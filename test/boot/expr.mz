@@ -1,0 +1,17 @@
+/* 
+  Modelyze II is licensed under the MIT license.
+  Copyright (C) David Broman. See file LICENSE.txt
+
+  File expr.mz tests the bootstrapping compiler
+  for basic evaluation of expressions.
+*/
+
+//dprint(4+1)
+
+utest 3+2       5
+utest 2+4*5     22
+utest (2+4)*5   30
+
+/*
+utest 1+2-4     -1
+*/
