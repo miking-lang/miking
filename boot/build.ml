@@ -51,8 +51,8 @@ let lsdir2file dir targetfile =
   if win32 then
     cmd ("dir " ^ dir ^ " > " ^ targetfile)  
   else (* unix. Might now work on Linux *)
-    cmd ("ls -l -T " ^ dir ^ " > " ^ targetfile)
-    
+    if command ("ls -l -T " ^ dir ^ " > " ^ targetfile ^ " 2>/dev/null") != 0
+    then cmd ("ls --full-time " ^ dir ^ " > " ^ targetfile)
 
 let read_binfile filename =
   let f = open_in_bin filename in
