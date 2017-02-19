@@ -7,13 +7,23 @@ echo
 
 echo "** Fast read test in C **"
 gcc readtest.c
-time a.out
+time a.out 
+echo
+
+echo "** Fast read test in Ocaml **"
+ocamlbuild readtest.native 
+time readtest.native
+echo
+
+echo "** Count test in C **"
+gcc readcount.c
+time a.out 
 echo
 
 echo "** Grep **"
-time grep '[123]+' f.txt
+time grep '[123]+' f.txt 
 echo
 
 
 echo "Clean up..."
-rm -rf f.txt a.out
+rm -rf f.txt a.out *.byte *.native _build
