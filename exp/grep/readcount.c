@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+//#define DOPRINT
+
 #define SIZE 32768
 
 char buf[SIZE];
@@ -31,5 +33,7 @@ int main(){
     }
   }
   fclose(f);
-  printf("count = %d\n", count);
+  #ifdef DOPRINT
+    printf("count = %d\n", count);
+  #endif
 }
