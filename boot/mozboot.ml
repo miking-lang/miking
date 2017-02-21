@@ -34,6 +34,9 @@ let pprintop op =
   | OpMul -> "*"
   | OpDiv -> "/"
   | OpMod -> "%"
+  | OpBoolNot -> "!"
+  | OpBoolAnd -> "&&"
+  | OpBoolOr -> "||"
   | OpLess -> "<"
   | OpLessEqual -> "<="
   | OpGreat -> ">"
@@ -123,6 +126,9 @@ let evalop op t1 t2 =
   | OpMul,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 * v2)
   | OpDiv,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 / v2)
   | OpMod,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 mod v2)
+  | OpBoolNot,TmBool(l,v1),_ -> TmBool(l,not v1)
+  | OpBoolAnd,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 && v2)
+  | OpBoolOr,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 || v2)
   | OpLess,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 < v2)
   | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 <= v2)
   | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 > v2)

@@ -12,6 +12,7 @@ open Msg
 type env = tm list
 
 and op = OpAdd  | OpSub | OpMul | OpDiv | OpMod |
+         OpBoolNot  | OpBoolAnd | OpBoolOr | 
          OpLess | OpLessEqual   | OpGreat |
          OpGreatEqual | OpEqual | OpNotEqual |
          OpDprint | OpDBprint

@@ -108,8 +108,7 @@
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
 %nonassoc NOT /*prec8 */
 %left ADD SUB /*prec 8*/
-%left MUL DIV /*prec 9*/
-%left MOD /*prec 10*/
+%left MUL DIV MOD /*prec 9*/
 
 
 
@@ -177,7 +176,9 @@ op:
   | op GREATEQUAL op     { TmOp($2.i,OpGreatEqual,$1,$3) }      
   | op EQUAL op          { TmOp($2.i,OpEqual,$1,$3) }      
   | op NOTEQUAL op       { TmOp($2.i,OpNotEqual,$1,$3) }
-
+  | NOT op               { TmOp($1.i,OpBoolNot,$2,TmNop) }
+  | op AND op            { TmOp($2.i,OpBoolAnd,$1,$3) }
+  | op OR op             { TmOp($2.i,OpBoolOr,$1,$3) }
 
     
       
