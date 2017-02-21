@@ -124,8 +124,8 @@ main:
       
 
 scope:
-  | { TmNop }      
-  | term scope {
+  | { TmNop }
+  | term scope  {
       match $2 with
       | TmNop -> $1 
       | _ -> TmSeq(tm_info $1,$1,$2) }      
@@ -143,6 +143,7 @@ scope:
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmUtest(fi,$2,$3,$4) }
 
+      
 body:
   | EQ op { $2 }
   | LCURLY scope RCURLY { $2 }
@@ -158,7 +159,7 @@ term:
         TmIf(fi,$2,$4,$6) }
   | IDENT DARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,$1.v,$3)} 
+        TmLam(fi,$1.v,$3)}
 
       
       
@@ -177,6 +178,9 @@ op:
   | op EQUAL op          { TmOp($2.i,OpEqual,$1,$3) }      
   | op NOTEQUAL op       { TmOp($2.i,OpNotEqual,$1,$3) }
 
+
+    
+      
 atom:
     /* Function application */  
   | FUNIDENT revtmseq RPAREN  
@@ -191,6 +195,7 @@ atom:
          | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else $2))}
   | LPAREN term RPAREN   { $2 }
+  | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }
   | LSQUARE revtmseq RSQUARE  
        { TmUC($1.i,UCList(List.rev $2),UCOrdered,UCMultivalued) }
   | LCURLY scope RCURLY  { $2 }
@@ -200,7 +205,7 @@ atom:
   | UINT                 { TmInt($1.i,$1.v) }
   | TRUE                 { TmBool($1.i,true) }
   | FALSE                { TmBool($1.i,false) }
-
+  
       
 revtmseq:
     |   {[]}

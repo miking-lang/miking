@@ -149,6 +149,7 @@ let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" |
 
 let line_comment = "//" [^ '\013' '\010']*  
 let unsigned_integer = digit+ 
+let signed_integer = unsigned_integer  | '-' unsigned_integer 
 
 (* Main lexing *)
 rule main = parse
