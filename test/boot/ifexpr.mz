@@ -1,0 +1,15 @@
+/* 
+  Modelyze II is licensed under the MIT license.
+  Copyright (C) David Broman. See file LICENSE.txt
+
+  File ifexpr.mz tests if-expressions with variable
+  definitions
+
+*/
+
+
+def x = 55
+
+utest if x<1 then 7 else 8+3        11
+
+//utest if(x<1) 7 else 8+3        11
