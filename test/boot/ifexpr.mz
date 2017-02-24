@@ -11,5 +11,5 @@
 def x = 55
 
 utest if x<1 then 7 else 8+3        11
-
-//utest if(x<1) 7 else 8+3        11
+//utest if  x<1 7 else 8+3            11
+//utest if (77>x) 7+1 else 8+3          8
