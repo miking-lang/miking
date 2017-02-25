@@ -16,7 +16,7 @@ utest 10-(-2)           12
 utest 10/3              3
 utest (-21)/4+1         (-4)
 utest 10 % 3            1
-utest 20 / 4 % 3        2
+2utest 20 / 4 % 3        2
 utest 4 + 5 / 2         6 
 utest (4 + 5) / 2       4
 
@@ -37,22 +37,4 @@ utest true || false && false    true
 utest (true || false) && false  false
 utest !false && false           false
 utest !(false && false)         true
-
-// Test operators '<' '>' '==' '!=''<=' and '>='
-utest 7 < 10               true
-utest (-100) < 0           true
-utest 55 < 1               false
-utest 100 > 4              true
-utest (-100) > 5           false
-utest 5 + 1 == 6           true
-utest 3/4 == 1             false
-utest 99 != (-4)           true
-utest 0 != 3-3             false
-utest 7 <= 10              true
-utest 7 <= 6               false
-utest 7-10 <= 0-3          true
-utest 100 >= 99+1          true
-utest 100 >= 101           false
-utest 1 < 5 && (-1) < 10   true
-utest 1 >= 5 ||  6 == 6+1  false
 

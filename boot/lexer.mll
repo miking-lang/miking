@@ -170,7 +170,9 @@ rule main = parse
       { Parser.UINT{i=mkinfo_fast str; v=int_of_string str} }
   | (ident as s) "("
       { let s2 = Ustring.from_utf8 s in
-        Parser.FUNIDENT {i=mkinfo_ustring s2; v=s2}}
+        (match s with
+        | "if" -> Parser.IF2{i=mkinfo_ustring s2;v=()}
+        | _ -> Parser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
   | ident | symtok as s
       { mkid s }
   | '\'' (utf8 as c) '\''

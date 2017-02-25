@@ -60,6 +60,7 @@
 %token <unit Ast.tokendata> DEF
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> IF
+%token <unit Ast.tokendata> IF2           /* Special handling if( */
 %token <unit Ast.tokendata> THEN
 %token <unit Ast.tokendata> ELSE
 %token <unit Ast.tokendata> TRUE
@@ -156,6 +157,12 @@ term:
   | IF term THEN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmIf(fi,$2,$4,$6) }
+  | IF2 term RPAREN term ELSE term
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmIf(fi,$2,$4,$6) }
+  | IF term term ELSE term
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmIf(fi,$2,$3,$5) }
   | IDENT DARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3)}
