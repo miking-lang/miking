@@ -117,6 +117,13 @@ let rec debruijn env t =
       -> TmUtest(fo,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t  
 
+let rec val_equal v1 v2 =
+  match v1,v2 with
+  | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
+  | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
+  | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
+  | TmNop,TmNop -> true
+  | _ -> false
 
   
 let evalop op t1 t2 =
@@ -133,20 +140,12 @@ let evalop op t1 t2 =
   | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 <= v2)
   | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 > v2)
   | OpGreatEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 >= v2)
-  | OpEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 == v2)
-  | OpNotEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 != v2)
+  | OpEqual,v1,v2 -> TmBool(tm_info v1,val_equal v1 v2)
+  | OpNotEqual,v1,v2 -> TmBool(tm_info v1,not (val_equal v1 v2))
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
   | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop  
   | _ -> failwith "Error evaluation values."
     
-
-let rec val_equal v1 v2 =
-  match v1,v2 with
-  | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
-  | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
-  | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
-  | TmNop,TmNop -> true
-  | _ -> false
 
     
 let rec eval env t = 
