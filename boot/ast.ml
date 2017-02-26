@@ -15,7 +15,7 @@ and op = OpAdd  | OpSub | OpMul | OpDiv | OpMod |
          OpBoolNot  | OpBoolAnd | OpBoolOr | 
          OpLess | OpLessEqual   | OpGreat |
          OpGreatEqual | OpEqual | OpNotEqual |
-         OpDprint | OpDBprint
+         OpDprint | OpDBprint   | OpConcat
           
 
 and ucTree =

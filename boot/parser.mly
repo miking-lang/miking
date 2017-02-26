@@ -84,6 +84,7 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> OR            /* "||" */
 %token <unit Ast.tokendata> AND           /* "&&" */
+%token <unit Ast.tokendata> CONCAT        /* "++" */
 
 
 
@@ -107,9 +108,11 @@
 %left OR  /*prec 2*/
 %left AND  /*prec 3*/
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
+%left CONCAT
 %nonassoc NOT /*prec8 */
 %left ADD SUB /*prec 8*/
 %left MUL DIV MOD /*prec 9*/
+
 
 
 
@@ -186,6 +189,7 @@ op:
   | NOT op               { TmOp($1.i,OpBoolNot,$2,TmNop) }
   | op AND op            { TmOp($2.i,OpBoolAnd,$1,$3) }
   | op OR op             { TmOp($2.i,OpBoolOr,$1,$3) }
+  | op CONCAT op         { TmOp($2.i,OpConcat,$1,$3) }
 
     
       

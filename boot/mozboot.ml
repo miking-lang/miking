@@ -46,6 +46,7 @@ let pprintop op =
   | OpDprint -> "dprint"            (* Debug printing of any value *)
   | OpDBprint -> "dbprint"          (* Debug basic printing "dbprint". 
                                        Use e.g. Set(1,2) instead of {1,2} *)
+  | OpConcat -> "++"  
   )
 
 let pprintUCKind ordered uniqueness =
@@ -92,7 +93,13 @@ let rec pprint basic t =
   | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2 
   | TmNop -> us"Nop"
 
-
+let unittest_failed fi t1 t2=
+  uprint_endline
+    (match fi with
+    | Info(filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
+        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint false t1) ^.
+        us"\n    RHS: " ^. (pprint false t2)          
+    | NoInfo -> us"Unit test FAILED ")
 
   
 let rec debruijn env t =
@@ -122,8 +129,12 @@ let rec val_equal v1 v2 =
   | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
   | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
-  | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) -> 
-      o1 = o2 && u1 = u2 && ucToRevList t1 = ucToRevList t2
+  | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) ->
+      let rec eql lst1 lst2 = match lst1,lst2 with
+        | l1::ls1,l2::ls2 when val_equal l1 l2 -> eql ls1 ls2
+        | [],[] -> true
+        | _ -> false
+      in o1 = o2 && u1 = u2 && eql (ucToRevList t1) (ucToRevList t2)
   | TmNop,TmNop -> true
   | _ -> false
 
@@ -145,7 +156,11 @@ let evalop op t1 t2 =
   | OpEqual,v1,v2 -> TmBool(tm_info v1,val_equal v1 v2)
   | OpNotEqual,v1,v2 -> TmBool(tm_info v1,not (val_equal v1 v2))
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
-  | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop  
+  | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
+  | OpConcat,TmUC(l,t1,o1,u1),TmUC(_,t2,o2,u2)
+       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
+  | OpConcat,tm1,TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
+  | OpConcat,TmUC(l,t1,o1,u1),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
   | _ -> failwith "Error evaluation values."
     
 
@@ -184,11 +199,12 @@ let rec eval env t =
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
-     if !utest then begin
-       if val_equal (eval env t1) (eval env t2) then
+    if !utest then begin
+      let (v1,v2) = ((eval env t1),(eval env t2)) in
+       if val_equal v1 v2 then
          (printf "."; utest_ok := !utest_ok + 1)
        else (
-        unittest_failed fi;
+        unittest_failed fi v1 v2;
         utest_fail := !utest_fail + 1;  
         utest_fail_local := !utest_fail_local + 1)
      end;

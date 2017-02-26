@@ -23,4 +23,22 @@ utest "this is ok" != "yes"       true
 utest "this is ok" != ""          true
 
 
+// Test operator ++ for concatination. Note that it supports overloading
+// and concatenating elements as well. Hence, we do not need a
+utest "st1" ++ "st2"                   "st1st2"
+utest "sas" ++ "love" == "saslove"     true
+utest "" ++ "love" == "love"           true
+utest "a" ++ "b" ++ "c" == "abc"       true
+utest "a" ++ "b" ++ "c" == "cba"       false
+utest 'a' ++ "bcd"                     "abcd"
+utest "bcd" ++ 'e'                     "bcde"
+utest 'a' ++ "bcd" == "abcd"           true
+utest 'a' ++ "bcd" == "ab"             false
+utest 'a' ++ "bcd" != "ab"             true
+utest "a" ++ "bcd"                     "abcd"
+
+// Print strings and not list of strings.
+// Test dstr, used by dprint. 
+
+
 

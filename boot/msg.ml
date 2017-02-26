@@ -40,7 +40,9 @@ type message = id * severity * info * arguments
   
 exception Error of message
 
-  
+
+
+    
 (** [id2str id] returns the identifier string for [id], e.g., 
     "LEX_UNKNOWN_CHAR" *)
 let id2str id =
@@ -83,11 +85,6 @@ let message2str (id,sev,info,args)  =
 let raise_error fi msg =
   raise (Error (ERROR(msg),ERROR,fi,[]))
   
-let unittest_failed fi =
-  printf " %s"
-    (match fi with
-    | Info(filename,l1,_,_,_) -> "Unit test FAILED on line " ^ (string_of_int l1) ^ " "
-    | NoInfo -> "Unit test FAILED ")
 
 
 
