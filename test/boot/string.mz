@@ -15,14 +15,12 @@ utest 'c' != 'c'     false
 
 
 // Introduction and equality test of characters
-/*
 utest "test"                      "test"
 utest ""                          ""
 utest "ok" == "ok"                true
 utest "not ok" == "ok"            false
 utest "this is ok" != "yes"       true
 utest "this is ok" != ""          true
-*/
 
 
 

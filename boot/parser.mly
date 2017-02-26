@@ -33,11 +33,11 @@
       | TmChar(_,_) -> false
       | TmOp(_,_,t1,t2) -> hasx t1 || hasx t2
       | TmIf(_,t1,t2,t3) -> hasx t1 || hasx t2|| hasx t3
-      | TmSeq(_,t1,t2) -> hasx t1 || hasx t2
+      | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
           let rec work uc = match uc with
-          | UCList(tms) -> List.exists hasx tms
           | UCNode(uc1,uc2) -> work uc1 || work uc2
+          | UCLeaf(tms) -> List.exists hasx tms
           in work uct
       | TmUtest(fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
       | TmNop -> false
@@ -128,7 +128,7 @@ scope:
   | term scope  {
       match $2 with
       | TmNop -> $1 
-      | _ -> TmSeq(tm_info $1,$1,$2) }      
+      | _ -> TmExprSeq(tm_info $1,$1,$2) }      
   | DEF FUNIDENT revidentseq RPAREN body scope
       { let fi = mkinfo $1.i (tm_info $5) in
         let rec mkfun lst = (match lst with
@@ -205,11 +205,13 @@ atom:
   | LPAREN term RPAREN   { $2 }
   | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }
   | LSQUARE revtmseq RSQUARE  
-       { TmUC($1.i,UCList(List.rev $2),UCOrdered,UCMultivalued) }
+       { TmUC($1.i,UCLeaf(List.rev $2),UCOrdered,UCMultivalued) }
   | LCURLY scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  /*  | STRING               {  */
+  | STRING
+      { let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list $1.v) in
+        TmUC($1.i,UCLeaf(lst),UCOrdered,UCMultivalued) } 
   | UINT                 { TmInt($1.i,$1.v) }
   | TRUE                 { TmBool($1.i,true) }
   | FALSE                { TmBool($1.i,false) }

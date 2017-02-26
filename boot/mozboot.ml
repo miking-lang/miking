@@ -61,8 +61,8 @@ let pprintUCKind ordered uniqueness =
 let uct2list uct =
   let rec work uct acc =
     match uct with
-    | UCList(t::ts) -> work (UCList(ts)) (t::acc)
-    | UCList([]) -> acc
+    | UCLeaf(t::ts) -> work (UCLeaf(ts)) (t::acc)
+    | UCLeaf([]) -> acc
     | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
   in List.rev (work uct [])
     
@@ -81,7 +81,7 @@ let rec pprint basic t =
                          us" " ^. pprint t2 ^. us")"
   | TmIf(fi,t1,t2,t3) -> us"if " ^. pprint t1 ^. us" then " ^. pprint t2 ^.
                          us" else " ^. pprint t3
-  | TmSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
+  | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->
@@ -111,8 +111,8 @@ let rec debruijn env t =
   | TmChar(_,_) -> t
   | TmOp(fi,op,t1,t2) -> TmOp(fi,op,debruijn env t1,debruijn env t2)
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
-  | TmSeq(fi,t1,t2) -> TmSeq(fi,debruijn env t1,debruijn env t2)
-  | TmUC(fi,uct,o,u) -> TmUC(fi, UCList(List.map (debruijn env) (uct2list uct)),o,u)
+  | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
+  | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fo,t1,t2,tnext)
       -> TmUtest(fo,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t  
@@ -122,6 +122,8 @@ let rec val_equal v1 v2 =
   | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
   | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
+  | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) -> 
+      o1 = o2 && u1 = u2 && ucToRevList t1 = ucToRevList t2
   | TmNop,TmNop -> true
   | _ -> false
 
@@ -179,7 +181,7 @@ let rec eval env t =
       | TmBool(_,true) -> eval env t2
       | TmBool(_,false) -> eval env t3
       | _ -> failwith "Incorrect if-expression")
-  | TmSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
+  | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
      if !utest then begin

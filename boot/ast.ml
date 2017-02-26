@@ -18,15 +18,16 @@ and op = OpAdd  | OpSub | OpMul | OpDiv | OpMod |
          OpDprint | OpDBprint
           
 
-and ucType =
-  | UCList        of tm list
-  | UCNode        of ucType * ucType
+and ucTree =
+  | UCNode        of ucTree * ucTree
+  | UCLeaf        of tm list
     
 
 and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
-   
+
+    
 and tm = 
   | TmVar         of info * ustring * int  
   | TmLam         of info * ustring * tm
@@ -38,16 +39,31 @@ and tm =
   | TmChar        of info * int
   | TmOp          of info * op * tm * tm
   | TmIf          of info * tm * tm * tm
-  | TmSeq         of info * tm * tm
-  | TmUC          of info * ucType * ucOrder * ucUniqueness
+  | TmExprSeq     of info * tm * tm
+  | TmUC          of info * ucTree * ucOrder * ucUniqueness
   | TmUtest       of info * tm * tm * tm
-  | TmNop        
+  | TmNop         
 
 
+(* Traditional map function on unified collection (UC) types *)      
 let rec ucmap f uc = match uc with
-  | UCList(tms) -> UCList(List.map f tms)
+  | UCLeaf(tms) -> UCLeaf(List.map f tms)
   | UCNode(uc1,uc2) -> UCNode(ucmap f uc1, ucmap f uc2)
-      
+
+(* Collapses the UC structure into a revered ordered list *)    
+let ucToRevList uc =
+  let rec apprev lst acc =
+    match lst with
+    | l::ls -> apprev ls (l::acc)
+    | [] -> acc
+  in
+  let rec work uc acc = 
+    match uc with
+    | UCLeaf(lst) -> apprev lst acc
+    | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
+  in work uc []
+    
+    
 let noidx = -1
       
 let tm_info t =
@@ -62,7 +78,7 @@ let tm_info t =
     | TmChar(fi,_) -> fi
     | TmOp(fi,_,_,_) -> fi
     | TmIf(fi,_,_,_) -> fi
-    | TmSeq(fi,_,_) -> fi
+    | TmExprSeq(fi,_,_) -> fi
     | TmUC(fi,_,_,_) -> fi
     | TmUtest(fi,_,_,_) -> fi
     | TmNop -> NoInfo
