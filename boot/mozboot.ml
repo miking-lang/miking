@@ -14,19 +14,15 @@ open Printf
 open Ast
 open Msg
 
-type options = { op_steps : bool; op_cbn : bool; op_speed : bool }
-  
+      
 
-let sl = if Sys.win32 then "\\" else "/"
+let utest = ref false           (* Set to true if unit testing is enabled *)
+let utest_ok = ref 0            (* Counts the number of successful unit tests *)
+let utest_fail = ref 0          (* Counts the number of failed unit tests *)
+let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
-module StrSet = Set.Make(Ustring)
-
-let utest = ref false
-let utest_ok = ref 0
-let utest_fail = ref 0
-let utest_fail_local = ref 0
   
-  
+(* Pretty prints operands *)   
 let pprintop op =
   us(match op with
   | OpAdd -> "+"
@@ -49,24 +45,44 @@ let pprintop op =
   | OpConcat -> "++"  
   )
 
+    
+(* Print the kind of unified collection (UC) type. *)    
 let pprintUCKind ordered uniqueness =
   match ordered, uniqueness with
-  | UCUnordered, UCUnique      -> us"Set"
-  | UCUnordered, UCMultivalued -> us"MultiSet"
-  | UCOrdered,   UCUnique      -> us"UniqueList"
-  | UCOrdered,   UCMultivalued -> us"List"
-  | UCSorted,    UCUnique      -> us"SortedSet"
-  | UCSorted,    UCMultivalued -> us"SortedMultiSet"
+  | UCUnordered, UCUnique      -> us"Set"      (* Set *)
+  | UCUnordered, UCMultivalued -> us"MSet"     (* Multivalued Set *)
+  | UCOrdered,   UCUnique      -> us"USeq"     (* Unique Sequence *)
+  | UCOrdered,   UCMultivalued -> us"Seq"      (* Sequence *)
+  | UCSorted,    UCUnique      -> us"SSet"     (* Sorted Set *)
+  | UCSorted,    UCMultivalued -> us"SMSet"    (* Sorted Multivalued Set *)
 
-
-let uct2list uct =
-  let rec work uct acc =
-    match uct with
-    | UCLeaf(t::ts) -> work (UCLeaf(ts)) (t::acc)
-    | UCLeaf([]) -> acc
-    | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
-  in List.rev (work uct [])
     
+(* Traditional map function on unified collection (UC) types *)      
+let rec ucmap f uc = match uc with
+  | UCLeaf(tms) -> UCLeaf(List.map f tms)
+  | UCNode(uc1,uc2) -> UCNode(ucmap f uc1, ucmap f uc2)
+
+    
+(* Collapses the UC structure into a revered ordered list *)    
+let uct2revlist uc =
+  let rec apprev lst acc =
+    match lst with
+    | l::ls -> apprev ls (l::acc)
+    | [] -> acc
+  in
+  let rec work uc acc = 
+    match uc with
+    | UCLeaf(lst) -> apprev lst acc
+    | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
+  in work uc []
+
+
+(* Translate a unified collection (UC) structure into a list *)  
+let uct2list uct = uct2revlist uct |> List.rev
+
+
+(* Pretty print a term. The boolean parameter 'basic' is true when
+   the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 let rec pprint basic t =
   let pprint = pprint basic in
   match t with
@@ -93,6 +109,8 @@ let rec pprint basic t =
   | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2 
   | TmNop -> us"Nop"
 
+    
+(* Print out error message when a unit test fails *)    
 let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
@@ -101,7 +119,8 @@ let unittest_failed fi t1 t2=
         us"\n    RHS: " ^. (pprint false t2)          
     | NoInfo -> us"Unit test FAILED ")
 
-  
+    
+(* Convert a term into de Bruijn indices *)  
 let rec debruijn env t =
   match t with
   | TmVar(fi,x,_) ->
@@ -124,6 +143,8 @@ let rec debruijn env t =
       -> TmUtest(fo,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t  
 
+    
+(* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
   | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
@@ -134,11 +155,12 @@ let rec val_equal v1 v2 =
         | l1::ls1,l2::ls2 when val_equal l1 l2 -> eql ls1 ls2
         | [],[] -> true
         | _ -> false
-      in o1 = o2 && u1 = u2 && eql (ucToRevList t1) (ucToRevList t2)
+      in o1 = o2 && u1 = u2 && eql (uct2revlist t1) (uct2revlist t2)
   | TmNop,TmNop -> true
   | _ -> false
 
-  
+
+(* Evaluate a binary or unary operation *)    
 let evalop op t1 t2 =
   match op,t1,t2 with
   | OpAdd,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 + v2)
@@ -164,7 +186,7 @@ let evalop op t1 t2 =
   | _ -> failwith "Error evaluation values."
     
 
-    
+(* Main evaluation loop of a term. Evaluates using big-step semantics *)    
 let rec eval env t = 
   match t with
   | TmVar(fi,x,n) ->
@@ -211,7 +233,9 @@ let rec eval env t =
      eval env tnext
   | TmNop -> t  
 
-    
+
+(* Main function for evaluation a function. Performs lexing, parsing
+   and evaluation. Does not perform any type checking *)
 let evalprog filename  =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
@@ -235,16 +259,24 @@ let evalprog filename  =
   end; close_in fs1;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
+    
+(* Define the file slash, to make it platform independent *)    
+let sl = if Sys.win32 then "\\" else "/"
+
+    
 (* Add a slash at the end "\\" or "/" if not already available *)
 let add_slash s =
   if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> sl
   then s ^ sl else s
 
+    
+(* Print out main menu *)    
 let menu() =
   printf "Usage: mozboot [test] <files>\n";
   printf "\n"
 
 
+(* Main function. Checks arguments and reads file names *)
 let main =
   if Array.length Sys.argv < 2 then menu()
   else

@@ -45,23 +45,6 @@ and tm =
   | TmNop         
 
 
-(* Traditional map function on unified collection (UC) types *)      
-let rec ucmap f uc = match uc with
-  | UCLeaf(tms) -> UCLeaf(List.map f tms)
-  | UCNode(uc1,uc2) -> UCNode(ucmap f uc1, ucmap f uc2)
-
-(* Collapses the UC structure into a revered ordered list *)    
-let ucToRevList uc =
-  let rec apprev lst acc =
-    match lst with
-    | l::ls -> apprev ls (l::acc)
-    | [] -> acc
-  in
-  let rec work uc acc = 
-    match uc with
-    | UCLeaf(lst) -> apprev lst acc
-    | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
-  in work uc []
     
     
 let noidx = -1
