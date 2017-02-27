@@ -1,0 +1,36 @@
+/* 
+  Modelyze II is licensed under the MIT license.
+  Copyright (C) David Broman. See file LICENSE.txt
+
+  Test generation of dstr() and dbstr(). These functions
+  are used by dprint() and dbprint().
+
+*/
+
+
+// Test different argument types to dstr().
+utest dstr(1)                   "1"
+utest dstr(88+3)                "91"
+utest dstr((-88))               "-88"
+utest dstr(true)                "true"
+utest dstr(false)               "false"
+utest dstr('h')                 "'h'"
+
+// Same as above, but with dbstr()
+utest dbstr(1)                   "1"
+utest dbstr(88+3)                "91"
+utest dbstr((-88))               "-88"
+utest dbstr(true)                "true"
+utest dbstr(false)               "false"
+utest dbstr('h')                 "'h'"
+
+
+// Test dstr() and dbstr() where they should give different answers
+utest dstr("My test")           "\"My test\""
+utest dbstr("My test")          "Seq('M','y',' ','t','e','s','t')"
+utest dstr("this" ++ "that")    "\"thisthat\""
+utest dbstr("this" ++ "that")   "Seq('t','h','i','s','t','h','a','t')"
+
+
+
+

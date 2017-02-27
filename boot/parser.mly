@@ -203,6 +203,8 @@ atom:
           | [] -> TmVar($1.i,$1.v,noidx)
         in
         (match Ustring.to_utf8 $1.v with
+         | "dstr"    -> TmOp($1.i,OpDstr,List.hd $2,TmNop)
+         | "dbstr"   -> TmOp($1.i,OpDBstr,List.hd $2,TmNop)
          | "dprint"  -> TmOp($1.i,OpDprint,List.hd $2,TmNop)
          | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else $2))}

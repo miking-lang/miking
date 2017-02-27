@@ -11,11 +11,27 @@ open Msg
 
 type env = tm list
 
-and op = OpAdd  | OpSub | OpMul | OpDiv | OpMod |
-         OpBoolNot  | OpBoolAnd | OpBoolOr | 
-         OpLess | OpLessEqual   | OpGreat |
-         OpGreatEqual | OpEqual | OpNotEqual |
-         OpDprint | OpDBprint   | OpConcat
+and op =
+ | OpAdd
+ | OpSub
+ | OpMul
+ | OpDiv
+ | OpMod
+ | OpBoolNot
+ | OpBoolAnd
+ | OpBoolOr
+ | OpLess
+ | OpLessEqual
+ | OpGreat
+ | OpGreatEqual
+ | OpEqual
+ | OpNotEqual
+ | OpDstr
+ | OpDBstr
+ | OpDprint
+ | OpDBprint
+ | OpConcat
+                 
           
 
 and ucTree =

@@ -39,6 +39,8 @@ let pprintop op =
   | OpGreatEqual -> ">="
   | OpEqual -> "=="
   | OpNotEqual -> "!="
+  | OpDstr -> "dstr"       
+  | OpDBstr -> "dbstr"
   | OpDprint -> "dprint"            (* Debug printing of any value *)
   | OpDBprint -> "dbprint"          (* Debug basic printing "dbprint". 
                                        Use e.g. Set(1,2) instead of {1,2} *)
@@ -102,7 +104,13 @@ let rec pprint basic t =
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->
-        us"[" ^. (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us"]"
+      let lst = uct2list uct in
+      (match lst with       
+      | TmChar(_,_)::_ ->
+        let intlst = List.map
+          (fun x -> match x with TmChar(_,i) -> i | _ -> failwith "Not a string list") lst in
+          us"\"" ^. list2ustring intlst ^.  us"\""
+      | _ -> us"[" ^. (Ustring.concat (us",") (List.map pprint lst)) ^. us"]")
     | _,_ -> 
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us")")
@@ -159,6 +167,9 @@ let rec val_equal v1 v2 =
   | TmNop,TmNop -> true
   | _ -> false
 
+let ustring2uctstring s =
+  let ls = List.map (fun i -> TmChar(NoInfo,i)) (ustring2list s) in
+  TmUC(NoInfo,UCLeaf(ls),UCOrdered,UCMultivalued)
 
 (* Evaluate a binary or unary operation *)    
 let evalop op t1 t2 =
@@ -177,6 +188,8 @@ let evalop op t1 t2 =
   | OpGreatEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 >= v2)
   | OpEqual,v1,v2 -> TmBool(tm_info v1,val_equal v1 v2)
   | OpNotEqual,v1,v2 -> TmBool(tm_info v1,not (val_equal v1 v2))
+  | OpDstr,t1,_ -> ustring2uctstring (pprint false t1)
+  | OpDBstr,t1,_ -> ustring2uctstring (pprint true t1)
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
   | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
   | OpConcat,TmUC(l,t1,o1,u1),TmUC(_,t2,o2,u2)
