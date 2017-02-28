@@ -70,6 +70,7 @@
 
 
 %token <unit Ast.tokendata> EQ            /* "="  */
+%token <unit Ast.tokendata> ARROW         /* "->"  */
 %token <unit Ast.tokendata> ADD           /* "+"  */
 %token <unit Ast.tokendata> SUB           /* "-"  */
 %token <unit Ast.tokendata> MUL           /* "*"  */
@@ -170,10 +171,9 @@ term:
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmIf(fi,$2,$3,$5) }
-  | IDENT DARROW term
+  | IDENT ARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3)}      
-      
       
 op:
   | atom                 { $1 }     
@@ -201,7 +201,7 @@ atom:
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
           match lst with
-          | t::ts -> TmApp(fi,mkapps ts,t)
+          | t::ts ->  TmApp(fi,mkapps ts,t)
           | [] -> TmVar($1.i,$1.v,noidx)
         in
         (match Ustring.to_utf8 $1.v with
@@ -224,7 +224,9 @@ atom:
   | UINT                 { TmInt($1.i,$1.v) }
   | TRUE                 { TmBool($1.i,true) }
   | FALSE                { TmBool($1.i,false) }
-  
+  | LPAREN revtmseq RPAREN ARROW op          { TmNop }
+
+
       
 revtmseq:
     |   {[]}
