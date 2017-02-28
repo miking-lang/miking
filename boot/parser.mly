@@ -132,13 +132,13 @@ scope:
       match $2 with
       | TmNop -> $1 
       | _ -> TmExprSeq(tm_info $1,$1,$2) }      
-  | DEF FUNIDENT revidentseq RPAREN body scope
-      { let fi = mkinfo $1.i (tm_info $5) in
+  | DEF FUNIDENT revidentseq RPAREN oparrow body scope
+      { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
           | x::xs -> TmLam(fi,x,mkfun xs)
-          | [] -> $5 ) in
+          | [] -> $6 ) in
         let f = if List.length $3 = 0 then [us"@no"] else $3 in
-        TmApp(fi,TmLam(fi,$2.v,$6),addrec $2.v (mkfun (List.rev f))) } 
+        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun (List.rev f))) } 
   | DEF IDENT body scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
@@ -146,6 +146,10 @@ scope:
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmUtest(fi,$2,$3,$4) }
 
+oparrow:
+  | {}
+  | ARROW ty
+    {}
       
 body:
   | EQ op { $2 }
@@ -168,9 +172,7 @@ term:
         TmIf(fi,$2,$3,$5) }
   | IDENT DARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,$1.v,$3)}
-
-      
+        TmLam(fi,$1.v,$3)}      
       
       
 op:
@@ -231,14 +233,34 @@ revtmseq:
     |   revtmseq COMMA term
         {$3::$1}
 
+        
 revidentseq:
     |   {[]}
-    |   IDENT {[$1.v]}               
-    |   revidentseq COMMA IDENT {$3.v::$1}
+    |   IDENT COLON ty
+        {[$1.v]}               
+    |   revidentseq COMMA IDENT COLON ty
+        {$3.v::$1}
         
       
-     
+ty:
+  | tyatom
+      {}
+  | tyatom ARROW ty
+      {}
+    
+tyatom:
+  | IDENT
+      {}
+  | LPAREN RPAREN 
+      {}      
+  | LPAREN revtypetupleseq RPAREN
+      {}      
 
+revtypetupleseq: 
+  | ty
+      {}               
+  | revtypetupleseq COMMA ty
+      {}
 
 
 
