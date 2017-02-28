@@ -279,7 +279,10 @@ tyatom:
   | LPAREN RPAREN 
       {}      
   | LPAREN revtypetupleseq RPAREN
-      {}      
+      {}
+  | LSQUARE ty RSQUARE
+      {}
+      
 
 revtypetupleseq: 
   | ty

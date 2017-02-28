@@ -18,3 +18,8 @@ utest foo1("foo")       'f'
 utest foo1("k")         'k'
 utest foo1("")          'y'
 */
+
+def map(f:a->b, lst:[a]) -> [b] = match lst {
+    [x]++xs => [f] ++ map(f,xs)
+    [] => []
+}
