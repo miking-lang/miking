@@ -2,7 +2,7 @@
    Modelyze II is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
-   mozboot.ml is the main entry point for the bootstrapping
+   mb1.ml is the main entry point for the bootstrapping
    interpreter that is implemented in OCaml. Note that the Modelyze
    bootstrapper only implements a subset of the language mcore
    (Modelyze core).
@@ -285,7 +285,7 @@ let add_slash s =
     
 (* Print out main menu *)    
 let menu() =
-  printf "Usage: mozboot [test] <files>\n";
+  printf "Usage: mb1 [test] <files>\n";
   printf "\n"
 
 

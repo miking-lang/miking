@@ -89,9 +89,9 @@ let build_bootstrapper() =
     chdir "boot";
     cmd "ocamllex lexer.mll";
     cmd "ocamlyacc parser.mly";
-    cmd ("ocamlopt -o .." ^ sl ^ "bin" ^ sl ^ "mozboot utils.mli utils.ml " ^
+    cmd ("ocamlopt -o .." ^ sl ^ "bin" ^ sl ^ "mb1 utils.mli utils.ml " ^
           "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
-          "parser.ml mozboot.ml"))
+          "parser.ml mb1.ml"))
   else
     printf "The bootstrapper is already up to date.\n"
   
@@ -119,7 +119,7 @@ let clean() =
 (************************************************************)    
 (* Script for performing tests *)     
 let test() =
-  cmd ("bin" ^ sl ^ "mozboot test test" ^ sl ^ "boot")    
+  cmd ("bin" ^ sl ^ "mb1 test test" ^ sl ^ "boot")    
 
     
 (************************************************************)  
