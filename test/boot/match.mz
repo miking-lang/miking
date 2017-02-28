@@ -1,0 +1,20 @@
+/* 
+  Modelyze II is licensed under the MIT license.
+  Copyright (C) David Broman. See file LICENSE.txt
+
+  Test differnt ways of using the match construct
+*/
+
+
+
+
+def foo1(x:String) = match x {
+    [x]++x2 => x
+    [] => 'y'
+}
+
+/*
+utest foo1("foo")       'f'
+utest foo1("k")         'k'
+utest foo1("")          'y'
+*/

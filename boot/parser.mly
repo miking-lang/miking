@@ -153,7 +153,7 @@ oparrow:
     {}
       
 body:
-  | EQ op { $2 }
+  | EQ term { $2 }
   | LCURLY scope RCURLY { $2 }
       
       
@@ -174,6 +174,8 @@ term:
   | IDENT ARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3)}      
+  | MATCH op LCURLY cases RCURLY
+      {TmNop}
       
 op:
   | atom                 { $1 }     
@@ -224,8 +226,29 @@ atom:
   | UINT                 { TmInt($1.i,$1.v) }
   | TRUE                 { TmBool($1.i,true) }
   | FALSE                { TmBool($1.i,false) }
-  | LPAREN revtmseq RPAREN ARROW op          { TmNop }
 
+
+revpatseq:
+  |   {[]}
+  | pattern
+      {[]}
+  |   revpatseq COMMA pattern
+      {$3::$1}
+
+      
+pattern:
+  | IDENT 
+      {}
+  | pattern CONCAT pattern
+      {}
+  | LSQUARE revpatseq RSQUARE  
+      {}
+    
+      
+cases:
+  |   {}      
+  | pattern DARROW term cases
+      {}
 
       
 revtmseq:
