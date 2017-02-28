@@ -207,6 +207,7 @@ atom:
          | "dbstr"   -> TmOp($1.i,OpDBstr,List.hd $2,TmNop)
          | "dprint"  -> TmOp($1.i,OpDprint,List.hd $2,TmNop)
          | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
+         | "Seq"     -> TmUC($1.i,UCLeaf(List.rev $2),UCOrdered,UCMultivalued) 
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else $2))}
   | LPAREN term RPAREN   { $2 }
   | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }

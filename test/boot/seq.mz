@@ -3,9 +3,33 @@
   Copyright (C) David Broman. See file LICENSE.txt
 
   Test of general sequences.
-
 */
 
 
 // Should include both [1,3,4] and Seq(1,3,4)
+
+// Test int sequences and concatenation
+utest [1,2]++[3]       [1,2,3]
+utest [77]++[12]       [77,12]
+utest []               []
+utest [[],[]]          [[],[]]
+utest []++[]           []
+utest []++[3]          [3]
+utest [5]++[]          [5]
+
+//Test sequences of booleans
+utest [true]                    [true]
+utest [true && false]           [false]
+utest [true,true]++[false]      [true,true,false]
+
+//Test sequences of strings
+utest ["this"]                  ["this"]
+utest ["this","that"]++["and"]  ["this","that","and"]
+utest ["this"++"that"]++["and"] ["thisthat","and"]
+
+//Test sequences in other form
+utest Seq(1,2)                          [1,2]
+utest Seq()                             []
+utest Seq("hello")                      ["hello"]
+utest Seq(true,true)++Seq(false)        [true,true,false]
 
