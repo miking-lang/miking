@@ -8,7 +8,7 @@
 
 
 
-def foo1(x:String) = match x {
+def foo1(str:String) = match str {
     [x]++x2 => x
     [] => 'y'
 }
