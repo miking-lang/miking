@@ -82,10 +82,25 @@ let uct2revlist uc =
 (* Translate a unified collection (UC) structure into a list *)  
 let uct2list uct = uct2revlist uct |> List.rev
 
+(* Pretty print a pattern *)
+let rec pprint_pat pat =
+  match pat with
+  | PatIdent(_,s) -> s
+  | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
+  | PatUC(_,plst,_,_)      
+      -> us"[" ^. (Ustring.concat (us",") (List.map pprint_pat plst)) ^. us"]"
+  | PatBool(_,b) -> us(if b then "true" else "false")
+  | PatInt(_,i) -> us(sprintf "%d" i)
+  | PatConcat(_,p1,p2) -> (pprint_pat p1) ^. us"++" ^. (pprint_pat p2)
 
+(* Pretty print match cases *)
+let rec pprint_cases basic cases = 
+   Ustring.concat (us" else ") (List.map
+    (fun (Case(_,p,t)) -> pprint_pat p ^. us" => " ^. pprint basic t) cases)
+     
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
-let rec pprint basic t =
+and pprint basic t =
   let pprint = pprint basic in
   match t with
   | TmVar(_,x,_) -> x
@@ -114,7 +129,9 @@ let rec pprint basic t =
     | _,_ -> 
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us")")
-  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2 
+  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2
+  | TmMatch(fi,t1,cases)
+    ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
 
     
@@ -127,6 +144,17 @@ let unittest_failed fi t1 t2=
         us"\n    RHS: " ^. (pprint false t2)          
     | NoInfo -> us"Unit test FAILED ")
 
+(* Add pattern variables to environment. Used in the debruijn function *)
+let rec patvars env pat =
+  match pat with
+  | PatIdent(_,x) -> x::env    
+  | PatChar(_,_) -> env
+  | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))      
+  | PatUC(fi,[],o,u) -> env
+  | PatBool(_,_) -> env
+  | PatInt(_,_) -> env
+  | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
+  
     
 (* Convert a term into de Bruijn indices *)  
 let rec debruijn env t =
@@ -134,7 +162,7 @@ let rec debruijn env t =
   | TmVar(fi,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y =. x then n else find ee (n+1)
-      | [] -> raise_error fi "Unknown variable."
+      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
   | TmClos(fi,t1,env1) -> failwith "Closures should not be available."
@@ -147,8 +175,12 @@ let rec debruijn env t =
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
-  | TmUtest(fo,t1,t2,tnext)
-      -> TmUtest(fo,debruijn env t1,debruijn env t2,debruijn env tnext)
+  | TmUtest(fi,t1,t2,tnext)
+      -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+  | TmMatch(fi,t1,cases) ->
+      TmMatch(fi,debruijn env t1,
+               List.map (fun (Case(fi,pat,tm)) ->
+                 Case(fi,pat,debruijn (patvars env pat) tm)) cases)
   | TmNop -> t  
 
     
@@ -236,14 +268,15 @@ let rec eval env t =
   | TmUtest(fi,t1,t2,tnext) -> 
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in
-       if val_equal v1 v2 then
+        if val_equal v1 v2 then
          (printf "."; utest_ok := !utest_ok + 1)
        else (
         unittest_failed fi v1 v2;
         utest_fail := !utest_fail + 1;  
         utest_fail_local := !utest_fail_local + 1)
      end;
-     eval env tnext
+    eval env tnext
+  | TmMatch(_,t1,cases) -> TmNop
   | TmNop -> t  
 
 

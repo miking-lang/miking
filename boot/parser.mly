@@ -40,6 +40,8 @@
           | UCLeaf(tms) -> List.exists hasx tms
           in work uct
       | TmUtest(fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
+      | TmMatch(fi,t1,cases) ->
+          List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
     if hasx t then TmFix(NoInfo,TmLam(NoInfo,x,t)) else t
@@ -175,7 +177,7 @@ term:
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3)}      
   | MATCH op LCURLY cases RCURLY
-      {TmNop}
+      {TmMatch($1.i,$2, $4)}
       
 op:
   | atom                 { $1 }     
@@ -231,24 +233,38 @@ atom:
 revpatseq:
   |   {[]}
   | pattern
-      {[]}
-  |   revpatseq COMMA pattern
+      {[$1]}
+  | revpatseq COMMA pattern
       {$3::$1}
 
       
 pattern:
-  | IDENT 
-      {}
+  | IDENT
+      {PatIdent($1.i,$1.v)}
+  | CHAR
+      {PatChar($1.i,List.hd (ustring2list $1.v))}
+  | STRING
+      { let lst = List.map (fun x -> PatChar(NoInfo,x)) (ustring2list $1.v) in
+        PatUC($1.i,lst,UCOrdered,UCMultivalued)}
+  | UINT
+      {PatInt($1.i,$1.v)}
+  | TRUE
+      {PatBool($1.i,true)}      
+  | FALSE
+      {PatBool($1.i,false)}
   | pattern CONCAT pattern
-      {}
-  | LSQUARE revpatseq RSQUARE  
-      {}
-    
+      {PatConcat($2.i,$1,$3)}
+  | LSQUARE revpatseq RSQUARE
+      {PatUC($1.i,List.rev $2,UCOrdered,UCMultivalued)}
+
+elseop:
+  | {}
+  | ELSE {}
       
 cases:
-  |   {}      
-  | pattern DARROW term cases
-      {}
+  |   {[]}      
+  | pattern DARROW term elseop cases
+      { Case($2.i,$1,$3)::$5 }
 
       
 revtmseq:

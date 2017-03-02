@@ -23,3 +23,14 @@ def map(f:a->b, lst:[a]) -> [b] = match lst {
     [x]++xs => [f] ++ map(f,xs)
     [] => []
 }
+
+/*
+utest match "tests" {['t',a,'s']++b => a else _ => '.'}           'e'
+utest match "tests" {['t',a,'s']++b => b   _ => '.'}              "ts"
+utest match "tests" {['t',a,'k']++b => b   _ => '.'}              '.'
+
+utest match "tests" {"t"++a++"s"++b => a   _ => '.'}              "e"
+*/
+
+
+// Pretty print of match
