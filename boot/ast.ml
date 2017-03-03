@@ -78,6 +78,7 @@ and tm =
 | TmMatch       of info * tm * case list
 | TmNop         
 
+
     
 (* No index -1 means that de Bruijn index has not yet been assigned *)    
 let noidx = -1

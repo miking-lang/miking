@@ -177,7 +177,7 @@ term:
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3)}      
   | MATCH op LCURLY cases RCURLY
-      {TmMatch($1.i,$2, $4)}
+      {TmMatch(mkinfo $1.i $5.i,$2, $4)}
       
 op:
   | atom                 { $1 }     

@@ -154,7 +154,10 @@ let rec patvars env pat =
   | PatBool(_,_) -> env
   | PatInt(_,_) -> env
   | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
+
+
   
+    
     
 (* Convert a term into de Bruijn indices *)  
 let rec debruijn env t =
@@ -229,8 +232,58 @@ let evalop op t1 t2 =
   | OpConcat,tm1,TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
   | OpConcat,TmUC(l,t1,o1,u1),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
   | _ -> failwith "Error evaluation values."
-    
 
+
+(* Update all UC to have the form of lists *)
+let rec make_tm_for_match tm =
+  let rec mklist uc acc =
+    match uc with
+    | UCNode(uc1,uc2) -> (mklist uc2 (mklist uc1 acc))
+    | UCLeaf(lst) -> (List.map make_tm_for_match lst)::acc
+  in
+  let rec mkuclist lst acc =
+    match lst with
+    | x::xs -> mkuclist xs (UCNode(UCLeaf(x),acc))
+    | [] -> acc
+  in
+  match tm with
+  | TmUC(fi,uc,o,u) -> TmUC(fi,mkuclist (mklist uc []) (UCLeaf([])),o,u)
+  | _ -> tm
+
+    
+    
+(* Matches a pattern against a value and returns a new environment *)
+let rec eval_match env pat t =
+  match pat,t with
+  | PatIdent(_,x1),v -> Some(v::env,TmNop)
+  | PatChar(_,c1),TmChar(_,c2) -> if c1 = c2 then Some(env,TmNop) else None
+  | PatChar(_,_),_ -> None
+  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf(t::ts),o2,u2) ->
+    (match eval_match env p t with
+    | Some(env,_) -> eval_match env (PatUC(fi1,ps,o1,u1)) (TmUC(fi2,UCLeaf(ts),o2,u2))
+    | None -> None)
+  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf([]),o2,u2) -> None
+  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf(t::ts),t2),o2,u2) ->
+    (match eval_match env p t with
+    | Some(env,_) ->
+        eval_match env (PatUC(fi1,ps,o1,u1)) (TmUC(fi2,UCNode(UCLeaf(ts),t2),o2,u2))
+    | None -> None)
+  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf([]),t2),o2,u2) ->
+      eval_match env pat (TmUC(fi2,t2,o2,u2))
+  | PatUC(fi1,[],o1,u1),t -> Some(env,t)
+  | PatUC(fi1,p::ps,o1,u2),t -> None
+  | PatBool(_,b1),TmBool(_,b2) -> if b1 = b2 then Some(env,TmNop) else None
+  | PatBool(_,_),_ -> None
+  | PatInt(fi,i1),TmInt(_,i2) -> if i1 = i2 then Some(env,TmNop) else None
+  | PatInt(_,_),_ -> None
+  | PatConcat(_,PatIdent(_,x),p2),_ -> failwith "TODO: var first"
+  | PatConcat(_,p1,p2),t1 -> 
+    (match eval_match env p1 t1 with
+    | Some(env,t2) -> eval_match env p2 t2 
+    | None -> None)
+      
+
+  
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)    
 let rec eval env t = 
   match t with
@@ -276,7 +329,17 @@ let rec eval env t =
         utest_fail_local := !utest_fail_local + 1)
      end;
     eval env tnext
-  | TmMatch(_,t1,cases) -> TmNop
+  | TmMatch(fi,t1,cases) -> (
+     let v1 = make_tm_for_match (eval env t1) in
+     let rec appcases cases =
+       match cases with
+       | Case(_,p,t)::cs ->
+          (match eval_match env p v1 with
+         | Some(env,_) -> eval env t 
+         | None -> appcases cs)
+       | [] -> raise_error fi  "Match error"
+     in
+      appcases cases)
   | TmNop -> t  
 
 

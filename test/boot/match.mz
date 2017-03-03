@@ -7,30 +7,50 @@
 
 
 
-
+//Simple string matching with function
 def foo1(str:String) = match str {
     [x]++x2 => x
     [] => 'y'
 }
-
-/*
 utest foo1("foo")       'f'
 utest foo1("k")         'k'
 utest foo1("")          'y'
-*/
 
+//Match strings
+utest match "tests" {['t',a,'s']++b => a else _ => '.'}           'e'
+utest match "tests" {['t',a,'s']++b => b      _ => '.'}           "ts"
+utest match "tests" {['t',a,'k']++b => b      _ => '.'}           '.'
+utest match "tests" {"t"++[a]++"s"++b => a    _ => '.'}           'e'
+utest match "te" ++ "sts" {['t',a,'s']++b => a else _ => '.'}     'e'
+utest match "te" ++ "sts" {['t',a,'s']++b => b else _ => '.'}     "ts"
+
+
+//Test recursive map function
 def map(f:a->b, lst:[a]) -> [b] = match lst {
-    [x]++xs => [f] ++ map(f,xs)
+    [x]++xs => [f(x)] ++ map(f,xs)
     [] => []
 }
+utest map(x->x+1,[1,2,3,4])                     [2,3,4,5]
+utest map(x->x+1,[1]++[2]++[3,4])               [2,3,4,5]
+utest map(x->x++"x",["1","2"]++["3","4"])       ["1x","2x","3x","4x"]
 
-/*
-utest match "tests" {['t',a,'s']++b => a else _ => '.'}           'e'
-utest match "tests" {['t',a,'s']++b => b   _ => '.'}              "ts"
-utest match "tests" {['t',a,'k']++b => b   _ => '.'}              '.'
+//test integer match
+utest match 3{2=>"2" else 3=>"3"}                 "3"
+utest match 2{2=>"2"}                             "2"
+utest match 2+2{2=>"2" else 3=>"3" else 4=>"4"}   "4"
 
-utest match "tests" {"t"++a++"s"++b => a   _ => '.'}              "e"
-*/
+//test boolean match
+utest match true {true=>1 else false=>2}          1
+utest match false {true=>1 else false=>2}         2
+
+//deep match
+
+//utest match [[],["abc","k"]]
+//      {[] => '1' [[],[]] => '2'  [[],["a"++[x]++b],_] => x}      'b'
 
 
-// Pretty print of match
+//Handle the case with variable first
+
+
+
+
