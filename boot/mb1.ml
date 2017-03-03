@@ -285,7 +285,8 @@ let rec eval_match env pat t final =
   | PatBool(_,_),_ -> None
   | PatInt(fi,i1),TmInt(_,i2) -> if i1 = i2 then Some(env,TmNop) else None
   | PatInt(_,_),_ -> None
-  | PatConcat(_,PatIdent(_,x),p2),_ -> failwith "TODO: var first"
+  | PatConcat(_,PatIdent(_,x),p2),_ ->
+      failwith "Pattern variable first is not part of Miking--"
   | PatConcat(_,p1,p2),t1 -> 
     (match eval_match env p1 t1 false with
     | Some(env,t2) -> eval_match env p2 t2 (final && true) 

@@ -26,6 +26,8 @@ let reserved_strings = [
   ("false",         fun(i) -> Parser.FALSE{i=i;v=()}); 
   ("match",         fun(i) -> Parser.MATCH{i=i;v=()}); 
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()}); 
+  ("type",          fun(i) -> Parser.TYPE{i=i;v=()}); 
+  ("data",          fun(i) -> Parser.DATA{i=i;v=()}); 
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});

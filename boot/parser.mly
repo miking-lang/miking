@@ -69,6 +69,8 @@
 %token <unit Ast.tokendata> FALSE
 %token <unit Ast.tokendata> MATCH
 %token <unit Ast.tokendata> UTEST
+%token <unit Ast.tokendata> TYPE
+%token <unit Ast.tokendata> DATA
 
 
 %token <unit Ast.tokendata> EQ            /* "="  */
@@ -145,6 +147,14 @@ scope:
   | DEF IDENT body scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
+  | TYPE IDENT scope
+      {TmNop}
+  | TYPE FUNIDENT revtyargs RPAREN scope
+      {TmNop}
+  | DATA IDENT DARROW ty scope
+      {TmNop}
+  | DATA FUNIDENT revtyargs RPAREN DARROW ty scope
+      {TmNop}
   | UTEST term term scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmUtest(fi,$2,$3,$4) }
@@ -256,6 +266,8 @@ pattern:
       {PatConcat($2.i,$1,$3)}
   | LSQUARE revpatseq RSQUARE
       {PatUC($1.i,List.rev $2,UCOrdered,UCMultivalued)}
+  | FUNIDENT revpatseq RPAREN
+      {PatIdent($1.i,$1.v)}
 
 elseop:
   | {}
@@ -298,6 +310,8 @@ tyatom:
       {}
   | LSQUARE ty RSQUARE
       {}
+  | FUNIDENT revtyargs RPAREN
+      {}
       
 
 revtypetupleseq: 
@@ -306,7 +320,21 @@ revtypetupleseq:
   | revtypetupleseq COMMA ty
       {}
 
+tyarg:
+  | ty
+      {}
+  | IDENT COLON ty
+      {}
+      
+revtyargs:
+  |   {}
+  | tyarg
+      {}
+  | revtyargs COMMA tyarg
+      {}
 
+
+      
 
 
 
