@@ -148,13 +148,13 @@ scope:
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
   | TYPE IDENT scope
-      {TmNop}
+      {$3}
   | TYPE FUNIDENT revtyargs RPAREN scope
-      {TmNop}
+      {$5}
   | DATA IDENT DARROW ty scope
-      {TmNop}
+      {$5}
   | DATA FUNIDENT revtyargs RPAREN DARROW ty scope
-      {TmNop}
+      {$7}
   | UTEST term term scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmUtest(fi,$2,$3,$4) }
