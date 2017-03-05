@@ -28,6 +28,7 @@ let reserved_strings = [
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()}); 
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()}); 
   ("data",          fun(i) -> Parser.DATA{i=i;v=()}); 
+  ("data",          fun(i) -> Parser.DATA{i=i;v=()}); 
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
@@ -175,6 +176,7 @@ rule main = parse
       { let s2 = Ustring.from_utf8 s in
         (match s with
         | "if" -> Parser.IF2{i=mkinfo_ustring s2;v=()}
+        | "func" -> Parser.FUNC2{i=mkinfo_ustring s2;v=()}
         | _ -> Parser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
   | ident | symtok as s
       { mkid s }

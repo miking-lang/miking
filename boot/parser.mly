@@ -59,6 +59,7 @@
 
 /* Keywords */
 %token <unit Ast.tokendata> FUNC
+%token <unit Ast.tokendata> FUNC2
 %token <unit Ast.tokendata> DEF
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> IF
@@ -171,7 +172,13 @@ body:
       
 term:
   | op                   { $1 }      
-  | FUNC IDENT LCURLY term RCURLY
+  | FUNC IDENT term 
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmLam(fi,$2.v,$3) }
+  | FUNC LPAREN IDENT RPAREN term 
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmLam(fi,$3.v,$5) }
+  | FUNC2 IDENT RPAREN term 
       { let fi = mkinfo $1.i (tm_info $4) in
         TmLam(fi,$2.v,$4) }
   | IF term THEN term ELSE term
