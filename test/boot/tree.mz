@@ -20,5 +20,12 @@ def count(tree:Tree(Int)) -> Int {
 }
 
 utest count(Node(Node(Leaf(5),Leaf(8)),Leaf(7)))        20
+
+//Possible syntax
+datatype Tree(a){
+  Node(a:Tree(a),b:Tree(a)) 
+  Leaf(x:a) [1 2 3; 1 3 4]  
+}
+  
 */
 

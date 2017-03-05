@@ -33,12 +33,12 @@ def incr(x:Int) = x + 3
 utest foo3(8,incr,"something")          11
 
 //Anonymous function, one parameter. Assume that we can do type infefence.
-utest foo3(10,func(x)x+5,"")       15
-utest foo3(10,func (x)x+5,"")      15
-utest foo3(10,func (x) x+5,"")     15
-utest foo3(10,func x x+5,"")       15
-utest foo3(10,func x {x+5},"")     15
-utest foo3(10,func(x){x+5},"")     15
+utest foo3(10,fun(x)x+5,"")       15
+utest foo3(10,fun (x)x+5,"")      15
+utest foo3(10,fun (x) x+5,"")     15
+utest foo3(10,fun x x+5,"")       15
+utest foo3(10,fun x {x+5},"")     15
+utest foo3(10,fun(x){x+5},"")     15
 
 
 //Return a function with several arguments. Several scopes

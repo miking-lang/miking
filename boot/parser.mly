@@ -190,9 +190,6 @@ term:
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmIf(fi,$2,$3,$5) }
-  | IDENT ARROW term
-      { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,$1.v,$3)}      
   | MATCH op LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
       
@@ -278,7 +275,7 @@ pattern:
 
 elseop:
   | {}
-  | ELSE {}
+  | COMMA {}
       
 cases:
   |   {[]}      
