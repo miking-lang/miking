@@ -391,7 +391,7 @@ let add_slash s =
     
 (* Print out main menu *)    
 let menu() =
-  printf "Usage: mb1 [test] <files>\n";
+  printf "Usage: boot1 [test] <files>\n";
   printf "\n"
 
 

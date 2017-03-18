@@ -10,6 +10,14 @@
 open Printf
 open Sys
 
+let sl = if win32 then "\\" else "/"
+
+
+(* Directories *)
+
+let builddir = "build"
+let bootdir = "src" ^ sl ^ "boot"
+
 
 (* Handle directories *)
 let startdir = getcwd()
@@ -18,19 +26,24 @@ let maindir() = chdir startdir
 let rmfiles s =
   let _ = command ((if win32 then "del /q " else "rm -f ") ^ s) in ()
 
-let cleanup_files() =
+let cleanup_build_files() =
   maindir();
-  chdir "boot";
+  chdir "build";
+  rmfiles "boot1 boot2 moz _bootbuildtag";
+  maindir()
+                                                                
+let cleanup_temp_files() =
+  maindir();
+  chdir bootdir;
   rmfiles "*.cmi *.cmx *.o lexer.ml parser.ml parser.mli";
   maindir()
 
 (* Execute a shell command. Exit if there is an error *)
 let cmd s =
   let code = command s in
-  if code != 0 then (cleanup_files(); exit code) else ()
+  if code != 0 then (cleanup_temp_files(); exit code) else ()
 
 
-let sl = if win32 then "\\" else "/"
   
 let dir_exists s =
   try is_directory s with _ -> false
@@ -72,13 +85,13 @@ let read_binfile filename =
 
 let should_recompile_bootstrapper() =
   if win32 then true else
-  let file =  "bin" ^ sl ^ "_bootbuildtag" in
+  let file =  builddir ^ sl ^ "_bootbuildtag" in
   if not (file_exists file) then (
-    lsdir2file "boot" file;
+    lsdir2file bootdir file;
     true)
   else
     let s1 = read_binfile file in
-    lsdir2file "boot" file;
+    lsdir2file bootdir file;
     let s2 = read_binfile file in
     s1 <> s2
         
@@ -86,12 +99,13 @@ let build_bootstrapper() =
   if should_recompile_bootstrapper() then (
     printf "Building bootstrapper...\n";
     flush_all();
-    chdir "boot";
+    chdir bootdir;
     cmd "ocamllex lexer.mll";
     cmd "ocamlyacc parser.mly";
-    cmd ("ocamlopt -o .." ^ sl ^ "bin" ^ sl ^ "mb1 utils.mli utils.ml " ^
+    cmd ("ocamlopt -o .." ^ sl ^ ".." ^ sl ^
+          builddir ^ sl ^ "boot1 utils.mli utils.ml " ^
           "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
-          "parser.ml mb1.ml"))
+          "parser.ml boot1.ml"))
   else
     printf "The bootstrapper is already up to date.\n"
   
@@ -99,9 +113,8 @@ let build_bootstrapper() =
 (************************************************************)  
 (* The build script for building all components of Modelyze *)
 let build() =
-  mkdir "bin";
   build_bootstrapper();
-  cleanup_files();
+  cleanup_temp_files();
   maindir();
   printf "Build complete.\n";
   flush_all()
@@ -111,15 +124,15 @@ let build() =
 (************************************************************)  
 (* Cleaning all build data *)
 let clean() =
-  rmdir "bin";
-  cleanup_files();
+  cleanup_build_files();  
+  cleanup_temp_files();
   printf "Cleaning complete.\n"
 
     
 (************************************************************)    
 (* Script for performing tests *)     
 let test() =
-  cmd ("bin" ^ sl ^ "mb1 test test" ^ sl ^ "boot")    
+  cmd (builddir ^ sl ^ "boot1 test test" ^ sl ^ "boot")    
 
     
 (************************************************************)  
