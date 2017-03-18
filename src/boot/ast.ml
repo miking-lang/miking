@@ -33,6 +33,7 @@ and op =
 | OpDprint     (* Debug print *)
 | OpDBprint    (* Debug print, basic *)
 | OpPrint      (* Print *)
+| OpArgv       (* Program Arguments *)
 | OpConcat     (* Concatenation *)
 
     
@@ -107,4 +108,9 @@ let tm_info t =
     
 type 'a tokendata = {i:info; v:'a}
 
-  
+
+let ustring2uctm fi str =
+  let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list str) in
+  TmUC(fi,UCLeaf(lst),UCOrdered,UCMultivalued)
+
+

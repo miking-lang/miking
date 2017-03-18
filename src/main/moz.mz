@@ -12,3 +12,5 @@ def menu =
     
 
 print(menu)
+
+dprint(argv())

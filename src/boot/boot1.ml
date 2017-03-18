@@ -20,7 +20,7 @@ let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
-
+let prog_argv = ref []          (* Argv for the program that is executed *)
   
 (* Pretty prints operands *)   
 let pprintop op =
@@ -45,6 +45,7 @@ let pprintop op =
   | OpDBprint -> "dbprint"          (* Debug basic printing "dbprint". 
                                        Use e.g. Set(1,2) instead of {1,2} *)
   | OpPrint -> "print"
+  | OpArgv -> "argv"
   | OpConcat -> "++"  
   )
 
@@ -101,6 +102,7 @@ let uc2ustring uclst =
       |TmChar(_,i) -> i
       | _ -> failwith "Not a string list") uclst 
 
+      
     
 (* Pretty print match cases *)
 let rec pprint_cases basic cases = 
@@ -239,8 +241,10 @@ let evalop op t1 t2 =
     | TmUC(_,uct,_,_) ->
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
         |> printf "%s"; TmNop
-    | _ -> raise_error (tm_info t1) "Cannot print value with this type"
-    )
+    | _ -> raise_error (tm_info t1) "Cannot print value with this type")
+  | OpArgv,_,_ ->
+    let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
+    in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
   | OpConcat,TmUC(l,t1,o1,u1),TmUC(_,t2,o2,u2)
        when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
   | OpConcat,tm1,TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
@@ -406,30 +410,28 @@ let menu() =
 
 (* Main function. Checks arguments and reads file names *)
 let main =
-  if Array.length Sys.argv < 2 then menu()
-  else
-    (* Check if we should run the test suite *)
-    let args =
-      let lst = Array.to_list Sys.argv |> List.tl in
-      (match List.hd lst with
-       | "run" -> List.tl lst
-       | "test" | "t" -> utest := true; List.tl lst
-       | _ -> lst)
-    in
-    (* Expand folders to file names *)
-    let files = files_of_folders args in
-    
-    (* Run all programs given as program arguments *)
-    List.iter evalprog files;
+  (* Check command  *)
+  (match Array.to_list Sys.argv |> List.tl with
 
-    (* Print out the unit test results *)
-    if !utest && !utest_fail = 0 then
+  (* Run tests on one or more files *)
+  | "test"::lst | "t"::lst -> (
+    utest := true;
+    List.iter evalprog (files_of_folders lst);
+    if !utest_fail = 0 then
       printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
         (!utest_ok)
-    else if !utest then
+            else 
       printf "\nERROR! %d successful tests and %d failed tests.\n"
-        (!utest_ok) (!utest_fail)
-    else ()
+        (!utest_ok) (!utest_fail))
+
+  (* Run one program with program arguments *)
+  | "run"::name::lst | name::lst -> (
+    prog_argv := lst;
+    evalprog name)
+
+  (* Show the menu *)
+  | _ -> menu())
+
      
     
 

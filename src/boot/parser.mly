@@ -228,6 +228,7 @@ atom:
          | "dprint"  -> TmOp($1.i,OpDprint,List.hd $2,TmNop)
          | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
          | "print"   -> TmOp($1.i,OpPrint,List.hd $2,TmNop)
+         | "argv"   -> TmOp($1.i,OpArgv,TmNop,TmNop)
          | "Seq"     -> TmUC($1.i,UCLeaf(List.rev $2),UCOrdered,UCMultivalued) 
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else $2))}
   | LPAREN term RPAREN   { $2 }
@@ -237,9 +238,7 @@ atom:
   | LCURLY scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  | STRING
-      { let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list $1.v) in
-        TmUC($1.i,UCLeaf(lst),UCOrdered,UCMultivalued) } 
+  | STRING               { ustring2uctm $1.i $1.v } 
   | UINT                 { TmInt($1.i,$1.v) }
   | TRUE                 { TmBool($1.i,true) }
   | FALSE                { TmBool($1.i,false) }

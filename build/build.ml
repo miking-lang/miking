@@ -28,7 +28,7 @@ let rmfiles s =
 let cleanup_build_files() =
   maindir();
   chdir "build";
-  rmfiles "boot1 boot2 moz _bootbuildtag";
+  rmfiles "boot1 boot2 _bootbuildtag";
   maindir()
                                                                 
 let cleanup_temp_files() =
