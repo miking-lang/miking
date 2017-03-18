@@ -2,10 +2,10 @@
    Modelyze II is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
-   mb1.ml is the main entry point for the bootstrapping
-   interpreter that is implemented in OCaml. Note that the Modelyze
-   bootstrapper only implements a subset of the language mcore
-   (Modelyze core).
+   boot1.ml is the main entry point for first stage of the 
+   bootstrapped Modelyze compiler. Stage 1 is interpreted and 
+   implemented in OCaml. Note that the Modelyze bootstrapper 
+   only implements a subset of the Miking language.
 *)
 
 open Utils
@@ -44,6 +44,7 @@ let pprintop op =
   | OpDprint -> "dprint"            (* Debug printing of any value *)
   | OpDBprint -> "dbprint"          (* Debug basic printing "dbprint". 
                                        Use e.g. Set(1,2) instead of {1,2} *)
+  | OpPrint -> "print"
   | OpConcat -> "++"  
   )
 
@@ -93,10 +94,19 @@ let rec pprint_pat pat =
   | PatInt(_,i) -> us(sprintf "%d" i)
   | PatConcat(_,p1,p2) -> (pprint_pat p1) ^. us"++" ^. (pprint_pat p2)
 
+(* Converts a UC to a ustring *)     
+let uc2ustring uclst =
+    List.map
+      (fun x -> match x with
+      |TmChar(_,i) -> i
+      | _ -> failwith "Not a string list") uclst 
+
+    
 (* Pretty print match cases *)
 let rec pprint_cases basic cases = 
    Ustring.concat (us" else ") (List.map
     (fun (Case(_,p,t)) -> pprint_pat p ^. us" => " ^. pprint basic t) cases)
+
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -122,9 +132,8 @@ and pprint basic t =
       let lst = uct2list uct in
       (match lst with       
       | TmChar(_,_)::_ ->
-        let intlst = List.map
-          (fun x -> match x with TmChar(_,i) -> i | _ -> failwith "Not a string list") lst in
-          us"\"" ^. list2ustring intlst ^.  us"\""
+        let intlst = uc2ustring lst in
+        us"\"" ^. list2ustring intlst ^.  us"\""
       | _ -> us"[" ^. (Ustring.concat (us",") (List.map pprint lst)) ^. us"]")
     | _,_ -> 
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
@@ -224,6 +233,14 @@ let evalop op t1 t2 =
   | OpDBstr,t1,_ -> ustring2uctstring (pprint true t1)
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
   | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
+  | OpPrint,t1,_ -> (match t1 with
+    | TmInt(_,v) -> printf "%d" v; TmNop
+    | TmBool(_,v) -> printf "%s" (if v then "true" else "false"); TmNop
+    | TmUC(_,uct,_,_) ->
+        uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
+        |> printf "%s"; TmNop
+    | _ -> raise_error (tm_info t1) "Cannot print value with this type"
+    )
   | OpConcat,TmUC(l,t1,o1,u1),TmUC(_,t2,o2,u2)
        when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
   | OpConcat,tm1,TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
@@ -379,19 +396,11 @@ let evalprog filename  =
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
     
-(* Define the file slash, to make it platform independent *)    
-let sl = if Sys.win32 then "\\" else "/"
-
     
-(* Add a slash at the end "\\" or "/" if not already available *)
-let add_slash s =
-  if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> sl
-  then s ^ sl else s
-
     
 (* Print out main menu *)    
 let menu() =
-  printf "Usage: boot1 [test] <files>\n";
+  printf "Usage: boot1 [run|test] <files>\n";
   printf "\n"
 
 
@@ -400,21 +409,15 @@ let main =
   if Array.length Sys.argv < 2 then menu()
   else
     (* Check if we should run the test suite *)
-    let args = Array.to_list Sys.argv |> List.tl in
     let args =
-      if List.hd args = "test" then (utest := true; List.tl args) else args
+      let lst = Array.to_list Sys.argv |> List.tl in
+      (match List.hd lst with
+       | "run" -> List.tl lst
+       | "test" | "t" -> utest := true; List.tl lst
+       | _ -> lst)
     in
     (* Expand folders to file names *)
-    let files = List.fold_left (fun a v ->
-      if Sys.is_directory v then
-        (Sys.readdir v
-         |> Array.to_list
-         |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
-         |> List.map (fun x -> (add_slash v) ^ x) 
-         |> List.filter (fun x -> not (Sys.is_directory x))
-        ) @ a  
-      else v::a
-    ) [] args in
+    let files = files_of_folders args in
     
     (* Run all programs given as program arguments *)
     List.iter evalprog files;

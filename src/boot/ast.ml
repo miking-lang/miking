@@ -32,6 +32,7 @@ and op =
 | OpDBstr      (* Debug string, basic *)
 | OpDprint     (* Debug print *)
 | OpDBprint    (* Debug print, basic *)
+| OpPrint      (* Print *)
 | OpConcat     (* Concatenation *)
 
     

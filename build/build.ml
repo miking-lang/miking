@@ -14,7 +14,6 @@ let sl = if win32 then "\\" else "/"
 
 
 (* Directories *)
-
 let builddir = "build"
 let bootdir = "src" ^ sl ^ "boot"
 
@@ -83,7 +82,7 @@ let read_binfile filename =
   | Invalid_argument _ -> raise (Sys_error "Cannot read file")
       
 
-let should_recompile_bootstrapper() =
+let should_recompile_bootstrappers() =
   if win32 then true else
   let file =  builddir ^ sl ^ "_bootbuildtag" in
   if not (file_exists file) then (
@@ -95,25 +94,34 @@ let should_recompile_bootstrapper() =
     let s2 = read_binfile file in
     s1 <> s2
         
-let build_bootstrapper() =
-  if should_recompile_bootstrapper() then (
-    printf "Building bootstrapper...\n";
+let build_bootstrappers() =
+  if should_recompile_bootstrappers() then (
+    (* boot1 *)
+    printf "Building boot1...\n";
     flush_all();
     chdir bootdir;
     cmd "ocamllex lexer.mll";
     cmd "ocamlyacc parser.mly";
     cmd ("ocamlopt -o .." ^ sl ^ ".." ^ sl ^
-          builddir ^ sl ^ "boot1 utils.mli utils.ml " ^
+          builddir ^ sl ^ "boot1 utils.ml " ^
           "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
-          "parser.ml boot1.ml"))
+          "parser.ml boot1.ml");
+
+    (* boot2 *)
+    printf "Building boot2...\n";
+    flush_all();
+    cmd ("ocamlopt -o .." ^ sl ^ ".." ^ sl ^
+          builddir ^ sl ^ "boot2 utils.ml " ^
+          "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
+          "parser.ml boot2.ml"))    
   else
-    printf "The bootstrapper is already up to date.\n"
+    printf "The bootstrappers are already up to date.\n"
   
       
 (************************************************************)  
 (* The build script for building all components of Modelyze *)
 let build() =
-  build_bootstrapper();
+  build_bootstrappers();
   cleanup_temp_files();
   maindir();
   printf "Build complete.\n";

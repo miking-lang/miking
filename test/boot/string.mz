@@ -1,10 +1,8 @@
-/* 
-  Modelyze II is licensed under the MIT license.
-  Copyright (C) David Broman. See file LICENSE.txt
+//  Modelyze II is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// Tests characters and string operations.
 
-  Tests characters and string operations.
-
-*/
 
 // Introduction and equality test of characters
 utest 'a'            'a'

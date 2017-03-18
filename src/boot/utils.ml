@@ -14,6 +14,28 @@ module IntSet = Set.Make(
 
 type intset = IntSet.t
 
+(* Define the file slash, to make it platform independent *)    
+let sl = if Sys.win32 then "\\" else "/"
+
+
+(* Add a slash at the end "\\" or "/" if not already available *)
+let add_slash s =
+  if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> sl
+  then s ^ sl else s
+
+  
+(* Expand a list of files and folders into a list of file names *)
+let files_of_folders lst = List.fold_left (fun a v ->
+  if Sys.is_directory v then
+    (Sys.readdir v
+        |> Array.to_list
+        |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
+        |> List.map (fun x -> (add_slash v) ^ x) 
+         |> List.filter (fun x -> not (Sys.is_directory x))
+    ) @ a  
+  else v::a
+) [] lst 
+
 
 (* Returns the last element *)
 let rec last xs =

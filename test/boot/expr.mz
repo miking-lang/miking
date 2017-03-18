@@ -1,17 +1,16 @@
-/* 
-  Modelyze II is licensed under the MIT license.
-  Copyright (C) David Broman. See file LICENSE.txt
+// Modelyze II is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// File expr.mz tests the bootstrapping compiler
+// for basic evaluation of expressions.
 
-  File expr.mz tests the bootstrapping compiler
-  for basic evaluation of expressions.
-*/
 
 
 // Testing integer binary operators '+' '-' '*' '/' '%' and unary operator '-'.
 utest 3+2               5
 utest 2+4*5             22
 utest (2+4)*5           30
-utest 1+2-4             (-1)   /* In mcore basic, we need () around unary minus */
+utest 1+2-4             (-1)   // In mcore basic, we need () around unary minus 
 utest 10-(-2)           12
 utest 10/3              3
 utest (-21)/4+1         (-4)

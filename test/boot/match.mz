@@ -1,10 +1,7 @@
-/* 
-  Modelyze II is licensed under the MIT license.
-  Copyright (C) David Broman. See file LICENSE.txt
-
-  Test differnt ways of using the match construct
-*/
-
+// Modelyze II is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// Test differnt ways of using the match construct
 
 
 //Simple string matching with function
@@ -15,7 +12,7 @@ def foo1(str:String) = match str {
 utest foo1("foo")       'f'
 utest foo1("k")         'k'
 utest foo1("")          'y'
-
+ 
 
 //Match strings
 utest match "tests" {['t',a,'s']++b => a, _ => '.'}           'e'

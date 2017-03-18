@@ -1,9 +1,8 @@
-/* 
-  Modelyze II is licensed under the MIT license.
-  Copyright (C) David Broman. See file LICENSE.txt
+// Modelyze II is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// Test different way of specifying funcions
 
-  Test different way of specifying funcions
-*/
 
 
 //Test a recursive function where we specify the return type

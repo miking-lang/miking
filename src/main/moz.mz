@@ -1,0 +1,14 @@
+// Modelyze II is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// File moz.mz is the main file of the Modelyze II tool chain.
+
+
+
+def menu =
+    "\n" ++ 
+    "Modelyze II by David Broman\n" ++
+    "Usage: moz [run|test|compile] <files>\n"
+    
+
+print(menu)
