@@ -7,7 +7,7 @@
 :: dependent on Make.
 :: ###################################################
 
-@ocaml boot\build.ml %1 %2 %3
+@ocaml build\build.ml %1 %2 %3
 
 
 
