@@ -244,12 +244,10 @@ atom:
   | FALSE                { TmBool($1.i,false) }
 
 
-revpatseq:
+patseq:
   |   {[]}
-  | pattern
-      {[$1]}
-  | revpatseq COMMA pattern
-      {$3::$1}
+  | pattern commaop patseq
+      {$1::$3}
 
       
 pattern:
@@ -268,9 +266,9 @@ pattern:
       {PatBool($1.i,false)}
   | pattern CONCAT pattern
       {PatConcat($2.i,$1,$3)}
-  | LSQUARE revpatseq RSQUARE
-      {PatUC($1.i,List.rev $2,UCOrdered,UCMultivalued)}
-  | FUNIDENT revpatseq RPAREN
+  | LSQUARE patseq RSQUARE
+      {PatUC($1.i,$2,UCOrdered,UCMultivalued)}
+  | FUNIDENT patseq RPAREN
       {PatIdent($1.i,$1.v)}
 
 commaop:

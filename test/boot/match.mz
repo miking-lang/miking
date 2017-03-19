@@ -38,12 +38,15 @@ utest map(fun(x){x++"x"},["1","2"]++["3","4"])     ["1x","2x","3x","4x"]
 
 //test integer match
 utest match 3{2=>"2", 3=>"3"}                 "3"
-utest match 2{2=>"2"}                             "2"
-utest match 2+2{2=>"2", 3=>"3", 4=>"4"}   "4"
+utest match 2{2=>"2"}                         "2"
+utest match 2+2{2=>"2", 3=>"3", 4=>"4"}       "4"
+utest match 2+2{2=>"2"  3=>"3", 4=>"4"}       "4"
+utest match 2+2{2=>"2"  3=>"3"  4=>"4"}       "4"
 
 //test boolean match
 utest match true {true=>1, false=>2}          1
 utest match false {true=>1, false=>2}         2
+utest match false {true=>1 false=>2}          2
 
 //deep match
 utest match [[],["abc","k"]]
