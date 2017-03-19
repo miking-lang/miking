@@ -102,8 +102,7 @@ let uc2ustring uclst =
       |TmChar(_,i) -> i
       | _ -> failwith "Not a string list") uclst 
 
-      
-    
+         
 (* Pretty print match cases *)
 let rec pprint_cases basic cases = 
    Ustring.concat (us" else ") (List.map
@@ -144,7 +143,7 @@ and pprint basic t =
   | TmMatch(fi,t1,cases)
     ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
-
+ 
     
 (* Print out error message when a unit test fails *)    
 let unittest_failed fi t1 t2=

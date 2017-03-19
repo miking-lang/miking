@@ -22,43 +22,46 @@ let bootdir = "src" ^ sl ^ "boot"
 let startdir = getcwd()
 let maindir() = chdir startdir
 
-let rmfiles s =
-  let _ = command ((if win32 then "del /q " else "rm -f ") ^ s) in ()
 
-let cleanup_build_files() =
-  maindir();
-  chdir "build";
-  rmfiles "boot1 boot2 boot1.exe boot2.exe _bootbuildtag";
-  maindir()
-                                                                
-let cleanup_temp_files() =
+(* Execute a shell command. Exit if there is an error *)
+let rec cmd s =
+  let code = command s in
+  if code != 0 then (cleanup_temp_files(); exit code) else ()
+
+and cleanup_temp_files() =
   maindir();
   chdir bootdir;
   rmfiles "*.cmi *.cmx *.o lexer.ml parser.ml parser.mli";
   maindir()
-
-(* Execute a shell command. Exit if there is an error *)
-let cmd s =
-  let code = command s in
-  if code != 0 then (cleanup_temp_files(); exit code) else ()
-
-
+                                                                
   
-let dir_exists s =
+and dir_exists s =
   try is_directory s with _ -> false
-
-let mkdir s =
+                                                                 
+and mkdir s =
   if not (dir_exists s) then
   cmd ("mkdir " ^ s) else ()
 
-let rmdir s =
+and rmdir s =
   if win32 then
     if dir_exists s then
       cmd ("rmdir /s /q " ^ s)
     else ()
   else
     cmd ("rm -rf " ^ s)
+  
+and rmfiles s =
+  let _ = command ((if win32 then "del /q " else "rm -f ") ^ s) in ()
 
+and cleanup_build_files() =
+  maindir();
+  rmdir "_build";
+  chdir "build";
+  rmfiles "boot1 boot2 boot1.exe boot2.exe _bootbuildtag";
+  maindir()
+                                                                
+                                                                   
+      
 let lsdir2file dir targetfile =
   if win32 then
     cmd ("dir " ^ dir ^ " > " ^ targetfile)  
@@ -81,7 +84,7 @@ let read_binfile filename =
   with 
   | Invalid_argument _ -> raise (Sys_error "Cannot read file")
       
-
+    
 let should_recompile_bootstrappers() =
   if win32 then true else
   let file =  builddir ^ sl ^ "_bootbuildtag" in
@@ -95,7 +98,7 @@ let should_recompile_bootstrappers() =
     s1 <> s2
         
 let build_bootstrappers() =
-  if should_recompile_bootstrappers() then (
+  if win32 || command "ocamlbuild --version > /dev/null 2>&1" != 0 then (
     (* boot1 *)
     printf "Building boot1...\n";
     flush_all();
@@ -114,9 +117,14 @@ let build_bootstrappers() =
           builddir ^ sl ^ "boot2 utils.ml " ^
           "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
           "parser.ml boot2.ml"))    
-  else
-    printf "The bootstrappers are already up to date.\n"
-  
+  else (
+    cmd ("ocamlbuild -Is src/boot boot1.native");
+    cmd ("mv -f boot1.native build/boot1");
+    cmd ("ocamlbuild -Is src/boot boot2.native");
+    cmd ("mv -f boot2.native build/boot2");      
+  )
+    
+      
       
 (************************************************************)  
 (* The build script for building all components of Modelyze *)
