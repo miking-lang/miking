@@ -138,13 +138,13 @@ scope:
       match $2 with
       | TmNop -> $1 
       | _ -> TmExprSeq(tm_info $1,$1,$2) }      
-  | DEF FUNIDENT revidentseq RPAREN oparrow body scope
+  | DEF FUNIDENT identseq RPAREN oparrow body scope
       { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
           | x::xs -> TmLam(fi,x,mkfun xs)
           | [] -> $6 ) in
         let f = if List.length $3 = 0 then [us"@no"] else $3 in
-        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun (List.rev f))) } 
+        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun f)) } 
   | DEF IDENT body scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
@@ -287,15 +287,21 @@ tmseq:
     |   {[]}
     |   term commaop tmseq
         {$1::$3}
-        
+
+        /*
 revidentseq:
     |   {[]}
     |   IDENT COLON ty
         {[$1.v]}               
     |   revidentseq COMMA IDENT COLON ty
         {$3.v::$1}
+        */
+
+identseq:
+    |   {[]}
+    |   IDENT COLON ty commaop identseq
+        {$1.v::$5}               
         
-      
 ty:
   | tyatom
       {}

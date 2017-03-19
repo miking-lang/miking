@@ -53,7 +53,10 @@ def foo6 = foo4(foo5,"first")
 utest foo6("second","last")       "first|secondlast" 
 
 
-
+//Definitions without commas
+def foo7(x:Int y:Int) = x + y
+utest foo7(3,8)                   11
+utest foo7(3 8)                   11
 
 
 
