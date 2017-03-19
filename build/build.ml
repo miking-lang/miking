@@ -98,7 +98,7 @@ let should_recompile_bootstrappers() =
     s1 <> s2
         
 let build_bootstrappers() =
-  if win32 || command "ocamlbuild --version > /dev/null 2>&1" != 0 then (
+  if win32 || command "ocamlbuild -version > /dev/null 2>&1" != 0 then (
     (* boot1 *)
     printf "Building boot1...\n";
     flush_all();
