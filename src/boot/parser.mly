@@ -172,13 +172,13 @@ body:
       
 term:
   | op                   { $1 }      
-  | FUNC IDENT term 
+  | FUNC IDENT term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$2.v,$3) }
-  | FUNC LPAREN IDENT RPAREN term 
+  | FUNC LPAREN IDENT RPAREN term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$3.v,$5) }
-  | FUNC2 IDENT RPAREN term 
+  | FUNC2 IDENT RPAREN term
       { let fi = mkinfo $1.i (tm_info $4) in
         TmLam(fi,$2.v,$4) }
   | IF term THEN term ELSE term
@@ -190,7 +190,7 @@ term:
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmIf(fi,$2,$3,$5) }
-  | MATCH op LCURLY cases RCURLY
+  | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
       
 op:
@@ -215,7 +215,7 @@ op:
       
 atom:
     /* Function application */  
-  | FUNIDENT revtmseq RPAREN  
+  | FUNIDENT tmseq RPAREN  
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
           match lst with
@@ -229,12 +229,12 @@ atom:
          | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
          | "print"   -> TmOp($1.i,OpPrint,List.hd $2,TmNop)
          | "argv"   -> TmOp($1.i,OpArgv,TmNop,TmNop)
-         | "Seq"     -> TmUC($1.i,UCLeaf(List.rev $2),UCOrdered,UCMultivalued) 
-         | _ -> mkapps (if List.length $2 = 0 then [TmNop] else $2))}
+         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) 
+         | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }
   | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }
-  | LSQUARE revtmseq RSQUARE  
-       { TmUC($1.i,UCLeaf(List.rev $2),UCOrdered,UCMultivalued) }
+  | LSQUARE tmseq RSQUARE  
+       { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
@@ -273,23 +273,20 @@ pattern:
   | FUNIDENT revpatseq RPAREN
       {PatIdent($1.i,$1.v)}
 
-elseop:
+commaop:
   | {}
   | COMMA {}
       
 cases:
   |   {[]}      
-  | pattern DARROW term elseop cases
+  | pattern DARROW term commaop cases
       { Case($2.i,$1,$3)::$5 }
 
       
-revtmseq:
+tmseq:
     |   {[]}
-    |   term
-        {[$1]}               
-    |   revtmseq COMMA term
-        {$3::$1}
-
+    |   term commaop tmseq
+        {$1::$3}
         
 revidentseq:
     |   {[]}

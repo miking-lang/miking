@@ -27,8 +27,13 @@ utest ["this","that"]++["and"]  ["this","that","and"]
 utest ["this"++"that"]++["and"] ["thisthat","and"]
 
 //Test sequences in other form
-utest Seq(1,2)                          [1,2]
-utest Seq()                             []
-utest Seq("hello")                      ["hello"]
-utest Seq(true,true)++Seq(false)        [true,true,false]
+utest seq(1,2)                          [1,2]
+utest seq()                             []
+utest seq("hello")                      ["hello"]
+utest seq(true,true)++seq(false)        [true,true,false]
 
+//Sequences without comma
+def foo(x:Int) = x + 1
+utest [1 4 3 5]                         [1,4,3,5]
+utest [1 4+7 3 foo(5)]                  [1,11,3,6]
+utest seq(4 5 10)                       [4,5,10]
