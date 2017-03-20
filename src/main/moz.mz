@@ -10,7 +10,12 @@ def menu =
     "Modelyze II by David Broman\n" ++
     "Usage: moz [run|test|compile] <files>\n"
     
+  
+match argv() {
+   ["run"]++_  => print("Run program\n")
+   ["test"]++_ => print("Test program\n")
+   _ => print(menu)
+}
 
-print(menu)
+// TODO: bug when running moz test2
 
-dprint(argv())
