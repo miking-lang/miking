@@ -285,13 +285,13 @@ let rec eval_match env pat t final =
   | PatChar(_,c1),TmChar(_,c2) -> if c1 = c2 then Some(env,TmNop) else None
   | PatChar(_,_),_ -> None
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf(t::ts),o2,u2) ->
-    (match eval_match env p t final with
+    (match eval_match env p t true with
     | Some(env,_) ->
       eval_match env (PatUC(fi1,ps,o1,u1)) (TmUC(fi2,UCLeaf(ts),o2,u2)) final
     | None -> None)
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf([]),o2,u2) -> None
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf(t::ts),t2),o2,u2) ->
-    (match eval_match env p t final with
+    (match eval_match env p t true with
     | Some(env,_) ->
       eval_match env (PatUC(fi1,ps,o1,u1))
         (TmUC(fi2,UCNode(UCLeaf(ts),t2),o2,u2)) final

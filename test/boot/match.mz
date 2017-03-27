@@ -59,7 +59,11 @@ utest match [1,2,3] {[_,a,_] => a}              2
 utest match [1,2,3] {[a,_,_] => a}              1
 utest match [1,2,3] {[a,_,_,_] => a  _ => 5}    5
 
-// Pattern variables first is notpart of Miking--
+utest match "testa" {"test" => 1, _ => 2}           2       
+utest match ["test"] {["test"]++_ => 1, _ => 2}     1
+utest match ["testa"] {["test"]++_ => 1, _ => 3}    3
+
+// Pattern variables first is not part of Miking--
 // utest match [1,2,3] {a++[2,3] => a}             [1]
 
 
