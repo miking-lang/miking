@@ -115,7 +115,7 @@ and pprint basic t =
   let pprint = pprint basic in
   match t with
   | TmVar(_,x,_) -> x
-  | TmLam(_,x,t1) -> us"(fun x " ^. x ^. us" " ^.  pprint t1 ^. us")"
+  | TmLam(_,x,t1) -> us"fun(" ^. x ^. us"){" ^.  pprint t1 ^. us"}"
   | TmClos(_,_,_) -> us"closure"
   | TmFix(_,_) -> us"fix"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
@@ -313,44 +313,99 @@ let rec eval_match env pat t final =
     | None -> None)
       
 
-  
+
+let rec eval_args eval env args  =
+  match args with
+  | (t,true)::ts -> args
+  | (t,false)::ts -> (eval env [] t,true)::(eval_args eval env ts)
+  | [] -> []
+    
+let apply eval env args env2 fi t1 =
+      printf "--- apply: %d\n" (List.length args);
+      uprint_endline (pprint true t1);
+      (match eval_args eval env args with
+      |(v,_)::ts ->
+      printf "- eval: %d\n" (List.length args);
+      uprint_endline (pprint true t1);
+        eval (v::env2) ts t1        
+      | [] ->
+      printf "- clos: %d\n" (List.length args);
+        TmClos(fi,t1,env2))
+
+    
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)    
-let rec eval env t = 
+let rec eval env args t = 
   match t with
   | TmVar(fi,x,n) ->
+      printf "--- TmVar: %d\n" (List.length args);
+      uprint_endline (pprint true t);
      (* let rec index env k = match env with
       | t::ee -> if k = 0 then t else index ee (k-1)
       | [] -> failwith "Cannot find index"
         in index env n *)
           (match List.nth env n with
-             | TmFix(_,t) as tt -> eval env tt
-             | t -> t) 
-  | TmLam(fi,x,t1) -> TmClos(fi,t1,env)
-  | TmClos(fi,t1,env2) -> t
+          | TmFix(_,t) as tt ->
+              printf "- TmFix: %d\n" (List.length args);
+            eval env args tt
+          | t ->
+              printf "- NotFix: %d\n" (List.length args);
+             uprint_endline (pprint true t);
+            eval env args t)
+  | TmLam(fi,x,t1) ->
+    printf "--- TmLam: %d\n" (List.length args);
+     uprint_endline (pprint true t);
+    apply eval env args env fi t1
+    (*
+      (match eval_args eval env args with
+      |(v,_)::ts -> eval (v::env) ts t1        
+      | [] -> TmClos(fi,t1,env))
+    *)
+  | TmClos(fi,t1,env2) ->
+     printf "--- TmClos: %d\n" (List.length args);
+      uprint_endline (pprint true t1);
+    apply eval env args env2 fi t1
+   (* 
+      (match eval_args eval env args with
+      | (v,_)::ts -> eval (v::env2) ts t1        
+      | [] -> t)
+   *)
   | TmFix(fi,t1) ->
-        (match eval env t1 with
-         | TmClos(fi,t2,env2) as tt ->                  
-              eval (TmFix(fi,tt)::env2) t2 
-         | _ -> TmFix(fi,t1))
+      printf "--- TmFix: %d\n" (List.length args);
+      uprint_endline (pprint true t1);
+        (match eval env [] t1 with
+         | TmClos(fi,t2,env2) as tt ->
+             printf "- Closure: %d\n" (List.length args);
+             uprint_endline (pprint true t2);
+             eval (TmFix(fi,tt)::env2) args t2
+         (* apply eval env args (TmFix(fi,tt)::env2) fi t2   *)
+
+             (*  eval (TmFix(fi,tt)::env2) args t2  *)
+         | _ -> 
+           printf "- No closure: %d\n" (List.length args);
+           TmFix(fi,t1))
   | TmApp(fi,t1,t2) ->
-      (match eval env t1 with
-       | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3  
+      printf "--- TmApp: %d\n" (List.length args);
+      uprint_endline (pprint true t);
+    eval env ((t2,false)::args) t1
+   (*      (match eval env args t1 with
+       | TmClos(fi,t3,env2) -> eval ((eval env args t2)::env2) args t3  
        | _ ->
-         raise_error fi "Runtime error. Application to a non closure value.")
+           raise_error fi "Runtime error. Application to a non closure value.") *)
   | TmInt(_,_) -> t
   | TmBool(_,_) -> t
   | TmChar(_,_) -> t
-  | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
+  | TmOp(_,op,t1,t2) -> evalop op (eval env [] t1) (eval env [] t2)
   | TmIf(fi,t1,t2,t3) ->
-      (match eval env t1 with
-      | TmBool(_,true) -> eval env t2
-      | TmBool(_,false) -> eval env t3
+      printf "--- TmIf: %d\n" (List.length args);
+      (match eval env [] t1 with
+      | TmBool(_,true) -> eval env args t2
+      | TmBool(_,false) -> eval env args t3
       | _ -> failwith "Incorrect if-expression")
-  | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
-  | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
+  | TmExprSeq(_,t1,t2) -> let _ = eval env [] t1 in eval env [] t2
+  | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env []) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
     if !utest then begin
-      let (v1,v2) = ((eval env t1),(eval env t2)) in
+      let (v1,v2) = ((eval env [] t1),(eval env [] t2)) in
         if val_equal v1 v2 then
          (printf "."; utest_ok := !utest_ok + 1)
        else (
@@ -358,14 +413,14 @@ let rec eval env t =
         utest_fail := !utest_fail + 1;  
         utest_fail_local := !utest_fail_local + 1)
      end;
-    eval env tnext
+    eval env [] tnext
   | TmMatch(fi,t1,cases) -> (
-     let v1 = make_tm_for_match (eval env t1) in
+     let v1 = make_tm_for_match (eval env [] t1) in
      let rec appcases cases =
        match cases with
        | Case(_,p,t)::cs ->
           (match eval_match env p v1 true with
-         | Some(env,_) -> eval env t 
+         | Some(env,_) -> eval env args t 
          | None -> appcases cs)
        | [] -> raise_error fi  "Match error"
      in
@@ -385,7 +440,7 @@ let evalprog filename  =
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main
         |> debruijn []
-        |> eval []
+        |> eval [] []
         |> fun _ -> ()
 
   with

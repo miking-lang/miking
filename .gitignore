@@ -1,4 +1,5 @@
 build/_bootbuildtag
-build/boot1
-build/boot2
+build/boot
 _build
+\#*
+\.\#*

@@ -1,0 +1,22 @@
+
+
+def fact(n:Int) -> Int {
+    if(n <= 1) 1 else n*fact(n-1)
+}
+
+
+/*
+def f(z:Int,y:Int) = {
+    dprint("h1")
+    x + y * 10 + 5
+}
+
+def k(z:Int){
+    dprint("a1")
+    x
+}
+
+dprint(f(1,k(20)))
+*/
+
+dprint(fact(3))
