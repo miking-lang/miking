@@ -57,7 +57,7 @@ and cleanup_build_files() =
   maindir();
   rmdir "_build";
   chdir "build";
-  rmfiles "boot1 boot2 boot1.exe boot2.exe _bootbuildtag";
+  rmfiles "boot boot.exe _bootbuildtag";
   maindir()
                                                                 
                                                                    
@@ -99,29 +99,19 @@ let should_recompile_bootstrappers() =
         
 let build_bootstrappers() =
   if win32 || command "ocamlbuild -version > /dev/null 2>&1" != 0 then (
-    (* boot1 *)
-    printf "Building boot1...\n";
+    (* boot *)
+    printf "Building boot...\n";
     flush_all();
     chdir bootdir;
     cmd "ocamllex lexer.mll";
     cmd "ocamlyacc parser.mly";
     cmd ("ocamlopt -o .." ^ sl ^ ".." ^ sl ^
-          builddir ^ sl ^ "boot1 utils.ml " ^
+          builddir ^ sl ^ "boot utils.ml " ^
           "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
-          "parser.ml boot1.ml");
-
-    (* boot2 *)
-    printf "Building boot2...\n";
-    flush_all();
-    cmd ("ocamlopt -o .." ^ sl ^ ".." ^ sl ^
-          builddir ^ sl ^ "boot2 utils.ml " ^
-          "ustring.mli ustring.ml msg.ml ast.ml parser.mli lexer.ml " ^
-          "parser.ml boot2.ml"))    
+          "parser.ml boot.ml"))    
   else (
-    cmd ("ocamlbuild -Is src/boot boot1.native");
-    cmd ("mv -f boot1.native build/boot1");
-    cmd ("ocamlbuild -Is src/boot boot2.native");
-    cmd ("mv -f boot2.native build/boot2");      
+    cmd ("ocamlbuild -Is src/boot boot.native");
+    cmd ("mv -f boot.native build/boot");
   )
     
       
@@ -148,7 +138,7 @@ let clean() =
 (************************************************************)    
 (* Script for performing tests *)     
 let test() =
-  cmd (builddir ^ sl ^ "boot1 test test" ^ sl ^ "boot")    
+  cmd (builddir ^ sl ^ "boot test test" ^ sl ^ "boot")    
 
     
 (************************************************************)  

@@ -2,8 +2,8 @@
    Modelyze II is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
-   boot1.ml is the main entry point for first stage of the 
-   bootstrapped Modelyze compiler. Stage 1 is interpreted and 
+   boot.ml is the main entry point for first stage of the 
+   bootstrapped Modelyze compiler. The bootstapper is interpreted and 
    implemented in OCaml. Note that the Modelyze bootstrapper 
    only implements a subset of the Miking language.
 *)
@@ -403,7 +403,7 @@ let evalprog filename  =
     
 (* Print out main menu *)    
 let menu() =
-  printf "Usage: boot1 [run|test] <files>\n";
+  printf "Usage: boot [run|test] <files>\n";
   printf "\n"
 
 
