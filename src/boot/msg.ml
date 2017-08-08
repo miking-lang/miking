@@ -1,5 +1,5 @@
 (* 
-   Modelyze II is licensed under the MIT license.  
+   Miking is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
    msg.ml includes standard error messages for the lexer and the

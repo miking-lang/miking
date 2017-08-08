@@ -1,4 +1,4 @@
-# Modelyze Reference Manual
+# Ragnar Reference Manual
 
 ## Features
 
@@ -12,7 +12,7 @@
 
 
 ## Data Types
-Modelyze has four primitive data types: `Int`, `Bool`, `Real`, and `String`. 
+Ragnar has four primitive data types: `Int`, `Bool`, `Real`, and `String`. 
 
 There are four built in compound types: `Set`, `Map`, `Seq`, and `Tup`. 
 

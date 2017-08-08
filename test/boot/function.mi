@@ -1,4 +1,4 @@
-// Modelyze II is licensed under the MIT license.
+// Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
 // Test different way of specifying funcions
@@ -38,6 +38,8 @@ utest foo3(10,fun (x) x+5,"")     15
 utest foo3(10,fun x x+5,"")       15
 utest foo3(10,fun x {x+5},"")     15
 utest foo3(10,fun(x){x+5},"")     15
+utest foo3(10,x->x+5,"")          15
+
 
 
 //Return a function with several arguments. Several scopes

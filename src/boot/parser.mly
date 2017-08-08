@@ -1,5 +1,5 @@
 /* 
-   Modelyze II is licensed under the MIT license. 
+   Miking is licensed under the MIT license. 
    Copyright (C) David Broman. See file LICENSE.txt
    
    parser.mly includes the grammar for parsing the mcore--, the subset
@@ -138,7 +138,7 @@ scope:
       match $2 with
       | TmNop -> $1 
       | _ -> TmExprSeq(tm_info $1,$1,$2) }      
-  | DEF FUNIDENT identseq RPAREN oparrow body scope
+  | DEF FUNIDENT identtyseq RPAREN oparrow body scope
       { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
           | x::xs -> TmLam(fi,x,mkfun xs)
@@ -171,7 +171,10 @@ body:
       
       
 term:
-  | op                   { $1 }      
+  | op                   { $1 }
+  | IDENT ARROW term    
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmLam(fi,$1.v,$3) }
   | FUNC IDENT term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$2.v,$3) }
@@ -194,7 +197,7 @@ term:
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
       
 op:
-  | atom                 { $1 }     
+  | atom                 { $1 }
   | op ADD op            { TmOp($2.i,OpAdd,$1,$3) }
   | op SUB op            { TmOp($2.i,OpSub,$1,$3) }
   | op MUL op            { TmOp($2.i,OpMul,$1,$3) }
@@ -286,19 +289,12 @@ tmseq:
     |   term commaop tmseq
         {$1::$3}
 
-        /*
-revidentseq:
-    |   {[]}
-    |   IDENT COLON ty
-        {[$1.v]}               
-    |   revidentseq COMMA IDENT COLON ty
-        {$3.v::$1}
-        */
 
-identseq:
+identtyseq:
     |   {[]}
-    |   IDENT COLON ty commaop identseq
+    |   IDENT COLON ty commaop identtyseq
         {$1.v::$5}               
+        
         
 ty:
   | tyatom

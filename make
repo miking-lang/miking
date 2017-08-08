@@ -1,6 +1,6 @@
 #!/bin/bash
 ###################################################
-#  Modelyze II is licensed under the MIT license.  
+#  Miking is licensed under the MIT license.  
 #  Copyright (C) David Broman. See file LICENSE.txt
 #
 #  To make the build system platform independent,

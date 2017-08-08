@@ -1,15 +1,14 @@
 
-# Modelyze II (under development)
+# Miking 
 
-Welcome to Modelyze, a host language for creating embedded domain-specific languages (DSLs).
+Welcome to Miking (Meta vIKING), a meta language system for creating embedded domain-specific and general-purpose languages. 
 
-Modelyze II is under development and is not intended to be used for the moment. Please take a look at the earlier version of Modelyze here: <https://github.com/david-broman/modelyze>
-
+Miking is under development and is not intended to be used for the moment. 
 
 ## MIT License 
-Modelyze II is licensed under the MIT license.
+Miking is licensed under the MIT license.
 
-Copyright 2010-2017 David Broman
+Copyright 2017 David Broman
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
