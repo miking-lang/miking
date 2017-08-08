@@ -38,6 +38,8 @@ utest foo3(10,fun (x) x+5,"")     15
 utest foo3(10,fun x x+5,"")       15
 utest foo3(10,fun x {x+5},"")     15
 utest foo3(10,fun(x){x+5},"")     15
+utest foo3(10,x->x+5,"")          15
+
 
 
 //Return a function with several arguments. Several scopes
