@@ -1,7 +1,0 @@
-#!/bin/bash
-
-MOZ=`dirname "$0"`
-$MOZ/boot $MOZ/../src/main/moz.mz $1 $2 $3 $4 $5
-
-
-

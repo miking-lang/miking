@@ -1,5 +1,5 @@
 (* 
-   Modelyze II is licensed under the MIT license.  
+   Miking is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
    File ast.ml includes the types and definitions for the abstract

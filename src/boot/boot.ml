@@ -1,11 +1,11 @@
 (* 
-   Modelyze II is licensed under the MIT license.  
+   Miking is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
    boot.ml is the main entry point for first stage of the 
-   bootstrapped Modelyze compiler. The bootstapper is interpreted and 
-   implemented in OCaml. Note that the Modelyze bootstrapper 
-   only implements a subset of the Miking language.
+   bootstrapped Miking compiler. The bootstapper is interpreted and 
+   implemented in OCaml. Note that the Miking bootstrapper 
+   only implements a subset of the Ragnar language.
 *)
 
 open Utils
@@ -306,7 +306,7 @@ let rec eval_match env pat t final =
   | PatInt(fi,i1),TmInt(_,i2) -> if i1 = i2 then Some(env,TmNop) else None
   | PatInt(_,_),_ -> None
   | PatConcat(_,PatIdent(_,x),p2),_ ->
-      failwith "Pattern variable first is not part of Miking--"
+      failwith "Pattern variable first is not part of Ragnar--"
   | PatConcat(_,p1,p2),t1 -> 
     (match eval_match env p1 t1 false with
     | Some(env,t2) -> eval_match env p2 t2 (final && true) 

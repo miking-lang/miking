@@ -1,5 +1,5 @@
 (* 
-   Modelyze II is licensed under the MIT license.  
+   Miking is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
 
    General build script written in Ocaml so that it becomes platform
@@ -117,7 +117,7 @@ let build_bootstrappers() =
       
       
 (************************************************************)  
-(* The build script for building all components of Modelyze *)
+(* The build script for building all components of Miking *)
 let build() =
   build_bootstrappers();
   cleanup_temp_files();
