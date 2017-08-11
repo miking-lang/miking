@@ -1,9 +1,9 @@
 
 # Miking 
 
-Welcome to Miking (Meta vIKING), a meta language system for creating embedded domain-specific and general-purpose languages. 
-
-Miking is under development and is not intended to be used for the moment. 
+Miking (Meta vIKING) is a meta language system for creating embedded
+domain-specific and general-purpose languages. The project is under
+development and is not intended to be used for the moment.
 
 ## MIT License 
 Miking is licensed under the MIT license.
