@@ -3,6 +3,7 @@
 
 // Test of general sequences.
 
+#lang ragnar
 
 
 // Should include both [1,3,4] and Seq(1,3,4)

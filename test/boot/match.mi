@@ -3,6 +3,7 @@
 //
 // Test differnt ways of using the match construct
 
+#lang ragnar
 
 //Simple string matching with function
 def foo1(str:String) = match str {

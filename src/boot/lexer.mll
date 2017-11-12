@@ -28,6 +28,9 @@ let reserved_strings = [
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()}); 
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()}); 
   ("data",          fun(i) -> Parser.DATA{i=i;v=()}); 
+  ("#lang",         fun(i) -> Parser.LANG{i=i;v=()}); 
+  ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()}); 
+  ("ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()}); 
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
@@ -148,7 +151,7 @@ let nondigit = ('_' | us_letter)
 let ident = (nondigit (digit | nondigit)*)
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | "."  | "|" | "->" | "=>" 
+              "::" | ":" | ","  | "."  | "|" | "->" | "=>" | "#lang"
   
 let line_comment = "//" [^ '\013' '\010']*  
 let unsigned_integer = digit+ 

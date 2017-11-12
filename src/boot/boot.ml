@@ -1,3 +1,4 @@
+
 (* 
    Miking is licensed under the MIT license.  
    Copyright (C) David Broman. See file LICENSE.txt
@@ -388,16 +389,44 @@ let evalprog filename  =
         |> eval []
         |> fun _ -> ()
 
-  with
-    | Lexer.Lex_error m -> fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str m))
-    | Error m -> fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str m))
-    | Parsing.Parse_error -> fprintf stderr "%s\n"
+    with
+    | Lexer.Lex_error m ->
+      if !utest then (
+        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
+        utest_fail := !utest_fail + 1;
+        utest_fail_local := !utest_fail_local + 1)
+      else 
+        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
+    | Error m -> 
+      if !utest then (
+        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
+        utest_fail := !utest_fail + 1;
+        utest_fail_local := !utest_fail_local + 1)
+      else 
+        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m)) 
+    | Parsing.Parse_error ->
+      if !utest then (
+        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
+        utest_fail := !utest_fail + 1;
+        utest_fail_local := !utest_fail_local + 1)
+      else
+        fprintf stderr "%s\n"
 	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
   end; close_in fs1;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
+(*      
+  | Lexer.Lex_error m -> fprintf stderr "%s\n"
+	(Ustring.to_utf8 (Msg.message2str m))
+  | Error m ->
+    if !utest then
+      printf (" ** " ^ (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message()))) ^ " ** ")
+      else fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m)) 
+  | Parsing.Parse_error -> fprintf stderr "%s\n"
+	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
+  end; close_in fs1;
+  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
+*)
     
     
     

@@ -2,8 +2,8 @@
    Miking is licensed under the MIT license. 
    Copyright (C) David Broman. See file LICENSE.txt
    
-   parser.mly includes the grammar for parsing the mcore--, the subset
-   that is used in the bootstrapping interpreter.
+   parser.mly includes the grammar for parsing the two languages 'mcore' and
+   'Ragnar'. The latter is used for implementing the Miking compiler.
 */
 
 %{ 
@@ -72,6 +72,10 @@
 %token <unit Ast.tokendata> UTEST
 %token <unit Ast.tokendata> TYPE
 %token <unit Ast.tokendata> DATA
+%token <unit Ast.tokendata> LANG
+%token <unit Ast.tokendata> MCORE
+%token <unit Ast.tokendata> RAGNAR
+
 
 
 %token <unit Ast.tokendata> EQ            /* "="  */
@@ -127,36 +131,35 @@
 %%
 
 main:
-  | scope EOF
-      { $1 }
-
+  | LANG RAGNAR ragnar_scope EOF
+      { $3 }
       
-
-scope:
+      
+ragnar_scope:
   | { TmNop }
-  | term scope  {
+  | term ragnar_scope  {
       match $2 with
       | TmNop -> $1 
       | _ -> TmExprSeq(tm_info $1,$1,$2) }      
-  | DEF FUNIDENT identtyseq RPAREN oparrow body scope
+  | DEF FUNIDENT identtyseq RPAREN oparrow body ragnar_scope
       { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
           | x::xs -> TmLam(fi,x,mkfun xs)
           | [] -> $6 ) in
         let f = if List.length $3 = 0 then [us"@no"] else $3 in
         TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun f)) } 
-  | DEF IDENT body scope
+  | DEF IDENT body ragnar_scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
-  | TYPE IDENT scope
+  | TYPE IDENT ragnar_scope
       {$3}
-  | TYPE FUNIDENT revtyargs RPAREN scope
+  | TYPE FUNIDENT revtyargs RPAREN ragnar_scope
       {$5}
-  | DATA IDENT DARROW ty scope
+  | DATA IDENT DARROW ty ragnar_scope
       {$5}
-  | DATA FUNIDENT revtyargs RPAREN DARROW ty scope
+  | DATA FUNIDENT revtyargs RPAREN DARROW ty ragnar_scope
       {$7}
-  | UTEST term term scope
+  | UTEST term term ragnar_scope
       { let fi = mkinfo $1.i (tm_info $3) in 
         TmUtest(fi,$2,$3,$4) }
 
@@ -167,7 +170,7 @@ oparrow:
       
 body:
   | EQ term { $2 }
-  | LCURLY scope RCURLY { $2 }
+  | LCURLY ragnar_scope RCURLY { $2 }
       
       
 term:
@@ -238,7 +241,7 @@ atom:
   | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }
   | LSQUARE tmseq RSQUARE  
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
-  | LCURLY scope RCURLY  { $2 }
+  | LCURLY ragnar_scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v } 

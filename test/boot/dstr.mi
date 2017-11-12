@@ -4,6 +4,7 @@
 // Test generation of dstr() and dbstr(). These functions
 // are used by dprint() and dbprint().
 
+#lang ragnar
 
 // Test different argument types to dstr().
 utest dstr(1)                   "1"
