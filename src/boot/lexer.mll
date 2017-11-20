@@ -31,6 +31,8 @@ let reserved_strings = [
   ("#lang",         fun(i) -> Parser.LANG{i=i;v=()}); 
   ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()}); 
   ("ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()}); 
+  ("let",           fun(i) -> Parser.LET{i=i;v=()}); 
+  ("lam",           fun(i) -> Parser.LAM{i=i;v=()}); 
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});

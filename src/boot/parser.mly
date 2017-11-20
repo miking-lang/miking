@@ -75,6 +75,8 @@
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> MCORE
 %token <unit Ast.tokendata> RAGNAR
+%token <unit Ast.tokendata> LET
+%token <unit Ast.tokendata> LAM
 
 
 
@@ -133,6 +135,42 @@
 main:
   | LANG RAGNAR ragnar_scope EOF
       { $3 }
+  | LANG MCORE mcore_scope EOF
+      { $3 }
+      
+
+/* ********************************* MCORE **************************************** */      
+      
+mcore_scope:
+  | { TmNop }
+  | UTEST mc_term mc_term mcore_scope
+      { let fi = mkinfo $1.i (tm_info $3) in 
+        TmUtest(fi,$2,$3,$4) }
+  | LET IDENT EQ mc_term mcore_scope
+      { let fi = mkinfo $1.i (tm_info $4) in 
+        TmApp(fi,TmLam(fi,$2.v,$5),$4) }
+
+mc_term:
+  | mc_atom
+      { $1 }
+  | LAM IDENT COLON ty DOT mc_term
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmLam(fi,$2.v,$6) }
+mc_atom:
+  | LPAREN mc_term RPAREN   { $2 }
+  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
+  | STRING               { ustring2uctm $1.i $1.v } 
+  | UINT                 { TmInt($1.i,$1.v) }
+  | TRUE                 { TmBool($1.i,true) }
+  | FALSE                { TmBool($1.i,false) }
+
+
+
+
+      
+
+/* ********************************* RAGNAR **************************************** */      
       
       
 ragnar_scope:
