@@ -109,6 +109,11 @@ let rec pprint_cases basic cases =
    Ustring.concat (us" else ") (List.map
     (fun (Case(_,p,t)) -> pprint_pat p ^. us" => " ^. pprint basic t) cases)
 
+(* Pretty print constants *)
+and pprint_const c =
+  match c with
+  | CBool(b) -> if b then us"true" else us"false"
+      
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -120,6 +125,7 @@ and pprint basic t =
   | TmClos(_,_,_) -> us"closure"
   | TmFix(_,_) -> us"fix"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
+  | TmConst(_,c) -> pprint_const c
   | TmInt(fi,i) -> us(sprintf "%d" i)
   | TmBool(fi,b) -> us(if b then "true" else "false")
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
@@ -179,6 +185,7 @@ let rec debruijn env t =
   | TmClos(fi,t1,env1) -> failwith "Closures should not be available."
   | TmFix(fi,t1) -> TmFix(fi,debruijn env t1)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
+  | TmConst(_,_) -> t
   | TmInt(_,_) -> t
   | TmBool(_,_) -> t
   | TmChar(_,_) -> t
@@ -201,6 +208,7 @@ let rec val_equal v1 v2 =
   | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
   | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
+  | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) ->
       let rec eql lst1 lst2 = match lst1,lst2 with
         | l1::ls1,l2::ls2 when val_equal l1 l2 -> eql ls1 ls2
@@ -338,6 +346,7 @@ let rec eval env t =
        | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3  
        | _ ->
          raise_error fi "Runtime error. Application to a non closure value.")
+  | TmConst(_,_) -> t
   | TmInt(_,_) -> t
   | TmBool(_,_) -> t
   | TmChar(_,_) -> t

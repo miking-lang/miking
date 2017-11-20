@@ -61,6 +61,10 @@ and ucTree =
 and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
+and const =
+| CBool of bool
+
+    
     
 (* Term/expression *)    
 and tm = 
@@ -69,6 +73,8 @@ and tm =
 | TmClos        of info * tm * env
 | TmFix         of info * tm
 | TmApp         of info * tm * tm
+| TmConst       of info * const
+   
 | TmInt         of info * int
 | TmBool        of info * bool
 | TmChar        of info * int
@@ -94,6 +100,8 @@ let tm_info t =
   | TmClos(fi,_,_) -> fi
   | TmFix(fi,_) -> fi
   | TmApp(fi,_,_) -> fi
+  | TmConst(fi,_) -> fi
+    
   | TmInt(fi,_) -> fi
   | TmBool(fi,_) -> fi
   | TmChar(fi,_) -> fi

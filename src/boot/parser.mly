@@ -28,6 +28,7 @@
       | TmClos(_,_,_) -> failwith "Cannot happen"
       | TmFix(_,t1) -> hasx t1
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
+      | TmConst(_,_) -> false
       | TmInt(_,_) -> false
       | TmBool(_,_) -> false
       | TmChar(_,_) -> false
@@ -162,8 +163,8 @@ mc_atom:
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v } 
   | UINT                 { TmInt($1.i,$1.v) }
-  | TRUE                 { TmBool($1.i,true) }
-  | FALSE                { TmBool($1.i,false) }
+  | TRUE                 { TmConst($1.i,CBool(true)) }
+  | FALSE                { TmConst($1.i,CBool(false)) }
 
 
 
