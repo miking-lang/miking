@@ -262,9 +262,9 @@ op:
   | op GREATEQUAL op     { TmOp($2.i,OpGreatEqual,$1,$3) }      
   | op EQUAL op          { TmOp($2.i,OpEqual,$1,$3) }      
   | op NOTEQUAL op       { TmOp($2.i,OpNotEqual,$1,$3) }
-  | NOT op               { TmOp($1.i,OpBoolNot,$2,TmNop) }
-  | op AND op            { TmOp($2.i,OpBoolAnd,$1,$3) }
-  | op OR op             { TmOp($2.i,OpBoolOr,$1,$3) }
+  | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
+  | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
+  | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }
   | op CONCAT op         { TmOp($2.i,OpConcat,$1,$3) }
 
     
@@ -296,8 +296,9 @@ atom:
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v } 
   | UINT                 { TmInt($1.i,$1.v) }
-  | TRUE                 { TmBool($1.i,true) }
-  | FALSE                { TmBool($1.i,false) }
+  | TRUE                 { TmConst($1.i,CBool(true)) }
+  | FALSE                { TmConst($1.i,CBool(false)) }
+
 
 
 patseq:

@@ -237,12 +237,12 @@ let evalop op t1 t2 =
   | OpBoolNot,TmBool(l,v1),_ -> TmBool(l,not v1)
   | OpBoolAnd,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 && v2)
   | OpBoolOr,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 || v2)
-  | OpLess,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 < v2)
-  | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 <= v2)
-  | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 > v2)
-  | OpGreatEqual,TmInt(l,v1),TmInt(_,v2) -> TmBool(l,v1 >= v2)
-  | OpEqual,v1,v2 -> TmBool(tm_info v1,val_equal v1 v2)
-  | OpNotEqual,v1,v2 -> TmBool(tm_info v1,not (val_equal v1 v2))
+  | OpLess,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 < v2))
+  | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 <= v2))
+  | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 > v2))
+  | OpGreatEqual,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 >= v2))
+  | OpEqual,v1,v2 -> TmConst(tm_info v1,CBool(val_equal v1 v2))
+  | OpNotEqual,v1,v2 -> TmConst(tm_info v1,CBool(not (val_equal v1 v2)))
   | OpDstr,t1,_ -> ustring2uctstring (pprint false t1)
   | OpDBstr,t1,_ -> ustring2uctstring (pprint true t1)
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
@@ -325,21 +325,21 @@ let rec eval_match env pat t final =
     | Some(env,t2) -> eval_match env p2 t2 (final && true) 
     | None -> None)
 
-let fail_constapp() = failwith "Incorrect constant application"
+let fail_constapp fi = raise_error fi "Incorrect application "
       
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
 let delta c v =
   match c,v with
   (* Boolean constants and intrinsic functions *)
-  | CBool(_),_ -> fail_constapp()
+  | CBool(_),t -> fail_constapp (tm_info t)
   | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-  | CBNot,_ -> fail_constapp()
+  | CBNot,t -> fail_constapp (tm_info t)
   | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
   | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-  | CBAnd,_ | CBAnd2(_),_  -> fail_constapp()
+  | CBAnd,t | CBAnd2(_),t  -> fail_constapp (tm_info t)
   | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
   | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-  | CBOr,_ | CBOr2(_),_  -> fail_constapp()
+  | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
 
     
 
@@ -374,9 +374,8 @@ let rec eval env t =
   | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
   | TmIf(fi,t1,t2,t3) ->
       (match eval env t1 with
-      | TmBool(_,true) -> eval env t2
-      | TmBool(_,false) -> eval env t3
-      | _ -> failwith "Incorrect if-expression")
+      | TmConst(_,CBool(v)) -> eval env (if v then t2 else t3)
+      | t -> raise_error (tm_info t) "Incorrect if-expression")
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
