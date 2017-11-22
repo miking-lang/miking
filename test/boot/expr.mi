@@ -4,7 +4,7 @@
 // File expr.mz tests the bootstrapping compiler
 // for basic evaluation of expressions.
 
-#lang ragnar
+language Ragnar
 
 // Testing integer binary operators '+' '-' '*' '/' '%' and unary operator '-'.
 utest 3+2               5

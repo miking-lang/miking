@@ -4,7 +4,7 @@
 // File ifexpr.mz tests if-expressions with variable
 // definitions
 
-#lang ragnar
+language Ragnar
 
 def x = 55
 def y = 25

@@ -64,8 +64,10 @@ and ucUniqueness = UCUnique | UCMultivalued
 and const =
 (* Boolean constant and operations *)
 | CBool of bool
-| CBoolNot 
-
+| CBNot 
+| CBAnd | CBAnd2 of bool
+| CBOr  | CBOr2 of bool
+    
     
     
 (* Term/expression *)    

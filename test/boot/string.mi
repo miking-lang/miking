@@ -3,7 +3,7 @@
 //
 // Tests characters and string operations.
 
-#lang ragnar
+language Ragnar
 
 // Introduction and equality test of characters
 utest 'a'            'a'

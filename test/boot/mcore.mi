@@ -1,6 +1,6 @@
 
 
-#lang mcore
+language MCore 
 
 // Literals
 utest 1  1
@@ -14,8 +14,21 @@ utest false false
 let x = 5
 utest x 5
 
-let foo = lam x:Int. lam y:Int. x
+// Intrinsic functions
+utest true  (bnot false)
+utest true  (band true true)
+utest false (band false true)
+utest false (band true false)
+utest false (band false false)
+utest true  (bor true true)
+utest true  (bor false true)
+utest true  (bor true false)
+utest false (bor false false)
+   
 
+//let foo = (lam x:Int. lam y:Int. iadd x y)
+let foo = lam x:Int. lam y:Int. x y
+let foo = lam x:Int. x 
 
 
 

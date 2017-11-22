@@ -3,7 +3,7 @@
 //
 // Test different way of specifying funcions
 
-#lang ragnar
+language Ragnar
 
 //Test a recursive function where we specify the return type
 def fact(n:Int) -> Int {

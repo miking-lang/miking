@@ -9,6 +9,7 @@
    only implements a subset of the Ragnar language.
 *)
 
+
 open Utils
 open Ustring.Op
 open Printf
@@ -113,7 +114,9 @@ let rec pprint_cases basic cases =
 and pprint_const c =
   match c with
   | CBool(b) -> if b then us"true" else us"false"
-  | CBoolNot -> us"not"
+  | CBNot -> us"bnot"
+  | CBAnd | CBAnd2(_) -> us"band"
+  | CBOr | CBOr2(_) -> us"bor"
       
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
@@ -180,7 +183,7 @@ let rec debruijn env t =
   | TmVar(fi,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y =. x then n else find ee (n+1)
-      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
+      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'") 
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
   | TmClos(fi,t1,env1) -> failwith "Closures should not be available."
@@ -326,13 +329,23 @@ let fail_constapp() = failwith "Incorrect constant application"
       
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
 let delta c v =
-  match c with
-  | CBoolNot -> (match v with |TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-                              | _ -> fail_constapp())
-  | CBool(_) -> fail_constapp()
+  match c,v with
+  (* Boolean constants and intrinsic functions *)
+  | CBool(_),_ -> fail_constapp()
+  | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
+  | CBNot,_ -> fail_constapp()
+  | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
+  | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
+  | CBAnd,_ | CBAnd2(_),_  -> fail_constapp()
+  | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
+  | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
+  | CBOr,_ | CBOr2(_),_  -> fail_constapp()
 
+    
 
-
+let builtin = [("bnot",CBNot);("band",CBAnd);("bor",CBOr)]
+  
+    
   
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)    
 let rec eval env t = 
@@ -402,8 +415,8 @@ let evalprog filename  =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main
-        |> debruijn []
-        |> eval []
+        |> debruijn (builtin |> List.split |> fst |> List.map us)
+        |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
 
     with
@@ -416,7 +429,7 @@ let evalprog filename  =
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Error m -> 
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
+        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else 

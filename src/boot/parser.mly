@@ -78,6 +78,7 @@
 %token <unit Ast.tokendata> RAGNAR
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
+%token <unit Ast.tokendata> IN
 
 
 
@@ -144,19 +145,29 @@ main:
       
 mcore_scope:
   | { TmNop }
-  | UTEST mc_term mc_term mcore_scope
+  | UTEST mc_atom mc_atom mcore_scope 
       { let fi = mkinfo $1.i (tm_info $3) in 
-        TmUtest(fi,$2,$3,$4) }
-  | LET IDENT EQ mc_term mcore_scope
+        TmUtest(fi,$2,$3,$4) } 
+  | LET IDENT EQ mc_term mcore_scope 
       { let fi = mkinfo $1.i (tm_info $4) in 
         TmApp(fi,TmLam(fi,$2.v,$5),$4) }
-
+      
 mc_term:
-  | mc_atom
+  | mc_left
       { $1 }
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmLam(fi,$2.v,$6) }
+  | LET IDENT EQ mc_term IN mc_term 
+      { let fi = mkinfo $1.i (tm_info $4) in 
+        TmApp(fi,TmLam(fi,$2.v,$6),$4) } 
+
+mc_left:
+  | mc_atom
+      { $1 }
+  | mc_left mc_atom
+      { TmApp(NoInfo,$1,$2) }
+
 mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
