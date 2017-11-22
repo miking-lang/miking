@@ -62,7 +62,9 @@ and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
 and const =
+(* Boolean constant and operations *)
 | CBool of bool
+| CBoolNot 
 
     
     

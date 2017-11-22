@@ -113,6 +113,7 @@ let rec pprint_cases basic cases =
 and pprint_const c =
   match c with
   | CBool(b) -> if b then us"true" else us"false"
+  | CBoolNot -> us"not"
       
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
@@ -320,17 +321,23 @@ let rec eval_match env pat t final =
     (match eval_match env p1 t1 false with
     | Some(env,t2) -> eval_match env p2 t2 (final && true) 
     | None -> None)
+
+let fail_constapp() = failwith "Incorrect constant application"
       
+(* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
+let delta c v =
+  match c with
+  | CBoolNot -> (match v with |TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
+                              | _ -> fail_constapp())
+  | CBool(_) -> fail_constapp()
+
+
 
   
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)    
 let rec eval env t = 
   match t with
   | TmVar(fi,x,n) ->
-     (* let rec index env k = match env with
-      | t::ee -> if k = 0 then t else index ee (k-1)
-      | [] -> failwith "Cannot find index"
-        in index env n *)
           (match List.nth env n with
              | TmFix(_,t) as tt -> eval env tt
              | t -> t) 
@@ -343,7 +350,8 @@ let rec eval env t =
          | _ -> TmFix(fi,t1))
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
-       | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3  
+       | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3
+       | TmConst(fi,c) -> delta c (eval env t2)
        | _ ->
          raise_error fi "Runtime error. Application to a non closure value.")
   | TmConst(_,_) -> t
