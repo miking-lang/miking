@@ -65,8 +65,13 @@ and const =
 | CBAnd | CBAnd2 of bool
 | CBOr  | CBOr2 of bool
 (* Integer constant and operations *)
-(* | CInt of int *)
-
+| CInt of int
+| CIAdd | CIAdd2 of int
+| CISub | CISub2 of int
+| CIMul | CIMul2 of int
+| CIDiv | CIDiv2 of int
+| CIMod | CIMod2 of int
+    
     
     
 (* Term/expression *)    

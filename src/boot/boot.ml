@@ -110,10 +110,18 @@ let rec pprint_cases basic cases =
 (* Pretty print constants *)
 and pprint_const c =
   match c with
+  (* Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | CBNot -> us"bnot"
   | CBAnd | CBAnd2(_) -> us"band"
   | CBOr | CBOr2(_) -> us"bor"
+  (* Integers *)
+  | CInt(v) -> us(sprintf "%d" v)
+  | CIAdd | CIAdd2(_) -> us"iadd"
+  | CISub | CISub2(_) -> us"isub"
+  | CIMul | CIMul2(_) -> us"imul"
+  | CIDiv | CIDiv2(_) -> us"idiv"
+  | CIMod | CIMod2(_) -> us"imod"
       
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
@@ -320,7 +328,7 @@ let fail_constapp fi = raise_error fi "Incorrect application "
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
 let delta c v =
   match c,v with
-  (* Boolean constants and intrinsic functions *)
+  (* Boolean constant and intrinsic functions *)
   | CBool(_),t -> fail_constapp (tm_info t)
   | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
   | CBNot,t -> fail_constapp (tm_info t)
@@ -330,10 +338,30 @@ let delta c v =
   | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
   | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
   | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
-
+  (* Integer constant and intrinsic functions *)
+  | CInt(_),t -> fail_constapp (tm_info t)
+  | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
+  | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+  | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
+  | CISub,TmConst(fi,CInt(v)) -> TmConst(fi,CISub2(v))
+  | CISub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+  | CISub,t | CISub2(_),t  -> fail_constapp (tm_info t)
+  | CIMul,TmConst(fi,CInt(v)) -> TmConst(fi,CIMul2(v))
+  | CIMul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+  | CIMul,t | CIMul2(_),t  -> fail_constapp (tm_info t)
+  | CIDiv,TmConst(fi,CInt(v)) -> TmConst(fi,CIDiv2(v))
+  | CIDiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+  | CIDiv,t | CIDiv2(_),t  -> fail_constapp (tm_info t)
+  | CIMod,TmConst(fi,CInt(v)) -> TmConst(fi,CIMod2(v))
+  | CIMod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
+  | CIMod,t | CIMod2(_),t  -> fail_constapp (tm_info t)
+  
     
-
-let builtin = [("bnot",CBNot);("band",CBAnd);("bor",CBOr)]
+(* Mapping between named builtin functions (intrinsics) and the 
+   correspond constats *)
+let builtin =
+  [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
+   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod)]
   
     
   
@@ -348,15 +376,13 @@ let rec eval env t =
   | TmClos(fi,t1,env2) -> t
   | TmFix(fi,t1) ->
         (match eval env t1 with
-         | TmClos(fi,t2,env2) as tt ->                  
-              eval (TmFix(fi,tt)::env2) t2 
+         | TmClos(fi,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2 
          | _ -> TmFix(fi,t1))
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3
        | TmConst(fi,c) -> delta c (eval env t2)
-       | _ ->
-         raise_error fi "Runtime error. Application to a non closure value.")
+       | _ -> raise_error fi "Application to a non closure value.")
   | TmConst(_,_) -> t
   | TmInt(_,_) -> t
   | TmChar(_,_) -> t
