@@ -1,0 +1,21 @@
+
+
+#lang mcore
+
+// Literals
+utest 1  1
+utest 35 35
+utest "test" "test"
+utest 's' 's'
+utest true true
+utest false false
+
+// let bindings
+let x = 5
+utest x 5
+
+let foo = lam x:Int. lam y:Int. x
+
+
+
+
