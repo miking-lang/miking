@@ -19,9 +19,6 @@ and op =
 | OpMul        (* Integer multiplication *)
 | OpDiv        (* Integer division *)
 | OpMod        (* Integer modulo *)
-| OpBoolNot    (* Boolean not *)
-| OpBoolAnd    (* Boolean and *)
-| OpBoolOr     (* Boolean or *)
 | OpLess       (* Less than *)
 | OpLessEqual  (* Less than or equal to *)
 | OpGreat      (* Greater than *)
@@ -67,7 +64,9 @@ and const =
 | CBNot 
 | CBAnd | CBAnd2 of bool
 | CBOr  | CBOr2 of bool
-    
+(* Integer constant and operations *)
+(* | CInt of int *)
+
     
     
 (* Term/expression *)    
@@ -80,7 +79,6 @@ and tm =
 | TmConst       of info * const
    
 | TmInt         of info * int
-| TmBool        of info * bool
 | TmChar        of info * int
 | TmOp          of info * op * tm * tm
 | TmIf          of info * tm * tm * tm
@@ -107,7 +105,6 @@ let tm_info t =
   | TmConst(fi,_) -> fi
     
   | TmInt(fi,_) -> fi
-  | TmBool(fi,_) -> fi
   | TmChar(fi,_) -> fi
   | TmOp(fi,_,_,_) -> fi
   | TmIf(fi,_,_,_) -> fi

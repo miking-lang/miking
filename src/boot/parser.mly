@@ -30,7 +30,6 @@
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmInt(_,_) -> false
-      | TmBool(_,_) -> false
       | TmChar(_,_) -> false
       | TmOp(_,_,t1,t2) -> hasx t1 || hasx t2
       | TmIf(_,t1,t2,t3) -> hasx t1 || hasx t2|| hasx t3

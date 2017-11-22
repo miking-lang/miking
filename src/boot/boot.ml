@@ -32,9 +32,6 @@ let pprintop op =
   | OpMul -> "*"
   | OpDiv -> "/"
   | OpMod -> "%"
-  | OpBoolNot -> "!"
-  | OpBoolAnd -> "&&"
-  | OpBoolOr -> "||"
   | OpLess -> "<"
   | OpLessEqual -> "<="
   | OpGreat -> ">"
@@ -131,7 +128,6 @@ and pprint basic t =
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmInt(fi,i) -> us(sprintf "%d" i)
-  | TmBool(fi,b) -> us(if b then "true" else "false")
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmOp(fi,op,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprintop op ^.
                          us" " ^. pprint t2 ^. us")"
@@ -191,7 +187,6 @@ let rec debruijn env t =
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmInt(_,_) -> t
-  | TmBool(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(fi,op,t1,t2) -> TmOp(fi,op,debruijn env t1,debruijn env t2)
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
@@ -210,7 +205,6 @@ let rec debruijn env t =
 let rec val_equal v1 v2 =
   match v1,v2 with
   | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
-  | TmBool(_,b1),TmBool(_,b2) -> b1 = b2
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) ->
@@ -234,9 +228,6 @@ let evalop op t1 t2 =
   | OpMul,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 * v2)
   | OpDiv,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 / v2)
   | OpMod,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 mod v2)
-  | OpBoolNot,TmBool(l,v1),_ -> TmBool(l,not v1)
-  | OpBoolAnd,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 && v2)
-  | OpBoolOr,TmBool(l,v1),TmBool(_,v2) -> TmBool(l,v1 || v2)
   | OpLess,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 < v2))
   | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 <= v2))
   | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 > v2))
@@ -249,7 +240,6 @@ let evalop op t1 t2 =
   | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
   | OpPrint,t1,_ -> (match t1 with
     | TmInt(_,v) -> printf "%d" v; TmNop
-    | TmBool(_,v) -> printf "%s" (if v then "true" else "false"); TmNop
     | TmUC(_,uct,_,_) ->
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
         |> printf "%s"; TmNop
@@ -314,7 +304,7 @@ let rec eval_match env pat t final =
   | PatUC(fi1,[],o1,u1),TmUC(fi2,uct,_,_) when uctzero uct && final -> Some(env,TmNop)  
   | PatUC(fi1,[],o1,u1),t when not final-> Some(env,t)
   | PatUC(fi1,lst,o1,u2),t -> None
-  | PatBool(_,b1),TmBool(_,b2) -> if b1 = b2 then Some(env,TmNop) else None
+  | PatBool(_,b1),TmConst(_,CBool(b2)) -> if b1 = b2 then Some(env,TmNop) else None
   | PatBool(_,_),_ -> None
   | PatInt(fi,i1),TmInt(_,i2) -> if i1 = i2 then Some(env,TmNop) else None
   | PatInt(_,_),_ -> None
@@ -369,7 +359,6 @@ let rec eval env t =
          raise_error fi "Runtime error. Application to a non closure value.")
   | TmConst(_,_) -> t
   | TmInt(_,_) -> t
-  | TmBool(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
   | TmIf(fi,t1,t2,t3) ->
