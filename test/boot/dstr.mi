@@ -7,7 +7,7 @@
 language Ragnar
 
 // Test different argument types to dstr().
-utest dstr(1)                   "1"
+ utest dstr(1)                   "1"
 utest dstr(88+3)                "91"
 utest dstr((-88))               "-88"
 utest dstr(true)                "true"

@@ -29,7 +29,6 @@
       | TmFix(_,t1) -> hasx t1
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
-      | TmInt(_,_) -> false
       | TmChar(_,_) -> false
       | TmOp(_,_,t1,t2) -> hasx t1 || hasx t2
       | TmIf(_,t1,t2,t3) -> hasx t1 || hasx t2|| hasx t3
@@ -250,17 +249,17 @@ term:
       
 op:
   | atom                 { $1 }
-  | op ADD op            { TmOp($2.i,OpAdd,$1,$3) }
-  | op SUB op            { TmOp($2.i,OpSub,$1,$3) }
-  | op MUL op            { TmOp($2.i,OpMul,$1,$3) }
-  | op DIV op            { TmOp($2.i,OpDiv,$1,$3) }
-  | op MOD op            { TmOp($2.i,OpMod,$1,$3) }
-  | op LESS op           { TmOp($2.i,OpLess,$1,$3) }      
-  | op LESSEQUAL op      { TmOp($2.i,OpLessEqual,$1,$3) }      
-  | op GREAT op          { TmOp($2.i,OpGreat,$1,$3) }      
-  | op GREATEQUAL op     { TmOp($2.i,OpGreatEqual,$1,$3) }      
-  | op EQUAL op          { TmOp($2.i,OpEqual,$1,$3) }      
-  | op NOTEQUAL op       { TmOp($2.i,OpNotEqual,$1,$3) }
+  | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIAdd),$1),$3) }
+  | op SUB op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISub),$1),$3) }
+  | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMul),$1),$3) }
+  | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIDiv),$1),$3) }
+  | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMod),$1),$3) }
+  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILt),$1),$3) }      
+  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILeq),$1),$3) }      
+  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}      
+  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }      
+  | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }      
+  | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CINeq),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }
@@ -269,7 +268,7 @@ op:
     
       
 atom:
-    /* Function application */  
+  /* Function application */  
   | FUNIDENT tmseq RPAREN  
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
@@ -287,16 +286,16 @@ atom:
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) 
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }
-  | LPAREN SUB op RPAREN { TmOp($2.i,OpMul,TmInt($2.i,-1),$3) }
+  | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,CINeg),$3)}
   | LSQUARE tmseq RSQUARE  
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY ragnar_scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v } 
-  | UINT                 { TmInt($1.i,$1.v) }
-  | TRUE                 { TmConst($1.i,CBool(true)) }
-  | FALSE                { TmConst($1.i,CBool(false)) }
+  | UINT                 { TmConst($1.i, CInt($1.v)) }
+  | TRUE                 { TmConst($1.i, CBool(true)) }
+  | FALSE                { TmConst($1.i, CBool(false)) }
 
 
 

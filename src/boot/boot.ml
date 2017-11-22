@@ -27,17 +27,6 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 (* Pretty prints operands *)   
 let pprintop op =
   us(match op with
-  | OpAdd -> "+"
-  | OpSub -> "-"
-  | OpMul -> "*"
-  | OpDiv -> "/"
-  | OpMod -> "%"
-  | OpLess -> "<"
-  | OpLessEqual -> "<="
-  | OpGreat -> ">"
-  | OpGreatEqual -> ">="
-  | OpEqual -> "=="
-  | OpNotEqual -> "!="
   | OpDstr -> "dstr"       
   | OpDBstr -> "dbstr"
   | OpDprint -> "dprint"            (* Debug printing of any value *)
@@ -110,19 +99,27 @@ let rec pprint_cases basic cases =
 (* Pretty print constants *)
 and pprint_const c =
   match c with
-  (* Booleans *)
+  (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | CBNot -> us"bnot"
   | CBAnd | CBAnd2(_) -> us"band"
   | CBOr | CBOr2(_) -> us"bor"
-  (* Integers *)
+  (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
   | CIAdd | CIAdd2(_) -> us"iadd"
   | CISub | CISub2(_) -> us"isub"
   | CIMul | CIMul2(_) -> us"imul"
   | CIDiv | CIDiv2(_) -> us"idiv"
   | CIMod | CIMod2(_) -> us"imod"
-      
+  | CINeg             -> us"imod"
+  | CILt  | CILt2(_)  -> us"ilt"
+  | CILeq | CILeq2(_) -> us"ileq"
+  | CIGt  | CIGt2(_)  -> us"igt"
+  | CIGeq | CIGeq2(_) -> us"igeq"
+  | CIEq  | CIEq2(_)  -> us"ieq"
+  | CINeq | CINeq2(_) -> us"neq"
+  (* Ragnar polymorpic temps *)
+  | CPolyEq | CPolyEq2(_) -> us"polyeq"
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -135,7 +132,6 @@ and pprint basic t =
   | TmFix(_,_) -> us"fix"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
-  | TmInt(fi,i) -> us(sprintf "%d" i)
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmOp(fi,op,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprintop op ^.
                          us" " ^. pprint t2 ^. us")"
@@ -194,7 +190,6 @@ let rec debruijn env t =
   | TmFix(fi,t1) -> TmFix(fi,debruijn env t1)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
-  | TmInt(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(fi,op,t1,t2) -> TmOp(fi,op,debruijn env t1,debruijn env t2)
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
@@ -212,7 +207,6 @@ let rec debruijn env t =
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
-  | TmInt(_,n1),TmInt(_,n2) -> n1 = n2
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) ->
@@ -231,23 +225,11 @@ let ustring2uctstring s =
 (* Evaluate a binary or unary operation *)    
 let evalop op t1 t2 =
   match op,t1,t2 with
-  | OpAdd,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 + v2)
-  | OpSub,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 - v2)
-  | OpMul,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 * v2)
-  | OpDiv,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 / v2)
-  | OpMod,TmInt(l,v1),TmInt(_,v2) -> TmInt(l,v1 mod v2)
-  | OpLess,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 < v2))
-  | OpLessEqual,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 <= v2))
-  | OpGreat,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 > v2))
-  | OpGreatEqual,TmInt(l,v1),TmInt(_,v2) -> TmConst(l,CBool(v1 >= v2))
-  | OpEqual,v1,v2 -> TmConst(tm_info v1,CBool(val_equal v1 v2))
-  | OpNotEqual,v1,v2 -> TmConst(tm_info v1,CBool(not (val_equal v1 v2)))
   | OpDstr,t1,_ -> ustring2uctstring (pprint false t1)
   | OpDBstr,t1,_ -> ustring2uctstring (pprint true t1)
   | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
   | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
   | OpPrint,t1,_ -> (match t1 with
-    | TmInt(_,v) -> printf "%d" v; TmNop
     | TmUC(_,uct,_,_) ->
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
         |> printf "%s"; TmNop
@@ -314,7 +296,7 @@ let rec eval_match env pat t final =
   | PatUC(fi1,lst,o1,u2),t -> None
   | PatBool(_,b1),TmConst(_,CBool(b2)) -> if b1 = b2 then Some(env,TmNop) else None
   | PatBool(_,_),_ -> None
-  | PatInt(fi,i1),TmInt(_,i2) -> if i1 = i2 then Some(env,TmNop) else None
+  | PatInt(fi,i1),TmConst(_,CInt(i2)) -> if i1 = i2 then Some(env,TmNop) else None
   | PatInt(_,_),_ -> None
   | PatConcat(_,PatIdent(_,x),p2),_ ->
       failwith "Pattern variable first is not part of Ragnar--"
@@ -328,41 +310,87 @@ let fail_constapp fi = raise_error fi "Incorrect application "
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
 let delta c v =
   match c,v with
-  (* Boolean constant and intrinsic functions *)
+  (* MCore boolean intrinsics *)
   | CBool(_),t -> fail_constapp (tm_info t)
+
   | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
   | CBNot,t -> fail_constapp (tm_info t)
+
   | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
   | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
   | CBAnd,t | CBAnd2(_),t  -> fail_constapp (tm_info t)
+
   | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
   | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
   | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
-  (* Integer constant and intrinsic functions *)
+
+  (* MCore integer intrinsics *)
   | CInt(_),t -> fail_constapp (tm_info t)
+    
   | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
   | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
   | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
+
   | CISub,TmConst(fi,CInt(v)) -> TmConst(fi,CISub2(v))
   | CISub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
   | CISub,t | CISub2(_),t  -> fail_constapp (tm_info t)
+
   | CIMul,TmConst(fi,CInt(v)) -> TmConst(fi,CIMul2(v))
   | CIMul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
   | CIMul,t | CIMul2(_),t  -> fail_constapp (tm_info t)
+
   | CIDiv,TmConst(fi,CInt(v)) -> TmConst(fi,CIDiv2(v))
   | CIDiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
   | CIDiv,t | CIDiv2(_),t  -> fail_constapp (tm_info t)
+
   | CIMod,TmConst(fi,CInt(v)) -> TmConst(fi,CIMod2(v))
   | CIMod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
   | CIMod,t | CIMod2(_),t  -> fail_constapp (tm_info t)
-  
+
+  | CINeg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+  | CINeg,t -> fail_constapp (tm_info t)
+    
+  | CILt,TmConst(fi,CInt(v)) -> TmConst(fi,CILt2(v))
+  | CILt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
+  | CILt,t | CILt2(_),t  -> fail_constapp (tm_info t)
+    
+  | CILeq,TmConst(fi,CInt(v)) -> TmConst(fi,CILeq2(v))
+  | CILeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
+  | CILeq,t | CILeq2(_),t  -> fail_constapp (tm_info t)
+    
+  | CIGt,TmConst(fi,CInt(v)) -> TmConst(fi,CIGt2(v))
+  | CIGt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
+  | CIGt,t | CIGt2(_),t  -> fail_constapp (tm_info t)
+    
+  | CIGeq,TmConst(fi,CInt(v)) -> TmConst(fi,CIGeq2(v))
+  | CIGeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
+  | CIGeq,t | CIGeq2(_),t  -> fail_constapp (tm_info t)
+    
+  | CIEq,TmConst(fi,CInt(v)) -> TmConst(fi,CIEq2(v))
+  | CIEq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
+  | CIEq,t | CIEq2(_),t  -> fail_constapp (tm_info t)
+    
+  | CINeq,TmConst(fi,CInt(v)) -> TmConst(fi,CINeq2(v))
+  | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
+  | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
+
+  (* Polymorphic functions, special case for Ragnar in the boot interpreter. 
+     These functions should be defined using well-defined ad-hoc polymorphism
+     in the real Ragnar compiler. *)
+  | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
+  | CPolyEq2(TmConst(_,CInt(v1))),TmConst(_,CInt(v2)) -> TmConst(NoInfo,CBool(v1 = v2))
+  | CPolyEq2(TmConst(_,CBool(v1))),TmConst(_,CBool(v2)) -> TmConst(NoInfo,CBool(v1 = v2))
+  | CPolyEq2(_),t  -> fail_constapp (tm_info t)
+   
+    
     
 (* Mapping between named builtin functions (intrinsics) and the 
    correspond constats *)
 let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
-   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod)]
-  
+   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
+   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq)]
+
     
   
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)    
@@ -384,7 +412,6 @@ let rec eval env t =
        | TmConst(fi,c) -> delta c (eval env t2)
        | _ -> raise_error fi "Application to a non closure value.")
   | TmConst(_,_) -> t
-  | TmInt(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
   | TmIf(fi,t1,t2,t3) ->

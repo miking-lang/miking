@@ -14,17 +14,6 @@ type env = tm list
 
 (* Operands, both unary and binary *)  
 and op =
-| OpAdd        (* Integer addition *)
-| OpSub        (* Integer subtraction *)
-| OpMul        (* Integer multiplication *)
-| OpDiv        (* Integer division *)
-| OpMod        (* Integer modulo *)
-| OpLess       (* Less than *)
-| OpLessEqual  (* Less than or equal to *)
-| OpGreat      (* Greater than *)
-| OpGreatEqual (* Greater than or equal to *)
-| OpEqual      (* Equal to *)
-| OpNotEqual   (* Not equal to *)
 | OpDstr       (* Debug string *)
 | OpDBstr      (* Debug string, basic *)
 | OpDprint     (* Debug print *)
@@ -59,20 +48,27 @@ and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
 and const =
-(* Boolean constant and operations *)
+(* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
 | CBNot 
 | CBAnd | CBAnd2 of bool
 | CBOr  | CBOr2 of bool
-(* Integer constant and operations *)
+(* MCore intrinsic: Integer constant and operations *)
 | CInt of int
 | CIAdd | CIAdd2 of int
 | CISub | CISub2 of int
 | CIMul | CIMul2 of int
 | CIDiv | CIDiv2 of int
 | CIMod | CIMod2 of int
-    
-    
+| CINeg 
+| CILt  | CILt2  of int 
+| CILeq | CILeq2 of int
+| CIGt  | CIGt2  of int
+| CIGeq | CIGeq2 of int
+| CIEq  | CIEq2  of int
+| CINeq | CINeq2 of int
+(* Ragnar temp functions for handling polymorphic arguments *)    
+| CPolyEq | CPolyEq2 of tm
     
 (* Term/expression *)    
 and tm = 
@@ -83,7 +79,6 @@ and tm =
 | TmApp         of info * tm * tm
 | TmConst       of info * const
    
-| TmInt         of info * int
 | TmChar        of info * int
 | TmOp          of info * op * tm * tm
 | TmIf          of info * tm * tm * tm
@@ -109,7 +104,6 @@ let tm_info t =
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
     
-  | TmInt(fi,_) -> fi
   | TmChar(fi,_) -> fi
   | TmOp(fi,_,_,_) -> fi
   | TmIf(fi,_,_,_) -> fi

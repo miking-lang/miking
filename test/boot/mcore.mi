@@ -14,25 +14,42 @@ utest false false
 let x = 5
 utest x 5
 
-
 // Boolean intrinsic functions
-utest true  (bnot false)
-utest true  (band true true)
+utest true  (bnot false)       // Boolean not
+utest true  (band true true)   // Boolean and
 utest false (band false true)
 utest false (band true false)
 utest false (band false false)
-utest true  (bor true true)
+utest true  (bor true true)    // Boolean or
 utest true  (bor false true)
 utest true  (bor true false)
 utest false (bor false false)
 
 // Integer intrinsic functions
-utest 10 (iadd 6 4)
-utest 20 (isub 30 10)
-utest 33 (imul 3 11)
-utest 4  (idiv 9 2)
-utest 1  (imod 9 2)
-
+utest 10 (iadd 6 4)            // Integer addition
+utest 20 (isub 30 10)          // Integer subtractioin
+utest 33 (imul 3 11)           // Integer multiplication
+utest 4  (idiv 9 2)            // Integer division
+utest 1  (imod 9 2)            // Integer modulo
+utest 15 (iadd (20) (ineg 5))  // Integer negation 
+utest true (ilt 4 10)          // Less than <
+utest false (ilt 20 10)        
+utest false (ilt 10 10)        
+utest true (ileq 4 10)         // Less than and equal <=
+utest false (ileq 20 10)
+utest true (ileq 10 10)
+utest true (igt 100 10)        // Greater than >
+utest false (igt 10 20)
+utest false (igt 10 10)
+utest true (igeq 100 10)       // Greater than and equal >=
+utest false (igeq 10 20)
+utest true (igeq 10 10)
+utest false (ieq 100 10)       // Equal =
+utest false (ieq 10 20)
+utest true (ieq 10 10)
+utest true (ineq 100 10)       // Not equal !=
+utest true (ineq 10 20)
+utest false (ineq 10 10)
 
 
 //let foo = (lam x:Int. lam y:Int. iadd x y)
