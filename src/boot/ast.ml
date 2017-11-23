@@ -68,7 +68,8 @@ and const =
 | CIEq  | CIEq2  of int
 | CINeq | CINeq2 of int
 (* Ragnar temp functions for handling polymorphic arguments *)    
-| CPolyEq | CPolyEq2 of tm
+| CPolyEq  | CPolyEq2  of tm
+| CPolyNeq | CPolyNeq2 of tm
     
 (* Term/expression *)    
 and tm = 

@@ -259,7 +259,7 @@ op:
   | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}      
   | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }      
   | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }      
-  | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CINeq),$1),$3) }
+  | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }

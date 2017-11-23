@@ -119,7 +119,8 @@ and pprint_const c =
   | CIEq  | CIEq2(_)  -> us"ieq"
   | CINeq | CINeq2(_) -> us"neq"
   (* Ragnar polymorpic temps *)
-  | CPolyEq | CPolyEq2(_) -> us"polyeq"
+  | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
+  | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
      
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -378,10 +379,17 @@ let delta c v =
      These functions should be defined using well-defined ad-hoc polymorphism
      in the real Ragnar compiler. *)
   | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
-  | CPolyEq2(TmConst(_,CInt(v1))),TmConst(_,CInt(v2)) -> TmConst(NoInfo,CBool(v1 = v2))
-  | CPolyEq2(TmConst(_,CBool(v1))),TmConst(_,CBool(v2)) -> TmConst(NoInfo,CBool(v1 = v2))
+  | CPolyEq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
+  | CPolyEq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
+  | CPolyEq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
   | CPolyEq2(_),t  -> fail_constapp (tm_info t)
-   
+
+  | CPolyNeq,t -> TmConst(NoInfo,CPolyNeq2(t))
+  | CPolyNeq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
+  | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
+  | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
+  | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
+    
     
     
 (* Mapping between named builtin functions (intrinsics) and the 
