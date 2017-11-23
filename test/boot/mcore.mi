@@ -71,6 +71,9 @@ let double = lam x:Int. imul x 2
 utest 20 (foo double x)
 
 
+// argv
+utest "" (argv nop)
+
 
 
 

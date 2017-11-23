@@ -118,6 +118,7 @@ and pprint_const c =
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
   | CPrint -> us"print"
+  | CArgv  -> us"argv"
   (* Ragnar polymorpic temps *)
   | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
   | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
@@ -380,7 +381,9 @@ let delta c v =
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
         |> printf "%s"; TmNop
     | _ -> raise_error (tm_info t) "Cannot print value with this type")
-    
+  | CArgv,_ -> 
+      let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
+      in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)   
     
   (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter. 
      These functions should be defined using well-defined ad-hoc polymorphism
@@ -405,7 +408,7 @@ let builtin =
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
    ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
    ("ifexp",CIF);
-   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint)]
+   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv)]
 
     
   

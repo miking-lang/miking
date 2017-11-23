@@ -77,6 +77,8 @@
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> FIX
+%token <unit Ast.tokendata> NOP
+
 
 
 
@@ -177,6 +179,7 @@ mc_atom:
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
+  | NOP                  { TmNop }
 
 
 
@@ -286,7 +289,6 @@ atom:
           | [] -> TmVar($1.i,$1.v,noidx)
         in
         (match Ustring.to_utf8 $1.v with
-         | "argv"   -> TmOp($1.i,OpArgv,TmNop,TmNop)
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) 
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }

@@ -64,10 +64,14 @@ and const =
 | CINeq | CINeq2 of int
 (* MCore control intrinsics *)
 | CIF | CIF2 of bool | CIF3 of bool * tm
-(* MCore debug intrinsics *)
+(* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint
 | CPrint
+| CArgv
+(* MCore unified collection type (UCT) intrinsics *)
+    (*| CConcat | CConcat2 of tm *)
+    
 (* Ragnar temp functions for handling polymorphic arguments *)    
 | CPolyEq  | CPolyEq2  of tm
 | CPolyNeq | CPolyNeq2 of tm

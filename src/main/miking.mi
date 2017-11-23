@@ -3,7 +3,7 @@
 //
 // File miking.mi is the main file of the Miking tool chain.
 
-
+language Ragnar
 
 def menu =
     "\n" ++ 
