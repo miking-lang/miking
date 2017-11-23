@@ -14,11 +14,6 @@ type env = tm list
 
 (* Operands, both unary and binary *)  
 and op =
-| OpDstr       (* Debug string *)
-| OpDBstr      (* Debug string, basic *)
-| OpDprint     (* Debug print *)
-| OpDBprint    (* Debug print, basic *)
-| OpPrint      (* Print *)
 | OpArgv       (* Program Arguments *)
 | OpConcat     (* Concatenation *)
 
@@ -68,10 +63,16 @@ and const =
 | CIEq  | CIEq2  of int
 | CINeq | CINeq2 of int
 (* MCore control intrinsics *)
-| CIF | CIF2 of bool | CIF3 of bool * tm      
+| CIF | CIF2 of bool | CIF3 of bool * tm
+(* MCore debug intrinsics *)
+| CDStr
+| CDPrint
+| CPrint
 (* Ragnar temp functions for handling polymorphic arguments *)    
 | CPolyEq  | CPolyEq2  of tm
 | CPolyNeq | CPolyNeq2 of tm
+
+
     
 (* Term/expression *)    
 and tm = 

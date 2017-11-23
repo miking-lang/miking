@@ -1,4 +1,7 @@
-
+// Miking is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// File mcore.mi tests all basic MCore language constructs
 
 language MCore 
 
@@ -51,11 +54,15 @@ utest true (ineq 100 10)       // Not equal !=
 utest true (ineq 10 20)
 utest false (ineq 10 10)
 
-// Control intrinsics
-utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))
+// IF-expressions. Note that the branches must be wrapped into a thunk
+utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))  
 utest 20 (ifexp false (lam _:a. 10) (lam _:a. 20))
 utest 30 (ifexp (bor false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
 utest 10 (ifexp (band false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
+
+// Debug strings
+utest "10" (dstr 10)
+utest "Seq('Y','e','s')" (dstr "Yes")
 
 //let foo = (lam x:Int. lam y:Int. iadd x y)
 let foo = lam x:Int. lam y:Int. x y

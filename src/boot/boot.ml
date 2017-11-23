@@ -27,12 +27,6 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 (* Pretty prints operands *)   
 let pprintop op =
   us(match op with
-  | OpDstr -> "dstr"       
-  | OpDBstr -> "dbstr"
-  | OpDprint -> "dprint"            (* Debug printing of any value *)
-  | OpDBprint -> "dbprint"          (* Debug basic printing "dbprint". 
-                                       Use e.g. Set(1,2) instead of {1,2} *)
-  | OpPrint -> "print"
   | OpArgv -> "argv"
   | OpConcat -> "++"  
   )
@@ -119,18 +113,23 @@ and pprint_const c =
   | CIEq  | CIEq2(_)  -> us"ieq"
   | CINeq | CINeq2(_) -> us"neq"
   (* MCore control intrinsics *)
-  | CIF | CIF2(_) | CIF3(_,_) -> us"if" 
+  | CIF | CIF2(_) | CIF3(_,_) -> us"if"
+  (* MCore debug and stdio intrinsics *)
+  | CDStr -> us"dstr"
+  | CDPrint -> us"dprint"
+  | CPrint -> us"print"
   (* Ragnar polymorpic temps *)
   | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
   | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
-     
+
+    
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 and pprint basic t =
   let pprint = pprint basic in
   match t with
   | TmVar(_,x,_) -> x
-  | TmLam(_,x,t1) -> us"(fun x " ^. x ^. us" " ^.  pprint t1 ^. us")"
+  | TmLam(_,x,t1) -> us"(lam " ^. x ^. us"." ^.  pprint t1 ^. us")"
   | TmClos(_,_,_) -> us"closure"
   | TmFix(_,_) -> us"fix"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
@@ -225,15 +224,6 @@ let ustring2uctstring s =
 (* Evaluate a binary or unary operation *)    
 let evalop op t1 t2 =
   match op,t1,t2 with
-  | OpDstr,t1,_ -> ustring2uctstring (pprint false t1)
-  | OpDBstr,t1,_ -> ustring2uctstring (pprint true t1)
-  | OpDprint,t1,_ -> uprint_endline (pprint false t1);TmNop
-  | OpDBprint,t1,_ -> uprint_endline (pprint true t1);TmNop
-  | OpPrint,t1,_ -> (match t1 with
-    | TmUC(_,uct,_,_) ->
-        uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
-        |> printf "%s"; TmNop
-    | _ -> raise_error (tm_info t1) "Cannot print value with this type")
   | OpArgv,_,_ ->
     let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
     in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
@@ -380,9 +370,19 @@ let delta c v =
   | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
   | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
   | CIF,t -> fail_constapp (tm_info t)
+
+  (* MCore debug and stdio intrinsics *)
+  | CDStr, t -> ustring2uctstring (pprint true t)
+  | CDPrint, t -> uprint_endline (pprint true t);TmNop
+  | CPrint, t ->
+    (match t with
+    | TmUC(_,uct,_,_) ->
+        uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
+        |> printf "%s"; TmNop
+    | _ -> raise_error (tm_info t) "Cannot print value with this type")
     
     
-  (* Polymorphic functions, special case for Ragnar in the boot interpreter. 
+  (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter. 
      These functions should be defined using well-defined ad-hoc polymorphism
      in the real Ragnar compiler. *)
   | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
@@ -398,14 +398,14 @@ let delta c v =
   | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
     
     
-    
 (* Mapping between named builtin functions (intrinsics) and the 
    correspond constats *)
 let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
    ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
-   ("ifexp",CIF)]
+   ("ifexp",CIF);
+   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint)]
 
     
   

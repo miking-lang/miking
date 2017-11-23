@@ -282,11 +282,6 @@ atom:
           | [] -> TmVar($1.i,$1.v,noidx)
         in
         (match Ustring.to_utf8 $1.v with
-         | "dstr"    -> TmOp($1.i,OpDstr,List.hd $2,TmNop)
-         | "dbstr"   -> TmOp($1.i,OpDBstr,List.hd $2,TmNop)
-         | "dprint"  -> TmOp($1.i,OpDprint,List.hd $2,TmNop)
-         | "dbprint" -> TmOp($1.i,OpDBprint,List.hd $2,TmNop)
-         | "print"   -> TmOp($1.i,OpPrint,List.hd $2,TmNop)
          | "argv"   -> TmOp($1.i,OpArgv,TmNop,TmNop)
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) 
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}

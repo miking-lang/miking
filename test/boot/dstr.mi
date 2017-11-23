@@ -7,34 +7,20 @@
 language Ragnar
 
 // Test different argument types to dstr().
- utest dstr(1)                   "1"
+utest dstr(1)                   "1"
 utest dstr(88+3)                "91"
 utest dstr((-88))               "-88"
 utest dstr(true)                "true"
 utest dstr(false)               "false"
 utest dstr('h')                 "'h'"
 
-// Same as above, but with dbstr()
-utest dbstr(1)                   "1"
-utest dbstr(88+3)                "91"
-utest dbstr((-88))               "-88"
-utest dbstr(true)                "true"
-utest dbstr(false)               "false"
-utest dbstr('h')                 "'h'"
-
-// Test dstr() and dbstr() where they should give different answers
-utest dstr("My test")           "\"My test\""
-utest dbstr("My test")          "Seq('M','y',' ','t','e','s','t')"
-utest dstr("this" ++ "that")    "\"thisthat\""
-utest dbstr("this" ++ "that")   "Seq('t','h','i','s','t','h','a','t')"
-utest dstr([1,3,24])            "[1,3,24]"
-utest dbstr([1,3,24])           "Seq(1,3,24)"
-utest dstr([])                  "[]"
-utest dbstr([])                 "Seq()"
-utest dstr(["true"])            "[\"true\"]"
-utest dbstr(["true"])           "Seq(Seq('t','r','u','e'))"
-utest dstr([[],[]])             "[[],[]]"
-utest dbstr([[],[]])            "Seq(Seq(),Seq())"
+utest dstr("My test")           "Seq('M','y',' ','t','e','s','t')"
+utest dstr("this" ++ "that")    "Seq('t','h','i','s','t','h','a','t')"
+utest dstr([1,3,24])            "Seq(1,3,24)"
+utest dstr([])                  "Seq()"
+utest dstr(["true"])            "Seq(Seq('t','r','u','e'))"
+utest dstr([[],[]])             "Seq(Seq(),Seq())"
 
 
+def _ = print "\n**Hello2**\n"
 
