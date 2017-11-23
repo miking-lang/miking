@@ -6,18 +6,21 @@
 
 language Ragnar
 
-// Testing integer binary operators '+' '-' '*' '/' '%' and unary operator '-'.
+// Testing integer binary operators '+' '-' '*' '/' '%' '<<' '>>' '>>>' and unary operator '-'.
 utest 3+2               5
 utest 2+4*5             22
 utest (2+4)*5           30
-utest 1+2-4             (-1)   // In ragnar basic, we need () around unary minus 
+utest 1+2-4             (-1)   // In ragnar basic, we need () around unary minus
 utest 10-(-2)           12
 utest 10/3              3
 utest (-21)/4+1         (-4)
 utest 10 % 3            1
 utest 20 / 4 % 3        2
-utest 4 + 5 / 2         6 
+utest 4 + 5 / 2         6
 utest (4 + 5) / 2       4
+utest 8 >> 2            2
+utest 4 << 1            8
+utest (-4) >>> 1         (-2)
 
 // Test booleans unary op '!', and binary operators '||' and '&&'.
 utest true                      true
@@ -32,7 +35,7 @@ utest true || true              true
 utest false || true             true
 utest true || false             true
 utest false || false            false
-utest true || false && false    true 
+utest true || false && false    true
 utest (true || false) && false  false
 utest !false && false           false
 utest !(false && false)         true

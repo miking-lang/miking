@@ -3,7 +3,7 @@
 //
 // File mcore.mi tests all basic MCore language constructs
 
-language MCore 
+language MCore
 
 // Literals
 utest 1  1
@@ -31,10 +31,10 @@ utest 20 (isub 30 10)          // Integer subtractioin
 utest 33 (imul 3 11)           // Integer multiplication
 utest 4  (idiv 9 2)            // Integer division
 utest 1  (imod 9 2)            // Integer modulo
-utest 15 (iadd (20) (ineg 5))  // Integer negation 
+utest 15 (iadd (20) (ineg 5))  // Integer negation
 utest true (ilt 4 10)          // Less than <
-utest false (ilt 20 10)        
-utest false (ilt 10 10)        
+utest false (ilt 20 10)
+utest false (ilt 10 10)
 utest true (ileq 4 10)         // Less than and equal <=
 utest false (ileq 20 10)
 utest true (ileq 10 10)
@@ -50,9 +50,12 @@ utest true (ieq 10 10)
 utest true (ineq 100 10)       // Not equal !=
 utest true (ineq 10 20)
 utest false (ineq 10 10)
+utest 2 (isll 1 1)
+utest 2 (isrl 4 1)
+utest (ineg 2) (isra (ineg 4) 1)
 
 // IF-expressions. Note that the branches must be wrapped into a thunk
-utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))  
+utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))
 utest 20 (ifexp false (lam _:a. 10) (lam _:a. 20))
 utest 30 (ifexp (bor false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
 utest 10 (ifexp (band false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))

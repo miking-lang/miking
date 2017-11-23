@@ -1,5 +1,5 @@
-(* 
-   Miking is licensed under the MIT license.  
+(*
+   Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 
    File ast.ml includes the types and definitions for the abstract
@@ -13,7 +13,7 @@ open Msg
 type env = tm list
 
 
-    
+
 (* Pattern used in match constructs *)
 and pattern =
 | PatIdent      of info * ustring
@@ -23,25 +23,25 @@ and pattern =
 | PatInt        of info * int
 | PatConcat     of info * pattern * pattern
 
-(* One pattern case *)    
+(* One pattern case *)
 and case =
 | Case          of info * pattern * tm
 
-    
+
 (* Tree fore representing universal collection types (UCT) *)
 and ucTree =
 | UCNode        of ucTree * ucTree
-| UCLeaf        of tm list    
+| UCLeaf        of tm list
 
-    
-(* Properties of Universal Collection types *)      
+
+(* Properties of Universal Collection types *)
 and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
 and const =
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
-| CBNot 
+| CBNot
 | CBAnd | CBAnd2 of bool
 | CBOr  | CBOr2 of bool
 (* MCore intrinsic: Integer constant and operations *)
@@ -51,13 +51,16 @@ and const =
 | CIMul | CIMul2 of int
 | CIDiv | CIDiv2 of int
 | CIMod | CIMod2 of int
-| CINeg 
-| CILt  | CILt2  of int 
+| CINeg
+| CILt  | CILt2  of int
 | CILeq | CILeq2 of int
 | CIGt  | CIGt2  of int
 | CIGeq | CIGeq2 of int
 | CIEq  | CIEq2  of int
 | CINeq | CINeq2 of int
+| CISll | CISll2 of int
+| CISrl | CISrl2 of int
+| CISra | CISra2 of int
 (* MCore control intrinsics *)
 | CIF | CIF2 of bool | CIF3 of bool * tm
 (* MCore debug and I/O intrinsics *)
@@ -66,36 +69,36 @@ and const =
 | CPrint
 | CArgv
 (* MCore unified collection type (UCT) intrinsics *)
-| CConcat | CConcat2 of tm 
-    
-(* Ragnar temp functions for handling polymorphic arguments *)    
+| CConcat | CConcat2 of tm
+
+(* Ragnar temp functions for handling polymorphic arguments *)
 | CPolyEq  | CPolyEq2  of tm
 | CPolyNeq | CPolyNeq2 of tm
 
 
-    
-(* Term/expression *)    
-and tm = 
-| TmVar         of info * ustring * int  
+
+(* Term/expression *)
+and tm =
+| TmVar         of info * ustring * int
 | TmLam         of info * ustring * tm
 | TmClos        of info * tm * env
 | TmFix         of info * tm
 | TmApp         of info * tm * tm
 | TmConst       of info * const
-   
+
 | TmChar        of info * int
 | TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
 | TmMatch       of info * tm * case list
-| TmNop         
+| TmNop
 
 
-    
-(* No index -1 means that de Bruijn index has not yet been assigned *)    
+
+(* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
-  
+
 (* Returns the info field from a term *)
 let tm_info t =
   match t with
@@ -105,7 +108,7 @@ let tm_info t =
   | TmFix(fi,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
-    
+
   | TmChar(fi,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
@@ -113,7 +116,7 @@ let tm_info t =
   | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
 
-    
+
 type 'a tokendata = {i:info; v:'a}
 
 

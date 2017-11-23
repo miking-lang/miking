@@ -1,19 +1,19 @@
-/* 
-   Miking is licensed under the MIT license. 
+/*
+   Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
-   
+
    parser.mly includes the grammar for parsing the two languages 'mcore' and
    'Ragnar'. The latter is used for implementing the Miking compiler.
 */
 
-%{ 
+%{
 
   open Ustring.Op
   open Msg
   open Ast
 
   (** Create a new info, taking left and right part *)
-  let mkinfo fi1 fi2 =  
+  let mkinfo fi1 fi2 =
     match (fi1,fi2) with
       | (Info(fn,r1,c1,_,_), Info(_,_,_,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (Info(fn,r1,c1,r2,c2), NoInfo) -> Info(fn,r1,c1,r2,c2)
@@ -23,7 +23,7 @@
    (** Add fix-point, if recursive function *)
   let addrec x t =
     let rec hasx t = match t with
-      | TmVar(_,y,_) ->  x =. y 
+      | TmVar(_,y,_) ->  x =. y
       | TmLam(_,y,t1) -> if x =. y then false else hasx t1
       | TmClos(_,_,_) -> failwith "Cannot happen"
       | TmFix(_,t1) -> hasx t1
@@ -42,8 +42,8 @@
       | TmNop -> false
     in
     if hasx t then TmFix(NoInfo,TmLam(NoInfo,x,t)) else t
- 
-        
+
+
 %}
 
 /* Misc tokens */
@@ -92,6 +92,9 @@
 %token <unit Ast.tokendata> LESSEQUAL     /* "<=" */
 %token <unit Ast.tokendata> GREAT         /* ">"  */
 %token <unit Ast.tokendata> GREATEQUAL    /* ">=" */
+%token <unit Ast.tokendata> SHIFTLL       /* "<<" */
+%token <unit Ast.tokendata> SHIFTRL       /* ">>" */
+%token <unit Ast.tokendata> SHIFTRA       /* ">>>" */
 %token <unit Ast.tokendata> EQUAL         /* "==" */
 %token <unit Ast.tokendata> NOTEQUAL      /* "!=" */
 %token <unit Ast.tokendata> NOT           /* "!"   */
@@ -116,12 +119,13 @@
 %token <unit Ast.tokendata> ARROW         /* "->" */
 %token <unit Ast.tokendata> DARROW        /* "=>" */
 
-%start main 
+%start main
 
 %left OR  /*prec 2*/
 %left AND  /*prec 3*/
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
 %left CONCAT
+%left SHIFTLL SHIFTRL SHIFTRA
 %nonassoc NOT /*prec8 */
 %left ADD SUB /*prec 8*/
 %left MUL DIV MOD /*prec 9*/
@@ -138,32 +142,32 @@ main:
       { $3 }
   | LANG MCORE mcore_scope EOF
       { $3 }
-      
 
-/* ********************************* MCORE **************************************** */      
-      
+
+/* ********************************* MCORE **************************************** */
+
 mcore_scope:
   | { TmNop }
-  | UTEST mc_atom mc_atom mcore_scope 
-      { let fi = mkinfo $1.i (tm_info $3) in 
-        TmUtest(fi,$2,$3,$4) } 
-  | LET IDENT EQ mc_term mcore_scope 
-      { let fi = mkinfo $1.i (tm_info $4) in 
+  | UTEST mc_atom mc_atom mcore_scope
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmUtest(fi,$2,$3,$4) }
+  | LET IDENT EQ mc_term mcore_scope
+      { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,$5),$4) }
-      
+
 mc_term:
   | mc_left
       { $1 }
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmLam(fi,$2.v,$6) }
-  | LET IDENT EQ mc_term IN mc_term 
-      { let fi = mkinfo $1.i (tm_info $4) in 
+  | LET IDENT EQ mc_term IN mc_term
+      { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,$6),$4) }
   | FIX mc_term
       { TmFix($1.i,$2) }
-  
-      
+
+
 mc_left:
   | mc_atom
       { $1 }
@@ -174,7 +178,7 @@ mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  | STRING               { ustring2uctm $1.i $1.v } 
+  | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
@@ -183,26 +187,26 @@ mc_atom:
 
 
 
-      
 
-/* ********************************* RAGNAR **************************************** */      
-      
-      
+
+/* ********************************* RAGNAR **************************************** */
+
+
 ragnar_scope:
   | { TmNop }
   | term ragnar_scope  {
       match $2 with
-      | TmNop -> $1 
-      | _ -> TmExprSeq(tm_info $1,$1,$2) }      
+      | TmNop -> $1
+      | _ -> TmExprSeq(tm_info $1,$1,$2) }
   | DEF FUNIDENT identtyseq RPAREN oparrow body ragnar_scope
       { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
           | x::xs -> TmLam(fi,x,mkfun xs)
           | [] -> $6 ) in
         let f = if List.length $3 = 0 then [us"@no"] else $3 in
-        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun f)) } 
+        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun f)) }
   | DEF IDENT body ragnar_scope
-      { let fi = mkinfo $1.i (tm_info $3) in 
+      { let fi = mkinfo $1.i (tm_info $3) in
         TmApp(fi,TmLam(fi,$2.v,$4),$3) }
   | TYPE IDENT ragnar_scope
       {$3}
@@ -213,22 +217,22 @@ ragnar_scope:
   | DATA FUNIDENT revtyargs RPAREN DARROW ty ragnar_scope
       {$7}
   | UTEST term term ragnar_scope
-      { let fi = mkinfo $1.i (tm_info $3) in 
+      { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
 
 oparrow:
   | {}
   | ARROW ty
     {}
-      
+
 body:
   | EQ term { $2 }
   | LCURLY ragnar_scope RCURLY { $2 }
-      
-      
+
+
 term:
   | op                   { $1 }
-  | IDENT ARROW term    
+  | IDENT ARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,$1.v,$3) }
   | FUNC IDENT term
@@ -257,7 +261,7 @@ term:
               TmLam(tm_info $5,us"",$5)) }
   | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
-      
+
 op:
   | atom                 { $1 }
   | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIAdd),$1),$3) }
@@ -265,22 +269,25 @@ op:
   | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMul),$1),$3) }
   | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIDiv),$1),$3) }
   | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMod),$1),$3) }
-  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILt),$1),$3) }      
-  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILeq),$1),$3) }      
-  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}      
-  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }      
-  | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }      
+  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILt),$1),$3) }
+  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILeq),$1),$3) }
+  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}
+  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }
+  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISll),$1),$3) }
+  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISrl),$1),$3) }
+  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISra),$1),$3) }
+  | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }
   | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }
   | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat),$1),$3) }
 
-    
-      
+
+
 atom:
-  /* Function application */  
-  | FUNIDENT tmseq RPAREN  
+  /* Function application */
+  | FUNIDENT tmseq RPAREN
       { let fi = mkinfo $1.i $3.i in
         let rec mkapps lst =
           match lst with
@@ -288,16 +295,16 @@ atom:
           | [] -> TmVar($1.i,$1.v,noidx)
         in
         (match Ustring.to_utf8 $1.v with
-         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) 
+         | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }
   | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,CINeg),$3)}
-  | LSQUARE tmseq RSQUARE  
+  | LSQUARE tmseq RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY ragnar_scope RCURLY  { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  | STRING               { ustring2uctm $1.i $1.v } 
+  | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i, CInt($1.v)) }
   | TRUE                 { TmConst($1.i, CBool(true)) }
   | FALSE                { TmConst($1.i, CBool(false)) }
@@ -309,7 +316,7 @@ patseq:
   | pattern commaop patseq
       {$1::$3}
 
-      
+
 pattern:
   | IDENT
       {PatIdent($1.i,$1.v)}
@@ -321,7 +328,7 @@ pattern:
   | UINT
       {PatInt($1.i,$1.v)}
   | TRUE
-      {PatBool($1.i,true)}      
+      {PatBool($1.i,true)}
   | FALSE
       {PatBool($1.i,false)}
   | pattern CONCAT pattern
@@ -334,13 +341,13 @@ pattern:
 commaop:
   | {}
   | COMMA {}
-      
+
 cases:
-  |   {[]}      
+  |   {[]}
   | pattern DARROW term commaop cases
       { Case($2.i,$1,$3)::$5 }
 
-      
+
 tmseq:
     |   {[]}
     |   term commaop tmseq
@@ -350,31 +357,31 @@ tmseq:
 identtyseq:
     |   {[]}
     |   IDENT COLON ty commaop identtyseq
-        {$1.v::$5}               
-        
-        
+        {$1.v::$5}
+
+
 ty:
   | tyatom
       {}
   | tyatom ARROW ty
       {}
-    
+
 tyatom:
   | IDENT
       {}
-  | LPAREN RPAREN 
-      {}      
+  | LPAREN RPAREN
+      {}
   | LPAREN revtypetupleseq RPAREN
       {}
   | LSQUARE ty RSQUARE
       {}
   | FUNIDENT revtyargs RPAREN
       {}
-      
 
-revtypetupleseq: 
+
+revtypetupleseq:
   | ty
-      {}               
+      {}
   | revtypetupleseq COMMA ty
       {}
 
@@ -383,7 +390,7 @@ tyarg:
       {}
   | IDENT COLON ty
       {}
-      
+
 revtyargs:
   |   {}
   | tyarg
@@ -392,12 +399,12 @@ revtyargs:
       {}
 
 
-      
 
 
 
 
 
 
-      
+
+
 
