@@ -24,12 +24,6 @@ let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 let prog_argv = ref []          (* Argv for the program that is executed *)
   
-(* Pretty prints operands *)   
-let pprintop op =
-  us(match op with
-  | OpArgv -> "argv"
-  | OpConcat -> "++"  
-  )
 
     
 (* Print the kind of unified collection (UC) type. *)    
@@ -119,6 +113,8 @@ and pprint_const c =
   | CDPrint -> us"dprint"
   | CPrint -> us"print"
   | CArgv  -> us"argv"
+  (* MCore unified collection type (UCT) intrinsics *)
+  | CConcat | CConcat2(_) -> us"concat"
   (* Ragnar polymorpic temps *)
   | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
   | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
@@ -136,8 +132,6 @@ and pprint basic t =
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmOp(fi,op,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprintop op ^.
-                         us" " ^. pprint t2 ^. us")"
   | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
@@ -192,7 +186,6 @@ let rec debruijn env t =
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
-  | TmOp(fi,op,t1,t2) -> TmOp(fi,op,debruijn env t1,debruijn env t2)
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fi,t1,t2,tnext)
@@ -221,18 +214,6 @@ let rec val_equal v1 v2 =
 let ustring2uctstring s =
   let ls = List.map (fun i -> TmChar(NoInfo,i)) (ustring2list s) in
   TmUC(NoInfo,UCLeaf(ls),UCOrdered,UCMultivalued)
-
-(* Evaluate a binary or unary operation *)    
-let evalop op t1 t2 =
-  match op,t1,t2 with
-  | OpArgv,_,_ ->
-    let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
-    in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
-  | OpConcat,TmUC(l,t1,o1,u1),TmUC(_,t2,o2,u2)
-       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
-  | OpConcat,tm1,TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
-  | OpConcat,TmUC(l,t1,o1,u1),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
-  | _ -> failwith "Error evaluation values."
 
 
 (* Update all UC to have the form of lists *)
@@ -383,8 +364,14 @@ let delta c v =
     | _ -> raise_error (tm_info t) "Cannot print value with this type")
   | CArgv,_ -> 
       let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
-      in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)   
-    
+      in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
+  | CConcat,t -> TmConst(NoInfo,CConcat2(t))
+  | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
+       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
+  | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
+  | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
+  | CConcat2(_),t -> fail_constapp (tm_info t)
+      
   (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter. 
      These functions should be defined using well-defined ad-hoc polymorphism
      in the real Ragnar compiler. *)
@@ -408,7 +395,8 @@ let builtin =
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
    ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
    ("ifexp",CIF);
-   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv)]
+   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
+   ("concat",CConcat)]
 
     
   
@@ -432,7 +420,6 @@ let rec eval env t =
        | _ -> raise_error fi "Application to a non closure value.")
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
-  | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
@@ -501,20 +488,6 @@ let evalprog filename  =
   end; close_in fs1;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
-(*      
-  | Lexer.Lex_error m -> fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str m))
-  | Error m ->
-    if !utest then
-      printf (" ** " ^ (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message()))) ^ " ** ")
-      else fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m)) 
-  | Parsing.Parse_error -> fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
-  end; close_in fs1;
-  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
-*)
-    
-    
     
 (* Print out main menu *)    
 let menu() =

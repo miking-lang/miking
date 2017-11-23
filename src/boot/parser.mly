@@ -30,7 +30,6 @@
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmChar(_,_) -> false
-      | TmOp(_,_,t1,t2) -> hasx t1 || hasx t2
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
           let rec work uc = match uc with
@@ -275,7 +274,7 @@ op:
   | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }
-  | op CONCAT op         { TmOp($2.i,OpConcat,$1,$3) }
+  | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat),$1),$3) }
 
     
       

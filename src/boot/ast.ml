@@ -12,10 +12,6 @@ open Msg
 (* Evaluation environment *)
 type env = tm list
 
-(* Operands, both unary and binary *)  
-and op =
-| OpArgv       (* Program Arguments *)
-| OpConcat     (* Concatenation *)
 
     
 (* Pattern used in match constructs *)
@@ -70,7 +66,7 @@ and const =
 | CPrint
 | CArgv
 (* MCore unified collection type (UCT) intrinsics *)
-    (*| CConcat | CConcat2 of tm *)
+| CConcat | CConcat2 of tm 
     
 (* Ragnar temp functions for handling polymorphic arguments *)    
 | CPolyEq  | CPolyEq2  of tm
@@ -88,7 +84,6 @@ and tm =
 | TmConst       of info * const
    
 | TmChar        of info * int
-| TmOp          of info * op * tm * tm
 | TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
@@ -112,7 +107,6 @@ let tm_info t =
   | TmConst(fi,_) -> fi
     
   | TmChar(fi,_) -> fi
-  | TmOp(fi,_,_,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

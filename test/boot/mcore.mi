@@ -70,6 +70,8 @@ let foo = lam x:Int->Int. lam y:Int. x y
 let double = lam x:Int. imul x 2
 utest 20 (foo double x)
 
+// Collection types
+utest "testthis" (concat "test" "this")
 
 // argv
 utest "" (argv nop)
