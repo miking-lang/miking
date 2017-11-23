@@ -1,0 +1,90 @@
+// Miking is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// File mcore.mi tests all basic MCore language constructs
+
+language MCore 
+
+// Literals
+utest 1  1
+utest 35 35
+utest "test" "test"
+utest 's' 's'
+utest true true
+utest false false
+
+
+// Boolean intrinsic functions
+utest true  (bnot false)       // Boolean not
+utest true  (band true true)   // Boolean and
+utest false (band false true)
+utest false (band true false)
+utest false (band false false)
+utest true  (bor true true)    // Boolean or
+utest true  (bor false true)
+utest true  (bor true false)
+utest false (bor false false)
+
+// Integer intrinsic functions
+utest 10 (iadd 6 4)            // Integer addition
+utest 20 (isub 30 10)          // Integer subtractioin
+utest 33 (imul 3 11)           // Integer multiplication
+utest 4  (idiv 9 2)            // Integer division
+utest 1  (imod 9 2)            // Integer modulo
+utest 15 (iadd (20) (ineg 5))  // Integer negation 
+utest true (ilt 4 10)          // Less than <
+utest false (ilt 20 10)        
+utest false (ilt 10 10)        
+utest true (ileq 4 10)         // Less than and equal <=
+utest false (ileq 20 10)
+utest true (ileq 10 10)
+utest true (igt 100 10)        // Greater than >
+utest false (igt 10 20)
+utest false (igt 10 10)
+utest true (igeq 100 10)       // Greater than and equal >=
+utest false (igeq 10 20)
+utest true (igeq 10 10)
+utest false (ieq 100 10)       // Equal =
+utest false (ieq 10 20)
+utest true (ieq 10 10)
+utest true (ineq 100 10)       // Not equal !=
+utest true (ineq 10 20)
+utest false (ineq 10 10)
+
+// IF-expressions. Note that the branches must be wrapped into a thunk
+utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))  
+utest 20 (ifexp false (lam _:a. 10) (lam _:a. 20))
+utest 30 (ifexp (bor false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
+utest 10 (ifexp (band false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
+
+// Debug strings
+utest "10" (dstr 10)
+utest "Seq('Y','e','s')" (dstr "Yes")
+
+// lambdas
+utest 40 ((lam x:Int. lam y:Int. imul x y) 4 10)
+
+// let
+let x = 10
+let foo = lam x:Int->Int. lam y:Int. x y
+let double = lam x:Int. imul x 2
+utest 20 (foo double x)
+
+// Collection types
+utest "testthis" (concat "test" "this")
+
+// argv
+utest "" (argv nop)
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -12,29 +12,6 @@ open Msg
 (* Evaluation environment *)
 type env = tm list
 
-(* Operands, both unary and binary *)  
-and op =
-| OpAdd        (* Integer addition *)
-| OpSub        (* Integer subtraction *)
-| OpMul        (* Integer multiplication *)
-| OpDiv        (* Integer division *)
-| OpMod        (* Integer modulo *)
-| OpBoolNot    (* Boolean not *)
-| OpBoolAnd    (* Boolean and *)
-| OpBoolOr     (* Boolean or *)
-| OpLess       (* Less than *)
-| OpLessEqual  (* Less than or equal to *)
-| OpGreat      (* Greater than *)
-| OpGreatEqual (* Greater than or equal to *)
-| OpEqual      (* Equal to *)
-| OpNotEqual   (* Not equal to *)
-| OpDstr       (* Debug string *)
-| OpDBstr      (* Debug string, basic *)
-| OpDprint     (* Debug print *)
-| OpDBprint    (* Debug print, basic *)
-| OpPrint      (* Print *)
-| OpArgv       (* Program Arguments *)
-| OpConcat     (* Concatenation *)
 
     
 (* Pattern used in match constructs *)
@@ -61,6 +38,41 @@ and ucTree =
 and ucOrder = UCUnordered | UCOrdered | UCSorted
 and ucUniqueness = UCUnique | UCMultivalued
 
+and const =
+(* MCore intrinsic: Boolean constant and operations *)
+| CBool of bool
+| CBNot 
+| CBAnd | CBAnd2 of bool
+| CBOr  | CBOr2 of bool
+(* MCore intrinsic: Integer constant and operations *)
+| CInt of int
+| CIAdd | CIAdd2 of int
+| CISub | CISub2 of int
+| CIMul | CIMul2 of int
+| CIDiv | CIDiv2 of int
+| CIMod | CIMod2 of int
+| CINeg 
+| CILt  | CILt2  of int 
+| CILeq | CILeq2 of int
+| CIGt  | CIGt2  of int
+| CIGeq | CIGeq2 of int
+| CIEq  | CIEq2  of int
+| CINeq | CINeq2 of int
+(* MCore control intrinsics *)
+| CIF | CIF2 of bool | CIF3 of bool * tm
+(* MCore debug and I/O intrinsics *)
+| CDStr
+| CDPrint
+| CPrint
+| CArgv
+(* MCore unified collection type (UCT) intrinsics *)
+| CConcat | CConcat2 of tm 
+    
+(* Ragnar temp functions for handling polymorphic arguments *)    
+| CPolyEq  | CPolyEq2  of tm
+| CPolyNeq | CPolyNeq2 of tm
+
+
     
 (* Term/expression *)    
 and tm = 
@@ -69,11 +81,9 @@ and tm =
 | TmClos        of info * tm * env
 | TmFix         of info * tm
 | TmApp         of info * tm * tm
-| TmInt         of info * int
-| TmBool        of info * bool
+| TmConst       of info * const
+   
 | TmChar        of info * int
-| TmOp          of info * op * tm * tm
-| TmIf          of info * tm * tm * tm
 | TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
@@ -94,11 +104,9 @@ let tm_info t =
   | TmClos(fi,_,_) -> fi
   | TmFix(fi,_) -> fi
   | TmApp(fi,_,_) -> fi
-  | TmInt(fi,_) -> fi
-  | TmBool(fi,_) -> fi
+  | TmConst(fi,_) -> fi
+    
   | TmChar(fi,_) -> fi
-  | TmOp(fi,_,_,_) -> fi
-  | TmIf(fi,_,_,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

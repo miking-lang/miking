@@ -3,6 +3,7 @@
 //
 // Test differnt ways of using data types
 
+language Ragnar
 
 type Tree(a) 
 
