@@ -76,6 +76,7 @@
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> IN
+%token <unit Ast.tokendata> FIX
 
 
 
@@ -157,8 +158,11 @@ mc_term:
         TmLam(fi,$2.v,$6) }
   | LET IDENT EQ mc_term IN mc_term 
       { let fi = mkinfo $1.i (tm_info $4) in 
-        TmApp(fi,TmLam(fi,$2.v,$6),$4) } 
-
+        TmApp(fi,TmLam(fi,$2.v,$6),$4) }
+  | FIX mc_term
+      { TmFix($1.i,$2) }
+  
+      
 mc_left:
   | mc_atom
       { $1 }

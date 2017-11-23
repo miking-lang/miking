@@ -13,9 +13,6 @@ utest 's' 's'
 utest true true
 utest false false
 
-// let bindings
-let x = 5
-utest x 5
 
 // Boolean intrinsic functions
 utest true  (bnot false)       // Boolean not
@@ -64,9 +61,15 @@ utest 10 (ifexp (band false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
 utest "10" (dstr 10)
 utest "Seq('Y','e','s')" (dstr "Yes")
 
-//let foo = (lam x:Int. lam y:Int. iadd x y)
-let foo = lam x:Int. lam y:Int. x y
-let foo = lam x:Int. x 
+// lambdas
+utest 40 ((lam x:Int. lam y:Int. imul x y) 4 10)
+
+// let
+let x = 10
+let foo = lam x:Int->Int. lam y:Int. x y
+let double = lam x:Int. imul x 2
+utest 20 (foo double x)
+
 
 
 

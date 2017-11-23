@@ -130,8 +130,8 @@ and pprint basic t =
   match t with
   | TmVar(_,x,_) -> x
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us"." ^.  pprint t1 ^. us")"
-  | TmClos(_,_,_) -> us"closure"
-  | TmFix(_,_) -> us"fix"
+  | TmClos(_,t,_) -> us"closure"
+  | TmFix(_,t) -> us"fix (" ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
