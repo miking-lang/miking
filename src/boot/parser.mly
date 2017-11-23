@@ -31,7 +31,6 @@
       | TmConst(_,_) -> false
       | TmChar(_,_) -> false
       | TmOp(_,_,t1,t2) -> hasx t1 || hasx t2
-      | TmIf(_,t1,t2,t3) -> hasx t1 || hasx t2|| hasx t3
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
           let rec work uc = match uc with
@@ -237,13 +236,19 @@ term:
         TmLam(fi,$2.v,$4) }
   | IF term THEN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmIf(fi,$2,$4,$6) }
+        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+              TmLam(tm_info $4,us"",$4)),
+              TmLam(tm_info $6,us"",$6)) }
   | IF2 term RPAREN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmIf(fi,$2,$4,$6) }
+        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+              TmLam(tm_info $4,us"",$4)),
+              TmLam(tm_info $6,us"",$6)) }
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmIf(fi,$2,$3,$5) }
+        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+              TmLam(tm_info $3,us"",$3)),
+              TmLam(tm_info $5,us"",$5)) }
   | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
       

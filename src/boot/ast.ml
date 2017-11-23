@@ -67,6 +67,8 @@ and const =
 | CIGeq | CIGeq2 of int
 | CIEq  | CIEq2  of int
 | CINeq | CINeq2 of int
+(* MCore control intrinsics *)
+| CIF | CIF2 of bool | CIF3 of bool * tm      
 (* Ragnar temp functions for handling polymorphic arguments *)    
 | CPolyEq  | CPolyEq2  of tm
 | CPolyNeq | CPolyNeq2 of tm
@@ -82,7 +84,6 @@ and tm =
    
 | TmChar        of info * int
 | TmOp          of info * op * tm * tm
-| TmIf          of info * tm * tm * tm
 | TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
@@ -107,7 +108,6 @@ let tm_info t =
     
   | TmChar(fi,_) -> fi
   | TmOp(fi,_,_,_) -> fi
-  | TmIf(fi,_,_,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

@@ -118,6 +118,8 @@ and pprint_const c =
   | CIGeq | CIGeq2(_) -> us"igeq"
   | CIEq  | CIEq2(_)  -> us"ieq"
   | CINeq | CINeq2(_) -> us"neq"
+  (* MCore control intrinsics *)
+  | CIF | CIF2(_) | CIF3(_,_) -> us"if" 
   (* Ragnar polymorpic temps *)
   | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
   | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
@@ -136,8 +138,6 @@ and pprint basic t =
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmOp(fi,op,t1,t2) -> us"(" ^. pprint t1 ^. us" " ^. pprintop op ^.
                          us" " ^. pprint t2 ^. us")"
-  | TmIf(fi,t1,t2,t3) -> us"if " ^. pprint t1 ^. us" then " ^. pprint t2 ^.
-                         us" else " ^. pprint t3
   | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
@@ -193,7 +193,6 @@ let rec debruijn env t =
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(fi,op,t1,t2) -> TmOp(fi,op,debruijn env t1,debruijn env t2)
-  | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fi,t1,t2,tnext)
@@ -375,6 +374,14 @@ let delta c v =
   | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
   | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
 
+  (* MCore control intrinsics *)
+  | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
+  | CIF2(guard),leftbranch -> TmConst(NoInfo,CIF3(guard,leftbranch))
+  | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
+  | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
+  | CIF,t -> fail_constapp (tm_info t)
+    
+    
   (* Polymorphic functions, special case for Ragnar in the boot interpreter. 
      These functions should be defined using well-defined ad-hoc polymorphism
      in the real Ragnar compiler. *)
@@ -397,7 +404,8 @@ let delta c v =
 let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
-   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq)]
+   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
+   ("ifexp",CIF)]
 
     
   
@@ -417,15 +425,11 @@ let rec eval env t =
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3
-       | TmConst(fi,c) -> delta c (eval env t2)
+       | TmConst(fi,c) -> eval env (delta c (eval env t2))
        | _ -> raise_error fi "Application to a non closure value.")
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
   | TmOp(_,op,t1,t2) -> evalop op (eval env t1) (eval env t2)
-  | TmIf(fi,t1,t2,t3) ->
-      (match eval env t1 with
-      | TmConst(_,CBool(v)) -> eval env (if v then t2 else t3)
-      | t -> raise_error (tm_info t) "Incorrect if-expression")
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) -> 
