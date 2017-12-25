@@ -1,5 +1,5 @@
-/* 
-   Miking is licensed under the MIT license. 
+/*
+   Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 */
 
@@ -64,7 +64,7 @@ dprint(fact(5))
 // Apply function [f] to each element of [lst]
 // f: The function that is applied to each list element
 // lst: The list
-//def map(f:a->b, lst:List(a)) -> List(b) = match lst { 
+//def map(f:a->b, lst:List(a)) -> List(b) = match lst {
 //    x::ls -> f(x)::map(f,ls)
 //    [] -> []//
 //}
@@ -82,8 +82,3 @@ dprint(fact(5))
 //def a = 7::[3,2]
 //def b = 1::2::3::[]
 //append(a,b)
-
-
-
-
-

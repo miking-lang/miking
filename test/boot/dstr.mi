@@ -23,4 +23,3 @@ utest dstr([[],[]])             "Seq(Seq(),Seq())"
 
 
 def _ = print "\n**Hello2**\n"
-
