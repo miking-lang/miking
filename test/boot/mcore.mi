@@ -50,6 +50,9 @@ utest true (ieq 10 10)
 utest true (ineq 100 10)       // Not equal !=
 utest true (ineq 10 20)
 utest false (ineq 10 10)
+utest 2 (isll 1 1)
+utest 2 (isrl 4 1)
+utest (ineg 2) (isra (ineg 4) 1)
 
 // IF-expressions. Note that the branches must be wrapped into a thunk
 utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))

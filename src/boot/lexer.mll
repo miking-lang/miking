@@ -48,6 +48,9 @@ let reserved_strings = [
   ("<=",            fun(i) -> Parser.LESSEQUAL{i=i;v=()});
   (">",             fun(i) -> Parser.GREAT{i=i;v=()});
   (">=",            fun(i) -> Parser.GREATEQUAL{i=i;v=()});
+  ("<<",            fun(i) -> Parser.SHIFTLL{i=i;v=()});
+  (">>",            fun(i) -> Parser.SHIFTRL{i=i;v=()});
+  (">>>",           fun(i) -> Parser.SHIFTRA{i=i;v=()});
   ("==",            fun(i) -> Parser.EQUAL{i=i;v=()});
   ("!=",            fun(i) -> Parser.NOTEQUAL{i=i;v=()});
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
@@ -154,7 +157,7 @@ let s_escape = "\\'" | "\\\"" | "\\?"  | "\\\\" |
                "\\a"  | "\\b" | "\\f"  | "\\n" | "\\r" | "\\t" | "\\v"
 let nondigit = ('_' | us_letter)
 let ident = (nondigit (digit | nondigit)*)
-let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "==" |
+let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "("  | ")"  | "["  | "]" | "{"  | "}"  |
               "::" | ":" | ","  | "."  | "|" | "->" | "=>"
 
@@ -230,3 +233,4 @@ and section_comment = parse
 	 	 mkinfo_ustring s, [s])) }
   | _ as c
       { Buffer.add_char string_buf c; section_comment lexbuf }
+

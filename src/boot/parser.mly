@@ -92,6 +92,9 @@
 %token <unit Ast.tokendata> LESSEQUAL     /* "<=" */
 %token <unit Ast.tokendata> GREAT         /* ">"  */
 %token <unit Ast.tokendata> GREATEQUAL    /* ">=" */
+%token <unit Ast.tokendata> SHIFTLL       /* "<<" */
+%token <unit Ast.tokendata> SHIFTRL       /* ">>" */
+%token <unit Ast.tokendata> SHIFTRA       /* ">>>" */
 %token <unit Ast.tokendata> EQUAL         /* "==" */
 %token <unit Ast.tokendata> NOTEQUAL      /* "!=" */
 %token <unit Ast.tokendata> NOT           /* "!"   */
@@ -122,6 +125,7 @@
 %left AND  /*prec 3*/
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
 %left CONCAT
+%left SHIFTLL SHIFTRL SHIFTRA
 %nonassoc NOT /*prec8 */
 %left ADD SUB /*prec 8*/
 %left MUL DIV MOD /*prec 9*/
@@ -269,6 +273,9 @@ op:
   | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILeq),$1),$3) }
   | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}
   | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }
+  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISll),$1),$3) }
+  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISrl),$1),$3) }
+  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISra),$1),$3) }
   | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }
   | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
@@ -390,3 +397,4 @@ revtyargs:
       {}
   | revtyargs COMMA tyarg
       {}
+

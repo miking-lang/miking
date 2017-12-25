@@ -58,6 +58,9 @@ and const =
 | CIGeq | CIGeq2 of int
 | CIEq  | CIEq2  of int
 | CINeq | CINeq2 of int
+| CISll | CISll2 of int
+| CISrl | CISrl2 of int
+| CISra | CISra2 of int
 (* MCore control intrinsics *)
 | CIF | CIF2 of bool | CIF3 of bool * tm
 (* MCore debug and I/O intrinsics *)
@@ -89,6 +92,8 @@ and tm =
 | TmUtest       of info * tm * tm * tm
 | TmMatch       of info * tm * case list
 | TmNop
+
+
 
 
 

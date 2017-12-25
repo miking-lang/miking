@@ -106,6 +106,9 @@ and pprint_const c =
   | CIGeq | CIGeq2(_) -> us"igeq"
   | CIEq  | CIEq2(_)  -> us"ieq"
   | CINeq | CINeq2(_) -> us"neq"
+  | CISll | CISll2(_) -> us"isll"
+  | CISrl | CISrl2(_) -> us"isrl"
+  | CISra | CISra2(_) -> us"isra"
   (* MCore control intrinsics *)
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
   (* MCore debug and stdio intrinsics *)
@@ -346,6 +349,18 @@ let delta c v =
   | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
   | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
 
+  | CISll,TmConst(fi,CInt(v)) -> TmConst(fi,CISll2(v))
+  | CISll2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
+  | CISll,t | CISll2(_),t  -> fail_constapp (tm_info t)
+
+  | CISrl,TmConst(fi,CInt(v)) -> TmConst(fi,CISrl2(v))
+  | CISrl2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
+  | CISrl,t | CISrl2(_),t  -> fail_constapp (tm_info t)
+
+  | CISra,TmConst(fi,CInt(v)) -> TmConst(fi,CISra2(v))
+  | CISra2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
+  | CISra,t | CISra2(_),t  -> fail_constapp (tm_info t)
+
   (* MCore control intrinsics *)
   | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
   | CIF2(guard),leftbranch -> TmConst(NoInfo,CIF3(guard,leftbranch))
@@ -394,6 +409,7 @@ let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
    ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
+   ("isll",CISll);("isrl",CISrl);("isra",CISra);
    ("ifexp",CIF);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
@@ -518,3 +534,4 @@ let main =
 
   (* Show the menu *)
   | _ -> menu())
+
