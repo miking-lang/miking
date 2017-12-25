@@ -5,7 +5,7 @@
 
 language Ragnar
 
-type Tree(a) 
+type Tree(a)
 
 data Node(a:Tree(a),b:Tree(a)) => Tree(a)
 data Leaf(x:a) => Tree(a)
@@ -22,8 +22,7 @@ utest count(Node(Node(Leaf(5),Leaf(8)),Leaf(7)))        20
 
 //Possible syntax
 datatype Tree(a){
-  Node(a:Tree(a),b:Tree(a)) 
-  Leaf(x:a) 
+  Node(a:Tree(a),b:Tree(a))
+  Leaf(x:a)
 }
 */
-

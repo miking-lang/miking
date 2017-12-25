@@ -1,11 +1,11 @@
 
-(* 
-   Miking is licensed under the MIT license.  
+(*
+   Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 
-   boot.ml is the main entry point for first stage of the 
-   bootstrapped Miking compiler. The bootstapper is interpreted and 
-   implemented in OCaml. Note that the Miking bootstrapper 
+   boot.ml is the main entry point for first stage of the
+   bootstrapped Miking compiler. The bootstapper is interpreted and
+   implemented in OCaml. Note that the Miking bootstrapper
    only implements a subset of the Ragnar language.
 *)
 
@@ -16,17 +16,17 @@ open Printf
 open Ast
 open Msg
 
-      
+
 
 let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 let prog_argv = ref []          (* Argv for the program that is executed *)
-  
 
-    
-(* Print the kind of unified collection (UC) type. *)    
+
+
+(* Print the kind of unified collection (UC) type. *)
 let pprintUCKind ordered uniqueness =
   match ordered, uniqueness with
   | UCUnordered, UCUnique      -> us"Set"      (* Set *)
@@ -36,28 +36,28 @@ let pprintUCKind ordered uniqueness =
   | UCSorted,    UCUnique      -> us"SSet"     (* Sorted Set *)
   | UCSorted,    UCMultivalued -> us"SMSet"    (* Sorted Multivalued Set *)
 
-    
-(* Traditional map function on unified collection (UC) types *)      
+
+(* Traditional map function on unified collection (UC) types *)
 let rec ucmap f uc = match uc with
   | UCLeaf(tms) -> UCLeaf(List.map f tms)
   | UCNode(uc1,uc2) -> UCNode(ucmap f uc1, ucmap f uc2)
 
-    
-(* Collapses the UC structure into a revered ordered list *)    
+
+(* Collapses the UC structure into a revered ordered list *)
 let uct2revlist uc =
   let rec apprev lst acc =
     match lst with
     | l::ls -> apprev ls (l::acc)
     | [] -> acc
   in
-  let rec work uc acc = 
+  let rec work uc acc =
     match uc with
     | UCLeaf(lst) -> apprev lst acc
     | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
   in work uc []
 
 
-(* Translate a unified collection (UC) structure into a list *)  
+(* Translate a unified collection (UC) structure into a list *)
 let uct2list uct = uct2revlist uct |> List.rev
 
 (* Pretty print a pattern *)
@@ -65,22 +65,22 @@ let rec pprint_pat pat =
   match pat with
   | PatIdent(_,s) -> s
   | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | PatUC(_,plst,_,_)      
+  | PatUC(_,plst,_,_)
       -> us"[" ^. (Ustring.concat (us",") (List.map pprint_pat plst)) ^. us"]"
   | PatBool(_,b) -> us(if b then "true" else "false")
   | PatInt(_,i) -> us(sprintf "%d" i)
   | PatConcat(_,p1,p2) -> (pprint_pat p1) ^. us"++" ^. (pprint_pat p2)
 
-(* Converts a UC to a ustring *)     
+(* Converts a UC to a ustring *)
 let uc2ustring uclst =
     List.map
       (fun x -> match x with
       |TmChar(_,i) -> i
-      | _ -> failwith "Not a string list") uclst 
+      | _ -> failwith "Not a string list") uclst
 
-         
+
 (* Pretty print match cases *)
-let rec pprint_cases basic cases = 
+let rec pprint_cases basic cases =
    Ustring.concat (us" else ") (List.map
     (fun (Case(_,p,t)) -> pprint_pat p ^. us" => " ^. pprint basic t) cases)
 
@@ -119,7 +119,7 @@ and pprint_const c =
   | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
   | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
 
-    
+
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 and pprint basic t =
@@ -137,48 +137,48 @@ and pprint basic t =
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->
       let lst = uct2list uct in
-      (match lst with       
+      (match lst with
       | TmChar(_,_)::_ ->
         let intlst = uc2ustring lst in
         us"\"" ^. list2ustring intlst ^.  us"\""
       | _ -> us"[" ^. (Ustring.concat (us",") (List.map pprint lst)) ^. us"]")
-    | _,_ -> 
+    | _,_ ->
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us")")
   | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2
   | TmMatch(fi,t1,cases)
     ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
- 
-    
-(* Print out error message when a unit test fails *)    
+
+
+(* Print out error message when a unit test fails *)
 let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
     | Info(filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
         us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint false t1) ^.
-        us"\n    RHS: " ^. (pprint false t2)          
+        us"\n    RHS: " ^. (pprint false t2)
     | NoInfo -> us"Unit test FAILED ")
 
 (* Add pattern variables to environment. Used in the debruijn function *)
 let rec patvars env pat =
   match pat with
-  | PatIdent(_,x) -> x::env    
+  | PatIdent(_,x) -> x::env
   | PatChar(_,_) -> env
-  | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))      
+  | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))
   | PatUC(fi,[],o,u) -> env
   | PatBool(_,_) -> env
   | PatInt(_,_) -> env
   | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
 
-    
-(* Convert a term into de Bruijn indices *)  
+
+(* Convert a term into de Bruijn indices *)
 let rec debruijn env t =
   match t with
   | TmVar(fi,x,_) ->
     let rec find env n = match env with
       | y::ee -> if y =. x then n else find ee (n+1)
-      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'") 
+      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
   | TmClos(fi,t1,env1) -> failwith "Closures should not be available."
@@ -194,9 +194,9 @@ let rec debruijn env t =
       TmMatch(fi,debruijn env t1,
                List.map (fun (Case(fi,pat,tm)) ->
                  Case(fi,pat,debruijn (patvars env pat) tm)) cases)
-  | TmNop -> t  
+  | TmNop -> t
 
-    
+
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
@@ -233,14 +233,14 @@ let rec make_tm_for_match tm =
     TmUC(fi,mkuclist (mklist uc []) (UCLeaf([])),o,u)
   | _ -> tm
 
-(* Check if a UC struct has zero length *)    
+(* Check if a UC struct has zero length *)
 let rec uctzero uct =
   match uct with
   | UCNode(n1,n2) -> (uctzero n1) && (uctzero n2)
   | UCLeaf([]) -> true
   | UCLeaf(_) -> false
-    
-    
+
+
 (* Matches a pattern against a value and returns a new environment
    Notes:
     - final is used to detect if a sequence be checked to be complete or not *)
@@ -263,7 +263,7 @@ let rec eval_match env pat t final =
     | None -> None)
   | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf([]),t2),o2,u2) ->
       eval_match env pat (TmUC(fi2,t2,o2,u2)) final
-  | PatUC(fi1,[],o1,u1),TmUC(fi2,uct,_,_) when uctzero uct && final -> Some(env,TmNop)  
+  | PatUC(fi1,[],o1,u1),TmUC(fi2,uct,_,_) when uctzero uct && final -> Some(env,TmNop)
   | PatUC(fi1,[],o1,u1),t when not final-> Some(env,t)
   | PatUC(fi1,lst,o1,u2),t -> None
   | PatBool(_,b1),TmConst(_,CBool(b2)) -> if b1 = b2 then Some(env,TmNop) else None
@@ -272,13 +272,13 @@ let rec eval_match env pat t final =
   | PatInt(_,_),_ -> None
   | PatConcat(_,PatIdent(_,x),p2),_ ->
       failwith "Pattern variable first is not part of Ragnar--"
-  | PatConcat(_,p1,p2),t1 -> 
+  | PatConcat(_,p1,p2),t1 ->
     (match eval_match env p1 t1 false with
-    | Some(env,t2) -> eval_match env p2 t2 (final && true) 
+    | Some(env,t2) -> eval_match env p2 t2 (final && true)
     | None -> None)
 
 let fail_constapp fi = raise_error fi "Incorrect application "
-      
+
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
 let delta c v =
   match c,v with
@@ -298,7 +298,7 @@ let delta c v =
 
   (* MCore integer intrinsics *)
   | CInt(_),t -> fail_constapp (tm_info t)
-    
+
   | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
   | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
   | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
@@ -321,27 +321,27 @@ let delta c v =
 
   | CINeg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
   | CINeg,t -> fail_constapp (tm_info t)
-    
+
   | CILt,TmConst(fi,CInt(v)) -> TmConst(fi,CILt2(v))
   | CILt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
   | CILt,t | CILt2(_),t  -> fail_constapp (tm_info t)
-    
+
   | CILeq,TmConst(fi,CInt(v)) -> TmConst(fi,CILeq2(v))
   | CILeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
   | CILeq,t | CILeq2(_),t  -> fail_constapp (tm_info t)
-    
+
   | CIGt,TmConst(fi,CInt(v)) -> TmConst(fi,CIGt2(v))
   | CIGt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
   | CIGt,t | CIGt2(_),t  -> fail_constapp (tm_info t)
-    
+
   | CIGeq,TmConst(fi,CInt(v)) -> TmConst(fi,CIGeq2(v))
   | CIGeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
   | CIGeq,t | CIGeq2(_),t  -> fail_constapp (tm_info t)
-    
+
   | CIEq,TmConst(fi,CInt(v)) -> TmConst(fi,CIEq2(v))
   | CIEq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
   | CIEq,t | CIEq2(_),t  -> fail_constapp (tm_info t)
-    
+
   | CINeq,TmConst(fi,CInt(v)) -> TmConst(fi,CINeq2(v))
   | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
   | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
@@ -362,8 +362,8 @@ let delta c v =
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
         |> printf "%s"; TmNop
     | _ -> raise_error (tm_info t) "Cannot print value with this type")
-  | CArgv,_ -> 
-      let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv) 
+  | CArgv,_ ->
+      let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv)
       in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
   | CConcat,t -> TmConst(NoInfo,CConcat2(t))
   | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
@@ -371,8 +371,8 @@ let delta c v =
   | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
   | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
   | CConcat2(_),t -> fail_constapp (tm_info t)
-      
-  (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter. 
+
+  (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
      These functions should be defined using well-defined ad-hoc polymorphism
      in the real Ragnar compiler. *)
   | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
@@ -386,9 +386,9 @@ let delta c v =
   | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
   | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
   | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
-    
-    
-(* Mapping between named builtin functions (intrinsics) and the 
+
+
+(* Mapping between named builtin functions (intrinsics) and the
    correspond constats *)
 let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
@@ -398,20 +398,20 @@ let builtin =
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
 
-    
-  
-(* Main evaluation loop of a term. Evaluates using big-step semantics *)    
-let rec eval env t = 
+
+
+(* Main evaluation loop of a term. Evaluates using big-step semantics *)
+let rec eval env t =
   match t with
   | TmVar(fi,x,n) ->
           (match List.nth env n with
              | TmFix(_,t) as tt -> eval env tt
-             | t -> t) 
+             | t -> t)
   | TmLam(fi,x,t1) -> TmClos(fi,t1,env)
   | TmClos(fi,t1,env2) -> t
   | TmFix(fi,t1) ->
         (match eval env t1 with
-         | TmClos(fi,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2 
+         | TmClos(fi,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2
          | _ -> TmFix(fi,t1))
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
@@ -422,14 +422,14 @@ let rec eval env t =
   | TmChar(_,_) -> t
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
-  | TmUtest(fi,t1,t2,tnext) -> 
+  | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in
         if val_equal v1 v2 then
          (printf "."; utest_ok := !utest_ok + 1)
        else (
         unittest_failed fi v1 v2;
-        utest_fail := !utest_fail + 1;  
+        utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
      end;
     eval env tnext
@@ -439,12 +439,12 @@ let rec eval env t =
        match cases with
        | Case(_,p,t)::cs ->
           (match eval_match env p v1 true with
-         | Some(env,_) -> eval env t 
+         | Some(env,_) -> eval env t
          | None -> appcases cs)
        | [] -> raise_error fi  "Match error"
      in
       appcases cases)
-  | TmNop -> t  
+  | TmNop -> t
 
 
 (* Main function for evaluation a function. Performs lexing, parsing
@@ -468,15 +468,15 @@ let evalprog filename  =
         printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-      else 
+      else
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
-    | Error m -> 
+    | Error m ->
       if !utest then (
         printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-      else 
-        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m)) 
+      else
+        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Parsing.Parse_error ->
       if !utest then (
         printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
@@ -488,8 +488,8 @@ let evalprog filename  =
   end; close_in fs1;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
-    
-(* Print out main menu *)    
+
+(* Print out main menu *)
 let menu() =
   printf "Usage: boot [run|test] <files>\n";
   printf "\n"
@@ -507,7 +507,7 @@ let main =
     if !utest_fail = 0 then
       printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
         (!utest_ok)
-            else 
+            else
       printf "\nERROR! %d successful tests and %d failed tests.\n"
         (!utest_ok) (!utest_fail))
 
@@ -518,12 +518,3 @@ let main =
 
   (* Show the menu *)
   | _ -> menu())
-
-     
-    
-
-
-
-
-
-      

@@ -24,8 +24,8 @@ utest if x > 6 then
          if y > 10 then 1 else 2
       else 8                        1
 
-utest if(x > 6) 
-         if(y > 10) 1 else 2 
+utest if(x > 6)
+         if(y > 10) 1 else 2
       else 8                        1
 
 utest if(x>10){
@@ -34,6 +34,3 @@ utest if(x>10){
       else{
         8+8
       }                             12
-
-
-       
