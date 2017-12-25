@@ -95,6 +95,8 @@ and tm =
 
 
 
+
+
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
@@ -123,5 +125,3 @@ type 'a tokendata = {i:info; v:'a}
 let ustring2uctm fi str =
   let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list str) in
   TmUC(fi,UCLeaf(lst),UCOrdered,UCMultivalued)
-
-

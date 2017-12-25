@@ -26,7 +26,7 @@ int main(){
     }
     else
       fread(buf,1,SIZE,f);
-    
+
     for(int j=0; j<l; j++){
       if(buf[j] == c)
         count++;

@@ -1,4 +1,4 @@
-// Miking is licensed under the MIT license.
+ // Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
 // File mcore.mi tests all basic MCore language constructs
@@ -78,16 +78,3 @@ utest "testthis" (concat "test" "this")
 
 // argv
 utest "" (argv nop)
-
-
-
-
-
-
-
-
-
-
-
-
-

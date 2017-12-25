@@ -234,6 +234,3 @@ and section_comment = parse
   | _ as c
       { Buffer.add_char string_buf c; section_comment lexbuf }
 
-
-
-
