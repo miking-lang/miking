@@ -25,7 +25,7 @@
     let rec hasx t = match t with
       | TmVar(_,y,_) ->  x =. y
       | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_) -> failwith "Cannot happen"
+      | TmClos(_,_,_,_) -> failwith "Cannot happen"
       | TmFix(_,t1) -> hasx t1
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false

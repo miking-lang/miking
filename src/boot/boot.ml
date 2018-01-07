@@ -108,6 +108,8 @@ and pprint_const c =
   | CINeq | CINeq2(_) -> us"neq"
   (* MCore control intrinsics *)
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
+  (* MCore partial evaluation instrinsic *)
+  | CPEval -> us"peval"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -125,9 +127,9 @@ and pprint_const c =
 and pprint basic t =
   let pprint = pprint basic in
   match t with
-  | TmVar(_,x,_) -> x
-  | TmLam(_,x,t1) -> us"(lam " ^. x ^. us"." ^.  pprint t1 ^. us")"
-  | TmClos(_,t,_) -> us"closure"
+  | TmVar(_,x,n) -> x ^. us"#" ^. us(string_of_int n)
+  | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
+  | TmClos(_,x,t,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmFix(_,t) -> us"fix (" ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
@@ -181,7 +183,7 @@ let rec debruijn env t =
       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
-  | TmClos(fi,t1,env1) -> failwith "Closures should not be available."
+  | TmClos(fi,x,t1,env1) -> failwith "Closures should not be available."
   | TmFix(fi,t1) -> TmFix(fi,debruijn env t1)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
@@ -280,112 +282,122 @@ let rec eval_match env pat t final =
 let fail_constapp fi = raise_error fi "Incorrect application "
 
 (* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
-let delta c v =
-  match c,v with
-  (* MCore boolean intrinsics *)
-  | CBool(_),t -> fail_constapp (tm_info t)
+let delta c t env eval =
+  (* Match constants that do not evaluate the argument to a value *)
+  match c with
+  | CPEval -> failwith "TODO: Fix!"
+  | _ -> (
+    (* Match all other constants *)
+    let v = eval env t in
+    match c,v with
+    (* MCore boolean intrinsics *)
+    | CBool(_),t -> fail_constapp (tm_info t)
 
-  | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-  | CBNot,t -> fail_constapp (tm_info t)
+    | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
+    | CBNot,t -> fail_constapp (tm_info t)
 
-  | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
-  | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-  | CBAnd,t | CBAnd2(_),t  -> fail_constapp (tm_info t)
+    | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
+    | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
+    | CBAnd,t | CBAnd2(_),t  -> fail_constapp (tm_info t)
 
-  | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
-  | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-  | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
+    | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
+    | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
+    | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
 
-  (* MCore integer intrinsics *)
-  | CInt(_),t -> fail_constapp (tm_info t)
+    (* MCore integer intrinsics *)
+    | CInt(_),t -> fail_constapp (tm_info t)
 
-  | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
-  | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-  | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
+    | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
+    | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
 
-  | CISub,TmConst(fi,CInt(v)) -> TmConst(fi,CISub2(v))
-  | CISub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-  | CISub,t | CISub2(_),t  -> fail_constapp (tm_info t)
+    | CISub,TmConst(fi,CInt(v)) -> TmConst(fi,CISub2(v))
+    | CISub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | CISub,t | CISub2(_),t  -> fail_constapp (tm_info t)
 
-  | CIMul,TmConst(fi,CInt(v)) -> TmConst(fi,CIMul2(v))
-  | CIMul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-  | CIMul,t | CIMul2(_),t  -> fail_constapp (tm_info t)
+    | CIMul,TmConst(fi,CInt(v)) -> TmConst(fi,CIMul2(v))
+    | CIMul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | CIMul,t | CIMul2(_),t  -> fail_constapp (tm_info t)
 
-  | CIDiv,TmConst(fi,CInt(v)) -> TmConst(fi,CIDiv2(v))
-  | CIDiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-  | CIDiv,t | CIDiv2(_),t  -> fail_constapp (tm_info t)
+    | CIDiv,TmConst(fi,CInt(v)) -> TmConst(fi,CIDiv2(v))
+    | CIDiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | CIDiv,t | CIDiv2(_),t  -> fail_constapp (tm_info t)
 
-  | CIMod,TmConst(fi,CInt(v)) -> TmConst(fi,CIMod2(v))
-  | CIMod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
-  | CIMod,t | CIMod2(_),t  -> fail_constapp (tm_info t)
+    | CIMod,TmConst(fi,CInt(v)) -> TmConst(fi,CIMod2(v))
+    | CIMod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
+    | CIMod,t | CIMod2(_),t  -> fail_constapp (tm_info t)
 
-  | CINeg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
-  | CINeg,t -> fail_constapp (tm_info t)
+    | CINeg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+    | CINeg,t -> fail_constapp (tm_info t)
 
-  | CILt,TmConst(fi,CInt(v)) -> TmConst(fi,CILt2(v))
-  | CILt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
-  | CILt,t | CILt2(_),t  -> fail_constapp (tm_info t)
+    | CILt,TmConst(fi,CInt(v)) -> TmConst(fi,CILt2(v))
+    | CILt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
+    | CILt,t | CILt2(_),t  -> fail_constapp (tm_info t)
 
-  | CILeq,TmConst(fi,CInt(v)) -> TmConst(fi,CILeq2(v))
-  | CILeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
-  | CILeq,t | CILeq2(_),t  -> fail_constapp (tm_info t)
+    | CILeq,TmConst(fi,CInt(v)) -> TmConst(fi,CILeq2(v))
+    | CILeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
+    | CILeq,t | CILeq2(_),t  -> fail_constapp (tm_info t)
 
-  | CIGt,TmConst(fi,CInt(v)) -> TmConst(fi,CIGt2(v))
-  | CIGt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
-  | CIGt,t | CIGt2(_),t  -> fail_constapp (tm_info t)
+    | CIGt,TmConst(fi,CInt(v)) -> TmConst(fi,CIGt2(v))
+    | CIGt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
+    | CIGt,t | CIGt2(_),t  -> fail_constapp (tm_info t)
 
-  | CIGeq,TmConst(fi,CInt(v)) -> TmConst(fi,CIGeq2(v))
-  | CIGeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
-  | CIGeq,t | CIGeq2(_),t  -> fail_constapp (tm_info t)
+    | CIGeq,TmConst(fi,CInt(v)) -> TmConst(fi,CIGeq2(v))
+    | CIGeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
+    | CIGeq,t | CIGeq2(_),t  -> fail_constapp (tm_info t)
 
-  | CIEq,TmConst(fi,CInt(v)) -> TmConst(fi,CIEq2(v))
-  | CIEq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
-  | CIEq,t | CIEq2(_),t  -> fail_constapp (tm_info t)
+    | CIEq,TmConst(fi,CInt(v)) -> TmConst(fi,CIEq2(v))
+    | CIEq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | CIEq,t | CIEq2(_),t  -> fail_constapp (tm_info t)
 
-  | CINeq,TmConst(fi,CInt(v)) -> TmConst(fi,CINeq2(v))
-  | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
-  | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
+    | CINeq,TmConst(fi,CInt(v)) -> TmConst(fi,CINeq2(v))
+    | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
+    | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
 
-  (* MCore control intrinsics *)
-  | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
-  | CIF2(guard),leftbranch -> TmConst(NoInfo,CIF3(guard,leftbranch))
-  | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
-  | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
-  | CIF,t -> fail_constapp (tm_info t)
+    (* MCore control intrinsics *)
+    | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
+    | CIF2(guard),leftbranch -> TmConst(NoInfo,CIF3(guard,leftbranch))
+    | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
+    | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
+    | CIF,t -> fail_constapp (tm_info t)
 
-  (* MCore debug and stdio intrinsics *)
-  | CDStr, t -> ustring2uctstring (pprint true t)
-  | CDPrint, t -> uprint_endline (pprint true t);TmNop
-  | CPrint, t ->
-    (match t with
-    | TmUC(_,uct,_,_) ->
+    (* MCore partial evaluation intrinsics *)
+    | CPEval,_ -> failwith "Should not happen"
+
+    (* MCore debug and stdio intrinsics *)
+    | CDStr, t -> ustring2uctstring (pprint true t)
+    | CDPrint, t -> uprint_endline (pprint true t);TmNop
+    | CPrint, t ->
+      (match t with
+      | TmUC(_,uct,_,_) ->
         uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
-        |> printf "%s"; TmNop
-    | _ -> raise_error (tm_info t) "Cannot print value with this type")
-  | CArgv,_ ->
+      |> printf "%s"; TmNop
+      | _ -> raise_error (tm_info t) "Cannot print value with this type")
+    | CArgv,_ ->
       let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv)
       in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
-  | CConcat,t -> TmConst(NoInfo,CConcat2(t))
-  | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
-       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
-  | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
-  | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
-  | CConcat2(_),t -> fail_constapp (tm_info t)
+    | CConcat,t -> TmConst(NoInfo,CConcat2(t))
+    | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
+      when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
+    | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
+    | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
+    | CConcat2(_),t -> fail_constapp (tm_info t)
 
-  (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
-     These functions should be defined using well-defined ad-hoc polymorphism
-     in the real Ragnar compiler. *)
-  | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
-  | CPolyEq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
-  | CPolyEq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
-  | CPolyEq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
-  | CPolyEq2(_),t  -> fail_constapp (tm_info t)
+    (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
+       These functions should be defined using well-defined ad-hoc polymorphism
+       in the real Ragnar compiler. *)
+    | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
+    | CPolyEq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
+    | CPolyEq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
+    | CPolyEq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
+    | CPolyEq2(_),t  -> fail_constapp (tm_info t)
 
-  | CPolyNeq,t -> TmConst(NoInfo,CPolyNeq2(t))
-  | CPolyNeq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
-  | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
-  | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
-  | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
+    | CPolyNeq,t -> TmConst(NoInfo,CPolyNeq2(t))
+    | CPolyNeq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
+    | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
+    | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
+    | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
+  )
 
 
 (* Mapping between named builtin functions (intrinsics) and the
@@ -407,16 +419,16 @@ let rec eval env t =
           (match List.nth env n with
              | TmFix(_,t) as tt -> eval env tt
              | t -> t)
-  | TmLam(fi,x,t1) -> TmClos(fi,t1,env)
-  | TmClos(fi,t1,env2) -> t
+  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
+  | TmClos(fi,x,t1,env2) -> t
   | TmFix(fi,t1) ->
         (match eval env t1 with
-         | TmClos(fi,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2
+         | TmClos(fi,x,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2
          | _ -> TmFix(fi,t1))
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
-       | TmClos(fi,t3,env2) -> eval ((eval env t2)::env2) t3
-       | TmConst(fi,c) -> eval env (delta c (eval env t2))
+       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
+       | TmConst(fi,c) -> eval env (delta c t2 env eval)
        | _ -> raise_error fi "Application to a non closure value.")
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
