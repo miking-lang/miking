@@ -110,6 +110,7 @@ and pprint_const c =
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
   (* MCore partial evaluation instrinsic *)
   | CPEval -> us"peval"
+  | CFix -> us"fix"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -130,7 +131,6 @@ and pprint basic t =
   | TmVar(_,x,n) -> x ^. us"#" ^. us(string_of_int n)
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
   | TmClos(_,x,t,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmFix(_,t) -> us"fix (" ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
@@ -184,7 +184,6 @@ let rec debruijn env t =
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
   | TmClos(fi,x,t1,env1) -> failwith "Closures should not be available."
-  | TmFix(fi,t1) -> TmFix(fi,debruijn env t1)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
@@ -362,7 +361,8 @@ let delta c t env eval =
     | CIF,t -> fail_constapp (tm_info t)
 
     (* MCore partial evaluation intrinsics *)
-    | CPEval,_ -> failwith "Should not happen"
+    | CPEval,_ -> failwith "CPEval should not happen"
+    | CFix,_ -> failwith "CFix should not happen"
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
@@ -415,21 +415,26 @@ let builtin =
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
   match t with
+  (* Variables using debruijn indices *)
   | TmVar(fi,x,n) ->
           (match List.nth env n with
-             | TmFix(_,t) as tt -> eval env tt
+             | TmApp(_,TmConst(_,CFix),_) as tt -> eval env tt
              | t -> t)
+  (* Lambda and closure conversions *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
   | TmClos(fi,x,t1,env2) -> t
-  | TmFix(fi,t1) ->
-        (match eval env t1 with
-         | TmClos(fi,x,t2,env2) as tt -> eval (TmFix(fi,tt)::env2) t2
-         | _ -> TmFix(fi,t1))
+  (* Handle Fix point *)
+  | TmApp(_,TmConst(_,CFix),t1) ->
+       (match eval env t1 with
+         | TmClos(fi,x,t2,env2) as tt -> eval ((capp CFix tt)::env2) t2
+         | _ -> capp CFix t1)
+  (* Closure application and delta *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
-       | TmConst(fi,c) -> eval env (delta c t2 env eval)
+       | TmConst(fi,c) ->  eval env (delta c t2 env eval)
        | _ -> raise_error fi "Application to a non closure value.")
+  (* Constant *)
   | TmConst(_,_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2

@@ -62,6 +62,7 @@ and const =
 | CIF | CIF2 of bool | CIF3 of bool * tm
 (* MCore partial evaluation intrinsics *)
 | CPEval
+| CFix
 
 (* MCore debug and I/O intrinsics *)
 | CDStr
@@ -77,12 +78,12 @@ and const =
 
 
 
+
 (* Term/expression *)
 and tm =
 | TmVar         of info * ustring * int
 | TmLam         of info * ustring * tm
 | TmClos        of info * ustring * tm * env
-| TmFix         of info * tm
 | TmApp         of info * tm * tm
 | TmConst       of info * const
 
@@ -93,7 +94,8 @@ and tm =
 | TmMatch       of info * tm * case list
 | TmNop
 
-
+(* Generate a constant application term for a specific constant *)
+let capp c v = TmApp(NoInfo,TmConst(NoInfo,c),v)
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
@@ -105,7 +107,6 @@ let tm_info t =
   | TmVar(fi,_,_) -> fi
   | TmLam(fi,_,_) -> fi
   | TmClos(fi,_,_,_) -> fi
-  | TmFix(fi,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
 

@@ -26,7 +26,6 @@
       | TmVar(_,y,_) ->  x =. y
       | TmLam(_,y,t1) -> if x =. y then false else hasx t1
       | TmClos(_,_,_,_) -> failwith "Cannot happen"
-      | TmFix(_,t1) -> hasx t1
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmChar(_,_) -> false
@@ -41,7 +40,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then TmFix(NoInfo,TmLam(NoInfo,x,t)) else t
+    if hasx t then capp CFix (TmLam(NoInfo,x,t)) else t
 
 
 %}
@@ -161,7 +160,7 @@ mc_term:
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,$6),$4) }
   | FIX mc_term
-      { TmFix($1.i,$2) }
+      { capp CFix $2 }
 
 
 mc_left:
