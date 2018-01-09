@@ -280,14 +280,23 @@ let rec eval_match env pat t final =
 
 let fail_constapp fi = raise_error fi "Incorrect application "
 
-(* Evaluate a constant application. This is the traditional delta function delta(c,v) *)
+(* Evaluate a constant application. This is a modified version of
+   the traditional  delta function delta(c,v). In this case, the delta
+   is delta(c,t,env,eval) and returns a tuple (env,v) *)
 let delta c t env eval =
   (* Match constants that do not evaluate the argument to a value *)
   match c with
+  (* Partial evaluation *)
   | CPEval -> failwith "TODO: Fix!"
+  (* Fix *)
+  | CFix ->
+     (match eval env t with
+     | TmClos(fi,x,t2,env2) as tt -> ((capp CFix tt)::env2,t2)
+     | _ -> failwith "Incorrect CFix")
   | _ -> (
     (* Match all other constants *)
     let v = eval env t in
+    (env, (* Returns a tuple, with the environment unchanged *)
     match c,v with
     (* MCore boolean intrinsics *)
     | CBool(_),t -> fail_constapp (tm_info t)
@@ -397,7 +406,7 @@ let delta c t env eval =
     | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
     | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
     | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
-  )
+  ))
 
 
 (* Mapping between named builtin functions (intrinsics) and the
@@ -415,24 +424,17 @@ let builtin =
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
   match t with
-  (* Variables using debruijn indices *)
-  | TmVar(fi,x,n) ->
-          (match List.nth env n with
-             | TmApp(_,TmConst(_,CFix),_) as tt -> eval env tt
-             | t -> t)
+  (* Variables using debruijn indices. Need to evaluate because fix point. *)
+  | TmVar(fi,x,n) -> eval env (List.nth env n)
   (* Lambda and closure conversions *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
   | TmClos(fi,x,t1,env2) -> t
-  (* Handle Fix point *)
-  | TmApp(_,TmConst(_,CFix),t1) ->
-       (match eval env t1 with
-         | TmClos(fi,x,t2,env2) as tt -> eval ((capp CFix tt)::env2) t2
-         | _ -> capp CFix t1)
   (* Closure application and delta *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
-       | TmConst(fi,c) ->  eval env (delta c t2 env eval)
+       | TmConst(fi,c) ->
+           let (env2,v) = delta c t2 env eval in eval env2 v
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) -> t
