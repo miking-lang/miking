@@ -427,6 +427,7 @@ let rec readback env n t =
   match t with
   | PESym(k) -> failwith ""
   | PEClos(fi,x,t,env2) -> failwith ""
+  | PEFix(t) -> failwith ""
   | PEExp(t2) -> t2
 
 
@@ -442,6 +443,22 @@ let rec normalize env n m t =
   | PEClos(fi,x,t2,env2) ->
       if m = 0 then t
       else PEClos(fi,x,normalize (PESym(n+1)::env2) (n+1) (m-1) t2, env2)
+  (* Perform all Fix with special PE. Not possible otherwise *)
+  | PEFix(t2) -> failwith ""
+(*      (match normalize env n m t2) with
+      | PEExp(TmClos(fi,x,t3,env2))  ->
+        let env3 = (PEFix(PEClos(fi,x,PEExp(t3),env2peenv env2)
+             let env3 = env2peenv (capp CFix (TmClos(fi,x,t3,env2))::env2)
+             in normalize ( n m (PEExp(t3))
+*)
+(*                              ***
+         | CFix ->
+           (match eval env t2 with
+           | TmClos(fi,x,t3,env2) as tt -> eval ((capp CFix tt)::env2) t3
+           | _ -> failwith "Incorrect CFix")
+
+                                ***** *)
+
   | PEExp(t2) ->
     (match t2 with
     (* Variables using debruijn indices. *)
@@ -459,21 +476,34 @@ let rec normalize env n m t =
            in  PEClos(fi,x,normalize (PESym(n+1)::env3)
                             (n+1) (m-1) (PEExp(t1)), env3)
     (* Closure application and delta *)
-    | TmApp(fi,t1,t2) -> failwith ""
-(*      (match normalize env n t1 with
-       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
-       | TmConst(fi,c) ->
-           let (env2,v) = delta c t2 env eval in eval env2 v
+    | TmApp(fi,t1,t2) ->
+      (match normalize env n m (PEExp(t1)) with
+       | PEClos(fi,x,t3,env2) ->
+           normalize ((normalize env n m (PEExp(t2)))::env2) n m t3
+       | PEExp(TmClos(fi,x,t3,env2)) ->
+           normalize ((normalize env n m
+                         (PEExp(t2)))::(env2peenv env2)) n m (PEExp(t3))
+       (* Constant application *)
+       | PEExp(TmConst(fi,c)) ->
+         (match c with
+         (* Partial evaluation *)
+         | CPEval -> normalize env n (m+1) (PEExp(t2))
+         (* Fix *)
+         | CFix ->
+           (match normalize env n m (PEExp(t2)) with
+           | PEExp(TmClos(fi,x,t3,env2))  ->
+               let env3 = env2peenv (capp CFix (TmClos(fi,x,t3,env2))::env2)
+               in normalize env3 n m (PEExp(t3))
+           | _ -> failwith "Incorrect CFix")
+         (* Other constants using the delta function *)
+         | _ -> failwith "")
+   (*         delta c (eval env t2))
+              normalize env () *)
+
+
        | _ -> raise_error fi "Application to a non closure value.")
 
-*)
-(*
-      (match normalize env n t1 with
-       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3x
-       | TmConst(fi,c) ->
-           let (env2,v) = delta c t2 env eval in eval env2 v
-       | _ -> raise_error fi "Application to a non closure value.")
-*)
+
 
     (* Constant *)
     | TmConst(_,_) -> PEExp(t2)
@@ -506,7 +536,7 @@ let rec eval env t =
          | CPEval ->
            (match normalize (env2peenv env ) 0 0 (PEExp(t2)) with
            | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, peenv2env env2)
-           | PESym(_) | PEExp(_)
+           | PESym(_) | PEExp(_) | PEFix(_)
                -> failwith "Incorrect peval. Should be captured by type system.")
          (* Fix *)
          | CFix ->

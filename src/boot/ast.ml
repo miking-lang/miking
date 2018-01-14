@@ -12,6 +12,12 @@ open Msg
 (* Evaluation environment *)
 type env = tm list
 
+(* Partial evaluation environment *)
+and penv_part =
+| PEnvList of tm list
+| PEnvElem of petm
+
+and penv = penv_part list
 
 (* Partial evaluation environment *)
 and peenv = petm list
@@ -99,15 +105,47 @@ and tm =
 and petm =
 | PESym         of int
 | PEClos        of info * ustring * petm * peenv
+| PEFix         of petm
 | PEExp         of tm
 
 
 (* Generate a constant application term for a specific constant *)
 let capp c v = TmApp(NoInfo,TmConst(NoInfo,c),v)
 
+(* Same as above, but for PE term *)
+let capp c v = TmApp(NoInfo,TmConst(NoInfo,c),v)
+
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
+
+(* Cons a normal term 't' to a PE environment 'penv' *)
+let cons_env t penv = PEnvList([t])::penv
+
+(* Cons a PE term 't' to a PE environment 'penv' *)
+let cons_penv t penv = PEnvElem(t)::penv
+
+(* Returns the nth element from a PE environment.
+   Assumes that the element exists. *)
+let rec nth_penv n penv =
+  match penv with
+  | PEnvList(t::ts)::rest ->
+     if n = 0 then PEExp(t) else nth_penv (n-1) (PEnvList(ts)::rest)
+  | PEnvList([])::rest -> nth_penv n rest
+  | PEnvElem(t)::rest ->
+    if n = 0 then t else nth_penv (n-1) rest
+  | [] -> failwith "Out of bound of the penv list"
+
+(* Returns the env version of a penv environment *)
+let rec to_env penv =
+  match penv with
+  | PEnvList(ts)::rest -> List.append ts (to_env rest)
+  | PEnvElem(PEExp(t))::rest -> t::(to_env rest)
+  | PEnvElem(_)::rest -> failwith "Cannot convert penv to env"
+  | [] -> []
+
+(* Returns the penv version of an env environment *)
+let to_penv env = PEnvList(env)
 
 
 (* Returns the info field from a term *)
