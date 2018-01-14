@@ -17,10 +17,9 @@ and penv_part =
 | PEnvList of tm list
 | PEnvElem of petm
 
+(* Partial evaluation environment *)
 and penv = penv_part list
 
-(* Partial evaluation environment *)
-and peenv = petm list
 
 (* Pattern used in match constructs *)
 and pattern =
@@ -104,7 +103,7 @@ and tm =
 (* Term/expression during partial evaluation *)
 and petm =
 | PESym         of int
-| PEClos        of info * ustring * petm * peenv
+| PEClos        of info * ustring * petm * penv
 | PEFix         of petm
 | PEExp         of tm
 
@@ -145,7 +144,7 @@ let rec to_env penv =
   | [] -> []
 
 (* Returns the penv version of an env environment *)
-let to_penv env = PEnvList(env)
+let to_penv env = [PEnvList(env)]
 
 
 (* Returns the info field from a term *)
