@@ -291,69 +291,12 @@ let builtin =
 
 
 
-(* The readback function is the second pass of the partial evaluation.
-   It removes symbols for the term. If this is the complete version,
-   this is the final pass before JIT *)
-let rec readback env n t =
-  match t with
-  | PESym(k) -> failwith ""
-  | PEClos(fi,x,t,env2) -> failwith ""
-  | PEExp(t2) -> t2
 
-
-
-(* The function normalization function that leaves symbols in the
-   term. These symbols are then removed using the readback function.
-   'env' is the environment, 'n' the lambda depth number, and
-   't' the term. *)
-let rec normalize env n t =
-  match t with
-  | PESym(k) -> failwith ""
-  | PEClos(fi,x,t,env2) -> t
-  | PEExp(t2) ->
-    (match t2 with
-    (* Variables using debruijn indices. *)
-    | TmVar(fi,x,n) -> failwith ""
-    (* Lambda and closure conversions *)
-    | TmLam(fi,x,t1) -> failwith ""
-    | TmClos(fi,x,t1,env2) -> failwith ""
-(* **| TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
-  | TmClos(fi,x,t1,env2) -> t
-   ** *)
-    (* Closure application and delta *)
-    | TmApp(fi,t1,t2) -> failwith ""
-    (* Constant *)
-    | TmConst(_,_) -> PEExp(t2)
-    | TmChar(_,_) -> failwith ""
-    | TmExprSeq(_,t1,t2) -> failwith ""
-    | TmUC(fi,uct,o,u) -> failwith ""
-    | TmUtest(fi,t1,t2,tnext) -> failwith ""
-    | TmMatch(fi,t1,cases) -> failwith ""
-    | TmNop -> failwith ""
-    )
 
 (* Evaluate a constant application. This is a modified version of
    the traditional  delta function delta(c,v). In this case, the delta
    is delta(c,t,env,eval) and returns a tuple (env,v) *)
-and delta c t env eval =
-  (* Match constants that do not evaluate the argument to a value *)
-  match c with
-  (* Partial evaluation *)
-  | CPEval ->
-    (match normalize env 0 (PEExp(t)) with
-    | PEClos(_,_,t2,env2) -> (env,readback env2 0 t2)
-    | PESym(_) -> failwith "Incorrect peval. Captured by typesystem"
-    (* TODO: Remove below. Should give an error *)
-    | PEExp(t) -> (env,t))
-  (* Fix *)
-  | CFix ->
-     (match eval env t with
-     | TmClos(fi,x,t2,env2) as tt -> ((capp CFix tt)::env2,t2)
-     | _ -> failwith "Incorrect CFix")
-  | _ -> (
-    (* Match all other constants *)
-    let v = eval env t in
-    (env, (* Returns a tuple, with the environment unchanged *)
+let delta c v  =
     match c,v with
     (* MCore boolean intrinsics *)
     | CBool(_),t -> fail_constapp (tm_info t)
@@ -463,7 +406,61 @@ and delta c t env eval =
     | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
     | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
     | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
-  ))
+
+
+(* The readback function is the second pass of the partial evaluation.
+   It removes symbols for the term. If this is the complete version,
+   this is the final pass before JIT *)
+let rec readback env n t =
+  match t with
+  | PESym(k) -> failwith ""
+  | PEClos(fi,x,t,env2) -> failwith ""
+  | PEExp(t2) -> t2
+
+
+
+(* The function normalization function that leaves symbols in the
+   term. These symbols are then removed using the readback function.
+   'env' is the environment, 'n' the lambda depth number, and
+   't' the term. *)
+let rec normalize env n t =
+  match t with
+  | PESym(k) -> t
+  | PEClos(fi,x,t,env2) -> t
+  | PEExp(t2) ->
+    (match t2 with
+    (* Variables using debruijn indices. *)
+    | TmVar(fi,x,n) -> normalize env n (List.nth env n)
+    (* Lambda and closure conversions *)
+    | TmLam(fi,x,t1) -> PEClos(fi,x,PEExp(t1),env)
+    | TmClos(fi,x,t1,env2) -> t
+    (* Closure application and delta *)
+    | TmApp(fi,t1,t2) -> failwith ""
+
+(*
+      (match normalize env n t1 with
+       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
+       | TmConst(fi,c) ->
+           let (env2,v) = delta c t2 env eval in eval env2 v
+       | _ -> raise_error fi "Application to a non closure value.")
+*)
+(*
+      (match normalize env n t1 with
+       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3x
+       | TmConst(fi,c) ->
+           let (env2,v) = delta c t2 env eval in eval env2 v
+       | _ -> raise_error fi "Application to a non closure value.")
+*)
+
+    (* Constant *)
+    | TmConst(_,_) -> PEExp(t2)
+    | TmChar(_,_) -> failwith "TODO: removed"
+    | TmExprSeq(_,t1,t2) -> failwith "TODO: removed"
+    | TmUC(fi,uct,o,u) -> failwith "TODO: removed"
+    | TmUtest(fi,t1,t2,tnext) -> failwith "TODO: removed"
+    | TmMatch(fi,t1,cases) -> failwith "TODO: removed"
+    | TmNop -> failwith "TODO: removed"
+    )
 
 
 
@@ -479,9 +476,25 @@ let rec eval env t =
   (* Closure application and delta *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
+       (* Closure application *)
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
+       (* Constant application *)
        | TmConst(fi,c) ->
-           let (env2,v) = delta c t2 env eval in eval env2 v
+         (match c with
+         (* Partial evaluation *)
+         | CPEval ->
+           (match normalize (List.map (fun x -> PEExp(x)) env) 0 (PEExp(t2)) with
+           | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3,env)
+           | PESym(_) -> failwith "Incorrect peval. Captured by typesystem"
+                  (* TODO: Remove below. Should give an error *)
+           | PEExp(t) -> t)
+         (* Fix *)
+         | CFix ->
+           (match eval env t2 with
+           | TmClos(fi,x,t3,env2) as tt -> eval ((capp CFix tt)::env2) t3
+           | _ -> failwith "Incorrect CFix")
+         (* Other constants using the delta function *)
+         | _ -> eval env (delta c (eval env t2)))
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) -> t
