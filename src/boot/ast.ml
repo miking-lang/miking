@@ -60,10 +60,8 @@ and const =
 | CINeq | CINeq2 of int
 (* MCore control intrinsics *)
 | CIF | CIF2 of bool | CIF3 of bool * tm
-(* MCore partial evaluation intrinsics *)
 | CPEval
 | CFix
-
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint

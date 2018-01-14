@@ -108,7 +108,6 @@ and pprint_const c =
   | CINeq | CINeq2(_) -> us"neq"
   (* MCore control intrinsics *)
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
-  (* MCore partial evaluation instrinsic *)
   | CPEval -> us"peval"
   | CFix -> us"fix"
   (* MCore debug and stdio intrinsics *)
@@ -370,8 +369,8 @@ let delta c t env eval =
     | CIF,t -> fail_constapp (tm_info t)
 
     (* MCore partial evaluation intrinsics *)
-    | CPEval,_ -> failwith "CPEval should not happen"
-    | CFix,_ -> failwith "CFix should not happen"
+    | CPEval,_ -> failwith "CPEval"
+    | CFix,_ -> failwith "CFix"
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
