@@ -279,6 +279,8 @@ let rec eval_match env pat t final =
 
 let fail_constapp fi = raise_error fi "Incorrect application "
 
+
+
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -291,11 +293,11 @@ let builtin =
 
 
 
-
-
-(* Evaluate a constant application. This is a modified version of
-   the traditional  delta function delta(c,v). In this case, the delta
-   is delta(c,t,env,eval) and returns a tuple (env,v) *)
+(* Evaluates a constant application. This is the standard delta function
+   delta(c,v) with the exception that it returns an expression and not
+   a value. This is why the returned value is evaluated in the eval() function.
+   The reason for this is that if-expressions return expressions
+   and not values. *)
 let delta c v  =
     match c,v with
     (* MCore boolean intrinsics *)
@@ -462,7 +464,14 @@ let rec normalize env n t =
     | TmNop -> failwith "TODO: removed"
     )
 
+(* Helper function. Converts from a PE environment to a normal environment *)
+let peenv2env env =
+  List.map (fun x ->
+    match x with PEExp(t) -> t | _ -> failwith "Should not happen!") env
 
+(* Helper function. Converts from a normal environment to a PE environment *)
+let env2peenv env =
+  List.map (fun x -> PEExp(x)) env
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
@@ -473,7 +482,7 @@ let rec eval env t =
   (* Lambda and closure conversions *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
   | TmClos(fi,x,t1,env2) -> t
-  (* Closure application and delta *)
+  (* Application *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
@@ -483,11 +492,10 @@ let rec eval env t =
          (match c with
          (* Partial evaluation *)
          | CPEval ->
-           (match normalize (List.map (fun x -> PEExp(x)) env) 0 (PEExp(t2)) with
-           | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3,env)
-           | PESym(_) -> failwith "Incorrect peval. Captured by typesystem"
-                  (* TODO: Remove below. Should give an error *)
-           | PEExp(t) -> t)
+           (match normalize (env2peenv env ) 0 (PEExp(t2)) with
+           | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, peenv2env env2)
+           | PESym(_) | PEExp(_)
+               -> failwith "Incorrect peval. Should be captured by type system.")
          (* Fix *)
          | CFix ->
            (match eval env t2 with
