@@ -12,7 +12,8 @@ open Msg
 (* Evaluation environment *)
 type env = tm list
 
-
+(* Partial evaluation environment *)
+and peenv = petm list
 
 (* Pattern used in match constructs *)
 and pattern =
@@ -91,6 +92,14 @@ and tm =
 | TmUtest       of info * tm * tm * tm
 | TmMatch       of info * tm * case list
 | TmNop
+
+
+(* Term/expression during partial evaluation *)
+and petm =
+| PESym         of int
+| PEClos        of info * ustring * petm * peenv
+| PEExp         of tm
+
 
 (* Generate a constant application term for a specific constant *)
 let capp c v = TmApp(NoInfo,TmConst(NoInfo,c),v)

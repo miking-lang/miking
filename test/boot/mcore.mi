@@ -1,4 +1,4 @@
- // Miking is licensed under the MIT license.
+// Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
 // File mcore.mi tests all basic MCore language constructs
@@ -12,7 +12,6 @@ utest "test" "test"
 utest 's' 's'
 utest true true
 utest false false
-
 
 // Boolean intrinsic functions
 utest true  (bnot false)       // Boolean not
@@ -75,3 +74,14 @@ utest "testthis" (concat "test" "this")
 
 // argv
 utest "" (argv nop)
+
+
+// Functions with fix point
+let pow = fix (lam pow:(Int->Int->Int). lam x:Int. lam n:Int.
+           ifexp (ileq n 1)
+              (lam _:a. x)
+              (lam _:a. imul x (pow x (isub n 1)))
+           )
+
+utest 16 (pow 2 4)
+utest 59049 (pow 3 10)

@@ -279,14 +279,72 @@ let rec eval_match env pat t final =
 
 let fail_constapp fi = raise_error fi "Incorrect application "
 
+(* Mapping between named builtin functions (intrinsics) and the
+   correspond constants *)
+let builtin =
+  [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
+   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
+   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
+   ("ifexp",CIF);("peval",CPEval);("fix",CFix);
+   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
+   ("concat",CConcat)]
+
+
+
+(* The readback function is the second pass of the partial evaluation.
+   It removes symbols for the term. If this is the complete version,
+   this is the final pass before JIT *)
+let rec readback env n t =
+  match t with
+  | PESym(k) -> failwith ""
+  | PEClos(fi,x,t,env2) -> failwith ""
+  | PEExp(t2) -> t2
+
+
+
+(* The function normalization function that leaves symbols in the
+   term. These symbols are then removed using the readback function.
+   'env' is the environment, 'n' the lambda depth number, and
+   't' the term. *)
+let rec normalize env n t =
+  match t with
+  | PESym(k) -> failwith ""
+  | PEClos(fi,x,t,env2) -> t
+  | PEExp(t2) ->
+    (match t2 with
+    (* Variables using debruijn indices. *)
+    | TmVar(fi,x,n) -> failwith ""
+    (* Lambda and closure conversions *)
+    | TmLam(fi,x,t1) -> failwith ""
+    | TmClos(fi,x,t1,env2) -> failwith ""
+(* **| TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
+  | TmClos(fi,x,t1,env2) -> t
+   ** *)
+    (* Closure application and delta *)
+    | TmApp(fi,t1,t2) -> failwith ""
+    (* Constant *)
+    | TmConst(_,_) -> PEExp(t2)
+    | TmChar(_,_) -> failwith ""
+    | TmExprSeq(_,t1,t2) -> failwith ""
+    | TmUC(fi,uct,o,u) -> failwith ""
+    | TmUtest(fi,t1,t2,tnext) -> failwith ""
+    | TmMatch(fi,t1,cases) -> failwith ""
+    | TmNop -> failwith ""
+    )
+
 (* Evaluate a constant application. This is a modified version of
    the traditional  delta function delta(c,v). In this case, the delta
    is delta(c,t,env,eval) and returns a tuple (env,v) *)
-let delta c t env eval =
+and delta c t env eval =
   (* Match constants that do not evaluate the argument to a value *)
   match c with
   (* Partial evaluation *)
-  | CPEval -> failwith "TODO: Fix!"
+  | CPEval ->
+    (match normalize env 0 (PEExp(t)) with
+    | PEClos(_,_,t2,env2) -> (env,readback env2 0 t2)
+    | PESym(_) -> failwith "Incorrect peval. Captured by typesystem"
+    (* TODO: Remove below. Should give an error *)
+    | PEExp(t) -> (env,t))
   (* Fix *)
   | CFix ->
      (match eval env t with
@@ -407,16 +465,6 @@ let delta c t env eval =
     | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
   ))
 
-
-(* Mapping between named builtin functions (intrinsics) and the
-   correspond constats *)
-let builtin =
-  [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
-   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
-   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
-   ("ifexp",CIF);
-   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
-   ("concat",CConcat)]
 
 
 

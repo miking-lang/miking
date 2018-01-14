@@ -34,7 +34,6 @@ let reserved_strings = [
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
-  ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
   ("nop",           fun(i) -> Parser.NOP{i=i;v=()});
 
   (* v *)

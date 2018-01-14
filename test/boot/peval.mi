@@ -1,0 +1,10 @@
+
+ // Miking is licensed under the MIT license.
+// Copyright (C) David Broman. See file LICENSE.txt
+//
+// File mcore.mi tests all basic MCore language constructs
+
+language MCore
+
+// Literals
+utest 1  (peval 1)
