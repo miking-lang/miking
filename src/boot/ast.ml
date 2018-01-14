@@ -12,6 +12,7 @@ open Msg
 (* Evaluation environment *)
 type env = tm list
 
+
 (* Partial evaluation environment *)
 and peenv = petm list
 
@@ -106,6 +107,7 @@ let capp c v = TmApp(NoInfo,TmConst(NoInfo,c),v)
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
+
 
 
 (* Returns the info field from a term *)

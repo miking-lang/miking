@@ -409,6 +409,16 @@ let delta c v  =
     | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
     | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
 
+(* Helper function. Converts from a PE environment to a normal environment *)
+let peenv2env env =
+  List.map (fun x ->
+    match x with PEExp(t) -> t | _ -> failwith "Should not happen!") env
+
+(* Helper function. Converts from a normal environment to a PE environment *)
+let env2peenv env =
+  List.map (fun x -> PEExp(x)) env
+
+
 
 (* The readback function is the second pass of the partial evaluation.
    It removes symbols for the term. If this is the complete version,
@@ -423,28 +433,39 @@ let rec readback env n t =
 
 (* The function normalization function that leaves symbols in the
    term. These symbols are then removed using the readback function.
-   'env' is the environment, 'n' the lambda depth number, and
+   'env' is the environment, 'n' the lambda depth number, 'm'
+   the number of lambdas that we can go under, and
    't' the term. *)
-let rec normalize env n t =
+let rec normalize env n m t =
   match t with
   | PESym(k) -> t
-  | PEClos(fi,x,t,env2) -> t
+  | PEClos(fi,x,t2,env2) ->
+      if m = 0 then t
+      else PEClos(fi,x,normalize (PESym(n+1)::env2) (n+1) (m-1) t2, env2)
   | PEExp(t2) ->
     (match t2 with
     (* Variables using debruijn indices. *)
-    | TmVar(fi,x,n) -> normalize env n (List.nth env n)
+    | TmVar(fi,x,n) -> normalize env n m (List.nth env n)
     (* Lambda and closure conversions *)
-    | TmLam(fi,x,t1) -> PEClos(fi,x,PEExp(t1),env)
-    | TmClos(fi,x,t1,env2) -> t
+    | TmLam(fi,x,t1) ->
+         if m = 0 then PEClos(fi,x,PEExp(t1),env)
+         else
+           let v = normalize (PESym(n+1)::env) (n+1) (m-1) (PEExp(t1))
+           in  PEClos(fi,x,v,env)
+    | TmClos(fi,x,t1,env2) ->
+         if m = 0 then t
+         else
+           let env3 = env2peenv env2
+           in  PEClos(fi,x,normalize (PESym(n+1)::env3)
+                            (n+1) (m-1) (PEExp(t1)), env3)
     (* Closure application and delta *)
     | TmApp(fi,t1,t2) -> failwith ""
-
-(*
-      (match normalize env n t1 with
+(*      (match normalize env n t1 with
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
        | TmConst(fi,c) ->
            let (env2,v) = delta c t2 env eval in eval env2 v
        | _ -> raise_error fi "Application to a non closure value.")
+
 *)
 (*
       (match normalize env n t1 with
@@ -463,15 +484,6 @@ let rec normalize env n t =
     | TmMatch(fi,t1,cases) -> failwith "TODO: removed"
     | TmNop -> failwith "TODO: removed"
     )
-
-(* Helper function. Converts from a PE environment to a normal environment *)
-let peenv2env env =
-  List.map (fun x ->
-    match x with PEExp(t) -> t | _ -> failwith "Should not happen!") env
-
-(* Helper function. Converts from a normal environment to a PE environment *)
-let env2peenv env =
-  List.map (fun x -> PEExp(x)) env
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
@@ -492,7 +504,7 @@ let rec eval env t =
          (match c with
          (* Partial evaluation *)
          | CPEval ->
-           (match normalize (env2peenv env ) 0 (PEExp(t2)) with
+           (match normalize (env2peenv env ) 0 0 (PEExp(t2)) with
            | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, peenv2env env2)
            | PESym(_) | PEExp(_)
                -> failwith "Incorrect peval. Should be captured by type system.")
