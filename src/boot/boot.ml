@@ -434,20 +434,13 @@ let rec normalize env n m t =
       if m = 0 then t
       else PEClos(fi,x,normalize (cons_penv (PESym(n+1)) env2) (n+1) (m-1) t2, env2)
   (* Perform all Fix with special PE. Not possible otherwise *)
-  | PEFix(t2) -> failwith ""
-(*      (match normalize env n m t2) with
-      | PEExp(TmClos(fi,x,t3,env2))  ->
-        let env3 = (PEFix(PEClos(fi,x,PEExp(t3),env2peenv env2)
-             let env3 = env2peenv (capp CFix (TmClos(fi,x,t3,env2))::env2)
-             in normalize ( n m (PEExp(t3))
-*)
-(*                              ***
-         | CFix ->
-           (match eval env t2 with
-           | TmClos(fi,x,t3,env2) as tt -> eval ((capp CFix tt)::env2) t3
-           | _ -> failwith "Incorrect CFix")
-
-                                ***** *)
+  | PEFix(t2) ->
+     (match normalize env n m t2 with
+      | PEClos(fi,x,t3,env2) as tt -> normalize (cons_penv (PEFix(tt)) env2) n m t3
+      | PEExp(TmClos(fi,x,t3,env2)) ->
+        let env3 = to_penv env2 in
+        normalize (cons_penv (PEFix(PEClos(fi,x,PEExp(t3),env3))) env3)  n m (PEExp(t3))
+      | _ -> failwith "Fix error")
 
   | PEExp(t2) ->
     (match t2 with
@@ -478,14 +471,7 @@ let rec normalize env n m t =
          (* Partial evaluation *)
          | CPEval -> normalize env n (m+1) (PEExp(t2))
          (* Fix *)
-         | CFix ->
-           (match normalize env n m (PEExp(t2)) with
-           | PEExp(TmClos(fi,x,t3,env2))  ->
-             failwith ""
-      (*       let env3 = env2peenv (capp CFix
-                              (cons_env (TmClos(fi,x,t3,env2)) env2))
-               in normalize env3 n m (PEExp(t3)) *)
-           | _ -> failwith "Incorrect CFix")
+         | CFix -> normalize env n m (PEExp(t2))
          (* Other constants using the delta function *)
          | _ -> failwith "")
    (*         delta c (eval env t2))
