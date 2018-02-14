@@ -441,7 +441,6 @@ let rec normalize env n m t =
         let env3 = to_penv env2 in
         normalize (cons_penv (PEFix(PEClos(fi,x,PEExp(t3),env3))) env3)  n m (PEExp(t3))
       | _ -> failwith "Fix error")
-
   | PEExp(t2) ->
     (match t2 with
     (* Variables using debruijn indices. *)
@@ -461,7 +460,7 @@ let rec normalize env n m t =
     | TmApp(fi,t1,t2) ->
       (match normalize env n m (PEExp(t1)) with
        | PEClos(fi,x,t3,env2) ->
-           normalize (cons_penv (normalize env n m (PEExp(t2)))env2) n m t3
+           normalize (cons_penv (normalize env n m (PEExp(t2))) env2) n m t3
        | PEExp(TmClos(fi,x,t3,env2)) ->
          normalize (cons_penv (normalize env n m (PEExp(t2))) (to_penv env2))
                    n m (PEExp(t3))
@@ -473,14 +472,13 @@ let rec normalize env n m t =
          (* Fix *)
          | CFix -> normalize env n m (PEExp(t2))
          (* Other constants using the delta function *)
+         (*| _ -> normalize env n m (delta c (eval env t2))) *)
+
          | _ -> failwith "")
    (*         delta c (eval env t2))
               normalize env () *)
 
-
        | _ -> raise_error fi "Application to a non closure value.")
-
-
 
     (* Constant *)
     | TmConst(_,_) -> PEExp(t2)
@@ -497,7 +495,7 @@ let rec normalize env n m t =
 let rec eval env t =
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(fi,x,n) -> eval env (List.nth env n)
+  | TmVar(fi,x,n) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
   | TmClos(fi,x,t1,env2) -> t
