@@ -427,6 +427,47 @@ let rec readback env n t =
    't' the term. *)
 let rec normalize env n m t =
   match t with
+  | PEExp(t2) ->
+    (match t2 with
+    (* Variables using debruijn indices. *)
+    | TmVar(fi,x,n) -> normalize env n m (nth_penv n env)
+    (* Lambda and closure conversions *)
+    | TmLam(fi,x,t1) -> normalize env n m (PEClos(fi,x,PEExp(t1),env))
+    | TmClos(fi,x,t1,env2) ->
+      if m = 0 then t
+      else normalize env n m (PEClos(fi,x,PEExp(t1),to_penv env2))
+
+    (* Closure application and delta *)
+    | TmApp(fi,t1,t2) ->
+      (match normalize env n m (PEExp(t1)) with
+       (* PE Closure *)
+       | PEClos(fi,x,t3,env2) ->
+         normalize (cons_penv (normalize env n m (PEExp(t2))) env2) n m t3
+       (* Normal closure *)
+       | PEExp(TmClos(fi,x,t3,env2)) ->
+         normalize (cons_penv (normalize env n m (PEExp(t2))) (to_penv env2))
+                   n m (PEExp(t3))
+       (* Constant application *)
+       | PEExp(TmConst(fi,c) as v1) ->
+         (match normalize env n m (PEExp(t2)) with
+         | PEExp(TmConst(_,_) as v) -> PEExp(delta c v)
+         | PEExp(v2) -> PEExp(TmApp(fi,v1,v2))
+         | _ -> failwith "")
+       (* Expression evaluated to normal form *)
+       | _ -> failwith "")
+
+
+    (* v1 -> PEExp(TmApp(fi,v1,normalize env n m (PEExp(t2))))) *)
+
+    (* Constant *)
+    | TmConst(_,_) | TmFix(_) | TmPEval(_) -> PEExp(t2)
+    | TmChar(_,_) -> failwith "TODO: removed"
+    | TmExprSeq(_,t1,t2) -> failwith "TODO: removed"
+    | TmUC(fi,uct,o,u) -> failwith "TODO: removed"
+    | TmUtest(fi,t1,t2,tnext) -> failwith "TODO: removed"
+    | TmMatch(fi,t1,cases) -> failwith "TODO: removed"
+    | TmNop -> failwith "TODO: removed"
+    )
   | PESym(k) -> t
   | PEClos(fi,x,t2,env2) ->
       if m = 0 then t
@@ -439,54 +480,6 @@ let rec normalize env n m t =
         let env3 = to_penv env2 in
         normalize (cons_penv (PEFix(PEClos(fi,x,PEExp(t3),env3))) env3)  n m (PEExp(t3))
       | _ -> failwith "Fix error")
-  | PEExp(t2) ->
-    (match t2 with
-    (* Variables using debruijn indices. *)
-    | TmVar(fi,x,n) -> normalize env n m (nth_penv n env)
-    (* Lambda and closure conversions *)
-    | TmLam(fi,x,t1) ->
-         if m = 0 then PEClos(fi,x,PEExp(t1),env)
-         else
-           let v = normalize (cons_penv (PESym(n+1)) env) (n+1) (m-1) (PEExp(t1))
-           in  PEClos(fi,x,v,env)
-    | TmClos(fi,x,t1,env2) ->
-         if m = 0 then t
-         else
-           PEClos(fi,x,normalize (cons_penv (PESym(n+1)) (to_penv env2))
-                          (n+1) (m-1) (PEExp(t1)), (to_penv env2))
-    (* Closure application and delta *)
-    | TmApp(fi,t1,t2) ->
-      (match normalize env n m (PEExp(t1)) with
-       | PEClos(fi,x,t3,env2) ->
-           normalize (cons_penv (normalize env n m (PEExp(t2))) env2) n m t3
-       | PEExp(TmClos(fi,x,t3,env2)) ->
-         normalize (cons_penv (normalize env n m (PEExp(t2))) (to_penv env2))
-                   n m (PEExp(t3))
-       (* Constant application *)
-       | PEExp(TmConst(fi,c)) ->
-         (match c with
-         (* Partial evaluation *)
-         (* | CPEval -> normalize env n (m+1) (PEExp(t2)) *)
-         (* Fix *)
-         (* | CFix -> normalize env n m (PEExp(t2))a *)
-         (* Other constants using the delta function *)
-         (*| _ -> normalize env n m (delta c (eval env t2))) *)
-
-         | _ -> failwith "")
-   (*         delta c (eval env t2))
-              normalize env () *)
-
-       | _ -> raise_error fi "Application to a non closure value.")
-
-    (* Constant *)
-    | TmConst(_,_) | TmFix(_) | TmPEval(_) -> PEExp(t2)
-    | TmChar(_,_) -> failwith "TODO: removed"
-    | TmExprSeq(_,t1,t2) -> failwith "TODO: removed"
-    | TmUC(fi,uct,o,u) -> failwith "TODO: removed"
-    | TmUtest(fi,t1,t2,tnext) -> failwith "TODO: removed"
-    | TmMatch(fi,t1,cases) -> failwith "TODO: removed"
-    | TmNop -> failwith "TODO: removed"
-    )
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
@@ -502,10 +495,13 @@ let rec eval env t =
       (match eval env t1 with
        (* Closure application *)
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
+       (* Constant application using the delta function *)
+       | TmConst(fi,c) ->
+           eval env (delta c (eval env t2))
        (* Partial evaluation *)
        | TmPEval(fi) ->
          (match normalize (to_penv env) 0 0 (PEExp(t2)) with
-         | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, to_env env2)
+         | PEClos(fi,x,t3,env3) -> TmClos(fi,x,readback env3 0 t3, to_env env3)
          | PESym(_) | PEExp(_) | PEFix(_)
                -> failwith "Incorrect peval. Should be captured by type system.")
        (* Fix *)
@@ -513,9 +509,6 @@ let rec eval env t =
          (match eval env t2 with
          | TmClos(fi,x,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
-       (* Constant application using the delta function *)
-       | TmConst(fi,c) ->
-           eval env (delta c (eval env t2))
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
