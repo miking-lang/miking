@@ -108,8 +108,6 @@ and pprint_const c =
   | CINeq | CINeq2(_) -> us"neq"
   (* MCore control intrinsics *)
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
-  | CPEval -> us"peval"
-  | CFix -> us"fix"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -132,6 +130,8 @@ and pprint basic t =
   | TmClos(_,x,t,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
+  | TmFix(_) -> us"fix"
+  | TmPEval(_) -> us"peval"
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
@@ -185,6 +185,8 @@ let rec debruijn env t =
   | TmClos(fi,x,t1,env1) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
+  | TmFix(_) -> t
+  | TmPEval(_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
@@ -287,7 +289,7 @@ let builtin =
   [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
    ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
    ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
-   ("ifexp",CIF);("peval",CPEval);("fix",CFix);
+   ("ifexp",CIF);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
 
@@ -370,10 +372,6 @@ let delta c v  =
     | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
     | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
     | CIF,t -> fail_constapp (tm_info t)
-
-    (* MCore partial evaluation intrinsics *)
-    | CPEval,_ -> failwith "CPEval"
-    | CFix,_ -> failwith "CFix"
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
@@ -468,9 +466,9 @@ let rec normalize env n m t =
        | PEExp(TmConst(fi,c)) ->
          (match c with
          (* Partial evaluation *)
-         | CPEval -> normalize env n (m+1) (PEExp(t2))
+         (* | CPEval -> normalize env n (m+1) (PEExp(t2)) *)
          (* Fix *)
-         | CFix -> normalize env n m (PEExp(t2))
+         (* | CFix -> normalize env n m (PEExp(t2))a *)
          (* Other constants using the delta function *)
          (*| _ -> normalize env n m (delta c (eval env t2))) *)
 
@@ -481,7 +479,7 @@ let rec normalize env n m t =
        | _ -> raise_error fi "Application to a non closure value.")
 
     (* Constant *)
-    | TmConst(_,_) -> PEExp(t2)
+    | TmConst(_,_) | TmFix(_) | TmPEval(_) -> PEExp(t2)
     | TmChar(_,_) -> failwith "TODO: removed"
     | TmExprSeq(_,t1,t2) -> failwith "TODO: removed"
     | TmUC(fi,uct,o,u) -> failwith "TODO: removed"
@@ -504,25 +502,23 @@ let rec eval env t =
       (match eval env t1 with
        (* Closure application *)
        | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
-       (* Constant application *)
-       | TmConst(fi,c) ->
-         (match c with
-         (* Partial evaluation *)
-         | CPEval ->
-           (match normalize (to_penv env) 0 0 (PEExp(t2)) with
-           | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, to_env env2)
-           | PESym(_) | PEExp(_) | PEFix(_)
+       (* Partial evaluation *)
+       | TmPEval(fi) ->
+         (match normalize (to_penv env) 0 0 (PEExp(t2)) with
+         | PEClos(fi,x,t3,env2) -> TmClos(fi,x,readback env2 0 t3, to_env env2)
+         | PESym(_) | PEExp(_) | PEFix(_)
                -> failwith "Incorrect peval. Should be captured by type system.")
-         (* Fix *)
-         | CFix ->
-           (match eval env t2 with
-           | TmClos(fi,x,t3,env2) as tt -> eval ((capp CFix tt)::env2) t3
-           | _ -> failwith "Incorrect CFix")
-         (* Other constants using the delta function *)
-         | _ -> eval env (delta c (eval env t2)))
+       (* Fix *)
+       | TmFix(fi) ->
+         (match eval env t2 with
+         | TmClos(fi,x,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | _ -> failwith "Incorrect CFix")
+       (* Constant application using the delta function *)
+       | TmConst(fi,c) ->
+           eval env (delta c (eval env t2))
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
-  | TmConst(_,_) -> t
+  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)

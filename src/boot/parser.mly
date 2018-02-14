@@ -28,6 +28,8 @@
       | TmClos(_,_,_,_) -> failwith "Cannot happen"
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
+      | TmFix(_) -> false
+      | TmPEval(_) -> false
       | TmChar(_,_) -> false
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
@@ -40,7 +42,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then capp CFix (TmLam(NoInfo,x,t)) else t
+    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,t))) else t
 
 
 %}
@@ -75,6 +77,8 @@
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> NOP
+%token <unit Ast.tokendata> FIX
+%token <unit Ast.tokendata> PEVAL
 
 
 
@@ -175,6 +179,8 @@ mc_atom:
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }
+  | FIX                  { TmFix($1.i) }
+  | PEVAL                { TmPEval($1.i) }
 
 
 

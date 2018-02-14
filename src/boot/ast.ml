@@ -67,8 +67,6 @@ and const =
 | CINeq | CINeq2 of int
 (* MCore control intrinsics *)
 | CIF | CIF2 of bool | CIF3 of bool * tm
-| CPEval
-| CFix
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint
@@ -91,6 +89,8 @@ and tm =
 | TmClos        of info * ustring * tm * env
 | TmApp         of info * tm * tm
 | TmConst       of info * const
+| TmPEval       of info
+| TmFix         of info
 
 | TmChar        of info * int
 | TmExprSeq     of info * tm * tm
@@ -155,6 +155,8 @@ let tm_info t =
   | TmClos(fi,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
+  | TmPEval(fi) -> fi
+  | TmFix(fi) -> fi
 
   | TmChar(fi,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
