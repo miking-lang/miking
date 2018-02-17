@@ -23,9 +23,9 @@
    (** Add fix-point, if recursive function *)
   let addrec x t =
     let rec hasx t = match t with
-      | TmVar(_,y,_) ->  x =. y
+      | TmVar(_,y,_,_) ->  x =. y
       | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_,_) -> failwith "Cannot happen"
+      | TmClos(_,_,_,_,_) -> failwith "Cannot happen"
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
@@ -172,7 +172,7 @@ mc_left:
 
 mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
@@ -287,7 +287,7 @@ atom:
         let rec mkapps lst =
           match lst with
           | t::ts ->  TmApp(fi,mkapps ts,t)
-          | [] -> TmVar($1.i,$1.v,noidx)
+          | [] -> TmVar($1.i,$1.v,noidx,false)
         in
         (match Ustring.to_utf8 $1.v with
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
@@ -297,7 +297,7 @@ atom:
   | LSQUARE tmseq RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY ragnar_scope RCURLY  { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i, CInt($1.v)) }

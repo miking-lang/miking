@@ -125,9 +125,9 @@ and pprint_const c =
 and pprint basic t =
   let pprint = pprint basic in
   match t with
-  | TmVar(_,x,n) -> x ^. us"#" ^. us(string_of_int n)
+  | TmVar(_,x,n,_) -> x ^. us"#" ^. us(string_of_int n)
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
-  | TmClos(_,x,t,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
+  | TmClos(_,x,t,_,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
@@ -176,13 +176,13 @@ let rec patvars env pat =
 (* Convert a term into de Bruijn indices *)
 let rec debruijn env t =
   match t with
-  | TmVar(fi,x,_) ->
+  | TmVar(fi,x,_,_) ->
     let rec find env n = match env with
       | y::ee -> if y =. x then n else find ee (n+1)
       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
-    in TmVar(fi,x,find env 0)
+    in TmVar(fi,x,find env 0,false)
   | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
-  | TmClos(fi,x,t1,env1) -> failwith "Closures should not be available."
+  | TmClos(fi,x,t1,env1,_) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
@@ -413,10 +413,7 @@ let delta c v  =
    this is the final pass before JIT *)
 let rec readback env n t =
   match t with
-  | PESym(k) -> failwith ""
-  | PEClos(fi,x,t,env2) -> failwith ""
-  | PEFix(t) -> failwith ""
-  | PEExp(t2) -> t2
+  | _ -> t
 
 
 
@@ -427,87 +424,81 @@ let rec readback env n t =
    't' the term. *)
 let rec normalize env n m t =
   match t with
-  | PEExp(t2) ->
-    (match t2 with
-    (* Variables using debruijn indices. *)
-    | TmVar(fi,x,n) -> normalize env n m (nth_penv n env)
-    (* Lambda and closure conversions *)
-    | TmLam(fi,x,t1) -> normalize env n m (PEClos(fi,x,PEExp(t1),env))
-    | TmClos(fi,x,t1,env2) ->
-      if m = 0 then t
-      else normalize env n m (PEClos(fi,x,PEExp(t1),to_penv env2))
+  (* Variables using debruijn indices. *)
+  | TmVar(fi,x,n,false) -> normalize env n m (List.nth env n)
+  (* PEMode variable (symbol) *)
+  | TmVar(fi,x,n,true) -> t
+  (* Lambda and closure conversions to PE closure *)
+  | TmLam(fi,x,t1) -> normalize env n m (TmClos(fi,x,t1,env,true))
+  (* Closures, both PE and non PE *)
+  | TmClos(fi,x,t2,env2,pemode) ->
+    (* If no lambdas to go under, leave as is *)
+    if m = 0 then t
+    (* Go under lambda. Always results in a PE closure *)
+    else
+      let pesym = TmVar(NoInfo,us"",n+1,true) in
+      TmClos(fi,x,normalize (pesym::env2) (n+1) (m-1) t2, env2, true)
+  (* Application: closures and delta  *)
+  | TmApp(fi,t1,t2) ->
+    (match normalize env n m t1 with
+    (* Closure application (PE on non PE) TODO: use affine lamba check *)
+    | TmClos(fi,x,t3,env2,_) ->
+         normalize ((normalize env n m t2)::env2) n m t3
+    (* Constant application using the delta function *)
+    | TmConst(fi1,c1) ->
+        (match normalize env n m t2 with
+        | TmConst(fi2,c2) as tt-> normalize env n m (delta c1 tt)
+        | nf -> TmApp(fi,TmConst(fi1,c1),nf))
+    (* Partial evaluation *)
+    | TmPEval(fi) -> normalize env n (m+1) t2
+    (* Fix *)
+    | TmFix(fi2) ->
+       (match normalize env n m t2 with
+       | TmClos(fi,x,t3,env2,_) as tt ->
+           normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n m t3
+       | v2 -> TmApp(fi,TmFix(fi2),v2))
+    (* Stay in normalized form *)
+    | v1 -> TmApp(fi,v1,normalize env n m t2))
+  (* Constant, fix, and Peval  *)
+  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* Other old, to remove *)
+  | TmChar(_,_) -> t
+  | TmExprSeq(fi,t1,t2) ->
+      TmExprSeq(fi,normalize env n m t1, normalize env n m t2)
+  | TmUC(fi,uct,o,u) -> t
+  | TmUtest(fi,t1,t2,tnext) ->
+      TmUtest(fi,normalize env n m t1,normalize env n m t2,tnext)
+  | TmMatch(fi,t1,cases) ->
+      TmMatch(fi,normalize env n m t1,cases)
+  | TmNop -> t
 
-    (* Closure application and delta *)
-    | TmApp(fi,t1,t2) ->
-      (match normalize env n m (PEExp(t1)) with
-       (* PE Closure *)
-       | PEClos(fi,x,t3,env2) ->
-         normalize (cons_penv (normalize env n m (PEExp(t2))) env2) n m t3
-       (* Normal closure *)
-       | PEExp(TmClos(fi,x,t3,env2)) ->
-         normalize (cons_penv (normalize env n m (PEExp(t2))) (to_penv env2))
-                   n m (PEExp(t3))
-       (* Constant application *)
-       | PEExp(TmConst(fi,c) as v1) ->
-         (match normalize env n m (PEExp(t2)) with
-         | PEExp(TmConst(_,_) as v) -> PEExp(delta c v)
-         | PEExp(v2) -> PEExp(TmApp(fi,v1,v2))
-         | _ -> failwith "")
-       (* Expression evaluated to normal form *)
-       | _ -> failwith "")
-
-
-    (* v1 -> PEExp(TmApp(fi,v1,normalize env n m (PEExp(t2))))) *)
-
-    (* Constant *)
-    | TmConst(_,_) | TmFix(_) | TmPEval(_) -> PEExp(t2)
-    | TmChar(_,_) -> failwith "TODO: removed"
-    | TmExprSeq(_,t1,t2) -> failwith "TODO: removed"
-    | TmUC(fi,uct,o,u) -> failwith "TODO: removed"
-    | TmUtest(fi,t1,t2,tnext) -> failwith "TODO: removed"
-    | TmMatch(fi,t1,cases) -> failwith "TODO: removed"
-    | TmNop -> failwith "TODO: removed"
-    )
-  | PESym(k) -> t
-  | PEClos(fi,x,t2,env2) ->
-      if m = 0 then t
-      else PEClos(fi,x,normalize (cons_penv (PESym(n+1)) env2) (n+1) (m-1) t2, env2)
-  (* Perform all Fix with special PE. Not possible otherwise *)
-  | PEFix(t2) ->
-     (match normalize env n m t2 with
-      | PEClos(fi,x,t3,env2) as tt -> normalize (cons_penv (PEFix(tt)) env2) n m t3
-      | PEExp(TmClos(fi,x,t3,env2)) ->
-        let env3 = to_penv env2 in
-        normalize (cons_penv (PEFix(PEClos(fi,x,PEExp(t3),env3))) env3)  n m (PEExp(t3))
-      | _ -> failwith "Fix error")
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(fi,x,n) -> eval env  (List.nth env n)
+  | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
-  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env)
-  | TmClos(fi,x,t1,env2) -> t
+  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,false)
+  | TmClos(fi,x,t1,env2,_) -> t
   (* Application *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(fi,x,t3,env2) -> eval ((eval env t2)::env2) t3
+       | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
        | TmConst(fi,c) ->
            eval env (delta c (eval env t2))
        (* Partial evaluation *)
        | TmPEval(fi) ->
-         (match normalize (to_penv env) 0 0 (PEExp(t2)) with
-         | PEClos(fi,x,t3,env3) -> TmClos(fi,x,readback env3 0 t3, to_env env3)
-         | PESym(_) | PEExp(_) | PEFix(_)
-               -> failwith "Incorrect peval. Should be captured by type system.")
+         (match normalize env 0 0 t2 with
+         | TmClos(fi,x,t3,env3,_) -> TmClos(fi,x,readback env3 0 t3, env3,false)
+         | _ -> failwith "Incorrect peval. Should be captured by type system.")
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with
-         | TmClos(fi,x,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | TmClos(fi,x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
