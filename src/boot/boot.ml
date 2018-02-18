@@ -17,13 +17,17 @@ open Ast
 open Msg
 
 
-
 let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
+(* Debug options *)
+let enable_debug_normalize = false
+let enable_debug_readback = false
+let enable_debug_eval = false
+let enable_debug_after_peval = false
 
 
 (* Print the kind of unified collection (UC) type. *)
@@ -127,7 +131,8 @@ and pprint basic t =
   match t with
   | TmVar(_,x,n,_) -> x ^. us"#" ^. us(string_of_int n)
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
-  | TmClos(_,x,t,_,_) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
+  | TmClos(_,x,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
+  | TmClos(_,x,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
@@ -281,6 +286,34 @@ let rec eval_match env pat t final =
 
 let fail_constapp fi = raise_error fi "Incorrect application "
 
+(* Debug function used in the PE readback function *)
+let debug_readback n t =
+  if enable_debug_readback then
+    (printf "\n-- readback --   n=%d  \n" n;
+     uprint_endline (pprint true t))
+  else ()
+
+(* Debug function used in the PE normalize function *)
+let debug_normalize n m t =
+  if enable_debug_normalize then
+    (printf "\n-- normalize --   n=%d  m=%d\n" n m;
+     uprint_endline (pprint true t))
+  else ()
+
+(* Debug function used in the eval function *)
+let debug_eval t =
+  if enable_debug_eval then
+    (printf "\n-- eval -- \n";
+     uprint_endline (pprint true t))
+  else ()
+
+(* Debug function used after partial evaluation *)
+let debug_after_peval t =
+  if enable_debug_after_peval then
+    (printf "\n-- after peval --  \n";
+     uprint_endline (pprint true t);
+     t)
+  else t
 
 
 (* Mapping between named builtin functions (intrinsics) and the
@@ -412,8 +445,32 @@ let delta c v  =
    It removes symbols for the term. If this is the complete version,
    this is the final pass before JIT *)
 let rec readback env n t =
+  debug_readback n t;
   match t with
-  | _ -> t
+  (* Variables using debruijn indices. Need to evaluate because fix point. *)
+  | TmVar(fi,x,k,false) -> readback env n (List.nth env k)
+  (* Variables as PE symbol. Convert symbol to de bruijn index. *)
+  | TmVar(fi,x,k,true) -> TmVar(fi,x,n-k,false)
+  (* Lambda *)
+  | TmLam(fi,x,t1) -> TmLam(fi,x,readback env (n+1) t1)
+  (* Normal closure *)
+  | TmClos(fi,x,t1,env2,false) -> t
+  (* PE closure *)
+  | TmClos(fi,x,t1,env2,true) -> TmLam(fi,x,readback env (n+1) t1)
+  (* Application *)
+  | TmApp(fi,t1,t2) -> TmApp(fi,readback env n t1,readback env n t2)
+  (* Constant, fix, and PEval  *)
+  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* Other old, to remove *)
+  | TmChar(_,_) -> t
+  | TmExprSeq(fi,t1,t2) ->
+      TmExprSeq(fi,readback env n t1, readback env n t2)
+  | TmUC(fi,uct,o,u) -> t
+  | TmUtest(fi,t1,t2,tnext) ->
+      TmUtest(fi,readback env n t1, readback env n t2,tnext)
+  | TmMatch(fi,t1,cases) ->
+      TmMatch(fi,readback env n t1,cases)
+  | TmNop -> t
 
 
 
@@ -423,6 +480,7 @@ let rec readback env n t =
    the number of lambdas that we can go under, and
    't' the term. *)
 let rec normalize env n m t =
+  debug_normalize n m t;
   match t with
   (* Variables using debruijn indices. *)
   | TmVar(fi,x,n,false) -> normalize env n m (List.nth env n)
@@ -476,6 +534,7 @@ let rec normalize env n m t =
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
+  debug_eval t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
@@ -488,13 +547,9 @@ let rec eval env t =
        (* Closure application *)
        | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
-       | TmConst(fi,c) ->
-           eval env (delta c (eval env t2))
+       | TmConst(fi,c) -> eval env (delta c (eval env t2))
        (* Partial evaluation *)
-       | TmPEval(fi) ->
-         (match normalize env 0 0 t2 with
-         | TmClos(fi,x,t3,env3,_) -> TmClos(fi,x,readback env3 0 t3, env3,false)
-         | _ -> failwith "Incorrect peval. Should be captured by type system.")
+       | TmPEval(fi) -> normalize env 0 1 t2 |> readback env 0 |> debug_after_peval
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with
