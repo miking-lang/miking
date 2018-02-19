@@ -249,17 +249,17 @@ term:
         TmLam(fi,$2.v,$4) }
   | IF term THEN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
   | IF2 term RPAREN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $3,us"",$3)),
               TmLam(tm_info $5,us"",$5)) }
   | MATCH term LCURLY cases RCURLY

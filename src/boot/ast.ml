@@ -57,8 +57,6 @@ and const =
 | Cgeq  | Cgeq2 of int
 | Ceq   | Ceq2  of int
 | Cneq  | Cneq2 of int
-(* MCore control intrinsics *)
-| CIF | CIF2 of bool | CIF3 of bool * tm
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint

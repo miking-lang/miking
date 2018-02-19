@@ -128,8 +128,6 @@ and pprint_const c =
   | Ceq2(v) -> us(sprintf "eq(%d)" v)
   | Cneq -> us"neq"
   | Cneq2(v) -> us(sprintf "neq(%d)" v)
-  (* MCore control intrinsics *)
-  | CIF | CIF2(_) | CIF3(_,_) -> us"if"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -431,13 +429,6 @@ let delta c v  =
     | Cneq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneq,t | Cneq2(_),t  -> fail_constapp (tm_info t)
 
-    (* MCore control intrinsics *)
-    | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
-    | CIF2(guard),leftbranch -> TmConst(NoInfo,CIF3(guard,leftbranch))
-    | CIF3(true,leftbranch),_ -> TmApp(NoInfo,leftbranch,TmNop)
-    | CIF3(false,_),rightbranch -> TmApp(NoInfo,rightbranch,TmNop)
-    | CIF,t -> fail_constapp (tm_info t)
-
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
     | CDPrint, t -> uprint_endline (pprint true t);TmNop
@@ -473,6 +464,35 @@ let delta c v  =
     | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
 
 
+(* Optimize away constant applications (mul with 0 or 1, add with 0 etc.) *)
+let optimize_const_app fi v1 v2 =
+  match v1,v2 with
+  (*|   0 * x  ==>  0   |*)
+  | TmConst(_,Cmul2(0)),v2 -> TmConst(fi,CInt(0))
+  (*|   1 * x  ==>  x   |*)
+  | TmConst(_,Cmul2(1)),v2 -> v2
+  (*|   0 + x  ==>  x   |*)
+  | TmConst(_,Cadd2(0)),v2 -> v2
+  (*|   0 * x  ==>  0   |*)
+  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
+  (*|   1 * x  ==>  x   |*)
+  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(1))),vv1 -> vv1
+  (*|   0 + x  ==>  x   |*)
+  | TmApp(_,TmConst(_,Cadd),TmConst(_,CInt(0))),vv1 -> vv1
+  (*|   x * 0  ==>  0   |*)
+  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
+  (*|   x * 1  ==>  x   |*)
+  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(1)) -> vv1
+  (*|   x + 0  ==>  x   |*)
+  | TmApp(_,TmConst(_,Cadd),vv1),TmConst(_,CInt(0)) -> vv1
+  (*|   x - 0  ==>  x   |*)
+  | TmApp(_,TmConst(_,Csub),vv1),TmConst(_,CInt(0)) -> vv1
+  (*|   x op y  ==>  res(x op y)   |*)
+  | TmConst(fi1,c1),(TmConst(fi2,c2) as tt)-> delta c1 tt
+  (* No optimization *)
+  | vv1,vv2 -> TmApp(fi,vv1,vv2)
+
+
 (* The readback function is the second pass of the partial evaluation.
    It removes symbols for the term. If this is the complete version,
    this is the final pass before JIT *)
@@ -491,7 +511,7 @@ let rec readback env n t =
   | TmClos(fi,x,t1,env2,true) ->
       TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
   (* Application *)
-  | TmApp(fi,t1,t2) -> TmApp(fi,readback env n t1,readback env n t2)
+  | TmApp(fi,t1,t2) -> optimize_const_app fi (readback env n t1) (readback env n t2)
   (* Constant, fix, and PEval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* If expression *)
@@ -535,7 +555,7 @@ let rec normalize env n t =
     (* Constant application using the delta function *)
     | TmConst(fi1,c1) ->
         (match normalize env n t2 with
-        | TmConst(fi2,c2) as tt-> normalize env n (delta c1 tt)
+        | TmConst(fi2,c2) as tt-> delta c1 tt
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
     | TmPEval(fi) ->
@@ -593,7 +613,7 @@ let rec eval env t =
        (* Closure application *)
        | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
-       | TmConst(fi,c) -> eval env (delta c (eval env t2))
+       | TmConst(fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
        | TmPEval(fi2) -> normalize env 0 (TmApp(fi,TmPEval(fi2),t2))
            |> readback env 0 |> debug_after_peval |> eval env
