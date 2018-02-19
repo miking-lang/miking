@@ -63,6 +63,8 @@ let uct2revlist uc =
     | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
   in work uc []
 
+(* Pretty print "true" or "false" *)
+let usbool x = us (if x then "true" else "false")
 
 (* Translate a unified collection (UC) structure into a list *)
 let uct2list uct = uct2revlist uct |> List.rev
@@ -96,27 +98,36 @@ and pprint_const c =
   match c with
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
-  | CBNot -> us"bnot"
-  | CBAnd | CBAnd2(_) -> us"band"
-  | CBOr | CBOr2(_) -> us"bor"
+  | Cnot -> us"not"
+  | Cand -> us"and"
+  | Cand2(v) -> us"and(" ^. usbool v ^. us")"
+  | Cor -> us"or"
+  | Cor2(v) -> us"or(" ^. usbool v ^. us")"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
-  | CIAdd -> us"iadd"
-  | CIAdd2(v) -> us(sprintf "iadd(%d)" v)
-  | CISub -> us"isub"
-  | CISub2(v) -> us(sprintf "isub(%d)" v)
-  | CIMul -> us"imul"
-  | CIMul2(v) -> us(sprintf "imul(%d)" v)
-  | CIDiv -> us"idiv"
-  | CIDiv2(v) -> us(sprintf "idiv(%d)" v)
-  | CIMod | CIMod2(_) -> us"imod"
-  | CINeg             -> us"imod"
-  | CILt  | CILt2(_)  -> us"ilt"
-  | CILeq | CILeq2(_) -> us"ileq"
-  | CIGt  | CIGt2(_)  -> us"igt"
-  | CIGeq | CIGeq2(_) -> us"igeq"
-  | CIEq  | CIEq2(_)  -> us"ieq"
-  | CINeq | CINeq2(_) -> us"neq"
+  | Cadd -> us"add"
+  | Cadd2(v) -> us(sprintf "add(%d)" v)
+  | Csub -> us"sub"
+  | Csub2(v) -> us(sprintf "sub(%d)" v)
+  | Cmul -> us"mul"
+  | Cmul2(v) -> us(sprintf "mul(%d)" v)
+  | Cdiv -> us"divi"
+  | Cdiv2(v) -> us(sprintf "div(%d)" v)
+  | Cmod -> us"mod"
+  | Cmod2(v) -> us(sprintf "mod(%d)" v)
+  | Cneg -> us"neg"
+  | Clt -> us"lt"
+  | Clt2(v) -> us(sprintf "lt(%d)" v)
+  | Cleq -> us"leq"
+  | Cleq2(v) -> us(sprintf "leq(%d)" v)
+  | Cgt -> us"gt"
+  | Cgt2(v) -> us(sprintf "gt(%d)" v)
+  | Cgeq -> us"geq"
+  | Cgeq2(v) -> us(sprintf "geq(%d)" v)
+  | Ceq -> us"eq"
+  | Ceq2(v) -> us(sprintf "eq(%d)" v)
+  | Cneq -> us"neq"
+  | Cneq2(v) -> us(sprintf "neq(%d)" v)
   (* MCore control intrinsics *)
   | CIF | CIF2(_) | CIF3(_,_) -> us"if"
   (* MCore debug and stdio intrinsics *)
@@ -337,9 +348,9 @@ let debug_after_peval t =
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
-  [("bnot",CBNot);("band",CBAnd);("bor",CBOr);
-   ("iadd",CIAdd);("isub",CISub);("imul",CIMul);("idiv",CIDiv);("imod",CIMod);("ineg",CINeg);
-   ("ilt",CILt);("ileq",CILeq);("igt",CIGt);("igeq",CIGeq);("ieq",CIEq);("ineq",CINeq);
+  [("not",Cnot);("and",Cand);("or",Cor);
+   ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
+   ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
    ("ifexp",CIF);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
@@ -356,66 +367,66 @@ let delta c v  =
     (* MCore boolean intrinsics *)
     | CBool(_),t -> fail_constapp (tm_info t)
 
-    | CBNot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-    | CBNot,t -> fail_constapp (tm_info t)
+    | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
+    | Cnot,t -> fail_constapp (tm_info t)
 
-    | CBAnd,TmConst(fi,CBool(v)) -> TmConst(fi,CBAnd2(v))
-    | CBAnd2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-    | CBAnd,t | CBAnd2(_),t  -> fail_constapp (tm_info t)
+    | Cand,TmConst(fi,CBool(v)) -> TmConst(fi,Cand2(v))
+    | Cand2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
+    | Cand,t | Cand2(_),t  -> fail_constapp (tm_info t)
 
-    | CBOr,TmConst(fi,CBool(v)) -> TmConst(fi,CBOr2(v))
-    | CBOr2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-    | CBOr,t | CBOr2(_),t  -> fail_constapp (tm_info t)
+    | Cor,TmConst(fi,CBool(v)) -> TmConst(fi,Cor2(v))
+    | Cor2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
+    | Cor,t | Cor2(_),t  -> fail_constapp (tm_info t)
 
     (* MCore integer intrinsics *)
     | CInt(_),t -> fail_constapp (tm_info t)
 
-    | CIAdd,TmConst(fi,CInt(v)) -> TmConst(fi,CIAdd2(v))
-    | CIAdd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-    | CIAdd,t | CIAdd2(_),t  -> fail_constapp (tm_info t)
+    | Cadd,TmConst(fi,CInt(v)) -> TmConst(fi,Cadd2(v))
+    | Cadd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | Cadd,t | Cadd2(_),t  -> fail_constapp (tm_info t)
 
-    | CISub,TmConst(fi,CInt(v)) -> TmConst(fi,CISub2(v))
-    | CISub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-    | CISub,t | CISub2(_),t  -> fail_constapp (tm_info t)
+    | Csub,TmConst(fi,CInt(v)) -> TmConst(fi,Csub2(v))
+    | Csub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | Csub,t | Csub2(_),t  -> fail_constapp (tm_info t)
 
-    | CIMul,TmConst(fi,CInt(v)) -> TmConst(fi,CIMul2(v))
-    | CIMul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-    | CIMul,t | CIMul2(_),t  -> fail_constapp (tm_info t)
+    | Cmul,TmConst(fi,CInt(v)) -> TmConst(fi,Cmul2(v))
+    | Cmul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | Cmul,t | Cmul2(_),t  -> fail_constapp (tm_info t)
 
-    | CIDiv,TmConst(fi,CInt(v)) -> TmConst(fi,CIDiv2(v))
-    | CIDiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-    | CIDiv,t | CIDiv2(_),t  -> fail_constapp (tm_info t)
+    | Cdiv,TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv2(v))
+    | Cdiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | Cdiv,t | Cdiv2(_),t  -> fail_constapp (tm_info t)
 
-    | CIMod,TmConst(fi,CInt(v)) -> TmConst(fi,CIMod2(v))
-    | CIMod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
-    | CIMod,t | CIMod2(_),t  -> fail_constapp (tm_info t)
+    | Cmod,TmConst(fi,CInt(v)) -> TmConst(fi,Cmod2(v))
+    | Cmod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
+    | Cmod,t | Cmod2(_),t  -> fail_constapp (tm_info t)
 
-    | CINeg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
-    | CINeg,t -> fail_constapp (tm_info t)
+    | Cneg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+    | Cneg,t -> fail_constapp (tm_info t)
 
-    | CILt,TmConst(fi,CInt(v)) -> TmConst(fi,CILt2(v))
-    | CILt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
-    | CILt,t | CILt2(_),t  -> fail_constapp (tm_info t)
+    | Clt,TmConst(fi,CInt(v)) -> TmConst(fi,Clt2(v))
+    | Clt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
+    | Clt,t | Clt2(_),t  -> fail_constapp (tm_info t)
 
-    | CILeq,TmConst(fi,CInt(v)) -> TmConst(fi,CILeq2(v))
-    | CILeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
-    | CILeq,t | CILeq2(_),t  -> fail_constapp (tm_info t)
+    | Cleq,TmConst(fi,CInt(v)) -> TmConst(fi,Cleq2(v))
+    | Cleq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
+    | Cleq,t | Cleq2(_),t  -> fail_constapp (tm_info t)
 
-    | CIGt,TmConst(fi,CInt(v)) -> TmConst(fi,CIGt2(v))
-    | CIGt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
-    | CIGt,t | CIGt2(_),t  -> fail_constapp (tm_info t)
+    | Cgt,TmConst(fi,CInt(v)) -> TmConst(fi,Cgt2(v))
+    | Cgt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
+    | Cgt,t | Cgt2(_),t  -> fail_constapp (tm_info t)
 
-    | CIGeq,TmConst(fi,CInt(v)) -> TmConst(fi,CIGeq2(v))
-    | CIGeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
-    | CIGeq,t | CIGeq2(_),t  -> fail_constapp (tm_info t)
+    | Cgeq,TmConst(fi,CInt(v)) -> TmConst(fi,Cgeq2(v))
+    | Cgeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
+    | Cgeq,t | Cgeq2(_),t  -> fail_constapp (tm_info t)
 
-    | CIEq,TmConst(fi,CInt(v)) -> TmConst(fi,CIEq2(v))
-    | CIEq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
-    | CIEq,t | CIEq2(_),t  -> fail_constapp (tm_info t)
+    | Ceq,TmConst(fi,CInt(v)) -> TmConst(fi,Ceq2(v))
+    | Ceq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceq,t | Ceq2(_),t  -> fail_constapp (tm_info t)
 
-    | CINeq,TmConst(fi,CInt(v)) -> TmConst(fi,CINeq2(v))
-    | CINeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
-    | CINeq,t | CINeq2(_),t  -> fail_constapp (tm_info t)
+    | Cneq,TmConst(fi,CInt(v)) -> TmConst(fi,Cneq2(v))
+    | Cneq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
+    | Cneq,t | Cneq2(_),t  -> fail_constapp (tm_info t)
 
     (* MCore control intrinsics *)
     | CIF,TmConst(fi,CBool(v)) -> TmConst(NoInfo,CIF2(v))
