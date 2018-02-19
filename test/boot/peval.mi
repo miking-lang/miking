@@ -6,13 +6,26 @@
 
 language MCore
 
-// Literals
+// Literals and normal expressions.
 utest 1  (peval 1)
+utest 14  (peval (iadd 10 (isub 7 3)))
 
+// Partial evaluation, but without giving any optimized effect
 let foo = lam x:Int. lam y:Int. (iadd x y)
 utest 13  ((peval foo) 10 3)
 utest 5  ((peval (foo 2)) 3)
 
-let foo2 = lam x:Int. lam y:Int. lam z:Int. (imul (iadd x y) z)
-utest 26  ((peval (foo2 10 3)) 2)
-utest 26  ((peval peval (foo2 10)) 3 2)
+// Partial evaluation one lambda. Performs partial eval under lambda
+let foo = lam x:Int. lam y:Int. lam z:Int. (imul (iadd x y) z)
+utest 26  ((peval (foo 10 3)) 2)
+
+// Partial evaluation of two dynamic input variables
+let foo = lam x:Int. lam y:Int. lam z:Int. lam k:Int. (imul (imul (iadd x y) z) k)
+utest 40  ((peval (foo 2 3)) 2 4)
+
+
+//TODO:
+// - change iadd to addi
+// - add partial evaluation of if-statements
+// - optimize mul with 0 and 1 and add with 0
+// - add affine lambdas

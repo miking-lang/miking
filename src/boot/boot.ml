@@ -30,7 +30,7 @@ let enable_debug_readback = false
 let enable_debug_readback_env = false
 let enable_debug_eval = false
 let enable_debug_eval_env = false
-let enable_debug_after_peval = true
+let enable_debug_after_peval = false
 
 
 (* Print the kind of unified collection (UC) type. *)
@@ -308,9 +308,9 @@ let debug_readback env n t =
   else ()
 
 (* Debug function used in the PE normalize function *)
-let debug_normalize env n m t =
+let debug_normalize env n t =
   if enable_debug_normalize then
-    (printf "\n-- normalize --   n=%d  m=%d\n" n m;
+    (printf "\n-- normalize --   n=%d" n;
      uprint_endline (pprint true t);
      if enable_debug_normalize_env then
         uprint_endline (pprint_env env))
@@ -498,60 +498,55 @@ let rec readback env n t =
    'env' is the environment, 'n' the lambda depth number, 'm'
    the number of lambdas that we can go under, and
    't' the term. *)
-let rec normalize env n m t =
-  debug_normalize env n m t;
+let rec normalize env n t =
+  debug_normalize env n t;
   match t with
   (* Variables using debruijn indices. *)
-  | TmVar(fi,x,n,false) -> normalize env n m (List.nth env n)
+  | TmVar(fi,x,n,false) -> normalize env n (List.nth env n)
   (* PEMode variable (symbol) *)
   | TmVar(fi,x,n,true) -> t
   (* Lambda and closure conversions to PE closure *)
   | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,true)
   (* Closures, both PE and non PE *)
   | TmClos(fi,x,t2,env2,pemode) -> t
-    (* If no lambdas to go under, leave as is *)
-  (*     if m = 0 then t
-       else
-      let pesym = TmVar(NoInfo,us"",n+1,true) in
-         TmClos(fi,x,normalize (pesym::env2) (n+1) (m-1) t2, env2, true) *)
   (* Application: closures and delta  *)
   | TmApp(fi,t1,t2) ->
-    (match normalize env n m t1 with
+    (match normalize env n t1 with
     (* Closure application (PE on non PE) TODO: use affine lamba check *)
     | TmClos(fi,x,t3,env2,_) ->
-         normalize ((normalize env n m t2)::env2) n m t3
+         normalize ((normalize env n t2)::env2) n t3
     (* Constant application using the delta function *)
     | TmConst(fi1,c1) ->
-        (match normalize env n m t2 with
-        | TmConst(fi2,c2) as tt-> normalize env n m (delta c1 tt)
+        (match normalize env n t2 with
+        | TmConst(fi2,c2) as tt-> normalize env n (delta c1 tt)
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
     | TmPEval(fi) ->
-      (match normalize env n 0 t2 with
+      (match normalize env n t2 with
       | TmClos(fi2,x,t2,env2,pemode) ->
           let pesym = TmVar(NoInfo,us"",n+1,true) in
           let t2' = (TmApp(fi,TmPEval(fi),t2)) in
-          TmClos(fi2,x,normalize (pesym::env2) (n+1) 0 t2',env2,true)
+          TmClos(fi2,x,normalize (pesym::env2) (n+1) t2',env2,true)
       | v2 -> v2)
     (* Fix *)
     | TmFix(fi2) ->
-       (match normalize env n m t2 with
+       (match normalize env n t2 with
        | TmClos(fi,x,t3,env2,_) as tt ->
-           normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n m t3
+           normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
     (* Stay in normalized form *)
-    | v1 -> TmApp(fi,v1,normalize env n m t2))
+    | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* Other old, to remove *)
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) ->
-      TmExprSeq(fi,normalize env n m t1, normalize env n m t2)
+      TmExprSeq(fi,normalize env n t1, normalize env n t2)
   | TmUC(fi,uct,o,u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
-      TmUtest(fi,normalize env n m t1,normalize env n m t2,tnext)
+      TmUtest(fi,normalize env n t1,normalize env n t2,tnext)
   | TmMatch(fi,t1,cases) ->
-      TmMatch(fi,normalize env n m t1,cases)
+      TmMatch(fi,normalize env n t1,cases)
   | TmNop -> t
 
 
@@ -573,7 +568,7 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> eval env (delta c (eval env t2))
        (* Partial evaluation *)
-       | TmPEval(fi2) -> normalize env 0 0 (TmApp(fi,TmPEval(fi2),t2))
+       | TmPEval(fi2) -> normalize env 0 (TmApp(fi,TmPEval(fi2),t2))
            |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
