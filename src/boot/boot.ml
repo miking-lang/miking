@@ -156,6 +156,9 @@ and pprint basic t =
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
   | TmPEval(_) -> us"peval"
+  | TmIfexp(_,None,_) -> us"ifexp"
+  | TmIfexp(_,Some(g),Some(t2)) -> us"ifexp(" ^. usbool g ^. us"," ^. pprint t2 ^. us")"
+  | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
@@ -215,6 +218,7 @@ let rec debruijn env t =
   | TmConst(_,_) -> t
   | TmFix(_) -> t
   | TmPEval(_) -> t
+  | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
@@ -351,7 +355,6 @@ let builtin =
   [("not",Cnot);("and",Cand);("or",Cor);
    ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
    ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
-   ("ifexp",CIF);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
 
@@ -491,6 +494,9 @@ let rec readback env n t =
   | TmApp(fi,t1,t2) -> TmApp(fi,readback env n t1,readback env n t2)
   (* Constant, fix, and PEval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* If expression *)
+  | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
+  | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
   (* Other old, to remove *)
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) ->
@@ -539,6 +545,14 @@ let rec normalize env n t =
           let t2' = (TmApp(fi,TmPEval(fi),t2)) in
           TmClos(fi2,x,normalize (pesym::env2) (n+1) t2',env2,true)
       | v2 -> v2)
+    (* If-expression *)
+    | TmIfexp(fi2,x1,x2) ->
+      (match x1,x2,normalize env n t2 with
+      | None,None,TmConst(fi3,CBool(b)) -> TmIfexp(fi2,Some(b),None)
+      | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+        if b then normalize (TmNop::env3) n t3 else normalize (TmNop::env4) n t4
+      | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
+      | _,_,v2 -> TmApp(fi,TmIfexp(fi2,x1,x2),v2))
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n t2 with
@@ -549,6 +563,8 @@ let rec normalize env n t =
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* If expression *)
+  | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) ->
@@ -586,9 +602,20 @@ let rec eval env t =
          (match eval env t2 with
          | TmClos(fi,x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
+       (* If-expression *)
+       | TmIfexp(fi,x1,x2) ->
+         (match x1,x2,eval env t2 with
+         | None,None,TmConst(fi,CBool(b)) -> TmIfexp(fi,Some(b),None)
+         | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+              if b then eval (TmNop::env3) t3 else eval (TmNop::env4) t4
+         | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
+         | _ -> raise_error fi "Incorrect if-expression in the eval function.")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* If expression *)
+  | TmIfexp(fi,_,_) -> t
+  (* The rest *)
   | TmChar(_,_) -> t
   | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)

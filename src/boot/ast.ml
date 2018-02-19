@@ -82,6 +82,7 @@ and tm =
 | TmApp         of info * tm * tm
 | TmConst       of info * const
 | TmPEval       of info
+| TmIfexp       of info * bool option * tm option
 | TmFix         of info
 
 | TmChar        of info * int
@@ -107,6 +108,7 @@ let tm_info t =
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
   | TmPEval(fi) -> fi
+  | TmIfexp(fi,_,_) -> fi
   | TmFix(fi) -> fi
 
   | TmChar(fi,_) -> fi

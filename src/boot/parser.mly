@@ -30,6 +30,8 @@
       | TmConst(_,_) -> false
       | TmFix(_) -> false
       | TmPEval(_) -> false
+      | TmIfexp(_,_,None) -> false
+      | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
@@ -79,6 +81,7 @@
 %token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> PEVAL
+%token <unit Ast.tokendata> IFEXP
 
 
 
@@ -181,6 +184,7 @@ mc_atom:
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
   | PEVAL                { TmPEval($1.i) }
+  | IFEXP                { TmIfexp($1.i,None,None) }
 
 
 
@@ -217,6 +221,7 @@ ragnar_scope:
   | UTEST term term ragnar_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
+
 
 oparrow:
   | {}
@@ -259,6 +264,8 @@ term:
               TmLam(tm_info $5,us"",$5)) }
   | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
+  | PEVAL term
+      { TmApp($1.i,TmPEval($1.i),$2) }
 
 op:
   | atom                 { $1 }
