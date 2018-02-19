@@ -30,7 +30,7 @@ let enable_debug_readback = false
 let enable_debug_readback_env = false
 let enable_debug_eval = false
 let enable_debug_eval_env = false
-let enable_debug_after_peval = false
+let enable_debug_after_peval = true
 
 
 (* Print the kind of unified collection (UC) type. *)
@@ -506,15 +506,14 @@ let rec normalize env n m t =
   (* PEMode variable (symbol) *)
   | TmVar(fi,x,n,true) -> t
   (* Lambda and closure conversions to PE closure *)
-  | TmLam(fi,x,t1) -> normalize env n m (TmClos(fi,x,t1,env,true))
+  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,true)
   (* Closures, both PE and non PE *)
-  | TmClos(fi,x,t2,env2,pemode) ->
+  | TmClos(fi,x,t2,env2,pemode) -> t
     (* If no lambdas to go under, leave as is *)
-    if m = 0 then t
-    (* Go under lambda. Always results in a PE closure *)
-    else
+  (*     if m = 0 then t
+       else
       let pesym = TmVar(NoInfo,us"",n+1,true) in
-      TmClos(fi,x,normalize (pesym::env2) (n+1) (m-1) t2, env2, true)
+         TmClos(fi,x,normalize (pesym::env2) (n+1) (m-1) t2, env2, true) *)
   (* Application: closures and delta  *)
   | TmApp(fi,t1,t2) ->
     (match normalize env n m t1 with
@@ -527,7 +526,13 @@ let rec normalize env n m t =
         | TmConst(fi2,c2) as tt-> normalize env n m (delta c1 tt)
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
-    | TmPEval(fi) -> normalize env n (m+1) (normalize env n 0 t2)
+    | TmPEval(fi) ->
+      (match normalize env n 0 t2 with
+      | TmClos(fi2,x,t2,env2,pemode) ->
+          let pesym = TmVar(NoInfo,us"",n+1,true) in
+          let t2' = (TmApp(fi,TmPEval(fi),t2)) in
+          TmClos(fi2,x,normalize (pesym::env2) (n+1) 0 t2',env2,true)
+      | v2 -> v2)
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n m t2 with
@@ -568,8 +573,8 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> eval env (delta c (eval env t2))
        (* Partial evaluation *)
-       | TmPEval(fi) -> normalize env 0 1 (eval env t2) |> readback env 0
-           |> debug_after_peval |> eval env
+       | TmPEval(fi2) -> normalize env 0 0 (TmApp(fi,TmPEval(fi2),t2))
+           |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with
