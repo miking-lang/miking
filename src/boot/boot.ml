@@ -25,8 +25,11 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 
 (* Debug options *)
 let enable_debug_normalize = false
+let enable_debug_normalize_env = false
 let enable_debug_readback = false
+let enable_debug_readback_env = false
 let enable_debug_eval = false
+let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
 
@@ -98,10 +101,14 @@ and pprint_const c =
   | CBOr | CBOr2(_) -> us"bor"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
-  | CIAdd | CIAdd2(_) -> us"iadd"
-  | CISub | CISub2(_) -> us"isub"
-  | CIMul | CIMul2(_) -> us"imul"
-  | CIDiv | CIDiv2(_) -> us"idiv"
+  | CIAdd -> us"iadd"
+  | CIAdd2(v) -> us(sprintf "iadd(%d)" v)
+  | CISub -> us"isub"
+  | CISub2(v) -> us(sprintf "isub(%d)" v)
+  | CIMul -> us"imul"
+  | CIMul2(v) -> us(sprintf "imul(%d)" v)
+  | CIDiv -> us"idiv"
+  | CIDiv2(v) -> us(sprintf "idiv(%d)" v)
   | CIMod | CIMod2(_) -> us"imod"
   | CINeg             -> us"imod"
   | CILt  | CILt2(_)  -> us"ilt"
@@ -129,7 +136,8 @@ and pprint_const c =
 and pprint basic t =
   let pprint = pprint basic in
   match t with
-  | TmVar(_,x,n,_) -> x ^. us"#" ^. us(string_of_int n)
+  | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
+  | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
   | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
   | TmClos(_,x,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmClos(_,x,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
@@ -156,6 +164,10 @@ and pprint basic t =
     ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
 
+(* Pretty prints the environment *)
+let pprint_env env =
+  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
+            |> Ustring.concat (us",")) ^. us"]"
 
 (* Print out error message when a unit test fails *)
 let unittest_failed fi t1 t2=
@@ -287,24 +299,30 @@ let rec eval_match env pat t final =
 let fail_constapp fi = raise_error fi "Incorrect application "
 
 (* Debug function used in the PE readback function *)
-let debug_readback n t =
+let debug_readback env n t =
   if enable_debug_readback then
     (printf "\n-- readback --   n=%d  \n" n;
-     uprint_endline (pprint true t))
+     uprint_endline (pprint true t);
+     if enable_debug_readback_env then
+        uprint_endline (pprint_env env))
   else ()
 
 (* Debug function used in the PE normalize function *)
-let debug_normalize n m t =
+let debug_normalize env n m t =
   if enable_debug_normalize then
     (printf "\n-- normalize --   n=%d  m=%d\n" n m;
-     uprint_endline (pprint true t))
+     uprint_endline (pprint true t);
+     if enable_debug_normalize_env then
+        uprint_endline (pprint_env env))
   else ()
 
 (* Debug function used in the eval function *)
-let debug_eval t =
+let debug_eval env t =
   if enable_debug_eval then
     (printf "\n-- eval -- \n";
-     uprint_endline (pprint true t))
+     uprint_endline (pprint true t);
+     if enable_debug_eval_env then
+        uprint_endline (pprint_env env))
   else ()
 
 (* Debug function used after partial evaluation *)
@@ -445,18 +463,19 @@ let delta c v  =
    It removes symbols for the term. If this is the complete version,
    this is the final pass before JIT *)
 let rec readback env n t =
-  debug_readback n t;
+  debug_readback env n t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(fi,x,k,false) -> readback env n (List.nth env k)
   (* Variables as PE symbol. Convert symbol to de bruijn index. *)
   | TmVar(fi,x,k,true) -> TmVar(fi,x,n-k,false)
   (* Lambda *)
-  | TmLam(fi,x,t1) -> TmLam(fi,x,readback env (n+1) t1)
+  | TmLam(fi,x,t1) -> TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
   (* Normal closure *)
   | TmClos(fi,x,t1,env2,false) -> t
   (* PE closure *)
-  | TmClos(fi,x,t1,env2,true) -> TmLam(fi,x,readback env (n+1) t1)
+  | TmClos(fi,x,t1,env2,true) ->
+      TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
   (* Application *)
   | TmApp(fi,t1,t2) -> TmApp(fi,readback env n t1,readback env n t2)
   (* Constant, fix, and PEval  *)
@@ -480,7 +499,7 @@ let rec readback env n t =
    the number of lambdas that we can go under, and
    't' the term. *)
 let rec normalize env n m t =
-  debug_normalize n m t;
+  debug_normalize env n m t;
   match t with
   (* Variables using debruijn indices. *)
   | TmVar(fi,x,n,false) -> normalize env n m (List.nth env n)
@@ -508,7 +527,7 @@ let rec normalize env n m t =
         | TmConst(fi2,c2) as tt-> normalize env n m (delta c1 tt)
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
-    | TmPEval(fi) -> normalize env n (m+1) t2
+    | TmPEval(fi) -> normalize env n (m+1) (normalize env n 0 t2)
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n m t2 with
@@ -534,7 +553,7 @@ let rec normalize env n m t =
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
-  debug_eval t;
+  debug_eval env t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
@@ -549,7 +568,8 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> eval env (delta c (eval env t2))
        (* Partial evaluation *)
-       | TmPEval(fi) -> normalize env 0 1 t2 |> readback env 0 |> debug_after_peval
+       | TmPEval(fi) -> normalize env 0 1 (eval env t2) |> readback env 0
+           |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with

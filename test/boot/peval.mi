@@ -9,5 +9,10 @@ language MCore
 // Literals
 utest 1  (peval 1)
 
-//let foo = lam x:Int. lam y:Int. (iadd x y)
-//utest 1  ((peval foo))
+let foo = lam x:Int. lam y:Int. (iadd x y)
+utest 13  ((peval foo) 10 3)
+utest 5  ((peval (foo 2)) 3)
+
+let foo2 = lam x:Int. lam y:Int. lam z:Int. (imul (iadd x y) z)
+utest 26  ((peval (foo2 10 3)) 2)
+utest 26  ((peval peval (foo2 10)) 3 2)
