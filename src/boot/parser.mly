@@ -23,12 +23,15 @@
    (** Add fix-point, if recursive function *)
   let addrec x t =
     let rec hasx t = match t with
-      | TmVar(_,y,_) ->  x =. y
+      | TmVar(_,y,_,_) ->  x =. y
       | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_) -> failwith "Cannot happen"
-      | TmFix(_,t1) -> hasx t1
+      | TmClos(_,_,_,_,_) -> failwith "Cannot happen"
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
+      | TmFix(_) -> false
+      | TmPEval(_) -> false
+      | TmIfexp(_,_,None) -> false
+      | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
       | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
@@ -41,7 +44,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then TmFix(NoInfo,TmLam(NoInfo,x,t)) else t
+    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,t))) else t
 
 
 %}
@@ -75,8 +78,10 @@
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> IN
-%token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> NOP
+%token <unit Ast.tokendata> FIX
+%token <unit Ast.tokendata> PEVAL
+%token <unit Ast.tokendata> IFEXP
 
 
 
@@ -164,8 +169,6 @@ mc_term:
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,$6),$4) }
-  | FIX mc_term
-      { TmFix($1.i,$2) }
 
 
 mc_left:
@@ -176,13 +179,16 @@ mc_left:
 
 mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }
+  | FIX                  { TmFix($1.i) }
+  | PEVAL                { TmPEval($1.i) }
+  | IFEXP                { TmIfexp($1.i,None,None) }
 
 
 
@@ -220,6 +226,7 @@ ragnar_scope:
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
 
+
 oparrow:
   | {}
   | ARROW ty
@@ -246,41 +253,43 @@ term:
         TmLam(fi,$2.v,$4) }
   | IF term THEN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
   | IF2 term RPAREN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $4,us"",$4)),
               TmLam(tm_info $6,us"",$6)) }
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmApp(fi,TmApp(fi,TmApp(fi,TmConst(fi,CIF),$2),
+        TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
               TmLam(tm_info $3,us"",$3)),
               TmLam(tm_info $5,us"",$5)) }
   | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
+  | PEVAL term
+      { TmApp($1.i,TmPEval($1.i),$2) }
 
 op:
   | atom                 { $1 }
-  | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIAdd),$1),$3) }
-  | op SUB op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISub),$1),$3) }
-  | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMul),$1),$3) }
-  | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIDiv),$1),$3) }
-  | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIMod),$1),$3) }
-  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILt),$1),$3) }
-  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,CILeq),$1),$3) }
-  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGt),$1),$3)}
-  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,CIGeq),$1),$3) }
-  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISll),$1),$3) }
-  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISrl),$1),$3) }
-  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,CISra),$1),$3) }
+  | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd),$1),$3) }
+  | op SUB op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub),$1),$3) }
+  | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul),$1),$3) }
+  | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv),$1),$3) }
+  | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmod),$1),$3) }
+  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clt),$1),$3) }
+  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleq),$1),$3) }
+  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgt),$1),$3)}
+  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeq),$1),$3) }
   | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }
   | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
-  | NOT op               { TmApp($1.i,TmConst($1.i,CBNot),$2) }
-  | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBAnd),$1),$3) }
-  | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,CBOr),$1),$3) }
+  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csll),$1),$3) }
+  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrl),$1),$3) }
+  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csra),$1),$3) }
+  | NOT op               { TmApp($1.i,TmConst($1.i,Cnot),$2) }
+  | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand),$1),$3) }
+  | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor),$1),$3) }
   | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat),$1),$3) }
 
 
@@ -292,17 +301,17 @@ atom:
         let rec mkapps lst =
           match lst with
           | t::ts ->  TmApp(fi,mkapps ts,t)
-          | [] -> TmVar($1.i,$1.v,noidx)
+          | [] -> TmVar($1.i,$1.v,noidx,false)
         in
         (match Ustring.to_utf8 $1.v with
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }
-  | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,CINeg),$3)}
+  | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,Cneg),$3)}
   | LSQUARE tmseq RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY ragnar_scope RCURLY  { $2 }
-  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i, CInt($1.v)) }
@@ -397,4 +406,3 @@ revtyargs:
       {}
   | revtyargs COMMA tyarg
       {}
-

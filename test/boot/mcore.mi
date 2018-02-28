@@ -1,4 +1,4 @@
- // Miking is licensed under the MIT license.
+// Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
 // File mcore.mi tests all basic MCore language constructs
@@ -13,64 +13,60 @@ utest 's' 's'
 utest true true
 utest false false
 
-
 // Boolean intrinsic functions
-utest true  (bnot false)       // Boolean not
-utest true  (band true true)   // Boolean and
-utest false (band false true)
-utest false (band true false)
-utest false (band false false)
-utest true  (bor true true)    // Boolean or
-utest true  (bor false true)
-utest true  (bor true false)
-utest false (bor false false)
+utest true  (not false)       // Boolean not
+utest true  (and true true)   // Boolean and
+utest false (and false true)
+utest false (and true false)
+utest false (and false false)
+utest true  (or true true)    // Boolean or
+utest true  (or false true)
+utest true  (or true false)
+utest false (or false false)
 
 // Integer intrinsic functions
-utest 10 (iadd 6 4)            // Integer addition
-utest 20 (isub 30 10)          // Integer subtractioin
-utest 33 (imul 3 11)           // Integer multiplication
-utest 4  (idiv 9 2)            // Integer division
-utest 1  (imod 9 2)            // Integer modulo
-utest 15 (iadd (20) (ineg 5))  // Integer negation
-utest true (ilt 4 10)          // Less than <
-utest false (ilt 20 10)
-utest false (ilt 10 10)
-utest true (ileq 4 10)         // Less than and equal <=
-utest false (ileq 20 10)
-utest true (ileq 10 10)
-utest true (igt 100 10)        // Greater than >
-utest false (igt 10 20)
-utest false (igt 10 10)
-utest true (igeq 100 10)       // Greater than and equal >=
-utest false (igeq 10 20)
-utest true (igeq 10 10)
-utest false (ieq 100 10)       // Equal =
-utest false (ieq 10 20)
-utest true (ieq 10 10)
-utest true (ineq 100 10)       // Not equal !=
-utest true (ineq 10 20)
-utest false (ineq 10 10)
-utest 2 (isll 1 1)
-utest 2 (isrl 4 1)
-utest (ineg 2) (isra (ineg 4) 1)
+utest 10 (add 6 4)            // Integer addition
+utest 20 (sub 30 10)          // Integer subtractioin
+utest 33 (mul 3 11)           // Integer multiplication
+utest 4  (div 9 2)            // Integer division
+utest 1  (mod 9 2)            // Integer modulo
+utest 15 (add (20) (neg 5))   // Integer negation
+utest true (lt 4 10)          // Less than <
+utest false (lt 20 10)
+utest false (lt 10 10)
+utest true (leq 4 10)         // Less than and equal <=
+utest false (leq 20 10)
+utest true (leq 10 10)
+utest true (gt 100 10)        // Greater than >
+utest false (gt 10 20)
+utest false (gt 10 10)
+utest true (geq 100 10)       // Greater than and equal >=
+utest false (geq 10 20)
+utest true (geq 10 10)
+utest false (eq 100 10)       // Equal =
+utest false (eq 10 20)
+utest true (eq 10 10)
+utest true (neq 100 10)       // Not equal !=
+utest true (neq 10 20)
+utest false (neq 10 10)
 
 // IF-expressions. Note that the branches must be wrapped into a thunk
 utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))
 utest 20 (ifexp false (lam _:a. 10) (lam _:a. 20))
-utest 30 (ifexp (bor false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
-utest 10 (ifexp (band false true) (lam _:a. iadd 10 20) (lam _:a. isub 20 10))
+utest 30 (ifexp (or false true) (lam _:a. add 10 20) (lam _:a. sub 20 10))
+utest 10 (ifexp (and false true) (lam _:a. add 10 20) (lam _:a. sub 20 10))
 
 // Debug strings
 utest "10" (dstr 10)
 utest "Seq('Y','e','s')" (dstr "Yes")
 
 // lambdas
-utest 40 ((lam x:Int. lam y:Int. imul x y) 4 10)
+utest 40 ((lam x:Int. lam y:Int. mul x y) 4 10)
 
 // let
 let x = 10
 let foo = lam x:Int->Int. lam y:Int. x y
-let double = lam x:Int. imul x 2
+let double = lam x:Int. mul x 2
 utest 20 (foo double x)
 
 // Collection types
@@ -78,3 +74,14 @@ utest "testthis" (concat "test" "this")
 
 // argv
 utest "" (argv nop)
+
+
+// Functions with fix point
+let pow = fix (lam pow:(Int->Int->Int). lam x:Int. lam n:Int.
+           ifexp (leq n 1)
+              (lam _:a. x)
+              (lam _:a. mul x (pow x (sub n 1)))
+           )
+
+utest 16 (pow 2 4)
+utest 59049 (pow 3 10)

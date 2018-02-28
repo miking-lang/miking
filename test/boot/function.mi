@@ -9,6 +9,7 @@ language Ragnar
 def fact(n:Int) -> Int {
     if(n <= 1) 1 else n*fact(n-1)
 }
+
 utest fact(0)   1
 utest fact(1)   1
 utest fact(2)   2

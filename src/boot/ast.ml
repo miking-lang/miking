@@ -13,7 +13,6 @@ open Msg
 type env = tm list
 
 
-
 (* Pattern used in match constructs *)
 and pattern =
 | PatIdent      of info * ustring
@@ -41,28 +40,26 @@ and ucUniqueness = UCUnique | UCMultivalued
 and const =
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
-| CBNot
-| CBAnd | CBAnd2 of bool
-| CBOr  | CBOr2 of bool
+| Cnot
+| Cand  | Cand2  of bool
+| Cor   | Cor2   of bool
 (* MCore intrinsic: Integer constant and operations *)
 | CInt of int
-| CIAdd | CIAdd2 of int
-| CISub | CISub2 of int
-| CIMul | CIMul2 of int
-| CIDiv | CIDiv2 of int
-| CIMod | CIMod2 of int
-| CINeg
-| CILt  | CILt2  of int
-| CILeq | CILeq2 of int
-| CIGt  | CIGt2  of int
-| CIGeq | CIGeq2 of int
-| CIEq  | CIEq2  of int
-| CINeq | CINeq2 of int
-| CISll | CISll2 of int
-| CISrl | CISrl2 of int
-| CISra | CISra2 of int
-(* MCore control intrinsics *)
-| CIF | CIF2 of bool | CIF3 of bool * tm
+| Cadd  | Cadd2 of int
+| Csub  | Csub2 of int
+| Cmul  | Cmul2 of int
+| Cdiv  | Cdiv2 of int
+| Cmod  | Cmod2 of int
+| Cneg
+| Clt   | Clt2  of int
+| Cleq  | Cleq2 of int
+| Cgt   | Cgt2  of int
+| Cgeq  | Cgeq2 of int
+| Ceq   | Ceq2  of int
+| Cneq  | Cneq2 of int
+| Csll  | Csll2 of int
+| Csrl  | Csrl2 of int
+| Csra  | Csra2 of int
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint
@@ -75,16 +72,19 @@ and const =
 | CPolyEq  | CPolyEq2  of tm
 | CPolyNeq | CPolyNeq2 of tm
 
-
+(* Tells if a variable is a pe variable or if a closure is a pe closure *)
+and pemode = bool
 
 (* Term/expression *)
 and tm =
-| TmVar         of info * ustring * int
+| TmVar         of info * ustring * int * pemode
 | TmLam         of info * ustring * tm
-| TmClos        of info * tm * env
-| TmFix         of info * tm
+| TmClos        of info * ustring * tm * env * pemode
 | TmApp         of info * tm * tm
 | TmConst       of info * const
+| TmPEval       of info
+| TmIfexp       of info * bool option * tm option
+| TmFix         of info
 
 | TmChar        of info * int
 | TmExprSeq     of info * tm * tm
@@ -104,12 +104,14 @@ let noidx = -1
 (* Returns the info field from a term *)
 let tm_info t =
   match t with
-  | TmVar(fi,_,_) -> fi
+  | TmVar(fi,_,_,_) -> fi
   | TmLam(fi,_,_) -> fi
-  | TmClos(fi,_,_) -> fi
-  | TmFix(fi,_) -> fi
+  | TmClos(fi,_,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
+  | TmPEval(fi) -> fi
+  | TmIfexp(fi,_,_) -> fi
+  | TmFix(fi) -> fi
 
   | TmChar(fi,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
