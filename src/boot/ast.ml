@@ -57,6 +57,9 @@ and const =
 | Cgeq  | Cgeq2 of int
 | Ceq   | Ceq2  of int
 | Cneq  | Cneq2 of int
+| Csll  | Csll2 of int
+| Csrl  | Csrl2 of int
+| Csra  | Csra2 of int
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint
@@ -89,6 +92,7 @@ and tm =
 | TmUtest       of info * tm * tm * tm
 | TmMatch       of info * tm * case list
 | TmNop
+
 
 
 

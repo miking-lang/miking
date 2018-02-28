@@ -128,6 +128,12 @@ and pprint_const c =
   | Ceq2(v) -> us(sprintf "eq(%d)" v)
   | Cneq -> us"neq"
   | Cneq2(v) -> us(sprintf "neq(%d)" v)
+  | Csll -> us"sll"
+  | Csll2(v) -> us(sprintf "sll(%d)" v)
+  | Csrl -> us"srl"
+  | Csrl2(v) -> us(sprintf "srl(%d)" v)
+  | Csra -> us"sra"
+  | Csra2(v) -> us(sprintf "sra(%d)" v)
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -353,6 +359,7 @@ let builtin =
   [("not",Cnot);("and",Cand);("or",Cor);
    ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
    ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
+   ("sll",Csll);("srl",Csrl);("sra",Csra);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
 
@@ -409,6 +416,7 @@ let delta c v  =
     | Clt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
     | Clt,t | Clt2(_),t  -> fail_constapp (tm_info t)
 
+
     | Cleq,TmConst(fi,CInt(v)) -> TmConst(fi,Cleq2(v))
     | Cleq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
     | Cleq,t | Cleq2(_),t  -> fail_constapp (tm_info t)
@@ -428,6 +436,18 @@ let delta c v  =
     | Cneq,TmConst(fi,CInt(v)) -> TmConst(fi,Cneq2(v))
     | Cneq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneq,t | Cneq2(_),t  -> fail_constapp (tm_info t)
+
+    | Csll,TmConst(fi,CInt(v)) -> TmConst(fi,Csll2(v))
+    | Csll2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
+    | Csll,t | Csll2(_),t  -> fail_constapp (tm_info t)
+
+    | Csrl,TmConst(fi,CInt(v)) -> TmConst(fi,Csrl2(v))
+    | Csrl2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
+    | Csrl,t | Csrl2(_),t  -> fail_constapp (tm_info t)
+
+    | Csra,TmConst(fi,CInt(v)) -> TmConst(fi,Csra2(v))
+    | Csra2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
+    | Csra,t | Csra2(_),t  -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
@@ -527,6 +547,7 @@ let rec readback env n t =
   | TmMatch(fi,t1,cases) ->
       TmMatch(fi,readback env n t1,cases)
   | TmNop -> t
+
 
 
 
