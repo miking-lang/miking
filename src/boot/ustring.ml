@@ -84,7 +84,7 @@ let normalize_newlines s =
 	else if c = '\x0A' && prev_x0d then worker (i+1) n false
 	else (Bytes.set s2 n c; worker (i+1) (n+1) false)
     end else n
-  in let n = worker 0 0 false in (s2,n)
+  in let n = worker 0 0 false in (Bytes.to_string s2,n)
 
 
 (* Internal and can be used if we shall convert a UTF-8 stream later on.
@@ -154,7 +154,7 @@ let rec to_latin1 s =
 	let sout = Bytes.create len in
 	  try
 	    for i = 0 to len-1 do Bytes.set sout i (char_of_int (a.(i))) done;
-	    sout
+	    Bytes.to_string sout
 	  with
 	      Invalid_argument _ -> raise (Invalid_argument "Ustring.to_latin1")
       end
@@ -211,7 +211,7 @@ let rec to_utf8 s =
 	    end
 	  end
 	in
-	  convert 0 0; sout
+	  convert 0 0; Bytes.to_string sout
     | Branch(s1,s2) as t -> s := Uchars(collapse t); to_utf8 s
 
 
@@ -556,14 +556,14 @@ let validate_ascii_string s n =
 let lexing_function ic enc_type inbuf outbuf stream_pos s n =
   let pos = ref 0 in
   let write_from buf =
-    let blen = String.length !buf in
+    let blen = Bytes.length !buf in
     if (n - !pos) <= blen then begin
-      String.blit !buf 0 s !pos (n - !pos);
-      buf := String.sub !buf (n - !pos) (blen - (n - !pos));
+      Bytes.blit !buf 0 s !pos (n - !pos);
+      buf := Bytes.sub !buf (n - !pos) (blen - (n - !pos));
       pos := n
     end else begin
-      String.blit !buf 0 s !pos blen;
-      buf := "";
+      Bytes.blit !buf 0 s !pos blen;
+      buf := Bytes.empty;
       pos := !pos + blen
     end
   in
@@ -572,19 +572,19 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
   let input_string ic n =
     let rec worker s pos =
       let rlen = input ic s pos (n-pos) in
-	if rlen = 0 then String.sub s 0 pos
+	if rlen = 0 then Bytes.sub s 0 pos
 	else if rlen + pos = n then s
 	else worker s (pos+rlen)
-    in worker (Bytes.create n) 0
+    in Bytes.to_string (worker (Bytes.create n) 0)
   in
   let read_to_inbuf i =
-    let l1 = String.length !inbuf in
+    let l1 = Bytes.length !inbuf in
     if l1 >= i then 0 else begin
       let s2 = input_string ic (i - l1) in
       let l2 = String.length s2 in
       let s3 = Bytes.create (l1 + l2) in
-	String.blit !inbuf 0 s3 0 l1;
-	String.blit s2 0 s3 l1 l2;
+	Bytes.blit !inbuf 0 s3 0 l1;
+	Bytes.blit (Bytes.of_string s2) 0 s3 l1 l2;
 	inbuf := s3;
 	l2
     end
@@ -594,8 +594,8 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
       | Ascii -> begin
 	  let rlen = read_to_inbuf n in
 	    stream_pos := !stream_pos + rlen;
-            let len_inbuf = String.length !inbuf in
-	    let n2 = validate_ascii_string !inbuf len_inbuf in
+            let len_inbuf = Bytes.length !inbuf in
+	    let n2 = validate_ascii_string (Bytes.to_string !inbuf) len_inbuf in
 	      write_from inbuf;
 	      if n2 = len_inbuf then !pos
 	      else raise (Decode_error(Ascii,!stream_pos-(len_inbuf-n2)))
@@ -603,8 +603,8 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
       | Latin1 -> begin
 	  write_from outbuf;
 	  let rlen = read_to_inbuf (n - !pos) in
-	    outbuf := !outbuf ^ (to_utf8 (from_latin1 !inbuf));
-	    inbuf := "";
+	    outbuf := Bytes.cat (!outbuf)  (Bytes.of_string (to_utf8 (from_latin1 (Bytes.to_string (!inbuf)))));
+	    inbuf := Bytes.empty;
 	    stream_pos := !stream_pos + rlen;
 	    write_from outbuf;
 	    !pos
@@ -612,11 +612,11 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
       | Utf8 -> begin
 	  let rlen = read_to_inbuf n in
 	    stream_pos := !stream_pos + rlen;
-	    let len_inbuf = String.length !inbuf in
+	    let len_inbuf = Bytes.length !inbuf in
 	      try begin
-		let n2 = validate_utf8_string !inbuf len_inbuf in
-		  outbuf := !outbuf ^ (String.sub !inbuf 0 n2);
-		  inbuf := String.sub !inbuf n2 (len_inbuf-n2);
+		let n2 = validate_utf8_string (Bytes.to_string !inbuf) len_inbuf in
+		  outbuf := Bytes.cat (!outbuf)  (Bytes.sub !inbuf 0 n2);
+		  inbuf := Bytes.sub !inbuf n2 (len_inbuf-n2);
 		  write_from outbuf;
 		  !pos
 	      end with
@@ -630,8 +630,8 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
       | Auto -> begin
 	  let rlen = read_to_inbuf n in
 	    stream_pos := !stream_pos + rlen;
-	    let len_inbuf = String.length !inbuf in
-	    let n2 = validate_ascii_string !inbuf len_inbuf in
+	    let len_inbuf = Bytes.length !inbuf in
+	    let n2 = validate_ascii_string (Bytes.to_string !inbuf) len_inbuf in
 	      (* Keep on reading just ascii? *)
 	      if n2 = len_inbuf then begin
 		write_from inbuf;
@@ -641,7 +641,7 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
 		let rlen = read_to_inbuf (n+3) in (* Enough for utf8 char *)
 		stream_pos := !stream_pos + rlen;
 		try begin
-		  let _ = validate_utf8_string !inbuf (String.length !inbuf) in
+		  let _ = validate_utf8_string (Bytes.to_string !inbuf) (Bytes.length !inbuf) in
 		  enc_type := Utf8;
 		  convert()
 		end with
@@ -654,29 +654,30 @@ let lexing_function ic enc_type inbuf outbuf stream_pos s n =
   in
     convert()
 
+let utf32be = Bytes.of_string "\x00\x00\xFE\xFF"
+let utf32le = Bytes.of_string "\xFF\xFE\x00\x00"
+let utf16be = Bytes.of_string "\xFE\xFF"
+let utf16le = Bytes.of_string "\xFF\xFE"
+let utf8    = Bytes.of_string "\xEF\xBB\xBF"
+
 
 (* INTERNAL - Read in BOM *)
 let read_bom ic =
-  let utf32be = "\x00\x00\xFE\xFF" in
-  let utf32le = "\xFF\xFE\x00\x00" in
-  let utf16be = "\xFE\xFF" in
-  let utf16le = "\xFF\xFE" in
-  let utf8    = "\xEF\xBB\xBF" in
   let s = Bytes.create 4 in
   let l = ref 0 in
   try
     really_input ic s 0 2; l := 2;
-    if String.sub s 0 2 = utf16be then (Utf16be,"") else (
+    if Bytes.sub s 0 2 = utf16be then (Utf16be,Bytes.empty) else (
     really_input ic s 2 1; l := 3;
-    if String.sub s 0 3 = utf8 then (Utf8,"") else (
-    if String.sub s 0 2 = utf16le && s.[2] != '\x00'
-      then (Utf16le,String.sub s 2 1) else (
+    if Bytes.sub s 0 3 = utf8 then (Utf8,Bytes.empty) else (
+    if Bytes.sub s 0 2 = utf16le && Bytes.get s 2 != '\x00'
+      then (Utf16le,Bytes.sub s 2 1) else (
     really_input ic s 3 1; l := 4;
-    if s = utf32be then (Utf32be,"") else
-    if s = utf32le then (Utf32le,"") else
+    if s = utf32be then (Utf32be,Bytes.empty) else
+    if s = utf32le then (Utf32le,Bytes.empty) else
     (Auto,s))))
   with
-      End_of_file -> (Auto,String.sub s 0 !l)
+      End_of_file -> (Auto,Bytes.sub s 0 !l)
 
 (* Internal *)
 let lexing_function ?(encode_type=Auto) ic =
@@ -684,10 +685,10 @@ let lexing_function ?(encode_type=Auto) ic =
     | Auto -> begin
 	let (enc,buf) = read_bom ic in
 	  (lexing_function ic (ref enc)
-	     (ref buf) (ref "") (ref (String.length buf)))
+	     (ref buf) (ref Bytes.empty) (ref (Bytes.length buf)))
       end
     | _ -> (lexing_function ic (ref encode_type)
-	    (ref "") (ref "") (ref 0))
+	    (ref Bytes.empty) (ref Bytes.empty) (ref 0))
 
 
 let lexing_from_channel ?(encode_type=Auto) ic =
@@ -700,16 +701,16 @@ let lexing_from_ustring s =
 let read_from_channel ?(encode_type=Auto) ic =
   let reader = lexing_function ~encode_type:encode_type ic in
   let readsize = 4096 in
-  let buf = ref "" in
+  let buf = ref Bytes.empty in
   (* Should not fail, since UTF-8 is already checked*)
   let fail() = assert false in
   fun l -> begin
     let s = Bytes.create readsize in
     let read_l = reader s readsize in
-    let s2 = !buf ^ (String.sub s 0 read_l) in
-    let len2 = String.length s2 in
-    let (i,a) = from_utf8_worker s2 len2 fail in
-    buf := String.sub s2 i (len2-i);
+    let s2 = Bytes.cat (!buf)  (Bytes.sub s 0 read_l) in
+    let len2 = Bytes.length s2 in
+    let (i,a) = from_utf8_worker (Bytes.to_string s2) len2 fail in
+    buf := Bytes.sub s2 i (len2-i);
     ref (Uchars(a))
   end
 
@@ -749,4 +750,4 @@ let write_file ?(encode_type=Utf8) fn s =
     | Latin1 -> to_latin1 s
     | _ -> failwith "Encoding not supported."
   in
-  Utils.write_binfile fn data
+  Utils.write_binfile fn (Bytes.of_string data)

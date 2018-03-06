@@ -1,7 +1,3 @@
-(*
-   Miking is licensed under the MIT license.
-   Copyright (C) David Broman. See file LICENSE.txt
-*)
 
 open Printf
 
@@ -13,28 +9,6 @@ module IntSet = Set.Make(
   end)
 
 type intset = IntSet.t
-
-(* Define the file slash, to make it platform independent *)
-let sl = if Sys.win32 then "\\" else "/"
-
-
-(* Add a slash at the end "\\" or "/" if not already available *)
-let add_slash s =
-  if String.length s = 0 || (String.sub s (String.length s - 1) 1) <> sl
-  then s ^ sl else s
-
-
-(* Expand a list of files and folders into a list of file names *)
-let files_of_folders lst = List.fold_left (fun a v ->
-  if Sys.is_directory v then
-    (Sys.readdir v
-        |> Array.to_list
-        |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
-        |> List.map (fun x -> (add_slash v) ^ x)
-         |> List.filter (fun x -> not (Sys.is_directory x))
-    ) @ a
-  else v::a
-) [] lst
 
 
 (* Returns the last element *)
@@ -105,7 +79,7 @@ let rec option_split lst =
 let string_of_intlist il =
   let s = Bytes.create (List.length il) in
   il |> List.fold_left (fun i x -> (Bytes.set s i (char_of_int x)); i+1) 0 |> ignore;
-  s
+  Bytes.to_string s
 
 let intlist_of_string s =
   let rec work n a = if n >= 0
@@ -114,7 +88,7 @@ let intlist_of_string s =
 
 let write_binfile filename str =
   let f = open_out_bin filename in
-  output_string f str;
+  output_bytes f str;
   flush f;
   close_out f
 
@@ -146,6 +120,8 @@ let genlist f n =
 
 let xor b1 b2 = (b1 || b2) && (not (b1 && b2))
 
+let sign_extension v n =
+  if ((v lsr (n-1)) land 1) = 0 then v else (-1 lsl n) lor v
 
 
 
