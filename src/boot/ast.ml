@@ -45,21 +45,21 @@ and const =
 | Cor   of bool option
 (* MCore intrinsic: Integer constant and operations *)
 | CInt  of int
-| Cadd  | Cadd2 of int
-| Csub  | Csub2 of int
-| Cmul  | Cmul2 of int
-| Cdiv  | Cdiv2 of int
-| Cmod  | Cmod2 of int
-| Cneg
-| Clt   | Clt2  of int
-| Cleq  | Cleq2 of int
-| Cgt   | Cgt2  of int
-| Cgeq  | Cgeq2 of int
-| Ceq   | Ceq2  of int
-| Cneq  | Cneq2 of int
-| Csll  | Csll2 of int
-| Csrl  | Csrl2 of int
-| Csra  | Csra2 of int
+| Caddi of int option
+| Csubi of int option
+| Cmuli of int option
+| Cdivi of int option
+| Cmodi of int option
+| Cnegi
+| Clti  of int option
+| Cleqi of int option
+| Cgti  of int option
+| Cgeqi of int option
+| Ceqi  of int option
+| Cneqi of int option
+| Cslli of int option
+| Csrli of int option
+| Csrai of int option
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint

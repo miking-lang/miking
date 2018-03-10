@@ -105,35 +105,35 @@ and pprint_const c =
   | Cor(Some(v)) -> us"or(" ^. usbool v ^. us")"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
-  | Cadd -> us"add"
-  | Cadd2(v) -> us(sprintf "add(%d)" v)
-  | Csub -> us"sub"
-  | Csub2(v) -> us(sprintf "sub(%d)" v)
-  | Cmul -> us"mul"
-  | Cmul2(v) -> us(sprintf "mul(%d)" v)
-  | Cdiv -> us"divi"
-  | Cdiv2(v) -> us(sprintf "div(%d)" v)
-  | Cmod -> us"mod"
-  | Cmod2(v) -> us(sprintf "mod(%d)" v)
-  | Cneg -> us"neg"
-  | Clt -> us"lt"
-  | Clt2(v) -> us(sprintf "lt(%d)" v)
-  | Cleq -> us"leq"
-  | Cleq2(v) -> us(sprintf "leq(%d)" v)
-  | Cgt -> us"gt"
-  | Cgt2(v) -> us(sprintf "gt(%d)" v)
-  | Cgeq -> us"geq"
-  | Cgeq2(v) -> us(sprintf "geq(%d)" v)
-  | Ceq -> us"eq"
-  | Ceq2(v) -> us(sprintf "eq(%d)" v)
-  | Cneq -> us"neq"
-  | Cneq2(v) -> us(sprintf "neq(%d)" v)
-  | Csll -> us"sll"
-  | Csll2(v) -> us(sprintf "sll(%d)" v)
-  | Csrl -> us"srl"
-  | Csrl2(v) -> us(sprintf "srl(%d)" v)
-  | Csra -> us"sra"
-  | Csra2(v) -> us(sprintf "sra(%d)" v)
+  | Caddi(None) -> us"add"
+  | Caddi(Some(v)) -> us(sprintf "add(%d)" v)
+  | Csubi(None) -> us"sub"
+  | Csubi(Some(v)) -> us(sprintf "sub(%d)" v)
+  | Cmuli(None) -> us"mul"
+  | Cmuli(Some(v)) -> us(sprintf "mul(%d)" v)
+  | Cdivi(None) -> us"divi"
+  | Cdivi(Some(v)) -> us(sprintf "div(%d)" v)
+  | Cmodi(None) -> us"mod"
+  | Cmodi(Some(v)) -> us(sprintf "mod(%d)" v)
+  | Cnegi -> us"neg"
+  | Clti(None) -> us"lt"
+  | Clti(Some(v)) -> us(sprintf "lt(%d)" v)
+  | Cleqi(None) -> us"leq"
+  | Cleqi(Some(v)) -> us(sprintf "leq(%d)" v)
+  | Cgti(None) -> us"gt"
+  | Cgti(Some(v)) -> us(sprintf "gt(%d)" v)
+  | Cgeqi(None) -> us"geq"
+  | Cgeqi(Some(v)) -> us(sprintf "geq(%d)" v)
+  | Ceqi(None) -> us"eq"
+  | Ceqi(Some(v)) -> us(sprintf "eq(%d)" v)
+  | Cneqi(None) -> us"neq"
+  | Cneqi(Some(v)) -> us(sprintf "neq(%d)" v)
+  | Cslli(None) -> us"sll"
+  | Cslli(Some(v)) -> us(sprintf "sll(%d)" v)
+  | Csrli(None) -> us"srl"
+  | Csrli(Some(v)) -> us(sprintf "srl(%d)" v)
+  | Csrai(None) -> us"sra"
+  | Csrai(Some(v)) -> us(sprintf "sra(%d)" v)
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -357,9 +357,11 @@ let debug_after_peval t =
    correspond constants *)
 let builtin =
   [("not",Cnot);("and",Cand(None));("or",Cor(None));
-   ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
-   ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
-   ("sll",Csll);("srl",Csrl);("sra",Csra);
+   ("add",Caddi(None));("sub",Csubi(None));("mul",Cmuli(None));
+   ("div",Cdivi(None));("mod",Cmodi(None));("neg",Cnegi);
+   ("lt",Clti(None));("leq",Cleqi(None));("gt",Cgti(None));("geq",Cgeqi(None));
+   ("eq",Ceqi(None));("neq",Cneqi(None));
+   ("sll",Cslli(None));("srl",Csrli(None));("sra",Csrai(None));
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat)]
 
@@ -389,65 +391,64 @@ let delta c v  =
     (* MCore integer intrinsics *)
     | CInt(_),t -> fail_constapp (tm_info t)
 
-    | Cadd,TmConst(fi,CInt(v)) -> TmConst(fi,Cadd2(v))
-    | Cadd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-    | Cadd,t | Cadd2(_),t  -> fail_constapp (tm_info t)
+    | Caddi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Caddi(Some(v)))
+    | Caddi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | Caddi(None),t | Caddi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Csub,TmConst(fi,CInt(v)) -> TmConst(fi,Csub2(v))
-    | Csub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-    | Csub,t | Csub2(_),t  -> fail_constapp (tm_info t)
+    | Csubi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csubi(Some(v)))
+    | Csubi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | Csubi(None),t | Csubi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cmul,TmConst(fi,CInt(v)) -> TmConst(fi,Cmul2(v))
-    | Cmul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-    | Cmul,t | Cmul2(_),t  -> fail_constapp (tm_info t)
+    | Cmuli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmuli(Some(v)))
+    | Cmuli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | Cmuli(None),t | Cmuli(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cdiv,TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv2(v))
-    | Cdiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-    | Cdiv,t | Cdiv2(_),t  -> fail_constapp (tm_info t)
+    | Cdivi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cdivi(Some(v)))
+    | Cdivi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | Cdivi(None),t | Cdivi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cmod,TmConst(fi,CInt(v)) -> TmConst(fi,Cmod2(v))
-    | Cmod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
-    | Cmod,t | Cmod2(_),t  -> fail_constapp (tm_info t)
+    | Cmodi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmodi(Some(v)))
+    | Cmodi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
+    | Cmodi(None),t | Cmodi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cneg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
-    | Cneg,t -> fail_constapp (tm_info t)
+    | Cnegi,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+    | Cnegi,t -> fail_constapp (tm_info t)
 
-    | Clt,TmConst(fi,CInt(v)) -> TmConst(fi,Clt2(v))
-    | Clt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
-    | Clt,t | Clt2(_),t  -> fail_constapp (tm_info t)
+    | Clti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Clti(Some(v)))
+    | Clti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
+    | Clti(None),t | Clti(Some(_)),t  -> fail_constapp (tm_info t)
 
+    | Cleqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cleqi(Some(v)))
+    | Cleqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
+    | Cleqi(None),t | Cleqi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cleq,TmConst(fi,CInt(v)) -> TmConst(fi,Cleq2(v))
-    | Cleq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
-    | Cleq,t | Cleq2(_),t  -> fail_constapp (tm_info t)
+    | Cgti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgti(Some(v)))
+    | Cgti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
+    | Cgti(None),t | Cgti(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cgt,TmConst(fi,CInt(v)) -> TmConst(fi,Cgt2(v))
-    | Cgt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
-    | Cgt,t | Cgt2(_),t  -> fail_constapp (tm_info t)
+    | Cgeqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgeqi(Some(v)))
+    | Cgeqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
+    | Cgeqi(None),t | Cgeqi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cgeq,TmConst(fi,CInt(v)) -> TmConst(fi,Cgeq2(v))
-    | Cgeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
-    | Cgeq,t | Cgeq2(_),t  -> fail_constapp (tm_info t)
+    | Ceqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Ceqi(Some(v)))
+    | Ceqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqi(None),t | Ceqi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Ceq,TmConst(fi,CInt(v)) -> TmConst(fi,Ceq2(v))
-    | Ceq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
-    | Ceq,t | Ceq2(_),t  -> fail_constapp (tm_info t)
+    | Cneqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cneqi(Some(v)))
+    | Cneqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
+    | Cneqi(None),t | Cneqi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cneq,TmConst(fi,CInt(v)) -> TmConst(fi,Cneq2(v))
-    | Cneq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
-    | Cneq,t | Cneq2(_),t  -> fail_constapp (tm_info t)
+    | Cslli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cslli(Some(v)))
+    | Cslli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
+    | Cslli(None),t | Cslli(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Csll,TmConst(fi,CInt(v)) -> TmConst(fi,Csll2(v))
-    | Csll2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
-    | Csll,t | Csll2(_),t  -> fail_constapp (tm_info t)
+    | Csrli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrli(Some(v)))
+    | Csrli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
+    | Csrli(None),t | Csrli(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Csrl,TmConst(fi,CInt(v)) -> TmConst(fi,Csrl2(v))
-    | Csrl2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
-    | Csrl,t | Csrl2(_),t  -> fail_constapp (tm_info t)
-
-    | Csra,TmConst(fi,CInt(v)) -> TmConst(fi,Csra2(v))
-    | Csra2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
-    | Csra,t | Csra2(_),t  -> fail_constapp (tm_info t)
+    | Csrai(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrai(Some(v)))
+    | Csrai(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
+    | Csrai(None),t | Csrai(Some(_)),t  -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
@@ -488,25 +489,25 @@ let delta c v  =
 let optimize_const_app fi v1 v2 =
   match v1,v2 with
   (*|   0 * x  ==>  0   |*)
-  | TmConst(_,Cmul2(0)),v2 -> TmConst(fi,CInt(0))
+  | TmConst(_,Cmuli(Some(0))),v2 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
-  | TmConst(_,Cmul2(1)),v2 -> v2
+  | TmConst(_,Cmuli(Some(1))),v2 -> v2
   (*|   0 + x  ==>  x   |*)
-  | TmConst(_,Cadd2(0)),v2 -> v2
+  | TmConst(_,Caddi(Some(0))),v2 -> v2
   (*|   0 * x  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(1))),vv1 -> vv1
+  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(1))),vv1 -> vv1
   (*|   0 + x  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cadd),TmConst(_,CInt(0))),vv1 -> vv1
+  | TmApp(_,TmConst(_,Caddi(None)),TmConst(_,CInt(0))),vv1 -> vv1
   (*|   x * 0  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
   (*|   x * 1  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(1)) -> vv1
+  | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(1)) -> vv1
   (*|   x + 0  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cadd),vv1),TmConst(_,CInt(0)) -> vv1
+  | TmApp(_,TmConst(_,Caddi(None)),vv1),TmConst(_,CInt(0)) -> vv1
   (*|   x - 0  ==>  x   |*)
-  | TmApp(_,TmConst(_,Csub),vv1),TmConst(_,CInt(0)) -> vv1
+  | TmApp(_,TmConst(_,Csubi(None)),vv1),TmConst(_,CInt(0)) -> vv1
   (*|   x op y  ==>  res(x op y)   |*)
   | TmConst(fi1,c1),(TmConst(fi2,c2) as tt)-> delta c1 tt
   (* No optimization *)

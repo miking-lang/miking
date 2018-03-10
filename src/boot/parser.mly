@@ -273,20 +273,20 @@ term:
 
 op:
   | atom                 { $1 }
-  | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cadd),$1),$3) }
-  | op SUB op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csub),$1),$3) }
-  | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmul),$1),$3) }
-  | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdiv),$1),$3) }
-  | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmod),$1),$3) }
-  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clt),$1),$3) }
-  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleq),$1),$3) }
-  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgt),$1),$3)}
-  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeq),$1),$3) }
+  | op ADD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Caddi(None)),$1),$3) }
+  | op SUB op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csubi(None)),$1),$3) }
+  | op MUL op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmuli(None)),$1),$3) }
+  | op DIV op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cdivi(None)),$1),$3) }
+  | op MOD op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cmodi(None)),$1),$3) }
+  | op LESS op           { TmApp($2.i,TmApp($2.i,TmConst($2.i,Clti(None)),$1),$3) }
+  | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
+  | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
+  | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
   | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }
   | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
-  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csll),$1),$3) }
-  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrl),$1),$3) }
-  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csra),$1),$3) }
+  | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
+  | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
+  | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,Cnot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
@@ -307,7 +307,7 @@ atom:
          | "seq"     -> TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued)
          | _ -> mkapps (if List.length $2 = 0 then [TmNop] else (List.rev $2)))}
   | LPAREN term RPAREN   { $2 }
-  | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,Cneg),$3)}
+  | LPAREN SUB op RPAREN { TmApp($2.i,TmConst($2.i,Cnegi),$3)}
   | LSQUARE tmseq RSQUARE
        { TmUC($1.i,UCLeaf($2),UCOrdered,UCMultivalued) }
   | LCURLY ragnar_scope RCURLY  { $2 }
