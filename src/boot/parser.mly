@@ -288,8 +288,8 @@ op:
   | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrl),$1),$3) }
   | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csra),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,Cnot),$2) }
-  | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand),$1),$3) }
-  | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor),$1),$3) }
+  | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
+  | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
   | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat),$1),$3) }
 
 

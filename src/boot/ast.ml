@@ -41,10 +41,10 @@ and const =
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
 | Cnot
-| Cand  | Cand2  of bool
-| Cor   | Cor2   of bool
+| Cand  of bool option
+| Cor   of bool option
 (* MCore intrinsic: Integer constant and operations *)
-| CInt of int
+| CInt  of int
 | Cadd  | Cadd2 of int
 | Csub  | Csub2 of int
 | Cmul  | Cmul2 of int

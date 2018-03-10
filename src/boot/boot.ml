@@ -99,10 +99,10 @@ and pprint_const c =
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | Cnot -> us"not"
-  | Cand -> us"and"
-  | Cand2(v) -> us"and(" ^. usbool v ^. us")"
-  | Cor -> us"or"
-  | Cor2(v) -> us"or(" ^. usbool v ^. us")"
+  | Cand(None) -> us"and"
+  | Cand(Some(v)) -> us"and(" ^. usbool v ^. us")"
+  | Cor(None) -> us"or"
+  | Cor(Some(v)) -> us"or(" ^. usbool v ^. us")"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
   | Cadd -> us"add"
@@ -356,7 +356,7 @@ let debug_after_peval t =
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
-  [("not",Cnot);("and",Cand);("or",Cor);
+  [("not",Cnot);("and",Cand(None));("or",Cor(None));
    ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
    ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
    ("sll",Csll);("srl",Csrl);("sra",Csra);
@@ -378,13 +378,13 @@ let delta c v  =
     | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
     | Cnot,t -> fail_constapp (tm_info t)
 
-    | Cand,TmConst(fi,CBool(v)) -> TmConst(fi,Cand2(v))
-    | Cand2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-    | Cand,t | Cand2(_),t  -> fail_constapp (tm_info t)
+    | Cand(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cand(Some(v)))
+    | Cand(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
+    | Cand(None),t | Cand(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cor,TmConst(fi,CBool(v)) -> TmConst(fi,Cor2(v))
-    | Cor2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-    | Cor,t | Cor2(_),t  -> fail_constapp (tm_info t)
+    | Cor(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cor(Some(v)))
+    | Cor(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
+    | Cor(None),t | Cor(Some(_)),t  -> fail_constapp (tm_info t)
 
     (* MCore integer intrinsics *)
     | CInt(_),t -> fail_constapp (tm_info t)
