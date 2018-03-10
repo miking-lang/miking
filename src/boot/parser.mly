@@ -282,15 +282,15 @@ op:
   | op LESSEQUAL op      { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cleqi(None)),$1),$3) }
   | op GREAT op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgti(None)),$1),$3)}
   | op GREATEQUAL op     { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cgeqi(None)),$1),$3) }
-  | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq),$1),$3) }
-  | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq),$1),$3) }
+  | op EQUAL op          { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyEq(None)),$1),$3) }
+  | op NOTEQUAL op       { TmApp($2.i,TmApp($2.i,TmConst($2.i,CPolyNeq(None)),$1),$3) }
   | op SHIFTLL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cslli(None)),$1),$3) }
   | op SHIFTRL op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrli(None)),$1),$3) }
   | op SHIFTRA op        { TmApp($2.i,TmApp($2.i,TmConst($2.i,Csrai(None)),$1),$3) }
   | NOT op               { TmApp($1.i,TmConst($1.i,Cnot),$2) }
   | op AND op            { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cand(None)),$1),$3) }
   | op OR op             { TmApp($2.i,TmApp($2.i,TmConst($2.i,Cor(None)),$1),$3) }
-  | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat),$1),$3) }
+  | op CONCAT op         { TmApp($2.i,TmApp($2.i,TmConst($2.i,CConcat(None)),$1),$3) }
 
 
 

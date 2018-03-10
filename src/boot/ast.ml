@@ -66,11 +66,11 @@ and const =
 | CPrint
 | CArgv
 (* MCore unified collection type (UCT) intrinsics *)
-| CConcat | CConcat2 of tm
+| CConcat of tm option
 
 (* Ragnar temp functions for handling polymorphic arguments *)
-| CPolyEq  | CPolyEq2  of tm
-| CPolyNeq | CPolyNeq2 of tm
+| CPolyEq  of tm option
+| CPolyNeq of tm option
 
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool

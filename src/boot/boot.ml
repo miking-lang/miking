@@ -140,10 +140,13 @@ and pprint_const c =
   | CPrint -> us"print"
   | CArgv  -> us"argv"
   (* MCore unified collection type (UCT) intrinsics *)
-  | CConcat | CConcat2(_) -> us"concat"
+  | CConcat(None) -> us"concat"
+  | CConcat(Some(v)) -> us"concat(" ^. (pprint true v) ^. us")"
   (* Ragnar polymorpic temps *)
-  | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
-  | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
+  | CPolyEq(None) -> us"polyeq"
+  | CPolyEq(Some(v)) -> us"polyeq(" ^. (pprint true v) ^. us")"
+  | CPolyNeq(None) -> us"polyneq"
+  | CPolyNeq(Some(v)) -> us"polyneq(" ^. (pprint true v) ^. us")"
 
 
 (* Pretty print a term. The boolean parameter 'basic' is true when
@@ -363,7 +366,7 @@ let builtin =
    ("eq",Ceqi(None));("neq",Cneqi(None));
    ("sll",Cslli(None));("srl",Csrli(None));("sra",Csrai(None));
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
-   ("concat",CConcat)]
+   ("concat",CConcat(None))]
 
 
 
@@ -462,27 +465,27 @@ let delta c v  =
     | CArgv,_ ->
       let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv)
       in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
-    | CConcat,t -> TmConst(NoInfo,CConcat2(t))
-    | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
+    | CConcat(None),t -> TmConst(NoInfo,CConcat((Some t)))
+    | CConcat(Some(TmUC(l,t1,o1,u1))),TmUC(_,t2,o2,u2)
       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
-    | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
-    | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
-    | CConcat2(_),t -> fail_constapp (tm_info t)
+    | CConcat(Some(tm1)),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
+    | CConcat(Some(TmUC(l,t1,o1,u1))),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
+    | CConcat(Some(_)),t -> fail_constapp (tm_info t)
 
     (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
        These functions should be defined using well-defined ad-hoc polymorphism
        in the real Ragnar compiler. *)
-    | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
-    | CPolyEq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
-    | CPolyEq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
-    | CPolyEq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
-    | CPolyEq2(_),t  -> fail_constapp (tm_info t)
+    | CPolyEq(None),t -> TmConst(NoInfo,CPolyEq((Some(t))))
+    | CPolyEq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
+    | CPolyEq(Some(TmChar(_,v1))),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
+    | CPolyEq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
+    | CPolyEq(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | CPolyNeq,t -> TmConst(NoInfo,CPolyNeq2(t))
-    | CPolyNeq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
-    | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
-    | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
-    | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
+    | CPolyNeq(None),t -> TmConst(NoInfo,CPolyNeq(Some(t)))
+    | CPolyNeq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
+    | CPolyNeq(Some(TmChar(_,v1))),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
+    | CPolyNeq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
+    | CPolyNeq(Some(_)),t  -> fail_constapp (tm_info t)
 
 
 (* Optimize away constant applications (mul with 0 or 1, add with 0 etc.) *)
