@@ -1,7 +1,7 @@
 // Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
-// Tests of all primitive MCore language constructs
+// Test integer primitives
 
 language MCore
 
@@ -9,21 +9,6 @@ language MCore
 utest 1  1
 utest 35 35
 utest (negi 1) (negi 1)
-utest "test" "test"
-utest 's' 's'
-utest true true
-utest false false
-
-// Boolean intrinsic functions
-utest true  (not false)       // Boolean not
-utest true  (and true true)   // Boolean and
-utest false (and false true)
-utest false (and true false)
-utest false (and false false)
-utest true  (or true true)    // Boolean or
-utest true  (or false true)
-utest true  (or true false)
-utest false (or false false)
 
 // Integer intrinsic functions
 utest 10 (addi 6 4)            // Integer addition
@@ -50,13 +35,3 @@ utest true (eqi 10 10)
 utest true (neqi 100 10)       // Not equal !=
 utest true (neqi 10 20)
 utest false (neqi 10 10)
-
-// Floating-point number intrinsics
-utest 32.1  32.1
-utest 0.01  1e-2
-utest 0.032 3.2e-2
-utest 1.10 (addf 1.0 0.1)
-utest 8.5  (subf 10.6 2.1)
-utest 2.2  (mulf 1.1 2.0)
-utest 10.2 (divf 20.4 2.0)
-utest (negf 2.2) (negf 2.2)

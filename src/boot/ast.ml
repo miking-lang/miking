@@ -9,9 +9,15 @@
 open Ustring.Op
 open Msg
 
+
+(* Either an int, a float, or none *)
+type intfloatoption =
+| TInt   of int
+| TFloat of float
+| TNone
+
 (* Evaluation environment *)
 type env = tm list
-
 
 (* Pattern used in match constructs *)
 and pattern =
@@ -67,6 +73,12 @@ and const =
 | Cmulf  of float option
 | Cdivf  of float option
 | Cnegf
+(* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+| Cadd   of intfloatoption
+| Csub   of intfloatoption
+| Cmul   of intfloatoption
+| Cdiv   of intfloatoption
+| Cneg
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint

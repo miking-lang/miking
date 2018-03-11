@@ -145,6 +145,20 @@ and pprint_const c =
   | Cdivf(None) -> us"divf"
   | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
   | Cnegf -> us"negf"
+  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+  | Cadd(TInt(v)) -> us(sprintf "add(%d)" v)
+  | Cadd(TFloat(v)) -> us(sprintf "add(%f)" v)
+  | Cadd(TNone) -> us"add"
+  | Csub(TInt(v)) -> us(sprintf "sub(%d)" v)
+  | Csub(TFloat(v)) -> us(sprintf "sub(%f)" v)
+  | Csub(TNone) -> us"sub"
+  | Cmul(TInt(v)) -> us(sprintf "mul(%d)" v)
+  | Cmul(TFloat(v)) -> us(sprintf "mul(%f)" v)
+  | Cmul(TNone) -> us"mul"
+  | Cdiv(TInt(v)) -> us(sprintf "div(%d)" v)
+  | Cdiv(TFloat(v)) -> us(sprintf "div(%f)" v)
+  | Cdiv(TNone) -> us"div"
+  | Cneg -> us"neg"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -378,6 +392,8 @@ let builtin =
    ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
    ("divf",Cdivf(None));("negf",Cnegf);
+   ("add",Cadd(TNone));("sub",Csub(TNone));("mul",Cmul(TNone));
+   ("div",Cdiv(TNone));("neg",Cneg);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat(None))]
 
@@ -487,6 +503,44 @@ let delta c v  =
 
     | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
     | Cnegf,t -> fail_constapp (tm_info t)
+
+    (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+
+    | Cadd(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cadd(TInt(v)))
+    | Cadd(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cadd(TFloat(v)))
+    | Cadd(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | Cadd(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
+    | Cadd(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 +. (float_of_int v2)))
+    | Cadd(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) +. v2))
+    | Cadd(_),t -> fail_constapp (tm_info t)
+
+    | Csub(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Csub(TInt(v)))
+    | Csub(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Csub(TFloat(v)))
+    | Csub(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | Csub(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
+    | Csub(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 -. (float_of_int v2)))
+    | Csub(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) -. v2))
+    | Csub(_),t -> fail_constapp (tm_info t)
+
+    | Cmul(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cmul(TInt(v)))
+    | Cmul(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmul(TFloat(v)))
+    | Cmul(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | Cmul(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
+    | Cmul(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 *. (float_of_int v2)))
+    | Cmul(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) *. v2))
+    | Cmul(_),t -> fail_constapp (tm_info t)
+
+    | Cdiv(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv(TInt(v)))
+    | Cdiv(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdiv(TFloat(v)))
+    | Cdiv(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | Cdiv(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
+    | Cdiv(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 /. (float_of_int v2)))
+    | Cdiv(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) /. v2))
+    | Cdiv(_),t -> fail_constapp (tm_info t)
+
+    | Cneg,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
+    | Cneg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+    | Cneg,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
