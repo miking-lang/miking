@@ -56,6 +56,7 @@
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
 %token <int Ast.tokendata> UINT
+%token <float Ast.tokendata> UFLOAT
 
 /* Keywords */
 %token <unit Ast.tokendata> FUNC
@@ -183,6 +184,7 @@ mc_atom:
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
+  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }

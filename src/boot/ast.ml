@@ -60,6 +60,13 @@ and const =
 | Cslli of int option
 | Csrli of int option
 | Csrai of int option
+(* MCore intrinsic: Floating-point number constant and operations *)
+| CFloat of float
+| Caddf  of float option
+| Csubf  of float option
+| Cmulf  of float option
+| Cdivf  of float option
+| Cnegf
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint

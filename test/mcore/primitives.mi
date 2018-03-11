@@ -1,13 +1,14 @@
 // Miking is licensed under the MIT license.
 // Copyright (C) David Broman. See file LICENSE.txt
 //
-// File mcore.mi tests all basic MCore language constructs
+// Tests of all primitive MCore language constructs
 
 language MCore
 
 // Literals
 utest 1  1
 utest 35 35
+utest (negi 1) (negi 1)
 utest "test" "test"
 utest 's' 's'
 utest true true
@@ -25,63 +26,37 @@ utest true  (or true false)
 utest false (or false false)
 
 // Integer intrinsic functions
-utest 10 (add 6 4)            // Integer addition
-utest 20 (sub 30 10)          // Integer subtractioin
-utest 33 (mul 3 11)           // Integer multiplication
-utest 4  (div 9 2)            // Integer division
-utest 1  (mod 9 2)            // Integer modulo
-utest 15 (add (20) (neg 5))   // Integer negation
-utest true (lt 4 10)          // Less than <
-utest false (lt 20 10)
-utest false (lt 10 10)
-utest true (leq 4 10)         // Less than and equal <=
-utest false (leq 20 10)
-utest true (leq 10 10)
-utest true (gt 100 10)        // Greater than >
-utest false (gt 10 20)
-utest false (gt 10 10)
-utest true (geq 100 10)       // Greater than and equal >=
-utest false (geq 10 20)
-utest true (geq 10 10)
-utest false (eq 100 10)       // Equal =
-utest false (eq 10 20)
-utest true (eq 10 10)
-utest true (neq 100 10)       // Not equal !=
-utest true (neq 10 20)
-utest false (neq 10 10)
+utest 10 (addi 6 4)            // Integer addition
+utest 20 (subi 30 10)          // Integer subtractioin
+utest 33 (muli 3 11)           // Integer multiplication
+utest 4  (divi 9 2)            // Integer division
+utest 1  (modi 9 2)            // Integer modulo
+utest 15 (addi (20) (negi 5))  // Integer negation
+utest true (lti 4 10)          // Less than <
+utest false (lti 20 10)
+utest false (lti 10 10)
+utest true (leqi 4 10)         // Less than and equal <=
+utest false (leqi 20 10)
+utest true (leqi 10 10)
+utest true (gti 100 10)        // Greater than >
+utest false (gti 10 20)
+utest false (gti 10 10)
+utest true (geqi 100 10)       // Greater than and equal >=
+utest false (geqi 10 20)
+utest true (geqi 10 10)
+utest false (eqi 100 10)       // Equal =
+utest false (eqi 10 20)
+utest true (eqi 10 10)
+utest true (neqi 100 10)       // Not equal !=
+utest true (neqi 10 20)
+utest false (neqi 10 10)
 
-// IF-expressions. Note that the branches must be wrapped into a thunk
-utest 10 (ifexp true (lam _:a. 10) (lam _:a. 20))
-utest 20 (ifexp false (lam _:a. 10) (lam _:a. 20))
-utest 30 (ifexp (or false true) (lam _:a. add 10 20) (lam _:a. sub 20 10))
-utest 10 (ifexp (and false true) (lam _:a. add 10 20) (lam _:a. sub 20 10))
-
-// Debug strings
-utest "10" (dstr 10)
-utest "Seq('Y','e','s')" (dstr "Yes")
-
-// lambdas
-utest 40 ((lam x:Int. lam y:Int. mul x y) 4 10)
-
-// let
-let x = 10
-let foo = lam x:Int->Int. lam y:Int. x y
-let double = lam x:Int. mul x 2
-utest 20 (foo double x)
-
-// Collection types
-utest "testthis" (concat "test" "this")
-
-// argv
-utest "" (argv nop)
-
-
-// Functions with fix point
-let pow = fix (lam pow:(Int->Int->Int). lam x:Int. lam n:Int.
-           ifexp (leq n 1)
-              (lam _:a. x)
-              (lam _:a. mul x (pow x (sub n 1)))
-           )
-
-utest 16 (pow 2 4)
-utest 59049 (pow 3 10)
+// Floating-point number intrinsics
+utest 32.1  32.1
+utest 0.01  1e-2
+utest 0.032 3.2e-2
+utest 1.10 (addf 1.0 0.1)
+utest 8.5  (subf 10.6 2.1)
+utest 2.2  (mulf 1.1 2.0)
+utest 10.2 (divf 20.4 2.0)
+utest (negf 2.2) (negf 2.2)

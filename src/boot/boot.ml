@@ -105,35 +105,46 @@ and pprint_const c =
   | Cor(Some(v)) -> us"or(" ^. usbool v ^. us")"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
-  | Caddi(None) -> us"add"
-  | Caddi(Some(v)) -> us(sprintf "add(%d)" v)
-  | Csubi(None) -> us"sub"
-  | Csubi(Some(v)) -> us(sprintf "sub(%d)" v)
-  | Cmuli(None) -> us"mul"
-  | Cmuli(Some(v)) -> us(sprintf "mul(%d)" v)
+  | Caddi(None) -> us"addi"
+  | Caddi(Some(v)) -> us(sprintf "addi(%d)" v)
+  | Csubi(None) -> us"subi"
+  | Csubi(Some(v)) -> us(sprintf "subi(%d)" v)
+  | Cmuli(None) -> us"muli"
+  | Cmuli(Some(v)) -> us(sprintf "muli(%d)" v)
   | Cdivi(None) -> us"divi"
-  | Cdivi(Some(v)) -> us(sprintf "div(%d)" v)
-  | Cmodi(None) -> us"mod"
-  | Cmodi(Some(v)) -> us(sprintf "mod(%d)" v)
-  | Cnegi -> us"neg"
-  | Clti(None) -> us"lt"
-  | Clti(Some(v)) -> us(sprintf "lt(%d)" v)
-  | Cleqi(None) -> us"leq"
-  | Cleqi(Some(v)) -> us(sprintf "leq(%d)" v)
-  | Cgti(None) -> us"gt"
-  | Cgti(Some(v)) -> us(sprintf "gt(%d)" v)
-  | Cgeqi(None) -> us"geq"
-  | Cgeqi(Some(v)) -> us(sprintf "geq(%d)" v)
-  | Ceqi(None) -> us"eq"
-  | Ceqi(Some(v)) -> us(sprintf "eq(%d)" v)
-  | Cneqi(None) -> us"neq"
-  | Cneqi(Some(v)) -> us(sprintf "neq(%d)" v)
-  | Cslli(None) -> us"sll"
-  | Cslli(Some(v)) -> us(sprintf "sll(%d)" v)
-  | Csrli(None) -> us"srl"
-  | Csrli(Some(v)) -> us(sprintf "srl(%d)" v)
-  | Csrai(None) -> us"sra"
-  | Csrai(Some(v)) -> us(sprintf "sra(%d)" v)
+  | Cdivi(Some(v)) -> us(sprintf "divi(%d)" v)
+  | Cmodi(None) -> us"modi"
+  | Cmodi(Some(v)) -> us(sprintf "modi(%d)" v)
+  | Cnegi -> us"negi"
+  | Clti(None) -> us"lti"
+  | Clti(Some(v)) -> us(sprintf "lti(%d)" v)
+  | Cleqi(None) -> us"leqi"
+  | Cleqi(Some(v)) -> us(sprintf "leqi(%d)" v)
+  | Cgti(None) -> us"gti"
+  | Cgti(Some(v)) -> us(sprintf "gti(%d)" v)
+  | Cgeqi(None) -> us"geqi"
+  | Cgeqi(Some(v)) -> us(sprintf "geqi(%d)" v)
+  | Ceqi(None) -> us"eqi"
+  | Ceqi(Some(v)) -> us(sprintf "eqi(%d)" v)
+  | Cneqi(None) -> us"neqi"
+  | Cneqi(Some(v)) -> us(sprintf "neqi(%d)" v)
+  | Cslli(None) -> us"slli"
+  | Cslli(Some(v)) -> us(sprintf "slli(%d)" v)
+  | Csrli(None) -> us"srli"
+  | Csrli(Some(v)) -> us(sprintf "srli(%d)" v)
+  | Csrai(None) -> us"srai"
+  | Csrai(Some(v)) -> us(sprintf "srai(%d)" v)
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat(v) -> us(sprintf "%f" v)
+  | Caddf(None) -> us"addf"
+  | Caddf(Some(v)) -> us(sprintf "addf(%f)" v)
+  | Csubf(None) -> us"subf"
+  | Csubf(Some(v)) -> us(sprintf "subf(%f)" v)
+  | Cmulf(None) -> us"mulf"
+  | Cmulf(Some(v)) -> us(sprintf "mulf(%f)" v)
+  | Cdivf(None) -> us"divf"
+  | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
+  | Cnegf -> us"negf"
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
@@ -360,11 +371,13 @@ let debug_after_peval t =
    correspond constants *)
 let builtin =
   [("not",Cnot);("and",Cand(None));("or",Cor(None));
-   ("add",Caddi(None));("sub",Csubi(None));("mul",Cmuli(None));
-   ("div",Cdivi(None));("mod",Cmodi(None));("neg",Cnegi);
-   ("lt",Clti(None));("leq",Cleqi(None));("gt",Cgti(None));("geq",Cgeqi(None));
-   ("eq",Ceqi(None));("neq",Cneqi(None));
-   ("sll",Cslli(None));("srl",Csrli(None));("sra",Csrai(None));
+   ("addi",Caddi(None));("subi",Csubi(None));("muli",Cmuli(None));
+   ("divi",Cdivi(None));("modi",Cmodi(None));("negi",Cnegi);
+   ("lti",Clti(None));("leqi",Cleqi(None));("gti",Cgti(None));("geqi",Cgeqi(None));
+   ("eqi",Ceqi(None));("neqi",Cneqi(None));
+   ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
+   ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
+   ("divf",Cdivf(None));("negf",Cnegf);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
    ("concat",CConcat(None))]
 
@@ -452,6 +465,28 @@ let delta c v  =
     | Csrai(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrai(Some(v)))
     | Csrai(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
     | Csrai(None),t | Csrai(Some(_)),t  -> fail_constapp (tm_info t)
+
+    (* MCore intrinsic: Floating-point number constant and operations *)
+    | CFloat(_),t -> fail_constapp (tm_info t)
+
+    | Caddf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Caddf(Some(v)))
+    | Caddf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
+    | Caddf(None),t | Caddf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Csubf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Csubf(Some(v)))
+    | Csubf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
+    | Csubf(None),t | Csubf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cmulf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmulf(Some(v)))
+    | Cmulf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
+    | Cmulf(None),t | Cmulf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cdivf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdivf(Some(v)))
+    | Cdivf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
+    | Cdivf(None),t | Cdivf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
+    | Cnegf,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
