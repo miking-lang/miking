@@ -138,7 +138,15 @@ let clean() =
 (************************************************************)
 (* Script for performing tests *)
 let test() =
-  cmd (builddir ^ sl ^ "boot test test" ^ sl ^ "boot")
+  let folder = "test" in
+  let lst =
+    Sys.readdir folder
+    |> Array.to_list
+    |> List.map (fun x -> folder ^ sl ^ x)
+    |> List.filter (fun x -> Sys.file_exists x && Sys.is_directory x)
+    |> String.concat " "
+  in
+    cmd (builddir ^ sl ^ "boot test " ^ lst)
 
 
 (************************************************************)
