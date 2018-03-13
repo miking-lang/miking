@@ -7,7 +7,7 @@
 *)
 
 {
-  open Parser
+  open Pplparser
   open Printf
   open Ustring.Op
   open Ast
@@ -16,64 +16,64 @@
 
 let reserved_strings = [
   (* Keywords *)
-  ("fun",           fun(i) -> Parser.FUNC{i=i;v=()});
-  ("def",           fun(i) -> Parser.DEF{i=i;v=()});
-  ("in",            fun(i) -> Parser.IN{i=i;v=()});
-  ("if",            fun(i) -> Parser.IF{i=i;v=()});
-  ("then",          fun(i) -> Parser.THEN{i=i;v=()});
-  ("else",          fun(i) -> Parser.ELSE{i=i;v=()});
-  ("true",          fun(i) -> Parser.TRUE{i=i;v=()});
-  ("false",         fun(i) -> Parser.FALSE{i=i;v=()});
-  ("match",         fun(i) -> Parser.MATCH{i=i;v=()});
-  ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
-  ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
-  ("data",          fun(i) -> Parser.DATA{i=i;v=()});
-  ("language",      fun(i) -> Parser.LANG{i=i;v=()});
-  ("MCore",         fun(i) -> Parser.MCORE{i=i;v=()});
-  ("Ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
-  ("let",           fun(i) -> Parser.LET{i=i;v=()});
-  ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
-  ("in",            fun(i) -> Parser.IN{i=i;v=()});
-  ("nop",           fun(i) -> Parser.NOP{i=i;v=()});
-  ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
-  ("peval",         fun(i) -> Parser.PEVAL{i=i;v=()});
-  ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
+  ("fun",           fun(i) -> Pplparser.FUNC{i=i;v=()});
+  ("def",           fun(i) -> Pplparser.DEF{i=i;v=()});
+  ("in",            fun(i) -> Pplparser.IN{i=i;v=()});
+  ("if",            fun(i) -> Pplparser.IF{i=i;v=()});
+  ("then",          fun(i) -> Pplparser.THEN{i=i;v=()});
+  ("else",          fun(i) -> Pplparser.ELSE{i=i;v=()});
+  ("true",          fun(i) -> Pplparser.TRUE{i=i;v=()});
+  ("false",         fun(i) -> Pplparser.FALSE{i=i;v=()});
+  ("match",         fun(i) -> Pplparser.MATCH{i=i;v=()});
+  ("utest",         fun(i) -> Pplparser.UTEST{i=i;v=()});
+  ("type",          fun(i) -> Pplparser.TYPE{i=i;v=()});
+  ("data",          fun(i) -> Pplparser.DATA{i=i;v=()});
+  ("language",      fun(i) -> Pplparser.LANG{i=i;v=()});
+  ("MCore",         fun(i) -> Pplparser.MCORE{i=i;v=()});
+  ("Ragnar",        fun(i) -> Pplparser.RAGNAR{i=i;v=()});
+  ("let",           fun(i) -> Pplparser.LET{i=i;v=()});
+  ("lam",           fun(i) -> Pplparser.LAM{i=i;v=()});
+  ("in",            fun(i) -> Pplparser.IN{i=i;v=()});
+  ("nop",           fun(i) -> Pplparser.NOP{i=i;v=()});
+  ("fix",           fun(i) -> Pplparser.FIX{i=i;v=()});
+  ("peval",         fun(i) -> Pplparser.PEVAL{i=i;v=()});
+  ("ifexp",         fun(i) -> Pplparser.IFEXP{i=i;v=()});
 
   (* v *)
-  ("=",             fun(i) -> Parser.EQ{i=i;v=()});
-  ("+",             fun(i) -> Parser.ADD{i=i;v=()});
-  ("-",             fun(i) -> Parser.SUB{i=i;v=()});
-  ("*",             fun(i) -> Parser.MUL{i=i;v=()});
-  ("/",             fun(i) -> Parser.DIV{i=i;v=()});
-  ("%",             fun(i) -> Parser.MOD{i=i;v=()});
-  ("<",             fun(i) -> Parser.LESS{i=i;v=()});
-  ("<=",            fun(i) -> Parser.LESSEQUAL{i=i;v=()});
-  (">",             fun(i) -> Parser.GREAT{i=i;v=()});
-  (">=",            fun(i) -> Parser.GREATEQUAL{i=i;v=()});
-  ("<<",            fun(i) -> Parser.SHIFTLL{i=i;v=()});
-  (">>",            fun(i) -> Parser.SHIFTRL{i=i;v=()});
-  (">>>",           fun(i) -> Parser.SHIFTRA{i=i;v=()});
-  ("==",            fun(i) -> Parser.EQUAL{i=i;v=()});
-  ("!=",            fun(i) -> Parser.NOTEQUAL{i=i;v=()});
-  ("!",             fun(i) -> Parser.NOT{i=i;v=()});
-  ("||",            fun(i) -> Parser.OR{i=i;v=()});
-  ("&&",            fun(i) -> Parser.AND{i=i;v=()});
-  ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
+  ("=",             fun(i) -> Pplparser.EQ{i=i;v=()});
+  ("+",             fun(i) -> Pplparser.ADD{i=i;v=()});
+  ("-",             fun(i) -> Pplparser.SUB{i=i;v=()});
+  ("*",             fun(i) -> Pplparser.MUL{i=i;v=()});
+  ("/",             fun(i) -> Pplparser.DIV{i=i;v=()});
+  ("%",             fun(i) -> Pplparser.MOD{i=i;v=()});
+  ("<",             fun(i) -> Pplparser.LESS{i=i;v=()});
+  ("<=",            fun(i) -> Pplparser.LESSEQUAL{i=i;v=()});
+  (">",             fun(i) -> Pplparser.GREAT{i=i;v=()});
+  (">=",            fun(i) -> Pplparser.GREATEQUAL{i=i;v=()});
+  ("<<",            fun(i) -> Pplparser.SHIFTLL{i=i;v=()});
+  (">>",            fun(i) -> Pplparser.SHIFTRL{i=i;v=()});
+  (">>>",           fun(i) -> Pplparser.SHIFTRA{i=i;v=()});
+  ("==",            fun(i) -> Pplparser.EQUAL{i=i;v=()});
+  ("!=",            fun(i) -> Pplparser.NOTEQUAL{i=i;v=()});
+  ("!",             fun(i) -> Pplparser.NOT{i=i;v=()});
+  ("||",            fun(i) -> Pplparser.OR{i=i;v=()});
+  ("&&",            fun(i) -> Pplparser.AND{i=i;v=()});
+  ("++",            fun(i) -> Pplparser.CONCAT{i=i;v=()});
 
   (* Symbolic Tokens *)
-  ("(",             fun(i) -> Parser.LPAREN{i=i;v=()});
-  (")",             fun(i) -> Parser.RPAREN{i=i;v=()});
-  ("[",             fun(i) -> Parser.LSQUARE{i=i;v=()});
-  ("]",             fun(i) -> Parser.RSQUARE{i=i;v=()});
-  ("{",             fun(i) -> Parser.LCURLY{i=i;v=()});
-  ("}",             fun(i) -> Parser.RCURLY{i=i;v=()});
-  ("::",            fun(i) -> Parser.CONS{i=i;v=()});
-  (":",             fun(i) -> Parser.COLON{i=i;v=()});
-  (",",             fun(i) -> Parser.COMMA{i=i;v=()});
-  (".",             fun(i) -> Parser.DOT{i=i;v=()});
-  ("|",             fun(i) -> Parser.BAR{i=i;v=()});
-  ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
-  ("=>",            fun(i) -> Parser.DARROW{i=i;v=()});
+  ("(",             fun(i) -> Pplparser.LPAREN{i=i;v=()});
+  (")",             fun(i) -> Pplparser.RPAREN{i=i;v=()});
+  ("[",             fun(i) -> Pplparser.LSQUARE{i=i;v=()});
+  ("]",             fun(i) -> Pplparser.RSQUARE{i=i;v=()});
+  ("{",             fun(i) -> Pplparser.LCURLY{i=i;v=()});
+  ("}",             fun(i) -> Pplparser.RCURLY{i=i;v=()});
+  ("::",            fun(i) -> Pplparser.CONS{i=i;v=()});
+  (":",             fun(i) -> Pplparser.COLON{i=i;v=()});
+  (",",             fun(i) -> Pplparser.COMMA{i=i;v=()});
+  (".",             fun(i) -> Pplparser.DOT{i=i;v=()});
+  ("|",             fun(i) -> Pplparser.BAR{i=i;v=()});
+  ("->",            fun(i) -> Pplparser.ARROW{i=i;v=()});
+  ("=>",            fun(i) -> Pplparser.DARROW{i=i;v=()});
 
 ]
 
@@ -118,7 +118,7 @@ let init file_name tab_size=
   tabsize := tab_size
 
 (* Handle identifiers, keywords, and operators *)
-type buildfun = info -> Parser.token
+type buildfun = info -> Pplparser.token
 let (str_tab : (string,buildfun) Hashtbl.t) =
   Hashtbl.create 1024
 let _ = List.iter (fun (str,f) -> Hashtbl.add str_tab str f)
@@ -130,7 +130,7 @@ let mkid s =
     let f = Hashtbl.find str_tab s in f (mkinfo_fast s)
   with Not_found ->
     let s2 = Ustring.from_utf8 s in
-    Parser.IDENT {i=mkinfo_ustring s2; v=s2}
+    Pplparser.IDENT {i=mkinfo_ustring s2; v=s2}
 
 (* String handling *)
 let string_buf = Buffer.create 80
@@ -185,28 +185,28 @@ rule main = parse
   | newline
       { newrow(); main lexbuf }
   | (unsigned_integer as str)
-      { Parser.UINT{i=mkinfo_fast str; v=int_of_string str} }
+      { Pplparser.UINT{i=mkinfo_fast str; v=int_of_string str} }
   | unsigned_number as str
-      { Parser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
+      { Pplparser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
   | (ident as s) "("
       { let s2 = Ustring.from_utf8 s in
         (match s with
-        | "if" -> Parser.IF2{i=mkinfo_ustring s2;v=()}
-        | "fun" -> Parser.FUNC2{i=mkinfo_ustring s2;v=()}
-        | _ -> Parser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
+        | "if" -> Pplparser.IF2{i=mkinfo_ustring s2;v=()}
+        | "fun" -> Pplparser.FUNC2{i=mkinfo_ustring s2;v=()}
+        | _ -> Pplparser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
   | ident | symtok as s
       { mkid s }
   | '\'' (utf8 as c) '\''
       { let s = Ustring.from_utf8 c in
-        Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
+        Pplparser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
   | '"'
       { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let esc_s = Ustring.convert_escaped_chars s in
-	 let rval = Parser.STRING{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
+	 let rval = Pplparser.STRING{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
 	 add_colno 2; rval}
   | eof
-      { Parser.EOF }
+      { Pplparser.EOF }
   | utf8 as c
       { let s = Ustring.from_utf8 c in
 	raise (Lex_error (LEX_UNKNOWN_CHAR,ERROR,mkinfo_utf8_fast c,[s])) }

@@ -17,10 +17,6 @@ open Ast
 open Msg
 
 
-let utest = ref false           (* Set to true if unit testing is enabled *)
-let utest_ok = ref 0            (* Counts the number of successful unit tests *)
-let utest_fail = ref 0          (* Counts the number of failed unit tests *)
-let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
 (* Debug options *)
@@ -857,7 +853,8 @@ let main =
   (* Run tests on one or more files *)
   | "test"::lst | "t"::lst -> (
     utest := true;
-    List.iter evalprog (files_of_folders lst);
+    (* List.iter evalprog (files_of_folders lst); *)
+    List.iter (Ppl.evalprog debruijn eval builtin) (files_of_folders lst);
     if !utest_fail = 0 then
       printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
         (!utest_ok)

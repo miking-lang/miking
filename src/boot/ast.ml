@@ -10,6 +10,11 @@ open Ustring.Op
 open Msg
 
 
+let utest = ref false           (* Set to true if unit testing is enabled *)
+let utest_ok = ref 0            (* Counts the number of successful unit tests *)
+let utest_fail = ref 0          (* Counts the number of failed unit tests *)
+let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
+
 (* Either an int, a float, or none *)
 type intfloatoption =
 | TInt   of int
