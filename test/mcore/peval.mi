@@ -9,36 +9,36 @@ language MCore
 
 // Literals and normal expressions.
 utest 1  (peval 1)
-utest 14  (peval (add 10 (sub 7 3)))
+utest 14  (peval (addi 10 (subi 7 3)))
 
 // Partial evaluation, but without giving any optimized effect
-let foo = lam x:Int. lam y:Int. (add x y)
+let foo = lam x:Int. lam y:Int. (addi x y)
 utest 13  ((peval foo) 10 3)
 utest 5  ((peval (foo 2)) 3)
 
 // Partial evaluation one lambda. Performs partial eval under lambda
-let foo = lam x:Int. lam y:Int. lam z:Int. (mul (add x y) z)
+let foo = lam x:Int. lam y:Int. lam z:Int. (muli (addi x y) z)
 utest 26  ((peval (foo 10 3)) 2)
 
 // Partial evaluation of two dynamic input variables
-let foo = lam x:Int. lam y:Int. lam z:Int. lam k:Int. (mul (mul (add x y) z) k)
+let foo = lam x:Int. lam y:Int. lam z:Int. lam k:Int. (muli (muli (addi x y) z) k)
 utest 40  ((peval (foo 2 3)) 2 4)
 
 
 // Partial evalatuon of the power function
 let pow = fix (lam pow:(Int->Int->Int). lam n:Int. lam x:Int.
-           ifexp (leq n 1)
+           ifexp (leqi n 1)
               (lam _:a. x)
-              (lam _:a. mul x (pow (sub n 1) x))
+              (lam _:a. muli x (pow (subi n 1) x))
            )
 utest 64 ((peval (pow 3)) 4)
 
 
 // Power function, but in the wrong order for partial evaluation
 let pow = fix (lam pow:(Int->Int->Int). lam x:Int. lam n:Int.
-           ifexp (leq n 1)
+           ifexp (leqi n 1)
               (lam _:a. x)
-              (lam _:a. mul x (pow x (sub n 1)))
+              (lam _:a. muli x (pow x (subi n 1)))
            )
 utest 16 ((peval ((lam n:Int. lam x:Int. pow x n) 2)) 4)
 

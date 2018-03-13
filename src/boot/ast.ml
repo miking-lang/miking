@@ -9,9 +9,20 @@
 open Ustring.Op
 open Msg
 
+
+let utest = ref false           (* Set to true if unit testing is enabled *)
+let utest_ok = ref 0            (* Counts the number of successful unit tests *)
+let utest_fail = ref 0          (* Counts the number of failed unit tests *)
+let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
+
+(* Either an int, a float, or none *)
+type intfloatoption =
+| TInt   of int
+| TFloat of float
+| TNone
+
 (* Evaluation environment *)
 type env = tm list
-
 
 (* Pattern used in match constructs *)
 and pattern =
@@ -41,36 +52,53 @@ and const =
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
 | Cnot
-| Cand  | Cand2  of bool
-| Cor   | Cor2   of bool
+| Cand  of bool option
+| Cor   of bool option
 (* MCore intrinsic: Integer constant and operations *)
-| CInt of int
-| Cadd  | Cadd2 of int
-| Csub  | Csub2 of int
-| Cmul  | Cmul2 of int
-| Cdiv  | Cdiv2 of int
-| Cmod  | Cmod2 of int
+| CInt  of int
+| Caddi of int option
+| Csubi of int option
+| Cmuli of int option
+| Cdivi of int option
+| Cmodi of int option
+| Cnegi
+| Clti  of int option
+| Cleqi of int option
+| Cgti  of int option
+| Cgeqi of int option
+| Ceqi  of int option
+| Cneqi of int option
+| Cslli of int option
+| Csrli of int option
+| Csrai of int option
+(* MCore intrinsic: Floating-point number constant and operations *)
+| CFloat of float
+| Caddf  of float option
+| Csubf  of float option
+| Cmulf  of float option
+| Cdivf  of float option
+| Cnegf
+(* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+| Cadd   of intfloatoption
+| Csub   of intfloatoption
+| Cmul   of intfloatoption
+| Cdiv   of intfloatoption
 | Cneg
-| Clt   | Clt2  of int
-| Cleq  | Cleq2 of int
-| Cgt   | Cgt2  of int
-| Cgeq  | Cgeq2 of int
-| Ceq   | Ceq2  of int
-| Cneq  | Cneq2 of int
-| Csll  | Csll2 of int
-| Csrl  | Csrl2 of int
-| Csra  | Csra2 of int
 (* MCore debug and I/O intrinsics *)
 | CDStr
 | CDPrint
 | CPrint
 | CArgv
 (* MCore unified collection type (UCT) intrinsics *)
-| CConcat | CConcat2 of tm
+| CConcat of tm option
 
 (* Ragnar temp functions for handling polymorphic arguments *)
-| CPolyEq  | CPolyEq2  of tm
-| CPolyNeq | CPolyNeq2 of tm
+| CPolyEq  of tm option
+| CPolyNeq of tm option
+
+(* Atom - an untyped lable that can be used to implement
+   domain specific constructs *)
+| CAtom of sid * tm list
 
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
