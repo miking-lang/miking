@@ -4,7 +4,7 @@
    Copyright (C) David Broman. See file LICENSE.txt
 
    The main experiment platform for probabilitic programming.
-   Main contributer: Daniel Lunden
+   Main contributer: Daniel Lundén
 *)
 
 open Utils
@@ -13,6 +13,18 @@ open Printf
 open Ast
 open Msg
 
+(* List of all atom constructs. See ppllexer.mll *)
+let asample = usid Ppllexer.atom_sample
+
+(* This is the main hook for new constructs in the mcore *)
+let eval_atom id tms v =
+  match id,tms,v with
+  (* sample *)
+  | asample,[],v -> TmConst(NoInfo,CAtom(asample,[v]))
+  | asample,[TmConst(_,CInt(x1))], TmConst(_,CInt(x2))
+    -> TmConst(NoInfo,CInt(x1 + x2))
+  (* no match *)
+  | _,_,_ -> raise_error NoInfo "Incorrect atom application "
 
 
 

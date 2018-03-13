@@ -28,6 +28,9 @@ let enable_debug_eval = false
 let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
+(* Evaluation of atoms. This is changed depending on the DSL *)
+let empty_eval_atom id tms v = v
+let eval_atom = ref empty_eval_atom
 
 (* Print the kind of unified collection (UC) type. *)
 let pprintUCKind ordered uniqueness =
@@ -168,7 +171,11 @@ and pprint_const c =
   | CPolyEq(Some(v)) -> us"polyeq(" ^. (pprint true v) ^. us")"
   | CPolyNeq(None) -> us"polyneq"
   | CPolyNeq(Some(v)) -> us"polyneq(" ^. (pprint true v) ^. us")"
-
+  (* Atom - an untyped lable that can be used to implement
+     domain specific constructs *)
+  | CAtom(id,tms) -> us"[" ^. (ustring_of_sid id) ^. us"]" ^.
+      (if List.length tms = 0 then us""
+       else us"(" ^. Ustring.concat (us",") (List.map (pprint true) tms) ^. us")")
 
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -572,6 +579,11 @@ let delta c v  =
     | CPolyNeq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
     | CPolyNeq(Some(_)),t  -> fail_constapp (tm_info t)
 
+    (* Atom - an untyped lable that can be used to implement
+       domain specific constructs *)
+    | CAtom(id,tms),t -> !eval_atom id tms t
+
+
 
 (* Optimize away constant applications (mul with 0 or 1, add with 0 etc.) *)
 let optimize_const_app fi v1 v2 =
@@ -831,7 +843,7 @@ let files_of_folders lst = List.fold_left (fun a v ->
         |> Array.to_list
         |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
         |> List.map (fun x -> (add_slash v) ^ x)
-         |> List.filter (fun x -> not (Sys.is_directory x))
+        |> List.filter (fun x -> not (Sys.is_directory x))
     ) @ a
   else v::a
 ) [] lst
@@ -853,8 +865,17 @@ let main =
   (* Run tests on one or more files *)
   | "test"::lst | "t"::lst -> (
     utest := true;
-    (* List.iter evalprog (files_of_folders lst); *)
-    List.iter (Ppl.evalprog debruijn eval builtin) (files_of_folders lst);
+    (* Select the lexer and parser, depending on the DSL*)
+    let eprog name =
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name
+    in
+    (* Evaluate each of the programs in turn *)
+    List.iter eprog (files_of_folders lst);
+
+    (* Print out unit test results, if applicable *)
     if !utest_fail = 0 then
       printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
         (!utest_ok)

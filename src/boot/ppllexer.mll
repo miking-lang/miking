@@ -2,8 +2,6 @@
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 
-   lexer.mll includes the lexer that generates tokens. The token
-   definitions are located in file parser.mly
 *)
 
 {
@@ -14,7 +12,13 @@
   open Msg
   exception Lex_error of Msg.message
 
+(* Atom definitions *)
+let atom_sample = "sample"
+
 let reserved_strings = [
+  (* Atoms *)
+  (atom_sample,     fun(i) -> Pplparser.ATOM{i=i;v=usid atom_sample});
+
   (* Keywords *)
   ("fun",           fun(i) -> Pplparser.FUNC{i=i;v=()});
   ("def",           fun(i) -> Pplparser.DEF{i=i;v=()});

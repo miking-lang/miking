@@ -96,6 +96,10 @@ and const =
 | CPolyEq  of tm option
 | CPolyNeq of tm option
 
+(* Atom - an untyped lable that can be used to implement
+   domain specific constructs *)
+| CAtom of sid * tm list
+
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
