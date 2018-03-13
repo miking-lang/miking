@@ -17,14 +17,14 @@ open Msg
 let asample = usid Ppllexer.atom_sample
 
 (* This is the main hook for new constructs in the mcore *)
-let eval_atom id tms v =
+let eval_atom fi id tms v =
   match id,tms,v with
   (* sample *)
-  | asample,[],v -> TmConst(NoInfo,CAtom(asample,[v]))
+  | asample,[],v -> TmConst(fi,CAtom(asample,[v]))
   | asample,[TmConst(_,CInt(x1))], TmConst(_,CInt(x2))
-    -> TmConst(NoInfo,CInt(x1 + x2))
+    -> TmConst(fi,CInt(x1 + x2))
   (* no match *)
-  | _,_,_ -> raise_error NoInfo "Incorrect atom application "
+  | _,_,_ -> raise_error fi "Incorrect atom application "
 
 
 

@@ -29,7 +29,7 @@ let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
-let empty_eval_atom id tms v = v
+let empty_eval_atom fi id tms v = v
 let eval_atom = ref empty_eval_atom
 
 (* Print the kind of unified collection (UC) type. *)
@@ -581,7 +581,7 @@ let delta c v  =
 
     (* Atom - an untyped lable that can be used to implement
        domain specific constructs *)
-    | CAtom(id,tms),t -> !eval_atom id tms t
+    | CAtom(id,tms),t -> !eval_atom (tm_info t) id tms t
 
 
 
