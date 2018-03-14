@@ -17,10 +17,6 @@ open Ast
 open Msg
 
 
-let utest = ref false           (* Set to true if unit testing is enabled *)
-let utest_ok = ref 0            (* Counts the number of successful unit tests *)
-let utest_fail = ref 0          (* Counts the number of failed unit tests *)
-let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
 (* Debug options *)
@@ -32,6 +28,9 @@ let enable_debug_eval = false
 let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 
+(* Evaluation of atoms. This is changed depending on the DSL *)
+let empty_eval_atom fi id tms v = v
+let eval_atom = ref empty_eval_atom
 
 (* Print the kind of unified collection (UC) type. *)
 let pprintUCKind ordered uniqueness =
@@ -99,52 +98,84 @@ and pprint_const c =
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | Cnot -> us"not"
-  | Cand -> us"and"
-  | Cand2(v) -> us"and(" ^. usbool v ^. us")"
-  | Cor -> us"or"
-  | Cor2(v) -> us"or(" ^. usbool v ^. us")"
+  | Cand(None) -> us"and"
+  | Cand(Some(v)) -> us"and(" ^. usbool v ^. us")"
+  | Cor(None) -> us"or"
+  | Cor(Some(v)) -> us"or(" ^. usbool v ^. us")"
   (* MCore Intrinsic Integers *)
   | CInt(v) -> us(sprintf "%d" v)
-  | Cadd -> us"add"
-  | Cadd2(v) -> us(sprintf "add(%d)" v)
-  | Csub -> us"sub"
-  | Csub2(v) -> us(sprintf "sub(%d)" v)
-  | Cmul -> us"mul"
-  | Cmul2(v) -> us(sprintf "mul(%d)" v)
-  | Cdiv -> us"divi"
-  | Cdiv2(v) -> us(sprintf "div(%d)" v)
-  | Cmod -> us"mod"
-  | Cmod2(v) -> us(sprintf "mod(%d)" v)
+  | Caddi(None) -> us"addi"
+  | Caddi(Some(v)) -> us(sprintf "addi(%d)" v)
+  | Csubi(None) -> us"subi"
+  | Csubi(Some(v)) -> us(sprintf "subi(%d)" v)
+  | Cmuli(None) -> us"muli"
+  | Cmuli(Some(v)) -> us(sprintf "muli(%d)" v)
+  | Cdivi(None) -> us"divi"
+  | Cdivi(Some(v)) -> us(sprintf "divi(%d)" v)
+  | Cmodi(None) -> us"modi"
+  | Cmodi(Some(v)) -> us(sprintf "modi(%d)" v)
+  | Cnegi -> us"negi"
+  | Clti(None) -> us"lti"
+  | Clti(Some(v)) -> us(sprintf "lti(%d)" v)
+  | Cleqi(None) -> us"leqi"
+  | Cleqi(Some(v)) -> us(sprintf "leqi(%d)" v)
+  | Cgti(None) -> us"gti"
+  | Cgti(Some(v)) -> us(sprintf "gti(%d)" v)
+  | Cgeqi(None) -> us"geqi"
+  | Cgeqi(Some(v)) -> us(sprintf "geqi(%d)" v)
+  | Ceqi(None) -> us"eqi"
+  | Ceqi(Some(v)) -> us(sprintf "eqi(%d)" v)
+  | Cneqi(None) -> us"neqi"
+  | Cneqi(Some(v)) -> us(sprintf "neqi(%d)" v)
+  | Cslli(None) -> us"slli"
+  | Cslli(Some(v)) -> us(sprintf "slli(%d)" v)
+  | Csrli(None) -> us"srli"
+  | Csrli(Some(v)) -> us(sprintf "srli(%d)" v)
+  | Csrai(None) -> us"srai"
+  | Csrai(Some(v)) -> us(sprintf "srai(%d)" v)
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat(v) -> us(sprintf "%f" v)
+  | Caddf(None) -> us"addf"
+  | Caddf(Some(v)) -> us(sprintf "addf(%f)" v)
+  | Csubf(None) -> us"subf"
+  | Csubf(Some(v)) -> us(sprintf "subf(%f)" v)
+  | Cmulf(None) -> us"mulf"
+  | Cmulf(Some(v)) -> us(sprintf "mulf(%f)" v)
+  | Cdivf(None) -> us"divf"
+  | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
+  | Cnegf -> us"negf"
+  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+  | Cadd(TInt(v)) -> us(sprintf "add(%d)" v)
+  | Cadd(TFloat(v)) -> us(sprintf "add(%f)" v)
+  | Cadd(TNone) -> us"add"
+  | Csub(TInt(v)) -> us(sprintf "sub(%d)" v)
+  | Csub(TFloat(v)) -> us(sprintf "sub(%f)" v)
+  | Csub(TNone) -> us"sub"
+  | Cmul(TInt(v)) -> us(sprintf "mul(%d)" v)
+  | Cmul(TFloat(v)) -> us(sprintf "mul(%f)" v)
+  | Cmul(TNone) -> us"mul"
+  | Cdiv(TInt(v)) -> us(sprintf "div(%d)" v)
+  | Cdiv(TFloat(v)) -> us(sprintf "div(%f)" v)
+  | Cdiv(TNone) -> us"div"
   | Cneg -> us"neg"
-  | Clt -> us"lt"
-  | Clt2(v) -> us(sprintf "lt(%d)" v)
-  | Cleq -> us"leq"
-  | Cleq2(v) -> us(sprintf "leq(%d)" v)
-  | Cgt -> us"gt"
-  | Cgt2(v) -> us(sprintf "gt(%d)" v)
-  | Cgeq -> us"geq"
-  | Cgeq2(v) -> us(sprintf "geq(%d)" v)
-  | Ceq -> us"eq"
-  | Ceq2(v) -> us(sprintf "eq(%d)" v)
-  | Cneq -> us"neq"
-  | Cneq2(v) -> us(sprintf "neq(%d)" v)
-  | Csll -> us"sll"
-  | Csll2(v) -> us(sprintf "sll(%d)" v)
-  | Csrl -> us"srl"
-  | Csrl2(v) -> us(sprintf "srl(%d)" v)
-  | Csra -> us"sra"
-  | Csra2(v) -> us(sprintf "sra(%d)" v)
   (* MCore debug and stdio intrinsics *)
   | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
   | CPrint -> us"print"
   | CArgv  -> us"argv"
   (* MCore unified collection type (UCT) intrinsics *)
-  | CConcat | CConcat2(_) -> us"concat"
+  | CConcat(None) -> us"concat"
+  | CConcat(Some(v)) -> us"concat(" ^. (pprint true v) ^. us")"
   (* Ragnar polymorpic temps *)
-  | CPolyEq  | CPolyEq2(_)  -> us"polyeq"
-  | CPolyNeq | CPolyNeq2(_) -> us"polyneq"
-
+  | CPolyEq(None) -> us"polyeq"
+  | CPolyEq(Some(v)) -> us"polyeq(" ^. (pprint true v) ^. us")"
+  | CPolyNeq(None) -> us"polyneq"
+  | CPolyNeq(Some(v)) -> us"polyneq(" ^. (pprint true v) ^. us")"
+  (* Atom - an untyped lable that can be used to implement
+     domain specific constructs *)
+  | CAtom(id,tms) -> us"[" ^. (ustring_of_sid id) ^. us"]" ^.
+      (if List.length tms = 0 then us""
+       else us"(" ^. Ustring.concat (us",") (List.map (pprint true) tms) ^. us")")
 
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
@@ -356,12 +387,18 @@ let debug_after_peval t =
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
-  [("not",Cnot);("and",Cand);("or",Cor);
-   ("add",Cadd);("sub",Csub);("mul",Cmul);("div",Cdiv);("mod",Cmod);("neg",Cneg);
-   ("lt",Clt);("leq",Cleq);("gt",Cgt);("geq",Cgeq);("eq",Ceq);("neq",Cneq);
-   ("sll",Csll);("srl",Csrl);("sra",Csra);
+  [("not",Cnot);("and",Cand(None));("or",Cor(None));
+   ("addi",Caddi(None));("subi",Csubi(None));("muli",Cmuli(None));
+   ("divi",Cdivi(None));("modi",Cmodi(None));("negi",Cnegi);
+   ("lti",Clti(None));("leqi",Cleqi(None));("gti",Cgti(None));("geqi",Cgeqi(None));
+   ("eqi",Ceqi(None));("neqi",Cneqi(None));
+   ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
+   ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
+   ("divf",Cdivf(None));("negf",Cnegf);
+   ("add",Cadd(TNone));("sub",Csub(TNone));("mul",Cmul(TNone));
+   ("div",Cdiv(TNone));("neg",Cneg);
    ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
-   ("concat",CConcat)]
+   ("concat",CConcat(None))]
 
 
 
@@ -378,76 +415,135 @@ let delta c v  =
     | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
     | Cnot,t -> fail_constapp (tm_info t)
 
-    | Cand,TmConst(fi,CBool(v)) -> TmConst(fi,Cand2(v))
-    | Cand2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-    | Cand,t | Cand2(_),t  -> fail_constapp (tm_info t)
+    | Cand(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cand(Some(v)))
+    | Cand(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
+    | Cand(None),t | Cand(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cor,TmConst(fi,CBool(v)) -> TmConst(fi,Cor2(v))
-    | Cor2(v1),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-    | Cor,t | Cor2(_),t  -> fail_constapp (tm_info t)
+    | Cor(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cor(Some(v)))
+    | Cor(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
+    | Cor(None),t | Cor(Some(_)),t  -> fail_constapp (tm_info t)
 
     (* MCore integer intrinsics *)
     | CInt(_),t -> fail_constapp (tm_info t)
 
-    | Cadd,TmConst(fi,CInt(v)) -> TmConst(fi,Cadd2(v))
-    | Cadd2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-    | Cadd,t | Cadd2(_),t  -> fail_constapp (tm_info t)
+    | Caddi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Caddi(Some(v)))
+    | Caddi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | Caddi(None),t | Caddi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Csub,TmConst(fi,CInt(v)) -> TmConst(fi,Csub2(v))
-    | Csub2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-    | Csub,t | Csub2(_),t  -> fail_constapp (tm_info t)
+    | Csubi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csubi(Some(v)))
+    | Csubi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | Csubi(None),t | Csubi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cmul,TmConst(fi,CInt(v)) -> TmConst(fi,Cmul2(v))
-    | Cmul2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-    | Cmul,t | Cmul2(_),t  -> fail_constapp (tm_info t)
+    | Cmuli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmuli(Some(v)))
+    | Cmuli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | Cmuli(None),t | Cmuli(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cdiv,TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv2(v))
-    | Cdiv2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-    | Cdiv,t | Cdiv2(_),t  -> fail_constapp (tm_info t)
+    | Cdivi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cdivi(Some(v)))
+    | Cdivi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | Cdivi(None),t | Cdivi(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | Cmod,TmConst(fi,CInt(v)) -> TmConst(fi,Cmod2(v))
-    | Cmod2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
-    | Cmod,t | Cmod2(_),t  -> fail_constapp (tm_info t)
+    | Cmodi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmodi(Some(v)))
+    | Cmodi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
+    | Cmodi(None),t | Cmodi(Some(_)),t  -> fail_constapp (tm_info t)
 
+    | Cnegi,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
+    | Cnegi,t -> fail_constapp (tm_info t)
+
+    | Clti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Clti(Some(v)))
+    | Clti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
+    | Clti(None),t | Clti(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cleqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cleqi(Some(v)))
+    | Cleqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
+    | Cleqi(None),t | Cleqi(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cgti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgti(Some(v)))
+    | Cgti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
+    | Cgti(None),t | Cgti(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cgeqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgeqi(Some(v)))
+    | Cgeqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
+    | Cgeqi(None),t | Cgeqi(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Ceqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Ceqi(Some(v)))
+    | Ceqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqi(None),t | Ceqi(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cneqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cneqi(Some(v)))
+    | Cneqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
+    | Cneqi(None),t | Cneqi(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cslli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cslli(Some(v)))
+    | Cslli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
+    | Cslli(None),t | Cslli(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Csrli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrli(Some(v)))
+    | Csrli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
+    | Csrli(None),t | Csrli(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Csrai(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrai(Some(v)))
+    | Csrai(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
+    | Csrai(None),t | Csrai(Some(_)),t  -> fail_constapp (tm_info t)
+
+    (* MCore intrinsic: Floating-point number constant and operations *)
+    | CFloat(_),t -> fail_constapp (tm_info t)
+
+    | Caddf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Caddf(Some(v)))
+    | Caddf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
+    | Caddf(None),t | Caddf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Csubf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Csubf(Some(v)))
+    | Csubf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
+    | Csubf(None),t | Csubf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cmulf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmulf(Some(v)))
+    | Cmulf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
+    | Cmulf(None),t | Cmulf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cdivf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdivf(Some(v)))
+    | Cdivf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
+    | Cdivf(None),t | Cdivf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
+    | Cnegf,t -> fail_constapp (tm_info t)
+
+    (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+
+    | Cadd(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cadd(TInt(v)))
+    | Cadd(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cadd(TFloat(v)))
+    | Cadd(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
+    | Cadd(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
+    | Cadd(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 +. (float_of_int v2)))
+    | Cadd(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) +. v2))
+    | Cadd(_),t -> fail_constapp (tm_info t)
+
+    | Csub(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Csub(TInt(v)))
+    | Csub(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Csub(TFloat(v)))
+    | Csub(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
+    | Csub(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
+    | Csub(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 -. (float_of_int v2)))
+    | Csub(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) -. v2))
+    | Csub(_),t -> fail_constapp (tm_info t)
+
+    | Cmul(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cmul(TInt(v)))
+    | Cmul(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmul(TFloat(v)))
+    | Cmul(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
+    | Cmul(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
+    | Cmul(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 *. (float_of_int v2)))
+    | Cmul(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) *. v2))
+    | Cmul(_),t -> fail_constapp (tm_info t)
+
+    | Cdiv(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv(TInt(v)))
+    | Cdiv(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdiv(TFloat(v)))
+    | Cdiv(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
+    | Cdiv(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
+    | Cdiv(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 /. (float_of_int v2)))
+    | Cdiv(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) /. v2))
+    | Cdiv(_),t -> fail_constapp (tm_info t)
+
+    | Cneg,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
     | Cneg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
     | Cneg,t -> fail_constapp (tm_info t)
-
-    | Clt,TmConst(fi,CInt(v)) -> TmConst(fi,Clt2(v))
-    | Clt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
-    | Clt,t | Clt2(_),t  -> fail_constapp (tm_info t)
-
-
-    | Cleq,TmConst(fi,CInt(v)) -> TmConst(fi,Cleq2(v))
-    | Cleq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
-    | Cleq,t | Cleq2(_),t  -> fail_constapp (tm_info t)
-
-    | Cgt,TmConst(fi,CInt(v)) -> TmConst(fi,Cgt2(v))
-    | Cgt2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
-    | Cgt,t | Cgt2(_),t  -> fail_constapp (tm_info t)
-
-    | Cgeq,TmConst(fi,CInt(v)) -> TmConst(fi,Cgeq2(v))
-    | Cgeq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
-    | Cgeq,t | Cgeq2(_),t  -> fail_constapp (tm_info t)
-
-    | Ceq,TmConst(fi,CInt(v)) -> TmConst(fi,Ceq2(v))
-    | Ceq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
-    | Ceq,t | Ceq2(_),t  -> fail_constapp (tm_info t)
-
-    | Cneq,TmConst(fi,CInt(v)) -> TmConst(fi,Cneq2(v))
-    | Cneq2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
-    | Cneq,t | Cneq2(_),t  -> fail_constapp (tm_info t)
-
-    | Csll,TmConst(fi,CInt(v)) -> TmConst(fi,Csll2(v))
-    | Csll2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
-    | Csll,t | Csll2(_),t  -> fail_constapp (tm_info t)
-
-    | Csrl,TmConst(fi,CInt(v)) -> TmConst(fi,Csrl2(v))
-    | Csrl2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
-    | Csrl,t | Csrl2(_),t  -> fail_constapp (tm_info t)
-
-    | Csra,TmConst(fi,CInt(v)) -> TmConst(fi,Csra2(v))
-    | Csra2(v1),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
-    | Csra,t | Csra2(_),t  -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDStr, t -> ustring2uctstring (pprint true t)
@@ -461,52 +557,57 @@ let delta c v  =
     | CArgv,_ ->
       let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv)
       in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
-    | CConcat,t -> TmConst(NoInfo,CConcat2(t))
-    | CConcat2(TmUC(l,t1,o1,u1)),TmUC(_,t2,o2,u2)
+    | CConcat(None),t -> TmConst(NoInfo,CConcat((Some t)))
+    | CConcat(Some(TmUC(l,t1,o1,u1))),TmUC(_,t2,o2,u2)
       when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
-    | CConcat2(tm1),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
-    | CConcat2(TmUC(l,t1,o1,u1)),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
-    | CConcat2(_),t -> fail_constapp (tm_info t)
+    | CConcat(Some(tm1)),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
+    | CConcat(Some(TmUC(l,t1,o1,u1))),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
+    | CConcat(Some(_)),t -> fail_constapp (tm_info t)
 
     (* Ragnar polymorphic functions, special case for Ragnar in the boot interpreter.
        These functions should be defined using well-defined ad-hoc polymorphism
        in the real Ragnar compiler. *)
-    | CPolyEq,t -> TmConst(NoInfo,CPolyEq2(t))
-    | CPolyEq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
-    | CPolyEq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
-    | CPolyEq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
-    | CPolyEq2(_),t  -> fail_constapp (tm_info t)
+    | CPolyEq(None),t -> TmConst(NoInfo,CPolyEq((Some(t))))
+    | CPolyEq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 = c2))
+    | CPolyEq(Some(TmChar(_,v1))),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 = v2))
+    | CPolyEq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(val_equal v1 v2))
+    | CPolyEq(Some(_)),t  -> fail_constapp (tm_info t)
 
-    | CPolyNeq,t -> TmConst(NoInfo,CPolyNeq2(t))
-    | CPolyNeq2(TmConst(_,c1)),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
-    | CPolyNeq2(TmChar(_,v1)),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
-    | CPolyNeq2(TmUC(_,_,_,_) as v1),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
-    | CPolyNeq2(_),t  -> fail_constapp (tm_info t)
+    | CPolyNeq(None),t -> TmConst(NoInfo,CPolyNeq(Some(t)))
+    | CPolyNeq(Some(TmConst(_,c1))),TmConst(_,c2) -> TmConst(NoInfo,CBool(c1 <> c2))
+    | CPolyNeq(Some(TmChar(_,v1))),TmChar(_,v2) -> TmConst(NoInfo,CBool(v1 <> v2))
+    | CPolyNeq(Some(TmUC(_,_,_,_) as v1)),(TmUC(_,_,_,_) as v2) -> TmConst(NoInfo,CBool(not (val_equal v1 v2)))
+    | CPolyNeq(Some(_)),t  -> fail_constapp (tm_info t)
+
+    (* Atom - an untyped lable that can be used to implement
+       domain specific constructs *)
+    | CAtom(id,tms),t -> !eval_atom (tm_info t) id tms t
+
 
 
 (* Optimize away constant applications (mul with 0 or 1, add with 0 etc.) *)
 let optimize_const_app fi v1 v2 =
   match v1,v2 with
   (*|   0 * x  ==>  0   |*)
-  | TmConst(_,Cmul2(0)),v2 -> TmConst(fi,CInt(0))
+  | TmConst(_,Cmuli(Some(0))),v2 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
-  | TmConst(_,Cmul2(1)),v2 -> v2
+  | TmConst(_,Cmuli(Some(1))),v2 -> v2
   (*|   0 + x  ==>  x   |*)
-  | TmConst(_,Cadd2(0)),v2 -> v2
+  | TmConst(_,Caddi(Some(0))),v2 -> v2
   (*|   0 * x  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(0))),vv1 -> TmConst(fi,CInt(0))
   (*|   1 * x  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cmul),TmConst(_,CInt(1))),vv1 -> vv1
+  | TmApp(_,TmConst(_,Cmuli(None)),TmConst(_,CInt(1))),vv1 -> vv1
   (*|   0 + x  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cadd),TmConst(_,CInt(0))),vv1 -> vv1
+  | TmApp(_,TmConst(_,Caddi(None)),TmConst(_,CInt(0))),vv1 -> vv1
   (*|   x * 0  ==>  0   |*)
-  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
+  | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(0)) -> TmConst(fi,CInt(0))
   (*|   x * 1  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cmul),vv1),TmConst(_,CInt(1)) -> vv1
+  | TmApp(_,TmConst(_,Cmuli(None)),vv1),TmConst(_,CInt(1)) -> vv1
   (*|   x + 0  ==>  x   |*)
-  | TmApp(_,TmConst(_,Cadd),vv1),TmConst(_,CInt(0)) -> vv1
+  | TmApp(_,TmConst(_,Caddi(None)),vv1),TmConst(_,CInt(0)) -> vv1
   (*|   x - 0  ==>  x   |*)
-  | TmApp(_,TmConst(_,Csub),vv1),TmConst(_,CInt(0)) -> vv1
+  | TmApp(_,TmConst(_,Csubi(None)),vv1),TmConst(_,CInt(0)) -> vv1
   (*|   x op y  ==>  res(x op y)   |*)
   | TmConst(fi1,c1),(TmConst(fi2,c2) as tt)-> delta c1 tt
   (* No optimization *)
@@ -742,7 +843,7 @@ let files_of_folders lst = List.fold_left (fun a v ->
         |> Array.to_list
         |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
         |> List.map (fun x -> (add_slash v) ^ x)
-         |> List.filter (fun x -> not (Sys.is_directory x))
+        |> List.filter (fun x -> not (Sys.is_directory x))
     ) @ a
   else v::a
 ) [] lst
@@ -764,7 +865,17 @@ let main =
   (* Run tests on one or more files *)
   | "test"::lst | "t"::lst -> (
     utest := true;
-    List.iter evalprog (files_of_folders lst);
+    (* Select the lexer and parser, depending on the DSL*)
+    let eprog name =
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name
+    in
+    (* Evaluate each of the programs in turn *)
+    List.iter eprog (files_of_folders lst);
+
+    (* Print out unit test results, if applicable *)
     if !utest_fail = 0 then
       printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
         (!utest_ok)
