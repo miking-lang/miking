@@ -708,7 +708,10 @@ let main =
   (* Run one program with program arguments *)
   | "run"::name::lst | name::lst -> (
     prog_argv := lst;
-    evalprog name)
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name)
 
   (* Show the menu *)
   | _ -> menu())
