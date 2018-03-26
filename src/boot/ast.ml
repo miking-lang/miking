@@ -148,6 +148,58 @@ let tm_info t =
   | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
 
+(* Returns the number of expected arguments *)
+let arity c =
+  match c with
+  (* MCore intrinsic: Boolean constant and operations *)
+  | CBool(_)    -> 0
+  | Cnot        -> 1
+  | Cand(None)  -> 2  | Cand(Some(_))  -> 1
+  | Cor(None)   -> 2  | Cor(Some(_))   -> 1
+  (* MCore intrinsic: Integer constant and operations *)
+  | CInt(_)     -> 0
+  | Caddi(None) -> 2  | Caddi(Some(_)) -> 1
+  | Csubi(None) -> 2  | Csubi(Some(_)) -> 1
+  | Cmuli(None) -> 2  | Cmuli(Some(_)) -> 1
+  | Cdivi(None) -> 2  | Cdivi(Some(_)) -> 1
+  | Cmodi(None) -> 2  | Cmodi(Some(_)) -> 1
+  | Cnegi       -> 1
+  | Clti(None)  -> 2  | Clti(Some(_))  -> 1
+  | Cleqi(None) -> 2  | Cleqi(Some(_)) -> 1
+  | Cgti(None)  -> 2  | Cgti(Some(_))  -> 1
+  | Cgeqi(None) -> 2  | Cgeqi(Some(_)) -> 1
+  | Ceqi(None)  -> 2  | Ceqi(Some(_))  -> 1
+  | Cneqi(None) -> 2  | Cneqi(Some(_)) -> 1
+  | Cslli(None) -> 2  | Cslli(Some(_)) -> 1
+  | Csrli(None) -> 2  | Csrli(Some(_)) -> 1
+  | Csrai(None) -> 2  | Csrai(Some(_)) -> 1
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat(_)   -> 0
+  | Caddf(None) -> 2  | Caddf(Some(_)) -> 1
+  | Csubf(None) -> 2  | Csubf(Some(_)) -> 1
+  | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
+  | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
+  | Cnegf       -> 1
+  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
+  | Cadd(TNone) -> 2  | Cadd(_)        -> 1
+  | Csub(TNone) -> 2  | Csub(_)        -> 1
+  | Cmul(TNone) -> 2  | Cmul(_)        -> 1
+  | Cdiv(TNone) -> 2  | Cdiv(_)        -> 1
+  | Cneg        -> 1
+  (* MCore debug and I/O intrinsics *)
+  | CDStr       -> 1
+  | CDPrint     -> 1
+  | CPrint      -> 1
+  | CArgv       -> 1
+  (* MCore unified collection type (UCT) intrinsics *)
+  | CConcat(None)  -> 2  | CConcat(Some(_))  -> 1
+  (* Ragnar temp functions for handling polymorphic arguments *)
+  | CPolyEq(None)  -> 2  | CPolyEq(Some(_))  -> 1
+  | CPolyNeq(None) -> 2  | CPolyNeq(Some(_)) -> 1
+  (* Atom - an untyped lable that can be used to implement
+     domain specific constructs *)
+  | CAtom(_,_)     -> 0
+
 
 type 'a tokendata = {i:info; v:'a}
 
