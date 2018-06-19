@@ -1,0 +1,12 @@
+
+
+(jbuild_version 1)
+
+(ocamlyacc (parser pplparser))
+(ocamllex (lexer ppllexer))
+
+(executable
+  ((name boot)
+   (libraries (oml))
+  )
+)

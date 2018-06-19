@@ -1,4 +1,3 @@
-#!/bin/bash
 ###################################################
 #  Miking is licensed under the MIT license.
 #  Copyright (C) David Broman. See file LICENSE.txt
@@ -19,3 +18,6 @@ test:
 
 clean:
 	@./make clean
+
+old:
+	@./make old
