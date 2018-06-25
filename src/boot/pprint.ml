@@ -186,3 +186,20 @@ and pprint basic t =
 let pprint_env env =
   us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
             |> Ustring.concat (us",")) ^. us"]"
+
+
+(* Pretty print a type *)
+let pprint_ty ty =
+  let rec ppt ty inside =
+  match ty with
+  | TyGround(fi,gt) ->
+    (match gt with
+    | GBool -> us"Bool"
+    | GInt -> us"Int"
+    | GFloat -> us"Float")
+  | TyArrow(fi,ty1,ty2) ->
+    (if inside then us"(" else us"") ^.
+    ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
+    (if inside then us")" else us"")
+  in
+    ppt ty false

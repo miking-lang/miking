@@ -28,8 +28,11 @@ let rec typeeq ty1 ty2 =
 let type_const c =
   match c with
   (* MCore intrinsic: Boolean constant and operations *)
-  | CBool(_) -> TyGround(GBool)
+  | CBool(_) -> TyGround(NoInfo,GBool)
+  | CInt(_) -> TyGround(NoInfo,GInt)
 
+
+(* -----------
 | Cnot
 | Cand  of bool option
 | Cor   of bool option
@@ -78,7 +81,9 @@ let type_const c =
 (* Atom - an untyped lable that can be used to implement
    domain specific constructs *)
 | CAtom of sid * tm list
+*)
 
+  | _ -> failwith "NOT FINISHED"
 
 
 (* Returns the type of term [t] *)
@@ -88,7 +93,7 @@ let rec typeof env t =
   | TmLam(fi,s,t1) -> failwith "TODO2"
   | TmClos(fi,s,t1,env1,pe) -> failwith "Closure cannot happen"
   | TmApp(fi,t1,t2) -> failwith "TODO3"
-  | TmConst(fi,c) -> failwith "TODO4"
+  | TmConst(fi,c) -> type_const c
   | TmPEval(fi) -> failwith "TODO5"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
@@ -99,7 +104,9 @@ let rec typeof env t =
   | TmUtest(fi,t1,t2,t3) ->
       if typeeq (typeof env t1) (typeof env t2)
       then typeof env t2
-      else raise_error fi "Types are not equal."
+      else raise_error fi  (us"The two types " ^. pprint_ty (typeof env t1) ^. us" and " ^.
+                            pprint_ty (typeof env t2) ^. us" for the two test expressions are not equal."
+                            |> Ustring.to_utf8)
   | TmMatch(fi,t1,cases) -> failwith "TODO12"
   | TmNop -> failwith "TODO12"
 
