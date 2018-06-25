@@ -121,7 +121,13 @@ and tm =
 | TmMatch       of info * tm * case list
 | TmNop
 
+(* Ground types *)
+and groundty = GBool | GInt | GFloat
 
+(* Types *)
+and ty =
+| TyGround      of info * groundty
+| TyArrow       of info * ty * ty
 
 
 
