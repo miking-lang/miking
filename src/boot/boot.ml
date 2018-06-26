@@ -610,7 +610,7 @@ let rec eval env t =
 
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
-let evalprog filename  =
+let evalprog filename typecheck =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   let fs1 = open_in filename in
@@ -619,7 +619,7 @@ let evalprog filename  =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main
-        (*  |> Typesys.typecheck *)
+        |> (if typecheck then Typesys.typecheck else fun x -> x)
         |> debruijn (builtin |> List.split |> fst |> List.map us)
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
@@ -671,7 +671,34 @@ let files_of_folders lst = List.fold_left (fun a v ->
   else v::a
 ) [] lst
 
+(* Iterate over all potential test files and run tests *)
+let testprog lst typecheck =
+    utest := true;
+    (* Select the lexer and parser, depending on the DSL*)
+    let eprog name =
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name typecheck
+    in
+    (* Evaluate each of the programs in turn *)
+    List.iter eprog (files_of_folders lst);
 
+    (* Print out unit test results, if applicable *)
+    if !utest_fail = 0 then
+      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
+        (!utest_ok)
+            else
+      printf "\nERROR! %d successful tests and %d failed tests.\n"
+        (!utest_ok) (!utest_fail)
+
+(* Run program *)
+let runprog name lst typecheck =
+    prog_argv := lst;
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name typecheck
 
 
 (* Print out main menu *)
@@ -686,39 +713,17 @@ let main =
   (match Array.to_list Sys.argv |> List.tl with
 
   (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> (
-    utest := true;
-    (* Select the lexer and parser, depending on the DSL*)
-    let eprog name =
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name
-    in
-    (* Evaluate each of the programs in turn *)
-    List.iter eprog (files_of_folders lst);
+  | "test"::lst | "t"::lst -> testprog lst false
 
-    (* Print out unit test results, if applicable *)
-    if !utest_fail = 0 then
-      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
-        (!utest_ok)
-            else
-      printf "\nERROR! %d successful tests and %d failed tests.\n"
-        (!utest_ok) (!utest_fail))
+  (* Run tests on one or more files, including type checking *)
+  | "tytest"::lst -> testprog lst true
 
-  (* This is just a temp oml library test. Should be removed later. *)
-  | "oml"::lst -> (
-      let sample = Oml.Statistics.Sampling.normal ~mean:2. ~std:1. () in
-     printf "%f\n%f\n" (sample()) (sample()))
+  (* Run one program with program arguments without typechecking *)
+  | "tyrun"::name::lst -> runprog name lst true
 
+  (* Run one program with program arguments without typechecking *)
+  | "run"::name::lst | name::lst -> runprog name lst false
 
-  (* Run one program with program arguments *)
-  | "run"::name::lst | name::lst -> (
-    prog_argv := lst;
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name)
 
 
   (* Show the menu *)

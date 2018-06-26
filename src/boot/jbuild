@@ -7,6 +7,6 @@
 
 (executable
   ((name boot)
-   (libraries (oml))
+   (libraries ())
   )
 )
