@@ -1,0 +1,7 @@
+
+
+language MCore
+
+utest 1 1
+utest true true
+utest 1.2 1.2

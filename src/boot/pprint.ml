@@ -196,7 +196,8 @@ let pprint_ty ty =
     (match gt with
     | GBool -> us"Bool"
     | GInt -> us"Int"
-    | GFloat -> us"Float")
+    | GFloat -> us"Float"
+    | GVoid -> us"Void")
   | TyArrow(fi,ty1,ty2) ->
     (if inside then us"(" else us"") ^.
     ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.

@@ -619,7 +619,7 @@ let evalprog filename typecheck =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main
-        |> (if typecheck then Typesys.typecheck else fun x -> x)
+        |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
         |> debruijn (builtin |> List.split |> fst |> List.map us)
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()

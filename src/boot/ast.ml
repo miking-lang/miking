@@ -122,7 +122,7 @@ and tm =
 | TmNop
 
 (* Ground types *)
-and groundty = GBool | GInt | GFloat
+and groundty = GBool | GInt | GFloat | GVoid
 
 (* Types *)
 and ty =

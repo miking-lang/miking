@@ -24,72 +24,56 @@ let rec typeeq ty1 ty2 =
       typeeq ty11 ty21 &&  typeeq ty21 ty22
   | _ -> false
 
-
+(* Returns the type of a constant value *)
 let type_const c =
+  let tyarr t1 t2 = TyArrow(NoInfo,t1,t2) in
+  let tybool = TyGround(NoInfo,GBool) in
+  let tyint =  TyGround(NoInfo,GInt) in
+  let tyfloat =  TyGround(NoInfo,GFloat) in
   match c with
   (* MCore intrinsic: Boolean constant and operations *)
-  | CBool(_) -> TyGround(NoInfo,GBool)
-  | CInt(_) -> TyGround(NoInfo,GInt)
-
-
-(* -----------
-| Cnot
-| Cand  of bool option
-| Cor   of bool option
+  | CBool(_) -> tybool
+  | Cnot -> tyarr tybool tybool
+  | Cand(None) | Cor(None) -> tyarr tybool (tyarr tybool tybool)
+  | Cand(_) | Cor(_) -> tyarr tybool tybool
 (* MCore intrinsic: Integer constant and operations *)
-| CInt  of int
-| Caddi of int option
-| Csubi of int option
-| Cmuli of int option
-| Cdivi of int option
-| Cmodi of int option
-| Cnegi
-| Clti  of int option
-| Cleqi of int option
-| Cgti  of int option
-| Cgeqi of int option
-| Ceqi  of int option
-| Cneqi of int option
-| Cslli of int option
-| Csrli of int option
-| Csrai of int option
+  | CInt(_) -> tyint
+  | Caddi(None) | Csubi(None) | Cmuli(None)| Cdivi(None) | Cmodi(None)
+      -> tyarr tyint (tyarr tyint tyint)
+  | Caddi(_) | Csubi(_) | Cmuli(_)| Cdivi(_) | Cmodi(_) | Cnegi
+      -> tyarr tyint tyint
+  | Clti(None) | Cleqi(None) | Cgti(None)  | Cgeqi(None) | Ceqi(None)
+               | Cneqi(None) | Cslli(None) | Csrli(None) | Csrai(None)
+      -> tyarr tyint (tyarr tyint tybool)
+  | Clti(_) | Cleqi(_) | Cgti(_)  | Cgeqi(_) | Ceqi(_)
+            | Cneqi(_) | Cslli(_) | Csrli(_) | Csrai(_)
+      -> tyarr tyint tybool
 (* MCore intrinsic: Floating-point number constant and operations *)
-| CFloat of float
-| Caddf  of float option
-| Csubf  of float option
-| Cmulf  of float option
-| Cdivf  of float option
-| Cnegf
+  | CFloat(_) -> tyfloat
+  | Caddf(None) | Csubf(None) | Cmulf(None) | Cdivf(None)
+      -> tyarr tyfloat (tyarr tyfloat tyfloat)
+  | Caddf(_) | Csubf(_) | Cmulf(_) | Cdivf(_) | Cnegf
+      -> tyarr tyfloat tyfloat
 (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-| Cadd   of intfloatoption
-| Csub   of intfloatoption
-| Cmul   of intfloatoption
-| Cdiv   of intfloatoption
-| Cneg
+  | Cadd(_) | Csub(_) | Cmul(_) | Cdiv(_) | Cneg
 (* MCore debug and I/O intrinsics *)
-| CDStr
-| CDPrint
-| CPrint
-| CArgv
+  | CDStr | CDPrint | CPrint | CArgv
 (* MCore unified collection type (UCT) intrinsics *)
-| CConcat of tm option
-
+  | CConcat(_)
 (* Ragnar temp functions for handling polymorphic arguments *)
-| CPolyEq  of tm option
-| CPolyNeq of tm option
-
-(* Atom - an untyped lable that can be used to implement
-   domain specific constructs *)
-| CAtom of sid * tm list
-*)
-
-  | _ -> failwith "NOT FINISHED"
+  | CPolyEq(_)
+  | CPolyNeq(_)
+(* Atom - an untyped lable that can be used to implement domain specific constructs *)
+  | CAtom(_,_)
+    -> error NoInfo (us"The constant is not supported in the current type system")
 
 
 (* Returns the type of term [t] *)
-let rec typeof env t =
+let rec typeof tyenv t =
   match t with
-  | TmVar(fi,s,n,pe) -> failwith "TODO1"
+  | TmVar(fi,s,n,pe) -> (
+    try (List.find (fun (x,_) -> s =. x) tyenv) |> snd
+    with Not_found -> error fi (us"Variable '" ^. s ^. us"' cannot be found."))
   | TmLam(fi,s,t1) -> failwith "TODO2"
   | TmClos(fi,s,t1,env1,pe) -> failwith "Closure cannot happen"
   | TmApp(fi,t1,t2) -> failwith "TODO3"
@@ -102,16 +86,26 @@ let rec typeof env t =
   | TmExprSeq(fi,t1,t2) -> failwith "TODO9"
   | TmUC(fi,tree,ord,unique) -> failwith "TODO10"
   | TmUtest(fi,t1,t2,t3) ->
-      if typeeq (typeof env t1) (typeof env t2)
-      then typeof env t2
-      else raise_error fi  (us"The two types " ^. pprint_ty (typeof env t1) ^. us" and " ^.
-                            pprint_ty (typeof env t2) ^. us" for the two test expressions are not equal."
-                            |> Ustring.to_utf8)
+      if typeeq (typeof tyenv t1) (typeof tyenv t2)
+      then typeof tyenv t3
+      else error fi  (us"The two test expressions have differnt types: " ^.
+                        pprint_ty (typeof tyenv t1) ^. us" and " ^.
+                        pprint_ty (typeof tyenv t2) ^. us".")
   | TmMatch(fi,t1,cases) -> failwith "TODO12"
-  | TmNop -> failwith "TODO12"
+  | TmNop -> TyGround(NoInfo,GVoid)
 
 
-
-let typecheck t =
-  let _ = typeof [] t in
+(* Main external function for type checking *)
+let typecheck builtin t =
+  (* Remove constant that are not supported by the type system *)
+  let lst = List.filter
+    (fun (x,_) ->
+      match x with
+      | "add" | "sub" | "div" | "mul" | "neg" |
+        "dstr" | "dprint" | "print" | "argv" | "concat" -> false
+      | _ -> true) builtin in
+  (* Create type environment for builtins *)
+  let tyenv = List.map (fun (x,c) -> (us x, type_const c)) lst in
+  (* Type check *)
+  let _ = typeof tyenv t in
   t
