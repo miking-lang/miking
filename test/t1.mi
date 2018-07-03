@@ -8,3 +8,6 @@ utest 1.2 1.2
 utest (addi 1 2) 3
 utest ((lam x:Int. addi x 1) 2) 3
 utest ((lam f:Int->Int. lam x:Int. f x) (lam y:Int. addi y 5) 2) 7
+
+let x = 5.1
+utest x 5

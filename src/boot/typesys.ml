@@ -78,6 +78,9 @@ let rec typeof tyenv t =
       let ty2 = typeof ((s,ty1)::tyenv) t1 in
       TyArrow(fi,ty1,ty2)
   | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
+  | TmApp(fi,TmLam(fi2,s,TyUndef,t1),t2) ->
+      let ty2 = typeof tyenv t2 in
+      typeof ((s,ty2)::tyenv) t1
   | TmApp(fi,t1,t2) -> (
     match typeof tyenv t1,typeof tyenv t2 with
     | TyArrow(fi2,ty11,ty12),ty11' ->
