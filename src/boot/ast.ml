@@ -106,8 +106,8 @@ and pemode = bool
 (* Term/expression *)
 and tm =
 | TmVar         of info * ustring * int * pemode
-| TmLam         of info * ustring * tm
-| TmClos        of info * ustring * tm * env * pemode
+| TmLam         of info * ustring * ty * tm
+| TmClos        of info * ustring * ty * tm * env * pemode
 | TmApp         of info * tm * tm
 | TmConst       of info * const
 | TmPEval       of info
@@ -128,6 +128,8 @@ and groundty = GBool | GInt | GFloat | GVoid
 and ty =
 | TyGround      of info * groundty
 | TyArrow       of info * ty * ty
+| TyVar         of info * ustring
+| TyUndef
 
 
 
@@ -139,8 +141,8 @@ let noidx = -1
 let tm_info t =
   match t with
   | TmVar(fi,_,_,_) -> fi
-  | TmLam(fi,_,_) -> fi
-  | TmClos(fi,_,_,_,_) -> fi
+  | TmLam(fi,_,_,_) -> fi
+  | TmClos(fi,_,_,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
   | TmPEval(fi) -> fi
@@ -153,6 +155,16 @@ let tm_info t =
   | TmUtest(fi,_,_,_) -> fi
   | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
+
+
+(* Returns the info field from a type *)
+let ty_info t =
+  match t with
+  | TyGround(fi,_) -> fi
+  | TyArrow(fi,_,_) -> fi
+  | TyVar(fi,_) -> fi
+  | TyUndef -> NoInfo         (* Used when deriving types for let-expressions *)
+
 
 (* Returns the number of expected arguments *)
 let arity c =

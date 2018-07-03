@@ -5,12 +5,12 @@
 
 language Ragnar
 
+/*
 type Tree(a)
 
 data Node(a:Tree(a),b:Tree(a)) => Tree(a)
 data Leaf(x:a) => Tree(a)
 
-/*
 def count(tree:Tree(Int)) -> Int {
     match tree{
           Node(t1,t2) => count(t1) + count(t2)

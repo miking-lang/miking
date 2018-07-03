@@ -69,8 +69,8 @@ let rec debruijn env t =
       | y::ee -> if y =. x then n else find ee (n+1)
       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
     in TmVar(fi,x,find env 0,false)
-  | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
-  | TmClos(fi,x,t1,env1,_) -> failwith "Closures should not be available."
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (x::env) t1)
+  | TmClos(fi,x,ty,t1,env1,_) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
@@ -447,12 +447,12 @@ let rec readback env n t =
   (* Variables as PE symbol. Convert symbol to de bruijn index. *)
   | TmVar(fi,x,k,true) -> TmVar(fi,x,n-k,false)
   (* Lambda *)
-  | TmLam(fi,x,t1) -> TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
   (* Normal closure *)
-  | TmClos(fi,x,t1,env2,false) -> t
+  | TmClos(fi,x,ty,t1,env2,false) -> t
   (* PE closure *)
-  | TmClos(fi,x,t1,env2,true) ->
-      TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
+  | TmClos(fi,x,ty,t1,env2,true) ->
+      TmLam(fi,x,ty,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
   (* Application *)
   | TmApp(fi,t1,t2) -> optimize_const_app fi (readback env n t1) (readback env n t2)
   (* Constant, fix, and PEval  *)
@@ -487,14 +487,14 @@ let rec normalize env n t =
   (* PEMode variable (symbol) *)
   | TmVar(fi,x,n,true) -> t
   (* Lambda and closure conversions to PE closure *)
-  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,true)
+  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env,true)
   (* Closures, both PE and non PE *)
-  | TmClos(fi,x,t2,env2,pemode) -> t
+  | TmClos(fi,x,ty,t2,env2,pemode) -> t
   (* Application: closures and delta  *)
   | TmApp(fi,t1,t2) ->
     (match normalize env n t1 with
     (* Closure application (PE on non PE) TODO: use affine lamba check *)
-    | TmClos(fi,x,t3,env2,_) ->
+    | TmClos(fi,x,ty,t3,env2,_) ->
          normalize ((normalize env n t2)::env2) n t3
     (* Constant application using the delta function *)
     | TmConst(fi1,c1) ->
@@ -504,23 +504,23 @@ let rec normalize env n t =
     (* Partial evaluation *)
     | TmPEval(fi) ->
       (match normalize env n t2 with
-      | TmClos(fi2,x,t2,env2,pemode) ->
+      | TmClos(fi2,x,ty,t2,env2,pemode) ->
           let pesym = TmVar(NoInfo,us"",n+1,true) in
           let t2' = (TmApp(fi,TmPEval(fi),t2)) in
-          TmClos(fi2,x,normalize (pesym::env2) (n+1) t2',env2,true)
+          TmClos(fi2,x,ty,normalize (pesym::env2) (n+1) t2',env2,true)
       | v2 -> v2)
     (* If-expression *)
     | TmIfexp(fi2,x1,x2) ->
       (match x1,x2,normalize env n t2 with
       | None,None,TmConst(fi3,CBool(b)) -> TmIfexp(fi2,Some(b),None)
-      | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+      | Some(b),Some(TmClos(_,_,_,t3,env3,_)),TmClos(_,_,_,t4,env4,_) ->
         if b then normalize (TmNop::env3) n t3 else normalize (TmNop::env4) n t4
-      | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
+      | Some(b),_,(TmClos(_,_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
       | _,_,v2 -> TmApp(fi,TmIfexp(fi2,x1,x2),v2))
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n t2 with
-       | TmClos(fi,x,t3,env2,_) as tt ->
+       | TmClos(fi,x,_,t3,env2,_) as tt ->
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
     (* Stay in normalized form *)
@@ -549,13 +549,13 @@ let rec eval env t =
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
-  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,false)
-  | TmClos(fi,x,t1,env2,_) -> t
+  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env,false)
+  | TmClos(fi,x,_,t1,env2,_) -> t
   (* Application *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
+       | TmClos(fi,x,_,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
@@ -564,15 +564,15 @@ let rec eval env t =
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with
-         | TmClos(fi,x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | TmClos(fi,x,_,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
        (* If-expression *)
        | TmIfexp(fi,x1,x2) ->
          (match x1,x2,eval env t2 with
          | None,None,TmConst(fi,CBool(b)) -> TmIfexp(fi,Some(b),None)
-         | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+         | Some(b),Some(TmClos(_,_,_,t3,env3,_)),TmClos(_,_,_,t4,env4,_) ->
               if b then eval (TmNop::env3) t3 else eval (TmNop::env4) t4
-         | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
+         | Some(b),_,(TmClos(_,_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
          | _ -> raise_error fi "Incorrect if-expression in the eval function.")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
@@ -627,21 +627,21 @@ let evalprog filename typecheck =
     with
     | Lexer.Lex_error m ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Error m ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Parsing.Parse_error ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else

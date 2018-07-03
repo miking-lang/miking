@@ -22,8 +22,8 @@
   let addrec x t =
     let rec hasx t = match t with
       | TmVar(_,y,_,_) ->  x =. y
-      | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_,_,_) -> failwith "Cannot happen"
+      | TmLam(_,y,_,t1) -> if x =. y then false else hasx t1
+      | TmClos(_,_,_,_,_,_) -> failwith "Cannot happen"
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
@@ -42,7 +42,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,t))) else t
+    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyUndef,t))) else t
 
 
 %}
@@ -156,17 +156,17 @@ mcore_scope:
         TmUtest(fi,$2,$3,$4) }
   | LET IDENT EQ mc_term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$5),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$5),$4) }
 
 mc_term:
   | mc_left
       { $1 }
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmLam(fi,$2.v,$6) }
+        TmLam(fi,$2.v,TyUndef,$6) }
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$6),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$6),$4) }
 
 
 mc_left:

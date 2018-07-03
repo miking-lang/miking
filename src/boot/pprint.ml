@@ -153,9 +153,9 @@ and pprint basic t =
   match t with
   | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
   | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
-  | TmLam(_,x,t1) -> us"(lam " ^. x ^. us". " ^. pprint t1 ^. us")"
-  | TmClos(_,x,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmClos(_,x,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
+  | TmLam(_,x,ty,t1) -> us"(lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. pprint t1 ^. us")"
+  | TmClos(_,x,_,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
+  | TmClos(_,x,_,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
@@ -183,13 +183,13 @@ and pprint basic t =
   | TmNop -> us"Nop"
 
 (* Pretty prints the environment *)
-let pprint_env env =
+and pprint_env env =
   us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
             |> Ustring.concat (us",")) ^. us"]"
 
 
 (* Pretty print a type *)
-let pprint_ty ty =
+and pprint_ty ty =
   let rec ppt ty inside =
   match ty with
   | TyGround(fi,gt) ->
@@ -201,6 +201,8 @@ let pprint_ty ty =
   | TyArrow(fi,ty1,ty2) ->
     (if inside then us"(" else us"") ^.
     ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
-    (if inside then us")" else us"")
+      (if inside then us")" else us"")
+  | TyVar(fi,x) -> x
+  | TyUndef -> us"Undef"
   in
     ppt ty false

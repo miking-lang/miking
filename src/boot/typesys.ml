@@ -17,11 +17,11 @@ open Msg
 open Pprint
 
 (* Checks if two types are equal *)
-let rec typeeq ty1 ty2 =
+let rec tyequal ty1 ty2 =
   match ty1,ty2 with
   | TyGround(_,g1),TyGround(_,g2) -> g1 = g2
   | TyArrow(_,ty11,ty12),TyArrow(_,ty21,ty22) ->
-      typeeq ty11 ty21 &&  typeeq ty21 ty22
+      tyequal ty11 ty21 &&  tyequal ty21 ty22
   | _ -> false
 
 (* Returns the type of a constant value *)
@@ -74,9 +74,23 @@ let rec typeof tyenv t =
   | TmVar(fi,s,n,pe) -> (
     try (List.find (fun (x,_) -> s =. x) tyenv) |> snd
     with Not_found -> error fi (us"Variable '" ^. s ^. us"' cannot be found."))
-  | TmLam(fi,s,t1) -> failwith "TODO2"
-  | TmClos(fi,s,t1,env1,pe) -> failwith "Closure cannot happen"
-  | TmApp(fi,t1,t2) -> failwith "TODO3"
+  | TmLam(fi,s,ty1,t1) ->
+      let ty2 = typeof ((s,ty1)::tyenv) t1 in
+      TyArrow(fi,ty1,ty2)
+  | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
+  | TmApp(fi,t1,t2) -> (
+    match typeof tyenv t1,typeof tyenv t2 with
+    | TyArrow(fi2,ty11,ty12),ty11' ->
+        if tyequal ty11 ty11' then ty12
+        else error (tm_info t2)
+          (us"Type application mismatch. Applied an expression of type " ^.
+           pprint_ty ty11' ^. us", but expected an expression of type " ^.
+           pprint_ty ty11 ^. us".")
+    | ty1,ty2 -> error (tm_info t1)
+          (us"Type application mismatch. Cannot apply an expression of " ^.
+           us"type " ^. pprint_ty ty2 ^. us" to an expression of type " ^.
+           pprint_ty ty1 ^. us".")
+  )
   | TmConst(fi,c) -> type_const c
   | TmPEval(fi) -> failwith "TODO5"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
@@ -86,7 +100,7 @@ let rec typeof tyenv t =
   | TmExprSeq(fi,t1,t2) -> failwith "TODO9"
   | TmUC(fi,tree,ord,unique) -> failwith "TODO10"
   | TmUtest(fi,t1,t2,t3) ->
-      if typeeq (typeof tyenv t1) (typeof tyenv t2)
+      if tyequal (typeof tyenv t1) (typeof tyenv t2)
       then typeof tyenv t3
       else error fi  (us"The two test expressions have differnt types: " ^.
                         pprint_ty (typeof tyenv t1) ^. us" and " ^.

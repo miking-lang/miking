@@ -24,8 +24,8 @@
   let addrec x t =
     let rec hasx t = match t with
       | TmVar(_,y,_,_) ->  x =. y
-      | TmLam(_,y,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_,_,_) -> failwith "Cannot happen"
+      | TmLam(_,y,_,t1) -> if x =. y then false else hasx t1
+      | TmClos(_,_,_,_,_,_) -> failwith "Cannot happen"
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
@@ -44,7 +44,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,t))) else t
+    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyUndef,t))) else t
 
 
 %}
@@ -159,24 +159,25 @@ mcore_scope:
         TmUtest(fi,$2,$3,$4) }
   | LET IDENT EQ mc_term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$5),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$5),$4) }
 
 mc_term:
   | mc_left
       { $1 }
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmLam(fi,$2.v,$6) }
+        TmLam(fi,$2.v,$4,$6) }
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,$6),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$6),$4) }
 
 
 mc_left:
   | mc_atom
       { $1 }
   | mc_left mc_atom
-      { TmApp(NoInfo,$1,$2) }
+      { let fi = mkinfo (tm_info $1) (tm_info $2) in
+        TmApp(fi,$1,$2) }
 
 mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
@@ -209,13 +210,13 @@ ragnar_scope:
   | DEF FUNIDENT identtyseq RPAREN oparrow body ragnar_scope
       { let fi = mkinfo $1.i (tm_info $6) in
         let rec mkfun lst = (match lst with
-          | x::xs -> TmLam(fi,x,mkfun xs)
+          | x::xs -> TmLam(fi,x,TyUndef,mkfun xs)
           | [] -> $6 ) in
         let f = if List.length $3 = 0 then [us"@no"] else $3 in
-        TmApp(fi,TmLam(fi,$2.v,$7),addrec $2.v (mkfun f)) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$7),addrec $2.v (mkfun f)) }
   | DEF IDENT body ragnar_scope
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmApp(fi,TmLam(fi,$2.v,$4),$3) }
+        TmApp(fi,TmLam(fi,$2.v,TyUndef,$4),$3) }
   | TYPE IDENT ragnar_scope
       {$3}
   | TYPE FUNIDENT revtyargs RPAREN ragnar_scope
@@ -243,31 +244,31 @@ term:
   | op                   { $1 }
   | IDENT ARROW term
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,$1.v,$3) }
+        TmLam(fi,$1.v,TyUndef,$3) }
   | FUNC IDENT term
       { let fi = mkinfo $1.i (tm_info $3) in
-        TmLam(fi,$2.v,$3) }
+        TmLam(fi,$2.v,TyUndef,$3) }
   | FUNC LPAREN IDENT RPAREN term
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$3.v,$5) }
+        TmLam(fi,$3.v,TyUndef,$5) }
   | FUNC2 IDENT RPAREN term
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmLam(fi,$2.v,$4) }
+        TmLam(fi,$2.v,TyUndef,$4) }
   | IF term THEN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
-              TmLam(tm_info $4,us"",$4)),
-              TmLam(tm_info $6,us"",$6)) }
+              TmLam(tm_info $4,us"",TyUndef,$4)),
+              TmLam(tm_info $6,us"",TyUndef,$6)) }
   | IF2 term RPAREN term ELSE term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
-              TmLam(tm_info $4,us"",$4)),
-              TmLam(tm_info $6,us"",$6)) }
+              TmLam(tm_info $4,us"",TyUndef,$4)),
+              TmLam(tm_info $6,us"",TyUndef,$6)) }
   | IF term term ELSE term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmApp(fi,TmApp(fi,TmApp(fi,TmIfexp(fi,None,None),$2),
-              TmLam(tm_info $3,us"",$3)),
-              TmLam(tm_info $5,us"",$5)) }
+              TmLam(tm_info $3,us"",TyUndef,$3)),
+              TmLam(tm_info $5,us"",TyUndef,$5)) }
   | MATCH term LCURLY cases RCURLY
       {TmMatch(mkinfo $1.i $5.i,$2, $4)}
   | PEVAL term
@@ -373,28 +374,34 @@ identtyseq:
 
 ty:
   | tyatom
-      {}
+      { $1 }
   | tyatom ARROW ty
-      {}
+      { let fi = mkinfo (ty_info $1) (ty_info $3) in
+        TyArrow(fi,$1,$3) }
 
 tyatom:
   | IDENT
-      {}
+      {match Ustring.to_utf8 $1.v with
+       | "Bool" -> TyGround($1.i,GBool)
+       | "Int" -> TyGround($1.i,GInt)
+       | "Float" -> TyGround($1.i,GFloat)
+       | "String" -> TyGround($1.i,GVoid)  (* TODO *)
+       | "Void" -> TyGround($1.i,GVoid)
+       | _ -> TyVar($1.i,$1.v)
+      }
   | LPAREN RPAREN
-      {}
+      {TyGround(mkinfo $1.i $2.i,GVoid)}
   | LPAREN revtypetupleseq RPAREN
-      {}
+      { $2 }
   | LSQUARE ty RSQUARE
-      {}
-  | FUNIDENT revtyargs RPAREN
-      {}
+      { $2 (* TODO: no support for lists yet *)  }
 
 
 revtypetupleseq:
   | ty
-      {}
+      { $1 }
   | revtypetupleseq COMMA ty
-      {}
+      { $3 (* TODO Tuples not supported *) }
 
 tyarg:
   | ty

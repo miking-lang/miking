@@ -5,3 +5,6 @@ language MCore
 utest 1 1
 utest true true
 utest 1.2 1.2
+utest (addi 1 2) 3
+utest ((lam x:Int. addi x 1) 2) 3
+utest ((lam f:Int->Int. lam x:Int. f x) (lam y:Int. addi y 5) 2) 7
