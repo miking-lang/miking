@@ -16,7 +16,7 @@ utest x 5
 
 let foo = Lam T. lam f:T->T. lam x:T. f x
 let f1 = lam x:Int->Int. addi x 5
-let res = foo1 $Int f1 10
+let res = foo $Int f1 10
 
 
 let boo = lam g:all a. a->a->a. lam f:Int->Int. g $Int f 2

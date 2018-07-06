@@ -80,6 +80,8 @@
 %token <unit Ast.tokendata> RAGNAR
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
+%token <unit Ast.tokendata> BIGLAM
+%token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
@@ -89,52 +91,53 @@
 
 
 
-%token <unit Ast.tokendata> EQ            /* "="  */
+%token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
-%token <unit Ast.tokendata> ADD           /* "+"  */
-%token <unit Ast.tokendata> SUB           /* "-"  */
-%token <unit Ast.tokendata> MUL           /* "*"  */
-%token <unit Ast.tokendata> DIV           /* "/"  */
-%token <unit Ast.tokendata> MOD           /* "%"  */
-%token <unit Ast.tokendata> LESS          /* "<"  */
-%token <unit Ast.tokendata> LESSEQUAL     /* "<=" */
-%token <unit Ast.tokendata> GREAT         /* ">"  */
-%token <unit Ast.tokendata> GREATEQUAL    /* ">=" */
-%token <unit Ast.tokendata> SHIFTLL       /* "<<" */
-%token <unit Ast.tokendata> SHIFTRL       /* ">>" */
+%token <unit Ast.tokendata> ADD           /* "+"   */
+%token <unit Ast.tokendata> SUB           /* "-"   */
+%token <unit Ast.tokendata> MUL           /* "*"   */
+%token <unit Ast.tokendata> DIV           /* "/"   */
+%token <unit Ast.tokendata> MOD           /* "%"   */
+%token <unit Ast.tokendata> LESS          /* "<"   */
+%token <unit Ast.tokendata> LESSEQUAL     /* "<="  */
+%token <unit Ast.tokendata> GREAT         /* ">"   */
+%token <unit Ast.tokendata> GREATEQUAL    /* ">="  */
+%token <unit Ast.tokendata> SHIFTLL       /* "<<"  */
+%token <unit Ast.tokendata> SHIFTRL       /* ">>"  */
 %token <unit Ast.tokendata> SHIFTRA       /* ">>>" */
-%token <unit Ast.tokendata> EQUAL         /* "==" */
-%token <unit Ast.tokendata> NOTEQUAL      /* "!=" */
+%token <unit Ast.tokendata> EQUAL         /* "=="  */
+%token <unit Ast.tokendata> NOTEQUAL      /* "!="  */
 %token <unit Ast.tokendata> NOT           /* "!"   */
-%token <unit Ast.tokendata> OR            /* "||" */
-%token <unit Ast.tokendata> AND           /* "&&" */
-%token <unit Ast.tokendata> CONCAT        /* "++" */
+%token <unit Ast.tokendata> OR            /* "||"  */
+%token <unit Ast.tokendata> AND           /* "&&"  */
+%token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> DOLLAR        /* "$"   */
 
 
 
 /* Symbolic Tokens */
-%token <unit Ast.tokendata> LPAREN        /* "("  */
-%token <unit Ast.tokendata> RPAREN        /* ")"  */
-%token <unit Ast.tokendata> LSQUARE       /* "["  */
-%token <unit Ast.tokendata> RSQUARE       /* "]"  */
-%token <unit Ast.tokendata> LCURLY        /* "{"  */
-%token <unit Ast.tokendata> RCURLY        /* "}"  */
-%token <unit Ast.tokendata> CONS          /* "::" */
-%token <unit Ast.tokendata> COLON         /* ":"  */
-%token <unit Ast.tokendata> COMMA         /* ","  */
-%token <unit Ast.tokendata> DOT           /* "."  */
-%token <unit Ast.tokendata> BAR           /* "|"  */
-%token <unit Ast.tokendata> ARROW         /* "->" */
-%token <unit Ast.tokendata> DARROW        /* "=>" */
+%token <unit Ast.tokendata> LPAREN        /* "("   */
+%token <unit Ast.tokendata> RPAREN        /* ")"   */
+%token <unit Ast.tokendata> LSQUARE       /* "["   */
+%token <unit Ast.tokendata> RSQUARE       /* "]"   */
+%token <unit Ast.tokendata> LCURLY        /* "{"   */
+%token <unit Ast.tokendata> RCURLY        /* "}"   */
+%token <unit Ast.tokendata> CONS          /* "::"  */
+%token <unit Ast.tokendata> COLON         /* ":"   */
+%token <unit Ast.tokendata> COMMA         /* ","   */
+%token <unit Ast.tokendata> DOT           /* "."   */
+%token <unit Ast.tokendata> BAR           /* "|"   */
+%token <unit Ast.tokendata> ARROW         /* "->"  */
+%token <unit Ast.tokendata> DARROW        /* "=>"  */
 
 %start main
 
-%left OR  /*prec 2*/
+%left OR   /*prec 2*/
 %left AND  /*prec 3*/
 %left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
 %left CONCAT
 %left SHIFTLL SHIFTRL SHIFTRA
-%nonassoc NOT /*prec8 */
+%nonassoc NOT /*prec 8 */
 %left ADD SUB /*prec 8*/
 %left MUL DIV MOD /*prec 9*/
 
@@ -169,6 +172,9 @@ mc_term:
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmLam(fi,$2.v,$4,$6) }
+  | BIGLAM IDENT DOT mc_term
+      { let fi = mkinfo $1.i (tm_info $4) in
+        TmTyLam(fi,$2.v,$4) }
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyUndef,$6),$4) }
@@ -180,6 +186,9 @@ mc_left:
   | mc_left mc_atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
+  | mc_left DOLLAR ty
+      { let fi = mkinfo (tm_info $1) (ty_info $3) in
+        TmTyApp(fi,$1,$3) }
 
 mc_atom:
   | LPAREN mc_term RPAREN   { $2 }
@@ -377,6 +386,9 @@ identtyseq:
 ty:
   | tyatom
       { $1 }
+  | ALL IDENT DOT ty
+      { let fi = mkinfo $1.i (ty_info $4) in
+        TyAll(fi,$2.v,$4) }
   | tyatom ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
