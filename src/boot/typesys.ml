@@ -98,7 +98,8 @@ let rec typeof tyenv t =
   | TmPEval(fi) -> failwith "TODO5"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
-
+  | TmTyLam(fi,x,t1) -> failwith "TODO7.1"
+  | TmTyApp(fi,t1,ty1) -> failwith "TODO7.2"
   | TmChar(fi,x) -> failwith "TODO8"
   | TmExprSeq(fi,t1,t2) -> failwith "TODO9"
   | TmUC(fi,tree,ord,unique) -> failwith "TODO10"

@@ -52,7 +52,7 @@ let unittest_failed fi t1 t2=
 (* Add pattern variables to environment. Used in the debruijn function *)
 let rec patvars env pat =
   match pat with
-  | PatIdent(_,x) -> x::env
+  | PatIdent(_,x) -> VarTm(x)::env
   | PatChar(_,_) -> env
   | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))
   | PatUC(fi,[],o,u) -> env
@@ -61,19 +61,41 @@ let rec patvars env pat =
   | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
 
 
-(* Convert a term into de Bruijn indices *)
+(* Convert a term into de Bruijn indices. Note that both type variables
+   and term variables are converted. The environment [env] is a list
+   type [vartype], indicating if it is a type variable (VarTy(x)) or
+   a term variable (VarTm(x)). *)
 let rec debruijn env t =
+  let rec debruijnTy env ty =
+    (match ty with
+    | TyGround(fi,gty) -> ty
+    | TyArrow(fi,ty1,ty2) -> TyArrow(fi,debruijnTy env ty1,debruijnTy env ty2)
+    | TyVar(fi,x,_) ->
+      let rec find env n =
+        (match env with
+        | VarTy(y)::ee -> if y =. x then n else find ee (n+1)
+        | VarTm(y)::ee -> find ee (n+1)
+        | [] -> raise_error fi ("Unknown type variable '" ^ Ustring.to_utf8 x ^ "'"))
+      in TyVar(fi,x,find env 0)
+    | TyAll(fi,x,ty1) -> TyAll(fi,x,debruijnTy (VarTy(x)::env) ty1)
+    | TyUndef -> TyUndef
+    )
+  in
   match t with
   | TmVar(fi,x,_,_) ->
-    let rec find env n = match env with
-      | y::ee -> if y =. x then n else find ee (n+1)
-      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
+    let rec find env n =
+      (match env with
+       | VarTm(y)::ee -> if y =. x then n else find ee (n+1)
+       | VarTy(y)::ee -> find ee (n+1)
+       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
     in TmVar(fi,x,find env 0,false)
-  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (x::env) t1)
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,debruijnTy env ty,debruijn (VarTm(x)::env) t1)
   | TmClos(fi,x,ty,t1,env1,_) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
+  | TmTyLam(fi,x,t1) -> TmTyLam(fi,x,debruijn (VarTy(x)::env) t1)
+  | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, ty1)
   | TmPEval(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
@@ -86,6 +108,7 @@ let rec debruijn env t =
                List.map (fun (Case(fi,pat,tm)) ->
                  Case(fi,pat,debruijn (patvars env pat) tm)) cases)
   | TmNop -> t
+
 
 
 (* Check if two value terms are equal *)
@@ -457,6 +480,8 @@ let rec readback env n t =
   | TmApp(fi,t1,t2) -> optimize_const_app fi (readback env n t1) (readback env n t2)
   (* Constant, fix, and PEval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
   (* If expression *)
   | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
@@ -523,10 +548,14 @@ let rec normalize env n t =
        | TmClos(fi,x,_,t3,env2,_) as tt ->
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
+    (* System F terms *)
+    | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
     (* Stay in normalized form *)
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
   (* If expression *)
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
@@ -577,6 +606,8 @@ let rec eval env t =
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
   (* If expression *)
   | TmIfexp(fi,_,_) -> t
   (* The rest *)
@@ -620,7 +651,7 @@ let evalprog filename typecheck =
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main
         |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
-        |> debruijn (builtin |> List.split |> fst |> List.map us)
+        |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
 

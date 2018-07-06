@@ -113,6 +113,9 @@ and tm =
 | TmPEval       of info
 | TmIfexp       of info * bool option * tm option
 | TmFix         of info
+| TmTyLam       of info * ustring * tm
+| TmTyApp       of info * tm * ty
+
 
 | TmChar        of info * int
 | TmExprSeq     of info * tm * tm
@@ -128,10 +131,14 @@ and groundty = GBool | GInt | GFloat | GVoid
 and ty =
 | TyGround      of info * groundty
 | TyArrow       of info * ty * ty
-| TyVar         of info * ustring
+| TyVar         of info * ustring * int
+| TyAll         of info * ustring * ty
 | TyUndef
 
-
+(* Variable type. Either a type variable or a term variable *)
+type vartype =
+| VarTy         of ustring
+| VarTm         of ustring
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
@@ -148,6 +155,8 @@ let tm_info t =
   | TmPEval(fi) -> fi
   | TmIfexp(fi,_,_) -> fi
   | TmFix(fi) -> fi
+  | TmTyLam(fi,_,_) -> fi
+  | TmTyApp(fi,_,_) -> fi
 
   | TmChar(fi,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
@@ -162,7 +171,8 @@ let ty_info t =
   match t with
   | TyGround(fi,_) -> fi
   | TyArrow(fi,_,_) -> fi
-  | TyVar(fi,_) -> fi
+  | TyVar(fi,_,_) -> fi
+  | TyAll(fi,_,_) -> fi
   | TyUndef -> NoInfo         (* Used when deriving types for let-expressions *)
 
 

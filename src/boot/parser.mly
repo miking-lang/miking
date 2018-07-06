@@ -29,6 +29,8 @@
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
+      | TmTyLam(fi,x,t1) -> hasx t1
+      | TmTyApp(fi,t1,ty1) -> hasx t1
       | TmPEval(_) -> false
       | TmIfexp(_,_,None) -> false
       | TmIfexp(_,_,Some(t1)) -> hasx t1
@@ -387,7 +389,7 @@ tyatom:
        | "Float" -> TyGround($1.i,GFloat)
        | "String" -> TyGround($1.i,GVoid)  (* TODO *)
        | "Void" -> TyGround($1.i,GVoid)
-       | _ -> TyVar($1.i,$1.v)
+       | _ -> TyVar($1.i,$1.v,-1)
       }
   | LPAREN RPAREN
       {TyGround(mkinfo $1.i $2.i,GVoid)}

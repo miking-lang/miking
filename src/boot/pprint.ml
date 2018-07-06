@@ -159,6 +159,8 @@ and pprint basic t =
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
+  | TmTyLam(_,x,t1) -> us"(Lam " ^. x ^. us". " ^. pprint t1 ^. us")"
+  | TmTyApp(_,t1,ty1) -> pprint t1 ^. us" $" ^. pprint_ty ty1
   | TmPEval(_) -> us"peval"
   | TmIfexp(_,None,_) -> us"ifexp"
   | TmIfexp(_,Some(g),Some(t2)) -> us"ifexp(" ^. usbool g ^. us"," ^. pprint t2 ^. us")"
@@ -202,7 +204,8 @@ and pprint_ty ty =
     (if inside then us"(" else us"") ^.
     ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
       (if inside then us")" else us"")
-  | TyVar(fi,x) -> x
-  | TyUndef -> us"Undef"
+  | TyVar(fi,x,_) -> x
+  | TyAll(fi,x,ty1) -> us"all " ^. x ^. us". " ^. ppt ty1 false
+ | TyUndef -> us"Undef"
   in
     ppt ty false
