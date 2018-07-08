@@ -28,6 +28,9 @@ let enable_debug_readback_env = false
 let enable_debug_eval = false
 let enable_debug_eval_env = false
 let enable_debug_after_peval = false
+let enable_debug_after_parse = false
+let enable_debug_after_debruijn = true
+let enable_debug_after_erase = true
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
 let empty_eval_atom fi id tms v = v
@@ -45,8 +48,8 @@ let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
     | Info(filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
-        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint false t1) ^.
-        us"\n    RHS: " ^. (pprint false t2)
+        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint true t1) ^.
+        us"\n    RHS: " ^. (pprint true t2)
     | NoInfo -> us"Unit test FAILED ")
 
 (* Add pattern variables to environment. Used in the debruijn function *)
@@ -95,7 +98,7 @@ let rec debruijn env t =
   | TmConst(_,_) -> t
   | TmFix(_) -> t
   | TmTyLam(fi,x,t1) -> TmTyLam(fi,x,debruijn (VarTy(x)::env) t1)
-  | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, ty1)
+  | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, debruijnTy env ty1)
   | TmPEval(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
@@ -220,13 +223,20 @@ let debug_eval env t =
         uprint_endline (pprint_env env))
   else ()
 
-(* Debug function used after partial evaluation *)
-let debug_after_peval t =
-  if enable_debug_after_peval then
-    (printf "\n-- after peval --  \n";
+(* Debug template function. Used below*)
+let debug_after t flag text=
+  if flag then
+    (printf "\n-- %s --  \n" text;
      uprint_endline (pprint true t);
      t)
   else t
+
+
+(* Debug function used after specific tasks *)
+let debug_after_peval t = debug_after t enable_debug_after_peval "After peval"
+let debug_after_parse t = debug_after t enable_debug_after_parse "After parsing"
+let debug_after_debruijn t = debug_after t enable_debug_after_debruijn "After debruijn"
+let debug_after_erase t = debug_after t enable_debug_after_erase "After erase"
 
 
 (* Mapping between named builtin functions (intrinsics) and the
@@ -481,7 +491,7 @@ let rec readback env n t =
   (* Constant, fix, and PEval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (1)"
   (* If expression *)
   | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
@@ -549,13 +559,13 @@ let rec normalize env n t =
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
     (* System F terms *)
-    | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
+    | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (2)"
     (* Stay in normalized form *)
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (3)"
   (* If expression *)
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
@@ -607,7 +617,7 @@ let rec eval env t =
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist"
+  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (4)"
   (* If expression *)
   | TmIfexp(fi,_,_) -> t
   (* The rest *)
@@ -649,9 +659,11 @@ let evalprog filename typecheck =
   begin try
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
-        |> Parser.main Lexer.main
-        |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
+        |> Parser.main Lexer.main |> debug_after_parse
         |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
+        |> debug_after_debruijn
+        |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
+        |> Typesys.erase |> debug_after_erase
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
 

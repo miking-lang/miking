@@ -10,6 +10,8 @@ open Ustring.Op
 open Msg
 
 
+
+
 let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
@@ -136,13 +138,20 @@ and ty =
 | TyUndef
 
 (* Variable type. Either a type variable or a term variable *)
-type vartype =
+and vartype =
 | VarTy         of ustring
 | VarTm         of ustring
+
+and tyenvVar =
+| TyenvTmvar    of ustring * ty
+| TyenvTyvar    of ustring
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
+(* Extract the variable name from a tyenvVar type *)
+let envVar tyvar =
+  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x) -> x
 
 (* Returns the info field from a term *)
 let tm_info t =

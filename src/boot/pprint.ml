@@ -8,6 +8,18 @@ open Ast
 open Ustring.Op
 open Printf
 
+
+(* Debug options *)
+let enable_debug_debruijn_print = true
+
+
+(* Print out a variable, either in debug mode or not *)
+let varDebugPrint x n =
+  if enable_debug_debruijn_print
+  then x ^. us(sprintf "'%d" n) else x
+
+
+
 (* Print the kind of unified collection (UC) type. *)
 let pprintUCKind ordered uniqueness =
   match ordered, uniqueness with
@@ -151,8 +163,7 @@ and pprint_const c =
 and pprint basic t =
   let pprint = pprint basic in
   match t with
-  | TmVar(_,x,n,false) -> x ^. us"#" ^. us(string_of_int n)
-  | TmVar(_,x,n,true) -> us"$" ^. us(string_of_int n)
+  | TmVar(_,x,n,_) -> varDebugPrint x n
   | TmLam(_,x,ty,t1) -> us"(lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. pprint t1 ^. us")"
   | TmClos(_,x,_,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
   | TmClos(_,x,_,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
@@ -204,7 +215,7 @@ and pprint_ty ty =
     (if inside then us"(" else us"") ^.
     ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
       (if inside then us")" else us"")
-  | TyVar(fi,x,_) -> x
+  | TyVar(fi,x,n) -> varDebugPrint x n
   | TyAll(fi,x,ty1) -> us"all " ^. x ^. us". " ^. ppt ty1 false
  | TyUndef -> us"Undef"
   in

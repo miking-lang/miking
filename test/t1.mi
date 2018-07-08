@@ -3,6 +3,8 @@
 
 language MCore
 
+/*
+// Simple types and function types
 utest 1 1
 utest true true
 utest 1.2 1.2
@@ -10,14 +12,16 @@ utest (addi 1 2) 3
 utest ((lam x:Int. addi x 1) 2) 3
 utest ((lam f:Int->Int. lam x:Int. f x) (lam y:Int. addi y 5) 2) 7
 
-let x = 5
-utest x 5
-
-
+// Test simple type abstraction and type application
 let foo = Lam T. lam f:T->T. lam x:T. f x
-let f1 = lam x:Int->Int. addi x 5
-let res = foo $Int f1 10
+let f1 = lam x:Int. addi x 5
+utest (foo $Int f1 10) 15
 
 
-let boo = lam g:all a. a->a->a. lam f:Int->Int. g $Int f 2
-utest (boo foo f1) 1
+// System F term where a parameter has universal type
+let boo = Lam T. lam f:(all X.X->X). lam v:T. f $T v
+utest (boo $Int (Lam X. lam x:X.x) 3) 3
+*/
+
+let goo = (Lam X. (Lam Y. lam f:(all X.Y->X). lam x:Y. f $Y x) $X) $Int
+utest (goo (lam x:Int.x) 2) 2
