@@ -186,8 +186,8 @@ mc_left:
   | mc_left mc_atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
-  | mc_left DOLLAR ty
-      { let fi = mkinfo (tm_info $1) (ty_info $3) in
+  | mc_left LSQUARE ty RSQUARE
+      { let fi = mkinfo (tm_info $1) $4.i in
         TmTyApp(fi,$1,$3) }
 
 mc_atom:

@@ -14,14 +14,18 @@ utest ((lam f:Int->Int. lam x:Int. f x) (lam y:Int. addi y 5) 2) 7
 // Test simple type abstraction and type application
 let foo = Lam T. lam f:T->T. lam x:T. f x
 let f1 = lam x:Int. addi x 5
-utest (foo $Int f1 10) 15
+utest (foo [Int] f1 10) 15
 
 
 // System F term where a parameter has universal type
-let boo = Lam T. lam f:(all X.X->X). lam v:T. f $T v
-utest (boo $Int (Lam X. lam x:X.x) 3) 3
+let boo = Lam T. lam f:(all X.X->X). lam v:T. f [T] v
+utest (boo [Int] (Lam X. lam x:X.x) 3) 3
 
 
 // System F where type subst forces evaluation under univeral binder
-let goo = (Lam X. (Lam Y. lam f:(all X.Y->X). lam x:Y. f $Y x) $X) $Int
+let goo = (Lam X. (Lam Y. lam f:(all X.Y->X). lam x:Y. f [Y] x) [X]) [Int]
 utest (goo (Lam X. lam x:Int.x) 2) 2
+
+// Same as above, but with overlapping term and type variable names
+let goo = (Lam x. (Lam f. lam f:(all x.f->x). lam x:f. f [f] x) [x]) [Int]
+utest (goo (Lam x. lam x:Int.x) 2) 2
