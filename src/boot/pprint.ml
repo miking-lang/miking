@@ -10,7 +10,7 @@ open Printf
 
 
 (* Debug options *)
-let enable_debug_debruijn_print = true
+let enable_debug_debruijn_print = false
 
 
 (* Print out a variable, either in debug mode or not *)

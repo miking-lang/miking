@@ -29,8 +29,8 @@ let enable_debug_eval = false
 let enable_debug_eval_env = false
 let enable_debug_after_peval = false
 let enable_debug_after_parse = false
-let enable_debug_after_debruijn = true
-let enable_debug_after_erase = true
+let enable_debug_after_debruijn = false
+let enable_debug_after_erase = false
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
 let empty_eval_atom fi id tms v = v

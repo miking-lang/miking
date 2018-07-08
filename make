@@ -26,7 +26,7 @@ case $1 in
     test)
         buildboot
         cd test
-        ../build/boot test mcore ppl ragnar
+        ../build/boot test mcore ppl ragnar && ../build/boot tytest tymcore
         ;;
     # Clean up the project
     clean)

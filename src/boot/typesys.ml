@@ -1,4 +1,5 @@
 
+
 (*
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
@@ -19,8 +20,18 @@ open Pprint
 
 
 
+(* Debug options *)
+let enable_debug_type_checking = false
 
 
+(* Generic type checking function *)
+let tydebug desc strlst tmlst tylst =
+  if not enable_debug_type_checking then () else (
+  printf "------------ %s START ------- \n" desc;
+  List.iter (fun (x,xs) -> uprint_endline (us x ^. us": " ^. xs)) strlst;
+  List.iter (fun (x,t) -> uprint_endline (us x ^. us": " ^. (pprint true t))) tmlst;
+  List.iter (fun (x,ty) -> uprint_endline (us x ^. us": " ^. (pprint_ty ty))) tylst;
+  printf "------------- %s END -------- \n" desc)
 
 
 (* Checks if two types are equal *)
@@ -98,12 +109,15 @@ let tySubst tys ty =
     | TyGround(fi,gt) -> ty
     | TyArrow(fi,ty1,ty2) -> TyArrow(fi,subst j s ty1, subst j s ty2)
     | TyVar(fi,x,k) -> if k = j then s else TyVar(fi,x,k)
-    | TyAll(fi,x,ty2) ->
-      let _ = if tyequal s (tyShift 1 0 s) then printf "** EQ **\n" else printf "** NOTEQ **\n" in
-      TyAll(fi,x, subst (j+1) (tyShift 1 0 s) ty2)
+    | TyAll(fi,x,ty2) -> TyAll(fi,x, subst (j+1) (tyShift 1 0 s) ty2)
     | TyUndef -> TyUndef)
   in
     subst 0 tys ty
+
+let tySubstTop tys ty =
+  tyShift (-1) 0 (tySubst (tyShift 1 0 tys) ty)
+
+
 
 (* Returns the type of term [t]
    The type environment [tyenv] is list with elements of type [tyenvVar] *)
@@ -112,36 +126,23 @@ let rec typeof tyenv t =
   | TmVar(fi,x,n,pe) ->
       (match List.nth_opt tyenv n with
        | Some(TyenvTmvar(y,ty1)) ->
-(*
-       printf "------------ VAR START ------ \n";
-       uprint_endline (us"** ty1: " ^. (pprint_ty ty1));
-       uprint_endline (us"** ty1 after shift: " ^. (pprint_ty (tyShift (n+1) 0 ty1)));
-       printf "------------ VAR END -------- \n";
-*)
-       tyShift (n+1) 0 ty1  (* Get types at correct index *)
+         let ty1shift = tyShift (n+1) 0 ty1 in
+         tydebug "TmVar" ["variable",x] [] [("ty1",ty1);("ty1shift",ty1shift)];
+         ty1shift
        | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
   | TmLam(fi,x,ty1,t1) ->
     let ty2 = typeof (TyenvTmvar(x,ty1)::tyenv) t1 in
-(*
-      printf "------------ LAM START ------ \n";
-      uprint_endline (us"** ty2: " ^. (pprint_ty ty2));
-      uprint_endline (us"** ty2subst: " ^. (pprint_ty (tyShift (-1) 0 ty2)));
-      printf "------------ LAM END -------- \n";
-*)
-      TyArrow(fi,ty1,tyShift (-1) 0 ty2)
+    let ty2shift = tyShift (-1) 0 ty2 in
+      tydebug "TmLam" [] [] [("ty1",ty1);("ty2",ty2);("ty2shift",ty2shift)];
+      TyArrow(fi,ty1,ty2shift)
   | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
   | TmApp(fi,TmLam(fi2,x,TyUndef,t1),t2) ->
       let ty2 = typeof tyenv t2 in
       typeof (TyenvTmvar(x,ty2)::tyenv) t1
   | TmApp(fi,t1,t2) -> (
     match typeof tyenv t1,typeof tyenv t2 with
-    | TyArrow(fi2,ty11,ty12),ty11' ->
-(*
-      printf "------------ APP START ------ \n";
-      uprint_endline (us"** ty1: " ^. (pprint_ty (TyArrow(fi2,ty11,ty12))));
-      uprint_endline (us"** ty2: " ^. (pprint_ty ty11'));
-      printf "------------ APP END -------- \n";
-*)
+    | TyArrow(fi2,ty11,ty12) as ty1,ty11' ->
+        tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
         if tyequal ty11 ty11' then ty12
         else error (tm_info t2)
           (us"Function application type mismatch. Applied an expression of type " ^.
@@ -159,17 +160,12 @@ let rec typeof tyenv t =
   | TmTyLam(fi,x,t1) ->
       let ty2 = typeof (TyenvTyvar(x)::tyenv) t1 in
       TyAll(fi,x,ty2)
-  | TmTyApp(fi,t1,ty1) ->
+  | TmTyApp(fi,t1,ty2) ->
      (match typeof (tyenv) t1 with
-      | TyAll(fi2,_,ty2) ->  tySubst ty1 ty2
-(*
-        uprint_endline (us"** tm: " ^. (pprint true t1));
-        uprint_endline (us"** ty1: " ^. (pprint_ty ty1));
-        uprint_endline (us"** ty2: " ^. (pprint_ty ty2));
-        let a = tySubst ty1 ty2 in
-        uprint_endline (us"** tysubst: " ^. (pprint_ty a));
-          a
-*)
+      | TyAll(fi2,_,ty1) ->
+        let ty1subst = tySubstTop ty2 ty1 in
+        tydebug "TmTyApp" [] [("t1",t1)] [("ty1",ty1);("ty2",ty2);("ty1subst",ty1subst)];
+        ty1subst
       | ty -> error (tm_info t1)
              (us"Type application expects an universal type, but found " ^.
               pprint_ty ty ^. us"."))
