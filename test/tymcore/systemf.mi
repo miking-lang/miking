@@ -1,5 +1,5 @@
 
-language MCore
+lang mcore
 
 // Simple types and function types
 utest 1 1

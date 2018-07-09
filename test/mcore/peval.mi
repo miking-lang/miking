@@ -4,7 +4,7 @@
 //
 // File mcore.mi tests all basic MCore language constructs
 
-language MCore
+lang mcore
 
 
 // Literals and normal expressions.

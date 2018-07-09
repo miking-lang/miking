@@ -28,9 +28,9 @@ let reserved_strings = [
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
   ("data",          fun(i) -> Parser.DATA{i=i;v=()});
-  ("language",      fun(i) -> Parser.LANG{i=i;v=()});
-  ("MCore",         fun(i) -> Parser.MCORE{i=i;v=()});
-  ("Ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
+  ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
+  ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
+  ("ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});

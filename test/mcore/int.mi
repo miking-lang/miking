@@ -3,7 +3,7 @@
 //
 // Test integer primitives
 
-language MCore
+lang mcore
 
 // Literals
 utest 1  1

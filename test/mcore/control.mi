@@ -3,7 +3,7 @@
 //
 // Test of control structions, including functions
 
-language MCore
+lang mcore
 
 
 // IF-expressions. Note that the branches must be wrapped into a thunk
