@@ -1,5 +1,11 @@
 
 lang mcore
 
-// Appying type-level unity function
-//utest  ((lam x:((lam X::*. X)Int). addi x 2) 3) 5
+utest 1 1
+
+utest ((lam x:((lam X::*.X)Int). addi x 2) 3) 5
+
+utest ((lam x:((lam F::*->*. lam X::*. F X) (lam Y::*.Y) Int). addi x 2) 3) 5
+
+// The below should fail
+utest ((lam x:((lam F::*. lam X::*. F X) (lam Y::*.Y) Int). addi x 2) 3) 5

@@ -30,6 +30,11 @@ let pprintUCKind ordered uniqueness =
   | UCSorted,    UCUnique      -> us"SSet"     (* Sorted Set *)
   | UCSorted,    UCMultivalued -> us"SMSet"    (* Sorted Multivalued Set *)
 
+(* Pretty printing for precedence *)
+let left inside = if inside then us"(" else us""
+let right inside = if inside then us")" else us""
+
+
 (* Pretty print "true" or "false" *)
 let usbool x = us (if x then "true" else "false")
 
@@ -158,27 +163,34 @@ and pprint_const c =
       (if List.length tms = 0 then us""
        else us"(" ^. Ustring.concat (us",") (List.map (pprint true) tms) ^. us")")
 
+
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 and pprint basic t =
-  let pprint = pprint basic in
+  let rec ppt inside t =
   match t with
   | TmVar(_,x,n,_) -> varDebugPrint x n
-  | TmLam(_,x,ty,t1) -> us"(lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. pprint t1 ^. us")"
-  | TmClos(_,x,_,t,_,false) -> us"(clos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmClos(_,x,_,t,_,true) -> us"(peclos " ^. x ^. us". " ^. pprint t ^. us")"
-  | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
+  | TmLam(_,x,ty,t1) -> left inside ^.
+      us"lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. ppt false t1 ^. right inside
+  | TmClos(_,x,_,t,_,false) -> left inside ^. us"clos " ^. x ^. us". " ^.
+       ppt false t ^. right inside
+  | TmClos(_,x,_,t,_,true) -> left inside ^. us"peclos " ^.
+       x ^. us". " ^. ppt false t ^. right inside
+  | TmApp(_,t1,t2) ->
+       left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmTyLam(_,x,kind,t1) -> us"(Lam " ^. x ^. us"::" ^. pprint_kind kind ^.
-                            us". " ^. pprint t1 ^. us")"
-  | TmTyApp(_,t1,ty1) -> pprint t1 ^. us" $" ^. pprint_ty ty1
+  | TmTyLam(_,x,kind,t1) -> left inside ^. us"Lam " ^. x ^. us"::"
+      ^. pprint_kind kind ^. us". " ^. ppt false t1  ^. us"" ^. right inside
+  | TmTyApp(_,t1,ty1) ->
+      left inside ^. ppt false t1 ^. us" [" ^. pprint_ty ty1 ^. us"]" ^. right inside
   | TmPEval(_) -> us"peval"
   | TmIfexp(_,None,_) -> us"ifexp"
-  | TmIfexp(_,Some(g),Some(t2)) -> us"ifexp(" ^. usbool g ^. us"," ^. pprint t2 ^. us")"
+  | TmIfexp(_,Some(g),Some(t2)) ->
+      us"ifexp(" ^. usbool g ^. us"," ^. ppt false t2 ^. us")"
   | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmExprSeq(fi,t1,t2) -> pprint t1 ^. us"\n" ^. pprint t2
+  | TmExprSeq(fi,t1,t2) -> ppt false t1 ^. us"\n" ^. ppt false t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->
@@ -187,14 +199,15 @@ and pprint basic t =
       | TmChar(_,_)::_ ->
         let intlst = uc2ustring lst in
         us"\"" ^. list2ustring intlst ^.  us"\""
-      | _ -> us"[" ^. (Ustring.concat (us",") (List.map pprint lst)) ^. us"]")
+      | _ -> us"[" ^. (Ustring.concat (us",") (List.map (ppt false) lst)) ^. us"]")
     | _,_ ->
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
-          (Ustring.concat (us",") (List.map pprint (uct2list uct))) ^. us")")
-  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. pprint t1 ^. us" " ^. pprint t2
+          (Ustring.concat (us",") (List.map (ppt false) (uct2list uct))) ^. us")")
+  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   | TmMatch(fi,t1,cases)
-    ->  us"match " ^. pprint t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
+    ->  us"match " ^. ppt false t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
+  in ppt false t
 
 (* Pretty prints the environment *)
 and pprint_env env =
@@ -204,7 +217,7 @@ and pprint_env env =
 
 (* Pretty print a type *)
 and pprint_ty ty =
-  let rec ppt ty inside =
+  let rec ppt inside ty =
   match ty with
   | TyGround(fi,gt) ->
     (match gt with
@@ -213,22 +226,23 @@ and pprint_ty ty =
     | GFloat -> us"Float"
     | GVoid -> us"Void")
   | TyArrow(fi,ty1,ty2) ->
-    (if inside then us"(" else us"") ^.
-    ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
-      (if inside then us")" else us"")
+      left inside ^. ppt true ty1 ^. us"->" ^. ppt false ty2 ^. right inside
   | TyVar(fi,x,n) -> varDebugPrint x n
-  | TyAll(fi,x,kind,ty1) -> us"all " ^. x ^. us"::" ^.
-                            pprint_kind kind ^. us". " ^. ppt ty1 false
-  | TyLam(fi,x,kind,ty1) -> us"lam " ^. x ^. us"::" ^.
-                            pprint_kind kind ^. us". " ^. ppt ty1 false
-  | TyApp(fi,ty1,ty2) -> ppt ty1 false ^. us" " ^. ppt ty2 true
+  | TyAll(fi,x,kind,ty1) -> left inside ^. us"all " ^. x ^. us"::" ^.
+         pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
+  | TyLam(fi,x,kind,ty1) -> left inside ^. us"lam " ^. x ^. us"::" ^.
+         pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
+  | TyApp(fi,ty1,ty2) ->
+    left inside ^. ppt true ty1 ^. us" " ^. ppt true ty2 ^. right inside
  | TyUndef -> us"Undef"
   in
-    ppt ty false
+    ppt true ty
 
 (* Pretty print kinds *)
 and pprint_kind k =
+  let rec ppt inside k =
   match k with
   | KindStar(fi) -> us"*"
   | KindArrow(fi,k1,k2) ->
-      pprint_kind k1 ^. us"->" ^. pprint_kind k2
+    left inside ^. ppt true k1 ^. us"->" ^. ppt false k2 ^. right inside
+  in ppt false k
