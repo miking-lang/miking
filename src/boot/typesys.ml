@@ -18,8 +18,6 @@ open Msg
 open Pprint
 
 
-
-
 (* Debug options *)
 let enable_debug_type_checking = false
 
@@ -41,12 +39,14 @@ let rec tyequal ty1 ty2 =
   | TyArrow(_,ty11,ty12),TyArrow(_,ty21,ty22) ->
      tyequal ty11 ty21 &&  tyequal ty21 ty22
   | TyVar(_,_,n1),TyVar(_,_,n2) -> n1 = n2
-  | TyAll(_,x1,ty1),TyAll(_,x2,ty2) -> tyequal ty1 ty2
+  | TyAll(_,x1,_,ty1),TyAll(_,x2,_,ty2) -> tyequal ty1 ty2
+  | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO"
+  | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO"
   | TyUndef,TyUndef -> true
   | TyGround(_,_), _ | _,TyGround(_,_) -> false
   | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> false
   | TyVar(_,_,_), _ | _,TyVar(_,_,_) -> false
-  | TyAll(_,_,_), _ | _,TyAll(_,_,_) -> false
+  | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> false
 
 (* Returns the type of a constant value *)
 let type_const c =
@@ -98,7 +98,9 @@ let rec tyShift d c ty =
   | TyGround(fi,gt) -> ty
   | TyArrow(fi,ty1,ty2) -> TyArrow(fi,tyShift d c ty1, tyShift d c ty2)
   | TyVar(fi,x,k) -> TyVar(fi,x,if k < c then k else k + d)
-  | TyAll(fi,x,ty2) -> TyAll(fi,x, tyShift d (c+1) ty2)
+  | TyAll(fi,x,kind,ty2) -> TyAll(fi,x,kind, tyShift d (c+1) ty2)
+  | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, tyShift d (c+1) ty1)
+  | TyApp(fi,ty1,ty2) -> TyApp(fi, tyShift d c ty1, tyShift d c ty2)
   | TyUndef -> TyUndef
 
 
@@ -107,9 +109,11 @@ let tySubst tys ty =
   let rec subst j s ty =
     (match ty with
     | TyGround(fi,gt) -> ty
-    | TyArrow(fi,ty1,ty2) -> TyArrow(fi,subst j s ty1, subst j s ty2)
+    | TyArrow(fi,ty1,ty2) -> TyArrow(fi, subst j s ty1, subst j s ty2)
     | TyVar(fi,x,k) -> if k = j then s else TyVar(fi,x,k)
-    | TyAll(fi,x,ty2) -> TyAll(fi,x, subst (j+1) (tyShift 1 0 s) ty2)
+    | TyAll(fi,x,kind,ty2) -> TyAll(fi,x,kind, subst (j+1) (tyShift 1 0 s) ty2)
+    | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, subst (j+1) (tyShift 1 0 s) ty1)
+    | TyApp(fi,ty1,ty2) -> TyApp(fi, subst j s ty1, subst j s ty2)
     | TyUndef -> TyUndef)
   in
     subst 0 tys ty
@@ -157,12 +161,12 @@ let rec typeof tyenv t =
   | TmPEval(fi) -> failwith "TODO5"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
-  | TmTyLam(fi,x,t1) ->
+  | TmTyLam(fi,x,kind,t1) ->
       let ty2 = typeof (TyenvTyvar(x)::tyenv) t1 in
-      TyAll(fi,x,ty2)
+      TyAll(fi,x,kind,ty2)
   | TmTyApp(fi,t1,ty2) ->
      (match typeof (tyenv) t1 with
-      | TyAll(fi2,_,ty1) ->
+      | TyAll(fi2,_,_,ty1) ->
         let ty1subst = tySubstTop ty2 ty1 in
         tydebug "TmTyApp" [] [("t1",t1)] [("ty1",ty1);("ty2",ty2);("ty1subst",ty1subst)];
         ty1subst
@@ -194,7 +198,7 @@ let rec erase t =
   | TmPEval(fi) -> t
   | TmIfexp(fi,op1,t2op) -> TmIfexp(fi, op1, eraseOp t2op)
   | TmFix(fi) -> t
-  | TmTyLam(fi,x,t1) -> TmLam(fi,us"_",TyGround(NoInfo,GVoid),erase t1)
+  | TmTyLam(fi,x,kind,t1) -> TmLam(fi,us"_",TyGround(NoInfo,GVoid),erase t1)
   | TmTyApp(fi,t1,ty1) -> TmApp(fi,erase t1,TmNop)
   | TmChar(fi,x) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi, erase t1, erase t2)

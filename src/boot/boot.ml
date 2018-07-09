@@ -80,7 +80,9 @@ let rec debruijn env t =
         | VarTm(y)::ee -> find ee (n+1)
         | [] -> raise_error fi ("Unknown type variable '" ^ Ustring.to_utf8 x ^ "'"))
       in TyVar(fi,x,find env 0)
-    | TyAll(fi,x,ty1) -> TyAll(fi,x,debruijnTy (VarTy(x)::env) ty1)
+    | TyAll(fi,x,kind,ty1) -> TyAll(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
+    | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
+    | TyApp(fi,ty1,ty2) -> TyApp(fi, debruijnTy env ty1, debruijnTy env ty2)
     | TyUndef -> TyUndef
     )
   in
@@ -97,7 +99,7 @@ let rec debruijn env t =
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmTyLam(fi,x,t1) -> TmTyLam(fi,x,debruijn (VarTy(x)::env) t1)
+  | TmTyLam(fi,x,kind,t1) -> TmTyLam(fi,x,kind,debruijn (VarTy(x)::env) t1)
   | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, debruijnTy env ty1)
   | TmPEval(_) -> t
   | TmIfexp(_,_,_) -> t
@@ -491,7 +493,7 @@ let rec readback env n t =
   (* Constant, fix, and PEval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (1)"
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (1)"
   (* If expression *)
   | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
@@ -559,13 +561,13 @@ let rec normalize env n t =
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
     (* System F terms *)
-    | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (2)"
+    | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (2)"
     (* Stay in normalized form *)
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (3)"
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (3)"
   (* If expression *)
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
@@ -617,7 +619,7 @@ let rec eval env t =
   (* Constant *)
   | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
   (* System F terms *)
-  | TmTyLam(fi,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (4)"
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (4)"
   (* If expression *)
   | TmIfexp(fi,_,_) -> t
   (* The rest *)

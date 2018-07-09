@@ -1,0 +1,5 @@
+
+language MCore
+
+// Appying type-level unity function
+//utest  ((lam x:((lam X::*. X)Int). addi x 2) 3) 5

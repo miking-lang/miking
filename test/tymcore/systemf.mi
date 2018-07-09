@@ -1,7 +1,6 @@
 
 language MCore
 
-
 // Simple types and function types
 utest 1 1
 utest true true
@@ -25,6 +24,7 @@ utest (boo [Int] (Lam X. lam x:X.x) 3) 3
 // System F where type subst forces evaluation under univeral binder
 let goo = (Lam X. (Lam Y. lam f:(all X.Y->X). lam x:Y. f [Y] x) [X]) [Int]
 utest (goo (Lam X. lam x:Int.x) 2) 2
+
 
 // Same as above, but with overlapping term and type variable names
 let goo = (Lam x. (Lam f. lam f:(all x.f->x). lam x:f. f [f] x) [x]) [Int]

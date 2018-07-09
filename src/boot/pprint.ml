@@ -170,7 +170,8 @@ and pprint basic t =
   | TmApp(_,t1,t2) -> pprint t1 ^. us" " ^. pprint t2
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmTyLam(_,x,t1) -> us"(Lam " ^. x ^. us". " ^. pprint t1 ^. us")"
+  | TmTyLam(_,x,kind,t1) -> us"(Lam " ^. x ^. us"::" ^. pprint_kind kind ^.
+                            us". " ^. pprint t1 ^. us")"
   | TmTyApp(_,t1,ty1) -> pprint t1 ^. us" $" ^. pprint_ty ty1
   | TmPEval(_) -> us"peval"
   | TmIfexp(_,None,_) -> us"ifexp"
@@ -216,7 +217,18 @@ and pprint_ty ty =
     ppt ty1 true ^. us" -> " ^. ppt ty2 false ^.
       (if inside then us")" else us"")
   | TyVar(fi,x,n) -> varDebugPrint x n
-  | TyAll(fi,x,ty1) -> us"all " ^. x ^. us". " ^. ppt ty1 false
+  | TyAll(fi,x,kind,ty1) -> us"all " ^. x ^. us"::" ^.
+                            pprint_kind kind ^. us". " ^. ppt ty1 false
+  | TyLam(fi,x,kind,ty1) -> us"lam " ^. x ^. us"::" ^.
+                            pprint_kind kind ^. us". " ^. ppt ty1 false
+  | TyApp(fi,ty1,ty2) -> ppt ty1 false ^. us" " ^. ppt ty2 true
  | TyUndef -> us"Undef"
   in
     ppt ty false
+
+(* Pretty print kinds *)
+and pprint_kind k =
+  match k with
+  | KindStar(fi) -> us"*"
+  | KindArrow(fi,k1,k2) ->
+      pprint_kind k1 ^. us"->" ^. pprint_kind k2

@@ -27,7 +27,7 @@
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
-      | TmTyLam(fi,x,t1) -> hasx t1
+      | TmTyLam(fi,x,k,t1) -> hasx t1
       | TmTyApp(fi,t1,ty1) -> hasx t1
       | TmPEval(_) -> false
       | TmIfexp(_,_,None) -> false

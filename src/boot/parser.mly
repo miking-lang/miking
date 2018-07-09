@@ -29,7 +29,7 @@
       | TmApp(_,t1,t2) -> hasx t1 || hasx t2
       | TmConst(_,_) -> false
       | TmFix(_) -> false
-      | TmTyLam(fi,x,t1) -> hasx t1
+      | TmTyLam(fi,x,k,t1) -> hasx t1
       | TmTyApp(fi,t1,ty1) -> hasx t1
       | TmPEval(_) -> false
       | TmIfexp(_,_,None) -> false
@@ -48,6 +48,11 @@
     in
     if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyUndef,t))) else t
 
+(* Create kind when optionally available *)
+let mkopkind fi op =
+  match op with
+  | None -> KindStar(fi)
+  | Some(k) -> k
 
 %}
 
@@ -172,9 +177,9 @@ mc_term:
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
         TmLam(fi,$2.v,$4,$6) }
-  | BIGLAM IDENT DOT mc_term
-      { let fi = mkinfo $1.i (tm_info $4) in
-        TmTyLam(fi,$2.v,$4) }
+  | BIGLAM IDENT opkind DOT mc_term
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmTyLam(fi,$2.v,mkopkind $2.i $3,$5) }
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyUndef,$6),$4) }
@@ -384,16 +389,27 @@ identtyseq:
 
 
 ty:
-  | tyatom
+  | ty_left
       { $1 }
-  | ALL IDENT DOT ty
-      { let fi = mkinfo $1.i (ty_info $4) in
-        TyAll(fi,$2.v,$4) }
-  | tyatom ARROW ty
+  | ty_left ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
+  | ALL IDENT opkind DOT ty
+      { let fi = mkinfo $1.i (ty_info $5) in
+        TyAll(fi,$2.v,mkopkind $2.i $3,$5) }
+  | LAM IDENT opkind DOT ty
+      { let fi = mkinfo $1.i (ty_info $5) in
+        TyLam(fi,$2.v,mkopkind $2.i $3,$5) }
 
-tyatom:
+
+ty_left:
+  | ty_atom
+      { $1 }
+  | ty_left ty_atom
+      { let fi = mkinfo (ty_info $1) (ty_info $2) in
+        TyApp(fi,$1,$2) }
+
+ty_atom:
   | IDENT
       {match Ustring.to_utf8 $1.v with
        | "Bool" -> TyGround($1.i,GBool)
@@ -403,12 +419,29 @@ tyatom:
        | "Void" -> TyGround($1.i,GVoid)
        | _ -> TyVar($1.i,$1.v,-1)
       }
-  | LPAREN RPAREN
-      {TyGround(mkinfo $1.i $2.i,GVoid)}
-  | LPAREN revtypetupleseq RPAREN
+  | LPAREN ty RPAREN
       { $2 }
-  | LSQUARE ty RSQUARE
-      { $2 (* TODO: no support for lists yet *)  }
+
+
+opkind:
+  |
+      { None }
+  | CONS kind
+      { Some($2) }
+
+
+kind:
+  | kindatom
+      { $1 }
+  | kindatom ARROW kind
+      { let fi = mkinfo (kind_info $1) (kind_info $3) in
+        KindArrow(fi,$1,$3) }
+
+kindatom:
+  | MUL
+      { KindStar($1.i) }
+  | LPAREN kind RPAREN
+      { $2 }
 
 
 revtypetupleseq:

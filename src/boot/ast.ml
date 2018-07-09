@@ -105,18 +105,18 @@ and const =
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
-(* Term/expression *)
+(* Terms / expressions *)
 and tm =
-| TmVar         of info * ustring * int * pemode
-| TmLam         of info * ustring * ty * tm
-| TmClos        of info * ustring * ty * tm * env * pemode
-| TmApp         of info * tm * tm
-| TmConst       of info * const
-| TmPEval       of info
+| TmVar         of info * ustring * int * pemode    (* Variable *)
+| TmLam         of info * ustring * ty * tm         (* Lambda abstraction *)
+| TmClos        of info * ustring * ty * tm * env * pemode (* Closure *)
+| TmApp         of info * tm * tm                   (* Application *)
+| TmConst       of info * const                     (* Constant *)
+| TmPEval       of info                             (* Dive operator *)
 | TmIfexp       of info * bool option * tm option
-| TmFix         of info
-| TmTyLam       of info * ustring * tm
-| TmTyApp       of info * tm * ty
+| TmFix         of info                             (* Fix point *)
+| TmTyLam       of info * ustring * kind * tm       (* Type abstraction *)
+| TmTyApp       of info * tm * ty                   (* Type application *)
 
 
 | TmChar        of info * int
@@ -131,11 +131,19 @@ and groundty = GBool | GInt | GFloat | GVoid
 
 (* Types *)
 and ty =
-| TyGround      of info * groundty
-| TyArrow       of info * ty * ty
-| TyVar         of info * ustring * int
-| TyAll         of info * ustring * ty
+| TyGround      of info * groundty                  (* Ground types *)
+| TyArrow       of info * ty * ty                   (* Function type *)
+| TyVar         of info * ustring * int             (* Type variable *)
+| TyAll         of info * ustring * kind * ty       (* Universal type *)
+| TyLam         of info * ustring * kind * ty       (* Type-level function *)
+| TyApp         of info * ty * ty                   (* Type-level application *)
 | TyUndef
+
+(* Kinds *)
+and kind =
+| KindStar      of info                             (* Kind of proper types *)
+| KindArrow     of info * kind * kind               (* Kind of type-level functions *)
+
 
 (* Variable type. Either a type variable or a term variable *)
 and vartype =
@@ -164,7 +172,7 @@ let tm_info t =
   | TmPEval(fi) -> fi
   | TmIfexp(fi,_,_) -> fi
   | TmFix(fi) -> fi
-  | TmTyLam(fi,_,_) -> fi
+  | TmTyLam(fi,_,_,_) -> fi
   | TmTyApp(fi,_,_) -> fi
 
   | TmChar(fi,_) -> fi
@@ -181,8 +189,18 @@ let ty_info t =
   | TyGround(fi,_) -> fi
   | TyArrow(fi,_,_) -> fi
   | TyVar(fi,_,_) -> fi
-  | TyAll(fi,_,_) -> fi
+  | TyAll(fi,_,_,_) -> fi
+  | TyLam(fi,_,_,_) -> fi
+  | TyApp(fi,_,_) -> fi
   | TyUndef -> NoInfo         (* Used when deriving types for let-expressions *)
+
+
+
+(* Returns the info field from a kind *)
+let kind_info k =
+  match k with
+  | KindStar(fi) -> fi
+  | KindArrow(fi,_,_) -> fi
 
 
 (* Returns the number of expected arguments *)
