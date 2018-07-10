@@ -174,15 +174,15 @@ let rec kindof env ty =
        KindStar(fi)
   | TyVar(fi,x,n) ->
       (match List.nth_opt env n with
-       | Some(TyenvTyvar(y,ki1)) -> ki1
+       | Some(TyenvTyvar(y,_,ki1)) -> ki1
        | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
   | TyAll(fi,x,ki1,ty1) ->
-      (match kindof (TyenvTyvar(x,ki1)::env) ty1 with
+      (match kindof (TyenvTyvar(x,TyUndef,ki1)::env) ty1 with
        | KindStar(_) as ki2 -> ki2
        | ki3 -> error fi (us"The type is of kind " ^. pprint_kind ki3 ^.
                           us", but kind * was expected"))
   | TyLam(fi,x,ki1,ty1) ->
-      let ki2 =  kindof (TyenvTyvar(x,ki1)::env) ty1 in
+      let ki2 =  kindof (TyenvTyvar(x,TyUndef,ki1)::env) ty1 in
       KindArrow(fi,ki1,ki2)
   | TyApp(fi,ty1,ty2) ->
       (match kindof env ty1, kindof env ty2 with
@@ -237,7 +237,7 @@ let rec typeof tyenv t =
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
   | TmTyLam(fi,x,kind,t1) ->
-      let ty2 = typeof (TyenvTyvar(x,kind)::tyenv) t1 in
+      let ty2 = typeof (TyenvTyvar(x,TyUndef,kind)::tyenv) t1 in
       TyAll(fi,x,kind,ty2)
   | TmTyApp(fi,t1,ty2) ->
      (match typeof (tyenv) t1 with
@@ -266,6 +266,155 @@ let rec typeof tyenv t =
                         pprint_ty ty2 ^. us".")
   | TmMatch(fi,t1,cases) -> failwith "TODO12"
   | TmNop -> TyGround(NoInfo,GVoid)
+
+(* Matches two types. Assumes that the input types are normalized.
+   Returns None if they do not match.
+   Returns a Some(ty',env') if match, where ty' is the augmented new
+   type, and env' the environment filled in with more information *)
+let tymatch ty1 ty2 env =
+  let varUpdate env fi x n =
+      (match List.nth_opt env n with
+       | Some(TyenvTyvar(y,TyUndef,_)) -> (TyVar(fi,x,n),env)
+       | Some(TyenvTyvar(y,ty1,ki1)) -> (ty1,env)
+       | _ -> failwith "Should not happen")
+  in
+  let rec tyrec ty1 ty2 env =
+    match ty1,ty2 with
+    | TyGround(_,g1),TyGround(_,g2) ->
+        if g1 = g2 then (ty1,env) else raise Not_found
+    | (TyGround(_,_) as ty), TyUndef | TyUndef,(TyGround(_,_) as ty) -> (ty,env)
+    | TyArrow(fi,ty11,ty12),TyArrow(_,ty21,ty22) ->
+        let (ty1,env1) = tyrec ty11 ty21 env in
+        let (ty2,env2) = tyrec ty12 ty22 env1 in
+        (TyArrow(fi,ty1,ty2),env2)
+    | TyArrow(fi,ty1,ty2),TyUndef | TyUndef,TyArrow(fi,ty1,ty2) ->
+        let (ty1',env1) = tyrec ty1 TyUndef env in
+        let (ty2',env2) = tyrec ty2 TyUndef env1 in
+        (TyArrow(fi,ty1',ty2'),env2)
+    | TyVar(fi,x,n1),TyVar(_,_,n2) ->
+      if n1 <> n2 then raise Not_found else varUpdate env fi x n1
+    | TyVar(fi,x,n),TyUndef | TyUndef,TyVar(fi,x,n) -> varUpdate env fi x n
+    | TyVar(fi,x,n),ty2 | ty2,TyVar(fi,x,n) ->
+        let rec updateEnv env n =
+          (* Should we check that ty2 does not contain type variables? *)
+          (match env with
+           | TyenvTyvar(y,TyUndef,ki1)::rest when n = 0 ->
+               TyenvTyvar(y,ty2,ki1)::rest
+           | TyenvTyvar(y,ty1,ki1)::rest when n = 0 ->
+               if tyequal ty1 ty2 then TyenvTyvar(y,ty1,ki1)::rest
+               else raise Not_found
+           | x::rest when n = 0 -> failwith "Should not happen"
+           | x::rest -> x::(updateEnv rest (n-1))
+           | [] -> failwith "Should not happen")
+        in (ty2, updateEnv env n)
+    | TyAll(_,x1,_,ty1),TyAll(_,x2,_,ty2) -> failwith "TODO"
+    | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO"
+    | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO"
+    | TyUndef,TyUndef -> (TyUndef,env)
+    | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> raise Not_found
+
+    | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> failwith "TODO"
+    | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO"
+    | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO"
+  in
+  try (let (ty',env') = tyrec ty1 ty2 env in Some(ty',env'))
+  with _ -> None
+
+
+
+(* Type reconstruction using bidirectional type checking
+*)
+let rec typerecon tyenv tyinher t =
+  match t with
+  | TmVar(fi,x,n,pe) ->
+      (match List.nth_opt tyenv n with
+       | Some(TyenvTmvar(y,ty1)) ->
+         let ty1shift = tyShift (n+1) 0 ty1 in
+         tydebug "TmVar" ["variable",x] [] [("ty1",ty1);("ty1shift",ty1shift)];
+         (TmVar(fi,x,n,pe), ty1shift, tyenv)
+       | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
+  | TmLam(fi,x,ty1,t1) -> failwith "TODO TmLam"
+(*
+    let ty2 = typeof (TyenvTmvar(x,ty1)::tyenv) t1 in
+    let ty2shift = tyShift (-1) 0 ty2 in
+      tydebug "TmLam" [] [] [("ty1",ty1);("ty2",ty2);("ty2shift",ty2shift)];
+      TyArrow(fi,ty1,ty2shift)
+*)
+  | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
+  | TmApp(fi,TmLam(fi2,x,TyUndef,t1),t2) -> failwith "TODO TmApp"
+(*
+      let ty2 = typeof tyenv t2 in
+      typeof (TyenvTmvar(x,ty2)::tyenv) t1
+*)
+  | TmApp(fi,t1,t2) -> failwith "TODO TmApp"
+(*
+    (match normTy (typeof tyenv t1), normTy (typeof tyenv t2) with
+    | TyArrow(fi2,ty11,ty12) as ty1,ty11' ->
+        tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
+        if tyequal ty11 ty11' then ty12
+        else error (tm_info t2)
+          (us"Function application type mismatch. Applied an expression of type " ^.
+           pprint_ty ty11' ^. us", but expected an expression of type " ^.
+           pprint_ty ty11 ^. us".")
+    | ty1,ty2 -> error (tm_info t1)
+          (us"Type application mismatch. Cannot apply an expression of " ^.
+           us"type " ^. pprint_ty ty2 ^. us" to an expression of type " ^.
+           pprint_ty ty1 ^. us".")
+  )
+*)
+  | TmConst(fi,c) -> (TmConst(fi,c),type_const c, tyenv)
+  | TmPEval(fi) -> failwith "TODO TmPEval (later)"
+  | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
+  | TmFix(fi) -> failwith "TODO TmFix (later)"
+  | TmTyLam(fi,x,kind,t1) -> failwith "TODO TmTyLam"
+(*
+      let ty2 = typeof (TyenvTyvar(x,TyUndef,kind)::tyenv) t1 in
+      TyAll(fi,x,kind,ty2)
+*)
+  | TmTyApp(fi,t1,ty2) -> failwith "TODO TmTyApp"
+(*
+     (match typeof (tyenv) t1 with
+      | TyAll(fi2,x,ki11,ty1) ->
+          let ki12 = kindof tyenv ty2 in
+          if kindEqual ki11 ki12 then
+            let ty1subst = tySubstTop ty2 ty1 in
+            tydebug "TmTyApp" [] [("t1",t1)]
+                   [("ty1",ty1);("ty2",ty2);("ty1subst",ty1subst)];
+            ty1subst
+          else error (ty_info ty2) (us"The type argument is of kind " ^.
+             pprint_kind ki12 ^. us", but a type of kind " ^. pprint_kind ki11 ^.
+             us" was expected.")
+      | ty -> error (tm_info t1)
+             (us"Type application expects an universal type, but found " ^.
+              pprint_ty ty ^. us"."))
+*)
+  | TmChar(fi,x) -> failwith "TODO TmChar (later)"
+  | TmExprSeq(fi,t1,t2) -> failwith "TODO TmExprSeq (later)"
+  | TmUC(fi,tree,ord,unique) -> failwith "TmUC (later)"
+  | TmUtest(fi,t1,t2,t3) ->
+      let (t1',ty1,env1) = typerecon tyenv TyUndef t1 in
+      let (t2',ty2,env2) = typerecon tyenv TyUndef t2 in
+      let (nty1,nty2) = (normTy ty1,normTy ty2) in
+      if tyequal nty1 nty2 then
+        let (t3',ty3,env3) = typerecon tyenv TyUndef t3 in
+        (TmUtest(fi,t1',t2',t3'),ty3, tyenv)
+      else error fi  (us"The two test expressions have differnt types: " ^.
+                        pprint_ty nty1 ^. us" and " ^.
+                        pprint_ty nty2 ^. us".")
+(*
+      let (ty1,ty2) = (normTy (typeof tyenv t1),normTy (typeof tyenv t2)) in
+      if tyequal ty1 ty2
+      then typeof tyenv t3
+      else error fi  (us"The two test expressions have differnt types: " ^.
+                        pprint_ty ty1 ^. us" and " ^.
+                        pprint_ty ty2 ^. us".")
+*)
+  | TmMatch(fi,t1,cases) -> failwith "TODO TmMatch (later)"
+  | TmNop -> (TmNop,TyGround(NoInfo,GVoid), tyenv)
+
+
+
+
 
 
 (* Erase type abstractions and applications *)
@@ -301,6 +450,10 @@ let typecheck builtin t =
       | _ -> true) builtin in
   (* Create type environment for builtins *)
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
+
+  (* Type reconstruct *)
+  (* let (t,ty, env) = typerecon tyenv TyUndef t in *)
+
   (* Type check *)
   let _ = typeof tyenv t in
   t

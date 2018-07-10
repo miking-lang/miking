@@ -152,14 +152,14 @@ and vartype =
 
 and tyenvVar =
 | TyenvTmvar    of ustring * ty
-| TyenvTyvar    of ustring * kind
+| TyenvTyvar    of ustring * ty * kind
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
 (* Extract the variable name from a tyenvVar type *)
 let envVar tyvar =
-  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_) -> x
+  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_,_) -> x
 
 (* Returns the info field from a term *)
 let tm_info t =
