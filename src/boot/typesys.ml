@@ -494,7 +494,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  let (t,ty, env) = typerecon tyenv TyDyn t in
+  (* let (t,ty, env) = typerecon tyenv TyDyn t in *)
 
   (* Type check *)
   let _ = typeof tyenv t in
