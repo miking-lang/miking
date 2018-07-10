@@ -293,8 +293,8 @@ let rec containsTyVar ty =
 
 (* Merge two types. Assumes that the input types are normalized.
    Returns None if they do not match.
-   Returns a Some(ty',env') if match, where ty' is the augmented new
-   type, and env' the environment filled in with more information *)
+   Returns Some(ty',env') if match, where ty' is the merged new
+   type, and env' the environment filled in with new type variable bindings. *)
 let tymerge ty1 ty2 env =
   let varUpdate env fi x n =
       (match List.nth_opt env n with
@@ -319,8 +319,8 @@ let tymerge ty1 ty2 env =
       if n1 <> n2 then raise Not_found else varUpdate env fi x n1
     | TyVar(fi,x,n),TyDyn | TyDyn,TyVar(fi,x,n) -> varUpdate env fi x n
     | TyVar(fi,x,n),ty2 | ty2,TyVar(fi,x,n) ->
+        if containsTyVar ty2 then raise Not_found else
         let rec updateEnv env n =
-          (* Should we check that ty2 does not contain type variables? *)
           (match env with
            | TyenvTyvar(y,TyDyn,ki1)::rest when n = 0 ->
                TyenvTyvar(y,ty2,ki1)::rest
@@ -331,27 +331,40 @@ let tymerge ty1 ty2 env =
            | x::rest -> x::(updateEnv rest (n-1))
            | [] -> failwith "Should not happen")
         in (ty2, updateEnv env n)
-    | TyAll(_,x1,_,ty1),TyAll(_,x2,_,ty2) -> failwith "TODO"
+    | TyAll(fi1,x,ki1,ty1),TyAll(fi2,_,ki2,ty2) ->
+        if not (kindEqual ki1 ki2) then raise Not_found else
+        let (ty3,env1) = tyrec ty1 ty2 env in
+        (TyAll(fi1,x,ki1,ty3),env1)
+    | TyAll(fi1,x,ki1,ty1),TyDyn | TyDyn,TyAll(fi1,x,ki1,ty1) ->
+        let (ty1',env1) = tyrec ty1 TyDyn env in
+        (TyAll(fi1,x,ki1,ty1'),env1)
     | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO"
     | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO"
     | TyDyn,TyDyn -> (TyDyn,env)
     | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> raise Not_found
+    | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> raise Not_found
 
-    | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> failwith "TODO"
     | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO"
     | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO"
   in
-  try (let (ty',env') = tyrec ty1 ty2 env in Some(ty',env'))
+  try
+    let (ty',env1) = tyrec ty1 ty2 env in
+    let (ty'',env2) = tyrec ty' TyDyn env1 in  (* Makes sure all variables are *)
+    Some(ty'',env2)                            (* substituted *)
   with _ -> None
 
 
 
 
-(* Type reconstruction using bidirectional type checking
-   Idea: we can combine let-polymorphism, gradual typing, and this
-   reconstruction of for type applications in system F using bidirectional
-   type checking. Should in such case mark code as gradually typed, that
-   allows TyDyn to be left, but still generates System F code.
+(* Type reconstruction using bidirectional type checking.
+   Main idea: propagate both types and type environment (filled will
+     bindings of type vars) in both directions, merging partially filled in
+     types. The 'holes' in the types are marked using type TyDyn. If
+     type reconstruction is complete, the TyDyn does not exist anywhere.
+   Future: we can combine let-polymorphism, gradual typing, and this
+     reconstruction of for type applications in system F using bidirectional
+     type checking. Should in such case mark code as gradually typed, that
+     allows TyDyn to be left, but still generates System F code.
 *)
 let rec typerecon tyenv tyinher t =
   match t with
@@ -481,7 +494,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  (*  let (t,ty, env) = typerecon tyenv TyDyn t in *)
+  let (t,ty, env) = typerecon tyenv TyDyn t in
 
   (* Type check *)
   let _ = typeof tyenv t in
