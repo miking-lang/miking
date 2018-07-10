@@ -137,7 +137,7 @@ and ty =
 | TyAll         of info * ustring * kind * ty       (* Universal type *)
 | TyLam         of info * ustring * kind * ty       (* Type-level function *)
 | TyApp         of info * ty * ty                   (* Type-level application *)
-| TyUndef
+| TyDyn                                             (* Dynamic type *)
 
 (* Kinds *)
 and kind =
@@ -192,7 +192,7 @@ let ty_info t =
   | TyAll(fi,_,_,_) -> fi
   | TyLam(fi,_,_,_) -> fi
   | TyApp(fi,_,_) -> fi
-  | TyUndef -> NoInfo         (* Used when deriving types for let-expressions *)
+  | TyDyn -> NoInfo         (* Used when deriving types for let-expressions *)
 
 
 

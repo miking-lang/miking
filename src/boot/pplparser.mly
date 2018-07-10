@@ -44,7 +44,7 @@
           List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
-    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyUndef,t))) else t
+    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyDyn,t))) else t
 
 
 %}
@@ -158,17 +158,17 @@ mcore_scope:
         TmUtest(fi,$2,$3,$4) }
   | LET IDENT EQ mc_term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,TyUndef,$5),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
 
 mc_term:
   | mc_left
       { $1 }
   | LAM IDENT COLON ty DOT mc_term
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmLam(fi,$2.v,TyUndef,$6) }
+        TmLam(fi,$2.v,TyDyn,$6) }
   | LET IDENT EQ mc_term IN mc_term
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,TyUndef,$6),$4) }
+        TmApp(fi,TmLam(fi,$2.v,TyDyn,$6),$4) }
 
 
 mc_left:

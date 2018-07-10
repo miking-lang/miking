@@ -83,7 +83,7 @@ let rec debruijn env t =
     | TyAll(fi,x,kind,ty1) -> TyAll(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
     | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
     | TyApp(fi,ty1,ty2) -> TyApp(fi, debruijnTy env ty1, debruijnTy env ty2)
-    | TyUndef -> TyUndef
+    | TyDyn -> TyDyn
     )
   in
   match t with
