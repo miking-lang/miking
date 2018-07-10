@@ -17,6 +17,7 @@ let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
+
 (* Either an int, a float, or none *)
 type intfloatoption =
 | TInt   of int
@@ -152,14 +153,15 @@ and vartype =
 
 and tyenvVar =
 | TyenvTmvar    of ustring * ty
-| TyenvTyvar    of ustring * ty * kind
+| TyenvTyvar    of ustring * ty * kind * bool       (* Boolean states if it is
+                                                       a forall binding *)
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
 (* Extract the variable name from a tyenvVar type *)
 let envVar tyvar =
-  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_,_) -> x
+  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_,_,_) -> x
 
 (* Returns the info field from a term *)
 let tm_info t =

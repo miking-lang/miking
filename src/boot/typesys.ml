@@ -174,15 +174,15 @@ let rec kindof env ty =
        KindStar(fi)
   | TyVar(fi,x,n) ->
       (match List.nth_opt env n with
-       | Some(TyenvTyvar(y,_,ki1)) -> ki1
+       | Some(TyenvTyvar(y,_,ki1,_)) -> ki1
        | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
   | TyAll(fi,x,ki1,ty1) ->
-      (match kindof (TyenvTyvar(x,TyDyn,ki1)::env) ty1 with
+      (match kindof (TyenvTyvar(x,TyDyn,ki1,true)::env) ty1 with
        | KindStar(_) as ki2 -> ki2
        | ki3 -> error fi (us"The type is of kind " ^. pprint_kind ki3 ^.
                           us", but kind * was expected"))
   | TyLam(fi,x,ki1,ty1) ->
-      let ki2 =  kindof (TyenvTyvar(x,TyDyn,ki1)::env) ty1 in
+      let ki2 =  kindof (TyenvTyvar(x,TyDyn,ki1,false)::env) ty1 in
       KindArrow(fi,ki1,ki2)
   | TyApp(fi,ty1,ty2) ->
       (match kindof env ty1, kindof env ty2 with
@@ -237,7 +237,7 @@ let rec typeof tyenv t =
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
   | TmTyLam(fi,x,kind,t1) ->
-      let ty2 = typeof (TyenvTyvar(x,TyDyn,kind)::tyenv) t1 in
+      let ty2 = typeof (TyenvTyvar(x,TyDyn,kind,false)::tyenv) t1 in
       TyAll(fi,x,kind,ty2)
   | TmTyApp(fi,t1,ty2) ->
      (match typeof (tyenv) t1 with
@@ -298,8 +298,8 @@ let rec containsTyVar ty =
 let tymerge ty1 ty2 env =
   let varUpdate env fi x n =
       (match List.nth_opt env n with
-       | Some(TyenvTyvar(y,TyDyn,_)) -> (TyVar(fi,x,n),env)
-       | Some(TyenvTyvar(y,ty1,ki1)) -> (ty1,env)
+       | Some(TyenvTyvar(y,TyDyn,_,_)) -> (TyVar(fi,x,n),env)
+       | Some(TyenvTyvar(y,ty1,ki1,_)) -> (ty1,env)
        | _ -> failwith "Should not happen")
   in
   let rec tyrec ty1 ty2 env =
@@ -322,22 +322,25 @@ let tymerge ty1 ty2 env =
         if containsTyVar ty2 then raise Not_found else
         let rec updateEnv env n =
           (match env with
-           | TyenvTyvar(y,TyDyn,ki1)::rest when n = 0 ->
-               TyenvTyvar(y,ty2,ki1)::rest
-           | TyenvTyvar(y,ty1,ki1)::rest when n = 0 ->
-               if tyequal ty1 ty2 then TyenvTyvar(y,ty1,ki1)::rest
+           | TyenvTyvar(y,TyDyn,ki1,false)::rest when n = 0 ->
+               TyenvTyvar(y,ty2,ki1,false)::rest
+           | TyenvTyvar(y,ty1,ki1,false)::rest when n = 0 ->
+               if tyequal ty1 ty2 then TyenvTyvar(y,ty1,ki1,false)::rest
                else raise Not_found
+           | TyenvTyvar(y,_,_,true)::rest when n = 0 -> raise Not_found
            | x::rest when n = 0 -> failwith "Should not happen"
            | x::rest -> x::(updateEnv rest (n-1))
            | [] -> failwith "Should not happen")
         in (ty2, updateEnv env n)
     | TyAll(fi1,x,ki1,ty1),TyAll(fi2,_,ki2,ty2) ->
         if not (kindEqual ki1 ki2) then raise Not_found else
-        let (ty3,env1) = tyrec ty1 ty2 env in
-        (TyAll(fi1,x,ki1,ty3),env1)
+          (match tyrec ty1 ty2 (TyenvTyvar(x,TyDyn,ki1,true)::env) with
+           | (ty3,remove::env1) -> (TyAll(fi1,x,ki1,ty3),env1)
+           | _ -> failwith "Should not happen")
     | TyAll(fi1,x,ki1,ty1),TyDyn | TyDyn,TyAll(fi1,x,ki1,ty1) ->
-        let (ty1',env1) = tyrec ty1 TyDyn env in
-        (TyAll(fi1,x,ki1,ty1'),env1)
+        (match tyrec ty1 TyDyn (TyenvTyvar(x,TyDyn,ki1,true)::env) with
+         | (ty1',remove::env1) -> (TyAll(fi1,x,ki1,ty1'),env1)
+         | _ -> failwith "Should not happen")
     | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO"
     | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO"
     | TyDyn,TyDyn -> (TyDyn,env)
@@ -494,7 +497,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  (* let (t,ty, env) = typerecon tyenv TyDyn t in *)
+  (*  let (t,ty, env) = typerecon tyenv TyDyn t in *)
 
   (* Type check *)
   let _ = typeof tyenv t in
