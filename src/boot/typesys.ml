@@ -280,15 +280,17 @@ let rec containsTyDyn ty =
 
 
 (* Returns true of the type contains at least one TyVar *)
-let rec containsTyVar ty =
+let containsFreeTyVar ty =
+  let rec work c ty =
   match ty with
   | TyGround(fi,gt) -> false
-  | TyArrow(fi,ty1,ty2) -> containsTyVar ty1 || containsTyVar ty2
-  | TyVar(fi,x,n) -> true
-  | TyAll(fi,x,ki1,ty1) -> containsTyVar ty1
-  | TyLam(fi,x,ki1,ty1) -> containsTyVar ty1
-  | TyApp(fi,ty1,ty2) -> containsTyVar ty1 || containsTyVar ty2
+  | TyArrow(fi,ty1,ty2) -> work c ty1 || work c ty2
+  | TyVar(fi,x,n) -> (n >= c)
+  | TyAll(fi,x,ki1,ty1) -> work (c+1) ty1
+  | TyLam(fi,x,ki1,ty1) -> work (c+1) ty1
+  | TyApp(fi,ty1,ty2) -> work c ty1 || work c ty2
   | TyDyn -> false
+  in work 0 ty
 
 
 (* Merge two types. Assumes that the input types are normalized.
@@ -319,19 +321,18 @@ let tymerge ty1 ty2 env =
       if n1 <> n2 then raise Not_found else varUpdate env fi x n1
     | TyVar(fi,x,n),TyDyn | TyDyn,TyVar(fi,x,n) -> varUpdate env fi x n
     | TyVar(fi,x,n),ty2 | ty2,TyVar(fi,x,n) ->
-        if containsTyVar ty2 then raise Not_found else
+        if containsFreeTyVar ty2 then raise Not_found else
         let rec updateEnv env n =
           (match env with
-           | TyenvTyvar(y,TyDyn,ki1,false)::rest when n = 0 ->
-               TyenvTyvar(y,ty2,ki1,false)::rest
            | TyenvTyvar(y,ty1,ki1,false)::rest when n = 0 ->
-               if tyequal ty1 ty2 then TyenvTyvar(y,ty1,ki1,false)::rest
-               else raise Not_found
+               let (ty',_) = tyrec ty1 ty2 [] in (* Safe. ty1 has no free type vars *)
+               TyenvTyvar(y,ty',ki1,false)::rest
            | TyenvTyvar(y,_,_,true)::rest when n = 0 -> raise Not_found
            | x::rest when n = 0 -> failwith "Should not happen"
            | x::rest -> x::(updateEnv rest (n-1))
            | [] -> failwith "Should not happen")
-        in (ty2, updateEnv env n)
+        in
+        varUpdate (updateEnv env n) fi x n
     | TyAll(fi1,x,ki1,ty1),TyAll(fi2,_,ki2,ty2) ->
         if not (kindEqual ki1 ki2) then raise Not_found else
           (match tyrec ty1 ty2 (TyenvTyvar(x,TyDyn,ki1,true)::env) with
@@ -341,14 +342,13 @@ let tymerge ty1 ty2 env =
         (match tyrec ty1 TyDyn (TyenvTyvar(x,TyDyn,ki1,true)::env) with
          | (ty1',remove::env1) -> (TyAll(fi1,x,ki1,ty1'),env1)
          | _ -> failwith "Should not happen")
-    | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO"
-    | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO"
+    | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO TyLam"
+    | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO TyApp"
     | TyDyn,TyDyn -> (TyDyn,env)
     | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> raise Not_found
     | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> raise Not_found
-
-    | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO"
-    | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO"
+    | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO TyLam"
+    | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO TyApp"
   in
   try
     let (ty',env1) = tyrec ty1 ty2 env in
@@ -497,7 +497,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  (*  let (t,ty, env) = typerecon tyenv TyDyn t in *)
+  (* let (t,ty, env) = typerecon tyenv TyDyn t in *)
 
   (* Type check *)
   let _ = typeof tyenv t in
