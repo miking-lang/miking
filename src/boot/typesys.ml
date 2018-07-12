@@ -16,7 +16,7 @@ open Printf
 open Ast
 open Msg
 open Pprint
-
+open Errors
 
 (* Debug options *)
 let enable_debug_type_checking = false
@@ -372,88 +372,94 @@ let tymerge ty1 ty2 env =
 let rec typerecon tyenv tyinher t =
   match t with
   | TmVar(fi,x,n,pe) ->
-      (match List.nth_opt tyenv n with
-       | Some(TyenvTmvar(y,ty1)) ->
-         let ty1shift = tyShift (n+1) 0 ty1 in
-         tydebug "TmVar" ["variable",x] [] [("ty1",ty1);("ty1shift",ty1shift)];
-         (TmVar(fi,x,n,pe), ty1shift, tyenv)
-       | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
+    (match List.nth_opt tyenv n with
+    | Some(TyenvTmvar(y,ty1)) ->
+      let ty1shift = tyShift (n+1) 0 ty1 in
+      (TmVar(fi,x,n,pe), ty1shift, tyenv)
+    | _ -> errorVarNotFound fi x)
   | TmLam(fi,x,ty1,t1) -> failwith "TODO TmLam"
-(*
+  (*
     let ty2 = typeof (TyenvTmvar(x,ty1)::tyenv) t1 in
     let ty2shift = tyShift (-1) 0 ty2 in
-      tydebug "TmLam" [] [] [("ty1",ty1);("ty2",ty2);("ty2shift",ty2shift)];
-      TyArrow(fi,ty1,ty2shift)
-*)
-  | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
-  | TmApp(fi,TmLam(fi2,x,TyDyn,t1),t2) -> failwith "TODO TmApp"
-(*
-      let ty2 = typeof tyenv t2 in
-      typeof (TyenvTmvar(x,ty2)::tyenv) t1
-*)
-  | TmApp(fi,t1,t2) -> failwith "TODO TmApp"
-(*
+    tydebug "TmLam" [] [] [("ty1",ty1);("ty2",ty2);("ty2shift",ty2shift)];
+    TyArrow(fi,ty1,ty2shift)
+  *)
+  | TmClos(fi,s,ty,t1,env1,pe) -> errorImpossible fi
+  | TmApp(fi,t1,t2) ->
+    let (t2',ty2',env2) = typerecon tyenv TyDyn t2 in
+    let (t1',ty1',env3) = typerecon env2 (TyArrow(fi,ty2',tyinher)) t1 in
+    if containsTyDyn ty1' then errorCannotInferType (tm_info t1) ty1'
+    else
+      (match ty1' with
+      | TyArrow(fi3,ty11,ty12) ->
+        let (t22,ty22,env4) =
+          if containsTyDyn ty2' then typerecon env3 ty11 t2 else (t2',ty2',env3) in
+        if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
+        if not (tyequal ty11 ty22) then errorFuncAppMismatch (tm_info t2) ty11 ty22
+        else (TmApp(fi,t1',t22),ty12,env4)
+      | _ -> errorNotFunctionType (tm_info t1) ty1')
+  (*
     (match normTy (typeof tyenv t1), normTy (typeof tyenv t2) with
     | TyArrow(fi2,ty11,ty12) as ty1,ty11' ->
-        tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
-        if tyequal ty11 ty11' then ty12
-        else error (tm_info t2)
-          (us"Function application type mismatch. Applied an expression of type " ^.
-           pprint_ty ty11' ^. us", but expected an expression of type " ^.
-           pprint_ty ty11 ^. us".")
+    tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
+    if tyequal ty11 ty11' then ty12
+    else error (tm_info t2)
+    (us"Function application type mismatch. Applied an expression of type " ^.
+    pprint_ty ty11' ^. us", but expected an expression of type " ^.
+    pprint_ty ty11 ^. us".")
     | ty1,ty2 -> error (tm_info t1)
-          (us"Type application mismatch. Cannot apply an expression of " ^.
-           us"type " ^. pprint_ty ty2 ^. us" to an expression of type " ^.
-           pprint_ty ty1 ^. us".")
-  )
-*)
+    (us"Type application mismatch. Cannot apply an expression of " ^.
+    us"type " ^. pprint_ty ty2 ^. us" to an expression of type " ^.
+    pprint_ty ty1 ^. us".")
+    )
+  *)
   | TmConst(fi,c) -> (TmConst(fi,c),type_const c, tyenv)
   | TmPEval(fi) -> failwith "TODO TmPEval (later)"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
   | TmFix(fi) -> failwith "TODO TmFix (later)"
   | TmTyLam(fi,x,kind,t1) -> failwith "TODO TmTyLam"
-(*
-      let ty2 = typeof (TyenvTyvar(x,TyDyn,kind)::tyenv) t1 in
-      TyAll(fi,x,kind,ty2)
-*)
+  (*
+    let ty2 = typeof (TyenvTyvar(x,TyDyn,kind)::tyenv) t1 in
+    TyAll(fi,x,kind,ty2)
+  *)
   | TmTyApp(fi,t1,ty2) -> failwith "TODO TmTyApp"
-(*
-     (match typeof (tyenv) t1 with
-      | TyAll(fi2,x,ki11,ty1) ->
-          let ki12 = kindof tyenv ty2 in
-          if kindEqual ki11 ki12 then
-            let ty1subst = tySubstTop ty2 ty1 in
-            tydebug "TmTyApp" [] [("t1",t1)]
-                   [("ty1",ty1);("ty2",ty2);("ty1subst",ty1subst)];
-            ty1subst
-          else error (ty_info ty2) (us"The type argument is of kind " ^.
-             pprint_kind ki12 ^. us", but a type of kind " ^. pprint_kind ki11 ^.
-             us" was expected.")
-      | ty -> error (tm_info t1)
-             (us"Type application expects an universal type, but found " ^.
-              pprint_ty ty ^. us"."))
-*)
+  (*
+    (match typeof (tyenv) t1 with
+    | TyAll(fi2,x,ki11,ty1) ->
+    let ki12 = kindof tyenv ty2 in
+    if kindEqual ki11 ki12 then
+    let ty1subst = tySubstTop ty2 ty1 in
+    tydebug "TmTyApp" [] [("t1",t1)]
+    [("ty1",ty1);("ty2",ty2);("ty1subst",ty1subst)];
+    ty1subst
+    else error (ty_info ty2) (us"The type argument is of kind " ^.
+    pprint_kind ki12 ^. us", but a type of kind " ^. pprint_kind ki11 ^.
+    us" was expected.")
+    | ty -> error (tm_info t1)
+    (us"Type application expects an universal type, but found " ^.
+    pprint_ty ty ^. us"."))
+  *)
   | TmChar(fi,x) -> failwith "TODO TmChar (later)"
   | TmExprSeq(fi,t1,t2) -> failwith "TODO TmExprSeq (later)"
   | TmUC(fi,tree,ord,unique) -> failwith "TmUC (later)"
   | TmUtest(fi,t1,t2,t3) ->
-      let (t1',ty1,env1) = typerecon tyenv TyDyn t1 in
-      let (t2',ty2,env2) = typerecon tyenv TyDyn t2 in
-      let (nty1,nty2) = (normTy ty1,normTy ty2) in
-      if tyequal nty1 nty2 then
-        let (t3',ty3,env3) = typerecon tyenv TyDyn t3 in
-        (TmUtest(fi,t1',t2',t3'),ty3, tyenv)
-      else error fi  (us"The two test expressions have differnt types: " ^.
-                        pprint_ty nty1 ^. us" and " ^.
-                        pprint_ty nty2 ^. us".")
-(*
-      let (ty1,ty2) = (normTy (typeof tyenv t1),normTy (typeof tyenv t2)) in
-      if tyequal ty1 ty2
-      then typeof tyenv t3
-      else error fi  (us"The two test expressions have differnt types: " ^.
-                        pprint_ty ty1 ^. us" and " ^.
-                        pprint_ty ty2 ^. us".")
-*)
+    let (t1',ty1,env1) = typerecon tyenv TyDyn t1 in
+    let (t2',ty2,env2) = typerecon tyenv TyDyn t2 in
+    let (nty1,nty2) = (normTy ty1,normTy ty2) in
+    if tyequal nty1 nty2 then
+      let (t3',ty3,env3) = typerecon tyenv TyDyn t3 in
+      (TmUtest(fi,t1',t2',t3'),ty3, tyenv)
+    else error fi  (us"The two test expressions have differnt types: " ^.
+                      pprint_ty nty1 ^. us" and " ^.
+                      pprint_ty nty2 ^. us".")
+  (*
+    let (ty1,ty2) = (normTy (typeof tyenv t1),normTy (typeof tyenv t2)) in
+    if tyequal ty1 ty2
+    then typeof tyenv t3
+    else error fi  (us"The two test expressions have differnt types: " ^.
+    pprint_ty ty1 ^. us" and " ^.
+    pprint_ty ty2 ^. us".")
+  *)
   | TmMatch(fi,t1,cases) -> failwith "TODO TmMatch (later)"
   | TmNop -> (TmNop,TyGround(NoInfo,GVoid), tyenv)
 
@@ -497,7 +503,29 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  (* let (t,ty, env) = typerecon tyenv TyDyn t in *)
+  (*  let (t,ty, env) = typerecon tyenv TyDyn t in *)
+
+(*
+  (* Testing merge function *)
+  let int = TyGround(NoInfo,GInt) in
+  let bool = TyGround(NoInfo,GBool) in
+  let dyn = TyDyn in
+  let arr t1 t2 = TyArrow(NoInfo,t1,t2) in
+  let all t1 = TyAll(NoInfo,us"",KindStar(NoInfo),t1) in
+  let var x n  = TyVar(NoInfo,us x,n) in
+  let env = [TyenvTyvar(us"x",TyDyn,KindStar(NoInfo),false)] in
+  let ty1 = all (arr dyn int) in
+  let ty2 = all (arr int (var "x" 1))  in
+
+  printf "\n------\n";
+  (match tymerge ty1 ty2 env with
+  | None -> printf "None\n"
+  | Some(ty',env') ->
+    uprint_endline (pprint_ty ty');
+    uprint_endline (pprint_tyenv env')
+  );
+  printf "------\n";
+*)
 
   (* Type check *)
   let _ = typeof tyenv t in

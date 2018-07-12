@@ -10,7 +10,7 @@ open Printf
 
 
 (* Debug options *)
-let enable_debug_debruijn_print = false
+let enable_debug_debruijn_print = true
 
 
 (* Print out a variable, either in debug mode or not *)
@@ -214,6 +214,20 @@ and pprint_env env =
   us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
             |> Ustring.concat (us",")) ^. us"]"
 
+(* Pretty prints the typing environment *)
+and pprint_tyenv env =
+  us"[" ^.
+    (List.mapi (fun i t -> us(sprintf " %d -> " i) ^.
+      (match t with
+      | TyenvTmvar(x,ty) -> x ^. us":" ^. pprint_ty ty
+      | TyenvTyvar(x,ty,ki,allb) -> x ^. us":" ^. pprint_ty ty ^. us"::" ^.
+          pprint_kind ki ^. (if allb then us"<all>" else us"")
+      )
+     ) env
+            |> Ustring.concat (us",")) ^. us"]"
+
+
+
 
 (* Pretty print a type *)
 and pprint_ty ty =
@@ -234,7 +248,7 @@ and pprint_ty ty =
          pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
   | TyApp(fi,ty1,ty2) ->
     left inside ^. ppt true ty1 ^. us" " ^. ppt true ty2 ^. right inside
- | TyDyn -> us"Undef"
+ | TyDyn -> us"Dyn"
   in
     ppt true ty
 
