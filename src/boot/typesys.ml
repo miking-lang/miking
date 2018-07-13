@@ -375,7 +375,7 @@ let rec typerecon tyenv tyinher t =
     (match List.nth_opt tyenv n with
     | Some(TyenvTmvar(y,ty1)) ->
       let ty1shift = tyShift (n+1) 0 ty1 in
-      (TmVar(fi,x,n,pe), ty1shift, tyenv)
+      (ty1shift, tyenv)
     | _ -> errorVarNotFound fi x)
   | TmLam(fi,x,ty1,t1) -> failwith "TODO TmLam"
   (*
@@ -432,12 +432,12 @@ let rec typerecon tyenv tyinher t =
   | TmExprSeq(fi,t1,t2) -> failwith "TODO TmExprSeq (later)"
   | TmUC(fi,tree,ord,unique) -> failwith "TmUC (later)"
   | TmUtest(fi,t1,t2,t3) ->
-    let (t1',ty1,env1) = typerecon tyenv TyDyn t1 in
-    let (t2',ty2,env2) = typerecon tyenv TyDyn t2 in
+    let (ty1,env1) = typerecon tyenv TyDyn t1 in
+    let (ty2,env2) = typerecon tyenv TyDyn t2 in
     let (nty1,nty2) = (normTy ty1,normTy ty2) in
     if tyequal nty1 nty2 then
       let (t3',ty3,env3) = typerecon tyenv TyDyn t3 in
-      (TmUtest(fi,t1',t2',t3'),ty3, tyenv)
+      (ty3, tyenv)
     else error fi  (us"The two test expressions have differnt types: " ^.
                       pprint_ty nty1 ^. us" and " ^.
                       pprint_ty nty2 ^. us".")
@@ -450,7 +450,7 @@ let rec typerecon tyenv tyinher t =
     pprint_ty ty2 ^. us".")
   *)
   | TmMatch(fi,t1,cases) -> failwith "TODO TmMatch (later)"
-  | TmNop -> (TmNop,TyGround(NoInfo,GVoid), tyenv)
+  | TmNop -> (TyGround(NoInfo,GVoid), tyenv)
 
 
 
@@ -492,7 +492,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  let (t,ty, env) = typerecon tyenv TyDyn t in
+  let (ty, env) = typerecon tyenv TyDyn t in
 
 (*
   (* Testing merge function *)
