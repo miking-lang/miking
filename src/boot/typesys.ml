@@ -389,30 +389,19 @@ let rec typerecon tyenv tyinher t =
     let (t2',ty2',env2) = typerecon tyenv TyDyn t2 in
     let (t1',ty1',env3) = typerecon env2 (TyArrow(fi,ty2',tyinher)) t1 in
     if containsTyDyn ty1' then errorCannotInferType (tm_info t1) ty1'
-    else
-      (match ty1' with
-      | TyArrow(fi3,ty11,ty12) ->
-        let (t22,ty22,env4) =
-          if containsTyDyn ty2' then typerecon env3 ty11 t2 else (t2',ty2',env3) in
-        if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
-        if not (tyequal ty11 ty22) then errorFuncAppMismatch (tm_info t2) ty11 ty22
-        else (TmApp(fi,t1',t22),ty12,env4)
-      | _ -> errorNotFunctionType (tm_info t1) ty1')
-  (*
-    (match normTy (typeof tyenv t1), normTy (typeof tyenv t2) with
-    | TyArrow(fi2,ty11,ty12) as ty1,ty11' ->
-    tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
-    if tyequal ty11 ty11' then ty12
-    else error (tm_info t2)
-    (us"Function application type mismatch. Applied an expression of type " ^.
-    pprint_ty ty11' ^. us", but expected an expression of type " ^.
-    pprint_ty ty11 ^. us".")
-    | ty1,ty2 -> error (tm_info t1)
-    (us"Type application mismatch. Cannot apply an expression of " ^.
-    us"type " ^. pprint_ty ty2 ^. us" to an expression of type " ^.
-    pprint_ty ty1 ^. us".")
-    )
-  *)
+    else failwith "temp"
+      (*
+      let rec dive t1' ty1' t2' ty2' env3 =
+        (match ty1' with
+        | TyArrow(fi3,ty11,ty12) ->
+          let (t22,ty22,env4) =
+            if containsTyDyn ty2' then typerecon env3 ty11 t2 else (t2',ty2',env3) in
+          if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
+            if not (tyequal ty11 ty22) then errorFuncAppMismatch (tm_info t2) ty11 ty22
+            else (TmApp(fi,t1',t22),ty12,env4)
+        | TyAll(fi,x,ki,ty4) ->
+        | _ -> errorNotFunctionType (tm_info t1) ty1')
+        in dive t1' ty1' t2' ty2' env3 *)
   | TmConst(fi,c) -> (TmConst(fi,c),type_const c, tyenv)
   | TmPEval(fi) -> failwith "TODO TmPEval (later)"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
@@ -503,7 +492,7 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
   (* Type reconstruct *)
-  (*  let (t,ty, env) = typerecon tyenv TyDyn t in *)
+  let (t,ty, env) = typerecon tyenv TyDyn t in
 
 (*
   (* Testing merge function *)
