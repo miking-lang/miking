@@ -202,7 +202,7 @@ let rec kindof env ty =
 
 (* Returns the type of term [t]
    The type environment [tyenv] is list with elements of type [tyenvVar] *)
-let rec typeof tyenv t =
+let rec typeOf tyenv t =
   match t with
   | TmVar(fi,x,n,pe) ->
       (match List.nth_opt tyenv n with
@@ -212,16 +212,16 @@ let rec typeof tyenv t =
          ty1shift
        | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
   | TmLam(fi,x,ty1,t1) ->
-    let ty2 = typeof (TyenvTmvar(x,ty1)::tyenv) t1 in
+    let ty2 = typeOf (TyenvTmvar(x,ty1)::tyenv) t1 in
     let ty2shift = tyShift (-1) 0 ty2 in
       tydebug "TmLam" [] [] [("ty1",ty1);("ty2",ty2);("ty2shift",ty2shift)];
       TyArrow(fi,ty1,ty2shift)
   | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closure cannot happen"
   | TmApp(fi,TmLam(fi2,x,TyDyn,t1),t2) ->
-      let ty2 = typeof tyenv t2 in
-      typeof (TyenvTmvar(x,ty2)::tyenv) t1
+      let ty2 = typeOf tyenv t2 in
+      typeOf (TyenvTmvar(x,ty2)::tyenv) t1
   | TmApp(fi,t1,t2) -> (
-    match normTy (typeof tyenv t1), normTy (typeof tyenv t2) with
+    match normTy (typeOf tyenv t1), normTy (typeOf tyenv t2) with
     | TyArrow(fi2,ty11,ty12) as ty1,ty11' ->
         tydebug "TmApp" [] [] [("ty1",ty1);("ty11'",ty11')];
         if tyequal ty11 ty11' then ty12
@@ -239,10 +239,10 @@ let rec typeof tyenv t =
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
   | TmTyLam(fi,x,kind,t1) ->
-      let ty2 = typeof (TyenvTyvar(x,TyDyn,kind,false)::tyenv) t1 in
+      let ty2 = typeOf (TyenvTyvar(x,TyDyn,kind,false)::tyenv) t1 in
       TyAll(fi,x,kind,ty2)
   | TmTyApp(fi,t1,ty2) ->
-     (match typeof (tyenv) t1 with
+     (match typeOf (tyenv) t1 with
       | TyAll(fi2,x,ki11,ty1) ->
           let ki12 = kindof tyenv ty2 in
           if kindEqual ki11 ki12 then
@@ -260,9 +260,9 @@ let rec typeof tyenv t =
   | TmExprSeq(fi,t1,t2) -> failwith "TODO9"
   | TmUC(fi,tree,ord,unique) -> failwith "TODO10"
   | TmUtest(fi,t1,t2,t3) ->
-      let (ty1,ty2) = (normTy (typeof tyenv t1),normTy (typeof tyenv t2)) in
+      let (ty1,ty2) = (normTy (typeOf tyenv t1),normTy (typeOf tyenv t2)) in
       if tyequal ty1 ty2
-      then typeof tyenv t3
+      then typeOf tyenv t3
       else error fi  (us"The two test expressions have differnt types: " ^.
                         pprint_ty ty1 ^. us" and " ^.
                         pprint_ty ty2 ^. us".")
@@ -295,83 +295,86 @@ let containsFreeTyVar ty =
   in work 0 ty
 
 
+(* Check if there is a free variable with index 0 *)
+let isTyVarFree ty =
+  let rec work d ty =
+  match ty with
+  | TyGround(fi,gt) -> false
+  | TyArrow(fi,ty1,ty2) -> work d ty1 || work d ty2
+  | TyVar(fi,x,n) -> (n = d)
+  | TyAll(fi,x,ki1,ty1) -> work (d+1) ty1
+  | TyLam(fi,x,ki1,ty1) -> work (d+1) ty1
+  | TyApp(fi,ty1,ty2) -> work d ty1 || work d ty2
+  | TyDyn -> false
+  in work 0 ty
+
+
+let rec substAll env ty =
+  match ty with
+  | TyGround(fi,gt) -> ty
+  | TyArrow(fi,ty1,ty2) -> TyArrow(fi, substAll env ty1, substAll env ty2)
+  | TyVar(fi,x,k) ->
+    (match List.nth_opt env k with
+    | Some(Some(ty2)) -> ty2
+    | Some(None) -> ty
+    | _ -> ty)
+  | TyAll(fi,x,kind,ty2) -> TyAll(fi,x,kind, substAll (None::env) ty2)
+  | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, substAll (None::env) ty1)
+  | TyApp(fi,ty1,ty2) -> TyApp(fi, substAll env ty1, substAll env ty2)
+  | TyDyn -> TyDyn
+
+
+
 (* Merge two types. Assumes that the input types are normalized.
-   Returns None if they do not match.
-   Returns Some(ty',env') if match, where ty' is the merged new
-   type, and env' the environment filled in with new type variable bindings. *)
-let tymerge ty1 ty2 env =
-  let varUpdate env fi x n =
-      (match List.nth_opt env n with
-       | Some(TyenvTyvar(y,TyDyn,_,_)) -> (TyVar(fi,x,n),env)
-       | Some(TyenvTyvar(y,ty1,ki1,_)) -> (ty1,env)
-       | _ -> failwith "Should not happen")
+   The merge environment [env] is a list of options, where None means that
+   the variable cannot be bound becase it is a local 'all' binder, whereas Some(ty)
+   is the type that the variable is bounded to.
+   Returns None if they do not match and Some(ty'), where ty' is the merged new
+   type.  *)
+let tyMerge ty1 ty2 =
+  let rec updateEnv env n ty =
+    (match env with
+    | None::_ when n = 0 -> raise Not_found
+    | Some(_)::xs when n = 0 -> Some(ty)::xs
+    | x::xs -> x::(updateEnv xs (n-1) ty)
+    | [] -> updateEnv [Some(TyDyn)] n ty)
   in
-  let rec tyrec ty1 ty2 env =
-    match ty1,ty2 with
-    | TyGround(_,g1),TyGround(_,g2) ->
-        if g1 = g2 then (ty1,env) else raise Not_found
-    | (TyGround(_,_) as ty), TyDyn | TyDyn,(TyGround(_,_) as ty) -> (ty,env)
-    | TyArrow(fi,ty11,ty12),TyArrow(_,ty21,ty22) ->
-        let (ty1,env1) = tyrec ty11 ty21 env in
-        let (ty2,env2) = tyrec ty12 ty22 env1 in
-        (TyArrow(fi,ty1,ty2),env2)
-    | TyArrow(fi,ty1,ty2),TyDyn | TyDyn,TyArrow(fi,ty1,ty2) ->
-        let (ty1',env1) = tyrec ty1 TyDyn env in
-        let (ty2',env2) = tyrec ty2 TyDyn env1 in
-        (TyArrow(fi,ty1',ty2'),env2)
-    | TyVar(fi,x,n1),TyVar(_,_,n2) ->
-      if n1 <> n2 then raise Not_found else varUpdate env fi x n1
-    | TyVar(fi,x,n),TyDyn | TyDyn,TyVar(fi,x,n) -> varUpdate env fi x n
-    | TyVar(fi,x,n),ty2 | ty2,TyVar(fi,x,n) ->
-        if containsFreeTyVar ty2 then raise Not_found else
-        let rec updateEnv env n =
-          (match env with
-           | TyenvTyvar(y,ty1,ki1,false)::rest when n = 0 ->
-               let (ty',_) = tyrec ty1 ty2 [] in (* Safe. ty1 has no free type vars *)
-               TyenvTyvar(y,ty',ki1,false)::rest
-           | TyenvTyvar(y,_,_,true)::rest when n = 0 -> raise Not_found
-           | x::rest when n = 0 -> failwith "Should not happen"
-           | x::rest -> x::(updateEnv rest (n-1))
-           | [] -> failwith "Should not happen")
-        in
-        varUpdate (updateEnv env n) fi x n
-    | TyAll(fi1,x,ki1,ty1),TyAll(fi2,_,ki2,ty2) ->
-        if not (kindEqual ki1 ki2) then raise Not_found else
-          (match tyrec ty1 ty2 (TyenvTyvar(x,TyDyn,ki1,true)::env) with
-           | (ty3,remove::env1) -> (TyAll(fi1,x,ki1,ty3),env1)
-           | _ -> failwith "Should not happen")
-    | TyAll(fi1,x,ki1,ty1),TyDyn | TyDyn,TyAll(fi1,x,ki1,ty1) ->
-        (match tyrec ty1 TyDyn (TyenvTyvar(x,TyDyn,ki1,true)::env) with
-         | (ty1',remove::env1) -> (TyAll(fi1,x,ki1,ty1'),env1)
-         | _ -> failwith "Should not happen")
-    | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO TyLam"
-    | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO TyApp"
-    | TyDyn,TyDyn -> (TyDyn,env)
-    | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> raise Not_found
-    | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> raise Not_found
-    | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO TyLam"
-    | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO TyApp"
+  let rec tyRec ty1 ty2 env =
+    (match ty1,ty2 with
+     | TyGround(_,g1),TyGround(_,g2) -> if g1 = g2 then (ty1,env) else raise Not_found
+     | (TyGround(_,_) as ty), TyDyn | TyDyn,(TyGround(_,_) as ty) -> (ty,env)
+     | TyArrow(fi,ty11,ty12),TyArrow(_,ty21,ty22) ->
+       let (ty1',env1) = tyRec ty11 ty21 env in
+       let (ty2',env2) = tyRec ty12 ty22 env1 in
+         (TyArrow(fi,ty1',ty2'),env2)
+     | TyArrow(fi,ty1,ty2),TyDyn | TyDyn,TyArrow(fi,ty1,ty2) ->
+         (TyArrow(fi,ty1,ty2),env)
+     | TyVar(fi,x,n1),TyVar(_,_,n2) ->
+       if n1 = n2 then (ty1,env) else raise Not_found
+     | TyVar(fi,x,n),TyDyn | TyDyn,TyVar(fi,x,n) -> (TyVar(fi,x,n),env)
+     | TyVar(fi,x,n),ty2 | ty2,TyVar(fi,x,n) ->
+         if containsFreeTyVar ty2 then raise Not_found else
+         (ty2, (updateEnv env n ty2))
+     | TyAll(fi1,x,ki1,ty1),TyAll(fi2,_,ki2,ty2) ->
+         if not (kindEqual ki1 ki2) then raise Not_found else
+           let (ty',env2) = tyRec ty1 ty2 (None::env) in
+           (TyAll(fi1,x,ki1,ty'),env)
+     | TyAll(fi1,x,ki1,ty1),TyDyn | TyDyn,TyAll(fi1,x,ki1,ty1) ->
+         (TyAll(fi1,x,ki1,ty1), env)
+     | TyLam(fi1,x1,kind1,ty1), TyLam(fi2,x2,kind2,ty2) -> failwith "TODO TyLam"
+     | TyApp(fi1,ty11,ty12), TyApp(fi2,ty21,ty22)-> failwith "TODO TyApp"
+     | TyDyn,TyDyn -> (TyDyn,env)
+     | TyArrow(_,_,_), _ | _,TyArrow(_,_,_) -> raise Not_found
+     | TyAll(_,_,_,_), _ | _,TyAll(_,_,_,_) -> raise Not_found
+     | TyLam(fi,x,kind,ty1),_ | _,TyLam(fi,x,kind,ty1) -> failwith "TODO TyLam"
+     | TyApp(fi,ty1,ty2),_ | _,TyApp(fi,ty1,ty2)-> failwith "TODO TyApp")
   in
-  try
-    let (ty',env1) = tyrec ty1 ty2 env in
-    let (ty'',env2) = tyrec ty' TyDyn env1 in  (* Makes sure all variables are *)
-    Some(ty'',env2)                            (* substituted *)
+  try Some(tyRec ty1 ty2 [])
   with _ -> None
 
 
-(* NOTES
-- We do not have to return the environment if we do not reconstruct system F, just check
-- It is safe to erase Lam x.t, if the original semantics assumes execution under Lam.
-- We need to update the tymerge function, to include environment info if the the
-  binding is local or not (if we can change its value). We do not need to use the
-  ordinary environment, so we can remove the term field in the type variable environment
-  binding. Also, we can remove the true/false flag.
-- We need to remove all. bindings. We just have to check if a free variable with this
-  type exists. If not, we can remove it. We need to check this particular variable,
-  other free variables can exist.
-*)
 
-(* Type reconstruction using bidirectional type checking.
+(* Bidirectional type checking where type variable application is not needed.
    Main idea: propagate both types and type environment (filled will
      bindings of type vars) in both directions, merging partially filled in
      types. The 'holes' in the types are marked using type TyDyn. If
@@ -379,87 +382,71 @@ let tymerge ty1 ty2 env =
    Future: we can combine let-polymorphism, gradual typing, and this
      reconstruction of for type applications in system F using bidirectional
      type checking. Should in such case mark code as gradually typed, that
-     allows TyDyn to be left, but still generates System F code.
-*)
-let rec typerecon tyenv tyinher t =
+     allows TyDyn to be left, but still generates System F code. *)
+let rec biTypeOf env ty t =
   match t with
   | TmVar(fi,x,n,pe) ->
-    (match List.nth_opt tyenv n with
+    (match List.nth_opt env n with
     | Some(TyenvTmvar(y,ty1)) ->
-      let ty1shift = tyShift (n+1) 0 ty1 in
-      (ty1shift, tyenv)
+      let tys = tyShift (n+1) 0 ty1 in
+      tydebug "TyVar" [("n",us(sprintf "%d" n));("x",x)] [] [("tys",tys)];
+      tys
     | _ -> errorVarNotFound fi x)
   | TmLam(fi,x,ty1,t1) ->
-    let (tyin,ty2) =
-      (match tyinher with TyArrow(_,ty1,ty2) -> (ty1,ty2)| _ -> (TyDyn,TyDyn))
-    in
-    tydebug "TmLam" [] [("t",t)] [("tyin",tyin);("ty2",ty2)];
-    (match tymerge ty1 tyin tyenv with
-    | None -> failwith "No match. Add better message."
-    | Some(ty1b,env2) ->
-      let (ty2b,env3) = typerecon (TyenvTmvar(x,ty1b)::env2) ty2 t1 in
+      let ty2b = biTypeOf (TyenvTmvar(x,ty1)::env) TyDyn t1 in
       let ty2shift = tyShift (-1) 0 ty2b in
-      (TyArrow(fi,ty1b,ty2shift),env3))
+      TyArrow(fi,ty1,ty2shift)
   | TmClos(fi,s,ty,t1,env1,pe) -> errorImpossible fi
+  | TmApp(fi,TmLam(fi2,x,TyDyn,t1),t2) ->
+      let ty2 = biTypeOf env TyDyn t2 in
+      biTypeOf (TyenvTmvar(x,ty2)::env) TyDyn t1
   | TmApp(fi,t1,t2) ->
-    let (ty2',env2) = typerecon tyenv TyDyn t2 in
-    let (ty1',env3) = typerecon env2 (TyArrow(fi,ty2',tyinher)) t1 in
+    let ty2' = biTypeOf env TyDyn t2 in
+    let ty1' = biTypeOf env (TyArrow(fi,ty2',ty)) t1 in
     tydebug "TmApp" [] [("t1",t1)] [("ty1'",ty1');("ty2'",ty2')];
     if containsTyDyn ty1' then errorCannotInferType (tm_info t1) ty1'
     else
-      let rec dive ty1' ty2' env3 =
+      let rec dive ty1' ty2' env =
         (match ty1' with
         | TyArrow(fi3,ty11,ty12) ->
-           let (ty22,env4) =
-            if containsTyDyn ty2' then typerecon env3 ty11 t2 else (ty2',env3) in
-            if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
-              (match tymerge ty11 ty22 env4 with
-              | None -> errorFuncAppMismatch (tm_info t2) ty11 ty22
-              | Some(ty11',env5) -> (ty12,env5))
+           let ty22 = if containsTyDyn ty2' then biTypeOf env ty11 t2 else ty2' in
+           if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
+             (match tyMerge ty11 ty22 with
+             | None -> errorFuncAppMismatch (tm_info t2) ty11 ty22
+             | Some(ty11',substEnv) ->
+                 substAll substEnv ty12)
         | TyAll(fi,x,ki,ty4) ->
-          let (ty',env4) = dive ty4 ty2' env3 in
-          if containsFreeTyVar ty' then errorCannotInferType (tm_info t1) ty'
-          else (ty',env4)
+          let ty' = dive ty4 ty2' env in
+          if isTyVarFree ty' then TyAll(fi,x,ki,ty') else ty'
         | _ -> errorNotFunctionType (tm_info t1) ty1')
-        in dive ty1' ty2' env3
-  | TmConst(fi,c) -> (type_const c, tyenv)
+      in dive ty1' ty2' env
+  | TmConst(fi,c) -> type_const c
   | TmPEval(fi) -> failwith "TODO TmPEval (later)"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
   | TmFix(fi) -> failwith "TODO TmFix (later)"
   | TmTyLam(fi,x,kind,t1) ->
-    let (ty1',env2) = typerecon (TyenvTyvar(x,TyDyn,kind,false)::tyenv) TyDyn t1 in
-    (TyAll(fi,x,kind,ty1'),env2)
+    let ty1' = biTypeOf (TyenvTyvar(x,TyDyn,kind,false)::env) TyDyn t1 in
+      tydebug "TmTyLam" [("x",x)] [] [("ty1'",ty1')];
+      TyAll(fi,x,kind,ty1')
   | TmTyApp(fi,t1,ty2) ->
-    let (ty1',env2) = typerecon tyenv TyDyn t1 in
+    let ty1' = biTypeOf env TyDyn t1 in
     (match ty1' with
     | TyAll(fi2,x,ki11,ty1) ->
-      let ki12 = kindof tyenv ty2 in
-      if kindEqual ki11 ki12 then
-        (tySubstTop ty2 ty1, env2)
+      let ki12 = kindof env ty2 in
+      if kindEqual ki11 ki12 then tySubstTop ty2 ty1
       else errorKindMismatch  (ty_info ty2) ki11 ki12
     | ty -> errorExpectsUniversal (tm_info t1) ty)
   | TmChar(fi,x) -> failwith "TODO TmChar (later)"
   | TmExprSeq(fi,t1,t2) -> failwith "TODO TmExprSeq (later)"
   | TmUC(fi,tree,ord,unique) -> failwith "TmUC (later)"
   | TmUtest(fi,t1,t2,t3) ->
-    let (ty1,env1) = typerecon tyenv TyDyn t1 in
-    let (ty2,env2) = typerecon tyenv TyDyn t2 in
+    let ty1  = biTypeOf env TyDyn t1 in
+    let ty2  = biTypeOf env TyDyn t2 in
     let (nty1,nty2) = (normTy ty1,normTy ty2) in
-    if tyequal nty1 nty2 then
-      typerecon tyenv TyDyn t3
-    else error fi  (us"The two test expressions have differnt types: " ^.
-                      pprint_ty nty1 ^. us" and " ^.
-                      pprint_ty nty2 ^. us".")
-  (*
-    let (ty1,ty2) = (normTy (typeof tyenv t1),normTy (typeof tyenv t2)) in
-    if tyequal ty1 ty2
-    then typeof tyenv t3
-    else error fi  (us"The two test expressions have differnt types: " ^.
-    pprint_ty ty1 ^. us" and " ^.
-    pprint_ty ty2 ^. us".")
-  *)
+    if tyequal nty1 nty2 then biTypeOf env TyDyn t3
+    else errorUtestExp fi nty1 nty2
   | TmMatch(fi,t1,cases) -> failwith "TODO TmMatch (later)"
-  | TmNop -> (TyGround(NoInfo,GVoid), tyenv)
+  | TmNop -> TyGround(NoInfo,GVoid)
 
 
 
@@ -478,8 +465,8 @@ let rec erase t =
   | TmPEval(fi) -> t
   | TmIfexp(fi,op1,t2op) -> TmIfexp(fi, op1, eraseOp t2op)
   | TmFix(fi) -> t
-  | TmTyLam(fi,x,kind,t1) -> TmLam(fi,us"_",TyGround(NoInfo,GVoid),erase t1)
-  | TmTyApp(fi,t1,ty1) -> TmApp(fi,erase t1,TmNop)
+  | TmTyLam(fi,x,kind,t1) -> erase t1
+  | TmTyApp(fi,t1,ty1) -> erase t1
   | TmChar(fi,x) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi, erase t1, erase t2)
   | TmUC(fi,tree,ord,unique) -> t
@@ -501,8 +488,9 @@ let typecheck builtin t =
   let tyenv = List.map (fun (x,c) -> TyenvTmvar(us x, type_const c)) lst in
 
 
-(*
+
   (* Testing merge function *)
+  (*
   let int = TyGround(NoInfo,GInt) in
   let bool = TyGround(NoInfo,GBool) in
   let dyn = TyDyn in
@@ -514,18 +502,17 @@ let typecheck builtin t =
   let ty2 = all (arr int (var "x" 1))  in
 
   printf "\n------\n";
-  (match tymerge ty1 ty2 env with
+  (match tyMerge (all (arr int (var "x" 3))) (all (arr int bool)) with
   | None -> printf "None\n"
-  | Some(ty',env') ->
+  | Some(ty') ->
     uprint_endline (pprint_ty ty');
-    uprint_endline (pprint_tyenv env')
   );
   printf "------\n";
-*)
+  *)
 
   (* Type reconstruct *)
-  let (_,_) = typerecon tyenv TyDyn t in
+  let _ = biTypeOf tyenv TyDyn t in
 
   (* Type check *)
-  (*   let _ = typeof tyenv t in *)
+  (*   let _ = typeOf tyenv t in *)
   t
