@@ -174,15 +174,15 @@ let rec kindof env ty =
        KindStar(fi)
   | TyVar(fi,x,n) ->
       (match List.nth_opt env n with
-       | Some(TyenvTyvar(y,_,ki1,_)) -> ki1
+       | Some(TyenvTyvar(y,ki1)) -> ki1
        | _ -> error fi (us"Variable '" ^. x ^. us"' cannot be found."))
   | TyAll(fi,x,ki1,ty1) ->
-      (match kindof (TyenvTyvar(x,TyDyn,ki1,true)::env) ty1 with
+      (match kindof (TyenvTyvar(x,ki1)::env) ty1 with
        | KindStar(_) as ki2 -> ki2
        | ki3 -> error fi (us"The type is of kind " ^. pprint_kind ki3 ^.
                           us", but kind * was expected"))
   | TyLam(fi,x,ki1,ty1) ->
-      let ki2 =  kindof (TyenvTyvar(x,TyDyn,ki1,false)::env) ty1 in
+      let ki2 =  kindof (TyenvTyvar(x,ki1)::env) ty1 in
       KindArrow(fi,ki1,ki2)
   | TyApp(fi,ty1,ty2) ->
       (match kindof env ty1, kindof env ty2 with
@@ -239,7 +239,7 @@ let rec typeOf tyenv t =
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
   | TmTyLam(fi,x,kind,t1) ->
-      let ty2 = typeOf (TyenvTyvar(x,TyDyn,kind,false)::tyenv) t1 in
+      let ty2 = typeOf (TyenvTyvar(x,kind)::tyenv) t1 in
       TyAll(fi,x,kind,ty2)
   | TmTyApp(fi,t1,ty2) ->
      (match typeOf (tyenv) t1 with
@@ -425,7 +425,7 @@ let rec biTypeOf env ty t =
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
   | TmFix(fi) -> failwith "TODO TmFix (later)"
   | TmTyLam(fi,x,kind,t1) ->
-    let ty1' = biTypeOf (TyenvTyvar(x,TyDyn,kind,false)::env) TyDyn t1 in
+    let ty1' = biTypeOf (TyenvTyvar(x,kind)::env) TyDyn t1 in
       tydebug "TmTyLam" [("x",x)] [] [("ty1'",ty1')];
       TyAll(fi,x,kind,ty1')
   | TmTyApp(fi,t1,ty2) ->
@@ -497,7 +497,7 @@ let typecheck builtin t =
   let arr t1 t2 = TyArrow(NoInfo,t1,t2) in
   let all t1 = TyAll(NoInfo,us"",KindStar(NoInfo),t1) in
   let var x n  = TyVar(NoInfo,us x,n) in
-  let env = [TyenvTyvar(us"x",TyDyn,KindStar(NoInfo),false)] in
+  let env = [TyenvTyvar(us"x",KindStar(NoInfo))] in
   let ty1 = all (arr dyn int) in
   let ty2 = all (arr int (var "x" 1))  in
 

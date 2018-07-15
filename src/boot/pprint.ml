@@ -220,9 +220,7 @@ and pprint_tyenv env =
     (List.mapi (fun i t -> us(sprintf " %d -> " i) ^.
       (match t with
       | TyenvTmvar(x,ty) -> x ^. us":" ^. pprint_ty ty
-      | TyenvTyvar(x,ty,ki,allb) -> x ^. us":" ^. pprint_ty ty ^. us"::" ^.
-          pprint_kind ki ^. (if allb then us"<all>" else us"")
-      )
+      | TyenvTyvar(x,ki) -> x ^. us":" ^. us"::" ^. pprint_kind ki)
      ) env
             |> Ustring.concat (us",")) ^. us"]"
 
