@@ -406,20 +406,21 @@ let rec biTypeOf env ty t =
     tydebug "TmApp" [] [("t1",t1)] [("ty1'",ty1');("ty2'",ty2')];
     if containsTyDyn ty1' then errorCannotInferType (tm_info t1) ty1'
     else
-      let rec dive ty1' ty2' env =
+      let rec dive ty1' ty2' env s =
         (match ty1' with
         | TyArrow(fi3,ty11,ty12) ->
            let ty22 = if containsTyDyn ty2' then biTypeOf env ty11 t2 else ty2' in
            if containsTyDyn ty22 then errorCannotInferType (tm_info t2) ty22 else
-             (match tyMerge ty11 ty22 with
-             | None -> errorFuncAppMismatch (tm_info t2) ty11 ty22
+             let ty22s = tyShift s 0 ty22 in
+             (match tyMerge ty11 ty22s with
+             | None -> errorFuncAppMismatch (tm_info t2) ty11 ty22s
              | Some(ty11',substEnv) ->
                  substAll substEnv ty12)
         | TyAll(fi,x,ki,ty4) ->
-          let ty' = dive ty4 ty2' env in
+          let ty' = dive ty4 ty2' env (s+1) in
           if isTyVarFree ty' then TyAll(fi,x,ki,ty') else ty'
         | _ -> errorNotFunctionType (tm_info t1) ty1')
-      in dive ty1' ty2' env
+      in dive ty1' ty2' env 0
   | TmConst(fi,c) -> type_const c
   | TmPEval(fi) -> failwith "TODO TmPEval (later)"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"

@@ -28,7 +28,7 @@ let goo = (Lam X. (Lam Y. lam f:(all X.Y->Int). lam x:Y. f [Y] x) [X]) [Int]
 utest (goo (Lam X. lam x:Int.x) 2) 2
 
 // Does not work if we remove [Y]  ***
-let goo = (Lam X. (Lam Y. lam f:(all X.Y->Int). lam x:Y. f [Y] x) [X]) [Int]
+let goo = (Lam X. (Lam Y. lam f:(all X.Y->Int). lam x:Y. f x) [X]) [Int]
 utest (goo (Lam X. lam x:Int.x) 2) 2
 
 
