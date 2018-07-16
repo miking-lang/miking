@@ -329,8 +329,8 @@ let rec substAll env ty =
    The merge environment [env] is a list of options, where None means that
    the variable cannot be bound becase it is a local 'all' binder, whereas Some(ty)
    is the type that the variable is bounded to.
-   Returns None if they do not match and Some(ty'), where ty' is the merged new
-   type.  *)
+   Returns None if they do not match and Some(ty',senv), where ty' is the merged new
+   type and senv is the variable substitution environment. *)
 let tyMerge ty1 ty2 =
   let rec updateEnv env n ty =
     (match env with
@@ -414,8 +414,7 @@ let rec biTypeOf env ty t =
              let ty22s = tyShift s 0 ty22 in
              (match tyMerge ty11 ty22s with
              | None -> errorFuncAppMismatch (tm_info t2) ty11 ty22s
-             | Some(ty11',substEnv) ->
-                 substAll substEnv ty12)
+             | Some(ty11',substEnv) -> substAll substEnv ty12)
         | TyAll(fi,x,ki,ty4) ->
           let ty' = dive ty4 ty2' env (s+1) in
           if isTyVarFree ty' then TyAll(fi,x,ki,ty') else ty'
