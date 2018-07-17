@@ -170,9 +170,9 @@ mcore_scope:
 mc_term:
   | mc_left
       { $1 }
-  | LAM IDENT COLON ty DOT mc_term
-      { let fi = mkinfo $1.i (tm_info $6) in
-        TmLam(fi,$2.v,$4,$6) }
+  | LAM IDENT ty_op DOT mc_term
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmLam(fi,$2.v,$3,$5) }
   | BIGLAM IDENT opkind DOT mc_term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkopkind $2.i $3,$5) }
@@ -180,6 +180,11 @@ mc_term:
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyDyn,$6),$4) }
 
+ty_op:
+  | COLON ty
+      { $2 }
+  |
+      { TyDyn }
 
 mc_left:
   | mc_atom

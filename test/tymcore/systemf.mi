@@ -35,3 +35,11 @@ utest (goo (Lam X. lam x:Int.x) 2) 2
 // Same as above, but with overlapping term and type variable names
 let goo = (Lam x. (Lam f. lam f:(all x.f->Int). lam x:f. f [f] x) [x]) [Int]
 utest (goo (Lam x. lam x:Int.x) 2) 2
+
+// Test to infer function argument
+let b = lam f:Int->Int. lam x:Int. f x
+utest (b (lam y. addi y 5) 10) 15
+
+// Test to infer function with two arguments
+let b = lam f:Int->Int->Int. lam x:Int. f x x
+utest (b (lam y. lam z. addi y z) 10) 20

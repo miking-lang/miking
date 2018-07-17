@@ -393,15 +393,23 @@ let rec biTypeOf env ty t =
       tys
     | _ -> errorVarNotFound fi x)
   | TmLam(fi,x,ty1,t1) ->
-      let ty2b = biTypeOf (TyenvTmvar(x,ty1)::env) TyDyn t1 in
-      let ty2shift = tyShift (-1) 0 ty2b in
-      TyArrow(fi,ty1,ty2shift)
+    let (ty1in,ty2in) =
+      (match ty with TyArrow(_,ty1,ty2) -> (ty1,ty2)| _ -> (TyDyn,TyDyn))
+    in
+     tydebug "TmLam" [] [("t",t)] [("ty1in",ty1in);("ty1",ty1);("ty2in",ty2in)];
+     (match tyMerge ty1 ty1in with
+     | None -> errorInferredTypeMismatch fi ty1 ty1in
+     | Some(ty1b,substEnv) ->
+       let ty1b = substAll substEnv ty1b in
+       let ty2b = biTypeOf (TyenvTmvar(x,ty1b)::env) ty2in t1 in
+       let ty2shift = tyShift (-1) 0 ty2b in
+       TyArrow(fi,ty1b,ty2shift))
   | TmClos(fi,s,ty,t1,env1,pe) -> errorImpossible fi
-  | TmApp(fi,TmLam(fi2,x,TyDyn,t1),t2) ->
-      let ty2 = biTypeOf env TyDyn t2 in
-      biTypeOf (TyenvTmvar(x,ty2)::env) TyDyn t1
   | TmApp(fi,t1,t2) ->
-    let ty2' = biTypeOf env TyDyn t2 in
+    let ty2' =
+      (match t2 with
+      | TmLam(_,_,TyDyn,_) -> TyDyn
+      | t2 -> biTypeOf env TyDyn t2) in
     let ty1' = biTypeOf env (TyArrow(fi,ty2',ty)) t1 in
     tydebug "TmApp" [] [("t1",t1)] [("ty1'",ty1');("ty2'",ty2')];
     if containsTyDyn ty1' then errorCannotInferType (tm_info t1) ty1'

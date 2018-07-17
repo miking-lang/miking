@@ -32,6 +32,10 @@ let errorKindMismatch fi ki1 ki2 =
                 pprint_kind ki2 ^. us", but a type of kind " ^. pprint_kind ki1 ^.
                 us" was expected.")
 
+let errorInferredTypeMismatch fi ty1 tyinf =
+  error fi (us"Type mismatch. Inferred  type " ^. pprint_ty tyinf ^.
+              us", but found type " ^. pprint_ty ty1 ^. us".")
+
 let errorExpectsUniversal fi ty =
   error fi  (us"Type application expects an universal type, but found " ^.
                pprint_ty ty ^. us".")
