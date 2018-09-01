@@ -101,7 +101,7 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmTyLam(fi,x,kind,t1) -> TmTyLam(fi,x,kind,debruijn (VarTy(x)::env) t1)
   | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, debruijnTy env ty1)
-  | TmPEval(_) -> t
+  | TmDive(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
@@ -491,7 +491,7 @@ let rec readback env n t =
   (* Application *)
   | TmApp(fi,t1,t2) -> optimize_const_app fi (readback env n t1) (readback env n t2)
   (* Constant, fix, and PEval  *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (1)"
   (* If expression *)
@@ -539,11 +539,11 @@ let rec normalize env n t =
         | TmConst(fi2,c2) as tt-> delta c1 tt
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
-    | TmPEval(fi) ->
+    | TmDive(fi) ->
       (match normalize env n t2 with
       | TmClos(fi2,x,ty,t2,env2,pemode) ->
           let pesym = TmVar(NoInfo,us"",n+1,true) in
-          let t2' = (TmApp(fi,TmPEval(fi),t2)) in
+          let t2' = (TmApp(fi,TmDive(fi),t2)) in
           TmClos(fi2,x,ty,normalize (pesym::env2) (n+1) t2',env2,true)
       | v2 -> v2)
     (* If-expression *)
@@ -565,7 +565,7 @@ let rec normalize env n t =
     (* Stay in normalized form *)
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (3)"
   (* If expression *)
@@ -600,7 +600,7 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
-       | TmPEval(fi2) -> normalize env 0 (TmApp(fi,TmPEval(fi2),t2))
+       | TmDive(fi2) -> normalize env 0 (TmApp(fi,TmDive(fi2),t2))
            |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
@@ -617,7 +617,7 @@ let rec eval env t =
          | _ -> raise_error fi "Incorrect if-expression in the eval function.")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (4)"
   (* If expression *)

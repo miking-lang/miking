@@ -235,7 +235,7 @@ let rec typeOf tyenv t =
            pprint_ty ty1 ^. us".")
   )
   | TmConst(fi,c) -> type_const c
-  | TmPEval(fi) -> failwith "TODO5"
+  | TmDive(fi) -> failwith "TODO5"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO6"
   | TmFix(fi) -> failwith "TODO7"
   | TmTyLam(fi,x,kind,t1) ->
@@ -429,7 +429,7 @@ let rec biTypeOf env ty t =
         | _ -> errorNotFunctionType (tm_info t1) ty1')
       in dive ty1' ty2' env 0
   | TmConst(fi,c) -> type_const c
-  | TmPEval(fi) -> failwith "TODO TmPEval (later)"
+  | TmDive(fi) -> failwith "TODO TmDive (later)"
   | TmIfexp(fi,t1op,t2op) -> failwith "TODO TmIfexp (later)"
   | TmFix(fi) -> failwith "TODO TmFix (later)"
   | TmTyLam(fi,x,kind,t1) ->
@@ -470,7 +470,7 @@ let rec erase t =
   | TmClos(fi,s,ty,t1,env1,pe) -> failwith "Closer should not exist during erase."
   | TmApp(fi,t1,t2) -> TmApp(fi, erase t1, erase t2)
   | TmConst(fi,c) -> t
-  | TmPEval(fi) -> t
+  | TmDive(fi) -> t
   | TmIfexp(fi,op1,t2op) -> TmIfexp(fi, op1, eraseOp t2op)
   | TmFix(fi) -> t
   | TmTyLam(fi,x,kind,t1) -> erase t1

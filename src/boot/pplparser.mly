@@ -29,7 +29,7 @@
       | TmFix(_) -> false
       | TmTyLam(fi,x,k,t1) -> hasx t1
       | TmTyApp(fi,t1,ty1) -> hasx t1
-      | TmPEval(_) -> false
+      | TmDive(_) -> false
       | TmIfexp(_,_,None) -> false
       | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
@@ -188,7 +188,7 @@ mc_atom:
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
-  | PEVAL                { TmPEval($1.i) }
+  | PEVAL                { TmDive($1.i) }
   | IFEXP                { TmIfexp($1.i,None,None) }
   | ATOM                 { TmConst($1.i,CAtom($1.v,[])) }
 

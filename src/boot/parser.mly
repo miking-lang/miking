@@ -31,7 +31,7 @@
       | TmFix(_) -> false
       | TmTyLam(fi,x,k,t1) -> hasx t1
       | TmTyApp(fi,t1,ty1) -> hasx t1
-      | TmPEval(_) -> false
+      | TmDive(_) -> false
       | TmIfexp(_,_,None) -> false
       | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
@@ -90,7 +90,7 @@ let mkopkind fi op =
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
-%token <unit Ast.tokendata> PEVAL
+%token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> IFEXP
 
 
@@ -207,7 +207,7 @@ mc_atom:
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
-  | PEVAL                { TmPEval($1.i) }
+  | DIVE                 { TmDive($1.i) }
   | IFEXP                { TmIfexp($1.i,None,None) }
 
 
