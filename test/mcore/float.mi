@@ -3,7 +3,7 @@
 //
 // Test floating-point number primitives and polymorphic primitives
 
-language MCore
+lang mcore
 
 
 // Floating-point number intrinsics

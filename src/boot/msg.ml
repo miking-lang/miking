@@ -9,6 +9,7 @@
 
 open Ustring.Op
 open Printf
+
 type row = int
 type col = int
 type filename = ustring
@@ -84,3 +85,5 @@ let message2str (id,sev,info,args)  =
 
 let raise_error fi msg =
   raise (Error (ERROR(msg),ERROR,fi,[]))
+
+let error fi msg = raise_error fi (msg |> Ustring.to_utf8)

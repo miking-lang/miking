@@ -28,6 +28,9 @@ let enable_debug_readback_env = false
 let enable_debug_eval = false
 let enable_debug_eval_env = false
 let enable_debug_after_peval = false
+let enable_debug_after_parse = false
+let enable_debug_after_debruijn = false
+let enable_debug_after_erase = false
 
 (* Evaluation of atoms. This is changed depending on the DSL *)
 let empty_eval_atom fi id tms v = v
@@ -45,14 +48,14 @@ let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
     | Info(filename,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
-        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint false t1) ^.
-        us"\n    RHS: " ^. (pprint false t2)
+        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint true t1) ^.
+        us"\n    RHS: " ^. (pprint true t2)
     | NoInfo -> us"Unit test FAILED ")
 
 (* Add pattern variables to environment. Used in the debruijn function *)
 let rec patvars env pat =
   match pat with
-  | PatIdent(_,x) -> x::env
+  | PatIdent(_,x) -> VarTm(x)::env
   | PatChar(_,_) -> env
   | PatUC(fi,p::ps,o,u) -> patvars (patvars env p) (PatUC(fi,ps,o,u))
   | PatUC(fi,[],o,u) -> env
@@ -61,20 +64,44 @@ let rec patvars env pat =
   | PatConcat(_,p1,p2) -> patvars (patvars env p1) p2
 
 
-(* Convert a term into de Bruijn indices *)
+(* Convert a term into de Bruijn indices. Note that both type variables
+   and term variables are converted. The environment [env] is a list
+   type [vartype], indicating if it is a type variable (VarTy(x)) or
+   a term variable (VarTm(x)). *)
 let rec debruijn env t =
+  let rec debruijnTy env ty =
+    (match ty with
+    | TyGround(fi,gty) -> ty
+    | TyArrow(fi,ty1,ty2) -> TyArrow(fi,debruijnTy env ty1,debruijnTy env ty2)
+    | TyVar(fi,x,_) ->
+      let rec find env n =
+        (match env with
+        | VarTy(y)::ee -> if y =. x then n else find ee (n+1)
+        | VarTm(y)::ee -> find ee (n+1)
+        | [] -> raise_error fi ("Unknown type variable '" ^ Ustring.to_utf8 x ^ "'"))
+      in TyVar(fi,x,find env 0)
+    | TyAll(fi,x,kind,ty1) -> TyAll(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
+    | TyLam(fi,x,kind,ty1) -> TyLam(fi,x,kind, debruijnTy (VarTy(x)::env) ty1)
+    | TyApp(fi,ty1,ty2) -> TyApp(fi, debruijnTy env ty1, debruijnTy env ty2)
+    | TyDyn -> TyDyn
+    )
+  in
   match t with
   | TmVar(fi,x,_,_) ->
-    let rec find env n = match env with
-      | y::ee -> if y =. x then n else find ee (n+1)
-      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")
+    let rec find env n =
+      (match env with
+       | VarTm(y)::ee -> if y =. x then n else find ee (n+1)
+       | VarTy(y)::ee -> find ee (n+1)
+       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
     in TmVar(fi,x,find env 0,false)
-  | TmLam(fi,x,t1) -> TmLam(fi,x,debruijn (x::env) t1)
-  | TmClos(fi,x,t1,env1,_) -> failwith "Closures should not be available."
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,debruijnTy env ty,debruijn (VarTm(x)::env) t1)
+  | TmClos(fi,x,ty,t1,env1,_) -> failwith "Closures should not be available."
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmPEval(_) -> t
+  | TmTyLam(fi,x,kind,t1) -> TmTyLam(fi,x,kind,debruijn (VarTy(x)::env) t1)
+  | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, debruijnTy env ty1)
+  | TmDive(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
@@ -86,6 +113,7 @@ let rec debruijn env t =
                List.map (fun (Case(fi,pat,tm)) ->
                  Case(fi,pat,debruijn (patvars env pat) tm)) cases)
   | TmNop -> t
+
 
 
 (* Check if two value terms are equal *)
@@ -197,13 +225,20 @@ let debug_eval env t =
         uprint_endline (pprint_env env))
   else ()
 
-(* Debug function used after partial evaluation *)
-let debug_after_peval t =
-  if enable_debug_after_peval then
-    (printf "\n-- after peval --  \n";
+(* Debug template function. Used below*)
+let debug_after t flag text=
+  if flag then
+    (printf "\n-- %s --  \n" text;
      uprint_endline (pprint true t);
      t)
   else t
+
+
+(* Debug function used after specific tasks *)
+let debug_after_peval t = debug_after t enable_debug_after_peval "After peval"
+let debug_after_parse t = debug_after t enable_debug_after_parse "After parsing"
+let debug_after_debruijn t = debug_after t enable_debug_after_debruijn "After debruijn"
+let debug_after_erase t = debug_after t enable_debug_after_erase "After erase"
 
 
 (* Mapping between named builtin functions (intrinsics) and the
@@ -447,16 +482,18 @@ let rec readback env n t =
   (* Variables as PE symbol. Convert symbol to de bruijn index. *)
   | TmVar(fi,x,k,true) -> TmVar(fi,x,n-k,false)
   (* Lambda *)
-  | TmLam(fi,x,t1) -> TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,readback (TmVar(fi,x,n+1,true)::env) (n+1) t1)
   (* Normal closure *)
-  | TmClos(fi,x,t1,env2,false) -> t
+  | TmClos(fi,x,ty,t1,env2,false) -> t
   (* PE closure *)
-  | TmClos(fi,x,t1,env2,true) ->
-      TmLam(fi,x,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
+  | TmClos(fi,x,ty,t1,env2,true) ->
+      TmLam(fi,x,ty,readback (TmVar(fi,x,n+1,true)::env2) (n+1) t1)
   (* Application *)
   | TmApp(fi,t1,t2) -> optimize_const_app fi (readback env n t1) (readback env n t2)
   (* Constant, fix, and PEval  *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (1)"
   (* If expression *)
   | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
@@ -487,14 +524,14 @@ let rec normalize env n t =
   (* PEMode variable (symbol) *)
   | TmVar(fi,x,n,true) -> t
   (* Lambda and closure conversions to PE closure *)
-  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,true)
+  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env,true)
   (* Closures, both PE and non PE *)
-  | TmClos(fi,x,t2,env2,pemode) -> t
+  | TmClos(fi,x,ty,t2,env2,pemode) -> t
   (* Application: closures and delta  *)
   | TmApp(fi,t1,t2) ->
     (match normalize env n t1 with
     (* Closure application (PE on non PE) TODO: use affine lamba check *)
-    | TmClos(fi,x,t3,env2,_) ->
+    | TmClos(fi,x,ty,t3,env2,_) ->
          normalize ((normalize env n t2)::env2) n t3
     (* Constant application using the delta function *)
     | TmConst(fi1,c1) ->
@@ -502,31 +539,35 @@ let rec normalize env n t =
         | TmConst(fi2,c2) as tt-> delta c1 tt
         | nf -> TmApp(fi,TmConst(fi1,c1),nf))
     (* Partial evaluation *)
-    | TmPEval(fi) ->
+    | TmDive(fi) ->
       (match normalize env n t2 with
-      | TmClos(fi2,x,t2,env2,pemode) ->
+      | TmClos(fi2,x,ty,t2,env2,pemode) ->
           let pesym = TmVar(NoInfo,us"",n+1,true) in
-          let t2' = (TmApp(fi,TmPEval(fi),t2)) in
-          TmClos(fi2,x,normalize (pesym::env2) (n+1) t2',env2,true)
+          let t2' = (TmApp(fi,TmDive(fi),t2)) in
+          TmClos(fi2,x,ty,normalize (pesym::env2) (n+1) t2',env2,true)
       | v2 -> v2)
     (* If-expression *)
     | TmIfexp(fi2,x1,x2) ->
       (match x1,x2,normalize env n t2 with
       | None,None,TmConst(fi3,CBool(b)) -> TmIfexp(fi2,Some(b),None)
-      | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+      | Some(b),Some(TmClos(_,_,_,t3,env3,_)),TmClos(_,_,_,t4,env4,_) ->
         if b then normalize (TmNop::env3) n t3 else normalize (TmNop::env4) n t4
-      | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
+      | Some(b),_,(TmClos(_,_,_,t3,_,_) as v3) -> TmIfexp(fi2,Some(b),Some(v3))
       | _,_,v2 -> TmApp(fi,TmIfexp(fi2,x1,x2),v2))
     (* Fix *)
     | TmFix(fi2) ->
        (match normalize env n t2 with
-       | TmClos(fi,x,t3,env2,_) as tt ->
+       | TmClos(fi,x,_,t3,env2,_) as tt ->
            normalize ((TmApp(fi,TmFix(fi2),tt))::env2) n t3
        | v2 -> TmApp(fi,TmFix(fi2),v2))
+    (* System F terms *)
+    | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (2)"
     (* Stay in normalized form *)
     | v1 -> TmApp(fi,v1,normalize env n t2))
   (* Constant, fix, and Peval  *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (3)"
   (* If expression *)
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
@@ -549,34 +590,36 @@ let rec eval env t =
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(fi,x,n,_) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
-  | TmLam(fi,x,t1) -> TmClos(fi,x,t1,env,false)
-  | TmClos(fi,x,t1,env2,_) -> t
+  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env,false)
+  | TmClos(fi,x,_,t1,env2,_) -> t
   (* Application *)
   | TmApp(fi,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(fi,x,t3,env2,_) -> eval ((eval env t2)::env2) t3
+       | TmClos(fi,x,_,t3,env2,_) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
-       | TmPEval(fi2) -> normalize env 0 (TmApp(fi,TmPEval(fi2),t2))
+       | TmDive(fi2) -> normalize env 0 (TmApp(fi,TmDive(fi2),t2))
            |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
          (match eval env t2 with
-         | TmClos(fi,x,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | TmClos(fi,x,_,t3,env2,_) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> failwith "Incorrect CFix")
        (* If-expression *)
        | TmIfexp(fi,x1,x2) ->
          (match x1,x2,eval env t2 with
          | None,None,TmConst(fi,CBool(b)) -> TmIfexp(fi,Some(b),None)
-         | Some(b),Some(TmClos(_,_,t3,env3,_)),TmClos(_,_,t4,env4,_) ->
+         | Some(b),Some(TmClos(_,_,_,t3,env3,_)),TmClos(_,_,_,t4,env4,_) ->
               if b then eval (TmNop::env3) t3 else eval (TmNop::env4) t4
-         | Some(b),_,(TmClos(_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
+         | Some(b),_,(TmClos(_,_,_,t3,_,_) as v3) -> TmIfexp(fi,Some(b),Some(v3))
          | _ -> raise_error fi "Incorrect if-expression in the eval function.")
        | _ -> raise_error fi "Application to a non closure value.")
   (* Constant *)
-  | TmConst(_,_) | TmFix(_) | TmPEval(_) -> t
+  | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
+  (* System F terms *)
+  | TmTyLam(fi,_,_,_) | TmTyApp(fi,_,_) -> failwith "System F terms should not exist (4)"
   (* If expression *)
   | TmIfexp(fi,_,_) -> t
   (* The rest *)
@@ -610,7 +653,7 @@ let rec eval env t =
 
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
-let evalprog filename  =
+let evalprog filename typecheck =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   let fs1 = open_in filename in
@@ -618,29 +661,32 @@ let evalprog filename  =
   begin try
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
-        |> Parser.main Lexer.main
-        |> debruijn (builtin |> List.split |> fst |> List.map us)
+        |> Parser.main Lexer.main |> debug_after_parse
+        |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
+        |> debug_after_debruijn
+        |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
+        |> Typesys.erase |> debug_after_erase
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
 
     with
     | Lexer.Lex_error m ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Error m ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str m));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
     | Parsing.Parse_error ->
       if !utest then (
-        printf "\n ** %s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
+        printf "\n%s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
@@ -670,7 +716,34 @@ let files_of_folders lst = List.fold_left (fun a v ->
   else v::a
 ) [] lst
 
+(* Iterate over all potential test files and run tests *)
+let testprog lst typecheck =
+    utest := true;
+    (* Select the lexer and parser, depending on the DSL*)
+    let eprog name =
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name typecheck
+    in
+    (* Evaluate each of the programs in turn *)
+    List.iter eprog (files_of_folders lst);
 
+    (* Print out unit test results, if applicable *)
+    if !utest_fail = 0 then
+      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
+        (!utest_ok)
+            else
+      printf "\nERROR! %d successful tests and %d failed tests.\n"
+        (!utest_ok) (!utest_fail)
+
+(* Run program *)
+let runprog name lst typecheck =
+    prog_argv := lst;
+      if Ustring.ends_with (us".ppl") (us name) then
+        (eval_atom := Ppl.eval_atom;
+         (Ppl.evalprog debruijn eval builtin) name)
+      else evalprog name typecheck
 
 
 (* Print out main menu *)
@@ -685,39 +758,17 @@ let main =
   (match Array.to_list Sys.argv |> List.tl with
 
   (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> (
-    utest := true;
-    (* Select the lexer and parser, depending on the DSL*)
-    let eprog name =
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name
-    in
-    (* Evaluate each of the programs in turn *)
-    List.iter eprog (files_of_folders lst);
+  | "test"::lst | "t"::lst -> testprog lst false
 
-    (* Print out unit test results, if applicable *)
-    if !utest_fail = 0 then
-      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
-        (!utest_ok)
-            else
-      printf "\nERROR! %d successful tests and %d failed tests.\n"
-        (!utest_ok) (!utest_fail))
+  (* Run tests on one or more files, including type checking *)
+  | "tytest"::lst -> testprog lst true
 
-  (* This is just a temp oml library test. Should be removed later. *)
-  | "oml"::lst -> (
-      let sample = Oml.Statistics.Sampling.normal ~mean:2. ~std:1. () in
-     printf "%f\n%f\n" (sample()) (sample()))
+  (* Run one program with program arguments without typechecking *)
+  | "tyrun"::name::lst -> runprog name lst true
 
+  (* Run one program with program arguments without typechecking *)
+  | "run"::name::lst | name::lst -> runprog name lst false
 
-  (* Run one program with program arguments *)
-  | "run"::name::lst | name::lst -> (
-    prog_argv := lst;
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name)
 
 
   (* Show the menu *)

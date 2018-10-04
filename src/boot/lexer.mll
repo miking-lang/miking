@@ -28,15 +28,17 @@ let reserved_strings = [
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
   ("data",          fun(i) -> Parser.DATA{i=i;v=()});
-  ("language",      fun(i) -> Parser.LANG{i=i;v=()});
-  ("MCore",         fun(i) -> Parser.MCORE{i=i;v=()});
-  ("Ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
+  ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
+  ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
+  ("ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
+  ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});
+  ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("nop",           fun(i) -> Parser.NOP{i=i;v=()});
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
-  ("peval",         fun(i) -> Parser.PEVAL{i=i;v=()});
+  ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
 
   (* v *)
@@ -59,6 +61,7 @@ let reserved_strings = [
   ("||",            fun(i) -> Parser.OR{i=i;v=()});
   ("&&",            fun(i) -> Parser.AND{i=i;v=()});
   ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
+  ("$",             fun(i) -> Parser.DOLLAR{i=i;v=()});
 
   (* Symbolic Tokens *)
   ("(",             fun(i) -> Parser.LPAREN{i=i;v=()});
@@ -160,7 +163,7 @@ let s_escape = "\\'" | "\\\"" | "\\?"  | "\\\\" |
 let nondigit = ('_' | us_letter)
 let ident = (nondigit (digit | nondigit)*)
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
-              "!=" | "!" | "&&" | "||" | "++"| "("  | ")"  | "["  | "]" | "{"  | "}"  |
+              "!=" | "!" | "&&" | "||" | "++"| "$"  | "("  | ")"  | "["  | "]" | "{"  | "}"  |
               "::" | ":" | ","  | "."  | "|" | "->" | "=>"
 
 let line_comment = "//" [^ '\013' '\010']*

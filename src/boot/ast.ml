@@ -10,10 +10,13 @@ open Ustring.Op
 open Msg
 
 
+
+
 let utest = ref false           (* Set to true if unit testing is enabled *)
 let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
+
 
 (* Either an int, a float, or none *)
 type intfloatoption =
@@ -103,16 +106,19 @@ and const =
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
-(* Term/expression *)
+(* Terms / expressions *)
 and tm =
-| TmVar         of info * ustring * int * pemode
-| TmLam         of info * ustring * tm
-| TmClos        of info * ustring * tm * env * pemode
-| TmApp         of info * tm * tm
-| TmConst       of info * const
-| TmPEval       of info
+| TmVar         of info * ustring * int * pemode    (* Variable *)
+| TmLam         of info * ustring * ty * tm         (* Lambda abstraction *)
+| TmClos        of info * ustring * ty * tm * env * pemode (* Closure *)
+| TmApp         of info * tm * tm                   (* Application *)
+| TmConst       of info * const                     (* Constant *)
+| TmDive        of info                             (* Dive operator *)
 | TmIfexp       of info * bool option * tm option
-| TmFix         of info
+| TmFix         of info                             (* Fix point *)
+| TmTyLam       of info * ustring * kind * tm       (* Type abstraction *)
+| TmTyApp       of info * tm * ty                   (* Type application *)
+
 
 | TmChar        of info * int
 | TmExprSeq     of info * tm * tm
@@ -121,25 +127,55 @@ and tm =
 | TmMatch       of info * tm * case list
 | TmNop
 
+(* Ground types *)
+and groundty = GBool | GInt | GFloat | GVoid
+
+(* Types *)
+and ty =
+| TyGround      of info * groundty                  (* Ground types *)
+| TyArrow       of info * ty * ty                   (* Function type *)
+| TyVar         of info * ustring * int             (* Type variable *)
+| TyAll         of info * ustring * kind * ty       (* Universal type *)
+| TyLam         of info * ustring * kind * ty       (* Type-level function *)
+| TyApp         of info * ty * ty                   (* Type-level application *)
+| TyDyn                                             (* Dynamic type *)
+
+(* Kinds *)
+and kind =
+| KindStar      of info                             (* Kind of proper types *)
+| KindArrow     of info * kind * kind               (* Kind of type-level functions *)
 
 
+(* Variable type. Either a type variable or a term variable *)
+and vartype =
+| VarTy         of ustring
+| VarTm         of ustring
 
+and tyenvVar =
+| TyenvTmvar    of ustring * ty
+| TyenvTyvar    of ustring * kind                  (* Boolean states if it is
+                                                       a forall binding *)
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
+(* Extract the variable name from a tyenvVar type *)
+let envVar tyvar =
+  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_) -> x
 
 (* Returns the info field from a term *)
 let tm_info t =
   match t with
   | TmVar(fi,_,_,_) -> fi
-  | TmLam(fi,_,_) -> fi
-  | TmClos(fi,_,_,_,_) -> fi
+  | TmLam(fi,_,_,_) -> fi
+  | TmClos(fi,_,_,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
-  | TmPEval(fi) -> fi
+  | TmDive(fi) -> fi
   | TmIfexp(fi,_,_) -> fi
   | TmFix(fi) -> fi
+  | TmTyLam(fi,_,_,_) -> fi
+  | TmTyApp(fi,_,_) -> fi
 
   | TmChar(fi,_) -> fi
   | TmExprSeq(fi,_,_) -> fi
@@ -147,6 +183,27 @@ let tm_info t =
   | TmUtest(fi,_,_,_) -> fi
   | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
+
+
+(* Returns the info field from a type *)
+let ty_info t =
+  match t with
+  | TyGround(fi,_) -> fi
+  | TyArrow(fi,_,_) -> fi
+  | TyVar(fi,_,_) -> fi
+  | TyAll(fi,_,_,_) -> fi
+  | TyLam(fi,_,_,_) -> fi
+  | TyApp(fi,_,_) -> fi
+  | TyDyn -> NoInfo         (* Used when deriving types for let-expressions *)
+
+
+
+(* Returns the info field from a kind *)
+let kind_info k =
+  match k with
+  | KindStar(fi) -> fi
+  | KindArrow(fi,_,_) -> fi
+
 
 (* Returns the number of expected arguments *)
 let arity c =

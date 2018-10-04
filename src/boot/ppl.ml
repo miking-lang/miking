@@ -38,7 +38,7 @@ let evalprog debruijn eval builtin filename =
     Ppllexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
         |> Pplparser.main Ppllexer.main
-        |> debruijn (builtin |> List.split |> fst |> List.map us)
+        |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
         |> fun _ -> ()
 

@@ -3,7 +3,7 @@
 //
 // Test boolean and if primitives
 
-language MCore
+lang mcore
 
 // Literals
 utest true true
