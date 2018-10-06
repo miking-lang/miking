@@ -600,7 +600,7 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(fi,c) -> delta c (eval env t2)
        (* Partial evaluation *)
-       | TmDive(fi2) -> normalize env 0 (TmApp(fi,TmDive(fi2),t2))
+       | TmDive(fi2) -> normalize env 0 (TmApp(fi,TmDive(fi2),eval env t2))
            |> readback env 0 |> debug_after_peval |> eval env
        (* Fix *)
        | TmFix(fi) ->
