@@ -520,9 +520,9 @@ let rec normalize env n t =
   debug_normalize env n t;
   match t with
   (* Variables using debruijn indices. *)
-  | TmVar(fi,x,n,false) -> normalize env n (List.nth env n)
+  | TmVar(fi,x,k,false) -> normalize env n (List.nth env k)
   (* PEMode variable (symbol) *)
-  | TmVar(fi,x,n,true) -> t
+  | TmVar(fi,x,k,true) -> t
   (* Lambda and closure conversions to PE closure *)
   | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env,true)
   (* Closures, both PE and non PE *)
