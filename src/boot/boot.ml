@@ -108,10 +108,6 @@ let rec debruijn env t =
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
-  | TmMatch(fi,t1,cases) ->
-      TmMatch(fi,debruijn env t1,
-               List.map (fun (Case(fi,pat,tm)) ->
-                 Case(fi,pat,debruijn (patvars env pat) tm)) cases)
   | TmNop -> t
 
 
@@ -504,8 +500,6 @@ let rec readback env n t =
   | TmUC(fi,uct,o,u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,readback env n t1, readback env n t2,tnext)
-  | TmMatch(fi,t1,cases) ->
-      TmMatch(fi,readback env n t1,cases)
   | TmNop -> t
 
 
@@ -577,8 +571,6 @@ let rec normalize env n t =
   | TmUC(fi,uct,o,u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,normalize env n t1,normalize env n t2,tnext)
-  | TmMatch(fi,t1,cases) ->
-      TmMatch(fi,normalize env n t1,cases)
   | TmNop -> t
 
 
@@ -637,17 +629,6 @@ let rec eval env t =
         utest_fail_local := !utest_fail_local + 1)
      end;
     eval env tnext
-  | TmMatch(fi,t1,cases) -> (
-     let v1 = make_tm_for_match (eval env t1) in
-     let rec appcases cases =
-       match cases with
-       | Case(_,p,t)::cs ->
-          (match eval_match env p v1 true with
-         | Some(env,_) -> eval env t
-         | None -> appcases cs)
-       | [] -> raise_error fi  "Match error"
-     in
-      appcases cases)
   | TmNop -> t
 
 

@@ -266,7 +266,6 @@ let rec typeOf tyenv t =
       else error fi  (us"The two test expressions have differnt types: " ^.
                         pprint_ty ty1 ^. us" and " ^.
                         pprint_ty ty2 ^. us".")
-  | TmMatch(fi,t1,cases) -> failwith "TODO12"
   | TmNop -> TyGround(NoInfo,GVoid)
 
 (* Returns true of the type contains at least one TyDyn *)
@@ -453,7 +452,6 @@ let rec biTypeOf env ty t =
     let (nty1,nty2) = (normTy ty1,normTy ty2) in
     if tyequal nty1 nty2 then biTypeOf env TyDyn t3
     else errorUtestExp fi nty1 nty2
-  | TmMatch(fi,t1,cases) -> failwith "TODO TmMatch (later)"
   | TmNop -> TyGround(NoInfo,GVoid)
 
 
@@ -479,7 +477,6 @@ let rec erase t =
   | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi, erase t1, erase t2)
   | TmUC(fi,tree,ord,unique) -> t
   | TmUtest(fi,t1,t2,t3) -> TmUtest(fi, erase t1, erase t2, erase t3)
-  | TmMatch(fi,t1,cases) -> t (* TODO if needed *)
   | TmNop -> t
 
 

@@ -124,7 +124,6 @@ and tm =
 | TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
-| TmMatch       of info * tm * case list
 | TmNop
 
 (* Ground types *)
@@ -181,7 +180,6 @@ let tm_info t =
   | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
-  | TmMatch(fi,_,_) -> fi
   | TmNop -> NoInfo
 
 

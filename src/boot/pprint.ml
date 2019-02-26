@@ -204,8 +204,6 @@ and pprint basic t =
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map (ppt false) (uct2list uct))) ^. us")")
   | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
-  | TmMatch(fi,t1,cases)
-    ->  us"match " ^. ppt false t1 ^. us" {" ^. pprint_cases basic cases ^. us"}"
   | TmNop -> us"Nop"
   in ppt false t
 

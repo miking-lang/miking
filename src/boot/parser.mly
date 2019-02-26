@@ -42,8 +42,6 @@
           | UCLeaf(tms) -> List.exists hasx tms
           in work uct
       | TmUtest(fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
-      | TmMatch(fi,t1,cases) ->
-          List.exists (fun (Case(_,_,t)) -> hasx t) cases
       | TmNop -> false
     in
     if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyDyn,t))) else t
