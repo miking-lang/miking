@@ -257,7 +257,6 @@ let rec typeOf tyenv t =
              (us"Type application expects an universal type, but found " ^.
               pprint_ty ty ^. us"."))
   | TmChar(fi,x) -> failwith "TODO8"
-  | TmExprSeq(fi,t1,t2) -> failwith "TODO9"
   | TmUC(fi,tree,ord,unique) -> failwith "TODO10"
   | TmUtest(fi,t1,t2,t3) ->
       let (ty1,ty2) = (normTy (typeOf tyenv t1),normTy (typeOf tyenv t2)) in
@@ -444,7 +443,6 @@ let rec biTypeOf env ty t =
       else errorKindMismatch  (ty_info ty2) ki11 ki12
     | ty -> errorExpectsUniversal (tm_info t1) ty)
   | TmChar(fi,x) -> failwith "TODO TmChar (later)"
-  | TmExprSeq(fi,t1,t2) -> failwith "TODO TmExprSeq (later)"
   | TmUC(fi,tree,ord,unique) -> failwith "TmUC (later)"
   | TmUtest(fi,t1,t2,t3) ->
     let ty1  = biTypeOf env TyDyn t1 in
@@ -474,7 +472,6 @@ let rec erase t =
   | TmTyLam(fi,x,kind,t1) -> erase t1
   | TmTyApp(fi,t1,ty1) -> erase t1
   | TmChar(fi,x) -> t
-  | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi, erase t1, erase t2)
   | TmUC(fi,tree,ord,unique) -> t
   | TmUtest(fi,t1,t2,t3) -> TmUtest(fi, erase t1, erase t2, erase t3)
   | TmNop -> t

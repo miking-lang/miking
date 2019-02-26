@@ -190,7 +190,6 @@ and pprint basic t =
       us"ifexp(" ^. usbool g ^. us"," ^. ppt false t2 ^. us")"
   | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
   | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmExprSeq(fi,t1,t2) -> ppt false t1 ^. us"\n" ^. ppt false t2
   | TmUC(fi,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->

@@ -35,7 +35,6 @@
       | TmIfexp(_,_,None) -> false
       | TmIfexp(_,_,Some(t1)) -> hasx t1
       | TmChar(_,_) -> false
-      | TmExprSeq(_,t1,t2) -> hasx t1 || hasx t2
       | TmUC(fi,uct,ordered,uniqueness) ->
           let rec work uc = match uc with
           | UCNode(uc1,uc2) -> work uc1 || work uc2

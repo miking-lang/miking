@@ -121,7 +121,6 @@ and tm =
 
 
 | TmChar        of info * int
-| TmExprSeq     of info * tm * tm
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
 | TmNop
@@ -177,7 +176,6 @@ let tm_info t =
   | TmTyApp(fi,_,_) -> fi
 
   | TmChar(fi,_) -> fi
-  | TmExprSeq(fi,_,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
   | TmNop -> NoInfo

@@ -104,7 +104,6 @@ let rec debruijn env t =
   | TmDive(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
-  | TmExprSeq(fi,t1,t2) -> TmExprSeq(fi,debruijn env t1,debruijn env t2)
   | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
@@ -495,8 +494,6 @@ let rec readback env n t =
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
   (* Other old, to remove *)
   | TmChar(_,_) -> t
-  | TmExprSeq(fi,t1,t2) ->
-      TmExprSeq(fi,readback env n t1, readback env n t2)
   | TmUC(fi,uct,o,u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,readback env n t1, readback env n t2,tnext)
@@ -566,8 +563,6 @@ let rec normalize env n t =
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
   | TmChar(_,_) -> t
-  | TmExprSeq(fi,t1,t2) ->
-      TmExprSeq(fi,normalize env n t1, normalize env n t2)
   | TmUC(fi,uct,o,u) -> t
   | TmUtest(fi,t1,t2,tnext) ->
       TmUtest(fi,normalize env n t1,normalize env n t2,tnext)
@@ -616,7 +611,6 @@ let rec eval env t =
   | TmIfexp(fi,_,_) -> t
   (* The rest *)
   | TmChar(_,_) -> t
-  | TmExprSeq(_,t1,t2) -> let _ = eval env t1 in eval env t2
   | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin
