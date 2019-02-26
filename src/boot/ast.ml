@@ -81,6 +81,9 @@ and const =
 | Cmulf  of float option
 | Cdivf  of float option
 | Cnegf
+(* MCore intrinsic: Tensors *)
+| CSeq   of tm list
+| Cnth   of tm option
 (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
 | Cadd   of intfloatoption
 | Csub   of intfloatoption
