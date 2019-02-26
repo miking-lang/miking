@@ -720,12 +720,7 @@ let files_of_folders lst = List.fold_left (fun a v ->
 let testprog lst typecheck =
     utest := true;
     (* Select the lexer and parser, depending on the DSL*)
-    let eprog name =
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name typecheck
-    in
+    let eprog name = evalprog name typecheck in
     (* Evaluate each of the programs in turn *)
     List.iter eprog (files_of_folders lst);
 
@@ -740,10 +735,7 @@ let testprog lst typecheck =
 (* Run program *)
 let runprog name lst typecheck =
     prog_argv := lst;
-      if Ustring.ends_with (us".ppl") (us name) then
-        (eval_atom := Ppl.eval_atom;
-         (Ppl.evalprog debruijn eval builtin) name)
-      else evalprog name typecheck
+    evalprog name typecheck
 
 
 (* Print out main menu *)

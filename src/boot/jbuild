@@ -2,8 +2,8 @@
 
 (jbuild_version 1)
 
-(ocamlyacc (parser pplparser))
-(ocamllex (lexer ppllexer))
+(ocamlyacc (parser))
+(ocamllex (lexer))
 
 (executable
   ((name boot)
