@@ -106,6 +106,8 @@ and const =
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
+
+
 (* Terms / expressions *)
 and tm =
 | TmVar         of info * ustring * int * pemode    (* Variable *)

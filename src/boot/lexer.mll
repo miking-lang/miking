@@ -1,3 +1,4 @@
+
 (*
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
@@ -16,26 +17,23 @@
 
 let reserved_strings = [
   (* Keywords *)
-  ("fun",           fun(i) -> Parser.FUNC{i=i;v=()});
-  ("def",           fun(i) -> Parser.DEF{i=i;v=()});
-  ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("if",            fun(i) -> Parser.IF{i=i;v=()});
   ("then",          fun(i) -> Parser.THEN{i=i;v=()});
   ("else",          fun(i) -> Parser.ELSE{i=i;v=()});
   ("true",          fun(i) -> Parser.TRUE{i=i;v=()});
   ("false",         fun(i) -> Parser.FALSE{i=i;v=()});
   ("match",         fun(i) -> Parser.MATCH{i=i;v=()});
+  ("with",          fun(i) -> Parser.WITH{i=i;v=()});
+  ("case",          fun(i) -> Parser.CASE{i=i;v=()});
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
   ("data",          fun(i) -> Parser.DATA{i=i;v=()});
   ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
   ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
-  ("ragnar",        fun(i) -> Parser.RAGNAR{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
-  ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("nop",           fun(i) -> Parser.NOP{i=i;v=()});
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
@@ -191,12 +189,6 @@ rule main = parse
       { Parser.UINT{i=mkinfo_fast str; v=int_of_string str} }
   | unsigned_number as str
       { Parser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
-  | (ident as s) "("
-      { let s2 = Ustring.from_utf8 s in
-        (match s with
-        | "if" -> Parser.IF2{i=mkinfo_ustring s2;v=()}
-        | "fun" -> Parser.FUNC2{i=mkinfo_ustring s2;v=()}
-        | _ -> Parser.FUNIDENT {i=mkinfo_ustring s2; v=s2})}
   | ident | symtok as s
       { mkid s }
   | '\'' (utf8 as c) '\''

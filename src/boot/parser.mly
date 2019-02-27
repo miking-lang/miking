@@ -56,35 +56,29 @@ let mkopkind fi op =
 /* Misc tokens */
 %token EOF
 %token <Ustring.ustring Ast.tokendata> IDENT
-%token <Ustring.ustring Ast.tokendata> FUNIDENT
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
 %token <int Ast.tokendata> UINT
 %token <float Ast.tokendata> UFLOAT
 
 /* Keywords */
-%token <unit Ast.tokendata> FUNC
-%token <unit Ast.tokendata> FUNC2
-%token <unit Ast.tokendata> DEF
-%token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> IF
-%token <unit Ast.tokendata> IF2           /* Special handling if( */
 %token <unit Ast.tokendata> THEN
 %token <unit Ast.tokendata> ELSE
 %token <unit Ast.tokendata> TRUE
 %token <unit Ast.tokendata> FALSE
 %token <unit Ast.tokendata> MATCH
+%token <unit Ast.tokendata> WITH
+%token <unit Ast.tokendata> CASE
 %token <unit Ast.tokendata> UTEST
 %token <unit Ast.tokendata> TYPE
 %token <unit Ast.tokendata> DATA
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> MCORE
-%token <unit Ast.tokendata> RAGNAR
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> BIGLAM
 %token <unit Ast.tokendata> ALL
-%token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> DIVE
@@ -157,15 +151,20 @@ main:
 
 mcore_scope:
   | { TmNop }
-  | UTEST mc_atom mc_atom mcore_scope
+  | UTEST atom atom mcore_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
   | LET IDENT EQ mc_term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
+  | TYPE IDENT mcore_scope
+      { TmNop } /* TODO */
+  | DATA ty_data mcore_scope
+      { TmNop } /* TODO */
+
 
 mc_term:
-  | mc_left
+  | cases
       { $1 }
   | LAM IDENT ty_op DOT mc_term
       { let fi = mkinfo $1.i (tm_info $5) in
@@ -173,28 +172,38 @@ mc_term:
   | BIGLAM IDENT opkind DOT mc_term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkopkind $2.i $3,$5) }
-  | LET IDENT EQ mc_term IN mc_term
-      { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,TyDyn,$6),$4) }
+  | MATCH mc_term WITH mc_term
+      { TmNop }
 
-ty_op:
-  | COLON ty
-      { $2 }
-  |
-      { TyDyn }
-
-mc_left:
-  | mc_atom
+cases:
+  | case
       { $1 }
-  | mc_left mc_atom
+  | case BAR cases
+      { $1 }
+
+
+case:
+  | left
+      { $1 }
+  | CASE IDENT LPAREN rev_comma_name_lst RPAREN DARROW left
+      { TmNop } /* TODO */
+  | CASE IDENT DARROW left
+      { TmNop } /* TODO */
+
+
+left:
+  | atom
+      { $1 }
+  | left atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
-  | mc_left LSQUARE ty RSQUARE
+  | left LSQUARE ty RSQUARE
       { let fi = mkinfo (tm_info $1) $4.i in
         TmTyApp(fi,$1,$3) }
 
-mc_atom:
-  | LPAREN mc_term RPAREN   { $2 }
+atom:
+  | LPAREN rev_comma_tm_lst RPAREN
+    { $2 } /* TODO */
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
@@ -207,6 +216,40 @@ mc_atom:
   | DIVE                 { TmDive($1.i) }
   | IFEXP                { TmIfexp($1.i,None,None) }
 
+
+
+rev_comma_name_lst:
+  | IDENT
+    { [($1.i,$1.v)] }
+  | rev_comma_name_lst COMMA IDENT
+    { ($3.i,$3.v)::$1 }
+
+
+rev_comma_tm_lst:
+  | mc_term
+     { $1 } /* TODO list */
+  | rev_comma_tm_lst COMMA mc_term
+     { $3 } /* TODO list */
+
+rev_comma_ty_lst:
+  | ty
+    { [$1] }
+  | rev_comma_ty_lst COMMA ty
+    { $3::$1 }
+
+
+ty_op:
+  | COLON ty
+      { $2 }
+  |
+      { TyDyn }
+
+
+ty_data:
+  | IDENT LPAREN rev_comma_ty_lst RPAREN DARROW IDENT
+     { TmNop } /* TODO */
+  | IDENT DARROW IDENT
+     { TmNop } /* TODO */
 
 
 ty:
