@@ -110,17 +110,24 @@ and pemode = bool
 
 (* Terms / expressions *)
 and tm =
-| TmVar         of info * ustring * int * pemode    (* Variable *)
-| TmLam         of info * ustring * ty * tm         (* Lambda abstraction *)
-| TmClos        of info * ustring * ty * tm * env * pemode (* Closure *)
-| TmApp         of info * tm * tm                   (* Application *)
-| TmConst       of info * const                     (* Constant *)
-| TmDive        of info                             (* Dive operator *)
+| TmVar         of info * ustring * int * pemode              (* Variable *)
+| TmLam         of info * ustring * ty * tm                   (* Lambda abstraction *)
+| TmClos        of info * ustring * ty * tm * env * pemode    (* Closure *)
+| TmApp         of info * tm * tm                             (* Application *)
+| TmConst       of info * const                               (* Constant *)
+| TmDive        of info                                       (* Dive operator *)
 | TmIfexp       of info * bool option * tm option
-| TmFix         of info                             (* Fix point *)
-| TmTyLam       of info * ustring * kind * tm       (* Type abstraction *)
-| TmTyApp       of info * tm * ty                   (* Type application *)
+| TmFix         of info                                       (* Fix point *)
+| TmTyLam       of info * ustring * kind * tm                 (* Type abstraction *)
+| TmTyApp       of info * tm * ty                             (* Type application *)
 
+| TmMatch       of info * tm * tm                             (* Match expression *)
+| TmCase        of info * ustring * (ustring * int) list * tm (* Case expression *)
+| TmCaseComp    of info * tm * tm                             (* Case composition *)
+| TmCon         of info * ustring * tm list                   (* Data constructor term *)
+
+| TmDefType     of info * ustring * tm                        (* Type definition *)
+| TmDefCon      of info * ty * tm                             (* Data constructor definition *)
 
 | TmChar        of info * int
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
@@ -132,18 +139,20 @@ and groundty = GBool | GInt | GFloat | GVoid
 
 (* Types *)
 and ty =
-| TyGround      of info * groundty                  (* Ground types *)
-| TyArrow       of info * ty * ty                   (* Function type *)
-| TyVar         of info * ustring * int             (* Type variable *)
-| TyAll         of info * ustring * kind * ty       (* Universal type *)
-| TyLam         of info * ustring * kind * ty       (* Type-level function *)
-| TyApp         of info * ty * ty                   (* Type-level application *)
-| TyDyn                                             (* Dynamic type *)
+| TyGround      of info * groundty                            (* Ground types *)
+| TyArrow       of info * ty * ty                             (* Function type *)
+| TyVar         of info * ustring * int                       (* Type variable *)
+| TyAll         of info * ustring * kind * ty                 (* Universal type *)
+| TyLam         of info * ustring * kind * ty                 (* Type-level function *)
+| TyApp         of info * ty * ty                             (* Type-level application *)
+| TyCase        of info * ustring * ty list * ustring         (* Case type *)
+| TyDyn                                                       (* Dynamic type *)
+
 
 (* Kinds *)
 and kind =
-| KindStar      of info                             (* Kind of proper types *)
-| KindArrow     of info * kind * kind               (* Kind of type-level functions *)
+| KindStar      of info                                       (* Kind of proper types *)
+| KindArrow     of info * kind * kind                         (* Kind of type-level functions *)
 
 
 (* Variable type. Either a type variable or a term variable *)

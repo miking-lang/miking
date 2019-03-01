@@ -46,7 +46,7 @@
     if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyDyn,t))) else t
 
 (* Create kind when optionally available *)
-let mkopkind fi op =
+let mkop_kind fi op =
   match op with
   | None -> KindStar(fi)
   | Some(k) -> k
@@ -154,41 +154,47 @@ mcore_scope:
   | UTEST atom atom mcore_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
-  | LET IDENT EQ mc_term mcore_scope
+  | LET IDENT EQ term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
   | TYPE IDENT mcore_scope
-      { TmNop } /* TODO */
-  | DATA ty_data mcore_scope
-      { TmNop } /* TODO */
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmDefType(fi,$2.v,$3) }
+  | DATA ty_case mcore_scope
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmDefCon(fi,$2,$3)}
 
 
-mc_term:
+term:
   | cases
       { $1 }
-  | LAM IDENT ty_op DOT mc_term
+  | LAM IDENT ty_op DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,$3,$5) }
-  | BIGLAM IDENT opkind DOT mc_term
+  | BIGLAM IDENT op_kind DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmTyLam(fi,$2.v,mkopkind $2.i $3,$5) }
-  | MATCH mc_term WITH mc_term
-      { TmNop }
+        TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
+  | MATCH term WITH term
+      { let fi = mkinfo $1.i (tm_info $4) in
+        TmMatch(fi,$2,$4) }
 
 cases:
   | case
       { $1 }
   | case BAR cases
-      { $1 }
+    { let fi = mkinfo (tm_info $1) (tm_info $3) in
+      TmCaseComp(fi,$1,$3) }
 
 
 case:
   | left
       { $1 }
   | CASE IDENT LPAREN rev_comma_name_lst RPAREN DARROW left
-      { TmNop } /* TODO */
+      { let fi = mkinfo $1.i $6.i in
+        TmCase(fi,$2.v,List.rev $4,$7) }
   | CASE IDENT DARROW left
-      { TmNop } /* TODO */
+      { let fi = mkinfo $1.i $3.i in
+        TmCase(fi,$2.v,[],$4) }
 
 
 left:
@@ -201,9 +207,11 @@ left:
       { let fi = mkinfo (tm_info $1) $4.i in
         TmTyApp(fi,$1,$3) }
 
+
 atom:
   | LPAREN rev_comma_tm_lst RPAREN
-    { $2 } /* TODO */
+    { let fi = mkinfo $1.i $3.i in
+      TmCon(fi,us"",List.rev $2) }
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
@@ -220,22 +228,16 @@ atom:
 
 rev_comma_name_lst:
   | IDENT
-    { [($1.i,$1.v)] }
+    { [($1.v,0)] }
   | rev_comma_name_lst COMMA IDENT
-    { ($3.i,$3.v)::$1 }
+    { ($3.v,0)::$1 }
 
 
 rev_comma_tm_lst:
-  | mc_term
-     { $1 } /* TODO list */
-  | rev_comma_tm_lst COMMA mc_term
-     { $3 } /* TODO list */
-
-rev_comma_ty_lst:
-  | ty
-    { [$1] }
-  | rev_comma_ty_lst COMMA ty
-    { $3::$1 }
+  | term
+     { [$1] }
+  | rev_comma_tm_lst COMMA term
+     { $3::$1 }
 
 
 ty_op:
@@ -245,11 +247,20 @@ ty_op:
       { TyDyn }
 
 
-ty_data:
+ty_case:
   | IDENT LPAREN rev_comma_ty_lst RPAREN DARROW IDENT
-     { TmNop } /* TODO */
+      { let fi = mkinfo $1.i $5.i in
+        TyCase(fi,$1.v,List.rev $3,$6.v) }
   | IDENT DARROW IDENT
-     { TmNop } /* TODO */
+      { let fi = mkinfo $1.i $3.i in
+        TyCase(fi,$1.v,[],$3.v) }
+
+
+rev_comma_ty_lst:
+  | ty
+      { [$1] }
+  |   rev_comma_ty_lst COMMA ty
+    { $3::$1 }
 
 
 ty:
@@ -258,12 +269,12 @@ ty:
   | ty_left ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
-  | ALL IDENT opkind DOT ty
+  | ALL IDENT op_kind DOT ty
       { let fi = mkinfo $1.i (ty_info $5) in
-        TyAll(fi,$2.v,mkopkind $2.i $3,$5) }
-  | LAM IDENT opkind DOT ty
+        TyAll(fi,$2.v,mkop_kind $2.i $3,$5) }
+  | LAM IDENT op_kind DOT ty
       { let fi = mkinfo $1.i (ty_info $5) in
-        TyLam(fi,$2.v,mkopkind $2.i $3,$5) }
+        TyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
 
 
 ty_left:
@@ -287,7 +298,7 @@ ty_atom:
       { $2 }
 
 
-opkind:
+op_kind:
   |
       { None }
   | CONS kind
@@ -295,13 +306,13 @@ opkind:
 
 
 kind:
-  | kindatom
+  | kind_atom
       { $1 }
-  | kindatom ARROW kind
+  | kind_atom ARROW kind
       { let fi = mkinfo (kind_info $1) (kind_info $3) in
         KindArrow(fi,$1,$3) }
 
-kindatom:
+kind_atom:
   | MUL
       { KindStar($1.i) }
   | LPAREN kind RPAREN

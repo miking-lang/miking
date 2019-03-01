@@ -1,6 +1,6 @@
 
-
 lang mcore
+
 
 // Define a data type
 type Tree
@@ -15,8 +15,8 @@ let t1 = Node(Node(Leaf(1),Leaf(2)),Leaf(3))
 // Define a function that checks if the input is a leaf or not
 let isLeaf = lam t:Tree.
   match t with
-    case Node(_,_) => false |
-    case Leaf(_)   => true
+    case Node(_,_) =>
+  | case Leaf(_)   => true
 
 // Unit tests of the isLeaf() function
 utest (isLeaf t1) false

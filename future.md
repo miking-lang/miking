@@ -49,7 +49,41 @@ Each of these collection types can then be used as other standard data type. For
 UC types have many different intrinsic functions (built-in functions), where some of them are only valid for some of the 6 specific collection types. Moreover, there are some operations defined on the *composition* of collection types. For instance, a matrix can be defined as a sequence of sequences, where matrix multiplication is defined on such a type.
 
 
+## MCore+
 
+MCore+ extends MCore with a number of syntactic sugar extensions.
+
+### Inference of Self Variables
+
+The following program in MCore+ 
+
+```
+let m1 = {
+  let foo = 7 
+}
+let x = m1.foo  // x contains value 7
+```
+is a syntactic simplification, where the self variables have been derived. In the following MCore version, the two self variables `s` and `root` are explicit.
+
+```
+let m1 = self s {
+  let foo = 7
+  let x = s.foo + 1   // x evaluates to 8
+}
+let y = root.m1.foo   // y evaluates to 7
+```
+
+In the above MCore code, the top level module was implicit, using a default self variable called `root`. In the following code, this module is explicit:
+
+```
+self root {
+  let m1 = self s {
+    let foo = 7
+    let x = s.foo + 1   // x evaluates to 8
+  }
+  let y = root.m1.foo   // y evaluates to 7
+}
+```
 
 
 ## MIT License

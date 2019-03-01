@@ -109,6 +109,38 @@ let rec debruijn env t =
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t
 
+(* Preprocess the term before evaluation. Includes i) translation into data constructions, ii)
+   destinction between data type constructor identifiers and lambda variables. The environment
+   is an associate list, mapping identifier strings to booleans, where true means that name is
+   used as a data constructor.
+ *)
+let rec preprocess env t =
+  match t with
+  | TmVar(fi,x,k,pemode) -> t
+  | TmLam         of info * ustring * ty * tm                   (* Lambda abstraction *)
+| TmClos        of info * ustring * ty * tm * env * pemode    (* Closure *)
+| TmApp         of info * tm * tm                             (* Application *)
+| TmConst       of info * const                               (* Constant *)
+| TmDive        of info                                       (* Dive operator *)
+| TmIfexp       of info * bool option * tm option
+| TmFix         of info                                       (* Fix point *)
+| TmTyLam       of info * ustring * kind * tm                 (* Type abstraction *)
+| TmTyApp       of info * tm * ty                             (* Type application *)
+
+| TmMatch       of info * tm * tm                             (* Match expression *)
+| TmCase        of info * ustring * (ustring * int) list * tm (* Case expression *)
+| TmCaseComp    of info * tm * tm                             (* Case composition *)
+| TmCon         of info * ustring * tm list                   (* Data constructor term *)
+
+| TmDefType     of info * ustring * tm                        (* Type definition *)
+| TmDefCon      of info * ty * tm                             (* Data constructor definition *)
+
+| TmChar        of info * int
+| TmUC          of info * ucTree * ucOrder * ucUniqueness
+| TmUtest       of info * tm * tm * tm
+| TmNop
+
+
 
 
 (* Check if two value terms are equal *)
@@ -466,6 +498,9 @@ let optimize_const_app fi v1 v2 =
   | vv1,vv2 -> TmApp(fi,vv1,vv2)
 
 
+
+
+
 (* The readback function is the second pass of the partial evaluation.
    It removes symbols for the term. If this is the complete version,
    this is the final pass before JIT *)
@@ -637,6 +672,7 @@ let evalprog filename typecheck =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
         |> Parser.main Lexer.main |> debug_after_parse
+        |> preprocess
         |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
         |> debug_after_debruijn
         |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
