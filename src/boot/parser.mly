@@ -20,30 +20,6 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
-   (** Add fix-point, if recursive function *)
-  let addrec x t =
-    let rec hasx t = match t with
-      | TmVar(_,y,_,_) ->  x =. y
-      | TmLam(_,y,_,t1) -> if x =. y then false else hasx t1
-      | TmClos(_,_,_,_,_,_) -> failwith "Cannot happen"
-      | TmApp(_,t1,t2) -> hasx t1 || hasx t2
-      | TmConst(_,_) -> false
-      | TmFix(_) -> false
-      | TmTyLam(fi,x,k,t1) -> hasx t1
-      | TmTyApp(fi,t1,ty1) -> hasx t1
-      | TmDive(_) -> false
-      | TmIfexp(_,_,None) -> false
-      | TmIfexp(_,_,Some(t1)) -> hasx t1
-      | TmChar(_,_) -> false
-      | TmUC(fi,uct,ordered,uniqueness) ->
-          let rec work uc = match uc with
-          | UCNode(uc1,uc2) -> work uc1 || work uc2
-          | UCLeaf(tms) -> List.exists hasx tms
-          in work uct
-      | TmUtest(fi,t1,t2,tnext) -> hasx t1 || hasx t2 || hasx tnext
-      | TmNop -> false
-    in
-    if hasx t then TmApp(NoInfo,TmFix(NoInfo), (TmLam(NoInfo,x,TyDyn,t))) else t
 
 (* Create kind when optionally available *)
 let mkop_kind fi op =
@@ -157,13 +133,13 @@ mcore_scope:
   | LET IDENT EQ term mcore_scope
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
-  | TYPE IDENT mcore_scope
+/*  | TYPE IDENT mcore_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmDefType(fi,$2.v,$3) }
   | DATA ty_case mcore_scope
       { let fi = mkinfo $1.i (tm_info $3) in
         TmDefCon(fi,$2,$3)}
-
+*/
 
 term:
   | cases
@@ -174,28 +150,29 @@ term:
   | BIGLAM IDENT op_kind DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-  | MATCH term WITH term
+/*  | MATCH term WITH term
       { let fi = mkinfo $1.i (tm_info $4) in
         TmMatch(fi,$2,$4) }
+*/
 
 cases:
   | case
       { $1 }
-  | case BAR cases
+/*  | case BAR cases
     { let fi = mkinfo (tm_info $1) (tm_info $3) in
       TmCaseComp(fi,$1,$3) }
-
+*/
 
 case:
   | left
       { $1 }
-  | CASE IDENT LPAREN rev_comma_name_lst RPAREN DARROW left
+/*  | CASE IDENT LPAREN rev_comma_name_lst RPAREN DARROW left
       { let fi = mkinfo $1.i $6.i in
         TmCase(fi,$2.v,List.rev $4,$7) }
   | CASE IDENT DARROW left
       { let fi = mkinfo $1.i $3.i in
         TmCase(fi,$2.v,[],$4) }
-
+*/
 
 left:
   | atom
@@ -209,9 +186,10 @@ left:
 
 
 atom:
-  | LPAREN rev_comma_tm_lst RPAREN
+/*  | LPAREN rev_comma_tm_lst RPAREN
     { let fi = mkinfo $1.i $3.i in
-      TmCon(fi,us"",List.rev $2) }
+TmCon(fi,us"",List.rev $2) } */
+  | LPAREN term RPAREN { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
@@ -247,14 +225,14 @@ ty_op:
       { TyDyn }
 
 
-ty_case:
+/*ty_case:
   | IDENT LPAREN rev_comma_ty_lst RPAREN DARROW IDENT
       { let fi = mkinfo $1.i $5.i in
         TyCase(fi,$1.v,List.rev $3,$6.v) }
   | IDENT DARROW IDENT
       { let fi = mkinfo $1.i $3.i in
         TyCase(fi,$1.v,[],$3.v) }
-
+*/
 
 rev_comma_ty_lst:
   | ty

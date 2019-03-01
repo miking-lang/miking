@@ -8,7 +8,6 @@
 *)
 
 open Ustring.Op
-open Printf
 
 type row = int
 type col = int
@@ -64,12 +63,12 @@ let severity2str s =
 
 let info2str_startline fi =
   match fi with
-    | Info(filename,l1,c1,l2,c2) -> l1
+    | Info(_,l1,_,_,_) -> l1
     | NoInfo -> assert false
 
 (** [message2str m] returns a string representation of message [m].
     Is message is not intended to be read by humans. *)
-let message2str (id,sev,info,args)  =
+let message2str (id,sev,info,_)  =
   match info with
     | Info(filename,l1,c1,l2,c2) ->
 	begin

@@ -121,13 +121,16 @@ and tm =
 | TmTyLam       of info * ustring * kind * tm                 (* Type abstraction *)
 | TmTyApp       of info * tm * ty                             (* Type application *)
 
+(*
 | TmMatch       of info * tm * tm                             (* Match expression *)
 | TmCase        of info * ustring * (ustring * int) list * tm (* Case expression *)
 | TmCaseComp    of info * tm * tm                             (* Case composition *)
 | TmCon         of info * ustring * tm list                   (* Data constructor term *)
 
+
 | TmDefType     of info * ustring * tm                        (* Type definition *)
 | TmDefCon      of info * ty * tm                             (* Data constructor definition *)
+ *)
 
 | TmChar        of info * int
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
@@ -145,7 +148,7 @@ and ty =
 | TyAll         of info * ustring * kind * ty                 (* Universal type *)
 | TyLam         of info * ustring * kind * ty                 (* Type-level function *)
 | TyApp         of info * ty * ty                             (* Type-level application *)
-| TyCase        of info * ustring * ty list * ustring         (* Case type *)
+(*| TyCase        of info * ustring * ty list * ustring         (* Case type *) *)
 | TyDyn                                                       (* Dynamic type *)
 
 

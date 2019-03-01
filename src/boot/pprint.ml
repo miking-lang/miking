@@ -189,8 +189,8 @@ and pprint basic t =
   | TmIfexp(_,Some(g),Some(t2)) ->
       us"ifexp(" ^. usbool g ^. us"," ^. ppt false t2 ^. us")"
   | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
-  | TmChar(fi,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmUC(fi,uct,ordered,uniqueness) -> (
+  | TmChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
+  | TmUC(_,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
     | UCOrdered,UCMultivalued when not basic ->
       let lst = uct2list uct in
@@ -202,7 +202,7 @@ and pprint basic t =
     | _,_ ->
         (pprintUCKind ordered uniqueness) ^. us"(" ^.
           (Ustring.concat (us",") (List.map (ppt false) (uct2list uct))) ^. us")")
-  | TmUtest(fi,t1,t2,tnext) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
+  | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   | TmNop -> us"Nop"
   in ppt false t
 
@@ -228,20 +228,20 @@ and pprint_tyenv env =
 and pprint_ty ty =
   let rec ppt inside ty =
   match ty with
-  | TyGround(fi,gt) ->
+  | TyGround(_,gt) ->
     (match gt with
     | GBool -> us"Bool"
     | GInt -> us"Int"
     | GFloat -> us"Float"
     | GVoid -> us"Void")
-  | TyArrow(fi,ty1,ty2) ->
+  | TyArrow(_,ty1,ty2) ->
       left inside ^. ppt true ty1 ^. us"->" ^. ppt false ty2 ^. right inside
-  | TyVar(fi,x,n) -> varDebugPrint x n
-  | TyAll(fi,x,kind,ty1) -> left inside ^. us"all " ^. x ^. us"::" ^.
+  | TyVar(_,x,n) -> varDebugPrint x n
+  | TyAll(_,x,kind,ty1) -> left inside ^. us"all " ^. x ^. us"::" ^.
          pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
-  | TyLam(fi,x,kind,ty1) -> left inside ^. us"lam " ^. x ^. us"::" ^.
+  | TyLam(_,x,kind,ty1) -> left inside ^. us"lam " ^. x ^. us"::" ^.
          pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
-  | TyApp(fi,ty1,ty2) ->
+  | TyApp(_,ty1,ty2) ->
     left inside ^. ppt true ty1 ^. us" " ^. ppt true ty2 ^. right inside
  | TyDyn -> us"Dyn"
   in
@@ -251,7 +251,7 @@ and pprint_ty ty =
 and pprint_kind k =
   let rec ppt inside k =
   match k with
-  | KindStar(fi) -> us"*"
-  | KindArrow(fi,k1,k2) ->
+  | KindStar(_) -> us"*"
+  | KindArrow(_,k1,k2) ->
     left inside ^. ppt true k1 ^. us"->" ^. ppt false k2 ^. right inside
   in ppt false k

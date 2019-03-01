@@ -8,8 +8,6 @@
 *)
 
 {
-  open Parser
-  open Printf
   open Ustring.Op
   open Ast
   open Msg
