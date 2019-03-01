@@ -14,7 +14,7 @@ set -e
 
 # General function for building the project
 buildboot(){
-    (cd src/boot; jbuilder build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
+    (cd src/boot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
 }
 
 case $1 in
