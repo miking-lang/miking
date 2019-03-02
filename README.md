@@ -49,21 +49,28 @@ Each of these collection types can then be used as other standard data type. For
 UC types have many different intrinsic functions (built-in functions), where some of them are only valid for some of the 6 specific collection types. Moreover, there are some operations defined on the *composition* of collection types. For instance, a matrix can be defined as a sequence of sequences, where matrix multiplication is defined on such a type.
 
 
-## MCore+
+## Pure MCore
 
-MCore+ extends MCore with a number of syntactic sugar extensions.
+MCore is an extension to Pure MCore that includes various syntactic sugar extensions. The
+main extensions are:
+
+* Inference of self variables.
+
+* Syntactic sugar for `let in` and `if` expressions.
+
+* An implicit definition of the default module with self variable `root`.
 
 ### Inference of Self Variables
 
-The following program in MCore+ 
+The following program in MCore
 
 ```
 let m1 = {
-  let foo = 7 
+  let foo = 7
 }
 let x = m1.foo  // x contains value 7
 ```
-is a syntactic simplification, where the self variables have been derived. In the following MCore version, the two self variables `s` and `root` are explicit.
+is a syntactic simplification of Pure MCore, where the self variables have been derived. In the following version, the two self variables `s` and `root` are explicit.
 
 ```
 let m1 = self s {
@@ -73,7 +80,7 @@ let m1 = self s {
 let y = root.m1.foo   // y evaluates to 7
 ```
 
-In the above MCore code, the top level module was implicit, using a default self variable called `root`. In the following code, this module is explicit:
+In the above code, the top level module was implicit, using a default self variable called `root`. In the following complete Pure MCore code, this module is also explicit:
 
 ```
 self root {
@@ -83,6 +90,43 @@ self root {
   }
   let y = root.m1.foo   // y evaluates to 7
 }
+```
+
+## Other
+
+The following things need to be described in the text:
+
+* First-class modules.
+
+* The use of public labels in modules.
+
+* Composition of modules and functions.
+
+* Why integers, floating-point numbers, and booleans are data types.
+
+* Expansion of `let in` expressions.
+
+* Expansion of `if` expressions into `match` expressions.
+
+Example of a program with polymorphic data types
+
+```
+lang mcore
+
+// Define a data type
+tcon Tree(*)
+
+// Define two data constructors
+dcon all A. Node(Tree(A),Tree(A)) => Tree(A)
+dcon all A. Leaf(A) => Tree(A)
+
+// Create a term of data type Tree
+let t1 = Node(Node(Leaf(1),Leaf(2)),Leaf(3))
+
+let countLeafs = lam t:Tree.
+  match t with
+    case Node(n1,n2) => addi (countLeafs n1) (countLeafs n2)
+  | case Leaf(_) => 1
 ```
 
 
