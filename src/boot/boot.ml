@@ -698,6 +698,7 @@ let files_of_folders lst = List.fold_left (fun a v ->
         |> List.filter (fun x -> not (String.length x >= 1 && String.get x 0 = '.'))
         |> List.map (fun x -> (add_slash v) ^ x)
         |> List.filter (fun x -> not (Sys.is_directory x))
+        |> List.filter (fun x -> not (String.contains x '#' || String.contains x '~'))
     ) @ a
   else v::a
 ) [] lst

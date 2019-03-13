@@ -1,0 +1,20 @@
+
+
+lang mcore
+
+
+let m1 = {
+    type T :: *
+    data d1 : Int -> T
+    let f1 = lam x. x
+}
+
+let m2 = {
+    type T :: *
+    data d2 : Int -> T
+    let f2 = lam x. x
+}
+
+let m3 = compose m1 m2
+
+let _ = print (m3.f2 3)

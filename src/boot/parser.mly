@@ -51,6 +51,7 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> DATA
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> MCORE
+%token <unit Ast.tokendata> PMCORE
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> BIGLAM
@@ -59,6 +60,7 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> IFEXP
+%token <unit Ast.tokendata> COMPOSE
 
 
 
@@ -121,25 +123,43 @@ let mkop_kind fi op =
 %%
 
 main:
-  | LANG MCORE mcore_scope EOF
+  | LANG MCORE module_body EOF
+      { $3 }
+  | LANG MCORE module_term EOF
+      { $3 }
+  | LANG PMCORE module_term EOF
       { $3 }
 
 
-mcore_scope:
+module_term:
+  | LCURLY op_self_var module_body RCURLY
+      { $3 }
+
+op_self_var:
+  |
+      { None }
+  | IDENT DOT
+      { Some $1.v }
+
+module_body:
   | { TmNop }
-  | UTEST atom atom mcore_scope
+  | UTEST atom atom module_body
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
-  | LET IDENT EQ term mcore_scope
+  | LET IDENT EQ term module_body
       { let fi = mkinfo $1.i (tm_info $4) in
         TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
-/*  | TYPE IDENT mcore_scope
-      { let fi = mkinfo $1.i (tm_info $3) in
+  | TYPE IDENT CONS kind module_body
+      { $5 }
+/*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefType(fi,$2.v,$3) }
-  | DATA ty_case mcore_scope
-      { let fi = mkinfo $1.i (tm_info $3) in
+*/
+  | DATA IDENT COLON ty module_body
+      { $5 }
+/*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefCon(fi,$2,$3)}
 */
+
 
 term:
   | cases
@@ -150,15 +170,26 @@ term:
   | BIGLAM IDENT op_kind DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-/*  | MATCH term WITH term
-      { let fi = mkinfo $1.i (tm_info $4) in
+  | MATCH term WITH term
+      { $4 }
+  | module_term
+      { TmNop }
+  | COMPOSE atom atom
+      { TmNop }
+
+
+
+/*      { let fi = mkinfo $1.i (tm_info $4) in
         TmMatch(fi,$2,$4) }
 */
+
 
 cases:
   | case
       { $1 }
-/*  | case BAR cases
+  | case BAR cases
+      { TmNop }
+/*
     { let fi = mkinfo (tm_info $1) (tm_info $3) in
       TmCaseComp(fi,$1,$3) }
 */
@@ -166,13 +197,14 @@ cases:
 case:
   | left
       { $1 }
-/*  | CASE IDENT LPAREN rev_comma_name_lst RPAREN DARROW left
+  | CASE IDENT name_lst ARROW left
+      { TmNop }
+/*
       { let fi = mkinfo $1.i $6.i in
         TmCase(fi,$2.v,List.rev $4,$7) }
-  | CASE IDENT DARROW left
-      { let fi = mkinfo $1.i $3.i in
-        TmCase(fi,$2.v,[],$4) }
 */
+
+
 
 left:
   | atom
@@ -185,11 +217,9 @@ left:
         TmTyApp(fi,$1,$3) }
 
 
+
 atom:
-/*  | LPAREN rev_comma_tm_lst RPAREN
-    { let fi = mkinfo $1.i $3.i in
-TmCon(fi,us"",List.rev $2) } */
-  | LPAREN term RPAREN { $2 }
+  | LPAREN term RPAREN   { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
@@ -201,21 +231,16 @@ TmCon(fi,us"",List.rev $2) } */
   | FIX                  { TmFix($1.i) }
   | DIVE                 { TmDive($1.i) }
   | IFEXP                { TmIfexp($1.i,None,None) }
+  | atom DOT IDENT       { TmNop }
 
 
+name_lst:
+  |
+    { [] }
+  | IDENT name_lst
+    { $1::$2 }
 
-rev_comma_name_lst:
-  | IDENT
-    { [($1.v,0)] }
-  | rev_comma_name_lst COMMA IDENT
-    { ($3.v,0)::$1 }
 
-
-rev_comma_tm_lst:
-  | term
-     { [$1] }
-  | rev_comma_tm_lst COMMA term
-     { $3::$1 }
 
 
 ty_op:
@@ -225,25 +250,10 @@ ty_op:
       { TyDyn }
 
 
-/*ty_case:
-  | IDENT LPAREN rev_comma_ty_lst RPAREN DARROW IDENT
-      { let fi = mkinfo $1.i $5.i in
-        TyCase(fi,$1.v,List.rev $3,$6.v) }
-  | IDENT DARROW IDENT
-      { let fi = mkinfo $1.i $3.i in
-        TyCase(fi,$1.v,[],$3.v) }
-*/
-
-rev_comma_ty_lst:
-  | ty
-      { [$1] }
-  |   rev_comma_ty_lst COMMA ty
-    { $3::$1 }
-
 
 ty:
   | ty_left
-      { $1 }
+    { $1 }
   | ty_left ARROW ty
       { let fi = mkinfo (ty_info $1) (ty_info $3) in
         TyArrow(fi,$1,$3) }
@@ -262,7 +272,11 @@ ty_left:
       { let fi = mkinfo (ty_info $1) (ty_info $2) in
         TyApp(fi,$1,$2) }
 
+
+
 ty_atom:
+  | LPAREN ty RPAREN
+      { $2 }
   | IDENT
       {match Ustring.to_utf8 $1.v with
        | "Bool" -> TyGround($1.i,GBool)
@@ -272,8 +286,8 @@ ty_atom:
        | "Void" -> TyGround($1.i,GVoid)
        | _ -> TyVar($1.i,$1.v,-1)
       }
-  | LPAREN ty RPAREN
-      { $2 }
+
+
 
 
 op_kind:

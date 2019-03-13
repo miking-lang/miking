@@ -28,6 +28,7 @@ let reserved_strings = [
   ("data",          fun(i) -> Parser.DATA{i=i;v=()});
   ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
   ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
+  ("pmcore",        fun(i) -> Parser.PMCORE{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});
@@ -36,6 +37,7 @@ let reserved_strings = [
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
+  ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
@@ -163,6 +165,7 @@ let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" |
               "::" | ":" | ","  | "."  | "|" | "->" | "=>"
 
 let line_comment = "//" [^ '\013' '\010']*
+let line_comment_alt = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+
 let signed_integer = unsigned_integer  | '-' unsigned_integer
 let unsigned_number = unsigned_integer ('.' (unsigned_integer)?)?
@@ -173,6 +176,8 @@ rule main = parse
   | whitespace+ as s
       { colcount_fast s; main lexbuf }
   | line_comment
+      { main lexbuf }
+  | line_comment_alt
       { main lexbuf }
   | "/*" as s
       { Buffer.reset string_buf ;
