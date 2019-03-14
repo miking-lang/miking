@@ -1,0 +1,8 @@
+lang mcore
+
+let is_prime_aux = lam n. lam d.
+   or (leqi d 0)
+      (and (neqi (modi n d) 0)
+           (is_prime_aux n (subi d 1)))
+
+let is_prime = lam n. is_prime_aux n (divi n 2)
