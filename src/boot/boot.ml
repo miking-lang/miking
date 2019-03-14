@@ -100,6 +100,7 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmTyLam(fi,x,kind,t1) -> TmTyLam(fi,x,kind,debruijn (VarTy(x)::env) t1)
   | TmTyApp(fi,t1,ty1) -> TmTyApp(fi,debruijn env t1, debruijnTy env ty1)
+  | TmModule(_,_,_) -> failwith "TODO"
   | TmDive(_) -> t
   | TmIfexp(_,_,_) -> t
   | TmChar(_,_) -> t
@@ -499,6 +500,7 @@ let rec readback env n t =
   | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(_,_,_,_) | TmTyApp(_,_,_) -> failwith "System F terms should not exist (1)"
+  | TmModule(_,_,_) -> failwith "TODO"
   (* If expression *)
   | TmIfexp(fi,x,Some(t3)) -> TmIfexp(fi,x,Some(readback env n t3))
   | TmIfexp(fi,x,None) -> TmIfexp(fi,x,None)
@@ -569,6 +571,7 @@ let rec normalize env n t =
   | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(_,_,_,_) | TmTyApp(_,_,_) -> failwith "System F terms should not exist (3)"
+  | TmModule(_,_,_) -> failwith "TODO"
   (* If expression *)
   | TmIfexp(_,_,_) -> t  (* TODO!!!!!! *)
   (* Other old, to remove *)
@@ -617,6 +620,7 @@ let rec eval env t =
   | TmConst(_,_) | TmFix(_) | TmDive(_) -> t
   (* System F terms *)
   | TmTyLam(_,_,_,_) | TmTyApp(_,_,_) -> failwith "System F terms should not exist (4)"
+  | TmModule(_,_,_) -> failwith "TODO"
   (* If expression *)
   | TmIfexp(_,_,_) -> t
   (* The rest *)
@@ -638,22 +642,26 @@ let rec eval env t =
 
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
-let evalprog filename typecheck =
+let evalprog filename typecheck parseonly =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   let fs1 = open_in filename in
   let tablength = 8 in
   begin try
     Lexer.init (us filename) tablength;
-    fs1 |> Ustring.lexing_from_channel
-        |> Parser.main Lexer.main |> debug_after_parse
+    let parsed =
+      fs1 |> Ustring.lexing_from_channel
+          |> Parser.main Lexer.main |> debug_after_parse in
+    if parseonly then ()
+    else
+      (parsed
         |> preprocess []
         |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
         |> debug_after_debruijn
         |> (if typecheck then Typesys.typecheck builtin else fun x -> x)
         |> Typesys.erase |> debug_after_erase
         |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
-        |> fun _ -> ()
+        |> fun _ -> ())
 
     with
     | Lexer.Lex_error m ->
@@ -704,10 +712,10 @@ let files_of_folders lst = List.fold_left (fun a v ->
 ) [] lst
 
 (* Iterate over all potential test files and run tests *)
-let testprog lst typecheck =
+let testprog lst typecheck parseonly =
     utest := true;
     (* Select the lexer and parser, depending on the DSL*)
-    let eprog name = evalprog name typecheck in
+    let eprog name = evalprog name typecheck parseonly in
     (* Evaluate each of the programs in turn *)
     List.iter eprog (files_of_folders lst);
 
@@ -720,14 +728,14 @@ let testprog lst typecheck =
         (!utest_ok) (!utest_fail)
 
 (* Run program *)
-let runprog name lst typecheck =
+let runprog name lst typecheck parseonly =
     prog_argv := lst;
-    evalprog name typecheck
+    evalprog name typecheck parseonly
 
 
 (* Print out main menu *)
 let menu() =
-  printf "Usage: boot [run|test] <files>\n";
+  printf "Usage: boot [run|test|tytest|tyrun|parse|parsetest] <files>\n";
   printf "\n"
 
 
@@ -737,18 +745,22 @@ let main =
   (match Array.to_list Sys.argv |> List.tl with
 
   (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> testprog lst false
+  | "test"::lst | "t"::lst -> testprog lst false false
 
   (* Run tests on one or more files, including type checking *)
-  | "tytest"::lst -> testprog lst true
+  | "tytest"::lst -> testprog lst true false
 
   (* Run one program with program arguments without typechecking *)
-  | "tyrun"::name::lst -> runprog name lst true
+  | "tyrun"::name::lst -> runprog name lst true false
+
+  (* Parse the program and then quit. *)
+  | "parse"::name::lst -> runprog name lst false true
+
+  (* Run tests, but just parse*)
+  | "parsetest"::lst -> testprog lst false true
 
   (* Run one program with program arguments without typechecking *)
-  | "run"::name::lst | name::lst -> runprog name lst false
-
-
+  | "run"::name::lst | name::lst -> runprog name lst false false
 
   (* Show the menu *)
   | _ -> menu())

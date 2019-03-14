@@ -184,6 +184,7 @@ and pprint basic t =
       ^. pprint_kind kind ^. us". " ^. ppt false t1  ^. us"" ^. right inside
   | TmTyApp(_,t1,ty1) ->
       left inside ^. ppt false t1 ^. us" [" ^. pprint_ty ty1 ^. us"]" ^. right inside
+  | TmModule(_,_,_) -> us"{...}" (* TODO *)
   | TmDive(_) -> us"dive"
   | TmIfexp(_,None,_) -> us"ifexp"
   | TmIfexp(_,Some(g),Some(t2)) ->

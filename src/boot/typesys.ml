@@ -254,7 +254,8 @@ let rec typeOf tyenv t =
              us" was expected.")
       | ty -> error (tm_info t1)
              (us"Type application expects an universal type, but found " ^.
-              pprint_ty ty ^. us"."))
+                pprint_ty ty ^. us"."))
+  | TmModule(_,_,_) -> failwith "TODO Module"
   | TmChar(_,_) -> failwith "TODO8"
   | TmUC(_,_,_,_) -> failwith "TODO10"
   | TmUtest(fi,t1,t2,t3) ->
@@ -441,6 +442,7 @@ let rec biTypeOf env ty t =
       if kindEqual ki11 ki12 then tySubstTop ty2 ty1
       else errorKindMismatch  (ty_info ty2) ki11 ki12
     | ty -> errorExpectsUniversal (tm_info t1) ty)
+  | TmModule(_,_,_) -> failwith "TODO"
   | TmChar(_,_) -> failwith "TODO TmChar (later)"
   | TmUC(_,_,_,_) -> failwith "TmUC (later)"
   | TmUtest(fi,t1,t2,t3) ->
@@ -470,6 +472,7 @@ let rec erase t =
   | TmFix(_) -> t
   | TmTyLam(_,_,_,t1) -> erase t1
   | TmTyApp(_,t1,_) -> erase t1
+  | TmModule(_,_,_) -> failwith "TODO"
   | TmChar(_,_) -> t
   | TmUC(_,_,_,_) -> t
   | TmUtest(fi,t1,t2,t3) -> TmUtest(fi, erase t1, erase t2, erase t3)

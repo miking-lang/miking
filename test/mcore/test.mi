@@ -1,0 +1,9 @@
+
+
+lang mcore
+
+let m = { self.
+  pub let x = 1
+}
+
+utest 1 1

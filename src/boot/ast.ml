@@ -106,6 +106,9 @@ and const =
 (* Tells if a variable is a pe variable or if a closure is a pe closure *)
 and pemode = bool
 
+and public = bool
+and letFields = (ustring * (public * tm)) list
+and dataFields = (ustring * (public * ty)) list
 
 
 (* Terms / expressions *)
@@ -121,6 +124,7 @@ and tm =
 | TmTyLam       of info * ustring * kind * tm                 (* Type abstraction *)
 | TmTyApp       of info * tm * ty                             (* Type application *)
 
+| TmModule      of info * letFields * dataFields              (* First-class module *)
 (*
 | TmMatch       of info * tm * tm                             (* Match expression *)
 | TmCase        of info * ustring * (ustring * int) list * tm (* Case expression *)
@@ -188,7 +192,7 @@ let tm_info t =
   | TmFix(fi) -> fi
   | TmTyLam(fi,_,_,_) -> fi
   | TmTyApp(fi,_,_) -> fi
-
+  | TmModule(fi,_,_) -> fi
   | TmChar(fi,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

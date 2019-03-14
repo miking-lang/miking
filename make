@@ -26,7 +26,7 @@ case $1 in
     test)
         buildboot
         cd test
-        ../build/boot test mcore && ../build/boot tytest tymcore
+        ../build/boot test mcore && ../build/boot tytest tymcore && ../build/boot parsetest parse
         ;;
     # Clean up the project
     clean)
