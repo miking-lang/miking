@@ -13,4 +13,4 @@ let m = { self.
 let main =
   let x = 5 in
   let f : Int -> Int = lam x:Int. x in
-  if true then x else y
+  if true then x else (compose x {pub let z = 5})

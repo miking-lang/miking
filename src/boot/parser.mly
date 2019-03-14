@@ -194,8 +194,6 @@ term:
   | BIGLAM IDENT op_kind DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-  | module_term
-      { TmNop }
   | COMPOSE atom atom
       { TmNop }
   | MATCH term WITH term
@@ -249,6 +247,7 @@ left:
 
 atom:
   | LPAREN term RPAREN   { $2 }
+  | module_term          { TmNop }
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
