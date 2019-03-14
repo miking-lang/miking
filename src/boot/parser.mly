@@ -63,6 +63,7 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> IFEXP
 %token <unit Ast.tokendata> COMPOSE
 %token <unit Ast.tokendata> PUB
+%token <unit Ast.tokendata> IN
 
 
 
@@ -153,16 +154,28 @@ module_body:
 /*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefType(fi,$2.v,$3) }
 */
-  | op_pub TLET IDENT EQ ty module_body
-      { $6 }  /* TODO */
+  | op_pub TLET IDENT op_tlet_kind EQ ty module_body
+      { $7 }  /* TODO */
   | op_pub DATA IDENT COLON ty module_body
       { $6 }
 /*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefCon(fi,$2,$3)}
 */
-  | op_pub LET IDENT EQ term module_body
-      { let fi = mkinfo $2.i (tm_info $5) in
-        TmApp(fi,TmLam(fi,$3.v,TyDyn,$6),$5) }
+  | op_pub LET IDENT op_let_ty EQ term module_body
+      { let fi = mkinfo $2.i (tm_info $6) in
+        TmApp(fi,TmLam(fi,$3.v,TyDyn,$7),$6) }
+
+op_let_ty:
+  |
+      { TyDyn }
+  | COLON ty
+    { $2 }
+
+op_tlet_kind:
+  |
+    { KindStar(NoInfo) }
+  | CONS kind
+    { $2 }
 
 
 op_pub:
@@ -187,7 +200,10 @@ term:
       { TmNop }
   | MATCH term WITH term
       { $4 }
-
+  | LET IDENT op_let_ty EQ term IN term
+      { $7 }
+  | IF term THEN term ELSE term
+      { $4 } /* TODO */
 
 
 /*      { let fi = mkinfo $1.i (tm_info $4) in

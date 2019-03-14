@@ -40,6 +40,7 @@ let reserved_strings = [
   ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
   ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
   ("pub",           fun(i) -> Parser.PUB{i=i;v=()});
+  ("in",            fun(i) -> Parser.IN{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
