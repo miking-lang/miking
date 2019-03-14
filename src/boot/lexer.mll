@@ -30,6 +30,7 @@ let reserved_strings = [
   ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
   ("pmcore",        fun(i) -> Parser.PMCORE{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
+  ("tlet",          fun(i) -> Parser.TLET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
@@ -38,6 +39,7 @@ let reserved_strings = [
   ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
   ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
+  ("pub",           fun(i) -> Parser.PUB{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});

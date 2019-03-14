@@ -53,6 +53,7 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> MCORE
 %token <unit Ast.tokendata> PMCORE
 %token <unit Ast.tokendata> LET
+%token <unit Ast.tokendata> TLET
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> BIGLAM
 %token <unit Ast.tokendata> ALL
@@ -61,6 +62,7 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> IFEXP
 %token <unit Ast.tokendata> COMPOSE
+%token <unit Ast.tokendata> PUB
 
 
 
@@ -146,19 +148,28 @@ module_body:
   | UTEST atom atom module_body
       { let fi = mkinfo $1.i (tm_info $3) in
         TmUtest(fi,$2,$3,$4) }
-  | LET IDENT EQ term module_body
-      { let fi = mkinfo $1.i (tm_info $4) in
-        TmApp(fi,TmLam(fi,$2.v,TyDyn,$5),$4) }
-  | TYPE IDENT CONS kind module_body
-      { $5 }
+  | op_pub TYPE IDENT CONS kind module_body
+      { $6 }
 /*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefType(fi,$2.v,$3) }
 */
-  | DATA IDENT COLON ty module_body
-      { $5 }
+  | op_pub TLET IDENT EQ ty module_body
+      { $6 }  /* TODO */
+  | op_pub DATA IDENT COLON ty module_body
+      { $6 }
 /*      { let fi = mkinfo $1.i (tm_info $3) in
         TmDefCon(fi,$2,$3)}
 */
+  | op_pub LET IDENT EQ term module_body
+      { let fi = mkinfo $2.i (tm_info $5) in
+        TmApp(fi,TmLam(fi,$3.v,TyDyn,$6),$5) }
+
+
+op_pub:
+  |
+      { false }
+  | PUB
+      { true }
 
 
 term:
@@ -170,12 +181,12 @@ term:
   | BIGLAM IDENT op_kind DOT term
       { let fi = mkinfo $1.i (tm_info $5) in
         TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-  | MATCH term WITH term
-      { $4 }
   | module_term
       { TmNop }
   | COMPOSE atom atom
       { TmNop }
+  | MATCH term WITH term
+      { $4 }
 
 
 
@@ -197,6 +208,8 @@ cases:
 case:
   | left
       { $1 }
+  | CASE prim_data name_lst ARROW left
+      { TmNop }
   | CASE IDENT name_lst ARROW left
       { TmNop }
 /*
@@ -223,15 +236,18 @@ atom:
   | IDENT                { TmVar($1.i,$1.v,noidx,false) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
-  | UINT                 { TmConst($1.i,CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
-  | TRUE                 { TmConst($1.i,CBool(true)) }
-  | FALSE                { TmConst($1.i,CBool(false)) }
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
   | DIVE                 { TmDive($1.i) }
   | IFEXP                { TmIfexp($1.i,None,None) }
   | atom DOT IDENT       { TmNop }
+  | prim_data            { $1 }
+
+prim_data:
+  | UINT                 { TmConst($1.i,CInt($1.v)) }
+  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
+  | TRUE                 { TmConst($1.i,CBool(true)) }
+  | FALSE                { TmConst($1.i,CBool(false)) }
 
 
 name_lst:

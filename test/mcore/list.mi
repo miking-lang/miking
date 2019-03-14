@@ -1,0 +1,63 @@
+lang mcore
+
+let mono_list =
+  { list.                                            -- Switched to dot notation
+    pub type List :: *
+    pub data Nil : List
+    pub data Cons : Int -> List -> List
+
+    pub let nth = lam i:Int . lam l:List . lam d:Int .
+      match l with
+        case Nil -> d
+      | case Cons x xs ->                            -- Missing |
+            (match i with                            -- Missing ( ) around nested match
+               case 0 -> x
+             | case i -> nth (subi i 1) xs d)
+
+    pub let length = lam l:List .
+      match l with
+        case Nil -> 0
+      | case Cons _ xs -> addi 1 (length xs)
+
+    pub let map = lam f:Int->Int . lam l:List .
+      match l with
+        case Nil -> Nil
+      | case Cons x xs -> Cons (f x) (map f xs)
+
+    let bump = lam x : Int . addi x 1
+
+    let ex = Cons 1 (Cons 2 (Cons 3 Nil))
+    let test_nth = eqi 3 (nth 2 ex (negi 1))         -- -1 does not exist
+    let test_length = eqi 3 (length ex)
+    let test_bump = eqi 4 (nth 2 (map bump ex) (negi 1))
+  }
+
+let poly_list =
+  { list.
+    pub type List :: * -> *
+    pub data Nil : all a. List a
+    pub data Cons : all a. a -> List a -> List a
+
+    pub let nth = Lam a. lam i:Int . lam l:List a . lam d:a .
+      match l with
+        case Nil -> d
+      | case Cons x xs ->
+          (match i with
+             case 0 -> x
+           | case i -> nth (subi i 1) xs d)
+
+    pub let length = Lam a . lam l:List a.
+      match l with
+        case Nil -> 0
+      | case Cons _ xs -> addi 1 (length xs)
+
+    pub let map = Lam a . Lam b . lam f:a->b . lam l:List a .
+      match l with
+        case Nil -> Nil
+      | case Cons x xs -> Cons (f x) (map f xs)
+
+    let ex = Cons 1 (Cons 2 (Cons 3 Nil))
+    let test_nth = eqi 3 (nth 2 ex (negi 1))
+    let test_length = eqi 3 (length ex)
+    let test_bump = eqi 4 (nth 2 (map bump ex) (negi 1))
+  }
