@@ -721,10 +721,10 @@ let testprog lst typecheck parseonly =
 
     (* Print out unit test results, if applicable *)
     if !utest_fail = 0 then
-      printf "\nUnit testing SUCCESSFUL after executing %d tests.\n"
+      printf "Unit testing SUCCESSFUL after executing %d tests.\n\n"
         (!utest_ok)
             else
-      printf "\nERROR! %d successful tests and %d failed tests.\n"
+      printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
 (* Run program *)

@@ -6,7 +6,7 @@
    independent (no need to install Make on Windows).
 *)
 
-
+as
 open Printf
 open Sys
 

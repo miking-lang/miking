@@ -14,24 +14,20 @@ set -e
 
 # General function for building the project
 buildboot(){
-    (cd src/boot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
+    (cd src/preboot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/preboot)
 }
 
 case $1 in
-    # Old build system using ocamlbuild and ocaml functions. Should be removed in the future.
-    old)
-        ocaml build/build.ml $2 $3 $4
-        ;;
     # Run the test suite
     test)
         buildboot
         cd test
-        ../build/boot test mcore && ../build/boot tytest tymcore && ../build/boot parsetest parse
+        ../build/preboot test mcore && ../build/preboot tytest tymcore && ../build/preboot parsetest parse
         ;;
     # Clean up the project
     clean)
-        rm -rf src/boot/_build
-        rm -f build/boot
+        rm -rf src/preboot/_build
+        rm -f build/preboot
         ;;
     # Just make the project
     all | *)

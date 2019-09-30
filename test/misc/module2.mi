@@ -1,9 +1,9 @@
 
-
 lang pmcore
 
 -- First class modules
 
+let other =
 { root.
 
   let m =
@@ -14,3 +14,13 @@ lang pmcore
 
   let y = root.m.foo        -- y evaluates to 7
 }
+
+
+----------------------------
+
+let m = {
+  let pub foo = 7
+  let x = addi foo 1   -- x evaluates to 8
+}
+
+let y = m.foo        -- y evaluates to 7

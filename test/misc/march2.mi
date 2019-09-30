@@ -1,7 +1,7 @@
 
 lang mcore
 
-
+let m = {
 -- Define a data type
 type Tree :: *
 
@@ -9,15 +9,19 @@ type Tree :: *
 data Node : Tree -> Tree -> Tree
 data Leaf : Int -> Tree
 
--- Create a term of data type Tree
-let t1 = Node (Node (Leaf 1) (Leaf 2)) (Leaf 3)
-
-
 -- Define a function that checks if the input is a leaf or not
-let isLeaf = lam t:Tree.
+pub isLeaf = lam t:Tree.
   match t with
     case Node _ _ -> false
   | case Leaf _   -> true
+
+}
+
+
+-- Create a term of data type Tree
+let t1 = m.Node (m.Node (m.Leaf 1) (m.Leaf 2)) (m.Leaf 3) in
+m.isLeaf t1
+
 
 -- Unit tests of the isLeaf() function
 utest (isLeaf t1) false
