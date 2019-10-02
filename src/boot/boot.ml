@@ -642,7 +642,7 @@ let rec eval env t =
 
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
-let evalprog filename parseonly =
+let evalprog filename  =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   let fs1 = open_in filename in
@@ -652,15 +652,12 @@ let evalprog filename parseonly =
     let parsed =
       fs1 |> Ustring.lexing_from_channel
           |> Parser.main Lexer.main |> debug_after_parse in
-    if parseonly then ()
-    else
-      (parsed
-        |> preprocess []
-        |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
-        |> debug_after_debruijn
-        |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
-        |> fun _ -> ())
-
+    (parsed
+     |> preprocess []
+     |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
+     |> debug_after_debruijn
+     |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
+     |> fun _ -> ())
     with
     | Lexer.Lex_error m ->
       if !utest then (
@@ -710,10 +707,10 @@ let files_of_folders lst = List.fold_left (fun a v ->
 ) [] lst
 
 (* Iterate over all potential test files and run tests *)
-let testprog lst parseonly =
+let testprog lst =
     utest := true;
     (* Select the lexer and parser, depending on the DSL*)
-    let eprog name = evalprog name parseonly in
+    let eprog name = evalprog name in
     (* Evaluate each of the programs in turn *)
     List.iter eprog (files_of_folders lst);
 
@@ -726,14 +723,14 @@ let testprog lst parseonly =
         (!utest_ok) (!utest_fail)
 
 (* Run program *)
-let runprog name lst parseonly =
+let runprog name lst =
     prog_argv := lst;
-    evalprog name parseonly
+    evalprog name
 
 
 (* Print out main menu *)
 let menu() =
-  printf "Usage: boot [run|test|tytest|tyrun|parse|parsetest] <files>\n";
+  printf "Usage: boot [run|test] <files>\n";
   printf "\n"
 
 
@@ -743,16 +740,10 @@ let main =
   (match Array.to_list Sys.argv |> List.tl with
 
   (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> testprog lst false
-
-  (* Parse the program and then quit. *)
-  | "parse"::name::lst -> runprog name lst true
-
-  (* Run tests, but just parse*)
-  | "parsetest"::lst -> testprog lst true
+  | "test"::lst | "t"::lst -> testprog lst
 
   (* Run one program with program arguments without typechecking *)
-  | "run"::name::lst | name::lst -> runprog name lst false
+  | "run"::name::lst | name::lst -> runprog name lst
 
   (* Show the menu *)
   | _ -> menu())
