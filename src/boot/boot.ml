@@ -32,19 +32,14 @@ let enable_debug_after_debruijn = false
 let enable_debug_after_erase = false
 
 
-(* Traditional map function on unified collection (UC) types *)
-let rec ucmap f uc = match uc with
-  | UCLeaf(tms) -> UCLeaf(List.map f tms)
-  | UCNode(uc1,uc2) -> UCNode(ucmap f uc1, ucmap f uc2)
-
 
 (* Print out error message when a unit test fails *)
 let unittest_failed fi t1 t2=
   uprint_endline
     (match fi with
     | Info(_,l1,_,_,_) -> us"\n ** Unit test FAILED on line " ^.
-        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint true t1) ^.
-        us"\n    RHS: " ^. (pprint true t2)
+        us(string_of_int l1) ^. us" **\n    LHS: " ^. (pprint t1) ^.
+        us"\n    RHS: " ^. (pprint t2)
     | NoInfo -> us"Unit test FAILED ")
 
 
@@ -67,86 +62,11 @@ let rec debruijn env t =
   | TmConst(_,_) -> t
   | TmFix(_) -> t
   | TmChar(_,_) -> t
-  | TmUC(fi,uct,o,u) -> TmUC(fi, UCLeaf(List.map (debruijn env) (uct2list uct)),o,u)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t
 
-(* Preprocess the term before evaluation. Includes i) translation into data constructions, ii)
-   destinction between data type constructor identifiers and lambda variables. The environment
-   is an associate list, mapping identifier strings to booleans, where true means that name is
-   used as a data constructor.
- *)
-let preprocess _ t = t
 
-
-
-
-let ustring2uctstring s =
-  let ls = List.map (fun i -> TmChar(NoInfo,i)) (ustring2list s) in
-  TmUC(NoInfo,UCLeaf(ls),UCOrdered,UCMultivalued)
-
-
-(* Update all UC to have the form of lists *)
-let rec make_tm_for_match tm =
-  let rec mklist uc acc =
-    match uc with
-    | UCNode(uc1,uc2) -> (mklist uc2 (mklist uc1 acc))
-    | UCLeaf(lst) -> (List.map make_tm_for_match lst)::acc
-  in
-  let rec mkuclist lst acc =
-    match lst with
-    | x::xs -> mkuclist xs (UCNode(UCLeaf(x),acc))
-    | [] -> acc
-  in
-  match tm with
-  | TmUC(fi,uc,o,u) ->
-    TmUC(fi,mkuclist (mklist uc []) (UCLeaf([])),o,u)
-  | _ -> tm
-
-(* Check if a UC struct has zero length *)
-let rec uctzero uct =
-  match uct with
-  | UCNode(n1,n2) -> (uctzero n1) && (uctzero n2)
-  | UCLeaf([]) -> true
-  | UCLeaf(_) -> false
-
-
-(* Matches a pattern against a value and returns a new environment
-   Notes:
-    - final is used to detect if a sequence be checked to be complete or not *)
-let rec eval_match env pat t final =
-    match pat,t with
-  | PatIdent(_,_),v -> Some(v::env,TmNop)
-  | PatChar(_,c1),TmChar(_,c2) -> if c1 = c2 then Some(env,TmNop) else None
-  | PatChar(_,_),_ -> None
-  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCLeaf(t::ts),o2,u2) ->
-    (match eval_match env p t true with
-    | Some(env,_) ->
-      eval_match env (PatUC(fi1,ps,o1,u1)) (TmUC(fi2,UCLeaf(ts),o2,u2)) final
-    | None -> None)
-  | PatUC(_,_::_,_,_),TmUC(_,UCLeaf([]),_,_) -> None
-  | PatUC(fi1,p::ps,o1,u1),TmUC(fi2,UCNode(UCLeaf(t::ts),t2),o2,u2) ->
-    (match eval_match env p t true with
-    | Some(env,_) ->
-      eval_match env (PatUC(fi1,ps,o1,u1))
-        (TmUC(fi2,UCNode(UCLeaf(ts),t2),o2,u2)) final
-    | None -> None)
-  | PatUC(_,_::_,_,_),TmUC(fi2,UCNode(UCLeaf([]),t2),o2,u2) ->
-      eval_match env pat (TmUC(fi2,t2,o2,u2)) final
-  | PatUC(_,[],_,_),TmUC(_,uct,_,_) when uctzero uct && final -> Some(env,TmNop)
-  | PatUC(_,[],_,_),t when not final-> Some(env,t)
-  | PatUC(_,_,_,_),_ -> None
-  | PatBool(_,b1),TmConst(_,CBool(b2)) -> if b1 = b2 then Some(env,TmNop) else None
-  | PatBool(_,_),_ -> None
-  | PatInt(_,i1),TmConst(_,CInt(i2)) -> if i1 = i2 then Some(env,TmNop) else None
-  | PatInt(_,_),_ -> None
-  | PatConcat(_,PatIdent(_,_),_),_ ->
-      failwith "Pattern variable first is not part of Ragnar--"
-  | PatConcat(_,p1,p2),t1 ->
-    (match eval_match env p1 t1 false with
-    | Some(env,t2) -> eval_match env p2 t2 (final && true)
-    | None -> None)
 
 let fail_constapp fi = raise_error fi "Incorrect application "
 
@@ -155,22 +75,21 @@ let fail_constapp fi = raise_error fi "Incorrect application "
 let debug_eval env t =
   if enable_debug_eval then
     (printf "\n-- eval -- \n";
-     uprint_endline (pprint true t);
+     uprint_endline (pprint t);
      if enable_debug_eval_env then
         uprint_endline (pprint_env env))
   else ()
 
-(* Debug template function. Used below*)
+(* Debug template function. Used below *)
 let debug_after t flag text=
   if flag then
     (printf "\n-- %s --  \n" text;
-     uprint_endline (pprint true t);
+     uprint_endline (pprint t);
      t)
   else t
 
 
 (* Debug function used after specific tasks *)
-let debug_after_peval t = debug_after t enable_debug_after_peval "After peval"
 let debug_after_parse t = debug_after t enable_debug_after_parse "After parsing"
 let debug_after_debruijn t = debug_after t enable_debug_after_debruijn "After debruijn"
 let debug_after_erase t = debug_after t enable_debug_after_erase "After erase"
@@ -186,11 +105,8 @@ let builtin =
    ("eqi",Ceqi(None));("neqi",Cneqi(None));
    ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
-   ("divf",Cdivf(None));("negf",Cnegf);
-   ("add",Cadd(TNone));("sub",Csub(TNone));("mul",Cmul(TNone));
-   ("div",Cdiv(TNone));("neg",Cneg);
-   ("dstr",CDStr);("dprint",CDPrint);("print",CPrint);("argv",CArgv);
-   ("concat",CConcat(None))]
+   ("divf",Cdivf(None));("negf",Cnegf)]
+
 
 
 
@@ -299,76 +215,17 @@ let delta c v  =
     | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
     | Cnegf,t -> fail_constapp (tm_info t)
 
-    (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-
-    | Cadd(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cadd(TInt(v)))
-    | Cadd(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cadd(TFloat(v)))
-    | Cadd(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-    | Cadd(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
-    | Cadd(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 +. (float_of_int v2)))
-    | Cadd(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) +. v2))
-    | Cadd(_),t -> fail_constapp (tm_info t)
-
-    | Csub(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Csub(TInt(v)))
-    | Csub(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Csub(TFloat(v)))
-    | Csub(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-    | Csub(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
-    | Csub(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 -. (float_of_int v2)))
-    | Csub(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) -. v2))
-    | Csub(_),t -> fail_constapp (tm_info t)
-
-    | Cmul(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cmul(TInt(v)))
-    | Cmul(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmul(TFloat(v)))
-    | Cmul(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-    | Cmul(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
-    | Cmul(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 *. (float_of_int v2)))
-    | Cmul(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) *. v2))
-    | Cmul(_),t -> fail_constapp (tm_info t)
-
-    | Cdiv(TNone),TmConst(fi,CInt(v)) -> TmConst(fi,Cdiv(TInt(v)))
-    | Cdiv(TNone),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdiv(TFloat(v)))
-    | Cdiv(TInt(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-    | Cdiv(TFloat(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
-    | Cdiv(TFloat(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CFloat(v1 /. (float_of_int v2)))
-    | Cdiv(TInt(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat((float_of_int v1) /. v2))
-    | Cdiv(_),t -> fail_constapp (tm_info t)
-
-    | Cneg,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
-    | Cneg,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
-    | Cneg,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
-    | CDStr, t -> ustring2uctstring (pprint true t)
-    | CDPrint, t -> uprint_endline (pprint true t);TmNop
-    | CPrint, t ->
-      (match t with
-      | TmUC(_,uct,_,_) ->
-        uct2list uct |> uc2ustring |> list2ustring |> Ustring.to_utf8
-      |> printf "%s"; TmNop
-      | _ -> raise_error (tm_info t) "Cannot print value with this type")
-    | CArgv,_ ->
-      let lst = List.map (fun x -> ustring2uctm NoInfo (us x)) (!prog_argv)
-      in TmUC(NoInfo,UCLeaf(lst),UCOrdered,UCMultivalued)
-    | CConcat(None),t -> TmConst(NoInfo,CConcat((Some t)))
-    | CConcat(Some(TmUC(l,t1,o1,u1))),TmUC(_,t2,o2,u2)
-      when o1 = o2 && u1 = u2 -> TmUC(l,UCNode(t1,t2),o1,u1)
-    | CConcat(Some(tm1)),TmUC(l,t2,o2,u2) -> TmUC(l,UCNode(UCLeaf([tm1]),t2),o2,u2)
-    | CConcat(Some(TmUC(l,t1,o1,u1))),tm2 -> TmUC(l,UCNode(t1,UCLeaf([tm2])),o1,u1)
-    | CConcat(Some(_)),t -> fail_constapp (tm_info t)
+    | CDPrint, t -> uprint_endline (pprint t);TmNop
 
 
 
 (* Check if two value terms are equal *)
-let rec val_equal v1 v2 =
+let val_equal v1 v2 =
   match v1,v2 with
   | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmUC(_,t1,o1,u1),TmUC(_,t2,o2,u2) ->
-      let rec eql lst1 lst2 = match lst1,lst2 with
-        | l1::ls1,l2::ls2 when val_equal l1 l2 -> eql ls1 ls2
-        | [],[] -> true
-        | _ -> false
-      in o1 = o2 && u1 = u2 && eql (uct2revlist t1) (uct2revlist t2)
   | TmNop,TmNop -> true
   | _ -> false
 
@@ -401,7 +258,6 @@ let rec eval env t =
   | TmConst(_,_) | TmFix(_)
   (* The rest *)
   | TmChar(_,_) -> t
-  | TmUC(fi,uct,o,u) -> TmUC(fi,ucmap (eval env) uct,o,u)
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in
@@ -429,7 +285,6 @@ let evalprog filename  =
       fs1 |> Ustring.lexing_from_channel
           |> Parser.main Lexer.main |> debug_after_parse in
     (parsed
-     |> preprocess []
      |> debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))

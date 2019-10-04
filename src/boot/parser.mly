@@ -146,7 +146,6 @@ atom:
   | LPAREN mexpr RPAREN   { $2 }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
-  | STRING               { ustring2uctm $1.i $1.v }
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }

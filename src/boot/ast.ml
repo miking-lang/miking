@@ -13,43 +13,14 @@ open Msg
 
 
 let utest = ref false           (* Set to true if unit testing is enabled *)
-let utest_ok = ref 0            (* Counts the number of successful unit tests *)
+let utest_ok = ref 0            (* sCounts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
 
-(* Either an int, a float, or none *)
-type intfloatoption =
-| TInt   of int
-| TFloat of float
-| TNone
-
 (* Evaluation environment *)
 type env = tm list
 
-(* Pattern used in match constructs *)
-and pattern =
-| PatIdent      of info * ustring
-| PatChar       of info * int
-| PatUC         of info * pattern list * ucOrder * ucUniqueness
-| PatBool       of info * bool
-| PatInt        of info * int
-| PatConcat     of info * pattern * pattern
-
-(* One pattern case *)
-and case =
-| Case          of info * pattern * tm
-
-
-(* Tree fore representing universal collection types (UCT) *)
-and ucTree =
-| UCNode        of ucTree * ucTree
-| UCLeaf        of tm list
-
-
-(* Properties of Universal Collection types *)
-and ucOrder = UCUnordered | UCOrdered | UCSorted
-and ucUniqueness = UCUnique | UCMultivalued
 
 and const =
 (* MCore intrinsic: Boolean constant and operations *)
@@ -81,23 +52,9 @@ and const =
 | Cmulf  of float option
 | Cdivf  of float option
 | Cnegf
-(* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-| Cadd   of intfloatoption
-| Csub   of intfloatoption
-| Cmul   of intfloatoption
-| Cdiv   of intfloatoption
-| Cneg
 (* MCore debug and I/O intrinsics *)
-| CDStr
 | CDPrint
-| CPrint
-| CArgv
-(* MCore unified collection type (UCT) intrinsics *)
-| CConcat of tm option
 
-
-
-and public = bool
 
 (* Terms / expressions *)
 and tm =
@@ -108,7 +65,6 @@ and tm =
 | TmConst       of info * const                               (* Constant *)
 | TmFix         of info                                       (* Fix point *)
 | TmChar        of info * int
-| TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
 | TmNop
 
@@ -137,7 +93,6 @@ let tm_info t =
   | TmConst(fi,_) -> fi
   | TmFix(fi) -> fi
   | TmChar(fi,_) -> fi
-  | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
   | TmNop -> NoInfo
 
@@ -175,24 +130,9 @@ let arity c =
   | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
   | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
   | Cnegf       -> 1
-  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-  | Cadd(TNone) -> 2  | Cadd(_)        -> 1
-  | Csub(TNone) -> 2  | Csub(_)        -> 1
-  | Cmul(TNone) -> 2  | Cmul(_)        -> 1
-  | Cdiv(TNone) -> 2  | Cdiv(_)        -> 1
-  | Cneg        -> 1
   (* MCore debug and I/O intrinsics *)
-  | CDStr       -> 1
   | CDPrint     -> 1
-  | CPrint      -> 1
-  | CArgv       -> 1
-  (* MCore unified collection type (UCT) intrinsics *)
-  | CConcat(None)  -> 2  | CConcat(Some(_))  -> 1
+
 
 
 type 'a tokendata = {i:info; v:'a}
-
-
-let ustring2uctm fi str =
-  let lst = List.map (fun x -> TmChar(NoInfo,x)) (ustring2list str) in
-  TmUC(fi,UCLeaf(lst),UCOrdered,UCMultivalued)

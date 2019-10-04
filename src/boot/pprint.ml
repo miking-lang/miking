@@ -20,16 +20,6 @@ let varDebugPrint x n =
 
 
 
-(* Print the kind of unified collection (UC) type. *)
-let pprintUCKind ordered uniqueness =
-  match ordered, uniqueness with
-  | UCUnordered, UCUnique      -> us"Set"      (* Set *)
-  | UCUnordered, UCMultivalued -> us"MSet"     (* Multivalued Set *)
-  | UCOrdered,   UCUnique      -> us"USeq"     (* Unique Sequence *)
-  | UCOrdered,   UCMultivalued -> us"Seq"      (* Sequence *)
-  | UCSorted,    UCUnique      -> us"SSet"     (* Sorted Set *)
-  | UCSorted,    UCMultivalued -> us"SMSet"    (* Sorted Multivalued Set *)
-
 (* Pretty printing for precedence *)
 let left inside = if inside then us"(" else us""
 let right inside = if inside then us")" else us""
@@ -38,48 +28,9 @@ let right inside = if inside then us")" else us""
 (* Pretty print "true" or "false" *)
 let usbool x = us (if x then "true" else "false")
 
-(* Collapses the UC structure into a revered ordered list *)
-let uct2revlist uc =
-  let rec apprev lst acc =
-    match lst with
-    | l::ls -> apprev ls (l::acc)
-    | [] -> acc
-  in
-  let rec work uc acc =
-    match uc with
-    | UCLeaf(lst) -> apprev lst acc
-    | UCNode(uc1,uc2) -> work uc2 (work uc1 acc)
-  in work uc []
-
-(* Translate a unified collection (UC) structure into a list *)
-let uct2list uct = uct2revlist uct |> List.rev
-
-(* Pretty print a pattern *)
-let rec pprint_pat pat =
-  match pat with
-  | PatIdent(_,s) -> s
-  | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | PatUC(_,plst,_,_)
-      -> us"[" ^. (Ustring.concat (us",") (List.map pprint_pat plst)) ^. us"]"
-  | PatBool(_,b) -> us(if b then "true" else "false")
-  | PatInt(_,i) -> us(sprintf "%d" i)
-  | PatConcat(_,p1,p2) -> (pprint_pat p1) ^. us"++" ^. (pprint_pat p2)
-
-(* Converts a UC to a ustring *)
-let uc2ustring uclst =
-    List.map
-      (fun x -> match x with
-      |TmChar(_,i) -> i
-      | _ -> failwith "Not a string list") uclst
-
-
-(* Pretty print match cases *)
-let rec pprint_cases basic cases =
-   Ustring.concat (us" else ") (List.map
-    (fun (Case(_,p,t)) -> pprint_pat p ^. us" => " ^. pprint basic t) cases)
 
 (* Pretty print constants *)
-and pprint_const c =
+let rec pprint_const c =
   match c with
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
@@ -130,32 +81,11 @@ and pprint_const c =
   | Cdivf(None) -> us"divf"
   | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
   | Cnegf -> us"negf"
-  (* Mcore intrinsic: Polymorphic integer and floating-point numbers *)
-  | Cadd(TInt(v)) -> us(sprintf "add(%d)" v)
-  | Cadd(TFloat(v)) -> us(sprintf "add(%f)" v)
-  | Cadd(TNone) -> us"add"
-  | Csub(TInt(v)) -> us(sprintf "sub(%d)" v)
-  | Csub(TFloat(v)) -> us(sprintf "sub(%f)" v)
-  | Csub(TNone) -> us"sub"
-  | Cmul(TInt(v)) -> us(sprintf "mul(%d)" v)
-  | Cmul(TFloat(v)) -> us(sprintf "mul(%f)" v)
-  | Cmul(TNone) -> us"mul"
-  | Cdiv(TInt(v)) -> us(sprintf "div(%d)" v)
-  | Cdiv(TFloat(v)) -> us(sprintf "div(%f)" v)
-  | Cdiv(TNone) -> us"div"
-  | Cneg -> us"neg"
   (* MCore debug and stdio intrinsics *)
-  | CDStr -> us"dstr"
   | CDPrint -> us"dprint"
-  | CPrint -> us"print"
-  | CArgv  -> us"argv"
-  (* MCore unified collection type (UCT) intrinsics *)
-  | CConcat(None) -> us"concat"
-  | CConcat(Some(v)) -> us"concat(" ^. (pprint true v) ^. us")"
 
-(* Pretty print a term. The boolean parameter 'basic' is true when
-   the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
-and pprint basic t =
+(* Pretty print a term. *)
+and pprint t =
   let rec ppt inside t =
   match t with
   | TmVar(_,x,n) -> varDebugPrint x n
@@ -168,25 +98,13 @@ and pprint basic t =
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
   | TmChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
-  | TmUC(_,uct,ordered,uniqueness) -> (
-    match ordered, uniqueness with
-    | UCOrdered,UCMultivalued when not basic ->
-      let lst = uct2list uct in
-      (match lst with
-      | TmChar(_,_)::_ ->
-        let intlst = uc2ustring lst in
-        us"\"" ^. list2ustring intlst ^.  us"\""
-      | _ -> us"[" ^. (Ustring.concat (us",") (List.map (ppt false) lst)) ^. us"]")
-    | _,_ ->
-        (pprintUCKind ordered uniqueness) ^. us"(" ^.
-          (Ustring.concat (us",") (List.map (ppt false) (uct2list uct))) ^. us")")
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   | TmNop -> us"Nop"
   in ppt false t
 
 (* Pretty prints the environment *)
 and pprint_env env =
-  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
+  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint t) env
             |> Ustring.concat (us",")) ^. us"]"
 
 
