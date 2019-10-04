@@ -10,6 +10,13 @@ open Ustring.Op
 open Msg
 
 
+(* Debug options *)
+let enable_debug_eval = false
+let enable_debug_eval_env = false
+let enable_debug_after_parse = false
+let enable_debug_after_debruijn = false
+let enable_debug_after_erase = false
+
 
 
 let utest = ref false           (* Set to true if unit testing is enabled *)
@@ -56,14 +63,19 @@ and const =
 | CDPrint
 
 
-(* Terms / expressions *)
+(* Terms in MLang *)
+and tml =
+| TmlExpr       of info * tm
+
+
+(* Terms in MExpr *)
 and tm =
-| TmVar         of info * ustring * int                       (* Variable *)
-| TmLam         of info * ustring * ty * tm                   (* Lambda abstraction *)
-| TmClos        of info * ustring * ty * tm * env             (* Closure *)
-| TmApp         of info * tm * tm                             (* Application *)
-| TmConst       of info * const                               (* Constant *)
-| TmFix         of info                                       (* Fix point *)
+| TmVar         of info * ustring * int               (* Variable *)
+| TmLam         of info * ustring * ty * tm           (* Lambda abstraction *)
+| TmClos        of info * ustring * ty * tm * env     (* Closure *)
+| TmApp         of info * tm * tm                     (* Application *)
+| TmConst       of info * const                       (* Constant *)
+| TmFix         of info                               (* Fix point *)
 | TmChar        of info * int
 | TmUtest       of info * tm * tm * tm
 | TmNop
@@ -71,7 +83,7 @@ and tm =
 
 (* Types *)
 and ty =
-| TyDyn                                                       (* Dynamic type *)
+| TyDyn                                               (* Dynamic type *)
 
 
 (* Variable type *)

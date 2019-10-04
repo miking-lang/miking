@@ -85,7 +85,7 @@ let rec pprint_const c =
   | CDPrint -> us"dprint"
 
 (* Pretty print a term. *)
-and pprint t =
+and pprintME t =
   let rec ppt inside t =
   match t with
   | TmVar(_,x,n) -> varDebugPrint x n
@@ -104,7 +104,7 @@ and pprint t =
 
 (* Pretty prints the environment *)
 and pprint_env env =
-  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint t) env
+  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprintME t) env
             |> Ustring.concat (us",")) ^. us"]"
 
 
@@ -114,3 +114,7 @@ and pprint_ty ty =
   | TyDyn -> us"Dyn"
   in
     ppt ty
+
+and pprintML tml =
+  match tml with
+  | TmlExpr(_,t) -> pprintME t
