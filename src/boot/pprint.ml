@@ -152,44 +152,21 @@ and pprint_const c =
   (* MCore unified collection type (UCT) intrinsics *)
   | CConcat(None) -> us"concat"
   | CConcat(Some(v)) -> us"concat(" ^. (pprint true v) ^. us")"
-  (* Ragnar polymorpic temps *)
-  | CPolyEq(None) -> us"polyeq"
-  | CPolyEq(Some(v)) -> us"polyeq(" ^. (pprint true v) ^. us")"
-  | CPolyNeq(None) -> us"polyneq"
-  | CPolyNeq(Some(v)) -> us"polyneq(" ^. (pprint true v) ^. us")"
-  (* Atom - an untyped lable that can be used to implement
-     domain specific constructs *)
-  | CAtom(id,tms) -> us"[" ^. (ustring_of_sid id) ^. us"]" ^.
-      (if List.length tms = 0 then us""
-       else us"(" ^. Ustring.concat (us",") (List.map (pprint true) tms) ^. us")")
-
 
 (* Pretty print a term. The boolean parameter 'basic' is true when
    the pretty printing should be done in basic form. Use e.g. Set(1,2) instead of {1,2} *)
 and pprint basic t =
   let rec ppt inside t =
   match t with
-  | TmVar(_,x,n,_) -> varDebugPrint x n
+  | TmVar(_,x,n) -> varDebugPrint x n
   | TmLam(_,x,ty,t1) -> left inside ^.
       us"lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. ppt false t1 ^. right inside
-  | TmClos(_,x,_,t,_,false) -> left inside ^. us"clos " ^. x ^. us". " ^.
+  | TmClos(_,x,_,t,_) -> left inside ^. us"clos " ^. x ^. us". " ^.
        ppt false t ^. right inside
-  | TmClos(_,x,_,t,_,true) -> left inside ^. us"peclos " ^.
-       x ^. us". " ^. ppt false t ^. right inside
   | TmApp(_,t1,t2) ->
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmTyLam(_,x,kind,t1) -> left inside ^. us"Lam " ^. x ^. us"::"
-      ^. pprint_kind kind ^. us". " ^. ppt false t1  ^. us"" ^. right inside
-  | TmTyApp(_,t1,ty1) ->
-      left inside ^. ppt false t1 ^. us" [" ^. pprint_ty ty1 ^. us"]" ^. right inside
-  | TmModule(_,_,_) -> us"{...}" (* TODO *)
-  | TmDive(_) -> us"dive"
-  | TmIfexp(_,None,_) -> us"ifexp"
-  | TmIfexp(_,Some(g),Some(t2)) ->
-      us"ifexp(" ^. usbool g ^. us"," ^. ppt false t2 ^. us")"
-  | TmIfexp(_,Some(g),_) -> us"ifexp(" ^. usbool g ^. us")"
   | TmChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmUC(_,uct,ordered,uniqueness) -> (
     match ordered, uniqueness with
@@ -212,47 +189,10 @@ and pprint_env env =
   us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprint true t) env
             |> Ustring.concat (us",")) ^. us"]"
 
-(* Pretty prints the typing environment *)
-and pprint_tyenv env =
-  us"[" ^.
-    (List.mapi (fun i t -> us(sprintf " %d -> " i) ^.
-      (match t with
-      | TyenvTmvar(x,ty) -> x ^. us":" ^. pprint_ty ty
-      | TyenvTyvar(x,ki) -> x ^. us":" ^. us"::" ^. pprint_kind ki)
-     ) env
-            |> Ustring.concat (us",")) ^. us"]"
 
-
-
-
-(* Pretty print a type *)
 and pprint_ty ty =
-  let rec ppt inside ty =
+  let ppt ty =
   match ty with
-  | TyGround(_,gt) ->
-    (match gt with
-    | GBool -> us"Bool"
-    | GInt -> us"Int"
-    | GFloat -> us"Float"
-    | GVoid -> us"Void")
-  | TyArrow(_,ty1,ty2) ->
-      left inside ^. ppt true ty1 ^. us"->" ^. ppt false ty2 ^. right inside
-  | TyVar(_,x,n) -> varDebugPrint x n
-  | TyAll(_,x,kind,ty1) -> left inside ^. us"all " ^. x ^. us"::" ^.
-         pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
-  | TyLam(_,x,kind,ty1) -> left inside ^. us"lam " ^. x ^. us"::" ^.
-         pprint_kind kind ^. us". " ^. ppt false ty1 ^. right inside
-  | TyApp(_,ty1,ty2) ->
-    left inside ^. ppt true ty1 ^. us" " ^. ppt true ty2 ^. right inside
- | TyDyn -> us"Dyn"
+  | TyDyn -> us"Dyn"
   in
-    ppt true ty
-
-(* Pretty print kinds *)
-and pprint_kind k =
-  let rec ppt inside k =
-  match k with
-  | KindStar(_) -> us"*"
-  | KindArrow(_,k1,k2) ->
-    left inside ^. ppt true k1 ^. us"->" ^. ppt false k2 ^. right inside
-  in ppt false k
+    ppt ty

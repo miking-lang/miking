@@ -21,11 +21,6 @@
       | (_,_) -> NoInfo
 
 
-(* Create kind when optionally available *)
-let mkop_kind fi op =
-  match op with
-  | None -> KindStar(fi)
-  | Some(k) -> k
 
 %}
 
@@ -59,7 +54,6 @@ let mkop_kind fi op =
 %token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
-%token <unit Ast.tokendata> DIVE
 %token <unit Ast.tokendata> IFEXP
 %token <unit Ast.tokendata> COMPOSE
 %token <unit Ast.tokendata> PUB
@@ -119,118 +113,25 @@ let mkop_kind fi op =
 %left MUL DIV MOD /*prec 9*/
 
 
-
-
 %type <Ast.tm> main
 
 %%
 
+
 main:
-  | LANG MCORE module_body EOF
-      { $3 }
-  | LANG MCORE module_term EOF
-      { $3 }
-  | LANG PMCORE module_term EOF
-      { $3 }
+  | mexpr EOF
+    { $1 }
 
 
-module_term:
-  | LCURLY op_self_var module_body RCURLY
-      { $3 }
-
-op_self_var:
-  |
-      { None }
-  | IDENT DOT
-      { Some $1.v }
-
-module_body:
-  | { TmNop }
-  | UTEST atom atom module_body
-      { let fi = mkinfo $1.i (tm_info $3) in
-        TmUtest(fi,$2,$3,$4) }
-  | op_pub TYPE IDENT CONS kind module_body
-      { $6 }
-/*      { let fi = mkinfo $1.i (tm_info $3) in
-        TmDefType(fi,$2.v,$3) }
-*/
-  | op_pub TLET IDENT op_tlet_kind EQ ty module_body
-      { $7 }  /* TODO */
-  | op_pub DATA IDENT COLON ty module_body
-      { $6 }
-/*      { let fi = mkinfo $1.i (tm_info $3) in
-        TmDefCon(fi,$2,$3)}
-*/
-  | op_pub LET IDENT op_let_ty EQ term module_body
-      { let fi = mkinfo $2.i (tm_info $6) in
-        TmApp(fi,TmLam(fi,$3.v,TyDyn,$7),$6) }
-
-op_let_ty:
-  |
-      { TyDyn }
-  | COLON ty
-    { $2 }
-
-op_tlet_kind:
-  |
-    { KindStar(NoInfo) }
-  | CONS kind
-    { $2 }
-
-
-op_pub:
-  |
-      { false }
-  | PUB
-      { true }
-
-
-term:
-  | cases
-      { $1 }
-  | LAM IDENT ty_op DOT term
-      { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$2.v,$3,$5) }
-  | BIGLAM IDENT op_kind DOT term
-      { let fi = mkinfo $1.i (tm_info $5) in
-        TmTyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-  | COMPOSE atom atom
-      { TmNop }
-  | MATCH term WITH term
-      { $4 }
-  | LET IDENT op_let_ty EQ term IN term
-      { $7 }
-  | IF term THEN term ELSE term
-      { $4 } /* TODO */
-
-
-/*      { let fi = mkinfo $1.i (tm_info $4) in
-        TmMatch(fi,$2,$4) }
-*/
-
-
-cases:
-  | case
-      { $1 }
-  | case BAR cases
-      { TmNop }
-/*
-    { let fi = mkinfo (tm_info $1) (tm_info $3) in
-      TmCaseComp(fi,$1,$3) }
-*/
-
-case:
+mexpr:
   | left
       { $1 }
-  | CASE prim_data name_lst ARROW left
-      { TmNop }
-  | CASE IDENT name_lst ARROW left
-      { TmNop }
-/*
-      { let fi = mkinfo $1.i $6.i in
-        TmCase(fi,$2.v,List.rev $4,$7) }
-*/
-
+  | LAM IDENT ty_op DOT mexpr
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmLam(fi,$2.v,$3,$5) }
+  | UTEST mexpr WITH mexpr IN mexpr
+      { let fi = mkinfo $1.i (tm_info $4) in
+        TmUtest(fi,$2,$4,$6) }
 
 
 left:
@@ -239,39 +140,19 @@ left:
   | left atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
-  | left LSQUARE ty RSQUARE
-      { let fi = mkinfo (tm_info $1) $4.i in
-        TmTyApp(fi,$1,$3) }
-
 
 
 atom:
-  | LPAREN term RPAREN   { $2 }
-  | module_term          { TmNop }
-  | IDENT                { TmVar($1.i,$1.v,noidx,false) }
+  | LPAREN mexpr RPAREN   { $2 }
+  | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmChar($1.i, List.hd (ustring2list $1.v)) }
   | STRING               { ustring2uctm $1.i $1.v }
   | NOP                  { TmNop }
   | FIX                  { TmFix($1.i) }
-  | DIVE                 { TmDive($1.i) }
-  | IFEXP                { TmIfexp($1.i,None,None) }
-  | atom DOT IDENT       { TmNop }
-  | prim_data            { $1 }
-
-prim_data:
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
-
-
-name_lst:
-  |
-    { [] }
-  | IDENT name_lst
-    { $1::$2 }
-
-
 
 
 ty_op:
@@ -281,28 +162,9 @@ ty_op:
       { TyDyn }
 
 
-
 ty:
-  | ty_left
-    { $1 }
-  | ty_left ARROW ty
-      { let fi = mkinfo (ty_info $1) (ty_info $3) in
-        TyArrow(fi,$1,$3) }
-  | ALL IDENT op_kind DOT ty
-      { let fi = mkinfo $1.i (ty_info $5) in
-        TyAll(fi,$2.v,mkop_kind $2.i $3,$5) }
-  | LAM IDENT op_kind DOT ty
-      { let fi = mkinfo $1.i (ty_info $5) in
-        TyLam(fi,$2.v,mkop_kind $2.i $3,$5) }
-
-
-ty_left:
   | ty_atom
-      { $1 }
-  | ty_left ty_atom
-      { let fi = mkinfo (ty_info $1) (ty_info $2) in
-        TyApp(fi,$1,$2) }
-
+    { $1 }
 
 
 ty_atom:
@@ -310,33 +172,6 @@ ty_atom:
       { $2 }
   | IDENT
       {match Ustring.to_utf8 $1.v with
-       | "Bool" -> TyGround($1.i,GBool)
-       | "Int" -> TyGround($1.i,GInt)
-       | "Float" -> TyGround($1.i,GFloat)
-       | "String" -> TyGround($1.i,GVoid)  (* TODO *)
-       | "Void" -> TyGround($1.i,GVoid)
-       | _ -> TyVar($1.i,$1.v,-1)
+       | "Dyn" -> TyDyn
+       | _ -> failwith "Unknown type"
       }
-
-
-
-
-op_kind:
-  |
-      { None }
-  | CONS kind
-      { Some($2) }
-
-
-kind:
-  | kind_atom
-      { $1 }
-  | kind_atom ARROW kind
-      { let fi = mkinfo (kind_info $1) (kind_info $3) in
-        KindArrow(fi,$1,$3) }
-
-kind_atom:
-  | MUL
-      { KindStar($1.i) }
-  | LPAREN kind RPAREN
-      { $2 }

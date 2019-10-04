@@ -95,128 +95,52 @@ and const =
 (* MCore unified collection type (UCT) intrinsics *)
 | CConcat of tm option
 
-(* Ragnar temp functions for handling polymorphic arguments *)
-| CPolyEq  of tm option
-| CPolyNeq of tm option
 
-(* Atom - an untyped lable that can be used to implement
-   domain specific constructs *)
-| CAtom of sid * tm list
-
-(* Tells if a variable is a pe variable or if a closure is a pe closure *)
-and pemode = bool
 
 and public = bool
-and letFields = (ustring * (public * tm)) list
-and dataFields = (ustring * (public * ty)) list
-
 
 (* Terms / expressions *)
 and tm =
-| TmVar         of info * ustring * int * pemode              (* Variable *)
+| TmVar         of info * ustring * int                       (* Variable *)
 | TmLam         of info * ustring * ty * tm                   (* Lambda abstraction *)
-| TmClos        of info * ustring * ty * tm * env * pemode    (* Closure *)
+| TmClos        of info * ustring * ty * tm * env             (* Closure *)
 | TmApp         of info * tm * tm                             (* Application *)
 | TmConst       of info * const                               (* Constant *)
-| TmDive        of info                                       (* Dive operator *)
-| TmIfexp       of info * bool option * tm option
 | TmFix         of info                                       (* Fix point *)
-| TmTyLam       of info * ustring * kind * tm                 (* Type abstraction *)
-| TmTyApp       of info * tm * ty                             (* Type application *)
-
-| TmModule      of info * letFields * dataFields              (* First-class module *)
-(*
-| TmMatch       of info * tm * tm                             (* Match expression *)
-| TmCase        of info * ustring * (ustring * int) list * tm (* Case expression *)
-| TmCaseComp    of info * tm * tm                             (* Case composition *)
-| TmCon         of info * ustring * tm list                   (* Data constructor term *)
-
-
-| TmDefType     of info * ustring * tm                        (* Type definition *)
-| TmDefCon      of info * ty * tm                             (* Data constructor definition *)
- *)
-
 | TmChar        of info * int
 | TmUC          of info * ucTree * ucOrder * ucUniqueness
 | TmUtest       of info * tm * tm * tm
 | TmNop
 
-(* Ground types *)
-and groundty = GBool | GInt | GFloat | GVoid
 
 (* Types *)
 and ty =
-| TyGround      of info * groundty                            (* Ground types *)
-| TyArrow       of info * ty * ty                             (* Function type *)
-| TyVar         of info * ustring * int                       (* Type variable *)
-| TyAll         of info * ustring * kind * ty                 (* Universal type *)
-| TyLam         of info * ustring * kind * ty                 (* Type-level function *)
-| TyApp         of info * ty * ty                             (* Type-level application *)
-(*| TyCase        of info * ustring * ty list * ustring         (* Case type *) *)
 | TyDyn                                                       (* Dynamic type *)
 
 
-(* Kinds *)
-and kind =
-| KindStar      of info                                       (* Kind of proper types *)
-| KindArrow     of info * kind * kind                         (* Kind of type-level functions *)
-
-
-(* Variable type. Either a type variable or a term variable *)
+(* Variable type *)
 and vartype =
-| VarTy         of ustring
 | VarTm         of ustring
 
-and tyenvVar =
-| TyenvTmvar    of ustring * ty
-| TyenvTyvar    of ustring * kind                  (* Boolean states if it is
-                                                       a forall binding *)
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
-(* Extract the variable name from a tyenvVar type *)
-let envVar tyvar =
-  match tyvar with TyenvTmvar(x,_) | TyenvTyvar(x,_) -> x
 
 (* Returns the info field from a term *)
 let tm_info t =
   match t with
-  | TmVar(fi,_,_,_) -> fi
+  | TmVar(fi,_,_) -> fi
   | TmLam(fi,_,_,_) -> fi
-  | TmClos(fi,_,_,_,_,_) -> fi
+  | TmClos(fi,_,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
-  | TmDive(fi) -> fi
-  | TmIfexp(fi,_,_) -> fi
   | TmFix(fi) -> fi
-  | TmTyLam(fi,_,_,_) -> fi
-  | TmTyApp(fi,_,_) -> fi
-  | TmModule(fi,_,_) -> fi
   | TmChar(fi,_) -> fi
   | TmUC(fi,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
   | TmNop -> NoInfo
 
-
-(* Returns the info field from a type *)
-let ty_info t =
-  match t with
-  | TyGround(fi,_) -> fi
-  | TyArrow(fi,_,_) -> fi
-  | TyVar(fi,_,_) -> fi
-  | TyAll(fi,_,_,_) -> fi
-  | TyLam(fi,_,_,_) -> fi
-  | TyApp(fi,_,_) -> fi
-  | TyDyn -> NoInfo         (* Used when deriving types for let-expressions *)
-
-
-
-(* Returns the info field from a kind *)
-let kind_info k =
-  match k with
-  | KindStar(fi) -> fi
-  | KindArrow(fi,_,_) -> fi
 
 
 (* Returns the number of expected arguments *)
@@ -264,12 +188,6 @@ let arity c =
   | CArgv       -> 1
   (* MCore unified collection type (UCT) intrinsics *)
   | CConcat(None)  -> 2  | CConcat(Some(_))  -> 1
-  (* Ragnar temp functions for handling polymorphic arguments *)
-  | CPolyEq(None)  -> 2  | CPolyEq(Some(_))  -> 1
-  | CPolyNeq(None) -> 2  | CPolyNeq(Some(_)) -> 1
-  (* Atom - an untyped lable that can be used to implement
-     domain specific constructs *)
-  | CAtom(_,_)     -> 0
 
 
 type 'a tokendata = {i:info; v:'a}

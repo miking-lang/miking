@@ -36,7 +36,6 @@ let reserved_strings = [
   ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("nop",           fun(i) -> Parser.NOP{i=i;v=()});
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
-  ("dive",          fun(i) -> Parser.DIVE{i=i;v=()});
   ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
   ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
   ("pub",           fun(i) -> Parser.PUB{i=i;v=()});
