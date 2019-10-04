@@ -61,7 +61,8 @@ and const =
 | Cnegf
 (* MCore debug and I/O intrinsics *)
 | CDPrint
-
+(* TODO: CSeq *)
+(* TODO: CData *)
 
 (* Terms in MLang *)
 and tml =
@@ -76,8 +77,11 @@ and tm =
 | TmApp         of info * tm * tm                     (* Application *)
 | TmConst       of info * const                       (* Constant *)
 | TmFix         of info                               (* Fix point *)
-| TmChar        of info * int
+| TmChar        of info * int                         (* TODO: Remove *)
 | TmUtest       of info * tm * tm * tm
+(* TODO: TmData  of info * ustring *)
+(* TODO: TmCon   of info * const * tm list *)
+(* TODO: TmMatch of info * tm * const * ustring list * tm * tm *)
 | TmNop
 
 

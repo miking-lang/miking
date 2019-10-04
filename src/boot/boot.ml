@@ -55,7 +55,7 @@ let evalprog filename  =
      |> Mlang.translate
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
-     |> eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
+     |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
      |> fun _ -> ())
     with
     | Lexer.Lex_error m ->
