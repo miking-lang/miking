@@ -65,9 +65,15 @@ and const =
 (* TODO: CData *)
 
 (* Terms in MLang *)
-and tml =
-| TmlExpr       of info * tm
+and cdecl   = CDecl   of info * ustring * ty list
+and param   = Param   of info * ustring * ty
+and pattern = Pattern of info * const * ustring list
+and decl = (* TODO: Local? *)
+| Data  of info * ustring * cdecl list
+| Inter of info * ustring * param list * (pattern * tm) list
 
+and mlang   = Lang    of info * ustring * ustring list * decl list
+and program = Program of info * mlang list * tm
 
 (* Terms in MExpr *)
 and tm =

@@ -52,6 +52,7 @@ let evalprog filename  =
       fs1 |> Ustring.lexing_from_channel
           |> Parser.main Lexer.main |> debug_after_parse in
     (parsed
+     |> Mlang.flatten
      |> Mlang.translate
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn

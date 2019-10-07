@@ -113,14 +113,14 @@
 %left MUL DIV MOD /*prec 9*/
 
 
-%type <Ast.tml> main
+%type <Ast.program> main
 
 %%
 
 
 main:
   | mexpr EOF
-    { TmlExpr(tm_info $1, $1) }
+    { Program(tm_info $1, [], $1) }
 
 
 mexpr:

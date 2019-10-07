@@ -117,4 +117,4 @@ and pprint_ty ty =
 
 and pprintML tml =
   match tml with
-  | TmlExpr(_,t) -> pprintME t
+  | Program(_,_,t) -> pprintME t
