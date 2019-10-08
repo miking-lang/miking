@@ -58,6 +58,9 @@
 %token <unit Ast.tokendata> COMPOSE
 %token <unit Ast.tokendata> PUB
 %token <unit Ast.tokendata> IN
+%token <unit Ast.tokendata> END
+%token <unit Ast.tokendata> SYN
+%token <unit Ast.tokendata> SEM
 
 
 
@@ -119,9 +122,103 @@
 
 
 main:
-  | mexpr EOF
-    { Program(tm_info $1, [], $1) }
+  | mlangs mexpr EOF
+    { Program(NoInfo, $1, $2) } // TODO: Does this need info?
 
+
+mlangs:
+  | mlang mlangs
+      { $1 :: $2 }
+  |
+      { [] }
+mlang:
+  | LANG IDENT includes lang_body
+    { let fi = if List.length $3 > 0 then
+                 mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
+               else
+                 mkinfo $1.i $2.i
+      in
+      Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
+
+includes:
+  | EQ lang_list
+    { $2 }
+  |
+    { [] }
+lang_list:
+  | IDENT ADD lang_list
+    { $1 :: $3 }
+  | IDENT
+    { [$1] }
+
+lang_body:
+  | decls END
+    { $1 }
+  |
+    { [] }
+decls:
+  | decl decls
+    { $1 :: $2 }
+  |
+    { [] }
+decl:
+  | SYN IDENT EQ constrs
+    { let fi = mkinfo $1.i $3.i in
+      Data (fi, $2.v, $4) }
+  | SEM IDENT params EQ cases
+    { let fi = mkinfo $1.i $4.i in
+      Inter (fi, $2.v, $3, $5) }
+
+constrs:
+  | constr constrs
+    { $1 :: $2 }
+  |
+    { [] }
+constr:
+  | BAR IDENT constr_params
+    { let fi = mkinfo $1.i $2.i in
+      CDecl(fi, $2.v, $3) }
+
+constr_params:
+  | LPAREN type_list RPAREN
+    { $2 }
+  |
+    { [] }
+type_list:
+  | ty COMMA type_list
+    { $1 :: $3 }
+  | ty
+    { [$1] }
+
+params:
+  | LPAREN IDENT COLON ty RPAREN params
+    { let fi = mkinfo $1.i $5.i in
+      Param (fi, $2.v, $4) :: $6 }
+  |
+    { [] }
+
+cases:
+  | case cases
+    { $1 :: $2 }
+  |
+    { [] }
+case:
+  | BAR IDENT binders ARROW mexpr
+    { let fi = mkinfo $1.i $4.i in
+      Pattern (fi, Cnot, $3), $5 } // TODO: Constant for data constructor
+binders:
+  | LPAREN name_list RPAREN
+    { $2 }
+
+  |
+    { [] }
+name_list:
+  | IDENT COMMA name_list
+    { $1.v :: $3 }
+  | IDENT
+    { [$1.v] }
+
+/// Expression language ///////////////////////////////
 
 mexpr:
   | left

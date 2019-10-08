@@ -27,6 +27,7 @@ case $1 in
         ../build/preboot tytest tymcore
         ../build/preboot parsetest parse
         ../build/boot test mexpr
+        ../build/boot test mlang
         ;;
     # Clean up the project
     clean)

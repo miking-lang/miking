@@ -13,6 +13,7 @@
   open Msg
   exception Lex_error of Msg.message
 
+(* TODO: Remove unused keywords *)
 let reserved_strings = [
   (* Keywords *)
   ("if",            fun(i) -> Parser.IF{i=i;v=()});
@@ -40,6 +41,9 @@ let reserved_strings = [
   ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
   ("pub",           fun(i) -> Parser.PUB{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
+  ("end",           fun(i) -> Parser.END{i=i;v=()});
+  ("syn",           fun(i) -> Parser.SYN{i=i;v=()});
+  ("sem",           fun(i) -> Parser.SEM{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
