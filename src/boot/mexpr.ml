@@ -29,12 +29,12 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
-  | TmNop -> t
 
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
-  [("not",Cnot);("and",Cand(None));("or",Cor(None));
+  [("nop",Cnop);
+   ("not",Cnot);("and",Cand(None));("or",Cor(None));
    ("addi",Caddi(None));("subi",Csubi(None));("muli",Cmuli(None));
    ("divi",Cdivi(None));("modi",Cmodi(None));("negi",Cnegi);
    ("lti",Clti(None));("leqi",Cleqi(None));("gti",Cgti(None));("geqi",Cgeqi(None));
@@ -56,6 +56,8 @@ let fail_constapp fi = raise_error fi "Incorrect application "
    and not values. *)
 let delta c v  =
     match c,v with
+    (* MCore intrinsic: no operation *)
+    | Cnop,t -> fail_constapp (tm_info t)
     (* MCore boolean intrinsics *)
     | CBool(_),t -> fail_constapp (tm_info t)
 
@@ -164,7 +166,7 @@ let delta c v  =
     | CInt2char,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
-    | CDPrint, t -> uprint_endline (pprintME t);TmNop
+    | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cnop)
 
 
 (* Debug function used in the eval function *)
@@ -191,7 +193,6 @@ let unittest_failed fi t1 t2=
 let val_equal v1 v2 =
   match v1,v2 with
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmNop,TmNop -> true
   | _ -> false
 
 
@@ -233,4 +234,3 @@ let rec eval env t =
         utest_fail_local := !utest_fail_local + 1)
      end;
     eval env tnext
-  | TmNop -> t

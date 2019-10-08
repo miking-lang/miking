@@ -30,6 +30,8 @@ type env = tm list
 
 
 and const =
+(* MCore intrinsic: no operation *)
+| Cnop
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool of bool
 | Cnot
@@ -91,7 +93,6 @@ and tm =
 (* TODO: TmData  of info * ustring *)
 (* TODO: TmCon   of info * const * tm list *)
 (* TODO: TmMatch of info * tm * const * ustring list * tm * tm *)
-| TmNop
 
 
 (* Types *)
@@ -117,12 +118,14 @@ let tm_info = function
   | TmConst(fi,_) -> fi
   | TmFix(fi) -> fi
   | TmUtest(fi,_,_,_) -> fi
-  | TmNop -> NoInfo
+
 
 
 
 (* Returns the number of expected arguments *)
 let arity = function
+  (* MCore intrinsic: no operation *)
+  | Cnop        -> 0
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1

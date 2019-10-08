@@ -32,6 +32,8 @@ let usbool x = us (if x then "true" else "false")
 (* Pretty print constants *)
 let rec pprint_const c =
   match c with
+  (* MCore intrinsic: no operation *)
+  | Cnop -> us"nop"
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | Cnot -> us"not"
@@ -102,7 +104,6 @@ and pprintME t =
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
-  | TmNop -> us"Nop"
   in ppt false t
 
 (* Pretty prints the environment *)
