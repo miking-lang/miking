@@ -81,6 +81,10 @@ let rec pprint_const c =
   | Cdivf(None) -> us"divf"
   | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
   | Cnegf -> us"negf"
+  (* MCore intrinsic: characters *)
+  | CChar(v) -> us"'" ^. list2ustring [v] ^. us"'"
+  | CChar2int -> us"char2int"
+  | CInt2char -> us"int2char"
   (* MCore debug and stdio intrinsics *)
   | CDPrint -> us"dprint"
 
@@ -97,7 +101,6 @@ and pprintME t =
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   | TmNop -> us"Nop"
   in ppt false t

@@ -27,7 +27,6 @@ let rec debruijn env t =
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmChar(_,_) -> t
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
   | TmNop -> t
@@ -42,7 +41,9 @@ let builtin =
    ("eqi",Ceqi(None));("neqi",Cneqi(None));
    ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
-   ("divf",Cdivf(None));("negf",Cnegf)]
+   ("divf",Cdivf(None));("negf",Cnegf);
+   ("char2int",CChar2int);("int2char",CInt2char);
+  ]
 
 
 let fail_constapp fi = raise_error fi "Incorrect application "
@@ -153,6 +154,14 @@ let delta c v  =
     | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
     | Cnegf,t -> fail_constapp (tm_info t)
 
+    (* MCore intrinsic: characters *)
+    | CChar(_),t -> fail_constapp (tm_info t)
+
+    | CChar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
+    | CChar2int,t -> fail_constapp (tm_info t)
+
+    | CInt2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
+    | CInt2char,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
     | CDPrint, t -> uprint_endline (pprintME t);TmNop
@@ -181,7 +190,6 @@ let unittest_failed fi t1 t2=
 (* Check if two value terms are equal *)
 let val_equal v1 v2 =
   match v1,v2 with
-  | TmChar(_,n1),TmChar(_,n2) -> n1 = n2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmNop,TmNop -> true
   | _ -> false
@@ -212,9 +220,8 @@ let rec eval env t =
          | _ -> failwith "Incorrect CFix")
        | _ -> failwith "Incorrect application")
   (* Constant *)
-  | TmConst(_,_) | TmFix(_)
+  | TmConst(_,_) | TmFix(_) -> t
   (* The rest *)
-  | TmChar(_,_) -> t
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in

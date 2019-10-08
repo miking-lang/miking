@@ -59,6 +59,10 @@ and const =
 | Cmulf  of float option
 | Cdivf  of float option
 | Cnegf
+(* MCore intrinsic: characters *)
+| CChar  of int
+| CChar2int
+| CInt2char
 (* MCore debug and I/O intrinsics *)
 | CDPrint
 (* TODO: CSeq *)
@@ -83,7 +87,6 @@ and tm =
 | TmApp         of info * tm * tm                     (* Application *)
 | TmConst       of info * const                       (* Constant *)
 | TmFix         of info                               (* Fix point *)
-| TmChar        of info * int                         (* TODO: Remove *)
 | TmUtest       of info * tm * tm * tm
 (* TODO: TmData  of info * ustring *)
 (* TODO: TmCon   of info * const * tm list *)
@@ -106,23 +109,20 @@ let noidx = -1
 
 
 (* Returns the info field from a term *)
-let tm_info t =
-  match t with
+let tm_info = function
   | TmVar(fi,_,_) -> fi
   | TmLam(fi,_,_,_) -> fi
   | TmClos(fi,_,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
   | TmFix(fi) -> fi
-  | TmChar(fi,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
   | TmNop -> NoInfo
 
 
 
 (* Returns the number of expected arguments *)
-let arity c =
-  match c with
+let arity = function
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1
@@ -152,6 +152,10 @@ let arity c =
   | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
   | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
   | Cnegf       -> 1
+  (* MCore intrinsic: characters *)
+  | CChar(_)    -> 0
+  | CChar2int   -> 1
+  | CInt2char   -> 1
   (* MCore debug and I/O intrinsics *)
   | CDPrint     -> 1
 
