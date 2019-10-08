@@ -54,6 +54,7 @@ and const =
 | Cslli of int option
 | Csrli of int option
 | Csrai of int option
+| Carity
 (* MCore intrinsic: Floating-point number constant and operations *)
 | CFloat of float
 | Caddf  of float option
@@ -121,46 +122,6 @@ let tm_info = function
 
 
 
-
-(* Returns the number of expected arguments *)
-let arity = function
-  (* MCore intrinsic: no operation *)
-  | Cnop        -> 0
-  (* MCore intrinsic: Boolean constant and operations *)
-  | CBool(_)    -> 0
-  | Cnot        -> 1
-  | Cand(None)  -> 2  | Cand(Some(_))  -> 1
-  | Cor(None)   -> 2  | Cor(Some(_))   -> 1
-  (* MCore intrinsic: Integer constant and operations *)
-  | CInt(_)     -> 0
-  | Caddi(None) -> 2  | Caddi(Some(_)) -> 1
-  | Csubi(None) -> 2  | Csubi(Some(_)) -> 1
-  | Cmuli(None) -> 2  | Cmuli(Some(_)) -> 1
-  | Cdivi(None) -> 2  | Cdivi(Some(_)) -> 1
-  | Cmodi(None) -> 2  | Cmodi(Some(_)) -> 1
-  | Cnegi       -> 1
-  | Clti(None)  -> 2  | Clti(Some(_))  -> 1
-  | Cleqi(None) -> 2  | Cleqi(Some(_)) -> 1
-  | Cgti(None)  -> 2  | Cgti(Some(_))  -> 1
-  | Cgeqi(None) -> 2  | Cgeqi(Some(_)) -> 1
-  | Ceqi(None)  -> 2  | Ceqi(Some(_))  -> 1
-  | Cneqi(None) -> 2  | Cneqi(Some(_)) -> 1
-  | Cslli(None) -> 2  | Cslli(Some(_)) -> 1
-  | Csrli(None) -> 2  | Csrli(Some(_)) -> 1
-  | Csrai(None) -> 2  | Csrai(Some(_)) -> 1
-  (* MCore intrinsic: Floating-point number constant and operations *)
-  | CFloat(_)   -> 0
-  | Caddf(None) -> 2  | Caddf(Some(_)) -> 1
-  | Csubf(None) -> 2  | Csubf(Some(_)) -> 1
-  | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
-  | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
-  | Cnegf       -> 1
-  (* MCore intrinsic: characters *)
-  | CChar(_)    -> 0
-  | CChar2int   -> 1
-  | CInt2char   -> 1
-  (* MCore debug and I/O intrinsics *)
-  | CDPrint     -> 1
 
 
 

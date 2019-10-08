@@ -10,26 +10,6 @@ open Ast
 open Pprint
 open Printf
 
-(* Convert a term into de Bruijn indices. Note that both type variables
-   and term variables are converted. The environment [env] is a list
-   type [vartype], indicating if it is a type variable (VarTy(x)) or
-   a term variable (VarTm(x)). *)
-let rec debruijn env t =
-  match t with
-  | TmVar(fi,x,_) ->
-    let rec find env n =
-      (match env with
-       | VarTm(y)::ee -> if y =. x then n else find ee (n+1)
-       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
-    in TmVar(fi,x,find env 0)
-  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
-  | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
-  | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
-  | TmConst(_,_) -> t
-  | TmFix(_) -> t
-  | TmUtest(fi,t1,t2,tnext)
-      -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
-
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -40,10 +20,55 @@ let builtin =
    ("lti",Clti(None));("leqi",Cleqi(None));("gti",Cgti(None));("geqi",Cgeqi(None));
    ("eqi",Ceqi(None));("neqi",Cneqi(None));
    ("slli",Cslli(None));("srli",Csrli(None));("srai",Csrai(None));
+   ("arity",Carity);
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
    ("divf",Cdivf(None));("negf",Cnegf);
    ("char2int",CChar2int);("int2char",CInt2char);
   ]
+
+
+
+(* Returns the number of expected arguments of a constant *)
+let arity = function
+  (* MCore intrinsic: no operation *)
+  | Cnop        -> 0
+  (* MCore intrinsic: Boolean constant and operations *)
+  | CBool(_)    -> 0
+  | Cnot        -> 1
+  | Cand(None)  -> 2  | Cand(Some(_))  -> 1
+  | Cor(None)   -> 2  | Cor(Some(_))   -> 1
+  (* MCore intrinsic: Integer constant and operations *)
+  | CInt(_)     -> 0
+  | Caddi(None) -> 2  | Caddi(Some(_)) -> 1
+  | Csubi(None) -> 2  | Csubi(Some(_)) -> 1
+  | Cmuli(None) -> 2  | Cmuli(Some(_)) -> 1
+  | Cdivi(None) -> 2  | Cdivi(Some(_)) -> 1
+  | Cmodi(None) -> 2  | Cmodi(Some(_)) -> 1
+  | Cnegi       -> 1
+  | Clti(None)  -> 2  | Clti(Some(_))  -> 1
+  | Cleqi(None) -> 2  | Cleqi(Some(_)) -> 1
+  | Cgti(None)  -> 2  | Cgti(Some(_))  -> 1
+  | Cgeqi(None) -> 2  | Cgeqi(Some(_)) -> 1
+  | Ceqi(None)  -> 2  | Ceqi(Some(_))  -> 1
+  | Cneqi(None) -> 2  | Cneqi(Some(_)) -> 1
+  | Cslli(None) -> 2  | Cslli(Some(_)) -> 1
+  | Csrli(None) -> 2  | Csrli(Some(_)) -> 1
+  | Csrai(None) -> 2  | Csrai(Some(_)) -> 1
+  | Carity      -> 1
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat(_)   -> 0
+  | Caddf(None) -> 2  | Caddf(Some(_)) -> 1
+  | Csubf(None) -> 2  | Csubf(Some(_)) -> 1
+  | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
+  | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
+  | Cnegf       -> 1
+  (* MCore intrinsic: characters *)
+  | CChar(_)    -> 0
+  | CChar2int   -> 1
+  | CInt2char   -> 1
+  (* MCore debug and I/O intrinsics *)
+  | CDPrint     -> 1
+
 
 
 let fail_constapp fi = raise_error fi "Incorrect application "
@@ -134,6 +159,9 @@ let delta c v  =
     | Csrai(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
     | Csrai(None),t | Csrai(Some(_)),t  -> fail_constapp (tm_info t)
 
+    | Carity,TmConst(fi,c) -> TmConst(fi,CInt(arity c))
+    | Carity,t -> fail_constapp (tm_info t)
+
     (* MCore intrinsic: Floating-point number constant and operations *)
     | CFloat(_),t -> fail_constapp (tm_info t)
 
@@ -195,6 +223,26 @@ let val_equal v1 v2 =
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | _ -> false
 
+
+(* Convert a term into de Bruijn indices. Note that both type variables
+   and term variables are converted. The environment [env] is a list
+   type [vartype], indicating if it is a type variable (VarTy(x)) or
+   a term variable (VarTm(x)). *)
+let rec debruijn env t =
+  match t with
+  | TmVar(fi,x,_) ->
+    let rec find env n =
+      (match env with
+       | VarTm(y)::ee -> if y =. x then n else find ee (n+1)
+       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
+    in TmVar(fi,x,find env 0)
+  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
+  | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
+  | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
+  | TmConst(_,_) -> t
+  | TmFix(_) -> t
+  | TmUtest(fi,t1,t2,tnext)
+      -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
 
 

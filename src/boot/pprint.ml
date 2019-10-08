@@ -72,6 +72,7 @@ let rec pprint_const c =
   | Csrli(Some(v)) -> us(sprintf "srli(%d)" v)
   | Csrai(None) -> us"srai"
   | Csrai(Some(v)) -> us(sprintf "srai(%d)" v)
+  | Carity -> us"arity"
   (* MCore intrinsic: Floating-point number constant and operations *)
   | CFloat(v) -> us(sprintf "%f" v)
   | Caddf(None) -> us"addf"

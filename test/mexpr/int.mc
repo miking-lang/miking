@@ -34,5 +34,10 @@ utest true with eqi 10 10 in
 utest true with neqi 100 10 in       // Not equal !=
 utest true with neqi 10 20 in
 utest false with neqi 10 10 in
+utest arity with arity in            // Arity of constants
+utest arity addi with 2 in
+utest arity arity with 1 in
+utest arity subf with 2 in
+utest arity negi with 1 in
 
 nop
