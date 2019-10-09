@@ -88,6 +88,14 @@ let rec pprint_const c =
   | CChar(v) -> us"'" ^. list2ustring [v] ^. us"'"
   | CChar2int -> us"char2int"
   | CInt2char -> us"int2char"
+  (* MCore intrinsic: sequences *)
+  | CSeq(tms) -> us"[" ^. Ustring.concat (us",") (List.map pprintME tms) ^. us"]"
+  | Cmakeseq(_) -> us"makeseq"
+  | Cconcat(_) -> us"concat"
+  | Cnth(_) -> us"nth"
+  | Ccons(_) -> us"cons"
+  | Cslice(_,_) -> us"slice"
+  | Creverse -> us"reverse"
   (* MCore debug and stdio intrinsics *)
   | CDPrint -> us"dprint"
 

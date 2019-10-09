@@ -66,6 +66,14 @@ and const =
 | CChar  of int
 | CChar2int
 | CInt2char
+(* MCore intrinsic: sequences *)
+| CSeq     of tm list
+| Cmakeseq of int option
+| Cconcat  of (tm list) option
+| Cnth     of (tm list) option
+| Ccons    of tm option
+| Cslice   of (tm list) option * int option
+| Creverse
 (* MCore debug and I/O intrinsics *)
 | CDPrint
 (* TODO: CSeq *)

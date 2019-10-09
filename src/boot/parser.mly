@@ -152,6 +152,16 @@ atom:
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
+  | LSQUARE seq RSQUARE  { TmConst(mkinfo $1.i $3.i, CSeq($2)) }
+  | LSQUARE RSQUARE      { TmConst(mkinfo $1.i $2.i, CSeq([])) }
+
+
+seq:
+  | mexpr
+    { [$1] }
+  | mexpr COMMA seq
+    { $1::$3 }
+
 
 
 ty_op:

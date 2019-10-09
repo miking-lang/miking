@@ -24,6 +24,9 @@ let builtin =
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
    ("divf",Cdivf(None));("negf",Cnegf);
    ("char2int",CChar2int);("int2char",CInt2char);
+   ("makeseq",Cmakeseq(None)); ("concat",Cconcat(None));
+   ("nth",Cnth(None)); ("cons",Ccons(None));
+   ("slice",Cslice(None,None)); ("reverse",Creverse)
   ]
 
 
@@ -66,6 +69,14 @@ let arity = function
   | CChar(_)    -> 0
   | CChar2int   -> 1
   | CInt2char   -> 1
+  (* MCore intrinsic: sequences *)
+  | CSeq(_)           -> 0
+  | Cmakeseq(None)    -> 2 | Cmakeseq(Some(_)) -> 1
+  | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
+  | Cnth(None)        -> 2 | Cnth(Some(_)) -> 1
+  | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
+  | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
+  | Creverse          -> 1
   (* MCore debug and I/O intrinsics *)
   | CDPrint     -> 1
 
@@ -79,7 +90,7 @@ let fail_constapp fi = raise_error fi "Incorrect application "
    a value. This is why the returned value is evaluated in the eval() function.
    The reason for this is that if-expressions return expressions
    and not values. *)
-let delta c v  =
+let delta fi c v  =
     match c,v with
     (* MCore intrinsic: no operation *)
     | Cnop,t -> fail_constapp (tm_info t)
@@ -193,6 +204,38 @@ let delta c v  =
     | CInt2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
     | CInt2char,t -> fail_constapp (tm_info t)
 
+    (* MCore intrinsic: sequences *)
+    | CSeq(_),t -> fail_constapp (tm_info t)
+
+    | Cmakeseq(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmakeseq(Some(v)))
+    | Cmakeseq(Some(v1)),t -> TmConst(tm_info t,CSeq(List.init v1 (fun _ -> t)))
+    | Cmakeseq(None),t -> fail_constapp (tm_info t)
+
+    | Cconcat(None),TmConst(fi,CSeq(lst1)) -> TmConst(fi,Cconcat(Some(lst1)))
+    | Cconcat(Some(lst1)),TmConst(fi,CSeq(lst2)) ->
+       TmConst(fi,CSeq(List.append lst1 lst2))
+    | Cconcat(None),t | Cconcat(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cnth(None),TmConst(fi,CSeq(lst)) -> TmConst(fi,Cnth(Some(lst)))
+    | Cnth(Some(lst)),TmConst(_,CInt(n)) ->
+       (try List.nth lst n with _ -> raise_error fi "Out of bound access in sequence.")
+    | Cnth(None),t | Cnth(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
+    | Ccons(Some(t)),TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(t::lst))
+    | Ccons(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cslice(None,None),TmConst(fi,CSeq(lst)) -> TmConst(fi,Cslice(Some(lst),None))
+    | Cslice(Some(lst),None),TmConst(fi,CInt(s)) -> TmConst(fi,Cslice(Some(lst),Some(s)))
+    | Cslice(Some(lst),Some(s)),TmConst(fi,CInt(l)) ->
+       let lst2 = List.fold_left (fun (acc,n) x -> if n >= s && n < s + l
+                                                   then (x::acc,n+1) else (acc,n+1))
+                  ([],0) lst |> fst |> List.rev in TmConst(fi,CSeq(lst2))
+    | Cslice(_,_),t -> fail_constapp (tm_info t)
+
+    | Creverse,TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(List.rev lst))
+    | Creverse,t -> fail_constapp (tm_info t)
+
     (* MCore debug and stdio intrinsics *)
     | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cnop)
 
@@ -218,8 +261,11 @@ let unittest_failed fi t1 t2=
 
 
 (* Check if two value terms are equal *)
-let val_equal v1 v2 =
+let rec val_equal v1 v2 =
   match v1,v2 with
+  | TmConst(_,CSeq(lst1)), TmConst(_,CSeq(lst2)) -> (
+     List.length lst1 = List.length lst2 &&
+     List.for_all (fun (x,y) -> val_equal x y) (List.combine lst1 lst2))
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | _ -> false
 
@@ -256,12 +302,12 @@ let rec eval env t =
   | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env)
   | TmClos(_,_,_,_,_) -> t
   (* Application *)
-  | TmApp(_,t1,t2) ->
+  | TmApp(fiapp,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
        | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
-       | TmConst(_,c) -> delta c (eval env t2)
+       | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
