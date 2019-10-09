@@ -4,8 +4,6 @@
 // Test string and char primitives
 
 
-
-
 // Unicode characters
 utest 'a' with 'a' in
 utest char2int 'A' with 65 in
@@ -15,6 +13,16 @@ utest int2char 97 with 'a' in
 utest int2char 252 with 'ü' in
 utest int2char 28246 with '湖' in
 
+//string construction
+utest "word" with "word" in
+utest "" with [] in
+utest "大衛·布羅曼" with "大衛·布羅曼" in
+
+// string operarations
+utest concat "This " "is" with "This is" in
+utest nth "Hello" 1 with 'e' in
+utest slice "This is all" 3 6 with "s is a" in
+utest slice "This is all" 3 6 with ['s',' ','i','s',' ','a'] in
 
 // Nop
 utest nop with nop in
