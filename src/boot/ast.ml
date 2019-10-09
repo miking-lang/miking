@@ -95,6 +95,7 @@ and tm =
 | TmVar         of info * ustring * int               (* Variable *)
 | TmLam         of info * ustring * ty * tm           (* Lambda abstraction *)
 | TmClos        of info * ustring * ty * tm * env     (* Closure *)
+| TmLet         of info * ustring * tm * tm           (* Let *)
 | TmApp         of info * tm * tm                     (* Application *)
 | TmConst       of info * const                       (* Constant *)
 | TmFix         of info                               (* Fix point *)
@@ -123,6 +124,7 @@ let tm_info = function
   | TmVar(fi,_,_) -> fi
   | TmLam(fi,_,_,_) -> fi
   | TmClos(fi,_,_,_,_) -> fi
+  | TmLet(fi,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
   | TmFix(fi) -> fi

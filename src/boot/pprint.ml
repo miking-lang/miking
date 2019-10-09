@@ -107,7 +107,9 @@ and pprintME t =
   | TmLam(_,x,ty,t1) -> left inside ^.
       us"lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. ppt false t1 ^. right inside
   | TmClos(_,x,_,t,_) -> left inside ^. us"clos " ^. x ^. us". " ^.
-       ppt false t ^. right inside
+                           ppt false t ^. right inside
+  | TmLet(_,x,t1,t2) -> left inside ^. us"let " ^. x ^. us" = " ^. ppt false t1 ^.
+                        us" in " ^. ppt false t2 ^. right inside
   | TmApp(_,t1,t2) ->
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c

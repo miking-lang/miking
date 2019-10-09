@@ -284,6 +284,7 @@ let rec debruijn env t =
     in TmVar(fi,x,find env 0)
   | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
   | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
+  | TmLet(fi,x,t1,t2) -> TmLet(fi,x,debruijn env t1,debruijn (VarTm(x)::env) t2)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
@@ -301,6 +302,8 @@ let rec eval env t =
   (* Lambda and closure conversions *)
   | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env)
   | TmClos(_,_,_,_,_) -> t
+  (* Let *)
+  | TmLet(_,_,t1,t2) -> eval ((eval env t1)::env) t2
   (* Application *)
   | TmApp(fiapp,t1,t2) ->
       (match eval env t1 with
