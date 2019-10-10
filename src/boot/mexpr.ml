@@ -24,7 +24,7 @@ let builtin =
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
    ("divf",Cdivf(None));("negf",Cnegf);
    ("char2int",CChar2int);("int2char",CInt2char);
-   ("makeseq",Cmakeseq(None)); ("concat",Cconcat(None));
+   ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
    ("slice",Cslice(None,None)); ("reverse",Creverse)
   ]
@@ -72,6 +72,7 @@ let arity = function
   (* MCore intrinsic: sequences *)
   | CSeq(_)           -> 0
   | Cmakeseq(None)    -> 2 | Cmakeseq(Some(_)) -> 1
+  | Clength           -> 1
   | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
   | Cnth(None)        -> 2 | Cnth(Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
@@ -210,6 +211,9 @@ let delta fi c v  =
     | Cmakeseq(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmakeseq(Some(v)))
     | Cmakeseq(Some(v1)),t -> TmConst(tm_info t,CSeq(List.init v1 (fun _ -> t)))
     | Cmakeseq(None),t -> fail_constapp (tm_info t)
+
+    | Clength,TmConst(fi,CSeq(lst)) -> TmConst(fi,CInt(List.length lst))
+    | Clength,t -> fail_constapp (tm_info t)
 
     | Cconcat(None),TmConst(fi,CSeq(lst1)) -> TmConst(fi,Cconcat(Some(lst1)))
     | Cconcat(Some(lst1)),TmConst(fi,CSeq(lst2)) ->

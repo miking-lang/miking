@@ -69,6 +69,7 @@ and const =
 (* MCore intrinsic: sequences *)
 | CSeq     of tm list
 | Cmakeseq of int option
+| Clength
 | Cconcat  of (tm list) option
 | Cnth     of (tm list) option
 | Ccons    of tm option

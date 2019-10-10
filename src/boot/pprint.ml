@@ -91,6 +91,7 @@ let rec pprint_const c =
   (* MCore intrinsic: sequences *)
   | CSeq(tms) -> us"[" ^. Ustring.concat (us",") (List.map pprintME tms) ^. us"]"
   | Cmakeseq(_) -> us"makeseq"
+  | Clength -> us"length"
   | Cconcat(_) -> us"concat"
   | Cnth(_) -> us"nth"
   | Ccons(_) -> us"cons"

@@ -38,4 +38,17 @@ utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
 utest reverse [] with [] in
 
+// head and tail
+let head = lam seq. nth seq 0 in
+let tail = lam seq. slice seq 1 (length seq) in
+utest head [2,3,5] with 2 in
+utest tail [2,4,8] with [4,8] in
+
+// map
+let map = fix (lam map. lam f. lam seq.
+  if eqi (length seq) 0 then []
+  else cons (f (head seq)) (map f (tail seq))
+) in
+utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
+
 nop
