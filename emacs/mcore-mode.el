@@ -10,6 +10,7 @@
        "Lam"
        "else"
        "end"
+       "fix"
        "if"
        "in"
        "lam"
