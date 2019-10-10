@@ -224,11 +224,14 @@ mexpr:
   | left
       { $1 }
   | LET IDENT EQ mexpr IN mexpr
-    { let fi = mkinfo $1.i $5.i in
-      TmLet(fi,$2.v,$4,$6) }
+      { let fi = mkinfo $1.i $5.i in
+        TmLet(fi,$2.v,$4,$6) }
   | LAM IDENT ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,$3,$5) }
+  | IF mexpr THEN mexpr ELSE mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmIf(fi,$2,$4,$6) }
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
         TmUtest(fi,$2,$4,$6) }

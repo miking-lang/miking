@@ -113,6 +113,8 @@ and pprintME t =
   | TmApp(_,t1,t2) ->
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
+  | TmIf(_,t1,t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
+                          ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
   | TmFix(_) -> us"fix"
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   in ppt false t

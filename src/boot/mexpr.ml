@@ -287,6 +287,7 @@ let rec debruijn env t =
   | TmLet(fi,x,t1,t2) -> TmLet(fi,x,debruijn env t1,debruijn (VarTm(x)::env) t2)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
+  | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
   | TmFix(_) -> t
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
@@ -319,7 +320,14 @@ let rec eval env t =
        | _ -> failwith "Incorrect application")
   (* Constant *)
   | TmConst(_,_) | TmFix(_) -> t
-  (* The rest *)
+  (* If expression *)
+  | TmIf(_,t1,t2,t3) -> (
+    match eval env t1 with
+    | TmConst(_,CBool(true)) -> eval env t2
+    | TmConst(_,CBool(false)) -> eval env t3
+    | t -> raise_error (tm_info t) "The guard of the if expression is not a boolean value"
+  )
+  (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in

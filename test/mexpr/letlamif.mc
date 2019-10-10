@@ -8,7 +8,7 @@
 utest (lam x. addi x 2) 3 with 5 in
 utest (lam x. lam y. muli x y) 3 4 with 12 in
 
-// let
+// let expressions
 let x = 10 in
 utest x with 10 in
 
@@ -21,5 +21,15 @@ utest y with 45 in
 
 let f2 = lam x. lam y. addi x y in
 utest f2 2 3 with 5 in
+
+// if expressions
+utest if true then 1 else 2 with 1 in
+let z = 8 in
+let m = lam x. lam y. muli x y in
+utest if eqi (m 2 3) 6 then addi z 2 else 0 with 10 in
+
+// fix
+utest fix (lam x. 1) with 1 in
+
 
 nop

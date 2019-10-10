@@ -98,6 +98,7 @@ and tm =
 | TmLet         of info * ustring * tm * tm           (* Let *)
 | TmApp         of info * tm * tm                     (* Application *)
 | TmConst       of info * const                       (* Constant *)
+| TmIf          of info * tm * tm * tm                (* If expression *)
 | TmFix         of info                               (* Fix point *)
 | TmUtest       of info * tm * tm * tm
 (* TODO: TmData  of info * ustring *)
@@ -127,6 +128,7 @@ let tm_info = function
   | TmLet(fi,_,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
+  | TmIf(fi,_,_,_) -> fi
   | TmFix(fi) -> fi
   | TmUtest(fi,_,_,_) -> fi
 
