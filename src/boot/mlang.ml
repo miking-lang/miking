@@ -121,7 +121,7 @@ let translate_cases target cases =
                  k, x, handler, inner) *)
        failwith "Not implemented"
   in
-  let no_match = TmConst (NoInfo, Cnop) in (* TODO: Should throw an error *)
+  let no_match = TmConst (NoInfo, Cunit) in (* TODO: Should throw an error *)
   List.fold_right translate_case cases no_match
 
 let translate_inter l f params cases : tm -> tm =

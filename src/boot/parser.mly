@@ -239,7 +239,7 @@ atom:
   | atom DOT UINT        { TmProj(mkinfo (tm_info $1) $3.i, $1, $3.v) }
   | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
                            else TmTuple(mkinfo $1.i $3.i,$2) }
-  | LPAREN RPAREN        { TmConst($1.i, Cnop) }
+  | LPAREN RPAREN        { TmConst($1.i, Cunit) }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | FIX                  { TmFix($1.i) }

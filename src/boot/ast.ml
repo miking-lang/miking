@@ -30,40 +30,40 @@ type env = tm list
 
 
 and const =
-(* MCore intrinsic: no operation *)
-| Cnop
+(* MCore intrinsic: unit - no operation *)
+| Cunit
 (* MCore intrinsic: Boolean constant and operations *)
-| CBool of bool
+| CBool    of bool
 | Cnot
-| Cand  of bool option
-| Cor   of bool option
+| Cand     of bool option
+| Cor      of bool option
 (* MCore intrinsic: Integer constant and operations *)
-| CInt  of int
-| Caddi of int option
-| Csubi of int option
-| Cmuli of int option
-| Cdivi of int option
-| Cmodi of int option
+| CInt     of int
+| Caddi    of int option
+| Csubi    of int option
+| Cmuli    of int option
+| Cdivi    of int option
+| Cmodi    of int option
 | Cnegi
-| Clti  of int option
-| Cleqi of int option
-| Cgti  of int option
-| Cgeqi of int option
-| Ceqi  of int option
-| Cneqi of int option
-| Cslli of int option
-| Csrli of int option
-| Csrai of int option
+| Clti     of int option
+| Cleqi    of int option
+| Cgti     of int option
+| Cgeqi    of int option
+| Ceqi     of int option
+| Cneqi    of int option
+| Cslli    of int option
+| Csrli    of int option
+| Csrai    of int option
 | Carity
 (* MCore intrinsic: Floating-point number constant and operations *)
-| CFloat of float
-| Caddf  of float option
-| Csubf  of float option
-| Cmulf  of float option
-| Cdivf  of float option
+| CFloat   of float
+| Caddf    of float option
+| Csubf    of float option
+| Cmulf    of float option
+| Cdivf    of float option
 | Cnegf
 (* MCore intrinsic: characters *)
-| CChar  of int
+| CChar    of int
 | CChar2int
 | CInt2char
 (* MCore intrinsic: sequences *)
@@ -83,25 +83,25 @@ and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
 and pattern = Pattern of info * const * ustring
 and decl = (* TODO: Local? *)
-| Data  of info * ustring * cdecl list
-| Inter of info * ustring * param list * (pattern * tm) list
+| Data     of info * ustring * cdecl list
+| Inter    of info * ustring * param list * (pattern * tm) list
 
 and mlang   = Lang    of info * ustring * ustring list * decl list
 and program = Program of info * mlang list * tm
 
 (* Terms in MExpr *)
 and tm =
-| TmVar         of info * ustring * int               (* Variable *)
-| TmLam         of info * ustring * ty * tm           (* Lambda abstraction *)
-| TmClos        of info * ustring * ty * tm * env     (* Closure *)
-| TmLet         of info * ustring * tm * tm           (* Let *)
-| TmApp         of info * tm * tm                     (* Application *)
-| TmConst       of info * const                       (* Constant *)
-| TmIf          of info * tm * tm * tm                (* If expression *)
-| TmFix         of info                               (* Fix point *)
-| TmTuple       of info * tm list                     (* Tuple *)
-| TmProj        of info * tm * int                    (* Projection of tuple *)
-| TmUtest       of info * tm * tm * tm
+| TmVar    of info * ustring * int               (* Variable *)
+| TmLam    of info * ustring * ty * tm           (* Lambda abstraction *)
+| TmClos   of info * ustring * ty * tm * env     (* Closure *)
+| TmLet    of info * ustring * tm * tm           (* Let *)
+| TmApp    of info * tm * tm                     (* Application *)
+| TmConst  of info * const                       (* Constant *)
+| TmIf     of info * tm * tm * tm                (* If expression *)
+| TmFix    of info                               (* Fix point *)
+| TmTuple  of info * tm list                     (* Tuple *)
+| TmProj   of info * tm * int                    (* Projection of tuple *)
+| TmUtest  of info * tm * tm * tm                (* Unit testing *)
 (* | TmData  of info * ustring *)
 (* TODO: TmCon   of info * const * tm list *)
 (* TODO: TmMatch of info * tm * const * ustring list * tm * tm *)
@@ -109,14 +109,14 @@ and tm =
 
 (* Types *)
 and ty =
-| TyDyn                                               (* Dynamic type *)
-| TyProd  of ty list                                  (* Product type *)
-| TyUnit                                              (* Unit type *)
+| TyDyn                                           (* Dynamic type *)
+| TyProd   of ty list                             (* Product type *)
+| TyUnit                                          (* Unit type *)
 
 
 (* Variable type *)
 and vartype =
-| VarTm         of ustring
+| VarTm    of ustring
 
 
 (* No index -1 means that de Bruijn index has not yet been assigned *)

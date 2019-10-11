@@ -13,7 +13,7 @@ open Printf
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
-  [("nop",Cnop);
+  [("unit",Cunit);
    ("not",Cnot);("and",Cand(None));("or",Cor(None));
    ("addi",Caddi(None));("subi",Csubi(None));("muli",Cmuli(None));
    ("divi",Cdivi(None));("modi",Cmodi(None));("negi",Cnegi);
@@ -34,7 +34,7 @@ let builtin =
 (* Returns the number of expected arguments of a constant *)
 let arity = function
   (* MCore intrinsic: no operation *)
-  | Cnop        -> 0
+  | Cunit       -> 0
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1
@@ -93,8 +93,8 @@ let fail_constapp fi = raise_error fi "Incorrect application "
    and not values. *)
 let delta fi c v  =
     match c,v with
-    (* MCore intrinsic: no operation *)
-    | Cnop,t -> fail_constapp (tm_info t)
+    (* MCore intrinsic: unit - no operation *)
+    | Cunit,t -> fail_constapp (tm_info t)
     (* MCore boolean intrinsics *)
     | CBool(_),t -> fail_constapp (tm_info t)
 
@@ -241,7 +241,7 @@ let delta fi c v  =
     | Creverse,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
-    | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cnop)
+    | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cunit)
 
 
 (* Debug function used in the eval function *)

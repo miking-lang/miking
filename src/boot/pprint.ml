@@ -32,8 +32,8 @@ let usbool x = us (if x then "true" else "false")
 (* Pretty print constants *)
 let rec pprint_const c =
   match c with
-  (* MCore intrinsic: no operation *)
-  | Cnop -> us"()"
+  (* MCore intrinsic: unit - no operation *)
+  | Cunit -> us"()"
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | Cnot -> us"not"
