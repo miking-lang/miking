@@ -108,18 +108,21 @@ let translate_params =
   in
   List.fold_right translate_param
 
-let translate_cases target = function
-  | [] -> TmConst (NoInfo, Cnop) (* TODO: Should throw an error *)
-  | (Pattern (_, k, x), handler)::cases ->
-     let _ = k in
-     let _ = x in
-     let _ = handler in
-     let _ = target in
-     let _ = cases in
+let translate_cases target cases =
+  let translate_case case inner =
+    match case with
+    | (Pattern (_, k, x), handler) ->
+       let _ = target in
+       let _ = k in
+       let _ = x in
+       let _ = handler in
+       let _ = inner in
      (* TmMatch (NoInfo, target,
-                 k, x, handler,
-                 translate_cases target cases) *)
-     failwith "Not implemented"
+                 k, x, handler, inner) *)
+       failwith "Not implemented"
+  in
+  let no_match = TmConst (NoInfo, Cnop) in (* TODO: Should throw an error *)
+  List.fold_right translate_case cases no_match
 
 let translate_inter l f params cases : tm -> tm =
   let _ = l in
