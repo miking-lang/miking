@@ -1,7 +1,7 @@
 lang Arith
   syn Expr =
-  | Num(Dyn)
-  | Add(Dyn, Dyn)
+  | Num Dyn
+  | Add (Dyn, Dyn)
 
   sem eval =
   | Num n -> n

@@ -7,6 +7,7 @@
 
 open Ast
 open Msg
+open Ustring.Op
 
 (*******************
  * Auxiliary stuff *
@@ -86,25 +87,55 @@ let flatten = function
 (***************
  * Translation *
  ***************)
-let translate_data l d constrs : tm =
-  let _ = l in
-  let _ = d in
-  let _ = constrs in
-  failwith "Not implemented"
 
-let translate_inter l f params cases : tm =
-  let _ = l in
-  let _ = f in
-  let _ = params in
-  let _ = cases in
-  failwith "Not implemented"
+let translate_data l d =
+  let translate_constr constr inner =
+    match constr with
+    | CDecl(_, k, ty) -> (* TmData (NoInfo, k, ty, inner) *)
+       let _ = inner in
+       let _ = l in
+       let _ = d in
+       let _ = k in
+       let _ = ty in
+       failwith "Not implemented"
+  in
+  List.fold_right translate_constr
 
-let translate_decl l = function
-  | Data (_, d, constrs) -> translate_data l d constrs
+let translate_params =
+  let translate_param p base =
+    match p with
+    | Param(_, x, ty) -> TmLam (NoInfo, x, ty, base)
+  in
+  List.fold_right translate_param
+
+let translate_cases target = function
+  | [] -> TmConst (NoInfo, Cnop) (* TODO: Should throw an error *)
+  | (Pattern (_, k, x), handler)::cases ->
+     let _ = k in
+     let _ = x in
+     let _ = handler in
+     let _ = target in
+     let _ = cases in
+     (* TmMatch (NoInfo, target,
+                 k, x, handler,
+                 translate_cases target cases) *)
+     failwith "Not implemented"
+
+let translate_inter l f params cases : tm -> tm =
+  let _ = l in
+  let target = us"_" in
+  let mtch = TmLam (NoInfo, target, TyDyn, translate_cases target cases) in
+  let wrapped_match = translate_params params mtch in
+  let recursive_fn = TmApp (NoInfo, TmFix NoInfo,
+                            TmLam (NoInfo, f, TyDyn, wrapped_match)) in
+  fun cont -> TmLet (NoInfo, f, recursive_fn, cont)
+
+let translate_decl l : decl -> tm -> tm = function
+  | Data (_, d, constrs) -> fun inner -> translate_data l d constrs inner
   | Inter (_, f, params, cases) -> translate_inter l f params cases
 
-let translate_lang = function
+let translate_lang : mlang -> (tm -> tm) list = function
   | Lang (_, l, _, decls) -> List.map (translate_decl l) decls
 
 let translate = function
-  | Program(_, langs, e) -> let _ = langs in e
+  | Program(_, langs, e) -> let _ = langs (* List.map translate_lang langs *) in e
