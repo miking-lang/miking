@@ -52,7 +52,6 @@
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> BIGLAM
 %token <unit Ast.tokendata> ALL
-%token <unit Ast.tokendata> NOP
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> IFEXP
 %token <unit Ast.tokendata> COMPOSE
@@ -246,10 +245,12 @@ left:
 
 
 atom:
-  | LPAREN mexpr RPAREN   { $2 }
+  | atom DOT UINT        { TmProj(mkinfo (tm_info $1) $3.i, $1, $3.v) }
+  | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
+                           else TmTuple(mkinfo $1.i $3.i,$2) }
+  | LPAREN RPAREN        { TmConst($1.i, Cnop) }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
-  | NOP                  { TmConst($1.i, Cnop) }
   | FIX                  { TmFix($1.i) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }

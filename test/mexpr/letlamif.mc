@@ -45,4 +45,4 @@ utest fact 1 with 1 in
 utest fact 3 with 6 in
 utest fact 8 with 40320 in
 
-nop
+()

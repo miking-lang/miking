@@ -77,8 +77,6 @@ and const =
 | Creverse
 (* MCore debug and I/O intrinsics *)
 | CDPrint
-(* TODO: CSeq *)
-(* TODO: CData *)
 
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty list
@@ -101,8 +99,10 @@ and tm =
 | TmConst       of info * const                       (* Constant *)
 | TmIf          of info * tm * tm * tm                (* If expression *)
 | TmFix         of info                               (* Fix point *)
+| TmTuple       of info * tm list                     (* Tuple *)
+| TmProj        of info * tm * int                    (* Projection of tuple *)
 | TmUtest       of info * tm * tm * tm
-(* TODO: TmData  of info * ustring *)
+(* | TmData  of info * ustring *)
 (* TODO: TmCon   of info * const * tm list *)
 (* TODO: TmMatch of info * tm * const * ustring list * tm * tm *)
 
@@ -131,6 +131,8 @@ let tm_info = function
   | TmConst(fi,_) -> fi
   | TmIf(fi,_,_,_) -> fi
   | TmFix(fi) -> fi
+  | TmTuple(fi,_) -> fi
+  | TmProj(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
 
 

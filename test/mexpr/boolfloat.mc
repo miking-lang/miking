@@ -29,4 +29,4 @@ utest 2.2 with mulf 1.1 2.0 in
 utest 10.2 with divf 20.4 2.0 in
 utest negf 2.2 with negf 2.2 in
 
-nop
+()

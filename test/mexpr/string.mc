@@ -25,6 +25,6 @@ utest slice "This is all" 3 6 with "s is a" in
 utest slice "This is all" 3 6 with ['s',' ','i','s',' ','a'] in
 
 // Nop
-utest nop with nop in
+utest () with () in
 
-nop
+()

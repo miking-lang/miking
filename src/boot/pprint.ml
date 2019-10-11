@@ -33,7 +33,7 @@ let usbool x = us (if x then "true" else "false")
 let rec pprint_const c =
   match c with
   (* MCore intrinsic: no operation *)
-  | Cnop -> us"nop"
+  | Cnop -> us"()"
   (* MCore Intrinsic Booleans *)
   | CBool(b) -> if b then us"true" else us"false"
   | Cnot -> us"not"
@@ -117,6 +117,8 @@ and pprintME t =
   | TmIf(_,t1,t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
                           ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
   | TmFix(_) -> us"fix"
+  | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
+  | TmProj(_,t,n) -> left inside ^. ppt false t  ^. us"." ^. ustring_of_int n ^. right inside
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   in ppt false t
 

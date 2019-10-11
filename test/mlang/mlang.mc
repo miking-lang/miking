@@ -22,4 +22,4 @@ lang ArithBool2 = Arith + Bool
   | IsZero(Dyn)
 end
 
-nop
+()

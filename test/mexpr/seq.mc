@@ -52,7 +52,7 @@ let map = fix (lam map. lam f. lam seq.
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
 utest map (lam x. addi x 1) [] with [] in
 
-// foldr
+// foldl
 let foldl = fix (lam foldl. lam f. lam acc. lam seq.
     if eqi (length seq) 0 then acc
     else foldl f (f acc (head seq)) (tail seq)
@@ -72,4 +72,4 @@ utest zipwith (zipwith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] in
 utest zipwith addi [] [] with [] in
 
-nop
+()
