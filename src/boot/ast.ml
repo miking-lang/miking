@@ -81,9 +81,9 @@ and const =
 (* TODO: CData *)
 
 (* Terms in MLang *)
-and cdecl   = CDecl   of info * ustring * ty list
+and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
-and pattern = Pattern of info * const * ustring list
+and pattern = Pattern of info * const * ustring
 and decl = (* TODO: Local? *)
 | Data  of info * ustring * cdecl list
 | Inter of info * ustring * param list * (pattern * tm) list
@@ -110,6 +110,8 @@ and tm =
 (* Types *)
 and ty =
 | TyDyn                                               (* Dynamic type *)
+| TyProd  of ty list                                  (* Product type *)
+| TyUnit                                              (* Unit type *)
 
 
 (* Variable type *)

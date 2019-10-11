@@ -130,6 +130,9 @@ and pprint_ty ty =
   let ppt ty =
   match ty with
   | TyDyn -> us"Dyn"
+  | TyProd tys ->
+     us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
+  | TyUnit -> us"()"
   in
     ppt ty
 

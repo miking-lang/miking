@@ -180,15 +180,10 @@ constr:
       CDecl(fi, $2.v, $3) }
 
 constr_params:
-  | LPAREN type_list RPAREN
-    { $2 }
-  |
-    { [] }
-type_list:
-  | ty COMMA type_list
-    { $1 :: $3 }
   | ty
-    { [$1] }
+    { $1 }
+  |
+    { TyUnit }
 
 params:
   | LPAREN IDENT COLON ty RPAREN params
@@ -203,20 +198,16 @@ cases:
   |
     { [] }
 case:
-  | BAR IDENT binders ARROW mexpr
+  | BAR IDENT binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
       Pattern (fi, Cnot, $3), $5 } // TODO: Constant for data constructor
-binders:
-  | LPAREN name_list RPAREN
-    { $2 }
-
-  |
-    { [] }
-name_list:
-  | IDENT COMMA name_list
-    { $1.v :: $3 }
+binder:
+  | LPAREN IDENT RPAREN
+    { $2.v }
   | IDENT
-    { [$1.v] }
+    { $1.v }
+  |
+    { us"_" } // TODO: How to handle "empty" case?
 
 /// Expression language ///////////////////////////////
 
@@ -282,10 +273,19 @@ ty:
 
 
 ty_atom:
+  | LPAREN RPAREN
+      { TyUnit }
   | LPAREN ty RPAREN
       { $2 }
+  | LPAREN ty COMMA ty_list RPAREN
+      { TyProd ($2::$4) }
   | IDENT
       {match Ustring.to_utf8 $1.v with
        | "Dyn" -> TyDyn
        | _ -> failwith "Unknown type"
       }
+ty_list:
+  | ty COMMA ty_list
+    { $1 :: $3 }
+  | ty
+    { [$1] }
