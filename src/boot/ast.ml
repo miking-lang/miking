@@ -77,6 +77,7 @@ and const =
 | Creverse
 (* MCore debug and I/O intrinsics *)
 | CDPrint
+| Cerror
 
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty

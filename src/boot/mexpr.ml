@@ -26,7 +26,8 @@ let builtin =
    ("char2int",CChar2int);("int2char",CInt2char);
    ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
-   ("slice",Cslice(None,None)); ("reverse",Creverse)
+   ("slice",Cslice(None,None)); ("reverse",Creverse);
+   ("error",Cerror)
   ]
 
 
@@ -80,6 +81,7 @@ let arity = function
   | Creverse          -> 1
   (* MCore debug and I/O intrinsics *)
   | CDPrint     -> 1
+  | Cerror      -> 1
 
 
 
@@ -242,6 +244,12 @@ let delta fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cunit)
+    | Cerror, TmConst(_,CSeq(lst)) ->
+       let lst2 = List.map (fun x ->
+                      match x with | TmConst(_,CChar(i)) -> i
+                                   | _ -> raise_error (tm_info x) "Term is not a string") lst in
+       (uprint_endline ((us"ERROR: ") ^. (list2ustring lst2)); exit 1)
+    | Cerror,t -> fail_constapp (tm_info t)
 
 
 (* Debug function used in the eval function *)

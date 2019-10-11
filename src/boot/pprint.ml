@@ -99,6 +99,7 @@ let rec pprint_const c =
   | Creverse -> us"reverse"
   (* MCore debug and stdio intrinsics *)
   | CDPrint -> us"dprint"
+  | Cerror -> us"error"
 
 (* Pretty print a term. *)
 and pprintME t =

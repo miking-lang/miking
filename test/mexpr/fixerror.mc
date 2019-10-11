@@ -21,4 +21,8 @@ utest even odd 27 with false in
 utest odd even 41 with true in
 utest odd even 42 with false in
 
-nop
+
+// Errors (cannot execute the actual error in the test suite)
+utest if false then error "message" else 0 with 0 in
+
+()
