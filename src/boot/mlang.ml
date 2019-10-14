@@ -108,7 +108,7 @@ let translate_params =
   in
   List.fold_right translate_param
 
-let translate_cases target cases =
+let translate_cases f target cases =
   let translate_case case inner =
     match case with
     | (Pattern (_, k, x), handler) ->
@@ -121,13 +121,18 @@ let translate_cases target cases =
                  k, x, handler, inner) *)
        failwith "Not implemented"
   in
-  let no_match = TmConst (NoInfo, Cunit) in (* TODO: Should throw an error *)
+  let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
+            (ustring2list (us"No matching case for function " ^. f))
+  in
+  let no_match =
+    TmApp (NoInfo, TmConst (NoInfo, Cerror), TmConst(NoInfo, CSeq msg))
+  in
   List.fold_right translate_case cases no_match
 
 let translate_inter l f params cases : tm -> tm =
   let _ = l in
   let target = us"_" in
-  let mtch = TmLam (NoInfo, target, TyDyn, translate_cases target cases) in
+  let mtch = TmLam (NoInfo, target, TyDyn, translate_cases f target cases) in
   let wrapped_match = translate_params params mtch in
   let recursive_fn = TmApp (NoInfo, TmFix NoInfo,
                             TmLam (NoInfo, f, TyDyn, wrapped_match)) in
