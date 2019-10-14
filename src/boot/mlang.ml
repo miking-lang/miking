@@ -23,21 +23,34 @@ let constr_compare decl1 decl2 =
 (** This code currently executes with the following assumptions
    (some of which should be fixed):
 
-  - If two constructor names are the same, they have the same
-   parameter types
-
   - If two constructor names are the same, they belong to the same
    datatype
 
   - Two interpreters being merged have the same return type
 *)
 
+let check_matching_constrs info constrs =
+  let check_matching_constr = function
+    | CDecl(_, c, ty) ->
+       let matching_constr = function
+       | CDecl(_, c', _) -> c = c'
+       in
+       match List.find_opt matching_constr constrs with
+       | Some (CDecl(_, _, ty')) ->
+          if not (ty = ty')
+          then raise_error info
+                 ("Conflicting parameter types for constructor '"^
+                  Ustring.to_utf8 c^"'")
+       | None -> ()
+  in
+  List.iter check_matching_constr
+
 let rec merge_data d constrs = function
   | [] -> [Data(NoInfo, d, constrs)]
   | Data(info', d', constrs')::decls when d = d' ->
-     let unique_constrs = List.sort_uniq constr_compare (constrs@constrs') in
-     (* TODO: Assumes arguments are the same *)
-     Data(info', d, unique_constrs)::decls
+       check_matching_constrs info' constrs constrs';
+       let unique_constrs = List.sort_uniq constr_compare (constrs@constrs') in
+       Data(info', d, unique_constrs)::decls
   | decl::decls ->
      decl::merge_data d constrs decls
 
