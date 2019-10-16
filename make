@@ -14,8 +14,11 @@ set -e
 
 # General function for building the project
 buildboot(){
-    (cd src/preboot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/preboot)
     (cd src/boot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
+}
+
+buildpreboot(){
+    (cd src/preboot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/preboot)
 }
 
 case $1 in
@@ -23,11 +26,16 @@ case $1 in
     test)
         buildboot
         cd test
+        ../build/boot test mexpr
+        ../build/boot test mlang
+        ;;
+    # Run the test suite
+    pretest)
+        buildpreboot
+        cd test
         ../build/preboot test mcore
         ../build/preboot tytest tymcore
         ../build/preboot parsetest parse
-        ../build/boot test mexpr
-        ../build/boot test mlang
         ;;
     # Clean up the project
     clean)
