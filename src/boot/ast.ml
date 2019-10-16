@@ -62,6 +62,12 @@ and const =
 | Cmulf    of float option
 | Cdivf    of float option
 | Cnegf
+| Cltf     of float option
+| Cleqf    of float option
+| Cgtf     of float option
+| Cgeqf    of float option
+| Ceqf     of float option
+| Cneqf    of float option
 (* MCore intrinsic: characters *)
 | CChar    of int
 | CChar2int
