@@ -3,7 +3,6 @@
 //
 // Test integer primitives
 
-
 // Constructor construction
 data K1 in
 data K2 in
@@ -20,10 +19,10 @@ let f = lam x.
      let n = t.1 in
      (n,s)
    else
-   match x with Bar b then addi b 5 else
-   "b" in
-utest f (Foo("a",1))  with (1,"a") in
-utest f (Bar 10) with 15 in
+   match x with Bar b then (addi b 5, "b") else
+   (negi 1, "b") in
+utest f (Foo("a",1)) with (1, "a") in
+utest f (Bar 10) with (15, "b") in
 
 
 ()
