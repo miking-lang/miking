@@ -126,6 +126,7 @@ and pprintME t =
   | TmIf(_,t1,t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
                           ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
   | TmFix(_) -> us"fix"
+  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
   | TmProj(_,t,n) -> left inside ^. ppt false t  ^. us"." ^. ustring_of_int n ^. right inside
   | TmData(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.

@@ -109,6 +109,7 @@ and tm =
 | TmConst  of info * const                                  (* Constant *)
 | TmIf     of info * tm * tm * tm                           (* If expression *)
 | TmFix    of info                                          (* Fix point *)
+| TmSeq    of info * tm list                                (* Sequence *)
 | TmTuple  of info * tm list                                (* Tuple *)
 | TmProj   of info * tm * int                               (* Projection of tuple *)
 | TmData   of info * ustring * ty * tm                      (* Data constructor definition *)
@@ -148,6 +149,7 @@ let tm_info = function
   | TmConst(fi,_) -> fi
   | TmIf(fi,_,_,_) -> fi
   | TmFix(fi) -> fi
+  | TmSeq(fi,_) -> fi
   | TmTuple(fi,_) -> fi
   | TmProj(fi,_,_) -> fi
   | TmData(fi,_,_,_) -> fi

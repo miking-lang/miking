@@ -333,6 +333,7 @@ let rec debruijn env t =
   | TmConst(_,_) -> t
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
   | TmFix(_) -> t
+  | TmSeq(fi,tms) -> TmSeq(fi,List.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
   | TmProj(fi,t,n) -> TmProj(fi,debruijn env t,n)
   | TmData(fi,x,ty,t) -> TmData(fi,x,ty,debruijn (VarTm(x)::env) t)
@@ -382,6 +383,8 @@ let rec eval env t =
     | TmConst(_,CBool(false)) -> eval env t3
     | t -> raise_error (tm_info t) "The guard of the if expression is not a boolean value"
   )
+  (* Sequences *)
+  | TmSeq(fi,tms) -> TmConst(fi,CSeq(List.map (eval env) tms))
   (* Tuples and projection *)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   | TmProj(fi,t,n) ->

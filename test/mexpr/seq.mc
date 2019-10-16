@@ -22,6 +22,7 @@ utest concat ['a','b'] [] with ['a','b'] in
 // nth lst n
 utest nth [1,3,9] 2 with 9 in
 utest nth [5] 0 with 5 in
+utest nth [5,addi 2 3] 1 with 5 in
 
 // cons x xs
 utest cons 1 [8,10] with [1,8,10] in
