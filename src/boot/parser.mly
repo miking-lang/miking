@@ -222,6 +222,12 @@ mexpr:
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmIf(fi,$2,$4,$6) }
+  | DATA IDENT ty_op IN mexpr
+      { let fi = mkinfo $1.i $4.i in
+        TmData(fi,$2.v,$3,$5)}
+  | MATCH mexpr WITH IDENT IDENT THEN mexpr ELSE mexpr
+      { let fi = mkinfo $1.i $8.i in
+         TmMatch(fi,$2,$4.v,noidx,$5.v,$7,$9) }
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
         TmUtest(fi,$2,$4,$6) }
@@ -251,6 +257,8 @@ atom:
                                              TmConst($1.i,CChar(x))) (ustring2list $1.v))) }
   | LSQUARE seq RSQUARE  { TmConst(mkinfo $1.i $3.i, CSeq($2)) }
   | LSQUARE RSQUARE      { TmConst(mkinfo $1.i $2.i, CSeq([])) }
+
+
 
 
 seq:

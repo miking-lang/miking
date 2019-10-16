@@ -280,22 +280,21 @@ let rec val_equal v1 v2 =
      List.for_all (fun (x,y) -> val_equal x y) (List.combine lst1 lst2))
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
-       List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
+     List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
+  | TmCon(_,_,sym1,None),TmCon(_,_,sym2,None) ->sym1 = sym2
+  | TmCon(_,_,sym1,Some(v1)),TmCon(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
 
-(* Convert a term into de Bruijn indices. Note that both type variables
-   and term variables are converted. The environment [env] is a list
-   type [vartype], indicating if it is a type variable (VarTy(x)) or
-   a term variable (VarTm(x)). *)
+(* Convert a term into de Bruijn indices. *)
 let rec debruijn env t =
+  let rec find fi env n x =
+    (match env with
+     | VarTm(y)::ee -> if y =. x then n else find fi ee (n+1) x
+     | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
+  in
   match t with
-  | TmVar(fi,x,_) ->
-    let rec find env n =
-      (match env with
-       | VarTm(y)::ee -> if y =. x then n else find ee (n+1)
-       | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
-    in TmVar(fi,x,find env 0)
+  | TmVar(fi,x,_) -> TmVar(fi,x,find fi env 0 x)
   | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
   | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
   | TmLet(fi,x,t1,t2) -> TmLet(fi,x,debruijn env t1,debruijn (VarTm(x)::env) t2)
@@ -305,6 +304,12 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
   | TmProj(fi,t,n) -> TmProj(fi,debruijn env t,n)
+  | TmData(fi,x,ty,t) -> TmData(fi,x,ty,debruijn (VarTm(x)::env) t)
+  | TmCon(fi,x,sym,tmop) ->
+     TmCon(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
+  | TmMatch(fi,t1,cx,_,y,t2,t3) ->
+     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,y,
+             debruijn (VarTm(y)::env) t2, debruijn env t3)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
@@ -328,13 +333,16 @@ let rec eval env t =
        | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::env2) t3
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta fiapp c (eval env t2)
+       (* Constructor application *)
+       | TmCon(fi,x,sym,None) -> TmCon(fi,x,sym,Some(eval env t2))
+       | TmCon(fi,_,_,Some(_)) -> raise_error fi "Cannot apply constructor more than once"
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
          | TmClos(fi,_,_,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
-         | _ -> failwith "Incorrect CFix")
-       | _ -> failwith "Incorrect application")
-  (* Constant *)
+         | _ -> raise_error (tm_info t1) "Incorrect CFix")
+       | _ -> raise_error fiapp "Incorrect application")
+  (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* If expression *)
   | TmIf(_,t1,t2,t3) -> (
@@ -343,12 +351,21 @@ let rec eval env t =
     | TmConst(_,CBool(false)) -> eval env t3
     | t -> raise_error (tm_info t) "The guard of the if expression is not a boolean value"
   )
+  (* Tuples and projection *)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   | TmProj(fi,t,n) ->
      (match eval env t with
       | TmTuple(_,vs) -> (try List.nth vs n
                           with _ -> raise_error fi "Tuple projection is out of bound.")
       | _ -> raise_error fi "Cannot project from term. The term is not a tuple.")
+  (* Data constructors and match *)
+  | TmData(fi,x,_,t) -> eval ((gencon fi x)::env) t
+  | TmCon(_,_,_,_) as tm -> tm
+  | TmMatch(fi,t1,_,n,_,t2,t3) ->
+     (match eval env t1, List.nth env n with
+      | TmCon(_,_,sym1,Some(v)), TmCon(_,_,sym2,_) ->
+         if sym1 = sym2 then eval (v::env) t2 else eval env t3
+      | _,_ -> raise_error fi "Invalid match")
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin

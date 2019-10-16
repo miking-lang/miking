@@ -79,6 +79,9 @@ and const =
 | CDPrint
 | Cerror
 
+(* Names *)
+and sym = int
+
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
@@ -92,20 +95,20 @@ and program = Program of info * mlang list * tm
 
 (* Terms in MExpr *)
 and tm =
-| TmVar    of info * ustring * int               (* Variable *)
-| TmLam    of info * ustring * ty * tm           (* Lambda abstraction *)
-| TmClos   of info * ustring * ty * tm * env     (* Closure *)
-| TmLet    of info * ustring * tm * tm           (* Let *)
-| TmApp    of info * tm * tm                     (* Application *)
-| TmConst  of info * const                       (* Constant *)
-| TmIf     of info * tm * tm * tm                (* If expression *)
-| TmFix    of info                               (* Fix point *)
-| TmTuple  of info * tm list                     (* Tuple *)
-| TmProj   of info * tm * int                    (* Projection of tuple *)
-| TmUtest  of info * tm * tm * tm                (* Unit testing *)
-(* | TmData  of info * ustring *)
-(* TODO: TmCon   of info * const * tm list *)
-(* TODO: TmMatch of info * tm * const * ustring list * tm * tm *)
+| TmVar    of info * ustring * int                          (* Variable *)
+| TmLam    of info * ustring * ty * tm                      (* Lambda abstraction *)
+| TmClos   of info * ustring * ty * tm * env                (* Closure *)
+| TmLet    of info * ustring * tm * tm                      (* Let *)
+| TmApp    of info * tm * tm                                (* Application *)
+| TmConst  of info * const                                  (* Constant *)
+| TmIf     of info * tm * tm * tm                           (* If expression *)
+| TmFix    of info                                          (* Fix point *)
+| TmTuple  of info * tm list                                (* Tuple *)
+| TmProj   of info * tm * int                               (* Projection of tuple *)
+| TmData   of info * ustring * ty * tm                      (* Data constructor definition *)
+| TmCon    of info * ustring * sym * tm option              (* Constructed data *)
+| TmMatch  of info * tm * ustring * int * ustring * tm * tm (* Match data *)
+| TmUtest  of info * tm * tm * tm                           (* Unit testing *)
 
 
 (* Types *)
@@ -123,6 +126,10 @@ and vartype =
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
+(* Creation and handling of constructors and symbol generation *)
+let symno = ref 0
+let gencon fi x = symno := !symno + 1; TmCon(fi,x,!symno,None)
+
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -136,6 +143,9 @@ let tm_info = function
   | TmFix(fi) -> fi
   | TmTuple(fi,_) -> fi
   | TmProj(fi,_,_) -> fi
+  | TmData(fi,_,_,_) -> fi
+  | TmCon(fi,_,_,_) -> fi
+  | TmMatch(fi,_,_,_,_,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
 
 

@@ -8,6 +8,7 @@
 (setq mcore-keywords
      '(
        "Lam"
+       "data"
        "else"
        "end"
        "fix"
