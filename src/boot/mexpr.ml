@@ -409,11 +409,11 @@ let rec eval env t =
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* If expression *)
-  | TmIf(_,t1,t2,t3) -> (
+  | TmIf(fi,t1,t2,t3) -> (
     match eval env t1 with
     | TmConst(_,CBool(true)) -> eval env t2
     | TmConst(_,CBool(false)) -> eval env t3
-    | t -> raise_error (tm_info t) "The guard of the if expression is not a boolean value"
+    | _ -> raise_error fi "The guard of the if expression is not a boolean value"
   )
   (* Sequences *)
   | TmSeq(fi,tms) -> TmConst(fi,CSeq(List.map (eval env) tms))
