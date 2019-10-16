@@ -84,6 +84,18 @@ let rec pprint_const c =
   | Cdivf(None) -> us"divf"
   | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
   | Cnegf -> us"negf"
+  | Cltf(None) -> us"ltf"
+  | Cltf(Some(v)) -> us(sprintf "ltf(%f)" v)
+  | Cleqf(None) -> us"leqf"
+  | Cleqf(Some(v)) -> us(sprintf "leqf(%f)" v)
+  | Cgtf(None) -> us"gtf"
+  | Cgtf(Some(v)) -> us(sprintf "gtf(%f)" v)
+  | Cgeqf(None) -> us"geqf"
+  | Cgeqf(Some(v)) -> us(sprintf "geqf(%f)" v)
+  | Ceqf(None) -> us"eqf"
+  | Ceqf(Some(v)) -> us(sprintf "eqf(%f)" v)
+  | Cneqf(None) -> us"neqf"
+  | Cneqf(Some(v)) -> us(sprintf "neqf(%f)" v)
   (* MCore intrinsic: characters *)
   | CChar(v) -> us"'" ^. list2ustring [v] ^. us"'"
   | CChar2int -> us"char2int"

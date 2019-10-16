@@ -23,6 +23,8 @@ let builtin =
    ("arity",Carity);
    ("addf",Caddf(None));("subf",Csubf(None));("mulf",Cmulf(None));
    ("divf",Cdivf(None));("negf",Cnegf);
+   ("ltf",Cltf(None));("leqf",Cleqf(None));("gtf",Cgtf(None));("geqf",Cgeqf(None));
+   ("eqf",Ceqf(None));("neqf",Cneqf(None));
    ("char2int",CChar2int);("int2char",CInt2char);
    ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
@@ -72,6 +74,12 @@ let arity = function
   | Cmulf(None) -> 2  | Cmulf(Some(_)) -> 1
   | Cdivf(None) -> 2  | Cdivf(Some(_)) -> 1
   | Cnegf       -> 1
+  | Cltf(None)  -> 2  | Cltf(Some(_))  -> 1
+  | Cleqf(None) -> 2  | Cleqf(Some(_)) -> 1
+  | Cgtf(None)  -> 2  | Cgtf(Some(_))  -> 1
+  | Cgeqf(None) -> 2  | Cgeqf(Some(_)) -> 1
+  | Ceqf(None)  -> 2  | Ceqf(Some(_))  -> 1
+  | Cneqf(None) -> 2  | Cneqf(Some(_)) -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
   | CChar2int   -> 1
@@ -208,6 +216,30 @@ let delta fi c v  =
 
     | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
     | Cnegf,t -> fail_constapp (tm_info t)
+
+    | Cltf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cltf(Some(v)))
+    | Cltf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 < v2))
+    | Cltf(None),t | Cltf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cleqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cleqf(Some(v)))
+    | Cleqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <= v2))
+    | Cleqf(None),t | Cleqf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cgtf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cgtf(Some(v)))
+    | Cgtf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 > v2))
+    | Cgtf(None),t | Cgtf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cgeqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cgeqf(Some(v)))
+    | Cgeqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 >= v2))
+    | Cgeqf(None),t | Cgeqf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Ceqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Ceqf(Some(v)))
+    | Ceqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqf(None),t | Ceqf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
+    | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
+    | Cneqf(None),t | Cneqf(Some(_)),t  -> fail_constapp (tm_info t)
 
     (* MCore intrinsic: characters *)
     | CChar(_),t -> fail_constapp (tm_info t)
