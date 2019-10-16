@@ -76,8 +76,12 @@ and const =
 | Cslice   of (tm list) option * int option
 | Creverse
 (* MCore debug and I/O intrinsics *)
-| CDPrint
+| Cprint
+| Cdprint
+(*| CReadfile of ustring option
+| CWritefile of ustring option *)
 | Cerror
+
 
 (* Names *)
 and sym = int

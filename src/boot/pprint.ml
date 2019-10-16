@@ -98,7 +98,8 @@ let rec pprint_const c =
   | Cslice(_,_) -> us"slice"
   | Creverse -> us"reverse"
   (* MCore debug and stdio intrinsics *)
-  | CDPrint -> us"dprint"
+  | Cprint -> us"print"
+  | Cdprint -> us"dprint"
   | Cerror -> us"error"
 
 (* Pretty print a term. *)

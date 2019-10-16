@@ -27,6 +27,11 @@ let builtin =
    ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
    ("slice",Cslice(None,None)); ("reverse",Creverse);
+   ("print",Cprint);("dprint",Cdprint);
+   ("argv",CSeq(Sys.argv |> Array.to_list |>
+                  List.map (fun s ->
+                      TmConst(NoInfo,CSeq(s |> us |> ustring2list |>
+                                            List.map (fun x->TmConst(NoInfo,CChar(x))))))));
    ("error",Cerror)
   ]
 
@@ -80,7 +85,8 @@ let arity = function
   | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
   (* MCore debug and I/O intrinsics *)
-  | CDPrint     -> 1
+  | Cprint      -> 1
+  | Cdprint     -> 1
   | Cerror      -> 1
 
 
@@ -243,7 +249,13 @@ let delta fi c v  =
     | Creverse,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
-    | CDPrint, t -> uprint_endline (pprintME t);TmConst(NoInfo,Cunit)
+    | Cprint, TmConst(fi,CSeq(seq)) ->
+        printf "%s" (seq |> List.map
+                            (fun x -> match x with | TmConst(_,CChar(n)) -> n
+                                                   | _ -> raise_error fi "Not only characters")
+                   |> list2ustring |> Ustring.to_utf8);TmConst(NoInfo,Cunit)
+    | Cprint, t -> raise_error (tm_info t) "The argument to print must be a string"
+    | Cdprint, t -> printf "%s" (pprintME t |> Ustring.to_utf8);TmConst(NoInfo,Cunit)
     | Cerror, TmConst(_,CSeq(lst)) ->
        let lst2 = List.map (fun x ->
                       match x with | TmConst(_,CChar(i)) -> i
