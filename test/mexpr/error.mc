@@ -12,4 +12,7 @@ utest if false then print "message\n" else 0 with 0 in
 // Test debug print (cannot execute actual printing)
 utest if false then dprint "message\n" else 0 with 0 in
 
+// Test argv
+utest slice argv 1 2 with ["test","mexpr"] in
+
 ()

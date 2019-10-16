@@ -78,8 +78,8 @@ and const =
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
-(*| CReadfile of ustring option
-| CWritefile of ustring option *)
+(*| Creadfile of ustring option
+| Cwritefile of ustring option *)
 | Cerror
 
 
