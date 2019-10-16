@@ -27,6 +27,8 @@ let constr_compare decl1 decl2 =
    datatype
 
   - Two interpreters being merged have the same return type
+
+  - Interpreters are not mutually recursive
 *)
 
 let check_matching_constrs info constrs =
@@ -101,16 +103,10 @@ let flatten = function
  * Translation *
  ***************)
 
-let translate_data l d =
+let translate_data =
   let translate_constr constr inner =
     match constr with
-    | CDecl(_, k, ty) -> (* TmData (NoInfo, k, ty, inner) *)
-       let _ = inner in
-       let _ = l in
-       let _ = d in
-       let _ = k in
-       let _ = ty in
-       failwith "Not implemented"
+    | CDecl(_, k, ty) -> TmData (NoInfo, k, ty, inner)
   in
   List.fold_right translate_constr
 
@@ -125,14 +121,8 @@ let translate_cases f target cases =
   let translate_case case inner =
     match case with
     | (Pattern (_, k, x), handler) ->
-       let _ = target in
-       let _ = k in
-       let _ = x in
-       let _ = handler in
-       let _ = inner in
-     (* TmMatch (NoInfo, target,
-                 k, x, handler, inner) *)
-       failwith "Not implemented"
+      TmMatch (NoInfo, target,
+               k, -1, x, handler, inner)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
             (ustring2list (us"No matching case for function " ^. f))
@@ -142,21 +132,26 @@ let translate_cases f target cases =
   in
   List.fold_right translate_case cases no_match
 
-let translate_inter l f params cases : tm -> tm =
-  let _ = l in
-  let target = us"_" in
-  let mtch = TmLam (NoInfo, target, TyDyn, translate_cases f target cases) in
+let translate_inter f params cases : tm -> tm =
+  let target_name = us"_" in
+  let target = TmVar(NoInfo, target_name, -1) in
+  let mtch =
+    TmLam (NoInfo, target_name, TyDyn, translate_cases f target cases) in
   let wrapped_match = translate_params params mtch in
   let recursive_fn = TmApp (NoInfo, TmFix NoInfo,
                             TmLam (NoInfo, f, TyDyn, wrapped_match)) in
-  fun cont -> TmLet (NoInfo, f, recursive_fn, cont)
+  fun inner -> TmLet (NoInfo, f, recursive_fn, inner)
 
-let translate_decl l : decl -> tm -> tm = function
-  | Data (_, d, constrs) -> fun inner -> translate_data l d constrs inner
-  | Inter (_, f, params, cases) -> translate_inter l f params cases
+let translate_decl : decl -> tm -> tm = function
+  | Data (_, _, constrs) -> fun inner -> translate_data constrs inner
+  | Inter (_, f, params, cases) -> translate_inter f params cases
 
 let translate_lang : mlang -> (tm -> tm) list = function
-  | Lang (_, l, _, decls) -> List.map (translate_decl l) decls
+  | Lang (_, _, _, decls) -> List.map translate_decl decls
+
+let translate_langs langs main =
+  let translated = List.concat (List.map translate_lang langs) in
+  List.fold_right (@@) translated main
 
 let translate = function
-  | Program(_, langs, e) -> let _ = langs (* List.map translate_lang langs *) in e
+  | Program(_, langs, e) -> translate_langs langs e

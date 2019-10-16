@@ -6,9 +6,9 @@ lang Arith
   sem eval =
   | Num n -> n
   | Add(t) ->
-    let e1 = t in
-    let e2 = t in
-    iadd (eval e1) (eval e2)
+    let e1 = t.0 in
+    let e2 = t.1 in
+    addi (eval e1) (eval e2)
 end
 
 lang Bool
@@ -18,12 +18,12 @@ lang Bool
   | If(Dyn, Dyn, Dyn)
 
   sem eval =
-  | True -> true
-  | False -> false
+  | True t -> true
+  | False t -> false
   | If t ->
-    let cnd = t in
-    let thn = t in
-    let els = t in
+    let cnd = t.0 in
+    let thn = t.1 in
+    let els = t.2 in
     if eval cnd
     then eval thn
     else eval els
@@ -38,8 +38,12 @@ lang ArithBool2 = Arith + Bool
   sem eval =
   | IsZero n ->
     if eqi (eval n) 0
-    then True
-    else False
+    then true
+    else false
 end
 
+utest eval (Add (Num 1, Num 2)) with 3 in
+utest eval (If (IsZero (Num 0)
+               ,Num 1
+               ,Num 2)) with 1 in
 ()

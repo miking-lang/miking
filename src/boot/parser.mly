@@ -199,7 +199,7 @@ cases:
 case:
   | BAR IDENT binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
-      Pattern (fi, Cnot, $3), $5 } // TODO: Constant for data constructor
+      Pattern (fi, $2.v, $3), $5}
 binder:
   | LPAREN IDENT RPAREN
     { $2.v }
