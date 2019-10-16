@@ -32,9 +32,10 @@ let builtin =
                   List.map (fun s ->
                       TmConst(NoInfo,CSeq(s |> us |> ustring2list |>
                                             List.map (fun x->TmConst(NoInfo,CChar(x))))))));
+   ("readFile",CreadFile); ("writeFile",CwriteFile(None));
+   ("fileExists", CfileExists); ("deleteFile", CdeleteFile);
    ("error",Cerror)
   ]
-
 
 
 (* Returns the number of expected arguments of a constant *)
@@ -85,9 +86,13 @@ let arity = function
   | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
   (* MCore debug and I/O intrinsics *)
-  | Cprint      -> 1
-  | Cdprint     -> 1
-  | Cerror      -> 1
+  | Cprint            -> 1
+  | Cdprint           -> 1
+  | CreadFile         -> 1
+  | CwriteFile(None)  -> 2 | CwriteFile(Some(_)) -> 1
+  | CfileExists       -> 1
+  | CdeleteFile       -> 1
+  | Cerror            -> 1
 
 
 
@@ -252,7 +257,27 @@ let delta fi c v  =
     | Cprint, TmConst(fi,CSeq(lst)) ->
        uprint_string (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
     | Cprint, t -> raise_error (tm_info t) "The argument to print must be a string"
+
     | Cdprint, t -> uprint_string (pprintME t); TmConst(NoInfo,Cunit)
+
+    | CreadFile,TmConst(fi,CSeq(lst)) ->
+       TmConst(fi,CSeq(Ustring.read_file (Ustring.to_utf8 (tmlist2ustring fi lst))
+                       |> (ustring2tmlist fi)))
+    | CreadFile,t -> fail_constapp (tm_info t)
+
+    | CwriteFile(None),TmConst(fi,CSeq(l)) -> TmConst(fi,CwriteFile(Some(tmlist2ustring fi l)))
+    | CwriteFile(Some(fname)),TmConst(fi,CSeq(lst)) ->
+        Ustring.write_file (Ustring.to_utf8 fname) (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
+    | CwriteFile(None),t | CwriteFile(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | CfileExists,TmConst(fi,CSeq(lst)) ->
+        TmConst(fi,CBool(Sys.file_exists (Ustring.to_utf8 (tmlist2ustring fi lst))))
+    | CfileExists,t -> fail_constapp (tm_info t)
+
+    | CdeleteFile,TmConst(fi,CSeq(lst)) ->
+        Sys.remove (Ustring.to_utf8 (tmlist2ustring fi lst)); TmConst(NoInfo,Cunit)
+    | CdeleteFile,t -> fail_constapp (tm_info t)
+
     | Cerror, TmConst(fi,CSeq(lst)) ->
        (uprint_endline ((us"ERROR: ") ^. (tmlist2ustring fi lst)); exit 1)
     | Cerror,t -> fail_constapp (tm_info t)

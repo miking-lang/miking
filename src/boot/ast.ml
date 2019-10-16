@@ -78,8 +78,10 @@ and const =
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
-(*| Creadfile of ustring option
-| Cwritefile of ustring option *)
+| CreadFile
+| CwriteFile of ustring option
+| CfileExists
+| CdeleteFile
 | Cerror
 
 
@@ -161,7 +163,9 @@ let tmlist2ustring fi lst =
                    | _ -> raise_error fi "The term is not a string") lst
   |> list2ustring
 
-
+(* Converts a ustring to a list of terms *)
+let ustring2tmlist fi s =
+   s |> ustring2list |> List.map (fun x -> TmConst(fi,CChar(x)))
 
 
 type 'a tokendata = {i:info; v:'a}

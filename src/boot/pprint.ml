@@ -103,8 +103,10 @@ let rec pprint_const c =
   (* MCore debug and stdio intrinsics *)
   | Cprint -> us"print"
   | Cdprint -> us"dprint"
-(*  | Creadfile(_) -> us"readfile"
-  | Cwritefile(_) -> us"writefile" *)
+  | CreadFile -> us"readFile"
+  | CwriteFile(_) -> us"writeFile"
+  | CfileExists -> us"fileExists"
+  | CdeleteFile -> us"deleteFile"
   | Cerror -> us"error"
 
 (* Pretty print a term. *)
