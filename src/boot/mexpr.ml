@@ -249,18 +249,12 @@ let delta fi c v  =
     | Creverse,t -> fail_constapp (tm_info t)
 
     (* MCore debug and stdio intrinsics *)
-    | Cprint, TmConst(fi,CSeq(seq)) ->
-        printf "%s" (seq |> List.map
-                            (fun x -> match x with | TmConst(_,CChar(n)) -> n
-                                                   | _ -> raise_error fi "Not only characters")
-                   |> list2ustring |> Ustring.to_utf8);TmConst(NoInfo,Cunit)
+    | Cprint, TmConst(fi,CSeq(lst)) ->
+       uprint_string (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
     | Cprint, t -> raise_error (tm_info t) "The argument to print must be a string"
-    | Cdprint, t -> printf "%s" (pprintME t |> Ustring.to_utf8);TmConst(NoInfo,Cunit)
-    | Cerror, TmConst(_,CSeq(lst)) ->
-       let lst2 = List.map (fun x ->
-                      match x with | TmConst(_,CChar(i)) -> i
-                                   | _ -> raise_error (tm_info x) "Term is not a string") lst in
-       (uprint_endline ((us"ERROR: ") ^. (list2ustring lst2)); exit 1)
+    | Cdprint, t -> uprint_string (pprintME t); TmConst(NoInfo,Cunit)
+    | Cerror, TmConst(fi,CSeq(lst)) ->
+       (uprint_endline ((us"ERROR: ") ^. (tmlist2ustring fi lst)); exit 1)
     | Cerror,t -> fail_constapp (tm_info t)
 
 

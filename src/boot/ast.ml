@@ -135,6 +135,7 @@ let symno = ref 0
 let gencon fi x = symno := !symno + 1; TmCon(fi,x,!symno,None)
 
 
+
 (* Returns the info field from a term *)
 let tm_info = function
   | TmVar(fi,_,_) -> fi
@@ -153,6 +154,12 @@ let tm_info = function
   | TmUtest(fi,_,_,_) -> fi
 
 
+(* Converts a list of terms (typically from CSeq) to a ustring *)
+let tmlist2ustring fi lst =
+  List.map (fun x ->
+      match x with | TmConst(_,CChar(i)) -> i
+                   | _ -> raise_error fi "The term is not a string") lst
+  |> list2ustring
 
 
 
