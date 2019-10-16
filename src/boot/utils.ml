@@ -3,7 +3,7 @@
 
 module IntSet = Set.Make(
   struct
-    let compare = Pervasives.compare
+    let compare = Stdlib.compare
     type t = int
   end)
 

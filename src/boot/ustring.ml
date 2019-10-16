@@ -221,7 +221,7 @@ struct
 
   module SidSet = Set.Make(
     struct
-      let compare = Pervasives.compare
+      let compare = Stdlib.compare
       type t = sid
     end)
 
@@ -544,7 +544,7 @@ let validate_ascii_string s n =
 
 (* INTERNAL - used by lexing_from_channel
    This function is applied to Lexing.from_function.
-   Exception "Invalid_argument" from function Pervasies.input should
+   Exception "Invalid_argument" from function Stdlib.input should
    not happen. *)
 let lexing_function ic enc_type inbuf outbuf stream_pos s n =
   let pos = ref 0 in
