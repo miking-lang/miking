@@ -53,6 +53,8 @@ lang User
   | Unit _ -> addi x 1
 end
 
+lang Overlap = ArithBool + ArithBool2 + Arith
+
 let _ =
   use ArithBool2 in
   utest eval (Add (Num 1, Num 2)) with 3 in
@@ -84,6 +86,19 @@ let _ =
   utest inspect (Unit ()) with 3 in
   utest bump (inspect (Unit ())) (Unit ()) with 4 in
   ()
+in
+let _ =
+  use Overlap in
+  utest eval (Add (Num 1, Num 2)) with 3 in
+  utest eval (If (IsZero (Num 0)
+                 ,Num 1
+                 ,Num 2)) with 1
+  in
+  utest eval (Add (Num 10
+                  ,If (IsZero (Add (Num 0, Num 3))
+                      ,Num 10
+                      ,Add (Num 5, (Num (negi 2)))))) with 13
+  in ()
 in
 
 ()

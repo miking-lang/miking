@@ -16,6 +16,10 @@ let constr_compare decl1 decl2 =
   match decl1, decl2 with
   | CDecl(_, c1, _), CDecl(_, c2, _) -> Ustring.compare c1 c2
 
+let param_eq p1 p2 =
+  match p1, p2 with
+  | Param(_,_,ty1), Param(_,_,ty2) -> ty1 = ty2
+
 (***************
  * Flattening *
  ***************)
@@ -69,7 +73,7 @@ let rec merge_inter f params cases = function
      if not (List.length params = List.length params') then
        raise_error info' ("Different number of parameters for interpreter '"^
                           Ustring.to_utf8 f^"'")
-     else if not (List.for_all2 (fun p1 p2 -> p1 = p2) params params') then
+     else if not (List.for_all2 param_eq params params') then
        raise_error info' ("Parameters are not the same for interpreter '"^
                           Ustring.to_utf8 f^"'")
      else
