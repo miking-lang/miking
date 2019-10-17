@@ -24,8 +24,8 @@ let f = lam x.
 utest f (Foo("a",1)) with (1, "a") in
 utest f (Bar 10) with (15, "b") in
 
-// Counting values in a binary tree
 
+// Counting values in a binary tree
 data Node in  // Node : (Tree,Tree) -> Tree
 data Leaf in  // Leaf : (Int) -> Tree
 
@@ -46,5 +46,6 @@ let tree2 = Node(Leaf(2),Leaf(7)) in
 utest count tree2 with 9 in
 
 let tree3 = Node(Node(Leaf(3),Node(Leaf(2),Leaf(6))),Leaf(12)) in
-utest count tree3 with 0 in
+utest count tree3 with 23 in
+
 ()
