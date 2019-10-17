@@ -24,5 +24,27 @@ let f = lam x.
 utest f (Foo("a",1)) with (1, "a") in
 utest f (Bar 10) with (15, "b") in
 
+// Counting values in a binary tree
 
+data Node in  // Node : (Tree,Tree) -> Tree
+data Leaf in  // Leaf : (Int) -> Tree
+
+let count = fix (lam count. lam tree.
+    match tree with Node t then
+      let left = t.0 in
+      let right = t.1 in
+      addi (count left) (count right)
+    else match tree with Leaf v then
+      v
+    else error "Unknown node"
+) in
+
+let tree1 = Leaf(5) in
+utest count tree1 with 5 in
+
+let tree2 = Node(Leaf(2),Leaf(7)) in
+utest count tree2 with 9 in
+
+let tree3 = Node(Node(Leaf(3),Node(Leaf(2),Leaf(6))),Leaf(12)) in
+utest count tree3 with 0 in
 ()
