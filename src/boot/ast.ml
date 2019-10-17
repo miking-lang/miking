@@ -121,6 +121,7 @@ and tm =
 | TmData   of info * ustring * ty * tm                      (* Data constructor definition *)
 | TmCon    of info * ustring * sym * tm option              (* Constructed data *)
 | TmMatch  of info * tm * ustring * int * ustring * tm * tm (* Match data *)
+| TmUse    of info * ustring * tm                           (* Use a language *)
 | TmUtest  of info * tm * tm * tm                           (* Unit testing *)
 
 
@@ -143,6 +144,25 @@ let noidx = -1
 let symno = ref 0
 let gencon fi x = symno := !symno + 1; TmCon(fi,x,!symno,None)
 
+(* General map over terms *)
+let rec map_tm f = function
+  | TmVar (_,_,_) as t -> f t
+  | TmLam(fi,x,ty,t1) -> f (TmLam(fi,x,ty,map_tm f t1))
+  | TmClos(fi,x,ty,t1,env) -> f (TmClos(fi,x,ty,map_tm f t1,env))
+  | TmLet(fi,x,t1,t2) -> f (TmLet(fi,x,map_tm f t1,map_tm f t2))
+  | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
+  | TmConst(_,_) as t -> f t
+  | TmFix(_) as t -> f t
+  | TmSeq(fi, tms) -> f (TmSeq(fi, List.map (map_tm f) tms))
+  | TmIf(fi,t1,t2,t3) -> f (TmIf(fi,map_tm f t1,map_tm f t2,map_tm f t3))
+  | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
+  | TmProj(fi,t1,n) -> f (TmProj(fi,map_tm f t1,n))
+  | TmData(fi,x,ty,t1) -> f (TmData(fi,x,ty,map_tm f t1))
+  | TmCon(fi,k,s,ot) -> f (TmCon(fi,k,s,Option.map (map_tm f) ot))
+  | TmMatch(fi,t1,k,n,x,t2,t3) ->
+    f (TmMatch(fi,map_tm f t1,k,n,x,map_tm f t2,map_tm f t3))
+  | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
+  | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,tnext))
 
 
 (* Returns the info field from a term *)
@@ -161,6 +181,7 @@ let tm_info = function
   | TmData(fi,_,_,_) -> fi
   | TmCon(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_,_,_) -> fi
+  | TmUse(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
 
 

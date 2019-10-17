@@ -42,8 +42,26 @@ lang ArithBool2 = Arith + Bool
     else false
 end
 
-utest eval (Add (Num 1, Num 2)) with 3 in
-utest eval (If (IsZero (Num 0)
-               ,Num 1
-               ,Num 2)) with 1 in
+lang User
+  syn Unit =
+  | Unit ()
+  sem inspect =
+  | Unit _ ->
+    use Arith in
+    eval (Add (Num 1, Num 2))
+end
+
+let _ =
+  use ArithBool2 in
+  utest eval (Add (Num 1, Num 2)) with 3 in
+  utest eval (If (IsZero (Num 0)
+                 ,Num 1
+                 ,Num 2)) with 1 in
+  ()
+in
+let _ =
+  use User in
+  utest inspect (Unit ()) with 3 in
+  ()
+in
 ()

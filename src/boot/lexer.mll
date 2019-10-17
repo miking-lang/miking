@@ -43,6 +43,7 @@ let reserved_strings = [
   ("end",           fun(i) -> Parser.END{i=i;v=()});
   ("syn",           fun(i) -> Parser.SYN{i=i;v=()});
   ("sem",           fun(i) -> Parser.SEM{i=i;v=()});
+  ("use",           fun(i) -> Parser.USE{i=i;v=()});
 
 
   (* v *)

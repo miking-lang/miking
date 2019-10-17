@@ -53,7 +53,7 @@ let evalprog filename  =
           |> Parser.main Lexer.main |> debug_after_parse in
     (parsed
      |> Mlang.flatten
-     |> Mlang.translate
+     |> Mlang.desugar_language_uses
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))

@@ -374,6 +374,7 @@ let rec debruijn env t =
   | TmMatch(fi,t1,cx,_,y,t2,t3) ->
      TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,y,
              debruijn (VarTm(y)::env) t2, debruijn env t3)
+  | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
@@ -432,6 +433,7 @@ let rec eval env t =
       | TmCon(_,_,sym1,Some(v)), TmCon(_,_,sym2,_) ->
          if sym1 = sym2 then eval (v::env) t2 else eval env t3
       | _,_ -> raise_error fi "Invalid match")
+  | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->
     if !utest then begin

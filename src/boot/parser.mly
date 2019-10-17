@@ -60,6 +60,7 @@
 %token <unit Ast.tokendata> END
 %token <unit Ast.tokendata> SYN
 %token <unit Ast.tokendata> SEM
+%token <unit Ast.tokendata> USE
 
 
 
@@ -228,6 +229,9 @@ mexpr:
   | MATCH mexpr WITH IDENT IDENT THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i $8.i in
          TmMatch(fi,$2,$4.v,noidx,$5.v,$7,$9) }
+  | USE IDENT IN mexpr
+      { let fi = mkinfo $1.i $3.i in
+        TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
         TmUtest(fi,$2,$4,$6) }

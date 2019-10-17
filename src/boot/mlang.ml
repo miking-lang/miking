@@ -29,7 +29,14 @@ let constr_compare decl1 decl2 =
   - Two interpreters being merged have the same return type
 
   - Interpreters are not mutually recursive
-*)
+
+  - It is uncertain if there is any interoperability between
+   languages (or if there should be)
+
+  - It is uncertain how nested language uses work (or if they
+   should be allowed)
+
+ *)
 
 let check_matching_constrs info constrs =
   let check_matching_constr = function
@@ -149,9 +156,35 @@ let translate_decl : decl -> tm -> tm = function
 let translate_lang : mlang -> (tm -> tm) list = function
   | Lang (_, _, _, decls) -> List.map translate_decl decls
 
-let translate_langs langs main =
-  let translated = List.concat (List.map translate_lang langs) in
-  List.fold_right (@@) translated main
+let translate_uses langs t =
+  let translate_use langs = function
+    | TmUse(fi, l, inner) ->
+       let lang = lookup_lang fi langs l in
+       let decl_wrappers = translate_lang lang in
+       List.fold_right (@@) decl_wrappers inner
+    | t -> t
+  in
+  Ast.map_tm (translate_use langs) t
 
-let translate = function
-  | Program(_, langs, e) -> translate_langs langs e
+let desugar_uses_in_interpreters langs =
+  let desugar_uses_in_case langs = function
+    | (p, t) -> (p, translate_uses langs t)
+  in
+  let desugar_uses_in_decl langs = function
+    | Inter (fi, f, params, cases) ->
+       let cases' = List.map (desugar_uses_in_case langs) cases in
+       Inter(fi, f, params, cases')
+    | Data _ as d -> d
+  in
+  let desugar_uses_in_lang desugared = function
+    | Lang(fi, l, ls, decls) ->
+       let decls' = List.map (desugar_uses_in_decl desugared) decls in
+       let lang' = Lang(fi, l, ls, decls') in
+       lang'::desugared
+  in
+  List.rev (List.fold_left desugar_uses_in_lang [] langs)
+
+let desugar_language_uses = function
+  | Program(_, langs, t) ->
+     let langs' = desugar_uses_in_interpreters langs in
+     translate_uses langs' t
