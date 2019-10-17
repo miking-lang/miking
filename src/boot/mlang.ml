@@ -20,15 +20,15 @@ let constr_compare decl1 decl2 =
  * Flattening *
  ***************)
 
-(** This code currently executes with the following assumptions
-   (some of which should be fixed):
+(** TODO: Some things that should be fixed or investigated
 
-  - If two constructor names are the same, they belong to the same
-   datatype
+  - If two constructor names are the same, they are assumed to
+   belong to the same datatype
 
-  - Two interpreters being merged have the same return type
+  - Two interpreters being merged are assumed to have the same
+   return type
 
-  - Interpreters are not mutually recursive
+  - Interpreters cannot be mutually recursive
 
   - It is uncertain if there is any interoperability between
    languages (or if there should be)
@@ -127,8 +127,8 @@ let translate_params =
 let translate_cases f target cases =
   let translate_case case inner =
     match case with
-    | (Pattern (_, k, x), handler) ->
-      TmMatch (NoInfo, target,
+    | (Pattern (fi, k, x), handler) ->
+      TmMatch (fi, target,
                k, -1, x, handler, inner)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
