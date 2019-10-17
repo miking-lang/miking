@@ -49,6 +49,8 @@ lang User
   | Unit _ ->
     use Arith in
     eval (Add (Num 1, Num 2))
+  sem bump (x : Dyn) =
+  | Unit _ -> addi x 1
 end
 
 let _ =
@@ -79,7 +81,9 @@ let _ =
 in
 let _ =
   use User in
-  utest inspect (Unit ()) with 3 in ()
+  utest inspect (Unit ()) with 3 in
+  utest bump (inspect (Unit ())) (Unit ()) with 4 in
+  ()
 in
 
 ()
