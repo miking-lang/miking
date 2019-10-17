@@ -25,6 +25,8 @@ let builtin =
    ("divf",Cdivf(None));("negf",Cnegf);
    ("ltf",Cltf(None));("leqf",Cleqf(None));("gtf",Cgtf(None));("geqf",Cgeqf(None));
    ("eqf",Ceqf(None));("neqf",Cneqf(None));
+   ("floorfi", Cfloorfi); ("ceilfi", Cceilfi); ("roundfi", Croundfi);
+   ("int2float", CInt2float);
    ("char2int",CChar2int);("int2char",CInt2char);
    ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
@@ -80,6 +82,10 @@ let arity = function
   | Cgeqf(None) -> 2  | Cgeqf(Some(_)) -> 1
   | Ceqf(None)  -> 2  | Ceqf(Some(_))  -> 1
   | Cneqf(None) -> 2  | Cneqf(Some(_)) -> 1
+  | Cfloorfi    -> 1
+  | Cceilfi     -> 1
+  | Croundfi    -> 1
+  | CInt2float  -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
   | CChar2int   -> 1
@@ -240,6 +246,18 @@ let delta fi c v  =
     | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
     | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneqf(None),t | Cneqf(Some(_)),t  -> fail_constapp (tm_info t)
+
+    | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
+    | Cfloorfi,t -> fail_constapp (tm_info t)
+
+    | Cceilfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.ceil v |> int_of_float))
+    | Cceilfi,t -> fail_constapp (tm_info t)
+
+    | Croundfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.round v |> int_of_float))
+    | Croundfi,t -> fail_constapp (tm_info t)
+
+    | CInt2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
+    | CInt2float,t -> fail_constapp (tm_info t)
 
     (* MCore intrinsic: characters *)
     | CChar(_),t -> fail_constapp (tm_info t)

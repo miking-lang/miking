@@ -48,6 +48,39 @@ utest divf 6.0 3.0 with 2.0 in
 utest eqf (subf 3.0 5.0) (negf 2.0) with true in
 utest eqf (subf 3.0 5.0) (negf 3.0) with false in
 
+// Float-to-Int conversions
+utest floorfi 0.0 with 0 in
+utest floorfi 3.8 with 3 in
+utest floorfi 3.0 with 3 in
+utest floorfi 2.999 with 2 in
+utest floorfi (negf 1.75) with negi 2 in
+utest floorfi (negf 1.25) with negi 2 in
+utest floorfi (negf 0.975) with negi 1 in
+
+utest ceilfi 0.0 with 0 in
+utest ceilfi 7.3 with 8 in
+utest ceilfi 7.75 with 8 in
+utest ceilfi 8.0 with 8 in
+utest ceilfi 8.001 with 9 in
+utest ceilfi (negf 5.0) with negi 5 in
+utest ceilfi (negf 5.75) with negi 5 in
+utest ceilfi (negf 6.25) with negi 6 in
+
+utest roundfi 0.0 with 0 in
+utest roundfi 1.0 with 1 in
+utest roundfi 1.25 with 1 in
+utest roundfi 1.5 with 2 in
+utest roundfi 0.75 with 1 in
+utest roundfi (negf 2.4) with negi 2 in
+utest roundfi (negf 2.0) with negi 2 in
+utest roundfi (negf 2.5) with negi 3 in
+
+// Int-to-Float conversion
+utest int2float 0 with 0.0 in
+utest int2float 1 with 1.0 in
+utest int2float 17 with 17.0 in
+utest int2float (negi 10) with negf 10.0 in
+
 // powf3 x = x^3
 let powf3 = lam x. mulf x (mulf x x) in
 let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
