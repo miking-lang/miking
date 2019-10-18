@@ -97,7 +97,7 @@ and sym = int
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
-and pattern = Pattern of info * ustring * ustring
+and pattern = Pattern of info * ustring * ustring option
 and decl = (* TODO: Local? *)
 | Data     of info * ustring * cdecl list
 | Inter    of info * ustring * param list * (pattern * tm) list

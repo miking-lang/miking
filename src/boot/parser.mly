@@ -203,11 +203,11 @@ case:
       Pattern (fi, $2.v, $3), $5}
 binder:
   | LPAREN IDENT RPAREN
-    { $2.v }
+    { Some ($2.v) }
   | IDENT
-    { $1.v }
+    { Some ($1.v) }
   |
-    { us"_" } // TODO: How to handle "empty" case?
+    { None }
 
 /// Expression language ///////////////////////////////
 

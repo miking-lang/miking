@@ -18,8 +18,8 @@ lang Bool
   | If(Dyn, Dyn, Dyn)
 
   sem eval =
-  | True t -> true
-  | False t -> false
+  | True -> true
+  | False -> false
   | If t ->
     let cnd = t.0 in
     let thn = t.1 in
@@ -44,13 +44,13 @@ end
 
 lang User
   syn Unit =
-  | Unit ()
+  | Unit
   sem inspect =
-  | Unit _ ->
+  | Unit ->
     use Arith in
     eval (Add (Num 1, Num 2))
   sem bump (x : Dyn) =
-  | Unit _ -> addi x 1
+  | Unit -> addi x 1
 end
 
 lang Overlap = ArithBool + ArithBool2 + Arith
@@ -71,20 +71,20 @@ in
 let _ =
   use ArithBool in
   utest eval (Add (Num 1, Num 2)) with 3 in
-  utest eval (If (True ()
+  utest eval (If (True
                  ,Num 1
                  ,Num 2)) with 1
   in
   utest eval (Add (Num 10
-                  ,If (False ()
+                  ,If (False
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
   in ()
 in
 let _ =
   use User in
-  utest inspect (Unit ()) with 3 in
-  utest bump (inspect (Unit ())) (Unit ()) with 4 in
+  utest inspect Unit with 3 in
+  utest bump (inspect Unit) Unit with 4 in
   ()
 in
 let _ =
