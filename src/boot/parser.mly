@@ -226,12 +226,9 @@ mexpr:
   | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
         TmCondef(fi,$2.v,$3,$5)}
-  | MATCH mexpr WITH IDENT THEN mexpr ELSE mexpr
-      { let fi = mkinfo $1.i $7.i in
-         TmMatch(fi,$2,$4.v,noidx,None,$6,$8) }
-  | MATCH mexpr WITH IDENT IDENT THEN mexpr ELSE mexpr
+  | MATCH mexpr WITH IDENT ident_op THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i $8.i in
-         TmMatch(fi,$2,$4.v,noidx,Some($5.v),$7,$9) }
+         TmMatch(fi,$2,$4.v,noidx,$5,$7,$9) }
   | USE IDENT IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
@@ -266,13 +263,18 @@ atom:
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
 
 
+ident_op:
+  | IDENT
+      { Some($1.v) }
+  |
+      { None }
 
 
 seq:
   | mexpr
-    { [$1] }
+      { [$1] }
   | mexpr COMMA seq
-    { $1::$3 }
+      { $1::$3 }
 
 
 
