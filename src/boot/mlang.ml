@@ -133,7 +133,7 @@ let translate_cases f target cases =
     match case with
     | (Pattern (fi, k, x), handler) ->
       TmMatch (fi, target,
-               k, -1, x, handler, inner)
+               k, -1, Some(x), handler, inner)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
             (ustring2list (us"No matching case for function " ^. f))

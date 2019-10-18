@@ -3,11 +3,16 @@
 //
 // Test integer primitives
 
-// Constructor construction
+// Constructor with and without arguments
 con K1 in
 con K2 in
-utest K1(1,3) with K1(1,3) in
-utest K2("k",100) with K2("k",100) in
+con K3 in
+utest K1 with K1 in
+utest match K1 with K1 then 1 else 0 with 1 in
+utest K2() with K2() in
+utest match K2() with K2 a then a else () with () in
+utest K3("k",100) with K3("k",100) in
+utest match K2("k",100) with K2 x then x.0 else "a" with "k" in
 
 
 // Matching two constructors

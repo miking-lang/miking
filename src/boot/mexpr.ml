@@ -371,9 +371,11 @@ let rec debruijn env t =
   | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
      TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
-  | TmMatch(fi,t1,cx,_,y,t2,t3) ->
-     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,y,
+  | TmMatch(fi,t1,cx,_,Some(y),t2,t3) ->
+     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,Some(y),
              debruijn (VarTm(y)::env) t2, debruijn env t3)
+  | TmMatch(fi,t1,cx,_,None,t2,t3) ->
+     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,None, debruijn env t2, debruijn env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
@@ -428,10 +430,12 @@ let rec eval env t =
   (* Data constructors and match *)
   | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
   | TmConsym(_,_,_,_) as tm -> tm
-  | TmMatch(fi,t1,_,n,_,t2,t3) ->
+  | TmMatch(fi,t1,_,n,xop,t2,t3) ->
      (match eval env t1, List.nth env n with
       | TmConsym(_,_,sym1,Some(v)), TmConsym(_,_,sym2,_) ->
          if sym1 = sym2 then eval (v::env) t2 else eval env t3
+      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_) when xop = None ->
+         if sym1 = sym2 then eval env t2 else eval env t3
       | _,_ -> raise_error fi "Invalid match")
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)

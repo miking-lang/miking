@@ -148,7 +148,9 @@ and pprintME t =
                             | Some(t) -> us"," ^. ppt false t ^. us")"
                             | None -> us")") ^. right inside
   | TmMatch(_,t,con,_,x,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
-        us" with " ^. con ^. us" " ^. x ^. us" then " ^. ppt false then_ ^.
+        us" with " ^. con ^.
+        (match x with | None -> us"" | Some(s) -> us" " ^. s) ^.
+        us" then " ^. ppt false then_ ^.
         us" else " ^. ppt false else_ ^. right inside
   | TmUse(_,l,t) -> us"use " ^. l ^. us" in " ^. ppt false t
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
