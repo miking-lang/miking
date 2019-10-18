@@ -1,4 +1,5 @@
 -- TODO: Change string variables to deBruijn indices
+-- TODO: Generate unique symbols for data constructors
 
 lang Var
   syn Expr =
@@ -214,6 +215,7 @@ lang Tuple = Arith
 end
 
 lang Data
+  -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmData (Dyn, Dyn) -- (String, Expr)
   | TmConFun (Dyn) -- (String)
@@ -313,7 +315,7 @@ in
 --   let e2 = t.1 in
 --   match eval e1 with Num n1 then
 --     match eval e2 with Num n2 then
---       Num (add n1 n2)
+--       Num (addi n1 n2)
 --     else ()
 --   else ()
 -- else els
