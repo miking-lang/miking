@@ -117,7 +117,7 @@ let flatten = function
 let translate_data =
   let translate_constr constr inner =
     match constr with
-    | CDecl(_, k, ty) -> TmData (NoInfo, k, ty, inner)
+    | CDecl(_, k, ty) -> TmCondef (NoInfo, k, ty, inner)
   in
   List.fold_right translate_constr
 

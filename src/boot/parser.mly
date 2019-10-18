@@ -43,7 +43,7 @@
 %token <unit Ast.tokendata> CASE
 %token <unit Ast.tokendata> UTEST
 %token <unit Ast.tokendata> TYPE
-%token <unit Ast.tokendata> DATA
+%token <unit Ast.tokendata> CON
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> MCORE
 %token <unit Ast.tokendata> PMCORE
@@ -223,9 +223,9 @@ mexpr:
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmIf(fi,$2,$4,$6) }
-  | DATA IDENT ty_op IN mexpr
+  | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmData(fi,$2.v,$3,$5)}
+        TmCondef(fi,$2.v,$3,$5)}
   | MATCH mexpr WITH IDENT IDENT THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i $8.i in
          TmMatch(fi,$2,$4.v,noidx,$5.v,$7,$9) }

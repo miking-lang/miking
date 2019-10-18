@@ -26,7 +26,7 @@ let reserved_strings = [
   ("case",          fun(i) -> Parser.CASE{i=i;v=()});
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
-  ("data",          fun(i) -> Parser.DATA{i=i;v=()});
+  ("con",           fun(i) -> Parser.CON{i=i;v=()});
   ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
   ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
   ("pmcore",        fun(i) -> Parser.PMCORE{i=i;v=()});

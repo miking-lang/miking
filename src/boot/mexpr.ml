@@ -344,8 +344,8 @@ let rec val_equal v1 v2 =
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
      List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
-  | TmCon(_,_,sym1,None),TmCon(_,_,sym2,None) ->sym1 = sym2
-  | TmCon(_,_,sym1,Some(v1)),TmCon(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
+  | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
+  | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
 
@@ -368,9 +368,9 @@ let rec debruijn env t =
   | TmSeq(fi,tms) -> TmSeq(fi,List.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
   | TmProj(fi,t,n) -> TmProj(fi,debruijn env t,n)
-  | TmData(fi,x,ty,t) -> TmData(fi,x,ty,debruijn (VarTm(x)::env) t)
-  | TmCon(fi,x,sym,tmop) ->
-     TmCon(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
+  | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
+  | TmConsym(fi,x,sym,tmop) ->
+     TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
   | TmMatch(fi,t1,cx,_,y,t2,t3) ->
      TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,y,
              debruijn (VarTm(y)::env) t2, debruijn env t3)
@@ -399,8 +399,8 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
-       | TmCon(fi,x,sym,None) -> TmCon(fi,x,sym,Some(eval env t2))
-       | TmCon(fi,_,_,Some(_)) -> raise_error fi "Cannot apply constructor more than once"
+       | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
+       | TmConsym(fi,_,_,Some(_)) -> raise_error fi "Cannot apply constructor more than once"
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
@@ -426,11 +426,11 @@ let rec eval env t =
                           with _ -> raise_error fi "Tuple projection is out of bound.")
       | _ -> raise_error fi "Cannot project from term. The term is not a tuple.")
   (* Data constructors and match *)
-  | TmData(fi,x,_,t) -> eval ((gencon fi x)::env) t
-  | TmCon(_,_,_,_) as tm -> tm
+  | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
+  | TmConsym(_,_,_,_) as tm -> tm
   | TmMatch(fi,t1,_,n,_,t2,t3) ->
      (match eval env t1, List.nth env n with
-      | TmCon(_,_,sym1,Some(v)), TmCon(_,_,sym2,_) ->
+      | TmConsym(_,_,sym1,Some(v)), TmConsym(_,_,sym2,_) ->
          if sym1 = sym2 then eval (v::env) t2 else eval env t3
       | _,_ -> raise_error fi "Invalid match")
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"

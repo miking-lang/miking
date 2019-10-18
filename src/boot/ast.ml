@@ -118,8 +118,8 @@ and tm =
 | TmSeq    of info * tm list                                (* Sequence *)
 | TmTuple  of info * tm list                                (* Tuple *)
 | TmProj   of info * tm * int                               (* Projection of tuple *)
-| TmData   of info * ustring * ty * tm                      (* Data constructor definition *)
-| TmCon    of info * ustring * sym * tm option              (* Constructed data *)
+| TmCondef of info * ustring * ty * tm                      (* Constructor definition *)
+| TmConsym of info * ustring * sym * tm option              (* Constructor symbol *)
 | TmMatch  of info * tm * ustring * int * ustring * tm * tm (* Match data *)
 | TmUse    of info * ustring * tm                           (* Use a language *)
 | TmUtest  of info * tm * tm * tm                           (* Unit testing *)
@@ -142,7 +142,7 @@ let noidx = -1
 
 (* Creation and handling of constructors and symbol generation *)
 let symno = ref 0
-let gencon fi x = symno := !symno + 1; TmCon(fi,x,!symno,None)
+let gencon fi x = symno := !symno + 1; TmConsym(fi,x,!symno,None)
 
 (* General map over terms *)
 let rec map_tm f = function
@@ -157,8 +157,8 @@ let rec map_tm f = function
   | TmIf(fi,t1,t2,t3) -> f (TmIf(fi,map_tm f t1,map_tm f t2,map_tm f t3))
   | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
   | TmProj(fi,t1,n) -> f (TmProj(fi,map_tm f t1,n))
-  | TmData(fi,x,ty,t1) -> f (TmData(fi,x,ty,map_tm f t1))
-  | TmCon(fi,k,s,ot) -> f (TmCon(fi,k,s,Option.map (map_tm f) ot))
+  | TmCondef(fi,x,ty,t1) -> f (TmCondef(fi,x,ty,map_tm f t1))
+  | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
   | TmMatch(fi,t1,k,n,x,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,k,n,x,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
@@ -178,8 +178,8 @@ let tm_info = function
   | TmSeq(fi,_) -> fi
   | TmTuple(fi,_) -> fi
   | TmProj(fi,_,_) -> fi
-  | TmData(fi,_,_,_) -> fi
-  | TmCon(fi,_,_,_) -> fi
+  | TmCondef(fi,_,_,_) -> fi
+  | TmConsym(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

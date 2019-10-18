@@ -4,15 +4,15 @@
 // Test integer primitives
 
 // Constructor construction
-data K1 in
-data K2 in
+con K1 in
+con K2 in
 utest K1(1,3) with K1(1,3) in
 utest K2("k",100) with K2("k",100) in
 
 
 // Matching two constructors
-data Foo in
-data Bar in
+con Foo in
+con Bar in
 let f = lam x.
    match x with Foo t then
      let s = t.0 in
@@ -26,8 +26,8 @@ utest f (Bar 10) with (15, "b") in
 
 
 // Counting values in a binary tree
-data Node in  // Node : (Tree,Tree) -> Tree
-data Leaf in  // Leaf : (Int) -> Tree
+con Node in  // Node : (Tree,Tree) -> Tree
+con Leaf in  // Leaf : (Int) -> Tree
 
 let count = fix (lam count. lam tree.
     match tree with Node t then

@@ -141,9 +141,9 @@ and pprintME t =
   | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
   | TmProj(_,t,n) -> left inside ^. ppt false t  ^. us"." ^. ustring_of_int n ^. right inside
-  | TmData(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.
+  | TmCondef(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.
                         us" in" ^. ppt false t ^. right inside
-  | TmCon(_,s,sym,tmop) -> left inside ^. us"con(" ^. s  ^. us(sprintf ",sym%d" sym) ^.
+  | TmConsym(_,s,sym,tmop) -> left inside ^. us"con(" ^. s  ^. us(sprintf ",sym%d" sym) ^.
                            (match tmop with
                             | Some(t) -> us"," ^. ppt false t ^. us")"
                             | None -> us")") ^. right inside
