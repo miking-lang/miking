@@ -402,7 +402,7 @@ let rec eval env t =
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
        | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
-       | TmConsym(fi,_,_,Some(_)) -> raise_error fi "Cannot apply constructor more than once"
+       | TmConsym(_,_,_,Some(_)) -> raise_error fiapp "Cannot apply constructor more than once"
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
@@ -426,7 +426,9 @@ let rec eval env t =
      (match eval env t with
       | TmTuple(_,vs) -> (try List.nth vs n
                           with _ -> raise_error fi "Tuple projection is out of bound.")
-      | _ -> raise_error fi "Cannot project from term. The term is not a tuple.")
+      | v ->
+         raise_error fi ("Cannot project from term. The term is not a tuple: "
+                         ^ Ustring.to_utf8 (pprintME v)))
   (* Data constructors and match *)
   | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
   | TmConsym(_,_,_,_) as tm -> tm
@@ -434,9 +436,11 @@ let rec eval env t =
      (match eval env t1, List.nth env n with
       | TmConsym(_,_,sym1,Some(v)), TmConsym(_,_,sym2,_) ->
          if sym1 = sym2 then eval (v::env) t2 else eval env t3
-      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_) when xop = None ->
-         if sym1 = sym2 then eval env t2 else eval env t3
-      | _,_ -> raise_error fi "Invalid match")
+      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_) ->
+         if sym1 = sym2 && xop = None then eval env t2 else eval env t3
+      | t1,t2 ->
+         let ex = Ustring.to_utf8 (pprintME t1 ^. us" with " ^. pprintME t2) in
+         raise_error fi  ("Invalid match: match " ^ ex ))
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->

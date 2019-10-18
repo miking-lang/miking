@@ -144,7 +144,7 @@ let translate_cases f target cases =
   List.fold_right translate_case cases no_match
 
 let translate_inter f params cases : tm -> tm =
-  let target_name = us"_" in
+  let target_name = us"_" ^. f ^. us"_target" in
   let target = TmVar(NoInfo, target_name, -1) in
   let mtch =
     TmLam (NoInfo, target_name, TyDyn, translate_cases f target cases) in
