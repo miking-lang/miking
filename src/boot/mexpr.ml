@@ -402,7 +402,7 @@ let rec eval env t =
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
        | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
-       | TmConsym(_,_,_,Some(_)) -> raise_error fiapp "Cannot apply constructor more than once"
+       | TmConsym(_,x,_,Some(_)) -> raise_error fiapp ("Cannot apply constructor '" ^ Ustring.to_utf8 x ^ "' more than once")
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
