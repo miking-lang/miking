@@ -76,7 +76,7 @@
                  (concat "miking " (buffer-name)))))
 
 (setq mcore-error-regexp
-      '(mcore "\"\\(.*\\)\" \\([0-9]*\\):\\([0-9]*\\)" 1 2 3))
+      '(mcore "\"\\(.+\\)\" \\([0-9]+\\):\\([0-9]+\\)" 1 2 3))
 (add-hook 'compilation-mode-hook
           (lambda ()
             (add-to-list 'compilation-error-regexp-alist-alist mcore-error-regexp)
