@@ -102,11 +102,24 @@ utest is_valid_char '_' with true in
 
 -- The Parser monad -----------------------------
 -- TODO: Track position
-con Success : (Dyn, Dyn) in -- Success : (a, String) -> ParseResult e a
-con Failure : Dyn in        -- Failure : e -> ParseResult e a
+con Success : (Dyn, Dyn) in -- Success : (a, String) -> ParseResult a
+con Failure : (Dyn, Dyn) in -- Failure : (String, String) -> ParseResult a
+-- Success stores result of parsing and rest of input
+-- Failure stores found and expected token
 
-let fail = lam msg. lam input.
-  Failure msg
+let fail = lam found. lam expected. lam input.
+  Failure (found, expected)
+in
+
+let show_error = lam f.
+  match f with Failure t then
+    let found = t.0 in
+    let expected = t.1 in
+    concat (concat "Unexpected " found)
+           (if gti (length expected) 0
+            then concat ". Expected " expected
+            else "")
+  else error "Tried to show something that is not a failure"
 in
 
 let fmap = lam f. lam p. lam input.
@@ -126,7 +139,7 @@ let alt = lam p1. lam p2. lam input.
   let res = p1 input in
   match res with Failure _
   then p2 input
-  else res -- Propagate Success or EOF
+  else res -- Propagate Success
 in
 
 -- pure : a -> M a
@@ -194,12 +207,12 @@ in
 -- Core ------------------------------------------------
 let next = lam input.
   if null input
-  then Failure "Unexpected end of input"
+  then fail "end of input" "" input
   else pure (head input) (tail input)
 in
 
 utest next "abc" with Success ('a', "bc") in
-utest next "" with Failure "Unexpected end of input" in
+utest show_error (next "") with "Unexpected end of input" in
 
 utest
   bind next (lam c1.
@@ -208,10 +221,12 @@ utest
 with Success ("ab", "c") in
 
 utest
+  show_error (
   bind next (lam c1.
   bind next (lam c2.
   pure [c1, c2])) "a"
-with Failure "Unexpected end of input" in
+  )
+with "Unexpected end of input" in
 
 let not_followed_by = lam p. lam input.
   let res1 = p input in
@@ -221,23 +236,15 @@ let not_followed_by = lam p. lam input.
     let res2 = next input in
     match res2 with Success t then
       let c = t.0 in
-      Failure (concat "Unexpected " (show_char c))
+      fail (show_char c) "" input
     else res2
 in
 
--- TODO: Add expected argument
 let satisfy = lam cnd. lam expected.
   bind next (lam c.
   if cnd c
   then pure c
-  else
-    let msg =
-      if eqi (length expected) 0
-      then concat "Unexpected " (show_char c)
-      else concat (concat "Unexpected " (show_char c))
-                  (concat ". Expected " expected)
-    in
-    fail msg)
+  else fail (show_char c) expected)
 in
 
 -- Combinators ---------------------------------
@@ -258,7 +265,7 @@ in
 let lex_char = lam c. satisfy (eqchar c) (show_char c) in
 
 utest lex_char 'a' "ab" with Success ('a', "b") in
-utest lex_char 'b' "ab" with Failure "Unexpected 'a'. Expected 'b'" in
+utest show_error (lex_char 'b' "ab") with "Unexpected 'a'. Expected 'b'" in
 
 utest
   bind (lex_char 'a') (lam c1.
@@ -266,26 +273,27 @@ utest
   pure [c1, c2])) "abc"
 with Success ("ab", "c") in
 
-utest
+utest show_error (
   bind (lex_char 'b') (lam c1.
   bind (lex_char 'b') (lam c2.
-  pure [c1, c2])) "abc"
-with Failure "Unexpected 'a'. Expected 'b'" in
+  pure [c1, c2])) "abc")
+with "Unexpected 'a'. Expected 'b'" in
 
-utest
+utest show_error (
   bind (lex_char 'a') (lam c1.
   bind (lex_char 'a') (lam c2.
-  pure [c1, c2])) "abc"
-with Failure "Unexpected 'b'. Expected 'a'" in
+  pure [c1, c2])) "abc")
+with "Unexpected 'b'. Expected 'a'" in
 
 utest alt (lex_char 'a') (lex_char 'b') "abc" with Success('a', "bc") in
 utest alt (lex_char 'b') (lex_char 'a') "abc" with Success('a', "bc") in
-utest alt (lex_char 'b') (lex_char 'c') "abc"
-with Failure "Unexpected 'a'. Expected 'c'" in
+utest show_error (
+  alt (lex_char 'b') (lex_char 'c') "abc")
+with "Unexpected 'a'. Expected 'c'" in
 
 utest not_followed_by (lex_char 'b') "abc" with Success((), "abc") in
-utest not_followed_by (lex_char 'a') "abc"
-with Failure "Unexpected 'a'" in
+utest show_error (not_followed_by (lex_char 'a') "abc")
+with "Unexpected 'a'" in
 
 utest many (lex_char 'a') "abc" with Success("a", "bc") in
 utest many (lex_char 'a') "aaabc" with Success("aaa", "bc") in
@@ -293,12 +301,12 @@ utest many (lex_char 'a') "bc" with Success("", "bc") in
 
 utest many1 (lex_char 'a') "abc" with Success("a", "bc") in
 utest many1 (lex_char 'a') "aaabc" with Success("aaa", "bc") in
-utest many1 (lex_char 'a') "bc" with Failure "Unexpected 'b'. Expected 'a'" in
+utest show_error (many1 (lex_char 'a') "bc") with "Unexpected 'b'. Expected 'a'" in
 
 let lex_number = fmap string2int (many1 (satisfy is_digit "digit")) in
 
 utest lex_number "123abc" with Success(123, "abc") in
-utest lex_number "abc" with Failure "Unexpected 'a'. Expected digit" in
+utest show_error (lex_number "abc") with "Unexpected 'a'. Expected digit" in
 
 let lex_string = fix (lam lex_string. lam s.
   if null s
@@ -313,7 +321,7 @@ let lex_string = fix (lam lex_string. lam s.
 
 utest lex_string "abc" "abcdef" with Success("abc", "def") in
 utest lex_string "abcdef" "abcdef" with Success("abcdef", "") in
-utest lex_string "abc" "def" with Failure "Unexpected 'd'. Expected 'a'" in
+utest show_error (lex_string "abc" "def") with "Unexpected 'd'. Expected 'a'" in
 
 utest
   bind (lex_string "ab") (lam s1.
@@ -328,7 +336,7 @@ utest spaces "   abc" with Success ((), "abc") in
 utest spaces "	  abc" with Success ((), "abc") in
 utest spaces1 "	  abc" with Success ((), "abc") in
 utest spaces "abc" with Success ((), "abc") in
-utest spaces1 "abc" with Failure "Unexpected 'a'. Expected whitespace" in
+utest show_error (spaces1 "abc") with "Unexpected 'a'. Expected whitespace" in
 
 let line_comment =
   void (apr (apr (alt (lex_string "--") (lex_string "//"))
@@ -364,8 +372,8 @@ let reserved = lam s.
   void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char "")))) in
 
 utest reserved "lam" "lam x. x" with Success((), "x. x") in
-utest reserved "lam" "lambda" with Failure "Unexpected 'b'" in
-utest reserved "lam" "la" with Failure "Unexpected end of input" in
+utest show_error (reserved "lam" "lambda") with "Unexpected 'b'" in
+utest show_error (reserved "lam" "la") with "Unexpected end of input" in
 
 let number = token lex_number in
 
@@ -377,8 +385,10 @@ let parens = wrapped_in (symbol "(") (symbol ")") in
 let brackets = wrapped_in (symbol "[") (symbol "]") in
 
 utest parens (lex_string "abc") "(abc)" with Success("abc","") in
-utest brackets (many (string "abc")) "[abc abc]" with Success(["abc", "abc"], "") in
-utest parens (lex_string "abc") "(abc" with Failure "Unexpected end of input" in
+utest brackets (many (string "abc")) "[abc abc]"
+with Success(["abc", "abc"], "") in
+utest show_error (parens (lex_string "abc") "(abc")
+with "Unexpected end of input" in
 
 let lex_string_lit =
   wrapped_in (lex_string "\"") (lex_string "\"")
@@ -453,7 +463,7 @@ con CChar : Dyn in
 let ident =
   bind identifier (lam x.
   if any (eqstr x) keywords
-  then fail (concat (concat "Cannot use keyword '" x) "' as identifier")
+  then fail (concat (concat "keyword '" x) "'") "identifier"
   else pure x)
 in
 
@@ -578,7 +588,10 @@ utest expr "let f = lam x. x in f \"foo\""
 with Success(TmLet("f", TmLam ("x", TmVar "x"),
              TmApp (TmVar "f", TmSeq "foo")), "") in
 
-utest expr "f t.0.1 u.0" with Success(TmApp(TmApp(TmVar "f", TmProj(TmProj(TmVar "t", 0), 1)), TmProj(TmVar "u", 0)),"") in
+utest expr "f t.0.1 u.0"
+with Success(TmApp(TmApp(TmVar "f",
+                         TmProj(TmProj(TmVar "t", 0), 1)),
+                   TmProj(TmVar "u", 0)),"") in
 
 let program = apr ws expr in
 
