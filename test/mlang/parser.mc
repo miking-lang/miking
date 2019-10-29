@@ -103,12 +103,12 @@ utest is_valid_char '_' with true in
 -- The Parser monad -----------------------------
 -- TODO: Track position
 con Success : (Dyn, Dyn) in -- Success : (a, String) -> ParseResult a
-con Failure : (Dyn, Dyn) in -- Failure : (String, String) -> ParseResult a
+con Failure : (Dyn, Dyn, Dyn) in -- Failure : (String, String, String) -> ParseResult a
 -- Success stores result of parsing and rest of input
--- Failure stores found and expected token
+-- Failure stores found and expected token, and rest of input
 
 let fail = lam found. lam expected. lam input.
-  Failure (found, expected)
+  Failure (found, expected, input)
 in
 
 let show_error = lam f.
@@ -131,14 +131,16 @@ let fmap = lam f. lam p. lam input.
   else res
 in
 
--- TODO: Error reporting is based on second parser
--- TODO: MegaParsec does not explore alternatives if first
---       parser consumes any input
+-- TODO: Error reporting is based on second parser.
+--       Should put them together "expected x or y"
 -- alt : M a -> M a -> M a
 let alt = lam p1. lam p2. lam input.
   let res = p1 input in
-  match res with Failure _
-  then p2 input
+  match res with Failure t then
+    let input2 = t.2 in
+    if eqi (length input) (length input2)
+    then p2 input
+    else res
   else res -- Propagate Success
 in
 
@@ -240,11 +242,19 @@ let not_followed_by = lam p. lam input.
     else res2
 in
 
-let satisfy = lam cnd. lam expected.
+let satisfy = lam cnd. lam expected. lam input.
   bind next (lam c.
   if cnd c
   then pure c
-  else fail (show_char c) expected)
+  else lam _. fail (show_char c) expected input) input
+in
+
+let try = lam p. lam input.
+  let res = p input in
+  match res with Failure t then
+    Failure (t.0, t.1, input)
+  else -- Propagate Success
+    res
 in
 
 -- Combinators ---------------------------------
@@ -314,9 +324,11 @@ let lex_string = fix (lam lex_string. lam s.
   else
     let c = head s in
     let cs = tail s in
-    bind (lex_char c) (lam _.
-    bind (lex_string cs) (lam _.
-    pure (cons c cs)))
+    try ( -- This 'try' makes the parser consume the whole string or nothing
+      bind (lex_char c) (lam _.
+      bind (lex_string cs) (lam _.
+      pure (cons c cs)))
+    )
 ) in
 
 utest lex_string "abc" "abcdef" with Success("abc", "def") in
@@ -408,11 +420,11 @@ utest char_lit "'a' bc" with Success('a', "bc") in
 let sep_by = lam sep. lam p.
   let inner = fix (lam inner.
     bind (apr sep p) (lam hd.
-    bind (alt inner (pure [])) (lam tl.
+    bind (alt (try inner) (pure [])) (lam tl.
     pure (cons hd tl)))
   ) in
   bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
-  bind (alt inner (pure [])) (lam tl.
+  bind (alt (try inner) (pure [])) (lam tl.
   pure (concat hd tl)))
 in
 
@@ -461,10 +473,12 @@ con CBool : Dyn in
 con CChar : Dyn in
 
 let ident =
-  bind identifier (lam x.
-  if any (eqstr x) keywords
-  then fail (concat (concat "keyword '" x) "'") "identifier"
-  else pure x)
+  try (
+    bind identifier (lam x.
+    if any (eqstr x) keywords
+    then fail (concat (concat "keyword '" x) "'") "identifier"
+    else pure x)
+  )
 in
 
 -- TODO: Other constants?
@@ -486,13 +500,13 @@ let atom = fix (lam atom. lam expr. lam input.
   in
   let str_lit = fmap TmSeq string_lit in
   let chr_lit = fmap (lam c. TmConst (CChar c)) char_lit in
-    alt var_access
-    (alt fix_
+    alt fix_
     (alt seq
     (alt tuple
     (alt num
     (alt bool
-    (alt char_lit str_lit)))))) input
+    (alt char_lit
+    (alt str_lit var_access)))))) input
 ) in
 
 let left = lam expr.
@@ -511,7 +525,7 @@ in
 let expr = fix (lam expr. lam input.
   let let_ =
     bind (reserved "let") (lam _.
-    bind identifier (lam x.
+    bind ident (lam x.
     bind (symbol "=") (lam _.
     bind expr (lam e.
     bind (reserved "in") (lam _.
@@ -520,7 +534,7 @@ let expr = fix (lam expr. lam input.
   in
   let lam_ =
     bind (reserved "lam") (lam _.
-    bind identifier (lam x.
+    bind ident (lam x.
     bind (symbol ".") (lam _.
     bind expr (lam e.
     pure (TmLam(x, e))))))
@@ -538,8 +552,8 @@ let expr = fix (lam expr. lam input.
     bind (reserved "match") (lam _.
     bind expr (lam e.
     bind (reserved "with") (lam _.
-    bind identifier (lam k.
-    bind identifier (lam x.
+    bind ident (lam k.
+    bind ident (lam x.
     bind (reserved "then") (lam _.
     bind expr (lam thn.
     bind (reserved "else") (lam _.
@@ -548,7 +562,7 @@ let expr = fix (lam expr. lam input.
   in
   let con_ =
     bind (reserved "con") (lam _.
-    bind identifier (lam k.
+    bind ident (lam k.
     bind (reserved "in") (lam _.
     bind expr (lam body.
     pure (TmConDef(k, body))))))
@@ -563,12 +577,12 @@ let expr = fix (lam expr. lam input.
     pure (TmUtest(e1, e2, body))))))))
   in
   -----------
-  alt (left expr)
-  (alt let_
+  alt let_
   (alt lam_
   (alt if_
   (alt match_
-  (alt con_ utest_))))) input
+  (alt con_
+  (alt utest_ (left expr)))))) input
 ) in
 
 utest (left expr) "f x"
@@ -592,6 +606,13 @@ utest expr "f t.0.1 u.0"
 with Success(TmApp(TmApp(TmVar "f",
                          TmProj(TmProj(TmVar "t", 0), 1)),
                    TmProj(TmVar "u", 0)),"") in
+
+utest show_error(expr "let lam = 42 in lam")
+with "Unexpected keyword 'lam'. Expected identifier" in
+utest show_error(expr "let x = [1,2 in nth x 0")
+with "Unexpected 'i'. Expected ']'" in
+utest show_error(expr "(1, (2,3).1")
+with "Unexpected end of input" in
 
 let program = apr ws expr in
 
