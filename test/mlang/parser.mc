@@ -131,19 +131,6 @@ let fmap = lam f. lam p. lam input.
   else res
 in
 
--- TODO: Error reporting is based on second parser.
---       Should put them together "expected x or y"
--- alt : M a -> M a -> M a
-let alt = lam p1. lam p2. lam input.
-  let res = p1 input in
-  match res with Failure t then
-    let input2 = t.2 in
-    if eqi (length input) (length input2)
-    then p2 input
-    else res
-  else res -- Propagate Success
-in
-
 -- pure : a -> M a
 let pure = lam v. lam input. Success(v, input) in
 
@@ -230,6 +217,30 @@ utest
   )
 with "Unexpected end of input" in
 
+let end_of_input = lam input.
+  if null input
+  then pure ((), input)
+  else fail (show_char (head input)) "end of input" input
+in
+
+-- alt : M a -> M a -> M a
+let alt = lam p1. lam p2. lam input.
+  let res1 = p1 input in
+  match res1 with Failure t1 then
+    let input2 = t1.2 in
+    if eqi (length input) (length input2) then
+      let res2 = p2 input in
+      match res2 with Failure t2 then
+        let input3 = t2.2 in
+        if eqi (length input2) (length input3) then
+          let exp = concat (concat t1.1 " or ") t2.1 in
+          Failure (t2.0, exp, input3)
+        else res2 -- p2 consumed input, don't merge expected
+      else res2 -- Propagate Success
+    else res1 -- p1 consumed input, don't backtrack
+  else res1 -- Propagate Success
+in
+
 let not_followed_by = lam p. lam input.
   let res1 = p input in
   match res1 with Failure _ then
@@ -254,6 +265,16 @@ let try = lam p. lam input.
   match res with Failure t then
     Failure (t.0, t.1, input)
   else -- Propagate Success
+    res
+in
+
+let label = lam l. lam p. lam input.
+  let res = p input in
+  match res with Failure t then
+  if eqi (length t.2) (length input)
+  then Failure (t.0, l, t.2)
+  else res
+  else -- Propagate success
     res
 in
 
@@ -299,7 +320,7 @@ utest alt (lex_char 'a') (lex_char 'b') "abc" with Success('a', "bc") in
 utest alt (lex_char 'b') (lex_char 'a') "abc" with Success('a', "bc") in
 utest show_error (
   alt (lex_char 'b') (lex_char 'c') "abc")
-with "Unexpected 'a'. Expected 'c'" in
+with "Unexpected 'a'. Expected 'b' or 'c'" in
 
 utest not_followed_by (lex_char 'b') "abc" with Success((), "abc") in
 utest show_error (not_followed_by (lex_char 'a') "abc")
@@ -324,16 +345,18 @@ let lex_string = fix (lam lex_string. lam s.
   else
     let c = head s in
     let cs = tail s in
-    try ( -- This 'try' makes the parser consume the whole string or nothing
-      bind (lex_char c) (lam _.
-      bind (lex_string cs) (lam _.
-      pure (cons c cs)))
-    )
+    label (concat "'" (concat s "'")) (
+      try ( -- This 'try' makes the parser consume the whole string or nothing
+        bind (lex_char c) (lam _.
+        bind (lex_string cs) (lam _.
+        pure (cons c cs)))
+      ))
 ) in
 
 utest lex_string "abc" "abcdef" with Success("abc", "def") in
 utest lex_string "abcdef" "abcdef" with Success("abcdef", "") in
-utest show_error (lex_string "abc" "def") with "Unexpected 'd'. Expected 'a'" in
+utest show_error (lex_string "abc" "def")
+with "Unexpected 'd'. Expected 'abc'" in
 
 utest
   bind (lex_string "ab") (lam s1.
@@ -385,7 +408,8 @@ let reserved = lam s.
 
 utest reserved "lam" "lam x. x" with Success((), "x. x") in
 utest show_error (reserved "lam" "lambda") with "Unexpected 'b'" in
-utest show_error (reserved "lam" "la") with "Unexpected end of input" in
+utest show_error (reserved "lam" "la")
+with "Unexpected end of input. Expected 'lam'" in
 
 let number = token lex_number in
 
@@ -400,7 +424,7 @@ utest parens (lex_string "abc") "(abc)" with Success("abc","") in
 utest brackets (many (string "abc")) "[abc abc]"
 with Success(["abc", "abc"], "") in
 utest show_error (parens (lex_string "abc") "(abc")
-with "Unexpected end of input" in
+with "Unexpected end of input. Expected ')'" in
 
 let lex_string_lit =
   wrapped_in (lex_string "\"") (lex_string "\"")
@@ -418,13 +442,8 @@ utest char_lit "'a'" with Success('a', "") in
 utest char_lit "'a' bc" with Success('a', "bc") in
 
 let sep_by = lam sep. lam p.
-  let inner = fix (lam inner.
-    bind (apr sep p) (lam hd.
-    bind (alt (try inner) (pure [])) (lam tl.
-    pure (cons hd tl)))
-  ) in
   bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
-  bind (alt (try inner) (pure [])) (lam tl.
+  bind (many (apr sep p)) (lam tl.
   pure (concat hd tl)))
 in
 
@@ -432,7 +451,8 @@ let comma_sep = sep_by (symbol ",") in
 
 utest comma_sep (string "a") "a, a, a" with Success(["a", "a", "a"],"") in
 utest comma_sep (string "a") "a" with Success(["a"],"") in
-utest comma_sep (string "a") "a ,a,b" with Success(["a", "a"],",b") in
+utest show_error (comma_sep (string "a") "a ,a,b")
+with "Unexpected 'b'. Expected 'a'" in
 utest brackets (comma_sep number) "[ 1 , 2, 3]" with Success([1,2,3], "") in
 
 let identifier =
@@ -488,7 +508,7 @@ let atom = fix (lam atom. lam expr. lam input.
   let seq = fmap TmSeq (brackets (comma_sep expr)) in
   let tuple =
     bind (parens (comma_sep expr)) (lam es.
-    if eqi (length es) 0
+    if null es
     then pure (TmConst CUnit)
     else if eqi (length es) 1
     then pure (head es)
@@ -500,20 +520,21 @@ let atom = fix (lam atom. lam expr. lam input.
   in
   let str_lit = fmap TmSeq string_lit in
   let chr_lit = fmap (lam c. TmConst (CChar c)) char_lit in
-    alt fix_
+    label "atomic expression"
+    (alt fix_
     (alt seq
     (alt tuple
     (alt num
     (alt bool
     (alt char_lit
-    (alt str_lit var_access)))))) input
+    (alt str_lit var_access))))))) input
 ) in
 
 let left = lam expr.
   let atom_or_proj =
     bind (atom expr) (lam a.
     bind (many (apr (symbol ".") number)) (lam is.
-    if eqi (length is) 0
+    if null is
     then pure a
     else pure (foldl (curry TmProj) a is)))
   in
@@ -576,13 +597,13 @@ let expr = fix (lam expr. lam input.
     bind expr (lam body.
     pure (TmUtest(e1, e2, body))))))))
   in
-  -----------
-  alt let_
+  label "expression"
+  (alt (left expr)
+  (alt let_
   (alt lam_
   (alt if_
   (alt match_
-  (alt con_
-  (alt utest_ (left expr)))))) input
+  (alt con_ utest_)))))) input
 ) in
 
 utest (left expr) "f x"
@@ -612,8 +633,14 @@ with "Unexpected keyword 'lam'. Expected identifier" in
 utest show_error(expr "let x = [1,2 in nth x 0")
 with "Unexpected 'i'. Expected ']'" in
 utest show_error(expr "(1, (2,3).1")
-with "Unexpected end of input" in
+with "Unexpected end of input. Expected ')'" in
 
-let program = apr ws expr in
+utest show_error(expr "")
+with "Unexpected end of input. Expected expression" in
+
+let program = apl (apr ws expr) end_of_input in
+
+utest show_error (program "f let x = 42 in x")
+with "Unexpected 'l'. Expected end of input" in
 
 ()
