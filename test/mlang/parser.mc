@@ -292,6 +292,13 @@ let many1 = lam p.
   pure (cons hd tl)))
 in
 
+con Some : Dyn in
+con None in
+
+let optional = lam p.
+  alt (fmap Some p) (pure None)
+in
+
 -- Lexers ---------------------------------------------
 let lex_char = lam c. satisfy (eqchar c) (show_char c) in
 
@@ -463,15 +470,17 @@ in
 
 utest identifier "foo" with Success("foo", "") in
 
--- TODO: left-recursive stuff?
-
 -- MCore parser ----------------------------------------
 let keywords =
   ["let", "in", "if", "then", "else", "match", "with", "con", "lam", "fix", "utest"]
 in
 
+con TyDyn in
+con TyProd : Dyn in
+con TyUnit in
+
 con TmLet : (Dyn, Dyn, Dyn) in
-con TmLam : (Dyn, Dyn) in
+con TmLam : (Dyn, Dyn, Dyn) in
 con TmIf  : (Dyn, Dyn, Dyn) in
 con TmConDef : (Dyn, Dyn) in
 -- TmMatch : (Expr, String, String, Expr, Expr)
@@ -500,6 +509,26 @@ let ident =
     else pure x)
   )
 in
+
+let ty = fix (lam ty. lam input.
+  let tuple =
+    bind (parens (comma_sep ty)) (lam ts.
+      if null ts
+      then pure TyUnit
+      else if eqi (length ts) 1
+      then pure (head ts)
+      else pure (TyProd ts))
+  in
+  let dyn = apr (reserved "Dyn") (pure TyDyn) in
+  label "type"
+  (alt tuple dyn) input
+) in
+
+utest ty "Dyn" with Success(TyDyn, "") in
+utest ty "((), ((Dyn), Dyn)) rest"
+with Success(TyProd[TyUnit,TyProd[TyDyn, TyDyn]], "rest") in
+utest show_error (ty "dyn") with "Unexpected 'd'. Expected type" in
+utest show_error (ty "(Dyn, dyn, Dyn)") with "Unexpected 'd'. Expected type" in
 
 -- TODO: Other constants?
 let atom = fix (lam atom. lam expr. lam input.
@@ -542,7 +571,6 @@ let left = lam expr.
   pure (foldl1 (curry TmApp) as))
 in
 
--- TODO: Type annotations
 let expr = fix (lam expr. lam input.
   let let_ =
     bind (reserved "let") (lam _.
@@ -556,9 +584,10 @@ let expr = fix (lam expr. lam input.
   let lam_ =
     bind (reserved "lam") (lam _.
     bind ident (lam x.
+    bind (optional (apr (symbol ":") ty)) (lam t.
     bind (symbol ".") (lam _.
     bind expr (lam e.
-    pure (TmLam(x, e))))))
+    pure (TmLam(x, t, e)))))))
   in
   let if_ =
     bind (reserved "if") (lam _.
@@ -574,7 +603,7 @@ let expr = fix (lam expr. lam input.
     bind expr (lam e.
     bind (reserved "with") (lam _.
     bind ident (lam k.
-    bind ident (lam x.
+    bind (optional ident) (lam x.
     bind (reserved "then") (lam _.
     bind expr (lam thn.
     bind (reserved "else") (lam _.
@@ -612,15 +641,15 @@ utest (left expr) "f x y"
 with Success (TmApp(TmApp(TmVar "f", TmVar "x"), TmVar "y"), "") in
 
 utest expr "let f = lam x. x in f x"
-with Success(TmLet("f", TmLam ("x", TmVar "x"),
+with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
              TmApp (TmVar "f", TmVar "x")), "") in
 
-utest expr "let f = lam x. x in f (x, y) z"
-with Success(TmLet("f", TmLam ("x", TmVar "x"),
+utest expr "let f = lam x : Dyn. x in f (x, y) z"
+with Success(TmLet("f", TmLam ("x", Some TyDyn, TmVar "x"),
              TmApp (TmApp (TmVar "f", TmTuple [TmVar "x", TmVar "y"]), TmVar "z")), "") in
 
 utest expr "let f = lam x. x in f \"foo\""
-with Success(TmLet("f", TmLam ("x", TmVar "x"),
+with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
              TmApp (TmVar "f", TmSeq "foo")), "") in
 
 utest expr "f t.0.1 u.0"
@@ -630,8 +659,16 @@ with Success(TmApp(TmApp(TmVar "f",
 
 utest show_error(expr "let lam = 42 in lam")
 with "Unexpected keyword 'lam'. Expected identifier" in
+
+utest show_error(expr "let x = 42 in")
+with "Unexpected end of input. Expected expression" in
+
+utest show_error(expr "lam x : 42. x")
+with "Unexpected '4'. Expected type" in
+
 utest show_error(expr "let x = [1,2 in nth x 0")
 with "Unexpected 'i'. Expected ']'" in
+
 utest show_error(expr "(1, (2,3).1")
 with "Unexpected end of input. Expected ')'" in
 
