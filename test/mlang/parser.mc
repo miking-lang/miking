@@ -107,10 +107,19 @@ con Failure : (Dyn, Dyn, Dyn) in -- Failure : (String, String, String) -> ParseR
 -- Success stores result of parsing and rest of input
 -- Failure stores found and expected token, and rest of input
 
+-- type Parser a = String -> ParseResult a
+
+-- fail : String -> String -> Parser a
+--
+-- Fail parsing with custom info
 let fail = lam found. lam expected. lam input.
   Failure (found, expected, input)
 in
 
+-- show_error : ParseResult a -> String
+--
+-- Show human readable error message from failed parse.
+-- Fails if argument is not a failure.
 let show_error = lam f.
   match f with Failure t then
     let found = t.0 in
@@ -122,6 +131,7 @@ let show_error = lam f.
   else error "Tried to show something that is not a failure"
 in
 
+-- fmap : (a -> b) -> Parser a -> Parser b
 let fmap = lam f. lam p. lam input.
   let res = p input in
   match res with Success t then
@@ -131,10 +141,10 @@ let fmap = lam f. lam p. lam input.
   else res
 in
 
--- pure : a -> M a
+-- pure : a -> Parser a
 let pure = lam v. lam input. Success(v, input) in
 
--- ap : M (a -> b) -> M a -> M b
+-- ap : Parser (a -> b) -> Parser a -> Parser b
 let ap = lam pf. lam p. lam input.
   let res1 = pf input in
   match res1 with Success t1 then
@@ -149,6 +159,9 @@ let ap = lam pf. lam p. lam input.
   else res1
 in
 
+-- apl : Parser a -> Parser b -> Parser a
+--
+-- Run two parser, use result of first one
 let apl = lam p1. lam p2. lam input.
   let res1 = p1 input in
   match res1 with Success t1 then
@@ -162,6 +175,9 @@ let apl = lam p1. lam p2. lam input.
   else res1
 in
 
+-- apr : Parser a -> Parser b -> Parser b
+--
+-- Run two parser, use result of second one
 let apr = lam p1. lam p2. lam input.
   let res1 = p1 input in
   match res1 with Success t1 then
@@ -175,7 +191,10 @@ let apr = lam p1. lam p2. lam input.
   else res1
 in
 
--- bind : M a -> (a -> M b) -> M b
+-- bind : Parser a -> (a -> Parser b) -> Parser b
+--
+-- Typical usage is `bind p1 (lam x. p2)`, i.e. run `p1` and
+-- pass result to a function running another parser.
 let bind = lam p. lam f. lam input.
   let res = p input in
   match res with Success t then
@@ -186,14 +205,22 @@ let bind = lam p. lam f. lam input.
     res
 in
 
+-- Run parser and ignore result
 let void = apl (pure ()) in
 
--- when : bool -> M a -> M ()
-let when = lam b. lam m. lam input.
-  if b then void m else pure ()
+-- when : bool -> Parser a -> Parser ()
+--
+-- Monadic conditional. `when b p` runs `p` (ignoring the
+-- result) if `b` is true.
+let when = lam b. lam p. lam input.
+  if b then void p else pure ()
 in
 
 -- Core ------------------------------------------------
+
+-- next : Parser char
+--
+-- Read next character from input stream
 let next = lam input.
   if null input
   then fail "end of input" "" input
@@ -223,7 +250,10 @@ let end_of_input = lam input.
   else fail (show_char (head input)) "end of input" input
 in
 
--- alt : M a -> M a -> M a
+-- alt : Parser a -> Parser a -> Parser a
+--
+-- `alt p1 p2` tries to parse `p1`, but falls back
+-- to `p2` if `p1` fails without consuming any input.
 let alt = lam p1. lam p2. lam input.
   let res1 = p1 input in
   match res1 with Failure t1 then
@@ -241,6 +271,10 @@ let alt = lam p1. lam p2. lam input.
   else res1 -- Propagate Success
 in
 
+-- not_followed_by : Parser a -> Parser ()
+--
+-- `not_followed_by p` succeeds (without consuming input)
+-- only if `p` does not succeed.
 let not_followed_by = lam p. lam input.
   let res1 = p input in
   match res1 with Failure _ then
@@ -253,6 +287,11 @@ let not_followed_by = lam p. lam input.
     else res2
 in
 
+-- satisfy : (Char -> Bool) -> String -> Parser Char
+--
+-- `satisfy cnd exp` succeeds with the next character
+-- if `cnd` returns true for that character. `exp` is
+-- the expected token.
 let satisfy = lam cnd. lam expected. lam input.
   bind next (lam c.
   if cnd c
@@ -260,6 +299,10 @@ let satisfy = lam cnd. lam expected. lam input.
   else lam _. fail (show_char c) expected input) input
 in
 
+-- try : Parser a -> Parser a
+--
+-- `try p` is used for backtracking. It parses `p`, but
+-- fails without consuming input if `p` fails.
 let try = lam p. lam input.
   let res = p input in
   match res with Failure t then
@@ -268,6 +311,11 @@ let try = lam p. lam input.
     res
 in
 
+-- label : String -> Parser p -> Parser p
+--
+-- `label l p` parses `p` but changes the "expected" token
+-- to `l` if `p` fails. Typical use is for big chains of
+-- `alt`, e.g., `label "expression" (alt (alt let_ lam_) ...)`
 let label = lam l. lam p. lam input.
   let res = p input in
   match res with Failure t then
@@ -279,6 +327,10 @@ let label = lam l. lam p. lam input.
 in
 
 -- Combinators ---------------------------------
+
+-- many : Parser a -> Parser [a]
+--
+-- Parse zero or more occurrences of a parser.
 let many = fix (lam many. lam p.
   bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
   if null hd
@@ -286,20 +338,48 @@ let many = fix (lam many. lam p.
   else bind (many p) (lam tl. pure (concat hd tl)))
 ) in
 
+-- many1 : Parser a -> Parser [a]
+--
+-- Parse one or more occurrences of a parser.
 let many1 = lam p.
   bind p (lam hd.
   bind (many p) (lam tl.
   pure (cons hd tl)))
 in
 
-con Some : Dyn in
-con None in
+con Some : Dyn in -- Some : Option a
+con None in       -- None : Option a
 
+-- optional : Parser a -> Parser (Option a)
 let optional = lam p.
   alt (fmap Some p) (pure None)
 in
 
+-- wrapped_in : Parser l -> Parser r -> Parser a -> Parser a
+--
+-- `wrapped_in pl pr p` parses `p` preceded by `pl` and
+-- succeeded by `pr`.
+let wrapped_in = lam pl. lam pr. lam p.
+  apr pl (apl p pr)
+in
+
+-- sep_by : Parser s -> Parser a -> Parser [a]
+--
+-- `sep_by sep p` parses zero or more occurrences of
+-- `p` separated by single occurrences of `sep`.
+let sep_by = lam sep. lam p.
+  bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
+  bind (many (apr sep p)) (lam tl.
+  pure (concat hd tl)))
+in
+
 -- Lexers ---------------------------------------------
+
+-- Lexers are parsers that do not consume trailing whitespace
+
+-- lex_char : Char -> Parser Char
+--
+-- Parse a specific character.
 let lex_char = lam c. satisfy (eqchar c) (show_char c) in
 
 utest lex_char 'a' "ab" with Success ('a', "b") in
@@ -341,11 +421,17 @@ utest many1 (lex_char 'a') "abc" with Success("a", "bc") in
 utest many1 (lex_char 'a') "aaabc" with Success("aaa", "bc") in
 utest show_error (many1 (lex_char 'a') "bc") with "Unexpected 'b'. Expected 'a'" in
 
+-- lex_number : Parser Int
+--
+-- Parse a natural number.
 let lex_number = fmap string2int (many1 (satisfy is_digit "digit")) in
 
 utest lex_number "123abc" with Success(123, "abc") in
 utest show_error (lex_number "abc") with "Unexpected 'a'. Expected digit" in
 
+-- lex_string : String -> Parser String
+--
+-- Parse a specific string.
 let lex_string = fix (lam lex_string. lam s.
   if null s
   then pure ""
@@ -371,7 +457,27 @@ utest
   pure (concat s1 s2))) "abcde"
 with Success ("abcd", "e") in
 
+-- Parser Char
+--
+-- Parse a character literal.
+let lex_char_lit = wrapped_in (lex_string "'") (lex_string "'") next in
+
+-- Parser String
+--
+-- Parse a string literal.
+let lex_string_lit =
+  wrapped_in (lex_string "\"") (lex_string "\"")
+             (many (satisfy (lam c. not (eqstr [c] "\"")) ""))
+in
+
+-- spaces : Parser ()
+--
+-- Parse zero or more whitespace characters.
 let spaces = void (many (satisfy is_whitespace "whitespace")) in
+
+-- spaces1 : Parser ()
+--
+-- Parse one or more whitespace characters.
 let spaces1 = void (many1 (satisfy is_whitespace "whitespace")) in
 
 utest spaces "   abc" with Success ((), "abc") in
@@ -380,6 +486,10 @@ utest spaces1 "	  abc" with Success ((), "abc") in
 utest spaces "abc" with Success ((), "abc") in
 utest show_error (spaces1 "abc") with "Unexpected 'a'. Expected whitespace" in
 
+-- line_comment : Parser ()
+--
+-- Parse a line comment, ignoring its contents.
+-- TODO: This should not be in the library!
 let line_comment =
   void (apr (apr (alt (lex_string "--") (lex_string "//"))
                  (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
@@ -389,14 +499,25 @@ in
 utest line_comment "-- this is a comment
 this is not" with Success((),"this is not") in
 
+-- ws : Parser ()
+--
+-- Parse whitespace or comments.
 let ws = void (many (alt line_comment spaces1)) in
 
 utest ws "   -- this is a comment
 --
     foo" with Success((), "foo") in
+
 -- Parsers ----------------------------------
 
+-- token : Parser a -> Parser a
+--
+-- `token p` parses `p` and any trailing whitespace
+-- or comments.
+-- TODO: Comment parser should be a parameter!
 let token = lam p. apl p ws in
+
+-- string : String -> Parser String
 let string = lam s. token (lex_string s) in
 
 utest string "ab" "abc" with Success("ab", "c") in
@@ -405,11 +526,16 @@ utest
   many (alt (string "ab") (string "cd")) "ab cd ef"
 with Success(["ab", "cd"], "ef") in
 
+-- symbol : String -> Parser String
 let symbol = string in
 
 utest symbol "(" "(abc)" with Success("(", "abc)") in
 utest symbol "(" "(  abc)" with Success("(", "abc)") in
 
+-- reserved : String -> Parser String
+--
+-- Parse a specific string and fail if it is followed by
+-- additional valid identifier characters.
 let reserved = lam s.
   void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char "")))) in
 
@@ -418,13 +544,13 @@ utest show_error (reserved "lam" "lambda") with "Unexpected 'b'" in
 utest show_error (reserved "lam" "la")
 with "Unexpected end of input. Expected 'lam'" in
 
+-- number : Parser Int
 let number = token lex_number in
 
-let wrapped_in = lam pl. lam pr. lam p.
-  apr pl (apl p pr)
-in
-
+-- parens : Parser a -> Parser a
 let parens = wrapped_in (symbol "(") (symbol ")") in
+
+-- brackets : Parser a -> Parser a
 let brackets = wrapped_in (symbol "[") (symbol "]") in
 
 utest parens (lex_string "abc") "(abc)" with Success("abc","") in
@@ -433,27 +559,19 @@ with Success(["abc", "abc"], "") in
 utest show_error (parens (lex_string "abc") "(abc")
 with "Unexpected end of input. Expected ')'" in
 
-let lex_string_lit =
-  wrapped_in (lex_string "\"") (lex_string "\"")
-             (many (satisfy (lam c. not (eqstr [c] "\"")) ""))
-in
-let string_lit = token lex_string_lit in
-
-utest string_lit "\"foobar\"" with Success("foobar", "") in
-utest string_lit "\"\" rest" with Success("", "rest") in
-
-let lex_char_lit = wrapped_in (lex_string "'") (lex_string "'") next in
+-- char_lit : Parser Char
 let char_lit = token lex_char_lit in
 
 utest char_lit "'a'" with Success('a', "") in
 utest char_lit "'a' bc" with Success('a', "bc") in
 
-let sep_by = lam sep. lam p.
-  bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
-  bind (many (apr sep p)) (lam tl.
-  pure (concat hd tl)))
-in
+-- string_lit : Parser String
+let string_lit = token lex_string_lit in
 
+utest string_lit "\"foobar\"" with Success("foobar", "") in
+utest string_lit "\"\" rest" with Success("", "rest") in
+
+-- comma_sep : Parser a -> Parser [a]
 let comma_sep = sep_by (symbol ",") in
 
 utest comma_sep (string "a") "a, a, a" with Success(["a", "a", "a"],"") in
@@ -462,6 +580,10 @@ utest show_error (comma_sep (string "a") "a ,a,b")
 with "Unexpected 'b'. Expected 'a'" in
 utest brackets (comma_sep number) "[ 1 , 2, 3]" with Success([1,2,3], "") in
 
+-- identifier : Parser String
+--
+-- Parse a valid identifier.
+-- TODO: Should not be in library
 let identifier =
   bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
   bind (token (many (satisfy is_valid_char ""))) (lam cs.
@@ -471,6 +593,8 @@ in
 utest identifier "foo" with Success("foo", "") in
 
 -- MCore parser ----------------------------------------
+
+-- List of reserved keywords
 let keywords =
   ["let", "in", "if", "then", "else", "match", "with", "con", "lam", "fix", "utest"]
 in
@@ -501,6 +625,10 @@ con CInt : Dyn in
 con CBool : Dyn in
 con CChar : Dyn in
 
+-- ident : Parser String
+--
+-- Parse an identifier, but require that it is not in the list
+-- of reserved keywords.
 let ident =
   try (
     bind identifier (lam x.
@@ -510,6 +638,7 @@ let ident =
   )
 in
 
+-- ty : Parser Type
 let ty = fix (lam ty. lam input.
   let tuple =
     bind (parens (comma_sep ty)) (lam ts.
@@ -530,7 +659,11 @@ with Success(TyProd[TyUnit,TyProd[TyDyn, TyDyn]], "rest") in
 utest show_error (ty "dyn") with "Unexpected 'd'. Expected type" in
 utest show_error (ty "(Dyn, dyn, Dyn)") with "Unexpected 'd'. Expected type" in
 
--- TODO: Other constants?
+-- atom : Parser Expr
+--
+-- Innermost expression parser.
+-- TODO: Other constants? Floats are annoying since there is no
+--       primitive string2float function!
 let atom = fix (lam atom. lam expr. lam input.
   let var_access = fmap TmVar ident in
   let fix_ = apr (reserved "fix") (pure TmFix) in
@@ -559,6 +692,10 @@ let atom = fix (lam atom. lam expr. lam input.
     (alt str_lit var_access))))))) input
 ) in
 
+-- left : Parser Expr
+--
+-- Left recursive expressions, i.e. function application
+-- and tuple projection.
 let left = lam expr.
   let atom_or_proj =
     bind (atom expr) (lam a.
@@ -571,6 +708,9 @@ let left = lam expr.
   pure (foldl1 (curry TmApp) as))
 in
 
+-- expr: Parser Expr
+--
+-- Main expression parser.
 let expr = fix (lam expr. lam input.
   let let_ =
     bind (reserved "let") (lam _.
@@ -675,6 +815,7 @@ with "Unexpected end of input. Expected ')'" in
 utest show_error(expr "")
 with "Unexpected end of input. Expected expression" in
 
+-- program : Parser Expr
 let program = apl (apr ws expr) end_of_input in
 
 utest show_error (program "f let x = 42 in x")
