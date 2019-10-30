@@ -89,17 +89,6 @@ utest is_alphanum 'A' with true in
 utest is_alphanum 'z' with true in
 utest is_alphanum '_' with false in
 
-let is_valid_char = lam c.
-  or (is_alphanum c) (eqchar c '_')
-in
-
-utest is_valid_char '0' with true in
-utest is_valid_char '9' with true in
-utest is_valid_char 'A' with true in
-utest is_valid_char 'z' with true in
-utest is_valid_char '_' with true in
-
-
 -- The Parser monad -----------------------------
 -- TODO: Track position
 con Success : (Dyn, Dyn) in -- Success : (a, String) -> ParseResult a
@@ -486,10 +475,17 @@ utest spaces1 "	  abc" with Success ((), "abc") in
 utest spaces "abc" with Success ((), "abc") in
 utest show_error (spaces1 "abc") with "Unexpected 'a'. Expected whitespace" in
 
+-- lex_token : Parser () -> Parser a -> Parser a
+--
+-- `lex_token ws p` parses `p`, using `ws` to consume any trailing
+-- whitespace or comments.
+let lex_token = lam ws. lam p. apl p ws in
+
+-- MCore tokens ----------------------------------
+
 -- line_comment : Parser ()
 --
 -- Parse a line comment, ignoring its contents.
--- TODO: This should not be in the library!
 let line_comment =
   void (apr (apr (alt (lex_string "--") (lex_string "//"))
                  (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
@@ -508,14 +504,10 @@ utest ws "   -- this is a comment
 --
     foo" with Success((), "foo") in
 
--- Parsers ----------------------------------
-
 -- token : Parser a -> Parser a
 --
--- `token p` parses `p` and any trailing whitespace
--- or comments.
--- TODO: Comment parser should be a parameter!
-let token = lam p. apl p ws in
+-- `token p` parses `p` and any trailing whitespace or comments.
+let token = lex_token ws in
 
 -- string : String -> Parser String
 let string = lam s. token (lex_string s) in
@@ -532,12 +524,23 @@ let symbol = string in
 utest symbol "(" "(abc)" with Success("(", "abc)") in
 utest symbol "(" "(  abc)" with Success("(", "abc)") in
 
+let is_valid_char = lam c.
+  or (is_alphanum c) (eqchar c '_')
+in
+
+utest is_valid_char '0' with true in
+utest is_valid_char '9' with true in
+utest is_valid_char 'A' with true in
+utest is_valid_char 'z' with true in
+utest is_valid_char '_' with true in
+
 -- reserved : String -> Parser String
 --
 -- Parse a specific string and fail if it is followed by
 -- additional valid identifier characters.
 let reserved = lam s.
-  void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char "")))) in
+  void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char ""))))
+in
 
 utest reserved "lam" "lam x. x" with Success((), "x. x") in
 utest show_error (reserved "lam" "lambda") with "Unexpected 'b'" in
@@ -580,24 +583,32 @@ utest show_error (comma_sep (string "a") "a ,a,b")
 with "Unexpected 'b'. Expected 'a'" in
 utest brackets (comma_sep number) "[ 1 , 2, 3]" with Success([1,2,3], "") in
 
--- identifier : Parser String
---
--- Parse a valid identifier.
--- TODO: Should not be in library
-let identifier =
-  bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
-  bind (token (many (satisfy is_valid_char ""))) (lam cs.
-  pure (cons c cs)))
-in
-
-utest identifier "foo" with Success("foo", "") in
-
--- MCore parser ----------------------------------------
-
 -- List of reserved keywords
 let keywords =
   ["let", "in", "if", "then", "else", "match", "with", "con", "lam", "fix", "utest"]
 in
+
+-- ident : Parser String
+--
+-- Parse an identifier, but require that it is not in the list
+-- of reserved keywords.
+let identifier =
+  let valid_id =
+    bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
+    bind (token (many (satisfy is_valid_char ""))) (lam cs.
+    pure (cons c cs)))
+  in
+  try (
+    bind valid_id (lam x.
+    if any (eqstr x) keywords
+    then fail (concat (concat "keyword '" x) "'") "identifier"
+    else pure x)
+  )
+in
+
+utest identifier "foo" with Success("foo", "") in
+
+-- MCore parsers ----------------------------------------
 
 con TyDyn in
 con TyProd : Dyn in
@@ -624,19 +635,6 @@ con CUnit in
 con CInt : Dyn in
 con CBool : Dyn in
 con CChar : Dyn in
-
--- ident : Parser String
---
--- Parse an identifier, but require that it is not in the list
--- of reserved keywords.
-let ident =
-  try (
-    bind identifier (lam x.
-    if any (eqstr x) keywords
-    then fail (concat (concat "keyword '" x) "'") "identifier"
-    else pure x)
-  )
-in
 
 -- ty : Parser Type
 let ty = fix (lam ty. lam input.
@@ -665,7 +663,7 @@ utest show_error (ty "(Dyn, dyn, Dyn)") with "Unexpected 'd'. Expected type" in
 -- TODO: Other constants? Floats are annoying since there is no
 --       primitive string2float function!
 let atom = fix (lam atom. lam expr. lam input.
-  let var_access = fmap TmVar ident in
+  let var_access = fmap TmVar identifier in
   let fix_ = apr (reserved "fix") (pure TmFix) in
   let seq = fmap TmSeq (brackets (comma_sep expr)) in
   let tuple =
@@ -714,7 +712,7 @@ in
 let expr = fix (lam expr. lam input.
   let let_ =
     bind (reserved "let") (lam _.
-    bind ident (lam x.
+    bind identifier (lam x.
     bind (symbol "=") (lam _.
     bind expr (lam e.
     bind (reserved "in") (lam _.
@@ -723,7 +721,7 @@ let expr = fix (lam expr. lam input.
   in
   let lam_ =
     bind (reserved "lam") (lam _.
-    bind ident (lam x.
+    bind identifier (lam x.
     bind (optional (apr (symbol ":") ty)) (lam t.
     bind (symbol ".") (lam _.
     bind expr (lam e.
@@ -742,8 +740,8 @@ let expr = fix (lam expr. lam input.
     bind (reserved "match") (lam _.
     bind expr (lam e.
     bind (reserved "with") (lam _.
-    bind ident (lam k.
-    bind (optional ident) (lam x.
+    bind identifier (lam k.
+    bind (optional identifier) (lam x.
     bind (reserved "then") (lam _.
     bind expr (lam thn.
     bind (reserved "else") (lam _.
@@ -752,7 +750,7 @@ let expr = fix (lam expr. lam input.
   in
   let con_ =
     bind (reserved "con") (lam _.
-    bind ident (lam k.
+    bind identifier (lam k.
     bind (reserved "in") (lam _.
     bind expr (lam body.
     pure (TmConDef(k, body))))))
