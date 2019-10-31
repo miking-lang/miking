@@ -68,6 +68,7 @@ and const =
 | Cgeqf    of float option
 | Ceqf     of float option
 | Cneqf    of float option
+| CString2float
 (* MCore intrinsic: characters *)
 | CChar    of int
 | CChar2int

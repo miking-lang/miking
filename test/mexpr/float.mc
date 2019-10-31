@@ -54,4 +54,7 @@ let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
 let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
 utest eqf taxicab2_1 taxicab2_2 with true in
 
+utest string2float "42" with 42.0 in
+utest string2float "3.14159" with 3.14159 in
+utest string2float "3.2e-2" with 0.032 in
 ()

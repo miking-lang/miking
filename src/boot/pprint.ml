@@ -96,6 +96,7 @@ let rec pprint_const c =
   | Ceqf(Some(v)) -> us(sprintf "eqf(%f)" v)
   | Cneqf(None) -> us"neqf"
   | Cneqf(Some(v)) -> us(sprintf "neqf(%f)" v)
+  | CString2float -> us"string2float"
   (* MCore intrinsic: characters *)
   | CChar(v) -> us"'" ^. list2ustring [v] ^. us"'"
   | CChar2int -> us"char2int"
