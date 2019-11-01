@@ -7,6 +7,7 @@
 utest 32.1 with 32.1 in
 utest 0.01 with 1e-2 in
 utest 0.032 with 3.2e-2 in
+utest 320.0 with 3.2e+2 in
 utest 1.10 with addf 1.0 0.1 in
 utest 8.5 with subf 10.6 2.1 in
 utest 2.2 with mulf 1.1 2.0 in
@@ -57,4 +58,6 @@ utest eqf taxicab2_1 taxicab2_2 with true in
 utest string2float "42" with 42.0 in
 utest string2float "3.14159" with 3.14159 in
 utest string2float "3.2e-2" with 0.032 in
+utest string2float "3.2e2" with 320.0 in
+utest string2float "3e+2" with 300.0 in
 ()

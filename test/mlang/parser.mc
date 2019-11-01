@@ -278,6 +278,7 @@ let next = lam env.
 in
 
 utest test_parser next "abc" with Success ('a', ("bc", ("", 1, 2))) in
+utest test_parser next "\"" with Success (head "\"", ("", ("", 1, 2))) in
 utest show_error (test_parser next "")
 with "Parse error at 1:1: Unexpected end of input" in
 
@@ -533,15 +534,66 @@ with Success ("abcd", ("e", ("", 1, 5))) in
 -- Parser Char
 --
 -- Parse a character literal.
-let lex_char_lit = wrapped_in (lex_string "'") (lex_string "'") next in
+-- TODO: Support escaped characters (also in OCaml parser)
+let lex_char_lit = wrapped_in (lex_char ''') (lex_char ''') next in
+
+utest test_parser lex_char_lit "'\n'" with Success (head "\n", ("", ("", 2, 2))) in
 
 -- Parser String
 --
 -- Parse a string literal.
 let lex_string_lit =
+  -- TODO: Are other escaped characters handled correctly?
+  let escaped =
+    try (alt (apr (lex_string "\\\\") (pure (head "\\")))
+             (apr (lex_string "\\") (fmap head (lex_string "\""))))
+  in
   wrapped_in (lex_string "\"") (lex_string "\"")
-             (many (satisfy (lam c. not (eqstr [c] "\"")) ""))
+             (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
 in
+
+utest test_parser lex_string_lit ['"','"'] with Success ("", ("", ("", 1, 3))) in
+utest test_parser lex_string_lit "\"FILE \\\"foo.mc\\\"\""
+with Success ("FILE \"foo.mc\"", ("", ("", 1, 18))) in
+utest test_parser (apr (lex_string "foo") lex_string_lit) "foo\"\\\"\""
+with Success ("\"", ("", ("", 1, 8))) in
+
+-- lex_float : Parser Float
+--
+-- Parse a floating point number
+let lex_float =
+  let decimals =
+    label "decimals" (
+    bind (apr (lex_char '.') (fmap int2string lex_number)) (lam d.
+    pure (concat "." d)))
+  in
+  let fractional =
+    bind (fmap int2string lex_number) (lam n.
+    bind (alt decimals (pure "")) (lam d.
+    pure (concat n d)))
+  in
+  let exp =
+    label "exponent" (
+    apr (lex_char 'e') (
+    bind (alt (alt (lex_string "-") (lex_string "+")) (pure "")) (lam sign.
+    bind fractional (lam p.
+    pure (concat (concat "e" sign) p)))))
+  in
+  bind (fmap int2string lex_number) (lam n.
+  bind (alt exp
+       (bind decimals (lam d.
+        bind (alt exp (pure "")) (lam e.
+        pure (concat d e)))))
+  (lam f. pure (string2float (concat n f))))
+in
+
+utest test_parser lex_float "3.14159" with Success(3.14159, ("", ("", 1, 8))) in
+utest test_parser lex_float "3.2e-2" with Success(0.032, ("", ("", 1, 7))) in
+utest test_parser lex_float "3.2e2" with Success(320.0, ("", ("", 1, 6))) in
+utest test_parser lex_float "3e+2" with Success(300.0, ("", ("", 1, 5))) in
+utest show_error(test_parser lex_float "42")
+with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals" in
+
 
 -- spaces : Parser ()
 --
@@ -647,6 +699,9 @@ with "Parse error at 1:1: Unexpected end of input. Expected 'lam'" in
 -- number : Parser Int
 let number = token lex_number in
 
+-- float : Parser Float
+let float = token lex_float in
+
 -- parens : Parser a -> Parser a
 let parens = wrapped_in (symbol "(") (symbol ")") in
 
@@ -739,6 +794,7 @@ con TmConFun : Dyn in
 
 con CUnit in
 con CInt : Dyn in
+con CFloat : Dyn in
 con CBool : Dyn in
 con CChar : Dyn in
 
@@ -769,8 +825,6 @@ with "Parse error at 1:7: Unexpected 'd'. Expected type" in
 -- atom : Parser Expr
 --
 -- Innermost expression parser.
--- TODO: Other constants? Floats are annoying since there is no
---       primitive string2float function!
 let atom = fix (lam atom. lam expr. lam input.
   let var_access =
     let _ = debug "== Parsing var_access" in
@@ -796,6 +850,10 @@ let atom = fix (lam atom. lam expr. lam input.
     let _ = debug "== Parsing num ==" in
     fmap (lam n. TmConst (CInt n)) number
   in
+  let float =
+    let _ = debug "== Parsing float ==" in
+    fmap (lam f. TmConst (CFloat f)) float
+  in
   let bool =
     let _ = debug "== Parsing bool ==" in
     alt (apr (reserved "true")  (pure (TmConst (CBool true))))
@@ -814,9 +872,10 @@ let atom = fix (lam atom. lam expr. lam input.
     (alt fix_
     (alt seq
     (alt tuple
+    (alt (try float)
     (alt num
     (alt bool
-    (alt str_lit char_lit))))))) input
+    (alt str_lit char_lit)))))))) input
 ) in
 
 -- left : Parser Expr
@@ -970,6 +1029,3 @@ else
       print_ln (show_error res)
   else
     print_ln (concat "Unknown file: " file)
-
--- TODO: Parse floats
--- TODO: Parse escaped characters
