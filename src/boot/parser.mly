@@ -43,7 +43,7 @@
 %token <unit Ast.tokendata> CASE
 %token <unit Ast.tokendata> UTEST
 %token <unit Ast.tokendata> TYPE
-%token <unit Ast.tokendata> DATA
+%token <unit Ast.tokendata> CON
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> MCORE
 %token <unit Ast.tokendata> PMCORE
@@ -203,11 +203,11 @@ case:
       Pattern (fi, $2.v, $3), $5}
 binder:
   | LPAREN IDENT RPAREN
-    { $2.v }
+    { Some ($2.v) }
   | IDENT
-    { $1.v }
+    { Some ($1.v) }
   |
-    { us"_" } // TODO: How to handle "empty" case?
+    { None }
 
 /// Expression language ///////////////////////////////
 
@@ -223,12 +223,12 @@ mexpr:
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmIf(fi,$2,$4,$6) }
-  | DATA IDENT ty_op IN mexpr
+  | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmData(fi,$2.v,$3,$5)}
-  | MATCH mexpr WITH IDENT IDENT THEN mexpr ELSE mexpr
+        TmCondef(fi,$2.v,$3,$5)}
+  | MATCH mexpr WITH IDENT ident_op THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i $8.i in
-         TmMatch(fi,$2,$4.v,noidx,$5.v,$7,$9) }
+         TmMatch(fi,$2,$4.v,noidx,$5,$7,$9) }
   | USE IDENT IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
@@ -263,13 +263,18 @@ atom:
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
 
 
+ident_op:
+  | IDENT
+      { Some($1.v) }
+  |
+      { None }
 
 
 seq:
   | mexpr
-    { [$1] }
+      { [$1] }
   | mexpr COMMA seq
-    { $1::$3 }
+      { $1::$3 }
 
 
 

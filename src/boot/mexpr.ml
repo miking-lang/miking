@@ -26,7 +26,7 @@ let builtin =
    ("ltf",Cltf(None));("leqf",Cleqf(None));("gtf",Cgtf(None));("geqf",Cgeqf(None));
    ("eqf",Ceqf(None));("neqf",Cneqf(None));
    ("floorfi", Cfloorfi); ("ceilfi", Cceilfi); ("roundfi", Croundfi);
-   ("int2float", CInt2float);
+   ("int2float", CInt2float); ("string2float", CString2float);
    ("char2int",CChar2int);("int2char",CInt2char);
    ("makeseq",Cmakeseq(None)); ("length",Clength);("concat",Cconcat(None));
    ("nth",Cnth(None)); ("cons",Ccons(None));
@@ -86,6 +86,7 @@ let arity = function
   | Cceilfi     -> 1
   | Croundfi    -> 1
   | CInt2float  -> 1
+  | CString2float -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
   | CChar2int   -> 1
@@ -246,6 +247,16 @@ let delta fi c v  =
     | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
     | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneqf(None),t | Cneqf(Some(_)),t  -> fail_constapp (tm_info t)
+    | CString2float,TmConst(fi,CSeq(s)) ->
+        let to_char = function
+          | TmConst(_, CChar(c)) -> c
+          | _ -> fail_constapp fi
+        in
+        let f = Ustring.to_utf8(Ustring.from_uchars(
+                Array.of_list(List.map to_char s)))
+        in
+        TmConst(fi, CFloat(Float.of_string f))
+    | CString2float,t -> fail_constapp (tm_info t)
 
     | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
     | Cfloorfi,t -> fail_constapp (tm_info t)
@@ -362,8 +373,8 @@ let rec val_equal v1 v2 =
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
      List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
-  | TmCon(_,_,sym1,None),TmCon(_,_,sym2,None) ->sym1 = sym2
-  | TmCon(_,_,sym1,Some(v1)),TmCon(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
+  | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
+  | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
 
@@ -386,12 +397,14 @@ let rec debruijn env t =
   | TmSeq(fi,tms) -> TmSeq(fi,List.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
   | TmProj(fi,t,n) -> TmProj(fi,debruijn env t,n)
-  | TmData(fi,x,ty,t) -> TmData(fi,x,ty,debruijn (VarTm(x)::env) t)
-  | TmCon(fi,x,sym,tmop) ->
-     TmCon(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
-  | TmMatch(fi,t1,cx,_,y,t2,t3) ->
-     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,y,
+  | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
+  | TmConsym(fi,x,sym,tmop) ->
+     TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
+  | TmMatch(fi,t1,cx,_,Some(y),t2,t3) ->
+     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,Some(y),
              debruijn (VarTm(y)::env) t2, debruijn env t3)
+  | TmMatch(fi,t1,cx,_,None,t2,t3) ->
+     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,None, debruijn env t2, debruijn env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
@@ -417,8 +430,8 @@ let rec eval env t =
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
-       | TmCon(fi,x,sym,None) -> TmCon(fi,x,sym,Some(eval env t2))
-       | TmCon(fi,_,_,Some(_)) -> raise_error fi "Cannot apply constructor more than once"
+       | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
+       | TmConsym(_,x,_,Some(_)) -> raise_error fiapp ("Cannot apply constructor '" ^ Ustring.to_utf8 x ^ "' more than once")
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
@@ -442,15 +455,21 @@ let rec eval env t =
      (match eval env t with
       | TmTuple(_,vs) -> (try List.nth vs n
                           with _ -> raise_error fi "Tuple projection is out of bound.")
-      | _ -> raise_error fi "Cannot project from term. The term is not a tuple.")
+      | v ->
+         raise_error fi ("Cannot project from term. The term is not a tuple: "
+                         ^ Ustring.to_utf8 (pprintME v)))
   (* Data constructors and match *)
-  | TmData(fi,x,_,t) -> eval ((gencon fi x)::env) t
-  | TmCon(_,_,_,_) as tm -> tm
-  | TmMatch(fi,t1,_,n,_,t2,t3) ->
+  | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
+  | TmConsym(_,_,_,_) as tm -> tm
+  | TmMatch(fi,t1,_,n,xop,t2,t3) ->
      (match eval env t1, List.nth env n with
-      | TmCon(_,_,sym1,Some(v)), TmCon(_,_,sym2,_) ->
+      | TmConsym(_,_,sym1,Some(v)), TmConsym(_,_,sym2,_) ->
          if sym1 = sym2 then eval (v::env) t2 else eval env t3
-      | _,_ -> raise_error fi "Invalid match")
+      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_) ->
+         if sym1 = sym2 && xop = None then eval env t2 else eval env t3
+      | t1,t2 ->
+         let ex = Ustring.to_utf8 (pprintME t1 ^. us" with " ^. pprintME t2) in
+         raise_error fi  ("Invalid match: match " ^ ex ))
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->

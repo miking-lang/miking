@@ -117,7 +117,7 @@ let flatten = function
 let translate_data =
   let translate_constr constr inner =
     match constr with
-    | CDecl(_, k, ty) -> TmData (NoInfo, k, ty, inner)
+    | CDecl(_, k, ty) -> TmCondef (NoInfo, k, ty, inner)
   in
   List.fold_right translate_constr
 
@@ -144,7 +144,7 @@ let translate_cases f target cases =
   List.fold_right translate_case cases no_match
 
 let translate_inter f params cases : tm -> tm =
-  let target_name = us"_" in
+  let target_name = us"_" ^. f ^. us"_target" in
   let target = TmVar(NoInfo, target_name, -1) in
   let mtch =
     TmLam (NoInfo, target_name, TyDyn, translate_cases f target cases) in
