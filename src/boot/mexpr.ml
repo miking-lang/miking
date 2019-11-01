@@ -306,9 +306,15 @@ let delta fi c v  =
     | Cslice(None,None),TmConst(fi,CSeq(lst)) -> TmConst(fi,Cslice(Some(lst),None))
     | Cslice(Some(lst),None),TmConst(fi,CInt(s)) -> TmConst(fi,Cslice(Some(lst),Some(s)))
     | Cslice(Some(lst),Some(s)),TmConst(fi,CInt(l)) ->
-       let lst2 = List.fold_left (fun (acc,n) x -> if n >= s && n < s + l
-                                                   then (x::acc,n+1) else (acc,n+1))
-                  ([],0) lst |> fst |> List.rev in TmConst(fi,CSeq(lst2))
+       let slice s l lst =
+         let rec slice' i = function
+           | [] -> []
+           | _ when i >= s + l -> []
+           | x::xs when s <= i && i < s + l -> x::slice' (i + 1) xs
+           | _::xs -> slice' (i+1) xs
+         in
+         slice' 0 lst
+       in TmConst(fi, CSeq(slice s l lst))
     | Cslice(_,_),t -> fail_constapp (tm_info t)
 
     | Creverse,TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(List.rev lst))
