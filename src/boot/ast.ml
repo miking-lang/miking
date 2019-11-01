@@ -68,6 +68,10 @@ and const =
 | Cgeqf    of float option
 | Ceqf     of float option
 | Cneqf    of float option
+| Cfloorfi
+| Cceilfi
+| Croundfi
+| CInt2float
 | CString2float
 (* MCore intrinsic: characters *)
 | CChar    of int
