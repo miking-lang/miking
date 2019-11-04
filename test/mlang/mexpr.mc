@@ -35,8 +35,7 @@ lang Fun = Var
   | TmClos (Dyn, Dyn, Dyn) -- (String, Expr, Env)
   | TmApp (Dyn, Dyn) -- (Expr, Expr)
 
-  -- TODO: mutual recursion instead of explicit parameter!
-  sem apply (eval : Dyn) (arg : Dyn) = -- (arg : Dyn)
+  sem apply (arg : Dyn) = -- (arg : Dyn)
   | TmClos t ->
       let x = t.0 in
       let body = t.1 in
@@ -53,14 +52,14 @@ lang Fun = Var
   | TmApp t ->
     let t1 = t.0 in
     let t2 = t.1 in
-    apply eval (eval env t2) (eval env t1) -- TODO: No eval argument
+    apply (eval env t2) (eval env t1)
 end
 
 lang Fix = Fun
   syn Expr =
   | TmFix
 
-  sem apply (eval : Dyn) (arg : Dyn) = -- (arg : Expr)
+  sem apply (arg : Dyn) = -- (arg : Expr)
   | TmFix ->
   match arg with TmClos clos then
     let x = clos.0 in
@@ -94,7 +93,7 @@ lang Const
 
   sem delta (arg : Dyn) = -- (arg : Expr)
 
-  sem apply (eval : Dyn) (arg : Dyn) = -- (arg : Expr)
+  sem apply (arg : Dyn) = -- (arg : Expr)
   | TmConst c -> delta arg c
 
   sem eval (env : Dyn) = -- (env : Env)
@@ -222,7 +221,7 @@ lang Data
   | TmCon (Dyn, Dyn) -- (String, Expr)
   | TmMatch (Dyn, Dyn, Dyn, Dyn, Dyn) -- (Expr, String, String, Expr, Expr)
 
-  sem apply (eval : Dyn) (arg : Dyn) = -- (arg : Dyn)
+  sem apply (arg : Dyn) = -- (arg : Dyn)
   | TmConFun k -> TmCon (k, arg)
 
   sem eval (env : Dyn) = -- (env : Env)
