@@ -274,10 +274,9 @@ lang Utest
     eval env next
 end
 
-lang MExpr = Const -- TODO: Order shouldn't matter (mutual recursion)
-           + Fun + Fix + Let
+lang MExpr = Fun + Fix + Let
            + Seq + Tuple + Data + Utest
-           + Arith + Bool + Unit
+           + Const + Arith + Bool + Unit
 
 use MExpr in
 let id = TmLam ("x", TmVar "x") in

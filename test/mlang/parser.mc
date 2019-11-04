@@ -266,6 +266,8 @@ utest test_parser end_of_input "" with Success((), ("", init_pos "")) in
 -- next : Parser char
 --
 -- Read next character from input stream
+-- TODO: It would most likely be faster to index into
+--       an array than to take the tail of a string
 let next = lam env.
   let input = env.0 in
   let pos = env.1 in
