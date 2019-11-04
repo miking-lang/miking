@@ -32,8 +32,6 @@ let param_eq p1 p2 =
   - Two interpreters being merged are assumed to have the same
    return type
 
-  - Interpreters cannot be mutually recursive
-
   - It is uncertain if there is any interoperability between
    languages (or if there should be)
 
@@ -81,14 +79,14 @@ let rec merge_inter f params cases = function
   | decl::decls ->
      decl::merge_inter f params cases decls
 
-let merge_decl decls = function
+let merge_decl decl decls = match decl with
   | Data(_, d, constrs) -> merge_data d constrs decls
   | Inter(_, f, params, cases) -> merge_inter f params cases decls
 
 let merge_langs lang1 lang2 : mlang =
   match lang1, lang2 with
   | Lang(info, l1, ls, decls1), Lang(_, _, _, decls2) ->
-     let decls1' = List.fold_left merge_decl decls1 decls2 in
+     let decls1' = List.fold_right merge_decl decls1 decls2 in
      Lang(info, l1, ls, decls1')
 
 let lookup_lang info langs l =
