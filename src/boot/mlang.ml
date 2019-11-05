@@ -155,9 +155,11 @@ let translate_params =
 let translate_cases f target cases =
   let translate_case case inner =
     match case with
-    | (Pattern (fi, k, x), handler) ->
+    | (ConPattern (fi, k, x), handler) ->
       TmMatch (fi, target,
                k, -1, x, handler, inner)
+    | (VarPattern (fi, x), handler) ->
+      TmLet(fi, x, target, handler)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
             (ustring2list (us"No matching case for function " ^.

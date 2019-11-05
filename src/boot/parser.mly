@@ -20,6 +20,10 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
+  let is_upper c =
+    let a = Ustring.get (us"A") 0 in
+    let z = Ustring.get (us"Z") 0 in
+    a <= c && c <= z
 %}
 
 /* Misc tokens */
@@ -190,16 +194,20 @@ cases:
   |
     { [] }
 case:
+  | BAR IDENT ARROW mexpr
+    { let fi = mkinfo $1.i $3.i in
+      let c = Ustring.get $2.v 0 in
+      if is_upper c
+      then (ConPattern (fi, $2.v, None), $4)
+      else (VarPattern (fi, $2.v), $4)}
   | BAR IDENT binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
-      Pattern (fi, $2.v, $3), $5}
+      (ConPattern (fi, $2.v, Some $3), $5)}
 binder:
   | LPAREN IDENT RPAREN
-    { Some ($2.v) }
+    { $2.v }
   | IDENT
-    { Some ($1.v) }
-  |
-    { None }
+    { $1.v }
 
 /// Expression language ///////////////////////////////
 
