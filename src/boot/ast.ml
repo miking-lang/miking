@@ -136,6 +136,7 @@ and ty =
 | TyBool                                          (* Boolean type *)
 | TyInt                                           (* Int type *)
 | TyFloat                                         (* Floating-point type *)
+| TyArrow of ty * ty                              (* Function type *)
 (* | TySeq    of ty                               (* Sequence type *)  *)
 | TyProd   of ty list                             (* Product type *)
 | TyUnit                                          (* Unit type *)

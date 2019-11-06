@@ -25,7 +25,11 @@ utest f v with 33.3 in
 let v : Bool = true in
 utest (lam x:Bool. if x then 1 else 2) v with 1 in
 
-
+// Function type
+let f1 : Int -> Int = lam x. addi x 1 in
+utest f1 5 with 6 in
+let f2 : Int -> Float -> Float = lam x:Int. lam y:Float. addf (int2float x) y in
+utest f2 10 17.2 with 27.2 in
 
 
 

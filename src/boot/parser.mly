@@ -287,7 +287,9 @@ ty_op:
 
 ty:
   | ty_atom
-    { $1 }
+      { $1 }
+  | ty_atom ARROW ty
+      { TyArrow($1,$3) }
 
 
 ty_atom:

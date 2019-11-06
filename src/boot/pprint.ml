@@ -174,6 +174,7 @@ and pprint_ty ty =
   | TyBool  -> us"Bool"
   | TyInt   -> us"Int"
   | TyFloat -> us"Float"
+  | TyArrow(ty1,ty2) -> us"(" ^. pprint_ty ty1 ^. us"," ^. pprint_ty ty2 ^. us")"
   | TyProd tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
   | TyUnit -> us"()"
