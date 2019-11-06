@@ -20,7 +20,15 @@ let param_eq p1 p2 =
   match p1, p2 with
   | Param(_,_,ty1), Param(_,_,ty2) -> ty1 = ty2
 
-let is_lang = function | TopLang _ -> true | _ -> false
+(*********************
+ * Compare patterns  *
+ *********************)
+
+let pattern_compare p1 p2 = match p1, p2 with
+  | VarPattern _,         VarPattern _ -> 0
+  | VarPattern _,         ConPattern _ -> 1
+  | ConPattern _,         VarPattern _ -> -1
+  | ConPattern(_, k1, _), ConPattern(_, k2, _) -> Ustring.compare k1 k2
 
 (***************
  * Flattening *
@@ -167,7 +175,11 @@ let translate_cases f target cases =
   in
   let no_match = app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg))
   in
-  List.fold_right translate_case cases no_match
+  let case_compare c1 c2 = match c1, c2 with
+    | (p1, _), (p2, _) -> pattern_compare p1 p2
+  in
+  let sorted_cases = List.sort case_compare cases in
+  List.fold_right translate_case sorted_cases no_match
 
 let unpack_recursive_functions names seq body =
   let rec unpack i = function
