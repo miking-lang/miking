@@ -1,6 +1,7 @@
 -- TODO: Change string variables to deBruijn indices
 -- TODO: Generate unique symbols for data constructors
 include "string.mc"
+-- TODO: Add types
 
 lang Var
   syn Expr =
@@ -20,7 +21,7 @@ end
 
 lang Fun = Var
   syn Expr =
-  | TmLam (Dyn, Dyn) -- (String, Expr)
+  | TmLam (Dyn, Dyn, Dyn) -- (String, Expr)
   | TmClos (Dyn, Dyn, Dyn) -- (String, Expr, Env)
   | TmApp (Dyn, Dyn) -- (Expr, Expr)
 
@@ -35,7 +36,7 @@ lang Fun = Var
   sem eval (env : Dyn) = -- env : Env
   | TmLam t ->
     let x = t.0 in
-    let body = t.1 in
+    let body = t.2 in
     TmClos(x, body, env)
   | TmClos t -> TmClos t
   | TmApp t ->
@@ -173,6 +174,26 @@ lang Bool
     else error "Condition is not a constant"
 end
 
+lang Cmp = Arith + Bool
+  syn Const =
+  | CEqi
+  | CEqi2 (Dyn) -- (Expr)
+
+  sem delta (arg : Dyn) =
+  | CEqi ->
+    match arg with TmConst c then
+      match c with CInt n then
+        TmConst(CEqi2 n)
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CEqi2 n1 ->
+    match arg with TmConst c then
+      match c with CInt n2 then
+        TmConst(CBool (eqi n1 n2))
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+end
+
 lang Seq = Arith
   syn Const =
   | CSeq (Dyn) -- ([Expr])
@@ -272,7 +293,7 @@ end
 
 lang MExpr = Fun + Fix + Let
            + Seq + Tuple + Data + Utest
-           + Const + Arith + Bool + Unit
+           + Const + Arith + Bool + Cmp + Unit
   sem eq (e1 : Dyn) = -- (e1 : Expr)
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2 e1
@@ -322,56 +343,22 @@ lang MExpr = Fun + Fix + Let
 
   sem tuple_eq (tms1 : Dyn) =
   | TmTuple tms2 ->
-    let zip_with = fix (lam zip_with. lam f. lam xs. lam ys.
-      if eqi (length xs) 0
-      then []
-      else if eqi (length ys) 0
-      then []
-      else
-        let x = nth xs 0 in
-        let y = nth ys 0 in
-        let xs2 = slice xs 1 (length xs) in
-        let ys2 = slice ys 1 (length ys) in
-        cons (f x y) (zip_with f xs2 ys2)
-    ) in
-    let for_all = fix (lam for_all. lam p. lam xs.
-      if eqi (length xs) 0
-      then true
-      else and (p (nth xs 0)) (for_all p (slice xs 1 (length xs)))
-    ) in
     and (eqi (length tms1) (length tms2))
-        (for_all (lam b.b) (zip_with eq tms1 tms2))
+        (all (lam b.b) (zipWith eq tms1 tms2))
   | _ -> false
 
   sem seq_eq (seq1 : Dyn) =
   | TmSeq seq2 ->
-    let zip_with = fix (lam zip_with. lam f. lam xs. lam ys.
-      if eqi (length xs) 0
-      then []
-      else if eqi (length ys) 0
-      then []
-      else
-        let x = nth xs 0 in
-        let y = nth ys 0 in
-        let xs2 = slice xs 1 (length xs) in
-        let ys2 = slice ys 1 (length ys) in
-        cons (f x y) (zip_with f xs2 ys2)
-    ) in
-    let for_all = fix (lam for_all. lam p. lam xs.
-      if eqi (length xs) 0
-      then true
-      else and (p (nth xs 0)) (for_all p (slice xs 1 (length xs)))
-    ) in
     and (eqi (length seq1) (length seq2))
-        (for_all (lam b.b) (zip_with eq seq1 seq2))
+        (all (lam b.b) (zipWith eq seq1 seq2))
   | _ -> false
 end
 
 main
 use MExpr in
-let id = TmLam ("x", TmVar "x") in
-let bump = TmLam ("x", TmApp (TmApp (TmConst CAddi, TmVar "x"), TmConst(CInt 1))) in
-let fst = TmLam ("t", TmProj (TmVar "t", 0)) in
+let id = TmLam ("x", None, TmVar "x") in
+let bump = TmLam ("x", None, TmApp (TmApp (TmConst CAddi, TmVar "x"), TmConst(CInt 1))) in
+let fst = TmLam ("t", None, TmProj (TmVar "t", 0)) in
 let app_id_unit = TmApp (id, TmConst CUnit) in
 let app_bump_3 = TmApp (bump, TmConst(CInt 3)) in
 let app_fst =
@@ -438,7 +425,7 @@ let deconstruct = lam t.
 let add_case = lam arg. lam els.
   TmMatch (arg, "Add", "t", deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
-  TmApp (TmFix, TmLam ("eval", TmLam ("e",
+  TmApp (TmFix, TmLam ("eval", None, TmLam ("e", None,
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
 
 let wrap_in_decls = lam t. -- con Num in con Add in let eval = ... in t

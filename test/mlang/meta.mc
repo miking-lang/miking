@@ -268,11 +268,12 @@ let program = apl (apr ws (apr (reserved "main") expr)) end_of_input in
 
 
 let builtins =
-    [("not",  TmConst CNot)
-    ,("and",  TmConst CAnd)
-    ,("or",   TmConst COr)
-    ,("addi", TmConst CAddi)]
-in
+    [("not", TmConst CNot)
+    ,("and", TmConst CAnd)
+    ,("or", TmConst COr)
+    ,("addi", TmConst CAddi)
+    ,("eqi", TmConst CEqi)
+] in
 
 if or (eqstr (nth argv 1) "test") (lti (length argv) 3) then
   ()
