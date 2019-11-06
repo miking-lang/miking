@@ -1,4 +1,11 @@
+include "mexpr.mc"
 include "parser.mc"
+
+main
+
+-- TODO: Re-implementing parts MCore parser. Needs top-level use to
+-- have parser use the same datatypes...
+use MExpr in
 
 -- MCore tokens ----------------------------------
 
@@ -9,25 +16,27 @@ let line_comment =
   void (apr (apr (alt (lex_string "--") (lex_string "//"))
                  (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
             (alt (lex_string "\n") end_of_input))
+in
 
 -- ws : Parser ()
 --
 -- Parse whitespace or comments.
-let ws = void (many (alt line_comment spaces1))
+let ws = void (many (alt line_comment spaces1)) in
 
 -- token : Parser a -> Parser a
 --
 -- `token p` parses `p` and any trailing whitespace or comments.
-let token = lex_token ws
+let token = lex_token ws in
 
 -- string : String -> Parser String
-let string = lam s. token (lex_string s)
+let string = lam s. token (lex_string s) in
 
 -- symbol : String -> Parser String
-let symbol = string
+let symbol = string in
 
 let is_valid_char = lam c.
   or (is_alphanum c) (eqchar c '_')
+in
 
 -- reserved : String -> Parser String
 --
@@ -35,31 +44,33 @@ let is_valid_char = lam c.
 -- additional valid identifier characters.
 let reserved = lam s.
   void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char ""))))
+in
 
 -- number : Parser Int
-let number = token lex_number
+let number = token lex_number in
 
 -- float : Parser Float
-let float = token lex_float
+let float = token lex_float in
 
 -- parens : Parser a -> Parser a
-let parens = wrapped_in (symbol "(") (symbol ")")
+let parens = wrapped_in (symbol "(") (symbol ")") in
 
 -- brackets : Parser a -> Parser a
-let brackets = wrapped_in (symbol "[") (symbol "]")
+let brackets = wrapped_in (symbol "[") (symbol "]") in
 
 -- char_lit : Parser Char
-let char_lit = token lex_char_lit
+let char_lit = token lex_char_lit in
 
 -- string_lit : Parser String
-let string_lit = token lex_string_lit
+let string_lit = token lex_string_lit in
 
 -- comma_sep : Parser a -> Parser [a]
-let comma_sep = sep_by (symbol ",")
+let comma_sep = sep_by (symbol ",") in
 
 -- List of reserved keywords
 let keywords =
   ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "lam", "fix", "utest"]
+in
 
 -- ident : Parser String
 --
@@ -77,39 +88,19 @@ let identifier =
     then fail (concat (concat "keyword '" x) "'") "identifier"
     else pure x)
   )
+in
 
 -- MCore parsers ----------------------------------------
 
-type Type
+type Type in
 
-con TyDyn : Type
-con TyProd : [Type] -> Type
-con TyUnit : Type
+con TyDyn : Type in
+con TyProd : [Type] -> Type in
+con TyUnit : Type in
 
-type Const
-con CUnit : Const
-con CInt : Int -> Const
-con CFloat : Float -> Const
-con CBool : Bool -> Const
-con CChar : Char -> Const
-
-type Expr
-
-con TmLet : (String, Expr, Expr) -> Expr
-con TmLam : (String, Option, Expr) -> Expr
-con TmIf  : (Expr, Expr, Expr) -> Expr
-con TmConDef : (String, Option, Dyn) -> Expr
-con TmMatch : (Expr, String, String, Expr, Expr) -> Expr
-con TmUtest : (Expr, Expr, Expr) -> Expr
-
-con TmApp : (Expr, Expr) -> Expr
-con TmVar : String -> Expr
-con TmTuple : [Expr] -> Expr
-con TmProj : (Expr, Int) -> Expr
-con TmConst : Const -> Expr
-con TmFix : Expr
-con TmSeq : [Expr] -> Expr
-con TmConFun : String -> Expr
+-- type Const
+con CFloat : Float -> Const in
+con CChar : Char -> Const in
 
 -- ty : Parser Type
 let ty = fix (lam ty. lam st.
@@ -124,6 +115,7 @@ let ty = fix (lam ty. lam st.
   let dyn = apr (reserved "Dyn") (pure TyDyn) in
   label "type"
   (alt tuple dyn) st)
+in
 
 -- atom : Parser Expr
 --
@@ -179,6 +171,7 @@ let atom = fix (lam atom. lam expr. lam input.
     (alt num
     (alt bool
     (alt str_lit char_lit)))))))) input)
+in
 
 -- left : Parser Expr
 --
@@ -194,6 +187,7 @@ let left = lam expr.
   in
   bind (many1 atom_or_proj) (lam as.
   pure (foldl1 (curry TmApp) as))
+in
 
 -- expr: Parser Expr
 --
@@ -267,134 +261,18 @@ let expr = fix (lam expr. lam st.
   (alt if_
   (alt match_
   (alt con_ utest_)))))) st)
+in
 
 -- program : Parser Expr
-let program = apl (apr ws (apr (reserved "main") expr)) end_of_input
+let program = apl (apr ws (apr (reserved "main") expr)) end_of_input in
 
-main
 
--- MCore token tests
-
-utest test_parser line_comment "-- this is a comment
-this is not"
-with Success((), ("this is not", ("",2,1))) in
-
-utest test_parser ws "   -- this is a comment
---
-    foo" with Success((), ("foo", ("", 3, 5))) in
-
-utest test_parser (string "ab") "abc"
-with Success("ab", ("c", ("", 1, 3))) in
-utest test_parser (string "abc") "abc def"
-with Success("abc", ("def", ("", 1, 5))) in
-utest test_parser (many (alt (string "ab") (string "cd"))) "ab cd ef"
-with Success(["ab", "cd"], ("ef", ("", 1, 7))) in
-
-utest test_parser (symbol "(") "(abc)"
-with Success("(", ("abc)", ("", 1, 2))) in
-utest test_parser (symbol "(") "(  abc)"
-with Success("(", ("abc)", ("", 1, 4))) in
-
-utest is_valid_char '0' with true in
-utest is_valid_char '9' with true in
-utest is_valid_char 'A' with true in
-utest is_valid_char 'z' with true in
-utest is_valid_char '_' with true in
-
-utest test_parser (reserved "lam") "lam x. x"
-with Success((), ("x. x", ("", 1, 5))) in
-utest show_error (test_parser (reserved "lam") "lambda")
-with "Parse error at 1:4: Unexpected 'b'" in
-utest show_error (test_parser (reserved "fix") "fix_")
-with "Parse error at 1:4: Unexpected '_'" in
-utest show_error (test_parser (reserved "lam") "la")
-with "Parse error at 1:1: Unexpected end of input. Expected 'lam'" in
-
-utest test_parser (parens (lex_string "abc")) "(abc)"
-with Success("abc", ("", ("", 1, 6))) in
-utest test_parser (brackets (many (string "abc"))) "[abc abc]"
-with Success(["abc", "abc"], ("", ("", 1, 10))) in
-utest show_error (test_parser (parens (lex_string "abc")) "(abc")
-with "Parse error at 1:5: Unexpected end of input. Expected ')'" in
-
-utest test_parser (char_lit) "'a'"
-with Success('a', ("", ("", 1,4))) in
-utest test_parser (char_lit) "'a' bc"
-with Success('a', ("bc", ("", 1,5))) in
-
-utest test_parser (string_lit) "\"foobar\""
-with Success("foobar", ("", ("", 1,9))) in
-utest test_parser (string_lit) "\"\" rest"
-with Success("", ("rest", ("", 1,4))) in
-
-utest test_parser (comma_sep (string "a")) "a, a, a"
-with Success(["a", "a", "a"],("", ("", 1,8))) in
-utest test_parser (comma_sep (string "a")) "a"
-with Success(["a"],("", ("", 1,2))) in
-utest show_error (test_parser (comma_sep (string "a")) "a ,a,b")
-with "Parse error at 1:6: Unexpected 'b'. Expected 'a'" in
-utest test_parser (brackets (comma_sep number)) "[ 1 , 2, 3]"
-with Success([1,2,3], ("", ("", 1, 12))) in
-
-utest test_parser identifier "foo" with Success("foo", ("", ("", 1, 4))) in
-utest test_parser identifier "fix_" with Success("fix_", ("", ("", 1, 5))) in
-
--- MCore parser tests
-
-utest test_parser ty "Dyn"
-with Success(TyDyn, ("", ("", 1, 4))) in
-utest test_parser (ty) "((), ((Dyn), Dyn)) rest"
-with Success(TyProd[TyUnit,TyProd[TyDyn, TyDyn]], ("rest", ("", 1, 20))) in
-utest show_error (test_parser ty "dyn")
-with "Parse error at 1:1: Unexpected 'd'. Expected type" in
-utest show_error (test_parser ty "(Dyn, dyn, Dyn)")
-with "Parse error at 1:7: Unexpected 'd'. Expected type" in
-
-utest test_parser (left expr) "f x"
-with Success(TmApp(TmVar "f", TmVar "x"), ("", ("", 1, 4))) in
-utest test_parser (left expr) "f x y"
-with Success(TmApp(TmApp(TmVar "f", TmVar "x"), TmVar "y"), ("", ("", 1, 6))) in
-
-utest test_parser expr "let f = lam x. x in f x"
-with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
-             TmApp (TmVar "f", TmVar "x")), ("", ("", 1,24))) in
-
-utest test_parser expr "let f = lam x : Dyn. x in f (x, y) z"
-with Success(TmLet("f", TmLam ("x", Some TyDyn, TmVar "x"),
-             TmApp (TmApp (TmVar "f", TmTuple [TmVar "x", TmVar "y"]), TmVar "z")),
-             ("", ("", 1, 37))) in
-
-utest test_parser expr "let f = lam x. x in f \"foo\""
-with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
-             TmApp (TmVar "f", TmSeq "foo")), ("", ("", 1, 28))) in
-
-utest test_parser expr "f t.0.1 u.0"
-with Success(TmApp(TmApp(TmVar "f",
-                         TmProj(TmProj(TmVar "t", 0), 1)),
-                   TmProj(TmVar "u", 0)), ("", ("", 1, 12))) in
-
-utest show_error(test_parser expr "let lam = 42 in lam")
-with "Parse error at 1:5: Unexpected keyword 'lam'. Expected identifier" in
-
-utest show_error(test_parser expr "let x = 42 in")
-with "Parse error at 1:14: Unexpected end of input. Expected expression" in
-
-utest show_error(test_parser expr "lam x : 42. x")
-with "Parse error at 1:9: Unexpected '4'. Expected type" in
-
-utest show_error(test_parser expr "let x = [1,2 in nth x 0")
-with "Parse error at 1:14: Unexpected 'i'. Expected ']'" in
-
-utest show_error(test_parser expr "(1, (2,3).1")
-with "Parse error at 1:12: Unexpected end of input. Expected ')'" in
-
-utest show_error(test_parser expr "")
-with "Parse error at 1:1: Unexpected end of input. Expected expression" in
-
-utest show_error (test_parser program "main f let x = 42 in x")
-with "Parse error at 1:8: Unexpected 'l'. Expected end of input" in
-
--- Main logic
+let builtins =
+    [("not",  TmConst CNot)
+    ,("and",  TmConst CAnd)
+    ,("or",   TmConst COr)
+    ,("addi", TmConst CAddi)]
+in
 
 if or (eqstr (nth argv 1) "test") (lti (length argv) 3) then
   ()
@@ -404,7 +282,9 @@ else
     let contents = readFile file in
     let res = run_parser file program contents in
     match res with Success t then
-      print_ln "Parsing successful!"
+      let _ = print_ln "Parsing successful!" in
+      let p = t.0 in
+      eval builtins p
     else
       print_ln (show_error res)
   else
