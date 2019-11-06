@@ -31,8 +31,8 @@ utest f (Bar 10) with (15, "b") in
 
 
 // Counting values in a binary tree
-con Node in  // Node : (Tree,Tree) -> Tree
-con Leaf in  // Leaf : (Int) -> Tree
+con Node : (Tree,Tree) -> Tree
+con Leaf : (Int) -> Tree
 
 let count = fix (lam count. lam tree.
     match tree with Node t then

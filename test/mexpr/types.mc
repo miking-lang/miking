@@ -54,6 +54,15 @@ utest (lam x:String. concat x x) s with "yesyes" in
 let l1 : [Int] = [1,3,4,8] in
 utest (lam x:[Int]. nth x 2) l1 with 4 in
 
+// Data types
+type Tree in
+con Node : (Tree,Tree) -> Tree in
+con Leaf : (Int) -> Tree in
+let t : Tree = match Node(Leaf(5),Leaf(10)) with Node t then t else error "" in
+utest t.0 with Leaf(5) in
+
+// Type alias
+type Tree2 = Tree in
 
 
 ()

@@ -181,6 +181,7 @@ and pprint_ty ty =
                   else us"[" ^. pprint_ty ty1 ^. us"]"
   | TyTuple tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
+  | TyCon(s) -> s
   in
     ppt ty
 

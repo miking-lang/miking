@@ -141,7 +141,7 @@ and ty =
 | TyArrow  of ty * ty                             (* Function type *)
 | TySeq    of ty                                  (* Sequence type *)
 | TyTuple  of ty list                             (* Tuple type *)
-
+| TyCon    of ustring                             (* Type constructor *)
 
 (* Variable type *)
 and vartype =

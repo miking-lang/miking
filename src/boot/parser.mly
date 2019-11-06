@@ -211,9 +211,15 @@ binder:
 
 /// Expression language ///////////////////////////////
 
+
+
 mexpr:
   | left
       { $1 }
+  | TYPE IDENT IN mexpr
+      { $4 }
+  | TYPE IDENT EQ ty IN mexpr
+      { $6 }
   | LET IDENT ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
         TmLet(fi,$2.v,$5,$7) }
@@ -303,13 +309,13 @@ ty_atom:
       { TyTuple ($2::$4) }
   | IDENT
       {match Ustring.to_utf8 $1.v with
-       | "Dyn"   -> TyDyn
-       | "Bool"  -> TyBool
-       | "Int"   -> TyInt
-       | "Float" -> TyFloat
-       | "Char" -> TyChar
+       | "Dyn"    -> TyDyn
+       | "Bool"   -> TyBool
+       | "Int"    -> TyInt
+       | "Float"  -> TyFloat
+       | "Char"   -> TyChar
        | "String" -> TySeq(TyChar)
-       | _ -> failwith "Unknown type"
+       | s        -> TyCon(us s)
       }
 ty_list:
   | ty COMMA ty_list

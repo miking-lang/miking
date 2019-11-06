@@ -21,6 +21,7 @@
        "sem"
        "syn"
        "then"
+       "type"
        "use"
        "utest"
        "with"
