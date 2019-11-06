@@ -30,7 +30,7 @@ lang Fun = Var
       let body = t.1 in
       let env2 = t.2 in
       eval (cons (x, arg) env2) body
--- TODO: Catch all for better error message
+  | _ -> error "Bad application"
 
   sem eval (env : Dyn) = -- env : Env
   | TmLam t ->
