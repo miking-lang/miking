@@ -170,7 +170,10 @@ and pprint_env env =
 and pprint_ty ty =
   let ppt ty =
   match ty with
-  | TyDyn -> us"Dyn"
+  | TyDyn   -> us"Dyn"
+  | TyBool  -> us"Bool"
+  | TyInt   -> us"Int"
+  | TyFloat -> us"Float"
   | TyProd tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
   | TyUnit -> us"()"

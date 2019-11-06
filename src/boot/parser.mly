@@ -214,9 +214,9 @@ binder:
 mexpr:
   | left
       { $1 }
-  | LET IDENT EQ mexpr IN mexpr
-      { let fi = mkinfo $1.i $5.i in
-        TmLet(fi,$2.v,$4,$6) }
+  | LET IDENT ty_op EQ mexpr IN mexpr
+      { let fi = mkinfo $1.i $6.i in
+        TmLet(fi,$2.v,$5,$7) }
   | LAM IDENT ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,$3,$5) }
@@ -299,7 +299,10 @@ ty_atom:
       { TyProd ($2::$4) }
   | IDENT
       {match Ustring.to_utf8 $1.v with
-       | "Dyn" -> TyDyn
+       | "Dyn"   -> TyDyn
+       | "Bool"  -> TyBool
+       | "Int"   -> TyInt
+       | "Float" -> TyFloat
        | _ -> failwith "Unknown type"
       }
 ty_list:

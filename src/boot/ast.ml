@@ -133,6 +133,10 @@ and tm =
 (* Types *)
 and ty =
 | TyDyn                                           (* Dynamic type *)
+| TyBool                                          (* Boolean type *)
+| TyInt                                           (* Int type *)
+| TyFloat                                         (* Floating-point type *)
+(* | TySeq    of ty                               (* Sequence type *)  *)
 | TyProd   of ty list                             (* Product type *)
 | TyUnit                                          (* Unit type *)
 
