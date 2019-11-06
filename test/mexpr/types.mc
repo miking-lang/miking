@@ -7,6 +7,10 @@
 let f = lam x. addi x 2 in
 utest f 5 with 7 in
 
+// Unit type
+let a:() = () in
+utest (lam x:(). 7) a with 7 in
+
 // Dynamic type
 let f = lam x:Dyn. x in
 utest f 5 with 5 in
@@ -30,6 +34,25 @@ let f1 : Int -> Int = lam x. addi x 1 in
 utest f1 5 with 6 in
 let f2 : Int -> Float -> Float = lam x:Int. lam y:Float. addf (int2float x) y in
 utest f2 10 17.2 with 27.2 in
+
+// Tuple type
+let x0 : Int = 7 in
+let x1 : (Int) = (8) in
+let x2 : (Int,Float) = (7, 33.3) in
+let x3 : (Int,Float,Int) = (1, 2.2, 7) in
+utest x0 with 7 in
+utest x1 with 8 in
+utest x2 with (7, 33.3) in
+utest x3 with (1, 2.2, 7) in
+utest (lam x:(Int,Float). x.0) (8, 13.3) with 8 in
+
+// String type
+let s:String = "yes" in
+utest (lam x:String. concat x x) s with "yesyes" in
+
+// Sequence type
+let l1 : [Int] = [1,3,4,8] in
+utest (lam x:[Int]. nth x 2) l1 with 4 in
 
 
 

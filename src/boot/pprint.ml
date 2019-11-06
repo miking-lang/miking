@@ -170,14 +170,17 @@ and pprint_env env =
 and pprint_ty ty =
   let ppt ty =
   match ty with
+  | TyUnit -> us"()"
   | TyDyn   -> us"Dyn"
   | TyBool  -> us"Bool"
   | TyInt   -> us"Int"
   | TyFloat -> us"Float"
+  | TyChar -> us"Char"
   | TyArrow(ty1,ty2) -> us"(" ^. pprint_ty ty1 ^. us"," ^. pprint_ty ty2 ^. us")"
-  | TyProd tys ->
+  | TySeq(ty1) -> if ty1 = TyChar then us"String"
+                  else us"[" ^. pprint_ty ty1 ^. us"]"
+  | TyTuple tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
-  | TyUnit -> us"()"
   in
     ppt ty
 

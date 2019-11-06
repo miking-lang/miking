@@ -297,14 +297,18 @@ ty_atom:
       { TyUnit }
   | LPAREN ty RPAREN
       { $2 }
+  | LSQUARE ty RSQUARE
+      { TySeq($2) }
   | LPAREN ty COMMA ty_list RPAREN
-      { TyProd ($2::$4) }
+      { TyTuple ($2::$4) }
   | IDENT
       {match Ustring.to_utf8 $1.v with
        | "Dyn"   -> TyDyn
        | "Bool"  -> TyBool
        | "Int"   -> TyInt
        | "Float" -> TyFloat
+       | "Char" -> TyChar
+       | "String" -> TySeq(TyChar)
        | _ -> failwith "Unknown type"
       }
 ty_list:
