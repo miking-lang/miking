@@ -23,22 +23,13 @@ let reserved_strings = [
   ("false",         fun(i) -> Parser.FALSE{i=i;v=()});
   ("match",         fun(i) -> Parser.MATCH{i=i;v=()});
   ("with",          fun(i) -> Parser.WITH{i=i;v=()});
-  ("case",          fun(i) -> Parser.CASE{i=i;v=()});
   ("utest",         fun(i) -> Parser.UTEST{i=i;v=()});
   ("type",          fun(i) -> Parser.TYPE{i=i;v=()});
   ("con",           fun(i) -> Parser.CON{i=i;v=()});
   ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
-  ("mcore",         fun(i) -> Parser.MCORE{i=i;v=()});
-  ("pmcore",        fun(i) -> Parser.PMCORE{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
-  ("tlet",          fun(i) -> Parser.TLET{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
-  ("Lam",           fun(i) -> Parser.BIGLAM{i=i;v=()});
-  ("all",           fun(i) -> Parser.ALL{i=i;v=()});
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
-  ("ifexp",         fun(i) -> Parser.IFEXP{i=i;v=()});
-  ("compose",       fun(i) -> Parser.COMPOSE{i=i;v=()});
-  ("pub",           fun(i) -> Parser.PUB{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("end",           fun(i) -> Parser.END{i=i;v=()});
   ("syn",           fun(i) -> Parser.SYN{i=i;v=()});
@@ -49,39 +40,17 @@ let reserved_strings = [
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
   ("+",             fun(i) -> Parser.ADD{i=i;v=()});
-  ("-",             fun(i) -> Parser.SUB{i=i;v=()});
-  ("*",             fun(i) -> Parser.MUL{i=i;v=()});
-  ("/",             fun(i) -> Parser.DIV{i=i;v=()});
-  ("%",             fun(i) -> Parser.MOD{i=i;v=()});
-  ("<",             fun(i) -> Parser.LESS{i=i;v=()});
-  ("<=",            fun(i) -> Parser.LESSEQUAL{i=i;v=()});
-  (">",             fun(i) -> Parser.GREAT{i=i;v=()});
-  (">=",            fun(i) -> Parser.GREATEQUAL{i=i;v=()});
-  ("<<",            fun(i) -> Parser.SHIFTLL{i=i;v=()});
-  (">>",            fun(i) -> Parser.SHIFTRL{i=i;v=()});
-  (">>>",           fun(i) -> Parser.SHIFTRA{i=i;v=()});
-  ("==",            fun(i) -> Parser.EQUAL{i=i;v=()});
-  ("!=",            fun(i) -> Parser.NOTEQUAL{i=i;v=()});
-  ("!",             fun(i) -> Parser.NOT{i=i;v=()});
-  ("||",            fun(i) -> Parser.OR{i=i;v=()});
-  ("&&",            fun(i) -> Parser.AND{i=i;v=()});
-  ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
-  ("$",             fun(i) -> Parser.DOLLAR{i=i;v=()});
 
   (* Symbolic Tokens *)
   ("(",             fun(i) -> Parser.LPAREN{i=i;v=()});
   (")",             fun(i) -> Parser.RPAREN{i=i;v=()});
   ("[",             fun(i) -> Parser.LSQUARE{i=i;v=()});
   ("]",             fun(i) -> Parser.RSQUARE{i=i;v=()});
-  ("{",             fun(i) -> Parser.LCURLY{i=i;v=()});
-  ("}",             fun(i) -> Parser.RCURLY{i=i;v=()});
-  ("::",            fun(i) -> Parser.CONS{i=i;v=()});
   (":",             fun(i) -> Parser.COLON{i=i;v=()});
   (",",             fun(i) -> Parser.COMMA{i=i;v=()});
   (".",             fun(i) -> Parser.DOT{i=i;v=()});
   ("|",             fun(i) -> Parser.BAR{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
-  ("=>",            fun(i) -> Parser.DARROW{i=i;v=()});
 
 ]
 

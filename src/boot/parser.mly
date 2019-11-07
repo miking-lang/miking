@@ -40,22 +40,13 @@
 %token <unit Ast.tokendata> FALSE
 %token <unit Ast.tokendata> MATCH
 %token <unit Ast.tokendata> WITH
-%token <unit Ast.tokendata> CASE
 %token <unit Ast.tokendata> UTEST
 %token <unit Ast.tokendata> TYPE
 %token <unit Ast.tokendata> CON
 %token <unit Ast.tokendata> LANG
-%token <unit Ast.tokendata> MCORE
-%token <unit Ast.tokendata> PMCORE
 %token <unit Ast.tokendata> LET
-%token <unit Ast.tokendata> TLET
 %token <unit Ast.tokendata> LAM
-%token <unit Ast.tokendata> BIGLAM
-%token <unit Ast.tokendata> ALL
 %token <unit Ast.tokendata> FIX
-%token <unit Ast.tokendata> IFEXP
-%token <unit Ast.tokendata> COMPOSE
-%token <unit Ast.tokendata> PUB
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> END
 %token <unit Ast.tokendata> SYN
@@ -68,53 +59,18 @@
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
 %token <unit Ast.tokendata> ADD           /* "+"   */
-%token <unit Ast.tokendata> SUB           /* "-"   */
-%token <unit Ast.tokendata> MUL           /* "*"   */
-%token <unit Ast.tokendata> DIV           /* "/"   */
-%token <unit Ast.tokendata> MOD           /* "%"   */
-%token <unit Ast.tokendata> LESS          /* "<"   */
-%token <unit Ast.tokendata> LESSEQUAL     /* "<="  */
-%token <unit Ast.tokendata> GREAT         /* ">"   */
-%token <unit Ast.tokendata> GREATEQUAL    /* ">="  */
-%token <unit Ast.tokendata> SHIFTLL       /* "<<"  */
-%token <unit Ast.tokendata> SHIFTRL       /* ">>"  */
-%token <unit Ast.tokendata> SHIFTRA       /* ">>>" */
-%token <unit Ast.tokendata> EQUAL         /* "=="  */
-%token <unit Ast.tokendata> NOTEQUAL      /* "!="  */
-%token <unit Ast.tokendata> NOT           /* "!"   */
-%token <unit Ast.tokendata> OR            /* "||"  */
-%token <unit Ast.tokendata> AND           /* "&&"  */
-%token <unit Ast.tokendata> CONCAT        /* "++"  */
-%token <unit Ast.tokendata> DOLLAR        /* "$"   */
-
-
 
 /* Symbolic Tokens */
 %token <unit Ast.tokendata> LPAREN        /* "("   */
 %token <unit Ast.tokendata> RPAREN        /* ")"   */
 %token <unit Ast.tokendata> LSQUARE       /* "["   */
 %token <unit Ast.tokendata> RSQUARE       /* "]"   */
-%token <unit Ast.tokendata> LCURLY        /* "{"   */
-%token <unit Ast.tokendata> RCURLY        /* "}"   */
-%token <unit Ast.tokendata> CONS          /* "::"  */
 %token <unit Ast.tokendata> COLON         /* ":"   */
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> DOT           /* "."   */
 %token <unit Ast.tokendata> BAR           /* "|"   */
-%token <unit Ast.tokendata> ARROW         /* "->"  */
-%token <unit Ast.tokendata> DARROW        /* "=>"  */
 
 %start main
-
-%left OR   /*prec 2*/
-%left AND  /*prec 3*/
-%left LESS LESSEQUAL GREAT GREATEQUAL EQUAL NOTEQUAL /*prec 6*/
-%left CONCAT
-%left SHIFTLL SHIFTRL SHIFTRA
-%nonassoc NOT /*prec 8 */
-%left ADD SUB /*prec 8*/
-%left MUL DIV MOD /*prec 9*/
-
 
 %type <Ast.program> main
 
@@ -122,15 +78,58 @@
 
 
 main:
-  | mlangs mexpr EOF
-    { Program(NoInfo, $1, $2) } // TODO: Does this need info?
+  | tops EOF
+    { match $1 with
+      | (tops, tm) -> Program (tops, tm) }
 
+//tops:
+//  | top tops
+//    { $1 :: $2 }
+//  |
+//    { [] }
+//
+//top:
+//  | mlang
+//    { TopLang{$1} }
+//  | toplet
+//    { TopLet{$1} }
+//
+//toplet:
+//  | LET IDENT ty_op EQ mexpr toplet_or_expr_cont
+//    { match $6 with
+//      | Tops(tops, tm) ->
+//         let fi = mkinfo $1.i $4.i in
+//         (TopLet(Let (fi, $2.v, $5))::tops, tm)
+//      | Expr (in_info, tm) ->
+//         let fi = mkinfo $1.i in_info in
+//         ([], TmLet(fi, $2.v, $5, tm)) }
 
-mlangs:
-  | mlang mlangs
-      { $1 :: $2 }
-  |
-      { [] }
+tops:
+  | mlang tops
+      { match $2 with
+        | (tops, tm) -> ($1 :: tops, tm) }
+  | toplet_or_expr
+      { $1 }
+
+toplet_or_expr:
+  | LET IDENT ty_op EQ mexpr toplet_or_expr_cont
+    { match $6 with
+      | Tops(tops, tm) ->
+         let fi = mkinfo $1.i $4.i in
+         (TopLet(Let (fi, $2.v, $5))::tops, tm)
+      | Expr (in_info, tm) ->
+         let fi = mkinfo $1.i in_info in
+         ([], TmLet(fi, $2.v, $5, tm)) }
+  | mexpr
+    { ([], $1) }
+
+toplet_or_expr_cont:
+  | tops
+    { match $1 with
+        (tops, tm) -> Tops(tops, tm) }
+  | IN mexpr
+    { Expr($1.i, $2) }
+
 mlang:
   | LANG IDENT includes lang_body
     { let fi = if List.length $3 > 0 then
