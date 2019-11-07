@@ -20,6 +20,8 @@ let param_eq p1 p2 =
   match p1, p2 with
   | Param(_,_,ty1), Param(_,_,ty2) -> ty1 = ty2
 
+let is_lang = function | TopLang _ -> true | _ -> false
+
 (***************
  * Flattening *
  ***************)
@@ -89,24 +91,28 @@ let merge_langs lang1 lang2 : mlang =
      let decls1' = List.fold_right merge_decl decls1 decls2 in
      Lang(info, l1, ls, decls1')
 
-let lookup_lang info langs l =
-  let has_name l lang = match lang with Lang(_, l', _, _) -> l = l' in
-  match List.find_opt (has_name l) langs with
-  | Some res -> res
-  | None -> raise_error info ("Unknown language fragment '"^
+let lookup_lang info tops l =
+  let has_name l = function
+    | TopLang(Lang(_, l', _, _)) -> l = l'
+    | TopLet _ -> false
+  in
+  match List.find_opt (has_name l) tops with
+  | Some (TopLang res) -> res
+  | _ -> raise_error info ("Unknown language fragment '"^
                               Ustring.to_utf8 l^"'")
 
-let flatten_langs langs : mlang list =
+let flatten_langs tops : top list =
   let flatten_langs' flat = function
-    | Lang(info, _, ls, _) as lang ->
+    | TopLang(Lang(info, _, ls, _) as lang)  ->
        let included_langs = List.map (lookup_lang info flat) ls in
        let lang' = List.fold_left merge_langs lang included_langs in
-       lang'::flat
+       TopLang lang'::flat
+    | TopLet _ as let_ -> let_::flat
   in
-  List.rev (List.fold_left flatten_langs' [] langs)
+  List.rev (List.fold_left flatten_langs' [] tops)
 
 let flatten = function
-  | Program(info, langs, e) -> Program(info, flatten_langs langs, e)
+  | Program(tops, e) -> Program(flatten_langs tops, e)
 
 (***************
  * Translation *
@@ -245,36 +251,46 @@ let translate_lang : mlang -> (tm -> tm) list = function
      fun_abstractions @ [fix; unpacks]
 
 
-let translate_uses langs t =
-  let translate_use langs = function
+let translate_uses tops t =
+  let translate_use = function
     | TmUse(fi, l, inner) ->
-       let lang = lookup_lang fi langs l in
+       let lang = lookup_lang fi tops l in
        let decl_wrappers = translate_lang lang in
        List.fold_right (@@) decl_wrappers inner
     | t -> t
   in
-  Ast.map_tm (translate_use langs) t
+  Ast.map_tm translate_use t
 
-let desugar_uses_in_interpreters langs =
-  let desugar_uses_in_case langs = function
-    | (p, t) -> (p, translate_uses langs t)
+let desugar_uses_in_interpreters tops =
+  let desugar_uses_in_case tops = function
+    | (p, t) -> (p, translate_uses tops t)
   in
-  let desugar_uses_in_decl langs = function
+  let desugar_uses_in_decl tops = function
     | Inter (fi, f, params, cases) ->
-       let cases' = List.map (desugar_uses_in_case langs) cases in
+       let cases' = List.map (desugar_uses_in_case tops) cases in
        Inter(fi, f, params, cases')
     | Data _ as d -> d
   in
   let desugar_uses_in_lang desugared = function
-    | Lang(fi, l, ls, decls) ->
+    | TopLang(Lang(fi, l, ls, decls)) ->
        let decls' = List.map (desugar_uses_in_decl desugared) decls in
-       let lang' = Lang(fi, l, ls, decls') in
+       let lang' = TopLang(Lang(fi, l, ls, decls')) in
        lang'::desugared
+    | l -> l::desugared
   in
-  List.rev (List.fold_left desugar_uses_in_lang [] langs)
+  List.rev (List.fold_left desugar_uses_in_lang [] tops)
+
+let insert_top_level_lets tops t =
+  let insert_let top inner = match top with
+    | TopLet(Let(fi, x, tm)) ->
+       TmLet(fi, x, tm, inner)
+    | TopLang _ -> inner
+  in
+  List.fold_right insert_let tops t
 
 let desugar_language_uses = function
-  | Program(_, langs, t) ->
-     let langs' = desugar_uses_in_interpreters langs in
-     let t' = translate_uses langs' t in
-     gen_defs t'
+  | Program(tops, t) ->
+     let tops' = desugar_uses_in_interpreters tops in
+     let t' = translate_uses tops' t in
+     let t'' = insert_top_level_lets tops t' in
+     gen_defs t''

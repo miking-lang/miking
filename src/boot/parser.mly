@@ -20,7 +20,9 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
-
+  type tops_or_mexpr =
+  | Tops of top list * tm
+  | Expr of info * tm
 
 %}
 
@@ -137,7 +139,7 @@ mlang:
                else
                  mkinfo $1.i $2.i
       in
-      Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
+      TopLang(Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4))}
 
 includes:
   | EQ lang_list

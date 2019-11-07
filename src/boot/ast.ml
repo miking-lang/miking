@@ -107,8 +107,12 @@ and decl = (* TODO: Local? *)
 | Data     of info * ustring * cdecl list
 | Inter    of info * ustring * param list * (pattern * tm) list
 
-and mlang   = Lang    of info * ustring * ustring list * decl list
-and program = Program of info * mlang list * tm
+and mlang   = Lang of info * ustring * ustring list * decl list
+and let_decl = Let  of info * ustring * tm
+and top =
+| TopLang of mlang
+| TopLet  of let_decl
+and program = Program of top list * tm
 
 (* Terms in MExpr *)
 and tm =
@@ -173,7 +177,7 @@ let rec map_tm f = function
   | TmMatch(fi,t1,k,n,x,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,k,n,x,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
-  | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,tnext))
+  | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,map_tm f tnext))
 
 
 (* Returns the info field from a term *)

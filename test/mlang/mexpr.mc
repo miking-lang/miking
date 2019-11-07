@@ -1,5 +1,19 @@
 -- TODO: Change string variables to deBruijn indices
 -- TODO: Generate unique symbols for data constructors
+let head = lam seq. nth seq 0
+let tail = lam seq. slice seq 1 (length seq)
+let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
+let eqstr = fix (lam eqstr. lam s1. lam s2.
+    if neqi (length s1) (length s2)
+    then false
+    else if eqi (length s1) 0
+         then true
+         else if eqchar (head s1) (head s2)
+         then eqstr (tail s1) (tail s2)
+         else false)
+let map = fix (lam map. lam f. lam seq.
+  if eqi (length seq) 0 then []
+  else cons (f (head seq)) (map f (tail seq)))
 
 lang Var
   syn Expr =
@@ -7,18 +21,6 @@ lang Var
 
   sem eval (env : Dyn) = -- (env : Env)
   | TmVar x ->
-    let head = lam seq. nth seq 0 in
-    let tail = lam seq. slice seq 1 (length seq) in
-    let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2) in
-    let eqstr = fix (lam eqstr. lam s1. lam s2.
-        if neqi (length s1) (length s2)
-        then false
-        else if eqi (length s1) 0
-             then true
-             else if eqchar (head s1) (head s2)
-             then eqstr (tail s1) (tail s2)
-             else false
-    ) in
     let lookup = fix (lam lookup. lam x. lam env.
       if eqi (length env) 0
       then error (concat "Unknown variable: " x)
@@ -180,12 +182,6 @@ lang Seq = Arith
 
   sem eval (env : Dyn) = -- (env : Expr)
   | TmSeq tms ->
-    let head = lam seq. nth seq 0 in
-    let tail = lam seq. slice seq 1 (length seq) in
-    let map = fix (lam map. lam f. lam seq.
-      if eqi (length seq) 0 then []
-      else cons (f (head seq)) (map f (tail seq))
-    ) in
     let vs = map (eval env) tms in
     TmConst(CSeq vs)
 end
@@ -197,12 +193,6 @@ lang Tuple = Arith
 
   sem eval (env : Dyn) = -- (env : Expr)
   | TmTuple tms ->
-    let head = lam seq. nth seq 0 in
-    let tail = lam seq. slice seq 1 (length seq) in
-    let map = fix (lam map. lam f. lam seq.
-      if eqi (length seq) 0 then []
-      else cons (f (head seq)) (map f (tail seq))
-    ) in
     let vs = map (eval env) tms in
     TmTuple(vs)
   | TmProj t ->
@@ -232,18 +222,6 @@ lang Data
   | TmConFun t -> TmConFun t
   | TmCon t -> TmCon t
   | TmMatch t ->
-    let head = lam seq. nth seq 0 in
-    let tail = lam seq. slice seq 1 (length seq) in
-    let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2) in
-    let eqstr = fix (lam eqstr. lam s1. lam s2.
-        if neqi (length s1) (length s2)
-        then false
-        else if eqi (length s1) 0
-             then true
-             else if eqchar (head s1) (head s2)
-             then eqstr (tail s1) (tail s2)
-             else false
-    ) in
     let target = t.0 in
     let k2 = t.1 in
     let x = t.2 in
