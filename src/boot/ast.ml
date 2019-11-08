@@ -112,7 +112,9 @@ and let_decl = Let  of info * ustring * tm
 and top =
 | TopLang of mlang
 | TopLet  of let_decl
-and program = Program of top list * tm
+
+and include_ = Include of info * ustring
+and program = Program of include_ list * top list * tm
 
 (* Terms in MExpr *)
 and tm =

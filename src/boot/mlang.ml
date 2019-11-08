@@ -112,7 +112,7 @@ let flatten_langs tops : top list =
   List.rev (List.fold_left flatten_langs' [] tops)
 
 let flatten = function
-  | Program(tops, e) -> Program(flatten_langs tops, e)
+  | Program(includes, tops, e) -> Program(includes, flatten_langs tops, e)
 
 (***************
  * Translation *
@@ -289,7 +289,7 @@ let insert_top_level_lets tops t =
   List.fold_right insert_let tops t
 
 let desugar_language_uses = function
-  | Program(tops, t) ->
+  | Program(_, tops, t) ->
      let tops' = desugar_uses_in_interpreters tops in
      let t' = translate_uses tops' t in
      let t'' = insert_top_level_lets tops t' in

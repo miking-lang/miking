@@ -40,7 +40,8 @@
      '( )) ;; Intensionally left blank
 
 (setq mcore-warning
-     '("main"))
+     '("main"
+       "include"))
 
 (setq mcore-keywords-regexp (regexp-opt mcore-keywords 'symbols))
 (setq mcore-operators-regexp (regexp-opt mcore-operators 'symbols))

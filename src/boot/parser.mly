@@ -51,6 +51,7 @@
 %token <unit Ast.tokendata> SEM
 %token <unit Ast.tokendata> USE
 %token <unit Ast.tokendata> MAIN
+%token <unit Ast.tokendata> INCLUDE
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -73,8 +74,19 @@
 %%
 
 main:
-  | tops mexpr_opt EOF
-    { Program ($1, $2) }
+  | includes tops mexpr_opt EOF
+    { Program ($1, $2, $3) }
+
+includes:
+  | include_ includes
+    { $1 :: $2 }
+  |
+    { [] }
+
+include_:
+  | INCLUDE STRING
+    { let fi = mkinfo $1.i $2.i in
+      Include(fi, $2.v) }
 
 mexpr_opt:
   | MAIN mexpr
@@ -100,7 +112,7 @@ toplet:
       Let (fi, $2.v, $5) }
 
 mlang:
-  | LANG IDENT includes lang_body
+  | LANG IDENT lang_includes lang_body
     { let fi = if List.length $3 > 0 then
                  mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
                else
@@ -108,7 +120,7 @@ mlang:
       in
       Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
 
-includes:
+lang_includes:
   | EQ lang_list
     { $2 }
   |

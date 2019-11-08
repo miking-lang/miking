@@ -37,27 +37,67 @@ let debug_after_debruijn t =
      t)
   else t
 
+(* Keep track of which files have been parsed to avoid double includes *)
+let parsed_files = ref []
 
+(* Open a file and parse it into an MCore program *)
+let parse_mcore_file filename =
+  let fs1 = open_in filename in
+  let tablength = 8 in
+  let p =
+    Lexer.init (us filename) tablength;
+    fs1 |> Ustring.lexing_from_channel
+    |> Parser.main Lexer.main |> debug_after_parse
+  in
+  close_in fs1; (parsed_files := filename::!parsed_files); p
+
+(* Parse and merge all files included from a program, given the
+   path of the "root program". Raise an error if a loop is
+   detected. *)
+let rec merge_includes root visited = function
+  | Program(includes, tops, tm) ->
+     let parse_include = function
+       | Include(info, path) ->
+          let filename = Filename.concat root (Ustring.to_utf8 path) in
+          if List.mem filename visited
+          then raise_error info ("Cycle detected in included files: " ^ filename)
+          else if List.mem filename !parsed_files
+          then None (* File already included *)
+          else
+            if Sys.file_exists filename then
+              parse_mcore_file filename |>
+              merge_includes (Filename.dirname filename) (filename::visited) |>
+              Option.some
+            else raise_error info ("No such file: \"" ^ filename ^ "\"")
+     in
+     let included =
+       includes
+       |> List.map parse_include
+       |> List.filter Option.is_some
+       |> List.map Option.get
+     in
+     let included_tops =
+       included
+       |> List.map (function Program(_ ,tops, _) -> tops)
+       |> List.concat
+     in
+     Program(includes, included_tops@tops, tm)
 
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
-  let fs1 = open_in filename in
-  let tablength = 8 in
   begin try
-    Lexer.init (us filename) tablength;
-    let parsed =
-      fs1 |> Ustring.lexing_from_channel
-          |> Parser.main Lexer.main |> debug_after_parse in
+    let parsed = parse_mcore_file filename in
     (parsed
+     |> merge_includes (Filename.dirname filename) [filename]
      |> Mlang.flatten
      |> Mlang.desugar_language_uses
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
-     |> fun _ -> ())
+     |> fun _ -> ()); parsed_files := []
     with
     | Lexer.Lex_error m ->
       if !utest then (
@@ -81,7 +121,7 @@ let evalprog filename  =
       else
         fprintf stderr "%s\n"
 	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
-  end; close_in fs1;
+  end;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
 

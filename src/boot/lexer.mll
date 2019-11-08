@@ -36,6 +36,7 @@ let reserved_strings = [
   ("sem",           fun(i) -> Parser.SEM{i=i;v=()});
   ("use",           fun(i) -> Parser.USE{i=i;v=()});
   ("main",          fun(i) -> Parser.MAIN{i=i;v=()});
+  ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
 
 
   (* v *)
