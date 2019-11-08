@@ -1,6 +1,8 @@
 let head = lam s. nth s 0
 let tail = lam s. slice s 1 (length s)
+let null = lam seq. eqi 0 (length seq)
 
+-- Maps and folds
 let map = fix (lam map. lam f. lam seq.
   if eqi (length seq) 0 then []
   else cons (f (head seq)) (map f (tail seq))
@@ -10,11 +12,19 @@ let foldl = fix (lam foldl. lam f. lam acc. lam seq.
     if eqi (length seq) 0 then acc
     else foldl f (f acc (head seq)) (tail seq)
 )
+let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 let zipwith = fix (lam zipwith. lam f. lam seq1. lam seq2.
     if eqi (length seq1) 0 then []
     else if eqi (length seq2) 0 then []
     else cons (f (head seq1) (head seq2)) (zipwith f (tail seq1) (tail seq2))
+)
+
+-- Predicates
+let any  = fix (lam any. lam p. lam seq.
+  if eqi (length seq) 0
+  then false
+  else or (p (head seq)) (any p (tail seq))
 )
 
 main
