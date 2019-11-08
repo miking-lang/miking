@@ -17,6 +17,11 @@ open Msg
 open Mexpr
 open Pprint
 
+let stdlib_loc =
+  match Sys.getenv_opt "MCORE_STDLIB" with
+  | Some path -> path
+  | None -> "@@@"
+
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
 
@@ -56,8 +61,8 @@ let parse_mcore_file filename =
    detected. *)
 let rec merge_includes root visited = function
   | Program(includes, tops, tm) ->
-     let parse_include = function
-       | Include(info, path) ->
+     let rec parse_include root = function
+       | Include(info, path) as inc ->
           let filename = Filename.concat root (Ustring.to_utf8 path) in
           if List.mem filename visited
           then raise_error info ("Cycle detected in included files: " ^ filename)
@@ -68,11 +73,15 @@ let rec merge_includes root visited = function
               parse_mcore_file filename |>
               merge_includes (Filename.dirname filename) (filename::visited) |>
               Option.some
+            else if root != stdlib_loc &&
+                    Sys.file_exists @@
+                      Filename.concat stdlib_loc (Ustring.to_utf8 path)
+            then parse_include stdlib_loc inc
             else raise_error info ("No such file: \"" ^ filename ^ "\"")
      in
      let included =
        includes
-       |> List.map parse_include
+       |> List.map (parse_include root)
        |> List.filter Option.is_some
        |> List.map Option.get
      in

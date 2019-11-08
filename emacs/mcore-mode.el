@@ -79,8 +79,17 @@
 
 (add-hook 'mcore-mode-hook
           (lambda ()
-            (set (make-local-variable 'compile-command)
-                 (concat "miking " (buffer-name)))))
+            ;; Set default compile command
+            (progn
+              (set (make-local-variable 'compile-command)
+                   (concat "miking " (buffer-name)))
+              ;; Get location of standard library from environment
+              (let ((path
+                     (replace-regexp-in-string
+                      "[[:space:]\n]*$" ""
+                      (shell-command-to-string "$SHELL -l -c 'echo $MCORE_STDLIB'"))))
+                (set (make-local-variable 'compilation-environment)
+                     (list (concat "MCORE_STDLIB=" path)))))))
 
 (setq mcore-error-regexp
       '(mcore "\"\\(.+\\)\" \\([0-9]+\\):\\([0-9]+\\)" 1 2 3))
