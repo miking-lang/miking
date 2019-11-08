@@ -3,6 +3,7 @@
 //
 // Test floating-point comparisons and operations
 
+main
 // Floating-point number intrinsics
 utest 32.1 with 32.1 in
 utest 0.01 with 1e-2 in

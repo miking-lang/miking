@@ -3,6 +3,7 @@
 //
 // Test string and char primitives
 
+main
 
 // Unicode characters
 utest 'a' with 'a' in

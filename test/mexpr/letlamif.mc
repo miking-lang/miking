@@ -3,6 +3,7 @@
 //
 // Test string and char primitives
 
+main
 
 // lambda
 utest (lam x. addi x 2) 3 with 5 in

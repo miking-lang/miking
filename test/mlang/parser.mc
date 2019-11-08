@@ -1,3 +1,4 @@
+main
 -- Printing stuff
 let print_ln = lam s. print (concat s "\n") in
 let debug_flag = false in

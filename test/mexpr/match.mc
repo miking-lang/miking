@@ -3,6 +3,7 @@
 //
 // Test integer primitives
 
+main
 // Constructor with and without arguments
 con K1 in
 con K2 in

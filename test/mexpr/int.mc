@@ -3,6 +3,7 @@
 //
 // Test integer primitives
 
+main
 
 // Literals
 utest 1 with 1 in

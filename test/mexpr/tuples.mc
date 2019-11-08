@@ -3,7 +3,7 @@
 //
 // Test tuples
 
-
+main
 // Tuples
 utest (1,3,10) with (1,3,10) in
 utest () with () in

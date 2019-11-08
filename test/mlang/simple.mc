@@ -50,6 +50,7 @@ lang And = Bool
   | False -> False
 end
 
+main
 let _ =
   use Empty in
   ()

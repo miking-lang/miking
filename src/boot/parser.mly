@@ -20,10 +20,6 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
-  type tops_or_mexpr =
-  | Tops of top list * tm
-  | Expr of info * tm
-
 %}
 
 /* Misc tokens */
@@ -54,9 +50,7 @@
 %token <unit Ast.tokendata> SYN
 %token <unit Ast.tokendata> SEM
 %token <unit Ast.tokendata> USE
-
-
-
+%token <unit Ast.tokendata> MAIN
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -78,59 +72,32 @@
 
 %%
 
-
 main:
-  | tops EOF
-    { match $1 with
-      | (tops, tm) -> Program (tops, tm) }
+  | tops mexpr_opt EOF
+    { Program ($1, $2) }
 
-//tops:
-//  | top tops
-//    { $1 :: $2 }
-//  |
-//    { [] }
-//
-//top:
-//  | mlang
-//    { TopLang{$1} }
-//  | toplet
-//    { TopLet{$1} }
-//
-//toplet:
-//  | LET IDENT ty_op EQ mexpr toplet_or_expr_cont
-//    { match $6 with
-//      | Tops(tops, tm) ->
-//         let fi = mkinfo $1.i $4.i in
-//         (TopLet(Let (fi, $2.v, $5))::tops, tm)
-//      | Expr (in_info, tm) ->
-//         let fi = mkinfo $1.i in_info in
-//         ([], TmLet(fi, $2.v, $5, tm)) }
+mexpr_opt:
+  | MAIN mexpr
+    { $2 }
+  |
+    { TmConst(NoInfo, Cunit) }
 
 tops:
-  | mlang tops
-      { match $2 with
-        | (tops, tm) -> ($1 :: tops, tm) }
-  | toplet_or_expr
-      { $1 }
+  | top tops
+    { $1 :: $2 }
+  |
+    { [] }
 
-toplet_or_expr:
-  | LET IDENT ty_op EQ mexpr toplet_or_expr_cont
-    { match $6 with
-      | Tops(tops, tm) ->
-         let fi = mkinfo $1.i $4.i in
-         (TopLet(Let (fi, $2.v, $5))::tops, tm)
-      | Expr (in_info, tm) ->
-         let fi = mkinfo $1.i in_info in
-         ([], TmLet(fi, $2.v, $5, tm)) }
-  | mexpr
-    { ([], $1) }
+top:
+  | mlang
+    { TopLang($1) }
+  | toplet
+    { TopLet($1) }
 
-toplet_or_expr_cont:
-  | tops
-    { match $1 with
-        (tops, tm) -> Tops(tops, tm) }
-  | IN mexpr
-    { Expr($1.i, $2) }
+toplet:
+  | LET IDENT ty_op EQ mexpr
+    { let fi = mkinfo $1.i $4.i in
+      Let (fi, $2.v, $5) }
 
 mlang:
   | LANG IDENT includes lang_body
@@ -139,7 +106,7 @@ mlang:
                else
                  mkinfo $1.i $2.i
       in
-      TopLang(Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4))}
+      Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
 
 includes:
   | EQ lang_list

@@ -39,10 +39,14 @@
 (setq mcore-operators
      '( )) ;; Intensionally left blank
 
+(setq mcore-warning
+     '("main"))
+
 (setq mcore-keywords-regexp (regexp-opt mcore-keywords 'symbols))
 (setq mcore-operators-regexp (regexp-opt mcore-operators 'symbols))
 (setq mcore-constants-regexp (regexp-opt mcore-constants 'symbols))
 (setq mcore-primitives-regexp (regexp-opt mcore-primitives 'symbols))
+(setq mcore-warning-regexp (regexp-opt mcore-warning 'symbols))
 
 (setq mcore-types-regexp "\\<[[:upper:]][[:word:]]*\\>")
 
@@ -53,6 +57,7 @@
        (,mcore-primitives-regexp . font-lock-type-face)
        (,mcore-operators-regexp  . font-lock-builtin-face)
        (,mcore-types-regexp      . font-lock-type-face)
+       (,mcore-warning-regexp     . font-lock-warning-face)
        )
      )
 

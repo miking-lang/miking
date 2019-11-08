@@ -55,6 +55,7 @@ end
 
 lang Overlap = ArithBool + ArithBool2 + Arith
 
+main
 let _ =
   use ArithBool2 in
   utest eval (Add (Num 1, Num 2)) with 3 in

@@ -3,6 +3,7 @@
 //
 // Test the parsing of types
 
+main
 // No type in lambda
 let f = lam x. addi x 2 in
 utest f 5 with 7 in

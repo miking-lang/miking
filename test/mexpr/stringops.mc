@@ -3,6 +3,7 @@
 //
 // Test implementation of simple string operations
 
+main
 let head = lam seq. nth seq 0 in
 let tail = lam seq. slice seq 1 (length seq) in
 

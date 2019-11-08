@@ -3,6 +3,7 @@
 //
 // Test floating-point number primitives and polymorphic primitives
 
+main
 
 
 // Boolean intrinsic functions

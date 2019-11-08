@@ -3,6 +3,7 @@
 //
 // Test integer primitives
 
+main
 // Construction of lists
 utest [] with [] in
 utest [1,2] with [1,2] in

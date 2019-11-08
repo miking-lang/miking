@@ -256,6 +256,7 @@ lang MExpr = Fun + Fix + Let
            + Seq + Tuple + Data + Utest
            + Const + Arith + Bool + Unit
 
+main
 use MExpr in
 let id = TmLam ("x", TmVar "x") in
 let bump = TmLam ("x", TmApp (TmApp (TmConst CAddi, TmVar "x"), TmConst(CInt 1))) in
