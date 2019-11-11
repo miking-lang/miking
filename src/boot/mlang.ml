@@ -120,69 +120,23 @@ let flatten = function
  * Translation *
  ***************)
 
-module Generated = struct
-  let lam x body = TmLam(NoInfo, x, TyDyn, body)
+module AstHelpers = struct
+  let lam x body = TmLam(NoInfo, us x, TyDyn, body)
   let lam2 x y body =
-    TmLam(NoInfo, x, TyDyn, lam y body)
+    TmLam(NoInfo, us x, TyDyn, lam y body)
   let lam3 x y z body =
-    TmLam(NoInfo, x, TyDyn, lam2 y z body)
-  let var x = TmVar(NoInfo, x, -1)
+    TmLam(NoInfo, us x, TyDyn, lam2 y z body)
+  let var x = TmVar(NoInfo, us x, -1)
   let app l r = TmApp(NoInfo, l, r)
   let app2 l r1 r2 = TmApp(NoInfo, app l r1, r2)
   let app3 l r1 r2 r3 = TmApp(NoInfo, app2 l r1 r2, r3)
   let fix = TmFix(NoInfo)
-  let let_ x e body = TmLet(NoInfo, x, e, body)
+  let let_ x e body = TmLet(NoInfo, us x, e, body)
   let if_ c t e = TmIf(NoInfo, c, t, e)
   let int n = TmConst(NoInfo, CInt n)
-  let nil = TmSeq(NoInfo, [])
-
-  let head = lam (us"seq") (app2 (var (us"nth")) (var (us"seq")) (int 0))
-  let head_name = us"@head"
-  let head_var = TmVar(NoInfo, head_name, -1)
-  let head_def body = TmLet(NoInfo, head_name, head, body)
-
-  let tail = lam (us"seq") (app3 (var (us"slice")) (var (us"seq")) (int 1)
-                                 (app (var (us"length")) (var (us"seq"))))
-  let tail_name = us"@tail"
-  let tail_var = TmVar(NoInfo, tail_name, -1)
-  let tail_def body = TmLet(NoInfo, tail_name, tail, body)
-
-  let map =
-    app fix
-        (lam3 (us"map") (us"f") (us"seq")
-              (if_ (app2 (var (us"eqi"))
-                         (app (var (us"length")) (var (us"seq")))
-                         (int 0))
-                   nil
-                   (app2 (var (us"cons"))
-                         (app (var (us"f")) (app head_var (var (us"seq"))))
-                         (app2 (var (us"map"))
-                               (var (us"f"))
-                               (app tail_var (var (us"seq")))))))
-  let map_name = us"@map"
-  let map_var = var map_name
-  let map_def body = let_ map_name map body
-
-  let fix_mutual =
-    lam (us"l")
-        (app2 fix
-              (lam2 (us"self") (us"l")
-                    (app2 map_var
-                          (lam2 (us"li") (us"x")
-                                (app2 (var (us"li"))
-                                      (app (var (us"self")) (var (us"l")))
-                                      (var (us"x"))))
-                          (var (us"l"))))
-              (var (us"l")))
-  let fix_mutual_name = us"@fix_mutual"
-  let fix_mutual_var = var fix_mutual_name
-  let fix_mutual_def body = let_ fix_mutual_name fix_mutual body
-
-  let defs = [head_def; tail_def; map_def; fix_mutual_def]
-  let gen_defs body = List.fold_right (@@) defs body
 end
 
-open Generated
+open AstHelpers
 
 let translate_data =
   let translate_constr constr inner =
@@ -206,7 +160,8 @@ let translate_cases f target cases =
                k, -1, x, handler, inner)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
-            (ustring2list (us"No matching case for function " ^. f))
+            (ustring2list (us"No matching case for function " ^.
+                             Ustring.from_utf8 f))
   in
   let no_match = app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg))
   in
@@ -215,41 +170,42 @@ let translate_cases f target cases =
 let unpack_recursive_functions names seq body =
   let rec unpack i = function
     | [] -> body
-    | f::fs -> let_ f (app2 (var (us"nth")) (var seq) (int i)) (unpack (i + 1) fs)
+    | f::fs -> let_ f (app2 (var "nth") (var seq) (int i)) (unpack (i + 1) fs)
   in
   unpack 0 names
 
 let translate_inter f fs params cases : tm -> tm =
-  let target_name = us"_" ^. f ^. us"_target" in
+  let target_name = "_" ^ f ^ "_target" in
   let target = var target_name in
   let mtch =
     lam target_name (translate_cases f target cases) in
   let wrapped_match = translate_params params mtch in
-  let funs_seq = f ^. us"_funs" in
+  let funs_seq = f ^ "_funs" in
   let unpacked = unpack_recursive_functions fs funs_seq wrapped_match in
   let fn = lam funs_seq unpacked in
-  fun inner -> let_ (f ^. us"_abs") fn inner
+  fun inner -> let_ (f ^ "_abs") fn inner
 
 let translate_decl fs : decl -> tm -> tm = function
   | Data (_, _, constrs) -> fun inner -> translate_data constrs inner
-  | Inter (_, f, params, cases) -> translate_inter f fs params cases
+  | Inter (_, f, params, cases) ->
+     translate_inter (Ustring.to_utf8 f) fs params cases
 
 let translate_lang : mlang -> (tm -> tm) list = function
   | Lang (_, _, _, decls) ->
      let extract_name decl ack = match decl with
-       | Inter(_, f, _, _) -> f::ack
+       | Inter(_, f, _, _) -> Ustring.to_utf8 f::ack
        | _ -> ack
      in
      let fun_names = List.fold_right extract_name decls [] in
      let fun_abstractions = List.map (translate_decl fun_names) decls in
      let abs_seq =
-       TmSeq(NoInfo, List.map (fun f -> var (f ^. us"_abs")) fun_names)
+       TmSeq(NoInfo, List.map (fun f -> var (f ^ "_abs")) fun_names)
      in
      let fix =
-       fun inner -> let_ (us"@funs") (app fix_mutual_var abs_seq) inner
+       fun inner -> let_ "@funs" (app (var "fix_mutual") abs_seq) inner
      in
      let unpacks =
-       fun inner -> unpack_recursive_functions fun_names (us"@funs") inner in
+       fun inner -> unpack_recursive_functions fun_names "@funs" inner in
      fun_abstractions @ [fix; unpacks]
 
 
@@ -297,4 +253,4 @@ let desugar_language_uses = function
      let tops' = desugar_uses_in_interpreters tops in
      let t' = translate_uses tops' t in
      let t'' = insert_top_level_decls tops t' in
-     gen_defs t''
+     t''
