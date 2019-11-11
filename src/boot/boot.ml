@@ -115,7 +115,7 @@ let evalprog filename  =
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
-     |> fun _ -> ()); parsed_files := []
+     |> fun _ -> ())
     with
     | Lexer.Lex_error m ->
       if !utest then (
@@ -139,7 +139,7 @@ let evalprog filename  =
       else
         fprintf stderr "%s\n"
 	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
-  end;
+  end; parsed_files := [];
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
 
