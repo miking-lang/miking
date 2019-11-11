@@ -1,19 +1,6 @@
 -- TODO: Change string variables to deBruijn indices
 -- TODO: Generate unique symbols for data constructors
-let head = lam seq. nth seq 0
-let tail = lam seq. slice seq 1 (length seq)
-let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
-let eqstr = fix (lam eqstr. lam s1. lam s2.
-    if neqi (length s1) (length s2)
-    then false
-    else if eqi (length s1) 0
-         then true
-         else if eqchar (head s1) (head s2)
-         then eqstr (tail s1) (tail s2)
-         else false)
-let map = fix (lam map. lam f. lam seq.
-  if eqi (length seq) 0 then []
-  else cons (f (head seq)) (map f (tail seq)))
+include "string.mc"
 
 lang Var
   syn Expr =

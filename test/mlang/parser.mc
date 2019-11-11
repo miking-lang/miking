@@ -1,14 +1,11 @@
-include "seq.mc"
 include "string.mc"
 
-main
 -- Printing stuff
-let print_ln = lam s. print (concat s "\n") in
-let debug_flag = false in
-let debug = lam s. if debug_flag then print_ln s else () in
+let print_ln = lam s. print (concat s "\n")
+let debug_flag = false
+let debug = lam s. if debug_flag then print_ln s else ()
 
--- Auxiliary stuff
-let curry = lam f. lam x. lam y. f(x, y) in
+main
 
 -- The Parser monad -----------------------------
 

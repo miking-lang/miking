@@ -22,6 +22,11 @@ let stdlib_loc =
   | Some path -> path
   | None -> "@@@"
 
+let default_includes =
+  match Sys.getenv_opt "MCORE_STDLIB" with
+  | Some _ -> [Include(NoInfo, us"prelude.mc")]
+  | _ -> []
+
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
 
@@ -92,6 +97,9 @@ let rec merge_includes root visited = function
      in
      Program(includes, included_tops@tops, tm)
 
+let add_prelude = function
+  | Program(includes, tops, tm) -> Program(default_includes@includes, tops, tm)
+
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
@@ -100,6 +108,7 @@ let evalprog filename  =
   begin try
     let parsed = parse_mcore_file filename in
     (parsed
+     |> add_prelude
      |> merge_includes (Filename.dirname filename) [filename]
      |> Mlang.flatten
      |> Mlang.desugar_language_uses

@@ -1,4 +1,3 @@
-include "seq.mc"
 include "char.mc"
 
 let eqstr = fix (lam eqstr. lam s1. lam s2.
