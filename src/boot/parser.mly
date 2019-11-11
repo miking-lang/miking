@@ -99,17 +99,29 @@ tops:
     { $1 :: $2 }
   |
     { [] }
+  // TODO: These should matter with a type system
+  | TYPE IDENT tops
+    { $3 }
+  | TYPE IDENT EQ ty tops
+    { $5 }
 
 top:
   | mlang
     { TopLang($1) }
   | toplet
     { TopLet($1) }
+  | topcon
+    { TopCon($1) }
 
 toplet:
   | LET IDENT ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
       Let (fi, $2.v, $5) }
+
+topcon:
+  | CON IDENT ty_op
+    { let fi = mkinfo $1.i $2.i in
+      Con (fi, $2.v, $3) }
 
 mlang:
   | LANG IDENT lang_includes lang_body

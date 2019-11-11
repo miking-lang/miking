@@ -95,6 +95,7 @@ let lookup_lang info tops l =
   let has_name l = function
     | TopLang(Lang(_, l', _, _)) -> l = l'
     | TopLet _ -> false
+    | TopCon _ -> false
   in
   match List.find_opt (has_name l) tops with
   | Some (TopLang res) -> res
@@ -108,6 +109,7 @@ let flatten_langs tops : top list =
        let lang' = List.fold_left merge_langs lang included_langs in
        TopLang lang'::flat
     | TopLet _ as let_ -> let_::flat
+    | TopCon _ as con -> con::flat
   in
   List.rev (List.fold_left flatten_langs' [] tops)
 
@@ -280,10 +282,12 @@ let desugar_uses_in_interpreters tops =
   in
   List.rev (List.fold_left desugar_uses_in_lang [] tops)
 
-let insert_top_level_lets tops t =
+let insert_top_level_decls tops t =
   let insert_let top inner = match top with
     | TopLet(Let(fi, x, tm)) ->
        TmLet(fi, x, tm, inner)
+    | TopCon(Con(fi, k, ty)) ->
+       TmCondef(fi, k, ty, inner)
     | TopLang _ -> inner
   in
   List.fold_right insert_let tops t
@@ -292,5 +296,5 @@ let desugar_language_uses = function
   | Program(_, tops, t) ->
      let tops' = desugar_uses_in_interpreters tops in
      let t' = translate_uses tops' t in
-     let t'' = insert_top_level_lets tops t' in
+     let t'' = insert_top_level_decls tops t' in
      gen_defs t''

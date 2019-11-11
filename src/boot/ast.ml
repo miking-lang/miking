@@ -20,7 +20,7 @@ let enable_debug_after_erase = false
 
 
 let utest = ref false           (* Set to true if unit testing is enabled *)
-let utest_ok = ref 0            (* sCounts the number of successful unit tests *)
+let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
@@ -108,10 +108,12 @@ and decl = (* TODO: Local? *)
 | Inter    of info * ustring * param list * (pattern * tm) list
 
 and mlang   = Lang of info * ustring * ustring list * decl list
-and let_decl = Let  of info * ustring * tm
+and let_decl = Let of info * ustring * tm
+and con_decl = Con of info * ustring * ty
 and top =
 | TopLang of mlang
 | TopLet  of let_decl
+| TopCon of con_decl
 
 and include_ = Include of info * ustring
 and program = Program of include_ list * top list * tm
