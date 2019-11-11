@@ -7,18 +7,76 @@ domain-specific and general-purpose languages.
 Miking is not a programming language, but rather a language system for
 creating languages and generating efficient compilers.
 
+## Getting started
+
+Before you test the Miking system, you need to install
+[OCaml](https://ocaml.org/), the
+[OPAM](https://opam.ocaml.org/) package manager, and the `dune`
+package. To compile and run the test suite, execute
+
+```
+>> make test
+```
+on the command line.
+
+A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
+
+```
+main
+  print("Hello world")
+```
+
+and then run it using command
+
+```
+>> build/boot hello.mc
+```
+
+
+
+
 
 ## MCore
-MCore (Miking Core) is the core language of the Miking system. It is based on a typed Lambda Calculus. Unique features of the MCore language are:
 
-* The **Dive** operator that enables runtime partial evaluation and meta programming.
-* The **Compose** operator that makes it possible to compose new languages from existing language fragments.
-* **Unified Collection Types (UC Types)**, a unified approach to handle standard collections, such as sequences, lists, maps, multisets, sets, and more.
+MCore (Miking Core) is the core language of the Miking system. It is
+based on a typed Lambda Calculus (Note: the type system is under
+development, and the current implementation is untyped).
 
-The rest of this document gives a brief overview of the MCore language.
+MCore consists of two parts:
 
-### Syntax
-One of the design objectives of MCore is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MCore language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
+* **MExpr** is an MCore expression. A Miking language is always translated into an MExpr, before it is further evaluated or compiled into machine code.
+
+* **MLang** which is a language for composing language fragments. MLang is formally translated into an MExpr.
+
+
+
+## MExpr
+
+One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MCore language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
+
+
+
+### Terms
+
+
+### Constants
+
+
+
+
+
+
+## MLang
+
+
+
+
+
+
+
+## Other
+
+The following section contains notes about concepts that are not yet part of the Miking system, but might be introduced at a later stage.
 
 ### Unfied Collection Types (UC Types)
 
@@ -47,87 +105,6 @@ Each combination of the two properties form a *specific* collection type:
 Each of these collection types can then be used as other standard data type. For instance, a sequence can be used as a list, an immutable array, a queue, or a stack. Functional maps can be defined using sets, where the values are maplets (only the key of a maplet is compared). Priority queues can be created using maplets and sorted sets.
 
 UC types have many different intrinsic functions (built-in functions), where some of them are only valid for some of the 6 specific collection types. Moreover, there are some operations defined on the *composition* of collection types. For instance, a matrix can be defined as a sequence of sequences, where matrix multiplication is defined on such a type.
-
-
-## Pure MCore
-
-MCore is an extension to Pure MCore that includes various syntactic sugar extensions. The
-main extensions are:
-
-* Inference of self variables.
-
-* Syntactic sugar for `let in` and `if` expressions.
-
-* An implicit definition of the default module with self variable `root`.
-
-### Inference of Self Variables
-
-The following program in MCore
-
-```
-let m1 = {
-  let foo = 7
-}
-let x = m1.foo  // x contains value 7
-```
-is a syntactic simplification of Pure MCore, where the self variables have been derived. In the following version, the two self variables `s` and `root` are explicit.
-
-```
-let m1 = self s {
-  let foo = 7
-  let x = s.foo + 1   // x evaluates to 8
-}
-let y = root.m1.foo   // y evaluates to 7
-```
-
-In the above code, the top level module was implicit, using a default self variable called `root`. In the following complete Pure MCore code, this module is also explicit:
-
-```
-self root {
-  let m1 = self s {
-    let foo = 7
-    let x = s.foo + 1   // x evaluates to 8
-  }
-  let y = root.m1.foo   // y evaluates to 7
-}
-```
-
-## Other
-
-The following things need to be described in the text:
-
-* First-class modules.
-
-* The use of public labels in modules.
-
-* Composition of modules and functions.
-
-* Why integers, floating-point numbers, and booleans are data types.
-
-* Expansion of `let in` expressions.
-
-* Expansion of `if` expressions into `match` expressions.
-
-Example of a program with polymorphic data types
-
-```
-lang mcore
-
-// Define a data type
-tcon Tree(*)
-
-// Define two data constructors
-dcon all A. Node(Tree(A),Tree(A)) => Tree(A)
-dcon all A. Leaf(A) => Tree(A)
-
-// Create a term of data type Tree
-let t1 = Node(Node(Leaf(1),Leaf(2)),Leaf(3))
-
-let countLeafs = lam t:Tree.
-  match t with
-    case Node(n1,n2) => addi (countLeafs n1) (countLeafs n2)
-  | case Leaf(_) => 1
-```
 
 
 ## MIT License
