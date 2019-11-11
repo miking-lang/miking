@@ -23,7 +23,7 @@ A bootstrap interpreter is available under `build/boot` after compiling the proj
 
 ```
 main
-  print("Hello world")
+  print("Hello, world!\n")
 ```
 
 and then run it using command
@@ -32,8 +32,28 @@ and then run it using command
 >> build/boot hello.mc
 ```
 
+To help Miking find its standard library, you should define the
+environment variable `MCORE_STDLIB` to be the path to `stdlib`,
+for example by running the following:
+
+    cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
 
+## Editor Support
+
+It is possible to write Miking code in any editor and compile it
+via the command line. There is however an Emacs mode in
+`emacs/mcore-mode.el` that defines syntax highlighting and
+compilation support. To use it, add the following to your
+`init.el` file:
+
+```
+;; MCore mode
+(add-to-list 'load-path "/path/to/miking/emacs/")
+(require 'mcore-mode)
+```
+
+(or run `M-x eval-buffer` in the file defining the mode)
 
 
 ## MCore
