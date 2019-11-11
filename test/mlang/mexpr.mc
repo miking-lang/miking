@@ -1,13 +1,15 @@
--- TODO: Change string variables to deBruijn indices
 -- TODO: Generate unique symbols for data constructors
-include "string.mc"
 -- TODO: Add types
+include "string.mc"
+
+-- TODO: Change string variables to deBruijn indices
+type Env = [(String, Expr)]
 
 lang Var
   syn Expr =
-  | TmVar (Dyn) -- String
+  | TmVar String
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmVar x ->
     let lookup = fix (lam lookup. lam x. lam env.
       if eqi (length env) 0
@@ -20,12 +22,14 @@ lang Var
 end
 
 lang Fun = Var
+  syn Type =
+  | Arrow (Type, Type)
   syn Expr =
-  | TmLam (Dyn, Dyn, Dyn) -- (String, Expr)
-  | TmClos (Dyn, Dyn, Dyn) -- (String, Expr, Env)
-  | TmApp (Dyn, Dyn) -- (Expr, Expr)
+  | TmLam (String, Option, Expr) -- Option Type
+  | TmClos (String, Option, Expr, Env) -- Option Type
+  | TmApp (Expr, Expr)
 
-  sem apply (arg : Dyn) = -- (arg : Dyn)
+  sem apply (arg : Expr) =
   | TmClos t ->
       let x = t.0 in
       let body = t.1 in
@@ -33,7 +37,7 @@ lang Fun = Var
       eval (cons (x, arg) env2) body
   | _ -> error "Bad application"
 
-  sem eval (env : Dyn) = -- env : Env
+  sem eval (env : Env) =
   | TmLam t ->
     let x = t.0 in
     let body = t.2 in
@@ -49,7 +53,7 @@ lang Fix = Fun
   syn Expr =
   | TmFix
 
-  sem apply (arg : Dyn) = -- (arg : Expr)
+  sem apply (arg : Expr) =
   | TmFix ->
   match arg with TmClos clos then
     let x = clos.0 in
@@ -59,15 +63,15 @@ lang Fix = Fun
   else
     error "Not fixing a function"
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmFix -> TmFix
  end
 
 lang Let = Var
   syn Expr =
-  | TmLet (Dyn, Dyn, Dyn) -- (String, Expr, Expr)
+  | TmLet (String, Expr, Expr)
 
-  sem eval (env : Dyn) = -- (Env)
+  sem eval (env : Env) =
   | TmLet t ->
     let x = t.0 in
     let t1 = t.1 in
@@ -79,14 +83,14 @@ lang Const
   syn Const =
 
   syn Expr =
-  | TmConst (Dyn) -- (Const)
+  | TmConst (Const)
 
-  sem delta (arg : Dyn) = -- (arg : Expr)
+  sem delta (arg : Expr) =
 
-  sem apply (arg : Dyn) = -- (arg : Expr)
+  sem apply (arg : Expr) =
   | TmConst c -> delta arg c
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmConst c -> TmConst c
 end
 
@@ -97,13 +101,13 @@ end
 
 lang Arith
   syn Const =
-  | CInt (Dyn) -- (int)
+  | CInt Int
   | CAddi
-  | CAddi2 (Dyn)
+  | CAddi2 Int
   -- TODO: Add more operations
   -- TODO: Add floating point numbers (maybe in its own fragment)
 
-  sem delta (arg : Dyn) = -- (arg : Expr)
+  sem delta (arg : Expr) =
   | CAddi ->
     match arg with TmConst c then
       match c with CInt n then
@@ -120,17 +124,17 @@ end
 
 lang Bool
   syn Const =
-  | CBool (Dyn) -- (bool)
+  | CBool Bool
   | CNot
   | CAnd
-  | CAnd2 (Dyn) -- (Expr)
+  | CAnd2 Bool
   | COr
-  | COr2 (Dyn) -- (Expr)
+  | COr2 Bool
 
   syn Expr =
-  | TmIf (Dyn, Dyn, Dyn)
+  | TmIf (Expr, Expr, Expr)
 
-  sem delta (arg : Dyn) = -- (arg : Expr)
+  sem delta (arg : Expr) =
   | CNot ->
     match arg with TmConst c then
       match c with CBool b then
@@ -162,7 +166,7 @@ lang Bool
       else error "Not or-ing a boolean constant"
     else error "Not or-ing a constant"
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmIf t ->
     let cond = t.0 in
     let thn  = t.1 in
@@ -177,9 +181,9 @@ end
 lang Cmp = Arith + Bool
   syn Const =
   | CEqi
-  | CEqi2 (Dyn) -- (Expr)
+  | CEqi2 Int
 
-  sem delta (arg : Dyn) =
+  sem delta (arg : Expr) =
   | CEqi ->
     match arg with TmConst c then
       match c with CInt n then
@@ -196,14 +200,14 @@ end
 
 lang Seq = Arith
   syn Const =
-  | CSeq (Dyn) -- ([Expr])
+  | CSeq [Expr]
   | CNth
-  | CNth2 (Dyn) -- ([Expr])
+  | CNth2 [Expr]
 
   syn Expr =
-  | TmSeq (Dyn) -- ([Expr])
+  | TmSeq [Expr]
 
-  sem delta (arg : Dyn) = -- (arg : Expr)
+  sem delta (arg : Expr) =
   | CNth ->
     match arg with TmConst c then
       match c with CSeq tms then
@@ -217,7 +221,7 @@ lang Seq = Arith
       else error "n in nth is not a number"
     else error "n in nth is not a constant"
 
-  sem eval (env : Dyn) = -- (env : Expr)
+  sem eval (env : Env) =
   | TmSeq tms ->
     let vs = map (eval env) tms in
     TmConst(CSeq vs)
@@ -225,10 +229,10 @@ end
 
 lang Tuple = Arith
   syn Expr =
-  | TmTuple (Dyn) -- ([Expr])
-  | TmProj (Dyn, Dyn) -- (Expr, int)
+  | TmTuple [Expr]
+  | TmProj (Expr, Int)
 
-  sem eval (env : Dyn) = -- (env : Expr)
+  sem eval (env : Env) =
   | TmTuple tms ->
     let vs = map (eval env) tms in
     TmTuple(vs)
@@ -243,15 +247,15 @@ end
 lang Data
   -- TODO: Constructors have no generated symbols
   syn Expr =
-  | TmConDef (Dyn, Dyn) -- (String, Expr)
-  | TmConFun (Dyn) -- (String)
-  | TmCon (Dyn, Dyn) -- (String, Expr)
-  | TmMatch (Dyn, Dyn, Dyn, Dyn, Dyn) -- (Expr, String, String, Expr, Expr)
+  | TmConDef (String, Expr)
+  | TmConFun (String)
+  | TmCon (String, Expr)
+  | TmMatch (Expr, String, String, Expr, Expr)
 
-  sem apply (arg : Dyn) = -- (arg : Dyn)
+  sem apply (arg : Expr) =
   | TmConFun k -> TmCon (k, arg)
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmConDef t ->
     let k = t.0 in
     let body = t.1 in
@@ -275,12 +279,12 @@ end
 
 lang Utest
   syn Expr =
-  | TmUtest (Dyn, Dyn, Dyn) -- (Expr, Expr, Expr)
+  | TmUtest (Expr, Expr, Expr)
 
-  sem eq (e1 : Dyn) = -- (e1 : Expr)
+  sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
-  sem eval (env : Dyn) = -- (env : Env)
+  sem eval (env : Env) =
   | TmUtest t ->
     let test = t.0 in
     let expected = t.1 in
@@ -294,17 +298,17 @@ end
 lang MExpr = Fun + Fix + Let
            + Seq + Tuple + Data + Utest
            + Const + Arith + Bool + Cmp + Unit
-  sem eq (e1 : Dyn) = -- (e1 : Expr)
+  sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2 e1
   | TmTuple tms2 -> tuple_eq tms2 e1
   | TmSeq seq2 -> seq_eq seq2 e1
 
-  sem const_expr_eq (c1 : Dyn) = -- (c1 : Const)
+  sem const_expr_eq (c1 : Const) =
   | TmConst c2 -> const_eq c1 c2
   | _ -> false
 
-  sem const_eq (c1 : Dyn) = -- (c1 : Const)
+  sem const_eq (c1 : Const) =
   | CUnit -> is_unit c1
   | CInt n2 -> int_eq n2 c1
   | CBool b2 -> bool_eq b2 c1
@@ -313,41 +317,29 @@ lang MExpr = Fun + Fix + Let
   | CUnit -> true
   | _ -> false
 
-  sem int_eq (n1 : Dyn) = -- (n1 : Int)
+  sem int_eq (n1 : Int) =
   | CInt n2 -> eqi n1 n2
   | _ -> false
 
-  sem bool_eq (b1 : Dyn) = -- (b1 : Bool)
+  sem bool_eq (b1 : Bool) =
   | CBool b2 -> or (and b1 b2) (and (not b1) (not b2))
   | _ -> false
 
-  sem data_eq (d1 : Dyn) = -- (d1 : (String, Expr))
+  sem data_eq (d1 : (String, Expr)) =
   | TmCon d2 ->
-    let tail = lam l. slice l 1 (length l) in
-    let head = lam l. nth l 0 in
-    let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2) in
-    let eqstr = fix (lam eqstr. lam s1. lam s2.
-        if neqi (length s1) (length s2)
-        then false
-        else if eqi (length s1) 0
-             then true
-             else if eqchar (head s1) (head s2)
-             then eqstr (tail s1) (tail s2)
-             else false
-    ) in
     let k1 = d1.0 in
     let k2 = d2.0 in
     let v1 = d1.1 in
     let v2 = d2.1 in
     and (eqstr k1 k2) (eq v1 v2)
 
-  sem tuple_eq (tms1 : Dyn) =
+  sem tuple_eq (tms1 : [Expr]) =
   | TmTuple tms2 ->
     and (eqi (length tms1) (length tms2))
         (all (lam b.b) (zipWith eq tms1 tms2))
   | _ -> false
 
-  sem seq_eq (seq1 : Dyn) =
+  sem seq_eq (seq1 : [Expr]) =
   | TmSeq seq2 ->
     and (eqi (length seq1) (length seq2))
         (all (lam b.b) (zipWith eq seq1 seq2))
