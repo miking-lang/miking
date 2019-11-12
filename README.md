@@ -294,8 +294,8 @@ other MExpr programs.
 
 ### Top-Level Definitions and Includes
 
-Values, types and data constructors can be defined top-level,
-before the `main` keyword of an MCore program. The syntax is
+Values, types, and data constructors can be defined top-level,
+before the `mexpr` keyword of an MCore program. The syntax is
 identical to that of the corresponding MExpr definitions, without
 the trailing `in`:
 
@@ -311,7 +311,7 @@ utest id (Foo 42) with Foo 42 in
 ```
 
 The translation into MExpr is straightforward: the definitions are
-simply moved into the beginning of the `main` program. The
+simply moved into the beginning of the `mexpr` program. The
 usefulness of top-level definitions becomes more apparent when
 adding included files. A file can be included using the syntax
 `include "path/to/prog.mc"` before any top-level definitions in a
@@ -335,7 +335,7 @@ is automatically included.
 
 A language fragment contains definitions of (abstract) syntax, and
 semantics ("interpreters") for that fragment. Any number of
-language fragments can be defined before the `main` keyword in an
+language fragments can be defined before the `mexpr` keyword in an
 MCore program. For example, here is a language fragment for simple
 arithmetics:
 
@@ -369,18 +369,18 @@ In the main MExpr program, a language fragment can be opened by
 a `use` expression:
 
 ```
-main
+expr
 use Arith in
 utest eval (Add (Num 2, Num 3)) with Num 5 in
 ()
 ```
 
-A `use` is translated into a series of MExpr definitions which
+A `use` is translated into a series of MExpr definitions that
 match the syntax and semantics of the specified language fragment.
 
 An important feature of language fragments is that they can be
 composed to form new language fragments. As an example, we might
-want to extend our arithmetics language with booleans and if
+want to extend our arithmetics language with booleans and `if`
 expressions:
 
 ```
@@ -407,7 +407,7 @@ end
 
 lang ArithBool = Arith + Bool
 
-main
+mexpr
 
 use ArithBool in
 utest eval (Add (If (False, Num 0, Num 5), Num 2)) with Num 7 in
@@ -439,7 +439,7 @@ The language fragments in the previous sections can be reused when
 adding new syntactic forms to our language. However, we are not
 able to extend the semantics of the existing syntactic forms. For
 example, we might want to overload the `Add` case so that it can
-be used expressions other than integers. In order to cater to such
+use expressions other than integers. In order to cater to such
 extensions, we have to design our language fragments with this in
 mind. Below is an example of how we might go about it.
 
@@ -505,7 +505,7 @@ end
 
 lang ArithReal = Integer + Real + Bool
 
-main
+mexpr
 
 use ArithReal in
 utest eval (Add (Integer 2, Integer 3)) with Integer 5 in
