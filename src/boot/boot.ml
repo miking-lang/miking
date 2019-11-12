@@ -17,6 +17,17 @@ open Msg
 open Mexpr
 open Pprint
 
+(* TODO: Temporary fix for hackinar installation issues *)
+module Option = struct
+  let some x = Some x
+  let is_some = function
+    | Some _ -> true
+    | None -> false
+  let get = function
+    | Some x -> x
+    | None -> failwith "Not Some"
+end
+
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
   | Some path -> path
