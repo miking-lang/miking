@@ -18,6 +18,7 @@
        "lang"
        "let"
        "match"
+       "main"
        "sem"
        "syn"
        "then"

@@ -1,10 +1,7 @@
 
 # Miking
 
-Miking (Meta vIKING) is a meta language system for creating embedded
-domain-specific and general-purpose languages.
-
-Miking is not a programming language, but rather a language system for
+Miking (Meta vIKING) is a meta language system for creating embedded domain-specific and general-purpose languages. Miking is not a programming language, but rather a language system for
 creating languages and generating efficient compilers.
 
 ## Getting started
@@ -22,7 +19,7 @@ on the command line.
 A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 
 ```
-main
+mexpr
   print("Hello, world!\n")
 ```
 
@@ -72,16 +69,207 @@ MCore consists of two parts:
 
 ## MExpr
 
-One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MCore language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
+One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
+
+Nevertheless, to understand the Miking system, it is good idea to learn to write basic programs directly as MCore expressions.
+
+An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
+
+### Prelude
+
+MCore contains a number of build-on values and predefined functions and constants. These are defined in the [prelude](doc/prelude.md). For instance, the program
+
+```
+mexpr
+print "Hello"
+```
+
+uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
 
 
 
-### Terms
+### Let Expressions
+
+Expressions can be given names using `let` expression. For instance
+
+```
+let x = addi 1 2 in
+x
+```
+
+introduces a new name `x`. The build in function `addi` performs addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a let expression. Hence, the `addi 1 2` expression is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-### Constants
+### Unit Test Expressions
 
+When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
 
+```
+utest addi 1 2 with 3 in
+()
+```
+Checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
+
+### Functions
+
+Functions are always defined anonymously as lambda functions. If you would like to give a function a name, a `let` expression can be used. For instance, the following program defines a function `double` that doubles the value of its argument.
+
+```
+let double = lam x. muli x 2 in
+utest double 5 with 10 in
+()
+```
+
+Types can be expressed in MCore programs, but they are currently not checked. For instance, `double` function can be written as
+
+```
+let double = lam x:Int. muli x 2 in
+```
+
+This means that `double` has type `Int -> Int`, which can also be expressed as part of the `let` expression.
+
+```
+let double : Int -> Int = lam x:Int. muli x 2 in
+```
+
+A function with several parameters are expressed using currying, using nested lambda expressions. For instance, expression
+
+```
+let foo = lam x. lam y. addi x y in
+utest foo 2 3 with 5 in
+()
+```
+creates a function `foo` that takes two arguments.
+
+### `if` Expressions
+
+Conditional expressions can be expressed using `if` expressions. The program
+
+```
+let x = 5
+let answer = if (lti x 10) then "yes" else "no"
+utest answer with "yes" in
+()
+```
+
+checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned. If expressions can be located in any other place where an expression can be placed. We will come back to what strings later in this section.
+
+### Recursion
+
+Using only lambdas and `let` expressions are not enough to express recursive functions. Instead, a fix-point term is used, called `fix`.
+
+Consider the factorial function
+
+```
+let fact = fix (lam fact. lam n.
+  	 if eqi n 0 then 1 else muli n (fact (subi n 1))
+) in
+
+utest fact 4 with 24 in
+()
+
+```
+
+Here we defined a recursive function `fact`, by using the fixed-point combinator `fix`. This means that when the inner `fact` will "copy itself", thus resulting in a recursive call.
+
+See the [prelude] documentations for details on `eqi`, `muli`, and `subi`.
+
+### Tuples
+
+Product types are expressed using tuples. An n-tuple is defined using syntax `(e_1, ..., e_n)` where `e_1` to `e_n` are MCore expressions. Extracting a value from a tuple (projection) is performed using an expression `e.n` where `e` is the expression that is evaluated into a tuple, and `n` is an integer number representing the index of element in the tuple. The first intex in a tuple is `0`.
+
+For instance, in the MCore expression
+
+```
+let t = (1+2, "hi", 80) in
+utest t.0 with 3 in
+utest t.1 with "hi" in
+utest t.2 with 80 in
+()
+```
+we create a 3-tuple `t` and projects out its values. Note that the different elements of a tuple can have different types. In this case, tuple `t` has type `(Int, String, Int)`.
+
+### Data Types and `match` expressions
+
+Sum types or variant types are constructed using a `con` expressions (constructor expressions). In contrast to most other functional languages, the introduction of a new data type and the introduction of constructors are separated. For instance, the expression
+
+```
+type Tree in
+con Node : (Tree,Tree) -> Tree in
+con Leaf : (Int) -> Tree in
+```
+
+introduces a new data type `Tree` and defines two new constructors `Node` and `Leaf`. Constructor `Leaf` takes just one one argument (an integer value for the leaf) and returns a tree, whereas the `Node` constructor takes a tuple with two trees as input and constructs a new tree node.
+
+For instance, expression
+
+```
+let tree1 = Node(Node(Leaf 4, Leaf 2), Leaf 3) in
+```
+
+is a small tree named `tree1`.
+
+Assume now that we want to count the sum of the values of al leafs in a tree. We can then write a recursive function that performs the counting.
+
+```
+let count = fix (lam count. lam tree.
+	match tree with Node t then
+	  let left = t.0 in
+	  let right = t.1 in
+	  addi (count left) (count right)
+	else match tree with Leaf v then v
+	else error "Unknown node"
+) in
+```
+
+The `count` function performs recursion using the fixed-point term `fix`.
+
+The new construct `match` inside the count function *deconstructs* data values by matching against a given constructor. For instance, the `match` expression
+
+```
+match tree with Node t then expr1 else expr2
+```
+
+matches the value after evaluating expression `tree` and checks if it is outer most constructor is a `Node` constructor. If that is the case, the identifier `t` in expression `expr1` is bound to the tuple consisting of the nodes two sub trees (recall the definition of the constructor `Node`).
+
+As part of the design of MExpr, we try to make it simple. Hence, MExpr does not support pattern variables or nested matches. This should instead be introduced by languages that are later compiled into an MExpr. This is the reason for the pattern where `left` and `right` identifiers are introduced by projecting out the elements from a tuple.
+
+### Sequences
+
+An MCore sequence is constructed using syntax `[e_1, ..., e_n]`. All elements in an sequence must have the same type. For instance, an expression
+
+```
+[1,3,6,7,22,3]
+```
+has type `[Int]` whereas and expression
+
+```
+["this", "is", "a", "test"]
+```
+
+has type `[String]`.
+
+A string itself is actually a sequence of characters. Hence,
+
+```
+utest "foo" with ['f','o','o'] in ()
+```
+
+is correct. This means that the type `String` is just an abbreviation for the sequence type `[Char]`.
+
+There are several operations defined for sequences, for instance, the `concat` command concatenates two sequences
+
+```
+utest concat [1,3,5] [7,9] with [1,3,5,7,9] in ()
+```
+
+or the `nth` function picks out an the nth element of a sequence
+
+```
+utest nth [3,5,8,9] 2 with 8 in ()
+```
+
+See the [prelude](doc/prelude.md) document for more information.
 
 
 
@@ -106,7 +294,7 @@ let id = lam x. x
 type T
 con Foo : Int -> T
 
-main
+mexpr
 
 utest id (Foo 42) with Foo 42 in
 ()
@@ -339,37 +527,8 @@ utest eval (Add (If (True, Real 4.0, Real 0.0), Real 3.0)) with Real 7.0 in
     an overriding case for that interpreter.
 
 
-## Other
 
-The following section contains notes about concepts that are not yet part of the Miking system, but might be introduced at a later stage.
 
-### Unfied Collection Types (UC Types)
-
-UC Types unify the concepts typically implemented in abstract data types such as lists, maps, and sets. Instead of being different data types, there is one unified type with two different properties: **Order** and **Uniqueness**.
-
-**Property 1 (Order):**
-
-* Unordered (U)
-* Ordered (O)
-* Sorted (S)
-
-**Property 2 (Uniqueness):**
-
-* Unique (Q)
-* Multivalued (M)
-
-Each combination of the two properties form a *specific* collection type:
-
-1. Properties *Unordered* and *Unique* forms a **Set**
-2. Properties *Unordered* and *Multivalued* forms a **Multi Set**
-3. Properties *Ordered* and *Unique* forms a **Unique Sequence**
-4. Properties *Ordered* and *Multivalued* forms a **Sequence**
-5. Properties *Sorted* and *Unique* forms a **Sorted Set**
-6. Properties *Sorted* and *Multivalued* forms a **Sorted Multi Set**
-
-Each of these collection types can then be used as other standard data type. For instance, a sequence can be used as a list, an immutable array, a queue, or a stack. Functional maps can be defined using sets, where the values are maplets (only the key of a maplet is compared). Priority queues can be created using maplets and sorted sets.
-
-UC types have many different intrinsic functions (built-in functions), where some of them are only valid for some of the 6 specific collection types. Moreover, there are some operations defined on the *composition* of collection types. For instance, a matrix can be defined as a sequence of sequences, where matrix multiplication is defined on such a type.
 
 
 ## MIT License
