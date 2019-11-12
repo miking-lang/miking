@@ -4,32 +4,32 @@ let null = lam seq. eqi 0 (length seq)
 
 -- Maps and folds
 let map = fix (lam map. lam f. lam seq.
-  if eqi (length seq) 0 then []
+  if null seq then []
   else cons (f (head seq)) (map f (tail seq))
 )
 
 let foldl = fix (lam foldl. lam f. lam acc. lam seq.
-    if eqi (length seq) 0 then acc
+    if null seq then acc
     else foldl f (f acc (head seq)) (tail seq)
 )
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 let zipWith = fix (lam zipWith. lam f. lam seq1. lam seq2.
-    if eqi (length seq1) 0 then []
-    else if eqi (length seq2) 0 then []
+    if null seq1 then []
+    else if null seq2 then []
     else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
 )
 
 -- Predicates
-let any  = fix (lam any. lam p. lam seq.
-  if eqi (length seq) 0
+let any = fix (lam any. lam p. lam seq.
+  if null seq
   then false
   else or (p (head seq)) (any p (tail seq)))
 
-let all = fix (lam all. lam p. lam xs.
-  if eqi (length xs) 0
+let all = fix (lam all. lam p. lam seq.
+  if null seq
   then true
-  else and (p (nth xs 0)) (all p (slice xs 1 (length xs))))
+  else and (p (head seq)) (all p (tail seq)))
 
 
 mexpr
