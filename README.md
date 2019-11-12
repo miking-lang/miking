@@ -39,7 +39,7 @@ for example by running the following:
 ## Editor Support
 
 It is possible to write Miking code in any editor and compile it
-via the command line. There is however an Emacs mode in
+via the command line. There is, however, an Emacs mode in
 `emacs/mcore-mode.el` that defines syntax highlighting and
 compilation support. To use it, add the following to your
 `init.el` file:
@@ -71,13 +71,13 @@ MCore consists of two parts:
 
 One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
 
-Nevertheless, to understand the Miking system, it is good idea to learn to write basic programs directly as MCore expressions.
+Nevertheless, to understand the Miking system, it is a good idea to learn to write basic programs directly as MCore expressions.
 
-An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
+An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
 
 ### Prelude
 
-MCore contains a number of build-on values and predefined functions and constants. These are defined in the [prelude](doc/prelude.md). For instance, the program
+MCore contains a number of built-in values and predefined functions and constants. These are defined in the [prelude](doc/prelude.md) documentation. For instance, the program
 
 ```
 mexpr
@@ -90,14 +90,14 @@ uses the built-in function `print` which has the type `String -> Unit`, i.e., it
 
 ### Let Expressions
 
-Expressions can be given names using `let` expression. For instance
+Expressions can be given names using `let` expressions. For instance
 
 ```
 let x = addi 1 2 in
 x
 ```
 
-introduces a new name `x`. The build in function `addi` performs addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a let expression. Hence, the `addi 1 2` expression is evaluated before it is substituted for `x` in the rest of the expression.
+introduces a new name `x`. The build in function `addi` performs an addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
 ### Unit Test Expressions
@@ -108,7 +108,7 @@ When writing MCore programs, it is typically done by writing explicit unit tests
 utest addi 1 2 with 3 in
 ()
 ```
-Checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
+checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
 ### Functions
 
@@ -120,7 +120,7 @@ utest double 5 with 10 in
 ()
 ```
 
-Types can be expressed in MCore programs, but they are currently not checked. For instance, `double` function can be written as
+Types can be expressed in MCore programs, but they are currently not checked. For instance, the `double` function can be written as
 
 ```
 let double = lam x:Int. muli x 2 in
@@ -146,23 +146,25 @@ creates a function `foo` that takes two arguments.
 Conditional expressions can be expressed using `if` expressions. The program
 
 ```
-let x = 5
-let answer = if (lti x 10) then "yes" else "no"
+let x = 5 in
+let answer = if (lti x 10) then "yes" else "no" in
 utest answer with "yes" in
 ()
 ```
 
-checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned. If expressions can be located in any other place where an expression can be placed. We will come back to what strings later in this section.
+checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned. 
 
 ### Recursion
 
-Using only lambdas and `let` expressions are not enough to express recursive functions. Instead, a fix-point term is used, called `fix`.
+Using only lambdas and `let` expressions are not enough to express recursive functions. Instead, a fixed-point term is used, called `fix`.
 
 Consider the factorial function
 
 ```
 let fact = fix (lam fact. lam n.
-  	 if eqi n 0 then 1 else muli n (fact (subi n 1))
+  if eqi n 0 
+    then 1 
+    else muli n (fact (subi n 1))
 ) in
 
 utest fact 4 with 24 in
@@ -170,28 +172,28 @@ utest fact 4 with 24 in
 
 ```
 
-Here we defined a recursive function `fact`, by using the fixed-point combinator `fix`. This means that when the inner `fact` will "copy itself", thus resulting in a recursive call.
+We define a recursive function `fact` by using the fixed-point combinator `fix`. This means that when the inner `fact` will "copy itself", thus resulting in a recursive call.
 
-See the [prelude] documentations for details on `eqi`, `muli`, and `subi`.
+See the [prelude](doc/prelude.md) documentation for details on `eqi`, `muli`, and `subi`.
 
 ### Tuples
 
-Product types are expressed using tuples. An n-tuple is defined using syntax `(e_1, ..., e_n)` where `e_1` to `e_n` are MCore expressions. Extracting a value from a tuple (projection) is performed using an expression `e.n` where `e` is the expression that is evaluated into a tuple, and `n` is an integer number representing the index of element in the tuple. The first intex in a tuple is `0`.
+Product types are expressed using tuples. An n-tuple is defined using syntax `(e_1, ..., e_n)` where `e_1` to `e_n` are MCore expressions. Extracting a value from a tuple (projection) is performed using an expression `e.n` where `e` is the expression that is evaluated into a tuple, and `n` is an integer number representing the index of an element in the tuple. The first intex in a tuple is `0`.
 
 For instance, in the MCore expression
 
 ```
-let t = (1+2, "hi", 80) in
+let t = (addi 1 2, "hi", 80) in
 utest t.0 with 3 in
 utest t.1 with "hi" in
 utest t.2 with 80 in
 ()
 ```
-we create a 3-tuple `t` and projects out its values. Note that the different elements of a tuple can have different types. In this case, tuple `t` has type `(Int, String, Int)`.
+we create a 3-tuple `t` and project out its values. Note that the different elements of a tuple can have different types. In this case, tuple `t` has type `(Int, String, Int)`.
 
 ### Data Types and `match` expressions
 
-Sum types or variant types are constructed using a `con` expressions (constructor expressions). In contrast to most other functional languages, the introduction of a new data type and the introduction of constructors are separated. For instance, the expression
+Sum types or variant types are constructed using `con` expressions (constructor expressions). In contrast to most other functional languages, the introduction of a new data type and the introduction of constructors are separated. For instance, the expression
 
 ```
 type Tree in
@@ -199,17 +201,17 @@ con Node : (Tree,Tree) -> Tree in
 con Leaf : (Int) -> Tree in
 ```
 
-introduces a new data type `Tree` and defines two new constructors `Node` and `Leaf`. Constructor `Leaf` takes just one one argument (an integer value for the leaf) and returns a tree, whereas the `Node` constructor takes a tuple with two trees as input and constructs a new tree node.
+introduces a new data type `Tree` and defines two new constructors `Node` and `Leaf`. Constructor `Leaf` takes just one argument (an integer value for the leaf) and returns a tree, whereas the `Node` constructor takes a tuple with two trees as input and constructs a new tree node.
 
 For instance, expression
 
 ```
-let tree1 = Node(Node(Leaf 4, Leaf 2), Leaf 3) in
+let tree = Node(Node(Leaf 4, Leaf 2), Leaf 3) in
 ```
 
-is a small tree named `tree1`.
+is a small tree named `tree`.
 
-Assume now that we want to count the sum of the values of al leafs in a tree. We can then write a recursive function that performs the counting.
+Assume now that we want to count the sum of the values of all leafs in a tree. We can then write a recursive function that performs the counting.
 
 ```
 let count = fix (lam count. lam tree.
@@ -224,15 +226,23 @@ let count = fix (lam count. lam tree.
 
 The `count` function performs recursion using the fixed-point term `fix`.
 
-The new construct `match` inside the count function *deconstructs* data values by matching against a given constructor. For instance, the `match` expression
+The `match` expression inside the count function *deconstructs* data values by matching against a given constructor. For instance, the `match` expression
 
 ```
 match tree with Node t then expr1 else expr2
 ```
 
-matches the value after evaluating expression `tree` and checks if it is outer most constructor is a `Node` constructor. If that is the case, the identifier `t` in expression `expr1` is bound to the tuple consisting of the nodes two sub trees (recall the definition of the constructor `Node`).
+matches the value after evaluating expression `tree` and checks if its outer most constructor is a `Node` constructor. If that is the case, the identifier `t` in expression `expr1` is bound to the tuple consisting of the node's two sub trees (recall the definition of the constructor `Node`).
 
 As part of the design of MExpr, we try to make it simple. Hence, MExpr does not support pattern variables or nested matches. This should instead be introduced by languages that are later compiled into an MExpr. This is the reason for the pattern where `left` and `right` identifiers are introduced by projecting out the elements from a tuple.
+
+Finally, if we execute the test
+
+```
+utest count tree with 9 in ()
+```
+
+we can check that the function computes the result as intended.
 
 ### Sequences
 
@@ -257,13 +267,13 @@ utest "foo" with ['f','o','o'] in ()
 
 is correct. This means that the type `String` is just an abbreviation for the sequence type `[Char]`.
 
-There are several operations defined for sequences, for instance, the `concat` command concatenates two sequences
+There are several operations defined for sequences, for instance, the `concat` function concatenates two sequences
 
 ```
 utest concat [1,3,5] [7,9] with [1,3,5,7,9] in ()
 ```
 
-or the `nth` function picks out an the nth element of a sequence
+or the `nth` function picks out the nth element of a sequence
 
 ```
 utest nth [3,5,8,9] 2 with 8 in ()
