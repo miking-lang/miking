@@ -88,8 +88,9 @@
                      (replace-regexp-in-string
                       "[[:space:]\n]*$" ""
                       (shell-command-to-string "$SHELL -l -c 'echo $MCORE_STDLIB'"))))
-                (set (make-local-variable 'compilation-environment)
-                     (list (concat "MCORE_STDLIB=" path)))))))
+                (if (> (length path) 0)
+                  (set (make-local-variable 'compilation-environment)
+                       (list (concat "MCORE_STDLIB=" path))))))))
 
 (setq mcore-error-regexp
       '(mcore "\"\\(.+\\)\" \\([0-9]+\\):\\([0-9]+\\)" 1 2 3))
