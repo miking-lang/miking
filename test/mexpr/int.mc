@@ -3,7 +3,7 @@
 //
 // Test integer primitives
 
-main
+mexpr
 
 // Literals
 utest 1 with 1 in

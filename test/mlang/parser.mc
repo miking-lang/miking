@@ -373,7 +373,7 @@ let spaces1 = void (many1 (satisfy is_whitespace "whitespace"))
 -- whitespace or comments.
 let lex_token = lam ws. lam p. apl p ws
 
-main
+mexpr
 
 -- Position tests
 utest show_pos (init_pos "foo.mc") with "FILE \"foo.mc\" 1:1" in

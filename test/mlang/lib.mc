@@ -1,4 +1,4 @@
 let bump = addi 1
-main
+mexpr
 utest bump 5 with 6 in
 ()

@@ -16,7 +16,7 @@ lang Nat
   | S n1 -> S (plus n1 n2)
 end
 
-main
+mexpr
 
 use Nat in
 utest is_zero Z with true in

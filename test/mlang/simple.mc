@@ -50,7 +50,8 @@ lang And = Bool
   | False -> False
 end
 
-main
+mexpr
+
 let _ =
   use Empty in
   ()

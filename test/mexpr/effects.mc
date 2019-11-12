@@ -3,7 +3,8 @@
 //
 // Test errors
 
-main
+mexpr
+
 // Errors (cannot execute the actual error in the test suite)
 utest if false then error "message" else 0 with 0 in
 

@@ -271,7 +271,7 @@ let expr = fix (lam expr. lam st.
 -- program : Parser Expr
 let program = apl (apr ws (apr (reserved "main") expr)) end_of_input
 
-main
+mexpr
 
 -- MCore token tests
 

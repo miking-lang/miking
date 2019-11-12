@@ -18,7 +18,7 @@ let fix_mutual =
 -- Printing stuff
 let print_ln = lam s. print (concat s "\n")
 
-main
+mexpr
 
 utest apply id 42 with id 42 in
 utest apply (compose id (apply id)) 42 with 42 in

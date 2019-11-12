@@ -54,7 +54,7 @@
 %token <unit Ast.tokendata> SYN
 %token <unit Ast.tokendata> SEM
 %token <unit Ast.tokendata> USE
-%token <unit Ast.tokendata> MAIN
+%token <unit Ast.tokendata> MEXPR
 %token <unit Ast.tokendata> INCLUDE
 
 %token <unit Ast.tokendata> EQ            /* "="   */
@@ -93,7 +93,7 @@ include_:
       Include(fi, $2.v) }
 
 mexpr_opt:
-  | MAIN mexpr
+  | MEXPR mexpr
     { $2 }
   |
     { TmConst(NoInfo, Cunit) }

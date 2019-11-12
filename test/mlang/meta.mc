@@ -1,7 +1,7 @@
 include "mexpr.mc"
 include "parser.mc"
 
-main
+mexpr
 
 -- TODO: Re-implementing parts MCore parser. Needs top-level use to
 -- have parser use the same datatypes...

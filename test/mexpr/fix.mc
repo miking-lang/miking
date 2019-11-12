@@ -3,7 +3,8 @@
 //
 // Test fixpoint usages
 
-main
+mexpr
+
 // Separate fix-point
 let fact_abs = (lam fact. lam n.
     if eqi n 0

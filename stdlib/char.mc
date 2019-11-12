@@ -15,7 +15,7 @@ let is_digit = lam c.
 let is_alphanum = lam c.
   or (is_alpha c) (is_digit c)
 
-main
+mexpr
 
 utest is_whitespace ' ' with true in
 utest is_whitespace '	' with true in

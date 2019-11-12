@@ -29,7 +29,8 @@ let int2string = fix (lam int2string. lam n.
     concat (int2string (divi n 10)) d
 )
 
-main
+mexpr
+
 utest string2int "5" with 5 in
 utest string2int "25" with 25 in
 utest string2int "314159" with 314159 in

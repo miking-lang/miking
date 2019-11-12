@@ -12,7 +12,8 @@ lang WrappedList
   | List l -> List (tail l)
 end
 
-main
+mexpr
+
 let s = [1,2,3] in
 utest head s with 1 in
 utest tail s with [2,3] in

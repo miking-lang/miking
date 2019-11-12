@@ -3,7 +3,7 @@
 //
 // Test floating-point number primitives and polymorphic primitives
 
-main
+mexpr
 
 
 // Boolean intrinsic functions

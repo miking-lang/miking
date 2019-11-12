@@ -291,7 +291,7 @@ lang Utest
     let next = t.2 in
     let v1 = eval env test in
     let v2 = eval env expected in
-    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    //let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval env next
 end
 
@@ -346,7 +346,8 @@ lang MExpr = Fun + Fix + Let
   | _ -> false
 end
 
-main
+mexpr
+
 use MExpr in
 let id = TmLam ("x", None, TmVar "x") in
 let bump = TmLam ("x", None, TmApp (TmApp (TmConst CAddi, TmVar "x"), TmConst(CInt 1))) in

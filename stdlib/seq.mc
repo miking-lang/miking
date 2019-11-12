@@ -32,7 +32,8 @@ let all = fix (lam all. lam p. lam xs.
   else and (p (nth xs 0)) (all p (slice xs 1 (length xs))))
 
 
-main
+mexpr
+
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in
 

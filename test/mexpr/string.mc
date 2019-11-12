@@ -3,7 +3,7 @@
 //
 // Test string and char primitives
 
-main
+mexpr
 
 // Unicode characters
 utest 'a' with 'a' in

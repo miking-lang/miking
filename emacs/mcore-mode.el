@@ -18,7 +18,6 @@
        "lang"
        "let"
        "match"
-       "main"
        "sem"
        "syn"
        "then"
@@ -41,7 +40,7 @@
      '( )) ;; Intensionally left blank
 
 (setq mcore-warning
-     '("main"
+     '("mexpr"
        "include"))
 
 (setq mcore-keywords-regexp (regexp-opt mcore-keywords 'symbols))

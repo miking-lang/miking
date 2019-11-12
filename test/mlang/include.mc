@@ -6,7 +6,7 @@ include "string.mc"            -- Include from standard library
 
 let double_bump = lam n. bump (bump n)
 
-main
+mexpr
 
 utest bump 10 with 11 in
 utest double_bump 10 with 12 in
