@@ -1,15 +1,17 @@
+include "option.mc"
+
 let head = lam s. nth s 0
 let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
 -- Maps, folds and reverse
 let map = fix (lam map. lam f. lam seq.
-  if eqi (length seq) 0 then []
+  if null seq then []
   else cons (f (head seq)) (map f (tail seq))
 )
 
 let foldl = fix (lam foldl. lam f. lam acc. lam seq.
-    if eqi (length seq) 0 then acc
+    if null seq then acc
     else foldl f (f acc (head seq)) (tail seq)
 )
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
@@ -27,29 +29,42 @@ let rev = lam seq.
 let foldr1 = lam f. lam seq. foldl1 f (reverse seq)
 
 let zipWith = fix (lam zipWith. lam f. lam seq1. lam seq2.
-    if eqi (length seq1) 0 then []
-    else if eqi (length seq2) 0 then []
+    if null seq1 then []
+    else if null seq2 then []
     else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
 )
 
 -- Predicates
 let any = fix (lam any. lam p. lam seq.
-  if eqi (length seq) 0
+  if null seq
   then false
   else or (p (head seq)) (any p (tail seq)))
 
-let all = fix (lam all. lam p. lam xs.
-  if eqi (length xs) 0
+let all = fix (lam all. lam p. lam seq.
+  if null seq
   then true
-  else and (p (nth xs 0)) (all p (slice xs 1 (length xs))))
+  else and (p (head seq)) (all p (tail seq)))
 
 -- Append and concat
-
 let append = lam seq1. lam seq2.
     let f = lam acc. lam x. cons x acc in
     foldr f seq2 seq1
 
 let concat = lam seqs. foldl append [] seqs
+
+-- Searching
+let filter = fix (lam filter. lam p. lam seq.
+  if null seq then []
+  else if p (head seq) then cons (head seq) (filter p (tail seq))
+  else (filter p (tail seq)))
+
+let find = fix (lam find. lam p. lam seq.
+  if null seq then None
+  else if p (head seq) then Some (head seq)
+  else find p (tail seq))
+
+let partition = (lam p. lam seq.
+    (filter p seq, filter (lam q. if p q then false else true) seq))
 
 mexpr
 
@@ -85,5 +100,21 @@ utest append [] [] with [] in
 utest concat [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6] in
 utest concat [[1,2],[],[5,6]] with [1,2,5,6] in
 utest concat [[],[],[]] with [] in
+
+utest any (lam x. eqi x 1) [0, 4, 1, 2] with true in
+utest any (lam x. eqi x 5) [0, 4, 1, 2] with false in
+utest any (lam x. true) [] with false in
+utest all (lam x. eqi x 1) [1, 1, 1, 2] with false in
+utest all (lam x. eqi x 0) [0, 0, 0] with true in
+utest all (lam x. eqi x 1) [] with true in
+
+utest filter (lam x. eqi x 1) [1,2,4] with [1] in
+utest filter (lam _. false) [3,5,234,1,43] with [] in
+utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43] in
+
+utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
+utest find (lam x. lti x 1) [4,1,2] with None in
+
+utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
 
 ()
