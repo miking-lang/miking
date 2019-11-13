@@ -19,12 +19,8 @@ let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 let foldr = fix (lam foldr. lam f. lam acc. lam seq.
     if null seq
     then acc
-    else f (foldr f acc (tail seq)) (head seq)
+    else f (head seq) (foldr f acc (tail seq))
 )
-
-let rev = lam seq.
-    let f = lam acc. lam x. cons x acc in
-    foldl f [] seq
 
 let foldr1 = lam f. lam seq. foldl1 f (reverse seq)
 
@@ -45,12 +41,8 @@ let all = fix (lam all. lam p. lam seq.
   then true
   else and (p (head seq)) (all p (tail seq)))
 
--- Append and concat
-let append = lam seq1. lam seq2.
-    let f = lam acc. lam x. cons x acc in
-    foldr f seq2 seq1
-
-let concat = lam seqs. foldl append [] seqs
+-- Join
+let join = lam seqs. foldl concat [] seqs
 
 -- Searching
 let filter = fix (lam filter. lam p. lam seq.
@@ -83,23 +75,14 @@ utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] in
 utest zipWith addi [] [] with [] in
 
-utest rev [1,2,3,4] with [4,3,2,1] in
-utest rev [1] with [1] in
-utest rev [] with [] in
-
-utest foldr (lam acc. lam x. x) 0 [1,2] with 1 in
+utest foldr (lam x. lam acc. x) 0 [1,2] with 1 in
 utest foldr (lam acc. lam x. x) 0 [] with 0 in
-utest foldr (lam acc. lam x. (cons x acc)) [] [1,2,3] with [1,2,3] in
+utest foldr cons [] [1,2,3] with [1,2,3] in
 utest foldr1 (lam acc. lam x. x) [1,2] with 1 in
 
-utest append [1,2,3] [4,5,6] with [1,2,3,4,5,6] in
-utest append [] [4,5,6] with [4,5,6] in
-utest append [1,2,3] [] with [1,2,3] in
-utest append [] [] with [] in
-
-utest concat [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6] in
-utest concat [[1,2],[],[5,6]] with [1,2,5,6] in
-utest concat [[],[],[]] with [] in
+utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6] in
+utest join [[1,2],[],[5,6]] with [1,2,5,6] in
+utest join [[],[],[]] with [] in
 
 utest any (lam x. eqi x 1) [0, 4, 1, 2] with true in
 utest any (lam x. eqi x 5) [0, 4, 1, 2] with false in
