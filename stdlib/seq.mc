@@ -4,7 +4,7 @@ let head = lam s. nth s 0
 let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
--- Maps, folds and reverse
+-- Maps and folds
 let map = fix (lam map. lam f. lam seq.
   if null seq then []
   else cons (f (head seq)) (map f (tail seq))
