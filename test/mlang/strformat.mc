@@ -20,6 +20,22 @@ lang TypeFloat
 	| TyFloat v -> float2string v
 end
 
+lang TypeString
+	syn Type =
+	| TyStr (String)
+
+	sem toString =
+	| TyStr v -> v
+end
+
+lang TypeChar
+	syn Type =
+	| TyChar (Char)
+
+	sem toString =
+	| TyChar v -> [v]
+end
+
 lang StrFormatBase
 	syn Type =
 
@@ -46,7 +62,10 @@ lang StrFormatBase
 			cons (head s) (eval args (CStrFormat (tail s)))
 end
 
-lang StrFormat = StrFormatBase + TypeInteger + TypeFloat
+
+lang StandardTypes = TypeInteger + TypeFloat + TypeString + TypeChar
+
+lang StrFormat = StandardTypes + StrFormatBase
 
 mexpr
 
@@ -56,5 +75,7 @@ let printf = lam s. lam args. print (sprintf s args) in
 
 utest sprintf "%d + %d = %d" [TyInt(2), TyInt(3), TyInt(addi 2 3)] with "2 + 3 = 5" in
 utest sprintf "Give it %T%%" [TyInt(101)] with "Give it 101%" in
+utest sprintf "Hello, %s!" [TyStr("John Doe")] with "Hello, John Doe!" in
+utest sprintf "My initials are %c.%c." [TyChar('J'), TyChar('D')] with "My initials are J.D." in
 
 printf "\n >Test Print:\n >%a/%a = %a\n" [TyInt(10), TyInt(3), TyFloat(divf (int2float 10) (int2float 3))]
