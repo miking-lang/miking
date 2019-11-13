@@ -33,59 +33,59 @@ let int2string = fix (lam int2string. lam n.
 
 // Returns an option with the index of the first occurrence of c in s. Returns
 // None if c was not found in s.
-let strindex = lam c. lam s.
-  let strindex_abs = fix (lam strindex. lam i. lam c. lam s.
+let strIndex = lam c. lam s.
+  let strIndex_rechelper = fix (lam strIndex. lam i. lam c. lam s.
     if eqi (length s) 0
     then None
     else if eqchar c (head s)
          then Some(i)
-         else strindex (addi i 1) c (tail s)
+         else strIndex (addi i 1) c (tail s)
   ) in
-  strindex_abs 0 c s
+  strIndex_rechelper 0 c s
 
 // Returns an option with the index of the last occurrence of c in s. Returns
 // None if c was not found in s.
-let strrindex = lam c. lam s.
-  let strrindex_abs = fix (lam strrindex. lam i. lam acc. lam c. lam s.
+let strLastIndex = lam c. lam s.
+  let strLastIndex_rechelper = fix (lam strLastIndex. lam i. lam acc. lam c. lam s.
     if eqi (length s) 0 then
       if eqi acc (negi 1)
       then None
       else Some(acc)
     else
       if eqchar c (head s)
-      then strrindex (addi i 1) i   c (tail s)
-      else strrindex (addi i 1) acc c (tail s)
+      then strLastIndex (addi i 1) i   c (tail s)
+      else strLastIndex (addi i 1) acc c (tail s)
   ) in
-  strrindex_abs 0 (negi 1) c s
+  strLastIndex_rechelper 0 (negi 1) c s
 
 // Splits s on delim
-let strsplit = fix (lam strsplit. lam delim. lam s.
+let strSplit = fix (lam strSplit. lam delim. lam s.
   if or (eqi (length delim) 0) (lti (length s) (length delim))
   then cons s []
   else if eqstr delim (slice s 0 (length delim))
-       then cons [] (strsplit delim (slice s (length delim) (length s)))
-       else let remaining = strsplit delim (tail s) in
+       then cons [] (strSplit delim (slice s (length delim) (length s)))
+       else let remaining = strSplit delim (tail s) in
             cons (cons (head s) (head remaining)) (tail remaining)
 )
 
 // Trims s of spaces
-let strtrim = lam s.
-  let strtrim_init = fix (lam strtrim_init. lam s.
+let strTrim = lam s.
+  let strTrim_init = fix (lam strTrim_init. lam s.
     if eqstr s ""
     then s
     else if is_whitespace (head s)
-         then strtrim_init (tail s)
+         then strTrim_init (tail s)
          else s
   ) in
-  reverse (strtrim_init (reverse (strtrim_init s)))
+  reverse (strTrim_init (reverse (strTrim_init s)))
 
 // Joins the strings in strs on delim
-let strjoin = fix (lam strjoin. lam delim. lam strs.
+let strJoin = fix (lam strJoin. lam delim. lam strs.
   if eqi (length strs) 0
   then ""
   else if eqi (length strs) 1
        then head strs
-       else concat (concat (head strs) delim) (strjoin delim (tail strs))
+       else concat (concat (head strs) delim) (strJoin delim (tail strs))
 )
 
 mexpr
@@ -98,32 +98,33 @@ utest int2string 5 with "5" in
 utest int2string 25 with "25" in
 utest int2string 314159 with "314159" in
 
-utest strindex '%' "a % 5" with Some(2) in
-utest strindex '%' "a & 5" with None in
-utest strindex 'w' "Hello, world!" with Some(7) in
-utest strindex 'w' "Hello, World!" with None in
-utest strindex 'o' "Hello, world!" with Some(4) in
-utest strindex '@' "Some @TAG@" with Some(4) in
+utest strIndex '%' "a % 5" with Some(2) in
+utest strIndex '%' "a & 5" with None in
+utest strIndex 'w' "Hello, world!" with Some(7) in
+utest strIndex 'w' "Hello, World!" with None in
+utest strIndex 'o' "Hello, world!" with Some(4) in
+utest strIndex '@' "Some @TAG@" with Some(5) in
 
-utest strrindex '%' "a % 5" with Some(2) in
-utest strrindex '%' "a & 5" with None in
-utest strrindex 'w' "Hello, world!" with Some(7) in
-utest strrindex 'w' "Hello, World!" with None in
-utest strrindex 'o' "Hello, world!" with Some(8) in
+utest strLastIndex '%' "a % 5" with Some(2) in
+utest strLastIndex '%' "a & 5" with None in
+utest strLastIndex 'w' "Hello, world!" with Some(7) in
+utest strLastIndex 'w' "Hello, World!" with None in
+utest strLastIndex 'o' "Hello, world!" with Some(8) in
+utest strLastIndex '@' "Some @TAG@" with Some(9) in
 
-utest strsplit "ll" "Hello" with ["He", "o"] in
-utest strsplit "ll" "Hellallllo" with ["He", "a", "", "o"] in
-utest strsplit "" "Hello" with ["Hello"] in
-utest strsplit "lla" "Hello" with ["Hello"] in
-utest strsplit "Hello" "Hello" with ["", ""] in
+utest strSplit "ll" "Hello" with ["He", "o"] in
+utest strSplit "ll" "Hellallllo" with ["He", "a", "", "o"] in
+utest strSplit "" "Hello" with ["Hello"] in
+utest strSplit "lla" "Hello" with ["Hello"] in
+utest strSplit "Hello" "Hello" with ["", ""] in
 
-utest strtrim " aaaa   " with "aaaa" in
-utest strtrim "   bbbbb  bbb " with "bbbbb  bbb" in
-utest strtrim "ccccc c\t   \n" with "ccccc c" in
+utest strTrim " aaaa   " with "aaaa" in
+utest strTrim "   bbbbb  bbb " with "bbbbb  bbb" in
+utest strTrim "ccccc c\t   \n" with "ccccc c" in
 
-utest strjoin "--" ["water", "tea", "coffee"] with "water--tea--coffee" in
-utest strjoin "--" [] with "" in
-utest strjoin "--" ["coffee"] with "coffee" in
-utest strjoin "water" ["coffee", "tea"] with "coffeewatertea" in
+utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee" in
+utest strJoin "--" [] with "" in
+utest strJoin "--" ["coffee"] with "coffee" in
+utest strJoin "water" ["coffee", "tea"] with "coffeewatertea" in
 
 ()
