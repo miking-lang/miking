@@ -12,24 +12,76 @@ let eqstr = fix (lam eqstr. lam s1. lam s2.
          else false
 )
 
-let string2int = fix (lam string2int. lam s.
-  let len = length s in
-  let last = subi len 1 in
-  if eqi len 0
-  then 0
-  else
-    let lsd = subi (char2int (nth s last)) (char2int '0') in
-    let rest = muli 10 (string2int (slice s 0 last)) in
-    addi rest lsd
-)
+let string2int = lam s.
+  let string2int_rechelper = fix (lam s2i_rechelp. lam s.
+    let len = length s in
+    let last = subi len 1 in
+    if eqi len 0
+    then 0
+    else
+      let lsd = subi (char2int (nth s last)) (char2int '0') in
+      let rest = muli 10 (s2i_rechelp (slice s 0 last)) in
+      addi rest lsd
+  ) in
+  if eqchar '-' (head s)
+  then negi (string2int_rechelper (tail s))
+  else string2int_rechelper s
 
-let int2string = fix (lam int2string. lam n.
-  if lti n 10
-  then [int2char (addi n (char2int '0'))]
-  else
-    let d = [int2char (addi (modi n 10) (char2int '0'))] in
-    concat (int2string (divi n 10)) d
-)
+let int2string = lam n.
+  let int2string_rechelper = fix (lam i2s_rechelp. lam n.
+    if lti n 10
+    then [int2char (addi n (char2int '0'))]
+    else
+      let d = [int2char (addi (modi n 10) (char2int '0'))] in
+      concat (i2s_rechelp (divi n 10)) d
+  ) in
+  if lti n 0
+  then cons '-' (int2string_rechelper (negi n))
+  else int2string_rechelper n
+
+// A naive float2string implementation that only formats in standard form
+let float2string = lam arg.
+  let precision = 7 in // Precision in number of digits
+  let prefixpair = if ltf arg 0.0 then ("-", negf arg) else ("", arg) in
+  let prefix = prefixpair.0 in
+  let val = prefixpair.1 in
+  let float2string_rechelper = fix (lam f2s_rec. lam prec. lam digits. lam v.
+    // Assume 0 <= v < 10
+    if eqi prec digits then
+      ""
+    else if eqf v 0.0 then
+      "0"
+    else
+      let fstdig = floorfi v in
+      let remaining = mulf (subf v (int2float fstdig)) 10.0 in
+      let c = int2char (addi fstdig (char2int '0')) in
+      cons c (f2s_rec prec (addi digits 1) remaining)
+  ) in
+  let positive_exponent_pair = fix (lam pos_exp_pair. lam acc. lam v.
+    if ltf v 10.0
+    then (v, acc)
+    else pos_exp_pair (addi acc 1) (divf v 10.0)
+  ) in
+  let negative_exponent_pair = fix (lam neg_exp_pair. lam acc. lam v.
+    if geqf v 1.0
+    then (v, acc)
+    else neg_exp_pair (addi acc 1) (mulf v 10.0)
+  ) in
+  let res = if eqf val 0.0 then
+              "0.0"
+            else if gtf val 1.0 then
+              let pospair = positive_exponent_pair 0 val in
+              let retstr = float2string_rechelper precision 0 (pospair.0) in
+              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
+              concat decimals (concat "e+" (int2string pospair.1))
+            else
+              let pospair = negative_exponent_pair 0 val in
+              let retstr = float2string_rechelper precision 0 (pospair.0) in
+              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
+              concat decimals (concat "e-" (int2string pospair.1))
+  in
+  concat prefix res
+
 
 // Returns an option with the index of the first occurrence of c in s. Returns
 // None if c was not found in s.
@@ -93,10 +145,17 @@ mexpr
 utest string2int "5" with 5 in
 utest string2int "25" with 25 in
 utest string2int "314159" with 314159 in
+utest string2int "-314159" with (negi 314159) in
 
 utest int2string 5 with "5" in
 utest int2string 25 with "25" in
 utest int2string 314159 with "314159" in
+utest int2string (negi 314159) with "-314159" in
+
+utest float2string 5.0e+25 with "5.0e+25" in
+utest float2string (negf 5.0e+25) with "-5.0e+25" in
+utest float2string (5.0e-5) with "5.0e-5" in
+utest float2string (negf 5.0e-5) with "-5.0e-5" in
 
 utest strIndex '%' "a % 5" with Some(2) in
 utest strIndex '%' "a & 5" with None in
