@@ -33,15 +33,30 @@ let int2string = fix (lam int2string. lam n.
 
 // Returns an option with the index of the first occurrence of c in s. Returns
 // None if c was not found in s.
-let strfind = lam c. lam s.
-  let strfind_abs = fix (lam strfind. lam i. lam c. lam s.
+let strindex = lam c. lam s.
+  let strindex_abs = fix (lam strindex. lam i. lam c. lam s.
     if eqi (length s) 0
     then None
     else if eqchar c (head s)
          then Some(i)
-         else strfind (addi i 1) c (tail s)
+         else strindex (addi i 1) c (tail s)
   ) in
-  strfind_abs 0 c s
+  strindex_abs 0 c s
+
+// Returns an option with the index of the last occurrence of c in s. Returns
+// None if c was not found in s.
+let strrindex = lam c. lam s.
+  let strrindex_abs = fix (lam strrindex. lam i. lam acc. lam c. lam s.
+    if eqi (length s) 0 then
+      if eqi acc (negi 1)
+      then None
+      else Some(acc)
+    else
+      if eqchar c (head s)
+      then strrindex (addi i 1) i   c (tail s)
+      else strrindex (addi i 1) acc c (tail s)
+  ) in
+  strrindex_abs 0 (negi 1) c s
 
 // Splits s on delim
 let strsplit = fix (lam strsplit. lam delim. lam s.
@@ -83,15 +98,24 @@ utest int2string 5 with "5" in
 utest int2string 25 with "25" in
 utest int2string 314159 with "314159" in
 
-utest strfind '%' "a % 5" with Some(2) in
-utest strfind '%' "a & 5" with None in
-utest strfind 'w' "Hello, world!" with Some(7) in
-utest strfind 'w' "Hello, World!" with None in
+utest strindex '%' "a % 5" with Some(2) in
+utest strindex '%' "a & 5" with None in
+utest strindex 'w' "Hello, world!" with Some(7) in
+utest strindex 'w' "Hello, World!" with None in
+utest strindex 'o' "Hello, world!" with Some(4) in
+utest strindex '@' "Some @TAG@" with Some(4) in
+
+utest strrindex '%' "a % 5" with Some(2) in
+utest strrindex '%' "a & 5" with None in
+utest strrindex 'w' "Hello, world!" with Some(7) in
+utest strrindex 'w' "Hello, World!" with None in
+utest strrindex 'o' "Hello, world!" with Some(8) in
 
 utest strsplit "ll" "Hello" with ["He", "o"] in
 utest strsplit "ll" "Hellallllo" with ["He", "a", "", "o"] in
 utest strsplit "" "Hello" with ["Hello"] in
 utest strsplit "lla" "Hello" with ["Hello"] in
+utest strsplit "Hello" "Hello" with ["", ""] in
 
 utest strtrim " aaaa   " with "aaaa" in
 utest strtrim "   bbbbb  bbb " with "bbbbb  bbb" in
