@@ -55,5 +55,6 @@ let sprintf = lam s. lam args. eval args (CStrFormat (s)) in
 let printf = lam s. lam args. print (sprintf s args) in
 
 utest sprintf "%d + %d = %d" [TyInt(2), TyInt(3), TyInt(addi 2 3)] with "2 + 3 = 5" in
+utest sprintf "Give it %T%%" [TyInt(101)] with "Give it 101%" in
 
 printf "\n >Test Print:\n >%a/%a = %a\n" [TyInt(10), TyInt(3), TyFloat(divf (int2float 10) (int2float 3))]
