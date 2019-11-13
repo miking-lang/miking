@@ -264,9 +264,9 @@ let expr = fix (lam expr. lam st.
 in
 
 -- program : Parser Expr
-let program = apl (apr ws (apr (reserved "main") expr)) end_of_input in
+let program = apl (apr ws (apr (reserved "mexpr") expr)) end_of_input in
 
-
+-- TODO: Define remaining built-ins
 let builtins =
     [("not", TmConst CNot)
     ,("and", TmConst CAnd)

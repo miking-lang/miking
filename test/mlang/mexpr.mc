@@ -291,7 +291,7 @@ lang Utest
     let next = t.2 in
     let v1 = eval env test in
     let v2 = eval env expected in
-    //let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval env next
 end
 
@@ -369,19 +369,20 @@ let data_decl = TmConDef ("Foo",
                           ,id)) in
 utest eval [] data_decl with unit in
 
-let utest_test1 = TmUtest (TmConst (CInt 1), TmConst (CInt 1), unit) in
-let utest_test2 =
-  TmUtest (TmTuple [TmConst (CInt 1),
-                    TmApp (TmApp (TmConst CAddi, TmConst (CInt 1)), TmConst (CInt 2))]
-          ,TmTuple [TmConst (CInt 1), TmConst (CInt 3)], unit)
-in
-let utest_test3 =
-  TmConDef ("Foo",
-    TmUtest (TmApp (TmVar "Foo", unit), TmApp (TmVar "Foo", unit), unit))
-in
-utest eval [] utest_test1 with unit in
-utest eval [] utest_test2 with unit in
-utest eval [] utest_test3 with unit in
+-- Commented out to not clutter the test suite
+-- let utest_test1 = TmUtest (TmConst (CInt 1), TmConst (CInt 1), unit) in
+-- let utest_test2 =
+--   TmUtest (TmTuple [TmConst (CInt 1),
+--                     TmApp (TmApp (TmConst CAddi, TmConst (CInt 1)), TmConst (CInt 2))]
+--           ,TmTuple [TmConst (CInt 1), TmConst (CInt 3)], unit)
+-- in
+-- let utest_test3 =
+--   TmConDef ("Foo",
+--     TmUtest (TmApp (TmVar "Foo", unit), TmApp (TmVar "Foo", unit), unit))
+-- in
+-- utest eval [] utest_test1 with unit in
+-- utest eval [] utest_test2 with unit in
+-- utest eval [] utest_test3 with unit in
 
 -- Implementing an interpreter
 let num = lam n. TmApp (TmVar "Num", TmConst(CInt n)) in

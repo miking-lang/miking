@@ -269,7 +269,7 @@ let expr = fix (lam expr. lam st.
   (alt con_ utest_)))))) st)
 
 -- program : Parser Expr
-let program = apl (apr ws (apr (reserved "main") expr)) end_of_input
+let program = apl (apr ws (apr (reserved "mexpr") expr)) end_of_input
 
 mexpr
 
@@ -391,8 +391,8 @@ with "Parse error at 1:12: Unexpected end of input. Expected ')'" in
 utest show_error(test_parser expr "")
 with "Parse error at 1:1: Unexpected end of input. Expected expression" in
 
-utest show_error (test_parser program "main f let x = 42 in x")
-with "Parse error at 1:8: Unexpected 'l'. Expected end of input" in
+utest show_error (test_parser program "mexpr f let x = 42 in x")
+with "Parse error at 1:9: Unexpected 'l'. Expected end of input" in
 
 -- Main logic
 
