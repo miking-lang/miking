@@ -22,7 +22,7 @@ let foldr = fix (lam foldr. lam f. lam acc. lam seq.
     else f (head seq) (foldr f acc (tail seq))
 )
 
-let foldr1 = lam f. lam seq. foldl1 f (reverse seq)
+let foldr1 = lam f. lam seq. foldl1 (lam acc. lam x. f x acc) (reverse seq)
 
 let zipWith = fix (lam zipWith. lam f. lam seq1. lam seq2.
     if null seq1 then []
@@ -78,7 +78,7 @@ utest zipWith addi [] [] with [] in
 utest foldr (lam x. lam acc. x) 0 [1,2] with 1 in
 utest foldr (lam acc. lam x. x) 0 [] with 0 in
 utest foldr cons [] [1,2,3] with [1,2,3] in
-utest foldr1 (lam acc. lam x. x) [1,2] with 1 in
+utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2) in
 
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6] in
 utest join [[1,2],[],[5,6]] with [1,2,5,6] in
