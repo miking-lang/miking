@@ -28,6 +28,7 @@ let reserved_strings = [
   ("con",           fun(i) -> Parser.CON{i=i;v=()});
   ("lang",          fun(i) -> Parser.LANG{i=i;v=()});
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
+  ("recursive",     fun(i) -> Parser.REC{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
   ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});

@@ -47,6 +47,7 @@
 %token <unit Ast.tokendata> CON
 %token <unit Ast.tokendata> LANG
 %token <unit Ast.tokendata> LET
+%token <unit Ast.tokendata> REC
 %token <unit Ast.tokendata> LAM
 %token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> IN
@@ -220,6 +221,8 @@ mexpr:
       { $4 }
   | TYPE IDENT EQ ty IN mexpr
       { $6 }
+  | REC lets IN mexpr
+      { TmConst($1.i, Cunit) }
   | LET IDENT ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
         TmLet(fi,$2.v,$5,$7) }
@@ -241,6 +244,13 @@ mexpr:
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
         TmUtest(fi,$2,$4,$6) }
+
+lets:
+  | LET IDENT ty_op EQ mexpr
+     { TmConst($1.i, Cunit) }
+  | LET IDENT ty_op EQ mexpr lets
+     { $6 }
+
 
 
 left:

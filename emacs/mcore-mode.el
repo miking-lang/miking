@@ -18,6 +18,7 @@
        "lang"
        "let"
        "match"
+       "recursive"
        "sem"
        "syn"
        "then"
