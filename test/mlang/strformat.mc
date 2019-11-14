@@ -45,6 +45,10 @@ lang FormatString
 	| FmtStr s ->
 		if eqstr fmtstr "%s" then
 			s
+		else if eqstr fmtstr "%^s" then
+			str2upper s
+		else if eqstr fmtstr "%_s" then
+			str2lower s
 		else
 			error (concat "FormatString: toFormat: Unrecognized format: " fmtstr)
 end
@@ -117,5 +121,7 @@ utest sprintf "Give it %d%%" [FmtInt(101)] with "Give it 101%" in
 utest sprintf "Hello, %s!" [FmtStr("John Doe")] with "Hello, John Doe!" in
 utest sprintf "My initials are %c.%c." [FmtChar('J'), FmtChar('D')] with "My initials are J.D." in
 utest sprintf "%* means %*" [FmtStr("Five"), FmtInt(5)] with "Five means 5" in
+
+utest sprintf "%s should be %_s or %^s" (makeseq 3 (FmtStr ("cAsE"))) with "cAsE should be case or CASE" in
 
 ()
