@@ -4,78 +4,77 @@ include "char.mc"
 include "seq.mc"
 include "string.mc"
 
-lang TypeInteger
-	syn Type =
-	| TyInt (Int)
+lang FmtInteger
+	syn Fmt =
+	| FmtInt (Int)
 
 	sem toString =
-	| TyInt v -> int2string v
+	| FmtInt n -> int2string n
 end
 
-lang TypeFloat
-	syn Type =
-	| TyFloat (Float)
+lang FmtFloat
+	syn Fmt =
+	| FmtFloat (Float)
 
 	sem toString =
-	| TyFloat v -> float2string v
+	| FmtFloat f -> float2string f
 end
 
-lang TypeString
-	syn Type =
-	| TyStr (String)
+lang FmtString
+	syn Fmt =
+	| FmtStr (String)
 
 	sem toString =
-	| TyStr v -> v
+	| FmtStr s -> s
 end
 
-lang TypeChar
-	syn Type =
-	| TyChar (Char)
+lang FmtChar
+	syn Fmt =
+	| FmtChar (Char)
 
 	sem toString =
-	| TyChar v -> [v]
+	| FmtChar c -> [c]
 end
 
 lang StrFormatBase
-	syn Type =
-
-	syn Operand =
-	| CStrFormat (String)
+	syn Fmt =
+	-- Intentionally left blank
 
 	sem toString =
-	| _ -> error "StrFormatBase: toString: Unknown type"
+	| _ -> error "StrFormatBase: toString: Unknown Fmt"
 
-	sem eval (args : [Type]) =
-	| CStrFormat s ->
+	sem strFormat (args : [Fmt]) =
+	| s ->
 		if lti (length s) 2 then
-			s 
+			s
 		else if eqchar '%' (head s) then
 			let c = head (tail s) in
 			if eqchar '%' c then
-				cons '%' (eval args (CStrFormat (tail (tail s))))
+				cons '%' (strFormat args (tail (tail s)))
 			else if is_alpha c then
 				-- At the moment just accept any alpha char to represent a format
-				concat (toString (head args)) (eval (tail args) (CStrFormat (tail (tail s))))
+				concat (toString (head args)) (strFormat (tail args) (tail (tail s)))
 			else
-				error "StrFormatBase: eval: Unrecognized format"
+				error "StrFormatBase: strFormat: Unrecognized format"
 		else
-			cons (head s) (eval args (CStrFormat (tail s)))
+			cons (head s) (strFormat args (tail s))
 end
 
 
-lang StandardTypes = TypeInteger + TypeFloat + TypeString + TypeChar
+lang StandardFormats = FmtInteger + FmtFloat + FmtString + FmtChar
 
-lang StrFormat = StandardTypes + StrFormatBase
+lang StrFormat = StandardFormats + StrFormatBase
 
 mexpr
 
 use StrFormat in
-let sprintf = lam s. lam args. eval args (CStrFormat (s)) in
+let sprintf = lam s. lam args. strFormat args s in
 let printf = lam s. lam args. print (sprintf s args) in
 
-utest sprintf "%d + %d = %d" [TyInt(2), TyInt(3), TyInt(addi 2 3)] with "2 + 3 = 5" in
-utest sprintf "Give it %T%%" [TyInt(101)] with "Give it 101%" in
-utest sprintf "Hello, %s!" [TyStr("John Doe")] with "Hello, John Doe!" in
-utest sprintf "My initials are %c.%c." [TyChar('J'), TyChar('D')] with "My initials are J.D." in
+utest sprintf "%d + %d = %d" [FmtInt(2), FmtInt(3), FmtInt(addi 2 3)] with "2 + 3 = 5" in
+utest sprintf "Give it %T%%" [FmtInt(101)] with "Give it 101%" in
+utest sprintf "Hello, %s!" [FmtStr("John Doe")] with "Hello, John Doe!" in
+utest sprintf "My initials are %c.%c." [FmtChar('J'), FmtChar('D')] with "My initials are J.D." in
+utest sprintf "%a means %a" [FmtStr("Five"), FmtInt(5)] with "Five means 5" in
 
-printf "\n >Test Print:\n >%a/%a = %a\n" [TyInt(10), TyInt(3), TyFloat(divf (int2float 10) (int2float 3))]
+()
