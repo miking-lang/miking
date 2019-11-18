@@ -115,7 +115,7 @@ let apl = lam p1. lam p2.
 --
 -- Run two parsers, use result of second one
 let apr = lam p1. lam p2.
-  ap (fmap (const id) p1) p2
+  ap (fmap (const identity) p1) p2
 
 -- Parser is a monad
 
