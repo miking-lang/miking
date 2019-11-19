@@ -136,7 +136,11 @@ and pprintME t =
   | TmClos(_,x,_,t,_) -> left inside ^. us"clos " ^. x ^. us". " ^.
                            ppt false t ^. right inside
   | TmLet(_,x,t1,t2) -> left inside ^. us"let " ^. x ^. us" = " ^. ppt false t1 ^.
-                        us" in " ^. ppt false t2 ^. right inside
+                          us" in " ^. ppt false t2 ^. right inside
+  | TmRecLets(_,lst,t2) ->
+     us"recursive" ^. Ustring.concat (us" ")
+               ((List.map (fun (_,x,t) -> us"let " ^. x ^. us" = " ^. ppt false t)) lst)
+              ^. us" in " ^. ppt false t2
   | TmApp(_,t1,t2) ->
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c

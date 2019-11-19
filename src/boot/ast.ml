@@ -126,7 +126,7 @@ and tm =
 | TmLam     of info * ustring * ty * tm                             (* Lambda abstraction *)
 | TmClos    of info * ustring * ty * tm * env                       (* Closure *)
 | TmLet     of info * ustring * tm * tm                             (* Let *)
-(*| TmRecLets of info * (ustring * tm) list * tm *)                     (* Recursive lets *)
+| TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
 | TmIf      of info * tm * tm * tm                                  (* If expression *)
@@ -179,6 +179,8 @@ let rec map_tm f = function
   | TmLam(fi,x,ty,t1) -> f (TmLam(fi,x,ty,map_tm f t1))
   | TmClos(fi,x,ty,t1,env) -> f (TmClos(fi,x,ty,map_tm f t1,env))
   | TmLet(fi,x,t1,t2) -> f (TmLet(fi,x,map_tm f t1,map_tm f t2))
+  | TmRecLets(fi,lst,tm) ->
+     f (TmRecLets(fi,List.map (fun (fi,s,t) -> (fi,s,map_tm f t)) lst, map_tm f tm))
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
@@ -200,6 +202,7 @@ let tm_info = function
   | TmLam(fi,_,_,_) -> fi
   | TmClos(fi,_,_,_,_) -> fi
   | TmLet(fi,_,_,_) -> fi
+  | TmRecLets(fi,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
   | TmIf(fi,_,_,_) -> fi

@@ -222,7 +222,8 @@ mexpr:
   | TYPE IDENT EQ ty IN mexpr
       { $6 }
   | REC lets IN mexpr
-      { TmConst($1.i, Cunit) }
+      { let fi = mkinfo $1.i $3.i in
+         TmRecLets(fi,$2,$4) }
   | LET IDENT ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
         TmLet(fi,$2.v,$5,$7) }
@@ -247,9 +248,11 @@ mexpr:
 
 lets:
   | LET IDENT ty_op EQ mexpr
-     { TmConst($1.i, Cunit) }
+      { let fi = mkinfo $1.i (tm_info $5) in
+        [(fi, $2.v, $5)] }
   | LET IDENT ty_op EQ mexpr lets
-     { $6 }
+      { let fi = mkinfo $1.i (tm_info $5) in
+         (fi, $2.v, $5)::$6 }
 
 
 

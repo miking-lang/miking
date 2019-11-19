@@ -396,6 +396,9 @@ let rec debruijn env t =
   | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
   | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
   | TmLet(fi,x,t1,t2) -> TmLet(fi,x,debruijn env t1,debruijn (VarTm(x)::env) t2)
+  | TmRecLets(fi,lst,tm) ->
+     let env2 = List.fold_left (fun env (_,x,_) -> VarTm(x)::env) env lst in
+     TmRecLets(fi,List.map (fun (fi,s,t) -> (fi,s, debruijn env2 t)) lst, debruijn env2 tm)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
   | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
@@ -416,7 +419,6 @@ let rec debruijn env t =
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
 
-
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval env t =
   debug_eval env t;
@@ -428,6 +430,16 @@ let rec eval env t =
   | TmClos(_,_,_,_,_) -> t
   (* Let *)
   | TmLet(_,_,t1,t2) -> eval ((eval env t1)::env) t2
+  (* Recursive lets *)
+  | TmRecLets(_,lst,t2) ->
+     (*
+      let t1 = match lst with | (_,_,t)::_ -> t | _ -> failwith "TEMP error" in
+      let rec t1' = (eval (t1'::env) t1) in
+      eval (t1'::env) t2
+      *)
+     let (t1,x) = match lst with | (_,x,t)::_ -> (t,x) | _ -> failwith "TEMP error" in
+     let t1' = TmApp(NoInfo, TmFix(NoInfo), TmLam(NoInfo,x,TyDyn,t1)) in
+     eval ((eval env t1')::env) t2
   (* Application *)
   | TmApp(fiapp,t1,t2) ->
       (match eval env t1 with
@@ -437,7 +449,9 @@ let rec eval env t =
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
        | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
-       | TmConsym(_,x,_,Some(_)) -> raise_error fiapp ("Cannot apply constructor '" ^ Ustring.to_utf8 x ^ "' more than once")
+       | TmConsym(_,x,_,Some(_)) ->
+          raise_error fiapp ("Cannot apply constructor '" ^ Ustring.to_utf8 x ^
+                               "' more than once")
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with

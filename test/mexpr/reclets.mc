@@ -9,12 +9,15 @@ mexpr
 
 
 recursive
-let fact = lam fact. lam n.
+let fact = lam n.
   if eqi n 0
     then 1
     else muli n (fact (subi n 1))
 in
 
+utest fact 0 with 1 in
+utest fact 4 with 24 in
+utest fact 5 with 120 in
 
 recursive
 let odd = lam n.
