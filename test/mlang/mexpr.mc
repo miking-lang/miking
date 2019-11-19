@@ -8,7 +8,9 @@ type Env = [(String, Expr)]
 lang Var
   syn Expr =
   | TmVar String
+end
 
+lang VarEval = Var
   sem eval (env : Env) =
   | TmVar x ->
     let lookup = fix (lam lookup. lam x. lam env.
@@ -21,13 +23,32 @@ lang Var
     eval env (lookup x env)
 end
 
-lang Fun = Var
+lang App
+  syn Expr =
+  | TmApp (Expr, Expr)
+end
+
+lang AppEval = App
+  sem apply (arg : Expr) =
+  | _ -> error "Bad application"
+
+  sem eval (env : Env) =
+  | TmApp t ->
+    let t1 = t.0 in
+    let t2 = t.1 in
+    apply (eval env t2) (eval env t1)
+end
+
+lang Fun = Var + App
   syn Type =
   | Arrow (Type, Type)
   syn Expr =
   | TmLam (String, Option, Expr) -- Option Type
+end
+
+lang FunEval = Fun + VarEval + AppEval
+  syn Expr =
   | TmClos (String, Option, Expr, Env) -- Option Type
-  | TmApp (Expr, Expr)
 
   sem apply (arg : Expr) =
   | TmClos t ->
@@ -35,7 +56,6 @@ lang Fun = Var
       let body = t.1 in
       let env2 = t.2 in
       eval (cons (x, arg) env2) body
-  | _ -> error "Bad application"
 
   sem eval (env : Env) =
   | TmLam t ->
@@ -43,16 +63,14 @@ lang Fun = Var
     let body = t.2 in
     TmClos(x, body, env)
   | TmClos t -> TmClos t
-  | TmApp t ->
-    let t1 = t.0 in
-    let t2 = t.1 in
-    apply (eval env t2) (eval env t1)
 end
 
 lang Fix = Fun
   syn Expr =
   | TmFix
+end
 
+lang FixEval = Fix + FunEval
   sem apply (arg : Expr) =
   | TmFix ->
   match arg with TmClos clos then
@@ -70,7 +88,9 @@ lang Fix = Fun
 lang Let = Var
   syn Expr =
   | TmLet (String, Expr, Expr)
+end
 
+lang LetEval = Let + VarEval
   sem eval (env : Env) =
   | TmLet t ->
     let x = t.0 in
@@ -84,7 +104,9 @@ lang Const
 
   syn Expr =
   | TmConst (Const)
+end
 
+lang ConstEval = Const
   sem delta (arg : Expr) =
 
   sem apply (arg : Expr) =
@@ -99,14 +121,23 @@ lang Unit = Const
   | CUnit
 end
 
-lang Arith
+-- Included for symmetry
+lang UnitEval = Unit + ConstEval
+
+lang Int = Const
   syn Const =
   | CInt Int
+end
+
+lang Arith = Const + Int
+  syn Const =
   | CAddi
   | CAddi2 Int
   -- TODO: Add more operations
   -- TODO: Add floating point numbers (maybe in its own fragment)
+end
 
+lang ArithEval = Arith + ConstEval
   sem delta (arg : Expr) =
   | CAddi ->
     match arg with TmConst c then
@@ -133,7 +164,9 @@ lang Bool
 
   syn Expr =
   | TmIf (Expr, Expr, Expr)
+end
 
+lang BoolEval = Bool + ConstEval
   sem delta (arg : Expr) =
   | CNot ->
     match arg with TmConst c then
@@ -178,11 +211,13 @@ lang Bool
     else error "Condition is not a constant"
 end
 
-lang Cmp = Arith + Bool
+lang Cmp = Int + Bool
   syn Const =
   | CEqi
   | CEqi2 Int
+end
 
+lang CmpEval = Cmp + ConstEval
   sem delta (arg : Expr) =
   | CEqi ->
     match arg with TmConst c then
@@ -198,7 +233,7 @@ lang Cmp = Arith + Bool
     else error "Not comparing a constant"
 end
 
-lang Seq = Arith
+lang Seq = Int
   syn Const =
   | CSeq [Expr]
   | CNth
@@ -206,7 +241,9 @@ lang Seq = Arith
 
   syn Expr =
   | TmSeq [Expr]
+end
 
+lang SeqEval = Seq + ConstEval
   sem delta (arg : Expr) =
   | CNth ->
     match arg with TmConst c then
@@ -227,11 +264,13 @@ lang Seq = Arith
     TmConst(CSeq vs)
 end
 
-lang Tuple = Arith
+lang Tuple
   syn Expr =
   | TmTuple [Expr]
   | TmProj (Expr, Int)
+end
 
+lang TupleEval = Tuple
   sem eval (env : Env) =
   | TmTuple tms ->
     let vs = map (eval env) tms in
@@ -251,7 +290,9 @@ lang Data
   | TmConFun (String)
   | TmCon (String, Expr)
   | TmMatch (Expr, String, String, Expr, Expr)
+end
 
+lang DataEval = Data + AppEval
   sem apply (arg : Expr) =
   | TmConFun k -> TmCon (k, arg)
 
@@ -280,7 +321,9 @@ end
 lang Utest
   syn Expr =
   | TmUtest (Expr, Expr, Expr)
+end
 
+lang UtestEval = Utest
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -295,9 +338,9 @@ lang Utest
     eval env next
 end
 
-lang MExpr = Fun + Fix + Let
-           + Seq + Tuple + Data + Utest
-           + Const + Arith + Bool + Cmp + Unit
+lang MExpr = FunEval + FixEval + LetEval
+           + SeqEval + TupleEval + DataEval + UtestEval
+           + ArithEval + BoolEval + CmpEval + UnitEval
   sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2 e1

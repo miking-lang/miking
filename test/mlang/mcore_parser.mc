@@ -1,4 +1,6 @@
 include "parser.mc"
+-- include "mexpr.mc"
+-- use MExpr
 
 -- MCore tokens ----------------------------------
 
