@@ -5,55 +5,67 @@ let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
 -- Maps and folds
-let map = fix (lam map. lam f. lam seq.
-  if null seq then []
-  else cons (f (head seq)) (map f (tail seq))
-)
+recursive
+  let map = lam f. lam seq.
+    if null seq then []
+    else cons (f (head seq)) (map f (tail seq))
+end
 
-let foldl = fix (lam foldl. lam f. lam acc. lam seq.
+recursive
+  let foldl = lam f. lam acc. lam seq.
     if null seq then acc
     else foldl f (f acc (head seq)) (tail seq)
-)
+end
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
-let foldr = fix (lam foldr. lam f. lam acc. lam seq.
+recursive
+  let foldr = lam f. lam acc. lam seq.
     if null seq
     then acc
     else f (head seq) (foldr f acc (tail seq))
-)
+end
 
 let foldr1 = lam f. lam seq. foldl1 (lam acc. lam x. f x acc) (reverse seq)
 
-let zipWith = fix (lam zipWith. lam f. lam seq1. lam seq2.
+recursive
+  let zipWith = lam f. lam seq1. lam seq2.
     if null seq1 then []
     else if null seq2 then []
     else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
-)
+end
 
 -- Predicates
-let any = fix (lam any. lam p. lam seq.
-  if null seq
-  then false
-  else or (p (head seq)) (any p (tail seq)))
+recursive
+  let any = lam p. lam seq.
+    if null seq
+    then false
+    else or (p (head seq)) (any p (tail seq))
+end
 
-let all = fix (lam all. lam p. lam seq.
-  if null seq
-  then true
-  else and (p (head seq)) (all p (tail seq)))
+recursive
+  let all = lam p. lam seq.
+    if null seq
+    then true
+    else and (p (head seq)) (all p (tail seq))
+end
 
 -- Join
 let join = lam seqs. foldl concat [] seqs
 
 -- Searching
-let filter = fix (lam filter. lam p. lam seq.
-  if null seq then []
-  else if p (head seq) then cons (head seq) (filter p (tail seq))
-  else (filter p (tail seq)))
+recursive
+  let filter = lam p. lam seq.
+    if null seq then []
+    else if p (head seq) then cons (head seq) (filter p (tail seq))
+    else (filter p (tail seq))
+end
 
-let find = fix (lam find. lam p. lam seq.
-  if null seq then None
-  else if p (head seq) then Some (head seq)
-  else find p (tail seq))
+recursive
+  let find = lam p. lam seq.
+    if null seq then None
+    else if p (head seq) then Some (head seq)
+    else find p (tail seq)
+end
 
 let partition = (lam p. lam seq.
     (filter p seq, filter (lam q. if p q then false else true) seq))
