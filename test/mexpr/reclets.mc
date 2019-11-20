@@ -30,4 +30,7 @@ let even = lam n.
     else odd (subi n 1)
 in
 
+utest odd 4 with false in
+utest even 4 with true in
+
 ()

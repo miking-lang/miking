@@ -124,7 +124,7 @@ and program = Program of include_ list * top list * tm
 and tm =
 | TmVar     of info * ustring * int                                 (* Variable *)
 | TmLam     of info * ustring * ty * tm                             (* Lambda abstraction *)
-| TmClos    of info * ustring * ty * tm * env                       (* Closure *)
+| TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
 | TmLet     of info * ustring * tm * tm                             (* Let *)
 | TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
