@@ -287,12 +287,14 @@ lang Data
   -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef (String, Expr)
-  | TmConFun (String)
-  | TmCon (String, Expr)
   | TmMatch (Expr, String, String, Expr, Expr)
 end
 
 lang DataEval = Data + AppEval
+  syn Expr =
+  | TmConFun (String)
+  | TmCon (String, Expr)
+
   sem apply (arg : Expr) =
   | TmConFun k -> TmCon (k, arg)
 
