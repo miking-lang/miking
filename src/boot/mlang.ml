@@ -265,6 +265,6 @@ let insert_top_level_decls tops t =
 let desugar_language_uses = function
   | Program(_, tops, t) ->
      let tops' = desugar_uses_in_interpreters tops in
-     let t' = translate_uses tops' t in
-     let t'' = insert_top_level_decls tops t' in
+     let t' = insert_top_level_decls tops' t in
+     let t'' = translate_uses tops' t' in
      t''
