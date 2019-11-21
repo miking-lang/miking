@@ -111,7 +111,10 @@ let arity = function
 
 
 
-let fail_constapp fi = raise_error fi "Incorrect application "
+let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
+                                         ^ Ustring.to_utf8 (pprint_const f)
+                                         ^ " value: "
+                                         ^ Ustring.to_utf8 (pprintME v))
 
 
 (* Evaluates a constant application. This is the standard delta function
@@ -120,6 +123,7 @@ let fail_constapp fi = raise_error fi "Incorrect application "
    The reason for this is that if-expressions return expressions
    and not values. *)
 let delta fi c v  =
+    let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
     | Cunit,t -> fail_constapp (tm_info t)
@@ -457,7 +461,8 @@ let rec eval env t =
          (match eval env t2 with
          | TmClos(fi,_,_,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
          | _ -> raise_error (tm_info t1) "Incorrect CFix")
-       | _ -> raise_error fiapp "Incorrect application")
+       | f -> raise_error fiapp ("Incorrect application. This is not a function: "
+                                 ^ Ustring.to_utf8 (pprintME f)))
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* If expression *)

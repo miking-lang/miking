@@ -152,10 +152,10 @@ and pprintME t =
   | TmProj(_,t,n) -> left inside ^. ppt false t  ^. us"." ^. ustring_of_int n ^. right inside
   | TmCondef(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.
                         us" in" ^. ppt false t ^. right inside
-  | TmConsym(_,s,sym,tmop) -> left inside ^. us"con(" ^. s  ^. us(sprintf ",sym%d" sym) ^.
+  | TmConsym(_,s,sym,tmop) -> left inside ^. s ^. us"_" ^. us(sprintf "%d" sym) ^. us" " ^.
                            (match tmop with
-                            | Some(t) -> us"," ^. ppt false t ^. us")"
-                            | None -> us")") ^. right inside
+                            | Some(t) -> ppt true t
+                            | None -> us"") ^. right inside
   | TmMatch(_,t,con,_,x,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
         us" with " ^. con ^.
         (match x with | None -> us"" | Some(s) -> us" " ^. s) ^.
