@@ -5,6 +5,27 @@ include "string.mc"
 -- TODO: Change string variables to deBruijn indices
 type Env = [(String, Expr)]
 
+recursive
+  let lookup = lam x. lam env.
+    if eqi (length env) 0
+    then None
+    else if eqstr (head env).0 x
+    then Some (head env).1
+    else lookup x (tail env)
+end
+
+let fresh : String -> Env -> String = lam var. lam env.
+  match lookup var env with None then
+    var
+  else
+    recursive let find_free = lam n.
+      let new = concat var (int2string n) in
+      match lookup new env with None then
+        new
+      else
+        find_free (addi n 1)
+    in find_free 0
+
 lang Var
   syn Expr =
   | TmVar String
@@ -13,14 +34,10 @@ end
 lang VarEval = Var
   sem eval (env : Env) =
   | TmVar x ->
-    let lookup = fix (lam lookup. lam x. lam env.
-      if eqi (length env) 0
-      then error (concat "Unknown variable: " x)
-      else if eqstr (head env).0 x
-      then (head env).1
-      else lookup x (tail env)
-    ) in
-    eval env (lookup x env)
+    match lookup x env with Some t then
+      eval env t
+    else
+      error (concat "Unknown variable: " x)
 end
 
 lang App
@@ -99,6 +116,35 @@ lang LetEval = Let + VarEval
     eval (cons (x, eval env t1) env) t2
 end
 
+lang RecLets = Var
+  syn Expr =
+  | TmRecLets ([(String, Expr)], Expr)
+end
+
+lang RecLetsEval = RecLets + VarEval + Fix + FixEval
+  sem eval (env : Env) =
+  | TmRecLets t ->
+    let bindings = t.0 in
+    let body = t.1 in
+    let foldli = lam f. lam init. lam seq.
+      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
+    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
+      with "0a1b2c" in
+    let eta_str = fresh "eta" env in
+    let eta_var = TmVar(eta_str) in
+    let unpack_from = lam var. lam body.
+      foldli
+        (lam i. lam body. lam binding.
+          TmLet(binding.0, TmLam(eta_str, None, TmApp(TmProj(var, i), eta_var)), body))
+        body
+        bindings in
+    let lst_str = fresh "lst" env in
+    let lst_var = TmVar(lst_str) in
+    let func_tuple = TmTuple (map (lam x. x.1) bindings) in
+    let unfixed_tuple = TmLam(lst_str, None, unpack_from lst_var func_tuple) in
+    eval (cons (lst_str, TmApp(TmFix, unfixed_tuple)) env) (unpack_from lst_var body)
+end
+
 lang Const
   syn Const =
 
@@ -133,6 +179,8 @@ lang Arith = Const + Int
   syn Const =
   | CAddi
   | CAddi2 Int
+  | CSubi
+  | CSubi2 Int
   -- TODO: Add more operations
   -- TODO: Add floating point numbers (maybe in its own fragment)
 end
@@ -151,6 +199,18 @@ lang ArithEval = Arith + ConstEval
         TmConst(CInt (addi n1 n2))
       else error "Not adding a numeric constant"
     else error "Not adding a constant"
+  | CSubi ->
+    match arg with TmConst c then
+      match c with CInt n then
+        TmConst(CSubi2 n)
+      else error "Not subbing a numeric constant"
+    else error "Not subbing a constant"
+  | CSubi2 n1 ->
+    match arg with TmConst c then
+      match c with CInt n2 then
+        TmConst(CInt (subi n1 n2))
+      else error "Not subbing a numeric constant"
+    else error "Not subbing a constant"
 end
 
 lang Bool
@@ -215,6 +275,8 @@ lang Cmp = Int + Bool
   syn Const =
   | CEqi
   | CEqi2 Int
+  | CLti
+  | CLti2 Int
 end
 
 lang CmpEval = Cmp + ConstEval
@@ -229,6 +291,18 @@ lang CmpEval = Cmp + ConstEval
     match arg with TmConst c then
       match c with CInt n2 then
         TmConst(CBool (eqi n1 n2))
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CLti ->
+    match arg with TmConst c then
+      match c with CInt n then
+        TmConst(CLti2 n)
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CLti2 n1 ->
+    match arg with TmConst c then
+      match c with CInt n2 then
+        TmConst(CBool (lti n1 n2))
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
 end
@@ -340,7 +414,7 @@ lang UtestEval = Utest
     eval env next
 end
 
-lang MExpr = FunEval + FixEval + LetEval
+lang MExpr = FunEval + LetEval + RecLetsEval
            + SeqEval + TupleEval + DataEval + UtestEval
            + ArithEval + BoolEval + CmpEval + UnitEval
   sem eq (e1 : Expr) =
@@ -476,5 +550,39 @@ let eval_add2 = wrap_in_decls (TmApp (TmVar "eval", add_one_two_three)) in
 
 utest eval [] eval_add1 with TmCon("Num", TmConst(CInt 3)) in
 utest eval [] eval_add2 with TmCon("Num", TmConst(CInt 6)) in
+
+let app = lam f. lam x. TmApp(f, x) in
+let app_seq = lam f. lam seq. foldl app f seq in
+let var = lam v. TmVar(v) in
+let int = lam i. TmConst (CInt i) in
+let lambda = lam var. lam body. TmLam(var, None, body) in
+let if_ = lam cond. lam th. lam el. TmIf(cond, th, el) in
+let true_ = TmConst (CBool true)in
+let false_ = TmConst (CBool false)in
+let eqi_ = lam a. lam b. app_seq (TmConst CEqi) [a, b] in
+let lti_ = lam a. lam b. app_seq (TmConst CLti) [a, b] in
+let subi_ = lam a. lam b. app_seq (TmConst CSubi) [a, b] in
+let odd_even = lam body.
+  TmRecLets(
+    [ ( "odd"
+      , lambda "x"
+        (if_ (eqi_ (var "x") (int 1))
+          true_
+          (if_ (lti_ (var "x") (int 1))
+            false_
+            (app (var "even") (subi_ (var "x") (int 1))))))
+    , ( "even"
+      , lambda "x"
+        (if_ (eqi_ (var "x") (int 0))
+          true_
+          (if_ (lti_ (var "x") (int 0))
+            false_
+            (app (var "odd") (subi_ (var "x") (int 1))))))
+    ]
+    , body) in
+utest eval [] (odd_even (app (var "odd") (int 4))) with TmConst (CBool false) in
+utest eval [] (odd_even (app (var "odd") (int 3))) with TmConst (CBool true) in
+utest eval [] (odd_even (app (var "even") (int 4))) with TmConst (CBool true) in
+utest eval [] (odd_even (app (var "even") (int 3))) with TmConst (CBool false) in
 
 ()
