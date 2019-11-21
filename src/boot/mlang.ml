@@ -153,10 +153,10 @@ end
 
 open AstHelpers
 
-let translate_data =
+let translate_data d =
   let translate_constr constr inner =
     match constr with
-    | CDecl(_, k, ty) -> TmCondef (NoInfo, k, ty, inner)
+    | CDecl(_, k, ty) -> TmCondef (NoInfo, k, TyArrow(ty, d), inner)
   in
   List.fold_right translate_constr
 
@@ -207,7 +207,7 @@ let translate_inter f fs params cases : tm -> tm =
   fun inner -> let_ (f ^ "_abs") fn inner
 
 let translate_decl fs : decl -> tm -> tm = function
-  | Data (_, _, constrs) -> fun inner -> translate_data constrs inner
+  | Data (_, d, constrs) -> fun inner -> translate_data (TyCon d) constrs inner
   | Inter (_, f, params, cases) ->
      translate_inter (Ustring.to_utf8 f) fs params cases
 

@@ -164,7 +164,26 @@ let noidx = -1
 
 (* Creation and handling of constructors and symbol generation *)
 let symno = ref 0
-let gencon fi x = symno := !symno + 1; TmConsym(fi,x,!symno,None)
+let gensym () = symno := !symno + 1; !symno
+
+module ConKey = struct
+  type t = ustring*ustring
+  let flatten = function (s1, s2) -> s1 ^. us" " ^. s2
+  let compare k1 k2 = Ustring.compare (flatten k1) (flatten k2)
+end
+module ConMap = Map.Make(ConKey)
+
+let memoized_cons = ref ConMap.empty
+let rec gencon fi k ty = match ty with
+  | TyArrow(_, res) -> gencon fi k res (* TODO: What about parameters *)
+  | TyCon d -> (match ConMap.find_opt (d,k) !memoized_cons with
+                | Some n -> TmConsym(fi,k,n,None)
+                | None ->
+                   let sym = gensym() in
+                   memoized_cons := ConMap.add (d,k) sym !memoized_cons;
+                   TmConsym(fi,k,sym,None))
+  (* This constructor was not given a type. Generate new symbol *)
+  | _ -> TmConsym(fi,k,gensym(),None)
 
 (* TODO: Temporary fix for hackinar installation issues *)
 module Option = struct

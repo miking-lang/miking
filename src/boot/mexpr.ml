@@ -479,7 +479,7 @@ let rec eval env t =
          raise_error fi ("Cannot project from term. The term is not a tuple: "
                          ^ Ustring.to_utf8 (pprintME v)))
   (* Data constructors and match *)
-  | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
+  | TmCondef(fi,x,ty,t) -> eval ((gencon fi x ty)::env) t
   | TmConsym(_,_,_,_) as tm -> tm
   | TmMatch(fi,t1,_,n,xop,t2,t3) ->
      (match eval env t1, List.nth env n with

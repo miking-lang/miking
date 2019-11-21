@@ -1,6 +1,5 @@
 include "parser.mc"
--- include "mexpr.mc"
--- use MExpr
+include "mexpr.mc"
 
 -- MCore tokens ----------------------------------
 
@@ -82,36 +81,15 @@ let identifier =
 
 -- MCore parsers ----------------------------------------
 
+-- TODO: These should be defined in mexpr.mc
 type Type
-
 con TyDyn : Type
 con TyProd : [Type] -> Type
 con TyUnit : Type
 
 type Const
-con CUnit : Const
-con CInt : Int -> Const
 con CFloat : Float -> Const
-con CBool : Bool -> Const
 con CChar : Char -> Const
-
-type Expr
-
-con TmLet : (String, Expr, Expr) -> Expr
-con TmLam : (String, Option, Expr) -> Expr
-con TmIf  : (Expr, Expr, Expr) -> Expr
-con TmConDef : (String, Option, Dyn) -> Expr
-con TmMatch : (Expr, String, String, Expr, Expr) -> Expr
-con TmUtest : (Expr, Expr, Expr) -> Expr
-
-con TmApp : (Expr, Expr) -> Expr
-con TmVar : String -> Expr
-con TmTuple : [Expr] -> Expr
-con TmProj : (Expr, Int) -> Expr
-con TmConst : Const -> Expr
-con TmFix : Expr
-con TmSeq : [Expr] -> Expr
-con TmConFun : String -> Expr
 
 -- ty : Parser Type
 let ty = fix (lam ty. lam st.
@@ -131,6 +109,7 @@ let ty = fix (lam ty. lam st.
 --
 -- Innermost expression parser.
 let atom = fix (lam atom. lam expr. lam input.
+  use MExpr in
   let var_access =
     let _ = debug "== Parsing var_access" in
     fmap TmVar identifier in
@@ -187,6 +166,7 @@ let atom = fix (lam atom. lam expr. lam input.
 -- Left recursive expressions, i.e. function application
 -- and tuple projection.
 let left = lam expr.
+  use MExpr in
   let atom_or_proj =
     bind (atom expr) (lam a.
     bind (many (apr (symbol ".") number)) (lam is.
@@ -201,6 +181,7 @@ let left = lam expr.
 --
 -- Main expression parser.
 let expr = fix (lam expr. lam st.
+  use MExpr in
   let let_ =
     let _ = debug "== Parsing let ==" in
     bind (reserved "let") (lam _.
@@ -351,6 +332,8 @@ utest show_error (test_parser ty "dyn")
 with "Parse error at 1:1: Unexpected 'd'. Expected type" in
 utest show_error (test_parser ty "(Dyn, dyn, Dyn)")
 with "Parse error at 1:7: Unexpected 'd'. Expected type" in
+
+use MExpr in
 
 utest test_parser (left expr) "f x"
 with Success(TmApp(TmVar "f", TmVar "x"), ("", ("", 1, 4))) in
