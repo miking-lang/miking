@@ -117,6 +117,8 @@ let evalprog filename  =
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   begin try
+    parsed_files := [];
+    symno := 0; memoized_cons := ConMap.empty;
     let parsed = parse_mcore_file filename in
     (parsed
      |> add_prelude
@@ -150,7 +152,7 @@ let evalprog filename  =
       else
         fprintf stderr "%s\n"
 	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
-  end; parsed_files := [];
+  end;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
 
