@@ -110,12 +110,19 @@ let lookup_lang info tops l =
   | _ -> raise_error info ("Unknown language fragment '"^
                               Ustring.to_utf8 l^"'")
 
+let sort_decls = function
+  | Lang(info, l, ls, decls) ->
+     let is_data_decl = function | Data _ -> true | _ -> false in
+     match List.partition is_data_decl decls with
+     | (data, inters) -> Lang(info, l, ls, data@inters)
+
 let flatten_langs tops : top list =
   let flatten_langs' flat = function
     | TopLang(Lang(info, _, ls, _) as lang)  ->
        let included_langs = List.map (lookup_lang info flat) ls in
        let lang' = List.fold_left merge_langs lang included_langs in
-       TopLang lang'::flat
+       let sorted = sort_decls lang' in
+       TopLang sorted::flat
     | TopLet _ as let_ -> let_::flat
     | TopCon _ as con -> con::flat
   in
