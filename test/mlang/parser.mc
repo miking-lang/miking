@@ -246,11 +246,13 @@ let label = lam l. lam p. lam st.
 -- many : Parser a -> Parser [a]
 --
 -- Parse zero or more occurrences of a parser.
-let many = fix (lam many. lam p.
-  bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
-  if null hd
-  then pure []
-  else bind (many p) (lam tl. pure (concat hd tl))))
+recursive
+  let many = lam p.
+    bind (alt (bind p (lam v. pure [v])) (pure [])) (lam hd.
+    if null hd
+    then pure []
+    else bind (many p) (lam tl. pure (concat hd tl)))
+end
 
 -- many1 : Parser a -> Parser [a]
 --
@@ -297,19 +299,21 @@ let lex_number = fmap string2int (many1 (satisfy is_digit "digit"))
 -- lex_string : String -> Parser String
 --
 -- Parse a specific string.
-let lex_string = fix (lam lex_string. lam s.
-  if null s
-  then pure ""
-  else
-    let c = head s in
-    let cs = tail s in
-    label (concat "'" (concat s "'")) (
-      try ( -- This 'try' makes the parser consume the whole string or nothing
-        bind (lex_char c) (lam _.
-        bind (lex_string cs) (lam _.
-        pure (cons c cs)))
-      ))
-)
+recursive
+  let lex_string = lam s.
+    if null s
+    then pure ""
+    else
+      let c = head s in
+      let cs = tail s in
+      label (concat "'" (concat s "'")) (
+        try ( -- This 'try' makes the parser consume the whole string or nothing
+          bind (lex_char c) (lam _.
+          bind (lex_string cs) (lam _.
+          pure (cons c cs)))
+        ))
+end
+
 
 -- Parser Char
 --
