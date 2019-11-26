@@ -37,7 +37,8 @@ type Tree in
 con Node : (Tree,Tree) -> Tree in
 con Leaf : (Int) -> Tree in
 
-let count = fix (lam count. lam tree.
+recursive
+  let count = lam tree.
     match tree with Node t then
       let left = t.0 in
       let right = t.1 in
@@ -45,7 +46,7 @@ let count = fix (lam count. lam tree.
     else match tree with Leaf v then
       v
     else error "Unknown node"
-) in
+in
 
 let tree1 = Leaf(5) in
 utest count tree1 with 5 in

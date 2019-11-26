@@ -32,15 +32,12 @@ let m = lam x. lam y. muli x y in
 utest if eqi (m 2 3) 6 then addi z 2 else 0 with 10 in
 
 
-// fix
-utest fix (lam x. 1) with 1 in
-
-
 // factorial function
-let fact = fix (lam fact. lam n.
+recursive
+  let fact = lam n.
     if eqi n 0 then 1
     else muli (fact (subi n 1)) n
-) in
+in
 utest fact 0 with 1 in
 utest fact 1 with 1 in
 utest fact 3 with 6 in

@@ -49,7 +49,6 @@
 %token <unit Ast.tokendata> LET
 %token <unit Ast.tokendata> REC
 %token <unit Ast.tokendata> LAM
-%token <unit Ast.tokendata> FIX
 %token <unit Ast.tokendata> IN
 %token <unit Ast.tokendata> END
 %token <unit Ast.tokendata> SYN
@@ -115,6 +114,8 @@ top:
     { TopLang($1) }
   | toplet
     { TopLet($1) }
+  | topRecLet
+    { TopRecLet($1) }
   | topcon
     { TopCon($1) }
 
@@ -122,6 +123,11 @@ toplet:
   | LET IDENT ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
       Let (fi, $2.v, $5) }
+
+topRecLet:
+  | REC lets END
+    { let fi = mkinfo $1.i $3.i in
+      RecLet (fi, $2) }
 
 topcon:
   | CON IDENT ty_op
@@ -271,7 +277,6 @@ atom:
   | LPAREN RPAREN        { TmConst($1.i, Cunit) }
   | IDENT                { TmVar($1.i,$1.v,noidx) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
-  | FIX                  { TmFix($1.i) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }

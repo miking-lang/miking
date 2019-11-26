@@ -61,7 +61,7 @@ let comma_sep = sep_by (symbol ",")
 
 -- List of reserved keywords
 let keywords =
-  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "lam", "fix", "utest"]
+  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "lam", "utest", "recursive"]
 
 -- ident : Parser String
 --
@@ -98,6 +98,7 @@ con CChar : Char -> Const
 type Expr
 
 con TmLet : (String, Expr, Expr) -> Expr
+con TmRecLets : ([(String, Expr)], Expr) -> Expr
 con TmLam : (String, Option, Expr) -> Expr
 con TmIf  : (Expr, Expr, Expr) -> Expr
 con TmConDef : (String, Option, Dyn) -> Expr
@@ -109,166 +110,181 @@ con TmVar : String -> Expr
 con TmTuple : [Expr] -> Expr
 con TmProj : (Expr, Int) -> Expr
 con TmConst : Const -> Expr
-con TmFix : Expr
 con TmSeq : [Expr] -> Expr
 con TmConFun : String -> Expr
 
 -- ty : Parser Type
-let ty = fix (lam ty. lam st.
-  let tuple =
-    bind (parens (comma_sep ty)) (lam ts.
-      if null ts
-      then pure TyUnit
-      else if eqi (length ts) 1
-      then pure (head ts)
-      else pure (TyProd ts))
-  in
-  let dyn = apr (reserved "Dyn") (pure TyDyn) in
-  label "type"
-  (alt tuple dyn) st)
+recursive
+  let ty = lam st.
+    let tuple =
+      bind (parens (comma_sep ty)) (lam ts.
+        if null ts
+        then pure TyUnit
+        else if eqi (length ts) 1
+        then pure (head ts)
+        else pure (TyProd ts))
+    in
+    let dyn = apr (reserved "Dyn") (pure TyDyn) in
+    label "type"
+    (alt tuple dyn) st
+end
 
--- atom : Parser Expr
---
--- Innermost expression parser.
-let atom = fix (lam atom. lam expr. lam input.
-  let var_access =
-    let _ = debug "== Parsing var_access" in
-    fmap TmVar identifier in
-  let fix_ =
-    let _ = debug "== Parsing fix ==" in
-    apr (reserved "fix") (pure TmFix)
-  in
-  let seq =
-    let _ = debug "== Parsing seq ==" in
-    fmap TmSeq (brackets (comma_sep expr))
-  in
-  let tuple =
-    let _ = debug "== Parsing tuple ==" in
-    bind (parens (comma_sep expr)) (lam es.
-    if null es
-    then pure (TmConst CUnit)
-    else if eqi (length es) 1
-    then pure (head es)
-    else pure (TmTuple es))
-  in
-  let num =
-    let _ = debug "== Parsing num ==" in
-    fmap (lam n. TmConst (CInt n)) number
-  in
-  let float =
-    let _ = debug "== Parsing float ==" in
-    fmap (lam f. TmConst (CFloat f)) float
-  in
-  let bool =
-    let _ = debug "== Parsing bool ==" in
-    alt (apr (reserved "true")  (pure (TmConst (CBool true))))
-        (apr (reserved "false") (pure (TmConst (CBool false))))
-  in
-  let str_lit =
-    let _ = debug "== Parsing string ==" in
-    fmap TmSeq string_lit
-  in
-  let chr_lit =
-    let _ = debug "== Parsing character ==" in
-    fmap (lam c. TmConst (CChar c)) char_lit
-  in
-    label "atomic expression"
-    (alt var_access
-    (alt fix_
-    (alt seq
-    (alt tuple
-    (alt (try float)
-    (alt num
-    (alt bool
-    (alt str_lit char_lit)))))))) input)
+recursive
+  -- atom : Parser Expr
+  --
+  -- Innermost expression parser.
+  let atom = lam input.
+    let var_access =
+      let _ = debug "== Parsing var_access" in
+      fmap TmVar identifier in
+    let seq =
+      let _ = debug "== Parsing seq ==" in
+      fmap TmSeq (brackets (comma_sep expr))
+    in
+    let tuple =
+      let _ = debug "== Parsing tuple ==" in
+      bind (parens (comma_sep expr)) (lam es.
+      if null es
+      then pure (TmConst CUnit)
+      else if eqi (length es) 1
+      then pure (head es)
+      else pure (TmTuple es))
+    in
+    let num =
+      let _ = debug "== Parsing num ==" in
+      fmap (lam n. TmConst (CInt n)) number
+    in
+    let float =
+      let _ = debug "== Parsing float ==" in
+      fmap (lam f. TmConst (CFloat f)) float
+    in
+    let bool =
+      let _ = debug "== Parsing bool ==" in
+      alt (apr (reserved "true")  (pure (TmConst (CBool true))))
+          (apr (reserved "false") (pure (TmConst (CBool false))))
+    in
+    let str_lit =
+      let _ = debug "== Parsing string ==" in
+      fmap TmSeq string_lit
+    in
+    let chr_lit =
+      let _ = debug "== Parsing character ==" in
+      fmap (lam c. TmConst (CChar c)) char_lit
+    in
+      label "atomic expression"
+      (alt var_access
+      (alt seq
+      (alt tuple
+      (alt (try float)
+      (alt num
+      (alt bool
+      (alt str_lit char_lit))))))) input
 
--- left : Parser Expr
---
--- Left recursive expressions, i.e. function application
--- and tuple projection.
-let left = lam expr.
-  let atom_or_proj =
-    bind (atom expr) (lam a.
-    bind (many (apr (symbol ".") number)) (lam is.
-    if null is
-    then pure a
-    else pure (foldl (curry TmProj) a is)))
-  in
-  bind (many1 atom_or_proj) (lam as.
-  pure (foldl1 (curry TmApp) as))
 
--- expr: Parser Expr
---
--- Main expression parser.
-let expr = fix (lam expr. lam st.
-  let let_ =
-    let _ = debug "== Parsing let ==" in
-    bind (reserved "let") (lam _.
-    bind identifier (lam x.
-    bind (symbol "=") (lam _.
-    bind expr (lam e.
-    bind (reserved "in") (lam _.
-    bind expr (lam body.
-    pure (TmLet(x, e, body))))))))
-  in
-  let lam_ =
-    let _ = debug "== Parsing lam ==" in
-    bind (reserved "lam") (lam _.
-    bind identifier (lam x.
-    bind (optional (apr (symbol ":") ty)) (lam t.
-    bind (symbol ".") (lam _.
-    bind expr (lam e.
-    pure (TmLam(x, t, e)))))))
-  in
-  let if_ =
-    let _ = debug "== Parsing if ==" in
-    bind (reserved "if") (lam _.
-    bind expr (lam cnd.
-    bind (reserved "then") (lam _.
-    bind expr (lam thn.
-    bind (reserved "else") (lam _.
-    bind expr (lam els.
-    pure (TmIf(cnd, thn, els))))))))
-  in
-  let match_ =
-    let _ = debug "== Parsing match ==" in
-    bind (reserved "match") (lam _.
-    bind expr (lam e.
-    bind (reserved "with") (lam _.
-    bind identifier (lam k.
-    bind (optional identifier) (lam x.
-    bind (reserved "then") (lam _.
-    bind expr (lam thn.
-    bind (reserved "else") (lam _.
-    bind expr (lam els.
-    pure (TmMatch(e, k, x, thn, els)))))))))))
-  in
-  let con_ =
-    let _ = debug "== Parsing con ==" in
-    bind (reserved "con") (lam _.
-    bind identifier (lam k.
-    bind (optional (apr (symbol ":") ty)) (lam t.
-    bind (reserved "in") (lam _.
-    bind expr (lam body.
-    pure (TmConDef(k, t, body)))))))
-  in
-  let utest_ =
-    let _ = debug "== Parsing utest ==" in
-    bind (reserved "utest") (lam _.
-    bind expr (lam e1.
-    bind (reserved "with") (lam _.
-    bind expr (lam e2.
-    bind (reserved "in") (lam _.
-    bind expr (lam body.
-    pure (TmUtest(e1, e2, body))))))))
-  in
-  label "expression"
-  (alt (left expr)
-  (alt let_
-  (alt lam_
-  (alt if_
-  (alt match_
-  (alt con_ utest_)))))) st)
+  -- expr: Parser Expr
+  --
+  -- Main expression parser.
+  let expr = lam st.
+    -- left : Parser Expr
+    --
+    -- Left recursive expressions, i.e. function application
+    -- and tuple projection.
+    let left =
+      let atom_or_proj =
+        bind atom (lam a.
+        bind (many (apr (symbol ".") number)) (lam is.
+        if null is
+        then pure a
+        else pure (foldl (curry TmProj) a is)))
+      in
+      bind (many1 atom_or_proj) (lam as.
+      pure (foldl1 (curry TmApp) as))
+    in
+    let letbinding =
+      let _ = debug "== Parsing letbinding ==" in
+      bind (reserved "let") (lam _.
+      bind identifier (lam x.
+      bind (symbol "=") (lam _.
+      bind expr (lam e.
+      pure (x, e)))))
+    in
+    let reclets =
+      let _ = debug "== Parsing recursive lets ==" in
+      bind (reserved "recursive") (lam _.
+      bind (many1 letbinding) (lam bindings.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure (TmRecLets(bindings, body))))))
+    in
+    let let_ =
+      let _ = debug "== Parsing let ==" in
+      bind letbinding (lam binding.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure (TmLet(binding.0, binding.1, body)))))
+    in
+    let lam_ =
+      let _ = debug "== Parsing lam ==" in
+      bind (reserved "lam") (lam _.
+      bind identifier (lam x.
+      bind (optional (apr (symbol ":") ty)) (lam t.
+      bind (symbol ".") (lam _.
+      bind expr (lam e.
+      pure (TmLam(x, t, e)))))))
+    in
+    let if_ =
+      let _ = debug "== Parsing if ==" in
+      bind (reserved "if") (lam _.
+      bind expr (lam cnd.
+      bind (reserved "then") (lam _.
+      bind expr (lam thn.
+      bind (reserved "else") (lam _.
+      bind expr (lam els.
+      pure (TmIf(cnd, thn, els))))))))
+    in
+    let match_ =
+      let _ = debug "== Parsing match ==" in
+      bind (reserved "match") (lam _.
+      bind expr (lam e.
+      bind (reserved "with") (lam _.
+      bind identifier (lam k.
+      bind (optional identifier) (lam x.
+      bind (reserved "then") (lam _.
+      bind expr (lam thn.
+      bind (reserved "else") (lam _.
+      bind expr (lam els.
+      pure (TmMatch(e, k, x, thn, els)))))))))))
+    in
+    let con_ =
+      let _ = debug "== Parsing con ==" in
+      bind (reserved "con") (lam _.
+      bind identifier (lam k.
+      bind (optional (apr (symbol ":") ty)) (lam t.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure (TmConDef(k, t, body)))))))
+    in
+    let utest_ =
+      let _ = debug "== Parsing utest ==" in
+      bind (reserved "utest") (lam _.
+      bind expr (lam e1.
+      bind (reserved "with") (lam _.
+      bind expr (lam e2.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure (TmUtest(e1, e2, body))))))))
+    in
+    label "expression"
+    (alt left
+    (alt let_
+    (alt reclets
+    (alt lam_
+    (alt if_
+    (alt match_
+    (alt con_ utest_))))))) st
+end
+
+
 
 -- program : Parser Expr
 let program = apl (apr ws (apr (reserved "mexpr") expr)) end_of_input
@@ -307,8 +323,6 @@ utest test_parser (reserved "lam") "lam x. x"
 with Success((), ("x. x", ("", 1, 5))) in
 utest show_error (test_parser (reserved "lam") "lambda")
 with "Parse error at 1:4: Unexpected 'b'" in
-utest show_error (test_parser (reserved "fix") "fix_")
-with "Parse error at 1:4: Unexpected '_'" in
 utest show_error (test_parser (reserved "lam") "la")
 with "Parse error at 1:1: Unexpected end of input. Expected 'lam'" in
 
@@ -352,9 +366,9 @@ with "Parse error at 1:1: Unexpected 'd'. Expected type" in
 utest show_error (test_parser ty "(Dyn, dyn, Dyn)")
 with "Parse error at 1:7: Unexpected 'd'. Expected type" in
 
-utest test_parser (left expr) "f x"
+utest test_parser expr "f x"
 with Success(TmApp(TmVar "f", TmVar "x"), ("", ("", 1, 4))) in
-utest test_parser (left expr) "f x y"
+utest test_parser expr "f x y"
 with Success(TmApp(TmApp(TmVar "f", TmVar "x"), TmVar "y"), ("", ("", 1, 6))) in
 
 utest test_parser expr "let f = lam x. x in f x"

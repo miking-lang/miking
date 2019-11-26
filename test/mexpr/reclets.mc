@@ -30,4 +30,20 @@ let even = lam n.
     else odd (subi n 1)
 in
 
+utest odd 4 with false in
+utest even 4 with true in
+
+recursive
+let fax = lam f. lam e. f (fax f) e in
+
+let fact = fax (lam recur. lam n.
+  if eqi n 0
+    then 1
+    else muli n (recur (subi n 1)))
+in
+
+utest fact 0 with 1 in
+utest fact 4 with 24 in
+utest fact 5 with 120 in
+
 ()

@@ -430,25 +430,23 @@ let rec eval env t =
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
   | TmVar(_,_,n) -> eval env  (List.nth env n)
   (* Lambda and closure conversions *)
-  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env)
+  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,lazy env)
   | TmClos(_,_,_,_,_) -> t
   (* Let *)
   | TmLet(_,_,t1,t2) -> eval ((eval env t1)::env) t2
   (* Recursive lets *)
   | TmRecLets(_,lst,t2) ->
-     (*
-      let t1 = match lst with | (_,_,t)::_ -> t | _ -> failwith "TEMP error" in
-      let rec t1' = (eval (t1'::env) t1) in
-      eval (t1'::env) t2
-      *)
-     let (t1,x) = match lst with | (_,x,t)::_ -> (t,x) | _ -> failwith "TEMP error" in
-     let t1' = TmApp(NoInfo, TmFix(NoInfo), TmLam(NoInfo,x,TyDyn,t1)) in
-     eval ((eval env t1')::env) t2
+     let rec env' = lazy
+       (let wraplambda = function
+          | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env')
+          | tm -> raise_error (tm_info tm) "Right-hand side of recursive let must be a lambda"
+        in List.fold_left (fun env (_, _, rhs) -> wraplambda rhs :: env) env lst)
+     in eval (Lazy.force env') (t2)
   (* Application *)
   | TmApp(fiapp,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::env2) t3
+       | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::Lazy.force env2) t3
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta fiapp c (eval env t2)
        (* Constructor application *)
@@ -459,7 +457,7 @@ let rec eval env t =
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
-         | TmClos(fi,_,_,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::env2) t3
+         | TmClos(fi,_,_,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::Lazy.force env2) t3
          | _ -> raise_error (tm_info t1) "Incorrect CFix")
        | f -> raise_error fiapp ("Incorrect application. This is not a function: "
                                  ^ Ustring.to_utf8 (pprintME f)))

@@ -30,7 +30,6 @@ let reserved_strings = [
   ("let",           fun(i) -> Parser.LET{i=i;v=()});
   ("recursive",     fun(i) -> Parser.REC{i=i;v=()});
   ("lam",           fun(i) -> Parser.LAM{i=i;v=()});
-  ("fix",           fun(i) -> Parser.FIX{i=i;v=()});
   ("in",            fun(i) -> Parser.IN{i=i;v=()});
   ("end",           fun(i) -> Parser.END{i=i;v=()});
   ("syn",           fun(i) -> Parser.SYN{i=i;v=()});

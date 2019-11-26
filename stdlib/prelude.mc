@@ -10,6 +10,10 @@ let compose = lam f. lam g. lam x. f (g x)
 let curry = lam f. lam x. lam y. f(x, y)
 let uncurry = lam f. lam t. f t.0 t.1
 
+recursive
+  let fix = lam f. lam e. f (fix f) e
+end
+
 -- Fixpoint computation for mutual recursion. Thanks Oleg Kiselyov!
 -- (http://okmij.org/ftp/Computation/fixed-point-combinators.html)
 let fix_mutual =

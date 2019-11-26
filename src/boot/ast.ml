@@ -111,10 +111,12 @@ and decl = (* TODO: Local? *)
 
 and mlang   = Lang of info * ustring * ustring list * decl list
 and let_decl = Let of info * ustring * tm
+and rec_let_decl = RecLet of info * (info * ustring * tm) list
 and con_decl = Con of info * ustring * ty
 and top =
 | TopLang of mlang
 | TopLet  of let_decl
+| TopRecLet of rec_let_decl
 | TopCon of con_decl
 
 and include_ = Include of info * ustring
@@ -124,7 +126,7 @@ and program = Program of include_ list * top list * tm
 and tm =
 | TmVar     of info * ustring * int                                 (* Variable *)
 | TmLam     of info * ustring * ty * tm                             (* Lambda abstraction *)
-| TmClos    of info * ustring * ty * tm * env                       (* Closure *)
+| TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
 | TmLet     of info * ustring * tm * tm                             (* Let *)
 | TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
