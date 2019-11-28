@@ -1,3 +1,5 @@
+include "seq.mc"
+
 let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
 let show_char = lam c. concat "'" (concat [c] "'")
 

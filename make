@@ -32,6 +32,9 @@ case $1 in
         cd test
         ../build/boot test mexpr
         ../build/boot test mlang
+        cd ..
+        unset MCORE_STDLIB
+        build/boot test stdlib
         ;;
     # Run the test suite
     pretest)
