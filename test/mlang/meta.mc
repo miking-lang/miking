@@ -98,7 +98,6 @@ con TyChar in
 
 -- type Const
 con CFloat : Float -> Const in
-con CChar : Char -> Const in
 
 -- ty : Parser Type
 recursive
@@ -190,7 +189,8 @@ recursive
     in
     let str_lit =
       let _ = debug "== Parsing string ==" in
-      fmap TmSeq string_lit
+      bind string_lit (lam s.
+      pure (TmSeq (map (lam c. TmConst (CChar c)) s)))
     in
     let chr_lit =
       let _ = debug "== Parsing character ==" in
@@ -203,7 +203,7 @@ recursive
       (alt (try float)
       (alt num
       (alt bool
-      (alt str_lit char_lit))))))) st
+      (alt str_lit chr_lit))))))) st
 
   -- expr: Parser Expr
   --
@@ -328,7 +328,10 @@ let builtins =
     ,("and", TmConst CAnd)
     ,("or", TmConst COr)
     ,("addi", TmConst CAddi)
+    ,("subi", TmConst CSubi)
+    ,("muli", TmConst CMuli)
     ,("eqi", TmConst CEqi)
+    ,("lti", TmConst CLti)
 ] in
 
 if or (eqstr (nth argv 1) "test") (lti (length argv) 3) then

@@ -183,6 +183,8 @@ lang Arith = Const + Int
   | CAddi2 Int
   | CSubi
   | CSubi2 Int
+  | CMuli
+  | CMuli2 Int
   -- TODO: Add more operations
   -- TODO: Add floating point numbers (maybe in its own fragment)
 end
@@ -213,6 +215,18 @@ lang ArithEval = Arith + ConstEval
         TmConst(CInt (subi n1 n2))
       else error "Not subbing a numeric constant"
     else error "Not subbing a constant"
+  | CMuli ->
+    match arg with TmConst c then
+      match c with CInt n then
+        TmConst(CMuli2 n)
+      else error "Not multiplying a numeric constant"
+    else error "Not multiplying a constant"
+  | CMuli2 n1 ->
+    match arg with TmConst c then
+      match c with CInt n2 then
+        TmConst(CInt (muli n1 n2))
+      else error "Not multiplying a numeric constant"
+    else error "Not multiplying a constant"
 end
 
 lang Bool
@@ -309,6 +323,14 @@ lang CmpEval = Cmp + ConstEval
     else error "Not comparing a constant"
 end
 
+lang Char = Const
+  syn Const =
+  | CChar Char
+end
+
+lang CharEval = Char + ConstEval
+end
+
 lang Seq = Int
   syn Const =
   | CSeq [Expr]
@@ -350,7 +372,7 @@ lang TupleEval = Tuple
   sem eval (env : Env) =
   | TmTuple tms ->
     let vs = map (eval env) tms in
-    TmTuple(vs)
+    TmTuple vs
   | TmProj t ->
     let tup = t.0 in
     let idx = t.1 in
@@ -363,7 +385,7 @@ lang Data
   -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef (String, Expr)
-  | TmMatch (Expr, String, String, Expr, Expr)
+  | TmMatch (Expr, String, Option, Expr, Expr) -- Option String
 end
 
 lang DataEval = Data + AppEval
@@ -377,21 +399,29 @@ lang DataEval = Data + AppEval
   sem eval (env : Env) =
   | TmConDef t ->
     let k = t.0 in
-    let body = t.1 in
+    let body = t.2 in
     eval (cons (k, TmConFun(k)) env) body
   | TmConFun t -> TmConFun t
   | TmCon t -> TmCon t
   | TmMatch t ->
     let target = t.0 in
     let k2 = t.1 in
-    let x = t.2 in
+    let xOpt = t.2 in
     let thn = t.3 in
     let els = t.4 in
-    match eval env target with TmCon t1 then
+    let targetVal = eval env target in
+    match targetVal with TmCon t1 then
       let k1 = t1.0 in
       let v = t1.1 in
       if eqstr k1 k2
-      then eval (cons (x, v) env) thn
+      then
+        match xOpt with Some x
+        then eval (cons (x, v) env) thn
+        else eval env thn
+      else eval env els
+    else match targetVal with TmConFun k1 then
+      if eqstr k1 k2
+      then eval env thn
       else eval env els
     else error "Not matching on constructor"
 end
@@ -460,12 +490,13 @@ end
 
 lang MExpr = FunEval + LetEval + RecLetsEval
            + SeqEval + TupleEval + DataEval + UtestEval
-           + ArithEval + BoolEval + CmpEval + UnitEval
+           + ArithEval + BoolEval + CmpEval + CharEval + UnitEval
            + DynType + UnitType + SeqType + TupleType
            + DataType + ArithType + BoolType + AppType
   sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
-  | TmCon d2 -> data_eq d2 e1
+  | TmCon d2 -> data_eq d2.0 d2.1 e1
+  | TmConFun k -> enum_eq k e1
   | TmTuple tms2 -> tuple_eq tms2 e1
   | TmSeq seq2 -> seq_eq seq2 e1
 
@@ -477,6 +508,7 @@ lang MExpr = FunEval + LetEval + RecLetsEval
   | CUnit -> is_unit c1
   | CInt n2 -> int_eq n2 c1
   | CBool b2 -> bool_eq b2 c1
+  | CChar chr2 -> char_eq chr2 c1
 
   sem is_unit =
   | CUnit -> true
@@ -490,13 +522,20 @@ lang MExpr = FunEval + LetEval + RecLetsEval
   | CBool b2 -> or (and b1 b2) (and (not b1) (not b2))
   | _ -> false
 
-  sem data_eq (d1 : (String, Expr)) =
+  sem char_eq (c1 : Char) =
+  | CChar c2 -> eqi (char2int c1) (char2int c2)
+  | _ -> false
+
+  sem data_eq (k1 : String) (v1 : Expr) =
   | TmCon d2 ->
-    let k1 = d1.0 in
     let k2 = d2.0 in
-    let v1 = d1.1 in
     let v2 = d2.1 in
     and (eqstr k1 k2) (eq v1 v2)
+  | _ -> false
+
+  sem enum_eq (k1 : String) =
+  | TmConFun k2 -> eqstr k1 k2
+  | _ -> false
 
   sem tuple_eq (tms1 : [Expr]) =
   | TmTuple tms2 ->
@@ -528,9 +567,9 @@ utest eval [] app_fst with TmConst (CBool true) in
 
 let unit = TmConst CUnit in
 
-let data_decl = TmConDef ("Foo",
+let data_decl = TmConDef ("Foo", None,
                   TmMatch (TmApp (TmVar "Foo", TmTuple [unit, unit])
-                          ,"Foo", "u", TmProj(TmVar "u",0)
+                          ,"Foo", Some "u", TmProj(TmVar "u",0)
                           ,id)) in
 utest eval [] data_decl with unit in
 
@@ -557,7 +596,7 @@ let three = num 3 in -- Num 3
 let add = lam n1. lam n2. TmApp (TmVar "Add", TmTuple([n1, n2])) in
 let add_one_two = add one two in -- Add (Num 1, Num 2)
 let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
-    TmMatch (arg, "Num", "n", TmApp (TmVar "Num", (TmVar "n")), els)
+    TmMatch (arg, "Num", Some "n", TmApp (TmVar "Num", (TmVar "n")), els)
 in
 -- match arg with Add t then
 --   let e1 = t.0 in
@@ -572,23 +611,24 @@ let result =
   TmApp (TmVar "Num", (TmApp (TmApp (TmConst CAddi, TmVar "n1"), TmVar "n2"))) in
 let match_inner =
   TmMatch (TmApp (TmVar "eval", TmVar "e2")
-          ,"Num", "n2", result
+          ,"Num", Some "n2", result
           ,unit) in
 let match_outer =
   TmMatch (TmApp (TmVar "eval", TmVar "e1")
-          ,"Num", "n1", match_inner
+          ,"Num", Some "n1", match_inner
           ,unit) in
 let deconstruct = lam t.
   TmLet ("e1", None, TmProj (t, 0)
         ,TmLet ("e2", None, TmProj(t, 1), match_outer)) in
 let add_case = lam arg. lam els.
-  TmMatch (arg, "Add", "t", deconstruct (TmVar "t"), els) in
+  TmMatch (arg, "Add", Some "t", deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
   TmApp (TmFix, TmLam ("eval", None, TmLam ("e", None,
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
 
 let wrap_in_decls = lam t. -- con Num in con Add in let eval = ... in t
-  TmConDef("Num", TmConDef ("Add", TmLet ("eval", None, eval_fn, t))) in
+  TmConDef("Num", None,
+    TmConDef ("Add", None, TmLet ("eval", None, eval_fn, t))) in
 
 let eval_add1 = wrap_in_decls (TmApp (TmVar "eval", add_one_two)) in
 let add_one_two_three = add (add one two) three in

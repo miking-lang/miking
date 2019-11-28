@@ -211,7 +211,8 @@ recursive
     in
     let str_lit =
       let _ = debug "== Parsing string ==" in
-      fmap TmSeq string_lit
+      bind string_lit (lam s.
+      pure (TmSeq (map (lam c. TmConst (CChar c)) s)))
     in
     let chr_lit =
       let _ = debug "== Parsing character ==" in
@@ -224,7 +225,7 @@ recursive
       (alt (try float)
       (alt num
       (alt bool
-      (alt str_lit char_lit))))))) st
+      (alt str_lit chr_lit))))))) st
 
   -- expr: Parser Expr
   --
@@ -444,7 +445,9 @@ with Success(TmLet("f", None, TmLam ("x", Some TyDyn, TmVar "x"),
 
 utest test_parser expr "let f = lam x. x in f \"foo\""
 with Success(TmLet("f", None, TmLam ("x", None, TmVar "x"),
-             TmApp (TmVar "f", TmSeq "foo")), ("", ("", 1, 28))) in
+             TmApp (TmVar "f"
+                   ,TmSeq [TmConst (CChar 'f'), TmConst (CChar 'o'), TmConst (CChar 'o')])),
+            ("", ("", 1, 28))) in
 
 utest test_parser expr "f t.0.1 u.0"
 with Success(TmApp(TmApp(TmVar "f",
