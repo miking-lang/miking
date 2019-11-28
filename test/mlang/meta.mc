@@ -69,7 +69,7 @@ let comma_sep = sep_by (symbol ",") in
 
 -- List of reserved keywords
 let keywords =
-  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "lam", "utest", "recursive"]
+  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "type", "lam", "utest", "recursive"]
 in
 
 -- ident : Parser String
@@ -93,10 +93,8 @@ in
 -- MCore parsers ----------------------------------------
 
 type Type in
-
-con TyDyn : Type in
-con TyProd : [Type] -> Type in
-con TyUnit : Type in
+con TyFloat in
+con TyChar in
 
 -- type Const
 con CFloat : Float -> Const in
@@ -104,7 +102,8 @@ con CChar : Char -> Const in
 
 -- ty : Parser Type
 recursive
-  let ty = lam st.
+  -- ty_atom : Parser Type
+  let ty_atom = lam st.
     let tuple =
       bind (parens (comma_sep ty)) (lam ts.
         if null ts
@@ -113,16 +112,53 @@ recursive
         then pure (head ts)
         else pure (TyProd ts))
     in
+    let sequence =
+      bind (brackets ty) (lam t.
+      pure (TySeq t))
+    in
     let dyn = apr (reserved "Dyn") (pure TyDyn) in
-    label "type"
-    (alt tuple dyn) st
+    let primitive =
+      (alt (apr (reserved "Int") (pure TyInt))
+      (alt (apr (reserved "Bool") (pure TyBool))
+      (alt (apr (reserved "Float") (pure TyFloat))
+      (apr (reserved "Char") (pure TyChar)))))
+    in
+    let string = apr (reserved "String") (pure (TySeq(TyChar))) in
+    let datatype =
+      bind (satisfy is_upper_alpha "Uppercase character") (lam c.
+      bind (token (many (satisfy is_valid_char ""))) (lam cs.
+      pure (TyCon (cons c cs))))
+    in
+    (alt tuple
+    (alt sequence
+    (alt primitive
+    (alt string
+    (alt dyn datatype))))) st
+
+  -- TODO: This goes beyond the OCaml parser. We haven't yet formally
+  -- decided if we want curried type applications (Haskell style) or
+  -- uncurried (OCaml style).
+  let ty = lam st.
+    let app_or_atom =
+      bind (many1 ty_atom) (lam ts.
+      pure (foldl1 (curry TyApp) ts))
+    in
+    let arrow_or_ty =
+      bind app_or_atom (lam lt.
+      bind (optional (apr (symbol "->") ty)) (lam ot.
+      match ot with Some rt then
+        pure (TyArrow (lt, rt))
+      else
+        pure lt))
+  in
+  label "type" arrow_or_ty st
 in
 
 recursive
-  -- atom : Parser Expr
-  --
-  -- Innermost expression parser.
-  let atom = lam input.
+-- atom : Parser Expr
+--
+-- Innermost expression parser.
+  let atom = lam st.
     let var_access =
       let _ = debug "== Parsing var_access" in
       fmap TmVar identifier in
@@ -167,7 +203,7 @@ recursive
       (alt (try float)
       (alt num
       (alt bool
-      (alt str_lit char_lit))))))) input
+      (alt str_lit char_lit))))))) st
 
   -- expr: Parser Expr
   --
@@ -192,9 +228,10 @@ recursive
       let _ = debug "== Parsing letbinding ==" in
       bind (reserved "let") (lam _.
       bind identifier (lam x.
+      bind (optional (apr (symbol ":") ty)) (lam t.
       bind (symbol "=") (lam _.
       bind expr (lam e.
-      pure (x, e)))))
+      pure (x, t, e))))))
     in
     let reclets =
       let _ = debug "== Parsing recursive lets ==" in
@@ -209,7 +246,7 @@ recursive
       bind letbinding (lam binding.
       bind (reserved "in") (lam _.
       bind expr (lam body.
-      pure (TmLet(binding.0, binding.1, body)))))
+      pure (TmLet(binding.0, binding.1, binding.2, body)))))
     in
     let lam_ =
       let _ = debug "== Parsing lam ==" in
@@ -252,6 +289,15 @@ recursive
       bind expr (lam body.
       pure (TmConDef(k, t, body)))))))
     in
+    let type_ =
+      let _ = debug "== Parsing typedef ==" in
+      bind (reserved "type") (lam _.
+      bind identifier (lam d. -- TODO: Should be uppercase
+      bind (optional (apr (symbol "=") ty)) (lam t.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure body))))) -- TODO: Do something with types
+    in
     let utest_ =
       let _ = debug "== Parsing utest ==" in
       bind (reserved "utest") (lam _.
@@ -264,12 +310,13 @@ recursive
     in
     label "expression"
     (alt left
-    (alt reclets
     (alt let_
+    (alt reclets
     (alt lam_
     (alt if_
     (alt match_
-    (alt con_ utest_))))))) st
+    (alt con_
+    (alt type_ utest_)))))))) st
 in
 
 -- program : Parser Expr

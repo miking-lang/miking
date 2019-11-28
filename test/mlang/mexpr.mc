@@ -58,12 +58,13 @@ end
 
 lang Fun = Var + App
   syn Type =
-  | Arrow (Type, Type)
+  | TyArrow (Type, Type)
   syn Expr =
   | TmLam (String, Option, Expr) -- Option Type
 end
 
 lang FunEval = Fun + VarEval + AppEval
+  syn Type =
   syn Expr =
   | TmClos (String, Option, Expr, Env) -- Option Type
 
@@ -104,21 +105,22 @@ lang FixEval = Fix + FunEval
 
 lang Let = Var
   syn Expr =
-  | TmLet (String, Expr, Expr)
+  | TmLet (String, Option, Expr, Expr) -- Option Type
 end
 
 lang LetEval = Let + VarEval
   sem eval (env : Env) =
   | TmLet t ->
     let x = t.0 in
-    let t1 = t.1 in
-    let t2 = t.2 in
+    let t1 = t.2 in
+    let t2 = t.3 in
     eval (cons (x, eval env t1) env) t2
 end
 
 lang RecLets = Var
+  syn Type =
   syn Expr =
-  | TmRecLets ([(String, Expr)], Expr)
+  | TmRecLets ([(String, Option, Expr)], Expr) -- Option Type
 end
 
 lang RecLetsEval = RecLets + VarEval + Fix + FixEval
@@ -135,12 +137,12 @@ lang RecLetsEval = RecLets + VarEval + Fix + FixEval
     let unpack_from = lam var. lam body.
       foldli
         (lam i. lam body. lam binding.
-          TmLet(binding.0, TmLam(eta_str, None, TmApp(TmProj(var, i), eta_var)), body))
+          TmLet(binding.0, binding.1, TmLam(eta_str, None, TmApp(TmProj(var, i), eta_var)), body))
         body
         bindings in
     let lst_str = fresh "lst" env in
     let lst_var = TmVar(lst_str) in
-    let func_tuple = TmTuple (map (lam x. x.1) bindings) in
+    let func_tuple = TmTuple (map (lam x. x.2) bindings) in
     let unfixed_tuple = TmLam(lst_str, None, unpack_from lst_var func_tuple) in
     eval (cons (lst_str, TmApp(TmFix, unfixed_tuple)) env) (unpack_from lst_var body)
 end
@@ -414,9 +416,53 @@ lang UtestEval = Utest
     eval env next
 end
 
+lang DynType
+  syn Type =
+  | TyDyn
+end
+
+lang UnitType
+  syn Type =
+  | TyUnit
+end
+
+lang SeqType
+  syn Type =
+  | TySeq Type
+end
+
+lang TupleType
+  syn Type =
+  | TyProd [Type]
+end
+
+lang DataType
+  syn Type =
+  | TyCon String
+end
+
+lang ArithType
+  syn Type =
+  | TyInt
+end
+
+lang BoolType
+  syn Type =
+  | TyBool
+end
+
+lang AppType
+  syn Type =
+  | TyApp (Type, Type)
+end
+
+-- TODO: Add more types! Think about design
+
 lang MExpr = FunEval + LetEval + RecLetsEval
            + SeqEval + TupleEval + DataEval + UtestEval
            + ArithEval + BoolEval + CmpEval + UnitEval
+           + DynType + UnitType + SeqType + TupleType
+           + DataType + ArithType + BoolType + AppType
   sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2 e1
@@ -533,8 +579,8 @@ let match_outer =
           ,"Num", "n1", match_inner
           ,unit) in
 let deconstruct = lam t.
-  TmLet ("e1", TmProj (t, 0)
-        ,TmLet ("e2", TmProj(t, 1), match_outer)) in
+  TmLet ("e1", None, TmProj (t, 0)
+        ,TmLet ("e2", None, TmProj(t, 1), match_outer)) in
 let add_case = lam arg. lam els.
   TmMatch (arg, "Add", "t", deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
@@ -542,7 +588,7 @@ let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
 
 let wrap_in_decls = lam t. -- con Num in con Add in let eval = ... in t
-  TmConDef("Num", TmConDef ("Add", TmLet ("eval", eval_fn, t))) in
+  TmConDef("Num", TmConDef ("Add", TmLet ("eval", None, eval_fn, t))) in
 
 let eval_add1 = wrap_in_decls (TmApp (TmVar "eval", add_one_two)) in
 let add_one_two_three = add (add one two) three in
@@ -565,6 +611,7 @@ let subi_ = lam a. lam b. app_seq (TmConst CSubi) [a, b] in
 let odd_even = lam body.
   TmRecLets(
     [ ( "odd"
+      , None
       , lambda "x"
         (if_ (eqi_ (var "x") (int 1))
           true_
@@ -572,6 +619,7 @@ let odd_even = lam body.
             false_
             (app (var "even") (subi_ (var "x") (int 1))))))
     , ( "even"
+      , None
       , lambda "x"
         (if_ (eqi_ (var "x") (int 0))
           true_

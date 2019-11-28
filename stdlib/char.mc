@@ -5,9 +5,13 @@ let show_char = lam c. concat "'" (concat [c] "'")
 let is_whitespace = lam c.
   or (or (eqchar c ' ') (eqchar c (head "\n"))) (eqchar c (head "\t"))
 
-let is_alpha = lam c.
-  or (and (leqi (char2int 'A') (char2int c)) (leqi (char2int c) (char2int 'Z')))
-     (and (leqi (char2int 'a') (char2int c)) (leqi (char2int c) (char2int 'z')))
+let is_lower_alpha = lam c.
+  and (leqi (char2int 'a') (char2int c)) (leqi (char2int c) (char2int 'z'))
+
+let is_upper_alpha = lam c.
+  and (leqi (char2int 'A') (char2int c)) (leqi (char2int c) (char2int 'Z'))
+
+let is_alpha = lam c. or (is_lower_alpha c) (is_upper_alpha c)
 
 let is_digit = lam c.
   and (leqi (char2int '0') (char2int c)) (leqi (char2int c) (char2int '9'))

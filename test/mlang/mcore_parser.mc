@@ -61,7 +61,7 @@ let comma_sep = sep_by (symbol ",")
 
 -- List of reserved keywords
 let keywords =
-  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "lam", "utest", "recursive"]
+  ["let", "in", "if", "then", "else", "true", "false", "match", "with", "con", "type", "lam", "utest", "recursive"]
 
 -- ident : Parser String
 --
@@ -86,7 +86,15 @@ type Type
 
 con TyDyn : Type
 con TyProd : [Type] -> Type
+con TySeq : Type -> Type
+con TyCon : String -> Type
+con TyArrow : (Type, Type)
+con TyApp : (Type, Type)
 con TyUnit : Type
+con TyInt : Type
+con TyBool : Type
+con TyFloat : Type
+con TyChar : Type
 
 type Const
 con CUnit : Const
@@ -97,9 +105,9 @@ con CChar : Char -> Const
 
 type Expr
 
-con TmLet : (String, Expr, Expr) -> Expr
-con TmRecLets : ([(String, Expr)], Expr) -> Expr
-con TmLam : (String, Option, Expr) -> Expr
+con TmLet : (String, Option, Expr, Expr) -> Expr -- Option Type
+con TmRecLets : ([(String, Option, Expr)], Expr) -> Expr -- Option Type
+con TmLam : (String, Option, Expr) -> Expr -- Option Type
 con TmIf  : (Expr, Expr, Expr) -> Expr
 con TmConDef : (String, Option, Dyn) -> Expr
 con TmMatch : (Expr, String, String, Expr, Expr) -> Expr
@@ -113,9 +121,10 @@ con TmConst : Const -> Expr
 con TmSeq : [Expr] -> Expr
 con TmConFun : String -> Expr
 
--- ty : Parser Type
+
 recursive
-  let ty = lam st.
+  -- ty_atom : Parser Type
+  let ty_atom = lam st.
     let tuple =
       bind (parens (comma_sep ty)) (lam ts.
         if null ts
@@ -124,16 +133,53 @@ recursive
         then pure (head ts)
         else pure (TyProd ts))
     in
+    let sequence =
+      bind (brackets ty) (lam t.
+      pure (TySeq t))
+    in
     let dyn = apr (reserved "Dyn") (pure TyDyn) in
-    label "type"
-    (alt tuple dyn) st
+    let primitive =
+      (alt (apr (reserved "Int") (pure TyInt))
+      (alt (apr (reserved "Bool") (pure TyBool))
+      (alt (apr (reserved "Float") (pure TyFloat))
+      (apr (reserved "Char") (pure TyChar)))))
+    in
+    let string = apr (reserved "String") (pure (TySeq(TyChar))) in
+    let datatype =
+      bind (satisfy is_upper_alpha "Uppercase character") (lam c.
+      bind (token (many (satisfy is_valid_char ""))) (lam cs.
+      pure (TyCon (cons c cs))))
+    in
+    (alt tuple
+    (alt sequence
+    (alt primitive
+    (alt string
+    (alt dyn datatype))))) st
+
+  -- TODO: This goes beyond the OCaml parser. We haven't yet formally
+  -- decided if we want curried type applications (Haskell style) or
+  -- uncurried (OCaml style).
+  let ty = lam st.
+    let app_or_atom =
+      bind (many1 ty_atom) (lam ts.
+      pure (foldl1 (curry TyApp) ts))
+    in
+    let arrow_or_ty =
+      bind app_or_atom (lam lt.
+      bind (optional (apr (symbol "->") ty)) (lam ot.
+      match ot with Some rt then
+        pure (TyArrow (lt, rt))
+      else
+        pure lt))
+  in
+  label "type" arrow_or_ty st
 end
 
 recursive
-  -- atom : Parser Expr
-  --
-  -- Innermost expression parser.
-  let atom = lam input.
+-- atom : Parser Expr
+--
+-- Innermost expression parser.
+  let atom = lam st.
     let var_access =
       let _ = debug "== Parsing var_access" in
       fmap TmVar identifier in
@@ -178,8 +224,7 @@ recursive
       (alt (try float)
       (alt num
       (alt bool
-      (alt str_lit char_lit))))))) input
-
+      (alt str_lit char_lit))))))) st
 
   -- expr: Parser Expr
   --
@@ -204,9 +249,10 @@ recursive
       let _ = debug "== Parsing letbinding ==" in
       bind (reserved "let") (lam _.
       bind identifier (lam x.
+      bind (optional (apr (symbol ":") ty)) (lam t.
       bind (symbol "=") (lam _.
       bind expr (lam e.
-      pure (x, e)))))
+      pure (x, t, e))))))
     in
     let reclets =
       let _ = debug "== Parsing recursive lets ==" in
@@ -221,7 +267,7 @@ recursive
       bind letbinding (lam binding.
       bind (reserved "in") (lam _.
       bind expr (lam body.
-      pure (TmLet(binding.0, binding.1, body)))))
+      pure (TmLet(binding.0, binding.1, binding.2, body)))))
     in
     let lam_ =
       let _ = debug "== Parsing lam ==" in
@@ -264,6 +310,15 @@ recursive
       bind expr (lam body.
       pure (TmConDef(k, t, body)))))))
     in
+    let type_ =
+      let _ = debug "== Parsing typedef ==" in
+      bind (reserved "type") (lam _.
+      bind identifier (lam d. -- TODO: Should be uppercase
+      bind (optional (apr (symbol "=") ty)) (lam t.
+      bind (reserved "in") (lam _.
+      bind expr (lam body.
+      pure body))))) -- TODO: Do something with types
+    in
     let utest_ =
       let _ = debug "== Parsing utest ==" in
       bind (reserved "utest") (lam _.
@@ -281,11 +336,9 @@ recursive
     (alt lam_
     (alt if_
     (alt match_
-    (alt con_ utest_))))))) st
+    (alt con_
+    (alt type_ utest_)))))))) st
 end
-
-
-
 -- program : Parser Expr
 let program = apl (apr ws (apr (reserved "mexpr") expr)) end_of_input
 
@@ -366,22 +419,31 @@ with "Parse error at 1:1: Unexpected 'd'. Expected type" in
 utest show_error (test_parser ty "(Dyn, dyn, Dyn)")
 with "Parse error at 1:7: Unexpected 'd'. Expected type" in
 
+utest test_parser ty "Option String -> Int -> (Bool, [Float])"
+with Success(TyArrow(TyApp (TyCon("Option"), TySeq TyChar)
+                    ,TyArrow(TyInt, TyProd [TyBool, TySeq TyFloat]))
+            ,("", ("", 1, 40))) in
+
+utest test_parser ty "Foo Int Bool Baz"
+with Success(TyApp(TyApp(TyApp(TyCon "Foo", TyInt), TyBool), TyCon "Baz")
+            ,("", ("", 1, 17))) in
+
 utest test_parser expr "f x"
 with Success(TmApp(TmVar "f", TmVar "x"), ("", ("", 1, 4))) in
 utest test_parser expr "f x y"
 with Success(TmApp(TmApp(TmVar "f", TmVar "x"), TmVar "y"), ("", ("", 1, 6))) in
 
 utest test_parser expr "let f = lam x. x in f x"
-with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
+with Success(TmLet("f", None, TmLam ("x", None, TmVar "x"),
              TmApp (TmVar "f", TmVar "x")), ("", ("", 1,24))) in
 
 utest test_parser expr "let f = lam x : Dyn. x in f (x, y) z"
-with Success(TmLet("f", TmLam ("x", Some TyDyn, TmVar "x"),
+with Success(TmLet("f", None, TmLam ("x", Some TyDyn, TmVar "x"),
              TmApp (TmApp (TmVar "f", TmTuple [TmVar "x", TmVar "y"]), TmVar "z")),
              ("", ("", 1, 37))) in
 
 utest test_parser expr "let f = lam x. x in f \"foo\""
-with Success(TmLet("f", TmLam ("x", None, TmVar "x"),
+with Success(TmLet("f", None, TmLam ("x", None, TmVar "x"),
              TmApp (TmVar "f", TmSeq "foo")), ("", ("", 1, 28))) in
 
 utest test_parser expr "f t.0.1 u.0"
