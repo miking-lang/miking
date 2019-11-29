@@ -242,9 +242,9 @@ mexpr:
   | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
         TmCondef(fi,$2.v,$3,$5)}
-  | MATCH mexpr WITH IDENT ident_op THEN mexpr ELSE mexpr
-      { let fi = mkinfo $1.i $8.i in
-         TmMatch(fi,$2,$4.v,noidx,$5,$7,$9) }
+  | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
+      { let fi = mkinfo $1.i (tm_info $8) in
+         TmMatch(fi,$2,$4,$6,$8) }
   | USE IDENT IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
@@ -287,19 +287,39 @@ atom:
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
 
 
-ident_op:
-  | IDENT
-      { Some($1.v) }
-  |
-      { None }
-
-
 seq:
   | mexpr
       { [$1] }
   | mexpr COMMA seq
       { $1::$3 }
 
+pat:
+  | IDENT
+      { let str = Ustring.to_latin1 $1.v
+        in if str = String.capitalize_ascii str && str <> String.uncapitalize_ascii str
+           then PatCon($1.i, $1.v, noidx, None)
+           else PatNamed($1.i, $1.v) } /* TODO: pattern matching is currently a bit inconsistent with the rest of the language when considering constructors */
+  | IDENT pat
+      { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, Some $2) }
+  | LPAREN pat RPAREN
+      { $2 }
+  | LPAREN pat COMMA pat_list RPAREN
+      { let fi = mkinfo $1.i $5.i
+        in PatTuple(fi, $2 :: $4) }
+  | UINT /* TODO: enable matching against negative ints */
+      { PatInt($1.i, $1.v) }
+  | TRUE
+      { PatBool($1.i, true) }
+  | FALSE
+      { PatBool($1.i, false) }
+  | LPAREN RPAREN
+      { PatUnit(mkinfo $1.i $2.i) }
+
+pat_list:
+  | pat
+      { [$1] }
+  | pat COMMA pat_list
+      { $1 :: $3 }
 
 
 ty_op:

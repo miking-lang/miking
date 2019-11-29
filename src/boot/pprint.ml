@@ -156,14 +156,28 @@ and pprintME t =
                            (match tmop with
                             | Some(t) -> ppt true t
                             | None -> us"") ^. right inside
-  | TmMatch(_,t,con,_,x,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
-        us" with " ^. con ^.
-        (match x with | None -> us"" | Some(s) -> us" " ^. s) ^.
+  | TmMatch(_,t,p,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
+        us" with " ^. pprintPat p ^.
         us" then " ^. ppt false then_ ^.
         us" else " ^. ppt false else_ ^. right inside
   | TmUse(_,l,t) -> us"use " ^. l ^. us" in " ^. ppt false t
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   in ppt false t
+
+and pprintPat p =
+  let rec ppp inside = function
+    | PatNamed(_,x) -> x
+    | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
+    | PatCon(_,x,n,mp) ->
+       left inside ^.
+       varDebugPrint x n ^. (match mp with
+                             | Some p -> us" " ^. ppp true p
+                             | None -> us"") ^.
+       right inside
+    | PatInt(_,i) -> Ustring.Op.ustring_of_int i
+    | PatBool(_,b) -> Ustring.Op.ustring_of_bool b
+    | PatUnit _ -> us"()"
+  in ppp false p
 
 (* Pretty prints the environment *)
 and pprint_env env =

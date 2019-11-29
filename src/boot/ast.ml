@@ -138,10 +138,18 @@ and tm =
 | TmProj    of info * tm * int                                      (* Projection of tuple *)
 | TmCondef  of info * ustring * ty * tm                             (* Constructor definition *)
 | TmConsym  of info * ustring * sym * tm option                     (* Constructor symbol *)
-| TmMatch   of info * tm * ustring * int * ustring option * tm * tm (* Match data *)
+| TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
 
+(* Patterns *)
+and pat =
+| PatNamed of info * ustring                      (* Named, capturing wildcard *)
+| PatTuple of info * pat list                     (* Tuple pattern *)
+| PatCon   of info * ustring * int * pat option   (* Constructor pattern *)
+| PatInt   of info * int                          (* Int pattern *)
+| PatBool  of info * bool                         (* Boolean pattern *)
+| PatUnit  of info                                (* Unit pattern *)
 
 (* Types *)
 and ty =
@@ -173,9 +181,12 @@ module Option = struct
   let map f = function
     | Some x -> Some (f x)
     | None -> None
+  let bind f = function
+    | Some x -> f x
+    | None -> None
 end
 
-(* General map over terms *)
+(* General (bottom-up) map over terms *)
 let rec map_tm f = function
   | TmVar (_,_,_) as t -> f t
   | TmLam(fi,x,ty,t1) -> f (TmLam(fi,x,ty,map_tm f t1))
@@ -192,8 +203,8 @@ let rec map_tm f = function
   | TmProj(fi,t1,n) -> f (TmProj(fi,map_tm f t1,n))
   | TmCondef(fi,x,ty,t1) -> f (TmCondef(fi,x,ty,map_tm f t1))
   | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
-  | TmMatch(fi,t1,k,n,x,t2,t3) ->
-    f (TmMatch(fi,map_tm f t1,k,n,x,map_tm f t2,map_tm f t3))
+  | TmMatch(fi,t1,p,t2,t3) ->
+    f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
   | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,map_tm f tnext))
 
@@ -214,9 +225,17 @@ let tm_info = function
   | TmProj(fi,_,_) -> fi
   | TmCondef(fi,_,_,_) -> fi
   | TmConsym(fi,_,_,_) -> fi
-  | TmMatch(fi,_,_,_,_,_,_) -> fi
+  | TmMatch(fi,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
+
+let pat_info = function
+  | PatNamed(fi,_) -> fi
+  | PatTuple(fi,_) -> fi
+  | PatCon(fi,_,_,_) -> fi
+  | PatInt(fi,_) -> fi
+  | PatBool(fi,_) -> fi
+  | PatUnit(fi) -> fi
 
 
 (* Converts a list of terms (typically from CSeq) to a ustring *)

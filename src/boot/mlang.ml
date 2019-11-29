@@ -173,8 +173,7 @@ let translate_cases f target cases =
   let translate_case case inner =
     match case with
     | (ConPattern (fi, k, x), handler) ->
-      TmMatch (fi, target,
-               k, -1, x, handler, inner)
+      TmMatch (fi, target, PatCon(fi, k, noidx, Option.map (fun x -> PatNamed(fi, x)) x), handler, inner)
     | (VarPattern (fi, x), handler) ->
       TmLet(fi, x, target, handler)
   in
