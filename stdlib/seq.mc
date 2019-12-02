@@ -62,7 +62,7 @@ end
 
 recursive
   let find = lam p. lam seq.
-    if null seq then None
+    if null seq then None ()
     else if p (head seq) then Some (head seq)
     else find p (tail seq)
 end
@@ -108,7 +108,7 @@ utest filter (lam _. false) [3,5,234,1,43] with [] in
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43] in
 
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
-utest find (lam x. lti x 1) [4,1,2] with None in
+utest find (lam x. lti x 1) [4,1,2] with None () in
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
 
