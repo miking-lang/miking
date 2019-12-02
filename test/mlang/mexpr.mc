@@ -169,12 +169,31 @@ lang Unit = Const
   | CUnit ()
 end
 
+lang UnitPat = Unit
+  syn Pat =
+  | UnitPat ()
+
+  sem tryMatch (t : Expr) =
+  | UnitPat _ ->
+    match t with TmConst CUnit _ then Some [] else None ()
+end
+
 -- Included for symmetry
 lang UnitEval = Unit + ConstEval
 
 lang Int = Const
   syn Const =
   | CInt Int
+end
+
+lang IntPat = Int
+  syn Pat =
+  | IntPat Int
+
+  sem tryMatch (t : Expr) =
+  | IntPat i -> match t with TmConst CInt i2 then
+    if eqi i i2 then Some [] else None ()
+    else None ()
 end
 
 lang Arith = Const + Int
@@ -240,6 +259,17 @@ lang Bool
 
   syn Expr =
   | TmIf (Expr, Expr, Expr)
+end
+
+lang BoolPat = Bool
+  syn Pat =
+  | BoolPat Bool
+
+  sem tryMatch (t : Expr) =
+  | BoolPat b ->
+    match t with TmConst CBool b2 then
+      if or (and b b2) (and (not b) (not b2)) then Some [] else None () -- TODO: is there a nicer way to do equality on bools? 'eqb' is unbound
+    else None ()
 end
 
 lang BoolEval = Bool + ConstEval
@@ -381,11 +411,28 @@ lang TupleEval = Tuple
     else error "Not projecting from a tuple"
 end
 
+lang TuplePat = Tuple
+  syn Pat =
+  | TuplePat [Pat]
+
+  sem tryMatch (t : Expr) =
+  | TuplePat pats ->
+    match t with TmTuple tms then
+      if eqi (length pats) (length tms) then
+        let results = zipWith tryMatch tms pats in
+        let go = lam left. lam right.
+          match (left, right) with (Some l, Some r)
+          then Some (concat l r)
+          else None () in
+        foldl go (Some []) results
+      else None ()
+    else None ()
+end
+
 lang Data
   -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef (String, Expr)
-  | TmMatch (Expr, String, Option, Expr, Expr) -- Option String
 end
 
 lang DataEval = Data + AppEval
@@ -403,27 +450,51 @@ lang DataEval = Data + AppEval
     eval (cons (k, TmConFun(k)) env) body
   | TmConFun t -> TmConFun t
   | TmCon t -> TmCon t
+end
+
+lang DataPat = Data
+  syn Pat =
+  | ConPat (String, Pat)
+
+  sem tryMatch (t : Expr) =
+  | ConPat x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
+    let constructor = x.0 in
+    let subpat = x.1 in
+    match t with TmCon (constructor2, subexpr) then
+      if eqstr constructor constructor2
+        then tryMatch subexpr subpat
+        else None ()
+    else None ()
+end
+
+lang Match
+  syn Expr =
+  | TmMatch (Expr, Pat, Expr, Expr)
+
+  syn Pat =
+end
+
+lang MatchEval = Match
+  sem eval (env : Env) =
   | TmMatch t ->
     let target = t.0 in
-    let k2 = t.1 in
-    let xOpt = t.2 in
-    let thn = t.3 in
-    let els = t.4 in
-    let targetVal = eval env target in
-    match targetVal with TmCon t1 then
-      let k1 = t1.0 in
-      let v = t1.1 in
-      if eqstr k1 k2
-      then
-        match xOpt with Some x
-        then eval (cons (x, v) env) thn
-        else eval env thn
-      else eval env els
-    else match targetVal with TmConFun k1 then
-      if eqstr k1 k2
-      then eval env thn
-      else eval env els
-    else error "Not matching on constructor"
+    let pat = t.1 in
+    let thn = t.2 in
+    let els = t.3 in
+    match tryMatch (eval env target) pat with Some newEnv then
+      eval (concat newEnv env) thn
+    else eval env els
+
+  sem tryMatch (t : Expr) =
+  | _ -> None ()
+end
+
+lang VarPat
+  syn Pat =
+  | VarPat String
+
+  sem tryMatch (t : Expr) =
+  | VarPat ident -> Some [(ident, t)]
 end
 
 lang Utest
@@ -491,8 +562,9 @@ end
 lang MExpr = FunEval + LetEval + RecLetsEval
            + SeqEval + TupleEval + DataEval + UtestEval
            + ArithEval + BoolEval + CmpEval + CharEval + UnitEval
-           + DynType + UnitType + SeqType + TupleType
-           + DataType + ArithType + BoolType + AppType
+           + MatchEval + DataPat + VarPat + IntPat + TuplePat
+           + BoolPat + UnitPat + DynType + UnitType + SeqType
+           + TupleType + DataType + ArithType + BoolType + AppType
   sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2.0 d2.1 e1
@@ -569,7 +641,7 @@ let unit = TmConst (CUnit ()) in
 
 let data_decl = TmConDef ("Foo", None,
                   TmMatch (TmApp (TmVar "Foo", TmTuple [unit, unit])
-                          ,"Foo", Some "u", TmProj(TmVar "u",0)
+                          ,ConPat("Foo", VarPat "u"), TmProj(TmVar "u",0)
                           ,id)) in
 utest eval [] data_decl with unit in
 
@@ -596,7 +668,7 @@ let three = num 3 in -- Num 3
 let add = lam n1. lam n2. TmApp (TmVar "Add", TmTuple([n1, n2])) in
 let add_one_two = add one two in -- Add (Num 1, Num 2)
 let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
-    TmMatch (arg, "Num", Some "n", TmApp (TmVar "Num", (TmVar "n")), els)
+    TmMatch (arg, ConPat ("Num", VarPat "n"), TmApp (TmVar "Num", (TmVar "n")), els)
 in
 -- match arg with Add t then
 --   let e1 = t.0 in
@@ -611,17 +683,17 @@ let result =
   TmApp (TmVar "Num", (TmApp (TmApp (TmConst (CAddi ()), TmVar "n1"), TmVar "n2"))) in
 let match_inner =
   TmMatch (TmApp (TmVar "eval", TmVar "e2")
-          ,"Num", Some "n2", result
+          ,ConPat ("Num", VarPat "n2"), result
           ,unit) in
 let match_outer =
   TmMatch (TmApp (TmVar "eval", TmVar "e1")
-          ,"Num", Some "n1", match_inner
+          ,ConPat ("Num", VarPat "n1"), match_inner
           ,unit) in
 let deconstruct = lam t.
   TmLet ("e1", None, TmProj (t, 0)
         ,TmLet ("e2", None, TmProj(t, 1), match_outer)) in
 let add_case = lam arg. lam els.
-  TmMatch (arg, "Add", Some "t", deconstruct (TmVar "t"), els) in
+  TmMatch (arg, ConPat ("Add", VarPat "t"), deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
   TmApp (TmFix (), TmLam ("eval", None (), TmLam ("e", None,
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
@@ -636,6 +708,8 @@ let eval_add2 = wrap_in_decls (TmApp (TmVar "eval", add_one_two_three)) in
 
 utest eval [] eval_add1 with TmCon("Num", TmConst(CInt 3)) in
 utest eval [] eval_add2 with TmCon("Num", TmConst(CInt 6)) in
+
+
 
 let app = lam f. lam x. TmApp(f, x) in
 let app_seq = lam f. lam seq. foldl app f seq in
@@ -672,5 +746,23 @@ utest eval [] (odd_even (app (var "odd") (int 4))) with TmConst (CBool false) in
 utest eval [] (odd_even (app (var "odd") (int 3))) with TmConst (CBool true) in
 utest eval [] (odd_even (app (var "even") (int 4))) with TmConst (CBool true) in
 utest eval [] (odd_even (app (var "even") (int 3))) with TmConst (CBool false) in
+
+let match_ = lam x. lam pat. lam thn. lam els. TmMatch(x, pat, thn, els) in
+let conpat = lam ctor. lam pat. ConPat(ctor, pat) in
+let tuppat = lam pats. TuplePat(pats) in
+let varpat = lam x. VarPat(x) in
+let addi_ = lam a. lam b. app_seq (TmConst (CAddi ())) [a, b] in
+let num = lam x. app (var "Num") x in
+-- lam arg. match arg with Add (Num n1, Num n2) then
+--   Num (addi n1 n2)
+-- else ()
+let add_eval_nested = lambda "arg"
+  (match_ (var "arg") (tuppat [(conpat "Num" (varpat "n1")), (conpat "Num" (varpat "n2"))])
+    (num (addi_ (var "n1") (var "n2")))
+    (unit)) in
+
+let tup = lam x. TmTuple(x) in
+let cint = lam x. TmConst (CInt x) in
+utest eval [] (wrap_in_decls (app add_eval_nested (tup [num (cint 1), num (cint 2)]))) with TmCon("Num", cint 3) in
 
 ()
