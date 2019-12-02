@@ -103,7 +103,7 @@ and sym = int
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
 and pattern =
-| ConPattern of info * ustring * ustring option
+| ConPattern of info * ustring * ustring
 | VarPattern of info * ustring
 and decl = (* TODO: Local? *)
 | Data     of info * ustring * cdecl list
@@ -146,7 +146,7 @@ and tm =
 and pat =
 | PatNamed of info * ustring                      (* Named, capturing wildcard *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
-| PatCon   of info * ustring * int * pat option   (* Constructor pattern *)
+| PatCon   of info * ustring * int * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)
 | PatBool  of info * bool                         (* Boolean pattern *)
 | PatUnit  of info                                (* Unit pattern *)
@@ -184,6 +184,9 @@ module Option = struct
   let bind f = function
     | Some x -> f x
     | None -> None
+  let value o ~default = match o with
+    | Some x -> x
+    | None -> default
 end
 
 (* General (bottom-up) map over terms *)

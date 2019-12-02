@@ -20,10 +20,6 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
-  let is_upper c =
-    let a = Ustring.get (us"A") 0 in
-    let z = Ustring.get (us"Z") 0 in
-    a <= c && c <= z
 %}
 
 /* Misc tokens */
@@ -203,13 +199,10 @@ cases:
 case:
   | BAR IDENT ARROW mexpr
     { let fi = mkinfo $1.i $3.i in
-      let c = Ustring.get $2.v 0 in
-      if is_upper c
-      then (ConPattern (fi, $2.v, None), $4)
-      else (VarPattern (fi, $2.v), $4)}
+      (VarPattern (fi, $2.v), $4) }
   | BAR IDENT binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
-      (ConPattern (fi, $2.v, Some $3), $5)}
+      (ConPattern (fi, $2.v, $3), $5)}
 binder:
   | LPAREN IDENT RPAREN
     { $2.v }
@@ -295,12 +288,9 @@ seq:
 
 pat:
   | IDENT
-      { let str = Ustring.to_latin1 $1.v
-        in if str = String.capitalize_ascii str && str <> String.uncapitalize_ascii str
-           then PatCon($1.i, $1.v, noidx, None)
-           else PatNamed($1.i, $1.v) } /* TODO: pattern matching is currently a bit inconsistent with the rest of the language when considering constructors */
+      { PatNamed($1.i, $1.v) }
   | IDENT pat
-      { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, Some $2) }
+      { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN

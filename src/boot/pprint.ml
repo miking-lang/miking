@@ -168,11 +168,9 @@ and pprintPat p =
   let rec ppp inside = function
     | PatNamed(_,x) -> x
     | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
-    | PatCon(_,x,n,mp) ->
+    | PatCon(_,x,n,p) ->
        left inside ^.
-       varDebugPrint x n ^. (match mp with
-                             | Some p -> us" " ^. ppp true p
-                             | None -> us"") ^.
+       varDebugPrint x n ^. ppp true p ^.
        right inside
     | PatInt(_,i) -> Ustring.Op.ustring_of_int i
     | PatBool(_,b) -> Ustring.Op.ustring_of_bool b

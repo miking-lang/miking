@@ -400,12 +400,10 @@ let rec debruijn env t =
        let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[])
        in (env,PatTuple(fi,ps))
-    | PatCon(fi,cx,_,mp) ->
+    | PatCon(fi,cx,_,p) ->
        let cxId = find fi env 0 cx in
-       let (env, mp) = match mp with
-         | Some p -> dbPat env p |> (fun (a,b) -> (a,Some b))
-         | None -> (env, None)
-       in (env,PatCon(fi,cx,cxId,mp))
+       let (env, p) = dbPat env p
+       in (env,PatCon(fi,cx,cxId,p))
     | PatInt _ as p -> (env,p)
     | PatBool _ as p -> (env,p)
     | PatUnit _ as p -> (env,p)
@@ -443,12 +441,7 @@ let rec tryMatch env value = function
       | TmTuple(_,vs) when List.length pats = List.length vs ->
          List.fold_right2 go vs pats (Some env)
       | _ -> None)
-  | PatCon(_,_,cxId,None) ->
-     (match value, List.nth env cxId with
-      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_)
-           when sym1 = sym2 -> Some env
-      | _ -> None)
-  | PatCon(_,_,cxId,Some p) ->
+  | PatCon(_,_,cxId,p) ->
      (match value, List.nth env cxId with
       | TmConsym(_,_,sym1,Some v), TmConsym(_,_,sym2,_)
            when sym1 = sym2 -> tryMatch env v p

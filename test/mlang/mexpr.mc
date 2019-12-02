@@ -85,22 +85,22 @@ end
 
 lang Fix = Fun
   syn Expr =
-  | TmFix
+  | TmFix ()
 end
 
 lang FixEval = Fix + FunEval
   sem apply (arg : Expr) =
-  | TmFix ->
+  | TmFix _ ->
   match arg with TmClos clos then
     let x = clos.0 in
     let body = clos.1 in
     let env2 = clos.2 in
-    eval (cons (x, TmApp (TmFix, TmClos clos)) env2) body
+    eval (cons (x, TmApp (TmFix (), TmClos clos)) env2) body
   else
     error "Not fixing a function"
 
   sem eval (env : Env) =
-  | TmFix -> TmFix
+  | TmFix _ -> TmFix ()
  end
 
 lang Let = Var
@@ -143,8 +143,8 @@ lang RecLetsEval = RecLets + VarEval + Fix + FixEval
     let lst_str = fresh "lst" env in
     let lst_var = TmVar(lst_str) in
     let func_tuple = TmTuple (map (lam x. x.2) bindings) in
-    let unfixed_tuple = TmLam(lst_str, None, unpack_from lst_var func_tuple) in
-    eval (cons (lst_str, TmApp(TmFix, unfixed_tuple)) env) (unpack_from lst_var body)
+    let unfixed_tuple = TmLam(lst_str, None (), unpack_from lst_var func_tuple) in
+    eval (cons (lst_str, TmApp(TmFix (), unfixed_tuple)) env) (unpack_from lst_var body)
 end
 
 lang Const
@@ -166,7 +166,7 @@ end
 
 lang Unit = Const
   syn Const =
-  | CUnit
+  | CUnit ()
 end
 
 -- Included for symmetry
@@ -179,9 +179,9 @@ end
 
 lang Arith = Const + Int
   syn Const =
-  | CAddi
+  | CAddi ()
   | CAddi2 Int
-  | CSubi
+  | CSubi ()
   | CSubi2 Int
   | CMuli
   | CMuli2 Int
@@ -191,7 +191,7 @@ end
 
 lang ArithEval = Arith + ConstEval
   sem delta (arg : Expr) =
-  | CAddi ->
+  | CAddi _ ->
     match arg with TmConst c then
       match c with CInt n then
         TmConst(CAddi2 n)
@@ -203,7 +203,7 @@ lang ArithEval = Arith + ConstEval
         TmConst(CInt (addi n1 n2))
       else error "Not adding a numeric constant"
     else error "Not adding a constant"
-  | CSubi ->
+  | CSubi _ ->
     match arg with TmConst c then
       match c with CInt n then
         TmConst(CSubi2 n)
@@ -232,10 +232,10 @@ end
 lang Bool
   syn Const =
   | CBool Bool
-  | CNot
-  | CAnd
+  | CNot ()
+  | CAnd ()
   | CAnd2 Bool
-  | COr
+  | COr ()
   | COr2 Bool
 
   syn Expr =
@@ -244,13 +244,13 @@ end
 
 lang BoolEval = Bool + ConstEval
   sem delta (arg : Expr) =
-  | CNot ->
+  | CNot _ ->
     match arg with TmConst c then
       match c with CBool b then
         TmConst(CBool (not b))
       else error "Not negating a boolean constant"
     else error "Not negating a constant"
-  | CAnd ->
+  | CAnd _ ->
     match arg with TmConst c then
       match c with CBool b then
         TmConst(CAnd2 b)
@@ -262,7 +262,7 @@ lang BoolEval = Bool + ConstEval
         TmConst(CBool (and b1 b2))
       else error "Not and-ing a boolean constant"
     else error "Not and-ing a constant"
-  | COr ->
+  | COr _ ->
     match arg with TmConst c then
       match c with CBool b then
         TmConst(COr2 b)
@@ -289,15 +289,15 @@ end
 
 lang Cmp = Int + Bool
   syn Const =
-  | CEqi
+  | CEqi ()
   | CEqi2 Int
-  | CLti
+  | CLti ()
   | CLti2 Int
 end
 
 lang CmpEval = Cmp + ConstEval
   sem delta (arg : Expr) =
-  | CEqi ->
+  | CEqi _ ->
     match arg with TmConst c then
       match c with CInt n then
         TmConst(CEqi2 n)
@@ -309,7 +309,7 @@ lang CmpEval = Cmp + ConstEval
         TmConst(CBool (eqi n1 n2))
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
-  | CLti ->
+  | CLti _ ->
     match arg with TmConst c then
       match c with CInt n then
         TmConst(CLti2 n)
@@ -334,7 +334,7 @@ end
 lang Seq = Int
   syn Const =
   | CSeq [Expr]
-  | CNth
+  | CNth ()
   | CNth2 [Expr]
 
   syn Expr =
@@ -343,7 +343,7 @@ end
 
 lang SeqEval = Seq + ConstEval
   sem delta (arg : Expr) =
-  | CNth ->
+  | CNth _ ->
     match arg with TmConst c then
       match c with CSeq tms then
         TmConst(CNth2 tms)
@@ -505,13 +505,13 @@ lang MExpr = FunEval + LetEval + RecLetsEval
   | _ -> false
 
   sem const_eq (c1 : Const) =
-  | CUnit -> is_unit c1
+  | CUnit _ -> is_unit c1
   | CInt n2 -> int_eq n2 c1
   | CBool b2 -> bool_eq b2 c1
   | CChar chr2 -> char_eq chr2 c1
 
   sem is_unit =
-  | CUnit -> true
+  | CUnit _ -> true
   | _ -> false
 
   sem int_eq (n1 : Int) =
@@ -553,19 +553,19 @@ end
 mexpr
 
 use MExpr in
-let id = TmLam ("x", None, TmVar "x") in
-let bump = TmLam ("x", None, TmApp (TmApp (TmConst CAddi, TmVar "x"), TmConst(CInt 1))) in
-let fst = TmLam ("t", None, TmProj (TmVar "t", 0)) in
-let app_id_unit = TmApp (id, TmConst CUnit) in
+let id = TmLam ("x", None (), TmVar "x") in
+let bump = TmLam ("x", None (), TmApp (TmApp (TmConst (CAddi ()), TmVar "x"), TmConst(CInt 1))) in
+let fst = TmLam ("t", None (), TmProj (TmVar "t", 0)) in
+let app_id_unit = TmApp (id, TmConst (CUnit ())) in
 let app_bump_3 = TmApp (bump, TmConst(CInt 3)) in
 let app_fst =
-  TmApp (fst, TmTuple([TmApp (TmConst CNot, TmConst(CBool false))
-                      ,TmApp (TmApp (TmConst CAddi, TmConst (CInt 1)), TmConst(CInt 2))])) in
-utest eval [] app_id_unit with TmConst CUnit in
+  TmApp (fst, TmTuple([TmApp (TmConst (CNot ()), TmConst(CBool false))
+                      ,TmApp (TmApp (TmConst (CAddi ()), TmConst (CInt 1)), TmConst(CInt 2))])) in
+utest eval [] app_id_unit with TmConst (CUnit ()) in
 utest eval [] app_bump_3 with TmConst (CInt 4) in
 utest eval [] app_fst with TmConst (CBool true) in
 
-let unit = TmConst CUnit in
+let unit = TmConst (CUnit ()) in
 
 let data_decl = TmConDef ("Foo", None,
                   TmMatch (TmApp (TmVar "Foo", TmTuple [unit, unit])
@@ -608,7 +608,7 @@ in
 --   else ()
 -- else els
 let result =
-  TmApp (TmVar "Num", (TmApp (TmApp (TmConst CAddi, TmVar "n1"), TmVar "n2"))) in
+  TmApp (TmVar "Num", (TmApp (TmApp (TmConst (CAddi ()), TmVar "n1"), TmVar "n2"))) in
 let match_inner =
   TmMatch (TmApp (TmVar "eval", TmVar "e2")
           ,"Num", Some "n2", result
@@ -623,7 +623,7 @@ let deconstruct = lam t.
 let add_case = lam arg. lam els.
   TmMatch (arg, "Add", Some "t", deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
-  TmApp (TmFix, TmLam ("eval", None, TmLam ("e", None,
+  TmApp (TmFix (), TmLam ("eval", None (), TmLam ("e", None,
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
 
 let wrap_in_decls = lam t. -- con Num in con Add in let eval = ... in t
@@ -641,13 +641,13 @@ let app = lam f. lam x. TmApp(f, x) in
 let app_seq = lam f. lam seq. foldl app f seq in
 let var = lam v. TmVar(v) in
 let int = lam i. TmConst (CInt i) in
-let lambda = lam var. lam body. TmLam(var, None, body) in
+let lambda = lam var. lam body. TmLam(var, None (), body) in
 let if_ = lam cond. lam th. lam el. TmIf(cond, th, el) in
 let true_ = TmConst (CBool true)in
 let false_ = TmConst (CBool false)in
-let eqi_ = lam a. lam b. app_seq (TmConst CEqi) [a, b] in
-let lti_ = lam a. lam b. app_seq (TmConst CLti) [a, b] in
-let subi_ = lam a. lam b. app_seq (TmConst CSubi) [a, b] in
+let eqi_ = lam a. lam b. app_seq (TmConst (CEqi ())) [a, b] in
+let lti_ = lam a. lam b. app_seq (TmConst (CLti ())) [a, b] in
+let subi_ = lam a. lam b. app_seq (TmConst (CSubi ())) [a, b] in
 let odd_even = lam body.
   TmRecLets(
     [ ( "odd"
