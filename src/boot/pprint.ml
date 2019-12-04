@@ -173,6 +173,7 @@ and pprintPat p =
        varDebugPrint x n ^. ppp true p ^.
        right inside
     | PatInt(_,i) -> Ustring.Op.ustring_of_int i
+    | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
     | PatBool(_,b) -> Ustring.Op.ustring_of_bool b
     | PatUnit _ -> us"()"
   in ppp false p

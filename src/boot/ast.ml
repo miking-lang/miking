@@ -148,6 +148,7 @@ and pat =
 | PatTuple of info * pat list                     (* Tuple pattern *)
 | PatCon   of info * ustring * int * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)
+| PatChar  of info * int                          (* Char pattern *)
 | PatBool  of info * bool                         (* Boolean pattern *)
 | PatUnit  of info                                (* Unit pattern *)
 
@@ -184,9 +185,6 @@ module Option = struct
   let bind f = function
     | Some x -> f x
     | None -> None
-  let value o ~default = match o with
-    | Some x -> x
-    | None -> default
 end
 
 (* General (bottom-up) map over terms *)
@@ -237,6 +235,7 @@ let pat_info = function
   | PatTuple(fi,_) -> fi
   | PatCon(fi,_,_,_) -> fi
   | PatInt(fi,_) -> fi
+  | PatChar(fi,_) -> fi
   | PatBool(fi,_) -> fi
   | PatUnit(fi) -> fi
 

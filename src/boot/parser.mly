@@ -298,6 +298,8 @@ pat:
         in PatTuple(fi, $2 :: $4) }
   | UINT /* TODO: enable matching against negative ints */
       { PatInt($1.i, $1.v) }
+  | CHAR
+      { PatChar($1.i, List.hd (ustring2list $1.v)) }
   | TRUE
       { PatBool($1.i, true) }
   | FALSE

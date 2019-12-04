@@ -10,7 +10,7 @@ utest classify (true, true) with "one" in
 utest classify (true, false) with "two" in
 utest classify (false, true) with "three" in
 utest classify (false, false) with "four" in
-utest classify Some with "five" in
+utest classify (true, true, true) with "five" in
 
 let uncurry = lam f. lam x.
   match x with (a, b) then f a b else error "bad" in
@@ -21,5 +21,7 @@ let weird = lam x.
     concat (concat a b) (concat c d)
   else error "bad" in
 utest weird (("a", "b"), ("c", "d")) with "abcd" in
+
+utest match 'a' with 'a' then true else false with true in
 
 ()

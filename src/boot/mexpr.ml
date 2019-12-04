@@ -405,6 +405,7 @@ let rec debruijn env t =
        let (env, p) = dbPat env p
        in (env,PatCon(fi,cx,cxId,p))
     | PatInt _ as p -> (env,p)
+    | PatChar _ as p -> (env,p)
     | PatBool _ as p -> (env,p)
     | PatUnit _ as p -> (env,p)
   in
@@ -449,6 +450,10 @@ let rec tryMatch env value = function
   | PatInt(_, i) ->
      (match value with
       | TmConst(_,CInt i2) when i = i2 -> Some env
+      | _ -> None)
+  | PatChar(_, c) ->
+     (match value with
+      | TmConst(_,CChar c2) when c = c2 -> Some env
       | _ -> None)
   | PatBool(_, b) ->
      (match value with
