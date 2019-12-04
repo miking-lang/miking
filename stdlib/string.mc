@@ -95,7 +95,7 @@ let strIndex = lam c. lam s.
   recursive
   let strIndex_rechelper = lam i. lam c. lam s.
     if eqi (length s) 0
-    then None
+    then None ()
     else if eqchar c (head s)
          then Some(i)
          else strIndex_rechelper (addi i 1) c (tail s)
@@ -109,7 +109,7 @@ let strLastIndex = lam c. lam s.
   let strLastIndex_rechelper = lam i. lam acc. lam c. lam s.
     if eqi (length s) 0 then
       if eqi acc (negi 1)
-      then None
+      then None ()
       else Some(acc)
     else
       if eqchar c (head s)
@@ -169,16 +169,16 @@ utest float2string (5.0e-5) with "5.0e-5" in
 utest float2string (negf 5.0e-5) with "-5.0e-5" in
 
 utest strIndex '%' "a % 5" with Some(2) in
-utest strIndex '%' "a & 5" with None in
+utest strIndex '%' "a & 5" with None () in
 utest strIndex 'w' "Hello, world!" with Some(7) in
-utest strIndex 'w' "Hello, World!" with None in
+utest strIndex 'w' "Hello, World!" with None () in
 utest strIndex 'o' "Hello, world!" with Some(4) in
 utest strIndex '@' "Some @TAG@" with Some(5) in
 
 utest strLastIndex '%' "a % 5" with Some(2) in
-utest strLastIndex '%' "a & 5" with None in
+utest strLastIndex '%' "a & 5" with None () in
 utest strLastIndex 'w' "Hello, world!" with Some(7) in
-utest strLastIndex 'w' "Hello, World!" with None in
+utest strLastIndex 'w' "Hello, World!" with None () in
 utest strLastIndex 'o' "Hello, world!" with Some(8) in
 utest strLastIndex '@' "Some @TAG@" with Some(9) in
 

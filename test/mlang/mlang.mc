@@ -13,13 +13,13 @@ end
 
 lang Bool
   syn Expr =
-  | True
-  | False
+  | True ()
+  | False ()
   | If(Dyn, Dyn, Dyn)
 
   sem eval =
-  | True -> true
-  | False -> false
+  | True _ -> true
+  | False _ -> false
   | If t ->
     let cnd = t.0 in
     let thn = t.1 in
@@ -44,9 +44,9 @@ end
 
 lang User
   syn Unit =
-  | Unit
+  | Unit ()
   sem inspect =
-  | Unit ->
+  | Unit _ ->
     use Arith in
     eval (Add (Num 1, Num 2))
   sem bump (x : Dyn) =
@@ -73,20 +73,20 @@ in
 let _ =
   use ArithBool in
   utest eval (Add (Num 1, Num 2)) with 3 in
-  utest eval (If (True
+  utest eval (If (True ()
                  ,Num 1
                  ,Num 2)) with 1
   in
   utest eval (Add (Num 10
-                  ,If (False
+                  ,If (False ()
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
   in ()
 in
 let _ =
   use User in
-  utest inspect Unit with 3 in
-  utest bump (inspect Unit) Unit with 4 in
+  utest inspect (Unit ()) with 3 in
+  utest bump (inspect (Unit ())) (Unit ()) with 4 in
   ()
 in
 let _ =

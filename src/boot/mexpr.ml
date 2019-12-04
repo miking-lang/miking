@@ -393,7 +393,21 @@ let rec debruijn env t =
   let rec find fi env n x =
     (match env with
      | VarTm(y)::ee -> if y =. x then n else find fi ee (n+1) x
-     | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'"))
+     | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")) in
+  let rec dbPat env = function
+    | PatNamed(fi,x) -> (VarTm(x)::env, PatNamed(fi,x))
+    | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
+       let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
+       let (env,ps) = List.fold_right go ps (env,[])
+       in (env,PatTuple(fi,ps))
+    | PatCon(fi,cx,_,p) ->
+       let cxId = find fi env 0 cx in
+       let (env, p) = dbPat env p
+       in (env,PatCon(fi,cx,cxId,p))
+    | PatInt _ as p -> (env,p)
+    | PatChar _ as p -> (env,p)
+    | PatBool _ as p -> (env,p)
+    | PatUnit _ as p -> (env,p)
   in
   match t with
   | TmVar(fi,x,_) -> TmVar(fi,x,find fi env 0 x)
@@ -413,14 +427,42 @@ let rec debruijn env t =
   | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
      TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
-  | TmMatch(fi,t1,cx,_,Some(y),t2,t3) ->
-     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,Some(y),
-             debruijn (VarTm(y)::env) t2, debruijn env t3)
-  | TmMatch(fi,t1,cx,_,None,t2,t3) ->
-     TmMatch(fi,debruijn env t1,cx,find fi env 0 cx,None, debruijn env t2, debruijn env t3)
+  | TmMatch(fi,t1,p,t2,t3) ->
+     let (matchedEnv, p) = dbPat env p in
+     TmMatch(fi,debruijn env t1,p,debruijn matchedEnv t2,debruijn env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+
+let rec tryMatch env value = function
+  | PatNamed _ -> Some (value :: env)
+  | PatTuple(_,pats) ->
+     let go v p env = Option.bind (fun env -> tryMatch env v p) env in
+     (match value with
+      | TmTuple(_,vs) when List.length pats = List.length vs ->
+         List.fold_right2 go vs pats (Some env)
+      | _ -> None)
+  | PatCon(_,_,cxId,p) ->
+     (match value, List.nth env cxId with
+      | TmConsym(_,_,sym1,Some v), TmConsym(_,_,sym2,_)
+           when sym1 = sym2 -> tryMatch env v p
+      | _ -> None)
+  | PatInt(_, i) ->
+     (match value with
+      | TmConst(_,CInt i2) when i = i2 -> Some env
+      | _ -> None)
+  | PatChar(_, c) ->
+     (match value with
+      | TmConst(_,CChar c2) when c = c2 -> Some env
+      | _ -> None)
+  | PatBool(_, b) ->
+     (match value with
+      | TmConst(_,CBool b2) when b = b2 -> Some env
+      | _ -> None)
+  | PatUnit _ ->
+     (match value with
+      | TmConst(_, Cunit) -> Some env
+      | _ -> None)
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
@@ -484,15 +526,10 @@ let rec eval env t =
   (* Data constructors and match *)
   | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
   | TmConsym(_,_,_,_) as tm -> tm
-  | TmMatch(fi,t1,_,n,xop,t2,t3) ->
-     (match eval env t1, List.nth env n with
-      | TmConsym(_,_,sym1,Some(v)), TmConsym(_,_,sym2,_) ->
-         if sym1 = sym2 then eval (v::env) t2 else eval env t3
-      | TmConsym(_,_,sym1,None), TmConsym(_,_,sym2,_) ->
-         if sym1 = sym2 && xop = None then eval env t2 else eval env t3
-      | t1,t2 ->
-         let ex = Ustring.to_utf8 (pprintME t1 ^. us" with " ^. pprintME t2) in
-         raise_error fi  ("Invalid match: match " ^ ex ))
+  | TmMatch(_,t1,p,t2,t3) ->
+     (match tryMatch env (eval env t1) p with
+      | Some env -> eval env t2
+      | None -> eval env t3)
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tnext) ->

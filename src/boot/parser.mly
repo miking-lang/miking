@@ -20,10 +20,6 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
-  let is_upper c =
-    let a = Ustring.get (us"A") 0 in
-    let z = Ustring.get (us"Z") 0 in
-    a <= c && c <= z
 %}
 
 /* Misc tokens */
@@ -203,13 +199,10 @@ cases:
 case:
   | BAR IDENT ARROW mexpr
     { let fi = mkinfo $1.i $3.i in
-      let c = Ustring.get $2.v 0 in
-      if is_upper c
-      then (ConPattern (fi, $2.v, None), $4)
-      else (VarPattern (fi, $2.v), $4)}
+      (VarPattern (fi, $2.v), $4) }
   | BAR IDENT binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
-      (ConPattern (fi, $2.v, Some $3), $5)}
+      (ConPattern (fi, $2.v, $3), $5)}
 binder:
   | LPAREN IDENT RPAREN
     { $2.v }
@@ -242,9 +235,9 @@ mexpr:
   | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
         TmCondef(fi,$2.v,$3,$5)}
-  | MATCH mexpr WITH IDENT ident_op THEN mexpr ELSE mexpr
-      { let fi = mkinfo $1.i $8.i in
-         TmMatch(fi,$2,$4.v,noidx,$5,$7,$9) }
+  | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
+      { let fi = mkinfo $1.i (tm_info $8) in
+         TmMatch(fi,$2,$4,$6,$8) }
   | USE IDENT IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
@@ -287,19 +280,38 @@ atom:
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
 
 
-ident_op:
-  | IDENT
-      { Some($1.v) }
-  |
-      { None }
-
-
 seq:
   | mexpr
       { [$1] }
   | mexpr COMMA seq
       { $1::$3 }
 
+pat:
+  | IDENT
+      { PatNamed($1.i, $1.v) }
+  | IDENT pat
+      { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
+  | LPAREN pat RPAREN
+      { $2 }
+  | LPAREN pat COMMA pat_list RPAREN
+      { let fi = mkinfo $1.i $5.i
+        in PatTuple(fi, $2 :: $4) }
+  | UINT /* TODO: enable matching against negative ints */
+      { PatInt($1.i, $1.v) }
+  | CHAR
+      { PatChar($1.i, List.hd (ustring2list $1.v)) }
+  | TRUE
+      { PatBool($1.i, true) }
+  | FALSE
+      { PatBool($1.i, false) }
+  | LPAREN RPAREN
+      { PatUnit(mkinfo $1.i $2.i) }
+
+pat_list:
+  | pat
+      { [$1] }
+  | pat COMMA pat_list
+      { $1 :: $3 }
 
 
 ty_op:
