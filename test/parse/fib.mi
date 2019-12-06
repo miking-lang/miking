@@ -1,9 +1,0 @@
-lang mcore
-
-let fib = lam n.
-  match n with
-    case 0 -> 0
-  | case 1 -> 1
-  | case _ -> addi (fib (subi n 1)) (fib (subi n 2))
-
-utest 34 (fib 10)

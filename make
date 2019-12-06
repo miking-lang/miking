@@ -21,10 +21,6 @@ buildboot(){
      dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
 }
 
-buildpreboot(){
-    (cd src/preboot; dune build boot.exe && cp -f _build/default/boot.exe ../../build/preboot)
-}
-
 case $1 in
     # Run the test suite
     test)
@@ -38,18 +34,8 @@ case $1 in
         unset MCORE_STDLIB
         build/boot test stdlib
         ;;
-    # Run the test suite
-    pretest)
-        buildpreboot
-        cd test
-        ../build/preboot test mcore
-        ../build/preboot tytest tymcore
-        ../build/preboot parsetest parse
-        ;;
     # Clean up the project
     clean)
-        rm -rf src/preboot/_build
-        rm -f build/preboot
         rm -rf src/boot/_build
         rm -f build/boot
         ;;

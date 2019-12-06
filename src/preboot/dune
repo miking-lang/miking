@@ -1,8 +1,0 @@
-
-
-(executable
-  (name boot)
-)
-
-(ocamllex lexer)
-(ocamlyacc parser)
