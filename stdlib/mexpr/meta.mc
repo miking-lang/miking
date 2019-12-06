@@ -1,11 +1,11 @@
-include "mexpr.mc"
 include "parser.mc"
+include "eval.mc"
 
 mexpr
 
 -- TODO: Re-implementing parts MCore parser. Needs top-level use to
 -- have parser use the same datatypes...
-use MExpr in
+use MExprEval in
 
 -- MCore tokens ----------------------------------
 

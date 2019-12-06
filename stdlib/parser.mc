@@ -1,4 +1,5 @@
 include "string.mc"
+include "prelude.mc" -- TODO: Should not be needed
 
 -- Debug stuff
 let debug_flag = false
