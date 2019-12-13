@@ -48,6 +48,8 @@ let reserved_strings = [
   (")",             fun(i) -> Parser.RPAREN{i=i;v=()});
   ("[",             fun(i) -> Parser.LSQUARE{i=i;v=()});
   ("]",             fun(i) -> Parser.RSQUARE{i=i;v=()});
+  ("{",             fun(i) -> Parser.LBRACKET{i=i;v=()});
+  ("}",             fun(i) -> Parser.RBRACKET{i=i;v=()});
   (":",             fun(i) -> Parser.COLON{i=i;v=()});
   (",",             fun(i) -> Parser.COMMA{i=i;v=()});
   (".",             fun(i) -> Parser.DOT{i=i;v=()});

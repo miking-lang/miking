@@ -62,6 +62,8 @@
 %token <unit Ast.tokendata> RPAREN        /* ")"   */
 %token <unit Ast.tokendata> LSQUARE       /* "["   */
 %token <unit Ast.tokendata> RSQUARE       /* "]"   */
+%token <unit Ast.tokendata> LBRACKET      /* "{"   */
+%token <unit Ast.tokendata> RBRACKET      /* "}"   */
 %token <unit Ast.tokendata> COLON         /* ":"   */
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> DOT           /* "."   */
@@ -264,7 +266,7 @@ left:
 
 
 atom:
-  | atom DOT UINT        { TmProj(mkinfo (tm_info $1) $3.i, $1, $3.v) }
+  | atom DOT label       { TmProj(mkinfo (tm_info $1) $2.i, $1, $3) }
   | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
                            else TmTuple(mkinfo $1.i $3.i,$2) }
   | LPAREN RPAREN        { TmConst($1.i, Cunit) }
@@ -278,13 +280,29 @@ atom:
                                                        (ustring2list $1.v))) }
   | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
+  | LBRACKET labels RBRACKET    { TmRecord(mkinfo $1.i $3.i, $2)}
+  | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, [])}
+  | LBRACKET mexpr WITH IDENT EQ mexpr RBRACKET
+      { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
 
+label:
+  | UINT
+    { LabIdx($1.v) }
+  | IDENT
+    { LabStr($1.v) }
 
 seq:
   | mexpr
       { [$1] }
   | mexpr COMMA seq
       { $1::$3 }
+
+labels:
+  | IDENT EQ mexpr
+    {[($1.v, $3)]}
+  | IDENT EQ mexpr COMMA labels
+    {($1.v, $3)::$5}
+
 
 pat:
   | IDENT
