@@ -214,9 +214,14 @@ and pprint_ty ty =
                   else us"[" ^. pprint_ty ty1 ^. us"]"
   | TyTuple tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
+  | TyRecord tys ->
+     us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
   | TyCon(s) -> s
   in
     ppt ty
+
+and pprint_ty_label = function
+  | (l, ty) -> l ^. us" : " ^. pprint_ty ty
 
 (* TODO: Print mlang part as well*)
 and pprintML tml =

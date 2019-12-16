@@ -355,6 +355,10 @@ ty_atom:
       { TySeq($2) }
   | LPAREN ty COMMA ty_list RPAREN
       { TyTuple ($2::$4) }
+  | LBRACKET RBRACKET
+      { TyRecord [] }
+  | LBRACKET label_tys RBRACKET
+      { TyRecord($2) }
   | IDENT
       {match Ustring.to_utf8 $1.v with
        | "Dyn"    -> TyDyn
@@ -365,8 +369,15 @@ ty_atom:
        | "String" -> TySeq(TyChar)
        | s        -> TyCon(us s)
       }
+
 ty_list:
   | ty COMMA ty_list
     { $1 :: $3 }
   | ty
     { [$1] }
+
+label_tys:
+  | IDENT COLON ty
+    {[($1.v, $3)]}
+  | IDENT COLON ty COMMA label_tys
+    {($1.v, $3)::$5}

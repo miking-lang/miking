@@ -172,6 +172,7 @@ and ty =
 | TyArrow  of ty * ty                             (* Function type *)
 | TySeq    of ty                                  (* Sequence type *)
 | TyTuple  of ty list                             (* Tuple type *)
+| TyRecord of (ustring * ty) list                 (* Record type *)
 | TyCon    of ustring                             (* Type constructor *)
 
 (* Variable type *)
