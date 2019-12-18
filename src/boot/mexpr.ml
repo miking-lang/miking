@@ -543,7 +543,8 @@ let rec eval env t =
          (match eval env t with
           | TmConst(fi, CRecord(r)) ->
              (try Record.find s r
-              with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^ "' in record."))
+              with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
+                                        "' in record " ^ Ustring.to_utf8 (pprint_const (CRecord(r)))))
           | v ->
              raise_error fi ("Cannot project from term. The term is not a record: "
                              ^ Ustring.to_utf8 (pprintME v))))
@@ -552,7 +553,8 @@ let rec eval env t =
       | TmConst(fi, CRecord(r)) ->
          if Record.mem l r
          then TmConst(fi, CRecord(Record.add l (eval env t2) r))
-         else raise_error fi ("No label '" ^ Ustring.to_utf8 l ^ "' in record.")
+         else raise_error fi ("No label '" ^ Ustring.to_utf8 l ^
+                                        "' in record " ^ Ustring.to_utf8 (pprint_const (CRecord r)))
       | v ->
          raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (pprintME v)))
