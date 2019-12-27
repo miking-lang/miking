@@ -100,6 +100,8 @@ let arity = function
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
   | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
+  (* MCore intrinsic: records *)
+  | CRecord(_)        -> 0
   (* MCore debug and I/O intrinsics *)
   | Cprint            -> 1
   | Cdprint           -> 1
@@ -324,6 +326,9 @@ let delta fi c v  =
     | Creverse,TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(List.rev lst))
     | Creverse,t -> fail_constapp (tm_info t)
 
+    (* MCore intrinsic: records *)
+    | CRecord(_),t -> fail_constapp (tm_info t)
+
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmConst(fi,CSeq(lst)) ->
        uprint_string (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
@@ -380,6 +385,8 @@ let rec val_equal v1 v2 =
   | TmConst(_,CSeq(lst1)), TmConst(_,CSeq(lst2)) -> (
      List.length lst1 = List.length lst2 &&
      List.for_all (fun (x,y) -> val_equal x y) (List.combine lst1 lst2))
+  | TmConst(_,CRecord(r1)), TmConst(_,CRecord(r2)) ->
+     Record.equal val_equal r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
      List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
@@ -423,7 +430,9 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmSeq(fi,tms) -> TmSeq(fi,List.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
-  | TmProj(fi,t,n) -> TmProj(fi,debruijn env t,n)
+  | TmRecord(fi, r) -> TmRecord(fi,List.map (function (l, t) -> (l, debruijn env t)) r)
+  | TmProj(fi,t,l) -> TmProj(fi,debruijn env t,l)
+  | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,debruijn env t1,l,debruijn env t2)
   | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
      TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
@@ -514,15 +523,43 @@ let rec eval env t =
   )
   (* Sequences *)
   | TmSeq(fi,tms) -> TmConst(fi,CSeq(List.map (eval env) tms))
-  (* Tuples and projection *)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
-  | TmProj(fi,t,n) ->
-     (match eval env t with
-      | TmTuple(_,vs) -> (try List.nth vs n
-                          with _ -> raise_error fi "Tuple projection is out of bound.")
+  (* Records *)
+  | TmRecord(fi,r) ->
+     let add_mapping m = function
+       | (l, t) -> Record.add l (eval env t) m
+    in
+     TmConst(fi,CRecord(List.fold_left add_mapping Record.empty r))
+  | TmProj(fi,t,l) ->
+     (match l with
+      | LabIdx i ->
+         (match eval env t with
+          | TmTuple(fi, tms) ->
+             (try List.nth tms i
+              with _ -> raise_error fi "Tuple projection is out of bounds.")
+          | v ->
+             raise_error fi ("Cannot project from term. The term is not a tuple: "
+                             ^ Ustring.to_utf8 (pprintME v)))
+      | LabStr s ->
+         (match eval env t with
+          | TmConst(fi, CRecord(r)) ->
+             (try Record.find s r
+              with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
+                                        "' in record " ^ Ustring.to_utf8 (pprint_const (CRecord(r)))))
+          | v ->
+             raise_error fi ("Cannot project from term. The term is not a record: "
+                             ^ Ustring.to_utf8 (pprintME v))))
+  | TmRecordUpdate(fi,t1,l,t2) ->
+     (match eval env t1 with
+      | TmConst(fi, CRecord(r)) ->
+         if Record.mem l r
+         then TmConst(fi, CRecord(Record.add l (eval env t2) r))
+         else raise_error fi ("No label '" ^ Ustring.to_utf8 l ^
+                                        "' in record " ^ Ustring.to_utf8 (pprint_const (CRecord r)))
       | v ->
-         raise_error fi ("Cannot project from term. The term is not a tuple: "
+         raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (pprintME v)))
+  (* Tuples *)
+  | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   (* Data constructors and match *)
   | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
   | TmConsym(_,_,_,_) as tm -> tm

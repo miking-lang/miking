@@ -24,10 +24,11 @@ let utest_ok = ref 0            (* Counts the number of successful unit tests *)
 let utest_fail = ref 0          (* Counts the number of failed unit tests *)
 let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 
+(* Map type for record implementation *)
+module Record = Map.Make(Ustring)
 
 (* Evaluation environment *)
 type env = tm list
-
 
 and const =
 (* MCore intrinsic: unit - no operation *)
@@ -86,6 +87,8 @@ and const =
 | Ccons    of tm option
 | Cslice   of (tm list) option * int option
 | Creverse
+(* MCore intrinsic: records *)
+| CRecord of tm Record.t
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
@@ -135,12 +138,18 @@ and tm =
 | TmFix     of info                                                 (* Fix point *)
 | TmSeq     of info * tm list                                       (* Sequence *)
 | TmTuple   of info * tm list                                       (* Tuple *)
-| TmProj    of info * tm * int                                      (* Projection of tuple *)
+| TmRecord  of info * (ustring * tm) list                           (* Record *)
+| TmProj    of info * tm * label                                    (* Projection of a tuple or record *)
+| TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
 | TmCondef  of info * ustring * ty * tm                             (* Constructor definition *)
 | TmConsym  of info * ustring * sym * tm option                     (* Constructor symbol *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
+
+and label =
+| LabIdx of int                                   (* Tuple index *)
+| LabStr of ustring                               (* Record label *)
 
 (* Patterns *)
 and pat =
@@ -163,6 +172,7 @@ and ty =
 | TyArrow  of ty * ty                             (* Function type *)
 | TySeq    of ty                                  (* Sequence type *)
 | TyTuple  of ty list                             (* Tuple type *)
+| TyRecord of (ustring * ty) list                 (* Record type *)
 | TyCon    of ustring                             (* Type constructor *)
 
 (* Variable type *)
@@ -201,7 +211,9 @@ let rec map_tm f = function
   | TmSeq(fi, tms) -> f (TmSeq(fi, List.map (map_tm f) tms))
   | TmIf(fi,t1,t2,t3) -> f (TmIf(fi,map_tm f t1,map_tm f t2,map_tm f t3))
   | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
-  | TmProj(fi,t1,n) -> f (TmProj(fi,map_tm f t1,n))
+  | TmRecord(fi, r) -> f (TmRecord(fi, List.map (function (l, t) -> (l, map_tm f t)) r))
+  | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
+  | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,ty,t1) -> f (TmCondef(fi,x,ty,map_tm f t1))
   | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
   | TmMatch(fi,t1,p,t2,t3) ->
@@ -223,7 +235,9 @@ let tm_info = function
   | TmFix(fi) -> fi
   | TmSeq(fi,_) -> fi
   | TmTuple(fi,_) -> fi
+  | TmRecord(fi,_) -> fi
   | TmProj(fi,_,_) -> fi
+  | TmRecordUpdate(fi,_,_,_) -> fi
   | TmCondef(fi,_,_,_) -> fi
   | TmConsym(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_) -> fi

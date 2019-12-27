@@ -28,7 +28,6 @@ let right inside = if inside then us")" else us""
 (* Pretty print "true" or "false" *)
 let usbool x = us (if x then "true" else "false")
 
-
 (* Pretty print constants *)
 let rec pprint_const c =
   match c with
@@ -117,6 +116,10 @@ let rec pprint_const c =
   | Ccons(_) -> us"cons"
   | Cslice(_,_) -> us"slice"
   | Creverse -> us"reverse"
+  (* MCore records *)
+  | CRecord(r) ->
+     let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
+     pprecord contents
   (* MCore debug and stdio intrinsics *)
   | Cprint -> us"print"
   | Cdprint -> us"dprint"
@@ -125,6 +128,17 @@ let rec pprint_const c =
   | CfileExists -> us"fileExists"
   | CdeleteFile -> us"deleteFile"
   | Cerror -> us"error"
+
+(* Pretty print a record *)
+and pprecord contents =
+  us"{" ^.
+    Ustring.concat (us",")
+      (List.map (function (l, v) -> l ^. us" = " ^. pprintME v) contents)
+    ^. us"}"
+
+and pplabel = function
+  | LabIdx i -> Ustring.Op.ustring_of_int i
+  | LabStr s -> s
 
 (* Pretty print a term. *)
 and pprintME t =
@@ -149,7 +163,9 @@ and pprintME t =
   | TmFix(_) -> us"fix"
   | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
-  | TmProj(_,t,n) -> left inside ^. ppt false t  ^. us"." ^. ustring_of_int n ^. right inside
+  | TmRecord(_, r) -> left inside ^. pprecord r ^. right inside
+  | TmProj(_,t,l) -> left inside ^. ppt false t  ^. us"." ^. pplabel l ^. right inside
+  | TmRecordUpdate(_,t1,l,t2) -> left inside ^. ppt false t1  ^. us" with " ^. l ^. us" = " ^. ppt false t2 ^. right inside
   | TmCondef(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.
                         us" in" ^. ppt false t ^. right inside
   | TmConsym(_,s,sym,tmop) -> left inside ^. s ^. us"_" ^. us(sprintf "%d" sym) ^. us" " ^.
@@ -198,9 +214,14 @@ and pprint_ty ty =
                   else us"[" ^. pprint_ty ty1 ^. us"]"
   | TyTuple tys ->
      us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
+  | TyRecord tys ->
+     us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
   | TyCon(s) -> s
   in
     ppt ty
+
+and pprint_ty_label = function
+  | (l, ty) -> l ^. us" : " ^. pprint_ty ty
 
 (* TODO: Print mlang part as well*)
 and pprintML tml =

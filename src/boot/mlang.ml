@@ -58,10 +58,16 @@ let check_matching_constrs info constrs =
        in
        match List.find_opt matching_constr constrs with
        | Some (CDecl(_, _, ty')) ->
+(*
           if not (ty = ty')
           then raise_error info
                  ("Conflicting parameter types for constructor '"^
                   Ustring.to_utf8 c^"'")
+*)
+          let _ = ty in
+          let _ = ty' in
+          let _ = info in
+          () (* TODO: Disabled to cater for extensible records *)
        | None -> ()
   in
   List.iter check_matching_constr
