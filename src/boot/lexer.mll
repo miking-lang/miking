@@ -131,18 +131,22 @@ let utf8_4byte = ['\xF0'-'\xF7'] ['\x80'-'\xBF'] ['\x80'-'\xBF'] ['\x80'-'\xBF']
 let ascii = utf8_1byte
 let noascii =  utf8_2byte | utf8_3byte | utf8_4byte
 let utf8 = ascii | noascii
-let us_letter = ['A'-'Z'] | ['a'-'z']
+let lcase_letter = ['a'-'z']
+let ucase_letter = ['A'-'Z']
+let us_letter = lcase_letter | ucase_letter
 let newline = ('\013' | '\010' | "\013\010")
 let whitespace = (' '| '\012')
 let tab = '\t'
 let digit = ['0'-'9']
 let s_escape = "\\'" | "\\\"" | "\\?"  | "\\\\" |
                "\\a"  | "\\b" | "\\f"  | "\\n" | "\\r" | "\\t" | "\\v"
-let nondigit = ('_' | us_letter)
-let ident = (nondigit (digit | nondigit)*)
+let ident = ('_'| lcase_letter) (digit | '_' | us_letter)*
+let uident = ucase_letter (digit | '_' | us_letter)*
+
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "$"  | "("  | ")"  | "["  | "]" | "{"  | "}"  |
               "::" | ":" | ","  | "."  | "|" | "->" | "=>"
+
 
 let line_comment = "//" [^ '\013' '\010']*
 let line_comment_alt = "--" [^ '\013' '\010']*
@@ -150,6 +154,7 @@ let unsigned_integer = digit+
 let signed_integer = unsigned_integer  | '-' unsigned_integer
 let unsigned_number = unsigned_integer ('.' (unsigned_integer)?)?
                       (('e'|'E') ("+"|"-")? unsigned_integer)?
+
 
 (* Main lexing *)
 rule main = parse
@@ -174,9 +179,21 @@ rule main = parse
       { Parser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
   | ident | symtok as s
       { mkid s }
+  | uident as s
+      { Parser.IDENT{i=mkinfo_fast s; v=Ustring.from_utf8 s} }  (* UIDENT *)
   | '\'' (utf8 as c) '\''
       { let s = Ustring.from_utf8 c in
         Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
+  | '#' (("con" | "type" | "var") as ident) '"'
+       { Buffer.reset string_buf ;  parsestring lexbuf;
+	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
+         let esc_s = Ustring.convert_escaped_chars s in
+         let fi = mkinfo_ustring (s ^. us"  #" ^. us(ident)) in
+	 let rval = (match ident with
+            | "var" -> Parser.IDENT{i=fi; v=esc_s}
+            | _ -> Parser.IDENT{i=fi; v=esc_s})  (* UIDENT *)
+         in
+	 add_colno 3; colcount_fast ident; rval}
   | '"'
       { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
