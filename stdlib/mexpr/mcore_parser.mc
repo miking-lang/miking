@@ -485,8 +485,8 @@ else
     let contents = readFile file in
     let res = run_parser file program contents in
     match res with Success t then
-      print_ln "Parsing successful!"
+      printLn "Parsing successful!"
     else
-      print_ln (show_error res)
+      printLn (show_error res)
   else
-    print_ln (concat "Unknown file: " file)
+    printLn (concat "Unknown file: " file)

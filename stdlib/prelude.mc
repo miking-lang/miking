@@ -20,7 +20,7 @@ let fix_mutual =
   lam l. fix (lam self. lam l. map (lam li. lam x. li (self l) x) l) l
 
 -- Printing stuff
-let print_ln = lam s. print (concat s "\n")
+let printLn = lam s. print (concat s "\n")
 
 mexpr
 

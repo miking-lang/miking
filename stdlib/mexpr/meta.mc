@@ -342,10 +342,10 @@ else
     let contents = readFile file in
     let res = run_parser file program contents in
     match res with Success t then
-      let _ = print_ln "Parsing successful!" in
+      let _ = printLn "Parsing successful!" in
       let p = t.0 in
       eval builtins p
     else
-      print_ln (show_error res)
+      printLn (show_error res)
   else
-    print_ln (concat "Unknown file: " file)
+    printLn (concat "Unknown file: " file)

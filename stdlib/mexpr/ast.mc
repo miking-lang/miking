@@ -75,7 +75,7 @@ end
 
 
 
-lang ArithAst = ConstAst + IntAst
+lang ArithIntAst = ConstAst + IntAst
   syn Const =
   | CAddi ()
   | CAddi2 Int
@@ -83,8 +83,6 @@ lang ArithAst = ConstAst + IntAst
   | CSubi2 Int
   | CMuli
   | CMuli2 Int
-  -- TODO: Add more operations
-  -- TODO: Add floating point numbers (maybe in its own fragment)
 end
 
 
@@ -255,5 +253,5 @@ end
 lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
   UnitAst + UnitPat + IntAst + IntPat +
-  ArithAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
+  ArithIntAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
   TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst

@@ -3,7 +3,7 @@ include "prelude.mc" -- TODO: Should not be needed
 
 -- Debug stuff
 let debug_flag = false
-let debug = lam s. if debug_flag then print_ln s else ()
+let debug = lam s. if debug_flag then printLn s else ()
 
 -- The Parser monad -----------------------------
 
