@@ -28,7 +28,7 @@ let fresh : String -> Env -> String = lam var. lam env.
         find_free (addi n 1)
     in find_free 0
 
-lang VarEval = Var
+lang VarEval = VarAst
   sem eval (env : Env) =
   | TmVar x ->
     match lookup x env with Some t then
@@ -37,7 +37,7 @@ lang VarEval = Var
       error (concat "Unknown variable: " x)
 end
 
-lang AppEval = App
+lang AppEval = AppAst
   sem apply (arg : Expr) =
   | _ -> error "Bad application"
 
@@ -49,7 +49,7 @@ lang AppEval = App
 end
 
 
-lang FunEval = Fun + VarEval + AppEval
+lang FunEval = FunAst + VarEval + AppEval
   syn Type =
   syn Expr =
   | TmClos (String, Option, Expr, Env) -- Option Type
@@ -70,7 +70,7 @@ lang FunEval = Fun + VarEval + AppEval
 end
 
 -- Fix is only needed for eval. Hence, it is not in ast.mc
-lang Fix = Fun
+lang Fix = FunAst
   syn Expr =
   | TmFix ()
 end
@@ -90,7 +90,7 @@ lang FixEval = Fix + FunEval
   | TmFix _ -> TmFix ()
  end
 
-lang LetEval = Let + VarEval
+lang LetEval = LetAst + VarEval
   sem eval (env : Env) =
   | TmLet t ->
     let x = t.0 in
@@ -99,7 +99,7 @@ lang LetEval = Let + VarEval
     eval (cons (x, eval env t1) env) t2
 end
 
-lang RecLetsEval = RecLets + VarEval + Fix + FixEval
+lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval
   sem eval (env : Env) =
   | TmRecLets t ->
     let bindings = t.0 in
@@ -124,7 +124,7 @@ lang RecLetsEval = RecLets + VarEval + Fix + FixEval
 end
 
 
-lang ConstEval = Const
+lang ConstEval = ConstAst
   sem delta (arg : Expr) =
 
   sem apply (arg : Expr) =
@@ -135,10 +135,10 @@ lang ConstEval = Const
 end
 
 -- Included for symmetry
-lang UnitEval = Unit + ConstEval
+lang UnitEval = UnitAst + ConstEval
 
 
-lang ArithEval = Arith + ConstEval
+lang ArithEval = ArithAst + ConstEval
   sem delta (arg : Expr) =
   | CAddi _ ->
     match arg with TmConst c then
@@ -178,7 +178,7 @@ lang ArithEval = Arith + ConstEval
     else error "Not multiplying a constant"
 end
 
-lang BoolEval = Bool + ConstEval
+lang BoolEval = BoolAst + ConstEval
   sem delta (arg : Expr) =
   | CNot _ ->
     match arg with TmConst c then
@@ -224,7 +224,7 @@ lang BoolEval = Bool + ConstEval
 end
 
 
-lang CmpEval = Cmp + ConstEval
+lang CmpEval = CmpAst + ConstEval
   sem delta (arg : Expr) =
   | CEqi _ ->
     match arg with TmConst c then
@@ -252,10 +252,10 @@ lang CmpEval = Cmp + ConstEval
     else error "Not comparing a constant"
 end
 
-lang CharEval = Char + ConstEval
+lang CharEval = CharAst + ConstEval
 end
 
-lang SeqEval = Seq + ConstEval
+lang SeqEval = SeqAst + ConstEval
   sem delta (arg : Expr) =
   | CNth _ ->
     match arg with TmConst c then
@@ -277,7 +277,7 @@ lang SeqEval = Seq + ConstEval
 end
 
 
-lang TupleEval = Tuple
+lang TupleEval = TupleAst
   sem eval (env : Env) =
   | TmTuple tms ->
     let vs = map (eval env) tms in
@@ -290,7 +290,7 @@ lang TupleEval = Tuple
     else error "Not projecting from a tuple"
 end
 
-lang DataEval = Data + AppEval
+lang DataEval = DataAst + AppEval
   syn Expr =
   | TmConFun (String)
   | TmCon (String, Expr)
@@ -308,7 +308,7 @@ lang DataEval = Data + AppEval
 end
 
 
-lang MatchEval = Match
+lang MatchEval = MatchAst
   sem eval (env : Env) =
   | TmMatch t ->
     let target = t.0 in
@@ -324,7 +324,7 @@ lang MatchEval = Match
 end
 
 
-lang UtestEval = Utest
+lang UtestEval = UtestAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -346,8 +346,8 @@ lang MExprEval = FunEval + LetEval + RecLetsEval
                + SeqEval + TupleEval + DataEval + UtestEval
                + ArithEval + BoolEval + CmpEval + CharEval + UnitEval
                + MatchEval + DataPat + VarPat + IntPat + TuplePat
-               + BoolPat + UnitPat + DynType + UnitType + SeqType
-               + TupleType + DataType + ArithType + BoolType + AppType
+               + BoolPat + UnitPat + DynTypeAst + UnitTypeAst + SeqTypeAst
+               + TupleTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
   | TmConst c2 -> const_expr_eq c2 e1
   | TmCon d2 -> data_eq d2.0 d2.1 e1
@@ -424,7 +424,7 @@ let unit = TmConst (CUnit ()) in
 
 let data_decl = TmConDef ("Foo", None,
                   TmMatch (TmApp (TmVar "Foo", TmTuple [unit, unit])
-                          ,ConPat("Foo", VarPat "u"), TmProj(TmVar "u",0)
+                          ,PCon("Foo", PVar "u"), TmProj(TmVar "u",0)
                           ,id)) in
 utest eval [] data_decl with unit in
 
@@ -451,7 +451,7 @@ let three = num 3 in -- Num 3
 let add = lam n1. lam n2. TmApp (TmVar "Add", TmTuple([n1, n2])) in
 let add_one_two = add one two in -- Add (Num 1, Num 2)
 let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
-    TmMatch (arg, ConPat ("Num", VarPat "n"), TmApp (TmVar "Num", (TmVar "n")), els)
+    TmMatch (arg, PCon ("Num", PVar "n"), TmApp (TmVar "Num", (TmVar "n")), els)
 in
 -- match arg with Add t then
 --   let e1 = t.0 in
@@ -466,17 +466,17 @@ let result =
   TmApp (TmVar "Num", (TmApp (TmApp (TmConst (CAddi ()), TmVar "n1"), TmVar "n2"))) in
 let match_inner =
   TmMatch (TmApp (TmVar "eval", TmVar "e2")
-          ,ConPat ("Num", VarPat "n2"), result
+          ,PCon ("Num", PVar "n2"), result
           ,unit) in
 let match_outer =
   TmMatch (TmApp (TmVar "eval", TmVar "e1")
-          ,ConPat ("Num", VarPat "n1"), match_inner
+          ,PCon ("Num", PVar "n1"), match_inner
           ,unit) in
 let deconstruct = lam t.
   TmLet ("e1", None, TmProj (t, 0)
         ,TmLet ("e2", None, TmProj(t, 1), match_outer)) in
 let add_case = lam arg. lam els.
-  TmMatch (arg, ConPat ("Add", VarPat "t"), deconstruct (TmVar "t"), els) in
+  TmMatch (arg, PCon ("Add", PVar "t"), deconstruct (TmVar "t"), els) in
 let eval_fn = -- fix (lam eval. lam e. match e with then ... else ())
   TmApp (TmFix (), TmLam ("eval", None (), TmLam ("e", None,
          num_case (TmVar "e") (add_case (TmVar "e") unit)))) in
@@ -531,9 +531,9 @@ utest eval [] (odd_even (app (var "even") (int 4))) with TmConst (CBool true) in
 utest eval [] (odd_even (app (var "even") (int 3))) with TmConst (CBool false) in
 
 let match_ = lam x. lam pat. lam thn. lam els. TmMatch(x, pat, thn, els) in
-let conpat = lam ctor. lam pat. ConPat(ctor, pat) in
-let tuppat = lam pats. TuplePat(pats) in
-let varpat = lam x. VarPat(x) in
+let conpat = lam ctor. lam pat. PCon(ctor, pat) in
+let tuppat = lam pats. PTuple(pats) in
+let varpat = lam x. PVar(x) in
 let addi_ = lam a. lam b. app_seq (TmConst (CAddi ())) [a, b] in
 let num = lam x. app (var "Num") x in
 -- lam arg. match arg with Add (Num n1, Num n2) then

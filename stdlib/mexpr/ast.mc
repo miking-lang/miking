@@ -1,18 +1,18 @@
 include "string.mc"
 
-lang Var
+lang VarAst
   syn Expr =
   | TmVar String
 end
 
 
-lang App
+lang AppAst
   syn Expr =
   | TmApp (Expr, Expr)
 end
 
 
-lang Fun = Var + App
+lang FunAst = VarAst + AppAst
   syn Type =
   | TyArrow (Type, Type)
   syn Expr =
@@ -20,13 +20,13 @@ lang Fun = Var + App
 end
 
 
-lang Let = Var
+lang LetAst = VarAst
   syn Expr =
   | TmLet (String, Option, Expr, Expr) -- Option Type
 end
 
 
-lang RecLets = Var
+lang RecLetsAst = VarAst
   syn Type =
   syn Expr =
   | TmRecLets ([(String, Option, Expr)], Expr) -- Option Type
@@ -34,7 +34,7 @@ end
 
 
 
-lang Const
+lang ConstAst
   syn Const =
 
   syn Expr =
@@ -42,40 +42,40 @@ lang Const
 end
 
 
-lang Unit = Const
+lang UnitAst = ConstAst
   syn Const =
   | CUnit ()
 end
 
-lang UnitPat = Unit
+lang UnitPat = UnitAst
   syn Pat =
-  | UnitPat ()
+  | PUnit ()
 
   sem tryMatch (t : Expr) =
-  | UnitPat _ ->
+  | PUnit _ ->
     match t with TmConst CUnit _ then Some [] else None ()
 end
 
 
 
-lang Int = Const
+lang IntAst = ConstAst
   syn Const =
   | CInt Int
 end
 
-lang IntPat = Int
+lang IntPat = IntAst
   syn Pat =
-  | IntPat Int
+  | PInt Int
 
   sem tryMatch (t : Expr) =
-  | IntPat i -> match t with TmConst CInt i2 then
+  | PInt i -> match t with TmConst CInt i2 then
     if eqi i i2 then Some [] else None ()
     else None ()
 end
 
 
 
-lang Arith = Const + Int
+lang ArithAst = ConstAst + IntAst
   syn Const =
   | CAddi ()
   | CAddi2 Int
@@ -88,7 +88,7 @@ lang Arith = Const + Int
 end
 
 
-lang Bool
+lang BoolAst
   syn Const =
   | CBool Bool
   | CNot ()
@@ -101,12 +101,12 @@ lang Bool
   | TmIf (Expr, Expr, Expr)
 end
 
-lang BoolPat = Bool
+lang BoolPat = BoolAst
   syn Pat =
-  | BoolPat Bool
+  | PBool Bool
 
   sem tryMatch (t : Expr) =
-  | BoolPat b ->
+  | PBool b ->
     match t with TmConst CBool b2 then
       if or (and b b2) (and (not b) (not b2)) then Some [] else None () -- TODO: is there a nicer way to do equality on bools? 'eqb' is unbound
     else None ()
@@ -114,7 +114,7 @@ end
 
 
 
-lang Cmp = Int + Bool
+lang CmpAst = IntAst + BoolAst
   syn Const =
   | CEqi ()
   | CEqi2 Int
@@ -123,13 +123,13 @@ lang Cmp = Int + Bool
 end
 
 
-lang Char = Const
+lang CharAst = ConstAst
   syn Const =
   | CChar Char
 end
 
 
-lang Seq = Int
+lang SeqAst = IntAst
   syn Const =
   | CSeq [Expr]
   | CNth ()
@@ -140,19 +140,19 @@ lang Seq = Int
 end
 
 
-lang Tuple
+lang TupleAst
   syn Expr =
   | TmTuple [Expr]
   | TmProj (Expr, Int)
 end
 
 
-lang TuplePat = Tuple
+lang TuplePat = TupleAst
   syn Pat =
-  | TuplePat [Pat]
+  | PTuple [Pat]
 
   sem tryMatch (t : Expr) =
-  | TuplePat pats ->
+  | PTuple pats ->
     match t with TmTuple tms then
       if eqi (length pats) (length tms) then
         let results = zipWith tryMatch tms pats in
@@ -165,7 +165,7 @@ lang TuplePat = Tuple
     else None ()
 end
 
-lang Data
+lang DataAst
   -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef (String, Expr)
@@ -173,12 +173,12 @@ end
 
 
 
-lang DataPat = Data
+lang DataPat = DataAst
   syn Pat =
-  | ConPat (String, Pat)
+  | PCon (String, Pat)
 
   sem tryMatch (t : Expr) =
-  | ConPat x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
+  | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
     let constructor = x.0 in
     let subpat = x.1 in
     match t with TmCon (constructor2, subexpr) then
@@ -188,7 +188,7 @@ lang DataPat = Data
     else None ()
 end
 
-lang Match
+lang MatchAst
   syn Expr =
   | TmMatch (Expr, Pat, Expr, Expr)
 
@@ -199,60 +199,61 @@ end
 
 lang VarPat
   syn Pat =
-  | VarPat String
+  | PVar String
 
   sem tryMatch (t : Expr) =
-  | VarPat ident -> Some [(ident, t)]
+  | PVar ident -> Some [(ident, t)]
 end
 
-lang Utest
+lang UtestAst
   syn Expr =
   | TmUtest (Expr, Expr, Expr)
 end
 
 
-lang DynType
+lang DynTypeAst
   syn Type =
   | TyDyn
 end
 
-lang UnitType
+lang UnitTypeAst
   syn Type =
   | TyUnit
 end
 
-lang SeqType
+lang SeqTypeAst
   syn Type =
   | TySeq Type
 end
 
-lang TupleType
+lang TupleTypeAst
   syn Type =
   | TyProd [Type]
 end
 
-lang DataType
+lang DataTypeAst
   syn Type =
   | TyCon String
 end
 
-lang ArithType
+lang ArithTypeAst
   syn Type =
   | TyInt
 end
 
-lang BoolType
+lang BoolTypeAst
   syn Type =
   | TyBool
 end
 
-lang AppType
+lang AppTypeAst
   syn Type =
   | TyApp (Type, Type)
 end
 
 
 lang MExprAst =
-  Var + App + Fun + Let + RecLets + Const + Unit + UnitPat + Int + IntPat +
-  Arith + Bool + BoolPat + Cmp + Char + Seq + Tuple + TuplePat + Data +
-  DataPat + Match + VarPat + Utest
+  VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
+  UnitAst + UnitPat + IntAst + IntPat +
+  ArithAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
+  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst
