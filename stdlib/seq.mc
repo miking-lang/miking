@@ -70,6 +70,11 @@ end
 let partition = (lam p. lam seq.
     (filter p seq, filter (lam q. if p q then false else true) seq))
 
+let findAssoc = lam p. lam seq.
+  match find (lam tup. p tup.0) seq with Some res
+  then Some res.1
+  else None
+
 mexpr
 
 utest head [2,3,5] with 2 in

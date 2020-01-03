@@ -187,7 +187,10 @@ let translate_cases f target cases =
             (ustring2list (us"No matching case for function " ^.
                              Ustring.from_utf8 f))
   in
-  let no_match = app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg))
+  let no_match =
+    let_ "_"
+      (app (TmConst (NoInfo, CdebugShow)) target)
+      (app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg)))
   in
   let case_compare c1 c2 = match c1, c2 with
     | (p1, _), (p2, _) -> pattern_compare p1 p2

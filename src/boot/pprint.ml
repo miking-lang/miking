@@ -128,6 +128,7 @@ let rec pprint_const c =
   | CfileExists -> us"fileExists"
   | CdeleteFile -> us"deleteFile"
   | Cerror -> us"error"
+  | CdebugShow -> us"debugShow"
 
 (* Pretty print a record *)
 and pprecord contents =

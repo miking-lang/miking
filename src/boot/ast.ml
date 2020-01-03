@@ -97,6 +97,7 @@ and const =
 | CfileExists
 | CdeleteFile
 | Cerror
+| CdebugShow
 
 
 (* Names *)

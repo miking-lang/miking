@@ -38,7 +38,8 @@ let builtin =
                                             List.map (fun x->TmConst(NoInfo,CChar(x))))))));
    ("readFile",CreadFile); ("writeFile",CwriteFile(None));
    ("fileExists", CfileExists); ("deleteFile", CdeleteFile);
-   ("error",Cerror)
+   ("error",Cerror);
+   ("debugShow", CdebugShow)
   ]
 
 
@@ -110,6 +111,7 @@ let arity = function
   | CfileExists       -> 1
   | CdeleteFile       -> 1
   | Cerror            -> 1
+  | CdebugShow        -> 1
 
 
 
@@ -357,6 +359,8 @@ let delta fi c v  =
     | Cerror, TmConst(fi,CSeq(lst)) ->
        (uprint_endline ((us"ERROR: ") ^. (tmlist2ustring fi lst)); exit 1)
     | Cerror,t -> fail_constapp (tm_info t)
+    | CdebugShow,t ->
+       uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
 
 
 (* Debug function used in the eval function *)
