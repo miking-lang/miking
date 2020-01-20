@@ -39,6 +39,12 @@ case $1 in
         rm -rf src/boot/_build
         rm -f build/boot
         ;;
+    # Install the boot interpreter locally for the current user
+    install)
+        buildboot
+        mkdir -p $HOME/bin
+        cp -i build/boot $HOME/bin/miking
+        ;;
     # Just make the project
     all | *)
         buildboot
