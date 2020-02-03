@@ -42,8 +42,10 @@ case $1 in
     # Install the boot interpreter locally for the current user
     install)
         buildboot
-        mkdir -p $HOME/.local/bin
-        cp -i build/boot $HOME/.local/bin/miking
+        install_path=$HOME/.local/bin
+        mkdir -p $install_path
+        cp -i build/boot $install_path/miking
+        chmod +x $install_path/miking
         ;;
     # Just make the project
     all | *)
