@@ -264,7 +264,7 @@ lang MatchPrettyPrint = MatchAst
 	| TmMatch t ->
 	  let newind = incr indent in
 	  let target = pprintAst newind t.0 in
-	  -- Same as for pprintCode
+	  -- Same issue as for pprintCode
 	  let k2 = t.1 in
 	  let x = t.2 in
 	  let _ = error "TmMatch not yet implemented for pretty printer." in
@@ -305,7 +305,7 @@ lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
 
 mexpr
 use MExprPrettyPrint in
-let simple_example_ast =
+let simple_ast =
     TmLet ("foo", None,
       TmLam ("a", None, TmLam ("b", None,
         TmLet ("bar", None,
@@ -338,11 +338,11 @@ let simple_example_ast =
 in
 
 --let _ = print "\n\n" in
---let _ = print (pprintCode 0 simple_example_ast) in
+--let _ = print (pprintCode 0 simple_ast) in
 --let _ = print "\n\n" in
---let _ = print (pprintAst 0 simple_example_ast) in
+--let _ = print (pprintAst 0 simple_ast) in
 --let _ = print "\n\n" in
 
-utest geqi (length (pprintCode 0 simple_example_ast)) 0 with true in
-utest geqi (length (pprintAst 0 simple_example_ast)) 0 with true in
+utest geqi (length (pprintCode 0 simple_ast)) 0 with true in
+utest geqi (length (pprintAst 0 simple_ast)) 0 with true in
 ()
