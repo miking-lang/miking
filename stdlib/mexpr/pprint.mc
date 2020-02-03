@@ -302,3 +302,47 @@ lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         BoolPrettyPrint + CmpPrettyPrint + SeqPrettyPrint +
                         TuplePrettyPrint + DataPrettyPrint + MatchPrettyPrint +
                         UtestPrettyPrint
+
+mexpr
+use MExprPrettyPrint in
+let simple_example_ast =
+    TmLet ("foo", None,
+      TmLam ("a", None, TmLam ("b", None,
+        TmLet ("bar", None,
+          TmLam ("x", None,
+            TmApp (
+              TmApp (
+                TmVar "addi",
+                TmVar "b"
+              ),
+              TmVar "x"
+            )
+          ),
+          TmLet ("babar", None,
+            TmConst (CInt 3),
+            TmApp (
+              TmApp (
+                TmVar "addi",
+                TmApp (
+                  TmVar "bar",
+                  TmVar "babar"
+                )
+              ),
+              TmVar "a"
+            )
+          )
+        )
+      )),
+      TmConst CUnit
+    )
+in
+
+--let _ = print "\n\n" in
+--let _ = print (pprintCode 0 simple_example_ast) in
+--let _ = print "\n\n" in
+--let _ = print (pprintAst 0 simple_example_ast) in
+--let _ = print "\n\n" in
+
+utest geqi (length (pprintCode 0 simple_example_ast)) 0 with true in
+utest geqi (length (pprintAst 0 simple_example_ast)) 0 with true in
+()
