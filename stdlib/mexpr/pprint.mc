@@ -154,7 +154,7 @@ lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
 	  let cond = pprintCode indent t.0 in
 	  let thn = pprintCode (incr indent) t.1 in
 	  let els = pprintCode (incr indent) t.2 in
-	  strJoin "" ["if ", cond, " then\n", spacing (incr indent), thn "\n", spacing indent,
+	  strJoin "" ["if ", cond, " then\n", spacing (incr indent), thn, "\n", spacing indent,
 	                            "else\n", spacing (incr indent), els]
 
 	sem pprintAst (indent : Int) =
