@@ -108,10 +108,10 @@ end
 
 lang UnitPrettyPrint = UnitAst + ConstPrettyPrint
 	sem getConstStringCode (indent : Int) =
-	| CUnit -> "()"
+	| CUnit _ -> "()"
 
 	sem getConstStringAst (indent : Int) =
-	| CUnit -> "CUnit"
+	| CUnit _ -> "CUnit"
 end
 
 lang IntPrettyPrint = IntAst + ConstPrettyPrint
@@ -124,29 +124,29 @@ end
 
 lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
 	sem getConstStringCode (indent : Int) =
-	| CAddi -> "addi"
+	| CAddi _ -> "addi"
 	| CAddi2 i -> strJoin "" ["(addi ", int2string i, ")"]
 
 	sem getConstStringAst (indent : Int) =
-	| CAddi -> "CAddi"
+	| CAddi _ -> "CAddi"
 	| CAddi2 i -> strJoin "" ["CAddi2 ", int2string i]
 end
 
 lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
 	sem getConstStringCode (indent : Int) =
 	| CBool b -> if b then "true" else "false"
-	| CNot -> "not"
-	| CAnd -> "and"
+	| CNot _ -> "not"
+	| CAnd _ -> "and"
 	| CAnd2 b -> strJoin "" ["(and ", getConstStringCode indent b, ")"]
-	| COr -> "or"
+	| COr _ -> "or"
 	| COr2 b -> strJoin "" ["(or ", getConstStringCode indent b, ")"]
 
 	sem getConstStringAst (indent : Int) =
 	| CBool b -> strJoin "" ["CBool ", if b then "true" else "false"]
-	| CNot -> "CNot"
-	| CAnd -> "CAnd"
+	| CNot _ -> "CNot"
+	| CAnd _ -> "CAnd"
 	| CAnd2 b -> strJoin "" ["CAnd ", if b then "true" else "false"]
-	| COr -> "COr"
+	| COr _ -> "COr"
 	| COr2 b -> strJoin "" ["COr ", if b then "true" else "false"]
 
 	sem pprintCode (indent : Int) =
@@ -168,22 +168,22 @@ end
 
 lang CmpPrettyPrint = CmpAst + ConstPrettyPrint
 	sem getConstStringCode (indent : Int) =
-	| CEqi -> "eqi"
+	| CEqi _ -> "eqi"
 	| CEqi2 i -> strJoin "" ["(eqi ", int2string i, ")"]
 
 	sem getConstStringAst (indent : Int) =
-	| CEqi -> "CEqi"
+	| CEqi _ -> "CEqi"
 	| CEqi2 i -> strJoin "" ["CEqi2 ", int2string i]
 end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint
 	sem getConstStringCode (indent : Int) =
-	| CNth -> "nth"
+	| CNth _ -> "nth"
 	| CNth2 tms -> strJoin "" ["(nth ", pprintCode indent (TmSeq tms), ")"]
 	| CSeq tms -> pprintCode indent (TmSeq tms)
 
 	sem getConstStringAst (indent : Int) =
-	| CNth -> "CNth"
+	| CNth _ -> "CNth"
 	| CNth2 tms ->
 	  let newind = incr indent in
 	  if gti (length tms) 0 then
@@ -312,7 +312,7 @@ let simple_ast =
           TmLam ("x", None,
             TmApp (
               TmApp (
-                TmVar "addi",
+                TmConst (CAddi ()),
                 TmVar "b"
               ),
               TmVar "x"
@@ -333,7 +333,7 @@ let simple_ast =
           )
         )
       )),
-      TmConst CUnit
+      TmConst (CUnit ())
     )
 in
 
