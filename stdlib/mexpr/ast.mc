@@ -5,6 +5,11 @@ lang VarAst
   | TmVar String
 end
 
+lang VarPat
+  syn Pat =
+  | PVar String
+end
+
 
 lang AppAst
   syn Expr =
@@ -33,7 +38,6 @@ lang RecLetsAst = VarAst
 end
 
 
-
 lang ConstAst
   syn Const =
 
@@ -50,12 +54,7 @@ end
 lang UnitPat = UnitAst
   syn Pat =
   | PUnit ()
-
-  sem tryMatch (t : Expr) =
-  | PUnit _ ->
-    match t with TmConst CUnit _ then Some [] else None ()
 end
-
 
 
 lang IntAst = ConstAst
@@ -66,34 +65,22 @@ end
 lang IntPat = IntAst
   syn Pat =
   | PInt Int
-
-  sem tryMatch (t : Expr) =
-  | PInt i -> match t with TmConst CInt i2 then
-    if eqi i i2 then Some [] else None ()
-    else None ()
 end
-
 
 
 lang ArithIntAst = ConstAst + IntAst
   syn Const =
   | CAddi ()
-  | CAddi2 Int
   | CSubi ()
-  | CSubi2 Int
-  | CMuli
-  | CMuli2 Int
+  | CMuli ()
 end
 
 
 lang BoolAst
   syn Const =
-  | CBool Bool
   | CNot ()
   | CAnd ()
-  | CAnd2 Bool
   | COr ()
-  | COr2 Bool
 
   syn Expr =
   | TmIf (Expr, Expr, Expr)
@@ -102,22 +89,13 @@ end
 lang BoolPat = BoolAst
   syn Pat =
   | PBool Bool
-
-  sem tryMatch (t : Expr) =
-  | PBool b ->
-    match t with TmConst CBool b2 then
-      if or (and b b2) (and (not b) (not b2)) then Some [] else None () -- TODO: is there a nicer way to do equality on bools? 'eqb' is unbound
-    else None ()
 end
-
 
 
 lang CmpAst = IntAst + BoolAst
   syn Const =
   | CEqi ()
-  | CEqi2 Int
   | CLti ()
-  | CLti2 Int
 end
 
 
@@ -131,7 +109,6 @@ lang SeqAst = IntAst
   syn Const =
   | CSeq [Expr]
   | CNth ()
-  | CNth2 [Expr]
 
   syn Expr =
   | TmSeq [Expr]
@@ -144,63 +121,30 @@ lang TupleAst
   | TmProj (Expr, Int)
 end
 
-
 lang TuplePat = TupleAst
   syn Pat =
   | PTuple [Pat]
-
-  sem tryMatch (t : Expr) =
-  | PTuple pats ->
-    match t with TmTuple tms then
-      if eqi (length pats) (length tms) then
-        let results = zipWith tryMatch tms pats in
-        let go = lam left. lam right.
-          match (left, right) with (Some l, Some r)
-          then Some (concat l r)
-          else None () in
-        foldl go (Some []) results
-      else None ()
-    else None ()
 end
+
 
 lang DataAst
   -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef (String, Expr)
+  | TmConFun (String)
 end
-
-
 
 lang DataPat = DataAst
   syn Pat =
   | PCon (String, Pat)
-
-  sem tryMatch (t : Expr) =
-  | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
-    let constructor = x.0 in
-    let subpat = x.1 in
-    match t with TmCon (constructor2, subexpr) then
-      if eqstr constructor constructor2
-        then tryMatch subexpr subpat
-        else None ()
-    else None ()
 end
+
 
 lang MatchAst
   syn Expr =
   | TmMatch (Expr, Pat, Expr, Expr)
 
   syn Pat =
-end
-
-
-
-lang VarPat
-  syn Pat =
-  | PVar String
-
-  sem tryMatch (t : Expr) =
-  | PVar ident -> Some [(ident, t)]
 end
 
 lang UtestAst

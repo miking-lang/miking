@@ -28,13 +28,16 @@ let fresh : String -> Env -> String = lam var. lam env.
         find_free (addi n 1)
     in find_free 0
 
-lang VarEval = VarAst
+lang VarEval = VarAst + VarPat
   sem eval (env : Env) =
   | TmVar x ->
     match lookup x env with Some t then
       eval env t
     else
       error (concat "Unknown variable: " x)
+
+  sem tryMatch (t : Expr) =
+  | PVar ident -> Some [(ident, t)]
 end
 
 lang AppEval = AppAst
@@ -135,10 +138,25 @@ lang ConstEval = ConstAst
 end
 
 -- Included for symmetry
-lang UnitEval = UnitAst + ConstEval
+lang UnitEval = UnitAst + UnitPat + ConstEval
+  sem tryMatch (t : Expr) =
+  | PUnit _ ->
+    match t with TmConst CUnit _ then Some [] else None ()
+end
 
+lang IntEval = IntAst + IntPat
+  sem tryMatch (t : Expr) =
+  | PInt i -> match t with TmConst CInt i2 then
+    if eqi i i2 then Some [] else None ()
+    else None ()
+end
 
 lang ArithIntEval = ArithIntAst + ConstEval
+  syn Const =
+  | CAddi2 Int
+  | CSubi2 Int
+  | CMuli2 Int
+
   sem delta (arg : Expr) =
   | CAddi _ ->
     match arg with TmConst c then
@@ -178,7 +196,12 @@ lang ArithIntEval = ArithIntAst + ConstEval
     else error "Not multiplying a constant"
 end
 
-lang BoolEval = BoolAst + ConstEval
+lang BoolEval = BoolAst + BoolPat + ConstEval
+  syn Const =
+  | CBool Bool
+  | CAnd2 Bool
+  | COr2 Bool
+
   sem delta (arg : Expr) =
   | CNot _ ->
     match arg with TmConst c then
@@ -221,10 +244,20 @@ lang BoolEval = BoolAst + ConstEval
         if b then eval env thn else eval env els
       else error "Condition is not a boolean"
     else error "Condition is not a constant"
+
+  sem tryMatch (t : Expr) =
+  | PBool b ->
+    match t with TmConst CBool b2 then
+      if or (and b b2) (and (not b) (not b2)) then Some [] else None () -- TODO: is there a nicer way to do equality on bools? 'eqb' is unbound
+    else None ()
 end
 
 
 lang CmpEval = CmpAst + ConstEval
+  syn Const =
+  | CEqi2 Int
+  | CLti2 Int
+
   sem delta (arg : Expr) =
   | CEqi _ ->
     match arg with TmConst c then
@@ -256,6 +289,9 @@ lang CharEval = CharAst + ConstEval
 end
 
 lang SeqEval = SeqAst + ConstEval
+  syn Const =
+  | CNth2 [Expr]
+
   sem delta (arg : Expr) =
   | CNth _ ->
     match arg with TmConst c then
@@ -277,7 +313,7 @@ lang SeqEval = SeqAst + ConstEval
 end
 
 
-lang TupleEval = TupleAst
+lang TupleEval = TupleAst + TuplePat
   sem eval (env : Env) =
   | TmTuple tms ->
     let vs = map (eval env) tms in
@@ -288,11 +324,23 @@ lang TupleEval = TupleAst
     match eval env tup with TmTuple tms then
       nth tms idx
     else error "Not projecting from a tuple"
+
+  sem tryMatch (t : Expr) =
+  | PTuple pats ->
+    match t with TmTuple tms then
+      if eqi (length pats) (length tms) then
+        let results = zipWith tryMatch tms pats in
+        let go = lam left. lam right.
+          match (left, right) with (Some l, Some r)
+          then Some (concat l r)
+          else None () in
+        foldl go (Some []) results
+      else None ()
+    else None ()
 end
 
-lang DataEval = DataAst + AppEval
+lang DataEval = DataAst + DataPat + AppEval
   syn Expr =
-  | TmConFun (String)
   | TmCon (String, Expr)
 
   sem apply (arg : Expr) =
@@ -305,6 +353,16 @@ lang DataEval = DataAst + AppEval
     eval (cons (k, TmConFun(k)) env) body
   | TmConFun t -> TmConFun t
   | TmCon t -> TmCon t
+
+  sem tryMatch (t : Expr) =
+  | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
+    let constructor = x.0 in
+    let subpat = x.1 in
+    match t with TmCon (constructor2, subexpr) then
+      if eqstr constructor constructor2
+        then tryMatch subexpr subpat
+        else None ()
+    else None ()
 end
 
 
@@ -342,12 +400,11 @@ end
 
 -- TODO: Add more types! Think about design
 
-lang MExprEval = FunEval + LetEval + RecLetsEval
-               + SeqEval + TupleEval + DataEval + UtestEval
-               + ArithIntEval + BoolEval + CmpEval + CharEval + UnitEval
-               + MatchEval + DataPat + VarPat + IntPat + TuplePat
-               + BoolPat + UnitPat + DynTypeAst + UnitTypeAst + SeqTypeAst
-               + TupleTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
+lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval
+               + DataEval + UtestEval + IntEval + ArithIntEval + BoolEval
+               + CmpEval + CharEval + UnitEval + MatchEval
+               + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst
+               + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
   | TmConst c2 -> constExprEq c2 e1
   | TmCon d2 -> dataEq d2.0 d2.1 e1
