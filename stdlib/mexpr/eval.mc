@@ -198,57 +198,54 @@ end
 
 lang BoolEval = BoolAst + BoolPat + ConstEval
   syn Const =
-  | CBool Bool
   | CAnd2 Bool
   | COr2 Bool
 
   sem delta (arg : Expr) =
   | CNot _ ->
     match arg with TmConst c then
-      match c with CBool b then
-        TmConst(CBool (not b))
+      match c.val with CBool b then
+        TmConst(CBool {val = not b.val})
       else error "Not negating a boolean constant"
     else error "Not negating a constant"
   | CAnd _ ->
     match arg with TmConst c then
-      match c with CBool b then
-        TmConst(CAnd2 b)
+      match c.val with CBool b then
+        TmConst(CAnd2 b.val)
       else error "Not and-ing a boolean constant"
     else error "Not and-ing a constant"
   | CAnd2 b1 ->
     match arg with TmConst c then
-      match c with CBool b2 then
-        TmConst(CBool (and b1 b2))
+      match c.val with CBool b2 then
+        TmConst(CBool {val = and b1 b2.val})
       else error "Not and-ing a boolean constant"
     else error "Not and-ing a constant"
   | COr _ ->
     match arg with TmConst c then
-      match c with CBool b then
-        TmConst(COr2 b)
+      match c.val with CBool b then
+        TmConst(COr2 b.val)
       else error "Not or-ing a boolean constant"
     else error "Not or-ing a constant"
   | COr2 b1 ->
     match arg with TmConst c then
-      match c with CBool b2 then
-        TmConst(CBool (or b1 b2))
+      match c.val with CBool b2 then
+        TmConst(CBool {val = or b1 b2.val})
       else error "Not or-ing a boolean constant"
     else error "Not or-ing a constant"
 
   sem eval (env : Env) =
   | TmIf t ->
-    let cond = t.0 in
-    let thn  = t.1 in
-    let els  = t.2 in
-    match eval env cond with TmConst c then
-      match c with CBool b then
-        if b then eval env thn else eval env els
+    match eval env t.cond with TmConst c then
+      match c.val with CBool b then
+        if b.val then eval env t.thn else eval env t.els
       else error "Condition is not a boolean"
     else error "Condition is not a constant"
 
   sem tryMatch (t : Expr) =
   | PBool b ->
-    match t with TmConst CBool b2 then
-      if or (and b b2) (and (not b) (not b2)) then Some [] else None () -- TODO: is there a nicer way to do equality on bools? 'eqb' is unbound
+    let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
+    match t with TmConst (CBool b2) then
+      if xnor b.val b2.val then Some [] else None ()
     else None ()
 end
 
@@ -261,26 +258,26 @@ lang CmpEval = CmpAst + ConstEval
   sem delta (arg : Expr) =
   | CEqi _ ->
     match arg with TmConst c then
-      match c with CInt n then
-        TmConst(CEqi2 n)
+      match c.val with CInt n then
+        TmConst(CEqi2 n.val)
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
   | CEqi2 n1 ->
     match arg with TmConst c then
-      match c with CInt n2 then
-        TmConst(CBool (eqi n1 n2))
+      match c.val with CInt n2 then
+        TmConst(CBool {val = eqi n1 n2.val})
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
   | CLti _ ->
     match arg with TmConst c then
-      match c with CInt n then
-        TmConst(CLti2 n)
+      match c.val with CInt n then
+        TmConst(CLti2 n.val)
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
   | CLti2 n1 ->
     match arg with TmConst c then
-      match c with CInt n2 then
-        TmConst(CBool (lti n1 n2))
+      match c.val with CInt n2 then
+        TmConst(CBool {val = lti n1 n2.val})
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
 end
@@ -295,41 +292,39 @@ lang SeqEval = SeqAst + ConstEval
   sem delta (arg : Expr) =
   | CNth _ ->
     match arg with TmConst c then
-      match c with CSeq tms then
-        TmConst(CNth2 tms)
+      match c.val with CSeq s then
+        TmConst(CNth2 s.tms)
       else error "Not nth of a sequence"
     else error "Not nth of a constant"
   | CNth2 tms ->
     match arg with TmConst c then
-      match c with CInt n then
-        nth tms n
+      match c.val with CInt n then
+        nth tms n.val
       else error "n in nth is not a number"
     else error "n in nth is not a constant"
 
   sem eval (env : Env) =
-  | TmSeq tms ->
-    let vs = map (eval env) tms in
-    TmConst(CSeq vs)
+  | TmSeq s ->
+    let vs = map (eval env) s.tms in
+    TmConst(CSeq {s with tms = vs})
 end
 
 
 lang TupleEval = TupleAst + TuplePat
   sem eval (env : Env) =
-  | TmTuple tms ->
-    let vs = map (eval env) tms in
+  | TmTuple v ->
+    let vs = map (eval env) v.tms in
     TmTuple vs
   | TmProj t ->
-    let tup = t.0 in
-    let idx = t.1 in
-    match eval env tup with TmTuple tms then
-      nth tms idx
+    match eval env t.tup with TmTuple v then
+      nth v.tms t.idx
     else error "Not projecting from a tuple"
 
   sem tryMatch (t : Expr) =
-  | PTuple pats ->
-    match t with TmTuple tms then
-      if eqi (length pats) (length tms) then
-        let results = zipWith tryMatch tms pats in
+  | PTuple p ->
+    match t with TmTuple v then
+      if eqi (length p.pats) (length v.tms) then
+        let results = zipWith tryMatch v.tms p.pats in
         let go = lam left. lam right.
           match (left, right) with (Some l, Some r)
           then Some (concat l r)
@@ -344,23 +339,18 @@ lang DataEval = DataAst + DataPat + AppEval
   | TmCon (String, Expr)
 
   sem apply (arg : Expr) =
-  | TmConFun k -> TmCon (k, arg)
+  | TmConFun t -> TmCon (t.ident, arg)
 
   sem eval (env : Env) =
-  | TmConDef t ->
-    let k = t.0 in
-    let body = t.2 in
-    eval (cons (k, TmConFun(k)) env) body
+  | TmConDef t -> eval (cons (t.ident, TmConFun(t.ident)) env) t.body
   | TmConFun t -> TmConFun t
   | TmCon t -> TmCon t
 
   sem tryMatch (t : Expr) =
   | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
-    let constructor = x.0 in
-    let subpat = x.1 in
-    match t with TmCon (constructor2, subexpr) then
-      if eqstr constructor constructor2
-        then tryMatch subexpr subpat
+    match t with TmCon (constructor, subexpr) then
+      if eqstr x.ident constructor
+        then tryMatch subexpr x.subpat
         else None ()
     else None ()
 end
@@ -369,13 +359,9 @@ end
 lang MatchEval = MatchAst
   sem eval (env : Env) =
   | TmMatch t ->
-    let target = t.0 in
-    let pat = t.1 in
-    let thn = t.2 in
-    let els = t.3 in
-    match tryMatch (eval env target) pat with Some newEnv then
-      eval (concat newEnv env) thn
-    else eval env els
+    match tryMatch (eval env t.target) t.pat with Some newEnv then
+      eval (concat newEnv env) t.thn
+    else eval env t.els
 
   sem tryMatch (t : Expr) =
   | _ -> None ()
@@ -388,13 +374,10 @@ lang UtestEval = UtestAst
 
   sem eval (env : Env) =
   | TmUtest t ->
-    let test = t.0 in
-    let expected = t.1 in
-    let next = t.2 in
-    let v1 = eval env test in
-    let v2 = eval env expected in
+    let v1 = eval env t.test in
+    let v2 = eval env t.expected in
     let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
-    eval env next
+    eval env t.next
 end
 
 
@@ -549,6 +532,14 @@ let evalAdd2 = wrapInDecls (TmApp (TmVar "eval", addOneTwoThree)) in
 utest eval [] evalAdd1 with TmCon("Num", TmConst(CInt 3)) in
 utest eval [] evalAdd2 with TmCon("Num", TmConst(CInt 6)) in
 
+
+let evalUTestIntInUnit = TmUtest {
+    test = TmConst (CInt 3),
+    expected = TmConst (CInt 3),
+    next = TmConst CUnit
+  } in
+
+utest eval [] evalUTestIntInUnit with (TmConst CUnit) in
 
 
 let app = lam f. lam x. TmApp(f, x) in
