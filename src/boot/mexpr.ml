@@ -41,6 +41,8 @@ let builtin =
    ("error",Cerror);
    ("debugShow", CdebugShow)
   ]
+  (* Append external functions TODO: Should not be part of core language *)
+  @ Ext.externals
 
 
 (* Returns the number of expected arguments of a constant *)
@@ -112,7 +114,8 @@ let arity = function
   | CdeleteFile       -> 1
   | Cerror            -> 1
   | CdebugShow        -> 1
-
+  (* External functions TODO: Should not be bart of core language *)
+  | CExt v            -> Ext.arity v
 
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
@@ -361,6 +364,8 @@ let delta fi c v  =
     | Cerror,t -> fail_constapp (tm_info t)
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
+
+    | CExt v, t -> Ext.delta v t
 
 
 (* Debug function used in the eval function *)
