@@ -1,0 +1,5 @@
+(copy_files ext-skel/*)
+
+(executable
+ (name boot)
+)

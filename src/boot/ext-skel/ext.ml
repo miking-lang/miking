@@ -19,10 +19,11 @@ let fail_extapp f v fi = raise_error fi
 
 let delta eval env c v =
   let fail_extapp = fail_extapp c v in
-  let _ext fi e = TmConst (fi, CExt e) in
-  let _app fi l r = TmApp (fi, l, r) in
+  let mk_ext fi e = TmConst (fi, CExt e) in
+  let mk_app fi f v = TmApp (fi, f, v) in
+
   match c, v with
   | EApp None, TmClos (fi, _, _, _, _) | EApp None, TmConst (fi,  _) ->
-     _ext fi (EApp (Some (fun x -> eval env (_app NoInfo v x))))
+     mk_ext fi (EApp (Some (fun x -> eval env (mk_app NoInfo v x))))
   | EApp (Some f), _ -> (f v)
   | EApp _, t -> fail_extapp (tm_info t)
