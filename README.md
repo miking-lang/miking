@@ -8,13 +8,27 @@ creating languages and generating efficient compilers.
 
 Before you test the Miking system, you need to install
 [OCaml](https://ocaml.org/), the
-[OPAM](https://opam.ocaml.org/) package manager, and the `dune`
-package. To compile and run the test suite, execute
+[OPAM](https://opam.ocaml.org/) package manager, and the `dune` package.
+
+In addition you need to install make sure that the [Sundials](https://computing.llnl.gov/projects/sundials) solver is installed on your system.
+
+The steps involve installing the C library. On `ubuntu 18.04` you can issue:
+
+```
+>> sudo apt-get install libsundials-dev
+```
+
+And then installing the ocaml bindings [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+>> opam install sundialsml
+```
+
+To compile and run the test suite, execute
 
 ```
 >> make test
 ```
-on the command line.
 
 A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 

@@ -1,7 +1,6 @@
-
-
 (executable
   (name boot)
+  (libraries sundialsml)
 )
 
 (ocamllex lexer)
