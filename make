@@ -28,6 +28,7 @@ case $1 in
         cd test
         ../build/boot test mexpr
         ../build/boot test mlang
+        ../build/boot test ext
         cd ../stdlib
         ../build/boot test mexpr
         cd ..
