@@ -31,7 +31,7 @@ case $1 in
         cd ../stdlib
         ../build/boot test mexpr
         cd ..
-        unset MCORE_STDLIB
+        export MCORE_STDLIB='@@@'
         build/boot test stdlib
         ;;
     # Clean up the project
@@ -42,10 +42,11 @@ case $1 in
     # Install the boot interpreter locally for the current user
     install)
         buildboot
-        install_path=$HOME/.local/bin
-        mkdir -p $install_path
-        cp -i build/boot $install_path/miking
-        chmod +x $install_path/miking
+        bin_path=$HOME/.local/bin/
+        lib_path=$HOME/.local/lib/mcore/stdlib
+        mkdir -p $bin_path $lib_path
+        cp -f build/boot $bin_path/miking; chmod +x $bin_path/miking
+        rm -rf $lib_path; cp -rf stdlib $lib_path
         ;;
     # Just make the project
     all | *)
