@@ -28,18 +28,33 @@ module Option = struct
     | None -> failwith "Not Some"
 end
 
+(* Standard lib default local path on unix (used by make install) *)
+let stdlib_loc_unix =
+  match Sys.getenv_opt "HOME" with
+  | Some home -> home ^ "/.local/lib/mcore/stdlib"
+  | None -> "@@@"
+
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
   | Some path -> path
-  | None -> "@@@"
+  | None ->
+    if Sys.os_type = "Unix" &&
+       Sys.file_exists stdlib_loc_unix
+    then stdlib_loc_unix
+    else "@@@"
 
 let default_includes =
+  let prelude = [Include(NoInfo, us"prelude.mc")] in
   match Sys.getenv_opt "MCORE_STDLIB" with
-  | Some _ -> [Include(NoInfo, us"prelude.mc")]
-  | _ -> []
+  | Some "@@@" -> [] (* Needed for test of stdlib *)
+  | Some _ -> prelude
+  | None ->
+    if Sys.os_type = "Unix" &&
+       Sys.file_exists stdlib_loc_unix
+    then prelude
+    else []
 
 let prog_argv = ref []          (* Argv for the program that is executed *)
-
 
 (* Debug template function. Used below *)
 let debug_after_parse t =
@@ -205,6 +220,7 @@ let menu() =
 
 (* Main function. Checks arguments and reads file names *)
 let main =
+
   (* Check command  *)
   (match Array.to_list Sys.argv |> List.tl with
 
