@@ -98,7 +98,8 @@ and const =
 | CdeleteFile
 | Cerror
 | CdebugShow
-
+(* External functions TODO: Should not be part of core language *)
+| CExt of Extast.ext
 
 (* Names *)
 and sym = int

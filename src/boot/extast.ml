@@ -1,0 +1,3 @@
+type ext =
+  | Esin
+  | Ecos
