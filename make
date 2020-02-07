@@ -40,6 +40,13 @@ case $1 in
         rm -f build/boot
         ;;
     # Just make the project
+    install)
+        buildboot
+        install_path=$HOME/.local/bin
+        mkdir -p $install_path
+        cp -f build/boot $install_path/miking
+        chmod +x $install_path/miking
+        ;;
     all | *)
         buildboot
         ;;

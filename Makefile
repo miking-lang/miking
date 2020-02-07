@@ -16,6 +16,9 @@ all:
 test:
 	@./make test
 
+install:
+	@./make install
+
 clean:
 	@./make clean
 
