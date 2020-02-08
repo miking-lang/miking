@@ -41,10 +41,10 @@ end
 lang RecLetsAst = VarAst
   syn Type =
   syn Expr =
-  | TmRecLets {lets   : [{ident : String,
-                          tpe   : Option,
-                          body  : Expr}],
-               inexpr : Expr}
+  | TmRecLets {bindings : [{ident : String,
+                            tpe   : Option,
+                            body  : Expr}],
+               inexpr   : Expr}
 end
 
 
@@ -144,8 +144,9 @@ end
 lang DataAst
   -- TODO: Constructors have no generated symbols
   syn Expr =
-  | TmConDef {ident : String,
-              body  : Expr}
+  | TmConDef {ident  : String,
+              tpe    : Option,
+              inexpr : Expr}
   | TmConFun {ident : String}
 end
 
