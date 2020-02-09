@@ -141,6 +141,15 @@ lang TuplePat = TupleAst
 end
 
 
+lang RecordAst
+  syn Expr =
+  | TmRecord {bindings : [{key   : String,
+                           value : Expr}]}
+  | TmRecordProj {rec : Expr,
+                  key : String}
+end
+
+
 lang DataAst
   -- TODO: Constructors have no generated symbols
   syn Expr =
