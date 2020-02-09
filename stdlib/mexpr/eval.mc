@@ -340,6 +340,26 @@ lang TupleEval = TupleAst + TuplePat
     else None ()
 end
 
+
+lang RecordEval = RecordAst
+  sem eval (env : Env) =
+  | TmRecord t ->
+    let bs = map (lam b. {b with value = eval env b.value}) t.bindings in
+    TmRecord {t with bindings = bs}
+  | TmRecordProj t ->
+    recursive let reclookup = lam key. lam bindings.
+      if eqi (length bindings) 0 then
+        error "Could not project from Record"
+      else if eqstr (head bindings).key key then
+        (head bindings).value
+      else
+        reclookup key (tail bindings)
+    in
+    match eval env t.rec with TmRecord t2 then
+      reclookup t.key t2.bindings
+    else error "Not projecting a Record"
+end
+
 lang DataEval = DataAst + DataPat + AppEval
   syn Expr =
   | TmCon {ident : String, body : Expr}
@@ -391,7 +411,7 @@ end
 
 -- TODO: Add more types! Think about design
 
-lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval
+lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
                + DataEval + UtestEval + IntEval + ArithIntEval + BoolEval
                + CmpEval + CharEval + UnitEval + MatchEval
                + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst
@@ -653,7 +673,7 @@ let oddEven = lam bdy.
                          (app (var "odd") (subi_ (var "x") (int 1)))))}
   in
   TmRecLets {bindings = [odd, even],
-               inexpr = bdy}
+             inexpr = bdy}
 in
 utest eval [] (oddEven (app (var "odd") (int 4))) with TmConst {val = CBool {val = false}} in
 utest eval [] (oddEven (app (var "odd") (int 3))) with TmConst {val = CBool {val = true}} in
@@ -683,5 +703,23 @@ let addEvalNested = lambda "arg"
 let tup = lam x. TmTuple {tms = x} in
 let cint = lam x. TmConst {val = CInt {val = x}} in
 utest eval [] (wrapInDecls (app addEvalNested (tup [num (cint 1), num (cint 2)]))) with TmCon {ident = "Num", body = cint 3} in
+
+let record_ = TmRecord {bindings = []} in
+let recAdd = lam key. lam value. lam rec.
+  match rec with TmRecord t then
+    TmRecord {t with bindings = cons {key = key, value = value} t.bindings}
+  else error "Not adding to a Record"
+in
+let recAddTups = lam tups. lam rec.
+  foldl (lam recacc. lam t. recAdd t.0 t.1 recacc) rec tups in
+
+
+let recordProj = TmLet {ident = "myrec",
+                        tpe = None (),
+                        body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
+                        inexpr = TmRecordProj {rec = var "myrec",
+                                               key = "b"}} in
+
+utest eval [] recordProj with TmConst {val = CInt {val = 37}} in
 
 ()
