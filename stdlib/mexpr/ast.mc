@@ -147,6 +147,9 @@ lang RecordAst
                            value : Expr}]}
   | TmRecordProj {rec : Expr,
                   key : String}
+  | TmRecordUpdate {rec   : Expr,
+                    key   : String,
+                    value : Expr}
 end
 
 

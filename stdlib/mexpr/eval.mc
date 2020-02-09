@@ -358,6 +358,20 @@ lang RecordEval = RecordAst
     match eval env t.rec with TmRecord t2 then
       reclookup t.key t2.bindings
     else error "Not projecting a Record"
+  | TmRecordUpdate u ->
+    match eval env u.rec with TmRecord t then
+      recursive let recupdate = lam bindings.
+        if eqi (length bindings) 0 then
+          [{key = u.key, value = u.value}]
+        else
+          let e = head bindings in
+          if eqstr u.key e.key then
+            cons {key = u.key, value = u.value} (tail bindings)
+          else
+            cons e (recupdate (tail bindings))
+      in
+      TmRecord {t with bindings = recupdate t.bindings}
+    else error "Not updating a record"
 end
 
 lang DataEval = DataAst + DataPat + AppEval
@@ -704,6 +718,8 @@ let tup = lam x. TmTuple {tms = x} in
 let cint = lam x. TmConst {val = CInt {val = x}} in
 utest eval [] (wrapInDecls (app addEvalNested (tup [num (cint 1), num (cint 2)]))) with TmCon {ident = "Num", body = cint 3} in
 
+
+
 let record_ = TmRecord {bindings = []} in
 let recAdd = lam key. lam value. lam rec.
   match rec with TmRecord t then
@@ -713,6 +729,13 @@ in
 let recAddTups = lam tups. lam rec.
   foldl (lam recacc. lam t. recAdd t.0 t.1 recacc) rec tups in
 
+let recordproj_ = lam key. lam rec. TmRecordProj {rec = rec,
+                                                  key = key}
+in
+let recordupdate_ = lam key. lam value. lam rec. TmRecordUpdate {rec = rec,
+                                                                 key = key,
+                                                                 value = value}
+in
 
 let recordProj = TmLet {ident = "myrec",
                         tpe = None (),
@@ -720,6 +743,21 @@ let recordProj = TmLet {ident = "myrec",
                         inexpr = TmRecordProj {rec = var "myrec",
                                                key = "b"}} in
 
+let recordUpdate = TmLet {ident = "myrec",
+                          tpe = None (),
+                          body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
+                          inexpr = TmRecordProj {rec = recordupdate_ "c" (cint 11) (var "myrec"),
+                                                 key = "c"}} in
+
+-- This updates the record with a non-existent value, should this case be allowed?
+let recordUpdate2 = TmLet {ident = "myrec",
+                           tpe = None (),
+                           body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
+                           inexpr = TmRecordProj {rec = recordupdate_ "d" (cint 1729) (var "myrec"),
+                                                  key = "d"}} in
+
 utest eval [] recordProj with TmConst {val = CInt {val = 37}} in
+utest eval [] recordUpdate with TmConst {val = CInt {val = 11}} in
+utest eval [] recordUpdate2 with TmConst {val = CInt {val = 1729}} in
 
 ()
