@@ -207,6 +207,12 @@ lang TupleTypeAst
   | TyProd {tpes : [Type]}
 end
 
+lang RecordTypeAst
+  syn Type =
+  | TyRecord {tpes : [{ident : String,
+                       tpe   : Type}]}
+end
+
 lang DataTypeAst
   syn Type =
   | TyCon {ident : String}
@@ -224,7 +230,7 @@ end
 
 lang AppTypeAst
   syn Type =
-  | TyApp {lhs : Type, rhs : Type} --JW: Is this right?  (Type, Type)
+  | TyApp {lhs : Type, rhs : Type}
 end
 
 

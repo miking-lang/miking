@@ -428,7 +428,7 @@ end
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
                + DataEval + UtestEval + IntEval + ArithIntEval + BoolEval
                + CmpEval + CharEval + UnitEval + MatchEval
-               + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst
+               + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst + RecordTypeAst
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
   | TmConst c2 -> constExprEq c2.val e1
@@ -436,6 +436,7 @@ lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordE
   | TmConFun k -> enumEq k.ident e1
   | TmTuple t -> tupleEq t.tms e1
   | TmSeq s -> seqEq s.tms e1
+  | TmRecord t -> recordEq t.bindings e1
 
   sem constExprEq (c1 : Const) =
   | TmConst c2 -> constEq c1 c2.val
@@ -478,6 +479,15 @@ lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordE
   | TmTuple t ->
     and (eqi (length tms1) (length t.tms))
         (all (lam b. b) (zipWith eq tms1 t.tms))
+  | _ -> false
+
+  sem recordEq (bindings1 : [{key : String, value : Expr}]) =
+  | TmRecord t ->
+    and (eqi (length bindings1) (length t.bindings))
+        (all (lam e1. any (lam e2. and (eqstr e1.key e2.key)
+                                       (eq e1.value e2.value))
+                          (bindings1))
+             (t.bindings))
   | _ -> false
 
   sem seqEq (seq1 : [Expr]) =
@@ -759,5 +769,12 @@ let recordUpdate2 = TmLet {ident = "myrec",
 utest eval [] recordProj with TmConst {val = CInt {val = 37}} in
 utest eval [] recordUpdate with TmConst {val = CInt {val = 11}} in
 utest eval [] recordUpdate2 with TmConst {val = CInt {val = 1729}} in
+
+let evalUTestRecordInUnit = TmUtest {
+    test = recAddTups [("a", cint 10), ("b", cint 13)] record_,
+    expected = recAddTups [("b", cint 13), ("a", cint 10)] record_,
+    next = TmConst {val = CUnit ()}}
+in
+utest eval [] evalUTestRecordInUnit with TmConst {val = CUnit ()} in
 
 ()
