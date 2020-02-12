@@ -144,36 +144,12 @@ let flatten = function
  ***************)
 
 module AstHelpers = struct
-  let lam x body = TmLam(NoInfo, us x, TyDyn, body)
-  let lam2 x y body =
-    TmLam(NoInfo, us x, TyDyn, lam y body)
-  let lam3 x y z body =
-    TmLam(NoInfo, us x, TyDyn, lam2 y z body)
-  let var x = TmVar(NoInfo, us x, -1)
+  let var x = TmVar(NoInfo, x, -1)
   let app l r = TmApp(NoInfo, l, r)
-  let app2 l r1 r2 = TmApp(NoInfo, app l r1, r2)
-  let app3 l r1 r2 r3 = TmApp(NoInfo, app2 l r1 r2, r3)
-  let fix = TmFix(NoInfo)
-  let let_ x e body = TmLet(NoInfo, us x, e, body)
-  let if_ c t e = TmIf(NoInfo, c, t, e)
-  let int n = TmConst(NoInfo, CInt n)
+  let let_ x e body = TmLet(NoInfo, x, e, body)
 end
 
 open AstHelpers
-
-let translate_data =
-  let translate_constr constr inner =
-    match constr with
-    | CDecl(_, k, ty) -> TmCondef (NoInfo, k, ty, inner)
-  in
-  List.fold_right translate_constr
-
-let translate_params =
-  let translate_param p base =
-    match p with
-    | Param(_, x, ty) -> TmLam (NoInfo, x, ty, base)
-  in
-  List.fold_right translate_param
 
 let translate_cases f target cases =
   let translate_case case inner =
@@ -184,11 +160,10 @@ let translate_cases f target cases =
       TmLet(fi, x, target, handler)
   in
   let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
-            (ustring2list (us"No matching case for function " ^.
-                             Ustring.from_utf8 f))
+            (ustring2list (us"No matching case for function " ^. f))
   in
   let no_match =
-    let_ "_"
+    let_ (us"_")
       (app (TmConst (NoInfo, CdebugShow)) target)
       (app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg)))
   in
@@ -198,92 +173,134 @@ let translate_cases f target cases =
   let sorted_cases = List.sort case_compare cases in
   List.fold_right translate_case sorted_cases no_match
 
-let unpack_recursive_functions names seq body =
-  let rec unpack i = function
-    | [] -> body
-    | f::fs -> let_ f (app2 (var "nth") (var seq) (int i)) (unpack (i + 1) fs)
-  in
-  unpack 0 names
+module USMap = Map.Make (Ustring)
 
-let translate_inter f fs params cases : tm -> tm =
-  let target_name = "_" ^ f ^ "_target" in
-  let target = var target_name in
-  let mtch =
-    lam target_name (translate_cases f target cases) in
-  let wrapped_match = translate_params params mtch in
-  let funs_seq = f ^ "_funs" in
-  let unpacked = unpack_recursive_functions fs funs_seq wrapped_match in
-  let fn = lam funs_seq unpacked in
-  fun inner -> let_ (f ^ "_abs") fn inner
+type mlangEnv = { constructors : ustring USMap.t; normals : ustring USMap.t }
+let emptyMlangEnv = {constructors = USMap.empty; normals = USMap.empty}
 
-let translate_decl fs : decl -> tm -> tm = function
-  | Data (_, _, constrs) -> fun inner -> translate_data constrs inner
-  | Inter (_, f, params, cases) ->
-     translate_inter (Ustring.to_utf8 f) fs params cases
+let merge_env_overwrite a b =
+  { constructors = USMap.union (fun _ _ r -> Some r) a.constructors b.constructors
+  ; normals = USMap.union (fun _ _ r -> Some r) a.normals b.normals }
 
-let translate_lang : mlang -> (tm -> tm) list = function
-  | Lang (_, _, _, decls) ->
-     let extract_name decl ack = match decl with
-       | Inter(_, f, _, _) -> Ustring.to_utf8 f::ack
-       | _ -> ack
-     in
-     let fun_names = List.fold_right extract_name decls [] in
-     let fun_abstractions = List.map (translate_decl fun_names) decls in
-     let abs_seq =
-       TmSeq(NoInfo, List.map (fun f -> var (f ^ "_abs")) fun_names)
-     in
-     let fix =
-       fun inner -> let_ "@funs" (app (var "fix_mutual") abs_seq) inner
-     in
-     let unpacks =
-       fun inner -> unpack_recursive_functions fun_names "@funs" inner in
-     fun_abstractions @ [fix; unpacks]
+let empty_mangle str = str
 
+let resolve_con {constructors; _} ident =
+  match USMap.find_opt ident constructors with
+  | Some(ident') -> ident'
+  | None -> empty_mangle ident
 
-let translate_uses tops t =
-  let translate_use = function
-    | TmUse(fi, l, inner) ->
-       let lang = lookup_lang fi tops l in
-       let decl_wrappers = translate_lang lang in
-       List.fold_right (@@) decl_wrappers inner
-    | t -> t
-  in
-  Ast.map_tm translate_use t
+let resolve_id {normals; _} ident =
+  match USMap.find_opt ident normals with
+  | Some(ident') -> ident'
+  | None -> empty_mangle ident
 
-let desugar_uses_in_interpreters tops =
-  let desugar_uses_in_case tops = function
-    | (p, t) -> (p, translate_uses tops t)
-  in
-  let desugar_uses_in_decl tops = function
-    | Inter (fi, f, params, cases) ->
-       let cases' = List.map (desugar_uses_in_case tops) cases in
-       Inter(fi, f, params, cases')
-    | Data _ as d -> d
-  in
-  let desugar_uses_in_lang desugared = function
-    | TopLang(Lang(fi, l, ls, decls)) ->
-       let decls' = List.map (desugar_uses_in_decl desugared) decls in
-       let lang' = TopLang(Lang(fi, l, ls, decls')) in
-       lang'::desugared
-    | l -> l::desugared
-  in
-  List.rev (List.fold_left desugar_uses_in_lang [] tops)
+(* TODO(vipa): this function is here since the current implementation has variables and constructors in the same namespace, it should be replaced by correct uses of resolve_id and resolve_con *)
+let resolve_id_or_con {constructors; normals} ident =
+  match USMap.find_opt ident normals with
+  | Some ident' -> ident'
+  | None ->
+     (match USMap.find_opt ident constructors with
+      | Some ident' -> ident'
+      | None -> empty_mangle ident)
 
-let insert_top_level_decls tops t =
-  let insert_let top inner = match top with
-    | TopLet(Let(fi, x, tm)) ->
-       TmLet(fi, x, tm, inner)
-    | TopRecLet(RecLet(fi, lst)) ->
-       TmRecLets(fi, lst, inner)
-    | TopCon(Con(fi, k, ty)) ->
-       TmCondef(fi, k, ty, inner)
-    | TopLang _ -> inner
-  in
-  List.fold_right insert_let tops t
+(* TODO(vipa): see resolve_id_or_con *)
+let delete_id_and_con {constructors; normals} ident =
+  { constructors = USMap.remove ident constructors
+  ; normals = USMap.remove ident normals }
 
-let desugar_language_uses = function
-  | Program(_, tops, t) ->
-     let tops' = desugar_uses_in_interpreters tops in
-     let t' = insert_top_level_decls tops' t in
-     let t'' = translate_uses tops' t' in
-     t''
+let rec desugar_tm nss env =
+  let map_right f (a, b) = (a, f b)
+  in function
+  (* Referencing things *)
+  | TmVar(fi, name, i) -> TmVar(fi, resolve_id_or_con env name, i)
+  | (TmConsym _) as tm -> tm
+  (* Introducing things *)
+  | TmLam(fi, name, ty, body) ->
+     TmLam(fi, empty_mangle name, ty, desugar_tm nss (delete_id_and_con env name) body)
+  | TmLet(fi, name, e, body) ->
+     TmLet(fi, empty_mangle name, desugar_tm nss env e, desugar_tm nss (delete_id_and_con env name) body)
+  | TmRecLets(fi, bindings, body) ->
+     let env' = List.fold_left (fun env' (_, name, _) -> delete_id_and_con env' name) env bindings
+     in TmRecLets(fi, List.map (fun (fi, name, e) -> (fi, empty_mangle name, desugar_tm nss env' e)) bindings, desugar_tm nss env' body)
+  | TmCondef(fi, name, ty, body) ->
+     TmCondef(fi, empty_mangle name, ty, desugar_tm nss (delete_id_and_con env name) body)
+  | (TmClos _) as tm -> tm
+  (* Both introducing and referencing *)
+  | TmMatch(fi, target, pat, thn, els) ->
+     let rec desugar_pat env = function
+       | PatNamed(fi, name) -> (delete_id_and_con env name, PatNamed(fi, empty_mangle name))
+       | PatTuple(fi, pats) ->
+          List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right (fun p -> p::pats)) pats (env, [])
+          |> map_right (fun pats -> PatTuple(fi, pats))
+       | PatCon(fi, name, sym, p) ->
+          desugar_pat env p
+          |> map_right (fun p -> PatCon(fi, resolve_con env name, sym, p))
+       | (PatInt _ | PatChar _ | PatBool _ | PatUnit _) as pat -> (env, pat) in
+     let (env', pat') = desugar_pat env pat in
+     TmMatch(fi, desugar_tm nss env target, pat', desugar_tm nss env' thn, desugar_tm nss env els)
+  (* Use *)
+  | TmUse(fi, name, body) ->
+     (match USMap.find_opt name nss with
+      | None -> raise_error fi ("Unknown language fragment '" ^ Ustring.to_utf8 name ^ "'")
+      | Some ns -> desugar_tm nss (merge_env_overwrite env ns) body)
+  (* Simple recursions *)
+  | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
+  | TmIf(fi, c, th, el) -> TmIf(fi, desugar_tm nss env c, desugar_tm nss env th, desugar_tm nss env el)
+  | TmSeq(fi, tms) -> TmSeq(fi, List.map (desugar_tm nss env) tms)
+  | TmTuple(fi, tms) -> TmTuple(fi, List.map (desugar_tm nss env) tms)
+  | TmRecord(fi, tms) -> TmRecord(fi, List.map (desugar_tm nss env |> map_right) tms)
+  | TmProj(fi, tm, lab) -> TmProj(fi, desugar_tm nss env tm, lab)
+  | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
+  | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
+  | TmConst(fi, CRecord record) -> TmConst(fi, CRecord (Record.map (desugar_tm nss env) record))
+  (* Non-recursive *)
+  | (TmConst _ | TmFix _ ) as tm -> tm
+
+(* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
+let desugar_top (nss, (stack : (tm -> tm) list)) = function
+  | TopLang (Lang(_, langName, _, decls)) ->
+     (* compute the namespace *)
+     let mangle str = langName ^. us"_" ^. str in
+     let cdecl_names (CDecl(_, name, _)) = (name, mangle name) in
+     let add_decl {constructors; normals} = function
+       | Data (_, _, cdecls) ->
+          let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names
+          in {constructors = USMap.add_seq new_constructors constructors; normals}
+       | Inter (_, name, _, _) -> {normals = USMap.add name (mangle name) normals; constructors} in
+     let ns = List.fold_left add_decl emptyMlangEnv decls in
+     (* wrap in "con"s *)
+     let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
+       TmCondef(fi, mangle cname, TyArrow(TyCon ty_name, ty), tm) in
+     let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
+       | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
+       | _ -> tm in
+     (* translate "Inter"s into (info * ustring * tm) *)
+     let inter_to_tm fname fi params cases =
+       let target = us"__sem_target" in
+       let wrap_param (Param(fi, name, ty)) tm = TmLam(fi, name, ty, tm)
+       in TmLam(fi, target, TyDyn, translate_cases fname (var target) cases)
+          |> List.fold_right wrap_param params
+          |> desugar_tm nss ns in
+     let translate_inter = function
+       | Inter(fi, name, params, cases) -> Some (fi, mangle name, inter_to_tm name fi params cases)
+       | _ -> None in
+     (* put translated inters in a single letrec, then wrap in cons, then done *)
+     let wrap tm = TmRecLets(NoInfo, List.filter_map translate_inter decls, tm)
+                   |> List.fold_right wrap_data decls
+     in (USMap.add langName ns nss, wrap :: stack)
+
+  (* The other tops are trivial translations *)
+  | TopLet(Let(fi, id, tm)) ->
+     let wrap tm' = TmLet(fi, empty_mangle id, desugar_tm nss emptyMlangEnv tm, tm')
+     in (nss, (wrap :: stack))
+  | TopRecLet(RecLet(fi, lets)) ->
+     let wrap tm' = TmRecLets(fi, List.map (fun (fi', id, tm) -> fi', empty_mangle id, desugar_tm nss emptyMlangEnv tm) lets, tm')
+     in (nss, (wrap :: stack))
+  | TopCon(Con(fi, id, ty)) ->
+     let wrap tm' = TmCondef(fi, id, ty, tm')
+     in (nss, (wrap :: stack))
+
+let desugar_post_flatten (Program(_, tops, t)) =
+  let acc_start = (USMap.empty, []) in
+  let (nss, stack) = List.fold_left desugar_top acc_start tops in
+  List.fold_left (|>) (desugar_tm nss emptyMlangEnv t) stack
