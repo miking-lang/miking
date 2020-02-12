@@ -156,7 +156,7 @@ and label =
 and pat =
 | PatNamed of info * ustring                      (* Named, capturing wildcard *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
-| PatCon   of info * ustring * int * pat          (* Constructor pattern *)
+| PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)
 | PatChar  of info * int                          (* Char pattern *)
 | PatBool  of info * bool                         (* Boolean pattern *)
