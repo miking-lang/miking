@@ -31,35 +31,59 @@ lang AppPrettyPrint = AppAst
 end
 
 lang FunPrettyPrint = FunAst
+    sem getTypeStringCode (indent : Int) =
+    -- Intentionally left blank
+
     sem pprintCode (indent : Int) =
     | TmLam t ->
       let ident = t.ident in
+      let tpe =
+        match t.tpe with Some t1 then
+          concat " : " (getTypeStringCode indent t1)
+        else ""
+      in
       let body = pprintCode indent t.body in
-      strJoin "" ["lam ", ident, ".", newline indent, body]
+      strJoin "" ["lam ", ident, tpe, ".", newline indent, body]
 end
 
 lang LetPrettyPrint = LetAst
+    sem getTypeStringCode (indent : Int) =
+    -- Intentionally left blank
+
     sem pprintCode (indent : Int) =
     | TmLet t ->
       let ident = t.ident in
+      let tpe =
+        match t.tpe with Some t1 then
+          concat " : " (getTypeStringCode indent t1)
+        else ""
+      in
       let body = pprintCode (incr indent) t.body in
       let inexpr = pprintCode indent t.inexpr in
-      strJoin "" ["let ", ident, " =", newline (incr indent),
+      strJoin "" ["let ", ident, tpe, " =", newline (incr indent),
                   body, newline indent,
                   "in", newline indent,
                   inexpr]
 end
 
 lang RecLetsPrettyPrint = RecLetsAst
+    sem getTypeStringCode (indent : Int) =
+    -- Intentionally left blank
+
     sem pprintCode (indent : Int) =
     | TmRecLets t ->
       let lets = t.bindings in
       let inexpr = pprintCode indent t.inexpr in
       let pprintLets = lam acc. lam l.
         let ident = l.ident in
+        let tpe =
+          match l.tpe with Some l1 then
+            concat " : " (getTypeStringCode indent l1)
+          else ""
+        in
         let body = pprintCode (incr (incr indent)) l.body in
         strJoin "" [acc, newline (incr indent),
-                    "let ", ident, " =", newline (incr (incr indent)),
+                    "let ", ident, tpe, " =", newline (incr (incr indent)),
                     body]
       in
       strJoin "" [foldl pprintLets "recursive" lets, newline indent,
@@ -145,11 +169,19 @@ lang RecordPrettyPrint = RecordAst
 end
 
 lang DataPrettyPrint = DataAst + DataPat
+    sem getTypeStringCode (indent : Int) =
+    -- Intentionally left blank
+
     sem pprintCode (indent : Int) =
     | TmConDef t ->
       let name = pprintCode indent (TmConFun {ident = t.ident}) in
+      let tpe =
+        match t.tpe with Some t1 then
+          concat " : " (getTypeStringCode indent t1)
+        else ""
+      in
       let inexpr = pprintCode indent t.inexpr in
-      strJoin "" ["con ", name, " in", newline indent, inexpr]
+      strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
     | TmConFun t ->
       if eqi (length t.ident) 0 then
         "#con\"\""
@@ -183,12 +215,38 @@ lang UtestPrettyPrint = UtestAst
       strJoin "" ["utest ", test, " with ", expected, " in", newline indent, next]
 end
 
+lang TypePrettyPrint = DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
+                       TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
+                       BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint
+    sem getTypeStringCode (indent : Int) =
+    | TyArrow t -> strJoin "" ["(", getTypeStringCode indent t.from, ") -> (",
+                               getTypeStringCode indent t.to, ")"]
+    | TyDyn _ -> "Dyn"
+    | TyUnit _ -> "()"
+    | TyChar _ -> "Char"
+    | TyString _ -> "String"
+    | TySeq t -> strJoin "" ["[", getTypeStringCode indent t.tpe, "]"]
+    | TyProd t ->
+      let tpes = map (lam x. getTypeStringCode indent x) t.tpes in
+      strJoin "" ["(", strJoin ", " tpes, ")"]
+    | TyRecord t ->
+      let conventry = lam entry.
+          strJoin "" [entry.ident, " : ", getTypeStringCode indent entry.tpe]
+      in
+      strJoin "" ["{", strJoin ", " (map conventry t.tpes), "}"]
+    | TyCon t -> pprintCode indent (TmConFun {ident = t.ident})
+    | TyInt _ -> "Int"
+    | TyBool _ -> "Bool"
+    | TyApp t -> getTypeStringCode indent (TyArrow {from = t.lhs, to = t.rhs})
+end
+
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
                         UnitPrettyPrint + IntPrettyPrint + ArithIntPrettyPrint +
                         BoolPrettyPrint + CmpPrettyPrint + CharPrettyPrint +
                         SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
-                        DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint
+                        DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +
+                        TypePrettyPrint
 
 mexpr
 use MExprPrettyPrint in
@@ -288,8 +346,8 @@ in
 --       muli n (factorial (subi n 1))
 -- in
 let func_factorial =
-    reclets_add "factorial" (None ())
-        (lam_ "n" (None ())
+    reclets_add "factorial" (Some (TyInt {}))
+        (lam_ "n" (Some (TyInt {}))
             (if_ (eqi_ (var_ "n") (int_ 0))
                  (int_ 1)
                  (muli_ (var_ "n")
@@ -328,7 +386,8 @@ in
 
 -- let recget = {i = 5, s = "hello!"} in
 let func_recget =
-    let_ "recget" (None ()) (
+    let_ "recget" (Some (TyRecord {tpes = [{ident = "i", tpe = TyInt {}},
+                                           {ident = "s", tpe = TySeq {tpe = TyChar {}}}]})) (
         record_add "i" (int_ 5) (
         record_add "s" (str_ "hello!")
         record_empty))
@@ -336,7 +395,7 @@ in
 
 -- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in
 let func_recconcs =
-    let_ "recconcs" (None ()) (lam_ "rec" (None ()) (lam_ "s" (None ()) (
+    let_ "recconcs" (None ()) (lam_ "rec" (None ()) (lam_ "s" (Some (TyString {})) (
         recordupdate_ "s"
                       (concat_ (recordproj_ "s" (var_ "rec"))
                                (var_ "s"))
