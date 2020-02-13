@@ -197,6 +197,12 @@ lang UnitTypeAst
   | TyUnit {}
 end
 
+lang CharTypeAst
+  syn Type =
+  | TyChar {}
+  | TyString {}
+end
+
 lang SeqTypeAst
   syn Type =
   | TySeq {tpe : Type}
