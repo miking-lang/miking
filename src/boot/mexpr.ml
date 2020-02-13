@@ -129,7 +129,7 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
    a value. This is why the returned value is evaluated in the eval() function.
    The reason for this is that if-expressions return expressions
    and not values. *)
-let delta fi c v  =
+let delta eval env fi c v  =
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
@@ -365,7 +365,7 @@ let delta fi c v  =
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
 
-    | CExt v, t -> Ext.delta v t
+    | CExt v, t -> Ext.delta eval env v t
 
 
 (* Debug function used in the eval function *)
@@ -508,7 +508,7 @@ let rec eval env t =
        (* Closure application *)
        | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::Lazy.force env2) t3
        (* Constant application using the delta function *)
-       | TmConst(_,c) -> delta fiapp c (eval env t2)
+       | TmConst(_,c) -> delta eval env fiapp c (eval env t2)
        (* Constructor application *)
        | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
        | TmConsym(_,x,_,Some(_)) ->
