@@ -99,7 +99,7 @@ and const =
 | Cerror
 | CdebugShow
 (* External functions TODO: Should not be part of core language *)
-| CExt of Extast.ext
+| CExt of tm Extast.ext
 
 (* Names *)
 and sym = int
