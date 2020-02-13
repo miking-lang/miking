@@ -128,6 +128,7 @@ lang IntEval = IntAst + IntPat
     else None ()
 end
 
+
 lang ArithIntEval = ArithIntAst + ConstEval
   syn Const =
   | CAddi2 Int
@@ -171,6 +172,71 @@ lang ArithIntEval = ArithIntAst + ConstEval
         TmConst {val = CInt {val = muli n1 n2.val}}
       else error "Not multiplying a numeric constant"
     else error "Not multiplying a constant"
+end
+
+
+lang ArithFloatEval = ArithFloatAst + ConstEval
+  syn Const =
+  | CAddf2 Float
+  | CSubf2 Float
+  | CMulf2 Float
+  | CDivf2 Float
+
+  sem delta (arg : Expr) =
+  | CAddf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CAddf2 f.val}
+      else error "Not adding a numeric constant"
+    else error "Not adding a constant"
+  | CAddf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CFloat {val = addf f1 f2.val}}
+      else error "Not adding a numeric constant"
+    else error "Not adding a constant"
+  | CSubf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CSubf2 f.val}
+      else error "Not subtracting a numeric constant"
+    else error "Not subtracting a constant"
+  | CSubf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CFloat {val = subf f1 f2.val}}
+      else error "Not subtracting a numeric constant"
+    else error "Not subtracting a constant"
+  | CMulf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CMulf2 f.val}
+      else error "Not multiplying a numeric constant"
+    else error "Not multiplying a constant"
+  | CMulf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CFloat {val = mulf f1 f2.val}}
+      else error "Not multiplying a numeric constant"
+    else error "Not multiplying a constant"
+  | CDivf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CDivf2 f.val}
+      else error "Not dividing a numeric constant"
+    else error "Not dividing a constant"
+  | CDivf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CFloat {val = divf f1 f2.val}}
+      else error "Not dividing a numeric constant"
+    else error "Not dividing a constant"
+  | CNegf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CFloat {val = negf f.val}}
+      else error "Not negating a numeric constant"
+    else error "Not negating a constant"
 end
 
 lang BoolEval = BoolAst + BoolPat + ConstEval
@@ -437,8 +503,8 @@ end
 -- TODO: Add more types! Think about design
 
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
-               + DataEval + UtestEval + IntEval + ArithIntEval + BoolEval
-               + CmpEval + CharEval + UnitEval + MatchEval
+               + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval
+               + BoolEval + CmpEval + CharEval + UnitEval + MatchEval
                + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst + RecordTypeAst
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
@@ -787,4 +853,17 @@ let evalUTestRecordInUnit = TmUtest {
     next = TmConst {val = CUnit ()}}
 in
 utest eval {env = []} evalUTestRecordInUnit with TmConst {val = CUnit ()} in
+
+let float = lam f. TmConst {val = CFloat {val = f}} in
+let addf_ = lam a. lam b. appSeq (TmConst {val = CAddf ()}) [a, b] in
+let subf_ = lam a. lam b. appSeq (TmConst {val = CSubf ()}) [a, b] in
+let mulf_ = lam a. lam b. appSeq (TmConst {val = CMulf ()}) [a, b] in
+let divf_ = lam a. lam b. appSeq (TmConst {val = CDivf ()}) [a, b] in
+let negf_ = lam a. appSeq (TmConst {val = CNegf ()}) [a] in
+
+utest eval {env = []} (addf_ (float 1.) (float 2.)) with float 3. in
+utest eval {env = []} (subf_ (float 1.) (float 2.)) with float (negf 1.) in
+utest eval {env = []} (mulf_ (float 1.) (float 2.)) with float 2. in
+utest eval {env = []} (divf_ (float 1.) (float 2.)) with float 0.5 in
+utest eval {env = []} (negf_ (float 1.)) with float (negf 1.) in
 ()
