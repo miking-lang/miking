@@ -14,7 +14,6 @@ let incr = lam indent. addi indent 4
 lang VarPrettyPrint = VarAst
     sem pprintCode (indent : Int) =
     | TmVar t ->
-      -- Not clear: Is an empty identifier valid syntax?
       if eqi (length t.ident) 0 then
         "#var\"\""
       else if is_lower_alpha (head t.ident) then
@@ -116,7 +115,7 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
-    | CChar c -> strJoin "" [head "'", c.val, head "'"]
+    | CChar c -> [head "'", c.val, head "'"]
 end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint
@@ -134,12 +133,30 @@ lang TuplePrettyPrint = TupleAst
     | TmProj t -> strJoin "" [pprintCode indent t.tup, ".", int2string t.idx]
 end
 
+lang RecordPrettyPrint = RecordAst
+    sem pprintCode (indent : Int) =
+    | TmRecord t ->
+      let binds = map (lam r. strJoin "" [r.key, " = ", pprintCode indent r.value]) t.bindings in
+      strJoin "" ["{", strJoin ", " binds, "}"]
+    | TmRecordProj t -> strJoin "" [pprintCode indent t.rec, ".", t.key]
+    | TmRecordUpdate t ->
+      strJoin "" ["{", pprintCode indent t.rec, " with ", t.key,
+                  " = ", pprintCode indent t.value, "}"]
+end
+
 lang DataPrettyPrint = DataAst + DataPat
     sem pprintCode (indent : Int) =
     | TmConDef t ->
-      let name = t.ident in
+      let name = pprintCode indent (TmConFun {ident = t.ident}) in
       let inexpr = pprintCode indent t.inexpr in
       strJoin "" ["con ", name, " in", newline indent, inexpr]
+    | TmConFun t ->
+      if eqi (length t.ident) 0 then
+        "#con\"\""
+      else if is_upper_alpha (head t.ident) then
+        t.ident
+      else
+        strJoin "" ["#con\"", t.ident, "\""]
 
     sem getPatStringCode (indent : Int) =
     | PCon t -> strJoin "" [t.ident, " (", t.subpat, ")"]
@@ -170,8 +187,8 @@ lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
                         UnitPrettyPrint + IntPrettyPrint + ArithIntPrettyPrint +
                         BoolPrettyPrint + CmpPrettyPrint + CharPrettyPrint +
-                        SeqPrettyPrint + TuplePrettyPrint + DataPrettyPrint +
-                        MatchPrettyPrint + UtestPrettyPrint
+                        SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
+                        DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint
 
 mexpr
 use MExprPrettyPrint in
@@ -222,6 +239,16 @@ in
 let seq_ = lam tms. TmSeq {tms = tms} in
 let tuple_ = lam tms. TmTuple {tms = tms} in
 let proj_ = lam tup. lam idx. TmProj {tup = tup, idx = idx} in
+let record_empty = TmRecord {bindings = []} in
+let record_add = lam key. lam value. lam record.
+    match record with TmRecord t then
+        TmRecord {t with bindings = cons {key = key, value = value} t.bindings}
+    else
+        error "record is not a TmRecord construct"
+in
+let recordproj_ = lam key. lam rec. TmRecordProj {rec = rec, key = key} in
+let recordupdate_ = lam key. lam value. lam rec. TmRecordUpdate {rec = rec, key = key, value = value} in
+
 let app_ = lam lhs. lam rhs. TmApp {lhs = lhs, rhs = rhs} in
 let appf1_ = lam f. lam a1. app_ f a1 in
 let appf2_ = lam f. lam a1. lam a2. app_ (appf1_ f a1) a2 in
@@ -234,6 +261,8 @@ let eqi_ = appf2_ (TmConst {val = CEqi ()}) in
 let and_ = appf2_ (TmConst {val = CAnd ()}) in
 let or_ = appf2_ (TmConst {val = COr ()}) in
 let not_ = appf1_ (TmConst {val = CNot ()}) in
+let cons_ = appf2_ (TmVar {ident = "cons"}) in
+let concat_ = appf2_ (TmVar {ident = "concat"}) in
 
 -- let foo = lam a. lam b.
 --     let bar = lam x. addi b x in
@@ -296,10 +325,30 @@ let funcs_evenodd =
     reclets_empty)
 in
 
+
+-- let recget = {i = 5, s = "hello!"} in
+let func_recget =
+    let_ "recget" (None ()) (
+        record_add "i" (int_ 5) (
+        record_add "s" (str_ "hello!")
+        record_empty))
+in
+
+-- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in
+let func_recconcs =
+    let_ "recconcs" (None ()) (lam_ "rec" (None ()) (lam_ "s" (None ()) (
+        recordupdate_ "s"
+                      (concat_ (recordproj_ "s" (var_ "rec"))
+                               (var_ "s"))
+                      (var_ "rec"))))
+in
+
 let sample_ast = unit_ in
 let sample_ast = letappend sample_ast func_foo in
 let sample_ast = letappend sample_ast func_factorial in
 let sample_ast = letappend sample_ast funcs_evenodd in
+let sample_ast = letappend sample_ast func_recget in
+let sample_ast = letappend sample_ast func_recconcs in
 
 --let _ = print "\n\n" in
 --let _ = print (pprintCode 0 sample_ast) in
