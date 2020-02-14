@@ -11,7 +11,7 @@ let newline = lam indent. concat "\n" (spacing indent)
 -- Set spacing on increment
 let incr = lam indent. addi indent 4
 
-lang VarPrettyPrint = VarAst
+lang VarPrettyPrint = VarAst + VarPat
     sem pprintCode (indent : Int) =
     | TmVar t ->
       if eqi (length t.ident) 0 then
@@ -20,6 +20,9 @@ lang VarPrettyPrint = VarAst
         t.ident
       else
         strJoin "" ["#var\"", t.ident, "\""]
+
+    sem getPatStringCode (indent : Int) =
+    | PVar t -> pprintCode indent (TmVar {ident = t.ident})
 end
 
 lang AppPrettyPrint = AppAst
@@ -98,14 +101,20 @@ lang ConstPrettyPrint = ConstAst
     | TmConst t -> getConstStringCode indent t.val
 end
 
-lang UnitPrettyPrint = UnitAst + ConstPrettyPrint
+lang UnitPrettyPrint = UnitAst + UnitPat + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CUnit _ -> "()"
+
+    sem getPatStringCode (indent : Int) =
+    | PUnit _ -> "()"
 end
 
-lang IntPrettyPrint = IntAst + ConstPrettyPrint
+lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CInt t -> int2string t.val
+
+    sem getPatStringCode (indent : Int) =
+    | PInt t -> int2string t.val
 end
 
 lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
@@ -115,7 +124,7 @@ lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
     | CMuli _ -> "muli"
 end
 
-lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
+lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CBool b -> if b.val then "true" else "false"
     | CNot _ -> "not"
@@ -129,6 +138,9 @@ lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
       let els = pprintCode (incr indent) t.els in
       strJoin "" ["if ", cond, " then", newline (incr indent), thn, newline indent,
                                 "else", newline (incr indent), els]
+
+    sem getPatStringCode (indent : Int) =
+    | PBool b -> getConstStringCode indent (CBool {val = b.val})
 end
 
 lang CmpPrettyPrint = CmpAst + ConstPrettyPrint
@@ -151,10 +163,13 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint
     | TmSeq t -> strJoin "" ["[", strJoin ", " (map (pprintCode indent) t.tms), "]"]
 end
 
-lang TuplePrettyPrint = TupleAst
+lang TuplePrettyPrint = TupleAst + TuplePat
     sem pprintCode (indent : Int) =
     | TmTuple t -> strJoin "" ["(", strJoin ", " (map (pprintCode indent) t.tms), ")"]
     | TmProj t -> strJoin "" [pprintCode indent t.tup, ".", int2string t.idx]
+
+    sem getPatStringCode (indent : Int) =
+    | PTuple t -> strJoin "" ["(", strJoin ", " (map (getPatStringCode indent) t.pats), ")"]
 end
 
 lang RecordPrettyPrint = RecordAst
@@ -191,7 +206,10 @@ lang DataPrettyPrint = DataAst + DataPat
         strJoin "" ["#con\"", t.ident, "\""]
 
     sem getPatStringCode (indent : Int) =
-    | PCon t -> strJoin "" [t.ident, " (", t.subpat, ")"]
+    | PCon t ->
+      let name = pprintCode indent (TmConFun {ident = t.ident}) in
+      let subpat = getPatStringCode indent t.subpat in
+      strJoin "" [name, " (", subpat, ")"]
 end
 
 lang MatchPrettyPrint = MatchAst
@@ -237,7 +255,9 @@ lang TypePrettyPrint = DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
     | TyCon t -> pprintCode indent (TmConFun {ident = t.ident})
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
-    | TyApp t -> getTypeStringCode indent (TyArrow {from = t.lhs, to = t.rhs})
+    | TyApp t ->
+      -- Unsure about how this should be formatted or what this type even means.
+      getTypeStringCode indent (TyArrow {from = t.lhs, to = t.rhs})
 end
 
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
@@ -258,6 +278,8 @@ recursive let letappend = lam letexpr. lam expr.
         TmLet {t with inexpr = letappend t.inexpr expr}
     else match letexpr with TmRecLets t then
         TmRecLets {t with inexpr = letappend t.inexpr expr}
+    else match letexpr with TmConDef t then
+        TmConDef {t with inexpr = letappend t.inexpr expr}
     else
         expr
 in
@@ -270,6 +292,8 @@ let false_ = TmConst {val = CBool {val = false}} in
 let char_ = lam c. TmConst {val = CChar {val = c}} in
 let str_ = lam s. TmConst {val = CSeq {tms = map char_ s}} in
 let var_ = lam s. TmVar {ident = s} in
+let confun_ = lam s. TmConFun {ident = s} in
+let condef_ = lam s. lam tpe. TmConDef {ident = s, tpe = tpe, inexpr = unit_} in
 let let_ = lam ident. lam tpe. lam body.
     TmLet {ident = ident,
            tpe = tpe,
@@ -294,6 +318,16 @@ in
 let if_ = lam cond. lam thn. lam els.
     TmIf {cond = cond, thn = thn, els = els}
 in
+let match_ = lam target. lam pat. lam thn. lam els.
+    TmMatch {target = target, pat = pat, thn = thn, els = els}
+in
+let pvar_ = lam s. PVar {ident = s} in
+let punit_ = PUnit {} in
+let pint_ = lam i. PInt {val = i} in
+let ptrue_ = PBool {val = true} in
+let pfalse_ = PBool {val = false} in
+let ptuple_ = lam pats. PTuple {pats = pats} in
+let pcon_ = lam cs. lam cp. PCon {ident = cs, subpat = cp} in
 let seq_ = lam tms. TmSeq {tms = tms} in
 let tuple_ = lam tms. TmTuple {tms = tms} in
 let proj_ = lam tup. lam idx. TmProj {tup = tup, idx = idx} in
@@ -402,12 +436,35 @@ let func_recconcs =
                       (var_ "rec"))))
 in
 
+-- con MyConA in
+let func_mycona = condef_ "MyConA" (None ()) in
+
+-- con #con"myConB" : (Bool, Int) in
+let func_myconb = condef_ "myConB" (Some (TyProd {tpes = [TyBool {}, TyInt {}]})) in
+
+-- let isconb : Bool = lam c : #con"myConB".
+--     match c with #con"myConB" (true, 17) then
+--         true
+--     else
+--         false
+let func_isconb =
+    let_ "isconb" (Some (TyBool {})) (
+        lam_ "c" (Some (TyCon {ident = "myConB"})) (
+            match_ (var_ "c")
+                   (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
+                   (true_)
+                   (false_)))
+in
+
 let sample_ast = unit_ in
 let sample_ast = letappend sample_ast func_foo in
 let sample_ast = letappend sample_ast func_factorial in
 let sample_ast = letappend sample_ast funcs_evenodd in
 let sample_ast = letappend sample_ast func_recget in
 let sample_ast = letappend sample_ast func_recconcs in
+let sample_ast = letappend sample_ast func_mycona in
+let sample_ast = letappend sample_ast func_myconb in
+let sample_ast = letappend sample_ast func_isconb in
 
 --let _ = print "\n\n" in
 --let _ = print (pprintCode 0 sample_ast) in
