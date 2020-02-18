@@ -19,12 +19,11 @@
 //   generated as arguments for the current lambda as well. These arguments
 //   will then be applied to the lifted lambda instead of the externally
 //   referenced arguments.
-// - For Let expressions in a recursive scope, the identifiers need to be
-//   given a temporary token. After all the Let expressions have been scanned
-//   (just like in the previous step), the generated temporary tokens need to
-//   be replaced by a TmApp (..., ...) where the generated arguments are
-//   pre-applied and the identifier is replaced by the actual identifier for
-//   the Let expression (not the temporary one).
+// - For Let expressions in a recursive scope, identifiers will be replaced in
+//   2 passes. After all the Let expressions have been scanned (just like in
+//   the previous step), the generated identifiers potentionally need to be
+//   replaced by a TmApp (..., ...) where the generated arguments are
+//   pre-applied on the generated identifier for the Let expression.
 
 // NOTE: Assumes that bound variables are limited to the following AST nodes:
 //        - TmVar
@@ -886,7 +885,7 @@ let example_conmatch_samename =
     letappend mycon (
       letappend bar (
         appf1_ (var_ "bar") (app_ (confun_ "x")
-                                  (unit_))
+                                  (true_))
       )
     )
   )
