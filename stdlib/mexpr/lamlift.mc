@@ -121,7 +121,7 @@ let st_isGloballyDefined: String -> LiftState -> Bool =
 -- Returns whether the string is available in the current lambda scope
 let st_inLambdaScope: String -> LiftState -> Bool =
     lam s. lam st.
-    any (lam e. eqstr s e.ident) st.lamdarefs
+    any (lam e. eqstr s e.ident) st.lambdarefs
 
 -- Strips away prefix of string if it exists
 let strip_prefix = lam s.
@@ -145,7 +145,6 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
       -- TEMP: Put this here until mlang-mangling is merged...
       let st_isGloballyDefinedTMP: String -> LiftState -> Bool =
           lam s. lam st.
-          use TopDef in
           let tdsm = lam td. -- tdsm: TopDefStringMatch
               match td with TmTopDef t then
                   eqstr t.ident s
@@ -251,7 +250,7 @@ lang FunLamlift = FunAst + TopDef
       (newstate, appargs)
 
     | TmLamChain t ->
-      match t with TmLam t1 then
+      match t.body with TmLam t1 then
         let newname = concat "arg" (concat (int2string state.id) (cons '_' (t1.ident))) in
         let arg = TmVar {ident = newname} in
 
@@ -262,7 +261,7 @@ lang FunLamlift = FunAst + TopDef
         let retbody = ret.1 in
         (retstate, TmLam {{t1 with ident = newname} with body = retbody})
       else
-        lamlift state t
+        lamlift state t.body
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmLam t -> TmLam {t with body = lamliftReplaceIdentifiers newnames t.body}
@@ -602,8 +601,7 @@ lang MExprLamlift = TopDef + VarLamlift + AppLamlift + FunLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
                     BoolLamlift + CmpLamlift + SeqLamlift +
                     TupleLamlift + DataLamlift + MatchLamlift +
-                    UtestLamlift +
-                    MExprAst
+                    UtestLamlift + MExprAst
 
 mexpr
 use MExprLamlift in
@@ -709,9 +707,9 @@ let lift_lambdas: Expr -> Expr = lam ast.
     -- first is at the end of the list
     let convert_from_globaldef = lam acc. lam gd.
         match gd with TmTopDef t then
-            TmLet {t with inexpr = acc}
+            TmLet {ident = t.ident, tpe = t.tpe, body = t.body, inexpr = acc}
         else match gd with TmTopRecDef t then
-            TmRecLets {t with inexpr = acc}
+            TmRecLets {bindings = t.bindings, inexpr = acc}
         else
             error "Global definition is not of TmTopDef"
     in
@@ -835,7 +833,7 @@ in
 --utest lift_lambdas example_ast with TmConst (CUnit) in
 
 let _ =
-    --use MExprLamliftAndPP in
+    --use MExprLamlift in
     let _ = print "\n[>>>>  Before  <<<<]\n" in
     --let _ = dprint example_recursive_ast in
     let _ = dprint example_ast in
@@ -844,7 +842,7 @@ let _ =
 in
 
 let _ =
-    --use MExprLamliftAndPP in
+    --use MExprLamlift in
     let _ = print "\n[>>>>  After  <<<<]\n" in
     let _ = dprint (lift_lambdas example_ast) in
     let _ = print "\n" in
