@@ -49,13 +49,17 @@ lang TopDef
     | TmTopRecDef {bindings : [{ident : String,
                                 tpe   : Option,
                                 body  : Expr}]}
+    | TmTopConDef {ident : String,
+                   tpe   : Option}
 end
 
 -- State for lambda lifting
 --   id:         ID counter (used to assign globally unique names to
 --               identifiers).
 --   globaldefs: List of expressions that has been lifted out.
---   env:        The environment lookup of the current scope.
+--   env:        The environment lookup of the current scope. Contains three
+--               types of lookups: 1) env.evar for variables, 2) env.econ for
+--               data constructs, and 3) env.etype for type names.
 --   lambdarefs: Lookup of identifiers that are defined locally in the current
 --               lambda expression (arguments and non-lambda let expressions).
 --   externrefs: List of identifiers that have been referenced in the current
@@ -65,7 +69,13 @@ end
 --               of the externally referenced identifiers.
 type LiftState = {id         : Int,
                   globaldefs : [Expr],
-                  env        : [{key   : String,
+                  env        : {evar  : [{key   : String,
+                                         value : Expr}],
+                                econ  : [{key   : String,
+                                          value : Expr}],
+                                etype : [{key   : String,
+                                          value : Expr}]},
+                  conenv     : [{key   : String,
                                  value : Expr}],
                   lambdarefs : [{ident : String,
                                  body  : Expr}],
@@ -82,9 +92,17 @@ let st_addGlobaldef: Expr -> LiftState -> LiftState =
     lam gd. lam st.
     {st with globaldefs = cons gd st.globaldefs}
 
-let st_addToEnv: String -> Expr -> LiftState -> LiftState =
+let st_addVarToEnv: String -> Expr -> LiftState -> LiftState =
     lam key. lam value. lam st.
-    {st with env = cons {key = key, value = value} st.env}
+    {st with env = {st.env with evar = cons {key = key, value = value} st.env.evar}}
+
+let st_addConToEnv: String -> Expr -> LiftState -> LiftState =
+    lam key. lam value. lam st.
+    {st with env = {st.env with econ = cons {key = key, value = value} st.env.econ}}
+
+let st_addTypeToEnv: String -> Expr -> LiftState -> LiftState =
+    lam key. lam value. lam st.
+    {st with env = {st.env with etype = cons {key = key, value = value} st.env.etype}}
 
 let st_addLambdaref: String -> Expr -> LiftState -> LiftState =
     lam ident. lam body. lam st.
@@ -108,8 +126,10 @@ let st_isGloballyDefined: String -> LiftState -> Bool =
             eqstr t.ident s
         else match td with TmTopRecDef t then
             any (lam rec. eqstr t.ident s) t.bindings
+        else match td with TmTopConDef t then
+            eqstr t.ident s
         else
-            error "Global define is not TmTopDef or TmTopRecDef"
+            error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
     in
     any tdsm st.globaldefs
 
@@ -145,12 +165,14 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
                   eqstr t.ident s
               else match td with TmTopRecDef t then
                   any (lam rec. eqstr t.ident s) t.bindings
+              else match td with TmTopConDef t then
+                  eqstr t.ident s
               else
-                  error "Global define is not TmTopDef or TmTopRecDef"
+                  error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
           in
           any tdsm st.globaldefs
       in
-      let ret = find (lam e. eqstr (e.key) x.ident) state.env in
+      let ret = find (lam e. eqstr (e.key) x.ident) state.env.evar in
       match ret with Some t then
         -- Function that for all variables in an expression, that they are in
         -- the current scope.
@@ -168,7 +190,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
               let oldname = strip_prefix t1.ident in
               let newname = concat "arg" (concat (int2string id) (cons '_' oldname)) in
               let newvar = TmVar {t1 with ident = newname} in
-              let newstate = st_incrId (st_addToEnv oldname newvar
+              let newstate = st_incrId (st_addVarToEnv oldname newvar
                                        (st_addLambdaref newname newvar
                                        (st_addExternref e
                                        (st_addGenarg newvar chkstate)))) in
@@ -201,6 +223,27 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
             find_replacement (tail l)
       in
       find_replacement newnames
+end
+
+lang DataLamlift = VarAst + DataAst
+    sem lamlift (state : LiftState) =
+    | TmConDef t ->
+      let newname = strJoin "" ["Con", int2string state.id, "_", t.ident] in
+
+      let updatedstate = st_incrId (st_addConToEnv t.ident (TmConFun {ident = newname})
+                                   (st_addGlobaldef (TmTopConDef {ident = newname, tpe = t.tpe}) state)) in
+
+      lamlift updatedstate t.inexpr
+    | TmConFun t ->
+      let ret = find (lam e. eqstr (e.key) t.ident) state.env.econ in
+      match ret with Some t1 then
+        (state, t1.value)
+      else
+        (state, TmConFun t)
+
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
+    | TmConDef t -> TmConDef {t with inexpr = lamliftReplaceIdentifiers newnames t.inexpr}
+    | TmConFun t -> TmConFun t -- not necessary here as we should never have to replace identifiers
 end
 
 lang AppLamlift = AppAst
@@ -249,7 +292,7 @@ lang FunLamlift = FunAst + TopDef
         let newname = concat "arg" (concat (int2string state.id) (cons '_' (t1.ident))) in
         let arg = TmVar {ident = newname} in
 
-        let newstate = st_incrId (st_addToEnv t1.ident arg (st_addLambdaref newname arg state)) in
+        let newstate = st_incrId (st_addVarToEnv t1.ident arg (st_addLambdaref newname arg state)) in
         let ret = lamlift newstate (TmLamChain {body = t1.body}) in
 
         let retstate = {ret.0 with env = state.env} in
@@ -287,7 +330,7 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
 
         -- Increment the id counter, add the TopDef to globaldefs, and add the return type to scope
         let newstate = st_incrId (st_addGlobaldef (TmTopDef {ident = newname, tpe = t.tpe, body = topdefbody})
-                                 (st_addToEnv t.ident appargs updatedstate)) in
+                                 (st_addVarToEnv t.ident appargs updatedstate)) in
 
         -- LHS has been lifted out, evaluate RHS and return that
         lamlift newstate t.inexpr
@@ -303,7 +346,7 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
         -- Increment ID counter, add the "original" variable t.ident to the
         -- environment, and mark this variable as referencable from the current
         -- lambda scope.
-        let newstate = st_incrId (st_addToEnv t.ident (TmVar {ident = newname})
+        let newstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname})
                                  (st_addLambdaref newname (TmVar {ident = newname}) updatedstate)) in
 
         let inret = lamlift newstate t.inexpr in
@@ -336,7 +379,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
         let id = (acc.0).id in
         let prefix = match e.body with TmLam _ then "fun" else "var" in
         let newname = strJoin "" [prefix, int2string id, "_", e.ident] in
-        let newstate = st_incrId (st_addToEnv e.ident (TmVar {ident = newname}) acc.0) in
+        let newstate = st_incrId (st_addVarToEnv e.ident (TmVar {ident = newname}) acc.0) in
         (newstate, concat (acc.1) [{e with ident = newname}], concat acc.2 [{ident = newname, body = TmVar {ident = newname}}])
       in
       let replaceret = foldl replacenames (state, [], []) t.bindings in
@@ -360,7 +403,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
         -- (We do not want to generate 2 separate arguments for the same reference)
         let var2str = lam v. match v with TmVar s then s.ident else error "Not a var" in
 
-        let envaddfld = lam st. lam v. st_addToEnv (strip_prefix (var2str v)) v st in
+        let envaddfld = lam st. lam v. st_addVarToEnv (strip_prefix (var2str v)) v st in
         let newstate = foldl envaddfld acc_state (acc_state.genargs) in
 
         let ret = lamlift newstate (TmLamChain {body = b.body}) in
@@ -393,7 +436,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
         -- The value to bind: TmApp (... TmApp (TmVar "fun#_<name>", Expr), ...)
         let binding = foldl (lam acc. lam e. TmApp {lhs = acc, rhs = e}) (TmVar {ident = name}) liftedstate.externrefs in
 
-        st_addToEnv oldname binding accstate
+        st_addVarToEnv oldname binding accstate
       in
       let envstate = foldl envgen {state with id = liftedstate.id} liftedbindings in
 
@@ -518,8 +561,6 @@ lang TupleLamlift = TupleAst
       (foldstate, TmTuple {t with tms = vs})
 
     | TmProj t ->
-      let tup = t.0 in
-      let idx = t.1 in
       let tupret = lamlift state t.tup in
       let tupstate = {tupret.0 with env = state.env} in
       let idxret = lamlift tupstate t.idx in
@@ -532,41 +573,58 @@ lang TupleLamlift = TupleAst
                              with idx = lamliftReplaceIdentifiers newnames t.idx}
 end
 
-lang DataLamlift = VarAst + DataAst
-    sem lamlift (state : LiftState) =
-    | TmConDef t ->
-      -- TODO: Double check if this really is the correct environment mapping!
-      let updatedstate = st_addToEnv t.ident (TmConFun {ident = t.ident}) state in
-      
-      let inret = lamlift updatedstate t.inexpr in
-      let instate = {inret.0 with env = state.env} in
-
-      (instate, TmConDef {t with inexpr = inret.1})
-    | TmConFun t -> TmConFun t
-
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
-    | TmConDef t -> TmConDef (t.0, lamliftReplaceIdentifiers newnames t.1)
-    | TmConFun t -> TmConFun t
-end
-
-lang MatchLamlift = MatchAst
+lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
+                    BoolPat + TuplePat + DataPat
     sem lamlift (state : LiftState) =
     | TmMatch t ->
       let targetret = lamlift state t.target in
       let targetstate = {targetret.0 with env = state.env} in
 
-      let thnret = lamlift targetstate t.thn in
-      let thnstate = {thnret.0 with env = state.env} in
+      let patret = lamliftPat targetstate t.pat in
+      let patstate = patret.0 in
+
+      let thnret = lamlift patstate t.thn in
+      let thnstate = {thnret.0 with env = patstate.env} in
 
       let elsret = lamlift thnstate t.els in
-      let elsstate = {elsret.0 with env = state.env} in
+      let elsstate = {elsret.0 with env = patstate.env} in
       
-      (elsstate, TmMatch {{{t with target = targetret.1} with thn = thnret.1} with els = elsret.1})
+      (elsstate, TmMatch {{{{t with target = targetret.1} with pat = patret.1} with thn = thnret.1} with els = elsret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmMatch t -> TmMatch {{{t with target = lamliftReplaceIdentifiers newnames t.target}
                                 with thn = lamliftReplaceIdentifiers newnames t.thn}
                                 with els = lamliftReplaceIdentifiers newnames t.els}
+
+    sem lamliftPat (state : LiftState) =
+    | PVar t ->
+      -- Bind the identifier in the current scope
+      let newname = strJoin "" ["pvar", int2string state.id, "_", t.ident] in
+      let updatedstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname}) state) in
+      (updatedstate, PVar {t with ident = newname})
+    | PUnit t -> (state, PUnit t)
+    | PInt t -> (state, PInt t)
+    | PBool t -> (state, PBool t)
+    | PTuple t ->
+      -- acc.0: state
+      -- acc.1: list of patterns
+      let liftpats = lam acc. lam e.
+        let ret = lamliftPat acc.0 e in
+        (ret.0, concat acc.1 [ret.1])
+      in
+      let foldret = foldl liftpats (state, []) t.pats in
+      (foldret.0, PTuple {t with pats = foldret.1})
+    | PCon t ->
+      let newident = find (lam e. eqstr (e.key) t.ident) state.env.econ in
+      let subret = lamliftPat state t.subpat in
+      match newident with Some t1 then
+        match t1.value with TmConFun t2 then
+          (subret.0, PCon {{t with ident = t2.ident} with subpat = subret.1})
+        else
+          (subret.0, PCon {t with subpat = subret.1})
+      else
+        (subret.0, PCon {t with subpat = subret.1})
+
 end
 
 lang UtestLamlift = UtestAst
@@ -683,9 +741,9 @@ let lift_lambdas: Expr -> Expr = lam ast.
                        {key = "nth", value = nth_}]
     in
 
-    let initstate: ListState = {id = 0,
+    let initstate: LiftState = {id = 0,
                                 globaldefs = [],
-                                env = builtin_env,
+                                env = {evar = builtin_env, econ = [], etype = []},
                                 lambdarefs = [],
                                 externrefs = [],
                                 genargs = []}
@@ -703,8 +761,10 @@ let lift_lambdas: Expr -> Expr = lam ast.
             TmLet {ident = t.ident, tpe = t.tpe, body = t.body, inexpr = acc}
         else match gd with TmTopRecDef t then
             TmRecLets {bindings = t.bindings, inexpr = acc}
+        else match gd with TmTopConDef t then
+            TmConDef {ident = t.ident, tpe = t.tpe, inexpr = acc}
         else
-            error "Global definition is not of TmTopDef"
+            error "Global definition is not of TmTopDef, TmTopRecDef, or TmTopConDef"
     in
     foldl convert_from_globaldef mainexpr liftedexprs
 in
@@ -784,22 +844,72 @@ let example_factorial =
   ) (reclets_empty)
 in
 
+let example_conmatch =
+  let_ "foo" (None ()) (
+    let mycon =
+      condef_ "MyCon" (None ())
+    in
+    let bar =
+      let_ "bar" (None ()) (
+        lam_ "x" (None ()) (
+          match_ (var_ "x")
+                 (pcon_ "MyCon" punit_)
+                 (true_)
+                 (false_)
+        )
+      )
+    in
+    letappend mycon (
+      letappend bar (
+        appf1_ (var_ "bar") (app_ (confun_ "MyCon")
+                                  (unit_))
+      )
+    )
+  )
+in
+
+let example_conmatch_samename =
+  let_ "foo" (None ()) (
+    let mycon =
+      condef_ "x" (None ())
+    in
+    let bar =
+      let_ "bar" (None ()) (
+        lam_ "x" (None ()) (
+          match_ (var_ "x")
+                 (pcon_ "x" (pvar_ "x"))
+                 (var_ "x")
+                 (false_)
+        )
+      )
+    in
+    letappend mycon (
+      letappend bar (
+        appf1_ (var_ "bar") (app_ (confun_ "x")
+                                  (unit_))
+      )
+    )
+  )
+in
+
 -- Test that the examples can run the lamlift semantics without errors
 utest lift_lambdas example_ast with lift_lambdas example_ast in
 utest lift_lambdas example_nested_ast with lift_lambdas example_nested_ast in
 utest lift_lambdas example_recursive_ast with lift_lambdas example_recursive_ast in
 utest lift_lambdas example_factorial with lift_lambdas example_factorial in
+utest lift_lambdas example_conmatch with lift_lambdas example_conmatch in
+utest lift_lambdas example_conmatch_samename with lift_lambdas example_conmatch_samename in
 
 let _ =
     --let _ = print "\n[>>>>  Before  <<<<]\n" in
-    --let _ = dprint example_recursive_ast in
+    --let _ = dprint example_conmatch in
     --let _ = print "\n" in
     ()
 in
 
 let _ =
     --let _ = print "\n[>>>>  After  <<<<]\n" in
-    --let _ = dprint (lift_lambdas example_recursive_ast) in
+    --let _ = dprint (lift_lambdas example_conmatch) in
     --let _ = print "\n" in
     ()
 in
