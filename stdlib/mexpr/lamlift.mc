@@ -53,7 +53,7 @@ lang TopDef
                 body  : Expr}
     | TmTopRecDef {bindings : [{ident : String,
                                 tpe   : Option,
-                                body  : Expr)}]}
+                                body  : Expr}]}
 end
 
 -- State for lambda lifting
@@ -112,7 +112,7 @@ let st_isGloballyDefined: String -> LiftState -> Bool =
         match td with TmTopDef t then
             eqstr t.ident s
         else match td with TmTopRecDef t then
-            any (lam rec. eqstr tup.ident s) t
+            any (lam rec. eqstr t.ident s) t
         else
             error "Global define is not TmTopDef or TmTopRecDef"
     in
@@ -150,7 +150,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
               match td with TmTopDef t then
                   eqstr t.ident s
               else match td with TmTopRecDef t then
-                  any (lam rec. eqstr tup.ident s) t
+                  any (lam rec. eqstr t.ident s) t
               else
                   error "Global define is not TmTopDef or TmTopRecDef"
           in
@@ -186,7 +186,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
             let lhsstate = lhsret.0 in
             let rhsret = check_scope lhsstate t2.rhs in
             let rhsstate = rhsret.0 in
-            (rhsstate, TmApp {t2 with lhs = lhsret.1, rhs = rhsret.1})
+            (rhsstate, TmApp {{t2 with lhs = lhsret.1} with rhs = rhsret.1})
           else
             (chkstate, e)
         in
@@ -216,11 +216,11 @@ lang AppLamlift = AppAst
       let lhsstate = {lhsret.0 with env = state.env} in
       let rhsret = lamlift lhsstate t.rhs in
       let rhsstate = {rhsret.0 with env = state.env} in
-      (rhsstate, TmApp {t with lhs = lhsret.1, rhs = rhsret.1})
+      (rhsstate, TmApp {{t with lhs = lhsret.1} with rhs = rhsret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
-    | TmApp t -> TmApp {t with lhs = lamliftReplaceIdentifiers newnames t.lhs,
-                               rhs = lamliftReplaceIdentifiers newnames t.rhs}
+    | TmApp t -> TmApp {{t with lhs = lamliftReplaceIdentifiers newnames t.lhs}
+                           with rhs = lamliftReplaceIdentifiers newnames t.rhs}
 end
 
 lang FunLamlift = FunAst + TopDef
@@ -230,10 +230,10 @@ lang FunLamlift = FunAst + TopDef
     sem lamlift (state : LiftState) =
     | TmLam t ->
       -- Encountered Lambda outside of a lambda chain, name this as fun#_anon
-      let passed_state = {state with lambdarefs = [], externrefs = [], genargs = []} in
+      let passed_state = {{{state with lambdarefs = []} with externrefs = []} with genargs = []} in
       let ret = lamlift passed_state (TmLamChain {body = TmLam t}) in
 
-      let updatedstate = {state with id = (ret.0).id, globaldefs = (ret.0).globaldefs} in
+      let updatedstate = {{state with id = (ret.0).id} with globaldefs = (ret.0).globaldefs} in
 
       let id = updatedstate.id in
       let name = concat "fun" (concat (int2string id) "_anon") in
@@ -260,7 +260,7 @@ lang FunLamlift = FunAst + TopDef
 
         let retstate = {ret.0 with env = state.env} in
         let retbody = ret.1 in
-        (retstate, TmLam {t2 with ident = newname, body = retbody})
+        (retstate, TmLam {{t1 with ident = newname} with body = retbody})
       else
         lamlift state t
 
@@ -275,10 +275,10 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
       match t.body with TmLam t1 then
         -- Pass the current LiftState with cleared lambdarefs, externrefs, and
         -- generated args to the body expression.
-        let passed_state = {state with lambdarefs = [], externrefs = [], genargs = []} in
+        let passed_state = {{{state with lambdarefs = []} with externrefs = []} with genargs = []} in
         let ret = lamlift passed_state (TmLamChain {body = t.body}) in
 
-        let updatedstate = {state with id = (ret.0).id, globaldefs = (ret.0).globaldefs} in
+        let updatedstate = {{state with id = (ret.0).id} with globaldefs = (ret.0).globaldefs} in
 
         -- Encountered a let-defined Lambda, name this as fun#_<name>
         let id = updatedstate.id in
@@ -316,11 +316,11 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
 
         let inretstate = {inret.0 with env = state.env} in
 
-        (inretstate, TmLet {t with ident = newname, body = ret.1, inexpr = inret.1})
+        (inretstate, TmLet {{{t with ident = newname} with body = ret.1} with inexpr = inret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
-    | TmLet t -> TmLet {t with body = lamliftReplaceIdentifiers newnames t.body,
-                               inexpr = lamliftReplaceIdentifiers newnames t.inexpr}
+    | TmLet t -> TmLet {{t with body = lamliftReplaceIdentifiers newnames t.body}
+                           with inexpr = lamliftReplaceIdentifiers newnames t.inexpr}
 end
 
 -- Lambda lifting of mutually recursive functions
@@ -353,7 +353,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
 
       -- Include the newly bound identifiers and clear any externally generated
       -- references.
-      let repstate = {replaceret.0 with lambdarefs = repnames, externrefs = [], genargs = []} in
+      let repstate = {{{replaceret.0 with lambdarefs = repnames} with externrefs = []} with genargs = []} in
       let repbindings = replaceret.1 in
 
       -- Lift out each individual expression
@@ -389,7 +389,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
         -- The top level definition: TmTopRecDef [("fun#_<name>", Option, TmLam ("arg#_%%", None, ...))]
         let lambdagenerator = lam e. lam acc. match e with TmVar t2 then (TmLam {ident = t2.ident, tpe = None, body = acc}) else let _ = dprint e in error "\ninternal error (3)" in
         let newbody = foldr lambdagenerator b.body liftedstate.genargs in
-        {b with tpe = None (), body = newbody}
+        {{b with tpe = None ()} with body = newbody}
       in
       let arggenbindings = map arggen liftedbindings in
 
@@ -406,7 +406,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
       let envstate = foldl envgen {state with id = liftedstate.id} liftedbindings in
 
       -- Replace all internal occurrences with the newly bound values
-      let appgappgenen = lam acc. lam b.
+      let appgen = lam acc. lam b.
         let name = b.ident in
 
         -- The value to bind: TmApp (... TmApp (TmVar "fun#_<name>", Expr), ...)
@@ -423,15 +423,15 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
       lamlift finalstate t.inexpr
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
-    | TmRecLets t -> TmRecLets {t with bindings = map (lam e. {e with lamliftReplaceIdentifiers newnames e.body}) t.bindings,
-                                       inexpr = lamliftReplaceIdentifiers newnames t.inexpr}
+    | TmRecLets t -> TmRecLets {{t with bindings = map (lam e. {e with body = lamliftReplaceIdentifiers newnames e.body}) t.bindings}
+                                   with inexpr = lamliftReplaceIdentifiers newnames t.inexpr}
 end
 
 lang ConstLamlift = ConstAst
     sem lamlift (state : LiftState) =
     | TmConst c -> (state, TmConst c)
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmConst c -> TmConst c
 end
 
@@ -463,12 +463,12 @@ lang BoolLamlift = BoolAst + ConstLamlift
       let elsret = lamlift thnstate t.els in
       let elsstate = {elsret.0 with env = state.env} in
 
-      (elsstate, TmIf {t with cond = condret.1, thn = thnret.1, els = elsret.1})
+      (elsstate, TmIf {{{t with cond = condret.1} with thn = thnret.1} with els = elsret.1})
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
-    | TmIf t -> TmIf {t with cond = lamliftReplaceIdentifiers newnames t.cond,
-                             thn = lamliftReplaceIdentifiers newnames t.els,
-                             els = lamliftReplaceIdentifiers newnames t.thn}
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
+    | TmIf t -> TmIf {{{t with cond = lamliftReplaceIdentifiers newnames t.cond}
+                          with thn = lamliftReplaceIdentifiers newnames t.els}
+                          with els = lamliftReplaceIdentifiers newnames t.thn}
 end
 
 lang CmpLamlift = CmpAst + ConstLamlift
@@ -500,7 +500,7 @@ lang SeqLamlift = SeqAst + ConstLamlift
       -- constant or not.
       (foldstate, TmSeq {t with tms = vs})
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmSeq t -> TmSeq {t with tms = map (lam e. lamliftReplaceIdentifiers newnames e) t.tms}
 end
 
@@ -532,12 +532,12 @@ lang TupleLamlift = TupleAst
       let tupstate = {tupret.0 with env = state.env} in
       let idxret = lamlift tupstate t.idx in
       let idxstate = {idxret.0 with env = state.env} in
-      (idxstate, TmProj {t with tup = tupret.1, idx = idxret.1})
+      (idxstate, TmProj {{t with tup = tupret.1} with idx = idxret.1})
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
-    | TmTuple tms -> TmTuple {t with tms = map (lam e. lamliftReplaceIdentifiers newnames e) t.tms}
-    | TmProj t -> TmProj {t with tup = lamliftReplaceIdentifiers newnames t.tup,
-                                 idx = lamliftReplaceIdentifiers newnames t.idx}
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
+    | TmTuple t -> TmTuple {t with tms = map (lam e. lamliftReplaceIdentifiers newnames e) t.tms}
+    | TmProj t -> TmProj {{t with tup = lamliftReplaceIdentifiers newnames t.tup}
+                             with idx = lamliftReplaceIdentifiers newnames t.idx}
 end
 
 lang DataLamlift = VarAst + DataAst
@@ -552,7 +552,7 @@ lang DataLamlift = VarAst + DataAst
       (instate, TmConDef {t with inexpr = inret.1})
     | TmConFun t -> TmConFun t
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmConDef t -> TmConDef (t.0, lamliftReplaceIdentifiers newnames t.1)
     | TmConFun t -> TmConFun t
 end
@@ -566,15 +566,15 @@ lang MatchLamlift = MatchAst
       let thnret = lamlift targetstate t.thn in
       let thnstate = {thnret.0 with env = state.env} in
 
-      let elsret = lamlift thnstate els in
+      let elsret = lamlift thnstate t.els in
       let elsstate = {elsret.0 with env = state.env} in
       
-      (elsstate, TmMatch {t with target = targetret.1, thn = thnret.1, els = elsret.1})
+      (elsstate, TmMatch {{{t with target = targetret.1} with thn = thnret.1} with els = elsret.1})
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
-    | TmMatch t -> TmMatch {t with target = lamliftReplaceIdentifiers newnames t.target,
-                                   thn = lamliftReplaceIdentifiers newnames t.thn,
-                                   els = lamliftReplaceIdentifiers newnames t.els}
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
+    | TmMatch t -> TmMatch {{{t with target = lamliftReplaceIdentifiers newnames t.target}
+                                with thn = lamliftReplaceIdentifiers newnames t.thn}
+                                with els = lamliftReplaceIdentifiers newnames t.els}
 end
 
 lang UtestLamlift = UtestAst
@@ -586,15 +586,15 @@ lang UtestLamlift = UtestAst
       let expectedret = lamlift teststate t.expected in
       let expectedstate = {expectedret.0 with env = state.env} in
 
-      let nextret = lamlift expectedstate next in
+      let nextret = lamlift expectedstate t.next in
       let nextstate = {nextret.0 with env = state.env} in
 
-      (nextstate, TmUtest {t with test = testret.1, expected = expectedret.1, next = nextret.1})
+      (nextstate, TmUtest {{{t with test = testret.1} with expected = expectedret.1} with next = nextret.1})
 
-    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}])) =
-    | TmUtest t -> TmUtest {t with test = lamliftReplaceIdentifiers newnames t.test,
-                                   expected = lamliftReplaceIdentifiers newnames t.expected,
-                                   next = lamliftReplaceIdentifiers newnames t.next}
+    sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
+    | TmUtest t -> TmUtest {{{t with test = lamliftReplaceIdentifiers newnames t.test}
+                                with expected = lamliftReplaceIdentifiers newnames t.expected}
+                                with next = lamliftReplaceIdentifiers newnames t.next}
 end
 
 lang MExprLamlift = TopDef + VarLamlift + AppLamlift + FunLamlift +
@@ -602,38 +602,116 @@ lang MExprLamlift = TopDef + VarLamlift + AppLamlift + FunLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
                     BoolLamlift + CmpLamlift + SeqLamlift +
                     TupleLamlift + DataLamlift + MatchLamlift +
-                    UtestLamlift
-
-lang MExprLamliftAndPP = MExprLamlift + MExprPrettyPrint
+                    UtestLamlift +
+                    MExprAst
 
 mexpr
-use MExprLamliftAndPP in
+use MExprLamlift in
+
+-- The letappend function is used for append let expressions together without
+-- having to manually do so in the AST. The provided expr argument is inserted
+-- as the inexpr of the last nested Let-expression.
+recursive let letappend = lam letexpr. lam expr.
+    match letexpr with TmLet t then
+        TmLet {t with inexpr = letappend t.inexpr expr}
+    else match letexpr with TmRecLets t then
+        TmRecLets {t with inexpr = letappend t.inexpr expr}
+    else match letexpr with TmConDef t then
+        TmConDef {t with inexpr = letappend t.inexpr expr}
+    else
+        expr
+in
+
+let unit_ = TmConst {val = CUnit ()} in
+let addi_ = TmConst {val = CAddi ()} in
+let subi_ = TmConst {val = CSubi ()} in
+let and_ = TmConst {val = CAnd ()} in
+let or_ = TmConst {val = COr ()} in
+let not_ = TmConst {val = CNot ()} in
+let eqi_ = TmConst {val = CEqi ()} in
+let nth_ = TmConst {val = CNth ()} in
+
+-- Convenience functions for manually constructing an AST.
+let unit_ = TmConst {val = CUnit ()} in
+let int_ = lam i. TmConst {val = CInt {val = i}} in
+let true_ = TmConst {val = CBool {val = true}} in
+let false_ = TmConst {val = CBool {val = false}} in
+let char_ = lam c. TmConst {val = CChar {val = c}} in
+let str_ = lam s. TmConst {val = CSeq {tms = map char_ s}} in
+let var_ = lam s. TmVar {ident = s} in
+let confun_ = lam s. TmConFun {ident = s} in
+let condef_ = lam s. lam tpe. TmConDef {ident = s, tpe = tpe, inexpr = unit_} in
+let let_ = lam ident. lam tpe. lam body.
+    TmLet {ident = ident,
+           tpe = tpe,
+           body = body,
+           inexpr = unit_}
+in
+let reclets_empty = TmRecLets {bindings = [], inexpr = unit_} in
+let reclets_add = lam ident. lam tpe. lam body. lam reclets.
+    match reclets with TmRecLets t then
+        let newbind = {ident = ident,
+                       tpe = tpe,
+                       body = body} in
+        TmRecLets {t with bindings = concat [newbind] t.bindings}
+    else
+        error "reclets is not a TmRecLets construct"
+in
+let lam_ = lam ident. lam tpe. lam body.
+    TmLam {ident = ident,
+           tpe = tpe,
+           body = body}
+in
+let if_ = lam cond. lam thn. lam els.
+    TmIf {cond = cond, thn = thn, els = els}
+in
+let match_ = lam target. lam pat. lam thn. lam els.
+    TmMatch {target = target, pat = pat, thn = thn, els = els}
+in
+let pvar_ = lam s. PVar {ident = s} in
+let punit_ = PUnit {} in
+let pint_ = lam i. PInt {val = i} in
+let ptrue_ = PBool {val = true} in
+let pfalse_ = PBool {val = false} in
+let ptuple_ = lam pats. PTuple {pats = pats} in
+let pcon_ = lam cs. lam cp. PCon {ident = cs, subpat = cp} in
+let seq_ = lam tms. TmSeq {tms = tms} in
+let tuple_ = lam tms. TmTuple {tms = tms} in
+let proj_ = lam tup. lam idx. TmProj {tup = tup, idx = idx} in
+let app_ = lam lhs. lam rhs. TmApp {lhs = lhs, rhs = rhs} in
+let appf1_ = lam f. lam a1. app_ f a1 in
+let appf2_ = lam f. lam a1. lam a2. app_ (appf1_ f a1) a2 in
+let appf3_ = lam f. lam a1. lam a2. lam a3. app_ (appf2_ f a1 a2) a3 in
 
 -- Lifts out the lambdas, returning a new AST with all lambdas on the top
 -- level.
 let lift_lambdas: Expr -> Expr = lam ast.
-    let builtin_env = [("addi", TmConst (CAddi ())), ("not", TmConst (CNot ())), ("and", TmConst (CAnd ())),
-                       ("or", TmConst (COr ())), ("eqi", TmConst (CEqi ())), ("nth", TmConst (CNth ())),
-                       ("subi", TmConst (CSubi ()))]
+    let builtin_env = [{key = "addi", value = addi_}, {key = "subi", value = subi_},
+                       {key = "and", value = and_}, {key = "or", value = or_},
+                       {key = "not", value = not_}, {key = "eqi", value = eqi_},
+                       {key = "nth", value = nth_}]
     in
 
-    let initstate: StateTuple = (0, [], builtin_env, [], [], []) in
+    let initstate: ListState = {id = 0,
+                                globaldefs = [],
+                                env = builtin_env,
+                                lambdarefs = [],
+                                externrefs = [],
+                                genargs = []}
+    in
 
     let liftret = lamlift initstate ast in
 
     let mainexpr = liftret.1 in
-    let liftedexprs = st_globaldefs (liftret.0) in
+    let liftedexprs = (liftret.0).globaldefs in
 
     -- liftedexprs is in reverse order, so the let-expression that should be
     -- first is at the end of the list
     let convert_from_globaldef = lam acc. lam gd.
         match gd with TmTopDef t then
-            let ident = t.0 in
-            let tpe = t.1 in
-            let body = t.2 in
-            TmLet (ident, tpe, body, acc)
+            TmLet {t with inexpr = acc}
         else match gd with TmTopRecDef t then
-            TmRecLets (t, acc)
+            TmRecLets {t with inexpr = acc}
         else
             error "Global definition is not of TmTopDef"
     in
@@ -641,34 +719,22 @@ let lift_lambdas: Expr -> Expr = lam ast.
 in
 
 let example_ast =
-    TmLet ("foo", None,
-      TmLam ("a", None, TmLam ("b", None,
-        TmLet ("bar", None,
-          TmLam ("x", None,
-            TmApp (
-              TmApp (
-                TmVar "addi",
-                TmVar "b"
-              ),
-              TmVar "x"
+    let_ "foo" (None ()) (
+      lam_ "a" (None ()) (lam_ "b" (None ()) (
+        let bar =
+          let_ "bar" (None ()) (
+            lam_ "x" (None ()) (
+              appf2_ (var_ "addi") (var_ "b") (var_ "x")
             )
-          ),
-          TmLet ("fun4_bar", None,
-            TmConst (CInt 3),
-            TmApp (
-              TmApp (
-                TmVar "addi",
-                TmApp (
-                  TmVar "bar",
-                  TmVar "fun4_bar"
-                )
-              ),
-              TmVar "a"
-            )
+          ) in
+        let fun4_bar =
+          let_ "fun4_bar" (None()) (int_ 3) in
+        letappend bar (
+          letappend fun4_bar (
+            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
           )
         )
-      )),
-      TmConst (CUnit ())
+      ))
     )
 in
 
@@ -772,7 +838,7 @@ let _ =
     --use MExprLamliftAndPP in
     let _ = print "\n[>>>>  Before  <<<<]\n" in
     --let _ = dprint example_recursive_ast in
-    let _ = print (pprintCode 0 example_recursive_ast) in
+    let _ = dprint example_ast in
     let _ = print "\n" in
     ()
 in
@@ -780,7 +846,7 @@ in
 let _ =
     --use MExprLamliftAndPP in
     let _ = print "\n[>>>>  After  <<<<]\n" in
-    let _ = print (pprintCode 0 (lift_lambdas example_recursive_ast)) in
+    let _ = dprint (lift_lambdas example_ast) in
     let _ = print "\n" in
     ()
 in
