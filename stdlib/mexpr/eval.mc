@@ -802,8 +802,7 @@ let addEvalNested = lambda "arg"
     (unit)) in
 
 let tup = lam x. TmTuple {tms = x} in
-let cint = lam x. TmConst {val = CInt {val = x}} in
-utest eval {env = []} (wrapInDecls (app addEvalNested (tup [num (cint 1), num (cint 2)]))) with TmCon {ident = "Num", body = cint 3} in
+utest eval {env = []} (wrapInDecls (app addEvalNested (tup [num (int 1), num (int 2)]))) with TmCon {ident = "Num", body = int 3} in
 
 
 
@@ -826,21 +825,21 @@ in
 
 let recordProj = TmLet {ident = "myrec",
                         tpe = None (),
-                        body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
+                        body = recAddTups [("a", int 10),("b", int 37),("c", int 23)] record_,
                         inexpr = TmRecordProj {rec = var "myrec",
                                                key = "b"}} in
 
 let recordUpdate = TmLet {ident = "myrec",
                           tpe = None (),
-                          body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
-                          inexpr = TmRecordProj {rec = recordupdate_ "c" (cint 11) (var "myrec"),
+                          body = recAddTups [("a", int 10),("b", int 37),("c", int 23)] record_,
+                          inexpr = TmRecordProj {rec = recordupdate_ "c" (int 11) (var "myrec"),
                                                  key = "c"}} in
 
 -- This updates the record with a non-existent value, should this case be allowed?
 let recordUpdate2 = TmLet {ident = "myrec",
                            tpe = None (),
-                           body = recAddTups [("a", cint 10),("b", cint 37),("c", cint 23)] record_,
-                           inexpr = TmRecordProj {rec = recordupdate_ "d" (cint 1729) (var "myrec"),
+                           body = recAddTups [("a", int 10),("b", int 37),("c", int 23)] record_,
+                           inexpr = TmRecordProj {rec = recordupdate_ "d" (int 1729) (var "myrec"),
                                                   key = "d"}} in
 
 utest eval {env = []} recordProj with TmConst {val = CInt {val = 37}} in
@@ -848,8 +847,8 @@ utest eval {env = []} recordUpdate with TmConst {val = CInt {val = 11}} in
 utest eval {env = []} recordUpdate2 with TmConst {val = CInt {val = 1729}} in
 
 let evalUTestRecordInUnit = TmUtest {
-    test = recAddTups [("a", cint 10), ("b", cint 13)] record_,
-    expected = recAddTups [("b", cint 13), ("a", cint 10)] record_,
+    test = recAddTups [("a", int 10), ("b", int 13)] record_,
+    expected = recAddTups [("b", int 13), ("a", int 10)] record_,
     next = TmConst {val = CUnit ()}}
 in
 utest eval {env = []} evalUTestRecordInUnit with TmConst {val = CUnit ()} in
