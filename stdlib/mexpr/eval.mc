@@ -866,4 +866,24 @@ utest eval {env = []} (subf_ (float 1.) (float 2.)) with float (negf 1.) in
 utest eval {env = []} (mulf_ (float 1.) (float 2.)) with float 2. in
 utest eval {env = []} (divf_ (float 1.) (float 2.)) with float 0.5 in
 utest eval {env = []} (negf_ (float 1.)) with float (negf 1.) in
+
+utest eval {env = []} (app id (int 1)) with int 1 in
+
+utest eval {env = []} (app (lambda "x" (app (var "x") (int 1))) id)
+with int 1 in
+
+utest eval {env = []}
+           (appSeq (lambda "x" (lambda "y" (addi_ (var "x") (var "y"))))
+                   [int 1, int 2])
+with int 3 in
+
+utest eval {env = []}
+           (appSeq (lambda "x" (lambda "y" (addi_ (var "x") (int 1))))
+                   [int 1, int 2])
+with int 2 in
+
+utest eval {env = []}
+           (appSeq (lambda "x" (lambda "x" (addi_ (var "x") (int 1))))
+                   [int 1, int 2])
+with int 3 in
 ()
