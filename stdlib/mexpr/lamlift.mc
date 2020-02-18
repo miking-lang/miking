@@ -35,11 +35,6 @@
 // incorrect program even if the input program was correct.
 
 
-
-// TODO: Check if we need to replace identifiers for TopDefs in case of a
-//       recursive let has an internal lambda that has been lifted out.
-
-
 include "ast.mc"
 include "option.mc"
 include "seq.mc"
@@ -112,7 +107,7 @@ let st_isGloballyDefined: String -> LiftState -> Bool =
         match td with TmTopDef t then
             eqstr t.ident s
         else match td with TmTopRecDef t then
-            any (lam rec. eqstr t.ident s) t
+            any (lam rec. eqstr t.ident s) t.bindings
         else
             error "Global define is not TmTopDef or TmTopRecDef"
     in
@@ -149,7 +144,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
               match td with TmTopDef t then
                   eqstr t.ident s
               else match td with TmTopRecDef t then
-                  any (lam rec. eqstr t.ident s) t
+                  any (lam rec. eqstr t.ident s) t.bindings
               else
                   error "Global define is not TmTopDef or TmTopRecDef"
           in
@@ -339,8 +334,6 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
       --   e: A let-binding in a mutually recursive scope.
       let replacenames = lam acc. lam e.
         let id = (acc.0).id in
-        let tpe = e.1 in
-        let body = e.2 in
         let prefix = match e.body with TmLam _ then "fun" else "var" in
         let newname = strJoin "" [prefix, int2string id, "_", e.ident] in
         let newstate = st_incrId (st_addToEnv e.ident (TmVar {ident = newname}) acc.0) in
@@ -417,7 +410,7 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
       let appgenbindings = map (lam b. {b with body = lamliftReplaceIdentifiers applist b.body}) arggenbindings in
 
       -- Return a TmRecLets with the defines
-      let finalstate = st_addGlobaldef (TmTopRecDef appgenbindings) envstate in
+      let finalstate = st_addGlobaldef (TmTopRecDef {bindings = appgenbindings}) envstate in
 
       lamlift finalstate t.inexpr
 
@@ -651,7 +644,7 @@ let reclets_add = lam ident. lam tpe. lam body. lam reclets.
         let newbind = {ident = ident,
                        tpe = tpe,
                        body = body} in
-        TmRecLets {t with bindings = concat [newbind] t.bindings}
+        TmRecLets {t with bindings = cons newbind t.bindings}
     else
         error "reclets is not a TmRecLets construct"
 in
@@ -737,115 +730,77 @@ let example_ast =
 in
 
 let example_nested_ast =
-    TmLet ("foo", None,
-      TmLam ("a", None, TmLam ("b", None,
-        TmLet ("bar", None,
-          TmLam ("x", None,
-            TmLet ("babar", None,
-              TmLam ("x", None,
-                TmApp (
-                  TmApp (
-                    TmVar "addi",
-                    TmVar "b"
-                  ),
-                  TmVar "x"
-                )
-              ),
-              TmApp (
-                TmVar "babar",
-                TmVar "x"
+    let_ "foo" (None ()) (
+      lam_ "a" (None ()) (lam_ "b" (None ()) (
+        let bar =
+          let_ "bar" (None ()) (
+            lam_ "x" (None ()) (
+              let babar =
+                let_ "babar" (None ()) (
+                  lam_ "x" (None ()) (
+                    appf2_ (var_ "addi") (var_ "b") (var_ "x")
+                  )
+                ) in
+              letappend babar (
+                appf1_ (var_ "babar") (var_ "x")
               )
             )
-          ),
-          TmLet ("fun4_bar", None,
-            TmConst (CInt 3),
-            TmApp (
-              TmApp (
-                TmVar "addi",
-                TmApp (
-                  TmVar "bar",
-                  TmVar "fun4_bar"
-                )
-              ),
-              TmVar "a"
-            )
+          ) in
+        let fun4_bar =
+          let_ "fun4_bar" (None()) (int_ 3) in
+        letappend bar (
+          letappend fun4_bar (
+            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
           )
         )
-      )),
-      TmConst (CUnit ())
+      ))
     )
 in
 
 let example_recursive_ast =
-  TmLet ("foo", None,
-    TmLam ("x", None,
-      TmRecLets ([
-          ("bar", None,
-            TmLam ("y", None,
-              TmApp (TmApp (TmVar "addi", TmVar "y"), TmVar "x")
-            )
-          ),
-          ("babar", None,
-            TmLam ("a", None,
-              TmApp (TmVar "bar", TmVar "a")
-            )
-          )
-        ],
-        TmApp (TmVar "babar", TmConst (CInt 36))
-      )
-    ),
-    TmConst (CUnit ())
+  let_ "foo" (None ()) (
+    lam_ "x" (None ()) (
+      reclets_add "bar" (None ()) (
+        lam_ "y" (None ()) (
+          appf2_ (var_ "addi") (var_ "y") (var_ "x")
+        )
+      )(reclets_add "babar" (None ()) (
+        lam_ "a" (None ()) (
+          appf1_ (var_ "bar") (var_ "a")
+        )
+      ) (reclets_empty))
+    )
   )
 in
 
 let example_factorial =
-  TmRecLets ([
-      ("factorial", None,
-        TmLam ("n", None,
-          TmIf (
-            TmApp (
-              TmApp (
-                TmVar "eqi",
-                TmVar "n"
-              ),
-              TmConst (CInt 0)
-            ),
-            TmConst (CInt 1),
-            TmApp (
-              TmVar "factorial",
-              TmApp (
-                TmApp (
-                  TmVar "subi",
-                  TmVar "n"
-                ),
-                TmConst (CInt 1)
-              )
-            )
-          )
-        )
-      )
-    ],
-    TmConst (CUnit ())
-  )
+  reclets_add "factorial" (None ()) (
+    lam_ "n" (None ()) (
+      if_ (appf2_ (var_ "eqi") (var_ "n") (int_ 0))
+          (int_ 1)
+          (appf1_ (var_ "factorial")
+                  (appf2_ (var_ "subi") (var_ "n") (int_ 1)))
+    )
+  ) (reclets_empty)
 in
 
---utest lift_lambdas (TmConst CUnit) with (TmConst (CUnit)) in
---utest lift_lambdas example_ast with TmConst (CUnit) in
+-- Test that the examples can run the lamlift semantics without errors
+utest lift_lambdas example_ast with lift_lambdas example_ast in
+utest lift_lambdas example_nested_ast with lift_lambdas example_nested_ast in
+utest lift_lambdas example_recursive_ast with lift_lambdas example_recursive_ast in
+utest lift_lambdas example_factorial with lift_lambdas example_factorial in
 
 let _ =
-    --use MExprLamlift in
-    let _ = print "\n[>>>>  Before  <<<<]\n" in
+    --let _ = print "\n[>>>>  Before  <<<<]\n" in
     --let _ = dprint example_recursive_ast in
-    let _ = dprint example_ast in
-    let _ = print "\n" in
+    --let _ = print "\n" in
     ()
 in
 
 let _ =
-    --use MExprLamlift in
-    let _ = print "\n[>>>>  After  <<<<]\n" in
-    let _ = dprint (lift_lambdas example_ast) in
-    let _ = print "\n" in
+    --let _ = print "\n[>>>>  After  <<<<]\n" in
+    --let _ = dprint (lift_lambdas example_recursive_ast) in
+    --let _ = print "\n" in
     ()
 in
 
