@@ -112,9 +112,7 @@ let rec merge_includes root visited = function
      in
      let included =
        includes
-       |> List.map (parse_include root)
-       |> List.filter Option.is_some
-       |> List.map Option.get
+       |> List.filter_map (parse_include root)
      in
      let included_tops =
        included
@@ -137,7 +135,7 @@ let evalprog filename  =
      |> add_prelude
      |> merge_includes (Filename.dirname filename) [filename]
      |> Mlang.flatten
-     |> Mlang.desugar_language_uses
+     |> Mlang.desugar_post_flatten
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
