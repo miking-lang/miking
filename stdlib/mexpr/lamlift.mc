@@ -128,7 +128,12 @@ let st_isGloballyDefined: String -> LiftState -> Bool =
         else match td with TmTopConDef t then
             eqstr t.ident s
         else
-            error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
+            let _ = print "\n\n" in
+            let _ = dprint td in
+            let _ = print "\n\n" in
+            let _ = dprint (TmTopDef {ident = "ident"}) in
+            let _ = print "\n\n" in
+            error "Bamse: Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
     in
     any tdsm st.globaldefs
 
@@ -153,24 +158,9 @@ let strip_prefix = lam s.
 --<<-- LANGUAGES -->>--
 ---\\-------------//---
 
-lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is merged
+lang VarLamlift = VarAst + TopDef + AppAst
     sem lamlift (state : LiftState) =
     | TmVar x ->
-      -- TEMP: Put this here until mlang-mangling is merged...
-      let st_isGloballyDefinedTMP: String -> LiftState -> Bool =
-          lam s. lam st.
-          let tdsm = lam td. -- tdsm: TopDefStringMatch
-              match td with TmTopDef t then
-                  eqstr t.ident s
-              else match td with TmTopRecDef t then
-                  any (lam rec. eqstr t.ident s) t.bindings
-              else match td with TmTopConDef t then
-                  eqstr t.ident s
-              else
-                  error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
-          in
-          any tdsm st.globaldefs
-      in
       let ret = find (lam e. eqstr (e.key) x.ident) state.env.evar in
       match ret with Some t then
         -- Function that for all variables in an expression, that they are in
@@ -179,7 +169,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
           match e with TmVar t1 then
             -- If the found variable is in the current lambda scope or in the
             -- global scope, then it is no need to generate an argument for it.
-            if or (st_inLambdaScope t1.ident chkstate) (st_isGloballyDefinedTMP t1.ident chkstate) then
+            if or (st_inLambdaScope t1.ident chkstate) (st_isGloballyDefined t1.ident chkstate) then
               (chkstate, e)
             else
               -- Referenced something outside of our scope, generate argument for it.
@@ -224,7 +214,7 @@ lang VarLamlift = VarAst + TopDef -- TEMP: Remove TopDef when mlang-mangling is 
       find_replacement newnames
 end
 
-lang DataLamlift = VarAst + DataAst
+lang DataLamlift = VarAst + DataAst + TopDef
     sem lamlift (state : LiftState) =
     | TmConDef t ->
       let newname = strJoin "" ["Con", int2string state.id, "_", t.ident] in
@@ -573,7 +563,7 @@ lang TupleLamlift = TupleAst
 end
 
 lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
-                    BoolPat + TuplePat + DataPat
+                    BoolPat + TuplePat + DataPat + VarAst
     sem lamlift (state : LiftState) =
     | TmMatch t ->
       let targetret = lamlift state t.target in
