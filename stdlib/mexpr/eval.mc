@@ -4,8 +4,6 @@
 include "string.mc"
 include "mexpr/ast.mc"
 
-type Ctx = {}
-
 -- TODO: Change string variables to deBruijn indices
 type Env = [(String, Expr)]
 
@@ -31,7 +29,7 @@ let fresh : String -> Env -> String = lam var. lam env.
     in find_free 0
 
 lang VarEval = VarAst + VarPat
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmVar x ->
     match lookup x.ident ctx.env with Some t then
       eval ctx t
@@ -43,10 +41,10 @@ lang VarEval = VarAst + VarPat
 end
 
 lang AppEval = AppAst
-  sem apply (ctx : Ctx) (arg : Expr) =
+  sem apply (ctx : {env : Env}) (arg : Expr) =
   | _ -> error "Bad application"
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
@@ -58,10 +56,10 @@ lang FunEval = FunAst + VarEval + AppEval
             body : Expr,
             env : Env}
 
-  sem apply (ctx : Ctx) (arg : Expr) =
+  sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmClos t -> eval {ctx with env = (cons (t.ident, arg) t.env)} t.body
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmLam t -> TmClos {ident = t.ident,
                        body = t.body,
                        env = ctx.env}
@@ -75,7 +73,7 @@ lang Fix = FunAst
 end
 
 lang FixEval = Fix + FunEval
-  sem apply (ctx : Ctx) (arg : Expr) =
+  sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
   match arg with TmClos clos then
     let x = clos.ident in
@@ -86,12 +84,12 @@ lang FixEval = Fix + FunEval
   else
     error "Not fixing a function"
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmFix _ -> TmFix ()
  end
 
 lang LetEval = LetAst + VarEval
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmLet t -> eval {ctx with
                      env = cons (t.ident, eval ctx t.body) ctx.env} t.inexpr
 end
@@ -100,10 +98,10 @@ end
 lang ConstEval = ConstAst
   sem delta (arg : Expr) =
 
-  sem apply (ctx : Ctx) (arg : Expr) =
+  sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmConst c -> delta arg c.val
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmConst c -> TmConst c
 end
 
@@ -276,7 +274,7 @@ lang BoolEval = BoolAst + BoolPat + ConstEval
       else error "Not or-ing a boolean constant"
     else error "Not or-ing a constant"
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmIf t ->
     match eval ctx t.cond with TmConst c then
       match c.val with CBool b then
@@ -348,7 +346,7 @@ lang SeqEval = SeqAst + ConstEval
       else error "n in nth is not a number"
     else error "n in nth is not a constant"
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmSeq s ->
     let vs = map (eval ctx) s.tms in
     TmConst {val = CSeq {s with tms = vs}}
@@ -356,7 +354,7 @@ end
 
 
 lang TupleEval = TupleAst + TuplePat
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmTuple v ->
     let vs = map (eval ctx) v.tms in
     TmTuple {v with tms = vs}
@@ -380,7 +378,7 @@ lang TupleEval = TupleAst + TuplePat
 end
 
 lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval + TupleEval + LetEval
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
     let foldli = lam f. lam init. lam seq.
       (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
@@ -412,11 +410,10 @@ lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval + TupleEval + LetEval
                               , TmApp {lhs = TmFix ()
                               , rhs = unfixed_tuple}) ctx.env}
          (unpack_from lst_var t.inexpr)
-
 end
 
 lang RecordEval = RecordAst
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmRecord t ->
     let bs = map (lam b. {b with value = eval ctx b.value}) t.bindings in
     TmRecord {t with bindings = bs}
@@ -452,10 +449,10 @@ lang DataEval = DataAst + DataPat + AppEval
   syn Expr =
   | TmCon {ident : String, body : Expr}
 
-  sem apply (ctx : Ctx) (arg : Expr) =
+  sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmConFun t -> TmCon {ident = t.ident, body = arg}
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmConDef t -> eval {ctx with
                         env = cons (t.ident , TmConFun {ident = t.ident})
                                    ctx.env
@@ -476,7 +473,7 @@ end
 
 
 lang MatchEval = MatchAst
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmMatch t ->
     match tryMatch (eval ctx t.target) t.pat with Some newEnv then
       eval {ctx with env = concat newEnv ctx.env} t.thn
@@ -491,7 +488,7 @@ lang UtestEval = UtestAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
-  sem eval (ctx : Ctx) =
+  sem eval (ctx : {env : Env}) =
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
