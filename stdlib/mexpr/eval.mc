@@ -92,37 +92,6 @@ lang LetEval = LetAst + VarEval
   | TmLet t -> eval (cons (t.ident, eval env t.body) env) t.inexpr
 end
 
-lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval
-  sem eval (env : Env) =
-  | TmRecLets t ->
-    let foldli = lam f. lam init. lam seq.
-      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
-    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
-      with "0a1b2c" in
-    let eta_str = fresh "eta" env in
-    let eta_var = TmVar {ident = eta_str} in
-    let unpack_from = lam var. lam body.
-      foldli
-        (lam i. lam bodyacc. lam binding.
-          TmLet {ident = binding.ident,
-                 tpe = binding.tpe,
-                 body = TmLam {ident = eta_str,
-                               tpe = None (),
-                               body = TmApp {lhs = TmProj {tup = var, idx = i},
-                                             rhs = eta_var}},
-                 inexpr = bodyacc}
-        )
-        body
-        t.bindings in
-    let lst_str = fresh "lst" env in
-    let lst_var = TmVar {ident = lst_str} in
-    let func_tuple = TmTuple {tms = map (lam x. x.body) t.bindings} in
-    let unfixed_tuple = TmLam {ident = lst_str, 
-                               tpe = None (),
-                               body = unpack_from lst_var func_tuple} in
-    eval (cons (lst_str, TmApp {lhs = TmFix (), rhs = unfixed_tuple}) env) (unpack_from lst_var t.inexpr)
-end
-
 
 lang ConstEval = ConstAst
   sem delta (arg : Expr) =
@@ -340,6 +309,36 @@ lang TupleEval = TupleAst + TuplePat
     else None ()
 end
 
+lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval + TupleEval + LetEval
+  sem eval (env : Env) =
+  | TmRecLets t ->
+    let foldli = lam f. lam init. lam seq.
+      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
+    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
+      with "0a1b2c" in
+    let eta_str = fresh "eta" env in
+    let eta_var = TmVar {ident = eta_str} in
+    let unpack_from = lam var. lam body.
+      foldli
+        (lam i. lam bodyacc. lam binding.
+          TmLet {ident = binding.ident,
+                 tpe = binding.tpe,
+                 body = TmLam {ident = eta_str,
+                               tpe = None (),
+                               body = TmApp {lhs = TmProj {tup = var, idx = i},
+                                             rhs = eta_var}},
+                 inexpr = bodyacc}
+        )
+        body
+        t.bindings in
+    let lst_str = fresh "lst" env in
+    let lst_var = TmVar {ident = lst_str} in
+    let func_tuple = TmTuple {tms = map (lam x. x.body) t.bindings} in
+    let unfixed_tuple = TmLam {ident = lst_str,
+                               tpe = None (),
+                               body = unpack_from lst_var func_tuple} in
+    eval (cons (lst_str, TmApp {lhs = TmFix (), rhs = unfixed_tuple}) env) (unpack_from lst_var t.inexpr)
+end
 
 lang RecordEval = RecordAst
   sem eval (env : Env) =
@@ -575,7 +574,7 @@ let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
     TmMatch {target = arg,
              pat = PCon {ident = "Num",
                          subpat = PVar {ident = "n"}},
-             thn = TmApp {lhs = TmVar {ident = "Num"}, 
+             thn = TmApp {lhs = TmVar {ident = "Num"},
                           rhs = TmVar {ident = "n"}},
              els = els}
 in
@@ -610,7 +609,7 @@ in
 let deconstruct = lam t. TmLet {ident = "e1",
                                 tpe = None (),
                                 body = TmProj {tup = t,
-                                               idx = 0}, 
+                                               idx = 0},
                                 inexpr = TmLet {ident = "e2",
                                                 tpe = None (),
                                                 body = TmProj {tup = t,

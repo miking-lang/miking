@@ -129,6 +129,8 @@ let rec pprint_const c =
   | CdeleteFile -> us"deleteFile"
   | Cerror -> us"error"
   | CdebugShow -> us"debugShow"
+  (* External pprint TODO: Should not be part of core language *)
+  | CExt(v) -> Extpprint.pprint v
 
 (* Pretty print a record *)
 and pprecord contents =
