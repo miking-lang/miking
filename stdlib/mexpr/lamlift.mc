@@ -882,16 +882,16 @@ utest lift_lambdas example_conmatch with lift_lambdas example_conmatch in
 utest lift_lambdas example_conmatch_samename with lift_lambdas example_conmatch_samename in
 
 let _ =
-    let _ = print "\n[>>>>  Before  <<<<]\n" in
-    let _ = dprint example_conmatch in
-    let _ = print "\n" in
+    --let _ = print "\n[>>>>  Before  <<<<]\n" in
+    --let _ = dprint example_conmatch in
+    --let _ = print "\n" in
     ()
 in
 
 let _ =
-    let _ = print "\n[>>>>  After  <<<<]\n" in
-    let _ = dprint (lift_lambdas example_conmatch) in
-    let _ = print "\n" in
+    --let _ = print "\n[>>>>  After  <<<<]\n" in
+    --let _ = dprint (lift_lambdas example_conmatch) in
+    --let _ = print "\n" in
     ()
 in
 
