@@ -213,6 +213,9 @@ lang DataPrettyPrint = DataAst + DataPat
 end
 
 lang MatchPrettyPrint = MatchAst
+    sem getPatStringCode (indent : Int) =
+    -- intentionally left blank
+
     sem pprintCode (indent : Int) =
     | TmMatch t ->
       let target = pprintCode indent t.target in
