@@ -40,7 +40,7 @@ include "seq.mc"
 include "string.mc"
 
 -- Temporary introduced AST elements
-lang TopDef
+lang TopDefLamlift
     syn Expr =
     | TmTopDef {ident : String,
                 tpe   : Option,
@@ -115,28 +115,6 @@ let st_addGenarg: Expr -> LiftState -> LiftState =
     lam genarg. lam st.
     {st with genargs = cons genarg st.genargs}
 
--- Returns whether the String is globally defined in the LiftState
--- (Not sure if I need this, keeping this here for the time being)
-let st_isGloballyDefined: String -> LiftState -> Bool =
-    lam s. lam st.
-    use TopDef in
-    let tdsm = lam td. -- tdsm: TopDefStringMatch
-        match td with TmTopDef t then
-            eqstr t.ident s
-        else match td with TmTopRecDef t then
-            any (lam rec. eqstr t.ident s) t.bindings
-        else match td with TmTopConDef t then
-            eqstr t.ident s
-        else
-            let _ = print "\n\n" in
-            let _ = dprint td in
-            let _ = print "\n\n" in
-            let _ = dprint (TmTopDef {ident = "ident"}) in
-            let _ = print "\n\n" in
-            error "Bamse: Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
-    in
-    any tdsm st.globaldefs
-
 -- Returns whether the string is available in the current lambda scope
 let st_inLambdaScope: String -> LiftState -> Bool =
     lam s. lam st.
@@ -158,9 +136,24 @@ let strip_prefix = lam s.
 --<<-- LANGUAGES -->>--
 ---\\-------------//---
 
-lang VarLamlift = VarAst + TopDef + AppAst
+lang VarLamlift = VarAst + TopDefLamlift + AppAst
     sem lamlift (state : LiftState) =
     | TmVar x ->
+      -- Returns whether the String is globally defined in the LiftState
+      let st_isGloballyDefined: String -> LiftState -> Bool =
+          lam s. lam st.
+          let tdsm = lam td. -- tdsm: TopDefStringMatch
+              match td with TmTopDef t then
+                  eqstr t.ident s
+              else match td with TmTopRecDef t then
+                  any (lam rec. eqstr t.ident s) t.bindings
+              else match td with TmTopConDef t then
+                  eqstr t.ident s
+              else
+                  error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
+          in
+          any tdsm st.globaldefs
+      in
       let ret = find (lam e. eqstr (e.key) x.ident) state.env.evar in
       match ret with Some t then
         -- Function that for all variables in an expression, that they are in
@@ -214,7 +207,7 @@ lang VarLamlift = VarAst + TopDef + AppAst
       find_replacement newnames
 end
 
-lang DataLamlift = VarAst + DataAst + TopDef
+lang DataLamlift = VarAst + DataAst + TopDefLamlift
     sem lamlift (state : LiftState) =
     | TmConDef t ->
       let newname = strJoin "" ["Con", int2string state.id, "_", t.ident] in
@@ -249,7 +242,7 @@ lang AppLamlift = AppAst
                            with rhs = lamliftReplaceIdentifiers newnames t.rhs}
 end
 
-lang FunLamlift = FunAst + TopDef
+lang FunLamlift = FunAst + TopDefLamlift
     syn Expr =
     | TmLamChain {body : Expr}
 
@@ -295,7 +288,7 @@ lang FunLamlift = FunAst + TopDef
     | TmLamChain t -> TmLamChain {t with body = lamliftReplaceIdentifiers newnames t.body}
 end
 
-lang LetLamlift = LetAst + FunLamlift + TopDef
+lang LetLamlift = LetAst + FunLamlift + TopDefLamlift
     sem lamlift (state : LiftState) =
     | TmLet t ->
       match t.body with TmLam t1 then
@@ -317,7 +310,7 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
         let lambdagenerator = lam e. lam acc. match e with TmVar t2 then (TmLam {ident = t2.ident, tpe = None (), body = acc}) else let _ = dprint e in error "\ninternal error (2)" in
         let topdefbody = foldr lambdagenerator ret.1 (ret.0).genargs in
 
-        -- Increment the id counter, add the TopDef to globaldefs, and add the return type to scope
+        -- Increment the id counter, add the TopDefLamlift to globaldefs, and add the return type to scope
         let newstate = st_incrId (st_addGlobaldef (TmTopDef {ident = newname, tpe = t.tpe, body = topdefbody})
                                  (st_addVarToEnv t.ident appargs updatedstate)) in
 
@@ -350,7 +343,7 @@ lang LetLamlift = LetAst + FunLamlift + TopDef
 end
 
 -- Lambda lifting of mutually recursive functions
-lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDef
+lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
     sem lamlift (state : LiftState) =
     | TmRecLets t ->
       -- Check that all bound identifiers are unique
@@ -613,7 +606,6 @@ lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
           (subret.0, PCon {t with subpat = subret.1})
       else
         (subret.0, PCon {t with subpat = subret.1})
-
 end
 
 lang UtestLamlift = UtestAst
@@ -636,7 +628,7 @@ lang UtestLamlift = UtestAst
                                 with next = lamliftReplaceIdentifiers newnames t.next}
 end
 
-lang MExprLamlift = TopDef + VarLamlift + AppLamlift + FunLamlift +
+lang MExprLamlift = TopDefLamlift + VarLamlift + AppLamlift + FunLamlift +
                     LetLamlift + RecLetsLamlift + ConstLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
                     BoolLamlift + CmpLamlift + SeqLamlift +
