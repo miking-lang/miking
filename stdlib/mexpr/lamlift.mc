@@ -35,6 +35,8 @@
 
 
 include "ast.mc"
+include "pprint.mc"
+
 include "option.mc"
 include "seq.mc"
 include "string.mc"
@@ -566,12 +568,13 @@ lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
       let patstate = patret.0 in
 
       let thnret = lamlift patstate t.thn in
-      let thnstate = {thnret.0 with env = patstate.env} in
+      let thnstate = {{thnret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
 
       let elsret = lamlift thnstate t.els in
-      let elsstate = {elsret.0 with env = patstate.env} in
+      let elsstate = {{elsret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
       
-      (elsstate, TmMatch {{{{t with target = targetret.1} with pat = patret.1} with thn = thnret.1} with els = elsret.1})
+      let retstate = {{elsret.0 with env = state.env} with lambdarefs = state.lambdarefs} in
+      (retstate, TmMatch {{{{t with target = targetret.1} with pat = patret.1} with thn = thnret.1} with els = elsret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmMatch t -> TmMatch {{{t with target = lamliftReplaceIdentifiers newnames t.target}
@@ -582,7 +585,8 @@ lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
     | PVar t ->
       -- Bind the identifier in the current scope
       let newname = strJoin "" ["pvar", int2string state.id, "_", t.ident] in
-      let updatedstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname}) state) in
+      let updatedstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname})
+                                   (st_addLambdaref newname (TmVar {ident = newname}) state)) in
       (updatedstate, PVar {t with ident = newname})
     | PUnit t -> (state, PUnit t)
     | PInt t -> (state, PInt t)
@@ -635,8 +639,10 @@ lang MExprLamlift = TopDefLamlift + VarLamlift + AppLamlift + FunLamlift +
                     TupleLamlift + DataLamlift + MatchLamlift +
                     UtestLamlift + MExprAst
 
+lang MExprLLandPP = MExprLamlift + MExprPrettyPrint
+
 mexpr
-use MExprLamlift in
+use MExprLLandPP in
 
 -- The letappend function is used for append let expressions together without
 -- having to manually do so in the AST. The provided expr argument is inserted
@@ -881,18 +887,33 @@ utest lift_lambdas example_factorial with lift_lambdas example_factorial in
 utest lift_lambdas example_conmatch with lift_lambdas example_conmatch in
 utest lift_lambdas example_conmatch_samename with lift_lambdas example_conmatch_samename in
 
-let _ =
-    --let _ = print "\n[>>>>  Before  <<<<]\n" in
-    --let _ = dprint example_conmatch in
-    --let _ = print "\n" in
-    ()
+
+let testllprint = lam name. lam ast.
+  let bar = "------------------------" in
+  let top = strJoin "" ["\n", bar, " ", name, " ", bar] in
+  let _ = print top in
+  let _ =
+      let _ = print "\n[>>>>  Before  <<<<]\n" in
+      let _ = print (pprintCode 0 ast) in
+      let _ = print "\n" in
+      ()
+  in
+  let _ =
+      let _ = print "\n[>>>>  After  <<<<]\n" in
+      let _ = print (pprintCode 0 (lift_lambdas ast)) in
+      let _ = print "\n" in
+      ()
+  in
+  let _ = print (makeseq (length top) '-') in
+  let _ = print "\n\n" in
+  ()
 in
 
-let _ =
-    --let _ = print "\n[>>>>  After  <<<<]\n" in
-    --let _ = dprint (lift_lambdas example_conmatch) in
-    --let _ = print "\n" in
-    ()
-in
+--let _ = testllprint "example_ast" example_ast in
+--let _ = testllprint "example_nested_ast" example_nested_ast in
+--let _ = testllprint "example_recursive_ast" example_recursive_ast in
+--let _ = testllprint "example_factorial" example_factorial in
+--let _ = testllprint "example_conmatch" example_conmatch in
+--let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
 
 ()
