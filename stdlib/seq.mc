@@ -5,11 +5,14 @@ let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
 -- Maps and folds
-recursive
-  let map = lam f. lam seq.
-    if null seq then []
-    else cons (f (head seq)) (map f (tail seq))
-end
+let mapi = lam f. lam seq.
+  recursive let work = lam i. lam f. lam seq.
+      if null seq then []
+      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
+  in
+  work 0 f seq
+
+let map = lam f. mapi (lam i. lam x. f x)
 
 recursive
   let foldl = lam f. lam acc. lam seq.
@@ -79,6 +82,9 @@ mexpr
 
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in
+
+utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
+utest mapi (lam i. lam x. i) [] with [] in
 
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
 utest map (lam x. addi x 1) [] with [] in
