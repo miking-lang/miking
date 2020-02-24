@@ -90,6 +90,19 @@ end
 
 let sort = quickSort
 
+-- Max/Min
+let min = lam cmp. lam seq.
+  recursive let work = lam e. lam seq.
+    if null seq then Some e
+    else
+      let h = head seq in
+      let t = tail seq in
+      if lti (cmp e h) 0 then work e t else work h t
+  in
+  if null seq then None () else work (head seq) (tail seq)
+
+let max = lam cmp. min (lam l. lam r. cmp r l)
+
 mexpr
 
 utest head [2,3,5] with 2 in
@@ -142,5 +155,10 @@ utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3] in
 utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3] in
 utest sort (lam l. lam r. subi l r) [] with [] in
 
+utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 in
+utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 in
+utest min (lam l. lam r. subi l r) [] with None () in
+utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 in
+utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
 
 ()
