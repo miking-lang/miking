@@ -78,6 +78,16 @@ let findAssoc = lam p. lam seq.
   then Some res.1
   else None
 
+-- Sorting
+recursive
+let quickSort = lam cmp. lam seq.
+  if null seq then seq else
+    let h = head seq in
+    let t = tail seq in
+    let lr = partition (lam x. lti (cmp x h) 0) t in
+    concat (quickSort cmp lr.0) (cons h (quickSort cmp lr.1))
+end
+
 mexpr
 
 utest head [2,3,5] with 2 in
@@ -122,5 +132,13 @@ utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
 utest find (lam x. lti x 1) [4,1,2] with None () in
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
+utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[]) in
+
+utest quickSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20] in
+utest quickSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20] in
+utest quickSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3] in
+utest quickSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3] in
+utest quickSort (lam l. lam r. subi l r) [] with [] in
+
 
 ()
