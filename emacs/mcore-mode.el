@@ -50,7 +50,7 @@
 (setq mcore-primitives-regexp (regexp-opt mcore-primitives 'symbols))
 (setq mcore-warning-regexp (regexp-opt mcore-warning 'symbols))
 
-(setq mcore-types-regexp "\\<[[:upper:]][[:word:]]*\\>")
+(setq mcore-types-regexp "\\_<[[:upper:]][[:word:]]*\\_>")
 
 (setq mcore-font-lock-keywords
      `(
