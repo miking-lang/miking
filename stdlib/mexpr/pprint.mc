@@ -154,10 +154,23 @@ lang CharPrettyPrint = CharAst + ConstPrettyPrint
     | CChar c -> [head "'", c.val, head "'"]
 end
 
-lang SeqPrettyPrint = SeqAst + ConstPrettyPrint
+lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     sem getConstStringCode (indent : Int) =
     | CNth _ -> "nth"
-    | CSeq t -> pprintCode indent (TmSeq {tms = t.tms})
+    | CSeq t ->
+      let extract_char = lam e.
+        match e with TmConst t1 then
+          match t1.val with CChar c then
+            Some (c.val)
+          else None ()
+        else None ()
+      in
+      let is_char = lam e. match extract_char e with Some c then true else false in
+      if all is_char t.tms then
+        concat "\"" (concat (map (lam e. match extract_char e with Some c then c else '?') t.tms)
+                            "\"")
+      else
+        pprintCode indent (TmSeq {tms = t.tms})
 
     sem pprintCode (indent : Int) =
     | TmSeq t -> strJoin "" ["[", strJoin ", " (map (pprintCode indent) t.tms), "]"]
