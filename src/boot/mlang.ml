@@ -73,11 +73,13 @@ let check_matching_constrs info constrs =
   List.iter check_matching_constr
 
 let rec merge_data d constrs = function
-  | [] -> [Data(NoInfo, d, constrs)]
+  | [] -> []
   | Data(info', d', constrs')::decls when d = d' ->
+       let matching_constr (CDecl(_, c, _)) (CDecl(_, c', _)) = c = c' in
+       let is_previously_defined c = List.exists (matching_constr c) constrs in
        check_matching_constrs info' constrs constrs';
-       let unique_constrs = List.sort_uniq constr_compare (constrs@constrs') in
-       Data(info', d, unique_constrs)::decls
+       let new_constrs = List.filter (fun c -> is_previously_defined c |> not) constrs' in
+       Data(info', d, new_constrs)::decls
   | decl::decls ->
      decl::merge_data d constrs decls
 
@@ -95,14 +97,16 @@ let rec merge_inter f params cases = function
   | decl::decls ->
      decl::merge_inter f params cases decls
 
+(* add decl to decls, since decl comes from a language that was included by the language decls originates from *)
 let merge_decl decl decls = match decl with
   | Data(_, d, constrs) -> merge_data d constrs decls
   | Inter(_, f, params, cases) -> merge_inter f params cases decls
 
+(* merge lang2 into lang1 (because lang1 includes lang2) *)
 let merge_langs lang1 lang2 : mlang =
   match lang1, lang2 with
   | Lang(info, l1, ls, decls1), Lang(_, _, _, decls2) ->
-     let decls1' = List.fold_right merge_decl decls1 decls2 in
+     let decls1' = List.fold_right merge_decl decls2 decls1 in
      Lang(info, l1, ls, decls1')
 
 let lookup_lang info tops l =
@@ -178,6 +182,7 @@ module USMap = Map.Make (Ustring)
 type mlangEnv = { constructors : ustring USMap.t; normals : ustring USMap.t }
 let emptyMlangEnv = {constructors = USMap.empty; normals = USMap.empty}
 
+(* Adds the names from b to a, overwriting with the name from b when they overlap *)
 let merge_env_overwrite a b =
   { constructors = USMap.union (fun _ _ r -> Some r) a.constructors b.constructors
   ; normals = USMap.union (fun _ _ r -> Some r) a.normals b.normals }
@@ -258,7 +263,9 @@ let rec desugar_tm nss env =
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
 let desugar_top (nss, (stack : (tm -> tm) list)) = function
-  | TopLang (Lang(_, langName, _, decls)) ->
+  | TopLang (Lang(_, langName, includes, decls)) ->
+     let add_lang ns lang = USMap.find_opt lang nss |> Option.value ~default:emptyMlangEnv |> merge_env_overwrite ns in
+     let previous_ns = List.fold_left add_lang emptyMlangEnv includes in
      (* compute the namespace *)
      let mangle str = langName ^. us"_" ^. str in
      let cdecl_names (CDecl(_, name, _)) = (name, mangle name) in
@@ -267,10 +274,10 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names
           in {constructors = USMap.add_seq new_constructors constructors; normals}
        | Inter (_, name, _, _) -> {normals = USMap.add name (mangle name) normals; constructors} in
-     let ns = List.fold_left add_decl emptyMlangEnv decls in
+     let ns = List.fold_left add_decl previous_ns decls in
      (* wrap in "con"s *)
      let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
-       TmCondef(fi, mangle cname, TyArrow(TyCon ty_name, ty), tm) in
+       TmCondef(fi, mangle cname, TyArrow(TyCon ty_name, ty), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
      let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
        | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
        | _ -> tm in

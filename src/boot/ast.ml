@@ -197,6 +197,9 @@ module Option = struct
   let bind f = function
     | Some x -> f x
     | None -> None
+  let value ~default = function
+    | Some x -> x
+    | None -> default
 end
 
 (* General (bottom-up) map over terms *)
