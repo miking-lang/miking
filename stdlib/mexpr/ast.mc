@@ -244,4 +244,7 @@ lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
   UnitAst + UnitPat + IntAst + IntPat +
   ArithIntAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
-  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst
+  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
+  DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
+  RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
+  AppTypeAst
