@@ -4,7 +4,7 @@ let head = lam s. nth s 0
 let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
--- Maps and folds
+-- Maps and (un)folds
 let mapi = lam f. lam seq.
   recursive let work = lam i. lam f. lam seq.
       if null seq then []
@@ -35,6 +35,14 @@ recursive
     if null seq1 then []
     else if null seq2 then []
     else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
+end
+
+recursive
+let unfoldr = lam f. lam b.
+  let fb = f b in
+  match fb with None _ then [] else
+  match fb with Some (a, bp) then cons a (unfoldr f bp)
+  else error "unfoldr.impossible"
 end
 
 -- Predicates
@@ -160,5 +168,8 @@ utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 in
 utest min (lam l. lam r. subi l r) [] with None () in
 utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 in
 utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
+
+utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
+with [0,1,2,3,4,5,6,7,8,9] in
 
 ()
