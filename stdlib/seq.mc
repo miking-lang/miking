@@ -12,7 +12,7 @@ let mapi = lam f. lam seq.
   in
   work 0 f seq
 
-let map = lam f. mapi (lam i. lam x. f x)
+let map = lam f. mapi (lam _. lam x. f x)
 
 recursive
   let foldl = lam f. lam acc. lam seq.
