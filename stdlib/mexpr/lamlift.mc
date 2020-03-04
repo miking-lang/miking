@@ -43,7 +43,7 @@ include "string.mc"
 
 -- Temporary introduced AST elements
 lang TopDefLamlift
-    syn Expr =
+    syn TopDef =
     | TmTopDef {ident : String,
                 tpe   : Option,
                 body  : Expr}
@@ -69,7 +69,7 @@ end
 --   genargs:    List of arguments that have been generated to take the place
 --               of the externally referenced identifiers.
 type LiftState = {id         : Int,
-                  globaldefs : [Expr],
+                  globaldefs : [TopDef],
                   env        : {evar  : [{key   : String,
                                          value : Expr}],
                                 econ  : [{key   : String,
