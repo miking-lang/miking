@@ -39,7 +39,8 @@ let builtin =
    ("readFile",CreadFile); ("writeFile",CwriteFile(None));
    ("fileExists", CfileExists); ("deleteFile", CdeleteFile);
    ("error",Cerror);
-   ("debugShow", CdebugShow)
+   ("debugShow", CdebugShow);
+   ("eqs", Ceqs(None)); ("gensymb", Cgensymb)
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -114,15 +115,25 @@ let arity = function
   | CdeleteFile       -> 1
   | Cerror            -> 1
   | CdebugShow        -> 1
+  (* MCore symbols *)
+  | CSymb(_)      -> 0
+  | Cgensymb      -> 1
+  | Ceqs(None)    -> 2
+  | Ceqs(Some(_)) -> 1
   (* External functions TODO: Should not be bart of core language *)
   | CExt v            -> Ext.arity v
 
+
+(* API for generating unique symbol ids *)
+let symid = ref 0
+let gen_symid _ =
+  symid := !symid + 1;
+  !symid
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ Ustring.to_utf8 (pprint_const f)
                                          ^ " value: "
                                          ^ Ustring.to_utf8 (pprintME v))
-
 
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
@@ -364,6 +375,13 @@ let delta eval env fi c v  =
     | Cerror,t -> fail_constapp (tm_info t)
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
+
+    | CSymb(_), t -> fail_constapp (tm_info t)
+    | Cgensymb, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensymb, t -> fail_constapp (tm_info t)
+    | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
+    | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
+    | Ceqs(_), t -> fail_constapp (tm_info t)
 
     | CExt v, t -> Ext.delta eval env v t
 
