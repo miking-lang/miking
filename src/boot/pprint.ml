@@ -129,6 +129,10 @@ let rec pprint_const c =
   | CdeleteFile -> us"deleteFile"
   | Cerror -> us"error"
   | CdebugShow -> us"debugShow"
+  (* MCore Symbols *)
+  | CSymb(id) -> us(sprintf "symb(%d)" id)
+  | Cgensymb -> us"gensymb"
+  | Ceqs(_) -> us"eqs"
   (* External pprint TODO: Should not be part of core language *)
   | CExt(v) -> Extpprint.pprint v
 
