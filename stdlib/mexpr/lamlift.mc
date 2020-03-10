@@ -41,19 +41,6 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 
--- Temporary introduced AST elements
-lang TopDefLamlift
-    syn TopDef =
-    | TmTopDef {ident : String,
-                tpe   : Option,
-                body  : Expr}
-    | TmTopRecDef {bindings : [{ident : String,
-                                tpe   : Option,
-                                body  : Expr}]}
-    | TmTopConDef {ident : String,
-                   tpe   : Option}
-end
-
 -- State for lambda lifting
 --   id:         ID counter (used to assign globally unique names to
 --               identifiers).
@@ -138,21 +125,26 @@ let strip_prefix = lam s.
 --<<-- LANGUAGES -->>--
 ---\\-------------//---
 
-lang VarLamlift = VarAst + TopDefLamlift + AppAst
+lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
+    syn Expr =
+    -- Only ever use for lookup, should never be used be part of the generated AST
+    | TmLamliftTypedVar {ident : String,
+                         tpe   : Option}
+
     sem lamlift (state : LiftState) =
     | TmVar x ->
       -- Returns whether the String is globally defined in the LiftState
       let st_isGloballyDefined: String -> LiftState -> Bool =
           lam s. lam st.
           let tdsm = lam td. -- tdsm: TopDefStringMatch
-              match td with TmTopDef t then
+              match td with TmLet t then
                   eqstr t.ident s
-              else match td with TmTopRecDef t then
+              else match td with TmRecLets t then
                   any (lam rec. eqstr t.ident s) t.bindings
-              else match td with TmTopConDef t then
+              else match td with TmConDef t then
                   eqstr t.ident s
               else
-                  error "Global define is not TmTopDef, TmTopRecDef, or TmTopConDef"
+                  error "Global define is not TmLet, TmRecLets, or TmConDef"
           in
           any tdsm st.globaldefs
       in
@@ -173,20 +165,40 @@ lang VarLamlift = VarAst + TopDefLamlift + AppAst
               -- as a prefix.
               let oldname = strip_prefix t1.ident in
               let newname = concat "arg" (concat (int2string id) (cons '_' oldname)) in
-              let newvar = TmVar {t1 with ident = newname} in
-              let newstate = st_incrId (st_addVarToEnv oldname newvar
-                                       (st_addLambdaref newname newvar
+              let newvar = TmVar {ident = newname} in
+              let newtypedvar = TmLamliftTypedVar {ident = newname, tpe = None ()} in
+              let newstate = st_incrId (st_addVarToEnv oldname newtypedvar
+                                       (st_addLambdaref newname newtypedvar
                                        (st_addExternref e
-                                       (st_addGenarg newvar chkstate)))) in
+                                       (st_addGenarg newtypedvar chkstate)))) in
               (newstate, newvar)
-          else match e with TmApp t2 then
+          else match e with TmLamliftTypedVar t2 then
+            -- If the found variable is in the current lambda scope or in the
+            -- global scope, then it is no need to generate an argument for it.
+            if or (st_inLambdaScope t2.ident chkstate) (st_isGloballyDefined t2.ident chkstate) then
+              (chkstate, TmVar {ident = t2.ident})
+            else
+              -- Referenced something outside of our scope, generate argument for it.
+              let id = chkstate.id in
+              -- All bound identifiers should have either "var", "fun", or "arg"
+              -- as a prefix.
+              let oldname = strip_prefix t2.ident in
+              let newname = concat "arg" (concat (int2string id) (cons '_' oldname)) in
+              let newvar = TmVar {ident = newname} in
+              let newtypedvar = TmLamliftTypedVar {t2 with ident = newname} in
+              let newstate = st_incrId (st_addVarToEnv oldname newtypedvar
+                                       (st_addLambdaref newname newtypedvar
+                                       (st_addExternref (TmVar {ident = t2.ident})
+                                       (st_addGenarg newtypedvar chkstate)))) in
+              (newstate, newvar)
+          else match e with TmApp t3 then
             -- Our bound identifier references to a chain of applications, make
             -- that all identifiers in that application are in the current scope.
-            let lhsret = check_scope chkstate t2.lhs in
+            let lhsret = check_scope chkstate t3.lhs in
             let lhsstate = lhsret.0 in
-            let rhsret = check_scope lhsstate t2.rhs in
+            let rhsret = check_scope lhsstate t3.rhs in
             let rhsstate = rhsret.0 in
-            (rhsstate, TmApp {{t2 with lhs = lhsret.1} with rhs = rhsret.1})
+            (rhsstate, TmApp {{t3 with lhs = lhsret.1} with rhs = rhsret.1})
           else
             (chkstate, e)
         in
@@ -207,15 +219,17 @@ lang VarLamlift = VarAst + TopDefLamlift + AppAst
             find_replacement (tail l)
       in
       find_replacement newnames
+    -- Deliberately no check for TmLamliftTypedVar here as we expect it to not
+    -- be part of the AST, making this act as a simple sanity check.
 end
 
-lang DataLamlift = VarAst + DataAst + TopDefLamlift
+lang DataLamlift = VarAst + DataAst + ConstAst + UnitAst
     sem lamlift (state : LiftState) =
     | TmConDef t ->
       let newname = strJoin "" ["Con", int2string state.id, "_", t.ident] in
 
       let updatedstate = st_incrId (st_addConToEnv t.ident (TmConFun {ident = newname})
-                                   (st_addGlobaldef (TmTopConDef {ident = newname, tpe = t.tpe}) state)) in
+                                   (st_addGlobaldef (TmConDef {{t with ident = newname} with inexpr = TmConst {val = CUnit ()}}) state)) in
 
       lamlift updatedstate t.inexpr
     | TmConFun t ->
@@ -244,7 +258,7 @@ lang AppLamlift = AppAst
                            with rhs = lamliftReplaceIdentifiers newnames t.rhs}
 end
 
-lang FunLamlift = FunAst + TopDefLamlift
+lang FunLamlift = VarLamlift + FunAst + ConstAst + UnitAst
     syn Expr =
     | TmLamChain {body : Expr}
 
@@ -262,19 +276,23 @@ lang FunLamlift = FunAst + TopDefLamlift
       -- The value to return: TmApp {... TmApp {lhs = TmVar {ident = "fun#_anon"}, rhs = Expr}, ...}
       let appargs = foldl (lam acc. lam e. TmApp {lhs = acc, rhs = e}) (TmVar {ident = name}) (ret.0).externrefs in
 
-      -- The top level definition: TmTopDef {ident = "fun#_anon", tpe = ..., body = TmLam {ident = "arg#_%%", tpe = None (), ...}}
-      let lambdagenerator = lam e. lam acc. match e with TmVar t1 then TmLam {ident = t1.ident, tpe = None (), body = acc} else error "internal error (1)" in
+      -- The top level definition: TmLet {ident = "fun#_anon", tpe = ..., body = TmLam {ident = "arg#_%%", tpe = None (), ...}}
+      let lambdagenerator = lam e. lam acc.
+        match e with TmLamliftTypedVar t1 then
+          TmLam {ident = t1.ident, tpe = t1.tpe, body = acc}
+        else error "internal error (1)"
+      in
       let topdefbody = foldr lambdagenerator ret.1 (ret.0).genargs in
 
       -- Increment the id counter and add the TopDef to globaldefs
-      let newstate = st_incrId (st_addGlobaldef (TmTopDef {ident = name, tpe = None (), body = topdefbody}) updatedstate) in
+      let newstate = st_incrId (st_addGlobaldef (TmLet {ident = name, tpe = None (), body = topdefbody, inexpr = TmConst {val = CUnit ()}}) updatedstate) in
 
       (newstate, appargs)
 
     | TmLamChain t ->
       match t.body with TmLam t1 then
         let newname = concat "arg" (concat (int2string state.id) (cons '_' (t1.ident))) in
-        let arg = TmVar {ident = newname} in
+        let arg = TmLamliftTypedVar {ident = newname, tpe = t1.tpe} in
 
         let newstate = st_incrId (st_addVarToEnv t1.ident arg (st_addLambdaref newname arg state)) in
         let ret = lamlift newstate (TmLamChain {body = t1.body}) in
@@ -290,7 +308,7 @@ lang FunLamlift = FunAst + TopDefLamlift
     | TmLamChain t -> TmLamChain {t with body = lamliftReplaceIdentifiers newnames t.body}
 end
 
-lang LetLamlift = LetAst + FunLamlift + TopDefLamlift
+lang LetLamlift = VarLamlift + LetAst + FunLamlift + ConstAst + UnitAst
     sem lamlift (state : LiftState) =
     | TmLet t ->
       match t.body with TmLam t1 then
@@ -308,12 +326,29 @@ lang LetLamlift = LetAst + FunLamlift + TopDefLamlift
         -- The value to bind: TmApp (... TmApp (TmVar "fun#_<name>", Expr), ...)
         let appargs = foldl (lam acc. lam e. TmApp {lhs = acc, rhs = e}) (TmVar {ident = newname}) (ret.0).externrefs in
 
-        -- The top level definition: TmTopDef ("fun#_<name>", TmLam ("arg#_%%", None, ...))
-        let lambdagenerator = lam e. lam acc. match e with TmVar t2 then (TmLam {ident = t2.ident, tpe = None (), body = acc}) else let _ = dprint e in error "\ninternal error (2)" in
+        -- The top level definition: TmLet ("fun#_<name>", TmLam ("arg#_%%", None, ...))
+        let lambdagenerator = lam e. lam acc.
+          match e with TmLamliftTypedVar t2 then
+            TmLam {ident = t2.ident, tpe = t2.tpe, body = acc}
+          else error "internal error (2)"
+        in
         let topdefbody = foldr lambdagenerator ret.1 (ret.0).genargs in
+        let arrowgenerator = lam e. lam acc.
+          match e with TmLamliftTypedVar t2 then
+            match t2.tpe with Some t3 then
+              match acc with Some t4 then
+                Some (TyArrow {from = t3, to = t4})
+              else None ()
+            else None ()
+          else error "LetLamlift: arrowgenerator: Generated argument is not TmLamliftTypedVar"
+        in
+        let topdeftype = foldr arrowgenerator t.tpe (ret.0).genargs in
 
         -- Increment the id counter, add the TopDefLamlift to globaldefs, and add the return type to scope
-        let newstate = st_incrId (st_addGlobaldef (TmTopDef {ident = newname, tpe = t.tpe, body = topdefbody})
+        let newstate = st_incrId (st_addGlobaldef (TmLet {{{{t with ident = newname}
+                                                               with tpe = topdeftype}
+                                                               with body = topdefbody}
+                                                               with inexpr = TmConst {val = CUnit ()}})
                                  (st_addVarToEnv t.ident appargs updatedstate)) in
 
         -- LHS has been lifted out, evaluate RHS and return that
@@ -326,12 +361,13 @@ lang LetLamlift = LetAst + FunLamlift + TopDefLamlift
 
         let id = updatedstate.id in
         let newname = concat "var" (concat (int2string id) (cons '_' t.ident)) in
+        let newvar = TmLamliftTypedVar {ident = newname, tpe = t.tpe} in
 
         -- Increment ID counter, add the "original" variable t.ident to the
         -- environment, and mark this variable as referencable from the current
         -- lambda scope.
-        let newstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname})
-                                 (st_addLambdaref newname (TmVar {ident = newname}) updatedstate)) in
+        let newstate = st_incrId (st_addVarToEnv t.ident newvar
+                                 (st_addLambdaref newname newvar updatedstate)) in
 
         let inret = lamlift newstate t.inexpr in
 
@@ -345,7 +381,7 @@ lang LetLamlift = LetAst + FunLamlift + TopDefLamlift
 end
 
 -- Lambda lifting of mutually recursive functions
-lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
+lang RecLetsLamlift = VarLamlift + RecLetsAst + FunLamlift + ConstAst + UnitAst
     sem lamlift (state : LiftState) =
     | TmRecLets t ->
       -- Check that all bound identifiers are unique
@@ -363,8 +399,9 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
         let id = (acc.0).id in
         let prefix = match e.body with TmLam _ then "fun" else "var" in
         let newname = strJoin "" [prefix, int2string id, "_", e.ident] in
-        let newstate = st_incrId (st_addVarToEnv e.ident (TmVar {ident = newname}) acc.0) in
-        (newstate, concat (acc.1) [{e with ident = newname}], concat acc.2 [{ident = newname, body = TmVar {ident = newname}}])
+        let newref = TmLamliftTypedVar {ident = newname, tpe = e.tpe} in
+        let newstate = st_incrId (st_addVarToEnv e.ident newref acc.0) in
+        (newstate, concat (acc.1) [{e with ident = newname}], concat acc.2 [{ident = newname, body = newref}])
       in
       let replaceret = foldl replacenames (state, [], []) t.bindings in
 
@@ -385,9 +422,13 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
 
         -- Extract the generated arguments and add them to the environment.
         -- (We do not want to generate 2 separate arguments for the same reference)
-        let var2str = lam v. match v with TmVar s then s.ident else error "Not a var" in
+        let typedvar2str = lam v. match v with TmLamliftTypedVar s then s.ident else error "Not a typed var" in
 
-        let envaddfld = lam st. lam v. st_addVarToEnv (strip_prefix (var2str v)) v st in
+        let envaddfld = lam st. lam v.
+          match v with TmLamliftTypedVar then
+            st_addVarToEnv (strip_prefix (typedvar2str v)) v st
+          else let _ = dprint v in error "envaddfld: Not a typed var."
+        in
         let newstate = foldl envaddfld acc_state (acc_state.genargs) in
 
         let ret = lamlift newstate (TmLamChain {body = b.body}) in
@@ -405,10 +446,24 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
 
       -- Generate arguments that were externally referenced in the expressions.
       let arggen = lam b.
-        -- The top level definition: TmTopRecDef [("fun#_<name>", Option, TmLam ("arg#_%%", None, ...))]
-        let lambdagenerator = lam e. lam acc. match e with TmVar t2 then (TmLam {ident = t2.ident, tpe = None, body = acc}) else let _ = dprint e in error "\ninternal error (3)" in
+        -- The top level definition: TmRecLets [("fun#_<name>", Option, TmLam ("arg#_%%", None, ...))]
+        let lambdagenerator = lam e. lam acc.
+          match e with TmLamliftTypedVar t2 then
+            TmLam {ident = t2.ident, tpe = t2.tpe, body = acc}
+          else let _ = dprint e in error "internal error (3)"
+        in
         let newbody = foldr lambdagenerator b.body liftedstate.genargs in
-        {{b with tpe = None ()} with body = newbody}
+        let arrowgenerator = lam e. lam acc.
+          match e with TmLamliftTypedVar t2 then
+            match t2.tpe with Some t3 then
+              match acc with Some t4 then
+                Some (TyArrow {from = t3, to = t4})
+              else None ()
+            else None ()
+          else error "RecLetsLamlift: arrowgenerator: Generated argument is not TmLamliftTypedVar"
+        in
+        let newtype = foldr arrowgenerator b.tpe liftedstate.genargs in
+        {{b with tpe = newtype} with body = newbody}
       in
       let arggenbindings = map arggen liftedbindings in
 
@@ -429,7 +484,12 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
         let name = b.ident in
 
         -- The value to bind: TmApp (... TmApp (TmVar "fun#_<name>", Expr), ...)
-        let binding = foldl (lam acc. lam e. TmApp {lhs = acc, rhs = e}) (TmVar {ident = name}) liftedstate.genargs in
+        let binding = foldl (
+          lam acc. lam e.
+          match e with TmLamliftTypedVar t1 then
+            TmApp {lhs = acc, rhs = TmVar {ident = t1.ident}}
+          else error "generated argument is not typed var"
+        ) (TmVar {ident = name}) liftedstate.genargs in
 
         concat acc [{ident = name, replacement = binding}]
       in
@@ -437,7 +497,8 @@ lang RecLetsLamlift = RecLetsAst + FunLamlift + TopDefLamlift
       let appgenbindings = map (lam b. {b with body = lamliftReplaceIdentifiers applist b.body}) arggenbindings in
 
       -- Return a TmRecLets with the defines
-      let finalstate = st_addGlobaldef (TmTopRecDef {bindings = appgenbindings}) envstate in
+      let finalstate = st_addGlobaldef (TmRecLets {{t with bindings = appgenbindings}
+                                                      with inexpr = TmConst {val = CUnit ()}}) envstate in
 
       lamlift finalstate t.inexpr
 
@@ -632,7 +693,7 @@ lang UtestLamlift = UtestAst
                                 with next = lamliftReplaceIdentifiers newnames t.next}
 end
 
-lang MExprLamlift = TopDefLamlift + VarLamlift + AppLamlift + FunLamlift +
+lang MExprLamlift = VarLamlift + AppLamlift + FunLamlift +
                     LetLamlift + RecLetsLamlift + ConstLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
                     BoolLamlift + CmpLamlift + SeqLamlift +
@@ -759,14 +820,14 @@ let lift_lambdas: Expr -> Expr = lam ast.
     -- liftedexprs is in reverse order, so the let-expression that should be
     -- first is at the end of the list
     let convert_from_globaldef = lam acc. lam gd.
-        match gd with TmTopDef t then
-            TmLet {ident = t.ident, tpe = t.tpe, body = t.body, inexpr = acc}
-        else match gd with TmTopRecDef t then
-            TmRecLets {bindings = t.bindings, inexpr = acc}
-        else match gd with TmTopConDef t then
-            TmConDef {ident = t.ident, tpe = t.tpe, inexpr = acc}
+        match gd with TmLet t then
+            TmLet {t with inexpr = acc}
+        else match gd with TmRecLets t then
+            TmRecLets {t with inexpr = acc}
+        else match gd with TmConDef t then
+            TmConDef {t with inexpr = acc}
         else
-            error "Global definition is not of TmTopDef, TmTopRecDef, or TmTopConDef"
+            error "Global definition is not of TmLet, TmRecLets, or TmConDef"
     in
     foldl convert_from_globaldef mainexpr liftedexprs
 in
@@ -786,6 +847,21 @@ let example_ast =
           letappend fun4_bar (
             appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
           )
+        )
+      ))
+    )
+in
+
+let example_anonlambda_ast =
+    let_ "foo" (None ()) (
+      lam_ "a" (None ()) (lam_ "b" (None ()) (
+        let fun4_bar =
+          let_ "fun4_bar" (None()) (int_ 3) in
+        letappend fun4_bar (
+          appf2_ (var_ "addi")
+                 (app_ (lam_ "x" (None ()) (appf2_ (var_ "addi") (var_ "b") (var_ "x")))
+                       (var_ "fun4_bar"))
+                 (var_ "a")
         )
       ))
     )
@@ -895,16 +971,16 @@ let example_conmatch_samename =
 in
 
 let example_typed_ast =
-    let_ "foo" (tyarrows_ [tyint_, tyint_, tyint_]) (
-      lam_ "a" tyint_ (lam_ "b" tyint_ (
+    let_ "foo" (Some (tyarrows_ [tyint_, tyint_, tyint_])) (
+      lam_ "a" (Some (tyint_)) (lam_ "b" (Some (tyint_)) (
         let bar =
-          let_ "bar" (tyarrow_ tyint_ tyint_) (
-            lam_ "x" tyint_ (
+          let_ "bar" (Some (tyarrow_ tyunit_ tyint_)) (
+            lam_ "x" (Some (tyunit_)) (
               appf2_ (var_ "addi") (var_ "b") (var_ "x")
             )
           ) in
         let fun4_bar =
-          let_ "fun4_bar" tyint_ (int_ 3) in
+          let_ "fun4_bar" (Some (tyint_)) (int_ 3) in
         letappend bar (
           letappend fun4_bar (
             appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
@@ -912,6 +988,22 @@ let example_typed_ast =
         )
       ))
     )
+in
+
+let example_recursive_typed_ast =
+  let_ "foo" (Some (tyarrow_ tybool_ tyint_)) (
+    lam_ "x" (Some (tybool_)) (
+      reclets_add "bar" (Some (tyarrow_ tyint_ tyint_)) (
+        lam_ "y" (Some (tyint_)) (
+          appf2_ (var_ "addi") (var_ "y") (var_ "x")
+        )
+      )(reclets_add "babar" (Some (tyarrow_ tyint_ tyint_)) (
+        lam_ "a" (Some (tyint_)) (
+          appf1_ (var_ "bar") (var_ "a")
+        )
+      ) (reclets_empty))
+    )
+  )
 in
 
 -- Test that the examples can run the lamlift semantics without errors
@@ -945,11 +1037,13 @@ let testllprint = lam name. lam ast.
 in
 
 let _ = testllprint "example_ast" example_ast in
+let _ = testllprint "example_anonlambda_ast" example_anonlambda_ast in
 let _ = testllprint "example_nested_ast" example_nested_ast in
 let _ = testllprint "example_recursive_ast" example_recursive_ast in
 let _ = testllprint "example_factorial" example_factorial in
 let _ = testllprint "example_conmatch" example_conmatch in
 let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
 let _ = testllprint "example_typed_ast" example_typed_ast in
+let _ = testllprint "example_recursive_typed_ast" example_recursive_typed_ast in
 
 ()
