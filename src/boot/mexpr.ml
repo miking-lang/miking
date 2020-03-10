@@ -376,12 +376,12 @@ let delta eval env fi c v  =
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
 
-    | CSymb(_), t -> fail_constapp (tm_info t)
+    | CSymb(_),_ -> fail_constapp fi
     | Cgensymb, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
-    | Cgensymb, t -> fail_constapp (tm_info t)
+    | Cgensymb,_ -> fail_constapp fi
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
-    | Ceqs(_), t -> fail_constapp (tm_info t)
+    | Ceqs(_),_ -> fail_constapp fi
 
     | CExt v, t -> Ext.delta eval env v t
 
