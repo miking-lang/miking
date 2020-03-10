@@ -1006,6 +1006,30 @@ let example_recursive_typed_ast =
   )
 in
 
+let example_conmatch_typed =
+  let_ "foo" (Some (tybool_)) (
+    let mycon =
+      condef_ "MyCon" (Some (tyunit_))
+    in
+    let bar =
+      let_ "bar" (Some (tyarrow_ (tycon_ "MyConType") tybool_)) (
+        lam_ "x" (Some (tycon_ "MyConType")) (
+          match_ (var_ "x")
+                 (pcon_ "MyCon" punit_)
+                 (true_)
+                 (false_)
+        )
+      )
+    in
+    letappend mycon (
+      letappend bar (
+        appf1_ (var_ "bar") (app_ (confun_ "MyCon")
+                                  (unit_))
+      )
+    )
+  )
+in
+
 -- Test that the examples can run the lamlift semantics without errors
 utest lift_lambdas example_ast with lift_lambdas example_ast in
 utest lift_lambdas example_nested_ast with lift_lambdas example_nested_ast in
@@ -1013,7 +1037,9 @@ utest lift_lambdas example_recursive_ast with lift_lambdas example_recursive_ast
 utest lift_lambdas example_factorial with lift_lambdas example_factorial in
 utest lift_lambdas example_conmatch with lift_lambdas example_conmatch in
 utest lift_lambdas example_conmatch_samename with lift_lambdas example_conmatch_samename in
-
+utest lift_lambdas example_typed_ast with lift_lambdas example_typed_ast in
+utest lift_lambdas example_recursive_typed_ast with lift_lambdas example_recursive_typed_ast in
+utest lift_lambdas example_conmatch_typed with lift_lambdas example_conmatch_typed in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
@@ -1036,14 +1062,15 @@ let testllprint = lam name. lam ast.
   ()
 in
 
-let _ = testllprint "example_ast" example_ast in
-let _ = testllprint "example_anonlambda_ast" example_anonlambda_ast in
-let _ = testllprint "example_nested_ast" example_nested_ast in
-let _ = testllprint "example_recursive_ast" example_recursive_ast in
-let _ = testllprint "example_factorial" example_factorial in
-let _ = testllprint "example_conmatch" example_conmatch in
-let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
-let _ = testllprint "example_typed_ast" example_typed_ast in
-let _ = testllprint "example_recursive_typed_ast" example_recursive_typed_ast in
+--let _ = testllprint "example_ast" example_ast in
+--let _ = testllprint "example_anonlambda_ast" example_anonlambda_ast in
+--let _ = testllprint "example_nested_ast" example_nested_ast in
+--let _ = testllprint "example_recursive_ast" example_recursive_ast in
+--let _ = testllprint "example_factorial" example_factorial in
+--let _ = testllprint "example_conmatch" example_conmatch in
+--let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
+--let _ = testllprint "example_typed_ast" example_typed_ast in
+--let _ = testllprint "example_recursive_typed_ast" example_recursive_typed_ast in
+--let _ = testllprint "example_conmatch_typed" example_conmatch_typed in
 
 ()
