@@ -30,7 +30,7 @@ lang AppPrettyPrint = AppAst
     | TmApp t ->
       let l = pprintCode indent t.lhs in
       let r = pprintCode indent t.rhs in
-      strJoin "" [l, " (", r, ")"]
+      strJoin "" ["(", l, ") (", r, ")"]
 end
 
 lang FunPrettyPrint = FunAst
@@ -472,6 +472,16 @@ let func_isconb =
                    (false_)))
 in
 
+-- let addone : Int -> Int = lam i : Int. (lam x : Int. addi x 1) i
+let func_addone =
+  let_ "addone" (Some (TyArrow {from = TyInt {}, to = TyInt {}})) (
+      lam_ "i" (Some (TyInt {})) (
+        app_ (lam_ "x" (Some (TyInt {})) (addi_ (var_ "x") (int_ 1)))
+             (var_ "i")
+      )
+  )
+in
+
 let sample_ast = unit_ in
 let sample_ast = letappend sample_ast func_foo in
 let sample_ast = letappend sample_ast func_factorial in
@@ -481,6 +491,7 @@ let sample_ast = letappend sample_ast func_recconcs in
 let sample_ast = letappend sample_ast func_mycona in
 let sample_ast = letappend sample_ast func_myconb in
 let sample_ast = letappend sample_ast func_isconb in
+let sample_ast = letappend sample_ast func_addone in
 
 --let _ = print "\n\n" in
 --let _ = print (pprintCode 0 sample_ast) in
