@@ -667,6 +667,21 @@ let not_ = TmConst {val = CNot ()} in
 let eqi_ = TmConst {val = CEqi ()} in
 let nth_ = TmConst {val = CNth ()} in
 
+-- Types --
+let tyarrow_ =  lam from. lam to. TyArrow {from = from, to = to} in
+let tyarrows_ = lam tpes. foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tpes in
+let tydyn_ = TyDyn () in
+let tyunit_ = TyUnit () in
+let tychar_ = TyChar () in
+let tystr_ = TyString () in
+let tyseq_ = lam tpe. TySeq {tpe = tpe} in
+let typrod_ = lam tpes. TyProd {tpes = tpes} in
+let tyrecord_ = lam tpes. TyRecord {tpes = tpes} in
+let tycon_ = lam ident. TyCon {ident = ident} in
+let tyint_ = TyInt () in
+let tybool_ = TyBool () in
+let tyapp_ = lam lhs. lam rhs. TyApp {lhs = lhs, rhs = rhs} in
+
 -- Convenience functions for manually constructing an AST.
 let unit_ = TmConst {val = CUnit ()} in
 let int_ = lam i. TmConst {val = CInt {val = i}} in
@@ -879,6 +894,26 @@ let example_conmatch_samename =
   )
 in
 
+let example_typed_ast =
+    let_ "foo" (tyarrows_ [tyint_, tyint_, tyint_]) (
+      lam_ "a" tyint_ (lam_ "b" tyint_ (
+        let bar =
+          let_ "bar" (tyarrow_ tyint_ tyint_) (
+            lam_ "x" tyint_ (
+              appf2_ (var_ "addi") (var_ "b") (var_ "x")
+            )
+          ) in
+        let fun4_bar =
+          let_ "fun4_bar" tyint_ (int_ 3) in
+        letappend bar (
+          letappend fun4_bar (
+            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
+          )
+        )
+      ))
+    )
+in
+
 -- Test that the examples can run the lamlift semantics without errors
 utest lift_lambdas example_ast with lift_lambdas example_ast in
 utest lift_lambdas example_nested_ast with lift_lambdas example_nested_ast in
@@ -909,11 +944,12 @@ let testllprint = lam name. lam ast.
   ()
 in
 
---let _ = testllprint "example_ast" example_ast in
---let _ = testllprint "example_nested_ast" example_nested_ast in
---let _ = testllprint "example_recursive_ast" example_recursive_ast in
---let _ = testllprint "example_factorial" example_factorial in
---let _ = testllprint "example_conmatch" example_conmatch in
---let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
+let _ = testllprint "example_ast" example_ast in
+let _ = testllprint "example_nested_ast" example_nested_ast in
+let _ = testllprint "example_recursive_ast" example_recursive_ast in
+let _ = testllprint "example_factorial" example_factorial in
+let _ = testllprint "example_conmatch" example_conmatch in
+let _ = testllprint "example_conmatch_samename" example_conmatch_samename in
+let _ = testllprint "example_typed_ast" example_typed_ast in
 
 ()
