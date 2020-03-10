@@ -133,131 +133,131 @@ let delta eval env fi c v  =
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
-    | Cunit,t -> fail_constapp (tm_info t)
+    | Cunit,_ -> fail_constapp fi
     (* MCore boolean intrinsics *)
-    | CBool(_),t -> fail_constapp (tm_info t)
+    | CBool(_),_ -> fail_constapp fi
 
     | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-    | Cnot,t -> fail_constapp (tm_info t)
+    | Cnot,_ -> fail_constapp fi
 
     | Cand(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cand(Some(v)))
     | Cand(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-    | Cand(None),t | Cand(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cand(None),_ | Cand(Some(_)),_  -> fail_constapp fi
 
     | Cor(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cor(Some(v)))
     | Cor(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-    | Cor(None),t | Cor(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cor(None),_ | Cor(Some(_)),_  -> fail_constapp fi
 
     (* MCore integer intrinsics *)
-    | CInt(_),t -> fail_constapp (tm_info t)
+    | CInt(_),_ -> fail_constapp fi
 
     | Caddi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Caddi(Some(v)))
     | Caddi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 + v2))
-    | Caddi(None),t | Caddi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Caddi(None),_ | Caddi(Some(_)),_  -> fail_constapp fi
 
     | Csubi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csubi(Some(v)))
     | Csubi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 - v2))
-    | Csubi(None),t | Csubi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Csubi(None),_ | Csubi(Some(_)),_  -> fail_constapp fi
 
     | Cmuli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmuli(Some(v)))
     | Cmuli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 * v2))
-    | Cmuli(None),t | Cmuli(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cmuli(None),_ | Cmuli(Some(_)),_  -> fail_constapp fi
 
     | Cdivi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cdivi(Some(v)))
     | Cdivi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 / v2))
-    | Cdivi(None),t | Cdivi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cdivi(None),_ | Cdivi(Some(_)),_  -> fail_constapp fi
 
     | Cmodi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmodi(Some(v)))
     | Cmodi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 mod v2))
-    | Cmodi(None),t | Cmodi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cmodi(None),_ | Cmodi(Some(_)),_  -> fail_constapp fi
 
     | Cnegi,TmConst(fi,CInt(v)) -> TmConst(fi,CInt((-1)*v))
-    | Cnegi,t -> fail_constapp (tm_info t)
+    | Cnegi,_ -> fail_constapp fi
 
     | Clti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Clti(Some(v)))
     | Clti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 < v2))
-    | Clti(None),t | Clti(Some(_)),t  -> fail_constapp (tm_info t)
+    | Clti(None),_ | Clti(Some(_)),_  -> fail_constapp fi
 
     | Cleqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cleqi(Some(v)))
     | Cleqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <= v2))
-    | Cleqi(None),t | Cleqi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cleqi(None),_ | Cleqi(Some(_)),_  -> fail_constapp fi
 
     | Cgti(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgti(Some(v)))
     | Cgti(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 > v2))
-    | Cgti(None),t | Cgti(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cgti(None),_ | Cgti(Some(_)),_  -> fail_constapp fi
 
     | Cgeqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cgeqi(Some(v)))
     | Cgeqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 >= v2))
-    | Cgeqi(None),t | Cgeqi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cgeqi(None),_ | Cgeqi(Some(_)),_  -> fail_constapp fi
 
     | Ceqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Ceqi(Some(v)))
     | Ceqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 = v2))
-    | Ceqi(None),t | Ceqi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Ceqi(None),_ | Ceqi(Some(_)),_  -> fail_constapp fi
 
     | Cneqi(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cneqi(Some(v)))
     | Cneqi(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CBool(v1 <> v2))
-    | Cneqi(None),t | Cneqi(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cneqi(None),_ | Cneqi(Some(_)),_  -> fail_constapp fi
 
     | Cslli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cslli(Some(v)))
     | Cslli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsl v2))
-    | Cslli(None),t | Cslli(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cslli(None),_ | Cslli(Some(_)),_  -> fail_constapp fi
 
     | Csrli(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrli(Some(v)))
     | Csrli(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 lsr v2))
-    | Csrli(None),t | Csrli(Some(_)),t  -> fail_constapp (tm_info t)
+    | Csrli(None),_ | Csrli(Some(_)),_  -> fail_constapp fi
 
     | Csrai(None),TmConst(fi,CInt(v)) -> TmConst(fi,Csrai(Some(v)))
     | Csrai(Some(v1)),TmConst(fi,CInt(v2)) -> TmConst(fi,CInt(v1 asr v2))
-    | Csrai(None),t | Csrai(Some(_)),t  -> fail_constapp (tm_info t)
+    | Csrai(None),_ | Csrai(Some(_)),_  -> fail_constapp fi
 
     | Carity,TmConst(fi,c) -> TmConst(fi,CInt(arity c))
-    | Carity,t -> fail_constapp (tm_info t)
+    | Carity,_ -> fail_constapp fi
 
     (* MCore intrinsic: Floating-point number constant and operations *)
-    | CFloat(_),t -> fail_constapp (tm_info t)
+    | CFloat(_),_ -> fail_constapp fi
 
     | Caddf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Caddf(Some(v)))
     | Caddf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 +. v2))
-    | Caddf(None),t | Caddf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Caddf(None),_ | Caddf(Some(_)),_  -> fail_constapp fi
 
     | Csubf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Csubf(Some(v)))
     | Csubf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 -. v2))
-    | Csubf(None),t | Csubf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Csubf(None),_ | Csubf(Some(_)),_  -> fail_constapp fi
 
     | Cmulf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cmulf(Some(v)))
     | Cmulf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 *. v2))
-    | Cmulf(None),t | Cmulf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cmulf(None),_ | Cmulf(Some(_)),_  -> fail_constapp fi
 
     | Cdivf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cdivf(Some(v)))
     | Cdivf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CFloat(v1 /. v2))
-    | Cdivf(None),t | Cdivf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cdivf(None),_ | Cdivf(Some(_)),_  -> fail_constapp fi
 
     | Cnegf,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat((-1.0)*.v))
-    | Cnegf,t -> fail_constapp (tm_info t)
+    | Cnegf,_ -> fail_constapp fi
 
     | Cltf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cltf(Some(v)))
     | Cltf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 < v2))
-    | Cltf(None),t | Cltf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cltf(None),_ | Cltf(Some(_)),_  -> fail_constapp fi
 
     | Cleqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cleqf(Some(v)))
     | Cleqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <= v2))
-    | Cleqf(None),t | Cleqf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cleqf(None),_ | Cleqf(Some(_)),_  -> fail_constapp fi
 
     | Cgtf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cgtf(Some(v)))
     | Cgtf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 > v2))
-    | Cgtf(None),t | Cgtf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cgtf(None),_ | Cgtf(Some(_)),_  -> fail_constapp fi
 
     | Cgeqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cgeqf(Some(v)))
     | Cgeqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 >= v2))
-    | Cgeqf(None),t | Cgeqf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cgeqf(None),_ | Cgeqf(Some(_)),_  -> fail_constapp fi
 
     | Ceqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Ceqf(Some(v)))
     | Ceqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 = v2))
-    | Ceqf(None),t | Ceqf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Ceqf(None),_ | Ceqf(Some(_)),_  -> fail_constapp fi
 
     | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
     | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
-    | Cneqf(None),t | Cneqf(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cneqf(None),_ | Cneqf(Some(_)),_  -> fail_constapp fi
     | CString2float,TmConst(fi,CSeq(s)) ->
         let to_char = function
           | TmConst(_, CChar(c)) -> c
@@ -267,52 +267,52 @@ let delta eval env fi c v  =
                 Array.of_list(List.map to_char s)))
         in
         TmConst(fi, CFloat(Float.of_string f))
-    | CString2float,t -> fail_constapp (tm_info t)
+    | CString2float,_ -> fail_constapp fi
 
     | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
-    | Cfloorfi,t -> fail_constapp (tm_info t)
+    | Cfloorfi,_ -> fail_constapp fi
 
     | Cceilfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.ceil v |> int_of_float))
-    | Cceilfi,t -> fail_constapp (tm_info t)
+    | Cceilfi,_ -> fail_constapp fi
 
     | Croundfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.round v |> int_of_float))
-    | Croundfi,t -> fail_constapp (tm_info t)
+    | Croundfi,_ -> fail_constapp fi
 
     | CInt2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
-    | CInt2float,t -> fail_constapp (tm_info t)
+    | CInt2float,_ -> fail_constapp fi
 
     (* MCore intrinsic: characters *)
-    | CChar(_),t -> fail_constapp (tm_info t)
+    | CChar(_),_ -> fail_constapp fi
 
     | CChar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
-    | CChar2int,t -> fail_constapp (tm_info t)
+    | CChar2int,_ -> fail_constapp fi
 
     | CInt2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
-    | CInt2char,t -> fail_constapp (tm_info t)
+    | CInt2char,_ -> fail_constapp fi
 
     (* MCore intrinsic: sequences *)
-    | CSeq(_),t -> fail_constapp (tm_info t)
+    | CSeq(_),_ -> fail_constapp fi
 
     | Cmakeseq(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmakeseq(Some(v)))
     | Cmakeseq(Some(v1)),t -> TmConst(tm_info t,CSeq(List.init v1 (fun _ -> t)))
-    | Cmakeseq(None),t -> fail_constapp (tm_info t)
+    | Cmakeseq(None),_ -> fail_constapp fi
 
     | Clength,TmConst(fi,CSeq(lst)) -> TmConst(fi,CInt(List.length lst))
-    | Clength,t -> fail_constapp (tm_info t)
+    | Clength,_ -> fail_constapp fi
 
     | Cconcat(None),TmConst(fi,CSeq(lst1)) -> TmConst(fi,Cconcat(Some(lst1)))
     | Cconcat(Some(lst1)),TmConst(fi,CSeq(lst2)) ->
        TmConst(fi,CSeq(List.append lst1 lst2))
-    | Cconcat(None),t | Cconcat(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cconcat(None),_ | Cconcat(Some(_)),_  -> fail_constapp fi
 
     | Cnth(None),TmConst(fi,CSeq(lst)) -> TmConst(fi,Cnth(Some(lst)))
     | Cnth(Some(lst)),TmConst(_,CInt(n)) ->
        (try List.nth lst n with _ -> raise_error fi "Out of bound access in sequence.")
-    | Cnth(None),t | Cnth(Some(_)),t  -> fail_constapp (tm_info t)
+    | Cnth(None),_ | Cnth(Some(_)),_  -> fail_constapp fi
 
     | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
     | Ccons(Some(t)),TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(t::lst))
-    | Ccons(Some(_)),t  -> fail_constapp (tm_info t)
+    | Ccons(Some(_)),_  -> fail_constapp fi
 
     | Cslice(None,None),TmConst(fi,CSeq(lst)) -> TmConst(fi,Cslice(Some(lst),None))
     | Cslice(Some(lst),None),TmConst(fi,CInt(s)) -> TmConst(fi,Cslice(Some(lst),Some(s)))
@@ -326,42 +326,42 @@ let delta eval env fi c v  =
          in
          slice' 0 lst
        in TmConst(fi, CSeq(slice s l lst))
-    | Cslice(_,_),t -> fail_constapp (tm_info t)
+    | Cslice(_,_),_ -> fail_constapp fi
 
     | Creverse,TmConst(fi,CSeq(lst)) -> TmConst(fi,CSeq(List.rev lst))
-    | Creverse,t -> fail_constapp (tm_info t)
+    | Creverse,_ -> fail_constapp fi
 
     (* MCore intrinsic: records *)
-    | CRecord(_),t -> fail_constapp (tm_info t)
+    | CRecord(_),_ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmConst(fi,CSeq(lst)) ->
        uprint_string (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
-    | Cprint, t -> raise_error (tm_info t) "The argument to print must be a string"
+    | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t -> uprint_string (pprintME t); TmConst(NoInfo,Cunit)
 
     | CreadFile,TmConst(fi,CSeq(lst)) ->
        TmConst(fi,CSeq(Ustring.read_file (Ustring.to_utf8 (tmlist2ustring fi lst))
                        |> (ustring2tmlist fi)))
-    | CreadFile,t -> fail_constapp (tm_info t)
+    | CreadFile,_ -> fail_constapp fi
 
     | CwriteFile(None),TmConst(fi,CSeq(l)) -> TmConst(fi,CwriteFile(Some(tmlist2ustring fi l)))
     | CwriteFile(Some(fname)),TmConst(fi,CSeq(lst)) ->
         Ustring.write_file (Ustring.to_utf8 fname) (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
-    | CwriteFile(None),t | CwriteFile(Some(_)),t  -> fail_constapp (tm_info t)
+    | CwriteFile(None),_ | CwriteFile(Some(_)),_  -> fail_constapp fi
 
     | CfileExists,TmConst(fi,CSeq(lst)) ->
         TmConst(fi,CBool(Sys.file_exists (Ustring.to_utf8 (tmlist2ustring fi lst))))
-    | CfileExists,t -> fail_constapp (tm_info t)
+    | CfileExists,_ -> fail_constapp fi
 
     | CdeleteFile,TmConst(fi,CSeq(lst)) ->
         Sys.remove (Ustring.to_utf8 (tmlist2ustring fi lst)); TmConst(NoInfo,Cunit)
-    | CdeleteFile,t -> fail_constapp (tm_info t)
+    | CdeleteFile,_ -> fail_constapp fi
 
     | Cerror, TmConst(fi,CSeq(lst)) ->
        (uprint_endline ((us"ERROR: ") ^. (tmlist2ustring fi lst)); exit 1)
-    | Cerror,t -> fail_constapp (tm_info t)
+    | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
 
