@@ -100,7 +100,7 @@ and const =
 | CdebugShow
 (* MCore Symbols *)
 | CSymb of int
-| Cgensymb
+| Cgensym
 | Ceqs of int option
 (* External functions TODO: Should not be part of core language *)
 | CExt of tm Extast.ext
