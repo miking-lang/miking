@@ -86,6 +86,21 @@ lang ArithIntAst = ConstAst + IntAst
 end
 
 
+lang FloatAst = ConstAst
+  syn Const =
+  | CFloat {val : Float}
+end
+
+
+lang ArithFloatAst = ConstAst + FloatAst
+  syn Const =
+  | CAddf {}
+  | CSubf {}
+  | CMulf {}
+  | CDivf {}
+  | CNegf {}
+end
+
 lang BoolAst
   syn Const =
   | CBool {val : Bool}
@@ -242,9 +257,10 @@ end
 
 lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
-  UnitAst + UnitPat + IntAst + IntPat +
-  ArithIntAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
-  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
+  UnitAst + UnitPat + IntAst + IntPat + ArithIntAst + FloatAst +
+  ArithFloatAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
+  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat +
+  UtestAst +
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
   RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst

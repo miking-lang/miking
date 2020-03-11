@@ -4,12 +4,15 @@ let head = lam s. nth s 0
 let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
--- Maps and folds
-recursive
-  let map = lam f. lam seq.
-    if null seq then []
-    else cons (f (head seq)) (map f (tail seq))
-end
+-- Maps and (un)folds
+let mapi = lam f. lam seq.
+  recursive let work = lam i. lam f. lam seq.
+      if null seq then []
+      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
+  in
+  work 0 f seq
+
+let map = lam f. mapi (lam _. lam x. f x)
 
 recursive
   let foldl = lam f. lam acc. lam seq.
@@ -32,6 +35,14 @@ recursive
     if null seq1 then []
     else if null seq2 then []
     else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
+end
+
+recursive
+let unfoldr = lam f. lam b.
+  let fb = f b in
+  match fb with None _ then [] else
+  match fb with Some (a, bp) then cons a (unfoldr f bp)
+  else error "unfoldr.impossible"
 end
 
 -- Predicates
@@ -75,10 +86,38 @@ let findAssoc = lam p. lam seq.
   then Some res.1
   else None
 
+-- Sorting
+recursive
+let quickSort = lam cmp. lam seq.
+  if null seq then seq else
+    let h = head seq in
+    let t = tail seq in
+    let lr = partition (lam x. lti (cmp x h) 0) t in
+    concat (quickSort cmp lr.0) (cons h (quickSort cmp lr.1))
+end
+
+let sort = quickSort
+
+-- Max/Min
+let min = lam cmp. lam seq.
+  recursive let work = lam e. lam seq.
+    if null seq then Some e
+    else
+      let h = head seq in
+      let t = tail seq in
+      if lti (cmp e h) 0 then work e t else work h t
+  in
+  if null seq then None () else work (head seq) (tail seq)
+
+let max = lam cmp. min (lam l. lam r. cmp r l)
+
 mexpr
 
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in
+
+utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
+utest mapi (lam i. lam x. i) [] with [] in
 
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
 utest map (lam x. addi x 1) [] with [] in
@@ -116,5 +155,21 @@ utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
 utest find (lam x. lti x 1) [4,1,2] with None () in
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
+utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[]) in
+
+utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20] in
+utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20] in
+utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3] in
+utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3] in
+utest sort (lam l. lam r. subi l r) [] with [] in
+
+utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 in
+utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 in
+utest min (lam l. lam r. subi l r) [] with None () in
+utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 in
+utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
+
+utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
+with [0,1,2,3,4,5,6,7,8,9] in
 
 ()

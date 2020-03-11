@@ -53,6 +53,16 @@ lang User
   | Unit -> addi x 1
 end
 
+lang A
+  syn ATy =
+  | ACon {afield : Dyn}
+end
+
+lang AExtend = A
+  syn ATy =
+  | ACon {aextfield : Dyn}
+end
+
 lang Overlap = ArithBool + ArithBool2 + Arith
 
 mexpr
@@ -99,8 +109,21 @@ let _ =
   utest eval (Add (Num 10
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
-                      ,Add (Num 5, (Num (negi 2)))))) with 13
-  in ()
+                      ,Add (Num 5, (Num (negi 2)))))) with 13 in
+  ()
+in
+let _ =
+  let e1 = use ArithBool in If(True(), Num 1, Num 2) in
+  let e2 = use ArithBool2 in If(True(), Num 1, Num 2) in
+  utest e1 with e2 in
+  ()
+in
+
+let _ =
+  let e1 = use A in ACon{afield = 1, aextfield = 2} in // TODO(vipa): this should break once we start typechecking product extensions of a constructor
+  let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
+  utest e1 with e2 in
+  ()
 in
 
 ()
