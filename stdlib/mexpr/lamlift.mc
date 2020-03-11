@@ -1088,20 +1088,20 @@ let example_conmatch_typed =
   )
 in
 
--- Convert from a Lambda Lifting-style environment to an eval-style environment
-let env = map (lam e. (e.key, e.value)) builtin_env in
+-- Convert from a Lambda Lifting-style environment to an eval-style context
+let ctx = {env = map (lam e. (e.key, e.value)) builtin_env} in
 
 -- Test that the examples can run the lamlift semantics without errors and that
 -- they evaluate to the same value after lambda lifting
-utest eval env example_ast with eval env (lift_lambdas example_ast) in
-utest eval env example_nested_ast with eval env (lift_lambdas example_nested_ast) in
-utest eval env example_recursive_ast with eval env (lift_lambdas example_recursive_ast) in
-utest eval env example_factorial with eval env (lift_lambdas example_factorial) in
-utest eval env example_conmatch with eval env (lift_lambdas example_conmatch) in
-utest eval env example_conmatch_samename with eval env (lift_lambdas example_conmatch_samename) in
-utest eval env example_typed_ast with eval env (lift_lambdas example_typed_ast) in
-utest eval env example_recursive_typed_ast with eval env (lift_lambdas example_recursive_typed_ast) in
-utest eval env example_conmatch_typed with eval env (lift_lambdas example_conmatch_typed) in
+utest eval ctx example_ast with eval ctx (lift_lambdas example_ast) in
+utest eval ctx example_nested_ast with eval ctx (lift_lambdas example_nested_ast) in
+utest eval ctx example_recursive_ast with eval ctx (lift_lambdas example_recursive_ast) in
+utest eval ctx example_factorial with eval ctx (lift_lambdas example_factorial) in
+utest eval ctx example_conmatch with eval ctx (lift_lambdas example_conmatch) in
+utest eval ctx example_conmatch_samename with eval ctx (lift_lambdas example_conmatch_samename) in
+utest eval ctx example_typed_ast with eval ctx (lift_lambdas example_typed_ast) in
+utest eval ctx example_recursive_typed_ast with eval ctx (lift_lambdas example_recursive_typed_ast) in
+utest eval ctx example_conmatch_typed with eval ctx (lift_lambdas example_conmatch_typed) in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
