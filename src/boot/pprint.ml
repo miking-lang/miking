@@ -131,7 +131,7 @@ let rec pprint_const c =
   | CdebugShow -> us"debugShow"
   (* MCore Symbols *)
   | CSymb(id) -> us(sprintf "symb(%d)" id)
-  | Cgensymb -> us"gensymb"
+  | Cgensym -> us"gensym"
   | Ceqs(_) -> us"eqs"
   (* External pprint TODO: Should not be part of core language *)
   | CExt(v) -> Extpprint.pprint v

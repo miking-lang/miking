@@ -1,5 +1,5 @@
-let x = gensymb ()
-let y = gensymb ()
+let x = gensym ()
+let y = gensym ()
 
 mexpr
 utest eqs x x with true in

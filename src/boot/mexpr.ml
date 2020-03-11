@@ -40,7 +40,7 @@ let builtin =
    ("fileExists", CfileExists); ("deleteFile", CdeleteFile);
    ("error",Cerror);
    ("debugShow", CdebugShow);
-   ("eqs", Ceqs(None)); ("gensymb", Cgensymb)
+   ("eqs", Ceqs(None)); ("gensym", Cgensym)
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -117,7 +117,7 @@ let arity = function
   | CdebugShow        -> 1
   (* MCore symbols *)
   | CSymb(_)      -> 0
-  | Cgensymb      -> 1
+  | Cgensym      -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
   (* External functions TODO: Should not be bart of core language *)
@@ -377,8 +377,8 @@ let delta eval env fi c v  =
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
 
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensymb, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
-    | Cgensymb,_ -> fail_constapp fi
+    | Cgensym, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym,_ -> fail_constapp fi
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqs(_),_ -> fail_constapp fi
