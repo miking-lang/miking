@@ -35,6 +35,7 @@
 
 
 include "ast.mc"
+include "eval.mc"
 include "pprint.mc"
 
 include "option.mc"
@@ -56,7 +57,7 @@ include "string.mc"
 --   genargs:    List of arguments that have been generated to take the place
 --               of the externally referenced identifiers.
 type LiftState = {id         : Int,
-                  globaldefs : [TopDef],
+                  globaldefs : [Expr],
                   env        : {evar  : [{key   : String,
                                          value : Expr}],
                                 econ  : [{key   : String,
@@ -140,7 +141,7 @@ lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
               match td with TmLet t then
                   eqstr t.ident s
               else match td with TmRecLets t then
-                  any (lam rec. eqstr t.ident s) t.bindings
+                  any (lam rec. eqstr rec.ident s) t.bindings
               else match td with TmConDef t then
                   eqstr t.ident s
               else
@@ -700,10 +701,10 @@ lang MExprLamlift = VarLamlift + AppLamlift + FunLamlift +
                     TupleLamlift + DataLamlift + MatchLamlift +
                     UtestLamlift + MExprAst
 
-lang MExprLLandPP = MExprLamlift + MExprPrettyPrint
+lang MExprLLandPPandEval = MExprLamlift + MExprPrettyPrint + MExprEval
 
 mexpr
-use MExprLLandPP in
+use MExprLLandPPandEval in
 
 -- The letappend function is used for append let expressions together without
 -- having to manually do so in the AST. The provided expr argument is inserted
@@ -795,14 +796,15 @@ let appf1_ = lam f. lam a1. app_ f a1 in
 let appf2_ = lam f. lam a1. lam a2. app_ (appf1_ f a1) a2 in
 let appf3_ = lam f. lam a1. lam a2. lam a3. app_ (appf2_ f a1 a2) a3 in
 
+let builtin_env = [{key = "addi", value = addi_}, {key = "subi", value = subi_},
+                   {key = "and", value = and_}, {key = "or", value = or_},
+                   {key = "not", value = not_}, {key = "eqi", value = eqi_},
+                   {key = "nth", value = nth_}]
+in
+
 -- Lifts out the lambdas, returning a new AST with all lambdas on the top
 -- level.
 let lift_lambdas: Expr -> Expr = lam ast.
-    let builtin_env = [{key = "addi", value = addi_}, {key = "subi", value = subi_},
-                       {key = "and", value = and_}, {key = "or", value = or_},
-                       {key = "not", value = not_}, {key = "eqi", value = eqi_},
-                       {key = "nth", value = nth_}]
-    in
 
     let initstate: LiftState = {id = 0,
                                 globaldefs = [],
@@ -833,7 +835,7 @@ let lift_lambdas: Expr -> Expr = lam ast.
 in
 
 let example_ast =
-    let_ "foo" (None ()) (
+    let foo = let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
         let bar =
           let_ "bar" (None ()) (
@@ -850,10 +852,16 @@ let example_ast =
         )
       ))
     )
+    in
+    letappend foo (
+      app_ (app_ (var_ "foo")
+                 (int_ 1))
+           (int_ 11)
+    )
 in
 
 let example_anonlambda_ast =
-    let_ "foo" (None ()) (
+    let foo = let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
         let fun4_bar =
           let_ "fun4_bar" (None()) (int_ 3) in
@@ -865,10 +873,16 @@ let example_anonlambda_ast =
         )
       ))
     )
+    in
+    letappend foo (
+      app_ (app_ (var_ "foo")
+                 (int_ 4))
+           (int_ 311)
+    )
 in
 
 let example_nested_ast =
-    let_ "foo" (None ()) (
+    let foo = let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
         let bar =
           let_ "bar" (None ()) (
@@ -893,26 +907,41 @@ let example_nested_ast =
         )
       ))
     )
+    in
+    letappend foo (
+      app_ (app_ (var_ "foo")
+                 (int_ 11))
+           (int_ 3)
+    )
 in
 
 let example_recursive_ast =
-  let_ "foo" (None ()) (
+  let foo = let_ "foo" (None ()) (
     lam_ "x" (None ()) (
-      reclets_add "bar" (None ()) (
-        lam_ "y" (None ()) (
-          appf2_ (var_ "addi") (var_ "y") (var_ "x")
-        )
-      )(reclets_add "babar" (None ()) (
-        lam_ "a" (None ()) (
-          appf1_ (var_ "bar") (var_ "a")
-        )
-      ) (reclets_empty))
+      let rls =
+        reclets_add "bar" (None ()) (
+          lam_ "y" (None ()) (
+            appf2_ (var_ "addi") (var_ "y") (var_ "x")
+          )
+        )(reclets_add "babar" (None ()) (
+          lam_ "a" (None ()) (
+            appf1_ (var_ "bar") (var_ "a")
+          )
+        ) (reclets_empty))
+      in
+      letappend rls (
+        app_ (var_ "babar") (int_ 6)
+      )
     )
+  )
+  in
+  letappend foo (
+    app_ (var_ "foo") (int_ 3)
   )
 in
 
 let example_factorial =
-  reclets_add "factorial" (None ()) (
+  let factorial = reclets_add "factorial" (None ()) (
     lam_ "n" (None ()) (
       if_ (appf2_ (var_ "eqi") (var_ "n") (int_ 0))
           (int_ 1)
@@ -920,10 +949,14 @@ let example_factorial =
                   (appf2_ (var_ "subi") (var_ "n") (int_ 1)))
     )
   ) (reclets_empty)
+  in
+  letappend factorial (
+    app_ (var_ "factorial") (int_ 11)
+  )
 in
 
 let example_conmatch =
-  let_ "foo" (None ()) (
+  let foo = let_ "foo" (None ()) (
     let mycon =
       condef_ "MyCon" (None ())
     in
@@ -944,10 +977,14 @@ let example_conmatch =
       )
     )
   )
+  in
+  letappend foo (
+    var_ "foo"
+  )
 in
 
 let example_conmatch_samename =
-  let_ "foo" (None ()) (
+  let foo = let_ "foo" (None ()) (
     let mycon =
       condef_ "x" (None ())
     in
@@ -968,14 +1005,18 @@ let example_conmatch_samename =
       )
     )
   )
+  in
+  letappend foo (
+    var_ "foo"
+  )
 in
 
 let example_typed_ast =
-    let_ "foo" (Some (tyarrows_ [tyint_, tyint_, tyint_])) (
+    let foo = let_ "foo" (Some (tyarrows_ [tyint_, tyint_, tyint_])) (
       lam_ "a" (Some (tyint_)) (lam_ "b" (Some (tyint_)) (
         let bar =
-          let_ "bar" (Some (tyarrow_ tyunit_ tyint_)) (
-            lam_ "x" (Some (tyunit_)) (
+          let_ "bar" (Some (tyarrow_ tyint_ tyint_)) (
+            lam_ "x" (Some (tyint_)) (
               appf2_ (var_ "addi") (var_ "b") (var_ "x")
             )
           ) in
@@ -988,12 +1029,17 @@ let example_typed_ast =
         )
       ))
     )
+    in
+    letappend foo (
+      app_ (app_ (var_ "foo") (int_ 1))
+           (int_ 0)
+    )
 in
 
 let example_recursive_typed_ast =
-  let_ "foo" (Some (tyarrow_ tybool_ tyint_)) (
-    lam_ "x" (Some (tybool_)) (
-      reclets_add "bar" (Some (tyarrow_ tyint_ tyint_)) (
+  let foo = let_ "foo" (Some (tyarrow_ tyint_ tyint_)) (
+    lam_ "x" (Some (tyint_)) (
+      let rls = reclets_add "bar" (Some (tyarrow_ tyint_ tyint_)) (
         lam_ "y" (Some (tyint_)) (
           appf2_ (var_ "addi") (var_ "y") (var_ "x")
         )
@@ -1002,12 +1048,20 @@ let example_recursive_typed_ast =
           appf1_ (var_ "bar") (var_ "a")
         )
       ) (reclets_empty))
+      in
+      letappend rls (
+        (app_ (var_ "babar") (int_ 7))
+      )
     )
+  )
+  in
+  letappend foo (
+    app_ (var_ "foo") (int_ 2)
   )
 in
 
 let example_conmatch_typed =
-  let_ "foo" (Some (tybool_)) (
+  let foo = let_ "foo" (Some (tybool_)) (
     let mycon =
       condef_ "MyCon" (Some (tyunit_))
     in
@@ -1028,18 +1082,26 @@ let example_conmatch_typed =
       )
     )
   )
+  in
+  letappend foo (
+    var_ "foo"
+  )
 in
 
--- Test that the examples can run the lamlift semantics without errors
-utest lift_lambdas example_ast with lift_lambdas example_ast in
-utest lift_lambdas example_nested_ast with lift_lambdas example_nested_ast in
-utest lift_lambdas example_recursive_ast with lift_lambdas example_recursive_ast in
-utest lift_lambdas example_factorial with lift_lambdas example_factorial in
-utest lift_lambdas example_conmatch with lift_lambdas example_conmatch in
-utest lift_lambdas example_conmatch_samename with lift_lambdas example_conmatch_samename in
-utest lift_lambdas example_typed_ast with lift_lambdas example_typed_ast in
-utest lift_lambdas example_recursive_typed_ast with lift_lambdas example_recursive_typed_ast in
-utest lift_lambdas example_conmatch_typed with lift_lambdas example_conmatch_typed in
+-- Convert from a Lambda Lifting-style environment to an eval-style environment
+let env = map (lam e. (e.key, e.value)) builtin_env in
+
+-- Test that the examples can run the lamlift semantics without errors and that
+-- they evaluate to the same value after lambda lifting
+utest eval env example_ast with eval env (lift_lambdas example_ast) in
+utest eval env example_nested_ast with eval env (lift_lambdas example_nested_ast) in
+utest eval env example_recursive_ast with eval env (lift_lambdas example_recursive_ast) in
+utest eval env example_factorial with eval env (lift_lambdas example_factorial) in
+utest eval env example_conmatch with eval env (lift_lambdas example_conmatch) in
+utest eval env example_conmatch_samename with eval env (lift_lambdas example_conmatch_samename) in
+utest eval env example_typed_ast with eval env (lift_lambdas example_typed_ast) in
+utest eval env example_recursive_typed_ast with eval env (lift_lambdas example_recursive_typed_ast) in
+utest eval env example_conmatch_typed with eval env (lift_lambdas example_conmatch_typed) in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
