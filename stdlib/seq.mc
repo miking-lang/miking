@@ -69,7 +69,7 @@ let unfoldr = lam f. lam b.
   let fb = f b in
   match fb with None _ then [] else
   match fb with Some (a, bp) then cons a (unfoldr f bp)
-  else error "unfoldr.impossible"
+  else never
 end
 
 utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
