@@ -205,7 +205,7 @@ lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
         in
         check_scope state t.value
       else
-        error (concat "Variable \"" (concat x "\" not found."))
+        error (concat "Variable \"" (concat x.ident "\" not found."))
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmVar x ->
@@ -548,8 +548,8 @@ lang BoolLamlift = BoolAst + ConstLamlift
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmIf t -> TmIf {{{t with cond = lamliftReplaceIdentifiers newnames t.cond}
-                          with thn = lamliftReplaceIdentifiers newnames t.els}
-                          with els = lamliftReplaceIdentifiers newnames t.thn}
+                          with thn = lamliftReplaceIdentifiers newnames t.thn}
+                          with els = lamliftReplaceIdentifiers newnames t.els}
 end
 
 lang CmpLamlift = CmpAst + ConstLamlift
@@ -1088,6 +1088,34 @@ let example_conmatch_typed =
   )
 in
 
+let example_ifexpr_ast =
+    let foo = let_ "foo" (None ()) (
+      lam_ "a" (None ()) (lam_ "b" (None ()) (
+        let bar =
+          reclets_add "bar" (None ()) (
+            lam_ "x" (None ()) (
+              if_ (appf2_ (var_ "eqi") (var_ "x") (int_ 3))
+                  (appf2_ (var_ "addi") (var_ "b") (int_ 10000))
+                  (appf2_ (var_ "addi") (var_ "b") (var_ "x"))
+            )
+          ) (reclets_empty) in
+        let fun4_bar =
+          let_ "fun4_bar" (None()) (int_ 3) in
+        letappend bar (
+          letappend fun4_bar (
+            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
+          )
+        )
+      ))
+    )
+    in
+    letappend foo (
+      app_ (app_ (var_ "foo")
+                 (int_ 1))
+           (int_ 11)
+    )
+in
+
 -- Convert from a Lambda Lifting-style environment to an eval-style context
 let ctx = {env = map (lam e. (e.key, e.value)) builtin_env} in
 
@@ -1102,6 +1130,7 @@ utest eval ctx example_conmatch_samename with eval ctx (lift_lambdas example_con
 utest eval ctx example_typed_ast with eval ctx (lift_lambdas example_typed_ast) in
 utest eval ctx example_recursive_typed_ast with eval ctx (lift_lambdas example_recursive_typed_ast) in
 utest eval ctx example_conmatch_typed with eval ctx (lift_lambdas example_conmatch_typed) in
+utest eval ctx example_ifexpr_ast with eval ctx (lift_lambdas example_ifexpr_ast) in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
@@ -1134,5 +1163,6 @@ in
 --let _ = testllprint "example_typed_ast" example_typed_ast in
 --let _ = testllprint "example_recursive_typed_ast" example_recursive_typed_ast in
 --let _ = testllprint "example_conmatch_typed" example_conmatch_typed in
+--let _ = testllprint "example_ifexpr_ast" example_ifexpr_ast in
 
 ()
