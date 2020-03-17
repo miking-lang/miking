@@ -1144,7 +1144,7 @@ let example_multiuse =
           let_ "bar" (None ()) (
             lam_ "y" (None ()) (
               let xp1 =
-                let_ "xp1" (None ()) (appf2_ (var_ "addi") (var_ "y") (int_ 1))
+                let_ "xp1" (None ()) (appf2_ (var_ "addi") (var_ "x") (int_ 1))
               in
               letappend xp1 (
                 if_ (appf2_ (var_ "eqi") (var_ "x") (var_ "y"))
@@ -1154,7 +1154,8 @@ let example_multiuse =
                             (appf2_ (var_ "subi") (var_ "x") (var_ "y")))
               )
             )
-          ) in
+          )
+        in
         letappend bar (
           app_ (var_ "bar") (int_ 3)
         )
