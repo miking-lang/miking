@@ -723,6 +723,7 @@ in
 let unit_ = TmConst {val = CUnit ()} in
 let addi_ = TmConst {val = CAddi ()} in
 let subi_ = TmConst {val = CSubi ()} in
+let muli_ = TmConst {val = CMuli ()} in
 let and_ = TmConst {val = CAnd ()} in
 let or_ = TmConst {val = COr ()} in
 let not_ = TmConst {val = CNot ()} in
@@ -797,9 +798,9 @@ let appf2_ = lam f. lam a1. lam a2. app_ (appf1_ f a1) a2 in
 let appf3_ = lam f. lam a1. lam a2. lam a3. app_ (appf2_ f a1 a2) a3 in
 
 let builtin_env = [{key = "addi", value = addi_}, {key = "subi", value = subi_},
-                   {key = "and", value = and_}, {key = "or", value = or_},
-                   {key = "not", value = not_}, {key = "eqi", value = eqi_},
-                   {key = "nth", value = nth_}]
+                   {key = "muli", value = muli_}, {key = "and", value = and_},
+                   {key = "or", value = or_}, {key = "not", value = not_},
+                   {key = "eqi", value = eqi_}, {key = "nth", value = nth_}]
 in
 
 -- Lifts out the lambdas, returning a new AST with all lambdas on the top
@@ -945,8 +946,10 @@ let example_factorial =
     lam_ "n" (None ()) (
       if_ (appf2_ (var_ "eqi") (var_ "n") (int_ 0))
           (int_ 1)
-          (appf1_ (var_ "factorial")
-                  (appf2_ (var_ "subi") (var_ "n") (int_ 1)))
+          (appf2_ (var_ "muli")
+                  (var_ "n")
+                  (appf1_ (var_ "factorial")
+                          (appf2_ (var_ "subi") (var_ "n") (int_ 1))))
     )
   ) (reclets_empty)
   in
