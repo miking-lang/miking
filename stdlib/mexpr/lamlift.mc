@@ -42,6 +42,13 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 
+lang LamliftTypedVarAst = VarAst
+    syn Expr =
+    -- Only ever use for lookup, should never be used be part of the generated AST
+    | TmLamliftTypedVar {ident : String,
+                         tpe   : Option}
+end
+
 -- State for lambda lifting
 --   id:         ID counter (used to assign globally unique names to
 --               identifiers).
@@ -69,7 +76,8 @@ type LiftState = {id         : Int,
                   lambdarefs : [{ident : String,
                                  body  : Expr}],
                   externrefs : [Expr],
-                  genargs    : [Expr]}
+                  genargs    : [{name   : String, -- original lookup name
+                                 genarg : Expr}]}
 
 
 -- LiftState update functions
@@ -101,9 +109,27 @@ let st_addExternref: Expr -> LiftState -> LiftState =
     lam er. lam st.
     {st with externrefs = cons er st.externrefs}
 
-let st_addGenarg: Expr -> LiftState -> LiftState =
-    lam genarg. lam st.
-    {st with genargs = cons genarg st.genargs}
+let st_addGenarg: String -> Expr -> LiftState -> LiftState =
+    lam name. lam genarg. lam st.
+    {st with genargs = cons {name = name, genarg = genarg} st.genargs}
+
+-- Adds generated arguments that are not in current environment.
+-- usage: st_addGenargsToEnv <state with genargs> <state without genargs> <state with environment to update>
+let st_addGenargsToEnv: LiftState -> LiftState -> LiftState =
+    use LamliftTypedVarAst in
+    lam st_w_genargs. lam st_wo_genargs. lam st.
+    let genarg_diff_count = subi (length st_w_genargs.genargs) (length st_wo_genargs.genargs) in
+    if gti genarg_diff_count 0 then
+      foldl (lam acc. lam e.
+        match e.genarg with TmLamliftTypedVar x then
+          st_addVarToEnv e.name (TmVar {ident = x.ident}) acc
+        else
+          let _ = dprint e in
+          let _ = print "\n" in
+          error "st_addGenargsToEnv: Generated argument above was expected to be TmLamliftTypedVar"
+      ) st (slice st_w_genargs.genargs 0 genarg_diff_count)
+    else
+      st
 
 -- Returns whether the string is available in the current lambda scope
 let st_inLambdaScope: String -> LiftState -> Bool =
@@ -126,12 +152,7 @@ let strip_prefix = lam s.
 --<<-- LANGUAGES -->>--
 ---\\-------------//---
 
-lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
-    syn Expr =
-    -- Only ever use for lookup, should never be used be part of the generated AST
-    | TmLamliftTypedVar {ident : String,
-                         tpe   : Option}
-
+lang VarLamlift = LamliftTypedVarAst + VarAst + AppAst + LetAst + RecLetsAst + DataAst
     sem lamlift (state : LiftState) =
     | TmVar x ->
       -- Returns whether the String is globally defined in the LiftState
@@ -171,7 +192,7 @@ lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
               let newstate = st_incrId (st_addVarToEnv oldname newtypedvar
                                        (st_addLambdaref newname newtypedvar
                                        (st_addExternref e
-                                       (st_addGenarg newtypedvar chkstate)))) in
+                                       (st_addGenarg oldname newtypedvar chkstate)))) in
               (newstate, newvar)
           else match e with TmLamliftTypedVar t2 then
             -- If the found variable is in the current lambda scope or in the
@@ -190,7 +211,7 @@ lang VarLamlift = VarAst + AppAst + LetAst + RecLetsAst + DataAst
               let newstate = st_incrId (st_addVarToEnv oldname newtypedvar
                                        (st_addLambdaref newname newtypedvar
                                        (st_addExternref (TmVar {ident = t2.ident})
-                                       (st_addGenarg newtypedvar chkstate)))) in
+                                       (st_addGenarg oldname newtypedvar chkstate)))) in
               (newstate, newvar)
           else match e with TmApp t3 then
             -- Our bound identifier references to a chain of applications, make
@@ -249,9 +270,9 @@ lang AppLamlift = AppAst
     sem lamlift (state : LiftState) =
     | TmApp t ->
       let lhsret = lamlift state t.lhs in
-      let lhsstate = {lhsret.0 with env = state.env} in
+      let lhsstate = st_addGenargsToEnv lhsret.0 state {lhsret.0 with env = state.env} in
       let rhsret = lamlift lhsstate t.rhs in
-      let rhsstate = {rhsret.0 with env = state.env} in
+      let rhsstate = st_addGenargsToEnv rhsret.0 state {rhsret.0 with env = state.env} in
       (rhsstate, TmApp {{t with lhs = lhsret.1} with rhs = rhsret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
@@ -279,7 +300,7 @@ lang FunLamlift = VarLamlift + FunAst + ConstAst + UnitAst
 
       -- The top level definition: TmLet {ident = "fun#_anon", tpe = ..., body = TmLam {ident = "arg#_%%", tpe = None (), ...}}
       let lambdagenerator = lam e. lam acc.
-        match e with TmLamliftTypedVar t1 then
+        match e.genarg with TmLamliftTypedVar t1 then
           TmLam {ident = t1.ident, tpe = t1.tpe, body = acc}
         else error "internal error (1)"
       in
@@ -306,7 +327,8 @@ lang FunLamlift = VarLamlift + FunAst + ConstAst + UnitAst
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmLam t -> TmLam {t with body = lamliftReplaceIdentifiers newnames t.body}
-    | TmLamChain t -> TmLamChain {t with body = lamliftReplaceIdentifiers newnames t.body}
+    -- Should never encounter a TmLamChain at this stage, so it is deliberately
+    -- left out as a sanity check.
 end
 
 lang LetLamlift = VarLamlift + LetAst + FunLamlift + ConstAst + UnitAst
@@ -329,13 +351,13 @@ lang LetLamlift = VarLamlift + LetAst + FunLamlift + ConstAst + UnitAst
 
         -- The top level definition: TmLet ("fun#_<name>", TmLam ("arg#_%%", None, ...))
         let lambdagenerator = lam e. lam acc.
-          match e with TmLamliftTypedVar t2 then
+          match e.genarg with TmLamliftTypedVar t2 then
             TmLam {ident = t2.ident, tpe = t2.tpe, body = acc}
           else error "internal error (2)"
         in
         let topdefbody = foldr lambdagenerator ret.1 (ret.0).genargs in
         let arrowgenerator = lam e. lam acc.
-          match e with TmLamliftTypedVar t2 then
+          match e.genarg with TmLamliftTypedVar t2 then
             match t2.tpe with Some t3 then
               match acc with Some t4 then
                 Some (TyArrow {from = t3, to = t4})
@@ -358,7 +380,10 @@ lang LetLamlift = VarLamlift + LetAst + FunLamlift + ConstAst + UnitAst
         -- Traverse the let body and extract everything from the returned state
         -- apart from the environment.
         let ret = lamlift state t.body in
-        let updatedstate = {ret.0 with env = state.env} in
+
+        -- Since we are not going to lift this expression, include the generated arguments
+        -- into the environment for the in-expression
+        let updatedstate = st_addGenargsToEnv ret.0 state {ret.0 with env = state.env} in
 
         let id = updatedstate.id in
         let newname = concat "var" (concat (int2string id) (cons '_' t.ident)) in
@@ -421,13 +446,9 @@ lang RecLetsLamlift = VarLamlift + RecLetsAst + FunLamlift + ConstAst + UnitAst
         let acc_state = acc.0 in
         let acc_bindings = acc.1 in
 
-        -- Extract the generated arguments and add them to the environment.
-        -- (We do not want to generate 2 separate arguments for the same reference)
-        let typedvar2str = lam v. match v with TmLamliftTypedVar s then s.ident else error "Not a typed var" in
-
         let envaddfld = lam st. lam v.
-          match v with TmLamliftTypedVar then
-            st_addVarToEnv (strip_prefix (typedvar2str v)) v st
+          match v.genarg with TmLamliftTypedVar s then
+            st_addVarToEnv (strip_prefix s.ident) v.genarg st
           else let _ = dprint v in error "envaddfld: Not a typed var."
         in
         let newstate = foldl envaddfld acc_state (acc_state.genargs) in
@@ -449,13 +470,13 @@ lang RecLetsLamlift = VarLamlift + RecLetsAst + FunLamlift + ConstAst + UnitAst
       let arggen = lam b.
         -- The top level definition: TmRecLets [("fun#_<name>", Option, TmLam ("arg#_%%", None, ...))]
         let lambdagenerator = lam e. lam acc.
-          match e with TmLamliftTypedVar t2 then
+          match e.genarg with TmLamliftTypedVar t2 then
             TmLam {ident = t2.ident, tpe = t2.tpe, body = acc}
           else let _ = dprint e in error "internal error (3)"
         in
         let newbody = foldr lambdagenerator b.body liftedstate.genargs in
         let arrowgenerator = lam e. lam acc.
-          match e with TmLamliftTypedVar t2 then
+          match e.genarg with TmLamliftTypedVar t2 then
             match t2.tpe with Some t3 then
               match acc with Some t4 then
                 Some (TyArrow {from = t3, to = t4})
@@ -487,7 +508,7 @@ lang RecLetsLamlift = VarLamlift + RecLetsAst + FunLamlift + ConstAst + UnitAst
         -- The value to bind: TmApp (... TmApp (TmVar "fun#_<name>", Expr), ...)
         let binding = foldl (
           lam acc. lam e.
-          match e with TmLamliftTypedVar t1 then
+          match e.genarg with TmLamliftTypedVar t1 then
             TmApp {lhs = acc, rhs = TmVar {ident = t1.ident}}
           else error "generated argument is not typed var"
         ) (TmVar {ident = name}) liftedstate.genargs in
@@ -536,13 +557,13 @@ lang BoolLamlift = BoolAst + ConstLamlift
     --| COr -> (state, COr)
     | TmIf t ->
       let condret = lamlift state t.cond in
-      let condstate = {condret.0 with env = state.env} in
+      let condstate = st_addGenargsToEnv condret.0 state {condret.0 with env = state.env} in
 
       let thnret = lamlift condstate t.thn in
-      let thnstate = {thnret.0 with env = state.env} in
+      let thnstate = st_addGenargsToEnv thnret.0 state {thnret.0 with env = state.env} in
 
       let elsret = lamlift thnstate t.els in
-      let elsstate = {elsret.0 with env = state.env} in
+      let elsstate = st_addGenargsToEnv elsret.0 state {elsret.0 with env = state.env} in
 
       (elsstate, TmIf {{{t with cond = condret.1} with thn = thnret.1} with els = elsret.1})
 
@@ -568,13 +589,13 @@ lang SeqLamlift = SeqAst + ConstLamlift
 
         let eret = lamlift accstate e in
 
-        let newstate = {eret.0 with env = accstate.env} in
+        let newstate = st_addGenargsToEnv eret.0 state {eret.0 with env = accstate.env} in
         let newlist = concat acclist [eret.1] in -- this is clumsy, perhaps use foldr?
         (newstate, newlist)
       in
       let foldret = foldl foldfun (state, []) t.tms in
 
-      let foldstate = {foldret.0 with env = state.env} in
+      let foldstate = st_addGenargsToEnv foldret.0 state {foldret.0 with env = state.env} in
       let vs = foldret.1 in
 
       -- Returning a TmSeq since we do not know if the contained terms are
@@ -595,28 +616,25 @@ lang TupleLamlift = TupleAst
 
         let eret = lamlift accstate e in
 
-        let newstate = {eret.0 with env = accstate.env} in
+        let newstate = st_addGenargsToEnv eret.0 state {eret.0 with env = accstate.env} in
         let newlist = concat acclist [eret.1] in
         (newstate, newlist)
       in
       let foldret = foldl foldfun (state, []) t.tms in
 
-      let foldstate = {foldret.0 with env = state.env} in
+      let foldstate = st_addGenargsToEnv foldret.0 state {foldret.0 with env = state.env} in
       let vs = foldret.1 in
 
       (foldstate, TmTuple {t with tms = vs})
 
     | TmProj t ->
       let tupret = lamlift state t.tup in
-      let tupstate = {tupret.0 with env = state.env} in
-      let idxret = lamlift tupstate t.idx in
-      let idxstate = {idxret.0 with env = state.env} in
-      (idxstate, TmProj {{t with tup = tupret.1} with idx = idxret.1})
+      let tupstate = st_addGenargsToEnv tupret.0 state {tupret.0 with env = state.env} in
+      (tupstate, TmProj {t with tup = tupret.1})
 
     sem lamliftReplaceIdentifiers (newnames : [{ident : String, replacement : Expr}]) =
     | TmTuple t -> TmTuple {t with tms = map (lam e. lamliftReplaceIdentifiers newnames e) t.tms}
-    | TmProj t -> TmProj {{t with tup = lamliftReplaceIdentifiers newnames t.tup}
-                             with idx = lamliftReplaceIdentifiers newnames t.idx}
+    | TmProj t -> TmProj {t with tup = lamliftReplaceIdentifiers newnames t.tup}
 end
 
 lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
@@ -624,16 +642,16 @@ lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
     sem lamlift (state : LiftState) =
     | TmMatch t ->
       let targetret = lamlift state t.target in
-      let targetstate = {targetret.0 with env = state.env} in
+      let targetstate = st_addGenargsToEnv targetret.0 state {targetret.0 with env = state.env} in
 
       let patret = lamliftPat targetstate t.pat in
       let patstate = patret.0 in
 
       let thnret = lamlift patstate t.thn in
-      let thnstate = {{thnret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
+      let thnstate = st_addGenargsToEnv thnret.0 patstate {{thnret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
 
       let elsret = lamlift thnstate t.els in
-      let elsstate = {{elsret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
+      let elsstate = st_addGenargsToEnv elsret.0 patstate {{elsret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
       
       let retstate = {{elsret.0 with env = state.env} with lambdarefs = state.lambdarefs} in
       (retstate, TmMatch {{{{t with target = targetret.1} with pat = patret.1} with thn = thnret.1} with els = elsret.1})
@@ -678,13 +696,13 @@ lang UtestLamlift = UtestAst
     sem lamlift (state : LiftState) =
     | TmUtest t ->
       let testret = lamlift state t.test in
-      let teststate = {testret.0 with env = state.env} in
+      let teststate = st_addGenargsToEnv testret.0 state {testret.0 with env = state.env} in
 
       let expectedret = lamlift teststate t.expected in
-      let expectedstate = {expectedret.0 with env = state.env} in
+      let expectedstate = st_addGenargsToEnv expectedret.0 state {expectedret.0 with env = state.env} in
 
       let nextret = lamlift expectedstate t.next in
-      let nextstate = {nextret.0 with env = state.env} in
+      let nextstate = st_addGenargsToEnv nextret.0 state {nextret.0 with env = state.env} in
 
       (nextstate, TmUtest {{{t with test = testret.1} with expected = expectedret.1} with next = nextret.1})
 
@@ -1119,6 +1137,35 @@ let example_ifexpr_ast =
     )
 in
 
+let example_multiuse =
+    let foo = let_ "foo" (None ()) (
+      lam_ "x" (None ()) (
+        let bar =
+          let_ "bar" (None ()) (
+            lam_ "y" (None ()) (
+              let xp1 =
+                let_ "xp1" (None ()) (appf2_ (var_ "addi") (var_ "y") (int_ 1))
+              in
+              letappend xp1 (
+                if_ (appf2_ (var_ "eqi") (var_ "x") (var_ "y"))
+                    (appf2_ (var_ "subi") (var_ "xp1") (var_ "x"))
+                    (appf2_ (var_ "addi")
+                            (appf2_ (var_ "addi") (var_ "x") (var_ "y"))
+                            (appf2_ (var_ "subi") (var_ "x") (var_ "y")))
+              )
+            )
+          ) in
+        letappend bar (
+          app_ (var_ "bar") (int_ 3)
+        )
+      )
+    )
+    in
+    letappend foo (
+      app_ (var_ "foo") (int_ 11)
+    )
+in
+
 -- Convert from a Lambda Lifting-style environment to an eval-style context
 let ctx = {env = map (lam e. (e.key, e.value)) builtin_env} in
 
@@ -1134,6 +1181,7 @@ utest eval ctx example_typed_ast with eval ctx (lift_lambdas example_typed_ast) 
 utest eval ctx example_recursive_typed_ast with eval ctx (lift_lambdas example_recursive_typed_ast) in
 utest eval ctx example_conmatch_typed with eval ctx (lift_lambdas example_conmatch_typed) in
 utest eval ctx example_ifexpr_ast with eval ctx (lift_lambdas example_ifexpr_ast) in
+utest eval ctx example_multiuse with eval ctx (lift_lambdas example_multiuse) in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
@@ -1167,5 +1215,6 @@ in
 --let _ = testllprint "example_recursive_typed_ast" example_recursive_typed_ast in
 --let _ = testllprint "example_conmatch_typed" example_conmatch_typed in
 --let _ = testllprint "example_ifexpr_ast" example_ifexpr_ast in
+--let _ = testllprint "example_multiuse" example_multiuse in
 
 ()
