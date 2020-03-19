@@ -368,8 +368,12 @@ let delta eval env fi c v  =
         Sys.remove (Ustring.to_utf8 (tmlist2ustring fi lst)); TmConst(NoInfo,Cunit)
     | CdeleteFile,_ -> fail_constapp fi
 
-    | Cerror, TmSeq(fi,lst) ->
-       (uprint_endline ((us"ERROR: ") ^. (tmlist2ustring fi lst)); exit 1)
+    | Cerror, TmSeq(fiseq,lst) ->
+       (let prefix = match fi with
+                     | Info(filename,l1,_,_,_) ->
+                       filename ^. us":" ^. (ustring_of_int l1) ^. us": "
+                     | NoInfo -> us""
+        in uprint_endline (prefix ^. us"ERROR: " ^. (tmlist2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)
