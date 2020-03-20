@@ -250,7 +250,6 @@ let rec desugar_tm nss env =
       | Some ns -> desugar_tm nss (merge_env_overwrite env ns) body)
   (* Simple recursions *)
   | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
-  | TmIf(fi, c, th, el) -> TmIf(fi, desugar_tm nss env c, desugar_tm nss env th, desugar_tm nss env el)
   | TmSeq(fi, tms) -> TmSeq(fi, List.map (desugar_tm nss env) tms)
   | TmTuple(fi, tms) -> TmTuple(fi, List.map (desugar_tm nss env) tms)
   | TmRecord(fi, tms) -> TmRecord(fi, List.map (desugar_tm nss env |> map_right) tms)

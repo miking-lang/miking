@@ -140,7 +140,6 @@ and tm =
 | TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
-| TmIf      of info * tm * tm * tm                                  (* If expression *)
 | TmFix     of info                                                 (* Fix point *)
 | TmSeq     of info * tm list                                       (* Sequence *)
 | TmTuple   of info * tm list                                       (* Tuple *)
@@ -218,7 +217,6 @@ let rec map_tm f = function
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
   | TmSeq(fi, tms) -> f (TmSeq(fi, List.map (map_tm f) tms))
-  | TmIf(fi,t1,t2,t3) -> f (TmIf(fi,map_tm f t1,map_tm f t2,map_tm f t3))
   | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
   | TmRecord(fi, r) -> f (TmRecord(fi, List.map (function (l, t) -> (l, map_tm f t)) r))
   | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
@@ -240,7 +238,6 @@ let tm_info = function
   | TmRecLets(fi,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
-  | TmIf(fi,_,_,_) -> fi
   | TmFix(fi) -> fi
   | TmSeq(fi,_) -> fi
   | TmTuple(fi,_) -> fi
