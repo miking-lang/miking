@@ -169,7 +169,7 @@ let translate_cases f target cases =
   let no_match =
     let_ (us"_")
       (app (TmConst (NoInfo, CdebugShow)) target)
-      (app (TmConst (NoInfo, Cerror)) (TmConst(NoInfo, CSeq msg)))
+      (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
   let case_compare c1 c2 = match c1, c2 with
     | (p1, _), (p2, _) -> pattern_compare p1 p2

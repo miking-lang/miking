@@ -276,8 +276,8 @@ atom:
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
-  | STRING               { TmConst($1.i, CSeq(List.map (fun x -> TmConst($1.i,CChar(x)))
-                                                       (ustring2list $1.v))) }
+  | STRING               { TmSeq($1.i, List.map (fun x -> TmConst($1.i,CChar(x)))
+                                                  (ustring2list $1.v)) }
   | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
   | LBRACKET labels RBRACKET    { TmRecord(mkinfo $1.i $3.i, $2)}

@@ -138,7 +138,7 @@ let evalprog filename  =
      |> Mlang.desugar_post_flatten
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
-     |> Mexpr.eval (builtin |> List.split |> snd |> List.map (fun x -> TmConst(NoInfo,x)))
+     |> Mexpr.eval (builtin |> List.split |> snd)
      |> fun _ -> ())
     with
     | Lexer.Lex_error m ->
