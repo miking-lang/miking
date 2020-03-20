@@ -165,8 +165,6 @@ and pprintME t =
   | TmApp(_,t1,t2) ->
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
-  | TmIf(_,t1,t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
-                          ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
   | TmFix(_) -> us"fix"
   | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
@@ -179,6 +177,8 @@ and pprintME t =
                            (match tmop with
                             | Some(t) -> ppt true t
                             | None -> us"") ^. right inside
+  | TmMatch(_,t1,PatBool(_,true),t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
+                          ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
   | TmMatch(_,t,p,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
         us" with " ^. pprintPat p ^.
         us" then " ^. ppt false then_ ^.

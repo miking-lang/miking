@@ -453,7 +453,6 @@ let rec debruijn env t =
      TmRecLets(fi,List.map (fun (fi,s,t) -> (fi,s, debruijn env2 t)) lst, debruijn env2 tm)
   | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
   | TmConst(_,_) -> t
-  | TmIf(fi,t1,t2,t3) -> TmIf(fi,debruijn env t1,debruijn env t2,debruijn env t3)
   | TmFix(_) -> t
   | TmSeq(fi,tms) -> TmSeq(fi,List.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
@@ -541,13 +540,6 @@ let rec eval env t =
                                  ^ Ustring.to_utf8 (pprintME f)))
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
-  (* If expression *)
-  | TmIf(fi,t1,t2,t3) -> (
-    match eval env t1 with
-    | TmConst(_,CBool(true)) -> eval env t2
-    | TmConst(_,CBool(false)) -> eval env t3
-    | _ -> raise_error fi "The guard of the if expression is not a boolean value"
-  )
   (* Sequences *)
   | TmSeq(fi,tms) -> TmConst(fi,CSeq(List.map (eval env) tms))
   (* Records *)

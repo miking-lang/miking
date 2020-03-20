@@ -233,7 +233,7 @@ mexpr:
         TmLam(fi,$2.v,$3,$5) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmIf(fi,$2,$4,$6) }
+        TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
   | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
         TmCondef(fi,$2.v,$3,$5)}
