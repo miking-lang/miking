@@ -3,7 +3,7 @@ open Ast
 open Msg
 
 let externals =
-  List.map (fun x -> (fst x,  CExt (snd x)))
+  List.map (fun x -> (fst x,  TmConst(NoInfo,CExt (snd x))))
   [
     ("eapp", EApp None)
   ]

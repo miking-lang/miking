@@ -105,10 +105,6 @@ let rec pprint_const c =
   | CChar2int -> us"char2int"
   | CInt2char -> us"int2char"
   (* MCore intrinsic: sequences *)
-  | CSeq(tms) ->
-     if List.for_all (fun x -> match x with | TmConst(_,CChar(_)) -> true | _ -> false) tms
-     then us"\"" ^. tmlist2ustring NoInfo tms ^. us"\""
-     else us"[" ^. Ustring.concat (us",") (List.map pprintME tms) ^. us"]"
   | Cmakeseq(_) -> us"makeseq"
   | Clength -> us"length"
   | Cconcat(_) -> us"concat"

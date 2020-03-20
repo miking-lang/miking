@@ -79,7 +79,6 @@ and const =
 | CChar2int
 | CInt2char
 (* MCore intrinsic: sequences *)
-| CSeq     of tm list
 | Cmakeseq of int option
 | Clength
 | Cconcat  of (tm list) option
@@ -135,12 +134,10 @@ and program = Program of include_ list * top list * tm
 and tm =
 | TmVar     of info * ustring * int                                 (* Variable *)
 | TmLam     of info * ustring * ty * tm                             (* Lambda abstraction *)
-| TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
 | TmLet     of info * ustring * tm * tm                             (* Let *)
 | TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
-| TmFix     of info                                                 (* Fix point *)
 | TmSeq     of info * tm list                                       (* Sequence *)
 | TmTuple   of info * tm list                                       (* Tuple *)
 | TmRecord  of info * (ustring * tm) list                           (* Record *)
@@ -151,6 +148,10 @@ and tm =
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
+(* Only part of the runtime system *)
+| TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
+| TmFix     of info                                                 (* Fix point *)
+
 
 and label =
 | LabIdx of int                                   (* Tuple index *)
@@ -260,7 +261,7 @@ let pat_info = function
   | PatUnit(fi) -> fi
 
 
-(* Converts a list of terms (typically from CSeq) to a ustring *)
+(* Converts a list of terms  to a ustring *)
 let tmlist2ustring fi lst =
   List.map (fun x ->
       match x with | TmConst(_,CChar(i)) -> i
