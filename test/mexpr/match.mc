@@ -1,11 +1,11 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// Test integer primitives
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+-- Test integer primitives
 
 mexpr
 
-// Constructor with and without arguments
+-- Constructor with and without arguments
 con K1 in
 con K2 in
 con K3 in
@@ -17,7 +17,7 @@ utest K3("k",100) with K3("k",100) in
 utest match K2("k",100) with K2 x then x.0 else "a" with "k" in
 
 
-// Matching two constructors
+-- Matching two constructors
 con Foo in
 con Bar in
 let f = lam x.
@@ -32,7 +32,7 @@ utest f (Foo("a",1)) with (1, "a") in
 utest f (Bar 10) with (15, "b") in
 
 
-// Counting values in a binary tree
+-- Counting values in a binary tree
 type Tree in
 con Node : (Tree,Tree) -> Tree in
 con Leaf : (Int) -> Tree in
@@ -56,5 +56,14 @@ utest count tree2 with 9 in
 
 let tree3 = Node(Node(Leaf(3),Node(Leaf(2),Leaf(6))),Leaf(12)) in
 utest count tree3 with 23 in
+
+
+-- Matching
+utest match (1,2,3) with (_,2,_) then true else false with true in
+utest match (1,2,3) with (_,2,x) then x else 0 with 3 in
+
+
+
+
 
 ()

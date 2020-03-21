@@ -159,7 +159,7 @@ let translate_cases f target cases =
   let translate_case case inner =
     match case with
     | (ConPattern (fi, k, x), handler) ->
-      TmMatch (fi, target, PatCon(fi, k, noidx, PatNamed(fi, x)), handler, inner)
+      TmMatch (fi, target, PatCon(fi, k, noidx, PatNamed(fi, NameStr(x))), handler, inner)
     | (VarPattern (fi, x), handler) ->
       TmLet(fi, x, target, handler)
   in
@@ -233,7 +233,8 @@ let rec desugar_tm nss env =
   (* Both introducing and referencing *)
   | TmMatch(fi, target, pat, thn, els) ->
      let rec desugar_pat env = function
-       | PatNamed(fi, name) -> (delete_id_and_con env name, PatNamed(fi, empty_mangle name))
+       | PatNamed(fi, NameStr(name)) -> (delete_id_and_con env name, PatNamed(fi, NameStr(empty_mangle name)))
+       | PatNamed(_, NameWildcard) as pat -> (env,pat)
        | PatTuple(fi, pats) ->
           List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right (fun p -> p::pats)) pats (env, [])
           |> map_right (fun pats -> PatTuple(fi, pats))

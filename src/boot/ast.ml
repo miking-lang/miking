@@ -153,19 +153,27 @@ and tm =
 | TmFix     of info                                                 (* Fix point *)
 
 
+
 and label =
 | LabIdx of int                                   (* Tuple index *)
 | LabStr of ustring                               (* Record label *)
 
+(* Kind of pattern name *)
+and name =
+| NameStr of ustring                              (* A normal pattern name *)
+| NameWildcard                                    (* Pattern wildcard *)
+
+
 (* Patterns *)
 and pat =
-| PatNamed of info * ustring                      (* Named, capturing wildcard *)
+| PatNamed of info * name                         (* Named, capturing wildcard *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
 | PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)
 | PatChar  of info * int                          (* Char pattern *)
 | PatBool  of info * bool                         (* Boolean pattern *)
 | PatUnit  of info                                (* Unit pattern *)
+
 
 (* Types *)
 and ty =

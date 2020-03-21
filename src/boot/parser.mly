@@ -306,7 +306,9 @@ labels:
 
 pat:
   | IDENT
-      { PatNamed($1.i, $1.v) }
+      { if $1.v =. us"_"
+        then PatNamed($1.i, NameWildcard)
+        else PatNamed($1.i, NameStr($1.v)) }
   | IDENT pat
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
   | LPAREN pat RPAREN
