@@ -185,7 +185,8 @@ and pprintME t =
 
 and pprintPat p =
   let rec ppp inside = function
-    | PatNamed(_,x) -> x
+    | PatNamed(_,NameStr(x)) -> x
+    | PatNamed(_,NameWildcard) -> us"_"
     | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
     | PatCon(_,x,n,p) ->
        left inside ^.

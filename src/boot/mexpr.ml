@@ -427,7 +427,8 @@ let rec debruijn env t =
      | VarTm(y)::ee -> if y =. x then n else find fi ee (n+1) x
      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")) in
   let rec dbPat env = function
-    | PatNamed(fi,x) -> (VarTm(x)::env, PatNamed(fi,x))
+    | PatNamed(_,NameStr(x)) as pat -> (VarTm(x)::env, pat)
+    | PatNamed(_,NameWildcard) as pat -> (env,pat)
     | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
        let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[])
@@ -468,7 +469,8 @@ let rec debruijn env t =
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
 let rec tryMatch env value = function
-  | PatNamed _ -> Some (value :: env)
+  | PatNamed(_,NameStr(_)) -> Some (value :: env)
+  | PatNamed(_,NameWildcard) -> Some (env)
   | PatTuple(_,pats) ->
      let go v p env = Option.bind (fun env -> tryMatch env v p) env in
      (match value with
