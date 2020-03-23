@@ -407,13 +407,14 @@ let unittest_failed fi t1 t2=
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
-  | TmSeq(_,lst1), TmSeq(_,lst2) -> (
+  | TmSeq(_,lst1), TmSeq(_,lst2) ->
      List.length lst1 = List.length lst2 &&
-     List.for_all (fun (x,y) -> val_equal x y) (List.combine lst1 lst2))
+      List.for_all (fun (x,y) -> val_equal x y) (List.combine lst1 lst2)
   | TmConst(_,CRecord(r1)), TmConst(_,CRecord(r2)) ->
      Record.equal val_equal r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
+     List.length tms1 = List.length tms2 &&
      List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
   | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
   | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
@@ -428,7 +429,14 @@ let rec debruijn env t =
      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")) in
   let rec dbPat env = function
     | PatNamed(_,NameStr(x)) as pat -> (VarTm(x)::env, pat)
-    | PatNamed(_,NameWildcard) as pat -> (env,pat)
+    | PatNamed(_,NameWildcard) as pat -> (VarTm(us"")::env, pat)
+    | PatSeq(fi,ps,seqMP) ->
+       let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
+       let (env,ps) = List.fold_right go ps (env,[]) in
+       let env = (match seqMP with
+       | SeqMatchPrefix(NameStr(x)) | SeqMatchPostfix(NameStr(x)) -> VarTm(x)::env
+       | SeqMatchPrefix(NameWildcard) | SeqMatchPostfix(NameWildcard) | SeqMatchTotal -> env) in
+       (env,PatSeq(fi,ps,seqMP))
     | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
        let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[])
@@ -468,11 +476,26 @@ let rec debruijn env t =
   | TmUtest(fi,t1,t2,tnext)
       -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
-let rec tryMatch env value = function
-  | PatNamed(_,NameStr(_)) -> Some (value :: env)
-  | PatNamed(_,NameWildcard) -> Some (env)
+
+
+let rec tryMatch env value pat =
+  let go v p env = Option.bind (fun env -> tryMatch env v p) env in
+  let rec splitNth n = function [] -> ([],[]) | x::xs ->
+    if n > 0 then let (pre,post) = splitNth (n-1) xs in (x::pre,post) else ([],x::xs) in
+  match pat with
+  | PatNamed(_,NameStr(_)) | PatNamed(_,NameWildcard)-> Some (value :: env)
+  | PatSeq(_,pats,seqMP) ->
+     (match value,seqMP with
+      | TmSeq(fi,vs),SeqMatchPrefix(_) when List.length pats <= List.length vs ->
+        let (pre,post) = vs |> splitNth (List.length pats) in
+        List.fold_right2 go pre pats (Some env) |> Option.bind (fun env -> Some(TmSeq(fi,post)::env))
+      | TmSeq(fi,vs),SeqMatchPostfix(_) when List.length pats <= List.length vs ->
+        let (pre,post) = vs |> splitNth (List.length vs - List.length pats) in
+        List.fold_right2 go post pats (Some env) |> Option.bind (fun env -> Some(TmSeq(fi,pre)::env))
+      | TmSeq(_,vs),SeqMatchTotal when List.length pats = List.length vs ->
+        List.fold_right2 go vs pats (Some env)
+      | _ -> None)
   | PatTuple(_,pats) ->
-     let go v p env = Option.bind (fun env -> tryMatch env v p) env in
      (match value with
       | TmTuple(_,vs) when List.length pats = List.length vs ->
          List.fold_right2 go vs pats (Some env)
