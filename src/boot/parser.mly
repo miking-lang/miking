@@ -68,6 +68,7 @@
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> DOT           /* "."   */
 %token <unit Ast.tokendata> BAR           /* "|"   */
+%token <unit Ast.tokendata> CONCAT        /* "++"  */
 
 %start main
 
@@ -303,14 +304,38 @@ labels:
   | IDENT EQ mexpr COMMA labels
     {($1.v, $3)::$5}
 
+pats:
+  | pat
+      { [$1] }
+  | pat COMMA pats
+      { $1::$3 }
 
-pat:
+patseq:
+  | LSQUARE RSQUARE
+      { (mkinfo $1.i $2.i, []) }
+  | LSQUARE pats RSQUARE
+      { (mkinfo $1.i $3.i, $2) }
+  | STRING
+      { ($1.i, List.map (fun x -> PatChar($1.i,x)) (ustring2list $1.v)) }
+
+
+name:
   | IDENT
       { if $1.v =. us"_"
         then PatNamed($1.i, NameWildcard)
         else PatNamed($1.i, NameStr($1.v)) }
+
+pat:
+  | name
+      { $1 }
   | IDENT pat
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
+  | patseq
+      { PatSeq($1 |> fst, $1 |> snd, SeqMatchTotal) }
+  | patseq CONCAT IDENT
+      { PatSeq($1 |> fst, $1 |> snd, SeqMatchPrefix(NameStr($3.v))) }
+  | IDENT CONCAT patseq
+      { PatSeq($3 |> fst, $3 |> snd, SeqMatchPostfix(NameStr($1.v))) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN

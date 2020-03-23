@@ -163,10 +163,16 @@ and name =
 | NameStr of ustring                              (* A normal pattern name *)
 | NameWildcard                                    (* Pattern wildcard *)
 
+(* Kind of sequence matching in patterns *)
+and seqMatchType =
+| SeqMatchPrefix of name
+| SeqMatchPostfix of name
+| SeqMatchTotal
 
 (* Patterns *)
 and pat =
 | PatNamed of info * name                         (* Named, capturing wildcard *)
+| PatSeq   of info * pat list * seqMatchType      (* Sequence pattern *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
 | PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)
@@ -261,6 +267,7 @@ let tm_info = function
 
 let pat_info = function
   | PatNamed(fi,_) -> fi
+  | PatSeq(fi,_,_) -> fi
   | PatTuple(fi,_) -> fi
   | PatCon(fi,_,_,_) -> fi
   | PatInt(fi,_) -> fi

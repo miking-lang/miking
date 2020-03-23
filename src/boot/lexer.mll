@@ -42,6 +42,7 @@ let reserved_strings = [
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
   ("+",             fun(i) -> Parser.ADD{i=i;v=()});
+  ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
 
   (* Symbolic Tokens *)
   ("(",             fun(i) -> Parser.LPAREN{i=i;v=()});
@@ -145,7 +146,7 @@ let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "$"  | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | "."  | "|" | "->" | "=>"
+              "::" | ":" | ","  | "."  | "|" | "->" | "=>" | "++"
 
 
 let line_comment = "//" [^ '\013' '\010']*

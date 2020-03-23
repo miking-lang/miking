@@ -232,9 +232,19 @@ let rec desugar_tm nss env =
   | (TmClos _) as tm -> tm
   (* Both introducing and referencing *)
   | TmMatch(fi, target, pat, thn, els) ->
-     let rec desugar_pat env = function
-       | PatNamed(fi, NameStr(name)) -> (delete_id_and_con env name, PatNamed(fi, NameStr(empty_mangle name)))
-       | PatNamed(_, NameWildcard) as pat -> (env,pat)
+    let desugar_pname env = function
+      | NameStr(n) -> (delete_id_and_con env n, NameStr(empty_mangle n))
+      | NameWildcard -> (env, NameWildcard) in
+    let rec desugar_pat env = function
+       | PatNamed(fi,name) -> name |> desugar_pname env |> map_right (fun n -> PatNamed(fi,n))
+       | PatSeq(fi,pats,seqMT) ->
+         let (env', pats') = List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right
+             (fun p -> p::pats)) pats (env, []) in
+         let (env'',seqMT') = match seqMT with
+           | SeqMatchPrefix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPrefix(n))
+           | SeqMatchPostfix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPostfix(n))
+           | SeqMatchTotal -> (env', SeqMatchTotal) in
+         (env'',PatSeq(fi,pats',seqMT'))
        | PatTuple(fi, pats) ->
           List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right (fun p -> p::pats)) pats (env, [])
           |> map_right (fun pats -> PatTuple(fi, pats))

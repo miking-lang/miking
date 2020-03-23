@@ -183,9 +183,18 @@ and pprintME t =
   | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
   in ppt false t
 
+and pprintTmList p = us"[" ^. (p |> List.map pprintME |> Ustring.concat (us",")) ^. us"]"
+
+
 and pprintPat p =
-  let rec ppp inside = function
+  let rec ppp inside pat =
+    let ppSeq lst = lst |> List.map (ppp inside) |> Ustring.concat (us",") in
+    let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
+    match pat with
     | PatNamed(_,NameStr(x)) -> x
+    | PatSeq(_,lst,SeqMatchPrefix(x)) -> us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
+    | PatSeq(_,lst,SeqMatchPostfix(x)) -> ppName x ^. us" ++ [" ^. ppSeq lst ^. us"]"
+    | PatSeq(_,lst,SeqMatchTotal) -> us"[" ^. ppSeq lst ^. us"]"
     | PatNamed(_,NameWildcard) -> us"_"
     | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
     | PatCon(_,x,n,p) ->
@@ -197,6 +206,8 @@ and pprintPat p =
     | PatBool(_,b) -> Ustring.Op.ustring_of_bool b
     | PatUnit _ -> us"()"
   in ppp false p
+
+and pprintPatList p = us"[" ^. (p |> List.map pprintPat |> Ustring.concat (us",")) ^. us"]"
 
 (* Pretty prints the environment *)
 and pprint_env env =
