@@ -20,7 +20,10 @@ type 'a ext =
                    unit) option
                 * float option
                 * RealArray.t option
+
   | EIdaSolveNormal of Nvector_serial.kind Ida.serial_session option
                        * float option
                        * Nvector_serial.t option
 
+  | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
+                    * Nvector_serial.t option

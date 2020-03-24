@@ -18,4 +18,5 @@ let pprint = function
   | EIdaSession _ -> us"idaSession"
   | EIdaInit _ -> us"idaInit"
   | EIdaSolveNormal _ -> us"idaSolveNormal"
+  | EIdaCalcICYY _ -> us"idaCalcICYY"
 

@@ -17,7 +17,8 @@ let externals =
       ("sArrSet", ESArraySet (None, None));
       ("sArrLength", ESArrayLength);
       ("idaInit", EIdaInit (None, None, None, None));
-      ("idaSolveNormal", EIdaSolveNormal (None, None, None))
+      ("idaSolveNormal", EIdaSolveNormal (None, None, None));
+      ("idaCalcICYY", EIdaCalcICYY (None, None))
     ]
 
 let arity = function
@@ -44,6 +45,9 @@ let arity = function
   | EIdaSolveNormal (Some _, None, None) -> 3
   | EIdaSolveNormal (_, Some _, None) -> 2
   | EIdaSolveNormal (_, _, Some _) -> 1
+  | EIdaCalcICYY (None, None) -> 3
+  | EIdaCalcICYY (Some _, None) -> 2
+  | EIdaCalcICYY (_, Some _) -> 1
 
 let fail_extapp f v fi = raise_error fi
                            ("Incorrect application. External function: "
@@ -149,3 +153,12 @@ let delta eval env fi c v =
      let (t', r) = Ida.solve_normal s t v v' in
      mk_tuple fi [mk_float NoInfo t'; mk_int NoInfo (ret2int r)]
   | EIdaSolveNormal _,_ -> fail_extapp fi
+
+  | EIdaCalcICYY (None, None), TmConst (fi, CExt (EIdaSession s)) ->
+     mk_ext fi (EIdaCalcICYY (Some s, None))
+  | EIdaCalcICYY (Some s, None), TmConst (fi, CExt (ESArray y)) ->
+     mk_ext fi (EIdaCalcICYY (Some s, Some (Nvector_serial.wrap y)))
+  | EIdaCalcICYY (Some s, Some y), TmConst (fi, CFloat t) ->
+     Ida.calc_ic_y s ~y:y t;
+     mk_unit fi
+  | EIdaCalcICYY _,_ -> fail_extapp fi
