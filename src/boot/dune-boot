@@ -4,19 +4,18 @@
 (rule
  (targets ext.ml)
  (deps    ext.cppo.ml)
- (action  (run %{bin:cppo} -D SUNDIALS %{deps} -o %{targets})))
+ (action  (run %{bin:cppo} %{deps} -o %{targets})))
 
 (rule
  (targets extast.ml)
  (deps    extast.cppo.ml)
- (action  (run %{bin:cppo} -D SUNDIALS %{deps} -o %{targets})))
+ (action  (run %{bin:cppo} %{deps} -o %{targets})))
 
 (rule
  (targets extpprint.ml)
  (deps    extpprint.cppo.ml)
- (action  (run %{bin:cppo} -D SUNDIALS %{deps} -o %{targets})))
+ (action  (run %{bin:cppo} %{deps} -o %{targets})))
 
 (executable
  (name boot)
- (libraries sundialsml)
 )

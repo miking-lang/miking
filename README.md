@@ -10,20 +10,6 @@ Before you test the Miking system, you need to install
 [OCaml](https://ocaml.org/), the
 [OPAM](https://opam.ocaml.org/) package manager, and the `dune` package.
 
-In addition you need to install make sure that the [Sundials](https://computing.llnl.gov/projects/sundials) solver is installed on your system.
-
-The steps involve installing the C library. On `ubuntu 18.04` you can issue:
-
-```
->> sudo apt-get install libsundials-dev
-```
-
-And then installing the ocaml bindings [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
-
-```
->> opam install sundialsml
-```
-
 To compile and run the test suite, execute
 
 ```
@@ -49,6 +35,43 @@ for example by running the following:
 
     cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
+To install the boot interpreter along with the standard library for the current
+user, issue:
+
+```
+>>> make install
+```
+
+### Sundials integration
+To build the project with sundials integration you need to install the
+[Sundials](https://computing.llnl.gov/projects/sundials) libraries on your
+system.
+
+This involves installing the C library. On `ubuntu 18.04` you can issue:
+
+```
+>> sudo apt-get install libsundials-dev
+```
+
+Then install the ocaml bindings
+[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+>> opam install sundialsml
+```
+
+To compile and run the test suite with sundials support:
+
+```
+>> make test-sundials
+
+```
+
+To install for the current user:
+
+```
+>>> make install-sundials
+```
 
 ## Editor Support
 

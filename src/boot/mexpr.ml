@@ -383,7 +383,7 @@ let delta eval env fi c v  =
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqs(_),_ -> fail_constapp fi
 
-    | CExt v, t -> Ext.delta eval env v t
+    | CExt v, t -> Ext.delta eval env fi v t
 
 
 (* Debug function used in the eval function *)
