@@ -17,7 +17,7 @@ let fail_extapp f v fi = raise_error fi
                             ^ " value: "
                             ^ Ustring.to_utf8 (Pprint.pprintME v))
 
-let delta eval env c v =
+let delta eval env _ c v =
   let fail_extapp = fail_extapp c v in
   let mk_ext fi e = TmConst (fi, CExt e) in
   let mk_app fi f v = TmApp (fi, f, v) in
