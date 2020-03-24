@@ -28,12 +28,22 @@ let arity = function
   (* SundialsML related functions *)
   | ESArray _ -> 0
   | ESArrayCreate -> 1
-  | ESArrayGet _ -> 2
-  | ESArraySet _ -> 3
+  | ESArrayGet None -> 2
+  | ESArrayGet (Some _) -> 1
+  | ESArraySet (None, None) -> 3
+  | ESArraySet (Some _, None) -> 2
+  | ESArraySet (_, Some _) -> 1
   | ESArrayLength -> 1
   | EIdaSession _ -> 0
-  | EIdaInit _ -> 5
-  | EIdaSolveNormal _ -> 4
+  | EIdaInit (None, None, None, None) -> 5
+  | EIdaInit (Some _, None, None, None) -> 4
+  | EIdaInit (_, Some _, None, None) -> 3
+  | EIdaInit (_, _, Some _, None) -> 2
+  | EIdaInit (_, _, _, Some _) -> 1
+  | EIdaSolveNormal (None, None, None) -> 4
+  | EIdaSolveNormal (Some _, None, None) -> 3
+  | EIdaSolveNormal (_, Some _, None) -> 2
+  | EIdaSolveNormal (_, _, Some _) -> 1
 
 let fail_extapp f v fi = raise_error fi
                            ("Incorrect application. External function: "
