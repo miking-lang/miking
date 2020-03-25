@@ -68,6 +68,8 @@ utest match s1 with [1,3] then true else false with false in
 utest match s1 with [1,3,5,10] then true else false with true in
 utest match s1 with [1,3] ++ _ then true else false with true in
 utest match s1 with [2,3] ++ _ then true else false with false in
+utest match s1 with [1,a] ++ _ then a else 0 with 3 in
+utest match s1 with [_,a] ++ b then (a,b) else (0,[]) with (3,[5,10]) in
 utest match s1 with _ ++ [5,10] then true else false with true in
 utest match s1 with _ ++ [5,11] then true else false with false in
 utest match s1 with _ ++ [5,a] then a else 0 with 10 in

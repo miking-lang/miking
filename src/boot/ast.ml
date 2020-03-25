@@ -159,19 +159,19 @@ and label =
 | LabStr of ustring                               (* Record label *)
 
 (* Kind of pattern name *)
-and name =
+and patName =
 | NameStr of ustring                              (* A normal pattern name *)
 | NameWildcard                                    (* Pattern wildcard *)
 
 (* Kind of sequence matching in patterns *)
 and seqMatchType =
-| SeqMatchPrefix of name
-| SeqMatchPostfix of name
+| SeqMatchPrefix of patName
+| SeqMatchPostfix of patName
 | SeqMatchTotal
 
 (* Patterns *)
 and pat =
-| PatNamed of info * name                         (* Named, capturing wildcard *)
+| PatNamed of info * patName                      (* Named, capturing wildcard *)
 | PatSeq   of info * pat list * seqMatchType      (* Sequence pattern *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
 | PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
