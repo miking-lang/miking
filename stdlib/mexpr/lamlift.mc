@@ -36,11 +36,13 @@
 
 include "ast.mc"
 include "eval.mc"
+include "convenience.mc"
 include "pprint.mc"
 
 include "option.mc"
 include "seq.mc"
 include "string.mc"
+
 
 lang LamliftTypedVarAst = VarAst
     syn Expr =
@@ -724,101 +726,14 @@ lang MExprLLandPPandEval = MExprLamlift + MExprPrettyPrint + MExprEval
 mexpr
 use MExprLLandPPandEval in
 
--- The letappend function is used for append let expressions together without
--- having to manually do so in the AST. The provided expr argument is inserted
--- as the inexpr of the last nested Let-expression.
-recursive let letappend = lam letexpr. lam expr.
-    match letexpr with TmLet t then
-        TmLet {t with inexpr = letappend t.inexpr expr}
-    else match letexpr with TmRecLets t then
-        TmRecLets {t with inexpr = letappend t.inexpr expr}
-    else match letexpr with TmConDef t then
-        TmConDef {t with inexpr = letappend t.inexpr expr}
-    else
-        expr
-in
-
-let unit_ = TmConst {val = CUnit ()} in
-let addi_ = TmConst {val = CAddi ()} in
-let subi_ = TmConst {val = CSubi ()} in
-let muli_ = TmConst {val = CMuli ()} in
-let and_ = TmConst {val = CAnd ()} in
-let or_ = TmConst {val = COr ()} in
-let not_ = TmConst {val = CNot ()} in
-let eqi_ = TmConst {val = CEqi ()} in
-let nth_ = TmConst {val = CNth ()} in
-
--- Types --
-let tyarrow_ =  lam from. lam to. TyArrow {from = from, to = to} in
-let tyarrows_ = lam tpes. foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tpes in
-let tydyn_ = TyDyn () in
-let tyunit_ = TyUnit () in
-let tychar_ = TyChar () in
-let tystr_ = TyString () in
-let tyseq_ = lam tpe. TySeq {tpe = tpe} in
-let typrod_ = lam tpes. TyProd {tpes = tpes} in
-let tyrecord_ = lam tpes. TyRecord {tpes = tpes} in
-let tycon_ = lam ident. TyCon {ident = ident} in
-let tyint_ = TyInt () in
-let tybool_ = TyBool () in
-let tyapp_ = lam lhs. lam rhs. TyApp {lhs = lhs, rhs = rhs} in
-
--- Convenience functions for manually constructing an AST.
-let unit_ = TmConst {val = CUnit ()} in
-let int_ = lam i. TmConst {val = CInt {val = i}} in
-let true_ = TmConst {val = CBool {val = true}} in
-let false_ = TmConst {val = CBool {val = false}} in
-let char_ = lam c. TmConst {val = CChar {val = c}} in
-let str_ = lam s. TmConst {val = CSeq {tms = map char_ s}} in
-let var_ = lam s. TmVar {ident = s} in
-let confun_ = lam s. TmConFun {ident = s} in
-let condef_ = lam s. lam tpe. TmConDef {ident = s, tpe = tpe, inexpr = unit_} in
-let let_ = lam ident. lam tpe. lam body.
-    TmLet {ident = ident,
-           tpe = tpe,
-           body = body,
-           inexpr = unit_}
-in
-let reclets_empty = TmRecLets {bindings = [], inexpr = unit_} in
-let reclets_add = lam ident. lam tpe. lam body. lam reclets.
-    match reclets with TmRecLets t then
-        let newbind = {ident = ident,
-                       tpe = tpe,
-                       body = body} in
-        TmRecLets {t with bindings = cons newbind t.bindings}
-    else
-        error "reclets is not a TmRecLets construct"
-in
-let lam_ = lam ident. lam tpe. lam body.
-    TmLam {ident = ident,
-           tpe = tpe,
-           body = body}
-in
-let if_ = lam cond. lam thn. lam els.
-    TmIf {cond = cond, thn = thn, els = els}
-in
-let match_ = lam target. lam pat. lam thn. lam els.
-    TmMatch {target = target, pat = pat, thn = thn, els = els}
-in
-let pvar_ = lam s. PVar {ident = s} in
-let punit_ = PUnit {} in
-let pint_ = lam i. PInt {val = i} in
-let ptrue_ = PBool {val = true} in
-let pfalse_ = PBool {val = false} in
-let ptuple_ = lam pats. PTuple {pats = pats} in
-let pcon_ = lam cs. lam cp. PCon {ident = cs, subpat = cp} in
-let seq_ = lam tms. TmSeq {tms = tms} in
-let tuple_ = lam tms. TmTuple {tms = tms} in
-let proj_ = lam tup. lam idx. TmProj {tup = tup, idx = idx} in
-let app_ = lam lhs. lam rhs. TmApp {lhs = lhs, rhs = rhs} in
-let appf1_ = lam f. lam a1. app_ f a1 in
-let appf2_ = lam f. lam a1. lam a2. app_ (appf1_ f a1) a2 in
-let appf3_ = lam f. lam a1. lam a2. lam a3. app_ (appf2_ f a1 a2) a3 in
-
-let builtin_env = [{key = "addi", value = addi_}, {key = "subi", value = subi_},
-                   {key = "muli", value = muli_}, {key = "and", value = and_},
-                   {key = "or", value = or_}, {key = "not", value = not_},
-                   {key = "eqi", value = eqi_}, {key = "nth", value = nth_}]
+let builtin_env = [{key = "addi", value = const_ (CAddi ())},
+                   {key = "subi", value = const_ (CSubi ())},
+                   {key = "muli", value = const_ (CMuli ())},
+                   {key = "and", value = const_ (CAnd ())},
+                   {key = "or", value = const_ (COr ())},
+                   {key = "not", value = const_ (CNot ())},
+                   {key = "eqi", value = const_ (CEqi ())},
+                   {key = "nth", value = const_ (CNth ())}]
 in
 
 -- Lifts out the lambdas, returning a new AST with all lambdas on the top
@@ -854,317 +769,286 @@ let lift_lambdas: Expr -> Expr = lam ast.
 in
 
 let example_ast =
-    let foo = let_ "foo" (None ()) (
+  bindall_ [
+    let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
-        let bar =
+        bindall_ [
           let_ "bar" (None ()) (
             lam_ "x" (None ()) (
               appf2_ (var_ "addi") (var_ "b") (var_ "x")
             )
-          ) in
-        let fun4_bar =
-          let_ "fun4_bar" (None()) (int_ 3) in
-        letappend bar (
-          letappend fun4_bar (
-            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
-          )
-        )
+          ),
+          let_ "fun4_bar" (None ()) (int_ 3),
+          appf2_ (var_ "addi")
+                 (app_ (var_ "bar") (var_ "fun4_bar"))
+                 (var_ "a")
+        ]
       ))
-    )
-    in
-    letappend foo (
-      app_ (app_ (var_ "foo")
-                 (int_ 1))
+    ),
+    appf2_ (var_ "foo")
+           (int_ 1)
            (int_ 11)
-    )
+  ]
 in
 
+-- TEMPORARY: Debug print to check why include order messes with the MLang
+--            uses, remove once fixed.
+--let _ = print "\n" in
+--let _ = dprint (let_ "foo" (None ()) unit_) in
+--let _ = print "\n\n" in
+--let _ = use MExprLLandPPandEval in 
+--  dprint (TmLet {ident = "foo",
+--                 tpe = None (),
+--                 body = unit_,
+--                 inexpr = unit_})
+--in
+--let _ = print "\n" in
+
 let example_anonlambda_ast =
-    let foo = let_ "foo" (None ()) (
+  bindall_ [
+    let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
-        let fun4_bar =
-          let_ "fun4_bar" (None()) (int_ 3) in
-        letappend fun4_bar (
+        bindall_ [
+          let_ "fun4_bar" (None ()) (int_ 3),
           appf2_ (var_ "addi")
-                 (app_ (lam_ "x" (None ()) (appf2_ (var_ "addi") (var_ "b") (var_ "x")))
-                       (var_ "fun4_bar"))
+                 (appf1_ (lam_ "x" (None ()) (appf2_ (var_ "addi") (var_ "b") (var_ "x")))
+                         (var_ "fun4_bar"))
                  (var_ "a")
-        )
+        ]
       ))
-    )
-    in
-    letappend foo (
-      app_ (app_ (var_ "foo")
-                 (int_ 4))
+    ),
+    appf2_ (var_ "foo")
+           (int_ 4)
            (int_ 311)
-    )
+  ]
 in
 
 let example_nested_ast =
-    let foo = let_ "foo" (None ()) (
+  bindall_ [
+    let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
-        let bar =
+        bindall_ [
           let_ "bar" (None ()) (
             lam_ "x" (None ()) (
-              let babar =
+              bindall_ [
                 let_ "babar" (None ()) (
                   lam_ "x" (None ()) (
                     appf2_ (var_ "addi") (var_ "b") (var_ "x")
                   )
-                ) in
-              letappend babar (
+                ),
                 appf1_ (var_ "babar") (var_ "x")
-              )
+              ]
             )
-          ) in
-        let fun4_bar =
-          let_ "fun4_bar" (None()) (int_ 3) in
-        letappend bar (
-          letappend fun4_bar (
-            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
-          )
-        )
+          ),
+          let_ "fun4_bar" (None ()) (int_ 3),
+          appf2_ (var_ "addi")
+                 (appf1_ (var_ "bar") (var_ "fun4_bar"))
+                 (var_ "a")
+        ]
       ))
-    )
-    in
-    letappend foo (
-      app_ (app_ (var_ "foo")
-                 (int_ 11))
+    ),
+    appf2_ (var_ "foo")
+           (int_ 11)
            (int_ 3)
-    )
+  ]
 in
 
 let example_recursive_ast =
-  let foo = let_ "foo" (None ()) (
-    lam_ "x" (None ()) (
-      let rls =
-        reclets_add "bar" (None ()) (
-          lam_ "y" (None ()) (
-            appf2_ (var_ "addi") (var_ "y") (var_ "x")
-          )
-        )(reclets_add "babar" (None ()) (
-          lam_ "a" (None ()) (
-            appf1_ (var_ "bar") (var_ "a")
-          )
-        ) (reclets_empty))
-      in
-      letappend rls (
-        app_ (var_ "babar") (int_ 6)
+  bindall_ [
+    let_ "foo" (None ()) (
+      lam_ "x" (None ()) (
+        bindall_ [
+          reclets_add "bar" (None ()) (
+            lam_ "y" (None ()) (
+              appf2_ (var_ "addi") (var_ "y") (var_ "x")
+            )
+          ) (reclets_add "babar" (None ()) (
+            lam_ "a" (None ()) (
+              appf1_ (var_ "bar") (var_ "a")
+            )
+          ) (reclets_empty)),
+          app_ (var_ "babar") (int_ 6)
+        ]
       )
-    )
-  )
-  in
-  letappend foo (
-    app_ (var_ "foo") (int_ 3)
-  )
+    ),
+    appf1_ (var_ "foo") (int_ 3)
+  ]
 in
 
 let example_factorial =
-  let factorial = reclets_add "factorial" (None ()) (
-    lam_ "n" (None ()) (
-      if_ (appf2_ (var_ "eqi") (var_ "n") (int_ 0))
-          (int_ 1)
-          (appf2_ (var_ "muli")
-                  (var_ "n")
-                  (appf1_ (var_ "factorial")
-                          (appf2_ (var_ "subi") (var_ "n") (int_ 1))))
-    )
-  ) (reclets_empty)
-  in
-  letappend factorial (
-    app_ (var_ "factorial") (int_ 11)
-  )
+  bindall_ [
+    reclets_add "factorial" (None ()) (
+      lam_ "n" (None ()) (
+        if_ (appf2_ (var_ "eqi") (var_ "n") (int_ 0))
+            (int_ 1)
+            (appf2_ (var_ "muli")
+                    (var_ "n")
+                    (appf1_ (var_ "factorial")
+                            (appf2_ (var_ "subi") (var_ "n") (int_ 1))))
+      )
+    ) (reclets_empty),
+    appf1_ (var_ "factorial") (int_ 11)
+  ]
 in
 
 let example_conmatch =
-  let foo = let_ "foo" (None ()) (
-    let mycon =
-      condef_ "MyCon" (None ())
-    in
-    let bar =
-      let_ "bar" (None ()) (
-        lam_ "x" (None ()) (
-          match_ (var_ "x")
-                 (pcon_ "MyCon" punit_)
-                 (true_)
-                 (false_)
-        )
-      )
-    in
-    letappend mycon (
-      letappend bar (
+  bindall_ [
+    let_ "foo" (None ()) (
+      bindall_ [
+        condef_ "MyCon" (None ()),
+        let_ "bar" (None ()) (
+          lam_ "x" (None ()) (
+            match_ (var_ "x")
+                   (pcon_ "MyCon" punit_)
+                   (true_)
+                   (false_)
+          )
+        ),
         appf1_ (var_ "bar") (app_ (confun_ "MyCon")
                                   (unit_))
-      )
-    )
-  )
-  in
-  letappend foo (
+      ]
+    ),
     var_ "foo"
-  )
+  ]
 in
 
 let example_conmatch_samename =
-  let foo = let_ "foo" (None ()) (
-    let mycon =
-      condef_ "x" (None ())
-    in
-    let bar =
-      let_ "bar" (None ()) (
-        lam_ "x" (None ()) (
-          match_ (var_ "x")
-                 (pcon_ "x" (pvar_ "x"))
-                 (var_ "x")
-                 (false_)
-        )
-      )
-    in
-    letappend mycon (
-      letappend bar (
+  bindall_ [
+    let_ "foo" (None ()) (
+      bindall_ [
+        condef_ "x" (None ()),
+        let_ "bar" (None ()) (
+          lam_ "x" (None ()) (
+            match_ (var_ "x")
+                   (pcon_ "x" (pvar_ "x"))
+                   (var_ "x")
+                   (false_)
+          )
+        ),
         appf1_ (var_ "bar") (app_ (confun_ "x")
                                   (true_))
-      )
-    )
-  )
-  in
-  letappend foo (
+      ]
+    ),
     var_ "foo"
-  )
+  ]
 in
 
 let example_typed_ast =
-    let foo = let_ "foo" (Some (tyarrows_ [tyint_, tyint_, tyint_])) (
+  bindall_ [
+    let_ "foo" (Some (tyarrows_ [tyint_, tyint_, tyint_])) (
       lam_ "a" (Some (tyint_)) (lam_ "b" (Some (tyint_)) (
-        let bar =
+        bindall_ [
           let_ "bar" (Some (tyarrow_ tyint_ tyint_)) (
             lam_ "x" (Some (tyint_)) (
               appf2_ (var_ "addi") (var_ "b") (var_ "x")
             )
-          ) in
-        let fun4_bar =
-          let_ "fun4_bar" (Some (tyint_)) (int_ 3) in
-        letappend bar (
-          letappend fun4_bar (
-            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
-          )
-        )
+          ),
+          let_ "fun4_bar" (Some (tyint_)) (int_ 3),
+          appf2_ (var_ "addi")
+                 (appf1_ (var_ "bar") (var_ "fun4_bar"))
+                 (var_ "a")
+        ]
       ))
-    )
-    in
-    letappend foo (
-      app_ (app_ (var_ "foo") (int_ 1))
+    ),
+    appf2_ (var_ "foo")
+           (int_ 1)
            (int_ 0)
-    )
+  ]
 in
 
 let example_recursive_typed_ast =
-  let foo = let_ "foo" (Some (tyarrow_ tyint_ tyint_)) (
-    lam_ "x" (Some (tyint_)) (
-      let rls = reclets_add "bar" (Some (tyarrow_ tyint_ tyint_)) (
-        lam_ "y" (Some (tyint_)) (
-          appf2_ (var_ "addi") (var_ "y") (var_ "x")
-        )
-      )(reclets_add "babar" (Some (tyarrow_ tyint_ tyint_)) (
-        lam_ "a" (Some (tyint_)) (
-          appf1_ (var_ "bar") (var_ "a")
-        )
-      ) (reclets_empty))
-      in
-      letappend rls (
-        (app_ (var_ "babar") (int_ 7))
+  bindall_ [
+    let_ "foo" (Some (tyarrow_ tyint_ tyint_)) (
+      lam_ "x" (Some (tyint_)) (
+        bindall_ [
+          reclets_add "bar" (Some (tyarrow_ tyint_ tyint_)) (
+            lam_ "y" (Some (tyint_)) (
+              appf2_ (var_ "addi") (var_ "y") (var_ "x")
+            )
+          ) (reclets_add "babar" (Some (tyarrow_ tyint_ tyint_)) (
+            lam_ "a" (Some (tyint_)) (
+              appf1_ (var_ "bar") (var_ "a")
+            )
+          ) (reclets_empty)),
+          (app_ (var_ "babar") (int_ 7))
+        ]
       )
-    )
-  )
-  in
-  letappend foo (
-    app_ (var_ "foo") (int_ 2)
-  )
+    ),
+    appf1_ (var_ "foo") (int_ 2)
+  ]
 in
 
 let example_conmatch_typed =
-  let foo = let_ "foo" (Some (tybool_)) (
-    let mycon =
-      condef_ "MyCon" (Some (tyunit_))
-    in
-    let bar =
-      let_ "bar" (Some (tyarrow_ (tycon_ "MyConType") tybool_)) (
-        lam_ "x" (Some (tycon_ "MyConType")) (
-          match_ (var_ "x")
-                 (pcon_ "MyCon" punit_)
-                 (true_)
-                 (false_)
-        )
-      )
-    in
-    letappend mycon (
-      letappend bar (
+  bindall_ [
+    let_ "foo" (Some (tybool_)) (
+      bindall_ [
+        condef_ "MyCon" (Some (tyunit_)),
+        let_ "bar" (Some (tyarrow_ (tycon_ "MyConType") tybool_)) (
+          lam_ "x" (Some (tycon_ "MyConType")) (
+            match_ (var_ "x")
+                   (pcon_ "MyCon" punit_)
+                   (true_)
+                   (false_)
+          )
+        ),
         appf1_ (var_ "bar") (app_ (confun_ "MyCon")
                                   (unit_))
-      )
-    )
-  )
-  in
-  letappend foo (
+      ]
+    ),
     var_ "foo"
-  )
+  ]
 in
 
 let example_ifexpr_ast =
-    let foo = let_ "foo" (None ()) (
+  bindall_ [
+    let_ "foo" (None ()) (
       lam_ "a" (None ()) (lam_ "b" (None ()) (
-        let bar =
+        bindall_ [
           reclets_add "bar" (None ()) (
             lam_ "x" (None ()) (
               if_ (appf2_ (var_ "eqi") (var_ "x") (int_ 3))
                   (appf2_ (var_ "addi") (var_ "b") (int_ 10000))
                   (appf2_ (var_ "addi") (var_ "b") (var_ "x"))
             )
-          ) (reclets_empty) in
-        let fun4_bar =
-          let_ "fun4_bar" (None()) (int_ 3) in
-        letappend bar (
-          letappend fun4_bar (
-            appf2_ (var_ "addi") (app_ (var_ "bar") (var_ "fun4_bar")) (var_ "a")
-          )
-        )
+          ) (reclets_empty),
+          let_ "fun4_bar" (None()) (int_ 3),
+          appf2_ (var_ "addi")
+                 (appf1_ (var_ "bar") (var_ "fun4_bar"))
+                 (var_ "a")
+        ]
       ))
-    )
-    in
-    letappend foo (
-      app_ (app_ (var_ "foo")
-                 (int_ 1))
+    ),
+    appf2_ (var_ "foo")
+           (int_ 1)
            (int_ 11)
-    )
+  ]
 in
 
 let example_multiuse =
-    let foo = let_ "foo" (None ()) (
+  bindall_ [
+    let_ "foo" (None ()) (
       lam_ "x" (None ()) (
-        let bar =
+        bindall_ [
           let_ "bar" (None ()) (
             lam_ "y" (None ()) (
-              let xp1 =
-                let_ "xp1" (None ()) (appf2_ (var_ "addi") (var_ "x") (int_ 1))
-              in
-              letappend xp1 (
+              bindall_ [
+                let_ "xp1" (None ()) (appf2_ (var_ "addi")
+                                             (var_ "x")
+                                             (int_ 1)),
                 if_ (appf2_ (var_ "eqi") (var_ "x") (var_ "y"))
                     (appf2_ (var_ "subi") (var_ "xp1") (var_ "x"))
                     (appf2_ (var_ "addi")
                             (appf2_ (var_ "addi") (var_ "x") (var_ "y"))
                             (appf2_ (var_ "subi") (var_ "x") (var_ "y")))
-              )
+              ]
             )
-          )
-        in
-        letappend bar (
-          app_ (var_ "bar") (int_ 3)
-        )
+          ),
+          appf1_ (var_ "bar") (int_ 3)
+        ]
       )
-    )
-    in
-    letappend foo (
-      app_ (var_ "foo") (int_ 11)
-    )
+    ),
+    appf1_ (var_ "foo") (int_ 11)
+  ]
 in
 
 -- Convert from a Lambda Lifting-style environment to an eval-style context
