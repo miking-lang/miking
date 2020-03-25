@@ -429,7 +429,7 @@ let rec debruijn env t =
      | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")) in
   let rec dbPat env = function
     | PatNamed(_,NameStr(x)) as pat -> (VarTm(x)::env, pat)
-    | PatNamed(_,NameWildcard) as pat -> (VarTm(us"")::env, pat)
+    | PatNamed(_,NameWildcard) as pat -> (env, pat)
     | PatSeq(fi,ps,seqMP) ->
        let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[]) in
@@ -474,7 +474,7 @@ let rec debruijn env t =
      TmMatch(fi,debruijn env t1,p,debruijn matchedEnv t2,debruijn env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
-      -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+     -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
 
 
@@ -482,21 +482,26 @@ let rec tryMatch env value pat =
   let go v p env = Option.bind (fun env -> tryMatch env v p) env in
   let rec splitNth n = function [] -> ([],[]) | x::xs ->
     if n > 0 then let (pre,post) = splitNth (n-1) xs in (x::pre,post) else ([],x::xs) in
+  let bindIfName fi tms seqMP env = match seqMP with
+    | SeqMatchPrefix(_) | SeqMatchPostfix(_) -> env |> Option.bind (fun env -> Some(TmSeq(fi,tms)::env))
+    | SeqMatchTotal -> env |> Option.bind (fun env -> Some(env))
+  in
   match pat with
-  | PatNamed(_,NameStr(_)) | PatNamed(_,NameWildcard)-> Some (value :: env)
+  | PatNamed(_,NameStr(_)) -> Some(value::env)
+  | PatNamed(_,NameWildcard)-> Some(env)
   | PatSeq(_,pats,seqMP) ->
-     (match value,seqMP with
-      | TmSeq(fi,vs),SeqMatchPrefix(_) when List.length pats <= List.length vs ->
-        let (pre,post) = vs |> splitNth (List.length pats) in
-        List.fold_right2 go pre pats (Some env) |> Option.bind (fun env -> Some(TmSeq(fi,post)::env))
-      | TmSeq(fi,vs),SeqMatchPostfix(_) when List.length pats <= List.length vs ->
-        let (pre,post) = vs |> splitNth (List.length vs - List.length pats) in
-        List.fold_right2 go post pats (Some env) |> Option.bind (fun env -> Some(TmSeq(fi,pre)::env))
-      | TmSeq(_,vs),SeqMatchTotal when List.length pats = List.length vs ->
-        List.fold_right2 go vs pats (Some env)
-      | _ -> None)
+    (match value,seqMP with
+     | TmSeq(fi,vs),SeqMatchPrefix(_) when List.length pats <= List.length vs ->
+       let (pre,post) = vs |> splitNth (List.length pats) in
+       List.fold_right2 go pre pats (Some env) |> bindIfName fi post seqMP
+     | TmSeq(fi,vs),SeqMatchPostfix(_) when List.length pats <= List.length vs ->
+       let (pre,post) = vs |> splitNth (List.length vs - List.length pats) in
+       List.fold_right2 go post pats (Some env) |> bindIfName fi pre seqMP
+     | TmSeq(_,vs),SeqMatchTotal when List.length pats = List.length vs ->
+       List.fold_right2 go vs pats (Some env)
+     | _ -> None)
   | PatTuple(_,pats) ->
-     (match value with
+    (match value with
       | TmTuple(_,vs) when List.length pats = List.length vs ->
          List.fold_right2 go vs pats (Some env)
       | _ -> None)
