@@ -71,7 +71,7 @@ case $1 in
         install
         ;;
     install-sundials)
-        build dune-sundials
+        build dune-boot-sundials
         install
         ;;
     # Builds project with Sundials integration
