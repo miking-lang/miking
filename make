@@ -15,18 +15,11 @@ set -e
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-# Generates dune buildfile
-gendunefile() {
-    declare tail="$1"
-    (cd src/boot;
-     cat dune-head "$tail" > dune)
-}
-
 # General function for building the project
 build() {
-    declare tail="$1"
-    gendunefile "$tail"
+    declare dune_file="$1"
     (cd src/boot;
+     cp "$dune_file" dune
      dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
 }
 
@@ -50,6 +43,13 @@ runtests() {
     build/boot test stdlib)
 }
 
+runtests_sundials() {
+    runtests
+    (cd test
+     ../build/boot test ext/sundials)
+    build/boot test stdlib/sundials
+}
+
 case $1 in
     # Run the test suite
     test)
@@ -58,10 +58,7 @@ case $1 in
         ;;
     test-sundials)
         build dune-boot-sundials
-        runtests
-        (cd test
-         ../build/boot test ext/sundials)
-        build/boot test stdlib/sundials
+        runtests_sundials
         ;;
     # Clean up the project
     clean)
