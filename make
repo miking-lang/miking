@@ -76,7 +76,7 @@ case $1 in
         ;;
     # Builds project with Sundials integration
     sundials)
-        build dune-sundials
+        build dune-boot-sundials
         ;;
     # Just make the project
     all | *)
