@@ -1,3 +1,0 @@
-(ocamllex lexer)
-(ocamlyacc parser)
-
