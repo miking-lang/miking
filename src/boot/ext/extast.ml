@@ -7,7 +7,7 @@ type 'a ext =
   | Ecos
   (* SundialsML related functions *)
   | ESArray of RealArray.t
-  | ESArrayCreate
+  | ESArrayMake of int option
   | ESArrayGet of RealArray.t option
   | ESArraySet of RealArray.t option * int option
   | ESArrayLength
