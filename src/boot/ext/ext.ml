@@ -12,7 +12,7 @@ let externals =
       ("sin", Esin);
       ("cos", Ecos);
       (* SundialsML related functions *)
-      ("sArrCreate", ESArrayCreate);
+      ("sArrMake", ESArrayMake None);
       ("sArrGet", ESArrayGet None);
       ("sArrSet", ESArraySet (None, None));
       ("sArrLength", ESArrayLength);
@@ -31,7 +31,8 @@ let arity = function
   | Ecos -> 1
   (* SundialsML related functions *)
   | ESArray _ -> 0
-  | ESArrayCreate -> 1
+  | ESArrayMake None -> 2
+  | ESArrayMake (Some _) -> 1
   | ESArrayGet None -> 2
   | ESArrayGet (Some _) -> 1
   | ESArraySet (None, None) -> 3
@@ -105,9 +106,11 @@ let delta eval env fi c v =
 
   (* SundialsML related functions *)
   | ESArray _,_ -> fail_extapp fi
-  | ESArrayCreate, TmConst (fi, CInt n) ->
-     mk_ext fi (ESArray (RealArray.create n))
-  | ESArrayCreate,_ -> fail_extapp fi
+  | ESArrayMake None, TmConst (fi, CInt n) ->
+     mk_ext fi (ESArrayMake (Some n))
+  | ESArrayMake (Some n), TmConst (fi, CFloat v) ->
+     mk_ext fi (ESArray (RealArray.make n v))
+  | ESArrayMake _,_ -> fail_extapp fi
 
   | ESArrayGet None, TmConst (fi, CExt (ESArray a)) ->
      mk_ext fi (ESArrayGet (Some a))

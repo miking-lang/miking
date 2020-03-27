@@ -1,7 +1,7 @@
 include "ext/sundials.mc"
 
 mexpr
-let a = sArrCreate 3 in
+let a = sArrMake 3 0. in
 let _ = sArrSet a 0 0. in
 let _ = sArrSet a 1 1. in
 let _ = sArrSet a 2 2. in
@@ -12,8 +12,8 @@ utest sArrGet a 2 with 2. in
 utest sArrLength a with 3 in
 utest sArr2Seq a with [0., 1., 2.] in
 
-let y = sArrCreate 2 in
-let yp = sArrCreate 2 in
+let y = sArrMake 2 0. in
+let yp = sArrMake 2 0. in
 let _ = sArrSet y 0 1. in
 let _ = sArrSet y 1 2. in
 let _ = sArrSet yp 0 3. in

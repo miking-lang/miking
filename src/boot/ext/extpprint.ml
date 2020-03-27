@@ -12,7 +12,7 @@ let pprint = function
      let l = RealArray.to_list a in
      let l' = List.map (fun x -> us (Printf.sprintf "%f" x)) l in
      us"<|" ^. Ustring.concat (us",") l' ^. us"|>"
-  | ESArrayCreate -> us"sArrCreate"
+  | ESArrayMake _ -> us"sArrMake"
   | ESArrayGet _ -> us"sArrGet"
   | ESArraySet _ -> us"sArrSet"
   | ESMatrixDense _ -> us"SMatrixDense"
