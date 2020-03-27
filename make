@@ -23,6 +23,7 @@ build() {
      dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
 }
 
+# Install the boot interpreter locally for the current user
 install() {
     bin_path=$HOME/.local/bin/
     lib_path=$HOME/.local/lib/mcore/stdlib
@@ -31,6 +32,7 @@ install() {
     rm -rf $lib_path; cp -rf stdlib $lib_path
 }
 
+# Run the test suite
 runtests() {
     (cd test
     ../build/boot test mexpr
@@ -43,6 +45,7 @@ runtests() {
     build/boot test stdlib)
 }
 
+# Run the test suite including sundials tests
 runtests_sundials() {
     runtests
     (cd test
@@ -51,34 +54,31 @@ runtests_sundials() {
 }
 
 case $1 in
-    # Run the test suite
-    test)
-        build dune-boot
-        runtests
-        ;;
+    # with Sundials integration
     test-sundials)
         build dune-boot-sundials
         runtests_sundials
-        ;;
-    # Clean up the project
-    clean)
-        rm -rf src/boot/_build
-        rm -f build/boot
-        ;;
-    # Install the boot interpreter locally for the current user
-    install)
-        build dune-boot
-        install
         ;;
     install-sundials)
         build dune-boot-sundials
         install
         ;;
-    # Builds project with Sundials integration
     sundials)
         build dune-boot-sundials
         ;;
-    # Just make the project
+    # without external dependencies
+    test)
+        build dune-boot
+        runtests
+        ;;
+    install)
+        build dune-boot
+        install
+        ;;
+    clean)
+        rm -rf src/boot/_build
+        rm -f build/boot
+        ;;
     all | *)
         build dune-boot
         ;;

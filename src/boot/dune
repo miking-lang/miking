@@ -1,9 +1,0 @@
-(ocamllex lexer)
-(ocamlyacc parser)
-
-(copy_files ext-sundials/*)
-
-(executable
- (name boot)
- (libraries sundialsml)
-)
