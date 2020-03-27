@@ -1,4 +1,4 @@
-include "sundials/sundials.mc"
+include "ext/sundials.mc"
 
 mexpr
 let a = sArrCreate 3 in

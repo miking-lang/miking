@@ -45,26 +45,26 @@ runtests() {
     build/boot test stdlib)
 }
 
-# Run the test suite including sundials tests
-runtests_sundials() {
+# Run the test suite including external functions tests
+runtests_ext() {
     runtests
     (cd test
-     ../build/boot test ext/sundials)
-    build/boot test stdlib/sundials
+     ../build/boot test ext/*)
+    build/boot test stdlib/ext/*
 }
 
 case $1 in
-    # with Sundials integration
-    test-sundials)
-        build dune-boot-sundials
-        runtests_sundials
+    # with external functions integration
+    externals-test)
+        build dune-boot-ext
+        runtests_ext
         ;;
-    install-sundials)
-        build dune-boot-sundials
+    externals-install)
+        build dune-boot-ext
         install
         ;;
-    sundials)
-        build dune-boot-sundials
+    externals)
+        build dune-boot-ext
         ;;
     # without external dependencies
     test)

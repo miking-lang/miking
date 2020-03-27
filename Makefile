@@ -19,14 +19,14 @@ test:
 install:
 	@./make install
 
-sundials:
-	@./make sundials
+externals:
+	@./make externals
 
-test-sundials:
-	@./make test-sundials
+externals-test:
+	@./make externals-test
 
-install-sundials:
-	@./make install-sundials
+externals-install:
+	@./make externals-install
 
 clean:
 	@./make clean

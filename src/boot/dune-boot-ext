@@ -1,7 +1,7 @@
 (ocamllex lexer)
 (ocamlyacc parser)
 
-(copy_files ext-sundials/*)
+(copy_files ext/*)
 
 (executable
  (name boot)
