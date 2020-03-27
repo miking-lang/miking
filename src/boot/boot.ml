@@ -127,6 +127,11 @@ let add_prelude = function
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
+  (* Make sure the filename is an absolute path, otherwise the duplicate file detection won't work *)
+  let filename =
+    if Filename.is_relative filename
+    then Filename.concat (Sys.getcwd ()) filename
+    else filename in
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   begin try
