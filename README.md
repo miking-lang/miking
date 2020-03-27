@@ -63,14 +63,13 @@ Then install the ocaml bindings
 To compile and run the test suite with sundials support:
 
 ```
->> make test-sundials
-
+>> make externals-test
 ```
 
 To install for the current user:
 
 ```
->>> make install-sundials
+>>> make externals-install
 ```
 
 ## Editor Support
