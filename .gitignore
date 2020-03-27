@@ -6,4 +6,5 @@ _build
 \.\#*
 temp/
 .merlin
+dune
 *~

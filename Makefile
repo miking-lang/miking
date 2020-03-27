@@ -13,17 +13,17 @@
 all:
 	@./make
 
-sundials:
-	@./make sundials
-
 test:
 	@./make test
 
-test-sundials:
-	@./make test-sundials
-
 install:
 	@./make install
+
+sundials:
+	@./make sundials
+
+test-sundials:
+	@./make test-sundials
 
 install-sundials:
 	@./make install-sundials
