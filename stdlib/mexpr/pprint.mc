@@ -4,7 +4,7 @@ include "seq.mc"
 include "string.mc"
 
 include "ast.mc"
-include "convenience.mc"
+include "ast-builder.mc"
 
 let spacing = lam indent. makeseq indent ' '
 let newline = lam indent. concat "\n" (spacing indent)

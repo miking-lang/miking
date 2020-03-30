@@ -36,7 +36,7 @@
 
 include "ast.mc"
 include "eval.mc"
-include "convenience.mc"
+include "ast-builder.mc"
 include "pprint.mc"
 
 include "option.mc"
