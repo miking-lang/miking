@@ -121,7 +121,7 @@ let delta eval env fi c v =
 
   | ESArrayGet None, TmConst (fi, CExt (ESArray a)) ->
      mk_ext fi (ESArrayGet (Some a))
-  | ESArrayGet (Some a), TmConst (fi, CInt n) ->
+  | ESArrayGet (Some a), TmConst (_, CInt n) ->
      mk_float fi (try Array1.get a n with _ ->
                     raise_error fi (Printf.sprintf "Index: %d out of bounds" n))
   | ESArrayGet _,_ -> fail_extapp fi
@@ -130,7 +130,7 @@ let delta eval env fi c v =
      mk_ext fi (ESArraySet (Some a, None))
   | ESArraySet (Some a, None), TmConst (fi, CInt n) ->
      mk_ext fi (ESArraySet (Some a, Some n))
-  | ESArraySet (Some a, Some n), TmConst (fi, CFloat f) ->
+  | ESArraySet (Some a, Some n), TmConst (_, CFloat f) ->
      (try Array1.set a n f with _ ->
         raise_error fi (Printf.sprintf "Index: %d out of bounds" n));
      mk_unit fi
@@ -152,7 +152,7 @@ let delta eval env fi c v =
      mk_ext fi (ESMatrixDenseGet (Some m, None))
   | ESMatrixDenseGet (Some m, None), TmConst (fi, CInt i) ->
      mk_ext fi (ESMatrixDenseGet (Some m, Some i))
-  | ESMatrixDenseGet (Some m, Some i), TmConst (fi, CInt j) ->
+  | ESMatrixDenseGet (Some m, Some i), TmConst (_, CInt j) ->
      let (k, l) = Matrix.Dense.size m in
      if i >= 0 && i < k && j >= 0 && j < l then
        mk_float fi (Matrix.Dense.get m i j)
@@ -166,7 +166,7 @@ let delta eval env fi c v =
      mk_ext fi (ESMatrixDenseSet (Some m, Some i, None))
   | ESMatrixDenseSet (Some m, Some i, None), TmConst (fi, CInt j) ->
      mk_ext fi (ESMatrixDenseSet (Some m, Some i, Some j))
-  | ESMatrixDenseSet (Some m, Some i, Some j), TmConst (fi, CFloat f) ->
+  | ESMatrixDenseSet (Some m, Some i, Some j), TmConst (_, CFloat f) ->
      (try Matrix.Dense.set m i j f with _ ->
         raise_error fi (Printf.sprintf "Index: (%d,%d) out of bounds" i j));
      mk_unit fi
