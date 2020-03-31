@@ -37,4 +37,15 @@ let s = idaInitDenseJac tol jacf resf 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
 utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
 
+let m = sMatrixDenseCreate 2 2 in
+let _ = sMatrixDenseSet m 0 0 1. in
+let _ = sMatrixDenseSet m 0 1 1. in
+let _ = sMatrixDenseSet m 1 0 1. in
+let _ = sMatrixDenseSet m 1 1 1. in
+
+utest sMatrixDenseGet m 0 0 with 1. in
+utest sMatrixDenseGet m 0 1 with 1. in
+utest sMatrixDenseGet m 1 0 with 1. in
+utest sMatrixDenseGet m 1 1 with 1. in
+
 ()

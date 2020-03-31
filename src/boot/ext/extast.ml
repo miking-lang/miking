@@ -12,6 +12,9 @@ type 'a ext =
   | ESArraySet of RealArray.t option * int option
   | ESArrayLength
   | ESMatrixDense of Matrix.Dense.t
+  | ESMatrixDenseCreate of int option
+  | ESMatrixDenseGet of Matrix.Dense.t option
+                        * int option
   | ESMatrixDenseSet of Matrix.Dense.t option
                         * int option
                         * int option

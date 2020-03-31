@@ -16,6 +16,8 @@ let externals =
       ("sArrGet", ESArrayGet None);
       ("sArrSet", ESArraySet (None, None));
       ("sArrLength", ESArrayLength);
+      ("sMatrixDenseCreate", ESMatrixDenseCreate None);
+      ("sMatrixDenseGet", ESMatrixDenseGet (None, None));
       ("sMatrixDenseSet", ESMatrixDenseSet (None, None, None));
       ("idaInitDense", EIdaInitDense (None, None, None, None));
       ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None));
@@ -40,6 +42,11 @@ let arity = function
   | ESArraySet (_, Some _) -> 1
   | ESArrayLength -> 1
   | ESMatrixDense _ -> 0
+  | ESMatrixDenseCreate None -> 2
+  | ESMatrixDenseCreate (Some _) -> 1
+  | ESMatrixDenseGet (None, None) -> 3
+  | ESMatrixDenseGet (Some _, None) -> 2
+  | ESMatrixDenseGet (_, Some _) -> 1
   | ESMatrixDenseSet (None, None, None) -> 4
   | ESMatrixDenseSet (Some _, None, None) -> 3
   | ESMatrixDenseSet (_, Some _, None) -> 2
@@ -134,6 +141,24 @@ let delta eval env fi c v =
   | ESArrayLength,_ -> fail_extapp fi
 
   | ESMatrixDense _,_ -> fail_extapp fi
+
+  | ESMatrixDenseCreate (None), TmConst (fi, CInt i) ->
+     mk_ext fi (ESMatrixDenseCreate (Some i))
+  | ESMatrixDenseCreate (Some i), TmConst (fi, CInt j) ->
+     mk_ext fi (ESMatrixDense (Matrix.Dense.create i j))
+  | ESMatrixDenseCreate _,_ -> fail_extapp fi
+
+  | ESMatrixDenseGet (None, None), TmConst (fi, CExt (ESMatrixDense m)) ->
+     mk_ext fi (ESMatrixDenseGet (Some m, None))
+  | ESMatrixDenseGet (Some m, None), TmConst (fi, CInt i) ->
+     mk_ext fi (ESMatrixDenseGet (Some m, Some i))
+  | ESMatrixDenseGet (Some m, Some i), TmConst (fi, CInt j) ->
+     let (k, l) = Matrix.Dense.size m in
+     if i >= 0 && i < k && j >= 0 && j < l then
+       mk_float fi (Matrix.Dense.get m i j)
+     else
+       raise_error fi (Printf.sprintf "Index: (%d,%d) out of bounds" i j)
+  | ESMatrixDenseGet _,_ -> fail_extapp fi
 
   | ESMatrixDenseSet (None, None, None), TmConst (fi, CExt (ESMatrixDense m)) ->
      mk_ext fi (ESMatrixDenseSet (Some m, None, None))

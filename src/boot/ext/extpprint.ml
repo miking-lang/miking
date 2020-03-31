@@ -16,6 +16,8 @@ let pprint = function
   | ESArrayGet _ -> us"sArrGet"
   | ESArraySet _ -> us"sArrSet"
   | ESMatrixDense _ -> us"SMatrixDense"
+  | ESMatrixDenseCreate _ -> us"sMatrixDenseCreate"
+  | ESMatrixDenseGet _ -> us"sMatrixDenseGet"
   | ESMatrixDenseSet _ -> us"sMatrixDenseSet"
   | ESArrayLength -> us "sArrLength"
   | EIdaSession _ -> us"idaSession"
@@ -23,4 +25,3 @@ let pprint = function
   | EIdaInitDenseJac _ -> us"idaInitDenseJac"
   | EIdaSolveNormal _ -> us"idaSolveNormal"
   | EIdaCalcICYY _ -> us"idaCalcICYY"
-
