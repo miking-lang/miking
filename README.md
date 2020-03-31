@@ -53,6 +53,13 @@ This involves installing the C library. On `ubuntu 18.04` you can issue:
 >> sudo apt-get install libsundials-dev
 ```
 
+On `macOS`, using Homebrew, you can install Sundials using command:
+
+```
+>> brew install sundials
+```
+
+
 Then install the ocaml bindings
 [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
 
@@ -188,7 +195,7 @@ utest answer with "yes" in
 ()
 ```
 
-checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned. 
+checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
 
 ### Recursion
 
@@ -198,8 +205,8 @@ Consider the factorial function
 
 ```
 let fact = fix (lam fact. lam n.
-  if eqi n 0 
-    then 1 
+  if eqi n 0
+    then 1
     else muli n (fact (subi n 1))
 ) in
 
