@@ -94,7 +94,7 @@ let rec merge_includes root visited = function
   | Program(includes, tops, tm) ->
      let rec parse_include root = function
        | Include(info, path) as inc ->
-          let filename = Filename.concat root (Ustring.to_utf8 path) in
+          let filename = Filename.concat root (Ustring.to_utf8 path) |> Utils.normalize_path in
           if List.mem filename visited
           then raise_error info ("Cycle detected in included files: " ^ filename)
           else if List.mem filename !parsed_files

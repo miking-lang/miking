@@ -5,4 +5,5 @@
 
 (executable
  (name boot)
+ (libraries str)
 )

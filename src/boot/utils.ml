@@ -122,6 +122,37 @@ let xor b1 b2 = (b1 || b2) && (not (b1 && b2))
 let sign_extension v n =
   if ((v lsr (n-1)) land 1) = 0 then v else (-1 lsl n) lor v
 
+type 'a list_zipper =
+  | ZipLeftEnd of 'a list
+  | ZipRightEnd of 'a list
+  | Zipper of 'a list * 'a * 'a list
+
+let list_to_zipper l = ZipLeftEnd l
+
+let list_zipper_right ls = function
+  | [] -> ZipRightEnd ls
+  | x :: xs -> Zipper (ls, x, xs)
+
+let list_zip_right = function
+  | ZipLeftEnd [] -> ZipRightEnd []
+  | ZipLeftEnd (x :: xs) -> Zipper ([], x, xs)
+  | ZipRightEnd xs -> ZipRightEnd xs
+  | Zipper(ls, x, r :: rs) -> Zipper (x :: ls, r, rs)
+  | Zipper(ls, x, []) -> ZipRightEnd (x :: ls)
+
+let normalize_path p =
+  let delim = Str.regexp_string Filename.dir_sep in
+  let rec recur = function
+    | Zipper (ls, d, rs) when d = Filename.current_dir_name ->
+       list_zipper_right ls rs |> recur
+    | Zipper (l :: ls, dd, rs) when dd = Filename.parent_dir_name && l <> dd ->
+       list_zipper_right ls rs |> recur
+    | ZipRightEnd xs -> List.rev xs
+    | zipper -> list_zip_right zipper |> recur
+  in Str.split_delim delim p
+     |> list_to_zipper
+     |> recur
+     |> String.concat Filename.dir_sep
 
 
 module Int =
