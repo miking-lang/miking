@@ -48,3 +48,5 @@ type 'a ext =
 
   | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
                     * Nvector_serial.t option
+
+  | EIdaPrintIntegratorStats

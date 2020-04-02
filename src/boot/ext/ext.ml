@@ -22,7 +22,8 @@ let externals =
       ("idaInitDense", EIdaInitDense (None, None, None, None));
       ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None));
       ("idaSolveNormal", EIdaSolveNormal (None, None, None));
-      ("idaCalcICYY", EIdaCalcICYY (None, None))
+      ("idaCalcICYY", EIdaCalcICYY (None, None));
+      ("idaPrintIntegratorStats", EIdaPrintIntegratorStats)
     ]
 
 let arity = function
@@ -70,6 +71,7 @@ let arity = function
   | EIdaCalcICYY (None, None) -> 3
   | EIdaCalcICYY (Some _, None) -> 2
   | EIdaCalcICYY (_, Some _) -> 1
+  | EIdaPrintIntegratorStats -> 1
 
 let fail_extapp f v fi = raise_error fi
                            ("Incorrect application. External function: "
@@ -272,3 +274,8 @@ let delta eval env fi c v =
      Ida.calc_ic_y s ~y:y t;
      mk_unit fi
   | EIdaCalcICYY _,_ -> fail_extapp fi
+
+  |EIdaPrintIntegratorStats, TmConst (fi, CExt (EIdaSession s)) ->
+    Ida.print_integrator_stats s stdout;
+    mk_unit fi
+  | EIdaPrintIntegratorStats,_ -> fail_extapp fi

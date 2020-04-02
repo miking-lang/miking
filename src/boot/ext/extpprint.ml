@@ -25,3 +25,4 @@ let pprint = function
   | EIdaInitDenseJac _ -> us"idaInitDenseJac"
   | EIdaSolveNormal _ -> us"idaSolveNormal"
   | EIdaCalcICYY _ -> us"idaCalcICYY"
+  | EIdaPrintIntegratorStats -> us"idaPrintIntegratorStats"
