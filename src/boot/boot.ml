@@ -94,7 +94,7 @@ let rec merge_includes root visited = function
   | Program(includes, tops, tm) ->
      let rec parse_include root = function
        | Include(info, path) as inc ->
-          let filename = Filename.concat root (Ustring.to_utf8 path) in
+          let filename = Filename.concat root (Ustring.to_utf8 path) |> Utils.normalize_path in
           if List.mem filename visited
           then raise_error info ("Cycle detected in included files: " ^ filename)
           else if List.mem filename !parsed_files
@@ -127,6 +127,11 @@ let add_prelude = function
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
+  (* Make sure the filename is an absolute path, otherwise the duplicate file detection won't work *)
+  let filename =
+    if Filename.is_relative filename
+    then Filename.concat (Sys.getcwd ()) filename
+    else filename in
   if !utest then printf "%s: " filename;
   utest_fail_local := 0;
   begin try
