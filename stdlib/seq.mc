@@ -111,6 +111,30 @@ let min = lam cmp. lam seq.
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
+-- First index in seq that satifies pred
+let index = lam pred. lam seq.
+  recursive let index_rechelper = lam i. lam pred. lam seq.
+    if null seq then
+      None ()
+    else if pred (head seq) then
+      Some i
+    else
+      index_rechelper (addi i 1) pred (tail seq)
+  in
+  index_rechelper 0 pred seq
+
+-- Last index in seq that satifies pred
+let lastIndex = lam pred. lam seq.
+  recursive let lastIndex_rechelper = lam i. lam acc. lam pred. lam seq.
+    if null seq then
+      acc
+    else if pred (head seq) then
+      lastIndex_rechelper (addi i 1) (Some i) pred (tail seq)
+    else
+      lastIndex_rechelper (addi i 1) acc pred (tail seq)
+  in
+  lastIndex_rechelper 0 (None ()) pred seq
+
 mexpr
 
 utest head [2,3,5] with 2 in
@@ -171,5 +195,11 @@ utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
 
 utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
 with [0,1,2,3,4,5,6,7,8,9] in
+
+utest index (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 1 in
+utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4 in
+
+utest lastIndex (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 3 in
+utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4 in
 
 ()

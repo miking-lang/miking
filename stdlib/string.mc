@@ -13,6 +13,9 @@ recursive
            else false
 end
 
+let str2upper = lam s. map char2upper s
+let str2lower = lam s. map char2lower s
+
 let string2int = lam s.
   recursive
   let string2int_rechelper = lam s.
