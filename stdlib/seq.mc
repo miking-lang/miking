@@ -113,27 +113,27 @@ let max = lam cmp. min (lam l. lam r. cmp r l)
 
 -- First index in seq that satifies pred
 let index = lam pred. lam seq.
-  let index_rechelper = fix (lam index_rh. lam i. lam pred. lam seq.
+  recursive let index_rechelper = lam i. lam pred. lam seq.
     if null seq then
-      None
+      None ()
     else if pred (head seq) then
       Some i
     else
-      index_rh (addi i 1) pred (tail seq)
-  ) in
+      index_rechelper (addi i 1) pred (tail seq)
+  in
   index_rechelper 0 pred seq
 
 -- Last index in seq that satifies pred
 let lastIndex = lam pred. lam seq.
-  let lastIndex_rechelper = fix (lam lastIndex_rh. lam i. lam acc. lam pred. lam seq.
+  recursive let lastIndex_rechelper = lam i. lam acc. lam pred. lam seq.
     if null seq then
       acc
     else if pred (head seq) then
-      lastIndex_rh (addi i 1) (Some i) pred (tail seq)
+      lastIndex_rechelper (addi i 1) (Some i) pred (tail seq)
     else
-      lastIndex_rh (addi i 1) acc pred (tail seq)
-  ) in
-  lastIndex_rechelper 0 None pred seq
+      lastIndex_rechelper (addi i 1) acc pred (tail seq)
+  in
+  lastIndex_rechelper 0 (None ()) pred seq
 
 mexpr
 
