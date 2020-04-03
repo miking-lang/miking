@@ -163,8 +163,9 @@ let translate_cases f target cases =
     | (VarPattern (fi, x), handler) ->
       TmLet(fi, x, target, handler)
   in
-  let msg = List.map (fun c -> TmConst(NoInfo,CChar(c)))
-            (ustring2list (us"No matching case for function " ^. f))
+  let msg = Mseq.map (fun c -> TmConst(NoInfo,CChar(c)))
+              ((us"No matching case for function " ^. f)
+               |> Mseq.of_ustring)
   in
   let no_match =
     let_ (us"_")
@@ -261,7 +262,7 @@ let rec desugar_tm nss env =
       | Some ns -> desugar_tm nss (merge_env_overwrite env ns) body)
   (* Simple recursions *)
   | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
-  | TmSeq(fi, tms) -> TmSeq(fi, List.map (desugar_tm nss env) tms)
+  | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
   | TmTuple(fi, tms) -> TmTuple(fi, List.map (desugar_tm nss env) tms)
   | TmRecord(fi, tms) -> TmRecord(fi, List.map (desugar_tm nss env |> map_right) tms)
   | TmProj(fi, tm, lab) -> TmProj(fi, desugar_tm nss env tm, lab)

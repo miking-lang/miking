@@ -162,7 +162,8 @@ and pprintME t =
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
+  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",")
+                               (List.map (ppt false) (Mseq.to_list tms)) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
   | TmRecord(_, r) -> left inside ^. pprecord r ^. right inside
   | TmProj(_,t,l) -> left inside ^. ppt false t  ^. us"." ^. pplabel l ^. right inside

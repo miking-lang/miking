@@ -81,10 +81,10 @@ and const =
 (* MCore intrinsic: sequences *)
 | Cmakeseq of int option
 | Clength
-| Cconcat  of (tm list) option
-| Cnth     of (tm list) option
+| Cconcat  of (tm Mseq.t) option
+| Cnth     of (tm Mseq.t) option
 | Ccons    of tm option
-| Cslice   of (tm list) option * int option
+| Cslice   of (tm Mseq.t) option * int option
 | Creverse
 (* MCore intrinsic: records *)
 | CRecord of tm Record.t
@@ -138,7 +138,7 @@ and tm =
 | TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
-| TmSeq     of info * tm list                                       (* Sequence *)
+| TmSeq     of info * tm Mseq.t                                      (* Sequence *)
 | TmTuple   of info * tm list                                       (* Tuple *)
 | TmRecord  of info * (ustring * tm) list                           (* Record *)
 | TmProj    of info * tm * label                                    (* Projection of a tuple or record *)
@@ -231,7 +231,7 @@ let rec map_tm f = function
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
-  | TmSeq(fi, tms) -> f (TmSeq(fi, List.map (map_tm f) tms))
+  | TmSeq(fi, tms) -> f (TmSeq(fi, Mseq.map (map_tm f) tms))
   | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
   | TmRecord(fi, r) -> f (TmRecord(fi, List.map (function (l, t) -> (l, map_tm f t)) r))
   | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
@@ -278,14 +278,16 @@ let pat_info = function
 
 (* Converts a list of terms  to a ustring *)
 let tmlist2ustring fi lst =
-  List.map (fun x ->
+  Mseq.map (fun x ->
       match x with | TmConst(_,CChar(i)) -> i
                    | _ -> raise_error fi "The term is not a string") lst
-  |> list2ustring
+  |> Mseq.to_ustring
 
 (* Converts a ustring to a list of terms *)
 let ustring2tmlist fi s =
-   s |> ustring2list |> List.map (fun x -> TmConst(fi,CChar(x)))
+  s
+  |> Mseq.of_ustring
+  |> Mseq.map (fun x -> TmConst(fi,CChar(x)))
 
 
 type 'a tokendata = {i:info; v:'a}

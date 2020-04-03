@@ -5,5 +5,5 @@
 
 (executable
  (name boot)
- (libraries str sundialsml)
+ (libraries batteries str sundialsml)
 )
