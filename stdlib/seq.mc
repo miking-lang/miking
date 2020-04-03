@@ -2,6 +2,14 @@ include "option.mc"
 
 let null = lam seq. eqi 0 (length seq)
 
+let slice = lam seq. lam n. lam m.
+  let splitAt2 = lam seq. lam n.
+    if geqi n (length seq) then (seq,[])
+    else if lti n 0 then ([],seq)
+    else splitAt seq n
+  in
+  (splitAt2 (splitAt2 seq n).1 m).0
+
 -- Maps and (un)folds
 let mapi = lam f. lam seq.
   recursive let work = lam i. lam f. lam seq.
@@ -137,6 +145,11 @@ mexpr
 
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in
+
+utest slice [1,3,5] 0 2 with [1,3] in
+utest slice [3,7,10,20] 1 3 with [7,10,20] in
+utest slice ['a','b'] 1 10 with ['b'] in
+utest slice [1,3] 2 10 with [] in
 
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
 utest mapi (lam i. lam x. i) [] with [] in

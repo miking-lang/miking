@@ -117,7 +117,6 @@ let rec pprint_const c =
   | Cinit -> us"init"
   | Clast -> us"last"
   | CsplitAt(_) -> us"splitAt"
-  | Cslice(_,_) -> us"slice"
   | Creverse -> us"reverse"
   (* MCore records *)
   | CRecord(r) ->

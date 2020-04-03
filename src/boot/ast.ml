@@ -91,7 +91,6 @@ and const =
 | Cinit
 | Clast
 | CsplitAt of (tm Mseq.t) option
-| Cslice   of (tm Mseq.t) option * int option
 | Creverse
 (* MCore intrinsic: records *)
 | CRecord of tm Record.t

@@ -33,8 +33,7 @@ let builtin =
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
-   ("splitAt",f(CsplitAt(None)));
-   ("slice",f(Cslice(None,None))); ("reverse",f(Creverse));
+   ("splitAt",f(CsplitAt(None)));("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
    ("argv",TmSeq(NoInfo,Sys.argv
                         |> Mseq.of_array
@@ -115,7 +114,6 @@ let arity = function
   | Cinit             -> 1
   | Clast             -> 1
   | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
-  | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
   (* MCore intrinsic: records *)
   | CRecord(_)        -> 0
@@ -377,20 +375,6 @@ let delta eval env fi c v  =
                 with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
        in TmTuple(fi,[TmSeq(fi,fst t);TmSeq(fi,snd t)])
     | CsplitAt(None),_ | CsplitAt(Some(_)),_  -> fail_constapp fi
-
-    | Cslice(None,None),TmSeq(fi,lst) -> TmConst(fi,Cslice(Some(lst),None))
-    | Cslice(Some(lst),None),TmConst(fi,CInt(s)) -> TmConst(fi,Cslice(Some(lst),Some(s)))
-    | Cslice(Some(lst),Some(s)),TmConst(fi,CInt(l)) ->
-       let slice s l lst =
-         let rec slice' i = function
-           | [] -> []
-           | _ when i >= s + l -> []
-           | x::xs when s <= i && i < s + l -> x::slice' (i + 1) xs
-           | _::xs -> slice' (i+1) xs
-         in
-         slice' 0 lst
-       in TmSeq(fi, Mseq.of_list (slice s l (Mseq.to_list lst)))
-    | Cslice(_,_),_ -> fail_constapp fi
 
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)
     | Creverse,_ -> fail_constapp fi

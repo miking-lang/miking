@@ -44,12 +44,6 @@ utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
 utest splitAt [1,2,3] 1 with ([1],[2,3]) in
 utest splitAt [1,2,3] 2 with ([1,2],[3]) in
 
-// slice lst start length
-utest slice [1,3,5] 0 2 with [1,3] in
-utest slice [3,7,10,20] 1 3 with [7,10,20] in
-utest slice ['a','b'] 1 10 with ['b'] in
-utest slice [1,3] 2 10 with [] in
-
 // reverse lst
 utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
