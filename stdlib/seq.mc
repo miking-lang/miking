@@ -34,7 +34,7 @@ recursive
     else f (head seq) (foldr f acc (tail seq))
 end
 
-let foldr1 = lam f. lam seq. foldl1 (lam acc. lam x. f x acc) (reverse seq)
+let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
 recursive
   let zipWith = lam f. lam seq1. lam seq2.
