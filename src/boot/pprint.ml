@@ -109,6 +109,7 @@ let rec pprint_const c =
   | Clength -> us"length"
   | Cconcat(_) -> us"concat"
   | Cget(_) -> us"get"
+  | Cset(_) -> us"set"
   | Ccons(_) -> us"cons"
   | Chead -> us"head"
   | Ctail -> us"tail"

@@ -83,6 +83,7 @@ and const =
 | Clength
 | Cconcat  of (tm Mseq.t) option
 | Cget     of (tm Mseq.t) option
+| Cset     of (tm Mseq.t) option * int option
 | Ccons    of tm option
 | Chead
 | Ctail

@@ -30,7 +30,8 @@ let builtin =
    ("int2float", f(CInt2float)); ("string2float", f(CString2float));
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
    ("makeseq",f(Cmakeseq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
-   ("get",f(Cget(None))); ("cons",f(Ccons(None)));
+   ("get",f(Cget(None)));("set",f(Cset(None,None)));
+   ("cons",f(Ccons(None)));
    ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
    ("splitAt",f(CsplitAt(None)));
    ("slice",f(Cslice(None,None))); ("reverse",f(Creverse));
@@ -106,6 +107,7 @@ let arity = function
   | Clength           -> 1
   | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
   | Cget(None)        -> 2 | Cget(Some(_)) -> 1
+  | Cset(None,None)   -> 3 | Cset(Some(_),None) -> 2 | Cset(_,Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
   | Chead             -> 1
   | Ctail             -> 1
@@ -331,6 +333,16 @@ let delta eval env fi c v  =
     | Cget(Some(s)),TmConst(_,CInt(n)) ->
        (try Mseq.get s n with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
     | Cget(None),_ | Cget(Some(_)),_  -> fail_constapp fi
+
+
+    | Cset(None,None),TmSeq(_,s) -> TmConst(fi,Cset(Some(s),None))
+    | Cset(Some(s),None),TmConst(_,CInt(n)) -> TmConst(fi,Cset(Some(s),Some(n)))
+    | Cset(Some(s),Some(n)),t ->
+       let s = try Mseq.set s n t
+               with _ -> raise_error fi index_out_of_bounds_in_seq_msg
+       in TmSeq(fi,s)
+    | Cset(_,_),_ -> fail_constapp fi
+
 
     | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
     | Ccons(Some(t)),TmSeq(fi,s) -> TmSeq(fi,Mseq.cons t s)

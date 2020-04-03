@@ -26,6 +26,11 @@ utest get [1,3,9] 2 with 9 in
 utest get [5] 0 with 5 in
 utest get [5,addi 2 3] 1 with 5 in
 
+// set
+utest set [1,2,3] 0 4 with [4,2,3] in
+utest set [1] 0 2 with [2] in
+utest set [1,2,3] 2 (addi 1 3) with [1,2,4] in
+
 // cons x xs
 utest cons 1 [8,10] with [1,8,10] in
 utest cons 'a' [] with ['a'] in
