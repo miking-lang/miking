@@ -2,13 +2,13 @@ include "option.mc"
 
 let null = lam seq. eqi 0 (length seq)
 
-let slice = lam seq. lam n. lam m.
-  let splitAt2 = lam seq. lam n.
-    if geqi n (length seq) then (seq,[])
-    else if lti n 0 then ([],seq)
-    else splitAt seq n
+let slice = lam seq. lam off. lam cnt.
+  let splitAt2 = lam seq. lam off.
+    if geqi off (length seq) then (seq,[])
+    else if lti off 0 then ([],seq)
+    else splitAt seq off
   in
-  (splitAt2 (splitAt2 seq n).1 m).0
+  (splitAt2 (splitAt2 seq off).1 cnt).0
 
 -- Maps and (un)folds
 let mapi = lam f. lam seq.
