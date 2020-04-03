@@ -31,7 +31,7 @@ let builtin =
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
    ("makeseq",f(Cmakeseq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
-   ("cons",f(Ccons(None)));
+   ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
    ("splitAt",f(CsplitAt(None)));
    ("slice",f(Cslice(None,None))); ("reverse",f(Creverse));
@@ -109,6 +109,7 @@ let arity = function
   | Cget(None)        -> 2 | Cget(Some(_)) -> 1
   | Cset(None,None)   -> 3 | Cset(Some(_),None) -> 2 | Cset(_,Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
+  | Csnoc(None)       -> 2 | Csnoc(Some(_)) -> 1
   | Chead             -> 1
   | Ctail             -> 1
   | Cinit             -> 1
@@ -347,6 +348,10 @@ let delta eval env fi c v  =
     | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
     | Ccons(Some(t)),TmSeq(fi,s) -> TmSeq(fi,Mseq.cons t s)
     | Ccons(Some(_)),_  -> fail_constapp fi
+
+    | Csnoc(None),TmSeq(_,s) -> TmConst(fi,Csnoc(Some(s)))
+    | Csnoc(Some(s)),t -> TmSeq(fi,Mseq.snoc s t)
+    | Csnoc(_),_ -> fail_constapp fi
 
     | Chead,TmSeq(_,s) ->
        (try Mseq.head s with _ -> raise_error fi empty_seq_msg)

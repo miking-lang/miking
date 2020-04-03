@@ -85,6 +85,7 @@ and const =
 | Cget     of (tm Mseq.t) option
 | Cset     of (tm Mseq.t) option * int option
 | Ccons    of tm option
+| Csnoc    of (tm Mseq.t) option
 | Chead
 | Ctail
 | Cinit

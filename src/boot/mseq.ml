@@ -16,6 +16,7 @@ let concat = BatFingerTree.append
 let get = BatFingerTree.get
 let set = BatFingerTree.set
 let cons e s = BatFingerTree.cons s e
+let snoc = BatFingerTree.snoc
 let reverse = BatFingerTree.reverse
 let split_at = BatFingerTree.split_at
 let equal = BatFingerTree.equal

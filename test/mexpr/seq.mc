@@ -35,6 +35,10 @@ utest set [1,2,3] 2 (addi 1 3) with [1,2,4] in
 utest cons 1 [8,10] with [1,8,10] in
 utest cons 'a' [] with ['a'] in
 
+// snoc
+utest snoc [1,2] 3 with [1,2,3] in
+utest snoc [] 1 with [1] in
+
 // splitAt
 utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
 utest splitAt [1,2,3] 1 with ([1],[2,3]) in
