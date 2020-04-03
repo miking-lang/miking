@@ -384,27 +384,27 @@ let delta eval env fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
-       uprint_string (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
+       uprint_string (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t -> uprint_string (pprintME t); TmConst(NoInfo,Cunit)
 
     | CreadFile,TmSeq(fi,lst) ->
-       TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmlist2ustring fi lst))
-                       |> (ustring2tmlist fi))
+       TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
+                       |> (ustring2tmseq fi))
     | CreadFile,_ -> fail_constapp fi
 
-    | CwriteFile(None),TmSeq(fi,l) -> TmConst(fi,CwriteFile(Some(tmlist2ustring fi l)))
+    | CwriteFile(None),TmSeq(fi,l) -> TmConst(fi,CwriteFile(Some(tmseq2ustring fi l)))
     | CwriteFile(Some(fname)),TmSeq(fi,lst) ->
-        Ustring.write_file (Ustring.to_utf8 fname) (tmlist2ustring fi lst); TmConst(NoInfo,Cunit)
+        Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
     | CwriteFile(None),_ | CwriteFile(Some(_)),_  -> fail_constapp fi
 
     | CfileExists,TmSeq(fi,lst) ->
-        TmConst(fi,CBool(Sys.file_exists (Ustring.to_utf8 (tmlist2ustring fi lst))))
+        TmConst(fi,CBool(Sys.file_exists (Ustring.to_utf8 (tmseq2ustring fi lst))))
     | CfileExists,_ -> fail_constapp fi
 
     | CdeleteFile,TmSeq(fi,lst) ->
-        Sys.remove (Ustring.to_utf8 (tmlist2ustring fi lst)); TmConst(NoInfo,Cunit)
+        Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); TmConst(NoInfo,Cunit)
     | CdeleteFile,_ -> fail_constapp fi
 
     | Cerror, TmSeq(fiseq,lst) ->
@@ -412,7 +412,7 @@ let delta eval env fi c v  =
                      | Info(filename,l1,_,_,_) ->
                        filename ^. us":" ^. (ustring_of_int l1) ^. us": "
                      | NoInfo -> us""
-        in uprint_endline (prefix ^. us"ERROR: " ^. (tmlist2ustring fiseq lst)); exit 1)
+        in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
        uprint_endline ((us"EXPR: ") ^. (pprintME t)); TmConst(NoInfo,Cunit)

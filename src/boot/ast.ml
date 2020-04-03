@@ -282,15 +282,15 @@ let pat_info = function
   | PatUnit(fi) -> fi
 
 
-(* Converts a list of terms  to a ustring *)
-let tmlist2ustring fi lst =
+(* Converts a sequence of terms to a ustring *)
+let tmseq2ustring fi s =
   Mseq.map (fun x ->
       match x with | TmConst(_,CChar(i)) -> i
-                   | _ -> raise_error fi "The term is not a string") lst
+                   | _ -> raise_error fi "The term is not a string") s
   |> Mseq.to_ustring
 
-(* Converts a ustring to a list of terms *)
-let ustring2tmlist fi s =
+(* Converts a ustring to a sequence of terms *)
+let ustring2tmseq fi s =
   s
   |> Mseq.of_ustring
   |> Mseq.map (fun x -> TmConst(fi,CChar(x)))
