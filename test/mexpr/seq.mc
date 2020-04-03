@@ -21,14 +21,19 @@ utest concat [1] [3] with [1,3] in
 utest concat [] [3,10] with [3,10] in
 utest concat ['a','b'] [] with ['a','b'] in
 
-// nth lst n
-utest nth [1,3,9] 2 with 9 in
-utest nth [5] 0 with 5 in
-utest nth [5,addi 2 3] 1 with 5 in
+// get lst n
+utest get [1,3,9] 2 with 9 in
+utest get [5] 0 with 5 in
+utest get [5,addi 2 3] 1 with 5 in
 
 // cons x xs
 utest cons 1 [8,10] with [1,8,10] in
 utest cons 'a' [] with ['a'] in
+
+// splitAt
+utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
+utest splitAt [1,2,3] 1 with ([1],[2,3]) in
+utest splitAt [1,2,3] 2 with ([1,2],[3]) in
 
 // slice lst start length
 utest slice [1,3,5] 0 2 with [1,3] in
@@ -42,7 +47,7 @@ utest reverse ['a'] with ['a'] in
 utest reverse [] with [] in
 
 // head and tail
-let head = lam seq. nth seq 0 in
+let head = lam seq. get seq 0 in
 let tail = lam seq. slice seq 1 (length seq) in
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in

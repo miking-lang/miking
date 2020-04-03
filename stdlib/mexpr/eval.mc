@@ -330,21 +330,21 @@ end
 
 lang SeqEval = SeqAst + ConstEval
   syn Const =
-  | CNth2 [Expr]
+  | CGet2 [Expr]
 
   sem delta (arg : Expr) =
-  | CNth _ ->
+  | CGet _ ->
     match arg with TmConst c then
       match c.val with CSeq s then
-        TmConst {val = CNth2 s.tms}
-      else error "Not nth of a sequence"
-    else error "Not nth of a constant"
-  | CNth2 tms ->
+        TmConst {val = CGet2 s.tms}
+      else error "Not get of a sequence"
+    else error "Not get of a constant"
+  | CGet2 tms ->
     match arg with TmConst c then
       match c.val with CInt n then
-        nth tms n.val
-      else error "n in nth is not a number"
-    else error "n in nth is not a constant"
+        get tms n.val
+      else error "n in get is not a number"
+    else error "n in get is not a constant"
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
@@ -360,7 +360,7 @@ lang TupleEval = TupleAst + TuplePat
     TmTuple {v with tms = vs}
   | TmProj t ->
     match eval ctx t.tup with TmTuple v then
-      nth v.tms t.idx
+      get v.tms t.idx
     else error "Not projecting from a tuple"
 
   sem tryMatch (t : Expr) =

@@ -24,7 +24,7 @@ let string2int = lam s.
     if eqi len 0
     then 0
     else
-      let lsd = subi (char2int (nth s last)) (char2int '0') in
+      let lsd = subi (char2int (get s last)) (char2int '0') in
       let rest = muli 10 (string2int_rechelper (slice s 0 last)) in
       addi rest lsd
   in

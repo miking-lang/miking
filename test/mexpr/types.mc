@@ -54,7 +54,7 @@ utest (lam x:String. concat x x) s with "yesyes" in
 
 // Sequence type
 let l1 : [Int] = [1,3,4,8] in
-utest (lam x:[Int]. nth x 2) l1 with 4 in
+utest (lam x:[Int]. get x 2) l1 with 4 in
 
 // Data types
 type Tree in

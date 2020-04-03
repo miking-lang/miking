@@ -463,7 +463,7 @@ with "Parse error at 1:14: Unexpected end of input. Expected expression" in
 utest show_error(test_parser expr "lam x : 42. x")
 with "Parse error at 1:9: Unexpected '4'. Expected type" in
 
-utest show_error(test_parser expr "let x = [1,2 in nth x 0")
+utest show_error(test_parser expr "let x = [1,2 in get x 0")
 with "Parse error at 1:14: Unexpected 'i'. Expected ']'" in
 
 utest show_error(test_parser expr "(1, (2,3).1")
@@ -477,10 +477,10 @@ with "Parse error at 1:9: Unexpected 'l'. Expected end of input" in
 
 -- Main logic
 
-if or (eqstr (nth argv 1) "test") (lti (length argv) 3) then
+if or (eqstr (get argv 1) "test") (lti (length argv) 3) then
   ()
 else
-  let file = nth argv 2 in
+  let file = get argv 2 in
   if fileExists file then
     let contents = readFile file in
     let res = run_parser file program contents in

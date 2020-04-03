@@ -108,8 +108,9 @@ let rec pprint_const c =
   | Cmakeseq(_) -> us"makeseq"
   | Clength -> us"length"
   | Cconcat(_) -> us"concat"
-  | Cnth(_) -> us"nth"
+  | Cget(_) -> us"get"
   | Ccons(_) -> us"cons"
+  | CsplitAt(_) -> us"splitAt"
   | Cslice(_,_) -> us"slice"
   | Creverse -> us"reverse"
   (* MCore records *)

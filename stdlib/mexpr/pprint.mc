@@ -157,7 +157,7 @@ end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     sem getConstStringCode (indent : Int) =
-    | CNth _ -> "nth"
+    | CGet _ -> "get"
     | CSeq t ->
       let extract_char = lam e.
         match e with TmConst t1 then

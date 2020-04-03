@@ -30,7 +30,8 @@ let builtin =
    ("int2float", f(CInt2float)); ("string2float", f(CString2float));
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
    ("makeseq",f(Cmakeseq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
-   ("nth",f(Cnth(None))); ("cons",f(Ccons(None)));
+   ("get",f(Cget(None))); ("cons",f(Ccons(None)));
+   ("splitAt",f(CsplitAt(None)));
    ("slice",f(Cslice(None,None))); ("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
    ("argv",TmSeq(NoInfo,Sys.argv
@@ -103,8 +104,9 @@ let arity = function
   | Cmakeseq(None)    -> 2 | Cmakeseq(Some(_)) -> 1
   | Clength           -> 1
   | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
-  | Cnth(None)        -> 2 | Cnth(Some(_)) -> 1
+  | Cget(None)        -> 2 | Cget(Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
+  | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
   | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
   (* MCore intrinsic: records *)
@@ -144,6 +146,7 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
    The reason for this is that if-expressions return expressions
    and not values. *)
 let delta eval env fi c v  =
+    let index_out_of_bounds_in_seq_msg = "Out of bound access in sequence." in
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
@@ -318,14 +321,21 @@ let delta eval env fi c v  =
        TmSeq(fi,Mseq.concat s1 s2)
     | Cconcat(None),_ | Cconcat(Some(_)),_  -> fail_constapp fi
 
-    | Cnth(None),TmSeq(fi,lst) -> TmConst(fi,Cnth(Some(lst)))
-    | Cnth(Some(lst)),TmConst(_,CInt(n)) ->
-       (try Mseq.get lst n with _ -> raise_error fi "Out of bound access in sequence.")
-    | Cnth(None),_ | Cnth(Some(_)),_  -> fail_constapp fi
+    | Cget(None),TmSeq(fi,s) -> TmConst(fi,Cget(Some(s)))
+    | Cget(Some(s)),TmConst(_,CInt(n)) ->
+       (try Mseq.get s n with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
+    | Cget(None),_ | Cget(Some(_)),_  -> fail_constapp fi
 
     | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
     | Ccons(Some(t)),TmSeq(fi,s) -> TmSeq(fi,Mseq.cons t s)
     | Ccons(Some(_)),_  -> fail_constapp fi
+
+    | CsplitAt(None),TmSeq(fi,s) -> TmConst(fi,CsplitAt(Some(s)))
+    | CsplitAt(Some(s)),TmConst(_,CInt(n)) ->
+       let t = (try Mseq.split_at s n
+                with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
+       in TmTuple(fi,[TmSeq(fi,fst t);TmSeq(fi,snd t)])
+    | CsplitAt(None),_ | CsplitAt(Some(_)),_  -> fail_constapp fi
 
     | Cslice(None,None),TmSeq(fi,lst) -> TmConst(fi,Cslice(Some(lst),None))
     | Cslice(Some(lst),None),TmConst(fi,CInt(s)) -> TmConst(fi,Cslice(Some(lst),Some(s)))
@@ -543,7 +553,7 @@ let rec eval env t =
   debug_eval env t;
   match t with
   (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(_,_,n) -> eval env  (List.nth env n)
+  | TmVar(_,_,n) -> eval env (List.nth env n)
   (* Lambda and closure conversions *)
   | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,lazy env)
   | TmClos(_,_,_,_,_) -> t

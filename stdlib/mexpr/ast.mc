@@ -175,7 +175,7 @@ end
 lang SeqAst = IntAst
   syn Const =
   | CSeq {tms : [Expr]}
-  | CNth {}
+  | CGet {}
 
   syn Expr =
   | TmSeq {tms : [Expr]}
@@ -355,7 +355,7 @@ lang MExprAst =
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
   RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst
-  
+
 mexpr
 use MExprAst in
 
