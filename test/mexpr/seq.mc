@@ -15,18 +15,18 @@ utest makeSeq 3 10 with [10,10,10] in
 utest makeSeq 8 'a' with ['a','a','a','a','a','a','a','a'] in
 utest makeSeq 0 100 with [] in
 
-// concat l1 l2
+// concat s1 s2
 utest concat [1,2,3] [10] with [1,2,3,10] in
 utest concat [1] [3] with [1,3] in
 utest concat [] [3,10] with [3,10] in
 utest concat ['a','b'] [] with ['a','b'] in
 
-// get lst n
+// get seq n
 utest get [1,3,9] 2 with 9 in
 utest get [5] 0 with 5 in
 utest get [5,addi 2 3] 1 with 5 in
 
-// set
+// set seq n v
 utest set [1,2,3] 0 4 with [4,2,3] in
 utest set [1] 0 2 with [2] in
 utest set [1,2,3] 2 (addi 1 3) with [1,2,4] in
@@ -35,16 +35,16 @@ utest set [1,2,3] 2 (addi 1 3) with [1,2,4] in
 utest cons 1 [8,10] with [1,8,10] in
 utest cons 'a' [] with ['a'] in
 
-// snoc
+// snoc xs x
 utest snoc [1,2] 3 with [1,2,3] in
 utest snoc [] 1 with [1] in
 
-// splitAt
+// splitAt seq n
 utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
 utest splitAt [1,2,3] 1 with ([1],[2,3]) in
 utest splitAt [1,2,3] 2 with ([1,2],[3]) in
 
-// reverse lst
+// reverse seq
 utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
 utest reverse [] with [] in
