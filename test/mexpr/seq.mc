@@ -10,10 +10,10 @@ utest [] with [] in
 utest [1,2] with [1,2] in
 utest [[2,3,10],7] with [[2,3,10],7] in
 
-// makeseq n v
-utest makeseq 3 10 with [10,10,10] in
-utest makeseq 8 'a' with ['a','a','a','a','a','a','a','a'] in
-utest makeseq 0 100 with [] in
+// makeSeq n v
+utest makeSeq 3 10 with [10,10,10] in
+utest makeSeq 8 'a' with ['a','a','a','a','a','a','a','a'] in
+utest makeSeq 0 100 with [] in
 
 // concat l1 l2
 utest concat [1,2,3] [10] with [1,2,3,10] in

@@ -105,7 +105,7 @@ let rec pprint_const c =
   | CChar2int -> us"char2int"
   | CInt2char -> us"int2char"
   (* MCore intrinsic: sequences *)
-  | Cmakeseq(_) -> us"makeseq"
+  | CmakeSeq(_) -> us"makeSeq"
   | Clength -> us"length"
   | Cconcat(_) -> us"concat"
   | Cget(_) -> us"get"

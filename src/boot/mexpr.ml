@@ -29,7 +29,7 @@ let builtin =
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
    ("int2float", f(CInt2float)); ("string2float", f(CString2float));
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
-   ("makeseq",f(Cmakeseq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
+   ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
@@ -102,7 +102,7 @@ let arity = function
   | CChar2int   -> 1
   | CInt2char   -> 1
   (* MCore intrinsic: sequences *)
-  | Cmakeseq(None)    -> 2 | Cmakeseq(Some(_)) -> 1
+  | CmakeSeq(None)    -> 2 | CmakeSeq(Some(_)) -> 1
   | Clength           -> 1
   | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
   | Cget(None)        -> 2 | Cget(Some(_)) -> 1
@@ -316,9 +316,9 @@ let delta eval env fi c v  =
     | CInt2char,_ -> fail_constapp fi
 
     (* MCore intrinsic: sequences *)
-    | Cmakeseq(None),TmConst(fi,CInt(v)) -> TmConst(fi,Cmakeseq(Some(v)))
-    | Cmakeseq(Some(v1)),t -> TmSeq(tm_info t,Mseq.make v1 (fun _ -> t))
-    | Cmakeseq(None),_ -> fail_constapp fi
+    | CmakeSeq(None),TmConst(fi,CInt(v)) -> TmConst(fi,CmakeSeq(Some(v)))
+    | CmakeSeq(Some(v1)),t -> TmSeq(tm_info t,Mseq.make v1 (fun _ -> t))
+    | CmakeSeq(None),_ -> fail_constapp fi
 
     | Clength,TmSeq(fi,s) -> TmConst(fi,CInt(Mseq.length s))
     | Clength,_ -> fail_constapp fi

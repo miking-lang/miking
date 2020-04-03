@@ -6,7 +6,7 @@ include "string.mc"
 include "ast.mc"
 include "ast-builder.mc"
 
-let spacing = lam indent. makeseq indent ' '
+let spacing = lam indent. makeSeq indent ' '
 let newline = lam indent. concat "\n" (spacing indent)
 
 -- Set spacing on increment

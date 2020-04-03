@@ -122,6 +122,6 @@ utest sprintf "Hello, %s!" [FmtStr("John Doe")] with "Hello, John Doe!" in
 utest sprintf "My initials are %c.%c." [FmtChar('J'), FmtChar('D')] with "My initials are J.D." in
 utest sprintf "%* means %*" [FmtStr("Five"), FmtInt(5)] with "Five means 5" in
 
-utest sprintf "%s should be %_s or %^s" (makeseq 3 (FmtStr ("cAsE"))) with "cAsE should be case or CASE" in
+utest sprintf "%s should be %_s or %^s" (makeSeq 3 (FmtStr ("cAsE"))) with "cAsE should be case or CASE" in
 
 ()

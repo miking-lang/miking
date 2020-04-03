@@ -1084,7 +1084,7 @@ let testllprint = lam name. lam ast.
       let _ = print "\n" in
       ()
   in
-  let _ = print (makeseq (length top) '-') in
+  let _ = print (makeSeq (length top) '-') in
   let _ = print "\n\n" in
   ()
 in

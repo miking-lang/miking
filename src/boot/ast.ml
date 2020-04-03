@@ -79,7 +79,7 @@ and const =
 | CChar2int
 | CInt2char
 (* MCore intrinsic: sequences *)
-| Cmakeseq of int option
+| CmakeSeq of int option
 | Clength
 | Cconcat  of (tm Mseq.t) option
 | Cget     of (tm Mseq.t) option
