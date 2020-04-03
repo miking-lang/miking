@@ -18,3 +18,7 @@ let cons e s = BatFingerTree.cons s e
 let reverse = BatFingerTree.reverse
 let split_at = BatFingerTree.split_at
 let equal = BatFingerTree.equal
+let head = BatFingerTree.head_exn
+let tail = BatFingerTree.tail_exn
+let init = BatFingerTree.init_exn
+let last = BatFingerTree.last_exn

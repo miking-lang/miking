@@ -31,6 +31,7 @@ let builtin =
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
    ("makeseq",f(Cmakeseq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None))); ("cons",f(Ccons(None)));
+   ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
    ("splitAt",f(CsplitAt(None)));
    ("slice",f(Cslice(None,None))); ("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
@@ -106,6 +107,10 @@ let arity = function
   | Cconcat(None)     -> 2 | Cconcat(Some(_)) -> 1
   | Cget(None)        -> 2 | Cget(Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
+  | Chead             -> 1
+  | Ctail             -> 1
+  | Cinit             -> 1
+  | Clast             -> 1
   | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
   | Cslice(None,None) -> 3 | Cslice(Some(_),None) -> 2 | Cslice(_,Some(_)) -> 1
   | Creverse          -> 1
@@ -147,6 +152,7 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
    and not values. *)
 let delta eval env fi c v  =
     let index_out_of_bounds_in_seq_msg = "Out of bound access in sequence." in
+    let empty_seq_msg = "Empty sequence." in
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
@@ -329,6 +335,24 @@ let delta eval env fi c v  =
     | Ccons(None),t -> TmConst(tm_info t,Ccons(Some(t)))
     | Ccons(Some(t)),TmSeq(fi,s) -> TmSeq(fi,Mseq.cons t s)
     | Ccons(Some(_)),_  -> fail_constapp fi
+
+    | Chead,TmSeq(_,s) ->
+       (try Mseq.head s with _ -> raise_error fi empty_seq_msg)
+    | Chead,_ -> fail_constapp fi
+
+    | Ctail,TmSeq(_,s) ->
+       let ts = try Mseq.tail s with _ -> raise_error fi empty_seq_msg in
+       TmSeq(fi,ts)
+    | Ctail,_ -> fail_constapp fi
+
+    | Cinit,TmSeq(_,s) ->
+       let ts = try Mseq.init s with _ -> raise_error fi empty_seq_msg in
+       TmSeq(fi,ts)
+    | Cinit,_ -> fail_constapp fi
+
+    | Clast,TmSeq(_,s) ->
+       (try Mseq.last s with _ -> raise_error fi empty_seq_msg)
+    | Clast,_ -> fail_constapp fi
 
     | CsplitAt(None),TmSeq(fi,s) -> TmConst(fi,CsplitAt(Some(s)))
     | CsplitAt(Some(s)),TmConst(_,CInt(n)) ->

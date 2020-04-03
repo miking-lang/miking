@@ -84,6 +84,10 @@ and const =
 | Cconcat  of (tm Mseq.t) option
 | Cget     of (tm Mseq.t) option
 | Ccons    of tm option
+| Chead
+| Ctail
+| Cinit
+| Clast
 | CsplitAt of (tm Mseq.t) option
 | Cslice   of (tm Mseq.t) option * int option
 | Creverse

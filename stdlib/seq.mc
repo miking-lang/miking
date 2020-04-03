@@ -1,7 +1,5 @@
 include "option.mc"
 
-let head = lam s. get s 0
-let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
 
 -- Maps and (un)folds
