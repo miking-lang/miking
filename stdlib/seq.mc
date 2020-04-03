@@ -143,9 +143,6 @@ let lastIndex = lam pred. lam seq.
 
 mexpr
 
-utest head [2,3,5] with 2 in
-utest tail [2,4,8] with [4,8] in
-
 utest slice [1,3,5] 0 2 with [1,3] in
 utest slice [3,7,10,20] 1 3 with [7,10,20] in
 utest slice ['a','b'] 1 10 with ['b'] in
