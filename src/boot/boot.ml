@@ -211,27 +211,46 @@ let testprog lst =
 
 (* Run program *)
 let runprog name lst =
+    (* TODO prog_argv is never used anywhere *)
     prog_argv := lst;
     evalprog name
 
 
 (* Print out main menu *)
-let menu() =
-  printf "Usage: boot [run|test] <files>\n";
-  printf "\n"
-
+let usage_msg = "Usage: boot [run|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
 
-  (* Check command  *)
-  (match Array.to_list Sys.argv |> List.tl with
+  (* A list of command line arguments *)
+  let speclist = [
 
-  (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> testprog lst
+    (* First character in description string must be a space for alignment! *)
+    "--debug-mlang", Arg.Set(enable_debug_mlang),
+    " Enables output of the mexpr program after mlang transformations.";
 
-  (* Run one program with program arguments without typechecking *)
-  | "run"::name::lst | name::lst -> runprog name lst
+  ] in
 
-  (* Show the menu *)
-  | _ -> menu())
+  (* Align the command line description list *)
+  let speclist = Arg.align speclist in
+
+  (* When non-option argument is encountered, simply save it to lst *)
+  let lst = ref [] in
+  let anon_fun arg = lst := arg :: !lst in
+
+  (* Parse command line *)
+  Arg.parse speclist anon_fun usage_msg;
+
+  if List.length !lst = 0 then
+    Arg.usage speclist usage_msg
+  else
+    match List.rev !lst with
+
+    (* Run tests on one or more files *)
+    | "test"::lst | "t"::lst -> testprog lst
+
+    (* Run one program with program arguments without typechecking *)
+    | "run"::name::lst | name::lst -> runprog name lst
+
+    (* Show the menu *)
+    | _ -> Arg.usage speclist usage_msg
