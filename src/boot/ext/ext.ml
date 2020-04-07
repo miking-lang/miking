@@ -22,7 +22,8 @@ let externals =
       ("idaInitDense", EIdaInitDense (None, None, None, None, None));
       ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None, None));
       ("idaSolveNormal", EIdaSolveNormal (None, None, None));
-      ("idaCalcICYY", EIdaCalcICYY (None, None))
+      ("idaCalcICYY", EIdaCalcICYY (None, None));
+      ("idaReinit", EIdaReinit (None, None, None))
     ]
 
 let arity = function
@@ -72,6 +73,10 @@ let arity = function
   | EIdaCalcICYY (None, None) -> 3
   | EIdaCalcICYY (Some _, None) -> 2
   | EIdaCalcICYY (_, Some _) -> 1
+  | EIdaReinit (None, None, None) -> 4
+  | EIdaReinit (Some _, None, None) -> 3
+  | EIdaReinit (_, Some _, None) -> 2
+  | EIdaReinit (_, _, Some _) -> 1
 
 let fail_extapp f v fi = raise_error fi
                            ("Incorrect application. External function: "
@@ -307,7 +312,18 @@ let delta eval env fi c v =
      mk_ext fi (EIdaCalcICYY (Some s, None))
   | EIdaCalcICYY (Some s, None), TmConst (fi, CExt (ESArray y)) ->
      mk_ext fi (EIdaCalcICYY (Some s, Some (Nvector_serial.wrap y)))
-  | EIdaCalcICYY (Some s, Some y), TmConst (fi, CFloat t) ->
-     Ida.calc_ic_y s ~y:y t;
+  | EIdaCalcICYY (Some s, Some v), TmConst (fi, CFloat t) ->
+     Ida.calc_ic_y s ~y:v t;
      mk_unit fi
   | EIdaCalcICYY _,_ -> fail_extapp fi
+
+  | EIdaReinit (None, None, None), TmConst (_, CExt (EIdaSession s)) ->
+     mk_ext fi (EIdaReinit (Some s, None, None))
+  | EIdaReinit (Some s, None, None), TmConst (_, CFloat t) ->
+     mk_ext fi (EIdaReinit (Some s, Some t, None))
+  | EIdaReinit (Some s, Some t, None), TmConst (_, CExt (ESArray y)) ->
+     mk_ext fi (EIdaReinit (Some s, Some t, Some (Nvector_serial.wrap y)))
+  | EIdaReinit (Some s, Some t, Some v), TmConst (_, CExt (ESArray y')) ->
+     Ida.reinit s t v (Nvector_serial.wrap y');
+     mk_unit fi
+  | EIdaReinit _,_ -> fail_extapp fi

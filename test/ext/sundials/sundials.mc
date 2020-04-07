@@ -39,6 +39,8 @@ in
 let s = idaInitDenseJac tol jacf resf (1, rootf) 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
 utest idaSolveNormal s 10. y yp with (5., IDA_ROOTS_FOUND) in
+utest idaReinit s 5. y yp with () in
+utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
 
 let m = sMatrixDenseCreate 2 2 in
 let _ = sMatrixDenseSet m 0 0 1. in

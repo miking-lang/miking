@@ -58,3 +58,7 @@ type 'a ext =
 
   | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
                     * Nvector_serial.t option
+
+  | EIdaReinit of Nvector_serial.kind Ida.serial_session option
+                  * float option
+                  * Nvector_serial.t option
