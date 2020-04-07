@@ -26,6 +26,11 @@ type 'a ext =
                         RealArray.t ->
                         RealArray.t ->
                         unit) option
+                        * (int * (float ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  unit)) option
                      * float option
                      * RealArray.t option
 
@@ -39,6 +44,11 @@ type 'a ext =
                            RealArray.t ->
                            RealArray.t ->
                            unit) option
+                        * (int * (float ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  unit)) option
                         * float option
                         * RealArray.t option
 

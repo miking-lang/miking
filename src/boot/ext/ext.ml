@@ -19,8 +19,8 @@ let externals =
       ("sMatrixDenseCreate", ESMatrixDenseCreate None);
       ("sMatrixDenseGet", ESMatrixDenseGet (None, None));
       ("sMatrixDenseSet", ESMatrixDenseSet (None, None, None));
-      ("idaInitDense", EIdaInitDense (None, None, None, None));
-      ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None));
+      ("idaInitDense", EIdaInitDense (None, None, None, None, None));
+      ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None, None));
       ("idaSolveNormal", EIdaSolveNormal (None, None, None));
       ("idaCalcICYY", EIdaCalcICYY (None, None))
     ]
@@ -52,17 +52,19 @@ let arity = function
   | ESMatrixDenseSet (_, Some _, None) -> 2
   | ESMatrixDenseSet (_, _, Some _) -> 1
   | EIdaSession _ -> 0
-  | EIdaInitDense (None, None, None, None) -> 5
-  | EIdaInitDense (Some _, None, None, None) -> 4
-  | EIdaInitDense (_, Some _, None, None) -> 3
-  | EIdaInitDense (_, _, Some _, None) -> 2
-  | EIdaInitDense (_, _, _, Some _) -> 1
-  | EIdaInitDenseJac (None, None, None, None, None) -> 6
-  | EIdaInitDenseJac (Some _, None, None, None, None) -> 5
-  | EIdaInitDenseJac (_, Some _, None, None, None) -> 4
-  | EIdaInitDenseJac (_, _, Some _, None, None) -> 3
-  | EIdaInitDenseJac (_, _, _, Some _, None) -> 2
-  | EIdaInitDenseJac (_, _, _, _, Some _) -> 1
+  | EIdaInitDense (None, None, None, None, None) -> 6
+  | EIdaInitDense (Some _, None, None, None, None) -> 5
+  | EIdaInitDense (_, Some _, None, None, None) -> 4
+  | EIdaInitDense (_, _, Some _, None, None) -> 3
+  | EIdaInitDense (_, _, _, Some _, None) -> 2
+  | EIdaInitDense (_, _, _, _, Some _) -> 1
+  | EIdaInitDenseJac (None, None, None, None, None, None) -> 7
+  | EIdaInitDenseJac (Some _, None, None, None, None, None) -> 6
+  | EIdaInitDenseJac (_, Some _, None, None, None, None) -> 5
+  | EIdaInitDenseJac (_, _, Some _, None, None, None) -> 4
+  | EIdaInitDenseJac (_, _, _, Some _, None, None) -> 3
+  | EIdaInitDenseJac (_, _, _, _, Some _, None) -> 2
+  | EIdaInitDenseJac (_, _, _, _, _, Some _) -> 1
   | EIdaSolveNormal (None, None, None) -> 4
   | EIdaSolveNormal (Some _, None, None) -> 3
   | EIdaSolveNormal (_, Some _, None) -> 2
@@ -88,9 +90,9 @@ let delta eval env fi c v =
   let mk_sa_matrix_dense fi m = mk_ext fi (ESMatrixDense m) in
   let mk_tuple fi l = TmTuple (fi, l) in
 
-  let mk_resf tm_resf =
+  let mk_idafun tm_fun =
      let resf t y y' r =
-       let _ = eval env (List.fold_left (mk_app NoInfo) tm_resf
+       let _ = eval env (List.fold_left (mk_app NoInfo) tm_fun
                            [mk_float NoInfo t;
                             mk_sa_array NoInfo y;
                             mk_sa_array NoInfo y';
@@ -174,36 +176,52 @@ let delta eval env fi c v =
 
   | EIdaSession _,_ -> fail_extapp fi
 
-  | EIdaInitDense (None, None, None, None),
+  | EIdaInitDense (None, None, None, None, None),
     TmTuple (fi ,
              (TmConst (_, CFloat rtol))::((TmConst (_, CFloat atol))::[])) ->
-     mk_ext fi (EIdaInitDense (Some (rtol, atol), None, None, None))
-  | EIdaInitDense (Some tol, None, None, None), tm_resf ->
+     mk_ext fi (EIdaInitDense (Some (rtol, atol), None, None, None, None))
+  | EIdaInitDense (Some tol, None, None, None, None), tm_resf ->
      mk_ext (tm_info tm_resf)
-       (EIdaInitDense (Some tol, Some (mk_resf tm_resf), None, None))
-  | EIdaInitDense (Some tol, Some resf, None, None),
+       (EIdaInitDense (Some tol, Some (mk_idafun tm_resf), None, None, None))
+  | EIdaInitDense (Some tol, Some resf, None, None, None),
+    TmTuple (fi , (TmConst (_, CInt n))::(tm_rootf::[])) ->
+     mk_ext fi (EIdaInitDense (Some tol,
+                               Some resf,
+                               Some (n, mk_idafun tm_rootf),
+                               None, None))
+  | EIdaInitDense (Some tol, Some resf, Some (n, rootf), None, None),
     TmConst (fi, CFloat t0) ->
-     mk_ext fi (EIdaInitDense (Some tol, Some resf, Some t0, None))
-  | EIdaInitDense (Some tol, Some resf, Some t0, None),
+     mk_ext fi (EIdaInitDense (Some tol,
+                               Some resf,
+                               Some (n, rootf),
+                               Some t0,
+                               None))
+  | EIdaInitDense (Some tol, Some resf, Some (n, rootf), Some t0, None),
     TmConst (fi, CExt (ESArray y0)) ->
-     mk_ext fi (EIdaInitDense (Some tol, Some resf, Some t0, Some y0))
-  | EIdaInitDense (Some (rtol, atol), Some resf, Some t0, Some y0),
+     mk_ext fi (EIdaInitDense (Some tol,
+                               Some resf,
+                               Some (n, rootf),
+                               Some t0,
+                               Some y0))
+  | EIdaInitDense (Some (rtol, atol), Some resf, Some (n, rootf), Some t0,
+                   Some y0),
     TmConst (fi, CExt (ESArray y0')) ->
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
      let s = Ida.(init Dls.(solver (dense v m))
                     (SStolerances (rtol, atol))
-                    resf t0 v v')
+                    resf ~roots:(n, rootf) t0 v v')
      in
      mk_ext fi (EIdaSession s)
   | EIdaInitDense _,_ -> fail_extapp fi
 
-  | EIdaInitDenseJac (None, None, None, None, None),
+  | EIdaInitDenseJac (None, None, None, None, None, None),
     TmTuple (fi ,
              (TmConst (_, CFloat rtol))::((TmConst (_, CFloat atol))::[])) ->
-     mk_ext fi (EIdaInitDenseJac (Some (rtol, atol), None, None, None, None))
-  | EIdaInitDenseJac (Some tol, None, None, None, None), tm_jacf ->
+     mk_ext fi (EIdaInitDenseJac (Some (rtol, atol),
+                                  None, None, None, None, None))
+  | EIdaInitDenseJac (Some tol, None, None, None, None, None), tm_jacf ->
      let jacf arg mm =
        match arg with
          {
@@ -221,26 +239,47 @@ let delta eval env fi c v =
                                mk_sa_matrix_dense NoInfo mm])
           in ()
      in
-     mk_ext (tm_info tm_jacf)
-       (EIdaInitDenseJac (Some tol, Some jacf, None, None, None))
-  | EIdaInitDenseJac (Some tol, Some jacf, None, None, None), tm_resf ->
-     mk_ext (tm_info tm_resf)
-       (EIdaInitDenseJac (Some tol, Some jacf, Some (mk_resf tm_resf),
-                          None, None))
-  | EIdaInitDenseJac (Some tol, Some jacf, Some resf, None, None),
+     mk_ext (tm_info tm_jacf) (EIdaInitDenseJac (Some tol,
+                                                 Some jacf,
+                                                 None, None, None, None))
+  | EIdaInitDenseJac (Some tol, Some jacf, None, None, None, None), tm_resf ->
+     mk_ext (tm_info tm_resf) (EIdaInitDenseJac (Some tol,
+                                                 Some jacf,
+                                                 Some (mk_idafun tm_resf),
+                                                 None, None, None))
+  | EIdaInitDenseJac (Some tol, Some jacf, Some resf, None, None, None),
+    TmTuple (fi , (TmConst (_, CInt n))::(tm_rootf::[])) ->
+     mk_ext fi (EIdaInitDenseJac (Some tol,
+                                  Some jacf,
+                                  Some resf,
+                                  Some (n, mk_idafun tm_rootf),
+                                  None, None))
+  | EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some (n, rootf),
+                      None, None),
     TmConst (fi, CFloat t0) ->
-     mk_ext fi
-       (EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some t0, None))
-  | EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some t0, None),
+     mk_ext fi (EIdaInitDenseJac (Some tol,
+                                  Some jacf,
+                                  Some resf,
+                                  Some (n, rootf),
+                                  Some t0,
+                                  None))
+  | EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0,
+                      None),
     TmConst (fi, CExt (ESArray y0)) ->
-     mk_ext fi
-       (EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some t0, Some y0))
-  | EIdaInitDenseJac (Some (rtol, atol), Some jacf, Some resf, Some t0, Some y0),
+     mk_ext fi (EIdaInitDenseJac (Some tol,
+                                  Some jacf,
+                                  Some resf,
+                                  Some (n, rootf),
+                                  Some t0,
+                                  Some y0))
+  | EIdaInitDenseJac (Some (rtol, atol), Some jacf, Some resf, Some (n, rootf),
+                      Some t0, Some y0),
     TmConst (fi, CExt (ESArray y0')) ->
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
      let s = Ida.(init Dls.(solver ~jac:jacf (dense v m))
+                    ~roots:(n, rootf)
                     (SStolerances (rtol, atol))
                     resf t0 v v')
      in
