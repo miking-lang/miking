@@ -10,12 +10,12 @@ open Printf
 
 
 (* Debug options *)
-let enable_debug_debruijn_print = true
+let enable_debug_debruijn_print = ref false
 
 
 (* Print out a variable, either in debug mode or not *)
 let varDebugPrint x n =
-  if enable_debug_debruijn_print
+  if !enable_debug_debruijn_print
   then x ^. us(sprintf "'%d" n) else x
 
 
@@ -101,7 +101,13 @@ let rec pprint_const c =
   | CInt2float -> us"int2float"
   | CString2float -> us"string2float"
   (* MCore intrinsic: characters *)
-  | CChar(v) -> us"'" ^. list2ustring [v] ^. us"'"
+  | CChar(v) ->
+    begin
+      (* TODO Probably handle all escape chars (not only \n) explictly *)
+      match Char.chr v with
+      | '\n' -> us"'\\n'"
+      | _    -> us"'" ^. list2ustring [v] ^. us"'"
+    end
   | CChar2int -> us"char2int"
   | CInt2char -> us"int2char"
   (* MCore intrinsic: sequences *)
@@ -204,7 +210,7 @@ and pprintPat p =
     | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
     | PatCon(_,x,n,p) ->
        left inside ^.
-       varDebugPrint x n ^. ppp true p ^.
+       varDebugPrint x n ^. us"(" ^. ppp true p ^. us")" ^.
        right inside
     | PatInt(_,i) -> Ustring.Op.ustring_of_int i
     | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
@@ -229,7 +235,8 @@ and pprint_ty ty =
   | TyInt   -> us"Int"
   | TyFloat -> us"Float"
   | TyChar -> us"Char"
-  | TyArrow(ty1,ty2) -> us"(" ^. pprint_ty ty1 ^. us"," ^. pprint_ty ty2 ^. us")"
+  | TyArrow(ty1,ty2) ->
+    us"(" ^. pprint_ty ty1 ^. us"->" ^. pprint_ty ty2 ^.  us")"
   | TySeq(ty1) -> if ty1 = TyChar then us"String"
                   else us"[" ^. pprint_ty ty1 ^. us"]"
   | TyTuple tys ->

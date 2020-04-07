@@ -73,6 +73,14 @@ let debug_after_debruijn t =
      t)
   else t
 
+(* Debug mlang to mexpr transform *)
+let debug_after_mlang t =
+  if !enable_debug_after_mlang then
+    (printf "\n-- After mlang --\n";
+     print_endline (Ppprint.string_of_tm t);
+     t)
+  else t
+
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
 
@@ -141,6 +149,7 @@ let evalprog filename  =
      |> merge_includes (Filename.dirname filename) [filename]
      |> Mlang.flatten
      |> Mlang.desugar_post_flatten
+     |> debug_after_mlang
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd)
@@ -226,8 +235,11 @@ let main =
   let speclist = [
 
     (* First character in description string must be a space for alignment! *)
-    "--debug-mlang", Arg.Set(enable_debug_mlang),
+    "--debug-mlang", Arg.Set(enable_debug_after_mlang),
     " Enables output of the mexpr program after mlang transformations.";
+
+    "--debruijn", Arg.Set(enable_debug_debruijn_print),
+    " Enables output of the debruijn indices of variables when printing.";
 
   ] in
 
