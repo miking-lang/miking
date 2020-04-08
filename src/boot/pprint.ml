@@ -1,256 +1,496 @@
-
-(*
-   Miking is licensed under the MIT license.
-   Copyright (C) David Broman. See file LICENSE.txt
-*)
+(** Pretty-printing for data types in Miking.
+ *
+ *  The main functions that should be used outside of this module is
+ *  - string_of_tm
+ *  - string_of_const
+ *  - string_of_env
+ *
+ *  Miking is licensed under the MIT license.
+ *  Copyright (C) David Broman. See file LICENSE.txt *)
 
 open Ast
+open Format
 open Ustring.Op
-open Printf
 
-
-(* Debug options *)
+(** Whether or not debruijn printin is the default (this can still be changed
+ *  through optional arguments) *)
 let enable_debug_debruijn_print = ref false
 
+(** Global configuration for debruijn printing. Needed because of the unwieldy
+ *  interface to the Format module *)
+let ref_debruijn = ref false
 
-(* Print out a variable, either in debug mode or not *)
-let varDebugPrint x n =
-  if !enable_debug_debruijn_print
+(** Global configuration for indentation size. Needed because of the unwieldy
+ *  interface to the Format module *)
+let ref_indent      = ref 2
+
+(** Alias for converting from ustring to string *)
+let string_of_ustring = Ustring.to_utf8
+
+(** Create string representation of variable *)
+let ustring_of_var x n =
+  if !ref_debruijn
   then x ^. us(sprintf "'%d" n) else x
 
+(** Create a string from a uchar, as it would appear in a string literal. *)
+let lit_of_uchar c =
+  let str = match (string_of_ustring (Ustring.from_uchars [|c|])) with
+    (* TODO This is a temporary fix for newlines only. How do we do this
+       properly? *)
+    | "\n" -> "\\n"
+    | str -> str in
+  Printf.sprintf "'%s'" str
 
-
-(* Pretty printing for precedence *)
-let left inside = if inside then us"(" else us""
-let right inside = if inside then us")" else us""
-
-
-(* Pretty print "true" or "false" *)
-let usbool x = us (if x then "true" else "false")
-
-(* Pretty print constants *)
-let rec pprint_const c =
-  match c with
-  (* MCore intrinsic: unit - no operation *)
-  | Cunit -> us"()"
-  (* MCore Intrinsic Booleans *)
-  | CBool(b) -> if b then us"true" else us"false"
-  | Cnot -> us"not"
-  | Cand(None) -> us"and"
-  | Cand(Some(v)) -> us"and(" ^. usbool v ^. us")"
-  | Cor(None) -> us"or"
-  | Cor(Some(v)) -> us"or(" ^. usbool v ^. us")"
-  (* MCore Intrinsic Integers *)
-  | CInt(v) -> us(sprintf "%d" v)
-  | Caddi(None) -> us"addi"
-  | Caddi(Some(v)) -> us(sprintf "addi(%d)" v)
-  | Csubi(None) -> us"subi"
-  | Csubi(Some(v)) -> us(sprintf "subi(%d)" v)
-  | Cmuli(None) -> us"muli"
-  | Cmuli(Some(v)) -> us(sprintf "muli(%d)" v)
-  | Cdivi(None) -> us"divi"
-  | Cdivi(Some(v)) -> us(sprintf "divi(%d)" v)
-  | Cmodi(None) -> us"modi"
-  | Cmodi(Some(v)) -> us(sprintf "modi(%d)" v)
-  | Cnegi -> us"negi"
-  | Clti(None) -> us"lti"
-  | Clti(Some(v)) -> us(sprintf "lti(%d)" v)
-  | Cleqi(None) -> us"leqi"
-  | Cleqi(Some(v)) -> us(sprintf "leqi(%d)" v)
-  | Cgti(None) -> us"gti"
-  | Cgti(Some(v)) -> us(sprintf "gti(%d)" v)
-  | Cgeqi(None) -> us"geqi"
-  | Cgeqi(Some(v)) -> us(sprintf "geqi(%d)" v)
-  | Ceqi(None) -> us"eqi"
-  | Ceqi(Some(v)) -> us(sprintf "eqi(%d)" v)
-  | Cneqi(None) -> us"neqi"
-  | Cneqi(Some(v)) -> us(sprintf "neqi(%d)" v)
-  | Cslli(None) -> us"slli"
-  | Cslli(Some(v)) -> us(sprintf "slli(%d)" v)
-  | Csrli(None) -> us"srli"
-  | Csrli(Some(v)) -> us(sprintf "srli(%d)" v)
-  | Csrai(None) -> us"srai"
-  | Csrai(Some(v)) -> us(sprintf "srai(%d)" v)
-  | Carity -> us"arity"
-  (* MCore intrinsic: Floating-point number constant and operations *)
-  | CFloat(v) -> us(sprintf "%f" v)
-  | Caddf(None) -> us"addf"
-  | Caddf(Some(v)) -> us(sprintf "addf(%f)" v)
-  | Csubf(None) -> us"subf"
-  | Csubf(Some(v)) -> us(sprintf "subf(%f)" v)
-  | Cmulf(None) -> us"mulf"
-  | Cmulf(Some(v)) -> us(sprintf "mulf(%f)" v)
-  | Cdivf(None) -> us"divf"
-  | Cdivf(Some(v)) -> us(sprintf "divf(%f)" v)
-  | Cnegf -> us"negf"
-  | Cltf(None) -> us"ltf"
-  | Cltf(Some(v)) -> us(sprintf "ltf(%f)" v)
-  | Cleqf(None) -> us"leqf"
-  | Cleqf(Some(v)) -> us(sprintf "leqf(%f)" v)
-  | Cgtf(None) -> us"gtf"
-  | Cgtf(Some(v)) -> us(sprintf "gtf(%f)" v)
-  | Cgeqf(None) -> us"geqf"
-  | Cgeqf(Some(v)) -> us(sprintf "geqf(%f)" v)
-  | Ceqf(None) -> us"eqf"
-  | Ceqf(Some(v)) -> us(sprintf "eqf(%f)" v)
-  | Cneqf(None) -> us"neqf"
-  | Cneqf(Some(v)) -> us(sprintf "neqf(%f)" v)
-  | Cfloorfi -> us"floorfi"
-  | Cceilfi -> us"ceilfi"
-  | Croundfi -> us"roundfi"
-  | CInt2float -> us"int2float"
-  | CString2float -> us"string2float"
-  (* MCore intrinsic: characters *)
-  | CChar(v) ->
-    begin
-      (* TODO Probably handle all escape chars (not only \n) explictly *)
-      match Char.chr v with
-      | '\n' -> us"'\\n'"
-      | _    -> us"'" ^. list2ustring [v] ^. us"'"
-    end
-  | CChar2int -> us"char2int"
-  | CInt2char -> us"int2char"
-  (* MCore intrinsic: sequences *)
-  | CmakeSeq(_) -> us"makeSeq"
-  | Clength -> us"length"
-  | Cconcat(_) -> us"concat"
-  | Cget(_) -> us"get"
-  | Cset(_) -> us"set"
-  | Ccons(_) -> us"cons"
-  | Csnoc(_) -> us"snoc"
-  | CsplitAt(_) -> us"splitAt"
-  | Creverse -> us"reverse"
-  (* MCore records *)
-  | CRecord(r) ->
-     let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
-     pprecord contents
-  (* MCore debug and stdio intrinsics *)
-  | Cprint -> us"print"
-  | Cdprint -> us"dprint"
-  | CreadFile -> us"readFile"
-  | CwriteFile(_) -> us"writeFile"
-  | CfileExists -> us"fileExists"
-  | CdeleteFile -> us"deleteFile"
-  | Cerror -> us"error"
-  | CdebugShow -> us"debugShow"
-  (* MCore Symbols *)
-  | CSymb(id) -> us(sprintf "symb(%d)" id)
-  | Cgensym -> us"gensym"
-  | Ceqs(_) -> us"eqs"
-  (* External pprint TODO: Should not be part of core language *)
-  | CExt(v) -> Extpprint.pprint v
-
-(* Pretty print a record *)
-and pprecord contents =
-  us"{" ^.
-    Ustring.concat (us",")
-      (List.map (function (l, v) -> l ^. us" = " ^. pprintME v) contents)
-    ^. us"}"
-
-and pplabel = function
-  | LabIdx i -> Ustring.Op.ustring_of_int i
-  | LabStr s -> s
-
-(* Pretty print a term. *)
-and pprintME t =
-  let rec ppt inside t =
-  match t with
-  | TmVar(_,x,n) -> varDebugPrint x n
-  | TmLam(_,x,ty,t1) -> left inside ^.
-      us"lam " ^. x ^. us":" ^. pprint_ty ty ^. us". " ^. ppt false t1 ^. right inside
-  | TmClos(_,x,_,t,_) -> left inside ^. us"clos " ^. x ^. us". " ^.
-                           ppt false t ^. right inside
-  | TmLet(_,x,t1,t2) -> left inside ^. us"let " ^. x ^. us" = " ^. ppt false t1 ^.
-                          us" in " ^. ppt false t2 ^. right inside
-  | TmRecLets(_,lst,t2) ->
-     us"recursive" ^. Ustring.concat (us" ")
-               ((List.map (fun (_,x,t) -> us"let " ^. x ^. us" = " ^. ppt false t)) lst)
-              ^. us" in " ^. ppt false t2
-  | TmApp(_,t1,t2) ->
-       left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
-  | TmConst(_,c) -> pprint_const c
-  | TmFix(_) -> us"fix"
-  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",")
-                               (List.map (ppt false) (Mseq.to_list tms)) ^. us"]"
-  | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
-  | TmRecord(_, r) -> left inside ^. pprecord r ^. right inside
-  | TmProj(_,t,l) -> left inside ^. ppt false t  ^. us"." ^. pplabel l ^. right inside
-  | TmRecordUpdate(_,t1,l,t2) -> left inside ^. ppt false t1  ^. us" with " ^. l ^. us" = " ^. ppt false t2 ^. right inside
-  | TmCondef(_,s,ty,t) -> left inside ^. us"data " ^. s ^. us" " ^. pprint_ty ty ^.
-                        us" in" ^. ppt false t ^. right inside
-  | TmConsym(_,s,sym,tmop) -> left inside ^. s ^. us"_" ^. us(sprintf "%d" sym) ^. us" " ^.
-                           (match tmop with
-                            | Some(t) -> ppt true t
-                            | None -> us"") ^. right inside
-  | TmMatch(_,t1,PatBool(_,true),t2,t3) -> left inside ^. us"if " ^. ppt false t1 ^. us" then " ^.
-                          ppt false t2 ^. us" else " ^. ppt false t3 ^.right inside
-  | TmMatch(_,t,p,then_,else_) -> left inside ^. us"match " ^. ppt false t ^.
-        us" with " ^. pprintPat p ^.
-        us" then " ^. ppt false then_ ^.
-        us" else " ^. ppt false else_ ^. right inside
-  | TmUse(_,l,t) -> us"use " ^. l ^. us" in " ^. ppt false t
-  | TmUtest(_,t1,t2,_) -> us"utest " ^. ppt false t1  ^. us" " ^. ppt false t2
-  in ppt false t
-
-and pprintTmList p = us"[" ^. (p |> List.map pprintME |> Ustring.concat (us",")) ^. us"]"
-
-
-and pprintPat p =
-  let rec ppp inside pat =
+(** Convert pattern to ustring.
+ *  TODO Precedence
+ *  TODO Use Format module printing *)
+let ustring_of_pat p =
+  let rec ppp pat =
     let ppSeq s =
-      s |> Mseq.to_list |> List.map (ppp inside) |> Ustring.concat (us",")
+      s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
     in
     let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
     match pat with
     | PatNamed(_,NameStr(x)) -> x
-    | PatSeq(_,lst,SeqMatchPrefix(x)) -> us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
-    | PatSeq(_,lst,SeqMatchPostfix(x)) -> ppName x ^. us" ++ [" ^. ppSeq lst ^. us"]"
+    | PatSeq(_,lst,SeqMatchPrefix(x)) ->
+      us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
+    | PatSeq(_,lst,SeqMatchPostfix(x)) ->
+      ppName x ^. us" ++ [" ^. ppSeq lst ^. us"]"
     | PatSeq(_,lst,SeqMatchTotal) -> us"[" ^. ppSeq lst ^. us"]"
     | PatNamed(_,NameWildcard) -> us"_"
-    | PatTuple(_,ps) -> us"(" ^. Ustring.concat (us",") (List.map (ppp false) ps) ^. us")"
+    | PatTuple(_,ps) ->
+      us"(" ^. Ustring.concat (us",") (List.map ppp ps) ^. us")"
     | PatCon(_,x,n,p) ->
-       left inside ^.
-       varDebugPrint x n ^. us"(" ^. ppp true p ^. us")" ^.
-       right inside
+      let con = ustring_of_var x n in
+      let inner = ppp p in
+      con ^. us"(" ^. inner ^. us")"
     | PatInt(_,i) -> Ustring.Op.ustring_of_int i
-    | PatChar(_,c) -> us"'" ^. list2ustring [c] ^. us"'"
-    | PatBool(_,b) -> Ustring.Op.ustring_of_bool b
+    | PatChar(_,c) -> us (lit_of_uchar c)
+    | PatBool(_,b) -> ustring_of_bool b
     | PatUnit _ -> us"()"
-  in ppp false p
+  in ppp p
 
-and pprintPatList p = us"[" ^. (p |> List.map pprintPat |> Ustring.concat (us",")) ^. us"]"
-
-(* Pretty prints the environment *)
-and pprint_env env =
-  us"[" ^. (List.mapi (fun i t -> us(sprintf " %d -> " i) ^. pprintME t) env
-            |> Ustring.concat (us",")) ^. us"]"
-
-
-and pprint_ty ty =
-  let ppt ty =
-  match ty with
-  | TyUnit -> us"()"
+(** Convert type to ustring.
+ *  TODO Precedence
+ *  TODO Use Format module printing *)
+let rec ustring_of_ty = function
+  | TyUnit  -> us"()"
   | TyDyn   -> us"Dyn"
   | TyBool  -> us"Bool"
   | TyInt   -> us"Int"
   | TyFloat -> us"Float"
-  | TyChar -> us"Char"
+  | TyChar  -> us"Char"
   | TyArrow(ty1,ty2) ->
-    us"(" ^. pprint_ty ty1 ^. us"->" ^. pprint_ty ty2 ^.  us")"
+    us"(" ^. ustring_of_ty ty1 ^. us"->" ^. ustring_of_ty ty2 ^.  us")"
   | TySeq(ty1) -> if ty1 = TyChar then us"String"
-                  else us"[" ^. pprint_ty ty1 ^. us"]"
+    else us"[" ^. ustring_of_ty ty1 ^. us"]"
   | TyTuple tys ->
-     us"(" ^. Ustring.concat (us",") (List.map pprint_ty tys) ^. us")"
+    us"(" ^. Ustring.concat (us",") (List.map ustring_of_ty tys) ^. us")"
   | TyRecord tys ->
-     us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
+    let pprint_ty_label = function
+      | (l, ty) -> l ^. us" : " ^. ustring_of_ty ty in
+    us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
   | TyCon(s) -> s
+
+(** Simple enum used in the concat function in string_of_tm *)
+type sep =
+  | SPACE
+  | COMMA
+
+(** Function for concatenating a list of fprintf calls using a given separator.
+ *  TODO Possible to simply use Format.pp_print_list? *)
+let rec concat fmt (sep, ls) = match ls with
+  | []  -> ()
+  | [f] -> f fmt
+  | f :: ls -> match sep with
+    | SPACE -> fprintf fmt "%t@ %a"  f concat (sep, ls)
+    | COMMA -> fprintf fmt "%t,@,%a" f concat (sep, ls)
+
+(** Precedence constants for printing *)
+type prec =
+  | MATCH
+  | LAM
+  | SEMICOLON
+  | IF
+  | TUP
+  | APP
+  | ATOM
+
+(** Print a constant on the given formatter
+ *  TODO Precendece?
+ *  TODO Break hints? *)
+let rec print_const fmt = function
+
+  (* MCore intrinsic: unit - no operation *)
+  | Cunit -> fprintf fmt "()"
+
+  (* MCore Intrinsic Booleans *)
+  | CBool(b)      -> fprintf fmt "%B" b
+  | Cnot          -> fprintf fmt "not"
+  | Cand(None)    -> fprintf fmt "and"
+  | Cand(Some(v)) -> fprintf fmt "and(%B)" v
+  | Cor(None)     -> fprintf fmt "or"
+  | Cor(Some(v))  -> fprintf fmt "or(%B)" v
+
+  (* MCore Intrinsic Integers *)
+  | CInt(v)        -> fprintf fmt "%d" v
+  | Caddi(None)    -> fprintf fmt "addi"
+  | Caddi(Some(v)) -> fprintf fmt "addi(%d)" v
+  | Csubi(None)    -> fprintf fmt "subi"
+  | Csubi(Some(v)) -> fprintf fmt "subi(%d)" v
+  | Cmuli(None)    -> fprintf fmt "muli"
+  | Cmuli(Some(v)) -> fprintf fmt "muli(%d)" v
+  | Cdivi(None)    -> fprintf fmt "divi"
+  | Cdivi(Some(v)) -> fprintf fmt "divi(%d)" v
+  | Cmodi(None)    -> fprintf fmt "modi"
+  | Cmodi(Some(v)) -> fprintf fmt "modi(%d)" v
+  | Cnegi          -> fprintf fmt "negi"
+  | Clti(None)     -> fprintf fmt "lti"
+  | Clti(Some(v))  -> fprintf fmt "lti(%d)" v
+  | Cleqi(None)    -> fprintf fmt "leqi"
+  | Cleqi(Some(v)) -> fprintf fmt "leqi(%d)" v
+  | Cgti(None)     -> fprintf fmt "gti"
+  | Cgti(Some(v))  -> fprintf fmt "gti(%d)" v
+  | Cgeqi(None)    -> fprintf fmt "geqi"
+  | Cgeqi(Some(v)) -> fprintf fmt "geqi(%d)" v
+  | Ceqi(None)     -> fprintf fmt "eqi"
+  | Ceqi(Some(v))  -> fprintf fmt "eqi(%d)" v
+  | Cneqi(None)    -> fprintf fmt "neqi"
+  | Cneqi(Some(v)) -> fprintf fmt "neqi(%d)" v
+  | Cslli(None)    -> fprintf fmt "slli"
+  | Cslli(Some(v)) -> fprintf fmt "slli(%d)" v
+  | Csrli(None)    -> fprintf fmt "srli"
+  | Csrli(Some(v)) -> fprintf fmt "srli(%d)" v
+  | Csrai(None)    -> fprintf fmt "srai"
+  | Csrai(Some(v)) -> fprintf fmt "srai(%d)" v
+  | Carity         -> fprintf fmt "arity"
+
+  (* MCore intrinsic: Floating-point number constant and operations *)
+  | CFloat(v)      -> fprintf fmt "%f" v
+  | Caddf(None)    -> fprintf fmt "addf"
+  | Caddf(Some(v)) -> fprintf fmt "addf(%f)" v
+  | Csubf(None)    -> fprintf fmt "subf"
+  | Csubf(Some(v)) -> fprintf fmt "subf(%f)" v
+  | Cmulf(None)    -> fprintf fmt "mulf"
+  | Cmulf(Some(v)) -> fprintf fmt "mulf(%f)" v
+  | Cdivf(None)    -> fprintf fmt "divf"
+  | Cdivf(Some(v)) -> fprintf fmt "divf(%f)" v
+  | Cnegf          -> fprintf fmt "negf"
+  | Cltf(None)     -> fprintf fmt "ltf"
+  | Cltf(Some(v))  -> fprintf fmt "ltf(%f)" v
+  | Cleqf(None)    -> fprintf fmt "leqf"
+  | Cleqf(Some(v)) -> fprintf fmt "leqf(%f)" v
+  | Cgtf(None)     -> fprintf fmt "gtf"
+  | Cgtf(Some(v))  -> fprintf fmt "gtf(%f)" v
+  | Cgeqf(None)    -> fprintf fmt "geqf"
+  | Cgeqf(Some(v)) -> fprintf fmt "geqf(%f)" v
+  | Ceqf(None)     -> fprintf fmt "eqf"
+  | Ceqf(Some(v))  -> fprintf fmt "eqf(%f)" v
+  | Cneqf(None)    -> fprintf fmt "neqf"
+  | Cneqf(Some(v)) -> fprintf fmt "neqf(%f)" v
+  | Cfloorfi       -> fprintf fmt "floorfi"
+  | Cceilfi        -> fprintf fmt "ceilfi"
+  | Croundfi       -> fprintf fmt "roundfi"
+  | CInt2float     -> fprintf fmt "int2float"
+  | CString2float  -> fprintf fmt "string2float"
+
+  (* MCore intrinsic: characters *)
+  | CChar(v)  -> fprintf fmt "%s" (lit_of_uchar v)
+  | CChar2int -> fprintf fmt "char2int"
+  | CInt2char -> fprintf fmt "int2char"
+
+  (* MCore intrinsic: sequences *)
+  | CmakeSeq(_) -> fprintf fmt "makeseq"
+  | Clength     -> fprintf fmt "length"
+  | Cconcat(_)  -> fprintf fmt "concat"
+  | Cget(_)     -> fprintf fmt "get"
+  | Cset(_)     -> fprintf fmt "set"
+  | Ccons(_)    -> fprintf fmt "cons"
+  | Csnoc(_)    -> fprintf fmt "snoc"
+  | CsplitAt(_) -> fprintf fmt "splitAt"
+  | Creverse    -> fprintf fmt "reverse"
+
+  (* MCore records *)
+  | CRecord(r) ->
+    let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
+    print_record fmt contents
+
+  (* MCore debug and stdio intrinsics *)
+  | Cprint        -> fprintf fmt "print"
+  | Cdprint       -> fprintf fmt "dprint"
+  | CreadFile     -> fprintf fmt "readFile"
+  | CwriteFile(_) -> fprintf fmt "writeFile"
+  | CfileExists   -> fprintf fmt "fileExists"
+  | CdeleteFile   -> fprintf fmt "deleteFile"
+  | Cerror        -> fprintf fmt "error"
+  | CdebugShow    -> fprintf fmt "debugShow"
+
+  (* MCore Symbols *)
+  | CSymb(id) -> fprintf fmt "symb(%d)" id
+  | Cgensym   -> fprintf fmt "gensym"
+  | Ceqs(_)   -> fprintf fmt "eqs"
+
+  (* External pprint TODO: Should not be part of core language *)
+  | CExt(v) -> fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
+
+(** Pretty print a record *)
+and print_record fmt r =
+  let print (l,t) =
+    let l = string_of_ustring l in
+    (fun fmt -> fprintf fmt "%s = %a" l print_tm (APP, t)) in
+  let inner = List.map print r in
+  fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
+
+(** Print a term on the given formatter and within the given precedence. *)
+and print_tm fmt (prec, t) =
+
+  let paren = prec > match t with
+    | TmMatch(_,_,PatBool(_,true),_,_) -> IF
+    | TmMatch _ | TmLet _              -> MATCH
+    | TmLam _                          -> LAM
+    | TmSeq _                          -> SEMICOLON
+    | TmTuple _                        -> TUP
+    | TmApp _                          -> APP
+    | TmVar _    | TmRecLets _
+    | TmConst _  | TmRecord _
+    | TmProj _   | TmRecordUpdate _
+    | TmCondef _ | TmConsym _
+    | TmUse _    | TmUtest _
+    | TmClos _   | TmFix _             -> ATOM
   in
-    ppt ty
 
-and pprint_ty_label = function
-  | (l, ty) -> l ^. us" : " ^. pprint_ty ty
+  if paren then
+    fprintf fmt "(%a)" print_tm' t
+  else
+    fprintf fmt "%a" print_tm' t
 
-(* TODO: Print mlang part as well*)
-and pprintML tml =
+(** Auxiliary print function *)
+and print_tm' fmt t = match t with
+
+  | TmVar(_,x,n) ->
+    let print = string_of_ustring (ustring_of_var x n) in
+    fprintf fmt "%s" print
+
+  | TmLam(_,x,ty,t1) ->
+    let x = string_of_ustring x in
+    let ty = ty |> ustring_of_ty |> string_of_ustring in
+    fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]"
+      !ref_indent x
+      ty
+      print_tm (LAM, t1)
+
+  | TmLet(_,x,t1,t2) ->
+    let x = string_of_ustring x in
+    fprintf fmt "@[<hov 0>\
+                   @[<hov %d>let %s =@ %a in@]\
+                   @ %a\
+                 @]"
+      !ref_indent x
+      print_tm (MATCH, t1)
+      print_tm (MATCH, t2)
+
+  | TmRecLets(_,lst,t2) ->
+    let print (_,x,t) =
+      let x = string_of_ustring x in
+      (fun fmt -> fprintf fmt "@[<hov %d>let %s =@ %a@]"
+          !ref_indent x print_tm (MATCH,t)) in
+    let inner = List.map print lst in
+    fprintf fmt "@[<hov 0>\
+                   @[<hov %d>recursive@ @[<hov 0>%a@] in@]\
+                   @ %a\
+                 @]"
+      !ref_indent concat (SPACE,inner)
+      print_tm (MATCH, t2)
+
+  | TmApp(_,t1,(TmApp _ as t2)) ->
+    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (ATOM, t2)
+
+  | TmApp(_,t1,t2) ->
+    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (APP, t2)
+
+  | TmConst(_,c) -> print_const fmt c
+
+  | TmSeq(_,tms) ->
+    let print t = (fun fmt -> fprintf fmt "%a" print_tm (APP,t)) in
+    let inner = List.map print (Mseq.to_list tms) in
+    fprintf fmt "[@[<hov 0>%a@]]" concat (COMMA,inner)
+
+  | TmTuple(_,tms) ->
+    let print t = (fun fmt -> fprintf fmt "%a" print_tm (APP,t)) in
+    let inner = List.map print tms in
+    fprintf fmt "(@[<hov 0>%a@])" concat (COMMA,inner)
+
+  | TmRecord(_,r) -> print_record fmt r
+
+  | TmProj(_,t,l) ->
+    let l = match l with
+      | LabIdx i -> string_of_int i
+      | LabStr s -> string_of_ustring s in
+    fprintf fmt "%a.%s" print_tm (ATOM, t) l
+
+  | TmRecordUpdate(_,t1,l,t2) ->
+    let l = string_of_ustring l in
+    (* TODO The below ATOM precedences can probably be made less conservative *)
+    fprintf fmt "{%a with %s = %a}"
+      print_tm (ATOM, t1)
+      l
+      print_tm (ATOM, t2)
+
+  | TmCondef(_,s,ty,t) ->
+    let s = string_of_ustring s in
+    let ty = ty |> ustring_of_ty |> string_of_ustring in
+    fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
+      s ty print_tm (MATCH, t)
+
+  | TmConsym(_,s,sym,tmop) ->
+    let s = string_of_ustring s in
+    (match tmop with
+     (* TODO ATOM precedence too conservative? *)
+     | Some(t) -> fprintf fmt "%s_%d %a" s sym print_tm (ATOM ,t)
+     | None -> fprintf fmt "%s_%d" s sym)
+
+  (* If expressions *)
+  | TmMatch(_,t1,PatBool(_,true),t2,t3) ->
+    fprintf fmt "@[<hov %d>\
+                   if %a@ \
+                   @[<hov 0>\
+                     then %a@ \
+                     else %a\
+                   @]\
+                 @]"
+      !ref_indent
+      print_tm (MATCH, t1)
+      print_tm (MATCH, t2)
+      print_tm (IF, t3)
+
+  | TmMatch(_,t,p,then_,else_) ->
+    let p = p |> ustring_of_pat |> string_of_ustring in
+    fprintf fmt "@[<hov %d>\
+                   match %a@ \
+                   @[<hov 0>\
+                     with %s@ \
+                     then %a@ \
+                     else %a\
+                   @]\
+                 @]"
+      !ref_indent
+      print_tm (MATCH, t)
+      p
+      print_tm (IF, then_)
+      print_tm (IF, else_)
+
+  | TmUse(_,l,t) ->
+    let l = string_of_ustring l in
+    fprintf fmt "@[<hov 0>use %s in@ %a@]"
+      l print_tm (MATCH, t)
+
+  | TmUtest(_,t1,t2,t3) ->
+    fprintf fmt "@[<hov 0>\
+                   @[<hov %d>\
+                     utest@ \
+                     @[<hov 0>\
+                       %a with@ \
+                       %a in\
+                     @]\
+                   @]\
+                   @ %a\
+                 @]"
+      !ref_indent
+      print_tm (MATCH, t1)
+      print_tm (MATCH, t2)
+      print_tm (MATCH, t3)
+
+  | TmClos(_,x,ty,t1,_) ->
+    let x = string_of_ustring x in
+    let ty = ty |> ustring_of_ty |> string_of_ustring in
+    fprintf fmt "@[<hov %d>clos %s:%s.@ %a@]"
+      !ref_indent x
+      ty
+      print_tm (LAM, t1)
+
+  | TmFix _ -> fprintf fmt "fix"
+
+(** Print an environment on the given formatter. *)
+and print_env fmt env =
+  let print i t = (fun fmt -> fprintf fmt "%d -> %a" i print_tm (MATCH, t)) in
+  let inner = List.mapi print env in
+  fprintf fmt "[@[<hov 0>%a@]]" concat (COMMA,inner)
+
+(** Helper function for configuring the string formatter and printing *)
+let str_formatter_print
+    ?(debruijn   = !enable_debug_debruijn_print)
+    ?(indent     = 2)
+    ?(max_indent = 68)
+    ?(margin     = 80)
+    ?(max_boxes  = max_int)
+    ?(prefix     = "")
+    printer arg =
+
+  (* Configure global settings *)
+  ref_debruijn := debruijn;
+  ref_indent   := indent;
+  pp_set_margin     str_formatter margin;
+  pp_set_max_indent str_formatter max_indent;
+  pp_set_max_boxes  str_formatter max_boxes;
+
+  (* Make sure formatter is cleared *)
+  ignore (flush_str_formatter ());
+
+  (* Print a prefix *)
+  fprintf str_formatter "%s" prefix;
+
+  (* Do the actual printing *)
+  printer str_formatter arg;
+
+  (* Return result string and clear formatter *)
+  flush_str_formatter ()
+
+(** Convert terms to strings.
+ *  TODO Messy with optional arguments passing. Alternatives? *)
+let string_of_tm ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix t =
+  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+    print_tm (MATCH, t)
+
+(** Converting constants to strings.
+ *  TODO Messy with optional arguments passing. Alternatives? *)
+let string_of_const ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix c =
+  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+    print_const c
+
+(** Converting environments to strings.
+ *  TODO Messy with optional arguments passing. Alternatives? *)
+let string_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
+  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+    print_env e
+
+(** Old printing function for terms.
+ *  @deprecated Use string_of_tm instead. *)
+let pprintME t = t |> string_of_tm ~margin:max_int |> us
+
+(** Old printing function for consts.
+ *  @deprecated Use string_of_const instead. *)
+let pprint_const c = c |> string_of_const ~margin:max_int |> us
+
+(** Old printing function for patterns.
+ *  @deprecated Use ustring_of_pat instead. *)
+let pprintPat = ustring_of_pat
+
+(** Old printing function for environments.
+ *  @deprecated Use string_of_env instead. *)
+let pprint_env e = e |> string_of_env |> us
+
+(** Old printing function for lists of terms.
+ *  TODO Use Format module printing *)
+let pprintTmList p =
+  us"[" ^. (p |> List.map pprintME |> Ustring.concat (us",")) ^. us"]"
+
+(** Old printing function for lists of patterns.
+ *  TODO Use Format module printing *)
+let pprintPatList p =
+  us"[" ^. (p |> List.map pprintPat |> Ustring.concat (us",")) ^. us"]"
+
+(** TODO: Print mlang part as well*)
+let pprintML tml =
   match tml with
   | Program(_,_,t) -> pprintME t
+

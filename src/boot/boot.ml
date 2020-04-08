@@ -59,16 +59,15 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 (* Debug template function. Used below *)
 let debug_after_parse t =
   if enable_debug_after_parse then
-    (printf "\n-- After parsing --  \n";
+    (printf "\n-- After parsing --\n";
      uprint_endline (pprintML t);
      t)
   else t
 
-
 (* Debug template function. Used below *)
 let debug_after_debruijn t =
   if enable_debug_after_debruijn  then
-    (printf "\n-- After debruijn --  \n";
+    (printf "\n-- After debruijn --\n";
      uprint_endline (pprintME t);
      t)
   else t
@@ -77,7 +76,7 @@ let debug_after_debruijn t =
 let debug_after_mlang t =
   if !enable_debug_after_mlang then
     (printf "\n-- After mlang --\n";
-     print_endline (Ppprint.string_of_tm t);
+     print_endline (string_of_tm t);
      t)
   else t
 
@@ -226,7 +225,7 @@ let runprog name lst =
 
 
 (* Print out main menu *)
-let usage_msg = "Usage: boot [run|test] <files>\n\nOptions:"
+let usage_msg = "Usage: miking [run|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
