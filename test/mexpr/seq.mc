@@ -43,6 +43,7 @@ utest snoc [] 1 with [1] in
 utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
 utest splitAt [1,2,3] 1 with ([1],[2,3]) in
 utest splitAt [1,2,3] 2 with ([1,2],[3]) in
+utest splitAt [1,2,3] 3 with ([1,2,3],[]) in
 
 // reverse seq
 utest reverse [1,7,10] with [10,7,1] in

@@ -24,6 +24,8 @@ let split_at s n =
   else if n == length s - 1 then
     (BatFingerTree.init_exn s,
      BatFingerTree.singleton (BatFingerTree.last_exn s))
+  else if n == length s then
+    (s, empty)
   else
     BatFingerTree.split_at s n
 
