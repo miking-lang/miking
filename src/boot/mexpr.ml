@@ -495,17 +495,12 @@ let rec debruijn env t =
 
 let rec tryMatch env value pat =
   let go v p env = Option.bind (fun env -> tryMatch env v p) env in
-  let splitNth n s =
-    assert (n <= Mseq.length s);
+  let splitNthOrDoubleEmpty n s =
     if Mseq.length s == 0 then (Mseq.empty, Mseq.empty)
-    else if n < Mseq.length s then Mseq.split_at s n
-    else (s, Mseq.empty)
+    else Mseq.split_at s n
   in
-  let bindIfName fi tms seqMP env = match seqMP with
-    | SeqMatchPrefix(_) | SeqMatchPostfix(_) ->
-       env |> Option.bind (fun env -> Some(TmSeq(fi,tms)::env))
-    | SeqMatchTotal ->
-       env |> Option.bind (fun env -> Some(env))
+  let bind fi tms env =
+    env |> Option.bind (fun env -> Some(TmSeq(fi,tms)::env))
   in
   match pat with
   | PatNamed(_,NameStr(_)) -> Some(value::env)
@@ -514,11 +509,13 @@ let rec tryMatch env value pat =
      let npats = Mseq.length pats in
      (match value,seqMP with
       | TmSeq(fi,vs),SeqMatchPrefix(_) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> splitNth npats in
-         Mseq.fold_right2 go pre pats (Some env) |> bindIfName fi post seqMP
+         let (pre,post) = vs |> splitNthOrDoubleEmpty npats in
+         Mseq.fold_right2 go pre pats (Some env) |> bind fi post
       | TmSeq(fi,vs),SeqMatchPostfix(_) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> splitNth (Mseq.length vs - npats) in
-         Mseq.fold_right2 go post pats (Some env) |> bindIfName fi pre seqMP
+         let (pre,post) =
+           vs |> splitNthOrDoubleEmpty (Mseq.length vs - npats)
+         in
+         Mseq.fold_right2 go post pats (Some env) |> bind fi pre
       | TmSeq(_,vs),SeqMatchTotal when npats == Mseq.length vs ->
          Mseq.fold_right2 go vs pats (Some env)
       | _ -> None)
