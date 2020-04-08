@@ -151,6 +151,12 @@ lang BoolAst
   | TmIf {cond : Expr,
           thn  : Expr,
           els  : Expr}
+
+  sem smap_Expr_Expr (f : Expr -> A) =
+  | TmIf t -> TmIf {cond = f t.cond, thn = f t.thn, els = f t.els}
+
+  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
+  | TmIf t -> f (f (f a t.cond) t.thn) t.els
 end
 
 lang BoolPat = BoolAst
@@ -355,7 +361,7 @@ lang MExprAst =
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
   RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst
-  
+
 mexpr
 use MExprAst in
 
@@ -415,6 +421,23 @@ let tmApp11 = app_ tmConst1 tmConst2 in
 
 utest smap_Expr_Expr (lam x. 0) tmConst1 with tmConst1 in
 utest sfold_Expr_Expr fold2seq [] tmConst1 with [] in
+
+let if_ = lam cond. lam thn. lam els. TmIf {cond = cond, thn = thn, els = els} in
+let true_ = TmConst {val = (CBool {val = true})} in
+let false_ = TmConst {val = (CBool {val = false})} in
+let ite1 = if_ true_ true_ false_ in
+let ite2 = if_ false_ false_ true_ in
+let ite3 = if_ false_ (int_ 1) (int_ 4) in
+let negateBool = lam tm. match tm with TmConst c then
+                           match c.val with CBool v then
+                             match v.val with true then false_ else true_
+                           else tm
+                         else tm
+in
+let countConsts = lam tm. match tm with TmConst _ then 1 else 0 in
+
+utest smap_Expr_Expr negateBool ite1 with ite2 in
+utest sfold_Expr_Expr addi 0 (smap_Expr_Expr countConsts ite3) with 3 in
 
 let seq_ = lam tms. TmSeq {tms = tms} in
 let tmSeq = seq_ [tmApp11, tmConst2, tmConst3] in
