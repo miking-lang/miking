@@ -92,7 +92,7 @@ let partition = (lam p. lam seq.
 let findAssoc = lam p. lam seq.
   match find (lam tup. p tup.0) seq with Some res
   then Some res.1
-  else None
+  else None ()
 
 recursive
   let uniq = lam eq. lam seq.
@@ -203,6 +203,9 @@ utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43] in
 
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
 utest find (lam x. lti x 1) [4,1,2] with None () in
+
+utest findAssoc (eqi 1) [(2,3), (1,4)] with Some 4 in
+utest findAssoc (eqi 3) [(2,3), (1,4)] with None () in
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[]) in
