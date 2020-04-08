@@ -147,7 +147,7 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
    The reason for this is that if-expressions return expressions
    and not values. *)
 let delta eval env fi c v  =
-    let index_out_of_bounds_in_seq_msg = "Out of bound access in sequence." in
+    let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
