@@ -7,8 +7,6 @@ let to_array s = Array.of_list (to_list s)
 let of_ustring u = of_list (Ustring.Op.ustring2list u)
 let to_ustring s = Ustring.Op.list2ustring (to_list s)
 
-let map = BatFingerTree.map
-
 let make n f = of_list (List.init n f)
 let empty = BatFingerTree.empty
 let length = BatFingerTree.size
@@ -24,3 +22,18 @@ let head = BatFingerTree.head_exn
 let tail = BatFingerTree.tail_exn
 let init = BatFingerTree.init_exn
 let last = BatFingerTree.last_exn
+
+let map = BatFingerTree.map
+let fold_right f s a = BatFingerTree.fold_right (fun a x -> f x a) a s
+
+let combine s1 s2 =
+  let rec work a s1 s2 =
+    if length s1 == 0 then a
+    else work (snoc a (head s1, head s2)) (tail s1) (tail s2)
+  in
+  if length s1 != length s2 then
+    raise (Invalid_argument "sequences of different length")
+  else work empty s1 s2
+
+let fold_right2 f s1 s2 a =
+  fold_right (fun x a -> f (fst x) (snd x) a) (combine s1 s2) a

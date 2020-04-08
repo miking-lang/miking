@@ -331,11 +331,11 @@ pat:
   | IDENT pat
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
   | patseq
-      { PatSeq($1 |> fst, $1 |> snd, SeqMatchTotal) }
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
   | patseq CONCAT IDENT
-      { PatSeq($1 |> fst, $1 |> snd, SeqMatchPrefix(NameStr($3.v))) }
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v))) }
   | IDENT CONCAT patseq
-      { PatSeq($3 |> fst, $3 |> snd, SeqMatchPostfix(NameStr($1.v))) }
+      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v))) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN

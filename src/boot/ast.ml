@@ -178,7 +178,7 @@ and seqMatchType =
 (* Patterns *)
 and pat =
 | PatNamed of info * patName                      (* Named, capturing wildcard *)
-| PatSeq   of info * pat list * seqMatchType      (* Sequence pattern *)
+| PatSeq   of info * pat Mseq.t * seqMatchType    (* Sequence pattern *)
 | PatTuple of info * pat list                     (* Tuple pattern *)
 | PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
 | PatInt   of info * int                          (* Int pattern *)

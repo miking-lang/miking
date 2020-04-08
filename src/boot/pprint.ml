@@ -195,7 +195,9 @@ and pprintTmList p = us"[" ^. (p |> List.map pprintME |> Ustring.concat (us","))
 
 and pprintPat p =
   let rec ppp inside pat =
-    let ppSeq lst = lst |> List.map (ppp inside) |> Ustring.concat (us",") in
+    let ppSeq s =
+      s |> Mseq.to_list |> List.map (ppp inside) |> Ustring.concat (us",")
+    in
     let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
     match pat with
     | PatNamed(_,NameStr(x)) -> x
