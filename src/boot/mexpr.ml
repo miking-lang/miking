@@ -32,7 +32,6 @@ let builtin =
    ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
-   ("head",f(Chead));("tail",f(Ctail));("init",f(Cinit));("last",f(Clast));
    ("splitAt",f(CsplitAt(None)));("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
    ("argv",TmSeq(NoInfo,Sys.argv
@@ -109,10 +108,6 @@ let arity = function
   | Cset(None,None)   -> 3 | Cset(Some(_),None) -> 2 | Cset(_,Some(_)) -> 1
   | Ccons(None)       -> 2 | Ccons(Some(_)) -> 1
   | Csnoc(None)       -> 2 | Csnoc(Some(_)) -> 1
-  | Chead             -> 1
-  | Ctail             -> 1
-  | Cinit             -> 1
-  | Clast             -> 1
   | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
   | Creverse          -> 1
   (* MCore intrinsic: records *)
@@ -153,7 +148,6 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
    and not values. *)
 let delta eval env fi c v  =
     let index_out_of_bounds_in_seq_msg = "Out of bound access in sequence." in
-    let empty_seq_msg = "Empty sequence." in
     let fail_constapp = fail_constapp c v in
     match c,v with
     (* MCore intrinsic: unit - no operation *)
@@ -351,24 +345,6 @@ let delta eval env fi c v  =
     | Csnoc(Some(s)),t -> TmSeq(fi,Mseq.snoc s t)
     | Csnoc(_),_ -> fail_constapp fi
 
-    | Chead,TmSeq(_,s) ->
-       (try Mseq.head s with _ -> raise_error fi empty_seq_msg)
-    | Chead,_ -> fail_constapp fi
-
-    | Ctail,TmSeq(_,s) ->
-       let ts = try Mseq.tail s with _ -> raise_error fi empty_seq_msg in
-       TmSeq(fi,ts)
-    | Ctail,_ -> fail_constapp fi
-
-    | Cinit,TmSeq(_,s) ->
-       let ts = try Mseq.init s with _ -> raise_error fi empty_seq_msg in
-       TmSeq(fi,ts)
-    | Cinit,_ -> fail_constapp fi
-
-    | Clast,TmSeq(_,s) ->
-       (try Mseq.last s with _ -> raise_error fi empty_seq_msg)
-    | Clast,_ -> fail_constapp fi
-
     | CsplitAt(None),TmSeq(fi,s) -> TmConst(fi,CsplitAt(Some(s)))
     | CsplitAt(Some(s)),TmConst(_,CInt(n)) ->
        let t = (try Mseq.split_at s n
@@ -446,7 +422,6 @@ let unittest_failed fi t1 t2=
     | NoInfo -> us"Unit test FAILED ")
 
 
-
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
@@ -518,7 +493,6 @@ let rec debruijn env t =
      -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
 
 
-
 let rec tryMatch env value pat =
   let go v p env = Option.bind (fun env -> tryMatch env v p) env in
   let splitNth n s =
@@ -539,12 +513,10 @@ let rec tryMatch env value pat =
   | PatSeq(_,pats,seqMP) ->
     (match value,seqMP with
      | TmSeq(fi,vs),SeqMatchPrefix(_) when Mseq.length pats <= Mseq.length vs ->
-       let (pre,post) = vs |> splitNth (Mseq.length pats) in
+        let (pre,post) = vs |> splitNth (Mseq.length pats) in
        Mseq.fold_right2 go pre pats (Some env) |> bindIfName fi post seqMP
      | TmSeq(fi,vs),SeqMatchPostfix(_) when Mseq.length pats <= Mseq.length vs ->
-        let (pre,post) =
-          vs |> splitNth (Mseq.length vs - Mseq.length pats)
-        in
+        let (pre,post) = vs |> splitNth (Mseq.length vs - Mseq.length pats) in
        Mseq.fold_right2 go post pats (Some env) |> bindIfName fi pre seqMP
      | TmSeq(_,vs),SeqMatchTotal when Mseq.length pats = Mseq.length vs ->
        Mseq.fold_right2 go vs pats (Some env)

@@ -49,14 +49,6 @@ utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
 utest reverse [] with [] in
 
-// head and tail
-utest head [2,3,5] with 2 in
-utest tail [2,4,8] with [4,8] in
-
-// init and last
-utest init [2,3,5] with [2,3] in
-utest last [2,4,8] with 8 in
-
 // map
 let map = fix (lam map. lam f. lam seq.
   if eqi (length seq) 0 then []

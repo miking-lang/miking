@@ -86,10 +86,6 @@ and const =
 | Cset     of (tm Mseq.t) option * int option
 | Ccons    of tm option
 | Csnoc    of (tm Mseq.t) option
-| Chead
-| Ctail
-| Cinit
-| Clast
 | CsplitAt of (tm Mseq.t) option
 | Creverse
 (* MCore intrinsic: records *)

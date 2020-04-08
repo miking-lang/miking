@@ -16,12 +16,18 @@ let set = BatFingerTree.set
 let cons e s = BatFingerTree.cons s e
 let snoc = BatFingerTree.snoc
 let reverse = BatFingerTree.reverse
-let split_at = BatFingerTree.split_at
+
+let split_at s n =
+  if n == 1 then
+    (BatFingerTree.singleton (BatFingerTree.head_exn s),
+     BatFingerTree.tail_exn s)
+  else if n == length s - 1 then
+    (BatFingerTree.init_exn s,
+     BatFingerTree.singleton (BatFingerTree.last_exn s))
+  else
+    BatFingerTree.split_at s n
+
 let equal = BatFingerTree.equal
-let head = BatFingerTree.head_exn
-let tail = BatFingerTree.tail_exn
-let init = BatFingerTree.init_exn
-let last = BatFingerTree.last_exn
 
 let map = BatFingerTree.map
 let fold_right f s a = BatFingerTree.fold_right (fun a x -> f x a) a s
@@ -29,7 +35,8 @@ let fold_right f s a = BatFingerTree.fold_right (fun a x -> f x a) a s
 let combine s1 s2 =
   let rec work a s1 s2 =
     if length s1 == 0 then a
-    else work (snoc a (head s1, head s2)) (tail s1) (tail s2)
+    else work (snoc a (BatFingerTree.head_exn s1, BatFingerTree.head_exn s2))
+           (BatFingerTree.tail_exn s1) (BatFingerTree.tail_exn s2)
   in
   if length s1 != length s2 then
     raise (Invalid_argument "sequences of different length")

@@ -112,10 +112,6 @@ let rec pprint_const c =
   | Cset(_) -> us"set"
   | Ccons(_) -> us"cons"
   | Csnoc(_) -> us"snoc"
-  | Chead -> us"head"
-  | Ctail -> us"tail"
-  | Cinit -> us"init"
-  | Clast -> us"last"
   | CsplitAt(_) -> us"splitAt"
   | Creverse -> us"reverse"
   (* MCore records *)

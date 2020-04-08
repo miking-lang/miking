@@ -1,6 +1,10 @@
 include "option.mc"
 
 let null = lam seq. eqi 0 (length seq)
+let head = lam seq. get (splitAt seq 1).0 0
+let tail = lam seq. (splitAt seq 1).1
+let last = lam seq. get (splitAt seq (subi (length seq) 1)).1 0
+let init = lam seq. (splitAt seq (subi (length seq) 1)).0
 
 let slice = lam seq. lam off. lam cnt.
   let splitAt2 = lam seq. lam off.
@@ -142,6 +146,12 @@ let lastIndex = lam pred. lam seq.
   lastIndex_rechelper 0 (None ()) pred seq
 
 mexpr
+
+utest head [2,3,5] with 2 in
+utest tail [2,4,8] with [4,8] in
+
+utest init [2,3,5] with [2,3] in
+utest last [2,4,8] with 8 in
 
 utest slice [1,3,5] 0 2 with [1,3] in
 utest slice [3,7,10,20] 1 3 with [7,10,20] in
