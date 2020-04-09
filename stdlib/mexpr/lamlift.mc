@@ -501,7 +501,7 @@ lang RecLetsLamlift = VarLamlift + RecLetsAst + FunLamlift + ConstAst + UnitAst
 
         st_addVarToEnv oldname binding accstate
       in
-      let envstate = foldl envgen {state with id = liftedstate.id} liftedbindings in
+      let envstate = foldl envgen {{state with id = liftedstate.id} with globaldefs = liftedstate.globaldefs} liftedbindings in
 
       -- Replace all internal occurrences with the newly bound values
       let appgen = lam acc. lam b.
@@ -1051,6 +1051,41 @@ let example_multiuse =
   ]
 in
 
+let example_let_in_reclet =
+  bindall_ [
+    let_ "foo" (None ()) (
+      lam_ "x" (None ()) (
+        bindall_ [
+          reclets_add "bar" (None ()) (
+            lam_ "y" (None ()) (
+              bindall_ [
+                let_ "babar" (None ()) (
+                  lam_ "z" (None ()) (
+                    appf2_ (var_ "muli") (var_ "z") (var_ "z")
+                  )
+                ),
+                if_ (appf2_ (var_ "eqi") (var_ "y") (int_ 0))
+                    (int_ 0)
+                    (appf2_ (var_ "addi")
+                            (appf1_ (var_ "babar") (var_ "y"))
+                            (appf1_ (var_ "bar")
+                                    (appf2_ (var_ "subi")
+                                            (var_ "y")
+                                            (int_ 1))))
+              ]
+            )
+          ) (reclets_empty),
+          appf1_ (var_ "bar")
+                 (appf2_ (var_ "muli")
+                         (var_ "x")
+                         (int_ 2))
+        ]
+      )
+    ),
+    appf1_ (var_ "foo") (int_ 7)
+  ]
+in
+
 -- Convert from a Lambda Lifting-style environment to an eval-style context
 let ctx = {env = map (lam e. (e.key, e.value)) builtin_env} in
 
@@ -1067,6 +1102,7 @@ utest eval ctx example_recursive_typed_ast with eval ctx (lift_lambdas example_r
 utest eval ctx example_conmatch_typed with eval ctx (lift_lambdas example_conmatch_typed) in
 utest eval ctx example_ifexpr_ast with eval ctx (lift_lambdas example_ifexpr_ast) in
 utest eval ctx example_multiuse with eval ctx (lift_lambdas example_multiuse) in
+utest eval ctx example_let_in_reclet with eval ctx (lift_lambdas example_let_in_reclet) in
 
 let testllprint = lam name. lam ast.
   let bar = "------------------------" in
@@ -1101,5 +1137,6 @@ in
 --let _ = testllprint "example_conmatch_typed" example_conmatch_typed in
 --let _ = testllprint "example_ifexpr_ast" example_ifexpr_ast in
 --let _ = testllprint "example_multiuse" example_multiuse in
+--let _ = testllprint "example_let_in_reclet" example_let_in_reclet in
 
 ()
