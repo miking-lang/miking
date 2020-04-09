@@ -1,8 +1,15 @@
 include "option.mc"
 
-let head = lam s. nth s 0
-let tail = lam s. slice s 1 (length s)
 let null = lam seq. eqi 0 (length seq)
+let head = lam seq. get (splitAt seq 1).0 0
+let tail = lam seq. (splitAt seq 1).1
+let last = lam seq. get (splitAt seq (subi (length seq) 1)).1 0
+let init = lam seq. (splitAt seq (subi (length seq) 1)).0
+
+let slice = lam seq. lam off. lam cnt.
+  let seq = (splitAt seq off).1 in
+  let cnt = if gti cnt (length seq) then length seq else cnt in
+  (splitAt seq cnt).0
 
 -- Maps and (un)folds
 let mapi = lam f. lam seq.
@@ -28,14 +35,15 @@ recursive
     else f (head seq) (foldr f acc (tail seq))
 end
 
-let foldr1 = lam f. lam seq. foldl1 (lam acc. lam x. f x acc) (reverse seq)
+let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
-recursive
-  let zipWith = lam f. lam seq1. lam seq2.
-    if null seq1 then []
-    else if null seq2 then []
-    else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
-end
+let zipWith = lam f. lam seq1. lam seq2.
+  recursive let work = lam a. lam s1. lam s2.
+    if or (null s1) (null s2) then a
+    else
+      work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
+  in
+  work [] seq1 seq2
 
 recursive
 let unfoldr = lam f. lam b.
@@ -139,6 +147,14 @@ mexpr
 
 utest head [2,3,5] with 2 in
 utest tail [2,4,8] with [4,8] in
+
+utest init [2,3,5] with [2,3] in
+utest last [2,4,8] with 8 in
+
+utest slice [1,3,5] 0 2 with [1,3] in
+utest slice [3,7,10,20] 1 3 with [7,10,20] in
+utest slice ['a','b'] 1 10 with ['b'] in
+utest slice [1,3] 2 10 with [] in
 
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
 utest mapi (lam i. lam x. i) [] with [] in

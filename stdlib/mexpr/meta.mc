@@ -334,10 +334,10 @@ let builtins =
     ,("lti", TmConst CLti)
 ] in
 
-if or (eqstr (nth argv 1) "test") (lti (length argv) 3) then
+if or (eqstr (get argv 1) "test") (lti (length argv) 3) then
   ()
 else
-  let file = nth argv 2 in
+  let file = get argv 2 in
   if fileExists file then
     let contents = readFile file in
     let res = run_parser file program contents in

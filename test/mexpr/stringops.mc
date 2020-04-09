@@ -5,7 +5,7 @@
 
 mexpr
 
-let head = lam seq. nth seq 0 in
+let head = lam seq. get seq 0 in
 let tail = lam seq. slice seq 1 (length seq) in
 
 recursive

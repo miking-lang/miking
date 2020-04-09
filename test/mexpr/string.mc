@@ -21,7 +21,7 @@ utest "大衛·布羅曼" with "大衛·布羅曼" in
 
 // string operarations
 utest concat "This " "is" with "This is" in
-utest nth "Hello" 1 with 'e' in
+utest get "Hello" 1 with 'e' in
 utest slice "This is all" 3 6 with "s is a" in
 utest slice "This is all" 3 6 with ['s',' ','i','s',' ','a'] in
 

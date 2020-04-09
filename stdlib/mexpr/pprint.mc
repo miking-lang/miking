@@ -6,7 +6,7 @@ include "string.mc"
 include "ast.mc"
 include "ast-builder.mc"
 
-let spacing = lam indent. makeseq indent ' '
+let spacing = lam indent. makeSeq indent ' '
 let newline = lam indent. concat "\n" (spacing indent)
 
 -- Set spacing on increment
@@ -157,7 +157,7 @@ end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     sem getConstStringCode (indent : Int) =
-    | CNth _ -> "nth"
+    | CGet _ -> "get"
     | CSeq t ->
       let extract_char = lam e.
         match e with TmConst t1 then

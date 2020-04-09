@@ -277,10 +277,10 @@ atom:
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
-  | STRING               { TmSeq($1.i, List.map (fun x -> TmConst($1.i,CChar(x)))
-                                                  (ustring2list $1.v)) }
-  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, $2) }
-  | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, []) }
+  | STRING               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
+                                                  (Mseq.of_ustring $1.v)) }
+  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.of_list $2) }
+  | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, Mseq.empty) }
   | LBRACKET labels RBRACKET    { TmRecord(mkinfo $1.i $3.i, $2)}
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, [])}
   | LBRACKET mexpr WITH IDENT EQ mexpr RBRACKET
@@ -331,11 +331,11 @@ pat:
   | IDENT pat
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
   | patseq
-      { PatSeq($1 |> fst, $1 |> snd, SeqMatchTotal) }
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
   | patseq CONCAT IDENT
-      { PatSeq($1 |> fst, $1 |> snd, SeqMatchPrefix(NameStr($3.v))) }
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v))) }
   | IDENT CONCAT patseq
-      { PatSeq($3 |> fst, $3 |> snd, SeqMatchPostfix(NameStr($1.v))) }
+      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v))) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN

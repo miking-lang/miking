@@ -181,7 +181,7 @@ end
 lang SeqAst = IntAst
   syn Const =
   | CSeq {tms : [Expr]}
-  | CNth {}
+  | CGet {}
 
   syn Expr =
   | TmSeq {tms : [Expr]}

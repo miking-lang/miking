@@ -583,7 +583,7 @@ end
 lang SeqLamlift = SeqAst + ConstLamlift
     sem lamlift (state : LiftState) =
     --| CSeq tms -> (state, CSeq tms)
-    --| CNth -> (state, CNth)
+    --| CGet -> (state, CGet)
     | TmSeq t ->
       let foldfun = lam acc. lam e.
         let accstate = acc.0 in
@@ -654,7 +654,7 @@ lang MatchLamlift = MatchAst + VarPat + UnitPat + IntPat +
 
       let elsret = lamlift thnstate t.els in
       let elsstate = st_addGenargsToEnv elsret.0 patstate {{elsret.0 with env = patstate.env} with lambdarefs = patstate.lambdarefs} in
-      
+
       let retstate = {{elsret.0 with env = state.env} with lambdarefs = state.lambdarefs} in
       (retstate, TmMatch {{{{t with target = targetret.1} with pat = patret.1} with thn = thnret.1} with els = elsret.1})
 
@@ -733,7 +733,7 @@ let builtin_env = [{key = "addi", value = const_ (CAddi ())},
                    {key = "or", value = const_ (COr ())},
                    {key = "not", value = const_ (CNot ())},
                    {key = "eqi", value = const_ (CEqi ())},
-                   {key = "nth", value = const_ (CNth ())}]
+                   {key = "get", value = const_ (CGet ())}]
 in
 
 -- Lifts out the lambdas, returning a new AST with all lambdas on the top
@@ -796,7 +796,7 @@ in
 --let _ = print "\n" in
 --let _ = dprint (let_ "foo" (None ()) unit_) in
 --let _ = print "\n\n" in
---let _ = use MExprLLandPPandEval in 
+--let _ = use MExprLLandPPandEval in
 --  dprint (TmLet {ident = "foo",
 --                 tpe = None (),
 --                 body = unit_,
@@ -1084,7 +1084,7 @@ let testllprint = lam name. lam ast.
       let _ = print "\n" in
       ()
   in
-  let _ = print (makeseq (length top) '-') in
+  let _ = print (makeSeq (length top) '-') in
   let _ = print "\n\n" in
   ()
 in

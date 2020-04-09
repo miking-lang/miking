@@ -208,7 +208,7 @@ let eqi_ = use MExprAst in
 
 let nth_ = use MExprAst in
   lam s. lam i.
-  appf2_ (const_ (CNth ())) s i
+  appf2_ (const_ (CGet ())) s i
 
 
 -- Patterns --

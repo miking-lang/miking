@@ -42,7 +42,7 @@ utest odd 41 with true in
 utest odd 42 with false in
 
 -- Generalized fixpoint for mutual recursion-----------------------------------
-let head = lam seq. nth seq 0 in
+let head = lam seq. get seq 0 in
 let tail = lam seq. slice seq 1 (length seq) in
 
 let map = fix (lam map. lam f. lam seq.
@@ -56,8 +56,8 @@ let fix_mut =
 in
 
 let odd2_abs = lam funs. lam n.
-    let odd = nth funs 0 in
-    let even = nth funs 1 in
+    let odd = get funs 0 in
+    let even = get funs 1 in
     if eqi n 1
     then true
     else if lti n 1
@@ -65,8 +65,8 @@ let odd2_abs = lam funs. lam n.
     else even (subi n 1)
 in
 let even2_abs = lam funs. lam n.
-    let odd = nth funs 0 in
-    let even = nth funs 1 in
+    let odd = get funs 0 in
+    let even = get funs 1 in
     if eqi n 0
     then true
     else if lti n 0
@@ -75,8 +75,8 @@ let even2_abs = lam funs. lam n.
 in
 
 let odd_even = fix_mut [odd2_abs, even2_abs] in
-let odd2 = nth odd_even 0 in
-let even2 = nth odd_even 1 in
+let odd2 = get odd_even 0 in
+let even2 = get odd_even 1 in
 
 utest even2 20 with true in
 utest even2 27 with false in

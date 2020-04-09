@@ -105,12 +105,14 @@ let rec pprint_const c =
   | CChar2int -> us"char2int"
   | CInt2char -> us"int2char"
   (* MCore intrinsic: sequences *)
-  | Cmakeseq(_) -> us"makeseq"
+  | CmakeSeq(_) -> us"makeSeq"
   | Clength -> us"length"
   | Cconcat(_) -> us"concat"
-  | Cnth(_) -> us"nth"
+  | Cget(_) -> us"get"
+  | Cset(_) -> us"set"
   | Ccons(_) -> us"cons"
-  | Cslice(_,_) -> us"slice"
+  | Csnoc(_) -> us"snoc"
+  | CsplitAt(_) -> us"splitAt"
   | Creverse -> us"reverse"
   (* MCore records *)
   | CRecord(r) ->
@@ -162,7 +164,8 @@ and pprintME t =
        left inside ^. ppt true t1  ^. us" " ^. ppt true t2 ^. right inside
   | TmConst(_,c) -> pprint_const c
   | TmFix(_) -> us"fix"
-  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us"]"
+  | TmSeq(_,tms) -> us"[" ^. Ustring.concat (us",")
+                               (List.map (ppt false) (Mseq.to_list tms)) ^. us"]"
   | TmTuple(_,tms) -> us"(" ^. Ustring.concat (us",") (List.map (ppt false) tms) ^. us")"
   | TmRecord(_, r) -> left inside ^. pprecord r ^. right inside
   | TmProj(_,t,l) -> left inside ^. ppt false t  ^. us"." ^. pplabel l ^. right inside
@@ -188,7 +191,9 @@ and pprintTmList p = us"[" ^. (p |> List.map pprintME |> Ustring.concat (us","))
 
 and pprintPat p =
   let rec ppp inside pat =
-    let ppSeq lst = lst |> List.map (ppp inside) |> Ustring.concat (us",") in
+    let ppSeq s =
+      s |> Mseq.to_list |> List.map (ppp inside) |> Ustring.concat (us",")
+    in
     let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
     match pat with
     | PatNamed(_,NameStr(x)) -> x
