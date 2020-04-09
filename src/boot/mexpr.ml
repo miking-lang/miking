@@ -494,13 +494,13 @@ let rec debruijn env t =
 
 
 let rec tryMatch env value pat =
-  let go v p env = Option.bind (fun env -> tryMatch env v p) env in
+  let go v p env = Option.bind env (fun env -> tryMatch env v p) in
   let splitNthOrDoubleEmpty n s =
     if Mseq.length s == 0 then (Mseq.empty, Mseq.empty)
     else Mseq.split_at s n
   in
   let bind fi tms env =
-    env |> Option.bind (fun env -> Some(TmSeq(fi,tms)::env))
+    Option.bind env (fun env -> Some(TmSeq(fi,tms)::env))
   in
   match pat with
   | PatNamed(_,NameStr(_)) -> Some(value::env)
