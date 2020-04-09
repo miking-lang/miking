@@ -7,7 +7,6 @@ let last = lam seq. get (splitAt seq (subi (length seq) 1)).1 0
 let init = lam seq. (splitAt seq (subi (length seq) 1)).0
 
 let slice = lam seq. lam off. lam cnt.
-  let off = if lti off 0 then 0 else off in
   let seq = (splitAt seq off).1 in
   let cnt = if gti cnt (length seq) then length seq else cnt in
   (splitAt seq cnt).0
