@@ -40,12 +40,13 @@ end
 
 let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
-recursive
-  let zipWith = lam f. lam seq1. lam seq2.
-    if null seq1 then []
-    else if null seq2 then []
-    else cons (f (head seq1) (head seq2)) (zipWith f (tail seq1) (tail seq2))
-end
+let zipWith = lam f. lam seq1. lam seq2.
+  recursive let work = lam a. lam s1. lam s2.
+    if or (null s1) (null s2) then a
+    else
+      work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
+  in
+  work [] seq1 seq2
 
 recursive
 let unfoldr = lam f. lam b.
