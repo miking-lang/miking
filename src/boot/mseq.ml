@@ -18,16 +18,18 @@ let snoc = BatFingerTree.snoc
 let reverse = BatFingerTree.reverse
 
 let split_at s n =
-  if n == 1 then
+  if n == 0 then
+    (empty, s)                                              (* O(1) *)
+  else if n == 1 then
     (BatFingerTree.singleton (BatFingerTree.head_exn s),
-     BatFingerTree.tail_exn s)
+     BatFingerTree.tail_exn s)                              (* Amortized O(1) *)
   else if n == length s - 1 then
     (BatFingerTree.init_exn s,
-     BatFingerTree.singleton (BatFingerTree.last_exn s))
+     BatFingerTree.singleton (BatFingerTree.last_exn s))    (* Amortized O(1) *)
   else if n == length s then
-    (s, empty)
+    (s, empty)                                              (* O(1) *)
   else
-    BatFingerTree.split_at s n
+    BatFingerTree.split_at s n                              (* O(log n) *)
 
 let equal = BatFingerTree.equal
 
