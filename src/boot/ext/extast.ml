@@ -26,6 +26,11 @@ type 'a ext =
                         RealArray.t ->
                         RealArray.t ->
                         unit) option
+                        * (int * (float ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  unit)) option
                      * float option
                      * RealArray.t option
 
@@ -39,6 +44,11 @@ type 'a ext =
                            RealArray.t ->
                            RealArray.t ->
                            unit) option
+                        * (int * (float ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  RealArray.t ->
+                                  unit)) option
                         * float option
                         * RealArray.t option
 
@@ -48,3 +58,7 @@ type 'a ext =
 
   | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
                     * Nvector_serial.t option
+
+  | EIdaReinit of Nvector_serial.kind Ida.serial_session option
+                  * float option
+                  * Nvector_serial.t option

@@ -23,7 +23,7 @@ let resf = lam t. lam y. lam yp. lam r.
   let _ = sArrSet r 0 (subf (sArrGet yp 0) (sArrGet y 1)) in
   sArrSet r 1 (addf (sArrGet yp 1) (sArrGet y 0))
 in
-let s = idaInitDense tol resf 0. y yp in
+let s = idaInitDense tol resf noroots 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
 utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
 
@@ -33,8 +33,13 @@ let jacf = lam t. lam c. lam y. lam yp. lam m.
   let _ = sMatrixDenseSet m 1 0 1. in
   sMatrixDenseSet m 1 1 c
 in
-let s = idaInitDenseJac tol jacf resf 0. y yp in
+let rootf = lam t. lam _. lam _. lam g.
+  sArrSet g 0 (subf t 5.)
+in
+let s = idaInitDenseJac tol jacf resf (1, rootf) 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
+utest idaSolveNormal s 10. y yp with (5., IDA_ROOTS_FOUND) in
+utest idaReinit s 5. y yp with () in
 utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
 
 let m = sMatrixDenseCreate 2 2 in
