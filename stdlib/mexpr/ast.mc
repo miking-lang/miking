@@ -4,11 +4,11 @@ lang VarAst
   syn Expr =
   | TmVar {ident : String}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmVar t -> a
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmVar t -> acc
 end
 
 lang VarPat
@@ -22,11 +22,11 @@ lang AppAst
   | TmApp {lhs : Expr,
            rhs : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmApp t -> TmApp {lhs = f t.lhs, rhs = f t.rhs}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmApp t -> f (f a t.lhs) t.rhs
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmApp t -> f (f acc t.lhs) t.rhs
 end
 
 
@@ -39,11 +39,11 @@ lang FunAst = VarAst + AppAst
            tpe   : Option,
            body  : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmLam t -> f a t.body
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmLam t -> f acc t.body
 end
 
 
@@ -54,11 +54,11 @@ lang LetAst = VarAst
            body   : Expr,
            inexpr : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmLet t -> f (f a t.body) t.inexpr
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmLet t -> f (f acc t.body) t.inexpr
 end
 
 
@@ -70,14 +70,14 @@ lang RecLetsAst = VarAst
                             body  : Expr}],
                inexpr   : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
     TmRecLets {{t with bindings = map (lam b. {b with body = f b.body})
                                       t.bindings}
                   with inexpr = f t.inexpr}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmRecLets t -> f (foldl f a (map (lam b. b.body) t.bindings)) t.inexpr
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmRecLets t -> f (foldl f acc (map (lam b. b.body) t.bindings)) t.inexpr
 end
 
 
@@ -87,11 +87,11 @@ lang ConstAst
   syn Expr =
   | TmConst {val : Const}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmConst t -> a
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmConst t -> acc
 end
 
 
@@ -152,11 +152,11 @@ lang BoolAst
           thn  : Expr,
           els  : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmIf t -> TmIf {cond = f t.cond, thn = f t.thn, els = f t.els}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmIf t -> f (f (f a t.cond) t.thn) t.els
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmIf t -> f (f (f acc t.cond) t.thn) t.els
 end
 
 lang BoolPat = BoolAst
@@ -186,11 +186,11 @@ lang SeqAst = IntAst
   syn Expr =
   | TmSeq {tms : [Expr]}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmSeq t -> foldl f a t.tms
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmSeq t -> foldl f acc t.tms
 end
 
 
@@ -200,13 +200,13 @@ lang TupleAst
   | TmProj {tup : Expr,
             idx : Int}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmTuple t -> TmTuple {t with tms = map f t.tms}
   | TmProj t -> TmProj {t with tup = f t.tup}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmTuple t -> foldl f a t.tms
-  | TmProj t -> f a t.tup
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmTuple t -> foldl f acc t.tms
+  | TmProj t -> f acc t.tup
 end
 
 lang TuplePat = TupleAst
@@ -225,7 +225,7 @@ lang RecordAst
                     key   : String,
                     value : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecord t -> TmRecord {t with
                             bindings = map (lam b. {b with value = f b.value})
                                            t.bindings}
@@ -234,10 +234,10 @@ lang RecordAst
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmRecord t -> foldl f a (map (lam b. b.value) t.bindings)
-  | TmRecordProj t -> f a t.rec
-  | TmRecordUpdate t -> f (f a t.rec) t.value
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmRecord t -> foldl f acc (map (lam b. b.value) t.bindings)
+  | TmRecordProj t -> f acc t.rec
+  | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
 
@@ -249,13 +249,13 @@ lang DataAst
               inexpr : Expr}
   | TmConFun {ident : String}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
   | TmConFun t -> TmConFun t
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmConDef t -> f a t.inexpr
-  | TmConFun t -> a
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmConDef t -> f acc t.inexpr
+  | TmConFun t -> acc
 end
 
 lang DataPat = DataAst
@@ -274,13 +274,13 @@ lang MatchAst
 
   syn Pat =
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmMatch t -> TmMatch {{{t with target = f t.target}
                               with thn = f t.thn}
                               with els = f t.els}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmMatch t -> f (f (f a t.target) t.thn) t.els
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmMatch t -> f (f (f acc t.target) t.thn) t.els
 end
 
 lang UtestAst
@@ -289,13 +289,13 @@ lang UtestAst
              expected : Expr,
              next     : Expr}
 
-  sem smap_Expr_Expr (f : Expr -> A) =
+  sem smap_Expr_Expr (f : Expr -> a) =
   | TmUtest t -> TmUtest {{{t with test = f t.test}
                               with expected = f t.expected}
                               with next = f t.next}
 
-  sem sfold_Expr_Expr (f : A -> B -> A) (a : A) =
-  | TmUtest t -> f (f (f a t.test) t.expected) t.next
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmUtest t -> f (f (f acc t.test) t.expected) t.next
 end
 
 
