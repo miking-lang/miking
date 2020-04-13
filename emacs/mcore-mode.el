@@ -74,6 +74,19 @@
        (modify-syntax-entry ?\n ">" synTable)
        synTable))
 
+;;;;;;;;;;;;;;
+;; prettify ;;
+;;;;;;;;;;;;;;
+
+(defvar mcore-prettify-symbols-alist
+  '(("lam" . ?λ))
+  "List of syntax to prettify for `mcore-mode'.")
+
+(add-hook 'mcore-mode-hook
+          (lambda ()
+            (mapc (lambda (pair) (push pair prettify-symbols-alist))
+                  mcore-prettify-symbols-alist)))
+
 ;;;;;;;;;;;;;;;;;
 ;; compilation ;;
 ;;;;;;;;;;;;;;;;;
