@@ -94,8 +94,8 @@ let rec ustring_of_ty = function
 
 (** Simple enum used in the concat function in string_of_tm *)
 type sep =
-  | SPACE
-  | COMMA
+  | Space
+  | Comma
 
 (** Function for concatenating a list of fprintf calls using a given separator.
  *  TODO Possible to simply use Format.pp_print_list? *)
@@ -103,18 +103,18 @@ let rec concat fmt (sep, ls) = match ls with
   | []  -> ()
   | [f] -> f fmt
   | f :: ls -> match sep with
-    | SPACE -> fprintf fmt "%t@ %a"  f concat (sep, ls)
-    | COMMA -> fprintf fmt "%t,@,%a" f concat (sep, ls)
+    | Space -> fprintf fmt "%t@ %a"  f concat (sep, ls)
+    | Comma -> fprintf fmt "%t,@,%a" f concat (sep, ls)
 
 (** Precedence constants for printing *)
 type prec =
-  | MATCH
-  | LAM
-  | SEMICOLON
-  | IF
-  | TUP
-  | APP
-  | ATOM
+  | Match
+  | Lam
+  | Semicolon
+  | If
+  | Tup
+  | App
+  | Atom
 
 (** Print a constant on the given formatter
  *  TODO Precendece?
@@ -237,26 +237,26 @@ let rec print_const fmt = function
 and print_record fmt r =
   let print (l,t) =
     let l = string_of_ustring l in
-    (fun fmt -> fprintf fmt "%s = %a" l print_tm (APP, t)) in
+    (fun fmt -> fprintf fmt "%s = %a" l print_tm (App, t)) in
   let inner = List.map print r in
-  fprintf fmt "{@[<hov 0>%a@]}" concat (COMMA,inner)
+  fprintf fmt "{@[<hov 0>%a@]}" concat (Comma,inner)
 
 (** Print a term on the given formatter and within the given precedence. *)
 and print_tm fmt (prec, t) =
 
   let paren = prec > match t with
-    | TmMatch(_,_,PatBool(_,true),_,_) -> IF
-    | TmMatch _ | TmLet _              -> MATCH
-    | TmLam _                          -> LAM
-    | TmSeq _                          -> SEMICOLON
-    | TmTuple _                        -> TUP
-    | TmApp _                          -> APP
+    | TmMatch(_,_,PatBool(_,true),_,_) -> If
+    | TmMatch _ | TmLet _              -> Match
+    | TmLam _                          -> Lam
+    | TmSeq _                          -> Semicolon
+    | TmTuple _                        -> Tup
+    | TmApp _                          -> App
     | TmVar _    | TmRecLets _
     | TmConst _  | TmRecord _
     | TmProj _   | TmRecordUpdate _
     | TmCondef _ | TmConsym _
     | TmUse _    | TmUtest _
-    | TmClos _   | TmFix _             -> ATOM
+    | TmClos _   | TmFix _             -> Atom
   in
 
   if paren then
@@ -277,7 +277,7 @@ and print_tm' fmt t = match t with
     fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]"
       !ref_indent x
       ty
-      print_tm (LAM, t1)
+      print_tm (Lam, t1)
 
   | TmLet(_,x,t1,t2) ->
     let x = string_of_ustring x in
@@ -286,39 +286,39 @@ and print_tm' fmt t = match t with
                    @ %a\
                  @]"
       !ref_indent x
-      print_tm (MATCH, t1)
-      print_tm (MATCH, t2)
+      print_tm (Match, t1)
+      print_tm (Match, t2)
 
   | TmRecLets(_,lst,t2) ->
     let print (_,x,t) =
       let x = string_of_ustring x in
       (fun fmt -> fprintf fmt "@[<hov %d>let %s =@ %a@]"
-          !ref_indent x print_tm (MATCH,t)) in
+          !ref_indent x print_tm (Match,t)) in
     let inner = List.map print lst in
     fprintf fmt "@[<hov 0>\
                    @[<hov %d>recursive@ @[<hov 0>%a@] in@]\
                    @ %a\
                  @]"
-      !ref_indent concat (SPACE,inner)
-      print_tm (MATCH, t2)
+      !ref_indent concat (Space,inner)
+      print_tm (Match, t2)
 
   | TmApp(_,t1,(TmApp _ as t2)) ->
-    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (ATOM, t2)
+    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (App, t1) print_tm (Atom, t2)
 
   | TmApp(_,t1,t2) ->
-    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (APP, t1) print_tm (APP, t2)
+    fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (App, t1) print_tm (App, t2)
 
   | TmConst(_,c) -> print_const fmt c
 
   | TmSeq(_,tms) ->
-    let print t = (fun fmt -> fprintf fmt "%a" print_tm (APP,t)) in
+    let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
     let inner = List.map print (Mseq.to_list tms) in
-    fprintf fmt "[@[<hov 0>%a@]]" concat (COMMA,inner)
+    fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
   | TmTuple(_,tms) ->
-    let print t = (fun fmt -> fprintf fmt "%a" print_tm (APP,t)) in
+    let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
     let inner = List.map print tms in
-    fprintf fmt "(@[<hov 0>%a@])" concat (COMMA,inner)
+    fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
 
   | TmRecord(_,r) -> print_record fmt r
 
@@ -326,27 +326,27 @@ and print_tm' fmt t = match t with
     let l = match l with
       | LabIdx i -> string_of_int i
       | LabStr s -> string_of_ustring s in
-    fprintf fmt "%a.%s" print_tm (ATOM, t) l
+    fprintf fmt "%a.%s" print_tm (Atom, t) l
 
   | TmRecordUpdate(_,t1,l,t2) ->
     let l = string_of_ustring l in
-    (* TODO The below ATOM precedences can probably be made less conservative *)
+    (* TODO The below Atom precedences can probably be made less conservative *)
     fprintf fmt "{%a with %s = %a}"
-      print_tm (ATOM, t1)
+      print_tm (Atom, t1)
       l
-      print_tm (ATOM, t2)
+      print_tm (Atom, t2)
 
   | TmCondef(_,s,ty,t) ->
     let s = string_of_ustring s in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
-      s ty print_tm (MATCH, t)
+      s ty print_tm (Match, t)
 
   | TmConsym(_,s,sym,tmop) ->
     let s = string_of_ustring s in
     (match tmop with
-     (* TODO ATOM precedence too conservative? *)
-     | Some(t) -> fprintf fmt "%s_%d %a" s sym print_tm (ATOM ,t)
+     (* TODO Atom precedence too conservative? *)
+     | Some(t) -> fprintf fmt "%s_%d %a" s sym print_tm (Atom ,t)
      | None -> fprintf fmt "%s_%d" s sym)
 
   (* If expressions *)
@@ -359,9 +359,9 @@ and print_tm' fmt t = match t with
                    @]\
                  @]"
       !ref_indent
-      print_tm (MATCH, t1)
-      print_tm (MATCH, t2)
-      print_tm (IF, t3)
+      print_tm (Match, t1)
+      print_tm (Match, t2)
+      print_tm (If, t3)
 
   | TmMatch(_,t,p,then_,else_) ->
     let p = p |> ustring_of_pat |> string_of_ustring in
@@ -374,15 +374,15 @@ and print_tm' fmt t = match t with
                    @]\
                  @]"
       !ref_indent
-      print_tm (MATCH, t)
+      print_tm (Match, t)
       p
-      print_tm (IF, then_)
-      print_tm (IF, else_)
+      print_tm (If, then_)
+      print_tm (If, else_)
 
   | TmUse(_,l,t) ->
     let l = string_of_ustring l in
     fprintf fmt "@[<hov 0>use %s in@ %a@]"
-      l print_tm (MATCH, t)
+      l print_tm (Match, t)
 
   | TmUtest(_,t1,t2,t3) ->
     fprintf fmt "@[<hov 0>\
@@ -396,9 +396,9 @@ and print_tm' fmt t = match t with
                    @ %a\
                  @]"
       !ref_indent
-      print_tm (MATCH, t1)
-      print_tm (MATCH, t2)
-      print_tm (MATCH, t3)
+      print_tm (Match, t1)
+      print_tm (Match, t2)
+      print_tm (Match, t3)
 
   | TmClos(_,x,ty,t1,_) ->
     let x = string_of_ustring x in
@@ -406,18 +406,18 @@ and print_tm' fmt t = match t with
     fprintf fmt "@[<hov %d>clos %s:%s.@ %a@]"
       !ref_indent x
       ty
-      print_tm (LAM, t1)
+      print_tm (Lam, t1)
 
   | TmFix _ -> fprintf fmt "fix"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
-  let print i t = (fun fmt -> fprintf fmt "%d -> %a" i print_tm (MATCH, t)) in
+  let print i t = (fun fmt -> fprintf fmt "%d -> %a" i print_tm (Match, t)) in
   let inner = List.mapi print env in
-  fprintf fmt "[@[<hov 0>%a@]]" concat (COMMA,inner)
+  fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
 (** Helper function for configuring the string formatter and printing *)
-let str_formatter_print
+let ustr_formatter_print
     ?(debruijn   = !enable_debug_debruijn_print)
     ?(indent     = 2)
     ?(max_indent = 68)
@@ -443,54 +443,28 @@ let str_formatter_print
   printer str_formatter arg;
 
   (* Return result string and clear formatter *)
-  flush_str_formatter ()
+  flush_str_formatter () |> us
 
 (** Convert terms to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let string_of_tm ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix t =
-  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
-    print_tm (MATCH, t)
+let ustring_of_tm ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix t =
+  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+    print_tm (Match, t)
 
 (** Converting constants to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let string_of_const ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix c =
-  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_const ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix c =
+  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_const c
 
 (** Converting environments to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let string_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
-  str_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
+  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_env e
 
-(** Old printing function for terms.
- *  @deprecated Use string_of_tm instead. *)
-let pprintME t = t |> string_of_tm ~margin:max_int |> us
-
-(** Old printing function for consts.
- *  @deprecated Use string_of_const instead. *)
-let pprint_const c = c |> string_of_const ~margin:max_int |> us
-
-(** Old printing function for patterns.
- *  @deprecated Use ustring_of_pat instead. *)
-let pprintPat = ustring_of_pat
-
-(** Old printing function for environments.
- *  @deprecated Use string_of_env instead. *)
-let pprint_env e = e |> string_of_env |> us
-
-(** Old printing function for lists of terms.
- *  TODO Use Format module printing *)
-let pprintTmList p =
-  us"[" ^. (p |> List.map pprintME |> Ustring.concat (us",")) ^. us"]"
-
-(** Old printing function for lists of patterns.
- *  TODO Use Format module printing *)
-let pprintPatList p =
-  us"[" ^. (p |> List.map pprintPat |> Ustring.concat (us",")) ^. us"]"
-
-(** TODO: Print mlang part as well*)
-let pprintML tml =
+(** TODO: Print mlang part as well. *)
+let ustring_of_program tml =
   match tml with
-  | Program(_,_,t) -> pprintME t
+  | Program(_,_,t) -> ustring_of_tm ~margin:max_int t
 

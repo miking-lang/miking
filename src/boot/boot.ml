@@ -60,7 +60,7 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 let debug_after_parse t =
   if enable_debug_after_parse then
     (printf "\n-- After parsing --\n";
-     uprint_endline (pprintML t);
+     uprint_endline (ustring_of_program t);
      t)
   else t
 
@@ -68,7 +68,7 @@ let debug_after_parse t =
 let debug_after_debruijn t =
   if enable_debug_after_debruijn  then
     (printf "\n-- After debruijn --\n";
-     uprint_endline (pprintME t);
+     uprint_endline (ustring_of_tm ~margin:max_int t);
      t)
   else t
 
@@ -76,7 +76,7 @@ let debug_after_debruijn t =
 let debug_after_mlang t =
   if !enable_debug_after_mlang then
     (printf "\n-- After mlang --\n";
-     print_endline (string_of_tm t);
+     uprint_endline (ustring_of_tm t);
      t)
   else t
 
