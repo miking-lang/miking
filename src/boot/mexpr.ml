@@ -138,10 +138,10 @@ let gen_symid _ =
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ Ustring.to_utf8
-                                           (ustring_of_const ~margin:max_int f)
+                                           (ustring_of_const f)
                                          ^ " value: "
                                          ^ Ustring.to_utf8
-                                           (ustring_of_tm ~margin:max_int v))
+                                           (ustring_of_tm v))
 
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
@@ -366,7 +366,7 @@ let delta eval env fi c v  =
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t ->
-      uprint_string (ustring_of_tm ~margin:max_int t);
+      uprint_string (ustring_of_tm t);
       TmConst(NoInfo,Cunit)
 
     | CreadFile,TmSeq(fi,lst) ->
@@ -395,7 +395,7 @@ let delta eval env fi c v  =
         in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
-       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm ~margin:max_int t));
+       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t));
        TmConst(NoInfo,Cunit)
 
     | CSymb(_),_ -> fail_constapp fi
@@ -412,9 +412,9 @@ let delta eval env fi c v  =
 let debug_eval env t =
   if enable_debug_eval then
     (printf "\n-- eval -- \n";
-     uprint_endline (ustring_of_tm ~margin:max_int t);
+     uprint_endline (ustring_of_tm t);
      if enable_debug_eval_env then
-        uprint_endline (ustring_of_env ~margin:max_int env))
+        uprint_endline (ustring_of_env env))
   else ()
 
 (* Print out error message when a unit test fails *)
@@ -424,8 +424,8 @@ let unittest_failed fi t1 t2=
     | Info(_,l1,_,_,_) ->
       us"\n ** Unit test FAILED on line " ^.
       us(string_of_int l1)
-      ^.  us" **\n    LHS: " ^. (ustring_of_tm ~margin:max_int t1)
-      ^.  us"\n    RHS: "    ^. (ustring_of_tm ~margin:max_int t2)
+      ^.  us" **\n    LHS: " ^. (ustring_of_tm t1)
+      ^.  us"\n    RHS: "    ^. (ustring_of_tm t2)
     | NoInfo -> us"Unit test FAILED ")
 
 
@@ -592,7 +592,7 @@ let rec eval env t =
          | _ -> raise_error (tm_info t1) "Incorrect CFix")
        | f -> raise_error fiapp ("Incorrect application. This is not a function: "
                                  ^ Ustring.to_utf8
-                                   (ustring_of_tm ~margin:max_int f)))
+                                   (ustring_of_tm f)))
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* Sequences *)
@@ -612,19 +612,19 @@ let rec eval env t =
               with _ -> raise_error fi "Tuple projection is out of bounds.")
           | v ->
              raise_error fi ("Cannot project from term. The term is not a tuple: "
-                             ^ Ustring.to_utf8 (ustring_of_tm ~margin:max_int v)))
+                             ^ Ustring.to_utf8 (ustring_of_tm v)))
       | LabStr s ->
          (match eval env t with
           | TmConst(fi, CRecord(r)) ->
              (try Record.find s r
               with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
                                         "' in record " ^ Ustring.to_utf8
-                                          (ustring_of_const ~margin:max_int
+                                          (ustring_of_const
                                              (CRecord(r)))))
           | v ->
              raise_error fi ("Cannot project from term. The term is not a record: "
                              ^ Ustring.to_utf8
-                               (ustring_of_tm ~margin:max_int v))))
+                               (ustring_of_tm v))))
   | TmRecordUpdate(fi,t1,l,t2) ->
      (match eval env t1 with
       | TmConst(fi, CRecord(r)) ->
@@ -632,10 +632,10 @@ let rec eval env t =
          then TmConst(fi, CRecord(Record.add l (eval env t2) r))
          else raise_error fi ("No label '" ^ Ustring.to_utf8 l ^
                                         "' in record " ^ Ustring.to_utf8
-                                (ustring_of_const ~margin:max_int (CRecord r)))
+                                (ustring_of_const (CRecord r)))
       | v ->
          raise_error fi ("Cannot update the term. The term is not a record: "
-                         ^ Ustring.to_utf8 (ustring_of_tm ~margin:max_int v)))
+                         ^ Ustring.to_utf8 (ustring_of_tm v)))
   (* Tuples *)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   (* Data constructors and match *)

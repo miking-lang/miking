@@ -421,7 +421,7 @@ let ustr_formatter_print
     ?(debruijn   = !enable_debug_debruijn_print)
     ?(indent     = 2)
     ?(max_indent = 68)
-    ?(margin     = 80)
+    ?(margin     = max_int)
     ?(max_boxes  = max_int)
     ?(prefix     = "")
     printer arg =
@@ -466,5 +466,5 @@ let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
 (** TODO: Print mlang part as well. *)
 let ustring_of_program tml =
   match tml with
-  | Program(_,_,t) -> ustring_of_tm ~margin:max_int t
+  | Program(_,_,t) -> ustring_of_tm t
 

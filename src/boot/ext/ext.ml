@@ -83,7 +83,7 @@ let fail_extapp f v fi = raise_error fi
                             ^ Ustring.to_utf8 (Extpprint.pprint f)
                             ^ " value: "
                             ^ Ustring.to_utf8
-                              (Pprint.string_of_tm ~margin:max_int v))
+                              (Pprint.ustring_of_tm v))
 
 let delta eval env fi c v =
   let fail_extapp = fail_extapp c v in

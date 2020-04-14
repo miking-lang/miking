@@ -68,7 +68,7 @@ let debug_after_parse t =
 let debug_after_debruijn t =
   if enable_debug_after_debruijn  then
     (printf "\n-- After debruijn --\n";
-     uprint_endline (ustring_of_tm ~margin:max_int t);
+     uprint_endline (ustring_of_tm t);
      t)
   else t
 
@@ -76,7 +76,7 @@ let debug_after_debruijn t =
 let debug_after_mlang t =
   if !enable_debug_after_mlang then
     (printf "\n-- After mlang --\n";
-     uprint_endline (ustring_of_tm t);
+     uprint_endline (ustring_of_tm ~margin:80 t);
      t)
   else t
 
