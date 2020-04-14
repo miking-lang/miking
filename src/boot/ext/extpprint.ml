@@ -26,3 +26,6 @@ let pprint = function
   | EIdaSolveNormal _ -> us"idaSolveNormal"
   | EIdaCalcICYY _ -> us"idaCalcICYY"
   | EIdaReinit _ -> us"idaReinit"
+  | EIdaGetDky _ -> us"idaGetDky"
+  | EIdaGetCurrentTime -> us"idaGetCurrentTime"
+  | EIdaGetLastStep -> us"idaGetLastStep"
