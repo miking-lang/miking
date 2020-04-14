@@ -18,6 +18,10 @@ include "seq.mc"
 -- Presently, the graph is implemented using an adjacency map, which maps each
 -- vertex to a list of outgoing edges from that vertex.
 
+type Digraph = { adj : [(a,[(a,b)])],
+                 eqv : a -> a -> Bool,
+                 eql : b -> b -> Bool }
+
 -- Map functions
 let mapLookup = lam key. lam eq. lam m.
                 match findAssoc (eq key) m with Some e
