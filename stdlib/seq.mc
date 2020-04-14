@@ -94,15 +94,15 @@ let findAssoc = lam p. lam seq.
   then Some res.1
   else None ()
 
-recursive
-  let uniq = lam eq. lam seq.
-    if null seq
-      then seq
-    else
-      match find (eq (head seq)) (tail seq) with Some _
-      then uniq eq (tail seq)
-      else cons (head seq) (uniq eq (tail seq))
-end
+-- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
+let distinct = lam eq. lam seq.
+  recursive let work = lam seq1. lam seq2.
+    match seq1 with [h] ++ t
+      then match find (eq h) seq2 with Some _
+           then work t seq2
+           else cons h (work t (cons h seq2))
+    else []
+  in work seq []
 
 -- Sorting
 recursive
@@ -210,11 +210,10 @@ utest findAssoc (eqi 3) [(2,3), (1,4)] with None () in
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[]) in
 
-utest uniq eqi [] with [] in
-utest uniq (lam x. lam y. false) [1,41,21,41] with [1,41,21,41] in
-utest uniq eqi [123,13,90] with [123,13,90] in
-utest uniq eqi [1,1,5,1,2,3,4,5,0] with [1,2,3,4,5,0] in
-utest uniq eqi [42,42,42,42,42] with [42] in
+utest distinct eqi [] with [] in
+utest distinct eqi [42,42] with [42] in
+utest distinct eqi [1,1,2] with [1,2] in
+utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0] in
 
 utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20] in
 utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20] in

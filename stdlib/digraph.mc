@@ -70,7 +70,7 @@ let digraphHasVertices = lam vs. lam g.
                          all (lam b. b) (map (lam v. digraphHasVertex v g) vs)
 
 let digraphSuccessors = lam v. lam g.
-    uniq g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
+    distinct g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
 
 -- TODO: predecessors
 
