@@ -17,16 +17,7 @@ open Msg
 open Mexpr
 open Pprint
 
-(* TODO: Temporary fix for hackinar installation issues *)
-module Option = struct
-  let some x = Some x
-  let is_some = function
-    | Some _ -> true
-    | None -> false
-  let get = function
-    | Some x -> x
-    | None -> failwith "Not Some"
-end
+module Option = BatOption
 
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =

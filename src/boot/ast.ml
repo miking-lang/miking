@@ -209,18 +209,7 @@ let noidx = -1
 let symno = ref 0
 let gencon fi x = symno := !symno + 1; TmConsym(fi,x,!symno,None)
 
-(* TODO: Temporary fix for hackinar installation issues *)
-module Option = struct
-  let map f = function
-    | Some x -> Some (f x)
-    | None -> None
-  let bind f = function
-    | Some x -> f x
-    | None -> None
-  let value ~default = function
-    | Some x -> x
-    | None -> default
-end
+module Option = BatOption
 
 (* General (bottom-up) map over terms *)
 let rec map_tm f = function
