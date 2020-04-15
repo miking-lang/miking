@@ -50,17 +50,24 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 (* Debug template function. Used below *)
 let debug_after_parse t =
   if enable_debug_after_parse then
-    (printf "\n-- After parsing --  \n";
-     uprint_endline (pprintML t);
+    (printf "\n-- After parsing --\n";
+     uprint_endline (ustring_of_program t);
      t)
   else t
-
 
 (* Debug template function. Used below *)
 let debug_after_debruijn t =
   if enable_debug_after_debruijn  then
-    (printf "\n-- After debruijn --  \n";
-     uprint_endline (pprintME t);
+    (printf "\n-- After debruijn --\n";
+     uprint_endline (ustring_of_tm t);
+     t)
+  else t
+
+(* Debug mlang to mexpr transform *)
+let debug_after_mlang t =
+  if !enable_debug_after_mlang then
+    (printf "\n-- After mlang --\n";
+     uprint_endline (ustring_of_tm ~margin:80 t);
      t)
   else t
 
@@ -132,6 +139,7 @@ let evalprog filename  =
      |> merge_includes (Filename.dirname filename) [filename]
      |> Mlang.flatten
      |> Mlang.desugar_post_flatten
+     |> debug_after_mlang
      |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
      |> debug_after_debruijn
      |> Mexpr.eval (builtin |> List.split |> snd)
@@ -202,27 +210,49 @@ let testprog lst =
 
 (* Run program *)
 let runprog name lst =
+    (* TODO prog_argv is never used anywhere *)
     prog_argv := lst;
     evalprog name
 
 
 (* Print out main menu *)
-let menu() =
-  printf "Usage: boot [run|test] <files>\n";
-  printf "\n"
-
+let usage_msg = "Usage: miking [run|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
 
-  (* Check command  *)
-  (match Array.to_list Sys.argv |> List.tl with
+  (* A list of command line arguments *)
+  let speclist = [
 
-  (* Run tests on one or more files *)
-  | "test"::lst | "t"::lst -> testprog lst
+    (* First character in description string must be a space for alignment! *)
+    "--debug-mlang", Arg.Set(enable_debug_after_mlang),
+    " Enables output of the mexpr program after mlang transformations.";
 
-  (* Run one program with program arguments without typechecking *)
-  | "run"::name::lst | name::lst -> runprog name lst
+    "--debruijn", Arg.Set(enable_debug_debruijn_print),
+    " Enables output of the debruijn indices of variables when printing.";
 
-  (* Show the menu *)
-  | _ -> menu())
+  ] in
+
+  (* Align the command line description list *)
+  let speclist = Arg.align speclist in
+
+  (* When non-option argument is encountered, simply save it to lst *)
+  let lst = ref [] in
+  let anon_fun arg = lst := arg :: !lst in
+
+  (* Parse command line *)
+  Arg.parse speclist anon_fun usage_msg;
+
+  if List.length !lst = 0 then
+    Arg.usage speclist usage_msg
+  else
+    match List.rev !lst with
+
+    (* Run tests on one or more files *)
+    | "test"::lst | "t"::lst -> testprog lst
+
+    (* Run one program with program arguments without typechecking *)
+    | "run"::name::lst | name::lst -> runprog name lst
+
+    (* Show the menu *)
+    | _ -> Arg.usage speclist usage_msg
