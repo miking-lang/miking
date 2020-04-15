@@ -92,7 +92,17 @@ let partition = (lam p. lam seq.
 let findAssoc = lam p. lam seq.
   match find (lam tup. p tup.0) seq with Some res
   then Some res.1
-  else None
+  else None ()
+
+-- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
+let distinct = lam eq. lam seq.
+  recursive let work = lam seq1. lam seq2.
+    match seq1 with [h] ++ t
+      then match find (eq h) seq2 with Some _
+           then work t seq2
+           else cons h (work t (cons h seq2))
+    else []
+  in work seq []
 
 -- Sorting
 recursive
@@ -194,8 +204,16 @@ utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43] in
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 in
 utest find (lam x. lti x 1) [4,1,2] with None () in
 
+utest findAssoc (eqi 1) [(2,3), (1,4)] with Some 4 in
+utest findAssoc (eqi 3) [(2,3), (1,4)] with None () in
+
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1]) in
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[]) in
+
+utest distinct eqi [] with [] in
+utest distinct eqi [42,42] with [42] in
+utest distinct eqi [1,1,2] with [1,2] in
+utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0] in
 
 utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20] in
 utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20] in
