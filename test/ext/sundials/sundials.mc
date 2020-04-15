@@ -42,6 +42,9 @@ utest idaSolveNormal s 10. y yp with (5., IDA_ROOTS_FOUND) in
 utest idaReinit s 5. y yp with () in
 utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
 
+utest idaGetDky s y (subf (idaGetCurrentTime s) (idaGetLastStep s)) 0 with () in
+utest idaGetDky s yp (subf (idaGetCurrentTime s) (idaGetLastStep s)) 1 with () in
+
 let m = sMatrixDenseCreate 2 2 in
 let _ = sMatrixDenseSet m 0 0 1. in
 let _ = sMatrixDenseSet m 0 1 1. in

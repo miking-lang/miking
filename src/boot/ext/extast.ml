@@ -62,3 +62,10 @@ type 'a ext =
   | EIdaReinit of Nvector_serial.kind Ida.serial_session option
                   * float option
                   * Nvector_serial.t option
+
+  | EIdaGetDky of Nvector_serial.kind Ida.serial_session option
+                  * Nvector_serial.t option
+                  * float option
+
+  | EIdaGetCurrentTime
+  | EIdaGetLastStep
