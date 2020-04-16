@@ -7,6 +7,7 @@ let pprint = function
   (* Elementary functions *)
   | Esin -> us "sin"
   | Ecos -> us "cos"
+  | Eatan -> us"atan"
   (* SundialsML related functions *)
   | ESArray a ->
      let l = RealArray.to_list a in

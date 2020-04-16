@@ -5,6 +5,7 @@ type 'a ext =
   (* Elementary functions *)
   | Esin
   | Ecos
+  | Eatan
   (* SundialsML related functions *)
   | ESArray of RealArray.t
   | ESArrayMake of int option
