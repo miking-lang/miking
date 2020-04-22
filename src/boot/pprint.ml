@@ -49,13 +49,12 @@ let ustring_of_pat p =
     let ppSeq s =
       s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
     in
-    let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
     match pat with
     | PatNamed(_,NameStr(x)) -> x
     | PatSeq(_,lst,SeqMatchPrefix(x)) ->
-      us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
+      us"[" ^. ppSeq lst ^. us"] ++ " ^. ppp x
     | PatSeq(_,lst,SeqMatchPostfix(x)) ->
-      ppName x ^. us" ++ [" ^. ppSeq lst ^. us"]"
+      ppp x ^. us" ++ [" ^. ppSeq lst ^. us"]"
     | PatSeq(_,lst,SeqMatchTotal) -> us"[" ^. ppSeq lst ^. us"]"
     | PatNamed(_,NameWildcard) -> us"_"
     | PatTuple(_,ps) ->
@@ -467,4 +466,3 @@ let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
 let ustring_of_program tml =
   match tml with
   | Program(_,_,t) -> ustring_of_tm t
-

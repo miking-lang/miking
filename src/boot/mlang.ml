@@ -242,8 +242,8 @@ let rec desugar_tm nss env =
          let (env', pats') = Mseq.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right
              (fun p -> Mseq.cons p pats)) pats (env, Mseq.empty) in
          let (env'',seqMT') = match seqMT with
-           | SeqMatchPrefix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPrefix(n))
-           | SeqMatchPostfix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPostfix(n))
+           | SeqMatchPrefix(p) -> p |> desugar_pat env' |> map_right (fun p -> SeqMatchPrefix(p))
+           | SeqMatchPostfix(p) -> p |> desugar_pat env' |> map_right (fun p -> SeqMatchPostfix(p))
            | SeqMatchTotal -> (env', SeqMatchTotal) in
          (env'',PatSeq(fi,pats',seqMT'))
        | PatTuple(fi, pats) ->

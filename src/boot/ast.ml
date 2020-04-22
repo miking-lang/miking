@@ -168,8 +168,8 @@ and patName =
 
 (* Kind of sequence matching in patterns *)
 and seqMatchType =
-| SeqMatchPrefix of patName
-| SeqMatchPostfix of patName
+| SeqMatchPrefix of pat
+| SeqMatchPostfix of pat
 | SeqMatchTotal
 
 (* Patterns *)

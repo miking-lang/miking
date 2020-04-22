@@ -69,6 +69,8 @@ utest match s1 with [1,3,5,10] then true else false with true in
 utest match s1 with [1,3] ++ _ then true else false with true in
 utest match s1 with [2,3] ++ _ then true else false with false in
 utest match s1 with [1,a] ++ _ then a else 0 with 3 in
+utest match s1 with [b] ++ _ then let a = 2 in (a, b, _) else (0, 0) with (2, 1) in
+utest match s1 with _ ++ [b] then let a = 2 in (a, b, _) else (0, 0) with (2, 10) in
 utest match s1 with [_,a] ++ b then (a,b) else (0,[]) with (3,[5,10]) in
 utest match s1 with _ ++ [5,10] then true else false with true in
 utest match s1 with _ ++ [5,11] then true else false with false in
@@ -77,6 +79,10 @@ utest match s1 with first ++ [1,2] then true else false with false in
 utest match s1 with [1,x] ++ rest then (x,rest) else (0,[]) with (3,[5,10]) in
 utest match s1 with first ++ [x,y] then (x,y,first) else (0,0,[]) with (5,10,[1,3]) in
 utest match s1 with first ++ [x,y,10] then (first,x,y) else ([],0,0) with ([1],3,5) in
+utest match s1 with [1] ++ mid ++ [10] then mid else [] with [3, 5] in
+utest match s1 with [1,3] ++ mid ++ [10] then mid else [] with [5] in
+utest match s1 with [1] ++ [3] ++ rest then rest else [] with [5, 10] in
+utest match s1 with [a,b] ++ mid ++ [c] then (a, b, mid, c) else (0, 0, [], 0) with (1, 3, [5], 10) in
 
 utest match "foo" with ['f','o','o'] then true else false with true in
 utest match "foo" with "foo" then true else false with true in

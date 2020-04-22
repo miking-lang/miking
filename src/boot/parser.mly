@@ -326,16 +326,39 @@ name:
         else PatNamed($1.i, NameStr($1.v)) }
 
 pat:
-  | name
-      { $1 }
   | IDENT pat
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
+  | patseq CONCAT pat
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix($3)) }
+  | pat_no_pre
+      { $1 }
+pat_no_pre:
+  | pat_no_patseq CONCAT patseq
+      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix($1)) }
+  | name
+      { $1 }
   | patseq
       { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
-  | patseq CONCAT IDENT
-      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v))) }
-  | IDENT CONCAT patseq
-      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v))) }
+  | LPAREN pat RPAREN
+      { $2 }
+  | LPAREN pat COMMA pat_list RPAREN
+      { let fi = mkinfo $1.i $5.i
+        in PatTuple(fi, $2 :: $4) }
+  | UINT /* TODO: enable matching against negative ints */
+      { PatInt($1.i, $1.v) }
+  | CHAR
+      { PatChar($1.i, List.hd (ustring2list $1.v)) }
+  | TRUE
+      { PatBool($1.i, true) }
+  | FALSE
+      { PatBool($1.i, false) }
+  | LPAREN RPAREN
+      { PatUnit(mkinfo $1.i $2.i) }
+pat_no_patseq:
+  | pat_no_patseq CONCAT patseq
+      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix($1)) }
+  | name
+      { $1 }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
