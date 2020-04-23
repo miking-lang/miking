@@ -151,6 +151,7 @@ and tm =
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
+| TmNever   of info                                                 (* Never term *)
 (* Only part of the runtime system *)
 | TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
 | TmFix     of info                                                 (* Fix point *)
@@ -234,6 +235,7 @@ let rec map_tm f = function
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
   | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,map_tm f tnext))
+  | TmNever(_) as t -> f t
 
 
 (* Returns the info field from a term *)
@@ -256,6 +258,7 @@ let tm_info = function
   | TmMatch(fi,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi
+  | TmNever(fi) -> fi
 
 let pat_info = function
   | PatNamed(fi,_) -> fi

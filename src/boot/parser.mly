@@ -52,6 +52,7 @@
 %token <unit Ast.tokendata> USE
 %token <unit Ast.tokendata> MEXPR
 %token <unit Ast.tokendata> INCLUDE
+%token <unit Ast.tokendata> NEVER
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -277,6 +278,7 @@ atom:
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
+  | NEVER                { TmNever($1.i) }
   | STRING               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
                                                   (Mseq.of_ustring $1.v)) }
   | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.of_list $2) }

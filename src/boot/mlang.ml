@@ -269,6 +269,7 @@ let rec desugar_tm nss env =
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
   | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
   | TmConst(fi, CRecord record) -> TmConst(fi, CRecord (Record.map (desugar_tm nss env) record))
+  | TmNever(fi) -> TmNever(fi)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ ) as tm -> tm
 

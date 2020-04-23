@@ -497,7 +497,8 @@ let rec debruijn env t =
      TmMatch(fi,debruijn env t1,p,debruijn matchedEnv t2,debruijn env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
   | TmUtest(fi,t1,t2,tnext)
-     -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+    -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+  | TmNever(_) -> t
 
 
 let rec tryMatch env value pat =
@@ -658,3 +659,4 @@ let rec eval env t =
         utest_fail_local := !utest_fail_local + 1)
      end;
     eval env tnext
+  | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."

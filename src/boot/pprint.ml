@@ -256,7 +256,8 @@ and print_tm fmt (prec, t) =
     | TmProj _   | TmRecordUpdate _
     | TmCondef _ | TmConsym _
     | TmUse _    | TmUtest _
-    | TmClos _   | TmFix _             -> Atom
+    | TmClos _   | TmFix _
+    | TmNever _                        -> Atom
   in
 
   if paren then
@@ -409,6 +410,7 @@ and print_tm' fmt t = match t with
       print_tm (Lam, t1)
 
   | TmFix _ -> fprintf fmt "fix"
+  | TmNever _ -> fprintf fmt "never"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
@@ -467,4 +469,3 @@ let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
 let ustring_of_program tml =
   match tml with
   | Program(_,_,t) -> ustring_of_tm t
-
