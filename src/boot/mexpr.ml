@@ -110,8 +110,6 @@ let arity = function
   | Csnoc(None)       -> 2 | Csnoc(Some(_)) -> 1
   | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
   | Creverse          -> 1
-  (* MCore intrinsic: records *)
-  | CRecord(_)        -> 0
   (* MCore debug and I/O intrinsics *)
   | Cprint            -> 1
   | Cdprint           -> 1
@@ -357,9 +355,6 @@ let delta eval env fi c v  =
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)
     | Creverse,_ -> fail_constapp fi
 
-    (* MCore intrinsic: records *)
-    | CRecord(_),_ -> fail_constapp fi
-
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
        uprint_string (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
@@ -433,8 +428,7 @@ let unittest_failed fi t1 t2=
 let rec val_equal v1 v2 =
   match v1,v2 with
   | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
-  | TmConst(_,CRecord(r1)), TmConst(_,CRecord(r2)) ->
-     Record.equal val_equal r1 r2
+  | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmTuple(_,tms1),TmTuple(_,tms2) ->
      List.length tms1 = List.length tms2 &&
@@ -486,7 +480,7 @@ let rec debruijn env t =
   | TmFix(_) -> t
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (debruijn env) tms)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
-  | TmRecord(fi, r) -> TmRecord(fi,List.map (function (l, t) -> (l, debruijn env t)) r)
+  | TmRecord(fi,r) -> TmRecord(fi,Record.map (debruijn env) r)
   | TmProj(fi,t,l) -> TmProj(fi,debruijn env t,l)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,debruijn env t1,l,debruijn env t2)
   | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
@@ -599,11 +593,7 @@ let rec eval env t =
   (* Sequences *)
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (eval env) tms)
   (* Records *)
-  | TmRecord(fi,r) ->
-     let add_mapping m = function
-       | (l, t) -> Record.add l (eval env t) m
-    in
-     TmConst(fi,CRecord(List.fold_left add_mapping Record.empty r))
+  | TmRecord(fi,tms) -> TmRecord(fi,Record.map (eval env) tms)
   | TmProj(fi,t,l) ->
      (match l with
       | LabIdx i ->
@@ -616,24 +606,22 @@ let rec eval env t =
                              ^ Ustring.to_utf8 (ustring_of_tm v)))
       | LabStr s ->
          (match eval env t with
-          | TmConst(fi, CRecord(r)) ->
+          | TmRecord(fi,r) ->
              (try Record.find s r
               with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
-                                        "' in record " ^ Ustring.to_utf8
-                                          (ustring_of_const
-                                             (CRecord(r)))))
+                                        "' in record "))
           | v ->
              raise_error fi ("Cannot project from term. The term is not a record: "
                              ^ Ustring.to_utf8
                                (ustring_of_tm v))))
   | TmRecordUpdate(fi,t1,l,t2) ->
      (match eval env t1 with
-      | TmConst(fi, CRecord(r)) ->
+      | TmRecord(fi,r) ->
          if Record.mem l r
-         then TmConst(fi, CRecord(Record.add l (eval env t2) r))
+         then TmRecord(fi, Record.add l (eval env t2) r)
          else raise_error fi ("No label '" ^ Ustring.to_utf8 l ^
                                         "' in record " ^ Ustring.to_utf8
-                                (ustring_of_const (CRecord r)))
+                                (ustring_of_tm (TmRecord(fi,r))))
       | v ->
          raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (ustring_of_tm v)))

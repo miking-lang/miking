@@ -89,8 +89,6 @@ and const =
 | Csnoc    of (tm Mseq.t) option
 | CsplitAt of (tm Mseq.t) option
 | Creverse
-(* MCore intrinsic: records *)
-| CRecord of tm Record.t
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
@@ -143,7 +141,7 @@ and tm =
 | TmConst   of info * const                                         (* Constant *)
 | TmSeq     of info * tm Mseq.t                                     (* Sequence *)
 | TmTuple   of info * tm list                                       (* Tuple *)
-| TmRecord  of info * (ustring * tm) list                           (* Record *)
+| TmRecord  of info * tm Record.t                                   (* Record *)
 | TmProj    of info * tm * label                                    (* Projection of a tuple or record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
 | TmCondef  of info * ustring * ty * tm                             (* Constructor definition *)
@@ -224,9 +222,9 @@ let rec map_tm f = function
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
-  | TmSeq(fi, tms) -> f (TmSeq(fi,Mseq.map (map_tm f) tms))
+  | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.map (map_tm f) tms))
   | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
-  | TmRecord(fi, r) -> f (TmRecord(fi,List.map (function (l, t) -> (l, map_tm f t)) r))
+  | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,ty,t1) -> f (TmCondef(fi,x,ty,map_tm f t1))

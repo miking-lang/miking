@@ -210,11 +210,6 @@ let rec print_const fmt = function
   | CsplitAt(_) -> fprintf fmt "splitAt"
   | Creverse    -> fprintf fmt "reverse"
 
-  (* MCore records *)
-  | CRecord(r) ->
-    let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
-    print_record fmt contents
-
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"
   | Cdprint       -> fprintf fmt "dprint"
@@ -321,7 +316,9 @@ and print_tm' fmt t = match t with
     let inner = List.map print tms in
     fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
 
-  | TmRecord(_,r) -> print_record fmt r
+  | TmRecord(_,r) ->
+    let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
+    print_record fmt contents
 
   | TmProj(_,t,l) ->
     let l = match l with
