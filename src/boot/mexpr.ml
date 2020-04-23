@@ -514,7 +514,7 @@ let rec debruijn env t =
 
 let rec tryMatch env value pat =
   let go v p env = Option.bind env (fun env -> tryMatch env v p) in
-  let splitNthOrDoubleEmpty n s =
+  let split_at_or_double_empty n s =
     if Mseq.length s == 0 then (Mseq.empty, Mseq.empty)
     else Mseq.split_at s n
   in
@@ -525,11 +525,11 @@ let rec tryMatch env value pat =
      let npats = Mseq.length pats in
      (match value,seqMP with
       | TmSeq(fi,vs),SeqMatchPrefix(p) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> splitNthOrDoubleEmpty npats in
+         let (pre,post) = vs |> split_at_or_double_empty npats in
          Mseq.fold_right2 go pre pats (Some env)
          |> go (TmSeq(fi, post)) p
       | TmSeq(fi,vs),SeqMatchPostfix(p) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> splitNthOrDoubleEmpty (Mseq.length vs - npats) in
+         let (pre,post) = vs |> split_at_or_double_empty (Mseq.length vs - npats) in
          go (TmSeq(fi, pre)) p (Some env)
          |> Mseq.fold_right2 go post pats
       | TmSeq(_,vs),SeqMatchTotal when npats == Mseq.length vs ->
