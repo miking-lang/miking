@@ -8,7 +8,7 @@ creating languages and generating efficient compilers.
 
 Before you test the Miking system, you need to install
 [OCaml](https://ocaml.org/), the
-[OPAM](https://opam.ocaml.org/) package manager, 
+[OPAM](https://opam.ocaml.org/) package manager,
 The packages `dune` and `batteries`.
 
 After installing `opam`, these packages can be installed as:
@@ -89,19 +89,15 @@ To install for the current user:
 ## Editor Support
 
 It is possible to write Miking code in any editor and compile it
-via the command line. There is, however, an Emacs mode in
-`emacs/mcore-mode.el` that defines syntax highlighting and
-compilation support. To use it, add the following to your
-`init.el` file:
+via the command line. There are, however, editing modes for a
+number of editors:
 
-```
-;; MCore mode
-(add-to-list 'load-path "/path/to/miking/emacs/")
-(require 'mcore-mode)
-```
+- [Emacs](https://github.com/miking-lang/miking-emacs)
+- [Vim](https://github.com/miking-lang/miking-vim)
+- [Sublime](https://github.com/miking-lang/miking-sublime-text)
 
-(or run `M-x eval-buffer` in the file defining the mode)
-
+If you create an editing mode of your own, please send a pull
+request to update this list!
 
 ## MCore
 
