@@ -11,6 +11,7 @@ let externals =
       (* Elementary functions *)
       ("sin", Esin);
       ("cos", Ecos);
+      ("atan", Eatan);
       (* SundialsML related functions *)
       ("sArrMake", ESArrayMake None);
       ("sArrGet", ESArrayGet None);
@@ -35,6 +36,7 @@ let arity = function
   (* Elementary functions *)
   | Esin -> 1
   | Ecos -> 1
+  | Eatan -> 1
   (* SundialsML related functions *)
   | ESArray _ -> 0
   | ESArrayMake None -> 2
@@ -128,6 +130,8 @@ let delta eval env fi c v =
   | Ecos, TmConst (_, CFloat f) -> mk_float fi (cos f)
   | Ecos,_ -> fail_extapp fi
 
+  | Eatan, TmConst (_, CFloat f) -> mk_float fi (atan f)
+  | Eatan,_ -> fail_extapp fi
   (* SundialsML related functions *)
   | ESArray _,_ -> fail_extapp fi
   | ESArrayMake None, TmConst (_, CInt n) ->
