@@ -97,6 +97,14 @@ utest match (1,[["a","b"],["c"]],76) with (1,b++[a],76) then (a,b) else [] with 
 utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else [] with [["a","b"]] in
 
 
+-- Matching with never terms
+let x = true in
+utest match x with true then "true" else
+      match x with false then "false" else
+      never
+with "true" in
+
+
 
 
 

@@ -264,11 +264,11 @@ let rec desugar_tm nss env =
   | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
   | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
   | TmTuple(fi, tms) -> TmTuple(fi, List.map (desugar_tm nss env) tms)
-  | TmRecord(fi, tms) -> TmRecord(fi, List.map (desugar_tm nss env |> map_right) tms)
+  | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
   | TmProj(fi, tm, lab) -> TmProj(fi, desugar_tm nss env tm, lab)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
   | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
-  | TmConst(fi, CRecord record) -> TmConst(fi, CRecord (Record.map (desugar_tm nss env) record))
+  | TmNever(fi) -> TmNever(fi)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ ) as tm -> tm
 
