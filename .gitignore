@@ -8,3 +8,8 @@ temp/
 .merlin
 dune
 *~
+TAGS
+tags
+.tags
+.ctags.d/
+.ctags
