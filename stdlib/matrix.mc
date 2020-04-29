@@ -29,10 +29,10 @@ let matrixBop = lam bop. lam mtx1. lam mtx2.
   else
     zipWith (vecBop bop) mtx1 mtx2
 
--- Applies function f i j x, columnwise, over the elements of mtx, where i, j is
+-- Applies function f i j x, row-wise, over the elements of mtx, where i, j is
 -- the index of element and x its value.
 let matrixMapij = lam f. lam mtx.
-  mapi (lam j. lam c. mapi (lam i. lam v. f i j v) c) mtx
+  mapi (lam i. lam c. mapi (lam j. lam v. f i j v) c) mtx
 
 -- Applies function f x over the elements of mtx, where x is the elements value.
 let matrixMap = lam f. matrixMapij (lam _. lam _. lam x. f x)
@@ -66,9 +66,9 @@ let matrixAdd = matrixBop addi in
 let matrixSMul = lam s. matrixMap (muli s) in
 let matrixMul = matrixMul addi muli in
 
-utest matrixConst (2,3) 0 with [[0, 0, 0], [0, 0, 0]] in
+utest matrixConst (2,3) 0 with [[0,0,0],[0,0,0]] in
 
-let A = [[1, 3], [2, 4]] in
+let A = [[1,3],[2,4]] in
 
 utest matrixIsMatrix A with true in
 utest matrixIsMatrix [] with false in
@@ -87,22 +87,22 @@ let B = matrixSet B 0 1 3 in
 let B = matrixSet B 1 1 4 in
 
 utest B with A in
-utest matrixAdd A B with [[2, 6], [4, 8]] in
+utest matrixAdd A B with [[2,6],[4,8]] in
 
-utest matrixMapij (lam i. lam j. lam _. (i, j)) (matrixConst (2,2) (0, 0))
-with [[(0, 0), (1, 0)], [(0, 1), (1, 1)]] in
+utest matrixMapij (lam i. lam j. lam _. (i, j)) (matrixConst (2,2) (0,0))
+with [[(0,0),(0,1)],[(1,0),(1,1)]] in
 
-utest matrixSMul 3 A with [[3, 9], [6, 12]] in
+utest matrixSMul 3 A with [[3,9],[6,12]] in
 
-utest matrixSize A with (2, 2) in
+utest matrixSize A with (2,2) in
 
 utest matrixTr (matrixTr A) with A in
-utest matrixTr A with [[1, 2], [3, 4]] in
-utest matrixTr [[1, 2, 3], [4, 5, 6]] with [[1, 4], [2, 5], [3, 6]] in
+utest matrixTr A with [[1,2], [3,4]] in
+utest matrixTr [[1,2,3], [4,5,6]] with [[1,4], [2,5], [3,6]] in
 
 utest matrixMul [[1]] [[1]] with [[1]] in
-utest matrixMul [[1], [2]] [[1, 2]] with [[1, 2], [2, 4]] in
-utest matrixMul [[1, 2]] [[1], [2]] with [[5]] in
-utest matrixMul [[1], [2]] [[3]] with [[3], [6]] in
+utest matrixMul [[1], [2]] [[1, 2]] with [[1,2], [2,4]] in
+utest matrixMul [[1,2]] [[1],[2]] with [[5]] in
+utest matrixMul [[1],[2]] [[3]] with [[3],[6]] in
 
 ()
