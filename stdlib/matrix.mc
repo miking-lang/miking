@@ -105,7 +105,4 @@ utest matrixMul [[1], [2]] [[1, 2]] with [[1, 2], [2, 4]] in
 utest matrixMul [[1, 2]] [[1], [2]] with [[5]] in
 utest matrixMul [[1], [2]] [[3]] with [[3], [6]] in
 
--- utest matrixRow2Seq [[1, 2, 3]] with [1, 2, 3] in
--- utest matrixCol2Seq [[1], [2], [3]] with [1, 2, 3] in
-
 ()
