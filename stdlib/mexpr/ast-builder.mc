@@ -264,6 +264,10 @@ let lam_ = use MExprAst in
   lam ident. lam tpe. lam body.
   TmLam {ident = ident, tpe = tpe, body = body}
 
+let ulam_ = use MExprAst in
+  lam ident. lam body.
+  TmLam {ident = ident, tpe = None (), body = body}
+
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmIf {cond = cond, thn = thn, els = els}
