@@ -1,8 +1,8 @@
 -- This file contains proof-of-concepts functions for CPS transformation of the
 -- basic lambda calculus subset of MExpr. It is based on
 -- http://matt.might.net/articles/cps-conversion/.
--- TODO Implement gensym (transformation is incorrect now since it does not use
--- fresh variables)
+-- TODO Implement gensym, so that we can remove the CPS variable env (much
+-- cleaner).
 -- TODO Add full language support when MExpr definition is stable.
 
 -- TODO Seems like the includes are order-dependent here. Including ast-builder
@@ -11,48 +11,50 @@ include "mexpr.mc"
 include "pprint.mc"
 include "ast-builder.mc"
 
--- TODO Generate fresh symbols
-let gensym = lam str. str
-
 lang MExprCPS = MExpr + MExprPrettyPrint
 
-  sem cpsK (cont: Expr -> Expr) =
+  sem cpsK (env: Env) (cont: Expr -> Env -> Expr) =
+  | TmLam t -> cont (cpsM env (TmLam t)) env
+  | TmVar t -> cont (cpsM env (TmVar t)) env
   | TmApp t ->
-    let rv = gensym "rv" in
+    let rv = fresh "rv" env in
     let rvvar = var_ rv in
-    let cont = ulam_ rv (cont rvvar) in
+    let env = cons (rv, ()) env in
+    let cont = ulam_ rv (cont rvvar env) in
+    -- TODO The below is the same for both cpsK and cpsC. How do I avoid this
+    -- code duplication?
     cpsK
-      (lam lhs.
+      env
+      (lam lhs. lam env.
         cpsK
-          (lam rhs.
+          env
+          (lam rhs. lam env.
             appf2_ lhs rhs cont)
           t.rhs)
       t.lhs
 
-  | TmLam t -> cont (cpsM (TmLam t))
-  | TmVar t -> cont (cpsM (TmVar t))
-
-  sem cpsC (cont: Expr) =
+  sem cpsC (env: Env) (cont: Expr) =
+  | TmLam t -> app_ cont (cpsM env (TmLam t))
+  | TmVar t -> app_ cont (cpsM env (TmVar t))
   | TmApp t ->
     cpsK
-      (lam lhs.
+      env
+      (lam lhs. lam env.
         cpsK
-          (lam rhs.
+          env
+          (lam rhs. lam env.
             appf2_ lhs rhs cont)
           t.rhs)
       t.lhs
 
-  | TmLam t -> app_ cont (cpsM (TmLam t))
-  | TmVar t -> app_ cont (cpsM (TmVar t))
-
-  sem cpsM =
+  sem cpsM (env: Env) =
   | TmApp t -> error "CPS: TmApp is not atomic"
-  | TmLam t ->
-    let k = gensym "k" in
-    let kvar = var_ k in
-    lam_ t.ident t.tpe (ulam_ k (cpsC kvar t.body))
-
   | TmVar t -> TmVar t
+  | TmLam t ->
+    let k = fresh "k" env in
+    let kvar = var_ k in
+    let env = cons (k, ()) (cons (t.ident, ()) env) in
+    lam_ t.ident t.tpe (ulam_ k (cpsC env kvar t.body))
 
 end
 
@@ -61,27 +63,34 @@ use MExprCPS in
 
 let id = ulam_ "x" (var_ "x") in
 
-utest cpsM (var_ "x") with
+utest cpsM [] (var_ "x") with
       var_ "x"
 in
 
-utest cpsM id with
+utest cpsM [] id with
       ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))
 in
 
-utest cpsC id (app_ (var_ "a") (var_ "b")) with
+utest cpsC [] id (app_ (var_ "a") (var_ "b")) with
       appf2_ (var_ "a") (var_ "b") id
 in
 
--- TODO Replace second occurrence of rv with fresh var when this is fixed
-utest cpsC id (app_
-                (app_ (var_ "a") (var_ "b"))
-                (app_ (var_ "c") (var_ "d"))) with
+utest cpsC [] id (app_
+                   (app_ (var_ "a") (var_ "b"))
+                   (app_ (var_ "c") (var_ "d"))) with
       appf2_ (var_ "a") (var_ "b")
         (ulam_ "rv"
           (appf2_ (var_ "c") (var_ "d")
-            (ulam_ "rv"
-              (appf2_ (var_ "rv") (var_ "rv") id))))
+            (ulam_ "rv0"
+              (appf2_ (var_ "rv") (var_ "rv0") id))))
 in
 
 ()
+
+--let program =
+--  (app_
+--    (app_ (var_ "a") (var_ "b"))
+--    (app_ (var_ "c") (var_ "d")))
+--in
+--
+--print (pprintCode 2 (cpsC [] id program))
