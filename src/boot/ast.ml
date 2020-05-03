@@ -203,8 +203,8 @@ and vartype =
 | VarTm    of ustring
 
 
-(* No index -1 means that de Bruijn index has not yet been assigned *)
-let noidx = -1
+(* Value -1 means that there is no symbol yet assigned *)
+let nosym = -1
 
 module Option = BatOption
 

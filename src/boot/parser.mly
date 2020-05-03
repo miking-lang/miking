@@ -272,7 +272,7 @@ atom:
   | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
                            else TmTuple(mkinfo $1.i $3.i,$2) }
   | LPAREN RPAREN        { TmConst($1.i, Cunit) }
-  | IDENT                { TmVar($1.i,$1.v,noidx) }
+  | IDENT                { TmVar($1.i,$1.v,nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
@@ -333,7 +333,7 @@ pat:
   | name
       { $1 }
   | IDENT pat
-      { PatCon(mkinfo $1.i (pat_info $2), $1.v, noidx, $2) }
+      { PatCon(mkinfo $1.i (pat_info $2), $1.v, nosym, $2) }
   | patseq
       { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
   | patseq CONCAT IDENT

@@ -453,11 +453,11 @@ let rec symbolize env t =
   let findsym fi x kind env = try List.assoc x env
     with Not_found -> raise_error fi ("Unknown " ^ kind ^ " '" ^ Ustring.to_utf8 x ^ "'")
   in
-  let rec dbPat env = function
+  let rec sPat env = function
     | PatNamed(fi,NameStr(x,_)) -> let s = gensym() in ((x,s)::env, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (env, pat)
     | PatSeq(fi,ps,seqMP) ->
-       let go p (env,ps) = let (env,p) = dbPat env p in (env,Mseq.cons p ps) in
+       let go p (env,ps) = let (env,p) = sPat env p in (env,Mseq.cons p ps) in
        let (env,ps) = Mseq.fold_right go ps (env,Mseq.empty) in
        let (env,seqMP') = (match seqMP with
          | SeqMatchPrefix(NameStr(x,_)) -> let s = gensym() in ((x,s)::env, SeqMatchPrefix(NameStr(x,s)))
@@ -465,12 +465,12 @@ let rec symbolize env t =
          | SeqMatchPrefix(NameWildcard) | SeqMatchPostfix(NameWildcard) | SeqMatchTotal -> (env,seqMP)) in
        (env,PatSeq(fi,ps,seqMP'))
     | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
-       let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
+       let go p (env,ps) = let (env,p) = sPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[])
        in (env,PatTuple(fi,ps))
     | PatCon(fi,cx,_,p) ->
        let cxId = findsym fi cx "constructor" env in
-       let (env, p) = dbPat env p
+       let (env, p) = sPat env p
        in (env,PatCon(fi,cx,cxId,p))
     | PatInt _ as p -> (env,p)
     | PatChar _ as p -> (env,p)
@@ -498,7 +498,7 @@ let rec symbolize env t =
   | TmConsym(fi,x,sym,tmop) ->
      TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(symbolize env t))
   | TmMatch(fi,t1,p,t2,t3) ->
-     let (matchedEnv, p) = dbPat env p in
+     let (matchedEnv, p) = sPat env p in
      TmMatch(fi,symbolize env t1,p,symbolize matchedEnv t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
   | TmUtest(fi,t1,t2,tnext)

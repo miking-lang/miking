@@ -148,7 +148,7 @@ let flatten = function
  ***************)
 
 module AstHelpers = struct
-  let var x = TmVar(NoInfo, x, -1)
+  let var x = TmVar(NoInfo, x, nosym)
   let app l r = TmApp(NoInfo, l, r)
   let let_ x s e body = TmLet(NoInfo, x, s, e, body)
 end
@@ -159,16 +159,16 @@ let translate_cases f target cases =
   let translate_case case inner =
     match case with
     | (ConPattern (fi, k, x), handler) ->
-      TmMatch (fi, target, PatCon(fi, k, noidx, PatNamed(fi, NameStr(x,0))), handler, inner)
+      TmMatch (fi, target, PatCon(fi, k, nosym, PatNamed(fi, NameStr(x,nosym))), handler, inner)
     | (VarPattern (fi, x), handler) ->
-      TmLet(fi, x, 0, target, handler)
+      TmLet(fi, x, nosym, target, handler)
   in
   let msg = Mseq.map (fun c -> TmConst(NoInfo,CChar(c)))
               ((us"No matching case for function " ^. f)
                |> Mseq.of_ustring)
   in
   let no_match =
-    let_ (us"_") 0   (* TODO: we should probably have a special sort for let with wildcards *)
+    let_ (us"_") nosym   (* TODO: we should probably have a special sort for let with wildcards *)
       (app (TmConst (NoInfo, CdebugShow)) target)
       (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
@@ -288,19 +288,19 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let ns = List.fold_left add_decl previous_ns decls in
      (* wrap in "con"s *)
      let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
-       TmCondef(fi, mangle cname, 0, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
+       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
      let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
        | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
        | _ -> tm in
      (* translate "Inter"s into (info * ustring * tm) *)
      let inter_to_tm fname fi params cases =
        let target = us"__sem_target" in
-       let wrap_param (Param(fi, name, ty)) tm = TmLam(fi, name, 0, ty, tm)
-       in TmLam(fi, target, 0, TyDyn, translate_cases fname (var target) cases)
+       let wrap_param (Param(fi, name, ty)) tm = TmLam(fi, name, nosym, ty, tm)
+       in TmLam(fi, target, nosym, TyDyn, translate_cases fname (var target) cases)
           |> List.fold_right wrap_param params
           |> desugar_tm nss ns in
      let translate_inter = function
-       | Inter(fi, name, params, cases) -> Some (fi, mangle name, 0, inter_to_tm name fi params cases)
+       | Inter(fi, name, params, cases) -> Some (fi, mangle name, nosym, inter_to_tm name fi params cases)
        | _ -> None in
      (* put translated inters in a single letrec, then wrap in cons, then done *)
      let wrap tm = TmRecLets(NoInfo, List.filter_map translate_inter decls, tm)
@@ -309,14 +309,14 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
 
   (* The other tops are trivial translations *)
   | TopLet(Let(fi, id, tm)) ->
-     let wrap tm' = TmLet(fi, empty_mangle id, 0, desugar_tm nss emptyMlangEnv tm, tm')
+     let wrap tm' = TmLet(fi, empty_mangle id, nosym, desugar_tm nss emptyMlangEnv tm, tm')
      in (nss, (wrap :: stack))
   | TopRecLet(RecLet(fi, lets)) ->
     let wrap tm' = TmRecLets(fi, List.map (fun (fi', id, tm) -> (fi',
-      empty_mangle id, 0, desugar_tm nss emptyMlangEnv tm)) lets, tm')
+      empty_mangle id, nosym, desugar_tm nss emptyMlangEnv tm)) lets, tm')
      in (nss, (wrap :: stack))
   | TopCon(Con(fi, id, ty)) ->
-     let wrap tm' = TmCondef(fi, id, 0, ty, tm')
+     let wrap tm' = TmCondef(fi, id, nosym, ty, tm')
      in (nss, (wrap :: stack))
 
 let desugar_post_flatten (Program(_, tops, t)) =
