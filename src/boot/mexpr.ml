@@ -413,11 +413,13 @@ let delta eval env fi c v  =
 
 (* Debug function used in the eval function *)
 let debug_eval env t =
-  if enable_debug_eval then
-    (printf "\n-- eval -- \n";
-     uprint_endline (ustring_of_tm t);
-     if enable_debug_eval_env then
-        uprint_endline (ustring_of_env env))
+  if !enable_debug_eval_tm  || !enable_debug_eval_env then (
+    printf "-- eval step -- \n";
+    let env_str = if !enable_debug_eval_env then
+        us"Environment:\n" ^. (ustring_of_env ~margin:80 env) ^. us"\n" else us"" in
+    let tm_str = if !enable_debug_eval_tm then
+        us"Term:\n" ^. (ustring_of_tm ~margin:80 t) ^. us"\n" else us"" in
+    uprint_endline (env_str ^. tm_str))
   else ()
 
 (* Print out error message when a unit test fails *)

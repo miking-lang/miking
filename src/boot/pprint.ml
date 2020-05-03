@@ -12,10 +12,6 @@ open Ast
 open Format
 open Ustring.Op
 
-(** Whether or not symbol printin is the default (this can still be changed
- *  through optional arguments) *)
-let enable_debug_symbol_print = ref false
-
 (** Global configuration for symbol printing. Needed because of the unwieldy
  *  interface to the Format module *)
 let ref_symbol = ref false
@@ -49,9 +45,9 @@ let ustring_of_pat p =
     let ppSeq s =
       s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
     in
-    let ppName = function NameStr(x,_) -> x | NameWildcard -> us"_" in
+    let ppName = function NameStr(x,s) -> ustring_of_var x s | NameWildcard -> us"_" in
     match pat with
-    | PatNamed(_,NameStr(x,_)) -> x
+    | PatNamed(_,NameStr(x,s)) -> ustring_of_var x s
     | PatSeq(_,lst,SeqMatchPrefix(x)) ->
       us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
     | PatSeq(_,lst,SeqMatchPostfix(x)) ->
@@ -335,18 +331,18 @@ and print_tm' fmt t = match t with
       l
       print_tm (Atom, t2)
 
-  | TmCondef(_,s,_,ty,t) ->
-    let s = string_of_ustring s in
+  | TmCondef(_,x,s,ty,t) ->
+    let str = string_of_ustring (ustring_of_var x s) in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
-      s ty print_tm (Match, t)
+      str ty print_tm (Match, t)
 
-  | TmConsym(_,s,sym,tmop) ->
-    let s = string_of_ustring s in
+  | TmConsym(_,x,sym,tmop) ->
+    let str = string_of_ustring (ustring_of_var x sym) in
     (match tmop with
      (* TODO Atom precedence too conservative? *)
-     | Some(t) -> fprintf fmt "%s_%d %a" s sym print_tm (Atom ,t)
-     | None -> fprintf fmt "%s_%d" s sym)
+     | Some(t) -> fprintf fmt "%s %a" str print_tm (Atom ,t)
+     | None -> fprintf fmt "%s" str)
 
   (* If expressions *)
   | TmMatch(_,t1,PatBool(_,true),t2,t3) ->

@@ -11,13 +11,12 @@ open Msg
 
 
 (* Debug options *)
-let enable_debug_eval = false
-let enable_debug_eval_env = false
+let enable_debug_eval_tm = ref false
+let enable_debug_eval_env = ref false
 let enable_debug_after_parse = ref false
-let enable_debug_after_debruijn = false
-let enable_debug_after_erase = false
+let enable_debug_after_symbolize = ref false
 let enable_debug_after_mlang = ref false
-
+let enable_debug_symbol_print = ref false
 
 
 let utest = ref false           (* Set to true if unit testing is enabled *)
