@@ -49,8 +49,8 @@ let prog_argv = ref []          (* Argv for the program that is executed *)
 
 (* Debug template function. Used below *)
 let debug_after_parse t =
-  if enable_debug_after_parse then
-    (printf "\n-- After parsing --\n";
+  if !enable_debug_after_parse then
+    (printf "\n-- After parsing (only mexpr part) --\n";
      uprint_endline (ustring_of_program t);
      t)
   else t
@@ -225,11 +225,14 @@ let main =
   let speclist = [
 
     (* First character in description string must be a space for alignment! *)
+    "--debug-parse", Arg.Set(enable_debug_after_parse),
+    " Enables output of parsing.";
+
     "--debug-mlang", Arg.Set(enable_debug_after_mlang),
     " Enables output of the mexpr program after mlang transformations.";
 
-    "--debruijn", Arg.Set(enable_debug_debruijn_print),
-    " Enables output of the debruijn indices of variables when printing.";
+    "--symbol", Arg.Set(enable_debug_symbol_print),
+    " Enables output of the symbols for variables when printing.";
 
   ] in
 

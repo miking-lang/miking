@@ -12,13 +12,13 @@ open Ast
 open Format
 open Ustring.Op
 
-(** Whether or not debruijn printin is the default (this can still be changed
+(** Whether or not symbol printin is the default (this can still be changed
  *  through optional arguments) *)
-let enable_debug_debruijn_print = ref false
+let enable_debug_symbol_print = ref false
 
-(** Global configuration for debruijn printing. Needed because of the unwieldy
+(** Global configuration for symbol printing. Needed because of the unwieldy
  *  interface to the Format module *)
-let ref_debruijn = ref false
+let ref_symbol = ref false
 
 (** Global configuration for indentation size. Needed because of the unwieldy
  *  interface to the Format module *)
@@ -28,9 +28,9 @@ let ref_indent      = ref 2
 let string_of_ustring = Ustring.to_utf8
 
 (** Create string representation of variable *)
-let ustring_of_var x n =
-  if !ref_debruijn
-  then x ^. us(sprintf "'%d" n) else x
+let ustring_of_var x s =
+  if !ref_symbol
+  then x ^. (if s == -1 then us"#" else us(sprintf "#%d" s)) else x
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -265,7 +265,8 @@ and print_tm' fmt t = match t with
 
   | TmVar(_,x,s) ->
     let print = string_of_ustring (ustring_of_var x s) in
-    fprintf fmt "%s#%d" print s
+  (*  fprintf fmt "%s#%d" print s *)
+    fprintf fmt "%s" print
 
   | TmLam(_,x,_,ty,t1) ->
     let x = string_of_ustring x in
@@ -417,7 +418,7 @@ and print_env fmt env =
 
 (** Helper function for configuring the string formatter and printing *)
 let ustr_formatter_print
-    ?(debruijn   = !enable_debug_debruijn_print)
+    ?(symbol   = !enable_debug_symbol_print)
     ?(indent     = 2)
     ?(max_indent = 68)
     ?(margin     = max_int)
@@ -426,7 +427,7 @@ let ustr_formatter_print
     printer arg =
 
   (* Configure global settings *)
-  ref_debruijn := debruijn;
+  ref_symbol := symbol;
   ref_indent   := indent;
   pp_set_margin     str_formatter margin;
   pp_set_max_indent str_formatter max_indent;
@@ -446,20 +447,20 @@ let ustr_formatter_print
 
 (** Convert terms to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_tm ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix t =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_tm ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix t =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_tm (Match, t)
 
 (** Converting constants to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_const ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix c =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_const ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix c =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_const c
 
 (** Converting environments to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_env ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix e =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_env e
 
 (** TODO: Print mlang part as well. *)

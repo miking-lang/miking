@@ -13,7 +13,7 @@ open Msg
 (* Debug options *)
 let enable_debug_eval = false
 let enable_debug_eval_env = false
-let enable_debug_after_parse = false
+let enable_debug_after_parse = ref false
 let enable_debug_after_debruijn = false
 let enable_debug_after_erase = false
 let enable_debug_after_mlang = ref false
