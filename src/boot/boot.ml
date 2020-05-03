@@ -140,9 +140,9 @@ let evalprog filename  =
      |> Mlang.flatten
      |> Mlang.desugar_post_flatten
      |> debug_after_mlang
-     |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
+     |> Mexpr.symbolize builtin_name2sym
      |> debug_after_debruijn
-     |> Mexpr.eval (builtin |> List.split |> snd)
+     |> Mexpr.eval builtin_sym2term
      |> fun _ -> ())
     with
     | Lexer.Lex_error m ->

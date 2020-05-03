@@ -49,9 +49,9 @@ let ustring_of_pat p =
     let ppSeq s =
       s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
     in
-    let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
+    let ppName = function NameStr(x,_) -> x | NameWildcard -> us"_" in
     match pat with
-    | PatNamed(_,NameStr(x)) -> x
+    | PatNamed(_,NameStr(x,_)) -> x
     | PatSeq(_,lst,SeqMatchPrefix(x)) ->
       us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
     | PatSeq(_,lst,SeqMatchPostfix(x)) ->
@@ -263,11 +263,11 @@ and print_tm fmt (prec, t) =
 (** Auxiliary print function *)
 and print_tm' fmt t = match t with
 
-  | TmVar(_,x,n) ->
-    let print = string_of_ustring (ustring_of_var x n) in
-    fprintf fmt "%s" print
+  | TmVar(_,x,s) ->
+    let print = string_of_ustring (ustring_of_var x s) in
+    fprintf fmt "%s#%d" print s
 
-  | TmLam(_,x,ty,t1) ->
+  | TmLam(_,x,_,ty,t1) ->
     let x = string_of_ustring x in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]"
@@ -275,7 +275,7 @@ and print_tm' fmt t = match t with
       ty
       print_tm (Lam, t1)
 
-  | TmLet(_,x,t1,t2) ->
+  | TmLet(_,x,_,t1,t2) ->
     let x = string_of_ustring x in
     fprintf fmt "@[<hov 0>\
                    @[<hov %d>let %s =@ %a in@]\
@@ -286,7 +286,7 @@ and print_tm' fmt t = match t with
       print_tm (Match, t2)
 
   | TmRecLets(_,lst,t2) ->
-    let print (_,x,t) =
+    let print (_,x,_,t) =
       let x = string_of_ustring x in
       (fun fmt -> fprintf fmt "@[<hov %d>let %s =@ %a@]"
           !ref_indent x print_tm (Match,t)) in
@@ -334,7 +334,7 @@ and print_tm' fmt t = match t with
       l
       print_tm (Atom, t2)
 
-  | TmCondef(_,s,ty,t) ->
+  | TmCondef(_,s,_,ty,t) ->
     let s = string_of_ustring s in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
@@ -398,7 +398,7 @@ and print_tm' fmt t = match t with
       print_tm (Match, t2)
       print_tm (Match, t3)
 
-  | TmClos(_,x,ty,t1,_) ->
+  | TmClos(_,x,_,ty,t1,_) ->
     let x = string_of_ustring x in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov %d>clos %s:%s.@ %a@]"
@@ -411,8 +411,8 @@ and print_tm' fmt t = match t with
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
-  let print i t = (fun fmt -> fprintf fmt "%d -> %a" i print_tm (Match, t)) in
-  let inner = List.mapi print env in
+  let print (s,t) = (fun fmt -> fprintf fmt "#%d -> %a" s print_tm (Match, t)) in
+  let inner = List.map print env in
   fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
 (** Helper function for configuring the string formatter and printing *)

@@ -24,7 +24,7 @@ let delta eval env _ c v =
   let mk_app fi f v = TmApp (fi, f, v) in
 
   match c, v with
-  | EApp None, TmClos (fi, _, _, _, _) | EApp None, TmConst (fi,  _) ->
+  | EApp None, TmClos (fi, _, _, _, _, _) | EApp None, TmConst (fi,  _) ->
      mk_ext fi (EApp (Some (fun x -> eval env (mk_app NoInfo v x))))
   | EApp (Some f), _ -> (f v)
   | EApp _, t -> fail_extapp (tm_info t)

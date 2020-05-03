@@ -28,8 +28,13 @@ let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 (* Map type for record implementation *)
 module Record = Map.Make(Ustring)
 
+(* Symbols for name association *)
+type sym = int
+let sym_no = ref 0
+let gensym() = sym_no := !sym_no + 1; !sym_no
+
 (* Evaluation environment *)
-type env = tm list
+type env = (sym * tm) list
 
 and const =
 (* MCore intrinsic: unit - no operation *)
@@ -105,9 +110,6 @@ and const =
 (* External functions TODO: Should not be part of core language *)
 | CExt of tm Extast.ext
 
-(* Names *)
-and sym = int
-
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
@@ -133,10 +135,10 @@ and program = Program of include_ list * top list * tm
 
 (* Terms in MExpr *)
 and tm =
-| TmVar     of info * ustring * int                                 (* Variable *)
-| TmLam     of info * ustring * ty * tm                             (* Lambda abstraction *)
-| TmLet     of info * ustring * tm * tm                             (* Let *)
-| TmRecLets of info * (info * ustring * tm) list * tm               (* Recursive lets *)
+| TmVar     of info * ustring * sym                                 (* Variable *)
+| TmLam     of info * ustring * sym * ty * tm                       (* Lambda abstraction *)
+| TmLet     of info * ustring * sym * tm * tm                       (* Let *)
+| TmRecLets of info * (info * ustring * sym * tm) list * tm         (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
 | TmSeq     of info * tm Mseq.t                                     (* Sequence *)
@@ -144,14 +146,14 @@ and tm =
 | TmRecord  of info * tm Record.t                                   (* Record *)
 | TmProj    of info * tm * label                                    (* Projection of a tuple or record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
-| TmCondef  of info * ustring * ty * tm                             (* Constructor definition *)
+| TmCondef  of info * ustring * sym * ty * tm                       (* Constructor definition *)
 | TmConsym  of info * ustring * sym * tm option                     (* Constructor symbol *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
 | TmNever   of info                                                 (* Never term *)
 (* Only part of the runtime system *)
-| TmClos    of info * ustring * ty * tm * env Lazy.t                (* Closure *)
+| TmClos    of info * ustring * sym * ty * tm * env Lazy.t          (* Closure *)
 | TmFix     of info                                                 (* Fix point *)
 
 
@@ -162,7 +164,7 @@ and label =
 
 (* Kind of pattern name *)
 and patName =
-| NameStr of ustring                              (* A normal pattern name *)
+| NameStr of ustring * sym                        (* A normal pattern name *)
 | NameWildcard                                    (* Pattern wildcard *)
 
 (* Kind of sequence matching in patterns *)
@@ -205,20 +207,16 @@ and vartype =
 (* No index -1 means that de Bruijn index has not yet been assigned *)
 let noidx = -1
 
-(* Creation and handling of constructors and symbol generation *)
-let symno = ref 0
-let gencon fi x = symno := !symno + 1; TmConsym(fi,x,!symno,None)
-
 module Option = BatOption
 
 (* General (bottom-up) map over terms *)
 let rec map_tm f = function
   | TmVar (_,_,_) as t -> f t
-  | TmLam(fi,x,ty,t1) -> f (TmLam(fi,x,ty,map_tm f t1))
-  | TmClos(fi,x,ty,t1,env) -> f (TmClos(fi,x,ty,map_tm f t1,env))
-  | TmLet(fi,x,t1,t2) -> f (TmLet(fi,x,map_tm f t1,map_tm f t2))
+  | TmLam(fi,x,s,ty,t1) -> f (TmLam(fi,x,s,ty,map_tm f t1))
+  | TmClos(fi,x,s,ty,t1,env) -> f (TmClos(fi,x,s,ty,map_tm f t1,env))
+  | TmLet(fi,x,s,t1,t2) -> f (TmLet(fi,x,s,map_tm f t1,map_tm f t2))
   | TmRecLets(fi,lst,tm) ->
-     f (TmRecLets(fi,List.map (fun (fi,s,t) -> (fi,s,map_tm f t)) lst, map_tm f tm))
+     f (TmRecLets(fi,List.map (fun (fi,x,s,t) -> (fi,x,s,map_tm f t)) lst, map_tm f tm))
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
@@ -227,7 +225,7 @@ let rec map_tm f = function
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
-  | TmCondef(fi,x,ty,t1) -> f (TmCondef(fi,x,ty,map_tm f t1))
+  | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
   | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
   | TmMatch(fi,t1,p,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
@@ -239,9 +237,9 @@ let rec map_tm f = function
 (* Returns the info field from a term *)
 let tm_info = function
   | TmVar(fi,_,_) -> fi
-  | TmLam(fi,_,_,_) -> fi
-  | TmClos(fi,_,_,_,_) -> fi
-  | TmLet(fi,_,_,_) -> fi
+  | TmLam(fi,_,_,_,_) -> fi
+  | TmClos(fi,_,_,_,_,_) -> fi
+  | TmLet(fi,_,_,_,_) -> fi
   | TmRecLets(fi,_,_) -> fi
   | TmApp(fi,_,_) -> fi
   | TmConst(fi,_) -> fi
@@ -251,7 +249,7 @@ let tm_info = function
   | TmRecord(fi,_) -> fi
   | TmProj(fi,_,_) -> fi
   | TmRecordUpdate(fi,_,_,_) -> fi
-  | TmCondef(fi,_,_,_) -> fi
+  | TmCondef(fi,_,_,_,_) -> fi
   | TmConsym(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi

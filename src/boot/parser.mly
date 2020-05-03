@@ -226,19 +226,20 @@ mexpr:
       { $6 }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
-         TmRecLets(fi,$2,$4) }
+        let lst = List.map (fun (fi,x,t) -> (fi,x,0,t)) $2 in
+         TmRecLets(fi,lst,$4) }
   | LET IDENT ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
-        TmLet(fi,$2.v,$5,$7) }
+        TmLet(fi,$2.v,0,$5,$7) }
   | LAM IDENT ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$2.v,$3,$5) }
+        TmLam(fi,$2.v,0,$3,$5) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
   | CON IDENT ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmCondef(fi,$2.v,$3,$5)}
+        TmCondef(fi,$2.v,0,$3,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
          TmMatch(fi,$2,$4,$6,$8) }
@@ -255,8 +256,7 @@ lets:
         [(fi, $2.v, $5)] }
   | LET IDENT ty_op EQ mexpr lets
       { let fi = mkinfo $1.i (tm_info $5) in
-         (fi, $2.v, $5)::$6 }
-
+        (fi, $2.v, $5)::$6 }
 
 
 left:
@@ -327,7 +327,7 @@ name:
   | IDENT
       { if $1.v =. us"_"
         then PatNamed($1.i, NameWildcard)
-        else PatNamed($1.i, NameStr($1.v)) }
+        else PatNamed($1.i, NameStr($1.v,0)) }
 
 pat:
   | name
@@ -337,9 +337,9 @@ pat:
   | patseq
       { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
   | patseq CONCAT IDENT
-      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v))) }
+      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v,0))) }
   | IDENT CONCAT patseq
-      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v))) }
+      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v,0))) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
