@@ -12,13 +12,9 @@ open Ast
 open Format
 open Ustring.Op
 
-(** Whether or not debruijn printin is the default (this can still be changed
- *  through optional arguments) *)
-let enable_debug_debruijn_print = ref false
-
-(** Global configuration for debruijn printing. Needed because of the unwieldy
+(** Global configuration for symbol printing. Needed because of the unwieldy
  *  interface to the Format module *)
-let ref_debruijn = ref false
+let ref_symbol = ref false
 
 (** Global configuration for indentation size. Needed because of the unwieldy
  *  interface to the Format module *)
@@ -28,9 +24,9 @@ let ref_indent      = ref 2
 let string_of_ustring = Ustring.to_utf8
 
 (** Create string representation of variable *)
-let ustring_of_var x n =
-  if !ref_debruijn
-  then x ^. us(sprintf "'%d" n) else x
+let ustring_of_var x s =
+  if !ref_symbol
+  then x ^. (if s == -1 then us"#" else us(sprintf "#%d" s)) else x
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -49,9 +45,9 @@ let ustring_of_pat p =
     let ppSeq s =
       s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
     in
-    let ppName = function NameStr(x) -> x | NameWildcard -> us"_" in
+    let ppName = function NameStr(x,s) -> ustring_of_var x s | NameWildcard -> us"_" in
     match pat with
-    | PatNamed(_,NameStr(x)) -> x
+    | PatNamed(_,NameStr(x,s)) -> ustring_of_var x s
     | PatSeq(_,lst,SeqMatchPrefix(x)) ->
       us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
     | PatSeq(_,lst,SeqMatchPostfix(x)) ->
@@ -263,11 +259,12 @@ and print_tm fmt (prec, t) =
 (** Auxiliary print function *)
 and print_tm' fmt t = match t with
 
-  | TmVar(_,x,n) ->
-    let print = string_of_ustring (ustring_of_var x n) in
+  | TmVar(_,x,s) ->
+    let print = string_of_ustring (ustring_of_var x s) in
+  (*  fprintf fmt "%s#%d" print s *)
     fprintf fmt "%s" print
 
-  | TmLam(_,x,ty,t1) ->
+  | TmLam(_,x,_,ty,t1) ->
     let x = string_of_ustring x in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]"
@@ -275,7 +272,7 @@ and print_tm' fmt t = match t with
       ty
       print_tm (Lam, t1)
 
-  | TmLet(_,x,t1,t2) ->
+  | TmLet(_,x,_,t1,t2) ->
     let x = string_of_ustring x in
     fprintf fmt "@[<hov 0>\
                    @[<hov %d>let %s =@ %a in@]\
@@ -286,7 +283,7 @@ and print_tm' fmt t = match t with
       print_tm (Match, t2)
 
   | TmRecLets(_,lst,t2) ->
-    let print (_,x,t) =
+    let print (_,x,_,t) =
       let x = string_of_ustring x in
       (fun fmt -> fprintf fmt "@[<hov %d>let %s =@ %a@]"
           !ref_indent x print_tm (Match,t)) in
@@ -334,18 +331,18 @@ and print_tm' fmt t = match t with
       l
       print_tm (Atom, t2)
 
-  | TmCondef(_,s,ty,t) ->
-    let s = string_of_ustring s in
+  | TmCondef(_,x,s,ty,t) ->
+    let str = string_of_ustring (ustring_of_var x s) in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
-      s ty print_tm (Match, t)
+      str ty print_tm (Match, t)
 
-  | TmConsym(_,s,sym,tmop) ->
-    let s = string_of_ustring s in
+  | TmConsym(_,x,sym,tmop) ->
+    let str = string_of_ustring (ustring_of_var x sym) in
     (match tmop with
      (* TODO Atom precedence too conservative? *)
-     | Some(t) -> fprintf fmt "%s_%d %a" s sym print_tm (Atom ,t)
-     | None -> fprintf fmt "%s_%d" s sym)
+     | Some(t) -> fprintf fmt "%s %a" str print_tm (Atom ,t)
+     | None -> fprintf fmt "%s" str)
 
   (* If expressions *)
   | TmMatch(_,t1,PatBool(_,true),t2,t3) ->
@@ -398,7 +395,7 @@ and print_tm' fmt t = match t with
       print_tm (Match, t2)
       print_tm (Match, t3)
 
-  | TmClos(_,x,ty,t1,_) ->
+  | TmClos(_,x,_,ty,t1,_) ->
     let x = string_of_ustring x in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov %d>clos %s:%s.@ %a@]"
@@ -411,13 +408,13 @@ and print_tm' fmt t = match t with
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
-  let print i t = (fun fmt -> fprintf fmt "%d -> %a" i print_tm (Match, t)) in
-  let inner = List.mapi print env in
+  let print (s,t) = (fun fmt -> fprintf fmt "#%d -> %a" s print_tm (Match, t)) in
+  let inner = List.map print env in
   fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
 (** Helper function for configuring the string formatter and printing *)
 let ustr_formatter_print
-    ?(debruijn   = !enable_debug_debruijn_print)
+    ?(symbol   = !enable_debug_symbol_print)
     ?(indent     = 2)
     ?(max_indent = 68)
     ?(margin     = max_int)
@@ -426,7 +423,7 @@ let ustr_formatter_print
     printer arg =
 
   (* Configure global settings *)
-  ref_debruijn := debruijn;
+  ref_symbol := symbol;
   ref_indent   := indent;
   pp_set_margin     str_formatter margin;
   pp_set_max_indent str_formatter max_indent;
@@ -446,20 +443,20 @@ let ustr_formatter_print
 
 (** Convert terms to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_tm ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix t =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_tm ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix t =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_tm (Match, t)
 
 (** Converting constants to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_const ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix c =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_const ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix c =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_const c
 
 (** Converting environments to strings.
  *  TODO Messy with optional arguments passing. Alternatives? *)
-let ustring_of_env ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix e =
-  ustr_formatter_print ?debruijn ?indent ?max_indent ?margin ?max_boxes ?prefix
+let ustring_of_env ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix e =
+  ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_env e
 
 (** TODO: Print mlang part as well. *)

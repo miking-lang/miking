@@ -14,7 +14,7 @@ open Printf
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  [("unit",f(Cunit));
+  ([("unit",f(Cunit));
    ("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
@@ -49,7 +49,15 @@ let builtin =
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym))
   ]
   (* Append external functions TODO: Should not be part of core language *)
-  @ Ext.externals
+  @ Ext.externals)
+  |> List.map (fun (x,t) -> (x,gensym(),t))
+
+(* Mapping name to symbol *)
+let builtin_name2sym = List.map (fun (x,s,_) -> (us x,s)) builtin
+
+(* Mapping sym to term *)
+let builtin_sym2term = List.map (fun (_,s,t) -> (s,t)) builtin
+
 
 (* Returns the number of expected arguments of a constant *)
 let arity = function
@@ -405,11 +413,13 @@ let delta eval env fi c v  =
 
 (* Debug function used in the eval function *)
 let debug_eval env t =
-  if enable_debug_eval then
-    (printf "\n-- eval -- \n";
-     uprint_endline (ustring_of_tm t);
-     if enable_debug_eval_env then
-        uprint_endline (ustring_of_env env))
+  if !enable_debug_eval_tm  || !enable_debug_eval_env then (
+    printf "-- eval step -- \n";
+    let env_str = if !enable_debug_eval_env then
+        us"Environment:\n" ^. (ustring_of_env ~margin:80 env) ^. us"\n" else us"" in
+    let tm_str = if !enable_debug_eval_tm then
+        us"Term:\n" ^. (ustring_of_tm ~margin:80 t) ^. us"\n" else us"" in
+    uprint_endline (env_str ^. tm_str))
   else ()
 
 (* Print out error message when a unit test fails *)
@@ -438,29 +448,29 @@ let rec val_equal v1 v2 =
   | _ -> false
 
 
-(* Convert a term into de Bruijn indices. *)
-let rec debruijn env t =
-  let rec find fi env n x =
-    (match env with
-     | VarTm(y)::ee -> if y =. x then n else find fi ee (n+1) x
-     | [] -> raise_error fi ("Unknown variable '" ^ Ustring.to_utf8 x ^ "'")) in
-  let rec dbPat env = function
-    | PatNamed(_,NameStr(x)) as pat -> (VarTm(x)::env, pat)
+(* Add symbol associations between lambdas, patterns, and variables *)
+let rec symbolize env t =
+  let findsym fi x kind env = try List.assoc x env
+    with Not_found -> raise_error fi ("Unknown " ^ kind ^ " '" ^ Ustring.to_utf8 x ^ "'")
+  in
+  let rec sPat env = function
+    | PatNamed(fi,NameStr(x,_)) -> let s = gensym() in ((x,s)::env, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (env, pat)
     | PatSeq(fi,ps,seqMP) ->
-       let go p (env,ps) = let (env,p) = dbPat env p in (env,Mseq.cons p ps) in
+       let go p (env,ps) = let (env,p) = sPat env p in (env,Mseq.cons p ps) in
        let (env,ps) = Mseq.fold_right go ps (env,Mseq.empty) in
-       let env = (match seqMP with
-       | SeqMatchPrefix(NameStr(x)) | SeqMatchPostfix(NameStr(x)) -> VarTm(x)::env
-       | SeqMatchPrefix(NameWildcard) | SeqMatchPostfix(NameWildcard) | SeqMatchTotal -> env) in
-       (env,PatSeq(fi,ps,seqMP))
+       let (env,seqMP') = (match seqMP with
+         | SeqMatchPrefix(NameStr(x,_)) -> let s = gensym() in ((x,s)::env, SeqMatchPrefix(NameStr(x,s)))
+         | SeqMatchPostfix(NameStr(x,_)) -> let s = gensym() in ((x,s)::env, SeqMatchPostfix(NameStr(x,s)))
+         | SeqMatchPrefix(NameWildcard) | SeqMatchPostfix(NameWildcard) | SeqMatchTotal -> (env,seqMP)) in
+       (env,PatSeq(fi,ps,seqMP'))
     | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
-       let go p (env,ps) = let (env,p) = dbPat env p in (env,p::ps) in
+       let go p (env,ps) = let (env,p) = sPat env p in (env,p::ps) in
        let (env,ps) = List.fold_right go ps (env,[])
        in (env,PatTuple(fi,ps))
     | PatCon(fi,cx,_,p) ->
-       let cxId = find fi env 0 cx in
-       let (env, p) = dbPat env p
+       let cxId = findsym fi cx "constructor" env in
+       let (env, p) = sPat env p
        in (env,PatCon(fi,cx,cxId,p))
     | PatInt _ as p -> (env,p)
     | PatChar _ as p -> (env,p)
@@ -468,56 +478,60 @@ let rec debruijn env t =
     | PatUnit _ as p -> (env,p)
   in
   match t with
-  | TmVar(fi,x,_) -> TmVar(fi,x,find fi env 0 x)
-  | TmLam(fi,x,ty,t1) -> TmLam(fi,x,ty,debruijn (VarTm(x)::env) t1)
-  | TmClos(_,_,_,_,_) -> failwith "Closures should not be available."
-  | TmLet(fi,x,t1,t2) -> TmLet(fi,x,debruijn env t1,debruijn (VarTm(x)::env) t2)
+  | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi x "variable" env)
+  | TmLam(fi,x,_,ty,t1) -> let s = gensym() in TmLam(fi,x,s,ty,symbolize ((x,s)::env) t1)
+  | TmClos(_,_,_,_,_,_) -> failwith "Closures should not be available."
+  | TmLet(fi,x,_,t1,t2) -> let s = gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((x,s)::env) t2)
   | TmRecLets(fi,lst,tm) ->
-     let env2 = List.fold_left (fun env (_,x,_) -> VarTm(x)::env) env lst in
-     TmRecLets(fi,List.map (fun (fi,s,t) -> (fi,s, debruijn env2 t)) lst, debruijn env2 tm)
-  | TmApp(fi,t1,t2) -> TmApp(fi,debruijn env t1,debruijn env t2)
+     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (x,s)::env) env lst in
+     TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi x "variable" env2, symbolize env2 t))
+       lst, symbolize env2 tm)
+  | TmApp(fi,t1,t2) -> TmApp(fi,symbolize env t1,symbolize env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (debruijn env) tms)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (debruijn env) tms)
-  | TmRecord(fi,r) -> TmRecord(fi,Record.map (debruijn env) r)
-  | TmProj(fi,t,l) -> TmProj(fi,debruijn env t,l)
-  | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,debruijn env t1,l,debruijn env t2)
-  | TmCondef(fi,x,ty,t) -> TmCondef(fi,x,ty,debruijn (VarTm(x)::env) t)
+  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
+  | TmTuple(fi,tms) -> TmTuple(fi,List.map (symbolize env) tms)
+  | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
+  | TmProj(fi,t,l) -> TmProj(fi,symbolize env t,l)
+  | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
+  | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((x,s)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
-     TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(debruijn env t))
+     TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(symbolize env t))
   | TmMatch(fi,t1,p,t2,t3) ->
-     let (matchedEnv, p) = dbPat env p in
-     TmMatch(fi,debruijn env t1,p,debruijn matchedEnv t2,debruijn env t3)
-  | TmUse(fi,l,t) -> TmUse(fi,l,debruijn env t)
+     let (matchedEnv, p) = sPat env p in
+     TmMatch(fi,symbolize env t1,p,symbolize matchedEnv t2,symbolize env t3)
+  | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
   | TmUtest(fi,t1,t2,tnext)
-    -> TmUtest(fi,debruijn env t1,debruijn env t2,debruijn env tnext)
+    -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
   | TmNever(_) -> t
 
 
-let rec tryMatch env value pat =
-  let go v p env = Option.bind env (fun env -> tryMatch env v p) in
-  let splitNthOrDoubleEmpty n s =
+
+let rec try_match env value pat =
+  let go v p env = Option.bind env (fun env -> try_match env v p) in
+  let split_nth_or_double_empty n s =
     if Mseq.length s == 0 then (Mseq.empty, Mseq.empty)
     else Mseq.split_at s n
   in
-  let bind fi tms env =
-    Option.bind env (fun env -> Some(TmSeq(fi,tms)::env))
+  let bind fi n tms env =
+    match n with
+    | NameStr(_,s) -> Option.bind env (fun env -> Some((s,TmSeq(fi,tms))::env))
+    | NameWildcard -> Option.bind env (fun env -> Some(env))
   in
   match pat with
-  | PatNamed(_,NameStr(_)) -> Some(value::env)
+  | PatNamed(_,NameStr(_,s)) -> Some((s,value)::env)
   | PatNamed(_,NameWildcard)-> Some(env)
   | PatSeq(_,pats,seqMP) ->
      let npats = Mseq.length pats in
      (match value,seqMP with
-      | TmSeq(fi,vs),SeqMatchPrefix(_) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> splitNthOrDoubleEmpty npats in
-         Mseq.fold_right2 go pre pats (Some env) |> bind fi post
-      | TmSeq(fi,vs),SeqMatchPostfix(_) when npats <= Mseq.length vs ->
+      | TmSeq(fi,vs),SeqMatchPrefix(n) when npats <= Mseq.length vs ->
+         let (pre,post) = vs |> split_nth_or_double_empty npats in
+         Mseq.fold_right2 go pre pats (Some env) |> bind fi n post
+      | TmSeq(fi,vs),SeqMatchPostfix(n) when npats <= Mseq.length vs ->
          let (pre,post) =
-           vs |> splitNthOrDoubleEmpty (Mseq.length vs - npats)
+           vs |> split_nth_or_double_empty (Mseq.length vs - npats)
          in
-         Mseq.fold_right2 go post pats (Some env) |> bind fi pre
+         Mseq.fold_right2 go post pats (Some env) |> bind fi n pre
       | TmSeq(_,vs),SeqMatchTotal when npats == Mseq.length vs ->
          Mseq.fold_right2 go vs pats (Some env)
       | _ -> None)
@@ -527,9 +541,9 @@ let rec tryMatch env value pat =
          List.fold_right2 go vs pats (Some env)
       | _ -> None)
   | PatCon(_,_,cxId,p) ->
-     (match value, List.nth env cxId with
+     (match value, List.assoc cxId env with
       | TmConsym(_,_,sym1,Some v), TmConsym(_,_,sym2,_)
-           when sym1 = sym2 -> tryMatch env v p
+           when sym1 = sym2 -> try_match env v p
       | _ -> None)
   | PatInt(_, i) ->
      (match value with
@@ -550,29 +564,29 @@ let rec tryMatch env value pat =
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
-let rec eval env t =
+let rec eval (env : (sym * tm) list) (t : tm) =
   debug_eval env t;
   match t with
-  (* Variables using debruijn indices. Need to evaluate because fix point. *)
-  | TmVar(_,_,n) -> eval env (List.nth env n)
+  (* Variables using symbol bindings. Need to evaluate because fix point. *)
+  | TmVar(_,_,s) -> eval env (List.assoc s env)
   (* Lambda and closure conversions *)
-  | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,lazy env)
-  | TmClos(_,_,_,_,_) -> t
+  | TmLam(fi,x,s,ty,t1) -> TmClos(fi,x,s,ty,t1,lazy env)
+  | TmClos(_,_,_,_,_,_) -> t
   (* Let *)
-  | TmLet(_,_,t1,t2) -> eval ((eval env t1)::env) t2
+  | TmLet(_,_,s,t1,t2) -> eval ((s,eval env t1)::env) t2
   (* Recursive lets *)
   | TmRecLets(_,lst,t2) ->
      let rec env' = lazy
        (let wraplambda = function
-          | TmLam(fi,x,ty,t1) -> TmClos(fi,x,ty,t1,env')
+          | TmLam(fi,x,s,ty,t1) -> TmClos(fi,x,s,ty,t1,env')
           | tm -> raise_error (tm_info tm) "Right-hand side of recursive let must be a lambda"
-        in List.fold_left (fun env (_, _, rhs) -> wraplambda rhs :: env) env lst)
+        in List.fold_left (fun env (_, _, s, rhs) -> (s, wraplambda rhs) :: env) env lst)
      in eval (Lazy.force env') (t2)
   (* Application *)
   | TmApp(fiapp,t1,t2) ->
       (match eval env t1 with
        (* Closure application *)
-       | TmClos(_,_,_,t3,env2) -> eval ((eval env t2)::Lazy.force env2) t3
+       | TmClos(_,_,s,_,t3,env2) -> eval ((s,eval env t2)::Lazy.force env2) t3
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta eval env fiapp c (eval env t2)
        (* Constructor application *)
@@ -583,7 +597,7 @@ let rec eval env t =
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
-         | TmClos(fi,_,_,t3,env2) as tt -> eval ((TmApp(fi,TmFix(fi),tt))::Lazy.force env2) t3
+         | TmClos(fi,_,s,_,t3,env2) as tt -> eval ((s,TmApp(fi,TmFix(fi),tt))::Lazy.force env2) t3
          | _ -> raise_error (tm_info t1) "Incorrect CFix")
        | f -> raise_error fiapp ("Incorrect application. This is not a function: "
                                  ^ Ustring.to_utf8
@@ -628,10 +642,10 @@ let rec eval env t =
   (* Tuples *)
   | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   (* Data constructors and match *)
-  | TmCondef(fi,x,_,t) -> eval ((gencon fi x)::env) t
+  | TmCondef(fi,x,s,_,t) -> eval ((s,TmConsym(fi,x,s,None))::env) t
   | TmConsym(_,_,_,_) as tm -> tm
   | TmMatch(_,t1,p,t2,t3) ->
-     (match tryMatch env (eval env t1) p with
+     (match try_match env (eval env t1) p with
       | Some env -> eval env t2
       | None -> eval env t3)
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"

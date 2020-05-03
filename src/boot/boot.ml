@@ -47,19 +47,19 @@ let default_includes =
 
 let prog_argv = ref []          (* Argv for the program that is executed *)
 
-(* Debug template function. Used below *)
+(* Debug printing after parse*)
 let debug_after_parse t =
-  if enable_debug_after_parse then
-    (printf "\n-- After parsing --\n";
+  if !enable_debug_after_parse then
+    (printf "\n-- After parsing (only mexpr part) --\n";
      uprint_endline (ustring_of_program t);
      t)
   else t
 
-(* Debug template function. Used below *)
-let debug_after_debruijn t =
-  if enable_debug_after_debruijn  then
-    (printf "\n-- After debruijn --\n";
-     uprint_endline (ustring_of_tm t);
+(* Debug printing after symbolize transformation *)
+let debug_after_symbolize t =
+  if !enable_debug_after_symbolize then
+    (printf "\n-- After symbolize --\n";
+     uprint_endline (ustring_of_tm ~margin:80 t);
      t)
   else t
 
@@ -140,9 +140,9 @@ let evalprog filename  =
      |> Mlang.flatten
      |> Mlang.desugar_post_flatten
      |> debug_after_mlang
-     |> Mexpr.debruijn (builtin |> List.split |> fst |> (List.map (fun x-> VarTm(us x))))
-     |> debug_after_debruijn
-     |> Mexpr.eval (builtin |> List.split |> snd)
+     |> Mexpr.symbolize builtin_name2sym
+     |> debug_after_symbolize
+     |> Mexpr.eval builtin_sym2term
      |> fun _ -> ())
     with
     | Lexer.Lex_error m ->
@@ -225,11 +225,23 @@ let main =
   let speclist = [
 
     (* First character in description string must be a space for alignment! *)
+    "--debug-parse", Arg.Set(enable_debug_after_parse),
+    " Enables output of parsing.";
+
     "--debug-mlang", Arg.Set(enable_debug_after_mlang),
     " Enables output of the mexpr program after mlang transformations.";
 
-    "--debruijn", Arg.Set(enable_debug_debruijn_print),
-    " Enables output of the debruijn indices of variables when printing.";
+    "--debug-symbolize", Arg.Set(enable_debug_after_symbolize),
+    " Enables output of the mexpr program after symbolize transformations.";
+
+    "--debug-eval-tm", Arg.Set(enable_debug_eval_tm),
+    " Enables output of terms in each eval step.";
+
+    "--debug-eval-env", Arg.Set(enable_debug_eval_env),
+    " Enables output of the environment in each eval step.";
+
+    "--symbol", Arg.Set(enable_debug_symbol_print),
+    " Enables output of symbols for variables. Affects all other debug printing.";
 
   ] in
 
