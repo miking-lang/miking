@@ -69,6 +69,8 @@ utest match s1 with [1,3,5,10] then true else false with true in
 utest match s1 with [1,3] ++ _ then true else false with true in
 utest match s1 with [2,3] ++ _ then true else false with false in
 utest match s1 with [1,a] ++ _ then a else 0 with 3 in
+utest let _ = [] in match s1 with [b] ++ _ then let a = 2 in (a, b, _) else (0, 0, []) with (2, 1, []) in
+utest let _ = [] in match s1 with _ ++ [b] then let a = 2 in (a, b, _) else (0, 0, []) with (2, 10, []) in
 utest match s1 with [_,a] ++ b then (a,b) else (0,[]) with (3,[5,10]) in
 utest match s1 with _ ++ [5,10] then true else false with true in
 utest match s1 with _ ++ [5,11] then true else false with false in
@@ -77,6 +79,9 @@ utest match s1 with first ++ [1,2] then true else false with false in
 utest match s1 with [1,x] ++ rest then (x,rest) else (0,[]) with (3,[5,10]) in
 utest match s1 with first ++ [x,y] then (x,y,first) else (0,0,[]) with (5,10,[1,3]) in
 utest match s1 with first ++ [x,y,10] then (first,x,y) else ([],0,0) with ([1],3,5) in
+utest match s1 with [1] ++ mid ++ [10] then mid else [] with [3, 5] in
+utest match s1 with [1,3] ++ mid ++ [10] then mid else [] with [5] in
+utest match s1 with [a,b] ++ mid ++ [c] then (a, b, mid, c) else (0, 0, [], 0) with (1, 3, [5], 10) in
 
 utest match "foo" with ['f','o','o'] then true else false with true in
 utest match "foo" with "foo" then true else false with true in
@@ -87,6 +92,8 @@ utest match "" with first then first else "-" with "" in
 utest match "" with [] then true else false with true in
 utest match "" with [] ++ rest then rest else "foo" with [] in
 utest match "" with first ++ [] then first else "foo" with [] in
+utest match "foobar" with "fo" ++ mid ++ "ar" then mid else "" with "ob" in
+utest match "foobar" with "fob" ++ mid ++ "ar" then mid else "" with "" in
 
 utest match [["a","b"],["c"]] with [a] then true else false with false in
 utest match [["a","b"],["c"]] with [a,b] then (a,b) else [] with (["a","b"],["c"]) in
@@ -96,6 +103,13 @@ utest match (1,[["a","b"],["c"]],76) with (1,[a]++b,76) then (a,b) else [] with 
 utest match (1,[["a","b"],["c"]],76) with (1,b++[a],76) then (a,b) else [] with (["c"],[["a","b"]]) in
 utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else [] with [["a","b"]] in
 
+-- Matching with "&", "|", "!"
+utest match true with !_ then true else false with false in
+utest match (1, 2) with (a, _) & (_, b) then (a, b) else (0, 0) with (1, 2) in
+utest match K1 1 with K1 a | K2 a | K3 a then a else 0 with 1 in
+utest match K2 2 with K1 a | K2 a | K3 a then a else 0 with 2 in
+utest match K3 3 with K1 a | K2 a | K3 a then a else 0 with 3 in
+utest match (true, true) with (true, a) & !(_, true) then a else false with false in
 
 -- Matching with never terms
 let x = true in

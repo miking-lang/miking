@@ -56,6 +56,8 @@ let reserved_strings = [
   (",",             fun(i) -> Parser.COMMA{i=i;v=()});
   (".",             fun(i) -> Parser.DOT{i=i;v=()});
   ("|",             fun(i) -> Parser.BAR{i=i;v=()});
+  ("&",             fun(i) -> Parser.AND{i=i;v=()});
+  ("!",             fun(i) -> Parser.NOT{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
 
 ]
@@ -146,8 +148,8 @@ let ident = ('_'| lcase_letter) (digit | '_' | us_letter)*
 let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
-              "!=" | "!" | "&&" | "||" | "++"| "$"  | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | "."  | "|" | "->" | "=>" | "++"
+              "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
+              "::" | ":" | ","  | "."  | "&" | "|" | "->" | "=>" | "++"
 
 
 let line_comment = "//" [^ '\013' '\010']*
