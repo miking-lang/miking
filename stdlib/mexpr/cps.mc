@@ -3,15 +3,12 @@
 -- http://matt.might.net/articles/cps-conversion/.
 -- TODO Implement gensym, so that we can remove the CPS variable env (much
 -- cleaner).
--- TODO Add full language support when MExpr definition is stable.
+-- TODO Add full support for MExpr when stable.
 
--- TODO Seems like the includes are order-dependent here. Including ast-builder
--- before mexpr gives an error. Is this a bug or intentional?
 include "mexpr.mc"
-include "pprint.mc"
 include "ast-builder.mc"
 
-lang MExprCPS = MExpr + MExprPrettyPrint
+lang FunCPS = FunAst
 
   sem cpsK (env: Env) (cont: Expr -> Env -> Expr) =
   | TmLam t -> cont (cpsM env (TmLam t)) env
@@ -59,7 +56,7 @@ lang MExprCPS = MExpr + MExprPrettyPrint
 end
 
 mexpr
-use MExprCPS in
+use FunCPS in
 
 let id = ulam_ "x" (var_ "x") in
 
@@ -86,11 +83,3 @@ utest cpsC [] id (app_
 in
 
 ()
-
---let program =
---  (app_
---    (app_ (var_ "a") (var_ "b"))
---    (app_ (var_ "c") (var_ "d")))
---in
---
---print (pprintCode 2 (cpsC [] id program))
