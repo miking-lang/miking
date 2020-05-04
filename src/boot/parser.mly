@@ -324,6 +324,12 @@ patseq:
   | STRING
       { ($1.i, List.map (fun x -> PatChar($1.i,x)) (ustring2list $1.v)) }
 
+pat_labels:
+  | IDENT EQ pat
+    {[($1.v, $3)]}
+  | IDENT EQ pat COMMA pat_labels
+    {($1.v, $3)::$5}
+
 
 name:
   | IDENT
@@ -364,6 +370,11 @@ pat_atom:
   | LPAREN pat COMMA pat_list RPAREN
       { let fi = mkinfo $1.i $5.i
         in PatTuple(fi, $2 :: $4) }
+  | LBRACKET RBRACKET
+      { PatRecord(mkinfo $1.i $2.i, Record.empty) }
+  | LBRACKET pat_labels RBRACKET
+      { PatRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
+                  (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | UINT /* TODO: enable matching against negative ints */
       { PatInt($1.i, $1.v) }
   | CHAR

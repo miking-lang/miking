@@ -82,6 +82,8 @@ utest match s1 with first ++ [x,y,10] then (first,x,y) else ([],0,0) with ([1],3
 utest match s1 with [1] ++ mid ++ [10] then mid else [] with [3, 5] in
 utest match s1 with [1,3] ++ mid ++ [10] then mid else [] with [5] in
 utest match s1 with [a,b] ++ mid ++ [c] then (a, b, mid, c) else (0, 0, [], 0) with (1, 3, [5], 10) in
+utest match s1 with [] ++ _ then true else false with true in
+utest match true with [] ++ _ then true else false with false in
 
 utest match "foo" with ['f','o','o'] then true else false with true in
 utest match "foo" with "foo" then true else false with true in
@@ -102,6 +104,15 @@ utest match (1,[["a","b"],["c"]],76) with (1,[a,b],76) then (a,b) else [] with (
 utest match (1,[["a","b"],["c"]],76) with (1,[a]++b,76) then (a,b) else [] with (["a","b"],[["c"]]) in
 utest match (1,[["a","b"],["c"]],76) with (1,b++[a],76) then (a,b) else [] with (["c"],[["a","b"]]) in
 utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else [] with [["a","b"]] in
+
+-- Matching with records
+utest match {} with {blue = _} then true else false with false in
+utest match {blue = true} with {blue = _} then true else false with true in
+utest match {blue = true} with {blue = a} then a else false with true in
+utest match {blue = (1, 2)} with {blue = {}} then true else false with false in
+utest match {blue = {red = true}} with {blue = {}} then true else false with true in
+utest match {blue = true, red = true} with {blue = _} & {red = _} then true else false with true in
+utest match {blue = true} with {blue = _} & {red = _} then true else false with false in
 
 -- Matching with "&", "|", "!"
 utest match true with !_ then true else false with false in
