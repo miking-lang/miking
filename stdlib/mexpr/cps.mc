@@ -1,4 +1,4 @@
--- This file contains proof-of-concepts functions for CPS transformation of the
+-- This file contains proof-of-concept functions for CPS transformation of the
 -- basic lambda calculus subset of MExpr. It is based on
 -- http://matt.might.net/articles/cps-conversion/.
 -- TODO Implement gensym, so that we can remove the CPS variable env (much
@@ -18,8 +18,6 @@ lang FunCPS = FunAst
     let rvvar = var_ rv in
     let env = cons (rv, ()) env in
     let cont = ulam_ rv (cont rvvar env) in
-    -- TODO The below is the same for both cpsK and cpsC. How do I avoid this
-    -- code duplication?
     cpsK
       env
       (lam lhs. lam env.
