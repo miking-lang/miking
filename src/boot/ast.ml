@@ -166,22 +166,21 @@ and patName =
 | NameStr of ustring * sym                        (* A normal pattern name *)
 | NameWildcard                                    (* Pattern wildcard *)
 
-(* Kind of sequence matching in patterns *)
-and seqMatchType =
-| SeqMatchPrefix of patName
-| SeqMatchPostfix of patName
-| SeqMatchTotal
-
 (* Patterns *)
 and pat =
-| PatNamed of info * patName                      (* Named, capturing wildcard *)
-| PatSeq   of info * pat Mseq.t * seqMatchType    (* Sequence pattern *)
-| PatTuple of info * pat list                     (* Tuple pattern *)
-| PatCon   of info * ustring * sym * pat          (* Constructor pattern *)
-| PatInt   of info * int                          (* Int pattern *)
-| PatChar  of info * int                          (* Char pattern *)
-| PatBool  of info * bool                         (* Boolean pattern *)
-| PatUnit  of info                                (* Unit pattern *)
+| PatNamed  of info * patName                     (* Named, capturing wildcard *)
+| PatSeqTot of info * pat Mseq.t                  (* Exact sequence patterns *)
+| PatSeqEdg of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
+| PatTuple  of info * pat list                    (* Tuple pattern *)
+| PatRecord of info * pat Record.t                (* Record pattern *)
+| PatCon    of info * ustring * sym * pat         (* Constructor pattern *)
+| PatInt    of info * int                         (* Int pattern *)
+| PatChar   of info * int                         (* Char pattern *)
+| PatBool   of info * bool                        (* Boolean pattern *)
+| PatUnit   of info                               (* Unit pattern *)
+| PatAnd    of info * pat * pat                   (* And pattern *)
+| PatOr     of info * pat * pat                   (* Or pattern *)
+| PatNot    of info * pat                         (* Not pattern *)
 
 
 (* Types *)
@@ -257,13 +256,18 @@ let tm_info = function
 
 let pat_info = function
   | PatNamed(fi,_) -> fi
-  | PatSeq(fi,_,_) -> fi
+  | PatSeqTot(fi, _) -> fi
+  | PatSeqEdg(fi, _, _, _) -> fi
   | PatTuple(fi,_) -> fi
+  | PatRecord(fi, _) -> fi
   | PatCon(fi,_,_,_) -> fi
   | PatInt(fi,_) -> fi
   | PatChar(fi,_) -> fi
   | PatBool(fi,_) -> fi
   | PatUnit(fi) -> fi
+  | PatAnd(fi, _, _) -> fi
+  | PatOr(fi, _, _) -> fi
+  | PatNot(fi, _) -> fi
 
 
 (* Converts a sequence of terms to a ustring *)

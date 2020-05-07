@@ -48,14 +48,29 @@ let ustring_of_pat p =
     let ppName = function NameStr(x,s) -> ustring_of_var x s | NameWildcard -> us"_" in
     match pat with
     | PatNamed(_,NameStr(x,s)) -> ustring_of_var x s
-    | PatSeq(_,lst,SeqMatchPrefix(x)) ->
-      us"[" ^. ppSeq lst ^. us"] ++ " ^. ppName x
-    | PatSeq(_,lst,SeqMatchPostfix(x)) ->
-      ppName x ^. us" ++ [" ^. ppSeq lst ^. us"]"
-    | PatSeq(_,lst,SeqMatchTotal) -> us"[" ^. ppSeq lst ^. us"]"
+    | PatSeqEdg(_,l, x, r) ->
+       if Mseq.length l = 0 && Mseq.length r = 0
+       then us"[] ++ " ^. ppName x
+       else
+         let rStr =
+           if Mseq.length l = 0
+           then us" ++ [" ^. ppSeq r ^. us"]"
+           else us "" in
+         let lStr =
+           if Mseq.length r = 0
+           then us"[" ^. ppSeq l ^. us"] ++ "
+           else us""
+         in lStr ^. ppName x ^. rStr
+    | PatSeqTot(_,lst) -> us"[" ^. ppSeq lst ^. us"]"
     | PatNamed(_,NameWildcard) -> us"_"
     | PatTuple(_,ps) ->
       us"(" ^. Ustring.concat (us",") (List.map ppp ps) ^. us")"
+    | PatRecord(_,ps) ->
+       let ps =
+         Record.bindings ps
+         |> List.map (fun (label, p) -> label ^. us" = " ^. ppp p)
+         |> Ustring.concat (us",")
+       in us"{" ^. ps ^. us"}"
     | PatCon(_,x,n,p) ->
       let con = ustring_of_var x n in
       let inner = ppp p in
@@ -64,6 +79,9 @@ let ustring_of_pat p =
     | PatChar(_,c) -> us (lit_of_uchar c)
     | PatBool(_,b) -> ustring_of_bool b
     | PatUnit _ -> us"()"
+    | PatAnd(_, l, r) -> us"(" ^. ppp l ^. us" & " ^. ppp r ^. us")"
+    | PatOr(_, l, r) -> us"(" ^. ppp l ^. us" | " ^. ppp r ^. us")"
+    | PatNot(_, p) -> us"!(" ^. ppp p ^. us")"
   in ppp p
 
 (** Convert type to ustring.

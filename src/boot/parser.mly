@@ -69,6 +69,8 @@
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> DOT           /* "."   */
 %token <unit Ast.tokendata> BAR           /* "|"   */
+%token <unit Ast.tokendata> AND           /* "&"   */
+%token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
 
 %start main
@@ -322,29 +324,57 @@ patseq:
   | STRING
       { ($1.i, List.map (fun x -> PatChar($1.i,x)) (ustring2list $1.v)) }
 
+pat_labels:
+  | IDENT EQ pat
+    {[($1.v, $3)]}
+  | IDENT EQ pat COMMA pat_labels
+    {($1.v, $3)::$5}
+
 
 name:
   | IDENT
       { if $1.v =. us"_"
-        then PatNamed($1.i, NameWildcard)
-        else PatNamed($1.i, NameStr($1.v,0)) }
+        then ($1.i, NameWildcard)
+        else ($1.i, NameStr($1.v,0)) }
 
 pat:
-  | name
+  | pat_conj BAR pat
+      { PatOr(mkinfo (pat_info $1) (pat_info $3), $1, $3) }
+  | pat_conj
       { $1 }
-  | IDENT pat
+pat_conj:
+  | pat_atom AND pat_conj
+      { PatAnd(mkinfo (pat_info $1) (pat_info $3), $1, $3)}
+  | pat_atom
+      { $1 }
+pat_atom:
+  | name
+      { PatNamed(fst $1, snd $1) }
+  | NOT pat_atom
+      { PatNot(mkinfo $1.i (pat_info $2), $2) }
+  | IDENT pat_atom
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, nosym, $2) }
   | patseq
-      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchTotal) }
-  | patseq CONCAT IDENT
-      { PatSeq($1 |> fst, $1 |> snd |> Mseq.of_list, SeqMatchPrefix(NameStr($3.v,0))) }
-  | IDENT CONCAT patseq
-      { PatSeq($3 |> fst, $3 |> snd |> Mseq.of_list, SeqMatchPostfix(NameStr($1.v,0))) }
+      { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.of_list) }
+  | patseq CONCAT name CONCAT patseq
+      { let fi = mkinfo (fst $1) (fst $5) in
+        let l = $1 |> snd |> Mseq.of_list in
+        let r = $5 |> snd |> Mseq.of_list in
+        PatSeqEdg(fi, l, snd $3, r) }
+  | patseq CONCAT name
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.of_list, snd $3, Mseq.empty) }
+  | name CONCAT patseq
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.of_list) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
       { let fi = mkinfo $1.i $5.i
         in PatTuple(fi, $2 :: $4) }
+  | LBRACKET RBRACKET
+      { PatRecord(mkinfo $1.i $2.i, Record.empty) }
+  | LBRACKET pat_labels RBRACKET
+      { PatRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
+                  (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | UINT /* TODO: enable matching against negative ints */
       { PatInt($1.i, $1.v) }
   | CHAR

@@ -236,19 +236,42 @@ let rec desugar_tm nss env =
     let desugar_pname env = function
       | NameStr(n,s) -> (delete_id_and_con env n, NameStr(empty_mangle n,s))
       | NameWildcard -> (env, NameWildcard) in
-    let rec desugar_pat env = function
+    let rec desugar_pat_seq env pats =
+      Mseq.fold_right
+        (fun p (env, pats) -> desugar_pat env p
+                              |> map_right (fun p -> Mseq.cons p pats))
+        pats
+        (env, Mseq.empty)
+    and desugar_pat env = function
        | PatNamed(fi,name) -> name |> desugar_pname env |> map_right (fun n -> PatNamed(fi,n))
-       | PatSeq(fi,pats,seqMT) ->
-         let (env', pats') = Mseq.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right
-             (fun p -> Mseq.cons p pats)) pats (env, Mseq.empty) in
-         let (env'',seqMT') = match seqMT with
-           | SeqMatchPrefix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPrefix(n))
-           | SeqMatchPostfix(n) -> n |> desugar_pname env' |> map_right (fun n -> SeqMatchPostfix(n))
-           | SeqMatchTotal -> (env', SeqMatchTotal) in
-         (env'',PatSeq(fi,pats',seqMT'))
+       | PatSeqTot(fi, pats) ->
+          let (env, pats) = desugar_pat_seq env pats
+          in (env, PatSeqTot(fi, pats))
+       | PatSeqEdg(fi, l, x, r) ->
+          let (env, l) = desugar_pat_seq env l in
+          let (env, x) = desugar_pname env x in
+          let (env, r) = desugar_pat_seq env r
+          in (env, PatSeqEdg(fi, l, x, r))
        | PatTuple(fi, pats) ->
           List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right (fun p -> p::pats)) pats (env, [])
           |> map_right (fun pats -> PatTuple(fi, pats))
+       | PatRecord(fi, pats) ->
+          let env = ref env in
+          let pats =
+            pats
+            |> Record.map (fun p -> let (env', p) = desugar_pat !env p in env := env'; p)
+          in (!env, PatRecord(fi, pats))
+       | PatAnd(fi, l, r) ->
+          let (env, l) = desugar_pat env l in
+          let (env, r) = desugar_pat env r
+          in (env, PatAnd(fi, l, r))
+       | PatOr(fi, l, r) ->
+          let (env, l) = desugar_pat env l in
+          let (env, r) = desugar_pat env r
+          in (env, PatOr(fi, l, r))
+       | PatNot(fi, p) ->
+          let (env, p) = desugar_pat env p
+          in (env, PatNot(fi, p))
        | PatCon(fi, name, sym, p) ->
           desugar_pat env p
           |> map_right (fun p -> PatCon(fi, resolve_con env name, sym, p))

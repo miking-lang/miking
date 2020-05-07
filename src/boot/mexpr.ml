@@ -453,29 +453,60 @@ let rec symbolize env t =
   let findsym fi x kind env = try List.assoc x env
     with Not_found -> raise_error fi ("Unknown " ^ kind ^ " '" ^ Ustring.to_utf8 x ^ "'")
   in
-  let rec sPat env = function
-    | PatNamed(fi,NameStr(x,_)) -> let s = gensym() in ((x,s)::env, PatNamed(fi,NameStr(x,s)))
-    | PatNamed(_,NameWildcard) as pat -> (env, pat)
-    | PatSeq(fi,ps,seqMP) ->
-       let go p (env,ps) = let (env,p) = sPat env p in (env,Mseq.cons p ps) in
-       let (env,ps) = Mseq.fold_right go ps (env,Mseq.empty) in
-       let (env,seqMP') = (match seqMP with
-         | SeqMatchPrefix(NameStr(x,_)) -> let s = gensym() in ((x,s)::env, SeqMatchPrefix(NameStr(x,s)))
-         | SeqMatchPostfix(NameStr(x,_)) -> let s = gensym() in ((x,s)::env, SeqMatchPostfix(NameStr(x,s)))
-         | SeqMatchPrefix(NameWildcard) | SeqMatchPostfix(NameWildcard) | SeqMatchTotal -> (env,seqMP)) in
-       (env,PatSeq(fi,ps,seqMP'))
-    | PatTuple(fi,ps) -> (* NOTE: this causes patterns to introduce names right-to-left, which will cause errors if a later pattern binds a name that is seen as a constructor in a pattern to the left *)
-       let go p (env,ps) = let (env,p) = sPat env p in (env,p::ps) in
-       let (env,ps) = List.fold_right go ps (env,[])
-       in (env,PatTuple(fi,ps))
+  (* add_name is only called in sPat and it reuses previously generated symbols.
+   * This is imperative for or-patterns, since both branches should give the same symbols,
+   * e.g., [a] | [a, _] should give the same symbol to both "a"s.
+   * However, this also has an effect on what happens when the same name is bound multiple times
+   * in a pattern in other cases. In particular, this means that, e.g., the pattern
+   * [a, a] assigns the same symbol to both "a"s, which may or may not be desirable. Which
+   * introduced binding gets used then depends on what try_match does for the pattern. *)
+  let add_name x env =
+    match List.assoc_opt x env with
+    | Some s -> (env, s)
+    | None -> let s = gensym() in ((x,s)::env, s) in
+  let rec s_pat_sequence env pats =
+    Mseq.fold_right
+      (fun p (env, ps) -> let (env, p) = sPat env p in (env, Mseq.cons p ps))
+      pats
+      (env, Mseq.empty)
+  and sPat patEnv = function
+    | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name x patEnv in (patEnv, PatNamed(fi,NameStr(x,s)))
+    | PatNamed(_,NameWildcard) as pat -> (patEnv, pat)
+    | PatSeqTot(fi, pats) ->
+       let (patEnv, pats) = s_pat_sequence patEnv pats
+       in (patEnv, PatSeqTot(fi, pats))
+    | PatSeqEdg(fi, l, x, r) ->
+       let (patEnv, l) = s_pat_sequence patEnv l in
+       let (patEnv, x) = match x with
+         | NameWildcard -> (patEnv, NameWildcard)
+         | NameStr(x, _) -> let s = gensym() in ((x,s)::patEnv, NameStr(x, s)) in
+       let (patEnv, r) = s_pat_sequence patEnv r
+       in (patEnv, PatSeqEdg(fi, l, x, r))
+    | PatTuple(fi,ps) ->
+       let go p (patEnv,ps) = let (patEnv,p) = sPat patEnv p in (patEnv,p::ps) in
+       let (patEnv,ps) = List.fold_right go ps (patEnv,[])
+       in (patEnv,PatTuple(fi,ps))
+    | PatRecord(fi, pats) ->
+       let patEnv = ref patEnv in
+       let pats = Record.map (fun p -> let (patEnv', p) = sPat !patEnv p in patEnv := patEnv'; p) pats
+       in (!patEnv, PatRecord(fi, pats))
     | PatCon(fi,cx,_,p) ->
        let cxId = findsym fi cx "constructor" env in
-       let (env, p) = sPat env p
-       in (env,PatCon(fi,cx,cxId,p))
-    | PatInt _ as p -> (env,p)
-    | PatChar _ as p -> (env,p)
-    | PatBool _ as p -> (env,p)
-    | PatUnit _ as p -> (env,p)
+       let (patEnv, p) = sPat patEnv p
+       in (patEnv,PatCon(fi,cx,cxId,p))
+    | PatInt _ as p -> (patEnv,p)
+    | PatChar _ as p -> (patEnv,p)
+    | PatBool _ as p -> (patEnv,p)
+    | PatUnit _ as p -> (patEnv,p)
+    | PatAnd(fi, l, r) ->
+       let (patEnv, l) = sPat patEnv l in
+       let (patEnv, r) = sPat patEnv r
+       in (patEnv, PatAnd(fi, l, r))
+    | PatOr(fi, l, r) ->
+       let (patEnv, l) = sPat patEnv l in
+       let (patEnv, r) = sPat patEnv r
+       in (patEnv, PatOr(fi, l, r))
+    | PatNot _ as p -> (patEnv, p) (* NOTE(vipa): names in a not-pattern do not matter since they will never bind (it should be an error to bind a name inside a not-pattern, but we're not doing that kind of static checks yet *)
   in
   match t with
   | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi x "variable" env)
@@ -498,8 +529,8 @@ let rec symbolize env t =
   | TmConsym(fi,x,sym,tmop) ->
      TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(symbolize env t))
   | TmMatch(fi,t1,p,t2,t3) ->
-     let (matchedEnv, p) = sPat env p in
-     TmMatch(fi,symbolize env t1,p,symbolize matchedEnv t2,symbolize env t3)
+     let (matchedEnv, p) = sPat [] p in
+     TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
   | TmUtest(fi,t1,t2,tnext)
     -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
@@ -521,24 +552,38 @@ let rec try_match env value pat =
   match pat with
   | PatNamed(_,NameStr(_,s)) -> Some((s,value)::env)
   | PatNamed(_,NameWildcard)-> Some(env)
-  | PatSeq(_,pats,seqMP) ->
+  | PatSeqTot(_, pats) ->
      let npats = Mseq.length pats in
-     (match value,seqMP with
-      | TmSeq(fi,vs),SeqMatchPrefix(n) when npats <= Mseq.length vs ->
-         let (pre,post) = vs |> split_nth_or_double_empty npats in
-         Mseq.fold_right2 go pre pats (Some env) |> bind fi n post
-      | TmSeq(fi,vs),SeqMatchPostfix(n) when npats <= Mseq.length vs ->
-         let (pre,post) =
-           vs |> split_nth_or_double_empty (Mseq.length vs - npats)
-         in
-         Mseq.fold_right2 go post pats (Some env) |> bind fi n pre
-      | TmSeq(_,vs),SeqMatchTotal when npats == Mseq.length vs ->
+     (match value with
+      | TmSeq(_, vs) when npats = Mseq.length vs ->
          Mseq.fold_right2 go vs pats (Some env)
+      | _ -> None)
+  | PatSeqEdg(_, l, x, r) ->
+     let npre = Mseq.length l in
+     let npost = Mseq.length r in
+     (match value with
+      | TmSeq(fi, vs) when npre + npost <= Mseq.length vs ->
+         let (pre, vs) = split_nth_or_double_empty npre vs in
+         let (vs, post) = split_nth_or_double_empty (Mseq.length vs - npost) vs
+         in Mseq.fold_right2 go post r (Some env)
+            |> bind fi x vs
+            |> Mseq.fold_right2 go pre l
       | _ -> None)
   | PatTuple(_,pats) ->
     (match value with
       | TmTuple(_,vs) when List.length pats = List.length vs ->
          List.fold_right2 go vs pats (Some env)
+      | _ -> None)
+  | PatRecord(_, pats) ->
+     (match value with
+      | TmRecord(_, vs) ->
+         let merge_f _ v p = match v, p with
+           | None, None -> None
+           | Some _, None -> None
+           | Some v, Some p -> Some (go v p)
+           | None, Some _ -> Some (fun _ -> None)
+         in Record.merge merge_f vs pats
+            |> (fun merged -> Record.fold (fun _ f env -> f env) merged (Some env))
       | _ -> None)
   | PatCon(_,_,cxId,p) ->
      (match value, List.assoc cxId env with
@@ -561,6 +606,15 @@ let rec try_match env value pat =
      (match value with
       | TmConst(_, Cunit) -> Some env
       | _ -> None)
+  | PatAnd(_, l, r) -> go value r (Some env) |> go value l
+  | PatOr(_, l, r) ->
+     (match try_match env value l with
+      | Some env -> Some env
+      | None -> try_match env value r)
+  | PatNot(_, p) ->
+     (match try_match env value p with
+      | Some _ -> None
+      | None -> Some env)
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
