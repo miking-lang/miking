@@ -10,14 +10,14 @@ type Env = [(String, Expr)]
 recursive
   let lookup = lam x. lam env.
     if eqi (length env) 0
-    then None
+    then None ()
     else if eqstr (head env).0 x
     then Some (head env).1
     else lookup x (tail env)
 end
 
 let fresh : String -> Env -> String = lam var. lam env.
-  match lookup var env with None then
+  match lookup var env with None () then
     var
   else
     recursive let find_free = lam n.
