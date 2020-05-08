@@ -32,6 +32,10 @@ let int_ = use MExprAst in
   lam i.
   const_ (CInt {val = i})
 
+let float_ = use MExprAst in
+  lam f.
+  const_ (CFloat {val = f})
+
 let true_ = use MExprAst in
   const_ (CBool {val = true})
 
@@ -67,6 +71,10 @@ let tuple_ = use MExprAst in
 let proj_ = use MExprAst in
   lam tup. lam idx.
   TmProj {tup = tup, idx = idx}
+
+let record_ = use MExprAst in
+  lam bindings.
+  TmRecord {bindings = bindings}
 
 let record_empty = use MExprAst in
   TmRecord {bindings = []}
@@ -255,6 +263,10 @@ let let_ = use MExprAst in
   lam ident. lam tpe. lam body.
   TmLet {ident = ident, tpe = tpe, body = body, inexpr = unit_}
 
+let ulet_ = use MExprAst in
+  lam ident. lam body.
+  let_ ident tydyn_ body
+
 let reclets_empty = use MExprAst in
   TmRecLets {bindings = [], inexpr = unit_}
 
@@ -278,7 +290,11 @@ let lam_ = use MExprAst in
 
 let ulam_ = use MExprAst in
   lam ident. lam body.
-  TmLam {ident = ident, tpe = None (), body = body}
+  lam_ ident tydyn_ body
+
+let ulams_ = use MExprAst in
+  lam idents. lam body.
+  foldr (lam ident. lam acc. ulam_ ident acc) body idents
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.

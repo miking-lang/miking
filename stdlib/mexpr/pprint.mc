@@ -118,6 +118,11 @@ lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
     | PInt t -> int2string t.val
 end
 
+lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CFloat t -> float2string t.val
+end
+
 lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CAddi _ -> "addi"
@@ -282,7 +287,8 @@ end
 
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
-                        UnitPrettyPrint + IntPrettyPrint + ArithIntPrettyPrint +
+                        UnitPrettyPrint + IntPrettyPrint + FloatPrettyPrint +
+                        ArithIntPrettyPrint +
                         BoolPrettyPrint + CmpPrettyPrint + CharPrettyPrint +
                         SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
                         DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +
