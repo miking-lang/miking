@@ -32,8 +32,12 @@ type sym = int
 let sym_no = ref 0
 let gensym() = sym_no := !sym_no + 1; !sym_no
 
+
+
+
 (* Evaluation environment *)
 type env = (sym * tm) list
+
 
 and const =
 (* MCore intrinsic: Boolean constant and operations *)
@@ -282,6 +286,11 @@ let ustring2tmseq fi s =
   s
   |> Mseq.of_ustring
   |> Mseq.map (fun x -> TmConst(fi,CChar(x)))
+
+(* Converts a list of terms (for a tuple) to a record term *)
+let tuple2record fi lst =
+  let r = List.fold_left (fun (i,a) x -> (i+1,Record.add (ustring_of_int i) x a)) (0,Record.empty) lst in
+  TmRecord(fi,snd r)
 
 
 type 'a tokendata = {i:info; v:'a}

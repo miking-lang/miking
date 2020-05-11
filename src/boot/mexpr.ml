@@ -353,7 +353,7 @@ let delta eval env fi c v  =
     | CsplitAt(Some(s)),TmConst(_,CInt(n)) ->
        let t = (try Mseq.split_at s n
                 with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
-       in TmTuple(fi,[TmSeq(fi,fst t);TmSeq(fi,snd t)])
+       in tuple2record fi [TmSeq(fi,fst t);TmSeq(fi,snd t)]
     | CsplitAt(None),_ | CsplitAt(Some(_)),_  -> fail_constapp fi
 
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)

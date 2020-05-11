@@ -113,7 +113,9 @@ utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else [] with 
 utest match {} with {blue = _} then true else false with false in
 utest match {blue = true} with {blue = _} then true else false with true in
 utest match {blue = true} with {blue = a} then a else false with true in
-utest match {blue = (1, 2)} with {blue = {}} then true else false with false in
+utest match {blue = (1, 2)} with {blue = {}} then true else false with true in
+utest match {blue = (1, 2)} with {blue = ()} then true else false with true in
+utest match {blue = (1, 2)} with {blue = (1,3)} then true else false with false in
 utest match {blue = {red = true}} with {blue = {}} then true else false with true in
 utest match {blue = true, red = true} with {blue = _} & {red = _} then true else false with true in
 utest match {blue = true} with {blue = _} & {red = _} then true else false with false in

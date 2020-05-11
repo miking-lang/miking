@@ -20,6 +20,8 @@
       | (NoInfo, Info(fn,r1,c1,r2,c2)) -> Info(fn,r1,c1,r2,c2)
       | (_,_) -> NoInfo
 
+  let unique_ident = us"X"
+
 %}
 
 /* Misc tokens */
@@ -270,9 +272,14 @@ left:
 
 
 atom:
-  | atom DOT label       { TmProj(mkinfo (tm_info $1) $2.i, $1, $3) }
-  | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
-                           else TmTuple(mkinfo $1.i $3.i,$2) }
+  | atom DOT proj_label
+      { let fi = mkinfo (tm_info $1) (fst $3) in
+        let id = unique_ident in
+        TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,nosym)))),
+                                TmVar(fi,id,nosym), TmNever(fi)) }
+  | LPAREN seq RPAREN
+      { if List.length $2 = 1 then List.hd $2
+        else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | IDENT                { TmVar($1.i,$1.v,nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
@@ -292,11 +299,13 @@ atom:
   | LBRACKET mexpr WITH IDENT EQ mexpr RBRACKET
       { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
 
-label:
+proj_label:
   | UINT
-    { LabIdx($1.v) }
+    { ($1.i, ustring_of_int $1.v) }
   | IDENT
-    { LabStr($1.v) }
+    { ($1.i,$1.v) }
+
+
 
 seq:
   | mexpr
@@ -368,8 +377,10 @@ pat_atom:
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
-      { let fi = mkinfo $1.i $5.i
-        in PatTuple(fi, $2 :: $4) }
+      { let fi = mkinfo $1.i $5.i in
+        let r = List.fold_left (fun (i,a) x ->
+          (i+1,Record.add (ustring_of_int i) x a)) (0,Record.empty) ($2::$4) in
+                               PatRecord(fi,snd r) }
   | LBRACKET RBRACKET
       { PatRecord(mkinfo $1.i $2.i, Record.empty) }
   | LBRACKET pat_labels RBRACKET
@@ -384,7 +395,7 @@ pat_atom:
   | FALSE
       { PatBool($1.i, false) }
   | LPAREN RPAREN
-      { PatUnit(mkinfo $1.i $2.i) }
+      { PatRecord(mkinfo $1.i $2.i, Record.empty) }
 
 pat_list:
   | pat
