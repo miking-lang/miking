@@ -36,8 +36,6 @@ let gensym() = sym_no := !sym_no + 1; !sym_no
 type env = (sym * tm) list
 
 and const =
-(* MCore intrinsic: unit - no operation *)
-| Cunit
 (* MCore intrinsic: Boolean constant and operations *)
 | CBool    of bool
 | Cnot
@@ -201,6 +199,8 @@ and ty =
 and vartype =
 | VarTm    of ustring
 
+
+let tmUnit = TmRecord(NoInfo,Record.empty)
 
 (* Value -1 means that there is no symbol yet assigned *)
 let nosym = -1

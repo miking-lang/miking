@@ -135,9 +135,6 @@ type prec =
  *  TODO Break hints? *)
 let rec print_const fmt = function
 
-  (* MCore intrinsic: unit - no operation *)
-  | Cunit -> fprintf fmt "()"
-
   (* MCore Intrinsic Booleans *)
   | CBool(b)      -> fprintf fmt "%B" b
   | Cnot          -> fprintf fmt "not"
@@ -332,8 +329,10 @@ and print_tm' fmt t = match t with
     fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
 
   | TmRecord(_,r) ->
-    let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
-    print_record fmt contents
+    if r = Record.empty then fprintf fmt "()"
+    else
+      let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
+      print_record fmt contents
 
   | TmProj(_,t,l) ->
     let l = match l with

@@ -98,7 +98,7 @@ mexpr_opt:
   | MEXPR mexpr
     { $2 }
   |
-    { TmConst(NoInfo, Cunit) }
+    { tmUnit }
 
 tops:
   | top tops
@@ -273,7 +273,7 @@ atom:
   | atom DOT label       { TmProj(mkinfo (tm_info $1) $2.i, $1, $3) }
   | LPAREN seq RPAREN    { if List.length $2 = 1 then List.hd $2
                            else TmTuple(mkinfo $1.i $3.i,$2) }
-  | LPAREN RPAREN        { TmConst($1.i, Cunit) }
+  | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | IDENT                { TmVar($1.i,$1.v,nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }

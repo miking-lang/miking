@@ -14,7 +14,7 @@ open Printf
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("unit",f(Cunit));
+  ([("unit", tmUnit);
    ("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
@@ -61,8 +61,6 @@ let builtin_sym2term = List.map (fun (_,s,t) -> (s,t)) builtin
 
 (* Returns the number of expected arguments of a constant *)
 let arity = function
-  (* MCore intrinsic: no operation *)
-  | Cunit       -> 0
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1
@@ -158,8 +156,6 @@ let delta eval env fi c v  =
     let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
     let fail_constapp = fail_constapp c v in
     match c,v with
-    (* MCore intrinsic: unit - no operation *)
-    | Cunit,_ -> fail_constapp fi
     (* MCore boolean intrinsics *)
     | CBool(_),_ -> fail_constapp fi
 
@@ -365,12 +361,11 @@ let delta eval env fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
-       uprint_string (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
+       uprint_string (tmseq2ustring fi lst); tmUnit
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t ->
-      uprint_string (ustring_of_tm t);
-      TmConst(NoInfo,Cunit)
+      uprint_string (ustring_of_tm t); tmUnit
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
@@ -379,7 +374,7 @@ let delta eval env fi c v  =
 
     | CwriteFile(None),TmSeq(fi,l) -> TmConst(fi,CwriteFile(Some(tmseq2ustring fi l)))
     | CwriteFile(Some(fname)),TmSeq(fi,lst) ->
-        Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
+        Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst); tmUnit
     | CwriteFile(None),_ | CwriteFile(Some(_)),_  -> fail_constapp fi
 
     | CfileExists,TmSeq(fi,lst) ->
@@ -387,7 +382,7 @@ let delta eval env fi c v  =
     | CfileExists,_ -> fail_constapp fi
 
     | CdeleteFile,TmSeq(fi,lst) ->
-        Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); TmConst(NoInfo,Cunit)
+        Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); tmUnit
     | CdeleteFile,_ -> fail_constapp fi
 
     | Cerror, TmSeq(fiseq,lst) ->
@@ -398,11 +393,10 @@ let delta eval env fi c v  =
         in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
-       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t));
-       TmConst(NoInfo,Cunit)
+       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t)); tmUnit
 
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym, TmRecord(fi,x) when x = Record.empty -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
@@ -604,7 +598,7 @@ let rec try_match env value pat =
       | _ -> None)
   | PatUnit _ ->
      (match value with
-      | TmConst(_, Cunit) -> Some env
+      | TmRecord(_,x) when x = Record.empty -> Some env
       | _ -> None)
   | PatAnd(_, l, r) -> go value r (Some env) |> go value l
   | PatOr(_, l, r) ->
