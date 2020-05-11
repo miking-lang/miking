@@ -252,9 +252,6 @@ let rec desugar_tm nss env =
           let (env, x) = desugar_pname env x in
           let (env, r) = desugar_pat_seq env r
           in (env, PatSeqEdg(fi, l, x, r))
-       | PatTuple(fi, pats) ->
-          List.fold_right (fun p (env, pats) -> desugar_pat env p |> map_right (fun p -> p::pats)) pats (env, [])
-          |> map_right (fun pats -> PatTuple(fi, pats))
        | PatRecord(fi, pats) ->
           let env = ref env in
           let pats =
@@ -286,9 +283,7 @@ let rec desugar_tm nss env =
   (* Simple recursions *)
   | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
   | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
-  | TmTuple(fi, tms) -> TmTuple(fi, List.map (desugar_tm nss env) tms)
   | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
-  | TmProj(fi, tm, lab) -> TmProj(fi, desugar_tm nss env tm, lab)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
   | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
   | TmNever(fi) -> TmNever(fi)

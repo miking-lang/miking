@@ -143,9 +143,7 @@ and tm =
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
 | TmSeq     of info * tm Mseq.t                                     (* Sequence *)
-| TmTuple   of info * tm list                                       (* Tuple *)
 | TmRecord  of info * tm Record.t                                   (* Record *)
-| TmProj    of info * tm * label                                    (* Projection of a tuple or record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
 | TmCondef  of info * ustring * sym * ty * tm                       (* Constructor definition *)
 | TmConsym  of info * ustring * sym * tm option                     (* Constructor symbol *)
@@ -173,7 +171,6 @@ and pat =
 | PatNamed  of info * patName                     (* Named, capturing wildcard *)
 | PatSeqTot of info * pat Mseq.t                  (* Exact sequence patterns *)
 | PatSeqEdg of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
-| PatTuple  of info * pat list                    (* Tuple pattern *)
 | PatRecord of info * pat Record.t                (* Record pattern *)
 | PatCon    of info * ustring * sym * pat         (* Constructor pattern *)
 | PatInt    of info * int                         (* Int pattern *)
@@ -223,9 +220,7 @@ let rec map_tm f = function
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
   | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.map (map_tm f) tms))
-  | TmTuple(fi,tms) -> f (TmTuple(fi,List.map (map_tm f) tms))
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
-  | TmProj(fi,t1,l) -> f (TmProj(fi,map_tm f t1,l))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
   | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
@@ -247,9 +242,7 @@ let tm_info = function
   | TmConst(fi,_) -> fi
   | TmFix(fi) -> fi
   | TmSeq(fi,_) -> fi
-  | TmTuple(fi,_) -> fi
   | TmRecord(fi,_) -> fi
-  | TmProj(fi,_,_) -> fi
   | TmRecordUpdate(fi,_,_,_) -> fi
   | TmCondef(fi,_,_,_,_) -> fi
   | TmConsym(fi,_,_,_) -> fi
@@ -262,7 +255,6 @@ let pat_info = function
   | PatNamed(fi,_) -> fi
   | PatSeqTot(fi, _) -> fi
   | PatSeqEdg(fi, _, _, _) -> fi
-  | PatTuple(fi,_) -> fi
   | PatRecord(fi, _) -> fi
   | PatCon(fi,_,_,_) -> fi
   | PatInt(fi,_) -> fi

@@ -434,9 +434,6 @@ let rec val_equal v1 v2 =
   | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmTuple(_,tms1),TmTuple(_,tms2) ->
-     List.length tms1 = List.length tms2 &&
-     List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
   | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
   | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
@@ -476,10 +473,6 @@ let rec symbolize env t =
          | NameStr(x, _) -> let s = gensym() in ((x,s)::patEnv, NameStr(x, s)) in
        let (patEnv, r) = s_pat_sequence patEnv r
        in (patEnv, PatSeqEdg(fi, l, x, r))
-    | PatTuple(fi,ps) ->
-       let go p (patEnv,ps) = let (patEnv,p) = sPat patEnv p in (patEnv,p::ps) in
-       let (patEnv,ps) = List.fold_right go ps (patEnv,[])
-       in (patEnv,PatTuple(fi,ps))
     | PatRecord(fi, pats) ->
        let patEnv = ref patEnv in
        let pats = Record.map (fun p -> let (patEnv', p) = sPat !patEnv p in patEnv := patEnv'; p) pats
@@ -515,9 +508,7 @@ let rec symbolize env t =
   | TmConst(_,_) -> t
   | TmFix(_) -> t
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
-  | TmProj(fi,t,l) -> TmProj(fi,symbolize env t,l)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
   | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((x,s)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
@@ -562,11 +553,6 @@ let rec try_match env value pat =
          in Mseq.fold_right2 go post r (Some env)
             |> bind fi x vs
             |> Mseq.fold_right2 go pre l
-      | _ -> None)
-  | PatTuple(_,pats) ->
-    (match value with
-      | TmTuple(_,vs) when List.length pats = List.length vs ->
-         List.fold_right2 go vs pats (Some env)
       | _ -> None)
   | PatRecord(_, pats) ->
      (match value with
@@ -656,26 +642,6 @@ let rec eval (env : (sym * tm) list) (t : tm) =
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (eval env) tms)
   (* Records *)
   | TmRecord(fi,tms) -> TmRecord(fi,Record.map (eval env) tms)
-  | TmProj(fi,t,l) ->
-     (match l with
-      | LabIdx i ->
-         (match eval env t with
-          | TmTuple(fi, tms) ->
-             (try List.nth tms i
-              with _ -> raise_error fi "Tuple projection is out of bounds.")
-          | v ->
-             raise_error fi ("Cannot project from term. The term is not a tuple: "
-                             ^ Ustring.to_utf8 (ustring_of_tm v)))
-      | LabStr s ->
-         (match eval env t with
-          | TmRecord(fi,r) ->
-             (try Record.find s r
-              with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
-                                        "' in record "))
-          | v ->
-             raise_error fi ("Cannot project from term. The term is not a record: "
-                             ^ Ustring.to_utf8
-                               (ustring_of_tm v))))
   | TmRecordUpdate(fi,t1,l,t2) ->
      (match eval env t1 with
       | TmRecord(fi,r) ->
@@ -687,8 +653,6 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       | v ->
          raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (ustring_of_tm v)))
-  (* Tuples *)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   (* Data constructors and match *)
   | TmCondef(fi,x,s,_,t) -> eval ((s,TmConsym(fi,x,s,None))::env) t
   | TmConsym(_,_,_,_) as tm -> tm
