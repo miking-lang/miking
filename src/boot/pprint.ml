@@ -323,15 +323,13 @@ and print_tm' fmt t = match t with
   | TmRecord(_,r) ->
     if r = Record.empty then fprintf fmt "()"
     else
-      let parsed_record_to_tuple =
-        List.fold_left (fun (a,k) (i,tm) ->
+      let match_tuple_item (a,k) (i,tm) =
           match a with
-          | Some _ when (try (int_of_ustring i) != k with _ -> true) -> (None,0)
+          | Some _ when try (int_of_ustring i) != k with _ -> true -> (None,0)
           | Some lst -> (Some(tm::lst),k+1)
-          | None -> (None,0)) (Some [], 0) (Record.bindings r)
-         |> fst
+          | None -> (None,0)
       in
-      (match parsed_record_to_tuple with
+      (match List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst with
       | Some(tms) ->
         let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
         let inner = List.map print (List.rev tms) in

@@ -396,7 +396,7 @@ let delta eval env fi c v  =
        uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t)); tmUnit
 
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmRecord(fi,x) when x = Record.empty -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
