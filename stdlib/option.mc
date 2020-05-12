@@ -31,7 +31,7 @@ let optionMap: Option -> (a -> a) -> Option = lam o. lam f.
     Some(f t)
   else
     None ()
-    
+
 -- Applies a function to the contained value (if any),
 -- or returns the provided default (if not).
 let optionMapOr: Option -> a -> (a -> a) -> a = lam o. lam d. lam f.
@@ -46,7 +46,7 @@ let optionMapOrElse: Option -> (Unit -> a) -> (a -> a) -> a = lam o. lam d. lam 
   match o with Some t then
     f t
   else
-    d unit
+    d ()
 
 -- Returns `None` if either option is `None`, otherwise returns
 -- the first option.
@@ -76,7 +76,7 @@ let optionFilter: Option -> (a -> a) -> Option = lam o. lam p.
       None ()
   else
     None ()
- 
+
 -- Returns the first option if it contains a value, otherwise returns
 -- the second option.
 let optionOr: Option -> Option -> Option = lam o1. lam o2.
@@ -84,14 +84,14 @@ let optionOr: Option -> Option -> Option = lam o1. lam o2.
     o1
   else
     o2
-  
+
 -- Returns the option if it contains a value, otherwise calls the specified
 -- function and returns the result.
 let optionOrElse: Option -> (Unit -> Option) -> Option = lam o. lam f.
   match o with Some _ then
     o
   else
-    f unit
+    f ()
 
 -- If exactly one option is `Some`, that option is returned,
 -- otherwise returns `None`.

@@ -14,8 +14,7 @@ open Printf
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("unit", tmUnit);
-   ("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
+  ([("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
    ("lti",f(Clti(None)));("leqi",f(Cleqi(None)));("gti",f(Cgti(None)));("geqi",f(Cgeqi(None)));
