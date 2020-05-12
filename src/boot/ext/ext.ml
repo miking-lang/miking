@@ -3,6 +3,7 @@ open Ast
 open Msg
 open Sundials
 open Bigarray
+open Ustring.Op
 
 let externals =
   List.map (fun x -> (fst x,  TmConst (NoInfo,CExt (snd x))))
@@ -101,11 +102,11 @@ let delta eval env fi c v =
   let mk_float fi f = TmConst (fi, CFloat f) in
   let mk_int fi n = TmConst (fi, CInt n) in
   let mk_ext fi e = TmConst (fi, CExt e) in
-  let mk_unit fi = TmConst (fi, Cunit) in
+  let mk_unit fi = TmRecord(fi,Record.empty) in
   let mk_app fi f v = TmApp (fi, f, v) in
   let mk_sa_array fi a = mk_ext fi (ESArray a) in
   let mk_sa_matrix_dense fi m = mk_ext fi (ESMatrixDense m) in
-  let mk_tuple fi l = TmTuple (fi, l) in
+  let mk_tuple = tuple2record in
 
   let mk_idafun tm_fun =
      let resf t y y' r =
@@ -116,6 +117,22 @@ let delta eval env fi c v =
                             mk_sa_array NoInfo r])
        in ()
      in resf
+  in
+
+  let get_tol fi r =
+    if Record.mem (us"0") r && Record.mem (us"1") r then
+      match (Record.find (us"0") r, Record.find (us"1") r) with
+      | TmConst(_,CFloat rtol),TmConst(_,CFloat atol) -> (rtol, atol)
+      | _,_ -> fail_extapp fi
+    else fail_extapp fi
+  in
+
+  let get_roots fi r =
+    if Record.mem (us"0") r && Record.mem (us"1") r then
+      match (Record.find (us"0") r, Record.find (us"1") r) with
+      | TmConst(_,CInt n), tm_rootf -> (n, mk_idafun tm_rootf)
+      | _, _ -> fail_extapp fi
+    else fail_extapp fi
   in
 
   match c, v with
@@ -195,18 +212,17 @@ let delta eval env fi c v =
 
   | EIdaSession _,_ -> fail_extapp fi
 
-  | EIdaInitDense (None, None, None, None, None),
-    TmTuple (_,
-             (TmConst (_, CFloat rtol))::((TmConst (_, CFloat atol))::[])) ->
+  | EIdaInitDense (None, None, None, None, None), TmRecord (_, r) ->
+     let (rtol, atol) = get_tol fi r in
      mk_ext fi (EIdaInitDense (Some (rtol, atol), None, None, None, None))
   | EIdaInitDense (Some tol, None, None, None, None), tm_resf ->
      mk_ext (tm_info tm_resf)
        (EIdaInitDense (Some tol, Some (mk_idafun tm_resf), None, None, None))
-  | EIdaInitDense (Some tol, Some resf, None, None, None),
-    TmTuple (_, (TmConst (_, CInt n))::(tm_rootf::[])) ->
+  | EIdaInitDense (Some tol, Some resf, None, None, None), TmRecord (_, r) ->
+     let (n, rootf) = get_roots fi r in
      mk_ext fi (EIdaInitDense (Some tol,
                                Some resf,
-                               Some (n, mk_idafun tm_rootf),
+                               Some (n, rootf),
                                None, None))
   | EIdaInitDense (Some tol, Some resf, Some (n, rootf), None, None),
     TmConst (_, CFloat t0) ->
@@ -235,9 +251,8 @@ let delta eval env fi c v =
      mk_ext fi (EIdaSession s)
   | EIdaInitDense _,_ -> fail_extapp fi
 
-  | EIdaInitDenseJac (None, None, None, None, None, None),
-    TmTuple (_,
-             (TmConst (_, CFloat rtol))::((TmConst (_, CFloat atol))::[])) ->
+  | EIdaInitDenseJac (None, None, None, None, None, None), TmRecord (_, r) ->
+     let (rtol, atol) = get_tol fi r in
      mk_ext fi (EIdaInitDenseJac (Some (rtol, atol),
                                   None, None, None, None, None))
   | EIdaInitDenseJac (Some tol, None, None, None, None, None), tm_jacf ->
@@ -267,11 +282,12 @@ let delta eval env fi c v =
                                                  Some (mk_idafun tm_resf),
                                                  None, None, None))
   | EIdaInitDenseJac (Some tol, Some jacf, Some resf, None, None, None),
-    TmTuple (_, (TmConst (_, CInt n))::(tm_rootf::[])) ->
+    TmRecord (_, r) ->
+     let (n, rootf) = get_roots fi r in
      mk_ext fi (EIdaInitDenseJac (Some tol,
                                   Some jacf,
                                   Some resf,
-                                  Some (n, mk_idafun tm_rootf),
+                                  Some (n, rootf),
                                   None, None))
   | EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some (n, rootf),
                       None, None),

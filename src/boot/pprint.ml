@@ -63,8 +63,6 @@ let ustring_of_pat p =
          in lStr ^. ppName x ^. rStr
     | PatSeqTot(_,lst) -> us"[" ^. ppSeq lst ^. us"]"
     | PatNamed(_,NameWildcard) -> us"_"
-    | PatTuple(_,ps) ->
-      us"(" ^. Ustring.concat (us",") (List.map ppp ps) ^. us")"
     | PatRecord(_,ps) ->
        let ps =
          Record.bindings ps
@@ -134,9 +132,6 @@ type prec =
  *  TODO Precendece?
  *  TODO Break hints? *)
 let rec print_const fmt = function
-
-  (* MCore intrinsic: unit - no operation *)
-  | Cunit -> fprintf fmt "()"
 
   (* MCore Intrinsic Booleans *)
   | CBool(b)      -> fprintf fmt "%B" b
@@ -258,11 +253,10 @@ and print_tm fmt (prec, t) =
     | TmMatch _ | TmLet _              -> Match
     | TmLam _                          -> Lam
     | TmSeq _                          -> Semicolon
-    | TmTuple _                        -> Tup
     | TmApp _                          -> App
     | TmVar _    | TmRecLets _
     | TmConst _  | TmRecord _
-    | TmProj _   | TmRecordUpdate _
+    | TmRecordUpdate _
     | TmCondef _ | TmConsym _
     | TmUse _    | TmUtest _
     | TmClos _   | TmFix _
@@ -326,20 +320,23 @@ and print_tm' fmt t = match t with
     let inner = List.map print (Mseq.to_list tms) in
     fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
-  | TmTuple(_,tms) ->
-    let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
-    let inner = List.map print tms in
-    fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
-
   | TmRecord(_,r) ->
-    let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
-    print_record fmt contents
-
-  | TmProj(_,t,l) ->
-    let l = match l with
-      | LabIdx i -> string_of_int i
-      | LabStr s -> string_of_ustring s in
-    fprintf fmt "%a.%s" print_tm (Atom, t) l
+    if r = Record.empty then fprintf fmt "()"
+    else
+      let match_tuple_item (a,k) (i,tm) =
+          match a with
+          | Some _ when try (int_of_ustring i) != k with _ -> true -> (None,0)
+          | Some lst -> (Some(tm::lst),k+1)
+          | None -> (None,0)
+      in
+      (match List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst with
+      | Some(tms) ->
+        let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
+        let inner = List.map print (List.rev tms) in
+        fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
+      | None ->
+        let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
+        print_record fmt contents)
 
   | TmRecordUpdate(_,t1,l,t2) ->
     let l = string_of_ustring l in

@@ -14,7 +14,7 @@ open Printf
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("unit",f(Cunit));
+  ([("unit", tmUnit);
    ("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
@@ -61,8 +61,6 @@ let builtin_sym2term = List.map (fun (_,s,t) -> (s,t)) builtin
 
 (* Returns the number of expected arguments of a constant *)
 let arity = function
-  (* MCore intrinsic: no operation *)
-  | Cunit       -> 0
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1
@@ -158,8 +156,6 @@ let delta eval env fi c v  =
     let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
     let fail_constapp = fail_constapp c v in
     match c,v with
-    (* MCore intrinsic: unit - no operation *)
-    | Cunit,_ -> fail_constapp fi
     (* MCore boolean intrinsics *)
     | CBool(_),_ -> fail_constapp fi
 
@@ -357,7 +353,7 @@ let delta eval env fi c v  =
     | CsplitAt(Some(s)),TmConst(_,CInt(n)) ->
        let t = (try Mseq.split_at s n
                 with _ -> raise_error fi index_out_of_bounds_in_seq_msg)
-       in TmTuple(fi,[TmSeq(fi,fst t);TmSeq(fi,snd t)])
+       in tuple2record fi [TmSeq(fi,fst t);TmSeq(fi,snd t)]
     | CsplitAt(None),_ | CsplitAt(Some(_)),_  -> fail_constapp fi
 
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)
@@ -365,12 +361,11 @@ let delta eval env fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
-       uprint_string (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
+       uprint_string (tmseq2ustring fi lst); tmUnit
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t ->
-      uprint_string (ustring_of_tm t);
-      TmConst(NoInfo,Cunit)
+      uprint_string (ustring_of_tm t); tmUnit
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
@@ -379,7 +374,7 @@ let delta eval env fi c v  =
 
     | CwriteFile(None),TmSeq(fi,l) -> TmConst(fi,CwriteFile(Some(tmseq2ustring fi l)))
     | CwriteFile(Some(fname)),TmSeq(fi,lst) ->
-        Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst); TmConst(NoInfo,Cunit)
+        Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst); tmUnit
     | CwriteFile(None),_ | CwriteFile(Some(_)),_  -> fail_constapp fi
 
     | CfileExists,TmSeq(fi,lst) ->
@@ -387,7 +382,7 @@ let delta eval env fi c v  =
     | CfileExists,_ -> fail_constapp fi
 
     | CdeleteFile,TmSeq(fi,lst) ->
-        Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); TmConst(NoInfo,Cunit)
+        Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); tmUnit
     | CdeleteFile,_ -> fail_constapp fi
 
     | Cerror, TmSeq(fiseq,lst) ->
@@ -398,11 +393,10 @@ let delta eval env fi c v  =
         in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
     | CdebugShow,t ->
-       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t));
-       TmConst(NoInfo,Cunit)
+       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t)); tmUnit
 
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmConst(fi, Cunit) -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
@@ -440,9 +434,6 @@ let rec val_equal v1 v2 =
   | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmTuple(_,tms1),TmTuple(_,tms2) ->
-     List.length tms1 = List.length tms2 &&
-     List.for_all (fun (x,y) -> val_equal x y) (List.combine tms1 tms2)
   | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
   | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
@@ -482,10 +473,6 @@ let rec symbolize env t =
          | NameStr(x, _) -> let s = gensym() in ((x,s)::patEnv, NameStr(x, s)) in
        let (patEnv, r) = s_pat_sequence patEnv r
        in (patEnv, PatSeqEdg(fi, l, x, r))
-    | PatTuple(fi,ps) ->
-       let go p (patEnv,ps) = let (patEnv,p) = sPat patEnv p in (patEnv,p::ps) in
-       let (patEnv,ps) = List.fold_right go ps (patEnv,[])
-       in (patEnv,PatTuple(fi,ps))
     | PatRecord(fi, pats) ->
        let patEnv = ref patEnv in
        let pats = Record.map (fun p -> let (patEnv', p) = sPat !patEnv p in patEnv := patEnv'; p) pats
@@ -521,9 +508,7 @@ let rec symbolize env t =
   | TmConst(_,_) -> t
   | TmFix(_) -> t
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
-  | TmProj(fi,t,l) -> TmProj(fi,symbolize env t,l)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
   | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((x,s)::env) t)
   | TmConsym(fi,x,sym,tmop) ->
@@ -569,11 +554,6 @@ let rec try_match env value pat =
             |> bind fi x vs
             |> Mseq.fold_right2 go pre l
       | _ -> None)
-  | PatTuple(_,pats) ->
-    (match value with
-      | TmTuple(_,vs) when List.length pats = List.length vs ->
-         List.fold_right2 go vs pats (Some env)
-      | _ -> None)
   | PatRecord(_, pats) ->
      (match value with
       | TmRecord(_, vs) ->
@@ -604,7 +584,7 @@ let rec try_match env value pat =
       | _ -> None)
   | PatUnit _ ->
      (match value with
-      | TmConst(_, Cunit) -> Some env
+      | TmRecord(_,x) when x = Record.empty -> Some env
       | _ -> None)
   | PatAnd(_, l, r) -> go value r (Some env) |> go value l
   | PatOr(_, l, r) ->
@@ -662,26 +642,6 @@ let rec eval (env : (sym * tm) list) (t : tm) =
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (eval env) tms)
   (* Records *)
   | TmRecord(fi,tms) -> TmRecord(fi,Record.map (eval env) tms)
-  | TmProj(fi,t,l) ->
-     (match l with
-      | LabIdx i ->
-         (match eval env t with
-          | TmTuple(fi, tms) ->
-             (try List.nth tms i
-              with _ -> raise_error fi "Tuple projection is out of bounds.")
-          | v ->
-             raise_error fi ("Cannot project from term. The term is not a tuple: "
-                             ^ Ustring.to_utf8 (ustring_of_tm v)))
-      | LabStr s ->
-         (match eval env t with
-          | TmRecord(fi,r) ->
-             (try Record.find s r
-              with _ -> raise_error fi ("No label '" ^ Ustring.to_utf8 s ^
-                                        "' in record "))
-          | v ->
-             raise_error fi ("Cannot project from term. The term is not a record: "
-                             ^ Ustring.to_utf8
-                               (ustring_of_tm v))))
   | TmRecordUpdate(fi,t1,l,t2) ->
      (match eval env t1 with
       | TmRecord(fi,r) ->
@@ -693,8 +653,6 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       | v ->
          raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (ustring_of_tm v)))
-  (* Tuples *)
-  | TmTuple(fi,tms) -> TmTuple(fi,List.map (eval env) tms)
   (* Data constructors and match *)
   | TmCondef(fi,x,s,_,t) -> eval ((s,TmConsym(fi,x,s,None))::env) t
   | TmConsym(_,_,_,_) as tm -> tm
