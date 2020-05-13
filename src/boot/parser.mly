@@ -214,17 +214,8 @@ cases:
   |
     { [] }
 case:
-  | BAR var_ident ARROW mexpr
-    { let fi = mkinfo $1.i $3.i in
-      (VarPattern (fi, $2.v), $4) }
-  | BAR con_ident binder ARROW mexpr
-    { let fi = mkinfo $1.i $4.i in
-      (ConPattern (fi, $2.v, $3), $5)}
-binder:
-  | LPAREN var_ident RPAREN
-    { $2.v }
-  | var_ident
-    { $1.v }
+  | BAR pat ARROW mexpr
+    { ($2, $4) }
 
 /// Expression language ///////////////////////////////
 

@@ -41,6 +41,11 @@ type message = id * severity * info * arguments
 exception Error of message
 
 
+let eq_info a b = match a, b with
+  | NoInfo, NoInfo -> true
+  | Info(f1, l11, c11, l21, c21), Info(f2, l12, c12, l22, c22) ->
+     l11 = l12 && c11 = c12 && l21 == l22 && c21 == c22 && f1 =. f2
+  | _ -> false
 
 
 (** [id2str id] returns the identifier string for [id], e.g.,
@@ -66,21 +71,21 @@ let info2str_startline fi =
     | Info(_,l1,_,_,_) -> l1
     | NoInfo -> assert false
 
+let info2str = function
+  | Info(filename, l1, c1, l2, c2) ->
+	   us"FILE \"" ^. filename ^. us"\" " ^.
+	     (ustring_of_int l1) ^. us":" ^.
+	     (ustring_of_int c1) ^. us"-" ^.
+	     (ustring_of_int l2) ^. us":" ^.
+	     (ustring_of_int c2)
+  | NoInfo -> us"NO INFO"
+
 (** [message2str m] returns a string representation of message [m].
     Is message is not intended to be read by humans. *)
 let message2str (id,sev,info,_)  =
-  match info with
-    | Info(filename,l1,c1,l2,c2) ->
-	begin
-	  us"FILE \"" ^. filename ^. us"\" " ^.
-	    (ustring_of_int l1) ^. us":" ^.
-	    (ustring_of_int c1) ^. us"-" ^.
-	    (ustring_of_int l2) ^. us":" ^.
-	    (ustring_of_int c2) ^. us" " ^.
-	    (severity2str sev) ^. us": " ^.
-	    (id2str id)
-        end
-    |  NoInfo -> us"NO INFO: " ^. (id2str id)
+  info2str info ^. us" " ^.
+	  (severity2str sev) ^. us": " ^.
+	  (id2str id)
 
 let raise_error fi msg =
   raise (Error (ERROR(msg),ERROR,fi,[]))

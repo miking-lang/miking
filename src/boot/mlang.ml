@@ -8,140 +8,183 @@
 open Ast
 open Msg
 open Ustring.Op
+open Pprint
 
-(*******************
- * Auxiliary stuff *
- *******************)
-let constr_compare decl1 decl2 =
-  match decl1, decl2 with
-  | CDecl(_, c1, _), CDecl(_, c2, _) -> Ustring.compare c1 c2
+open Patterns
 
-let param_eq p1 p2 =
-  match p1, p2 with
-  | Param(_,_,ty1), Param(_,_,ty2) -> ty1 = ty2
+let accum_map (f: 'acc -> 'a -> 'acc * 'b) (acc: 'acc) (l: 'a list): 'acc * 'b list =
+  let rec recur acc = function
+    | [] -> (acc, [])
+    | x::xs ->
+       let (acc, x') = f acc x in
+       let (acc, xs') = recur acc xs in
+       (acc, x'::xs')
+  in recur acc l
 
-(*********************
- * Compare patterns  *
- *********************)
-
-let pattern_compare p1 p2 = match p1, p2 with
-  | VarPattern _,         VarPattern _ -> 0
-  | VarPattern _,         ConPattern _ -> 1
-  | ConPattern _,         VarPattern _ -> -1
-  | ConPattern(_, k1, _), ConPattern(_, k2, _) -> Ustring.compare k1 k2
-
-(***************
- * Flattening *
- ***************)
-
-(** TODO: Some things that should be fixed or investigated
-
-  - If two constructor names are the same, they are assumed to
-   belong to the same datatype
-
-  - Two interpreters being merged are assumed to have the same
-   return type
-
-  - It is uncertain if there is any interoperability between
-   languages (or if there should be)
-
-  - It is uncertain how nested language uses work (or if they
-   should be allowed)
-
- *)
-
-let check_matching_constrs info constrs =
-  let check_matching_constr = function
-    | CDecl(_, c, ty) ->
-       let matching_constr = function
-       | CDecl(_, c', _) -> c = c'
-       in
-       match List.find_opt matching_constr constrs with
-       | Some (CDecl(_, _, ty')) ->
-(*
-          if not (ty = ty')
-          then raise_error info
-                 ("Conflicting parameter types for constructor '"^
-                  Ustring.to_utf8 c^"'")
-*)
-          let _ = ty in
-          let _ = ty' in
-          let _ = info in
-          () (* TODO: Disabled to cater for extensible records *)
-       | None -> ()
-  in
-  List.iter check_matching_constr
-
-let rec merge_data d constrs = function
+let rec pair_with_later: 'a list -> ('a * 'a) list = function
   | [] -> []
-  | Data(info', d', constrs')::decls when d = d' ->
-       let matching_constr (CDecl(_, c, _)) (CDecl(_, c', _)) = c = c' in
-       let is_previously_defined c = List.exists (matching_constr c) constrs in
-       check_matching_constrs info' constrs constrs';
-       let new_constrs = List.filter (fun c -> is_previously_defined c |> not) constrs' in
-       Data(info', d, new_constrs)::decls
-  | decl::decls ->
-     decl::merge_data d constrs decls
+  | x::xs ->
+     List.rev_append
+       (List.map (fun y -> (x, y)) xs)
+       (pair_with_later xs)
 
-let rec merge_inter f params cases = function
-  | [] -> [Inter(NoInfo, f, params, cases)]
-  | Inter(info', f', params', cases')::decls when f = f' ->
-     if not (List.length params = List.length params') then
-       raise_error info' ("Different number of parameters for interpreter '"^
-                          Ustring.to_utf8 f^"'")
-     else if not (List.for_all2 param_eq params params') then
-       raise_error info' ("Parameters are not the same for interpreter '"^
-                          Ustring.to_utf8 f^"'")
-     else
-       Inter(info', f', params', cases@cases')::decls
-  | decl::decls ->
-     decl::merge_inter f params cases decls
+let fold_map ~(fold: 'b -> 'b -> 'b) ~(map: 'a -> 'b): 'b -> 'a list -> 'b =
+  let rec recur acc = function
+    | [] -> acc
+    | x::xs -> recur (fold acc (map x)) xs
+  in recur
 
-(* add decl to decls, since decl comes from a language that was included by the language decls originates from *)
-let merge_decl decl decls = match decl with
-  | Data(_, d, constrs) -> merge_data d constrs decls
-  | Inter(_, f, params, cases) -> merge_inter f params cases decls
+let add_new_by (eq : 'a -> 'a -> bool) (source: 'a list) (target: 'a list) =
+  List.fold_left (fun prev a -> if List.exists (eq a) prev then prev else a :: prev) target source
 
-(* merge lang2 into lang1 (because lang1 includes lang2) *)
-let merge_langs lang1 lang2 : mlang =
-  match lang1, lang2 with
-  | Lang(info, l1, ls, decls1), Lang(_, _, _, decls2) ->
-     let decls1' = List.fold_right merge_decl decls2 decls1 in
-     Lang(info, l1, ls, decls1')
+let lookup_lang info prev_langs name =
+  match Record.find_opt name prev_langs with
+  | None -> raise_error info ("Unknown language fragment '" ^ Ustring.to_utf8 name^"'")
+  | Some l -> l
 
-let lookup_lang info tops l =
-  let has_name l = function
-    | TopLang(Lang(_, l', _, _)) -> l = l'
-    | TopLet _ -> false
-    | TopRecLet _ -> false
-    | TopCon _ -> false
-  in
-  match List.find_opt (has_name l) tops with
-  | Some (TopLang res) -> res
-  | _ -> raise_error info ("Unknown language fragment '"^
-                              Ustring.to_utf8 l^"'")
+type case = {
+    pat: pat;
+    rhs: tm;
+    (* We precompute the normpat corresponding to pat, as well as the one
+     * corresponding to not(pat) *)
+    pos_pat: normpat;
+    neg_pat: normpat;
+  }
+type inter_data = {
+    info: info;
+    params: param list;
+    (* We represent each case by the location of its pattern *)
+    cases: (info * case) list;
+    (* We store the DAG of subset relations as a list of pairs (a, b),
+     * where a \subset b. Note proper subset, since equality
+     * means we should error because we can't order the patterns. *)
+    subsets: (info * info) list;
+  }
+type lang_data = {
+    inters: inter_data Record.t;
+    syns: (info * cdecl list) Record.t;
+  }
 
-let sort_decls = function
-  | Lang(info, l, ls, decls) ->
-     let is_data_decl = function | Data _ -> true | _ -> false in
-     match List.partition is_data_decl decls with
-     | (data, inters) -> Lang(info, l, ls, data@inters)
+let compute_order fi ((fi1, {pos_pat = p1; neg_pat = n1; _}), (fi2, {pos_pat = p2; neg_pat = n2; _})) =
+  let string_of_pat pat = ustring_of_pat pat |> Ustring.to_utf8 in
+  let info2str fi = info2str fi |> Ustring.to_utf8 in
+  match order_query (p1, n1) (p2, n2) with
+  | Subset -> [(fi1, fi2)]
+  | Superset -> [(fi2, fi1)]
+  | Equal -> raise_error fi ("Patterns at " ^ info2str fi1 ^ " and " ^ info2str fi2 ^ " cannot be ordered by specificity; they match exactly the same values.")
+  | Disjoint -> []
+  | Overlapping(only1, both, only2) ->
+     "Patterns at " ^ info2str fi1 ^ " and " ^ info2str fi2 ^ " cannot be ordered by specificity (neither is more specific than the other), but the order matters; they overlap. Example:" ^
+       "\nOnly in the first: " ^ string_of_pat only1 ^
+       "\nIn both: " ^ string_of_pat both ^
+       "\nOnly in the other: " ^ string_of_pat only2
+     |> raise_error fi
 
-let flatten_langs tops : top list =
-  let flatten_langs' flat = function
-    | TopLang(Lang(info, _, ls, _) as lang)  ->
-       let included_langs = List.map (lookup_lang info flat) ls in
-       let lang' = List.fold_left merge_langs lang included_langs in
-       let sorted = sort_decls lang' in
-       TopLang sorted::flat
-    | TopLet _ as let_ -> let_::flat
-    | TopRecLet _ as let_ -> let_::flat
-    | TopCon _ as con -> con::flat
-  in
-  List.rev (List.fold_left flatten_langs' [] tops)
+(* Check that a single language fragment is self-consistent; it has compatible patterns,
+ * no duplicate definitions, etc. Does not consider included languages at all.
+ *)
+let compute_lang_data (Lang(info, _, _, decls)): lang_data =
+  let add_new_syn name ((fi, _) as data) = function
+    | None -> Some data
+    | Some (old_fi, _) -> raise_error fi ("Duplicate definition of '" ^ Ustring.to_utf8 name ^ "', previously defined at " ^ Ustring.to_utf8 (info2str old_fi)) in
+  let add_new_sem name fi data = function
+    | None -> Some data
+    | Some {info; _} -> raise_error fi ("Duplicate definition of '" ^ Ustring.to_utf8 name ^ "', previously defined at " ^ Ustring.to_utf8 (info2str info)) in
+  let add_decl lang_data = function
+    | Data(fi, name, cons) ->
+       {lang_data with syns = Record.update name (add_new_syn name (fi, cons)) lang_data.syns}
+    | Inter(fi, name, params, cases) ->
+       let mk_case (pat, rhs) =
+         let pos_pat = pat_to_normpat pat in
+         (pat_info pat, {pat; rhs; pos_pat; neg_pat = normpat_complement pos_pat}) in
+       let cases = List.map mk_case cases in
+       let subsets = pair_with_later cases
+                     |> fold_map ~fold:(fun a b -> List.rev_append b a) ~map:(compute_order info) [] in
+       let inter_data = {info = fi; params; cases; subsets} in
+       {lang_data with inters = Record.update name (add_new_sem name fi inter_data) lang_data.inters}
+  in List.fold_left add_decl {inters = Record.empty; syns = Record.empty} decls
 
-let flatten = function
-  | Program(includes, tops, e) -> Program(includes, flatten_langs tops, e)
+(* Merges the second language into the first, because the first includes the second *)
+let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data =
+  let eq_cons (CDecl(_, c1, _)) (CDecl(_, c2, _)) = c1 =. c2 in
+  let merge_syn _ a b = match a, b with
+    | None, None -> None
+    | None, Some _ -> Some (NoInfo, [])
+    | Some a, None -> Some a
+    | Some (fi, cons), Some (_, old_cons) ->
+       Some (fi, List.filter (fun c1 -> List.exists (eq_cons c1) old_cons |> not) cons) in
+  let merge_inter name a b = match a, b with
+    | None, None -> None
+  | None, Some a -> Some a
+    | Some a, None -> Some a
+    | Some ({info=fi1; params=p1; cases=c1; subsets=s1} as data)
+    , Some {info=fi2; params=p2; cases=c2; subsets=s2} ->
+       if fi1 = fi2 then Some data
+       else if List.length p1 <> List.length p2 then
+         raise_error fi1 ("Different number of parameters for interpreter '" ^ Ustring.to_utf8 name ^ "' compared to previous definitian at " ^ Ustring.to_utf8 (info2str fi2))
+       else
+         let c2 = List.filter (fun (fi, _) -> List.exists (fun (fi2, _) -> eq_info fi fi2) c1 |> not) c2 in
+         let subsets = add_new_by (fun (a1, a2) (b1, b2) -> eq_info a1 b1 && eq_info a2 b2) s2 s1 in
+         let subsets =
+           liftA2 (fun a b -> (a, b)) c1 c2
+           |> fold_map ~fold:(fun a b -> List.rev_append b a) ~map:(compute_order fi1) subsets in
+         Some {data with subsets; cases = List.rev_append c2 c1} in
+  {inters = Record.merge merge_inter i1 i2; syns = Record.merge merge_syn s1 s2}
+
+(* TODO(vipa): this is likely fairly low hanging fruit when it comes to optimization *)
+let topo_sort (eq: 'a -> 'a -> bool) (edges: ('a * 'a) list) (vertices: 'a list) =
+  let rec recur rev_order edges vertices =
+    match List.find_opt (fun v -> List.exists (fun (_, t) -> eq v t) edges |> not) vertices with
+    | None -> List.rev rev_order
+    | Some x ->
+       recur
+         (x :: rev_order)
+         (List.filter (fun (f, t) -> not (eq x f) && not (eq x t)) edges)
+         (List.filter (fun v -> not (eq x v)) vertices)
+  in recur [] edges vertices
+
+let data_to_lang info name includes {inters; syns}: mlang =
+  let info_assoc fi l = List.find (fun (fi2, _) -> eq_info fi fi2) l |> snd in
+  let syns =
+    Record.bindings syns
+    |> List.map (fun (syn_name, (fi, cons)) -> Data(fi, syn_name, cons)) in
+  let sort_inter name {info; params; cases; subsets} =
+    let mk_case fi = let case = info_assoc fi cases in (case.pat, case.rhs) in
+    let cases =
+      List.map fst cases
+      |> topo_sort eq_info subsets
+      |> List.map mk_case in
+    Inter(info, name, params, cases) in
+  let inters =
+    Record.bindings inters
+    |> List.map (fun (name, inter_data) -> sort_inter name inter_data) in
+  Lang(info, name, includes, List.rev_append syns inters)
+
+let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * top = function
+  | (TopLet _ | TopRecLet _ | TopCon _) as top -> (prev_langs, top)
+  | TopLang(Lang(info, name, includes, _) as lang) ->
+     let self_data = compute_lang_data lang in
+     let included_data = List.map (lookup_lang info prev_langs) includes in
+     let merged_data = List.fold_left merge_lang_data self_data included_data in
+     (Record.add name merged_data prev_langs, TopLang(data_to_lang info name includes merged_data))
+
+let flatten (Program(includes, tops, e)): program =
+  Program(includes, accum_map flatten_lang Record.empty tops |> snd, e)
+
+(*
+TODO
+- flatten needs to remember more info about previous languages, namely for
+  each Inter we need the DAG and normpats and stuff.
+- when we initially look at a language we construct such DAGs and error if
+  language internal patterns conflict in some way.
+- we then merge in old languages into the new one, building ever bigger DAGs
+  (and reporting concflicts). This means that when merging we only need to
+  consider the cartesian product between the two fragments, not intralanguage
+  pairs.
+- we then store the DAG(s) for use in later languages, and produce a topological
+  sort of the patterns found thus far. This topological sort is what's placed
+  in the flattened TopLang, thus translation can use that order directly.
+ *)
 
 (***************
  * Translation *
@@ -156,12 +199,8 @@ end
 open AstHelpers
 
 let translate_cases f target cases =
-  let translate_case case inner =
-    match case with
-    | (ConPattern (fi, k, x), handler) ->
-      TmMatch (fi, target, PatCon(fi, k, nosym, PatNamed(fi, NameStr(x,nosym))), handler, inner)
-    | (VarPattern (fi, x), handler) ->
-      TmLet(fi, x, nosym, target, handler)
+  let translate_case (pat, handler) inner =
+    TmMatch (pat_info pat, target, pat, handler, inner)
   in
   let msg = Mseq.map (fun c -> TmConst(NoInfo,CChar(c)))
               ((us"No matching case for function " ^. f)
@@ -172,16 +211,12 @@ let translate_cases f target cases =
       (app (TmConst (NoInfo, CdebugShow)) target)
       (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
-  let case_compare c1 c2 = match c1, c2 with
-    | (p1, _), (p2, _) -> pattern_compare p1 p2
-  in
-  let sorted_cases = List.sort case_compare cases in
-  List.fold_right translate_case sorted_cases no_match
+  List.fold_right translate_case cases no_match
 
 module USMap = Map.Make (Ustring)
 
 type mlangEnv = { constructors : ustring USMap.t; normals : ustring USMap.t }
-let emptyMlangEnv = {constructors = USMap.empty; normals = USMap.empty}
+let emptyMlangEnv = { constructors = USMap.empty; normals = USMap.empty }
 
 (* Adds the names from b to a, overwriting with the name from b when they overlap *)
 let merge_env_overwrite a b =
@@ -264,7 +299,7 @@ let rec desugar_tm nss env =
        | PatCon(fi, name, sym, p) ->
           desugar_pat env p
           |> map_right (fun p -> PatCon(fi, resolve_con env name, sym, p))
-       | (PatInt _ | PatChar _ | PatBool _ | PatUnit _) as pat -> (env, pat) in
+       | (PatInt _ | PatChar _ | PatBool _) as pat -> (env, pat) in
      let (env', pat') = desugar_pat env pat in
      TmMatch(fi, desugar_tm nss env target, pat', desugar_tm nss env' thn, desugar_tm nss env els)
   (* Use *)
