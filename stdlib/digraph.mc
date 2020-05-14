@@ -1,5 +1,7 @@
 include "option.mc"
 include "seq.mc"
+include "set.mc"
+include "map.mc"
 
 -- Represents a directed graph with labeled edges.
 
@@ -109,6 +111,67 @@ let digraphUnion = lam g1. lam g2.
   let g3 = foldl (lam g. lam v. digraphMaybeAddVertex v g) g1 (digraphVertices g2)
   in foldl (lam g. lam tup. digraphMaybeAddEdge tup.0 tup.1 tup.2 g) g3 (digraphEdges g2)
 
+-- Strongly connected components of g.
+let digraphTarjan = lam g.
+  let isNone = optionIsNone in
+  let min = lam l. lam r. if lti l r then l else r in
+  let maybeFind = mapFind g.eqv in
+  let find = lam v. lam m. optionMapOrElse (maybeFind v m)
+                                       (lam _. error "undefined")
+                                       identity
+  in
+  let add = mapAdd g.eqv in
+  let mem = setMem g.eqv in
+
+  recursive let strongConnect = lam s. lam v.
+    let traverseSuccessors = lam s. lam w.
+      if isNone (maybeFind w s.number) then
+        let s = strongConnect s w in
+        {s with lowlink = add v (min (find v s.lowlink) (find w s.lowlink))
+                                s.lowlink}
+      else if lti (find w s.number) (find v s.number) then
+        if mem w s.stack then
+          {s with lowlink = add v (min (find v s.lowlink) (find w s.number))
+                                  s.lowlink}
+        else s
+      else s
+    in
+
+    let popStackIntoComp = lam s.
+      let vn = find v s.number in
+
+      recursive let work = lam comp. lam stack.
+        if null stack then (comp,stack)
+        else
+          let w = head stack in
+          if lti (find w s.number) vn then (comp,stack)
+          else work (snoc comp w) (tail stack)
+      in
+      let t = work [] s.stack in
+      {{s with comps = snoc s.comps t.0}
+          with stack = t.1}
+    in
+
+    let s = {{{{s with number = add v s.i s.number}
+                  with lowlink = add v s.i s.lowlink}
+                  with stack = cons v s.stack}
+                  with i = addi s.i 1}
+    in
+
+    let s = foldl traverseSuccessors s (digraphSuccessors v g) in
+
+    if eqi (find v s.lowlink) (find v s.number)
+    then popStackIntoComp s else s
+  in
+
+  let s = foldl (lam s. lam v. if isNone (maybeFind v s.number)
+                           then strongConnect s v else s)
+                {i = 0, number = [], lowlink = [], stack = [], comps = []}
+                (digraphVertices g)
+  in s.comps
+
+-- Strongly connected components of g.
+let digraphStrongConnects = lam g. digraphTarjan g
 
 mexpr
 -- map tests
@@ -169,5 +232,41 @@ utest digraphCountVertices g5 with 2 in
 utest digraphCountEdges g5 with 2 in
 let g6 = digraphUnion empty empty in
 utest digraphCountVertices g6 with 0 in
+
+let compsEq = setEqual (setEqual eqi) in
+
+utest  compsEq (digraphStrongConnects empty) [] with true in
+
+let g = foldr digraphAddVertex empty [1,2,3,4,5,6,7,8] in
+
+let g1 = g in
+
+utest compsEq (digraphStrongConnects g1) [[1],[2],[3],[4],[5],[6],[7],[8]]
+with true in
+
+let g2 = digraphAddEdge 1 2 (gensym ()) g in
+let g2 = digraphAddEdge 2 3 (gensym ()) g2 in
+let g2 = digraphAddEdge 3 1 (gensym ()) g2 in
+let g2 = digraphAddEdge 4 5 (gensym ()) g2 in
+let g2 = digraphAddEdge 5 4 (gensym ()) g2 in
+
+utest compsEq (digraphStrongConnects g2) [[1,2,3],[4,5],[6],[7],[8]]
+with true in
+
+-- Figure 3 from Tarjans original paper.
+let g3 = digraphAddEdge 1 2 (gensym ()) g in
+let g3 = digraphAddEdge 2 3 (gensym ()) g3 in
+let g3 = digraphAddEdge 2 8 (gensym ()) g3 in
+let g3 = digraphAddEdge 3 4 (gensym ()) g3 in
+let g3 = digraphAddEdge 3 7 (gensym ()) g3 in
+let g3 = digraphAddEdge 4 5 (gensym ()) g3 in
+let g3 = digraphAddEdge 5 3 (gensym ()) g3 in
+let g3 = digraphAddEdge 5 6 (gensym ()) g3 in
+let g3 = digraphAddEdge 7 4 (gensym ()) g3 in
+let g3 = digraphAddEdge 7 6 (gensym ()) g3 in
+let g3 = digraphAddEdge 8 1 (gensym ()) g3 in
+let g3 = digraphAddEdge 8 7 (gensym ()) g3 in
+
+utest compsEq (digraphStrongConnects g3) [[1,2,8],[3,4,5,7],[6]] with true in
 
 ()
