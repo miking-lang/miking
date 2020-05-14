@@ -17,5 +17,12 @@ utest #ident"Foo" with Foo in
 utest #ident"*9^/\nhi" with #ident"*9^/\nhi" in
 utest #ident"*9^/\nhi" with 8 in
 
+type Bar in
+con f : (Int,Int) -> Bar in
+con F : (Int,String) -> Bar in
+
+utest match f(5,2) with f(x,y) then (y,x) else (0,0) with (2,5) in
+utest match F(3,"a") with F(x,y) then (y,x) else ("b",0) with ("a",3) in
+utest match F(3,"a") with f(x,y) then (y,x) else (0,0) with (0,0) in
 
 ()
