@@ -112,6 +112,8 @@ let digraphUnion = lam g1. lam g2.
   in foldl (lam g. lam tup. digraphMaybeAddEdge tup.0 tup.1 tup.2 g) g3 (digraphEdges g2)
 
 -- Strongly connected components of g.
+-- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
+-- https://doi.org/10.1137/0201010
 let digraphTarjan = lam g.
   let isNone = optionIsNone in
   let min = lam l. lam r. if lti l r then l else r in
