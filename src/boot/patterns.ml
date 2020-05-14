@@ -1,22 +1,6 @@
 open Utils
 open Ast
 open Ustring.Op
-(* and pat =
- * | PatNamed  of info * patName                     (\* Named, capturing wildcard *\)
- * | PatSeqTot of info * pat Mseq.t                  (\* Exact sequence patterns *\)
- * | PatSeqEdg of info * pat Mseq.t * patName * pat Mseq.t (\* Sequence edge patterns *\)
- * | PatTuple  of info * pat list                    (\* Tuple pattern *\)
- * | PatRecord of info * pat Record.t                (\* Record pattern *\)
- * | PatCon    of info * ustring * sym * pat         (\* Constructor pattern *\)
- * | PatInt    of info * int                         (\* Int pattern *\)
- * | PatChar   of info * int                         (\* Char pattern *\)
- * | PatBool   of info * bool                        (\* Boolean pattern *\)
- * | PatUnit   of info                               (\* Unit pattern *\)
- * | PatAnd    of info * pat * pat                   (\* And pattern *\)
- * | PatOr     of info * pat * pat                   (\* Or pattern *\)
- * | PatNot    of info * pat                         (\* Not pattern *\) *)
-
-(* NOTE: I'm pre-emptively dropping tuple and unit *)
 
 module UstringSet = Set.Make(Ustring)
 
@@ -42,11 +26,28 @@ type simple_con =
 | BoolCon of bool
 | ConCon of ustring
 
+(* TODO(vipa): Ord for simple_con and npat are not technically accurate
+ * since they're just comparing hashes, and may thus falsly say "equal".
+ * They may also falsly say "not equal" since ustring may look different
+ * structurally without having a distinct value, which I assume changes
+ * the hash. *)
+
 module SimpleConOrd = struct
   type t = simple_con
-  (* This is a bit hacky, but I'm going with it for the moment. I would really
-   * like a persistent hashmap in ocaml. *)
-  let compare a b = Int.compare (Hashtbl.hash a) (Hashtbl.hash b)
+  (* NOTE: I can't just use the polymorphic compare in the standard library
+   * since ustring has internal mutation that would be visible to it, but
+   * shouldn't affect the result *)
+  let compare a b = match a, b with
+    | IntCon a, IntCon b -> Int.compare a b
+    | CharCon a, CharCon b -> Int.compare a b
+    | BoolCon a, BoolCon b -> Bool.compare a b
+    | ConCon a, ConCon b -> Ustring.compare a b
+    | IntCon _, (CharCon _ | BoolCon _ | ConCon _) -> -1
+    | (CharCon _ | BoolCon _ | ConCon _), IntCon _  -> 1
+    | CharCon _, (BoolCon _ | ConCon _) -> -1
+    | (BoolCon _ | ConCon _), CharCon _  -> 1
+    | BoolCon _, ConCon _ -> -1
+    | ConCon _, BoolCon _ -> 1
 end
 module ConSet = Set.Make(SimpleConOrd)
 
@@ -78,7 +79,47 @@ let simple_con_of_simple_pat = function
 
 module NPatOrd = struct
   type t = npat
-  let compare a b = Int.compare (Hashtbl.hash a) (Hashtbl.hash b)
+  let rec compare_list a b = match a, b with
+    | [], [] -> 0
+    | x::xs, y::ys ->
+       let pat_res = compare x y in
+       if pat_res = 0 then compare_list xs ys else pat_res
+    | [], _::_ -> -1
+    | _::_, [] -> 1
+  and compare_simple a b = match a, b with
+    | SPatInt a, SPatInt b -> Int.compare a b
+    | SPatChar a, SPatChar b -> Int.compare a b
+    | SPatBool a, SPatBool b -> Bool.compare a b
+    | SPatCon (str1, p1), SPatCon (str2, p2) ->
+       let str_res = Ustring.compare str1 str2 in
+       if str_res = 0 then compare p1 p2 else str_res
+    | SPatInt _, (SPatChar _ | SPatBool _ | SPatCon _) -> -1
+    | (SPatChar _ | SPatBool _ | SPatCon _), SPatInt _  -> 1
+    | SPatChar _, (SPatBool _ | SPatCon _) -> -1
+    | (SPatBool _ | SPatCon _), SPatChar _ -> 1
+    | SPatBool _, SPatCon _ -> -1
+    | SPatCon _, SPatBool _ -> -1
+  and compare a b = match a, b with
+    | NSPat a, NSPat b -> compare_simple a b
+    | NPatRecord a, NPatRecord b -> Record.compare compare a b
+    | NPatSeqTot a, NPatSeqTot b -> compare_list a b
+    | NPatSeqEdg (pre1, post1), NPatSeqEdg (pre2, post2) ->
+       let pre_res = compare_list pre1 pre2 in
+       if pre_res = 0 then compare_list post1 post2 else pre_res
+    | NPatNot (seqs1, recs1, cons1), NPatNot (seqs2, recs2, cons2) ->
+       let seq_res = Option.compare ~cmp:IntSet.compare seqs1 seqs2 in
+       if seq_res <> 0 then seq_res else
+       let rec_res = Option.compare ~cmp:UstringSet.compare recs1 recs2 in
+       if rec_res <> 0 then rec_res else
+       ConSet.compare cons1 cons2
+    | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) -> -1
+    | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _), NSPat _ -> 1
+    | NPatRecord _, (NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) -> -1
+    | (NPatSeqTot _ | NPatSeqEdg _ | NPatNot _), NPatRecord _ -> 1
+    | NPatSeqTot _, (NPatSeqEdg _ | NPatNot _) -> -1
+    | (NPatSeqEdg _ | NPatNot _), NPatSeqTot _ -> 1
+    | NPatSeqEdg _, NPatNot _ -> -1
+    | NPatNot _, NPatSeqEdg _ -> -1
 end
 module NPatSet = Set.Make(NPatOrd)
 

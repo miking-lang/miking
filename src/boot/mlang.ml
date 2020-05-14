@@ -171,21 +171,6 @@ let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * t
 let flatten (Program(includes, tops, e)): program =
   Program(includes, accum_map flatten_lang Record.empty tops |> snd, e)
 
-(*
-TODO
-- flatten needs to remember more info about previous languages, namely for
-  each Inter we need the DAG and normpats and stuff.
-- when we initially look at a language we construct such DAGs and error if
-  language internal patterns conflict in some way.
-- we then merge in old languages into the new one, building ever bigger DAGs
-  (and reporting concflicts). This means that when merging we only need to
-  consider the cartesian product between the two fragments, not intralanguage
-  pairs.
-- we then store the DAG(s) for use in later languages, and produce a topological
-  sort of the patterns found thus far. This topological sort is what's placed
-  in the flattened TopLang, thus translation can use that order directly.
- *)
-
 (***************
  * Translation *
  ***************)
