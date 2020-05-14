@@ -188,7 +188,7 @@ rule main = parse
   | '\'' (utf8 as c) '\''
       { let s = Ustring.from_utf8 c in
         Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
-  | '#' (("con" | "type" | "var") as ident) '"'
+  | '#' (("ident") as ident) '"'
        { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let esc_s = Ustring.convert_escaped_chars s in
