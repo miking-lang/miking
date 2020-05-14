@@ -608,7 +608,7 @@ utest eval {env = []} appFst with TmConst {val = CBool {val = true}} in
 let unit = TmConst {val = CUnit ()} in
 
 let dataDecl = TmConDef {ident = "Foo",
-                         tpe = None,
+                         tpe = None(),
                          inexpr = TmMatch {target = TmApp {lhs = TmVar {ident = "Foo"},
                                                            rhs = TmTuple {tms = [unit, unit]}},
                                            pat = PCon {ident = "Foo",

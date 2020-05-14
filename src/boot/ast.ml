@@ -146,7 +146,7 @@ and tm =
 | TmRecord  of info * tm Record.t                                   (* Record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
 | TmCondef  of info * ustring * sym * ty * tm                       (* Constructor definition *)
-| TmConsym  of info * ustring * sym * tm option                     (* Constructor symbol *)
+| TmConapp  of info * ustring * sym * tm                            (* Constructor application *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
@@ -201,6 +201,12 @@ and vartype =
 | VarTm    of ustring
 
 
+(* Kind of indentifier *)
+and identkind =
+| IdentVar   (* A variable identifier *)
+| IdentCon   (* A constructor identifier *)
+| IdentAny   (* Any of the above *)
+
 let tmUnit = TmRecord(NoInfo,Record.empty)
 
 (* Value -1 means that there is no symbol yet assigned *)
@@ -223,7 +229,7 @@ let rec map_tm f = function
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
-  | TmConsym(fi,k,s,ot) -> f (TmConsym(fi,k,s,Option.map (map_tm f) ot))
+  | TmConapp(fi,k,s,t) -> f (TmConapp(fi,k,s,t))
   | TmMatch(fi,t1,p,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
@@ -245,7 +251,7 @@ let tm_info = function
   | TmRecord(fi,_) -> fi
   | TmRecordUpdate(fi,_,_,_) -> fi
   | TmCondef(fi,_,_,_,_) -> fi
-  | TmConsym(fi,_,_,_) -> fi
+  | TmConapp(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi
   | TmUtest(fi,_,_,_) -> fi

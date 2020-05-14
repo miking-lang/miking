@@ -265,7 +265,7 @@ let many1 = lam p.
 
 -- optional : Parser a -> Parser (Option a)
 let optional = lam p.
-  alt (fmap Some p) (pure None)
+  alt (fmap (lam x. Some x) p) (pure (None()))
 
 -- wrapped_in : Parser l -> Parser r -> Parser a -> Parser a
 --

@@ -257,7 +257,7 @@ and print_tm fmt (prec, t) =
     | TmVar _    | TmRecLets _
     | TmConst _  | TmRecord _
     | TmRecordUpdate _
-    | TmCondef _ | TmConsym _
+    | TmCondef _ | TmConapp _
     | TmUse _    | TmUtest _
     | TmClos _   | TmFix _
     | TmNever _                        -> Atom
@@ -352,12 +352,9 @@ and print_tm' fmt t = match t with
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
       str ty print_tm (Match, t)
 
-  | TmConsym(_,x,sym,tmop) ->
+  | TmConapp(_,x,sym,t) ->
     let str = string_of_ustring (ustring_of_var x sym) in
-    (match tmop with
-     (* TODO Atom precedence too conservative? *)
-     | Some(t) -> fprintf fmt "%s %a" str print_tm (Atom ,t)
-     | None -> fprintf fmt "%s" str)
+     fprintf fmt "%s %a" str print_tm (Atom ,t)
 
   (* If expressions *)
   | TmMatch(_,t1,PatBool(_,true),t2,t3) ->
