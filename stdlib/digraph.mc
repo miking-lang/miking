@@ -119,8 +119,8 @@ let digraphTarjan = lam g.
   let min = lam l. lam r. if lti l r then l else r in
   let maybeFind = mapFind g.eqv in
   let find = lam v. lam m. optionMapOrElse (maybeFind v m)
-                                       (lam _. error "undefined")
-                                       identity
+                                           (lam _. error "undefined")
+                                           identity
   in
   let add = mapAdd g.eqv in
   let mem = setMem g.eqv in
@@ -167,7 +167,7 @@ let digraphTarjan = lam g.
   in
 
   let s = foldl (lam s. lam v. if isNone (maybeFind v s.number)
-                           then strongConnect s v else s)
+                               then strongConnect s v else s)
                 {i = 0, number = [], lowlink = [], stack = [], comps = []}
                 (digraphVertices g)
   in s.comps
