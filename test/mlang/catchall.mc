@@ -5,7 +5,7 @@ lang Nat
 
   sem is_zero =
   | Z _ -> true
-  | n -> false
+  | S _ -> false
 
   sem pred =
   | Z _ -> Z ()
@@ -19,10 +19,10 @@ end
 mexpr
 
 use Nat in
-let Z = Z () in
-utest is_zero Z with true in
-utest is_zero (S Z) with false in
-utest pred Z with Z in
-utest pred (S Z) with Z in
-utest plus (S (S Z)) (S Z) with S (S (S Z)) in
+let z = Z () in
+utest is_zero z with true in
+utest is_zero (S z) with false in
+utest pred z with z in
+utest pred (S z) with z in
+utest plus (S (S z)) (S z) with S (S (S z)) in
 ()

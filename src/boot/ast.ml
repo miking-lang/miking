@@ -196,16 +196,14 @@ and ty =
 | TyRecord of (ustring * ty) list                 (* Record type *)
 | TyCon    of ustring                             (* Type constructor *)
 
-(* Variable type *)
-and vartype =
-| VarTm    of ustring
 
+(* Kind of identifier *)
+and ident =
+| IdVar   of sid    (* A variable identifier *)
+| IdCon   of sid    (* A constructor identifier *)
+| IdType  of sid    (* A type identifier *)
+| IdLabel of sid    (* A label identifier *)
 
-(* Kind of indentifier *)
-and identkind =
-| IdentVar   (* A variable identifier *)
-| IdentCon   (* A constructor identifier *)
-| IdentAny   (* Any of the above *)
 
 let tmUnit = TmRecord(NoInfo,Record.empty)
 

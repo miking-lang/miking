@@ -22,7 +22,7 @@ let fresh : String -> Env -> String = lam var. lam env.
   else
     recursive let find_free = lam n.
       let new = concat var (int2string n) in
-      match lookup new env with None then
+      match lookup new env with None () then
         new
       else
         find_free (addi n 1)
