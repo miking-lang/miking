@@ -68,36 +68,36 @@ let matrixMul = matrixMul addi muli in
 
 utest matrixConst (2,3) 0 with [[0,0,0],[0,0,0]] in
 
-let A = [[1,3],[2,4]] in
+let matA = [[1,3],[2,4]] in
 
-utest matrixIsMatrix A with true in
+utest matrixIsMatrix matA with true in
 utest matrixIsMatrix [] with false in
 utest matrixIsMatrix [[]] with false in
 utest matrixIsMatrix [[1, 2], [1]] with false in
 
-utest matrixGet A 0 0 with 1 in
-utest matrixGet A 1 0 with 2 in
-utest matrixGet A 0 1 with 3 in
-utest matrixGet A 1 1 with 4 in
+utest matrixGet matA 0 0 with 1 in
+utest matrixGet matA 1 0 with 2 in
+utest matrixGet matA 0 1 with 3 in
+utest matrixGet matA 1 1 with 4 in
 
-let C = matrixConst (2,2) 0 in
-let B = matrixSet C 0 0 1 in
-let B = matrixSet B 1 0 2 in
-let B = matrixSet B 0 1 3 in
-let B = matrixSet B 1 1 4 in
+let matC = matrixConst (2,2) 0 in
+let matB = matrixSet matC 0 0 1 in
+let matB = matrixSet matB 1 0 2 in
+let matB = matrixSet matB 0 1 3 in
+let matB = matrixSet matB 1 1 4 in
 
-utest B with A in
-utest matrixAdd A B with [[2,6],[4,8]] in
+utest matB with matA in
+utest matrixAdd matA matB with [[2,6],[4,8]] in
 
 utest matrixMapij (lam i. lam j. lam _. (i, j)) (matrixConst (2,2) (0,0))
 with [[(0,0),(0,1)],[(1,0),(1,1)]] in
 
-utest matrixSMul 3 A with [[3,9],[6,12]] in
+utest matrixSMul 3 matA with [[3,9],[6,12]] in
 
-utest matrixSize A with (2,2) in
+utest matrixSize matA with (2,2) in
 
-utest matrixTr (matrixTr A) with A in
-utest matrixTr A with [[1,2], [3,4]] in
+utest matrixTr (matrixTr matA) with matA in
+utest matrixTr matA with [[1,2], [3,4]] in
 utest matrixTr [[1,2,3], [4,5,6]] with [[1,4], [2,5], [3,6]] in
 
 utest matrixMul [[1]] [[1]] with [[1]] in

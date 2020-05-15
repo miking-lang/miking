@@ -214,7 +214,7 @@ cases:
   |
     { [] }
 case:
-  | BAR con_ident ARROW mexpr
+  | BAR var_ident ARROW mexpr
     { let fi = mkinfo $1.i $3.i in
       (VarPattern (fi, $2.v), $4) }
   | BAR con_ident binder ARROW mexpr

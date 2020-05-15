@@ -200,42 +200,33 @@ let resolve_id {normals; _} ident =
   | Some(ident') -> ident'
   | None -> empty_mangle ident
 
-(* TODO(vipa): this function is here since the current implementation has variables and constructors in the same namespace, it should be replaced by correct uses of resolve_id and resolve_con
-   I am not sure what this is doing now, and if we can remove it. *)
-let resolve_id_or_con {constructors; normals} ident =
-  match USMap.find_opt ident normals with
-  | Some ident' -> ident'
-  | None ->
-     (match USMap.find_opt ident constructors with
-      | Some ident' -> ident'
-      | None -> empty_mangle ident)
+let delete_id ({normals; _} as env) ident =
+  {env with normals = USMap.remove ident normals}
 
-(* TODO(vipa): see resolve_id_or_con *)
-let delete_id_and_con {constructors; normals} ident =
-  { constructors = USMap.remove ident constructors
-  ; normals = USMap.remove ident normals }
+let delete_con ({constructors; _} as env) ident =
+  {env with constructors = USMap.remove ident constructors}
 
 let rec desugar_tm nss env =
   let map_right f (a, b) = (a, f b)
   in function
   (* Referencing things *)
-  | TmVar(fi, name, i) -> TmVar(fi, resolve_id_or_con env name, i)
+  | TmVar(fi, name, i) -> TmVar(fi, resolve_id env name, i)
   (* Introducing things *)
   | TmLam(fi, name, s, ty, body) ->
-     TmLam(fi, empty_mangle name, s, ty, desugar_tm nss (delete_id_and_con env name) body)
+     TmLam(fi, empty_mangle name, s, ty, desugar_tm nss (delete_id env name) body)
   | TmLet(fi, name, s,  e, body) ->
-     TmLet(fi, empty_mangle name, s, desugar_tm nss env e, desugar_tm nss (delete_id_and_con env name) body)
+     TmLet(fi, empty_mangle name, s, desugar_tm nss env e, desugar_tm nss (delete_id env name) body)
   | TmRecLets(fi, bindings, body) ->
-     let env' = List.fold_left (fun env' (_, name,_, _) -> delete_id_and_con env' name) env bindings
+     let env' = List.fold_left (fun env' (_, name,_, _) -> delete_id env' name) env bindings
      in TmRecLets(fi, List.map (fun (fi, name, s, e) -> (fi, empty_mangle name, s, desugar_tm nss env' e)) bindings, desugar_tm nss env' body)
   | TmCondef(fi, name, s, ty, body) ->
-     TmCondef(fi, empty_mangle name, s, ty, desugar_tm nss (delete_id_and_con env name) body)
-  | TmConapp(fi,x,s,t) -> TmConapp(fi,x,s,desugar_tm nss env t)
+     TmCondef(fi, empty_mangle name, s, ty, desugar_tm nss (delete_con env name) body)
+  | TmConapp(fi,x,s,t) -> TmConapp(fi,resolve_con env x,s,desugar_tm nss env t)
   | (TmClos _) as tm -> tm
   (* Both introducing and referencing *)
   | TmMatch(fi, target, pat, thn, els) ->
     let desugar_pname env = function
-      | NameStr(n,s) -> (delete_id_and_con env n, NameStr(empty_mangle n,s))
+      | NameStr(n,s) -> (delete_id env n, NameStr(empty_mangle n,s))
       | NameWildcard -> (env, NameWildcard) in
     let rec desugar_pat_seq env pats =
       Mseq.fold_right
@@ -335,7 +326,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       empty_mangle id, nosym, desugar_tm nss emptyMlangEnv tm)) lets, tm')
      in (nss, (wrap :: stack))
   | TopCon(Con(fi, id, ty)) ->
-     let wrap tm' = TmCondef(fi, id, nosym, ty, tm')
+     let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
      in (nss, (wrap :: stack))
 
 let desugar_post_flatten (Program(_, tops, t)) =
