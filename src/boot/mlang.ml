@@ -65,7 +65,7 @@ type lang_data = {
     syns: (info * cdecl list) Record.t;
   }
 
-let compute_order fi ((fi1, {pos_pat = p1; neg_pat = n1; _}), (fi2, {pos_pat = p2; neg_pat = n2; _})) =
+let compute_order fi ((fi1, {pat = pat1; pos_pat = p1; neg_pat = n1; _}), (fi2, {pat = pat2; pos_pat = p2; neg_pat = n2; _})) =
   let string_of_pat pat = ustring_of_pat pat |> Ustring.to_utf8 in
   let info2str fi = info2str fi |> Ustring.to_utf8 in
   match order_query (p1, n1) (p2, n2) with
@@ -74,10 +74,13 @@ let compute_order fi ((fi1, {pos_pat = p1; neg_pat = n1; _}), (fi2, {pos_pat = p
   | Equal -> raise_error fi ("Patterns at " ^ info2str fi1 ^ " and " ^ info2str fi2 ^ " cannot be ordered by specificity; they match exactly the same values.")
   | Disjoint -> []
   | Overlapping(only1, both, only2) ->
-     "Patterns at " ^ info2str fi1 ^ " and " ^ info2str fi2 ^ " cannot be ordered by specificity (neither is more specific than the other), but the order matters; they overlap. Example:" ^
-       "\nOnly in the first: " ^ string_of_pat only1 ^
-       "\nIn both: " ^ string_of_pat both ^
-       "\nOnly in the other: " ^ string_of_pat only2
+     "Two patterns in this semantic function cannot be ordered by specificity (neither is more specific than the other), but the order matters; they overlap." ^
+       "\n  " ^ info2str fi1 ^ ": " ^ string_of_pat pat1 ^
+       "\n  " ^ info2str fi2 ^ ": " ^ string_of_pat pat2 ^
+       "\n Example:" ^
+       "\n  Only in the first: " ^ string_of_pat only1 ^
+       "\n  In both: " ^ string_of_pat both ^
+       "\n  Only in the other: " ^ string_of_pat only2
      |> raise_error fi
 
 (* Check that a single language fragment is self-consistent; it has compatible patterns,

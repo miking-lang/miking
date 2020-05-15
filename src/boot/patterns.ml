@@ -51,6 +51,8 @@ module SimpleConOrd = struct
 end
 module ConSet = Set.Make(SimpleConOrd)
 
+type allow = Allow | Disallow
+
 type simple_pat =
 | SPatInt of int
 | SPatChar of int
@@ -58,18 +60,18 @@ type simple_pat =
 | SPatCon of ustring * npat
 and npat =
 | NSPat of simple_pat
-| NPatRecord of npat Record.t
+| NPatRecord of npat Record.t * UstringSet.t (* The set is disallowed labels *)
 | NPatSeqTot of npat list
 | NPatSeqEdg of npat list * npat list
 | NPatNot
   of IntSet.t option (* Some lengths -> the disallowed sequence lengths, None -> no sequences allowed *)
-     * UstringSet.t option (* Some labels -> the disallowed labels, None -> no records allowed *)
+     * allow (* Whether records are allowed *)
      * ConSet.t (* The disallowed simple constructors *)
-let wildpat = NPatNot (Some IntSet.empty, Some UstringSet.empty, ConSet.empty)
-let notpat_simple c = NPatNot (Some IntSet.empty, Some UstringSet.empty, ConSet.singleton c)
-let notpat_label label = NPatNot (Some IntSet.empty, Some (UstringSet.singleton label), ConSet.empty)
-let notpat_seq_len n = NPatNot (Some (IntSet.singleton n), Some UstringSet.empty, ConSet.empty)
-let notpat_seq = NPatNot (None, Some UstringSet.empty, ConSet.empty)
+let wildpat = NPatNot (Some IntSet.empty, Allow, ConSet.empty)
+let notpat_simple c = NPatNot (Some IntSet.empty, Allow, ConSet.singleton c)
+let notpat_rec = NPatNot (Some IntSet.empty, Disallow, ConSet.empty)
+let notpat_seq_len n = NPatNot (Some (IntSet.singleton n), Allow, ConSet.empty)
+let notpat_seq = NPatNot (None, Allow, ConSet.empty)
 
 let simple_con_of_simple_pat = function
   | SPatInt i -> IntCon i
@@ -101,7 +103,9 @@ module NPatOrd = struct
     | SPatCon _, SPatBool _ -> -1
   and compare a b = match a, b with
     | NSPat a, NSPat b -> compare_simple a b
-    | NPatRecord a, NPatRecord b -> Record.compare compare a b
+    | NPatRecord (a1, d1), NPatRecord (a2, d2) ->
+       let rec_res = Record.compare compare a1 a2 in
+       if rec_res = 0 then UstringSet.compare d1 d2 else rec_res
     | NPatSeqTot a, NPatSeqTot b -> compare_list a b
     | NPatSeqEdg (pre1, post1), NPatSeqEdg (pre2, post2) ->
        let pre_res = compare_list pre1 pre2 in
@@ -109,9 +113,10 @@ module NPatOrd = struct
     | NPatNot (seqs1, recs1, cons1), NPatNot (seqs2, recs2, cons2) ->
        let seq_res = Option.compare ~cmp:IntSet.compare seqs1 seqs2 in
        if seq_res <> 0 then seq_res else
-       let rec_res = Option.compare ~cmp:UstringSet.compare recs1 recs2 in
-       if rec_res <> 0 then rec_res else
-       ConSet.compare cons1 cons2
+       (match recs1, recs2 with
+        | Allow, Disallow -> -1
+        | Disallow, Allow -> 1
+        | _ -> ConSet.compare cons1 cons2)
     | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) -> -1
     | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _), NSPat _ -> 1
     | NPatRecord _, (NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) -> -1
@@ -180,7 +185,11 @@ and npat_complement: npat -> normpat = function
      npat_complement p
      |> NPatSet.map (fun p -> NSPat (SPatCon (c, p)))
      |> NPatSet.add (notpat_simple (ConCon c))
-  | NPatRecord pats ->
+  | NPatRecord (pats, neg_labels) ->
+     let with_forbidden_labels =
+       UstringSet.elements neg_labels
+       |> List.map (fun label -> NPatRecord (Record.add label wildpat pats, UstringSet.empty))
+       |> NPatSet.of_list in
      let (labels, pats) =
        Record.bindings pats
        |> List.split in
@@ -190,13 +199,14 @@ and npat_complement: npat -> normpat = function
            List.combine labels pats
            |> List.to_seq
            |> Record.of_seq
-           |> fun x -> NPatRecord x)
+           |> fun x -> NPatRecord (x, UstringSet.empty))
          pats in
      let missing_labels =
        labels
-       |> List.map (fun label -> notpat_label label)
+       |> List.map (fun label -> NPatRecord (Record.empty, UstringSet.singleton label))
        |> NPatSet.of_list
      in NPatSet.union complemented_product missing_labels
+        |> NPatSet.union with_forbidden_labels
   | NPatSeqTot pats ->
      list_complement (fun pats -> NPatSeqTot pats) pats
      |> NPatSet.add (notpat_seq_len <| List.length pats)
@@ -220,11 +230,8 @@ and npat_complement: npat -> normpat = function
           |> List.map (fun n -> NPatSeqTot (repeat n wildpat))
           |> NPatSet.of_list in
      let recs = match labels with
-       | None -> NPatRecord Record.empty |> NPatSet.singleton
-       | Some labels ->
-          UstringSet.elements labels
-          |> List.map (fun label -> NPatRecord (Record.singleton label wildpat))
-          |> NPatSet.of_list in
+       | Disallow -> NPatRecord (Record.empty, UstringSet.empty) |> NPatSet.singleton
+       | Allow -> NPatSet.empty in
      let cons =
        ConSet.elements cons
        |> List.map
@@ -243,22 +250,19 @@ and npat_intersect (a: npat) (b: npat): normpat = match a, b with
        | None, _ | _, None -> None
        | Some a, Some b -> Some (IntSet.union a b) in
      let recs = match recs1, recs2 with
-       | None, _ | _, None -> None
-       | Some a, Some b -> Some (UstringSet.union a b) in
+       | Disallow, _ | _, Disallow -> Disallow
+       | Allow, Allow -> Allow in
      let cons = ConSet.union cons1 cons2
      in NPatSet.singleton (NPatNot (seqs, recs, cons))
   | NPatNot (_, _, cons), (NSPat sp as pat) | (NSPat sp as pat), NPatNot (_, _, cons) ->
      if ConSet.mem (simple_con_of_simple_pat sp) cons
      then NPatSet.empty
      else NPatSet.singleton pat
-  | NPatNot (_, recs, _), (NPatRecord r as pat) | (NPatRecord r as pat), NPatNot (_, recs, _) ->
+  | NPatNot (_, recs, _), (NPatRecord _ as pat)
+    | (NPatRecord _ as pat), NPatNot (_, recs, _) ->
      (match recs with
-      | None -> NPatSet.empty
-      | Some labels ->
-         let has_forbidden_label =
-           Record.bindings r
-           |> List.exists (fun (label, _) -> UstringSet.mem label labels)
-         in if has_forbidden_label then NPatSet.empty else NPatSet.singleton pat)
+      | Disallow -> NPatSet.empty
+      | Allow -> NPatSet.singleton pat)
   | NPatNot (None, _, _), (NPatSeqTot _ | NPatSeqEdg _)
     | (NPatSeqTot _ | NPatSeqEdg _), NPatNot (None, _, _) ->
      NPatSet.empty
@@ -287,16 +291,21 @@ and npat_intersect (a: npat) (b: npat): normpat = match a, b with
       | _ -> NPatSet.empty)
   | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _)
     | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _), NSPat _ -> NPatSet.empty
-  | NPatRecord r1, NPatRecord r2 ->
-     let merge_f _ a b = match a, b with
-       | None, None -> None
-       | Some a, Some b -> Some (npat_intersect a b |> NPatSet.elements)
-       | Some a, _ | _, Some a -> Some [a] in
-     Record.merge merge_f r1 r2
-     |> Record.bindings
-     |> traverse (fun (k, vs) -> List.map (fun v -> (k, v)) vs)
-     |> List.map (fun bindings -> NPatRecord (List.to_seq bindings |> Record.of_seq))
-     |> NPatSet.of_list
+  | NPatRecord (r1, neg1), NPatRecord (r2, neg2) ->
+     if Record.exists (fun label _ -> UstringSet.mem label neg2) r1
+      || Record.exists (fun label _ -> UstringSet.mem label neg1) r2
+     then NPatSet.empty
+     else
+       let neg = UstringSet.union neg1 neg2 in
+       let merge_f _ a b = match a, b with
+         | None, None -> None
+         | Some a, Some b -> Some (npat_intersect a b |> NPatSet.elements)
+         | Some a, _ | _, Some a -> Some [a] in
+       Record.merge merge_f r1 r2
+       |> Record.bindings
+       |> traverse (fun (k, vs) -> List.map (fun v -> (k, v)) vs)
+       |> List.map (fun bindings -> NPatRecord (List.to_seq bindings |> Record.of_seq, neg))
+       |> NPatSet.of_list
   | NPatRecord _, (NPatSeqTot _ | NPatSeqEdg _)
     | (NPatSeqTot _ | NPatSeqEdg _), NPatRecord _ -> NPatSet.empty
   | NPatSeqTot pats1, NPatSeqTot pats2 ->
@@ -361,7 +370,7 @@ let rec pat_to_normpat = function
             pat_to_normpat p
             |> NPatSet.elements
             |> List.map (fun p -> (k, p)))
-     |> List.map (fun bindings -> NPatRecord (List.to_seq bindings |> Record.of_seq))
+     |> List.map (fun bindings -> NPatRecord (List.to_seq bindings |> Record.of_seq, UstringSet.empty))
      |> NPatSet.of_list
   | PatCon(_, c, _, p) ->
      pat_to_normpat p
@@ -380,7 +389,15 @@ let pat_example normpat =
     | NSPat (SPatChar c) -> PatChar(NoInfo, c)
     | NSPat (SPatBool b) -> PatBool(NoInfo, b)
     | NSPat (SPatCon (str, np)) -> PatCon(NoInfo, str, nosym, npat_to_pat np)
-    | NPatRecord r -> PatRecord(NoInfo, Record.map npat_to_pat r)
+    | NPatRecord (r, neg) ->
+       let pos = PatRecord(NoInfo, Record.map npat_to_pat r) in
+       UstringSet.elements neg
+       |> List.map (fun label -> PatRecord(NoInfo, Record.singleton label wildpat))
+       |> (function
+           | [] -> pos
+           | x::xs ->
+              let neg = PatNot(NoInfo, List.fold_left (fun a b -> PatOr(NoInfo, a, b)) x xs) in
+              if Record.is_empty r then neg else PatAnd(NoInfo, pos, neg))
     | NPatSeqTot nps -> PatSeqTot(NoInfo, List.map npat_to_pat nps |> Mseq.of_list)
     | NPatSeqEdg (pre, post) ->
        PatSeqEdg(NoInfo,
@@ -394,10 +411,8 @@ let pat_example normpat =
             IntSet.elements lens
             |> List.map (fun len -> PatSeqTot(NoInfo, repeat len wildpat |> Mseq.of_list)) in
        let recs = match recs with
-         | None -> [PatRecord(NoInfo, Record.empty)]
-         | Some labels ->
-            UstringSet.elements labels
-            |> List.map (fun label -> PatRecord(NoInfo, Record.singleton label wildpat)) in
+         | Disallow -> [PatRecord(NoInfo, Record.empty)]
+         | Allow -> [] in
        let cons =
          ConSet.elements cons
          |> List.map (function

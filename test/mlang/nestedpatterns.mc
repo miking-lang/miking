@@ -1,18 +1,21 @@
+-- The commented out fragments are part of things that should produce error messages,
+-- but we don't have a way to assert breakage yet
+
 -- lang SameBroken
 --   sem foo =
 --   | (true, _) -> true
 --   | (_, true) -> false
 -- end
 
--- lang BrokenA
---   sem foo =
---   | (true, _) -> true
--- end
--- lang BrokenB
---   sem foo =
---   | (_, true) -> false
--- end
--- lang CombinedBroken = BrokenA + BrokenB
+lang OkA
+  sem foo =
+  | (true, _) -> true
+end
+lang OkB
+  sem foo =
+  | (_, true) -> false
+end
+-- lang CombinedBroken = OkA + OkB
 
 lang CatchAll
   sem foo =
@@ -40,6 +43,35 @@ lang OrderIndependentB
   | (true, true) -> "spec"
 end
 
+-- lang SemanticsOverSyntax
+--   sem foo =
+--   | {red = true} & {blue = true} -> true
+--   | {red = true, blue = true} -> false
+-- end
+
+-- We probably want these sorts of patterns to give a warning or something, at least later
+lang EmptyPatterns
+  sem foo =
+  | !_ -> true
+end
+lang EmptyPatterns
+  sem foo =
+  | true & false -> false
+end
+
+-- lang RecordsWithNegationAmbiguous
+--   sem foo =
+--   | {red = _} -> 1
+--   | !{blue = _} -> 2
+--   | !{blue = true} -> 3
+-- end
+lang RecordsWithNegation
+  sem foo =
+  | !{blue = _} -> 2
+  | !{blue = true} -> 3
+  | {blue = true} -> 4
+end
+
 mexpr
 
 utest use CatchAll in foo (true, true) with "catchall" in
@@ -54,4 +86,9 @@ utest use OrderIndependentA in foo (true, true) with use OrderIndependentB in fo
 utest use OrderIndependentA in foo (false, false) with use OrderIndependentB in foo (false, false) in
 utest use OrderIndependentA in foo (true, false) with use OrderIndependentB in foo (true, false) in
 utest use OrderIndependentA in foo (false, true) with use OrderIndependentB in foo (false, true) in
+
+utest use RecordsWithNegation in foo {blue = true} with 4 in
+utest use RecordsWithNegation in foo {red = true} with 2 in
+utest use RecordsWithNegation in foo {blue = false} with 3 in
+
 ()
