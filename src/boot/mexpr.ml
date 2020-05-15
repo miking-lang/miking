@@ -464,44 +464,44 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
     match List.assoc_opt x patEnv with
     | Some s -> (patEnv, s)
     | None -> let s = gensym() in ((x,s)::patEnv, s) in
-  let rec s_pat_sequence env patEnv pats =
+  let rec s_pat_sequence patEnv pats =
     Mseq.fold_right
-      (fun p (patEnv, ps) -> let (patEnv, p) = sPat env patEnv p in (patEnv, Mseq.cons p ps))
+      (fun p (patEnv, ps) -> let (patEnv, p) = sPat patEnv p in (patEnv, Mseq.cons p ps))
       pats
       (patEnv, Mseq.empty)
-  and sPat (env : (ident *int) list) (patEnv : (ident * int) list) = function
+  and sPat (patEnv : (ident * int) list) = function
     | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name (IdVar(sid_of_ustring x)) patEnv
                                    in (patEnv, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (patEnv, pat)
     | PatSeqTot(fi, pats) ->
-       let (patEnv, pats) = s_pat_sequence env patEnv pats
+       let (patEnv, pats) = s_pat_sequence patEnv pats
        in (patEnv, PatSeqTot(fi, pats))
     | PatSeqEdg(fi, l, x, r) ->
-       let (patEnv, l) = s_pat_sequence env patEnv l in
+       let (patEnv, l) = s_pat_sequence patEnv l in
        let (patEnv, x) = match x with
          | NameWildcard -> (patEnv, NameWildcard)
          | NameStr(x, _) -> let s = gensym() in ((IdVar(sid_of_ustring x),s)::patEnv, NameStr(x, s)) in
-       let (patEnv, r) = s_pat_sequence env patEnv r
+       let (patEnv, r) = s_pat_sequence patEnv r
        in (patEnv, PatSeqEdg(fi, l, x, r))
     | PatRecord(fi, pats) ->
        let patEnv = ref patEnv in
-       let pats = Record.map (fun p -> let (patEnv', p) = sPat env !patEnv p in patEnv := patEnv'; p) pats
+       let pats = Record.map (fun p -> let (patEnv', p) = sPat !patEnv p in patEnv := patEnv'; p) pats
        in (!patEnv, PatRecord(fi, pats))
     | PatCon(fi,x,_,p) ->
        let s = findsym fi (IdCon(sid_of_ustring x)) env in
-       let (patEnv, p) = sPat env patEnv p
+       let (patEnv, p) = sPat patEnv p
        in (patEnv,PatCon(fi,x,s,p))
     | PatInt _ as p -> (patEnv,p)
     | PatChar _ as p -> (patEnv,p)
     | PatBool _ as p -> (patEnv,p)
     | PatUnit _ as p -> (patEnv,p)
     | PatAnd(fi, l, r) ->
-       let (patEnv, l) = sPat env patEnv l in
-       let (patEnv, r) = sPat env patEnv r
+       let (patEnv, l) = sPat patEnv l in
+       let (patEnv, r) = sPat patEnv r
        in (patEnv, PatAnd(fi, l, r))
     | PatOr(fi, l, r) ->
-       let (patEnv, l) = sPat env patEnv l in
-       let (patEnv, r) = sPat env patEnv r
+       let (patEnv, l) = sPat patEnv l in
+       let (patEnv, r) = sPat patEnv r
        in (patEnv, PatOr(fi, l, r))
     | PatNot _ as p -> (patEnv, p) (* NOTE(vipa): names in a not-pattern do not matter since they will never bind (it should be an error to bind a name inside a not-pattern, but we're not doing that kind of static checks yet *)
   in
@@ -523,7 +523,7 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
   | TmConapp(fi,x,_,t) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,symbolize env t)
   | TmMatch(fi,t1,p,t2,t3) ->
-     let (matchedEnv, p) = sPat env [] p in
+     let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
   | TmUtest(fi,t1,t2,tnext)
