@@ -21,20 +21,20 @@ let setEqual = lam eq. lam seq1. lam seq2.
 let setDiff = lam eq. lam seq1. lam seq2.
   filter (lam x1. not (setMem eq x1 seq2)) seq1
 
--- Adds element x to seq if x not already in seq, where equality is defined by
--- eq.
-let setAdd = lam eq. lam x. lam seq.
+-- Inserts element x into seq if x not already in seq,
+-- where equality is defined by eq.
+let setInsert = lam eq. lam x. lam seq.
   if setMem eq x seq then seq else snoc seq x
 
 -- The union of seq1 and seq2, where equality is defined by eq.
 let setUnion = lam eq. lam seq1. lam seq2.
-  foldr (setAdd eq) seq1 seq2
+  foldr (setInsert eq) seq1 seq2
 
 mexpr
 
 let equal = setEqual eqi in
 let diff = setDiff eqi in
-let add = setAdd eqi in
+let add = setInsert eqi in
 let union = setUnion eqi in
 let mem = setMem eqi in
 

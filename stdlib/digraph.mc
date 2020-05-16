@@ -24,22 +24,6 @@ type Digraph = { adj : [(a,[(a,b)])],
                  eqv : a -> a -> Bool,
                  eql : b -> b -> Bool }
 
--- Map functions
-let mapLookup = lam key. lam eq. lam m.
-                match findAssoc (eq key) m with Some e
-                then e
-                else error "Element not found"
-
-recursive
-let mapUpdate = lam key. lam f. lam eq. lam m.
-                let k = (head m).0 in
-                let v = (head m).1 in
-                if eq key k then
-                  cons (k, f v) (tail m)
-                else
-                  cons (head m) (mapUpdate key f eq (tail m))
-end
-
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let digraphEmpty = lam eqv. lam eql. {adj = [], eqv = eqv, eql = eql}
 
@@ -56,7 +40,7 @@ let digraphEdges = lam g.
        g.adj)
 
 let digraphEdgesFrom = lam v. lam g.
-                       map (lam tup. (v, tup.0, tup.1)) (mapLookup v g.eqv g.adj)
+                       map (lam tup. (v, tup.0, tup.1)) (mapLookup g.eqv v g.adj)
 
 let digraphLabels = lam v1. lam v2. lam g.
     let from_v1_to_v2 = filter (lam tup. g.eqv tup.1 v2) (digraphEdgesFrom v1 g) in
@@ -98,7 +82,7 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else if any (g.eql l) (digraphLabels v1 v2 g) then
     if check then error "label already exists" else g
   else
-    {g with adj = mapUpdate v1 (cons (v2, l)) g.eqv g.adj}
+    {g with adj = mapUpdate g.eqv v1 (cons (v2, l)) g.adj}
 
 let digraphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdgeCheckLabel v1 v2 l g true
@@ -115,38 +99,34 @@ let digraphUnion = lam g1. lam g2.
 -- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
 -- https://doi.org/10.1137/0201010
 let digraphTarjan = lam g.
-  let isNone = optionIsNone in
   let min = lam l. lam r. if lti l r then l else r in
-  let maybeFind = mapFind g.eqv in
-  let find = lam v. lam m. optionMapOrElse (maybeFind v m)
-                                           (lam _. error "undefined")
-                                           identity
-  in
-  let add = mapAdd g.eqv in
-  let mem = setMem g.eqv in
+  let mapMem = mapMem g.eqv in
+  let mapLookup = mapLookup g.eqv in
+  let mapInsert = mapInsert g.eqv in
+  let setMem = setMem g.eqv in
 
   recursive let strongConnect = lam s. lam v.
     let traverseSuccessors = lam s. lam w.
-      if isNone (maybeFind w s.number) then
+      if not (mapMem w s.number) then
         let s = strongConnect s w in
-        {s with lowlink = add v (min (find v s.lowlink) (find w s.lowlink))
-                                s.lowlink}
-      else if lti (find w s.number) (find v s.number) then
-        if mem w s.stack then
-          {s with lowlink = add v (min (find v s.lowlink) (find w s.number))
-                                  s.lowlink}
+        let n = min (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
+        {s with lowlink = mapInsert v n s.lowlink}
+      else if lti (mapLookup w s.number) (mapLookup v s.number) then
+        if setMem w s.stack then
+          let n = min (mapLookup v s.lowlink) (mapLookup w s.number) in
+          {s with lowlink = mapInsert v n s.lowlink}
         else s
       else s
     in
 
     let popStackIntoComp = lam s.
-      let vn = find v s.number in
+      let vn = mapLookup v s.number in
 
       recursive let work = lam comp. lam stack.
         if null stack then (comp,stack)
         else
           let w = head stack in
-          if lti (find w s.number) vn then (comp,stack)
+          if lti (mapLookup w s.number) vn then (comp,stack)
           else work (snoc comp w) (tail stack)
       in
       let t = work [] s.stack in
@@ -154,19 +134,19 @@ let digraphTarjan = lam g.
           with stack = t.1}
     in
 
-    let s = {{{{s with number = add v s.i s.number}
-                  with lowlink = add v s.i s.lowlink}
+    let s = {{{{s with number = mapInsert v s.i s.number}
+                  with lowlink = mapInsert v s.i s.lowlink}
                   with stack = cons v s.stack}
                   with i = addi s.i 1}
     in
 
     let s = foldl traverseSuccessors s (digraphSuccessors v g) in
 
-    if eqi (find v s.lowlink) (find v s.number)
+    if eqi (mapLookup v s.lowlink) (mapLookup v s.number)
     then popStackIntoComp s else s
   in
 
-  let s = foldl (lam s. lam v. if isNone (maybeFind v s.number)
+  let s = foldl (lam s. lam v. if not (mapMem v s.number)
                                then strongConnect s v else s)
                 {i = 0, number = [], lowlink = [], stack = [], comps = []}
                 (digraphVertices g)
@@ -176,10 +156,6 @@ let digraphTarjan = lam g.
 let digraphStrongConnects = lam g. digraphTarjan g
 
 mexpr
--- map tests
-let m = [(1,3), (4,6)] in
-utest mapLookup 1 eqi m with 3 in
-utest mapUpdate 4 (addi 1) eqi m with [(1,3), (4,7)] in
 
 -- graph tests
 let empty = digraphEmpty eqi eqs in
