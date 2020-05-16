@@ -213,7 +213,7 @@ utest digraphCountVertices g6 with 0 in
 
 let compsEq = setEqual (setEqual eqi) in
 
-utest  compsEq (digraphStrongConnects empty) [] with true in
+utest compsEq (digraphStrongConnects empty) [] with true in
 
 let g = foldr digraphAddVertex empty [1,2,3,4,5,6,7,8] in
 
