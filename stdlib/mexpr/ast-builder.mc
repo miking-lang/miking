@@ -210,6 +210,10 @@ let nth_ = use MExprAst in
   lam s. lam i.
   appf2_ (const_ (CGet ())) s i
 
+let cons_ = use MExprAst in
+  lam s. lam e.
+  appf2_ (const_ (CCons ())) s e
+
 
 -- Patterns --
 let pvar_ = use MExprAst in

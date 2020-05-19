@@ -331,6 +331,7 @@ end
 lang SeqEval = SeqAst + ConstEval
   syn Const =
   | CGet2 [Expr]
+  | CCons2 Expr
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -345,6 +346,14 @@ lang SeqEval = SeqAst + ConstEval
         get tms n.val
       else error "n in get is not a number"
     else error "n in get is not a constant"
+  | CCons _ ->
+    TmConst {val = CCons2 arg}
+  | CCons2 tm ->
+    match arg with TmConst c then
+      match c.val with CSeq s then
+        TmSeq {tms = cons tm s.tms}
+      else error "Not a cons of a sequence"
+    else error "Not a cons of a constant"
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->

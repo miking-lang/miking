@@ -182,6 +182,7 @@ lang SeqAst = IntAst
   syn Const =
   | CSeq {tms : [Expr]}
   | CGet {}
+  | CCons {}
 
   syn Expr =
   | TmSeq {tms : [Expr]}
