@@ -332,6 +332,8 @@ lang SeqEval = SeqAst + ConstEval
   syn Const =
   | CGet2 [Expr]
   | CCons2 Expr
+  | CSnoc2 [Expr]
+  | CConcat2 [Expr]
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -352,8 +354,29 @@ lang SeqEval = SeqAst + ConstEval
     match arg with TmConst c then
       match c.val with CSeq s then
         TmSeq {tms = cons tm s.tms}
-      else error "Not a cons of a sequence"
-    else error "Not a cons of a constant"
+      else error "Not cons of a sequence"
+    else error "Not cons of a constant"
+  | CSnoc _ ->
+    match arg with TmConst c then
+      match c.val with CSeq s then
+        TmConst {val = CSnoc2 s.tms}
+      else error "Not snoc of a sequence"
+    else error "Not snoc of a constant"
+  | CSnoc2 tms ->
+    TmSeq {tms = snoc tms arg}
+  | CConcat _ ->
+    match arg with TmConst c then
+      match c.val with CSeq s then
+        TmConst {val = CConcat2 s.tms}
+      else "Not concat of a sequence"
+    else "Not concat of a constant"
+  | CConcat2 tms ->
+    match arg with TmConst c then
+      match c.val with CSeq s then
+        TmSeq {tms = concat tms s.tms}
+      else "Not concat of a sequence"
+    else "Not concat of a constant"
+
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
