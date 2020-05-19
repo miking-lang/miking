@@ -581,7 +581,7 @@ lang CmpIntLamlift = CmpIntAst + ConstLamlift
 end
 
 -- TODO
---lang CmpFloatLamlift
+lang CmpFloatLamlift
 
 lang SeqLamlift = SeqAst + ConstLamlift
     sem lamlift (state : LiftState) =
@@ -720,7 +720,7 @@ end
 lang MExprLamlift = VarLamlift + AppLamlift + FunLamlift +
                     LetLamlift + RecLetsLamlift + ConstLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
-                    BoolLamlift + CmpIntLamlift +
+                    BoolLamlift + CmpIntLamlift + CmpFloatLamlift +
                     SeqLamlift + TupleLamlift + DataLamlift + MatchLamlift +
                     UtestLamlift + MExprAst
 
