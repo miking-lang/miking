@@ -1,5 +1,7 @@
 include "option.mc"
 include "seq.mc"
+include "set.mc"
+include "map.mc"
 
 -- Represents a directed graph with labeled edges.
 
@@ -22,22 +24,6 @@ type Digraph = { adj : [(a,[(a,b)])],
                  eqv : a -> a -> Bool,
                  eql : b -> b -> Bool }
 
--- Map functions
-let mapLookup = lam key. lam eq. lam m.
-                match findAssoc (eq key) m with Some e
-                then e
-                else error "Element not found"
-
-recursive
-let mapUpdate = lam key. lam f. lam eq. lam m.
-                let k = (head m).0 in
-                let v = (head m).1 in
-                if eq key k then
-                  cons (k, f v) (tail m)
-                else
-                  cons (head m) (mapUpdate key f eq (tail m))
-end
-
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let digraphEmpty = lam eqv. lam eql. {adj = [], eqv = eqv, eql = eql}
 
@@ -54,7 +40,7 @@ let digraphEdges = lam g.
        g.adj)
 
 let digraphEdgesFrom = lam v. lam g.
-                       map (lam tup. (v, tup.0, tup.1)) (mapLookup v g.eqv g.adj)
+                       map (lam tup. (v, tup.0, tup.1)) (mapLookup g.eqv v g.adj)
 
 let digraphLabels = lam v1. lam v2. lam g.
     let from_v1_to_v2 = filter (lam tup. g.eqv tup.1 v2) (digraphEdgesFrom v1 g) in
@@ -96,7 +82,7 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else if any (g.eql l) (digraphLabels v1 v2 g) then
     if check then error "label already exists" else g
   else
-    {g with adj = mapUpdate v1 (cons (v2, l)) g.eqv g.adj}
+    {g with adj = mapUpdate g.eqv v1 (cons (v2, l)) g.adj}
 
 let digraphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdgeCheckLabel v1 v2 l g true
@@ -109,12 +95,67 @@ let digraphUnion = lam g1. lam g2.
   let g3 = foldl (lam g. lam v. digraphMaybeAddVertex v g) g1 (digraphVertices g2)
   in foldl (lam g. lam tup. digraphMaybeAddEdge tup.0 tup.1 tup.2 g) g3 (digraphEdges g2)
 
+-- Strongly connected components of g.
+-- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
+-- https://doi.org/10.1137/0201010
+let digraphTarjan = lam g.
+  let min = lam l. lam r. if lti l r then l else r in
+  let mapMem = mapMem g.eqv in
+  let mapLookup = mapLookup g.eqv in
+  let mapInsert = mapInsert g.eqv in
+  let setMem = setMem g.eqv in
+
+  recursive let strongConnect = lam s. lam v.
+    let traverseSuccessors = lam s. lam w.
+      if not (mapMem w s.number) then
+        let s = strongConnect s w in
+        let n = min (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
+        {s with lowlink = mapInsert v n s.lowlink}
+      else if lti (mapLookup w s.number) (mapLookup v s.number) then
+        if setMem w s.stack then
+          let n = min (mapLookup v s.lowlink) (mapLookup w s.number) in
+          {s with lowlink = mapInsert v n s.lowlink}
+        else s
+      else s
+    in
+
+    let popStackIntoComp = lam s.
+      let vn = mapLookup v s.number in
+
+      recursive let work = lam comp. lam stack.
+        if null stack then (comp,stack)
+        else
+          let w = head stack in
+          if lti (mapLookup w s.number) vn then (comp,stack)
+          else work (snoc comp w) (tail stack)
+      in
+      let t = work [] s.stack in
+      {{s with comps = snoc s.comps t.0}
+          with stack = t.1}
+    in
+
+    let s = {{{{s with number = mapInsert v s.i s.number}
+                  with lowlink = mapInsert v s.i s.lowlink}
+                  with stack = cons v s.stack}
+                  with i = addi s.i 1}
+    in
+
+    let s = foldl traverseSuccessors s (digraphSuccessors v g) in
+
+    if eqi (mapLookup v s.lowlink) (mapLookup v s.number)
+    then popStackIntoComp s else s
+  in
+
+  let s = foldl (lam s. lam v. if not (mapMem v s.number)
+                               then strongConnect s v else s)
+                {i = 0, number = [], lowlink = [], stack = [], comps = []}
+                (digraphVertices g)
+  in s.comps
+
+-- Strongly connected components of g.
+let digraphStrongConnects = lam g. digraphTarjan g
 
 mexpr
--- map tests
-let m = [(1,3), (4,6)] in
-utest mapLookup 1 eqi m with 3 in
-utest mapUpdate 4 (addi 1) eqi m with [(1,3), (4,7)] in
 
 -- graph tests
 let empty = digraphEmpty eqi eqs in
@@ -169,5 +210,41 @@ utest digraphCountVertices g5 with 2 in
 utest digraphCountEdges g5 with 2 in
 let g6 = digraphUnion empty empty in
 utest digraphCountVertices g6 with 0 in
+
+let compsEq = setEqual (setEqual eqi) in
+
+utest compsEq (digraphStrongConnects empty) [] with true in
+
+let g = foldr digraphAddVertex empty [1,2,3,4,5,6,7,8] in
+
+let g1 = g in
+
+utest compsEq (digraphStrongConnects g1) [[1],[2],[3],[4],[5],[6],[7],[8]]
+with true in
+
+let g2 = digraphAddEdge 1 2 (gensym ()) g in
+let g2 = digraphAddEdge 2 3 (gensym ()) g2 in
+let g2 = digraphAddEdge 3 1 (gensym ()) g2 in
+let g2 = digraphAddEdge 4 5 (gensym ()) g2 in
+let g2 = digraphAddEdge 5 4 (gensym ()) g2 in
+
+utest compsEq (digraphStrongConnects g2) [[1,2,3],[4,5],[6],[7],[8]]
+with true in
+
+-- Figure 3 from Tarjans original paper.
+let g3 = digraphAddEdge 1 2 (gensym ()) g in
+let g3 = digraphAddEdge 2 3 (gensym ()) g3 in
+let g3 = digraphAddEdge 2 8 (gensym ()) g3 in
+let g3 = digraphAddEdge 3 4 (gensym ()) g3 in
+let g3 = digraphAddEdge 3 7 (gensym ()) g3 in
+let g3 = digraphAddEdge 4 5 (gensym ()) g3 in
+let g3 = digraphAddEdge 5 3 (gensym ()) g3 in
+let g3 = digraphAddEdge 5 6 (gensym ()) g3 in
+let g3 = digraphAddEdge 7 4 (gensym ()) g3 in
+let g3 = digraphAddEdge 7 6 (gensym ()) g3 in
+let g3 = digraphAddEdge 8 1 (gensym ()) g3 in
+let g3 = digraphAddEdge 8 7 (gensym ()) g3 in
+
+utest compsEq (digraphStrongConnects g3) [[1,2,8],[3,4,5,7],[6]] with true in
 
 ()
