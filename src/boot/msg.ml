@@ -44,7 +44,7 @@ exception Error of message
 let eq_info a b = match a, b with
   | NoInfo, NoInfo -> true
   | Info(f1, l11, c11, l21, c21), Info(f2, l12, c12, l22, c22) ->
-     l11 = l12 && c11 = c12 && l21 == l22 && c21 == c22 && f1 =. f2
+     l11 = l12 && c11 = c12 && l21 = l22 && c21 = c22 && f1 =. f2
   | _ -> false
 
 
