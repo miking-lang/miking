@@ -115,7 +115,7 @@ let mkid s =
     let f = Hashtbl.find str_tab s in f (mkinfo_fast s)
   with Not_found ->
     let s2 = Ustring.from_utf8 s in
-    Parser.IDENT {i=mkinfo_ustring s2; v=s2}
+    Parser.LC_IDENT {i=mkinfo_ustring s2; v=s2}
 
 (* String handling *)
 let string_buf = Buffer.create 80
@@ -184,18 +184,21 @@ rule main = parse
   | ident | symtok as s
       { mkid s }
   | uident as s
-      { Parser.IDENT{i=mkinfo_fast s; v=Ustring.from_utf8 s} }  (* UIDENT *)
+      { Parser.UC_IDENT{i=mkinfo_fast s; v= Ustring.from_utf8 s} }
   | '\'' (utf8 as c) '\''
       { let s = Ustring.from_utf8 c in
         Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
-  | '#' (("con" | "type" | "var") as ident) '"'
+  | '#' (("con" | "type" | "var" | "label") as ident) '"'
        { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
-         let esc_s = Ustring.convert_escaped_chars s in
+         let id = Ustring.convert_escaped_chars s  in
          let fi = mkinfo_ustring (s ^. us"  #" ^. us(ident)) in
 	 let rval = (match ident with
-            | "var" -> Parser.IDENT{i=fi; v=esc_s}
-            | _ -> Parser.IDENT{i=fi; v=esc_s})  (* UIDENT *)
+            | "con"   -> Parser.CON_IDENT{i=fi; v=id}
+            | "type"  -> Parser.TYPE_IDENT{i=fi; v=id}
+            | "var"   -> Parser.VAR_IDENT{i=fi; v=id}
+            | "label" -> Parser.LABEL_IDENT{i=fi; v=id}
+            | _ -> failwith "Cannot happen")
          in
 	 add_colno 3; colcount_fast ident; rval}
   | '"'

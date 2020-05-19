@@ -25,7 +25,7 @@ let resf = lam t. lam y. lam yp. lam r.
 in
 let s = idaInitDense tol resf noroots 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
-utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
+utest idaSolveNormal s 10. y yp with (10., idaRCSuccess) in
 
 let jacf = lam t. lam c. lam y. lam yp. lam m.
   let _ = sMatrixDenseSet m 0 0 c in
@@ -38,9 +38,9 @@ let rootf = lam t. lam _. lam _. lam g.
 in
 let s = idaInitDenseJac tol jacf resf (1, rootf) 0. y yp in
 utest idaCalcICYY s y 0.001 with () in
-utest idaSolveNormal s 10. y yp with (5., IDA_ROOTS_FOUND) in
+utest idaSolveNormal s 10. y yp with (5., idaRCRootsFound) in
 utest idaReinit s 5. y yp with () in
-utest idaSolveNormal s 10. y yp with (10., IDA_SUCCESS) in
+utest idaSolveNormal s 10. y yp with (10., idaRCSuccess) in
 
 utest idaGetDky s y (subf (idaGetCurrentTime s) (idaGetLastStep s)) 0 with () in
 utest idaGetDky s yp (subf (idaGetCurrentTime s) (idaGetLastStep s)) 1 with () in

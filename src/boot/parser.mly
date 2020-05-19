@@ -1,3 +1,4 @@
+
 /*
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
@@ -26,11 +27,19 @@
 
 /* Misc tokens */
 %token EOF
-%token <Ustring.ustring Ast.tokendata> IDENT
+
+/* Use the non-terminals 'con_ident', 'var_ident', 'type_ident', and 'ident' instead of the below */
+%token <Ustring.ustring Ast.tokendata> CON_IDENT
+%token <Ustring.ustring Ast.tokendata> VAR_IDENT
+%token <Ustring.ustring Ast.tokendata> TYPE_IDENT
+%token <Ustring.ustring Ast.tokendata> LABEL_IDENT
+%token <Ustring.ustring Ast.tokendata> UC_IDENT  /* An identifier that starts with an upper-case letter */
+%token <Ustring.ustring Ast.tokendata> LC_IDENT  /* An identifier that starts with "_" or a lower-case letter */
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
 %token <int Ast.tokendata> UINT
 %token <float Ast.tokendata> UFLOAT
+
 
 /* Keywords */
 %token <unit Ast.tokendata> IF
@@ -108,9 +117,9 @@ tops:
   |
     { [] }
   // TODO: These should matter with a type system
-  | TYPE IDENT tops
+  | TYPE type_ident tops
     { $3 }
-  | TYPE IDENT EQ ty tops
+  | TYPE type_ident EQ ty tops
     { $5 }
 
 top:
@@ -124,7 +133,7 @@ top:
     { TopCon($1) }
 
 toplet:
-  | LET IDENT ty_op EQ mexpr
+  | LET var_ident ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
       Let (fi, $2.v, $5) }
 
@@ -134,12 +143,12 @@ topRecLet:
       RecLet (fi, $2) }
 
 topcon:
-  | CON IDENT ty_op
+  | CON con_ident ty_op
     { let fi = mkinfo $1.i $2.i in
       Con (fi, $2.v, $3) }
 
 mlang:
-  | LANG IDENT lang_includes lang_body
+  | LANG ident lang_includes lang_body
     { let fi = if List.length $3 > 0 then
                  mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
                else
@@ -153,9 +162,9 @@ lang_includes:
   |
     { [] }
 lang_list:
-  | IDENT ADD lang_list
+  | ident ADD lang_list
     { $1 :: $3 }
-  | IDENT
+  | ident
     { [$1] }
 
 lang_body:
@@ -169,10 +178,10 @@ decls:
   |
     { [] }
 decl:
-  | SYN IDENT EQ constrs
+  | SYN type_ident EQ constrs
     { let fi = mkinfo $1.i $3.i in
       Data (fi, $2.v, $4) }
-  | SEM IDENT params EQ cases
+  | SEM var_ident params EQ cases
     { let fi = mkinfo $1.i $4.i in
       Inter (fi, $2.v, $3, $5) }
 
@@ -182,7 +191,7 @@ constrs:
   |
     { [] }
 constr:
-  | BAR IDENT constr_params
+  | BAR con_ident constr_params
     { let fi = mkinfo $1.i $2.i in
       CDecl(fi, $2.v, $3) }
 
@@ -193,7 +202,7 @@ constr_params:
     { TyUnit }
 
 params:
-  | LPAREN IDENT COLON ty RPAREN params
+  | LPAREN var_ident COLON ty RPAREN params
     { let fi = mkinfo $1.i $5.i in
       Param (fi, $2.v, $4) :: $6 }
   |
@@ -205,16 +214,16 @@ cases:
   |
     { [] }
 case:
-  | BAR IDENT ARROW mexpr
+  | BAR var_ident ARROW mexpr
     { let fi = mkinfo $1.i $3.i in
       (VarPattern (fi, $2.v), $4) }
-  | BAR IDENT binder ARROW mexpr
+  | BAR con_ident binder ARROW mexpr
     { let fi = mkinfo $1.i $4.i in
       (ConPattern (fi, $2.v, $3), $5)}
 binder:
-  | LPAREN IDENT RPAREN
+  | LPAREN var_ident RPAREN
     { $2.v }
-  | IDENT
+  | var_ident
     { $1.v }
 
 /// Expression language ///////////////////////////////
@@ -224,30 +233,30 @@ binder:
 mexpr:
   | left
       { $1 }
-  | TYPE IDENT IN mexpr
+  | TYPE type_ident IN mexpr
       { $4 }
-  | TYPE IDENT EQ ty IN mexpr
+  | TYPE type_ident EQ ty IN mexpr
       { $6 }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,t) -> (fi,x,0,t)) $2 in
          TmRecLets(fi,lst,$4) }
-  | LET IDENT ty_op EQ mexpr IN mexpr
+  | LET var_ident ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
         TmLet(fi,$2.v,0,$5,$7) }
-  | LAM IDENT ty_op DOT mexpr
+  | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,0,$3,$5) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
-  | CON IDENT ty_op IN mexpr
+  | CON con_ident ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
         TmCondef(fi,$2.v,0,$3,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
          TmMatch(fi,$2,$4,$6,$8) }
-  | USE IDENT IN mexpr
+  | USE ident IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
@@ -255,10 +264,10 @@ mexpr:
         TmUtest(fi,$2,$4,$6) }
 
 lets:
-  | LET IDENT ty_op EQ mexpr
+  | LET var_ident ty_op EQ mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         [(fi, $2.v, $5)] }
-  | LET IDENT ty_op EQ mexpr lets
+  | LET var_ident ty_op EQ mexpr lets
       { let fi = mkinfo $1.i (tm_info $5) in
         (fi, $2.v, $5)::$6 }
 
@@ -269,6 +278,9 @@ left:
   | left atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
+  | con_ident atom
+      { let fi = mkinfo $1.i (tm_info $2) in
+        TmConapp(fi,$1.v,nosym,$2) }
 
 
 atom:
@@ -281,7 +293,7 @@ atom:
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | IDENT                { TmVar($1.i,$1.v,nosym) }
+  | var_ident                { TmVar($1.i,$1.v,nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
@@ -296,13 +308,13 @@ atom:
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, Record.empty)}
-  | LBRACKET mexpr WITH IDENT EQ mexpr RBRACKET
+  | LBRACKET mexpr WITH var_ident EQ mexpr RBRACKET
       { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
 
 proj_label:
   | UINT
     { ($1.i, ustring_of_int $1.v) }
-  | IDENT
+  | label_ident
     { ($1.i,$1.v) }
 
 
@@ -314,9 +326,9 @@ seq:
       { $1::$3 }
 
 labels:
-  | IDENT EQ mexpr
+  | label_ident EQ mexpr
     {[($1.v, $3)]}
-  | IDENT EQ mexpr COMMA labels
+  | label_ident EQ mexpr COMMA labels
     {($1.v, $3)::$5}
 
 pats:
@@ -334,14 +346,14 @@ patseq:
       { ($1.i, List.map (fun x -> PatChar($1.i,x)) (ustring2list $1.v)) }
 
 pat_labels:
-  | IDENT EQ pat
+  | label_ident EQ pat
     {[($1.v, $3)]}
-  | IDENT EQ pat COMMA pat_labels
+  | label_ident EQ pat COMMA pat_labels
     {($1.v, $3)::$5}
 
 
 name:
-  | IDENT
+  | var_ident
       { if $1.v =. us"_"
         then ($1.i, NameWildcard)
         else ($1.i, NameStr($1.v,0)) }
@@ -361,7 +373,7 @@ pat_atom:
       { PatNamed(fst $1, snd $1) }
   | NOT pat_atom
       { PatNot(mkinfo $1.i (pat_info $2), $2) }
-  | IDENT pat_atom
+  | con_ident pat_atom
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, nosym, $2) }
   | patseq
       { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.of_list) }
@@ -431,7 +443,7 @@ ty_atom:
       { TyRecord [] }
   | LBRACKET label_tys RBRACKET
       { TyRecord($2) }
-  | IDENT
+  | type_ident
       {match Ustring.to_utf8 $1.v with
        | "Dyn"    -> TyDyn
        | "Bool"   -> TyBool
@@ -449,7 +461,30 @@ ty_list:
     { [$1] }
 
 label_tys:
-  | IDENT COLON ty
+  | label_ident COLON ty
     {[($1.v, $3)]}
-  | IDENT COLON ty COMMA label_tys
+  | label_ident COLON ty COMMA label_tys
     {($1.v, $3)::$5}
+
+
+/// Identifiers ///////////////////////////////
+
+ident:
+  | UC_IDENT {$1}
+  | LC_IDENT {$1}
+
+var_ident:
+  | LC_IDENT {$1}
+  | VAR_IDENT {$1}
+
+con_ident:
+  | UC_IDENT {$1}
+  | CON_IDENT {$1}
+
+type_ident:
+  | ident {$1}
+  | TYPE_IDENT {$1}
+
+label_ident:
+  | ident {$1}
+  | LABEL_IDENT {$1}

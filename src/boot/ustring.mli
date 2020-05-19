@@ -145,6 +145,9 @@ sig
       If the string identifier has not been defined, exception
       [Not_found] is raised *)
 
+  val string_of_sid : sid -> string
+  (** Returns the UTF8-encoded ocaml string of a [sid] *)
+
   val usid : string -> sid
   (** Expression [sid s] returns a unique string identifier of string [s].
       Same as expression [sid_of_ustring (us s)] *)

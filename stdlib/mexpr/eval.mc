@@ -22,7 +22,7 @@ let fresh : String -> Env -> String = lam var. lam env.
   else
     recursive let find_free = lam n.
       let new = concat var (int2string n) in
-      match lookup new env with None then
+      match lookup new env with None () then
         new
       else
         find_free (addi n 1)
@@ -608,7 +608,7 @@ utest eval {env = []} appFst with TmConst {val = CBool {val = true}} in
 let unit = TmConst {val = CUnit ()} in
 
 let dataDecl = TmConDef {ident = "Foo",
-                         tpe = None,
+                         tpe = None(),
                          inexpr = TmMatch {target = TmApp {lhs = TmVar {ident = "Foo"},
                                                            rhs = TmTuple {tms = [unit, unit]}},
                                            pat = PCon {ident = "Foo",

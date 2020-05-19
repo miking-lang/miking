@@ -50,7 +50,7 @@ lang User
     use Arith in
     eval (Add (Num 1, Num 2))
   sem bump (x : Dyn) =
-  | Unit -> addi x 1
+  | Unit _ -> addi x 1
 end
 
 lang A

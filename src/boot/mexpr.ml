@@ -53,7 +53,7 @@ let builtin =
   |> List.map (fun (x,t) -> (x,gensym(),t))
 
 (* Mapping name to symbol *)
-let builtin_name2sym = List.map (fun (x,s,_) -> (us x,s)) builtin
+let builtin_name2sym = List.map (fun (x,s,_) -> (IdVar(usid x),s)) builtin
 
 (* Mapping sym to term *)
 let builtin_sym2term = List.map (fun (_,s,t) -> (s,t)) builtin
@@ -434,15 +434,24 @@ let rec val_equal v1 v2 =
   | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmConsym(_,_,sym1,None),TmConsym(_,_,sym2,None) ->sym1 = sym2
-  | TmConsym(_,_,sym1,Some(v1)),TmConsym(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
+  | TmConapp(_,_,sym1,v1),TmConapp(_,_,sym2,v2) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
 
-(* Add symbol associations between lambdas, patterns, and variables *)
-let rec symbolize env t =
-  let findsym fi x kind env = try List.assoc x env
-    with Not_found -> raise_error fi ("Unknown " ^ kind ^ " '" ^ Ustring.to_utf8 x ^ "'")
+type identType
+
+(* Add symbol associations between lambdas, patterns, and variables. The function also
+   constructs TmConapp terms from the combination of variables and function applications.  *)
+let rec symbolize (env : (ident * sym) list) (t : tm) =
+  let findsym fi id env =
+    try List.assoc id env
+    with Not_found ->
+      let (x,kindstr) = match id with
+        | IdVar(x)   -> (x,"variable")
+        | IdCon(x)   -> (x,"constructor")
+        | IdType(x)  -> (x,"identifier")
+        | IdLabel(x) -> (x,"label")
+      in raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
   in
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
@@ -451,17 +460,18 @@ let rec symbolize env t =
    * in a pattern in other cases. In particular, this means that, e.g., the pattern
    * [a, a] assigns the same symbol to both "a"s, which may or may not be desirable. Which
    * introduced binding gets used then depends on what try_match does for the pattern. *)
-  let add_name x env =
-    match List.assoc_opt x env with
-    | Some s -> (env, s)
-    | None -> let s = gensym() in ((x,s)::env, s) in
-  let rec s_pat_sequence env pats =
+  let add_name (x: ident) (patEnv: (ident * int) list) =
+    match List.assoc_opt x patEnv with
+    | Some s -> (patEnv, s)
+    | None -> let s = gensym() in ((x,s)::patEnv, s) in
+  let rec s_pat_sequence patEnv pats =
     Mseq.fold_right
-      (fun p (env, ps) -> let (env, p) = sPat env p in (env, Mseq.cons p ps))
+      (fun p (patEnv, ps) -> let (patEnv, p) = sPat patEnv p in (patEnv, Mseq.cons p ps))
       pats
-      (env, Mseq.empty)
-  and sPat patEnv = function
-    | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name x patEnv in (patEnv, PatNamed(fi,NameStr(x,s)))
+      (patEnv, Mseq.empty)
+  and sPat (patEnv : (ident * int) list) = function
+    | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name (IdVar(sid_of_ustring x)) patEnv
+                                   in (patEnv, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (patEnv, pat)
     | PatSeqTot(fi, pats) ->
        let (patEnv, pats) = s_pat_sequence patEnv pats
@@ -470,17 +480,17 @@ let rec symbolize env t =
        let (patEnv, l) = s_pat_sequence patEnv l in
        let (patEnv, x) = match x with
          | NameWildcard -> (patEnv, NameWildcard)
-         | NameStr(x, _) -> let s = gensym() in ((x,s)::patEnv, NameStr(x, s)) in
+         | NameStr(x, _) -> let s = gensym() in ((IdVar(sid_of_ustring x),s)::patEnv, NameStr(x, s)) in
        let (patEnv, r) = s_pat_sequence patEnv r
        in (patEnv, PatSeqEdg(fi, l, x, r))
     | PatRecord(fi, pats) ->
        let patEnv = ref patEnv in
        let pats = Record.map (fun p -> let (patEnv', p) = sPat !patEnv p in patEnv := patEnv'; p) pats
        in (!patEnv, PatRecord(fi, pats))
-    | PatCon(fi,cx,_,p) ->
-       let cxId = findsym fi cx "constructor" env in
+    | PatCon(fi,x,_,p) ->
+       let s = findsym fi (IdCon(sid_of_ustring x)) env in
        let (patEnv, p) = sPat patEnv p
-       in (patEnv,PatCon(fi,cx,cxId,p))
+       in (patEnv,PatCon(fi,x,s,p))
     | PatInt _ as p -> (patEnv,p)
     | PatChar _ as p -> (patEnv,p)
     | PatBool _ as p -> (patEnv,p)
@@ -496,13 +506,13 @@ let rec symbolize env t =
     | PatNot _ as p -> (patEnv, p) (* NOTE(vipa): names in a not-pattern do not matter since they will never bind (it should be an error to bind a name inside a not-pattern, but we're not doing that kind of static checks yet *)
   in
   match t with
-  | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi x "variable" env)
-  | TmLam(fi,x,_,ty,t1) -> let s = gensym() in TmLam(fi,x,s,ty,symbolize ((x,s)::env) t1)
+  | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi (IdVar(sid_of_ustring x)) env)
+  | TmLam(fi,x,_,ty,t1) -> let s = gensym() in TmLam(fi,x,s,ty,symbolize ((IdVar(sid_of_ustring x),s)::env) t1)
   | TmClos(_,_,_,_,_,_) -> failwith "Closures should not be available."
-  | TmLet(fi,x,_,t1,t2) -> let s = gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((x,s)::env) t2)
+  | TmLet(fi,x,_,t1,t2) -> let s = gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((IdVar(sid_of_ustring x),s)::env) t2)
   | TmRecLets(fi,lst,tm) ->
-     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (x,s)::env) env lst in
-     TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi x "variable" env2, symbolize env2 t))
+     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+     TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
        lst, symbolize env2 tm)
   | TmApp(fi,t1,t2) -> TmApp(fi,symbolize env t1,symbolize env t2)
   | TmConst(_,_) -> t
@@ -510,9 +520,8 @@ let rec symbolize env t =
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
-  | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((x,s)::env) t)
-  | TmConsym(fi,x,sym,tmop) ->
-     TmConsym(fi,x,sym,match tmop with | None -> None | Some(t) -> Some(symbolize env t))
+  | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
+  | TmConapp(fi,x,_,t) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,symbolize env t)
   | TmMatch(fi,t1,p,t2,t3) ->
      let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
@@ -565,10 +574,9 @@ let rec try_match env value pat =
          in Record.merge merge_f vs pats
             |> (fun merged -> Record.fold (fun _ f env -> f env) merged (Some env))
       | _ -> None)
-  | PatCon(_,_,cxId,p) ->
-     (match value, List.assoc cxId env with
-      | TmConsym(_,_,sym1,Some v), TmConsym(_,_,sym2,_)
-           when sym1 = sym2 -> try_match env v p
+  | PatCon(_,_,s1,p) ->
+     (match value with
+      | TmConapp(_,_,s2,v) when s1 = s2 -> try_match env v p
       | _ -> None)
   | PatInt(_, i) ->
      (match value with
@@ -623,11 +631,6 @@ let rec eval (env : (sym * tm) list) (t : tm) =
        | TmClos(_,_,s,_,t3,env2) -> eval ((s,eval env t2)::Lazy.force env2) t3
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta eval env fiapp c (eval env t2)
-       (* Constructor application *)
-       | TmConsym(fi,x,sym,None) -> TmConsym(fi,x,sym,Some(eval env t2))
-       | TmConsym(_,x,_,Some(_)) ->
-          raise_error fiapp ("Cannot apply constructor '" ^ Ustring.to_utf8 x ^
-                               "' more than once")
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
@@ -654,8 +657,8 @@ let rec eval (env : (sym * tm) list) (t : tm) =
          raise_error fi ("Cannot update the term. The term is not a record: "
                          ^ Ustring.to_utf8 (ustring_of_tm v)))
   (* Data constructors and match *)
-  | TmCondef(fi,x,s,_,t) -> eval ((s,TmConsym(fi,x,s,None))::env) t
-  | TmConsym(_,_,_,_) as tm -> tm
+  | TmCondef(_,_,_,_,t) -> eval env t
+  | TmConapp(fi,x,s,t) -> TmConapp(fi,x,s,eval env t)
   | TmMatch(_,t1,p,t2,t3) ->
      (match try_match env (eval env t1) p with
       | Some env -> eval env t2

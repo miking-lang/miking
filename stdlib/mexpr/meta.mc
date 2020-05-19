@@ -106,7 +106,7 @@ recursive
     let tuple =
       bind (parens (comma_sep ty)) (lam ts.
         if null ts
-        then pure TyUnit
+        then pure (TyUnit())
         else if eqi (length ts) 1
         then pure (head ts)
         else pure (TyProd ts))
@@ -115,14 +115,14 @@ recursive
       bind (brackets ty) (lam t.
       pure (TySeq t))
     in
-    let dyn = apr (reserved "Dyn") (pure TyDyn) in
+    let dyn = apr (reserved "Dyn") (pure (TyDyn())) in
     let primitive =
-      (alt (apr (reserved "Int") (pure TyInt))
-      (alt (apr (reserved "Bool") (pure TyBool))
-      (alt (apr (reserved "Float") (pure TyFloat))
-      (apr (reserved "Char") (pure TyChar)))))
+      (alt (apr (reserved "Int") (pure (TyInt())))
+      (alt (apr (reserved "Bool") (pure (TyBool())))
+      (alt (apr (reserved "Float") (pure (TyFloat())))
+      (apr (reserved "Char") (pure (TyChar()))))))
     in
-    let string = apr (reserved "String") (pure (TySeq(TyChar))) in
+    let string = apr (reserved "String") (pure (TySeq(TyChar()))) in
     let datatype =
       bind (satisfy is_upper_alpha "Uppercase character") (lam c.
       bind (token (many (satisfy is_valid_char ""))) (lam cs.
@@ -140,7 +140,7 @@ recursive
   let ty = lam st.
     let app_or_atom =
       bind (many1 ty_atom) (lam ts.
-      pure (foldl1 (curry TyApp) ts))
+      pure (foldl1 (curry (lam x. TyApp x)) ts))
     in
     let arrow_or_ty =
       bind app_or_atom (lam lt.
@@ -160,16 +160,16 @@ recursive
   let atom = lam st.
     let var_access =
       let _ = debug "== Parsing var_access" in
-      fmap TmVar identifier in
+      fmap (lam x. TmVar x) identifier in
     let seq =
       let _ = debug "== Parsing seq ==" in
-      fmap TmSeq (brackets (comma_sep expr))
+      fmap (lam x. TmSeq x) (brackets (comma_sep expr))
     in
     let tuple =
       let _ = debug "== Parsing tuple ==" in
       bind (parens (comma_sep expr)) (lam es.
       if null es
-      then pure (TmConst CUnit)
+      then pure (TmConst (CUnit{}))
       else if eqi (length es) 1
       then pure (head es)
       else pure (TmTuple es))
@@ -219,10 +219,10 @@ recursive
         bind (many (apr (symbol ".") number)) (lam is.
         if null is
         then pure a
-        else pure (foldl (curry TmProj) a is)))
+        else pure (foldl (curry (lam x. TmProj x)) a is)))
       in
       bind (many1 atom_or_proj) (lam as.
-      pure (foldl1 (curry TmApp) as))
+      pure (foldl1 (curry (lam x. TmApp x)) as))
     in
     let letbinding =
       let _ = debug "== Parsing letbinding ==" in
@@ -324,14 +324,14 @@ let program = apl (apr ws (apr (reserved "mexpr") expr)) end_of_input in
 
 -- TODO: Define remaining built-ins
 let builtins =
-    [("not", TmConst CNot)
-    ,("and", TmConst CAnd)
-    ,("or", TmConst COr)
-    ,("addi", TmConst CAddi)
-    ,("subi", TmConst CSubi)
-    ,("muli", TmConst CMuli)
-    ,("eqi", TmConst CEqi)
-    ,("lti", TmConst CLti)
+    [("not", TmConst (CNot{}))
+    ,("and", TmConst (CAnd{}))
+    ,("or", TmConst (COr{}))
+    ,("addi", TmConst (CAddi{}))
+    ,("subi", TmConst (CSubi{}))
+    ,("muli", TmConst (CMuli{}))
+    ,("eqi", TmConst (CEqi{}))
+    ,("lti", TmConst (CLti{}))
 ] in
 
 if or (eqstr (get argv 1) "test") (lti (length argv) 3) then
