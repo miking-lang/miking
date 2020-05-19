@@ -293,7 +293,7 @@ lang BoolEval = BoolAst + BoolPat + ConstEval
 end
 
 
-lang CmpEval = CmpAst + ConstEval
+lang CmpIntEval = CmpIntAst + ConstEval
   syn Const =
   | CEqi2 Int
   | CLti2 Int
@@ -324,6 +324,9 @@ lang CmpEval = CmpAst + ConstEval
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
 end
+
+-- TODO
+lang CmpFloatEval
 
 lang CharEval = CharAst + ConstEval
 end
@@ -520,7 +523,7 @@ end
 
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
                + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval
-               + BoolEval + CmpEval + CharEval + UnitEval + MatchEval
+               + BoolEval + CmpIntEval + CmpFloatEval + CharEval + UnitEval + MatchEval
                + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst + RecordTypeAst
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =

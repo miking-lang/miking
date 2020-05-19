@@ -47,6 +47,10 @@ let int2string = lam n.
 
 // A naive float2string implementation that only formats in standard form
 let float2string = lam arg.
+  // Quick fix to check for infinities
+  if eqf arg inf then "inf" else
+  if eqf arg (negf inf) then "-inf" else
+  // End of quick fix
   let precision = 7 in // Precision in number of digits
   let prefixpair = if ltf arg 0.0 then ("-", negf arg) else ("", arg) in
   let prefix = prefixpair.0 in

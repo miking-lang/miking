@@ -130,6 +130,15 @@ lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
     | CMuli _ -> "muli"
 end
 
+lang ArithFloatPrettyPrint = ArithFloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CAddf _ -> "addf"
+    | CSubf _ -> "subf"
+    | CMulf _ -> "mulf"
+    | CDivf _ -> "divf"
+    | CNegf _ -> "negf"
+end
+
 lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CBool b -> if b.val then "true" else "false"
@@ -149,10 +158,16 @@ lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
     | PBool b -> getConstStringCode indent (CBool {val = b.val})
 end
 
-lang CmpPrettyPrint = CmpAst + ConstPrettyPrint
+lang CmpIntPrettyPrint = CmpIntAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CEqi _ -> "eqi"
     | CLti _ -> "lti"
+end
+
+lang CmpFloatPrettyPrint = CmpFloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CEqf _ -> "eqf"
+    | CLtf _ -> "ltf"
 end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
@@ -288,8 +303,9 @@ end
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
                         UnitPrettyPrint + IntPrettyPrint + FloatPrettyPrint +
-                        ArithIntPrettyPrint +
-                        BoolPrettyPrint + CmpPrettyPrint + CharPrettyPrint +
+                        ArithIntPrettyPrint + ArithFloatPrettyPrint +
+                        BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint +
+                        CharPrettyPrint +
                         SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
                         DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +
                         TypePrettyPrint

@@ -198,6 +198,26 @@ let muli_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CMuli ())) a b
 
+let addf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CAddf ())) a b
+
+let subf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CSubf ())) a b
+
+let mulf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CMulf ())) a b
+
+let divf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CDivf ())) a b
+
+let negf_ = use MExprAst in
+  lam a.
+  appf1_ (const_ (CNegf ())) a
+
 let and_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CAnd ())) a b
@@ -213,6 +233,18 @@ let not_ = use MExprAst in
 let eqi_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CEqi ())) a b
+
+let lti_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CLti ())) a b
+
+let eqf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CEqf ())) a b
+
+let ltf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CLtf ())) a b
 
 let nth_ = use MExprAst in
   lam s. lam i.
@@ -266,6 +298,18 @@ let let_ = use MExprAst in
 let ulet_ = use MExprAst in
   lam ident. lam body.
   let_ ident tydyn_ body
+
+let reclets_ = use MExprAst in
+  lam bindings.
+  TmRecLets {bindings = bindings, inexpr = unit_}
+
+let reclet_ = use MExprAst in
+  lam ident. lam tpe. lam body.
+  reclets_ [{ident = ident, tpe = tpe, body = body}]
+
+let ureclet_ = use MExprAst in
+  lam ident. lam body.
+  reclet_ ident tydyn_ body
 
 let reclets_empty = use MExprAst in
   TmRecLets {bindings = [], inexpr = unit_}

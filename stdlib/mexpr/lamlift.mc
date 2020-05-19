@@ -575,10 +575,13 @@ lang BoolLamlift = BoolAst + ConstLamlift
                           with els = lamliftReplaceIdentifiers newnames t.els}
 end
 
-lang CmpLamlift = CmpAst + ConstLamlift
+lang CmpIntLamlift = CmpIntAst + ConstLamlift
     --sem lamlift (state : LiftState) =
     --| CEqi -> (state, CEqi)
 end
+
+-- TODO
+--lang CmpFloatLamlift
 
 lang SeqLamlift = SeqAst + ConstLamlift
     sem lamlift (state : LiftState) =
@@ -717,8 +720,8 @@ end
 lang MExprLamlift = VarLamlift + AppLamlift + FunLamlift +
                     LetLamlift + RecLetsLamlift + ConstLamlift +
                     UnitLamlift + IntLamlift + ArithIntLamlift +
-                    BoolLamlift + CmpLamlift + SeqLamlift +
-                    TupleLamlift + DataLamlift + MatchLamlift +
+                    BoolLamlift + CmpIntLamlift +
+                    SeqLamlift + TupleLamlift + DataLamlift + MatchLamlift +
                     UtestLamlift + MExprAst
 
 lang MExprLLandPPandEval = MExprLamlift + MExprPrettyPrint + MExprEval
