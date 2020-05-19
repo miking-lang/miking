@@ -80,7 +80,7 @@ let m = update 5 (addi 3) m in
 utest lookup 1 m with 5 in
 utest lookup 4 m with 7 in
 
-utest update 1 (lam _. never) [] with [] in
+utest update 1 (lam _. error "Don't call me!") [] with [] in
 
 utest mem 1 m with true in
 utest mem 2 m with false in
