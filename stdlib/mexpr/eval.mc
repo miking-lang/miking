@@ -914,4 +914,30 @@ utest eval {env = []}
            (appSeq (lambda "x" (lambda "x" (addi_ (var "x") (int 1))))
                    [int 1, int 2])
 with int 3 in
+
+-- Builtin sequence functions
+-- get [1,2,3] 1 -> 2
+let getAst = TmApp {lhs = TmApp {lhs = TmConst {val = CGet ()},
+                                  rhs = TmSeq {tms = [int 1, int 2, int 3]}},
+                     rhs = int 1} in
+utest eval {env = []} getAst with int 2 in
+
+-- cons 1 [2, 3] -> [1,2,3]
+let consAst = TmApp {lhs = TmApp {lhs = TmConst {val = CCons ()},
+                                  rhs = int 1},
+                     rhs = TmSeq {tms = [int 2, int 3]}} in
+utest eval {env = []} consAst with TmSeq {tms = [int 1, int 2, int 3]} in
+
+-- snoc [2, 3] 1 -> [2,3,1]
+let snocAst = TmApp {lhs = TmApp {lhs = TmConst {val = CSnoc ()},
+                                  rhs = TmSeq {tms = [int 2, int 3]}},
+                     rhs = int 1} in
+utest eval {env = []} snocAst with TmSeq {tms = [int 2, int 3, int 1]} in
+
+-- concat [1,2,3] [4,5,6] -> [1,2,3,4,5,6]
+let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
+                                    rhs = TmSeq {tms = [int 1, int 2, int 3]}},
+                       rhs = TmSeq {tms = [int 4, int 5, int 6]}} in
+utest eval {env = []} concatAst with TmSeq {tms = [int 1, int 2, int 3, int 4, int 5, int 6]} in
+
 ()
