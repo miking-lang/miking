@@ -53,11 +53,11 @@ let ustring_of_pat p =
        then us"[] ++ " ^. ppName x
        else
          let rStr =
-           if Mseq.length l = 0
+           if Mseq.length r <> 0
            then us" ++ [" ^. ppSeq r ^. us"]"
            else us "" in
          let lStr =
-           if Mseq.length r = 0
+           if Mseq.length l <> 0
            then us"[" ^. ppSeq l ^. us"] ++ "
            else us""
          in lStr ^. ppName x ^. rStr

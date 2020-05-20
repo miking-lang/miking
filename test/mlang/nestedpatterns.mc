@@ -72,6 +72,72 @@ lang RecordsWithNegation
   | {blue = true} -> 4
 end
 
+lang LexBase
+  syn Tok =
+  sem lex =
+  | [] -> Some []
+  | str -> None ()
+end
+
+lang LexDecimal = LexBase
+  syn Tok =
+  | IntTok [Char]
+
+  sem lex =
+  | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _) & str ->
+    match lex_int "" str with (n, rest) then
+      optionMap (lex rest) (cons (IntTok n))
+    else never
+
+  sem lex_int (prev_digits : [Char]) =
+  | [('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') & digit] ++ rest ->
+    lex_int (snoc prev_digits digit) rest
+  | rest ->
+    (prev_digits, rest)
+end
+
+lang LexSpace = LexBase
+  sem lex =
+  | " " ++ rest -> lex rest
+end
+
+lang LexBinary = LexBase
+  syn Tok =
+  | BinaryIntTok [Char]  -- NOTE: this should probably reuse IntTok and do conversion, but that's not relevant for this test
+
+  sem lex =
+  | (['0', 'b', '0' | '1'] ++ _) & ([_, _] ++ str) ->
+    match lex_binary "" str with (n, rest) then
+      optionMap (lex rest) (cons (BinaryIntTok n))
+    else never
+
+  sem lex_binary (prev_digits : [Char]) =
+  | [('0' | '1') & digit] ++ rest ->
+    lex_binary (snoc prev_digits digit) rest
+  | rest ->
+    (prev_digits, rest)
+end
+
+lang Lexer = LexSpace + LexBinary + LexDecimal
+
+-- lang Broken
+--   sem foo =
+--   | "a" ++ _ -> true
+--   | _ ++ "a" -> false
+-- end
+
+-- lang Broken
+--   sem foo =
+--   | [_] -> true
+--   | "a" ++ _ -> false
+-- end
+
+-- lang Broken
+--   sem foo =
+--   | [!'a'] ++ _ -> true
+--   | _ ++ [!'b'] -> false
+-- end
+
 mexpr
 
 utest use CatchAll in foo (true, true) with "catchall" in
@@ -90,5 +156,17 @@ utest use OrderIndependentA in foo (false, true) with use OrderIndependentB in f
 utest use RecordsWithNegation in foo {blue = true} with 4 in
 utest use RecordsWithNegation in foo {red = true} with 2 in
 utest use RecordsWithNegation in foo {blue = false} with 3 in
+
+let _ =
+  use Lexer in
+  utest lex "" with Some [] in
+  utest lex "0" with Some [IntTok "0"] in
+  utest lex "0109" with Some [IntTok "0109"] in
+  utest lex "0109 32" with Some [IntTok "0109", IntTok "32"] in
+  utest lex "0b10 0109 32" with Some [BinaryIntTok "10", IntTok "0109", IntTok "32"] in
+  utest lex "0b 10" with None () in
+  utest lex "  32 " with Some [IntTok "32"] in
+  ()
+in
 
 ()
