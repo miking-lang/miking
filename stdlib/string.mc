@@ -1,7 +1,7 @@
 include "char.mc"
 include "option.mc"
 include "seq.mc"
-include "float.mc"
+include "math.mc"
 
 recursive
   let eqstr = lam s1. lam s2.
