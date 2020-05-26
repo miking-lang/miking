@@ -1,6 +1,7 @@
 include "char.mc"
 include "option.mc"
 include "seq.mc"
+include "math.mc"
 
 recursive
   let eqstr = lam s1. lam s2.
@@ -47,6 +48,10 @@ let int2string = lam n.
 
 // A naive float2string implementation that only formats in standard form
 let float2string = lam arg.
+  // Quick fix to check for infinities
+  if eqf arg inf then "INFINITY" else
+  if eqf arg (negf inf) then "-INFINITY" else
+  // End of quick fix
   let precision = 7 in // Precision in number of digits
   let prefixpair = if ltf arg 0.0 then ("-", negf arg) else ("", arg) in
   let prefix = prefixpair.0 in

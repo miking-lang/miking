@@ -118,11 +118,25 @@ lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
     | PInt t -> int2string t.val
 end
 
+lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CFloat t -> float2string t.val
+end
+
 lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CAddi _ -> "addi"
     | CSubi _ -> "subi"
     | CMuli _ -> "muli"
+end
+
+lang ArithFloatPrettyPrint = ArithFloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CAddf _ -> "addf"
+    | CSubf _ -> "subf"
+    | CMulf _ -> "mulf"
+    | CDivf _ -> "divf"
+    | CNegf _ -> "negf"
 end
 
 lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
@@ -144,10 +158,16 @@ lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
     | PBool b -> getConstStringCode indent (CBool {val = b.val})
 end
 
-lang CmpPrettyPrint = CmpAst + ConstPrettyPrint
+lang CmpIntPrettyPrint = CmpIntAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CEqi _ -> "eqi"
     | CLti _ -> "lti"
+end
+
+lang CmpFloatPrettyPrint = CmpFloatAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CEqf _ -> "eqf"
+    | CLtf _ -> "ltf"
 end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
@@ -282,8 +302,10 @@ end
 
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
-                        UnitPrettyPrint + IntPrettyPrint + ArithIntPrettyPrint +
-                        BoolPrettyPrint + CmpPrettyPrint + CharPrettyPrint +
+                        UnitPrettyPrint + IntPrettyPrint + FloatPrettyPrint +
+                        ArithIntPrettyPrint + ArithFloatPrettyPrint +
+                        BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint +
+                        CharPrettyPrint +
                         SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
                         DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +
                         TypePrettyPrint

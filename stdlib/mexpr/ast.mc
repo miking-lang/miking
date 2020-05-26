@@ -165,10 +165,16 @@ lang BoolPat = BoolAst
 end
 
 
-lang CmpAst = IntAst + BoolAst
+lang CmpIntAst = IntAst + BoolAst
   syn Const =
   | CEqi {}
   | CLti {}
+end
+
+lang CmpFloatAst = FloatAst + BoolAst
+  syn Const =
+  | CEqf {}
+  | CLtf {}
 end
 
 
@@ -358,7 +364,7 @@ end
 lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
   UnitAst + UnitPat + IntAst + IntPat + FloatAst + ArithFloatAst +
-  ArithIntAst + BoolAst + BoolPat + CmpAst + CharAst + SeqAst +
+  ArithIntAst + BoolAst + BoolPat + CmpIntAst + CmpFloatAst + CharAst + SeqAst +
   TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
   RecordAst +
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +

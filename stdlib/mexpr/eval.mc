@@ -3,6 +3,7 @@
 
 include "string.mc"
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 
 -- TODO: Change string variables to deBruijn indices
 type Env = [(String, Expr)]
@@ -292,8 +293,7 @@ lang BoolEval = BoolAst + BoolPat + ConstEval
     else None ()
 end
 
-
-lang CmpEval = CmpAst + ConstEval
+lang CmpIntEval = CmpIntAst + ConstEval
   syn Const =
   | CEqi2 Int
   | CLti2 Int
@@ -321,6 +321,38 @@ lang CmpEval = CmpAst + ConstEval
     match arg with TmConst c then
       match c.val with CInt n2 then
         TmConst {val = CBool {val = lti n1 n2.val}}
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+end
+
+lang CmpFloatEval = CmpFloatAst + ConstEval
+  syn Const =
+  | CEqf2 Float
+  | CLtf2 Float
+
+  sem delta (arg : Expr) =
+  | CEqf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CEqf2 f.val}
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CEqf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CBool {val = eqf f1 f2.val}}
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CLtf _ ->
+    match arg with TmConst c then
+      match c.val with CFloat f then
+        TmConst {val = CLtf2 f.val}
+      else error "Not comparing a numeric constant"
+    else error "Not comparing a constant"
+  | CLtf2 f1 ->
+    match arg with TmConst c then
+      match c.val with CFloat f2 then
+        TmConst {val = CBool {val = ltf f1 f2.val}}
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
 end
@@ -520,7 +552,7 @@ end
 
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
                + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval
-               + BoolEval + CmpEval + CharEval + UnitEval + MatchEval
+               + BoolEval + CmpIntEval + CmpFloatEval + CharEval + UnitEval + MatchEval
                + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst + RecordTypeAst
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
@@ -926,5 +958,12 @@ let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
                                     rhs = TmSeq {tms = [int 1, int 2, int 3]}},
                        rhs = TmSeq {tms = [int 4, int 5, int 6]}} in
 utest eval {env = []} concatAst with TmSeq {tms = [int 1, int 2, int 3, int 4, int 5, int 6]} in
+
+-- Unit tests for CmpFloatEval
+utest eval {env = []} (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in
+utest eval {env = []} (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
 ()
