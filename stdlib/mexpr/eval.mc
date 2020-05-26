@@ -337,46 +337,33 @@ lang SeqEval = SeqAst + ConstEval
 
   sem delta (arg : Expr) =
   | CGet _ ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmConst {val = CGet2 s.tms}
-      else error "Not get of a sequence"
-    else error "Not get of a constant"
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CGet2 s.tms}
+    else error "Not a get of a constant sequence"
   | CGet2 tms ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        get tms n.val
-      else error "n in get is not a number"
-    else error "n in get is not a constant"
+    match arg with TmConst {val = CInt n} then
+      get tms n.val
+    else error "n in get is not a number"
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmSeq {tms = cons tm s.tms}
-      else error "Not cons of a sequence"
-    else error "Not cons of a constant"
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = cons tm s.tms}
+    else error "Not a cons of a constant sequence"
   | CSnoc _ ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmConst {val = CSnoc2 s.tms}
-      else error "Not snoc of a sequence"
-    else error "Not snoc of a constant"
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CSnoc2 s.tms}
+    else "Not a snoc of a constant sequence"
   | CSnoc2 tms ->
     TmSeq {tms = snoc tms arg}
   | CConcat _ ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmConst {val = CConcat2 s.tms}
-      else "Not concat of a sequence"
-    else "Not concat of a constant"
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CConcat2 s.tms}
+    else "Not a concat of a constant sequence"
   | CConcat2 tms ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmSeq {tms = concat tms s.tms}
-      else "Not concat of a sequence"
-    else "Not concat of a constant"
-
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = concat tms s.tms}
+    else "Not a concat of a constant sequence"
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
