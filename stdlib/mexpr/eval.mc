@@ -331,20 +331,39 @@ end
 lang SeqEval = SeqAst + ConstEval
   syn Const =
   | CGet2 [Expr]
+  | CCons2 Expr
+  | CSnoc2 [Expr]
+  | CConcat2 [Expr]
 
   sem delta (arg : Expr) =
   | CGet _ ->
-    match arg with TmConst c then
-      match c.val with CSeq s then
-        TmConst {val = CGet2 s.tms}
-      else error "Not get of a sequence"
-    else error "Not get of a constant"
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CGet2 s.tms}
+    else error "Not a get of a constant sequence"
   | CGet2 tms ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        get tms n.val
-      else error "n in get is not a number"
-    else error "n in get is not a constant"
+    match arg with TmConst {val = CInt n} then
+      get tms n.val
+    else error "n in get is not a number"
+  | CCons _ ->
+    TmConst {val = CCons2 arg}
+  | CCons2 tm ->
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = cons tm s.tms}
+    else error "Not a cons of a constant sequence"
+  | CSnoc _ ->
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CSnoc2 s.tms}
+    else "Not a snoc of a constant sequence"
+  | CSnoc2 tms ->
+    TmSeq {tms = snoc tms arg}
+  | CConcat _ ->
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CConcat2 s.tms}
+    else "Not a concat of a constant sequence"
+  | CConcat2 tms ->
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = concat tms s.tms}
+    else "Not a concat of a constant sequence"
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
@@ -882,4 +901,30 @@ utest eval {env = []}
            (appSeq (lambda "x" (lambda "x" (addi_ (var "x") (int 1))))
                    [int 1, int 2])
 with int 3 in
+
+-- Builtin sequence functions
+-- get [1,2,3] 1 -> 2
+let getAst = TmApp {lhs = TmApp {lhs = TmConst {val = CGet ()},
+                                  rhs = TmSeq {tms = [int 1, int 2, int 3]}},
+                     rhs = int 1} in
+utest eval {env = []} getAst with int 2 in
+
+-- cons 1 [2, 3] -> [1,2,3]
+let consAst = TmApp {lhs = TmApp {lhs = TmConst {val = CCons ()},
+                                  rhs = int 1},
+                     rhs = TmSeq {tms = [int 2, int 3]}} in
+utest eval {env = []} consAst with TmSeq {tms = [int 1, int 2, int 3]} in
+
+-- snoc [2, 3] 1 -> [2,3,1]
+let snocAst = TmApp {lhs = TmApp {lhs = TmConst {val = CSnoc ()},
+                                  rhs = TmSeq {tms = [int 2, int 3]}},
+                     rhs = int 1} in
+utest eval {env = []} snocAst with TmSeq {tms = [int 2, int 3, int 1]} in
+
+-- concat [1,2,3] [4,5,6] -> [1,2,3,4,5,6]
+let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
+                                    rhs = TmSeq {tms = [int 1, int 2, int 3]}},
+                       rhs = TmSeq {tms = [int 4, int 5, int 6]}} in
+utest eval {env = []} concatAst with TmSeq {tms = [int 1, int 2, int 3, int 4, int 5, int 6]} in
+
 ()
