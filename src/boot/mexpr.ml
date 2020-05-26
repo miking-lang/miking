@@ -14,8 +14,7 @@ open Printf
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("unit", tmUnit);
-   ("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
+  ([("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
    ("lti",f(Clti(None)));("leqi",f(Cleqi(None)));("gti",f(Cgti(None)));("geqi",f(Cgeqi(None)));
@@ -494,7 +493,6 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
     | PatInt _ as p -> (patEnv,p)
     | PatChar _ as p -> (patEnv,p)
     | PatBool _ as p -> (patEnv,p)
-    | PatUnit _ as p -> (patEnv,p)
     | PatAnd(fi, l, r) ->
        let (patEnv, l) = sPat patEnv l in
        let (patEnv, r) = sPat patEnv r
@@ -589,10 +587,6 @@ let rec try_match env value pat =
   | PatBool(_, b) ->
      (match value with
       | TmConst(_,CBool b2) when b = b2 -> Some env
-      | _ -> None)
-  | PatUnit _ ->
-     (match value with
-      | TmRecord(_,x) when x = Record.empty -> Some env
       | _ -> None)
   | PatAnd(_, l, r) -> go value r (Some env) |> go value l
   | PatOr(_, l, r) ->

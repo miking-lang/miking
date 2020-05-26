@@ -53,11 +53,11 @@ let ustring_of_pat p =
        then us"[] ++ " ^. ppName x
        else
          let rStr =
-           if Mseq.length l = 0
+           if Mseq.length r <> 0
            then us" ++ [" ^. ppSeq r ^. us"]"
            else us "" in
          let lStr =
-           if Mseq.length r = 0
+           if Mseq.length l <> 0
            then us"[" ^. ppSeq l ^. us"] ++ "
            else us""
          in lStr ^. ppName x ^. rStr
@@ -76,7 +76,6 @@ let ustring_of_pat p =
     | PatInt(_,i) -> Ustring.Op.ustring_of_int i
     | PatChar(_,c) -> us (lit_of_uchar c)
     | PatBool(_,b) -> ustring_of_bool b
-    | PatUnit _ -> us"()"
     | PatAnd(_, l, r) -> us"(" ^. ppp l ^. us" & " ^. ppp r ^. us")"
     | PatOr(_, l, r) -> us"(" ^. ppp l ^. us" | " ^. ppp r ^. us")"
     | PatNot(_, p) -> us"!(" ^. ppp p ^. us")"

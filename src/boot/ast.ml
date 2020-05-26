@@ -114,12 +114,9 @@ and const =
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
-and pattern =
-| ConPattern of info * ustring * ustring
-| VarPattern of info * ustring
 and decl = (* TODO: Local? *)
 | Data     of info * ustring * cdecl list
-| Inter    of info * ustring * param list * (pattern * tm) list
+| Inter    of info * ustring * param list * (pat * tm) list
 
 and mlang   = Lang of info * ustring * ustring list * decl list
 and let_decl = Let of info * ustring * tm
@@ -176,7 +173,6 @@ and pat =
 | PatInt    of info * int                         (* Int pattern *)
 | PatChar   of info * int                         (* Char pattern *)
 | PatBool   of info * bool                        (* Boolean pattern *)
-| PatUnit   of info                               (* Unit pattern *)
 | PatAnd    of info * pat * pat                   (* And pattern *)
 | PatOr     of info * pat * pat                   (* Or pattern *)
 | PatNot    of info * pat                         (* Not pattern *)
@@ -264,7 +260,6 @@ let pat_info = function
   | PatInt(fi,_) -> fi
   | PatChar(fi,_) -> fi
   | PatBool(fi,_) -> fi
-  | PatUnit(fi) -> fi
   | PatAnd(fi, _, _) -> fi
   | PatOr(fi, _, _) -> fi
   | PatNot(fi, _) -> fi

@@ -243,6 +243,9 @@ let main =
     "--symbol", Arg.Set(enable_debug_symbol_print),
     " Enables output of symbols for variables. Affects all other debug printing.";
 
+    "--full-pattern", Arg.Set(Patterns.pat_example_gives_complete_pattern),
+    " Make the pattern analysis in mlang print full patterns instead of partial ones.";
+
   ] in
 
   (* Align the command line description list *)
