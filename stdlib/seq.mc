@@ -117,7 +117,7 @@ end
 let sort = quickSort
 
 -- Max/Min
-let min = lam cmp. lam seq.
+let minOpt = lam cmp. lam seq.
   recursive let work = lam e. lam seq.
     if null seq then Some e
     else
@@ -126,6 +126,13 @@ let min = lam cmp. lam seq.
       if lti (cmp e h) 0 then work e t else work h t
   in
   if null seq then None () else work (head seq) (tail seq)
+
+let maxOpt = lam cmp. minOpt (lam l. lam r. cmp r l)
+
+let min = lam cmp. lam seq.
+  optionMapOrElse (minOpt cmp seq)
+                  (lam _. error "Undefined")
+                  (lam x. x)
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
@@ -221,11 +228,16 @@ utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3] in
 utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3] in
 utest sort (lam l. lam r. subi l r) [] with [] in
 
-utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 in
-utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 in
-utest min (lam l. lam r. subi l r) [] with None () in
-utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 in
-utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
+utest minOpt (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 in
+utest minOpt (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 in
+utest minOpt (lam l. lam r. subi l r) [] with None () in
+utest maxOpt (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 in
+utest maxOpt (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 in
+
+utest min (lam l. lam r. subi l r) [3,4,8,9,20] with 3 in
+utest min (lam l. lam r. subi l r) [9,8,4,20,3] with 3 in
+utest max (lam l. lam r. subi l r) [3,4,8,9,20] with 20 in
+utest max (lam l. lam r. subi l r) [9,8,4,20,3] with 20 in
 
 utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
 with [0,1,2,3,4,5,6,7,8,9] in
