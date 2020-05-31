@@ -2,6 +2,7 @@
 -- matching on weighted bipartite graph G=(U,V,E). Implementation based off
 -- https://gist.github.com/KartikTalwar/3158534
 
+include "prelude.mc"
 include "matrix.mc"
 include "math.mc"
 
@@ -81,7 +82,7 @@ let isPerfectMatch = all isMatch
 let findNonCovered = lam x.
   optionMapOrElse (index (lam x. not (isMatch x)) x)
                   (lam _. error "All nodes are covered")
-                  (lam x. x)
+                  identity
 
 -- lu[u] + lv[v] - w[u][v]
 let slackVal = lam u. lam v. lam state.
