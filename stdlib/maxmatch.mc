@@ -12,7 +12,7 @@ type Slack = {
 }
 
 type State = {
-  c      : [[Int]],             -- cost matrix
+  w      : [[Int]],             -- weight matrix
   n      : Int,                 -- problem size
   lus    : [Int],               -- labels for U
   luv    : [Int],               -- labels for V
@@ -25,21 +25,21 @@ type State = {
   preds  : [Int]                -- predecessors of v in V
 }
 
--- Costructs initial state from cost-matrix c.
+-- Costructs initial state from weight-matrix w.
 let preliminaries : [[Int]] -> State =
-lam c.
-  let d = matrixSize c in
+lam w.
+  let d = matrixSize w in
   let n = d.0 in
-  if neqi d.1 n then error "Expected square cost matrix"
+  if neqi d.1 n then error "Expected square weight matrix"
   else
   let vs = unfoldr (lam a. if eqi a n then None () else Some (a, addi a 1)) 0 in
   let negv = makeSeq n (negi 1) in
   let zerov = makeSeq n 0 in
     {
-      c = c,
+      w = w,
       n = n,
-      lus = map (max subi) c,   -- assign feasible labels, e.g.
-      lvs = zerov,              -- lu[u] + lv[v] => c[u][v] for all v in V, u in U
+      lus = map (max subi) w,   -- assign feasible labels, e.g.
+      lvs = zerov,              -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
       uM = negv,
       vM = negv,
       ss = [],
@@ -83,9 +83,9 @@ let findNonCovered = lam x.
                   (lam _. error "All nodes are covered")
                   (lam x. x)
 
--- lu[u] + lv[v] - c[u][v]
+-- lu[u] + lv[v] - w[u][v]
 let slackVal = lam u. lam v. lam state.
-  subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.c u v)
+  subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.w u v)
 
 -- T <- {}
 let emptyT = lam state. {state with ts = makeSeq state.n false}
@@ -188,10 +188,10 @@ end
 let formatResult = lam state.
   {uM = state.uM, vM = state.vM, val = foldl1 addi (concat state.lus state.lvs)}
 
--- Find a maximum weight matching on weighted bipartite graph encoded by cost
--- matrix c. This implementation uses slack variables to ensure sub O(n^4) time
+-- Find a maximum weight matching on weighted bipartite graph encoded by weight
+-- matrix w. This implementation uses slack variables to ensure sub O(n^4) time
 -- complexity.
-let maxmatchHungarian = lam c.
+let maxmatchHungarian = lam w.
   recursive let work = lam state. lam k.
     if isPerfectMatch state.uM then formatResult state
     -- We should find complete matching in at most n steps.
@@ -206,27 +206,27 @@ let maxmatchHungarian = lam c.
       let state = insertS u0 (emptyS (emptyT {state with slacks = slacks0})) in
       work (augment state) (addi k 1) -- Each application improves matching by one.
   in
-  work (preliminaries c) 0
+  work (preliminaries w) 0
 
 
 -- Maximum weight matching on the bipartite graph G=(U,V,E) encoded by the
--- weight incidence matrix c. Incidence of U and V after Matching is given by uM
+-- weight incidence matrix w. Incidence of U and V after Matching is given by uM
 -- and vM, respectively, and val holds the value of the matching.
 let maxmatchFindMatch : [[Int]] -> {uM : Int, vM : Int, val : Int} =
-lam c. maxmatchHungarian c
+lam w. maxmatchHungarian w
 
 mexpr
 
-let c = [[7, 5, 11],
+let w = [[7, 5, 11],
          [5, 4, 1],
          [9, 3, 2]]
 in
 
-utest (maxmatchHungarian c).val with 24 in
+utest (maxmatchHungarian w).val with 24 in
 
-let c = [[1, 2],
+let w = [[1, 2],
          [1, 3]] in
 
-utest (maxmatchHungarian c).val with 4 in
+utest (maxmatchHungarian w).val with 4 in
 
 ()
