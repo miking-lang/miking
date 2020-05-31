@@ -16,12 +16,12 @@ type State = {
   w      : [[Int]],             -- weight matrix
   n      : Int,                 -- problem size
   lus    : [Int],               -- labels for U
-  luv    : [Int],               -- labels for V
-  uM     : [Int],               -- match incidence vector of U, (-1) means unmatched
-  vM     : [Int],               -- match incidence vector of V, (-1) means unmatched
-  ss     : [Int],               -- represents S set, holding candidates in U of augmenting path
+  lvs    : [Int],               -- labels for V
+  mus    : [Int],               -- matched incidence vector of U, (-1) means unmatched
+  mvs    : [Int],               -- matched incidence vector of V, (-1) means unmatched
+  ss     : [Int],               -- u's in the vertex cover
   vs     : [Int],               -- V's vertices enumerated
-  ts     : [Bool],              -- represents T set, holding candidates in V of augmenting path
+  ts     : [Bool],              -- v's in the vertex cover
   slacks : [Slack],             -- slack variables
   preds  : [Int]                -- predecessors of v in V
 }
@@ -41,8 +41,8 @@ lam w.
       n = n,
       lus = map (max subi) w,   -- assign feasible labels, e.g.
       lvs = zerov,              -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
-      uM = negv,
-      vM = negv,
+      mus = negv,
+      mvs = negv,
       ss = [],
       vs = vs,
       ts = makeSeq n false,
@@ -56,10 +56,10 @@ let debugShowState = lam state.
   let _ = debugShow state.lus in
   let _ = print "lvs: " in
   let _ = debugShow state.lvs in
-  let _ = print "uM: " in
-  let _ = debugShow state.uM in
-  let _ = print "vM: " in
-  let _ = debugShow state.vM in
+  let _ = print "mus: " in
+  let _ = debugShow state.mus in
+  let _ = print "mvs: " in
+  let _ = debugShow state.mvs in
   let _ = print "ss: " in
   let _ = debugShow state.ss in
   let _ = print "ts: " in
@@ -106,9 +106,9 @@ let insertS = lam u. lam state. {state with ss = cons u state.ss}
 -- all v not in T
 let vsNotInT = lam state. filter (lam v. not (memT v state)) state.vs
 
--- match u with v
-let doMatch = lam u. lam v. lam state.
-  {{state with uM = set state.uM u v} with vM = set state.vM v u}
+-- assigns u with v
+let assign = lam u. lam v. lam state.
+  {{state with mus = set state.mus u v} with mvs = set state.mvs v u}
 
 let updateSlack = lam v. lam f. lam state.
   {state with slacks = set state.slacks v (f (get state.slacks v))}
@@ -142,14 +142,14 @@ recursive
   -- Improves matching by flipping edges in the augmenting path ending in v.
   let improveMatching = lam v. lam state.
     let u = get state.preds v in
-    let v1 = get state.uM u in
-    let state = doMatch u v state in
+    let v1 = get state.mus u in
+    let state = assign u v state in
     if not (isMatch v1) then state
     else improveMatching v1 state
 end
 
--- Updates slacks according to slackv = min slackv (slack u v) for v not in
--- T. Called everytime a new u is inserted in S.
+-- Updates slacks according to slackv <- min slackv (slack u v) for v not in
+-- T. Applied everytime a new u is inserted in S.
 let updateSlacks = lam u. lam state.
   let f = lam state. lam v.
     let s = get state.slacks v in
@@ -170,7 +170,7 @@ recursive
   in
 
   -- Since we can only expand the matching in the equality graph, e.g. slack =
-  -- 0, to ensure a maximal matching, we might have to update the labels.
+  -- 0, to ensure a maximal matching, we might have to improve the labels.
   let maybeImproveLabels = lam state.
     if gti s.val 0 then improveLabels s.val state
     else state
@@ -179,41 +179,44 @@ recursive
   -- Add minimal node v to T and remember its predecessor.
   let state = updatePred s.v s.u (insertT s.v (maybeImproveLabels state)) in
 
-  let u1 = get state.vM s.v in
+  let u1 = get state.mvs s.v in
   if not (isMatch u1) then
     improveMatching s.v state   -- v is unmatched and we have an augmenting path.
   else
-    augment (updateSlacks u1 (insertS u1 state)) -- update slacks and continue the search.
+    augment (updateSlacks u1 (insertS u1 state)) -- update S, slacks, and continue the search.
 end
 
 let formatResult = lam state.
-  {uM = state.uM, vM = state.vM, val = foldl1 addi (concat state.lus state.lvs)}
+  { incidenceU = state.mus
+  , incidenceV = state.mvs
+  , weight = foldl1 addi (concat state.lus state.lvs) }
 
 -- Find a maximum weight matching on weighted bipartite graph encoded by weight
 -- matrix w. This implementation uses slack variables to ensure sub O(n^4) time
 -- complexity.
 let maxmatchHungarian = lam w.
   recursive let work = lam state. lam k.
-    if isPerfectMatch state.uM then formatResult state
-    -- We should find complete matching in at most n steps.
+    if isPerfectMatch state.mus then formatResult state
+    -- We should find a complete matching in at most n steps.
     else if gti k state.n then error "Failed to find maximal matching"
     else
-      let u0 = findNonCovered state.uM in -- Find unmatched u in U.
+      let u0 = findNonCovered state.mus in -- Find unmatched u in U.
       let slacks0 =
         -- Initial slack variables.
         map (lam v. {val = slackVal u0 v state, v = v, u = u0}) state.vs
       in
-      -- S = {u} and T = {}.
+      -- S <- {u} and T <- {}.
       let state = insertS u0 (emptyS (emptyT {state with slacks = slacks0})) in
       work (augment state) (addi k 1) -- Each application improves matching by one.
   in
   work (preliminaries w) 0
 
 
--- Maximum weight matching on the bipartite graph G=(U,V,E) encoded by the
--- weight incidence matrix w. Incidence of U and V after Matching is given by uM
--- and vM, respectively, and val holds the value of the matching.
-let maxmatchFindMatch : [[Int]] -> {uM : Int, vM : Int, val : Int} =
+-- Maximum-weight matching on the bipartite graph G=(U,V,E) encoded by the
+-- weight-incidence matrix w. Incidence of U and V after assignment is given by
+-- incidenceU and incidenceV. The total weight of the assignment is given by
+-- weight.
+let maxmatchFindMatch : [[Int]] -> {incidenceU : Int, incidenceV : Int, weight : Int} =
 lam w. maxmatchHungarian w
 
 mexpr
@@ -223,11 +226,11 @@ let w = [[7, 5, 11],
          [9, 3, 2]]
 in
 
-utest (maxmatchHungarian w).val with 24 in
+utest (maxmatchHungarian w).weight with 24 in
 
 let w = [[1, 2],
          [1, 3]] in
 
-utest (maxmatchHungarian w).val with 4 in
+utest (maxmatchHungarian w).weight with 4 in
 
 ()
