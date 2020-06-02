@@ -221,6 +221,10 @@ lam w. maxmatchHungarian w
 
 mexpr
 
+let w = [[1]] in
+
+utest (maxmatchHungarian w).weight with 1 in
+
 let w = [[7, 5, 11],
          [5, 4, 1],
          [9, 3, 2]]
@@ -228,9 +232,43 @@ in
 
 utest (maxmatchHungarian w).weight with 24 in
 
+
 let w = [[1, 2],
          [1, 3]] in
 
 utest (maxmatchHungarian w).weight with 4 in
+
+
+let neginf = negi 100000 in
+
+
+let w = [[neginf]] in
+
+utest (maxmatchHungarian w).weight with neginf in
+
+
+let w = [[2     , neginf, 0]
+        ,[neginf, 2     , 0]
+        ,[0     , 0     , neginf]]
+in
+
+utest (maxmatchHungarian w).weight with 2 in
+
+
+let w = [[1     , 0     , neginf]
+        ,[neginf, 1     , 0]
+        ,[0     , neginf, neginf]]
+in
+
+utest (maxmatchHungarian w).weight with 0 in
+
+
+let w = [[0, 0     , neginf, neginf]
+        ,[0, 0     , 0     , neginf]
+        ,[0, neginf, 1     , 0]
+        ,[2, 2     , 2     , 1]]
+in
+
+utest (maxmatchHungarian w).weight with 2 in
 
 ()
