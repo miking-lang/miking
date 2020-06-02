@@ -37,10 +37,10 @@ let matrixMapij = lam f. lam mtx.
 -- Applies function f x over the elements of mtx, where x is the elements value.
 let matrixMap = lam f. matrixMapij (lam _. lam _. lam x. f x)
 
--- Size of matrix mtx
+-- Size of matrix mtx.
 let matrixSize = lam mtx. (length mtx, length (get mtx 0))
 
--- Transpose matrix mtx
+-- Transpose matrix mtx.
 let matrixTr = lam mtx.
   recursive let work = lam mtx.
     if null mtx then []
@@ -59,6 +59,44 @@ let matrixMul = lam add. lam mul. lam mtx1. lam mtx2.
   else
     let m2tr = matrixTr mtx2 in
     map (lam row. map (lam col. vecDot add mul col row) m2tr) mtx1
+
+-- Minimum element of mtx given comparator cmp.
+let matrixMin = lam cmp. lam mtx.
+  min cmp (map (min cmp) mtx)
+
+-- Maximum element of mtx given comparator cmp.
+let matrixMax = lam cmp. matrixMin (lam l. lam r. cmp r l)
+
+-- Fold row-wise over mtx applying f a i j x, where i,j are the index of x and a
+-- the accumulator.
+let matrixFoldij = lam f. lam a. lam mtx.
+  let ai = foldl (lam ai. lam r.
+                    let i = ai.1 in
+                    let aj = foldl (lam aj. lam x.
+                                      let j = aj.1 in
+                                      (f aj.0 i j x, addi j 1))
+                                    (ai.0, 0)
+                                    r
+                    in (aj.0, addi i 1))
+                    (a, 0)
+                    mtx
+  in ai.0
+
+-- Fold row-wise over mtx applying f a x, where a is the accumulator.
+let matrixFold = lam f.
+  matrixFoldij (lam a. lam i. lam j. lam x. f a x)
+
+-- First index (i,j) of mtx satisfying predicate pred.
+let matrixIndex = lam pred. lam mtx.
+  let d = matrixSize mtx in
+  recursive let work = lam i. lam rs.
+    if eqi i d.0 then None ()
+    else
+      let j = index pred (head rs) in
+      if optionIsSome j then optionMap j (lam j. (i, j))
+      else work (addi i 1) (tail rs)
+  in
+  work 0 mtx
 
 mexpr
 
@@ -104,5 +142,19 @@ utest matrixMul [[1]] [[1]] with [[1]] in
 utest matrixMul [[1], [2]] [[1, 2]] with [[1,2], [2,4]] in
 utest matrixMul [[1,2]] [[1],[2]] with [[5]] in
 utest matrixMul [[1],[2]] [[3]] with [[3],[6]] in
+
+utest matrixMin subi matA with 1 in
+utest matrixMax subi matA with 4 in
+
+utest matrixFoldij (lam a. lam i. lam j. lam x. snoc a (i,j,x)) [] matA
+with [(0,0,1),(0,1,3),(1,0,2),(1,1,4)] in
+
+utest matrixFold (lam a. lam x. snoc a x) [] matA
+with [1, 3, 2, 4] in
+
+utest matrixIndex (lam x. eqi 1 x) matA with Some (0, 0) in
+utest matrixIndex (lam x. eqi 2 x) matA with Some (1, 0) in
+utest matrixIndex (lam x. eqi 3 x) matA with Some (0, 1) in
+utest matrixIndex (lam x. eqi 4 x) matA with Some (1, 1) in
 
 ()
