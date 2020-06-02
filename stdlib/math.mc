@@ -8,7 +8,6 @@ let minf = lam r. lam l. if ltf r l then r else l
 
 let maxi = lam r. lam l. if gti r l then r else l
 let mini = lam r. lam l. if lti r l then r else l
-let negi = lam n. subi 0 n
 
 mexpr
 
