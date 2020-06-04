@@ -1,5 +1,22 @@
 include "digraph.mc"
 
+-- Represents a graph with labeled edges.
+
+-- Vertices and labels can be of any data types, as long as they have an
+-- equality function (given as arguments to the graph when created).
+
+-- An edge is represented as a triple (v1, v2, label), where the edge connects
+-- the vertices v1 and v2, and "label" is the label of the edge. There can be
+-- several edges between two vertices.
+
+-- Vertices must be unique: there cannot be two vertices whose value of the
+-- equality function is true. This is maintained as invariant. Similarly, labels
+-- between any pair of vertices must be unique; this is also maintained as
+-- invariant.
+
+-- Presently, the graph is implemented using an adjacency map, which maps each
+-- vertex to a list of incident edges upon that vertex.
+
 type Graph = Digraph
 
 -- Returns an empty graph. Input: equality functions for vertices and labels.
@@ -77,6 +94,9 @@ let g1 = graphAddEdge 1 2 l2 (graphAddEdge 1 2 l1 g) in
 utest graphHasEdges [(1, 2, l1), (1, 2, l2)] g1 with true in
 utest graphHasEdges [(1, 2, l2)] g1 with true in
 utest graphHasEdges [(1, 2, l1)] g1 with true in
+utest graphHasEdges [(2, 1, l1), (2, 1, l2)] g1 with true in
+utest graphHasEdges [(2, 1, l2)] g1 with true in
+utest graphHasEdges [(2, 1, l1)] g1 with true in
 
 let l1 = gensym () in
 let g = graphAddVertex 1 (graphAddVertex 2 (graphAddVertex 3 empty)) in
@@ -141,6 +161,5 @@ let g3 = graphAddEdge 8 1 (gensym ()) g3 in
 let g3 = graphAddEdge 8 7 (gensym ()) g3 in
 
 utest compsEq (digraphStrongConnects g3) [[1,2,8,3,4,5,7,6]] with true in
-
 
 ()
