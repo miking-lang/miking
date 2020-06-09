@@ -2,7 +2,6 @@
 
 include "mexpr/ast.mc"
 
--- C expressions should really be a subset of mexpr expressions
 lang CExprAst = VarAst + ConstAst + IntAst + FloatAst + CharAst
   syn Expr =
     | TmAssg { lhs: Expr, rhs: Expr }
