@@ -3,10 +3,12 @@
 include "mexpr/ast.mc"
 
 -- C expressions should really be a subset of mexpr expressions
-lang CExprAst = VarAst + AppAst + ConstAst + IntAst + FloatAst + CharAst
+lang CExprAst = VarAst + ConstAst + IntAst + FloatAst + CharAst
   syn Expr =
     | TmAssg { lhs: Expr, rhs: Expr }
     -- TODO Many things missing, for instance:
+    -- * Function applications. AppAst in mexpr/ast.mc only allows unary
+    --   applications.
     -- * Operators. We cannot reuse operators from mexpr (such as CAddi) since
     --   they are curried. Maybe this will change in the future?
     -- * Pointers
