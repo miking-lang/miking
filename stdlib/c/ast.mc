@@ -6,9 +6,9 @@ include "mexpr/ast.mc"
 lang CExprAst = VarAst + ConstAst + IntAst + FloatAst + CharAst
   syn Expr =
     | TmAssg { lhs: Expr, rhs: Expr }
-    -- TODO Many things missing, for instance:
-    -- * Function applications. AppAst in mexpr/ast.mc only allows unary
-    --   applications.
+    | TmApp { fun: String, args: [Expr] }
+
+    -- TODO Many other things missing, for instance:
     -- * Operators. We cannot reuse operators from mexpr (such as CAddi) since
     --   they are curried. Maybe this will change in the future?
     -- * Pointers
