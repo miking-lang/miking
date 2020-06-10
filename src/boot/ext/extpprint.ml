@@ -26,6 +26,7 @@ let pprint = function
   | EIdaInitDenseJac _ -> us"idaInitDenseJac"
   | EIdaSolveNormal _ -> us"idaSolveNormal"
   | EIdaCalcICYY _ -> us"idaCalcICYY"
+  | EIdaCalcICYYYP _ -> us"idaCalcICYYYP"
   | EIdaReinit _ -> us"idaReinit"
   | EIdaGetDky _ -> us"idaGetDky"
   | EIdaGetCurrentTime -> us"idaGetCurrentTime"
