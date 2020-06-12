@@ -55,6 +55,16 @@ let digraphHasVertex = lam v. lam g. any (g.eqv v) (digraphVertices g)
 let digraphHasVertices = lam vs. lam g.
                          all (lam b. b) (map (lam v. digraphHasVertex v g) vs)
 
+-- Edges e1 and e2 equal in graph g.
+let digraphEdgeEq = lam g. lam e1. lam e2.
+                    and (and (g.eqv e1.0 e2.0)
+                             (g.eqv e1.1 e2.1))
+                        (g.eql e1.2 e2.2)
+
+-- Graph g contains edges es.
+let digraphHasEdges = lam es. lam g.
+                      setIsSubsetEq (digraphEdgeEq g) es (digraphEdges g)
+
 let digraphSuccessors = lam v. lam g.
     distinct g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
 
@@ -68,7 +78,7 @@ let digraphAddVertexCheck = lam v. lam g. lam check.
   if digraphHasVertex v g then
     if check then error "vertex already exists" else g
   else
-    {adj = cons (v,[]) g.adj, eqv = g.eqv, eql = g.eql}
+    {adj = snoc g.adj (v,[]), eqv = g.eqv, eql = g.eql}
 
 let digraphAddVertex = lam v. lam g.
   digraphAddVertexCheck v g true
@@ -82,7 +92,7 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else if any (g.eql l) (digraphLabels v1 v2 g) then
     if check then error "label already exists" else g
   else
-    {g with adj = mapUpdate g.eqv v1 (cons (v2, l)) g.adj}
+    {g with adj = mapUpdate g.eqv v1 (lam es. snoc es (v2, l)) g.adj}
 
 let digraphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdgeCheckLabel v1 v2 l g true
@@ -178,14 +188,15 @@ utest digraphHasVertex 3 g with true in
 utest digraphHasVertices [1, 2, 3] g with true in
 utest digraphHasVertices [3, 2] g with true in
 utest digraphHasVertices [1, 2, 3, 4] g with false in
-let label = gensym () in
-utest digraphEdgesFrom 1 g with [] in
-utest digraphLabels 1 2 g with [] in
-let g1 = digraphAddEdge 1 2 label g in
-utest digraphEdges (digraphAddEdge 1 2 label g) with [(1, 2, label)] in
-
 let l1 = gensym () in
 let l2 = gensym () in
+utest digraphEdgesFrom 1 g with [] in
+utest digraphLabels 1 2 g with [] in
+let g1 = digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 g) in
+utest digraphHasEdges [(1, 2, l1), (1, 2, l2)] g1 with true in
+utest digraphHasEdges [(1, 2, l2)] g1 with true in
+utest digraphHasEdges [(1, 2, l1)] g1 with true in
+
 let g = digraphAddVertex 1 (digraphAddVertex 2 (digraphAddVertex 3 empty)) in
 let g1 = (digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 g)) in
 utest digraphSuccessors 1 g1 with [2] in

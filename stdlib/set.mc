@@ -11,11 +11,16 @@ let setIsSet = lam eq. lam seq.
 let setMem = lam eq. lam x. lam seq.
   any (eq x) seq
 
+-- True if seq1 is a subset or equal to seq2 as defined by eq. Otherwise false.
+let setIsSubsetEq = lam eq. lam seq1. lam seq2.
+  if gti (length seq1) (length seq1) then false
+  else all (lam x. setMem eq x seq2) seq1
+
 -- True if the seq1 and seq2 are of the same length and contains the same
 -- elements as defined by eq. Otherwise false.
 let setEqual = lam eq. lam seq1. lam seq2.
   if neqi (length seq1) (length seq2) then false
-  else all (lam x. setMem eq x seq2) seq1
+  else setIsSubsetEq eq seq1 seq2
 
 -- The elements of seq1 that are not in seq2, where equality is defined by eq.
 let setDiff = lam eq. lam seq1. lam seq2.
@@ -37,9 +42,17 @@ let diff = setDiff eqi in
 let add = setInsert eqi in
 let union = setUnion eqi in
 let mem = setMem eqi in
+let isSubsetEq = setIsSubsetEq eqi in
 
 utest setIsSet eqi [1,2,3] with true in
 utest setIsSet eqi [1,2,3,2] with false in
+
+utest isSubsetEq [1,2] [1,2] with true in
+utest isSubsetEq [2,1] [1,2] with true in
+utest isSubsetEq [1,2] [1,2,3] with true in
+utest isSubsetEq [1,2,3] [1,2] with false in
+utest isSubsetEq [1,2] [1,3] with false in
+utest isSubsetEq [1,3] [1,2] with false in
 
 utest equal [1,2] [1,2] with true in
 utest equal [2,1] [1,2] with true in
