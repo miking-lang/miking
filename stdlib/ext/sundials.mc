@@ -1,8 +1,10 @@
-type SResf = SArray -> SArray -> Float -> SArray -> ()
 
 let idaRCSuccess = 0
 let idaRCRootsFound = 2
 let idaRCStopTimeReached = 1
+
+let idaVarIdDifferential = 1.
+let idaVarIdAlgebraic = 0.
 
 let noroots = (0, lam _. error "Called noroots")
 

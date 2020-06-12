@@ -56,4 +56,16 @@ utest sMatrixDenseGet m 0 1 with 1. in
 utest sMatrixDenseGet m 1 0 with 1. in
 utest sMatrixDenseGet m 1 1 with 1. in
 
+let y = sArrMake 2 0. in
+let yp = sArrMake 2 0. in
+let _ = sArrSet y 0 1. in
+let _ = sArrSet y 1 2. in
+let _ = sArrSet yp 0 3. in
+let _ = sArrSet yp 1 4. in
+let varid = sArrMake 2 idaVarIdDifferential in
+
+let s = idaInitDense tol resf noroots 0. y yp in
+
+utest idaCalcICYYYP s y yp varid 0.001 with () in
+
 ()

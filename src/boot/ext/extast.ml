@@ -19,7 +19,6 @@ type 'a ext =
   | ESMatrixDenseSet of Matrix.Dense.t option
                         * int option
                         * int option
-
   | EIdaSession of Nvector_serial.kind Ida.serial_session
   | EIdaInitDense of (float * float) option
                      * (float ->
@@ -34,7 +33,6 @@ type 'a ext =
                                   unit)) option
                      * float option
                      * RealArray.t option
-
   | EIdaInitDenseJac of (float * float) option
                         * ((RealArray.t Ida.triple, RealArray.t)
                              Ida.jacobian_arg ->
@@ -52,21 +50,20 @@ type 'a ext =
                                   unit)) option
                         * float option
                         * RealArray.t option
-
   | EIdaSolveNormal of Nvector_serial.kind Ida.serial_session option
                        * float option
                        * Nvector_serial.t option
-
   | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
                     * Nvector_serial.t option
-
+  | EIdaCalcICYYYP of Nvector_serial.kind Ida.serial_session option
+                      * Nvector_serial.t option
+                      * Nvector_serial.t option
+                      * Nvector_serial.t option
   | EIdaReinit of Nvector_serial.kind Ida.serial_session option
                   * float option
                   * Nvector_serial.t option
-
   | EIdaGetDky of Nvector_serial.kind Ida.serial_session option
                   * Nvector_serial.t option
                   * float option
-
   | EIdaGetCurrentTime
   | EIdaGetLastStep

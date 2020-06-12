@@ -25,6 +25,7 @@ let externals =
       ("idaInitDenseJac", EIdaInitDenseJac (None, None, None, None, None, None));
       ("idaSolveNormal", EIdaSolveNormal (None, None, None));
       ("idaCalcICYY", EIdaCalcICYY (None, None));
+      ("idaCalcICYYYP", EIdaCalcICYYYP (None, None, None, None));
       ("idaReinit", EIdaReinit (None, None, None));
       ("idaGetDky", EIdaGetDky (None, None, None));
       ("idaGetCurrentTime", EIdaGetCurrentTime);
@@ -79,6 +80,11 @@ let arity = function
   | EIdaCalcICYY (None, None) -> 3
   | EIdaCalcICYY (Some _, None) -> 2
   | EIdaCalcICYY (_, Some _) -> 1
+  | EIdaCalcICYYYP (None, None, None, None) -> 5
+  | EIdaCalcICYYYP (Some _, None, None, None) -> 4
+  | EIdaCalcICYYYP (_, Some _, None, None) -> 3
+  | EIdaCalcICYYYP (_, _, Some _, None) -> 2
+  | EIdaCalcICYYYP (_, _, _, Some _) -> 1
   | EIdaReinit (None, None, None) -> 4
   | EIdaReinit (Some _, None, None) -> 3
   | EIdaReinit (_, Some _, None) -> 2
@@ -346,6 +352,26 @@ let delta eval env fi c v =
      Ida.calc_ic_y s ~y:v t;
      mk_unit fi
   | EIdaCalcICYY _,_ -> fail_extapp fi
+
+  | EIdaCalcICYYYP (None, None, None, None),
+    TmConst (_, CExt (EIdaSession s)) ->
+      mk_ext fi (EIdaCalcICYYYP (Some s, None, None, None))
+  | EIdaCalcICYYYP (Some s, None, None, None), TmConst (_, CExt (ESArray y)) ->
+      mk_ext fi (EIdaCalcICYYYP (Some s, Some (Nvector_serial.wrap y),
+                               None, None))
+  | EIdaCalcICYYYP (Some s, Some y, None, None),
+    TmConst (_, CExt (ESArray y')) ->
+      mk_ext fi (EIdaCalcICYYYP (Some s, Some y, Some (Nvector_serial.wrap y'),
+                               None))
+  | EIdaCalcICYYYP (Some s, Some y, Some y', None),
+    TmConst (_, CExt (ESArray v)) ->
+      mk_ext fi (EIdaCalcICYYYP (Some s, Some y, Some y',
+                               Some (Nvector_serial.wrap v)))
+  | EIdaCalcICYYYP (Some s, Some y, Some y', Some v),
+    TmConst (_, CFloat t) ->
+      Ida.calc_ic_ya_yd' s ~y:y ~y':y' ~varid:v t;
+      mk_unit fi
+  | EIdaCalcICYYYP _,_ -> fail_extapp fi
 
   | EIdaReinit (None, None, None), TmConst (_, CExt (EIdaSession s)) ->
      mk_ext fi (EIdaReinit (Some s, None, None))
