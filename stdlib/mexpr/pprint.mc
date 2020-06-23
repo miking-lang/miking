@@ -175,6 +175,11 @@ lang CmpFloatPrettyPrint = CmpFloatAst + ConstPrettyPrint
     | CLtf _ -> "ltf"
 end
 
+lang CmpSymbPrettyPrint = CmpSymbAst + ConstPrettyPrint
+     sem getConstStringCode (indent : Int) =
+     | CEqs _ -> "eqs"
+end
+
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CChar c -> [head "'", c.val, head "'"]
@@ -186,6 +191,11 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     | CCons _ -> "cons"
     | CSnoc _ -> "snoc"
     | CConcat _ -> "concat"
+    | CLength _ -> "length"
+    | CHead _ -> "head"
+    | CTail _ -> "tail"
+    | CNull _ -> "null"
+    | CReverse _ -> "reverse"
     | CSeq t ->
       let extract_char = lam e.
         match e with TmConst t1 then
@@ -306,10 +316,10 @@ lang TypePrettyPrint = DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
 end
 
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
-                        LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
+                        LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + SymbPrettyPrint +
                         UnitPrettyPrint + IntPrettyPrint + FloatPrettyPrint +
                         ArithIntPrettyPrint + ArithFloatPrettyPrint +
-                        BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint +
+                        BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint + CmpSymbPrettyPrint +
                         CharPrettyPrint +
                         SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
                         DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +

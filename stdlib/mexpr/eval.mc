@@ -364,7 +364,7 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
   | CEqs2 Symb
 
-sem delta (arg : Expr) =
+  sem delta (arg : Expr) =
   | CEqs _ ->
     match arg with TmConst {val = CSymb s} then
       TmConst {val = CEqs2 s.val}
@@ -378,7 +378,7 @@ end
 lang CharEval = CharAst + ConstEval
 end
 
-lang SeqEval = SeqAst + ConstEval
+lang SeqEval = SeqAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
   | CCons2 Expr
@@ -403,17 +403,40 @@ lang SeqEval = SeqAst + ConstEval
   | CSnoc _ ->
     match arg with TmConst {val = CSeq s} then
       TmConst {val = CSnoc2 s.tms}
-    else "Not a snoc of a constant sequence"
+    else error "Not a snoc of a constant sequence"
   | CSnoc2 tms ->
     TmSeq {tms = snoc tms arg}
   | CConcat _ ->
     match arg with TmConst {val = CSeq s} then
       TmConst {val = CConcat2 s.tms}
-    else "Not a concat of a constant sequence"
+    else error "Not a concat of a constant sequence"
   | CConcat2 tms ->
     match arg with TmConst {val = CSeq s} then
       TmSeq {tms = concat tms s.tms}
-    else "Not a concat of a constant sequence"
+    else error "Not a concat of a constant sequence"
+  | CLength _ ->
+    match arg with TmConst {val = CSeq s} then
+      TmConst {val = CInt {val = (length s.tms)}}
+    else error "Not length of a constant sequence"
+  | CHead _ ->
+    match arg with TmConst {val = CSeq s} then
+      head s.tms
+    else error "Not head of a constant sequence"
+  | CTail _ ->
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = tail s.tms}
+    else error "Not tail of a constant sequence"
+  | CNull _ ->
+    match arg with TmConst {val = CSeq s} then
+      if null s.tms
+      then TmConst {val = CBool {val = true}}
+      else TmConst {val = CBool {val = false}}
+    else error "Not null of a constant sequence"
+  | CReverse _ ->
+    match arg with TmConst {val = CSeq s} then
+      TmSeq {tms = reverse s.tms}
+    else error "Not reverse of a constant sequence"
+
 
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
@@ -977,6 +1000,37 @@ let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
                        rhs = TmSeq {tms = [int 4, int 5, int 6]}} in
 utest eval {env = []} concatAst with TmSeq {tms = [int 1, int 2, int 3, int 4, int 5, int 6]} in
 
+-- length [1, 2, 3] = 3
+let lengthAst = TmApp {lhs = TmConst {val = CLength ()},
+                       rhs = TmSeq {tms = [int 1, int 2, int 3]}} in
+utest eval {env = []} lengthAst with int 3 in
+
+-- tail [1, 2, 3] = [2, 3]
+let tailAst = TmApp {lhs = TmConst {val = CTail ()},
+                     rhs = TmSeq {tms = [int 1, int 2, int 3]}} in
+utest eval {env = []} tailAst with TmSeq {tms = [int 2, int 3]} in
+
+-- head [1, 2, 3] = 1
+let headAst = TmApp {lhs = TmConst {val = CHead ()},
+                     rhs = TmSeq {tms = [int 1, int 2, int 3]}} in
+utest eval {env = []} headAst with int 1 in
+
+-- null [1, 2, 3] = false
+let nullAst = TmApp {lhs = TmConst {val = CNull ()},
+                     rhs = TmSeq {tms = [int 1, int 2, int 3]}} in
+utest eval {env = []} nullAst with false_ in
+
+-- null [] = true
+let nullAst = TmApp {lhs = TmConst {val = CNull ()},
+                     rhs = TmSeq {tms = []}} in
+utest eval {env = []} nullAst with true_ in
+
+-- reverse [1, 2, 3] = [3, 2, 1]
+let reverseAst = TmApp {lhs = TmConst {val = CReverse ()},
+                        rhs = TmSeq {tms = [int 1, int 2, int 3]}} in
+utest eval {env = []} reverseAst with TmSeq {tms = [int 3, int 2, int 1]} in
+
+
 -- Unit tests for CmpFloatEval
 utest eval {env = []} (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in
 utest eval {env = []} (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
@@ -986,7 +1040,6 @@ utest eval {env = []} (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
 -- Unit tests for SymbEval and CmpSymbEval
 utest eval {env = []} (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
-utest eval {env = []} (bind_ (let_ "s" (None ()) (symb_ (gensym ())))
-                             (eqs_ (var_ "s") (var_ "s"))) with true_ in
+utest eval {env = []} (bind_ (let_ "s" (None ()) (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s"))) with true_ in
 
 ()

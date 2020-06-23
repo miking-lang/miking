@@ -270,6 +270,26 @@ let concat_ = use MExprAst in
   lam s1. lam s2.
   appf2_ (const_ (CConcat ())) s1 s2
 
+let length_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CLength ())) s
+
+let head_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CHead ())) s
+
+let tail_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CTail ())) s
+
+let null_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CNull ())) s
+
+let reverse_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CReverse ())) s
+
 
 -- Patterns --
 let pvar_ = use MExprAst in

@@ -202,6 +202,11 @@ lang SeqAst = IntAst
   | CCons {}
   | CSnoc {}
   | CConcat {}
+  | CLength {}
+  | CHead {}
+  | CTail {}
+  | CNull {}
+  | CReverse {}
 
   syn Expr =
   | TmSeq {tms : [Expr]}
