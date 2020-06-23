@@ -42,6 +42,10 @@ let digraphEdges = lam g.
 let digraphEdgesFrom = lam v. lam g.
                        map (lam tup. (v, tup.0, tup.1)) (mapLookup g.eqv v g.adj)
 
+let digraphEdgesTo = lam v. lam g.
+                     let allEdges = digraphEdges g in
+                     filter (lam tup. g.eqv v tup.1) allEdges
+
 let digraphLabels = lam v1. lam v2. lam g.
     let from_v1_to_v2 = filter (lam tup. g.eqv tup.1 v2) (digraphEdgesFrom v1 g) in
     map (lam tup. tup.2) from_v1_to_v2
@@ -164,6 +168,19 @@ let digraphTarjan = lam g.
 
 -- Strongly connected components of g.
 let digraphStrongConnects = lam g. digraphTarjan g
+
+-- Print as dot format
+let digraphPrintDot = lam g. lam v2str. lam l2str.
+  let _ = print "digraph {" in
+  let _ = map
+    (lam e. let _ = print (v2str e.0) in
+            let _ = print " -> " in
+            let _ = print (v2str e.1) in
+            let _ = print "[label=" in
+            let _ = print (l2str e.2) in
+            print "];")
+    (digraphEdges g) in
+  let _ = print "}\n" in ()
 
 mexpr
 
