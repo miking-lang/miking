@@ -160,6 +160,17 @@ let lastIndex = lam pred. lam seq.
   in
   lastIndex_rechelper 0 (None ()) pred seq
 
+-- Check if s1 is a prefix of s2
+recursive let isPrefix = lam eq. lam s1. lam s2.
+  if null s1 then true
+  else if null s2 then false
+  else and (eq (head s1) (head s2)) (isPrefix eq (tail s1) (tail s2))
+end
+
+-- Check if s1 is a suffix of s2
+let isSuffix = lam eq. lam s1. lam s2.
+  isPrefix eq (reverse s1) (reverse s2)
+
 mexpr
 
 utest head [2,3,5] with 2 in
@@ -247,5 +258,17 @@ utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4 in
 
 utest lastIndex (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 3 in
 utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4 in
+
+utest isPrefix eqi [] [1,2,3] with true in
+utest isPrefix eqi [1] [1,2,3] with true in
+utest isPrefix eqi [1,2,3] [1,2,3] with true in
+utest isPrefix eqi [1,2,3,4] [1,2,3] with false in
+utest isPrefix eqi [2,3] [1,2,3] with false in
+
+utest isSuffix eqi [] [1,2,3] with true in
+utest isSuffix eqi [2,3] [1,2,3] with true in
+utest isSuffix eqi [1,2,3] [1,2,3] with true in
+utest isSuffix eqi [1,2,3] [1,1,2,3] with true in
+utest isSuffix eqi [1,1,2,3] [1,2,3] with false in
 
 ()
