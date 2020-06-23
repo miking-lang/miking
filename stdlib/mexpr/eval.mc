@@ -117,6 +117,9 @@ lang UnitEval = UnitAst + UnitPat + ConstEval
     else None ()
 end
 
+lang SymbEval = SymbAst + ConstEval
+end
+
 lang IntEval = IntAst + IntPat
   sem tryMatch (t : Expr) =
   | PInt i ->
@@ -357,6 +360,21 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
     else error "Not comparing a constant"
 end
 
+lang CmpSymbEval = CmpSymbAst + ConstEval
+  syn Const =
+  | CEqs2 Symb
+
+sem delta (arg : Expr) =
+  | CEqs _ ->
+    match arg with TmConst {val = CSymb s} then
+      TmConst {val = CEqs2 s.val}
+    else error "First argument in eqs is not a symbol"
+  | CEqs2 s1 ->
+    match arg with TmConst {val = CSymb s2} then
+      TmConst {val = CBool {val = eqs s1 s2.val}}
+    else error "Second argument in eqs is not a symbol"
+end
+
 lang CharEval = CharAst + ConstEval
 end
 
@@ -551,8 +569,8 @@ end
 -- TODO: Add more types! Think about design
 
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
-               + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval
-               + BoolEval + CmpIntEval + CmpFloatEval + CharEval + UnitEval + MatchEval
+               + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval + SymbEval
+               + BoolEval + CmpIntEval + CmpFloatEval + CmpSymbEval + CharEval + UnitEval + MatchEval
                + DynTypeAst + UnitTypeAst + SeqTypeAst + TupleTypeAst + RecordTypeAst
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
@@ -965,5 +983,10 @@ utest eval {env = []} (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
 utest eval {env = []} (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
 utest eval {env = []} (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
 utest eval {env = []} (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
+
+-- Unit tests for SymbEval and CmpSymbEval
+utest eval {env = []} (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
+utest eval {env = []} (bind_ (let_ "s" (None ()) (symb_ (gensym ())))
+                             (eqs_ (var_ "s") (var_ "s"))) with true_ in
 
 ()

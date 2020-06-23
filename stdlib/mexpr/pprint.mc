@@ -110,6 +110,11 @@ lang UnitPrettyPrint = UnitAst + UnitPat + ConstPrettyPrint
     | PUnit _ -> "()"
 end
 
+lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
+    sem getConstStringCode (indent : Int) =
+    | CSymb _ -> "sym"
+end
+
 lang IntPrettyPrint = IntAst + IntPat + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
     | CInt t -> int2string t.val

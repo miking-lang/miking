@@ -50,6 +50,10 @@ let str_ = use MExprAst in
   lam s.
   const_ (CSeq {tms = map char_ s})
 
+let symb_ = use MExprAst in
+  lam c.
+  const_ (CSymb {val = c})
+
 let var_ = use MExprAst in
   lam s.
   TmVar {ident = s}
@@ -241,6 +245,10 @@ let lti_ = use MExprAst in
 let eqf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CEqf ())) a b
+
+let eqs_ = use MExprAst in
+  lam s1. lam s2.
+  appf2_ (const_ (CEqs ())) s1 s2
 
 let ltf_ = use MExprAst in
   lam a. lam b.
