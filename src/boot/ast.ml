@@ -40,7 +40,7 @@ type env = (sym * tm) list
 
 
 and const =
-(* MCore intrinsic: Boolean constant and operations *)
+(* MCore intrinsic: Boolean constant and operations. See test/mexpr/bool.mc *)
 | CBool    of bool
 | Cnot
 | Cand     of bool option

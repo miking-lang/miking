@@ -26,8 +26,7 @@ To compile and run the test suite, execute
 A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 
 ```
-mexpr
-  print("Hello, world!\n")
+mexpr print "Hello world!"
 ```
 
 and then run it using command
@@ -49,42 +48,6 @@ user, issue:
 >>> make install
 ```
 
-### Sundials integration
-To build the project with sundials integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) libraries on your
-system.
-
-This involves installing the C library. On `ubuntu 18.04` you can issue:
-
-```
->> sudo apt-get install libsundials-dev
-```
-
-On `macOS`, using Homebrew, you can install Sundials using command:
-
-```
->> brew install sundials
-```
-
-
-Then install the ocaml bindings
-[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
-
-```
->> opam install sundialsml
-```
-
-To compile and run the test suite with sundials support:
-
-```
->> make externals-test
-```
-
-To install for the current user:
-
-```
->>> make externals-install
-```
 
 ## Editor Support
 
@@ -121,10 +84,21 @@ Nevertheless, to understand the Miking system, it is a good idea to learn to wri
 
 An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
 
+### Unit Test Expressions
+
+When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
+
+```
+utest addi 1 2 with 3 in
+()
+```
+checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
+
 ### Prelude
 
-MCore contains a number of built-in values and predefined functions and constants. These are defined in the [prelude](doc/prelude.md) documentation. For instance, the program
-
+The prelude contains a number of built-in values (intrinsics) and
+predefined functions and constants (part of the standard library).
+For instance
 ```
 mexpr
 print "Hello"
@@ -132,7 +106,19 @@ print "Hello"
 
 uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
 
+The current documentation of the prelude is implicit via code containing `utest` expressions. Please see the following files:
 
+* [Boolean intrinsics](test/mexpr/bool.mc)
+
+* [Integer intrinsics](test/mexpr/int.mc)
+
+* [Floating-point number intrinsics](test/mexpr/float.mc)
+
+* [Strings](test/mexpr/string.mc)
+
+* [Sequences](test/mexpr/seq.mc)
+
+* [Side effects (printing, I/O, debugging etc.)](test/mexpr/effects.mc)
 
 ### Let Expressions
 
@@ -146,15 +132,6 @@ x
 introduces a new name `x`. The build in function `addi` performs an addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-### Unit Test Expressions
-
-When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
-
-```
-utest addi 1 2 with 3 in
-()
-```
-checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
 ### Functions
 
@@ -584,6 +561,49 @@ utest eval (Add (If (True, Real 4.0, Real 0.0), Real 3.0)) with Real 7.0 in
 
 
 
+## Externals
+
+As part of the experimental setup of boot, we currently support a way
+to use external libraries without interfering with the development of
+Miking that does not need these external dependencies.
+
+One of the external dependencies is Sundials, a numerical library for
+solving differential equations.  To build the project with sundials
+integration you need to install the
+[Sundials](https://computing.llnl.gov/projects/sundials) libraries on
+your system.
+
+This involves installing the C library. On `ubuntu 18.04` you can issue:
+
+```
+>> sudo apt-get install libsundials-dev
+```
+
+On `macOS`, using Homebrew, you can install Sundials using command:
+
+```
+>> brew install sundials
+```
+
+
+Then install the ocaml bindings
+[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+>> opam install sundialsml
+```
+
+To compile and run the test suite with sundials support:
+
+```
+>> make externals-test
+```
+
+To install for the current user:
+
+```
+>>> make externals-install
+```
 
 
 
