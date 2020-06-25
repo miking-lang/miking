@@ -103,7 +103,6 @@ and const =
 | CfileExists
 | CdeleteFile
 | Cerror
-| CdebugShow
 (* MCore Symbols *)
 | CSymb of int
 | Cgensym
