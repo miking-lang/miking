@@ -377,9 +377,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
         else error "Internal error: this letexpr should have a TmLam in its body"
       else le
     in
-    -- FIXME: Really do it for all bindings, not just the first
-    TmRecLets {{t with bindings = [handleLetExpr (get t.bindings 0)]}
-               with inexpr = transform2 fs prev t.inexpr}
+    TmRecLets {{t with bindings = foldl (lam a. lam b. cons (handleLetExpr b) a) [] t.bindings}
+                with inexpr = transform2 fs prev t.inexpr}
 
   -- Insert call context as extra argument in function calls (not recursive ones)
   | TmLApp {lhs = TmVar v, rhs = rhs, id = id} ->
