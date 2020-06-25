@@ -11,6 +11,12 @@ include "string.mc"
 -- It's really a graph algorithm, but very specific, and the test cases
 -- takes lots of space, so it's currently in a separate file from digraph.mc.
 
+-- TODO: prove true/false: an eq. path is never a sub-path of another eq-path
+
+
+-- Complexity: O(V+E), as we explore each node and its neighbours at most
+-- once (compare to DFS). This assumes digraphEdgesTo, isVisited and concat are
+-- constant operations.
 let eqPaths = lam g. lam v. lam d.
   let isVisited = lam eq. lam path. lam v.
     optionIsSome (find (eq v) path) in
@@ -323,6 +329,7 @@ let g = addEdges
 let _ = digraphPrintDot g int2string (lam x. x) in
 
 utest eqPaths g 1 2 with [[l1, l4]] in
+utest eqPaths g 1 3 with [[l1, l4]] in
 
 -- Long cycle
 --             ┌─────┐

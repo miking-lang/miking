@@ -114,6 +114,10 @@ let handleLetEdge = use FunAst in
     then f g letexpr.ident lm.body
     else f g prev letexpr.body
 
+-- Complexity (I think): O(|V|*|F|), as we visit each node exactly once and each
+-- time potentially perform a graph union operation, which we assume has
+-- complexity O(|F|). V is the set of nodes in the AST and F is the set of nodes
+-- in the call graph (i.e. set of functions in the AST).
 lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
   sem toCallGraph =
   | arg ->
