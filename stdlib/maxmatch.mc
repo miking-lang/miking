@@ -53,21 +53,21 @@ lam w.
 let debugShowState = lam state.
   let _ = printLn "===" in
   let _ = print "lus: " in
-  let _ = debugShow state.lus in
+  let _ = dprint state.lus in
   let _ = print "lvs: " in
-  let _ = debugShow state.lvs in
+  let _ = dprint state.lvs in
   let _ = print "mus: " in
-  let _ = debugShow state.mus in
+  let _ = dprint state.mus in
   let _ = print "mvs: " in
-  let _ = debugShow state.mvs in
+  let _ = dprint state.mvs in
   let _ = print "ss: " in
-  let _ = debugShow state.ss in
+  let _ = dprint state.ss in
   let _ = print "ts: " in
-  let _ = debugShow state.ts in
+  let _ = dprint state.ts in
   let _ = print "slacks: " in
-  let _ = debugShow state.slacks in
+  let _ = dprint state.slacks in
   let _ = print "preds: " in
-  let _ = debugShow state.preds in
+  let _ = dprint state.preds in
   ()
 
 ------------------------------------------------------------

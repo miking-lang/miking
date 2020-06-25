@@ -106,7 +106,8 @@ print "Hello"
 
 uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
 
-The current documentation of the prelude is implicit via code containing `utest` expressions. Please see the following files:
+The current documentation of intrinsics is implicit via code
+containing `utest` expressions. Please see the following files:
 
 * [Boolean intrinsics](test/mexpr/bool.mc)
 
@@ -114,11 +115,16 @@ The current documentation of the prelude is implicit via code containing `utest`
 
 * [Floating-point number intrinsics](test/mexpr/float.mc)
 
-* [Strings](test/mexpr/string.mc)
+* [Strings intrinsics ](test/mexpr/string.mc)
 
-* [Sequences](test/mexpr/seq.mc)
+* [Sequences intrinsics ](test/mexpr/seq.mc)
 
-* [Side effects (printing, I/O, debugging etc.)](test/mexpr/effects.mc)
+* [Side effect (printing, I/O, debugging etc.) intrinsics](test/mexpr/effects.mc)
+
+* [Symbol intrinsics](test/mexpr/symbs.mc)
+
+Besides the intrinsic functions, the prelude includes a number of functions defined in the MCore standard library, which can be found in the folder [stdlib](stdlib/). The main file [prelude.mc](stdlib/prelude.mc) is automatically included in all `.mc` files. Note also that the prelude file includes other files, e.g., [seq.mc](stdlib/seq.mc) and [option.mc](stdlib/option.mc). For the details of these prelude functions, please see the above files.
+
 
 ### Let Expressions
 
@@ -129,7 +135,7 @@ let x = addi 1 2 in
 x
 ```
 
-introduces a new name `x`. The build in function `addi` performs an addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
+introduces a new name `x`. The built-in function `addi` performs an addition between two integers. Note that MCore uses a call-by-value evaluation order, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
 
