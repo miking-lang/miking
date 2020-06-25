@@ -26,8 +26,7 @@ To compile and run the test suite, execute
 A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 
 ```
-mexpr
-  print("Hello, world!\n")
+mexpr print "Hello world!"
 ```
 
 and then run it using command
@@ -49,42 +48,6 @@ user, issue:
 >>> make install
 ```
 
-### Sundials integration
-To build the project with sundials integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) libraries on your
-system.
-
-This involves installing the C library. On `ubuntu 18.04` you can issue:
-
-```
->> sudo apt-get install libsundials-dev
-```
-
-On `macOS`, using Homebrew, you can install Sundials using command:
-
-```
->> brew install sundials
-```
-
-
-Then install the ocaml bindings
-[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
-
-```
->> opam install sundialsml
-```
-
-To compile and run the test suite with sundials support:
-
-```
->> make externals-test
-```
-
-To install for the current user:
-
-```
->>> make externals-install
-```
 
 ## Editor Support
 
@@ -121,10 +84,21 @@ Nevertheless, to understand the Miking system, it is a good idea to learn to wri
 
 An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
 
+### Unit Test Expressions
+
+When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
+
+```
+utest addi 1 2 with 3 in
+()
+```
+checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
+
 ### Prelude
 
-MCore contains a number of built-in values and predefined functions and constants. These are defined in the [prelude](doc/prelude.md) documentation. For instance, the program
-
+The prelude contains a number of built-in values (intrinsics) and
+predefined functions and constants (part of the standard library).
+For instance
 ```
 mexpr
 print "Hello"
@@ -132,6 +106,24 @@ print "Hello"
 
 uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
 
+The current documentation of intrinsics is implicit via code
+containing `utest` expressions. Please see the following files:
+
+* [Boolean intrinsics](test/mexpr/bool.mc)
+
+* [Integer intrinsics](test/mexpr/int.mc)
+
+* [Floating-point number intrinsics](test/mexpr/float.mc)
+
+* [Strings intrinsics ](test/mexpr/string.mc)
+
+* [Sequences intrinsics ](test/mexpr/seq.mc)
+
+* [Side effect (printing, I/O, debugging etc.) intrinsics](test/mexpr/effects.mc)
+
+* [Symbol intrinsics](test/mexpr/symbs.mc)
+
+Besides the intrinsic functions, the prelude includes a number of functions defined in the MCore standard library, which can be found in the folder [stdlib](stdlib/). The main file [prelude.mc](stdlib/prelude.mc) is automatically included in all `.mc` files. Note also that the prelude file includes other files, e.g., [seq.mc](stdlib/seq.mc) and [option.mc](stdlib/option.mc). For the details of these prelude functions, please see the above files.
 
 
 ### Let Expressions
@@ -143,18 +135,9 @@ let x = addi 1 2 in
 x
 ```
 
-introduces a new name `x`. The build in function `addi` performs an addition between two integers. Note that MCore has a call-by-value semantics, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
+introduces a new name `x`. The built-in function `addi` performs an addition between two integers. Note that MCore uses a call-by-value evaluation order, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-### Unit Test Expressions
-
-When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
-
-```
-utest addi 1 2 with 3 in
-()
-```
-checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
 ### Functions
 
@@ -175,7 +158,7 @@ let double = lam x:Int. muli x 2 in
 This means that `double` has type `Int -> Int`, which can also be expressed as part of the `let` expression.
 
 ```
-let double : Int -> Int = lam x:Int. muli x 2 in
+let double : Int -> Int = lam x. muli x 2 in
 ```
 
 A function with several parameters are expressed using currying, using nested lambda expressions. For instance, expression
@@ -202,29 +185,44 @@ checks if `x` is less than 10 (using the `lti` function with signature `Int -> I
 
 ### Recursion
 
-Using only lambdas and `let` expressions are not enough to express recursive functions. Instead, a fixed-point term is used, called `fix`.
-
-Consider the factorial function
+A normal `let` expression cannot be used to define recursive functions. Instead, recursion can be defined using *recursive lets*, starting with the `recursive` keyword:
 
 ```
-let fact = fix (lam fact. lam n.
+recursive
+let fact = lam n.
   if eqi n 0
     then 1
     else muli n (fact (subi n 1))
-) in
+in
 
+utest fact 0 with 1 in
 utest fact 4 with 24 in
 ()
 
 ```
 
-We define a recursive function `fact` by using the fixed-point combinator `fix`. This means that when the inner `fact` will "copy itself", thus resulting in a recursive call.
+Recursive lets can also be used to define mutually recursive functions. For instance:
 
-See the [prelude](doc/prelude.md) documentation for details on `eqi`, `muli`, and `subi`.
+```
+recursive
+let odd = lam n.
+    if eqi n 1 then true
+    else if lti n 1 then false
+    else even (subi n 1)
+let even = lam n.
+    if eqi n 0 then true
+    else if lti n 0 then false
+    else odd (subi n 1)
+in
+
+utest odd 4 with false in
+utest even 4 with true in
+```
+
 
 ### Tuples
 
-Product types are expressed using tuples. An n-tuple is defined using syntax `(e_1, ..., e_n)` where `e_1` to `e_n` are MCore expressions. Extracting a value from a tuple (projection) is performed using an expression `e.n` where `e` is the expression that is evaluated into a tuple, and `n` is an integer number representing the index of an element in the tuple. The first intex in a tuple is `0`.
+Product types can be expressed using tuples. An n-tuple is defined using syntax `(e_1, ..., e_n)` where `e_1` to `e_n` are MCore expressions. Extracting a value from a tuple (projection) is performed using an expression `e.n` where `e` is the expression that is evaluated into a tuple, and `n` is an integer number representing the index of an element in the tuple. The first index in a tuple is `0`.
 
 For instance, in the MCore expression
 
@@ -236,6 +234,42 @@ utest t.2 with 80 in
 ()
 ```
 we create a 3-tuple `t` and project out its values. Note that the different elements of a tuple can have different types. In this case, tuple `t` has type `(Int, String, Int)`.
+
+
+### Records
+
+Another more general form of product types are records. A record has
+named fields that can have different types. For instance,
+
+```
+let r1 = {age = 42, name = "foobar"} in
+```
+defines a record of type `{age : int, name : string}`. The order of the fields does not matter:
+
+```
+utest r1 with {age = 42, name = "foobar"} in
+utest r1 with {name = "foobar", age = 42} in
+```
+
+To project out a value, a dot notation may be used.
+
+```
+utest r1.age with 42 in
+utest r1.name with "foobar" in
+```
+
+A record type is not just a general product type in MCore, it is the only
+product type. That is, a tuple is just *syntactic sugar* for a record. This means that the compiler encodes a tuple as a record, where the names of the fields are numbers `0`, `1`, etc. Labels can internally be any kind of string. For strings that cannot be defined as a normal identifier, the label form `#label"x"`
+can be used, where `x` is the string of the label.
+
+The following example shows how a tuple is actually encoded as a
+record.
+
+
+```
+utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in
+```
+
 
 ### Data Types and `match` expressions
 
@@ -260,17 +294,16 @@ is a small tree named `tree`.
 Assume now that we want to count the sum of the values of all leafs in a tree. We can then write a recursive function that performs the counting.
 
 ```
-let count = fix (lam count. lam tree.
-	match tree with Node t then
-	  let left = t.0 in
-	  let right = t.1 in
-	  addi (count left) (count right)
-	else match tree with Leaf v then v
-	else error "Unknown node"
-) in
+recursive
+  let count = lam tree.
+    match tree with Node t then
+      let left = t.0 in
+      let right = t.1 in
+      addi (count left) (count right)
+    else match tree with Leaf v then v
+    else error "Unknown node"
+in
 ```
-
-The `count` function performs recursion using the fixed-point term `fix`.
 
 The `match` expression inside the count function *deconstructs* data values by matching against a given constructor. For instance, the `match` expression
 
@@ -278,11 +311,7 @@ The `match` expression inside the count function *deconstructs* data values by m
 match tree with Node t then expr1 else expr2
 ```
 
-matches the value after evaluating expression `tree` and checks if its outer most constructor is a `Node` constructor. If that is the case, the identifier `t` in expression `expr1` is bound to the tuple consisting of the node's two sub trees (recall the definition of the constructor `Node`).
-
-As part of the design of MExpr, we try to make it simple. Hence, MExpr does not support pattern variables or nested matches. This should instead be introduced by languages that are later compiled into an MExpr. This is the reason for the pattern where `left` and `right` identifiers are introduced by projecting out the elements from a tuple.
-
-Finally, if we execute the test
+matches the value after evaluating expression `tree` and checks if its outer most constructor is a `Node` constructor. If that is the case, the identifier `t` in expression `expr1` is bound to the tuple consisting of the node's two sub trees (recall the definition of the constructor `Node`). Finally, if we execute the test
 
 ```
 utest count tree with 9 in ()
@@ -290,9 +319,73 @@ utest count tree with 9 in ()
 
 we can check that the function computes the result as intended.
 
+### Pattern matching
+
+In the previous match example, the `match` construct matched against
+the constructor, but not against the actual data content. MExpr is
+designed to be simple with few language construct, at the right level
+of abstraction. If the abstraction level is too low, it is hard to
+perform useful static analysis and code generation. As a consequence,
+MExpr support *patterns* in `match` expressions. The `count` function
+can be rewritten as
+
+```
+recursive
+  let count = lam tree.
+    match tree with Node(left,right) then
+      addi (count left) (count right)
+    else match tree with Leaf v then v
+    else error "Unknown node"
+in
+```
+
+where the match construct matches against pattern `Node(left,right)`,
+where `left` and `right` are pattern variables.
+
+Remember, however, that tuples are just syntactic sugar for records. Hence, match line
+
+```
+    match tree with Node(left,right) then
+```
+is equivalent to the following
+```
+    match tree with Node {#label"0"=left,#label"1"=right} then
+```
+where the pattern is a *record pattern*.
+
+Pattern matching is the general form of deconstructing data in MExpr. Patterns can also be nested:
+
+```
+utest
+  match {foo=7,bar={more="hello"}} with {foo=_,bar={more=str}} then str else ""
+with "hello" in
+```
+
+Note also the use of *wildcard* patterns `_` (used in the `foo`
+field), which matches any value.
+
+Finally, MExpr also supports more advanced patterns, including AND patterns (using infix notation `&`)
+```
+utest match (1, 2) with (a, _) & (_, b) then (a, b) else (0, 0) with (1, 2) in
+```
+
+OR patterns (using infix notation `|`)
+```
+utest match K1 1 with K1 a | K2 a | K3 a then a else 0 with 1 in
+```
+
+and `NOT` patterns (using the prefix notation `!`)
+```
+utest match (true, true) with (true, a) & !(_, true) then a else false with false in
+
+```
+
+
+
+
 ### Sequences
 
-An MCore sequence is constructed using syntax `[e_1, ..., e_n]`. All elements in an sequence must have the same type. For instance, an expression
+An MCore sequence is constructed using syntax `[e_1, ..., e_n]`. All elements in a sequence must have the same type. For instance, an expression
 
 ```
 [1,3,6,7,22,3]
@@ -319,13 +412,40 @@ There are several operations defined for sequences, for instance, the `concat` f
 utest concat [1,3,5] [7,9] with [1,3,5,7,9] in ()
 ```
 
-or the `nth` function picks out the nth element of a sequence
+or the `get` function picks out the nth element of a sequence
 
 ```
-utest nth [3,5,8,9] 2 with 8 in ()
+utest get [3,5,8,9] 2 with 8 in ()
 ```
 
-See the [prelude](doc/prelude.md) document for more information.
+It is also possible to pattern match on sequences, to either extract the *tail* of a sequence, if the first part matches
+
+```
+utest match "foobar" with "fo" ++ rest then rest else ""
+with "obar" in
+```
+
+or the *head* of a sequence if the last part matches:
+
+```
+utest match "foobar" with first ++ "bar" then first else ""
+with "foo" in
+```
+
+It is even possible to extract the middle of a sequence, if the head and the tail matches:
+
+```
+utest match "foobar" with "fo" ++ mid ++ "ar" then mid else ""
+with "ob" in
+```
+
+Again, matching can be combined and nested:
+
+```
+utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else []
+with [["a","b"]] in
+```
+
 
 
 
@@ -360,7 +480,12 @@ The translation into MExpr is straightforward: the definitions are
 simply moved into the beginning of the `mexpr` program. The
 usefulness of top-level definitions becomes more apparent when
 adding included files. A file can be included using the syntax
-`include "path/to/prog.mc"` before any top-level definitions in a
+
+```
+include "path/to/prog.mc"
+```
+
+before any top-level definitions in a
 file. The string is a file path relative to the file that contains
 the `include`. If the environment variable `MCORE_STDLIB` is
 defined, its value is used as a fallback path to search from if
@@ -373,7 +498,7 @@ Including a file is equivalent to inserting all the top-level
 definitions of that file. There are no namespaces and no
 disambiguation; if a name defined in an included file is shadowed
 in the including file, the included definition becomes
-unavailable. When `MCORE_STDLIB` is defined, the file "prelude.mc"
+unavailable. When `MCORE_STDLIB` is defined, the file `prelude.mc`
 is automatically included.
 
 
@@ -393,9 +518,7 @@ lang Arith
 
   sem eval =
   | Num n -> Num n
-  | Add t ->
-    let e1 = t.0 in
-    let e2 = t.1 in
+  | Add (e1,e2) ->
     match eval e1 with Num n1 then
       match eval e2 with Num n2 then
         Num (addi n1 n2)
@@ -415,7 +538,7 @@ In the main MExpr program, a language fragment can be opened by
 a `use` expression:
 
 ```
-expr
+mexpr
 use Arith in
 utest eval (Add (Num 2, Num 3)) with Num 5 in
 ()
@@ -432,31 +555,26 @@ expressions:
 ```
 lang Bool
   syn Expr =
-  | True
-  | False
+  | True()
+  | False()
   | If (Expr, Expr, Expr)
 
   sem eval =
-  | True -> True
-  | False -> False
-  | If t ->
-    let cnd = t.0 in
-    let thn = t.1 in
-    let els = t.2 in
+  | True() -> True()
+  | False() -> False()
+  | If(cnd,thn,els) ->
     let cndVal = eval cnd in
-    match cndVal with True
-    then eval thn
-    else match cndVal with False
-    then eval els
+    match cndVal with True() then eval thn
+    else match cndVal with False() then eval els
     else error "Not a boolean"
 end
 
 lang ArithBool = Arith + Bool
 
 mexpr
-
 use ArithBool in
-utest eval (Add (If (False, Num 0, Num 5), Num 2)) with Num 7 in
+utest eval (Add (If (False(), Num 0, Num 5), Num 2)) with Num 7 in
+()
 ```
 
 The language fragment `ArithBool` is indistinguishable from a
@@ -473,11 +591,16 @@ lang ArithBool = Arith + Bool
   sem eval =
   | IsZero e ->
     match eval e with Num n then
-      if eq n 0 then True else False
+      if eqi n 0 then True() else False()
     else
       error "Not a number"
 end
 ```
+
+<!--
+NOTE: The following text needs to be updated since we now have
+nested patterns, even for MLang.
+
 
 ### Designing for Extensibility
 
@@ -559,14 +682,19 @@ utest eval (Add (If (True, Real 4.0, Real 0.0), Real 3.0)) with Real 7.0 in
 ()
 ```
 
-### Known Issues/Future Work
+-->
 
+### Known Issues/Future Work
+<!--
 * Pattern matching in interpreters is shallow, which sometimes
-  requires defining interpreters in multiple "layers" to maintain
-  extensibility.
-* Interpreters are always defined on pattern matching on a single
-  parameter, which also forces the programmer to define several
-  interpreters to achieve the same thing.
+requires defining interpreters in multiple "layers" to maintain
+extensibility.
+
+* Iterpreters are always defined on pattern matching on a single
+parameter, which also forces the programmer to define several
+interpreters to achieve the same thing.
+-->
+
 * Name binding in language definitions is dynamic in where the
   language is used, meaning that shadowing can change behavior in
   unexpected ways (a type system would address this to some
@@ -584,6 +712,49 @@ utest eval (Add (If (True, Real 4.0, Real 0.0), Real 3.0)) with Real 7.0 in
 
 
 
+## Externals
+
+As part of the experimental setup of boot, we currently support a way
+to use external libraries without interfering with the development of
+Miking that does not need these external dependencies.
+
+One of the external dependencies is Sundials, a numerical library for
+solving differential equations.  To build the project with sundials
+integration you need to install the
+[Sundials](https://computing.llnl.gov/projects/sundials) libraries on
+your system.
+
+This involves installing the C library. On `ubuntu 18.04` you can issue:
+
+```
+>> sudo apt-get install libsundials-dev
+```
+
+On `macOS`, using Homebrew, you can install Sundials using command:
+
+```
+>> brew install sundials
+```
+
+
+Then install the ocaml bindings
+[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+>> opam install sundialsml
+```
+
+To compile and run the test suite with sundials support:
+
+```
+>> make externals-test
+```
+
+To install for the current user:
+
+```
+>>> make externals-install
+```
 
 
 

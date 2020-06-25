@@ -60,6 +60,35 @@ utest count tree2 with 9 in
 let tree3 = Node(Node(Leaf(3),Node(Leaf(2),Leaf(6))),Leaf(12)) in
 utest count tree3 with 23 in
 
+recursive
+  let count = lam tree.
+    match tree with Node(left,right) then
+      addi (count left) (count right)
+    else match tree with Leaf v then
+      v
+    else error "Unknown node"
+in
+
+utest count tree3 with 23 in
+
+recursive
+  let count = lam tree.
+    match tree with Node {#label"0"=left,#label"1"=right} then
+      addi (count left) (count right)
+    else match tree with Leaf v then
+      v
+    else error "Unknown node"
+in
+
+utest count tree3 with 23 in
+
+--- Nested record patterns
+
+utest
+  match {foo=7,bar={more="hello"}} with {foo=_,bar={more=str}} then str else ""
+with "hello" in
+
+
 
 -- Wildcard
 utest match (1,2,3) with (_,2,_) then true else false with true in
@@ -126,6 +155,7 @@ utest match K1 1 with K1 a | K2 a | K3 a then a else 0 with 1 in
 utest match K2 2 with K1 a | K2 a | K3 a then a else 0 with 2 in
 utest match K3 3 with K1 a | K2 a | K3 a then a else 0 with 3 in
 utest match (true, true) with (true, a) & !(_, true) then a else false with false in
+utest match (true, false) with (true, a) & !(_, true) then a else false with false in
 
 -- Matching with never terms
 let x = true in

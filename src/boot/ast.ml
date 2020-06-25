@@ -40,7 +40,7 @@ type env = (sym * tm) list
 
 
 and const =
-(* MCore intrinsic: Boolean constant and operations *)
+(* MCore intrinsic: Boolean constant and operations. See test/mexpr/bool.mc *)
 | CBool    of bool
 | Cnot
 | Cand     of bool option
@@ -103,7 +103,6 @@ and const =
 | CfileExists
 | CdeleteFile
 | Cerror
-| CdebugShow
 (* MCore Symbols *)
 | CSymb of int
 | Cgensym

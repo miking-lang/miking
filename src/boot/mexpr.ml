@@ -44,7 +44,6 @@ let builtin =
    ("readFile",f(CreadFile)); ("writeFile",f(CwriteFile(None)));
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
-   ("debugShow", f(CdebugShow));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym))
   ]
   (* Append external functions TODO: Should not be part of core language *)
@@ -123,7 +122,6 @@ let arity = function
   | CfileExists       -> 1
   | CdeleteFile       -> 1
   | Cerror            -> 1
-  | CdebugShow        -> 1
   (* MCore symbols *)
   | CSymb(_)      -> 0
   | Cgensym      -> 1
@@ -391,9 +389,6 @@ let delta eval env fi c v  =
                      | NoInfo -> us""
         in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
-    | CdebugShow,t ->
-       uprint_endline ((us"EXPR: ") ^. (ustring_of_tm t)); tmUnit
-
     | CSymb(_),_ -> fail_constapp fi
     | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi

@@ -196,7 +196,7 @@ let translate_cases f target cases =
   in
   let no_match =
     let_ (us"_") nosym   (* TODO: we should probably have a special sort for let with wildcards *)
-      (app (TmConst (NoInfo, CdebugShow)) target)
+      (app (TmConst (NoInfo, Cdprint)) target)
       (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
   List.fold_right translate_case cases no_match
