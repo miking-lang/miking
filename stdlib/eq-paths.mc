@@ -14,9 +14,9 @@ include "string.mc"
 -- TODO: prove true/false: an eq. path is never a sub-path of another eq-path
 
 
--- Complexity: O(V+E), as we explore each node and its neighbours at most
--- once (compare to DFS). This assumes digraphEdgesTo, isVisited and concat are
--- constant operations.
+-- Complexity: O(|V|^2), as for each node, we potentially visit every other
+-- node. This assumes digraphEdgesTo, isVisited and concat are constant
+-- operations.
 let eqPaths = lam g. lam v. lam d.
   let isVisited = lam eq. lam path. lam v.
     optionIsSome (find (eq v) path) in
