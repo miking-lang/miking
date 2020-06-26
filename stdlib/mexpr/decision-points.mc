@@ -178,6 +178,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   sem transform =
   | tm ->
     -- Define hard coded constants
+    -- TODO: Use unique identifiers instead of hard coded strings.
     let callCtxVar = "callCtx" in
     let callCtxTp = None () in
     let lookupTableVar = "lookupTable" in

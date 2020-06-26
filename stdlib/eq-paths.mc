@@ -25,7 +25,6 @@ let eqPaths = lam g. lam v. lam d.
 
   recursive let traverse = lam v. lam path. lam visited. lam d.
     let toEdges = digraphEdgesTo v g in
-    --let nonSelfLoops = filter (lam e. if isSelfLoop g.eqv e then false else true) toEdges in
     let nonSelfLoops = filter (lam e. not (isSelfLoop g.eqv e)) toEdges in
 
     if isVisited g.eqv visited v then
@@ -51,12 +50,10 @@ let addEdges = lam g. lam es. foldl (lam acc. lam e. digraphAddEdge e.0 e.1 e.2 
 
 -- To compare paths
 recursive let eqpath = lam eq. lam p1. lam p2.
-  if and (null p1) (null p2) then
-    true
-  else if or (null p1) (null p2) then
-    false
-  else
-    and (eq (head p1) (head p2)) (eqpath eq (tail p1) (tail p2)) in
+  match (p1, p2) with ([], []) then true else
+  match (p1, p2) with ([], _) | (_, []) then false
+  else and (eq (head p1) (head p2)) (eqpath eq (tail p1) (tail p2))
+in
 
 -- To compare edges
 let eqedge = lam e1. lam e2.
@@ -65,10 +62,10 @@ in
 
 let samePaths = lam eq. lam seq1. lam seq2.
   and
-  -- equal number of paths
-  (eqi (length seq1) (length seq2))
-  -- each path in seq1 exists in seq2
-  (all (lam p. match (find (eqpath eq p) seq2) with Some _ then true else false) seq1)
+    -- equal number of paths
+    (eqi (length seq1) (length seq2))
+    -- each path in seq1 exists in seq2
+    (all (lam p. optionIsSome (find (eqpath eq p) seq2)) seq1)
 in
 
 -- Create some labels
