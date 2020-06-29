@@ -208,15 +208,52 @@ let testprog lst =
       printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
+let parse_mcore_string str =
+  Lexing.from_string str
+  |> Parser.main Lexer.main
+
+let eval_with_env name2sym sym2term prog =
+  let (new_name2sym, symbolized) = Mexpr.symbolize_toplevel name2sym prog in
+  let (new_sym2term, result) = Mexpr.eval_toplevel sym2term symbolized in
+  (new_name2sym, new_sym2term, result)
+
+let read_user_input () =
+  let rec read_new_line acc prompt =
+    print_string prompt;
+    let line = String.trim (read_line ()) in
+    let len = String.length line in
+    let last_two = BatString.slice ~first:(len - 2) line in
+    match last_two with
+    | ";;" -> sprintf "%s\n%s" acc (BatString.slice ~last:(len - 2) line)
+    | _ -> read_new_line (sprintf "%s\n%s" acc line) " | "
+  in read_new_line "" ">> "
+
+(* Start REPL *)
+let runrepl _ =
+  let basic_prog = Program(default_includes, [], TmConst(NoInfo, CInt(69))) in
+  let basic_term = basic_prog |> Mlang.flatten |> Mlang.desugar_post_flatten in
+  let (name2sym, sym2term, _) = eval_with_env builtin_name2sym builtin_sym2term basic_term in
+  let rec read_eval_print name2sym sym2term =
+    let user_input = read_user_input () in
+    let prog = user_input
+                |> parse_mcore_string
+                |> Mlang.flatten
+                |> Mlang.desugar_post_flatten in
+    let (new_name2sym, new_sym2term, result) = eval_with_env name2sym sym2term prog in
+    uprint_endline (ustring_of_tm result);
+    read_eval_print new_name2sym new_sym2term
+  in
+  print_endline "Welcome to the MCore REPL!";
+  read_eval_print name2sym sym2term
+
 (* Run program *)
 let runprog name lst =
     (* TODO prog_argv is never used anywhere *)
     prog_argv := lst;
     evalprog name
 
-
 (* Print out main menu *)
-let usage_msg = "Usage: miking [run|test] <files>\n\nOptions:"
+let usage_msg = "Usage: miking [run|repl|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
@@ -265,6 +302,9 @@ let main =
 
     (* Run tests on one or more files *)
     | "test"::lst | "t"::lst -> testprog lst
+
+    (* Start the MCore REPL *)
+    | "repl"::lst -> runrepl lst
 
     (* Run one program with program arguments without typechecking *)
     | "run"::name::lst | name::lst -> runprog name lst

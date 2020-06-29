@@ -523,7 +523,12 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
     -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
   | TmNever(_) -> t
 
-
+let rec symbolize_toplevel (env : (ident * sym) list) = function
+  | TmLet(fi,x,_,t1,t2) ->
+    let s = gensym() in
+    let (new_env, new_t2) = symbolize_toplevel ((IdVar(sid_of_ustring x),s)::env) t2 in
+    (new_env, TmLet(fi,x,s,symbolize env t1,new_t2))
+  | t -> (env, symbolize env t)
 
 let rec try_match env value pat =
   let go v p env = Option.bind env (fun env -> try_match env v p) in
@@ -666,3 +671,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
      end;
     eval env tnext
   | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."
+
+let rec eval_toplevel (env : (sym * tm) list) = function
+  | TmLet(_,_,s,t1,t2) -> eval_toplevel ((s,eval env t1)::env) t2
+  | t -> (env, eval env t)
