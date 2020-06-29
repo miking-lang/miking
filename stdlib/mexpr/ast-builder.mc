@@ -50,6 +50,10 @@ let str_ = use MExprAst in
   lam s.
   const_ (CSeq {tms = map char_ s})
 
+let symb_ = use MExprAst in
+  lam c.
+  const_ (CSymb {val = c})
+
 let var_ = use MExprAst in
   lam s.
   TmVar {ident = s}
@@ -242,6 +246,10 @@ let eqf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CEqf ())) a b
 
+let eqs_ = use MExprAst in
+  lam s1. lam s2.
+  appf2_ (const_ (CEqs ())) s1 s2
+
 let ltf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLtf ())) a b
@@ -261,6 +269,26 @@ let snoc_ = use MExprAst in
 let concat_ = use MExprAst in
   lam s1. lam s2.
   appf2_ (const_ (CConcat ())) s1 s2
+
+let length_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CLength ())) s
+
+let head_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CHead ())) s
+
+let tail_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CTail ())) s
+
+let null_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CNull ())) s
+
+let reverse_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CReverse ())) s
 
 
 -- Patterns --
