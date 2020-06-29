@@ -130,9 +130,8 @@ let minOpt = lam cmp. lam seq.
 let maxOpt = lam cmp. minOpt (lam l. lam r. cmp r l)
 
 let min = lam cmp. lam seq.
-  optionMapOrElse (minOpt cmp seq)
-                  (lam _. error "Undefined")
-                  (lam x. x)
+  optionGetOrElse (lam _. error "Undefined")
+                  (minOpt cmp seq)
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 

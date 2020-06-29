@@ -14,9 +14,8 @@ let mapLookupOpt = lam eq. lam k. lam seq. findAssoc (eq k) seq
 -- Value binded to k in seq, if no such binding in seq then an error occurs.
 -- Equality defined by eq.
 let mapLookup = lam eq. lam k. lam seq.
-  optionMapOrElse (mapLookupOpt eq k seq)
-                  (lam _. error "Element not found")
-                  (lam x. x)
+  optionGetOrElse (lam _. error "Element not found")
+                  (mapLookupOpt eq k seq)
 
 -- True if k is bound in seq, else false.
 -- Equality defined by eq.
@@ -25,9 +24,9 @@ let mapMem = lam eq. lam k. lam seq.
 
 -- Binds v to k in seq, where equality defined by eq.
 let mapInsert = lam eq. lam k. lam v. lam seq.
-  optionMapOrElse (index ( lam t. eq k t.0) seq)
-                  (lam _. cons (k,v) seq)
+  optionMapOrElse (lam _. cons (k,v) seq)
                   (lam i. set seq i (k,v))
+                  (index (lam t. eq k t.0) seq)
 
 -- Updates seq by applying f to the value bound by k.
 -- Equality defined by eq.

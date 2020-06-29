@@ -80,9 +80,8 @@ let isMatch = lam x. neqi x (negi 1)
 let isPerfectMatch = all isMatch
 
 let findNonCovered = lam x.
-  optionMapOrElse (index (lam x. not (isMatch x)) x)
-                  (lam _. error "All nodes are covered")
-                  identity
+  optionGetOrElse (lam _. error "All nodes are covered")
+                  (index (lam x. not (isMatch x)) x)
 
 -- lu[u] + lv[v] - w[u][v]
 let slackVal = lam u. lam v. lam state.

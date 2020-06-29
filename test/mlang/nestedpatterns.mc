@@ -86,7 +86,7 @@ lang LexDecimal = LexBase
   sem lex =
   | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _) & str ->
     match lex_int "" str with (n, rest) then
-      optionMap (lex rest) (cons (IntTok n))
+      optionMap (cons (IntTok n)) (lex rest)
     else never
 
   sem lex_int (prev_digits : [Char]) =
@@ -108,7 +108,7 @@ lang LexBinary = LexBase
   sem lex =
   | (['0', 'b', '0' | '1'] ++ _) & ([_, _] ++ str) ->
     match lex_binary "" str with (n, rest) then
-      optionMap (lex rest) (cons (BinaryIntTok n))
+      optionMap (cons (BinaryIntTok n)) (lex rest)
     else never
 
   sem lex_binary (prev_digits : [Char]) =
