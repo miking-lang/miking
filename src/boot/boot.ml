@@ -166,7 +166,7 @@ let evalprog filename  =
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
+  (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
   end; parsed_files := [];
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
@@ -255,7 +255,10 @@ let runrepl _ =
     with e ->
       begin
         match e with
+        | Lexer.Lex_error m -> uprint_endline (message2str m)
+        | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
         | Error m -> uprint_endline (message2str m)
+        | End_of_file -> exit 0
         | _ -> print_endline @@ Printexc.to_string e
       end;
       read_eval_print envs
