@@ -156,6 +156,9 @@ utest match K2 2 with K1 a | K2 a | K3 a then a else 0 with 2 in
 utest match K3 3 with K1 a | K2 a | K3 a then a else 0 with 3 in
 utest match (true, true) with (true, a) & !(_, true) then a else false with false in
 utest match (true, false) with (true, a) & !(_, true) then a else false with false in
+utest match (1, 2) with (a, _) & b then (a, b) else (0, (0, 0)) with (1, (1, 2)) in
+utest match Some true with a & !(None ()) then a else Some false with Some true in
+utest match None () with a & !(None ()) then a else Some false with Some false in
 
 -- Matching with never terms
 let x = true in

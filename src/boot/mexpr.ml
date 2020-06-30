@@ -496,7 +496,14 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
        let (patEnv, l) = sPat patEnv l in
        let (patEnv, r) = sPat patEnv r
        in (patEnv, PatOr(fi, l, r))
-    | PatNot _ as p -> (patEnv, p) (* NOTE(vipa): names in a not-pattern do not matter since they will never bind (it should be an error to bind a name inside a not-pattern, but we're not doing that kind of static checks yet *)
+    | PatNot(fi, p) ->
+       let (_, p) = sPat patEnv p in
+        (* NOTE(vipa): new names in a not-pattern do not matter since they will
+         * never bind (it should probably be an error to bind a name inside a
+         * not-pattern, but we're not doing that kind of static checks yet.
+         * Note that we still need to run symbolize though, constructors must
+         * refer to the right symbol. *)
+       (patEnv, PatNot(fi, p))
   in
   match t with
   | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi (IdVar(sid_of_ustring x)) env)
