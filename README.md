@@ -9,7 +9,7 @@ creating languages and generating efficient compilers.
 Before you test the Miking system, you need to install
 [OCaml](https://ocaml.org/), the
 [OPAM](https://opam.ocaml.org/) package manager,
-and the packages `dune` and `batteries`.
+The packages `dune` and `batteries`.
 
 After installing `opam`, these packages can be installed as:
 
