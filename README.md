@@ -78,7 +78,7 @@ MCore consists of two parts:
 
 ## MExpr
 
-One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general purpose programming language, but as a core language to which other languages translate into.
+One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general-purpose programming language. Instead, the aim of MCore is to be a core language that other languages can translate into.
 
 Nevertheless, to understand the Miking system, it is a good idea to learn to write basic programs directly as MCore expressions.
 
@@ -92,7 +92,7 @@ When writing MCore programs, it is typically done by writing explicit unit tests
 utest addi 1 2 with 3 in
 ()
 ```
-checkes that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `boot` command with argument `test`:
+checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `boot` command with argument `test`:
 
 
 ```
