@@ -73,11 +73,11 @@ let debug_after_mlang t =
 
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
+let tablength = 8
 
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
   let fs1 = open_in filename in
-  let tablength = 8 in
   let p =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
@@ -208,43 +208,65 @@ let testprog lst =
       printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
+(* Parse a string received by the REPL into an MCore AST *)
 let parse_mcore_string str =
-  Lexing.from_string str
+  Lexer.init (us "REPL") tablength;
+  str |> Lexing.from_string
   |> Parser.main Lexer.main
 
-let eval_with_env name2sym sym2term prog =
-  let (new_name2sym, symbolized) = Mexpr.symbolize_toplevel name2sym prog in
-  let (new_sym2term, result) = Mexpr.eval_toplevel sym2term symbolized in
-  (new_name2sym, new_sym2term, result)
+(* Evaluate a term given existing name2sym and sym2term environments.
+   Returns updated environments along with evaluation result.
+*)
+let eval_with_envs (name2sym, sym2term) term =
+  let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym term in
+  let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
+  ((new_name2sym, new_sym2term), result)
 
+(* Read user input until the terminating sequence is encountered *)
 let read_user_input () =
+  let initial_prompt = ">> " in
+  let followup_prompt = " | " in
   let rec read_new_line acc prompt =
     print_string prompt;
-    let line = String.trim (read_line ()) in
-    let len = String.length line in
-    let last_two = BatString.slice ~first:(len - 2) line in
-    match last_two with
-    | ";;" -> sprintf "%s\n%s" acc (BatString.slice ~last:(len - 2) line)
-    | _ -> read_new_line (sprintf "%s\n%s" acc line) " | "
-  in read_new_line "" ">> "
+    let open BatString in
+    let split_at str idx = (slice ~last:idx str, slice ~first:idx str) in
+    let line = trim (read_line ()) in
+    let first, last = split_at line (length line - 2) in
+    match last with
+    | ";;" -> sprintf "%s\n%s" acc first
+    | _ -> read_new_line (sprintf "%s\n%s" acc line) followup_prompt
+  in read_new_line "" initial_prompt
 
-(* Start REPL *)
+(* Run the MCore REPL *)
 let runrepl _ =
-  let basic_prog = Program(default_includes, [], TmConst(NoInfo, CInt(69))) in
-  let basic_term = basic_prog |> Mlang.flatten |> Mlang.desugar_post_flatten in
-  let (name2sym, sym2term, _) = eval_with_env builtin_name2sym builtin_sym2term basic_term in
-  let rec read_eval_print name2sym sym2term =
-    let user_input = read_user_input () in
-    let prog = user_input
-                |> parse_mcore_string
-                |> Mlang.flatten
-                |> Mlang.desugar_post_flatten in
-    let (new_name2sym, new_sym2term, result) = eval_with_env name2sym sym2term prog in
-    uprint_endline (ustring_of_tm result);
-    read_eval_print new_name2sym new_sym2term
+  let generate_term ast =
+    ast |> merge_includes (Sys.getcwd ()) []
+    |> Mlang.flatten
+    |> Mlang.desugar_post_flatten in
+  let rec read_eval_print envs =
+    try
+      let user_input = read_user_input () in
+      let prog = user_input
+                 |> parse_mcore_string
+                 |> generate_term in
+      let (new_envs, result) = eval_with_envs envs prog in
+      uprint_endline (ustring_of_tm result);
+      read_eval_print new_envs
+    with e ->
+      begin
+        match e with
+        | Error m -> uprint_endline (message2str m)
+        | _ -> print_endline @@ Printexc.to_string e
+      end;
+      read_eval_print envs
   in
+  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
+                     |> add_prelude
+                     |> generate_term in
+  let builtin_envs = (builtin_name2sym, builtin_sym2term) in
+  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
   print_endline "Welcome to the MCore REPL!";
-  read_eval_print name2sym sym2term
+  read_eval_print initial_envs
 
 (* Run program *)
 let runprog name lst =
