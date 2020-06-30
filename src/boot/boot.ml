@@ -217,10 +217,12 @@ let parse_mcore_string str =
 (* Evaluate a term given existing name2sym and sym2term environments.
    Returns updated environments along with evaluation result.
 *)
-let eval_with_envs (name2sym, sym2term) term =
-  let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym term in
+let eval_with_envs (langs, nss, name2sym, sym2term) term =
+  let new_langs, flattened = Mlang.flatten_with_env langs term in
+  let new_nss, desugared = Mlang.desugar_post_flatten_with_nss nss flattened in
+  let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym desugared in
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
-  ((new_name2sym, new_sym2term), result)
+  ((new_langs, new_nss, new_name2sym, new_sym2term), result)
 
 (* Read user input until the terminating sequence is encountered *)
 let read_user_input () =
@@ -239,16 +241,13 @@ let read_user_input () =
 
 (* Run the MCore REPL *)
 let runrepl _ =
-  let generate_term ast =
-    ast |> merge_includes (Sys.getcwd ()) []
-    |> Mlang.flatten
-    |> Mlang.desugar_post_flatten in
+  let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
   let rec read_eval_print envs =
     try
       let user_input = read_user_input () in
       let prog = user_input
                  |> parse_mcore_string
-                 |> generate_term in
+                 |> repl_merge_includes in
       let (new_envs, result) = eval_with_envs envs prog in
       uprint_endline (ustring_of_tm result);
       read_eval_print new_envs
@@ -265,8 +264,8 @@ let runrepl _ =
   in
   let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
                      |> add_prelude
-                     |> generate_term in
-  let builtin_envs = (builtin_name2sym, builtin_sym2term) in
+                     |> repl_merge_includes in
+  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
   let initial_envs, _ = eval_with_envs builtin_envs initial_term in
   print_endline "Welcome to the MCore REPL!";
   read_eval_print initial_envs

@@ -171,8 +171,11 @@ let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * t
      let merged_data = List.fold_left merge_lang_data self_data included_data in
      (Record.add name merged_data prev_langs, TopLang(data_to_lang info name includes merged_data))
 
-let flatten (Program(includes, tops, e)): program =
-  Program(includes, accum_map flatten_lang Record.empty tops |> snd, e)
+let flatten_with_env (prev_langs: lang_data Record.t) (Program(includes, tops, e): program) =
+  let new_langs, new_tops = accum_map flatten_lang prev_langs tops in
+  (new_langs, Program(includes, new_tops, e))
+
+let flatten prg: program = snd (flatten_with_env Record.empty prg)
 
 (***************
  * Translation *
@@ -352,7 +355,16 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
      in (nss, (wrap :: stack))
 
-let desugar_post_flatten (Program(_, tops, t)) =
-  let acc_start = (USMap.empty, []) in
-  let (nss, stack) = List.fold_left desugar_top acc_start tops in
-  List.fold_left (|>) (desugar_tm nss emptyMlangEnv t) stack
+(* Desugar top level statements after flattening language fragments.
+  Takes a map of previously defined language namespaces and returns
+  an updated version along with the desugared term *)
+let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
+  let acc_start = (nss, []) in
+  let (new_nss, stack) = List.fold_left desugar_top acc_start tops in
+  let desugared_tm = List.fold_left (|>) (desugar_tm new_nss emptyMlangEnv t) stack in
+  (new_nss, desugared_tm)
+
+(* Same as desugar_post_flatten_with_nss, but takes no previous namespaces
+  and returns only the desugared term *)
+let desugar_post_flatten prg =
+  snd (desugar_post_flatten_with_nss USMap.empty prg)
