@@ -364,24 +364,42 @@ with "hello" in
 Note also the use of *wildcard* patterns `_` (used in the `foo`
 field), which matches any value.
 
-Finally, MExpr also supports more advanced patterns, including AND patterns (using infix notation `&`)
+Finally, MExpr also supports more advanced patterns, including `AND` patterns (using infix notation `&`)
 ```
-utest match (1, 2) with (a, _) & (_, b) then (a, b) else (0, 0) with (1, 2) in
+utest match (1, 2) with (a, _) & b then (a, b) else (0, (0, 0)) with (1, (1, 2)) in
 ```
 
-OR patterns (using infix notation `|`)
+`OR` patterns (using infix notation `|`)
 ```
 utest match K1 1 with K1 a | K2 a | K3 a then a else 0 with 1 in
 ```
 
 and `NOT` patterns (using the prefix notation `!`)
 ```
-utest match (true, true) with (true, a) & !(_, true) then a else false with false in
+utest match Some true with a & !(None ()) then a else Some false with Some true in
+utest match None () with a & !(None ()) then a else Some false with Some false in
 
 ```
 
+These are present to make it possible to translate order-dependent patterns to order-*in*dependent patterns. For example, in OCaml,
 
+```ocaml
+match (opt1, opt2) with
+| (Some a, _) -> a
+| (_, Some a) -> a
+| (_, _) -> 1
+```
 
+is order-dependent; any change in pattern order changes which match-arm is executed. To express this in an order-independent manner we `&` every pattern with the inverse (`!`) of the union (`|`) of the previous patterns. If we pretent for a moment that OCaml supports `&` and `!` in patterns they could then be written as:
+
+```ocaml
+match (opt1, opt2) with
+| (Some a, _) -> a
+| (_, Some a) & !(Some a, _) -> a
+| (_, _) & !((Some a, _) | (_, Some a))-> 1
+```
+
+The order can now be changed freely without affecting the semantics. In practice `&` and `!` will probably rarely be used in manually written code, while `|` is rather more useful.
 
 ### Sequences
 
