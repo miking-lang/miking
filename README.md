@@ -9,7 +9,7 @@ creating languages and generating efficient compilers.
 Before you test the Miking system, you need to install
 [OCaml](https://ocaml.org/), the
 [OPAM](https://opam.ocaml.org/) package manager,
-The packages `dune` and `batteries`.
+and the packages `dune` and `batteries`.
 
 After installing `opam`, these packages can be installed as:
 
@@ -48,6 +48,7 @@ user, issue:
 >>> make install
 ```
 
+This will install the boot interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
 ## Editor Support
 
@@ -721,7 +722,7 @@ Miking that does not need these external dependencies.
 One of the external dependencies is Sundials, a numerical library for
 solving differential equations.  To build the project with sundials
 integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) libraries on
+[Sundials](https://computing.llnl.gov/projects/sundials) library on
 your system.
 
 This involves installing the C library. On `ubuntu 18.04` you can issue:
