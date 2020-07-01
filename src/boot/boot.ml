@@ -73,10 +73,10 @@ let debug_after_mlang t =
 
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
-let tablength = 8
 
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
+  let tablength = 8 in
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength;
@@ -210,9 +210,9 @@ let testprog lst =
 
 (* Parse a string received by the REPL into an MCore AST *)
 let parse_mcore_string str =
-  Lexer.init (us "REPL") tablength;
-  str |> Lexing.from_string
-  |> Parser.main Lexer.main
+  let lexbuf = Lexing.from_string str in
+  try Ok (Parser.main Lexer.main lexbuf)
+  with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
 
 (* Evaluate a term given existing environments.
    Returns updated environments along with evaluation result.
@@ -228,26 +228,27 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
 let read_user_input () =
   let initial_prompt = ">> " in
   let followup_prompt = " | " in
-  let rec read_new_line acc prompt =
+  let read_input prompt =
     print_string prompt;
-    let open BatString in
-    let split_at str idx = (slice ~last:idx str, slice ~first:idx str) in
-    let line = trim (read_line ()) in
-    let first, last = split_at line (length line - 2) in
-    match last with
-    | ";;" -> sprintf "%s\n%s" acc first
-    | _ -> read_new_line (sprintf "%s\n%s" acc line) followup_prompt
-  in read_new_line "" initial_prompt
+    read_line () in
+  let rec read_new_line added_mexpr input =
+    let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
+    match parse_mcore_string input with
+      | Ok ast -> ast
+      | Error "" -> read_new_line added_mexpr (new_acc ())
+      | Error _ ->
+        if added_mexpr then
+          raise Parsing.Parse_error
+        else
+          read_new_line true ("mexpr " ^ input)
+  in read_new_line false (read_input initial_prompt)
 
 (* Run the MCore REPL *)
 let runrepl _ =
   let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
   let rec read_eval_print envs =
     try
-      let user_input = read_user_input () in
-      let prog = user_input
-                 |> parse_mcore_string
-                 |> repl_merge_includes in
+      let prog = read_user_input () |> repl_merge_includes in
       let (new_envs, result) = eval_with_envs envs prog in
       uprint_endline (ustring_of_tm result);
       read_eval_print new_envs
