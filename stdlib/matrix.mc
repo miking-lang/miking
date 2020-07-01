@@ -93,7 +93,7 @@ let matrixIndex = lam pred. lam mtx.
     if eqi i d.0 then None ()
     else
       let j = index pred (head rs) in
-      if optionIsSome j then optionMap j (lam j. (i, j))
+      if optionIsSome j then optionMap (lam j. (i, j)) j
       else work (addi i 1) (tail rs)
   in
   work 0 mtx

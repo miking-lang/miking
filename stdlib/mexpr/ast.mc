@@ -106,6 +106,12 @@ lang UnitPat = UnitAst
 end
 
 
+lang SymbAst = ConstAst
+  syn Const =
+  | CSymb {val : Symb}
+end
+
+
 lang IntAst = ConstAst
   syn Const =
   | CInt {val : Int}
@@ -177,6 +183,11 @@ lang CmpFloatAst = FloatAst + BoolAst
   | CLtf {}
 end
 
+lang CmpSymbAst = SymbAst + BoolAst
+  syn Const =
+  | CEqs {}
+end
+
 
 lang CharAst = ConstAst
   syn Const =
@@ -191,6 +202,11 @@ lang SeqAst = IntAst
   | CCons {}
   | CSnoc {}
   | CConcat {}
+  | CLength {}
+  | CHead {}
+  | CTail {}
+  | CNull {}
+  | CReverse {}
 
   syn Expr =
   | TmSeq {tms : [Expr]}
@@ -363,8 +379,8 @@ end
 
 lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
-  UnitAst + UnitPat + IntAst + IntPat + FloatAst + ArithFloatAst +
-  ArithIntAst + BoolAst + BoolPat + CmpIntAst + CmpFloatAst + CharAst + SeqAst +
+  UnitAst + UnitPat + IntAst + IntPat + FloatAst + ArithFloatAst + SymbAst +
+  ArithIntAst + BoolAst + BoolPat + CmpIntAst + CmpFloatAst + CmpSymbAst + CharAst + SeqAst +
   TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
   RecordAst +
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +

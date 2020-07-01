@@ -6,18 +6,18 @@ creating languages and generating efficient compilers.
 
 ## Getting started
 
-Before you test the Miking system, you need to install
-[OCaml](https://ocaml.org/), the
-[OPAM](https://opam.ocaml.org/) package manager,
-The packages `dune` and `batteries`.
+Before you can use the Miking system, you need to install
+[OCaml](https://ocaml.org/) and the
+[OPAM](https://opam.ocaml.org/) package manager.
 
-After installing `opam`, these packages can be installed as:
+
+After the installation, you need to install the `opam` packages `dune` and `batteries` by running the following:
 
 ```
 >> opam install dune batteries
 ```
 
-To compile and run the test suite, execute
+To compile and run the test suite, execute:
 
 ```
 >> make test
@@ -29,7 +29,7 @@ A bootstrap interpreter is available under `build/boot` after compiling the proj
 mexpr print "Hello world!"
 ```
 
-and then run it using command
+and then run it using command:
 
 ```
 >> build/boot hello.mc
@@ -47,6 +47,8 @@ user, issue:
 ```
 >>> make install
 ```
+
+This will install the boot interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
 The boot interpreter also features a simple REPL.
 To start the REPL, run
@@ -101,7 +103,7 @@ MCore consists of two parts:
 
 ## MExpr
 
-One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general purpose programming language, but a core language to which other languages translate into.
+One design objective of MExpr is to make the concrete syntax very close to the abstract syntax of the language. That is, no syntactic sugar is introduced to the concrete MCore syntax. The MExpr language is not intended to be a general-purpose programming language. Instead, the aim of MCore is to be a core language that other languages can translate into.
 
 Nevertheless, to understand the Miking system, it is a good idea to learn to write basic programs directly as MCore expressions.
 
@@ -115,7 +117,14 @@ When writing MCore programs, it is typically done by writing explicit unit tests
 utest addi 1 2 with 3 in
 ()
 ```
-checkes that the addition of `1` and `2` is in fact `3`. Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly, and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
+checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `boot` command with argument `test`:
+
+
+```
+>> build/boot test program.mc
+```
+
+Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
 ### Prelude
 
@@ -744,7 +753,7 @@ Miking that does not need these external dependencies.
 One of the external dependencies is Sundials, a numerical library for
 solving differential equations.  To build the project with sundials
 integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) libraries on
+[Sundials](https://computing.llnl.gov/projects/sundials) library on
 your system.
 
 This involves installing the C library. On `ubuntu 18.04` you can issue:
