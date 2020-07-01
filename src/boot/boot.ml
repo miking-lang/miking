@@ -214,7 +214,7 @@ let parse_mcore_string str =
   str |> Lexing.from_string
   |> Parser.main Lexer.main
 
-(* Evaluate a term given existing name2sym and sym2term environments.
+(* Evaluate a term given existing environments.
    Returns updated environments along with evaluation result.
 *)
 let eval_with_envs (langs, nss, name2sym, sym2term) term =

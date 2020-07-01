@@ -175,6 +175,7 @@ let flatten_with_env (prev_langs: lang_data Record.t) (Program(includes, tops, e
   let new_langs, new_tops = accum_map flatten_lang prev_langs tops in
   (new_langs, Program(includes, new_tops, e))
 
+(* Flatten top-level language definitions *)
 let flatten prg: program = snd (flatten_with_env Record.empty prg)
 
 (***************
@@ -355,16 +356,12 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
      in (nss, (wrap :: stack))
 
-(* Desugar top level statements after flattening language fragments.
-  Takes a map of previously defined language namespaces and returns
-  an updated version along with the desugared term *)
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let acc_start = (nss, []) in
   let (new_nss, stack) = List.fold_left desugar_top acc_start tops in
   let desugared_tm = List.fold_left (|>) (desugar_tm new_nss emptyMlangEnv t) stack in
   (new_nss, desugared_tm)
 
-(* Same as desugar_post_flatten_with_nss, but takes no previous namespaces
-  and returns only the desugared term *)
+(* Desugar top level statements after flattening language fragments. *)
 let desugar_post_flatten prg =
   snd (desugar_post_flatten_with_nss USMap.empty prg)
