@@ -50,6 +50,30 @@ user, issue:
 
 This will install the boot interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
+The boot interpreter also features a simple REPL.
+To start the REPL, run
+
+```
+>>> build/boot repl
+```
+
+The REPL allows executing fragments of MCore code. The syntax is the
+same as when writing a regular program, meaning that to evaluate an
+expression, you need to prepend it with `mexpr`. End your commands
+using `;;`. To exit the REPL, use Ctrl-C or Ctrl-D.
+
+The following is an example interaction with the REPL.
+
+```
+Welcome to the MCore REPL!
+>> let x = 5;;
+()
+>> mexpr let y = 10 in
+ | addi x y;;
+15
+>> 
+```
+
 ## Editor Support
 
 It is possible to write Miking code in any editor and compile it

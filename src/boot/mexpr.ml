@@ -434,19 +434,19 @@ let rec val_equal v1 v2 =
 
 type identType
 
+let findsym fi id env =
+  try List.assoc id env
+  with Not_found ->
+    let (x,kindstr) = match id with
+      | IdVar(x)   -> (x,"variable")
+      | IdCon(x)   -> (x,"constructor")
+      | IdType(x)  -> (x,"identifier")
+      | IdLabel(x) -> (x,"label")
+    in raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
+
 (* Add symbol associations between lambdas, patterns, and variables. The function also
    constructs TmConapp terms from the combination of variables and function applications.  *)
 let rec symbolize (env : (ident * sym) list) (t : tm) =
-  let findsym fi id env =
-    try List.assoc id env
-    with Not_found ->
-      let (x,kindstr) = match id with
-        | IdVar(x)   -> (x,"variable")
-        | IdCon(x)   -> (x,"constructor")
-        | IdType(x)  -> (x,"identifier")
-        | IdLabel(x) -> (x,"label")
-      in raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
-  in
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
    * e.g., [a] | [a, _] should give the same symbol to both "a"s.
@@ -523,7 +523,23 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
     -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
   | TmNever(_) -> t
 
-
+(* Same as symbolize, but records all toplevel definitions and returns them
+ along with the symbolized term *)
+let rec symbolize_toplevel (env : (ident * sym) list) = function
+  | TmLet(fi,x,_,t1,t2) ->
+    let s = gensym() in
+    let (new_env, new_t2) = symbolize_toplevel ((IdVar(sid_of_ustring x),s)::env) t2 in
+    (new_env, TmLet(fi,x,s,symbolize env t1,new_t2))
+  | TmRecLets(fi,lst,tm) ->
+    let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+    let (new_env, new_tm) = symbolize_toplevel env2 tm in
+    (new_env, TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
+       lst, new_tm))
+  | TmCondef(fi,x,_,ty,t) ->
+    let s = gensym() in
+    let (new_env, new_t2) = symbolize_toplevel ((IdCon(sid_of_ustring x),s)::env) t in
+    (new_env, TmCondef(fi,x,s,ty,new_t2))
+  | t -> (env, symbolize env t)
 
 let rec try_match env value pat =
   let go v p env = Option.bind env (fun env -> try_match env v p) in
@@ -666,3 +682,17 @@ let rec eval (env : (sym * tm) list) (t : tm) =
      end;
     eval env tnext
   | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."
+
+(* Same as eval, but records all toplevel definitions and returns them along
+  with the evaluated result *)
+let rec eval_toplevel (env : (sym * tm) list) = function
+  | TmLet(_,_,s,t1,t2) -> eval_toplevel ((s,eval env t1)::env) t2
+  | TmRecLets(_,lst,t2) ->
+     let rec env' = lazy
+       (let wraplambda = function
+          | TmLam(fi,x,s,ty,t1) -> TmClos(fi,x,s,ty,t1,env')
+          | tm -> raise_error (tm_info tm) "Right-hand side of recursive let must be a lambda"
+        in List.fold_left (fun env (_, _, s, rhs) -> (s, wraplambda rhs) :: env) env lst)
+     in eval_toplevel (Lazy.force env') t2
+  | TmCondef(_,_,_,_,t) -> eval_toplevel env t
+  | t -> (env, eval env t)

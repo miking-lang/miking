@@ -73,11 +73,11 @@ let debug_after_mlang t =
 
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
+let tablength = 8
 
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
   let fs1 = open_in filename in
-  let tablength = 8 in
   let p =
     Lexer.init (us filename) tablength;
     fs1 |> Ustring.lexing_from_channel
@@ -166,7 +166,7 @@ let evalprog filename  =
         utest_fail_local := !utest_fail_local + 1)
       else
         fprintf stderr "%s\n"
-	(Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
+  (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
   end; parsed_files := [];
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
 
@@ -208,15 +208,76 @@ let testprog lst =
       printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
+(* Parse a string received by the REPL into an MCore AST *)
+let parse_mcore_string str =
+  Lexer.init (us "REPL") tablength;
+  str |> Lexing.from_string
+  |> Parser.main Lexer.main
+
+(* Evaluate a term given existing environments.
+   Returns updated environments along with evaluation result.
+*)
+let eval_with_envs (langs, nss, name2sym, sym2term) term =
+  let new_langs, flattened = Mlang.flatten_with_env langs term in
+  let new_nss, desugared = Mlang.desugar_post_flatten_with_nss nss flattened in
+  let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym desugared in
+  let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
+  ((new_langs, new_nss, new_name2sym, new_sym2term), result)
+
+(* Read user input until the terminating sequence is encountered *)
+let read_user_input () =
+  let initial_prompt = ">> " in
+  let followup_prompt = " | " in
+  let rec read_new_line acc prompt =
+    print_string prompt;
+    let open BatString in
+    let split_at str idx = (slice ~last:idx str, slice ~first:idx str) in
+    let line = trim (read_line ()) in
+    let first, last = split_at line (length line - 2) in
+    match last with
+    | ";;" -> sprintf "%s\n%s" acc first
+    | _ -> read_new_line (sprintf "%s\n%s" acc line) followup_prompt
+  in read_new_line "" initial_prompt
+
+(* Run the MCore REPL *)
+let runrepl _ =
+  let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
+  let rec read_eval_print envs =
+    try
+      let user_input = read_user_input () in
+      let prog = user_input
+                 |> parse_mcore_string
+                 |> repl_merge_includes in
+      let (new_envs, result) = eval_with_envs envs prog in
+      uprint_endline (ustring_of_tm result);
+      read_eval_print new_envs
+    with e ->
+      begin
+        match e with
+        | Lexer.Lex_error m -> uprint_endline (message2str m)
+        | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
+        | Error m -> uprint_endline (message2str m)
+        | End_of_file -> exit 0
+        | _ -> print_endline @@ Printexc.to_string e
+      end;
+      read_eval_print envs
+  in
+  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
+                     |> add_prelude
+                     |> repl_merge_includes in
+  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
+  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
+  print_endline "Welcome to the MCore REPL!";
+  read_eval_print initial_envs
+
 (* Run program *)
 let runprog name lst =
     (* TODO prog_argv is never used anywhere *)
     prog_argv := lst;
     evalprog name
 
-
 (* Print out main menu *)
-let usage_msg = "Usage: miking [run|test] <files>\n\nOptions:"
+let usage_msg = "Usage: miking [run|repl|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
@@ -265,6 +326,9 @@ let main =
 
     (* Run tests on one or more files *)
     | "test"::lst | "t"::lst -> testprog lst
+
+    (* Start the MCore REPL *)
+    | "repl"::lst -> runrepl lst
 
     (* Run one program with program arguments without typechecking *)
     | "run"::name::lst | name::lst -> runprog name lst
