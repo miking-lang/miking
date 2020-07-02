@@ -300,9 +300,16 @@ let linenoise_init () =
 (* Run the MCore REPL *)
 let runrepl _ =
   let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
+  (* Wrap the final mexpr in a lambda application to prevent scope leak *)
+  let repl_wrap_mexpr (Program(inc, tops, tm)) =
+    let lambda_wrapper = TmLam(NoInfo, us"_", nosym, TyArrow(TyInt,TyDyn), tm) in
+    let new_tm = TmApp(NoInfo, lambda_wrapper, TmConst(NoInfo, CInt(0))) in
+    Program(inc, tops, new_tm) in
   let rec read_eval_print envs =
     try
-      let prog = read_user_input () |> repl_merge_includes in
+      let prog = read_user_input ()
+        |> repl_merge_includes
+        |> repl_wrap_mexpr in
       let (new_envs, result) = eval_with_envs envs prog in
       uprint_endline (ustring_of_tm result);
       read_eval_print new_envs
