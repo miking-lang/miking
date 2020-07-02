@@ -208,11 +208,70 @@ let testprog lst =
       printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
-(* Parse a string received by the REPL into an MCore AST *)
+(* Try to parse a string received by the REPL into an MCore AST *)
 let parse_mcore_string str =
   let lexbuf = Lexing.from_string str in
   try Ok (Parser.main Lexer.main lexbuf)
   with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
+
+let initial_prompt = ">> "
+let followup_prompt = " | "
+
+let read_input prompt =
+  match LNoise.linenoise prompt with
+    | None -> raise End_of_file
+    | Some str ->
+      LNoise.history_add str |> ignore;
+      String.trim str
+
+let handle_command str =
+  let help_message = "No help for you!" in
+  match str with
+    | ":q" -> exit 0
+    | ":h" -> print_endline help_message; true
+    | _ -> false
+
+(* Read and parse a toplevel or mexpr expression. Continues to read input
+   until a valid expression is formed. Returns Error if the expression cannot
+   be extended to a valid expression *)
+let rec read_until_complete added_mexpr input =
+  let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
+  match parse_mcore_string input with
+    | Ok ast -> ast
+    | Error "" -> read_until_complete added_mexpr (new_acc ())
+    | Error _ ->
+      if added_mexpr then
+        raise Parsing.Parse_error
+      else
+        read_until_complete true ("mexpr " ^ input)
+
+(* Read and parse a multiline expression, that is an expression enclosed in
+  :{ and :}. Returns None if the first line does not start with :{ *)
+let read_multiline first_line =
+  let rec read_until_end acc =
+    let line = read_input followup_prompt in
+    let first, last = Utils.split_at (String.length line - 2) line in
+    match last with
+    | ":}" -> sprintf "%s\n%s" acc first
+    | _ -> read_until_end (sprintf "%s\n%s" acc line)
+  in
+  let first, last = Utils.split_at 2 first_line in
+  if first = ":{" then
+    match last |> read_until_end |> parse_mcore_string with
+    | Ok ast -> Some ast
+    | Error _ -> raise Parsing.Parse_error
+  else
+    None
+
+(* Read input from the user and respond accordingly depending on if it is a
+   command, the beginning of a multiline statement or a normal expression *)
+let rec read_user_input () =
+  let first_line = read_input initial_prompt in
+  if handle_command first_line then
+    read_user_input ()
+  else
+    Option.default_delayed (fun _ -> read_until_complete false first_line)
+                           (read_multiline first_line)
 
 (* Evaluate a term given existing environments.
    Returns updated environments along with evaluation result.
@@ -224,24 +283,9 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
 
-(* Read user input until the terminating sequence is encountered *)
-let read_user_input () =
-  let initial_prompt = ">> " in
-  let followup_prompt = " | " in
-  let read_input prompt =
-    print_string prompt;
-    read_line () in
-  let rec read_new_line added_mexpr input =
-    let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
-    match parse_mcore_string input with
-      | Ok ast -> ast
-      | Error "" -> read_new_line added_mexpr (new_acc ())
-      | Error _ ->
-        if added_mexpr then
-          raise Parsing.Parse_error
-        else
-          read_new_line true ("mexpr " ^ input)
-  in read_new_line false (read_input initial_prompt)
+(* Initialize linenoise *)
+let linenoise_init () =
+  LNoise.catch_break false
 
 (* Run the MCore REPL *)
 let runrepl _ =
@@ -268,6 +312,7 @@ let runrepl _ =
                      |> repl_merge_includes in
   let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
   let initial_envs, _ = eval_with_envs builtin_envs initial_term in
+  linenoise_init ();
   print_endline "Welcome to the MCore REPL!";
   read_eval_print initial_envs
 

@@ -5,5 +5,5 @@
 
 (executable
  (name boot)
- (libraries batteries str sundialsml)
+ (libraries batteries str linenoise sundialsml)
 )

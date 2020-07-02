@@ -154,6 +154,9 @@ let normalize_path p =
      |> recur
      |> String.concat Filename.dir_sep
 
+let split_at idx str =
+  let open BatString in
+  (slice ~last:idx str, slice ~first:idx str)
 
 module Int =
 struct

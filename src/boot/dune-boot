@@ -5,5 +5,5 @@
 
 (executable
  (name boot)
- (libraries batteries str)
+ (libraries batteries str linenoise)
 )

@@ -57,19 +57,18 @@ To start the REPL (assuming that the interpreter is installed in the path), run
 mi repl
 ```
 
-The REPL allows executing fragments of MCore code. The syntax is the
-same as when writing a regular program, meaning that to evaluate an
-expression, you need to prepend it with `mexpr`. End your commands
-using `;;`. To exit the REPL, use Ctrl-C or Ctrl-D.
+The REPL allows interactively executing fragments of MCore code.
+Both toplevel definitions and expressions can be evaluated.
+To exit the REPL, use Ctrl-C or Ctrl-D.
 
 The following is an example interaction with the REPL.
 
 ```
 Welcome to the MCore REPL!
->> let x = 5;;
+>> let x = 5
 ()
->> mexpr let y = 10 in
- | addi x y;;
+>> let y = 10 in
+ | addi x y
 15
 >>
 ```
