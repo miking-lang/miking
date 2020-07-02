@@ -253,7 +253,7 @@ let rec read_until_complete added_mexpr input =
       if added_mexpr then
         raise Parsing.Parse_error
       else
-        read_until_complete true ("mexpr " ^ input)
+        read_until_complete true (sprintf "mexpr %s" input)
 
 (* Read and parse a multiline expression, that is an expression enclosed in
   :{ and :}. Returns None if the first line does not start with :{ *)
@@ -267,9 +267,13 @@ let read_multiline first_line =
   in
   let first, last = Utils.split_at 2 first_line in
   if first = ":{" then
-    match last |> read_until_end |> parse_mcore_string with
+    let lines = read_until_end last in
+    match parse_mcore_string lines with
     | Ok ast -> Some ast
-    | Error _ -> raise Parsing.Parse_error
+    | Error _ ->
+      match lines |> sprintf "mexpr %s" |> parse_mcore_string with
+      | Ok ast -> Some ast
+      | Error _ -> raise Parsing.Parse_error
   else
     None
 
