@@ -74,9 +74,10 @@ let debug_after_mlang t =
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
 
+let tablength = 8
+
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
-  let tablength = 8 in
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength;
@@ -209,9 +210,10 @@ let testprog lst =
         (!utest_ok) (!utest_fail)
 
 (* Try to parse a string received by the REPL into an MCore AST *)
-let parse_mcore_string str =
+let parse_mcore_string parse_fun str =
+  Lexer.init (us"REPL") tablength;
   let lexbuf = Lexing.from_string str in
-  try Ok (Parser.main Lexer.main lexbuf)
+  try Ok (parse_fun Lexer.main lexbuf)
   with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
 
 let initial_prompt = ">> "
@@ -244,16 +246,17 @@ let handle_command str =
 (* Read and parse a toplevel or mexpr expression. Continues to read input
    until a valid expression is formed. Raises Parse_error if the expression cannot
    be extended to a valid expression *)
-let rec read_until_complete added_mexpr input =
+let rec read_until_complete is_mexpr input =
   let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
-  match parse_mcore_string input with
+  let parse_fun = if is_mexpr then Parser.prog_mexpr else Parser.main in
+  match parse_mcore_string parse_fun input with
     | Ok ast -> ast
-    | Error "" -> read_until_complete added_mexpr (new_acc ())
+    | Error "" -> read_until_complete is_mexpr (new_acc ())
     | Error _ ->
-      if added_mexpr then
+      if is_mexpr then
         raise Parsing.Parse_error
       else
-        read_until_complete true (sprintf "mexpr %s" input)
+        read_until_complete true input
 
 (* Read and parse a multiline expression, that is an expression enclosed in
   :{ and :}. Returns None if the first line does not start with :{ *)
@@ -268,10 +271,10 @@ let read_multiline first_line =
   let first, last = Utils.split_at 2 first_line in
   if first = ":{" then
     let lines = read_until_end last in
-    match parse_mcore_string lines with
+    match parse_mcore_string Parser.main lines with
     | Ok ast -> Some ast
     | Error _ ->
-      match lines |> sprintf "mexpr %s" |> parse_mcore_string with
+      match lines |> parse_mcore_string Parser.prog_mexpr with
       | Ok ast -> Some ast
       | Error _ -> raise Parsing.Parse_error
   else

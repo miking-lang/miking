@@ -85,14 +85,20 @@
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
 
 %start main
+%start prog_mexpr
 
 %type <Ast.program> main
+%type <Ast.program> prog_mexpr
 
 %%
 
 main:
   | includes tops mexpr_opt EOF
     { Program ($1, $2, $3) }
+
+prog_mexpr:
+  | mexpr EOF
+    { Program ([], [], $1) }
 
 includes:
   | include_ includes
