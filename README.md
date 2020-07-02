@@ -11,10 +11,10 @@ Before you can use the Miking system, you need to install
 [OPAM](https://opam.ocaml.org/) package manager.
 
 
-After the installation, you need to install the `opam` packages `dune` and `batteries` by running the following:
+After the installation, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
 
 ```
-opam install dune batteries
+opam install dune batteries linenoise
 ```
 
 To compile and run the test suite, execute:
@@ -51,20 +51,20 @@ make install
 This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
 The Miking interpreter also features a simple REPL.
+The REPL allows interactively executing fragments of MCore code.
+Both toplevel definitions and expressions can be evaluated.
+
 To start the REPL (assuming that the interpreter is installed in the path), run
 
 ```
 mi repl
 ```
 
-The REPL allows interactively executing fragments of MCore code.
-Both toplevel definitions and expressions can be evaluated.
-To exit the REPL, use Ctrl-C or Ctrl-D.
-
 The following is an example interaction with the REPL.
 
 ```
 Welcome to the MCore REPL!
+Type :h for help or :q to quit.
 >> let x = 5
 ()
 >> let y = 10 in

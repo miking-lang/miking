@@ -224,15 +224,25 @@ let read_input prompt =
       LNoise.history_add str |> ignore;
       String.trim str
 
+let print_welcome_message () =
+  print_endline "Welcome to the MCore REPL!";
+  print_endline "Type :h for help or :q to quit."
+
 let handle_command str =
-  let help_message = "No help for you!" in
+  let help_message =
+{|  Commands available from the prompt:
+
+   <statement>                 evaluate <statement>
+   :{\n ..lines.. \n:}\n       multiline command
+   :q                          exit the REPL
+   :h                          display this message|} in
   match str with
     | ":q" -> exit 0
     | ":h" -> print_endline help_message; true
     | _ -> false
 
 (* Read and parse a toplevel or mexpr expression. Continues to read input
-   until a valid expression is formed. Returns Error if the expression cannot
+   until a valid expression is formed. Raises Parse_error if the expression cannot
    be extended to a valid expression *)
 let rec read_until_complete added_mexpr input =
   let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
@@ -313,7 +323,7 @@ let runrepl _ =
   let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
   let initial_envs, _ = eval_with_envs builtin_envs initial_term in
   linenoise_init ();
-  print_endline "Welcome to the MCore REPL!";
+  print_welcome_message ();
   read_eval_print initial_envs
 
 (* Run program *)
