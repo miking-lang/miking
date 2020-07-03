@@ -219,12 +219,17 @@ let parse_mcore_string parse_fun str =
 let initial_prompt = ">> "
 let followup_prompt = " | "
 
+let no_line_edit = ref false
+
 let read_input prompt =
-  match LNoise.linenoise prompt with
-    | None -> raise End_of_file
-    | Some str ->
-      LNoise.history_add str |> ignore;
-      String.trim str
+  if !no_line_edit then
+    (print_string prompt; read_line ())
+  else
+    match LNoise.linenoise prompt with
+      | None -> raise End_of_file
+      | Some str ->
+        LNoise.history_add str |> ignore;
+        String.trim str
 
 let print_welcome_message () =
   print_endline "Welcome to the MCore REPL!";
@@ -378,6 +383,9 @@ let main =
 
     "--full-pattern", Arg.Set(Patterns.pat_example_gives_complete_pattern),
     " Make the pattern analysis in mlang print full patterns instead of partial ones.";
+
+    "--no-line-edit", Arg.Set(no_line_edit),
+    " Disable line editing funcionality in the REPL.";
 
   ] in
 
