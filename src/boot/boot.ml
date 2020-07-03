@@ -268,14 +268,13 @@ let rec read_until_complete is_mexpr input =
 let read_multiline first_line =
   let rec read_until_end acc =
     let line = read_input followup_prompt in
-    let first, last = Utils.split_at (String.length line - 2) line in
-    match last with
-    | ":}" -> sprintf "%s\n%s" acc first
-    | _ -> read_until_end (sprintf "%s\n%s" acc line)
+    match line with
+    | ":}" -> acc
+    | _ -> read_until_end (line :: acc)
   in
-  let first, last = Utils.split_at 2 first_line in
-  if first = ":{" then
-    let lines = read_until_end last in
+  if first_line = ":{" then
+    let lines = List.fold_right (fun x a -> sprintf "%s\n%s" a x)
+                                (read_until_end []) "" in
     match parse_mcore_string Parser.main lines with
     | Ok ast -> Some ast
     | Error _ ->
