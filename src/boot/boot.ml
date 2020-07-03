@@ -253,7 +253,7 @@ let handle_command str =
    be extended to a valid expression *)
 let rec read_until_complete is_mexpr input =
   let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
-  let parse_fun = if is_mexpr then Parser.prog_mexpr else Parser.main in
+  let parse_fun = if is_mexpr then Parser.main_mexpr else Parser.main in
   match parse_mcore_string parse_fun input with
     | Ok ast -> ast
     | Error "" -> read_until_complete is_mexpr (new_acc ())
@@ -279,7 +279,7 @@ let read_multiline first_line =
     match parse_mcore_string Parser.main lines with
     | Ok ast -> Some ast
     | Error _ ->
-      match lines |> parse_mcore_string Parser.prog_mexpr with
+      match lines |> parse_mcore_string Parser.main_mexpr with
       | Ok ast -> Some ast
       | Error _ -> raise Parsing.Parse_error
   else
