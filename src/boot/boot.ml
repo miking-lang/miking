@@ -75,10 +75,9 @@ let debug_after_mlang t =
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
 
-let tablength = 8
-
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
+  let tablength = 8 in
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength;

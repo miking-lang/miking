@@ -66,7 +66,6 @@ The following is an example interaction with the REPL.
 Welcome to the MCore REPL!
 Type :h for help or :q to quit.
 >> let x = 5
-()
 >> let y = 10 in
  | addi x y
 15
