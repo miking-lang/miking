@@ -300,10 +300,6 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
 
-(* Initialize linenoise *)
-let linenoise_init () =
-  LNoise.catch_break false
-
 (* Run the MCore REPL *)
 let runrepl _ =
   let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
@@ -314,11 +310,17 @@ let runrepl _ =
     Program(inc, tops, new_tm) in
   let rec read_eval_print envs =
     try
-      let prog = read_user_input ()
+      let (Program(_,_,tm)) as ast = read_user_input () in
+      let prog = ast
         |> repl_merge_includes
         |> repl_wrap_mexpr in
       let (new_envs, result) = eval_with_envs envs prog in
-      uprint_endline (ustring_of_tm result);
+      begin
+        if tm = tmUnit then
+          flush stdout
+        else
+          uprint_endline (ustring_of_tm result)
+      end;
       read_eval_print new_envs
     with e ->
       begin
@@ -326,6 +328,7 @@ let runrepl _ =
         | Lexer.Lex_error m -> uprint_endline (message2str m)
         | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
         | Error m -> uprint_endline (message2str m)
+        | Sys.Break -> ()
         | End_of_file -> exit 0
         | _ -> print_endline @@ Printexc.to_string e
       end;
@@ -336,7 +339,6 @@ let runrepl _ =
                      |> repl_merge_includes in
   let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
   let initial_envs, _ = eval_with_envs builtin_envs initial_term in
-  linenoise_init ();
   print_welcome_message ();
   read_eval_print initial_envs
 
