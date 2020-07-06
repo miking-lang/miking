@@ -2,6 +2,7 @@
 (ocamlyacc parser)
 
 (copy_files ext/*)
+(copy_files py/*)
 
 (executable
  (name boot)

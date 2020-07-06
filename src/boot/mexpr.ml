@@ -45,8 +45,9 @@ let builtin =
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
-   ("pycall", f(Cpycall(None,None))); ("pyimport", f(Cpyimport))
   ]
+  (* Append python intrinsics *)
+  @ Pyffi.builtin
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals)
   |> List.map (fun (x,t) -> (x,gensym(),t))
@@ -128,9 +129,8 @@ let arity = function
   | Cgensym      -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
-  | CpyObject(_) -> 0
-  | Cpyimport -> 1
-  | Cpycall(None, None) -> 3 | Cpycall(Some(_),None) -> 2 | Cpycall(_,Some(_)) -> 1
+  (* Python intrinsics *)
+  | CPy v -> Pyffi.arity v
   (* External functions TODO: Should not be bart of core language *)
   | CExt v            -> Ext.arity v
 
@@ -147,20 +147,6 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ " value: "
                                          ^ Ustring.to_utf8
                                            (ustring_of_tm v))
-
-let rec val_to_python fi = function
-  | TmConst(_,CBool(v)) -> Py.Bool.of_bool v
-  | TmConst(_,CInt(v)) -> Py.Int.of_int v
-  | TmConst(_,CFloat(v)) -> Py.Float.of_float v
-  | TmConst(_,CpyObject(v)) -> v
-  | TmSeq(_,s) ->
-    begin
-      try tmseq2ustring fi s |> Ustring.to_utf8 |> Py.String.of_string
-      with _ -> Mseq.to_list s |> Py.List.of_list_map (val_to_python fi)
-    end
-  (* | TmRecord(_,r1) ->
-     | TmConapp(_,_,sym1,v1) -> *)
-  | _ -> raise_error fi "The supplied value cannot be used as a python argument"
 
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
@@ -413,21 +399,8 @@ let delta eval env fi c v  =
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqs(_),_ -> fail_constapp fi
-    | CpyObject(_),_ -> fail_constapp fi
-    | Cpyimport, TmSeq(fi, lst) ->
-        TmConst(fi, CpyObject(Py.import (tmseq2ustring fi lst |> Ustring.to_utf8)))
-    | Cpyimport,_ -> fail_constapp fi
-    | Cpycall(None, None),TmConst(_,CpyObject(obj)) -> TmConst(fi,Cpycall(Some(obj), None))
-    | Cpycall(None, None),_ -> fail_constapp fi
-    | Cpycall(Some(m), None),TmSeq(fi,lst) ->
-        TmConst(fi, Cpycall(Some(m), Some(tmseq2ustring fi lst |> Ustring.to_utf8)))
-    | Cpycall(Some(_), None),_ -> fail_constapp fi
-    | Cpycall(Some(m),Some(s)),TmRecord(fi,args) ->
-        let size_of_record = Record.cardinal args in
-        let argv = Array.make size_of_record (Py.Float.of_float 0.) in
-        Record.iter (fun k v -> Array.set argv (int_of_ustring k) (val_to_python fi v)) args;
-        TmConst(fi, CpyObject(Py.Module.get_function m s argv))
-    | Cpycall(_, _), _ -> fail_constapp fi
+
+    | CPy v, t -> Pyffi.delta eval env fi v t
 
     | CExt v, t -> Ext.delta eval env fi v t
 

@@ -109,9 +109,7 @@ and const =
 | Ceqs of int option
 (* External functions TODO: Should not be part of core language *)
 | CExt of tm Extast.ext
-| CpyObject of Py.Object.t
-| Cpyimport
-| Cpycall of Py.Object.t option * string option
+| CPy of Pyast.py
 
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
