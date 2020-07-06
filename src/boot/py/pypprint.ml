@@ -6,5 +6,5 @@ let pprint = function
   | Pyimport -> us "pyimport"
   | Pycall(None,None) -> us "pycall"
   | Pycall(Some(_),None) -> us "pycall PyObject"
-  | Pycall(Some(_),Some s) -> us "pycall PyObject" ^. us s
+  | Pycall(Some(_),Some s) -> us "pycall PyObject " ^. us s
   | _ -> failwith "Can't happen"
