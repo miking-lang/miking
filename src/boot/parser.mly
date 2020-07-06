@@ -289,6 +289,8 @@ atom:
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
+  | LPAREN mexpr COMMA RPAREN
+      { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | var_ident                { TmVar($1.i,$1.v,nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
