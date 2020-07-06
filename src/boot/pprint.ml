@@ -232,6 +232,11 @@ let rec print_const fmt = function
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqs(_)   -> fprintf fmt "eqs"
 
+  (* Python intrinsics *)
+  | CpyObject(_)   -> fprintf fmt "[PYTHON_VAL]"
+  | Cpyimport   -> fprintf fmt "[PYTHON_IMPORT]"
+  | Cpycall(_,_)   -> fprintf fmt "[PYTHON_CALL]"
+
   (* External pprint TODO: Should not be part of core language *)
   | CExt(v) -> fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
 
