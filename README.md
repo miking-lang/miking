@@ -13,14 +13,14 @@ Before you can use the Miking system, you need to install
 
 After the installation, you need to install the `opam` packages `dune` and `batteries` by running the following:
 
-```
->> opam install dune batteries
+```bash
+opam install dune batteries
 ```
 
 To compile and run the test suite, execute:
 
-```
->> make test
+```bash
+make test
 ```
 
 An interpreter is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
@@ -31,8 +31,8 @@ mexpr print "Hello world!"
 
 and then run it using command:
 
-```
->> build/mi hello.mc
+```bash
+build/mi hello.mc
 ```
 
 To help Miking find its standard library, you should define the
@@ -44,8 +44,8 @@ for example by running the following:
 To install the interpreter along with the standard library for the current
 user, issue:
 
-```
->> make install
+```bash
+make install
 ```
 
 This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
@@ -53,8 +53,8 @@ This will install the interpreter to `$HOME/.local/bin` and the standard library
 The Miking interpreter also features a simple REPL.
 To start the REPL (assuming that the interpreter is installed in the path), run
 
-```
->> mi repl
+```bash
+mi repl
 ```
 
 The REPL allows executing fragments of MCore code. The syntax is the
@@ -120,8 +120,8 @@ utest addi 1 2 with 3 in
 checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test`:
 
 
-```
->> build/mi test program.mc
+```bash
+build/mi test program.mc
 ```
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
@@ -776,34 +776,34 @@ your system.
 
 This involves installing the C library. On `ubuntu 18.04` you can issue:
 
-```
->> sudo apt-get install libsundials-dev
+```bash
+sudo apt-get install libsundials-dev
 ```
 
 On `macOS`, using Homebrew, you can install Sundials using command:
 
-```
->> brew install sundials
+```bash
+brew install sundials
 ```
 
 
 Then install the ocaml bindings
 [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
 
-```
->> opam install sundialsml
+```bash
+opam install sundialsml
 ```
 
 To compile and run the test suite with sundials support:
 
-```
->> make externals-test
+```bash
+make externals-test
 ```
 
 To install for the current user:
 
-```
->>> make externals-install
+```bash
+make externals-install
 ```
 
 
