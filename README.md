@@ -14,16 +14,16 @@ Before you can use the Miking system, you need to install
 After the installation, you need to install the `opam` packages `dune` and `batteries` by running the following:
 
 ```
->> opam install dune batteries
+opam install dune batteries
 ```
 
 To compile and run the test suite, execute:
 
 ```
->> make test
+make test
 ```
 
-A bootstrap interpreter is available under `build/boot` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
+An interpreter is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 
 ```
 mexpr print "Hello world!"
@@ -32,7 +32,7 @@ mexpr print "Hello world!"
 and then run it using command:
 
 ```
->> build/boot hello.mc
+build/mi hello.mc
 ```
 
 To help Miking find its standard library, you should define the
@@ -41,20 +41,20 @@ for example by running the following:
 
     cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-To install the boot interpreter along with the standard library for the current
+To install the interpreter along with the standard library for the current
 user, issue:
 
 ```
->>> make install
+make install
 ```
 
-This will install the boot interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
+This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
-The boot interpreter also features a simple REPL.
-To start the REPL, run
+The Miking interpreter also features a simple REPL.
+To start the REPL (assuming that the interpreter is installed in the path), run
 
 ```
->>> build/boot repl
+mi repl
 ```
 
 The REPL allows executing fragments of MCore code. The syntax is the
@@ -71,7 +71,7 @@ Welcome to the MCore REPL!
 >> mexpr let y = 10 in
  | addi x y;;
 15
->> 
+>>
 ```
 
 ## Editor Support
@@ -117,11 +117,11 @@ When writing MCore programs, it is typically done by writing explicit unit tests
 utest addi 1 2 with 3 in
 ()
 ```
-checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `boot` command with argument `test`:
+checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test`:
 
 
 ```
->> build/boot test program.mc
+build/mi test program.mc
 ```
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
@@ -764,7 +764,7 @@ interpreters to achieve the same thing.
 
 ## Externals
 
-As part of the experimental setup of boot, we currently support a way
+As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
 Miking that does not need these external dependencies.
 
@@ -777,13 +777,13 @@ your system.
 This involves installing the C library. On `ubuntu 18.04` you can issue:
 
 ```
->> sudo apt-get install libsundials-dev
+sudo apt-get install libsundials-dev
 ```
 
 On `macOS`, using Homebrew, you can install Sundials using command:
 
 ```
->> brew install sundials
+brew install sundials
 ```
 
 
@@ -791,19 +791,19 @@ Then install the ocaml bindings
 [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
 
 ```
->> opam install sundialsml
+opam install sundialsml
 ```
 
 To compile and run the test suite with sundials support:
 
 ```
->> make externals-test
+make externals-test
 ```
 
 To install for the current user:
 
 ```
->>> make externals-install
+make externals-install
 ```
 
 

@@ -20,7 +20,7 @@ build() {
     declare dune_file="$1"
     (cd src/boot;
      cp "$dune_file" dune
-     dune build boot.exe && cp -f _build/default/boot.exe ../../build/boot)
+     dune build boot.exe && cp -f _build/default/boot.exe ../../build/mi)
 }
 
 # Install the boot interpreter locally for the current user
@@ -28,29 +28,29 @@ install() {
     bin_path=$HOME/.local/bin/
     lib_path=$HOME/.local/lib/mcore/stdlib
     mkdir -p $bin_path $lib_path
-    cp -f build/boot $bin_path/miking; chmod +x $bin_path/miking
+    cp -f build/mi $bin_path/mi; chmod +x $bin_path/mi
     rm -rf $lib_path; cp -rf stdlib $lib_path
 }
 
 # Run the test suite
 runtests() {
     (cd test
-    ../build/boot test mexpr
-    ../build/boot test mlang
-    ../build/boot test ext
+    ../build/mi test mexpr
+    ../build/mi test mlang
+    ../build/mi test ext
     cd ../stdlib
-    ../build/boot test mexpr
+    ../build/mi test mexpr
     cd ..
     export MCORE_STDLIB='@@@'
-    build/boot test stdlib)
+    build/mi test stdlib)
 }
 
 # Run the test suite including external functions tests
 runtests_ext() {
     runtests
     (cd test
-     ../build/boot test ext/*)
-    build/boot test stdlib/ext/*
+     ../build/mi test ext/*)
+    build/mi test stdlib/ext/*
 }
 
 case $1 in
@@ -77,7 +77,7 @@ case $1 in
         ;;
     clean)
         rm -rf src/boot/_build
-        rm -f build/boot
+        rm -f build/mi
         ;;
     all | *)
         build dune-boot
