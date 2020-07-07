@@ -277,7 +277,7 @@ let runprog name lst =
     evalprog name
 
 (* Print out main menu *)
-let usage_msg = "Usage: miking [run|repl|test] <files>\n\nOptions:"
+let usage_msg = "Usage: mi [run|repl|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
