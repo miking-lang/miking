@@ -13,13 +13,13 @@ Before you can use the Miking system, you need to install
 
 After the installation, you need to install the `opam` packages `dune` and `batteries` by running the following:
 
-```bash
+```
 opam install dune batteries
 ```
 
 To compile and run the test suite, execute:
 
-```bash
+```
 make test
 ```
 
@@ -31,7 +31,7 @@ mexpr print "Hello world!"
 
 and then run it using command:
 
-```bash
+```
 build/mi hello.mc
 ```
 
@@ -44,7 +44,7 @@ for example by running the following:
 To install the interpreter along with the standard library for the current
 user, issue:
 
-```bash
+```
 make install
 ```
 
@@ -53,7 +53,7 @@ This will install the interpreter to `$HOME/.local/bin` and the standard library
 The Miking interpreter also features a simple REPL.
 To start the REPL (assuming that the interpreter is installed in the path), run
 
-```bash
+```
 mi repl
 ```
 
@@ -120,7 +120,7 @@ utest addi 1 2 with 3 in
 checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test`:
 
 
-```bash
+```
 build/mi test program.mc
 ```
 
@@ -776,13 +776,13 @@ your system.
 
 This involves installing the C library. On `ubuntu 18.04` you can issue:
 
-```bash
+```
 sudo apt-get install libsundials-dev
 ```
 
 On `macOS`, using Homebrew, you can install Sundials using command:
 
-```bash
+```
 brew install sundials
 ```
 
@@ -790,19 +790,19 @@ brew install sundials
 Then install the ocaml bindings
 [SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
 
-```bash
+```
 opam install sundialsml
 ```
 
 To compile and run the test suite with sundials support:
 
-```bash
+```
 make externals-test
 ```
 
 To install for the current user:
 
-```bash
+```
 make externals-install
 ```
 
