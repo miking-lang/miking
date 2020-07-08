@@ -1,4 +1,0 @@
-#!/bin/bash
-
-MI=`dirname "$0"`
-$MI/boot $MI/../src/main/miking.mi $1 $2 $3 $4 $5
