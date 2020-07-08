@@ -722,6 +722,7 @@ let convert_escaped_chars s =
       | (true,0x5c::ss) -> 0x5c::(conv false ss)         (*  "\\" *)
       | (true,0x6E::ss) -> 0x0A::(conv false ss)         (*  "\n" *)
       | (true,0x74::ss) -> 0x09::(conv false ss)         (*  "\t" *)
+      | (true,0x72::ss) -> 0x0D::(conv false ss)         (*  "\r" *)
       | (true,_) -> raise (Invalid_argument "Ustring.convert_escaped_char")
   in
   let a2 = conv false (Array.to_list (collapse_ustring s)) in

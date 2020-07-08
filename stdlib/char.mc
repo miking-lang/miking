@@ -19,9 +19,7 @@ let char2lower = lam c.
   then (int2char (addi (char2int c) 32))
   else c
 
--- TODO: It would be nicer with escape codes in chars!
-let is_whitespace = lam c.
-  or (or (eqchar c ' ') (eqchar c (head "\n"))) (eqchar c (head "\t"))
+let is_whitespace = lam c. any (eqchar c) [' ', '\n', '\t', '\r']
 
 let is_lower_alpha = lam c.
   and (leqi (char2int 'a') (char2int c)) (leqi (char2int c) (char2int 'z'))
@@ -52,6 +50,10 @@ utest is_whitespace '	' with true in
 utest is_whitespace '
 ' with true in
 utest is_whitespace 'a' with false in
+utest is_whitespace '\n' with true in
+utest is_whitespace '\t' with true in
+utest is_whitespace '\r' with true in
+utest is_whitespace '\'' with false in
 
 utest is_alpha 'a' with true in
 utest is_alpha 'm' with true in

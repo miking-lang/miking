@@ -185,9 +185,10 @@ rule main = parse
       { mkid s }
   | uident as s
       { Parser.UC_IDENT{i=mkinfo_fast s; v= Ustring.from_utf8 s} }
-  | '\'' (utf8 as c) '\''
+  | '\'' ((s_escape | utf8) as c) '\''
       { let s = Ustring.from_utf8 c in
-        Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=s}}
+        let esc_s = Ustring.convert_escaped_chars s in
+        Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=esc_s}}
   | '#' (("con" | "type" | "var" | "label") as ident) '"'
        { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in

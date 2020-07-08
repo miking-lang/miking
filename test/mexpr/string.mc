@@ -17,9 +17,13 @@ utest "大衛·布羅曼" with "大衛·布羅曼" in
 utest char2int 'A' with 65 in         -- Char -> Int
 utest char2int 'ä' with 228 in
 utest char2int '島' with 23798 in
+utest char2int '\n' with 10 in
+utest char2int '\r' with 13 in
 utest int2char 97 with 'a' in         -- Int -> Char
 utest int2char 252 with 'ü' in
 utest int2char 28246 with '湖' in
+utest int2char 10 with '\n' in
+utest int2char 13 with '\r' in
 
 
 -- String operations
