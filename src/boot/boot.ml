@@ -263,8 +263,6 @@ let usage_msg = "Usage: mi [run|repl|test] <files>\n\nOptions:"
 (* Main function. Checks arguments and reads file names *)
 let main =
 
-  Py.initialize ();
-
   (* A list of command line arguments *)
   let speclist = [
 

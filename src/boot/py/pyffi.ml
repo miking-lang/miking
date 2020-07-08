@@ -13,7 +13,7 @@ open Msg
 
 let mk_py fi p = TmConst(fi, CPy(p))
 
-let builtin =
+let externals =
   let f p = mk_py NoInfo p in
   [("pycall", f(Pycall(None,None))); ("pyimport", f(Pyimport))]
 
@@ -43,7 +43,12 @@ let fail_constapp f v fi = raise_error fi
                            ^ Ustring.to_utf8
                               (Pprint.ustring_of_tm v))
 
+let initialize_on_first_call () =
+  if not Py.is_initialized () then
+    Py.initialize ()
+
 let delta _ _ fi c v =
+  initialize_on_first_call ();
   let fail_constapp fi = fail_constapp c v fi in
   match c,v with
     | PyObject(_),_ -> fail_constapp fi

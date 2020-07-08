@@ -2,9 +2,9 @@
 (ocamlyacc parser)
 
 (copy_files ext-skel/*)
-(copy_files py/*)
+(copy_files py-skel/*)
 
 (executable
  (name boot)
- (libraries batteries str linenoise pyml)
+ (libraries batteries str linenoise)
 )

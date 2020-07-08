@@ -46,10 +46,10 @@ let builtin =
    ("error",f(Cerror));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
   ]
-  (* Append python intrinsics *)
-  @ Pyffi.builtin
   (* Append external functions TODO: Should not be part of core language *)
-  @ Ext.externals)
+  @ Ext.externals
+  (* Append python intrinsics *)
+  @ Pyffi.externals)
   |> List.map (fun (x,t) -> (x,gensym(),t))
 
 (* Mapping name to symbol *)
