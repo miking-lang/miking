@@ -16,6 +16,7 @@ open Ast
 open Msg
 open Mexpr
 open Pprint
+open Repl
 
 module Option = BatOption
 
@@ -73,10 +74,10 @@ let debug_after_mlang t =
 
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
-let tablength = 8
 
 (* Open a file and parse it into an MCore program *)
 let parse_mcore_file filename =
+  let tablength = 8 in
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength;
@@ -208,48 +209,27 @@ let testprog lst =
       printf "ERROR! %d successful tests and %d failed tests.\n\n"
         (!utest_ok) (!utest_fail)
 
-(* Parse a string received by the REPL into an MCore AST *)
-let parse_mcore_string str =
-  Lexer.init (us "REPL") tablength;
-  str |> Lexing.from_string
-  |> Parser.main Lexer.main
-
-(* Evaluate a term given existing environments.
-   Returns updated environments along with evaluation result.
-*)
-let eval_with_envs (langs, nss, name2sym, sym2term) term =
-  let new_langs, flattened = Mlang.flatten_with_env langs term in
-  let new_nss, desugared = Mlang.desugar_post_flatten_with_nss nss flattened in
-  let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym desugared in
-  let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
-  ((new_langs, new_nss, new_name2sym, new_sym2term), result)
-
-(* Read user input until the terminating sequence is encountered *)
-let read_user_input () =
-  let initial_prompt = ">> " in
-  let followup_prompt = " | " in
-  let rec read_new_line acc prompt =
-    print_string prompt;
-    let open BatString in
-    let split_at str idx = (slice ~last:idx str, slice ~first:idx str) in
-    let line = trim (read_line ()) in
-    let first, last = split_at line (length line - 2) in
-    match last with
-    | ";;" -> sprintf "%s\n%s" acc first
-    | _ -> read_new_line (sprintf "%s\n%s" acc line) followup_prompt
-  in read_new_line "" initial_prompt
-
 (* Run the MCore REPL *)
 let runrepl _ =
   let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
+  (* Wrap the final mexpr in a lambda application to prevent scope leak *)
+  let repl_wrap_mexpr (Program(inc, tops, tm)) =
+    let lambda_wrapper = TmLam(NoInfo, us"_", nosym, TyArrow(TyInt,TyDyn), tm) in
+    let new_tm = TmApp(NoInfo, lambda_wrapper, TmConst(NoInfo, CInt(0))) in
+    Program(inc, tops, new_tm) in
   let rec read_eval_print envs =
     try
-      let user_input = read_user_input () in
-      let prog = user_input
-                 |> parse_mcore_string
-                 |> repl_merge_includes in
+      let (Program(_,_,tm)) as ast = read_user_input () in
+      let prog = ast
+        |> repl_merge_includes
+        |> repl_wrap_mexpr in
       let (new_envs, result) = eval_with_envs envs prog in
-      uprint_endline (ustring_of_tm result);
+      begin
+        if tm = tmUnit then
+          flush stdout
+        else
+          uprint_endline (ustring_of_tm result)
+      end;
       read_eval_print new_envs
     with e ->
       begin
@@ -257,6 +237,7 @@ let runrepl _ =
         | Lexer.Lex_error m -> uprint_endline (message2str m)
         | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
         | Error m -> uprint_endline (message2str m)
+        | Sys.Break -> ()
         | End_of_file -> exit 0
         | _ -> print_endline @@ Printexc.to_string e
       end;
@@ -267,7 +248,7 @@ let runrepl _ =
                      |> repl_merge_includes in
   let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
   let initial_envs, _ = eval_with_envs builtin_envs initial_term in
-  print_endline "Welcome to the MCore REPL!";
+  print_welcome_message ();
   read_eval_print initial_envs
 
 (* Run program *)
@@ -306,6 +287,9 @@ let main =
 
     "--full-pattern", Arg.Set(Patterns.pat_example_gives_complete_pattern),
     " Make the pattern analysis in mlang print full patterns instead of partial ones.";
+
+    "--no-line-edit", Arg.Set(Repl.no_line_edit),
+    " Disable line editing funcionality in the REPL.";
 
   ] in
 
