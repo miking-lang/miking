@@ -265,6 +265,9 @@ utest t.2 with 80 in
 ```
 we create a 3-tuple `t` and project out its values. Note that the different elements of a tuple can have different types. In this case, tuple `t` has type `(Int, String, Int)`.
 
+Singleton tuples are also supported: `(x,)` represents a tuple with `x` as its
+only element.
+
 
 ### Records
 
@@ -766,6 +769,7 @@ As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
 Miking that does not need these external dependencies.
 
+### Sundials
 One of the external dependencies is Sundials, a numerical library for
 solving differential equations.  To build the project with sundials
 integration you need to install the
@@ -795,15 +799,59 @@ opam install sundialsml
 To compile and run the test suite with sundials support:
 
 ```
-make externals-test
+MI_ENABLE_SUNDIALS=1 make test
 ```
 
 To install for the current user:
 
 ```
-make externals-install
+MI_ENABLE_SUNDIALS=1 make install
 ```
 
+### Python
+Another optional feature is Python intrinsics, which allow calling Python code
+from MCore. To build the project with Python integration you need to have
+[Python](https://www.python.org) installed on your system. You will also need to
+install any Python libraries you want to use (for example using pip).
+
+In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml
+Python bindings, available via `opam`:
+
+```
+opam install pyml
+```
+
+To compile and run the test suite with Python support:
+
+```
+MI_ENABLE_PYTHON=1 make test
+```
+
+To install for the current user:
+
+```
+MI_ENABLE_PYTHON=1 make install
+```
+
+The following example shows how to use the intrinsics to to plot an MCore
+sequence using `matplotlib` (assuming it's installed) after sorting it.
+
+```
+let builtins = pyimport "builtins"
+let plt = pyimport "matplotlib.pyplot"
+
+let x = [5.,4.5,4.,1.,1.5,]
+let y = pycall builtins "sorted" (x,)
+
+mexpr
+let _ = pycall plt "plot" (y,) in
+let _ = pycall plt "show" () in
+()
+```
+
+Arguments are passed to the `pycall` intrinsic using tuples.
+Note that to call Python's builtin functions, you should use the
+module `builtins`.
 
 
 ## MIT License
