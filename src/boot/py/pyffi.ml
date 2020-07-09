@@ -45,7 +45,7 @@ let fail_constapp f v fi = raise_error fi
 
 let initialize_on_first_call () =
   if not (Py.is_initialized ()) then
-    Py.initialize ()
+    Py.initialize ~version:3 ()
 
 let delta _ _ fi c v =
   initialize_on_first_call ();

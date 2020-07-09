@@ -840,7 +840,7 @@ sequence using `matplotlib` (assuming it's installed) after sorting it.
 let builtins = pyimport "builtins"
 let plt = pyimport "matplotlib.pyplot"
 
-let x = [5.,4.5,4.,1.,1.5,]
+let x = [5.,4.5,4.,1.,1.5]
 let y = pycall builtins "sorted" (x,)
 
 mexpr
