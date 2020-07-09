@@ -95,6 +95,12 @@ case $1 in
         build
         runtests
         ;;
+    test-all)
+        export MI_ENABLE_PYTHON=1
+        export MI_ENABLE_SUNDIALS=1
+        build
+        runtests
+        ;;
     install)
         build
         install

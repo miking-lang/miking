@@ -16,17 +16,11 @@ all:
 test:
 	@./make test
 
+test-all:
+	@./make test-all
+
 install:
 	@./make install
-
-externals:
-	@./make externals
-
-externals-test:
-	@./make externals-test
-
-externals-install:
-	@./make externals-install
 
 clean:
 	@./make clean
