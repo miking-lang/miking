@@ -32,8 +32,6 @@ let rec val_to_python fi = function
       try tmseq2ustring fi s |> Ustring.to_utf8 |> Py.String.of_string
       with _ -> Mseq.to_list s |> Py.List.of_list_map (val_to_python fi)
     end
-  (* | TmRecord(_,r1) ->
-     | TmConapp(_,_,sym1,v1) -> *)
   | _ -> raise_error fi "The supplied value cannot be used as a python argument"
 
 let fail_constapp f v fi = raise_error fi

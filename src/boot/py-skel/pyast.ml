@@ -1,1 +1,1 @@
-type py = unit
+type 'a ext = unit
