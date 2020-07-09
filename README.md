@@ -851,7 +851,8 @@ let _ = pycall plt "show" () in
 
 Arguments are passed to the `pycall` intrinsic using tuples.
 Note that to call Python's builtin functions, you should use the
-module `builtins`.
+module `builtins`. Also note that at the moment there is no way
+to convert Python values back to MCore values.
 
 
 ## MIT License
