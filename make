@@ -80,14 +80,13 @@ runtests() {
     ../build/mi test mexpr
     cd ..
     export MCORE_STDLIB='@@@'
-    build/mi test stdlib
+    build/mi test stdlib)
     if [[ -n $MI_ENABLE_PYTHON ]]; then
         runtests_py
     fi
     if [[ -n $MI_ENABLE_SUNDIALS ]]; then
         runtests_ext
     fi
-    )
 }
 
 case $1 in
