@@ -44,7 +44,7 @@ let fail_constapp f v fi = raise_error fi
                               (Pprint.ustring_of_tm v))
 
 let initialize_on_first_call () =
-  if not Py.is_initialized () then
+  if not (Py.is_initialized ()) then
     Py.initialize ()
 
 let delta _ _ fi c v =
