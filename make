@@ -17,8 +17,7 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
 # General function for building the project
 build() {
-    rm -rf build
-    mkdir build
+    mkdir -p build
     declare dune_file="$1"
     (cd src/boot;
      cp "$dune_file" dune
