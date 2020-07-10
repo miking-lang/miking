@@ -15,13 +15,37 @@ set -e
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
+BASE_DEPS="batteries str linenoise"
+
 # General function for building the project
 build() {
     mkdir -p build
-    declare dune_file="$1"
     (cd src/boot;
-     cp "$dune_file" dune
-     dune build boot.exe && cp -f _build/default/boot.exe ../../build/mi)
+    DEPS=$BASE_DEPS
+    > dune
+    if [[ -n $MI_ENABLE_SUNDIALS ]]; then
+        DEPS="$DEPS sundialsml"
+        echo "(copy_files ext/*)" >> dune
+    else
+        echo "(copy_files ext-skel/*)" >> dune
+    fi
+    if [[ -n $MI_ENABLE_PYTHON ]]; then
+        DEPS="$DEPS pyml"
+        echo "(copy_files py/*)" >> dune
+    else
+        echo "(copy_files py-skel/*)" >> dune
+    fi
+    cat >> dune << EndOfMessage
+
+(ocamllex lexer)
+(ocamlyacc parser)
+
+(executable
+  (name boot)
+  (libraries $DEPS)
+)
+EndOfMessage
+    dune build boot.exe && cp -f _build/default/boot.exe ../../build/mi)
 }
 
 # Install the boot interpreter locally for the current user
@@ -31,6 +55,19 @@ install() {
     mkdir -p $bin_path $lib_path
     cp -f build/mi $bin_path/mi; chmod +x $bin_path/mi
     rm -rf $lib_path; cp -rf stdlib $lib_path
+}
+
+# Run the test suite for sundials
+runtests_ext() {
+    (cd test
+     ../build/mi test ext/*)
+    build/mi test stdlib/ext/*
+}
+
+# Run the test suite for python intrinsic tests
+runtests_py() {
+    (cd test
+     ../build/mi test py/*)
 }
 
 # Run the test suite
@@ -44,36 +81,27 @@ runtests() {
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
-}
-
-# Run the test suite including external functions tests
-runtests_ext() {
-    runtests
-    (cd test
-     ../build/mi test ext/*)
-    build/mi test stdlib/ext/*
+    if [[ -n $MI_ENABLE_PYTHON ]]; then
+        runtests_py
+    fi
+    if [[ -n $MI_ENABLE_SUNDIALS ]]; then
+        runtests_ext
+    fi
 }
 
 case $1 in
-    # with external functions integration
-    externals-test)
-        build dune-boot-ext
-        runtests_ext
-        ;;
-    externals-install)
-        build dune-boot-ext
-        install
-        ;;
-    externals)
-        build dune-boot-ext
-        ;;
-    # without external dependencies
     test)
-        build dune-boot
+        build
+        runtests
+        ;;
+    test-all)
+        export MI_ENABLE_PYTHON=1
+        export MI_ENABLE_SUNDIALS=1
+        build
         runtests
         ;;
     install)
-        build dune-boot
+        build
         install
         ;;
     clean)
@@ -81,6 +109,6 @@ case $1 in
         rm -rf build
         ;;
     all | *)
-        build dune-boot
+        build
         ;;
 esac

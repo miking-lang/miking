@@ -44,10 +44,12 @@ let builtin =
    ("readFile",f(CreadFile)); ("writeFile",f(CwriteFile(None)));
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
-   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym))
+   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
   ]
   (* Append external functions TODO: Should not be part of core language *)
-  @ Ext.externals)
+  @ Ext.externals
+  (* Append python intrinsics *)
+  @ Pyffi.externals)
   |> List.map (fun (x,t) -> (x,gensym(),t))
 
 (* Mapping name to symbol *)
@@ -127,6 +129,8 @@ let arity = function
   | Cgensym      -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
+  (* Python intrinsics *)
+  | CPy v -> Pyffi.arity v
   (* External functions TODO: Should not be bart of core language *)
   | CExt v            -> Ext.arity v
 
@@ -395,6 +399,8 @@ let delta eval env fi c v  =
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqs(_),_ -> fail_constapp fi
+
+    | CPy v, t -> Pyffi.delta eval env fi v t
 
     | CExt v, t -> Ext.delta eval env fi v t
 

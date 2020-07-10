@@ -232,6 +232,9 @@ let rec print_const fmt = function
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqs(_)   -> fprintf fmt "eqs"
 
+  (* Python intrinsics *)
+  | CPy(v) -> fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
+
   (* External pprint TODO: Should not be part of core language *)
   | CExt(v) -> fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
 
@@ -328,6 +331,7 @@ and print_tm' fmt t = match t with
           | None -> (None,0)
       in
       (match List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst with
+      | Some([tm]) -> fprintf fmt "(%a,)" print_tm (App,tm)
       | Some(tms) ->
         let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
         let inner = List.map print (List.rev tms) in
