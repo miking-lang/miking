@@ -811,11 +811,9 @@ MI_ENABLE_SUNDIALS=1 make install
 ### Python
 Another optional feature is Python intrinsics, which allow calling Python code
 from MCore. To build the project with Python integration you need to have
-[Python](https://www.python.org) installed on your system. You will also need to
-install any Python libraries you want to use (for example using pip).
+[Python 3](https://www.python.org) installed on your system. You will also need to install any Python libraries you want to use (for example using pip).
 
-In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml
-Python bindings, available via `opam`:
+In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml Python bindings, available via `opam`:
 
 ```
 opam install pyml
@@ -854,6 +852,20 @@ Note that to call Python's builtin functions, you should use the
 module `builtins`. Also note that at the moment there is no way
 to convert Python values back to MCore values.
 
+#### Note when installing Python with brew
+`pyml` requires the shared library `libpython`. However, when using Python installed by brew on macOS, this library is not available in the paths searched by `pyml`. One way to fix this is to create a symlink to the library in `/usr/local/lib`. To find where the library is installed, use the command:
+
+```
+python3-config --ldflags
+```
+
+This should output `-L/some_path` where `some_path` is the path to the directory containing `libpython*.dylib` (where `*` is the version number). To create the symlink, type
+
+```
+ln -s /some_path/libpython*.dylib /usr/local/lib/
+```
+
+The bindings should now work properly.
 
 ## MIT License
 Miking is licensed under the MIT license.
