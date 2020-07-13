@@ -32,15 +32,23 @@ let parse_mcore_string parse_fun str =
   try Ok (parse_fun Lexer.main lexbuf)
   with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
 
+let parse_prog_or_mexpr lines =
+  match parse_mcore_string Parser.main lines with
+  | Ok ast -> ast
+  | Error _ ->
+    match parse_mcore_string Parser.main_mexpr lines with
+    | Ok ast -> ast
+    | Error _ -> raise Parsing.Parse_error
+
 let read_input prompt =
   if !no_line_edit then
     (print_string prompt; read_line ())
   else
     match LNoise.linenoise prompt with
-      | None -> raise End_of_file
-      | Some str ->
-        LNoise.history_add str |> ignore;
-        String.trim str
+    | None -> raise End_of_file
+    | Some str ->
+      LNoise.history_add str |> ignore;
+      String.trim str
 
 let print_welcome_message () =
   print_endline "Welcome to the MCore REPL!";
@@ -55,9 +63,9 @@ let handle_command str =
    :q                          exit the REPL
    :h                          display this message|} in
   match str with
-    | ":q" -> exit 0
-    | ":h" -> print_endline help_message; true
-    | _ -> false
+  | ":q" -> exit 0
+  | ":h" -> print_endline help_message; true
+  | _ -> false
 
 (* Read and parse a toplevel or mexpr expression. Continues to read input
    until a valid expression is formed. Raises Parse_error if the expression
@@ -66,13 +74,13 @@ let rec read_until_complete is_mexpr input =
   let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
   let parse_fun = if is_mexpr then Parser.main_mexpr else Parser.main in
   match parse_mcore_string parse_fun input with
-    | Ok ast -> ast
-    | Error "" -> read_until_complete is_mexpr (new_acc ())
-    | Error _ ->
-      if is_mexpr then
-        raise Parsing.Parse_error
-      else
-        read_until_complete true input
+  | Ok ast -> ast
+  | Error "" -> read_until_complete is_mexpr (new_acc ())
+  | Error _ ->
+    if is_mexpr then
+      raise Parsing.Parse_error
+    else
+      read_until_complete true input
 
 (* Read and parse a multiline expression (:{\n ..lines.. \n:}).
    Returns None if the first line is not ":{" *)
@@ -86,12 +94,7 @@ let read_multiline first_line =
   if first_line = ":{" then
     let lines = List.fold_right (fun x a -> sprintf "%s\n%s" a x)
                                 (read_until_end []) "" in
-    match parse_mcore_string Parser.main lines with
-    | Ok ast -> Some ast
-    | Error _ ->
-      match parse_mcore_string Parser.main_mexpr lines with
-      | Ok ast -> Some ast
-      | Error _ -> raise Parsing.Parse_error
+    Some (parse_prog_or_mexpr lines)
   else
     None
 
@@ -115,28 +118,43 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
 
+(* Wrap the final mexpr in a lambda application to prevent scope leak *)
+let wrap_mexpr (Program(inc, tops, tm)) =
+  let lambda_wrapper = TmLam(NoInfo, us"_", nosym, TyArrow(TyInt,TyDyn), tm) in
+  let new_tm = TmApp(NoInfo, lambda_wrapper, TmConst(NoInfo, CInt(0))) in
+  Program(inc, tops, new_tm)
+
+let repl_merge_includes = merge_includes (Sys.getcwd ()) []
+
+let repl_envs =
+  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
+                     |> add_prelude
+                     |> repl_merge_includes in
+  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
+  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
+  ref initial_envs
+
+let repl_eval_ast prog =
+  let new_envs, result = prog
+    |> repl_merge_includes
+    |> wrap_mexpr
+    |> eval_with_envs !repl_envs in
+  repl_envs := new_envs;
+  result
+
 (* Run the MCore REPL *)
 let start_repl () =
-  let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
-  (* Wrap the final mexpr in a lambda application to prevent scope leak *)
-  let repl_wrap_mexpr (Program(inc, tops, tm)) =
-    let lambda_wrapper = TmLam(NoInfo, us"_", nosym, TyArrow(TyInt,TyDyn), tm) in
-    let new_tm = TmApp(NoInfo, lambda_wrapper, TmConst(NoInfo, CInt(0))) in
-    Program(inc, tops, new_tm) in
-  let rec read_eval_print envs =
+  let rec read_eval_print () =
     try
       let (Program(_,_,tm)) as ast = read_user_input () in
-      let prog = ast
-        |> repl_merge_includes
-        |> repl_wrap_mexpr in
-      let (new_envs, result) = eval_with_envs envs prog in
+      let result = repl_eval_ast ast in
       begin
         if tm = tmUnit then
           flush stdout
         else
           uprint_endline (ustring_of_tm result)
       end;
-      read_eval_print new_envs
+      read_eval_print ()
     with e ->
       begin
         match e with
@@ -147,12 +165,7 @@ let start_repl () =
         | End_of_file -> exit 0
         | _ -> print_endline @@ Printexc.to_string e
       end;
-      read_eval_print envs
+      read_eval_print ()
   in
-  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
-                     |> add_prelude
-                     |> repl_merge_includes in
-  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
-  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
   print_welcome_message ();
-  read_eval_print initial_envs
+  read_eval_print ()
