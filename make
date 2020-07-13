@@ -48,6 +48,13 @@ EndOfMessage
     dune build boot.exe && cp -f _build/default/boot.exe ../../build/mi)
 }
 
+build_kernel() {
+  mkdir -p build
+  (cd src/boot;
+  cp kernel/dune-kernel dune
+  dune build kernel.exe && cp -f _build/default/kernel.exe ../../build/kernel)
+}
+
 # Install the boot interpreter locally for the current user
 install() {
     bin_path=$HOME/.local/bin/
@@ -100,6 +107,9 @@ case $1 in
         build
         runtests
         ;;
+    kernel)
+        build_kernel
+    ;;
     install)
         build
         install

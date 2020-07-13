@@ -13,6 +13,9 @@
 all:
 	@./make
 
+kernel:
+	@./make kernel
+
 test:
 	@./make test
 

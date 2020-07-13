@@ -1,0 +1,11 @@
+(copy_files ext-skel/*)
+(copy_files py/*)
+(copy_files kernel/*)
+
+(ocamllex lexer)
+(ocamlyacc parser)
+
+(executable
+  (name kernel)
+  (libraries batteries str linenoise jupyter-kernel pyml)
+)
