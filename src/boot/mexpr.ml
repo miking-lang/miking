@@ -10,6 +10,8 @@ open Ast
 open Pprint
 open Printf
 
+let program_output = ref uprint_string
+
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -362,11 +364,11 @@ let delta eval env fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
-       uprint_string (tmseq2ustring fi lst); tmUnit
+      !program_output (tmseq2ustring fi lst); tmUnit
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t ->
-      uprint_string (ustring_of_tm t); tmUnit
+      !program_output (ustring_of_tm t); tmUnit
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
@@ -386,12 +388,7 @@ let delta eval env fi c v  =
         Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); tmUnit
     | CdeleteFile,_ -> fail_constapp fi
 
-    | Cerror, TmSeq(fiseq,lst) ->
-       (let prefix = match fi with
-                     | Info(filename,l1,_,_,_) ->
-                       filename ^. us":" ^. (ustring_of_int l1) ^. us": "
-                     | NoInfo -> us""
-        in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
+    | Cerror, TmSeq(fiseq,lst) -> tmseq2ustring fiseq lst |> Ustring.to_utf8 |> raise_error fi
     | Cerror,_ -> fail_constapp fi
     | CSymb(_),_ -> fail_constapp fi
     | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
