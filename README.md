@@ -72,6 +72,9 @@ Type :h for help or :q to quit.
 >>
 ```
 
+This repository also contains a Jupyter kernel for MCore. For details,
+see [KERNEL_README.md](./KERNEL_README.md).
+
 ## Editor Support
 
 It is possible to write Miking code in any editor and compile it
