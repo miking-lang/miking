@@ -48,10 +48,33 @@ let init () =
   init_py_mpl ();
   Lwt.return ()
 
+let get_python code =
+  let python_indicator, content =
+    try BatString.split code ~by:"\n"
+    with Not_found -> ("", code)
+  in
+  match python_indicator with
+  | "%%%python" -> Some content
+  | _ -> None
+
 let exec ~count:_ code =
   try
-    let ast = parse_prog_or_mexpr code in
-    let result = ast |> repl_eval_ast |> Pprint.ustring_of_tm |> Ustring.to_utf8 in
+    let result =
+      match get_python code with
+      | Some content ->
+        let statements, expr =
+          try BatString.rsplit content ~by:"\n"
+          with Not_found -> ("", content)
+        in
+        ignore @@ Py.Run.eval ~start:Py.File statements;
+        let pyval =
+          try Py.Run.eval expr
+          with _ -> Py.Run.eval ~start:Py.File expr
+        in Py.Object.to_string pyval
+      | None ->
+        let ast = parse_prog_or_mexpr code in
+        ast |> repl_eval_ast |> Pprint.ustring_of_tm |> Ustring.to_utf8
+    in
     ignore @@ Py.Module.get_function ocaml_module "after_exec" [||];
     let new_actions =
       match BatIO.close_out !current_output with
