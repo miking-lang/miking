@@ -31,8 +31,9 @@ sys.stdout = OCamlPrint()"
 
 let init_py_mpl () =
   ignore @@ Py.Run.eval ~start:Py.File "
-import os
-os.environ['MPLBACKEND']='module://src.boot.kernel.mpl_backend'";
+import os, sys
+sys.path.append(os.path.expanduser('~') + '/.local/lib/mcore/kernel')
+os.environ['MPLBACKEND']='module://mpl_backend'";
   let py_ocaml_show args =
     let data = Py.String.to_string args.(0) in
     other_actions := Client.Kernel.mime ~base64:true ~ty:"image/png" data :: !other_actions;
@@ -76,5 +77,5 @@ for creating embedded domain-specific and general-purpose languages"
       ~init:init
       ~exec:exec
       () in
-      let config = Client_main.mk_config ~usage:"Usage: kernel --connection-file {connection_file}" () in
+      let config = Client_main.mk_config ~usage:"Usage: mcore_kernel --connection-file {connection_file}" () in
       Lwt_main.run (Client_main.main ~config:config ~kernel:mcore_kernel)

@@ -16,6 +16,9 @@ all:
 kernel:
 	@./make kernel
 
+kernel-install:
+	@./make kernel-install
+
 test:
 	@./make test
 

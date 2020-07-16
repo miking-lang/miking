@@ -49,10 +49,10 @@ EndOfMessage
 }
 
 build_kernel() {
-  mkdir -p build
-  (cd src/boot;
-  cp kernel/dune-kernel dune
-  dune build kernel.exe && cp -f _build/default/kernel.exe ../../build/kernel)
+    mkdir -p build
+    (cd src/boot;
+    cp kernel/dune-kernel dune
+    dune build kernel.exe && cp -f _build/default/kernel.exe ../../build/kernel)
 }
 
 # Install the boot interpreter locally for the current user
@@ -62,6 +62,15 @@ install() {
     mkdir -p $bin_path $lib_path
     cp -f build/mi $bin_path/mi; chmod +x $bin_path/mi
     rm -rf $lib_path; cp -rf stdlib $lib_path
+}
+
+install_kernel() {
+    bin_path=$HOME/.local/bin/
+    lib_path=$HOME/.local/lib/mcore/kernel/
+    mkdir -p $bin_path $lib_path
+    cp -f build/kernel $bin_path/mcore_kernel; chmod +x $bin_path/mcore_kernel
+    cp -f src/boot/kernel/mpl_backend.py $lib_path
+    jupyter-kernelspec install src/boot/kernel --user
 }
 
 # Run the test suite for sundials
@@ -109,7 +118,11 @@ case $1 in
         ;;
     kernel)
         build_kernel
-    ;;
+        ;;
+    kernel-install)
+        build_kernel
+        install_kernel
+        ;;
     install)
         build
         install
