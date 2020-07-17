@@ -54,7 +54,7 @@ let get_python code =
     with Not_found -> ("", code)
   in
   match python_indicator with
-  | "%%%python" -> Some content
+  | "%%python" -> Some content
   | _ -> None
 
 let is_expr pycode =

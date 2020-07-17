@@ -54,16 +54,43 @@ and select the `MCore` kernel when creating a new notebook.
 *Note that `$HOME/.local/bin` must be included in your PATH. This should be
 done by default on most Linux distributions.*
 
+## Now you're playing with Python
+
+The MCore kernel also allows executing Python code and interacting with it from
+MCore. Use the special directive `%%python` at the top of a cell to evaluate
+Python code.
+
+You can call the functions you have defined in Python cells in normal MCore
+cells by importing and using the module `__main__`. For example, consider the
+following two cells:
+
+```python
+%%python
+def foo(x):
+  print("foo"+x)
+```
+
+```ocaml
+let x = "bar" in
+let m = pyimport "__main__" in
+pycall m "foo" (x,)
+```
+
+The final `pycall` will print `foobar` as expected.
+
 ## Plotting graphs
 
-It is possible to plot graphs with MCore using the Python library `matplotlib`.
+It is possible to plot graphs using the Python library `matplotlib`.
 The Jupyter kernel offers integration with `matplotlib` to display plots inline.
 Make sure you have `matplotlib` installed (if not, you can install it using
 `pip`). Now, when you use `matplotlib`'s plot functions in a notebook cell, the
-plots will be displayed as part of the cell's output. For example, you can try running the following in a cell:
+plots will be displayed as part of the cell's output.
+For example, you can try running the following in a cell:
 
 ```ocaml
 let plt = pyimport "matplotlib.pyplot"
 let x = [1,2,4,8]
 let _ = pycall plt "plot" (x,)
 ```
+
+Of course, the same goes for plots made using Python cells.
