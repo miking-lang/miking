@@ -57,20 +57,34 @@ let get_python code =
   | "%%%python" -> Some content
   | _ -> None
 
+let is_expr pycode =
+  try
+    ignore @@ Py.compile ~source:pycode ~filename:"" `Eval;
+    true
+  with _ -> false
+
+let eval_python code =
+  let statements, expr =
+    try BatString.rsplit code ~by:"\n"
+    with Not_found -> ("", code)
+  in
+  let result =
+    if is_expr expr then
+      begin
+        ignore @@ Py.Run.eval ~start:Py.File statements;
+        Py.Run.eval expr
+      end
+    else
+      Py.Run.eval ~start:Py.File code
+   in
+   Py.Object.to_string result
+
 let exec ~count:_ code =
   try
     let result =
       match get_python code with
       | Some content ->
-        let statements, expr =
-          try BatString.rsplit content ~by:"\n"
-          with Not_found -> ("", content)
-        in
-        ignore @@ Py.Run.eval ~start:Py.File statements;
-        let pyval =
-          try Py.Run.eval expr
-          with _ -> Py.Run.eval ~start:Py.File expr
-        in Py.Object.to_string pyval
+        eval_python content
       | None ->
         let ast = parse_prog_or_mexpr code in
         ast |> repl_eval_ast |> Pprint.ustring_of_tm |> Ustring.to_utf8
