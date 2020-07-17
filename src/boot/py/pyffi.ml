@@ -34,6 +34,10 @@ let rec val_to_python fi = function
     end
   | _ -> raise_error fi "The supplied value cannot be used as a python argument"
 
+let is_none = function
+  | PyObject(v) -> v = Py.none
+  | _ -> false
+
 let fail_constapp f v fi = raise_error fi
                           ("Incorrect application. function: "
                            ^ Ustring.to_utf8 (pprint f)

@@ -1,10 +1,11 @@
 open Ustring.Op
 open Pyast
+open Printf
 
 let pprint = function
-  | PyObject(_) -> us "PyObject"
+  | PyObject(v) -> us (Py.Object.to_string v)
   | Pyimport -> us "pyimport"
   | Pycall(None,None) -> us "pycall"
-  | Pycall(Some(_),None) -> us "pycall PyObject"
-  | Pycall(Some(_),Some s) -> us "pycall PyObject " ^. us s
+  | Pycall(Some(v),None) -> us (sprintf "pycall(%s)" (Py.Object.to_string v))
+  | Pycall(Some(v),Some s) -> us (sprintf "pycall(%s, %s)" (Py.Object.to_string v) s)
   | _ -> failwith "Can't happen"

@@ -68,26 +68,29 @@ let eval_python code =
     try BatString.rsplit code ~by:"\n"
     with Not_found -> ("", code)
   in
-  let result =
-    if is_expr expr then
-      begin
-        ignore @@ Py.Run.eval ~start:Py.File statements;
-        Py.Run.eval expr
-      end
-    else
-      Py.Run.eval ~start:Py.File code
-   in
-   Py.Object.to_string result
+  if is_expr expr then
+    begin
+      ignore @@ Py.Run.eval ~start:Py.File statements;
+      Py.Run.eval expr
+    end
+  else
+    Py.Run.eval ~start:Py.File code
 
 let exec ~count:_ code =
   try
     let result =
       match get_python code with
       | Some content ->
-        eval_python content
+        let py_val = eval_python content in
+        if py_val = Py.none then
+          None
+        else
+          Some(Py.Object.to_string py_val)
       | None ->
-        let ast = parse_prog_or_mexpr code in
-        ast |> repl_eval_ast |> Pprint.ustring_of_tm |> Ustring.to_utf8
+        parse_prog_or_mexpr code
+        |> repl_eval_ast
+        |> repl_format
+        |> Option.map (Ustring.to_utf8)
     in
     ignore @@ Py.Module.get_function ocaml_module "after_exec" [||];
     let new_actions =
@@ -98,7 +101,7 @@ let exec ~count:_ code =
     let actions = List.rev new_actions in
     current_output := BatIO.output_string ();
     other_actions := [];
-    Lwt.return (Ok { Client.Kernel.msg=Some(result)
+    Lwt.return (Ok { Client.Kernel.msg=result
                    ; Client.Kernel.actions=actions})
   with e -> Lwt.return (Error (Printexc.to_string e))
 
