@@ -354,9 +354,13 @@ and print_tm' fmt t = match t with
     fprintf fmt "@[<hov 0>con %s:%s in@ %a@]"
       str ty print_tm (Match, t)
 
-  | TmConapp(_,x,sym,t) ->
+  | TmConapp(_,x,sym,opt) ->
     let str = string_of_ustring (ustring_of_var x sym) in
-     fprintf fmt "%s %a" str print_tm (Atom ,t)
+    begin
+      match opt with
+      | None -> fprintf fmt "%s" str
+      | Some(t) -> fprintf fmt "%s %a" str print_tm (Atom, t)
+    end
 
   (* If expressions *)
   | TmMatch(_,t1,PatBool(_,true),t2,t3) ->

@@ -248,7 +248,7 @@ let rec desugar_tm nss env =
      in TmRecLets(fi, List.map (fun (fi, name, s, e) -> (fi, empty_mangle name, s, desugar_tm nss env' e)) bindings, desugar_tm nss env' body)
   | TmCondef(fi, name, s, ty, body) ->
      TmCondef(fi, empty_mangle name, s, ty, desugar_tm nss (delete_con env name) body)
-  | TmConapp(fi,x,s,t) -> TmConapp(fi,resolve_con env x,s,desugar_tm nss env t)
+  | TmConapp(fi,x,s,_) -> TmConapp(fi,resolve_con env x,s,None)
   | (TmClos _) as tm -> tm
   (* Both introducing and referencing *)
   | TmMatch(fi, target, pat, thn, els) ->

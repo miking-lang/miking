@@ -434,7 +434,7 @@ let rec val_equal v1 v2 =
   | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
-  | TmConapp(_,_,sym1,v1),TmConapp(_,_,sym2,v2) -> sym1 = sym2 && val_equal v1 v2
+  | TmConapp(_,_,sym1,Some(v1)),TmConapp(_,_,sym2,Some(v2)) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
 
@@ -527,7 +527,7 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
   | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
-  | TmConapp(fi,x,_,t) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,symbolize env t)
+  | TmConapp(fi,x,_,_) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,None)
   | TmMatch(fi,t1,p,t2,t3) ->
      let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
@@ -598,7 +598,7 @@ let rec try_match env value pat =
       | _ -> None)
   | PatCon(_,_,s1,p) ->
      (match value with
-      | TmConapp(_,_,s2,v) when s1 = s2 -> try_match env v p
+      | TmConapp(_,_,s2,Some(v)) when s1 = s2 -> try_match env v p
       | _ -> None)
   | PatInt(_, i) ->
      (match value with
@@ -649,6 +649,8 @@ let rec eval (env : (sym * tm) list) (t : tm) =
        | TmClos(_,_,s,_,t3,env2) -> eval ((s,eval env t2)::Lazy.force env2) t3
        (* Constant application using the delta function *)
        | TmConst(_,c) -> delta eval env fiapp c (eval env t2)
+       (* Constructor application *)
+       | TmConapp(fi,x,s,None) -> TmConapp(fi,x,s,Some(eval env t2))
        (* Fix *)
        | TmFix(_) ->
          (match eval env t2 with
@@ -676,7 +678,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
                          ^ Ustring.to_utf8 (ustring_of_tm v)))
   (* Data constructors and match *)
   | TmCondef(_,_,_,_,t) -> eval env t
-  | TmConapp(fi,x,s,t) -> TmConapp(fi,x,s,eval env t)
+  | TmConapp(fi,x,s,opt) -> TmConapp(fi,x,s,Option.map(eval env) opt)
   | TmMatch(_,t1,p,t2,t3) ->
      (match try_match env (eval env t1) p with
       | Some env -> eval env t2

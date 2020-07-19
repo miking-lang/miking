@@ -275,9 +275,6 @@ left:
   | left atom
       { let fi = mkinfo (tm_info $1) (tm_info $2) in
         TmApp(fi,$1,$2) }
-  | con_ident atom
-      { let fi = mkinfo $1.i (tm_info $2) in
-        TmConapp(fi,$1.v,nosym,$2) }
 
 
 atom:
@@ -292,7 +289,8 @@ atom:
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | var_ident                { TmVar($1.i,$1.v,nosym) }
+  | var_ident            { TmVar($1.i,$1.v,nosym) }
+  | con_ident            { TmConapp($1.i,$1.v,nosym,None) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }

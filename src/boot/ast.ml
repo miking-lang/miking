@@ -143,7 +143,7 @@ and tm =
 | TmRecord  of info * tm Record.t                                   (* Record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
 | TmCondef  of info * ustring * sym * ty * tm                       (* Constructor definition *)
-| TmConapp  of info * ustring * sym * tm                            (* Constructor application *)
+| TmConapp  of info * ustring * sym * tm option                     (* Constructor application *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
@@ -223,7 +223,7 @@ let rec map_tm f = function
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
-  | TmConapp(fi,k,s,t) -> f (TmConapp(fi,k,s,t))
+  | TmConapp _ as t -> f t
   | TmMatch(fi,t1,p,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
