@@ -72,7 +72,7 @@ let optionFilter: (a -> Bool) -> Option -> Option = lam p. lam o.
 -- Returns the option if it contains a value, otherwise calls the specified
 -- function and returns the result.
 let optionOrElse: (Unit -> Option) -> Option -> Option = lam f. lam o.
-  optionGetOrElse f (optionMap (lam x. Some x) o)
+  optionGetOrElse f (optionMap Some o)
 
 -- Returns the first option if it contains a value, otherwise returns
 -- the second option.

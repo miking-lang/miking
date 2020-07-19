@@ -86,7 +86,7 @@ let fmap = lam f. lam p. lam st.
 -- Parser is an applicative functor
 
 -- pure : a -> Parser a
-let pure = lam v. lam st. Success(v, st)
+let pure = curry Success
 
 -- ap : Parser (a -> b) -> Parser a -> Parser b
 let ap = lam pf. lam p. lam st.
@@ -265,7 +265,7 @@ let many1 = lam p.
 
 -- optional : Parser a -> Parser (Option a)
 let optional = lam p.
-  alt (fmap (lam x. Some x) p) (pure (None()))
+  alt (fmap Some p) (pure (None()))
 
 -- wrapped_in : Parser l -> Parser r -> Parser a -> Parser a
 --

@@ -162,7 +162,7 @@ recursive
   let ty = lam st.
     let app_or_atom =
       bind (many1 ty_atom) (lam ts.
-      pure (foldl1 (curry (lam x. TyApp x)) ts))
+      pure (foldl1 (curry TyApp) ts))
     in
     let arrow_or_ty =
       bind app_or_atom (lam lt.
@@ -182,10 +182,10 @@ recursive
   let atom = lam st.
     let var_access =
       let _ = debug "== Parsing var_access" in
-      fmap (lam x. TmVar x) identifier in
+      fmap TmVar identifier in
     let seq =
       let _ = debug "== Parsing seq ==" in
-      fmap (lam x. TmSeq x) (brackets (comma_sep expr))
+      fmap TmSeq (brackets (comma_sep expr))
     in
     let tuple =
       let _ = debug "== Parsing tuple ==" in
@@ -198,11 +198,11 @@ recursive
     in
     let num =
       let _ = debug "== Parsing num ==" in
-      fmap (lam n. TmConst (CInt n)) number
+      fmap (compose TmConst CInt) number
     in
     let float =
       let _ = debug "== Parsing float ==" in
-      fmap (lam f. TmConst (CFloat f)) float
+      fmap (compose TmConst CFloat) float
     in
     let bool =
       let _ = debug "== Parsing bool ==" in
@@ -212,11 +212,11 @@ recursive
     let str_lit =
       let _ = debug "== Parsing string ==" in
       bind string_lit (lam s.
-      pure (TmSeq (map (lam c. TmConst (CChar c)) s)))
+      pure (TmSeq (map (compose TmConst CChar) s)))
     in
     let chr_lit =
       let _ = debug "== Parsing character ==" in
-      fmap (lam c. TmConst (CChar c)) char_lit
+      fmap (compose TmConst CChar) char_lit
     in
       label "atomic expression"
       (alt var_access
@@ -241,10 +241,10 @@ recursive
         bind (many (apr (symbol ".") number)) (lam is.
         if null is
         then pure a
-        else pure (foldl (curry (lam x. TmProj x)) a is)))
+        else pure (foldl (curry TmProj) a is)))
       in
       bind (many1 atom_or_proj) (lam as.
-      pure (foldl1 (curry (lam x. TmApp x)) as))
+      pure (foldl1 (curry TmApp) as))
     in
     let letbinding =
       let _ = debug "== Parsing letbinding ==" in
