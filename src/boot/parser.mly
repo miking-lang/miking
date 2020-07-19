@@ -137,6 +137,8 @@ top:
     { TopRecLet($1) }
   | topcon
     { TopCon($1) }
+  | toputest
+    { TopUtest($1) }
 
 toplet:
   | LET var_ident ty_op EQ mexpr
@@ -152,6 +154,11 @@ topcon:
   | CON con_ident ty_op
     { let fi = mkinfo $1.i $2.i in
       Con (fi, $2.v, $3) }
+
+toputest:
+  | UTEST mexpr WITH mexpr
+      { let fi = mkinfo $1.i (tm_info $4) in
+        Utest (fi,$2,$4) }
 
 mlang:
   | LANG ident lang_includes lang_body

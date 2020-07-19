@@ -164,7 +164,7 @@ let data_to_lang info name includes {inters; syns}: mlang =
   Lang(info, name, includes, List.rev_append syns inters)
 
 let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * top = function
-  | (TopLet _ | TopRecLet _ | TopCon _) as top -> (prev_langs, top)
+  | (TopLet _ | TopRecLet _ | TopCon _ | TopUtest _) as top -> (prev_langs, top)
   | TopLang(Lang(info, name, includes, _) as lang) ->
      let self_data = compute_lang_data lang in
      let included_data = List.map (lookup_lang info prev_langs) includes in
@@ -354,6 +354,9 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      in (nss, (wrap :: stack))
   | TopCon(Con(fi, id, ty)) ->
      let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
+     in (nss, (wrap :: stack))
+  | TopUtest(Utest(fi, lhs, rhs)) ->
+     let wrap tm' = TmUtest(fi, lhs, rhs, tm')
      in (nss, (wrap :: stack))
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =

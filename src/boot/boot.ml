@@ -113,9 +113,13 @@ let rec merge_includes root visited = function
        includes
        |> List.filter_map (parse_include root)
      in
+     let not_test = function
+       | TopUtest(_) -> false
+       | _ -> true
+     in
      let included_tops =
        included
-       |> List.map (function Program(_ ,tops, _) -> tops)
+       |> List.map (function Program(_ ,tops, _) -> List.filter not_test tops)
        |> List.concat
      in
      Program(includes, included_tops@tops, tm)
