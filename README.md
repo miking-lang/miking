@@ -834,26 +834,26 @@ To install for the current user:
 MI_ENABLE_PYTHON=1 make install
 ```
 
-The following example shows how to use the intrinsics to to plot an MCore
-sequence using `matplotlib` (assuming it's installed) after sorting it.
+The following example shows how to use the intrinsics to sort a sequence using
+Python's builtin `sorted` function.
 
-```
+```ocaml
 let builtins = pyimport "builtins"
-let plt = pyimport "matplotlib.pyplot"
 
 let x = [5.,4.5,4.,1.,1.5]
 let y = pycall builtins "sorted" (x,)
-
-mexpr
-let _ = pycall plt "plot" (y,) in
-let _ = pycall plt "show" () in
-()
+let x_sorted = pyconvert y
 ```
 
 Arguments are passed to the `pycall` intrinsic using tuples.
 Note that to call Python's builtin functions, you should use the
-module `builtins`. Also note that at the moment there is no way
-to convert Python values back to MCore values.
+module `builtins`. Other modules can also be imported as long as they
+are available in the Python path. `y` in the example above is a Python value,
+which can either be passed to other Python functions, or converted back to
+an MCore sequence using the `pyconvert` builtin.
+
+[KERNEL_README.md](./KERNEL_README.md) shows some additional examples using
+the Python intrinsics, such as plotting sequences with `matplotlib`.
 
 #### Note when installing Python with brew
 `pyml` requires the shared library `libpython`. However, when using Python installed by brew on macOS, this library is not available in the paths searched by `pyml`. One way to fix this is to create a symlink to the library in `/usr/local/lib`. To find where the library is installed, use the command:
