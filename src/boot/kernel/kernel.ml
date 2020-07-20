@@ -112,7 +112,7 @@ let main =
       ~language:"MCore"
       ~language_version:[0; 1]
       ~file_extension:".mc"
-      ~codemirror_mode:"haskell"
+      ~codemirror_mode:"mcore"
       ~banner:"The core language of Miking - a meta language system
 for creating embedded domain-specific and general-purpose languages"
       ~init:init
