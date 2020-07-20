@@ -42,6 +42,7 @@ os.environ['MPLBACKEND']='module://mpl_backend'";
   Py.Module.set_function ocaml_module "ocaml_show" py_ocaml_show
 
 let init () =
+  initialize_envs ();
   Mexpr.program_output := kernel_output_ustring;
   Py.Module.set_function ocaml_module "after_exec" (fun _ -> Py.none);
   init_py_print ();
@@ -111,7 +112,7 @@ let main =
       ~language:"MCore"
       ~language_version:[0; 1]
       ~file_extension:".mc"
-      ~codemirror_mode:"ocaml"
+      ~codemirror_mode:"haskell"
       ~banner:"The core language of Miking - a meta language system
 for creating embedded domain-specific and general-purpose languages"
       ~init:init
