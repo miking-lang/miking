@@ -1,5 +1,7 @@
-open Repl
+open Ast
 open Jupyter_kernel
+open Repl
+open Ustring.Op
 
 let current_output = ref (BatIO.output_string ())
 let other_actions = ref []
@@ -106,6 +108,37 @@ let exec ~count:_ code =
                    ; Client.Kernel.actions=actions})
   with e -> Lwt.return (Error (Printexc.to_string e))
 
+let keywords = List.map fst Lexer.reserved_strings
+
+let begins_at str pos =
+  let nonword_characters = Str.regexp "[][/\\\\(),={} \n\r\x0c\t]" in
+  try Str.search_backward nonword_characters str (pos-1) + 1
+  with Not_found -> 0
+
+let get_matches s = s
+  |> BatPervasives.flip BatString.starts_with
+  |> List.filter
+
+let keywords_and_identifiers () =
+  let extract_name id =
+    let sid =
+      match id with
+      | IdVar(s) -> s
+      | IdCon(s) -> s
+      | IdType(s) -> s
+      | IdLabel(s) -> s
+    in Ustring.to_utf8 (ustring_of_sid sid)
+  in
+  let (_,_,name2sym,_) = !repl_envs in
+  keywords @ (List.map (fun x -> x |> fst |> extract_name) name2sym)
+
+let complete ~pos str =
+  let start_pos = begins_at str pos in
+  let word_to_complete = BatString.slice ~first:start_pos ~last:pos str in
+  Lwt.return { Client.Kernel.completion_matches = get_matches word_to_complete (keywords_and_identifiers ())
+             ; Client.Kernel.completion_start = start_pos
+             ; Client.Kernel.completion_end = pos}
+
 let main =
   let mcore_kernel =
     Client.Kernel.make
@@ -117,6 +150,7 @@ let main =
 for creating embedded domain-specific and general-purpose languages"
       ~init:init
       ~exec:exec
+      ~complete:complete
       () in
       let config = Client_main.mk_config ~usage:"Usage: mcore_kernel --connection-file {connection_file}" () in
       Lwt_main.run (Client_main.main ~config:config ~kernel:mcore_kernel)
