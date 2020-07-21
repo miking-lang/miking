@@ -73,6 +73,21 @@ define(function() {
                 return "string error";
             }
 
+            function definition(source, setState) {
+                if (source.eatWhile(whiteCharRE)) {
+                  return null;
+                }
+
+                var ch = source.next();
+                var t = null;
+                if (largeRE.test(ch) || smallRE.test(ch)) {
+                    source.eatWhile(idRE);
+                    t = "def";
+                }
+                setState(normal);
+                return t;
+            }
+
             var wellKnownWords = (function() {
                 var wkw = {};
                 function setType(t) {
@@ -103,10 +118,38 @@ define(function() {
                     "with"
                 );
 
-                setType("atom")(
+                setType("builtin")(
                     "false",
                     "true"
                 );
+
+                setType("builtin")(
+                    "not","and","or",
+                    "addi","subi","muli",
+                    "divi","modi","negi",
+                    "lti","leqi","gti","geqi",
+                    "eqi","neqi",
+                    "slli","srli","srai",
+                    "arity",
+                    "addf","subf","mulf",
+                    "divf","negf",
+                    "ltf","leqf","gtf","geqf",
+                    "eqf","neqf",
+                    "floorfi","ceilfi","roundfi",
+                    "int2float","string2float",
+                    "char2int","int2char",
+                    "makeSeq","length","concat",
+                    "get","set",
+                    "cons","snoc",
+                    "splitAt","reverse",
+                    "print","dprint",
+                    "argv",
+                    "readFile","writeFile",
+                    "fileExists","deleteFile",
+                    "error",
+                    "eqs","gensym",
+                    "pycall","pyimport","pyconvert"
+                )
 
                 setType("meta")(
                     "mexpr",
@@ -121,16 +164,66 @@ define(function() {
                 return wkw;
             })();
 
+            var definitionWords = [
+              "con",
+              "lang",
+              "let",
+              "sem",
+              "syn",
+              "type"
+            ]
 
+            var strongIndentationWords = [
+              "lang"
+            ]
+
+            var indentationWords = strongIndentationWords.concat([
+              "then",
+              "else"
+              ]
+            )
+
+            var indentLength = _config.indentUnit;
+
+            function resetIndentation(stream, state){
+                if (!state.strongIndent){
+                    state.indent = stream.indentation();
+                }
+                if (stream.eol()) {
+                    state.strongIndent = false;
+                }
+            }
+
+            function setIndentation(state, word){
+                if (indentationWords.includes(word)){
+                    state.indent += indentLength;
+                    if (strongIndentationWords.includes(word)){
+                        state.strongIndent = true;
+                    }
+                }
+            }
 
             return {
-                startState: function ()  { return { f: normal }; },
-                copyState:  function (s) { return { f: s.f }; },
+                startState: function ()  { return { f: normal, indent: 0, strongIndent: false }; },
+                copyState:  function (s) { return { f: s.f, indent: s.indent, strongIndent: s.strongIndent }; },
 
                 token: function(stream, state) {
                     var t = state.f(stream, function(s) { state.f = s; });
                     var w = stream.current();
-                    return wellKnownWords.hasOwnProperty(w) ? wellKnownWords[w] : t;
+                    resetIndentation(stream, state);
+                    if (wellKnownWords.hasOwnProperty(w)){
+                      if (definitionWords.includes(w)){
+                        state.f = definition;
+                      }
+                      setIndentation(state, w);
+                      return wellKnownWords[w];
+                    } else {
+                      return t;
+                    }
+                },
+
+                indent: function(state, textAfter) {
+                    return state.indent;
                 },
 
                 lineComment: "--"
