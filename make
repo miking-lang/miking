@@ -71,6 +71,8 @@ install_kernel() {
     cp -f build/kernel $bin_path/mcore_kernel; chmod +x $bin_path/mcore_kernel
     cp -f src/boot/kernel/mpl_backend.py $lib_path
     jupyter-kernelspec install src/boot/kernel --user
+    jupyter-nbextension install src/boot/kernel/mcore-syntax --user --log-level=WARN
+    jupyter-nbextension enable mcore-syntax/main --user
 }
 
 # Run the test suite for sundials
