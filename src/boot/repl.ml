@@ -16,13 +16,15 @@ open Ast
 open Msg
 open Pprint
 
+module Option = BatOption
+
 let initial_prompt = ">> "
 let followup_prompt = " | "
 
 let no_line_edit = ref false
 
-module Option = BatOption
-
+let history_dir = Sys.getenv "HOME" ^ "/.mcore"
+let history_file = sprintf "%s/repl_history" history_dir
 
 (* Try to parse a string received by the REPL into an MCore AST *)
 let parse_mcore_string filename parse_fun str =
@@ -50,6 +52,10 @@ let read_input prompt =
       LNoise.history_add str |> ignore;
       String.trim str
 
+let save_history_and_exit () =
+  LNoise.history_save ~filename:history_file |> ignore;
+  exit 0
+
 let print_welcome_message () =
   print_endline "Welcome to the MCore REPL!";
   print_endline "Type :h for help or :q to quit."
@@ -63,7 +69,7 @@ let handle_command str =
    :q                          exit the REPL
    :h                          display this message|} in
   match str with
-  | ":q" -> exit 0
+  | ":q" -> save_history_and_exit ()
   | ":h" -> print_endline help_message; true
   | _ -> false
 
@@ -185,6 +191,13 @@ let completion_callback line_so_far ln_completions =
   let completions = List.map (sprintf "%s%s" line_beginning) raw_completions in
   List.iter (LNoise.add_completion ln_completions) completions
 
+let init_linenoise () =
+  if not !no_line_edit then (
+    if not (Sys.file_exists history_dir && Sys.is_directory history_dir) then
+      Unix.mkdir history_dir 0o666;
+    LNoise.set_completion_callback completion_callback;
+    LNoise.history_load ~filename:history_file |> ignore)
+
 (* Run the MCore REPL *)
 let start_repl () =
   let repl_print tm =
@@ -202,12 +215,12 @@ let start_repl () =
       begin
         match e with
         | Sys.Break -> ()
-        | End_of_file -> exit 0
+        | End_of_file -> save_history_and_exit ()
         | _ -> uprint_endline @@ error_to_ustring e
       end;
       read_eval_print ()
   in
   print_welcome_message ();
-  LNoise.set_completion_callback completion_callback;
+  init_linenoise ();
   initialize_envs ();
   read_eval_print ()
