@@ -149,6 +149,42 @@ let repl_format tm =
   | TmConst(_,CPy(obj)) when Pyffi.is_none obj -> None
   | _ -> Some(ustring_of_tm tm)
 
+(* Autocompletion *)
+let begins_at str pos =
+  let nonword_characters = Str.regexp "[][/\\\\(),={} \n\r\x0c\t]" in
+  try Str.search_backward nonword_characters str (pos-1) + 1
+  with Not_found -> 0
+
+let keywords = List.map fst Lexer.reserved_strings
+
+let get_matches s = s
+  |> BatPervasives.flip BatString.starts_with
+  |> List.filter
+
+let keywords_and_identifiers () =
+  let extract_name id =
+    let sid =
+      match id with
+      | IdVar(s) -> s
+      | IdCon(s) -> s
+      | IdType(s) -> s
+      | IdLabel(s) -> s
+    in Ustring.to_utf8 (ustring_of_sid sid)
+  in
+  let (_,_,name2sym,_) = !repl_envs in
+  keywords @ (List.map (fun x -> x |> fst |> extract_name) name2sym)
+
+let get_completions str pos =
+  let start_pos = begins_at str pos in
+  let word_to_complete = BatString.slice ~first:start_pos ~last:pos str in
+  (start_pos, get_matches word_to_complete (keywords_and_identifiers ()))
+
+let completion_callback line_so_far ln_completions =
+  let start_pos,raw_completions = get_completions line_so_far (String.length line_so_far) in
+  let line_beginning = String.sub line_so_far 0 start_pos in
+  let completions = List.map (sprintf "%s%s" line_beginning) raw_completions in
+  List.iter (LNoise.add_completion ln_completions) completions
+
 (* Run the MCore REPL *)
 let start_repl () =
   let repl_print tm =
@@ -172,5 +208,6 @@ let start_repl () =
       read_eval_print ()
   in
   print_welcome_message ();
+  LNoise.set_completion_callback completion_callback;
   initialize_envs ();
   read_eval_print ()
