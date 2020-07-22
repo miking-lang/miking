@@ -24,8 +24,10 @@ let followup_prompt = " | "
 let no_line_edit = ref false
 
 let history_dir =
-  try Sys.getenv "HOME" ^ "/.mcore"
-  with Not_found -> failwith "$HOME is needed to save history, but it is unset. Either set it, or disable line editing with --no-line-edit"
+  if not !no_line_edit then
+    try Sys.getenv "HOME" ^ "/.mcore"
+    with Not_found -> failwith "$HOME is needed to save history, but it is unset. Either set it, or disable line editing with --no-line-edit"
+  else "@@@"
 let history_file = sprintf "%s/repl_history" history_dir
 
 (* Try to parse a string received by the REPL into an MCore AST *)
