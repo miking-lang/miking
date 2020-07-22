@@ -2,6 +2,7 @@ open Ast
 open Jupyter_kernel
 open Repl
 open Ustring.Op
+open Eval
 
 let current_output = ref (BatIO.output_string ())
 let other_actions = ref []
@@ -106,7 +107,7 @@ let exec ~count:_ code =
     other_actions := [];
     Lwt.return (Ok { Client.Kernel.msg=result
                    ; Client.Kernel.actions=actions})
-  with e -> Lwt.return (Error (Printexc.to_string e))
+  with e -> Lwt.return (Error (error_to_ustring e |> Ustring.to_utf8))
 
 let keywords = List.map fst Lexer.reserved_strings
 

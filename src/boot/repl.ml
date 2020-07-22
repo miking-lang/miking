@@ -165,12 +165,9 @@ let start_repl () =
     with e ->
       begin
         match e with
-        | Lexer.Lex_error m -> uprint_endline (message2str m)
-        | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
-        | Error m -> uprint_endline (message2str m)
         | Sys.Break -> ()
         | End_of_file -> exit 0
-        | _ -> print_endline @@ Printexc.to_string e
+        | _ -> uprint_endline @@ error_to_ustring e
       end;
       read_eval_print ()
   in

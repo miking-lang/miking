@@ -116,6 +116,13 @@ let rec merge_includes root visited = function
 let add_prelude = function
   | Program(includes, tops, tm) -> Program(default_includes@includes, tops, tm)
 
+let error_to_ustring e =
+  match e with
+  | Lexer.Lex_error m -> message2str m
+  | Parsing.Parse_error -> message2str (Lexer.parse_error_message ())
+  | Error m -> message2str m
+  | _ -> us(Printexc.to_string e)
+
 (* Main function for evaluation a function. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
@@ -139,27 +146,13 @@ let evalprog filename  =
      |> Mexpr.eval builtin_sym2term
      |> fun _ -> ())
     with
-    | Lexer.Lex_error m ->
+    | (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
+      let error_string = Ustring.to_utf8 (error_to_ustring e) in
       if !utest then (
-        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
+        printf "\n%s" error_string;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
       else
-        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
-    | Error m ->
-      if !utest then (
-        printf "\n%s" (Ustring.to_utf8 (Msg.message2str m));
-        utest_fail := !utest_fail + 1;
-        utest_fail_local := !utest_fail_local + 1)
-      else
-        fprintf stderr "%s\n" (Ustring.to_utf8 (Msg.message2str m))
-    | Parsing.Parse_error ->
-      if !utest then (
-        printf "\n%s" (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())));
-        utest_fail := !utest_fail + 1;
-        utest_fail_local := !utest_fail_local + 1)
-      else
-        fprintf stderr "%s\n"
-  (Ustring.to_utf8 (Msg.message2str (Lexer.parse_error_message())))
+        fprintf stderr "%s\n" error_string
   end; parsed_files := [];
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
