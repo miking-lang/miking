@@ -1,8 +1,8 @@
 import matplotlib
-import ocaml
+import _mcore_kernel
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib._pylab_helpers import Gcf
-from ocaml import ocaml_show
+from _mcore_kernel import ocaml_show
 from io import BytesIO
 
 matplotlib.interactive(True)
@@ -40,9 +40,9 @@ def flush_figures():
 
 FigureCanvas = FigureCanvasAgg
 
-old_after_exec = ocaml.after_exec
+old_after_exec = _mcore_kernel.after_exec
 def new_after_exec():
     old_after_exec()
     flush_figures()
 
-ocaml.after_exec = lambda: new_after_exec()
+_mcore_kernel.after_exec = lambda: new_after_exec()

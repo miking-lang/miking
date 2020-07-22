@@ -11,8 +11,8 @@ let text_data_of_string str =
 let kernel_output_string str = BatIO.nwrite !current_output str
 let kernel_output_ustring ustr = ustr |> Ustring.to_utf8 |> kernel_output_string
 
-let python_init = Py.initialize ~version:3 ()
-let ocaml_module = Py.Import.add_module "ocaml"
+let _ = Py.initialize ~version:3 ()
+let ocaml_module = Py.Import.add_module "_mcore_kernel"
 
 (* Set Python's sys.stdout to our own ocaml function to handle Python prints *)
 let init_py_print () =
@@ -23,7 +23,7 @@ let init_py_print () =
   Py.Module.set_function ocaml_module "ocaml_print" py_ocaml_print;
   ignore @@ Py.Run.eval ~start:Py.File "
 import sys
-from ocaml import ocaml_print
+from _mcore_kernel import ocaml_print
 class OCamlPrint:
     def write(self, str):
         ocaml_print(str)
