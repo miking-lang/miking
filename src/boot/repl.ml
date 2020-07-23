@@ -200,6 +200,7 @@ let keywords_and_identifiers () =
   |> USSet.to_seq
   |> List.of_seq
   |> List.map Ustring.to_utf8
+  |> (@) keywords
 
 let get_matches s = s
   |> BatPervasives.flip BatString.starts_with
