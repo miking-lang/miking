@@ -855,6 +855,43 @@ an MCore sequence using the `pyconvert` builtin.
 [KERNEL_README.md](./KERNEL_README.md) shows some additional examples using
 the Python intrinsics, such as plotting sequences with `matplotlib`.
 
+#### Conversion between MCore and Python
+
+When calling a Python function using the `pycall` builtin, the arguments will be
+automatically converted from MCore values to Python values. Similarly, the
+opposite conversion is performed when using `pyconvert` on the result of a
+`pycall`. This section explains the details of these conversions.
+
+##### From MCore to Python
+
+| MCore type      | Python type |
+|:--------------- |:----------- |
+| Bool            | bool        |
+| Int             | int         |
+| Char            | N/A         |
+| Float           | float       |
+| [Char] (String) | str         |
+| [a]             | List        |
+| Unit            | None        |
+| Record          | Dict        |
+| Tuple (Record)  | Dict        |
+| other           | N/A         |
+
+##### From Python to MCore
+
+| Python type | MCore type      |
+|:----------- |:--------------- |
+| bool        | Bool            |
+| int         | Int             |
+| long        | Int             |
+| float       | Float           |
+| str         | [Char] (String) |
+| List        | [a]             |
+| None        | Unit            |
+| Dict        | Record          |
+| Tuple       | Tuple (Record)  |
+| other       | N/A             |
+
 #### Note when installing Python with brew
 `pyml` requires the shared library `libpython`. However, when using Python installed by brew on macOS, this library is not available in the paths searched by `pyml`. One way to fix this is to create a symlink to the library in `/usr/local/lib`. To find where the library is installed, use the command:
 
