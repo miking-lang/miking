@@ -14,12 +14,31 @@ let char2upper = lam c.
   then (int2char (subi (char2int c) 32))
   else c
 
+utest char2upper 'a' with 'A'
+utest char2upper '0' with '0'
+utest char2upper 'A' with 'A'
+
 let char2lower = lam c.
   if and (geqchar c 'A') (leqchar c 'Z')
   then (int2char (addi (char2int c) 32))
   else c
 
+utest char2lower 'a' with 'a'
+utest char2lower '0' with '0'
+utest char2lower 'A' with 'a'
+
+-- Character predicates
 let is_whitespace = lam c. any (eqchar c) [' ', '\n', '\t', '\r']
+
+utest is_whitespace ' ' with true
+utest is_whitespace '	' with true
+utest is_whitespace '
+' with true
+utest is_whitespace 'a' with false
+utest is_whitespace '\n' with true
+utest is_whitespace '\t' with true
+utest is_whitespace '\r' with true
+utest is_whitespace '\'' with false
 
 let is_lower_alpha = lam c.
   and (leqi (char2int 'a') (char2int c)) (leqi (char2int c) (char2int 'z'))
@@ -29,52 +48,31 @@ let is_upper_alpha = lam c.
 
 let is_alpha = lam c. or (is_lower_alpha c) (is_upper_alpha c)
 
+utest is_alpha 'a' with true
+utest is_alpha 'm' with true
+utest is_alpha 'z' with true
+utest is_alpha '`' with false
+utest is_alpha '{' with false
+utest is_alpha 'A' with true
+utest is_alpha 'M' with true
+utest is_alpha 'Z' with true
+utest is_alpha '@' with false
+utest is_alpha '[' with false
+
 let is_digit = lam c.
   and (leqi (char2int '0') (char2int c)) (leqi (char2int c) (char2int '9'))
+
+utest is_digit '0' with true
+utest is_digit '5' with true
+utest is_digit '9' with true
+utest is_digit '/' with false
+utest is_digit ':' with false
 
 let is_alphanum = lam c.
   or (is_alpha c) (is_digit c)
 
-mexpr
-
-utest char2upper 'a' with 'A' in
-utest char2upper '0' with '0' in
-utest char2upper 'A' with 'A' in
-
-utest char2lower 'a' with 'a' in
-utest char2lower '0' with '0' in
-utest char2lower 'A' with 'a' in
-
-utest is_whitespace ' ' with true in
-utest is_whitespace '	' with true in
-utest is_whitespace '
-' with true in
-utest is_whitespace 'a' with false in
-utest is_whitespace '\n' with true in
-utest is_whitespace '\t' with true in
-utest is_whitespace '\r' with true in
-utest is_whitespace '\'' with false in
-
-utest is_alpha 'a' with true in
-utest is_alpha 'm' with true in
-utest is_alpha 'z' with true in
-utest is_alpha '`' with false in
-utest is_alpha '{' with false in
-utest is_alpha 'A' with true in
-utest is_alpha 'M' with true in
-utest is_alpha 'Z' with true in
-utest is_alpha '@' with false in
-utest is_alpha '[' with false in
-
-utest is_digit '0' with true in
-utest is_digit '5' with true in
-utest is_digit '9' with true in
-utest is_digit '/' with false in
-utest is_digit ':' with false in
-
-utest is_alphanum '0' with true in
-utest is_alphanum '9' with true in
-utest is_alphanum 'A' with true in
-utest is_alphanum 'z' with true in
-utest is_alphanum '_' with false in
-()
+utest is_alphanum '0' with true
+utest is_alphanum '9' with true
+utest is_alphanum 'A' with true
+utest is_alphanum 'z' with true
+utest is_alphanum '_' with false

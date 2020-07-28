@@ -33,6 +33,11 @@ let string2int = lam s.
   then negi (string2int_rechelper (tail s))
   else string2int_rechelper s
 
+utest string2int "5" with 5
+utest string2int "25" with 25
+utest string2int "314159" with 314159
+utest string2int "-314159" with (negi 314159)
+
 let int2string = lam n.
   recursive
   let int2string_rechelper = lam n.
@@ -45,6 +50,11 @@ let int2string = lam n.
   if lti n 0
   then cons '-' (int2string_rechelper (negi n))
   else int2string_rechelper n
+
+utest int2string 5 with "5"
+utest int2string 25 with "25"
+utest int2string 314159 with "314159"
+utest int2string (negi 314159) with "-314159"
 
 // A naive float2string implementation that only formats in standard form
 let float2string = lam arg.
@@ -96,6 +106,10 @@ let float2string = lam arg.
   in
   concat prefix res
 
+utest float2string 5.0e+25 with "5.0e+25"
+utest float2string (negf 5.0e+25) with "-5.0e+25"
+utest float2string (5.0e-5) with "5.0e-5"
+utest float2string (negf 5.0e-5) with "-5.0e-5"
 
 // Returns an option with the index of the first occurrence of c in s. Returns
 // None if c was not found in s.
@@ -109,6 +123,13 @@ let strIndex = lam c. lam s.
          else strIndex_rechelper (addi i 1) c (tail s)
   in
   strIndex_rechelper 0 c s
+
+utest strIndex '%' "a % 5" with Some(2)
+utest strIndex '%' "a & 5" with None ()
+utest strIndex 'w' "Hello, world!" with Some(7)
+utest strIndex 'w' "Hello, World!" with None ()
+utest strIndex 'o' "Hello, world!" with Some(4)
+utest strIndex '@' "Some @TAG@" with Some(5)
 
 // Returns an option with the index of the last occurrence of c in s. Returns
 // None if c was not found in s.
@@ -126,6 +147,13 @@ let strLastIndex = lam c. lam s.
   in
   strLastIndex_rechelper 0 (negi 1) c s
 
+utest strLastIndex '%' "a % 5" with Some(2)
+utest strLastIndex '%' "a & 5" with None ()
+utest strLastIndex 'w' "Hello, world!" with Some(7)
+utest strLastIndex 'w' "Hello, World!" with None ()
+utest strLastIndex 'o' "Hello, world!" with Some(8)
+utest strLastIndex '@' "Some @TAG@" with Some(9)
+
 // Splits s on delim
 recursive
   let strSplit = lam delim. lam s.
@@ -136,6 +164,12 @@ recursive
          else let remaining = strSplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
 end
+
+utest strSplit "ll" "Hello" with ["He", "o"]
+utest strSplit "ll" "Hellallllo" with ["He", "a", "", "o"]
+utest strSplit "" "Hello" with ["Hello"]
+utest strSplit "lla" "Hello" with ["Hello"]
+utest strSplit "Hello" "Hello" with ["", ""]
 
 // Trims s of spaces
 let strTrim = lam s.
@@ -149,6 +183,10 @@ let strTrim = lam s.
   in
   reverse (strTrim_init (reverse (strTrim_init s)))
 
+utest strTrim " aaaa   " with "aaaa"
+utest strTrim "   bbbbb  bbb " with "bbbbb  bbb"
+utest strTrim "ccccc c\t   \n" with "ccccc c"
+
 // Joins the strings in strs on delim
 recursive
   let strJoin = lam delim. lam strs.
@@ -159,50 +197,7 @@ recursive
          else concat (concat (head strs) delim) (strJoin delim (tail strs))
 end
 
-mexpr
-
-utest string2int "5" with 5 in
-utest string2int "25" with 25 in
-utest string2int "314159" with 314159 in
-utest string2int "-314159" with (negi 314159) in
-
-utest int2string 5 with "5" in
-utest int2string 25 with "25" in
-utest int2string 314159 with "314159" in
-utest int2string (negi 314159) with "-314159" in
-
-utest float2string 5.0e+25 with "5.0e+25" in
-utest float2string (negf 5.0e+25) with "-5.0e+25" in
-utest float2string (5.0e-5) with "5.0e-5" in
-utest float2string (negf 5.0e-5) with "-5.0e-5" in
-
-utest strIndex '%' "a % 5" with Some(2) in
-utest strIndex '%' "a & 5" with None () in
-utest strIndex 'w' "Hello, world!" with Some(7) in
-utest strIndex 'w' "Hello, World!" with None () in
-utest strIndex 'o' "Hello, world!" with Some(4) in
-utest strIndex '@' "Some @TAG@" with Some(5) in
-
-utest strLastIndex '%' "a % 5" with Some(2) in
-utest strLastIndex '%' "a & 5" with None () in
-utest strLastIndex 'w' "Hello, world!" with Some(7) in
-utest strLastIndex 'w' "Hello, World!" with None () in
-utest strLastIndex 'o' "Hello, world!" with Some(8) in
-utest strLastIndex '@' "Some @TAG@" with Some(9) in
-
-utest strSplit "ll" "Hello" with ["He", "o"] in
-utest strSplit "ll" "Hellallllo" with ["He", "a", "", "o"] in
-utest strSplit "" "Hello" with ["Hello"] in
-utest strSplit "lla" "Hello" with ["Hello"] in
-utest strSplit "Hello" "Hello" with ["", ""] in
-
-utest strTrim " aaaa   " with "aaaa" in
-utest strTrim "   bbbbb  bbb " with "bbbbb  bbb" in
-utest strTrim "ccccc c\t   \n" with "ccccc c" in
-
-utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee" in
-utest strJoin "--" [] with "" in
-utest strJoin "--" ["coffee"] with "coffee" in
-utest strJoin "water" ["coffee", "tea"] with "coffeewatertea" in
-
-()
+utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
+utest strJoin "--" [] with ""
+utest strJoin "--" ["coffee"] with "coffee"
+utest strJoin "water" ["coffee", "tea"] with "coffeewatertea"

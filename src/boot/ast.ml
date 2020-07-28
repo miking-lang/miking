@@ -122,11 +122,13 @@ and mlang   = Lang of info * ustring * ustring list * decl list
 and let_decl = Let of info * ustring * tm
 and rec_let_decl = RecLet of info * (info * ustring * tm) list
 and con_decl = Con of info * ustring * ty
+and utest_top = Utest of info * tm * tm
 and top =
 | TopLang of mlang
 | TopLet  of let_decl
 | TopRecLet of rec_let_decl
 | TopCon of con_decl
+| TopUtest of utest_top
 
 and include_ = Include of info * ustring
 and program = Program of include_ list * top list * tm
