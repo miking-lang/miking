@@ -23,7 +23,7 @@ https://jupyter.org/ also provides more helpful links and information.
 This README will explain how to get started with Jupyter Notebooks for MCore,
 and go through all the functionality of the Jupyter MCore kernel. Once you have
 installed the kernel in the next section, there is also an interactive notebook
-demonstrating MCore and the kernel's capabilities at `JupyterExample.ipynb`.
+demonstrating MCore and the kernel's capabilities at `MCoreJupyter.ipynb`.
 
 ## Getting started
 
@@ -109,7 +109,7 @@ def foo(x):
 foo("bar")
 ```
 
-The running the cell will print `foobar`, as one might expect.
+Running the cell will print `foobar`, as one might expect.
 
 You can call the functions you have defined in Python cells in normal MCore
 cells by using the Python intrinsics (for more information on these, see
@@ -150,7 +150,7 @@ a Python cell would of course also work.
 
 If you followed the installation instructions above, you can try out the
 interactive example notebook, by running `jupyter notebook` in the root
-directory of the repository and opening the file `JupyterExample.ipynb` from the
+directory of the repository and opening the file `MCoreJupyter.ipynb` from the
 Jupyter Notebook interface. The notebook features many examples, including MCore
 basics and the Python intrinsics, demonstrating the full capabilities of the
 MCore Jupyter kernel.
