@@ -11,10 +11,12 @@ con JsonNull   : ()                                  -> JsonValue
 
 
 let with_ws = wrapped_in spaces spaces
+
 let list_or_spaces = lam left. lam right. lam elem.
   (wrapped_in left right
-    (alt (try (sep_by (lex_char ',') elem))
-         (apr spaces (pure []))))
+    (apr spaces
+         (sep_by (lex_char ',') elem)))
+
 
 let jsonNumber =
   let maybe = lam p. alt p (pure "") in
