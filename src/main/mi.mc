@@ -38,7 +38,7 @@ let parseOptions = lam xs.
     match acc with (options,lst) then
       match findAssoc (lam s2. eqstr s1 s2) optionsMap with Some f
       then (f options, lst)
-      else match s1 with "--" ++ rest
+      else match s1 with "--" ++ _
            then  [printLn (concat "Unknown option " s1), exit 1]
            else (options, cons s1 xs)
     else never
