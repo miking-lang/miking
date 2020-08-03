@@ -75,6 +75,7 @@ mexpr
 
 utest test_parser jsonNumber "123.45" with Success (JsonFloat 123.45, ("", ("", 1, 7))) in
 utest test_parser jsonNumber "1233" with Success (JsonInt 1233, ("", ("", 1, 5))) in
+utest test_parser jsonNumber "-1233" with Success (JsonInt (negi 1233), ("", ("", 1, 6))) in
 utest test_parser jsonBool "true" with Success (JsonBool true, ("", ("", 1, 5))) in
 utest test_parser jsonBool "false" with Success (JsonBool false, ("", ("", 1, 6))) in
 utest test_parser jsonNull "null" with Success (JsonNull (), ("", ("", 1, 5))) in
