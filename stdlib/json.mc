@@ -1,13 +1,13 @@
 include "parser.mc"
 
 type JsonValue
-con JsonObject : [ { key: String, val: JsonValue } ] -> JsonValue
-con JsonArray  : [ JsonValue ]                       -> JsonValue
-con JsonString : String                              -> JsonValue
-con JsonFloat  : Float                               -> JsonValue
-con JsonInt    : Int                                 -> JsonValue
-con JsonBool   : Bool                                -> JsonValue
-con JsonNull   : ()                                  -> JsonValue
+con JsonObject : [ (String, JsonValue) ] -> JsonValue
+con JsonArray  : [ JsonValue ]           -> JsonValue
+con JsonString : String                  -> JsonValue
+con JsonFloat  : Float                   -> JsonValue
+con JsonInt    : Int                     -> JsonValue
+con JsonBool   : Bool                    -> JsonValue
+con JsonNull   : ()                      -> JsonValue
 
 
 let with_ws = wrapped_in spaces spaces
@@ -44,7 +44,7 @@ let jsonBool = fmap (lam x. JsonBool x) (alt lexTrue lexFalse)
 recursive
 -- These functions are all eta expanded, because recursive lets must begin with a lambda.
 let jsonMember = lam x.
-  let makeMember = lam k. lam v. { key = k, val = v } in
+  let makeMember = lam k. lam v. (k, v) in
   (liftA2 makeMember (apl (with_ws lex_string_lit) (lex_char ':')) jsonValue) x
 
 let jsonObject = lam x.
@@ -84,9 +84,9 @@ utest show_error (test_parser jsonValue "{\"mystr\" : foo}")
 with "Parse error at 1:12: Unexpected 'f'. Expected '{' or '[' or '\"' or digit or 'true' or 'false' or 'null'" in
 utest test_parser jsonValue "{\"mylist\" : [1,2,3], \"mystr\" : \"foo\", \"mybool\" :\ttrue, \"mynull\":null}"
 with
-Success (JsonObject [ {key = "mylist", val = JsonArray [JsonInt 1, JsonInt 2, JsonInt 3]}
-                    , {key = "mystr", val = JsonString "foo"}
-                    , {key = "mybool", val = JsonBool true}
-                    , {key = "mynull", val = JsonNull ()}
+Success (JsonObject [ ("mylist", JsonArray [JsonInt 1, JsonInt 2, JsonInt 3])
+                    , ("mystr", JsonString "foo")
+                    , ("mybool", JsonBool true)
+                    , ("mynull", JsonNull ())
                     ], ("", ("", 1, 70))) in
 ()
