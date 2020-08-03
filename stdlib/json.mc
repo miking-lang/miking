@@ -57,7 +57,7 @@ let jsonArray = lam x.
 
 -- jsonValue : Parser JsonValue
 --
--- Parse a string containing a JSON value into a JsonValue.
+-- Parse a JSON value from a string
 let jsonValue = lam x.
   let jsonValues =
     [ jsonObject
@@ -71,11 +71,13 @@ let jsonValue = lam x.
   (with_ws (foldr1 alt jsonValues)) x
 end
 
--- parseJson : String -> String -> JsonValue
+-- parseJson : String -> Option
 --
--- Parse a JSON value given a string and the name of the file it came from
-let parseJson = lam filename.
-  run_parser filename jsonValue
+-- Try to parse a JSON value from a string, returning None if the string is
+-- not valid JSON.
+let parseJson = lam str.
+  match test_parser jsonValue str with Success (result, _) then Some result
+  else None ()
 
 let wrapString = lam left. lam right. lam x.
   cons left (snoc x right)
@@ -147,9 +149,9 @@ let myJsonObject =
              ]
 in
 utest test_parser jsonValue "{\"mylist\" : [1,2,3], \"mystr\" : \"foo\", \"mybool\" :\ttrue, \"mynull\":null}"
-with
-Success (myJsonObject, ("", ("", 1, 70))) in
+with Success (myJsonObject, ("", ("", 1, 70))) in
 utest formatValue myJsonObject
 with "{\"mylist\": [1, 2, 3], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
 utest test_parser jsonValue (formatValue myJsonObject) with Success (myJsonObject, ("", ("", 1, 70))) in
+utest parseJson (formatValue myJsonObject) with Some myJsonObject in
 ()
