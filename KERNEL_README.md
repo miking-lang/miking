@@ -16,7 +16,8 @@ executable code, display images and more. Notebooks provide support for many lan
 by using language-specific _kernels_, which take care of executing the user's
 code and producing output for the notebook to display.
 
-To get a quick introducion on how to use Jupyter Notebooks in general, check out
+To get a quick introduction on how to use Jupyter Notebooks in
+general, check out
 [this tutorial](https://mybinder.org/v2/gh/ipython/ipython-in-depth/master?filepath=binder/Index.ipynb).
 https://jupyter.org/ also provides more helpful links and information.
 
@@ -34,7 +35,7 @@ and the `pyml` Python bindings for OCaml. For information on how to install
 these, see [README.md](./README.md).
 
 Next, you will need to have Jupyter itself installed.
-To install Jupyter using using `pip`, run the following command:
+To install Jupyter using `pip`, run the following command:
 
 ```bash
 pip install jupyter
