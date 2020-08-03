@@ -55,6 +55,9 @@ let jsonArray = lam x.
   fmap (lam x. JsonArray x)
   (list_or_spaces (lex_char '[') (lex_char ']') jsonValue) x
 
+-- jsonValue : Parser JsonValue
+--
+-- Parse a string containing a JSON value into a JsonValue.
 let jsonValue = lam x.
   let jsonValues =
     [ jsonObject
@@ -68,8 +71,61 @@ let jsonValue = lam x.
   (with_ws (foldr1 alt jsonValues)) x
 end
 
-let parseJson : String -> String -> JsonValue = lam filename.
+-- parseJson : String -> String -> JsonValue
+--
+-- Parse a JSON value given a string and the name of the file it came from
+let parseJson = lam filename.
   run_parser filename jsonValue
+
+let wrapString = lam left. lam right. lam x.
+  cons left (snoc x right)
+
+let formatNull = const "null"
+let formatBool = lam b. if b then "true" else "false"
+let formatInt = int2string
+let formatFloat = float2string
+let formatString = wrapString '\"' '\"'
+
+let formatSeq = lam left. lam right. lam show. lam x.
+  let contents =
+    if null x then
+      ""
+    else
+      let i = init x in
+      let l = last x in
+      foldr (lam v. lam s. concat (show v) (concat ", " s)) (show l) i
+  in wrapString left right contents
+
+recursive
+let formatArray = lam x. formatSeq '[' ']' formatValue x
+let formatObject = lam x.
+  let formatMember = lam t.
+    concat (formatString t.0) (concat ": " (formatValue t.1))
+  in formatSeq '{' '}' formatMember x
+
+let formatValue : JsonValue -> String = lam x.
+  match x with JsonObject o then
+    formatObject o
+  else match x with JsonArray a then
+    formatArray a
+  else match x with JsonString s then
+    formatString s
+  else match x with JsonFloat f then
+    formatFloat f
+  else match x with JsonInt n then
+    formatInt n
+  else match x with JsonBool b then
+    formatBool b
+  else match x with JsonNull n then
+    formatNull n
+  else
+    error "formatValue: Arg is not a JSON value"
+end
+
+-- formatJson : JsonValue -> String
+--
+-- Format an MCore JsonValue to a JSON string representation
+let formatJson = formatValue
 
 mexpr
 
@@ -83,11 +139,17 @@ utest test_parser jsonObject "{ \t}" with Success (JsonObject [], ("", ("", 1, 5
 utest test_parser jsonArray "[ \t]" with Success (JsonArray [], ("", ("", 1, 5))) in
 utest show_error (test_parser jsonValue "{\"mystr\" : foo}")
 with "Parse error at 1:12: Unexpected 'f'. Expected '{' or '[' or '\"' or digit or 'true' or 'false' or 'null'" in
+let myJsonObject =
+  JsonObject [ ("mylist", JsonArray [JsonInt 1, JsonInt 2, JsonInt 3])
+             , ("mystr", JsonString "foo")
+             , ("mybool", JsonBool true)
+             , ("mynull", JsonNull ())
+             ]
+in
 utest test_parser jsonValue "{\"mylist\" : [1,2,3], \"mystr\" : \"foo\", \"mybool\" :\ttrue, \"mynull\":null}"
 with
-Success (JsonObject [ ("mylist", JsonArray [JsonInt 1, JsonInt 2, JsonInt 3])
-                    , ("mystr", JsonString "foo")
-                    , ("mybool", JsonBool true)
-                    , ("mynull", JsonNull ())
-                    ], ("", ("", 1, 70))) in
+Success (myJsonObject, ("", ("", 1, 70))) in
+utest formatValue myJsonObject
+with "{\"mylist\": [1, 2, 3], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
+utest test_parser jsonValue (formatValue myJsonObject) with Success (myJsonObject, ("", ("", 1, 70))) in
 ()
