@@ -10,6 +10,21 @@ open Ast
 open Pprint
 open Printf
 
+(* Extract the arguments when running boot, and the arguments of the actual program.
+   -- is used to separate the program arguments. For instance,
+     mi myprog.mc --debug-parse -- foo --something
+   results in two arrays:
+    argv_boot: ["mi","myprog.mc","--debug-parse"]
+    argv_prog: ["mi","foo","--something"] *)
+let (argv_boot,argv_prog) =
+  let (n,_) = Sys.argv |>
+      (Array.fold_left (fun (n,b) x -> if x = "--" || b then (n,true) else (n+1,b)) (0,false)) in
+  (Array.sub Sys.argv 0 n,
+   Array.append (Array.sub Sys.argv 0 1)
+     (try Array.sub Sys.argv (n+1) ((Array.length Sys.argv)-n-1) with _ -> [||]))
+
+
+
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -33,7 +48,7 @@ let builtin =
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("splitAt",f(CsplitAt(None)));("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
-   ("argv",TmSeq(NoInfo,Sys.argv
+   ("argv",TmSeq(NoInfo,argv_prog
                         |> Mseq.of_array
                         |> Mseq.map (fun s ->
                                TmSeq(NoInfo,s
@@ -44,6 +59,7 @@ let builtin =
    ("readFile",f(CreadFile)); ("writeFile",f(CwriteFile(None)));
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
+   ("exit",f(Cexit));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
   ]
   (* Append external functions TODO: Should not be part of core language *)
@@ -124,6 +140,7 @@ let arity = function
   | CfileExists       -> 1
   | CdeleteFile       -> 1
   | Cerror            -> 1
+  | Cexit             -> 1
   (* MCore symbols *)
   | CSymb(_)      -> 0
   | Cgensym      -> 1
@@ -393,6 +410,8 @@ let delta eval env fi c v  =
                      | NoInfo -> us""
         in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
     | Cerror,_ -> fail_constapp fi
+    | Cexit, TmConst(_,CInt(x)) -> exit x
+    | Cexit,_ -> fail_constapp fi
     | CSymb(_),_ -> fail_constapp fi
     | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi

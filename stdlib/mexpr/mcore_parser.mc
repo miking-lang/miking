@@ -475,12 +475,11 @@ with "Parse error at 1:1: Unexpected end of input. Expected expression" in
 utest show_error (test_parser program "mexpr f let x = 42 in x")
 with "Parse error at 1:9: Unexpected 'l'. Expected end of input" in
 
--- Main logic
-
-if or (eqstr (get argv 1) "test") (lti (length argv) 3) then
-  ()
-else
-  let file = get argv 2 in
+-- Test parser outside utest. Note: this MExpr parser is incomplete.
+-- Run for instance:
+--   mi stdlib/mexpr/mcore_parser.mc -- test/mexpr/bool.mc
+if gti (length argv) 1 then
+  let file = get argv 1 in
   if fileExists file then
     let contents = readFile file in
     let res = run_parser file program contents in
@@ -490,3 +489,4 @@ else
       printLn (show_error res)
   else
     printLn (concat "Unknown file: " file)
+else ()

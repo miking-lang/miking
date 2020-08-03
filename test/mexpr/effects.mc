@@ -44,5 +44,9 @@ utest if false then error "message" else 0 with 0 in
 
 
 // 'argv' contains the program arguments
-utest slice argv 1 2 with ["test","mexpr"] in
+utest slice argv 1 2 with [] in
+
+// 'exit c' exits the program with error code 'c'
+utest if true then () else exit 1 with () in
+
 ()
