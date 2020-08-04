@@ -10,6 +10,11 @@
 
 open Ustring.Op
 open Printf
+open Eval
+open Mexpr
+open Ast
+open Msg
+open Pprint
 
 let initial_prompt = ">> "
 let followup_prompt = " | "
@@ -109,3 +114,45 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
   let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym desugared in
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
+
+(* Run the MCore REPL *)
+let start_repl () =
+  let repl_merge_includes = merge_includes (Sys.getcwd ()) [] in
+  (* Wrap the final mexpr in a lambda application to prevent scope leak *)
+  let repl_wrap_mexpr (Program(inc, tops, tm)) =
+    let lambda_wrapper = TmLam(NoInfo, us"_", nosym, TyArrow(TyInt,TyDyn), tm) in
+    let new_tm = TmApp(NoInfo, lambda_wrapper, TmConst(NoInfo, CInt(0))) in
+    Program(inc, tops, new_tm) in
+  let rec read_eval_print envs =
+    try
+      let (Program(_,_,tm)) as ast = read_user_input () in
+      let prog = ast
+        |> repl_merge_includes
+        |> repl_wrap_mexpr in
+      let (new_envs, result) = eval_with_envs envs prog in
+      begin
+        if tm = tmUnit then
+          flush stdout
+        else
+          uprint_endline (ustring_of_tm result)
+      end;
+      read_eval_print new_envs
+    with e ->
+      begin
+        match e with
+        | Lexer.Lex_error m -> uprint_endline (message2str m)
+        | Parsing.Parse_error -> uprint_endline (message2str (Lexer.parse_error_message ()))
+        | Error m -> uprint_endline (message2str m)
+        | Sys.Break -> ()
+        | End_of_file -> exit 0
+        | _ -> print_endline @@ Printexc.to_string e
+      end;
+      read_eval_print envs
+  in
+  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
+                     |> add_prelude
+                     |> repl_merge_includes in
+  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
+  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
+  print_welcome_message ();
+  read_eval_print initial_envs
