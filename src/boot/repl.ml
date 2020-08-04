@@ -25,18 +25,18 @@ module Option = BatOption
 
 
 (* Try to parse a string received by the REPL into an MCore AST *)
-let parse_mcore_string parse_fun str =
+let parse_mcore_string filename parse_fun str =
   let repl_tablength = 8 in
-  Lexer.init (us"REPL") repl_tablength;
+  Lexer.init (us filename) repl_tablength;
   let lexbuf = Lexing.from_string str in
   try Ok (parse_fun Lexer.main lexbuf)
   with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
 
-let parse_prog_or_mexpr lines =
-  match parse_mcore_string Parser.main lines with
+let parse_prog_or_mexpr filename lines =
+  match parse_mcore_string filename Parser.main lines with
   | Ok ast -> ast
   | Error _ ->
-    match parse_mcore_string Parser.main_mexpr lines with
+    match parse_mcore_string filename Parser.main_mexpr lines with
     | Ok ast -> ast
     | Error _ -> raise Parsing.Parse_error
 
@@ -73,7 +73,7 @@ let handle_command str =
 let rec read_until_complete is_mexpr input =
   let new_acc () = sprintf "%s\n%s" input (read_input followup_prompt) in
   let parse_fun = if is_mexpr then Parser.main_mexpr else Parser.main in
-  match parse_mcore_string parse_fun input with
+  match parse_mcore_string "REPL" parse_fun input with
   | Ok ast -> ast
   | Error "" -> read_until_complete is_mexpr (new_acc ())
   | Error _ ->
@@ -94,7 +94,7 @@ let read_multiline first_line =
   if first_line = ":{" then
     let lines = List.fold_right (fun x a -> sprintf "%s\n%s" a x)
                                 (read_until_end []) "" in
-    Some (parse_prog_or_mexpr lines)
+    Some (parse_prog_or_mexpr "REPL" lines)
   else
     None
 
