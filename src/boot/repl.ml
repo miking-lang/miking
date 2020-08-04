@@ -13,6 +13,7 @@ open Printf
 open Eval
 open Mexpr
 open Ast
+open Mlang
 open Msg
 open Pprint
 
@@ -123,8 +124,8 @@ let rec read_user_input () =
    Returns updated environments along with evaluation result.
 *)
 let eval_with_envs (langs, nss, name2sym, sym2term) term =
-  let new_langs, flattened = Mlang.flatten_with_env langs term in
-  let new_nss, desugared = Mlang.desugar_post_flatten_with_nss nss flattened in
+  let new_langs, flattened = flatten_with_env langs term in
+  let new_nss, desugared = desugar_post_flatten_with_nss nss flattened in
   let new_name2sym, symbolized = Mexpr.symbolize_toplevel name2sym desugared in
   let new_sym2term, result = Mexpr.eval_toplevel sym2term symbolized in
   ((new_langs, new_nss, new_name2sym, new_sym2term), result)
@@ -137,7 +138,7 @@ let wrap_mexpr (Program(inc, tops, tm)) =
 
 let repl_merge_includes = merge_includes (Sys.getcwd ()) []
 
-let repl_envs = ref (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term)
+let repl_envs = ref (Record.empty, USMap.empty, builtin_name2sym, builtin_sym2term)
 
 let initialize_envs () =
   let initial_envs, _ = Program([],[],TmConst(NoInfo,CInt(0)))
@@ -168,9 +169,7 @@ let begins_at str pos =
 
 let keywords = List.map fst Lexer.reserved_strings
 
-let get_matches s = s
-  |> BatPervasives.flip BatString.starts_with
-  |> List.filter
+module USSet = Set.Make (Ustring)
 
 let keywords_and_identifiers () =
   let extract_name id =
@@ -180,10 +179,31 @@ let keywords_and_identifiers () =
       | IdCon(s) -> s
       | IdType(s) -> s
       | IdLabel(s) -> s
-    in Ustring.to_utf8 (ustring_of_sid sid)
+    in ustring_of_sid sid
   in
-  let (_,_,name2sym,_) = !repl_envs in
-  keywords @ (List.map (fun x -> x |> fst |> extract_name) name2sym)
+  let (_,nss,name2sym,_) = !repl_envs in
+  let names_without_langs = List.map (fun x -> x |> fst |> extract_name) name2sym in
+  let replace_name name mangled_name names =
+    names
+    |> USSet.add name
+    |> USSet.remove mangled_name
+  in
+  let process_lang lang ns names =
+    names
+    |> USSet.add lang
+    |> USMap.fold replace_name ns.constructors
+    |> USMap.fold replace_name ns.normals
+  in
+  names_without_langs
+  |> USSet.of_list
+  |> USMap.fold process_lang nss
+  |> USSet.to_seq
+  |> List.of_seq
+  |> List.map Ustring.to_utf8
+
+let get_matches s = s
+  |> BatPervasives.flip BatString.starts_with
+  |> List.filter
 
 let get_completions str pos =
   let start_pos = begins_at str pos in
