@@ -49,4 +49,4 @@ let parseOptions = lam xs.
 if lti (length argv) 2 then print menu else
   match findAssoc (lam s. eqstr (get argv 1) s) commandsMap with Some cmd
   then cmd (parseOptions argv)
-  else print (strJoin "" ["Unknown command '", get argv 1, "'"])
+  else [printLn (strJoin "" ["Unknown command '", get argv 1, "'"]), exit 1]
