@@ -226,6 +226,7 @@ let rec print_const fmt = function
   | CfileExists   -> fprintf fmt "fileExists"
   | CdeleteFile   -> fprintf fmt "deleteFile"
   | Cerror        -> fprintf fmt "error"
+  | Cexit         -> fprintf fmt "exit"
 
   (* MCore Symbols *)
   | CSymb(id) -> fprintf fmt "symb(%d)" id

@@ -11,3 +11,4 @@ tags
 .tags
 .ctags.d/
 .ctags
+.DS_Store
