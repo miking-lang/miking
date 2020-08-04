@@ -126,13 +126,14 @@ let wrap_mexpr (Program(inc, tops, tm)) =
 
 let repl_merge_includes = merge_includes (Sys.getcwd ()) []
 
-let repl_envs =
-  let initial_term = Program([],[],TmConst(NoInfo,CInt(0)))
-                     |> add_prelude
-                     |> repl_merge_includes in
-  let builtin_envs = (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term) in
-  let initial_envs, _ = eval_with_envs builtin_envs initial_term in
-  ref initial_envs
+let repl_envs = ref (Record.empty, Mlang.USMap.empty, builtin_name2sym, builtin_sym2term)
+
+let initialize_envs () =
+  let initial_envs, _ = Program([],[],TmConst(NoInfo,CInt(0)))
+                        |> add_prelude
+                        |> repl_merge_includes
+                        |> eval_with_envs !repl_envs in
+  repl_envs := initial_envs
 
 let repl_eval_ast prog =
   let new_envs, result = prog
@@ -168,4 +169,5 @@ let start_repl () =
       read_eval_print ()
   in
   print_welcome_message ();
+  initialize_envs ();
   read_eval_print ()
