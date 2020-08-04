@@ -849,8 +849,9 @@ are available in the Python path. `y` in the example above is a Python value,
 which can either be passed to other Python functions, or converted back to
 an MCore sequence using the `pyconvert` builtin.
 
-[KERNEL_README.md](./KERNEL_README.md) shows some additional examples using
-the Python intrinsics, such as plotting sequences with `matplotlib`.
+The [`miking-jupyter`](https://github.com/miking-lang/miking-jupyter)
+repo shows some additional examples using the Python intrinsics, such
+as plotting sequences with `matplotlib`.
 
 #### Conversion between MCore and Python
 
