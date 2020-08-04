@@ -24,12 +24,11 @@ let followup_prompt = " | "
 
 let no_line_edit = ref false
 
-let history_dir =
+let history_file =
   if not !no_line_edit then
-    try Sys.getenv "HOME" ^ "/.mcore"
+    try Sys.getenv "HOME" ^ "/.mcore_history"
     with Not_found -> failwith "$HOME is needed to save history, but it is unset. Either set it, or disable line editing with --no-line-edit"
   else "@@@"
-let history_file = sprintf "%s/repl_history" history_dir
 
 (* Try to parse a string received by the REPL into an MCore AST *)
 let parse_mcore_string filename parse_fun str =
@@ -219,8 +218,6 @@ let completion_callback line_so_far ln_completions =
 
 let init_linenoise () =
   if not !no_line_edit then (
-    if not (Sys.file_exists history_dir && Sys.is_directory history_dir) then
-      Unix.mkdir history_dir 0o755;
     LNoise.set_completion_callback completion_callback;
     LNoise.history_load ~filename:history_file |> ignore)
 
