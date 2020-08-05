@@ -1,7 +1,9 @@
 --
 -- A simple generic hashmap library.
 --
--- TODO: Add support for resizing buckets.
+-- TODO:
+--  - Resizing of buckets.
+--  - Conversion to and from association lists.
 --
 
 include "math.mc"
