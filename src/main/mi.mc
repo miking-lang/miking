@@ -27,7 +27,7 @@ let optionsMap = [
 ] in
 
 -- Commands map, maps command strings to functions. The functions
--- always take an option structure as input.
+-- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("compile", compile)
 ] in
@@ -38,9 +38,7 @@ let parseOptions = lam xs.
     match acc with (options,lst) then
       match findAssoc (lam s2. eqstr s1 s2) optionsMap with Some f
       then (f options, lst)
-      else match s1 with "--" ++ _
-           then  [printLn (concat "Unknown option " s1), exit 1]
-           else (options, cons s1 xs)
+      else [printLn (concat "Unknown option " s1), exit 1]
     else never
   ) (options,[]) (reverse xs)).0 in
 
@@ -48,5 +46,8 @@ let parseOptions = lam xs.
 -- Main: find and run the correct command. See commandsMap above.
 if lti (length argv) 2 then print menu else
   match findAssoc (lam s. eqstr (get argv 1) s) commandsMap with Some cmd
-  then cmd (parseOptions argv)
-  else [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
+  then
+    let argvp = partition (isPrefix eqc "--") (tail (tail argv)) in
+    cmd argvp.1 (parseOptions argvp.0)
+  else
+    [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]

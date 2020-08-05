@@ -12,6 +12,10 @@ utest "word" with "word" in
 utest "" with [] in
 utest "大衛·布羅曼" with "大衛·布羅曼" in
 
+-- char equality check
+utest eqc 'a' 'a' with true in
+utest eqc '島' '島' with true in
+utest eqc 'A' 'b' with false in
 
 -- Conversion, Unicode interger numer of a character
 utest char2int 'A' with 65 in         -- Char -> Int

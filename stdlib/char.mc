@@ -1,7 +1,13 @@
 include "seq.mc"
 
-let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
-let neqchar = lam c1. lam c2. neqi (char2int c1) (char2int c2)
+let eqchar = lam c1. lam c2. eqc c1 c2
+let neqchar = lam c1. lam c2. not (eqc c1 c2)
+
+utest eqchar 'a' 'a' with true
+utest eqchar 'A' 'B' with false
+utest neqchar 'a' 'a' with false
+utest neqchar 'A' 'B' with true
+
 let ltchar = lam c1. lam c2. lti (char2int c1) (char2int c2)
 let gtchar = lam c1. lam c2. gti (char2int c1) (char2int c2)
 let leqchar = lam c1. lam c2. leqi (char2int c1) (char2int c2)

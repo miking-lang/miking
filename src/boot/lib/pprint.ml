@@ -200,9 +200,11 @@ let rec print_const fmt = function
   | CString2float  -> fprintf fmt "string2float"
 
   (* MCore intrinsic: characters *)
-  | CChar(v)  -> fprintf fmt "%s" (lit_of_uchar v)
-  | CChar2int -> fprintf fmt "char2int"
-  | CInt2char -> fprintf fmt "int2char"
+  | CChar(v)       -> fprintf fmt "%s" (lit_of_uchar v)
+  | Ceqc(None)     -> fprintf fmt "eqf"
+  | Ceqc(Some(v))  -> fprintf fmt "eqf(%d)" v
+  | CChar2int      -> fprintf fmt "char2int"
+  | CInt2char      -> fprintf fmt "int2char"
 
   (* MCore intrinsic: sequences *)
   | CmakeSeq(_) -> fprintf fmt "makeseq"
