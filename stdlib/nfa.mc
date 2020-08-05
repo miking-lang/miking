@@ -21,7 +21,6 @@ type NFA = {
     acceptStates: [a]
 }
 
-
 -- get equality function for states
 let nfaGetEqv = lam dfa.
     dfa.graph.eqv
@@ -38,11 +37,31 @@ let nfaStates = lam nfa.
 let nfaTransitions = lam nfa.
     digraphEdges nfa.graph
 
+-- get start state of the nfa
+let getStartState = lam nfa.
+  nfa.startState
+
+-- get the accept states in the nfa
+let getAcceptStates = lam nfa.
+  nfa.acceptStates
+
+-- get all transitions from state s1 to state s2
+let getTransitionsBetween = lam s1. lam s2. lam nfa.
+    digraphEdgesBetween s1 s2 nfa.graph
+
+-- get all predecessor states to state s
+let nfaInStates = lam s. lam nfa.
+  digraphPredeccessors s nfa.graph
+
+-- get all successor states to state s
+let nfaOutStates = lam s. lam nfa.
+  digraphSuccessors s nfa.graph
+
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
-    if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
-    else if not (setMem eqv startS s) then error "The start state does not exist"
-    else true
+  if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
+  else if not (setMem eqv startS s) then error "The start state does not exist"
+  else true
 
 -- States are represented by vertices in a directed graph
 let nfaAddState =  lam nfa. lam state.
