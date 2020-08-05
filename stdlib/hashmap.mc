@@ -12,7 +12,7 @@ include "string.mc"
 
 include "map.mc" -- REMOVE BEFORE MERGE (only used for comparison)
 
-let hashmapDefaultBucketCount = 400
+let hashmapDefaultBucketCount = 100
 
 -- The base type of a HashMap object.
 --   k: Polymorphic key type
@@ -190,7 +190,7 @@ utest hashmapLookupOpt "" m with Some ("ddd") in
 utest hashmapLookup "" m with "ddd" in
 
 -- Test with collisions
-let n = addi hashmapDefaultBucketCount 10 in
+let n = addi (muli hashmapDefaultBucketCount 4) 10 in
 
 recursive let populate = lam hm. lam i.
   if geqi i n then
