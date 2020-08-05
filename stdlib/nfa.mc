@@ -59,6 +59,7 @@ let nfaOutStates = lam s. lam nfa.
 
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
+<<<<<<< HEAD
   if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
   else if not (setMem eqv startS s) then error "The start state does not exist"
   else true
@@ -86,6 +87,35 @@ let nfaAddTransition = lam nfa. lam trans.
 -- returns true if state s is an accepted state in the nfa
 let nfaIsAcceptedState = lam s. lam nfa.
   setMem nfa.graph.eqv s nfa.acceptStates
+=======
+    if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
+        else if not (setMem eqv startS s) then error "The start state does not exist"
+        else true
+
+-- States are represented by vertices in a directed graph
+let nfaAddState =  lam nfa. lam state.
+    {
+        graph = (digraphAddVertex state nfa.graph),
+        startState = nfa.startState,
+        acceptStates = nfa.acceptStates
+    }
+
+-- Transitions between two states are represented by edges between vertices
+let nfaAddTransition = lam nfa. lam trans.
+    let states = getStates nfa in
+    let from = trans.0 in
+    let to = trans.1 in
+    let label = trans.2 in
+    {
+        graph = (digraphAddEdge from to label nfa.graph),
+        startState = nfa.startState,
+        acceptStates = nfa.acceptStates
+    }
+
+-- returns true if state s is an accepted state in the nfa
+let nfaIsAcceptedState = lam s. lam nfa.
+    setMem nfa.graph.eqv s nfa.acceptStates
+>>>>>>> DFA/NFA: Clean up whitespace and make alphabet implicit
 
 -- check if there is a transition with label lbl from state s
 let nfaStateHasTransition = lam s. lam trans. lam lbl.
@@ -138,6 +168,7 @@ end
 
 -- constructor for the NFA
 let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
+<<<<<<< HEAD
   if nfaCheckValues trans s eqv eql accS startS then
   let emptyDigraph = digraphEmpty eqv eql in
   let initNfa = {
@@ -147,6 +178,53 @@ let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
   } in
   foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
   else {}
+=======
+    if nfaCheckValues trans s eqv eql accS startS then
+    let emptyDigraph = digraphEmpty eqv eql in
+    let initNfa = {
+        graph = emptyDigraph,
+        startState = startS,
+        acceptStates = accS
+    } in
+    foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
+    else {}
+
+let printList = lam list.
+    map (lam x. print x) list
+
+let nfaPrintDotWithStates = lam nfa. lam v2str. lam l2str. lam direction. lam activeState.
+    let eqv = getEqv nfa in
+    let edges = getTransitions nfa in
+    let vertices = getStates nfa in
+    let _ = print "digraph {" in
+    let _ = printList ["rankdir=", direction, ";\n"] in
+    let _ = printList ["node [style=filled fillcolor=white shape=circle];"] in
+    let _ = map
+        (lam v.
+            let _ = print (v2str v) in
+            let dbl = (if (any (lam x. eqv x v) nfa.acceptStates) then "shape=doublecircle " else "") in
+            let active = match activeState with () then "" else (
+                if (eqv v activeState) then "fillcolor=darkgreen color=darkgreen fontcolor = white" else ""
+            ) in
+            printList ["[", dbl, active, "];"])
+        vertices in
+    let _ = print "start [fontcolor = white color = white];\n" in
+    let _ = printList ["start -> ", v2str nfa.startState, "[label=start];"] in
+    let eqEdge = (lam a. lam b. if and (eqv a.0 b.0) (eqv a.1 b.1) then true else false) in
+    let _ = map
+        (lam e.
+            let _ = print (v2str e.0) in
+            let _ = print " -> " in
+            let _ = print (v2str e.1) in
+            let _ = print "[label=\"" in
+            let _ = print (l2str e.2) in
+            print "\"];")
+        edges in
+    let _ = print "}\n" in ()
+
+let nfaPrintDot = lam nfa. lam v2str. lam l2str. lam direction.
+    nfaPrintDotWithStates nfa v2str l2str direction ()
+>>>>>>> DFA/NFA: Clean up whitespace and make alphabet implicit
 
 mexpr
 let states = [0,1,2] in
@@ -187,6 +265,7 @@ utest nfaMakeInputPath (negi 1) newNfa.startState "0110" newNfa with
   [{status = "stuck",state = 0,index = negi 1}] in
 -- Input of length 0
 utest nfaMakeInputPath (negi 1) newNfa.startState "" newNfa with
+<<<<<<< HEAD
   [{status = "not accepted",state = 0,index = negi 1}] in
 -- Accepted, after branch got stuck.
  utest nfaMakeInputPath (negi 1) newNfa2.startState "11" newNfa2 with
@@ -200,4 +279,19 @@ utest nfaMakeInputPath (negi 1) newNfa3.startState "11" newNfa3 with
   [{status = "",state = 0,index = (negi 1)},
   {status = "",state = 1,index = 0},
   {status = "accepted",state = 3,index = 1}] in
+=======
+    [{status = "not accepted",state = 0,index = negi 1}] in
+-- Accepted, after branch got stuck.
+ utest nfaMakeInputPath (negi 1) newNfa2.startState "11" newNfa2 with
+    [{status = "",state = 0,index = (negi 1)},
+    {status = "",state = 1,index = 0},
+    {status = "not accepted", state = 3,index = 1},
+    {status = "",state = 1,index = 0},
+    {status = "accepted",state = 2,index = 1}] in
+-- Accepted, got accepted in the first branch (the second isn't)
+utest nfaMakeInputPath (negi 1) newNfa3.startState "11" newNfa3 with
+    [{status = "",state = 0,index = (negi 1)},
+    {status = "",state = 1,index = 0},
+    {status = "accepted",state = 3,index = 1}] in
+>>>>>>> DFA/NFA: Clean up whitespace and make alphabet implicit
 ()
