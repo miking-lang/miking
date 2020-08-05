@@ -292,10 +292,15 @@ let sep_by = lam sep. lam p.
 -- Parse a specific character.
 let lex_char = lam c. satisfy (eqchar c) (show_char c)
 
+-- lex_digits : Parser String
+--
+-- Parse a sequence of digits
+let lex_digits = many1 (satisfy is_digit "digit")
+
 -- lex_number : Parser Int
 --
 -- Parse a natural number.
-let lex_number = fmap string2int (many1 (satisfy is_digit "digit"))
+let lex_number = fmap string2int lex_digits
 
 -- lex_string : String -> Parser String
 --
@@ -334,33 +339,23 @@ let lex_string_lit =
   wrapped_in (lex_string "\"") (lex_string "\"")
              (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
 
+-- lex_numeral : Parser String
+--
+-- Parse a string representing a floating point numeral
+let lex_numeral =
+  let maybe = lam p. alt p (pure "") in
+  let decimals = label "decimals" (liftA2 cons (lex_char '.') lex_digits) in
+  let exponent = label "exponent" (
+    liftA2 cons (lex_char 'e')
+           (liftA2 concat (foldr1 alt [lex_string "-", lex_string "+", pure ""])
+                   lex_digits))
+  in liftA2 concat lex_digits
+            (alt exponent (liftA2 concat decimals (maybe exponent)))
+
 -- lex_float : Parser Float
 --
 -- Parse a floating point number
-let lex_float =
-  let decimals =
-    label "decimals" (
-    bind (apr (lex_char '.') (fmap int2string lex_number)) (lam d.
-    pure (concat "." d)))
-  in
-  let fractional =
-    bind (fmap int2string lex_number) (lam n.
-    bind (alt decimals (pure "")) (lam d.
-    pure (concat n d)))
-  in
-  let exp =
-    label "exponent" (
-    apr (lex_char 'e') (
-    bind (alt (alt (lex_string "-") (lex_string "+")) (pure "")) (lam sign.
-    bind fractional (lam p.
-    pure (concat (concat "e" sign) p)))))
-  in
-  bind (fmap int2string lex_number) (lam n.
-  bind (alt exp
-       (bind decimals (lam d.
-        bind (alt exp (pure "")) (lam e.
-        pure (concat d e)))))
-  (lam f. pure (string2float (concat n f))))
+let lex_float = fmap string2float lex_numeral
 
 -- spaces : Parser ()
 --
