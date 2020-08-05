@@ -5,7 +5,7 @@ include "string.mc"
 
 -- Represents a nondeterministic finite automaton
 -- Equality and print functions are required for
--- the states (eqv,s2s) and labels (eql,l2s) for the 
+-- the states (eqv,s2s) and labels (eql,l2s) for the
 -- construct function (nfaConstr).
 
 -- States are represented by a vertex in a directed graph.
@@ -24,11 +24,11 @@ type NFA = {
 
 
 -- get equality function for states
-let getEqv = lam dfa.
+let nfaGetEqv = lam dfa.
     dfa.graph.eqv
 
 -- get equality functions for labels
-let getEql = lam dfa.
+let nfaGetEql = lam dfa.
     dfa.graph.eql
 
 -- get all states in nfa
@@ -45,8 +45,8 @@ let nfaCheckLabels = lam graph. lam alph. lam eql.
 
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam alph. lam eqv. lam eql. lam accS. lam startS.
-    if not (nfaCheckLabels trans alph eql) then error "Some labels are not in the defined alphabet" 
-        else if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist" 
+    if not (nfaCheckLabels trans alph eql) then error "Some labels are not in the defined alphabet"
+        else if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
         else if not (setMem eqv startS s) then error "The start state does not exist"
         else true
 
@@ -72,9 +72,8 @@ let nfaAddTransition = lam nfa. lam trans.
         acceptStates = nfa.acceptStates
     }
 
-
 -- returns true if state s is an accepted state in the nfa
-let nfaIsAcceptedState = lam s. lam nfa. 
+let nfaIsAcceptedState = lam s. lam nfa.
     setMem nfa.graph.eqv s nfa.acceptStates
 
 -- check if there is a transition with label lbl from state s
@@ -83,19 +82,27 @@ let nfaStateHasTransition = lam s. lam trans. lam lbl.
     --check if lbl is a label in the neighbors list
     setMem trans.eql lbl (map (lam x. x.2) neighbors)
 
--- get next state from state s with label lbl. Throws error if no transition is found
-let nfaNextStates = lam from. lam graph. lam lbl.
-    let neighbors = digraphEdgesFrom from graph in
-    let matches = filter (lam x. graph.eql x.2 lbl) neighbors in
-    let neighboringStates = map (lam x. x.1) matches in
-    match matches with [] then
-    error "No transition was found"
-    else neighboringStates
-
 -- takes a path and returns whether it's accepted or not.
 let pathIsAccepted = lam path.
     if null path then false 
     else (setEqual eqchar (last path).status "accepted")
+
+-- get next state from state s with label lbl.
+let nfaNextStates = lam from. lam graph. lam lbl.
+    let neighbors = digraphEdgesFrom from graph in
+    let matches = filter (lam x. graph.eql x.2 lbl) neighbors in
+    map (lam x. x.1) matches
+
+recursive
+let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
+    if (eqi (length input) 0) then []
+    -- check if transition exists. If yes, go to next state
+    else if nfaStateHasTransition currentState nfa.graph (head input) then
+        foldl (lam path. lam elem.
+            join [path, [(currentState,elem)], nfaMakeEdgeInputPath elem (tail input) nfa]
+        ) [] (nfaNextStates currentState nfa.graph (head input))
+    else []
+end
 
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
@@ -115,16 +122,6 @@ let nfaMakeInputPath = lam i. lam currentState. lam input. lam nfa.
     else [{state = currentState, index = i, status = "stuck"}]
 end
 
-recursive
-let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
-    if (eqi (length input) 0) then []
-    -- check if transition exists. If yes, go to next state
-    else if nfaStateHasTransition currentState nfa.graph (head input) then
-        foldl (lam path. lam elem.
-            join [path, [(currentState,elem)], nfaMakeEdgeInputPath elem (tail input) nfa]
-        ) [] (nfaNextStates currentState nfa.graph (head input))
-    else []
-end
 
 -- constructor for the NFA
 let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam eql.
@@ -139,47 +136,6 @@ let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam e
     foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
     else {}
 
-let printList = lam list. 
-    map (lam x. print x) list
-
-let nfaPrintDotWithStates = lam nfa. lam v2str. lam l2str. lam direction. lam activeState.
-    let eqv = getEqv nfa in
-    let edges = getTransitions nfa in
-    let vertices = getStates nfa in
-    let _ = print "digraph {" in
-    let _ = printList ["rankdir=", direction, ";\n"] in
-    let _ = printList ["node [style=filled fillcolor=white shape=circle];"] in
-    let _ = map 
-        (lam v. 
-            let _ = print (v2str v) in
-            let dbl = (if (any (lam x. eqv x v) nfa.acceptStates) then "shape=doublecircle " else "") in
-            let active = match activeState with () then "" else (
-                if (eqv v activeState) then "fillcolor=darkgreen color=darkgreen fontcolor = white" else ""
-            ) in
-            printList ["[", dbl, active, "];"])
-        vertices in
-    let _ = print "start [fontcolor = white color = white];\n" in
-    let _ = printList ["start -> ", nfa.startState, "[label=start];"] in
-    let eqEdge = (lam a. lam b. if and (eqv a.0 b.0) (eqv a.1 b.1) then true else false) in
-    let _ = map
-        (lam e. 
-	   --let _ =  if (lti (negi 1) steps) then 
-            --    (
-            --    if (eqEdge (e.0,e.1) finalEdge) then print "edge [color=darkgreen style=bold];\n"
-            --    else if (setMem eqEdge (e.0,e.1) path) then print "edge [color= black style=bold];\n"
-            --    else print "edge [color=black style=dashed];\n"
-            --) else "" in
-            let _ = print (v2str e.0) in
-            let _ = print " -> " in
-            let _ = print (v2str e.1) in
-            let _ = print "[label=\"" in
-            let _ = print (l2str e.2) in
-            print "\"];")
-        edges in
-    let _ = print "}\n" in ()
-
-let nfaPrintDot = lam nfa. lam v2str. lam l2str. lam direction.
-    nfaPrintDotWithStates nfa v2str l2str direction ()
 
 mexpr
 let alphabet = ['0','1'] in
@@ -188,7 +144,7 @@ let states2 = [0,1,2,3,4] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let transitions2 = [(0,1,'1'),(1,3,'1'),(1,2,'1')] in
 let startState = 0 in
-let acceptStates = [2] in 
+let acceptStates = [2] in
 let newNfa = nfaConstr states transitions alphabet startState acceptStates eqi eqchar in
 let newNfa2 = nfaConstr states2 transitions2 alphabet startState acceptStates eqi eqchar in
 let newNfa3 = nfaConstr states2 transitions2 alphabet startState [3] eqi eqchar in

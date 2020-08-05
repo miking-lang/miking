@@ -47,7 +47,6 @@ let dfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam e
 	if(err.0) then error "There are duplicate labels for same state outgoing transition at"
 	else nfaConstr s trans alph startS accS eqv eql
 
- 
 
 mexpr
 let alphabet = ['0','1'] in
@@ -66,28 +65,4 @@ utest nfaCheckLabels [(1,2,'2')] alphabet eqchar with false in
 utest (digraphHasEdges [(1,2,'1')] (nfaAddTransition newDfa (1,2,'1')).graph) with true in
 utest (digraphHasVertex 7 (nfaAddState newDfa 7).graph) with true in
 utest nfaIsAcceptedState 2 newDfa with true in
-utest nfaIsAcceptedState 3 newDfa with false in
-utest nfaNextStates 1 newDfa.graph '0' with [2] in
--- Not accepted
-utest nfaMakeInputPath (negi 1) newDfa.startState "1011" newDfa with
-    [{status = "",state = 0,index = negi 1},
-    {status = "",state = 1,index = 0},
-    {status = "",state = 2,index = 1},
-    {status = "",state = 1,index = 2},
-    {status = "not accepted",state = 1,index = 3}] in
--- Accepted
-utest nfaMakeInputPath (negi 1) newDfa.startState "10110" newDfa with
-    [{status = "",state = 0,index = negi 1},
-    {status = "",state = 1,index = 0},
-    {status = "",state = 2,index = 1},
-    {status = "",state = 1,index = 2},
-    {status = "",state = 1,index = 3},
-    {status = "accepted",state = 2,index = 4}] in
--- Invalid transition
-utest nfaMakeInputPath (negi 1) newDfa.startState "0110" newDfa with
-    [{status = "stuck",state = 0,index = negi 1}] in
--- Input of length 0
-utest nfaMakeInputPath (negi 1) newDfa.startState "" newDfa with 
-    [{status = "not accepted", state = 0, index = negi 1}] in
-()
-
+utest nfaIsAcceptedState 3 newDfa with false in ()
