@@ -32,11 +32,11 @@ let nfaGetEql = lam dfa.
     dfa.graph.eql
 
 -- get all states in nfa
-let getStates = lam nfa.
+let nfaStates = lam nfa.
     digraphVertices nfa.graph
 
 -- get all transitions in nfa
-let getTransitions = lam nfa.
+let nfaTransitions = lam nfa.
     digraphEdges nfa.graph
 
 -- check that all labels for transitions are in the alphabet
@@ -61,7 +61,7 @@ let nfaAddState =  lam nfa. lam state.
 
 -- Transitions between two states are represented by edges between vertices
 let nfaAddTransition = lam nfa. lam trans.
-    let states = getStates nfa in
+    let states = nfaStates nfa in
     let from = trans.0 in
     let to = trans.1 in
     let label = trans.2 in
@@ -82,27 +82,19 @@ let nfaStateHasTransition = lam s. lam trans. lam lbl.
     --check if lbl is a label in the neighbors list
     setMem trans.eql lbl (map (lam x. x.2) neighbors)
 
--- takes a path and returns whether it's accepted or not.
-let pathIsAccepted = lam path.
-    if null path then false 
-    else (setEqual eqchar (last path).status "accepted")
-
--- get next state from state s with label lbl.
+-- get next state from state s with label lbl. Throws error if no transition is found
 let nfaNextStates = lam from. lam graph. lam lbl.
     let neighbors = digraphEdgesFrom from graph in
     let matches = filter (lam x. graph.eql x.2 lbl) neighbors in
-    map (lam x. x.1) matches
+    let neighboringStates = map (lam x. x.1) matches in
+    match matches with [] then
+    error "No transition was found"
+    else neighboringStates
 
-recursive
-let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
-    if (eqi (length input) 0) then []
-    -- check if transition exists. If yes, go to next state
-    else if nfaStateHasTransition currentState nfa.graph (head input) then
-        foldl (lam path. lam elem.
-            join [path, [(currentState,elem)], nfaMakeEdgeInputPath elem (tail input) nfa]
-        ) [] (nfaNextStates currentState nfa.graph (head input))
-    else []
-end
+-- takes a path and returns whether it's accepted or not.
+let pathIsAccepted = lam path.
+    if null path then false
+    else (setEqual eqchar (last path).status "accepted")
 
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
@@ -115,13 +107,23 @@ let nfaMakeInputPath = lam i. lam currentState. lam input. lam nfa.
     else if nfaStateHasTransition currentState nfa.graph (head input) then
         foldl (lam path. lam elem.
             if (pathIsAccepted path) then path
-            else 
+            else
                 let config = [{state = currentState,index = i, status = ""}] in
                 join [path, config, nfaMakeInputPath (addi i 1) elem (tail input) nfa]
         ) [] (nfaNextStates currentState nfa.graph (head input))
     else [{state = currentState, index = i, status = "stuck"}]
 end
 
+recursive
+let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
+    if (eqi (length input) 0) then []
+    -- check if transition exists. If yes, go to next state
+    else if nfaStateHasTransition currentState nfa.graph (head input) then
+        foldl (lam path. lam elem.
+            join [path, [(currentState,elem)], nfaMakeEdgeInputPath elem (tail input) nfa]
+        ) [] (nfaNextStates currentState nfa.graph (head input))
+    else []
+end
 
 -- constructor for the NFA
 let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam eql.
@@ -135,7 +137,6 @@ let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam e
     } in
     foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
     else {}
-
 
 mexpr
 let alphabet = ['0','1'] in
@@ -179,17 +180,17 @@ utest nfaMakeInputPath (negi 1) newNfa.startState "10110" newNfa with
 utest nfaMakeInputPath (negi 1) newNfa.startState "0110" newNfa with
     [{status = "stuck",state = 0,index = negi 1}] in
 -- Input of length 0
-utest nfaMakeInputPath (negi 1) newNfa.startState "" newNfa with 
+utest nfaMakeInputPath (negi 1) newNfa.startState "" newNfa with
     [{status = "not accepted",state = 0,index = negi 1}] in
 -- Accepted, after branch got stuck.
- utest nfaMakeInputPath (negi 1) newNfa2.startState "11" newNfa2 with 
+ utest nfaMakeInputPath (negi 1) newNfa2.startState "11" newNfa2 with
     [{status = "",state = 0,index = (negi 1)},
     {status = "",state = 1,index = 0},
     {status = "not accepted", state = 3,index = 1},
     {status = "",state = 1,index = 0},
     {status = "accepted",state = 2,index = 1}] in
 -- Accepted, got accepted in the first branch (the second isn't)
-utest nfaMakeInputPath (negi 1) newNfa3.startState "11" newNfa3 with 
+utest nfaMakeInputPath (negi 1) newNfa3.startState "11" newNfa3 with
     [{status = "",state = 0,index = (negi 1)},
     {status = "",state = 1,index = 0},
     {status = "accepted",state = 3,index = 1}] in
