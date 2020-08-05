@@ -46,6 +46,11 @@ let digraphEdgesTo = lam v. lam g.
                      let allEdges = digraphEdges g in
                      filter (lam tup. g.eqv v tup.1) allEdges
 
+-- Get all edges from v1 to v2
+let digraphEdgesBetween = lam v1. lam v2. lam g.
+  let fromV1 = digraphEdgesFrom v1 g in
+  filter (lam tup. g.eqv v2 tup.1) fromV1
+
 let digraphLabels = lam v1. lam v2. lam g.
     let from_v1_to_v2 = filter (lam tup. g.eqv tup.1 v2) (digraphEdgesFrom v1 g) in
     map (lam tup. tup.2) from_v1_to_v2
@@ -69,10 +74,13 @@ let digraphEdgeEq = lam g. lam e1. lam e2.
 let digraphHasEdges = lam es. lam g.
                       setIsSubsetEq (digraphEdgeEq g) es (digraphEdges g)
 
+-- Get successor nodes of v
 let digraphSuccessors = lam v. lam g.
-    distinct g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
+  distinct g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
 
--- TODO: predecessors
+-- Get predecessor nodes of v
+let digraphPredeccessors = lam v. lam g.
+  distinct g.eqv (map (lam tup. tup.0) (digraphEdgesTo v g))
 
 let digraphIsSuccessor = lam v1. lam v2. lam g.
   any (g.eqv v1) (digraphSuccessors v2 g)
@@ -183,8 +191,11 @@ let digraphPrintDot = lam g. lam v2str. lam l2str.
   let _ = print "}\n" in ()
 
 mexpr
+let l1 = gensym () in
+let l2 = gensym () in
+let l3 = gensym () in
+let l4 = gensym () in
 
--- graph tests
 let empty = digraphEmpty eqi eqs in
 
 utest digraphEdges empty with [] in
@@ -205,8 +216,6 @@ utest digraphHasVertex 3 g with true in
 utest digraphHasVertices [1, 2, 3] g with true in
 utest digraphHasVertices [3, 2] g with true in
 utest digraphHasVertices [1, 2, 3, 4] g with false in
-let l1 = gensym () in
-let l2 = gensym () in
 utest digraphEdgesFrom 1 g with [] in
 utest digraphLabels 1 2 g with [] in
 let g1 = digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 g) in
@@ -217,10 +226,17 @@ utest digraphHasEdges [(1, 2, l1)] g1 with true in
 let g = digraphAddVertex 1 (digraphAddVertex 2 (digraphAddVertex 3 empty)) in
 let g1 = (digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 g)) in
 utest digraphSuccessors 1 g1 with [2] in
+utest digraphPredeccessors 1 g1 with [] in
 utest digraphIsSuccessor 2 1 g1 with true in
 utest any (eqs l1) (digraphLabels 1 2 g1) with true in
 utest any (eqs l2) (digraphLabels 1 2 g1) with true in
 utest any (eqs l2) (digraphLabels 2 1 g1) with false in
+
+let g = digraphAddVertex 1 (digraphAddVertex 2 (digraphAddVertex 3 empty)) in
+let g = digraphAddEdge 2 3 l4 (digraphAddEdge 1 3 l3 (digraphAddEdge 1 2 l2 (digraphAddEdge 1 2 l1 g))) in
+utest digraphEdgesBetween 1 3 g with [(1,3,l3)] in
+utest match digraphEdgesBetween 1 2 g with [(1,2,l1),(1,2,l2)] | [(1,2,l2),(1,2,l1)] then true else false with true in
+utest match digraphPredeccessors 3 g with [1,2] | [2,1] then true else false with true in
 
 let l3 = gensym () in
 let g2 = digraphAddEdge 3 2 l3 g1 in
