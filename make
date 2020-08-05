@@ -15,37 +15,11 @@ set -e
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-BASE_DEPS="batteries str linenoise"
-
 # General function for building the project
 build() {
     mkdir -p build
     (cd src/boot;
-    DEPS=$BASE_DEPS
-    > dune
-    if [[ -n $MI_ENABLE_SUNDIALS ]]; then
-        DEPS="$DEPS sundialsml"
-        echo "(copy_files ext/*)" >> dune
-    else
-        echo "(copy_files ext-skel/*)" >> dune
-    fi
-    if [[ -n $MI_ENABLE_PYTHON ]]; then
-        DEPS="$DEPS pyml"
-        echo "(copy_files py/*)" >> dune
-    else
-        echo "(copy_files py-skel/*)" >> dune
-    fi
-    cat >> dune << EndOfMessage
-
-(ocamllex lexer)
-(ocamlyacc parser)
-
-(executable
-  (name boot)
-  (libraries $DEPS)
-)
-EndOfMessage
-    dune build boot.exe && cp -f _build/default/boot.exe ../../build/mi)
+    dune build mi.exe && cp -f _build/default/mi.exe ../../build/mi)
 }
 
 # Install the boot interpreter locally for the current user
@@ -81,10 +55,10 @@ runtests() {
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
-    if [[ -n $MI_ENABLE_PYTHON ]]; then
+    if [[ -n $MI_TEST_PYTHON ]]; then
         runtests_py
     fi
-    if [[ -n $MI_ENABLE_SUNDIALS ]]; then
+    if [[ -n $MI_TEST_SUNDIALS ]]; then
         runtests_ext
     fi
 }
@@ -95,8 +69,8 @@ case $1 in
         runtests
         ;;
     test-all)
-        export MI_ENABLE_PYTHON=1
-        export MI_ENABLE_SUNDIALS=1
+        export MI_TEST_PYTHON=1
+        export MI_TEST_SUNDIALS=1
         build
         runtests
         ;;
