@@ -796,17 +796,14 @@ Then install the ocaml bindings
 opam install sundialsml
 ```
 
-To compile and run the test suite with sundials support:
+`mi` will automatically be compiled with sundials support when the `sundialsml` package is installed.
+To run the sundials-specific test suite, set the `MI_TEST_SUNDIALS` variable before running `make test`:
 
 ```
-MI_ENABLE_SUNDIALS=1 make test
+MI_TEST_SUNDIALS=1 make test
 ```
 
-To install for the current user:
-
-```
-MI_ENABLE_SUNDIALS=1 make install
-```
+To install for the current user, run `make install` as usual.
 
 ### Python
 Another optional feature is Python intrinsics, which allow calling Python code
@@ -819,17 +816,14 @@ In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml
 opam install pyml
 ```
 
-To compile and run the test suite with Python support:
+`mi` will automatically be compiled with Python support when the `pyml` package is installed.
+To run the Python-specific test suite, set the `MI_TEST_PYTHON` variable before running `make test`:
 
 ```
-MI_ENABLE_PYTHON=1 make test
+MI_TEST_PYTHON=1 make test
 ```
 
-To install for the current user:
-
-```
-MI_ENABLE_PYTHON=1 make install
-```
+To install for the current user, run `make install` as usual.
 
 The following example shows how to use the intrinsics to sort a sequence using
 Python's builtin `sorted` function.
