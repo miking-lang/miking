@@ -45,7 +45,7 @@ let builtin =
    ("exp",f(Cexp));
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
    ("int2float", f(CInt2float)); ("string2float", f(CString2float));
-   ("char2int",f(CChar2int));("int2char",f(CInt2char));
+   ("eqc",f(Ceqc(None)));("char2int",f(CChar2int));("int2char",f(CInt2char));
    ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
@@ -126,6 +126,7 @@ let arity = function
   | CString2float -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
+  | Ceqc(_)     -> 2
   | CChar2int   -> 1
   | CInt2char   -> 1
   (* MCore intrinsic: sequences *)
@@ -352,6 +353,10 @@ let delta eval env fi c v  =
 
     (* MCore intrinsic: characters *)
     | CChar(_),_ -> fail_constapp fi
+
+    | Ceqc(None),TmConst(fi,CChar(v)) -> TmConst(fi,Ceqc(Some(v)))
+    | Ceqc(Some(v1)),TmConst(fi,CChar(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqc(None),_ | Ceqc(Some(_)),_  -> fail_constapp fi
 
     | CChar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
     | CChar2int,_ -> fail_constapp fi

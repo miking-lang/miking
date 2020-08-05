@@ -81,6 +81,7 @@ and const =
 | CString2float
 (* MCore intrinsic: characters *)
 | CChar    of int
+| Ceqc     of int option
 | CChar2int
 | CInt2char
 (* MCore intrinsic: sequences *)
