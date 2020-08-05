@@ -10,6 +10,11 @@ open Ast
 open Pprint
 open Printf
 
+(* This function determines how to print program output.
+   It's used to redirect standard output of a program,
+   for instance by the Jupyter kernel *)
+let program_output = ref uprint_string
+
 (* Extract the arguments when running boot, and the arguments of the actual program.
    -- is used to separate the program arguments. For instance,
      mi myprog.mc --debug-parse -- foo --something
@@ -22,8 +27,6 @@ let (argv_boot,argv_prog) =
   (Array.sub Sys.argv 0 n,
    Array.append (Array.sub Sys.argv 0 1)
      (try Array.sub Sys.argv (n+1) ((Array.length Sys.argv)-n-1) with _ -> [||]))
-
-
 
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
@@ -379,11 +382,11 @@ let delta eval env fi c v  =
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
-       uprint_string (tmseq2ustring fi lst); tmUnit
+      !program_output (tmseq2ustring fi lst); tmUnit
     | Cprint, _ -> raise_error fi "The argument to print must be a string"
 
     | Cdprint, t ->
-      uprint_string (ustring_of_tm t); tmUnit
+      !program_output (ustring_of_tm t); tmUnit
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
@@ -403,12 +406,7 @@ let delta eval env fi c v  =
         Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)); tmUnit
     | CdeleteFile,_ -> fail_constapp fi
 
-    | Cerror, TmSeq(fiseq,lst) ->
-       (let prefix = match fi with
-                     | Info(filename,l1,_,_,_) ->
-                       filename ^. us":" ^. (ustring_of_int l1) ^. us": "
-                     | NoInfo -> us""
-        in uprint_endline (prefix ^. us"ERROR: " ^. (tmseq2ustring fiseq lst)); exit 1)
+    | Cerror, TmSeq(fiseq,lst) -> tmseq2ustring fiseq lst |> Ustring.to_utf8 |> raise_error fi
     | Cerror,_ -> fail_constapp fi
     | Cexit, TmConst(_,CInt(x)) -> exit x
     | Cexit,_ -> fail_constapp fi
