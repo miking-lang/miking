@@ -131,27 +131,53 @@ let formatJson = formatValue
 
 mexpr
 
-utest test_parser jsonNumber "123.45" with Success (JsonFloat 123.45, ("", ("", 1, 7))) in
-utest test_parser jsonNumber "1233" with Success (JsonInt 1233, ("", ("", 1, 5))) in
-utest test_parser jsonNumber "-1233" with Success (JsonInt (negi 1233), ("", ("", 1, 6))) in
-utest test_parser jsonBool "true" with Success (JsonBool true, ("", ("", 1, 5))) in
-utest test_parser jsonBool "false" with Success (JsonBool false, ("", ("", 1, 6))) in
-utest test_parser jsonNull "null" with Success (JsonNull (), ("", ("", 1, 5))) in
-utest test_parser jsonObject "{ \t}" with Success (JsonObject [], ("", ("", 1, 5))) in
-utest test_parser jsonArray "[ \t]" with Success (JsonArray [], ("", ("", 1, 5))) in
+utest parseJson "1.234500e+2" with Some (JsonFloat 123.45) in
+utest formatJson (JsonFloat 123.45) with "1.234500e+2" in
+
+utest parseJson "-1e-5" with Some (JsonFloat (negf 1e-5)) in
+utest formatJson (JsonFloat (negf 1e-5)) with "-1.0e-5" in
+
+utest parseJson "1233" with Some (JsonInt 1233) in
+utest formatJson (JsonInt 1233) with "1233" in
+
+utest parseJson "-1233" with Some (JsonInt (negi 1233)) in
+utest formatJson (JsonInt (negi 1233)) with "-1233" in
+
+utest parseJson "true" with Some (JsonBool true) in
+utest formatJson (JsonBool true) with "true" in
+
+utest parseJson "false" with Some (JsonBool false) in
+utest formatJson (JsonBool false) with "false" in
+
+utest parseJson "null" with Some (JsonNull ()) in
+utest formatJson (JsonNull ()) with "null" in
+
+utest parseJson "{}" with Some (JsonObject []) in
+utest formatJson (JsonObject []) with "{}" in
+
+utest parseJson "[]" with Some (JsonArray []) in
+utest formatJson (JsonArray []) with "[]" in
+
+utest parseJson "{ \t\n}" with Some (JsonObject []) in
+utest parseJson "[ \n\t]" with Some (JsonArray []) in
+
+utest parseJson "{\"list\":[{},{}]}" with Some (JsonObject [("list", JsonArray [JsonObject [], JsonObject []])]) in
+utest formatJson (JsonObject [("list", JsonArray [JsonObject [], JsonObject []])]) with "{\"list\": [{}, {}]}" in
+utest parseJson "[{\n}\n,[\n{\t}]\n]" with Some (JsonArray [JsonObject [], JsonArray [JsonObject []]]) in
+utest formatJson (JsonArray [JsonObject [], JsonArray [JsonObject []]]) with "[{}, [{}]]" in
+
 utest show_error (test_parser jsonValue "{\"mystr\" : foo}")
 with "Parse error at 1:12: Unexpected 'f'. Expected '{' or '[' or '\"' or digit or 'true' or 'false' or 'null'" in
 let myJsonObject =
-  JsonObject [ ("mylist", JsonArray [JsonInt 1, JsonInt 2, JsonInt 3])
+  JsonObject [ ("mylist", JsonArray [JsonObject [], JsonInt 2, JsonFloat 3e-2])
              , ("mystr", JsonString "foo")
              , ("mybool", JsonBool true)
              , ("mynull", JsonNull ())
              ]
 in
-utest test_parser jsonValue "{\"mylist\" : [1,2,3], \"mystr\" : \"foo\", \"mybool\" :\ttrue, \"mynull\":null}"
-with Success (myJsonObject, ("", ("", 1, 70))) in
+utest test_parser jsonValue "{\"mylist\" : [{},2,3e-2], \"mystr\" : \n\"foo\", \"mybool\" :\ttrue, \"mynull\":null}abc"
+with Success (myJsonObject, ("abc", ("", 2, 39))) in
 utest formatValue myJsonObject
-with "{\"mylist\": [1, 2, 3], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
-utest test_parser jsonValue (formatValue myJsonObject) with Success (myJsonObject, ("", ("", 1, 70))) in
+with "{\"mylist\": [{}, 2, 3.0e-2], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
 utest parseJson (formatValue myJsonObject) with Some myJsonObject in
 ()
