@@ -323,15 +323,8 @@ and print_tm' fmt t = match t with
     fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 
   | TmRecord(_,r) ->
-    if r = Record.empty then fprintf fmt "()"
-    else
-      let match_tuple_item (a,k) (i,tm) =
-          match a with
-          | Some _ when try (int_of_ustring i) != k with _ -> true -> (None,0)
-          | Some lst -> (Some(tm::lst),k+1)
-          | None -> (None,0)
-      in
-      (match List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst with
+    begin
+      match record2tuple r with
       | Some([tm]) -> fprintf fmt "(%a,)" print_tm (App,tm)
       | Some(tms) ->
         let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
@@ -339,7 +332,8 @@ and print_tm' fmt t = match t with
         fprintf fmt "(@[<hov 0>%a@])" concat (Comma,inner)
       | None ->
         let contents = Record.fold (fun l v ack -> (l, v)::ack) r [] in
-        print_record fmt contents)
+        print_record fmt contents
+    end
 
   | TmRecordUpdate(_,t1,l,t2) ->
     let l = string_of_ustring l in

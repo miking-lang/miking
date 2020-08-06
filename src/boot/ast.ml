@@ -286,5 +286,15 @@ let tuple2record fi lst =
   let r = List.fold_left (fun (i,a) x -> (i+1,Record.add (ustring_of_int i) x a)) (0,Record.empty) lst in
   TmRecord(fi,snd r)
 
+(* Converts a record map to an optional list of terms. Returns Some list if
+   the record represents a tuple, None otherwise. *)
+let record2tuple (r : tm Record.t) =
+  let match_tuple_item (a,k) (i,tm) =
+      match a with
+      | Some _ when try (int_of_ustring i) != k with _ -> true -> (None,0)
+      | Some lst -> (Some(tm::lst),k+1)
+      | None -> (None,0)
+  in
+  List.fold_left match_tuple_item (Some [], 0) (Record.bindings r) |> fst
 
 type 'a tokendata = {i:info; v:'a}
