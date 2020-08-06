@@ -29,6 +29,14 @@ let vals = [1, 2, 3] in
 let dict = pycall builtins "dict" (pycall builtins "zip" (keys,vals),) in
 utest pyconvert dict with {one=1, two=2, three=3} in
 
-let t = pycall builtins "tuple" ([1,2],) in
+let str = pycall builtins "str" ({one=1, two=2, three=3},) in
+utest pyconvert str with "{'one': 1, 'two': 2, 'three': 3}" in
+
+let t = pycall builtins "tuple" ((1,2),) in
 utest pyconvert t with (1,2) in
+
+utest pyconvert (pycall builtins "str" ((),)) with "None" in
+let none = pycall builtins "print" ("",) in
+utest pyconvert (pycall builtins "str" (none,)) with "None" in
+utest pyconvert none with () in
 ()
