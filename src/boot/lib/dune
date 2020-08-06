@@ -9,6 +9,9 @@
    str
    linenoise
 
+   ;; Optional dependencies are used if the relevant libraries are available.
+   ;; Note that this will change the result of compiling `mi` depending on
+   ;; which packages are available in the environment.
    (select pyffi.ml from
      (pyml -> py/pyffi.ml)
      (-> py-skel/pyffi.ml))
