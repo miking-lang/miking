@@ -79,7 +79,7 @@ case $1 in
         install
         ;;
     clean)
-        rm -rf src/boot/_build
+        rm -rf _build
         rm -rf build
         ;;
     all | *)
