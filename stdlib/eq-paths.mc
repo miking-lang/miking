@@ -1,5 +1,7 @@
 include "digraph.mc"
 include "string.mc"
+include "dfa.mc"
+include "regex.mc"
 
 -- This file implements eqPaths: computing equivalence paths for decision
 -- points.
@@ -12,6 +14,85 @@ include "string.mc"
 -- takes lots of space, so it's currently in a separate file from digraph.mc.
 
 -- TODO: prove true/false: an eq. path is never a sub-path of another eq-path
+
+let rpprint = regExPprint (lam x. x)
+
+let callGraph2DFA = lam g. lam sStates. lam aState.
+  let gRev = digraphReverse g in
+  -- Reversed graph: start states are accept states and accept state is start state
+  let dfa = dfaFromDigraph gRev aState sStates in
+  let re = regexFromDFA dfa in
+  re
+
+-- Expand the regular expression as far as possible, but at most to length d
+-- Kleene closures are taken at most once
+-- TODO: Set #laps in Kleene closures as a parameter
+let regExpand: RegEx -> Int -> [[a]] = lam r. lam d.
+  -- RegEx -> Int -> [Sym] -> [[Sym]]
+  recursive let expand: RegEx -> Int -> [a] -> [[a]] =
+    lam r. lam d. lam cur. lam acc.
+      -- Hack: check for terminal T
+      match cur with h ++ ['T'] then cons h acc else
+      match d with 0 then cons cur acc else
+
+      match r with Empty () then acc else
+      match r with Epsilon () then cons cur acc else
+      match r with Symbol s then cons (snoc cur s) acc else
+      match r with Concat (r1, r2) then
+        let left = expand r1 d [] [] in
+        let right = foldl
+                    (lam a. lam l.
+                       let len = length l in
+                       let newCur = concat cur l in
+                       expand r2 (subi d len) newCur a)
+                    acc left
+        in
+        right
+      else
+      match r with Union (r1, r2) then
+        let left = expand r1 d cur acc in
+        expand r2 d cur left
+      else
+      -- Ignore self loops
+      match r with Kleene (Symbol s) then
+        cons cur acc
+      else
+      -- Walk the loop 0 or 1 times
+      match r with Kleene w then
+        let zeroLaps = cur in
+        let oneLap = expand w d cur acc in
+        -- Hack: mark one-laps with a terminal symbol
+        let oneLap = map (lam x. snoc x 'T') oneLap in
+        cons zeroLaps oneLap
+      else
+      error "Unknown RegEx in expand"
+  in
+  let expansion = expand r d [] [] in
+  map (lam x. match x with (h ++ ['T']) then h else x) expansion
+
+
+utest regExpand (Empty ()) 1 with []
+utest regExpand (Epsilon ()) 1 with [[]]
+utest regExpand (Symbol 'a') 1 with [['a']]
+utest regExpand (Concat (Symbol 'a', Symbol 'b')) 2 with [['a', 'b']]
+utest regExpand (Concat (Symbol 'a', Symbol 'b')) 1 with [['a']]
+utest regExpand (Concat (Symbol 'a', Concat (Symbol 'b', Symbol 'c'))) 1 with [['a']]
+utest regExpand (Concat (Symbol 'a', Concat (Symbol 'b', Symbol 'c'))) 2 with [['a','b']]
+utest regExpand (Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c')) 2 with [['a','b']]
+utest regExpand (Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c')) 3 with [['a','b','c']]
+utest regExpand (Kleene (Symbol 'a')) 1 with [[]]
+utest regExpand (Concat (Kleene (Symbol 'a'), Symbol 'b')) 1 with [['b']]
+utest regExpand (Concat (Kleene (Symbol 'a'), Symbol 'b')) 2 with [['b']]
+utest regExpand (Kleene (Concat (Symbol 'a', Symbol 'b'))) 5 with [[], ['a','b']]
+-- (ab)*c -> c, ab
+utest regExpand (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 3 with [['a','b'], ['c']]
+utest regExpand (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 2 with [['a','b'], ['c']]
+
+utest regExpand (Union (Epsilon (), Symbol 'a')) 1 with [['a'], []]
+utest regExpand (Union (Symbol 'a', Symbol 'b')) 1 with [['b'], ['a']]
+utest regExpand (Union (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c'),
+                        Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c'))) 3 with [['a','b','c'], ['a','b'], ['c']]
+
 
 
 -- Complexity: O(|V|^2), as for each node, we potentially visit every other
@@ -193,6 +274,9 @@ utest eqPaths g 1 1 with [["21"]] in
 utest eqPaths g 1 2 with [["21"]] in
 utest eqPaths g 1 3 with [["21"]] in
 utest eqPaths g 1 10 with [["21"]] in
+
+let foo = callGraph2DFA g [2] 1 in
+--utest foo with [] in
 
 -- Mutual recursion again
 -- ┌─────┐
