@@ -65,11 +65,11 @@ let regExpand: RegEx -> Int -> [[a]] = lam r. lam d.
         let oneLap = map (lam x. snoc x 'T') oneLap in
         cons zeroLaps oneLap
       else
+
       error "Unknown RegEx in expand"
   in
   let expansion = expand r d [] [] in
   map (lam x. match x with (h ++ ['T']) then h else x) expansion
-
 
 utest regExpand (Empty ()) 1 with []
 utest regExpand (Epsilon ()) 1 with [[]]
@@ -93,7 +93,11 @@ utest regExpand (Union (Symbol 'a', Symbol 'b')) 1 with [['b'], ['a']]
 utest regExpand (Union (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c'),
                         Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c'))) 3 with [['a','b','c'], ['a','b'], ['c']]
 
-
+let eqPaths2 = lam g. lam v. lam d. lam sStates.
+  let re = callGraph2DFA g sStates v in
+  let paths = regExpand re d in
+  -- TODO: Remove duplicates
+  map (lam p. reverse p) paths
 
 -- Complexity: O(|V|^2), as for each node, we potentially visit every other
 -- node. This assumes digraphEdgesTo, isVisited and concat are constant
@@ -149,6 +153,8 @@ let samePaths = lam eq. lam seq1. lam seq2.
     (all (lam p. optionIsSome (find (eqpath eq p) seq2)) seq1)
 in
 
+let eq = samePaths eqedge in
+
 -- Create some labels
 let l1 = "l1" in
 let l2 = "l2" in
@@ -198,6 +204,12 @@ utest eqPaths g v 2 with [[l2, l1]] in
 utest eqPaths g v 3 with [[l3, l2, l1]] in
 utest eqPaths g v 4 with [[l3, l2, l1]] in
 
+utest eqPaths2 g v 2 [] with [] in
+utest eqPaths2 g v 2 [4] with [[l2, l1]] in
+utest eqPaths2 g v 4 [4] with [[l3, l2, l1]] in
+utest eqPaths2 g v 4 [3,4] with [[l3, l2, l1], [l2,l1]] in
+utest eq (eqPaths2 g v 4 [1,2,3,4]) [[l3, l2, l1], [l2,l1], [l1], []] with true in
+
 -- Chain with several edges
 -- ┌─────┐
 -- │  4  │
@@ -238,6 +250,10 @@ utest samePaths eqedge (eqPaths g v 2)
 utest samePaths eqedge (eqPaths g v 3)
                           ([[l3, l2, l1],
                             [l3, l4, l1]]) with true in
+
+utest eq (eqPaths2 g v 3 [1,2,3,4]) ([[l3,l4,l1],[l3,l2,l1],[l4,l1],[l2,l1],[l1],[]]) with true in
+-- TODO: Fix this test
+utest eq (eqPaths2 g v 2 [1,2,3,4]) ([[l4,l1],[l2,l1],[l1],[]]) with true in
 
 -- Self looping graph
 -- ┌───┐   l1
