@@ -54,27 +54,27 @@ let hashmapInsert = lam key. lam value. lam hm.
   let hash = hm.hashfn key in
   let idx = modi (absi hash) (length hm.buckets) in
   let bucket = get hm.buckets idx in
-  recursive let idxfinder = lam i.
-    if geqi i (length bucket) then
-      length bucket
+  let newEntry = {hash = hash, key = key, value = value} in
+  recursive let inserter = lam seq.
+    if null seq then
+      [newEntry]
     else
-      let entry = get bucket i in
+      let entry = head seq in
       if neqi hash entry.hash then
-        idxfinder (addi i 1)
+        cons entry (inserter (tail seq))
       else if hm.eq key entry.key then
-        i
+        cons newEntry (tail seq)
       else
-        idxfinder (addi i 1)
+        cons entry (inserter (tail seq))
   in
-  let bucketIdx = idxfinder 0 in
-  let entry = {hash = hash, key = key, value = value} in
-  if geqi bucketIdx (length bucket) then
+  let newBucket = inserter bucket in
+  if gti (length newBucket) (length bucket) then
     -- Insert new entry into the bucket
     {{hm with nelems = addi hm.nelems 1}
-         with buckets = set hm.buckets idx (cons entry bucket)}
+         with buckets = set hm.buckets idx newBucket}
   else
     -- Replace existing entry in the bucket
-    {hm with buckets = set hm.buckets idx (set bucket bucketIdx entry)}
+    {hm with buckets = set hm.buckets idx newBucket}
 
 -- Removes a key-value pair from the hashmap
 --   key: The key that the value (to be removed) is bound to.
@@ -190,7 +190,7 @@ utest hashmapLookupOpt "" m with Some ("ddd") in
 utest hashmapLookup "" m with "ddd" in
 
 -- Test with collisions
-let n = addi (muli hashmapDefaultBucketCount 4) 10 in
+let n = addi hashmapDefaultBucketCount 10 in
 
 recursive let populate = lam hm. lam i.
   if geqi i n then
