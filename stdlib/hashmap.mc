@@ -70,13 +70,9 @@ let hashmapInsert = lam key. lam value. lam hm.
         cons entry (inserter (tail seq))
   in
   let newBucket = inserter bucket in
-  if gti (length newBucket) (length bucket) then
-    -- Insert new entry into the bucket
-    {{hm with nelems = addi hm.nelems 1}
-         with buckets = set hm.buckets idx newBucket}
-  else
-    -- Replace existing entry in the bucket
-    {hm with buckets = set hm.buckets idx newBucket}
+  -- If lengths differ, then an element has been inserted and we increment nelems
+  {{hm with nelems = addi hm.nelems (subi (length newBucket) (length bucket))}
+       with buckets = set hm.buckets idx newBucket}
 
 -- Removes a key-value pair from the hashmap
 --   key: The key that the value (to be removed) is bound to.
