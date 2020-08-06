@@ -35,10 +35,16 @@ let rec val_to_python fi = function
     end
   | TmRecord(_,r) when r = Record.empty -> Py.none
   | TmRecord(_,r) ->
-    Py.Dict.of_bindings_map
-      (fun x -> Py.String.of_string (Ustring.to_utf8 x))
-      (val_to_python fi)
-      (Record.bindings r)
+    begin
+      match record2tuple r with
+      | Some tms ->
+        Py.Tuple.of_list_map (val_to_python fi) (List.rev tms)
+      | None ->
+        Py.Dict.of_bindings_map
+          (fun x -> Py.String.of_string (Ustring.to_utf8 x))
+          (val_to_python fi)
+          (Record.bindings r)
+    end
   | _ -> raise_error fi "The supplied value cannot be used as a python argument"
 
 let rec python_to_val fi obj =
