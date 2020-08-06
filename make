@@ -18,8 +18,8 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 # General function for building the project
 build() {
     mkdir -p build
-    (cd src/boot;
-    dune build mi.exe && cp -f _build/default/mi.exe ../../build/mi)
+    dune build -p boot
+    cp -f _build/install/default/bin/boot.mi build/mi
 }
 
 # Install the boot interpreter locally for the current user
