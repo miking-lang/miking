@@ -43,7 +43,6 @@ let eqr = lam eqs. lam re1. lam re2.
       (match re2 with Concat (w1, w2) then and (eqrAux r1 w1) (eqrAux r2 w2) else false)
     else
     match re1 with Kleene r then (match re2 with Kleene w then eqrAux r w else false) else
-    utest re1 with [] in
     error ("Not eqr of a RegEx")
 in eqrAux re1 re2
 
