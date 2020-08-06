@@ -1,5 +1,7 @@
 (lang dune 1.10)
 (generate_opam_files true)
+(name boot)
+(maintainers "David Broman <dbro@kth.se>")
 
 (package
  (name boot)

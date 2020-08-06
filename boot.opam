@@ -6,6 +6,7 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs] {with-test}
   ["dune" "build" "-p" name "@doc"] {with-doc}
 ]
+maintainer: ["David Broman <dbro@kth.se>"]
 synopsis: "The Miking boot interpreter"
 description: """
 Miking is a meta language-system for creating DSLs.
