@@ -11,3 +11,4 @@ tags
 .ctags.d/
 .ctags
 .DS_Store
+*.install
