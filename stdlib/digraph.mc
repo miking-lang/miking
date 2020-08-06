@@ -30,6 +30,12 @@ let digraphEmpty = lam eqv. lam eql. {adj = [], eqv = eqv, eql = eql}
 -- Get the vertices of the graph g.
 let digraphVertices = lam g. (map (lam tup. tup.0) g.adj)
 
+-- Get equivalence function for vertices.
+let digraphEqv = lam g. g.eqv
+
+-- Get equivalence function for labels.
+let digraphEql = lam g. g.eql
+
 -- Get the edges of the graph g.
 let digraphEdges = lam g.
     foldl concat []

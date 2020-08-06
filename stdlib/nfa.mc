@@ -189,6 +189,10 @@ let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
     foldl nfaAddTransition (foldl nfaAddState initNfa s) trans
     else {}
 
+-- Create an NFA from a Digraph
+let nfaFromDigraph = lam g. lam startS. lam accS.
+  nfaConstr (digraphVertices g) (digraphEdges g) startS accS (digraphEqv g) (digraphEql g)
+
 let printList = lam list.
     map (lam x. print x) list
 
