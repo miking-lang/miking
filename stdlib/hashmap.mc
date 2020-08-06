@@ -50,6 +50,8 @@ let hashmapStrEmpty =
 --   key: The key to bind the value to.
 --   value: The value to be inserted.
 --   hm: The hashmap to insert the value into.
+-- [NOTE]
+--   The insertion uses a recursion which is not tail-recursive.
 let hashmapInsert = lam key. lam value. lam hm.
   let hash = hm.hashfn key in
   let idx = modi (absi hash) (length hm.buckets) in
