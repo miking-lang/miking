@@ -42,26 +42,22 @@ let checkDuplicateLabels = lam trans. lam eqv. lam eql.
 end
     
 -- constructor for the DFA
-let dfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam eql.
+let dfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
 	let err = checkDuplicateLabels trans eqv eql in
 	if(err.0) then error "There are duplicate labels for same state outgoing transition at"
-	else nfaConstr s trans alph startS accS eqv eql
+	else nfaConstr s trans startS accS eqv eql
 
 
 mexpr
-let alphabet = ['0','1'] in
 let states = [0,1,2] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newDfa = dfaConstr states transitions alphabet startState acceptStates eqi eqchar in
-utest setEqual eqchar alphabet newDfa.alphabet with true in
+let newDfa = dfaConstr states transitions startState acceptStates eqi eqchar in
 utest eqi startState newDfa.startState with true in
 utest setEqual eqi acceptStates newDfa.acceptStates with true in
 utest (digraphHasVertices states newDfa.graph) with true in
 utest (digraphHasEdges transitions newDfa.graph) with true in
-utest nfaCheckLabels transitions alphabet eqchar with true in
-utest nfaCheckLabels [(1,2,'2')] alphabet eqchar with false in
 utest (digraphHasEdges [(1,2,'1')] (nfaAddTransition newDfa (1,2,'1')).graph) with true in
 utest (digraphHasVertex 7 (nfaAddState newDfa 7).graph) with true in
 utest nfaIsAcceptedState 2 newDfa with true in

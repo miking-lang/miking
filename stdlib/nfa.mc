@@ -17,7 +17,6 @@ include "string.mc"
 
 type NFA = {
     graph: Digraph,
-    alphabet: [b],
     startState: a,
     acceptStates: [a]
 }
@@ -39,22 +38,16 @@ let nfaStates = lam nfa.
 let nfaTransitions = lam nfa.
     digraphEdges nfa.graph
 
--- check that all labels for transitions are in the alphabet
-let nfaCheckLabels = lam graph. lam alph. lam eql.
-    all (lam x. (any (lam y. eql x.2 y) alph)) graph
-
 -- check that values are acceptable for the NFA
-let nfaCheckValues = lam trans. lam s. lam alph. lam eqv. lam eql. lam accS. lam startS.
-    if not (nfaCheckLabels trans alph eql) then error "Some labels are not in the defined alphabet"
-        else if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
-        else if not (setMem eqv startS s) then error "The start state does not exist"
-        else true
+let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
+    if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
+    else if not (setMem eqv startS s) then error "The start state does not exist"
+    else true
 
 -- States are represented by vertices in a directed graph
 let nfaAddState =  lam nfa. lam state.
     {
         graph = (digraphAddVertex state nfa.graph),
-        alphabet = nfa.alphabet,
         startState = nfa.startState,
         acceptStates = nfa.acceptStates
     }
@@ -67,7 +60,6 @@ let nfaAddTransition = lam nfa. lam trans.
     let label = trans.2 in
     {
         graph = (digraphAddEdge from to label nfa.graph),
-        alphabet = nfa.alphabet,
         startState = nfa.startState,
         acceptStates = nfa.acceptStates
     }
@@ -126,12 +118,11 @@ let nfaMakeEdgeInputPath = lam currentState. lam input. lam nfa.
 end
 
 -- constructor for the NFA
-let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam eql.
-    if nfaCheckValues trans s alph eqv eql accS startS then
+let nfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
+    if nfaCheckValues trans s eqv eql accS startS then
     let emptyDigraph = digraphEmpty eqv eql in
     let initNfa = {
         graph = emptyDigraph,
-        alphabet = alph,
         startState = startS,
         acceptStates = accS
     } in
@@ -139,23 +130,19 @@ let nfaConstr = lam s. lam trans. lam alph. lam startS. lam accS. lam eqv. lam e
     else {}
 
 mexpr
-let alphabet = ['0','1'] in
 let states = [0,1,2] in
 let states2 = [0,1,2,3,4] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let transitions2 = [(0,1,'1'),(1,3,'1'),(1,2,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newNfa = nfaConstr states transitions alphabet startState acceptStates eqi eqchar in
-let newNfa2 = nfaConstr states2 transitions2 alphabet startState acceptStates eqi eqchar in
-let newNfa3 = nfaConstr states2 transitions2 alphabet startState [3] eqi eqchar in
-utest setEqual eqchar alphabet newNfa.alphabet with true in
+let newNfa = nfaConstr states transitions startState acceptStates eqi eqchar in
+let newNfa2 = nfaConstr states2 transitions2 startState acceptStates eqi eqchar in
+let newNfa3 = nfaConstr states2 transitions2 startState [3] eqi eqchar in
 utest eqi startState newNfa.startState with true in
 utest setEqual eqi acceptStates newNfa.acceptStates with true in
 utest (digraphHasVertices states newNfa.graph) with true in
 utest (digraphHasEdges transitions newNfa.graph) with true in
-utest nfaCheckLabels transitions alphabet eqchar with true in
-utest nfaCheckLabels [(1,2,'2')] alphabet eqchar with false in
 utest (digraphHasEdges [(1,2,'1')] (nfaAddTransition newNfa (1,2,'1')).graph) with true in
 utest (digraphHasVertex 7 (nfaAddState newNfa 7).graph) with true in
 utest nfaIsAcceptedState 2 newNfa with true in
