@@ -143,18 +143,24 @@ let repl_eval_ast prog =
   repl_envs := new_envs;
   result
 
+let repl_format tm =
+  match tm with
+  | TmRecord(_,x) when Record.is_empty x -> None
+  | TmConst(_,CPy(obj)) when Pyffi.is_none obj -> None
+  | _ -> Some(ustring_of_tm tm)
+
 (* Run the MCore REPL *)
 let start_repl () =
+  let repl_print tm =
+    match repl_format tm with
+    | None -> flush stdout
+    | Some(str) -> uprint_endline str
+  in
   let rec read_eval_print () =
     try
-      let (Program(_,_,tm)) as ast = read_user_input () in
-      let result = repl_eval_ast ast in
-      begin
-        if tm = tmUnit then
-          flush stdout
-        else
-          uprint_endline (ustring_of_tm result)
-      end;
+      read_user_input ()
+      |> repl_eval_ast
+      |> repl_print;
       read_eval_print ()
     with e ->
       begin

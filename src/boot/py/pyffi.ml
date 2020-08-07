@@ -71,6 +71,9 @@ let rec python_to_val fi obj =
   | t ->
     raise_error fi ("The supplied python value with type " ^ Py.Type.name t ^
       " cannot be converted to an MCore value")
+let is_none = function
+  | PyObject(v) -> v = Py.none
+  | _ -> false
 
 let fail_constapp f v fi = raise_error fi
                           ("Incorrect application. function: "
