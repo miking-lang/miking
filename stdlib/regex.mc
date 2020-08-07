@@ -10,18 +10,32 @@ type RegEx
   con Concat  : (RegEx, RegEx) -> RegEx
   con Kleene  : (RegEx)        -> RegEx
 
+let prec = lam reg.
+  match reg with Empty () then 2 else
+  match reg with Epsilon () then 2 else
+  match reg with Symbol _ then 2 else
+  match reg with Union _ then 1 else
+  match reg with Concat _ then 1 else
+  match reg with Kleene _ then 1 else
+  error "Unkown regex in prec"
+
 let regEx2str = lam sym2str. lam reg.
-  recursive let pprint = lam reg.
-    match reg with Epsilon () then "(eps)" else
-    match reg with Empty () then "(empty)" else
-    match reg with Symbol (a) then sym2str a else
-    match reg with Union (r1, r2) then
-      strJoin "" ["(", pprint r1, ")|(", pprint r2, ")"] else
-    match reg with Concat (r1, r2) then
-      strJoin "" ["(", pprint r1, ") (", pprint r2, ")"] else
-    match reg with Kleene r then
-      strJoin "" ["(", pprint r, ")*"] else
-    error "Not a regExPprint of a RegEx"
+  recursive
+    let enclose = lam parent. lam child.
+      if leqi (prec child) (prec parent) then (strJoin "" ["(", pprint child, ")"])
+      else pprint child
+
+    let pprint = lam reg.
+      match reg with Epsilon () then "(eps)" else
+      match reg with Empty () then "(empty)" else
+      match reg with Symbol (a) then sym2str a else
+      match reg with Union (r1, r2) then
+        strJoin "" [enclose reg r1, "|", enclose reg r2] else
+      match reg with Concat (r1, r2) then
+        strJoin "" [enclose reg r1, " ", enclose reg r2] else
+      match reg with Kleene r then
+        strJoin "" [enclose reg r, "*"] else
+      error "Not a regExPprint of a RegEx"
   in
   pprint reg
 
@@ -206,7 +220,9 @@ let regexFromDFA = lam dfa.
     let finalDFA = foldl (lam accDFA. lam s. eliminate s accDFA)
                    dfa
                    toEliminate
-    in regExFromGeneric finalDFA
+    in
+    let finalRE = regExFromGeneric finalDFA in
+    finalRE
   in
 
   -- ** Actual Algorithm **
