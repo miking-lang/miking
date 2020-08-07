@@ -20,24 +20,24 @@ type DFA = NFA
 -- check for specific duplicate label
 recursive
 let checkSpecificDuplicate = lam trans. lam rest. lam eqv. lam eql.
-    if(eqi (length rest) 0) then false
-    else
-    let first = head rest in
-    let rest = tail rest in
-    if(and (eqv first.0 trans.0) (eql first.2 trans.2)) then true
-    else checkSpecificDuplicate trans rest eqv eql
+  if(eqi (length rest) 0) then false
+  else
+  let first = head rest in
+  let rest = tail rest in
+  if(and (eqv first.0 trans.0) (eql first.2 trans.2)) then true
+  else checkSpecificDuplicate trans rest eqv eql
 end
 
 -- check for duplicate labels
 recursive
 let checkDuplicateLabels = lam trans. lam eqv. lam eql.
-    if (leqi (length trans) 1) then (false, (0,0))
-    else
-    let first = head trans in
-    let rest = tail trans in
-    if(checkSpecificDuplicate first rest eqv eql) then (true, (first.0, first.2))
-    else
-    checkDuplicateLabels rest eqv eql
+  if (leqi (length trans) 1) then (false, (0,0))
+  else
+  let first = head trans in
+  let rest = tail trans in
+  if(checkSpecificDuplicate first rest eqv eql) then (true, (first.0, first.2))
+  else
+  checkDuplicateLabels rest eqv eql
 end
 
 -- constructor for the DFA
