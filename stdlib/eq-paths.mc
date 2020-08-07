@@ -13,8 +13,6 @@ include "regex.mc"
 -- It's really a graph algorithm, but very specific, and the test cases
 -- takes lots of space, so it's currently in a separate file from digraph.mc.
 
--- TODO: prove true/false: an eq. path is never a sub-path of another eq-path
-
 let rpprint = regExPprint (lam x. x)
 
 let callGraph2DFA = lam g. lam sStates. lam aState.
