@@ -38,15 +38,15 @@ let nfaTransitions = lam nfa.
     digraphEdges nfa.graph
 
 -- get start state of the nfa
-let getStartState = lam nfa.
+let nfaStartState = lam nfa.
   nfa.startState
 
 -- get the accept states in the nfa
-let getAcceptStates = lam nfa.
+let nfaAcceptStates = lam nfa.
   nfa.acceptStates
 
 -- get all transitions from state s1 to state s2
-let getTransitionsBetween = lam s1. lam s2. lam nfa.
+let nfaTransitionsBetween = lam s1. lam s2. lam nfa.
     digraphEdgesBetween s1 s2 nfa.graph
 
 -- get all predecessor states to state s

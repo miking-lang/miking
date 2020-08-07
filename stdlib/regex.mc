@@ -78,7 +78,7 @@ let regexFromDFA = lam dfa.
   -- ** Helper functions **
   -- Merge transitions for state pair s1 and s2
   let pairMergeTrans = lam dfa. lam s1. lam s2.
-    let arcsBetween = getTransitionsBetween s1 s2 dfa in
+    let arcsBetween = nfaTransitionsBetween s1 s2 dfa in
     match arcsBetween with [] then None () else
     match arcsBetween with [t] then
        Some (t.0, t.1, Symbol t.2)
@@ -90,10 +90,10 @@ let regexFromDFA = lam dfa.
 
   -- Return the replacing transition between q and p when s is removed
   let replaceTrans = lam dfa. lam p. lam s. lam q.
-    let psRE = (head (getTransitionsBetween p s dfa)).2 in
-    let sqRE = (head (getTransitionsBetween s q dfa)).2 in
+    let psRE = (head (nfaTransitionsBetween p s dfa)).2 in
+    let sqRE = (head (nfaTransitionsBetween s q dfa)).2 in
     -- Loop from s to s?
-    let maybeLoop = getTransitionsBetween s s dfa in
+    let maybeLoop = nfaTransitionsBetween s s dfa in
     let isLoop = not (null maybeLoop) in
     -- Compute Regex for p->s->q replacement
     let psqRE = if isLoop then
@@ -105,7 +105,7 @@ let regexFromDFA = lam dfa.
                   Concat (psRE, sqRE)
     in
     -- Create regex for the p->q transition
-    let maybePQTrans = getTransitionsBetween p q dfa in
+    let maybePQTrans = nfaTransitionsBetween p q dfa in
     let finalPQReg =
       if not (null maybePQTrans) then
         let pqRE = (head maybePQTrans).2 in
@@ -130,26 +130,26 @@ let regexFromDFA = lam dfa.
     -- Compute transitions to keep
     let keepTrans = filter
                     (lam t.
-                       let eqv = (getEqv dfa) in
+                       let eqv = (nfaGetEqv dfa) in
                        if eqv s t.0 then false else
                        if eqv s t.1 then false else
                        if and (setMem eqv t.0 inStates)
                               (setMem eqv t.1 outStates) then false
                        else true)
-                    (getTransitions dfa)
+                    (nfaTransitions dfa)
     in
     -- Keep all the states except s
-    let newStates = filter (lam st. not ((getEqv dfa) s st)) (getStates dfa) in
+    let newStates = filter (lam st. not ((nfaGetEqv dfa) s st)) (nfaStates dfa) in
     let newTrans = concat keepTrans addTrans in
     -- Create a new dfa where s has been eliminated
-    dfaConstr newStates newTrans (getStartState dfa) (getAcceptStates dfa) (getEqv dfa) (getEql dfa)
+    dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)
   in
 
   -- Extract regex from canonical 1-state or 2-state DFA
   let regExFromGeneric = lam dfa.
     -- Get the symbol between from and to, or an empty regex if none exists
     let getSymOrEmpty = lam dfa. lam from. lam to.
-      let trans = getTransitionsBetween from to dfa in
+      let trans = nfaTransitionsBetween from to dfa in
       match trans with [] then Empty () else
       match trans with [t] then t.2 else
       error (strJoin ["getSymOrEmpty expected 0 or 1 transitions, was ", length trans])
@@ -157,19 +157,19 @@ let regexFromDFA = lam dfa.
     in
     -- Handle 1-state DFA
     let generic1State = lam dfa.
-      let trans = getTransitions dfa in
+      let trans = nfaTransitions dfa in
       match trans with [] then Epsilon () else
       match trans with [t] then Kleene(t.2) else
       error (strJoin "" ["Expected 0 or 1 transitions in 1-state DFA, not ", length trans])
     in
     -- Handle 2-state DFA
     let generic2State = lam dfa.
-      let trans = getTransitions dfa in
+      let trans = nfaTransitions dfa in
       match trans with [] then (error (strJoin "" ["Expected DFA with at least one transition"])) else
       -- Start and accept state only states left
-      let p = getStartState dfa in
-      let q = match (getAcceptStates dfa) with [a] then a else error "Expected DFA with exactly one accept state" in
-      if (getEqv dfa) p q then error (strJoin "" ["Expected start state and accept state to be different"]) else
+      let p = nfaStartState dfa in
+      let q = match (nfaAcceptStates dfa) with [a] then a else error "Expected DFA with exactly one accept state" in
+      if (nfaGetEqv dfa) p q then error (strJoin "" ["Expected start state and accept state to be different"]) else
       -- Extract the regexes from the 4 potential transitions
       let pq = getSymOrEmpty dfa p q in
       let qp = getSymOrEmpty dfa q p in
@@ -177,11 +177,11 @@ let regexFromDFA = lam dfa.
       let qq = getSymOrEmpty dfa q q in
       -- Construct the regex
       let leftRE = Concat(pq, Kleene(qq)) in
-      simplifyD (getEql dfa)
+      simplifyD (nfaGetEql dfa)
                 (Concat (Kleene (Union (pp, Concat (leftRE, qp))),
                          leftRE))
     in
-    let nStates = length (getStates dfa) in
+    let nStates = length (nfaStates dfa) in
     match nStates with 1 then generic1State dfa else
     match nStates with 2 then generic2State dfa else
     error (strJoin "" ["Expected DFA of size 1 or 2, not ", nStates, "."])
@@ -190,15 +190,15 @@ let regexFromDFA = lam dfa.
   -- Get the regex from a DFA with one accept state
   let regexOneAccept = lam dfa. lam acceptState.
     -- Turn acceptState into the only accepting state
-    let dfa = dfaConstr (getStates dfa) (getTransitions dfa) (getStartState dfa)
-                        [acceptState] (getEqv dfa) (getEql dfa) in
+    let dfa = dfaConstr (nfaStates dfa) (nfaTransitions dfa) (nfaStartState dfa)
+                        [acceptState] (nfaGetEqv dfa) (nfaGetEql dfa) in
 
-    let startState = getStartState dfa in
+    let startState = nfaStartState dfa in
     let toEliminate = filter
                       (lam s. and
-                              (not ((getEqv dfa) startState s))
-                              (not ((getEqv dfa) acceptState s)))
-                      (getStates dfa) in
+                              (not ((nfaGetEqv dfa) startState s))
+                              (not ((nfaGetEqv dfa) acceptState s)))
+                      (nfaStates dfa) in
     -- Eliminate states and extract regex
     let finalDFA = foldl (lam accDFA. lam s. eliminate s accDFA)
                    dfa
@@ -211,7 +211,7 @@ let regexFromDFA = lam dfa.
   -- Step 1: Initialisation.
   -- For every pair of states, merge the transitions between them and replace by a regex.
   -- Established invariant: for every pair of state, there is at most one transition between them.
-  let states = getStates dfa in
+  let states = nfaStates dfa in
 
   -- Create the merged transitions
   let mergedTrans = foldl (lam acc. lam s.
@@ -226,11 +226,11 @@ let regexFromDFA = lam dfa.
                     states
   in
   -- Create the DFA with the merged transitions
-  let dfa = dfaConstr states mergedTrans (getStartState dfa) (getAcceptStates dfa) (getEqv dfa) (eqr (getEql dfa)) in
+  let dfa = dfaConstr states mergedTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (eqr (nfaGetEql dfa)) in
 
   -- Step 2: State Elimination.
   -- Iteratively eliminate states and replace by regexes
-  let acceptStates = getAcceptStates dfa in
+  let acceptStates = nfaAcceptStates dfa in
   match acceptStates with [] then Empty () else
   match acceptStates with [a] then regexOneAccept dfa a else
   foldl (lam acc. lam astate. Union (acc, regexOneAccept dfa astate))
@@ -264,9 +264,6 @@ utest eqrStr r4 (Union(Kleene(Concat(r1, r2)), Symbol(l2))) with false in
 utest simplifyD eqrStr r2 with r2 in
 utest simplifyD eqrStr r5 with Kleene r1 in
 
-let printDotRE = lam dfa. nfaPrintDot dfa int2string (regEx2str (lam x. x)) "LR" in
-let printDot = lam dfa. nfaPrintDot dfa int2string (lam x. x) "LR" in
-
 -- ┌───────┐  start   ╔═══╗
 -- │ start │ ───────▶ ║ 1 ║
 -- └───────┘          ╚═══╝
@@ -275,7 +272,6 @@ let transitions = [] in
 let startState = 1 in
 let acceptStates = [1] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
---let _ = printDot dfa in
 
 utest regexFromDFA dfa with Epsilon () in
 
@@ -293,7 +289,6 @@ let transitions = [(1,1,l1), (1,1,l2)] in
 let startState = 1 in
 let acceptStates = [1] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
--- let _ = printDot dfa in
 
 -- (l1 | l2)*
 utest regexFromDFA dfa with Kleene (Union (Symbol l1, Symbol l2)) in
@@ -316,7 +311,6 @@ let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [2] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
---let _ = printDot dfa in
 
 -- ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Concat (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -342,7 +336,6 @@ let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
---let _ = printDot dfa in
 
 -- ((l2 | l4 | l5) l3)*
 utest regexFromDFA dfa with Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -369,7 +362,6 @@ let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1,2] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
---let _ = printDot dfa in
 
 -- (((l2 | l4 | l5) l3)*) | ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Union (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5), Symbol l3)),
