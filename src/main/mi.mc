@@ -34,18 +34,18 @@ let commandsMap = [
 
 -- Simple handling of options before we have an argument parsing library.
 let parseOptions = lam xs.
-  (foldl (lam acc. lam s1.
+  (foldl (lam acc. lam s.
     match acc with (options,lst) then
-      match findAssoc (lam s2. eqstr s1 s2) optionsMap with Some f
+      match findAssoc (eqstr s) optionsMap with Some f
       then (f options, lst)
-      else [printLn (concat "Unknown option " s1), exit 1]
+      else [printLn (concat "Unknown option " s), exit 1]
     else never
   ) (options,[]) (reverse xs)).0 in
 
 
 -- Main: find and run the correct command. See commandsMap above.
 if lti (length argv) 2 then print menu else
-  match findAssoc (lam s. eqstr (get argv 1) s) commandsMap with Some cmd
+  match findAssoc (eqstr (get argv 1)) commandsMap with Some cmd
   then
     let argvp = partition (isPrefix eqc "--") (tail (tail argv)) in
     cmd argvp.1 (parseOptions argvp.0)
