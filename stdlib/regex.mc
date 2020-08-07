@@ -119,6 +119,9 @@ let regexFromDFA = lam dfa.
     -- Compute transitions to add
     let inStates = nfaInStates s dfa in
     let outStates = nfaOutStates s dfa in
+    -- Filter out s from inStates and outStates
+    let inStates = filter (lam i. not ((nfaGetEqv dfa) s i)) inStates in
+    let outStates = filter (lam o. not ((nfaGetEqv dfa) s o)) outStates in
     let addTrans =
       foldl (lam acc. lam i.
                let newTrans = map (lam o. replaceTrans dfa i s o) outStates in
@@ -141,7 +144,8 @@ let regexFromDFA = lam dfa.
     let newStates = filter (lam st. not ((nfaGetEqv dfa) s st)) (nfaStates dfa) in
     let newTrans = concat keepTrans addTrans in
     -- Create a new dfa where s has been eliminated
-    dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)
+    let newDFA = dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)in
+    newDFA
   in
 
   -- Extract regex from canonical 1-state or 2-state DFA
@@ -365,4 +369,31 @@ let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
 -- (((l2 | l4 | l5) l3)*) | ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Union (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5), Symbol l3)),
                                    Concat (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),Symbol l3)),Symbol l1)) in
+
+-- ┌───────┐  start   ┌───┐  a    ┌─────┐  c    ┌───┐
+-- │ start │ ───────▶ │ 1 │ ────▶ │     │ ────▶ │ 3 │
+-- └───────┘          └───┘       │     │       └───┘
+--                                │     │  b      │
+--                                │  2  │ ◀───────┘
+--                                │     │
+--                                │     │
+--                                │     │ ◀┐
+--                                └─────┘  │
+--                                  │      │
+--                                  │ e    │ d
+--                                  ▼      │
+--                                ╔═════╗  │
+--                                ║  4  ║ ─┘
+--                                ╚═════╝
+--
+let acceptStates = [4] in
+let startState = 1 in
+let states = [1,2,3,4] in
+let transitions = [(1,2,"a"),(2,3,"c"),(2,4,"e"),(3,2,"b"),(4,2,"d")] in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+
+-- Short form: a(cb|ed)*e
+-- Actual return: (ae | (ac(bc)*be)) (de | (dc (bc)* be))*
+utest regexFromDFA dfa with  Concat (Union (Concat (Symbol "a",Symbol "e"),Concat (Concat (Symbol "a",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))),Kleene (Union (Concat (Symbol "d",Symbol "e"),Concat (Concat (Symbol "d",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))))) in
+
 ()
