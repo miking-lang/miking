@@ -73,12 +73,14 @@ let eatWSAC = lam str.
     (x,acc)
   let eatLineComment = lam x. lam acc.
     match x with "\n" ++ xs then eatWhitespace xs (snoc acc '\n') else
-    match x with [x] ++ xs then eatLineComment xs (snoc acc x) else never
+    match x with [x] ++ xs then eatLineComment xs (snoc acc x) else
+    (x,acc)
   in eatWhitespace str []
 
 utest eatWSAC "foo" with ("foo","")
 utest eatWSAC " \n bar foo" with ("bar foo"," \n ")
 utest eatWSAC "   -- comment\n  foo" with ("foo","   -- comment\n  ")
+utest eatWSAC " -- foo " with (""," -- foo ")
 
 -- Parses a program
 let parse = lam rules. lam prod. lam str.
