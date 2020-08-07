@@ -17,7 +17,7 @@ include "string.mc"
 
 type NFA = {
   graph: Digraph,
-  tartState: a,
+  startState: a,
   acceptStates: [a]
 }
 
