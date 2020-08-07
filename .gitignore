@@ -4,7 +4,6 @@ _build
 \.\#*
 temp/
 .merlin
-dune
 *~
 TAGS
 tags
@@ -12,3 +11,4 @@ tags
 .ctags.d/
 .ctags
 .DS_Store
+*.install

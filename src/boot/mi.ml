@@ -3,17 +3,17 @@
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 
-   boot.ml is the main entry point for first stage of the
+   mi.ml is the main entry point for first stage of the
    bootstrapped Miking compiler. The bootstapper is interpreted and
    implemented in OCaml. Note that the Miking bootstrapper
    only implements a subset of the Ragnar language.
 *)
 
 open Printf
-open Ast
-open Eval
-open Repl
-open Mexpr
+open Boot.Ast
+open Boot.Eval
+open Boot.Repl
+open Boot.Mexpr
 
 (* Define the file slash, to make it platform independent *)
 let sl = if Sys.win32 then "\\" else "/"
@@ -90,10 +90,10 @@ let main =
     "--symbol", Arg.Set(enable_debug_symbol_print),
     " Enables output of symbols for variables. Affects all other debug printing.";
 
-    "--full-pattern", Arg.Set(Patterns.pat_example_gives_complete_pattern),
+    "--full-pattern", Arg.Set(Boot.Patterns.pat_example_gives_complete_pattern),
     " Make the pattern analysis in mlang print full patterns instead of partial ones.";
 
-    "--no-line-edit", Arg.Set(Repl.no_line_edit),
+    "--no-line-edit", Arg.Set(Boot.Repl.no_line_edit),
     " Disable line editing funcionality in the REPL.";
 
   ] in
