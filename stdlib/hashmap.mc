@@ -10,8 +10,6 @@ include "math.mc"
 include "option.mc"
 include "string.mc"
 
-include "map.mc" -- REMOVE BEFORE MERGE (only used for comparison)
-
 let hashmapDefaultBucketCount = 100
 
 -- The base type of a HashMap object.
@@ -223,37 +221,5 @@ in
 let m = removeall 0 m in
 
 utest m.nelems with 0 in
-
-
-
--- BEGIN TEMPORARY TIMING TEST (Remove before merge)
---let lookupOpt = mapLookupOpt eqstr in
---let lookup = mapLookup eqstr in
---let insert = mapInsert eqstr in
---let update = mapUpdate eqstr in
---let mem = mapMem eqstr in
---
---recursive let populate = lam m. lam i.
---  if geqi i n then
---    m
---  else
---    let key = cons 'a' (int2string i) in
---    populate (insert key i m)
---             (addi i 1)
---in
---let m = populate [] 0 in
---
---utest length m with n in
---
---recursive let checkmem = lam i.
---  if geqi i n then
---    ()
---  else
---    let key = cons 'a' (int2string i) in
---    utest lookupOpt key m with Some (i) in
---    checkmem (addi i 1)
---in
---let _ = checkmem 0 in
--- END TEMPORARY TIMING TEST
 
 ()
