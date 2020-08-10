@@ -114,7 +114,7 @@ let eqPaths2 = lam g. lam v. lam d. lam sStates.
   -- Equality function for paths
   let eq = lam p1. lam p2.
              and (eqi (length p1) (length p2))
-                 (all (lam t. eqchar t.0 t.1) (zipWith (lam e1. lam e2. (e1, e2)) p1 p2)) in
+                 (all (lam t. (digraphEql g) t.0 t.1) (zipWith (lam e1. lam e2. (e1, e2)) p1 p2)) in
   -- Remove duplicate paths
   let upaths = distinct eq paths in
   -- Reverse paths, making v the end path
