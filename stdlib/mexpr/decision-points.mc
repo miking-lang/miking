@@ -186,6 +186,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let maxDepthVar = "maxDepth" in
     let addCallFunName = "addCall" in
     let addCallFunTp = None () in
+    let topLevelFun = "top" in
 
     -- Equip TmApps with unique labels
     let ltm = labelApps tm in
@@ -218,7 +219,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let defDummies = match dummies with [] then unit_ else bindall_ dummies in
 
     -- Transform program to use call context
-    let trans = transformCallCtx isFun "top" ltm in
+    let trans = transformCallCtx isFun topLevelFun ltm in
 
     -- Rename public functions
     let transRenamed = rename isPublic renameF trans in
@@ -227,7 +228,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let defCallCtx = let_ callCtxVar callCtxTp (seq_ []) in
 
     -- Define initial lookup table
-    let lookupTable = initLookupTable ltm in
+    let lookupTable = initLookupTable (cons topLevelFun publicFns) ltm in
     -- AST-ify the lookup table
     let defLookupTable =
       let_ lookupTableVar lookupTableTp
@@ -490,7 +491,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
 
   -- Initialise lookup table as a list of triples (id, path, startGuess)
-  sem initLookupTable =
+  sem initLookupTable (publicFns : [String]) =
   | tm ->
     let g = toCallGraph tm in
     let functionIDPairs = allFunHoles tm in
@@ -500,7 +501,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                let hole = match t.1 with LTmHole h then h else error "Internal error" in
                let depth = match hole.depth with TmConst {val = CInt n} then n.val
                            else error "Depth must be a constant integer" in
-               let allPaths = eqPaths2 g fun depth [] in
+               let allPaths = eqPaths2 g fun depth publicFns in
                let idPathValTriples = map (lam path. (hole.id, path, hole.startGuess)) allPaths
                in concat acc idPathValTriples)
            [] functionIDPairs
