@@ -1,6 +1,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "set.mc"
 include "seq.mc"
 include "char.mc"
 include "string.mc"
@@ -60,6 +61,7 @@ let testRules = [
 ("app", ("Expr", [NT("e1","Expr"), NT("e2","Expr")]))
 ]
 
+
 -- Functions for eating white space and comments (WSAC).
 -- Returns a tuple where the first element is the remaining
 -- string and the second element is the eaten WASC
@@ -81,6 +83,19 @@ utest eatWSAC "foo" with ("foo","")
 utest eatWSAC " \n bar foo" with ("bar foo"," \n ")
 utest eatWSAC "   -- comment\n  foo" with ("foo","   -- comment\n  ")
 utest eatWSAC " -- foo " with (""," -- foo ")
+
+-- Returns a list of unique tokens. The index in this list will be used
+-- as unqiue symbols when matching tokens in the future.
+let getTokenList = lam rules.
+    foldl (lam acc. lam e.
+       match e with (_,(_,lst)) then
+         foldl (lam acc. lam e. match e with T(_,x)
+	                        then setInsert eqstr x acc else acc) acc lst
+       else never  
+    ) "" rules
+
+utest getTokenList testRules with ["let","=","in",":ident:",":num:","+","*"]
+ 
 
 -- Parses a program
 let parse = lam rules. lam prod. lam str.
