@@ -11,8 +11,6 @@ include "eq-paths.mc"
 -- * An algorithm for AST -> call graph conversion (Ast2CallGraph fragment)
 -- * Program transformations for programs with decision points (HolyCallGraph)
 
--- TODO: this file should probably be split into several ones.
-
 lang HoleAst
   syn Expr =
   | TmHole {tp : Type,
@@ -175,7 +173,7 @@ end
 
 lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Transform the program
-  sem transform =
+  sem transform (publicFns : [String]) =
   | tm ->
     -- Define hard coded constants
     -- TODO: Use unique identifiers instead of hard coded strings.
@@ -351,6 +349,9 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                          (snoc_ (tail_ (var_ callCtxVar)) (var_ lblVarName)))))
     in
 
+    -- Rename public functions and create dummy functions for them
+    let transformed = handlePublic publicFns transformed in
+
     -- Put all the pieces together
     bindall_ [defLookupTable,
               defCallCtx,
@@ -358,6 +359,43 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
               defAddCall,
               defLookup,
               transformed]
+
+  -- Handle public functions
+  -- TODO: Bodies of lambdas
+  sem handlePublic (fs : [String]) =
+  | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
+    -- Public function?
+    let newIdent =
+      if optionIsSome (find (eqstr t.ident) fs) then
+        strJoin "" [t.ident, "Pr"]
+      else
+        t.ident
+    in TmLet {{{t with ident = newIdent}
+                with body = handlePublic fs t.body}
+                with inexpr = handlePublic fs t.inexpr}
+
+  | TmRecLets t ->
+    let handleLet = lam le.
+      -- Defines a public function
+      if optionIsSome (find (eqstr le.ident) fs) then
+        match le.body with TmLam lm then
+          let newIdent = strJoin "" [le.ident, "Pr"] in
+          let newBody = handlePublic fs le.body in
+          {{le with ident=newIdent} with body=newBody}
+        else
+          error (strJoin "" ["Identifier ", le.ident, " expected to refer to a function."])
+      else
+        le
+     in TmRecLets {{t with bindings = map handleLet t.bindings}
+                    with inexpr = handlePublic fs t.inexpr}
+
+  | TmVar v ->
+    if optionIsSome (find (eqstr v.ident) fs) then
+      TmVar {v with ident = (strJoin "" [v.ident, "Pr"])}
+    else TmVar v
+
+  | tm -> smap_Expr_Expr (handlePublic fs) tm
 
   -- Do some transformations (see paper for example)
   sem transform2 (fs : [String]) (prev : String) =
@@ -413,7 +451,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                let hole = match t.1 with LTmHole h then h else error "Internal error" in
                let depth = match hole.depth with TmConst {val = CInt n} then n.val
                            else error "Depth must be a constant integer" in
-               let allPaths = eqPaths g fun depth in
+               let allPaths = eqPaths2 g fun depth [] in
                let idPathValTriples = map (lam path. (hole.id, path, hole.startGuess)) allPaths
                in concat acc idPathValTriples)
            [] functionIDPairs
@@ -444,7 +482,7 @@ mexpr
 use TestLang in
 
 -- Enable/disable printing
-let printEnabled = false in
+let printEnabled = true in
 let print = if printEnabled then print else lam x. x in
 
 let ctx = {env = []} in
@@ -476,7 +514,7 @@ let ast = labelApps ast in
 let _ = print "AST 0\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 0\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let g = toCallGraph ast in
@@ -497,7 +535,7 @@ let ast = labelApps ast in
 let _ = print "AST 1\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 1\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let g = toCallGraph ast in
@@ -513,7 +551,7 @@ let ast = labelApps (bind_ id_func (addi_ (app_ (var_ "foo") (int_ 1)) (int_ 2))
 let _ = print "AST 2\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 2\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 -- graph: vs = [foo, top]. es = [top->foo].
@@ -533,7 +571,7 @@ let ast = labelApps (bind_ id_func bar) in
 let _ = print "AST 3\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 3\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 -- graph: vs = [foo, bar, top], es = [bar->foo].
@@ -560,7 +598,7 @@ utest eval ctx ast with int_ 2 in
 let _ = print "AST 4\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 4\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let g = toCallGraph ast in
@@ -585,7 +623,7 @@ let ast =
 in
 let ast = labelApps ast in
 let _ = print "Transformed AST 5\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let _ = print "AST 5\n" in
@@ -624,7 +662,7 @@ let ast = labelApps ast in
 let _ = print "AST 6\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 6\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 utest eval ctx ast with int_ 2 in
 
@@ -655,7 +693,7 @@ let ast = labelApps ast in
 let _ = print "AST 7\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 7\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let g = toCallGraph ast in
@@ -690,7 +728,7 @@ let ast = labelApps ast in
 let _ = print "AST 8\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 8\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 utest eval ctx ast with (int_ 24) in
 
@@ -715,7 +753,7 @@ let ast = labelApps ast in
 let _ = print "AST 9\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 9\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 utest eval ctx ast with int_ 1 in
 
@@ -749,7 +787,7 @@ let ast = labelApps ast in
 let _ = print "AST 10\n" in
 let _ = pprint ast in
 let _ = print "Transformed AST 10\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 -- graph: vs = [top, foo, c], es = [c->foo, top->foo, top->c]
@@ -792,7 +830,7 @@ let ast = labelApps ast in
 let _ = print "AST 11: mutual recursion" in
 let _ = pprint ast in
 let _ = print "Transformed AST 11\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 utest eval ctx ast with true_ in
 
@@ -815,7 +853,7 @@ let ast = labelApps ast in
 let _ = print "AST 12: hidden function call" in
 let _ = pprint ast in
 let _ = print "Transformed AST 12\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 utest eval ctx ast with int_ 1 in
 
@@ -840,7 +878,7 @@ let ast = bind_ foo (app_ (var_ "foo") (int_ 42)) in
 let ast = labelApps ast in
 let _ = print "If-then-else with holes\n" in
 let _ = pprint ast in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 let g = toCallGraph ast in
@@ -871,7 +909,7 @@ let _ = print "AST with holes\n" in
 let _ = pprint ast in
 
 let _ = print "Transformed AST with holes\n" in
-let tast = transform ast in
+let tast = transform [] ast in
 let _ = pprint tast in
 
 
@@ -907,7 +945,7 @@ let _ = print "\nAST from paper\n" in
 let _ = pprint ast in
 
 let _ = print "\nTransformed AST from paper\n" in
-let tast = transform ast in
+let tast = transform ["foo"] ast in
 let _ = pprint tast in
 
 -- Takes ~90 s to evaluate
