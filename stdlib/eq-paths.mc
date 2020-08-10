@@ -6,10 +6,6 @@ include "regex.mc"
 -- This file implements eqPaths: computing equivalence paths for decision
 -- points.
 
--- Input: a graph, a start node v and a depth d
--- Output: the set of equivalence paths ending in v. The lengths of the
--- paths are at most d.
-
 -- Expand the regular expression as far as possible, at most to length d
 -- Kleene closures are walked at most once
 -- TODO: Set #laps in Kleene closures as a parameter
@@ -91,7 +87,10 @@ utest regExpandChar (Kleene (Concat (Symbol 'a', Symbol 'b'))) 5 with [[], ['a',
 utest regExpandChar (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 3 with [['a','b'], ['c']]
 utest regExpandChar (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 2 with [['a','b'], ['c']]
 
-let eqPaths2 = lam g. lam v. lam d. lam sStates.
+-- Input: a graph, a start node v, depth d and start nodes.
+-- Output: the set of equivalence paths ending in v. The lengths of the
+-- paths are at most d.
+let eqPaths = lam g. lam v. lam d. lam sStates.
   -- Compute a reversed regular expression from the call graph
   let callGraph2RegEx = lam g. lam sStates. lam aState.
     let gRev = digraphReverse g in
@@ -109,35 +108,6 @@ let eqPaths2 = lam g. lam v. lam d. lam sStates.
   let upaths = distinct eq paths in
   -- Reverse paths, making v the end node
   map (lam p. reverse p) upaths
-
--- Complexity: O(|V|^2), as for each node, we potentially visit every other
--- node. This assumes digraphEdgesTo, isVisited and concat are constant
--- operations.
-let eqPaths = lam g. lam v. lam d.
-  let isVisited = lam eq. lam path. lam v.
-    optionIsSome (find (eq v) path) in
-
-  let isSelfLoop = lam eq. lam e. eq e.0 e.1 in
-
-  recursive let traverse = lam v. lam path. lam visited. lam d.
-    let toEdges = digraphEdgesTo v g in
-    let nonSelfLoops = filter (lam e. not (isSelfLoop g.eqv e)) toEdges in
-
-    if isVisited g.eqv visited v then
-        [tail path]
-    -- Dead end: depth is 0, or no incoming edges except self loops
-    else if or (eqi d 0) (null nonSelfLoops) then
-      [path]
-    else
-      -- Recursively compute paths for all predecessors
-      let paths = map (lam edge.
-                         traverse edge.0 (cons edge.2 path) (cons v visited) (subi d 1))
-                       nonSelfLoops in
-      -- Return the union of the paths
-      foldl concat [] paths
-  in
-  traverse v [] [] d
-
 
 mexpr
 -- To construct test graphs
@@ -179,7 +149,6 @@ let h = 'h' in
 let i = 'i' in
 let j = 'j' in
 
-
 -- Simple chain graph
 -- ┌─────┐
 -- │  4  │
@@ -211,17 +180,11 @@ in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
 let v = 1 in
-utest eqPaths g v 0 with [[]] in
-utest eqPaths g v 1 with [[a]] in
-utest eqPaths g v 2 with [[b, a]] in
-utest eqPaths g v 3 with [[c, b, a]] in
-utest eqPaths g v 4 with [[c, b, a]] in
-
-utest eqPaths2 g v 2 [] with [] in
-utest eqPaths2 g v 2 [4] with [[b, a]] in
-utest eqPaths2 g v 4 [4] with [[c, b, a]] in
-utest eqPaths2 g v 4 [3,4] with [[c, b, a], [b,a]] in
-utest eq (eqPaths2 g v 4 [1,2,3,4]) [[c, b, a], [b,a], [a], []] with true in
+utest eqPaths g v 2 [] with [] in
+utest eqPaths g v 2 [4] with [[b, a]] in
+utest eqPaths g v 4 [4] with [[c, b, a]] in
+utest eqPaths g v 4 [3,4] with [[c, b, a], [b,a]] in
+utest eq (eqPaths g v 4 [1,2,3,4]) [[c, b, a], [b,a], [a], []] with true in
 
 
 -- Chain with several edges
@@ -256,17 +219,8 @@ in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
 let v = 1 in
-utest eqPaths g v 0 with [[]] in
-utest eqPaths g v 1 with [[a]] in
-utest samePaths eqedge (eqPaths g v 2)
-                       ([[b, a],
-                         [d, a]]) with true in
-utest samePaths eqedge (eqPaths g v 3)
-                          ([[c, b, a],
-                            [c, d, a]]) with true in
-
-utest eq (eqPaths2 g v 3 [1,2,3,4]) ([[c,d,a],[c,b,a],[d,a],[b,a],[a],[]]) with true in
-utest eq (eqPaths2 g v 2 [1,2,3,4]) ([[d,a],[b,a],[a],[]]) with true in
+utest eq (eqPaths g v 3 [1,2,3,4]) ([[c,d,a],[c,b,a],[d,a],[b,a],[a],[]]) with true in
+utest eq (eqPaths g v 2 [1,2,3,4]) ([[d,a],[b,a],[a],[]]) with true in
 
 -- Self looping graph
 -- ┌───┐   a
@@ -280,12 +234,9 @@ let g0 = addEdges
 -- let _ = digraphPrintDot g0 int2string (lam x. x) in
 
 -- Path should always be empty
-utest eqPaths g0 1 0  with [[]] in
-utest eqPaths g0 1 10 with [[]] in
-
-utest eqPaths2 g0 1 0 [1] with [[]] in
-utest eqPaths2 g0 1 1 [1] with [[]] in
-utest eqPaths2 g0 1 10 [1] with [[]] in
+utest eqPaths g0 1 0 [1] with [[]] in
+utest eqPaths g0 1 1 [1] with [[]] in
+utest eqPaths g0 1 10 [1] with [[]] in
 
 -- Loop with two nodes (mutual recursion)
 -- ┌─────┐
@@ -302,17 +253,11 @@ let g = addEdges
         [(1,2,'b'),(2,1,'a')] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 0 with [[]] in
-utest eqPaths g 1 1 with [['a']] in
-utest eqPaths g 1 2 with [['a']] in
-utest eqPaths g 1 3 with [['a']] in
-utest eqPaths g 1 10 with [['a']] in
-
-utest eqPaths2 g 1 0 [2] with [[]] in
-utest eqPaths2 g 1 1 [2] with [['a']] in
+utest eqPaths g 1 0 [2] with [[]] in
+utest eqPaths g 1 1 [2] with [['a']] in
 -- Questionable result: Includes a loop
-utest eqPaths2 g 1 2 [2] with [['b','a'],['a']] in
-utest eqPaths2 g 1 2 [1,2] with [['b','a'],['a'],[]] in
+utest eqPaths g 1 2 [2] with [['b','a'],['a']] in
+utest eqPaths g 1 2 [1,2] with [['b','a'],['a'],[]] in
 
 -- Mutual recursion again
 -- ┌─────┐
@@ -325,7 +270,7 @@ utest eqPaths2 g 1 2 [1,2] with [['b','a'],['a'],[]] in
 -- │  2  │ ◀┐
 -- └─────┘  │
 --   │      │
---   │ b   │ c
+--   │ b    │ c
 --   ▼      │
 -- ┌─────┐  │
 -- │  3  │ ─┘
@@ -335,15 +280,11 @@ let g = addEdges
         [(1,2,a), (3,2,c),(2,3,b)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 2 0 with [[]] in
-utest samePaths eqedge (eqPaths g 2 1) [[a],[c]] with true in
-utest samePaths eqedge (eqPaths g 2 2) [[a],[c]] with true in
-
-utest eqPaths2 g 2 0 [1,2,3] with [[]] in
+utest eqPaths g 2 0 [1,2,3] with [[]] in
 -- Questionable result: cuts off at the mutual recursion
-utest eqPaths2 g 2 3 [1] with [[b,c], [a]] in
-utest eqPaths2 g 2 3 [3] with [[b,c], [c]] in
-utest eq (eqPaths2 g 2 3 [1,2,3]) [[b,c], [a], [], [c]] with true in
+utest eqPaths g 2 3 [1] with [[b,c], [a]] in
+utest eqPaths g 2 3 [3] with [[b,c], [c]] in
+utest eq (eqPaths g 2 3 [1,2,3]) [[b,c], [a], [], [c]] with true in
 
 -- Yet another mutual recursion
 --      ┌─────┐
@@ -366,26 +307,21 @@ let g = addEdges
         [(2,1,a), (3,2,b), (1,3,c), (1,2,d)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 0 with [[]] in
-utest eqPaths g 1 1 with [[a]] in
-utest samePaths eqedge (eqPaths g 1 2) [[b, a], [a]] with true in
-utest samePaths eqedge (eqPaths g 1 3) [[b, a], [a]] with true in
-
-utest eqPaths2 g 1 1 [1] with [[],[a]] in
-utest eqPaths2 g 1 5 [3] with [[d,a], [c, b, a], [b,a]] in
+utest eqPaths g 1 1 [1] with [[],[a]] in
+utest eqPaths g 1 5 [3] with [[d,a], [c, b, a], [b,a]] in
 
 -- Loop with three nodes
 -- ┌─────┐
 -- │  3  │ ◀┐
 -- └─────┘  │
 --   │      │
---   │ c   │
+--   │ c    │
 --   ▼      │
 -- ┌─────┐  │
 -- │  1  │  │ b
 -- └─────┘  │
 --   │      │
---   │ a   │
+--   │ a    │
 --   ▼      │
 -- ┌─────┐  │
 -- │  2  │ ─┘
@@ -395,10 +331,7 @@ let g = addEdges
         [(1,2,a),(2,3,b),(3,1,c)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 1 with [[c]] in
-utest eqPaths g 1 2 with [[b, c]] in
-
-utest eqPaths2 g 2 3 [3] with [[b,c,a],[c,a]] in
+utest eqPaths g 2 3 [3] with [[b,c,a],[c,a]] in
 
 -- Two way loop
 -- ┌─────┐
@@ -421,20 +354,10 @@ let g = addEdges
         [(2,3,b),(3,2,c),(2,4,d),(4,2,e),(2,1,a)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 1 with [[a]] in
-utest samePaths eqedge (eqPaths g 1 2)
-                       ([[e, a],
-                         [c, a]]) with true in
--- d=3 same result as d=2
-utest eqPaths g 1 3 with eqPaths g 1 2 in
-
-utest eqPaths2 g 1 10 [2] with [[a], [d,e,a], [b,c,a]] in
-utest eqPaths2 g 1 1 [4] with [[a]] in
-utest eqPaths2 g 1 2 [4] with [[e,a], [c,a]] in
-utest eqPaths2 g 1 3 [4] with [[e,a], [d,e,a], [b,c,a]] in
--- TODO: blows up
---utest eqPaths2 g 1 10 [4] with [[e,a], [d,e,a], [b,c,a]] in
---let foo = eqPaths2 g 1 10 [2,4] in
+utest eqPaths g 1 10 [2] with [[a], [d,e,a], [b,c,a]] in
+utest eqPaths g 1 1 [4] with [[a]] in
+utest eqPaths g 1 2 [4] with [[e,a], [c,a]] in
+utest eqPaths g 1 3 [4] with [[e,a], [d,e,a], [b,c,a]] in
 
 -- Chain with loops
 -- ┌─────┐   c
@@ -461,43 +384,8 @@ let g = addEdges
         [(3,3,c),(2,2,b),(3,2,a),(2,1,d)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 2 with [[a, d]] in
-utest eqPaths g 1 3 with [[a, d]] in
-
--- Long cycle
---             ┌─────┐
---             │  1  │
---             └─────┘
---               │
---               │ a
---               ▼
--- ┌───┐  h   ┌───────────────────┐
--- │ 7 │ ◀──── │         3         │
--- └───┘       └───────────────────┘
---               │      ▲      ▲
---               │ d   │ g   │ b
---               ▼      │      │
---             ┌─────┐  │    ┌─────┐
---             │  4  │  │    │  2  │
---             └─────┘  │    └─────┘
---               │      │
---               │ e   │
---               ▼      │
---             ┌─────┐  │
---             │  5  │  │
---             └─────┘  │
---               │      │
---               │ f   │
---               ▼      │
---             ┌─────┐  │
---             │  6  │ ─┘
---             └─────┘
-let g = addEdges
-        (fromList [1,2,3,4,5,6,7])
-        [(1,3,a), (2,3,b), (3,4,d), (4,5,e), (5,6,f), (6,3,g), (3,7,h)] in
--- let _ = digraphPrintDot g int2string (lam x. x) in
-
---utest samePaths eqedge (eqPaths g 7 2) [[g, h], [b, h], [a, h]] with true in
---utest samePaths eqedge (eqPaths g 7 10) [[e, f, g, h], [b, h], [a, h]] with true in
+utest eqPaths g 1 3 [3] with [[a,d]] in
+utest eqPaths g 1 3 [2,3] with [[a,d],[d]] in
+utest eqPaths g 1 3 [1,2,3] with [[a,d],[d],[]] in
 
 ()

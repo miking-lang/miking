@@ -501,7 +501,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                let hole = match t.1 with LTmHole h then h else error "Internal error" in
                let depth = match hole.depth with TmConst {val = CInt n} then n.val
                            else error "Depth must be a constant integer" in
-               let allPaths = eqPaths2 g fun depth publicFns in
+               let allPaths = eqPaths g fun depth publicFns in
                let idPathValTriples = map (lam path. (hole.id, path, hole.startGuess)) allPaths
                in concat acc idPathValTriples)
            [] functionIDPairs
@@ -532,7 +532,7 @@ mexpr
 use TestLang in
 
 -- Enable/disable printing
-let printEnabled = true in
+let printEnabled = false in
 let print = if printEnabled then print else lam x. x in
 
 let ctx = {env = []} in
