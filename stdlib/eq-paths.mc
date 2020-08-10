@@ -10,70 +10,59 @@ include "regex.mc"
 -- Output: the set of equivalence paths ending in v. The lengths of the
 -- paths are at most d.
 
--- It's really a graph algorithm, but very specific, and the test cases
--- takes lots of space, so it's currently in a separate file from digraph.mc.
-
-let rpprint = regExPprint (lam x. x)
-
-let callGraph2DFA = lam g. lam sStates. lam aState.
-  let gRev = digraphReverse g in
-  -- Reversed graph: start states are accept states and accept state is start state
-  let dfa = dfaFromDigraph gRev aState sStates in
-  let re = regexFromDFA dfa in
-  re
-
--- Expand the regular expression as far as possible, but at most to length d
--- Kleene closures are taken at most once
+-- Expand the regular expression as far as possible, at most to length d
+-- Kleene closures are walked at most once
 -- TODO: Set #laps in Kleene closures as a parameter
 let regExpand: (a -> a -> bool) -> RegEx -> Int -> [[a]] =
+  -- Marker for finished expansion
+  con ExpandEnd in
+  -- Check if path is marked as finished
+  let isFinished = lam path.
+    match path with h ++ [ExpandEnd ()] then true
+    else false
+  in
+  -- Actual expansion
   lam eqsym. lam r. lam d.
-  -- RegEx -> Int -> [Sym] -> [[Sym]]
-  recursive let expand: RegEx -> Int -> [a] -> [[a]] =
-    lam r. lam d. lam cur. lam acc.
-      -- Hack: check for terminal T
-      --match cur with h ++ ['T'] then cons h acc else
-      match cur with h ++ ['T'] then cons cur acc else
-      match d with 0 then cons cur acc else
+    recursive let expand: RegEx -> Int -> [a] -> [[a]] =
+      lam r. lam d. lam cur. lam acc.
+        match isFinished cur with true then cons cur acc else
+        match d with 0 then cons cur acc else
+        match r with Empty () then acc else
+        match r with Epsilon () then cons cur acc else
+        match r with Symbol s then cons (snoc cur s) acc else
+        match r with Concat (r1, r2) then
+          let left = expand r1 d [] [] in
+          foldl (lam a. lam l.
+                   let len = length l in
+                   let newCur = concat cur l in
+                   expand r2 (subi d len) newCur a)
+                acc left
+        else
+        match r with Union (r1, r2) then
+          let left = expand r1 d cur acc in
+          expand r2 d cur left
+        else
+        -- Ignore self loops
+        match r with Kleene (Symbol s) then
+          cons cur acc
+        else
+        -- Walk the loop 0 or 1 times
+        match r with Kleene w then
+          let zeroLaps = cur in
+          let oneLap = expand w d cur acc in
+          -- Mark one-laps with a end marker
+          let oneLap = map (lam x. snoc x (ExpandEnd ())) oneLap in
+          cons zeroLaps oneLap
+        else
 
-      match r with Empty () then acc else
-      match r with Epsilon () then cons cur acc else
-      match r with Symbol s then cons (snoc cur s) acc else
-      match r with Concat (r1, r2) then
-        let left = expand r1 d [] [] in
-        let right = foldl
-                    (lam a. lam l.
-                       let len = length l in
-                       let newCur = concat cur l in
-                       expand r2 (subi d len) newCur a)
-                    acc left
-        in
-        right
-      else
-      match r with Union (r1, r2) then
-        let left = expand r1 d cur acc in
-        expand r2 d cur left
-      else
-      -- Ignore self loops
-      match r with Kleene (Symbol s) then
-        cons cur acc
-      else
-      -- Walk the loop 0 or 1 times
-      match r with Kleene w then
-        let zeroLaps = cur in
-        let oneLap = expand w d cur acc in
-        -- Hack: mark one-laps with a terminal symbol
-        let oneLap = map (lam x. snoc x 'T') oneLap in
-        cons zeroLaps oneLap
-      else
-
-      error "Unknown RegEx in expand"
-  in
+        error "Unknown RegEx in expand"
+    in
   let expansion = expand r d [] [] in
-  -- Remove trailing terminals
-  recursive let trimTerminals = lam seq.
-    match seq with (h ++ ['T']) then trimTerminals h else seq
+  -- Remove trailing end markers
+  recursive let trim = lam path.
+    match path with (h ++ [ExpandEnd ()]) then trim h else path
   in
-  let trimmedPaths = map trimTerminals expansion in
+  let trimmedPaths = map trim expansion in
   -- Equality function for paths
   let eq = lam p1. lam p2.
     and (eqi (length p1) (length p2))
@@ -86,38 +75,39 @@ let regExpandChar = regExpand eqchar
 utest regExpandChar (Empty ()) 1 with []
 utest regExpandChar (Epsilon ()) 1 with [[]]
 utest regExpandChar (Symbol 'a') 1 with [['a']]
+
 utest regExpandChar (Concat (Symbol 'a', Symbol 'b')) 2 with [['a', 'b']]
 utest regExpandChar (Concat (Symbol 'a', Symbol 'b')) 1 with [['a']]
+
 utest regExpandChar (Concat (Symbol 'a', Concat (Symbol 'b', Symbol 'c'))) 1 with [['a']]
 utest regExpandChar (Concat (Symbol 'a', Concat (Symbol 'b', Symbol 'c'))) 2 with [['a','b']]
 utest regExpandChar (Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c')) 2 with [['a','b']]
 utest regExpandChar (Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c')) 3 with [['a','b','c']]
+
 utest regExpandChar (Kleene (Symbol 'a')) 1 with [[]]
 utest regExpandChar (Concat (Kleene (Symbol 'a'), Symbol 'b')) 1 with [['b']]
 utest regExpandChar (Concat (Kleene (Symbol 'a'), Symbol 'b')) 2 with [['b']]
 utest regExpandChar (Kleene (Concat (Symbol 'a', Symbol 'b'))) 5 with [[], ['a','b']]
--- (ab)*c -> c,Char ab
 utest regExpandChar (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 3 with [['a','b'], ['c']]
 utest regExpandChar (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c')) 2 with [['a','b'], ['c']]
 
-utest regExpandChar (Union (Epsilon (), Symbol 'a')) 1 with [['a'], []]
-utest regExpandChar (Union (Symbol 'a', Symbol 'b')) 1 with [['b'], ['a']]
-utest regExpandChar (Union (Concat (Kleene (Concat (Symbol 'a', Symbol 'b')), Symbol 'c'),
-                        Concat (Concat (Symbol 'a', Symbol 'b'), Symbol 'c'))) 3 with [['a','b','c'], ['a','b'], ['c']]
-utest regExpandChar (Kleene (Concat (Symbol 'a', Symbol 'b'))) 2 with [[], ['a', 'b']]
-utest regExpandChar (Kleene ((Kleene (Concat (Symbol 'a', Symbol 'b'))))) 2 with [[], ['a', 'b']]
-
 let eqPaths2 = lam g. lam v. lam d. lam sStates.
-  let re = callGraph2DFA g sStates v in
---  let _ = regExPprint show_char re in
+  -- Compute a reversed regular expression from the call graph
+  let callGraph2RegEx = lam g. lam sStates. lam aState.
+    let gRev = digraphReverse g in
+    let dfa = dfaFromDigraph gRev aState sStates in
+    regexFromDFA dfa
+  in
+  let re = callGraph2RegEx g sStates v in
+  -- Expand regex into paths
   let paths = regExpand (digraphEql g) re d in
-  -- Equality function for paths
+  -- Define equality function for paths
   let eq = lam p1. lam p2.
              and (eqi (length p1) (length p2))
                  (all (lam t. (digraphEql g) t.0 t.1) (zipWith (lam e1. lam e2. (e1, e2)) p1 p2)) in
   -- Remove duplicate paths
   let upaths = distinct eq paths in
-  -- Reverse paths, making v the end path
+  -- Reverse paths, making v the end node
   map (lam p. reverse p) upaths
 
 -- Complexity: O(|V|^2), as for each node, we potentially visit every other
@@ -147,6 +137,7 @@ let eqPaths = lam g. lam v. lam d.
       foldl concat [] paths
   in
   traverse v [] [] d
+
 
 mexpr
 -- To construct test graphs
@@ -323,9 +314,6 @@ utest eqPaths2 g 1 1 [2] with [['a']] in
 utest eqPaths2 g 1 2 [2] with [['b','a'],['a']] in
 utest eqPaths2 g 1 2 [1,2] with [['b','a'],['a'],[]] in
 
-let foo = callGraph2DFA g [2] 1 in
---utest foo with [] in
-
 -- Mutual recursion again
 -- ┌─────┐
 -- │  1  │
@@ -365,10 +353,10 @@ utest eq (eqPaths2 g 2 3 [1,2,3]) [[b,c], [a], [], [c]] with true in
 -- │      │ b
 -- │      ▼
 -- │    ┌─────┐
--- │ c │  2  │ ◀┐
+-- │  c │  2  │ ◀┐
 -- │    └─────┘  │
 -- │      │      │
--- │      │ a   │ d
+-- │      │  a   │ d
 -- │      ▼      │
 -- │    ┌─────┐  │
 -- └─── │  1  │ ─┘
