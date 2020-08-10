@@ -96,7 +96,7 @@ let getTokenList = lam rules.
 
 utest getTokenList testRules with ["let","=","in",":ident:",":num:","+","*"]
  
-
+ 
 -- Parses a program
 let parse = lam rules. lam prod. lam str.
   ()
