@@ -67,7 +67,7 @@ recursive let simplifyS = lam reg.
   match reg with Concat(Epsilon (), r) | Concat(r, Epsilon ()) then simplifyS r else
   match reg with Union(Empty (), r) | Union(r, Empty ()) then simplifyS r else
 
-  match reg with Symbol _ then reg else
+  match reg with Empty () | Epsilon () | Symbol _ then reg else
   match reg with Union (r1, r2) then Union (simplifyS r1, simplifyS r2) else
   match reg with Concat (r1, r2) then Concat (simplifyS r1, simplifyS r2) else
   match reg with Kleene r then Kleene (simplifyS r) else
