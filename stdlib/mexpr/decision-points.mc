@@ -349,8 +349,27 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                          (snoc_ (tail_ (var_ callCtxVar)) (var_ lblVarName)))))
     in
 
+    recursive let makeDummy = lam funName. lam tm. lam acc.
+      match tm with TmLam t then
+        TmLam {t with body=makeDummy funName t.body (cons t.ident acc)}
+      else
+        foldl (lam a. lam x. app_ a (var_ x)) (app_ (var_ funName) (var_ "callCtx")) acc
+    in
+    --utest makeDummy "foo" (lam_ "x" (None ()) (var_ "x")) [] with [] in
+    --utest makeDummy "foo" (lam_ "x" (None ()) (lam_ "y" (None ()) (var_ "x"))) with [] in
+
+    -- Extract dummy functions from the AST, replacing public functions
+    let dummies = dummyPublic publicFns makeDummy ltm in
+
+    utest dummies with [] in
+
     -- Rename public functions and create dummy functions for them
-    let transformed = handlePublic publicFns transformed in
+    let transformed = renamePublic publicFns (lam ident. strJoin "" [ident, "Pr"]) transformed in
+
+    let defDummies =
+      match dummies with [] then unit_
+      else bindall_ dummies
+    in
 
     -- Put all the pieces together
     bindall_ [defLookupTable,
@@ -358,44 +377,72 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
               defMaxDepth,
               defAddCall,
               defLookup,
+              defDummies,
               transformed]
 
-  -- Handle public functions
-  -- TODO: Bodies of lambdas
-  sem handlePublic (fs : [String]) =
+  -- Define dummy functions for public functions
+  sem dummyPublic (fs : [String]) (makeDummy : String -> Expr -> [String] -> Expr) =
+  | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
+    -- Public function?
+    let dummy =
+      if optionIsSome (find (eqstr t.ident) fs) then
+        let newName = strJoin "" [t.ident, "Pr"] in
+        let dummyBody = makeDummy newName t.body [] in
+        [TmLet {{t with body = dummyBody} with inexpr=unit_}]
+      else []
+    in concat dummy (dummyPublic fs makeDummy t.inexpr)
+
+  | TmRecLets t ->
+    let handleLet = lam le.
+      if optionIsSome (find (eqstr le.ident) fs) then
+        match le.body with TmLam lm then
+          let newName = strJoin "" [le.ident, "Pr"] in
+          let dummyBody = makeDummy newName le.body [] in
+          [{le with body=dummyBody}]
+        else error (strJoin "" ["Expected identifier ", le.ident, " to define a lambda."])
+      else []
+    in
+    let dummies = foldl (lam acc. lam b. concat acc (handleLet b)) [] t.bindings in
+    concat [TmRecLets {inexpr=unit_, bindings=dummies}] (dummyPublic fs makeDummy t.inexpr)
+
+  | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (dummyPublic fs makeDummy) tm)
+
+  -- Rename functions in fs with renaming function rf
+  sem renamePublic (fs : [String]) (rf : String -> String) =
   | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
     let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
     -- Public function?
     let newIdent =
       if optionIsSome (find (eqstr t.ident) fs) then
-        strJoin "" [t.ident, "Pr"]
+        rf t.ident
       else
         t.ident
     in TmLet {{{t with ident = newIdent}
-                with body = handlePublic fs t.body}
-                with inexpr = handlePublic fs t.inexpr}
+                with body = renamePublic fs rf t.body}
+                with inexpr = renamePublic fs rf t.inexpr}
 
   | TmRecLets t ->
     let handleLet = lam le.
       -- Defines a public function
       if optionIsSome (find (eqstr le.ident) fs) then
         match le.body with TmLam lm then
-          let newIdent = strJoin "" [le.ident, "Pr"] in
-          let newBody = handlePublic fs le.body in
+          let newIdent = rf le.ident in
+          let newBody = renamePublic fs rf le.body in
           {{le with ident=newIdent} with body=newBody}
         else
           error (strJoin "" ["Identifier ", le.ident, " expected to refer to a function."])
       else
         le
      in TmRecLets {{t with bindings = map handleLet t.bindings}
-                    with inexpr = handlePublic fs t.inexpr}
+                    with inexpr = renamePublic fs rf t.inexpr}
 
   | TmVar v ->
     if optionIsSome (find (eqstr v.ident) fs) then
-      TmVar {v with ident = (strJoin "" [v.ident, "Pr"])}
+      TmVar {v with ident = rf v.ident}
     else TmVar v
 
-  | tm -> smap_Expr_Expr (handlePublic fs) tm
+  | tm -> smap_Expr_Expr (renamePublic fs rf) tm
 
   -- Do some transformations (see paper for example)
   sem transform2 (fs : [String]) (prev : String) =
@@ -945,7 +992,7 @@ let _ = print "\nAST from paper\n" in
 let _ = pprint ast in
 
 let _ = print "\nTransformed AST from paper\n" in
-let tast = transform ["foo"] ast in
+let tast = transform ["foo", "bar"] ast in
 let _ = pprint tast in
 
 -- Takes ~90 s to evaluate
