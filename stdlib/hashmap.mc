@@ -193,6 +193,7 @@ recursive let populate = lam hm. lam i.
     hm
   else
     let key = cons 'a' (int2string i) in
+    utest hashmapLookupOpt key hm with None () in
     populate (hashmapInsert key i hm)
              (addi i 1)
 in
@@ -215,8 +216,9 @@ recursive let removeall = lam i. lam hm.
     hm
   else
     let key = cons 'a' (int2string i) in
-    removeall (addi i 1)
-              (hashmapRemove key hm)
+    let newHm = hashmapRemove key hm in
+    utest hashmapLookupOpt key newHm with None () in
+    removeall (addi i 1) newHm
 in
 let m = removeall 0 m in
 
