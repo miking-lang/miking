@@ -63,8 +63,8 @@ let testRules = [
 
 
 -- Functions for eating white space and comments (WSAC).
--- Returns a tuple where the first element is the remaining
--- string and the second element is the eaten WASC
+-- Returns a record {str:string, wsac:string} where 'str'
+-- is the remaining string, and 'wsac' is the eaten WASC
 let eatWSAC = lam str.
   recursive
   let eatWhitespace = lam x. lam acc.
@@ -72,17 +72,17 @@ let eatWSAC = lam str.
     match x with "\n" ++ xs then eatWhitespace xs (snoc acc '\n') else
     match x with "\t" ++ xs then eatWhitespace xs (snoc acc '\t') else
     match x with "--" ++ xs then eatLineComment xs (concat acc "--") else
-    (x,acc)
+    {str=x,wsac=acc}
   let eatLineComment = lam x. lam acc.
     match x with "\n" ++ xs then eatWhitespace xs (snoc acc '\n') else
     match x with [x] ++ xs then eatLineComment xs (snoc acc x) else
-    (x,acc)
+    {str=x,wsac=acc}
   in eatWhitespace str []
 
-utest eatWSAC "foo" with ("foo","")
-utest eatWSAC " \n bar foo" with ("bar foo"," \n ")
-utest eatWSAC "   -- comment\n  foo" with ("foo","   -- comment\n  ")
-utest eatWSAC " -- foo " with (""," -- foo ")
+utest eatWSAC "foo" with {str="foo",wsac=""}
+utest eatWSAC " \n bar foo" with {str="bar foo",wsac=" \n "}
+utest eatWSAC "   -- comment\n  foo" with {str="foo",wsac="   -- comment\n  "}
+utest eatWSAC " -- foo " with {str="",wsac=" -- foo "}
 
 -- Returns a list of unique tokens. The index in this list will be used
 -- as unqiue symbols when matching tokens in the future.
@@ -95,8 +95,11 @@ let getTokenList = lam rules.
     ) "" rules
 
 utest getTokenList testRules with ["let","=","in",":ident:",":num:","+","*"]
- 
- 
+  
+--let getToken = lam tokenList. lam str.
+  
+
+
 -- Parses a program
 let parse = lam rules. lam prod. lam str.
   ()
