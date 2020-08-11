@@ -317,10 +317,16 @@ and print_tm' fmt t = match t with
 
   | TmConst(_,c) -> print_const fmt c
 
-  | TmSeq(_,tms) ->
-    let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
-    let inner = List.map print (Mseq.to_list tms) in
-    fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
+  | TmSeq(fi,tms) ->
+    begin
+      try
+        fprintf fmt "\"%s\"" (string_of_ustring (tmseq2ustring fi tms))
+      with
+      | _ ->
+        let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
+        let inner = List.map print (Mseq.to_list tms) in
+        fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
+    end
 
   | TmRecord(_,r) ->
     begin
