@@ -7,9 +7,6 @@ include "char.mc"
 include "string.mc"
 
 
-type Rule
-con T  : (String) -> Rule         -- Terminal node
-con NT : (String,String) -> Rule  -- Nonterminal node
 
 
 -- In this first draft version, "Ident" and "Num" are built in special non-term
@@ -44,6 +41,23 @@ recursive
     let r7 = ignore r6.0 "" in
     r7.0
 end
+
+
+type NTId = Int         -- non terminal ID
+type TId = Int          -- terminal ID
+type ProdName = String   -- Production name
+
+type PSymbol
+con T  : {name:String, regex:String} -> PSymbol         -- Terminal node
+con NT : (String,String) -> PSymbol  -- Nonterminal node
+
+
+type ParserState = {
+  tokens: [String],        -- The index is the token symbol.
+  nonTerminals: [String],  -- The index is the symbol for the non terminal
+  productions: [(NTSym,[(ProdName)])] -- Associate map from non
+
+}
 
 
 let testRules = [
@@ -163,7 +177,6 @@ utest getToken _rules " _foo12 more" with
   {wsac=" ", tok=_tokId ":ident:", val="_foo12", remstr=" more"}
 utest getToken _rules "  " with
   {wsac="  ", tok=negi 1, val="", remstr=""}
-
 
 
 mexpr
