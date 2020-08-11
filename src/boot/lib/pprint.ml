@@ -320,7 +320,10 @@ and print_tm' fmt t = match t with
   | TmSeq(fi,tms) ->
     begin
       try
-        fprintf fmt "\"%s\"" (string_of_ustring (tmseq2ustring fi tms))
+        tmseq2ustring fi tms
+        |> string_of_ustring
+        |> String.escaped
+        |> fprintf fmt "\"%s\""
       with
       | _ ->
         let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
