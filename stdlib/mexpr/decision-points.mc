@@ -211,7 +211,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
         match tm with TmLam t then
           TmLam {t with body=work t.body (cons t.ident acc)}
         else
-          foldl (lam a. lam x. app_ a (var_ x)) (app_ (var_ (renameF funName)) (var_ "callCtx")) acc
+          foldl (lam a. lam x. app_ a (var_ x)) (app_ (var_ (renameF funName)) (var_ callCtxVar)) acc
       in work tm []
     in
     -- Extract dummy functions from the AST, to replace public functions
