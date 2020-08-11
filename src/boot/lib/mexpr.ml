@@ -64,6 +64,7 @@ let builtin =
    ("error",f(Cerror));
    ("exit",f(Cexit));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
+   ("randInt", f(CrandInt));
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -153,6 +154,8 @@ let arity = function
   | CPy v -> Pyffi.arity v
   (* External functions TODO: Should not be bart of core language *)
   | CExt v            -> Ext.arity v
+  (* MCore intrinsic: random numbers *)
+  | CrandInt          -> 1
 
 
 (* API for generating unique symbol ids *)
@@ -160,6 +163,11 @@ let symid = ref 0
 let gen_symid _ =
   symid := !symid + 1;
   !symid
+
+(* Random number generation *)
+let rand_int bound =
+  Random.self_init ();
+  Random.int bound
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ Ustring.to_utf8
@@ -379,6 +387,10 @@ let delta eval env fi c v  =
 
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)
     | Creverse,_ -> fail_constapp fi
+
+    (* MCore intrinsic: random numbers *)
+    | CrandInt, TmConst(fi, CInt(v)) -> TmConst(fi, CInt(rand_int v))
+    | CrandInt,_ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
