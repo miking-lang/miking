@@ -10,8 +10,6 @@ include "math.mc"
 include "option.mc"
 include "string.mc"
 
-let hashmapDefaultBucketCount = 100
-
 -- The base type of a HashMap object.
 --   k: Polymorphic key type
 --   v: Polymorphic value type
@@ -22,12 +20,16 @@ type HashMap = {
   hashfn : k -> Int
 }
 
+-- Private definitions
+let _hashmapDefaultBucketCount = 100
+let _hashmapBucketIdx = lam hash. lam hm. modi (absi hash) (length hm.buckets)
+
 
 -- Returns an empty hashmap with a default number of buckets.
 --   eq: A function that specifies equalities between keys in the hashmap.
 --   hashfn: A function for computing the hash of a key value.
 let hashmapEmpty = lam eq. lam hashfn.
-  {buckets = makeSeq hashmapDefaultBucketCount [],
+  {buckets = makeSeq _hashmapDefaultBucketCount [],
    nelems = 0,
    eq = eq,
    hashfn = hashfn}
@@ -52,7 +54,7 @@ let hashmapStrEmpty =
 --   The insertion uses a recursion which is not tail-recursive.
 let hashmapInsert = lam key. lam value. lam hm.
   let hash = hm.hashfn key in
-  let idx = modi (absi hash) (length hm.buckets) in
+  let idx = _hashmapBucketIdx hash hm in
   let bucket = get hm.buckets idx in
   let newEntry = {hash = hash, key = key, value = value} in
   recursive let inserter = lam seq.
@@ -79,7 +81,7 @@ let hashmapInsert = lam key. lam value. lam hm.
 --   The removal uses a recursion which is not tail-recursive.
 let hashmapRemove = lam key. lam hm.
   let hash = hm.hashfn key in
-  let idx = modi (absi hash) (length hm.buckets) in
+  let idx = _hashmapBucketIdx hash hm in
   let bucket = get hm.buckets idx in
   recursive let remover = lam seq.
     if null seq then
@@ -103,7 +105,7 @@ let hashmapRemove = lam key. lam hm.
 --   hm: The hashmap to lookup from.
 let hashmapLookupOpt = lam key. lam hm.
   let hash = hm.hashfn key in
-  let idx = modi (absi hash) (length hm.buckets) in
+  let idx = _hashmapBucketIdx hash hm in
   recursive let finder = lam seq.
     if null seq then
       None ()
@@ -186,7 +188,7 @@ utest hashmapLookupOpt "" m with Some ("ddd") in
 utest hashmapLookup "" m with "ddd" in
 
 -- Test with collisions
-let n = addi hashmapDefaultBucketCount 10 in
+let n = addi _hashmapDefaultBucketCount 10 in
 
 recursive let populate = lam hm. lam i.
   if geqi i n then
