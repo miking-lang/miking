@@ -10,6 +10,7 @@ include "regex.mc"
 -- Kleene closures are walked at most once
 -- TODO: Set #laps in Kleene closures as a parameter
 let regExpand: (a -> a -> bool) -> RegEx -> Int -> [[a]] =
+  lam eqsym. lam r. lam d.
   -- Marker for finished expansion
   con ExpandEnd in
   -- Check if path is marked as finished
@@ -18,40 +19,37 @@ let regExpand: (a -> a -> bool) -> RegEx -> Int -> [[a]] =
     else false
   in
   -- Actual expansion
-  lam eqsym. lam r. lam d.
-    recursive let expand: RegEx -> Int -> [a] -> [[a]] =
-      lam r. lam d. lam cur. lam acc.
-        match isFinished cur with true then cons cur acc else
-        match d with 0 then cons cur acc else
-        match r with Empty () then acc else
-        match r with Epsilon () then cons cur acc else
-        match r with Symbol s then cons (snoc cur s) acc else
-        match r with Concat (r1, r2) then
-          let left = expand r1 d [] [] in
-          foldl (lam a. lam l.
-                   let len = length l in
-                   let newCur = concat cur l in
-                   expand r2 (subi d len) newCur a)
-                acc left
-        else
-        match r with Union (r1, r2) then
-          let left = expand r1 d cur acc in
-          expand r2 d cur left
-        else
-        -- Ignore self loops
-        match r with Kleene (Symbol s) then
-          cons cur acc
-        else
-        -- Walk the loop 0 or 1 times
-        match r with Kleene w then
-          let zeroLaps = cur in
-          let oneLap = expand w d cur acc in
-          -- Mark one-laps with a end marker
-          let oneLap = map (lam x. snoc x (ExpandEnd ())) oneLap in
-          cons zeroLaps oneLap
-        else
-
-        error "Unknown RegEx in expand"
+  recursive let expand: RegEx -> Int -> [a] -> [[a]] =
+    lam r. lam d. lam cur. lam acc.
+      match isFinished cur with true then cons cur acc else
+      match d with 0 then cons cur acc else
+      match r with Empty () then acc else
+      match r with Epsilon () then cons cur acc else
+      match r with Symbol s then cons (snoc cur s) acc else
+      match r with Concat (r1, r2) then
+        let left = expand r1 d [] [] in
+        foldl (lam a. lam l.
+                 let len = length l in
+                 let newCur = concat cur l in
+                 expand r2 (subi d len) newCur a)
+              acc left
+      else
+      match r with Union (r1, r2) then
+        let left = expand r1 d cur acc in
+        expand r2 d cur left
+      else
+      -- Ignore self loops
+      match r with Kleene (Symbol s) then
+        cons cur acc
+      else
+      -- Walk the loop 0 or 1 times
+      match r with Kleene w then
+        let zeroLaps = cur in
+        let oneLap = expand w d cur acc in
+        -- Mark one-laps with a end marker
+        let oneLap = map (lam x. snoc x (ExpandEnd ())) oneLap in
+        cons zeroLaps oneLap
+      else error "Unknown RegEx in expand"
     in
   let expansion = expand r d [] [] in
   -- Remove trailing end markers
