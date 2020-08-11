@@ -10,18 +10,32 @@ type RegEx
   con Concat  : (RegEx, RegEx) -> RegEx
   con Kleene  : (RegEx)        -> RegEx
 
+let prec = lam reg.
+  match reg with Empty () then 2 else
+  match reg with Epsilon () then 2 else
+  match reg with Symbol _ then 2 else
+  match reg with Union _ then 1 else
+  match reg with Concat _ then 1 else
+  match reg with Kleene _ then 1 else
+  error "Unkown regex in prec"
+
 let regEx2str = lam sym2str. lam reg.
-  recursive let pprint = lam reg.
-    match reg with Epsilon () then "(eps)" else
-    match reg with Empty () then "(empty)" else
-    match reg with Symbol (a) then sym2str a else
-    match reg with Union (r1, r2) then
-      strJoin "" ["(", pprint r1, ")|(", pprint r2, ")"] else
-    match reg with Concat (r1, r2) then
-      strJoin "" ["(", pprint r1, ") (", pprint r2, ")"] else
-    match reg with Kleene r then
-      strJoin "" ["(", pprint r, ")*"] else
-    error "Not a regExPprint of a RegEx"
+  recursive
+    let enclose = lam parent. lam child.
+      if leqi (prec child) (prec parent) then (strJoin "" ["(", pprint child, ")"])
+      else pprint child
+
+    let pprint = lam reg.
+      match reg with Epsilon () then "(eps)" else
+      match reg with Empty () then "(empty)" else
+      match reg with Symbol (a) then sym2str a else
+      match reg with Union (r1, r2) then
+        strJoin "" [enclose reg r1, "|", enclose reg r2] else
+      match reg with Concat (r1, r2) then
+        strJoin "" [enclose reg r1, " ", enclose reg r2] else
+      match reg with Kleene r then
+        strJoin "" [enclose reg r, "*"] else
+      error "Not a regExPprint of a RegEx"
   in
   pprint reg
 
@@ -43,7 +57,6 @@ let eqr = lam eqs. lam re1. lam re2.
       (match re2 with Concat (w1, w2) then and (eqrAux r1 w1) (eqrAux r2 w2) else false)
     else
     match re1 with Kleene r then (match re2 with Kleene w then eqrAux r w else false) else
-    utest re1 with [] in
     error ("Not eqr of a RegEx")
 in eqrAux re1 re2
 
@@ -54,7 +67,7 @@ recursive let simplifyS = lam reg.
   match reg with Concat(Epsilon (), r) | Concat(r, Epsilon ()) then simplifyS r else
   match reg with Union(Empty (), r) | Union(r, Empty ()) then simplifyS r else
 
-  match reg with Symbol _ then reg else
+  match reg with Empty () | Epsilon () | Symbol _ then reg else
   match reg with Union (r1, r2) then Union (simplifyS r1, simplifyS r2) else
   match reg with Concat (r1, r2) then Concat (simplifyS r1, simplifyS r2) else
   match reg with Kleene r then Kleene (simplifyS r) else
@@ -120,6 +133,9 @@ let regexFromDFA = lam dfa.
     -- Compute transitions to add
     let inStates = nfaInStates s dfa in
     let outStates = nfaOutStates s dfa in
+    -- Filter out s from inStates and outStates
+    let inStates = filter (lam i. not ((nfaGetEqv dfa) s i)) inStates in
+    let outStates = filter (lam o. not ((nfaGetEqv dfa) s o)) outStates in
     let addTrans =
       foldl (lam acc. lam i.
                let newTrans = map (lam o. replaceTrans dfa i s o) outStates in
@@ -142,7 +158,8 @@ let regexFromDFA = lam dfa.
     let newStates = filter (lam st. not ((nfaGetEqv dfa) s st)) (nfaStates dfa) in
     let newTrans = concat keepTrans addTrans in
     -- Create a new dfa where s has been eliminated
-    dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)
+    let newDFA = dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)in
+    newDFA
   in
 
   -- Extract regex from canonical 1-state or 2-state DFA
@@ -203,7 +220,9 @@ let regexFromDFA = lam dfa.
     let finalDFA = foldl (lam accDFA. lam s. eliminate s accDFA)
                    dfa
                    toEliminate
-    in regExFromGeneric finalDFA
+    in
+    let finalRE = regExFromGeneric finalDFA in
+    finalRE
   in
 
   -- ** Actual Algorithm **
@@ -366,4 +385,31 @@ let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
 -- (((l2 | l4 | l5) l3)*) | ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Union (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5), Symbol l3)),
                                    Concat (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),Symbol l3)),Symbol l1)) in
+
+-- ┌───────┐  start   ┌───┐  a    ┌─────┐  c    ┌───┐
+-- │ start │ ───────▶ │ 1 │ ────▶ │     │ ────▶ │ 3 │
+-- └───────┘          └───┘       │     │       └───┘
+--                                │     │  b      │
+--                                │  2  │ ◀───────┘
+--                                │     │
+--                                │     │
+--                                │     │ ◀┐
+--                                └─────┘  │
+--                                  │      │
+--                                  │ e    │ d
+--                                  ▼      │
+--                                ╔═════╗  │
+--                                ║  4  ║ ─┘
+--                                ╚═════╝
+--
+let acceptStates = [4] in
+let startState = 1 in
+let states = [1,2,3,4] in
+let transitions = [(1,2,"a"),(2,3,"c"),(2,4,"e"),(3,2,"b"),(4,2,"d")] in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+
+-- Short form: a(cb|ed)*e
+-- Actual return: (ae | (ac(bc)*be)) (de | (dc (bc)* be))*
+utest regexFromDFA dfa with  Concat (Union (Concat (Symbol "a",Symbol "e"),Concat (Concat (Symbol "a",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))),Kleene (Union (Concat (Symbol "d",Symbol "e"),Concat (Concat (Symbol "d",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))))) in
+
 ()

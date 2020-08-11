@@ -27,9 +27,16 @@ type Digraph = { adj : [(a,[(a,b)])],
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let digraphEmpty = lam eqv. lam eql. {adj = [], eqv = eqv, eql = eql}
 
--- Access vertices and edges
+-- Get the vertices of the graph g.
 let digraphVertices = lam g. (map (lam tup. tup.0) g.adj)
 
+-- Get equivalence function for vertices.
+let digraphEqv = lam g. g.eqv
+
+-- Get equivalence function for labels.
+let digraphEql = lam g. g.eql
+
+-- Get the edges of the graph g.
 let digraphEdges = lam g.
     foldl concat []
       (map
@@ -39,65 +46,82 @@ let digraphEdges = lam g.
            (map (lam tup. (v, tup.0, tup.1)) edgelist))
        g.adj)
 
+-- Get the outgoing edges from vertex v in graph g.
 let digraphEdgesFrom = lam v. lam g.
                        map (lam tup. (v, tup.0, tup.1)) (mapLookup g.eqv v g.adj)
 
+-- Get the incoming edges to vertex v in graph g.
 let digraphEdgesTo = lam v. lam g.
                      let allEdges = digraphEdges g in
                      filter (lam tup. g.eqv v tup.1) allEdges
 
--- Get all edges from v1 to v2
+-- Get all edges from v1 to v2 in graph g.
 let digraphEdgesBetween = lam v1. lam v2. lam g.
   let fromV1 = digraphEdgesFrom v1 g in
   filter (lam tup. g.eqv v2 tup.1) fromV1
 
+-- Get all labels between v1 and v2 in graph g.
 let digraphLabels = lam v1. lam v2. lam g.
     let from_v1_to_v2 = filter (lam tup. g.eqv tup.1 v2) (digraphEdgesFrom v1 g) in
     map (lam tup. tup.2) from_v1_to_v2
 
+-- Get the number of vertices in graph g.
 let digraphCountVertices = lam g. length g.adj
 
+-- Get the number of edges in graph g.
 let digraphCountEdges = lam g. length (digraphEdges g)
 
+-- Check whether g has vertex v.
 let digraphHasVertex = lam v. lam g. any (g.eqv v) (digraphVertices g)
 
+-- Check whether g has all the vertices vs.
 let digraphHasVertices = lam vs. lam g.
                          all (lam b. b) (map (lam v. digraphHasVertex v g) vs)
 
--- Edges e1 and e2 equal in graph g.
+-- Check whether edges e1 and e2 are equal in graph g.
 let digraphEdgeEq = lam g. lam e1. lam e2.
                     and (and (g.eqv e1.0 e2.0)
                              (g.eqv e1.1 e2.1))
                         (g.eql e1.2 e2.2)
 
--- Graph g contains edges es.
+-- Check whether graph g has all the edges in es.
 let digraphHasEdges = lam es. lam g.
                       setIsSubsetEq (digraphEdgeEq g) es (digraphEdges g)
 
--- Get successor nodes of v
+-- Get successor nodes of v.
 let digraphSuccessors = lam v. lam g.
   distinct g.eqv (map (lam tup. tup.1) (digraphEdgesFrom v g))
 
--- Get predecessor nodes of v
+-- Get predecessor nodes of v.
 let digraphPredeccessors = lam v. lam g.
   distinct g.eqv (map (lam tup. tup.0) (digraphEdgesTo v g))
 
+-- Check whether vertex v1 is a successor of vertex v2 in graph g.
 let digraphIsSuccessor = lam v1. lam v2. lam g.
   any (g.eqv v1) (digraphSuccessors v2 g)
 
--- Add vertices and edges
+-- Add vertex v to graph g if it doesn't already exist in g.
+-- If v exists in g and check is true, an error is thrown.
+-- If v exist in g and check is false, g stays unchanged.
 let digraphAddVertexCheck = lam v. lam g. lam check.
   if digraphHasVertex v g then
     if check then error "vertex already exists" else g
   else
     {adj = snoc g.adj (v,[]), eqv = g.eqv, eql = g.eql}
 
+-- Add a vertex to graph g. Throws an error if v already exists in g.
 let digraphAddVertex = lam v. lam g.
   digraphAddVertexCheck v g true
 
+-- Maybe add a vertex v to g. Graph stays unchanged if v already exists in g.
 let digraphMaybeAddVertex = lam v. lam g.
   digraphAddVertexCheck v g false
 
+-- Add edge e=(v1,v2,l) to graph g.
+-- If v1 or v2 do not exist in g, an error is thrown.
+-- If l exists in g and check is true, an error is thrown.
+-- If l exist in g and check is false, g stays unchanged.
+-- Otherwise, e is added to g.
 let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   if not (digraphHasVertices [v1, v2] g) then
     error "some vertices do not exist"
@@ -106,16 +130,32 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else
     {g with adj = mapUpdate g.eqv v1 (lam es. snoc es (v2, l)) g.adj}
 
+-- Add edge e=(v1,v2,l) to g. Throws an error if l already exists in g.
 let digraphAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdgeCheckLabel v1 v2 l g true
 
+-- Maybe add edge e=(v1,v2,l) to g. Graph stays unchanged if l already exists in g.
 let digraphMaybeAddEdge = lam v1. lam v2. lam l. lam g.
     digraphAddEdgeCheckLabel v1 v2 l g false
 
--- Union of two graphs
+-- Add a list of vertices to a graph g.
+let digraphAddVertices = lam vs. lam g.
+  foldl (lam g. lam v. digraphAddVertex v g) g vs
+
+-- Add a list of edges to a graph g.
+let digraphAddEdges = lam es. lam g.
+  foldl (lam g. lam e. digraphAddEdge e.0 e.1 e.2 g) g es
+
+-- Create the union of two graphs.
 let digraphUnion = lam g1. lam g2.
   let g3 = foldl (lam g. lam v. digraphMaybeAddVertex v g) g1 (digraphVertices g2)
   in foldl (lam g. lam tup. digraphMaybeAddEdge tup.0 tup.1 tup.2 g) g3 (digraphEdges g2)
+
+-- Reverse the direction of graph g.
+let digraphReverse = lam g.
+  let edgesReversed = map (lam e. (e.1, e.0, e.2)) (digraphEdges g) in
+  let vs = digraphVertices g in
+  digraphAddEdges edgesReversed (digraphAddVertices vs (digraphEmpty g.eqv g.eql))
 
 -- Strongly connected components of g.
 -- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
@@ -237,6 +277,12 @@ let g = digraphAddEdge 2 3 l4 (digraphAddEdge 1 3 l3 (digraphAddEdge 1 2 l2 (dig
 utest digraphEdgesBetween 1 3 g with [(1,3,l3)] in
 utest match digraphEdgesBetween 1 2 g with [(1,2,l1),(1,2,l2)] | [(1,2,l2),(1,2,l1)] then true else false with true in
 utest match digraphPredeccessors 3 g with [1,2] | [2,1] then true else false with true in
+
+let g = digraphAddEdges [(1,2,l1),(1,3,l2),(3,1,l3)] (digraphAddVertices [1,2,3] empty) in
+let gRev = digraphReverse g in
+utest digraphHasEdges [(2,1,l1),(3,1,l2),(1,3,l3)] gRev with true in
+utest digraphCountVertices gRev with 3 in
+utest digraphCountEdges gRev with 3 in
 
 let l3 = gensym () in
 let g2 = digraphAddEdge 3 2 l3 g1 in

@@ -46,6 +46,9 @@ let dfaConstr = lam s. lam trans. lam startS. lam accS. lam eqv. lam eql.
 	if(err.0) then error "There are duplicate labels for same state outgoing transition at"
 	else nfaConstr s trans startS accS eqv eql
 
+-- Creat a DFA from a Digraph
+let dfaFromDigraph = nfaFromDigraph
+
 mexpr
 let states = [0,1,2] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
