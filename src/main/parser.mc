@@ -63,7 +63,7 @@ let testRules = [
 
 
 -- Functions for eating white space and comments (WSAC).
--- Returns a record {str:string, wsac:string} where 'str'
+-- Returns a record {remstr:string, wsac:string} where 'remstr'
 -- is the remaining string, and 'wsac' is the eaten WASC
 let eatWSAC = lam str.
   recursive
@@ -72,17 +72,17 @@ let eatWSAC = lam str.
     match x with "\n" ++ xs then eatWhitespace xs (snoc acc '\n') else
     match x with "\t" ++ xs then eatWhitespace xs (snoc acc '\t') else
     match x with "--" ++ xs then eatLineComment xs (concat acc "--") else
-    {str=x,wsac=acc}
+    {remstr=x,wsac=acc}
   let eatLineComment = lam x. lam acc.
     match x with "\n" ++ xs then eatWhitespace xs (snoc acc '\n') else
     match x with [x] ++ xs then eatLineComment xs (snoc acc x) else
-    {str=x,wsac=acc}
+    {remstr=x,wsac=acc}
   in eatWhitespace str []
 
-utest eatWSAC "foo" with {str="foo",wsac=""}
-utest eatWSAC " \n bar foo" with {str="bar foo",wsac=" \n "}
-utest eatWSAC "   -- comment\n  foo" with {str="foo",wsac="   -- comment\n  "}
-utest eatWSAC " -- foo " with {str="",wsac=" -- foo "}
+utest eatWSAC "foo" with {remstr="foo",wsac=""}
+utest eatWSAC " \n bar foo" with {remstr="bar foo",wsac=" \n "}
+utest eatWSAC "   -- comment\n  foo" with {remstr="foo",wsac="   -- comment\n  "}
+utest eatWSAC " -- foo " with {remstr="",wsac=" -- foo "}
 
 -- Returns a list of unique tokens. The index in this list will be used
 -- as unqiue symbols when matching tokens in the future.
@@ -91,38 +91,81 @@ let getTokenList = lam rules.
        match e with (_,(_,lst)) then
          foldl (lam acc. lam e. match e with T(_,x)
 	                        then setInsert eqstr x acc else acc) acc lst
-       else never  
+       else never
     ) "" rules
 
 utest getTokenList testRules with ["let","=","in",":ident:",":num:","+","*"]
-  
---let getToken = lam tokenList. lam str.
-  
+
+-- Temp function before we can handle regex. Note that an identifier cannot include numbers
+-- Returns an optional record matching an identier.
+-- Some{val:string, remstr:string}
+let getIdent = lam str.
+  recursive
+  let ident = lam x. lam acc. lam first.
+    match x with [y] ++ xs then
+      if or (or (or (and (geqchar y 'A') (leqchar y 'Z'))
+                (and (geqchar y 'a') (leqchar y 'z'))) (eqchar y '_'))
+             (and (not first) (and (geqchar y '0') (leqchar y '9')))
+      then ident xs (snoc acc y) false
+      else if eqi (length acc) 0 then None() else Some{val=acc,remstr=x}
+    else if eqi (length acc) 0 then None() else Some{val=acc,remstr=[]}
+  in ident str [] true
+
+utest getIdent "foo bar" with Some{val="foo", remstr=" bar"}
+utest getIdent "12foo bar" with None()
+
+-- Temp function before we can handle regex. Get a number literal.
+-- Returns an optional record matching an identier.
+-- Some{val:string, remstr:string}
+let getNum = lam str.
+  recursive
+  let num = lam x. lam acc.
+    match x with [y] ++ xs then
+      if and (geqchar y '0') (leqchar y '9')
+      then num xs (snoc acc y)
+      else if eqi (length acc) 0 then None() else Some{val=acc,remstr=x}
+    else if eqi (length acc) 0 then None() else Some{val=acc,remstr=[]}
+  in num str []
+
+utest getNum "123 bar" with Some{val="123",remstr=" bar"}
+utest getNum "foo" with None()
 
 
--- Parses a program
-let parse = lam rules. lam prod. lam str.
-  ()
 
+-- Matches and returns the next token as record type
+-- {wsac:string, tok:int, val:string, remstr:string})
+-- If it is the end, then tok = -1.
+let getToken = lam tokenList. lam str.
+  let w = eatWSAC str in
+  if eqi (length w.remstr) 0 then {wsac=w.wsac, tok=negi 1, val="", remstr=""}
+  else match index (lam tok. isPrefix eqc tok w.remstr) tokenList with Some n then
+    let x = get tokenList n in
+    {wsac=w.wsac, tok=n, val=x, remstr=slice w.remstr (length x) (subi (length w.remstr) (length x))}
+  else
+    let tokId = lam x. optionGetOr (negi 1) (index (eqstr x) tokenList) in
+    match getIdent w.remstr with Some r then
+      {wsac=w.wsac, tok=tokId ":ident:", val=r.val, remstr=r.remstr}
+    else match getNum w.remstr with Some r then
+      {wsac=w.wsac, tok=tokId ":num:", val=r.val, remstr=r.remstr}
+    else error "Lexical error"
 
---utest parse testRules "Expr" "let x = 5 in x" with ""
-
+let _rules = getTokenList testRules
+let _tokId = lam x. optionGetOr (negi 1) (index (eqstr x) _rules)
+utest getToken _rules "  +let" with
+  {wsac="  ", tok=_tokId "+", val="+", remstr="let"}
+utest getToken _rules " let+ " with
+  {wsac=" ", tok=_tokId "let", val="let", remstr="+ "}
+utest getToken _rules "   123let+ " with
+  {wsac="   ", tok=_tokId ":num:", val="123", remstr="let+ "}
+utest getToken _rules " something+boo " with
+  {wsac=" ", tok=_tokId ":ident:", val="something", remstr="+boo "}
+utest getToken _rules " _foo12 more" with
+  {wsac=" ", tok=_tokId ":ident:", val="_foo12", remstr=" more"}
+utest getToken _rules "  " with
+  {wsac="  ", tok=negi 1, val="", remstr=""}
 
 
 
 mexpr
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ()

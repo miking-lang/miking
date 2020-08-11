@@ -161,8 +161,9 @@ recursive
     else find p (tail seq)
 end
 
-utest find (lam x. eqi x 2) [4,1,2] with Some 2
+utest find (lam x. eqi x 8) [4,1,8] with Some 8
 utest find (lam x. lti x 1) [4,1,2] with None ()
+
 
 let partition = (lam p. lam seq.
     (filter p seq, filter (lam q. if p q then false else true) seq))
