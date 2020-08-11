@@ -12,6 +12,6 @@ mexpr
 -- type: Int -> Int
 let randSeq = map (lam _. randInt 5) (makeSeq 1000 0) in
 -- With high probability all possible elements are present in the random sequence
-utest setIsSubsetEq eqi [0,1,2,3,4] randSeq with true in
+utest setEqual eqi [0,1,2,3,4] (distinct eqi randSeq) with true in
 
 ()
