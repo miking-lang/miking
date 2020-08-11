@@ -24,13 +24,13 @@ type HashMap = {
 
 
 -- Returns an empty hashmap with a default number of buckets.
---   eqArg: A function that specifies equalities between keys in the hashmap.
---   hashfnArg: A function for computing the hash of a key value.
-let hashmapEmpty = lam eqArg. lam hashfnArg.
+--   eq: A function that specifies equalities between keys in the hashmap.
+--   hashfn: A function for computing the hash of a key value.
+let hashmapEmpty = lam eq. lam hashfn.
   {buckets = makeSeq hashmapDefaultBucketCount [],
    nelems = 0,
-   eq = eqArg,
-   hashfn = hashfnArg}
+   eq = eq,
+   hashfn = hashfn}
 
 -- An empty hashmap using strings as keys
 let hashmapStrEmpty =
