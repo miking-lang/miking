@@ -8,9 +8,10 @@ include "set.mc"
 
 mexpr
 
--- 'randInt bound' generates a random number in the interval [0,bound)
+-- 'randIntU bound' generates a random number from a uniform distribution in the
+-- interval [0,bound)
 -- type: Int -> Int
-let randSeq = map (lam _. randInt 5) (makeSeq 1000 0) in
+let randSeq = map (lam _. randIntU 5) (makeSeq 1000 0) in
 -- With high probability all possible elements are present in the random sequence
 utest setEqual eqi [0,1,2,3,4] (distinct eqi randSeq) with true in
 

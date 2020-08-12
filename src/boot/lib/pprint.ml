@@ -219,7 +219,7 @@ let rec print_const fmt = function
   | Creverse    -> fprintf fmt "reverse"
 
   (* MCore intrinsic: random numbers *)
-  | CrandInt -> fprintf fmt "randInt"
+  | CrandIntU -> fprintf fmt "randIntU"
 
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"
