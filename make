@@ -55,10 +55,10 @@ runtests() {
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
-    if [[ -n $MI_TEST_PYTHON ]]; then
+    if [ -n "$MI_TEST_PYTHON" ]; then
         runtests_py
     fi
-    if [[ -n $MI_TEST_SUNDIALS ]]; then
+    if [ -n "$MI_TEST_SUNDIALS" ]; then
         runtests_ext
     fi
 }
