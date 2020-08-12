@@ -97,6 +97,7 @@ and const =
 | Creverse
 (* MCore intrinsic: random numbers *)
 | CrandIntU of int option
+| CrandSetSeed
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint

@@ -220,6 +220,7 @@ let rec print_const fmt = function
 
   (* MCore intrinsic: random numbers *)
   | CrandIntU(_) -> fprintf fmt "randIntU"
+  | CrandSetSeed -> fprintf fmt "randSetSeed"
 
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"
