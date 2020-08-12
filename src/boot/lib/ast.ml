@@ -96,7 +96,7 @@ and const =
 | CsplitAt of (tm Mseq.t) option
 | Creverse
 (* MCore intrinsic: random numbers *)
-| CrandIntU
+| CrandIntU of int option
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint

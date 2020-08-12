@@ -64,7 +64,7 @@ let builtin =
    ("error",f(Cerror));
    ("exit",f(Cexit));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
-   ("randIntU", f(CrandIntU));
+   ("randIntU", f(CrandIntU(None)));
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -155,7 +155,8 @@ let arity = function
   (* External functions TODO: Should not be part of core language *)
   | CExt v            -> Ext.arity v
   (* MCore intrinsic: random numbers *)
-  | CrandIntU         -> 1
+  | CrandIntU(None)    -> 2
+  | CrandIntU(Some(_)) -> 1
 
 
 (* API for generating unique symbol ids *)
@@ -165,9 +166,9 @@ let gen_symid _ =
   !symid
 
 (* Random number generation *)
-let rand_int bound =
+let rand_int_u lower upper =
   Random.self_init ();
-  Random.int bound
+  lower + Random.int (upper - lower)
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ Ustring.to_utf8
@@ -389,8 +390,12 @@ let delta eval env fi c v  =
     | Creverse,_ -> fail_constapp fi
 
     (* MCore intrinsic: random numbers *)
-    | CrandIntU, TmConst(fi, CInt(v)) -> TmConst(fi, CInt(rand_int v))
-    | CrandIntU,_ -> fail_constapp fi
+    | CrandIntU(None), TmConst(fi, CInt(v)) -> TmConst(fi, CrandIntU(Some(v)))
+    | CrandIntU(Some(v1)), TmConst(fi, CInt(v2)) ->
+       if v1 >= v2 then
+         raise_error fi "Lower bound to randInt must be smaller than upper bound"
+       else TmConst(fi, CInt(rand_int_u v1 v2))
+    | CrandIntU(_),_ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
