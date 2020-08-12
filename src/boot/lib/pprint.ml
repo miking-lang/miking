@@ -221,6 +221,7 @@ let rec print_const fmt = function
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"
   | Cdprint       -> fprintf fmt "dprint"
+  | CreadLine     -> fprintf fmt "readLile"
   | CreadFile     -> fprintf fmt "readFile"
   | CwriteFile(_) -> fprintf fmt "writeFile"
   | CfileExists   -> fprintf fmt "fileExists"

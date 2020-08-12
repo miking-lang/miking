@@ -98,6 +98,7 @@ and const =
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
+| CreadLine
 | CreadFile
 | CwriteFile of ustring option
 | CfileExists
