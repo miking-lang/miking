@@ -866,7 +866,7 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | [a]             | List        |
 | Unit            | None        |
 | Record          | Dict        |
-| Tuple (Record)  | Dict        |
+| Tuple (Record)  | Tuple       |
 | other           | N/A         |
 
 ##### From Python to MCore
