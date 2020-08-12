@@ -825,6 +825,8 @@ MI_TEST_PYTHON=1 make test
 
 To install for the current user, run `make install` as usual.
 
+#### Usage
+
 The following example shows how to use the intrinsics to sort a sequence using
 Python's builtin `sorted` function.
 
@@ -836,16 +838,53 @@ let y = pycall builtins "sorted" (x,)
 let x_sorted = pyconvert y
 ```
 
-Arguments are passed to the `pycall` intrinsic using tuples.
-Note that to call Python's builtin functions, you should use the
-module `builtins`. Other modules can also be imported as long as they
-are available in the Python path. `y` in the example above is a Python value,
-which can either be passed to other Python functions, or converted back to
-an MCore sequence using the `pyconvert` builtin.
+`pycall` is the main piece of the Python intrinsics: in the example above,
+it is used to call the function `sorted` from the `builtins` module, imported
+with the `pyimport` intrinsic. As the example shows, arguments are
+passed to the `pycall` intrinsic using tuples (remember that `(x,)` is a
+singleton tuple containing `x`). The result of a `pycall` (`y` in the example
+above) is a Python value, which can either be passed to other Python functions,
+or converted back to an MCore sequence using the `pyconvert` builtin.
 
-The [`miking-jupyter`](https://github.com/miking-lang/miking-jupyter)
-repo shows some additional examples using the Python intrinsics, such
-as plotting sequences with `matplotlib`.
+`pycall` can also be used to call methods of objects by passing an object
+instead of a module as the first argument. For example, the following code
+will invoke the `count` method of a list:
+
+```ocaml
+let builtins = pyimport "builtins"
+
+let pylist = pycall builtins "list" ([1,1,2],)
+let ones = pyconvert (pycall pylist "count" (1,))
+```
+
+In the examples above, we use the `builtins` module to access Python's builtins.
+Other modules can also be imported as long as they are available in the Python
+path: for instance, it is perfectly possible to import `numpy` or `matplotlib`,
+assuming that they are installed.
+
+The following example shows how a numpy `nparray` can be created and converted
+to an MCore sequence. The key here is to use numpy's `tolist` method first,
+since conversion directly from `nparray` is not supported.
+
+```ocaml
+let rnd = pyimport "numpy.random"
+
+let nparray = pycall rnd "normal" (0., 0.1, 10)
+let mc_seq = pyconvert (pycall nparray "tolist" ())
+```
+
+In the next example, we use `matplotlib` to produce a plot; this works in
+exactly the same way as in a regular Python program.
+
+```ocaml
+let plt = pyimport "matplotlib.pyplot"
+let np = pyimport "numpy"
+
+let x = pycall np "arange" (0, 4, 0.1)
+let y = pycall np "cos" (x,)
+let _ = pycall plt "plot" (x, y)
+let _ = pycall plt "show" ()
+```
 
 #### Conversion between MCore and Python
 
