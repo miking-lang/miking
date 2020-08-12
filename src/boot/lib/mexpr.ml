@@ -152,7 +152,7 @@ let arity = function
   | Ceqs(Some(_)) -> 1
   (* Python intrinsics *)
   | CPy v -> Pyffi.arity v
-  (* External functions TODO: Should not be bart of core language *)
+  (* External functions TODO: Should not be part of core language *)
   | CExt v            -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU         -> 1
