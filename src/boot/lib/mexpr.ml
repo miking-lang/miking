@@ -66,6 +66,7 @@ let builtin =
    ("exit",f(Cexit));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
    ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
+   ("wallTimeMs",f(CwallTimeMs)); ("sleepMs",f(CsleepMs));
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -137,6 +138,9 @@ let arity = function
   | Csnoc(None)       -> 2 | Csnoc(Some(_)) -> 1
   | CsplitAt(None)    -> 2 | CsplitAt(Some(_)) -> 1
   | Creverse          -> 1
+  (* MCore intrinsic: elapsed time *)
+  | CwallTimeMs       -> 1
+  | CsleepMs          -> 1
   (* MCore debug and I/O intrinsics *)
   | Cprint            -> 1
   | Cdprint           -> 1
@@ -184,6 +188,14 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ " value: "
                                          ^ Ustring.to_utf8
                                            (ustring_of_tm v))
+
+(* Get current time stamp *)
+let get_wall_time_ms _ =
+  Unix.gettimeofday () *. 1000.
+
+(* Sleep a number of ms *)
+let sleep_ms ms =
+  Thread.delay ((float_of_int ms) /. 1000.)
 
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
@@ -407,6 +419,13 @@ let delta eval env fi c v  =
 
     | CrandSetSeed,TmConst(fi,CInt(v)) -> rand_set_seed v; tmUnit
     | CrandSetSeed,_ -> fail_constapp fi
+
+    (* MCore intrinsic: time *)
+    | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CFloat(get_wall_time_ms ()))
+    | CwallTimeMs, _ -> fail_constapp fi
+
+    | CsleepMs, TmConst(fi, CInt(v)) -> sleep_ms v ; tmUnit
+    | CsleepMs, _ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->
