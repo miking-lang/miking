@@ -98,6 +98,9 @@ and const =
 (* MCore intrinsic: random numbers *)
 | CrandIntU of int option
 | CrandSetSeed
+(* MCore intrinsic: time *)
+| CwallTimeMs
+| CsleepMs
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint

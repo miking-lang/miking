@@ -12,4 +12,6 @@
  (depends
   dune
   batteries
-  linenoise))
+  linenoise
+  mtime
+  mtime.clock.os))

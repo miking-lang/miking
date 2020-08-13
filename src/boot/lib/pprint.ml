@@ -221,6 +221,9 @@ let rec print_const fmt = function
   (* MCore intrinsic: random numbers *)
   | CrandIntU(_) -> fprintf fmt "randIntU"
   | CrandSetSeed -> fprintf fmt "randSetSeed"
+  (* MCore intrinsic: elapsed time *)
+  | CwallTimeMs -> fprintf fmt "wallTimeMs"
+  | CsleepMs -> fprintf fmt "sleepMs"
 
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"

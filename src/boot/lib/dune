@@ -8,6 +8,8 @@
    batteries
    str
    linenoise
+   mtime
+   mtime.clock.os
 
    ;; Optional dependencies are used if the relevant libraries are available.
    ;; Note that this will change the result of compiling `mi` depending on
