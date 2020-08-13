@@ -153,6 +153,8 @@ containing `utest` expressions. Please see the following files:
 
 * [Symbol intrinsics](test/mexpr/symbs.mc)
 
+* [Random number generation intrinsics](test/mexpr/random.mc)
+
 Besides the intrinsic functions, the prelude includes a number of functions defined in the MCore standard library, which can be found in the folder [stdlib](stdlib/). The main file [prelude.mc](stdlib/prelude.mc) is automatically included in all `.mc` files. Note also that the prelude file includes other files, e.g., [seq.mc](stdlib/seq.mc) and [option.mc](stdlib/option.mc). For the details of these prelude functions, please see the above files.
 
 

@@ -8,11 +8,11 @@ include "set.mc"
 
 mexpr
 
--- randIntU l u : Int -> Int
--- Generates a random number from a uniform distribution in the interval [l,u).
+-- 'randIntU l u : Int -> Int'
+-- Generates a random number from a uniform distribution in the interval ['l','u').
 -- Self-initializes the random generator if not already set by randSetSeed.
 
--- randSetSeed s : Int -> ()
+-- 'randSetSeed s : Int -> Unit'
 -- Seeds the random generator. The same seeds generates the same sequence of numbers.
 
 -- Generate a sequence of random numbers
