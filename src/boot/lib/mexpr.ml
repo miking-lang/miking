@@ -65,6 +65,7 @@ let builtin =
    ("error",f(Cerror));
    ("exit",f(Cexit));
    ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
+   ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
@@ -153,8 +154,12 @@ let arity = function
   | Ceqs(Some(_)) -> 1
   (* Python intrinsics *)
   | CPy v -> Pyffi.arity v
-  (* External functions TODO: Should not be bart of core language *)
+  (* External functions TODO: Should not be part of core language *)
   | CExt v            -> Ext.arity v
+  (* MCore intrinsic: random numbers *)
+  | CrandIntU(None)    -> 2
+  | CrandIntU(Some(_)) -> 1
+  | CrandSetSeed       -> 1
 
 
 (* API for generating unique symbol ids *)
@@ -162,6 +167,16 @@ let symid = ref 0
 let gen_symid _ =
   symid := !symid + 1;
   !symid
+
+(* Random number generation *)
+let rand_is_seeded = ref false
+let rand_set_seed seed =
+  Random.init seed;
+  rand_is_seeded := true
+
+let rand_int_u lower upper =
+  if !rand_is_seeded then () else Random.self_init ();
+  lower + Random.int (upper - lower)
 
 let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
                                          ^ Ustring.to_utf8
@@ -381,6 +396,17 @@ let delta eval env fi c v  =
 
     | Creverse,TmSeq(fi,s) -> TmSeq(fi,Mseq.reverse s)
     | Creverse,_ -> fail_constapp fi
+
+    (* MCore intrinsic: random numbers *)
+    | CrandIntU(None), TmConst(fi, CInt(v)) -> TmConst(fi, CrandIntU(Some(v)))
+    | CrandIntU(Some(v1)), TmConst(fi, CInt(v2)) ->
+       if v1 >= v2 then
+         raise_error fi "Lower bound to randInt must be smaller than upper bound"
+       else TmConst(fi, CInt(rand_int_u v1 v2))
+    | CrandIntU(_),_ -> fail_constapp fi
+
+    | CrandSetSeed,TmConst(fi,CInt(v)) -> rand_set_seed v; tmUnit
+    | CrandSetSeed,_ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
     | Cprint, TmSeq(fi,lst) ->

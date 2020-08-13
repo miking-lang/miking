@@ -218,6 +218,10 @@ let rec print_const fmt = function
   | CsplitAt(_) -> fprintf fmt "splitAt"
   | Creverse    -> fprintf fmt "reverse"
 
+  (* MCore intrinsic: random numbers *)
+  | CrandIntU(_) -> fprintf fmt "randIntU"
+  | CrandSetSeed -> fprintf fmt "randSetSeed"
+
   (* MCore debug and stdio intrinsics *)
   | Cprint        -> fprintf fmt "print"
   | Cdprint       -> fprintf fmt "dprint"

@@ -95,6 +95,9 @@ and const =
 | Csnoc    of (tm Mseq.t) option
 | CsplitAt of (tm Mseq.t) option
 | Creverse
+(* MCore intrinsic: random numbers *)
+| CrandIntU of int option
+| CrandSetSeed
 (* MCore debug and I/O intrinsics *)
 | Cprint
 | Cdprint
