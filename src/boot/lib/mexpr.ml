@@ -51,6 +51,7 @@ let builtin =
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("splitAt",f(CsplitAt(None)));("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
+   ("readLine",f(CreadLine));
    ("argv",TmSeq(NoInfo,argv_prog
                         |> Mseq.of_array
                         |> Mseq.map (fun s ->
@@ -138,6 +139,7 @@ let arity = function
   (* MCore debug and I/O intrinsics *)
   | Cprint            -> 1
   | Cdprint           -> 1
+  | CreadLine         -> 1
   | CreadFile         -> 1
   | CwriteFile(None)  -> 2 | CwriteFile(Some(_)) -> 1
   | CfileExists       -> 1
@@ -387,6 +389,11 @@ let delta eval env fi c v  =
 
     | Cdprint, t ->
       !program_output (ustring_of_tm t); tmUnit
+
+    | CreadLine, TmRecord(_, r) when r = Record.empty ->
+      let line = try read_line () with End_of_file -> "" in
+      TmSeq(fi, line |> Ustring.from_utf8 |> ustring2tmseq fi)
+    | CreadLine,_ -> fail_constapp fi
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
