@@ -3,7 +3,7 @@ open Pyast
 open Printf
 
 let pprint = function
-  | PyObject(v) -> us (Py.Object.to_string v)
+  | PyObject(v) -> us (sprintf "PyObject(%s)" (Py.Object.to_string v))
   | Pyimport -> us "pyimport"
   | Pyconvert -> us "pyconvert"
   | Pycall(None,None) -> us "pycall"
