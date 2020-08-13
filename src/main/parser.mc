@@ -43,21 +43,40 @@ recursive
 end
 
 
-type NTId = Int         -- non terminal ID
-type TId = Int          -- terminal ID
-type ProdName = String   -- Production name
+
+
+
+
+
+type ProdName = Name     -- Production name
+type TName = Name        -- Terminal name
+type NTName = Name       -- Nonterminal name
 
 type PSymbol
-con T  : {name:String, regex:String} -> PSymbol         -- Terminal node
-con NT : (String,String) -> PSymbol  -- Nonterminal node
+con T  : NonTermName -> PSymbol   -- Terminal node symbol
+con NT : TermName -> PSymbol  -- Nonterminal node symbol
 
 
-type ParserState = {
-  tokens: [String],        -- The index is the token symbol.
-  nonTerminals: [String],  -- The index is the symbol for the non terminal
-  productions: [(NTSym,[(ProdName)])] -- Associate map from non
-
+type ParseState = {
+  tokens: SymTable,          -- The index is the token symbol identifier
+  nonTerminals: SymTable,    -- The index is the symbol identifier for the non terminal
+  productions: [(NonTermName,[(ProdName,[PSymbol])])] -- Associate map from non
 }
+
+-- An empty parse state
+let emptyParseState = {
+  tokens = symtableEmpty,
+  nonTerminals = symtableEmpty,
+  productions = []
+}
+
+
+
+
+let addProduction : ProdName -> NonTermName -> [PSymbol] -> ParseState -> ParseState option
+  = lam prodName. lam. ntName. lam.  lam pstate. ()
+
+
 
 
 let testRules = [
