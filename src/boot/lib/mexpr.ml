@@ -191,7 +191,7 @@ let fail_constapp f v fi = raise_error fi ("Incorrect application. function: "
 
 (* Get current time stamp *)
 let get_wall_time_ms _ =
-  Int64.to_int (Mtime.to_uint64_ns (Mtime_clock.now ())) / 1000000
+  Unix.gettimeofday () *. 1000.
 
 (* Sleep a number of ms *)
 let sleep_ms ms =
@@ -421,7 +421,7 @@ let delta eval env fi c v  =
     | CrandSetSeed,_ -> fail_constapp fi
 
     (* MCore intrinsic: time *)
-    | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CInt(get_wall_time_ms ()))
+    | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CFloat(get_wall_time_ms ()))
     | CwallTimeMs, _ -> fail_constapp fi
 
     | CsleepMs, TmConst(fi, CInt(v)) -> sleep_ms v ; tmUnit

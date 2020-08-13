@@ -12,4 +12,4 @@ description: """
 Miking is a meta language-system for creating DSLs.
 This is the Miking bootstrap interpreter.
 """
-depends: ["dune" "batteries" "linenoise" "mtime" "mtime.clock.os"]
+depends: ["dune" "batteries" "linenoise"]

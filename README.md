@@ -11,10 +11,10 @@ Before you can use the Miking system, you need to install
 [OPAM](https://opam.ocaml.org/) package manager.
 
 
-After the installation, you need to install the `opam` packages `dune`, `batteries`, `linenoise`, and `mtime` by running the following:
+After the installation, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
 
 ```
-opam install dune batteries linenoise mtime
+opam install dune batteries linenoise
 ```
 
 To compile and run the test suite, execute:
