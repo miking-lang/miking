@@ -145,6 +145,7 @@ let partition = (lam p. lam seq.
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1])
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[])
 
+
 let findAssoc = lam p. lam seq.
   match find (lam tup. p tup.0) seq with Some res
   then Some res.1
@@ -152,6 +153,36 @@ let findAssoc = lam p. lam seq.
 
 utest findAssoc (eqi 1) [(2,3), (1,4)] with Some 4
 utest findAssoc (eqi 3) [(2,3), (1,4)] with None ()
+
+
+-- 'addAssoc eq k v lst' returns a new associate list where
+-- a key 'k' and a value 'v' have been added to the associate list
+-- 'lst'. If the key 'k' already exists, it is updated with key 'k'
+-- and value 'v'. If the key does not exist, the key/value pair
+-- is added to the end of the list. The function is not tail recursive.
+let addAssoc : (a -> a-> Bool) -> a -> b -> [(a,b)] -> [(a,b)] =
+  lam eq. lam k. lam v. lam lst.
+  recursive
+  let work = lam lst.
+    match lst with [(k2,v2)] ++ xs then
+      if eq k k2 then cons (k,v) xs
+      else cons (k2,v2) (work xs)
+    else [(k,v)]
+  in work lst
+
+utest addAssoc eqi 1 "a" [(2,"b")] with [(2,"b"),(1,"a")]
+utest addAssoc eqi 2 "c" [(2,"b")] with [(2,"c")]
+
+
+-- 'removeAssoc p lst' returns a new associate list where
+-- the key matching predicate 'p' is removed from list 'lst'.
+let removeAssoc : (a -> Bool) -> [(a,b)] -> [(a,b)] =
+  lam p. lam lst.
+    filter (lam x. not (p x.0)) lst
+
+utest removeAssoc (eqi 1) [(2,"b"),(1,"a")] with [(2,"b")]
+utest removeAssoc (eqi 1) [(2,"b")] with [(2,"b")]
+
 
 -- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
 let distinct = lam eq. lam seq.
