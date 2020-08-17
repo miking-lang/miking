@@ -208,23 +208,13 @@ end
 
 -- TODO Move pattern matching to own fragment
 lang DataEval = DataAst + DataPat + AppEval
-  syn Expr =
-  | TmCon {ident : String, body : Expr}
-
-  sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmConFun t -> TmCon {ident = t.ident, body = arg}
-
   sem eval (ctx : {env : Env}) =
-  | TmConDef t -> eval {ctx with
-                        env = cons (t.ident , TmConFun {ident = t.ident})
-                                   ctx.env
-                       } t.inexpr
-  | TmConFun t -> TmConFun t
-  | TmCon t -> TmCon t
+  | TmConDef t -> eval ctx t.inexpr
+  | TmConApp t -> TmConApp {t with body = eval ctx t.body}
 
   sem tryMatch (t : Expr) =
   | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
-    match t with TmCon cn then
+    match t with TmConApp cn then
       let constructor = cn.ident in
       let subexpr = cn.body in
       if eqstr x.ident constructor
@@ -620,8 +610,7 @@ lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordE
                + DataTypeAst + ArithTypeAst + BoolTypeAst + AppTypeAst
   sem eq (e1 : Expr) =
   | TmConst c2 -> constExprEq c2.val e1
-  | TmCon d2 -> dataEq d2.ident d2.body e1
-  | TmConFun k -> enumEq k.ident e1
+  | TmConApp d2 -> dataEq d2.ident d2.body e1
   | TmTuple t -> tupleEq t.tms e1
   | TmSeq s -> seqEq s.tms e1
   | TmRecord t -> recordEq t.bindings e1
@@ -653,14 +642,10 @@ lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordE
   | _ -> false
 
   sem dataEq (k1 : String) (v1 : Expr) =
-  | TmCon d2 ->
+  | TmConApp d2 ->
     let k2 = d2.ident in
     let v2 = d2.body in
     and (eqstr k1 k2) (eq v1 v2)
-  | _ -> false
-
-  sem enumEq (k1 : String) =
-  | TmConFun k2 -> eqstr k1 k2.ident
   | _ -> false
 
   sem tupleEq (tms1 : [Expr]) =
@@ -726,16 +711,23 @@ utest eval {env = []} appFst with TmConst {val = CBool {val = true}} in
 
 let unit = TmConst {val = CUnit ()} in
 
-let dataDecl = TmConDef {ident = "Foo",
-                         tpe = None(),
-                         inexpr = TmMatch {target = TmApp {lhs = TmVar {ident = "Foo"},
-                                                           rhs = TmTuple {tms = [unit, unit]}},
-                                           pat = PCon {ident = "Foo",
-                                                       subpat = PVar {ident = "u"}},
-                                           thn = TmProj {tup = TmVar {ident = "u"},
-                                                         idx = 0},
-                                           els = id}}
-in
+let dataDecl = TmConDef {
+  ident = "Foo",
+  tpe = None(),
+  inexpr = TmMatch {
+    target = TmConApp {
+      ident = "Foo",
+      body = TmTuple {tms = [unit, unit]}
+    },
+    pat = PCon {
+      ident = "Foo",
+      subpat = PVar {ident = "u"}
+    },
+    thn = TmProj {tup = TmVar {ident = "u"}, idx = 0},
+    els = id
+  }
+} in
+
 utest eval {env = []} dataDecl with unit in
 
 -- Commented out to not clutter the test suite
@@ -754,22 +746,21 @@ utest eval {env = []} dataDecl with unit in
 -- utest eval {env = []} utest_test3 with unit in
 
 -- Implementing an interpreter
-let num = lam n. TmApp {lhs = TmVar {ident = "Num"},
-                        rhs = TmConst {val = CInt {val = n}}}
+let num = lam n.
+  TmConApp {ident = "Num", body = TmConst {val = CInt {val = n}}}
 in
 let one = num 1 in -- Num 1
 let two = num 2 in -- Num 2
 let three = num 3 in -- Num 3
-let add = lam n1. lam n2. TmApp {lhs = TmVar {ident = "Add"},
-                                 rhs = TmTuple {tms = [n1, n2]}}
+let add = lam n1. lam n2.
+  TmConApp {ident = "Add", body = TmTuple {tms = [n1, n2]}}
 in
 let addOneTwo = add one two in -- Add (Num 1, Num 2)
 let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
     TmMatch {target = arg,
              pat = PCon {ident = "Num",
                          subpat = PVar {ident = "n"}},
-             thn = TmApp {lhs = TmVar {ident = "Num"},
-                          rhs = TmVar {ident = "n"}},
+             thn = TmConApp {ident = "Num", body = TmVar {ident = "n"}},
              els = els}
 in
 -- match arg with Add t then
@@ -781,8 +772,9 @@ in
 --     else repl()
 --   else ()
 -- else els
-let result = TmApp {lhs = TmVar {ident = "Num"},
-                    rhs = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
+let result = TmConApp {
+               ident = "Num",
+               body = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
                                               rhs = TmVar {ident = "n1"}},
                                  rhs = TmVar {ident = "n2"}}}
 in
@@ -842,8 +834,8 @@ let addOneTwoThree = add (add one two) three in
 let evalAdd2 = wrapInDecls (TmApp {lhs = TmVar {ident = "eval"},
                                    rhs = addOneTwoThree}) in
 
-utest eval {env = []} evalAdd1 with TmCon {ident = "Num", body = TmConst {val = CInt {val = 3}}} in
-utest eval {env = []} evalAdd2 with TmCon {ident = "Num", body = TmConst {val = CInt {val = 6}}} in
+utest eval {env = []} evalAdd1 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 3}}} in
+utest eval {env = []} evalAdd2 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 6}}} in
 
 let evalUTestIntInUnit = TmUtest {
     test = TmConst {val = CInt {val = 3}},
@@ -908,7 +900,7 @@ in
 let tuppat = lam pats. PTuple {pats = pats} in
 let varpat = lam x. PVar {ident = x} in
 let addi_ = lam a. lam b. appSeq (TmConst {val = CAddi ()}) [a, b] in
-let num = lam x. app (var "Num") x in
+let num = lam x. TmConApp { ident = "Num", body = x } in
 -- lam arg. match arg with Add (Num n1, Num n2) then
 --   Num (addi n1 n2)
 -- else ()
@@ -918,7 +910,7 @@ let addEvalNested = lambda "arg"
     (unit)) in
 
 let tup = lam x. TmTuple {tms = x} in
-utest eval {env = []} (wrapInDecls (app addEvalNested (tup [num (int 1), num (int 2)]))) with TmCon {ident = "Num", body = int 3} in
+utest eval {env = []} (wrapInDecls (app addEvalNested (tup [num (int 1), num (int 2)]))) with TmConApp {ident = "Num", body = int 3} in
 
 
 

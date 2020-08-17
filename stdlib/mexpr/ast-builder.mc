@@ -58,9 +58,9 @@ let var_ = use MExprAst in
   lam s.
   TmVar {ident = s}
 
-let confun_ = use MExprAst in
-  lam s.
-  TmConFun {ident = s}
+let conapp_ = use MExprAst in
+  lam s. lam b.
+  TmConApp {ident = s, body = b}
 
 
 -- Sequence, tuple, and record

@@ -2,11 +2,12 @@
 
 include "string.mc"
 
+-- TODO Symbolize changes
+
 -----------
 -- TERMS --
 -----------
 
--- TODO Symbolize changes
 lang VarAst
   syn Expr =
   | TmVar {ident : String}
@@ -30,7 +31,6 @@ lang AppAst
   | TmApp t -> f (f acc t.lhs) t.rhs
 end
 
--- TODO Symbolize changes
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : String,
@@ -44,7 +44,6 @@ lang FunAst = VarAst + AppAst
   | TmLam t -> f acc t.body
 end
 
--- TODO Symbolize changes
 lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : String,
@@ -59,7 +58,6 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
--- TODO Symbolize changes
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : String,
@@ -90,29 +88,10 @@ lang ConstAst
   | TmConst t -> acc
 end
 
--- TODO Remove, deprecated
-lang TupleAst
-  syn Expr =
-  | TmTuple {tms : [Expr]}
-  | TmProj {tup : Expr,
-            idx : Int}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmTuple t -> TmTuple {t with tms = map f t.tms}
-  | TmProj t -> TmProj {t with tup = f t.tup}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmTuple t -> foldl f acc t.tms
-  | TmProj t -> f acc t.tup
-end
-
--- TODO Remove TmRecordProj (now syntactic sugar)
 lang RecordAst
   syn Expr =
   | TmRecord {bindings : [{key   : String,
                            value : Expr}]}
-  | TmRecordProj {rec : Expr,
-                  key : String}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
                     value : Expr}
@@ -121,33 +100,29 @@ lang RecordAst
   | TmRecord t -> TmRecord {t with
                             bindings = map (lam b. {b with value = f b.value})
                                            t.bindings}
-
-  | TmRecordProj t -> TmRecordProj {t with rec = f t.rec}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmRecord t -> foldl f acc (map (lam b. b.value) t.bindings)
-  | TmRecordProj t -> f acc t.rec
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
--- TODO Symbolize changes
--- TODO ThConFun -> TmConapp?
 lang DataAst
   syn Expr =
   | TmConDef {ident  : String,
               tpe    : Option,
               inexpr : Expr}
-  | TmConFun {ident : String}
+  | TmConApp {ident : String,
+              body : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
-  | TmConFun t -> TmConFun t
+  | TmConApp t -> TmConApp {t with body = f t.body}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmConDef t -> f acc t.inexpr
-  | TmConFun t -> acc
+  | TmConApp t -> f acc t.body
 end
 
 lang MatchAst
@@ -193,8 +168,8 @@ lang UseAst
 ---------------
 -- CONSTANTS --
 ---------------
--- All constants in boot have not been implemented. We will add missing ones as
--- needed.
+-- All constants in boot have not been implemented. Missing ones can be added
+-- as needed.
 
 lang UnitAst = ConstAst
   syn Const =
@@ -429,7 +404,6 @@ lang AppTypeAst
   | TyApp {lhs : Type, rhs : Type}
 end
 
-
 ------------------------
 -- MEXPR AST FRAGMENT --
 ------------------------
@@ -583,11 +557,11 @@ utest smap_Expr_Expr map2varX tmCon with con_ "y" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmCon with [tmApp] in
 
 
-let confun_ = lam id. TmConFun {ident = id} in
-let tmConFun = confun_ "y" in
+let conapp_ = lam id. lam b. TmConApp {ident = id, body = b} in
+let tmConApp = conapp_ "y" tmApp in
 
-utest smap_Expr_Expr map2varX tmConFun with tmConFun in
-utest sfold_Expr_Expr fold2seq [] tmConFun with [] in
+utest smap_Expr_Expr map2varX tmConApp with tmConApp in
+utest sfold_Expr_Expr fold2seq [] tmConApp with [tmApp] in
 
 
 let match_ = lam t. lam p. lam thn. lam els.

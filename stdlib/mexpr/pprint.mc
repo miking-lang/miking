@@ -235,13 +235,22 @@ lang RecordPrettyPrint = RecordAst
                   " = ", pprintCode indent t.value, "}"]
 end
 
+-- Constructor name translation
+let conName = lam name.
+  if eqi (length t.ident) 0 then
+    "#con\"\""
+  else if is_upper_alpha (head t.ident) then
+    t.ident
+  else
+    strJoin "" ["#con\"", t.ident, "\""]
+
 lang DataPrettyPrint = DataAst + DataPat
     sem getTypeStringCode (indent : Int) =
     -- Intentionally left blank
 
     sem pprintCode (indent : Int) =
     | TmConDef t ->
-      let name = pprintCode indent (TmConFun {ident = t.ident}) in
+      let name = conName t.ident in
       let tpe =
         match t.tpe with Some t1 then
           concat " : " (getTypeStringCode indent t1)
@@ -249,17 +258,15 @@ lang DataPrettyPrint = DataAst + DataPat
       in
       let inexpr = pprintCode indent t.inexpr in
       strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
-    | TmConFun t ->
-      if eqi (length t.ident) 0 then
-        "#con\"\""
-      else if is_upper_alpha (head t.ident) then
-        t.ident
-      else
-        strJoin "" ["#con\"", t.ident, "\""]
+
+    | TmConApp t ->
+      let l = conName t.ident in
+      let r = pprintCode indent t.body in
+      strJoin "" ["(", l, ") (", r, ")"]
 
     sem getPatStringCode (indent : Int) =
     | PCon t ->
-      let name = pprintCode indent (TmConFun {ident = t.ident}) in
+      let name = conName t.ident in
       let subpat = getPatStringCode indent t.subpat in
       strJoin "" [name, " (", subpat, ")"]
 end
@@ -307,7 +314,7 @@ lang TypePrettyPrint = DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
           strJoin "" [entry.ident, " : ", getTypeStringCode indent entry.tpe]
       in
       strJoin "" ["{", strJoin ", " (map conventry t.tpes), "}"]
-    | TyCon t -> pprintCode indent (TmConFun {ident = t.ident})
+    | TyCon t -> conName t.ident
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
     | TyApp t ->
