@@ -1,5 +1,12 @@
+-- Language fragments of MExpr
+
 include "string.mc"
 
+-----------
+-- TERMS --
+-----------
+
+-- TODO Symbolize changes
 lang VarAst
   syn Expr =
   | TmVar {ident : String}
@@ -10,12 +17,6 @@ lang VarAst
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmVar t -> acc
 end
-
-lang VarPat
-  syn Pat =
-  | PVar {ident : String}
-end
-
 
 lang AppAst
   syn Expr =
@@ -29,11 +30,8 @@ lang AppAst
   | TmApp t -> f (f acc t.lhs) t.rhs
 end
 
-
+-- TODO Symbolize changes
 lang FunAst = VarAst + AppAst
-  syn Type =
-  | TyArrow {from : Type,
-             to   : Type}
   syn Expr =
   | TmLam {ident : String,
            tpe   : Option,
@@ -46,7 +44,7 @@ lang FunAst = VarAst + AppAst
   | TmLam t -> f acc t.body
 end
 
-
+-- TODO Symbolize changes
 lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : String,
@@ -61,9 +59,8 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
-
+-- TODO Symbolize changes
 lang RecLetsAst = VarAst
-  syn Type =
   syn Expr =
   | TmRecLets {bindings : [{ident : String,
                             tpe   : Option,
@@ -80,7 +77,6 @@ lang RecLetsAst = VarAst
   | TmRecLets t -> f (foldl f acc (map (lam b. b.body) t.bindings)) t.inexpr
 end
 
-
 lang ConstAst
   syn Const =
 
@@ -94,131 +90,7 @@ lang ConstAst
   | TmConst t -> acc
 end
 
-
-lang UnitAst = ConstAst
-  syn Const =
-  | CUnit {}
-end
-
-lang UnitPat = UnitAst
-  syn Pat =
-  | PUnit {}
-end
-
-
-lang SymbAst = ConstAst
-  syn Const =
-  | CSymb {val : Symb}
-end
-
-
-lang IntAst = ConstAst
-  syn Const =
-  | CInt {val : Int}
-end
-
-lang IntPat = IntAst
-  syn Pat =
-  | PInt {val : Int}
-end
-
-
-lang ArithIntAst = ConstAst + IntAst
-  syn Const =
-  | CAddi {}
-  | CSubi {}
-  | CMuli {}
-end
-
-
-lang FloatAst = ConstAst
-  syn Const =
-  | CFloat {val : Float}
-end
-
-
-lang ArithFloatAst = ConstAst + FloatAst
-  syn Const =
-  | CAddf {}
-  | CSubf {}
-  | CMulf {}
-  | CDivf {}
-  | CNegf {}
-end
-
-lang BoolAst
-  syn Const =
-  | CBool {val : Bool}
-  | CNot {}
-  | CAnd {}
-  | COr {}
-
-  syn Expr =
-  | TmIf {cond : Expr,
-          thn  : Expr,
-          els  : Expr}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmIf t -> TmIf {cond = f t.cond, thn = f t.thn, els = f t.els}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmIf t -> f (f (f acc t.cond) t.thn) t.els
-end
-
-lang BoolPat = BoolAst
-  syn Pat =
-  | PBool {val : Bool}
-end
-
-
-lang CmpIntAst = IntAst + BoolAst
-  syn Const =
-  | CEqi {}
-  | CLti {}
-end
-
-lang CmpFloatAst = FloatAst + BoolAst
-  syn Const =
-  | CEqf {}
-  | CLtf {}
-end
-
-lang CmpSymbAst = SymbAst + BoolAst
-  syn Const =
-  | CEqs {}
-end
-
-
-lang CharAst = ConstAst
-  syn Const =
-  | CChar {val : Char}
-end
-
-
-lang SeqAst = IntAst
-  syn Const =
-  | CSeq {tms : [Expr]}
-  | CGet {}
-  | CCons {}
-  | CSnoc {}
-  | CConcat {}
-  | CLength {}
-  | CHead {}
-  | CTail {}
-  | CNull {}
-  | CReverse {}
-
-  syn Expr =
-  | TmSeq {tms : [Expr]}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmSeq t -> TmSeq {t with tms = map f t.tms}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmSeq t -> foldl f acc t.tms
-end
-
-
+-- TODO Remove, deprecated
 lang TupleAst
   syn Expr =
   | TmTuple {tms : [Expr]}
@@ -234,12 +106,7 @@ lang TupleAst
   | TmProj t -> f acc t.tup
 end
 
-lang TuplePat = TupleAst
-  syn Pat =
-  | PTuple {pats : [Pat]}
-end
-
-
+-- TODO Remove TmRecordProj (now syntactic sugar)
 lang RecordAst
   syn Expr =
   | TmRecord {bindings : [{key   : String,
@@ -265,9 +132,9 @@ lang RecordAst
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
-
+-- TODO Symbolize changes
+-- TODO ThConFun -> TmConapp?
 lang DataAst
-  -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef {ident  : String,
               tpe    : Option,
@@ -282,13 +149,6 @@ lang DataAst
   | TmConDef t -> f acc t.inexpr
   | TmConFun t -> acc
 end
-
-lang DataPat = DataAst
-  syn Pat =
-  | PCon {ident  : String,
-          subpat : Pat}
-end
-
 
 lang MatchAst
   syn Expr =
@@ -323,6 +183,199 @@ lang UtestAst
   | TmUtest t -> f (f (f acc t.test) t.expected) t.next
 end
 
+lang NeverAst
+  -- TODO
+end
+
+-- Language uses in MLang (for future implementation)
+lang UseAst
+
+---------------
+-- CONSTANTS --
+---------------
+-- All constants in boot have not been implemented. We will add missing ones as
+-- needed.
+
+lang UnitAst = ConstAst
+  syn Const =
+  | CUnit {}
+end
+
+lang IntAst = ConstAst
+  syn Const =
+  | CInt {val : Int}
+end
+
+lang ArithIntAst = ConstAst + IntAst
+  syn Const =
+  | CAddi {}
+  | CSubi {}
+  | CMuli {}
+end
+
+lang FloatAst = ConstAst
+  syn Const =
+  | CFloat {val : Float}
+end
+
+lang ArithFloatAst = ConstAst + FloatAst
+  syn Const =
+  | CAddf {}
+  | CSubf {}
+  | CMulf {}
+  | CDivf {}
+  | CNegf {}
+end
+
+-- TODO TmIf is deprecated in favor of TmMatch, refactor
+-- TODO Separate into more fragments?
+lang BoolAst
+  syn Const =
+  | CBool {val : Bool}
+  | CNot {}
+  | CAnd {}
+  | COr {}
+
+  syn Expr =
+  | TmIf {cond : Expr,
+          thn  : Expr,
+          els  : Expr}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmIf t -> TmIf {cond = f t.cond, thn = f t.thn, els = f t.els}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmIf t -> f (f (f acc t.cond) t.thn) t.els
+end
+
+lang CmpIntAst = IntAst + BoolAst
+  syn Const =
+  | CEqi {}
+  | CLti {}
+end
+
+lang CmpFloatAst = FloatAst + BoolAst
+  syn Const =
+  | CEqf {}
+  | CLtf {}
+end
+
+lang CharAst = ConstAst
+  syn Const =
+  | CChar {val : Char}
+end
+
+lang SymbAst = ConstAst
+  syn Const =
+  | CSymb {val : Symb}
+end
+
+lang CmpSymbAst = SymbAst + BoolAst
+  syn Const =
+  | CEqs {}
+end
+
+-- TODO Separate consts from tms (to remove dependency on IntAst)
+-- TODO Remove constants no longer available in boot
+lang SeqAst = IntAst
+  syn Const =
+  | CSeq {tms : [Expr]}
+  | CGet {}
+  | CCons {}
+  | CSnoc {}
+  | CConcat {}
+  | CLength {}
+  | CHead {}
+  | CTail {}
+  | CNull {}
+  | CReverse {}
+
+  syn Expr =
+  | TmSeq {tms : [Expr]}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmSeq t -> TmSeq {t with tms = map f t.tms}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmSeq t -> foldl f acc t.tms
+end
+
+--------------
+-- PATTERNS --
+--------------
+
+lang VarPat
+  syn Pat =
+  | PVar {ident : String}
+end
+
+lang SeqTotPat
+  -- TODO
+end
+
+lang SeqEdgPat
+  -- TODO
+end
+
+lang RecordPat
+  -- TODO
+end
+
+lang DataPat = DataAst
+  syn Pat =
+  | PCon {ident  : String,
+          subpat : Pat}
+end
+
+lang IntPat = IntAst
+  syn Pat =
+  | PInt {val : Int}
+end
+
+lang CharPat
+  -- TODO
+end
+
+lang BoolPat = BoolAst
+  syn Pat =
+  | PBool {val : Bool}
+end
+
+lang AndPat
+  -- TODO
+end
+
+lang OrPat
+  -- TODO
+end
+
+lang NotPat
+  -- TODO
+end
+
+-- TODO Deprecated, remove
+lang TuplePat = TupleAst
+  syn Pat =
+  | PTuple {pats : [Pat]}
+end
+
+-- TODO Not available in boot?
+lang UnitPat = UnitAst
+  syn Pat =
+  | PUnit {}
+end
+
+
+-----------
+-- TYPES --
+-----------
+-- TODO Update (also not up to date in boot?)
+
+lang FunTypeAst
+  syn Type =
+  | TyArrow {from : Type,
+             to   : Type}
+end
 
 lang DynTypeAst
   syn Type =
@@ -377,15 +430,25 @@ lang AppTypeAst
 end
 
 
+------------------------
+-- MEXPR AST FRAGMENT --
+------------------------
+-- TODO Update and structure this after finishing adding/removing fragments
+
 lang MExprAst =
   VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
   UnitAst + UnitPat + IntAst + IntPat + FloatAst + ArithFloatAst + SymbAst +
   ArithIntAst + BoolAst + BoolPat + CmpIntAst + CmpFloatAst + CmpSymbAst + CharAst + SeqAst +
   TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
-  RecordAst +
+  RecordAst + FunTypeAst +
   DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
   RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst
+
+
+-----------
+-- TESTS --
+-----------
 
 mexpr
 use MExprAst in

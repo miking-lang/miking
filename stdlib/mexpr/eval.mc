@@ -5,7 +5,11 @@ include "string.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
--- TODO: Change string variables to deBruijn indices
+----------------------------
+-- EVALUATION ENVIRONMENT --
+----------------------------
+-- TODO Symbolize changes
+
 type Env = [(String, Expr)]
 
 recursive
@@ -29,6 +33,12 @@ let fresh : String -> Env -> String = lam var. lam env.
         find_free (addi n 1)
     in find_free 0
 
+
+-----------
+-- TERMS --
+-----------
+
+-- TODO Move pattern matching part to own fragment?
 lang VarEval = VarAst + VarPat
   sem eval (ctx : {env : Env}) =
   | TmVar x ->
@@ -49,9 +59,7 @@ lang AppEval = AppAst
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
-
 lang FunEval = FunAst + VarEval + AppEval
-  syn Type =
   syn Expr =
   | TmClos {ident : String,
             body : Expr,
@@ -67,13 +75,19 @@ lang FunEval = FunAst + VarEval + AppEval
   | TmClos t -> TmClos t
 end
 
--- Fix is only needed for eval. Hence, it is not in ast.mc
-lang Fix = FunAst
+lang LetEval = LetAst + VarEval
+  sem eval (ctx : {env : Env}) =
+  | TmLet t -> eval {ctx with
+                     env = cons (t.ident, eval ctx t.body) ctx.env} t.inexpr
+end
+
+-- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
+lang FixAst = FunAst
   syn Expr =
   | TmFix ()
 end
 
-lang FixEval = Fix + FunEval
+lang FixEval = FixAst + FunEval
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
   match arg with TmClos clos then
@@ -89,12 +103,40 @@ lang FixEval = Fix + FunEval
   | TmFix _ -> TmFix ()
  end
 
-lang LetEval = LetAst + VarEval
+lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + TupleEval + LetEval
   sem eval (ctx : {env : Env}) =
-  | TmLet t -> eval {ctx with
-                     env = cons (t.ident, eval ctx t.body) ctx.env} t.inexpr
-end
+  | TmRecLets t ->
+    let foldli = lam f. lam init. lam seq.
+      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
+    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
+      with "0a1b2c" in
+    let eta_str = fresh "eta" ctx.env in
+    let eta_var = TmVar {ident = eta_str} in
+    let unpack_from = lam var. lam body.
+      foldli
+        (lam i. lam bodyacc. lam binding.
+          TmLet {ident = binding.ident,
+                 tpe = binding.tpe,
+                 body = TmLam {ident = eta_str,
+                               tpe = None (),
+                               body = TmApp {lhs = TmProj {tup = var, idx = i},
+                                             rhs = eta_var}},
+                 inexpr = bodyacc}
+        )
+        body
+        t.bindings in
+    let lst_str = fresh "lst" ctx.env in
+    let lst_var = TmVar {ident = lst_str} in
+    let func_tuple = TmTuple {tms = map (lam x. x.body) t.bindings} in
+    let unfixed_tuple = TmLam {ident = lst_str,
+                               tpe = None (),
+                               body = unpack_from lst_var func_tuple} in
 
+    eval {ctx with env = cons (lst_str
+                              , TmApp {lhs = TmFix ()
+                              , rhs = unfixed_tuple}) ctx.env}
+         (unpack_from lst_var t.inexpr)
+end
 
 lang ConstEval = ConstAst
   sem delta (arg : Expr) =
@@ -106,30 +148,124 @@ lang ConstEval = ConstAst
   | TmConst c -> TmConst c
 end
 
--- Included for symmetry
-lang UnitEval = UnitAst + UnitPat + ConstEval
+-- TODO Remove, deprecated
+lang TupleEval = TupleAst + TuplePat
+  sem eval (ctx : {env : Env}) =
+  | TmTuple v ->
+    let vs = map (eval ctx) v.tms in
+    TmTuple {v with tms = vs}
+  | TmProj t ->
+    match eval ctx t.tup with TmTuple v then
+      get v.tms t.idx
+    else error "Not projecting from a tuple"
+
   sem tryMatch (t : Expr) =
-  | PUnit _ ->
-    match t with TmConst c then
-      match c.val with CUnit _ then
-        Some []
+  | PTuple p ->
+    match t with TmTuple v then
+      if eqi (length p.pats) (length v.tms) then
+        let results = zipWith tryMatch v.tms p.pats in
+        let go = lam left. lam right.
+          match (left, right) with (Some l, Some r)
+          then Some (concat l r)
+          else None () in
+        foldl go (Some []) results
       else None ()
     else None ()
 end
 
-lang SymbEval = SymbAst + ConstEval
+lang RecordEval = RecordAst
+  sem eval (ctx : {env : Env}) =
+  | TmRecord t ->
+    let bs = map (lam b. {b with value = eval ctx b.value}) t.bindings in
+    TmRecord {t with bindings = bs}
+  | TmRecordProj t ->
+    recursive let reclookup = lam key. lam bindings.
+      if eqi (length bindings) 0 then
+        error "Could not project from Record"
+      else if eqstr (head bindings).key key then
+        (head bindings).value
+      else
+        reclookup key (tail bindings)
+    in
+    match eval ctx t.rec with TmRecord t2 then
+      reclookup t.key t2.bindings
+    else error "Not projecting a Record"
+  | TmRecordUpdate u ->
+    match eval ctx u.rec with TmRecord t then
+      recursive let recupdate = lam bindings.
+        if eqi (length bindings) 0 then
+          [{key = u.key, value = u.value}]
+        else
+          let e = head bindings in
+          if eqstr u.key e.key then
+            cons {key = u.key, value = u.value} (tail bindings)
+          else
+            cons e (recupdate (tail bindings))
+      in
+      TmRecord {t with bindings = recupdate t.bindings}
+    else error "Not updating a record"
 end
 
-lang IntEval = IntAst + IntPat
+-- TODO Move pattern matching to own fragment
+lang DataEval = DataAst + DataPat + AppEval
+  syn Expr =
+  | TmCon {ident : String, body : Expr}
+
+  sem apply (ctx : {env : Env}) (arg : Expr) =
+  | TmConFun t -> TmCon {ident = t.ident, body = arg}
+
+  sem eval (ctx : {env : Env}) =
+  | TmConDef t -> eval {ctx with
+                        env = cons (t.ident , TmConFun {ident = t.ident})
+                                   ctx.env
+                       } t.inexpr
+  | TmConFun t -> TmConFun t
+  | TmCon t -> TmCon t
+
   sem tryMatch (t : Expr) =
-  | PInt i ->
-    match t with TmConst c then
-      match c.val with CInt i2 then
-        if eqi i.val i2.val then Some [] else None ()
-      else None ()
+  | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
+    match t with TmCon cn then
+      let constructor = cn.ident in
+      let subexpr = cn.body in
+      if eqstr x.ident constructor
+        then tryMatch subexpr x.subpat
+        else None ()
     else None ()
 end
 
+lang MatchEval = MatchAst
+  sem eval (ctx : {env : Env}) =
+  | TmMatch t ->
+    match tryMatch (eval ctx t.target) t.pat with Some newEnv then
+      eval {ctx with env = concat newEnv ctx.env} t.thn
+    else eval ctx t.els
+
+  sem tryMatch (t : Expr) =
+  | _ -> None ()
+end
+
+lang UtestEval = UtestAst
+  sem eq (e1 : Expr) =
+  | _ -> error "Equality not defined for expression"
+
+  sem eval (ctx : {env : Env}) =
+  | TmUtest t ->
+    let v1 = eval ctx t.test in
+    let v2 = eval ctx t.expected in
+    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    eval ctx t.next
+end
+
+lang NeverEval = NeverAst
+  --TODO
+end
+
+-- Language uses in MLang (for future implementation)
+lang UseEval = UseAst
+
+---------------
+-- CONSTANTS --
+---------------
 
 lang ArithIntEval = ArithIntAst + ConstEval
   syn Const =
@@ -175,7 +311,6 @@ lang ArithIntEval = ArithIntAst + ConstEval
       else error "Not multiplying a numeric constant"
     else error "Not multiplying a constant"
 end
-
 
 lang ArithFloatEval = ArithFloatAst + ConstEval
   syn Const =
@@ -241,6 +376,7 @@ lang ArithFloatEval = ArithFloatAst + ConstEval
     else error "Not negating a constant"
 end
 
+-- TODO Move pattern matching to own fragment?
 lang BoolEval = BoolAst + BoolPat + ConstEval
   syn Const =
   | CAnd2 Bool
@@ -360,6 +496,9 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
     else error "Not comparing a constant"
 end
 
+lang SymbEval = SymbAst + ConstEval
+end
+
 lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
   | CEqs2 Symb
@@ -375,9 +514,7 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
     else error "Second argument in eqs is not a symbol"
 end
 
-lang CharEval = CharAst + ConstEval
-end
-
+-- TODO Separate consts from tms
 lang SeqEval = SeqAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
@@ -437,159 +574,44 @@ lang SeqEval = SeqAst + BoolAst + ConstEval
       TmSeq {tms = reverse s.tms}
     else error "Not reverse of a constant sequence"
 
-
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
     let vs = map (eval ctx) s.tms in
     TmConst {val = CSeq {s with tms = vs}}
 end
 
+--------------
+-- PATTERNS --
+--------------
+-- TODO Add all patterns from ast.mc
 
-lang TupleEval = TupleAst + TuplePat
-  sem eval (ctx : {env : Env}) =
-  | TmTuple v ->
-    let vs = map (eval ctx) v.tms in
-    TmTuple {v with tms = vs}
-  | TmProj t ->
-    match eval ctx t.tup with TmTuple v then
-      get v.tms t.idx
-    else error "Not projecting from a tuple"
-
+-- TODO Not available in boot?
+lang UnitEval = UnitAst + UnitPat + ConstEval
   sem tryMatch (t : Expr) =
-  | PTuple p ->
-    match t with TmTuple v then
-      if eqi (length p.pats) (length v.tms) then
-        let results = zipWith tryMatch v.tms p.pats in
-        let go = lam left. lam right.
-          match (left, right) with (Some l, Some r)
-          then Some (concat l r)
-          else None () in
-        foldl go (Some []) results
+  | PUnit _ ->
+    match t with TmConst c then
+      match c.val with CUnit _ then
+        Some []
       else None ()
     else None ()
 end
 
-lang RecLetsEval = RecLetsAst + VarEval + Fix + FixEval + TupleEval + LetEval
-  sem eval (ctx : {env : Env}) =
-  | TmRecLets t ->
-    let foldli = lam f. lam init. lam seq.
-      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
-    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
-      with "0a1b2c" in
-    let eta_str = fresh "eta" ctx.env in
-    let eta_var = TmVar {ident = eta_str} in
-    let unpack_from = lam var. lam body.
-      foldli
-        (lam i. lam bodyacc. lam binding.
-          TmLet {ident = binding.ident,
-                 tpe = binding.tpe,
-                 body = TmLam {ident = eta_str,
-                               tpe = None (),
-                               body = TmApp {lhs = TmProj {tup = var, idx = i},
-                                             rhs = eta_var}},
-                 inexpr = bodyacc}
-        )
-        body
-        t.bindings in
-    let lst_str = fresh "lst" ctx.env in
-    let lst_var = TmVar {ident = lst_str} in
-    let func_tuple = TmTuple {tms = map (lam x. x.body) t.bindings} in
-    let unfixed_tuple = TmLam {ident = lst_str,
-                               tpe = None (),
-                               body = unpack_from lst_var func_tuple} in
-
-    eval {ctx with env = cons (lst_str
-                              , TmApp {lhs = TmFix ()
-                              , rhs = unfixed_tuple}) ctx.env}
-         (unpack_from lst_var t.inexpr)
-end
-
-lang RecordEval = RecordAst
-  sem eval (ctx : {env : Env}) =
-  | TmRecord t ->
-    let bs = map (lam b. {b with value = eval ctx b.value}) t.bindings in
-    TmRecord {t with bindings = bs}
-  | TmRecordProj t ->
-    recursive let reclookup = lam key. lam bindings.
-      if eqi (length bindings) 0 then
-        error "Could not project from Record"
-      else if eqstr (head bindings).key key then
-        (head bindings).value
-      else
-        reclookup key (tail bindings)
-    in
-    match eval ctx t.rec with TmRecord t2 then
-      reclookup t.key t2.bindings
-    else error "Not projecting a Record"
-  | TmRecordUpdate u ->
-    match eval ctx u.rec with TmRecord t then
-      recursive let recupdate = lam bindings.
-        if eqi (length bindings) 0 then
-          [{key = u.key, value = u.value}]
-        else
-          let e = head bindings in
-          if eqstr u.key e.key then
-            cons {key = u.key, value = u.value} (tail bindings)
-          else
-            cons e (recupdate (tail bindings))
-      in
-      TmRecord {t with bindings = recupdate t.bindings}
-    else error "Not updating a record"
-end
-
-lang DataEval = DataAst + DataPat + AppEval
-  syn Expr =
-  | TmCon {ident : String, body : Expr}
-
-  sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmConFun t -> TmCon {ident = t.ident, body = arg}
-
-  sem eval (ctx : {env : Env}) =
-  | TmConDef t -> eval {ctx with
-                        env = cons (t.ident , TmConFun {ident = t.ident})
-                                   ctx.env
-                       } t.inexpr
-  | TmConFun t -> TmConFun t
-  | TmCon t -> TmCon t
-
+lang IntEval = IntAst + IntPat
   sem tryMatch (t : Expr) =
-  | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
-    match t with TmCon cn then
-      let constructor = cn.ident in
-      let subexpr = cn.body in
-      if eqstr x.ident constructor
-        then tryMatch subexpr x.subpat
-        else None ()
+  | PInt i ->
+    match t with TmConst c then
+      match c.val with CInt i2 then
+        if eqi i.val i2.val then Some [] else None ()
+      else None ()
     else None ()
 end
 
-
-lang MatchEval = MatchAst
-  sem eval (ctx : {env : Env}) =
-  | TmMatch t ->
-    match tryMatch (eval ctx t.target) t.pat with Some newEnv then
-      eval {ctx with env = concat newEnv ctx.env} t.thn
-    else eval ctx t.els
-
-  sem tryMatch (t : Expr) =
-  | _ -> None ()
+lang CharEval = CharAst + ConstEval
 end
 
-
-lang UtestEval = UtestAst
-  sem eq (e1 : Expr) =
-  | _ -> error "Equality not defined for expression"
-
-  sem eval (ctx : {env : Env}) =
-  | TmUtest t ->
-    let v1 = eval ctx t.test in
-    let v2 = eval ctx t.expected in
-    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
-    eval ctx t.next
-end
-
-
--- TODO: Add more types! Think about design
+-------------------------
+-- MEXPR EVAL FRAGMENT --
+-------------------------
 
 lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordEval
                + DataEval + UtestEval + IntEval + ArithIntEval + ArithFloatEval + SymbEval
@@ -662,6 +684,11 @@ lang MExprEval = FunEval + LetEval + RecLetsEval + SeqEval + TupleEval + RecordE
         (all (lam b.b) (zipWith eq seq1 s.tms))
   | _ -> false
 end
+
+
+-----------
+-- TESTS --
+-----------
 
 mexpr
 
