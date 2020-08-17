@@ -527,9 +527,6 @@ let rec val_equal v1 v2 =
   | TmConapp(_,_,sym1,v1),TmConapp(_,_,sym2,v2) -> sym1 = sym2 && val_equal v1 v2
   | _ -> false
 
-
-type identType
-
 let findsym fi id env =
   try List.assoc id env
   with Not_found ->

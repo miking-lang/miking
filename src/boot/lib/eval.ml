@@ -127,7 +127,7 @@ let error_to_ustring e =
   | Error m -> message2str m
   | _ -> us(Printexc.to_string e)
 
-(* Main function for evaluation a function. Performs lexing, parsing
+(* Main function for evaluating a program. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename  =
   (* Make sure the filename is an absolute path, otherwise the duplicate file detection won't work *)

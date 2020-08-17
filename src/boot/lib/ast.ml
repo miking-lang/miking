@@ -164,12 +164,6 @@ and tm =
 | TmClos    of info * ustring * sym * ty * tm * env Lazy.t          (* Closure *)
 | TmFix     of info                                                 (* Fix point *)
 
-
-
-and label =
-| LabIdx of int                                   (* Tuple index *)
-| LabStr of ustring                               (* Record label *)
-
 (* Kind of pattern name *)
 and patName =
 | NameStr of ustring * sym                        (* A normal pattern name *)
