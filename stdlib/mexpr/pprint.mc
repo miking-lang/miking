@@ -151,14 +151,6 @@ lang BoolPrettyPrint = BoolAst + BoolPat + ConstPrettyPrint
     | CAnd _ -> "and"
     | COr _ -> "or"
 
-    sem pprintCode (indent : Int) =
-    | TmIf t ->
-      let cond = pprintCode indent t.cond in
-      let thn = pprintCode (incr indent) t.thn in
-      let els = pprintCode (incr indent) t.els in
-      strJoin "" ["if ", cond, " then", newline (incr indent), thn, newline indent,
-                                "else", newline (incr indent), els]
-
     sem getPatStringCode (indent : Int) =
     | PBool b -> getConstStringCode indent (CBool {val = b.val})
 end

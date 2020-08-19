@@ -25,9 +25,6 @@ let const_ = use MExprAst in
   lam c.
   TmConst {val = c}
 
-let unit_ = use MExprAst in
-  const_ (CUnit ())
-
 let int_ = use MExprAst in
   lam i.
   const_ (CInt {val = i})
@@ -48,7 +45,7 @@ let char_ = use MExprAst in
 
 let str_ = use MExprAst in
   lam s.
-  const_ (CSeq {tms = map char_ s})
+  const_ (TmSeq {tms = map char_ s})
 
 let symb_ = use MExprAst in
   lam c.
@@ -68,13 +65,10 @@ let seq_ = use MExprAst in
   lam tms.
   TmSeq {tms = tms}
 
-let tuple_ = use MExprAst in
-  lam tms.
-  TmTuple {tms = tms}
-
-let proj_ = use MExprAst in
-  lam tup. lam idx.
-  TmProj {tup = tup, idx = idx}
+-- TODO Should be done using a record instead
+-- let tuple_ = use MExprAst in
+--   lam tms.
+--   TmTuple {tms = tms}
 
 let record_ = use MExprAst in
   lam bindings.
@@ -83,6 +77,8 @@ let record_ = use MExprAst in
 let record_empty = use MExprAst in
   TmRecord {bindings = []}
 
+let unit_ = record_empty
+
 let record_add = use MExprAst in
   lam key. lam value. lam record.
   match record with TmRecord t then
@@ -90,9 +86,13 @@ let record_add = use MExprAst in
   else
       error "record is not a TmRecord construct"
 
-let recordproj_ = use MExprAst in
-  lam key. lam rec.
-  TmRecordProj {rec = rec, key = key}
+let recordAddTups = lam tups. lam record.
+  foldl (lam recacc. lam t. record_add t.0 t.1 recacc) record tups
+
+-- TODO This needs to be done with pattern matching instead
+-- let recordproj_ = use MExprAst in
+--   lam key. lam rec.
+--   TmRecordProj {rec = rec, key = key}
 
 let recordupdate_ = use MExprAst in
   lam key. lam value. lam rec.
@@ -155,6 +155,10 @@ let tyapp_ = use MExprAst in
 let app_ = use MExprAst in
   lam l. lam r.
   TmApp {lhs = l, rhs = r}
+
+let appSeq_ = use MExprAst in
+  lam f. lam seq.
+  foldl app_ f seq
 
 let appf1_ = use MExprAst in
   lam f. lam a1.
@@ -297,7 +301,7 @@ let pvar_ = use MExprAst in
   PVar {ident = s}
 
 let punit_ = use MExprAst in
-  PUnit ()
+  PRecord { bindings = [] }
 
 let pint_ = use MExprAst in
   lam i.
@@ -308,10 +312,6 @@ let ptrue_ = use MExprAst in
 
 let pfalse_ = use MExprAst in
   PBool {val = false}
-
-let ptuple_ = use MExprAst in
-  lam pats.
-  PTuple {pats = pats}
 
 let pcon_ = use MExprAst in
   lam cs. lam cp.
@@ -370,7 +370,7 @@ let ulams_ = use MExprAst in
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
-  TmIf {cond = cond, thn = thn, els = els}
+  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
 
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
