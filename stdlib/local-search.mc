@@ -1,58 +1,106 @@
+include "set.mc"
 include "digraph.mc"
 include "string.mc"
 
-type Assignment = [a]
+type Assignment = [v]
+-- TODO: support other types than int
 type Cost = Int
 type Solution = (Assignment, Cost)
-type SearchState = {cur : Solution, inc : Solution, iter : Int, appendix : Record}
 
-type StepF = (SearchState -> [Assignment]) -> ([Assignment] -> Assignment) -> (Assignment -> Cost)
+type NeighbourhoodFun = SearchState -> [Assignment]
+type SearchState = {cur : Solution, inc : Solution, iter : Int, stuck : Bool}
 
--- TODO: Satisfiability of best found solution
--- TODO: Where to compute cost function
--- TODO: Combine tabu search and SA
+type MetaHeuristic
+con Base               : {select : ([Assignment] -> SearchState -> AssignmentOption)} -> MetaHeuristic
+con SimulatedAnnealing : {select : ([Assignment] -> SearchState -> AssignmentOption),
+                          temp : Float,
+                          decayFun : Float -> SearchState -> Float}                   -> MetaHeuristic
+con TabuSearch         : {select : ([Assignment] -> SearchState -> AssignmentOption),
+                          tabuConvert : Assignment -> t,
+                          tabu : [t],
+                          isTabu : t -> [t] -> Bool,
+                          tabuAdd : t -> [t] -> [t]}                                  -> MetaHeuristic
 
---  'initAssign ()' returns the initial assignment of the variables
---  'step' is the step function
---  'stop' is the stop condition
-let lsMinimize : (Unit -> Assignment) -> StepF -> (Unit -> Bool) -> (SearchState -> Unit) -> Record -> SearchState =
-  lam initAssign. lam step. lam terminate. lam extra. lam stateAppend.
-    let init = initAssign () in
-    let state = {cur = init, inc = init, iter = 0, appendix = stateAppend} in
-    recursive let search = lam state.
-      if not (terminate state) then
-        let state = {state with iter=addi state.iter 1} in
-        let state = step state in
-        -- Improving solution?
-        let incumbent =
-          if leqi state.cur.1 state.inc.1 then state.cur else state.inc in
-        let _ = extra state in
-        search state
+-- Internal definitions
+recursive
+  let _search = lam meta. lam terminate. lam callAfterEachIter. lam nextSol. lam state.
+    if not (terminate state) then
+      let state = {state with iter=addi state.iter 1} in
+      let next = nextSol state meta in
+      let newCur = next.0 in
+      match newCur with None () then
+        ({state with stuck = true}, meta)
       else
-        state
-    in search state
+        let meta = next.1 in
+        let cur = optionGetOrElse (lam _. error "Expected a solution") newCur in
+        -- New best solution?
+        let inc = if leqi cur.1 state.inc.1 then cur else state.inc in
+        let state = {{state with cur = cur} with inc = inc} in
+        let _ = callAfterEachIter state in
+        _search meta terminate callAfterEachIter nextSol state
+    else
+      (state, meta)
+end
 
--- A generic step function for local search
---  'neighbours s' returns the neighbours of solution 's'
---  'legal ns s' returns the legal neighbours in 'ns' w.r.t. 's'
---  'select sols s' returns a selected element of 'sols' w.r.t. 's'
---  'cost s' returns the cost of a solution s, to be minimized
---  'state' current state. 'state.cur'
-let lsStep =
-  lam neighbours. lam select. lam cost. lam state.
-    let ns = neighbours state in
-    let newCur = select (neighbours state) cost state in
-    {state with cur=newCur}
+-- External definitions
+let initSearchState : (Unit -> Solution) -> SearchState = lam initAssign.
+  let init = initAssign () in
+  {cur = init,
+   inc = init,
+   iter = 0,
+   stuck = false}
 
+let minimize : MetaHeuristic -> (SearchState -> Bool) -> (SearchState -> Unit) ->
+               NieghbourhoodFun -> SearchState -> (SearchState, MetaHeuristic) =
+  lam terminate. lam callAfterEachIter. lam neighbourhood. lam state. lam meta.
 
--- Simulated annealing
+    match meta with Base r then
+      let nextSol = lam state. lam meta.
+        (r.select (neighbourhood state) state, meta)
+      in _search meta terminate callAfterEachIter nextSol state else
 
+    match meta with SimulatedAnnealing r then
+      -- Compute exponential of x
+      -- TODO: Refactor into a proper implementation of exponential function
+      let exp = lam x.
+        addf x 1. in
+      let nextSol = lam state. lam meta.
+        let proposal = r.select (neighbourhood state) state in
+        match proposal with None () then (None (), meta) else
+        -- Accept proposal according to Metropolis condition
+        if leqi proposal.1 state.cur.1 then
+          (Some proposal, meta)
+        else
+          match meta with SimulatedAnnealing r then
+            let pAccept = exp (divf (int2float (subi proposal.1 state.cur.1)) r.temp) in
+            let rnd = int2float (randIntU 0 100) in
+            let choice = if geqf (mulf pAccept 100.0) rnd then proposal else state.cur in
+            (Some choice, SimulatedAnnealing {r with temp=r.decayFunc r.temp state})
+          else
+            error "Expected SimulatedAnnealing as meta heuristics"
+        in _search meta terminate callAfterEachIter nextSol state else
+
+      match meta with TabuSearch r then
+        let nextSol = lam state. lam meta.
+          let ns = neighbourhood state in
+          let nonTabus = filter (lam n. not (r.isTabu n r.tabu)) ns in
+          let choice = r.select nonTabus state in
+          optionMapOr (choice, meta)
+                      (lam s. (Some s, TabuSearch {r with tabu=r.tabuAdd (r.tabuConvert s) r.tabu}))
+                      (choice)
+        in _search meta terminate callAfterEachIter nextSol state
+
+    else error "Unknown meta heuristic in minimize"
 
 mexpr
 
 -- Example: Travelling Salesman Problem (TSP)
 -- Given a weighted undirected graph, find a tour (Hamiltonian circuit) that
 -- visits each node exactly once, with minimum path weight.
+
+--------------------
+-- Set up problem --
+--------------------
 
 -- Define instance data
 let vs = ["Uppsala", "Stockholm", "Kiruna", "Gothenburg"] in
@@ -64,9 +112,6 @@ let es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
           ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)] in
 
 let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqstr eqi)) in
-
--- Check solution
-let isHamiltonianCircuit = lam g. lam path. true in
 
 -- Define initial assignment, cost, select and legal functions
 let initTour = [("Uppsala", "Kiruna", 10),
@@ -80,10 +125,10 @@ let cost = lam s.
 let init = lam _. (initTour, cost initTour) in
 
 -- Neighbourhood: replace 2 edges by two others s.t. still a tour
-let neighbours = lam state.
-  -- TODO: initial state
-  let g = state.appendix.g in
-  let tour = state.cur.0 in
+let neighbours = lam g. lam state.
+  let curSol = state.cur in
+  --let _ = dprint curSol in
+  let tour = curSol.0 in
 
   let tourHasEdge = lam v1. lam v2.
     any (lam e. or (and (eqstr v1 e.0) (eqstr v2 e.1))
@@ -129,21 +174,65 @@ let neighbours = lam state.
    in map (lam ex. neighbourFromExchange [ex.0,ex.1] [ex.2,ex.3] tour) possibleExchanges
 in
 
+let terminate = lam state. geqi state.iter 10 in
+let printIter = lam state. print (strJoin "" ["Iter: ", int2string state.iter, ", ",
+                                              "Best: ", int2string state.inc.1, "\n"]) in
+
+let initState = initSearchState init in
+
+let minimizeTSP = minimize terminate printIter (neighbours g) initState in
+
+----------------------------
+-- Set up meta heuristics --
+----------------------------
+
 -- Select a random best neighbour
-let randomBest = lam neighs. lam costF. lam _.
-  let costs = map costF neighs in
+let randomBest = lam neighs. lam state.
+  match neighs with [] then None () else
+  let costs = map cost neighs in
   let minCost = min subi costs in
   let neighCosts = zipWith (lam n. lam c. (n,c)) neighs costs in
   let minNeighs = filter (lam t. eqi t.1 minCost) neighCosts in
   let randIdx = randIntU 0 (length minNeighs) in
-  get minNeighs randIdx
-
+  Some (get minNeighs randIdx)
 in
 
-let stepF = lsStep neighbours randomBest cost in
+let metaRandBest = Base {select = randomBest} in
 
-let res = lsMinimize init stepF (lam state. eqi state.iter 10) (lam state. print "iter\n") {g=g} in
+-- Simulated annealing
+let randSol = lam ns. lam state.
+  match ns with [] then None () else
+  let nRand = get ns (randIntU 0 (length ns)) in
+  (nRand, cost nRand)
+in
 
-dprint res.inc
+let decayFunc = lam temp. lam state.
+  mulf temp 0.95
+in
 
+let metaSA = SimulatedAnnealing {select = randSol, temp = 100.0, decayFunc = decayFunc} in
 
+-- Tabu search
+let metaTabu = TabuSearch {select = randomBest,
+                           tabu = [],
+                           isTabu = lam assign. lam tabu. false,
+                           tabuAdd = lam assign. lam tabu. cons assign tabu,
+                           tabuConvert = identity} in
+
+-----------------------
+-- Solve the problem --
+-----------------------
+
+let _ = print "Choose a random best solution:\n" in
+let _ = printIter initState in
+let r = minimizeTSP metaRandBest in
+
+let _ = print "Simulated annealing:\n" in
+let _ = printIter initState in
+let r = minimizeTSP metaSA in
+
+let _ = print "Tabu search:\n" in
+let _ = printIter initState in
+let r = minimizeTSP metaTabu in
+
+()
