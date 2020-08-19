@@ -28,12 +28,20 @@ let mapInsert = lam eq. lam k. lam v. lam seq.
                   (lam i. set seq i (k,v))
                   (index (lam t. eq k t.0) seq)
 
+-- Removes a key-value pair from the map, if it exists
+let mapRemove = lam eq. lam key. lam seq.
+  optionMapOr seq
+              (lam i.
+                let spl = splitAt seq i in
+                concat spl.0 (tail spl.1))
+              (index (lam t. eq key t.0) seq)
 mexpr
 
 let lookupOpt = mapLookupOpt eqi in
 let lookup = mapLookup eqi in
 let insert = mapInsert eqi in
 let mem = mapMem eqi in
+let remove = mapRemove eqi in
 
 let m = [(1,'1'),(2,'2'),(3,'3')] in
 let s = snoc m (1, '1') in
@@ -58,12 +66,24 @@ utest lookupOpt 4 m with Some '5' in
 
 let m = [(1,3), (4,6)] in
 
-utest lookup 1 m with 5 in
-utest lookup 4 m with 7 in
-
 utest mem 1 m with true in
 utest mem 2 m with false in
 utest mem 3 m with false in
 utest mem 4 m with true in
+
+let m = remove 1 m in
+
+utest mem 1 m with false in
+utest mem 4 m with true in
+
+let m = remove 1 m in
+let m = remove 3 m in
+
+utest mem 1 m with false in
+utest mem 4 m with true in
+
+let m = remove 4 m in
+
+utest mem 4 m with false in
 
 ()
