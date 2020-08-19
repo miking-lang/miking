@@ -94,6 +94,10 @@ let minimize : MetaHeuristic -> (SearchState -> Bool) -> (SearchState -> Unit) -
 
 mexpr
 
+-- Enable/disable printing
+let printEnabled = false in
+let print = if printEnabled then print else identity in
+
 -- Example: Travelling Salesman Problem (TSP)
 -- Given a weighted undirected graph, find a tour (Hamiltonian circuit) that
 -- visits each node exactly once, with minimum path weight.
@@ -234,5 +238,15 @@ let r = minimizeTSP metaSA in
 let _ = print "Tabu search:\n" in
 let _ = printIter initState in
 let r = minimizeTSP metaTabu in
+
+-- Switch between meta-heuristics during search
+let minimizeTSP = lam terminate. lam state.
+minimize terminate printIter (neighbours g) state in
+
+let _ = print "Start with tabu search:\n" in
+let _ = printIter initState in
+let r = minimizeTSP (lam state. geqi state.iter 5) initState metaTabu in
+let _ = print "Switch to simulated annealing:\n" in
+let r = minimizeTSP (lam state. geqi state.iter 10) r.0 metaSA in
 
 ()
