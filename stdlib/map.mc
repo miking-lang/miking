@@ -28,26 +28,11 @@ let mapInsert = lam eq. lam k. lam v. lam seq.
                   (lam i. set seq i (k,v))
                   (index (lam t. eq k t.0) seq)
 
--- Updates seq by applying f to the value bound by k.
--- Equality defined by eq.
-recursive
-let mapUpdate = lam eq. lam k. lam f. lam seq.
-  if null seq then seq
-  else
-    let x = head seq in
-    let xs = tail seq in
-    if eq k x.0 then
-      cons (k, f x.1) xs
-    else
-      cons x (mapUpdate eq k f xs)
-end
-
 mexpr
 
 let lookupOpt = mapLookupOpt eqi in
 let lookup = mapLookup eqi in
 let insert = mapInsert eqi in
-let update = mapUpdate eqi in
 let mem = mapMem eqi in
 
 let m = [(1,'1'),(2,'2'),(3,'3')] in
@@ -72,14 +57,9 @@ utest lookupOpt 3 m with Some '4' in
 utest lookupOpt 4 m with Some '5' in
 
 let m = [(1,3), (4,6)] in
-let m = update 1 (addi 2) m in
-let m = update 4 (addi 1) m in
-let m = update 5 (addi 3) m in
 
 utest lookup 1 m with 5 in
 utest lookup 4 m with 7 in
-
-utest update 1 (lam _. error "Don't call me!") [] with [] in
 
 utest mem 1 m with true in
 utest mem 2 m with false in

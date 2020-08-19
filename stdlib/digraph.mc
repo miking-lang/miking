@@ -128,7 +128,8 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else if any (g.eql l) (digraphLabels v1 v2 g) then
     if check then error "label already exists" else g
   else
-    {g with adj = mapUpdate g.eqv v1 (lam es. snoc es (v2, l)) g.adj}
+    let oldEdgeList = mapLookup g.eqv v1 g.adj in
+    {g with adj = mapInsert g.eqv v1 (snoc oldEdgeList (v2, l)) g.adj}
 
 -- Add edge e=(v1,v2,l) to g. Throws an error if l already exists in g.
 let digraphAddEdge = lam v1. lam v2. lam l. lam g.
