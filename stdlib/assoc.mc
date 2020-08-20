@@ -9,8 +9,8 @@ include "set.mc"
 type AssocMap = [(k, v)]
 type AssocTraits = {eq : k -> k -> Bool}
 
--- 'assocEmpty ()' returns an empty associate map
-let assocEmpty : Unit -> AssocMap = lam _.
+-- 'assocEmpty' is an empty associate map
+let assocEmpty : AssocMap =
    []
 
 -- 'assocInsert traits k v m' returns a new map, where the key-value pair
@@ -87,7 +87,7 @@ let remove = assocRemove traits in
 let keys = assocKeys traits in
 let values = assocValues traits in
 
-let m = assocEmpty () in
+let m = assocEmpty in
 let m = insert 1 '1' m in
 let m = insert 2 '2' m in
 let m = insert 3 '3' m in
@@ -121,7 +121,7 @@ utest lookup 4 m with Some '5' in
 
 let m = [(1,3), (4,6)] in
 
-let m = assocEmpty () in
+let m = assocEmpty in
 let m = insert 1 3 m in
 let m = insert 4 6 m in
 let m = insert 2 3 m in

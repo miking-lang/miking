@@ -26,7 +26,7 @@ type Digraph = { adj : AssocMap,
 
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let digraphEmpty = lam eqv. lam eql.
-  {adj = assocEmpty (), eqv = eqv, eql = eql}
+  {adj = assocEmpty, eqv = eqv, eql = eql}
 
 -- Get equivalence function for vertices.
 let digraphEqv = lam g.

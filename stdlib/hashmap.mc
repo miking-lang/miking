@@ -29,8 +29,8 @@ let _hashmapDefaultBucketCount = 100
 let _hashmapBucketIdx = lam hash. lam hm. modi (absi hash) (length hm.buckets)
 
 
--- 'hashmapEmpty ()' returns an empty hashmap with a default number of buckets.
-let hashmapEmpty : Unit -> HashMap = lam _.
+-- 'hashmapEmpty' is an empty hashmap with a default number of buckets.
+let hashmapEmpty : HashMap =
   {buckets = makeSeq _hashmapDefaultBucketCount [],
    nelems = 0}
 
@@ -171,7 +171,7 @@ let remove = hashmapRemove traits in
 let keys = hashmapKeys traits in
 let values = hashmapValues traits in
 
-let m = hashmapEmpty () in
+let m = hashmapEmpty in
 
 utest m.nelems with 0 in
 utest mem "foo" m with false in
@@ -245,7 +245,7 @@ recursive let populate = lam hm. lam i.
     populate (insert key i hm)
              (addi i 1)
 in
-let m = populate (hashmapEmpty ()) 0 in
+let m = populate (hashmapEmpty) 0 in
 
 utest m.nelems with n in
 
