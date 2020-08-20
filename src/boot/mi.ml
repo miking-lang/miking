@@ -106,7 +106,10 @@ let main =
   let anon_fun arg = lst := arg :: !lst in
 
   (* Parse command line *)
-  Arg.parse_argv argv_boot speclist anon_fun usage_msg;
+  begin
+    try Arg.parse_argv argv_boot speclist anon_fun usage_msg
+    with Arg.Bad m | Arg.Help m -> print_endline m; exit 0
+  end;
 
   if List.length !lst = 0 then
     Arg.usage speclist usage_msg
