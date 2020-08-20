@@ -593,12 +593,6 @@ in
 -- number : Parser Int
 let number = token lex_number in
 
--- parens : Parser a -> Parser a
-let parens = wrapped_in (symbol "(") (symbol ")") in
-
--- comma_sep : Parser a -> Parser [a]
-let comma_sep = sep_by (symbol ",") in
-
 -- List of reserved keywords
 let keywords =
   ["lam", "let", "in", "if", "then", "else"]
@@ -686,7 +680,7 @@ recursive
     if_))) st
 in
 
-let prog_string = "let f = lam x . if lt 0 x then addi x 1 else 0 in f 5" in
+let prog_string = "let f = lam x . if lt 0 x then addi x 1 else 0 in f 5\n-- This line will be ignored" in
 
 let prog =
   Let ("f",
@@ -698,7 +692,7 @@ let prog =
 in
 
 utest test_parser expr prog_string
-with Success (prog, ("", ("", 1, 54))) in
+with Success (prog, ("", ("", 2, 29))) in
 
 let bad_prog_string = "let f = lam x . x in" in
 
