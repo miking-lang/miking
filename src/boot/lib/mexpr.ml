@@ -51,7 +51,7 @@ let builtin =
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
    ("splitAt",f(CsplitAt(None)));("reverse",f(Creverse));
    ("print",f(Cprint));("dprint",f(Cdprint));
-   ("readLine",f(CreadLine));
+   ("readLine",f(CreadLine));("readBytes",f(CreadBytes));
    ("argv",TmSeq(NoInfo,argv_prog
                         |> Mseq.of_array
                         |> Mseq.map (fun s ->
@@ -145,6 +145,7 @@ let arity = function
   | Cprint            -> 1
   | Cdprint           -> 1
   | CreadLine         -> 1
+  | CreadBytes        -> 1
   | CreadFile         -> 1
   | CwriteFile(None)  -> 2 | CwriteFile(Some(_)) -> 1
   | CfileExists       -> 1
@@ -439,6 +440,21 @@ let delta eval env fi c v  =
       let line = try read_line () with End_of_file -> "" in
       TmSeq(fi, line |> Ustring.from_utf8 |> ustring2tmseq fi)
     | CreadLine,_ -> fail_constapp fi
+
+    | CreadBytes, TmConst(_, CInt(v)) ->
+      if v < 0 then
+        raise_error fi "The argument to readBytes must be a positive integer"
+      else
+        let str = try BatIO.nread BatIO.stdin v with BatIO.No_more_input -> "" in
+        let ustr =
+          try Ustring.from_utf8 str
+          with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
+        in
+        tuple2record fi
+          [ TmSeq(fi, ustring2tmseq fi ustr)
+          ; TmConst(fi,CInt(String.length str))
+          ]
+    | CreadBytes,_ -> fail_constapp fi
 
     | CreadFile,TmSeq(fi,lst) ->
        TmSeq(fi,Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))

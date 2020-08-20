@@ -229,6 +229,7 @@ let rec print_const fmt = function
   | Cprint        -> fprintf fmt "print"
   | Cdprint       -> fprintf fmt "dprint"
   | CreadLine     -> fprintf fmt "readLine"
+  | CreadBytes    -> fprintf fmt "readBytes"
   | CreadFile     -> fprintf fmt "readFile"
   | CwriteFile(_) -> fprintf fmt "writeFile"
   | CfileExists   -> fprintf fmt "fileExists"
