@@ -1,11 +1,11 @@
 -- TODO: Generate unique symbols for data constructors
 -- TODO: Add types
--- TODO: Add pattern matching on records (allows for implementing recordproj_
--- in ast-builder)
 
 include "string.mc"
+include "assoc.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+-- include "mexpr/pprint.mc"
 
 ----------------------------
 -- EVALUATION ENVIRONMENT --
@@ -104,25 +104,18 @@ lang FixEval = FixAst + FunEval
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = map (lam b. {b with value = eval ctx b.value}) t.bindings in
+    let bs = map (lam b. (b.0, (eval ctx b.1))) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
+    let mem = assocMem {eq = eqstr} in
+    let insert = assocInsert {eq = eqstr} in
     match eval ctx u.rec with TmRecord t then
-      recursive let recupdate = lam bindings.
-        if eqi (length bindings) 0 then
-          [{key = u.key, value = u.value}]
-        else
-          let e = head bindings in
-          if eqstr u.key e.key then
-            cons {key = u.key, value = u.value} (tail bindings)
-          else
-            cons e (recupdate (tail bindings))
-      in
-      TmRecord {t with bindings = recupdate t.bindings}
+      if mem u.key t.bindings then
+        TmRecord { bindings = insert u.key (eval ctx u.value) t.bindings }
+      else error "Key does not exist in record"
     else error "Not updating a record"
 end
 
--- TODO Update, cannot use TmTuple, TmProj
 lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -139,7 +132,7 @@ lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEva
                  tpe = binding.tpe,
                  body = TmLam {ident = eta_str,
                                tpe = None (),
-                               body = TmApp {lhs = TmProj {tup = var, idx = i},
+                               body = TmApp {lhs = tupleproj_ i var,
                                              rhs = eta_var}},
                  inexpr = bodyacc}
         )
@@ -147,7 +140,7 @@ lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEva
         t.bindings in
     let lst_str = fresh "lst" ctx.env in
     let lst_var = TmVar {ident = lst_str} in
-    let func_tuple = TmTuple {tms = map (lam x. x.body) t.bindings} in
+    let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_str,
                                tpe = None (),
                                body = unpack_from lst_var func_tuple} in
@@ -177,11 +170,11 @@ end
 lang MatchEval = MatchAst
   sem eval (ctx : {env : Env}) =
   | TmMatch t ->
-    match tryMatch (eval ctx t.target) t.pat with Some newEnv then
+    match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
       eval {ctx with env = concat newEnv ctx.env} t.thn
     else eval ctx t.els
 
-  sem tryMatch (t : Expr) =
+  sem tryMatch (env : Env) (t : Expr) =
   | _ -> None ()
 end
 
@@ -454,7 +447,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
 
   sem delta (arg : Expr) =
   | CGet _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmConst {val = CGet2 s.tms}
     else error "Not a get of a constant sequence"
   | CGet2 tms ->
@@ -464,43 +457,43 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmSeq {tms = cons tm s.tms}
     else error "Not a cons of a constant sequence"
   | CSnoc _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmConst {val = CSnoc2 s.tms}
     else error "Not a snoc of a constant sequence"
   | CSnoc2 tms ->
     TmSeq {tms = snoc tms arg}
   | CConcat _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmConst {val = CConcat2 s.tms}
     else error "Not a concat of a constant sequence"
   | CConcat2 tms ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmSeq {tms = concat tms s.tms}
     else error "Not a concat of a constant sequence"
   | CLength _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmConst {val = CInt {val = (length s.tms)}}
     else error "Not length of a constant sequence"
   | CHead _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       head s.tms
     else error "Not head of a constant sequence"
   | CTail _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmSeq {tms = tail s.tms}
     else error "Not tail of a constant sequence"
   | CNull _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       if null s.tms
       then TmConst {val = CBool {val = true}}
       else TmConst {val = CBool {val = false}}
     else error "Not null of a constant sequence"
   | CReverse _ ->
-    match arg with TmConst {val = CSeq s} then
+    match arg with TmSeq s then
       TmSeq {tms = reverse s.tms}
     else error "Not reverse of a constant sequence"
 end
@@ -510,8 +503,8 @@ end
 --------------
 
 lang VarPatEval = VarPat
-  sem tryMatch (t : Expr) =
-  | PVar v -> Some [(v.ident, t)]
+  sem tryMatch (env : Env) (t : Expr) =
+  | PVar v -> Some (cons (v.ident, t) env)
 end
 
 lang SeqTotPatEval = SeqTotPat
@@ -522,28 +515,42 @@ lang SeqEdgPatEval = SeqEdgPat
   -- TODO
 end
 
-lang RecordPatEval = RecordPat
-  -- TODO
+lang RecordPatEval = RecordAst + RecordPat
+  sem tryMatch (env : Env) (t : Expr) =
+  | PRecord r ->
+    match t with TmRecord {bindings = bs} then
+      recursive let recurse = lam env. lam pbs.
+        match pbs with [(k,p)] ++ pbs then
+          match assocLookup {eq = eqstr} k bs with Some v then
+            match tryMatch env v p with Some env then
+              recurse env pbs
+            else None ()
+          else None ()
+        else match pbs with [] then Some env
+        else never
+      in
+      recurse env r.bindings
+    else None ()
 end
 
 lang DataPatEval = DataAst + DataPat
-  sem tryMatch (t : Expr) =
+  sem tryMatch (env : Env) (t : Expr) =
   | PCon x -> -- INCONSISTENCY: this won't follow renames in the constructor, but the ml interpreter will
     match t with TmConApp cn then
       let constructor = cn.ident in
       let subexpr = cn.body in
       if eqstr x.ident constructor
-        then tryMatch subexpr x.subpat
+        then tryMatch env subexpr x.subpat
         else None ()
     else None ()
 end
 
 lang IntPatEval = IntAst + IntPat
-  sem tryMatch (t : Expr) =
+  sem tryMatch (env : Env) (t : Expr) =
   | PInt i ->
     match t with TmConst c then
       match c.val with CInt i2 then
-        if eqi i.val i2.val then Some [] else None ()
+        if eqi i.val i2.val then Some env else None ()
       else None ()
     else None ()
 end
@@ -552,12 +559,12 @@ lang CharPatEval = CharAst + ConstEval
 end
 
 lang BoolPatEval = BoolAst + BoolPat
-  sem tryMatch (t : Expr) =
+  sem tryMatch (env : Env) (t : Expr) =
   | PBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
     match t with TmConst c then
       match c.val with CBool b2 then
-        if xnor b.val b2.val then Some [] else None ()
+        if xnor b.val b2.val then Some env else None ()
       else None ()
     else None ()
 end
@@ -577,7 +584,6 @@ end
 -------------------------
 -- MEXPR EVAL FRAGMENT --
 -------------------------
--- TODO Update dependency list when done with above
 
 lang MExprEval =
 
@@ -624,11 +630,11 @@ lang MExprEval =
     and (eqstr k1 k2) (eq v1 v2)
   | _ -> false
 
-  sem recordEq (bindings1 : [{key : String, value : Expr}]) =
+  sem recordEq (bindings1 : AssocMap) = -- AssocMap String Expr
   | TmRecord t ->
     and (eqi (length bindings1) (length t.bindings))
-        (all (lam e1. any (lam e2. and (eqstr e1.key e2.key)
-                                       (eq e1.value e2.value))
+        (all (lam e1. any (lam e2. and (eqstr e1.0 e2.0)
+                                       (eq e1.1 e2.1))
                           (bindings1))
              (t.bindings))
   | _ -> false
@@ -649,338 +655,332 @@ mexpr
 
 use MExprEval in
 
--- TODO Lots of changes related to the old TmTuple, TmProj, and TmRecProj are
--- needed for the below. Ignored for now.
---
--- let id = TmLam {ident = "x",
---                 tpe = None (),
---                 body = TmVar {ident = "x"}}
+let id = TmLam {ident = "x",
+                tpe = None (),
+                body = TmVar {ident = "x"}}
+in
+let bump = TmLam {ident = "x",
+                  tpe = None (),
+                  body = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
+                                             rhs = TmVar {ident = "x"}},
+                                rhs = TmConst {val = CInt {val = 1}}}}
+in
+let fst = TmLam {ident = "t",
+                 tpe = None (),
+                 body = tupleproj_ 0 (var_"t")}
+in
+let appIdUnit = TmApp {lhs = id,
+                       rhs = unit_}
+in
+let appBump3 = TmApp {lhs = bump,
+                      rhs = TmConst {val = CInt {val = 3}}} in
+let appFst = TmApp {lhs = fst,
+                    rhs = tuple_ [TmApp {lhs = TmConst {val = CNot ()},
+                                                 rhs = TmConst {val = CBool {val = false}}},
+                                          TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
+                                                              rhs = TmConst {val = CInt {val = 1}}},
+                                                 rhs = TmConst {val = CInt {val = 2}}}]}
+in
+utest eval {env = []} appIdUnit with unit_ in
+utest eval {env = []} appBump3 with TmConst {val = CInt {val = 4}} in
+utest eval {env = []} appFst with TmConst {val = CBool {val = true}} in
+
+let dataDecl = TmConDef {
+  ident = "Foo",
+  tpe = None(),
+  inexpr = TmMatch {
+    target = TmConApp {
+      ident = "Foo",
+      body = tuple_ [unit_, unit_]
+    },
+    pat = PCon {
+      ident = "Foo",
+      subpat = PVar {ident = "u"}
+    },
+    thn = tupleproj_ 0 (var_ "u"),
+    els = id
+  }
+} in
+
+utest eval {env = []} dataDecl with unit_ in
+
+-- Commented out to not clutter the test suite
+-- let utest_test1 = TmUtest (TmConst (CInt 1), TmConst (CInt 1), unit_) in
+-- let utest_test2 =
+--   TmUtest (tuple_ [TmConst (CInt 1),
+--                     TmApp (TmApp (TmConst CAddi, TmConst (CInt 1)), TmConst (CInt 2))]
+--           ,tuple_ [TmConst (CInt 1), TmConst (CInt 3)], unit_)
 -- in
--- let bump = TmLam {ident = "x",
---                   tpe = None (),
---                   body = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
---                                              rhs = TmVar {ident = "x"}},
---                                 rhs = TmConst {val = CInt {val = 1}}}}
+-- let utest_test3 =
+--   TmConDef ("Foo",
+--     TmUtest (TmApp (TmVar "Foo", unit_), TmApp (TmVar "Foo", unit_), unit_))
 -- in
--- let fst = TmLam {ident = "t",
---                  tpe = None (),
---                  body = TmProj {tup = TmVar {ident = "t"},
---                                 idx = 0}}
--- in
--- let appIdUnit = TmApp {lhs = id,
---                        rhs = unit_}
--- in
--- let appBump3 = TmApp {lhs = bump,
---                       rhs = TmConst {val = CInt {val = 3}}} in
--- let appFst = TmApp {lhs = fst,
---                     rhs = TmTuple {tms = [TmApp {lhs = TmConst {val = CNot ()},
---                                                  rhs = TmConst {val = CBool {val = false}}},
---                                           TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
---                                                               rhs = TmConst {val = CInt {val = 1}}},
---                                                  rhs = TmConst {val = CInt {val = 2}}}]}}
--- in
--- utest eval {env = []} appIdUnit with unit_ in
--- utest eval {env = []} appBump3 with TmConst {val = CInt {val = 4}} in
--- utest eval {env = []} appFst with TmConst {val = CBool {val = true}} in
---
--- let dataDecl = TmConDef {
---   ident = "Foo",
---   tpe = None(),
---   inexpr = TmMatch {
---     target = TmConApp {
---       ident = "Foo",
---       body = TmTuple {tms = [unit_, unit_]}
---     },
---     pat = PCon {
---       ident = "Foo",
---       subpat = PVar {ident = "u"}
---     },
---     thn = TmProj {tup = TmVar {ident = "u"}, idx = 0},
---     els = id
---   }
--- } in
---
--- utest eval {env = []} dataDecl with unit_ in
---
--- -- Commented out to not clutter the test suite
--- -- let utest_test1 = TmUtest (TmConst (CInt 1), TmConst (CInt 1), unit_) in
--- -- let utest_test2 =
--- --   TmUtest (TmTuple [TmConst (CInt 1),
--- --                     TmApp (TmApp (TmConst CAddi, TmConst (CInt 1)), TmConst (CInt 2))]
--- --           ,TmTuple [TmConst (CInt 1), TmConst (CInt 3)], unit_)
--- -- in
--- -- let utest_test3 =
--- --   TmConDef ("Foo",
--- --     TmUtest (TmApp (TmVar "Foo", unit_), TmApp (TmVar "Foo", unit_), unit_))
--- -- in
--- -- utest eval {env = []} utest_test1 with unit_ in
--- -- utest eval {env = []} utest_test2 with unit_ in
--- -- utest eval {env = []} utest_test3 with unit_ in
---
--- -- Implementing an interpreter
--- let num = lam n.
---   TmConApp {ident = "Num", body = TmConst {val = CInt {val = n}}}
--- in
--- let one = num 1 in -- Num 1
--- let two = num 2 in -- Num 2
--- let three = num 3 in -- Num 3
--- let add = lam n1. lam n2.
---   TmConApp {ident = "Add", body = TmTuple {tms = [n1, n2]}}
--- in
--- let addOneTwo = add one two in -- Add (Num 1, Num 2)
--- let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
---     TmMatch {target = arg,
---              pat = PCon {ident = "Num",
---                          subpat = PVar {ident = "n"}},
---              thn = TmConApp {ident = "Num", body = TmVar {ident = "n"}},
---              els = els}
--- in
--- -- match arg with Add t then
--- --   let e1 = t.0 in
--- --   let e2 = t.1 in
--- --   match eval e1 with Num n1 then
--- --     match eval e2 with Num n2 then
--- --       Num (addi n1 n2)
--- --     else repl()
--- --   else ()
--- -- else els
--- let result = TmConApp {
---                ident = "Num",
---                body = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
---                                               rhs = TmVar {ident = "n1"}},
---                                  rhs = TmVar {ident = "n2"}}}
--- in
--- let matchInner = TmMatch {target = TmApp {lhs = TmVar {ident = "eval"},
---                                           rhs = TmVar {ident = "e2"}},
---                           pat = PCon {ident = "Num",
---                                       subpat = PVar {ident = "n2"}},
---                           thn = result,
---                           els = unit_}
--- in
--- let matchOuter = TmMatch {target = TmApp {lhs = TmVar {ident = "eval"},
---                                           rhs = TmVar {ident = "e1"}},
---                           pat = PCon {ident = "Num",
---                                       subpat = PVar {ident = "n1"}},
---                           thn = matchInner,
---                           els = unit_}
--- in
--- let deconstruct = lam t. TmLet {ident = "e1",
---                                 tpe = None (),
---                                 body = TmProj {tup = t,
---                                                idx = 0},
---                                 inexpr = TmLet {ident = "e2",
---                                                 tpe = None (),
---                                                 body = TmProj {tup = t,
---                                                                idx = 1},
---                                                 inexpr = matchOuter}}
--- in
--- let addCase = lam arg. lam els. TmMatch {target = arg,
---                                          pat = PCon {ident = "Add",
---                                                      subpat = PVar {ident = "t"}},
---                                          thn = deconstruct (TmVar {ident = "t"}),
---                                          els = els}
--- in
---  -- fix (lam eval. lam e. match e with then ... else ())
--- let evalFn = TmApp {lhs = TmFix (),
---                     rhs = TmLam {ident = "eval",
---                                  tpe = None (),
---                                  body = TmLam {ident = "e",
---                                                tpe = None (),
---                                                body = num_case (TmVar {ident = "e"}) (addCase (TmVar {ident = "e"}) unit_)}}}
--- in
---
--- -- con Num in con Add in let eval = ... in t
--- let wrapInDecls = lam t. TmConDef {ident = "Num",
---                                    tpe = None (),
---                                    inexpr = TmConDef {ident = "Add",
---                                                       tpe = None (),
---                                                       inexpr = TmLet {ident = "eval",
---                                                                       tpe = None (),
---                                                                       body = evalFn,
---                                                                       inexpr = t}}}
--- in
---
--- let evalAdd1 = wrapInDecls (TmApp {lhs = TmVar {ident = "eval"},
---                                    rhs = addOneTwo}) in
--- let addOneTwoThree = add (add one two) three in
--- let evalAdd2 = wrapInDecls (TmApp {lhs = TmVar {ident = "eval"},
---                                    rhs = addOneTwoThree}) in
---
--- utest eval {env = []} evalAdd1 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 3}}} in
--- utest eval {env = []} evalAdd2 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 6}}} in
---
--- let evalUTestIntInUnit = TmUtest {
---     test = TmConst {val = CInt {val = 3}},
---     expected = TmConst {val = CInt {val = 3}},
---     next = unit_}
--- in
---
--- utest eval {env = []} evalUTestIntInUnit with unit_ in
---
--- let oddEven = lam bdy.
---   let odd = {ident = "odd",
---              tpe = None (),
---              body = ulam_ "x"
---                     (if_ (eqi_ (var_ "x") (int_ 1))
---                       true_
---                       (if_ (lti_ (var_ "x") (int_ 1))
---                         false_
---                         (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))}
---   in
---   let even = {ident = "even",
---               tpe = None (),
---               body = ulam_ "x"
---                      (if_ (eqi_ (var_ "x") (int_ 0))
---                        true_
---                        (if_ (lti_ (var_ "x") (int_ 0))
---                          false_
---                          (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))}
---   in
---   TmRecLets {bindings = [odd, even],
---              inexpr = bdy}
--- in
--- utest eval {env = []} (oddEven (app_ (var_ "odd") (int_ 4))) with TmConst {val = CBool {val = false}} in
--- utest eval {env = []} (oddEven (app_ (var_ "odd") (int_ 3))) with TmConst {val = CBool {val = true}} in
--- utest eval {env = []} (oddEven (app_ (var_ "even") (int_ 4))) with TmConst {val = CBool {val = true}} in
--- utest eval {env = []} (oddEven (app_ (var_ "even") (int_ 3))) with TmConst {val = CBool {val = false}} in
---
--- -- TODO Tuples are needed for the below
--- -- let num = lam x. TmConApp { ident = "Num", body = x } in
--- -- lam arg. match arg with Add (Num n1, Num n2) then
--- --   Num (addi n1 n2)
--- -- else ()
--- -- let addEvalNested = ulam_ "arg"
--- --   (match_ (var_ "arg") (ptuple_ [(pcon_ "Num" (pvar_ "n1")), (pcon_ "Num" (pvar_ "n2"))])
--- --     (num (addi_ (var_ "n1") (var_ "n2")))
--- --     (unit_)) in
--- --
--- -- utest eval {env = []} (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)]))) with TmConApp {ident = "Num", body = int_ 3} in
---
---
---
--- -- TODO We need to remove the dependence on TmRecordProj and instead use match (easily done if recordproj_ in ast-builder is implemented)
--- --
--- -- let recordProj = TmLet {ident = "myrec",
--- --                         tpe = None (),
--- --                         body = recordAddTups [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
--- --                         inexpr = TmRecordProj {rec = var_ "myrec",
--- --                                                key = "b"}} in
--- --
--- -- let recordUpdate = TmLet {ident = "myrec",
--- --                           tpe = None (),
--- --                           body = recordAddTups [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
--- --                           inexpr = TmRecordProj {rec = recordupdate_ "c" (int_ 11) (var_ "myrec"),
--- --                                                  key = "c"}} in
--- --
--- -- -- This updates the record with a non-existent value, should this case be allowed?
--- -- let recordUpdate2 = TmLet {ident = "myrec",
--- --                            tpe = None (),
--- --                            body = recordAddTups [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
--- --                            inexpr = TmRecordProj {rec = recordupdate_ "d" (int_ 1729) (var_ "myrec"),
--- --                                                   key = "d"}} in
--- --
--- -- utest eval {env = []} recordProj with TmConst {val = CInt {val = 37}} in
--- -- utest eval {env = []} recordUpdate with TmConst {val = CInt {val = 11}} in
--- -- utest eval {env = []} recordUpdate2 with TmConst {val = CInt {val = 1729}} in
---
--- let evalUTestRecordInUnit = TmUtest {
---     test = recordAddTups [("a", int_ 10), ("b", int_ 13)] record_empty,
---     expected = recordAddTups [("b", int_ 13), ("a", int_ 10)] record_empty,
---     next = unit_}
--- in
--- utest eval {env = []} evalUTestRecordInUnit with unit_ in
---
--- utest eval {env = []} (addf_ (float_ 1.) (float_ 2.)) with float_ 3. in
--- utest eval {env = []} (subf_ (float_ 1.) (float_ 2.)) with float_ (negf 1.) in
--- utest eval {env = []} (mulf_ (float_ 1.) (float_ 2.)) with float_ 2. in
--- utest eval {env = []} (divf_ (float_ 1.) (float_ 2.)) with float_ 0.5 in
--- utest eval {env = []} (negf_ (float_ 1.)) with float_ (negf 1.) in
---
--- utest eval {env = []} (app_ id (int_ 1)) with int_ 1 in
---
--- utest eval {env = []} (app_ (ulam_ "x" (app_ (var_ "x") (int_ 1))) id)
--- with int_ 1 in
---
--- utest eval {env = []}
---            (appSeq_ (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))))
---                    [int_ 1, int_ 2])
--- with int_ 3 in
---
--- utest eval {env = []}
---            (appSeq_ (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (int_ 1))))
---                    [int_ 1, int_ 2])
--- with int_ 2 in
---
--- utest eval {env = []}
---            (appSeq_ (ulam_ "x" (ulam_ "x" (addi_ (var_ "x") (int_ 1))))
---                    [int_ 1, int_ 2])
--- with int_ 3 in
---
--- -- Builtin sequence functions
--- -- get [1,2,3] 1 -> 2
--- let getAst = TmApp {lhs = TmApp {lhs = TmConst {val = CGet ()},
---                                   rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}},
---                      rhs = int_ 1} in
--- utest eval {env = []} getAst with int_ 2 in
---
--- -- cons 1 [2, 3] -> [1,2,3]
--- let consAst = TmApp {lhs = TmApp {lhs = TmConst {val = CCons ()},
---                                   rhs = int_ 1},
---                      rhs = TmSeq {tms = [int_ 2, int_ 3]}} in
--- utest eval {env = []} consAst with TmSeq {tms = [int_ 1, int_ 2, int_ 3]} in
---
--- -- snoc [2, 3] 1 -> [2,3,1]
--- let snocAst = TmApp {lhs = TmApp {lhs = TmConst {val = CSnoc ()},
---                                   rhs = TmSeq {tms = [int_ 2, int_ 3]}},
---                      rhs = int_ 1} in
--- utest eval {env = []} snocAst with TmSeq {tms = [int_ 2, int_ 3, int_ 1]} in
---
--- -- concat [1,2,3] [4,5,6] -> [1,2,3,4,5,6]
--- let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
---                                     rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}},
---                        rhs = TmSeq {tms = [int_ 4, int_ 5, int_ 6]}} in
--- utest eval {env = []} concatAst with TmSeq {tms = [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5, int_ 6]} in
---
--- -- length [1, 2, 3] = 3
--- let lengthAst = TmApp {lhs = TmConst {val = CLength ()},
---                        rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
--- utest eval {env = []} lengthAst with int_ 3 in
---
--- -- tail [1, 2, 3] = [2, 3]
--- let tailAst = TmApp {lhs = TmConst {val = CTail ()},
---                      rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
--- utest eval {env = []} tailAst with TmSeq {tms = [int_ 2, int_ 3]} in
---
--- -- head [1, 2, 3] = 1
--- let headAst = TmApp {lhs = TmConst {val = CHead ()},
---                      rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
--- utest eval {env = []} headAst with int_ 1 in
---
--- -- null [1, 2, 3] = false
--- let nullAst = TmApp {lhs = TmConst {val = CNull ()},
---                      rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
--- utest eval {env = []} nullAst with false_ in
---
--- -- null [] = true
--- let nullAst = TmApp {lhs = TmConst {val = CNull ()},
---                      rhs = TmSeq {tms = []}} in
--- utest eval {env = []} nullAst with true_ in
---
--- -- reverse [1, 2, 3] = [3, 2, 1]
--- let reverseAst = TmApp {lhs = TmConst {val = CReverse ()},
---                         rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
--- utest eval {env = []} reverseAst with TmSeq {tms = [int_ 3, int_ 2, int_ 1]} in
---
---
--- -- Unit tests for CmpFloatEval
--- utest eval {env = []} (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in
--- utest eval {env = []} (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
--- utest eval {env = []} (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
--- utest eval {env = []} (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
--- utest eval {env = []} (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
---
--- -- Unit tests for SymbEval and CmpSymbEval
--- utest eval {env = []} (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
--- utest eval {env = []} (bind_ (let_ "s" (None ()) (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s"))) with true_ in
---
+-- utest eval {env = []} utest_test1 with unit_ in
+-- utest eval {env = []} utest_test2 with unit_ in
+-- utest eval {env = []} utest_test3 with unit_ in
+
+-- Implementing an interpreter
+let num = lam n.
+  TmConApp {ident = "Num", body = TmConst {val = CInt {val = n}}}
+in
+let one = num 1 in -- Num 1
+let two = num 2 in -- Num 2
+let three = num 3 in -- Num 3
+let add = lam n1. lam n2.
+  TmConApp {ident = "Add", body = tuple_ [n1, n2]}
+in
+let addOneTwo = add one two in -- Add (Num 1, Num 2)
+let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
+    TmMatch {target = arg,
+             pat = PCon {ident = "Num",
+                         subpat = PVar {ident = "n"}},
+             thn = TmConApp {ident = "Num", body = TmVar {ident = "n"}},
+             els = els}
+in
+-- match arg with Add t then
+--   let e1 = t.0 in
+--   let e2 = t.1 in
+--   match eval e1 with Num n1 then
+--     match eval e2 with Num n2 then
+--       Num (addi n1 n2)
+--     else repl()
+--   else ()
+-- else els
+let result = TmConApp {
+               ident = "Num",
+               body = TmApp {lhs = TmApp {lhs = TmConst {val = CAddi ()},
+                                              rhs = TmVar {ident = "n1"}},
+                                 rhs = TmVar {ident = "n2"}}}
+in
+let matchInner = TmMatch {target = TmApp {lhs = TmVar {ident = "eval"},
+                                          rhs = TmVar {ident = "e2"}},
+                          pat = PCon {ident = "Num",
+                                      subpat = PVar {ident = "n2"}},
+                          thn = result,
+                          els = unit_}
+in
+let matchOuter = TmMatch {target = TmApp {lhs = TmVar {ident = "eval"},
+                                          rhs = TmVar {ident = "e1"}},
+                          pat = PCon {ident = "Num",
+                                      subpat = PVar {ident = "n1"}},
+                          thn = matchInner,
+                          els = unit_}
+in
+let deconstruct = lam t. TmLet {ident = "e1",
+                                tpe = None (),
+                                body = tupleproj_ 0 t,
+                                inexpr = TmLet {ident = "e2",
+                                                tpe = None (),
+                                                body = tupleproj_ 1 t,
+                                                inexpr = matchOuter}}
+in
+let addCase = lam arg. lam els. TmMatch {target = arg,
+                                         pat = PCon {ident = "Add",
+                                                     subpat = PVar {ident = "t"}},
+                                         thn = deconstruct (TmVar {ident = "t"}),
+                                         els = els}
+in
+ -- fix (lam eval. lam e. match e with then ... else ())
+let evalFn = TmApp {lhs = TmFix (),
+                    rhs = TmLam {ident = "eval",
+                                 tpe = None (),
+                                 body = TmLam {ident = "e",
+                                               tpe = None (),
+                                               body = num_case (TmVar {ident = "e"}) (addCase (TmVar {ident = "e"}) unit_)}}}
+in
+
+-- con Num in con Add in let eval = ... in t
+let wrapInDecls = lam t. TmConDef {ident = "Num",
+                                   tpe = None (),
+                                   inexpr = TmConDef {ident = "Add",
+                                                      tpe = None (),
+                                                      inexpr = TmLet {ident = "eval",
+                                                                      tpe = None (),
+                                                                      body = evalFn,
+                                                                      inexpr = t}}}
+in
+
+let evalAdd1 = wrapInDecls (TmApp {lhs = TmVar {ident = "eval"},
+                                   rhs = addOneTwo}) in
+let addOneTwoThree = add (add one two) three in
+let evalAdd2 = wrapInDecls (TmApp {lhs = TmVar {ident = "eval"},
+                                   rhs = addOneTwoThree}) in
+
+utest eval {env = []} evalAdd1 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 3}}} in
+utest eval {env = []} evalAdd2 with TmConApp {ident = "Num", body = TmConst {val = CInt {val = 6}}} in
+
+let evalUTestIntInUnit = TmUtest {
+    test = TmConst {val = CInt {val = 3}},
+    expected = TmConst {val = CInt {val = 3}},
+    next = unit_}
+in
+
+utest eval {env = []} evalUTestIntInUnit with unit_ in
+
+let oddEven = lam bdy.
+  let odd = {ident = "odd",
+             tpe = None (),
+             body = ulam_ "x"
+                    (if_ (eqi_ (var_ "x") (int_ 1))
+                      true_
+                      (if_ (lti_ (var_ "x") (int_ 1))
+                        false_
+                        (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))}
+  in
+  let even = {ident = "even",
+              tpe = None (),
+              body = ulam_ "x"
+                     (if_ (eqi_ (var_ "x") (int_ 0))
+                       true_
+                       (if_ (lti_ (var_ "x") (int_ 0))
+                         false_
+                         (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))}
+  in
+  TmRecLets {bindings = [odd, even],
+             inexpr = bdy}
+in
+utest eval {env = []} (oddEven (app_ (var_ "odd") (int_ 4))) with TmConst {val = CBool {val = false}} in
+utest eval {env = []} (oddEven (app_ (var_ "odd") (int_ 3))) with TmConst {val = CBool {val = true}} in
+utest eval {env = []} (oddEven (app_ (var_ "even") (int_ 4))) with TmConst {val = CBool {val = true}} in
+utest eval {env = []} (oddEven (app_ (var_ "even") (int_ 3))) with TmConst {val = CBool {val = false}} in
+
+let num = lam x. TmConApp { ident = "Num", body = x } in
+-- lam arg. match arg with Add (Num n1, Num n2) then
+--   Num (addi n1 n2)
+-- else ()
+let addEvalNested = ulam_ "arg"
+  (match_ (var_ "arg") (ptuple_ [(pcon_ "Num" (pvar_ "n1")), (pcon_ "Num" (pvar_ "n2"))])
+    (num (addi_ (var_ "n1") (var_ "n2")))
+    (unit_)) in
+
+utest eval {env = []} (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)]))) with TmConApp {ident = "Num", body = int_ 3} in
+
+
+let recordProj = TmLet {ident = "myrec",
+                        tpe = None (),
+                        body = record_add_bindings [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
+                        inexpr = recordproj_ "b" (var_ "myrec")} in
+
+let recordUpdate = TmLet {ident = "myrec",
+                          tpe = None (),
+                          body = record_add_bindings [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
+                          inexpr =
+                            recordproj_ "c"
+                              (recordupdate_ "c" (int_ 11) (var_ "myrec"))} in
+
+let recordUpdate2 = TmLet {ident = "myrec",
+                           tpe = None (),
+                           body = record_add_bindings [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
+                           inexpr =
+                             recordproj_ "a"
+                               (recordupdate_ "a" (int_ 1729) (var_ "myrec"))} in
+
+utest eval {env = []} recordProj with TmConst {val = CInt {val = 37}} in
+utest eval {env = []} recordUpdate with TmConst {val = CInt {val = 11}} in
+utest eval {env = []} recordUpdate2 with TmConst {val = CInt {val = 1729}} in
+
+let recordUpdateNonValue =
+  (recordupdate_ "a" (addi_ (int_ 1729) (int_ 1)) (record_ [("a", int_ 10)])) in
+utest eval {env = []} recordUpdateNonValue with record_ [("a", int_ 1730)] in
+
+let evalUTestRecordInUnit = TmUtest {
+    test = record_add_bindings [("a", int_ 10), ("b", int_ 13)] record_empty,
+    expected = record_add_bindings [("b", int_ 13), ("a", int_ 10)] record_empty,
+    next = unit_}
+in
+utest eval {env = []} evalUTestRecordInUnit with unit_ in
+
+utest eval {env = []} (addf_ (float_ 1.) (float_ 2.)) with float_ 3. in
+utest eval {env = []} (subf_ (float_ 1.) (float_ 2.)) with float_ (negf 1.) in
+utest eval {env = []} (mulf_ (float_ 1.) (float_ 2.)) with float_ 2. in
+utest eval {env = []} (divf_ (float_ 1.) (float_ 2.)) with float_ 0.5 in
+utest eval {env = []} (negf_ (float_ 1.)) with float_ (negf 1.) in
+
+utest eval {env = []} (app_ id (int_ 1)) with int_ 1 in
+
+utest eval {env = []} (app_ (ulam_ "x" (app_ (var_ "x") (int_ 1))) id)
+with int_ 1 in
+
+utest eval {env = []}
+           (appSeq_ (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))))
+                   [int_ 1, int_ 2])
+with int_ 3 in
+
+utest eval {env = []}
+           (appSeq_ (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (int_ 1))))
+                   [int_ 1, int_ 2])
+with int_ 2 in
+
+utest eval {env = []}
+           (appSeq_ (ulam_ "x" (ulam_ "x" (addi_ (var_ "x") (int_ 1))))
+                   [int_ 1, int_ 2])
+with int_ 3 in
+
+-- Builtin sequence functions
+-- get [1,2,3] 1 -> 2
+let getAst = TmApp {lhs = TmApp {lhs = TmConst {val = CGet ()},
+                                  rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}},
+                     rhs = int_ 1} in
+utest eval {env = []} getAst with int_ 2 in
+
+-- cons 1 [2, 3] -> [1,2,3]
+let consAst = TmApp {lhs = TmApp {lhs = TmConst {val = CCons ()},
+                                  rhs = int_ 1},
+                     rhs = TmSeq {tms = [int_ 2, int_ 3]}} in
+utest eval {env = []} consAst with TmSeq {tms = [int_ 1, int_ 2, int_ 3]} in
+
+-- snoc [2, 3] 1 -> [2,3,1]
+let snocAst = TmApp {lhs = TmApp {lhs = TmConst {val = CSnoc ()},
+                                  rhs = TmSeq {tms = [int_ 2, int_ 3]}},
+                     rhs = int_ 1} in
+utest eval {env = []} snocAst with TmSeq {tms = [int_ 2, int_ 3, int_ 1]} in
+
+-- concat [1,2,3] [4,5,6] -> [1,2,3,4,5,6]
+let concatAst = TmApp {lhs = TmApp {lhs = TmConst {val = CConcat ()},
+                                    rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}},
+                       rhs = TmSeq {tms = [int_ 4, int_ 5, int_ 6]}} in
+utest eval {env = []} concatAst with TmSeq {tms = [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5, int_ 6]} in
+
+-- length [1, 2, 3] = 3
+let lengthAst = TmApp {lhs = TmConst {val = CLength ()},
+                       rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
+utest eval {env = []} lengthAst with int_ 3 in
+
+-- tail [1, 2, 3] = [2, 3]
+let tailAst = TmApp {lhs = TmConst {val = CTail ()},
+                     rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
+utest eval {env = []} tailAst with TmSeq {tms = [int_ 2, int_ 3]} in
+
+-- head [1, 2, 3] = 1
+let headAst = TmApp {lhs = TmConst {val = CHead ()},
+                     rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
+utest eval {env = []} headAst with int_ 1 in
+
+-- null [1, 2, 3] = false
+let nullAst = TmApp {lhs = TmConst {val = CNull ()},
+                     rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
+utest eval {env = []} nullAst with false_ in
+
+-- null [] = true
+let nullAst = TmApp {lhs = TmConst {val = CNull ()},
+                     rhs = TmSeq {tms = []}} in
+utest eval {env = []} nullAst with true_ in
+
+-- reverse [1, 2, 3] = [3, 2, 1]
+let reverseAst = TmApp {lhs = TmConst {val = CReverse ()},
+                        rhs = TmSeq {tms = [int_ 1, int_ 2, int_ 3]}} in
+utest eval {env = []} reverseAst with TmSeq {tms = [int_ 3, int_ 2, int_ 1]} in
+
+
+-- Unit tests for CmpFloatEval
+utest eval {env = []} (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in
+utest eval {env = []} (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
+utest eval {env = []} (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
+
+-- Unit tests for SymbEval and CmpSymbEval
+utest eval {env = []} (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
+utest eval {env = []} (bind_ (let_ "s" (None ()) (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s"))) with true_ in
+
 ()

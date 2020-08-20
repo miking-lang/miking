@@ -59,45 +59,39 @@ let conapp_ = use MExprAst in
   lam s. lam b.
   TmConApp {ident = s, body = b}
 
+-- Never term
+let never_ = use MExprAst in
+  TmNever {}
 
--- Sequence, tuple, and record
-let seq_ = use MExprAst in
-  lam tms.
-  TmSeq {tms = tms}
+-- Patterns --
+let pvar_ = use MExprAst in
+  lam s.
+  PVar {ident = s}
 
--- TODO Should be done using a record instead
--- let tuple_ = use MExprAst in
---   lam tms.
---   TmTuple {tms = tms}
+let punit_ = use MExprAst in
+  PRecord { bindings = [] }
 
-let record_ = use MExprAst in
+let pint_ = use MExprAst in
+  lam i.
+  PInt {val = i}
+
+let ptrue_ = use MExprAst in
+  PBool {val = true}
+
+let pfalse_ = use MExprAst in
+  PBool {val = false}
+
+let pcon_ = use MExprAst in
+  lam cs. lam cp.
+  PCon {ident = cs, subpat = cp}
+
+let prec_ = use MExprAst in
   lam bindings.
-  TmRecord {bindings = bindings}
+  PRecord {bindings = bindings}
 
-let record_empty = use MExprAst in
-  TmRecord {bindings = []}
-
-let unit_ = record_empty
-
-let record_add = use MExprAst in
-  lam key. lam value. lam record.
-  match record with TmRecord t then
-      TmRecord {t with bindings = cons {key = key, value = value} t.bindings}
-  else
-      error "record is not a TmRecord construct"
-
-let recordAddTups = lam tups. lam record.
-  foldl (lam recacc. lam t. record_add t.0 t.1 recacc) record tups
-
--- TODO This needs to be done with pattern matching instead
--- let recordproj_ = use MExprAst in
---   lam key. lam rec.
---   TmRecordProj {rec = rec, key = key}
-
-let recordupdate_ = use MExprAst in
-  lam key. lam value. lam rec.
-  TmRecordUpdate {rec = rec, key = key, value = value}
-
+let ptuple_ = use MExprAst in
+  lam ps.
+  prec_ (mapi (lam i. lam p. (int2string i,p)) ps)
 
 -- Types --
 let tyarrow_ = use MExprAst in
@@ -149,6 +143,71 @@ let tycon_ = use MExprAst in
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}
+
+-- Control flows --
+let lam_ = use MExprAst in
+  lam ident. lam tpe. lam body.
+  TmLam {ident = ident, tpe = tpe, body = body}
+
+let ulam_ = use MExprAst in
+  lam ident. lam body.
+  lam_ ident tydyn_ body
+
+let ulams_ = use MExprAst in
+  lam idents. lam body.
+  foldr (lam ident. lam acc. ulam_ ident acc) body idents
+
+let if_ = use MExprAst in
+  lam cond. lam thn. lam els.
+  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
+
+let match_ = use MExprAst in
+  lam target. lam pat. lam thn. lam els.
+  TmMatch {target = target, pat = pat, thn = thn, els = els}
+
+-- Sequence, tuple, and record
+let seq_ = use MExprAst in
+  lam tms.
+  TmSeq {tms = tms}
+
+let record_ = use MExprAst in
+  lam bindings.
+  TmRecord {bindings = bindings}
+
+let tuple_ = use MExprAst in
+  lam tms.
+  record_ (mapi (lam i. lam t. (int2string i,t)) tms)
+
+let record_empty = use MExprAst in
+  TmRecord {bindings = []}
+
+let unit_ = record_empty
+
+let record_add = use MExprAst in
+  lam key. lam value. lam record.
+  match record with TmRecord t then
+      TmRecord {t with bindings = cons (key, value) t.bindings}
+  else
+      error "record is not a TmRecord construct"
+
+let record_add_bindings = lam bindings. lam record.
+  foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
+
+let recordproj_ = use MExprAst in
+  lam key. lam r.
+  -- It is fine to use any variable name here. It doesn't matter if it
+  -- overwrites a previous binding, since that binding will never be used in
+  -- the then clause in any case (TODO double check this).
+  match_ r (prec_ [(key,pvar_ "x")]) (var_ "x") never_
+
+let tupleproj_ = use MExprAst in
+  lam i. lam t.
+  recordproj_ (int2string i) t
+
+let recordupdate_ = use MExprAst in
+  lam key. lam value. lam rec.
+  TmRecordUpdate {rec = rec, key = key, value = value}
+
 
 
 -- Application helpers --
@@ -295,29 +354,6 @@ let reverse_ = use MExprAst in
   appf1_ (const_ (CReverse ())) s
 
 
--- Patterns --
-let pvar_ = use MExprAst in
-  lam s.
-  PVar {ident = s}
-
-let punit_ = use MExprAst in
-  PRecord { bindings = [] }
-
-let pint_ = use MExprAst in
-  lam i.
-  PInt {val = i}
-
-let ptrue_ = use MExprAst in
-  PBool {val = true}
-
-let pfalse_ = use MExprAst in
-  PBool {val = false}
-
-let pcon_ = use MExprAst in
-  lam cs. lam cp.
-  PCon {ident = cs, subpat = cp}
-
-
 -- Let expressions (use bind_ or bindall_ to set inexpr) --
 let let_ = use MExprAst in
   lam ident. lam tpe. lam body.
@@ -355,23 +391,3 @@ let condef_ = use MExprAst in
   TmConDef {ident = s, tpe = tpe, inexpr = unit_}
 
 
--- Control flows --
-let lam_ = use MExprAst in
-  lam ident. lam tpe. lam body.
-  TmLam {ident = ident, tpe = tpe, body = body}
-
-let ulam_ = use MExprAst in
-  lam ident. lam body.
-  lam_ ident tydyn_ body
-
-let ulams_ = use MExprAst in
-  lam idents. lam body.
-  foldr (lam ident. lam acc. ulam_ ident acc) body idents
-
-let if_ = use MExprAst in
-  lam cond. lam thn. lam els.
-  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
-
-let match_ = use MExprAst in
-  lam target. lam pat. lam thn. lam els.
-  TmMatch {target = target, pat = pat, thn = thn, els = els}

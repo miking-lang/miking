@@ -47,21 +47,18 @@ end
 
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : [{key   : String,
-                           value : Expr}]}
+  | TmRecord {bindings : AssocMap} -- AssocMap String Expr
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
                     value : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {t with
-                            bindings = map (lam b. {b with value = f b.value})
-                                           t.bindings}
+  | TmRecord t -> TmRecord {bindings = map (lam b. (b.0, f b.1)) t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> foldl f acc (map (lam b. b.value) t.bindings)
+  | TmRecord t -> foldl f acc (map (lam b. b.1) t.bindings)
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -183,11 +180,6 @@ end
 -- All constants in boot have not been implemented. Missing ones can be added
 -- as needed.
 
-lang UnitAst = ConstAst
-  syn Const =
-  | CUnit {}
-end
-
 lang IntAst = ConstAst
   syn Const =
   | CInt {val : Int}
@@ -214,7 +206,7 @@ lang ArithFloatAst = ConstAst + FloatAst
   | CNegf {}
 end
 
-lang BoolAst
+lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
   | CNot {}
@@ -250,7 +242,7 @@ lang CmpSymbAst = SymbAst + BoolAst
 end
 
 -- TODO Remove constants no longer available in boot?
-lang SeqOpAst
+lang SeqOpAst = SeqAst
   syn Const =
   | CGet {}
   | CCons {}
@@ -282,8 +274,7 @@ end
 
 lang RecordPat
   syn Pat =
-  | PRecord {bindings : [{key   : String,
-                          pat   : Pat}]}
+  | PRecord {bindings : AssocMap} -- AssocMap String Pat
 end
 
 lang DataPat = DataAst
@@ -392,7 +383,7 @@ lang MExprAst =
   DataAst + MatchAst + UtestAst + SeqAst + NeverAst
 
   -- Constants
-  + UnitAst + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
 
   -- Patterns
@@ -496,7 +487,7 @@ let tmSeq = seq_ [tmApp11, tmConst2, tmConst3] in
 utest smap_Expr_Expr map2varX tmSeq with seq_ [tmVarX, tmVarX, tmVarX] in
 utest sfold_Expr_Expr fold2seq [] tmSeq with [tmConst3, tmConst2, tmApp11] in
 
-let rb_ = lam k. lam v. {key = k, value = v} in
+let rb_ = lam k. lam v. (k,v) in
 let rec_ = lam bs. TmRecord {bindings = bs} in
 let mkTmRecordXY = lam x. lam y. rec_ [rb_ "x" x, rb_ "y" y] in
 let tmRecordI = mkTmRecordXY tmApp11 tmConst3 in
@@ -527,7 +518,7 @@ utest sfold_Expr_Expr fold2seq [] tmCon with [tmApp] in
 let conapp_ = lam id. lam b. TmConApp {ident = id, body = b} in
 let tmConApp = conapp_ "y" tmApp in
 
-utest smap_Expr_Expr map2varX tmConApp with tmConApp in
+utest smap_Expr_Expr map2varX tmConApp with conapp_ "y" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmConApp with [tmApp] in
 
 

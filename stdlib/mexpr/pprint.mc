@@ -1,3 +1,5 @@
+-- TODO Update and organize according to changes in ast.mc
+
 include "char.mc"
 include "option.mc"
 include "seq.mc"
@@ -48,6 +50,16 @@ lang FunPrettyPrint = FunAst
       in
       let body = pprintCode indent t.body in
       strJoin "" ["lam ", ident, tpe, ".", newline indent, body]
+end
+
+lang RecordPrettyPrint = RecordAst
+    sem pprintCode (indent : Int) =
+    | TmRecord t ->
+      let binds = map (lam r. strJoin "" [r.key, " = ", pprintCode indent r.value]) t.bindings in
+      strJoin "" ["{", strJoin ", " binds, "}"]
+    | TmRecordUpdate t ->
+      strJoin "" ["{", pprintCode indent t.rec, " with ", t.key,
+                  " = ", pprintCode indent t.value, "}"]
 end
 
 lang LetPrettyPrint = LetAst
@@ -102,13 +114,33 @@ lang ConstPrettyPrint = ConstAst
     | TmConst t -> getConstStringCode indent t.val
 end
 
-lang UnitPrettyPrint = UnitAst + UnitPat + ConstPrettyPrint
-    sem getConstStringCode (indent : Int) =
-    | CUnit _ -> "()"
+lang DataPrettyPrint = DataAst + DataPat
+    sem getTypeStringCode (indent : Int) =
+    -- Intentionally left blank
+
+    sem pprintCode (indent : Int) =
+    | TmConDef t ->
+      let name = conName t.ident in
+      let tpe =
+        match t.tpe with Some t1 then
+          concat " : " (getTypeStringCode indent t1)
+        else ""
+      in
+      let inexpr = pprintCode indent t.inexpr in
+      strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
+
+    | TmConApp t ->
+      let l = conName t.ident in
+      let r = pprintCode indent t.body in
+      strJoin "" ["(", l, ") (", r, ")"]
 
     sem getPatStringCode (indent : Int) =
-    | PUnit _ -> "()"
+    | PCon t ->
+      let name = conName t.ident in
+      let subpat = getPatStringCode indent t.subpat in
+      strJoin "" [name, " (", subpat, ")"]
 end
+
 
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
     sem getConstStringCode (indent : Int) =
@@ -188,7 +220,9 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     | CTail _ -> "tail"
     | CNull _ -> "null"
     | CReverse _ -> "reverse"
-    | CSeq t ->
+
+    sem pprintCode (indent : Int) =
+    | TmSeq t ->
       let extract_char = lam e.
         match e with TmConst t1 then
           match t1.val with CChar c then
@@ -201,30 +235,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
         concat "\"" (concat (map (lam e. match extract_char e with Some c then c else '?') t.tms)
                             "\"")
       else
-        pprintCode indent (TmSeq {tms = t.tms})
-
-    sem pprintCode (indent : Int) =
-    | TmSeq t -> strJoin "" ["[", strJoin ", " (map (pprintCode indent) t.tms), "]"]
-end
-
-lang TuplePrettyPrint = TupleAst + TuplePat
-    sem pprintCode (indent : Int) =
-    | TmTuple t -> strJoin "" ["(", strJoin ", " (map (pprintCode indent) t.tms), ")"]
-    | TmProj t -> strJoin "" [pprintCode indent t.tup, ".", int2string t.idx]
-
-    sem getPatStringCode (indent : Int) =
-    | PTuple t -> strJoin "" ["(", strJoin ", " (map (getPatStringCode indent) t.pats), ")"]
-end
-
-lang RecordPrettyPrint = RecordAst
-    sem pprintCode (indent : Int) =
-    | TmRecord t ->
-      let binds = map (lam r. strJoin "" [r.key, " = ", pprintCode indent r.value]) t.bindings in
-      strJoin "" ["{", strJoin ", " binds, "}"]
-    | TmRecordProj t -> strJoin "" [pprintCode indent t.rec, ".", t.key]
-    | TmRecordUpdate t ->
-      strJoin "" ["{", pprintCode indent t.rec, " with ", t.key,
-                  " = ", pprintCode indent t.value, "}"]
+        strJoin "" ["[", strJoin ", " (map (pprintCode indent) t.tms), "]"]
 end
 
 -- Constructor name translation
@@ -235,33 +246,6 @@ let conName = lam name.
     t.ident
   else
     strJoin "" ["#con\"", t.ident, "\""]
-
-lang DataPrettyPrint = DataAst + DataPat
-    sem getTypeStringCode (indent : Int) =
-    -- Intentionally left blank
-
-    sem pprintCode (indent : Int) =
-    | TmConDef t ->
-      let name = conName t.ident in
-      let tpe =
-        match t.tpe with Some t1 then
-          concat " : " (getTypeStringCode indent t1)
-        else ""
-      in
-      let inexpr = pprintCode indent t.inexpr in
-      strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
-
-    | TmConApp t ->
-      let l = conName t.ident in
-      let r = pprintCode indent t.body in
-      strJoin "" ["(", l, ") (", r, ")"]
-
-    sem getPatStringCode (indent : Int) =
-    | PCon t ->
-      let name = conName t.ident in
-      let subpat = getPatStringCode indent t.subpat in
-      strJoin "" [name, " (", subpat, ")"]
-end
 
 lang MatchPrettyPrint = MatchAst
     sem getPatStringCode (indent : Int) =
@@ -287,7 +271,7 @@ lang UtestPrettyPrint = UtestAst
       strJoin "" ["utest ", test, " with ", expected, " in", newline indent, next]
 end
 
-lang TypePrettyPrint = DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
+lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
                        TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
                        BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint
     sem getTypeStringCode (indent : Int) =
@@ -316,11 +300,11 @@ end
 
 lang MExprPrettyPrint = VarPrettyPrint + AppPrettyPrint + FunPrettyPrint +
                         LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + SymbPrettyPrint +
-                        UnitPrettyPrint + IntPrettyPrint + FloatPrettyPrint +
+                        IntPrettyPrint + FloatPrettyPrint +
                         ArithIntPrettyPrint + ArithFloatPrettyPrint +
                         BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint + CmpSymbPrettyPrint +
                         CharPrettyPrint +
-                        SeqPrettyPrint + TuplePrettyPrint + RecordPrettyPrint +
+                        SeqPrettyPrint + RecordPrettyPrint +
                         DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint +
                         TypePrettyPrint
 
