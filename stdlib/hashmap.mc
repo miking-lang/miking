@@ -132,6 +132,20 @@ let hashmapMem : HashMapTraits -> k -> HashMap -> Bool =
   lam traits. lam key. lam hm.
     optionIsSome (hashmapLookupOpt traits key hm)
 
+-- 'hashmapKeys traits hm' returns a list of all keys stored in 'hm'
+let hashmapKeys : HashMapTraits -> HashMap -> [k] =
+  lam _. lam hm.
+    foldl (lam keys. lam bucket.
+             concat keys (map (lam r. r.key) bucket))
+          [] hm.buckets
+
+-- 'hashmapValues traits hm' returns a list of all values stored in 'hm'
+let hashmapValues : HashMapTraits -> HashMap -> [v] =
+  lam _. lam hm.
+    foldl (lam vals. lam bucket.
+      concat vals (map (lam r. r.value) bucket))
+    [] hm.buckets
+
 
 mexpr
 
@@ -141,6 +155,8 @@ let lookup = hashmapLookup traits in
 let lookupOpt = hashmapLookupOpt traits in
 let insert = hashmapInsert traits in
 let remove = hashmapRemove traits in
+let keys = hashmapKeys traits in
+let values = hashmapValues traits in
 
 let m = hashmapEmpty () in
 
@@ -161,6 +177,14 @@ utest m.nelems with 2 in
 utest mem "bar" m with true in
 utest lookupOpt "bar" m with Some ("bbb") in
 utest lookup "bar" m with "bbb" in
+utest
+  match keys m with ["foo", "bar"] | ["bar", "foo"]
+  then true else false
+with true in
+utest
+  match values m with ["aaa", "bbb"] | ["bbb", "aaa"]
+  then true else false
+with true in
 
 let m = insert "foo" "ccc" m in
 

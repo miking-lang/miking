@@ -54,6 +54,17 @@ let assocMem : AssocTraits -> k -> AssocMap -> Bool =
   lam traits. lam k. lam m.
     optionIsSome (assocLookupOpt traits k m)
 
+-- 'assocKeys traits m' returns a list of all keys stored in 'm'
+let assocKeys : AssocTraits -> AssocMap -> [k] =
+  lam _. lam m.
+    map (lam t. t.0) m
+
+-- 'assocValues traits m' returns a list of all values stored in 'm'
+let assocValues : AssocTraits -> AssocMap -> [v] =
+  lam _. lam m.
+    map (lam t. t.1) m
+
+
 mexpr
 
 let traits = {eq = eqi} in
@@ -63,6 +74,8 @@ let lookup = assocLookup traits in
 let insert = assocInsert traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
+let keys = assocKeys traits in
+let values = assocValues traits in
 
 let m = assocEmpty () in
 let m = insert 1 '1' m in
@@ -73,6 +86,18 @@ utest lookupOpt 1 m with Some '1' in
 utest lookupOpt 2 m with Some '2' in
 utest lookupOpt 3 m with Some '3' in
 utest lookupOpt 4 m with None () in
+utest lookup 1 m with '1' in
+utest lookup 2 m with '2' in
+utest lookup 3 m with '3' in
+utest
+  match keys m with [1,2,3] | [1,3,2] | [2,1,3] | [2,3,1] | [3,1,2] | [3,2,1]
+  then true else false
+with true in
+utest
+  match values m with "123" | "132" | "213" | "231" | "312" | "321"
+  then true else false
+with true in
+
 
 let m = insert 1 '2' m in
 let m = insert 2 '3' m in

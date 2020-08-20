@@ -50,6 +50,9 @@ let h = 'h' in
 let i = 'i' in
 let j = 'j' in
 
+let samePaths = lam p1. lam p2.
+  setEqual eqstr p1 p2 in
+
 -- Simple chain graph
 -- ┌─────┐
 -- │  4  │
@@ -89,12 +92,12 @@ utest eqPaths g v 3 [] with ["cba"] in
 
 -- With start nodes
 utest eqPaths g v 0 [1,2,3,4] with [""] in
-utest eqPaths g v 1 [1] with ["","a"] in
-utest eqPaths g v 2 [1] with ["", "ba"] in
-utest eqPaths g v 2 [1,2] with ["", "a", "ba"] in
-utest eqPaths g v 2 [1,2,3] with ["", "a", "ba"] in
-utest eqPaths g v 3 [2,3] with ["a", "ba", "cba"] in
-utest eqPaths g v 3 [1,2,3,4] with ["", "a", "ba", "cba"] in
+utest samePaths (eqPaths g v 1 [1]) ["","a"] with true in
+utest samePaths (eqPaths g v 2 [1]) ["", "ba"] with true in
+utest samePaths (eqPaths g v 2 [1,2]) ["", "a", "ba"] with true in
+utest samePaths (eqPaths g v 2 [1,2,3]) ["", "a", "ba"] with true in
+utest samePaths (eqPaths g v 3 [2,3]) ["a", "ba", "cba"] with true in
+utest samePaths (eqPaths g v 3 [1,2,3,4]) ["", "a", "ba", "cba"] with true in
 
 -- Chain with several edges
 -- ┌─────┐
@@ -129,10 +132,10 @@ in
 
 let v = 1 in
 utest eqPaths g v 1 [] with ["a"] in
-utest eqPaths g v 2 [] with ["ba", "da"] in
-utest eqPaths g v 3 [] with ["cba", "cda"] in
+utest samePaths (eqPaths g v 2 []) ["ba", "da"] with true in
+utest samePaths (eqPaths g v 3 []) ["cba", "cda"] with true in
 
-utest eqPaths g v 3 [3] with ["ba", "cba", "da", "cda"] in
+utest samePaths (eqPaths g v 3 [3]) ["ba", "cba", "da", "cda"] with true in
 
 -- Self looping graph
 -- ┌───┐   a
@@ -147,7 +150,7 @@ let g0 = addEdges
 
 utest eqPaths g0 1 0 [] with [""] in
 utest eqPaths g0 1 0 [1] with [""] in
-utest eqPaths g0 1 1 [1] with ["", "a"] in
+utest samePaths (eqPaths g0 1 1 [1]) ["", "a"] with true in
 
 -- Loop with two nodes (mutual recursion)
 -- ┌─────┐
@@ -165,9 +168,9 @@ let g = addEdges
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
 utest eqPaths g 1 0 [1,2] with [""] in
-utest eqPaths g 1 1 [1] with ["", "a"] in
-utest eqPaths g 1 2 [1] with ["", "ba"] in
-utest eqPaths g 1 2 [1,2] with ["", "a", "ba"] in
+utest samePaths (eqPaths g 1 1 [1]) ["", "a"] with true in
+utest samePaths (eqPaths g 1 2 [1]) ["", "ba"] with true in
+utest samePaths (eqPaths g 1 2 [1,2]) ["", "a", "ba"] with true in
 
 -- Mutual recursion again
 -- ┌─────┐
@@ -191,9 +194,9 @@ let g = addEdges
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
 utest eqPaths g 2 0 [1,2,3] with [""] in
-utest eqPaths g 2 1 [1,2,3] with ["", "a", "c"] in
-utest eqPaths g 2 2 [1,2,3] with ["", "a", "c", "bc"] in
-utest eqPaths g 2 1000000000 [1,2,3] with ["", "a", "c", "bc"] in
+utest samePaths (eqPaths g 2 1 [1,2,3]) ["", "a", "c"] with true in
+utest samePaths (eqPaths g 2 2 [1,2,3]) ["", "a", "c", "bc"] with true in
+utest samePaths (eqPaths g 2 1000000000 [1,2,3]) ["", "a", "c", "bc"] with true in
 
 -- Yet another mutual recursion
 --      ┌─────┐
@@ -216,7 +219,7 @@ let g = addEdges
         [(2,1,a), (3,2,b), (1,3,c), (1,2,d)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 2 3 [1,2,3] with ["","d","ad","b","cb","acb"] in
+utest samePaths (eqPaths g 2 3 [1,2,3]) ["","d","ad","b","cb","acb"] with true in
 
 -- Loop with three nodes
 -- ┌─────┐
@@ -239,7 +242,7 @@ let g = addEdges
         [(1,2,a),(2,3,b),(3,1,c)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 2 3 [3] with ["ca","bca"] in
+utest samePaths (eqPaths g 2 3 [3]) ["ca","bca"] with true in
 
 -- Two way loop
 -- ┌─────┐
@@ -262,8 +265,8 @@ let g = addEdges
         [(2,3,b),(3,2,c),(2,4,d),(4,2,e),(2,1,a)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 10 [2] with ["a", "bca", "dea"] in
-utest eqPaths g 1 10 [4] with ["bca", "ea", "dea"] in
+utest samePaths (eqPaths g 1 10 [2]) ["a", "bca", "dea"] with true in
+utest samePaths (eqPaths g 1 10 [4]) ["bca", "ea", "dea"] with true in
 
 -- Chain with loops
 -- ┌─────┐   c
@@ -290,6 +293,6 @@ let g = addEdges
         [(3,3,c),(2,2,b),(3,2,a),(2,1,d)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 3 [3] with ["bd", "ad", "cad"] in
+utest samePaths (eqPaths g 1 3 [3]) ["bd", "ad", "cad"] with true in
 
 ()

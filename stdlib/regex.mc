@@ -409,7 +409,7 @@ let transitions = [(1,2,"a"),(2,3,"c"),(2,4,"e"),(3,2,"b"),(4,2,"d")] in
 let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
 
 -- Short form: a(cb|ed)*e
--- Actual return: (ae | (ac(bc)*be)) (de | (dc (bc)* be))*
-utest regexFromDFA dfa with  Concat (Union (Concat (Symbol "a",Symbol "e"),Concat (Concat (Symbol "a",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))),Kleene (Union (Concat (Symbol "d",Symbol "e"),Concat (Concat (Symbol "d",Symbol "c"),Concat (Kleene (Concat (Symbol "b",Symbol "c")),Concat (Symbol "b",Symbol "e")))))) in
+-- Actual return: a(cb)*e(d(cb)*e)*
+utest regexFromDFA dfa with Concat (Concat (Symbol ("a"),Concat (Kleene (Concat (Symbol ("c"),Symbol ("b") )),Symbol ("e"))),Kleene (Concat (Symbol ("d"),Concat (Kleene (Concat (Symbol ("c"),Symbol ("b"))),Symbol ("e"))))) in
 
 ()

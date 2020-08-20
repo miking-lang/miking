@@ -1,6 +1,5 @@
 include "graph.mc"
 include "char.mc"
-include "map.mc"
 include "string.mc"
 
 -- Represents a nondeterministic finite automaton
