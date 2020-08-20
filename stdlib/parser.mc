@@ -8,16 +8,11 @@ let debug = lam s. if debug_flag then printLn s else ()
 -- The Parser monad -----------------------------
 
 type Pos = (String, Int, Int)
+-- A position carries a file name, a row number, and a column number
 
-let eqpos = lam pos1 : Pos. lam pos2 : Pos.
-  and (eqstr pos1.0 pos2.0)
-  (and (eqi pos1.1 pos2.1) (eqi pos1.2 pos2.2))
-
-let init_pos = lam f. (f, 1, 1)
-
-let bump_col = lam pos. (pos.0, pos.1, addi 1 pos.2)
-let bump_row = lam pos. (pos.0, addi 1 pos.1, 1)
-
+-- show_pos : Pos -> String
+--
+-- `show_pos pos` gives a string representation of `pos`.
 let show_pos = lam pos.
   let file = if null pos.0
              then ""
@@ -25,6 +20,33 @@ let show_pos = lam pos.
   in
   let row_col = concat (concat (int2string pos.1) ":") (int2string pos.2) in
   concat file row_col
+
+-- eqpos : Pos -> Pos -> Bool
+--
+-- Check if two positions are equal.
+let eqpos = lam pos1 : Pos. lam pos2 : Pos.
+  and (eqstr pos1.0 pos2.0)
+  (and (eqi pos1.1 pos2.1) (eqi pos1.2 pos2.2))
+
+-- init_pos : String -> Pos
+--
+-- `init_pos "foo.ext"` gives a position which is at the start of
+-- the file "foo.ext".
+let init_pos = lam f. (f, 1, 1)
+
+utest show_pos (init_pos "foo.mc") with "FILE \"foo.mc\" 1:1"
+utest show_pos (init_pos "") with "1:1"
+
+-- bumb_col : Pos -> Pos
+--
+-- Increase the column number by 1.
+let bump_col = lam pos. (pos.0, pos.1, addi 1 pos.2)
+
+-- bumb_row : Pos -> Pos
+--
+-- Increase the row number by 1.
+let bump_row = lam pos. (pos.0, addi 1 pos.1, 1)
+
 
 type State = (String, Pos)
 -- The parser state is the remaining input and the current position
@@ -145,6 +167,7 @@ let void = apl (pure ())
 let when = lam b. lam p. lam st.
   if b then void p else pure ()
 
+
 -- Core ------------------------------------------------
 
 -- end_of_input : Parser ()
@@ -155,6 +178,8 @@ let end_of_input = lam st.
   if null input
   then pure () st
   else fail (show_char (head input)) "end of input" st
+
+utest test_parser end_of_input "" with Success((), ("", init_pos ""))
 
 -- next : Parser char
 --
@@ -170,6 +195,29 @@ let next = lam st.
     let c = head input in
     let pos2 = if eqstr [c] "\n" then bump_row pos else bump_col pos in
     pure c (tail input, pos2)
+
+-- Core tests
+utest test_parser next "abc" with Success ('a', ("bc", ("", 1, 2)))
+utest test_parser next "\"" with Success (head "\"", ("", ("", 1, 2)))
+utest show_error (test_parser next "")
+with "Parse error at 1:1: Unexpected end of input"
+
+utest
+  test_parser (
+    bind next (lam c1.
+    bind next (lam c2.
+    pure [c1, c2]))
+  ) "abc"
+with Success ("ab", ("c", ("", 1, 3)))
+
+utest
+  show_error (test_parser (
+  bind next (lam c1.
+  bind next (lam c2.
+  pure [c1, c2]))
+  ) "a")
+with "Parse error at 1:2: Unexpected end of input"
+
 
 -- alt : Parser a -> Parser a -> Parser a
 --
@@ -283,6 +331,7 @@ let sep_by = lam sep. lam p.
   bind (many (apr sep p)) (lam tl.
   pure (concat hd tl)))
 
+
 -- Lexers ---------------------------------------------
 
 -- Lexers are parsers that do not consume trailing whitespace
@@ -291,6 +340,65 @@ let sep_by = lam sep. lam p.
 --
 -- Parse a specific character.
 let lex_char = lam c. satisfy (eqchar c) (show_char c)
+
+utest test_parser (lex_char 'a') "ab" with Success ('a', ("b", ("", 1, 2)))
+utest show_error (test_parser (lex_char 'b') "ab")
+with "Parse error at 1:1: Unexpected 'a'. Expected 'b'"
+
+utest test_parser (
+    bind (lex_char 'a') (lam c1.
+    bind (lex_char 'b') (lam c2.
+    pure [c1, c2]))
+  ) "abc"
+with Success ("ab", ("c", ("", 1, 3)))
+
+utest show_error (
+  test_parser (
+    bind (lex_char 'b') (lam c1.
+    bind (lex_char 'b') (lam c2.
+    pure [c1, c2]))
+  ) "abc")
+with "Parse error at 1:1: Unexpected 'a'. Expected 'b'"
+
+utest show_error (
+  test_parser (
+    bind (lex_char 'a') (lam c1.
+    bind (lex_char 'a') (lam c2.
+    pure [c1, c2]))
+  ) "abc")
+with "Parse error at 1:2: Unexpected 'b'. Expected 'a'"
+
+utest test_parser (alt (lex_char 'a') (lex_char 'b')) "abc"
+with Success('a', ("bc", ("", 1, 2)))
+utest test_parser (alt (lex_char 'b') (lex_char 'a')) "abc"
+with Success('a', ("bc", ("", 1, 2)))
+utest show_error (
+  test_parser (
+    alt (lex_char 'b') (lex_char 'c')
+  ) "abc")
+with "Parse error at 1:1: Unexpected 'a'. Expected 'b' or 'c'"
+
+utest test_parser (not_followed_by (lex_char 'b')) "abc"
+with Success((), ("abc", ("", 1, 1)))
+utest show_error (test_parser (not_followed_by (lex_char 'a')) "abc")
+with "Parse error at 1:1: Unexpected 'a'"
+
+utest test_parser (many (lex_char 'a')) "abc"
+with Success("a", ("bc", ("", 1,2)))
+utest test_parser (many (lex_char 'a')) "aaabc"
+with Success("aaa", ("bc", ("", 1,4)))
+utest test_parser (many (lex_char 'a')) "bc"
+with Success("", ("bc", ("", 1,1)))
+
+utest test_parser (many1 (lex_char 'a')) "abc"
+with Success("a", ("bc", ("", 1, 2)))
+utest test_parser (many1 (lex_char 'a')) "aaabc"
+with Success("aaa", ("bc", ("", 1, 4)))
+utest show_error (
+  test_parser (
+    many1 (lex_char 'a')
+  ) "bc")
+with "Parse error at 1:1: Unexpected 'b'. Expected 'a'"
 
 -- lex_digits : Parser String
 --
@@ -301,6 +409,11 @@ let lex_digits = many1 (satisfy is_digit "digit")
 --
 -- Parse a natural number.
 let lex_number = fmap string2int lex_digits
+
+utest test_parser (lex_number) "123abc"
+with Success(123, ("abc", ("", 1, 4)))
+utest show_error (test_parser lex_number "abc")
+with "Parse error at 1:1: Unexpected 'a'. Expected digit"
 
 -- lex_string : String -> Parser String
 --
@@ -320,12 +433,28 @@ recursive
         ))
 end
 
+utest test_parser (lex_string "abc") "abcdef"
+with Success("abc", ("def", ("", 1, 4)))
+utest test_parser (lex_string "abcdef") "abcdef"
+with Success("abcdef", ("", ("", 1, 7)))
+utest show_error (test_parser (lex_string "abc") "def")
+with "Parse error at 1:1: Unexpected 'd'. Expected 'abc'"
+
+utest
+  test_parser (
+    bind (lex_string "ab") (lam s1.
+    bind (lex_string "cd") (lam s2.
+    pure (concat s1 s2)))
+  ) "abcde"
+with Success ("abcd", ("e", ("", 1, 5)))
 
 -- Parser Char
 --
 -- Parse a character literal.
 -- TODO: Support escaped characters (also in OCaml parser)
 let lex_char_lit = wrapped_in (lex_char ''') (lex_char ''') next
+
+utest test_parser lex_char_lit "'\n'" with Success (head "\n", ("", ("", 2, 2)))
 
 -- Parser String
 --
@@ -338,6 +467,12 @@ let lex_string_lit =
   in
   wrapped_in (lex_string "\"") (lex_string "\"")
              (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
+
+utest test_parser lex_string_lit ['"','"'] with Success ("", ("", ("", 1, 3)))
+utest test_parser lex_string_lit "\"FILE \\\"foo.mc\\\"\""
+with Success ("FILE \"foo.mc\"", ("", ("", 1, 18)))
+utest test_parser (apr (lex_string "foo") lex_string_lit) "foo\"\\\"\""
+with Success ("\"", ("", ("", 1, 8)))
 
 -- lex_numeral : Parser String
 --
@@ -357,6 +492,13 @@ let lex_numeral =
 -- Parse a floating point number
 let lex_float = fmap string2float lex_numeral
 
+utest test_parser lex_float "3.14159" with Success(3.14159, ("", ("", 1, 8)))
+utest test_parser lex_float "3.2e-2" with Success(0.032, ("", ("", 1, 7)))
+utest test_parser lex_float "3.2e2" with Success(320.0, ("", ("", 1, 6)))
+utest test_parser lex_float "3e+2" with Success(300.0, ("", ("", 1, 5)))
+utest show_error(test_parser lex_float "42")
+with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals"
+
 -- spaces : Parser ()
 --
 -- Parse zero or more whitespace characters.
@@ -367,146 +509,199 @@ let spaces = void (many (satisfy is_whitespace "whitespace"))
 -- Parse one or more whitespace characters.
 let spaces1 = void (many1 (satisfy is_whitespace "whitespace"))
 
+utest test_parser spaces "   abc"
+with Success ((), ("abc", ("", 1, 4)))
+utest test_parser spaces "	  abc"
+with Success ((), ("abc", ("", 1, 4)))
+utest test_parser spaces1 "	  abc"
+with Success ((), ("abc", ("", 1, 4)))
+utest test_parser spaces "abc"
+with Success ((), ("abc", ("", 1, 1)))
+utest show_error (test_parser spaces1 "abc")
+with "Parse error at 1:1: Unexpected 'a'. Expected whitespace"
+
 -- lex_token : Parser () -> Parser a -> Parser a
 --
 -- `lex_token ws p` parses `p`, using `ws` to consume any trailing
 -- whitespace or comments.
 let lex_token = lam ws. lam p. apl p ws
 
+
 mexpr
+-- The following code is meant to serve as an example of how
+-- to write a parser for a small language. The definitions would
+-- typically be top-level, but are kept local here.
 
--- Position tests
-utest show_pos (init_pos "foo.mc") with "FILE \"foo.mc\" 1:1" in
-utest show_pos (init_pos "") with "1:1" in
+-- Here is the AST type for the untyped lambda calculus with
+-- numbers, let bindings and if expressions.
 
--- Core tests
-utest test_parser end_of_input "" with Success((), ("", init_pos "")) in
+type Expr in
 
-utest test_parser next "abc" with Success ('a', ("bc", ("", 1, 2))) in
-utest test_parser next "\"" with Success (head "\"", ("", ("", 1, 2))) in
-utest show_error (test_parser next "")
-with "Parse error at 1:1: Unexpected end of input" in
+con Abs : (String, Expr) -> Expr in
+con App : (Expr, Expr) -> Expr in
+con Var : String -> Expr in
+con Num : Int -> Expr in
+con Let : (String, Expr, Expr) -> Expr in
+con If  : (Expr, Expr, Expr) -> Expr in
 
-utest
-  test_parser (
-    bind next (lam c1.
-    bind next (lam c2.
-    pure [c1, c2]))
-  ) "abc"
-with Success ("ab", ("c", ("", 1, 3))) in
+-- We start by defining the tokens of the language.
 
-utest
-  show_error (test_parser (
-  bind next (lam c1.
-  bind next (lam c2.
-  pure [c1, c2]))
-  ) "a")
-with "Parse error at 1:2: Unexpected end of input" in
+-- line_comment : Parser ()
+--
+-- Parse a line comment, ignoring its contents.
+let line_comment =
+  void (apr (apr (lex_string "--")
+                 (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
+            (alt (lex_string "\n") end_of_input))
+in
 
--- Lexer tests
+-- ws : Parser ()
+--
+-- Parse whitespace or comments.
+let ws = void (many (alt line_comment spaces1)) in
 
-utest test_parser (lex_char 'a') "ab" with Success ('a', ("b", ("", 1, 2))) in
-utest show_error (test_parser (lex_char 'b') "ab")
-with "Parse error at 1:1: Unexpected 'a'. Expected 'b'" in
+-- token : Parser a -> Parser a
+--
+-- `token p` parses `p` and any trailing whitespace or comments.
+let token = lex_token ws in
 
-utest test_parser (
-    bind (lex_char 'a') (lam c1.
-    bind (lex_char 'b') (lam c2.
-    pure [c1, c2]))
-  ) "abc"
-with Success ("ab", ("c", ("", 1, 3))) in
+-- string : String -> Parser String
+--
+-- `string s` parses the string `s` as a token
+let string = lam s. token (lex_string s) in
 
-utest show_error (
-  test_parser (
-    bind (lex_char 'b') (lam c1.
-    bind (lex_char 'b') (lam c2.
-    pure [c1, c2]))
-  ) "abc")
-with "Parse error at 1:1: Unexpected 'a'. Expected 'b'" in
+-- symbol : String -> Parser String
+--
+-- `symbol` is an alias for `string`
+let symbol = string in
 
-utest show_error (
-  test_parser (
-    bind (lex_char 'a') (lam c1.
-    bind (lex_char 'a') (lam c2.
-    pure [c1, c2]))
-  ) "abc")
-with "Parse error at 1:2: Unexpected 'b'. Expected 'a'" in
+-- is_valid_char : Char -> Bool
+--
+-- Check if a character is valid in an identifier.
+let is_valid_char = lam c.
+  or (is_alphanum c) (eqchar c '_')
+in
 
-utest test_parser (alt (lex_char 'a') (lex_char 'b')) "abc"
-with Success('a', ("bc", ("", 1, 2))) in
-utest test_parser (alt (lex_char 'b') (lex_char 'a')) "abc"
-with Success('a', ("bc", ("", 1, 2))) in
-utest show_error (
-  test_parser (
-    alt (lex_char 'b') (lex_char 'c')
-  ) "abc")
-with "Parse error at 1:1: Unexpected 'a'. Expected 'b' or 'c'" in
+-- reserved : String -> Parser String
+--
+-- Parse a specific string and fail if it is followed by
+-- additional valid identifier characters.
+let reserved = lam s.
+  void (token (apl (lex_string s) (not_followed_by (satisfy is_valid_char ""))))
+in
 
-utest test_parser (not_followed_by (lex_char 'b')) "abc"
-with Success((), ("abc", ("", 1, 1))) in
-utest show_error (test_parser (not_followed_by (lex_char 'a')) "abc")
-with "Parse error at 1:1: Unexpected 'a'" in
+-- number : Parser Int
+let number = token lex_number in
 
-utest test_parser (many (lex_char 'a')) "abc"
-with Success("a", ("bc", ("", 1,2))) in
-utest test_parser (many (lex_char 'a')) "aaabc"
-with Success("aaa", ("bc", ("", 1,4))) in
-utest test_parser (many (lex_char 'a')) "bc"
-with Success("", ("bc", ("", 1,1))) in
+-- parens : Parser a -> Parser a
+let parens = wrapped_in (symbol "(") (symbol ")") in
 
-utest test_parser (many1 (lex_char 'a')) "abc"
-with Success("a", ("bc", ("", 1, 2))) in
-utest test_parser (many1 (lex_char 'a')) "aaabc"
-with Success("aaa", ("bc", ("", 1, 4))) in
-utest show_error (
-  test_parser (
-    many1 (lex_char 'a')
-  ) "bc")
-with "Parse error at 1:1: Unexpected 'b'. Expected 'a'" in
+-- comma_sep : Parser a -> Parser [a]
+let comma_sep = sep_by (symbol ",") in
 
-utest test_parser (lex_number) "123abc"
-with Success(123, ("abc", ("", 1, 4))) in
-utest show_error (test_parser lex_number "abc")
-with "Parse error at 1:1: Unexpected 'a'. Expected digit" in
+-- List of reserved keywords
+let keywords =
+  ["lam", "let", "in", "if", "then", "else"]
+in
 
-utest test_parser (lex_string "abc") "abcdef"
-with Success("abc", ("def", ("", 1, 4))) in
-utest test_parser (lex_string "abcdef") "abcdef"
-with Success("abcdef", ("", ("", 1, 7))) in
-utest show_error (test_parser (lex_string "abc") "def")
-with "Parse error at 1:1: Unexpected 'd'. Expected 'abc'" in
+-- ident : Parser String
+--
+-- Parse an identifier, but require that it is not in the list
+-- of reserved keywords.
+let identifier =
+  let valid_id =
+    bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
+    bind (token (many (satisfy is_valid_char ""))) (lam cs.
+    pure (cons c cs)))
+  in
+  try (
+    bind valid_id (lam x.
+    if any (eqstr x) keywords
+    then fail (concat (concat "keyword '" x) "'") "identifier"
+    else pure x)
+  )
+in
 
-utest
-  test_parser (
-    bind (lex_string "ab") (lam s1.
-    bind (lex_string "cd") (lam s2.
-    pure (concat s1 s2)))
-  ) "abcde"
-with Success ("abcd", ("e", ("", 1, 5))) in
+-- We now use the tokens to define the main parser for our
+-- language:
 
-utest test_parser lex_char_lit "'\n'" with Success (head "\n", ("", ("", 2, 2))) in
+recursive
+-- atom : Parser Expr
+--
+-- Innermost expression parser.
+  let atom = lam st.
+    let var_access =
+      let _ = debug "== Parsing var_access" in
+      fmap (lam x. Var x) identifier in
+    let num =
+      let _ = debug "== Parsing num ==" in
+      fmap (lam n. Num n) number
+    in
+      label "atomic expression"
+      (alt var_access num) st
 
-utest test_parser lex_string_lit ['"','"'] with Success ("", ("", ("", 1, 3))) in
-utest test_parser lex_string_lit "\"FILE \\\"foo.mc\\\"\""
-with Success ("FILE \"foo.mc\"", ("", ("", 1, 18))) in
-utest test_parser (apr (lex_string "foo") lex_string_lit) "foo\"\\\"\""
-with Success ("\"", ("", ("", 1, 8))) in
+  -- expr: Parser Expr
+  --
+  -- Main expression parser.
+  let expr = lam st.
+    -- left : Parser Expr
+    --
+    -- Left recursive expressions, i.e. function application
+    let left =
+      bind (many1 atom) (lam as.
+      pure (foldl1 (curry (lam x. App x)) as))
+    in
+    let abs =
+      let _ = debug "== Parsing abstraction ==" in
+      bind (reserved "lam") (lam _.
+      bind identifier (lam x.
+      bind (symbol ".") (lam _.
+      bind expr (lam e.
+      pure (Abs (x, e))))))
+    in
+    let let_ =
+      let _ = debug "== Parsing let ==" in
+      bind (reserved "let") (lam _.
+      bind identifier (lam x.
+      bind (symbol "=") (lam _.
+      bind expr (lam e.
+      bind (symbol "in") (lam _.
+      bind expr (lam body.
+      pure (Let (x, e, body))))))))
+    in
+    let if_ =
+      let _ = debug "== Parsing if ==" in
+      bind (reserved "if") (lam _.
+      bind expr (lam cnd.
+      bind (reserved "then") (lam _.
+      bind expr (lam thn.
+      bind (reserved "else") (lam _.
+      bind expr (lam els.
+      pure (If(cnd, thn, els))))))))
+    in
+    label "expression"
+    (alt left
+    (alt abs
+    (alt let_
+    if_))) st
+in
 
-utest test_parser lex_float "3.14159" with Success(3.14159, ("", ("", 1, 8))) in
-utest test_parser lex_float "3.2e-2" with Success(0.032, ("", ("", 1, 7))) in
-utest test_parser lex_float "3.2e2" with Success(320.0, ("", ("", 1, 6))) in
-utest test_parser lex_float "3e+2" with Success(300.0, ("", ("", 1, 5))) in
-utest show_error(test_parser lex_float "42")
-with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals" in
+let prog_string = "let f = lam x . if lt 0 x then addi x 1 else 0 in f 5" in
 
-utest test_parser spaces "   abc"
-with Success ((), ("abc", ("", 1, 4))) in
-utest test_parser spaces "	  abc"
-with Success ((), ("abc", ("", 1, 4))) in
-utest test_parser spaces1 "	  abc"
-with Success ((), ("abc", ("", 1, 4))) in
-utest test_parser spaces "abc"
-with Success ((), ("abc", ("", 1, 1))) in
-utest show_error (test_parser spaces1 "abc")
-with "Parse error at 1:1: Unexpected 'a'. Expected whitespace" in
+let prog =
+  Let ("f",
+    Abs ("x",
+      If (App (App (Var "lt", Num 0), Var "x"),
+          App (App (Var "addi", Var "x"), Num 1),
+          Num 0)),
+    App (Var "f", Num 5))
+in
+
+utest test_parser expr prog_string
+with Success (prog, ("", ("", 1, 54))) in
+
+let bad_prog_string = "let f = lam x . x in" in
+
+utest show_error (test_parser expr bad_prog_string)
+with "Parse error at 1:21: Unexpected end of input. Expected expression" in
 ()
