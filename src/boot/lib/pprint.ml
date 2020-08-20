@@ -226,15 +226,16 @@ let rec print_const fmt = function
   | CsleepMs -> fprintf fmt "sleepMs"
 
   (* MCore debug and stdio intrinsics *)
-  | Cprint        -> fprintf fmt "print"
-  | Cdprint       -> fprintf fmt "dprint"
-  | CreadLine     -> fprintf fmt "readLine"
-  | CreadFile     -> fprintf fmt "readFile"
-  | CwriteFile(_) -> fprintf fmt "writeFile"
-  | CfileExists   -> fprintf fmt "fileExists"
-  | CdeleteFile   -> fprintf fmt "deleteFile"
-  | Cerror        -> fprintf fmt "error"
-  | Cexit         -> fprintf fmt "exit"
+  | Cprint             -> fprintf fmt "print"
+  | Cdprint            -> fprintf fmt "dprint"
+  | CreadLine          -> fprintf fmt "readLine"
+  | CreadBytesAsString -> fprintf fmt "readBytesAsString"
+  | CreadFile          -> fprintf fmt "readFile"
+  | CwriteFile(_)      -> fprintf fmt "writeFile"
+  | CfileExists        -> fprintf fmt "fileExists"
+  | CdeleteFile        -> fprintf fmt "deleteFile"
+  | Cerror             -> fprintf fmt "error"
+  | Cexit              -> fprintf fmt "exit"
 
   (* MCore Symbols *)
   | CSymb(id) -> fprintf fmt "symb(%d)" id

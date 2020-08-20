@@ -105,6 +105,7 @@ and const =
 | Cprint
 | Cdprint
 | CreadLine
+| CreadBytesAsString
 | CreadFile
 | CwriteFile of ustring option
 | CfileExists
