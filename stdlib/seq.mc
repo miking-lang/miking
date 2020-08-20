@@ -145,14 +145,6 @@ let partition = (lam p. lam seq.
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1])
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[])
 
-let findAssoc = lam p. lam seq.
-  match find (lam tup. p tup.0) seq with Some res
-  then Some res.1
-  else None ()
-
-utest findAssoc (eqi 1) [(2,3), (1,4)] with Some 4
-utest findAssoc (eqi 3) [(2,3), (1,4)] with None ()
-
 -- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
 let distinct = lam eq. lam seq.
   recursive let work = lam seq1. lam seq2.
