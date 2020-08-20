@@ -50,7 +50,7 @@ let digraphEdges = lam g.
 
 -- Get the outgoing edges from vertex v in graph g.
 let digraphEdgesFrom = lam v. lam g.
-  map (lam t. (v, t.0, t.1)) (assocLookup {eq=g.eqv} v g.adj)
+  map (lam t. (v, t.0, t.1)) (assocLookupOrElse {eq=g.eqv} (lam _. error "Lookup failed") v g.adj)
 
 -- Get the incoming edges to vertex v in graph g.
 let digraphEdgesTo = lam v. lam g.
@@ -137,7 +137,7 @@ let digraphAddEdgeCheckLabel = lam v1. lam v2. lam l. lam g. lam check.
   else if any (g.eql l) (digraphLabels v1 v2 g) then
     if check then error "label already exists" else g
   else
-    let oldEdgeList = assocLookup {eq=g.eqv} v1 g.adj in
+    let oldEdgeList = assocLookupOrElse {eq=g.eqv} (lam _. error "Edge not found") v1 g.adj in
     {g with adj = assocInsert {eq=g.eqv} v1 (snoc oldEdgeList (v2, l)) g.adj}
 
 -- Add edge e=(v1,v2,l) to g. Throws an error if l already exists in g.
@@ -173,7 +173,7 @@ let digraphReverse = lam g.
 let digraphTarjan = lam g.
   let min = lam l. lam r. if lti l r then l else r in
   let mapMem = assocMem {eq=g.eqv} in
-  let mapLookup = assocLookup {eq=g.eqv} in
+  let mapLookup = assocLookupOrElse {eq=g.eqv} (lam _. error "Lookup failed") in
   let mapInsert = assocInsert {eq=g.eqv} in
   let setMem = setMem g.eqv in
 

@@ -33,26 +33,35 @@ let assocRemove : AssocTraits -> k -> AssocMap -> AssocMap =
                 (index (lam t. traits.eq k t.0) m)
 
 
--- 'assocLookupOpt traits k m' looks up the key 'k' and returns an Option type.
+-- 'assocLookup traits k m' looks up the key 'k' and returns an Option type.
 -- If 'm' has the key 'k' stored, its value is returned, otherwise None () is
 -- returned.
-let assocLookupOpt : AssocTraits -> k -> AssocMap -> OptionV =
+let assocLookup : AssocTraits -> k -> AssocMap -> OptionV =
   lam traits. lam k. lam m.
     optionMapOr (None ())
                 (lam t. Some t.1)
                 (find (lam t. traits.eq k t.0) m)
 
--- 'assocLookup traits k m' returns the value of key 'k' in 'm'. Throws an error
--- if 'k' does not exist in 'm'.
-let assocLookup : AssocTraits -> k -> AssocMap -> v =
-  lam traits. lam k. lam m.
-    optionGetOrElse (lam _. error "Element not found")
-                    (assocLookupOpt traits k m)
+-- 'assocLookupOrElse traits d k m' returns the value of key 'k' in 'm' if it
+-- exists, otherwise returns the result of 'd ()'.
+let assocLookupOrElse : AssocTraits -> (Unit -> a) -> k -> AssocMap -> vOra =
+  lam traits. lam d. lam k. lam m.
+    optionGetOrElse d
+                    (assocLookup traits k m)
+
+-- 'assocLookupPred p m' returns the associated value of a key that satisfies
+-- the predicate 'p'. If several keys satisfies 'p', the one that happens to be
+-- found first is returned.
+let assocLookupPred : AssocTraits -> (k -> Bool) -> AssocMap -> OptionV =
+  lam p. lam m.
+    optionMapOr (None ())
+                (lam t. Some t.1)
+                (find (lam t. p t.0) m)
 
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
 let assocMem : AssocTraits -> k -> AssocMap -> Bool =
   lam traits. lam k. lam m.
-    optionIsSome (assocLookupOpt traits k m)
+    optionIsSome (assocLookup traits k m)
 
 -- 'assocKeys traits m' returns a list of all keys stored in 'm'
 let assocKeys : AssocTraits -> AssocMap -> [k] =
@@ -69,8 +78,9 @@ mexpr
 
 let traits = {eq = eqi} in
 
-let lookupOpt = assocLookupOpt traits in
 let lookup = assocLookup traits in
+let lookupOrElse = assocLookupOrElse traits in
+let lookupPred = assocLookupPred in
 let insert = assocInsert traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
@@ -82,13 +92,14 @@ let m = insert 1 '1' m in
 let m = insert 2 '2' m in
 let m = insert 3 '3' m in
 
-utest lookupOpt 1 m with Some '1' in
-utest lookupOpt 2 m with Some '2' in
-utest lookupOpt 3 m with Some '3' in
-utest lookupOpt 4 m with None () in
-utest lookup 1 m with '1' in
-utest lookup 2 m with '2' in
-utest lookup 3 m with '3' in
+utest lookup 1 m with Some '1' in
+utest lookup 2 m with Some '2' in
+utest lookup 3 m with Some '3' in
+utest lookup 4 m with None () in
+utest lookupOrElse (lam _. 42) 1 m with '1' in
+utest lookupOrElse (lam _. 42) 2 m with '2' in
+utest lookupOrElse (lam _. 42) 3 m with '3' in
+utest lookupPred (eqi 2) m with Some '2' in
 utest
   match keys m with [1,2,3] | [1,3,2] | [2,1,3] | [2,3,1] | [3,1,2] | [3,2,1]
   then true else false
@@ -98,16 +109,15 @@ utest
   then true else false
 with true in
 
-
 let m = insert 1 '2' m in
 let m = insert 2 '3' m in
 let m = insert 3 '4' m in
 let m = insert 4 '5' m in
 
-utest lookupOpt 1 m with Some '2' in
-utest lookupOpt 2 m with Some '3' in
-utest lookupOpt 3 m with Some '4' in
-utest lookupOpt 4 m with Some '5' in
+utest lookup 1 m with Some '2' in
+utest lookup 2 m with Some '3' in
+utest lookup 3 m with Some '4' in
+utest lookup 4 m with Some '5' in
 
 let m = [(1,3), (4,6)] in
 

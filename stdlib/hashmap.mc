@@ -100,9 +100,9 @@ let hashmapRemove : HashMapTraits -> k -> HashMap -> HashMap =
     {{hm with buckets = set hm.buckets idx newBucket}
          with nelems = newSize}
 
--- 'hashmapLookupOpt traits k hm' looks up the key 'k' in 'hm', returning an
+-- 'hashmapLookup traits k hm' looks up the key 'k' in 'hm', returning an
 -- Option type.
-let hashmapLookupOpt : HashMapTraits -> k -> HashMap -> OptionV =
+let hashmapLookup : HashMapTraits -> k -> HashMap -> OptionV =
   lam traits. lam key. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -120,17 +120,29 @@ let hashmapLookupOpt : HashMapTraits -> k -> HashMap -> OptionV =
     in
     finder (get hm.buckets idx)
 
--- 'hashmapLookup traits k hm': like hashmapLookupOpt, but will return an error
--- if an element was not found instead of returning an Option type.
-let hashmapLookup : HashMapTraits -> k -> HashMap -> v =
-  lam traits. lam key. lam hm.
-    optionGetOrElse (lam _. error "No element in hashmap bound to the specified key.")
-                    (hashmapLookupOpt traits key hm)
+-- 'hashmapLookupOrElse traits k hm': like hashmapLookupOpt, but returns the
+-- result of 'd ()' if no element was found.
+let hashmapLookupOrElse : HashMapTraits -> k -> HashMap -> v =
+  lam traits. lam d. lam key. lam hm.
+    optionGetOrElse d
+                    (hashmapLookup traits key hm)
+
+-- 'hashmapLookupPred p hm' returns the value of a key that satisfies the
+-- predicate 'p'. If several keys satisfies 'p', the one that happens to be
+-- found first is returned.
+-- [NOTE]
+--   Linear complexity.
+let hashmapLookupPred : (k -> Bool) -> HashMap -> OptionV =
+  lam p. lam hm.
+    let flatBuckets = foldr1 concat hm.buckets in
+    optionMapOr (None ())
+                (lam r. Some (r.value))
+                (find (lam r. p r.key) flatBuckets)
 
 -- 'hashmapMem traits k hm' returns true if 'k' is a key in 'hm', else false.
 let hashmapMem : HashMapTraits -> k -> HashMap -> Bool =
   lam traits. lam key. lam hm.
-    optionIsSome (hashmapLookupOpt traits key hm)
+    optionIsSome (hashmapLookup traits key hm)
 
 -- 'hashmapKeys traits hm' returns a list of all keys stored in 'hm'
 let hashmapKeys : HashMapTraits -> HashMap -> [k] =
@@ -151,8 +163,9 @@ mexpr
 
 let traits = hashmapStrTraits in
 let mem = hashmapMem traits in
+let lookupOrElse = hashmapLookupOrElse traits in
 let lookup = hashmapLookup traits in
-let lookupOpt = hashmapLookupOpt traits in
+let lookupPred = hashmapLookupPred in
 let insert = hashmapInsert traits in
 let remove = hashmapRemove traits in
 let keys = hashmapKeys traits in
@@ -162,21 +175,22 @@ let m = hashmapEmpty () in
 
 utest m.nelems with 0 in
 utest mem "foo" m with false in
-utest lookupOpt "foo" m with None () in
+utest lookup "foo" m with None () in
 
 let m = insert "foo" "aaa" m in
 
 utest m.nelems with 1 in
 utest mem "foo" m with true in
-utest lookupOpt "foo" m with Some ("aaa") in
-utest lookup "foo" m with "aaa" in
+utest lookup "foo" m with Some ("aaa") in
+utest lookupOrElse (lam _. 42) "foo" m with "aaa" in
 
 let m = insert "bar" "bbb" m in
 
 utest m.nelems with 2 in
 utest mem "bar" m with true in
-utest lookupOpt "bar" m with Some ("bbb") in
-utest lookup "bar" m with "bbb" in
+utest lookup "bar" m with Some ("bbb") in
+utest lookupOrElse (lam _. 42) "bar" m with "bbb" in
+utest lookupPred (eqstr "bar") m with Some "bbb" in
 utest
   match keys m with ["foo", "bar"] | ["bar", "foo"]
   then true else false
@@ -190,33 +204,34 @@ let m = insert "foo" "ccc" m in
 
 utest m.nelems with 2 in
 utest mem "foo" m with true in
-utest lookupOpt "foo" m with Some ("ccc") in
-utest lookup "foo" m with "ccc" in
+utest lookup "foo" m with Some ("ccc") in
+utest lookupOrElse (lam _. 42) "foo" m with "ccc" in
+utest lookupOrElse (lam _. 42) "abc" m with 42 in
 
 let m = remove "foo" m in
 
 utest m.nelems with 1 in
 utest mem "foo" m with false in
-utest lookupOpt "foo" m with None () in
+utest lookup "foo" m with None () in
 
 let m = remove "foo" m in
 
 utest m.nelems with 1 in
 utest mem "foo" m with false in
-utest lookupOpt "foo" m with None () in
+utest lookup "foo" m with None () in
 
 let m = remove "babar" m in
 
 utest m.nelems with 1 in
 utest mem "babar" m with false in
-utest lookupOpt "babar" m with None () in
+utest lookup "babar" m with None () in
 
 let m = insert "" "ddd" m in
 
 utest m.nelems with 2 in
 utest mem "" m with true in
-utest lookupOpt "" m with Some ("ddd") in
-utest lookup "" m with "ddd" in
+utest lookup "" m with Some ("ddd") in
+utest lookupOrElse (lam _. 1) "" m with "ddd" in
 
 -- Test with collisions
 let n = addi _hashmapDefaultBucketCount 10 in
@@ -226,7 +241,7 @@ recursive let populate = lam hm. lam i.
     hm
   else
     let key = cons 'a' (int2string i) in
-    utest lookupOpt key hm with None () in
+    utest lookup key hm with None () in
     populate (insert key i hm)
              (addi i 1)
 in
@@ -239,7 +254,7 @@ recursive let checkmem = lam i.
     ()
   else
     let key = cons 'a' (int2string i) in
-    utest lookupOpt key m with Some (i) in
+    utest lookup key m with Some (i) in
     checkmem (addi i 1)
 in
 let _ = checkmem 0 in
@@ -250,7 +265,7 @@ recursive let removeall = lam i. lam hm.
   else
     let key = cons 'a' (int2string i) in
     let newHm = remove key hm in
-    utest lookupOpt key newHm with None () in
+    utest lookup key newHm with None () in
     removeall (addi i 1) newHm
 in
 let m = removeall 0 m in
