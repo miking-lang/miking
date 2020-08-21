@@ -19,13 +19,13 @@ type MetaState
 con Base               : {}                                         -> MetaState
 con SimulatedAnnealing : {temp : Float,
                           decayFun : Float -> SearchState -> Float} -> MetaState
-con TabuSearch         : {tabuConvert : Assignment -> t,
+con TabuSearch         : {tabuConvert : Solution -> t,
                           tabu : [t],
                           isTabu : t -> [t] -> Bool,
                           tabuAdd : t -> [t] -> [t]}                -> MetaState
 
 type NeighbourhoodFun = SearchState -> [Assignment]
-type StepFun = SearchState -> MetaState -> (SearchState, MetaState)
+type StepFun = SearchState -> MetaState -> (Solution, MetaState)
 
 type MetaHeuristic = (MetaState, StepFun)
 
@@ -129,7 +129,7 @@ let printEnabled = false in
 let print = if printEnabled then print else identity in
 
 -- Example: Travelling Salesman Problem (TSP)
--- Given a weighted undirected graph, find a tour (Hamiltonian circuit) that
+-- Given a weighted directed graph, find a tour (Hamiltonian circuit) that
 -- visits each node exactly once, with minimum path weight.
 
 ------------------------
@@ -206,30 +206,48 @@ let neighbours = lam g. lam state.
    in map (lam ex. neighbourFromExchange [ex.0,ex.1] [ex.2,ex.3] tour) possibleExchanges
 in
 
-let terminate = lam state. geqi state.iter 10 in
+let terminate = lam state. geqi state.iter 3 in
 let printIter = lam state. print (strJoin "" ["Iter: ", int2string state.iter, ", ",
                                               "Best: ", int2string state.inc.1, "\n"]) in
 let initState = initSearchState initSol in
 
 let minimizeTSP = minimize terminate printIter initState in
+-- Custom termination condition
+let minimizeTSP1 = lam terminate.
+  minimize terminate printIter initState in
+-- Custom start solution
+let minimizeTSP2 = lam terminate. lam init.
+  minimize terminate printIter init in
 
 ----------------------------
 -- Set up meta-heuristics --
 ----------------------------
 
+let randElem = lam seq.
+  match seq with [] then None ()
+  else Some (get seq (randIntU 0 (length seq))) in
+
 -- Select a random best neighbour
-let randomBest = lam neighs. lam state.
-  match neighs with [] then None () else
-  let costs = map cost neighs in
+let randomBest = lam ns. lam state.
+  match ns with [] then None () else
+  let costs = map cost ns in
   let minCost = min subi costs in
-  let neighCosts = zipWith (lam n. lam c. (n,c)) neighs costs in
-  let minNeighs = filter (lam t. eqi t.1 minCost) neighCosts in
-  let randIdx = randIntU 0 (length minNeighs) in
-  Some (get minNeighs randIdx)
+  let nsCosts = zipWith (lam n. lam c. (n,c)) ns costs in
+  let minNs = filter (lam t. eqi t.1 minCost) nsCosts in
+  randElem minNs
 in
 
-let baseState = Base {} in
-let metaRandBest = (baseState, stepBase (neighbours g) randomBest) in
+let metaRandBest = (Base {}, stepBase (neighbours g) randomBest) in
+
+-- Select a random improving solution (steepest descent)
+let randImproving = lam ns. lam state.
+  match ns with [] then None () else
+  let curCost = state.cur.1 in
+  let nsCosts = map (lam n. (n, cost n)) ns in
+  let improvingNs = filter (lam t. lti t.1 curCost) nsCosts in
+  randElem improvingNs in
+
+let metaSteepDesc = (Base {}, stepBase (neighbours g) randImproving) in
 
 -- Simulated annealing
 let randSol = lam ns. lam state.
@@ -246,10 +264,13 @@ let saState = SimulatedAnnealing {temp = 100.0, decayFunc = decayFunc} in
 let metaSA = (saState, stepSA (neighbours g) randSol) in
 
 -- Tabu search
-let tabuState = TabuSearch {tabu = [],
-                            isTabu = lam assign. lam tabu. false,
+let toursEq = lam t1. lam t2.
+  setEqual (digraphEdgeEq g) t1 t2 in
+
+let tabuState = TabuSearch {tabu = [initTour],
+                            isTabu = lam tour. lam tabu. any (toursEq tour) tabu,
                             tabuAdd = lam assign. lam tabu. cons assign tabu,
-                            tabuConvert = identity} in
+                            tabuConvert = lam sol. sol.0} in
 let metaTabu = (tabuState, stepTabu (neighbours g) randomBest) in
 
 -----------------------
@@ -258,20 +279,45 @@ let metaTabu = (tabuState, stepTabu (neighbours g) randomBest) in
 
 let _ = print "Choose a random best solution:\n" in
 let _ = printIter initState in
-let r = minimizeTSP metaRandBest in
+let r = minimizeTSP1 (lam st. geqi st.iter 50) metaRandBest in
+
+let sstate = r.0 in
+utest sstate.iter with 50 in
+utest sstate.inc.1 with 251 in -- optimum
+utest sstate.stuck with false in
+
+let _ = print "Steepest descent:\n" in
+let _ = printIter initState in
+let r = minimizeTSP1 (lam st. geqi st.iter 100) metaSteepDesc in
+
+let sstate = r.0 in
+utest sstate.inc.1 with 251 in
+utest sstate.stuck with true in
 
 let _ = print "Simulated annealing:\n" in
 let _ = printIter initState in
 let r = minimizeTSP metaSA in
 
+let sstate = r.0 in
+let mstate = match r.1 with SimulatedAnnealing s then s else error "Not a SimulatedAnnealing" in
+utest sstate.iter with 3 in
+utest sstate.stuck with false in
+utest mstate.temp with mulf 0.95 (mulf 0.95 (mulf 0.95 100.0)) in
+
 let _ = print "Tabu search:\n" in
 let _ = printIter initState in
 let r = minimizeTSP metaTabu in
 
--- Switch between meta-heuristics during search
-let minimizeTSP2 = lam terminate. lam state.
-  minimize terminate printIter state in
+let sstate = r.0 in
+let mstate = match r.1 with TabuSearch s then s else error "Not a TabuSearch" in
+utest sstate.iter with 3 in
+utest sstate.stuck with false in
+utest length (mstate.tabu) with 4 in
+utest mstate.isTabu initTour mstate.tabu with true in
+utest mstate.isTabu sstate.cur.0 mstate.tabu with true in
+utest mstate.isTabu sstate.inc.0 mstate.tabu with true in
 
+-- Switch between meta-heuristics during search
 let _ = print "Start with tabu search:\n" in
 let _ = printIter initState in
 let r = minimizeTSP2 (lam state. geqi state.iter 5) initState metaTabu in
