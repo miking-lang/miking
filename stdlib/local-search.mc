@@ -86,8 +86,6 @@ let stepBase : NeighbourhoodFun -> SelectFun -> StepFun =
 -- function.
 let stepSA : NeighbourhoodFun -> SelectFun -> StepFun =
   lam neighbourhood. lam select.
-    let exp = lam x.
-      addf x 1. in
     let step : StepFun = lam state. lam meta.
       match meta with SimulatedAnnealing r then
         let updatedMeta = SimulatedAnnealing {r with temp=r.decayFunc r.temp state} in
