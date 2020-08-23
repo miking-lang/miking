@@ -3,7 +3,6 @@
 --
 -- Test symbools
 
-
 mexpr
 
 -- 'gensym()' generates a new unique symbol.
@@ -18,5 +17,14 @@ utest eqs x x with true in
 utest eqs y y with true in
 utest eqs y x with false in
 utest eqs x y with false in
+
+-- 'sym2int s1' returns an integer representation of s1 that fulfills the
+-- following criterion: eqs a b => eqi (sym2int a) (sym2int b)
+-- No guarantees are given for the opposite direction, but a best effort is
+-- made to give 2 symbols different integer representation.
+-- Symbol -> Int
+let z = x in
+utest eqi (sym2int x) (sym2int x) with true in
+utest eqi (sym2int x) (sym2int z) with true in
 
 ()
