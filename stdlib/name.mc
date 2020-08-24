@@ -12,8 +12,8 @@ include "seq.mc"
 
 type Name = (String, Symbol)
 
--- We use the private _noNymbol instead of an option type
--- for performance reason (no tagging).
+-- We use the private _noSymbol instead of an option type
+-- for performance reasons (no tagging).
 let _noSymbol = gensym ()
 
 

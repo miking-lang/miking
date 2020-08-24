@@ -11,7 +11,7 @@ include "string.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : String}
+  | TmVar {ident : Name}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -34,7 +34,7 @@ end
 
 lang FunAst = VarAst + AppAst
   syn Expr =
-  | TmLam {ident : String,
+  | TmLam {ident : Name,
            tpe   : Option,
            body  : Expr}
 
@@ -64,7 +64,7 @@ end
 
 lang LetAst = VarAst
   syn Expr =
-  | TmLet {ident  : String,
+  | TmLet {ident  : Name,
            tpe    : Option,
            body   : Expr,
            inexpr : Expr}
@@ -78,7 +78,7 @@ end
 
 lang RecLetsAst = VarAst
   syn Expr =
-  | TmRecLets {bindings : [{ident : String,
+  | TmRecLets {bindings : [{ident : Name,
                             tpe   : Option,
                             body  : Expr}],
                inexpr   : Expr}
@@ -108,10 +108,10 @@ end
 
 lang DataAst
   syn Expr =
-  | TmConDef {ident  : String,
+  | TmConDef {ident  : Name,
               tpe    : Option,
               inexpr : Expr}
-  | TmConApp {ident : String,
+  | TmConApp {ident : Name,
               body : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =

@@ -11,19 +11,19 @@ include "mexpr/ast-builder.mc"
 ----------------------------
 -- EVALUATION ENVIRONMENT --
 ----------------------------
--- TODO Symbolize changes
 
-type Env = [(String, Expr)]
+type Env = [(Name, Expr)]
 
 recursive
   let lookup = lam x. lam env.
     if eqi (length env) 0
     then None ()
-    else if eqstr (head env).0 x
+    else if nameEqSym (head env).0 x
     then Some (head env).1
     else lookup x (tail env)
 end
 
+-- TODO Replace with simple call to nameSym
 let fresh : String -> Env -> String = lam var. lam env.
   match lookup var env with None () then
     var
@@ -60,7 +60,7 @@ end
 
 lang FunEval = FunAst + VarEval + AppEval
   syn Expr =
-  | TmClos {ident : String,
+  | TmClos {ident : Name,
             body : Expr,
             env : Env}
 
