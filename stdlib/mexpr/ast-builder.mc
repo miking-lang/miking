@@ -45,7 +45,7 @@ let char_ = use MExprAst in
 
 let str_ = use MExprAst in
   lam s.
-  const_ (TmSeq {tms = map char_ s})
+  TmSeq {tms = map char_ s}
 
 let symb_ = use MExprAst in
   lam c.
