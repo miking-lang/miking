@@ -33,6 +33,16 @@ utest optionBind (None ()) (lam t. Some (addi 1 t)) with (None ())
 utest optionBind (Some 1) (lam t. Some (addi 1 t)) with (Some 2)
 utest optionBind (Some 1) (lam _. None ()) with (None ())
 
+-- 'optionCompose f g' composes the option-producing functions f and g into
+-- a new function, which only succeeds if both f and g succeed.
+let optionCompose: (b -> Option) -> (a -> Option) -> a -> Option =
+  lam f. lam g. lam x.
+    optionBind (g x) f
+
+utest optionCompose (lam t. Some (addi 1 t)) (lam t. Some (muli 2 t)) 2 with Some 5
+utest optionCompose (lam t. None ()) (lam t. Some (muli 2 t)) 2 with None ()
+utest optionCompose (lam t. Some (addi 1 t)) (lam t. None ()) 2 with None ()
+
 -- Try to retrieve the contained value, or compute a default value
 let optionGetOrElse: (Unit -> a) -> Option -> a = lam d. lam o.
   match o with Some t then
@@ -65,6 +75,17 @@ let optionMapOr: b -> (a -> b) -> Option -> b = lam d. lam f. lam o.
 
 utest optionMapOr 3 (addi 1) (Some 1) with 2
 utest optionMapOr 3 (addi 1) (None ()) with 3
+
+-- 'optionMapM f l' maps each element of 'l' to an option using 'f'.
+-- Then it collects the results to a new list option, which is 'Some'
+-- only if all elements of 'l' were mapped to 'Some' by 'f'.
+let optionMapM: (a -> Option) -> [a] -> Option = lam f. lam l.
+  foldr (lam x. lam o. optionBind (f x) (lam y. optionMap (cons y) o))
+        (Some [])
+        l
+
+utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
+utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
 
 -- Returns `true` if the option contains a value which
 -- satisfies the specified predicate.
