@@ -80,9 +80,16 @@ utest optionMapOr 3 (addi 1) (None ()) with 3
 -- Then it collects the results to a new list option, which is 'Some'
 -- only if all elements of 'l' were mapped to 'Some' by 'f'.
 let optionMapM: (a -> Option) -> [a] -> Option = lam f. lam l.
-  foldr (lam x. lam o. optionBind (f x) (lam y. optionMap (cons y) o))
-        (Some [])
-        l
+  recursive let g = lam l. lam acc.
+    match l with [hd] ++ rest then
+      match f hd with Some x then
+        g rest (snoc acc x)
+      else
+        None ()
+    else
+      Some acc
+  in
+  g l []
 
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
