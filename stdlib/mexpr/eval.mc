@@ -4,21 +4,24 @@
 include "string.mc"
 include "char.mc"
 include "assoc.mc"
+include "name.mc"
+
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
--- include "mexpr/pprint.mc"
 
 ----------------------------
 -- EVALUATION ENVIRONMENT --
 ----------------------------
 
-type Env = [(Name, Expr)]
+type Symbol = Int
+
+type Env = [(Symbol, Expr)]
 
 recursive
   let lookup = lam x. lam env.
     if eqi (length env) 0
     then None ()
-    else if nameEqSym (head env).0 x
+    else if eqi (head env).0 x
     then Some (head env).1
     else lookup x (tail env)
 end

@@ -51,6 +51,7 @@ let symb_ = use MExprAst in
   lam c.
   const_ (CSymb {val = c})
 
+-- TODO Add handling of symbols
 let var_ = use MExprAst in
   lam s.
   TmVar {ident = s}
@@ -64,6 +65,7 @@ let never_ = use MExprAst in
   TmNever {}
 
 -- Patterns --
+-- TODO Add handling of symbols
 let pvar_ = use MExprAst in
   lam s.
   PVar {ident = s}
@@ -149,10 +151,13 @@ let tyapp_ = use MExprAst in
   TyApp {lhs = lhs, rhs = rhs}
 
 -- Control flows --
+
+-- TODO Add handling of symbols
 let lam_ = use MExprAst in
   lam ident. lam tpe. lam body.
   TmLam {ident = ident, tpe = tpe, body = body}
 
+-- TODO Add handling of symbols
 let ulam_ = use MExprAst in
   lam ident. lam body.
   lam_ ident tydyn_ body
@@ -202,6 +207,7 @@ let recordproj_ = use MExprAst in
   -- It is fine to use any variable name here. It doesn't matter if it
   -- overwrites a previous binding, since that binding will never be used in
   -- the then clause in any case (TODO double check this).
+  -- TODO Add handling of symbols (var_ + pvar_)
   match_ r (prec_ [(key,pvar_ "x")]) (var_ "x") never_
 
 let tupleproj_ = use MExprAst in
@@ -351,18 +357,23 @@ let reverse_ = use MExprAst in
 
 
 -- Let expressions (use bind_ or bindall_ to set inexpr) --
+
+-- TODO Add handling of symbols
 let let_ = use MExprAst in
   lam ident. lam tpe. lam body.
   TmLet {ident = ident, tpe = tpe, body = body, inexpr = unit_}
 
+-- TODO Add handling of symbols
 let ulet_ = use MExprAst in
   lam ident. lam body.
   let_ ident tydyn_ body
 
+-- TODO Add handling of symbols
 let reclets_ = use MExprAst in
   lam bindings.
   TmRecLets {bindings = bindings, inexpr = unit_}
 
+-- TODO Add handling of symbols
 let reclet_ = use MExprAst in
   lam ident. lam tpe. lam body.
   reclets_ [{ident = ident, tpe = tpe, body = body}]

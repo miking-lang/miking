@@ -257,9 +257,12 @@ end
 -- PATTERNS --
 --------------
 
+type PatName
+con PName     : Name -> PatName
+con PWildcard : ()   -> PatName
 lang VarPat
   syn Pat =
-  | PVar {ident : String}
+  | PVar {ident : PatName}
 end
 
 lang SeqTotPat
@@ -277,7 +280,7 @@ end
 
 lang DataPat = DataAst
   syn Pat =
-  | PCon {ident  : String,
+  | PCon {ident  : Name,
           subpat : Pat}
 end
 
