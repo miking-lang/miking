@@ -248,7 +248,7 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CChar c -> [head "'", c.val, head "'"]
+  | CChar c -> ['\'', c.val, '\'']
 end
 
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
@@ -315,7 +315,7 @@ end
 
 lang CharPatPrettyPrint = CharPat
   sem getPatStringCode (indent : Int) =
-  | PChar t -> [head "'", t.val, head "'"]
+  | PChar t -> ['\'', t.val, '\'']
 end
 
 lang BoolPatPrettyPrint = BoolPat
