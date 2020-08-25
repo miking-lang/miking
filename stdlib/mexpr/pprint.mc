@@ -313,8 +313,9 @@ lang IntPatPrettyPrint = IntPat
   | PInt t -> int2string t.val
 end
 
-lang CharPatPrettyPring = CharPat
-  -- TODO
+lang CharPatPrettyPrint = CharPat
+  sem getPatStringCode (indent : Int) =
+  | PChar t -> [head "'", t.val, head "'"]
 end
 
 lang BoolPatPrettyPrint = BoolPat
@@ -386,7 +387,7 @@ lang MExprPrettyPrint =
   -- Patterns
   + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgPatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
-  CharPatPrettyPring + BoolPatPrettyPrint + AndPatPrettyPrint +
+  CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
   OrPatPrettyPrint + NotPatPrettyPrint
 
   -- Types

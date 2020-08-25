@@ -2,6 +2,7 @@
 -- TODO: Add types
 
 include "string.mc"
+include "char.mc"
 include "assoc.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -555,7 +556,14 @@ lang IntPatEval = IntAst + IntPat
     else None ()
 end
 
-lang CharPatEval = CharAst + ConstEval
+lang CharPatEval = CharAst + CharPat
+  sem tryMatch (env : Env) (t : Expr) =
+  | PChar ch ->
+    match t with TmConst c then
+      match c.val with CChar ch2 then
+        if eqchar ch.val ch2.val then Some env else None ()
+      else None ()
+    else None ()
 end
 
 lang BoolPatEval = BoolAst + BoolPat

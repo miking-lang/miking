@@ -75,6 +75,10 @@ let pint_ = use MExprAst in
   lam i.
   PInt {val = i}
 
+let pchar_ = use MExprAst in
+  lam c.
+  PChar {val = c}
+
 let ptrue_ = use MExprAst in
   PBool {val = true}
 

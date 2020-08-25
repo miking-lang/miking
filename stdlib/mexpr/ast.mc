@@ -289,7 +289,8 @@ lang IntPat = IntAst
 end
 
 lang CharPat
-  -- TODO
+  syn Pat =
+  | PChar {val : Char}
 end
 
 lang BoolPat = BoolAst
