@@ -38,7 +38,12 @@ let reserved_strings = [
   ("mexpr",         fun(i) -> Parser.MEXPR{i=i;v=()});
   ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
-
+  ("Dyn",           fun(i) -> Parser.DYN{i=i;v=()});
+  ("Bool",          fun(i) -> Parser.BOOL{i=i;v=()});
+  ("Int",           fun(i) -> Parser.INT{i=i;v=()});
+  ("Float",         fun(i) -> Parser.FLOAT{i=i;v=()});
+  ("Char",          fun(i) -> Parser.CHAR{i=i;v=()});
+  ("String",        fun(i) -> Parser.STRING{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
@@ -188,7 +193,7 @@ rule main = parse
   | '\'' ((s_escape | utf8) as c) '\''
       { let s = Ustring.from_utf8 c in
         let esc_s = Ustring.convert_escaped_chars s in
-        Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=esc_s}}
+        Parser.CHAR_LIT{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=esc_s}}
   | '#' (("con" | "type" | "var" | "label") as ident) '"'
        { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
@@ -206,7 +211,7 @@ rule main = parse
       { Buffer.reset string_buf ;  parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let esc_s = Ustring.convert_escaped_chars s in
-	 let rval = Parser.STRING{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
+	 let rval = Parser.STRING_LIT{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
 	 add_colno 2; rval}
   | eof
       { Parser.EOF }
