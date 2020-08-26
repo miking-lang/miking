@@ -435,10 +435,16 @@ ty_op:
       { TyDyn }
 
 ty:
+  | ty_base
+      { $1 }
+  | ty_base ARROW ty
+      { TyArrow($1,$3) }
+
+ty_base:
   | ty_atom
       { $1 }
-  | ty_atom ARROW ty
-      { TyArrow($1,$3) }
+  | ty_left
+      { TyCon($1) }
 
 ty_atom:
   | LPAREN RPAREN
@@ -465,14 +471,18 @@ ty_atom:
       { TyChar }
   | STRING
       { TySeq(TyChar) }
-  | ty_left
-      { TyCon($1) }
 
 ty_left:
   | ty_con
     { $1 }
-  | ty_left ty
+  | ty_left ty_atom_or_con
     { TyConApp($1,$2) }
+
+ty_atom_or_con:
+  | ty_atom
+    { $1 }
+  | ty_con
+    { TyCon($1) }
 
 ty_con:
   | type_ident
