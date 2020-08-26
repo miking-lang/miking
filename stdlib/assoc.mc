@@ -6,17 +6,17 @@
 include "option.mc"
 include "set.mc"
 
-type AssocMap = [(k, v)]
-type AssocTraits = {eq : k -> k -> Bool}
+type AssocMap k v = [(k, v)]
+type AssocTraits k = {eq : k -> k -> Bool}
 
 -- 'assocEmpty' is an empty associate map
-let assocEmpty : AssocMap =
+let assocEmpty : AssocMap k v =
    []
 
 -- 'assocInsert traits k v m' returns a new map, where the key-value pair
 -- ('k','v') is stored. If 'k' is already a key in 'm', its old value will be
 -- overwritten.
-let assocInsert : AssocTraits -> k -> v -> AssocMap -> AssocMap =
+let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam v. lam m.
     optionMapOrElse (lam _. cons (k,v) m)
                     (lam i. set m i (k,v))
@@ -24,7 +24,7 @@ let assocInsert : AssocTraits -> k -> v -> AssocMap -> AssocMap =
 
 -- 'assocRemove traits k m' returns a new map, where 'k' is not a key. If 'k' is
 -- not a key in 'm', the map remains unchanged after the operation.
-let assocRemove : AssocTraits -> k -> AssocMap -> AssocMap =
+let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam m.
     optionMapOr m
                 (lam i.
@@ -36,7 +36,7 @@ let assocRemove : AssocTraits -> k -> AssocMap -> AssocMap =
 -- 'assocLookup traits k m' looks up the key 'k' and returns an Option type.
 -- If 'm' has the key 'k' stored, its value is returned, otherwise None () is
 -- returned.
-let assocLookup : AssocTraits -> k -> AssocMap -> OptionV =
+let assocLookup : AssocTraits k -> k -> AssocMap k v -> Option v =
   lam traits. lam k. lam m.
     optionMapOr (None ())
                 (lam t. Some t.1)
@@ -44,7 +44,7 @@ let assocLookup : AssocTraits -> k -> AssocMap -> OptionV =
 
 -- 'assocLookupOrElse traits d k m' returns the value of key 'k' in 'm' if it
 -- exists, otherwise returns the result of 'd ()'.
-let assocLookupOrElse : AssocTraits -> (Unit -> a) -> k -> AssocMap -> vOra =
+let assocLookupOrElse : AssocTraits k -> (Unit -> v) -> k -> AssocMap k v -> v =
   lam traits. lam d. lam k. lam m.
     optionGetOrElse d
                     (assocLookup traits k m)
@@ -52,24 +52,24 @@ let assocLookupOrElse : AssocTraits -> (Unit -> a) -> k -> AssocMap -> vOra =
 -- 'assocLookupPred p m' returns the associated value of a key that satisfies
 -- the predicate 'p'. If several keys satisfies 'p', the one that happens to be
 -- found first is returned.
-let assocLookupPred : AssocTraits -> (k -> Bool) -> AssocMap -> OptionV =
+let assocLookupPred : AssocTraits k -> (k -> Bool) -> AssocMap k v -> Option v =
   lam p. lam m.
     optionMapOr (None ())
                 (lam t. Some t.1)
                 (find (lam t. p t.0) m)
 
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
-let assocMem : AssocTraits -> k -> AssocMap -> Bool =
+let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
   lam traits. lam k. lam m.
     optionIsSome (assocLookup traits k m)
 
 -- 'assocKeys traits m' returns a list of all keys stored in 'm'
-let assocKeys : AssocTraits -> AssocMap -> [k] =
+let assocKeys : AssocTraits k -> AssocMap k v -> [k] =
   lam _. lam m.
     map (lam t. t.0) m
 
 -- 'assocValues traits m' returns a list of all values stored in 'm'
-let assocValues : AssocTraits -> AssocMap -> [v] =
+let assocValues : AssocTraits k -> AssocMap k v -> [v] =
   lam _. lam m.
     map (lam t. t.1) m
 
