@@ -5,8 +5,7 @@
 -- cleaner).
 -- TODO Add full support for MExpr when stable.
 
-include "mexpr.mc"
-include "ast-builder.mc"
+include "ast.mc"
 
 lang FunCPS = FunAst
 

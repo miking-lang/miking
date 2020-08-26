@@ -88,6 +88,32 @@ utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]]
 utest zipWith addi [] [] with []
 
+-- Accumulating maps
+let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+  lam f. lam acc. lam seq.
+    let res =
+      foldl
+        (lam tacc. lam x.
+           match f tacc.0 x with (acc, y) then (acc, cons y tacc.1) else never)
+        (acc, []) seq in
+    (res.0, reverse res.1)
+
+let mapAccumR : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
+  lam f. lam acc. lam seq.
+    foldr
+      (lam x. lam tacc.
+         match f tacc.0 x with (acc, y) then (acc, cons y tacc.1) else never)
+       (acc, []) seq
+
+utest mapAccumL (lam acc. lam x. let x = addi x 1 in ((addi acc x), x)) 0 [1,2,3]
+with (9, [2,3,4])
+utest mapAccumL (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
+with ([3,2,1], [1,2,3])
+utest mapAccumR (lam acc. lam x. let x = addi x 1 in ((addi acc x), x)) 0 [1,2,3]
+with (9, [2,3,4])
+utest mapAccumR (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
+with ([1,2,3], [1,2,3])
+
 -- Predicates
 recursive
   let any = lam p. lam seq.

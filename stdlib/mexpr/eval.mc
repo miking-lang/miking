@@ -849,21 +849,21 @@ let recordUpdate = TmLet {ident = "myrec",
                           body = record_add_bindings [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
                           inexpr =
                             recordproj_ "c"
-                              (recordupdate_ "c" (int_ 11) (var_ "myrec"))} in
+                              (recordupdate_ (var_ "myrec") "c" (int_ 11))} in
 
 let recordUpdate2 = TmLet {ident = "myrec",
                            tpe = None (),
                            body = record_add_bindings [("a", int_ 10),("b", int_ 37),("c", int_ 23)] record_empty,
                            inexpr =
                              recordproj_ "a"
-                               (recordupdate_ "a" (int_ 1729) (var_ "myrec"))} in
+                               (recordupdate_ (var_ "myrec") "a" (int_ 1729))} in
 
 utest eval {env = []} recordProj with TmConst {val = CInt {val = 37}} in
 utest eval {env = []} recordUpdate with TmConst {val = CInt {val = 11}} in
 utest eval {env = []} recordUpdate2 with TmConst {val = CInt {val = 1729}} in
 
 let recordUpdateNonValue =
-  (recordupdate_ "a" (addi_ (int_ 1729) (int_ 1)) (record_ [("a", int_ 10)])) in
+  (recordupdate_ (record_ [("a", int_ 10)]) "a" (addi_ (int_ 1729) (int_ 1))) in
 utest eval {env = []} recordUpdateNonValue with record_ [("a", int_ 1730)] in
 
 let evalUTestRecordInUnit = TmUtest {

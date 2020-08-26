@@ -1,35 +1,52 @@
--- TODO Update and organize according to changes in ast.mc
 
 include "char.mc"
 include "option.mc"
 include "seq.mc"
 include "string.mc"
+include "name.mc"
 
-include "ast.mc"
-include "ast-builder.mc"
+include "mexpr/ast.mc"
 
 let spacing = lam indent. makeSeq indent ' '
 let newline = lam indent. concat "\n" (spacing indent)
 
 -- Set spacing on increment
-let incr = lam indent. addi indent 4
+let incr = lam indent. addi indent 2
+
+let symbolDelim = "'"
+
+-- 'sym2string sym' returns a string corresponding to the symbol 'sym'. This
+-- exposes the underlying symbol representation, but is necessary for pretty
+-- printing.
+let sym2string = lam s. int2string (sym2int s)
 
 -- Constructor name translation
-let conName = lam name.
-  if eqi (length name) 0 then
-    "#con\"\""
-  else if is_upper_alpha (head name) then
-    name
-  else
-    strJoin "" ["#con\"", name, "\""]
+let conString = lam name.
+  match name with (str,sym) then
+    let str =
+      if eqi (length str) 0 then
+        "#con\"\""
+      else if is_upper_alpha (head str) then
+        str
+      else
+        strJoin "" ["#con\"", str, "\""] in
+    let sym = if nameHasSym name then sym2string sym else "" in
+    strJoin symbolDelim [str, sym]
+  else never
 
-let varName = lam name.
-    if eqi (length name) 0 then
-      "#var\"\""
-    else if is_lower_alpha (head name) then
-      name
-    else
-      strJoin "" ["#var\"", name, "\""]
+-- Variable name translation (TODO Some code duplication)
+let varString = lam name.
+  match name with (str,sym) then
+    let str =
+      if eqi (length str) 0 then
+        "#var\"\""
+      else if is_lower_alpha (head str) then
+        str
+      else
+        strJoin "" ["#var\"", str, "\""] in
+    let sym = if nameHasSym name then sym2string sym else "" in
+    strJoin symbolDelim [str, sym]
+  else never
 
 -----------
 -- TERMS --
@@ -37,7 +54,7 @@ let varName = lam name.
 
 lang VarPrettyPrint = VarAst
   sem pprintCode (indent : Int) =
-  | TmVar t -> varName t.ident
+  | TmVar t -> varString t.ident
 end
 
 lang AppPrettyPrint = AppAst
@@ -54,7 +71,7 @@ lang FunPrettyPrint = FunAst
 
   sem pprintCode (indent : Int) =
   | TmLam t ->
-    let ident = t.ident in
+    let ident = varString t.ident in
     let tpe =
       match t.tpe with Some t1 then
         concat " : " (getTypeStringCode indent t1)
@@ -80,15 +97,10 @@ lang LetPrettyPrint = LetAst
 
   sem pprintCode (indent : Int) =
   | TmLet t ->
-    let ident = t.ident in
-    let tpe =
-      match t.tpe with Some t1 then
-        concat " : " (getTypeStringCode indent t1)
-      else ""
-    in
+    let ident = varString t.ident in
     let body = pprintCode (incr indent) t.body in
     let inexpr = pprintCode indent t.inexpr in
-    strJoin "" ["let ", ident, tpe, " =", newline (incr indent),
+    strJoin "" ["let ", ident, " =", newline (incr indent),
                 body, newline indent,
                 "in", newline indent,
                 inexpr]
@@ -103,15 +115,10 @@ lang RecLetsPrettyPrint = RecLetsAst
     let lets = t.bindings in
     let inexpr = pprintCode indent t.inexpr in
     let pprintLets = lam acc. lam l.
-      let ident = l.ident in
-      let tpe =
-        match l.tpe with Some l1 then
-          concat " : " (getTypeStringCode indent l1)
-        else ""
-      in
+      let ident = varString l.ident in
       let body = pprintCode (incr (incr indent)) l.body in
       strJoin "" [acc, newline (incr indent),
-                  "let ", ident, tpe, " =", newline (incr (incr indent)),
+                  "let ", ident, " =", newline (incr (incr indent)),
                   body]
     in
     strJoin "" [foldl pprintLets "recursive" lets, newline indent,
@@ -132,7 +139,7 @@ lang DataPrettyPrint = DataAst
 
   sem pprintCode (indent : Int) =
   | TmConDef t ->
-    let name = conName t.ident in
+    let name = conString t.ident in
     let tpe =
       match t.tpe with Some t1 then
         concat " : " (getTypeStringCode indent t1)
@@ -142,7 +149,7 @@ lang DataPrettyPrint = DataAst
     strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
 
   | TmConApp t ->
-    let l = conName t.ident in
+    let l = conString t.ident in
     let r = pprintCode indent t.body in
     strJoin "" ["(", l, ") (", r, ")"]
 end
@@ -278,7 +285,8 @@ end
 
 lang VarPatPrettyPrint = VarPat
   sem getPatStringCode (indent : Int) =
-  | PVar t -> varName t.ident
+  | PVar {ident = PName name} -> varString name
+  | PVar {ident = PWildcard ()} -> "_"
 end
 
 lang SeqTotPatPrettyPrint = SeqTotPat
@@ -301,7 +309,7 @@ end
 lang DataPatPrettyPrint = DataPat
   sem getPatStringCode (indent : Int) =
   | PCon t ->
-    let name = conName t.ident in
+    let name = conString t.ident in
     let subpat = getPatStringCode indent t.subpat in
     strJoin "" [name, " (", subpat, ")"]
 end
@@ -357,7 +365,7 @@ lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + Seq
           strJoin "" [entry.ident, " : ", getTypeStringCode indent entry.tpe]
       in
       strJoin "" ["{", strJoin ", " (map conventry t.tpes), "}"]
-    | TyCon t -> conName t.ident
+    | TyCon t -> t.ident
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
     | TyApp t ->
@@ -403,16 +411,16 @@ let concat_ = appf2_ (var_ "concat") in
 --     addi (bar babar) a
 -- in
 let func_foo =
-  let_ "foo" (None ()) (
+  let_ "foo" (
     lam_ "a" (None ()) (
       lam_ "b" (None ()) (
         bindall_ [
-          let_ "bar" (None ()) (
+          let_ "bar" (
             lam_ "x" (None ()) (
               addi_ (var_ "b") (var_ "x")
             )
           ),
-          let_ "babar" (None ()) (int_ 3),
+          let_ "babar" (int_ 3),
           addi_ (app_ (var_ "bar")
                       (var_ "babar"))
                 (var_ "a")
@@ -429,7 +437,7 @@ in
 --       muli n (factorial (subi n 1))
 -- in
 let func_factorial =
-    reclets_add "factorial" (Some (tyint_))
+    reclets_add "factorial"
         (lam_ "n" (Some (tyint_))
             (if_ (eqi_ (var_ "n") (int_ 0))
                  (int_ 1)
@@ -451,13 +459,13 @@ in
 --         else not (even (subi x 1))
 -- in
 let funcs_evenodd =
-    reclets_add "even" (None ())
+    reclets_add "even"
         (lam_ "x" (None ())
             (if_ (eqi_ (var_ "x") (int_ 0))
                  (true_)
                  (not_ (app_ (var_ "odd")
                              (subi_ (var_ "x") (int_ 1))))))
-    (reclets_add "odd" (None ())
+    (reclets_add "odd"
         (lam_ "x" (None ())
             (if_ (eqi_ (var_ "x") (int_ 1))
                  (true_)
@@ -469,8 +477,7 @@ in
 
 -- let recget = {i = 5, s = "hello!"} in
 let func_recget =
-    let_ "recget" (Some (tyrecord_fromtups [("i", tyint_),
-                                            ("s", tyseq_ tychar_)])) (
+    let_ "recget" (
         record_add "i" (int_ 5) (
         record_add "s" (str_ "hello!")
         record_empty))
@@ -478,11 +485,11 @@ in
 
 -- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in
 let func_recconcs =
-    let_ "recconcs" (None ()) (lam_ "rec" (None ()) (lam_ "s" (Some (tystr_)) (
-        recordupdate_ "s"
+    let_ "recconcs" (lam_ "rec" (None ()) (lam_ "s" (Some (tystr_)) (
+        recordupdate_ (var_ "rec")
+                      "s"
                       (concat_ (recordproj_ "s" (var_ "rec"))
-                               (var_ "s"))
-                      (var_ "rec"))))
+                               (var_ "s")))))
 in
 
 -- con MyConA in
@@ -497,7 +504,7 @@ let func_myconb = condef_ "myConB" (Some (typrod_ [tybool_, tyint_])) in
 --     else
 --         false
 let func_isconb =
-    let_ "isconb" (Some (tybool_)) (
+    let_ "isconb" (
         lam_ "c" (Some (tycon_ "myConB")) (
             match_ (var_ "c")
                    (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
@@ -507,7 +514,7 @@ in
 
 -- let addone : Int -> Int = lam i : Int. (lam x : Int. addi x 1) i
 let func_addone =
-  let_ "addone" (Some (tyarrow_ tyint_ tyint_)) (
+  let_ "addone" (
       lam_ "i" (Some (tyint_)) (
         app_ (lam_ "x" (Some (tyint_)) (addi_ (var_ "x") (int_ 1)))
              (var_ "i")
@@ -529,9 +536,9 @@ let sample_ast =
   ]
 in
 
---let _ = print "\n\n" in
---let _ = print (pprintCode 0 sample_ast) in
---let _ = print "\n\n" in
+-- let _ = print "\n\n" in
+-- let _ = print (pprintCode 0 sample_ast) in
+-- let _ = print "\n\n" in
 
 utest geqi (length (pprintCode 0 sample_ast)) 0 with true in
 ()
