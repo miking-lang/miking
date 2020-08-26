@@ -52,7 +52,7 @@ let assocLookupOrElse : AssocTraits k -> (Unit -> v) -> k -> AssocMap k v -> v =
 -- 'assocLookupPred p m' returns the associated value of a key that satisfies
 -- the predicate 'p'. If several keys satisfies 'p', the one that happens to be
 -- found first is returned.
-let assocLookupPred : AssocTraits k -> (k -> Bool) -> AssocMap k v -> Option v =
+let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
   lam p. lam m.
     optionMapOr (None ())
                 (lam t. Some t.1)
