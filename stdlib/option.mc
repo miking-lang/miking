@@ -33,9 +33,9 @@ utest optionBind (None ()) (lam t. Some (addi 1 t)) with (None ())
 utest optionBind (Some 1) (lam t. Some (addi 1 t)) with (Some 2)
 utest optionBind (Some 1) (lam _. None ()) with (None ())
 
--- 'optionCompose f g' composes the option-producing functions f and g into
--- a new function, which only succeeds if both f and g succeed.
-let optionCompose: (b -> Option) -> (a -> Option) -> a -> Option =
+-- 'optionCompose f g' composes the option-producing functions 'f' and 'g' into
+-- a new function, which only succeeds if both 'f' and 'g' succeed.
+let optionCompose: (b -> Option c) -> (a -> Option b) -> a -> Option c =
   lam f. lam g. lam x.
     optionBind (g x) f
 
@@ -79,7 +79,7 @@ utest optionMapOr 3 (addi 1) (None ()) with 3
 -- 'optionMapM f l' maps each element of 'l' to an option using 'f'.
 -- Then it collects the results to a new list option, which is 'Some'
 -- only if all elements of 'l' were mapped to 'Some' by 'f'.
-let optionMapM: (a -> Option) -> [a] -> Option = lam f. lam l.
+let optionMapM: (a -> Option b) -> [a] -> Option [b] = lam f. lam l.
   recursive let g = lam l. lam acc.
     match l with [hd] ++ rest then
       match f hd with Some x then
