@@ -325,7 +325,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let ns = List.fold_left add_decl previous_ns decls in
      (* wrap in "con"s *)
      let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
-       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon(TyConVar ty_name)), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
+       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
      let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
        | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
        | _ -> tm in

@@ -201,11 +201,7 @@ and ty =
 | TySeq    of ty                                  (* Sequence type *)
 | TyTuple  of ty list                             (* Tuple type *)
 | TyRecord of (ustring * ty) list                 (* Record type *)
-| TyCon    of ty_con                              (* Type constructor *)
-
-and ty_con =
-| TyConVar of ustring                             (* Type constructor *)
-| TyConApp of (ty_con * ty)                       (* Type constructor application *)
+| TyCon    of ustring                             (* Type constructor *)
 
 
 (* Kind of identifier *)

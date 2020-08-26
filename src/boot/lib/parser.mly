@@ -35,8 +35,8 @@
 %token <Ustring.ustring Ast.tokendata> LABEL_IDENT
 %token <Ustring.ustring Ast.tokendata> UC_IDENT  /* An identifier that starts with an upper-case letter */
 %token <Ustring.ustring Ast.tokendata> LC_IDENT  /* An identifier that starts with "_" or a lower-case letter */
-%token <Ustring.ustring Ast.tokendata> STRING_LIT
-%token <Ustring.ustring Ast.tokendata> CHAR_LIT
+%token <Ustring.ustring Ast.tokendata> STRING
+%token <Ustring.ustring Ast.tokendata> CHAR
 %token <int Ast.tokendata> UINT
 %token <float Ast.tokendata> UFLOAT
 
@@ -64,12 +64,6 @@
 %token <unit Ast.tokendata> MEXPR
 %token <unit Ast.tokendata> INCLUDE
 %token <unit Ast.tokendata> NEVER
-%token <unit Ast.tokendata> DYN
-%token <unit Ast.tokendata> BOOL
-%token <unit Ast.tokendata> INT
-%token <unit Ast.tokendata> FLOAT
-%token <unit Ast.tokendata> CHAR
-%token <unit Ast.tokendata> STRING
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -113,7 +107,7 @@ includes:
     { [] }
 
 include_:
-  | INCLUDE STRING_LIT
+  | INCLUDE STRING
     { let fi = mkinfo $1.i $2.i in
       Include(fi, $2.v) }
 
@@ -306,14 +300,14 @@ atom:
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
   | var_ident                { TmVar($1.i,$1.v,nosym) }
-  | CHAR_LIT             { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
+  | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NEVER                { TmNever($1.i) }
-  | STRING_LIT               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
-                                                    (Mseq.of_ustring $1.v)) }
+  | STRING               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
+                                                  (Mseq.of_ustring $1.v)) }
   | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.of_list $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, Mseq.empty) }
   | LBRACKET labels RBRACKET
@@ -354,7 +348,7 @@ patseq:
       { (mkinfo $1.i $2.i, []) }
   | LSQUARE pats RSQUARE
       { (mkinfo $1.i $3.i, $2) }
-  | STRING_LIT
+  | STRING
       { ($1.i, List.map (fun x -> PatChar($1.i,x)) (ustring2list $1.v)) }
 
 pat_labels:
@@ -412,7 +406,7 @@ pat_atom:
                   (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | UINT /* TODO: enable matching against negative ints */
       { PatInt($1.i, $1.v) }
-  | CHAR_LIT
+  | CHAR
       { PatChar($1.i, List.hd (ustring2list $1.v)) }
   | TRUE
       { PatBool($1.i, true) }
@@ -434,17 +428,13 @@ ty_op:
   |
       { TyDyn }
 
-ty:
-  | ty_base
-      { $1 }
-  | ty_base ARROW ty
-      { TyArrow($1,$3) }
 
-ty_base:
+ty:
   | ty_atom
       { $1 }
-  | ty_left
-      { TyCon($1) }
+  | ty_atom ARROW ty
+      { TyArrow($1,$3) }
+
 
 ty_atom:
   | LPAREN RPAREN
@@ -459,34 +449,16 @@ ty_atom:
       { TyRecord [] }
   | LBRACKET label_tys RBRACKET
       { TyRecord($2) }
-  | DYN
-      { TyDyn }
-  | BOOL
-      { TyBool }
-  | INT
-      { TyInt }
-  | FLOAT
-      { TyFloat }
-  | CHAR
-      { TyChar }
-  | STRING
-      { TySeq(TyChar) }
-
-ty_left:
-  | ty_con
-    { $1 }
-  | ty_left ty_atom_or_con
-    { TyConApp($1,$2) }
-
-ty_atom_or_con:
-  | ty_atom
-    { $1 }
-  | ty_con
-    { TyCon($1) }
-
-ty_con:
   | type_ident
-    { TyConVar($1.v) }
+      {match Ustring.to_utf8 $1.v with
+       | "Dyn"    -> TyDyn
+       | "Bool"   -> TyBool
+       | "Int"    -> TyInt
+       | "Float"  -> TyFloat
+       | "Char"   -> TyChar
+       | "String" -> TySeq(TyChar)
+       | s        -> TyCon(us s)
+      }
 
 ty_list:
   | ty COMMA ty_list
