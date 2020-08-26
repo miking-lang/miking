@@ -123,10 +123,16 @@ tops:
   |
     { [] }
   // TODO: These should matter with a type system
-  | TYPE type_ident tops
-    { $3 }
-  | TYPE type_ident EQ ty tops
-    { $5 }
+  | TYPE type_ident type_params tops
+    { $4 }
+  | TYPE type_ident type_params EQ ty tops
+    { $6 }
+
+type_params:
+  | type_ident type_params
+    { $1 :: $2 }
+  |
+    { [] }
 
 top:
   | mlang
