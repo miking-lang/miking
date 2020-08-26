@@ -430,11 +430,16 @@ ty_op:
 
 
 ty:
-  | ty_atom
+  | ty_left
       { $1 }
-  | ty_atom ARROW ty
+  | ty_left ARROW ty
       { TyArrow($1,$3) }
 
+ty_left:
+  | ty_atom
+    { $1 }
+  | ty_left ty_atom
+    { TyApp($1,$2) }
 
 ty_atom:
   | LPAREN RPAREN
