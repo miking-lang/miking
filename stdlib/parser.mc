@@ -7,46 +7,45 @@ let debug = lam s. if debug_flag then printLn s else ()
 
 -- The Parser monad -----------------------------
 
-type Pos = (String, Int, Int)
+type Pos = {file: String, row: Int, col: Int}
 -- A position carries a file name, a row number, and a column number
 
 -- show_pos : Pos -> String
 --
 -- `show_pos pos` gives a string representation of `pos`.
 let show_pos = lam pos.
-  let file = if null pos.0
+  let file = if null pos.file
              then ""
-             else concat (concat "FILE \"" pos.0) "\" "
+             else concat (concat "FILE \"" pos.file) "\" "
   in
-  let row_col = concat (concat (int2string pos.1) ":") (int2string pos.2) in
+  let row_col = concat (concat (int2string pos.row) ":") (int2string pos.col) in
   concat file row_col
 
 -- eqpos : Pos -> Pos -> Bool
 --
 -- Check if two positions are equal.
 let eqpos = lam pos1 : Pos. lam pos2 : Pos.
-  and (eqstr pos1.0 pos2.0)
-  (and (eqi pos1.1 pos2.1) (eqi pos1.2 pos2.2))
+  and (eqstr pos1.file pos2.file)
+  (and (eqi pos1.row pos2.row) (eqi pos1.col pos2.col))
 
 -- init_pos : String -> Pos
 --
 -- `init_pos "foo.ext"` gives a position which is at the start of
 -- the file "foo.ext".
-let init_pos = lam f. (f, 1, 1)
+let init_pos = lam f. {file = f, row = 1, col = 1}
 
 utest show_pos (init_pos "foo.mc") with "FILE \"foo.mc\" 1:1"
 utest show_pos (init_pos "") with "1:1"
 
+-- bumb_row : Pos -> Pos
+--
+-- Increase the row number by 1 and set column number to 1.
+let bump_row = lam pos. {{pos with row = addi 1 pos.row} with col = 1}
+
 -- bumb_col : Pos -> Pos
 --
 -- Increase the column number by 1.
-let bump_col = lam pos. (pos.0, pos.1, addi 1 pos.2)
-
--- bumb_row : Pos -> Pos
---
--- Increase the row number by 1.
-let bump_row = lam pos. (pos.0, addi 1 pos.1, 1)
-
+let bump_col = lam pos. {pos with col = addi 1 pos.col}
 
 type State = (String, Pos)
 -- The parser state is the remaining input and the current position
@@ -197,8 +196,12 @@ let next = lam st.
     pure c (tail input, pos2)
 
 -- Core tests
-utest test_parser next "abc" with Success ('a', ("bc", ("", 1, 2)))
-utest test_parser next "\"" with Success (head "\"", ("", ("", 1, 2)))
+utest test_parser next "abc"
+with Success ('a', ("bc", {file = "", row = 1, col = 2}))
+
+utest test_parser next "\""
+with Success (head "\"", ("", {file = "", row = 1, col = 2}))
+
 utest show_error (test_parser next "")
 with "Parse error at 1:1: Unexpected end of input"
 
@@ -208,7 +211,7 @@ utest
     bind next (lam c2.
     pure [c1, c2]))
   ) "abc"
-with Success ("ab", ("c", ("", 1, 3)))
+with Success ("ab", ("c", {file = "", row = 1, col = 3}))
 
 utest
   show_error (test_parser (
@@ -341,7 +344,9 @@ let sep_by = lam sep. lam p.
 -- Parse a specific character.
 let lex_char = lam c. satisfy (eqchar c) (show_char c)
 
-utest test_parser (lex_char 'a') "ab" with Success ('a', ("b", ("", 1, 2)))
+utest test_parser (lex_char 'a') "ab"
+with Success ('a', ("b", {file = "", row = 1, col = 2}))
+
 utest show_error (test_parser (lex_char 'b') "ab")
 with "Parse error at 1:1: Unexpected 'a'. Expected 'b'"
 
@@ -350,7 +355,7 @@ utest test_parser (
     bind (lex_char 'b') (lam c2.
     pure [c1, c2]))
   ) "abc"
-with Success ("ab", ("c", ("", 1, 3)))
+with Success ("ab", ("c", {file = "", row = 1, col = 3}))
 
 utest show_error (
   test_parser (
@@ -369,9 +374,11 @@ utest show_error (
 with "Parse error at 1:2: Unexpected 'b'. Expected 'a'"
 
 utest test_parser (alt (lex_char 'a') (lex_char 'b')) "abc"
-with Success('a', ("bc", ("", 1, 2)))
+with Success('a', ("bc", {file = "", row = 1, col = 2}))
+
 utest test_parser (alt (lex_char 'b') (lex_char 'a')) "abc"
-with Success('a', ("bc", ("", 1, 2)))
+with Success('a', ("bc", {file = "", row = 1, col = 2}))
+
 utest show_error (
   test_parser (
     alt (lex_char 'b') (lex_char 'c')
@@ -379,21 +386,26 @@ utest show_error (
 with "Parse error at 1:1: Unexpected 'a'. Expected 'b' or 'c'"
 
 utest test_parser (not_followed_by (lex_char 'b')) "abc"
-with Success((), ("abc", ("", 1, 1)))
+with Success((), ("abc", {file = "", row = 1, col = 1}))
+
 utest show_error (test_parser (not_followed_by (lex_char 'a')) "abc")
 with "Parse error at 1:1: Unexpected 'a'"
 
 utest test_parser (many (lex_char 'a')) "abc"
-with Success("a", ("bc", ("", 1,2)))
+with Success("a", ("bc", {file = "", row = 1, col = 2}))
+
 utest test_parser (many (lex_char 'a')) "aaabc"
-with Success("aaa", ("bc", ("", 1,4)))
+with Success("aaa", ("bc", {file = "", row = 1, col = 4}))
+
 utest test_parser (many (lex_char 'a')) "bc"
-with Success("", ("bc", ("", 1,1)))
+with Success("", ("bc", {file = "", row = 1, col = 1}))
 
 utest test_parser (many1 (lex_char 'a')) "abc"
-with Success("a", ("bc", ("", 1, 2)))
+with Success("a", ("bc", {file = "", row = 1, col = 2}))
+
 utest test_parser (many1 (lex_char 'a')) "aaabc"
-with Success("aaa", ("bc", ("", 1, 4)))
+with Success("aaa", ("bc", {file = "", row = 1, col = 4}))
+
 utest show_error (
   test_parser (
     many1 (lex_char 'a')
@@ -411,7 +423,8 @@ let lex_digits = many1 (satisfy is_digit "digit")
 let lex_number = fmap string2int lex_digits
 
 utest test_parser (lex_number) "123abc"
-with Success(123, ("abc", ("", 1, 4)))
+with Success(123, ("abc", {file = "", row = 1, col = 4}))
+
 utest show_error (test_parser lex_number "abc")
 with "Parse error at 1:1: Unexpected 'a'. Expected digit"
 
@@ -434,9 +447,9 @@ recursive
 end
 
 utest test_parser (lex_string "abc") "abcdef"
-with Success("abc", ("def", ("", 1, 4)))
+with Success("abc", ("def", {file = "", row = 1, col = 4}))
 utest test_parser (lex_string "abcdef") "abcdef"
-with Success("abcdef", ("", ("", 1, 7)))
+with Success("abcdef", ("", {file = "", row = 1, col = 7}))
 utest show_error (test_parser (lex_string "abc") "def")
 with "Parse error at 1:1: Unexpected 'd'. Expected 'abc'"
 
@@ -446,7 +459,7 @@ utest
     bind (lex_string "cd") (lam s2.
     pure (concat s1 s2)))
   ) "abcde"
-with Success ("abcd", ("e", ("", 1, 5)))
+with Success ("abcd", ("e", {file = "", row = 1, col = 5}))
 
 -- Parser Char
 --
@@ -454,7 +467,8 @@ with Success ("abcd", ("e", ("", 1, 5)))
 -- TODO: Support escaped characters (also in OCaml parser)
 let lex_char_lit = wrapped_in (lex_char ''') (lex_char ''') next
 
-utest test_parser lex_char_lit "'\n'" with Success (head "\n", ("", ("", 2, 2)))
+utest test_parser lex_char_lit "'\n'"
+with Success (head "\n", ("", {file = "", row = 2, col = 2}))
 
 -- Parser String
 --
@@ -468,11 +482,14 @@ let lex_string_lit =
   wrapped_in (lex_string "\"") (lex_string "\"")
              (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
 
-utest test_parser lex_string_lit ['"','"'] with Success ("", ("", ("", 1, 3)))
+utest test_parser lex_string_lit ['"','"']
+with Success ("", ("", {file = "", row = 1, col = 3}))
+
 utest test_parser lex_string_lit "\"FILE \\\"foo.mc\\\"\""
-with Success ("FILE \"foo.mc\"", ("", ("", 1, 18)))
+with Success ("FILE \"foo.mc\"", ("", {file = "", row = 1, col = 18}))
+
 utest test_parser (apr (lex_string "foo") lex_string_lit) "foo\"\\\"\""
-with Success ("\"", ("", ("", 1, 8)))
+with Success ("\"", ("", {file = "", row = 1, col = 8}))
 
 -- lex_numeral : Parser String
 --
@@ -492,10 +509,18 @@ let lex_numeral =
 -- Parse a floating point number
 let lex_float = fmap string2float lex_numeral
 
-utest test_parser lex_float "3.14159" with Success(3.14159, ("", ("", 1, 8)))
-utest test_parser lex_float "3.2e-2" with Success(0.032, ("", ("", 1, 7)))
-utest test_parser lex_float "3.2e2" with Success(320.0, ("", ("", 1, 6)))
-utest test_parser lex_float "3e+2" with Success(300.0, ("", ("", 1, 5)))
+utest test_parser lex_float "3.14159"
+with Success(3.14159, ("", {file = "", row = 1, col = 8}))
+
+utest test_parser lex_float "3.2e-2"
+with Success(0.032, ("", {file = "", row = 1, col = 7}))
+
+utest test_parser lex_float "3.2e2"
+with Success(320.0, ("", {file = "", row = 1, col = 6}))
+
+utest test_parser lex_float "3e+2"
+with Success(300.0, ("", {file = "", row = 1, col = 5}))
+
 utest show_error(test_parser lex_float "42")
 with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals"
 
@@ -510,13 +535,17 @@ let spaces = void (many (satisfy is_whitespace "whitespace"))
 let spaces1 = void (many1 (satisfy is_whitespace "whitespace"))
 
 utest test_parser spaces "   abc"
-with Success ((), ("abc", ("", 1, 4)))
+with Success ((), ("abc", {file = "", row = 1, col = 4}))
+
 utest test_parser spaces "	  abc"
-with Success ((), ("abc", ("", 1, 4)))
+with Success ((), ("abc", {file = "", row = 1, col = 4}))
+
 utest test_parser spaces1 "	  abc"
-with Success ((), ("abc", ("", 1, 4)))
+with Success ((), ("abc", {file = "", row = 1, col = 4}))
+
 utest test_parser spaces "abc"
-with Success ((), ("abc", ("", 1, 1)))
+with Success ((), ("abc", {file = "", row = 1, col = 1}))
+
 utest show_error (test_parser spaces1 "abc")
 with "Parse error at 1:1: Unexpected 'a'. Expected whitespace"
 
@@ -692,7 +721,7 @@ let prog =
 in
 
 utest test_parser expr prog_string
-with Success (prog, ("", ("", 2, 29))) in
+with Success (prog, ("", {file = "", row = 2, col = 29})) in
 
 let bad_prog_string = "let f = lam x . x in" in
 
