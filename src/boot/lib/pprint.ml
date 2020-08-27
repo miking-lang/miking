@@ -1,9 +1,9 @@
 (** Pretty-printing for data types in Miking.
  *
  *  The main functions that should be used outside of this module is
- *  - string_of_tm
- *  - string_of_const
- *  - string_of_env
+ *  - ustring_of_tm
+ *  - ustring_of_const
+ *  - ustring_of_env
  *
  *  Miking is licensed under the MIT license.
  *  Copyright (C) David Broman. See file LICENSE.txt *)
@@ -103,7 +103,7 @@ let rec ustring_of_ty = function
     us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
   | TyCon(s) -> s
 
-(** Simple enum used in the concat function in string_of_tm *)
+(** Simple enum used in the concat function in ustring_of_tm *)
 type sep =
   | Space
   | Comma

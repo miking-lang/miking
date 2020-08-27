@@ -1,4 +1,13 @@
+-- Language fragments of MExpr
+
 include "string.mc"
+
+-- TODO Symbolize changes
+-- TODO Merge with ast-builder to avoid duplicate definitions?
+
+-----------
+-- TERMS --
+-----------
 
 lang VarAst
   syn Expr =
@@ -10,12 +19,6 @@ lang VarAst
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmVar t -> acc
 end
-
-lang VarPat
-  syn Pat =
-  | PVar {ident : String}
-end
-
 
 lang AppAst
   syn Expr =
@@ -29,11 +32,7 @@ lang AppAst
   | TmApp t -> f (f acc t.lhs) t.rhs
 end
 
-
 lang FunAst = VarAst + AppAst
-  syn Type =
-  | TyArrow {from : Type,
-             to   : Type}
   syn Expr =
   | TmLam {ident : String,
            tpe   : Option,
@@ -46,6 +45,22 @@ lang FunAst = VarAst + AppAst
   | TmLam t -> f acc t.body
 end
 
+lang RecordAst
+  syn Expr =
+  | TmRecord {bindings : AssocMap} -- AssocMap String Expr
+  | TmRecordUpdate {rec   : Expr,
+                    key   : String,
+                    value : Expr}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmRecord t -> TmRecord {bindings = map (lam b. (b.0, f b.1)) t.bindings}
+  | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
+                                           with value = f t.value}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmRecord t -> foldl f acc (map (lam b. b.1) t.bindings)
+  | TmRecordUpdate t -> f (f acc t.rec) t.value
+end
 
 lang LetAst = VarAst
   syn Expr =
@@ -61,9 +76,7 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
-
 lang RecLetsAst = VarAst
-  syn Type =
   syn Expr =
   | TmRecLets {bindings : [{ident : String,
                             tpe   : Option,
@@ -80,7 +93,6 @@ lang RecLetsAst = VarAst
   | TmRecLets t -> f (foldl f acc (map (lam b. b.body) t.bindings)) t.inexpr
 end
 
-
 lang ConstAst
   syn Const =
 
@@ -94,201 +106,22 @@ lang ConstAst
   | TmConst t -> acc
 end
 
-
-lang UnitAst = ConstAst
-  syn Const =
-  | CUnit {}
-end
-
-lang UnitPat = UnitAst
-  syn Pat =
-  | PUnit {}
-end
-
-
-lang SymbAst = ConstAst
-  syn Const =
-  | CSymb {val : Symb}
-end
-
-
-lang IntAst = ConstAst
-  syn Const =
-  | CInt {val : Int}
-end
-
-lang IntPat = IntAst
-  syn Pat =
-  | PInt {val : Int}
-end
-
-
-lang ArithIntAst = ConstAst + IntAst
-  syn Const =
-  | CAddi {}
-  | CSubi {}
-  | CMuli {}
-end
-
-
-lang FloatAst = ConstAst
-  syn Const =
-  | CFloat {val : Float}
-end
-
-
-lang ArithFloatAst = ConstAst + FloatAst
-  syn Const =
-  | CAddf {}
-  | CSubf {}
-  | CMulf {}
-  | CDivf {}
-  | CNegf {}
-end
-
-lang BoolAst
-  syn Const =
-  | CBool {val : Bool}
-  | CNot {}
-  | CAnd {}
-  | COr {}
-
-  syn Expr =
-  | TmIf {cond : Expr,
-          thn  : Expr,
-          els  : Expr}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmIf t -> TmIf {cond = f t.cond, thn = f t.thn, els = f t.els}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmIf t -> f (f (f acc t.cond) t.thn) t.els
-end
-
-lang BoolPat = BoolAst
-  syn Pat =
-  | PBool {val : Bool}
-end
-
-
-lang CmpIntAst = IntAst + BoolAst
-  syn Const =
-  | CEqi {}
-  | CLti {}
-end
-
-lang CmpFloatAst = FloatAst + BoolAst
-  syn Const =
-  | CEqf {}
-  | CLtf {}
-end
-
-lang CmpSymbAst = SymbAst + BoolAst
-  syn Const =
-  | CEqs {}
-end
-
-
-lang CharAst = ConstAst
-  syn Const =
-  | CChar {val : Char}
-end
-
-
-lang SeqAst = IntAst
-  syn Const =
-  | CSeq {tms : [Expr]}
-  | CGet {}
-  | CCons {}
-  | CSnoc {}
-  | CConcat {}
-  | CLength {}
-  | CHead {}
-  | CTail {}
-  | CNull {}
-  | CReverse {}
-
-  syn Expr =
-  | TmSeq {tms : [Expr]}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmSeq t -> TmSeq {t with tms = map f t.tms}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmSeq t -> foldl f acc t.tms
-end
-
-
-lang TupleAst
-  syn Expr =
-  | TmTuple {tms : [Expr]}
-  | TmProj {tup : Expr,
-            idx : Int}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmTuple t -> TmTuple {t with tms = map f t.tms}
-  | TmProj t -> TmProj {t with tup = f t.tup}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmTuple t -> foldl f acc t.tms
-  | TmProj t -> f acc t.tup
-end
-
-lang TuplePat = TupleAst
-  syn Pat =
-  | PTuple {pats : [Pat]}
-end
-
-
-lang RecordAst
-  syn Expr =
-  | TmRecord {bindings : [{key   : String,
-                           value : Expr}]}
-  | TmRecordProj {rec : Expr,
-                  key : String}
-  | TmRecordUpdate {rec   : Expr,
-                    key   : String,
-                    value : Expr}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {t with
-                            bindings = map (lam b. {b with value = f b.value})
-                                           t.bindings}
-
-  | TmRecordProj t -> TmRecordProj {t with rec = f t.rec}
-  | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
-                                           with value = f t.value}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> foldl f acc (map (lam b. b.value) t.bindings)
-  | TmRecordProj t -> f acc t.rec
-  | TmRecordUpdate t -> f (f acc t.rec) t.value
-end
-
-
 lang DataAst
-  -- TODO: Constructors have no generated symbols
   syn Expr =
   | TmConDef {ident  : String,
               tpe    : Option,
               inexpr : Expr}
-  | TmConFun {ident : String}
+  | TmConApp {ident : String,
+              body : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
-  | TmConFun t -> TmConFun t
+  | TmConApp t -> TmConApp {t with body = f t.body}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmConDef t -> f acc t.inexpr
-  | TmConFun t -> acc
+  | TmConApp t -> f acc t.body
 end
-
-lang DataPat = DataAst
-  syn Pat =
-  | PCon {ident  : String,
-          subpat : Pat}
-end
-
 
 lang MatchAst
   syn Expr =
@@ -323,6 +156,170 @@ lang UtestAst
   | TmUtest t -> f (f (f acc t.test) t.expected) t.next
 end
 
+lang SeqAst
+  syn Expr =
+  | TmSeq {tms : [Expr]}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmSeq t -> TmSeq {t with tms = map f t.tms}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmSeq t -> foldl f acc t.tms
+end
+
+lang NeverAst
+  syn Expr =
+  | TmNever {}
+
+  -- TODO smap, sfold?
+end
+
+---------------
+-- CONSTANTS --
+---------------
+-- All constants in boot have not been implemented. Missing ones can be added
+-- as needed.
+
+lang IntAst = ConstAst
+  syn Const =
+  | CInt {val : Int}
+end
+
+lang ArithIntAst = ConstAst + IntAst
+  syn Const =
+  | CAddi {}
+  | CSubi {}
+  | CMuli {}
+end
+
+lang FloatAst = ConstAst
+  syn Const =
+  | CFloat {val : Float}
+end
+
+lang ArithFloatAst = ConstAst + FloatAst
+  syn Const =
+  | CAddf {}
+  | CSubf {}
+  | CMulf {}
+  | CDivf {}
+  | CNegf {}
+end
+
+lang BoolAst = ConstAst
+  syn Const =
+  | CBool {val : Bool}
+  | CNot {}
+  | CAnd {}
+  | COr {}
+end
+
+lang CmpIntAst = IntAst + BoolAst
+  syn Const =
+  | CEqi {}
+  | CLti {}
+end
+
+lang CmpFloatAst = FloatAst + BoolAst
+  syn Const =
+  | CEqf {}
+  | CLtf {}
+end
+
+lang CharAst = ConstAst
+  syn Const =
+  | CChar {val : Char}
+end
+
+lang SymbAst = ConstAst
+  syn Const =
+  | CSymb {val : Symb}
+end
+
+lang CmpSymbAst = SymbAst + BoolAst
+  syn Const =
+  | CEqs {}
+end
+
+-- TODO Remove constants no longer available in boot?
+lang SeqOpAst = SeqAst
+  syn Const =
+  | CGet {}
+  | CCons {}
+  | CSnoc {}
+  | CConcat {}
+  | CLength {}
+  | CHead {}
+  | CTail {}
+  | CNull {}
+  | CReverse {}
+end
+
+--------------
+-- PATTERNS --
+--------------
+
+lang VarPat
+  syn Pat =
+  | PVar {ident : String}
+end
+
+lang SeqTotPat
+  -- TODO
+end
+
+lang SeqEdgPat
+  -- TODO
+end
+
+lang RecordPat
+  syn Pat =
+  | PRecord {bindings : AssocMap} -- AssocMap String Pat
+end
+
+lang DataPat = DataAst
+  syn Pat =
+  | PCon {ident  : String,
+          subpat : Pat}
+end
+
+lang IntPat = IntAst
+  syn Pat =
+  | PInt {val : Int}
+end
+
+lang CharPat
+  syn Pat =
+  | PChar {val : Char}
+end
+
+lang BoolPat = BoolAst
+  syn Pat =
+  | PBool {val : Bool}
+end
+
+lang AndPat
+  -- TODO
+end
+
+lang OrPat
+  -- TODO
+end
+
+lang NotPat
+  -- TODO
+end
+
+-----------
+-- TYPES --
+-----------
+-- TODO Update (also not up to date in boot?)
+
+lang FunTypeAst
+  syn Type =
+  | TyArrow {from : Type,
+             to   : Type}
+end
 
 lang DynTypeAst
   syn Type =
@@ -376,16 +373,33 @@ lang AppTypeAst
   | TyApp {lhs : Type, rhs : Type}
 end
 
+------------------------
+-- MEXPR AST FRAGMENT --
+------------------------
 
 lang MExprAst =
-  VarAst + AppAst + FunAst + LetAst + RecLetsAst + ConstAst +
-  UnitAst + UnitPat + IntAst + IntPat + FloatAst + ArithFloatAst + SymbAst +
-  ArithIntAst + BoolAst + BoolPat + CmpIntAst + CmpFloatAst + CmpSymbAst + CharAst + SeqAst +
-  TupleAst + TuplePat + DataAst + DataPat + MatchAst + VarPat + UtestAst +
-  RecordAst +
-  DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst + TupleTypeAst +
-  RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
+
+  -- Terms
+  VarAst + AppAst + FunAst + RecordAst + LetAst + RecLetsAst + ConstAst +
+  DataAst + MatchAst + UtestAst + SeqAst + NeverAst
+
+  -- Constants
+  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
+
+  -- Patterns
+  + VarPat + SeqTotPat + SeqEdgPat + RecordPat + DataPat + IntPat + CharPat +
+  BoolPat + AndPat + OrPat + NotPat
+
+  -- Types
+  + FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
+  TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst
+
+
+-----------
+-- TESTS --
+-----------
 
 mexpr
 use MExprAst in
@@ -447,7 +461,11 @@ let tmApp11 = app_ tmConst1 tmConst2 in
 utest smap_Expr_Expr (lam x. 0) tmConst1 with tmConst1 in
 utest sfold_Expr_Expr fold2seq [] tmConst1 with [] in
 
-let if_ = lam cond. lam thn. lam els. TmIf {cond = cond, thn = thn, els = els} in
+
+let ptrue_ = PBool {val = true} in
+let if_ =
+  lam cond. lam thn. lam els.
+  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els} in
 let true_ = TmConst {val = (CBool {val = true})} in
 let false_ = TmConst {val = (CBool {val = false})} in
 let ite1 = if_ true_ true_ false_ in
@@ -470,21 +488,7 @@ let tmSeq = seq_ [tmApp11, tmConst2, tmConst3] in
 utest smap_Expr_Expr map2varX tmSeq with seq_ [tmVarX, tmVarX, tmVarX] in
 utest sfold_Expr_Expr fold2seq [] tmSeq with [tmConst3, tmConst2, tmApp11] in
 
-
-let tup_ = lam tms. TmTuple {tms = tms} in
-let tmTup = (tup_ [tmApp11, tmConst2, tmConst3]) in
-
-utest smap_Expr_Expr map2varX tmTup with tup_ [tmVarX, tmVarX, tmVarX] in
-utest sfold_Expr_Expr fold2seq [] tmTup with [tmConst3, tmConst2, tmApp11] in
-
-
-let proj_ = lam t. lam i. TmProj {tup = t, idx = i} in
-let tmProj = proj_ tmTup 1 in
-utest smap_Expr_Expr map2varX tmProj with proj_ tmVarX 1 in
-utest sfold_Expr_Expr fold2seq [] tmProj with [tmTup] in
-
-
-let rb_ = lam k. lam v. {key = k, value = v} in
+let rb_ = lam k. lam v. (k,v) in
 let rec_ = lam bs. TmRecord {bindings = bs} in
 let mkTmRecordXY = lam x. lam y. rec_ [rb_ "x" x, rb_ "y" y] in
 let tmRecordI = mkTmRecordXY tmApp11 tmConst3 in
@@ -493,14 +497,6 @@ utest smap_Expr_Expr map2varX tmRecordI
 with rec_ [rb_ "x" tmVarX, rb_ "y" tmVarX] in
 
 utest sfold_Expr_Expr fold2seq [] tmRecordI with [tmConst3, tmApp11] in
-
-
-let recProj_ = lam r. lam k. TmRecordProj {rec = r, key = k} in
-let tmRecordProj = recProj_ tmRecordI "x" in
-
-utest smap_Expr_Expr map2varX tmRecordProj with recProj_ tmVarX "x" in
-utest sfold_Expr_Expr fold2seq [] tmRecordProj with [tmRecordI] in
-
 
 let recUpd_ = lam r. lam k. lam v.
   TmRecordUpdate {rec = r, key = k, value = v}
@@ -520,20 +516,21 @@ utest smap_Expr_Expr map2varX tmCon with con_ "y" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmCon with [tmApp] in
 
 
-let confun_ = lam id. TmConFun {ident = id} in
-let tmConFun = confun_ "y" in
+let conapp_ = lam id. lam b. TmConApp {ident = id, body = b} in
+let tmConApp = conapp_ "y" tmApp in
 
-utest smap_Expr_Expr map2varX tmConFun with tmConFun in
-utest sfold_Expr_Expr fold2seq [] tmConFun with [] in
+utest smap_Expr_Expr map2varX tmConApp with conapp_ "y" tmVarX in
+utest sfold_Expr_Expr fold2seq [] tmConApp with [tmApp] in
 
 
+let punit_ = PRecord { bindings = [] } in
 let match_ = lam t. lam p. lam thn. lam els.
   TmMatch {target = t, pat = p, thn = thn, els = els}
 in
-let tmMatch = match_ tmApp (PUnit ()) tmVarY tmVarZ in
+let tmMatch = match_ tmApp punit_ tmVarY tmVarZ in
 
 utest smap_Expr_Expr map2varX tmMatch
-with match_ tmVarX (PUnit ()) tmVarX tmVarX in
+with match_ tmVarX punit_ tmVarX tmVarX in
 
 utest sfold_Expr_Expr fold2seq [] tmMatch with [tmVarZ, tmVarY, tmApp] in
 

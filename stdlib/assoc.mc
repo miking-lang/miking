@@ -5,6 +5,7 @@
 
 include "option.mc"
 include "set.mc"
+include "char.mc"
 
 type AssocMap = [(k, v)]
 type AssocTraits = {eq : k -> k -> Bool}
@@ -73,6 +74,12 @@ let assocValues : AssocTraits -> AssocMap -> [v] =
   lam _. lam m.
     map (lam t. t.1) m
 
+-- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
+-- 'acc'. The folding order depends on the order of the underlying list.
+let assocFold : AssocTraits -> (acc -> key -> a -> acc)
+                -> acc -> AssocMap -> acc =
+  lam traits. lam f. lam acc. lam m.
+    foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
 mexpr
 
@@ -86,6 +93,7 @@ let mem = assocMem traits in
 let remove = assocRemove traits in
 let keys = assocKeys traits in
 let values = assocValues traits in
+let fold = assocFold traits in
 
 let m = assocEmpty in
 let m = insert 1 '1' m in
@@ -108,6 +116,9 @@ utest
   match values m with "123" | "132" | "213" | "231" | "312" | "321"
   then true else false
 with true in
+
+utest fold (lam acc. lam k. lam v. addi acc k) 0 m with 6 in
+utest fold (lam acc. lam k. lam v. and acc (is_digit v)) true m with true in
 
 let m = insert 1 '2' m in
 let m = insert 2 '3' m in

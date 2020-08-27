@@ -341,24 +341,24 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                        (bindall_ [
                                   let_ "entries" (None ()) (
                                       appf2_ (var_ "filter")
-                                             (lam_ "t" (None ()) (eqs_ (var_ "id") (proj_ (var_ "t") 0)))
+                                             (lam_ "t" (None ()) (eqs_ (var_ "id") (tupleproj_ 0 (var_ "t"))))
                                              (var_ "lookupTable")),
 
                                   let_ "eqs" (None ()) (lam_ "x" (None ()) (lam_ "y" (None ()) (eqs_ (var_ "x") (var_ "y")))),
                                   let_ "entriesSuffix" (None ())
                                        (appf2_ (var_ "filter")
-                                               (lam_ "t" (None ()) (appf3_ (var_ "isSuffix") (var_ "eqs") (proj_ (var_ "t") 1) (var_ "callCtx")))
+                                               (lam_ "t" (None ()) (appf3_ (var_ "isSuffix") (var_ "eqs") (tupleproj_ 1 (var_ "t")) (var_ "callCtx")))
                                                (var_ "entries")),
 
                                   let_ "cmp" (None ())
                                              (lam_ "t1" (None ())
                                                         (lam_ "t2" (None ())
                                                                    (appf2_ (var_ "subi")
-                                                                           (length_ (proj_ (var_ "t1") 1))
-                                                                           (length_ (proj_ (var_ "t2") 1))))),
+                                                                           (length_ (tupleproj_ 1 (var_ "t1")))
+                                                                           (length_ (tupleproj_ 1 (var_ "t2")))))),
 
                                   let_ "entryLongestSuffix" (None ()) (appf2_ (var_ "max") (var_ "cmp") (var_ "entriesSuffix")),
-                                  proj_ (var_ "entryLongestSuffix") 2])))
+                                  tupleproj_ 2 (var_ "entryLongestSuffix")])))
     in
     let defLookup = bindall_ [isPrefix, isSuffix, max, filter, lookup] in
 
