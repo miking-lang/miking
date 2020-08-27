@@ -10,10 +10,16 @@ include "digraph.mc"
 include "string.mc"
 
 type Assignment = [v]
--- TODO: support other types than int
-type Cost = Int
+type Cost = c
 type Solution = (Assignment, Cost)
-type SearchState = {cur : Solution, inc : Solution, iter : Int, stuck : Bool}
+type SearchState = {
+  cur : Solution,
+  inc : Solution,
+  iter : Int,
+  stuck : Bool,
+  -- 'cmp c1 c2' is negative if 'c1 < c2', positive if 'c1 > c2, otherwise 0'
+  cmp : Cost -> Cost -> Int
+}
 
 type MetaState
 con Base               : {}                                         -> MetaState
@@ -58,7 +64,7 @@ let minimize : (SearchState -> Bool) -> (SearchState -> Unit) -> SearchState -> 
           let mstate = next.1 in
           let cur = optionGetOrElse (lam _. error "Expected a solution") newCur in
           -- New best solution?
-          let inc = if leqi cur.1 sstate.inc.1 then cur else sstate.inc in
+          let inc = if lti (sstate.cmp cur.1 sstate.inc.1) 0 then cur else sstate.inc in
           let sstate = {{sstate with cur = cur} with inc = inc} in
           let _ = callAfterEachIter sstate in
           search sstate mstate
@@ -66,13 +72,15 @@ let minimize : (SearchState -> Bool) -> (SearchState -> Unit) -> SearchState -> 
         (sstate, mstate)
     in search state metaHeur.0
 
--- 'initSearchState sol' initialises a search state, where 'sol' is to be used
--- as the initial solution in the search.
-let initSearchState : Solution -> SearchState = lam initSol.
+-- 'initSearchState sol cmp' initialises a search state, where 'sol' is to be
+-- used as the initial solution in the search and 'cmp' compares the cost of two
+-- solutions.
+let initSearchState : Solution -> SearchState = lam initSol. lam cmp.
   {cur = initSol,
    inc = initSol,
    iter = 0,
-   stuck = false}
+   stuck = false,
+   cmp = cmp}
 
 -- 'stepBase ns sel' returns a step function for a Base meta heuristic, using
 -- 'ns' as the neighourhood function and 'sel' as the select function.
@@ -95,7 +103,7 @@ let stepSA : NeighbourhoodFun -> SelectFun -> StepFun =
         match proposalOpt with None () then (None (), meta) else
         let proposal = optionGetOrElse (lam _. error "Expected a solution") proposalOpt in
         -- Metropolis condition
-        if leqi proposal.1 state.cur.1 then
+        if leqi (state.cmp proposal.1 state.cur.1) 0 then
           -- Always accept improving solution
           (Some proposal, updatedMeta)
         else
@@ -211,7 +219,7 @@ in
 let terminate = lam state. geqi state.iter 3 in
 let printIter = lam state. print (strJoin "" ["Iter: ", int2string state.iter, ", ",
                                               "Best: ", int2string state.inc.1, "\n"]) in
-let initState = initSearchState initSol in
+let initState = initSearchState initSol subi in
 
 let minimizeTSP = minimize terminate printIter initState in
 -- Custom termination condition
