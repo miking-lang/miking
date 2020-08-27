@@ -36,14 +36,13 @@
 -- // incorrect program even if the input program was correct.
 --
 --
--- include "ast.mc"
--- include "ast-builder.mc"
--- include "eval.mc"
--- include "pprint.mc"
---
 -- include "option.mc"
 -- include "seq.mc"
 -- include "string.mc"
+--
+-- include "mexpr/ast.mc"
+-- include "mexpr/eval.mc"
+-- include "mexpr/pprint.mc"
 --
 --
 -- lang LamliftTypedVarAst = VarAst

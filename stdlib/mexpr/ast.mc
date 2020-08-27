@@ -644,12 +644,16 @@ let record_add_bindings = lam bindings. lam record.
 let never_ = use MExprAst in
   TmNever {}
 
-let recordproj_ = use MExprAst in
-  lam key. lam r.
+let nrecordproj_ = use MExprAst in
+  lam name. lam key. lam r.
   -- It is fine to use any variable name here. It doesn't matter if it
   -- overwrites a previous binding, since that binding will never be used in
   -- the then clause in any case.
-  match_ r (prec_ [(key,pvar_ "x")]) (var_ "x") never_
+  match_ r (prec_ [(key,npvar_ name)]) (nvar_ name) never_
+
+let recordproj_ = use MExprAst in
+  lam key. lam r.
+  nrecordproj_ (nameNoSym "x") key r
 
 let tupleproj_ = use MExprAst in
   lam i. lam t.

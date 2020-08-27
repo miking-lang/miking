@@ -2,7 +2,6 @@ include "mexpr.mc"
 include "pprint.mc"
 include "digraph.mc"
 include "string.mc"
-include "ast-builder.mc"
 include "eq-paths.mc"
 
 -- This file contains implementations related to decision points. In particular,

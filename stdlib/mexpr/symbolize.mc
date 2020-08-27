@@ -29,10 +29,10 @@ let identEq : Ident -> Ident -> Bool =
 
 type Env = AssocMapIdentSymbol -- i.e., [(Ident, Symbol)]
 
-let lookup = assocLookup {eq = identEq}
-let insert = assocInsert {eq = identEq}
-let recmap = assocMap {eq = identEq}
-let mapAccum = assocMapAccum {eq = identEq}
+let lookupId = assocLookup {eq = identEq}
+let insertId = assocInsert {eq = identEq}
+let recmapId = assocMap {eq = identEq}
+let mapAccumId = assocMapAccum {eq = identEq}
 
 -----------
 -- TERMS --
@@ -41,7 +41,7 @@ let mapAccum = assocMapAccum {eq = identEq}
 lang VarSym = VarAst
   sem symbolize (env : Env) =
   | TmVar {ident = (str, _)} ->
-    match lookup (IdVar str) env
+    match lookupId (IdVar str) env
     with Some sym then TmVar {ident = (str, sym)}
     else error (concat "Unknown variable in symbolize: " str)
 end
@@ -56,14 +56,14 @@ lang FunSym = FunAst
   sem symbolize (env : Env) =
   | TmLam {ident = (str, _), tpe = tpe, body = body} ->
     let sym = gensym () in
-    let env = insert (IdVar str) sym env in
+    let env = insertId (IdVar str) sym env in
     TmLam {ident = (str,sym), tpe = tpe, body = symbolize env body}
 end
 
 lang RecordSym = RecordAst
   sem symbolize (env : Env) =
   | TmRecord {bindings = bindings} ->
-    TmRecord {bindings = recmap (symbolize env) bindings}
+    TmRecord {bindings = recmapId (symbolize env) bindings}
 
   | TmRecordUpdate {rec = rec, key = key, value = value} ->
     TmRecordUpdate {rec = symbolize env rec, key = key,
@@ -75,7 +75,7 @@ lang LetSym = LetAst
   | TmLet {ident = (str, _),  body = body, inexpr = inexpr} ->
     let body = symbolize env body in
     let sym = gensym () in
-    let env = insert (IdVar str) sym env in
+    let env = insertId (IdVar str) sym env in
     TmLet {ident = (str,sym), body = body, inexpr = symbolize env inexpr}
 end
 
@@ -91,7 +91,7 @@ lang RecLetsSym = RecLetsAst
     let env =
       foldl
         (lam env. lam bind.
-           insert (IdVar (nameGetStr bind.ident))
+           insertId (IdVar (nameGetStr bind.ident))
              (match nameGetSym bind.ident with Some sym then sym
               else error "Impossible: symbol missing in RecLetsSym")
              env)
@@ -115,10 +115,10 @@ lang DataSym = DataAst
   sem symbolize (env : Env) =
   | TmConDef {ident = (str,_), tpe = tpe, inexpr = inexpr} ->
     let sym = gensym () in
-    let env = insert (IdCon str) sym env in
+    let env = insertId (IdCon str) sym env in
     TmConDef {ident = (str,sym), tpe = tpe, inexpr = symbolize env inexpr}
   | TmConApp {ident = (str,_), body = body} ->
-    match lookup (IdCon str) env
+    match lookupId (IdCon str) env
     with Some sym then TmConApp {ident = (str, sym), body = symbolize env body}
     else error (concat "Unknown constructor in symbolize: " str)
 end
@@ -161,12 +161,12 @@ end
 lang VarPatSym = VarPat
   sem symbolizePat (env : Env) =
   | PVar {ident = PName (str,_)} ->
-    let l = lookup (IdVar str) env in
+    let l = lookupId (IdVar str) env in
     match l with Some sym then
       (env, PVar {ident = PName (str,sym)})
     else match l with None () then
       let sym = gensym () in
-      let env = insert (IdVar str) sym env in
+      let env = insertId (IdVar str) sym env in
       (env, PVar {ident = PName (str,sym)})
     else never
   | PVar {ident = PWildcard ()} ->
@@ -184,7 +184,7 @@ end
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : Env) =
   | PRecord {bindings = bindings} ->
-    match mapAccum (lam env. lam _. lam p. symbolizePat env p) env bindings
+    match mapAccumId (lam env. lam _. lam p. symbolizePat env p) env bindings
     with (env,bindings) then
       (env, PRecord {bindings = bindings})
     else never
@@ -193,7 +193,7 @@ end
 lang DataPatSym = DataPat
   sem symbolizePat (env : Env) =
   | PCon {ident = (str,_), subpat = subpat} ->
-    match lookup (IdCon str) env
+    match lookupId (IdCon str) env
     with Some sym then
       match symbolizePat env subpat with (env, subpat) then
         (env, PCon {ident = (str, sym), subpat = subpat})
