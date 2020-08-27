@@ -5,7 +5,7 @@ include "string.mc"
 include "assoc.mc"
 
 include "mexpr/ast.mc"
-include "mexpr/pprint.mc"
+-- include "mexpr/pprint.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -82,14 +82,28 @@ end
 lang RecLetsSym = RecLetsAst
   sem symbolize (env : Env) =
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
+
+    -- Generate fresh symbols for all identifiers
     let bindings =
       map (lam bind. {bind with ident = nameSetNewSym bind.ident}) bindings in
+
+    -- Add all identifiers to environment
     let env =
       foldl
         (lam env. lam bind.
-           insert (IdVar (nameGetStr bind.ident)) (nameGetSym bind.ident) env)
+           insert (IdVar (nameGetStr bind.ident))
+             (match nameGetSym bind.ident with Some sym then sym
+              else error "Impossible: symbol missing in RecLetsSym")
+             env)
         env bindings in
+
+    -- Symbolize all bodies with the new environment
+    let bindings =
+      map (lam bind. {bind with body = symbolize env bind.body})
+        bindings in
+
     TmRecLets {bindings = bindings, inexpr = symbolize env inexpr}
+
 end
 
 lang ConstSym = ConstAst
@@ -155,8 +169,8 @@ lang VarPatSym = VarPat
       let env = insert (IdVar str) sym env in
       (env, PVar {ident = PName (str,sym)})
     else never
-  | PVar {ident = PWildcard name} ->
-    (env, PVar {ident = PWildcard name})
+  | PVar {ident = PWildcard ()} ->
+    (env, PVar {ident = PWildcard ()})
 end
 
 lang SeqTotPatSym = SeqTotPat
@@ -170,7 +184,10 @@ end
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : Env) =
   | PRecord {bindings = bindings} ->
-    mapAccum (lam env. lam _. lam p. symbolizePat env p) env bindings
+    match mapAccum (lam env. lam _. lam p. symbolizePat env p) env bindings
+    with (env,bindings) then
+      (env, PRecord {bindings = bindings})
+    else never
 end
 
 lang DataPatSym = DataPat
@@ -215,7 +232,7 @@ end
 -- MEXPR SYMBOLIZE FRAGMENT --
 ------------------------------
 
-lang MExprSym = MExprPrettyPrint +
+lang MExprSym = -- MExprPrettyPrint +
 
   -- Terms
   VarSym + AppSym + FunSym + RecordSym + LetSym + RecLetsSym + ConstSym +
@@ -229,30 +246,88 @@ lang MExprSym = MExprPrettyPrint +
 -- TESTS --
 -----------
 -- It is difficult to directly do unit testing for the above due to the nature
--- of symbols, so we are just checking for crashes or errors below. Unit
--- testing in eval.mc also covers symbolize.
+-- of symbols, so we are just evaluating the below for errors. Unit
+-- testing in eval.mc also implicitly covers symbolize.
 
 mexpr
 
 use MExprSym in
 
-let debugPrint = lam e. lam es.
-  let _ = printLn "--- BEFORE SYMBOLIZE ---" in
-  let _ = printLn (pprintCode 0 e) in
-  let _ = print "\n" in
-  let _ = printLn "--- AFTER SYMBOLIZE ---" in
-  let _ = printLn (pprintCode 0 es) in
-  let _ = print "\n" in
-  ()
-in
+-- let debugPrint = lam e. lam es.
+--   let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+--   let _ = printLn (pprintCode 0 e) in
+--   let _ = print "\n" in
+--   let _ = printLn "--- AFTER SYMBOLIZE ---" in
+--   let _ = printLn (pprintCode 0 es) in
+--   let _ = print "\n" in
+--   ()
+-- in
 
-let expr1 = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
-let expr1s = symbolize [] expr1 in
-let _ = debugPrint expr1 expr1s in
+let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
+let sbase = symbolize [] base in
+-- let _ = debugPrint base sbase in
 
-let expr2 = record_ [("k1", expr1), ("k2", expr1), ("k3", expr1)] in
-let expr2s = symbolize [] expr2 in
-let _ = debugPrint expr2 expr2s in
+let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
+let srec = symbolize [] rec in
+-- let _ = debugPrint rec srec in
+
+let letin = bind_ (let_ "x" rec) (app_ (var_ "x") base) in
+let sletin = symbolize [] letin in
+-- let _ = debugPrint letin sletin in
+
+let rlets =
+  bind_ (reclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
+    (app_ (var_ "x") (var_ "y")) in
+let srlets = symbolize [] rlets in
+-- let _ = debugPrint rlets srlets in
+
+let const = int_ 1 in
+let sconst = symbolize [] const in
+-- let _ = debugPrint const sconst in
+
+let data = bind_ (ucondef_ "Test") (conapp_ "Test" base) in
+let sdata = symbolize [] data in
+-- let _ = debugPrint data sdata in
+
+let varpat = match_ unit_ (pvar_ "x") (var_ "x") base in
+let svarpat = symbolize [] varpat in
+-- let _ = debugPrint varpat svarpat in
+
+let recpat =
+  match_ base
+    (prec_ [("k1", (pvar_ "x")), ("k2", pvarw_), ("k3", (pvar_ "x"))])
+    (var_ "x") unit_ in
+let srecpat = symbolize [] recpat in
+-- let _ = debugPrint recpat srecpat in
+
+let datapat =
+  bind_ (ucondef_ "Test")
+    (match_ unit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") unit_) in
+let sdatapat = symbolize [] datapat in
+-- let _ = debugPrint datapat sdatapat in
+
+let litpat =
+  match_ unit_ (pint_ 1)
+    (match_ unit_ (pchar_ 'c')
+       (match_ unit_ (ptrue_)
+            base
+          unit_)
+       unit_)
+    unit_ in
+let slitpat = symbolize [] litpat in
+-- let _ = debugPrint litpat slitpat in
+
+let ut = utest_ base base base in
+let sut = symbolize [] ut in
+-- let _ = debugPrint ut sut in
+
+let seq = seq_ [base, data, const] in
+let sseq = seq_ [base, data, const] in
+-- let _ = debugPrint seq sseq in
+
+let nev = never_ in
+let snever = symbolize [] never_ in
+-- let _ = debugPrint nev snever in
 
 ()
 

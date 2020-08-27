@@ -77,15 +77,22 @@ lang FunPrettyPrint = FunAst
         concat " : " (getTypeStringCode indent t1)
       else ""
     in
-    let body = pprintCode indent t.body in
-    strJoin "" ["lam ", ident, tpe, ".", newline indent, body]
+    let body = pprintCode (incr indent) t.body in
+    strJoin "" ["lam ", ident, tpe, ".", newline (incr indent), body]
 end
 
 lang RecordPrettyPrint = RecordAst
   sem pprintCode (indent : Int) =
   | TmRecord t ->
-    let binds = map (lam r. strJoin "" [r.0, " = ", pprintCode indent r.1]) t.bindings in
-    strJoin "" ["{", strJoin ", " binds, "}"]
+    if eqi (length t.bindings) 0 then "{}"
+    else
+      let binds =
+        map (lam r. strJoin ""
+                      [r.0, " = ",
+                       pprintCode (incr indent) r.1])
+          t.bindings in
+      let merged = strJoin (concat ", " (newline (incr indent))) binds in
+      strJoin "" ["{ ", merged, " }"]
   | TmRecordUpdate t ->
     strJoin "" ["{", pprintCode indent t.rec, " with ", t.key,
                 " = ", pprintCode indent t.value, "}"]
@@ -175,7 +182,9 @@ lang UtestPrettyPrint = UtestAst
     let test = pprintCode indent t.test in
     let expected = pprintCode indent t.expected in
     let next = pprintCode indent t.next in
-    strJoin "" ["utest ", test, " with ", expected, " in", newline indent, next]
+    strJoin "" ["utest ", test, newline indent,
+                "with ", expected, newline indent,
+                "in", newline indent, next]
 end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
@@ -193,7 +202,9 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
       concat "\"" (concat (map (lam e. match extract_char e with Some c then c else '?') t.tms)
                           "\"")
     else
-      strJoin "" ["[", strJoin ", " (map (pprintCode indent) t.tms), "]"]
+      let merged = strJoin (concat ", " (newline (incr indent)))
+                     (map (pprintCode (incr indent)) t.tms) in
+      strJoin "" ["[ ", merged, " ]"]
 end
 
 lang NeverPrettyPrint = NeverAst
@@ -299,9 +310,9 @@ end
 
 lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) =
-  | PRecord t ->
+  | PRecord {bindings = bindings} ->
     let binds = map
-      (lam r. strJoin "" [r.0, " = ", getPatStringCode indent r.1]) t.bindings
+      (lam r. strJoin "" [r.0, " = ", getPatStringCode indent r.1]) bindings
     in
     strJoin "" ["{", strJoin ", " binds, "}"]
 end
