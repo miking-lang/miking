@@ -25,7 +25,8 @@ con TabuSearch         : {tabuConvert : Solution -> t,
                           tabuAdd : t -> [t] -> [t]}                -> MetaState
 
 type NeighbourhoodFun = SearchState -> [Assignment]
-type StepFun = SearchState -> MetaState -> (Solution, MetaState)
+type SelectFun = [Assignment] -> SearchState -> OptionSolution
+type StepFun = SearchState -> MetaState -> (OptionSolution, MetaState)
 
 type MetaHeuristic = (MetaState, StepFun)
 
@@ -89,9 +90,10 @@ let stepSA : NeighbourhoodFun -> SelectFun -> StepFun =
     let step : StepFun = lam state. lam meta.
       match meta with SimulatedAnnealing r then
         let updatedMeta = SimulatedAnnealing {r with temp=r.decayFunc r.temp state} in
-        let proposal = select (neighbourhood state) state in
+        let proposalOpt = select (neighbourhood state) state in
         -- Leave meta unchanged if stuck
-        match proposal with None () then (None (), meta) else
+        match proposalOpt with None () then (None (), meta) else
+        let proposal = optionGetOrElse (lam _. error "Expected a solution") proposalOpt in
         -- Metropolis condition
         if leqi proposal.1 state.cur.1 then
           -- Always accept improving solution
@@ -253,7 +255,7 @@ let metaSteepDesc = (Base {}, stepBase (neighbours g) randImproving) in
 let randSol = lam ns. lam state.
   match ns with [] then None () else
   let nRand = get ns (randIntU 0 (length ns)) in
-  (nRand, cost nRand)
+  Some (nRand, cost nRand)
 in
 
 let decayFunc = lam temp. lam state.
