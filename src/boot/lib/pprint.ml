@@ -102,6 +102,8 @@ let rec ustring_of_ty = function
       | (l, ty) -> l ^. us" : " ^. ustring_of_ty ty in
     us"{" ^. Ustring.concat (us",") (List.map pprint_ty_label tys) ^. us"}"
   | TyCon(s) -> s
+  | TyApp(ty1,ty2) ->
+    us"(" ^. ustring_of_ty ty1 ^. us" " ^. ustring_of_ty ty2 ^.  us")"
 
 (** Simple enum used in the concat function in ustring_of_tm *)
 type sep =

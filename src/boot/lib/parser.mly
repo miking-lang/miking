@@ -123,10 +123,16 @@ tops:
   |
     { [] }
   // TODO: These should matter with a type system
-  | TYPE type_ident tops
-    { $3 }
-  | TYPE type_ident EQ ty tops
-    { $5 }
+  | TYPE type_ident type_params tops
+    { $4 }
+  | TYPE type_ident type_params EQ ty tops
+    { $6 }
+
+type_params:
+  | type_ident type_params
+    { $1 :: $2 }
+  |
+    { [] }
 
 top:
   | mlang
@@ -430,11 +436,16 @@ ty_op:
 
 
 ty:
-  | ty_atom
+  | ty_left
       { $1 }
-  | ty_atom ARROW ty
+  | ty_left ARROW ty
       { TyArrow($1,$3) }
 
+ty_left:
+  | ty_atom
+    { $1 }
+  | ty_left ty_atom
+    { TyApp($1,$2) }
 
 ty_atom:
   | LPAREN RPAREN

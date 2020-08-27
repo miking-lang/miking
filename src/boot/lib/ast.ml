@@ -197,6 +197,7 @@ and ty =
 | TyTuple  of ty list                             (* Tuple type *)
 | TyRecord of (ustring * ty) list                 (* Record type *)
 | TyCon    of ustring                             (* Type constructor *)
+| TyApp    of (ty * ty)                           (* Type constructor application *)
 
 
 (* Kind of identifier *)
