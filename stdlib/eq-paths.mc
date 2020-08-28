@@ -16,10 +16,11 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
 
     recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
       lam g. lam v. lam curPath. lam visited. lam d.
-        if or (eqi d 0) (setMem (digraphEqv g) v visited) then
+        let fromEdges = digraphEdgesFrom v g in
+        if or (or (eqi d 0) (setMem (digraphEqv g) v visited))
+              (null fromEdges) then
           [curPath]
         else
-          let fromEdges = digraphEdgesFrom v g in
           let paths =
             map (lam edge.
                    traverse g edge.1 (cons edge.2 curPath) (cons v visited) (subi d 1))
@@ -52,6 +53,19 @@ let j = 'j' in
 
 let samePaths = lam p1. lam p2.
   setEqual eqstr p1 p2 in
+
+-- Graph with one node
+-- ┌─────┐
+-- │  1  │
+-- └─────┘
+let g = fromList [1] in
+utest eqPaths g 1 0 [] with [""] in
+utest eqPaths g 1 1 [] with [""] in
+utest eqPaths g 1 2 [] with [""] in
+
+utest eqPaths g 1 0 [1] with [""] in
+utest eqPaths g 1 1 [1] with [""] in
+utest eqPaths g 1 2 [1] with [""] in
 
 -- Simple chain graph
 -- ┌─────┐
