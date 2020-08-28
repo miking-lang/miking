@@ -52,7 +52,7 @@ lang AppSym = AppAst
     TmApp {lhs = symbolize env lhs, rhs = symbolize env rhs}
 end
 
-lang FunSym = FunAst
+lang FunSym = FunAst + VarSym + AppSym
   sem symbolize (env : Env) =
   | TmLam {ident = (str, _), tpe = tpe, body = body} ->
     let sym = gensym () in
