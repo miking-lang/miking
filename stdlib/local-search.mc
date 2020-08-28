@@ -9,36 +9,37 @@ include "set.mc"
 include "digraph.mc"
 include "string.mc"
 
-type Assignment = [v]
-type Cost = c
-type Solution = (Assignment, Cost)
-type SearchState = {
-  cur : Solution,
-  inc : Solution,
+-- 'v': polymorphic value type
+-- 'c': polymorphic cost type
+type Assignment v = [v]
+type Solution v c = (Assignment v, c)
+type SearchState v c = {
+  cur : Solution v c,
+  inc : Solution v c,
   iter : Int,
   stuck : Bool,
-  -- 'cmp c1 c2' is negative if 'c1 < c2', positive if 'c1 > c2, otherwise 0'
-  cmp : Cost -> Cost -> Int
+  -- 'cmp c1 c2' is negative if 'c1' < 'c2', positive if 'c1' > 'c2', otherwise 0
+  cmp : c -> c -> Int
 }
 
-type MetaState
-con Base               : {}                                         -> MetaState
+type MetaState v c
+con Base               : {}                                             -> MetaState v c
 con SimulatedAnnealing : {temp : Float,
-                          decayFun : Float -> SearchState -> Float} -> MetaState
-con TabuSearch         : {tabuConvert : Solution -> t,
+                          decayFun : Float -> SearchState v c -> Float} -> MetaState v c
+con TabuSearch         : {tabuConvert : Solution v c -> t,
                           tabu : [t],
                           isTabu : t -> [t] -> Bool,
-                          tabuAdd : t -> [t] -> [t]}                -> MetaState
+                          tabuAdd : t -> [t] -> [t]}                    -> MetaState v c
 
-type NeighbourhoodFun = SearchState -> [Assignment]
-type SelectFun = [Assignment] -> SearchState -> OptionSolution
-type StepFun = SearchState -> MetaState -> (OptionSolution, MetaState)
+type NeighbourhoodFun v c = SearchState v c -> [Assignment v]
+type SelectFun v c = [Assignment v] -> SearchState v c -> Option (Solution v c)
+type StepFun v c = SearchState v c -> MetaState v c -> (Option (Solution v c), MetaState v c)
 
-type MetaHeuristic = (MetaState, StepFun)
+type MetaHeuristic v c = (MetaState v c, StepFun v c)
 
 -- Master search algorithm.
 --
--- 'minimize stop c state heur' takes a number of steps (by calling the step
+-- 'minimize stop f state heur' takes a number of steps (by calling the step
 -- function 'heur.1') using 'state' as initial state, and returns a tuple
 -- ('sstate', 'mstate'), s.t.:
 --  'sstate.inc' is the incumbent, i.e. best found, solution.
@@ -47,10 +48,10 @@ type MetaHeuristic = (MetaState, StepFun)
 --  'sstate.stuck' is true iff the search got stuck (no further step possible).
 --  'mstate' is the current meta state.
 -- The search terminates when 'stop st' is true, where 'st' is the current
--- search state. The function 'c' is called between each iteration. The search
+-- search state. The function 'f' is called between each iteration. The search
 -- can be continued from the resulting state by using 'sstate' and 'mstate' in
 -- subsequent calls to 'minimize' (see tests for examples).
-let minimize : (SearchState -> Bool) -> (SearchState -> Unit) -> SearchState -> MetaHeuristic -> (SearchState, MetaState) =
+let minimize : (SearchState v c -> Bool) -> (SearchState v c -> Unit) -> SearchState v c -> MetaHeuristic v c -> (SearchState v c, MetaState v c) =
   lam terminate. lam callAfterEachIter. lam state. lam metaHeur.
     let step = metaHeur.1 in
     recursive let search = lam sstate. lam mstate.
@@ -75,27 +76,28 @@ let minimize : (SearchState -> Bool) -> (SearchState -> Unit) -> SearchState -> 
 -- 'initSearchState sol cmp' initialises a search state, where 'sol' is to be
 -- used as the initial solution in the search and 'cmp' compares the cost of two
 -- solutions.
-let initSearchState : Solution -> SearchState = lam initSol. lam cmp.
-  {cur = initSol,
-   inc = initSol,
-   iter = 0,
-   stuck = false,
-   cmp = cmp}
+let initSearchState : Solution v c -> (c -> c -> Int) -> SearchState v c =
+  lam initSol. lam cmp.
+    {cur = initSol,
+     inc = initSol,
+     iter = 0,
+     stuck = false,
+     cmp = cmp}
 
 -- 'stepBase ns sel' returns a step function for a Base meta heuristic, using
 -- 'ns' as the neighourhood function and 'sel' as the select function.
-let stepBase : NeighbourhoodFun -> SelectFun -> StepFun =
+let stepBase : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
   lam neighbourhood. lam select.
-    let step : StepFun = lam state. lam meta.
+    let step = lam state. lam meta.
       (select (neighbourhood state) state, meta)
     in step
 
 -- 'stepSA ns sel' returns a step function for a simulated annealing meta
 -- heuristic, using 'ns' as the neighourhood function and 'sel' as the select
 -- function.
-let stepSA : NeighbourhoodFun -> SelectFun -> StepFun =
+let stepSA : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
   lam neighbourhood. lam select.
-    let step : StepFun = lam state. lam meta.
+    let step = lam state. lam meta.
       match meta with SimulatedAnnealing r then
         let updatedMeta = SimulatedAnnealing {r with temp=r.decayFunc r.temp state} in
         let proposalOpt = select (neighbourhood state) state in
@@ -118,7 +120,7 @@ let stepSA : NeighbourhoodFun -> SelectFun -> StepFun =
 
 -- 'stepTabu ns sel' returns a step function for a tabu search meta heuristic,
 -- using 'ns' as the neighourhood function and 'sel' as the select function.
-let stepTabu : NeighbourhoodFun -> SelectFun -> StepFun =
+let stepTabu : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
   lam neighbourhood. lam select.
     let step : StepFun = lam state. lam meta.
       match meta with TabuSearch r then
@@ -338,7 +340,7 @@ let r = minimizeTSP2 (lam state. geqi state.iter 10) r.0 metaSA in
 -- Design a custom meta heuristic --
 ------------------------------------
 
-con FooMetaState : {foo : Int} -> MetaState in
+con FooMetaState : {foo : Int} -> MetaState v c in
 
 let fooStep : StepFun = lam state. lam mstate.
   match mstate with FooMetaState r then
