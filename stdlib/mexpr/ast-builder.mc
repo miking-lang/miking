@@ -2,6 +2,10 @@
 
 include "ast.mc"
 
+-- Private definitions
+let _tupleIdx2RecordKey = lam i.
+  concat "_" (int2string i)
+
 -- Methods of binding an expression into a chain of lets --
 recursive let bind_ = use MExprAst in
   lam letexpr. lam expr.
@@ -95,7 +99,7 @@ let prec_ = use MExprAst in
 
 let ptuple_ = use MExprAst in
   lam ps.
-  prec_ (mapi (lam i. lam p. (int2string i,p)) ps)
+  prec_ (mapi (lam i. lam p. (_tupleIdx2RecordKey i, p)) ps)
 
 -- Types --
 let tyarrow_ = use MExprAst in
@@ -180,7 +184,7 @@ let record_ = use MExprAst in
 
 let tuple_ = use MExprAst in
   lam tms.
-  record_ (mapi (lam i. lam t. (int2string i,t)) tms)
+  record_ (mapi (lam i. lam t. (_tupleIdx2RecordKey i, t)) tms)
 
 let record_empty = use MExprAst in
   TmRecord {bindings = []}
@@ -206,7 +210,7 @@ let recordproj_ = use MExprAst in
 
 let tupleproj_ = use MExprAst in
   lam i. lam t.
-  recordproj_ (int2string i) t
+  recordproj_ (_tupleIdx2RecordKey i) t
 
 let recordupdate_ = use MExprAst in
   lam key. lam value. lam rec.
