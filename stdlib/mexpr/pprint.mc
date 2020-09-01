@@ -25,7 +25,7 @@ let conString = lam name.
       else if is_upper_alpha (head str) then
         str
       else
-        strJoin "" ["#con\"", str, "\""] in
+        join ["#con\"", str, "\""] in
     let sym = if nameHasSym name then sym2string sym else "" in
     strJoin symbolDelim [str, sym]
   else never
@@ -39,7 +39,7 @@ let varString = lam name.
       else if is_lower_alpha (head str) then
         str
       else
-        strJoin "" ["#var\"", str, "\""] in
+        join ["#var\"", str, "\""] in
     let sym = if nameHasSym name then sym2string sym else "" in
     strJoin symbolDelim [str, sym]
   else never
@@ -58,7 +58,7 @@ lang AppPrettyPrint = AppAst
   | TmApp t ->
     let l = pprintCode indent t.lhs in
     let r = pprintCode indent t.rhs in
-    strJoin "" ["(", l, ") (", r, ")"]
+    join ["(", l, ") (", r, ")"]
 end
 
 lang FunPrettyPrint = FunAst
@@ -74,7 +74,7 @@ lang FunPrettyPrint = FunAst
       else ""
     in
     let body = pprintCode (incr indent) t.body in
-    strJoin "" ["lam ", ident, tpe, ".", newline (incr indent), body]
+    join ["lam ", ident, tpe, ".", newline (incr indent), body]
 end
 
 lang RecordPrettyPrint = RecordAst
@@ -83,14 +83,14 @@ lang RecordPrettyPrint = RecordAst
     if eqi (length t.bindings) 0 then "{}"
     else
       let binds =
-        map (lam r. strJoin ""
+        map (lam r. join
                       [r.0, " = ",
                        pprintCode (incr indent) r.1])
           t.bindings in
       let merged = strJoin (concat ", " (newline (incr indent))) binds in
-      strJoin "" ["{ ", merged, " }"]
+      join ["{ ", merged, " }"]
   | TmRecordUpdate t ->
-    strJoin "" ["{", pprintCode indent t.rec, " with ", t.key,
+    join ["{", pprintCode indent t.rec, " with ", t.key,
                 " = ", pprintCode indent t.value, "}"]
 end
 
@@ -103,7 +103,7 @@ lang LetPrettyPrint = LetAst
     let ident = varString t.ident in
     let body = pprintCode (incr indent) t.body in
     let inexpr = pprintCode indent t.inexpr in
-    strJoin "" ["let ", ident, " =", newline (incr indent),
+    join ["let ", ident, " =", newline (incr indent),
                 body, newline indent,
                 "in", newline indent,
                 inexpr]
@@ -120,11 +120,11 @@ lang RecLetsPrettyPrint = RecLetsAst
     let pprintLets = lam acc. lam l.
       let ident = varString l.ident in
       let body = pprintCode (incr (incr indent)) l.body in
-      strJoin "" [acc, newline (incr indent),
+      join [acc, newline (incr indent),
                   "let ", ident, " =", newline (incr (incr indent)),
                   body]
     in
-    strJoin "" [foldl pprintLets "recursive" lets, newline indent,
+    join [foldl pprintLets "recursive" lets, newline indent,
                 "in", newline indent, inexpr]
 end
 
@@ -149,12 +149,12 @@ lang DataPrettyPrint = DataAst
       else ""
     in
     let inexpr = pprintCode indent t.inexpr in
-    strJoin "" ["con ", name, tpe, " in", newline indent, inexpr]
+    join ["con ", name, tpe, " in", newline indent, inexpr]
 
   | TmConApp t ->
     let l = conString t.ident in
     let r = pprintCode indent t.body in
-    strJoin "" ["(", l, ") (", r, ")"]
+    join ["(", l, ") (", r, ")"]
 end
 
 lang MatchPrettyPrint = MatchAst
@@ -167,7 +167,7 @@ lang MatchPrettyPrint = MatchAst
     let pat = getPatStringCode indent t.pat in
     let thn = pprintCode (incr indent) t.thn in
     let els = pprintCode (incr indent) t.els in
-    strJoin "" ["match ", target, " with ", pat, " then",
+    join ["match ", target, " with ", pat, " then",
                 newline (incr indent), thn, newline indent, "else",
                 newline (incr indent), els]
 end
@@ -178,7 +178,7 @@ lang UtestPrettyPrint = UtestAst
     let test = pprintCode indent t.test in
     let expected = pprintCode indent t.expected in
     let next = pprintCode indent t.next in
-    strJoin "" ["utest ", test, newline indent,
+    join ["utest ", test, newline indent,
                 "with ", expected, newline indent,
                 "in", newline indent, next]
 end
@@ -200,7 +200,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     else
       let merged = strJoin (concat ", " (newline (incr indent)))
                      (map (pprintCode (incr indent)) t.tms) in
-      strJoin "" ["[ ", merged, " ]"]
+      join ["[ ", merged, " ]"]
 end
 
 lang NeverPrettyPrint = NeverAst
@@ -308,9 +308,9 @@ lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) =
   | PRecord {bindings = bindings} ->
     let binds = map
-      (lam r. strJoin "" [r.0, " = ", getPatStringCode indent r.1]) bindings
+      (lam r. join [r.0, " = ", getPatStringCode indent r.1]) bindings
     in
-    strJoin "" ["{", strJoin ", " binds, "}"]
+    join ["{", strJoin ", " binds, "}"]
 end
 
 lang DataPatPrettyPrint = DataPat
@@ -318,7 +318,7 @@ lang DataPatPrettyPrint = DataPat
   | PCon t ->
     let name = conString t.ident in
     let subpat = getPatStringCode indent t.subpat in
-    strJoin "" [name, " (", subpat, ")"]
+    join [name, " (", subpat, ")"]
 end
 
 lang IntPatPrettyPrint = IntPat
@@ -357,21 +357,21 @@ lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + Seq
                        TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
                        BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint
     sem getTypeStringCode (indent : Int) =
-    | TyArrow t -> strJoin "" ["(", getTypeStringCode indent t.from, ") -> (",
+    | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
                                getTypeStringCode indent t.to, ")"]
     | TyDyn _ -> "Dyn"
     | TyUnit _ -> "()"
     | TyChar _ -> "Char"
     | TyString _ -> "String"
-    | TySeq t -> strJoin "" ["[", getTypeStringCode indent t.tpe, "]"]
+    | TySeq t -> join ["[", getTypeStringCode indent t.tpe, "]"]
     | TyProd t ->
       let tpes = map (lam x. getTypeStringCode indent x) t.tpes in
-      strJoin "" ["(", strJoin ", " tpes, ")"]
+      join ["(", strJoin ", " tpes, ")"]
     | TyRecord t ->
       let conventry = lam entry.
-          strJoin "" [entry.ident, " : ", getTypeStringCode indent entry.tpe]
+          join [entry.ident, " : ", getTypeStringCode indent entry.tpe]
       in
-      strJoin "" ["{", strJoin ", " (map conventry t.tpes), "}"]
+      join ["{", strJoin ", " (map conventry t.tpes), "}"]
     | TyCon t -> t.ident
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
