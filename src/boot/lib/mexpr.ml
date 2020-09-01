@@ -32,7 +32,7 @@ let (argv_boot,argv_prog) =
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("not",f(Cnot));("and",f(Cand(None)));("or",f(Cor(None)));
+  ([("not",f(Cnot));
    ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
    ("lti",f(Clti(None)));("leqi",f(Cleqi(None)));("gti",f(Cgti(None)));("geqi",f(Cgeqi(None)));
@@ -87,8 +87,6 @@ let arity = function
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
   | Cnot        -> 1
-  | Cand(None)  -> 2  | Cand(Some(_))  -> 1
-  | Cor(None)   -> 2  | Cor(Some(_))   -> 1
   (* MCore intrinsic: Integer constant and operations *)
   | CInt(_)     -> 0
   | Caddi(None) -> 2  | Caddi(Some(_)) -> 1
@@ -214,14 +212,6 @@ let delta eval env fi c v  =
 
     | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
     | Cnot,_ -> fail_constapp fi
-
-    | Cand(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cand(Some(v)))
-    | Cand(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 && v2))
-    | Cand(None),_ | Cand(Some(_)),_  -> fail_constapp fi
-
-    | Cor(None),TmConst(fi,CBool(v)) -> TmConst(fi,Cor(Some(v)))
-    | Cor(Some(v1)),TmConst(fi,CBool(v2)) -> TmConst(fi,CBool(v1 || v2))
-    | Cor(None),_ | Cor(Some(_)),_  -> fail_constapp fi
 
     (* MCore integer intrinsics *)
     | CInt(_),_ -> fail_constapp fi
