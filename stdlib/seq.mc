@@ -1,3 +1,4 @@
+include "bool.mc"
 include "option.mc"
 
 let null = lam seq. eqi 0 (length seq)

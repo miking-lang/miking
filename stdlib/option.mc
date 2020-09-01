@@ -1,3 +1,5 @@
+include "bool.mc"
+
 type Option a
 con Some : a -> Option a
 con None : () -> Option a
