@@ -4,6 +4,7 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "name.mc"
+include "symbol.mc"
 
 include "mexpr/ast.mc"
 
@@ -14,11 +15,6 @@ let newline = lam indent. concat "\n" (spacing indent)
 let incr = lam indent. addi indent 2
 
 let symbolDelim = "'"
-
--- 'sym2string sym' returns a string corresponding to the symbol 'sym'. This
--- exposes the underlying symbol representation, but is necessary for pretty
--- printing.
-let sym2string = lam s. int2string (sym2int s)
 
 -- Constructor name translation
 let conString = lam name.
