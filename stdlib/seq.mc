@@ -91,12 +91,10 @@ utest zipWith addi [] [] with []
 -- Accumulating maps
 let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f. lam acc. lam seq.
-    let res =
-      foldl
-        (lam tacc. lam x.
-           match f tacc.0 x with (acc, y) then (acc, cons y tacc.1) else never)
-        (acc, []) seq in
-    (res.0, reverse res.1)
+    foldl
+      (lam tacc. lam x.
+         match f tacc.0 x with (acc, y) then (acc, snoc tacc.1 y) else never)
+      (acc, []) seq
 
 let mapAccumR : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f. lam acc. lam seq.
