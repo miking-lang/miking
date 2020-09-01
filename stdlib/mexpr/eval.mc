@@ -7,6 +7,7 @@ include "assoc.mc"
 include "name.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/pprint.mc"
 

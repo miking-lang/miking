@@ -41,6 +41,7 @@
 -- include "string.mc"
 --
 -- include "mexpr/ast.mc"
+-- include "mexpr/ast-builder.mc"
 -- include "mexpr/eval.mc"
 -- include "mexpr/pprint.mc"
 --

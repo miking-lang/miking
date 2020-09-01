@@ -4,6 +4,7 @@
 -- TODO Add full support for MExpr when stable.
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 
 lang FunCPS = FunSym

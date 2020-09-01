@@ -5,6 +5,7 @@ include "string.mc"
 include "assoc.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 -- include "mexpr/pprint.mc"
 
 ---------------------------
@@ -27,7 +28,7 @@ let identEq : Ident -> Ident -> Bool =
     then eqstr s1 s2
     else false
 
-type Env = AssocMapIdentSymbol -- i.e., [(Ident, Symbol)]
+type Env = AssocMap Ident Symbol -- i.e., [(Ident, Symbol)]
 
 let lookupId = assocLookup {eq = identEq}
 let insertId = assocInsert {eq = identEq}

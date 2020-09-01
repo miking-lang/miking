@@ -7,6 +7,7 @@ include "name.mc"
 include "symbol.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 
 let spacing = lam indent. makeSeq indent ' '
 let newline = lam indent. concat "\n" (spacing indent)
