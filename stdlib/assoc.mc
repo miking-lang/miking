@@ -75,23 +75,23 @@ let assocValues : AssocTraits k -> AssocMap k v -> [v] =
     map (lam t. t.1) m
 
 -- 'assocMap traits f m' maps over the values of 'm' using function 'f'.
-let assocMap : AssocTraits -> (a -> b) -> AssocMap -> AssocMap =
+let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
   lam _. lam f. lam m.
     map (lam t. (t.0, f t.1)) m
 
 -- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'.
 -- IMPORTANT: The folding order is unspecified.
-let assocFold : AssocTraits -> (acc -> key -> a -> acc)
-                  -> acc -> AssocMap -> acc =
+let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
+                  -> acc -> AssocMap k v -> acc =
   lam _. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
 -- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
 -- and fold over 'm' using function 'f' and accumulator 'acc'.
 -- IMPORTANT: The folding order is unspecified.
-let assocMapAccum : AssocTraits -> (acc -> key -> a -> (acc, b))
-                      -> acc -> [a] -> (acc, [b]) =
+let assocMapAccum : AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
+                      -> acc -> AssocMap k v1 -> (acc, AssocMap k v2) =
   lam _. lam f. lam acc. lam m.
     mapAccumL
       (lam acc. lam t.

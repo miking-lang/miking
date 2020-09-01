@@ -45,7 +45,7 @@ end
 
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMapStringExpr}
+  | TmRecord {bindings : AssocMap String Expr}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
                     value : Expr}
@@ -271,7 +271,7 @@ end
 
 lang RecordPat
   syn Pat =
-  | PRecord {bindings : AssocMapStringPat}
+  | PRecord {bindings : AssocMap String Pat}
 end
 
 lang DataPat = DataAst

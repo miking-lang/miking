@@ -17,7 +17,7 @@ include "mexpr/pprint.mc"
 
 type Symbol = Int
 
-type Env = AssocMapSymbolExpr
+type Env = AssocMap Symbol Expr
 
 let _ns : Name -> Symbol = lam name.
   match nameGetSym name with Some sym then sym
@@ -619,7 +619,7 @@ lang MExprEval =
     and (eqs k1 k2) (eq v1 v2)
   | _ -> false
 
-  sem recordEq (bindings1 : AssocMap) = -- AssocMap String Expr
+  sem recordEq (bindings1 : AssocMap String Expr) =
   | TmRecord t ->
     and (eqi (length bindings1) (length t.bindings))
         (all (lam e1. any (lam e2. and (eqstr e1.0 e2.0)
