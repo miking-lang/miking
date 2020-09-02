@@ -297,7 +297,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     -- recursive let isPrefix = lam eq. lam s1. lam s2.
     --   if null s1 then true
     --   else if null s2 then false
-    --   else and (eq (head s1) (head s2)) (isPrefix eq (tail s1) (tail s2))
+    --   else if (eq (head s1) (head s2)) then (isPrefix eq (tail s1) (tail s2))
+    --   else false
     -- in
     let isPrefix =
         reclets_add "isPrefix" (None ()) (
@@ -308,9 +309,10 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                                     (true_)
                                     (if_ (null_ (var_ "s2"))
                                          (false_)
-                                         (and_ (appf2_ (var_ "eq") (head_ (var_ "s1")) (head_ (var_ "s2")))
-                                               (appf3_ (var_ "isPrefix") (var_ "eq") (tail_ (var_ "s1")) (tail_ (var_ "s2")) ))) )))))
-                                               reclets_empty
+                                         (if_ (appf2_ (var_ "eq") (head_ (var_ "s1")) (head_ (var_ "s2")))
+                                              (appf3_ (var_ "isPrefix") (var_ "eq") (tail_ (var_ "s1")) (tail_ (var_ "s2")) )
+                                              (false_))) )))))
+                                              reclets_empty
     in
 
     -- AST-ify isSuffix

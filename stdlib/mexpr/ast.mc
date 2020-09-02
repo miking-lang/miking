@@ -210,8 +210,6 @@ lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
   | CNot {}
-  | CAnd {}
-  | COr {}
 end
 
 lang CmpIntAst = IntAst + BoolAst
