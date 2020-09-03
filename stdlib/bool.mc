@@ -5,6 +5,14 @@
 -- its truth table.
 
 
+-- Logical NOT
+let not: Bool -> Bool -> Bool =
+  lam a. if a then false else true
+
+utest not true with false
+utest not false with true
+
+
 -- Logical AND
 let and: Bool -> Bool -> Bool =
   lam a. lam b. if a then b else false

@@ -32,8 +32,7 @@ let (argv_boot,argv_prog) =
    correspond constants *)
 let builtin =
   let f c = TmConst(NoInfo,c) in
-  ([("not",f(Cnot));
-   ("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
+  ([("addi",f(Caddi(None)));("subi",f(Csubi(None)));("muli",f(Cmuli(None)));
    ("divi",f(Cdivi(None)));("modi",f(Cmodi(None)));("negi",f(Cnegi));
    ("lti",f(Clti(None)));("leqi",f(Cleqi(None)));("gti",f(Cgti(None)));("geqi",f(Cgeqi(None)));
    ("eqi",f(Ceqi(None)));("neqi",f(Cneqi(None)));
@@ -86,7 +85,6 @@ let builtin_sym2term = List.map (fun (_,s,t) -> (s,t)) builtin
 let arity = function
   (* MCore intrinsic: Boolean constant and operations *)
   | CBool(_)    -> 0
-  | Cnot        -> 1
   (* MCore intrinsic: Integer constant and operations *)
   | CInt(_)     -> 0
   | Caddi(None) -> 2  | Caddi(Some(_)) -> 1
@@ -209,9 +207,6 @@ let delta eval env fi c v  =
     match c,v with
     (* MCore boolean intrinsics *)
     | CBool(_),_ -> fail_constapp fi
-
-    | Cnot,TmConst(fi,CBool(v)) -> TmConst(fi,CBool(not v))
-    | Cnot,_ -> fail_constapp fi
 
     (* MCore integer intrinsics *)
     | CInt(_),_ -> fail_constapp fi
