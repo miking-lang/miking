@@ -41,9 +41,10 @@ let mapAccumId = assocMapAccum {eq = identEq}
 
 lang VarSym = VarAst
   sem symbolize (env : Env) =
-  | TmVar {ident = (str, _)} ->
+  | TmVar {ident = ident} ->
+    let str = nameGetStr ident in
     match lookupId (IdVar str) env
-    with Some sym then TmVar {ident = (str, sym)}
+    with Some sym then TmVar {ident = nameSetSym ident sym}
     else error (concat "Unknown variable in symbolize: " str)
 end
 
@@ -55,10 +56,11 @@ end
 
 lang FunSym = FunAst + VarSym + AppSym
   sem symbolize (env : Env) =
-  | TmLam {ident = (str, _), tpe = tpe, body = body} ->
+  | TmLam {ident = ident, tpe = tpe, body = body} ->
+    let str = nameGetStr ident in
     let sym = gensym () in
     let env = insertId (IdVar str) sym env in
-    TmLam {ident = (str,sym), tpe = tpe, body = symbolize env body}
+    TmLam {ident = nameSetSym ident sym, tpe = tpe, body = symbolize env body}
 end
 
 lang RecordSym = RecordAst
@@ -73,11 +75,13 @@ end
 
 lang LetSym = LetAst
   sem symbolize (env : Env) =
-  | TmLet {ident = (str, _),  body = body, inexpr = inexpr} ->
+  | TmLet {ident = ident,  body = body, inexpr = inexpr} ->
+    let str = nameGetStr ident in
     let body = symbolize env body in
     let sym = gensym () in
     let env = insertId (IdVar str) sym env in
-    TmLet {ident = (str,sym), body = body, inexpr = symbolize env inexpr}
+    TmLet {ident = nameSetSym ident sym,
+           body = body, inexpr = symbolize env inexpr}
 end
 
 lang RecLetsSym = RecLetsAst
@@ -114,13 +118,17 @@ end
 
 lang DataSym = DataAst
   sem symbolize (env : Env) =
-  | TmConDef {ident = (str,_), tpe = tpe, inexpr = inexpr} ->
+  | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
+    let str = nameGetStr ident in
     let sym = gensym () in
     let env = insertId (IdCon str) sym env in
-    TmConDef {ident = (str,sym), tpe = tpe, inexpr = symbolize env inexpr}
-  | TmConApp {ident = (str,_), body = body} ->
+    TmConDef {ident = nameSetSym ident sym,
+              tpe = tpe, inexpr = symbolize env inexpr}
+  | TmConApp {ident = ident, body = body} ->
+    let str = nameGetStr ident in
     match lookupId (IdCon str) env
-    with Some sym then TmConApp {ident = (str, sym), body = symbolize env body}
+    with Some sym then
+      TmConApp {ident = nameSetSym ident sym, body = symbolize env body}
     else error (concat "Unknown constructor in symbolize: " str)
 end
 
@@ -193,11 +201,12 @@ end
 
 lang DataPatSym = DataPat
   sem symbolizePat (env : Env) =
-  | PCon {ident = (str,_), subpat = subpat} ->
+  | PCon {ident = ident, subpat = subpat} ->
+    let str = nameGetStr ident in
     match lookupId (IdCon str) env
     with Some sym then
       match symbolizePat env subpat with (env, subpat) then
-        (env, PCon {ident = (str, sym), subpat = subpat})
+        (env, PCon {ident = nameSetSym ident sym, subpat = subpat})
       else never
     else error (concat "Unknown constructor in symbolize: " str)
 end
