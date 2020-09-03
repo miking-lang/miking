@@ -14,7 +14,7 @@ let pvarw_ = use MExprAst in
   PVar {ident = PWildcard ()}
 
 let punit_ = use MExprAst in
-  PRecord { bindings = [] }
+  PRecord { bindings = assocEmpty }
 
 let pint_ = use MExprAst in
   lam i.
@@ -118,7 +118,7 @@ let bindall_ = use MExprAst in
   foldl1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = []}
+  TmRecord {bindings = assocEmpty}
 
 let nlet_ = use MExprAst in
   lam n. lam body.

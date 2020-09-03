@@ -416,7 +416,7 @@ let utest_ = use MExprAst in
   TmUtest {test = t, expected = e, next = n}
 
 let punit_ = use MExprAst in
-  PRecord { bindings = [] }
+  PRecord { bindings = assocEmpty }
 
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
@@ -431,7 +431,7 @@ let conapp_ = use MExprAst in
   nconapp_ (nameNoSym s) b
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = []}
+  TmRecord {bindings = assocEmpty }
 
 let ncondef_ = use MExprAst in
   lam n. lam tpe.

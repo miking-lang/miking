@@ -49,7 +49,7 @@ end
 mexpr
 use FunCPS in
 
-let _s = symbolize [] in
+let _s = symbolize assocEmpty in
 
 let id = _s (ulam_ "x" (var_ "x")) in
 

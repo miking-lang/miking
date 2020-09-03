@@ -645,7 +645,8 @@ mexpr
 use MExprEval in
 
 -- Evaluation shorthand used in tests below
-let eval = lam t. eval {env = []} (symbolize [] t) in
+let eval =
+  lam t. eval {env = assocEmpty} (symbolize assocEmpty t) in
 
 let id = ulam_ "x" (var_ "x") in
 let bump = ulam_ "x" (addi_ (var_ "x") (int_ 1)) in
