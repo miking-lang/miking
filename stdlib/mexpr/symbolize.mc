@@ -169,14 +169,15 @@ end
 
 lang VarPatSym = VarPat
   sem symbolizePat (env : Env) =
-  | PVar {ident = PName (str,_)} ->
+  | PVar {ident = PName name} ->
+    let str = nameGetStr name in
     let l = lookupId (IdVar str) env in
     match l with Some sym then
-      (env, PVar {ident = PName (str,sym)})
+      (env, PVar {ident = PName (nameSetSym name sym)})
     else match l with None () then
       let sym = gensym () in
       let env = insertId (IdVar str) sym env in
-      (env, PVar {ident = PName (str,sym)})
+      (env, PVar {ident = PName (nameSetSym name sym)})
     else never
   | PVar {ident = PWildcard ()} ->
     (env, PVar {ident = PWildcard ()})

@@ -19,31 +19,37 @@ let symbolDelim = "'"
 
 -- Constructor name translation
 let conString = lam name.
-  match name with (str,sym) then
-    let str =
-      if eqi (length str) 0 then
-        "#con\"\""
-      else if is_upper_alpha (head str) then
-        str
-      else
-        join ["#con\"", str, "\""] in
-    let sym = if nameHasSym name then sym2string sym else "" in
-    strJoin symbolDelim [str, sym]
-  else never
+  let str = nameGetStr name in
+  let str =
+    if eqi (length str) 0 then
+      "#con\"\""
+    else if is_upper_alpha (head str) then
+      str
+    else
+      join ["#con\"", str, "\""] in
+  let sym =
+    match nameGetSym name with Some sym then
+      concat "'" (sym2string sym)
+    else
+      "" in
+  concat str sym
 
 -- Variable name translation (TODO Some code duplication)
 let varString = lam name.
-  match name with (str,sym) then
-    let str =
-      if eqi (length str) 0 then
-        "#var\"\""
-      else if is_lower_alpha (head str) then
-        str
-      else
-        join ["#var\"", str, "\""] in
-    let sym = if nameHasSym name then sym2string sym else "" in
-    strJoin symbolDelim [str, sym]
-  else never
+  let str = nameGetStr name in
+  let str =
+    if eqi (length str) 0 then
+      "#var\"\""
+    else if is_lower_alpha (head str) then
+      str
+    else
+      join ["#var\"", str, "\""] in
+  let sym =
+    match nameGetSym name with Some sym then
+      concat "'" (sym2string sym)
+    else
+      "" in
+  concat str sym
 
 -----------
 -- TERMS --
