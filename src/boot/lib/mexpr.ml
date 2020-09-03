@@ -65,7 +65,7 @@ let builtin =
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
    ("exit",f(Cexit));
-   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym));
+   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym)); ("sym2hash", f(CSym2hash));
    ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
    ("wallTimeMs",f(CwallTimeMs)); ("sleepMs",f(CsleepMs));
   ]
@@ -159,6 +159,7 @@ let arity = function
   | Cgensym      -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
+  | CSym2hash      -> 1
   (* Python intrinsics *)
   | CPy v -> Pyffi.arity v
   (* External functions TODO: Should not be part of core language *)
@@ -489,6 +490,8 @@ let delta eval env fi c v  =
     | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
     | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqs(_),_ -> fail_constapp fi
+    | CSym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
+    | CSym2hash,_ -> fail_constapp fi
 
     | CPy v, t -> Pyffi.delta eval env fi v t
 
