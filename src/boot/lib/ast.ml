@@ -116,7 +116,7 @@ and const =
 | CSymb of int
 | Cgensym
 | Ceqs of int option
-| CSym2int
+| CSym2hash
 (* External functions TODO: Should not be part of core language *)
 | CExt of tm Extast.ext
 | CPy of tm Pyast.ext

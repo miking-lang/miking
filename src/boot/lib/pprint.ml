@@ -241,7 +241,7 @@ let rec print_const fmt = function
   | CSymb(id) -> fprintf fmt "symb(%d)" id
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqs(_)   -> fprintf fmt "eqs"
-  | CSym2int  -> fprintf fmt "sym2int"
+  | CSym2hash  -> fprintf fmt "sym2hash"
 
   (* Python intrinsics *)
   | CPy(v) -> fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
