@@ -1,11 +1,11 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// Test fixpoint usages
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+-- Test fixpoint usages
 
 mexpr
 
-// Separate fix-point
+-- Separate fix-point
 let fact_abs = (lam fact. lam n.
     if eqi n 0
     then 1
@@ -17,7 +17,7 @@ let fact = fix fact_abs in
 utest fact 5 with 120 in
 utest fact 0 with 1 in
 
-// Mutual recursion
+-- Mutual recursion
 let odd_abs = lam odd. lam even. lam n.
     if eqi n 1
     then true

@@ -1,4 +1,4 @@
-// String format with MLang
+-- String format with MLang
 
 include "char.mc"
 include "seq.mc"

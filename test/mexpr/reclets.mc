@@ -1,11 +1,11 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
 
 
 mexpr
 
-// Mutual recursion
+-- Mutual recursion
 
 
 recursive

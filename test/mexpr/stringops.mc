@@ -1,7 +1,7 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// Test implementation of simple string operations
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+-- Test implementation of simple string operations
 
 mexpr
 
@@ -31,14 +31,14 @@ recursive
          else false
 in
 
-// Convert a character to upper case
+-- Convert a character to upper case
 let char2upper = (lam c.
 	if and (geqchar c 'a') (leqchar c 'z')
 	then (int2char (subi (char2int c) 32))
 	else c
 ) in
 
-// Convert a character to lower case
+-- Convert a character to lower case
 let char2lower = (lam c.
 	if and (geqchar c 'A') (leqchar c 'Z')
 	then (int2char (addi (char2int c) 32))
@@ -49,7 +49,7 @@ let str2upper = lam s. map char2upper s in
 let str2lower = lam s. map char2lower s in
 
 recursive
-  // Splits the string on the entered delimiter
+  -- Splits the string on the entered delimiter
   let strsplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
@@ -59,7 +59,7 @@ recursive
               cons (cons (head s) (head remaining)) (tail remaining)
 in
 
-// Trims a string of spaces
+-- Trims a string of spaces
 recursive
   let strtrim_init = lam s.
     if eqstr s ""
@@ -71,7 +71,7 @@ in
 let strtrim = lam s. reverse (strtrim_init (reverse (strtrim_init s))) in
 
 recursive
-  // Join a list of strings with a common delimiter
+  -- Join a list of strings with a common delimiter
   let strjoin = lam delim. lam slist.
     if eqi (length slist) 0
     then ""

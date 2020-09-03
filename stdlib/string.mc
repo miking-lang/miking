@@ -56,19 +56,19 @@ utest int2string 25 with "25"
 utest int2string 314159 with "314159"
 utest int2string (negi 314159) with "-314159"
 
-// A naive float2string implementation that only formats in standard form
+-- A naive float2string implementation that only formats in standard form
 let float2string = lam arg.
-  // Quick fix to check for infinities
+  -- Quick fix to check for infinities
   if eqf arg inf then "INFINITY" else
   if eqf arg (negf inf) then "-INFINITY" else
-  // End of quick fix
-  let precision = 7 in // Precision in number of digits
+  -- End of quick fix
+  let precision = 7 in -- Precision in number of digits
   let prefixpair = if ltf arg 0.0 then ("-", negf arg) else ("", arg) in
   let prefix = prefixpair.0 in
   let val = prefixpair.1 in
   recursive
   let float2string_rechelper = lam prec. lam digits. lam v.
-    // Assume 0 <= v < 10
+    -- Assume 0 <= v < 10
     if eqi prec digits then
       ""
     else if eqf v 0.0 then
@@ -111,8 +111,8 @@ utest float2string (negf 5.0e+25) with "-5.0e+25"
 utest float2string (5.0e-5) with "5.0e-5"
 utest float2string (negf 5.0e-5) with "-5.0e-5"
 
-// Returns an option with the index of the first occurrence of c in s. Returns
-// None if c was not found in s.
+-- Returns an option with the index of the first occurrence of c in s. Returns
+-- None if c was not found in s.
 let strIndex = lam c. lam s.
   recursive
   let strIndex_rechelper = lam i. lam c. lam s.
@@ -131,8 +131,8 @@ utest strIndex 'w' "Hello, World!" with None ()
 utest strIndex 'o' "Hello, world!" with Some(4)
 utest strIndex '@' "Some @TAG@" with Some(5)
 
-// Returns an option with the index of the last occurrence of c in s. Returns
-// None if c was not found in s.
+-- Returns an option with the index of the last occurrence of c in s. Returns
+-- None if c was not found in s.
 let strLastIndex = lam c. lam s.
   recursive
   let strLastIndex_rechelper = lam i. lam acc. lam c. lam s.
@@ -154,7 +154,7 @@ utest strLastIndex 'w' "Hello, World!" with None ()
 utest strLastIndex 'o' "Hello, world!" with Some(8)
 utest strLastIndex '@' "Some @TAG@" with Some(9)
 
-// Splits s on delim
+-- Splits s on delim
 recursive
   let strSplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
@@ -171,7 +171,7 @@ utest strSplit "" "Hello" with ["Hello"]
 utest strSplit "lla" "Hello" with ["Hello"]
 utest strSplit "Hello" "Hello" with ["", ""]
 
-// Trims s of spaces
+-- Trims s of spaces
 let strTrim = lam s.
   recursive
   let strTrim_init = lam s.
@@ -187,7 +187,7 @@ utest strTrim " aaaa   " with "aaaa"
 utest strTrim "   bbbbb  bbb " with "bbbbb  bbb"
 utest strTrim "ccccc c\t   \n" with "ccccc c"
 
-// Joins the strings in strs on delim
+-- Joins the strings in strs on delim
 recursive
   let strJoin = lam delim. lam strs.
     if eqi (length strs) 0

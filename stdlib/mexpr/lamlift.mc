@@ -1,39 +1,39 @@
 -- TODO Needs updating, commented out for now
 --
--- // Defines semantics for lambda lifting
--- // Based on the technique from the 1985 paper.
--- // (This will not handle partial application until a type-checker has been
--- // implemented.)
+-- -- Defines semantics for lambda lifting
+-- -- Based on the technique from the 1985 paper.
+-- -- (This will not handle partial application until a type-checker has been
+-- -- implemented.)
 --
--- // This defines the lamlift semantics which, given a state tuple, propagates
--- // the entire AST and lifts out any internal lambda expressions to the top-
--- // level.
+-- -- This defines the lamlift semantics which, given a state tuple, propagates
+-- -- the entire AST and lifts out any internal lambda expressions to the top-
+-- -- level.
 --
--- // This also defines the internal replace semantics which replaces all
--- // occurrences of an identifier with a specific expression. This is primarily
--- // used to replace the identifiers that are signalling a recursion.
+-- -- This also defines the internal replace semantics which replaces all
+-- -- occurrences of an identifier with a specific expression. This is primarily
+-- -- used to replace the identifiers that are signalling a recursion.
 --
--- // Algorithm for Let's (and anonymous lambdas):
--- // - Keep a track of all the arguments and variables (not defined functions)
--- // - When a Let expression has been fully scanned, check which variables that
--- //   where externally referenced. All the variables that were externally
--- //   referenced and are not part of the current lambda scope needs to be
--- //   generated as arguments for the current lambda as well. These arguments
--- //   will then be applied to the lifted lambda instead of the externally
--- //   referenced arguments.
--- // - For Let expressions in a recursive scope, identifiers will be replaced in
--- //   2 passes. After all the Let expressions have been scanned (just like in
--- //   the previous step), the generated identifiers potentionally need to be
--- //   replaced by a TmApp (..., ...) where the generated arguments are
--- //   pre-applied on the generated identifier for the Let expression.
+-- -- Algorithm for Let's (and anonymous lambdas):
+-- -- - Keep a track of all the arguments and variables (not defined functions)
+-- -- - When a Let expression has been fully scanned, check which variables that
+-- --   where externally referenced. All the variables that were externally
+-- --   referenced and are not part of the current lambda scope needs to be
+-- --   generated as arguments for the current lambda as well. These arguments
+-- --   will then be applied to the lifted lambda instead of the externally
+-- --   referenced arguments.
+-- -- - For Let expressions in a recursive scope, identifiers will be replaced in
+-- --   2 passes. After all the Let expressions have been scanned (just like in
+-- --   the previous step), the generated identifiers potentionally need to be
+-- --   replaced by a TmApp (..., ...) where the generated arguments are
+-- --   pre-applied on the generated identifier for the Let expression.
 --
--- // NOTE: Assumes that bound variables are limited to the following AST nodes:
--- //        - TmVar
--- //        - TmApp
--- //
--- // If an identifier is bound to a different node which itself contain
--- // identifiers, then this could lead to the lambda lifting returning an
--- // incorrect program even if the input program was correct.
+-- -- NOTE: Assumes that bound variables are limited to the following AST nodes:
+-- --        - TmVar
+-- --        - TmApp
+-- --
+-- -- If an identifier is bound to a different node which itself contain
+-- -- identifiers, then this could lead to the lambda lifting returning an
+-- -- incorrect program even if the input program was correct.
 --
 --
 -- include "ast.mc"
