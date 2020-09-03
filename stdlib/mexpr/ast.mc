@@ -2,6 +2,7 @@
 
 include "string.mc"
 include "name.mc"
+include "assoc.mc"
 
 -----------
 -- TERMS --

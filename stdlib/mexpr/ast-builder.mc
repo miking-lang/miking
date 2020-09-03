@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "assoc.mc"
 
 -- Patterns --
 

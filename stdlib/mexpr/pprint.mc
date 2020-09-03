@@ -88,7 +88,7 @@ lang RecordPrettyPrint = RecordAst
                       [r.0, " = ",
                        pprintCode (incr indent) r.1])
           t.bindings in
-      let merged = strJoin (concat ", " (newline (incr indent))) binds in
+      let merged = strJoin (concat "," (newline (incr indent))) binds in
       join ["{ ", merged, " }"]
   | TmRecordUpdate t ->
     join ["{", pprintCode indent t.rec, " with ", t.key,
@@ -199,7 +199,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
       concat "\"" (concat (map (lam e. match extract_char e with Some c then c else '?') t.tms)
                           "\"")
     else
-      let merged = strJoin (concat ", " (newline (incr indent)))
+      let merged = strJoin (concat "," (newline (incr indent)))
                      (map (pprintCode (incr indent)) t.tms) in
       join ["[ ", merged, " ]"]
 end
