@@ -289,14 +289,6 @@ let negf_ = use MExprAst in
   lam a.
   appf1_ (const_ (CNegf ())) a
 
-let and_ = use MExprAst in
-  lam a. lam b.
-  appf2_ (const_ (CAnd ())) a b
-
-let or_ = use MExprAst in
-  lam a. lam b.
-  appf2_ (const_ (COr ())) a b
-
 let not_ = use MExprAst in
   lam a.
   appf1_ (const_ (CNot ())) a

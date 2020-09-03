@@ -319,10 +319,6 @@ end
 
 -- TODO Move pattern matching to own fragment?
 lang BoolEval = BoolAst + ConstEval
-  syn Const =
-  | CAnd2 Bool
-  | COr2 Bool
-
   sem delta (arg : Expr) =
   | CNot _ ->
     match arg with TmConst c then
@@ -330,30 +326,6 @@ lang BoolEval = BoolAst + ConstEval
         TmConst {val = CBool {val = not b.val}}
       else error "Not negating a boolean constant"
     else error "Not negating a constant"
-  | CAnd _ ->
-    match arg with TmConst c then
-      match c.val with CBool b then
-        TmConst {val = CAnd2 b.val}
-      else error "Not and-ing a boolean constant"
-    else error "Not and-ing a constant"
-  | CAnd2 b1 ->
-    match arg with TmConst c then
-      match c.val with CBool b2 then
-        TmConst {val = CBool {val = and b1 b2.val}}
-      else error "Not and-ing a boolean constant"
-    else error "Not and-ing a constant"
-  | COr _ ->
-    match arg with TmConst c then
-      match c.val with CBool b then
-        TmConst {val = COr2 b.val}
-      else error "Not or-ing a boolean constant"
-    else error "Not or-ing a constant"
-  | COr2 b1 ->
-    match arg with TmConst c then
-      match c.val with CBool b2 then
-        TmConst {val = CBool {val = or b1 b2.val}}
-      else error "Not or-ing a boolean constant"
-    else error "Not or-ing a constant"
 end
 
 lang CmpIntEval = CmpIntAst + ConstEval

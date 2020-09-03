@@ -136,11 +136,6 @@ let rec print_const fmt = function
 
   (* MCore Intrinsic Booleans *)
   | CBool(b)      -> fprintf fmt "%B" b
-  | Cnot          -> fprintf fmt "not"
-  | Cand(None)    -> fprintf fmt "and"
-  | Cand(Some(v)) -> fprintf fmt "and(%B)" v
-  | Cor(None)     -> fprintf fmt "or"
-  | Cor(Some(v))  -> fprintf fmt "or(%B)" v
 
   (* MCore Intrinsic Integers *)
   | CInt(v)        -> fprintf fmt "%d" v

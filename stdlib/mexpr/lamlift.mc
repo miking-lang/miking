@@ -557,8 +557,6 @@
 --     sem lamlift (state : LiftState) =
 --     --| CBool b -> (state, CBool b)
 --     --| CNot -> (state, CNot)
---     --| CAnd -> (state, CAnd)
---     --| COr -> (state, COr)
 --     | TmIf t ->
 --       let condret = lamlift state t.cond in
 --       let condstate = st_addGenargsToEnv condret.0 state {condret.0 with env = state.env} in
@@ -733,8 +731,6 @@
 -- let builtin_env = [{key = "addi", value = const_ (CAddi ())},
 --                    {key = "subi", value = const_ (CSubi ())},
 --                    {key = "muli", value = const_ (CMuli ())},
---                    {key = "and", value = const_ (CAnd ())},
---                    {key = "or", value = const_ (COr ())},
 --                    {key = "not", value = const_ (CNot ())},
 --                    {key = "eqi", value = const_ (CEqi ())},
 --                    {key = "get", value = const_ (CGet ())}]
