@@ -17,14 +17,17 @@ include "mexpr/pprint.mc"
 
 type Symbol = Int
 
-type Env = AssocMap Symbol Expr
+type Env = AssocMap Name Expr
 
-let _ns : Name -> Symbol = lam name.
-  match nameGetSym name with Some sym then sym
-  else error "Impossible: symbol empty in eval. Did you run symbolize?"
+let _eqn =
+  lam n1. lam n2.
+    if and (nameHasSym n1) (nameHasSym n2) then
+      nameEqSym n1 n2
+    else
+      error "Found name without symbol in eval. Did you run symbolize?"
 
-let lookupSym = assocLookup {eq = eqs}
-let insertSym = assocInsert {eq = eqs}
+let _evalLookup = assocLookup {eq = _eqn}
+let _evalInsert = assocInsert {eq = _eqn}
 
 -------------
 -- HELPERS --
@@ -49,7 +52,7 @@ let dtupleproj_ = use MExprAst in
 lang VarEval = VarAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
-    match lookupSym (_ns ident) ctx.env with Some t then
+    match _evalLookup ident ctx.env with Some t then
       eval ctx t
     else
       error (concat "Unknown variable: " (varString ident))
@@ -68,7 +71,7 @@ lang FunEval = FunAst + VarEval + AppEval
   | TmClos {ident : Name, body : Expr, env : Env}
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmClos t -> eval {ctx with env = insertSym (_ns t.ident) arg t.env} t.body
+  | TmClos t -> eval {ctx with env = _evalInsert t.ident arg t.env} t.body
 
   sem eval (ctx : {env : Env}) =
   | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
@@ -78,7 +81,7 @@ end
 lang LetEval = LetAst + VarEval
   sem eval (ctx : {env : Env}) =
   | TmLet t ->
-    eval {ctx with env = insertSym (_ns t.ident) (eval ctx t.body) ctx.env}
+    eval {ctx with env = _evalInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
 
@@ -92,10 +95,10 @@ lang FixEval = FixAst + FunEval
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
     match arg with TmClos clos then
-      let sym = _ns clos.ident in
+      let ident = clos.ident in
       let body = clos.body in
       let env =
-        insertSym sym (TmApp {lhs = TmFix (), rhs = TmClos clos}) clos.env in
+        _evalInsert ident (TmApp {lhs = TmFix (), rhs = TmClos clos}) clos.env in
       eval {ctx with env = env} body
     else
       error "Not fixing a function"
@@ -141,14 +144,13 @@ lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEva
         body
         t.bindings in
     let lst_name = nameSym "lst" in
-    let lst_sym = _ns lst_name in
     let lst_var = TmVar {ident = lst_name} in
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                tpe = None (),
                                body = unpack_from lst_var func_tuple} in
     eval {ctx with env =
-            insertSym lst_sym (TmApp {lhs = TmFix (), rhs = unfixed_tuple})
+            _evalInsert lst_name (TmApp {lhs = TmFix (), rhs = unfixed_tuple})
             ctx.env}
          (unpack_from lst_var t.inexpr)
 end
@@ -477,7 +479,7 @@ end
 
 lang VarPatEval = VarPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PVar {ident = PName name} -> Some (insertSym (_ns name) t env)
+  | PVar {ident = PName name} -> Some (_evalInsert name t env)
   | PVar {ident = PWildcard ()} -> Some env
 end
 
@@ -514,7 +516,7 @@ lang DataPatEval = DataAst + DataPat
     match t with TmConApp cn then
       let constructor = cn.ident in
       let subexpr = cn.body in
-      if eqs (_ns ident) (_ns constructor)
+      if _eqn ident constructor
         then tryMatch env subexpr subpat
         else None ()
     else None ()
@@ -613,10 +615,10 @@ lang MExprEval =
 
   sem dataEq (k1 : Name) (v1 : Expr) =
   | TmConApp d2 ->
-    let k1 = _ns k1 in
-    let k2 = _ns d2.ident in
+    let k1 = k1 in
+    let k2 = d2.ident in
     let v2 = d2.body in
-    and (eqs k1 k2) (eq v1 v2)
+    and (_eqn k1 k2) (eq v1 v2)
   | _ -> false
 
   sem recordEq (bindings1 : AssocMap String Expr) =
