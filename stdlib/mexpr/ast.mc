@@ -260,52 +260,123 @@ con PWildcard : ()   -> PatName
 lang VarPat
   syn Pat =
   | PVar {ident : PatName}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PVar p -> PVar p
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PVar _ -> acc
 end
 
 lang SeqTotPat
-  -- TODO
+  syn Pat =
+  | PSeqTot { pats : [Pat] }
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PSeqTot p -> PSeqTot {p with pats = map f p.pats}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PSeqTot {pats = pats} -> foldl f acc pats
 end
 
-lang SeqEdgPat
-  -- TODO
+lang SeqEdgePat
+  syn Pat =
+  | PSeqEdge {prefix : [Pat], postfix : [Pat]}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PSeqEdge p -> PSeqEdge {{p with prefix = map f p.prefix} with postfix = map f p.postfix}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PSeqEdge {prefix = pre, postfix = post} -> foldl f (foldl f acc pre) post
 end
 
 lang RecordPat
   syn Pat =
   | PRecord {bindings : AssocMap String Pat}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PRecord b -> PRecord {b with bindings = map (lam b. (b.0, f b.1)) b.bindings}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PRecord {bindings = bindings} -> foldl f acc (map (lam b. b.1) bindings)
 end
 
 lang DataPat = DataAst
   syn Pat =
   | PCon {ident  : Name,
           subpat : Pat}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PCon c -> PCon {c with subpat = f c.subpat}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PCon {subpat = subpat} -> f acc subpat
 end
 
 lang IntPat = IntAst
   syn Pat =
   | PInt {val : Int}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PInt v -> PInt v
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PInt _ -> acc
 end
 
 lang CharPat
   syn Pat =
   | PChar {val : Char}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PChar v -> PChar v
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PChar _ -> acc
 end
 
 lang BoolPat = BoolAst
   syn Pat =
   | PBool {val : Bool}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PBool v -> PBool v
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PBool _ -> acc
 end
 
 lang AndPat
-  -- TODO
+  syn Pat =
+  | PAnd {lpat : Pat, rpat : Pat}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PAnd p -> PAnd {{p with lpat = f p.lpat} with rpat = f p.rpat}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PAnd {lpat = l, rpat = r} -> f (f acc l) r
 end
 
 lang OrPat
-  -- TODO
+  syn Pat =
+  | POr {lpat : Pat, rpat : Pat}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | POr p -> POr {{p with lpat = f p.lpat} with rpat = f p.rpat}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | POr {lpat = l, rpat = r} -> f (f acc l) r
 end
 
 lang NotPat
-  -- TODO
+  syn Pat =
+  | PNot {subpat : Pat}
+
+  sem smap_Pat_Pat (f : Pat -> a) =
+  | PNot p -> PNot {p with subpat = f p.subpat}
+
+  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
+  | PNot {subpat = p} -> f acc p
 end
 
 -----------
@@ -386,7 +457,7 @@ lang MExprAst =
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
 
   -- Patterns
-  + VarPat + SeqTotPat + SeqEdgPat + RecordPat + DataPat + IntPat + CharPat +
+  + VarPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
   BoolPat + AndPat + OrPat + NotPat
 
   -- Types
@@ -487,8 +558,15 @@ let int_ = use MExprAst in
   lam i.
   const_ (CInt {val = i})
 
+let pbool_ = use MExprAst in
+  lam v.
+  PBool {val = v}
+
 let ptrue_ = use MExprAst in
-  PBool {val = true}
+  pbool_ true
+
+let pfalse_ = use MExprAst in
+  pbool_ false
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
@@ -538,6 +616,20 @@ let var_ = use MExprAst in
   lam s.
   nvar_ (nameNoSym s)
 
+let npvar_ = use MExprAst in
+  lam n.
+  PVar {ident = PName n}
+
+let pvar_ = use MExprAst in
+  lam s.
+  npvar_ (nameNoSym s)
+
+let pwild_ = use MExprAst in
+  PVar {ident = PWildcard ()}
+
+let pseqtot_ = use MExprAst in
+  lam pats.
+  PSeqTot {pats = pats}
 
 -----------
 -- TESTS --
@@ -652,6 +744,11 @@ let tmUtest = utest_ tmApp tmVarY tmVarZ in
 
 utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp] in
+
+let pSeqTot = pseqtot_ [ptrue_, pfalse_] in
+
+utest smap_Pat_Pat (lam x. pseqtot_ [x]) pSeqTot
+with pseqtot_ [pseqtot_ [ptrue_], pseqtot_ [pfalse_]] in
 
 -- recursive schemes tests
 let tmConst1C = char_ (int2char 1) in
