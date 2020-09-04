@@ -1,75 +1,21 @@
--- Convenience functions for manually constructing ASTs
-
-include "ast.mc"
-
--- Methods of binding an expression into a chain of lets --
-recursive let bind_ = use MExprAst in
-  lam letexpr. lam expr.
-  match letexpr with TmLet t then
-    TmLet {t with inexpr = bind_ t.inexpr expr}
-  else match letexpr with TmRecLets t then
-    TmRecLets {t with inexpr = bind_ t.inexpr expr}
-  else match letexpr with TmConDef t then
-    TmConDef {t with inexpr = bind_ t.inexpr expr}
-  else
-    expr -- Insert at the end of the chain
-end
-
-let bindall_ = use MExprAst in
-  lam exprs.
-  foldl1 bind_ exprs
-
-
--- Constant values --
-let const_ = use MExprAst in
-  lam c.
-  TmConst {val = c}
-
-let int_ = use MExprAst in
-  lam i.
-  const_ (CInt {val = i})
-
-let float_ = use MExprAst in
-  lam f.
-  const_ (CFloat {val = f})
-
-let true_ = use MExprAst in
-  const_ (CBool {val = true})
-
-let false_ = use MExprAst in
-  const_ (CBool {val = false})
-
-let char_ = use MExprAst in
-  lam c.
-  const_ (CChar {val = c})
-
-let str_ = use MExprAst in
-  lam s.
-  TmSeq {tms = map char_ s}
-
-let symb_ = use MExprAst in
-  lam c.
-  const_ (CSymb {val = c})
-
-let var_ = use MExprAst in
-  lam s.
-  TmVar {ident = s}
-
-let conapp_ = use MExprAst in
-  lam s. lam b.
-  TmConApp {ident = s, body = b}
-
--- Never term
-let never_ = use MExprAst in
-  TmNever {}
+include "mexpr/ast.mc"
+include "assoc.mc"
 
 -- Patterns --
+
+let npvar_ = use MExprAst in
+  lam n.
+  PVar {ident = PName n}
+
 let pvar_ = use MExprAst in
   lam s.
-  PVar {ident = s}
+  npvar_ (nameNoSym s)
+
+let pvarw_ = use MExprAst in
+  PVar {ident = PWildcard ()}
 
 let punit_ = use MExprAst in
-  PRecord { bindings = [] }
+  PRecord { bindings = assocEmpty }
 
 let pint_ = use MExprAst in
   lam i.
@@ -85,9 +31,13 @@ let ptrue_ = use MExprAst in
 let pfalse_ = use MExprAst in
   PBool {val = false}
 
+let npcon_ = use MExprAst in
+  lam n. lam cp.
+  PCon {ident = n, subpat = cp}
+
 let pcon_ = use MExprAst in
   lam cs. lam cp.
-  PCon {ident = cs, subpat = cp}
+  npcon_ (nameNoSym cs) cp
 
 let prec_ = use MExprAst in
   lam bindings.
@@ -148,18 +98,120 @@ let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}
 
--- Control flows --
+
+-- Terms --
+-- Methods of binding an expression into a chain of lets/reclets/condefs --
+
+recursive let bind_ = use MExprAst in
+  lam letexpr. lam expr.
+  match letexpr with TmLet t then
+    TmLet {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmRecLets t then
+    TmRecLets {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmConDef t then
+    TmConDef {t with inexpr = bind_ t.inexpr expr}
+  else
+    expr -- Insert at the end of the chain
+end
+
+let bindall_ = use MExprAst in
+  lam exprs.
+  foldl1 bind_ exprs
+
+let unit_ = use MExprAst in
+  TmRecord {bindings = assocEmpty}
+
+let nlet_ = use MExprAst in
+  lam n. lam body.
+  TmLet {ident = n, body = body, inexpr = unit_}
+
+let let_ = use MExprAst in
+  lam s. lam body.
+  nlet_ (nameNoSym s) body
+
+let nreclets_ = use MExprAst in
+  lam bs.
+  TmRecLets {bindings = map (lam t. {ident = t.0, body = t.1}) bs,
+             inexpr = unit_}
+
+let reclets_ = use MExprAst in
+  lam bs.
+  nreclets_ (map (lam b. (nameNoSym b.0, b.1)) bs)
+
+let reclet_ = use MExprAst in
+  lam s. lam body.
+  reclets_ [(s, body)]
+
+let reclets_empty = use MExprAst in
+  reclets_ []
+
+let nreclets_add = use MExprAst in
+  lam n. lam body. lam reclets.
+  match reclets with TmRecLets t then
+    let newbind = {ident = n, body = body} in
+    TmRecLets {t with bindings = cons newbind t.bindings}
+  else
+    error "reclets is not a TmRecLets construct"
+
+let reclets_add = use MExprAst in
+  lam s. lam body. lam reclets.
+  nreclets_add (nameNoSym s) body reclets
+
+let ncondef_ = use MExprAst in
+  lam n. lam tpe.
+  TmConDef {ident = n, tpe = tpe, inexpr = unit_}
+
+let condef_ = use MExprAst in
+  lam s. lam tpe.
+  ncondef_ (nameNoSym s) tpe
+
+let nucondef_ = use MExprAst in
+  lam n.
+  ncondef_ n tydyn_
+
+let ucondef_ = use MExprAst in
+  lam s.
+  condef_ s tydyn_
+
+let nvar_ = use MExprAst in
+  lam n.
+  TmVar {ident = n}
+
+let var_ = use MExprAst in
+  lam s.
+  nvar_ (nameNoSym s)
+
+let nconapp_ = use MExprAst in
+  lam n. lam b.
+  TmConApp {ident = n, body = b}
+
+let conapp_ = use MExprAst in
+  lam s. lam b.
+  nconapp_ (nameNoSym s) b
+
+let const_ = use MExprAst in
+  lam c.
+  TmConst {val = c}
+
+let nlam_ = use MExprAst in
+  lam n. lam tpe. lam body.
+  TmLam {ident = n, tpe = tpe, body = body}
+
 let lam_ = use MExprAst in
-  lam ident. lam tpe. lam body.
-  TmLam {ident = ident, tpe = tpe, body = body}
+  lam s. lam tpe. lam body.
+  nlam_ (nameNoSym s) tpe body
+
+let nulam_ = use MExprAst in
+  lam n. lam body.
+  nlam_ n tydyn_ body
 
 let ulam_ = use MExprAst in
-  lam ident. lam body.
-  lam_ ident tydyn_ body
+  lam s. lam body.
+  lam_ s tydyn_ body
 
 let ulams_ = use MExprAst in
   lam idents. lam body.
-  foldr (lam ident. lam acc. ulam_ ident acc) body idents
+  foldr (lam s. lam acc. ulam_ s acc) body idents
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
@@ -169,7 +221,6 @@ let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
   TmMatch {target = target, pat = pat, thn = thn, els = els}
 
--- Sequence, tuple, and record
 let seq_ = use MExprAst in
   lam tms.
   TmSeq {tms = tms}
@@ -182,10 +233,7 @@ let tuple_ = use MExprAst in
   lam tms.
   record_ (mapi (lam i. lam t. (int2string i,t)) tms)
 
-let record_empty = use MExprAst in
-  TmRecord {bindings = []}
-
-let unit_ = record_empty
+let record_empty = unit_
 
 let record_add = use MExprAst in
   lam key. lam value. lam record.
@@ -197,24 +245,28 @@ let record_add = use MExprAst in
 let record_add_bindings = lam bindings. lam record.
   foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
 
-let recordproj_ = use MExprAst in
-  lam key. lam r.
+let never_ = use MExprAst in
+  TmNever {}
+
+let nrecordproj_ = use MExprAst in
+  lam name. lam key. lam r.
   -- It is fine to use any variable name here. It doesn't matter if it
   -- overwrites a previous binding, since that binding will never be used in
-  -- the then clause in any case (TODO double check this).
-  match_ r (prec_ [(key,pvar_ "x")]) (var_ "x") never_
+  -- the then clause in any case.
+  match_ r (prec_ [(key,npvar_ name)]) (nvar_ name) never_
+
+let recordproj_ = use MExprAst in
+  lam key. lam r.
+  nrecordproj_ (nameNoSym "x") key r
 
 let tupleproj_ = use MExprAst in
   lam i. lam t.
   recordproj_ (int2string i) t
 
 let recordupdate_ = use MExprAst in
-  lam key. lam value. lam rec.
+  lam rec. lam key. lam value.
   TmRecordUpdate {rec = rec, key = key, value = value}
 
-
-
--- Application helpers --
 let app_ = use MExprAst in
   lam l. lam r.
   TmApp {lhs = l, rhs = r}
@@ -255,8 +307,38 @@ let appf8_ = use MExprAst in
   lam f. lam a1. lam a2. lam a3. lam a4. lam a5. lam a6. lam a7. lam a8.
   app_ (appf7_ f a1 a2 a3 a4 a5 a6 a7) a8
 
+let utest_ = use MExprAst in
+  lam t. lam e. lam n.
+  TmUtest {test = t, expected = e, next = n}
 
--- Application of built-in functions --
+-- Constants --
+
+let int_ = use MExprAst in
+  lam i.
+  const_ (CInt {val = i})
+
+let float_ = use MExprAst in
+  lam f.
+  const_ (CFloat {val = f})
+
+let true_ = use MExprAst in
+  const_ (CBool {val = true})
+
+let false_ = use MExprAst in
+  const_ (CBool {val = false})
+
+let char_ = use MExprAst in
+  lam c.
+  const_ (CChar {val = c})
+
+let str_ = use MExprAst in
+  lam s.
+  TmSeq {tms = map char_ s}
+
+let symb_ = use MExprAst in
+  lam c.
+  const_ (CSymb {val = c})
+
 let addi_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CAddi ())) a b
@@ -348,42 +430,5 @@ let null_ = use MExprAst in
 let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
-
-
--- Let expressions (use bind_ or bindall_ to set inexpr) --
-let let_ = use MExprAst in
-  lam ident. lam tpe. lam body.
-  TmLet {ident = ident, tpe = tpe, body = body, inexpr = unit_}
-
-let ulet_ = use MExprAst in
-  lam ident. lam body.
-  let_ ident tydyn_ body
-
-let reclets_ = use MExprAst in
-  lam bindings.
-  TmRecLets {bindings = bindings, inexpr = unit_}
-
-let reclet_ = use MExprAst in
-  lam ident. lam tpe. lam body.
-  reclets_ [{ident = ident, tpe = tpe, body = body}]
-
-let ureclet_ = use MExprAst in
-  lam ident. lam body.
-  reclet_ ident tydyn_ body
-
-let reclets_empty = use MExprAst in
-  TmRecLets {bindings = [], inexpr = unit_}
-
-let reclets_add = use MExprAst in
-  lam ident. lam tpe. lam body. lam reclets.
-  match reclets with TmRecLets t then
-    let newbind = {ident = ident, tpe = tpe, body = body} in
-    TmRecLets {t with bindings = cons newbind t.bindings}
-  else
-    error "reclets is not a TmRecLets construct"
-
-let condef_ = use MExprAst in
-  lam s. lam tpe.
-  TmConDef {ident = s, tpe = tpe, inexpr = unit_}
 
 

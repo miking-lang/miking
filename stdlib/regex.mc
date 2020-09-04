@@ -22,7 +22,7 @@ let prec = lam reg.
 let regEx2str = lam sym2str. lam reg.
   recursive
     let enclose = lam parent. lam child.
-      if leqi (prec child) (prec parent) then (strJoin "" ["(", pprint child, ")"])
+      if leqi (prec child) (prec parent) then (join ["(", pprint child, ")"])
       else pprint child
 
     let pprint = lam reg.
@@ -30,11 +30,11 @@ let regEx2str = lam sym2str. lam reg.
       match reg with Empty () then "(empty)" else
       match reg with Symbol (a) then sym2str a else
       match reg with Union (r1, r2) then
-        strJoin "" [enclose reg r1, "|", enclose reg r2] else
+        join [enclose reg r1, "|", enclose reg r2] else
       match reg with Concat (r1, r2) then
-        strJoin "" [enclose reg r1, " ", enclose reg r2] else
+        join [enclose reg r1, " ", enclose reg r2] else
       match reg with Kleene r then
-        strJoin "" [enclose reg r, "*"] else
+        join [enclose reg r, "*"] else
       error "Not a regExPprint of a RegEx"
   in
   pprint reg
@@ -177,16 +177,16 @@ let regexFromDFA = lam dfa.
       let trans = nfaTransitions dfa in
       match trans with [] then Epsilon () else
       match trans with [t] then Kleene(t.2) else
-      error (strJoin "" ["Expected 0 or 1 transitions in 1-state DFA, not ", length trans])
+      error (join ["Expected 0 or 1 transitions in 1-state DFA, not ", length trans])
     in
     -- Handle 2-state DFA
     let generic2State = lam dfa.
       let trans = nfaTransitions dfa in
-      match trans with [] then (error (strJoin "" ["Expected DFA with at least one transition"])) else
+      match trans with [] then (error (join ["Expected DFA with at least one transition"])) else
       -- Start and accept state only states left
       let p = nfaStartState dfa in
       let q = match (nfaAcceptStates dfa) with [a] then a else error "Expected DFA with exactly one accept state" in
-      if (nfaGetEqv dfa) p q then error (strJoin "" ["Expected start state and accept state to be different"]) else
+      if (nfaGetEqv dfa) p q then error (join ["Expected start state and accept state to be different"]) else
       -- Extract the regexes from the 4 potential transitions
       let pq = getSymOrEmpty dfa p q in
       let qp = getSymOrEmpty dfa q p in
@@ -201,7 +201,7 @@ let regexFromDFA = lam dfa.
     let nStates = length (nfaStates dfa) in
     match nStates with 1 then generic1State dfa else
     match nStates with 2 then generic2State dfa else
-    error (strJoin "" ["Expected DFA of size 1 or 2, not ", nStates, "."])
+    error (join ["Expected DFA of size 1 or 2, not ", nStates, "."])
   in
 
   -- Get the regex from a DFA with one accept state

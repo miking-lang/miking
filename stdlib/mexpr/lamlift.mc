@@ -36,14 +36,14 @@
 -- // incorrect program even if the input program was correct.
 --
 --
--- include "ast.mc"
--- include "ast-builder.mc"
--- include "eval.mc"
--- include "pprint.mc"
---
 -- include "option.mc"
 -- include "seq.mc"
 -- include "string.mc"
+--
+-- include "mexpr/ast.mc"
+-- include "mexpr/ast-builder.mc"
+-- include "mexpr/eval.mc"
+-- include "mexpr/pprint.mc"
 --
 --
 -- lang LamliftTypedVarAst = VarAst
@@ -252,7 +252,7 @@
 -- lang DataLamlift = VarAst + DataAst + ConstAst + UnitAst
 --     sem lamlift (state : LiftState) =
 --     | TmConDef t ->
---       let newname = strJoin "" ["Con", int2string state.id, "_", t.ident] in
+--       let newname = join ["Con", int2string state.id, "_", t.ident] in
 --
 --       let updatedstate = st_incrId (st_addConToEnv t.ident (TmConFun {ident = newname})
 --                                    (st_addGlobaldef (TmConDef {{t with ident = newname} with inexpr = TmConst {val = CUnit ()}}) state)) in
@@ -428,7 +428,7 @@
 --       let replacenames = lam acc. lam e.
 --         let id = (acc.0).id in
 --         let prefix = match e.body with TmLam _ then "fun" else "var" in
---         let newname = strJoin "" [prefix, int2string id, "_", e.ident] in
+--         let newname = join [prefix, int2string id, "_", e.ident] in
 --         let newref = TmLamliftTypedVar {ident = newname, tpe = e.tpe} in
 --         let newstate = st_incrId (st_addVarToEnv e.ident newref acc.0) in
 --         (newstate, concat (acc.1) [{e with ident = newname}], concat acc.2 [{ident = newname, body = newref}])
@@ -668,7 +668,7 @@
 --     sem lamliftPat (state : LiftState) =
 --     | PVar t ->
 --       -- Bind the identifier in the current scope
---       let newname = strJoin "" ["pvar", int2string state.id, "_", t.ident] in
+--       let newname = join ["pvar", int2string state.id, "_", t.ident] in
 --       let updatedstate = st_incrId (st_addVarToEnv t.ident (TmVar {ident = newname})
 --                                    (st_addLambdaref newname (TmVar {ident = newname}) state)) in
 --       (updatedstate, PVar {t with ident = newname})
@@ -1106,7 +1106,7 @@
 --
 -- let testllprint = lam name. lam ast.
 --   let bar = "------------------------" in
---   let top = strJoin "" ["\n", bar, " ", name, " ", bar] in
+--   let top = join ["\n", bar, " ", name, " ", bar] in
 --   let _ = print top in
 --   let _ =
 --       let _ = print "\n[>>>>  Before  <<<<]\n" in

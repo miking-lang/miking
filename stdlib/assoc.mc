@@ -59,6 +59,12 @@ let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
                 (lam t. Some t.1)
                 (find (lam t. p t.0) m)
 
+-- 'assocAny p m' returns true if at least one (k,v) pair in the map satisfies
+-- the predicate 'p'.
+let assocAny : (k -> v -> Bool) -> AssocMap k v -> Bool =
+  lam p. lam m.
+    any (lam t. p t.0 t.1) m
+
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
 let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
   lam traits. lam k. lam m.
@@ -74,12 +80,29 @@ let assocValues : AssocTraits k -> AssocMap k v -> [v] =
   lam _. lam m.
     map (lam t. t.1) m
 
+-- 'assocMap traits f m' maps over the values of 'm' using function 'f'.
+let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
+  lam _. lam f. lam m.
+    map (lam t. (t.0, f t.1)) m
+
 -- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
--- 'acc'. The folding order depends on the order of the underlying list.
-let assocFold : AssocTraits -> (acc -> key -> a -> acc)
-                -> acc -> AssocMap -> acc =
-  lam traits. lam f. lam acc. lam m.
+-- 'acc'.
+-- IMPORTANT: The folding order is unspecified.
+let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
+                  -> acc -> AssocMap k v -> acc =
+  lam _. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
+
+-- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
+-- and fold over 'm' using function 'f' and accumulator 'acc'.
+-- IMPORTANT: The folding order is unspecified.
+let assocMapAccum : AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
+                      -> acc -> AssocMap k v1 -> (acc, AssocMap k v2) =
+  lam _. lam f. lam acc. lam m.
+    mapAccumL
+      (lam acc. lam t.
+         match f acc t.0 t.1 with (acc, b) then (acc, (t.0, b)) else never)
+      acc m
 
 mexpr
 
@@ -88,12 +111,15 @@ let traits = {eq = eqi} in
 let lookup = assocLookup traits in
 let lookupOrElse = assocLookupOrElse traits in
 let lookupPred = assocLookupPred in
+let any = assocAny in
 let insert = assocInsert traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
 let keys = assocKeys traits in
 let values = assocValues traits in
+let map = assocMap traits in
 let fold = assocFold traits in
+let mapAccum = assocMapAccum traits in
 
 let m = assocEmpty in
 let m = insert 1 '1' m in
@@ -108,6 +134,8 @@ utest lookupOrElse (lam _. 42) 1 m with '1' in
 utest lookupOrElse (lam _. 42) 2 m with '2' in
 utest lookupOrElse (lam _. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
+utest any (lam k. lam v. eqchar v '2') m with true in
+utest any (lam k. lam v. eqchar v '4') m with false in
 utest
   match keys m with [1,2,3] | [1,3,2] | [2,1,3] | [2,3,1] | [3,1,2] | [3,2,1]
   then true else false
@@ -117,8 +145,18 @@ utest
   then true else false
 with true in
 
+let nextChar = lam c. int2char (addi 1 (char2int c)) in
+
+let mapm = (map nextChar m) in
+utest (lookup 1 mapm, lookup 2 mapm, lookup 3 mapm)
+with (Some '2', Some '3', Some '4') in
+
 utest fold (lam acc. lam k. lam v. addi acc k) 0 m with 6 in
 utest fold (lam acc. lam k. lam v. and acc (is_digit v)) true m with true in
+
+let mapaccm = mapAccum (lam acc. lam k. lam v. (addi acc k, nextChar v)) 0 m in
+utest (mapaccm.0, (lookup 1 mapaccm.1, lookup 2 mapaccm.1, lookup 3 mapaccm.1))
+with (6, (Some '2', Some '3', Some '4')) in
 
 let m = insert 1 '2' m in
 let m = insert 2 '3' m in

@@ -6,5 +6,5 @@
 include "seq.mc"
 
 let compile = lam options.
-  print (strJoin ""
+  print (join
     ["Option --debug-parse is ", if options.debugParse then "enabled" else "disabled", "."])
