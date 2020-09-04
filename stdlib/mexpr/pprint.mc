@@ -4,7 +4,6 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "name.mc"
-include "symbol.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
