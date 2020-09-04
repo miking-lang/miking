@@ -6,9 +6,7 @@ include "assoc.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-
--- Enable for debugging
--- include "mexpr/pprint.mc"
+include "mexpr/pprint.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -32,10 +30,10 @@ let identEq : Ident -> Ident -> Bool =
 
 type Env = AssocMap Ident Name -- i.e., [(Ident, Symbol)]
 
-let lookupId = assocLookup {eq = identEq}
-let insertId = assocInsert {eq = identEq}
-let recmapId = assocMap {eq = identEq}
-let mapAccumId = assocMapAccum {eq = identEq}
+let _symLookup = assocLookup {eq = identEq}
+let _symInsert = assocInsert {eq = identEq}
+let _symRecMap = assocMap {eq = identEq}
+let _symMapAccum = assocMapAccum {eq = identEq}
 
 -----------
 -- TERMS --
@@ -45,7 +43,7 @@ lang VarSym = VarAst
   sem symbolize (env : Env) =
   | TmVar {ident = ident} ->
     let str = nameGetStr ident in
-    match lookupId (IdVar str) env
+    match _symLookup (IdVar str) env
     with Some ident then TmVar {ident = ident}
     else error (concat "Unknown variable in symbolize: " str)
 end
@@ -61,14 +59,14 @@ lang FunSym = FunAst + VarSym + AppSym
   | TmLam {ident = ident, tpe = tpe, body = body} ->
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
-    let env = insertId (IdVar str) ident env in
+    let env = _symInsert (IdVar str) ident env in
     TmLam {ident = ident, tpe = tpe, body = symbolize env body}
 end
 
 lang RecordSym = RecordAst
   sem symbolize (env : Env) =
   | TmRecord {bindings = bindings} ->
-    TmRecord {bindings = recmapId (symbolize env) bindings}
+    TmRecord {bindings = _symRecMap (symbolize env) bindings}
 
   | TmRecordUpdate {rec = rec, key = key, value = value} ->
     TmRecordUpdate {rec = symbolize env rec, key = key,
@@ -81,7 +79,7 @@ lang LetSym = LetAst
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
     let body = symbolize env body in
-    let env = insertId (IdVar str) ident env in
+    let env = _symInsert (IdVar str) ident env in
     TmLet {ident = ident, body = body, inexpr = symbolize env inexpr}
 end
 
@@ -97,7 +95,7 @@ lang RecLetsSym = RecLetsAst
     let env =
       foldl
         (lam env. lam bind.
-           insertId (IdVar (nameGetStr bind.ident)) bind.ident env)
+           _symInsert (IdVar (nameGetStr bind.ident)) bind.ident env)
         env bindings in
 
     -- Symbolize all bodies with the new environment
@@ -119,11 +117,11 @@ lang DataSym = DataAst
   | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
     let str = nameGetStr ident in
     let ident = nameSetNewSym ident in
-    let env = insertId (IdCon str) ident env in
+    let env = _symInsert (IdCon str) ident env in
     TmConDef {ident = ident, tpe = tpe, inexpr = symbolize env inexpr}
   | TmConApp {ident = ident, body = body} ->
     let str = nameGetStr ident in
-    match lookupId (IdCon str) env
+    match _symLookup (IdCon str) env
     with Some ident then
       TmConApp {ident = ident, body = symbolize env body}
     else error (concat "Unknown constructor in symbolize: " str)
@@ -168,12 +166,12 @@ lang VarPatSym = VarPat
   sem symbolizePat (env : Env) =
   | PVar {ident = PName name} ->
     let str = nameGetStr name in
-    let res = lookupId (IdVar str) env in
+    let res = _symLookup (IdVar str) env in
     match res with Some name then
       (env, PVar {ident = PName name})
     else match res with None () then
       let name = nameSetNewSym name in
-      let env = insertId (IdVar str) name env in
+      let env = _symInsert (IdVar str) name env in
       (env, PVar {ident = PName name})
     else never
   | PVar {ident = PWildcard ()} ->
@@ -191,7 +189,7 @@ end
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : Env) =
   | PRecord {bindings = bindings} ->
-    match mapAccumId (lam env. lam _. lam p. symbolizePat env p) env bindings
+    match _symMapAccum (lam env. lam _. lam p. symbolizePat env p) env bindings
     with (env,bindings) then
       (env, PRecord {bindings = bindings})
     else never
@@ -201,7 +199,7 @@ lang DataPatSym = DataPat
   sem symbolizePat (env : Env) =
   | PCon {ident = ident, subpat = subpat} ->
     let str = nameGetStr ident in
-    match lookupId (IdCon str) env
+    match _symLookup (IdCon str) env
     with Some ident then
       match symbolizePat env subpat with (env, subpat) then
         (env, PCon {ident = ident, subpat = subpat})
@@ -250,8 +248,8 @@ lang MExprSym =
   + VarPatSym + SeqTotPatSym + SeqEdgPatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
-  -- Enable for debugging
-  -- + MExprPrettyPrint
+  -- Debugging
+  + MExprPrettyPrint
 
 -----------
 -- TESTS --
@@ -264,17 +262,19 @@ mexpr
 
 use MExprSym in
 
--- let debugPrint = lam e. lam es.
---   let _ = printLn "--- BEFORE SYMBOLIZE ---" in
---   let _ = printLn (pprintCode 0 e) in
---   let _ = print "\n" in
---   let _ = printLn "--- AFTER SYMBOLIZE ---" in
---   let _ = printLn (pprintCode 0 es) in
---   let _ = print "\n" in
---   ()
--- in
+let debug = false in
 
-let debugPrint = lam _. lam _. () in
+let debugPrint = lam e. lam es.
+  if debug then
+    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+    let _ = printLn (expr2str e) in
+    let _ = print "\n" in
+    let _ = printLn "--- AFTER SYMBOLIZE ---" in
+    let _ = printLn (expr2str es) in
+    let _ = print "\n" in
+    ()
+  else ()
+in
 
 let ae = assocEmpty in
 
