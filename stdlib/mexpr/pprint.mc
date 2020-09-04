@@ -509,7 +509,7 @@ lang SeqTotPatPrettyPrint = SeqTotPat
   -- TODO
 end
 
-lang SeqEdgPatPrettyPrint = SeqEdgPat
+lang SeqEdgePatPrettyPrint = SeqEdgePat
   -- TODO
 end
 
@@ -616,7 +616,7 @@ lang MExprPrettyPrint =
   + SeqOpPrettyPrint
 
   -- Patterns
-  + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgPatPrettyPrint +
+  + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
   OrPatPrettyPrint + NotPatPrettyPrint

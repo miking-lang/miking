@@ -182,7 +182,7 @@ lang SeqTotPatSym = SeqTotPat
   -- TODO
 end
 
-lang SeqEdgPatSym = SeqEdgPat
+lang SeqEdgePatSym = SeqEdgePat
   -- TODO
 end
 
@@ -245,7 +245,7 @@ lang MExprSym =
   DataSym + MatchSym + UtestSym + SeqSym + NeverSym
 
   -- Patterns
-  + VarPatSym + SeqTotPatSym + SeqEdgPatSym + RecordPatSym + DataPatSym +
+  + VarPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
   -- Debugging
@@ -345,4 +345,3 @@ let snever = symbolize ae never_ in
 let _ = debugPrint nev snever in
 
 ()
-

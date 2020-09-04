@@ -487,7 +487,7 @@ lang SeqTotPatEval = SeqTotPat
   -- TODO
 end
 
-lang SeqEdgPatEval = SeqEdgPat
+lang SeqEdgePatEval = SeqEdgePat
   -- TODO
 end
 
@@ -583,7 +583,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval
 
   -- Patterns
-  + VarPatEval + SeqTotPatEval + SeqEdgPatEval + RecordPatEval + DataPatEval +
+  + VarPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
   sem eq (e1 : Expr) =
