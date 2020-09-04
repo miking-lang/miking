@@ -59,6 +59,12 @@ let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
                 (lam t. Some t.1)
                 (find (lam t. p t.0) m)
 
+-- 'assocAny p m' returns true if at least one (k,v) pair in the map satisfies
+-- the predicate 'p'.
+let assocAny : (k -> v -> Bool) -> AssocMap k v -> Bool =
+  lam p. lam m.
+    any (lam t. p t.0 t.1) m
+
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
 let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
   lam traits. lam k. lam m.
@@ -105,6 +111,7 @@ let traits = {eq = eqi} in
 let lookup = assocLookup traits in
 let lookupOrElse = assocLookupOrElse traits in
 let lookupPred = assocLookupPred in
+let any = assocAny in
 let insert = assocInsert traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
@@ -127,6 +134,8 @@ utest lookupOrElse (lam _. 42) 1 m with '1' in
 utest lookupOrElse (lam _. 42) 2 m with '2' in
 utest lookupOrElse (lam _. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
+utest any (lam k. lam v. eqchar v '2') m with true in
+utest any (lam k. lam v. eqchar v '4') m with false in
 utest
   match keys m with [1,2,3] | [1,3,2] | [2,1,3] | [2,3,1] | [3,1,2] | [3,2,1]
   then true else false
