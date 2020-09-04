@@ -219,7 +219,7 @@ let neighbours = lam g. lam state.
 in
 
 let terminate = lam state. geqi state.iter 3 in
-let printIter = lam state. print (strJoin "" ["Iter: ", int2string state.iter, ", ",
+let printIter = lam state. print (join ["Iter: ", int2string state.iter, ", ",
                                               "Best: ", int2string state.inc.1, "\n"]) in
 let initState = initSearchState initSol subi in
 

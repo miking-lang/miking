@@ -12,8 +12,8 @@ include "seq.mc"
 
 type Name = (String, Symbol)
 
--- We use the private _noNymbol instead of an option type
--- for performance reason (no tagging).
+-- We use the private _noSymbol instead of an option type
+-- for performance reasons (no tagging).
 let _noSymbol = gensym ()
 
 
@@ -32,21 +32,6 @@ let nameSym : String -> Name =
 
 let _t = nameSym "foo"
 utest _t with _t
-
-
--- 'nameEqSym n1 n2' returns true if both names 'n1' and 'n2'
--- contain the same symbol or if none of them has a symbol.
--- If not, the function returns false.
-let nameEqSym : Name -> Name -> Bool =
-  lam n1. lam n2. eqs n1.1 n2.1
-
-let _t1 = nameNoSym "foo"
-let _t2 = nameSym "foo"
-let _t3 = nameSym "foo"
-utest nameEqSym _t1 _t1 with true
-utest nameEqSym _t2 _t2 with true
-utest nameEqSym _t1 _t2 with false
-utest nameEqSym _t2 _t3 with false
 
 
 -- 'nameEqStr n1 n2' returns true if both names 'n1' and 'n2'
@@ -70,6 +55,25 @@ let nameHasSym : Name -> Bool =
 
 utest nameHasSym (nameSym "foo") with true
 utest nameHasSym (nameNoSym "foo") with false
+
+
+-- 'nameEqSym n1 n2' returns true if both names 'n1' and 'n2' contain the same
+-- symbol. If either 'n1' or 'n2' does not have a symbol, or if the symbols
+-- differ, return false.
+let nameEqSym : Name -> Name -> Bool =
+  lam n1. lam n2.
+    if and (nameHasSym n1) (nameHasSym n2) then
+      eqs n1.1 n2.1
+    else false
+
+let _t1 = nameNoSym "foo"
+let _t2 = nameSym "foo"
+let _t3 = nameSym "foo"
+utest nameEqSym _t1 _t1 with false
+utest nameEqSym _t2 _t2 with true
+utest nameEqSym _t1 _t2 with false
+utest nameEqSym _t2 _t3 with false
+utest nameEqSym _t3 _t3 with true
 
 
 -- 'nameSetNewSym n' returns a new name with a fresh symbol.

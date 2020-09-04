@@ -1,9 +1,8 @@
 -- Language fragments of MExpr
 
 include "string.mc"
-
--- TODO Symbolize changes
--- TODO Merge with ast-builder to avoid duplicate definitions?
+include "name.mc"
+include "assoc.mc"
 
 -----------
 -- TERMS --
@@ -11,7 +10,7 @@ include "string.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : String}
+  | TmVar {ident : Name}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -34,7 +33,7 @@ end
 
 lang FunAst = VarAst + AppAst
   syn Expr =
-  | TmLam {ident : String,
+  | TmLam {ident : Name,
            tpe   : Option,
            body  : Expr}
 
@@ -47,7 +46,7 @@ end
 
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMap} -- AssocMap String Expr
+  | TmRecord {bindings : AssocMap String Expr}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
                     value : Expr}
@@ -64,8 +63,7 @@ end
 
 lang LetAst = VarAst
   syn Expr =
-  | TmLet {ident  : String,
-           tpe    : Option,
+  | TmLet {ident  : Name,
            body   : Expr,
            inexpr : Expr}
 
@@ -78,8 +76,7 @@ end
 
 lang RecLetsAst = VarAst
   syn Expr =
-  | TmRecLets {bindings : [{ident : String,
-                            tpe   : Option,
+  | TmRecLets {bindings : [{ident : Name,
                             body  : Expr}],
                inexpr   : Expr}
 
@@ -108,10 +105,10 @@ end
 
 lang DataAst
   syn Expr =
-  | TmConDef {ident  : String,
+  | TmConDef {ident  : Name,
               tpe    : Option,
               inexpr : Expr}
-  | TmConApp {ident : String,
+  | TmConApp {ident : Name,
               body : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
@@ -257,9 +254,12 @@ end
 -- PATTERNS --
 --------------
 
+type PatName
+con PName     : Name -> PatName
+con PWildcard : ()   -> PatName
 lang VarPat
   syn Pat =
-  | PVar {ident : String}
+  | PVar {ident : PatName}
 end
 
 lang SeqTotPat
@@ -272,12 +272,12 @@ end
 
 lang RecordPat
   syn Pat =
-  | PRecord {bindings : AssocMap} -- AssocMap String Pat
+  | PRecord {bindings : AssocMap String Pat}
 end
 
 lang DataPat = DataAst
   syn Pat =
-  | PCon {ident  : String,
+  | PCon {ident  : Name,
           subpat : Pat}
 end
 
@@ -394,6 +394,150 @@ lang MExprAst =
   TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
   AppTypeAst
 
+-----------------------
+-- BUILDER FUNCTIONS --
+-----------------------
+-- Duplicates of required function in ast-builder.mc, since we cannot include
+-- it (circularity). TODO Merge with ast-mc?
+
+let app_ = use MExprAst in
+  lam l. lam r.
+  TmApp {lhs = l, rhs = r}
+
+let const_ = use MExprAst in
+  lam c.
+  TmConst {val = c}
+
+let char_ = use MExprAst in
+  lam c.
+  const_ (CChar {val = c})
+
+let utest_ = use MExprAst in
+  lam t. lam e. lam n.
+  TmUtest {test = t, expected = e, next = n}
+
+let punit_ = use MExprAst in
+  PRecord { bindings = assocEmpty }
+
+let match_ = use MExprAst in
+  lam target. lam pat. lam thn. lam els.
+  TmMatch {target = target, pat = pat, thn = thn, els = els}
+
+let nconapp_ = use MExprAst in
+  lam n. lam b.
+  TmConApp {ident = n, body = b}
+
+let conapp_ = use MExprAst in
+  lam s. lam b.
+  nconapp_ (nameNoSym s) b
+
+let unit_ = use MExprAst in
+  TmRecord {bindings = assocEmpty }
+
+let ncondef_ = use MExprAst in
+  lam n. lam tpe.
+  TmConDef {ident = n, tpe = tpe, inexpr = unit_}
+
+let condef_ = use MExprAst in
+  lam s. lam tpe.
+  ncondef_ (nameNoSym s) tpe
+
+let tydyn_ = use MExprAst in
+  TyDyn ()
+
+let nucondef_ = use MExprAst in
+  lam n.
+  ncondef_ n tydyn_
+
+let ucondef_ = use MExprAst in
+  lam s.
+  condef_ s tydyn_
+
+recursive let bind_ = use MExprAst in
+  lam letexpr. lam expr.
+  match letexpr with TmLet t then
+    TmLet {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmRecLets t then
+    TmRecLets {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmConDef t then
+    TmConDef {t with inexpr = bind_ t.inexpr expr}
+  else
+    expr -- Insert at the end of the chain
+end
+
+let recordupdate_ = use MExprAst in
+  lam rec. lam key. lam value.
+  TmRecordUpdate {rec = rec, key = key, value = value}
+
+let record_ = use MExprAst in
+  lam bindings.
+  TmRecord {bindings = bindings}
+
+let seq_ = use MExprAst in
+  lam tms.
+  TmSeq {tms = tms}
+
+let true_ = use MExprAst in
+  const_ (CBool {val = true})
+
+let false_ = use MExprAst in
+  const_ (CBool {val = false})
+
+let int_ = use MExprAst in
+  lam i.
+  const_ (CInt {val = i})
+
+let ptrue_ = use MExprAst in
+  PBool {val = true}
+
+let if_ = use MExprAst in
+  lam cond. lam thn. lam els.
+  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
+
+let nreclets_ = use MExprAst in
+  lam bs.
+  TmRecLets {bindings = map (lam t. {ident = t.0, body = t.1}) bs,
+             inexpr = unit_}
+
+let reclets_ = use MExprAst in
+  lam bs.
+  nreclets_ (map (lam b. (nameNoSym b.0, b.1)) bs)
+
+let nlet_ = use MExprAst in
+  lam n. lam body.
+  TmLet {ident = n, body = body, inexpr = unit_}
+
+let let_ = use MExprAst in
+  lam s. lam body.
+  nlet_ (nameNoSym s) body
+
+let tydyn_ = use MExprAst in
+  TyDyn ()
+
+let nlam_ = use MExprAst in
+  lam n. lam tpe. lam body.
+  TmLam {ident = n, tpe = tpe, body = body}
+
+let lam_ = use MExprAst in
+  lam s. lam tpe. lam body.
+  nlam_ (nameNoSym s) tpe body
+
+let nulam_ = use MExprAst in
+  lam n. lam body.
+  nlam_ n tydyn_ body
+
+let ulam_ = use MExprAst in
+  lam s. lam body.
+  lam_ s tydyn_ body
+
+let nvar_ = use MExprAst in
+  lam n.
+  TmVar {ident = n}
+
+let var_ = use MExprAst in
+  lam s.
+  nvar_ (nameNoSym s)
+
 
 -----------
 -- TESTS --
@@ -404,7 +548,6 @@ use MExprAst in
 
 -- smap and sfold tests
 
-let var_ = lam v. TmVar {ident = v} in
 let tmVarX = (var_ "x") in
 let tmVarY = (var_ "y") in
 let tmVarZ = (var_ "z") in
@@ -416,41 +559,34 @@ let fold2seq = lam a. lam e. cons e a in
 utest smap_Expr_Expr map2varX tmVarY with tmVarY in
 utest sfold_Expr_Expr fold2seq [] tmVarY with [] in
 
-let app_ = lam l. lam r. TmApp {lhs = l, rhs = r} in
 let tmApp = app_ tmVarY tmVarZ in
 
 utest smap_Expr_Expr map2varX tmApp with app_ tmVarX tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmApp with [tmVarZ, tmVarY] in
 
 
-let lam_ = lam id. lam b. TmLam {ident = id, tpe = None (), body = b} in
-let tmLam = lam_ "x" tmApp in
+let tmLam = ulam_ "x" tmApp in
 
-utest smap_Expr_Expr map2varX tmLam with lam_ "x" tmVarX in
+utest smap_Expr_Expr map2varX tmLam with ulam_ "x" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmLam with [tmApp] in
 
 
-let let_ = lam id. lam b. lam ine.
-  TmLet {ident = id, tpe = None (), body = b, inexpr = ine}
-in
-let tmLet = let_ "y" tmLam tmVarY in
+let tmLet = bind_ (let_ "y" tmLam) tmVarY in
 
-utest smap_Expr_Expr map2varX tmLet with let_ "y" tmVarX tmVarX in
+utest smap_Expr_Expr map2varX tmLet with bind_ (let_ "y" tmVarX) tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmLet with [tmVarY, tmLam] in
 
 
-let bind_ = lam id. lam b. {ident = id, tpe = None (), body = b} in
-let reclet_ = lam bs. lam ine.
-  TmRecLets {bindings = bs, inexpr = ine}
-in
-let tmRecLets = reclet_ [bind_ "x" tmApp, bind_ "u" tmVarW] tmVarU in
+let tmRecLets = bind_ (reclets_ [("x", tmApp), ("u", tmVarW)]) tmVarU in
 
 utest smap_Expr_Expr map2varX tmRecLets
-with reclet_ [bind_ "x" tmVarX, bind_ "u" tmVarX] tmVarX in
+with
+bind_ (reclets_ [("x", tmVarX), ("u", tmVarX)])
+  tmVarX
+in
 utest sfold_Expr_Expr fold2seq [] tmRecLets with [tmVarU, tmVarW, tmApp] in
 
 
-let int_ = lam i. TmConst {value = CInt {value = i}} in
 let tmConst1 = int_ 1 in
 let tmConst2 = int_ 2 in
 let tmConst3 = int_ 3 in
@@ -460,12 +596,6 @@ utest smap_Expr_Expr (lam x. 0) tmConst1 with tmConst1 in
 utest sfold_Expr_Expr fold2seq [] tmConst1 with [] in
 
 
-let ptrue_ = PBool {val = true} in
-let if_ =
-  lam cond. lam thn. lam els.
-  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els} in
-let true_ = TmConst {val = (CBool {val = true})} in
-let false_ = TmConst {val = (CBool {val = false})} in
 let ite1 = if_ true_ true_ false_ in
 let ite2 = if_ false_ false_ true_ in
 let ite3 = if_ false_ (int_ 1) (int_ 4) in
@@ -480,51 +610,37 @@ let countConsts = lam tm. match tm with TmConst _ then 1 else 0 in
 utest smap_Expr_Expr negateBool ite1 with ite2 in
 utest sfold_Expr_Expr addi 0 (smap_Expr_Expr countConsts ite3) with 3 in
 
-let seq_ = lam tms. TmSeq {tms = tms} in
 let tmSeq = seq_ [tmApp11, tmConst2, tmConst3] in
 
 utest smap_Expr_Expr map2varX tmSeq with seq_ [tmVarX, tmVarX, tmVarX] in
 utest sfold_Expr_Expr fold2seq [] tmSeq with [tmConst3, tmConst2, tmApp11] in
 
-let rb_ = lam k. lam v. (k,v) in
-let rec_ = lam bs. TmRecord {bindings = bs} in
-let mkTmRecordXY = lam x. lam y. rec_ [rb_ "x" x, rb_ "y" y] in
+let mkTmRecordXY = lam x. lam y. record_ [("x", x), ("y", y)] in
 let tmRecordI = mkTmRecordXY tmApp11 tmConst3 in
 
 utest smap_Expr_Expr map2varX tmRecordI
-with rec_ [rb_ "x" tmVarX, rb_ "y" tmVarX] in
+with record_ [("x", tmVarX), ("y", tmVarX)] in
 
 utest sfold_Expr_Expr fold2seq [] tmRecordI with [tmConst3, tmApp11] in
 
-let recUpd_ = lam r. lam k. lam v.
-  TmRecordUpdate {rec = r, key = k, value = v}
-in
-let tmRecordUpdate = recUpd_ tmRecordI "x" tmVarY in
+let tmRecordUpdate = recordupdate_ tmRecordI "x" tmVarY in
 
-utest smap_Expr_Expr map2varX tmRecordUpdate with recUpd_ tmVarX "x" tmVarX in
+utest smap_Expr_Expr map2varX tmRecordUpdate with recordupdate_ tmVarX "x" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmRecordUpdate with [tmVarY, tmRecordI] in
 
 
-let con_ = lam id. lam ine.
-  TmConDef {ident = id, tpe = None (), inexpr = ine}
-in
-let tmCon = con_ "y" tmApp in
+let tmCon = bind_ (ucondef_ "y") tmApp in
 
-utest smap_Expr_Expr map2varX tmCon with con_ "y" tmVarX in
+utest smap_Expr_Expr map2varX tmCon with bind_ (ucondef_ "y") tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmCon with [tmApp] in
 
 
-let conapp_ = lam id. lam b. TmConApp {ident = id, body = b} in
 let tmConApp = conapp_ "y" tmApp in
 
 utest smap_Expr_Expr map2varX tmConApp with conapp_ "y" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmConApp with [tmApp] in
 
 
-let punit_ = PRecord { bindings = [] } in
-let match_ = lam t. lam p. lam thn. lam els.
-  TmMatch {target = t, pat = p, thn = thn, els = els}
-in
 let tmMatch = match_ tmApp punit_ tmVarY tmVarZ in
 
 utest smap_Expr_Expr map2varX tmMatch
@@ -532,17 +648,12 @@ with match_ tmVarX punit_ tmVarX tmVarX in
 
 utest sfold_Expr_Expr fold2seq [] tmMatch with [tmVarZ, tmVarY, tmApp] in
 
-
-let utest_ = lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n}
-in
 let tmUtest = utest_ tmApp tmVarY tmVarZ in
 
 utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp] in
 
 -- recursive schemes tests
-let char_ = lam c. TmConst {value = CChar {value = c}} in
 let tmConst1C = char_ (int2char 1) in
 let tmConst2C = char_ (int2char 2) in
 let tmConst3C = char_ (int2char 3) in
@@ -551,8 +662,8 @@ let tmRecordC = mkTmRecordXY tmApp11C tmConst3C in
 
 let cInt2cChar =
 lam e. match e with TmConst t then
-         match t.value with CInt i
-           then TmConst {value = CChar {value = int2char i.value}}
+         match t.val with CInt i
+           then TmConst {val = CChar {val = int2char i.val}}
          else e
        else e
 in

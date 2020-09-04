@@ -152,7 +152,7 @@ let arity = function
   | Cexit              -> 1
   (* MCore symbols *)
   | CSymb(_)      -> 0
-  | Cgensym      -> 1
+  | Cgensym       -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
   | CSym2hash      -> 1
