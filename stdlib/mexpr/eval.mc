@@ -483,12 +483,29 @@ lang VarPatEval = VarPat
   | PVar {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = SeqTotPat
-  -- TODO
+lang SeqTotPatEval = SeqTotPat + SeqAst
+  sem tryMatch (env : Env) (t : Expr) =
+  | PSeqTot {pats = pats} ->
+    match t with TmSeq {tms = tms} then
+      if eqi (length tms) (length pats) then
+        optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env
+          (zipWith (lam a. lam b. (a, b)) tms pats)
+      else None ()
+    else None ()
 end
 
-lang SeqEdgePatEval = SeqEdgePat
-  -- TODO
+lang SeqEdgePatEval = SeqEdgePat + SeqAst
+  sem tryMatch (env : Env) (t : Expr) =
+  | PSeqEdge {prefix = pre, postfix = post} ->
+    match t with TmSeq {tms = tms} then
+      if geqi (length tms) (addi (length pre) (length post)) then
+        let preTm = (splitAt tms (length pre)).0 in
+        let postTm = (splitAt tms (subi (length tms) (length post))).1 in
+        let pair = lam a. lam b. (a, b) in
+        let paired = zipWith pair (concat preTm postTm) (concat pre post) in
+        optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env paired
+      else None ()
+    else None ()
 end
 
 lang RecordPatEval = RecordAst + RecordPat
@@ -554,15 +571,20 @@ lang BoolPatEval = BoolAst + BoolPat
 end
 
 lang AndPatEval = AndPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | PAnd {lpat = l, rpat = r} -> optionBind (lam env. tryMatch env t r) (tryMatch env t l)
 end
 
 lang OrPatEval = OrPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | POr {lpat = l, rpat = r} ->
+    optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
 end
 
 lang NotPatEval = NotPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | PNot {subpat = p} ->
+    match tryMatch env t p with None _ then Some env else None ()
 end
 
 -------------------------
