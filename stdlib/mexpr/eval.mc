@@ -1,4 +1,3 @@
--- TODO: Generate unique symbols for data constructors
 -- TODO: Add types
 
 include "string.mc"
