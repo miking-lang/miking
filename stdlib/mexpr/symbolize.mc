@@ -179,11 +179,19 @@ lang VarPatSym = VarPat
 end
 
 lang SeqTotPatSym = SeqTotPat
-  -- TODO
+  sem symbolizePat (env : Env) =
+  | PSeqTot p ->
+    let res = mapAccumL symbolizePat env p.pats in
+    (res.0, PSeqTot {p with pats = res.1})
 end
 
 lang SeqEdgePatSym = SeqEdgePat
-  -- TODO
+  sem symbolizePat (env : Env) =
+  | PSeqEdge p ->
+    let preRes = mapAccumL symbolizePat env p.prefix in
+    let postRes = mapAccumL symbolizePat preRes.0 p.postfix in
+    (postRes.0, PSeqEdge
+      {{p with prefix = preRes.1} with postfix = postRes.1})
 end
 
 lang RecordPatSym = RecordPat
@@ -223,15 +231,31 @@ lang BoolPatSym = BoolPat
 end
 
 lang AndPatSym = AndPat
-  -- TODO
+  sem symbolizePat (env : Env) =
+  | PAnd p ->
+    let lRes = symbolizePat env p.lpat in
+    let rRes = symbolizePat lRes.0 p.rpat in
+    (rRes.0, PAnd {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang OrPatSym = OrPat
-  -- TODO
+  sem symbolizePat (env : Env) =
+  | POr p ->
+    let lRes = symbolizePat env p.lpat in
+    let rRes = symbolizePat lRes.0 p.rpat in
+    (rRes.0, POr {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang NotPatSym = NotPat
-  -- TODO
+  sem symbolizePat (env : Env) =
+  | PNot p ->
+    -- NOTE(vipa): new names in a not-pattern do not matter since they will
+    -- never bind (it should probably be an error to bind a name inside a
+    -- not-pattern, but we're not doing that kind of static checks yet.
+    -- Note that we still need to run symbolize though, constructors must
+    -- refer to the right symbol.
+    let res = symbolizePat env p.subpat in
+    (env, PNot {p with subpat = res.1})
 end
 
 ------------------------------
