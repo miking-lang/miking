@@ -56,7 +56,7 @@ con Failure : (String, String, State) -> ParseResult
 -- Success stores result of parsing
 -- Failure stores found and expected token
 
-type Parser = State -> String -> ParseResult
+type Parser = State -> ParseResult
 
 type Filename = String
 
