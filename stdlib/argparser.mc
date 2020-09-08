@@ -296,14 +296,16 @@ type TestArgs = {
   help: Bool,
   version: Bool,
   debugParser: Bool,
-  optLevel: Int
+  optLevel: Int,
+  defines: [String]
 } in
 
 let defaults: TestArgs = {
   help = false,
   version = false,
   debugParser = false,
-  optLevel = 0
+  optLevel = 0,
+  defines = []
 } in
 
 let parser: ArgParser TestArgs = argparserNew "test" defaults in
@@ -329,6 +331,12 @@ in
 let parser = argparserAddParamOption 'O' "optimization-level"
                                      "Sets the optimization level."
                                      (lam p. lam o. {o with optLevel = string2int p})
+                                     parser
+in
+
+let parser = argparserAddParamOption 'D' "define"
+                                     "Add C preprocessor definition."
+                                     (lam p. lam o. {o with defines = snoc o.defines p})
                                      parser
 in
 
@@ -359,5 +367,9 @@ utest argparserParse ["-vhO2"] parser with {{{defaults with help = true}
 utest argparserParse ["-vhO", "2"] parser with {{{defaults with help = true}
                                                            with version = true}
                                                            with optLevel = 2} in
+
+utest argparserParse ["-DMCORE"] parser with {defaults with defines = ["MCORE"]} in
+
+utest argparserParse ["-DMI", "--define", "TEST"] parser with {defaults with defines = ["MI", "TEST"]} in
 
 ()
