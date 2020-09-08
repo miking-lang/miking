@@ -346,6 +346,7 @@ utest argparserParse ["-v", "--help"] parser with {{defaults with help = true}
                                                              with version = true} in
 
 utest argparserParse ["--optimization-level=2"] parser with {defaults with optLevel = 2} in
+utest argparserParse ["--optimization-level", "71"] parser with {defaults with optLevel = 71} in
 utest argparserParse ["-O=2"] parser with {defaults with optLevel = 2} in
 utest argparserParse ["-O", "2"] parser with {defaults with optLevel = 2} in
 utest argparserParse ["-O2"] parser with {defaults with optLevel = 2} in
