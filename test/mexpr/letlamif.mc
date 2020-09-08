@@ -1,16 +1,16 @@
-// Miking is licensed under the MIT license.
-// Copyright (C) David Broman. See file LICENSE.txt
-//
-// Test string and char primitives
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+-- Test string and char primitives
 
 mexpr
 
-// lambda
+-- lambda
 utest (lam x. addi x 2) 3 with 5 in
 utest (lam x. lam y. muli x y) 3 4 with 12 in
 
 
-// let expressions
+-- let expressions
 let x = 10 in
 utest x with 10 in
 
@@ -25,14 +25,14 @@ let f2 = lam x. lam y. addi x y in
 utest f2 2 3 with 5 in
 
 
-// if expressions
+-- if expressions
 utest if true then 1 else 2 with 1 in
 let z = 8 in
 let m = lam x. lam y. muli x y in
 utest if eqi (m 2 3) 6 then addi z 2 else 0 with 10 in
 
 
-// factorial function
+-- factorial function
 recursive
   let fact = lam n.
     if eqi n 0 then 1

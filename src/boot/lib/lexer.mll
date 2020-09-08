@@ -152,8 +152,7 @@ let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" |
               "::" | ":" | ","  | "."  | "&" | "|" | "->" | "=>" | "++"
 
 
-let line_comment = "//" [^ '\013' '\010']*
-let line_comment_alt = "--" [^ '\013' '\010']*
+let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+
 let signed_integer = unsigned_integer  | '-' unsigned_integer
 let unsigned_number = unsigned_integer ('.' (unsigned_integer)?)?
@@ -165,8 +164,6 @@ rule main = parse
   | whitespace+ as s
       { colcount_fast s; main lexbuf }
   | line_comment
-      { main lexbuf }
-  | line_comment_alt
       { main lexbuf }
   | "/*" as s
       { Buffer.reset string_buf ;
