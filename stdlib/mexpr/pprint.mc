@@ -52,6 +52,10 @@ let conString = lam str.
 let varString = lam str.
   parserStr str "#var" (lam str. is_lower_alpha (head str))
 
+-- Label string parser translation for records
+let labelString = lam str.
+  parserStr str "#label" (lam str. is_lower_alpha (head str))
+
 let _ppLookupName = assocLookup {eq = nameEqSym}
 let _ppLookupStr = assocLookup {eq = eqstr}
 let _ppInsertName = assocInsert {eq = nameEqSym}
@@ -159,7 +163,7 @@ lang RecordPrettyPrint = RecordAst
         mapAccumL
           (lam env. lam r.
              match pprintCode innerIndent env r.1 with (env,str) then
-               (env, join [r.0, " =", newline innerIndent, str])
+               (env, join [labelString r.0, " =", newline innerIndent, str])
              else never)
           env t.bindings
       with (env,binds) then
@@ -170,7 +174,7 @@ lang RecordPrettyPrint = RecordAst
   | TmRecordUpdate t ->
     match pprintCode indent env t.rec with (env,rec) then
       match pprintCode indent env t.value with (env,value) then
-        (env,join ["{", rec, " with ", t.key, " = ", value, "}"])
+        (env,join ["{", rec, " with ", labelString t.key, " = ", value, "}"])
       else never
     else never
 end
@@ -422,7 +426,7 @@ lang RecordPatPrettyPrint = RecordPat
     match
       mapAccumL (lam env. lam r.
         match getPatStringCode indent env r.1 with (env,str) then
-          (env,join [r.0, " = ", str])
+          (env,join [labelString r.0, " = ", str])
         else never)
         env bindings
     with (env,binds) then
