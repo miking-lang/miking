@@ -391,7 +391,7 @@ let parser = argparserAddLongParamOption "a-very-long-option-name" "fooparam"
                                          parser
 in
 
--- Used to test usage print with linewidth 80. Make sure this is uncommented
+-- Used to test usage print with linewidth 80. Make sure this is commented out
 -- when finished testing the usage print.
 let _ = print (join ["\n", argparserUsage 80 parser, "\n"]) in
 
