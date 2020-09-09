@@ -113,6 +113,27 @@ let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
         else never
       else never
 
+-- Get an optional list of tuple expressions for a record. If the record does
+-- not represent a tuple, None () is returned.
+let _record2tuple = lam tm.
+  use RecordAst in
+  match tm with TmRecord t then
+    let keys = assocKeys {eq=eqstr} t.bindings in
+    match all stringIsInt keys with false then None () else
+    let intKeys = map string2int keys in
+    let sortedKeys = sort subi intKeys in
+    -- Check if keys are a sequence 0..(n-1)
+    match and (eqi 0 (head sortedKeys))
+              (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
+      -- Note: Quadratic complexity. Sorting the association list directly
+      -- w.r.t. key would improve complexity to n*log(n).
+      Some (map (lam key. assocLookupOrElse {eq=eqstr}
+                            (lam _. error "Key not found")
+                            (int2string key) t.bindings)
+                 sortedKeys)
+    else None ()
+  else error "Not a record"
+
 
 -----------
 -- TERMS --
@@ -154,27 +175,10 @@ lang FunPrettyPrint = FunAst
 end
 
 lang RecordPrettyPrint = RecordAst
-  sem record2tuple =
-  | TmRecord t ->
-    match t.bindings with [] then
-      None ()
-    else
-      let keys = assocKeys {eq=eqstr} t.bindings in
-      match all stringIsInt keys with false then None () else
-      let intKeys = map string2int keys in
-      let sortedKeys = sort subi intKeys in
-      -- Check if keys are a sequence 0..(n-1)
-      match and (eqi 0 (head sortedKeys))
-                (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
-        Some (map (lam key. assocLookupOrElse {eq=eqstr} (lam _. never)
-                                              (int2string key) t.bindings)
-                   sortedKeys)
-      else None ()
-
   sem pprintCode (indent : Int) (env: Env) =
   | TmRecord t ->
     if eqi (length t.bindings) 0 then (env,"{}")
-    else match record2tuple (TmRecord t) with Some tms then
+    else match _record2tuple (TmRecord t) with Some tms then
       match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
       with (env,tupleExprs) then
         let merged = match tupleExprs with [e] then
