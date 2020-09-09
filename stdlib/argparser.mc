@@ -385,10 +385,10 @@ let parser = argparserAddParamOption 'D' "define" "DEFINITION"
                                      parser
 in
 
-let parser = argparserAddLongOption "a-very-long-option-name"
-                                     "Dummy option with a very long name."
-                                     (lam o. o)
-                                     parser
+let parser = argparserAddLongParamOption "a-very-long-option-name" "fooparam"
+                                         "Dummy option with a very long name."
+                                         (lam _. lam o. o)
+                                         parser
 in
 
 -- Used to test usage print with linewidth 80. Make sure this is uncommented
