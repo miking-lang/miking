@@ -7,6 +7,7 @@
 include "bool.mc"
 include "char.mc"
 include "hashmap.mc"
+include "math.mc"
 include "option.mc"
 include "seq.mc"
 include "string.mc"
@@ -25,7 +26,8 @@ type ArgParserOption a = {
   long: String,
   apply: String -> a -> a,
   description: String,
-  parameterized: Bool
+  parameterized: Bool,
+  paramname: String
 }
 
 type ArgParser a = {
@@ -202,13 +204,50 @@ end
 
 -- Get a string describing the usage of the application.
 let argparserUsage: Int -> ArgParser a -> String = lam maxwidth. lam parser.
-  "TODO"
+  -- Format "usage: <progname> [OPTIONS] <POSITIONALS>"
+  let prefix = join ["usage: ", parser.progname] in
+  let indent = makeSeq (mini (length prefix) 20) ' ' in -- do not indent more than 20 characters
+
+  let allOpts = _str_values parser.opts in
+
+  -- Splits options into "Shorts With No Parameter" and the rest
+  let splitSWNP = partition (lam opt. match opt.short with Some _ then not opt.parameterized else false) allOpts in
+
+  -- Constructs the string [-abcdeFGHIJK]
+  let shortNonParamStr = join ["[-", map (lam opt. optionGetOrElse (lam _. error "Logic error") opt.short) splitSWNP.0, "]"] in
+
+  let opt2headerpart = lam opt: ArgParserOption a.
+    let name = optionMapOr (concat "--" opt.long)
+                           (lam c. ['-', c])
+                           opt.short
+    in
+    let parampart = if opt.parameterized then cons ' ' opt.paramname else "" in
+    join ["[", name, parampart, "]"]
+  in
+
+  let parts = cons shortNonParamStr (map opt2headerpart splitSWNP.1) in
+  -- TODO: Missing positionals
+
+  let fmtUsage = lam revacc: [String]. lam part: String.
+    let totallength = addi (length (head revacc)) (addi (length part) 1) in
+    if gti totallength maxwidth then
+      -- Add a new line
+      cons (join [indent, " ", part]) revacc
+    else
+      -- Add to existing line
+      cons (join [head revacc, " ", part]) (tail revacc)
+  in
+  let lines = reverse (foldl fmtUsage [prefix] parts) in
+
+  -- TODO: Add detailed descriptions here
+  strJoin "\n" lines
 
 -- Adds a parameterized option to the argument parser with a short name and a
 -- long name.
 let argparserAddParamOption =
   lam short: Char.
   lam long: String.
+  lam paramname: String.
   lam description: String.
   lam applyfn: String -> a -> a.
   lam parser: ArgParser a.
@@ -221,7 +260,8 @@ let argparserAddParamOption =
     long = long,
     apply = applyfn,
     description = description,
-    parameterized = true
+    parameterized = true,
+    paramname = paramname
   } in
 
   {{parser with shortopts = _char_insert short long parser.shortopts}
@@ -244,7 +284,8 @@ let argparserAddOption =
     long = long,
     apply = (lam _: String. applyfn),
     description = description,
-    parameterized = false
+    parameterized = false,
+    paramname = ""
   } in
 
   {{parser with shortopts = _char_insert short long parser.shortopts}
@@ -254,6 +295,7 @@ let argparserAddOption =
 -- name.
 let argparserAddLongParamOption =
   lam long: String.
+  lam paramname: String.
   lam description: String.
   lam applyfn: String -> a -> a.
   lam parser: ArgParser a.
@@ -265,7 +307,8 @@ let argparserAddLongParamOption =
     long = long,
     apply = applyfn,
     description = description,
-    parameterized = true
+    parameterized = true,
+    paramname = paramname
   } in
 
   {parser with opts = _str_insert long newopt parser.opts}
@@ -285,7 +328,8 @@ let argparserAddLongOption =
     long = long,
     apply = (lam _: String. applyfn),
     description = description,
-    parameterized = false
+    parameterized = false,
+    paramname = ""
   } in
 
   {parser with opts = _str_insert long newopt parser.opts}
@@ -329,17 +373,27 @@ let parser = argparserAddLongOption "debug-parser"
                                     parser
 in
 
-let parser = argparserAddParamOption 'O' "optimization-level"
+let parser = argparserAddParamOption 'O' "optimization-level" "LEVEL"
                                      "Sets the optimization level."
                                      (lam p. lam o. {o with optLevel = string2int p})
                                      parser
 in
 
-let parser = argparserAddParamOption 'D' "define"
+let parser = argparserAddParamOption 'D' "define" "DEFINITION"
                                      "Add C preprocessor definition."
                                      (lam p. lam o. {o with defines = snoc o.defines p})
                                      parser
 in
+
+let parser = argparserAddLongOption "a-very-long-option-name"
+                                     "Dummy option with a very long name."
+                                     (lam o. o)
+                                     parser
+in
+
+-- Used to test usage print with linewidth 80. Make sure this is uncommented
+-- when finished testing the usage print.
+let _ = print (join ["\n", argparserUsage 80 parser, "\n"]) in
 
 utest argparserParse [] parser with defaults in
 utest argparserParse ["-h"] parser with {defaults with help = true} in
