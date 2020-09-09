@@ -1,7 +1,8 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
--- An argument parser library
+-- An argument parser library. Note that almost all functions in this library
+-- will throw errors on invalid input. Only use at the start of the program.
 
 include "bool.mc"
 include "char.mc"
@@ -370,6 +371,6 @@ utest argparserParse ["-vhO", "2"] parser with {{{defaults with help = true}
 
 utest argparserParse ["-DMCORE"] parser with {defaults with defines = ["MCORE"]} in
 
-utest argparserParse ["-DMI", "--define", "TEST"] parser with {defaults with defines = ["MI", "TEST"]} in
+utest argparserParse ["-Dh", "--define", "TEST"] parser with {defaults with defines = ["h", "TEST"]} in
 
 ()
