@@ -12,28 +12,28 @@ include "seq.mc"
 include "string.mc"
 
 type ArgParserPositional a = {
-	name: String,
-	matchcond: String -> Bool,
-	disablecond: String -> Bool,
-	apply: String -> a -> a,
-	description: String
-	-- TBI: Priority, ex: if something is not a filename, then accept it as something else. Some semantics of strongest match.
+  name: String,
+  matchcond: String -> Bool,
+  disablecond: String -> Bool,
+  apply: String -> a -> a,
+  description: String
+  -- TBI: Priority, ex: if something is not a filename, then accept it as something else. Some semantics of strongest match.
 }
 
 type ArgParserOption a = {
-	short: Option Char,
-	long: String,
-	apply: String -> a -> a,
-	description: String,
+  short: Option Char,
+  long: String,
+  apply: String -> a -> a,
+  description: String,
   parameterized: Bool
 }
 
 type ArgParser a = {
-	progname: String,
-	posargs: [ArgParserPositional a],
-	shortopts: HashMap Char String,
-	opts: HashMap String (ArgParserOption a),
-	values: a
+  progname: String,
+  posargs: [ArgParserPositional a],
+  shortopts: HashMap Char String,
+  opts: HashMap String (ArgParserOption a),
+  values: a
 }
 
 -- Local hashmap definitions
