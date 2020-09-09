@@ -154,9 +154,34 @@ lang FunPrettyPrint = FunAst
 end
 
 lang RecordPrettyPrint = RecordAst
+  sem record2tuple =
+  | TmRecord t ->
+    match t.bindings with [] then
+      None ()
+    else
+      let keys = assocKeys {eq=eqstr} t.bindings in
+      match all stringIsInt keys with false then None () else
+      let intKeys = map string2int keys in
+      let sortedKeys = sort subi intKeys in
+      -- Check if keys are a sequence 0..(n-1)
+      match and (eqi 0 (head sortedKeys))
+                (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
+        Some (map (lam key. assocLookupOrElse {eq=eqstr} (lam _. never)
+                                              (int2string key) t.bindings)
+                   sortedKeys)
+      else None ()
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmRecord t ->
     if eqi (length t.bindings) 0 then (env,"{}")
+    else match record2tuple (TmRecord t) with Some tms then
+      match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
+      with (env,tupleExprs) then
+        let merged = match tupleExprs with [e] then
+                       concat e ","
+                     else strJoin ", " tupleExprs in
+        (env, join ["(", merged, ")"])
+      else never
     else
       let innerIndent = incr (incr indent) in
       match

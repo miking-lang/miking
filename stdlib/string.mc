@@ -29,6 +29,7 @@ let string2int = lam s.
       let rest = muli 10 (string2int_rechelper (slice s 0 last)) in
       addi rest lsd
   in
+  match s with [] then 0 else
   if eqchar '-' (head s)
   then negi (string2int_rechelper (tail s))
   else string2int_rechelper s
@@ -55,6 +56,16 @@ utest int2string 5 with "5"
 utest int2string 25 with "25"
 utest int2string 314159 with "314159"
 utest int2string (negi 314159) with "-314159"
+
+-- 'stringIsInt s' returns true iff 's' is a string representing an integer
+let stringIsInt: String -> Bool = lam s.
+  eqstr s (int2string (string2int s))
+
+utest stringIsInt "" with false
+utest stringIsInt "1 " with false
+utest stringIsInt " 1" with false
+utest stringIsInt "1" with true
+utest stringIsInt "-1098" with true
 
 -- A naive float2string implementation that only formats in standard form
 let float2string = lam arg.
