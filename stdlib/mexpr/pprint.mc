@@ -52,6 +52,10 @@ let conString = lam str.
 let varString = lam str.
   parserStr str "#var" (lam str. is_lower_alpha (head str))
 
+-- Label string parser translation for records
+let labelString = lam str.
+  parserStr str "#label" (lam str. is_lower_alpha (head str))
+
 let _ppLookupName = assocLookup {eq = nameEqSym}
 let _ppLookupStr = assocLookup {eq = eqstr}
 let _ppInsertName = assocInsert {eq = nameEqSym}
@@ -109,6 +113,27 @@ let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
         else never
       else never
 
+-- Get an optional list of tuple expressions for a record. If the record does
+-- not represent a tuple, None () is returned.
+let _record2tuple = lam tm.
+  use RecordAst in
+  match tm with TmRecord t then
+    let keys = assocKeys {eq=eqstr} t.bindings in
+    match all stringIsInt keys with false then None () else
+    let intKeys = map string2int keys in
+    let sortedKeys = sort subi intKeys in
+    -- Check if keys are a sequence 0..(n-1)
+    match and (eqi 0 (head sortedKeys))
+              (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
+      -- Note: Quadratic complexity. Sorting the association list directly
+      -- w.r.t. key would improve complexity to n*log(n).
+      Some (map (lam key. assocLookupOrElse {eq=eqstr}
+                            (lam _. error "Key not found")
+                            (int2string key) t.bindings)
+                 sortedKeys)
+    else None ()
+  else error "Not a record"
+
 
 -----------
 -- TERMS --
@@ -153,16 +178,25 @@ lang RecordPrettyPrint = RecordAst
   sem pprintCode (indent : Int) (env: Env) =
   | TmRecord t ->
     if eqi (length t.bindings) 0 then (env,"{}")
+    else match _record2tuple (TmRecord t) with Some tms then
+      match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
+      with (env,tupleExprs) then
+        let merged = match tupleExprs with [e] then
+                       concat e ","
+                     else strJoin ", " tupleExprs in
+        (env, join ["(", merged, ")"])
+      else never
     else
       let innerIndent = incr (incr indent) in
       match
-        mapAccumL
-          (lam env. lam r.
-             match pprintCode innerIndent env r.1 with (env,str) then
-               (env, join [r.0, " =", newline innerIndent, str])
+        assocMapAccum {eq=eqstr}
+          (lam env. lam k. lam v.
+             match pprintCode innerIndent env v with (env, str) then
+               (env, join [labelString k, " =", newline innerIndent, str])
              else never)
-          env t.bindings
-      with (env,binds) then
+           env t.bindings
+      with (env, bindMap) then
+        let binds = assocValues {eq=eqstr} bindMap in
         let merged = strJoin (concat "," (newline (incr indent))) binds in
         (env,join ["{ ", merged, " }"])
       else never
@@ -170,7 +204,7 @@ lang RecordPrettyPrint = RecordAst
   | TmRecordUpdate t ->
     match pprintCode indent env t.rec with (env,rec) then
       match pprintCode indent env t.value with (env,value) then
-        (env,join ["{", rec, " with ", t.key, " = ", value, "}"])
+        (env,join ["{", rec, " with ", labelString t.key, " = ", value, "}"])
       else never
     else never
 end
@@ -420,13 +454,14 @@ lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) (env: Env) =
   | PRecord {bindings = bindings} ->
     match
-      mapAccumL (lam env. lam r.
-        match getPatStringCode indent env r.1 with (env,str) then
-          (env,join [r.0, " = ", str])
-        else never)
-        env bindings
-    with (env,binds) then
-      (env,join ["{", strJoin ", " binds, "}"])
+      assocMapAccum {eq=eqstr}
+        (lam env. lam k. lam v.
+           match getPatStringCode indent env v with (env,str) then
+             (env,join [labelString k, " = ", str])
+           else never)
+         env bindings
+    with (env,bindMap) then
+      (env,join ["{", strJoin ", " (assocValues {eq=eqstr} bindMap), "}"])
     else never
 end
 
