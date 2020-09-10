@@ -117,4 +117,12 @@ let ext =
 
 let _ = debugPrint ext in
 
+let lambda =
+  app_
+    (ulam_ "x" (bind_ (let_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
+    (int_ 4)
+in
+
+let _ = debugPrint lambda in
+
 ()
