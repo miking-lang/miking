@@ -24,10 +24,7 @@ lang MExprANF = MExprSym
       (lam n1. (TmLet {ident = ident, body = n1, inexpr = normalize k m2}))
       m1
 
-  | TmApp {lhs = lhs, rhs = rhs} ->
-    normalizeName
-      (lam l. normalizeName (lam r. k (TmApp {lhs = l, rhs = r})) rhs)
-      lhs
+  | TmApp t -> normalizeNames k (TmApp t)
 
   | TmVar t -> k (TmVar t)
   | TmConst t -> k (TmConst t)
@@ -40,6 +37,13 @@ lang MExprANF = MExprSym
            (TmLet {ident = ident, body = n,
                    inexpr = k (TmVar {ident = ident})}))
       m
+
+  sem normalizeNames (k : Expr -> Expr) =
+  | TmApp {lhs = lhs, rhs = rhs} ->
+    normalizeNames
+      (lam l. normalizeName (lam r. k (TmApp {lhs = l, rhs = r})) rhs)
+      lhs
+  | t -> normalizeName k t
 
 end
 
