@@ -189,13 +189,14 @@ lang RecordPrettyPrint = RecordAst
     else
       let innerIndent = incr (incr indent) in
       match
-        mapAccumL
-          (lam env. lam r.
-             match pprintCode innerIndent env r.1 with (env,str) then
-               (env, join [labelString r.0, " =", newline innerIndent, str])
-             else never)
+        assocMapAccum {eq=eqstr}
+          (lam env. lam k. lam v.
+              match pprintCode innerIndent env v with (env, str) then
+                (env, join [labelString k, " =", newline innerIndent, str])
+              else never)
           env t.bindings
-      with (env,binds) then
+      with (env, bindMap) then
+        let binds = assocValues {eq=eqstr} bindMap in
         let merged = strJoin (concat "," (newline (incr indent))) binds in
         (env,join ["{ ", merged, " }"])
       else never
