@@ -1,4 +1,4 @@
-include "parser.mc"
+include "parser-combinators.mc"
 
 type JsonValue
 con JsonObject : [ (String, JsonValue) ] -> JsonValue
@@ -10,50 +10,50 @@ con JsonBool   : Bool                    -> JsonValue
 con JsonNull   : ()                      -> JsonValue
 
 
-let with_ws = wrapped_in spaces spaces
+let with_ws = wrappedIn spaces spaces
 
 let list_or_spaces = lam left. lam right. lam elem.
-  (wrapped_in left right
+  (wrappedIn left right
     (apr spaces
-         (sep_by (lex_char ',') elem)))
+         (sepBy (lexChar ',') elem)))
 
 
 let jsonNumber =
   let maybe = lam p. alt p (pure "") in
-  let decimals = label "decimals" (liftA2 cons (lex_char '.') lex_digits) in
+  let decimals = label "decimals" (liftA2 cons (lexChar '.') lexDigits) in
   let exponent = label "exponent" (
-    liftA2 cons (alt (lex_char 'e') (lex_char 'E'))
-           (liftA2 concat (foldr1 alt [lex_string "-", lex_string "+", pure ""])
-                          lex_digits))
+    liftA2 cons (alt (lexChar 'e') (lexChar 'E'))
+           (liftA2 concat (foldr1 alt [lexString "-", lexString "+", pure ""])
+                          lexDigits))
   in
   let string2JsonFloat = lam x. JsonFloat (string2float x) in
   let string2JsonInt = lam x. JsonInt (string2int x) in
-  bind (liftA2 concat (maybe (lex_string "-")) lex_digits) (lam digits.
+  bind (liftA2 concat (maybe (lexString "-")) lexDigits) (lam digits.
   alt (fmap (compose string2JsonFloat (concat digits))
             (alt exponent (liftA2 concat decimals (maybe exponent))))
       (pure (string2JsonInt digits)))
 
-let jsonString = fmap (lam x. JsonString x) lex_string_lit
+let jsonString = fmap (lam x. JsonString x) lexStringLit
 
-let jsonNull = apr (lex_string "null") (pure (JsonNull ()))
+let jsonNull = apr (lexString "null") (pure (JsonNull ()))
 
-let lexTrue = apr (lex_string "true") (pure true)
-let lexFalse = apr (lex_string "false") (pure false)
+let lexTrue = apr (lexString "true") (pure true)
+let lexFalse = apr (lexString "false") (pure false)
 let jsonBool = fmap (lam x. JsonBool x) (alt lexTrue lexFalse)
 
 recursive
 -- These functions are all eta expanded, because recursive lets must begin with a lambda.
 let jsonMember = lam x.
   let makeMember = lam k. lam v. (k, v) in
-  (liftA2 makeMember (apl (with_ws lex_string_lit) (lex_char ':')) jsonValue) x
+  (liftA2 makeMember (apl (with_ws lexStringLit) (lexChar ':')) jsonValue) x
 
 let jsonObject = lam x.
   fmap (lam x. JsonObject x)
-  (list_or_spaces (lex_char '{') (lex_char '}') jsonMember) x
+  (list_or_spaces (lexChar '{') (lexChar '}') jsonMember) x
 
 let jsonArray = lam x.
   fmap (lam x. JsonArray x)
-  (list_or_spaces (lex_char '[') (lex_char ']') jsonValue) x
+  (list_or_spaces (lexChar '[') (lexChar ']') jsonValue) x
 
 -- jsonValue : Parser JsonValue
 --
@@ -76,7 +76,7 @@ end
 -- Try to parse a JSON value from a string, returning None if the string is
 -- not valid JSON.
 let parseJson = lam str.
-  match test_parser jsonValue str with Success (result, _) then Some result
+  match testParser jsonValue str with Success (result, _) then Some result
   else None ()
 
 let wrapString = lam left. lam right. lam x.
@@ -166,7 +166,7 @@ utest formatJson (JsonObject [("list", JsonArray [JsonObject [], JsonObject []])
 utest parseJson "[{\n}\n,[\n{\t}]\n]" with Some (JsonArray [JsonObject [], JsonArray [JsonObject []]]) in
 utest formatJson (JsonArray [JsonObject [], JsonArray [JsonObject []]]) with "[{}, [{}]]" in
 
-utest show_error (test_parser jsonValue "{\"mystr\" : foo}")
+utest showError (testParser jsonValue "{\"mystr\" : foo}")
 with "Parse error at 1:12: Unexpected 'f'. Expected '{' or '[' or '\"' or digit or 'true' or 'false' or 'null'" in
 let myJsonObject =
   JsonObject [ ("mylist", JsonArray [JsonObject [], JsonInt 2, JsonFloat 3e-2])
@@ -175,8 +175,8 @@ let myJsonObject =
              , ("mynull", JsonNull ())
              ]
 in
-utest test_parser jsonValue "{\"mylist\" : [{},2,3e-2], \"mystr\" : \n\"foo\", \"mybool\" :\ttrue, \"mynull\":null}abc"
-with Success (myJsonObject, ("abc", ("", 2, 39))) in
+utest testParser jsonValue "{\"mylist\" : [{},2,3e-2], \"mystr\" : \n\"foo\", \"mybool\" :\ttrue, \"mynull\":null}abc"
+with Success (myJsonObject, ("abc", {file ="", row = 2, col = 39})) in
 utest formatValue myJsonObject
 with "{\"mylist\": [{}, 2, 3.0e-2], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
 utest parseJson (formatValue myJsonObject) with Some myJsonObject in
