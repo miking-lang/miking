@@ -454,13 +454,14 @@ lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) (env: Env) =
   | PRecord {bindings = bindings} ->
     match
-      mapAccumL (lam env. lam r.
-        match getPatStringCode indent env r.1 with (env,str) then
-          (env,join [labelString r.0, " = ", str])
-        else never)
-        env bindings
-    with (env,binds) then
-      (env,join ["{", strJoin ", " binds, "}"])
+      assocMapAccum {eq=eqstr}
+        (lam env. lam k. lam v.
+           match getPatStringCode indent env v with (env,str) then
+             (env,join [labelString k, " = ", str])
+           else never)
+         env bindings
+    with (env,bindMap) then
+      (env,join ["{", strJoin ", " (assocValues {eq=eqstr} bindMap), "}"])
     else never
 end
 
