@@ -140,22 +140,47 @@ let _record2tuple = lam tm.
 -----------
 
 lang VarPrettyPrint = VarAst
+  sem isAtomic =
+  | TmVar _ -> true
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmVar {ident = ident} ->
     match _getStr ident env with (env,str) then (env,varString str) else never
 end
 
 lang AppPrettyPrint = AppAst
+  sem isAtomic =
+  | TmApp _ -> false
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmApp t ->
-    match pprintCode indent env t.lhs with (env,l) then
-      match pprintCode indent env t.rhs with (env,r) then
-        (env, join ["(", l, ") (", r, ")"])
+    recursive let appseq =
+      lam t. match t with TmApp {lhs = lhs, rhs = rhs} then
+        snoc (appseq lhs) rhs
+      else [t]
+    in
+    let apps = appseq (TmApp t) in
+
+    let f = lam indent. lam env. lam t.
+      match pprintCode indent env t with (env,str) then
+        if isAtomic t then (env,str)
+        else (env,join ["(", str, ")"])
       else never
-    else never
+    in
+
+    match f indent env (head apps) with (env,fun) then
+      let aindent = incr indent in
+      match mapAccumL (f aindent) env (tail apps) with (env,args) then
+        (env,
+         join [fun, newline aindent, strJoin (newline aindent) args])
+      else never
+    else error "Impossible"
 end
 
 lang FunPrettyPrint = FunAst
+  sem isAtomic =
+  | TmLam _ -> false
+
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
@@ -175,6 +200,10 @@ lang FunPrettyPrint = FunAst
 end
 
 lang RecordPrettyPrint = RecordAst
+  sem isAtomic =
+  | TmRecord _ -> true
+  | TmRecordUpdate _ -> true
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmRecord t ->
     if eqi (length t.bindings) 0 then (env,"{}")
@@ -202,14 +231,21 @@ lang RecordPrettyPrint = RecordAst
       else never
 
   | TmRecordUpdate t ->
-    match pprintCode indent env t.rec with (env,rec) then
-      match pprintCode indent env t.value with (env,value) then
-        (env,join ["{", rec, " with ", labelString t.key, " = ", value, "}"])
+    let i = incr indent in
+    let ii = incr i in
+    match pprintCode i env t.rec with (env,rec) then
+      match pprintCode ii env t.value with (env,value) then
+        (env,join ["{ ", rec, newline i,
+                   "with", newline i,
+                   labelString t.key, " =", newline ii, value, " }"])
       else never
     else never
 end
 
 lang LetPrettyPrint = LetAst
+  sem isAtomic =
+  | TmLet _ -> false
+
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
@@ -229,6 +265,9 @@ lang LetPrettyPrint = LetAst
 end
 
 lang RecLetsPrettyPrint = RecLetsAst
+  sem isAtomic =
+  | TmRecLets _ -> false
+
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
@@ -257,6 +296,9 @@ lang RecLetsPrettyPrint = RecLetsAst
 end
 
 lang ConstPrettyPrint = ConstAst
+  sem isAtomic =
+  | TmConst _ -> true
+
   sem getConstStringCode (indent : Int) =
   -- intentionally left blank
 
@@ -265,6 +307,10 @@ lang ConstPrettyPrint = ConstAst
 end
 
 lang DataPrettyPrint = DataAst
+  sem isAtomic =
+  | TmConDef _ -> false
+  | TmConApp _ -> false
+
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
@@ -292,18 +338,24 @@ lang DataPrettyPrint = DataAst
 end
 
 lang MatchPrettyPrint = MatchAst
+  sem isAtomic =
+  | TmMatch _ -> false
+
   sem getPatStringCode (indent : Int) (env: Env) =
   -- intentionally left blank
 
   sem pprintCode (indent : Int) (env: Env) =
   | TmMatch t ->
-    match pprintCode indent env t.target with (env,target) then
-      match getPatStringCode indent env t.pat with (env,pat) then
-        match pprintCode (incr indent) env t.thn with (env,thn) then
-          match pprintCode (incr indent) env t.els with (env,els) then
-            (env,join ["match ", target, " with ", pat, " then",
-                       newline (incr indent), thn, newline indent, "else",
-                       newline (incr indent), els])
+    let i = indent in
+    let ii = incr indent in
+    match pprintCode ii env t.target with (env,target) then
+      match getPatStringCode ii env t.pat with (env,pat) then
+        match pprintCode ii env t.thn with (env,thn) then
+          match pprintCode ii env t.els with (env,els) then
+            (env,join ["match", newline ii, target, newline i,
+                       "with", newline ii, pat, newline i,
+                       "then", newline ii, thn, newline i,
+                       "else", newline ii, els])
           else never
         else never
       else never
@@ -311,6 +363,9 @@ lang MatchPrettyPrint = MatchAst
 end
 
 lang UtestPrettyPrint = UtestAst
+  sem isAtomic =
+  | TmUtest _ -> false
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmUtest t ->
     match pprintCode indent env t.test with (env,test) then
@@ -325,6 +380,9 @@ lang UtestPrettyPrint = UtestAst
 end
 
 lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
+  sem isAtomic =
+  | TmSeq _ -> true
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmSeq t ->
     let extract_char = lam e.
@@ -349,6 +407,9 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
 end
 
 lang NeverPrettyPrint = NeverAst
+  sem isAtomic =
+  | TmNever _ -> true
+
   sem pprintCode (indent : Int) (env: Env) =
   | TmNever {} -> (env,"never")
 end
