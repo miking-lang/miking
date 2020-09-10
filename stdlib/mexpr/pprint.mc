@@ -191,10 +191,10 @@ lang RecordPrettyPrint = RecordAst
       match
         assocMapAccum {eq=eqstr}
           (lam env. lam k. lam v.
-              match pprintCode innerIndent env v with (env, str) then
-                (env, join [labelString k, " =", newline innerIndent, str])
-              else never)
-          env t.bindings
+             match pprintCode innerIndent env v with (env, str) then
+               (env, join [labelString k, " =", newline innerIndent, str])
+             else never)
+           env t.bindings
       with (env, bindMap) then
         let binds = assocValues {eq=eqstr} bindMap in
         let merged = strJoin (concat "," (newline (incr indent))) binds in
