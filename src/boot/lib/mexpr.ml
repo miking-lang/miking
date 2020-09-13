@@ -607,8 +607,9 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
      let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
-  | TmUtest(fi,t1,t2,tnext)
-    -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
+     let sym_using = Option.map (fun t -> symbolize env t) tusing in
+     TmUtest(fi,symbolize env t1,symbolize env t2,sym_using,symbolize env tnext)
   | TmNever(_) -> t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -758,7 +759,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       | None -> eval env t3)
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
-  | TmUtest(fi,t1,t2,tnext) ->
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
     if !utest then begin
       let (v1,v2) = ((eval env t1),(eval env t2)) in
         if val_equal v1 v2 then

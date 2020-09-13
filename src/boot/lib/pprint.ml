@@ -408,7 +408,7 @@ and print_tm' fmt t = match t with
     fprintf fmt "@[<hov 0>use %s in@ %a@]"
       l print_tm (Match, t)
 
-  | TmUtest(_,t1,t2,t3) ->
+  | TmUtest(_,t1,t2,None,t4) ->
     fprintf fmt "@[<hov 0>\
                    @[<hov %d>\
                      utest@ \
@@ -422,7 +422,25 @@ and print_tm' fmt t = match t with
       !ref_indent
       print_tm (Match, t1)
       print_tm (Match, t2)
+      print_tm (Match, t4)
+
+  | TmUtest(_,t1,t2,Some t3,t4) ->
+    fprintf fmt "@[<hov 0>\
+                   @[<hov %d>\
+                     utest@ \
+                     @[<hov 0>\
+                       %a with@ \
+                       %a using@ \
+                       %a in\
+                     @]\
+                   @]\
+                   @ %a\
+                 @]"
+      !ref_indent
+      print_tm (Match, t1)
+      print_tm (Match, t2)
       print_tm (Match, t3)
+      print_tm (Match, t4)
 
   | TmClos(_,x,_,ty,t1,_) ->
     let x = string_of_ustring x in
