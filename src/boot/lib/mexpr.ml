@@ -761,14 +761,21 @@ let rec eval (env : (sym * tm) list) (t : tm) =
   (* Unit testing *)
   | TmUtest(fi,t1,t2,tusing,tnext) ->
     if !utest then begin
-      let (v1,v2) = ((eval env t1),(eval env t2)) in
-        if val_equal v1 v2 then
-         (printf "."; utest_ok := !utest_ok + 1)
-       else (
+      let v1,v2 = eval env t1,eval env t2 in
+      let equal = (match tusing with
+       | Some t ->
+         (match eval env (TmApp(fi,TmApp(fi,t,v1),v2)) with
+          | TmConst(_,CBool(b)) -> b
+          | _ -> raise_error fi ("Invalid equivalence function: "
+                                 ^ Ustring.to_utf8 (ustring_of_tm t)))
+       | None -> val_equal v1 v2) in
+      if equal then
+        (printf "."; utest_ok := !utest_ok + 1)
+      else (
         unittest_failed fi v1 v2;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-     end;
+    end;
     eval env tnext
   | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."
 
