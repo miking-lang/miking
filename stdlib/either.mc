@@ -39,7 +39,6 @@ let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. lam e.
   match e with Left content then
     Left (f content)
   else match e with Right content then
-    -- just returning e here is most likely not type safe
     Right content
   else never
 
@@ -49,7 +48,6 @@ utest eitherMapLeft (cons 'a') (Left "choo") with Left "achoo"
 
 let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. lam e.
   match e with Left content then
-    -- just returning e here is most likely not type safe
     Left content
   else match e with Right content then
     Right (f content)
@@ -57,6 +55,32 @@ let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. lam e.
 
 utest eitherMapRight (addi 2) (Right 40) with Right 42
 utest eitherMapRight (addi 2) (Left "foo") with Left "foo"
+
+
+let eitherBindLeft: Either a b -> (a -> Either c b) -> Either c b =
+  lam e. lam bf.
+  match e with Left content then
+    bf content
+  else match e with Right content then
+    Right content
+  else never
+
+utest eitherBindLeft (Left "a") (lam s. Left (head s)) with Left 'a'
+utest eitherBindLeft (Left "a") (lam _. Right 42) with Right 42
+utest eitherBindLeft (Right 42) (lam s. Left (head s)) with Right 42
+
+
+let eitherBindRight: Either a b -> (b -> Either a c) -> Either a c =
+  lam e. lam bf.
+  match e with Left content then
+    Left content
+  else match e with Right content then
+    bf content
+  else never
+
+utest eitherBindRight (Left "a") (lam i. Right [int2char i]) with Left "a"
+utest eitherBindRight (Right 10) (lam i. Right [int2char i]) with Right "\n"
+utest eitherBindRight (Right 11) (lam _. Left "c") with Left "c"
 
 
 let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
