@@ -23,6 +23,42 @@ utest eitherEither (eqi 1) (eqf 0.5) (Left 2) with false
 utest eitherEither (eqi 1) (eqf 0.5) (Right 0.5) with true
 
 
+let eitherBiMap: (a -> c) -> (b -> d) -> Either a b -> Either c d =
+  lam lf. lam rf. lam e.
+  match e with Left content then
+    Left (lf content)
+  else match e with Right content then
+    Right (rf content)
+  else never
+
+utest eitherBiMap (addi 1) (cons 'a') (Left 2) with Left 3
+utest eitherBiMap (addi 1) (cons 'a') (Right "choo") with Right "achoo"
+
+
+let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. lam e.
+  match e with Left content then
+    Left (f content)
+  else match e with Right content then
+    -- just returning e here is most likely not type safe
+    Right content
+  else never
+
+utest eitherMapLeft (cons 'a') (Right 5) with Right 5
+utest eitherMapLeft (cons 'a') (Left "choo") with Left "achoo"
+
+
+let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. lam e.
+  match e with Left content then
+    -- just returning e here is most likely not type safe
+    Left content
+  else match e with Right content then
+    Right (f content)
+  else never
+
+utest eitherMapRight (addi 2) (Right 40) with Right 42
+utest eitherMapRight (addi 2) (Left "foo") with Left "foo"
+
+
 let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
   foldl (lam acc. lam e.
     match e with Left content then
