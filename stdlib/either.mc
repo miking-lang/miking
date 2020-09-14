@@ -11,6 +11,23 @@ con Left: a -> Either a b
 con Right: b -> Either a b
 
 
+let eitherEq: (a -> c -> Bool) -> (b -> d -> Bool) -> Either a b -> Either c d -> Bool =
+  lam eql. lam eqr. lam e1. lam e2.
+  match (e1,e2) with (Left c1, Left c2) then
+    eql c1 c2
+  else match (e1,e2) with (Right c1, Right c2) then
+    eqr c1 c2
+  else
+    false
+
+utest eitherEq eqi eqi (Left 100) (Left 100) with true
+utest eitherEq eqi eqi (Left 100) (Left 33) with false
+utest eitherEq eqi eqi (Left 100) (Right 100) with false
+utest eitherEq eqi eqi (Right 4321) (Right 4321) with true
+utest eitherEq eqi eqi (Right 4321) (Right 1) with false
+utest eitherEq eqi eqi (Right 4321) (Left 4321) with false
+
+
 let eitherEither: (a -> c) -> (b -> c) -> Either a b -> c =
   lam lf. lam rf. lam e.
   match e with Left content then
@@ -35,23 +52,13 @@ utest eitherBiMap (addi 1) (cons 'a') (Left 2) with Left 3
 utest eitherBiMap (addi 1) (cons 'a') (Right "choo") with Right "achoo"
 
 
-let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. lam e.
-  match e with Left content then
-    Left (f content)
-  else match e with Right content then
-    Right content
-  else never
+let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. eitherBiMap f (lam x. x)
 
 utest eitherMapLeft (cons 'a') (Right 5) with Right 5
 utest eitherMapLeft (cons 'a') (Left "choo") with Left "achoo"
 
 
-let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. lam e.
-  match e with Left content then
-    Left content
-  else match e with Right content then
-    Right (f content)
-  else never
+let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. eitherBiMap (lam x. x) f
 
 utest eitherMapRight (addi 2) (Right 40) with Right 42
 utest eitherMapRight (addi 2) (Left "foo") with Left "foo"
