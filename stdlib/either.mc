@@ -10,7 +10,17 @@ type Either a b
 con Left: a -> Either a b
 con Right: b -> Either a b
 
-
+--  *-
+--  * .brief Checks equality between two Either values.
+--  *
+--  * .lam[eql] Function that checks left equality
+--  * .lam[eqr] Function that checks right equality
+--  * .lam[e1] Either value to be compared
+--  * .lam[e2] The other Either value to be compared
+--  *
+--  * .return Whether e1 and e2 are equal based on the provided equaliy
+--  *         functions.
+-- -*
 let eitherEq: (a -> c -> Bool) -> (b -> d -> Bool) -> Either a b -> Either c d -> Bool =
   lam eql. lam eqr. lam e1. lam e2.
   match (e1,e2) with (Left c1, Left c2) then
@@ -27,7 +37,15 @@ utest eitherEq eqi eqi (Right 4321) (Right 4321) with true
 utest eitherEq eqi eqi (Right 4321) (Right 1) with false
 utest eitherEq eqi eqi (Right 4321) (Left 4321) with false
 
-
+--  *-
+--  * .brief Case analysis of an Either type to extract its value
+--  *
+--  * .lam[lf] How a Left value should be extracted
+--  * .lam[rf] How a Right value should be extracted
+--  * .lam[e] The Either value to have have its value extracted
+--  *
+--  * .return The value that was extracted from the case analysis
+-- -*
 let eitherEither: (a -> c) -> (b -> c) -> Either a b -> c =
   lam lf. lam rf. lam e.
   match e with Left content then
