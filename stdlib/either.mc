@@ -3,6 +3,7 @@
 --
 -- The library defines the Either type and its two constructors: Left & Right.
 
+include "option.mc"
 include "seq.mc"
 
 type Either a b
@@ -86,3 +87,23 @@ let eitherFromRight: b -> Either a b -> b = lam v. lam e.
 
 utest eitherFromRight 0 (Left "foo") with 0
 utest eitherFromRight 0 (Right 42) with 42
+
+
+let eitherGetLeft: Either a b -> Option a = lam e.
+  match e with Left content then
+    Some content
+  else
+    None ()
+
+utest eitherGetLeft (Left "foo") with Some "foo"
+utest eitherGetLeft (Right 42) with None ()
+
+
+let eitherGetRight: Either a b -> Option b = lam e.
+  match e with Right content then
+    Some content
+  else
+    None ()
+
+utest eitherGetRight (Left "foo") with None ()
+utest eitherGetRight (Right 42) with Some 42
