@@ -3,50 +3,57 @@
 --
 -- File miking.mi is the main file of the Miking tool chain.
 
+include "argparser.mc"
 include "seq.mc"
 include "string.mc"
 include "compile.mc"
 
 mexpr
 
--- Menu
-let menu = strJoin "\n" [
-  "Usage: mi [compile] <files>",
-  "",
-  "Options:",
-  "  --debug-parse    Enables output of parsing"] in
-
 -- Option structure
-let options = {
-  debugParse = false
+let defaults = {
+  help = false,
+  debugParse = false,
+  mode = "",
+  mcorefiles = []
 } in
 
--- Option map, maps strings to structure updates
-let optionsMap = [
-("--debug-parse", lam o. {o with debugParse = true})
+let config = [
+  ArgParserFlag ('h', "help", "Prints a help message and exits",
+                 lam o. {o with help = true}),
+  ArgParserLongFlag ("debug-parse", "Enables output of parsing",
+                     lam o. {o with debugParse = true}),
+  ArgParserPositional [
+    ArgParserName "MODE",
+    ArgParserPosition 0,
+    ArgParserRequired (),
+    ArgParserDescription "Set mode of the Miking compiler.",
+    -- Allowed modes:
+    ArgParserValue ("compile", "Compiles the provided MCore files."),
+    ArgParserValue ("eval", "Evaluates the provided MCore files."),
+    ArgParserApplyVal (lam m. lam o. {o with mode = m})
+  ],
+  ArgParserPositional [
+    ArgParserName "files",
+    ArgParserDescription "MCore input files.",
+    ArgParserApplyVal (lam f. lam o. {o with mcorefiles = snoc o.mcorefiles f})
+  ]
 ] in
 
--- Commands map, maps command strings to functions. The functions
--- always take an option structure as input.
-let commandsMap = [
-("compile", compile)
-] in
+let apret = argparserParse config defaults argv in
 
--- Simple handling of options before we have an argument parsing library.
-let parseOptions = lam xs.
-  (foldl (lam acc. lam s1.
-    match acc with (options,lst) then
-      match findAssoc (lam s2. eqstr s1 s2) optionsMap with Some f
-      then (f options, lst)
-      else match s1 with "--" ++ _
-           then  [printLn (concat "Unknown option " s1), exit 1]
-           else (options, cons s1 xs)
-    else never
-  ) (options,[]) (reverse xs)).0 in
+let args =
+  match apret with Left err then
+    let _ = print (strJoin "\n" ["", errs, ""]) in
+    error "Error parsing input arguments."
+  else match apret with Right values then
+    values
+  else never
+in
 
+if args.help then
+  let _ = print (argparserUsage config 80 argv) in
+  exit 0
+else --continue
 
--- Main: find and run the correct command. See commandsMap above.
-if lti (length argv) 2 then print menu else
-  match findAssoc (lam s. eqstr (get argv 1) s) commandsMap with Some cmd
-  then cmd (parseOptions argv)
-  else [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
+()
