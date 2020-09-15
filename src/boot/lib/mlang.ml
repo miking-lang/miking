@@ -304,7 +304,9 @@ let rec desugar_tm nss env =
   | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
   | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
-  | TmUtest(fi, a, b, using, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, using, desugar_tm nss env body)
+  | TmUtest(fi, a, b, using, body) ->
+    let using_desugared = Option.map (desugar_tm nss env) using in
+    TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, using_desugared, desugar_tm nss env body)
   | TmNever(fi) -> TmNever(fi)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ ) as tm -> tm
