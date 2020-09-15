@@ -3,7 +3,7 @@ open Ast
 open Msg
 
 let externals =
-  List.map (fun x -> (fst x,  TmConst(NoInfo,CExt (snd x))))
+  List.map (fun x -> (fst x,  TmConst(NoInfo,CSd (snd x))))
   [
     ("eapp", EApp None)
   ]
@@ -20,7 +20,7 @@ let fail_extapp f v fi = raise_error fi
 
 let delta eval env _ c v =
   let fail_extapp = fail_extapp c v in
-  let mk_ext fi e = TmConst (fi, CExt e) in
+  let mk_ext fi e = TmConst (fi, CSd e) in
   let mk_app fi f v = TmApp (fi, f, v) in
 
   match c, v with

@@ -6,7 +6,7 @@ open Bigarray
 open Ustring.Op
 
 let externals =
-  List.map (fun x -> (fst x,  TmConst (NoInfo,CExt (snd x))))
+  List.map (fun x -> (fst x,  TmConst (NoInfo,CSd (snd x))))
     [
       ("eapp", EApp None);
       (* Elementary functions *)
@@ -107,7 +107,7 @@ let delta eval env fi c v =
   let fail_extapp = fail_extapp c v in
   let mk_float fi f = TmConst (fi, CFloat f) in
   let mk_int fi n = TmConst (fi, CInt n) in
-  let mk_ext fi e = TmConst (fi, CExt e) in
+  let mk_ext fi e = TmConst (fi, CSd e) in
   let mk_unit fi = TmRecord(fi,Record.empty) in
   let mk_app fi f v = TmApp (fi, f, v) in
   let mk_sa_array fi a = mk_ext fi (ESArray a) in
@@ -163,14 +163,14 @@ let delta eval env fi c v =
      mk_ext fi (ESArray (RealArray.make n v))
   | ESArrayMake _,_ -> fail_extapp fi
 
-  | ESArrayGet None, TmConst (_, CExt (ESArray a)) ->
+  | ESArrayGet None, TmConst (_, CSd (ESArray a)) ->
      mk_ext fi (ESArrayGet (Some a))
   | ESArrayGet (Some a), TmConst (_, CInt n) ->
      mk_float fi (try Array1.get a n with _ ->
                     raise_error fi (Printf.sprintf "Index: %d out of bounds" n))
   | ESArrayGet _,_ -> fail_extapp fi
 
-  | ESArraySet (None, None), TmConst (_, CExt (ESArray a)) ->
+  | ESArraySet (None, None), TmConst (_, CSd (ESArray a)) ->
      mk_ext fi (ESArraySet (Some a, None))
   | ESArraySet (Some a, None), TmConst (_, CInt n) ->
      mk_ext fi (ESArraySet (Some a, Some n))
@@ -180,7 +180,7 @@ let delta eval env fi c v =
      mk_unit fi
   | ESArraySet _,_ -> fail_extapp fi
 
-  | ESArrayLength, TmConst (_, CExt (ESArray a)) ->
+  | ESArrayLength, TmConst (_, CSd (ESArray a)) ->
      mk_int fi (RealArray.length a)
   | ESArrayLength,_ -> fail_extapp fi
 
@@ -192,7 +192,7 @@ let delta eval env fi c v =
      mk_ext fi (ESMatrixDense (Matrix.Dense.create i j))
   | ESMatrixDenseCreate _,_ -> fail_extapp fi
 
-  | ESMatrixDenseGet (None, None), TmConst (_, CExt (ESMatrixDense m)) ->
+  | ESMatrixDenseGet (None, None), TmConst (_, CSd (ESMatrixDense m)) ->
      mk_ext fi (ESMatrixDenseGet (Some m, None))
   | ESMatrixDenseGet (Some m, None), TmConst (_, CInt i) ->
      mk_ext fi (ESMatrixDenseGet (Some m, Some i))
@@ -204,7 +204,7 @@ let delta eval env fi c v =
        raise_error fi (Printf.sprintf "Index: (%d,%d) out of bounds" i j)
   | ESMatrixDenseGet _,_ -> fail_extapp fi
 
-  | ESMatrixDenseSet (None, None, None), TmConst (_, CExt (ESMatrixDense m)) ->
+  | ESMatrixDenseSet (None, None, None), TmConst (_, CSd (ESMatrixDense m)) ->
      mk_ext fi (ESMatrixDenseSet (Some m, None, None))
   | ESMatrixDenseSet (Some m, None, None), TmConst (_, CInt i) ->
      mk_ext fi (ESMatrixDenseSet (Some m, Some i, None))
@@ -238,7 +238,7 @@ let delta eval env fi c v =
                                Some t0,
                                None))
   | EIdaInitDense (Some tol, Some resf, Some (n, rootf), Some t0, None),
-    TmConst (_, CExt (ESArray y0)) ->
+    TmConst (_, CSd (ESArray y0)) ->
      mk_ext fi (EIdaInitDense (Some tol,
                                Some resf,
                                Some (n, rootf),
@@ -246,7 +246,7 @@ let delta eval env fi c v =
                                Some y0))
   | EIdaInitDense (Some (rtol, atol), Some resf, Some (n, rootf), Some t0,
                    Some y0),
-    TmConst (_, CExt (ESArray y0')) ->
+    TmConst (_, CSd (ESArray y0')) ->
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
@@ -306,7 +306,7 @@ let delta eval env fi c v =
                                   None))
   | EIdaInitDenseJac (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0,
                       None),
-    TmConst (fi, CExt (ESArray y0)) ->
+    TmConst (fi, CSd (ESArray y0)) ->
      mk_ext fi (EIdaInitDenseJac (Some tol,
                                   Some jacf,
                                   Some resf,
@@ -315,7 +315,7 @@ let delta eval env fi c v =
                                   Some y0))
   | EIdaInitDenseJac (Some (rtol, atol), Some jacf, Some resf, Some (n, rootf),
                       Some t0, Some y0),
-    TmConst (_, CExt (ESArray y0')) ->
+    TmConst (_, CSd (ESArray y0')) ->
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
@@ -327,13 +327,13 @@ let delta eval env fi c v =
      mk_ext fi (EIdaSession s)
   | EIdaInitDenseJac _,_ -> fail_extapp fi
 
-  | EIdaSolveNormal (None, None, None), TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaSolveNormal (None, None, None), TmConst (_, CSd (EIdaSession s)) ->
      mk_ext fi (EIdaSolveNormal (Some s, None, None))
   | EIdaSolveNormal (Some s, None, None), TmConst (_, CFloat t) ->
      mk_ext fi (EIdaSolveNormal (Some s, Some t, None))
-  | EIdaSolveNormal (Some s, Some t, None), TmConst (_, CExt (ESArray y)) ->
+  | EIdaSolveNormal (Some s, Some t, None), TmConst (_, CSd (ESArray y)) ->
      mk_ext fi (EIdaSolveNormal (Some s, Some t, Some (Nvector_serial.wrap y)))
-  | EIdaSolveNormal (Some s, Some t, Some v), TmConst (_, CExt (ESArray y')) ->
+  | EIdaSolveNormal (Some s, Some t, Some v), TmConst (_, CSd (ESArray y')) ->
      let ret2int = function
        | Ida.Success -> 0
        | Ida.RootsFound -> 2
@@ -344,9 +344,9 @@ let delta eval env fi c v =
      mk_tuple fi [mk_float NoInfo t'; mk_int NoInfo (ret2int r)]
   | EIdaSolveNormal _,_ -> fail_extapp fi
 
-  | EIdaCalcICYY (None, None), TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaCalcICYY (None, None), TmConst (_, CSd (EIdaSession s)) ->
      mk_ext fi (EIdaCalcICYY (Some s, None))
-  | EIdaCalcICYY (Some s, None), TmConst (_, CExt (ESArray y)) ->
+  | EIdaCalcICYY (Some s, None), TmConst (_, CSd (ESArray y)) ->
      mk_ext fi (EIdaCalcICYY (Some s, Some (Nvector_serial.wrap y)))
   | EIdaCalcICYY (Some s, Some v), TmConst (_, CFloat t) ->
      Ida.calc_ic_y s ~y:v t;
@@ -354,17 +354,17 @@ let delta eval env fi c v =
   | EIdaCalcICYY _,_ -> fail_extapp fi
 
   | EIdaCalcICYYYP (None, None, None, None),
-    TmConst (_, CExt (EIdaSession s)) ->
+    TmConst (_, CSd (EIdaSession s)) ->
       mk_ext fi (EIdaCalcICYYYP (Some s, None, None, None))
-  | EIdaCalcICYYYP (Some s, None, None, None), TmConst (_, CExt (ESArray y)) ->
+  | EIdaCalcICYYYP (Some s, None, None, None), TmConst (_, CSd (ESArray y)) ->
       mk_ext fi (EIdaCalcICYYYP (Some s, Some (Nvector_serial.wrap y),
                                None, None))
   | EIdaCalcICYYYP (Some s, Some y, None, None),
-    TmConst (_, CExt (ESArray y')) ->
+    TmConst (_, CSd (ESArray y')) ->
       mk_ext fi (EIdaCalcICYYYP (Some s, Some y, Some (Nvector_serial.wrap y'),
                                None))
   | EIdaCalcICYYYP (Some s, Some y, Some y', None),
-    TmConst (_, CExt (ESArray v)) ->
+    TmConst (_, CSd (ESArray v)) ->
       mk_ext fi (EIdaCalcICYYYP (Some s, Some y, Some y',
                                Some (Nvector_serial.wrap v)))
   | EIdaCalcICYYYP (Some s, Some y, Some y', Some v),
@@ -373,20 +373,20 @@ let delta eval env fi c v =
       mk_unit fi
   | EIdaCalcICYYYP _,_ -> fail_extapp fi
 
-  | EIdaReinit (None, None, None), TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaReinit (None, None, None), TmConst (_, CSd (EIdaSession s)) ->
      mk_ext fi (EIdaReinit (Some s, None, None))
   | EIdaReinit (Some s, None, None), TmConst (_, CFloat t) ->
      mk_ext fi (EIdaReinit (Some s, Some t, None))
-  | EIdaReinit (Some s, Some t, None), TmConst (_, CExt (ESArray y)) ->
+  | EIdaReinit (Some s, Some t, None), TmConst (_, CSd (ESArray y)) ->
      mk_ext fi (EIdaReinit (Some s, Some t, Some (Nvector_serial.wrap y)))
-  | EIdaReinit (Some s, Some t, Some v), TmConst (_, CExt (ESArray y')) ->
+  | EIdaReinit (Some s, Some t, Some v), TmConst (_, CSd (ESArray y')) ->
      Ida.reinit s t v (Nvector_serial.wrap y');
      mk_unit fi
   | EIdaReinit _,_ -> fail_extapp fi
 
-  | EIdaGetDky (None, None, None), TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaGetDky (None, None, None), TmConst (_, CSd (EIdaSession s)) ->
      mk_ext fi (EIdaGetDky (Some s, None, None))
-  | EIdaGetDky (Some s, None, None), TmConst (_, CExt (ESArray y)) ->
+  | EIdaGetDky (Some s, None, None), TmConst (_, CSd (ESArray y)) ->
      mk_ext fi (EIdaGetDky (Some s, Some (Nvector_serial.wrap y), None))
   | EIdaGetDky (Some s, Some y, None), TmConst (_, CFloat t) ->
      mk_ext fi (EIdaGetDky (Some s, Some y, Some t))
@@ -395,10 +395,10 @@ let delta eval env fi c v =
      mk_unit fi
   | EIdaGetDky _,_ -> fail_extapp fi
 
-  | EIdaGetCurrentTime, TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaGetCurrentTime, TmConst (_, CSd (EIdaSession s)) ->
      mk_float fi (Ida.get_current_time s)
   | EIdaGetCurrentTime, _ -> fail_extapp fi
 
-  | EIdaGetLastStep, TmConst (_, CExt (EIdaSession s)) ->
+  | EIdaGetLastStep, TmConst (_, CSd (EIdaSession s)) ->
      mk_float fi (Ida.get_last_step s)
   | EIdaGetLastStep, _ -> fail_extapp fi

@@ -159,7 +159,7 @@ let arity = function
   (* Python intrinsics *)
   | CPy v -> Pyffi.arity v
   (* External functions TODO: Should not be part of core language *)
-  | CExt v            -> Ext.arity v
+  | CSd v            -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU(None)    -> 2
   | CrandIntU(Some(_)) -> 1
@@ -480,7 +480,7 @@ let delta eval env fi c v  =
 
     | CPy v, t -> Pyffi.delta eval env fi v t
 
-    | CExt v, t -> Ext.delta eval env fi v t
+    | CSd v, t -> Ext.delta eval env fi v t
 
 
 (* Debug function used in the eval function *)
