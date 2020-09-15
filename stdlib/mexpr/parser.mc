@@ -59,10 +59,10 @@ lang MultilineCommentParser = WSACParser
     in remove (advanceCol p 2) xs 1
 end
 
--- Commbined WSAC parser for MCore
-lang MCoreWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
+-- Commbined WSAC parser for MExpr
+lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 
-let _ = use MCoreWSACParser in
+let _ = use MExprWSACParser in
   utest eatWSAC (initPos "") " --foo \n  bar " with {str = "bar ", pos = posVal "" 2 2} in
   utest eatWSAC (initPos "") " *- foo -* bar" with {str = "bar", pos = posVal "" 1 11} in
   utest eatWSAC (initPos "") " *- foo\n x \n -* \nbar " with {str = "bar ", pos = posVal "" 4 0} in
@@ -78,6 +78,18 @@ lang ExprParser = WSACParser
   sem parseExprImp (p: Pos) =
   | _ -> posErrorExit p "Parse error. Unknown character sequence."
 end
+
+-- Parsing of boolean literals
+lang BoolParser = ExprParser + ConstAst + BoolAst
+  sem parseExprImp (p: Pos) =
+  | "true" ++ xs ->
+      let p2 = advanceCol p 4 in
+      {val = TmConst {val = CBool {val = true}, fi = makeInfo p p2}, pos = p2, str = xs}
+  | "false" ++ xs ->
+      let p2 = advanceCol p 5 in
+      {val = TmConst {val = CBool {val = false}, fi = makeInfo p p2}, pos = p2, str = xs}
+end
+
 
 -- Parsing of an unsigned integer
 lang UIntParser = ExprParser + ConstAst + IntAst
@@ -126,15 +138,23 @@ lang IfParser = KeywordParser + ExprParser + MatchAst + BoolPat
  end
 
 
-lang MCoreParser = UIntParser + IfParser + MCoreWSACParser
+
+lang MExprParser = BoolParser + UIntParser + IfParser + MExprWSACParser
 
 mexpr
 
-use MCoreParser in
+use MExprParser in
+-- Unsigned integer
 utest parseExpr (initPos "file") "  123foo" with
       {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5}, pos = posVal "file" 1 5, str = "foo"} in
+-- If expression
 utest (parseExpr (initPos "") "  if 1 then 22 else 3").pos with posVal "" 1 21 in
-
+-- Boolean literal 'true'
+utest parseExpr (initPos "f") " true " with
+      {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
+-- Boolean literal 'false'
+utest parseExpr (initPos "f") " true " with
+      {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
 
 
 ()
