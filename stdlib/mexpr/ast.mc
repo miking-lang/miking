@@ -126,7 +126,8 @@ lang MatchAst
   | TmMatch {target : Expr,
              pat    : Pat,
              thn    : Expr,
-             els    : Expr}
+             els    : Expr,
+             fi     : Info}
 
   syn Pat =
 
@@ -294,7 +295,7 @@ end
 
 lang BoolPat = BoolAst
   syn Pat =
-  | PBool {val : Bool}
+  | PBool {val : Bool, fi:Info}
 end
 
 lang AndPat

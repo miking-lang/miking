@@ -2,7 +2,8 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
-
+include "string.mc"
+include "seq.mc"
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 
@@ -75,10 +76,11 @@ lang ExprParser = WSACParser
     let r = eatWSAC p s in parseExprImp r.pos r.str
 
   sem parseExprImp (p: Pos) =
+  | _ -> posErrorExit p "Parse error. Unknown character sequence."
 end
 
 -- Parsing of an unsigned integer
-lang UIntParser = ConstAst + IntAst + ExprParser
+lang UIntParser = ExprParser + ConstAst + IntAst
   sem parseExprImp (p : Pos) =
   | ("0" ++ s) & xs | ("1" ++ s) & xs | ("2" ++ s) & xs | ("3" ++ s) & xs | ("4" ++ s) & xs |
     ("5" ++ s) & xs | ("6" ++ s) & xs | ("7" ++ s) & xs | ("8" ++ s) & xs | ("9" ++ s) & xs ->
@@ -88,14 +90,51 @@ lang UIntParser = ConstAst + IntAst + ExprParser
         let c = char2int x in
         if and (geqi c 48) (leqi c 57)
         then work (advanceCol p2 1) xs (snoc num x)
-        else TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}
-      else TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}
+        else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
+      else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
     in work (advanceCol p 1) (tail xs) ([head xs])
     -- BUG: replace "tail xs" with "s". Should work, but does not. Probably an error in the boot pattern matching code.
 end
 
-lang _MCoreUIntParser = UIntParser + MCoreWSACParser
-let _ = use _MCoreUIntParser in
-  utest parseExpr (initPos "file") "  123foo" with
-        TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5} in
-  ()
+
+-- Fragment for simple parsing of keyword
+lang KeywordParser = WSACParser
+  sem matchKeyword (keyword: String) (p: Pos) =
+  | s ->
+     let r = eatWSAC p s in
+     if isPrefix eqc keyword r.str then
+       let l = length keyword in
+       {pos = advanceCol r.pos l, str = slice r.str l (subi (length r.str) l)}
+     else
+       posErrorExit r.pos (join ["Unknown character. Expected keyword '", keyword, "'."])
+end
+
+
+-- Parsing if expressions
+lang IfParser = KeywordParser + ExprParser + MatchAst + BoolPat
+  sem parseExprImp (p: Pos) =
+  | "if" ++ xs ->
+     let e1 = parseExpr (advanceCol p 2) xs in
+     let r1 = matchKeyword "then" e1.pos e1.str  in
+     let e2 = parseExpr r1.pos r1.str in
+     let r2 = matchKeyword "else" e2.pos e2.str  in
+     let e3 = parseExpr r2.pos r2.str in
+     {val = TmMatch {target = e1.val, pat = PBool {val = true, fi = NoInfo ()},
+                     thn = e2.val, els = e3.val, fi = makeInfo p e3.pos},
+      pos = e3.pos,
+      str = e3.str}
+ end
+
+
+lang MCoreParser = UIntParser + IfParser + MCoreWSACParser
+
+mexpr
+
+use MCoreParser in
+utest parseExpr (initPos "file") "  123foo" with
+      {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5}, pos = posVal "file" 1 5, str = "foo"} in
+utest (parseExpr (initPos "") "  if 1 then 22 else 3").pos with posVal "" 1 21 in
+
+
+
+()
