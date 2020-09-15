@@ -136,9 +136,19 @@ lang IfParser = KeywordParser + ExprParser + MatchAst + BoolPat
       str = e3.str}
  end
 
+-- Integer arithmetic parser (intrinsics)
+lang ArithIntParser = ExprParser + ArithIntAst
+  sem parseExprImp (p: Pos) =
+  | "addi" ++ xs -> let p2 = advanceCol p 4 in
+      {val = TmConst {val = CAddi {}, fi = makeInfo p p2}, pos = p2, str = xs}
+  | "subi" ++ xs -> let p2 = advanceCol p 4 in
+      {val = TmConst {val = CSubi {}, fi = makeInfo p p2}, pos = p2, str = xs}
+  | "muli" ++ xs -> let p2 = advanceCol p 4 in
+      {val = TmConst {val = CMuli {}, fi = makeInfo p p2}, pos = p2, str = xs}
+end
 
 
-lang MExprParser = BoolParser + UIntParser + IfParser + MExprWSACParser
+lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser + MExprWSACParser
 
 mexpr
 
@@ -154,6 +164,12 @@ utest parseExpr (initPos "f") " true " with
 -- Boolean literal 'false'
 utest parseExpr (initPos "f") " true " with
       {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
-
+-- Instrinsics integer arithmetic
+utest parseExpr (initPos "") "  addi " with
+      {val = TmConst {val = CAddi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
+utest parseExpr (initPos "") "  subi " with
+      {val = TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
+utest parseExpr (initPos "") "  muli " with
+      {val = TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
 
 ()
