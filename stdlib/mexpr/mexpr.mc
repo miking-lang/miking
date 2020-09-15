@@ -47,6 +47,7 @@ utest evalStr "if true then 10 else 20" with "10" in
 utest evalStr "if false then 10 else 20" with "20" in
 utest evalStr "if false then true else if true then 1 else 2" with "1" in
 utest evalStr "if true then if false then 1 else 2 else 3" with "2" in
+utest evalStr "if true then (if false then 1 else 2) else 3" with "2" in
 
 
 ()

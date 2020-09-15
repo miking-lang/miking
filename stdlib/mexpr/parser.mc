@@ -122,7 +122,7 @@ end
 
 
 -- Parsing if expressions
-lang IfParser = KeywordParser + ExprParser + MatchAst + BoolPat
+lang IfParser = ExprParser + KeywordParser +  MatchAst + BoolPat
   sem parseExprImp (p: Pos) =
   | "if" ++ xs ->
      let e1 = parseExpr (advanceCol p 2) xs in
@@ -147,8 +147,20 @@ lang ArithIntParser = ExprParser + ArithIntAst
       {val = TmConst {val = CMuli {}, fi = makeInfo p p2}, pos = p2, str = xs}
 end
 
+-- Parse parentheses
+lang ParenthesesParser = ExprParser + KeywordParser
+  sem parseExprImp (p: Pos) =
+  | "(" ++ xs ->
+    let e = parseExpr (advanceCol p 1) xs in
+    let r = matchKeyword ")" e.pos e.str in
+    {val = e.val, pos = r.pos, str = r.str}
+end
 
-lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser + MExprWSACParser
+
+
+lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser +
+                   ParenthesesParser + MExprWSACParser
+
 
 mexpr
 
@@ -171,5 +183,8 @@ utest parseExpr (initPos "") "  subi " with
       {val = TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
 utest parseExpr (initPos "") "  muli " with
       {val = TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
+-- Parentheses
+utest parseExpr (initPos "") " ( muli) " with
+      {val = TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7}, pos = posVal "" 1 8, str = " "} in
 
 ()
