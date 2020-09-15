@@ -65,12 +65,21 @@ let _ = use MCoreWSACParser in
   utest eatWSAC (initPos "") " --foo \n  bar " with {str = "bar ", pos = posVal "" 2 2} in
   utest eatWSAC (initPos "") " *- foo -* bar" with {str = "bar", pos = posVal "" 1 11} in
   utest eatWSAC (initPos "") " *- foo\n x \n -* \nbar " with {str = "bar ", pos = posVal "" 4 0} in
-  utest eatWSAC (initPos "") " *- x -- y *- foo \n -* z - !" with {str = "!", pos = posVal "" 2 9} in
+  utest eatWSAC (initPos "") " *- x -- y *- foo \n -* -* !" with {str = "!", pos = posVal "" 2 7} in
   ()
 
---
-lang UIntParser = ConstAst + IntAst
+-- Top of the expression parser. Connects WSAC with parsing of other non terminals
+lang ExprParser = WSACParser
   sem parseExpr (p : Pos) =
+  | s ->
+    let r = eatWSAC p s in parseExprImp r.pos r.str
+
+  sem parseExprImp (p: Pos) =
+end
+
+-- Parsing of an unsigned integer
+lang UIntParser = ConstAst + IntAst + ExprParser
+  sem parseExprImp (p : Pos) =
   | ("0" ++ s) & xs | ("1" ++ s) & xs | ("2" ++ s) & xs | ("3" ++ s) & xs | ("4" ++ s) & xs |
     ("5" ++ s) & xs | ("6" ++ s) & xs | ("7" ++ s) & xs | ("8" ++ s) & xs | ("9" ++ s) & xs ->
     recursive
@@ -85,8 +94,8 @@ lang UIntParser = ConstAst + IntAst
     -- BUG: replace "tail xs" with "s". Should work, but does not. Probably an error in the boot pattern matching code.
 end
 
-
-let _ = use UIntParser in
-  utest parseExpr (initPos "file") "123foo" with
-        TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 0 1 3} in
+lang _MCoreUIntParser = UIntParser + MCoreWSACParser
+let _ = use _MCoreUIntParser in
+  utest parseExpr (initPos "file") "  123foo" with
+        TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5} in
   ()
