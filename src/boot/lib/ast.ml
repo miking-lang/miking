@@ -233,7 +233,7 @@ let rec map_tm f = function
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
   | TmUtest(fi,t1,t2,tusing,tnext) ->
-    let tusing_mapped = Option.map (fun t -> map_tm f t) tusing in
+    let tusing_mapped = Option.map map_tm tusing in
     f (TmUtest(fi,map_tm f t1,map_tm f t2,tusing_mapped,map_tm f tnext))
   | TmNever(_) as t -> f t
 
