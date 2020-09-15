@@ -1,7 +1,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
--- The library defines the Either type and its two constructors: Left & Right.
+-- This library defines the Either type and its two constructors: Left & Right.
 
 include "option.mc"
 include "seq.mc"
