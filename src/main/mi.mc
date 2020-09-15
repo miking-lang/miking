@@ -15,7 +15,7 @@ let defaults = {
   help = false,
   debugParse = false,
   mode = "",
-  mcorefiles = []
+  files = []
 } in
 
 let config = [
@@ -33,12 +33,14 @@ let config = [
     ArgParserValue ("eval", "Evaluates the provided MCore files."),
     ArgParserApplyVal (lam m. lam o. {o with mode = m})
   ],
-  ArgParserPositional [
-    ArgParserName "files",
-    ArgParserDescription "MCore input files.",
-    ArgParserApplyVal (lam f. lam o. {o with mcorefiles = snoc o.mcorefiles f})
-  ]
+  ArgParserMany ("files", "MCore input files",
+                 lam f. lam o. {o with files = snoc o.files f})
 ] in
+
+-- Compile time check that arguments settings are well formed. Right side will
+-- be `Some String` where the string is a LF separated string with the error
+-- messages.
+utest argparserCheckError config with None () in
 
 let apret = argparserParse config defaults argv in
 
