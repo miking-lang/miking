@@ -227,7 +227,12 @@ let seq_ = use MExprAst in
 
 let record_ = use MExprAst in
   lam bindings.
-  TmRecord {bindings = bindings}
+  TmRecord {
+    bindings =
+      foldl
+        (lam acc. lam b. assocInsert {eq=eqstr} b.0 b.1 acc)
+        assocEmpty bindings
+    }
 
 let tuple_ = use MExprAst in
   lam tms.
