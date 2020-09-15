@@ -1,4 +1,4 @@
-open Extast
+open Sdast
 open Ast
 open Msg
 open Sundials
@@ -98,7 +98,7 @@ let arity = function
 
 let fail_extapp f v fi = raise_error fi
                            ("Incorrect application. External function: "
-                            ^ Ustring.to_utf8 (Extpprint.pprint f)
+                            ^ Ustring.to_utf8 (Sdpprint.pprint f)
                             ^ " value: "
                             ^ Ustring.to_utf8
                               (Pprint.ustring_of_tm v))
