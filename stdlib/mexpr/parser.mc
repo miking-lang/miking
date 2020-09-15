@@ -42,7 +42,6 @@ lang LineCommentParser = WSACParser
     in remove p xs
 end
 
--- TODO: Add error code for open comment
 -- Eat multiline comment of the form *-  -*
 lang MultilineCommentParser = WSACParser
   sem eatWSAC (p : Pos) =
