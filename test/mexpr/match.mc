@@ -159,6 +159,8 @@ utest match (true, false) with (true, a) & !(_, true) then a else false with fal
 utest match (1, 2) with (a, _) & b then (a, b) else (0, (0, 0)) with (1, (1, 2)) in
 utest match Some true with a & !(None ()) then a else Some false with Some true in
 utest match None () with a & !(None ()) then a else Some false with Some false in
+utest match "abc" with ['a'] ++ s | ['b'] ++ s then s else "" with "bc" in
+utest match "bc" with ['a'] ++ s | ['b'] ++ s then s else "" with "c" in
 
 -- Matching with never terms
 let x = true in
