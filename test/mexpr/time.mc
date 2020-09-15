@@ -15,4 +15,4 @@ let t1 = wallTimeMs () in
 let _ = sleepMs 1 in
 let t2 = wallTimeMs () in
 
-utest gtf t2 t1 with true in ()
+utest t2 with t1 using gtf in ()

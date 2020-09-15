@@ -20,17 +20,18 @@ let randSeq = lam lower. lam upper. lam length.
   map (lam _. randIntU lower upper) (makeSeq length 0) in
 
 -- With high probability all possible elements are present in the random sequence
-utest setEqual eqi [2,3,4,5,6] (distinct eqi (randSeq 2 7 1000)) with true in
+utest [2,3,4,5,6] with distinct eqi (randSeq 2 7 1000) using setEqual eqi in
 
 -- The same seed should give the same sequence of numbers
 let _ = randSetSeed 42 in
 let randSeq1 = randSeq 123 89018 100 in
 let _ = randSetSeed 42 in
 let randSeq2 = randSeq 123 89018 100 in
-utest setEqual eqi randSeq1 randSeq2 with true in
+utest randSeq1 with randSeq2 using setEqual eqi in
 
 -- With high probability, subsequent sequence should be different
 let randSeq3 = randSeq 123 89018 100 in
-utest setEqual eqi randSeq1 randSeq3 with false in
+let neg = lam f. lam x. lam y. not (f x y) in
+utest randSeq1 with randSeq3 using neg (setEqual eqi) in
 
 ()
