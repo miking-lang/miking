@@ -495,14 +495,18 @@ let debug_eval env t =
   else ()
 
 (* Print out error message when a unit test fails *)
-let unittest_failed fi t1 t2=
+let unittest_failed fi t1 t2 tusing =
   uprint_endline
     (match fi with
     | Info(_,l1,_,_,_) ->
+      let using_str = (match tusing with
+        | Some t -> us"\n    Using: " ^. (ustring_of_tm t)
+        | None   -> us"") in
       us"\n ** Unit test FAILED on line " ^.
       us(string_of_int l1)
       ^.  us" **\n    LHS: " ^. (ustring_of_tm t1)
       ^.  us"\n    RHS: "    ^. (ustring_of_tm t2)
+      ^.  using_str
     | NoInfo -> us"Unit test FAILED ")
 
 
@@ -772,7 +776,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       if equal then
         (printf "."; utest_ok := !utest_ok + 1)
       else (
-        unittest_failed fi v1 v2;
+        unittest_failed fi v1 v2 tusing;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
     end;
