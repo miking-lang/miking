@@ -3,6 +3,7 @@
 include "string.mc"
 include "name.mc"
 include "assoc.mc"
+include "mexpr/info.mc"
 
 -----------
 -- TERMS --
@@ -94,7 +95,7 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const}
+  | TmConst {val : Const, fi: Info}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
