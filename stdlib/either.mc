@@ -242,7 +242,7 @@ utest eitherIsRight (Right (Left 1)) with true
 --  *
 --  * .return The Left case value or the default value.
 -- -*
-let eitherFromLeft: a -> Either a b -> a = lam v. lam e. eitherEither (lam x. x) (lam _. v)
+let eitherFromLeft: a -> Either a b -> a = lam v. eitherEither (lam x. x) (lam _. v)
 
 utest eitherFromLeft "a" (Right 5) with "a"
 utest eitherFromLeft "a" (Left "foo") with "foo"
@@ -256,7 +256,7 @@ utest eitherFromLeft "a" (Left "foo") with "foo"
 --  *
 --  * .return The Right case value or the default value.
 -- -*
-let eitherFromRight: b -> Either a b -> b = lam v. lam e. eitherEither (lam _. v) (lam x. x)
+let eitherFromRight: b -> Either a b -> b = lam v. eitherEither (lam _. v) (lam x. x)
 
 utest eitherFromRight 0 (Left "foo") with 0
 utest eitherFromRight 0 (Right 42) with 42
