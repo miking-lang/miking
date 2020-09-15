@@ -155,6 +155,7 @@ let delta eval env fi c v =
 
   | Eatan, TmConst (_, CFloat f) -> mk_float fi (atan f)
   | Eatan,_ -> fail_extapp fi
+
   (* SundialsML related functions *)
   | ESArray _,_ -> fail_extapp fi
   | ESArrayMake None, TmConst (_, CInt n) ->
@@ -250,9 +251,9 @@ let delta eval env fi c v =
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
-     let s = Ida.(init Dls.(solver (dense v m))
-                    (SStolerances (rtol, atol))
-                    resf ~roots:(n, rootf) t0 v v')
+     let s = Ida.(init (SStolerances (rtol, atol))
+                       ~lsolver:Dls.(solver (dense v m))
+                       resf ~roots:(n, rootf) t0 v v')
      in
      mk_ext fi (EIdaSession s)
   | EIdaInitDense _,_ -> fail_extapp fi
@@ -319,10 +320,10 @@ let delta eval env fi c v =
      let m = Matrix.dense (RealArray.length y0) in
      let v = Nvector_serial.wrap y0 in
      let v' = Nvector_serial.wrap y0' in
-     let s = Ida.(init Dls.(solver ~jac:jacf (dense v m))
-                    ~roots:(n, rootf)
-                    (SStolerances (rtol, atol))
-                    resf t0 v v')
+     let s = Ida.(init (SStolerances (rtol, atol))
+                       ~lsolver:Dls.(solver ~jac:jacf (dense v m))
+                       ~roots:(n, rootf)
+                       resf t0 v v')
      in
      mk_ext fi (EIdaSession s)
   | EIdaInitDenseJac _,_ -> fail_extapp fi
