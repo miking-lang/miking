@@ -555,7 +555,9 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
        let (patEnv, l) = s_pat_sequence patEnv l in
        let (patEnv, x) = match x with
          | NameWildcard -> (patEnv, NameWildcard)
-         | NameStr(x, _) -> let s = gensym() in ((IdVar(sid_of_ustring x),s)::patEnv, NameStr(x, s)) in
+         | NameStr(x, _) ->
+            let (patEnv, s) = add_name (IdVar (sid_of_ustring x)) patEnv
+            in (patEnv, NameStr(x, s)) in
        let (patEnv, r) = s_pat_sequence patEnv r
        in (patEnv, PatSeqEdg(fi, l, x, r))
     | PatRecord(fi, pats) ->
