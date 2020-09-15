@@ -4,6 +4,7 @@ include "digraph.mc"
 include "string.mc"
 include "ast-builder.mc"
 include "eq-paths.mc"
+include "prelude.mc"
 
 -- This file contains implementations related to decision points. In particular,
 -- it implements:
@@ -11,26 +12,47 @@ include "eq-paths.mc"
 -- * An algorithm for AST -> call graph conversion (Ast2CallGraph fragment)
 -- * Program transformations for programs with decision points (HolyCallGraph)
 
+let _top = nameSym "top"
+
+let _eqn = lam n1. lam n2.
+  if and (nameHasSym n1) (nameHasSym n2) then
+    nameEqSym n1 n2
+  else
+    error "Name without symbol."
+
 lang HoleAst
   syn Expr =
   | TmHole {tp : Type,
-            startGuess : Dyn,
+            startGuess : Expr,
             depth : Int}
+  sem symbolize (env : Env) =
 end
 
 lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
-  sem pprintCode (indent : Int) =
-  | TmHole h -> strJoin "" ["Hole (", getTypeStringCode indent h.tp, ", ",
-                                      pprintCode indent h.startGuess, ", ",
-                                      pprintCode indent h.depth, ")"]
+  sem isAtomic =
+  | TmHole _ -> false
+
+  sem pprintCode (indent : Int) (env : Env) =
+  | TmHole h ->
+    match pprintCode indent env h.startGuess with (env1, startStr) then
+      match pprintCode indent env1 h.depth with (env2, depthStr) then
+        (env2,
+          join ["Hole (",
+                strJoin ", " [getTypeStringCode indent h.tp, startStr, depthStr],
+                ")"])
+      else never
+    else never
 end
 
 -- Temporary workaround: uniquely labeled decision points
 lang LHoleAst = HoleAst
   syn Expr =
   | LTmHole {tp : Type,
-             startGuess : Dyn,
+             startGuess : Expr,
              depth : Int}
+
+  sem symbolize (env : Env) =
+  | LTmHole h -> LTmHole h
 
   sem fromTmHole =
   | TmHole h -> LTmHole {tp = h.tp, startGuess = h.startGuess,
@@ -47,8 +69,11 @@ lang LHoleAst = HoleAst
 end
 
 lang LHoleAstPrettyPrint = LHoleAst + HoleAstPrettyPrint
-  sem pprintCode (indent : Int) =
-  | LTmHole h -> pprintCode indent (toTmHole (LTmHole h))
+  sem isAtomic =
+  | LTmHole _ -> false
+
+  sem pprintCode (indent : Int) (env : Env) =
+  | LTmHole h -> pprintCode indent env (toTmHole (LTmHole h))
 end
 
 let hole_ = use LHoleAst in
@@ -78,6 +103,9 @@ lang LAppAst = AppAst
   | TmApp t ->
     fromAppAst (TmApp {lhs = labelApps t.lhs, rhs = labelApps t.rhs})
   | tm -> smap_Expr_Expr labelApps tm
+
+  sem symbolize (env : Env) =
+  | TmLApp t -> fromAppAst (symbolize env (toAppAst (TmLApp t)))
 end
 
 lang LAppEval = LAppAst + AppEval
@@ -86,9 +114,12 @@ lang LAppEval = LAppAst + AppEval
 end
 
 lang LAppPrettyPrint = LAppAst + AppPrettyPrint
-  sem pprintCode (indent : Int) =
+  sem isAtomic =
+  | TmLApp _ -> false
+
+  sem pprintCode (indent : Int) (env : Env) =
   | TmLApp t ->
-    let s = pprintCode indent (toAppAst (TmLApp t)) in
+    let s = pprintCode indent env (toAppAst (TmLApp t)) in
     s
 end
 
@@ -97,16 +128,15 @@ end
 -- * Vertices (represented as strings) are functions f defined as: let f = lam. ...
 -- * There is an edge between f1 and f2 iff f1 calls f2: let f1 = lam. ... (f2 a)
 -- * "top" is the top of the graph (i.e., no incoming edges)
--- * TODO: we assume that function names are unique
 
 -- Helper functions
-let handleLetVertex = use FunAst in
+let _handleLetVertex = use FunAst in
   lam letexpr. lam f.
     match letexpr.body with TmLam lm
     then cons letexpr.ident (f lm.body)
     else f letexpr.body
 
-let handleLetEdge = use FunAst in
+let _handleLetEdge = use FunAst in
   lam letexpr. lam f. lam g. lam prev.
     match letexpr.body with TmLam lm
     then f g letexpr.ident lm.body
@@ -119,21 +149,20 @@ let handleLetEdge = use FunAst in
 lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
   sem toCallGraph =
   | arg ->
-    let top = "top" in
     let vs = findVertices arg in
-    let gempty = digraphAddVertex top (digraphEmpty eqstr eqs) in
+    let gempty = digraphAddVertex _top (digraphEmpty _eqn eqs) in
     let gvs = foldl (lam g. lam v. digraphAddVertex v g) gempty vs in
-    findEdges gvs top arg
+    findEdges gvs _top arg
 
   -- Find all vertices of the call graph
   sem findVertices =
   | TmLet t ->
-    let res_body = handleLetVertex t findVertices
+    let res_body = _handleLetVertex t findVertices
     in concat res_body (findVertices t.inexpr)
 
   | TmRecLets t ->
     let res =
-      foldl (lam a. lam b. concat a (handleLetVertex b findVertices))
+      foldl (lam a. lam b. concat a (_handleLetVertex b findVertices))
             [] t.bindings
     in concat res (findVertices t.inexpr)
 
@@ -144,7 +173,7 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
   sem findEdges (cgraph : DiGraph) (prev : String) =
   | TmLet t ->
     -- let <fun-name> = lam. ...
-    let res_body = handleLetEdge t findEdges cgraph prev
+    let res_body = _handleLetEdge t findEdges cgraph prev
     in findEdges res_body prev t.inexpr
 
   | TmLApp t ->
@@ -162,7 +191,7 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
 
   | TmRecLets t ->
     let res =
-      foldl (lam g. lam b. digraphUnion g (handleLetEdge b findEdges g prev))
+      foldl (lam g. lam b. digraphUnion g (_handleLetEdge b findEdges g prev))
             cgraph t.bindings
     in findEdges res prev t.inexpr
 
@@ -170,24 +199,21 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
     sfold_Expr_Expr digraphUnion cgraph (smap_Expr_Expr (findEdges cgraph prev) tm)
 end
 
+-- Define variable names to be used in transformed program
+let _callCtx = "callCtx"
+let _lookupTable = "lookupTable"
+let _lookup = "lookup"
+let _maxDepth = "maxDepth"
+let _addCall = "addCall"
+let _filter = "filter"
+let _max = "max"
+let _isPrefix = "isPrefix"
+let _isSuffix = "isSuffix"
 
 lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Transform the program
-  sem transform (publicFns : [String]) =
+  sem transform (publicFns : [Name]) =
   | tm ->
-    -- Define hard coded constants
-    -- TODO: Use unique identifiers instead of hard coded strings.
-    let callCtxVar = "callCtx" in
-    let callCtxTp = None () in
-    let lookupTableVar = "lookupTable" in
-    let lookupTableTp = None () in
-    let lookupFunName = "lookup" in
-    let addCallFunName = "addCall" in
-    let maxDepthVar = "maxDepth" in
-    let addCallFunName = "addCall" in
-    let addCallFunTp = None () in
-    let topLevelFun = "top" in
-
     -- Equip TmApps with unique labels
     let ltm = labelApps tm in
 
@@ -195,23 +221,26 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let callGraph = toCallGraph ltm in
 
     -- Renaming function for public functions
-    let renameF = lam ident. strJoin "" [ident, "Pr"] in
+    let renameF = lam ident.
+      let nameStr = nameGetStr ident in
+      let newNameStr = concat nameStr "Pr" in
+      nameNoSym newNameStr in
 
     -- Check if identifier is a public function
-    let isPublic =
-      lam ident. optionIsSome (find (eqstr ident) publicFns) in
+    let isPublic = lam ident.
+      optionIsSome (find (_eqn ident) publicFns) in
 
     -- Check if identifier is a function in the call graph
-    let isFun =
-      lam ident. optionIsSome (find (eqstr ident) (digraphVertices callGraph)) in
+    let isFun = lam ident.
+      optionIsSome (find (_eqn ident) (digraphVertices callGraph)) in
 
     -- Replacer function for public functions
     let makeDummy = lam funName. lam tm.
       recursive let work = lam tm. lam acc.
         match tm with TmLam t then
-          TmLam {t with body=work t.body (cons t.ident acc)}
+          TmLam {t with body=work t.body (snoc acc t.ident)}
         else
-          foldl (lam a. lam x. app_ a (var_ x)) (app_ (var_ (renameF funName)) (var_ callCtxVar)) acc
+          foldl (lam a. lam x. app_ a (nvar_ x)) (app_ (nvar_ (renameF funName)) (var_ _callCtx)) acc
       in work tm []
     in
     -- Extract dummy functions from the AST, to replace public functions
@@ -219,29 +248,29 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let defDummies = match dummies with [] then unit_ else bindall_ dummies in
 
     -- Transform program to use call context
-    let trans = transformCallCtx isFun topLevelFun ltm in
+    let trans = transformCallCtx isFun _top ltm in
 
     -- Rename public functions
     let transRenamed = rename isPublic renameF trans in
 
     -- Define initial call context
-    let defCallCtx = let_ callCtxVar callCtxTp (seq_ []) in
+    let defCallCtx = let_ _callCtx (seq_ []) in
 
     -- Define initial lookup table
-    let lookupTable = initLookupTable (cons topLevelFun publicFns) ltm in
+    let lookupTable = initLookupTable (cons _top publicFns) ltm in
     -- AST-ify the lookup table
     let defLookupTable =
-      let_ lookupTableVar lookupTableTp
-           (seq_ (map (lam t. tuple_ [t.0, (seq_ (map symb_ t.1)), t.2]) lookupTable))
+      let_ _lookupTable
+        (seq_ (map (lam r. record_ [("id", r.id), ("path", seq_ (map symb_ r.path)), ("value", r.value)]) lookupTable))
     in
 
     -- Compute maximum depth of the decision points
     let maxDepth =
       match lookupTable with [] then 0
-      else max subi (map (lam t. length t.1) lookupTable)
+      else max subi (map (lam r. length r.path) lookupTable)
     in
     -- AST-ify the maxDepth variable
-    let defMaxDepth = let_ maxDepthVar (None ()) (int_ maxDepth) in
+    let defMaxDepth = let_ _maxDepth (int_ maxDepth) in
 
     -- AST-ify filter
     -- recursive let filter = lam p. lam s.
@@ -252,16 +281,17 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   else (filter p (tail s))
     -- in
     let filter =
-        reclets_add "filter" (None ())
-                    (lam_ "p" (None ())
-                          (lam_ "s" (None ())
-                                (if_ (null_ (var_ "s"))
-                                     (seq_ [])
-                                     (if_ (app_ (var_ "p") (head_ (var_ "s")))
-                                          (bind_ (let_ "f" (None ()) (appf2_ (var_ "filter") (var_ "p") (tail_ (var_ "s"))))
-                                                 (cons_ (head_ (var_ "s")) (var_ "f")))
-                                          (appf2_ (var_ "filter") (var_ "p") (tail_ (var_ "s")))) )))
-        reclets_empty
+      -- Define local variables
+      reclets_add _filter
+        (lam_ "p" (None ())
+              (lam_ "s" (None ())
+                    (if_ (null_ (var_ "s"))
+                         (seq_ [])
+                         (if_ (app_ (var_ "p") (head_ (var_ "s")))
+                              (bind_ (let_ "f" (appf2_ (var_ _filter) (var_ "p") (tail_ (var_ "s"))))
+                                     (cons_ (head_ (var_ "s")) (var_ "f")))
+                              (appf2_ (var_ _filter) (var_ "p") (tail_ (var_ "s")))) )))
+      reclets_empty
     in
 
     -- AST-ify max (for a non-empty list)
@@ -276,21 +306,21 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --    work (head seq) (tail seq)
     -- in utest max [2, 4, 5] with 5 in
     let max =
-      let_ "max" (None ())
-           (lam_ "cmp" (None ()) (
-             (lam_ "seq" (None ())
-             (bindall_ [(reclets_add "work" (None ())
-                                    (lam_ "e" (None ())
-                                              (lam_ "seq" (None ())
-                                                            (if_ (null_ (var_ "seq"))
-                                                                 (var_ "e")
-                                                                 (bindall_ [let_ "h" (None ()) (head_ (var_ "seq")),
-                                                                            let_ "t" (None ()) (tail_ (var_ "seq")),
-                                                                            if_ (lti_ (appf2_ (var_ "cmp") (var_ "h") (var_ "e")) (int_ 0))
-                                                                                (appf2_ (var_ "work") (var_ "e") (var_ "t"))
-                                                                                (appf2_ (var_ "work") (var_ "h") (var_ "t"))]) )))
-                        reclets_empty),
-                        appf2_ (var_ "work") (head_ (var_ "seq")) (tail_ (var_ "seq"))]))))
+      let_ _max
+        (lam_ "cmp" (None ()) (
+          (lam_ "seq" (None ())
+          (bindall_ [(reclets_add "work"
+                       (lam_ "e" (None ())
+                                (lam_ "seq" (None ())
+                                              (if_ (null_ (var_ "seq"))
+                                                   (var_ "e")
+                                                   (bindall_ [let_ "h" (head_ (var_ "seq")),
+                                                              let_ "t" (tail_ (var_ "seq")),
+                                                              if_ (lti_ (appf2_ (var_ "cmp") (var_ "h") (var_ "e")) (int_ 0))
+                                                                  (appf2_ (var_ "work") (var_ "e") (var_ "t"))
+                                                                  (appf2_ (var_ "work") (var_ "h") (var_ "t"))]) )))
+                     reclets_empty),
+                     appf2_ (var_ "work") (head_ (var_ "seq")) (tail_ (var_ "seq"))]))))
     in
 
     -- AST-ify isPrefix
@@ -301,18 +331,18 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   else false
     -- in
     let isPrefix =
-        reclets_add "isPrefix" (None ()) (
-        (lam_ "eq" (None ())
-              (lam_ "s1" (None ())
-                    (lam_ "s2" (None ())
-                               (if_ (null_ (var_ "s1"))
-                                    (true_)
-                                    (if_ (null_ (var_ "s2"))
-                                         (false_)
-                                         (if_ (appf2_ (var_ "eq") (head_ (var_ "s1")) (head_ (var_ "s2")))
-                                              (appf3_ (var_ "isPrefix") (var_ "eq") (tail_ (var_ "s1")) (tail_ (var_ "s2")) )
-                                              (false_))) )))))
-                                              reclets_empty
+      reclets_add _isPrefix (
+      (lam_ "eq" (None ())
+            (lam_ "s1" (None ())
+                  (lam_ "s2" (None ())
+                             (if_ (null_ (var_ "s1"))
+                                  (true_)
+                                  (if_ (null_ (var_ "s2"))
+                                       (false_)
+                                       (if_ (appf2_ (var_ "eq") (head_ (var_ "s1")) (head_ (var_ "s2")))
+                                            (appf3_ (var_ _isPrefix) (var_ "eq") (tail_ (var_ "s1")) (tail_ (var_ "s2")) )
+                                            (false_))) )))))
+                                            reclets_empty
     in
 
     -- AST-ify isSuffix
@@ -320,14 +350,14 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --     isPrefix eq (reverse s1) (reverse s2)
     -- in
     let isSuffix =
-        let_ "isSuffix" (None ())
-          ((lam_ "eq" (None ())
-                (lam_ "s1" (None ())
-                      (lam_ "s2" (None ())
-                            (appf3_ (var_ "isPrefix")
-                                    (var_ "eq")
-                                    (reverse_ (var_ "s1"))
-                                    (reverse_ (var_ "s2"))))))) in
+      let_ _isSuffix
+        ((lam_ "eq" (None ())
+              (lam_ "s1" (None ())
+                    (lam_ "s2" (None ())
+                          (appf3_ (var_ _isPrefix)
+                                  (var_ "eq")
+                                  (reverse_ (var_ "s1"))
+                                  (reverse_ (var_ "s2"))))))) in
 
     -- Lookup the value for a decision point in a given call context
     -- let lookup = lam callCtx. lam id.
@@ -337,30 +367,27 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   max cmp entriesSuffix
     -- in
     let lookup =
-      let_ "lookup" (None ())
-           (lam_ "callCtx" (None ())
+      let_ _lookup
+           (lam_ _callCtx (None ())
                  (lam_ "id" (None ())
                        (bindall_ [
-                                  let_ "entries" (None ()) (
-                                      appf2_ (var_ "filter")
-                                             (lam_ "t" (None ()) (eqs_ (var_ "id") (tupleproj_ 0 (var_ "t"))))
-                                             (var_ "lookupTable")),
-
-                                  let_ "eqs" (None ()) (lam_ "x" (None ()) (lam_ "y" (None ()) (eqs_ (var_ "x") (var_ "y")))),
-                                  let_ "entriesSuffix" (None ())
-                                       (appf2_ (var_ "filter")
-                                               (lam_ "t" (None ()) (appf3_ (var_ "isSuffix") (var_ "eqs") (tupleproj_ 1 (var_ "t")) (var_ "callCtx")))
-                                               (var_ "entries")),
-
-                                  let_ "cmp" (None ())
-                                             (lam_ "t1" (None ())
-                                                        (lam_ "t2" (None ())
-                                                                   (appf2_ (var_ "subi")
-                                                                           (length_ (tupleproj_ 1 (var_ "t1")))
-                                                                           (length_ (tupleproj_ 1 (var_ "t2")))))),
-
-                                  let_ "entryLongestSuffix" (None ()) (appf2_ (var_ "max") (var_ "cmp") (var_ "entriesSuffix")),
-                                  tupleproj_ 2 (var_ "entryLongestSuffix")])))
+        let_ "entries" (
+            appf2_ (var_ _filter)
+                   (lam_ "t" (None ()) (eqs_ (var_ "id") (recordproj_ "id" (var_ "t"))))
+                   (var_ _lookupTable)),
+        let_ "eqs" (lam_ "x" (None ()) (lam_ "y" (None ()) (eqs_ (var_ "x") (var_ "y")))),
+        let_ "entriesSuffix"
+             (appf2_ (var_ _filter)
+                     (lam_ "t" (None ()) (appf3_ (var_ _isSuffix) (var_ "eqs") (recordproj_ "path" (var_ "t")) (var_ _callCtx)))
+                     (var_ "entries")),
+        let_ "cmp"
+          (lam_ "t1" (None ())
+                     (lam_ "t2" (None ())
+                                (subi_
+                                   (length_ (recordproj_ "path" (var_ "t1")))
+                                   (length_ (recordproj_ "path" (var_ "t2")))))),
+        let_ "entriesLongestSuffix" (appf2_ (var_ _max) (var_ "cmp") (var_ "entriesSuffix")),
+        recordproj_ "value" (var_ "entriesLongestSuffix")])))
     in
     let defLookup = bindall_ [isPrefix, isSuffix, max, filter, lookup] in
 
@@ -370,29 +397,31 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --     snoc (tail callCtx) lbl
     --   else
     --     snoc callCtx lbl
-    let defAddCall = let lblVarName = "lbl" in
-      let_ addCallFunName addCallFunTp (
-           lam_ callCtxVar (None ()) (
-                lam_ lblVarName (None ()) (
-                     if_ (lti_ (length_ (var_ callCtxVar)) (var_ maxDepthVar))
-                         (snoc_ (var_ callCtxVar) (var_ lblVarName))
-                         (snoc_ (tail_ (var_ callCtxVar)) (var_ lblVarName)))))
+    let defAddCall =
+      let_ _addCall (
+        lam_ _callCtx (None ()) (
+          lam_ "lbl" (None ()) (
+            if_ (eqi_ (var_ _maxDepth) (int_ 0)) (var_ _callCtx)
+                (if_ (lti_ (length_ (var_ _callCtx)) (var_ _maxDepth))
+                    (snoc_ (var_ _callCtx) (var_ "lbl"))
+                    (snoc_ (tail_ (var_ _callCtx)) (var_ "lbl"))) )))
     in
 
     -- Put all the pieces together
-    bindall_ [defLookupTable,
-              defCallCtx,
-              defMaxDepth,
-              defAddCall,
-              defLookup,
-              defDummies,
-              transRenamed]
+    symbolize assocEmpty
+      (bindall_ [defLookupTable,
+                 defCallCtx,
+                 defMaxDepth,
+                 defAddCall,
+                 defLookup,
+                 defDummies,
+                 transRenamed])
 
   -- Extract expressions from the body of identifiers for which p is true using extractor function
   sem extract (p : String -> Bool)
               (extractor : String -> Expr -> Expr) =
-  | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
     let res =
       if p t.ident then
         let newBody = extractor t.ident t.body in
@@ -416,8 +445,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
   -- Rename identifiers for which p is true, with renaming function rf
   sem rename (p : String -> Bool) (rf : String -> String) =
-  | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
     let newIdent =
       if p t.ident then
         rf t.ident
@@ -452,12 +481,12 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Transform program to use call context, considering identifiers for which p is true.
   sem transformCallCtx (p : String -> Bool) (prev : String) =
   -- Add call context as extra argument in function definitions
-  | TmLet {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, tpe=tpe, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
     -- Is the name one of the nodes in the call graph?
     if p t.ident then
-      let newBody = lam_ "callCtx" (None ())
-                         (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
+      let newBody = lam_ _callCtx (None ())
+                      (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
       TmLet {{t with body = newBody} with inexpr = transformCallCtx p prev t.inexpr}
     else TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
 
@@ -466,8 +495,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let handleLetExpr = lam le.
       if p le.ident then
         match le.body with TmLam lm then
-          let newBody = lam_ "callCtx"  (None ())
-                             (TmLam {lm with body = transformCallCtx p le.ident lm.body})
+          let newBody = lam_ _callCtx  (None ())
+                          (TmLam {lm with body = transformCallCtx p le.ident lm.body})
           in {le with body = newBody}
         else error "Internal error: this letexpr should have a TmLam in its body"
       else le
@@ -479,21 +508,21 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   | TmLApp {lhs = TmVar v, rhs = rhs, id = id} ->
     if p v.ident then
       -- Append to call context (only if not recursive call)
-      let isRecursiveCall = eqstr prev v.ident in
-      let addToCallCtx = if isRecursiveCall then (var_ "callCtx")
-                         else appf2_ (var_ "addCall") (var_ "callCtx") (symb_ id)
+      let isRecursiveCall = _eqn prev v.ident in
+      let addToCallCtx = if isRecursiveCall then (var_ _callCtx)
+                         else appf2_ (var_ _addCall) (var_ _callCtx) (symb_ id)
       in TmLApp {lhs = app_ (TmVar v) addToCallCtx, rhs = transformCallCtx p prev rhs, id = id}
     else
       TmLApp {lhs = TmVar v, rhs = transformCallCtx p prev rhs, id = id}
 
   -- Replace holes with a call to lookup function
   | LTmHole t ->
-    TmApp {lhs = TmApp {lhs = var_ "lookup", rhs = var_ "callCtx"}, rhs = t.id}
+    TmApp {lhs = TmApp {lhs = var_ _lookup, rhs = var_ _callCtx}, rhs = t.id}
 
   | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
 
   -- Initialise lookup table as a list of triples (id, path, startGuess)
-  sem initLookupTable (publicFns : [String]) =
+  sem initLookupTable (publicFns : [Name]) =
   | tm ->
     let g = toCallGraph tm in
     let functionIDPairs = allFunHoles tm in
@@ -504,15 +533,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
                let depth = match hole.depth with TmConst {val = CInt n} then n.val
                            else error "Depth must be a constant integer" in
                let allPaths = eqPaths g fun depth publicFns in
-               let idPathValTriples = map (lam path. (hole.id, path, hole.startGuess)) allPaths
-               in concat acc idPathValTriples)
+               let idPathValTriples = map (lam path. {id=hole.id, path=path, value=hole.startGuess}) allPaths
+               in concat acc idPathValTriples) --
            [] functionIDPairs
 
   -- Return a list of pairs (function name, hole) for all holes in tm
   sem allFunHoles =
-  | tm -> allFunHoles2 "top" tm
+  | tm -> allFunHoles2 _top tm
 
-  sem allFunHoles2 (prev : String) =
+  sem allFunHoles2 (prev : Name) =
   | TmLet t ->
     let res_body =
       match t.body with TmLam lm
@@ -525,9 +554,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
 end
 
+lang PPrintLang = MExprPrettyPrint + LAppPrettyPrint + LHoleAstPrettyPrint
+let expr2str = use PPrintLang in
+  lam expr.
+    match
+      pprintCode 0 {nameMap = assocEmpty, strMap = assocEmpty, count = assocEmpty} expr
+    with (_,str)
+    then str else never
 
-lang TestLang = MExpr + MExprPrettyPrint + ContextAwareHoles + LAppPrettyPrint +
-                LAppEval + LHoleAstPrettyPrint
+lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang
 
 mexpr
 
@@ -537,15 +572,21 @@ use TestLang in
 let printEnabled = false in
 let print = if printEnabled then print else lam x. x in
 
-let ctx = {env = []} in
+-- Enable/disable eval
+let evalEnabled = false in
+let eval = lam expr. lam expected.
+  if evalEnabled then eval {env = []} expr else expected in
+
+-- Shorthand for symbolize
+let symbolize = symbolize assocEmpty in
 
 -- Prettyprinting
 let pprint = lam ast.
   let _ = print "\n\n" in
-  let _ = print (pprintCode 0 ast) in
+  let _ = print (expr2str ast) in
   let _ = print "\n\n" in () in
 
--- Test labeling of TmApp
+-- Labeled application tests
 let ast = app_ (var_ "foo") (int_ 1) in
 let last = labelApps ast in
 
@@ -557,109 +598,105 @@ with (match last with TmLApp t then t.rhs else error "error") in
 
 let _ = pprint last in
 
--- Tests of AST:s. For each AST we create a call graph and apply the transform.
+-- Transform & call graph tests
+let dprintTransform = lam ast.
+  -- Symbolize
+  let ast = symbolize ast in
+  -- Label applications
+  let ast = labelApps ast in
+  let _ = print "\n-------------- BEFORE TRANSFORMATION --------------" in
+  let _ = pprint ast in
+  let _ = print "-------------- AFTER TRANSFORMATION --------------" in
+  let ast = transform [] ast in
+  let _ = pprint ast in
+  let _ = print "-------------- END OF TRANSFORMED AST --------------" in
+  ast
+in
+
+-- Test that call graph of the ast has the string names in vs and return the
+-- graph.
+let callGraphTests = lam ast. lam strVs.
+  let ast = labelApps (symbolize ast) in
+  let g = toCallGraph ast in
+  let vs = digraphVertices g in
+  let symVs = map nameNoSym strVs in
+  utest setIsSubsetEq nameEqStr symVs vs with true in
+  g
+in
+
+-- Get a call graph using the strings of the names as vertices.
+let callGraphStr = lam ng.
+  let vs = digraphVertices ng in
+  let es = digraphEdges ng in
+  digraphAddEdges
+    (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) es)
+    (digraphAddVertices (map nameGetStr vs) (digraphEmpty eqstr eqs))
+in
 
 -- *** AST 0: a constant ***
-let ast = int_ 1 in
-let ast = labelApps ast in
-
-let _ = print "AST 0\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 0\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
+let ast = symbolize (int_ 1) in
+let tast = dprintTransform ast in
+utest eval tast (int_ 1) with int_ 1 in
 
 let g = toCallGraph ast in
 utest digraphCountVertices g with 1 in
 utest digraphCountEdges g with 0 in
-utest digraphHasVertex "top" g with true in
-
+utest digraphHasVertex _top g with true in
 
 -- *** AST 1: One function ***
 -- let foo = lam x. x in ()
-let id_func = let_ "foo"
-                    (None ())
-                    (lam_ "x" (None ()) (var_ "x")) in
+let identity = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
 
--- print the AST
-let ast = bind_ id_func unit_ in
-let ast = labelApps ast in
-let _ = print "AST 1\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 1\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-
-let g = toCallGraph ast in
-utest digraphCountVertices g with 2 in
+let ast = identity in
+let tast = dprintTransform ast in
+utest eval tast unit_ with unit_ in
+let g = callGraphTests ast ["foo", "top"] in
 utest digraphCountEdges g with 0 in
-utest digraphHasVertex "foo" g with true in
-utest digraphHasVertex "top" g with true in
 
 -- *** AST 2: One function call ***
 -- let foo = lam x. x in foo 1
-let ast = bind_ id_func (app_ (var_ "foo") (int_ 1)) in
-let ast = labelApps (bind_ id_func (addi_ (app_ (var_ "foo") (int_ 1)) (int_ 2))) in
-let _ = print "AST 2\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 2\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-
+let ast = bind_ identity (app_ (var_ "foo") (int_ 1)) in
+let tast = dprintTransform ast in
+utest eval tast (int_ 1) with int_ 1 in
 -- graph: vs = [foo, top]. es = [top->foo].
-let g = toCallGraph ast in
-utest digraphHasVertices ["top", "foo"] g with true in
+let g = callGraphTests ast ["top", "foo"] in
 utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" g with ["foo"] in
-
+utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
 
 -- *** AST 3: Two functions, one function call ***
 -- let foo = lam x. x in
 -- let bar = lam x. (foo x) in ()
 let bar = let_ "bar"
-               (None ())
                (lam_ "x" (None ()) (app_ (var_ "foo") (var_ "x"))) in
-let ast = labelApps (bind_ id_func bar) in
-let _ = print "AST 3\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 3\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
+let ast = bind_ identity bar in
+let _ = dprintTransform ast in
 
 -- graph: vs = [foo, bar, top], es = [bar->foo].
-let g = toCallGraph ast in
+let g = callGraphTests ast ["foo", "bar", "top"] in
 utest digraphCountVertices g with 3 in
-utest digraphHasVertices ["foo", "bar"] g with true in
 utest digraphCountEdges g with 1 in
-utest digraphSuccessors "bar" g with ["foo"] in
-
+utest digraphSuccessors "bar" (callGraphStr g) with ["foo"] in
 
 -- *** AST 4: 2 calls to the same function ***
 -- let foo = lam x. x in
 -- let bar = lam x. addi (foo x) (foo x) in
 -- bar 1
-let bar = let_ "bar" (None ())
+let bar = let_ "bar"
                (lam_ "x" (None ())
                (addi_ (app_ (var_ "foo") (var_ "x"))
                       (app_ (var_ "foo") (var_ "x")))) in
-let ast = bind_ (bind_ id_func bar)
+let ast = bind_ (bind_ identity bar)
                 (app_ (var_ "bar") (int_ 1)) in
-let ast = labelApps ast in
+let tast = dprintTransform ast in
+utest eval tast (int_ 2) with int_ 2 in
 
-utest eval ctx ast with int_ 2 in
-let _ = print "AST 4\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 4\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-
-let g = toCallGraph ast in
+let g = callGraphTests ast ["top", "foo", "bar"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 3 in
 utest digraphCountVertices g with 3 in
-utest digraphHasVertices ["top", "foo", "bar"] g with true in
-utest digraphSuccessors "bar" g with ["foo"] in
-utest digraphSuccessors "top" g with ["bar"] in
+let gstr = callGraphStr g in
+utest digraphSuccessors "bar" gstr with ["foo"] in
+utest digraphSuccessors "top" gstr with ["bar"] in
 
 
 -- *** AST 5: function with 2 arguments ***
@@ -667,26 +704,18 @@ utest digraphSuccessors "top" g with ["bar"] in
 --foo 1 2
 let ast =
     bind_
-    (let_ "foo" (None ())
-                (lam_ "x" (None ()) (
-                      lam_ "y" (None ()) (addi_ (var_ "x") (var_ "y"))
-                )))
+    (let_ "foo"
+      (lam_ "x" (None ()) (
+            lam_ "y" (None ()) (addi_ (var_ "x") (var_ "y"))
+      )))
     (appf2_ (var_ "foo") (int_ 1) (int_ 2))
 in
-let ast = labelApps ast in
-let _ = print "Transformed AST 5\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
+let tast = dprintTransform ast in
+utest eval tast (int_ 3) with (int_ 3) in
 
-let _ = print "AST 5\n" in
-let _ = pprint ast in
-utest eval ctx ast with (int_ 3) in
-
-let g = toCallGraph ast in
-utest digraphHasVertices ["foo", "top"] g with true in
+let g = callGraphTests ast ["foo", "top"] in
 utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" g with ["foo"] in
-
+utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
 
 -- *** AST 6: inner function ***
 --let foo = lam x.
@@ -695,33 +724,25 @@ utest digraphSuccessors "top" g with ["foo"] in
 --          bar 1
 --foo 1
 let ast = bind_
-          (let_ "foo" (None ())
-                      (lam_ "x" (None ()) (
-                                bind_
-                                  (let_ "y" (None ()) (int_ 1))
-                                  (bind_
-                                    ((let_ "bar" (None ()) (
-                                                lam_ "y" (None ()) (
-                                                          bind_
-                                                          (let_ "z" (None ()) (int_ 2))
-                                                          (addi_ (var_ "x") (var_ "y"))))))
-                                    (app_ (var_ "bar") (int_ 1)))
-                                )))
-          (app_ (var_ "foo") (int_ 1))
+  (let_ "foo"
+    (lam_ "x" (None ()) (
+      bind_
+        (let_ "y" (int_ 1))
+        (bind_
+          ((let_ "bar" (
+              lam_ "y" (None ()) (
+                bind_
+                  (let_ "z" (int_ 2))
+                  (addi_ (var_ "x") (var_ "y"))))))
+          (app_ (var_ "bar") (int_ 1))))))
+        (app_ (var_ "foo") (int_ 1))
 in
-let ast = labelApps ast in
+let tast = dprintTransform ast in
+utest eval tast (int_ 2) with int_ 2 in
 
-let _ = print "AST 6\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 6\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-utest eval ctx ast with int_ 2 in
-
-let g = toCallGraph ast in
+let g = callGraphTests ast ["foo", "bar", "top"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 2 in
-
 
 -- *** AST 7: inner functions again ***
 -- let foo = lam a. lam b.
@@ -730,30 +751,22 @@ utest digraphCountEdges g with 2 in
 --     addi (bar babar) a
 -- in ()
 let ast =
-  let_ "foo" (None ()) (lam_ "a" (None ()) (lam_ "b" (None ()) (
-     let bar = let_ "bar" (None ()) (lam_ "x" (None ())
+  let_ "foo" (lam_ "a" (None ()) (lam_ "b" (None ()) (
+     let bar = let_ "bar" (lam_ "x" (None ())
                     (addi_ (var_ "b") (var_ "x"))) in
-     let babar = let_ "babar" (None ()) (int_ 3) in
+     let babar = let_ "babar" (int_ 3) in
      bind_ bar (
      bind_ babar (
        addi_ (app_ (var_ "bar")
                    (var_ "babar"))
              (var_ "a"))))))
 in
-let ast = labelApps ast in
+let _ = dprintTransform ast in
 
-let _ = print "AST 7\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 7\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-
-let g = toCallGraph ast in
-utest digraphHasVertices ["top", "foo"] g with true in
+let g = callGraphTests ast ["top", "foo", "bar"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 1 in
-utest digraphIsSuccessor "bar" "foo" g with true in
-
+utest digraphIsSuccessor "bar" "foo" (callGraphStr g) with true in
 
 -- *** AST 8: recursive function ***
 -- recursive let factorial = lam n.
@@ -764,7 +777,7 @@ utest digraphIsSuccessor "bar" "foo" g with true in
 -- in
 -- factorial 4
 let factorial =
-    reclets_add "factorial" (Some (TyInt {}))
+    reclets_add "factorial"
            (lam_ "n" (Some (TyInt {}))
                  (if_ (eqi_ (var_ "n") (int_ 0))
                       (int_ 1)
@@ -774,21 +787,15 @@ let factorial =
                                           (int_ 1))))))
     reclets_empty
 in
-let ast = bind_ factorial (app_ (var_ "factorial") (int_ 4)) in
-let ast = labelApps ast in
+let ast = bind_ factorial (app_ (var_ "factorial") (int_ 2)) in
+let tast = dprintTransform ast in
+utest eval tast (int_ 2) with (int_ 2) in
 
-let _ = print "AST 8\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 8\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-utest eval ctx ast with (int_ 24) in
-
-let g = toCallGraph ast in
-utest digraphHasVertices ["top", "factorial"] g with true in
+let g = callGraphTests ast ["top", "factorial"] in
 utest digraphCountEdges g with 2 in
-utest digraphSuccessors "top" g with ["factorial"] in
-utest digraphSuccessors "factorial" g with ["factorial"] in
+let gstr = callGraphStr g in
+utest digraphSuccessors "top" gstr with ["factorial"] in
+utest digraphSuccessors "factorial" gstr with ["factorial"] in
 
 
 -- *** AST 9: let with a function call ***
@@ -796,23 +803,16 @@ utest digraphSuccessors "factorial" g with ["factorial"] in
 -- let a = foo 1 in
 -- a
 let ast =
-    let foo = let_ "foo" (None ()) (lam_ "x" (None ()) (var_ "x")) in
-    let a = let_ "a" (None ()) (app_ (var_ "foo") (int_ 1)) in
+    let foo = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
+    let a = let_ "a" (app_ (var_ "foo") (int_ 1)) in
     bind_ (bind_ foo a) (var_ "a")
 in
-let ast = labelApps ast in
+let tast = dprintTransform ast in
+utest eval tast (int_ 1) with int_ 1 in
 
-let _ = print "AST 9\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 9\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-utest eval ctx ast with int_ 1 in
-
-let g = toCallGraph ast in
-utest digraphHasVertices ["top", "foo"] g with true in
+let g = callGraphTests ast ["top", "foo"] in
 utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" g with ["foo"] in
+utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
 
 
 -- *** AST 10: chain of lets ***
@@ -824,33 +824,23 @@ utest digraphSuccessors "top" g with ["foo"] in
 --     foo (c d) in
 -- a
 let ast =
-    let foo = let_ "foo" (None ()) (lam_ "x" (None ()) (var_ "x")) in
-    let c = let_ "c" (None ())
-                     (lam_ "x" (None ()) (app_ (var_ "foo") (var_ "x"))) in
-    let d = let_ "d" (None()) (int_ 2) in
-    let a = let_ "a" (None ())
-                     (bind_ (let_ "b" (None ()) (int_ 1)) (bind_ c (bind_ d (app_ (var_ "foo") (app_ (var_ "c") (var_ "d")))))) in
-
+    let foo = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
+    let c = let_ "c" (lam_ "x" (None ()) (app_ (var_ "foo") (var_ "x"))) in
+    let d = let_ "d" (int_ 2) in
+    let a = let_ "a" (bind_ (let_ "b" (int_ 1)) (bind_ c (bind_ d (app_ (var_ "foo") (app_ (var_ "c") (var_ "d")))))) in
     let e = (var_ "a") in
     bind_ foo (bind_ a e) in
-
-let ast = labelApps ast in
-
-let _ = print "AST 10\n" in
-let _ = pprint ast in
-let _ = print "Transformed AST 10\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
+let tast = dprintTransform ast in
+utest eval tast (int_ 2) with int_ 2 in
 
 -- graph: vs = [top, foo, c], es = [c->foo, top->foo, top->c]
-utest eval ctx ast with int_ 2 in
-let g = toCallGraph ast in
+let g = callGraphTests ast ["foo", "top", "c"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 3 in
-utest digraphIsSuccessor "foo" "top" g with true in
-utest digraphIsSuccessor "foo" "c" g with true in
-utest digraphIsSuccessor "c" "top" g with true in
-
+let gstr = callGraphStr g in
+utest digraphIsSuccessor "foo" "top" gstr with true in
+utest digraphIsSuccessor "foo" "c" gstr with true in
+utest digraphIsSuccessor "c" "top" gstr with true in
 
 -- *** AST 11: mutual recursion
 -- recursive
@@ -862,31 +852,23 @@ utest digraphIsSuccessor "c" "top" g with true in
 --         if eqi x 1
 --         then true
 --         else even (subi x 1)
--- in even 6
+-- in even 4
 let even_odd =
-    reclets_add "even" (None ())
-                       (lam_ "x" (None ())
+    reclets_add "even" (lam_ "x" (None ())
                                  (if_ (eqi_ (var_ "x") (int_ 0))
                                       (true_)
                                       (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
-   (reclets_add "odd" (None ())
-                      (lam_ "x" (None ())
+   (reclets_add "odd" (lam_ "x" (None ())
                                 (if_ (eqi_ (var_ "x") (int_ 1))
                                      (true_)
                                      (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
    reclets_empty)
 in
-let ast = bind_ even_odd (app_ (var_ "even") (int_ 6)) in
-let ast = labelApps ast in
+let ast = bind_ even_odd (app_ (var_ "even") (int_ 2)) in
+let tast = dprintTransform ast in
+utest eval tast true_ with true_ in
 
-let _ = print "AST 11: mutual recursion" in
-let _ = pprint ast in
-let _ = print "Transformed AST 11\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-utest eval ctx ast with true_ in
-
-let g = toCallGraph ast in
+let g = callGraphTests ast ["even", "odd"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 3 in
 
@@ -895,24 +877,15 @@ utest digraphCountEdges g with 3 in
 -- let foo = lam f. lam x. f x in -- cannot see that foo calls bar
 -- foo bar 1
 let ast = bindall_ [
-   let_ "bar" (None ()) (lam_ "y" (None ()) (var_ "y")),
-   let_ "foo" (None ()) (lam_ "f" (None ())
-                                  (lam_ "x" (None ()) (app_ (var_ "f") (var_ "x")))),
+   let_ "bar" (lam_ "y" (None ()) (var_ "y")),
+   let_ "foo" (lam_ "f" (None ()) (lam_ "x" (None ()) (app_ (var_ "f") (var_ "x")))),
    appf2_ (var_ "foo") (var_ "bar") (int_ 1)
 ] in
-let ast = labelApps ast in
+let tast = dprintTransform ast in
 
-let _ = print "AST 12: hidden function call" in
-let _ = pprint ast in
-let _ = print "Transformed AST 12\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-utest eval ctx ast with int_ 1 in
-
-let g = toCallGraph ast in
+let g = callGraphTests ast ["bar", "foo"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 1 in
-
 
 -- let foo = lam x.
 --   if (LTmHole {id=s1}) then x
@@ -920,21 +893,15 @@ utest digraphCountEdges g with 1 in
 -- in foo 42
 let foo =
   let_ "foo"
-       (None ())
        (lam_ "x" (None ())
                  (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                                     (bind_ (let_ "d" (None()) (hole_ tyint_ (int_ 1) (int_ 2)))
+                                     (bind_ (let_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
                                             (addi_ (var_ "x") (var_ "d")))))
 in
 let ast = bind_ foo (app_ (var_ "foo") (int_ 42)) in
-let ast = labelApps ast in
-let _ = print "If-then-else with holes\n" in
-let _ = pprint ast in
-let tast = transform [] ast in
-let _ = pprint tast in
+let tast = dprintTransform ast in
 
-let g = toCallGraph ast in
-let labelTopFoo = (get (digraphEdgesTo "foo" g) 0).2 in
+let g = callGraphTests ast ["foo"] in
 
 --let foo = lam x.
 --          let d1 = LTmHole {id=s1} in
@@ -944,32 +911,24 @@ let labelTopFoo = (get (digraphEdgesTo "foo" g) 0).2 in
 --          bar 1
 --in foo 1
 let ast = bind_
-          (let_ "foo" (None ())
-                     (lam_ "x" (None ())
-                               (bind_
-                                ((bind_ (let_ "d1" (None ()) (hole_ tyint_ (int_ 1) (int_ 2)))
-                                        (let_ "bar" (None ())
-                                                    (lam_ "y" (None ())
-                                                              (bind_ (let_ "d2" (None ()) (hole_ tyint_ (int_ 3) (int_ 2)))
-                                                                     (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
-                                (app_ (var_ "bar") (int_ 1)))
-                     ))
+          (let_ "foo"
+            (lam_ "x" (None ())
+                      (bind_
+                       ((bind_ (let_ "d1"(hole_ tyint_ (int_ 1) (int_ 2)))
+                               (let_ "bar"
+                                     (lam_ "y" (None ())
+                                               (bind_ (let_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
+                                                      (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
+                       (app_ (var_ "bar") (int_ 1)))
+            ))
           (app_ (var_ "foo") (int_ 1))
 in
-let ast = labelApps ast in
-let _ = print "AST with holes\n" in
-let _ = pprint ast in
+let tast = dprintTransform ast in
 
-let _ = print "Transformed AST with holes\n" in
-let tast = transform [] ast in
-let _ = pprint tast in
-
-
-let g = toCallGraph ast in
+let g = callGraphTests ast ["foo", "bar"] in
 utest digraphCountVertices g with 3 in
 utest digraphCountEdges g with 2 in
 
--- AST from the paper
 -- let bar = lam x.
 --   let h = LTmHole {depth = 2, startGuess = true} in
 --   if h then x else (addi x 1)
@@ -983,25 +942,18 @@ utest digraphCountEdges g with 2 in
 -- let b1 = bar 1 in
 -- let b2 = bar 2 in
 -- foo 1
-let bar = let_ "bar" (None ()) (lam_ "x" (None ()) (bind_ (let_ "h" tybool_ (hole_ tybool_ true_ (int_ 2)))
-                                                   (if_ (var_ "h") (var_ "x") (addi_ (var_ "x") (int_ 1))))) in
+let bar = let_ "bar" (lam_ "x" (None ()) (bind_ (let_ "h" (hole_ tybool_ true_ (int_ 2)))
+                                                (if_ (var_ "h") (var_ "x") (addi_ (var_ "x") (int_ 1))))) in
 let foo =
-  reclets_add "foo" (None ()) (lam_ "x" (None ()) (if_ (eqi_ (var_ "x") (int_ 1)) (app_ (var_ "foo") (int_ 2)) (app_ (var_ "bar") (var_ "x")))) reclets_empty in
+  reclets_add "foo" (lam_ "x" (None ()) (if_ (eqi_ (var_ "x") (int_ 1)) (app_ (var_ "foo") (int_ 2)) (app_ (var_ "bar") (var_ "x")))) reclets_empty in
 
 let ast = bindall_ [bar, foo,
-                    let_ "b1" tyint_ (app_ (var_ "bar") (int_ 1)),
-                    let_ "b2" tyint_ (app_ (var_ "bar") (int_ 2)),
+                    let_ "b1" (app_ (var_ "bar") (int_ 1)),
+                    let_ "b2" (app_ (var_ "bar") (int_ 2)),
                     app_ (var_ "foo") (int_ 1)] in
 
-let _ = print "\nAST from paper\n" in
-let _ = pprint ast in
-
-let _ = print "\nTransformed AST from paper\n" in
-let tast = transform ["foo", "bar"] ast in
-let _ = pprint tast in
-
--- Takes ~90 s to evaluate
---let e = eval ctx tast in
---utest e with int_ 2 in
+let tast = dprintTransform ast in
+let e = eval tast (int_ 2) in
+utest e with int_ 2 in
 
 ()
