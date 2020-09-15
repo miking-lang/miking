@@ -103,8 +103,7 @@ lang UIntParser = ExprParser + ConstAst + IntAst
         then work (advanceCol p2 1) xs (snoc num x)
         else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
       else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
-    in work (advanceCol p 1) (tail xs) ([head xs])
-    -- BUG: replace "tail xs" with "s". Should work, but does not. Probably an error in the boot pattern matching code.
+    in work (advanceCol p 1) s ([head xs])
 end
 
 
