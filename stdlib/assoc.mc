@@ -12,7 +12,11 @@ type AssocTraits k = {eq : k -> k -> Bool}
 
 -- 'assocEmpty' is an empty associate map
 let assocEmpty : AssocMap k v =
-   []
+  []
+
+-- 'assocLength m' returns the number of key-value pairs in m
+let assocLength : AssocMap k v -> Int =
+  lam m. length m
 
 -- 'assocInsert traits k v m' returns a new map, where the key-value pair
 -- ('k','v') is stored. If 'k' is already a key in 'm', its old value will be
@@ -64,6 +68,12 @@ let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
 let assocAny : (k -> v -> Bool) -> AssocMap k v -> Bool =
   lam p. lam m.
     any (lam t. p t.0 t.1) m
+
+-- 'assocAll p m' returns true if all (k,v) pair in the map satisfies
+-- the predicate 'p'.
+let assocAll : (k -> v -> Bool) -> AssocMap k v -> Bool =
+  lam p. lam m.
+    all (lam t. p t.0 t.1) m
 
 -- 'assocMem traits k m' returns true if 'k' is a key in 'm', else false.
 let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
@@ -119,10 +129,12 @@ mexpr
 
 let traits = {eq = eqi} in
 
+let length = assocLength in
 let lookup = assocLookup traits in
 let lookupOrElse = assocLookupOrElse traits in
 let lookupPred = assocLookupPred in
 let any = assocAny in
+let all = assocAll in
 let insert = assocInsert traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
@@ -139,6 +151,7 @@ let m = insert 1 '1' m in
 let m = insert 2 '2' m in
 let m = insert 3 '3' m in
 
+utest length m with 3 in
 utest lookup 1 m with Some '1' in
 utest lookup 2 m with Some '2' in
 utest lookup 3 m with Some '3' in
@@ -149,6 +162,8 @@ utest lookupOrElse (lam _. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
 utest any (lam k. lam v. eqchar v '2') m with true in
 utest any (lam k. lam v. eqchar v '4') m with false in
+utest all (lam k. lam v. gti k 0) m with true in
+utest all (lam k. lam v. gti k 1) m with false in
 utest
   match keys m with [1,2,3] | [1,3,2] | [2,1,3] | [2,3,1] | [3,1,2] | [3,2,1]
   then true else false

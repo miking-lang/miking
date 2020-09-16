@@ -26,6 +26,7 @@ type Env = {
   nameMap: AssocMap Name String,
 
   -- Used to keep track of strings assigned to names without symbols
+  -- TODO It is probably cleaner to merge this with nameMap (see eq.mc)
   strMap: AssocMap String String,
 
   -- Count the number of occurrences of each (base) string to assist with

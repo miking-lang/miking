@@ -75,6 +75,22 @@ utest nameEqSym _t1 _t2 with false
 utest nameEqSym _t2 _t3 with false
 utest nameEqSym _t3 _t3 with true
 
+-- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
+-- a symbol and their strings are equal. Otherwise, return false.
+-- TODO Short circuit for performance?
+let nameEq : Name -> Name -> Bool =
+  lam n1. lam n2.
+    or (nameEqSym n1 n2)
+      (and (and (not (nameHasSym n1)) (not (nameHasSym n2))) (nameEqStr n1 n2))
+
+let _t1 = nameNoSym "foo"
+let _t2 = nameSym "foo"
+let _t3 = nameSym "foo"
+utest nameEq _t1 _t1 with true
+utest nameEq _t2 _t2 with true
+utest nameEq _t1 _t2 with false
+utest nameEq _t2 _t3 with false
+utest nameEq _t3 _t3 with true
 
 -- 'nameSetNewSym n' returns a new name with a fresh symbol.
 -- The returned name contains the same string as 'n'.
