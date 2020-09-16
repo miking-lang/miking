@@ -10,7 +10,8 @@ let externals =
       (* Elementary functions *)
       ("extSin", Esin);
       ("extCos", Ecos);
-      ("extAtan", Eatan)
+      ("extAtan", Eatan);
+      ("extExp", Eexp)
     ]
 
 let arity = function
@@ -18,6 +19,7 @@ let arity = function
   | Esin -> 1
   | Ecos -> 1
   | Eatan -> 1
+  | Eexp -> 1
 
 let float_ fi f = TmConst(fi, CFloat(f))
 let int_ fi n = TmConst(fi, CInt(n))
@@ -44,3 +46,6 @@ let delta eval env fi c v =
 
   | Eatan,TmConst(_,CFloat(x)) -> float_ fi (atan x)
   | Eatan,_ -> fail_extapp fi
+
+  | Eexp,TmConst(_,CFloat(x)) -> float_ fi (exp x)
+  | Eexp,_ -> fail_extapp fi

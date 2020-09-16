@@ -6,3 +6,4 @@ let pprint = function
   | Esin -> us "extSin"
   | Ecos -> us "extCos"
   | Eatan -> us"extAtan"
+  | Eexp -> us"extExp"

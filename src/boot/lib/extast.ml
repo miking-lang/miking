@@ -3,3 +3,4 @@ type ext =
   | Esin
   | Ecos
   | Eatan
+  | Eexp
