@@ -1,7 +1,9 @@
--- Miking is licensed under the MIT license.
--- Copyright (C) David Broman. See file LICENSE.txt
---
--- Test integer primitives
+*-
+* Miking is licensed under the MIT license.
+* Copyright (C) David Broman. See file LICENSE.txt
+*
+* Test integer primitives
+-*
 
 mexpr
 
