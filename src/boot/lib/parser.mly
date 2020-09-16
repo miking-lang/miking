@@ -64,6 +64,7 @@
 %token <unit Ast.tokendata> MEXPR
 %token <unit Ast.tokendata> INCLUDE
 %token <unit Ast.tokendata> NEVER
+%token <unit Ast.tokendata> USING
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -164,7 +165,10 @@ topcon:
 toputest:
   | UTEST mexpr WITH mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
-        Utest (fi,$2,$4) }
+        Utest (fi,$2,$4,None) }
+  | UTEST mexpr WITH mexpr USING mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        Utest (fi,$2,$4,Some $6) }
 
 mlang:
   | LANG ident lang_includes lang_body
@@ -271,7 +275,10 @@ mexpr:
         TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $4) in
-        TmUtest(fi,$2,$4,$6) }
+        TmUtest(fi,$2,$4,None,$6) }
+  | UTEST mexpr WITH mexpr USING mexpr IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmUtest(fi,$2,$4,Some $6,$8) }
 
 lets:
   | LET var_ident ty_op EQ mexpr

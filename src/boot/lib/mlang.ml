@@ -304,7 +304,9 @@ let rec desugar_tm nss env =
   | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
   | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
-  | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
+  | TmUtest(fi, a, b, using, body) ->
+    let using_desugared = Option.map (desugar_tm nss env) using in
+    TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, using_desugared, desugar_tm nss env body)
   | TmNever(fi) -> TmNever(fi)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ ) as tm -> tm
@@ -355,8 +357,8 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
   | TopCon(Con(fi, id, ty)) ->
      let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
      in (nss, (wrap :: stack))
-  | TopUtest(Utest(fi, lhs, rhs)) ->
-     let wrap tm' = TmUtest(fi, lhs, rhs, tm')
+  | TopUtest(Utest(fi, lhs, rhs, using)) ->
+     let wrap tm' = TmUtest(fi, lhs, rhs, using, tm')
      in (nss, (wrap :: stack))
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =

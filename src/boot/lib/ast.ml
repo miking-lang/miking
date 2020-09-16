@@ -130,7 +130,7 @@ and mlang   = Lang of info * ustring * ustring list * decl list
 and let_decl = Let of info * ustring * tm
 and rec_let_decl = RecLet of info * (info * ustring * tm) list
 and con_decl = Con of info * ustring * ty
-and utest_top = Utest of info * tm * tm
+and utest_top = Utest of info * tm * tm * tm option
 and top =
 | TopLang of mlang
 | TopLet  of let_decl
@@ -156,7 +156,7 @@ and tm =
 | TmConapp  of info * ustring * sym * tm                            (* Constructor application *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
-| TmUtest   of info * tm * tm * tm                                  (* Unit testing *)
+| TmUtest   of info * tm * tm * tm option * tm                      (* Unit testing *)
 | TmNever   of info                                                 (* Never term *)
 (* Only part of the runtime system *)
 | TmClos    of info * ustring * sym * ty * tm * env Lazy.t          (* Closure *)
@@ -232,7 +232,9 @@ let rec map_tm f = function
   | TmMatch(fi,t1,p,t2,t3) ->
     f (TmMatch(fi,map_tm f t1,p,map_tm f t2,map_tm f t3))
   | TmUse(fi,l,t1) -> f (TmUse(fi,l,map_tm f t1))
-  | TmUtest(fi,t1,t2,tnext) -> f (TmUtest(fi,map_tm f t1,map_tm f t2,map_tm f tnext))
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
+    let tusing_mapped = Option.map (map_tm f) tusing in
+    f (TmUtest(fi,map_tm f t1,map_tm f t2,tusing_mapped,map_tm f tnext))
   | TmNever(_) as t -> f t
 
 
@@ -253,7 +255,7 @@ let tm_info = function
   | TmConapp(fi,_,_,_) -> fi
   | TmMatch(fi,_,_,_,_) -> fi
   | TmUse(fi,_,_) -> fi
-  | TmUtest(fi,_,_,_) -> fi
+  | TmUtest(fi,_,_,_,_) -> fi
   | TmNever(fi) -> fi
 
 let pat_info = function

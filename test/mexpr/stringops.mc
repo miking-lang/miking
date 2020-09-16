@@ -85,7 +85,7 @@ let strflatten = lam s. strjoin "" s in
 utest str2upper "Hello, world!" with "HELLO, WORLD!" in
 utest str2lower "Foo... BAR!" with "foo... bar!" in
 
-utest (eqstr "Hello" "Hello") with true in
+utest "Hello" with "Hello" using eqstr in
 utest (cons "Hello" []) with ["Hello"] in
 
 utest (strsplit "ll" "Hello") with ["He", "o"] in

@@ -495,14 +495,18 @@ let debug_eval env t =
   else ()
 
 (* Print out error message when a unit test fails *)
-let unittest_failed fi t1 t2=
+let unittest_failed fi t1 t2 tusing =
   uprint_endline
     (match fi with
     | Info(_,l1,_,_,_) ->
+      let using_str = (match tusing with
+        | Some t -> us"\n    Using: " ^. (ustring_of_tm t)
+        | None   -> us"") in
       us"\n ** Unit test FAILED on line " ^.
       us(string_of_int l1)
       ^.  us" **\n    LHS: " ^. (ustring_of_tm t1)
       ^.  us"\n    RHS: "    ^. (ustring_of_tm t2)
+      ^.  using_str
     | NoInfo -> us"Unit test FAILED ")
 
 
@@ -609,8 +613,9 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
      let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
-  | TmUtest(fi,t1,t2,tnext)
-    -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
+     let sym_using = Option.map (fun t -> symbolize env t) tusing in
+     TmUtest(fi,symbolize env t1,symbolize env t2,sym_using,symbolize env tnext)
   | TmNever(_) -> t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -760,16 +765,23 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       | None -> eval env t3)
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
-  | TmUtest(fi,t1,t2,tnext) ->
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
     if !utest then begin
-      let (v1,v2) = ((eval env t1),(eval env t2)) in
-        if val_equal v1 v2 then
-         (printf "."; utest_ok := !utest_ok + 1)
-       else (
-        unittest_failed fi v1 v2;
+      let v1,v2 = eval env t1,eval env t2 in
+      let equal = (match tusing with
+       | Some t ->
+         (match eval env (TmApp(fi,TmApp(fi,t,v1),v2)) with
+          | TmConst(_,CBool(b)) -> b
+          | _ -> raise_error fi ("Invalid equivalence function: "
+                                 ^ Ustring.to_utf8 (ustring_of_tm t)))
+       | None -> val_equal v1 v2) in
+      if equal then
+        (printf "."; utest_ok := !utest_ok + 1)
+      else (
+        unittest_failed fi v1 v2 tusing;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-     end;
+    end;
     eval env tnext
   | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."
 

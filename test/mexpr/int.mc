@@ -24,24 +24,25 @@ utest negi 1 with negi 1 in
 
 -- Integer comparison operators
 -- int -> int -> bool
-utest true with lti 4 10 in           -- Less than <
-utest false with lti 20 10 in
-utest false with lti 10 10 in
-utest true with leqi 4 10 in          -- Less than and equal <=
-utest false with leqi 20 10 in
-utest true with leqi 10 10 in
-utest true with gti 100 10 in         -- Greater than >
-utest false with gti 10 20 in
-utest false with gti 10 10 in
-utest true with geqi 100 10 in        -- Greater than and equal >=
-utest false with geqi 10 20 in
-utest true with geqi 10 10 in
-utest false with eqi 100 10 in        -- Equal =
-utest false with eqi 10 20 in
-utest true with eqi 10 10 in
-utest true with neqi 100 10 in        -- Not equal !=
-utest true with neqi 10 20 in
-utest false with neqi 10 10 in
+let neg = lam f. lam x. lam y. not (f x y) in
+utest 4 with 10 using lti in          -- Less than <
+utest 20 with 10 using neg lti in
+utest 10 with 10 using neg lti in
+utest 4 with 10 using leqi in         -- Less than or equal <=
+utest 20 with 10 using neg leqi in
+utest 10 with 10 using leqi in
+utest 100 with 10 using gti in        -- Greater than >
+utest 10 with 20 using neg gti in
+utest 10 with 10 using neg gti in
+utest 100 with 10 using geqi in       -- Greater than or equal >=
+utest 10 with 20 using neg geqi in
+utest 10 with 10 using geqi in
+utest 100 with 10 using neg eqi in    -- Equal =
+utest 10 with 20 using neg eqi in
+utest 10 with 10 using eqi in
+utest 100 with 10 using neqi in       -- Not equal !=
+utest 10 with 20 using neqi in
+utest 10 with 10 using neg neqi in
 
 -- Bit-shifting operators
 -- int -> int -> int

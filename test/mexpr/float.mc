@@ -34,26 +34,27 @@ utest negf 2.2 with negf 2.2 in
 
 -- Floating-point operations
 -- Float -> Float -> Bool
-utest ltf 0.5 2.0 with true in           -- less than (float)
-utest ltf 2.0 0.5 with false in
-utest ltf 0.5 0.5 with false in
-utest leqf 0.5 2.0 with true in          -- less equal (float)
-utest leqf 2.0 0.5 with false in
-utest leqf 0.5 0.5 with true in
-utest gtf 7.5 0.25 with true in          -- greater than (float)
-utest gtf 0.25 7.5 with false in
-utest gtf 0.25 0.25 with false in
-utest geqf 7.5 0.25 with true in         -- greater than or equal (float)
-utest geqf 0.25 7.5 with false in
-utest geqf 0.25 0.25 with true in
-utest eqf 2.2 2.2 with true in           -- equal (float)
-utest eqf 2.2 2.3 with false in
-utest eqf (subf 3.0 5.0) (negf 2.0)
-      with true in
-utest eqf (subf 3.0 5.0) (negf 3.0)
-      with false in
-utest neqf 0.25 0.25 with false in       -- not equal (float)
-utest neqf 0.25 0.5 with true in
+let neg = lam f. lam x. lam y. not (f x y) in
+utest 0.5 with 2.0 using ltf in          -- less than (float)
+utest 2.0 with 0.5 using neg ltf in
+utest 0.5 with 0.5 using neg ltf in
+utest 0.5 with 2.0 using leqf in         -- less equal (float)
+utest 2.0 with 0.5 using neg leqf in
+utest 0.5 with 0.5 using leqf in
+utest 7.5 with 0.25 using gtf in         -- greater than (float)
+utest 0.25 with 7.5 using neg gtf in
+utest 0.25 with 0.25 using neg gtf in
+utest 7.5 with 0.25 using geqf in        -- greater than or equal (float)
+utest 0.25 with 7.5 using neg geqf in
+utest 0.25 with 0.25 using geqf in
+utest 2.2 with 2.2 using eqf in          -- equal (float)
+utest 2.2 with 2.3 using neg eqf in
+utest subf 3.0 5.0 with negf 2.0
+      using eqf in
+utest subf 3.0 5.0 with negf 3.0
+      using neg eqf in
+utest 0.25 with 0.25 using neg neqf in   -- not equal (float)
+utest 0.25 with 0.5 using neqf in
 
 
 -- Conversion from Float to Int
@@ -105,6 +106,6 @@ utest string2float "3e+2" with 300.0 in
 let powf3 = lam x. mulf x (mulf x x) in
 let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
 let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
-utest eqf taxicab2_1 taxicab2_2 with true in
+utest taxicab2_1 with taxicab2_2 using eqf in
 
 ()

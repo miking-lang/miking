@@ -38,6 +38,7 @@ let reserved_strings = [
   ("mexpr",         fun(i) -> Parser.MEXPR{i=i;v=()});
   ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
+  ("using",         fun(i) -> Parser.USING{i=i;v=()});
 
 
   (* v *)
