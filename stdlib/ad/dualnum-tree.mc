@@ -21,7 +21,7 @@ con Num : Float -> DualNum -- we separate out real numbers
 let dualnumLtE : Eps -> Eps -> Bool = lti
 
 -- make a Real number
-let dualnumMkNum : Float -> DualNum =
+let dualnumNum : Float -> DualNum =
 lam f. Num f
 
 -- unpack float representation of a real number
@@ -31,11 +31,11 @@ lam n. match n with Num f then f
 
 -- lift unary real operator to number operator
 let dualnumFloat2num1 : (Float -> Float) -> (DualNum -> DualNum) =
-lam op. (lam x. dualnumMkNum (op (dualnumUnpackNum x)))
+lam op. (lam x. dualnumNum (op (dualnumUnpackNum x)))
 
 -- lift unary real operator to number operator
 let dualnumFloat2num2 : (Float -> Float -> Float) -> (DualNum -> DualNum -> DualNum) =
-lam op. (lam x1. lam x2. dualnumMkNum (op (dualnumUnpackNum x1)
+lam op. (lam x1. lam x2. dualnumNum (op (dualnumUnpackNum x1)
                                     (dualnumUnpackNum x2)))
 
 -- false if x' = 0 in x+ex'
@@ -45,7 +45,7 @@ lam n. match n with Num _ then false else
        never
 
 -- x if x' = 0 otherwise x+ex'
-let dualnumMkDualNum : Eps -> DualNum -> DualNum -> DualNum =
+let dualnumDNum : Eps -> DualNum -> DualNum -> DualNum =
 lam e. lam x. lam xp.
   match xp with Num f then
     if eqf f 0. then x else DualNum {e = e, x = x, xp = xp}
@@ -82,18 +82,18 @@ let e1 = 1 in
 let e2 = 2 in
 let e3 = 3 in
 
-let num0 = dualnumMkNum 0. in
-let num1 = dualnumMkNum 1. in
-let num2 = dualnumMkNum 2. in
-let num3 = dualnumMkNum 3. in
-let num4 = dualnumMkNum 4. in
-let dnum112 = dualnumMkDualNum e1 num1 num2 in
-let dnum212 = dualnumMkDualNum e2 num3 num4 in
+let num0 = dualnumNum 0. in
+let num1 = dualnumNum 1. in
+let num2 = dualnumNum 2. in
+let num3 = dualnumNum 3. in
+let num4 = dualnumNum 4. in
+let dnum112 = dualnumDNum e1 num1 num2 in
+let dnum212 = dualnumDNum e2 num3 num4 in
 
 utest dualnumIsDualNum num1 with false in
 utest dualnumIsDualNum dnum112 with true in
 utest dualnumEpsilon dnum112 with e1 in
-utest dualnumEpsilon (dualnumMkDualNum e3 dnum112 dnum212) with e3 in
+utest dualnumEpsilon (dualnumDNum e3 dnum112 dnum212) with e3 in
 utest dualnumPrimal e1 dnum112 with num1 in
 utest dualnumPertubation e1 dnum112 with num2 in
 utest dualnumPrimal e2 dnum112 with dnum112 in

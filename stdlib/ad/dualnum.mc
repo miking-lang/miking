@@ -10,10 +10,11 @@
 
 
 include "dualnum-symb.mc"
+include "dualnum-helpers.mc"
 include "string.mc"
 
-let num = dualnumMkNum
-let dnum = dualnumMkDualNum
+let num = dualnumNum
+let dnum = dualnumDNum
 
 let ltE = dualnumLtE
 let isDualNum = dualnumIsDualNum
@@ -92,7 +93,7 @@ recursive
 let dualnumPrimalDeep : DualNum -> DualNum =
 lam p.
    if not (isDualNum p) then p
-   else dualnumPrimalDeep (primal (epsilon p) p)  
+   else dualnumPrimalDeep (primal (epsilon p) p)
 end
 
 -- Real part of arbritrary nested dual number p as string.
@@ -100,33 +101,6 @@ let dualnum2string : DualNum -> String =
 lam p. float2string (unpack (dualnumPrimalDeep p))
 
 mexpr
-
-let num0 = num 0. in
-let num1 = num 1. in
-let num2 = num 2. in
-let num3 = num 3. in
-let num4 = num 4. in
-let num6 = num 6. in
-let num8 = num 8. in
-let num10 = num 10. in
-
-let e0 = dualnumGenEpsilon () in
-let e1 = dualnumGenEpsilon () in
-let e2 = dualnumGenEpsilon () in
-
-let dnum0 = dnum e0 in
-let dnum1 = dnum e1 in
-let dnum010 = dnum0 num1 num0 in
-let dnum011 = dnum0 num1 num1 in
-let dnum012 = dnum0 num1 num2 in
-let dnum021 = dnum0 num2 num1 in
-let dnum022 = dnum0 num2 num2 in
-let dnum031 = dnum0 num3 num1 in
-let dnum034 = dnum0 num3 num4 in
-let dnum036 = dnum0 num3 num6 in
-let dnum048 = dnum0 num4 num8 in
-let dnum111 = dnum1 num1 num1 in
-let dnum134 = dnum1 num3 num4 in
 
 -- addn
 utest addn num1 num2 with num3 in
