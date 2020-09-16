@@ -3,31 +3,26 @@ open Ustring.Op
 open Sundials
 
 let pprint = function
-  | EApp _ -> us "eapp"
-  (* Elementary functions *)
-  | Esin -> us "sin"
-  | Ecos -> us "cos"
-  | Eatan -> us"atan"
   (* SundialsML related functions *)
-  | ESArray a ->
-     let l = RealArray.to_list a in
-     let l' = List.map (fun x -> us (Printf.sprintf "%f" x)) l in
-     us"<|" ^. Ustring.concat (us",") l' ^. us"|>"
-  | ESArrayMake _ -> us"sArrMake"
-  | ESArrayGet _ -> us"sArrGet"
-  | ESArraySet _ -> us"sArrSet"
-  | ESMatrixDense _ -> us"SMatrixDense"
-  | ESMatrixDenseCreate _ -> us"sMatrixDenseCreate"
-  | ESMatrixDenseGet _ -> us"sMatrixDenseGet"
-  | ESMatrixDenseSet _ -> us"sMatrixDenseSet"
-  | ESArrayLength -> us "sArrLength"
-  | EIdaSession _ -> us"idaSession"
-  | EIdaInitDense _ -> us"idaInitDense"
-  | EIdaInitDenseJac _ -> us"idaInitDenseJac"
-  | EIdaSolveNormal _ -> us"idaSolveNormal"
-  | EIdaCalcICYY _ -> us"idaCalcICYY"
-  | EIdaCalcICYYYP _ -> us"idaCalcICYYYP"
-  | EIdaReinit _ -> us"idaReinit"
-  | EIdaGetDky _ -> us"idaGetDky"
-  | EIdaGetCurrentTime -> us"idaGetCurrentTime"
-  | EIdaGetLastStep -> us"idaGetLastStep"
+  | SArray a ->
+    let l = RealArray.to_list a in
+    let l' = List.map (fun x -> us (Printf.sprintf "%f" x)) l in
+    us"<|" ^. Ustring.concat (us",") l' ^. us"|>"
+  | SArrayMake _ -> us"sArrMake"
+  | SArrayGet _ -> us"sArrGet"
+  | SArraySet _ -> us"sArrSet"
+  | SMatrixDense _ -> us"SMatrixDense"
+  | SMatrixDenseCreate _ -> us"sMatrixDenseCreate"
+  | SMatrixDenseGet _ -> us"sMatrixDenseGet"
+  | SMatrixDenseSet _ -> us"sMatrixDenseSet"
+  | SArrayLength -> us "sArrLength"
+  | SIdaSession _ -> us"idaSession"
+  | SIdaInitDense _ -> us"idaInitDense"
+  | SIdaInitDenseJac _ -> us"idaInitDenseJac"
+  | SIdaSolveNormal _ -> us"idaSolveNormal"
+  | SIdaCalcICYY _ -> us"idaCalcICYY"
+  | SIdaCalcICYYYP _ -> us"idaCalcICYYYP"
+  | SIdaReinit _ -> us"idaReinit"
+  | SIdaGetDky _ -> us"idaGetDky"
+  | SIdaGetCurrentTime -> us"idaGetCurrentTime"
+  | SIdaGetLastStep -> us"idaGetLastStep"

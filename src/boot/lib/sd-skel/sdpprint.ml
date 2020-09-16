@@ -1,5 +1,4 @@
 open Sdast
 open Ustring.Op
 
-let pprint = function
-  | EApp _ -> us "eapp"
+let pprint _ = failwith "Don't call me!"

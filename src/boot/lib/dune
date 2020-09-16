@@ -22,7 +22,7 @@
      (pyml -> py/pypprint.ml)
      (-> py-skel/pypprint.ml))
 
-   (select ext.ml from
+   (select sd.ml from
      (sundialsml -> sd/sd.ml)
      (-> sd-skel/sd.ml))
    (select sdast.ml from

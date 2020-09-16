@@ -70,6 +70,8 @@ let builtin =
   ]
   (* Append external functions TODO: Should not be part of core language *)
   @ Ext.externals
+  (* Append sundials intrinsics *)
+  @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals)
   |> List.map (fun (x,t) -> (x,gensym(),t))
@@ -155,11 +157,13 @@ let arity = function
   | Cgensym       -> 1
   | Ceqs(None)    -> 2
   | Ceqs(Some(_)) -> 1
-  | CSym2hash      -> 1
+  | CSym2hash     -> 1
   (* Python intrinsics *)
-  | CPy v -> Pyffi.arity v
+  | CPy v   -> Pyffi.arity v
+  (* Sundials intrinsics *)
+  | CSd v   -> Sd.arity v
   (* External functions TODO: Should not be part of core language *)
-  | CSd v            -> Ext.arity v
+  | CExt v  -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU(None)    -> 2
   | CrandIntU(Some(_)) -> 1
@@ -478,9 +482,12 @@ let delta eval env fi c v  =
     | CSym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
     | CSym2hash,_ -> fail_constapp fi
 
+    (* Python intrinsics *)
     | CPy v, t -> Pyffi.delta eval env fi v t
-
-    | CSd v, t -> Ext.delta eval env fi v t
+    (* Sundials intrinsics *)
+    | CSd v, t -> Sd.delta eval env fi v t
+    (* Externals *)
+    | CExt v, t -> Ext.delta eval env fi v t 
 
 
 (* Debug function used in the eval function *)
