@@ -47,6 +47,26 @@ let ptuple_ = use MExprAst in
   lam ps.
   prec_ (mapi (lam i. lam p. (int2string i,p)) ps)
 
+let pseqtot_ = use MExprAst in
+  lam ps.
+  PSeqTot {pats = ps}
+
+let pseqedge_ = use MExprAst in
+  lam pre. lam post.
+  PSeqEdge {prefix = pre, postfix = post}
+
+let pand_ = use MExprAst in
+  lam l. lam r.
+  PAnd {lpat = l, rpat = r}
+
+let por_ = use MExprAst in
+  lam l. lam r.
+  POr {lpat = l, rpat = r}
+
+let pnot_ = use MExprAst in
+  lam p.
+  PNot {subpat = p}
+
 -- Types --
 let tyarrow_ = use MExprAst in
   lam from. lam to.
@@ -430,5 +450,3 @@ let null_ = use MExprAst in
 let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
-
-
