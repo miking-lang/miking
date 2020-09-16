@@ -39,7 +39,7 @@ lang VarANF = ANF + VarAst
 end
 
 -- This simplifies multiple-argument applications by not binding every
--- intermediate closure to a variable. I'm not sure if this makes static
+-- intermediate closure to a variable. I'm not yet sure if this makes static
 -- analysis easier or more difficult.
 lang AppANF = ANF + AppAst
   sem isValue =
@@ -116,7 +116,7 @@ lang RecLetsANF = ANF + RecLetsAst
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
-    let bindings = map (lam b. (b.ident, normalizeTerm b.body)) bindings in
+    let bindings = map (lam b. {b with body = normalizeTerm b.body}) bindings in
     TmRecLets {bindings = bindings, inexpr = normalize k inexpr}
 end
 
@@ -130,22 +130,68 @@ lang ConstANF = ANF + ConstAst
 end
 
 lang DataANF = ANF + DataAst
+  sem isValue =
+  | TmConDef _ -> false
+  | TmConApp _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
+    TmConDef {ident = ident, tpe = tpe, inexpr = normalize k inexpr}
+
+  | TmConApp {ident = ident, body = body } ->
+    normalizeName (lam b. k (TmConApp {ident = ident, body = b})) body
 
 end
 
 lang MatchANF = ANF + MatchAst
+  sem isValue =
+  | TmMatch _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
+    normalizeName
+      (lam t. TmMatch {target = t, pat = pat, thn = normalizeTerm thn,
+                                              els = normalizeTerm els})
+      target
 
 end
 
 lang UtestANF = ANF + UtestAst
+  sem isValue =
+  | TmUtest _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmUtest {test = test, expected = expected, next = next} ->
+    TmUtest {test = normalizeTerm test,
+             expected = normalizeTerm expected,
+             next = normalize k next}
 
 end
 
 lang SeqANF = ANF + SeqAst
+  sem isValue =
+  | TmSeq _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmSeq {tms = tms} ->
+    let acc = lam ts. k (TmSeq {tms = ts}) in
+    let f =
+      (lam acc. lam e.
+         (lam ts.
+            normalizeName
+              (lam v. acc (cons v ts))
+              e))
+    in
+    (foldl f acc tms) []
 
 end
 
 lang NeverANF = ANF + NeverAst
+  sem isValue =
+  | TmNever _ -> true
+
+  sem normalize (k : Expr -> Expr) =
+  | TmNever t -> k (TmNever t)
 
 end
 
@@ -154,9 +200,9 @@ lang MExprANF =
   VarANF + AppANF + FunANF + RecordANF + LetANF + RecLetsANF + ConstANF
   + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
 
-  -- It doesn't really make sense to have ANF without first symbolizing
   + MExprSym
 
+  + MExprPrettyPrint
 
 mexpr
 use MExprANF in
@@ -184,7 +230,11 @@ let apps =
 in
 
 let record =
-  record_ [("a",(app_ (int_ 1) (app_ (int_ 2) (int_ 3)))), ("b", (int_ 4)), ("c", (app_ (int_ 5) (int_ 6)))]
+  record_ [
+    ("a",(app_ (int_ 1) (app_ (int_ 2) (int_ 3)))),
+    ("b", (int_ 4)),
+    ("c", (app_ (int_ 5) (int_ 6)))
+  ]
 in
 
 let rupdate =
@@ -198,7 +248,17 @@ let factorial =
         (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))
 in
 
-let debug = true in
+let data = bind_ (ucondef_ "A") (conapp_ "A" (app_ (int_ 1) (int_ 2))) in
+
+let seq =
+  seq_ [
+    (app_ (int_ 1) (app_ (int_ 2) (int_ 3))),
+    (int_ 4),
+    (app_ (int_ 5) (int_ 6))
+  ]
+in
+
+let debug = false in
 
 let debugPrint = lam t.
   if debug then
@@ -221,7 +281,9 @@ let _ =
      apps,
      record,
      rupdate,
-     factorial
+     factorial,
+     data,
+     seq
    ]
 in
 ()
