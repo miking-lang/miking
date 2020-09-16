@@ -43,5 +43,13 @@ utest cosn num0 with num1 using eqnEps
 utest addn (muln (sinn num1) (sinn num1)) (muln (cosn num1) (cosn num1))
 with num1 using eqnEps
 
-utest pertubation e0 (sinn dnum011) with cosn num1 using eqnEps 
+utest pertubation e0 (sinn dnum011) with cosn num1 using eqnEps
 utest pertubation e0 (cosn dnum011) with negn (sinn num1) using eqnEps
+
+-- Exponential function
+recursive
+  let expn = lam p. lift1 (float2num1 exp) expn p
+end
+
+utest expn num0 with num1 using eqnEps
+utest pertubation e0 (expn dnum011) with expn num1 using eqnEps

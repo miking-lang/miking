@@ -20,5 +20,6 @@ utest cos 0. with 1. using eqfEps
 utest addf (mulf (sin 1.) (sin 1.)) (mulf (cos 1.) (cos 1.)) with 1.
 using eqfEps
 
+-- Exponential function
 let exp = extExp
 utest exp 0. with 1. using eqfEps
