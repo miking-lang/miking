@@ -8,7 +8,7 @@ let abs = lam x. if ltf x 0. then negf x else x
 let eqfEps = lam l. lam r.
   ltf (abs (subf l r)) eps
 
--- Trigonometic functions
+-- Trigonometric functions
 let sin = extSin
 utest sin (divf pi 2.) with 1. using eqfEps
 utest sin 0. with 0. using eqfEps

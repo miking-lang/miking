@@ -28,7 +28,7 @@ let absn = lam p. if ltn p num0 then negn p else p
 let eqnEps = lam l. lam r.
   ltn (absn (subn l r)) epsn
 
--- Trigonometic functions
+-- Trigonometric functions
 recursive
   let sinn = lam p. lift1 (float2num1 sin) cosn p
   let cosn = lam p. lift1 (float2num1 cos) (lam x. negn (sinn x)) p
