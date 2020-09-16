@@ -162,7 +162,8 @@ lang AppPrettyPrint = AppAst
     let apps = appseq (TmApp t) in
 
     let f = lam indent. lam env. lam t.
-      match pprintCode indent env t with (env,str) then
+      let i = if isAtomic t then indent else addi 1 indent in
+      match pprintCode i env t with (env,str) then
         if isAtomic t then (env,str)
         else (env,join ["(", str, ")"])
       else never
@@ -171,8 +172,7 @@ lang AppPrettyPrint = AppAst
     match f indent env (head apps) with (env,fun) then
       let aindent = incr indent in
       match mapAccumL (f aindent) env (tail apps) with (env,args) then
-        (env,
-         join [fun, newline aindent, strJoin (newline aindent) args])
+        (env, join [fun, newline aindent, strJoin (newline aindent) args])
       else never
     else error "Impossible"
 end
@@ -331,8 +331,10 @@ lang DataPrettyPrint = DataAst
   | TmConApp t ->
     match _getStr t.ident env with (env,str) then
       let l = conString str in
-      match pprintCode indent env t.body with (env,r) then
-        (env,join ["(", l, ") (", r, ")"])
+      let i = if isAtomic t.body then incr indent else addi 1 (incr indent) in
+      match pprintCode i env t.body with (env,r) then
+        let str = if isAtomic t.body then r else join ["(", r, ")"] in
+          (env,join [l, newline (incr indent), str])
       else never
     else never
 end
