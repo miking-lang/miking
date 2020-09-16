@@ -1,4 +1,4 @@
--- Symbolization of the MExpr ast.
+-- Symbolization of closed MExpr terms.
 
 include "name.mc"
 include "string.mc"
@@ -262,64 +262,30 @@ mexpr
 
 use MExprSym in
 
-let debug = false in
-
-let debugPrint = lam e. lam es.
-  if debug then
-    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
-    let _ = printLn (expr2str e) in
-    let _ = print "\n" in
-    let _ = printLn "--- AFTER SYMBOLIZE ---" in
-    let _ = printLn (expr2str es) in
-    let _ = print "\n" in
-    ()
-  else ()
-in
-
-let ae = assocEmpty in
-
 let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
-let sbase = symbolize ae base in
-let _ = debugPrint base sbase in
 
 let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
-let srec = symbolize ae rec in
-let _ = debugPrint rec srec in
 
 let letin = bind_ (let_ "x" rec) (app_ (var_ "x") base) in
-let sletin = symbolize ae letin in
-let _ = debugPrint letin sletin in
 
 let rlets =
   bind_ (reclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
     (app_ (var_ "x") (var_ "y")) in
-let srlets = symbolize ae rlets in
-let _ = debugPrint rlets srlets in
 
 let const = int_ 1 in
-let sconst = symbolize ae const in
-let _ = debugPrint const sconst in
 
 let data = bind_ (ucondef_ "Test") (conapp_ "Test" base) in
-let sdata = symbolize ae data in
-let _ = debugPrint data sdata in
 
 let varpat = match_ unit_ (pvar_ "x") (var_ "x") base in
-let svarpat = symbolize ae varpat in
-let _ = debugPrint varpat svarpat in
 
 let recpat =
   match_ base
     (prec_ [("k1", (pvar_ "x")), ("k2", pvarw_), ("k3", (pvar_ "x"))])
     (var_ "x") unit_ in
-let srecpat = symbolize ae recpat in
-let _ = debugPrint recpat srecpat in
 
 let datapat =
   bind_ (ucondef_ "Test")
     (match_ unit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") unit_) in
-let sdatapat = symbolize ae datapat in
-let _ = debugPrint datapat sdatapat in
 
 let litpat =
   match_ unit_ (pint_ 1)
@@ -329,20 +295,44 @@ let litpat =
           unit_)
        unit_)
     unit_ in
-let slitpat = symbolize ae litpat in
-let _ = debugPrint litpat slitpat in
 
 let ut = utest_ base base base in
-let sut = symbolize ae ut in
-let _ = debugPrint ut sut in
 
 let seq = seq_ [base, data, const] in
-let sseq = symbolize ae seq in
-let _ = debugPrint seq sseq in
 
 let nev = never_ in
-let snever = symbolize ae never_ in
-let _ = debugPrint nev snever in
 
+let debug = false in
+
+let debugPrint = lam t.
+  if debug then
+    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+    let _ = printLn (expr2str t) in
+    let _ = print "\n" in
+    let _ = printLn "--- AFTER SYMBOLIZE ---" in
+    let t = symbolize assocEmpty t in
+    let _ = printLn (expr2str t) in
+    let _ = print "\n" in
+    ()
+  else ()
+in
+
+let _ =
+  map debugPrint [
+    base,
+    rec,
+    letin,
+    rlets,
+    const,
+    data,
+    varpat,
+    recpat,
+    datapat,
+    litpat,
+    ut,
+    seq,
+    nev
+  ]
+in
 ()
 
