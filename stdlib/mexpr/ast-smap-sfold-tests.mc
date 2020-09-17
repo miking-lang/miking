@@ -123,10 +123,10 @@ utest smap_Pat_Pat (lam x. pseqtot_ [x]) pSeqTot
 with pseqtot_ [pseqtot_ [ptrue_], pseqtot_ [pfalse_]] in
 utest sfold_Pat_Pat snoc [] pSeqTot with [ptrue_, pfalse_] in
 
-let pSeqEdge = pseqedge_ [pint_ 1, pint_ 2] pwild_ [pint_ 3] in
+let pSeqEdge = pseqedgew_ [pint_ 1, pint_ 2] [pint_ 3] in
 
 utest smap_Pat_Pat (lam x. pseqtot_ [x]) pSeqEdge
-with pseqedge_ [pseqtot_ [pint_ 1], pseqtot_ [pint_ 2]] pwild_ [pseqtot_ [pint_ 3]] in
+with pseqedgew_ [pseqtot_ [pint_ 1], pseqtot_ [pint_ 2]] [pseqtot_ [pint_ 3]] in
 utest sfold_Pat_Pat snoc [] pSeqEdge with [pint_ 1, pint_ 2, pint_ 3] in
 
 let pAnd = pand_ ptrue_ pfalse_ in

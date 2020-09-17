@@ -34,6 +34,7 @@ let _symLookup = assocLookup {eq = identEq}
 let _symInsert = assocInsert {eq = identEq}
 let _symRecMap = assocMap {eq = identEq}
 let _symMapAccum = assocMapAccum {eq = identEq}
+let _symOverwrite = assocMergePreferRight {eq = identEq}
 
 -----------
 -- TERMS --
@@ -128,15 +129,20 @@ lang DataSym = DataAst
 end
 
 lang MatchSym = MatchAst
-  sem symbolizePat (env : Env) =
+  -- TODO(vipa): env is constant throughout symbolizePat, so it would be preferrable to pass it
+  -- in some other way, a reader monad or something. patEnv on the other hand changes, it would
+  -- be nice to pass via state monad or something.
+  -- env is the environment from the outside, plus the names added thus far in the pattern
+  -- patEnv is only the newly added names
+  sem symbolizePat (env : Env) (patEnv : Env) =
   -- Intentionally left blank
 
   sem symbolize (env : Env) =
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
-    match symbolizePat env pat
-    with (thnenv, pat) then
+    match symbolizePat env assocEmpty pat
+    with (thnPatEnv, pat) then
       TmMatch {target = symbolize env target,
-               pat = pat, thn = symbolize thnenv thn, els = symbolize env els}
+               pat = pat, thn = symbolize (_symOverwrite env thnPatEnv) thn, els = symbolize env els}
     else never
 end
 
@@ -162,108 +168,108 @@ end
 -- PATTERNS --
 --------------
 
-let _symbolize_patname: Env ->  (Env, PatName) = lam env. lam pname.
+let _symbolize_patname: Env ->  (Env, PatName) = lam patEnv. lam pname.
   match pname with PName name then
     let str = nameGetStr name in
-    let res = _symLookup (IdVar str) env in
+    let res = _symLookup (IdVar str) patEnv in
     match res with Some name then
-      (env, PName name)
+      (patEnv, PName name)
     else match res with None () then
       let name = nameSetNewSym name in
-      let env = _symInsert (IdVar str) name env in
-      (env, PName name)
+      let patEnv = _symInsert (IdVar str) name patEnv in
+      (patEnv, PName name)
     else never
   else match pname with PWildcard () then
-    (env, PWildcard ())
+    (patEnv, PWildcard ())
   else never
 
 lang VarPatSym = VarPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PVar p ->
-    match _symbolize_patname env p.ident with (env, patname) then
-      (env, PVar {p with ident = patname})
+    match _symbolize_patname patEnv p.ident with (patEnv, patname) then
+      (patEnv, PVar {p with ident = patname})
     else never
 end
 
 lang SeqTotPatSym = SeqTotPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PSeqTot p ->
-    let res = mapAccumL symbolizePat env p.pats in
+    let res = mapAccumL (symbolizePat env) patEnv p.pats in
     (res.0, PSeqTot {p with pats = res.1})
 end
 
 lang SeqEdgePatSym = SeqEdgePat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PSeqEdge p ->
-    let preRes = mapAccumL symbolizePat env p.prefix in
+    let preRes = mapAccumL (symbolizePat env) patEnv p.prefix in
     let midRes = _symbolize_patname preRes.0 p.middle in
-    let postRes = mapAccumL symbolizePat midRes.0 p.postfix in
+    let postRes = mapAccumL (symbolizePat env) midRes.0 p.postfix in
     (postRes.0, PSeqEdge
       {{{p with prefix = preRes.1} with middle = midRes.1} with postfix = postRes.1})
 end
 
 lang RecordPatSym = RecordPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PRecord {bindings = bindings} ->
-    match _symMapAccum (lam env. lam _. lam p. symbolizePat env p) env bindings
+    match _symMapAccum (lam patEnv. lam _. lam p. symbolizePat env patEnv p) env bindings
     with (env,bindings) then
       (env, PRecord {bindings = bindings})
     else never
 end
 
 lang DataPatSym = DataPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PCon {ident = ident, subpat = subpat} ->
     let str = nameGetStr ident in
     match _symLookup (IdCon str) env
     with Some ident then
-      match symbolizePat env subpat with (env, subpat) then
-        (env, PCon {ident = ident, subpat = subpat})
+      match symbolizePat env patEnv subpat with (patEnv, subpat) then
+        (patEnv, PCon {ident = ident, subpat = subpat})
       else never
     else error (concat "Unknown constructor in symbolize: " str)
 end
 
 lang IntPatSym = IntPat
-  sem symbolizePat (env : Env) =
-  | PInt i -> (env, PInt i)
+  sem symbolizePat (env : Env) (patEnv : Env) =
+  | PInt i -> (patEnv, PInt i)
 end
 
 lang CharPatSym = CharPat
-  sem symbolizePat (env : Env) =
-  | PChar c -> (env, PChar c)
+  sem symbolizePat (env : Env) (patEnv : Env) =
+  | PChar c -> (patEnv, PChar c)
 end
 
 lang BoolPatSym = BoolPat
-  sem symbolizePat (env : Env) =
-  | PBool b -> (env, PBool b)
+  sem symbolizePat (env : Env) (patEnv : Env) =
+  | PBool b -> (patEnv, PBool b)
 end
 
 lang AndPatSym = AndPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PAnd p ->
-    let lRes = symbolizePat env p.lpat in
-    let rRes = symbolizePat lRes.0 p.rpat in
+    let lRes = symbolizePat env patEnv p.lpat in
+    let rRes = symbolizePat env lRes.0 p.rpat in
     (rRes.0, PAnd {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang OrPatSym = OrPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | POr p ->
-    let lRes = symbolizePat env p.lpat in
-    let rRes = symbolizePat lRes.0 p.rpat in
+    let lRes = symbolizePat env patEnv p.lpat in
+    let rRes = symbolizePat env lRes.0 p.rpat in
     (rRes.0, POr {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang NotPatSym = NotPat
-  sem symbolizePat (env : Env) =
+  sem symbolizePat (env : Env) (patEnv : Env) =
   | PNot p ->
     -- NOTE(vipa): new names in a not-pattern do not matter since they will
     -- never bind (it should probably be an error to bind a name inside a
     -- not-pattern, but we're not doing that kind of static checks yet.
     -- Note that we still need to run symbolize though, constructors must
     -- refer to the right symbol.
-    let res = symbolizePat env p.subpat in
-    (env, PNot {p with subpat = res.1})
+    let res = symbolizePat env patEnv p.subpat in
+    (patEnv, PNot {p with subpat = res.1})
 end
 
 ------------------------------
@@ -294,7 +300,7 @@ mexpr
 
 use MExprSym in
 
-let debug = false in
+let debug = true in
 
 let debugPrint = lam e. lam es.
   if debug then
@@ -375,5 +381,22 @@ let _ = debugPrint seq sseq in
 let nev = never_ in
 let snever = symbolize ae never_ in
 let _ = debugPrint nev snever in
+
+let matchand = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pand_ (pint_ 1) (pvar_ "a")) (var_ "a") (never_)) in
+let smatchand = symbolize ae matchand in
+let _ = debugPrint matchand smatchand in
+
+let matchor = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar_ "a")) (var_ "a") (never_)) in
+let smatchor = symbolize ae matchor in
+let _ = debugPrint matchor smatchor in
+
+-- NOTE(vipa): (var_ "a") should refer to the "a" from let_, not the pattern, that's intended, in case someone happens to notice and finds it odd
+let matchnot = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
+let smatchnot = symbolize ae matchnot in
+let _ = debugPrint matchnot smatchnot in
+
+let matchoredge = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
+let smatchoredge = symbolize ae matchoredge in
+let _ = debugPrint matchoredge smatchoredge in
 
 ()

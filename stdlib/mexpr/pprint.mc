@@ -516,7 +516,7 @@ end
 let _pprint_patseq: (Int -> Env -> Pat -> (Env, String)) -> Int -> Env -> [Pat] -> (Env, String) = lam recur. lam indent. lam env. lam pats.
   use CharPat in
   let extract_char = lam e.
-    match e with PChar c then Some c
+    match e with PChar c then Some c.val
     else None () in
   match optionMapM extract_char pats with Some str then
     (env, join ["\"", str, "\""])
@@ -842,9 +842,8 @@ let func_beginsWithBinaryDigit =
   let_ "beginsWithBinaryDigit" (
     lam_ "s" (Some (tycon_ "Bool")) (
       match_ (var_ "s")
-             (pseqedge_
+             (pseqedgew_
                [por_ (pchar_ '0') (pchar_ '1')]
-               (pwild_)
                [])
              (true_)
              (false_)
