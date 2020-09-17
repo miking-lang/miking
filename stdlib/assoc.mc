@@ -103,6 +103,15 @@ let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
   lam _. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
+-- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
+-- 'acc'. The folding stops immediately if 'f' returns 'None ()'.
+-- IMPORTANT: The folding order is unspecified.
+let assocFoldOption : AssocTraits k -> (acc -> k -> v -> Option acc)
+                        -> acc -> AssocMap k v -> Option acc =
+  lam _. lam f. lam acc. lam m.
+    -- TODO Replace with optionFoldlM when available
+    foldOption (lam acc. lam t. f acc t.0 t.1) acc m
+
 -- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
 -- and fold over 'm' using function 'f' and accumulator 'acc'.
 -- IMPORTANT: The folding order is unspecified.
@@ -142,6 +151,7 @@ let keys = assocKeys traits in
 let values = assocValues traits in
 let map = assocMap traits in
 let fold = assocFold traits in
+let foldOption = assocFoldOption traits in
 let mapAccum = assocMapAccum traits in
 let mergePreferLeft = assocMergePreferLeft traits in
 let mergePreferRight = assocMergePreferRight traits in
@@ -181,6 +191,14 @@ with (Some '2', Some '3', Some '4') in
 
 utest fold (lam acc. lam k. lam v. addi acc k) 0 m with 6 in
 utest fold (lam acc. lam k. lam v. and acc (is_digit v)) true m with true in
+
+utest foldOption (lam acc. lam k. lam v. Some (addi acc k)) 0 m with Some 6 in
+utest foldOption (lam acc. lam k. lam v. if eqi k 4 then None () else Some acc)
+        true m
+with Some true in
+utest foldOption (lam acc. lam k. lam v. if eqi k 2 then None () else Some acc)
+        true m
+with None () in
 
 let mapaccm = mapAccum (lam acc. lam k. lam v. (addi acc k, nextChar v)) 0 m in
 utest (mapaccm.0, (lookup 1 mapaccm.1, lookup 2 mapaccm.1, lookup 3 mapaccm.1))

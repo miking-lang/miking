@@ -270,3 +270,65 @@ end
 --------------
 -- PATTERNS --
 --------------
+
+lang SeqTotPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- TODO
+end
+
+lang SeqEdgPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- TODO
+end
+
+lang RecordPatEq = RecordPat
+  sem eqpat (env : Env) (lhs : Pat) =
+  | PRecord {bindings = bs2} ->
+    match lhs with PRecord {bindings = bs1} then
+      if eqi (assocLength bs1) (assocLength bs2) then
+        assocFoldOption {eq=eqstr}
+          (lam env. lam k1. lam p1.
+             match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
+               eqpat env p1 p2
+             else None ())
+          env bs1
+      else None ()
+    else None ()
+end
+
+lang DataPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- | PCon {ident  : Name,
+  --         subpat : Pat}
+end
+
+lang IntPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- | PInt {val : Int}
+end
+
+lang CharPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- | PChar {val : Char}
+end
+
+lang BoolPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- | PBool {val : Bool}
+end
+
+lang AndPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- TODO
+end
+
+lang OrPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- TODO
+end
+
+lang NotPatEq
+  sem eqpat (env : Env) (lhs : Pat) =
+  -- TODO
+end
+
