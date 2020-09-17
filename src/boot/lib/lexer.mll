@@ -167,7 +167,7 @@ rule main = parse
       { colcount_fast s; main lexbuf }
   | line_comment
       { main lexbuf }
-  | "*-" as s
+  | "/-" as s
       { Buffer.reset string_buf ;
 	Buffer.add_string string_buf s;
         nesting_level := 0;
@@ -235,19 +235,19 @@ and parsestring = parse
 
 (* Section comment *)
 and section_comment = parse
-  | "-*" as s
+  | "-/" as s
       { if !nesting_level = 0 then
           Buffer.add_string string_buf s
         else (
           nesting_level := !nesting_level - 1;
           section_comment lexbuf)
       }
-  | "*-"
+  | "/-"
       { nesting_level := !nesting_level + 1;
         section_comment lexbuf
       }
   | eof
-      { let s = Ustring.from_utf8 ("*-" ^ (Buffer.contents string_buf)) in
+      { let s = Ustring.from_utf8 ("/-" ^ (Buffer.contents string_buf)) in
 	raise (Lex_error (LEX_COMMENT_NOT_TERMINATED,ERROR,
 	 	 mkinfo_ustring s, [s])) }
   | _ as c
