@@ -300,7 +300,7 @@ mexpr
 
 use MExprSym in
 
-let debug = true in
+let debug = false in
 
 let debugPrint = lam e. lam es.
   if debug then
