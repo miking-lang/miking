@@ -109,14 +109,13 @@ lang FixEval = FixAst + FunEval
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = map (lam b. (b.0, (eval ctx b.1))) t.bindings in
+    let bs = assocMap {eq=eqstr} (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
-    let mem = assocMem {eq = eqstr} in
-    let insertStr = assocInsert {eq = eqstr} in
     match eval ctx u.rec with TmRecord t then
-      if mem u.key t.bindings then
-        TmRecord { bindings = insertStr u.key (eval ctx u.value) t.bindings }
+      if assocMem {eq = eqstr} u.key t.bindings then
+        TmRecord { bindings = assocInsert {eq = eqstr}
+                                u.key (eval ctx u.value) t.bindings }
       else error "Key does not exist in record"
     else error "Not updating a record"
 end
@@ -515,19 +514,14 @@ end
 lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PRecord r ->
-    let lookupStr = assocLookup {eq = eqstr} in
     match t with TmRecord {bindings = bs} then
-      recursive let recurse = lam env. lam pbs.
-        match pbs with [(k,p)] ++ pbs then
-          match lookupStr k bs with Some v then
-            match tryMatch env v p with Some env then
-              recurse env pbs
-            else None ()
-          else None ()
-        else match pbs with [] then Some env
-        else never
-      in
-      recurse env r.bindings
+      assocFoldOption {eq = eqstr}
+        (lam env. lam k. lam p.
+          match assocLookup {eq = eqstr} k bs with Some v then
+            tryMatch env v p
+          else None ())
+        env
+        r.bindings
     else None ()
 end
 
