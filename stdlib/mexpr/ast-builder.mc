@@ -14,6 +14,9 @@ let pvar_ = use MExprAst in
 let pvarw_ = use MExprAst in
   PVar {ident = PWildcard ()}
 
+let pwild_ = use MExprAst in
+  PWildcard ()
+
 let punit_ = use MExprAst in
   PRecord { bindings = assocEmpty }
 
@@ -52,8 +55,8 @@ let pseqtot_ = use MExprAst in
   PSeqTot {pats = ps}
 
 let pseqedge_ = use MExprAst in
-  lam pre. lam post.
-  PSeqEdge {prefix = pre, postfix = post}
+  lam pre. lam middle. lam post.
+  PSeqEdge {prefix = pre, middle = middle, postfix = post}
 
 let pand_ = use MExprAst in
   lam l. lam r.
@@ -117,6 +120,10 @@ let tycon_ = use MExprAst in
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}
+
+let tyvar_ = use MExprAst in
+  lam ident.
+  TyVar {ident = ident}
 
 
 -- Terms --

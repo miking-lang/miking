@@ -281,7 +281,7 @@ end
 
 lang SeqEdgePat
   syn Pat =
-  | PSeqEdge {prefix : [Pat], postfix : [Pat]}
+  | PSeqEdge {prefix : [Pat], middle: PatName, postfix : [Pat]}
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PSeqEdge p -> PSeqEdge {{p with prefix = map f p.prefix} with postfix = map f p.postfix}
@@ -442,6 +442,11 @@ lang AppTypeAst
   | TyApp {lhs : Type, rhs : Type}
 end
 
+lang TypeVarAst
+  syn Type =
+  | TyVar {ident : String}
+end
+
 ------------------------
 -- MEXPR AST FRAGMENT --
 ------------------------
@@ -463,4 +468,4 @@ lang MExprAst =
   -- Types
   + FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
   TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
-  AppTypeAst
+  AppTypeAst + TypeVarAst

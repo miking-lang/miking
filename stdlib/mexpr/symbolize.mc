@@ -162,20 +162,27 @@ end
 -- PATTERNS --
 --------------
 
-lang VarPatSym = VarPat
-  sem symbolizePat (env : Env) =
-  | PVar {ident = PName name} ->
+let _symbolize_patname: Env ->  (Env, PatName) = lam env. lam pname.
+  match pname with PName name then
     let str = nameGetStr name in
     let res = _symLookup (IdVar str) env in
     match res with Some name then
-      (env, PVar {ident = PName name})
+      (env, PName name)
     else match res with None () then
       let name = nameSetNewSym name in
       let env = _symInsert (IdVar str) name env in
-      (env, PVar {ident = PName name})
+      (env, PName name)
     else never
-  | PVar {ident = PWildcard ()} ->
-    (env, PVar {ident = PWildcard ()})
+  else match pname with PWildcard () then
+    (env, PWildcard ())
+  else never
+
+lang VarPatSym = VarPat
+  sem symbolizePat (env : Env) =
+  | PVar p ->
+    match _symbolize_patname env p.ident with (env, patname) then
+      (env, PVar {p with ident = patname})
+    else never
 end
 
 lang SeqTotPatSym = SeqTotPat
@@ -189,9 +196,10 @@ lang SeqEdgePatSym = SeqEdgePat
   sem symbolizePat (env : Env) =
   | PSeqEdge p ->
     let preRes = mapAccumL symbolizePat env p.prefix in
-    let postRes = mapAccumL symbolizePat preRes.0 p.postfix in
+    let midRes = _symbolize_patname preRes.0 p.middle in
+    let postRes = mapAccumL symbolizePat midRes.0 p.postfix in
     (postRes.0, PSeqEdge
-      {{p with prefix = preRes.1} with postfix = postRes.1})
+      {{{p with prefix = preRes.1} with middle = midRes.1} with postfix = postRes.1})
 end
 
 lang RecordPatSym = RecordPat
