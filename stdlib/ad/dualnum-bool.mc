@@ -10,9 +10,10 @@
 
 
 include "dualnum.mc"
+include "dualnum-helpers.mc"
 
-let num = dualnumMkNum
-let dnum = dualnumMkDualNum
+let num = dualnumNum
+let dnum = dualnumDNum
 
 let epsilon = dualnumEpsilon
 let primal = dualnumPrimal
@@ -40,14 +41,6 @@ let gtn = dualnumLiftBoolFun2 gtf -- lifted >
 let geqn = dualnumLiftBoolFun2 geqf -- lifted >=
 
 mexpr
-
-let e1 = genEpsilon () in
-let e2 = genEpsilon () in
-
-let num1 = num 1. in
-let num2 = num 2. in
-let num3 = num 3. in
-let dnum112 = dnum e1 num1 num2 in
 
 utest eqn num1 num1 with true in
 utest eqn num1 num2 with false in

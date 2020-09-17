@@ -1,39 +1,34 @@
 open Sundials
 
-type 'a ext =
-  | EApp of ('a -> 'a) option
-  (* Elementary functions *)
-  | Esin
-  | Ecos
-  | Eatan
+type ext =
   (* SundialsML related functions *)
-  | ESArray of RealArray.t
-  | ESArrayMake of int option
-  | ESArrayGet of RealArray.t option
-  | ESArraySet of RealArray.t option * int option
-  | ESArrayLength
-  | ESMatrixDense of Matrix.Dense.t
-  | ESMatrixDenseCreate of int option
-  | ESMatrixDenseGet of Matrix.Dense.t option
-                        * int option
-  | ESMatrixDenseSet of Matrix.Dense.t option
-                        * int option
-                        * int option
-  | EIdaSession of Nvector_serial.kind Ida.serial_session
-  | EIdaInitDense of (float * float) option
+  | SArray of RealArray.t
+  | SArrayMake of int option
+  | SArrayGet of RealArray.t option
+  | SArraySet of RealArray.t option * int option
+  | SArrayLength
+  | SMatrixDense of Matrix.Dense.t
+  | SMatrixDenseCreate of int option
+  | SMatrixDenseGet of Matrix.Dense.t option
+                       * int option
+  | SMatrixDenseSet of Matrix.Dense.t option
+                       * int option
+                       * int option
+  | SIdaSession of Nvector_serial.kind Ida.serial_session
+  | SIdaInitDense of (float * float) option
                      * (float ->
                         RealArray.t ->
                         RealArray.t ->
                         RealArray.t ->
                         unit) option
-                        * (int * (float ->
-                                  RealArray.t ->
-                                  RealArray.t ->
-                                  RealArray.t ->
-                                  unit)) option
+                     * (int * (float ->
+                               RealArray.t ->
+                               RealArray.t ->
+                               RealArray.t ->
+                               unit)) option
                      * float option
                      * RealArray.t option
-  | EIdaInitDenseJac of (float * float) option
+  | SIdaInitDenseJac of (float * float) option
                         * ((RealArray.t Ida.triple, RealArray.t)
                              Ida.jacobian_arg ->
                            Matrix.Dense.t ->
@@ -50,20 +45,20 @@ type 'a ext =
                                   unit)) option
                         * float option
                         * RealArray.t option
-  | EIdaSolveNormal of Nvector_serial.kind Ida.serial_session option
+  | SIdaSolveNormal of Nvector_serial.kind Ida.serial_session option
                        * float option
                        * Nvector_serial.t option
-  | EIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
+  | SIdaCalcICYY of Nvector_serial.kind Ida.serial_session option
                     * Nvector_serial.t option
-  | EIdaCalcICYYYP of Nvector_serial.kind Ida.serial_session option
+  | SIdaCalcICYYYP of Nvector_serial.kind Ida.serial_session option
                       * Nvector_serial.t option
                       * Nvector_serial.t option
                       * Nvector_serial.t option
-  | EIdaReinit of Nvector_serial.kind Ida.serial_session option
+  | SIdaReinit of Nvector_serial.kind Ida.serial_session option
                   * float option
                   * Nvector_serial.t option
-  | EIdaGetDky of Nvector_serial.kind Ida.serial_session option
+  | SIdaGetDky of Nvector_serial.kind Ida.serial_session option
                   * Nvector_serial.t option
                   * float option
-  | EIdaGetCurrentTime
-  | EIdaGetLastStep
+  | SIdaGetCurrentTime
+  | SIdaGetLastStep

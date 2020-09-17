@@ -1,0 +1,1 @@
+type ext = unit

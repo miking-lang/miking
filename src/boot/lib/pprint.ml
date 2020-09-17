@@ -243,7 +243,8 @@ let rec print_const fmt = function
 
   (* Python intrinsics *)
   | CPy(v) -> fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
-
+  (* Sundials intrinsics *)
+  | CSd(v) -> fprintf fmt "%s" (string_of_ustring (Sdpprint.pprint v))
   (* External pprint TODO: Should not be part of core language *)
   | CExt(v) -> fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
 
