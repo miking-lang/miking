@@ -19,22 +19,28 @@ let defaults = {
 } in
 
 let config = [
-  ArgParserFlag ('h', "help", "Prints a help message and exits",
-                 lam o. {o with help = true}),
-  ArgParserLongFlag ("debug-parse", "Enables output of parsing",
-                     lam o. {o with debugParse = true}),
-  ArgParserPositional [
-    ArgParserName "MODE",
-    ArgParserPosition 0,
-    ArgParserRequired (),
-    ArgParserDescription "Set mode of the Miking compiler.",
+  APFlag ('h', "help", "Prints a help message and exits",
+          lam o. {o with help = true}),
+  APLongFlag ("debug-parse", "Enables output of parsing",
+              lam o. {o with debugParse = true}),
+  APPositional [
+    APName "mode",
+    APPosition 0,
+    APRequired (),
+    APDescription "Set mode of the Miking compiler.",
     -- Allowed modes:
-    ArgParserValue ("compile", "Compiles the provided MCore files."),
-    ArgParserValue ("eval", "Evaluates the provided MCore files."),
-    ArgParserApplyVal (lam m. lam o. {o with mode = m})
+    APValue ("compile", "Compiles the provided MCore files."),
+    APValue ("eval", "Evaluates the provided MCore files."),
+    APValue ("repl", "Launches the MCore REPL. Specified input files are automatically included."),
+    APApplyVal (lam m. lam o. {o with mode = m}),
+    -- Perform sanity checks depending on which mode that was selected
+    APPostCond (lam o. if eqstr o.mode "compile" then not (null o.files) else true,
+                "No input files to compile"),
+    APPostCond (lam o. if eqstr o.mode "eval" then not (null o.files) else true,
+                "No input files to evaluate")
   ],
-  ArgParserMany ("files", "MCore input files",
-                 lam f. lam o. {o with files = snoc o.files f})
+  APAny ("files", "MCore input files",
+         lam f. lam o. {o with files = snoc o.files f})
 ] in
 
 -- Compile time check that arguments settings are well formed. Right side will

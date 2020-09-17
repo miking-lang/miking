@@ -5,6 +5,7 @@
 
 include "bool.mc"
 include "char.mc"
+include "either.mc"
 include "hashmap.mc"
 include "math.mc"
 include "option.mc"
@@ -12,38 +13,40 @@ include "seq.mc"
 include "string.mc"
 
 -- Public types
-type ArgParserModifier a
+type APModifier a
 -- OPTION ONLY MODIFIERS
-con ArgParserShort: Char -> ArgParserModifier a
-con ArgParserLong: String -> ArgParserModifier a
-con ArgParserMetavar: String -> ArgParserModifier a
-con ArgParserApply: (a -> a) -> ArgParserModifier a
+con APShort: Char -> APModifier a
+con APLong: String -> APModifier a
+con APMetavar: String -> APModifier a
+con APApply: (a -> a) -> APModifier a
 -- POSITIONAL ONLY MODIFIERS
-con ArgParserName: String -> ArgParserModifier a
-con ArgParserPosition: Int -> ArgParserModifier a
-con ArgParserMatchCond: (String -> Bool) -> ArgParserModifier a
-con ArgParserRequired: () -> ArgParserModifier a
+con APName: String -> APModifier a
+con APPosition: Int -> APModifier a
+con APMatchCond: (String -> Bool) -> APModifier a
+con APRequired: () -> APModifier a
 -- GENERIC MODIFIERS
-con ArgParserDescription: String -> ArgParserModifier a
-con ArgParserApplyVal: (String -> a -> a) -> ArgParserModifier a
-con ArgParserValue: (String, String) -> ArgParserModifier a
-con ArgParserValues: [String] -> ArgParserModifier a
-con ArgParserValueDescription: (String, String) -> ArgParserModifier a
-con ArgParserOnce: () -> ArgParserModifier a
-con ArgParserPostCond: ((String -> Bool), String) -> ArgParserModifier a -- A check that will be performed if this has been matched with an input argument
+con APDescription: String -> APModifier a
+con APApplyVal: (String -> a -> a) -> APModifier a
+con APValue: (String, String) -> APModifier a
+con APValues: [String] -> APModifier a
+con APValueDescription: (String, String) -> APModifier a
+con APOnce: () -> APModifier a
+con APPostCond: ((a -> Bool), String) -> APModifier a -- A check that will be performed if this has been matched with an input argument
 
-type ArgParserConfiguration a
-con ArgParserOption: [ArgParserModifier a] -> ArgParserConfiguration a
-con ArgParserPositional: [ArgParserModifier a] -> ArgParserConfiguration a
-con ArgParserFlag: (Char, String, String, a -> a) -> ArgParserConfiguration a
-con ArgParserLongFlag: (String, String, a -> a) -> ArgParserConfiguration a
-con ArgParserMetavarFlag: (Char, String, String, String, String -> a -> a) -> ArgParserConfiguration a
-con ArgParserLongMetavarFlag: (String, String, String, String -> a -> a) -> ArgParserConfiguration a
-con ArgParserMutuallyExclusiveOptions: [String] -> ArgParserConfiguration a
+type APConfiguration a
+con APOption: [APModifier a] -> APConfiguration a
+con APPositional: [APModifier a] -> APConfiguration a
+con APFlag: (Char, String, String, a -> a) -> APConfiguration a
+con APLongFlag: (String, String, a -> a) -> APConfiguration a
+con APMetavarFlag: (Char, String, String, String, String -> a -> a) -> APConfiguration a
+con APLongMetavarFlag: (String, String, String, String -> a -> a) -> APConfiguration a
+con APMutuallyExclusiveOptions: [String] -> APConfiguration a
+con APAny: (String, String, a -> a) -> APConfiguration a
+con APMany: (String, String, a -> a) -> APConfiguration a
 
 
 -- Internal types
-type ArgParserOptionItem_ a = {
+type APOptionItem_ a = {
   short: Option Char,
   long: String,
   metavar: Option String,
@@ -54,7 +57,7 @@ type ArgParserOptionItem_ a = {
   once: Bool,
   postconds: [((String -> Bool), String)]
 }
-type ArgParserPositionalItem_ a = {
+type APPositionalItem_ a = {
   name: String,
   description: Option String,
   position: Option Int,
@@ -64,22 +67,24 @@ type ArgParserPositionalItem_ a = {
   -- values: <ValueName> -> <Description>
   values: HashMap String String,
   once: Bool,
-  postconds: [((String -> Bool), String)]
+  postconds: [((a -> Bool), String)]
 }
 type ArgParser_ a = {
   -- The name of the program being run, specified by `head args`.
   name: String,
   -- Contains all options as a map from long option name -> option record
-  options: HashMap String ArgParserOptionItem_,
+  options: HashMap String (APOptionItem_ a),
   -- Lookup from short option name -> long option name
   shortOptLookup: HashMap Char String,
   -- A map over long option names -> other options than cannot be specified with this option
   optExclusions: HashMap String [String],
   -- All positionals
-  positionals: [ArgParserPositionalItem_],
+  positionals: [APPositionalItem_ a],
   -- Lines of error messages that has been produced during the argument
   -- parsing. An empty list indicates that no error has occurred. These should
-  -- ideally be printed as `strJoin "\n" ap.errors`.
+  -- ideally be printed as `strJoin "\n" ap.errors`. The reason for not
+  -- embedding this into an Either type is to allow accumulation of as many
+  -- errors as possible when forming the parser.
   errors: [String]
 }
 
@@ -104,11 +109,11 @@ let _char_keys = hashmapKeys _char_traits
 let _char_values = hashmapValues _char_traits
 
 
--- Takes the settings list to an ArgParserOption and returns either a tuple
+-- Takes the settings list to an APOption and returns either a tuple
 -- containing the long option name with list of error messages, or a
 -- well-formed option.
-let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOptionItem_ a) = lam mods.
-  let opt: ArgParserOptionItem_ a = {
+let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) = lam mods.
+  let opt: APOptionItem_ a = {
     short = None (),
     long = "",
     metavar = None (),
@@ -123,27 +128,27 @@ let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOp
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserShort c then
+    match mod with APShort c then
       if optionIsNone acc.opt.short then
         {acc with opt = {acc.opt with short = Some c}}
       else
         {acc with errs = snoc acc.errs "Multiple short modifiers"}
-    else match mod with ArgParserLong s then
+    else match mod with APLong s then
       if not acc.hasLong then
         {{acc with opt = {acc.opt with long = s}}
               with hasLong = true}
       else
         {acc with errs = snoc acc.errs "Multiple long modifiers"}
-    else match mod with ArgParserMetavar mv then
+    else match mod with APMetavar mv then
       if optionIsNone acc.opt.metavar then
         {acc with opt = {acc.opt with metavar = Some mv}}
       else
         {acc with errs = snoc acc.errs "Multiple metavars"}
-    else match mod with ArgParserDescription s then
+    else match mod with APDescription s then
       {acc with opt = {acc.opt with description = s}}
-    else match mod with ArgParserValue (val,desc) then
+    else match mod with APValue (val,desc) then
       {acc with opt = {acc.opt with values = _str_insert val desc acc.opt.values}}
-    else match mod with ArgParserValues vs then
+    else match mod with APValues vs then
       if null vs then
         {acc with errs = snoc acc.errs "Empty value list"}
       else
@@ -153,9 +158,9 @@ let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOp
             else
               _str_insert v "" hm
           ) acc.opt.values vs}}
-    else match mod with ArgParserOnce _ then
+    else match mod with APOnce _ then
       {acc with opt = {acc.opt with once = true}}
-    else match mod with ArgParserPostCond pctup then
+    else match mod with APPostCond pctup then
       {acc with opt = {acc.opt with postconds = cons pctup acc.opt.postconds}}
     else
       -- Process this at a later stage
@@ -164,19 +169,19 @@ let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOp
 
   -- Process options that depends on previously processed settings
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserValueDescription (val, desc) then
+    match mod with APValueDescription (val, desc) then
       -- Only add description to a value if it actually exists.
       if _str_mem val acc.opt.values then
         {acc with opt = {acc.opt with values = _str_insert val desc acc.opt.values}}
       else
         {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
-    else match mod with ArgParserApply fn then
+    else match mod with APApply fn then
       if acc.hasApply then
         {acc with errs = snoc acc.errs "Multiple apply functions"}
       else
         {{acc with opt = {acc.opt with apply = lam _. fn}}
               with hasApply = true}
-    else match mod with ArgParserApplyVal fn then
+    else match mod with APApplyVal fn then
       if optionIsNone acc.opt.metavar then
         {acc with errs = snoc acc.errs "Cannot apply value to an option without a metavar"}
       else if opt.hasApply then
@@ -191,12 +196,12 @@ let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOp
 
   -- Check for settings that are not applicable to an option
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserName _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"ArgParserName\""}
-    else match mod with ArgParserPosition _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"ArgParserPosition\""}
-    else match mod with ArgParserMatchCond _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"ArgParserMatchCond\""}
+    match mod with APName _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APName\""}
+    else match mod with APPosition _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APPosition\""}
+    else match mod with APMatchCond _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APMatchCond\""}
     else
       -- Process this at a later stage
       {acc with unprocessed = snoc acc.unprocessed mod}
@@ -232,11 +237,11 @@ let formOption_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserOp
     Right state.opt
 
 
--- Takes the settings list to an ArgParserPositional and returns either a tuple
+-- Takes the settings list to an APPositional and returns either a tuple
 -- that contains identifying name with a list of error messages, or a
 -- well-formed positional.
-let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgParserPositionalItem_ a) = lam mods.
-  let pos: ArgParserPositionalItem_ a = {
+let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalItem_ a) = lam mods.
+  let pos: APPositionalItem_ a = {
     name = "",
     description = "",
     position = None (),
@@ -252,24 +257,24 @@ let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgPars
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserName s then
+    match mod with APName s then
       if not acc.hasName then
         {{acc with pos = {acc.pos with name = s}}
               with hasName = true}
       else
         {acc with errs = snoc acc.errs "Multiple names for positional"}
-    else match mod with ArgParserPosition i then
+    else match mod with APPosition i then
       if optionIsNone acc.pos.position then
         {acc with pos = {acc.pos with position = Some i}}
       else
         {acc with errs = snoc acc.errs "Multiple positions specified"}
-    else match mod with ArgParserMatchCond condfn then
+    else match mod with APMatchCond condfn then
       {acc with pos = {acc.pos with matchconds = cons condfn acc.pos.matchconds}}
-    else match mod with ArgParserDescription s then
+    else match mod with APDescription s then
       {acc with pos = {acc.pos with description = s}}
-    else match mod with ArgParserValue (val,desc) then
+    else match mod with APValue (val,desc) then
       {acc with pos = {acc.pos with values = _str_insert val desc acc.pos.values}}
-    else match mod with ArgParserValues vs then
+    else match mod with APValues vs then
       if null vs then
         {acc with errs = snoc acc.errs "Empty value list"}
       else
@@ -279,11 +284,11 @@ let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgPars
             else
               _str_insert v "" hm
           ) acc.pos.values vs}}
-    else match mod with ArgParserOnce _ then
+    else match mod with APOnce _ then
       {acc with pos = {acc.pos with once = true}}
-    else match mod with ArgParserRequired _ then
+    else match mod with APRequired _ then
       {acc with pos = {acc.pos with required = true}}
-    else match mod with ArgParserPostCond pctup then
+    else match mod with APPostCond pctup then
       {acc with pos = {acc.pos with postconds = cons pctup acc.pos.postconds}}
     else
       -- Process this at a later stage
@@ -292,13 +297,13 @@ let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgPars
 
   -- Process options that depends on previously processed settings
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserValueDescription (val, desc) then
+    match mod with APValueDescription (val, desc) then
       -- Only add description to a value if it actually exists.
       if _str_mem val acc.pos.values then
         {acc with pos = {acc.pos with values = _str_insert val desc acc.pos.values}}
       else
         {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
-    else match mod with ArgParserApplyVal fn then
+    else match mod with APApplyVal fn then
       if pos.hasApply then
         {acc with errs = snoc acc.errs "Multiple apply functions"}
       else
@@ -311,14 +316,14 @@ let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgPars
 
   -- Check for settings that are not applicable to a positional
   let state = foldl (lam acc. lam mod.
-    match mod with ArgParserShort _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"ArgParserShort\""}
-    else match mod with ArgParserLong _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"ArgParserLong\""}
-    else match mod with ArgParserMetavar _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"ArgParserMetavar\""}
-    else match mod with ArgParserApply _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"ArgParserApply\""}
+    match mod with APShort _ then
+      {acc with errs = snoc acc.errs "Invalid positional setting \"APShort\""}
+    else match mod with APLong _ then
+      {acc with errs = snoc acc.errs "Invalid positional setting \"APLong\""}
+    else match mod with APMetavar _ then
+      {acc with errs = snoc acc.errs "Invalid positional setting \"APMetavar\""}
+    else match mod with APApply _ then
+      {acc with errs = snoc acc.errs "Invalid positional setting \"APApply\""}
     else
       -- Process this at a later stage
       {acc with unprocessed = snoc acc.unprocessed mod}
@@ -357,7 +362,7 @@ let formPositional_: [ArgParserModifier a] -> Either (String, [String]) (ArgPars
 -- Adds a parsed option result to the ArgParser if it passes all checks.
 -- Otherwise concatenates the error messages to the internal list of error
 -- messages.
-let addOption_: Either (String, [String]) (ArgParserOptionItem_ a) -> ArgParser_ a -> ArgParser_ a =
+let addOption_: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> ArgParser_ a =
   lam eitherOpt. lam ap.
   match eitherOpt with Left (long, errs) then
     {ap with errors = join [
@@ -384,7 +389,7 @@ let addOption_: Either (String, [String]) (ArgParserOptionItem_ a) -> ArgParser_
 -- Adds a parsed positionalal result to the ArgParser if it passes all checks.
 -- Otherwise concatenates the error messages to the internal list of error
 -- messages.
-let addPositional_: Either (String, [String]) (ArgParserPositionalItem_ a) -> ArgParser_ a -> ArgParser_ a =
+let addPositional_: Either (String, [String]) (APPositionalItem_ a) -> ArgParser_ a -> ArgParser_ a =
   lam eitherPos. lam ap.
   match eitherPos with Left (name, errs) then
     {ap with errors = join [
@@ -393,51 +398,59 @@ let addPositional_: Either (String, [String]) (ArgParserPositionalItem_ a) -> Ar
       map (concat "  - ") errs -- <- apply indendation
     ]}
   else match eitherPos with Right pos then
+    if any (lam p. eqstr p.name pos.name) ap.positionals then
+      {ap with errors = join [
+        ap.errors,
+        [join ["Duplicate positional name \"", name, "\":"]],
+        map (concat "  - ") errs -- <- apply indendation
+      ]}
+    else
     {ap with positionals = snoc ap.positionals pos}
   else never
 
-recursive let translateConfig_: [ArgParserConfiguration a] -> [ArgParserConfiguration a] -> ArgParser_ a -> ArgParser_ a =
+
+recursive let translateConfig_: [APConfiguration a] -> [APConfiguration a] -> ArgParser_ a -> ArgParser_ a =
   lam configs. lam postconfigs. lam ap.
   match configs with [config] ++ remaining then
     -- Scan primary configs
     let config = head configs in
     let remaining = tail configs in
-    match config with ArgParserOption mods then
+    match config with APOption mods then
       let optret = formOption_ mods in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with ArgParserPositional mods then
+    else match configs with APPositional mods then
       let posret = formPositional_ mods in
       translateConfig_ remaining postconfigs (addPositional_ modret ap)
-    else match configs with ArgParserFlag (short, long, description, apply) then
+    else match configs with APFlag (short, long, description, apply) then
       let optret = formOption_ [
-        ArgParserShort short,
-        ArgParserLong long,
-        ArgParserDescription description,
-        ArgParserApply apply
+        APShort short,
+        APLong long,
+        APDescription description,
+        APApply apply
       ] in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with ArgParserLongFlag (long, description, apply) then
+    else match configs with APLongFlag (long, description, apply) then
       let optret = formOption_ [
-        ArgParserLong long,
-        ArgParserDescription description,
-        ArgParserApply apply
+        APLong long,
+        APDescription description,
+        APApply apply
       ] in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with ArgParserMetavarFlag (short, long, metavar, description, applyval) then
+    else match configs with APMetavarFlag (short, long, metavar, description, applyval) then
       let optret = formOption_ [
-        ArgParserShort short,
-        ArgParserLong long,
-        ArgParserMetavar metvar,
-        ArgParserDescription description,
-        ArgParserApplyVal applyval
+        APShort short,
+        APLong long,
+        APMetavar metvar,
+        APDescription description,
+        APApplyVal applyval
       ] in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with ArgParserLongMetavarFlag (long, metavar, description, applyval) then
+    else match configs with APLongMetavarFlag (long, metavar, description, applyval) then
       let optret = formOption_ [
-        ArgParserLong long,
-        ArgParserMetavar metvar,
-        ArgParserDescription description,
-        ArgParserApplyVal applyval
+        APLong long,
+        APMetavar metvar,
+        APDescription description,
+        APApplyVal applyval
       ] in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
     else
@@ -445,7 +458,7 @@ recursive let translateConfig_: [ArgParserConfiguration a] -> [ArgParserConfigur
       -- that it needs to have all names specified
       translateConfig_ remaining (snoc configs postconfigs) ap
   else match postconfigs with [postconfig] ++ remaining then
-    match postconfig with ArgParserMutuallyExclusiveOptions longs then
+    match postconfig with APMutuallyExclusiveOptions longs then
       -- Check that all specified names actually exists
       let check = foldl (lam acc: Option [String]. lam long.
         if _str_mem long ap.options then
@@ -474,8 +487,16 @@ recursive let translateConfig_: [ArgParserConfiguration a] -> [ArgParserConfigur
 end
 
 
+--- It can be difficult to
+--- find the odd one out
+--- when there is a bunch
+--- of text to read at the
+--  same time as trying to make
+--- sure that you follow proper
+--- formatting styles.
+
 -- Constructs a parser based on the provided configuration
-let createParser_: [ArgParserConfiguration a] -> String -> Either [String] (ArgParser_ a) =
+let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
   lam configs. lam progname.
   let ap = {
     name = progname,
@@ -488,12 +509,15 @@ let createParser_: [ArgParserConfiguration a] -> String -> Either [String] (ArgP
 
   -- Scan configuration and form initial parser
   let ap = translateConfig_ configs [] ap in
+  let ap = checkPositionalLogic_ ap in
+
+
+  --
   if not (null ap.errors) then
     Left ap.errors
   else -- OK! No errors so far.
 
   -- Check that positionals are well-formed
-  let ap = checkPositionalLogic_ ap in
   if not (null ap.errors) then
     Left ap.errors
   else
@@ -505,7 +529,7 @@ let createParser_: [ArgParserConfiguration a] -> String -> Either [String] (ArgP
   -- 3. form positionals from lists
   -- 4. create lookup tables for options
   -- 5. create
-let argparserParse: [ArgParserConfiguration a] -> a -> [String] -> Either String a =
+let argparserParse: [APConfiguration a] -> a -> [String] -> Either String a =
   lam configs. lam defaults. lam args.
   let apret = createParser_ configs (head args) in
   match apret with Left errs then
@@ -522,7 +546,7 @@ let argparserParse: [ArgParserConfiguration a] -> a -> [String] -> Either String
 
 
 
-type ArgParserPositional a = {
+type APPositional a = {
   name: String,
   matchcond: String -> Bool,
   disablecond: String -> Bool,
@@ -531,7 +555,7 @@ type ArgParserPositional a = {
   -- TBI: Priority, ex: if something is not a filename, then accept it as something else. Some semantics of strongest match.
 }
 
-type ArgParserOption a = {
+type APOption a = {
   short: Option Char,
   long: String,
   apply: String -> a -> a,
@@ -542,9 +566,9 @@ type ArgParserOption a = {
 
 type ArgParser a = {
   progname: String,
-  posargs: [ArgParserPositional a],
+  posargs: [APPositional a],
   shortopts: HashMap Char String,
-  opts: HashMap String (ArgParserOption a),
+  opts: HashMap String (APOption a),
   values: a
 }
 
@@ -726,7 +750,7 @@ let argparserUsage: Int -> ArgParser a -> String = lam maxwidth. lam parser.
   -- Constructs the string [-abcdeFGHIJK]
   let shortNonParamStr = join ["[-", map (lam opt. optionGetOrElse (lam _. error "Logic error") opt.short) splitSWNP.0, "]"] in
 
-  let opt2headerpart = lam opt: ArgParserOption a.
+  let opt2headerpart = lam opt: APOption a.
     let name = optionMapOr (concat "--" opt.long)
                            (lam c. ['-', c])
                            opt.short
@@ -765,7 +789,7 @@ let argparserAddParamOption =
   let _ = _sanityCheckShort short parser in
   let _ = _sanityCheckLong long parser in
 
-  let newopt: ArgParserOption a = {
+  let newopt: APOption a = {
     short = Some short,
     long = long,
     apply = applyfn,
@@ -789,7 +813,7 @@ let argparserAddOption =
   let _ = _sanityCheckShort short parser in
   let _ = _sanityCheckLong long parser in
 
-  let newopt: ArgParserOption a = {
+  let newopt: APOption a = {
     short = Some short,
     long = long,
     apply = (lam _: String. applyfn),
@@ -812,7 +836,7 @@ let argparserAddLongParamOption =
   -- Sanity checks
   let _ = _sanityCheckLong long parser in
 
-  let newopt: ArgParserOption a = {
+  let newopt: APOption a = {
     short = None (),
     long = long,
     apply = applyfn,
@@ -833,7 +857,7 @@ let argparserAddLongOption =
   -- Sanity checks
   let _ = _sanityCheckLong long parser in
 
-  let newopt: ArgParserOption a = {
+  let newopt: APOption a = {
     short = None (),
     long = long,
     apply = (lam _: String. applyfn),
@@ -867,69 +891,68 @@ let defaults: TestArgs = {
 } in
 
 let argspec = [
-  ArgParserProgramName "test",
-  ArgParserOption [
-    ArgParserShort 'h',
-    ArgParserLong "help",
-    ArgParserDescription "Prints a help message and exits.",
-    ArgParserApply (lam o. {o with help = true})
+  APOption [
+    APShort 'h',
+    APLong "help",
+    APDescription "Prints a help message and exits.",
+    APApply (lam o. {o with help = true})
   ],
-  ArgParserOption [
-    ArgParserShort 'v',
-    ArgParserLong "version",
-    ArgParserDescription "Prints version and exits.",
-    ArgParserApply (lam o. {o with version = true})
+  APOption [
+    APShort 'v',
+    APLong "version",
+    APDescription "Prints version and exits.",
+    APApply (lam o. {o with version = true})
   ],
-  ArgParserOption [
-    ArgParserLong "debug-parser",
-    ArgParserDescription "Shows debug prints during parsing.",
-    ArgParserApply (lam o. {o with debugParser = true})
+  APOption [
+    APLong "debug-parser",
+    APDescription "Shows debug prints during parsing.",
+    APApply (lam o. {o with debugParser = true})
   ],
-  ArgParserOption [
-    ArgParserShort 'O',
-    ArgParserLong "optimization-level",
-    ArgParserMetavar "LEVEL",
-    ArgParserDescription "Sets the optimization level.",
-    ArgParserApplyVar (lam p. lam o. {o with optLevel = string2int p})
+  APOption [
+    APShort 'O',
+    APLong "optimization-level",
+    APMetavar "LEVEL",
+    APDescription "Sets the optimization level.",
+    APApplyVal (lam p. lam o. {o with optLevel = string2int p})
   ],
-  ArgParserOption [
-    ArgParserShort 'D',
-    ArgParserLong "define",
-    ArgParserMetavar "DEFINITION",
-    ArgParserDescription "Add C preprocessor definition.",
-    ArgParserApplyVar (lam p. lam o. {o with defines = snoc o.defines p})
+  APOption [
+    APShort 'D',
+    APLong "define",
+    APMetavar "DEFINITION",
+    APDescription "Add C preprocessor definition.",
+    APApplyVal (lam p. lam o. {o with defines = snoc o.defines p})
   ],
-  ArgParserOption [
-    ArgParserLong "a-very-long-option-name",
-    ArgParserMetavar "fooparam",
-    ArgParserDescription "Shows debug prints during parsing.",
-    ArgParserApplyVar (lam _. lam o. o)
+  APOption [
+    APLong "a-very-long-option-name",
+    APMetavar "fooparam",
+    APDescription "Shows debug prints during parsing.",
+    APApplyVal (lam _. lam o. o)
   ],
-  ArgParserOption [
-    ArgParserLong "multi",
-    ArgParserMetavars ["arg1", "arg2", "arg3"],
-    ArgParserDescription "Takes multiple parameters.",
-    ArgParserApplyVars (lam sl. lam o. {o with multi = (get sl 0, get sl 1, get sl 2)})
+  APOption [
+    APLong "multi",
+    APMetavars ["arg1", "arg2", "arg3"],
+    APDescription "Takes multiple parameters.",
+    APApplyVals (lam sl. lam o. {o with multi = (get sl 0, get sl 1, get sl 2)})
   ],
-  ArgParserMutuallyExclusive [
-    ArgParserOption [
-      ArgParserLong "on",
-      ArgParserDescription "Turns it on!",
-      ArgParserApply (lam o. {o with isOn = true})
+  APMutuallyExclusive [
+    APOption [
+      APLong "on",
+      APDescription "Turns it on!",
+      APApply (lam o. {o with isOn = true})
     ],
-    ArgParserOption [
-      ArgParserLong "off",
-      ArgParserDescription "Turns it off!",
-      ArgParserApply (lam o. {o with isOn = false})
+    APOption [
+      APLong "off",
+      APDescription "Turns it off!",
+      APApply (lam o. {o with isOn = false})
     ]
   ],
   -- The above would be a wrapper for this, which allows for more complex behavior:
-  ArgParserMutuallyExclusiveOptions [
-    ArgParserLong "on",
-    ArgParserLong "off"
+  APMutuallyExclusiveOptions [
+    APLong "on",
+    APLong "off"
   ],
-  ArgParserLongFlag ("ocaml", "Targets OCaml backend", lam o. {o with ocaml = true}),
-  ArgParserFlag ('V', "verbose", "Increases verbosity", lam o. {o with verbosity = addi o.verbosity 1}),
+  APLongFlag ("ocaml", "Targets OCaml backend", lam o. {o with ocaml = true}),
+  APFlag ('V', "verbose", "Increases verbosity", lam o. {o with verbosity = addi o.verbosity 1}),
   -- What I expect to have in the end:
   AP.Positional [
     AP.Name "mcore file",
