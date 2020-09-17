@@ -14,9 +14,6 @@ let pvar_ = use MExprAst in
 let pvarw_ = use MExprAst in
   PVar {ident = PWildcard ()}
 
-let pwild_ = use MExprAst in
-  PWildcard ()
-
 let punit_ = use MExprAst in
   PRecord { bindings = assocEmpty }
 
