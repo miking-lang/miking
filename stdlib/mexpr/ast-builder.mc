@@ -54,9 +54,17 @@ let pseqtot_ = use MExprAst in
   lam ps.
   PSeqTot {pats = ps}
 
+let pseqedgew_ = use MExprAst in
+  lam pre. lam post.
+  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post}
+
+let pseqedgen_ = use MExprAst in
+  lam pre. lam middle. lam post.
+  PSeqEdge {prefix = pre, middle = PName middle, postfix = post}
+
 let pseqedge_ = use MExprAst in
   lam pre. lam middle. lam post.
-  PSeqEdge {prefix = pre, middle = middle, postfix = post}
+  pseqedgen_ pre (nameNoSym middle) post
 
 let pand_ = use MExprAst in
   lam l. lam r.
