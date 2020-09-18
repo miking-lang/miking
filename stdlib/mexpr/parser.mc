@@ -45,12 +45,12 @@ end
 -- Eat multiline comment of the form *-  -*
 lang MultilineCommentParser = WSACParser
   sem eatWSAC (p : Pos) =
-  | "*-" ++ xs ->
+  | "/-" ++ xs ->
     recursive
     let remove = lam p. lam str. lam d.
-      match str with "*-" ++ xs then remove (advanceCol p 2) xs (addi d 1) else
+      match str with "/-" ++ xs then remove (advanceCol p 2) xs (addi d 1) else
       match str with "\n" ++ xs then remove (advanceRow p 1) xs d else
-      match str with "-*" ++ xs then
+      match str with "-/" ++ xs then
         if eqi d 1 then eatWSAC (advanceCol p 2) xs
         else remove (advanceCol p 2) xs (subi d 1) else
       match str with [_] ++ xs then remove (advanceCol p 1) xs d else
@@ -63,9 +63,9 @@ lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentPa
 
 let _ = use MExprWSACParser in
   utest eatWSAC (initPos "") " --foo \n  bar " with {str = "bar ", pos = posVal "" 2 2} in
-  utest eatWSAC (initPos "") " *- foo -* bar" with {str = "bar", pos = posVal "" 1 11} in
-  utest eatWSAC (initPos "") " *- foo\n x \n -* \nbar " with {str = "bar ", pos = posVal "" 4 0} in
-  utest eatWSAC (initPos "") " *- x -- y *- foo \n -* -* !" with {str = "!", pos = posVal "" 2 7} in
+  utest eatWSAC (initPos "") " /- foo -/ bar" with {str = "bar", pos = posVal "" 1 11} in
+  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar " with {str = "bar ", pos = posVal "" 4 0} in
+  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !" with {str = "!", pos = posVal "" 2 7} in
   ()
 
 -- Top of the expression parser. Connects WSAC with parsing of other non terminals
