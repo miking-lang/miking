@@ -161,6 +161,29 @@ lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser +
                    ParenthesesParser + MExprWSACParser
 
 
+-- Expr  -> Term Expr'             Function: parseExpr openExpr
+--                                 1. eatWSAC, 2. parseFirst on Term (success of fail) -> new nextTerm
+--                                 3. eatWSAC 4. check end of expr, return
+--                                 4. if not, parseSecond(openExpr, nextTerm)
+
+-- Expr' -> "+" Term Expr'         Function: parseSecond openExpr nextTerm
+--        | "-" Term Expr'         1. parse "op" etc. if relevant
+--                                 2. if "op" higher prec than last or equal and right assoc then
+--                                      call parseExpr with (lam rhs. openExpr(nextTerm "+" rhs) )
+--                                    else "op" lower prec than last or equal and left assoc then
+--                                      return
+--        | Term Expr'             2. call parseExpr with flag "only_first"
+--        | empty
+--
+-- Term  -> Atom Term'
+-- Term' -> "*" Atom Term'
+--        | "/" Atom Term'
+--        | empty
+--
+-- Atom  -> Num
+--        | "(" Expr ")"
+
+
 mexpr
 
 use MExprParser in
