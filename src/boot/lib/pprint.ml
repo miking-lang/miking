@@ -193,7 +193,6 @@ let rec print_const fmt = function
   | Ceqf(Some(v))  -> fprintf fmt "eqf(%f)" v
   | Cneqf(None)    -> fprintf fmt "neqf"
   | Cneqf(Some(v)) -> fprintf fmt "neqf(%f)" v
-  | Cexp           -> fprintf fmt "exp"
   | Cfloorfi       -> fprintf fmt "floorfi"
   | Cceilfi        -> fprintf fmt "ceilfi"
   | Croundfi       -> fprintf fmt "roundfi"

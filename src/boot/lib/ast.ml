@@ -73,7 +73,6 @@ and const =
 | Cgeqf    of float option
 | Ceqf     of float option
 | Cneqf    of float option
-| Cexp
 | Cfloorfi
 | Cceilfi
 | Croundfi

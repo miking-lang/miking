@@ -8,6 +8,7 @@ include "prelude.mc"
 include "set.mc"
 include "digraph.mc"
 include "string.mc"
+include "ext/math.mc"
 
 -- 'v': polymorphic value type
 -- 'c': polymorphic cost type
