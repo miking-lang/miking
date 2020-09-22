@@ -20,6 +20,10 @@ let _eqn = lam n1. lam n2.
   else
     error "Name without symbol."
 
+let drecordproj_ = use MExprAst in
+  lam key. lam r.
+  nrecordproj_ (nameSym "x") key r
+
 lang HoleAst
   syn Expr =
   | TmHole {tp : Type,
@@ -200,15 +204,15 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
 end
 
 -- Define variable names to be used in transformed program
-let _callCtx = "callCtx"
-let _lookupTable = "lookupTable"
-let _lookup = "lookup"
-let _maxDepth = "maxDepth"
-let _addCall = "addCall"
-let _filter = "filter"
-let _max = "max"
-let _isPrefix = "isPrefix"
-let _isSuffix = "isSuffix"
+let _callCtx = nameSym "callCtx"
+let _lookupTable = nameSym "lookupTable"
+let _lookup = nameSym "lookup"
+let _maxDepth = nameSym "maxDepth"
+let _addCall = nameSym "addCall"
+let _filter = nameSym "filter"
+let _max = nameSym "max"
+let _isPrefix = nameSym "isPrefix"
+let _isSuffix = nameSym "isSuffix"
 
 lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Transform the program
@@ -240,7 +244,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
         match tm with TmLam t then
           TmLam {t with body=work t.body (snoc acc t.ident)}
         else
-          foldl (lam a. lam x. app_ a (nvar_ x)) (app_ (nvar_ (renameF funName)) (var_ _callCtx)) acc
+          foldl (lam a. lam x. app_ a (nvar_ x)) (app_ (nvar_ (renameF funName)) (nvar_ _callCtx)) acc
       in work tm []
     in
     -- Extract dummy functions from the AST, to replace public functions
@@ -254,13 +258,13 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let transRenamed = rename isPublic renameF trans in
 
     -- Define initial call context
-    let defCallCtx = let_ _callCtx (seq_ []) in
+    let defCallCtx = nlet_ _callCtx (seq_ []) in
 
     -- Define initial lookup table
     let lookupTable = initLookupTable (cons _top publicFns) ltm in
     -- AST-ify the lookup table
     let defLookupTable =
-      let_ _lookupTable
+      nlet_ _lookupTable
         (seq_ (map (lam r. record_ [("id", r.id), ("path", seq_ (map symb_ r.path)), ("value", r.value)]) lookupTable))
     in
 
@@ -270,7 +274,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       else max subi (map (lam r. length r.path) lookupTable)
     in
     -- AST-ify the maxDepth variable
-    let defMaxDepth = let_ _maxDepth (int_ maxDepth) in
+    let defMaxDepth = nlet_ _maxDepth (int_ maxDepth) in
 
     -- AST-ify filter
     -- recursive let filter = lam p. lam s.
@@ -282,20 +286,22 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     -- in
     let filter =
       -- Define local variables
-      reclets_add _filter
-        (lam_ "p" (None ())
-              (lam_ "s" (None ())
-                    (if_ (null_ (var_ "s"))
-                         (seq_ [])
-                         (if_ (app_ (var_ "p") (head_ (var_ "s")))
-                              (bind_ (let_ "f" (appf2_ (var_ _filter) (var_ "p") (tail_ (var_ "s"))))
-                                     (cons_ (head_ (var_ "s")) (var_ "f")))
-                              (appf2_ (var_ _filter) (var_ "p") (tail_ (var_ "s")))) )))
+      let p = nameSym "p" in
+      let s = nameSym "s" in
+      let f = nameSym "f" in
+      nreclets_add _filter
+        (nulam_ p (nulam_ s
+          (if_ (null_ (nvar_ s))
+               (seq_ [])
+               (if_ (app_ (nvar_ p) (head_ (nvar_ s)))
+                    (bind_ (nlet_ f (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s))))
+                           (cons_ (head_ (nvar_ s)) (nvar_ f)))
+                    (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s)))))))
       reclets_empty
     in
 
     -- AST-ify max (for a non-empty list)
-    -- let max = lam cmp. lam seq.
+    -- nlet max = lam cmp. lam seq.
     --   recursive let work = lam e. lam seq.
     --     if null seq then e
     --     else
@@ -306,21 +312,26 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --    work (head seq) (tail seq)
     -- in utest max [2, 4, 5] with 5 in
     let max =
-      let_ _max
-        (lam_ "cmp" (None ()) (
-          (lam_ "seq" (None ())
-          (bindall_ [(reclets_add "work"
-                       (lam_ "e" (None ())
-                                (lam_ "seq" (None ())
-                                              (if_ (null_ (var_ "seq"))
-                                                   (var_ "e")
-                                                   (bindall_ [let_ "h" (head_ (var_ "seq")),
-                                                              let_ "t" (tail_ (var_ "seq")),
-                                                              if_ (lti_ (appf2_ (var_ "cmp") (var_ "h") (var_ "e")) (int_ 0))
-                                                                  (appf2_ (var_ "work") (var_ "e") (var_ "t"))
-                                                                  (appf2_ (var_ "work") (var_ "h") (var_ "t"))]) )))
+      let cmp = nameSym "cmp" in
+      let seq = nameSym "seq" in
+      let work = nameSym "work" in
+      let e = nameSym "e" in
+      let h = nameNoSym "h" in
+      let t = nameNoSym "t" in
+      nlet_ _max
+        (nulam_ cmp (
+          (nulam_ seq
+          (bindall_ [(nreclets_add work
+                       (nulam_ e (nulam_ seq
+                         (if_ (null_ (nvar_ seq))
+                           (nvar_ e)
+                           (bindall_ [nlet_ h (head_ (nvar_ seq)),
+                                      nlet_ t (tail_ (nvar_ seq)),
+                                      if_ (lti_ (appf2_ (nvar_ cmp) (nvar_ h) (nvar_ e)) (int_ 0))
+                                          (appf2_ (nvar_ work) (nvar_ e) (nvar_ t))
+                                          (appf2_ (nvar_ work) (nvar_ h) (nvar_ t))]) )))
                      reclets_empty),
-                     appf2_ (var_ "work") (head_ (var_ "seq")) (tail_ (var_ "seq"))]))))
+                     appf2_ (nvar_ work) (head_ (nvar_ seq)) (tail_ (nvar_ seq))]))))
     in
 
     -- AST-ify isPrefix
@@ -331,18 +342,19 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   else false
     -- in
     let isPrefix =
-      reclets_add _isPrefix (
-      (lam_ "eq" (None ())
-            (lam_ "s1" (None ())
-                  (lam_ "s2" (None ())
-                             (if_ (null_ (var_ "s1"))
-                                  (true_)
-                                  (if_ (null_ (var_ "s2"))
-                                       (false_)
-                                       (if_ (appf2_ (var_ "eq") (head_ (var_ "s1")) (head_ (var_ "s2")))
-                                            (appf3_ (var_ _isPrefix) (var_ "eq") (tail_ (var_ "s1")) (tail_ (var_ "s2")) )
-                                            (false_))) )))))
-                                            reclets_empty
+      let eq = nameSym "eq" in
+      let s1 = nameSym "s1" in
+      let s2 = nameSym "s2" in
+      nreclets_add _isPrefix (
+      (nulam_ eq (nulam_ s1 (nulam_ s2
+        (if_ (null_ (nvar_ s1))
+             (true_)
+             (if_ (null_ (nvar_ s2))
+                  (false_)
+                  (if_ (appf2_ (nvar_ eq) (head_ (nvar_ s1)) (head_ (nvar_ s2)))
+                       (appf3_ (nvar_ _isPrefix) (nvar_ eq) (tail_ (nvar_ s1)) (tail_ (nvar_ s2)) )
+                       (false_))) )))))
+      reclets_empty
     in
 
     -- AST-ify isSuffix
@@ -350,14 +362,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --     isPrefix eq (reverse s1) (reverse s2)
     -- in
     let isSuffix =
-      let_ _isSuffix
-        ((lam_ "eq" (None ())
-              (lam_ "s1" (None ())
-                    (lam_ "s2" (None ())
-                          (appf3_ (var_ _isPrefix)
-                                  (var_ "eq")
-                                  (reverse_ (var_ "s1"))
-                                  (reverse_ (var_ "s2"))))))) in
+      let eq = nameSym "eq" in
+      let s1 = nameSym "s1" in
+      let s2 = nameSym "s2" in
+      nlet_ _isSuffix
+        (nulam_ eq (nulam_ s1 (nulam_ s2
+          (appf3_ (nvar_ _isPrefix)
+                  (nvar_ eq)
+                  (reverse_ (nvar_ s1))
+                  (reverse_ (nvar_ s2)))))) in
 
     -- Lookup the value for a decision point in a given call context
     -- let lookup = lam callCtx. lam id.
@@ -367,27 +380,36 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   max cmp entriesSuffix
     -- in
     let lookup =
-      let_ _lookup
-           (lam_ _callCtx (None ())
-                 (lam_ "id" (None ())
-                       (bindall_ [
-        let_ "entries" (
-            appf2_ (var_ _filter)
-                   (lam_ "t" (None ()) (eqs_ (var_ "id") (recordproj_ "id" (var_ "t"))))
-                   (var_ _lookupTable)),
-        let_ "eqs" (lam_ "x" (None ()) (lam_ "y" (None ()) (eqs_ (var_ "x") (var_ "y")))),
-        let_ "entriesSuffix"
-             (appf2_ (var_ _filter)
-                     (lam_ "t" (None ()) (appf3_ (var_ _isSuffix) (var_ "eqs") (recordproj_ "path" (var_ "t")) (var_ _callCtx)))
-                     (var_ "entries")),
-        let_ "cmp"
-          (lam_ "t1" (None ())
-                     (lam_ "t2" (None ())
-                                (subi_
-                                   (length_ (recordproj_ "path" (var_ "t1")))
-                                   (length_ (recordproj_ "path" (var_ "t2")))))),
-        let_ "entriesLongestSuffix" (appf2_ (var_ _max) (var_ "cmp") (var_ "entriesSuffix")),
-        recordproj_ "value" (var_ "entriesLongestSuffix")])))
+      let id = nameSym "id" in
+      let entries = nameSym "entries" in
+      let entriesSuffix = nameSym "entriesSuffix" in
+      let entriesLongestSuffix = nameSym "entriesLongestSuffix" in
+      let eqs = nameSym "eqs" in
+      let cmp = nameSym "cmp" in
+      let y = nameSym "y" in
+      let t = nameSym "t" in
+      let x = nameSym "x" in
+      let t1 = nameSym "t1" in
+      let t2 = nameSym "t2" in
+      nlet_ _lookup
+        (nulam_ _callCtx (nulam_ id
+        (bindall_ [
+          nlet_ entries (
+              appf2_ (nvar_ _filter)
+                     (nulam_ t (eqs_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
+                     (nvar_ _lookupTable)),
+          nlet_ eqs (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
+          nlet_ entriesSuffix
+               (appf2_ (nvar_ _filter)
+                       (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqs) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))
+                       (nvar_ entries)),
+          nlet_ cmp
+            (nulam_ t1 (nulam_ t2
+              (subi_
+                 (length_ (drecordproj_ "path" (nvar_ t1)))
+                 (length_ (drecordproj_ "path" (nvar_ t2)))))),
+          nlet_ entriesLongestSuffix (appf2_ (nvar_ _max) (nvar_ cmp) (nvar_ entriesSuffix)),
+          drecordproj_ "value" (nvar_ entriesLongestSuffix)])))
     in
     let defLookup = bindall_ [isPrefix, isSuffix, max, filter, lookup] in
 
@@ -398,24 +420,23 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --   else
     --     snoc callCtx lbl
     let defAddCall =
-      let_ _addCall (
-        lam_ _callCtx (None ()) (
-          lam_ "lbl" (None ()) (
-            if_ (eqi_ (var_ _maxDepth) (int_ 0)) (var_ _callCtx)
-                (if_ (lti_ (length_ (var_ _callCtx)) (var_ _maxDepth))
-                    (snoc_ (var_ _callCtx) (var_ "lbl"))
-                    (snoc_ (tail_ (var_ _callCtx)) (var_ "lbl"))) )))
+      let lbl = nameSym "lbl" in
+      nlet_ _addCall (
+        nulam_ _callCtx (nulam_ lbl (
+          if_ (eqi_ (nvar_ _maxDepth) (int_ 0)) (nvar_ _callCtx)
+            (if_ (lti_ (length_ (nvar_ _callCtx)) (nvar_ _maxDepth))
+              (snoc_ (nvar_ _callCtx) (nvar_ lbl))
+              (snoc_ (tail_ (nvar_ _callCtx)) (nvar_ lbl))) )))
     in
 
     -- Put all the pieces together
-    symbolize assocEmpty
-      (bindall_ [defLookupTable,
-                 defCallCtx,
-                 defMaxDepth,
-                 defAddCall,
-                 defLookup,
-                 defDummies,
-                 transRenamed])
+    bindall_ [defLookupTable,
+              defCallCtx,
+              defMaxDepth,
+              defAddCall,
+              defLookup,
+              defDummies,
+              transRenamed]
 
   -- Extract expressions from the body of identifiers for which p is true using extractor function
   sem extract (p : String -> Bool)
@@ -485,7 +506,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
     -- Is the name one of the nodes in the call graph?
     if p t.ident then
-      let newBody = lam_ _callCtx (None ())
+      let newBody = nlam_ _callCtx (None ())
                       (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
       TmLet {{t with body = newBody} with inexpr = transformCallCtx p prev t.inexpr}
     else TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
@@ -495,8 +516,9 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let handleLetExpr = lam le.
       if p le.ident then
         match le.body with TmLam lm then
-          let newBody = lam_ _callCtx  (None ())
-                          (TmLam {lm with body = transformCallCtx p le.ident lm.body})
+          let newBody =
+            nulam_ _callCtx
+              (TmLam {lm with body = transformCallCtx p le.ident lm.body})
           in {le with body = newBody}
         else error "Internal error: this letexpr should have a TmLam in its body"
       else le
@@ -509,15 +531,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     if p v.ident then
       -- Append to call context (only if not recursive call)
       let isRecursiveCall = _eqn prev v.ident in
-      let addToCallCtx = if isRecursiveCall then (var_ _callCtx)
-                         else appf2_ (var_ _addCall) (var_ _callCtx) (symb_ id)
+      let addToCallCtx = if isRecursiveCall then (nvar_ _callCtx)
+                         else appf2_ (nvar_ _addCall) (nvar_ _callCtx) (symb_ id)
       in TmLApp {lhs = app_ (TmVar v) addToCallCtx, rhs = transformCallCtx p prev rhs, id = id}
     else
       TmLApp {lhs = TmVar v, rhs = transformCallCtx p prev rhs, id = id}
 
   -- Replace holes with a call to lookup function
   | LTmHole t ->
-    TmApp {lhs = TmApp {lhs = var_ _lookup, rhs = var_ _callCtx}, rhs = t.id}
+    TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = t.id}
 
   | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
 
