@@ -310,7 +310,6 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --       if lti h e then work e t else work h t
     --    in
     --    work (head seq) (tail seq)
-    -- in utest max [2, 4, 5] with 5 in
     let max =
       let cmp = nameSym "cmp" in
       let seq = nameSym "seq" in
@@ -596,7 +595,7 @@ let print = if printEnabled then print else lam x. x in
 
 -- Enable/disable eval
 let evalEnabled = false in
-let eval = lam expr. lam expected.
+let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
 
 -- Shorthand for symbolize
@@ -618,9 +617,7 @@ with (match last with TmLApp t then t.lhs else error "error") in
 utest (match ast with TmApp t then t.rhs else error "error")
 with (match last with TmLApp t then t.rhs else error "error") in
 
-let _ = pprint last in
-
--- Transform & call graph tests
+-- Perform transform tests
 let dprintTransform = lam ast.
   -- Symbolize
   let ast = symbolize ast in
@@ -634,163 +631,119 @@ let dprintTransform = lam ast.
   let _ = print "-------------- END OF TRANSFORMED AST --------------" in
   ast
 in
-
--- Test that call graph of the ast has the string names in vs and return the
--- graph.
-let callGraphTests = lam ast. lam strVs.
-  let ast = labelApps (symbolize ast) in
-  let g = toCallGraph ast in
-  let vs = digraphVertices g in
-  let symVs = map nameNoSym strVs in
-  utest setIsSubsetEq nameEqStr symVs vs with true in
-  g
+let testTransform = lam r.
+  let tast = dprintTransform r.ast in
+  utest evalE tast r.expected with r.expected in ()
 in
 
--- Get a call graph using the strings of the names as vertices.
-let callGraphStr = lam ng.
-  let vs = digraphVertices ng in
-  let es = digraphEdges ng in
-  digraphAddEdges
-    (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) es)
-    (digraphAddVertices (map nameGetStr vs) (digraphEmpty eqstr eqs))
+-- Perform call graph tests
+let callGraphTests = lam ast. lam strVs. lam strEdgs.
+  -- Convert to graph with string nodes
+  let toStr = lam ng.
+    digraphAddEdges
+      (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
+      (digraphAddVertices (map nameGetStr (digraphVertices ng))
+                          (digraphEmpty eqstr eqs))
+  in
+  let g = toCallGraph (labelApps (symbolize ast)) in
+  let sg = toStr g in
+
+  utest setEqual eqstr strVs (digraphVertices sg) with true in
+
+  let es = digraphEdges sg in
+  utest length es with length strEdgs in
+  map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
+in
+let testCallgraph = lam r.
+  callGraphTests r.ast r.vs r.calls
 in
 
--- *** AST 0: a constant ***
-let ast = symbolize (int_ 1) in
-let tast = dprintTransform ast in
-utest eval tast (int_ 1) with int_ 1 in
 
-let g = toCallGraph ast in
-utest digraphCountVertices g with 1 in
-utest digraphCountEdges g with 0 in
-utest digraphHasVertex _top g with true in
+-- 1
+let constant = {
+  ast = int_ 1,
+  expected = int_ 1,
+  vs = ["top"],
+  calls = []
+} in
 
--- *** AST 1: One function ***
 -- let foo = lam x. x in ()
-let identity = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
+let identity = {
+  ast = let_ "foo" (ulam_ "x" (var_ "x")),
+  expected = unit_,
+  vs = ["top", "foo"],
+  calls = []
+} in
 
-let ast = identity in
-let tast = dprintTransform ast in
-utest eval tast unit_ with unit_ in
-let g = callGraphTests ast ["foo", "top"] in
-utest digraphCountEdges g with 0 in
-
--- *** AST 2: One function call ***
--- let foo = lam x. x in foo 1
-let ast = bind_ identity (app_ (var_ "foo") (int_ 1)) in
-let tast = dprintTransform ast in
-utest eval tast (int_ 1) with int_ 1 in
--- graph: vs = [foo, top]. es = [top->foo].
-let g = callGraphTests ast ["top", "foo"] in
-utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
-
--- *** AST 3: Two functions, one function call ***
 -- let foo = lam x. x in
--- let bar = lam x. (foo x) in ()
-let bar = let_ "bar"
-               (lam_ "x" (None ()) (app_ (var_ "foo") (var_ "x"))) in
-let ast = bind_ identity bar in
-let _ = dprintTransform ast in
+-- let bar = lam x. foo x in ()
+let funCall = {
+  ast = bind_ (let_ "foo" (ulam_ "x" (var_ "x")))
+              (let_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
+  expected = unit_,
+  vs = ["top", "foo", "bar"],
+  calls = [("bar", "foo")]
+} in
 
--- graph: vs = [foo, bar, top], es = [bar->foo].
-let g = callGraphTests ast ["foo", "bar", "top"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 1 in
-utest digraphSuccessors "bar" (callGraphStr g) with ["foo"] in
-
--- *** AST 4: 2 calls to the same function ***
 -- let foo = lam x. x in
 -- let bar = lam x. addi (foo x) (foo x) in
 -- bar 1
-let bar = let_ "bar"
-               (lam_ "x" (None ())
-               (addi_ (app_ (var_ "foo") (var_ "x"))
-                      (app_ (var_ "foo") (var_ "x")))) in
-let ast = bind_ (bind_ identity bar)
-                (app_ (var_ "bar") (int_ 1)) in
-let tast = dprintTransform ast in
-utest eval tast (int_ 2) with int_ 2 in
+let ast =
+  bindall_ [identity.ast,
+            let_ "bar" (ulam_ "x" (addi_ (app_ (var_ "foo") (var_ "x"))
+                                         (app_ (var_ "foo") (var_ "x")))),
+            (app_ (var_ "bar") (int_ 1))] in
+let callSameFunctionTwice = {
+  ast = ast,
+  expected = int_ 2,
+  vs = ["top", "foo", "bar"],
+  calls = [("top", "bar"), ("bar", "foo"), ("bar", "foo")]
+} in
 
-let g = callGraphTests ast ["top", "foo", "bar"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 3 in
-utest digraphCountVertices g with 3 in
-let gstr = callGraphStr g in
-utest digraphSuccessors "bar" gstr with ["foo"] in
-utest digraphSuccessors "top" gstr with ["bar"] in
-
-
--- *** AST 5: function with 2 arguments ***
 --let foo = lam x. lam y. addi x y in
 --foo 1 2
-let ast =
-    bind_
-    (let_ "foo"
-      (lam_ "x" (None ()) (
-            lam_ "y" (None ()) (addi_ (var_ "x") (var_ "y"))
-      )))
-    (appf2_ (var_ "foo") (int_ 1) (int_ 2))
-in
-let tast = dprintTransform ast in
-utest eval tast (int_ 3) with (int_ 3) in
+let twoArgs = {
+  ast = bind_
+          (let_ "foo"
+            (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))))
+          (appf2_ (var_ "foo") (int_ 1) (int_ 2)),
+  expected = int_ 3,
+  vs = ["top", "foo"],
+  calls = [("top", "foo")]
+} in
 
-let g = callGraphTests ast ["foo", "top"] in
-utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
-
--- *** AST 6: inner function ***
---let foo = lam x.
---          let y = 1 in
---          let bar = lam y. addi x y in
---          bar 1
---foo 1
-let ast = bind_
-  (let_ "foo"
-    (lam_ "x" (None ()) (
-      bind_
-        (let_ "y" (int_ 1))
-        (bind_
-          ((let_ "bar" (
-              lam_ "y" (None ()) (
-                bind_
-                  (let_ "z" (int_ 2))
-                  (addi_ (var_ "x") (var_ "y"))))))
-          (app_ (var_ "bar") (int_ 1))))))
-        (app_ (var_ "foo") (int_ 1))
-in
-let tast = dprintTransform ast in
-utest eval tast (int_ 2) with int_ 2 in
-
-let g = callGraphTests ast ["foo", "bar", "top"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 2 in
-
--- *** AST 7: inner functions again ***
 -- let foo = lam a. lam b.
 --     let bar = lam x. addi b x in
---     let babar = 3 in
---     addi (bar babar) a
+--     let b = 3 in
+--     addi (bar b) a
 -- in ()
-let ast =
-  let_ "foo" (lam_ "a" (None ()) (lam_ "b" (None ()) (
-     let bar = let_ "bar" (lam_ "x" (None ())
-                    (addi_ (var_ "b") (var_ "x"))) in
-     let babar = let_ "babar" (int_ 3) in
-     bind_ bar (
-     bind_ babar (
-       addi_ (app_ (var_ "bar")
-                   (var_ "babar"))
-             (var_ "a"))))))
-in
-let _ = dprintTransform ast in
+let innerFun = {
+  ast = let_ "foo" (ulam_ "a" (ulam_ "b" (
+          let bar = let_ "bar" (ulam_ "x"
+                         (addi_ (var_ "b") (var_ "x"))) in
+          let babar = let_ "b" (int_ 3) in
+          bind_ bar (
+          bind_ babar (
+            addi_ (app_ (var_ "bar")
+                        (var_ "b"))
+                  (var_ "a")))))),
+  expected = unit_,
+  vs = ["top", "foo", "bar"],
+  calls = [("foo", "bar")]
+} in
 
-let g = callGraphTests ast ["top", "foo", "bar"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 1 in
-utest digraphIsSuccessor "bar" "foo" (callGraphStr g) with true in
+-- let foo = lam x. x in
+-- let a = foo 1 in
+-- a
+let letWithFunCall = {
+  ast = let foo = let_ "foo" (ulam_ "x" (var_ "x")) in
+        let a = let_ "a" (app_ (var_ "foo") (int_ 1)) in
+        bind_ (bind_ foo a) (var_ "a"),
+  expected = int_ 1,
+  vs = ["top", "foo"],
+  calls = [("top", "foo")]
+} in
 
--- *** AST 8: recursive function ***
 -- recursive let factorial = lam n.
 --     if eqi n 0 then
 --       1
@@ -798,8 +751,9 @@ utest digraphIsSuccessor "bar" "foo" (callGraphStr g) with true in
 --       muli n (factorial (subi n 1))
 -- in
 -- factorial 4
-let factorial =
-    reclets_add "factorial"
+let factorial = {
+  ast = bind_
+    (reclets_add "factorial"
            (lam_ "n" (Some (TyInt {}))
                  (if_ (eqi_ (var_ "n") (int_ 0))
                       (int_ 1)
@@ -807,64 +761,13 @@ let factorial =
                              (app_ (var_ "factorial")
                                    (subi_ (var_ "n")
                                           (int_ 1))))))
-    reclets_empty
-in
-let ast = bind_ factorial (app_ (var_ "factorial") (int_ 2)) in
-let tast = dprintTransform ast in
-utest eval tast (int_ 2) with (int_ 2) in
+     reclets_empty)
+    (app_ (var_ "factorial") (int_ 2)),
+  expected = int_ 2,
+  vs = ["top", "factorial"],
+  calls = [("top", "factorial"), ("factorial", "factorial")]
+} in
 
-let g = callGraphTests ast ["top", "factorial"] in
-utest digraphCountEdges g with 2 in
-let gstr = callGraphStr g in
-utest digraphSuccessors "top" gstr with ["factorial"] in
-utest digraphSuccessors "factorial" gstr with ["factorial"] in
-
-
--- *** AST 9: let with a function call ***
--- let foo = lam x. x in
--- let a = foo 1 in
--- a
-let ast =
-    let foo = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
-    let a = let_ "a" (app_ (var_ "foo") (int_ 1)) in
-    bind_ (bind_ foo a) (var_ "a")
-in
-let tast = dprintTransform ast in
-utest eval tast (int_ 1) with int_ 1 in
-
-let g = callGraphTests ast ["top", "foo"] in
-utest digraphCountEdges g with 1 in
-utest digraphSuccessors "top" (callGraphStr g) with ["foo"] in
-
-
--- *** AST 10: chain of lets ***
--- let foo = lam x. x in
--- let a =
---     let b = 1 in
---     let c = lam x. foo x in
---     let d = 2 in
---     foo (c d) in
--- a
-let ast =
-    let foo = let_ "foo" (lam_ "x" (None ()) (var_ "x")) in
-    let c = let_ "c" (lam_ "x" (None ()) (app_ (var_ "foo") (var_ "x"))) in
-    let d = let_ "d" (int_ 2) in
-    let a = let_ "a" (bind_ (let_ "b" (int_ 1)) (bind_ c (bind_ d (app_ (var_ "foo") (app_ (var_ "c") (var_ "d")))))) in
-    let e = (var_ "a") in
-    bind_ foo (bind_ a e) in
-let tast = dprintTransform ast in
-utest eval tast (int_ 2) with int_ 2 in
-
--- graph: vs = [top, foo, c], es = [c->foo, top->foo, top->c]
-let g = callGraphTests ast ["foo", "top", "c"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 3 in
-let gstr = callGraphStr g in
-utest digraphIsSuccessor "foo" "top" gstr with true in
-utest digraphIsSuccessor "foo" "c" gstr with true in
-utest digraphIsSuccessor "c" "top" gstr with true in
-
--- *** AST 11: mutual recursion
 -- recursive
 --     let even = lam x.
 --         if eqi x 0
@@ -875,81 +778,74 @@ utest digraphIsSuccessor "c" "top" gstr with true in
 --         then true
 --         else even (subi x 1)
 -- in even 4
-let even_odd =
-    reclets_add "even" (lam_ "x" (None ())
-                                 (if_ (eqi_ (var_ "x") (int_ 0))
+let evenOdd ={
+  ast = bind_
+    (reclets_add "even" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 0))
+                                       (true_)
+                                       (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
+    (reclets_add "odd" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 1))
                                       (true_)
-                                      (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
-   (reclets_add "odd" (lam_ "x" (None ())
-                                (if_ (eqi_ (var_ "x") (int_ 1))
-                                     (true_)
-                                     (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
-   reclets_empty)
-in
-let ast = bind_ even_odd (app_ (var_ "even") (int_ 2)) in
-let tast = dprintTransform ast in
-utest eval tast true_ with true_ in
+                                      (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
+     reclets_empty))
+    (app_ (var_ "even") (int_ 2)),
+  expected = true_,
+  vs = ["top", "even", "odd"],
+  calls = [("top", "even"), ("even", "odd"), ("odd", "even")]
+} in
 
-let g = callGraphTests ast ["even", "odd"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 3 in
-
--- *** AST 12: hidden function call
 -- let bar = lam y. y in
 -- let foo = lam f. lam x. f x in -- cannot see that foo calls bar
 -- foo bar 1
-let ast = bindall_ [
-   let_ "bar" (lam_ "y" (None ()) (var_ "y")),
-   let_ "foo" (lam_ "f" (None ()) (lam_ "x" (None ()) (app_ (var_ "f") (var_ "x")))),
-   appf2_ (var_ "foo") (var_ "bar") (int_ 1)
-] in
-let tast = dprintTransform ast in
-
-let g = callGraphTests ast ["bar", "foo"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 1 in
+let hiddenCall = {
+  ast = bindall_ [
+          let_ "bar" (ulam_ "y" (var_ "y")),
+          let_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x")))),
+          appf2_ (var_ "foo") (var_ "bar") (int_ 1)],
+  expected = int_ 1,
+  vs = ["top", "foo", "bar"],
+  calls = [("top", "foo")]
+} in
 
 -- let foo = lam x.
---   if (LTmHole {id=s1}) then x
---   else let d = LTmHole {id=s2} in addi x d
+--   if (<hole>) then x
+--   else let d = <hole> in addi x d
 -- in foo 42
-let foo =
-  let_ "foo"
-       (lam_ "x" (None ())
-                 (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                                     (bind_ (let_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
-                                            (addi_ (var_ "x") (var_ "d")))))
-in
-let ast = bind_ foo (app_ (var_ "foo") (int_ 42)) in
-let tast = dprintTransform ast in
-
-let g = callGraphTests ast ["foo"] in
+let hole1 = {
+  ast =
+    bind_
+      (let_ "foo"
+           (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
+                           (bind_ (let_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
+                                  (addi_ (var_ "x") (var_ "d"))))))
+      (app_ (var_ "foo") (int_ 42)),
+  expected = int_ 42,
+  vs = ["top", "foo"],
+  calls = [("top", "foo")]
+} in
 
 --let foo = lam x.
---          let d1 = LTmHole {id=s1} in
+--          let d1 = <hole> in
 --          let bar = lam y.
---                      let d2 = LTmHole {id=s2} in
+--                      let d2 = <hole> in
 --                      addi d1 (addi d2 y) in
 --          bar 1
 --in foo 1
-let ast = bind_
-          (let_ "foo"
-            (lam_ "x" (None ())
-                      (bind_
-                       ((bind_ (let_ "d1"(hole_ tyint_ (int_ 1) (int_ 2)))
-                               (let_ "bar"
-                                     (lam_ "y" (None ())
-                                               (bind_ (let_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
-                                                      (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
-                       (app_ (var_ "bar") (int_ 1)))
-            ))
-          (app_ (var_ "foo") (int_ 1))
-in
-let tast = dprintTransform ast in
-
-let g = callGraphTests ast ["foo", "bar"] in
-utest digraphCountVertices g with 3 in
-utest digraphCountEdges g with 2 in
+let hole2 = {
+  ast =
+    bind_
+      (let_ "foo"
+        (ulam_ "x" (bind_
+          ((bind_ (let_ "d1" (hole_ tyint_ (int_ 1) (int_ 2)))
+             (let_ "bar"
+               (ulam_ "y" (bind_ (let_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
+                                 (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
+          (app_ (var_ "bar") (int_ 1)))
+        ))
+      (app_ (var_ "foo") (int_ 1)),
+   expected = int_ 5,
+   vs = ["top", "foo", "bar"],
+   calls = [("top", "foo"), ("foo", "bar")]
+} in
 
 -- let bar = lam x.
 --   let h = LTmHole {depth = 2, startGuess = true} in
@@ -964,18 +860,46 @@ utest digraphCountEdges g with 2 in
 -- let b1 = bar 1 in
 -- let b2 = bar 2 in
 -- foo 1
-let bar = let_ "bar" (lam_ "x" (None ()) (bind_ (let_ "h" (hole_ tybool_ true_ (int_ 2)))
-                                                (if_ (var_ "h") (var_ "x") (addi_ (var_ "x") (int_ 1))))) in
-let foo =
-  reclets_add "foo" (lam_ "x" (None ()) (if_ (eqi_ (var_ "x") (int_ 1)) (app_ (var_ "foo") (int_ 2)) (app_ (var_ "bar") (var_ "x")))) reclets_empty in
+let hole3 = {
+  ast = bindall_ [let_ "bar" (ulam_ "x"
+                    (bind_ (let_ "h" (hole_ tybool_ true_ (int_ 2)))
+                           (if_ (var_ "h")
+                                (var_ "x")
+                                (addi_ (var_ "x") (int_ 1))))),
+                  reclets_add
+                    "foo" (ulam_ "x"
+                      (if_ (eqi_ (var_ "x") (int_ 1))
+                           (app_ (var_ "foo") (int_ 2))
+                           (app_ (var_ "bar") (var_ "x"))))
+                  reclets_empty,
+                  let_ "b1" (app_ (var_ "bar") (int_ 1)),
+                  let_ "b2" (app_ (var_ "bar") (int_ 2)),
+                  app_ (var_ "foo") (int_ 1)],
+  expected = int_ 2,
+  vs = ["top", "bar", "foo"],
+  calls = [("top", "foo"), ("top", "bar"), ("top", "bar"), ("foo", "foo"), ("foo", "bar")]
+} in
 
-let ast = bindall_ [bar, foo,
-                    let_ "b1" (app_ (var_ "bar") (int_ 1)),
-                    let_ "b2" (app_ (var_ "bar") (int_ 2)),
-                    app_ (var_ "foo") (int_ 1)] in
+let allTests = [
+  hole1,
+  hole2,
+  hole3,
+  constant,
+  identity,
+  funCall,
+  callSameFunctionTwice,
+  twoArgs,
+  innerFun,
+  letWithFunCall,
+  factorial,
+  evenOdd,
+  hiddenCall
+] in
 
-let tast = dprintTransform ast in
-let e = eval tast (int_ 2) in
-utest e with int_ 2 in
+let tTests = [hole1, hole2, hole3] in
+let cgTests = allTests in
+
+let _ = map testTransform tTests in
+let _ = map testCallgraph cgTests in
 
 ()
