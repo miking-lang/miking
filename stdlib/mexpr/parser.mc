@@ -155,6 +155,30 @@ lang ParenthesesParser = ExprParser + KeywordParser
     {val = e.val, pos = r.pos, str = r.str}
 end
 
+-- General fragment for handling infix operations
+lang InfixParser = ExprParser
+  syn Associativity = 
+  | LeftAssoc ()
+  | RightAssoc ()
+ 
+  sem parseInfixImp (p: Pos) =
+end
+
+
+-- Constructor of binary opertors. Used by InfixArithParser
+let makeConstBinOp = lam op. lam n. lam p. lam xs. lam assoc. lam prec.
+  let p2 = advanceCol p 1 in
+  use ArithIntAst in
+  {val = lam x. lam y. TmConst {val = op, fi = makeInfo p p2}, pos = p2, str = xs,
+       assoc = assoc, prec = prec}
+
+-- Demonstrates the use of infix operators. The syntax is not part of basic MCore
+lang InfixArithParser = InfixParser + ArithIntAst
+  sem parseInfixImp (p: Pos) =
+  | "+" ++ xs -> makeConstBinOp (CAddi {}) 1 p xs (LeftAssoc ()) 10
+  | "-" ++ xs -> makeConstBinOp (CSubi {}) 1 p xs (LeftAssoc ()) 10
+  | "*" ++ xs -> makeConstBinOp (CMuli {}) 1 p xs (LeftAssoc ()) 20
+end
 
 
 lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser +
