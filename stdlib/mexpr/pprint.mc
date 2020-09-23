@@ -398,7 +398,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     if all is_char t.tms then
       (env,concat "\""
         (concat
-           (map (lam e. match extract_char e with Some c then c else '?') t.tms)  -- TODO: escape characters
+           (map (lam e. match extract_char e with Some c then c else '?') t.tms)  -- TODO(vipa, 2020-09-23): escape characters
            "\""))
     else
     match mapAccumL (lam env. lam tm. pprintCode (incr indent) env tm) env t.tms
@@ -593,7 +593,7 @@ lang CharPatPrettyPrint = CharPat
   | PChar _ -> true
 
   sem getPatStringCode (indent : Int) (env: Env) =
-  | PChar t -> (env, ['\'', t.val, '\''])  -- TODO: should escape t.val probably?
+  | PChar t -> (env, ['\'', t.val, '\''])  -- TODO(vipa, 2020-09-23): should escape t.val probably?
 end
 
 lang BoolPatPrettyPrint = BoolPat
@@ -634,7 +634,7 @@ end
 
 lang NotPatPrettyPrint = NotPat
   sem patIsAtomic =
-  | PNot _ -> false  -- TODO: this could possibly be true, just because it binds stronger than everything else
+  | PNot _ -> false  -- OPT(vipa, 2020-09-23): this could possibly be true, just because it binds stronger than everything else
 
   sem getPatStringCode (indent : Int) (env : Env) =
   | PNot {subpat = p} ->
@@ -668,12 +668,12 @@ lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + Seq
           join [entry.ident, " : ", getTypeStringCode indent entry.tpe]
       in
       join ["{", strJoin ", " (map conventry t.tpes), "}"]
-    | TyCon t -> t.ident  -- TODO: format properly with #con
+    | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
     | TyApp t ->
       join ["(", getTypeStringCode indent t.lhs, ") (", getTypeStringCode indent t.rhs, ")"]
-    | TyVar t -> t.ident  -- TODO: format properly with #var
+    | TyVar t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #var
 end
 
 ---------------------------
