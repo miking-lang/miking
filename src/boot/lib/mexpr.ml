@@ -42,7 +42,6 @@ let builtin =
    ("divf",f(Cdivf(None)));("negf",f(Cnegf));
    ("ltf",f(Cltf(None)));("leqf",f(Cleqf(None)));("gtf",f(Cgtf(None)));("geqf",f(Cgeqf(None)));
    ("eqf",f(Ceqf(None)));("neqf",f(Cneqf(None)));
-   ("exp",f(Cexp));
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
    ("int2float", f(CInt2float)); ("string2float", f(CString2float));
    ("char2int",f(CChar2int));("int2char",f(CInt2char));
@@ -118,7 +117,6 @@ let arity = function
   | Cgeqf(None) -> 2  | Cgeqf(Some(_)) -> 1
   | Ceqf(None)  -> 2  | Ceqf(Some(_))  -> 1
   | Cneqf(None) -> 2  | Cneqf(Some(_)) -> 1
-  | Cexp        -> 1
   | Cfloorfi    -> 1
   | Cceilfi     -> 1
   | Croundfi    -> 1
@@ -335,9 +333,6 @@ let delta eval env fi c v  =
         TmConst(fi, CFloat(Float.of_string f))
     | CString2float,_ -> fail_constapp fi
 
-    | Cexp,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat(exp(v)))
-    | Cexp,_ -> fail_constapp fi
-
     | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
     | Cfloorfi,_ -> fail_constapp fi
 
@@ -487,7 +482,7 @@ let delta eval env fi c v  =
     (* Sundials intrinsics *)
     | CSd v, t -> Sd.delta eval env fi v t
     (* Externals *)
-    | CExt v, t -> Ext.delta eval env fi v t 
+    | CExt v, t -> Ext.delta eval env fi v t
 
 
 (* Debug function used in the eval function *)
