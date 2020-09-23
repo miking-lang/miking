@@ -104,6 +104,17 @@ let assocMapAccum : AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
          match f acc t.0 t.1 with (acc, b) then (acc, (t.0, b)) else never)
       acc m
 
+-- 'assocMergePreferRight traits l r' merges two maps, keeping values from r in case a key
+-- exists in both maps. See also 'assocMergePreferLeft'
+let assocMergePreferRight : AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
+  lam traits. lam l. lam r.
+    assocFold traits (lam m. lam k. lam v. assocInsert traits k v m) l r
+
+-- 'assocMergePreferLeft traits l r' merges two maps, keeping values from l in case a key
+-- exists in both maps. See also 'assocMergePreferRight'
+let assocMergePreferLeft : AssocTraits k -> AssocMap k v -> AssocMap k v -> AssocMap k v =
+  lam traits. lam l. lam r. assocMergePreferRight traits r l
+
 mexpr
 
 let traits = {eq = eqi} in
@@ -120,6 +131,8 @@ let values = assocValues traits in
 let map = assocMap traits in
 let fold = assocFold traits in
 let mapAccum = assocMapAccum traits in
+let mergePreferLeft = assocMergePreferLeft traits in
+let mergePreferRight = assocMergePreferRight traits in
 
 let m = assocEmpty in
 let m = insert 1 '1' m in
@@ -195,5 +208,20 @@ utest mem 4 m with true in
 let m = remove 4 m in
 
 utest mem 4 m with false in
+
+let m1 = insert 1 "1l" (insert 2 "2l" assocEmpty) in
+let m2 = insert 1 "1r" (insert 3 "3r" assocEmpty) in
+let ml = mergePreferLeft m1 m2 in
+let mr = mergePreferRight m1 m2 in
+
+utest ml with mergePreferRight m2 m1 in
+utest lookup 1 ml with Some "1l" in
+utest lookup 2 ml with Some "2l" in
+utest lookup 3 ml with Some "3r" in
+
+utest mr with mergePreferLeft m2 m1 in
+utest lookup 1 mr with Some "1r" in
+utest lookup 2 mr with Some "2l" in
+utest lookup 3 mr with Some "3r" in
 
 ()
