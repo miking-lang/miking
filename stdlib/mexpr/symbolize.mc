@@ -129,11 +129,12 @@ lang DataSym = DataAst
 end
 
 lang MatchSym = MatchAst
-  -- TODO(vipa): env is constant throughout symbolizePat, so it would be preferrable to pass it
-  -- in some other way, a reader monad or something. patEnv on the other hand changes, it would
-  -- be nice to pass via state monad or something.
-  -- env is the environment from the outside, plus the names added thus far in the pattern
-  -- patEnv is only the newly added names
+  -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
+  -- so it would be preferrable to pass it in some other way, a reader
+  -- monad or something. patEnv on the other hand changes, it would be
+  -- nice to pass via state monad or something.  env is the
+  -- environment from the outside, plus the names added thus far in
+  -- the pattern patEnv is only the newly added names
   sem symbolizePat (env : Env) (patEnv : Env) =
   -- Intentionally left blank
 
@@ -263,11 +264,11 @@ end
 lang NotPatSym = NotPat
   sem symbolizePat (env : Env) (patEnv : Env) =
   | PNot p ->
-    -- NOTE(vipa): new names in a not-pattern do not matter since they will
-    -- never bind (it should probably be an error to bind a name inside a
-    -- not-pattern, but we're not doing that kind of static checks yet.
-    -- Note that we still need to run symbolize though, constructors must
-    -- refer to the right symbol.
+    -- NOTE(vipa, 2020-09-23): new names in a not-pattern do not
+    -- matter since they will never bind (it should probably be an
+    -- error to bind a name inside a not-pattern, but we're not doing
+    -- that kind of static checks yet.  Note that we still need to run
+    -- symbolize though, constructors must refer to the right symbol.
     let res = symbolizePat env patEnv p.subpat in
     (patEnv, PNot {p with subpat = res.1})
 end
@@ -390,7 +391,7 @@ let matchor = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar
 let smatchor = symbolize ae matchor in
 let _ = debugPrint matchor smatchor in
 
--- NOTE(vipa): (var_ "a") should refer to the "a" from let_, not the pattern, that's intended, in case someone happens to notice and finds it odd
+-- NOTE(vipa, 2020-09-23): (var_ "a") should refer to the "a" from let_, not the pattern, that's intended, in case someone happens to notice and finds it odd
 let matchnot = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
 let smatchnot = symbolize ae matchnot in
 let _ = debugPrint matchnot smatchnot in

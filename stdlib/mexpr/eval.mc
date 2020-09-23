@@ -589,7 +589,9 @@ end
 lang NotPatEval = NotPat
   sem tryMatch (env : Env) (t : Expr) =
   | PNot {subpat = p} ->
-    match tryMatch env t p with None _ then Some env else None ()
+    let res = tryMatch env t p in
+    match res with None _ then Some env else
+    match res with Some _ then None () else never
 end
 
 -------------------------

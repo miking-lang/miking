@@ -100,10 +100,15 @@ utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with Non
 let optionFoldlM: (a -> b -> Option a) -> a -> [b] -> Option a = lam f.
   recursive let recur = lam a. lam bs.
     match bs with [b] ++ bs then
-      match f a b with Some a then
+      let res = f a b in
+      match res with Some a then
         recur a bs
-      else None ()
-    else Some a
+      else match res with None () then
+        None ()
+      else never
+    else match bs with [] then
+      Some a
+    else never
   in recur
 
 utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2]
