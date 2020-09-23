@@ -398,7 +398,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     if all is_char t.tms then
       (env,concat "\""
         (concat
-           (map (lam e. match extract_char e with Some c then c else '?') t.tms)  -- TODO(vipa, 2020-09-23): escape characters
+           (map (lam e. match extract_char e with Some c then c else '?') t.tms)
            "\""))
     else
     match mapAccumL (lam env. lam tm. pprintCode (incr indent) env tm) env t.tms
@@ -498,59 +498,22 @@ end
 -- PATTERNS --
 --------------
 
-let _pprint_patname: Env -> PatName -> (Env, String) = lam env. lam pname.
-  match pname with PName name then
-    match _getStr name env with (env, str) then (env, varString str) else never
-  else match pname with PWildcard () then
-    (env, "_")
-  else never
-
 lang VarPatPrettyPrint = VarPat
-  sem patIsAtomic =
-  | PVar _ -> true
-
   sem getPatStringCode (indent : Int) (env: Env) =
-  | PVar {ident = patname} -> _pprint_patname env patname
+  | PVar {ident = PName name} ->
+    match _getStr name env with (env,str) then (env,varString str) else never
+  | PVar {ident = PWildcard ()} -> (env,"_")
 end
 
-let _pprint_patseq: (Int -> Env -> Pat -> (Env, String)) -> Int -> Env -> [Pat] -> (Env, String) = lam recur. lam indent. lam env. lam pats.
-  use CharPat in
-  let extract_char = lam e.
-    match e with PChar c then Some c.val
-    else None () in
-  match optionMapM extract_char pats with Some str then
-    (env, join ["\"", str, "\""])
-  else match mapAccumL (recur (incr indent)) env pats
-  with (env, pats) then
-    let merged = strJoin (concat "," (newline (incr indent))) pats in
-    (env, join ["[ ", merged, " ]"])
-  else never
-
-lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
-  sem patIsAtomic =
-  | PSeqTot _ -> true
-
-  sem getPatStringCode (indent : Int) (env : Env) =
-  | PSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
+lang SeqTotPatPrettyPrint = SeqTotPat
+  -- TODO
 end
 
-lang SeqEdgePatPrettyPrint = SeqEdgePat
-  sem patIsAtomic =
-  | PSeqEdge _ -> false
-
-  sem getPatStringCode (indent : Int) (env : Env) =
-  | PSeqEdge {prefix = pre, middle = patname, postfix = post} ->
-    match _pprint_patseq getPatStringCode indent env pre with (env, pre) then
-    match _pprint_patname env patname with (env, pname) then
-    match _pprint_patseq getPatStringCode indent env post with (env, post) then
-      (env, join [pre, " ++ ", pname, " ++ ", post])
-    else never else never else never
+lang SeqEdgPatPrettyPrint = SeqEdgPat
+  -- TODO
 end
 
 lang RecordPatPrettyPrint = RecordPat
-  sem patIsAtomic =
-  | PRecord _ -> true
-
   sem getPatStringCode (indent : Int) (env: Env) =
   | PRecord {bindings = bindings} ->
     match
@@ -566,82 +529,41 @@ lang RecordPatPrettyPrint = RecordPat
 end
 
 lang DataPatPrettyPrint = DataPat
-  sem patIsAtomic =
-  | PCon _ -> false
-
   sem getPatStringCode (indent : Int) (env: Env) =
   | PCon t ->
     match _getStr t.ident env with (env,str) then
       let name = conString str in
       match getPatStringCode indent env t.subpat with (env,subpat) then
-        let subpat = if patIsAtomic t.subpat then subpat else join ["(", subpat, ")"]
-        in (env, join [name, " ", subpat])
+        (env,join [name, " (", subpat, ")"])
       else never
     else never
 end
 
 lang IntPatPrettyPrint = IntPat
-  sem patIsAtomic =
-  | PInt _ -> true
-
   sem getPatStringCode (indent : Int) (env: Env) =
   | PInt t -> (env, int2string t.val)
 end
 
 lang CharPatPrettyPrint = CharPat
-  sem patIsAtomic =
-  | PChar _ -> true
-
   sem getPatStringCode (indent : Int) (env: Env) =
-  | PChar t -> (env, ['\'', t.val, '\''])  -- TODO(vipa, 2020-09-23): should escape t.val probably?
+  | PChar t -> (env, ['\'', t.val, '\''])
 end
 
 lang BoolPatPrettyPrint = BoolPat
-  sem patIsAtomic =
-  | PBool _ -> true
-
   sem getPatStringCode (indent : Int) (env: Env) =
   | PBool b -> (env, if b.val then "true" else "false")
 end
 
 lang AndPatPrettyPrint = AndPat
-  sem patIsAtomic =
-  | PAnd _ -> false
-
-  sem getPatStringCode (indent : Int) (env : Env) =
-  | PAnd {lpat = l, rpat = r} ->
-    match getPatStringCode indent env l with (env, l2) then
-    match getPatStringCode indent env r with (env, r2) then
-    let l2 = if patIsAtomic l then l2 else join ["(", l2, ")"] in
-    let r2 = if patIsAtomic r then r2 else join ["(", r2, ")"] in
-    (env, join [l2, " & ", r2])
-    else never else never
+  -- TODO
 end
 
 lang OrPatPrettyPrint = OrPat
-  sem patIsAtomic =
-  | POr _ -> false
-
-  sem getPatStringCode (indent : Int) (env : Env) =
-  | POr {lpat = l, rpat = r} ->
-    match getPatStringCode indent env l with (env, l2) then
-    match getPatStringCode indent env r with (env, r2) then
-    let l2 = if patIsAtomic l then l2 else join ["(", l2, ")"] in
-    let r2 = if patIsAtomic r then r2 else join ["(", r2, ")"] in
-    (env, join [l2, " | ", r2])
-    else never else never
+  -- TODO
 end
 
 lang NotPatPrettyPrint = NotPat
-  sem patIsAtomic =
-  | PNot _ -> false  -- OPT(vipa, 2020-09-23): this could possibly be true, just because it binds stronger than everything else
-
-  sem getPatStringCode (indent : Int) (env : Env) =
-  | PNot {subpat = p} ->
-    match getPatStringCode indent env p with (env, p2) then
-    let p2 = if patIsAtomic p then p2 else join ["(", p2, ")"] in
-    (env, join ["!", p2])
-    else never
+  -- TODO
 end
 
 -----------
@@ -651,7 +573,7 @@ end
 
 lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
                        TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
-                       BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint + TypeVarAst
+                       BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint
     sem getTypeStringCode (indent : Int) =
     | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
                                getTypeStringCode indent t.to, ")"]
@@ -668,12 +590,12 @@ lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + Seq
           join [entry.ident, " : ", getTypeStringCode indent entry.tpe]
       in
       join ["{", strJoin ", " (map conventry t.tpes), "}"]
-    | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
+    | TyCon t -> t.ident
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
     | TyApp t ->
-      join ["(", getTypeStringCode indent t.lhs, ") (", getTypeStringCode indent t.rhs, ")"]
-    | TyVar t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #var
+      -- Unsure about how this should be formatted or what this type even means.
+      getTypeStringCode indent (TyArrow {from = t.lhs, to = t.rhs})
 end
 
 ---------------------------
@@ -694,7 +616,7 @@ lang MExprPrettyPrint =
   + SeqOpPrettyPrint
 
   -- Patterns
-  + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
+  + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgPatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
   OrPatPrettyPrint + NotPatPrettyPrint
@@ -836,47 +758,6 @@ let func_addone =
   )
 in
 
--- let beginsWithBinaryDigit : String -> Bool = lam s : String.
---   match s with ['0' | '1'] ++ _ then true else false
-let func_beginsWithBinaryDigit =
-  let_ "beginsWithBinaryDigit" (
-    lam_ "s" (Some (tycon_ "Bool")) (
-      match_ (var_ "s")
-             (pseqedgew_
-               [por_ (pchar_ '0') (pchar_ '1')]
-               [])
-             (true_)
-             (false_)
-    )
-  )
-in
-
--- let pedanticIsSome : Option a -> Bool = lam o : Option a.
---   match o with !(None ()) & Some _ then true else false
-let func_pedanticIsSome =
-  let_ "pedanticIsSome" (
-    lam_ "s" (Some (tyapp_ (tycon_ "Option") (tyvar_ "a"))) (
-      match_ (var_ "o")
-             (pand_
-               (pnot_ (pcon_ "None" punit_))
-               (pcon_ "Some" pvarw_))
-             (true_)
-             (false_)
-    )
-  )
-in
-
-let func_is123 =
-  let_ "is123" (
-    lam_ "l" (Some (tyseq_ tyint_)) (
-      match_ (var_ "l")
-             (pseqtot_ [pint_ 1, pint_ 2, pint_ 3])
-             (true_)
-             (false_)
-    )
-  )
-in
-
 let sample_ast =
   bindall_ [
     func_foo,
@@ -887,10 +768,7 @@ let sample_ast =
     func_mycona,
     func_myconb,
     func_isconb,
-    func_addone,
-    func_beginsWithBinaryDigit,
-    func_pedanticIsSome,
-    func_is123
+    func_addone
   ]
 in
 
@@ -898,5 +776,5 @@ in
 -- let _ = print (expr2str sample_ast) in
 -- let _ = print "\n\n" in
 
-utest length (expr2str sample_ast) with 0 using geqi in
+utest geqi (length (expr2str sample_ast)) 0 with true in
 ()

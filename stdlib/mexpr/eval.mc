@@ -1,3 +1,4 @@
+-- TODO: Generate unique symbols for data constructors
 -- TODO: Add types
 
 include "string.mc"
@@ -482,34 +483,12 @@ lang VarPatEval = VarPat
   | PVar {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = SeqTotPat + SeqAst
-  sem tryMatch (env : Env) (t : Expr) =
-  | PSeqTot {pats = pats} ->
-    match t with TmSeq {tms = tms} then
-      if eqi (length tms) (length pats) then
-        optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env
-          (zipWith (lam a. lam b. (a, b)) tms pats)
-      else None ()
-    else None ()
+lang SeqTotPatEval = SeqTotPat
+  -- TODO
 end
 
-lang SeqEdgePatEval = SeqEdgePat + SeqAst
-  sem tryMatch (env : Env) (t : Expr) =
-  | PSeqEdge {prefix = pre, middle = middle, postfix = post} ->
-    match t with TmSeq {tms = tms} then
-      if geqi (length tms) (addi (length pre) (length post)) then
-        match splitAt tms (length pre) with (preTm, tms) then
-        match splitAt tms (subi (length tms) (length post)) with (tms, postTm) then
-        let pair = lam a. lam b. (a, b) in
-        let paired = zipWith pair (concat preTm postTm) (concat pre post) in
-        let env = optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env paired in
-        match middle with PName name then
-          optionMap (_evalInsert name (seq_ tms)) env
-        else match middle with PWildcard () then
-          env
-        else never else never else never
-      else None ()
-    else None ()
+lang SeqEdgPatEval = SeqEdgPat
+  -- TODO
 end
 
 lang RecordPatEval = RecordAst + RecordPat
@@ -575,23 +554,15 @@ lang BoolPatEval = BoolAst + BoolPat
 end
 
 lang AndPatEval = AndPat
-  sem tryMatch (env : Env) (t : Expr) =
-  | PAnd {lpat = l, rpat = r} ->
-    optionBind (tryMatch env t l) (lam env. tryMatch env t r)
+  -- TODO
 end
 
 lang OrPatEval = OrPat
-  sem tryMatch (env : Env) (t : Expr) =
-  | POr {lpat = l, rpat = r} ->
-    optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
+  -- TODO
 end
 
 lang NotPatEval = NotPat
-  sem tryMatch (env : Env) (t : Expr) =
-  | PNot {subpat = p} ->
-    let res = tryMatch env t p in
-    match res with None _ then Some env else
-    match res with Some _ then None () else never
+  -- TODO
 end
 
 -------------------------
@@ -612,7 +583,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval
 
   -- Patterns
-  + VarPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
+  + VarPatEval + SeqTotPatEval + SeqEdgPatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
   sem eq (e1 : Expr) =
@@ -927,110 +898,5 @@ utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
 utest eval (bind_ (let_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
 with true_ in
-
-utest eval (match_
-  (tuple_ [true_, true_])
-  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
-  true_
-  false_)
-with true_ in
-
-utest eval (match_
-  (tuple_ [true_, false_])
-  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
-  true_
-  false_)
-with false_ in
-
-utest eval (match_
-  (tuple_ [false_, true_])
-  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
-  true_
-  false_)
-with false_ in
-
-utest eval (match_
-  (tuple_ [false_, false_])
-  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
-  true_
-  false_)
-with false_ in
-
-utest eval (match_
-  (int_ 1)
-  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
-  (var_ "x")
-  (int_ 42))
-with int_ 1 in
-
-utest eval (match_
-  (int_ 2)
-  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
-  (var_ "x")
-  (int_ 42))
-with int_ 2 in
-
-utest eval (match_
-  (int_ 3)
-  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
-  (var_ "x")
-  (int_ 42))
-with int_ 42 in
-
-utest eval (match_
-  true_
-  (pnot_ ptrue_)
-  true_
-  false_)
-with false_ in
-
-utest eval (match_
-  false_
-  (pnot_ ptrue_)
-  true_
-  false_)
-with true_ in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5])
-  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
-  false_)
-with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5] in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2, int_ 3])
-  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
-  false_)
-with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3] in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2])
-  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
-  false_)
-with false_ in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2, int_ 3])
-  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
-  false_)
-with tuple_ [int_ 1, int_ 2, int_ 3] in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
-  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
-  false_)
-with false_ in
-
-utest eval (match_
-  (seq_ [int_ 1, int_ 2])
-  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
-  false_)
-with false_ in
 
 ()
