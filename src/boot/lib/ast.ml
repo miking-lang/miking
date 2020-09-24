@@ -80,6 +80,7 @@ and const =
 | Cstring2float
 (* MCore intrinsic: characters *)
 | CChar    of int
+| Ceqc     of int option
 | Cchar2int
 | Cint2char
 (* MCore intrinsic: sequences *)

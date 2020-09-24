@@ -201,6 +201,8 @@ let rec print_const fmt = function
 
   (* MCore intrinsic: characters *)
   | CChar(v)  -> fprintf fmt "%s" (lit_of_uchar v)
+  | Ceqc(None)     -> fprintf fmt "eqc"
+  | Ceqc(Some(v))  -> fprintf fmt "eqc(%d)" v
   | Cchar2int -> fprintf fmt "char2int"
   | Cint2char -> fprintf fmt "int2char"
 

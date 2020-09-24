@@ -3,6 +3,7 @@
 include "string.mc"
 include "name.mc"
 include "assoc.mc"
+include "mexpr/info.mc"
 
 -----------
 -- TERMS --
@@ -94,7 +95,7 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const}
+  | TmConst {val : Const, fi: Info}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
@@ -125,7 +126,8 @@ lang MatchAst
   | TmMatch {target : Expr,
              pat    : Pat,
              thn    : Expr,
-             els    : Expr}
+             els    : Expr,
+             fi     : Info}
 
   syn Pat =
 
@@ -338,7 +340,7 @@ end
 
 lang BoolPat = BoolAst
   syn Pat =
-  | PBool {val : Bool}
+  | PBool {val : Bool, fi:Info}
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PBool v -> PBool v
