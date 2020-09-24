@@ -52,12 +52,12 @@ lang RecordAst
                     value : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {bindings = map (lam b. (b.0, f b.1)) t.bindings}
+  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqstr} f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> foldl f acc (map (lam b. b.1) t.bindings)
+  | TmRecord t -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc t.bindings
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -295,10 +295,10 @@ lang RecordPat
   | PRecord {bindings : AssocMap String Pat}
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PRecord b -> PRecord {b with bindings = map (lam b. (b.0, f b.1)) b.bindings}
+  | PRecord b -> PRecord {b with bindings = assocMap {eq=eqstr} (lam b. (b.0, f b.1)) b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PRecord {bindings = bindings} -> foldl f acc (map (lam b. b.1) bindings)
+  | PRecord {bindings = bindings} -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
