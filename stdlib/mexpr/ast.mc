@@ -257,6 +257,7 @@ end
 type PatName
 con PName     : Name -> PatName
 con PWildcard : ()   -> PatName
+
 lang VarPat
   syn Pat =
   | PVar {ident : PatName}

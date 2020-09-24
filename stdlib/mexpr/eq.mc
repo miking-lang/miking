@@ -10,9 +10,11 @@ include "mexpr/ast.mc"
 -- ENVIRONMENT --
 -----------------
 
+type NameEnv = AssocMap Name Name
+
 type Env = {
-  varEnv : AssocMap Name Name,
-  conEnv : AssocMap Name Name
+  varEnv : NameEnv,
+  conEnv : NameEnv
 }
 
 -----------
@@ -41,7 +43,7 @@ end
 
 lang FunEq = FunAst
   sem eqexpr (env : Env) (lhs : Expr) =
-  -- The type annotation is currently ignored. TODO Add?
+  -- NOTE: The type annotation is currently ignored.
   | TmLam {ident = i2, body = b2} ->
     match env with {varEnv = varEnv, conEnv = conEnv} then
       match lhs with TmLam {ident = i1, body = b1} then
@@ -86,8 +88,9 @@ end
 lang RecLetsEq = RecLetsAst
   sem eqexpr (env : Env) (lhs : Expr) =
   | TmRecLets {bindings = bs2} ->
-    -- This requires the bindings to occur in the same order. TODO Do we want
-    -- to allow equality of differently ordered (but equal) bindings as well?
+    -- This requires the bindings to occur in the same order.
+    -- NOTE: Do we want to allow equality of differently ordered (but equal)
+    -- bindings as well?
     match env with {varEnv = varEnv, conEnv = conEnv} then
       match lhs with TmRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
@@ -141,7 +144,7 @@ lang DataEq = DataAst
 end
 
 lang MatchEq = MatchAst
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- Intentionally left blank
 
   sem eqexpr (env : Env) (lhs : Expr) =
@@ -149,8 +152,12 @@ lang MatchEq = MatchAst
     match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1} then
       if eqexpr env t1 t2 then
         if eqexpr env els1 els2 then
-          match eqpat env p1 p2 with Some env then
-            eqexpr env thn1 thn2
+          match eqpat env assocEmpty p1 p2 with Some patEnv then
+            match env with {varEnv = varEnv, conEnv = conEnv} then
+              -- TODO: Waiting for symbolize updates from Viktor (varEnv should
+              -- be merged with patEnv using mergepreferright from assoc.mc)
+              eqexpr {varEnv = varEnv, conEnv = conEnv} thn1 thn2
+            else never
           else false
         else false
       else false
@@ -271,64 +278,102 @@ end
 -- PATTERNS --
 --------------
 
+let _eqpatname : NameEnv -> PatName -> PatName -> Option NameEnv =
+  lam penv. lam p1. lam p2.
+    match (p1,p2) with (PName n1,PName n2) then
+      match assocLookup {eq=nameEq} n1 penv with Some i2 then
+        if nameEq i2 n2 then Some penv else None ()
+      else Some (assocInsert {eq = nameEq} n1 n2 penv)
+    else match (p1,p2) with (PWildcard _,PWildcard _) then Some penv
+    else None ()
+
+lang VarPatEq = VarPat
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PVar p2 -> match lhs with PVar p1 then _eqpatname patEnv p1 p2 else None ()
+end
+
 lang SeqTotPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang SeqEdgPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang RecordPatEq = RecordPat
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PRecord {bindings = bs2} ->
     match lhs with PRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
         assocFoldOption {eq=eqstr}
-          (lam env. lam k1. lam p1.
+          (lam patEnv. lam k1. lam p1.
              match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
-               eqpat env p1 p2
+               eqpat env patEnv p1 p2
              else None ())
-          env bs1
+          patEnv bs1
       else None ()
     else None ()
 end
 
-lang DataPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
-  -- | PCon {ident  : Name,
-  --         subpat : Pat}
+lang DataPatEq = DataPat
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PCon {ident = i2, subpat = s2} ->
+    match lhs with PCon {ident = i1, subpat = s1} then
+      match env with {conEnv = conEnv} then
+        match assocLookup {eq=nameEq} i1 conEnv with n2 then
+          if nameEq i2 n2 then eqpat env patEnv s1 s2
+          else None ()
+        else None ()
+      else never
+    else None ()
 end
 
-lang IntPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
-  -- | PInt {val : Int}
+lang IntPatEq = IntPat
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PInt {val = i2} ->
+    match lhs with PInt {val = i1} then
+      if eqi i1 i2 then Some patEnv else None ()
+    else None ()
 end
 
-lang CharPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
-  -- | PChar {val : Char}
+lang CharPatEq = CharPat
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PChar {val = c2} ->
+    match lhs with PChar {val = c1} then
+      if eqchar c1 c2 then Some patEnv else None ()
+    else None ()
 end
 
-lang BoolPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
-  -- | PBool {val : Bool}
+lang BoolPatEq = BoolPat
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PBool {val = b2} ->
+    match lhs with PBool {val = b1} then
+      if eqb b1 b2 then Some patEnv else None ()
+    else None ()
 end
 
 lang AndPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang OrPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang NotPatEq
-  sem eqpat (env : Env) (lhs : Pat) =
+  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
+-----------------------------
+-- MEXPR ALPHA EQUIVALENCE --
+-----------------------------
+
+
+-----------
+-- TESTS --
+-----------

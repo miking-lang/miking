@@ -88,7 +88,7 @@ utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]]
 utest zipWith addi [] [] with []
 
--- TODO Duplicate of optionFoldlM, remove.
+-- TODO Duplicate of optionFoldlM, remove when available.
 recursive
   let foldOption = lam f. lam acc. lam seq.
       if null seq then Some acc

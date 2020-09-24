@@ -16,7 +16,7 @@ let assocEmpty : AssocMap k v =
 
 -- 'assocLength m' returns the number of key-value pairs in m
 let assocLength : AssocMap k v -> Int =
-  lam m. length m
+  length
 
 -- 'assocInsert traits k v m' returns a new map, where the key-value pair
 -- ('k','v') is stored. If 'k' is already a key in 'm', its old value will be
@@ -103,7 +103,7 @@ let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
   lam _. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
--- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
+-- 'assocFoldOption traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'. The folding stops immediately if 'f' returns 'None ()'.
 -- IMPORTANT: The folding order is unspecified.
 let assocFoldOption : AssocTraits k -> (acc -> k -> v -> Option acc)

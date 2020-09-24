@@ -11,10 +11,10 @@ include "mexpr/pprint.mc"
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
--- TODO The environment differs from boot, since we do not have access to the
+-- NOTE The environment differs from boot, since we do not have access to the
 -- unique string identifiers from ustring.ml. Instead, we use strings directly.
 
--- TODO We should probably use separate environments for the below instead (as
+-- NOTE We should probably use separate environments for the below instead (as
 -- in eq.mc)
 type Ident
 con IdVar   : String -> Ident
