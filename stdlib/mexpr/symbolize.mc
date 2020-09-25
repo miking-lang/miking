@@ -1,4 +1,7 @@
 -- Symbolization of the MExpr ast.
+--
+-- TODO dlunde 2020-09-25: Add support for leaving existing symbols intact when
+-- running symbolize on an already partially symbolized term?
 
 include "name.mc"
 include "string.mc"
@@ -11,11 +14,12 @@ include "mexpr/pprint.mc"
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
--- NOTE The environment differs from boot, since we do not have access to the
--- unique string identifiers from ustring.ml. Instead, we use strings directly.
+-- NOTE dlunde 2020-09-25: The environment differs from boot, since we do not
+-- have access to the unique string identifiers from ustring.ml. Instead, we
+-- use strings directly.
 
--- NOTE We should probably use separate environments for the below instead (as
--- in eq.mc)
+-- TODO dlunde 2020-09-25: We should probably use separate environments for the
+-- below instead (as in eq.mc)
 type Ident
 con IdVar   : String -> Ident
 con IdCon   : String -> Ident
@@ -30,7 +34,7 @@ let identEq : Ident -> Ident -> Bool =
     then eqstr s1 s2
     else false
 
-type Env = AssocMap Ident Name -- i.e., [(Ident, Symbol)]
+type Env = AssocMap Ident Name
 
 let _symLookup = assocLookup {eq = identEq}
 let _symInsert = assocInsert {eq = identEq}
@@ -292,6 +296,12 @@ lang MExprSym =
   -- Debugging
   + MExprPrettyPrint
 
+---------------------------
+-- CONVENIENCE FUNCTIONS --
+---------------------------
+
+let symbolizeMExpr = use MExprSym in symbolize assocEmpty
+
 -----------
 -- TESTS --
 -----------
@@ -303,64 +313,30 @@ mexpr
 
 use MExprSym in
 
-let debug = false in
-
-let debugPrint = lam e. lam es.
-  if debug then
-    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
-    let _ = printLn (expr2str e) in
-    let _ = print "\n" in
-    let _ = printLn "--- AFTER SYMBOLIZE ---" in
-    let _ = printLn (expr2str es) in
-    let _ = print "\n" in
-    ()
-  else ()
-in
-
-let ae = assocEmpty in
-
 let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
-let sbase = symbolize ae base in
-let _ = debugPrint base sbase in
 
 let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
-let srec = symbolize ae rec in
-let _ = debugPrint rec srec in
 
 let letin = bind_ (let_ "x" rec) (app_ (var_ "x") base) in
-let sletin = symbolize ae letin in
-let _ = debugPrint letin sletin in
 
 let rlets =
   bind_ (reclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
     (app_ (var_ "x") (var_ "y")) in
-let srlets = symbolize ae rlets in
-let _ = debugPrint rlets srlets in
 
 let const = int_ 1 in
-let sconst = symbolize ae const in
-let _ = debugPrint const sconst in
 
 let data = bind_ (ucondef_ "Test") (conapp_ "Test" base) in
-let sdata = symbolize ae data in
-let _ = debugPrint data sdata in
 
 let varpat = match_ unit_ (pvar_ "x") (var_ "x") base in
-let svarpat = symbolize ae varpat in
-let _ = debugPrint varpat svarpat in
 
 let recpat =
   match_ base
     (prec_ [("k1", (pvar_ "x")), ("k2", pvarw_), ("k3", (pvar_ "x"))])
     (var_ "x") unit_ in
-let srecpat = symbolize ae recpat in
-let _ = debugPrint recpat srecpat in
 
 let datapat =
   bind_ (ucondef_ "Test")
     (match_ unit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") unit_) in
-let sdatapat = symbolize ae datapat in
-let _ = debugPrint datapat sdatapat in
 
 let litpat =
   match_ unit_ (pint_ 1)
@@ -370,36 +346,57 @@ let litpat =
           unit_)
        unit_)
     unit_ in
-let slitpat = symbolize ae litpat in
-let _ = debugPrint litpat slitpat in
 
 let ut = utest_ base base base in
-let sut = symbolize ae ut in
-let _ = debugPrint ut sut in
 
 let seq = seq_ [base, data, const] in
-let sseq = symbolize ae seq in
-let _ = debugPrint seq sseq in
 
 let nev = never_ in
-let snever = symbolize ae never_ in
-let _ = debugPrint nev snever in
 
 let matchand = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pand_ (pint_ 1) (pvar_ "a")) (var_ "a") (never_)) in
-let smatchand = symbolize ae matchand in
-let _ = debugPrint matchand smatchand in
 
 let matchor = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar_ "a")) (var_ "a") (never_)) in
-let smatchor = symbolize ae matchor in
-let _ = debugPrint matchor smatchor in
 
 -- NOTE(vipa, 2020-09-23): (var_ "a") should refer to the "a" from let_, not the pattern, that's intended, in case someone happens to notice and finds it odd
 let matchnot = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
-let smatchnot = symbolize ae matchnot in
-let _ = debugPrint matchnot smatchnot in
 
 let matchoredge = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
-let smatchoredge = symbolize ae matchoredge in
-let _ = debugPrint matchoredge smatchoredge in
+
+let debug = false in
+
+let debugPrint = lam t.
+  let r = symbolize assocEmpty t in
+  if debug then
+    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+    let _ = printLn (expr2str t) in
+    let _ = print "\n" in
+    let _ = printLn "--- AFTER SYMBOLIZE ---" in
+    let _ = printLn (expr2str r) in
+    let _ = print "\n" in
+    ()
+  else ()
+in
+
+let _ =
+  map debugPrint [
+    base,
+    rec,
+    letin,
+    rlets,
+    const,
+    data,
+    varpat,
+    recpat,
+    datapat,
+    litpat,
+    ut,
+    seq,
+    nev,
+    matchand,
+    matchor,
+    matchnot,
+    matchoredge
+  ]
+in
 
 ()

@@ -8,6 +8,7 @@ include "name.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
 ----------------------------
@@ -188,7 +189,7 @@ lang UtestEval = UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    let _ = if eqmexpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval ctx t.next
 end
 
@@ -515,7 +516,7 @@ lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PRecord r ->
     match t with TmRecord {bindings = bs} then
-      assocFoldOption {eq = eqstr}
+      assocFoldlM {eq = eqstr}
         (lam env. lam k. lam p.
           match assocLookup {eq = eqstr} k bs with Some v then
             tryMatch env v p
@@ -609,55 +610,6 @@ lang MExprEval =
   + VarPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
-  sem eq (e1 : Expr) =
-  | TmConst c2 -> constExprEq c2.val e1
-  | TmConApp d2 -> dataEq d2.ident d2.body e1
-  | TmSeq s -> seqEq s.tms e1
-  | TmRecord t -> recordEq t.bindings e1
-
-  sem constExprEq (c1 : Const) =
-  | TmConst c2 -> constEq c1 c2.val
-  | _ -> false
-
-  sem constEq (c1 : Const) =
-  | CInt n2 -> intEq n2.val c1
-  | CBool b2 -> boolEq b2.val c1
-  | CChar chr2 -> charEq chr2.val c1
-
-  sem intEq (n1 : Int) =
-  | CInt n2 -> eqi n1 n2.val
-  | _ -> false
-
-  sem boolEq (b1 : Bool) =
-  | CBool b2 -> or (and b1 b2.val) (and (not b1) (not b2.val))
-  | _ -> false
-
-  sem charEq (c1 : Char) =
-  | CChar c2 -> eqi (char2int c1) (char2int c2.val)
-  | _ -> false
-
-  sem dataEq (k1 : Name) (v1 : Expr) =
-  | TmConApp d2 ->
-    let k1 = k1 in
-    let k2 = d2.ident in
-    let v2 = d2.body in
-    and (_eqn k1 k2) (eq v1 v2)
-  | _ -> false
-
-  sem recordEq (bindings1 : AssocMap String Expr) =
-  | TmRecord t ->
-    and (eqi (length bindings1) (length t.bindings))
-        (all (lam e1. any (lam e2. and (eqstr e1.0 e2.0)
-                                       (eq e1.1 e2.1))
-                          (bindings1))
-             (t.bindings))
-  | _ -> false
-
-  sem seqEq (seq1 : [Expr]) =
-  | TmSeq s ->
-    and (eqi (length seq1) (length s.tms))
-        (all (lam b.b) (zipWith eq seq1 s.tms))
-  | _ -> false
 end
 
 
@@ -761,10 +713,8 @@ let srl = bind_
 
 utest eval srl with true_ in
 
--- TODO This is currently not working because "Num" has different symbols in
--- LHS and RHS.
--- utest eval evalAdd1 with conapp_ "Num" (int_ 3) in
--- utest eval evalAdd2 with conapp_ "Num" (int_ 6) in
+utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqmexpr in
+utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqmexpr in
 
 -- Commented out to declutter test suite output
 -- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) unit_ in

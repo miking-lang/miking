@@ -103,14 +103,13 @@ let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
   lam _. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
--- 'assocFoldOption traits f acc m' folds over 'm' using function 'f' and accumulator
+-- 'assocFoldlM traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'. The folding stops immediately if 'f' returns 'None ()'.
 -- IMPORTANT: The folding order is unspecified.
-let assocFoldOption : AssocTraits k -> (acc -> k -> v -> Option acc)
+let assocFoldlM : AssocTraits k -> (acc -> k -> v -> Option acc)
                         -> acc -> AssocMap k v -> Option acc =
   lam _. lam f. lam acc. lam m.
-    -- TODO Replace with optionFoldlM when available
-    foldOption (lam acc. lam t. f acc t.0 t.1) acc m
+    optionFoldlM (lam acc. lam t. f acc t.0 t.1) acc m
 
 -- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
 -- and fold over 'm' using function 'f' and accumulator 'acc'.
@@ -151,7 +150,7 @@ let keys = assocKeys traits in
 let values = assocValues traits in
 let map = assocMap traits in
 let fold = assocFold traits in
-let foldOption = assocFoldOption traits in
+let foldOption = assocFoldlM traits in
 let mapAccum = assocMapAccum traits in
 let mergePreferLeft = assocMergePreferLeft traits in
 let mergePreferRight = assocMergePreferRight traits in

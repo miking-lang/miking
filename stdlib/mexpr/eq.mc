@@ -5,6 +5,7 @@ include "name.mc"
 include "bool.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/symbolize.mc"
 
 -----------------
 -- ENVIRONMENT --
@@ -16,6 +17,8 @@ type Env = {
   varEnv : NameEnv,
   conEnv : NameEnv
 }
+
+let envEmpty = {varEnv = assocEmpty, conEnv = assocEmpty}
 
 -----------
 -- TERMS --
@@ -89,8 +92,8 @@ lang RecLetsEq = RecLetsAst
   sem eqexpr (env : Env) (lhs : Expr) =
   | TmRecLets {bindings = bs2} ->
     -- This requires the bindings to occur in the same order.
-    -- NOTE: Do we want to allow equality of differently ordered (but equal)
-    -- bindings as well?
+    -- NOTE dlunde 2020-09-25: Do we want to allow equality of differently
+    -- ordered (but equal) bindings as well?
     match env with {varEnv = varEnv, conEnv = conEnv} then
       match lhs with TmRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
@@ -119,13 +122,18 @@ lang ConstEq = ConstAst
     else false
 end
 
+-- TODO dlunde 2020-09-05: Equality of constructors rely upon the type system,
+-- and we cannot rely on there being a corresponding 'TmConDef' for every
+-- occurence of a 'TmConApp' (since this information is most likely discarded
+-- after type checking and evaluation). I'm not sure how we should solve this.
+-- For now, the constructor name is simply ignored.
 lang DataEq = DataAst
   sem eqexpr (env : Env) (lhs : Expr) =
   -- Type annotation ignored here as well
   | TmConDef {ident = i2, inexpr = ie2} ->
     match env with {varEnv = varEnv, conEnv = conEnv} then
       match lhs with TmConDef {ident = i1, inexpr = ie1} then
-        let conEnv = assocInsert {eq = nameEq} i1 i2 conEnv in
+        -- let conEnv = assocInsert {eq = nameEq} i1 i2 conEnv in
         eqexpr {varEnv = varEnv, conEnv = conEnv} ie1 ie2
       else false
     else never
@@ -133,11 +141,17 @@ lang DataEq = DataAst
   | TmConApp {ident = i2, body = b2} ->
     match env with {varEnv = varEnv, conEnv = conEnv} then
       match lhs with TmConApp {ident = i1, body = b1} then
-        match assocLookup {eq = nameEq} i1 conEnv with Some n2 then
-          if nameEq i2 n2 then
-            eqexpr env b1 b2
-          else false
-        else error (concat "Unbound constructor in eq: " (nameGetStr i2))
+
+        -- Ignore if constructor is defined or not
+        eqexpr env b1 b2
+
+        -- Old version
+        -- match assocLookup {eq = nameEq} i1 conEnv with Some n2 then
+        --   if nameEq i2 n2 then
+        --     eqexpr env b1 b2
+        --   else false
+        -- else error (concat "Unbound constructor in eq: " (nameGetStr i2))
+
       else false
     else never
 
@@ -154,9 +168,10 @@ lang MatchEq = MatchAst
         if eqexpr env els1 els2 then
           match eqpat env assocEmpty p1 p2 with Some patEnv then
             match env with {varEnv = varEnv, conEnv = conEnv} then
-              -- TODO: Waiting for symbolize updates from Viktor (varEnv should
-              -- be merged with patEnv using mergepreferright from assoc.mc)
-              eqexpr {varEnv = varEnv, conEnv = conEnv} thn1 thn2
+              eqexpr
+                { varEnv = assocMergePreferRight {eq = nameEq} varEnv patEnv,
+                  conEnv = conEnv }
+                thn1 thn2
             else never
           else false
         else false
@@ -307,7 +322,7 @@ lang RecordPatEq = RecordPat
   | PRecord {bindings = bs2} ->
     match lhs with PRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
-        assocFoldOption {eq=eqstr}
+        assocFoldlM {eq=eqstr}
           (lam patEnv. lam k1. lam p1.
              match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
                eqpat env patEnv p1 p2
@@ -322,10 +337,15 @@ lang DataPatEq = DataPat
   | PCon {ident = i2, subpat = s2} ->
     match lhs with PCon {ident = i1, subpat = s1} then
       match env with {conEnv = conEnv} then
-        match assocLookup {eq=nameEq} i1 conEnv with n2 then
-          if nameEq i2 n2 then eqpat env patEnv s1 s2
-          else None ()
-        else None ()
+
+        eqpat env patEnv s1 s2
+
+        -- NOTE dlunde 2020-09-05: See comments for DataEq
+        -- match assocLookup {eq=nameEq} i1 conEnv with n2 then
+        --   if nameEq i2 n2 then eqpat env patEnv s1 s2
+        --   else None ()
+        -- else None ()
+
       else never
     else None ()
 end
@@ -373,7 +393,108 @@ end
 -- MEXPR ALPHA EQUIVALENCE --
 -----------------------------
 
+lang MExprEq =
+
+  MExprSym
+
+  -- Terms
+  + VarEq + AppEq + FunEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
+  MatchEq + UtestEq + SeqEq + NeverEq
+
+  -- Constants
+  + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
+  CharEq + SymbEq + CmpSymbEq + SeqOpEq
+
+  -- Patterns
+  + VarPatEq + SeqTotPatEq + SeqEdgPatEq + RecordPatEq + DataPatEq + IntPatEq +
+  CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
+
+---------------------------
+-- CONVENIENCE FUNCTIONS --
+---------------------------
+
+let eqmexpr = use MExprEq in eqexpr envEmpty
 
 -----------
 -- TESTS --
 -----------
+
+mexpr
+
+use MExprEq in
+
+let sm = symbolizeMExpr in
+
+let lv1 = ulam_ "x" (var_ "x") in
+let lv2 = ulam_ "y" (var_ "y") in
+
+utest lv1 with lv2 using eqmexpr in
+utest eqmexpr (int_ 1) lv2 with false in
+
+utest sm lv1 with sm lv2 using eqmexpr in
+utest eqmexpr (sm (int_ 1)) (sm lv2) with false in
+
+
+let a1 = app_ lv1 lv2 in
+let a2 = app_ lv2 lv1 in
+
+utest a1 with a2 using eqmexpr in
+utest eqmexpr a1 lv1 with false in
+
+utest sm a1 with sm a2 using eqmexpr in
+utest eqmexpr (sm a1) (sm lv1) with false in
+
+
+let r1 = record_ [("a",lv1), ("b",a1), ("c",a2)] in
+let r2 = record_ [("b",a1), ("a",lv2), ("c",a2)] in
+let r3e = record_ [("a",lv1), ("b",a1), ("d",a2)] in
+let r4e = record_ [("a",lv1), ("b",a1), ("c",lv2)] in
+
+utest r1 with r2 using eqmexpr in
+utest eqmexpr r1 r3e with false in
+utest eqmexpr r1 r4e with false in
+
+utest sm r1 with sm r2 using eqmexpr in
+utest eqmexpr (sm r1) (sm r3e) with false in
+utest eqmexpr (sm r1) (sm r4e) with false in
+
+
+let ru1 = recordupdate_ r1 "b" lv1 in
+let ru2 = recordupdate_ r2 "b" lv2 in
+let ru3e = recordupdate_ r3e "b" lv2 in
+let ru4e = recordupdate_ r2 "c" lv2 in
+
+utest ru1 with ru2 using eqmexpr in
+utest eqmexpr ru1 ru3e with false in
+utest eqmexpr ru1 ru4e with false in
+
+utest sm ru1 with sm ru2 using eqmexpr in
+utest eqmexpr (sm ru1) (sm ru3e) with false in
+utest eqmexpr (sm ru1) (sm ru4e) with false in
+
+
+let let1 = bind_ (let_ "x" lv1) a1 in
+let let2 = bind_ (let_ "y" lv2) a2 in
+let let3e = bind_ (let_ "x" (int_ 1)) a1 in
+let let4e = bind_ (let_ "x" lv2) lv1 in
+
+utest let1 with let2 using eqmexpr in
+utest eqmexpr let1 let3e with false in
+utest eqmexpr let1 let4e with false in
+
+utest sm let1 with sm let2 using eqmexpr in
+utest eqmexpr (sm let1) (sm let3e) with false in
+utest eqmexpr (sm let1) (sm let4e) with false in
+
+
+let rlet1 = reclets_ [("x", a1), ("y", lv1)] in
+let rlet2 = reclets_ [("x", a2), ("y", lv2)] in
+let rlet3 = reclets_ [("y", a2), ("x", lv2)] in
+let rlet4e = reclets_ [("y", lv1), ("x", a1)] in -- Order matters
+utest rlet1 with rlet2 using eqmexpr in
+utest rlet1 with rlet3 using eqmexpr in
+utest eqmexpr rlet1 rlet4e with false in
+
+-- TODO Remaining tests
+
+()

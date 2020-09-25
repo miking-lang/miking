@@ -1,13 +1,14 @@
 -- This file contains proof-of-concept functions for CPS transformation of the
 -- basic lambda calculus subset of MExpr. It is based on
 -- http://matt.might.net/articles/cps-conversion/.
--- TODO Add full support for MExpr when stable.
+-- TODO dlunde 2020-09-25: Add full support for MExpr when stable.
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
 
-lang FunCPS = FunSym
+lang FunCPS = FunSym + FunEq
 
   sem cpsK (cont: Expr -> Expr) =
   | TmLam t -> cont (cpsM (TmLam t))
@@ -49,15 +50,11 @@ end
 mexpr
 use FunCPS in
 
-let _s = symbolize assocEmpty in
+let id = symbolizeMExpr (ulam_ "x" (var_ "x")) in
+let idc = symbolizeMExpr (ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))) in
 
-let id = _s (ulam_ "x" (var_ "x")) in
+utest cpsM id with idc using eqmexpr in
 
--- TODO This is currently not working since the symbols differ between the LHS
--- and RHS. Implement equality check between terms that takes care of symbols?
--- utest cpsM id
--- with _s (ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))) in
-
--- TODO Add more test cases
+-- TODO dlunde 2020-09-25: Add more test cases
 
 ()
