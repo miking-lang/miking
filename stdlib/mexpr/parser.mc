@@ -70,7 +70,7 @@ let _ = use MExprWSACParser in
 
 -- Top of the expression parser. Connects WSAC with parsing of other non terminals
 lang ExprParser = WSACParser
-  sem parseExpr (p : Pos) =
+  sem parseExpr (p: Pos) (prec: Int) =
   | s ->
     let r = eatWSAC p s in parseExprImp r.pos r.str
 
@@ -124,11 +124,11 @@ end
 lang IfParser = ExprParser + KeywordParser +  MatchAst + BoolPat
   sem parseExprImp (p: Pos) =
   | "if" ++ xs ->
-     let e1 = parseExpr (advanceCol p 2) xs in
+     let e1 = parseExpr (advanceCol p 2) 0 xs in
      let r1 = matchKeyword "then" e1.pos e1.str  in
-     let e2 = parseExpr r1.pos r1.str in
+     let e2 = parseExpr r1.pos 0 r1.str in
      let r2 = matchKeyword "else" e2.pos e2.str  in
-     let e3 = parseExpr r2.pos r2.str in
+     let e3 = parseExpr r2.pos 0 r2.str in
      {val = TmMatch {target = e1.val, pat = PBool {val = true, fi = NoInfo ()},
                      thn = e2.val, els = e3.val, fi = makeInfo p e3.pos},
       pos = e3.pos,
@@ -150,7 +150,7 @@ end
 lang ParenthesesParser = ExprParser + KeywordParser
   sem parseExprImp (p: Pos) =
   | "(" ++ xs ->
-    let e = parseExpr (advanceCol p 1) xs in
+    let e = parseExpr (advanceCol p 1) 0 xs in
     let r = matchKeyword ")" e.pos e.str in
     {val = e.val, pos = r.pos, str = r.str}
 end
@@ -160,20 +160,36 @@ lang InfixParser = ExprParser
   syn Associativity = 
   | LeftAssoc ()
   | RightAssoc ()
- 
+
+  sem parseInfix (p: Pos) (prec: Int) (exp1: Expr) =
+  | str ->
+    match parseInfixImp p str with Some op then
+      if geqi op.prec prec then 
+        let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
+        let exp2 = parseExpr op.pos prec2 op.str in 
+        let exp = {val = op.val exp1.val exp2.val, pos = exp2.pos, str = exp2.str} in
+	parseInfixImp exp.pos prec exp
+      else exp1
+    else exp1
+    
   sem parseInfixImp (p: Pos) =
 end
 
+-- This parser should be used if juxtaposition is NOT used
+lang InfixParserClosed = InfixParser
+  sem parseInfixImp (p: Pos) =
+  | _ -> None ()
+end
 
 -- Constructor of binary opertors. Used by InfixArithParser
 let makeConstBinOp = lam op. lam n. lam p. lam xs. lam assoc. lam prec.
   let p2 = advanceCol p 1 in
   use ArithIntAst in
-  {val = lam x. lam y. TmConst {val = op, fi = makeInfo p p2}, pos = p2, str = xs,
-       assoc = assoc, prec = prec}
+  Some {val = lam x. lam y. TmConst {val = op, fi = makeInfo p p2},
+        pos = p2, str = xs, assoc = assoc, prec = prec}
 
 -- Demonstrates the use of infix operators. The syntax is not part of basic MCore
-lang InfixArithParser = InfixParser + ArithIntAst
+lang InfixArithParser = InfixParserClosed + ArithIntAst
   sem parseInfixImp (p: Pos) =
   | "+" ++ xs -> makeConstBinOp (CAddi {}) 1 p xs (LeftAssoc ()) 10
   | "-" ++ xs -> makeConstBinOp (CSubi {}) 1 p xs (LeftAssoc ()) 10
@@ -208,29 +224,31 @@ lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser +
 --        | "(" Expr ")"
 
 
+
+
 mexpr
 
 use MExprParser in
 -- Unsigned integer
-utest parseExpr (initPos "file") "  123foo" with
+utest parseExpr (initPos "file") 0 "  123foo" with
       {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5}, pos = posVal "file" 1 5, str = "foo"} in
 -- If expression
-utest (parseExpr (initPos "") "  if 1 then 22 else 3").pos with posVal "" 1 21 in
+utest (parseExpr (initPos "") 0 "  if 1 then 22 else 3").pos with posVal "" 1 21 in
 -- Boolean literal 'true'
-utest parseExpr (initPos "f") " true " with
+utest parseExpr (initPos "f") 0 " true " with
       {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
 -- Boolean literal 'false'
-utest parseExpr (initPos "f") " true " with
+utest parseExpr (initPos "f") 0 " true " with
       {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
 -- Instrinsics integer arithmetic
-utest parseExpr (initPos "") "  addi " with
+utest parseExpr (initPos "") 0 "  addi " with
       {val = TmConst {val = CAddi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
-utest parseExpr (initPos "") "  subi " with
+utest parseExpr (initPos "") 0 "  subi " with
       {val = TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
-utest parseExpr (initPos "") "  muli " with
+utest parseExpr (initPos "") 0 "  muli " with
       {val = TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
 -- Parentheses
-utest parseExpr (initPos "") " ( muli) " with
+utest parseExpr (initPos "") 0 " ( muli) " with
       {val = TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7}, pos = posVal "" 1 8, str = " "} in
 
 ()

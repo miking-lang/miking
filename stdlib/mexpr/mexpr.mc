@@ -18,7 +18,7 @@ let evalExpr : Expr -> Expr =
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =
-  lam str. use MExpr in evalExpr (parseExpr (initPos "") str).val
+  lam str. use MExpr in evalExpr (parseExpr (initPos "") 0 str).val
 
 -- Parse a string and then evaluate into a value, and pretty print
 -- as a string.
