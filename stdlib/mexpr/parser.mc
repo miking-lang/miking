@@ -68,14 +68,28 @@ let _ = use MExprWSACParser in
   utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !" with {str = "!", pos = posVal "" 2 7} in
   ()
 
+
+
 -- Top of the expression parser. Connects WSAC with parsing of other non terminals
 lang ExprParser = WSACParser
   sem parseExpr (p: Pos) (prec: Int) =
   | s ->
-    let r = eatWSAC p s in parseExprImp r.pos r.str
+    let r1 = eatWSAC p s in
+    let exp = parseExprImp r1.pos r1.str in
+    let r2 = eatWSAC exp.pos exp.str in
+    parseInfix r2.pos prec exp r2.str 
+
+  sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
 
   sem parseExprImp (p: Pos) =
   | _ -> posErrorExit p "Parse error. Unknown character sequence."
+end
+
+
+-- Include this fragment is there are no infix operations
+lang ExprParserNoInfix = ExprParser
+  sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
+  | _ -> exp
 end
 
 -- Parsing of boolean literals
@@ -156,30 +170,38 @@ lang ParenthesesParser = ExprParser + KeywordParser
 end
 
 -- General fragment for handling infix operations
-lang InfixParser = ExprParser
+lang ExprInfixParser = ExprParser
   syn Associativity = 
   | LeftAssoc ()
   | RightAssoc ()
 
-  sem parseInfix (p: Pos) (prec: Int) (exp1: Expr) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
   | str ->
     match parseInfixImp p str with Some op then
       if geqi op.prec prec then 
         let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
         let exp2 = parseExpr op.pos prec2 op.str in 
-        let exp = {val = op.val exp1.val exp2.val, pos = exp2.pos, str = exp2.str} in
-	parseInfixImp exp.pos prec exp
-      else exp1
-    else exp1
+        let exp = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
+	parseInfix exp.pos prec exp exp.str
+      else exp
+    else exp
     
   sem parseInfixImp (p: Pos) =
 end
 
 -- This parser should be used if juxtaposition is NOT used
-lang InfixParserClosed = InfixParser
+lang ExprInfixParserClosed = ExprInfixParser
   sem parseInfixImp (p: Pos) =
   | _ -> None ()
 end
+
+
+
+lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
+                       ParenthesesParser + MExprWSACParser 
+
+lang MExprParser = MExprParserBase + ExprParserNoInfix
+
 
 -- Constructor of binary opertors. Used by InfixArithParser
 let makeConstBinOp = lam op. lam n. lam p. lam xs. lam assoc. lam prec.
@@ -187,9 +209,9 @@ let makeConstBinOp = lam op. lam n. lam p. lam xs. lam assoc. lam prec.
   use ArithIntAst in
   Some {val = lam x. lam y. TmConst {val = op, fi = makeInfo p p2},
         pos = p2, str = xs, assoc = assoc, prec = prec}
-
+ 
 -- Demonstrates the use of infix operators. The syntax is not part of basic MCore
-lang InfixArithParser = InfixParserClosed + ArithIntAst
+lang ExprInfixArithParser = ExprInfixParser + ArithIntAst
   sem parseInfixImp (p: Pos) =
   | "+" ++ xs -> makeConstBinOp (CAddi {}) 1 p xs (LeftAssoc ()) 10
   | "-" ++ xs -> makeConstBinOp (CSubi {}) 1 p xs (LeftAssoc ()) 10
@@ -197,36 +219,16 @@ lang InfixArithParser = InfixParserClosed + ArithIntAst
 end
 
 
-lang MExprParser = BoolParser + UIntParser + IfParser + ArithIntParser +
-                   ParenthesesParser + MExprWSACParser
+lang MExprParserExtended = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed
 
-
--- Expr  -> Term Expr'             Function: parseExpr openExpr
---                                 1. eatWSAC, 2. parseFirst on Term (success of fail) -> new nextTerm
---                                 3. eatWSAC 4. check end of expr, return
---                                 4. if not, parseSecond(openExpr, nextTerm)
-
--- Expr' -> "+" Term Expr'         Function: parseSecond openExpr nextTerm
---        | "-" Term Expr'         1. parse "op" etc. if relevant
---                                 2. if "op" higher prec than last or equal and right assoc then
---                                      call parseExpr with (lam rhs. openExpr(nextTerm "+" rhs) )
---                                    else "op" lower prec than last or equal and left assoc then
---                                      return
---        | Term Expr'             2. call parseExpr with flag "only_first"
---        | empty
---
--- Term  -> Atom Term'
--- Term' -> "*" Atom Term'
---        | "/" Atom Term'
---        | empty
---
--- Atom  -> Num
---        | "(" Expr ")"
-
-
+let _ = use MExprParserExtended in
+  utest parseExpr (initPos "") 0 " 1 + 2" with () in
+  ()
 
 
 mexpr
+
+
 
 use MExprParser in
 -- Unsigned integer
