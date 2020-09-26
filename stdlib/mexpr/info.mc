@@ -33,6 +33,15 @@ let makeInfo : Pos -> Pos -> Info = lam p1. lam p2.
   Info {filename = p1.filename, row1 = p1.row, col1 = p1.col,
         row2 = p2.row, col2 = p2.col}
 
+-- Compose an info structure from two other info structures
+let mergeInfo : Info -> Info -> Info = lam fi1. lam fi2.
+  match fi1 with Info r1 then
+    match fi2 with Info r2 then
+      Info {filename = r1.filename, row1 = r1.row1, col1 = r1.col1,
+            row2 = r2.row2, col2 = r2.col2}
+    else NoInfo ()
+  else NoInfo ()
+  
 -- Create an info structure
 let infoVal : String -> Int -> Int -> Int -> Int =
   lam filename. lam r1. lam c1. lam r2. lam c2.

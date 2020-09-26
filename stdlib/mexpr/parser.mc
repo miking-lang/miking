@@ -181,8 +181,8 @@ lang ExprInfixParser = ExprParser
       if geqi op.prec prec then 
         let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
         let exp2 = parseExpr op.pos prec2 op.str in 
-        let exp = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
-	parseInfix exp.pos prec exp exp.str
+        let exp3 = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
+	parseInfix exp3.pos prec exp3 exp3.str
       else exp
     else exp
     
@@ -203,27 +203,6 @@ lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
 
--- Constructor of binary opertors. Used by InfixArithParser
-let makeConstBinOp = lam op. lam n. lam p. lam xs. lam assoc. lam prec.
-  let p2 = advanceCol p 1 in
-  use ArithIntAst in
-  Some {val = lam x. lam y. TmConst {val = op, fi = makeInfo p p2},
-        pos = p2, str = xs, assoc = assoc, prec = prec}
- 
--- Demonstrates the use of infix operators. The syntax is not part of basic MCore
-lang ExprInfixArithParser = ExprInfixParser + ArithIntAst
-  sem parseInfixImp (p: Pos) =
-  | "+" ++ xs -> makeConstBinOp (CAddi {}) 1 p xs (LeftAssoc ()) 10
-  | "-" ++ xs -> makeConstBinOp (CSubi {}) 1 p xs (LeftAssoc ()) 10
-  | "*" ++ xs -> makeConstBinOp (CMuli {}) 1 p xs (LeftAssoc ()) 20
-end
-
-
-lang MExprParserExtended = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed
-
-let _ = use MExprParserExtended in
-  utest parseExpr (initPos "") 0 " 1 + 2" with () in
-  ()
 
 
 mexpr
