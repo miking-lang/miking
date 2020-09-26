@@ -756,10 +756,9 @@ let addEvalNested = ulam_ "arg"
     (unit_)) in
 
 
--- TODO This is currently not working because "Num" has different symbols in
--- LHS and RHS.
---   eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
--- with conapp_ "Num" (int_ 3) in
+utest eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
+with conapp_ "Num" (int_ 3)
+using eqmexpr in
 
 let recordProj =
   bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))

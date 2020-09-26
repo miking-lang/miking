@@ -18,83 +18,102 @@ type Env = {
   conEnv : NameEnv
 }
 
-let envEmpty = {varEnv = assocEmpty, conEnv = assocEmpty}
+-- Checks if i1->i2 exists in either the bound or free environment (bound takes
+-- precedence). If so, return the given free environment. If the mapping does
+-- not exist, add it to the free environment and return this updated
+-- environment. In all other cases, return None ().
+let _checkNames : NameEnv -> NameEnv -> Name -> Name -> Option NameEnv =
+  lam env. lam free. lam i1. lam i2.
+    match optionOr
+            (assocLookup {eq = nameEq} i1 env) -- Known bound var
+            (assocLookup {eq = nameEq} i1 free) -- Known free var
+    with Some n2 then
+      if nameEq i2 n2 then Some free else None ()
+    else -- Unknown (free) var
+      Some (assocInsert {eq = nameEq} i1 i2 free)
 
 -----------
 -- TERMS --
 -----------
 
 lang VarEq = VarAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmVar {ident = i2} ->
-    match env with {varEnv = varEnv} then
-      match lhs with TmVar {ident = i1} then
-        match assocLookup {eq = nameEq} i1 varEnv with Some n2 then
-          nameEq i2 n2
-        else error (concat "Unbound variable in eq: " (nameGetStr i2))
-      else false
-    else never
+    match lhs with TmVar {ident = i1} then
+      match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) then
+        match _checkNames varEnv freeVarEnv i1 i2 with Some freeVarEnv then
+          Some {free with varEnv = freeVarEnv}
+        else None ()
+      else never
+    else None ()
 end
 
 lang AppEq = AppAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmApp {lhs = rl, rhs = rr} ->
     match lhs with TmApp {lhs = ll, rhs = lr} then
-      if eqexpr env ll rl then eqexpr env lr rr else false
-    else false
+      match eqexpr env free ll rl with Some free then
+        eqexpr env free lr rr
+      else None ()
+    else None ()
 end
 
 lang FunEq = FunAst
-  sem eqexpr (env : Env) (lhs : Expr) =
-  -- NOTE: The type annotation is currently ignored.
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
+  -- NOTE dlunde 2020-09-26: The type annotation is currently ignored.
   | TmLam {ident = i2, body = b2} ->
-    match env with {varEnv = varEnv, conEnv = conEnv} then
+    match env with {varEnv = varEnv} then
       match lhs with TmLam {ident = i1, body = b1} then
         let varEnv = assocInsert {eq = nameEq} i1 i2 varEnv in
-        eqexpr {varEnv = varEnv, conEnv = conEnv} b1 b2
-      else false
+        eqexpr {env with varEnv = varEnv} free b1 b2
+      else None ()
     else never
 end
 
 lang RecordEq = RecordAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmRecord {bindings = bs2} ->
     match lhs with TmRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
-        assocAll
-          (lam k1. lam v1.
-            assocAny (lam k2. lam v2. and (eqstr k1 k2) (eqexpr env v1 v2))
-              bs2)
-          bs1
-      else false
-    else false
+        assocFoldlM {eq=eqstr}
+          (lam free. lam k1. lam v1.
+            match assocLookup {eq=eqstr} k1 bs2 with Some v2 then
+              eqexpr env free v1 v2
+            else None ())
+          free bs1
+      else None ()
+    else None ()
 
   | TmRecordUpdate {rec = r2, key = k2, value = v2} ->
     match lhs with TmRecordUpdate {rec = r1, key = k1, value = v1} then
-      and (and (eqexpr env r1 r2) (eqstr k1 k2)) (eqexpr env v1 v2)
-    else false
+      if eqstr k1 k2 then
+        match eqexpr env free r1 r2 with Some free then
+          eqexpr env free v1 v2
+        else None ()
+      else None ()
+    else None ()
 end
 
 lang LetEq = LetAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmLet {ident = i2, body = b2, inexpr = ie2} ->
-    match env with {varEnv = varEnv, conEnv = conEnv} then
-      match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
-        if eqexpr env b1 b2 then
+    match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
+      match eqexpr env free b1 b2 with Some free then
+        match env with {varEnv = varEnv} then
           let varEnv = assocInsert {eq = nameEq} i1 i2 varEnv in
-          eqexpr {varEnv = varEnv, conEnv = conEnv} ie1 ie2
-        else false
-      else false
-    else never
+          eqexpr {env with varEnv = varEnv} free ie1 ie2
+        else never
+      else None ()
+    else None ()
 end
 
 lang RecLetsEq = RecLetsAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmRecLets {bindings = bs2} ->
-    -- This requires the bindings to occur in the same order.
-    -- NOTE dlunde 2020-09-25: Do we want to allow equality of differently
-    -- ordered (but equal) bindings as well?
-    match env with {varEnv = varEnv, conEnv = conEnv} then
+    -- NOTE dlunde 2020-09-25: This requires the bindings to occur in the same
+    -- order. Do we want to allow equality of differently ordered (but equal)
+    -- bindings as well?
+    match env with {varEnv = varEnv} then
       match lhs with TmRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
           let bszip = zipWith (lam b1. lam b2. (b1, b2)) bs1 bs2 in
@@ -104,10 +123,11 @@ lang RecLetsEq = RecLetsAst
                  assocInsert {eq = nameEq} (t.0).ident (t.1).ident varEnv)
               varEnv bszip
           in
-          let env = {varEnv = varEnv, conEnv = conEnv} in
-          all (lam t. eqexpr env (t.0).body (t.1).body) bszip
-        else false
-      else false
+          let env = {env with varEnv = varEnv} in
+          optionFoldlM (lam free. lam t. eqexpr env free (t.0).body (t.1).body)
+            free bszip
+        else None ()
+      else None ()
     else never
 end
 
@@ -115,97 +135,83 @@ lang ConstEq = ConstAst
   sem eqconst (lhs : Const) =
   -- Intentionally left blank
 
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmConst {val = v2} ->
     match lhs with TmConst {val = v1} then
-      eqconst v1 v2
-    else false
+      if eqconst v1 v2 then Some free else None ()
+    else None ()
 end
 
--- TODO dlunde 2020-09-05: Equality of constructors rely upon the type system,
--- and we cannot rely on there being a corresponding 'TmConDef' for every
--- occurence of a 'TmConApp' (since this information is most likely discarded
--- after type checking and evaluation). I'm not sure how we should solve this.
--- For now, the constructor name is simply ignored.
 lang DataEq = DataAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   -- Type annotation ignored here as well
   | TmConDef {ident = i2, inexpr = ie2} ->
-    match env with {varEnv = varEnv, conEnv = conEnv} then
+    match env with {conEnv = conEnv} then
       match lhs with TmConDef {ident = i1, inexpr = ie1} then
-        -- let conEnv = assocInsert {eq = nameEq} i1 i2 conEnv in
-        eqexpr {varEnv = varEnv, conEnv = conEnv} ie1 ie2
-      else false
+        let conEnv = assocInsert {eq = nameEq} i1 i2 conEnv in
+        eqexpr {env with conEnv = conEnv} free ie1 ie2
+      else None ()
     else never
 
   | TmConApp {ident = i2, body = b2} ->
-    match env with {varEnv = varEnv, conEnv = conEnv} then
-      match lhs with TmConApp {ident = i1, body = b1} then
-
-        -- Ignore if constructor is defined or not
-        eqexpr env b1 b2
-
-        -- Old version
-        -- match assocLookup {eq = nameEq} i1 conEnv with Some n2 then
-        --   if nameEq i2 n2 then
-        --     eqexpr env b1 b2
-        --   else false
-        -- else error (concat "Unbound constructor in eq: " (nameGetStr i2))
-
-      else false
-    else never
-
+    match lhs with TmConApp {ident = i1, body = b1} then
+      match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
+        match _checkNames conEnv freeConEnv i1 i2 with Some freeConEnv then
+          eqexpr env {free with conEnv = freeConEnv} b1 b2
+        else None ()
+      else never
+    else None ()
 end
 
 lang MatchEq = MatchAst
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- Intentionally left blank
 
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmMatch {target = t2, pat = p2, thn = thn2, els = els2} ->
     match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1} then
-      if eqexpr env t1 t2 then
-        if eqexpr env els1 els2 then
-          match eqpat env assocEmpty p1 p2 with Some patEnv then
-            match env with {varEnv = varEnv, conEnv = conEnv} then
+      match eqexpr env free t1 t2 with Some free then
+        match eqexpr env free els1 els2 with Some free then
+          match eqpat env free assocEmpty p1 p2 with Some (free,patEnv) then
+            match env with {varEnv = varEnv} then
               eqexpr
-                { varEnv = assocMergePreferRight {eq = nameEq} varEnv patEnv,
-                  conEnv = conEnv }
-                thn1 thn2
+                { env with
+                  varEnv = assocMergePreferRight {eq = nameEq} varEnv patEnv }
+                free thn1 thn2
             else never
-          else false
-        else false
-      else false
-    else false
+          else None ()
+        else None ()
+      else None ()
+    else None ()
 
 end
 
 lang UtestEq = UtestAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmUtest {test = t2, expected = e2, next = n2} ->
     match lhs with TmUtest {test = t1, expected = e1, next = n1} then
-      if eqexpr env t1 t2 then
-        if eqexpr env e1 e2 then
-          eqexpr env n1 n2
-        else false
-      else false
-    else false
+      match eqexpr env free t1 t2 with Some free then
+        match eqexpr env free e1 e2 with Some free then
+          eqexpr env free n1 n2
+        else None ()
+      else None ()
+    else None ()
 end
 
 lang SeqEq = SeqAst
-  sem eqexpr (env : Env) (lhs : Expr) =
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
   | TmSeq {tms = ts2} ->
     match lhs with TmSeq {tms = ts1} then
       if eqi (length ts1) (length ts2) then
         let z = zipWith (lam t1. lam t2. (t1,t2)) ts1 ts2 in
-        all (lam tp. eqexpr env tp.0 tp.1) z
-      else false
-    else false
+        optionFoldlM (lam free. lam tp. eqexpr env free tp.0 tp.1) free z
+      else None ()
+    else None ()
 end
 
 lang NeverEq = NeverAst
-  sem eqexpr (env : Env) (lhs : Expr) =
-  | TmNever _ -> match lhs with TmNever _ then true else false
+  sem eqexpr (env : Env) (free : Env) (lhs : Expr) =
+  | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
 ---------------
@@ -293,99 +299,98 @@ end
 -- PATTERNS --
 --------------
 
-let _eqpatname : NameEnv -> PatName -> PatName -> Option NameEnv =
-  lam penv. lam p1. lam p2.
+let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
+  lam penv. lam free. lam p1. lam p2.
     match (p1,p2) with (PName n1,PName n2) then
       match assocLookup {eq=nameEq} n1 penv with Some i2 then
-        if nameEq i2 n2 then Some penv else None ()
-      else Some (assocInsert {eq = nameEq} n1 n2 penv)
-    else match (p1,p2) with (PWildcard _,PWildcard _) then Some penv
+        if nameEq i2 n2 then Some (free,penv) else None ()
+      else Some (free, assocInsert {eq = nameEq} n1 n2 penv)
+    else match (p1,p2) with (PWildcard _,PWildcard _) then Some (free,penv)
     else None ()
 
 lang VarPatEq = VarPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
-  | PVar p2 -> match lhs with PVar p1 then _eqpatname patEnv p1 p2 else None ()
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  | PVar p2 ->
+    match lhs with PVar p1 then
+      _eqpatname patEnv free p1 p2
+    else None ()
 end
 
 lang SeqTotPatEq
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang SeqEdgPatEq
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang RecordPatEq = RecordPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PRecord {bindings = bs2} ->
     match lhs with PRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
         assocFoldlM {eq=eqstr}
-          (lam patEnv. lam k1. lam p1.
-             match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
-               eqpat env patEnv p1 p2
-             else None ())
-          patEnv bs1
+          (lam tEnv. lam k1. lam p1.
+             match tEnv with (free,patEnv) then
+               match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
+                 eqpat env free patEnv p1 p2
+               else None ()
+             else never)
+          (free,patEnv) bs1
       else None ()
     else None ()
 end
 
 lang DataPatEq = DataPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PCon {ident = i2, subpat = s2} ->
     match lhs with PCon {ident = i1, subpat = s1} then
-      match env with {conEnv = conEnv} then
-
-        eqpat env patEnv s1 s2
-
-        -- NOTE dlunde 2020-09-05: See comments for DataEq
-        -- match assocLookup {eq=nameEq} i1 conEnv with n2 then
-        --   if nameEq i2 n2 then eqpat env patEnv s1 s2
-        --   else None ()
-        -- else None ()
-
+      match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
+        match _checkNames conEnv freeConEnv i1 i2 with Some freeConEnv then
+          eqpat env {free with conEnv = freeConEnv} patEnv s1 s2
+        else None ()
       else never
     else None ()
 end
 
 lang IntPatEq = IntPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PInt {val = i2} ->
     match lhs with PInt {val = i1} then
-      if eqi i1 i2 then Some patEnv else None ()
+      if eqi i1 i2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang CharPatEq = CharPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PChar {val = c2} ->
     match lhs with PChar {val = c1} then
-      if eqchar c1 c2 then Some patEnv else None ()
+      if eqchar c1 c2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang BoolPatEq = BoolPat
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PBool {val = b2} ->
     match lhs with PBool {val = b1} then
-      if eqb b1 b2 then Some patEnv else None ()
+      if eqb b1 b2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang AndPatEq
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang OrPatEq
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang NotPatEq
-  sem eqpat (env : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
@@ -413,7 +418,10 @@ lang MExprEq =
 -- CONVENIENCE FUNCTIONS --
 ---------------------------
 
-let eqmexpr = use MExprEq in eqexpr envEmpty
+let eqmexpr = use MExprEq in
+  lam e1. lam e2.
+    let empty = {varEnv = assocEmpty, conEnv = assocEmpty} in
+    match eqexpr empty empty e1 e2 with Some _ then true else false
 
 -----------
 -- TESTS --
