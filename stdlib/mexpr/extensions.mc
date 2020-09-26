@@ -1,6 +1,11 @@
+----------------------------------------------------
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
+-- This file adds syntactic sugar to MExpr by
+-- extending the MExpr parser and transforming the
+-- code into standard MExpr.
+---------------------------------------------------- 
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -16,15 +21,15 @@ lang MExprMakeConstBinOp = ArithIntAst + AppAst
                      (assoc: Associativity) (prec: Int) =
   | op ->
     let p2 = advanceCol p 1 in
-    --let _ = dprint ["---1", p2] in let _ = print "\n" in
     Some {
       val = lam x. lam y.
         let op = TmConst {val = op, fi = makeInfo p p2} in
         let app = lam x. lam y. 
                 TmApp {lhs = x, rhs = y, fi = NoInfo ()} in
                 --TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)} in
-		--BUG: the above should work, but info does not exist for TmApp,
-		-- altough languge fragment AppAst is included.
+		--
+		--BUG: the above should work, but the info function does not exist
+		-- for TmApp, altough languge fragment AppAst is included.
         let resx = (app op x) in
         let res = (app (app op x) y) in
         res, 
@@ -42,11 +47,6 @@ end
 
 
 lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed
-
---let _ = use MExprParserExt in
---  let _ = print "\n" in
---  utest parseExpr (initPos "") 0 " 1 + 2" with () in
---  ()
 
 lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint
 
@@ -68,5 +68,10 @@ let evalStrToStr : String -> String =
 utest evalStrToStr "true" with "true"
 utest evalStrToStr "1+2" with "3"
 utest evalStrToStr " 2 * 3" with "6"
---utest evalStrToStr " 2 + 3 * 4" with "14"
---utest evalStrToStr " 2 * 3 + 4" with ""
+utest evalStrToStr " 2 + 3 * 4 " with "14"
+utest evalStrToStr " 2 + 3 + 4 " with "9"
+utest evalStrToStr " (2 + 3) * 4 " with "20"
+utest evalStrToStr " 1 + 2 * 3 + 4 " with "11"
+utest evalStrToStr " 1 + 2 * ( 3 + 4 ) " with "15"
+utest evalStrToStr " 10 - 7 - 2" with "1"
+utest evalStrToStr " 10 - (7 - 2)" with "5"

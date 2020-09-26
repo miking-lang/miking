@@ -177,8 +177,9 @@ lang ExprInfixParser = ExprParser
 
   sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
   | str ->
-    match parseInfixImp p str with Some op then
-      if geqi op.prec prec then 
+    let r = eatWSAC p str in
+    match parseInfixImp r.pos r.str with Some op then
+      if geqi op.prec prec then
         let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
         let exp2 = parseExpr op.pos prec2 op.str in 
         let exp3 = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
