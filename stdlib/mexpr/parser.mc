@@ -235,6 +235,61 @@ lang CharParser = ExprParser + KeywordParser + CharAst
        pos = r2.pos, str = r2.str}
 end
 
+-- Parses an identfier that starts with a lower-case letter or a '_' if parameter
+-- 'upper' is false, and starts with an upper-case letter if 'upper' is true.
+-- The rest of the string can contain both upper and lower-case letters.
+-- If no identifier, the 'val' field contains an empty string.
+let parseIdent = lam upper. lam p. lam str.
+  recursive
+  let work = lam acc. lam first. lam p. lam str.
+    match str with [x] ++ xs then
+      let c = char2int x in
+      let m1 = or (not first) upper in
+      let m2 = or (not first) (not upper) in
+      if or (or (and m1 (and (geqi c 65) (leqi c 90)))
+                (and m2 (or (eqi c 95) (and (geqi c 97) (leqi c 122)))))
+	    (and (not first) (and (geqi c 48) (leqi c 57)))	    
+      then work (snoc acc x) false (advanceCol p 1) xs
+      else {val = acc, pos = p, str = str}
+    else {val = acc, pos = p, str = str}
+  in work "" true p str
+
+utest parseIdent false (initPos "") "+" with {val = "", str = "+", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "a " with {val = "a", str = " ", pos = posVal "" 1 1}
+utest parseIdent false (initPos "") "ba" with {val = "ba", str = "", pos = posVal "" 1 2}
+utest parseIdent false (initPos "") "_asd " with {val = "_asd", str = " ", pos = posVal "" 1 4}
+utest parseIdent true (initPos "") "_asd " with {val = "", str = "_asd ", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "Asd12 " with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
+utest parseIdent true (initPos "") "Asd12 " with {val = "Asd12", str = " ", pos = posVal "" 1 5}
+
+-- Parse variable
+lang VarParser = ExprParser + VarAst
+  sem parseExprImp (p: Pos) =
+  | ("_" ++ s) & xs | ("a" ++ s) & xs | ("b" ++ s) & xs | ("c" ++ s) & xs | ("d" ++ s) & xs |
+    ("e" ++ s) & xs | ("f" ++ s) & xs | ("g" ++ s) & xs | ("h" ++ s) & xs | ("i" ++ s) & xs |
+    ("j" ++ s) & xs | ("k" ++ s) & xs | ("l" ++ s) & xs | ("m" ++ s) & xs | ("n" ++ s) & xs |
+    ("o" ++ s) & xs | ("p" ++ s) & xs | ("q" ++ s) & xs | ("r" ++ s) & xs | ("s" ++ s) & xs |
+    ("t" ++ s) & xs | ("u" ++ s) & xs | ("v" ++ s) & xs | ("w" ++ s) & xs | ("x" ++ s) & xs |
+    ("y" ++ s) & xs | ("z" ++ s) & xs ->
+    let r = parseIdent false p xs in
+    {val = TmVar {ident = nameNoSym r.val, fi = makeInfo p r.pos},
+     pos = r.pos, str = r.str}
+end
+
+-- Parsing of a lambda
+lang FunParser = ExprParser + KeywordParser + FunAst 
+  sem parseExprImp (p: Pos) =
+  | "lam" ++ xs ->
+    let r = eatWSAC (advanceCol p 3) xs in
+    let r2 = parseIdent false r.pos r.str in
+    let r3 = matchKeyword "." r2.pos r2.str  in
+    let e = parseExpr r3.pos 0 r3.str in
+    {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
+                  body = e.val, fi = makeInfo p e.pos},
+     pos = e.pos, str = e.str}
+    -- TODO David (2020-09-27): Add parsing of type     
+end
+
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
   syn Associativity = 
@@ -256,6 +311,7 @@ lang ExprInfixParser = ExprParser
   sem parseInfixImp (p: Pos) =
 end
 
+
 -- This parser should be used if juxtaposition is NOT used
 lang ExprInfixParserClosed = ExprInfixParser
   sem parseInfixImp (p: Pos) =
@@ -267,7 +323,8 @@ end
 lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
                        ParenthesesParser + MExprWSACParser +
 		       SeqParser + SeqOpParser +
-		       StringParser + CharParser
+		       StringParser + CharParser +
+		       VarParser + FunParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -330,5 +387,10 @@ utest parseExpr (initPos "") 0 " \'A\' " with
 utest parseExpr (initPos "") 0 " \'\\n\' " with
   {val = TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5},
    pos = posVal "" 1 5, str = " "} in
+-- Var
+utest (parseExpr (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
+utest (parseExpr (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
+-- Lambda
+utest (parseExpr (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
 
 ()

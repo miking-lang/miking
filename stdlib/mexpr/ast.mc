@@ -11,7 +11,10 @@ include "mexpr/info.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name}
+  | TmVar {ident : Name, fi: Info}
+
+  sem info =
+  | TmVar r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -39,7 +42,11 @@ lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
            tpe   : Option,
-           body  : Expr}
+           body  : Expr,
+	   fi    : Info}
+
+  sem info =
+  | TmLam r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
