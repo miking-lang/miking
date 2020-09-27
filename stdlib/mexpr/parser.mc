@@ -318,6 +318,15 @@ lang ExprInfixParserClosed = ExprInfixParser
   | _ -> None ()
 end
 
+-- This parser should be used for application using juxaposition 
+lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
+  sem parseInfixImp (p: Pos) =
+  | str ->
+    Some {
+      val = lam x. lam y. TmApp {lhs = x, rhs = y, fi = NoInfo ()},
+      -- TODO: David (2020-09-27): Add correct info handling
+      pos = p, str = str, assoc = LeftAssoc (), prec = 50}
+end
 
 
 lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
@@ -392,5 +401,7 @@ utest (parseExpr (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
 utest (parseExpr (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
 -- Lambda
 utest (parseExpr (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
+-- Application
+--utest (parseExpr (initPos "") 0 " f x ") with "" in
 
 ()
