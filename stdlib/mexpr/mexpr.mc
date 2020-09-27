@@ -43,3 +43,6 @@ utest evalTest "if true then (if false then 1 else 2) else 3" with "2"
 utest evalTest " [ ] " with "\"\""
 utest evalTest " [ 12 ] " with "[12]"
 utest evalTest " [ 12 , ( 17 ), 789 ] " with "[12,17,789]"
+utest evalTest " \"hi\" " with "\"hi\""
+utest evalStrToStr " \" f\\\\  \\n \\\" \" " with "\" f\\  \n \" \""
+

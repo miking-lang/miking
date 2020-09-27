@@ -193,6 +193,37 @@ lang SeqOpParser = ExprParser + ConstAst + SeqOpAst
       {val = TmConst {val = CConcat {}, fi = makeInfo p p2}, pos = p2, str = xs}
 end
 
+-- Matches a character (including escape character). 
+let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
+  lam p. lam str.
+  let ret = lam c. lam s. lam n. {val = c, pos = (advanceCol p n), str = s} in
+    match str with "\\" ++ xs then
+      match xs with "\\" ++ xs then ret '\\' xs 2 else
+      match xs with "n" ++ xs then ret '\n' xs 2 else
+      match xs with "t" ++ xs then ret '\t' xs 2 else
+      match xs with "\"" ++ xs then ret '\"' xs 2 else 
+      match xs with "'" ++ xs then ret '\'' xs 2 else
+      posErrorExit (advanceCol p 1) "Unknown escape character."
+    else match str with [x] ++ xs then ret x xs 1
+    else posErrorExit p "Unexpected end of file."
+    -- TODO David (2020-09-27): Shoud we allow newlines etc. inside strings
+    -- TODO David (2020-09-27): Add all other relevant escape characters
+
+-- Parses strings, including escape characters
+lang StringParser = ExprParser + SeqAst + CharAst
+  sem parseExprImp (p: Pos) =
+  | "\"" ++ xs ->
+    recursive let work = lam acc. lam p2. lam str.
+      match str with "\"" ++ xs then
+        {val = TmSeq {tms = acc, fi = makeInfo p (advanceCol p2 1)},
+	 pos = advanceCol p2 1, str = xs}
+      else	  
+        let r =  matchChar p2 str in
+        let v = TmConst {val = CChar {val = r.val}, fi = makeInfo p2 r.pos} in
+	work (snoc acc v) r.pos r.str
+    in
+      work [] (advanceCol p 1) xs
+end
 
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
@@ -225,7 +256,8 @@ end
 
 lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
                        ParenthesesParser + MExprWSACParser +
-		       SeqParser + SeqOpParser
+		       SeqParser + SeqOpParser +
+		       StringParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -270,6 +302,16 @@ utest parseExpr (initPos "") 0 " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
       {val = TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17}, pos = posVal "" 1 17, str = " "} in
-
+-- Strings
+let makeChar = lam k. lam c. lam n.
+    TmConst {val = CChar {val = c}, fi = infoVal "" 1 n 1 (addi n k)} in
+let mkc = makeChar 1 in
+let mkc2 = makeChar 2 in
+utest parseExpr (initPos "") 0 " \"Foo\" " with
+  let str = [mkc 'F' 2, mkc 'o' 3, mkc 'o' 4] in
+  {val = TmSeq {tms = str, fi = infoVal "" 1 1 1 6}, pos = posVal "" 1 6, str = " "} in
+utest parseExpr (initPos "") 0 " \" a\\\\ \\n\" " with
+  let str = [mkc ' ' 2, mkc 'a' 3, mkc2 '\\' 4, mkc ' ' 6, mkc2 '\n' 7] in
+  {val = TmSeq {tms = str, fi = infoVal "" 1 1 1 10}, pos = posVal "" 1 10, str = " "} in
 
 ()
