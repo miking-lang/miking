@@ -13,7 +13,7 @@ include "mexpr/eval.mc"
 include "mexpr/parser.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
-
+include "ast-builder.mc"
 
 -- Fragment for constructing constant binary opertors. Used by InfixArithParser
 lang MExprMakeConstBinOp = ArithIntAst + AppAst
@@ -30,7 +30,6 @@ lang MExprMakeConstBinOp = ArithIntAst + AppAst
 		--
 		--BUG: the above should work, but the info function does not exist
 		-- for TmApp, altough languge fragment AppAst is included.
-        let resx = (app op x) in
         let res = (app (app op x) y) in
         res, 
       pos = p2, str = xs, assoc = assoc, prec = prec}
@@ -46,8 +45,32 @@ lang ExprInfixArithParser =  ExprInfixParser + ArithIntAst + MExprMakeConstBinOp
 end
 
 
+-- Used by the infix operation test
+let makeTestBinOp = lam op. lam p. lam xs. lam assoc. lam prec.
+  Some {
+    val = lam x. lam y.
+      let s1 = concat_ (seq_ [char_ '(']) x in
+      let s2 = concat_ y (seq_ [char_ ')']) in
+      let opstr = seq_ (map (lam x. char_ x) op) in
+      concat_ (concat_ s1 opstr) s2,
+    pos = advanceCol p (length op), 
+    str = xs, assoc = assoc, prec = prec}
+  
+-- Test fragment for testing infix operations
+lang ExprInfixTestParser = ExprInfixParser + SeqOpAst + ArithIntAst + AppAst
+   sem parseInfixImp (p: Pos) =
+  | "il1" ++ xs -> makeTestBinOp "-il1-" p xs (LeftAssoc ()) 1 
+  | "il2" ++ xs -> makeTestBinOp "-il2-" p xs (LeftAssoc ()) 2 
+  | "il3" ++ xs -> makeTestBinOp "-il3-" p xs (LeftAssoc ()) 3 
+  | "il4" ++ xs -> makeTestBinOp "-il4-" p xs (LeftAssoc ()) 4 
+  | "ir1" ++ xs -> makeTestBinOp "-ir1-" p xs (RightAssoc ()) 1 
+  | "ir2" ++ xs -> makeTestBinOp "-ir2-" p xs (RightAssoc ()) 2 
+  | "ir3" ++ xs -> makeTestBinOp "-ir3-" p xs (RightAssoc ()) 3 
+end
 
-lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed
+
+lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed +
+                      ExprInfixTestParser
 
 lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint
 
@@ -81,3 +104,18 @@ utest evalTest " 1 + 2 * ( 3 + 4 ) " with "15"
 utest evalTest " 10 - 7 - 2" with "1"
 utest evalTest " 10 - (7 - 2)" with "5"
 utest evalTest " [10 + 17, 2 + 3 * 4]" with "[27,14]"
+
+-- Test infix operators
+utest evalTest "['a'] il1 ['b'] il1 ['c'] il1 ['d']" with "\"(((a-il1-b)-il1-c)-il1-d)\""
+utest evalTest "['a'] ir1 ['b'] ir1 ['c'] ir1 ['d']" with "\"(a-ir1-(b-ir1-(c-ir1-d)))\""
+utest evalTest "['a'] ir1 ['b'] ir1 ['c'] ir1 ['d']" with "\"(a-ir1-(b-ir1-(c-ir1-d)))\""
+utest evalTest "['a'] il2 ['b'] ir1 ['c'] il1 ['d']" with "\"((a-il2-b)-ir1-(c-il1-d))\""
+utest evalTest "['a'] il2 ['b'] il4 ['c'] il3 ['d'] il1 ['e']" with
+               "\"((a-il2-((b-il4-c)-il3-d))-il1-e)\""
+utest evalTest "['a'] il1 ['b'] il3 ['c'] il4 ['d'] il2 ['e']" with
+               "\"(a-il1-((b-il3-(c-il4-d))-il2-e))\""
+
+
+
+
+
