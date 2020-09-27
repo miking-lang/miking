@@ -45,4 +45,5 @@ utest evalTest " [ 12 ] " with "[12]"
 utest evalTest " [ 12 , ( 17 ), 789 ] " with "[12,17,789]"
 utest evalTest " \"hi\" " with "\"hi\""
 utest evalStrToStr " \" f\\\\  \\n \\\" \" " with "\" f\\  \n \" \""
+utest evalTest " [ 'a' , 'b' , 'c'] " with "\"abc\""
 

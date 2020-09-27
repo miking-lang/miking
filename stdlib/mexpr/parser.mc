@@ -225,6 +225,16 @@ lang StringParser = ExprParser + SeqAst + CharAst
       work [] (advanceCol p 1) xs
 end
 
+-- Parses character literals
+lang CharParser = ExprParser + KeywordParser + CharAst
+  sem parseExprImp (p: Pos) =
+  | "\'" ++ xs ->
+      let r =  matchChar (advanceCol p 1) xs in
+      let r2 = matchKeyword "\'" r.pos r.str in
+      {val = TmConst {val = CChar {val = r.val}, fi = makeInfo p r2.pos},
+       pos = r2.pos, str = r2.str}
+end
+
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
   syn Associativity = 
@@ -257,7 +267,7 @@ end
 lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
                        ParenthesesParser + MExprWSACParser +
 		       SeqParser + SeqOpParser +
-		       StringParser
+		       StringParser + CharParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -313,5 +323,12 @@ utest parseExpr (initPos "") 0 " \"Foo\" " with
 utest parseExpr (initPos "") 0 " \" a\\\\ \\n\" " with
   let str = [mkc ' ' 2, mkc 'a' 3, mkc2 '\\' 4, mkc ' ' 6, mkc2 '\n' 7] in
   {val = TmSeq {tms = str, fi = infoVal "" 1 1 1 10}, pos = posVal "" 1 10, str = " "} in
+-- Chars
+utest parseExpr (initPos "") 0 " \'A\' " with
+  {val = TmConst {val = CChar {val = 'A'}, fi = infoVal "" 1 1 1 4},
+   pos = posVal "" 1 4, str = " "} in
+utest parseExpr (initPos "") 0 " \'\\n\' " with
+  {val = TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5},
+   pos = posVal "" 1 5, str = " "} in
 
 ()
