@@ -166,7 +166,10 @@ end
 
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr]}
+  | TmSeq {tms : [Expr], fi: Info}
+
+  sem info =
+  | TmSeq r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
@@ -177,7 +180,10 @@ end
 
 lang NeverAst
   syn Expr =
-  | TmNever {}
+  | TmNever {fi: Info}
+
+  sem info =
+  | TmNever r -> r.fi
 
   -- TODO(dlunde,2020-09-29): smap, sfold
 end

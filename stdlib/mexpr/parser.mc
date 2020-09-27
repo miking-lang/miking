@@ -130,7 +130,7 @@ lang KeywordParser = WSACParser
        let l = length keyword in
        {pos = advanceCol r.pos l, str = slice r.str l (subi (length r.str) l)}
      else
-       posErrorExit r.pos (join ["Unknown character. Expected keyword '", keyword, "'."])
+       posErrorExit r.pos (join ["Unknown character. Expected '", keyword, "'."])
 end
 
 
@@ -150,7 +150,7 @@ lang IfParser = ExprParser + KeywordParser +  MatchAst + BoolPat
  end
 
 -- Integer arithmetic parser (intrinsics)
-lang ArithIntParser = ExprParser + ArithIntAst
+lang ArithIntParser = ExprParser + ConstAst + ArithIntAst
   sem parseExprImp (p: Pos) =
   | "addi" ++ xs -> let p2 = advanceCol p 4 in
       {val = TmConst {val = CAddi {}, fi = makeInfo p p2}, pos = p2, str = xs}
@@ -160,6 +160,7 @@ lang ArithIntParser = ExprParser + ArithIntAst
       {val = TmConst {val = CMuli {}, fi = makeInfo p p2}, pos = p2, str = xs}
 end
 
+
 -- Parse parentheses
 lang ParenthesesParser = ExprParser + KeywordParser
   sem parseExprImp (p: Pos) =
@@ -168,6 +169,30 @@ lang ParenthesesParser = ExprParser + KeywordParser
     let r = matchKeyword ")" e.pos e.str in
     {val = e.val, pos = r.pos, str = r.str}
 end
+
+-- Parses a sequence of 
+lang SeqParser = ExprParser + KeywordParser + SeqAst
+  sem parseExprImp (p: Pos) =
+  | "[" ++ xs -> 
+      recursive let work = lam acc. lam first. lam p2. lam str.
+        let r = eatWSAC p2 str in
+  	match r.str with "]" ++ xs then
+	  {val = TmSeq{tms = acc, fi = makeInfo p (advanceCol r.pos 1)},
+	   pos = advanceCol r.pos 1, str = xs}
+	else
+	  let r2 = if first then r else matchKeyword "," r.pos r.str in
+	  let e = parseExpr r2.pos 0 r2.str in
+	  work (snoc acc e.val) false e.pos e.str  
+      in work [] true (advanceCol p 1) xs
+end
+
+-- Sequence operations (intrinsics)
+lang SeqOpParser = ExprParser + ConstAst + SeqOpAst
+  sem parseExprImp (p: Pos) =
+  | "concat" ++ xs -> let p2 = advanceCol p 6 in
+      {val = TmConst {val = CConcat {}, fi = makeInfo p p2}, pos = p2, str = xs}
+end
+
 
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
@@ -199,7 +224,8 @@ end
 
 
 lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
-                       ParenthesesParser + MExprWSACParser 
+                       ParenthesesParser + MExprWSACParser +
+		       SeqParser + SeqOpParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -232,5 +258,18 @@ utest parseExpr (initPos "") 0 "  muli " with
 -- Parentheses
 utest parseExpr (initPos "") 0 " ( muli) " with
       {val = TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7}, pos = posVal "" 1 8, str = " "} in
+-- Sequences
+utest parseExpr (initPos "") 0 "[]" with
+      {val = TmSeq {tms = [], fi = infoVal "" 1 0 1 2}, pos = posVal "" 1 2, str = ""} in
+utest parseExpr (initPos "") 0 " [ ] " with
+      {val = TmSeq {tms = [], fi = infoVal "" 1 1 1 4}, pos = posVal "" 1 4, str = " "} in
+utest parseExpr (initPos "") 0 " [ 17 ] " with
+      let v = TmConst {val = CInt {val = 17}, fi = infoVal "" 1 3 1 5} in
+      {val = TmSeq {tms = [v], fi = infoVal "" 1 1 1 7}, pos = posVal "" 1 7, str = " "} in
+utest parseExpr (initPos "") 0 " [ 232 , ( 19 ) ] " with
+      let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
+      let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
+      {val = TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17}, pos = posVal "" 1 17, str = " "} in
+
 
 ()
