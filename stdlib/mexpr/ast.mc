@@ -76,7 +76,11 @@ lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
            body   : Expr,
-           inexpr : Expr}
+           inexpr : Expr,
+	   fi     : Info}
+
+  sem info =
+  | TmLet r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}

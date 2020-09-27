@@ -297,6 +297,22 @@ lang FunParser = ExprParser + KeywordParser + FunAst
     -- TODO David (2020-09-27): Add parsing of type     
 end
 
+-- Parsing let expressions
+lang LetParser = ExprParser + KeywordParser + LetAst
+  sem parseExprImp (p: Pos) =
+  | "let" ++ xs ->
+    let r = eatWSAC (advanceCol p 3) xs in
+    let r2 = parseIdent false r.pos r.str in
+    let r3 = matchKeyword "=" r2.pos r2.str in
+    let e1 = parseExprMain r3.pos 0 r3.str in
+    let r4 = matchKeyword "in" e1.pos e1.str in
+    let e2 = parseExprMain r4.pos 0 r4.str in
+    {val = TmLet {ident = nameNoSym r2.val, body = e1.val,
+                  inexpr = e2.val, fi = makeInfo p e2.pos},
+     pos = e2.pos, str = e2.str}
+end
+
+
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
   syn Associativity = 
@@ -340,7 +356,7 @@ lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
                        ParenthesesParser + MExprWSACParser +
 		       SeqParser + SeqOpParser +
 		       StringParser + CharParser +
-		       VarParser + FunParser
+		       VarParser + FunParser + LetParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -409,7 +425,8 @@ utest (parseExprMain (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
 utest (parseExprMain (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
 -- Lambda
 utest (parseExprMain (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
--- Application
---utest (parseExpr (initPos "") 0 " f x ") with "" in
+-- Let
+utest (parseExprMain (initPos "") 0 "  let x = 5 in 8 ").pos with posVal "" 1 16 in 
+
 
 ()
