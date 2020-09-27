@@ -46,6 +46,7 @@ lang ExprInfixArithParser =  ExprInfixParser + ArithIntAst + MExprMakeConstBinOp
 end
 
 
+
 lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed
 
 lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint
@@ -64,14 +65,19 @@ let evalStr : String -> Expr =
 let evalStrToStr : String -> String =
   lam str. expr2str (evalStr str)
 
+-- Same as evalStrToStr, but removes all white space. Good for testing.
+let evalTest : String -> String = lam str. 
+  filter (lam x. not (or (or (eqchar x ' ') (eqchar x '\n')) (eqchar x '\t')))
+  (evalStrToStr str)
 
-utest evalStrToStr "true" with "true"
-utest evalStrToStr "1+2" with "3"
-utest evalStrToStr " 2 * 3" with "6"
-utest evalStrToStr " 2 + 3 * 4 " with "14"
-utest evalStrToStr " 2 + 3 + 4 " with "9"
-utest evalStrToStr " (2 + 3) * 4 " with "20"
-utest evalStrToStr " 1 + 2 * 3 + 4 " with "11"
-utest evalStrToStr " 1 + 2 * ( 3 + 4 ) " with "15"
-utest evalStrToStr " 10 - 7 - 2" with "1"
-utest evalStrToStr " 10 - (7 - 2)" with "5"
+utest evalTest "true" with "true"
+utest evalTest "1+2" with "3"
+utest evalTest " 2 * 3" with "6"
+utest evalTest " 2 + 3 * 4 " with "14"
+utest evalTest " 2 + 3 + 4 " with "9"
+utest evalTest " (2 + 3) * 4 " with "20"
+utest evalTest " 1 + 2 * 3 + 4 " with "11"
+utest evalTest " 1 + 2 * ( 3 + 4 ) " with "15"
+utest evalTest " 10 - 7 - 2" with "1"
+utest evalTest " 10 - (7 - 2)" with "5"
+utest evalTest " [10 + 17, 2 + 3 * 4]" with "[27,14]"
