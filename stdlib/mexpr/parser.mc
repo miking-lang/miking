@@ -72,7 +72,14 @@ let _ = use MExprWSACParser in
 
 -- Top of the expression parser. Connects WSAC with parsing of other non terminals
 lang ExprParser = WSACParser
-  sem parseExpr (p: Pos) (prec: Int) =
+  sem parseExpr (p: Pos) =
+  | s ->
+    let r1 = parseExprMain p 0 s in
+    let r2 = eatWSAC r1.pos r1.str in
+    if eqi (length r2.str) 0 then r1.val
+    else posErrorExit r2.pos "Parse error. Unknown characters."
+  
+  sem parseExprMain (p: Pos) (prec: Int) =
   | s ->
     let r1 = eatWSAC p s in
     let exp = parseExprImp r1.pos r1.str in
@@ -138,11 +145,11 @@ end
 lang IfParser = ExprParser + KeywordParser +  MatchAst + BoolPat
   sem parseExprImp (p: Pos) =
   | "if" ++ xs ->
-     let e1 = parseExpr (advanceCol p 2) 0 xs in
+     let e1 = parseExprMain (advanceCol p 2) 0 xs in
      let r1 = matchKeyword "then" e1.pos e1.str  in
-     let e2 = parseExpr r1.pos 0 r1.str in
+     let e2 = parseExprMain r1.pos 0 r1.str in
      let r2 = matchKeyword "else" e2.pos e2.str  in
-     let e3 = parseExpr r2.pos 0 r2.str in
+     let e3 = parseExprMain r2.pos 0 r2.str in
      {val = TmMatch {target = e1.val, pat = PBool {val = true, fi = NoInfo ()},
                      thn = e2.val, els = e3.val, fi = makeInfo p e3.pos},
       pos = e3.pos,
@@ -165,7 +172,7 @@ end
 lang ParenthesesParser = ExprParser + KeywordParser
   sem parseExprImp (p: Pos) =
   | "(" ++ xs ->
-    let e = parseExpr (advanceCol p 1) 0 xs in
+    let e = parseExprMain (advanceCol p 1) 0 xs in
     let r = matchKeyword ")" e.pos e.str in
     {val = e.val, pos = r.pos, str = r.str}
 end
@@ -181,7 +188,7 @@ lang SeqParser = ExprParser + KeywordParser + SeqAst
 	   pos = advanceCol r.pos 1, str = xs}
 	else
 	  let r2 = if first then r else matchKeyword "," r.pos r.str in
-	  let e = parseExpr r2.pos 0 r2.str in
+	  let e = parseExprMain r2.pos 0 r2.str in
 	  work (snoc acc e.val) false e.pos e.str  
       in work [] true (advanceCol p 1) xs
 end
@@ -283,7 +290,7 @@ lang FunParser = ExprParser + KeywordParser + FunAst
     let r = eatWSAC (advanceCol p 3) xs in
     let r2 = parseIdent false r.pos r.str in
     let r3 = matchKeyword "." r2.pos r2.str  in
-    let e = parseExpr r3.pos 0 r3.str in
+    let e = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
                   body = e.val, fi = makeInfo p e.pos},
      pos = e.pos, str = e.str}
@@ -302,7 +309,7 @@ lang ExprInfixParser = ExprParser
     match parseInfixImp r.pos r.str with Some op then
       if geqi op.prec prec then
         let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
-        let exp2 = parseExpr op.pos prec2 op.str in 
+        let exp2 = parseExprMain op.pos prec2 op.str in 
         let exp3 = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
 	parseInfix exp3.pos prec exp3 exp3.str
       else exp
@@ -346,61 +353,62 @@ mexpr
 
 use MExprParser in
 -- Unsigned integer
-utest parseExpr (initPos "file") 0 "  123foo" with
-      {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5}, pos = posVal "file" 1 5, str = "foo"} in
--- If expression
-utest (parseExpr (initPos "") 0 "  if 1 then 22 else 3").pos with posVal "" 1 21 in
+utest parseExprMain (initPos "file") 0 "  123foo" with
+      {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5},
+       pos = posVal "file" 1 5, str = "foo"} in
+      
+--If expression
+utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos with posVal "" 1 21 in
 -- Boolean literal 'true'
-utest parseExpr (initPos "f") 0 " true " with
-      {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
+utest parseExpr (initPos "f") " true " with
+      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
 -- Boolean literal 'false'
-utest parseExpr (initPos "f") 0 " true " with
-      {val = TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5}, pos = posVal "f" 1 5, str = " "} in
+utest parseExpr (initPos "f") " true " with
+      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
 -- Instrinsics integer arithmetic
-utest parseExpr (initPos "") 0 "  addi " with
-      {val = TmConst {val = CAddi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
-utest parseExpr (initPos "") 0 "  subi " with
-      {val = TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
-utest parseExpr (initPos "") 0 "  muli " with
-      {val = TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6}, pos = posVal "" 1 6, str = " "} in
--- Parentheses
-utest parseExpr (initPos "") 0 " ( muli) " with
-      {val = TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7}, pos = posVal "" 1 8, str = " "} in
+utest parseExpr (initPos "") "  addi " with
+      TmConst {val = CAddi {}, fi = infoVal "" 1 2 1 6}  in
+utest parseExpr (initPos "") "  subi " with
+      TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6} in
+utest parseExpr (initPos "") "  muli " with
+      TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6} in 
+-- Parentheses 
+utest parseExpr (initPos "") " ( muli) " with
+      TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7} in
 -- Sequences
-utest parseExpr (initPos "") 0 "[]" with
-      {val = TmSeq {tms = [], fi = infoVal "" 1 0 1 2}, pos = posVal "" 1 2, str = ""} in
-utest parseExpr (initPos "") 0 " [ ] " with
-      {val = TmSeq {tms = [], fi = infoVal "" 1 1 1 4}, pos = posVal "" 1 4, str = " "} in
-utest parseExpr (initPos "") 0 " [ 17 ] " with
+utest parseExpr (initPos "") "[]" with
+      TmSeq {tms = [], fi = infoVal "" 1 0 1 2} in
+utest parseExpr (initPos "") " [ ] " with
+      TmSeq {tms = [], fi = infoVal "" 1 1 1 4} in
+utest parseExprMain (initPos "") 0 " [ 17 ] " with
       let v = TmConst {val = CInt {val = 17}, fi = infoVal "" 1 3 1 5} in
       {val = TmSeq {tms = [v], fi = infoVal "" 1 1 1 7}, pos = posVal "" 1 7, str = " "} in
-utest parseExpr (initPos "") 0 " [ 232 , ( 19 ) ] " with
+utest parseExpr (initPos "") " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
-      {val = TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17}, pos = posVal "" 1 17, str = " "} in
+      TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17} in 
 -- Strings
 let makeChar = lam k. lam c. lam n.
     TmConst {val = CChar {val = c}, fi = infoVal "" 1 n 1 (addi n k)} in
 let mkc = makeChar 1 in
 let mkc2 = makeChar 2 in
-utest parseExpr (initPos "") 0 " \"Foo\" " with
+utest parseExpr (initPos "") " \"Foo\" " with
   let str = [mkc 'F' 2, mkc 'o' 3, mkc 'o' 4] in
-  {val = TmSeq {tms = str, fi = infoVal "" 1 1 1 6}, pos = posVal "" 1 6, str = " "} in
-utest parseExpr (initPos "") 0 " \" a\\\\ \\n\" " with
+  TmSeq {tms = str, fi = infoVal "" 1 1 1 6} in
+utest parseExpr (initPos "") " \" a\\\\ \\n\" " with
   let str = [mkc ' ' 2, mkc 'a' 3, mkc2 '\\' 4, mkc ' ' 6, mkc2 '\n' 7] in
-  {val = TmSeq {tms = str, fi = infoVal "" 1 1 1 10}, pos = posVal "" 1 10, str = " "} in
+  TmSeq {tms = str, fi = infoVal "" 1 1 1 10} in
 -- Chars
-utest parseExpr (initPos "") 0 " \'A\' " with
+utest parseExprMain (initPos "") 0 " \'A\' " with
   {val = TmConst {val = CChar {val = 'A'}, fi = infoVal "" 1 1 1 4},
    pos = posVal "" 1 4, str = " "} in
-utest parseExpr (initPos "") 0 " \'\\n\' " with
-  {val = TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5},
-   pos = posVal "" 1 5, str = " "} in
+utest parseExpr (initPos "") " \'\\n\' " with
+  TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5} in 
 -- Var
-utest (parseExpr (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
-utest (parseExpr (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
+utest (parseExprMain (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
+utest (parseExprMain (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
 -- Lambda
-utest (parseExpr (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
+utest (parseExprMain (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
 -- Application
 --utest (parseExpr (initPos "") 0 " f x ") with "" in
 
