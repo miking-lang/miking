@@ -29,7 +29,7 @@ lang HoleAst
   | TmHole {tp : Type,
             startGuess : Expr,
             depth : Int}
-  sem symbolize (env : Env) =
+  sem symbolizeExpr (env : Env) =
 end
 
 lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
@@ -55,7 +55,7 @@ lang LHoleAst = HoleAst
              startGuess : Expr,
              depth : Int}
 
-  sem symbolize (env : Env) =
+  sem symbolizeExpr (env : Env) =
   | LTmHole h -> LTmHole h
 
   sem fromTmHole =
@@ -108,8 +108,8 @@ lang LAppAst = AppAst
     fromAppAst (TmApp {lhs = labelApps t.lhs, rhs = labelApps t.rhs})
   | tm -> smap_Expr_Expr labelApps tm
 
-  sem symbolize (env : Env) =
-  | TmLApp t -> fromAppAst (symbolize env (toAppAst (TmLApp t)))
+  sem symbolizeExpr (env : Env) =
+  | TmLApp t -> fromAppAst (symbolizeExpr env (toAppAst (TmLApp t)))
 end
 
 lang LAppEval = LAppAst + AppEval
@@ -575,7 +575,9 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
 end
 
-lang PPrintLang = MExprPrettyPrint + LAppPrettyPrint + LHoleAstPrettyPrint
+-- TODO dlunde 2020-09-29: Why does the include order matter here? If I place
+-- MExprPrettyPrint first, I get a pattern matching error.
+lang PPrintLang = LAppPrettyPrint + LHoleAstPrettyPrint + MExprPrettyPrint
 let expr2str = use PPrintLang in
   lam expr.
     match
@@ -599,7 +601,7 @@ let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
 
 -- Shorthand for symbolize
-let symbolize = symbolize assocEmpty in
+let symbolize = symbolizeExpr assocEmpty in
 
 -- Prettyprinting
 let pprint = lam ast.

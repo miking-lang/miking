@@ -140,7 +140,16 @@ let _record2tuple = lam tm.
 -- TERMS --
 -----------
 
-lang VarPrettyPrint = VarAst
+lang PrettyPrint
+  sem pprintCode (indent : Int) (env: Env) =
+  -- Intentionally left blank
+
+  sem expr2str =
+  | expr -> match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+
+end
+
+lang VarPrettyPrint = PrettyPrint + VarAst
   sem isAtomic =
   | TmVar _ -> true
 
@@ -149,7 +158,7 @@ lang VarPrettyPrint = VarAst
     match _getStr ident env with (env,str) then (env,varString str) else never
 end
 
-lang AppPrettyPrint = AppAst
+lang AppPrettyPrint = PrettyPrint + AppAst
   sem isAtomic =
   | TmApp _ -> false
 
@@ -178,7 +187,7 @@ lang AppPrettyPrint = AppAst
     else error "Impossible"
 end
 
-lang FunPrettyPrint = FunAst
+lang FunPrettyPrint = PrettyPrint + FunAst
   sem isAtomic =
   | TmLam _ -> false
 
@@ -200,7 +209,7 @@ lang FunPrettyPrint = FunAst
     else never
 end
 
-lang RecordPrettyPrint = RecordAst
+lang RecordPrettyPrint = PrettyPrint + RecordAst
   sem isAtomic =
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
@@ -243,7 +252,7 @@ lang RecordPrettyPrint = RecordAst
     else never
 end
 
-lang LetPrettyPrint = LetAst
+lang LetPrettyPrint = PrettyPrint + LetAst
   sem isAtomic =
   | TmLet _ -> false
 
@@ -265,7 +274,7 @@ lang LetPrettyPrint = LetAst
     else never
 end
 
-lang RecLetsPrettyPrint = RecLetsAst
+lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
   sem isAtomic =
   | TmRecLets _ -> false
 
@@ -296,7 +305,7 @@ lang RecLetsPrettyPrint = RecLetsAst
     else never
 end
 
-lang ConstPrettyPrint = ConstAst
+lang ConstPrettyPrint = PrettyPrint + ConstAst
   sem isAtomic =
   | TmConst _ -> true
 
@@ -307,7 +316,7 @@ lang ConstPrettyPrint = ConstAst
   | TmConst t -> (env,getConstStringCode indent t.val)
 end
 
-lang DataPrettyPrint = DataAst
+lang DataPrettyPrint = PrettyPrint + DataAst
   sem isAtomic =
   | TmConDef _ -> false
   | TmConApp _ -> false
@@ -340,7 +349,7 @@ lang DataPrettyPrint = DataAst
     else never
 end
 
-lang MatchPrettyPrint = MatchAst
+lang MatchPrettyPrint = PrettyPrint + MatchAst
   sem isAtomic =
   | TmMatch _ -> false
 
@@ -365,7 +374,7 @@ lang MatchPrettyPrint = MatchAst
     else never
 end
 
-lang UtestPrettyPrint = UtestAst
+lang UtestPrettyPrint = PrettyPrint + UtestAst
   sem isAtomic =
   | TmUtest _ -> false
 
@@ -382,7 +391,7 @@ lang UtestPrettyPrint = UtestAst
     else never
 end
 
-lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
+lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
   sem isAtomic =
   | TmSeq _ -> true
 
@@ -409,7 +418,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     else never
 end
 
-lang NeverPrettyPrint = NeverAst
+lang NeverPrettyPrint = PrettyPrint + NeverAst
   sem isAtomic =
   | TmNever _ -> true
 
@@ -703,12 +712,7 @@ lang MExprPrettyPrint =
   -- Types
   + TypePrettyPrint
 
----------------------------
--- CONVENIENCE FUNCTIONS --
----------------------------
-
-let expr2str = use MExprPrettyPrint in
-  lam expr. match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+end
 
 -----------
 -- TESTS --

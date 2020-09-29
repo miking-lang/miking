@@ -46,52 +46,61 @@ let _symOverwrite = assocMergePreferRight {eq = identEq}
 -- TERMS --
 -----------
 
-lang VarSym = VarAst
-  sem symbolize (env : Env) =
+lang Sym
+  sem symbolizeExpr (env : Env) =
+  -- Intentionally left blank
+
+  sem symbolize =
+  | expr -> symbolizeExpr assocEmpty expr
+
+end
+
+lang VarSym = Sym + VarAst
+  sem symbolizeExpr (env : Env) =
   | TmVar {ident = ident} ->
     let str = nameGetStr ident in
     match _symLookup (IdVar str) env
     with Some ident then TmVar {ident = ident}
-    else error (concat "Unknown variable in symbolize: " str)
+    else error (concat "Unknown variable in symbolizeExpr: " str)
 end
 
-lang AppSym = AppAst
-  sem symbolize (env : Env) =
+lang AppSym = Sym + AppAst
+  sem symbolizeExpr (env : Env) =
   | TmApp {lhs = lhs, rhs = rhs} ->
-    TmApp {lhs = symbolize env lhs, rhs = symbolize env rhs}
+    TmApp {lhs = symbolizeExpr env lhs, rhs = symbolizeExpr env rhs}
 end
 
-lang FunSym = FunAst + VarSym + AppSym
-  sem symbolize (env : Env) =
+lang FunSym = Sym + FunAst + VarSym + AppSym
+  sem symbolizeExpr (env : Env) =
   | TmLam {ident = ident, tpe = tpe, body = body} ->
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
     let env = _symInsert (IdVar str) ident env in
-    TmLam {ident = ident, tpe = tpe, body = symbolize env body}
+    TmLam {ident = ident, tpe = tpe, body = symbolizeExpr env body}
 end
 
-lang RecordSym = RecordAst
-  sem symbolize (env : Env) =
+lang RecordSym = Sym + RecordAst
+  sem symbolizeExpr (env : Env) =
   | TmRecord {bindings = bindings} ->
-    TmRecord {bindings = _symRecMap (symbolize env) bindings}
+    TmRecord {bindings = _symRecMap (symbolizeExpr env) bindings}
 
   | TmRecordUpdate {rec = rec, key = key, value = value} ->
-    TmRecordUpdate {rec = symbolize env rec, key = key,
-                    value = symbolize env value}
+    TmRecordUpdate {rec = symbolizeExpr env rec, key = key,
+                    value = symbolizeExpr env value}
 end
 
-lang LetSym = LetAst
-  sem symbolize (env : Env) =
+lang LetSym = Sym + LetAst
+  sem symbolizeExpr (env : Env) =
   | TmLet {ident = ident,  body = body, inexpr = inexpr} ->
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
-    let body = symbolize env body in
+    let body = symbolizeExpr env body in
     let env = _symInsert (IdVar str) ident env in
-    TmLet {ident = ident, body = body, inexpr = symbolize env inexpr}
+    TmLet {ident = ident, body = body, inexpr = symbolizeExpr env inexpr}
 end
 
-lang RecLetsSym = RecLetsAst
-  sem symbolize (env : Env) =
+lang RecLetsSym = Sym + RecLetsAst
+  sem symbolizeExpr (env : Env) =
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
 
     -- Generate fresh symbols for all identifiers
@@ -107,34 +116,34 @@ lang RecLetsSym = RecLetsAst
 
     -- Symbolize all bodies with the new environment
     let bindings =
-      map (lam bind. {bind with body = symbolize env bind.body})
+      map (lam bind. {bind with body = symbolizeExpr env bind.body})
         bindings in
 
-    TmRecLets {bindings = bindings, inexpr = symbolize env inexpr}
+    TmRecLets {bindings = bindings, inexpr = symbolizeExpr env inexpr}
 
 end
 
-lang ConstSym = ConstAst
-  sem symbolize (env : Env) =
+lang ConstSym = Sym + ConstAst
+  sem symbolizeExpr (env : Env) =
   | TmConst t -> TmConst t
 end
 
-lang DataSym = DataAst
-  sem symbolize (env : Env) =
+lang DataSym = Sym + DataAst
+  sem symbolizeExpr (env : Env) =
   | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
     let str = nameGetStr ident in
     let ident = nameSetNewSym ident in
     let env = _symInsert (IdCon str) ident env in
-    TmConDef {ident = ident, tpe = tpe, inexpr = symbolize env inexpr}
+    TmConDef {ident = ident, tpe = tpe, inexpr = symbolizeExpr env inexpr}
   | TmConApp {ident = ident, body = body} ->
     let str = nameGetStr ident in
     match _symLookup (IdCon str) env
     with Some ident then
-      TmConApp {ident = ident, body = symbolize env body}
-    else error (concat "Unknown constructor in symbolize: " str)
+      TmConApp {ident = ident, body = symbolizeExpr env body}
+    else error (concat "Unknown constructor in symbolizeExpr: " str)
 end
 
-lang MatchSym = MatchAst
+lang MatchSym = Sym + MatchAst
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader
   -- monad or something. patEnv on the other hand changes, it would be
@@ -144,30 +153,30 @@ lang MatchSym = MatchAst
   sem symbolizePat (env : Env) (patEnv : Env) =
   -- Intentionally left blank
 
-  sem symbolize (env : Env) =
+  sem symbolizeExpr (env : Env) =
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     match symbolizePat env assocEmpty pat
     with (thnPatEnv, pat) then
-      TmMatch {target = symbolize env target,
-               pat = pat, thn = symbolize (_symOverwrite env thnPatEnv) thn, els = symbolize env els}
+      TmMatch {target = symbolizeExpr env target,
+               pat = pat, thn = symbolizeExpr (_symOverwrite env thnPatEnv) thn, els = symbolizeExpr env els}
     else never
 end
 
-lang UtestSym = UtestAst
-  sem symbolize (env : Env) =
+lang UtestSym = Sym + UtestAst
+  sem symbolizeExpr (env : Env) =
   | TmUtest {test = test, expected = expected, next = next} ->
-    TmUtest {test = symbolize env test,
-             expected = symbolize env expected,
-             next = symbolize env next}
+    TmUtest {test = symbolizeExpr env test,
+             expected = symbolizeExpr env expected,
+             next = symbolizeExpr env next}
 end
 
-lang SeqSym = SeqAst
-  sem symbolize (env : Env) =
-  | TmSeq {tms = tms} -> TmSeq {tms = map (symbolize env) tms}
+lang SeqSym = Sym + SeqAst
+  sem symbolizeExpr (env : Env) =
+  | TmSeq {tms = tms} -> TmSeq {tms = map (symbolizeExpr env) tms}
 end
 
-lang NeverSym = NeverAst
-  sem symbolize (env : Env) =
+lang NeverSym = Sym + NeverAst
+  sem symbolizeExpr (env : Env) =
   | TmNever {} -> TmNever {}
 end
 
@@ -233,7 +242,7 @@ lang DataPatSym = DataPat
       match symbolizePat env patEnv subpat with (patEnv, subpat) then
         (patEnv, PCon {ident = ident, subpat = subpat})
       else never
-    else error (concat "Unknown constructor in symbolize: " str)
+    else error (concat "Unknown constructor in symbolizeExpr: " str)
 end
 
 lang IntPatSym = IntPat
@@ -274,7 +283,7 @@ lang NotPatSym = NotPat
     -- matter since they will never bind (it should probably be an
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
-    -- symbolize though, constructors must refer to the right symbol.
+    -- symbolizeExpr though, constructors must refer to the right symbol.
     let res = symbolizePat env patEnv p.subpat in
     (patEnv, PNot {p with subpat = res.1})
 end
@@ -296,18 +305,12 @@ lang MExprSym =
   -- Debugging
   + MExprPrettyPrint
 
----------------------------
--- CONVENIENCE FUNCTIONS --
----------------------------
-
-let symbolizeMExpr = use MExprSym in symbolize assocEmpty
-
 -----------
 -- TESTS --
 -----------
 -- It is difficult to directly do unit testing for the above due to the nature
 -- of symbols, so we are just evaluating the below for errors. Unit
--- testing in eval.mc also implicitly covers symbolize.
+-- testing in eval.mc also implicitly covers symbolizeExpr.
 
 mexpr
 
@@ -365,7 +368,7 @@ let matchoredge = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [p
 let debug = false in
 
 let debugPrint = lam t.
-  let r = symbolize assocEmpty t in
+  let r = symbolize t in
   if debug then
     let _ = printLn "--- BEFORE SYMBOLIZE ---" in
     let _ = printLn (expr2str t) in

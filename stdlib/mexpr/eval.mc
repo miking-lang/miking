@@ -181,7 +181,7 @@ lang MatchEval = MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = UtestAst
+lang UtestEval = Eq + UtestAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -189,7 +189,7 @@ lang UtestEval = UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eqmexpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    let _ = if eqexpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval ctx t.next
 end
 
@@ -595,8 +595,8 @@ end
 
 lang MExprEval =
 
-  -- Symbolize is required before eval
-  MExprSym
+  -- Symbolize is required before eval, and MExprEq is used below when testing.
+  MExprSym + MExprEq
 
   -- Terms
   + VarEval + AppEval + FunEval + FixEval + RecordEval + RecLetsEval +
@@ -623,7 +623,7 @@ use MExprEval in
 
 -- Evaluation shorthand used in tests below
 let eval =
-  lam t. eval {env = assocEmpty} (symbolize assocEmpty t) in
+  lam t. eval {env = assocEmpty} (symbolize t) in
 
 let id = ulam_ "x" (var_ "x") in
 let bump = ulam_ "x" (addi_ (var_ "x") (int_ 1)) in
@@ -713,8 +713,8 @@ let srl = bind_
 
 utest eval srl with true_ in
 
-utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqmexpr in
-utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqmexpr in
+utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqexpr in
+utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqexpr in
 
 -- Commented out to declutter test suite output
 -- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) unit_ in
@@ -758,7 +758,7 @@ let addEvalNested = ulam_ "arg"
 
 utest eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
 with conapp_ "Num" (int_ 3)
-using eqmexpr in
+using eqexpr in
 
 let recordProj =
   bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))

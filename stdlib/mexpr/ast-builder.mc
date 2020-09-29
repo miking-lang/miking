@@ -254,12 +254,6 @@ let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
 
-let and_ = use MExprAst in
-  lam a. lam b. if_ a b false
-
-let or_ = use MExprAst in
-  lam a. lam b. if_ a true b
-
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
   TmMatch {target = target, pat = pat, thn = thn, els = els}
@@ -478,3 +472,11 @@ let null_ = use MExprAst in
 let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
+
+-- Short circuit logical expressions
+let and_ = use MExprAst in
+  lam a. lam b. if_ a b false_
+
+let or_ = use MExprAst in
+  lam a. lam b. if_ a true_ b
+
