@@ -168,7 +168,7 @@ lang NeverAst
   syn Expr =
   | TmNever {}
 
-  -- TODO smap, sfold?
+  -- TODO(dlunde,2020-09-29): smap, sfold
 end
 
 ---------------
@@ -206,7 +206,7 @@ end
 lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
-  | CNot {} -- TODO dlunde 2020-09-29: This constant does not exist in boot. Remove?
+  | CNot {} -- TODO(dlunde,2020-09-29): This constant does not exist in boot. Remove?
 end
 
 lang CmpIntAst = IntAst + BoolAst
@@ -236,7 +236,7 @@ lang CmpSymbAst = SymbAst + BoolAst
   | CEqsym {}
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
   | CGet {}
@@ -383,7 +383,7 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO Update (also not up to date in boot?)
+-- TODO(dlunde,2020-09-29): Update (also not up to date in boot?)
 
 lang FunTypeAst
   syn Type =

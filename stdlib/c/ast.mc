@@ -7,17 +7,17 @@ lang CExprAst = VarAst + ConstAst + IntAst + FloatAst + CharAst
     | TmAssg { lhs: Expr, rhs: Expr }
     | TmApp { fun: String, args: [Expr] }
 
-    -- TODO Many other things missing, for instance:
+    -- TODO(dlunde,2020-09-29): Many other things missing, for instance:
     -- * Operators. We cannot reuse operators from mexpr (such as CAddi) since
     --   they are curried. Maybe this will change in the future?
     -- * Pointers
     -- * Arrays
-    -- * Unions (NOTE: not tagged unions, aka variants)
+    -- * Unions (NOTE(dlunde,2020-09-29): not tagged unions, aka variants)
     -- * Enums (variants with only nullary constructors)
     -- * Structs (should be reusable if we decompose RecordAst a bit)
 end
 
--- TODO Types (Some reuse from mexpr should be possible after some refactoring)
+-- TODO(dlunde,2020-09-29): Types (Some reuse from mexpr should be possible after some refactoring)
 lang CTypeAst
 
 lang CStmtAst = CExprAst + CTypeAst

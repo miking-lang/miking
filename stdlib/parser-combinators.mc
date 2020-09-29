@@ -1,5 +1,5 @@
 include "string.mc"
-include "prelude.mc" -- TODO: Should not be needed
+include "prelude.mc" -- TODO(?,?): Should not be needed
 
 -- Debug stuff
 let debugFlag = false
@@ -183,7 +183,7 @@ utest testParser endOfInput "" with Success((), ("", initPos ""))
 -- next : Parser char
 --
 -- Read next character from input stream
--- TODO: It would most likely be faster to index into
+-- TODO(?,?): It would most likely be faster to index into
 --       an array than to take the tail of a string
 let next = lam st.
   let input = st.0 in
@@ -464,7 +464,7 @@ with Success ("abcd", ("e", {file = "", row = 1, col = 5}))
 -- Parser Char
 --
 -- Parse a character literal.
--- TODO: Support escaped characters (also in OCaml parser)
+-- TODO(?,?): Support escaped characters (also in OCaml parser)
 let lexCharLit = wrappedIn (lexChar ''') (lexChar ''') next
 
 utest testParser lexCharLit "'\n'"
@@ -474,7 +474,7 @@ with Success (head "\n", ("", {file = "", row = 2, col = 2}))
 --
 -- Parse a string literal.
 let lexStringLit =
-  -- TODO: Are other escaped characters handled correctly?
+  -- TODO(?,?): Are other escaped characters handled correctly?
   let escaped =
     try (alt (apr (lexString "\\\\") (pure (head "\\")))
              (apr (lexString "\\") (fmap head (lexString "\""))))

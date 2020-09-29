@@ -114,7 +114,7 @@ and const =
 | Cgensym
 | Ceqsym of int option
 | CSym2hash
-(* External functions TODO: Should not be part of core language *)
+(* External functions TODO(?,?): Should not be part of core language *)
 | CExt of Extast.ext
 | CSd of Sdast.ext
 | CPy of tm Pyast.ext
@@ -122,7 +122,7 @@ and const =
 (* Terms in MLang *)
 and cdecl   = CDecl   of info * ustring * ty
 and param   = Param   of info * ustring * ty
-and decl = (* TODO: Local? *)
+and decl = (* TODO(?,?): Local? *)
 | Data     of info * ustring * cdecl list
 | Inter    of info * ustring * param list * (pat * tm) list
 

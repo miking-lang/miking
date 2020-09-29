@@ -77,7 +77,7 @@ utest nameEqSym _t3 _t3 with true
 
 -- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
 -- a symbol and their strings are equal. Otherwise, return false.
--- TODO dlunde 2020-09-25: Short circuit for performance?
+-- TODO(dlunde,2020-09-25): Short circuit for performance?
 let nameEq : Name -> Name -> Bool =
   lam n1. lam n2.
     or (nameEqSym n1 n2)
@@ -139,7 +139,7 @@ utest nameGetStr (nameSym "foo") with "foo"
 
 -- 'nameGetSym n' returns optionally the symbol of name 'n'.
 -- If 'n' has no symbol, 'None' is returned.
--- TODO: Update signature when we have polymorphic types.
+-- TODO(dlunde,2020-09-29): Update signature when we have polymorphic types.
 let nameGetSym : Name -> OptionSymbol =
   lam n. if eqsym n.1 _noSymbol then None () else Some n.1
 

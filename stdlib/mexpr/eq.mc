@@ -103,7 +103,7 @@ end
 
 lang FunEq = Eq + FunAst + VarEq + AppEq
   sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
-  -- NOTE dlunde 2020-09-26: The type annotation is currently ignored.
+  -- NOTE(dlunde,2020-09-26): The type annotation is currently ignored.
   | TmLam {ident = i2, body = b2} ->
     match env with {varEnv = varEnv} then
       match lhs with TmLam {ident = i1, body = b1} then
@@ -153,7 +153,7 @@ end
 lang RecLetsEq = Eq + RecLetsAst
   sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmRecLets {bindings = bs2} ->
-    -- NOTE dlunde 2020-09-25: This requires the bindings to occur in the same
+    -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
     match env with {varEnv = varEnv} then
@@ -323,7 +323,7 @@ lang CmpSymbEq = CmpSymbAst
   | CEqsym {} -> match lhs with CEqsym _ then true else false
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEq = SeqOpAst
   sem eqConst (lhs : Const) =
   | CGet {} -> match lhs with CGet _ then true else false
@@ -364,12 +364,12 @@ end
 
 lang SeqTotPatEq
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO
+  -- TODO(dlunde,2020-09-29)
 end
 
 lang SeqEdgPatEq
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO
+  -- TODO(dlunde,2020-09-29)
 end
 
 lang RecordPatEq = RecordPat
@@ -427,17 +427,17 @@ end
 
 lang AndPatEq
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO
+  -- TODO(dlunde,2020-09-29)
 end
 
 lang OrPatEq
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO
+  -- TODO(dlunde,2020-09-29)
 end
 
 lang NotPatEq
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO
+  -- TODO(dlunde,2020-09-29)
 end
 
 -----------------------------

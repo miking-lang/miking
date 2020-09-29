@@ -67,7 +67,7 @@ let builtin =
    ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
    ("wallTimeMs",f(CwallTimeMs)); ("sleepMs",f(CsleepMs));
   ]
-  (* Append external functions TODO: Should not be part of core language *)
+  (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
   @ Sd.externals
@@ -160,7 +160,7 @@ let arity = function
   | CPy v   -> Pyffi.arity v
   (* Sundials intrinsics *)
   | CSd v   -> Sd.arity v
-  (* External functions TODO: Should not be part of core language *)
+  (* External functions TODO(?,?): Should not be part of core language *)
   | CExt v  -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU(None)    -> 2

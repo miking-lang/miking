@@ -26,7 +26,8 @@ type Env = {
   nameMap: AssocMap Name String,
 
   -- Used to keep track of strings assigned to names without symbols
-  -- TODO It is probably cleaner to merge this with nameMap (see eq.mc)
+  -- TODO(dlunde,2020-09-29): It is probably cleaner to merge this with nameMap
+  -- (see eq.mc)
   strMap: AssocMap String String,
 
   -- Count the number of occurrences of each (base) string to assist with
@@ -35,7 +36,7 @@ type Env = {
 
 }
 
--- TODO Make it possible to debug the actual symbols
+-- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
 let _emptyEnv = {nameMap = assocEmpty, strMap = assocEmpty, count = assocEmpty}
 
@@ -657,7 +658,7 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO Update (also not up to date in boot?)
+-- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
 lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
                        TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +

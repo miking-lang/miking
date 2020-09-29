@@ -575,7 +575,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
 end
 
--- TODO dlunde 2020-09-29: Why does the include order matter here? If I place
+-- TODO(dlunde,2020-09-29): Why does the include order matter here? If I place
 -- MExprPrettyPrint first, I get a pattern matching error.
 lang PPrintLang = LAppPrettyPrint + LHoleAstPrettyPrint + MExprPrettyPrint
 let expr2str = use PPrintLang in

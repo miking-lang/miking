@@ -1,4 +1,4 @@
--- TODO: Add types
+-- TODO(?,?): Add types
 
 include "string.mc"
 include "char.mc"
@@ -201,7 +201,7 @@ lang SeqEval = SeqAst
 end
 
 lang NeverEval = NeverAst
-  --TODO
+  --TODO(?,?)
 end
 
 ---------------
@@ -411,7 +411,7 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
     else error "Second argument in eqsym is not a symbol"
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]

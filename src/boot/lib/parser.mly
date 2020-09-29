@@ -123,7 +123,7 @@ tops:
     { $1 :: $2 }
   |
     { [] }
-  // TODO: These should matter with a type system
+  // TODO(?,?): These should matter with a type system
   | TYPE type_ident type_params tops
     { $4 }
   | TYPE type_ident type_params EQ ty tops
@@ -417,7 +417,7 @@ pat_atom:
   | LBRACKET pat_labels RBRACKET
       { PatRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
                   (fun acc (k,v) -> Record.add k v acc) Record.empty) }
-  | UINT /* TODO: enable matching against negative ints */
+  | UINT /* TODO(?,?): enable matching against negative ints */
       { PatInt($1.i, $1.v) }
   | CHAR
       { PatChar($1.i, List.hd (ustring2list $1.v)) }

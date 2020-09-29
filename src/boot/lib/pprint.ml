@@ -31,15 +31,15 @@ let ustring_of_var x s =
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
   let str = match (string_of_ustring (Ustring.from_uchars [|c|])) with
-    (* TODO This is a temporary fix for newlines only. How do we do this
+    (* TODO(dlunde,?): This is a temporary fix for newlines only. How do we do this
        properly? *)
     | "\n" -> "\\n"
     | str -> str in
   Printf.sprintf "'%s'" str
 
 (** Convert pattern to ustring.
- *  TODO Precedence
- *  TODO Use Format module printing *)
+ *  TODO(dlunde,?): Precedence
+ *  TODO(dlunde,?): Use Format module printing *)
 let ustring_of_pat p =
   let rec ppp pat =
     let ppSeq s =
@@ -82,8 +82,8 @@ let ustring_of_pat p =
   in ppp p
 
 (** Convert type to ustring.
- *  TODO Precedence
- *  TODO Use Format module printing *)
+ *  TODO(dlunde,?): Precedence
+ *  TODO(dlunde,?): Use Format module printing *)
 let rec ustring_of_ty = function
   | TyUnit  -> us"()"
   | TyDyn   -> us"Dyn"
@@ -111,7 +111,7 @@ type sep =
   | Comma
 
 (** Function for concatenating a list of fprintf calls using a given separator.
- *  TODO Possible to simply use Format.pp_print_list? *)
+ *  TODO(dlunde,?) Possible to simply use Format.pp_print_list? *)
 let rec concat fmt (sep, ls) = match ls with
   | []  -> ()
   | [f] -> f fmt
@@ -130,8 +130,8 @@ type prec =
   | Atom
 
 (** Print a constant on the given formatter
- *  TODO Precendece?
- *  TODO Break hints? *)
+ *  TODO(dlunde,?): Precendece?
+ *  TODO(dlunde,?): Break hints? *)
 let rec print_const fmt = function
 
   (* MCore Intrinsic Booleans *)
@@ -244,7 +244,7 @@ let rec print_const fmt = function
   | CPy(v) -> fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
   (* Sundials intrinsics *)
   | CSd(v) -> fprintf fmt "%s" (string_of_ustring (Sdpprint.pprint v))
-  (* External pprint TODO: Should not be part of core language *)
+  (* External pprint TODO(?,?):: Should not be part of core language *)
   | CExt(v) -> fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
 
 (** Pretty print a record *)
@@ -357,7 +357,7 @@ and print_tm' fmt t = match t with
 
   | TmRecordUpdate(_,t1,l,t2) ->
     let l = string_of_ustring l in
-    (* TODO The below Atom precedences can probably be made less conservative *)
+    (* TODO(?,?): The below Atom precedences can probably be made less conservative *)
     fprintf fmt "{%a with %s = %a}"
       print_tm (Atom, t1)
       l
@@ -489,24 +489,24 @@ let ustr_formatter_print
   flush_str_formatter () |> us
 
 (** Convert terms to strings.
- *  TODO Messy with optional arguments passing. Alternatives? *)
+ *  TODO(dlunde,?): Messy with optional arguments passing. Alternatives? *)
 let ustring_of_tm ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix t =
   ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_tm (Match, t)
 
 (** Converting constants to strings.
- *  TODO Messy with optional arguments passing. Alternatives? *)
+ *  TODO(dlunde,?): Messy with optional arguments passing. Alternatives? *)
 let ustring_of_const ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix c =
   ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_const c
 
 (** Converting environments to strings.
- *  TODO Messy with optional arguments passing. Alternatives? *)
+ *  TODO(dlunde,?): Messy with optional arguments passing. Alternatives? *)
 let ustring_of_env ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix e =
   ustr_formatter_print ?symbol ?indent ?max_indent ?margin ?max_boxes ?prefix
     print_env e
 
-(** TODO: Print mlang part as well. *)
+(** TODO(dlunde,?): Print mlang part as well. *)
 let ustring_of_program tml =
   match tml with
   | Program(_,_,t) -> ustring_of_tm t

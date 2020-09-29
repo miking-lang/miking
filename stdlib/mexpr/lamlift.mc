@@ -1,4 +1,4 @@
--- TODO Needs updating, commented out for now
+-- TODO(dlunde,2020-09-29) Needs updating, commented out for now
 --
 -- -- Defines semantics for lambda lifting
 -- -- Based on the technique from the 1985 paper.
@@ -27,7 +27,7 @@
 -- --   replaced by a TmApp (..., ...) where the generated arguments are
 -- --   pre-applied on the generated identifier for the Let expression.
 --
--- -- NOTE: Assumes that bound variables are limited to the following AST nodes:
+-- -- NOTE(?,?): Assumes that bound variables are limited to the following AST nodes:
 -- --        - TmVar
 -- --        - TmApp
 -- --
@@ -580,7 +580,7 @@
 --     --| CEqi -> (state, CEqi)
 -- end
 --
--- -- TODO: Write CmpFloatLamlift
+-- -- TODO(?,?): Write CmpFloatLamlift
 --
 -- lang SeqLamlift = SeqAst + ConstLamlift
 --     sem lamlift (state : LiftState) =

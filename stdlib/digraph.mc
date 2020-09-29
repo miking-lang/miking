@@ -304,7 +304,7 @@ utest digraphHasEdges [(2,1,l1),(3,1,l2),(1,3,l3)] gRev with true in
 utest digraphCountVertices gRev with 3 in
 utest digraphCountEdges gRev with 3 in
 
--- TODO: successor/predeccessor
+-- TODO(?,?): successor/predeccessor
 
 let g = digraphUnion (digraphAddVertex 1 empty) (digraphAddVertex 2 empty) in
 

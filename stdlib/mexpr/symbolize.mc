@@ -1,6 +1,6 @@
 -- Symbolization of the MExpr ast.
 --
--- TODO dlunde 2020-09-25: Add support for leaving existing symbols intact when
+-- TODO(dlunde,2020-09-25): Add support for leaving existing symbols intact when
 -- running symbolize on an already partially symbolized term?
 
 include "name.mc"
@@ -14,11 +14,11 @@ include "mexpr/pprint.mc"
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
--- NOTE dlunde 2020-09-25: The environment differs from boot, since we do not
+-- NOTE(dlunde,2020-09-25): The environment differs from boot, since we do not
 -- have access to the unique string identifiers from ustring.ml. Instead, we
 -- use strings directly.
 
--- TODO dlunde 2020-09-25: We should probably use separate environments for the
+-- TODO(dlunde,2020-09-25): We should probably use separate environments for the
 -- below instead (as in eq.mc)
 type Ident
 con IdVar   : String -> Ident

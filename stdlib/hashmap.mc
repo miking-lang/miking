@@ -3,7 +3,7 @@
 --
 -- A simple generic hashmap library.
 --
--- TODO:
+-- TODO(?,?):
 --  - Resizing of buckets.
 --  - Conversion to and from association lists.
 --
@@ -49,7 +49,7 @@ let hashmapStrTraits : HashMapTraits =
 -- 'hashmapInsert traits k v hm' returns a new hashmap, where the key-value pair
 -- ('k', 'v') is stored. If 'k' is already a key in 'hm', its old value will be
 -- overwritten.
--- [NOTE]
+-- [NOTE(?,?)]
 --   The insertion uses a recursion that is not tail-recursive.
 let hashmapInsert : HashMapTraits -> k -> v -> HashMap -> HashMap =
   lam traits. lam key. lam value. lam hm.
@@ -76,7 +76,7 @@ let hashmapInsert : HashMapTraits -> k -> v -> HashMap -> HashMap =
 
 -- 'hashmapRemove traits k hm' returns a new hashmap, where 'k' is not a key. If
 -- 'k' is not a key in 'hm', the map remains unchanged after the operation.
--- [NOTE]
+-- [NOTE(?,?)]
 --   The removal uses a recursion that is not tail-recursive.
 let hashmapRemove : HashMapTraits -> k -> HashMap -> HashMap =
   lam traits. lam key. lam hm.
@@ -130,7 +130,7 @@ let hashmapLookupOrElse : HashMapTraits -> k -> HashMap -> v =
 -- 'hashmapLookupPred p hm' returns the value of a key that satisfies the
 -- predicate 'p'. If several keys satisfies 'p', the one that happens to be
 -- found first is returned.
--- [NOTE]
+-- [NOTE(?,?)]
 --   Linear complexity.
 let hashmapLookupPred : (k -> Bool) -> HashMap -> OptionV =
   lam p. lam hm.

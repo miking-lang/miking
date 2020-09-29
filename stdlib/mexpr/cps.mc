@@ -1,7 +1,7 @@
 -- This file contains proof-of-concept functions for CPS transformation of the
 -- basic lambda calculus subset of MExpr. It is based on
 -- http://matt.might.net/articles/cps-conversion/.
--- TODO dlunde 2020-09-25: Add full support for MExpr when stable.
+-- TODO(dlunde,2020-09-25): Add full support for MExpr when stable.
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -55,6 +55,6 @@ let idc = symbolize (ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))) in
 
 utest cpsM id with idc using eqExpr in
 
--- TODO dlunde 2020-09-25: Add more test cases
+-- TODO(dlunde,2020-09-25): Add more test cases
 
 ()
