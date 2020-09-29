@@ -115,7 +115,13 @@ utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (ad
       with Some 3
 utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2, 3]
       with None ()
-
+utest optionFoldlM (lam acc. lam x. Some (addi acc x)) 0 [1,2,3,4] with Some 10
+utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
+        0 [1,2,3,4]
+with Some 4
+utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
+        0 [1,2,2,4]
+with None ()
 
 -- Returns `true` if the option contains a value which
 -- satisfies the specified predicate.
