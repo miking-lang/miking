@@ -280,7 +280,7 @@ lang RecLetsPrettyPrint = RecLetsAst
       else never in
     let lbody = lam env. lam bind.
       match pprintCode (incr (incr indent)) env bind.body with (env,str) then
-        (env,varString str)
+        (env,str)
       else never in
     match mapAccumL lname env t.bindings with (env,idents) then
       match mapAccumL lbody env t.bindings with (env,bodies) then

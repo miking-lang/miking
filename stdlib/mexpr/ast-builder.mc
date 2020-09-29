@@ -41,7 +41,12 @@ let pcon_ = use MExprAst in
 
 let prec_ = use MExprAst in
   lam bindings.
-  PRecord {bindings = bindings}
+  PRecord {
+    bindings =
+      foldl
+        (lam acc. lam b. assocInsert {eq=eqstr} b.0 b.1 acc)
+        assocEmpty bindings
+    }
 
 let ptuple_ = use MExprAst in
   lam ps.
