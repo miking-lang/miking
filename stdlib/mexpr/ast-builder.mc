@@ -254,6 +254,12 @@ let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
 
+let and_ = use MExprAst in
+  lam a. lam b. if_ a b false
+
+let or_ = use MExprAst in
+  lam a. lam b. if_ a true b
+
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
   TmMatch {target = target, pat = pat, thn = thn, els = els}

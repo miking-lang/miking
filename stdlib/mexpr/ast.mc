@@ -206,7 +206,7 @@ end
 lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
-  | CNot {}
+  | CNot {} -- TODO dlunde 2020-09-29: This constant does not exist in boot. Remove?
 end
 
 lang CmpIntAst = IntAst + BoolAst
