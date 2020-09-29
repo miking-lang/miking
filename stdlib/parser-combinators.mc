@@ -176,7 +176,7 @@ let endOfInput = lam st.
   let input = st.0 in
   if null input
   then pure () st
-  else fail (show_char (head input)) "end of input" st
+  else fail (showChar (head input)) "end of input" st
 
 utest testParser endOfInput "" with Success((), ("", initPos ""))
 
@@ -254,7 +254,7 @@ let notFollowedBy = lam p. lam st.
     let res2 = next st in
     match res2 with Success t then
       let c = t.0 in
-      fail (show_char c) "" st
+      fail (showChar c) "" st
     else res2
 
 -- satisfy : (Char -> Bool) -> String -> Parser Char
@@ -266,7 +266,7 @@ let satisfy = lam cnd. lam expected. lam st.
   bind next (lam c.
   if cnd c
   then pure c
-  else lam _ . fail (show_char c) expected st) st
+  else lam _ . fail (showChar c) expected st) st
 
 -- try : Parser a -> Parser a
 --
@@ -342,7 +342,7 @@ let sepBy = lam sep. lam p.
 -- lexChar : Char -> Parser Char
 --
 -- Parse a specific character.
-let lexChar = lam c. satisfy (eqchar c) (show_char c)
+let lexChar = lam c. satisfy (eqChar c) (showChar c)
 
 utest testParser (lexChar 'a') "ab"
 with Success ('a', ("b", {file = "", row = 1, col = 2}))
@@ -608,7 +608,7 @@ let symbol = string in
 --
 -- Check if a character is valid in an identifier.
 let isValidChar = lam c.
-  or (is_alphanum c) (eqchar c '_')
+  or (is_alphanum c) (eqChar c '_')
 in
 
 -- reserved : String -> Parser String
@@ -633,7 +633,7 @@ in
 -- of reserved keywords.
 let identifier =
   let validId =
-    bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
+    bind (satisfy (lam c. or (is_alpha c) (eqChar '_' c)) "valid identifier") (lam c.
     bind (token (many (satisfy isValidChar ""))) (lam cs.
     pure (cons c cs)))
   in

@@ -553,7 +553,7 @@ lang CharPatEval = CharAst + CharPat
   | PChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
-        if eqchar ch.val ch2.val then Some env else None ()
+        if eqChar ch.val ch2.val then Some env else None ()
       else None ()
     else None ()
 end

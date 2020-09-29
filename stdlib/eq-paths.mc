@@ -35,7 +35,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
 
 mexpr
 -- To construct test graphs
-let empty = digraphEmpty eqi eqchar in
+let empty = digraphEmpty eqi eqChar in
 let fromList = lam vs. foldl (lam g. lam v. digraphAddVertex v g) empty vs in
 let addEdges = lam g. lam es. foldl (lam acc. lam e. digraphAddEdge e.0 e.1 e.2 acc) g es in
 

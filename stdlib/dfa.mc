@@ -54,7 +54,7 @@ let states = [0,1,2] in
 let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newDfa = dfaConstr states transitions startState acceptStates eqi eqchar in
+let newDfa = dfaConstr states transitions startState acceptStates eqi eqChar in
 utest eqi startState newDfa.startState with true in
 utest setEqual eqi acceptStates newDfa.acceptStates with true in
 utest (digraphHasVertices states newDfa.graph) with true in

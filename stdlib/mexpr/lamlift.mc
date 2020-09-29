@@ -146,7 +146,7 @@
 --         let strip_prefix_helper = lam tailstr.
 --         if null tailstr
 --         then s -- String has no prefix
---         else if eqchar '_' (head tailstr)
+--         else if eqChar '_' (head tailstr)
 --              then tail tailstr
 --              else strip_prefix_helper (tail tailstr)
 --     in

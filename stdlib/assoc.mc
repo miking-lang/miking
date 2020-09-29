@@ -169,8 +169,8 @@ utest lookupOrElse (lam _. 42) 1 m with '1' in
 utest lookupOrElse (lam _. 42) 2 m with '2' in
 utest lookupOrElse (lam _. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
-utest any (lam k. lam v. eqchar v '2') m with true in
-utest any (lam k. lam v. eqchar v '4') m with false in
+utest any (lam k. lam v. eqChar v '2') m with true in
+utest any (lam k. lam v. eqChar v '4') m with false in
 utest all (lam k. lam v. gti k 0) m with true in
 utest all (lam k. lam v. gti k 1) m with false in
 utest

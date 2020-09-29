@@ -82,11 +82,11 @@ lang StrFormatBase
   | s ->
     if lti (length s) 2 then
       s
-    else if eqchar '%' (head s) then
+    else if eqChar '%' (head s) then
       let c = head (tail s) in
-      if eqchar '%' c then
+      if eqChar '%' c then
         cons '%' (strFormat args (tail (tail s)))
-      else if eqchar c '*' then
+      else if eqChar c '*' then
         -- %* represents a wildcard format; The argument is converted
         -- to _some_ string.
         concat (toString (head args)) (strFormat (tail args) (tail (tail s)))

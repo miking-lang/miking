@@ -309,7 +309,7 @@ end
 lang CharEq = CharAst
   sem eqConst (lhs : Const) =
   | CChar {val = v2} ->
-    match lhs with CChar {val = v1} then eqchar v1 v2 else false
+    match lhs with CChar {val = v1} then eqChar v1 v2 else false
 end
 
 lang SymbEq = SymbAst
@@ -413,7 +413,7 @@ lang CharPatEq = CharPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PChar {val = c2} ->
     match lhs with PChar {val = c1} then
-      if eqchar c1 c2 then Some (free,patEnv) else None ()
+      if eqChar c1 c2 then Some (free,patEnv) else None ()
     else None ()
 end
 
