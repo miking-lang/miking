@@ -52,7 +52,7 @@ let i = 'i' in
 let j = 'j' in
 
 let samePaths = lam p1. lam p2.
-  setEqual eqstr p1 p2 in
+  setEqual eqString p1 p2 in
 
 -- Graph with one node
 -- ┌─────┐

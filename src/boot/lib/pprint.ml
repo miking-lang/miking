@@ -237,7 +237,7 @@ let rec print_const fmt = function
   (* MCore Symbols *)
   | CSymb(id) -> fprintf fmt "symb(%d)" id
   | Cgensym   -> fprintf fmt "gensym"
-  | Ceqs(_)   -> fprintf fmt "eqs"
+  | Ceqsym(_)   -> fprintf fmt "eqsym"
   | CSym2hash  -> fprintf fmt "sym2hash"
 
   (* Python intrinsics *)

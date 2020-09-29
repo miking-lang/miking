@@ -54,9 +54,9 @@ utest xnor false false with true
 
 
 -- Boolean equality
-let eqb = lam b1. lam b2. or (and b1 b2) (and (not b1) (not b2))
-utest eqb false false with true
-utest eqb false true  with false
-utest eqb true  false with false
-utest eqb true  true  with true
+let eqBool = lam b1. lam b2. or (and b1 b2) (and (not b1) (not b2))
+utest eqBool false false with true
+utest eqBool false true  with false
+utest eqBool true  false with false
+utest eqBool true  true  with true
 

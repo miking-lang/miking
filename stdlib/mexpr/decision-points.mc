@@ -154,7 +154,7 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
   sem toCallGraph =
   | arg ->
     let vs = findVertices arg in
-    let gempty = digraphAddVertex _top (digraphEmpty _eqn eqs) in
+    let gempty = digraphAddVertex _top (digraphEmpty _eqn eqsym) in
     let gvs = foldl (lam g. lam v. digraphAddVertex v g) gempty vs in
     findEdges gvs _top arg
 
@@ -373,7 +373,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
     -- Lookup the value for a decision point in a given call context
     -- let lookup = lam callCtx. lam id.
-    --   let entries = filter (lam t. eqs t.0 id) lookupTable in
+    --   let entries = filter (lam t. eqsym t.0 id) lookupTable in
     --   let entriesSuffix = filter (lam t. isSuffix eqi t.1 callCtx) entries in
     --   let cmp = lam t1. lam t2. subi (length t1.1) (length t2.1) in
     --   max cmp entriesSuffix
@@ -383,7 +383,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let entries = nameSym "entries" in
       let entriesSuffix = nameSym "entriesSuffix" in
       let entriesLongestSuffix = nameSym "entriesLongestSuffix" in
-      let eqs = nameSym "eqs" in
+      let eqsym = nameSym "eqsym" in
       let cmp = nameSym "cmp" in
       let y = nameSym "y" in
       let t = nameSym "t" in
@@ -397,10 +397,10 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
               appf2_ (nvar_ _filter)
                      (nulam_ t (eqs_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
                      (nvar_ _lookupTable)),
-          nlet_ eqs (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
+          nlet_ eqsym (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
           nlet_ entriesSuffix
                (appf2_ (nvar_ _filter)
-                       (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqs) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))
+                       (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqsym) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))
                        (nvar_ entries)),
           nlet_ cmp
             (nulam_ t1 (nulam_ t2
@@ -645,12 +645,12 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
     digraphAddEdges
       (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
       (digraphAddVertices (map nameGetStr (digraphVertices ng))
-                          (digraphEmpty eqstr eqs))
+                          (digraphEmpty eqString eqsym))
   in
   let g = toCallGraph (labelApps (symbolize ast)) in
   let sg = toStr g in
 
-  utest setEqual eqstr strVs (digraphVertices sg) with true in
+  utest setEqual eqString strVs (digraphVertices sg) with true in
 
   let es = digraphEdges sg in
   utest length es with length strEdgs in

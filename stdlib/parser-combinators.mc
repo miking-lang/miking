@@ -25,7 +25,7 @@ let showPos = lam pos.
 --
 -- Check if two positions are equal.
 let eqpos = lam pos1 : Pos. lam pos2 : Pos.
-  and (eqstr pos1.file pos2.file)
+  and (eqString pos1.file pos2.file)
   (and (eqi pos1.row pos2.row) (eqi pos1.col pos2.col))
 
 -- initPos : String -> Pos
@@ -192,7 +192,7 @@ let next = lam st.
   then fail "end of input" "" st
   else
     let c = head input in
-    let pos2 = if eqstr [c] "\n" then bumpRow pos else bumpCol pos in
+    let pos2 = if eqString [c] "\n" then bumpRow pos else bumpCol pos in
     pure c (tail input, pos2)
 
 -- Core tests
@@ -480,7 +480,7 @@ let lexStringLit =
              (apr (lexString "\\") (fmap head (lexString "\""))))
   in
   wrappedIn (lexString "\"") (lexString "\"")
-             (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
+             (many (alt escaped (satisfy (lam c. not (eqString [c] "\"")) "")))
 
 utest testParser lexStringLit ['"','"']
 with Success ("", ("", {file = "", row = 1, col = 3}))
@@ -580,7 +580,7 @@ con If  : (Expr, Expr, Expr) -> Expr in
 -- Parse a line comment, ignoring its contents.
 let lineComment =
   void (apr (apr (lexString "--")
-                 (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
+                 (many (satisfy (lam c. not (eqString "\n" [c])) "")))
             (alt (lexString "\n") endOfInput))
 in
 
@@ -639,7 +639,7 @@ let identifier =
   in
   try (
     bind validId (lam x.
-    if any (eqstr x) keywords
+    if any (eqString x) keywords
     then fail (concat (concat "keyword '" x) "'") "identifier"
     else pure x)
   )

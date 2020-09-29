@@ -31,7 +31,7 @@ let identEq : Ident -> Ident -> Bool =
     | (IdCon   s1, IdCon   s2)
     | (IdType  s1, IdType  s2)
     | (IdLabel s1, IdLabel s2)
-    then eqstr s1 s2
+    then eqString s1 s2
     else false
 
 type Env = AssocMap Ident Name

@@ -44,7 +44,7 @@ let prec_ = use MExprAst in
   PRecord {
     bindings =
       foldl
-        (lam acc. lam b. assocInsert {eq=eqstr} b.0 b.1 acc)
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
         assocEmpty bindings
     }
 
@@ -267,7 +267,7 @@ let record_ = use MExprAst in
   TmRecord {
     bindings =
       foldl
-        (lam acc. lam b. assocInsert {eq=eqstr} b.0 b.1 acc)
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
         assocEmpty bindings
     }
 
@@ -431,7 +431,7 @@ let eqf_ = use MExprAst in
 
 let eqs_ = use MExprAst in
   lam s1. lam s2.
-  appf2_ (const_ (CEqs ())) s1 s2
+  appf2_ (const_ (CEqsym ())) s1 s2
 
 let ltf_ = use MExprAst in
   lam a. lam b.

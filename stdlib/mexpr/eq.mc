@@ -67,20 +67,20 @@ let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
 -- TERMS --
 -----------
 
--- Convenience fragment containing the function eqexpr. Should be included in
+-- Convenience fragment containing the function eqExpr. Should be included in
 -- all fragments below.
 lang Eq
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   -- Intentionally left blank
 
-  sem eqexpr (e1: Expr) =
+  sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
-    match eqexprh empty empty e1 e2 with Some _ then true else false
+    match eqExprH empty empty e1 e2 with Some _ then true else false
 end
 
 lang VarEq = Eq + VarAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmVar {ident = i2} ->
     match lhs with TmVar {ident = i1} then
       match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) then
@@ -92,36 +92,36 @@ lang VarEq = Eq + VarAst
 end
 
 lang AppEq = Eq + AppAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmApp {lhs = rl, rhs = rr} ->
     match lhs with TmApp {lhs = ll, rhs = lr} then
-      match eqexprh env free ll rl with Some free then
-        eqexprh env free lr rr
+      match eqExprH env free ll rl with Some free then
+        eqExprH env free lr rr
       else None ()
     else None ()
 end
 
 lang FunEq = Eq + FunAst + VarEq + AppEq
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   -- NOTE dlunde 2020-09-26: The type annotation is currently ignored.
   | TmLam {ident = i2, body = b2} ->
     match env with {varEnv = varEnv} then
       match lhs with TmLam {ident = i1, body = b1} then
         let varEnv = biInsert (i1,i2) varEnv in
-        eqexprh {env with varEnv = varEnv} free b1 b2
+        eqExprH {env with varEnv = varEnv} free b1 b2
       else None ()
     else never
 end
 
 lang RecordEq = Eq + RecordAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmRecord {bindings = bs2} ->
     match lhs with TmRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
-        assocFoldlM {eq=eqstr}
+        assocFoldlM {eq=eqString}
           (lam free. lam k1. lam v1.
-            match assocLookup {eq=eqstr} k1 bs2 with Some v2 then
-              eqexprh env free v1 v2
+            match assocLookup {eq=eqString} k1 bs2 with Some v2 then
+              eqExprH env free v1 v2
             else None ())
           free bs1
       else None ()
@@ -129,29 +129,29 @@ lang RecordEq = Eq + RecordAst
 
   | TmRecordUpdate {rec = r2, key = k2, value = v2} ->
     match lhs with TmRecordUpdate {rec = r1, key = k1, value = v1} then
-      if eqstr k1 k2 then
-        match eqexprh env free r1 r2 with Some free then
-          eqexprh env free v1 v2
+      if eqString k1 k2 then
+        match eqExprH env free r1 r2 with Some free then
+          eqExprH env free v1 v2
         else None ()
       else None ()
     else None ()
 end
 
 lang LetEq = Eq + LetAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmLet {ident = i2, body = b2, inexpr = ie2} ->
     match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
-      match eqexprh env free b1 b2 with Some free then
+      match eqExprH env free b1 b2 with Some free then
         match env with {varEnv = varEnv} then
           let varEnv = biInsert (i1,i2) varEnv in
-          eqexprh {env with varEnv = varEnv} free ie1 ie2
+          eqExprH {env with varEnv = varEnv} free ie1 ie2
         else never
       else None ()
     else None ()
 end
 
 lang RecLetsEq = Eq + RecLetsAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmRecLets {bindings = bs2} ->
     -- NOTE dlunde 2020-09-25: This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
@@ -168,7 +168,7 @@ lang RecLetsEq = Eq + RecLetsAst
           in
           let env = {env with varEnv = varEnv} in
           optionFoldlM
-            (lam free. lam t. eqexprh env free (t.0).body (t.1).body)
+            (lam free. lam t. eqExprH env free (t.0).body (t.1).body)
             free bszip
         else None ()
       else None ()
@@ -176,24 +176,24 @@ lang RecLetsEq = Eq + RecLetsAst
 end
 
 lang ConstEq = Eq + ConstAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   -- Intentionally left blank
 
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmConst {val = v2} ->
     match lhs with TmConst {val = v1} then
-      if eqconst v1 v2 then Some free else None ()
+      if eqConst v1 v2 then Some free else None ()
     else None ()
 end
 
 lang DataEq = Eq + DataAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   -- Type annotation ignored here as well
   | TmConDef {ident = i2, inexpr = ie2} ->
     match env with {conEnv = conEnv} then
       match lhs with TmConDef {ident = i1, inexpr = ie1} then
         let conEnv = biInsert (i1,i2) conEnv in
-        eqexprh {env with conEnv = conEnv} free ie1 ie2
+        eqExprH {env with conEnv = conEnv} free ie1 ie2
       else None ()
     else never
 
@@ -201,24 +201,24 @@ lang DataEq = Eq + DataAst
     match lhs with TmConApp {ident = i1, body = b1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
         match _eqCheck i1 i2 conEnv freeConEnv with Some freeConEnv then
-          eqexprh env {free with conEnv = freeConEnv} b1 b2
+          eqExprH env {free with conEnv = freeConEnv} b1 b2
         else None ()
       else never
     else None ()
 end
 
 lang MatchEq = Eq + MatchAst
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- Intentionally left blank
 
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmMatch {target = t2, pat = p2, thn = thn2, els = els2} ->
     match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1} then
-      match eqexprh env free t1 t2 with Some free then
-        match eqexprh env free els1 els2 with Some free then
-          match eqpat env free biEmpty p1 p2 with Some (free,patEnv) then
+      match eqExprH env free t1 t2 with Some free then
+        match eqExprH env free els1 els2 with Some free then
+          match eqPat env free biEmpty p1 p2 with Some (free,patEnv) then
             match env with {varEnv = varEnv} then
-              eqexprh {env with varEnv = biMergePreferRight varEnv patEnv}
+              eqExprH {env with varEnv = biMergePreferRight varEnv patEnv}
                 free thn1 thn2
             else never
           else None ()
@@ -229,30 +229,30 @@ lang MatchEq = Eq + MatchAst
 end
 
 lang UtestEq = Eq + UtestAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmUtest {test = t2, expected = e2, next = n2} ->
     match lhs with TmUtest {test = t1, expected = e1, next = n1} then
-      match eqexprh env free t1 t2 with Some free then
-        match eqexprh env free e1 e2 with Some free then
-          eqexprh env free n1 n2
+      match eqExprH env free t1 t2 with Some free then
+        match eqExprH env free e1 e2 with Some free then
+          eqExprH env free n1 n2
         else None ()
       else None ()
     else None ()
 end
 
 lang SeqEq = Eq + SeqAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmSeq {tms = ts2} ->
     match lhs with TmSeq {tms = ts1} then
       if eqi (length ts1) (length ts2) then
         let z = zipWith (lam t1. lam t2. (t1,t2)) ts1 ts2 in
-        optionFoldlM (lam free. lam tp. eqexprh env free tp.0 tp.1) free z
+        optionFoldlM (lam free. lam tp. eqExprH env free tp.0 tp.1) free z
       else None ()
     else None ()
 end
 
 lang NeverEq = Eq + NeverAst
-  sem eqexprh (env : Env) (free : Env) (lhs : Expr) =
+  sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
@@ -261,25 +261,25 @@ end
 ---------------
 
 lang IntEq = IntAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CInt {val = v2} -> match lhs with CInt {val = v1} then eqi v1 v2 else false
 end
 
 lang ArithEq = ArithIntAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CAddi {} -> match lhs with CAddi _ then true else false
   | CSubi {} -> match lhs with CSubi _ then true else false
   | CMuli {} -> match lhs with CMuli _ then true else false
 end
 
 lang FloatEq = FloatAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CFloat {val = v2} ->
     match lhs with CFloat {val = v1} then eqf v1 v2 else false
 end
 
 lang ArithFloatEq = ArithFloatAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CAddf {} -> match lhs with CAddf _ then true else false
   | CSubf {} -> match lhs with CSubf _ then true else false
   | CMulf {} -> match lhs with CMulf _ then true else false
@@ -288,44 +288,44 @@ lang ArithFloatEq = ArithFloatAst
 end
 
 lang BoolEq = BoolAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CBool {val = v2} ->
-    match lhs with CBool {val = v1} then eqb v1 v2 else false
+    match lhs with CBool {val = v1} then eqBool v1 v2 else false
   | CNot {} -> match lhs with CNot _ then true else false
 end
 
 lang CmpIntEq = CmpIntAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CEqi {} -> match lhs with CEqi _ then true else false
   | CLti {} -> match lhs with CLti _ then true else false
 end
 
 lang CmpFloatEq = CmpFloatAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CEqf {} -> match lhs with CEqf _ then true else false
   | CLtf {} -> match lhs with CLtf _ then true else false
 end
 
 lang CharEq = CharAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CChar {val = v2} ->
     match lhs with CChar {val = v1} then eqchar v1 v2 else false
 end
 
 lang SymbEq = SymbAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CSymb {val = v2} ->
-    match lhs with CSymb {val = v1} then eqs v1 v2 else false
+    match lhs with CSymb {val = v1} then eqsym v1 v2 else false
 end
 
 lang CmpSymbEq = CmpSymbAst
-  sem eqconst (lhs : Const) =
-  | CEqs {} -> match lhs with CEqs _ then true else false
+  sem eqConst (lhs : Const) =
+  | CEqsym {} -> match lhs with CEqsym _ then true else false
 end
 
 -- TODO Remove constants no longer available in boot?
 lang SeqOpEq = SeqOpAst
-  sem eqconst (lhs : Const) =
+  sem eqConst (lhs : Const) =
   | CGet {} -> match lhs with CGet _ then true else false
   | CCons {} -> match lhs with CCons _ then true else false
   | CSnoc {} -> match lhs with CSnoc _ then true else false
@@ -355,7 +355,7 @@ let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
     else None ()
 
 lang VarPatEq = VarPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PVar {ident = p2} ->
     match lhs with PVar {ident = p1} then
       _eqpatname patEnv free p1 p2
@@ -363,25 +363,25 @@ lang VarPatEq = VarPat
 end
 
 lang SeqTotPatEq
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang SeqEdgPatEq
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang RecordPatEq = RecordPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PRecord {bindings = bs2} ->
     match lhs with PRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
-        assocFoldlM {eq=eqstr}
+        assocFoldlM {eq=eqString}
           (lam tEnv. lam k1. lam p1.
              match tEnv with (free,patEnv) then
-               match assocLookup {eq=eqstr} k1 bs2 with Some p2 then
-                 eqpat env free patEnv p1 p2
+               match assocLookup {eq=eqString} k1 bs2 with Some p2 then
+                 eqPat env free patEnv p1 p2
                else None ()
              else never)
           (free,patEnv) bs1
@@ -390,19 +390,19 @@ lang RecordPatEq = RecordPat
 end
 
 lang DataPatEq = DataPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PCon {ident = i2, subpat = s2} ->
     match lhs with PCon {ident = i1, subpat = s1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
         match _eqCheck i1 i2 conEnv freeConEnv with Some freeConEnv then
-          eqpat env {free with conEnv = freeConEnv} patEnv s1 s2
+          eqPat env {free with conEnv = freeConEnv} patEnv s1 s2
         else None ()
       else never
     else None ()
 end
 
 lang IntPatEq = IntPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PInt {val = i2} ->
     match lhs with PInt {val = i1} then
       if eqi i1 i2 then Some (free,patEnv) else None ()
@@ -410,7 +410,7 @@ lang IntPatEq = IntPat
 end
 
 lang CharPatEq = CharPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PChar {val = c2} ->
     match lhs with PChar {val = c1} then
       if eqchar c1 c2 then Some (free,patEnv) else None ()
@@ -418,25 +418,25 @@ lang CharPatEq = CharPat
 end
 
 lang BoolPatEq = BoolPat
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PBool {val = b2} ->
     match lhs with PBool {val = b1} then
-      if eqb b1 b2 then Some (free,patEnv) else None ()
+      if eqBool b1 b2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang AndPatEq
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang OrPatEq
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
 lang NotPatEq
-  sem eqpat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
+  sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   -- TODO
 end
 
@@ -473,26 +473,26 @@ use MExprEq in
 -- Simple variables
 let v1 = var_ "x" in
 let v2 = var_ "y" in
-utest v1 with v2 using eqexpr in
-utest eqexpr (int_ 1) v1 with false in
+utest v1 with v2 using eqExpr in
+utest eqExpr (int_ 1) v1 with false in
 
 -- Variables are equal as long as they occur in the same positions
 let v3 = app_ (var_ "x") (var_ "y") in
 let v4 = app_ (var_ "y") (var_ "x") in
 let v5e = app_ (var_ "x") (var_ "x") in
-utest v3 with v4 using eqexpr in
-utest eqexpr v3 v5e with false in
+utest v3 with v4 using eqExpr in
+utest eqExpr v3 v5e with false in
 
 -- Lambdas
 let lam1 = ulam_ "x" v1 in
 let lam2 = ulam_ "y" v2 in
-utest lam1 with lam2 using eqexpr in
-utest eqexpr (int_ 1) lam2 with false in
+utest lam1 with lam2 using eqExpr in
+utest eqExpr (int_ 1) lam2 with false in
 
 let lamNested1 = ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y"))) in
 let lamNested2 = ulam_ "x" (ulam_ "x" (app_ (var_ "x") (var_ "x"))) in
-utest eqexpr lamNested1 lamNested2 with false in
-utest eqexpr lamNested2 lamNested1 with false in
+utest eqExpr lamNested1 lamNested2 with false in
+utest eqExpr lamNested2 lamNested1 with false in
 
 let lamNested21 = ulam_ "x" (ulam_ "y" (ulam_ "x" (var_ "x"))) in
 let lamNested22 = ulam_ "x" (ulam_ "y" (ulam_ "y" (var_ "y"))) in
@@ -500,14 +500,14 @@ let lamNested23 =
   ulam_ "x" (ulam_ "y" (ulam_ "x" (app_ (var_ "x") (var_ "y")))) in
 let lamNested24 =
   ulam_ "x" (ulam_ "y" (ulam_ "y" (app_ (var_ "y") (var_ "y")))) in
-utest lamNested21 with lamNested22 using eqexpr in
-utest eqexpr lamNested23 lamNested24 with false in
+utest lamNested21 with lamNested22 using eqExpr in
+utest eqExpr lamNested23 lamNested24 with false in
 
 -- Applications
 let a1 = app_ lam1 lam2 in
 let a2 = app_ lam2 lam1 in
-utest a1 with a2 using eqexpr in
-utest eqexpr a1 lam1 with false in
+utest a1 with a2 using eqExpr in
+utest eqExpr a1 lam1 with false in
 
 -- Records
 let r1 = record_ [("a",lam1), ("b",a1), ("c",a2)] in
@@ -515,44 +515,44 @@ let r2 = record_ [("b",a1), ("a",lam2), ("c",a2)] in
 let r3e = record_ [("a",lam1), ("b",a1), ("d",a2)] in
 let r4e = record_ [("a",lam1), ("b",a1), ("c",lam2)] in
 let r5e = record_ [("a",lam1), ("b",a1), ("c",a2), ("d",lam2)] in
-utest r1 with r2 using eqexpr in
-utest eqexpr r1 r3e with false in
-utest eqexpr r1 r4e with false in
-utest eqexpr r1 r5e with false in
+utest r1 with r2 using eqExpr in
+utest eqExpr r1 r3e with false in
+utest eqExpr r1 r4e with false in
+utest eqExpr r1 r5e with false in
 
 let ru1 = recordupdate_ r1 "b" lam1 in
 let ru2 = recordupdate_ r2 "b" lam2 in
 let ru3e = recordupdate_ r3e "b" lam2 in
 let ru4e = recordupdate_ r2 "c" lam2 in
-utest ru1 with ru2 using eqexpr in
-utest eqexpr ru1 ru3e with false in
-utest eqexpr ru1 ru4e with false in
+utest ru1 with ru2 using eqExpr in
+utest eqExpr ru1 ru3e with false in
+utest eqExpr ru1 ru4e with false in
 
 -- Let and recursive let
 let let1 = bind_ (let_ "x" lam1) a1 in
 let let2 = bind_ (let_ "y" lam2) a2 in
 let let3e = bind_ (let_ "x" (int_ 1)) a1 in
 let let4e = bind_ (let_ "x" lam2) lam1 in
-utest let1 with let2 using eqexpr in
-utest eqexpr let1 let3e with false in
-utest eqexpr let1 let4e with false in
+utest let1 with let2 using eqExpr in
+utest eqExpr let1 let3e with false in
+utest eqExpr let1 let4e with false in
 
 let rlet1 = reclets_ [("x", a1), ("y", lam1)] in
 let rlet2 = reclets_ [("x", a2), ("y", lam2)] in
 let rlet3 = reclets_ [("y", a2), ("x", lam2)] in
 let rlet4e = reclets_ [("y", lam1), ("x", a1)] in -- Order matters
-utest rlet1 with rlet2 using eqexpr in
-utest rlet1 with rlet3 using eqexpr in
-utest eqexpr rlet1 rlet4e with false in
+utest rlet1 with rlet2 using eqExpr in
+utest rlet1 with rlet3 using eqExpr in
+utest eqExpr rlet1 rlet4e with false in
 
 -- Constants
 let c1 = (int_ 1) in
 let c2 = (int_ 2) in
 let c3 = (true_) in
 
-utest c1 with c1 using eqexpr in
-utest eqexpr c1 c2 with false in
-utest eqexpr c1 c3 with false in
+utest c1 with c1 using eqExpr in
+utest eqExpr c1 c2 with false in
+utest eqExpr c1 c3 with false in
 
 -- Constructors can have different names, but they must be used in the same
 -- positions.
@@ -565,8 +565,8 @@ let cda2 =
 let cd3e =
   bind_ (ucondef_ "App")
     (app_ (conapp_ "App2" (int_ 1)) (conapp_ "Other2" (int_ 2))) in
-utest cda1 with cda2 using eqexpr in
-utest eqexpr cda1 cd3e with false in
+utest cda1 with cda2 using eqExpr in
+utest eqExpr cda1 cd3e with false in
 
 -- Match and patterns
 let m1 = match_ c1 (pint_ 1) cda1 rlet1 in
@@ -574,47 +574,47 @@ let m2 = match_ c1 (pint_ 1) cda2 rlet2 in
 let m3e = match_ rlet1 (pint_ 1) cda2 rlet2 in
 let m4e = match_ c1 (pint_ 1) c1 rlet2 in
 let m5e = match_ c1 (pint_ 1) cda2 cda1 in
-utest m1 with m2 using eqexpr in
-utest eqexpr m1 m3e with false in
-utest eqexpr m1 m4e with false in
-utest eqexpr m1 m5e with false in
+utest m1 with m2 using eqExpr in
+utest eqExpr m1 m3e with false in
+utest eqExpr m1 m4e with false in
+utest eqExpr m1 m5e with false in
 
 let pgen = lam p. match_ (int_ 1) p (int_ 2) (int_ 3) in
 let pvar1 = pvar_ "x" in
 let pvar2 = pvar_ "y" in
-utest pgen pvar1 with pgen pvar2 using eqexpr in
-utest eqexpr (pgen pvar1) (pgen (pint_ 1)) with false in
+utest pgen pvar1 with pgen pvar2 using eqExpr in
+utest eqExpr (pgen pvar1) (pgen (pint_ 1)) with false in
 
 let prec1 = prec_ [("a",pvar1), ("b",pvar2), ("c",pvar1)] in
 let prec2 = prec_ [("a",pvar2), ("b",pvar1), ("c",pvar2)] in
 let prec3e = prec_ [("a",pvar2), ("b",pvar2), ("c",pvar1)] in
 let prec4e = prec_ [("a",pvar2), ("b",pvar2), ("c",pvar1)] in
-utest pgen prec1 with pgen prec2 using eqexpr in
-utest eqexpr (pgen prec1) (pgen prec3e) with false in
+utest pgen prec1 with pgen prec2 using eqExpr in
+utest eqExpr (pgen prec1) (pgen prec3e) with false in
 
 let pdata1 = pcon_ "Const1" (pcon_ "Const2" prec1) in
 let pdata2 = pcon_ "Const2" (pcon_ "Const1" prec1) in
 let pdata3e = pcon_ "Const1" (pcon_ "Const1" prec1) in
-utest pgen pdata1 with pgen pdata2 using eqexpr in
-utest eqexpr (pgen pdata1) (pgen pdata3e) with false in
+utest pgen pdata1 with pgen pdata2 using eqExpr in
+utest eqExpr (pgen pdata1) (pgen pdata3e) with false in
 
 let pint1 = pint_ 1 in
 let pint2 = pint_ 1 in
 let pint3e = pint_ 2 in
-utest pgen pint1 with pgen pint2 using eqexpr in
-utest eqexpr (pgen pint1) (pgen pint3e) with false in
+utest pgen pint1 with pgen pint2 using eqExpr in
+utest eqExpr (pgen pint1) (pgen pint3e) with false in
 
 let pchar1 = pchar_ 'a' in
 let pchar2 = pchar_ 'a' in
 let pchar3e = pchar_ 'b' in
-utest pgen pchar1 with pgen pchar2 using eqexpr in
-utest eqexpr (pgen pchar1) (pgen pchar3e) with false in
+utest pgen pchar1 with pgen pchar2 using eqExpr in
+utest eqExpr (pgen pchar1) (pgen pchar3e) with false in
 
 let pbool1 = ptrue_ in
 let pbool2 = ptrue_ in
 let pbool3e = pfalse_ in
-utest pgen pbool1 with pgen pbool2 using eqexpr in
-utest eqexpr (pgen pbool1) (pgen pbool3e) with false in
+utest pgen pbool1 with pgen pbool2 using eqExpr in
+utest eqExpr (pgen pbool1) (pgen pbool3e) with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
@@ -622,26 +622,26 @@ let ut2 = utest_ lam2 lam1 v4 in
 let ut3e = utest_ v5e lam2 v3 in
 let ut4e = utest_ lam1 v5e v3 in
 let ut5e = utest_ lam1 lam2 v5e in
-utest ut1 with ut2 using eqexpr in
-utest eqexpr ut1 ut3e with false in
-utest eqexpr ut1 ut4e with false in
-utest eqexpr ut1 ut5e with false in
+utest ut1 with ut2 using eqExpr in
+utest eqExpr ut1 ut3e with false in
+utest eqExpr ut1 ut4e with false in
+utest eqExpr ut1 ut5e with false in
 
 -- Sequences
 let s1 = seq_ [lam1, lam2, v3] in
 let s2 = seq_ [lam2, lam1, v4] in
 let s3e = seq_ [lam1, v5e, v3] in
-utest s1 with s2 using eqexpr in
-utest eqexpr s1 s3e with false in
+utest s1 with s2 using eqExpr in
+utest eqExpr s1 s3e with false in
 
 -- Never
-utest never_ with never_ using eqexpr in
-utest eqexpr never_ true_ with false in
+utest never_ with never_ using eqExpr in
+utest eqExpr never_ true_ with false in
 
 -- Symbolized (and partially symbolized) terms are also supported.
 let sm = symbolize in
-utest sm lamNested21 with sm lamNested22 using eqexpr in
-utest lamNested21 with sm lamNested22 using eqexpr in
-utest eqexpr (sm lamNested23) (sm lamNested24) with false in
+utest sm lamNested21 with sm lamNested22 using eqExpr in
+utest lamNested21 with sm lamNested22 using eqExpr in
+utest eqExpr (sm lamNested23) (sm lamNested24) with false in
 
 ()

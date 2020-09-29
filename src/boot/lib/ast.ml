@@ -112,7 +112,7 @@ and const =
 (* MCore Symbols *)
 | CSymb of int
 | Cgensym
-| Ceqs of int option
+| Ceqsym of int option
 | CSym2hash
 (* External functions TODO: Should not be part of core language *)
 | CExt of Extast.ext

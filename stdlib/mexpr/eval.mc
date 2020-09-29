@@ -110,12 +110,12 @@ lang FixEval = FixAst + FunEval
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = assocMap {eq=eqstr} (eval ctx) t.bindings in
+    let bs = assocMap {eq=eqString} (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
     match eval ctx u.rec with TmRecord t then
-      if assocMem {eq = eqstr} u.key t.bindings then
-        TmRecord { bindings = assocInsert {eq = eqstr}
+      if assocMem {eq = eqString} u.key t.bindings then
+        TmRecord { bindings = assocInsert {eq = eqString}
                                 u.key (eval ctx u.value) t.bindings }
       else error "Key does not exist in record"
     else error "Not updating a record"
@@ -189,7 +189,7 @@ lang UtestEval = Eq + UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eqexpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    let _ = if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval ctx t.next
 end
 
@@ -398,17 +398,17 @@ end
 
 lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
-  | CEqs2 Symb
+  | CEqsym2 Symb
 
   sem delta (arg : Expr) =
-  | CEqs _ ->
+  | CEqsym _ ->
     match arg with TmConst {val = CSymb s} then
-      TmConst {val = CEqs2 s.val}
-    else error "First argument in eqs is not a symbol"
-  | CEqs2 s1 ->
+      TmConst {val = CEqsym2 s.val}
+    else error "First argument in eqsym is not a symbol"
+  | CEqsym2 s1 ->
     match arg with TmConst {val = CSymb s2} then
-      TmConst {val = CBool {val = eqs s1 s2.val}}
-    else error "Second argument in eqs is not a symbol"
+      TmConst {val = CBool {val = eqsym s1 s2.val}}
+    else error "Second argument in eqsym is not a symbol"
 end
 
 -- TODO Remove constants no longer available in boot?
@@ -516,9 +516,9 @@ lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PRecord r ->
     match t with TmRecord {bindings = bs} then
-      assocFoldlM {eq = eqstr}
+      assocFoldlM {eq = eqString}
         (lam env. lam k. lam p.
-          match assocLookup {eq = eqstr} k bs with Some v then
+          match assocLookup {eq = eqString} k bs with Some v then
             tryMatch env v p
           else None ())
         env
@@ -713,8 +713,8 @@ let srl = bind_
 
 utest eval srl with true_ in
 
-utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqexpr in
-utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqexpr in
+utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqExpr in
+utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqExpr in
 
 -- Commented out to declutter test suite output
 -- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) unit_ in
@@ -758,7 +758,7 @@ let addEvalNested = ulam_ "arg"
 
 utest eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
 with conapp_ "Num" (int_ 3)
-using eqexpr in
+using eqExpr in
 
 let recordProj =
   bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))

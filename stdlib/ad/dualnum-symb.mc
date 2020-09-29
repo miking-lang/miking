@@ -22,7 +22,7 @@ type Term = ([Eps], Float)
 con DualNum : [Term] -> DualNum
 con Num : Float -> DualNum -- we separate out real numbers
 
-let memq = lam s. any (lam x. eqs x s)
+let memq = lam s. any (lam x. eqsym x s)
 let some = any
 
 let findIf = lam p. lam seq.
@@ -32,7 +32,7 @@ let findIf = lam p. lam seq.
 let removeIf = lam p. filter (lam x. not (p x))
 
 let removeq : Eps -> [Eps] =
-lam s. lam ss. filter (lam x. not (eqs x s)) ss
+lam s. lam ss. filter (lam x. not (eqsym x s)) ss
 
 let terms : DualNum -> [Term] =
 lam p. match p with Num f then [([], f)] else

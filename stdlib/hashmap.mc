@@ -44,7 +44,7 @@ let hashmapStrTraits : HashMapTraits =
       let newhash = addi (addi (muli hash 32) hash) (char2int (head s)) in
       djb2 newhash (tail s)
   in
-  {eq = eqstr, hashfn = djb2 5381}
+  {eq = eqString, hashfn = djb2 5381}
 
 -- 'hashmapInsert traits k v hm' returns a new hashmap, where the key-value pair
 -- ('k', 'v') is stored. If 'k' is already a key in 'hm', its old value will be
@@ -190,7 +190,7 @@ utest m.nelems with 2 in
 utest mem "bar" m with true in
 utest lookup "bar" m with Some ("bbb") in
 utest lookupOrElse (lam _. 42) "bar" m with "bbb" in
-utest lookupPred (eqstr "bar") m with Some "bbb" in
+utest lookupPred (eqString "bar") m with Some "bbb" in
 utest
   match keys m with ["foo", "bar"] | ["bar", "foo"]
   then true else false

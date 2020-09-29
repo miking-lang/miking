@@ -246,7 +246,7 @@ let l2 = gensym () in
 let l3 = gensym () in
 let l4 = gensym () in
 
-let empty = digraphEmpty eqi eqs in
+let empty = digraphEmpty eqi eqsym in
 
 utest digraphVertices empty with [] in
 utest digraphEdges empty with [] in

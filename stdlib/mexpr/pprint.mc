@@ -58,9 +58,9 @@ let labelString = lam str.
   parserStr str "#label" (lam str. is_lower_alpha (head str))
 
 let _ppLookupName = assocLookup {eq = nameEqSym}
-let _ppLookupStr = assocLookup {eq = eqstr}
+let _ppLookupStr = assocLookup {eq = eqString}
 let _ppInsertName = assocInsert {eq = nameEqSym}
-let _ppInsertStr = assocInsert {eq = eqstr}
+let _ppInsertStr = assocInsert {eq = eqString}
 
 -- Look up the string associated with a name in the environment
 let _lookup : Name -> Env -> Option String = lam name. lam env.
@@ -75,7 +75,7 @@ let _lookup : Name -> Env -> Option String = lam name. lam env.
 -- Check if a string is free in the environment.
 let _free : String -> Env -> Bool = lam str. lam env.
   match env with { nameMap = nameMap, strMap = strMap } then
-    let f = lam _. lam v. eqstr str v in
+    let f = lam _. lam v. eqString str v in
     not (or (assocAny f nameMap) (assocAny f strMap))
   else never
 
@@ -119,7 +119,7 @@ let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
 let _record2tuple = lam tm.
   use RecordAst in
   match tm with TmRecord t then
-    let keys = assocKeys {eq=eqstr} t.bindings in
+    let keys = assocKeys {eq=eqString} t.bindings in
     match all stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
@@ -128,7 +128,7 @@ let _record2tuple = lam tm.
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
       -- Note: Quadratic complexity. Sorting the association list directly
       -- w.r.t. key would improve complexity to n*log(n).
-      Some (map (lam key. assocLookupOrElse {eq=eqstr}
+      Some (map (lam key. assocLookupOrElse {eq=eqString}
                             (lam _. error "Key not found")
                             (int2string key) t.bindings)
                  sortedKeys)
@@ -228,14 +228,14 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
     else
       let innerIndent = incr (incr indent) in
       match
-        assocMapAccum {eq=eqstr}
+        assocMapAccum {eq=eqString}
           (lam env. lam k. lam v.
              match pprintCode innerIndent env v with (env, str) then
                (env, join [labelString k, " =", newline innerIndent, str])
              else never)
            env t.bindings
       with (env, bindMap) then
-        let binds = assocValues {eq=eqstr} bindMap in
+        let binds = assocValues {eq=eqString} bindMap in
         let merged = strJoin (concat "," (newline (incr indent))) binds in
         (env,join ["{ ", merged, " }"])
       else never
@@ -488,7 +488,7 @@ end
 
 lang CmpSymbPrettyPrint = CmpSymbAst + ConstPrettyPrint
    sem getConstStringCode (indent : Int) =
-   | CEqs _ -> "eqs"
+   | CEqsym _ -> "eqsym"
 end
 
 lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
@@ -564,14 +564,14 @@ lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) (env: Env) =
   | PRecord {bindings = bindings} ->
     match
-      assocMapAccum {eq=eqstr}
+      assocMapAccum {eq=eqString}
         (lam env. lam k. lam v.
            match getPatStringCode indent env v with (env,str) then
              (env,join [labelString k, " = ", str])
            else never)
          env bindings
     with (env,bindMap) then
-      (env,join ["{", strJoin ", " (assocValues {eq=eqstr} bindMap), "}"])
+      (env,join ["{", strJoin ", " (assocValues {eq=eqString} bindMap), "}"])
     else never
 end
 

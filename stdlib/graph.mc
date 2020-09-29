@@ -66,7 +66,7 @@ let graphUnion = digraphUnion
 
 mexpr
 
-let empty = graphEmpty eqi eqs in
+let empty = graphEmpty eqi eqsym in
 
 utest graphEdges empty with [] in
 utest graphVertices empty with [] in
@@ -104,14 +104,14 @@ let g1 = graphAddEdge 1 2 l1 g in
 utest graphNeighbors 1 g1 with [2] in
 utest graphIsAdjecent 2 1 g1 with true in
 utest graphIsAdjecent 1 2 g1 with true in
-utest any (eqs l1) (graphLabels 1 2 g1) with true in
-utest any (eqs l1) (graphLabels 1 2 g1) with true in
+utest any (eqsym l1) (graphLabels 1 2 g1) with true in
+utest any (eqsym l1) (graphLabels 1 2 g1) with true in
 
 let l3 = gensym () in
 let g2 = graphAddEdge 3 2 l3 g1 in
 utest graphIsAdjecent 2 3 g2 with true in
 utest graphIsAdjecent 3 2 g2 with true in
-utest any (eqs l3) (graphLabels 3 2 g2) with true in
+utest any (eqsym l3) (graphLabels 3 2 g2) with true in
 
 let l2 = gensym () in
 let g3 = graphUnion (graphAddVertex 1 empty) (graphAddVertex 2 empty) in

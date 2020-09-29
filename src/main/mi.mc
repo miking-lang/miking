@@ -36,7 +36,7 @@ let commandsMap = [
 let parseOptions = lam xs.
   (foldl (lam acc. lam s1.
     match acc with (options,lst) then
-      match findAssoc (lam s2. eqstr s1 s2) optionsMap with Some f
+      match findAssoc (lam s2. eqString s1 s2) optionsMap with Some f
       then (f options, lst)
       else match s1 with "--" ++ _
            then  [printLn (concat "Unknown option " s1), exit 1]
@@ -47,6 +47,6 @@ let parseOptions = lam xs.
 
 -- Main: find and run the correct command. See commandsMap above.
 if lti (length argv) 2 then print menu else
-  match findAssoc (lam s. eqstr (get argv 1) s) commandsMap with Some cmd
+  match findAssoc (lam s. eqString (get argv 1) s) commandsMap with Some cmd
   then cmd (parseOptions argv)
   else [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]

@@ -53,7 +53,7 @@ use FunCPS in
 let id = symbolize (ulam_ "x" (var_ "x")) in
 let idc = symbolize (ulam_ "x" (ulam_ "k" (app_ (var_ "k") (var_ "x")))) in
 
-utest cpsM id with idc using eqexpr in
+utest cpsM id with idc using eqExpr in
 
 -- TODO dlunde 2020-09-25: Add more test cases
 

@@ -4,13 +4,13 @@ include "seq.mc"
 include "math.mc"
 
 recursive
-  let eqstr = lam s1. lam s2.
+  let eqString = lam s1. lam s2.
       if neqi (length s1) (length s2)
       then false
       else if null s1
            then true
            else if eqchar (head s1) (head s2)
-           then eqstr (tail s1) (tail s2)
+           then eqString (tail s1) (tail s2)
            else false
 end
 
@@ -59,7 +59,7 @@ utest int2string (negi 314159) with "-314159"
 
 -- 'stringIsInt s' returns true iff 's' is a string representing an integer
 let stringIsInt: String -> Bool = lam s.
-  eqstr s (int2string (string2int s))
+  eqString s (int2string (string2int s))
 
 utest stringIsInt "" with false
 utest stringIsInt "1 " with false
@@ -170,7 +170,7 @@ recursive
   let strSplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
-    else if eqstr delim (slice s 0 (length delim))
+    else if eqString delim (slice s 0 (length delim))
          then cons [] (strSplit delim (slice s (length delim) (length s)))
          else let remaining = strSplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
@@ -186,7 +186,7 @@ utest strSplit "Hello" "Hello" with ["", ""]
 let strTrim = lam s.
   recursive
   let strTrim_init = lam s.
-    if eqstr s ""
+    if eqString s ""
     then s
     else if is_whitespace (head s)
          then strTrim_init (tail s)

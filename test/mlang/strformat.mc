@@ -13,7 +13,7 @@ lang FormatInteger
 
   sem toFormat (fmtstr : String) =
   | FmtInt n ->
-    if eqstr fmtstr "%d" then
+    if eqString fmtstr "%d" then
       int2string n
     else
       error (concat "FormatInteger: toFormat: Unrecognized format: " fmtstr)
@@ -28,7 +28,7 @@ lang FormatFloat
 
   sem toFormat (fmtstr : String) =
   | FmtFloat f ->
-    if eqstr fmtstr "%f" then
+    if eqString fmtstr "%f" then
       float2string f
     else
       error (concat "FormatFloat: toFormat: Unrecognized format: " fmtstr)
@@ -43,11 +43,11 @@ lang FormatString
 
   sem toFormat (fmtstr : String) =
   | FmtStr s ->
-    if eqstr fmtstr "%s" then
+    if eqString fmtstr "%s" then
       s
-    else if eqstr fmtstr "%^s" then
+    else if eqString fmtstr "%^s" then
       str2upper s
-    else if eqstr fmtstr "%_s" then
+    else if eqString fmtstr "%_s" then
       str2lower s
     else
       error (concat "FormatString: toFormat: Unrecognized format: " fmtstr)
@@ -62,7 +62,7 @@ lang FormatChar
 
   sem toFormat (fmtstr : String) =
   | FmtChar c ->
-    if eqstr fmtstr "%c" then
+    if eqString fmtstr "%c" then
       [c]
     else
       error (concat "FormatChar: toFormat: Unrecognized format: " fmtstr)
