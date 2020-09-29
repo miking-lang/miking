@@ -21,6 +21,7 @@ lang WhitespaceParser = WSACParser
   | " " ++ xs -> eatWSAC (advanceCol p 1)  xs
   | "\t" ++ xs -> eatWSAC (advanceCol p tabSpace) xs
   | "\n" ++ xs -> eatWSAC (advanceRow p 1) xs
+  | "\r" ++ xs -> eatWSAC p xs
   | x -> {str = x, pos = p}
 end
 
