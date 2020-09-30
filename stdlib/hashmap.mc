@@ -19,7 +19,7 @@ type HashMap k v = {
   buckets : [[{hash : Int, key : k, value : v}]],
   nelems : Int
 }
-type HashMapTraits k v = {
+type HashMapTraits k = {
   eq : k -> k -> Bool,
   hashfn : k -> Int
 }
@@ -54,7 +54,7 @@ let hashmapSize : HashMap k v = lam hm. hm.nelems
 -- overwritten.
 -- [NOTE(?,?)]
 --   The insertion uses a recursion that is not tail-recursive.
-let hashmapInsert : HashMapTraits k v -> k -> v -> HashMap k v -> HashMap k v =
+let hashmapInsert : HashMapTraits k -> k -> v -> HashMap k v -> HashMap k v =
   lam traits. lam key. lam value. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -81,7 +81,7 @@ let hashmapInsert : HashMapTraits k v -> k -> v -> HashMap k v -> HashMap k v =
 -- 'k' is not a key in 'hm', the map remains unchanged after the operation.
 -- [NOTE(?,?)]
 --   The removal uses a recursion that is not tail-recursive.
-let hashmapRemove : HashMapTraits k v -> k -> HashMap k v -> HashMap k v =
+let hashmapRemove : HashMapTraits k -> k -> HashMap k v -> HashMap k v =
   lam traits. lam key. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -105,7 +105,7 @@ let hashmapRemove : HashMapTraits k v -> k -> HashMap k v -> HashMap k v =
 
 -- 'hashmapLookup traits k hm' looks up the key 'k' in 'hm', returning an
 -- Option type.
-let hashmapLookup : HashMapTraits k v -> k -> HashMap k v -> Option v =
+let hashmapLookup : HashMapTraits k -> k -> HashMap k v -> Option v =
   lam traits. lam key. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -125,14 +125,14 @@ let hashmapLookup : HashMapTraits k v -> k -> HashMap k v -> Option v =
 
 -- 'hashmapLookupOrElse traits d k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
-let hashmapLookupOrElse : HashMapTraits k v -> (Unit -> v) -> k -> HashMap k v -> v =
+let hashmapLookupOrElse : HashMapTraits k -> (Unit -> v) -> k -> HashMap k v -> v =
   lam traits. lam d. lam key. lam hm.
     optionGetOrElse d
                     (hashmapLookup traits key hm)
 
 -- 'hashmapLookupOr traits v k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
-let hashmapLookupOr : HashMapTraits k v -> v -> k -> HashMap k v -> v =
+let hashmapLookupOr : HashMapTraits k -> v -> k -> HashMap k v -> v =
   lam traits. lam default.
     hashmapLookupOrElse traits (lam _. default)
 
@@ -149,19 +149,25 @@ let hashmapLookupPred : (k -> Bool) -> HashMap k v -> Option v =
                 (find (lam r. p r.key) flatBuckets)
 
 -- 'hashmapMem traits k hm' returns true if 'k' is a key in 'hm', else false.
-let hashmapMem : HashMapTraits k v -> k -> HashMap k v -> Bool =
+let hashmapMem : HashMapTraits k -> k -> HashMap k v -> Bool =
   lam traits. lam key. lam hm.
     optionIsSome (hashmapLookup traits key hm)
 
+-- 'hashmapMap' maps the provided functions on all values in the hashmap
+let hashmapMap : HashMapTraits k -> (v1 -> v2) -> HashMap k v1 -> HashMap k v2 =
+  lam traits. lam fn. lam hm.
+    {buckets = map (map (lam e. {hash = e.hash, key = e.key, value = fn e.value})) hm.buckets,
+     nelems = hm.nelems}
+
 -- 'hashmapKeys traits hm' returns a list of all keys stored in 'hm'
-let hashmapKeys : HashMapTraits k v -> HashMap k v -> [k] =
+let hashmapKeys : HashMapTraits k -> HashMap k v -> [k] =
   lam _. lam hm.
     foldl (lam keys. lam bucket.
              concat keys (map (lam r. r.key) bucket))
           [] hm.buckets
 
 -- 'hashmapValues traits hm' returns a list of all values stored in 'hm'
-let hashmapValues : HashMapTraits k v -> HashMap k v -> [v] =
+let hashmapValues : HashMapTraits k -> HashMap k v -> [v] =
   lam _. lam hm.
     foldl (lam vals. lam bucket.
       concat vals (map (lam r. r.value) bucket))
@@ -172,6 +178,7 @@ mexpr
 
 let traits = hashmapStrTraits in
 let mem = hashmapMem traits in
+let map = hashmapMap traits in
 let lookupOrElse = hashmapLookupOrElse traits in
 let lookupOr = hashmapLookupOr traits in
 let lookup = hashmapLookup traits in
@@ -211,6 +218,13 @@ utest
   match values m with ["aaa", "bbb"] | ["bbb", "aaa"]
   then true else false
 with true in
+
+
+-- Test map all values
+let mMapped = map (cons '?') m in
+utest lookup "foo" mMapped with Some ("?aaa") in
+utest lookup "bar" mMapped with Some ("?bbb") in
+
 
 let m = insert "foo" "ccc" m in
 
