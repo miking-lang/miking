@@ -122,7 +122,7 @@ let hashmapLookup : HashMapTraits -> k -> HashMap -> OptionV =
 
 -- 'hashmapLookupOrElse traits k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
-let hashmapLookupOrElse : HashMapTraits -> k -> HashMap -> v =
+let hashmapLookupOrElse : HashMapTraits -> (Unit -> v) -> k -> HashMap -> v =
   lam traits. lam d. lam key. lam hm.
     optionGetOrElse d
                     (hashmapLookup traits key hm)
