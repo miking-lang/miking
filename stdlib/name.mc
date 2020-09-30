@@ -37,7 +37,7 @@ utest _t with _t
 -- 'nameEqStr n1 n2' returns true if both names 'n1' and 'n2'
 -- contain the same string, else false.
 let nameEqStr : Name -> Name -> Bool =
-  lam n1. lam n2. eqstr n1.0 n2.0
+  lam n1. lam n2. eqString n1.0 n2.0
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
@@ -51,7 +51,7 @@ utest nameEqStr _t1 _t3 with false
 -- 'nameHasSym n' returns true if name 'n' has a
 -- symbol, else it returns false.
 let nameHasSym : Name -> Bool =
-  lam n. not (eqs n.1 _noSymbol)
+  lam n. not (eqsym n.1 _noSymbol)
 
 utest nameHasSym (nameSym "foo") with true
 utest nameHasSym (nameNoSym "foo") with false
@@ -63,7 +63,7 @@ utest nameHasSym (nameNoSym "foo") with false
 let nameEqSym : Name -> Name -> Bool =
   lam n1. lam n2.
     if and (nameHasSym n1) (nameHasSym n2) then
-      eqs n1.1 n2.1
+      eqsym n1.1 n2.1
     else false
 
 let _t1 = nameNoSym "foo"
@@ -75,6 +75,22 @@ utest nameEqSym _t1 _t2 with false
 utest nameEqSym _t2 _t3 with false
 utest nameEqSym _t3 _t3 with true
 
+-- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
+-- a symbol and their strings are equal. Otherwise, return false.
+-- TODO(dlunde,2020-09-25): Short circuit for performance?
+let nameEq : Name -> Name -> Bool =
+  lam n1. lam n2.
+    or (nameEqSym n1 n2)
+      (and (and (not (nameHasSym n1)) (not (nameHasSym n2))) (nameEqStr n1 n2))
+
+let _t1 = nameNoSym "foo"
+let _t2 = nameSym "foo"
+let _t3 = nameSym "foo"
+utest nameEq _t1 _t1 with true
+utest nameEq _t2 _t2 with true
+utest nameEq _t1 _t2 with false
+utest nameEq _t2 _t3 with false
+utest nameEq _t3 _t3 with true
 
 -- 'nameSetNewSym n' returns a new name with a fresh symbol.
 -- The returned name contains the same string as 'n'.
@@ -123,9 +139,9 @@ utest nameGetStr (nameSym "foo") with "foo"
 
 -- 'nameGetSym n' returns optionally the symbol of name 'n'.
 -- If 'n' has no symbol, 'None' is returned.
--- TODO: Update signature when we have polymorphic types.
+-- TODO(dlunde,2020-09-29): Update signature when we have polymorphic types.
 let nameGetSym : Name -> OptionSymbol =
-  lam n. if eqs n.1 _noSymbol then None () else Some n.1
+  lam n. if eqsym n.1 _noSymbol then None () else Some n.1
 
 let _s = gensym ()
 utest nameGetSym (nameNoSym "foo") with None ()

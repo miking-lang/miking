@@ -158,7 +158,7 @@ let es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
           ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
           ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)] in
 
-let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqstr eqi)) in
+let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqString eqi)) in
 
 -- Define initial solution
 let initTour = [("Uppsala", "Kiruna", 10),
@@ -178,8 +178,8 @@ let neighbours = lam g. lam state.
   let tour = curSol.0 in
 
   let tourHasEdge = lam v1. lam v2.
-    any (lam e. or (and (eqstr v1 e.0) (eqstr v2 e.1))
-                   (and (eqstr v1 e.1) (eqstr v2 e.0))) tour in
+    any (lam e. or (and (eqString v1 e.0) (eqString v2 e.1))
+                   (and (eqString v1 e.1) (eqString v2 e.0))) tour in
 
   -- Find replacing edges for 'e12' and 'e34'
   let exchange = lam e12. lam e34.

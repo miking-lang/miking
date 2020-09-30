@@ -26,6 +26,8 @@ type Env = {
   nameMap: AssocMap Name String,
 
   -- Used to keep track of strings assigned to names without symbols
+  -- TODO(dlunde,2020-09-29): It is probably cleaner to merge this with nameMap
+  -- (see eq.mc)
   strMap: AssocMap String String,
 
   -- Count the number of occurrences of each (base) string to assist with
@@ -34,7 +36,7 @@ type Env = {
 
 }
 
--- TODO Make it possible to debug the actual symbols
+-- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
 let _emptyEnv = {nameMap = assocEmpty, strMap = assocEmpty, count = assocEmpty}
 
@@ -57,9 +59,9 @@ let labelString = lam str.
   parserStr str "#label" (lam str. is_lower_alpha (head str))
 
 let _ppLookupName = assocLookup {eq = nameEqSym}
-let _ppLookupStr = assocLookup {eq = eqstr}
+let _ppLookupStr = assocLookup {eq = eqString}
 let _ppInsertName = assocInsert {eq = nameEqSym}
-let _ppInsertStr = assocInsert {eq = eqstr}
+let _ppInsertStr = assocInsert {eq = eqString}
 
 -- Look up the string associated with a name in the environment
 let _lookup : Name -> Env -> Option String = lam name. lam env.
@@ -74,7 +76,7 @@ let _lookup : Name -> Env -> Option String = lam name. lam env.
 -- Check if a string is free in the environment.
 let _free : String -> Env -> Bool = lam str. lam env.
   match env with { nameMap = nameMap, strMap = strMap } then
-    let f = lam _. lam v. eqstr str v in
+    let f = lam _. lam v. eqString str v in
     not (or (assocAny f nameMap) (assocAny f strMap))
   else never
 
@@ -118,7 +120,7 @@ let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
 let _record2tuple = lam tm.
   use RecordAst in
   match tm with TmRecord t then
-    let keys = assocKeys {eq=eqstr} t.bindings in
+    let keys = assocKeys {eq=eqString} t.bindings in
     match all stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
@@ -127,7 +129,7 @@ let _record2tuple = lam tm.
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
       -- Note: Quadratic complexity. Sorting the association list directly
       -- w.r.t. key would improve complexity to n*log(n).
-      Some (map (lam key. assocLookupOrElse {eq=eqstr}
+      Some (map (lam key. assocLookupOrElse {eq=eqString}
                             (lam _. error "Key not found")
                             (int2string key) t.bindings)
                  sortedKeys)
@@ -139,7 +141,16 @@ let _record2tuple = lam tm.
 -- TERMS --
 -----------
 
-lang VarPrettyPrint = VarAst
+lang PrettyPrint
+  sem pprintCode (indent : Int) (env: Env) =
+  -- Intentionally left blank
+
+  sem expr2str =
+  | expr -> match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+
+end
+
+lang VarPrettyPrint = PrettyPrint + VarAst
   sem isAtomic =
   | TmVar _ -> true
 
@@ -148,7 +159,7 @@ lang VarPrettyPrint = VarAst
     match _getStr ident env with (env,str) then (env,varString str) else never
 end
 
-lang AppPrettyPrint = AppAst
+lang AppPrettyPrint = PrettyPrint + AppAst
   sem isAtomic =
   | TmApp _ -> false
 
@@ -177,7 +188,7 @@ lang AppPrettyPrint = AppAst
     else error "Impossible"
 end
 
-lang FunPrettyPrint = FunAst
+lang FunPrettyPrint = PrettyPrint + FunAst
   sem isAtomic =
   | TmLam _ -> false
 
@@ -199,7 +210,7 @@ lang FunPrettyPrint = FunAst
     else never
 end
 
-lang RecordPrettyPrint = RecordAst
+lang RecordPrettyPrint = PrettyPrint + RecordAst
   sem isAtomic =
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
@@ -218,14 +229,14 @@ lang RecordPrettyPrint = RecordAst
     else
       let innerIndent = incr (incr indent) in
       match
-        assocMapAccum {eq=eqstr}
+        assocMapAccum {eq=eqString}
           (lam env. lam k. lam v.
              match pprintCode innerIndent env v with (env, str) then
                (env, join [labelString k, " =", newline innerIndent, str])
              else never)
            env t.bindings
       with (env, bindMap) then
-        let binds = assocValues {eq=eqstr} bindMap in
+        let binds = assocValues {eq=eqString} bindMap in
         let merged = strJoin (concat "," (newline (incr indent))) binds in
         (env,join ["{ ", merged, " }"])
       else never
@@ -242,7 +253,7 @@ lang RecordPrettyPrint = RecordAst
     else never
 end
 
-lang LetPrettyPrint = LetAst
+lang LetPrettyPrint = PrettyPrint + LetAst
   sem isAtomic =
   | TmLet _ -> false
 
@@ -264,7 +275,7 @@ lang LetPrettyPrint = LetAst
     else never
 end
 
-lang RecLetsPrettyPrint = RecLetsAst
+lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
   sem isAtomic =
   | TmRecLets _ -> false
 
@@ -279,7 +290,7 @@ lang RecLetsPrettyPrint = RecLetsAst
       else never in
     let lbody = lam env. lam bind.
       match pprintCode (incr (incr indent)) env bind.body with (env,str) then
-        (env,varString str)
+        (env,str)
       else never in
     match mapAccumL lname env t.bindings with (env,idents) then
       match mapAccumL lbody env t.bindings with (env,bodies) then
@@ -295,7 +306,7 @@ lang RecLetsPrettyPrint = RecLetsAst
     else never
 end
 
-lang ConstPrettyPrint = ConstAst
+lang ConstPrettyPrint = PrettyPrint + ConstAst
   sem isAtomic =
   | TmConst _ -> true
 
@@ -306,7 +317,7 @@ lang ConstPrettyPrint = ConstAst
   | TmConst t -> (env,getConstStringCode indent t.val)
 end
 
-lang DataPrettyPrint = DataAst
+lang DataPrettyPrint = PrettyPrint + DataAst
   sem isAtomic =
   | TmConDef _ -> false
   | TmConApp _ -> false
@@ -339,7 +350,7 @@ lang DataPrettyPrint = DataAst
     else never
 end
 
-lang MatchPrettyPrint = MatchAst
+lang MatchPrettyPrint = PrettyPrint + MatchAst
   sem isAtomic =
   | TmMatch _ -> false
 
@@ -364,7 +375,7 @@ lang MatchPrettyPrint = MatchAst
     else never
 end
 
-lang UtestPrettyPrint = UtestAst
+lang UtestPrettyPrint = PrettyPrint + UtestAst
   sem isAtomic =
   | TmUtest _ -> false
 
@@ -381,7 +392,7 @@ lang UtestPrettyPrint = UtestAst
     else never
 end
 
-lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
+lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
   sem isAtomic =
   | TmSeq _ -> true
 
@@ -408,7 +419,7 @@ lang SeqPrettyPrint = SeqAst + ConstPrettyPrint + CharAst
     else never
 end
 
-lang NeverPrettyPrint = NeverAst
+lang NeverPrettyPrint = PrettyPrint + NeverAst
   sem isAtomic =
   | TmNever _ -> true
 
@@ -478,7 +489,7 @@ end
 
 lang CmpSymbPrettyPrint = CmpSymbAst + ConstPrettyPrint
    sem getConstStringCode (indent : Int) =
-   | CEqs _ -> "eqs"
+   | CEqsym _ -> "eqsym"
 end
 
 lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
@@ -554,14 +565,14 @@ lang RecordPatPrettyPrint = RecordPat
   sem getPatStringCode (indent : Int) (env: Env) =
   | PRecord {bindings = bindings} ->
     match
-      assocMapAccum {eq=eqstr}
+      assocMapAccum {eq=eqString}
         (lam env. lam k. lam v.
            match getPatStringCode indent env v with (env,str) then
              (env,join [labelString k, " = ", str])
            else never)
          env bindings
     with (env,bindMap) then
-      (env,join ["{", strJoin ", " (assocValues {eq=eqstr} bindMap), "}"])
+      (env,join ["{", strJoin ", " (assocValues {eq=eqString} bindMap), "}"])
     else never
 end
 
@@ -647,7 +658,7 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO Update (also not up to date in boot?)
+-- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
 lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
                        TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
@@ -702,12 +713,7 @@ lang MExprPrettyPrint =
   -- Types
   + TypePrettyPrint
 
----------------------------
--- CONVENIENCE FUNCTIONS --
----------------------------
-
-let expr2str = use MExprPrettyPrint in
-  lam expr. match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+end
 
 -----------
 -- TESTS --

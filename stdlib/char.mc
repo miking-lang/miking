@@ -1,16 +1,13 @@
 include "seq.mc"
 
-let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
-let neqchar = lam c1. lam c2. neqi (char2int c1) (char2int c2)
-let ltchar = lam c1. lam c2. lti (char2int c1) (char2int c2)
-let gtchar = lam c1. lam c2. gti (char2int c1) (char2int c2)
-let leqchar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
-let geqchar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
-let show_char = lam c. concat "'" (concat [c] "'")
+let eqChar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
+let leqChar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
+let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
+let showChar = lam c. concat "'" (concat [c] "'")
 
 -- Character conversion
 let char2upper = lam c.
-  if and (geqchar c 'a') (leqchar c 'z')
+  if and (geqChar c 'a') (leqChar c 'z')
   then (int2char (subi (char2int c) 32))
   else c
 
@@ -19,7 +16,7 @@ utest char2upper '0' with '0'
 utest char2upper 'A' with 'A'
 
 let char2lower = lam c.
-  if and (geqchar c 'A') (leqchar c 'Z')
+  if and (geqChar c 'A') (leqChar c 'Z')
   then (int2char (addi (char2int c) 32))
   else c
 
@@ -28,7 +25,7 @@ utest char2lower '0' with '0'
 utest char2lower 'A' with 'a'
 
 -- Character predicates
-let is_whitespace = lam c. any (eqchar c) [' ', '\n', '\t', '\r']
+let is_whitespace = lam c. any (eqChar c) [' ', '\n', '\t', '\r']
 
 utest is_whitespace ' ' with true
 utest is_whitespace '	' with true

@@ -79,10 +79,10 @@ lang RecordANF = ANF + RecordAst
       (lam acc. lam k. lam e.
          (lam bs.
             normalizeName
-              (lam v. acc (assocInsert {eq=eqstr} k v bs))
+              (lam v. acc (assocInsert {eq=eqString} k v bs))
               e))
     in
-    (assocFold {eq=eqstr} f acc bindings) assocEmpty
+    (assocFold {eq=eqString} f acc bindings) assocEmpty
 
   | TmRecordUpdate {rec = rec, key = key, value = value} ->
     normalizeName

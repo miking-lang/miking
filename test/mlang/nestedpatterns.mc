@@ -103,7 +103,7 @@ end
 
 lang LexBinary = LexBase
   syn Tok =
-  | BinaryIntTok [Char]  -- NOTE: this should probably reuse IntTok and do conversion, but that's not relevant for this test
+  | BinaryIntTok [Char]  -- NOTE(?,?): this should probably reuse IntTok and do conversion, but that's not relevant for this test
 
   sem lex =
   | (['0', 'b', '0' | '1'] ++ _) & ([_, _] ++ str) ->

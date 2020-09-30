@@ -52,12 +52,12 @@ lang RecordAst
                     value : Expr}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqstr} f t.bindings}
+  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqString} f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc t.bindings
+  | TmRecord t -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc t.bindings
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -168,7 +168,7 @@ lang NeverAst
   syn Expr =
   | TmNever {}
 
-  -- TODO smap, sfold?
+  -- TODO(dlunde,2020-09-29): smap, sfold
 end
 
 ---------------
@@ -206,7 +206,7 @@ end
 lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
-  | CNot {}
+  | CNot {} -- TODO(dlunde,2020-09-29): This constant does not exist in boot. Remove?
 end
 
 lang CmpIntAst = IntAst + BoolAst
@@ -233,10 +233,10 @@ end
 
 lang CmpSymbAst = SymbAst + BoolAst
   syn Const =
-  | CEqs {}
+  | CEqsym {}
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
   | CGet {}
@@ -257,6 +257,7 @@ end
 type PatName
 con PName     : Name -> PatName
 con PWildcard : ()   -> PatName
+
 lang VarPat
   syn Pat =
   | PVar {ident : PatName}
@@ -295,10 +296,10 @@ lang RecordPat
   | PRecord {bindings : AssocMap String Pat}
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PRecord b -> PRecord {b with bindings = assocMap {eq=eqstr} (lam b. (b.0, f b.1)) b.bindings}
+  | PRecord b -> PRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PRecord {bindings = bindings} -> assocFold {eq=eqstr} (lam acc. lam _k. lam v. f acc v) acc bindings
+  | PRecord {bindings = bindings} -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
@@ -382,7 +383,7 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO Update (also not up to date in boot?)
+-- TODO(dlunde,2020-09-29): Update (also not up to date in boot?)
 
 lang FunTypeAst
   syn Type =

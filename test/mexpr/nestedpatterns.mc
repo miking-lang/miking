@@ -11,7 +11,7 @@ utest classify (true, false) with "two" in
 utest classify (false, true) with "three" in
 utest classify (false, false) with "four" in
 
--- TODO: in the future when we have static type checking,
+-- TODO(?,?): in the future when we have static type checking,
 -- the following expression should give a type error.
 -- utest classify (true, true, true) with "five" in
 

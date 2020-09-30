@@ -13,7 +13,7 @@
   open Msg
   exception Lex_error of Msg.message
 
-(* TODO: Remove unused keywords *)
+(* TODO(?,?): Remove unused keywords *)
 let reserved_strings = [
   (* Keywords *)
   ("if",            fun(i) -> Parser.IF{i=i;v=()});

@@ -134,7 +134,7 @@ let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data
          Some {data with subsets; cases = List.rev_append c2 c1} in
   {inters = Record.merge merge_inter i1 i2; syns = Record.merge merge_syn s1 s2}
 
-(* TODO(vipa): this is likely fairly low hanging fruit when it comes to optimization *)
+(* TODO(vipa,?): this is likely fairly low hanging fruit when it comes to optimization *)
 let topo_sort (eq: 'a -> 'a -> bool) (edges: ('a * 'a) list) (vertices: 'a list) =
   let rec recur rev_order edges vertices =
     match List.find_opt (fun v -> List.exists (fun (_, t) -> eq v t) edges |> not) vertices with
@@ -199,7 +199,7 @@ let translate_cases f target cases =
                |> Mseq.of_ustring)
   in
   let no_match =
-    let_ (us"_") nosym   (* TODO: we should probably have a special sort for let with wildcards *)
+    let_ (us"_") nosym   (* TODO(?,?): we should probably have a special sort for let with wildcards *)
       (app (TmConst (NoInfo, Cdprint)) target)
       (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
@@ -327,8 +327,8 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let ns = List.fold_left add_decl previous_ns decls in
      (* wrap in "con"s *)
      let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
-       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
-     let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
+       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
+     let wrap_data decl tm = match decl with (* TODO(vipa,?): this does not declare the type itself *)
        | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
        | _ -> tm in
      (* translate "Inter"s into (info * ustring * tm) *)

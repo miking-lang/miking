@@ -4,13 +4,13 @@ include "seq.mc"
 include "math.mc"
 
 recursive
-  let eqstr = lam s1. lam s2.
+  let eqString = lam s1. lam s2.
       if neqi (length s1) (length s2)
       then false
       else if null s1
            then true
-           else if eqchar (head s1) (head s2)
-           then eqstr (tail s1) (tail s2)
+           else if eqChar (head s1) (head s2)
+           then eqString (tail s1) (tail s2)
            else false
 end
 
@@ -30,7 +30,7 @@ let string2int = lam s.
       addi rest lsd
   in
   match s with [] then 0 else
-  if eqchar '-' (head s)
+  if eqChar '-' (head s)
   then negi (string2int_rechelper (tail s))
   else string2int_rechelper s
 
@@ -59,7 +59,7 @@ utest int2string (negi 314159) with "-314159"
 
 -- 'stringIsInt s' returns true iff 's' is a string representing an integer
 let stringIsInt: String -> Bool = lam s.
-  eqstr s (int2string (string2int s))
+  eqString s (int2string (string2int s))
 
 utest stringIsInt "" with false
 utest stringIsInt "1 " with false
@@ -129,7 +129,7 @@ let strIndex = lam c. lam s.
   let strIndex_rechelper = lam i. lam c. lam s.
     if eqi (length s) 0
     then None ()
-    else if eqchar c (head s)
+    else if eqChar c (head s)
          then Some(i)
          else strIndex_rechelper (addi i 1) c (tail s)
   in
@@ -152,7 +152,7 @@ let strLastIndex = lam c. lam s.
       then None ()
       else Some(acc)
     else
-      if eqchar c (head s)
+      if eqChar c (head s)
       then strLastIndex_rechelper (addi i 1) i   c (tail s)
       else strLastIndex_rechelper (addi i 1) acc c (tail s)
   in
@@ -170,7 +170,7 @@ recursive
   let strSplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
-    else if eqstr delim (slice s 0 (length delim))
+    else if eqString delim (slice s 0 (length delim))
          then cons [] (strSplit delim (slice s (length delim) (length s)))
          else let remaining = strSplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
@@ -186,7 +186,7 @@ utest strSplit "Hello" "Hello" with ["", ""]
 let strTrim = lam s.
   recursive
   let strTrim_init = lam s.
-    if eqstr s ""
+    if eqString s ""
     then s
     else if is_whitespace (head s)
          then strTrim_init (tail s)

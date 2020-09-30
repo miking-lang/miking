@@ -51,3 +51,12 @@ utest xnor true true with true
 utest xnor true false with false
 utest xnor false true with false
 utest xnor false false with true
+
+
+-- Boolean equality
+let eqBool = lam b1. lam b2. or (and b1 b2) (and (not b1) (not b2))
+utest eqBool false false with true
+utest eqBool false true  with false
+utest eqBool true  false with false
+utest eqBool true  true  with true
+

@@ -41,7 +41,12 @@ let pcon_ = use MExprAst in
 
 let prec_ = use MExprAst in
   lam bindings.
-  PRecord {bindings = bindings}
+  PRecord {
+    bindings =
+      foldl
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
+        assocEmpty bindings
+    }
 
 let ptuple_ = use MExprAst in
   lam ps.
@@ -262,7 +267,7 @@ let record_ = use MExprAst in
   TmRecord {
     bindings =
       foldl
-        (lam acc. lam b. assocInsert {eq=eqstr} b.0 b.1 acc)
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
         assocEmpty bindings
     }
 
@@ -426,7 +431,7 @@ let eqf_ = use MExprAst in
 
 let eqs_ = use MExprAst in
   lam s1. lam s2.
-  appf2_ (const_ (CEqs ())) s1 s2
+  appf2_ (const_ (CEqsym ())) s1 s2
 
 let ltf_ = use MExprAst in
   lam a. lam b.
@@ -467,3 +472,11 @@ let null_ = use MExprAst in
 let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
+
+-- Short circuit logical expressions
+let and_ = use MExprAst in
+  lam a. lam b. if_ a b false_
+
+let or_ = use MExprAst in
+  lam a. lam b. if_ a true_ b
+

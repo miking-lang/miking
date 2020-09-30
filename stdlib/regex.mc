@@ -45,11 +45,11 @@ let regExPprint = lam sym2str. lam reg.
 
 -- Checks structural equivalence of two regexes.
 -- Does NOT check whether the regexes describe the same language.
-let eqr = lam eqs. lam re1. lam re2.
+let eqr = lam eqsym. lam re1. lam re2.
   recursive let eqrAux = lam re1. lam re2.
     match re1 with Epsilon () then (match re2 with Epsilon () then true else false) else
     match re1 with Empty () then (match re2 with Empty () then true else false) else
-    match re1 with Symbol a then (match re2 with Symbol b then eqs a b else false) else
+    match re1 with Symbol a then (match re2 with Symbol b then eqsym a b else false) else
     match re1 with Union (r1, r2) then
       (match re2 with Union (w1, w2) then and (eqrAux r1 w1) (eqrAux r2 w2) else false)
     else
@@ -270,7 +270,7 @@ let r3 = Concat (r1, r2) in
 let r4 = Union(Kleene(Concat(r1, r2)), Symbol(l3)) in
 let r5 = Kleene (Union(Empty (), Concat (r1, Kleene (Empty ())))) in
 
-let eqrStr = eqr eqstr in
+let eqrStr = eqr eqString in
 utest eqrStr r1 r1 with true in
 utest eqrStr r1 r2 with false in
 utest eqrStr r3 r3 with true in
@@ -290,7 +290,7 @@ let states = [1] in
 let transitions = [] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 utest regexFromDFA dfa with Epsilon () in
 
@@ -307,7 +307,7 @@ let states = [1] in
 let transitions = [(1,1,l1), (1,1,l2)] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 -- (l1 | l2)*
 utest regexFromDFA dfa with Kleene (Union (Symbol l1, Symbol l2)) in
@@ -329,7 +329,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [2] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 -- ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Concat (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -354,7 +354,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 -- ((l2 | l4 | l5) l3)*
 utest regexFromDFA dfa with Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -380,7 +380,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1,2] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 -- (((l2 | l4 | l5) l3)*) | ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Union (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5), Symbol l3)),
@@ -406,7 +406,7 @@ let acceptStates = [4] in
 let startState = 1 in
 let states = [1,2,3,4] in
 let transitions = [(1,2,"a"),(2,3,"c"),(2,4,"e"),(3,2,"b"),(4,2,"d")] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqstr in
+let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
 
 -- Short form: a(cb|ed)*e
 -- Actual return: a(cb)*e(d(cb)*e)*
