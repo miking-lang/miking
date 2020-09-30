@@ -2,6 +2,18 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- An argument parser library.
+--
+--
+-- birka update
+-- birka download <package>
+-- birka source add <URL...>
+-- birka source remove <URL>
+-- birka configure text
+--
+-- birka = progname
+-- update|download|source|configure = Positional [Name "mode", Required, Once, Position 0, Values ["update", "download", "source", "configure"]]
+-- add|remove = Positional [Name "srcmode", Required, Once, Position 1, Parent ("mode", "source"), Values ["add", "remove"]]
+-- text = Positional [Name "confmode", Required, Once, Position 1, Parent ("mode", "configure"), Values ["text"]]
 
 include "bool.mc"
 include "char.mc"
@@ -21,15 +33,17 @@ con APMetavar: String -> APModifier a
 con APApply: (a -> a) -> APModifier a
 -- POSITIONAL ONLY MODIFIERS
 con APName: String -> APModifier a
-con APPosition: Int -> APModifier a
+con APFirst: () -> APModifier a
+con APParent: String -> APModifier a
+con APParentValue: (String, String) -> APModifier a
 con APMatchCond: (String -> Bool) -> APModifier a
-con APRequired: () -> APModifier a
 -- GENERIC MODIFIERS
 con APDescription: String -> APModifier a
 con APApplyVal: (String -> a -> a) -> APModifier a
 con APValue: (String, String) -> APModifier a
 con APValues: [String] -> APModifier a
 con APValueDescription: (String, String) -> APModifier a
+con APRequired: () -> APModifier a
 con APOnce: () -> APModifier a
 con APPostCond: ((a -> Bool), String) -> APModifier a -- A check that will be performed if this has been matched with an input argument
 
@@ -41,8 +55,14 @@ con APLongFlag: (String, String, a -> a) -> APConfiguration a
 con APMetavarFlag: (Char, String, String, String, String -> a -> a) -> APConfiguration a
 con APLongMetavarFlag: (String, String, String, String -> a -> a) -> APConfiguration a
 con APMutuallyExclusiveOptions: [String] -> APConfiguration a
-con APAny: (String, String, a -> a) -> APConfiguration a
-con APMany: (String, String, a -> a) -> APConfiguration a
+con APAny: (String, String, String -> a -> a) -> APConfiguration a
+con APMany: (String, String, String -> a -> a) -> APConfiguration a
+con APMode: (String, [String], String, String -> a -> a) -> APConfiguration a
+con APSubmode: (String, String, [String], String, String -> a -> a) -> APConfiguration a
+con APSubmodeSpecific: (String, String, String, [String], String, String -> a -> a) -> APConfiguration a
+
+-- Internal sets of characters
+let _invalid_chars = ['-', '=', ' ', '\r', '\n', '\t']
 
 
 -- Internal types
@@ -54,20 +74,24 @@ type APOptionItem_ a = {
   apply: String -> a -> a,
   -- values: <ValueName> -> <Description>
   values: HashMap String String,
+  required: Bool,
   once: Bool,
   postconds: [((String -> Bool), String)]
 }
 type APPositionalItem_ a = {
   name: String,
   description: Option String,
-  position: Option Int,
+  first: Bool,
+  children: HashMap String String, -- if value is key, then child is next positional. Empty key indicates wildcard, a.k.a. match this if nothing else specific matches
   apply: Option (String -> a -> a),
   matchconds: [String -> Bool],
-  required: Bool,
   -- values: <ValueName> -> <Description>
   values: HashMap String String,
+  required: Bool,
   once: Bool,
-  postconds: [((a -> Bool), String)]
+  postconds: [((a -> Bool), String)],
+  -- INTERMEDIARY VALUES
+  parent: Option (String, String)
 }
 type ArgParser_ a = {
   -- The name of the program being run, specified by `head args`.
@@ -78,8 +102,10 @@ type ArgParser_ a = {
   shortOptLookup: HashMap Char String,
   -- A map over long option names -> other options than cannot be specified with this option
   optExclusions: HashMap String [String],
-  -- All positionals
-  positionals: [APPositionalItem_ a],
+  -- All positionals as a map name -> positional record
+  positionals: HashMap String (APPositionalItem_ a),
+  -- The potential positional to be scanned first
+  firstPositional: Some String,
   -- Lines of error messages that has been produced during the argument
   -- parsing. An empty list indicates that no error has occurred. These should
   -- ideally be printed as `strJoin "\n" ap.errors`. The reason for not
@@ -120,6 +146,7 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
     description = "",
     apply = lam _. lam o. o,
     values = hashmapEmpty,
+    required = false,
     once = false,
     postconds = []
   } in
@@ -134,7 +161,9 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
       else
         {acc with errs = snoc acc.errs "Multiple short modifiers"}
     else match mod with APLong s then
-      if not acc.hasLong then
+      if null s then
+        {acc with errs = snoc acc.errs "Empty long modifier"}
+      else if not acc.hasLong then
         {{acc with opt = {acc.opt with long = s}}
               with hasLong = true}
       else
@@ -160,6 +189,8 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
           ) acc.opt.values vs}}
     else match mod with APOnce _ then
       {acc with opt = {acc.opt with once = true}}
+    else match mod with APRequired _ then
+      {acc with opt = {acc.opt with required = true}}
     else match mod with APPostCond pctup then
       {acc with opt = {acc.opt with postconds = cons pctup acc.opt.postconds}}
     else
@@ -198,10 +229,12 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
   let state = foldl (lam acc. lam mod.
     match mod with APName _ then
       {acc with errs = snoc acc.errs "Invalid option setting \"APName\""}
-    else match mod with APPosition _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APPosition\""}
+    else match mod with APFirst _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APFirst\""}
     else match mod with APMatchCond _ then
       {acc with errs = snoc acc.errs "Invalid option setting \"APMatchCond\""}
+    else match mod with APParentValue _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APParentValue\""}
     else
       -- Process this at a later stage
       {acc with unprocessed = snoc acc.unprocessed mod}
@@ -224,11 +257,12 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
       state
   in
 
-  -- Print a warning if we still have unprocessed modifiers
-  let _ =
+  -- Internal error if we still have unprocessed modifiers
+  let state =
     if not (null state.unprocessed) then
-      print "WARNING: Internal check failed: Unprocessed option modifiers\n"
-    else ()
+      {state with errs = snoc state.errs "Unprocessed option modifiers\n"}
+    else
+      state
   in
 
   if not (null state.errs) then
@@ -244,13 +278,15 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
   let pos: APPositionalItem_ a = {
     name = "",
     description = "",
-    position = None (),
+    first = false,
+    children = hashmapEmpty,
     apply = lam _. lam o. o,
     matchconds = [],
-    required = false,
     values = hashmapEmpty,
+    required = false,
     once = false,
-    postconds = []
+    postconds = [],
+    parent = None ()
   } in
 
   let accrecord = {pos = pos, errs = [], hasName = false, hasApply = false, unprocessed = []} in
@@ -258,16 +294,20 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
     match mod with APName s then
-      if not acc.hasName then
+      if null s then
+        {acc with errs = snoc acc.errs "Empty name specified for positional"}
+      else if not acc.hasName then
         {{acc with pos = {acc.pos with name = s}}
               with hasName = true}
       else
         {acc with errs = snoc acc.errs "Multiple names for positional"}
-    else match mod with APPosition i then
-      if optionIsNone acc.pos.position then
-        {acc with pos = {acc.pos with position = Some i}}
+    else match mod with APFirst _ then
+      {acc with pos = {acc.pos with first = true}}
+    else match mod with APParentValue (pname, pvalue) then
+      if isSome acc.pos then
+        {acc with errs = snoc acc.errs "Multiple parents specified"}
       else
-        {acc with errs = snoc acc.errs "Multiple positions specified"}
+        {acc with pos = {acc.pos with parent = Some (pname, pvalue)}}
     else match mod with APMatchCond condfn then
       {acc with pos = {acc.pos with matchconds = cons condfn acc.pos.matchconds}}
     else match mod with APDescription s then
@@ -284,10 +324,10 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
             else
               _str_insert v "" hm
           ) acc.pos.values vs}}
-    else match mod with APOnce _ then
-      {acc with pos = {acc.pos with once = true}}
     else match mod with APRequired _ then
       {acc with pos = {acc.pos with required = true}}
+    else match mod with APOnce _ then
+      {acc with pos = {acc.pos with once = true}}
     else match mod with APPostCond pctup then
       {acc with pos = {acc.pos with postconds = cons pctup acc.pos.postconds}}
     else
@@ -346,11 +386,12 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
       state
   in
 
-  -- Print a warning if we still have unprocessed modifiers
-  let _ =
+  -- Internal error if we still have unprocessed modifiers
+  let state =
     if not (null state.unprocessed) then
-      print "WARNING: Internal check failed: Unprocessed positional modifiers\n"
-    else ()
+      {state with errs = snoc state.errs "Unprocessed positional modifiers\n"}
+    else
+      state
   in
 
   if not (null state.errs) then
@@ -398,17 +439,18 @@ let addPositional_: Either (String, [String]) (APPositionalItem_ a) -> ArgParser
       map (concat "  - ") errs -- <- apply indendation
     ]}
   else match eitherPos with Right pos then
-    if any (lam p. eqstr p.name pos.name) ap.positionals then
+    if _str_mem pos.name ap.positionals then
       {ap with errors = join [
         ap.errors,
         [join ["Duplicate positional name \"", name, "\":"]],
         map (concat "  - ") errs -- <- apply indendation
       ]}
     else
-    {ap with positionals = snoc ap.positionals pos}
+    {ap with positionals = _str_insert pos.name pos ap.positionals}
   else never
 
 
+-- Translates a list of ArgParser configurations into an internal ArgParser representation.
 recursive let translateConfig_: [APConfiguration a] -> [APConfiguration a] -> ArgParser_ a -> ArgParser_ a =
   lam configs. lam postconfigs. lam ap.
   match configs with [config] ++ remaining then
@@ -453,6 +495,51 @@ recursive let translateConfig_: [APConfiguration a] -> [APConfiguration a] -> Ar
         APApplyVal applyval
       ] in
       translateConfig_ remaining postconfigs (addOption_ optret ap)
+    else match configs with APAny (name, description, applyval) then
+      let posret = formOption_ [
+        APName name,
+        APDescription description,
+        APApplyVal applyval
+      ] in
+      translateConfig_ remaining postconfigs (addPositional_ posret ap)
+    else match configs with APMany (name, description, applyval) then
+      let posret = formOption_ [
+        APName name,
+        APDescription description,
+        APRequired (),
+        APApplyVal applyval
+      ] in
+      translateConfig_ remaining postconfigs (addPositional_ posret ap)
+    else match configs with APMode (name, values, description, applyval) then
+      let posret = formOption_ [
+        APName name,
+        APFirst (),
+        APDescription description,
+        APValues values,
+        APRequired (),
+        APApplyVal applyval
+      ] in
+      translateConfig_ remaining postconfigs (addPositional_ posret ap)
+    else match configs with APSubmode (name, parentname, values, description, applyval) then
+      let posret = formOption_ [
+        APName name,
+        APParent parentname,
+        APDescription description,
+        APValues values,
+        APRequired (),
+        APApplyVal applyval
+      ] in
+      translateConfig_ remaining postconfigs (addPositional_ posret ap)
+    else match configs with APSubmodeSpecific (name, parentname, parentvalue, values, description, applyval) then
+      let posret = formOption_ [
+        APName name,
+        APParentValue (parentname, parentvalue),
+        APDescription description,
+        APValues values,
+        APRequired (),
+        APApplyVal applyval
+      ] in
+      translateConfig_ remaining postconfigs (addPositional_ posret ap)
     else
       -- Handle this config after the primary configs. Most likely due to
       -- that it needs to have all names specified
@@ -479,21 +566,90 @@ recursive let translateConfig_: [APConfiguration a] -> [APConfiguration a] -> Ar
         ) ap longs in
         translateConfig_ [] remaining updatedAp
     else
-      let _ = print "WARNING: Internal check failed: Unprocessed config modifier\n" in
-      translateConfig_ [] remaining ap
+      translateConfig_ [] remaining {ap with errors = snoc ap.errors "Internal check failed: Unprocessed configuration"}
   else
     -- No more configs to translate!
     ap
 end
 
+-- Sets up the positional relations and performs sanity checks
+let setupPositionalRelations_: ArgParser_ a -> ArgParser_ a = lam ap.
+  -- STAGE 1: Setup and verify Parent-Child relations
+  -- If positional has a parent, add this positional as a child of that parent.
+  let ap =
+    foldl (lam apAcc. lam pos.
+      match pos.parent with Some (pname, pvalue) then
+        match _str_lookup pname apAcc.positionals with Some parent then
+          match _str_lookup pvalue parent.children with Some childname then
+            {apAcc with errors = snoc apAcc.errors (join ["Duplicate children \"", childname, "\" and \"", pos.name, "\""
+                                                          " for positional \"", pos.name "\" on value \"", pvalue, "\""])}
+          else
+            let newParent =
+              {parent with children = _str_insert pvalue pos.name parent.children}
+            in
+            {apAcc with positionals = _str_insert pname newParent apAcc.positionals}
+        else
+          {apAcc with errors = snoc apAcc.errors (join ["Parent \"", pname, "\" does not exist for positional \"", pos.name "\""])}
+      else
+        apAcc
+    ) ap (_str_values ap.positionals)
+  in
 
---- It can be difficult to
---- find the odd one out
---- when there is a bunch
---- of text to read at the
---  same time as trying to make
---- sure that you follow proper
---- formatting styles.
+  -- STAGE 2: Set the first positional if existent
+  let firsts = filter (lam pos. pos.first) (_str_values ap.positionals) in
+  let ap =
+    if null firsts then
+      ap
+    else if eqi (length firsts) 1 then
+      {ap with firstPositional = Some (head firsts).name}
+    else
+      {ap with errors = snoc ap.errors (join ["Muliple first positionals ",
+                                              strJoin ", " (map (lam fst. join ["\"", fst.name, "\""]) firsts)])}
+  in
+
+  -- STAGE 3: Check that there are no relational loops, such that no one is its own distant relative
+  recursive let traversePosTree = lam apAcc. lam visited. lam current.
+    -- Check loop
+    match lastIndex (eqstr current) visited with Some idx then
+      let path = snoc (splitAt visited idx).1 current in
+      {apAcc with errors = snoc apAcc.errors (join ["Positional loop detected: ",
+                                                    strJoin " -> " path])}
+    else
+      -- No loop so far...
+      let positional = _str_lookupOrElse (lam _. error "unreachable") current apAcc.positionals in
+      let children = _str_values positionals.children in
+      foldl (lam apAcc. lam child.
+        traversePosTree apAcc (snoc visited current) child
+      ) apAcc children
+  in
+  let ap = optionMapOr ap (traversePosTree ap []) ap.firstPositional in
+
+  -- STAGE 4: Verify that no positional with a parent also has a match condition
+  let ap = foldl (lam apAcc. lam pos.
+    if and (isSome pos.parent) (not (null pos.matchconds)) then
+      {apAcc with errors = snoc apAcc.errors (join ["Positional \"", pos.name, "\" cannot have both a parent positional and a match condition"])}
+    else
+      apAcc
+  ) ap (_str_values ap.positionals) in
+
+  -- STAGE 5: Check that no two positionals without parents also lack match conditions
+  let ambiguousPositionals = filter (lam pos. and (null pos.matchconds) (isNone pos.parent)) (_str_values ap.positionals) in
+  let ap =
+    if null ambiguousPositionals then
+      ap
+    else
+      {ap with errors = snoc ap.errors (join ["Ambiguous positionals ",
+                                              strJoin ", " (map (lam pos. join ["\"", pos.name, "\""]) ambiguousPositionals)])}
+  in
+
+  -- DONE. Positionals are well-formed and all set up
+  ap
+
+
+-- Sets up option relations and performs sanity checks
+let setupOptionRelations_: ArgParser_ a -> ArgParser_ a =
+  )))))))))))))))))))))))))))))))TODO ()
+
 
 -- Constructs a parser based on the provided configuration
 let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
@@ -503,25 +659,28 @@ let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
     options = hashmapEmpty,
     shortOptLookup = hashmapEmpty,
     optExclusions = hashmapEmpty,
-    positionals = [],
+    positionals = hashmapEmpty,
+    firstPositional = None (),
     errors = []
   } in
 
   -- Scan configuration and form initial parser
   let ap = translateConfig_ configs [] ap in
-  let ap = checkPositionalLogic_ ap in
+  let ap = setupPositionalRelations_ ap in
+  let ap = setupOptionRelations_ ap in
+
+  ap
 
 
-  --
-  if not (null ap.errors) then
-    Left ap.errors
-  else -- OK! No errors so far.
-
-  -- Check that positionals are well-formed
-  if not (null ap.errors) then
-    Left ap.errors
+-- Checks whether the argparser is well-formed. Returns None () on success.
+-- Otherwise Some String containing the error message.
+let argparserCheckError: [APConfiguration a] -> Some String = lam configs.
+  let ap = createParser_ configs "<confcheck>" in
+  if null ap.errors then
+    None ()
   else
-    Right ap
+    Some (strJoin "\n" (cons "Misformed ArgParser:" errs))
+
 
 -- argparserParse:
   -- 1. transform shorthands to verbose modifier lists
