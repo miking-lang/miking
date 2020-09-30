@@ -156,32 +156,46 @@ let hashmapMem : HashMapTraits k -> k -> HashMap k v -> Bool =
 -- 'hashmapAny traits p hm' returns true if at least one entry in the hashmap matches the predicate
 let hashmapAny : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
   lam traits. lam p. lam hm.
-    any (any (lam e. p e.key e.value)) hm.buckets
+    any (any (lam r. p r.key r.value)) hm.buckets
 
 -- 'hashmapAll traits p hm' returns true iff all entries in the hashmap matches the predicate
 let hashmapAll : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
   lam traits. lam p. lam hm.
-    all (all (lam e. p e.key e.value)) hm.buckets
+    all (all (lam r. p r.key r.value)) hm.buckets
 
 -- 'hashmapMap' maps the provided functions on all values in the hashmap
 let hashmapMap : HashMapTraits k -> (v1 -> v2) -> HashMap k v1 -> HashMap k v2 =
   lam traits. lam fn. lam hm.
-    {buckets = map (map (lam e. {hash = e.hash, key = e.key, value = fn e.value})) hm.buckets,
+    {buckets = map (map (lam r. {hash = r.hash, key = r.key, value = fn r.value})) hm.buckets,
      nelems = hm.nelems}
+
+-- 'hashmapFilterKeys traits p hm' returns a list of all key-value pairs in 'hm' that satisfies 'p'
+let hashmapFilter : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> [(k,v)] =
+  lam traits. lam p. lam hm.
+    foldl (lam pairs. lam bucket.
+      concat pairs (map (lam r. (r.key, r.value))
+                        (filter (lam r. p r.key r.value) bucket))
+    ) [] hm.buckets
+
+-- 'hashmapFilterKeys traits p hm' returns a list of all keys in 'hm' that satisfies 'p'
+let hashmapFilterKeys : HashMapTraits k -> (k -> Bool) -> HashMap k v -> [k] =
+  lam traits. lam p. lam hm.
+    map (lam pair. pair.0) (hashmapFilter traits (lam a. lam _. p a) hm)
+
+-- 'hashmapFilterValues traits p hm' returns a list of all values in 'hm' that satisfies 'p'
+let hashmapFilterValues : HashMapTraits k -> (v -> Bool) -> HashMap k v -> [v] =
+  lam traits. lam p. lam hm.
+    map (lam pair. pair.1) (hashmapFilter traits (lam _. lam b. p b) hm)
 
 -- 'hashmapKeys traits hm' returns a list of all keys stored in 'hm'
 let hashmapKeys : HashMapTraits k -> HashMap k v -> [k] =
-  lam _. lam hm.
-    foldl (lam keys. lam bucket.
-             concat keys (map (lam r. r.key) bucket))
-          [] hm.buckets
+  lam traits. lam hm.
+    hashmapFilterKeys traits (lam _. true) hm
 
 -- 'hashmapValues traits hm' returns a list of all values stored in 'hm'
 let hashmapValues : HashMapTraits k -> HashMap k v -> [v] =
-  lam _. lam hm.
-    foldl (lam vals. lam bucket.
-      concat vals (map (lam r. r.value) bucket))
-    [] hm.buckets
+  lam traits. lam hm.
+    hashmapFilterValues traits (lam _. true) hm
 
 
 mexpr
@@ -191,6 +205,9 @@ let mem = hashmapMem traits in
 let any = hashmapAny traits in
 let all = hashmapAll traits in
 let map = hashmapMap traits in
+let filter = hashmapFilter traits in
+let filterKeys = hashmapFilterKeys traits in
+let filterValues = hashmapFilterValues traits in
 let lookupOrElse = hashmapLookupOrElse traits in
 let lookupOr = hashmapLookupOr traits in
 let lookup = hashmapLookup traits in
@@ -237,6 +254,15 @@ utest
   match values m with ["aaa", "bbb"] | ["bbb", "aaa"]
   then true else false
 with true in
+utest
+  match filter (lam _. lam _. true) m with [("foo", "aaa"), ("bar", "bbb")] | [("bar", "bbb"), ("foo", "aaa")]
+  then true else false
+with true in
+utest filter (eqString) m with [] in
+utest filter (lam a. lam _. eqString "foo" a) m with [("foo", "aaa")] in
+utest filter (lam _. lam b. eqString "bbb" b) m with [("bar", "bbb")] in
+utest filterKeys (lam a. optionIsSome (strIndex 'o' a)) m with ["foo"] in
+utest filterValues (lam a. optionIsSome (strIndex 'b' a)) m with ["bbb"] in
 
 
 -- Test map all values
