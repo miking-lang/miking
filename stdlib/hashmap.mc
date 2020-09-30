@@ -153,6 +153,16 @@ let hashmapMem : HashMapTraits k -> k -> HashMap k v -> Bool =
   lam traits. lam key. lam hm.
     optionIsSome (hashmapLookup traits key hm)
 
+-- 'hashmapAny traits p hm' returns true if at least one entry in the hashmap matches the predicate
+let hashmapAny : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
+  lam traits. lam p. lam hm.
+    any (any (lam e. p e.key e.value)) hm.buckets
+
+-- 'hashmapAll traits p hm' returns true iff all entries in the hashmap matches the predicate
+let hashmapAll : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
+  lam traits. lam p. lam hm.
+    all (all (lam e. p e.key e.value)) hm.buckets
+
 -- 'hashmapMap' maps the provided functions on all values in the hashmap
 let hashmapMap : HashMapTraits k -> (v1 -> v2) -> HashMap k v1 -> HashMap k v2 =
   lam traits. lam fn. lam hm.
@@ -178,6 +188,8 @@ mexpr
 
 let traits = hashmapStrTraits in
 let mem = hashmapMem traits in
+let any = hashmapAny traits in
+let all = hashmapAll traits in
 let map = hashmapMap traits in
 let lookupOrElse = hashmapLookupOrElse traits in
 let lookupOr = hashmapLookupOr traits in
@@ -206,6 +218,13 @@ let m = insert "bar" "bbb" m in
 
 utest size m with 2 in
 utest mem "bar" m with true in
+utest any (lam _. lam b. eqString "BBB" (str2upper b)) m with true in
+utest any (lam a. lam _. eqString "FOO" (str2upper a)) m with true in
+utest any (lam a. lam b. eqString a b) m with false in
+utest any (lam a. lam _. eqString "bar" a) m with true in
+utest all (lam a. lam _. eqString "bar" a) m with false in
+utest all (lam a. lam _. eqi (length a) 3) m with true in
+utest all (lam _. lam b. eqi (length b) 3) m with true in
 utest lookup "bar" m with Some ("bbb") in
 utest lookupOrElse (lam _. "BABAR") "bar" m with "bbb" in
 utest lookupOr "bananas" "bar42" m with "bananas" in
