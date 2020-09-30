@@ -65,6 +65,16 @@ type lang_data = {
     syns: (info * cdecl list) Record.t;
   }
 
+let spprint_inter_data ({info; cases}): ustring =
+  List.map (fun (fi, {pat}) -> us"  " ^. ustring_of_pat pat ^. us" at " ^. info2str fi) cases
+  |> Ustring.concat (us"\n")
+  |> (fun msg -> us"My location is " ^. info2str info ^. us"\n" ^. msg)
+
+let spprint_lang_data ({inters}): ustring =
+  Record.bindings inters
+  |> List.map (fun (name, data) -> name ^. us"\n" ^. spprint_inter_data data)
+  |> Ustring.concat (us"\n")
+
 let compute_order fi ((fi1, {pat = pat1; pos_pat = p1; neg_pat = n1; _}), (fi2, {pat = pat2; pos_pat = p2; neg_pat = n2; _})) =
   let string_of_pat pat = ustring_of_pat pat |> Ustring.to_utf8 in
   let info2str fi = info2str fi |> Ustring.to_utf8 in
@@ -108,7 +118,7 @@ let compute_lang_data (Lang(info, _, _, decls)): lang_data =
   in List.fold_left add_decl {inters = Record.empty; syns = Record.empty} decls
 
 (* Merges the second language into the first, because the first includes the second *)
-let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data =
+let merge_lang_data fi {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data =
   let eq_cons (CDecl(_, c1, _)) (CDecl(_, c2, _)) = c1 =. c2 in
   let merge_syn _ a b = match a, b with
     | None, None -> None
@@ -118,11 +128,11 @@ let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data
        Some (fi, List.filter (fun c1 -> List.exists (eq_cons c1) old_cons |> not) cons) in
   let merge_inter name a b = match a, b with
     | None, None -> None
-  | None, Some a -> Some a
+    | None, Some a -> Some {a with info = fi}
     | Some a, None -> Some a
     | Some ({info=fi1; params=p1; cases=c1; subsets=s1} as data)
     , Some {info=fi2; params=p2; cases=c2; subsets=s2} ->
-       if fi1 = fi2 then Some data
+       if eq_info fi1 fi2 then Some data
        else if List.length p1 <> List.length p2 then
          raise_error fi1 ("Different number of parameters for interpreter '" ^ Ustring.to_utf8 name ^ "' compared to previous definitian at " ^ Ustring.to_utf8 (info2str fi2))
        else
@@ -138,7 +148,9 @@ let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data
 let topo_sort (eq: 'a -> 'a -> bool) (edges: ('a * 'a) list) (vertices: 'a list) =
   let rec recur rev_order edges vertices =
     match List.find_opt (fun v -> List.exists (fun (_, t) -> eq v t) edges |> not) vertices with
-    | None -> List.rev rev_order
+    | None ->
+       (if vertices <> [] then uprint_endline (us"topo_sort ended with " ^. ustring_of_int (List.length vertices) ^. us" vertices remaining"));
+       List.rev rev_order
     | Some x ->
        recur
          (x :: rev_order)
@@ -168,7 +180,7 @@ let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * t
   | TopLang(Lang(info, name, includes, _) as lang) ->
      let self_data = compute_lang_data lang in
      let included_data = List.map (lookup_lang info prev_langs) includes in
-     let merged_data = List.fold_left merge_lang_data self_data included_data in
+     let merged_data = List.fold_left (merge_lang_data info) self_data included_data in
      (Record.add name merged_data prev_langs, TopLang(data_to_lang info name includes merged_data))
 
 let flatten_with_env (prev_langs: lang_data Record.t) (Program(includes, tops, e): program) =
