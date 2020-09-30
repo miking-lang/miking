@@ -46,6 +46,9 @@ let hashmapStrTraits : HashMapTraits =
   in
   {eq = eqString, hashfn = djb2 5381}
 
+-- 'hashmapSize' returns the number of elements in a hashmap.
+let hashmapSize : HashMap k v = lam hm. hm.nelems
+
 -- 'hashmapInsert traits k v hm' returns a new hashmap, where the key-value pair
 -- ('k', 'v') is stored. If 'k' is already a key in 'hm', its old value will be
 -- overwritten.
@@ -120,12 +123,18 @@ let hashmapLookup : HashMapTraits -> k -> HashMap -> OptionV =
     in
     finder (get hm.buckets idx)
 
--- 'hashmapLookupOrElse traits k hm': like hashmapLookupOpt, but returns the
+-- 'hashmapLookupOrElse traits d k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
 let hashmapLookupOrElse : HashMapTraits -> (Unit -> v) -> k -> HashMap -> v =
   lam traits. lam d. lam key. lam hm.
     optionGetOrElse d
                     (hashmapLookup traits key hm)
+
+-- 'hashmapLookupOr traits v k hm': like hashmapLookupOpt, but returns the
+-- result of 'd ()' if no element was found.
+let hashmapLookupOr : HashMapTraits -> v -> k -> HashMap -> v =
+  lam traits. lam default.
+    hashmapLookupOrElse traits (lam _. default)
 
 -- 'hashmapLookupPred p hm' returns the value of a key that satisfies the
 -- predicate 'p'. If several keys satisfies 'p', the one that happens to be
@@ -164,8 +173,10 @@ mexpr
 let traits = hashmapStrTraits in
 let mem = hashmapMem traits in
 let lookupOrElse = hashmapLookupOrElse traits in
+let lookupOr = hashmapLookupOr traits in
 let lookup = hashmapLookup traits in
 let lookupPred = hashmapLookupPred in
+let size = hashmapSize in
 let insert = hashmapInsert traits in
 let remove = hashmapRemove traits in
 let keys = hashmapKeys traits in
@@ -173,23 +184,24 @@ let values = hashmapValues traits in
 
 let m = hashmapEmpty in
 
-utest m.nelems with 0 in
+utest size m with 0 in
 utest mem "foo" m with false in
 utest lookup "foo" m with None () in
 
 let m = insert "foo" "aaa" m in
 
-utest m.nelems with 1 in
+utest size m with 1 in
 utest mem "foo" m with true in
 utest lookup "foo" m with Some ("aaa") in
 utest lookupOrElse (lam _. 42) "foo" m with "aaa" in
 
 let m = insert "bar" "bbb" m in
 
-utest m.nelems with 2 in
+utest size m with 2 in
 utest mem "bar" m with true in
 utest lookup "bar" m with Some ("bbb") in
-utest lookupOrElse (lam _. 42) "bar" m with "bbb" in
+utest lookupOrElse (lam _. "BABAR") "bar" m with "bbb" in
+utest lookupOr "bananas" "bar42" m with "bananas" in
 utest lookupPred (eqString "bar") m with Some "bbb" in
 utest
   match keys m with ["foo", "bar"] | ["bar", "foo"]
@@ -202,7 +214,7 @@ with true in
 
 let m = insert "foo" "ccc" m in
 
-utest m.nelems with 2 in
+utest size m with 2 in
 utest mem "foo" m with true in
 utest lookup "foo" m with Some ("ccc") in
 utest lookupOrElse (lam _. 42) "foo" m with "ccc" in
@@ -210,25 +222,25 @@ utest lookupOrElse (lam _. 42) "abc" m with 42 in
 
 let m = remove "foo" m in
 
-utest m.nelems with 1 in
+utest size m with 1 in
 utest mem "foo" m with false in
 utest lookup "foo" m with None () in
 
 let m = remove "foo" m in
 
-utest m.nelems with 1 in
+utest size m with 1 in
 utest mem "foo" m with false in
 utest lookup "foo" m with None () in
 
 let m = remove "babar" m in
 
-utest m.nelems with 1 in
+utest size m with 1 in
 utest mem "babar" m with false in
 utest lookup "babar" m with None () in
 
 let m = insert "" "ddd" m in
 
-utest m.nelems with 2 in
+utest size m with 2 in
 utest mem "" m with true in
 utest lookup "" m with Some ("ddd") in
 utest lookupOrElse (lam _. 1) "" m with "ddd" in
@@ -247,7 +259,7 @@ recursive let populate = lam hm. lam i.
 in
 let m = populate (hashmapEmpty) 0 in
 
-utest m.nelems with n in
+utest size m with n in
 
 recursive let checkmem = lam i.
   if geqi i n then
@@ -270,6 +282,6 @@ recursive let removeall = lam i. lam hm.
 in
 let m = removeall 0 m in
 
-utest m.nelems with 0 in
+utest size m with 0 in
 
 ()
