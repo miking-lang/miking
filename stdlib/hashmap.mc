@@ -15,11 +15,11 @@ include "string.mc"
 -- The base type of a HashMap object.
 --   k: Polymorphic key type
 --   v: Polymorphic value type
-type HashMap = {
+type HashMap k v = {
   buckets : [[{hash : Int, key : k, value : v}]],
   nelems : Int
 }
-type HashMapTraits = {
+type HashMapTraits k v = {
   eq : k -> k -> Bool,
   hashfn : k -> Int
 }
@@ -30,12 +30,12 @@ let _hashmapBucketIdx = lam hash. lam hm. modi (absi hash) (length hm.buckets)
 
 
 -- 'hashmapEmpty' is an empty hashmap with a default number of buckets.
-let hashmapEmpty : HashMap =
+let hashmapEmpty : HashMap k v =
   {buckets = makeSeq _hashmapDefaultBucketCount [],
    nelems = 0}
 
 -- 'hashmapStrTraits' is traits for a hashmap with strings as keys.
-let hashmapStrTraits : HashMapTraits =
+let hashmapStrTraits : HashMapTraits String v =
   -- An implementation of the djb2 hash function (http://www.cse.yorku.ca/~oz/hash.html)
   recursive let djb2 = lam hash. lam s.
     if null s then
@@ -54,7 +54,7 @@ let hashmapSize : HashMap k v = lam hm. hm.nelems
 -- overwritten.
 -- [NOTE(?,?)]
 --   The insertion uses a recursion that is not tail-recursive.
-let hashmapInsert : HashMapTraits -> k -> v -> HashMap -> HashMap =
+let hashmapInsert : HashMapTraits k v -> k -> v -> HashMap k v -> HashMap k v =
   lam traits. lam key. lam value. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -81,7 +81,7 @@ let hashmapInsert : HashMapTraits -> k -> v -> HashMap -> HashMap =
 -- 'k' is not a key in 'hm', the map remains unchanged after the operation.
 -- [NOTE(?,?)]
 --   The removal uses a recursion that is not tail-recursive.
-let hashmapRemove : HashMapTraits -> k -> HashMap -> HashMap =
+let hashmapRemove : HashMapTraits k v -> k -> HashMap k v -> HashMap k v =
   lam traits. lam key. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -105,7 +105,7 @@ let hashmapRemove : HashMapTraits -> k -> HashMap -> HashMap =
 
 -- 'hashmapLookup traits k hm' looks up the key 'k' in 'hm', returning an
 -- Option type.
-let hashmapLookup : HashMapTraits -> k -> HashMap -> OptionV =
+let hashmapLookup : HashMapTraits k v -> k -> HashMap k v -> Option v =
   lam traits. lam key. lam hm.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
@@ -125,14 +125,14 @@ let hashmapLookup : HashMapTraits -> k -> HashMap -> OptionV =
 
 -- 'hashmapLookupOrElse traits d k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
-let hashmapLookupOrElse : HashMapTraits -> (Unit -> v) -> k -> HashMap -> v =
+let hashmapLookupOrElse : HashMapTraits k v -> (Unit -> v) -> k -> HashMap k v -> v =
   lam traits. lam d. lam key. lam hm.
     optionGetOrElse d
                     (hashmapLookup traits key hm)
 
 -- 'hashmapLookupOr traits v k hm': like hashmapLookupOpt, but returns the
 -- result of 'd ()' if no element was found.
-let hashmapLookupOr : HashMapTraits -> v -> k -> HashMap -> v =
+let hashmapLookupOr : HashMapTraits k v -> v -> k -> HashMap k v -> v =
   lam traits. lam default.
     hashmapLookupOrElse traits (lam _. default)
 
@@ -141,7 +141,7 @@ let hashmapLookupOr : HashMapTraits -> v -> k -> HashMap -> v =
 -- found first is returned.
 -- [NOTE(?,?)]
 --   Linear complexity.
-let hashmapLookupPred : (k -> Bool) -> HashMap -> OptionV =
+let hashmapLookupPred : (k -> Bool) -> HashMap k v -> Option v =
   lam p. lam hm.
     let flatBuckets = foldr1 concat hm.buckets in
     optionMapOr (None ())
@@ -149,19 +149,19 @@ let hashmapLookupPred : (k -> Bool) -> HashMap -> OptionV =
                 (find (lam r. p r.key) flatBuckets)
 
 -- 'hashmapMem traits k hm' returns true if 'k' is a key in 'hm', else false.
-let hashmapMem : HashMapTraits -> k -> HashMap -> Bool =
+let hashmapMem : HashMapTraits k v -> k -> HashMap k v -> Bool =
   lam traits. lam key. lam hm.
     optionIsSome (hashmapLookup traits key hm)
 
 -- 'hashmapKeys traits hm' returns a list of all keys stored in 'hm'
-let hashmapKeys : HashMapTraits -> HashMap -> [k] =
+let hashmapKeys : HashMapTraits k v -> HashMap k v -> [k] =
   lam _. lam hm.
     foldl (lam keys. lam bucket.
              concat keys (map (lam r. r.key) bucket))
           [] hm.buckets
 
 -- 'hashmapValues traits hm' returns a list of all values stored in 'hm'
-let hashmapValues : HashMapTraits -> HashMap -> [v] =
+let hashmapValues : HashMapTraits k v -> HashMap k v -> [v] =
   lam _. lam hm.
     foldl (lam vals. lam bucket.
       concat vals (map (lam r. r.value) bucket))
