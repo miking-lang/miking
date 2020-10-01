@@ -3,7 +3,21 @@ include "seq.mc"
 let eqChar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
 let leqChar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
 let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
-let showChar = lam c. concat "'" (concat [c] "'")
+
+-- Display characters
+let showChar = lam c.
+  let escapes = [('\n', "n"), ('\t', "t"), ('\r', "r"),
+                 ('\\', "\\"), ('\"', "\""), ('\'', "\'")] in
+  match find (lam e. eqChar c e.0) escapes with Some (_, v) then
+    join ["\'\\", v, "\'"]
+  else
+    ['\'', c, '\'']
+
+utest showChar 'e' with "\'e\'"
+utest showChar '0' with "\'0\'"
+utest showChar '\n' with "\'\\n\'"
+utest showChar '\r' with "\'\\r\'"
+utest showChar '\t' with "\'\\t\'"
 
 -- Character conversion
 let char2upper = lam c.
