@@ -18,7 +18,7 @@ end
 
 -- Fixpoint computation for mutual recursion. Thanks Oleg Kiselyov!
 -- (http://okmij.org/ftp/Computation/fixed-point-combinators.html)
-let fix_mutual =
+let fixMutual =
   lam l. fix (lam self. lam l. map (lam li. lam x. li (self l) x) l) l
 
 -- Printing stuff

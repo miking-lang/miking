@@ -48,15 +48,15 @@ let parserStr = lam str. lam prefix. lam cond.
 
 -- Constructor string parser translation
 let conString = lam str.
-  parserStr str "#con" (lam str. is_upper_alpha (head str))
+  parserStr str "#con" (lam str. isUpperAlpha (head str))
 
 -- Variable string parser translation
 let varString = lam str.
-  parserStr str "#var" (lam str. is_lower_alpha (head str))
+  parserStr str "#var" (lam str. isLowerAlpha (head str))
 
 -- Label string parser translation for records
 let labelString = lam str.
-  parserStr str "#label" (lam str. is_lower_alpha (head str))
+  parserStr str "#label" (lam str. isLowerAlpha (head str))
 
 let _ppLookupName = assocLookup {eq = nameEqSym}
 let _ppLookupStr = assocLookup {eq = eqString}

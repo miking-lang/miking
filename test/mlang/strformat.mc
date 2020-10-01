@@ -94,7 +94,7 @@ lang StrFormatBase
         -- A valid format: %(...)X
         -- Where X represents any alpha char and (...) represents any
         -- sequence of non-alpha chars.
-        let found_idx = index is_alpha s in
+        let found_idx = index isAlpha s in
         match found_idx with Some i then
           let fmtstr = slice s 0 (addi i 1) in
           let remaining = slice s (addi i 1) (length s) in
