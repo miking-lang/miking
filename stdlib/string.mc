@@ -91,26 +91,26 @@ let float2string = lam arg.
       cons c (float2string_rechelper prec (addi digits 1) remaining)
   in
   recursive
-  let positive_exponent_pair = lam acc. lam v.
+  let positiveExponentPair = lam acc. lam v.
     if ltf v 10.0
     then (v, acc)
-    else positive_exponent_pair (addi acc 1) (divf v 10.0)
+    else positiveExponentPair (addi acc 1) (divf v 10.0)
   in
   recursive
-  let negative_exponent_pair = lam acc. lam v.
+  let negativeExponentPair = lam acc. lam v.
     if geqf v 1.0
     then (v, acc)
-    else negative_exponent_pair (addi acc 1) (mulf v 10.0)
+    else negativeExponentPair (addi acc 1) (mulf v 10.0)
   in
   let res = if eqf val 0.0 then
               "0.0"
             else if gtf val 1.0 then
-              let pospair = positive_exponent_pair 0 val in
+              let pospair = positiveExponentPair 0 val in
               let retstr = float2string_rechelper precision 0 (pospair.0) in
               let decimals = cons (head retstr) (cons '.' (tail retstr)) in
               concat decimals (concat "e+" (int2string pospair.1))
             else
-              let pospair = negative_exponent_pair 0 val in
+              let pospair = negativeExponentPair 0 val in
               let retstr = float2string_rechelper precision 0 (pospair.0) in
               let decimals = cons (head retstr) (cons '.' (tail retstr)) in
               concat decimals (concat "e-" (int2string pospair.1))
@@ -188,7 +188,7 @@ let strTrim = lam s.
   let strTrim_init = lam s.
     if eqString s ""
     then s
-    else if is_whitespace (head s)
+    else if isWhitespace (head s)
          then strTrim_init (tail s)
          else s
   in

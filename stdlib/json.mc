@@ -10,9 +10,9 @@ con JsonBool   : Bool                    -> JsonValue
 con JsonNull   : ()                      -> JsonValue
 
 
-let with_ws = wrappedIn spaces spaces
+let withWs = wrappedIn spaces spaces
 
-let list_or_spaces = lam left. lam right. lam elem.
+let listOrSpaces = lam left. lam right. lam elem.
   (wrappedIn left right
     (apr spaces
          (sepBy (lexChar ',') elem)))
@@ -45,15 +45,15 @@ recursive
 -- These functions are all eta expanded, because recursive lets must begin with a lambda.
 let jsonMember = lam x.
   let makeMember = lam k. lam v. (k, v) in
-  (liftA2 makeMember (apl (with_ws lexStringLit) (lexChar ':')) jsonValue) x
+  (liftA2 makeMember (apl (withWs lexStringLit) (lexChar ':')) jsonValue) x
 
 let jsonObject = lam x.
   fmap (lam x. JsonObject x)
-  (list_or_spaces (lexChar '{') (lexChar '}') jsonMember) x
+  (listOrSpaces (lexChar '{') (lexChar '}') jsonMember) x
 
 let jsonArray = lam x.
   fmap (lam x. JsonArray x)
-  (list_or_spaces (lexChar '[') (lexChar ']') jsonValue) x
+  (listOrSpaces (lexChar '[') (lexChar ']') jsonValue) x
 
 -- jsonValue : Parser JsonValue
 --
@@ -68,7 +68,7 @@ let jsonValue = lam x.
     , jsonNull
     ]
   in
-  (with_ws (foldr1 alt jsonValues)) x
+  (withWs (foldr1 alt jsonValues)) x
 end
 
 -- parseJson : String -> Option

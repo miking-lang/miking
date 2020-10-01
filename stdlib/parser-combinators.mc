@@ -415,7 +415,7 @@ with "Parse error at 1:1: Unexpected 'b'. Expected 'a'"
 -- lexDigits : Parser String
 --
 -- Parse a sequence of digits
-let lexDigits = many1 (satisfy is_digit "digit")
+let lexDigits = many1 (satisfy isDigit "digit")
 
 -- lexNumber : Parser Int
 --
@@ -527,12 +527,12 @@ with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals
 -- spaces : Parser ()
 --
 -- Parse zero or more whitespace characters.
-let spaces = void (many (satisfy is_whitespace "whitespace"))
+let spaces = void (many (satisfy isWhitespace "whitespace"))
 
 -- spaces1 : Parser ()
 --
 -- Parse one or more whitespace characters.
-let spaces1 = void (many1 (satisfy is_whitespace "whitespace"))
+let spaces1 = void (many1 (satisfy isWhitespace "whitespace"))
 
 utest testParser spaces "   abc"
 with Success ((), ("abc", {file = "", row = 1, col = 4}))
@@ -608,7 +608,7 @@ let symbol = string in
 --
 -- Check if a character is valid in an identifier.
 let isValidChar = lam c.
-  or (is_alphanum c) (eqChar c '_')
+  or (isAlphanum c) (eqChar c '_')
 in
 
 -- reserved : String -> Parser String
@@ -633,7 +633,7 @@ in
 -- of reserved keywords.
 let identifier =
   let validId =
-    bind (satisfy (lam c. or (is_alpha c) (eqChar '_' c)) "valid identifier") (lam c.
+    bind (satisfy (lam c. or (isAlpha c) (eqChar '_' c)) "valid identifier") (lam c.
     bind (token (many (satisfy isValidChar ""))) (lam cs.
     pure (cons c cs)))
   in

@@ -189,7 +189,7 @@ utest (lookup 1 mapm, lookup 2 mapm, lookup 3 mapm)
 with (Some '2', Some '3', Some '4') in
 
 utest fold (lam acc. lam k. lam v. addi acc k) 0 m with 6 in
-utest fold (lam acc. lam k. lam v. and acc (is_digit v)) true m with true in
+utest fold (lam acc. lam k. lam v. and acc (isDigit v)) true m with true in
 
 utest foldOption (lam acc. lam k. lam v. Some (addi acc k)) 0 m with Some 6 in
 utest foldOption (lam acc. lam k. lam v. if eqi k 4 then None () else Some acc)
