@@ -286,16 +286,16 @@ and print_tm' fmt t = match t with
   (*  fprintf fmt "%s#%d" print s *)
     fprintf fmt "%s" print
 
-  | TmLam(_,x,_,ty,t1) ->
-    let x = string_of_ustring x in
+  | TmLam(_,x,s,ty,t1) ->
+    let x = string_of_ustring (ustring_of_var x s) in
     let ty = ty |> ustring_of_ty |> string_of_ustring in
     fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]"
       !ref_indent x
       ty
       print_tm (Lam, t1)
 
-  | TmLet(_,x,_,t1,t2) ->
-    let x = string_of_ustring x in
+  | TmLet(_,x,s,t1,t2) ->
+    let x = string_of_ustring (ustring_of_var x s) in
     fprintf fmt "@[<hov 0>\
                    @[<hov %d>let %s =@ %a in@]\
                    @ %a\
@@ -305,8 +305,8 @@ and print_tm' fmt t = match t with
       print_tm (Match, t2)
 
   | TmRecLets(_,lst,t2) ->
-    let print (_,x,_,t) =
-      let x = string_of_ustring x in
+    let print (_,x,s,t) =
+      let x = string_of_ustring (ustring_of_var x s) in
       (fun fmt -> fprintf fmt "@[<hov %d>let %s =@ %a@]"
           !ref_indent x print_tm (Match,t)) in
     let inner = List.map print lst in
