@@ -13,7 +13,7 @@
   open Msg
   exception Lex_error of Msg.message
 
-(* TODO: Remove unused keywords *)
+(* TODO(?,?): Remove unused keywords *)
 let reserved_strings = [
   (* Keywords *)
   ("if",            fun(i) -> Parser.IF{i=i;v=()});
@@ -38,6 +38,7 @@ let reserved_strings = [
   ("mexpr",         fun(i) -> Parser.MEXPR{i=i;v=()});
   ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
+  ("using",         fun(i) -> Parser.USING{i=i;v=()});
 
 
   (* v *)
@@ -68,6 +69,7 @@ let filename = ref (us"")
 let rowno = ref 1
 let colno = ref 0
 let last_info = ref NoInfo
+let nesting_level = ref 0
 let utf8strlen s = Ustring.length (Ustring.from_utf8 s)
 let newrow() =
   incr rowno;
@@ -165,9 +167,11 @@ rule main = parse
       { colcount_fast s; main lexbuf }
   | line_comment
       { main lexbuf }
-  | "/*" as s
+  | "/-" as s
       { Buffer.reset string_buf ;
-	Buffer.add_string string_buf s; section_comment lexbuf;
+	Buffer.add_string string_buf s;
+        nesting_level := 0;
+        section_comment lexbuf;
 	count_utf8 (Buffer.contents string_buf);
 	main lexbuf}
   | tab
@@ -231,10 +235,19 @@ and parsestring = parse
 
 (* Section comment *)
 and section_comment = parse
-  | "*/" as s
-      { Buffer.add_string string_buf s }
+  | "-/" as s
+      { if !nesting_level = 0 then
+          Buffer.add_string string_buf s
+        else (
+          nesting_level := !nesting_level - 1;
+          section_comment lexbuf)
+      }
+  | "/-"
+      { nesting_level := !nesting_level + 1;
+        section_comment lexbuf
+      }
   | eof
-      { let s = Ustring.from_utf8 ("/*" ^ (Buffer.contents string_buf)) in
+      { let s = Ustring.from_utf8 ("/-" ^ (Buffer.contents string_buf)) in
 	raise (Lex_error (LEX_COMMENT_NOT_TERMINATED,ERROR,
 	 	 mkinfo_ustring s, [s])) }
   | _ as c

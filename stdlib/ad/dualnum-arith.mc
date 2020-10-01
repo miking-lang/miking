@@ -10,9 +10,10 @@
 
 
 include "dualnum.mc"
+include "dualnum-helpers.mc"
 
-let num = dualnumMkNum
-let dnum = dualnumMkDualNum
+let num = dualnumNum
+let dnum = dualnumDNum
 let lift1 = dualnumLift1
 let lift2 = dualnumLift2
 let float2num1 = dualnumFloat2num1
@@ -43,29 +44,6 @@ recursive
 end
 
 mexpr
-
-let num0 = num 0. in
-let num1 = num 1. in
-let num2 = num 2. in
-let num3 = num 3. in
-let num4 = num 4. in
-
-let e0 = genEpsilon () in
-let e1 = genEpsilon () in
-
-let dnum0 = dnum e0 in
-let dnum1 = dnum e1 in
-let dnum010 = dnum0 num1 num0 in
-let dnum011 = dnum0 num1 num1 in
-let dnum012 = dnum0 num1 num2 in
-let dnum020 = dnum0 num2 num0 in
-let dnum021 = dnum0 num2 num1 in
-let dnum022 = dnum0 num2 num2 in
-let dnum034 = dnum0 num3 num4 in
-let dnum040 = dnum0 num4 num0 in
-let dnum044 = dnum0 num4 num4 in
-let dnum122 = dnum1 num2 num2 in
-let dnum134 = dnum1 num3 num4 in
 
 -- negn
 utest negn num1 with num (negf 1.) in

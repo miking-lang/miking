@@ -1,5 +1,4 @@
--- TODO: Generate unique symbols for data constructors
--- TODO: Add types
+-- TODO(?,?): Add types
 
 include "string.mc"
 include "char.mc"
@@ -9,6 +8,7 @@ include "name.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
 ----------------------------
@@ -110,14 +110,13 @@ lang FixEval = FixAst + FunEval
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = map (lam b. (b.0, (eval ctx b.1))) t.bindings in
+    let bs = assocMap {eq=eqString} (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
-    let mem = assocMem {eq = eqstr} in
-    let insertStr = assocInsert {eq = eqstr} in
     match eval ctx u.rec with TmRecord t then
-      if mem u.key t.bindings then
-        TmRecord { bindings = insertStr u.key (eval ctx u.value) t.bindings }
+      if assocMem {eq = eqString} u.key t.bindings then
+        TmRecord { bindings = assocInsert {eq = eqString}
+                                u.key (eval ctx u.value) t.bindings }
       else error "Key does not exist in record"
     else error "Not updating a record"
 end
@@ -182,7 +181,7 @@ lang MatchEval = MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = UtestAst
+lang UtestEval = Eq + UtestAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -190,7 +189,7 @@ lang UtestEval = UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eq v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    let _ = if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
     eval ctx t.next
 end
 
@@ -202,7 +201,7 @@ lang SeqEval = SeqAst
 end
 
 lang NeverEval = NeverAst
-  --TODO
+  --TODO(?,?)
 end
 
 ---------------
@@ -399,20 +398,20 @@ end
 
 lang CmpSymbEval = CmpSymbAst + ConstEval
   syn Const =
-  | CEqs2 Symb
+  | CEqsym2 Symb
 
   sem delta (arg : Expr) =
-  | CEqs _ ->
+  | CEqsym _ ->
     match arg with TmConst {val = CSymb s} then
-      TmConst {val = CEqs2 s.val}
-    else error "First argument in eqs is not a symbol"
-  | CEqs2 s1 ->
+      TmConst {val = CEqsym2 s.val}
+    else error "First argument in eqsym is not a symbol"
+  | CEqsym2 s1 ->
     match arg with TmConst {val = CSymb s2} then
-      TmConst {val = CBool {val = eqs s1 s2.val}}
-    else error "Second argument in eqs is not a symbol"
+      TmConst {val = CBool {val = eqsym s1 s2.val}}
+    else error "Second argument in eqsym is not a symbol"
 end
 
--- TODO Remove constants no longer available in boot?
+-- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
@@ -483,30 +482,47 @@ lang VarPatEval = VarPat
   | PVar {ident = PWildcard ()} -> Some env
 end
 
-lang SeqTotPatEval = SeqTotPat
-  -- TODO
+lang SeqTotPatEval = SeqTotPat + SeqAst
+  sem tryMatch (env : Env) (t : Expr) =
+  | PSeqTot {pats = pats} ->
+    match t with TmSeq {tms = tms} then
+      if eqi (length tms) (length pats) then
+        optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env
+          (zipWith (lam a. lam b. (a, b)) tms pats)
+      else None ()
+    else None ()
 end
 
-lang SeqEdgPatEval = SeqEdgPat
-  -- TODO
+lang SeqEdgePatEval = SeqEdgePat + SeqAst
+  sem tryMatch (env : Env) (t : Expr) =
+  | PSeqEdge {prefix = pre, middle = middle, postfix = post} ->
+    match t with TmSeq {tms = tms} then
+      if geqi (length tms) (addi (length pre) (length post)) then
+        match splitAt tms (length pre) with (preTm, tms) then
+        match splitAt tms (subi (length tms) (length post)) with (tms, postTm) then
+        let pair = lam a. lam b. (a, b) in
+        let paired = zipWith pair (concat preTm postTm) (concat pre post) in
+        let env = optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env paired in
+        match middle with PName name then
+          optionMap (_evalInsert name (seq_ tms)) env
+        else match middle with PWildcard () then
+          env
+        else never else never else never
+      else None ()
+    else None ()
 end
 
 lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PRecord r ->
-    let lookupStr = assocLookup {eq = eqstr} in
     match t with TmRecord {bindings = bs} then
-      recursive let recurse = lam env. lam pbs.
-        match pbs with [(k,p)] ++ pbs then
-          match lookupStr k bs with Some v then
-            match tryMatch env v p with Some env then
-              recurse env pbs
-            else None ()
-          else None ()
-        else match pbs with [] then Some env
-        else never
-      in
-      recurse env r.bindings
+      assocFoldlM {eq = eqString}
+        (lam env. lam k. lam p.
+          match assocLookup {eq = eqString} k bs with Some v then
+            tryMatch env v p
+          else None ())
+        env
+        r.bindings
     else None ()
 end
 
@@ -537,7 +553,7 @@ lang CharPatEval = CharAst + CharPat
   | PChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
-        if eqchar ch.val ch2.val then Some env else None ()
+        if eqChar ch.val ch2.val then Some env else None ()
       else None ()
     else None ()
 end
@@ -554,15 +570,23 @@ lang BoolPatEval = BoolAst + BoolPat
 end
 
 lang AndPatEval = AndPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | PAnd {lpat = l, rpat = r} ->
+    optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
 lang OrPatEval = OrPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | POr {lpat = l, rpat = r} ->
+    optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
 end
 
 lang NotPatEval = NotPat
-  -- TODO
+  sem tryMatch (env : Env) (t : Expr) =
+  | PNot {subpat = p} ->
+    let res = tryMatch env t p in
+    match res with None _ then Some env else
+    match res with Some _ then None () else never
 end
 
 -------------------------
@@ -571,8 +595,8 @@ end
 
 lang MExprEval =
 
-  -- Symbolize is required before eval
-  MExprSym
+  -- Symbolize is required before eval, and MExprEq is used below when testing.
+  MExprSym + MExprEq
 
   -- Terms
   + VarEval + AppEval + FunEval + FixEval + RecordEval + RecLetsEval +
@@ -583,58 +607,9 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval
 
   -- Patterns
-  + VarPatEval + SeqTotPatEval + SeqEdgPatEval + RecordPatEval + DataPatEval +
+  + VarPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
-  sem eq (e1 : Expr) =
-  | TmConst c2 -> constExprEq c2.val e1
-  | TmConApp d2 -> dataEq d2.ident d2.body e1
-  | TmSeq s -> seqEq s.tms e1
-  | TmRecord t -> recordEq t.bindings e1
-
-  sem constExprEq (c1 : Const) =
-  | TmConst c2 -> constEq c1 c2.val
-  | _ -> false
-
-  sem constEq (c1 : Const) =
-  | CInt n2 -> intEq n2.val c1
-  | CBool b2 -> boolEq b2.val c1
-  | CChar chr2 -> charEq chr2.val c1
-
-  sem intEq (n1 : Int) =
-  | CInt n2 -> eqi n1 n2.val
-  | _ -> false
-
-  sem boolEq (b1 : Bool) =
-  | CBool b2 -> or (and b1 b2.val) (and (not b1) (not b2.val))
-  | _ -> false
-
-  sem charEq (c1 : Char) =
-  | CChar c2 -> eqi (char2int c1) (char2int c2.val)
-  | _ -> false
-
-  sem dataEq (k1 : Name) (v1 : Expr) =
-  | TmConApp d2 ->
-    let k1 = k1 in
-    let k2 = d2.ident in
-    let v2 = d2.body in
-    and (_eqn k1 k2) (eq v1 v2)
-  | _ -> false
-
-  sem recordEq (bindings1 : AssocMap String Expr) =
-  | TmRecord t ->
-    and (eqi (length bindings1) (length t.bindings))
-        (all (lam e1. any (lam e2. and (eqstr e1.0 e2.0)
-                                       (eq e1.1 e2.1))
-                          (bindings1))
-             (t.bindings))
-  | _ -> false
-
-  sem seqEq (seq1 : [Expr]) =
-  | TmSeq s ->
-    and (eqi (length seq1) (length s.tms))
-        (all (lam b.b) (zipWith eq seq1 s.tms))
-  | _ -> false
 end
 
 
@@ -648,7 +623,7 @@ use MExprEval in
 
 -- Evaluation shorthand used in tests below
 let eval =
-  lam t. eval {env = assocEmpty} (symbolize assocEmpty t) in
+  lam t. eval {env = assocEmpty} (symbolize t) in
 
 let id = ulam_ "x" (var_ "x") in
 let bump = ulam_ "x" (addi_ (var_ "x") (int_ 1)) in
@@ -738,10 +713,8 @@ let srl = bind_
 
 utest eval srl with true_ in
 
--- TODO This is currently not working because "Num" has different symbols in
--- LHS and RHS.
--- utest eval evalAdd1 with conapp_ "Num" (int_ 3) in
--- utest eval evalAdd2 with conapp_ "Num" (int_ 6) in
+utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqExpr in
+utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqExpr in
 
 -- Commented out to declutter test suite output
 -- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) unit_ in
@@ -783,10 +756,9 @@ let addEvalNested = ulam_ "arg"
     (unit_)) in
 
 
--- TODO This is currently not working because "Num" has different symbols in
--- LHS and RHS.
---   eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
--- with conapp_ "Num" (int_ 3) in
+utest eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
+with conapp_ "Num" (int_ 3)
+using eqExpr in
 
 let recordProj =
   bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
@@ -898,5 +870,110 @@ utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
 utest eval (bind_ (let_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
 with true_ in
+
+utest eval (match_
+  (tuple_ [true_, true_])
+  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
+  true_
+  false_)
+with true_ in
+
+utest eval (match_
+  (tuple_ [true_, false_])
+  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
+  true_
+  false_)
+with false_ in
+
+utest eval (match_
+  (tuple_ [false_, true_])
+  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
+  true_
+  false_)
+with false_ in
+
+utest eval (match_
+  (tuple_ [false_, false_])
+  (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
+  true_
+  false_)
+with false_ in
+
+utest eval (match_
+  (int_ 1)
+  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
+  (var_ "x")
+  (int_ 42))
+with int_ 1 in
+
+utest eval (match_
+  (int_ 2)
+  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
+  (var_ "x")
+  (int_ 42))
+with int_ 2 in
+
+utest eval (match_
+  (int_ 3)
+  (por_ (pand_ (pint_ 1) (pvar_ "x")) (pand_ (pint_ 2) (pvar_ "x")))
+  (var_ "x")
+  (int_ 42))
+with int_ 42 in
+
+utest eval (match_
+  true_
+  (pnot_ ptrue_)
+  true_
+  false_)
+with false_ in
+
+utest eval (match_
+  false_
+  (pnot_ ptrue_)
+  true_
+  false_)
+with true_ in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5])
+  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
+  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  false_)
+with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5] in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2, int_ 3])
+  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
+  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  false_)
+with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3] in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2])
+  (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
+  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  false_)
+with false_ in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2, int_ 3])
+  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
+  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  false_)
+with tuple_ [int_ 1, int_ 2, int_ 3] in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
+  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  false_)
+with false_ in
+
+utest eval (match_
+  (seq_ [int_ 1, int_ 2])
+  (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
+  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  false_)
+with false_ in
 
 ()

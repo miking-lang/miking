@@ -94,6 +94,35 @@ let optionMapM: (a -> Option b) -> [a] -> Option [b] = lam f. lam l.
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
 
+-- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
+-- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
+-- result is 'None'.
+let optionFoldlM: (a -> b -> Option a) -> a -> [b] -> Option a = lam f.
+  recursive let recur = lam a. lam bs.
+    match bs with [b] ++ bs then
+      let res = f a b in
+      match res with Some a then
+        recur a bs
+      else match res with None () then
+        None ()
+      else never
+    else match bs with [] then
+      Some a
+    else never
+  in recur
+
+utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2]
+      with Some 3
+utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2, 3]
+      with None ()
+utest optionFoldlM (lam acc. lam x. Some (addi acc x)) 0 [1,2,3,4] with Some 10
+utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
+        0 [1,2,3,4]
+with Some 4
+utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
+        0 [1,2,2,4]
+with None ()
+
 -- Returns `true` if the option contains a value which
 -- satisfies the specified predicate.
 let optionContains: Option a -> (a -> Bool) -> Bool = lam o. lam p.

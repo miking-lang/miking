@@ -65,6 +65,16 @@ type lang_data = {
     syns: (info * cdecl list) Record.t;
   }
 
+let spprint_inter_data ({info; cases}): ustring =
+  List.map (fun (fi, {pat}) -> us"  " ^. ustring_of_pat pat ^. us" at " ^. info2str fi) cases
+  |> Ustring.concat (us"\n")
+  |> (fun msg -> us"My location is " ^. info2str info ^. us"\n" ^. msg)
+
+let spprint_lang_data ({inters}): ustring =
+  Record.bindings inters
+  |> List.map (fun (name, data) -> name ^. us"\n" ^. spprint_inter_data data)
+  |> Ustring.concat (us"\n")
+
 let compute_order fi ((fi1, {pat = pat1; pos_pat = p1; neg_pat = n1; _}), (fi2, {pat = pat2; pos_pat = p2; neg_pat = n2; _})) =
   let string_of_pat pat = ustring_of_pat pat |> Ustring.to_utf8 in
   let info2str fi = info2str fi |> Ustring.to_utf8 in
@@ -108,7 +118,7 @@ let compute_lang_data (Lang(info, _, _, decls)): lang_data =
   in List.fold_left add_decl {inters = Record.empty; syns = Record.empty} decls
 
 (* Merges the second language into the first, because the first includes the second *)
-let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data =
+let merge_lang_data fi {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data =
   let eq_cons (CDecl(_, c1, _)) (CDecl(_, c2, _)) = c1 =. c2 in
   let merge_syn _ a b = match a, b with
     | None, None -> None
@@ -118,11 +128,11 @@ let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data
        Some (fi, List.filter (fun c1 -> List.exists (eq_cons c1) old_cons |> not) cons) in
   let merge_inter name a b = match a, b with
     | None, None -> None
-  | None, Some a -> Some a
+    | None, Some a -> Some {a with info = fi}
     | Some a, None -> Some a
     | Some ({info=fi1; params=p1; cases=c1; subsets=s1} as data)
     , Some {info=fi2; params=p2; cases=c2; subsets=s2} ->
-       if fi1 = fi2 then Some data
+       if eq_info fi1 fi2 then Some data
        else if List.length p1 <> List.length p2 then
          raise_error fi1 ("Different number of parameters for interpreter '" ^ Ustring.to_utf8 name ^ "' compared to previous definitian at " ^ Ustring.to_utf8 (info2str fi2))
        else
@@ -134,11 +144,13 @@ let merge_lang_data {inters = i1; syns = s1} {inters = i2; syns = s2}: lang_data
          Some {data with subsets; cases = List.rev_append c2 c1} in
   {inters = Record.merge merge_inter i1 i2; syns = Record.merge merge_syn s1 s2}
 
-(* TODO(vipa): this is likely fairly low hanging fruit when it comes to optimization *)
+(* TODO(vipa,?): this is likely fairly low hanging fruit when it comes to optimization *)
 let topo_sort (eq: 'a -> 'a -> bool) (edges: ('a * 'a) list) (vertices: 'a list) =
   let rec recur rev_order edges vertices =
     match List.find_opt (fun v -> List.exists (fun (_, t) -> eq v t) edges |> not) vertices with
-    | None -> List.rev rev_order
+    | None ->
+       (if vertices <> [] then uprint_endline (us"topo_sort ended with " ^. ustring_of_int (List.length vertices) ^. us" vertices remaining"));
+       List.rev rev_order
     | Some x ->
        recur
          (x :: rev_order)
@@ -168,7 +180,7 @@ let flatten_lang (prev_langs: lang_data Record.t): top -> lang_data Record.t * t
   | TopLang(Lang(info, name, includes, _) as lang) ->
      let self_data = compute_lang_data lang in
      let included_data = List.map (lookup_lang info prev_langs) includes in
-     let merged_data = List.fold_left merge_lang_data self_data included_data in
+     let merged_data = List.fold_left (merge_lang_data info) self_data included_data in
      (Record.add name merged_data prev_langs, TopLang(data_to_lang info name includes merged_data))
 
 let flatten_with_env (prev_langs: lang_data Record.t) (Program(includes, tops, e): program) =
@@ -199,7 +211,7 @@ let translate_cases f target cases =
                |> Mseq.of_ustring)
   in
   let no_match =
-    let_ (us"_") nosym   (* TODO: we should probably have a special sort for let with wildcards *)
+    let_ (us"_") nosym   (* TODO(?,?): we should probably have a special sort for let with wildcards *)
       (app (TmConst (NoInfo, Cdprint)) target)
       (app (TmConst (NoInfo, Cerror)) (TmSeq(NoInfo, msg)))
   in
@@ -304,7 +316,9 @@ let rec desugar_tm nss env =
   | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
   | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
-  | TmUtest(fi, a, b, body) -> TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, desugar_tm nss env body)
+  | TmUtest(fi, a, b, using, body) ->
+    let using_desugared = Option.map (desugar_tm nss env) using in
+    TmUtest(fi, desugar_tm nss env a, desugar_tm nss env b, using_desugared, desugar_tm nss env body)
   | TmNever(fi) -> TmNever(fi)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ ) as tm -> tm
@@ -325,8 +339,8 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
      let ns = List.fold_left add_decl previous_ns decls in
      (* wrap in "con"s *)
      let wrap_con ty_name (CDecl(fi, cname, ty)) tm =
-       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa): the type will likely be incorrect once we start doing product extensions of constructors *)
-     let wrap_data decl tm = match decl with (* TODO(vipa): this does not declare the type itself *)
+       TmCondef(fi, mangle cname, nosym, TyArrow(ty, TyCon ty_name), tm) in (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
+     let wrap_data decl tm = match decl with (* TODO(vipa,?): this does not declare the type itself *)
        | Data(_, name, cdecls) -> List.fold_right (wrap_con name) cdecls tm
        | _ -> tm in
      (* translate "Inter"s into (info * ustring * tm) *)
@@ -355,8 +369,8 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
   | TopCon(Con(fi, id, ty)) ->
      let wrap tm' = TmCondef(fi, empty_mangle id, nosym, ty, tm')
      in (nss, (wrap :: stack))
-  | TopUtest(Utest(fi, lhs, rhs)) ->
-     let wrap tm' = TmUtest(fi, lhs, rhs, tm')
+  | TopUtest(Utest(fi, lhs, rhs, using)) ->
+     let wrap tm' = TmUtest(fi, lhs, rhs, using, tm')
      in (nss, (wrap :: stack))
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =

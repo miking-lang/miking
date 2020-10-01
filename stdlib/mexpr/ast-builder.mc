@@ -41,11 +41,44 @@ let pcon_ = use MExprAst in
 
 let prec_ = use MExprAst in
   lam bindings.
-  PRecord {bindings = bindings}
+  PRecord {
+    bindings =
+      foldl
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
+        assocEmpty bindings
+    }
 
 let ptuple_ = use MExprAst in
   lam ps.
   prec_ (mapi (lam i. lam p. (int2string i,p)) ps)
+
+let pseqtot_ = use MExprAst in
+  lam ps.
+  PSeqTot {pats = ps}
+
+let pseqedgew_ = use MExprAst in
+  lam pre. lam post.
+  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post}
+
+let pseqedgen_ = use MExprAst in
+  lam pre. lam middle. lam post.
+  PSeqEdge {prefix = pre, middle = PName middle, postfix = post}
+
+let pseqedge_ = use MExprAst in
+  lam pre. lam middle. lam post.
+  pseqedgen_ pre (nameNoSym middle) post
+
+let pand_ = use MExprAst in
+  lam l. lam r.
+  PAnd {lpat = l, rpat = r}
+
+let por_ = use MExprAst in
+  lam l. lam r.
+  POr {lpat = l, rpat = r}
+
+let pnot_ = use MExprAst in
+  lam p.
+  PNot {subpat = p}
 
 -- Types --
 let tyarrow_ = use MExprAst in
@@ -97,6 +130,10 @@ let tycon_ = use MExprAst in
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}
+
+let tyvar_ = use MExprAst in
+  lam ident.
+  TyVar {ident = ident}
 
 
 -- Terms --
@@ -227,7 +264,12 @@ let seq_ = use MExprAst in
 
 let record_ = use MExprAst in
   lam bindings.
-  TmRecord {bindings = bindings}
+  TmRecord {
+    bindings =
+      foldl
+        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
+        assocEmpty bindings
+    }
 
 let tuple_ = use MExprAst in
   lam tms.
@@ -389,7 +431,7 @@ let eqf_ = use MExprAst in
 
 let eqs_ = use MExprAst in
   lam s1. lam s2.
-  appf2_ (const_ (CEqs ())) s1 s2
+  appf2_ (const_ (CEqsym ())) s1 s2
 
 let ltf_ = use MExprAst in
   lam a. lam b.
@@ -431,4 +473,10 @@ let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
 
+-- Short circuit logical expressions
+let and_ = use MExprAst in
+  lam a. lam b. if_ a b false_
+
+let or_ = use MExprAst in
+  lam a. lam b. if_ a true_ b
 

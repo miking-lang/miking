@@ -12,8 +12,8 @@ include "dualnum-bool.mc"
 include "vec.mc"
 include "string.mc"
 
-let num = dualnumMkNum
-let dnum = dualnumMkDualNum
+let num = dualnumNum
+let dnum = dualnumDNum
 let genEpsilon = dualnumGenEpsilon
 let pertubation = dualnumPertubation
 let zeron = lam n. makeSeq n (num 0.)

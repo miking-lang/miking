@@ -32,10 +32,10 @@ install() {
 }
 
 # Run the test suite for sundials
-runtests_ext() {
+runtests_sundials() {
     (cd test
-     ../build/mi test ext/*)
-    build/mi test stdlib/ext/*
+     ../build/mi test sundials/*)
+    build/mi test stdlib/sundials/*
 }
 
 # Run the test suite for python intrinsic tests
@@ -49,10 +49,10 @@ runtests() {
     (cd test
     ../build/mi test mexpr
     ../build/mi test mlang
-    ../build/mi test ext
     cd ../stdlib
     ../build/mi test mexpr
     ../build/mi test ad
+		../build/mi test ext
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
@@ -60,7 +60,7 @@ runtests() {
         runtests_py
     fi
     if [ -n "$MI_TEST_SUNDIALS" ]; then
-        runtests_ext
+        runtests_sundials
     fi
 }
 

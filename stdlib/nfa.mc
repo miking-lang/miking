@@ -104,7 +104,7 @@ let nfaNextStates = lam from. lam graph. lam lbl.
 -- takes a path and returns whether it's accepted or not.
 let pathIsAccepted = lam path.
   if null path then false
-  else (setEqual eqchar (last path).status "accepted")
+  else (setEqual eqChar (last path).status "accepted")
 
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
@@ -158,9 +158,9 @@ let transitions = [(0,1,'1'),(1,1,'1'),(1,2,'0'),(2,2,'0'),(2,1,'1')] in
 let transitions2 = [(0,1,'1'),(1,3,'1'),(1,2,'1')] in
 let startState = 0 in
 let acceptStates = [2] in
-let newNfa = nfaConstr states transitions startState acceptStates eqi eqchar in
-let newNfa2 = nfaConstr states2 transitions2 startState acceptStates eqi eqchar in
-let newNfa3 = nfaConstr states2 transitions2 startState [3] eqi eqchar in
+let newNfa = nfaConstr states transitions startState acceptStates eqi eqChar in
+let newNfa2 = nfaConstr states2 transitions2 startState acceptStates eqi eqChar in
+let newNfa3 = nfaConstr states2 transitions2 startState [3] eqi eqChar in
 utest eqi startState newNfa.startState with true in
 utest setEqual eqi acceptStates newNfa.acceptStates with true in
 utest (digraphHasVertices states newNfa.graph) with true in

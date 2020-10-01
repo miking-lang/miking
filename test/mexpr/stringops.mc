@@ -3,6 +3,8 @@
 --
 -- Test implementation of simple string operations
 
+include "char.mc"
+
 mexpr
 
 let head = lam seq. get seq 0 in
@@ -14,33 +16,27 @@ recursive
     else cons (f (head seq)) (map f (tail seq))
 in
 
-let eqchar = lam c1. lam c2. eqi (char2int c1) (char2int c2) in
-let ltchar = lam c1. lam c2. lti (char2int c1) (char2int c2) in
-let gtchar = lam c1. lam c2. gti (char2int c1) (char2int c2) in
-let leqchar = lam c1. lam c2. leqi (char2int c1) (char2int c2) in
-let geqchar = lam c1. lam c2. geqi (char2int c1) (char2int c2) in
-
 recursive
-  let eqstr = lam s1. lam s2.
+  let eqString = lam s1. lam s2.
     if neqi (length s1) (length s2)
     then false
     else if eqi (length s1) 0
          then true
-         else if eqchar (head s1) (head s2)
-         then eqstr (tail s1) (tail s2)
+         else if eqChar (head s1) (head s2)
+         then eqString (tail s1) (tail s2)
          else false
 in
 
 -- Convert a character to upper case
 let char2upper = (lam c.
-	if and (geqchar c 'a') (leqchar c 'z')
+	if and (geqChar c 'a') (leqChar c 'z')
 	then (int2char (subi (char2int c) 32))
 	else c
 ) in
 
 -- Convert a character to lower case
 let char2lower = (lam c.
-	if and (geqchar c 'A') (leqchar c 'Z')
+	if and (geqChar c 'A') (leqChar c 'Z')
 	then (int2char (addi (char2int c) 32))
 	else c
 ) in
@@ -53,7 +49,7 @@ recursive
   let strsplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
-    else if eqstr delim (slice s 0 (length delim))
+    else if eqString delim (slice s 0 (length delim))
          then cons [] (strsplit delim (slice s (length delim) (length s)))
          else let remaining = strsplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
@@ -62,9 +58,9 @@ in
 -- Trims a string of spaces
 recursive
   let strtrim_init = lam s.
-    if eqstr s ""
+    if eqString s ""
     then s
-    else if eqchar (head s) ' '
+    else if eqChar (head s) ' '
          then strtrim_init (tail s)
          else s
 in
@@ -85,7 +81,7 @@ let strflatten = lam s. strjoin "" s in
 utest str2upper "Hello, world!" with "HELLO, WORLD!" in
 utest str2lower "Foo... BAR!" with "foo... bar!" in
 
-utest (eqstr "Hello" "Hello") with true in
+utest "Hello" with "Hello" using eqString in
 utest (cons "Hello" []) with ["Hello"] in
 
 utest (strsplit "ll" "Hello") with ["He", "o"] in

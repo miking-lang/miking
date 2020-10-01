@@ -1,4 +1,4 @@
--- TODO Needs updating, commented out for now
+-- TODO(dlunde,2020-09-29) Needs updating, commented out for now
 --
 -- -- Defines semantics for lambda lifting
 -- -- Based on the technique from the 1985 paper.
@@ -27,7 +27,7 @@
 -- --   replaced by a TmApp (..., ...) where the generated arguments are
 -- --   pre-applied on the generated identifier for the Let expression.
 --
--- -- NOTE: Assumes that bound variables are limited to the following AST nodes:
+-- -- NOTE(?,?): Assumes that bound variables are limited to the following AST nodes:
 -- --        - TmVar
 -- --        - TmApp
 -- --
@@ -138,7 +138,7 @@
 -- -- Returns whether the string is available in the current lambda scope
 -- let st_inLambdaScope: String -> LiftState -> Bool =
 --     lam s. lam st.
---     any (lam e. eqstr s e.ident) st.lambdarefs
+--     any (lam e. eqString s e.ident) st.lambdarefs
 --
 -- -- Strips away prefix of string if it exists
 -- let strip_prefix = lam s.
@@ -146,7 +146,7 @@
 --         let strip_prefix_helper = lam tailstr.
 --         if null tailstr
 --         then s -- String has no prefix
---         else if eqchar '_' (head tailstr)
+--         else if eqChar '_' (head tailstr)
 --              then tail tailstr
 --              else strip_prefix_helper (tail tailstr)
 --     in
@@ -164,17 +164,17 @@
 --           lam s. lam st.
 --           let tdsm = lam td. -- tdsm: TopDefStringMatch
 --               match td with TmLet t then
---                   eqstr t.ident s
+--                   eqString t.ident s
 --               else match td with TmRecLets t then
---                   any (lam rec. eqstr rec.ident s) t.bindings
+--                   any (lam rec. eqString rec.ident s) t.bindings
 --               else match td with TmConDef t then
---                   eqstr t.ident s
+--                   eqString t.ident s
 --               else
 --                   error "Global define is not TmLet, TmRecLets, or TmConDef"
 --           in
 --           any tdsm st.globaldefs
 --       in
---       let ret = find (lam e. eqstr (e.key) x.ident) state.env.evar in
+--       let ret = find (lam e. eqString (e.key) x.ident) state.env.evar in
 --       match ret with Some t then
 --         -- Function that for all variables in an expression, that they are in
 --         -- the current scope.
@@ -239,7 +239,7 @@
 --           TmVar x
 --         else
 --           let e = head l in -- e: (name, replacement)
---           if eqstr x.ident e.ident then
+--           if eqString x.ident e.ident then
 --             e.replacement
 --           else
 --             find_replacement (tail l)
@@ -259,7 +259,7 @@
 --
 --       lamlift updatedstate t.inexpr
 --     | TmConFun t ->
---       let ret = find (lam e. eqstr (e.key) t.ident) state.env.econ in
+--       let ret = find (lam e. eqString (e.key) t.ident) state.env.econ in
 --       match ret with Some t1 then
 --         (state, t1.value)
 --       else
@@ -416,7 +416,7 @@
 --     | TmRecLets t ->
 --       -- Check that all bound identifiers are unique
 --       let bound_names = map (lam e. e.ident) t.bindings in
---       if any (lam s. neqi 1 (length (filter (eqstr s) bound_names))) bound_names
+--       if any (lam s. neqi 1 (length (filter (eqString s) bound_names))) bound_names
 --       then error "Name duplication in recursive expression"
 --       else -- continue
 --
@@ -580,7 +580,7 @@
 --     --| CEqi -> (state, CEqi)
 -- end
 --
--- -- TODO: Write CmpFloatLamlift
+-- -- TODO(?,?): Write CmpFloatLamlift
 --
 -- lang SeqLamlift = SeqAst + ConstLamlift
 --     sem lamlift (state : LiftState) =
@@ -685,7 +685,7 @@
 --       let foldret = foldl liftpats (state, []) t.pats in
 --       (foldret.0, PTuple {t with pats = foldret.1})
 --     | PCon t ->
---       let newident = find (lam e. eqstr (e.key) t.ident) state.env.econ in
+--       let newident = find (lam e. eqString (e.key) t.ident) state.env.econ in
 --       let subret = lamliftPat state t.subpat in
 --       match newident with Some t1 then
 --         match t1.value with TmConFun t2 then

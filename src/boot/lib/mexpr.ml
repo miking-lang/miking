@@ -42,10 +42,9 @@ let builtin =
    ("divf",f(Cdivf(None)));("negf",f(Cnegf));
    ("ltf",f(Cltf(None)));("leqf",f(Cleqf(None)));("gtf",f(Cgtf(None)));("geqf",f(Cgeqf(None)));
    ("eqf",f(Ceqf(None)));("neqf",f(Cneqf(None)));
-   ("exp",f(Cexp));
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
-   ("int2float", f(CInt2float)); ("string2float", f(CString2float));
-   ("char2int",f(CChar2int));("int2char",f(CInt2char));
+   ("int2float", f(Cint2float)); ("string2float", f(Cstring2float));
+   ("char2int",f(Cchar2int));("int2char",f(Cint2char));
    ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
    ("cons",f(Ccons(None)));("snoc",f(Csnoc(None)));
@@ -64,12 +63,14 @@ let builtin =
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
    ("error",f(Cerror));
    ("exit",f(Cexit));
-   ("eqs", f(Ceqs(None))); ("gensym", f(Cgensym)); ("sym2hash", f(CSym2hash));
+   ("eqsym", f(Ceqsym(None))); ("gensym", f(Cgensym)); ("sym2hash", f(Csym2hash));
    ("randIntU", f(CrandIntU(None))); ("randSetSeed", f(CrandSetSeed));
    ("wallTimeMs",f(CwallTimeMs)); ("sleepMs",f(CsleepMs));
   ]
-  (* Append external functions TODO: Should not be part of core language *)
+  (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
+  (* Append sundials intrinsics *)
+  @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals)
   |> List.map (fun (x,t) -> (x,gensym(),t))
@@ -116,16 +117,15 @@ let arity = function
   | Cgeqf(None) -> 2  | Cgeqf(Some(_)) -> 1
   | Ceqf(None)  -> 2  | Ceqf(Some(_))  -> 1
   | Cneqf(None) -> 2  | Cneqf(Some(_)) -> 1
-  | Cexp        -> 1
   | Cfloorfi    -> 1
   | Cceilfi     -> 1
   | Croundfi    -> 1
-  | CInt2float  -> 1
-  | CString2float -> 1
+  | Cint2float  -> 1
+  | Cstring2float -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
-  | CChar2int   -> 1
-  | CInt2char   -> 1
+  | Cchar2int   -> 1
+  | Cint2char   -> 1
   (* MCore intrinsic: sequences *)
   | CmakeSeq(None)    -> 2 | CmakeSeq(Some(_)) -> 1
   | Clength           -> 1
@@ -153,13 +153,15 @@ let arity = function
   (* MCore symbols *)
   | CSymb(_)      -> 0
   | Cgensym       -> 1
-  | Ceqs(None)    -> 2
-  | Ceqs(Some(_)) -> 1
-  | CSym2hash      -> 1
+  | Ceqsym(None)    -> 2
+  | Ceqsym(Some(_)) -> 1
+  | Csym2hash     -> 1
   (* Python intrinsics *)
-  | CPy v -> Pyffi.arity v
-  (* External functions TODO: Should not be part of core language *)
-  | CExt v            -> Ext.arity v
+  | CPy v   -> Pyffi.arity v
+  (* Sundials intrinsics *)
+  | CSd v   -> Sd.arity v
+  (* External functions TODO(?,?): Should not be part of core language *)
+  | CExt v  -> Ext.arity v
   (* MCore intrinsic: random numbers *)
   | CrandIntU(None)    -> 2
   | CrandIntU(Some(_)) -> 1
@@ -319,7 +321,7 @@ let delta eval env fi c v  =
     | Cneqf(None),TmConst(fi,CFloat(v)) -> TmConst(fi,Cneqf(Some(v)))
     | Cneqf(Some(v1)),TmConst(fi,CFloat(v2)) -> TmConst(fi,CBool(v1 <> v2))
     | Cneqf(None),_ | Cneqf(Some(_)),_  -> fail_constapp fi
-    | CString2float,TmSeq(fi,s) ->
+    | Cstring2float,TmSeq(fi,s) ->
         let to_char = function
           | TmConst(_, CChar(c)) -> c
           | _ -> fail_constapp fi
@@ -329,10 +331,7 @@ let delta eval env fi c v  =
                 |> Ustring.from_uchars |> Ustring.to_utf8
         in
         TmConst(fi, CFloat(Float.of_string f))
-    | CString2float,_ -> fail_constapp fi
-
-    | Cexp,TmConst(fi,CFloat(v)) -> TmConst(fi,CFloat(exp(v)))
-    | Cexp,_ -> fail_constapp fi
+    | Cstring2float,_ -> fail_constapp fi
 
     | Cfloorfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.floor v |> int_of_float))
     | Cfloorfi,_ -> fail_constapp fi
@@ -343,17 +342,17 @@ let delta eval env fi c v  =
     | Croundfi,TmConst(fi,CFloat(v)) -> TmConst(fi,CInt(Float.round v |> int_of_float))
     | Croundfi,_ -> fail_constapp fi
 
-    | CInt2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
-    | CInt2float,_ -> fail_constapp fi
+    | Cint2float,TmConst(fi,CInt(v)) -> TmConst(fi,CFloat(float_of_int v))
+    | Cint2float,_ -> fail_constapp fi
 
     (* MCore intrinsic: characters *)
     | CChar(_),_ -> fail_constapp fi
 
-    | CChar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
-    | CChar2int,_ -> fail_constapp fi
+    | Cchar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
+    | Cchar2int,_ -> fail_constapp fi
 
-    | CInt2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
-    | CInt2char,_ -> fail_constapp fi
+    | Cint2char,TmConst(fi,CInt(v)) -> TmConst(fi,CChar(v))
+    | Cint2char,_ -> fail_constapp fi
 
     (* MCore intrinsic: sequences *)
     | CmakeSeq(None),TmConst(fi,CInt(v)) -> TmConst(fi,CmakeSeq(Some(v)))
@@ -472,14 +471,17 @@ let delta eval env fi c v  =
     | CSymb(_),_ -> fail_constapp fi
     | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
     | Cgensym,_ -> fail_constapp fi
-    | Ceqs(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqs(Some(id)))
-    | Ceqs(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
-    | Ceqs(_),_ -> fail_constapp fi
-    | CSym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
-    | CSym2hash,_ -> fail_constapp fi
+    | Ceqsym(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqsym(Some(id)))
+    | Ceqsym(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
+    | Ceqsym(_),_ -> fail_constapp fi
+    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
+    | Csym2hash,_ -> fail_constapp fi
 
+    (* Python intrinsics *)
     | CPy v, t -> Pyffi.delta eval env fi v t
-
+    (* Sundials intrinsics *)
+    | CSd v, t -> Sd.delta eval env fi v t
+    (* Externals *)
     | CExt v, t -> Ext.delta eval env fi v t
 
 
@@ -495,14 +497,18 @@ let debug_eval env t =
   else ()
 
 (* Print out error message when a unit test fails *)
-let unittest_failed fi t1 t2=
+let unittest_failed fi t1 t2 tusing =
   uprint_endline
     (match fi with
     | Info(_,l1,_,_,_) ->
+      let using_str = (match tusing with
+        | Some t -> us"\n    Using: " ^. (ustring_of_tm t)
+        | None   -> us"") in
       us"\n ** Unit test FAILED on line " ^.
       us(string_of_int l1)
       ^.  us" **\n    LHS: " ^. (ustring_of_tm t1)
       ^.  us"\n    RHS: "    ^. (ustring_of_tm t2)
+      ^.  using_str
     | NoInfo -> us"Unit test FAILED ")
 
 
@@ -609,8 +615,9 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
      let (matchedEnv, p) = sPat [] p in
      TmMatch(fi,symbolize env t1,p,symbolize (matchedEnv @ env) t2,symbolize env t3)
   | TmUse(fi,l,t) -> TmUse(fi,l,symbolize env t)
-  | TmUtest(fi,t1,t2,tnext)
-    -> TmUtest(fi,symbolize env t1,symbolize env t2,symbolize env tnext)
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
+     let sym_using = Option.map (fun t -> symbolize env t) tusing in
+     TmUtest(fi,symbolize env t1,symbolize env t2,sym_using,symbolize env tnext)
   | TmNever(_) -> t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -760,16 +767,23 @@ let rec eval (env : (sym * tm) list) (t : tm) =
       | None -> eval env t3)
   | TmUse(fi,_,_) -> raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
-  | TmUtest(fi,t1,t2,tnext) ->
+  | TmUtest(fi,t1,t2,tusing,tnext) ->
     if !utest then begin
-      let (v1,v2) = ((eval env t1),(eval env t2)) in
-        if val_equal v1 v2 then
-         (printf "."; utest_ok := !utest_ok + 1)
-       else (
-        unittest_failed fi v1 v2;
+      let v1,v2 = eval env t1,eval env t2 in
+      let equal = (match tusing with
+       | Some t ->
+         (match eval env (TmApp(fi,TmApp(fi,t,v1),v2)) with
+          | TmConst(_,CBool(b)) -> b
+          | _ -> raise_error fi ("Invalid equivalence function: "
+                                 ^ Ustring.to_utf8 (ustring_of_tm t)))
+       | None -> val_equal v1 v2) in
+      if equal then
+        (printf "."; utest_ok := !utest_ok + 1)
+      else (
+        unittest_failed fi v1 v2 tusing;
         utest_fail := !utest_fail + 1;
         utest_fail_local := !utest_fail_local + 1)
-     end;
+    end;
     eval env tnext
   | TmNever(fi) -> raise_error fi "Reached a never term, which should be impossible in a well-typed program."
 

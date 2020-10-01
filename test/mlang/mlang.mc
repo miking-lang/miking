@@ -65,6 +65,26 @@ end
 
 lang Overlap = ArithBool + ArithBool2 + Arith
 
+lang FooA
+  syn Val =
+  | A {}
+
+  sem foo =
+  | A _ -> "A"
+end
+
+lang FooB
+  syn Val =
+  | B {}
+
+  sem foo =
+  | B _ -> "B"
+end
+
+lang FooTrans = FooA + FooB
+
+lang FooCombined = FooA + FooTrans
+
 mexpr
 
 let _ =
@@ -120,9 +140,16 @@ let _ =
 in
 
 let _ =
-  let e1 = use A in ACon{afield = 1, aextfield = 2} in -- TODO(vipa): this should break once we start typechecking product extensions of a constructor
+  let e1 = use A in ACon{afield = 1, aextfield = 2} in -- TODO(vipa,?): this should break once we start typechecking product extensions of a constructor
   let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
   utest e1 with e2 in
+  ()
+in
+
+let _ =
+  use FooCombined in
+  utest foo (A {}) with "A" in
+  utest foo (B {}) with "B" in
   ()
 in
 

@@ -1,5 +1,5 @@
 include "string.mc"
-include "prelude.mc" -- TODO: Should not be needed
+include "prelude.mc" -- TODO(?,?): Should not be needed
 
 -- Debug stuff
 let debugFlag = false
@@ -25,7 +25,7 @@ let showPos = lam pos.
 --
 -- Check if two positions are equal.
 let eqpos = lam pos1 : Pos. lam pos2 : Pos.
-  and (eqstr pos1.file pos2.file)
+  and (eqString pos1.file pos2.file)
   (and (eqi pos1.row pos2.row) (eqi pos1.col pos2.col))
 
 -- initPos : String -> Pos
@@ -176,14 +176,14 @@ let endOfInput = lam st.
   let input = st.0 in
   if null input
   then pure () st
-  else fail (show_char (head input)) "end of input" st
+  else fail (showChar (head input)) "end of input" st
 
 utest testParser endOfInput "" with Success((), ("", initPos ""))
 
 -- next : Parser char
 --
 -- Read next character from input stream
--- TODO: It would most likely be faster to index into
+-- TODO(?,?): It would most likely be faster to index into
 --       an array than to take the tail of a string
 let next = lam st.
   let input = st.0 in
@@ -192,7 +192,7 @@ let next = lam st.
   then fail "end of input" "" st
   else
     let c = head input in
-    let pos2 = if eqstr [c] "\n" then bumpRow pos else bumpCol pos in
+    let pos2 = if eqString [c] "\n" then bumpRow pos else bumpCol pos in
     pure c (tail input, pos2)
 
 -- Core tests
@@ -254,7 +254,7 @@ let notFollowedBy = lam p. lam st.
     let res2 = next st in
     match res2 with Success t then
       let c = t.0 in
-      fail (show_char c) "" st
+      fail (showChar c) "" st
     else res2
 
 -- satisfy : (Char -> Bool) -> String -> Parser Char
@@ -266,7 +266,7 @@ let satisfy = lam cnd. lam expected. lam st.
   bind next (lam c.
   if cnd c
   then pure c
-  else lam _ . fail (show_char c) expected st) st
+  else lam _ . fail (showChar c) expected st) st
 
 -- try : Parser a -> Parser a
 --
@@ -342,7 +342,7 @@ let sepBy = lam sep. lam p.
 -- lexChar : Char -> Parser Char
 --
 -- Parse a specific character.
-let lexChar = lam c. satisfy (eqchar c) (show_char c)
+let lexChar = lam c. satisfy (eqChar c) (showChar c)
 
 utest testParser (lexChar 'a') "ab"
 with Success ('a', ("b", {file = "", row = 1, col = 2}))
@@ -415,7 +415,7 @@ with "Parse error at 1:1: Unexpected 'b'. Expected 'a'"
 -- lexDigits : Parser String
 --
 -- Parse a sequence of digits
-let lexDigits = many1 (satisfy is_digit "digit")
+let lexDigits = many1 (satisfy isDigit "digit")
 
 -- lexNumber : Parser Int
 --
@@ -464,7 +464,7 @@ with Success ("abcd", ("e", {file = "", row = 1, col = 5}))
 -- Parser Char
 --
 -- Parse a character literal.
--- TODO: Support escaped characters (also in OCaml parser)
+-- TODO(?,?): Support escaped characters (also in OCaml parser)
 let lexCharLit = wrappedIn (lexChar ''') (lexChar ''') next
 
 utest testParser lexCharLit "'\n'"
@@ -474,13 +474,13 @@ with Success (head "\n", ("", {file = "", row = 2, col = 2}))
 --
 -- Parse a string literal.
 let lexStringLit =
-  -- TODO: Are other escaped characters handled correctly?
+  -- TODO(?,?): Are other escaped characters handled correctly?
   let escaped =
     try (alt (apr (lexString "\\\\") (pure (head "\\")))
              (apr (lexString "\\") (fmap head (lexString "\""))))
   in
   wrappedIn (lexString "\"") (lexString "\"")
-             (many (alt escaped (satisfy (lam c. not (eqstr [c] "\"")) "")))
+             (many (alt escaped (satisfy (lam c. not (eqString [c] "\"")) "")))
 
 utest testParser lexStringLit ['"','"']
 with Success ("", ("", {file = "", row = 1, col = 3}))
@@ -527,12 +527,12 @@ with "Parse error at 1:3: Unexpected end of input. Expected exponent or decimals
 -- spaces : Parser ()
 --
 -- Parse zero or more whitespace characters.
-let spaces = void (many (satisfy is_whitespace "whitespace"))
+let spaces = void (many (satisfy isWhitespace "whitespace"))
 
 -- spaces1 : Parser ()
 --
 -- Parse one or more whitespace characters.
-let spaces1 = void (many1 (satisfy is_whitespace "whitespace"))
+let spaces1 = void (many1 (satisfy isWhitespace "whitespace"))
 
 utest testParser spaces "   abc"
 with Success ((), ("abc", {file = "", row = 1, col = 4}))
@@ -580,7 +580,7 @@ con If  : (Expr, Expr, Expr) -> Expr in
 -- Parse a line comment, ignoring its contents.
 let lineComment =
   void (apr (apr (lexString "--")
-                 (many (satisfy (lam c. not (eqstr "\n" [c])) "")))
+                 (many (satisfy (lam c. not (eqString "\n" [c])) "")))
             (alt (lexString "\n") endOfInput))
 in
 
@@ -608,7 +608,7 @@ let symbol = string in
 --
 -- Check if a character is valid in an identifier.
 let isValidChar = lam c.
-  or (is_alphanum c) (eqchar c '_')
+  or (isAlphanum c) (eqChar c '_')
 in
 
 -- reserved : String -> Parser String
@@ -633,13 +633,13 @@ in
 -- of reserved keywords.
 let identifier =
   let validId =
-    bind (satisfy (lam c. or (is_alpha c) (eqchar '_' c)) "valid identifier") (lam c.
+    bind (satisfy (lam c. or (isAlpha c) (eqChar '_' c)) "valid identifier") (lam c.
     bind (token (many (satisfy isValidChar ""))) (lam cs.
     pure (cons c cs)))
   in
   try (
     bind validId (lam x.
-    if any (eqstr x) keywords
+    if any (eqString x) keywords
     then fail (concat (concat "keyword '" x) "'") "identifier"
     else pure x)
   )

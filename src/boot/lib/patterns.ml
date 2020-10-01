@@ -30,7 +30,7 @@ type simple_con =
 
 module SimpleConOrd = struct
   type t = simple_con
-  (* NOTE: I can't just use the polymorphic compare in the standard library
+  (* NOTE(?,?): I can't just use the polymorphic compare in the standard library
    * since ustring has internal mutation that would be visible to it, but
    * shouldn't affect the result *)
   let compare a b = match a, b with

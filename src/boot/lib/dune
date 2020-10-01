@@ -22,13 +22,13 @@
      (pyml -> py/pypprint.ml)
      (-> py-skel/pypprint.ml))
 
-   (select ext.ml from
-     (sundialsml -> ext/ext.ml)
-     (-> ext-skel/ext.ml))
-   (select extast.ml from
-     (sundialsml -> ext/extast.ml)
-     (-> ext-skel/extast.ml))
-   (select extpprint.ml from
-     (sundialsml -> ext/extpprint.ml)
-     (-> ext-skel/extpprint.ml))
+   (select sd.ml from
+     (sundialsml -> sd/sd.ml)
+     (-> sd-skel/sd.ml))
+   (select sdast.ml from
+     (sundialsml -> sd/sdast.ml)
+     (-> sd-skel/sdast.ml))
+   (select sdpprint.ml from
+     (sundialsml -> sd/sdpprint.ml)
+     (-> sd-skel/sdpprint.ml))
 ))

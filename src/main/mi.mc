@@ -51,7 +51,7 @@ utest argparserCheckError config with None () in
 let apret = argparserParse config defaults argv in
 
 let args =
-  match apret with Left err then
+  match apret with Left errs then
     let _ = print (strJoin "\n" ["", errs, ""]) in
     error "Error parsing input arguments."
   else match apret with Right values then
@@ -63,5 +63,3 @@ if args.help then
   let _ = print (argparserUsage config 80 argv) in
   exit 0
 else --continue
-
-()
