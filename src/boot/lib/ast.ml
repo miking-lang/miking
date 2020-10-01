@@ -76,12 +76,12 @@ and const =
 | Cfloorfi
 | Cceilfi
 | Croundfi
-| CInt2float
-| CString2float
+| Cint2float
+| Cstring2float
 (* MCore intrinsic: characters *)
 | CChar    of int
-| CChar2int
-| CInt2char
+| Cchar2int
+| Cint2char
 (* MCore intrinsic: sequences *)
 | CmakeSeq of int option
 | Clength
@@ -113,7 +113,7 @@ and const =
 | CSymb of int
 | Cgensym
 | Ceqsym of int option
-| CSym2hash
+| Csym2hash
 (* External functions TODO(?,?): Should not be part of core language *)
 | CExt of Extast.ext
 | CSd of Sdast.ext

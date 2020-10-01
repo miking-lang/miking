@@ -196,13 +196,13 @@ let rec print_const fmt = function
   | Cfloorfi       -> fprintf fmt "floorfi"
   | Cceilfi        -> fprintf fmt "ceilfi"
   | Croundfi       -> fprintf fmt "roundfi"
-  | CInt2float     -> fprintf fmt "int2float"
-  | CString2float  -> fprintf fmt "string2float"
+  | Cint2float     -> fprintf fmt "int2float"
+  | Cstring2float  -> fprintf fmt "string2float"
 
   (* MCore intrinsic: characters *)
   | CChar(v)  -> fprintf fmt "%s" (lit_of_uchar v)
-  | CChar2int -> fprintf fmt "char2int"
-  | CInt2char -> fprintf fmt "int2char"
+  | Cchar2int -> fprintf fmt "char2int"
+  | Cint2char -> fprintf fmt "int2char"
 
   (* MCore intrinsic: sequences *)
   | CmakeSeq(_) -> fprintf fmt "makeseq"
@@ -238,7 +238,7 @@ let rec print_const fmt = function
   | CSymb(id) -> fprintf fmt "symb(%d)" id
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqsym(_)   -> fprintf fmt "eqsym"
-  | CSym2hash  -> fprintf fmt "sym2hash"
+  | Csym2hash  -> fprintf fmt "sym2hash"
 
   (* Python intrinsics *)
   | CPy(v) -> fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
