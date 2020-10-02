@@ -115,6 +115,10 @@ let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
         else never
       else never
 
+----------------------
+-- HELPER FUNCTIONS --
+----------------------
+
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
 let _record2tuple = lam tm.
@@ -142,11 +146,30 @@ let _record2tuple = lam tm.
 -----------
 
 lang PrettyPrint
+  sem isAtomic =
+  -- Intentionally left blank
+
   sem pprintCode (indent : Int) (env: Env) =
   -- Intentionally left blank
 
   sem expr2str =
   | expr -> match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+
+  -- Helper function for printing parentheses
+  sem printParen (indent : Int) (env: Env) =
+  | expr ->
+    let i = if isAtomic expr then indent else addi 1 indent in
+    match pprintCode i env expr with (env,str) then
+      if isAtomic expr then (env,str)
+      else (env,join ["(", str, ")"])
+    else never
+
+  -- Helper function for printing a list of arguments
+  sem printArgs (indent : Int) (env : Env) =
+  | exprs ->
+    match mapAccumL (printParen indent) env exprs with (env,args) then
+      (env, strJoin (newline indent) args)
+    else never
 
 end
 
@@ -172,18 +195,10 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     in
     let apps = appseq (TmApp t) in
 
-    let f = lam indent. lam env. lam t.
-      let i = if isAtomic t then indent else addi 1 indent in
-      match pprintCode i env t with (env,str) then
-        if isAtomic t then (env,str)
-        else (env,join ["(", str, ")"])
-      else never
-    in
-
-    match f indent env (head apps) with (env,fun) then
+    match printParen indent env (head apps) with (env,fun) then
       let aindent = incr indent in
-      match mapAccumL (f aindent) env (tail apps) with (env,args) then
-        (env, join [fun, newline aindent, strJoin (newline aindent) args])
+      match printArgs aindent env (tail apps) with (env,args) then
+        (env, join [fun, newline aindent, args])
       else never
     else error "Impossible"
 end
@@ -342,10 +357,8 @@ lang DataPrettyPrint = PrettyPrint + DataAst
   | TmConApp t ->
     match _getStr t.ident env with (env,str) then
       let l = conString str in
-      let i = if isAtomic t.body then incr indent else addi 1 (incr indent) in
-      match pprintCode i env t.body with (env,r) then
-        let str = if isAtomic t.body then r else join ["(", r, ")"] in
-          (env,join [l, newline (incr indent), str])
+      match printParen (incr indent) env t.body with (env,body) then
+        (env, join [l, newline (incr indent), body])
       else never
     else never
 end
