@@ -86,11 +86,11 @@ let evalStr : String -> Expr =
 -- Parse a string and then evaluate into a value, and pretty print
 -- as a string.
 let evalStrToStr : String -> String =
-  lam str. expr2str (evalStr str)
+  use MExprExt in lam str. expr2str (evalStr str)
 
 -- Same as evalStrToStr, but removes all white space. Good for testing.
 let evalTest : String -> String = lam str. 
-  filter (lam x. not (or (or (eqchar x ' ') (eqchar x '\n')) (eqchar x '\t')))
+  filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t')))
   (evalStrToStr str)
 
 utest evalTest "true" with "true"
