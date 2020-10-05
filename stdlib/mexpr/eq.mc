@@ -369,9 +369,10 @@ lang SeqTotPatEq = SeqTotPat
       if eqi (length ps2) (length ps1) then
         let z = zipWith (lam p1. lam p2. (p1,p2)) ps1 ps2 in
         optionFoldlM (lam fpEnv. lam ps.
-            match fpEnv with (f,p) then
-              eqPat env f p ps.0 ps.1 else None ())
-               (free,patEnv) z
+          match fpEnv with (f,p) then
+            eqPat env f p ps.0 ps.1 
+          else never)
+          (free,patEnv) z
       else None ()
     else None ()
 end
@@ -385,17 +386,19 @@ lang SeqEdgPatEq = SeqEdgePat
       match _eqpatname patEnv free mid1 mid2 with Some (f,p) then
         if eqi (length pre1) (length pre2) then
           let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
-    let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
-    match optionFoldlM (lam fpEnv. lam ps.
-              match fpEnv with (f,p) then
-                eqPat env f p ps.0 ps.1 else None ())
-                 (free,patEnv) z1 with Some (f1,p1) then
-      if eqi (length post1) (length post2) then
-        optionFoldlM (lam fpEnv. lam ps.
-              match fpEnv with (f,p) then
-                eqPat env f p ps.0 ps.1 else None ())
-                 (free,patEnv) z2
-      else None ()
+          let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
+          match optionFoldlM (lam fpEnv. lam ps.
+            match fpEnv with (f,p) then
+              eqPat env f p ps.0 ps.1 
+            else never)
+            (free,patEnv) z1 with Some (f1,p1) then
+              if eqi (length post1) (length post2) then
+                optionFoldlM (lam fpEnv. lam ps.
+                  match fpEnv with (f,p) then
+                    eqPat env f p ps.0 ps.1 
+                  else never)
+                  (free,patEnv) z2
+              else None ()
           else None ()
         else None ()
       else None ()
@@ -458,9 +461,6 @@ end
 lang AndPatEq = AndPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PAnd {lpat = l2, rpat = r2} ->
-    -- NOTE(gcaylak,2020-10-02): This check assumes order is important.
-    -- So 'l1 & r1 != l2 & r2' in terms of pattern matching.
-    -- Should we change this with irrelevant order?
     match lhs with PAnd {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
@@ -471,9 +471,6 @@ end
 lang OrPatEq = OrPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | POr {lpat = l2, rpat = r2} ->
-    -- NOTE(gcaylak,2020-10-02): This check assumes order is important.
-    -- So 'l1 | r1 != l2 | r2' in terms of pattern matching.
-    -- Should we change this with irrelevant order?
     match lhs with POr {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
