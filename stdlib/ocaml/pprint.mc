@@ -2,20 +2,13 @@ include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/pprint.mc"
-include "mexpr/pprint-helper.mc"
 include "char.mc"
 include "name.mc"
 
-let newline = pprintHelperNewline
-let incr = pprintHelperIncr
-let getStr = pprintHelperGetStr
-let envEmpty = pprintHelperEnvEmpty
+lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
+                        + LetPrettyPrint + OCamlAst
 
-type Env = PPrintEnv
-
-lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint + LetPrettyPrint
-                        + OCamlAst
-  sem _pprintBinding (indent : Int) (env: Env) =
+  sem _pprintBinding (indent : Int) (env: PPrintEnv) =
   | {ident = id, body = b} ->
     join [nameGetStr id, " = ", pprintCode indent b]
 
@@ -47,32 +40,37 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint + LetPrettyPrint
   | CLtf _ -> "(<)"
   | CChar {val = c} -> show_char c
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PPrintEnv) =
   | TmConst {val = c} -> (env, pprintConst c)
   | TmLam {ident = id, body = b} ->
-    match getStr id env with (env,str) then
-      let ident = _varString str in
-      match pprintCode (incr indent) env b with (env,body) then
-        (env,join ["fun ", ident, " ->", newline (incr indent), body])
+    match pprintEnvGetStr id env with (env,str) then
+      let ident = pprintVarString str in
+      match pprintCode (pprintIncr indent) env b with (env,body) then
+        (env,join ["fun ", ident, " ->",
+         pprintNewline (pprintIncr indent), body])
       else never
     else never
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
     let lname = lam env. lam bind.
-      match getStr bind.ident env with (env,str) then
-        (env,_varString str)
+      match pprintEnvGetStr bind.ident env with (env,str) then
+        (env,pprintVarString str)
       else never in
     let lbody = lam env. lam bind.
-      match pprintCode (incr (incr indent)) env bind.body with (env,str) then
-        (env,_varString str)
+      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
+      with (env,str) then (env,pprintVarString str)
       else never in
     match mapAccumL lname env bindings with (env,idents) then
       match mapAccumL lbody env bindings with (env,bodies) then
         match pprintCode indent env inexpr with (env,inexpr) then
           let fzip = lam ident. lam body.
-            join [ident, " =", newline (incr (incr indent)), body]
+            join [ident, " =",
+                  pprintNewline (pprintIncr (pprintIncr indent)),
+                  body]
           in
-          (env,join ["let rec ", strJoin (join [newline indent, "and "])
-            (zipWith fzip idents bodies), newline indent, "in ", inexpr])
+          (env,join ["let rec ",
+                     strJoin (join [pprintNewline indent, "and "])
+                     (zipWith fzip idents bodies),
+                     pprintNewline indent, "in ", inexpr])
         else never
       else never
     else never
@@ -83,13 +81,9 @@ lang TestLang = OCamlPrettyPrint + MExprSym
 mexpr
 use TestLang in
 
-let pprint = lam indent. lam t.
-  (pprintCode indent envEmpty t).1
-in
-
 let pprintProg = lam p.
   let _ = print "\n\n" in
-  print (pprint 0 (symbolize assocEmpty p))
+  print (expr2str (symbolize p))
 in
 
 let addInt1 = addi_ (int_ 1) (int_ 2) in
