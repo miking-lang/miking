@@ -377,9 +377,7 @@ lang SeqTotPatEq = SeqTotPat
     else None ()
 end
 
-lang SeqEdgPatEq = SeqEdgePat
-  -- NOTE(gcaylak,2020-10-02): 'SeqEdgPatEq' is called 'SeqEdgePat' in 'ast.mc'.
-  -- Should we change 'SeqEdgPatEq' to 'SeqEdgePatEq' as well?
+lang SeqEdgePatEq = SeqEdgePat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
@@ -387,18 +385,19 @@ lang SeqEdgPatEq = SeqEdgePat
         if eqi (length pre1) (length pre2) then
           let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
           let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
-          match optionFoldlM (lam fpEnv. lam ps.
+          let fl = optionFoldlM (lam fpEnv. lam ps.
             match fpEnv with (f,p) then
               eqPat env f p ps.0 ps.1 
             else never)
-            (free,patEnv) z1 with Some (f1,p1) then
-              if eqi (length post1) (length post2) then
-                optionFoldlM (lam fpEnv. lam ps.
-                  match fpEnv with (f,p) then
-                    eqPat env f p ps.0 ps.1 
-                  else never)
-                  (free,patEnv) z2
-              else None ()
+            (free,patEnv) z1 in
+          match fl with Some (f1,p1) then
+            if eqi (length post1) (length post2) then
+              optionFoldlM (lam fpEnv. lam ps.
+                match fpEnv with (f,p) then
+                  eqPat env f p ps.0 ps.1 
+                else never)
+                (free,patEnv) z2
+            else None ()
           else None ()
         else None ()
       else None ()
@@ -503,7 +502,7 @@ lang MExprEq =
   CharEq + SymbEq + CmpSymbEq + SeqOpEq
 
   -- Patterns
-  + VarPatEq + SeqTotPatEq + SeqEdgPatEq + RecordPatEq + DataPatEq + IntPatEq +
+  + VarPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
   CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
 
 end
