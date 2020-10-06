@@ -3,6 +3,7 @@
 include "string.mc"
 include "name.mc"
 include "assoc.mc"
+include "mexpr/info.mc"
 
 -----------
 -- TERMS --
@@ -10,7 +11,10 @@ include "assoc.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name}
+  | TmVar {ident : Name, fi: Info}
+
+  sem info =
+  | TmVar r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -21,21 +25,28 @@ end
 
 lang AppAst
   syn Expr =
-  | TmApp {lhs : Expr,
-           rhs : Expr}
+  | TmApp {lhs : Expr, rhs : Expr, fi: Info}
+
+  sem info =
+  | TmApp r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmApp t -> TmApp {lhs = f t.lhs, rhs = f t.rhs}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmApp t -> f (f acc t.lhs) t.rhs
+
 end
 
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
            tpe   : Option,
-           body  : Expr}
+           body  : Expr,
+           fi    : Info}
+
+  sem info =
+  | TmLam r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
@@ -65,7 +76,11 @@ lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
            body   : Expr,
-           inexpr : Expr}
+           inexpr : Expr,
+	   fi     : Info}
+
+  sem info =
+  | TmLet r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}
@@ -94,7 +109,10 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const}
+  | TmConst {val : Const, fi: Info}
+
+  sem info =
+  | TmConst r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
@@ -125,9 +143,13 @@ lang MatchAst
   | TmMatch {target : Expr,
              pat    : Pat,
              thn    : Expr,
-             els    : Expr}
+             els    : Expr,
+             fi     : Info}
 
   syn Pat =
+
+  sem info =
+  | TmMatch r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmMatch t -> TmMatch {{{t with target = f t.target}
@@ -155,7 +177,10 @@ end
 
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr]}
+  | TmSeq {tms : [Expr], fi: Info}
+
+  sem info =
+  | TmSeq r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
@@ -166,7 +191,10 @@ end
 
 lang NeverAst
   syn Expr =
-  | TmNever {}
+  | TmNever {fi: Info}
+
+  sem info =
+  | TmNever r -> r.fi
 
   -- TODO(dlunde,2020-09-29): smap, sfold
 end
@@ -338,7 +366,10 @@ end
 
 lang BoolPat = BoolAst
   syn Pat =
-  | PBool {val : Bool}
+  | PBool {val : Bool, fi : Info}
+
+  sem info =
+  | PBool r -> r.fi
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PBool v -> PBool v

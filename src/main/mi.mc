@@ -6,6 +6,7 @@
 include "seq.mc"
 include "string.mc"
 include "compile.mc"
+include "assoc.mc"
 
 mexpr
 
@@ -27,26 +28,27 @@ let optionsMap = [
 ] in
 
 -- Commands map, maps command strings to functions. The functions
--- always take an option structure as input.
+-- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("compile", compile)
 ] in
 
 -- Simple handling of options before we have an argument parsing library.
 let parseOptions = lam xs.
-  (foldl (lam acc. lam s1.
+  (foldl (lam acc. lam s.
     match acc with (options,lst) then
       match findAssoc (lam s2. eqString s1 s2) optionsMap with Some f
       then (f options, lst)
-      else match s1 with "--" ++ _
-           then  [printLn (concat "Unknown option " s1), exit 1]
-           else (options, cons s1 xs)
+      else [printLn (concat "Unknown option " s), exit 1]
     else never
   ) (options,[]) (reverse xs)).0 in
 
 
 -- Main: find and run the correct command. See commandsMap above.
 if lti (length argv) 2 then print menu else
-  match findAssoc (lam s. eqString (get argv 1) s) commandsMap with Some cmd
-  then cmd (parseOptions argv)
-  else [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
+  match  (eqString (get argv 1)) commandsMap with Some cmd
+  then
+    let argvp = partition (isPrefix eqc "--") (tail (tail argv)) in
+    cmd argvp.1 (parseOptions argvp.0)
+  else
+    [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
