@@ -94,7 +94,7 @@ lang ExprParser = WSACParser
 end
 
 
--- Include this fragment is there are no infix operations
+-- Include this fragment if there are no infix operations
 lang ExprParserNoInfix = ExprParser
   sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
   | _ -> exp
@@ -115,8 +115,7 @@ end
 -- Parsing of an unsigned integer
 lang UIntParser = ExprParser + ConstAst + IntAst
   sem parseExprImp (p : Pos) =
-  | ("0" ++ s) & xs | ("1" ++ s) & xs | ("2" ++ s) & xs | ("3" ++ s) & xs | ("4" ++ s) & xs |
-    ("5" ++ s) & xs | ("6" ++ s) & xs | ("7" ++ s) & xs | ("8" ++ s) & xs | ("9" ++ s) & xs ->
+  | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ s) & xs -> 
     recursive
     let work = lam p2. lam str. lam num.
       match str with [x] ++ xs then
@@ -214,8 +213,8 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
       posErrorExit (advanceCol p 1) "Unknown escape character."
     else match str with [x] ++ xs then ret x xs 1
     else posErrorExit p "Unexpected end of file."
-    -- TODO David (2020-09-27): Shoud we allow newlines etc. inside strings
-    -- TODO David (2020-09-27): Add all other relevant escape characters
+    -- TODO (David, 2020-09-27): Shoud we allow newlines etc. inside strings
+    -- TODO (David, 2020-09-27): Add all other relevant escape characters
 
 -- Parses strings, including escape characters
 lang StringParser = ExprParser + SeqAst + CharAst
@@ -273,12 +272,9 @@ utest parseIdent true (initPos "") "Asd12 " with {val = "Asd12", str = " ", pos 
 -- Parse variable
 lang VarParser = ExprParser + VarAst
   sem parseExprImp (p: Pos) =
-  | ("_" ++ s) & xs | ("a" ++ s) & xs | ("b" ++ s) & xs | ("c" ++ s) & xs | ("d" ++ s) & xs |
-    ("e" ++ s) & xs | ("f" ++ s) & xs | ("g" ++ s) & xs | ("h" ++ s) & xs | ("i" ++ s) & xs |
-    ("j" ++ s) & xs | ("k" ++ s) & xs | ("l" ++ s) & xs | ("m" ++ s) & xs | ("n" ++ s) & xs |
-    ("o" ++ s) & xs | ("p" ++ s) & xs | ("q" ++ s) & xs | ("r" ++ s) & xs | ("s" ++ s) & xs |
-    ("t" ++ s) & xs | ("u" ++ s) & xs | ("v" ++ s) & xs | ("w" ++ s) & xs | ("x" ++ s) & xs |
-    ("y" ++ s) & xs | ("z" ++ s) & xs ->
+  | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
+      'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
+      'x' | 'y' | 'z' ] ++ s) & xs ->
     let r = parseIdent false p xs in
     {val = TmVar {ident = nameNoSym r.val, fi = makeInfo p r.pos},
      pos = r.pos, str = r.str}
@@ -295,7 +291,7 @@ lang FunParser = ExprParser + KeywordParser + FunAst
     {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
                   body = e.val, fi = makeInfo p e.pos},
      pos = e.pos, str = e.str}
-    -- TODO David (2020-09-27): Add parsing of type     
+    -- TODO (David, 2020-09-27): Add parsing of type     
 end
 
 -- Parsing let expressions
@@ -347,8 +343,7 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
   sem parseInfixImp (p: Pos) =
   | str ->
     Some {
-      val = lam x. lam y. TmApp {lhs = x, rhs = y, fi = NoInfo ()},
-      -- TODO: David (2020-09-27): Add correct info handling
+      val = lam x. lam y. TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)},
       pos = p, str = str, assoc = LeftAssoc (), prec = 50}
 end
 
