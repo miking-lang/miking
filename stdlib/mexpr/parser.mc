@@ -129,7 +129,7 @@ end
 
 
 -- Fragment for simple parsing of keyword
-lang KeywordParser = WSACParser
+lang KeywordUtils = WSACParser
   sem matchKeyword (keyword: String) (p: Pos) =
   | s ->
      let r = eatWSAC p s in
@@ -142,7 +142,7 @@ end
 
 
 -- Parsing if expressions
-lang IfParser = ExprParser + KeywordParser +  MatchAst + BoolPat
+lang IfParser = ExprParser + KeywordUtils +  MatchAst + BoolPat
   sem parseExprImp (p: Pos) =
   | "if" ++ xs ->
      let e1 = parseExprMain (advanceCol p 2) 0 xs in
@@ -169,7 +169,7 @@ end
 
 
 -- Parse parentheses
-lang ParenthesesParser = ExprParser + KeywordParser
+lang ParenthesesParser = ExprParser + KeywordUtils
   sem parseExprImp (p: Pos) =
   | "(" ++ xs ->
     let e = parseExprMain (advanceCol p 1) 0 xs in
@@ -178,7 +178,7 @@ lang ParenthesesParser = ExprParser + KeywordParser
 end
 
 -- Parses a sequence of 
-lang SeqParser = ExprParser + KeywordParser + SeqAst
+lang SeqParser = ExprParser + KeywordUtils + SeqAst
   sem parseExprImp (p: Pos) =
   | "[" ++ xs -> 
       recursive let work = lam acc. lam first. lam p2. lam str.
@@ -233,7 +233,7 @@ lang StringParser = ExprParser + SeqAst + CharAst
 end
 
 -- Parses character literals
-lang CharParser = ExprParser + KeywordParser + CharAst
+lang CharParser = ExprParser + KeywordUtils + CharAst
   sem parseExprImp (p: Pos) =
   | "\'" ++ xs ->
       let r =  matchChar (advanceCol p 1) xs in
@@ -261,13 +261,20 @@ let parseIdent = lam upper. lam p. lam str.
     else {val = acc, pos = p, str = str}
   in work "" true p str
 
-utest parseIdent false (initPos "") "+" with {val = "", str = "+", pos = posVal "" 1 0}
-utest parseIdent false (initPos "") "a " with {val = "a", str = " ", pos = posVal "" 1 1}
-utest parseIdent false (initPos "") "ba" with {val = "ba", str = "", pos = posVal "" 1 2}
-utest parseIdent false (initPos "") "_asd " with {val = "_asd", str = " ", pos = posVal "" 1 4}
-utest parseIdent true (initPos "") "_asd " with {val = "", str = "_asd ", pos = posVal "" 1 0}
-utest parseIdent false (initPos "") "Asd12 " with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
-utest parseIdent true (initPos "") "Asd12 " with {val = "Asd12", str = " ", pos = posVal "" 1 5}
+utest parseIdent false (initPos "") "+"
+  with {val = "", str = "+", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "a "
+  with {val = "a", str = " ", pos = posVal "" 1 1}
+utest parseIdent false (initPos "") "ba"
+  with {val = "ba", str = "", pos = posVal "" 1 2}
+utest parseIdent false (initPos "") "_asd "
+  with {val = "_asd", str = " ", pos = posVal "" 1 4}
+utest parseIdent true (initPos "") "_asd "
+  with {val = "", str = "_asd ", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "Asd12 "
+  with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
+utest parseIdent true (initPos "") "Asd12 "
+  with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 
 -- Parse variable
 lang VarParser = ExprParser + VarAst
@@ -276,26 +283,34 @@ lang VarParser = ExprParser + VarAst
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ] ++ s) & xs ->
     let r = parseIdent false p xs in
-    {val = TmVar {ident = nameNoSym r.val, fi = makeInfo p r.pos},
-     pos = r.pos, str = r.str}
+    match parseKeyword p r.str r.val with Some v then
+      v
+    else   
+      {val = TmVar {ident = nameNoSym r.val, fi = makeInfo p r.pos},
+       pos = r.pos, str = r.str}
+
+  sem parseKeyword (p: Pos) (xs: string) =
+  | _ -> None () 
 end
 
+
 -- Parsing of a lambda
-lang FunParser = ExprParser + KeywordParser + FunAst 
-  sem parseExprImp (p: Pos) =
-  | "lam" ++ xs ->
+lang FunParser = ExprParser + VarParser + KeywordUtils + FunAst 
+  sem parseKeyword (p: Pos) (xs: String) =
+  | "lam" ->
     let r = eatWSAC (advanceCol p 3) xs in
     let r2 = parseIdent false r.pos r.str in
     let r3 = matchKeyword "." r2.pos r2.str  in
     let e = parseExprMain r3.pos 0 r3.str in
-    {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
+    Some {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
                   body = e.val, fi = makeInfo p e.pos},
-     pos = e.pos, str = e.str}
+          pos = e.pos, str = e.str}
     -- TODO (David, 2020-09-27): Add parsing of type     
 end
 
+
 -- Parsing let expressions
-lang LetParser = ExprParser + KeywordParser + LetAst
+lang LetParser = ExprParser + KeywordUtils + LetAst
   sem parseExprImp (p: Pos) =
   | "let" ++ xs ->
     let r = eatWSAC (advanceCol p 3) xs in
