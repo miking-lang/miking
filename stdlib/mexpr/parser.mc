@@ -215,16 +215,6 @@ lang IfParser = ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat
       str = e3.str}
  end
 
--- Integer arithmetic parser (intrinsics)
-lang ArithIntParser = ExprParser + ConstAst + ArithIntAst
-  sem parseExprImp (p: Pos) =
-  | "addi" ++ xs -> let p2 = advanceCol p 4 in
-      {val = TmConst {val = CAddi {}, fi = makeInfo p p2}, pos = p2, str = xs}
-  | "subi" ++ xs -> let p2 = advanceCol p 4 in
-      {val = TmConst {val = CSubi {}, fi = makeInfo p p2}, pos = p2, str = xs}
-  | "muli" ++ xs -> let p2 = advanceCol p 4 in
-      {val = TmConst {val = CMuli {}, fi = makeInfo p p2}, pos = p2, str = xs}
-end
 
 
 -- Parse parentheses
@@ -252,12 +242,6 @@ lang SeqParser = ExprParser + KeywordUtils + SeqAst
       in work [] true (advanceCol p 1) xs
 end
 
--- Sequence operations (intrinsics)
-lang SeqOpParser = ExprParser + ConstAst + SeqOpAst
-  sem parseExprImp (p: Pos) =
-  | "concat" ++ xs -> let p2 = advanceCol p 6 in
-      {val = TmConst {val = CConcat {}, fi = makeInfo p p2}, pos = p2, str = xs}
-end
 
 -- Matches a character (including escape character). 
 let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
@@ -386,9 +370,9 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
 end
 
 
-lang MExprParserBase = BoolParser + UIntParser + IfParser + ArithIntParser +
+lang MExprParserBase = BoolParser + UIntParser + IfParser + 
                        ParenthesesParser + MExprWSACParser +
-		       SeqParser + SeqOpParser +
+		       SeqParser + 
 		       StringParser + CharParser +
 		       VarParser + FunParser + LetParser
 
@@ -417,16 +401,9 @@ utest parseExpr (initPos "f") " true " with
 -- Boolean literal 'false'
 utest parseExpr (initPos "f") " true " with
       TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
--- Instrinsics integer arithmetic
-utest parseExpr (initPos "") "  addi " with
-      TmConst {val = CAddi {}, fi = infoVal "" 1 2 1 6}  in
-utest parseExpr (initPos "") "  subi " with
-      TmConst {val = CSubi {}, fi = infoVal "" 1 2 1 6} in
-utest parseExpr (initPos "") "  muli " with
-      TmConst {val = CMuli {}, fi = infoVal "" 1 2 1 6} in 
 -- Parentheses 
-utest parseExpr (initPos "") " ( muli) " with
-      TmConst {val = CMuli {}, fi = infoVal "" 1 3 1 7} in
+utest parseExpr (initPos "") " ( 123) " with
+      TmConst {val = CInt {val = 123}, fi = infoVal "" 1 3 1 6} in
 -- Sequences
 utest parseExpr (initPos "") "[]" with
       TmSeq {tms = [], fi = infoVal "" 1 0 1 2} in

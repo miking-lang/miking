@@ -31,7 +31,6 @@ let evalTest : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t')))
   (evalStrToStr str)
 
------------------------------------------
 
 
 
@@ -53,3 +52,4 @@ utest evalTest " [ 'a' , 'b' , 'c'] " with "\"abc\""
 utest evalTest " let x = 73 in x" with "73"
 utest evalTest " let foo1 = 19 in \n let foo2 = 22 in [foo1,foo2]" with "[19,22]"
 utest evalTest " let iftrue = 5 in iftrue" with "5"
+
