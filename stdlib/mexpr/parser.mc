@@ -118,9 +118,9 @@ let parseIdent = lam upper. lam p. lam str.
       let c = char2int x in
       let m1 = or (not first) upper in
       let m2 = or (not first) (not upper) in
-      if or (or (and m1 (and (geqi c 65) (leqi c 90)))
-                (and m2 (or (eqi c 95) (and (geqi c 97) (leqi c 122)))))
-	    (and (not first) (and (geqi c 48) (leqi c 57)))	    
+      if or (or (and m1 (isUpperAlpha x))
+                (and m2 (or (eqChar x '_') (isLowerAlpha x))))
+	    (and (not first) (isDigit x))	    
       then work (snoc acc x) false (advanceCol p 1) xs
       else {val = acc, pos = p, str = str}
     else {val = acc, pos = p, str = str}
@@ -142,7 +142,7 @@ utest parseIdent true (initPos "") "Asd12 "
   with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 
 
--- Parse identfier
+-- Parse identifier
 lang IdentParser = ExprParser 
   sem parseExprImp (p: Pos) =
   | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
