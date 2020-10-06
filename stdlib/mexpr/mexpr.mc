@@ -10,12 +10,12 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "seq.mc"
 
-lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint
+lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint 
 
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExpr in lam t. eval {env = assocEmpty} (symbolize assocEmpty t)
+  use MExpr in lam t. eval {env = assocEmpty} (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =
@@ -30,6 +30,10 @@ let evalStrToStr : String -> String =
 let evalTest : String -> String = lam str. 
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t')))
   (evalStrToStr str)
+
+-----------------------------------------
+
+
 
 utest evalTest "true" with "true"
 utest evalTest "false" with "false"
@@ -48,4 +52,3 @@ utest evalStrToStr " \" f\\\\  \\n \\\" \" " with "\" f\\  \n \" \""
 utest evalTest " [ 'a' , 'b' , 'c'] " with "\"abc\""
 utest evalTest " let x = 73 in x" with "73"
 utest evalTest " let foo1 = 19 in \n let foo2 = 22 in [foo1,foo2]" with "[19,22]"
-

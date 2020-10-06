@@ -43,7 +43,7 @@ lang FunAst = VarAst + AppAst
   | TmLam {ident : Name,
            tpe   : Option,
            body  : Expr,
-	   fi    : Info}
+           fi    : Info}
 
   sem info =
   | TmLam r -> r.fi
