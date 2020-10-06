@@ -15,7 +15,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "ast-builder.mc"
 
--- Fragment for constructing constant binary opertors. Used by InfixArithParser
+-- Fragment for constructing constant binary operators. Used by InfixArithParser
 lang MExprMakeConstBinOp = ArithIntAst + AppAst
   sem makeConstBinOp (n: Int) (p: Pos) (xs: String)
                      (assoc: Associativity) (prec: Int) =
@@ -25,18 +25,14 @@ lang MExprMakeConstBinOp = ArithIntAst + AppAst
       val = lam x. lam y.
         let op = TmConst {val = op, fi = makeInfo p p2} in
         let app = lam x. lam y. 
-                TmApp {lhs = x, rhs = y, fi = NoInfo ()} in
-                --TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)} in
-		--
-		--BUG: the above should work, but the info function does not exist
-		-- for TmApp, altough languge fragment AppAst is included.
+                TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)} in
         let res = (app (app op x) y) in
         res, 
       pos = p2, str = xs, assoc = assoc, prec = prec}
 end
 
 
--- Demonstrates the use of infix operators. The syntax is not part of basic MCore
+-- Demonstrates the use of infix operators. The syntax is not part of basic MCore.
 lang ExprInfixArithParser =  ExprInfixParser + ArithIntAst + MExprMakeConstBinOp 
   sem parseInfixImp (p: Pos) =
   | "+" ++ xs -> makeConstBinOp 1 p xs (LeftAssoc ()) 10 (CAddi {})
