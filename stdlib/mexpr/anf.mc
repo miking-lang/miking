@@ -268,7 +268,7 @@ let debug = false in
 let debugPrint = lam t.
   if debug then
     let _ = printLn "--- BEFORE ANF ---" in
-    let t = symbolize assocEmpty t in
+    let t = symbolize t in
     let _ = printLn (expr2str t) in
     let _ = print "\n" in
     let _ = printLn "--- AFTER ANF ---" in

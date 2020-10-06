@@ -77,11 +77,15 @@ utest nameEqSym _t3 _t3 with true
 
 -- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
 -- a symbol and their strings are equal. Otherwise, return false.
--- TODO(dlunde,2020-09-25): Short circuit for performance?
 let nameEq : Name -> Name -> Bool =
   lam n1. lam n2.
-    or (nameEqSym n1 n2)
-      (and (and (not (nameHasSym n1)) (not (nameHasSym n2))) (nameEqStr n1 n2))
+    if nameEqSym n1 n2 then true
+    else
+      if not (nameHasSym n1) then
+        if not (nameHasSym n2) then
+          nameEqStr n1 n2
+        else false
+      else false
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
