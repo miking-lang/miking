@@ -276,35 +276,41 @@ utest parseIdent false (initPos "") "Asd12 "
 utest parseIdent true (initPos "") "Asd12 "
   with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 
--- Parse variable
-lang VarParser = ExprParser + VarAst
+
+-- Parse identfier
+lang IdentParser = ExprParser 
   sem parseExprImp (p: Pos) =
   | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ] ++ s) & xs ->
     let r = parseIdent false p xs in
-    match parseKeyword p r.str r.val with Some v then
-      v
-    else   
-      {val = TmVar {ident = nameNoSym r.val, fi = makeInfo p r.pos},
-       pos = r.pos, str = r.str}
+    nextIdent p r.str r.val 
 
-  sem parseKeyword (p: Pos) (xs: string) =
-  | _ -> None () 
+  sem nextIdent (p: Pos) (xs: string) =
+end
+
+
+-- Parse variable
+lang VarParser = ExprParser + IdentParser + VarAst
+  sem nextIdent (p: Pos) (xs: string) =
+  | x ->
+      let p2 = advanceCol p (length x) in
+      {val = TmVar {ident = nameNoSym x, fi = makeInfo p p2},
+       pos = p2, str = xs}
 end
 
 
 -- Parsing of a lambda
-lang FunParser = ExprParser + VarParser + KeywordUtils + FunAst 
-  sem parseKeyword (p: Pos) (xs: String) =
+lang FunParser = ExprParser + IdentParser + KeywordUtils + FunAst 
+  sem nextIdent (p: Pos) (xs: String) =
   | "lam" ->
     let r = eatWSAC (advanceCol p 3) xs in
     let r2 = parseIdent false r.pos r.str in
     let r3 = matchKeyword "." r2.pos r2.str  in
     let e = parseExprMain r3.pos 0 r3.str in
-    Some {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
+    {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
                   body = e.val, fi = makeInfo p e.pos},
-          pos = e.pos, str = e.str}
+     pos = e.pos, str = e.str}
     -- TODO (David, 2020-09-27): Add parsing of type     
 end
 
@@ -379,6 +385,7 @@ mexpr
 
 
 use MExprParser in
+
 -- Unsigned integer
 utest parseExprMain (initPos "file") 0 "  123foo" with
       {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5},
