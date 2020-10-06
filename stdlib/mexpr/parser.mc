@@ -26,9 +26,12 @@ lang WhitespaceParser = WSACParser
 end
 
 let _ = use WhitespaceParser in
-  utest eatWSAC (initPos "") "  foo" with {str = "foo", pos = (posVal "" 1 2)} in
-  utest eatWSAC (initPos "") " \tfoo" with {str = "foo", pos = (posVal "" 1 3)} in
-  utest eatWSAC (initPos "") " \n    bar " with {str = "bar ", pos = (posVal "" 2 4)} in
+  utest eatWSAC (initPos "") "  foo"
+    with {str = "foo", pos = (posVal "" 1 2)} in
+  utest eatWSAC (initPos "") " \tfoo"
+    with {str = "foo", pos = (posVal "" 1 3)} in
+  utest eatWSAC (initPos "") " \n    bar "
+    with {str = "bar ", pos = (posVal "" 2 4)} in
   ()
 
 -- Eat line comments of the form --
@@ -63,10 +66,14 @@ end
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 
 let _ = use MExprWSACParser in
-  utest eatWSAC (initPos "") " --foo \n  bar " with {str = "bar ", pos = posVal "" 2 2} in
-  utest eatWSAC (initPos "") " /- foo -/ bar" with {str = "bar", pos = posVal "" 1 11} in
-  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar " with {str = "bar ", pos = posVal "" 4 0} in
-  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !" with {str = "!", pos = posVal "" 2 7} in
+  utest eatWSAC (initPos "") " --foo \n  bar "
+    with {str = "bar ", pos = posVal "" 2 2} in
+  utest eatWSAC (initPos "") " /- foo -/ bar"
+    with {str = "bar", pos = posVal "" 1 11} in
+  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar "
+    with {str = "bar ", pos = posVal "" 4 0} in
+  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !"
+    with {str = "!", pos = posVal "" 2 7} in
   ()
 
 
@@ -100,15 +107,65 @@ lang ExprParserNoInfix = ExprParser
   | _ -> exp
 end
 
--- Parsing of boolean literals
-lang BoolParser = ExprParser + ConstAst + BoolAst
+-- Parses an identfier that starts with a lower-case letter or a '_' if parameter
+-- 'upper' is false, and starts with an upper-case letter if 'upper' is true.
+-- The rest of the string can contain both upper and lower-case letters.
+-- If no identifier, the 'val' field contains an empty string.
+let parseIdent = lam upper. lam p. lam str.
+  recursive
+  let work = lam acc. lam first. lam p. lam str.
+    match str with [x] ++ xs then
+      let c = char2int x in
+      let m1 = or (not first) upper in
+      let m2 = or (not first) (not upper) in
+      if or (or (and m1 (and (geqi c 65) (leqi c 90)))
+                (and m2 (or (eqi c 95) (and (geqi c 97) (leqi c 122)))))
+	    (and (not first) (and (geqi c 48) (leqi c 57)))	    
+      then work (snoc acc x) false (advanceCol p 1) xs
+      else {val = acc, pos = p, str = str}
+    else {val = acc, pos = p, str = str}
+  in work "" true p str
+
+utest parseIdent false (initPos "") "+"
+  with {val = "", str = "+", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "a "
+  with {val = "a", str = " ", pos = posVal "" 1 1}
+utest parseIdent false (initPos "") "ba"
+  with {val = "ba", str = "", pos = posVal "" 1 2}
+utest parseIdent false (initPos "") "_asd "
+  with {val = "_asd", str = " ", pos = posVal "" 1 4}
+utest parseIdent true (initPos "") "_asd "
+  with {val = "", str = "_asd ", pos = posVal "" 1 0}
+utest parseIdent false (initPos "") "Asd12 "
+  with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
+utest parseIdent true (initPos "") "Asd12 "
+  with {val = "Asd12", str = " ", pos = posVal "" 1 5}
+
+
+-- Parse identfier
+lang IdentParser = ExprParser 
   sem parseExprImp (p: Pos) =
-  | "true" ++ xs ->
+  | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
+      'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
+      'x' | 'y' | 'z' ] ++ s) & xs ->
+    let r = parseIdent false p xs in
+    nextIdent p r.str r.val 
+
+  sem nextIdent (p: Pos) (xs: string) =
+end
+
+
+-- Parsing of boolean literals
+lang BoolParser = ExprParser + IdentParser + ConstAst + BoolAst
+  sem nextIdent (p: Pos) (xs: String) =
+  | "true" ->
       let p2 = advanceCol p 4 in
-      {val = TmConst {val = CBool {val = true}, fi = makeInfo p p2}, pos = p2, str = xs}
-  | "false" ++ xs ->
+      {val = TmConst {val = CBool {val = true}, fi = makeInfo p p2},
+       pos = p2, str = xs}
+  | "false" ->
       let p2 = advanceCol p 5 in
-      {val = TmConst {val = CBool {val = false}, fi = makeInfo p p2}, pos = p2, str = xs}
+      {val = TmConst {val = CBool {val = false}, fi = makeInfo p p2},
+       pos = p2, str = xs}
 end
 
 
@@ -122,8 +179,10 @@ lang UIntParser = ExprParser + ConstAst + IntAst
         let c = char2int x in
         if and (geqi c 48) (leqi c 57)
         then work (advanceCol p2 1) xs (snoc num x)
-        else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
-      else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2}, pos = p2, str = str}
+        else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2},
+              pos = p2, str = str}
+      else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2},
+            pos = p2, str = str}
     in work (advanceCol p 1) s ([head xs])
 end
 
@@ -142,9 +201,9 @@ end
 
 
 -- Parsing if expressions
-lang IfParser = ExprParser + KeywordUtils +  MatchAst + BoolPat
-  sem parseExprImp (p: Pos) =
-  | "if" ++ xs ->
+lang IfParser = ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat
+  sem nextIdent (p: Pos) (xs: String) =
+  | "if" ->
      let e1 = parseExprMain (advanceCol p 2) 0 xs in
      let r1 = matchKeyword "then" e1.pos e1.str  in
      let e2 = parseExprMain r1.pos 0 r1.str in
@@ -242,52 +301,6 @@ lang CharParser = ExprParser + KeywordUtils + CharAst
        pos = r2.pos, str = r2.str}
 end
 
--- Parses an identfier that starts with a lower-case letter or a '_' if parameter
--- 'upper' is false, and starts with an upper-case letter if 'upper' is true.
--- The rest of the string can contain both upper and lower-case letters.
--- If no identifier, the 'val' field contains an empty string.
-let parseIdent = lam upper. lam p. lam str.
-  recursive
-  let work = lam acc. lam first. lam p. lam str.
-    match str with [x] ++ xs then
-      let c = char2int x in
-      let m1 = or (not first) upper in
-      let m2 = or (not first) (not upper) in
-      if or (or (and m1 (and (geqi c 65) (leqi c 90)))
-                (and m2 (or (eqi c 95) (and (geqi c 97) (leqi c 122)))))
-	    (and (not first) (and (geqi c 48) (leqi c 57)))	    
-      then work (snoc acc x) false (advanceCol p 1) xs
-      else {val = acc, pos = p, str = str}
-    else {val = acc, pos = p, str = str}
-  in work "" true p str
-
-utest parseIdent false (initPos "") "+"
-  with {val = "", str = "+", pos = posVal "" 1 0}
-utest parseIdent false (initPos "") "a "
-  with {val = "a", str = " ", pos = posVal "" 1 1}
-utest parseIdent false (initPos "") "ba"
-  with {val = "ba", str = "", pos = posVal "" 1 2}
-utest parseIdent false (initPos "") "_asd "
-  with {val = "_asd", str = " ", pos = posVal "" 1 4}
-utest parseIdent true (initPos "") "_asd "
-  with {val = "", str = "_asd ", pos = posVal "" 1 0}
-utest parseIdent false (initPos "") "Asd12 "
-  with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
-utest parseIdent true (initPos "") "Asd12 "
-  with {val = "Asd12", str = " ", pos = posVal "" 1 5}
-
-
--- Parse identfier
-lang IdentParser = ExprParser 
-  sem parseExprImp (p: Pos) =
-  | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
-      'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
-      'x' | 'y' | 'z' ] ++ s) & xs ->
-    let r = parseIdent false p xs in
-    nextIdent p r.str r.val 
-
-  sem nextIdent (p: Pos) (xs: string) =
-end
 
 
 -- Parse variable
@@ -316,9 +329,9 @@ end
 
 
 -- Parsing let expressions
-lang LetParser = ExprParser + KeywordUtils + LetAst
-  sem parseExprImp (p: Pos) =
-  | "let" ++ xs ->
+lang LetParser = ExprParser + IdentParser + KeywordUtils + LetAst
+  sem nextIdent (p: Pos) (xs: String) =
+  | "let" ->
     let r = eatWSAC (advanceCol p 3) xs in
     let r2 = parseIdent false r.pos r.str in
     let r3 = matchKeyword "=" r2.pos r2.str in
@@ -342,9 +355,12 @@ lang ExprInfixParser = ExprParser
     let r = eatWSAC p str in
     match parseInfixImp r.pos r.str with Some op then
       if geqi op.prec prec then
-        let prec2 = match op.assoc with LeftAssoc () then addi op.prec 1 else op.prec in
+        let prec2 = match op.assoc with LeftAssoc ()
+                    then addi op.prec 1
+                    else op.prec in
         let exp2 = parseExprMain op.pos prec2 op.str in 
-        let exp3 = {val = op.val exp.val exp2.val, pos = exp2.pos, str = exp2.str} in
+        let exp3 = {val = op.val exp.val exp2.val,
+                    pos = exp2.pos, str = exp2.str} in
 	parseInfix exp3.pos prec exp3 exp3.str
       else exp
     else exp
@@ -364,7 +380,8 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
   sem parseInfixImp (p: Pos) =
   | str ->
     Some {
-      val = lam x. lam y. TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)},
+      val = lam x. lam y.
+        TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)},
       pos = p, str = str, assoc = LeftAssoc (), prec = 50}
 end
 
@@ -392,7 +409,8 @@ utest parseExprMain (initPos "file") 0 "  123foo" with
        pos = posVal "file" 1 5, str = "foo"} in
       
 --If expression
-utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos with posVal "" 1 21 in
+utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos
+  with posVal "" 1 21 in
 -- Boolean literal 'true'
 utest parseExpr (initPos "f") " true " with
       TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
@@ -416,7 +434,8 @@ utest parseExpr (initPos "") " [ ] " with
       TmSeq {tms = [], fi = infoVal "" 1 1 1 4} in
 utest parseExprMain (initPos "") 0 " [ 17 ] " with
       let v = TmConst {val = CInt {val = 17}, fi = infoVal "" 1 3 1 5} in
-      {val = TmSeq {tms = [v], fi = infoVal "" 1 1 1 7}, pos = posVal "" 1 7, str = " "} in
+      {val = TmSeq {tms = [v], fi = infoVal "" 1 1 1 7},
+       pos = posVal "" 1 7, str = " "} in
 utest parseExpr (initPos "") " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
@@ -442,9 +461,11 @@ utest parseExpr (initPos "") " \'\\n\' " with
 utest (parseExprMain (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
 utest (parseExprMain (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
 -- Lambda
-utest (parseExprMain (initPos "") 0 " lam x . x ").pos with posVal "" 1 10 in
+utest (parseExprMain (initPos "") 0 " lam x . x ").pos
+  with posVal "" 1 10 in
 -- Let
-utest (parseExprMain (initPos "") 0 "  let x = 5 in 8 ").pos with posVal "" 1 16 in 
+utest (parseExprMain (initPos "") 0 "  let x = 5 in 8 ").pos
+  with posVal "" 1 16 in 
 
 
 ()
