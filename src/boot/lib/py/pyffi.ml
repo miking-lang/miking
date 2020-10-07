@@ -133,13 +133,7 @@ let delta _ _ fi c v =
       Record.iter (fun k v -> Array.set argv (int_of_ustring k) (val_to_python fi v)) args;
       mk_py fi (PycallKw(Some(m), Some(s), Some(argv)))
     | PycallKw(Some(m),Some(s),Some(a)),TmRecord(fi,args) ->
-      let size_of_record = Record.cardinal args in
-      let kwargv = Array.make (size_of_record / 2) ("0", Py.Float.of_float 0.) in
-      Record.iter (fun k v ->
-          let i = int_of_ustring k in
-          if i mod 2 = 0 then
-            let next = Record.find (ustring_of_int (i + 1)) args in
-            Array.set kwargv (i / 2) (val_to_string fi v, val_to_python fi next)
-          else ()) args;
-      mk_py fi (PyObject(Py.Module.get_function_with_keywords m s a (Array.to_list kwargv)))
+      let kwargs = List.map (fun (k, v) ->
+          (Ustring.to_utf8 k, val_to_python fi v)) (Record.bindings args) in
+      mk_py fi (PyObject(Py.Module.get_function_with_keywords m s a kwargs))
     | PycallKw(_, _, _), _ -> fail_constapp fi
