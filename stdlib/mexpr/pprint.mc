@@ -38,23 +38,23 @@ type PprintEnv = {
 
 -- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
-let _emptyEnv = {nameMap = assocEmpty, count = assocEmpty}
+let pprintEnvEmpty = {nameMap = assocEmpty, count = assocEmpty}
 
 -- Look up the string associated with a name in the environment
-let _lookup : Name -> PprintEnv -> Option String = lam name. lam env.
+let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
   match env with { nameMap = nameMap } then
     assocLookup {eq = nameEq} name nameMap
   else never
 
 -- Check if a string is free in the environment.
-let _free : String -> PprintEnv -> Bool = lam str. lam env.
+let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
     not (assocAny f nameMap)
   else never
 
 -- Add a binding to the environment
-let _add : Name -> String -> Int -> PprintEnv -> PprintEnv =
+let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
   lam name. lam str. lam i. lam env.
     match env with {nameMap = nameMap, count = count} then
       let baseStr = nameGetStr name in
@@ -65,11 +65,11 @@ let _add : Name -> String -> Int -> PprintEnv -> PprintEnv =
 
 -- Get a string for the current name. Returns both the string and a new
 -- environment.
-let _getStr : Name -> PprintEnv -> (PprintEnv, String) = lam name. lam env.
-  match _lookup name env with Some str then (env,str)
+let pprintEnvGetStr : Name -> PprintEnv -> (PprintEnv, String) = lam name. lam env.
+  match pprintEnvLookup name env with Some str then (env,str)
   else
     let baseStr = nameGetStr name in
-    if _free baseStr env then (_add name baseStr 1 env, baseStr)
+    if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
     else
       match env with {count = count} then
         let start =
@@ -78,11 +78,11 @@ let _getStr : Name -> PprintEnv -> (PprintEnv, String) = lam name. lam env.
         recursive let findFree : String -> Int -> (String, Int) =
           lam baseStr. lam i.
             let proposal = concat baseStr (int2string i) in
-            if _free proposal env then (proposal, i)
+            if pprintEnvFree proposal env then (proposal, i)
             else findFree baseStr (addi i 1)
         in
         match findFree baseStr start with (str, i) then
-          (_add name str (addi i 1) env, str)
+          (pprintEnvAdd name str (addi i 1) env, str)
         else never
       else never
 
@@ -142,7 +142,8 @@ lang PrettyPrint
   -- Intentionally left blank
 
   sem expr2str =
-  | expr -> match pprintCode 0 _emptyEnv expr with (_,str) then str else never
+  | expr -> match pprintCode 0 pprintEnvEmpty expr with (_,str)
+            then str else never
 
   -- Helper function for printing parentheses
   sem printParen (indent : Int) (env: PprintEnv) =
@@ -168,7 +169,8 @@ lang VarPrettyPrint = PrettyPrint + VarAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident} ->
-    match _getStr ident env with (env,str) then (env,varString str) else never
+    match pprintEnvGetStr ident env with (env,str)
+    then (env,varString str) else never
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst
@@ -201,7 +203,7 @@ lang FunPrettyPrint = PrettyPrint + FunAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
-    match _getStr t.ident env with (env,str) then
+    match pprintEnvGetStr t.ident env with (env,str) then
       let ident = varString str in
       let tpe =
         match t.tpe with Some t1 then
@@ -270,7 +272,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
-    match _getStr t.ident env with (env,str) then
+    match pprintEnvGetStr t.ident env with (env,str) then
       let ident = varString str in
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
@@ -293,7 +295,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecLets t ->
     let lname = lam env. lam bind.
-      match _getStr bind.ident env with (env,str) then
+      match pprintEnvGetStr bind.ident env with (env,str) then
         (env,varString str)
       else never in
     let lbody = lam env. lam bind.
@@ -336,7 +338,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
-    match _getStr t.ident env with (env,str) then
+    match pprintEnvGetStr t.ident env with (env,str) then
       let str = conString str in
       let tpe =
         match t.tpe with Some t1 then
@@ -349,7 +351,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst
     else never
 
   | TmConApp t ->
-    match _getStr t.ident env with (env,str) then
+    match pprintEnvGetStr t.ident env with (env,str) then
       let l = conString str in
       match printParen (pprintIncr indent) env t.body with (env,body) then
         (env, join [l, pprintNewline (pprintIncr indent), body])
@@ -524,7 +526,8 @@ end
 let _pprint_patname: PprintEnv -> PatName -> (PprintEnv, String) =
 lam env. lam pname.
   match pname with PName name then
-    match _getStr name env with (env, str) then (env, varString str) else never
+    match pprintEnvGetStr name env with (env, str)
+    then (env, varString str) else never
   else match pname with PWildcard () then
     (env, "_")
   else never
@@ -598,7 +601,7 @@ lang DataPatPrettyPrint = DataPat
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PCon t ->
-    match _getStr t.ident env with (env,str) then
+    match pprintEnvGetStr t.ident env with (env,str) then
       let name = conString str in
       match getPatStringCode indent env t.subpat with (env,subpat) then
         let subpat = if patIsAtomic t.subpat then subpat
