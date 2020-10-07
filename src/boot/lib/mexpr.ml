@@ -413,14 +413,14 @@ let delta eval env fi c v  =
        else TmConst(fi, CInt(rand_int_u v1 v2))
     | CrandIntU(_),_ -> fail_constapp fi
 
-    | CrandSetSeed,TmConst(fi,CInt(v)) -> rand_set_seed v; tmUnit
+    | CrandSetSeed,TmConst(_,CInt(v)) -> rand_set_seed v; tmUnit
     | CrandSetSeed,_ -> fail_constapp fi
 
     (* MCore intrinsic: time *)
     | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CFloat(get_wall_time_ms ()))
     | CwallTimeMs, _ -> fail_constapp fi
 
-    | CsleepMs, TmConst(fi, CInt(v)) -> sleep_ms v ; tmUnit
+    | CsleepMs, TmConst(_, CInt(v)) -> sleep_ms v ; tmUnit
     | CsleepMs, _ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)

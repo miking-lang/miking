@@ -2,7 +2,6 @@ open Extast
 open Extpprint
 open Ast
 open Msg
-open Ustring.Op
 
 let externals =
   List.map (fun x -> (fst x,  TmConst(NoInfo, CExt(snd x))))
@@ -34,7 +33,7 @@ let fail_extapp pprint f v fi = raise_error fi
      ^ Ustring.to_utf8
        (Pprint.ustring_of_tm v))
 
-let delta eval env fi c v =
+let delta _ _ fi c v =
   let fail_extapp = fail_extapp pprint c v in
   match c,v with
   (* Elementary functions *)
