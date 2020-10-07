@@ -8,11 +8,18 @@ include "name.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
-let spacing = lam indent. makeSeq indent ' '
-let newline = lam indent. concat "\n" (spacing indent)
+----------------------------
+-- PRETTY PRINT INDENTING --
+----------------------------
 
--- Set spacing on increment
-let incr = lam indent. addi indent 2
+-- Indentation consisting of [indent] spaces
+let pprintSpacing = lam indent. makeSeq indent ' '
+
+-- Newline followed by [indent] spaces
+let pprintNewline = lam indent. concat "\n" (pprintSpacing indent)
+
+-- Increment [indent] by 2
+let pprintIncr = lam indent. addi indent 2
 
 let symbolDelim = "'"
 
@@ -152,7 +159,7 @@ lang PrettyPrint
   sem printArgs (indent : Int) (env : PprintEnv) =
   | exprs ->
     match mapAccumL (printParen indent) env exprs with (env,args) then
-      (env, strJoin (newline indent) args)
+      (env, strJoin (pprintNewline indent) args)
     else never
 
 end
@@ -180,9 +187,9 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     let apps = appseq (TmApp t) in
 
     match printParen indent env (head apps) with (env,fun) then
-      let aindent = incr indent in
+      let aindent = pprintIncr indent in
       match printArgs aindent env (tail apps) with (env,args) then
-        (env, join [fun, newline aindent, args])
+        (env, join [fun, pprintNewline aindent, args])
       else never
     else error "Impossible"
 end
@@ -203,8 +210,10 @@ lang FunPrettyPrint = PrettyPrint + FunAst
           concat " : " (getTypeStringCode indent t1)
         else ""
       in
-      match pprintCode (incr indent) env t.body with (env,body) then
-        (env,join ["lam ", ident, tpe, ".", newline (incr indent), body])
+      match pprintCode (pprintIncr indent) env t.body with (env,body) then
+        (env,
+         join ["lam ", ident, tpe, ".", pprintNewline (pprintIncr indent),
+               body])
       else never
     else never
 end
@@ -226,28 +235,30 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
         (env, join ["(", merged, ")"])
       else never
     else
-      let innerIndent = incr (incr indent) in
+      let innerIndent = pprintIncr (pprintIncr indent) in
       match
         assocMapAccum {eq=eqString}
           (lam env. lam k. lam v.
              match pprintCode innerIndent env v with (env, str) then
-               (env, join [labelString k, " =", newline innerIndent, str])
+               (env, join [labelString k, " =", pprintNewline innerIndent, str])
              else never)
            env t.bindings
       with (env, bindMap) then
         let binds = assocValues {eq=eqString} bindMap in
-        let merged = strJoin (concat "," (newline (incr indent))) binds in
+        let merged =
+          strJoin (concat "," (pprintNewline (pprintIncr indent))) binds
+        in
         (env,join ["{ ", merged, " }"])
       else never
 
   | TmRecordUpdate t ->
-    let i = incr indent in
-    let ii = incr i in
+    let i = pprintIncr indent in
+    let ii = pprintIncr i in
     match pprintCode i env t.rec with (env,rec) then
       match pprintCode ii env t.value with (env,value) then
-        (env,join ["{ ", rec, newline i,
-                   "with", newline i,
-                   labelString t.key, " =", newline ii, value, " }"])
+        (env,join ["{ ", rec, pprintNewline i,
+                   "with", pprintNewline i,
+                   labelString t.key, " =", pprintNewline ii, value, " }"])
       else never
     else never
 end
@@ -263,11 +274,11 @@ lang LetPrettyPrint = PrettyPrint + LetAst
   | TmLet t ->
     match _getStr t.ident env with (env,str) then
       let ident = varString str in
-      match pprintCode (incr indent) env t.body with (env,body) then
+      match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
-          (env, join ["let ", ident, " =", newline (incr indent),
-                      body, newline indent,
-                      "in", newline indent,
+          (env, join ["let ", ident, " =", pprintNewline (pprintIncr indent),
+                      body, pprintNewline indent,
+                      "in", pprintNewline indent,
                       inexpr])
         else never
       else never
@@ -288,18 +299,19 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
         (env,varString str)
       else never in
     let lbody = lam env. lam bind.
-      match pprintCode (incr (incr indent)) env bind.body with (env,str) then
-        (env,str)
+      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
+      with (env,str) then (env,str)
       else never in
     match mapAccumL lname env t.bindings with (env,idents) then
       match mapAccumL lbody env t.bindings with (env,bodies) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
           let fzip = lam ident. lam body.
-            join [newline (incr indent),
-                  "let ", ident, " =", newline (incr (incr indent)), body]
+            join [pprintNewline (pprintIncr indent),
+                  "let ", ident, " =",
+                  pprintNewline (pprintIncr (pprintIncr indent)), body]
           in
           (env,join ["recursive", join (zipWith fzip idents bodies),
-                 newline indent, "in", newline indent, inexpr])
+                 pprintNewline indent, "in", pprintNewline indent, inexpr])
         else never
       else never
     else never
@@ -334,15 +346,15 @@ lang DataPrettyPrint = PrettyPrint + DataAst
         else ""
       in
       match pprintCode indent env t.inexpr with (env,inexpr) then
-        (env,join ["con ", str, tpe, " in", newline indent, inexpr])
+        (env,join ["con ", str, tpe, " in", pprintNewline indent, inexpr])
       else never
     else never
 
   | TmConApp t ->
     match _getStr t.ident env with (env,str) then
       let l = conString str in
-      match printParen (incr indent) env t.body with (env,body) then
-        (env, join [l, newline (incr indent), body])
+      match printParen (pprintIncr indent) env t.body with (env,body) then
+        (env, join [l, pprintNewline (pprintIncr indent), body])
       else never
     else never
 end
@@ -357,15 +369,15 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmMatch t ->
     let i = indent in
-    let ii = incr indent in
+    let ii = pprintIncr indent in
     match pprintCode ii env t.target with (env,target) then
       match getPatStringCode ii env t.pat with (env,pat) then
         match pprintCode ii env t.thn with (env,thn) then
           match pprintCode ii env t.els with (env,els) then
-            (env,join ["match", newline ii, target, newline i,
-                       "with", newline ii, pat, newline i,
-                       "then", newline ii, thn, newline i,
-                       "else", newline ii, els])
+            (env,join ["match", pprintNewline ii, target, pprintNewline i,
+                       "with", pprintNewline ii, pat, pprintNewline i,
+                       "then", pprintNewline ii, thn, pprintNewline i,
+                       "else", pprintNewline ii, els])
           else never
         else never
       else never
@@ -381,9 +393,9 @@ lang UtestPrettyPrint = PrettyPrint + UtestAst
     match pprintCode indent env t.test with (env,test) then
       match pprintCode indent env t.expected with (env,expected) then
         match pprintCode indent env t.next with (env,next) then
-          (env,join ["utest ", test, newline indent,
-                 "with ", expected, newline indent,
-                 "in", newline indent, next])
+          (env,join ["utest ", test, pprintNewline indent,
+                 "with ", expected, pprintNewline indent,
+                 "in", pprintNewline indent, next])
         else never
       else never
     else never
@@ -411,9 +423,12 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
            (map (lam e. match extract_char e with Some c then c else '?') t.tms)  -- TODO(vipa, 2020-09-23): escape characters
            "\""))
     else
-    match mapAccumL (lam env. lam tm. pprintCode (incr indent) env tm) env t.tms
+    match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
+                    env t.tms
     with (env,tms) then
-      let merged = strJoin (concat "," (newline (incr indent))) tms in
+      let merged =
+        strJoin (concat "," (pprintNewline (pprintIncr indent))) tms
+      in
       (env,join ["[ ", merged, " ]"])
     else never
 end
@@ -533,9 +548,10 @@ lam recur. lam indent. lam env. lam pats.
     else None () in
   match optionMapM extract_char pats with Some str then
     (env, join ["\"", str, "\""])
-  else match mapAccumL (recur (incr indent)) env pats
+  else match mapAccumL (recur (pprintIncr indent)) env pats
   with (env, pats) then
-    let merged = strJoin (concat "," (newline (incr indent))) pats in
+    let merged =
+      strJoin (concat "," (pprintNewline (pprintIncr indent))) pats in
     (env, join ["[ ", merged, " ]"])
   else never
 
