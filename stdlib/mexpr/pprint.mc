@@ -20,7 +20,7 @@ let symbolDelim = "'"
 -- PRETTY PRINTING ENVIRONMENT --
 ---------------------------------
 
-type Env = {
+type PprintEnv = {
 
   -- Used to keep track of strings assigned to names
   nameMap: AssocMap Name String,
@@ -36,20 +36,20 @@ type Env = {
 let _emptyEnv = {nameMap = assocEmpty, count = assocEmpty}
 
 -- Look up the string associated with a name in the environment
-let _lookup : Name -> Env -> Option String = lam name. lam env.
+let _lookup : Name -> PprintEnv -> Option String = lam name. lam env.
   match env with { nameMap = nameMap } then
     assocLookup {eq = nameEq} name nameMap
   else never
 
 -- Check if a string is free in the environment.
-let _free : String -> Env -> Bool = lam str. lam env.
+let _free : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
     not (assocAny f nameMap)
   else never
 
 -- Add a binding to the environment
-let _add : Name -> String -> Int -> Env -> Env =
+let _add : Name -> String -> Int -> PprintEnv -> PprintEnv =
   lam name. lam str. lam i. lam env.
     match env with {nameMap = nameMap, count = count} then
       let baseStr = nameGetStr name in
@@ -60,7 +60,7 @@ let _add : Name -> String -> Int -> Env -> Env =
 
 -- Get a string for the current name. Returns both the string and a new
 -- environment.
-let _getStr : Name -> Env -> (Env, String) = lam name. lam env.
+let _getStr : Name -> PprintEnv -> (PprintEnv, String) = lam name. lam env.
   match _lookup name env with Some str then (env,str)
   else
     let baseStr = nameGetStr name in
@@ -133,14 +133,14 @@ lang PrettyPrint
   sem isAtomic =
   -- Intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   -- Intentionally left blank
 
   sem expr2str =
   | expr -> match pprintCode 0 _emptyEnv expr with (_,str) then str else never
 
   -- Helper function for printing parentheses
-  sem printParen (indent : Int) (env: Env) =
+  sem printParen (indent : Int) (env: PprintEnv) =
   | expr ->
     let i = if isAtomic expr then indent else addi 1 indent in
     match pprintCode i env expr with (env,str) then
@@ -149,7 +149,7 @@ lang PrettyPrint
     else never
 
   -- Helper function for printing a list of arguments
-  sem printArgs (indent : Int) (env : Env) =
+  sem printArgs (indent : Int) (env : PprintEnv) =
   | exprs ->
     match mapAccumL (printParen indent) env exprs with (env,args) then
       (env, strJoin (newline indent) args)
@@ -161,7 +161,7 @@ lang VarPrettyPrint = PrettyPrint + VarAst
   sem isAtomic =
   | TmVar _ -> true
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident} ->
     match _getStr ident env with (env,str) then (env,varString str) else never
 end
@@ -170,7 +170,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
   sem isAtomic =
   | TmApp _ -> false
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmApp t ->
     recursive let appseq =
       lam t. match t with TmApp {lhs = lhs, rhs = rhs} then
@@ -194,7 +194,7 @@ lang FunPrettyPrint = PrettyPrint + FunAst
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
     match _getStr t.ident env with (env,str) then
       let ident = varString str in
@@ -214,7 +214,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecord t ->
     if eqi (length t.bindings) 0 then (env,"{}")
     else match _record2tuple (TmRecord t) with Some tms then
@@ -259,7 +259,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
     match _getStr t.ident env with (env,str) then
       let ident = varString str in
@@ -281,7 +281,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecLets t ->
     let lname = lam env. lam bind.
       match _getStr bind.ident env with (env,str) then
@@ -312,7 +312,7 @@ lang ConstPrettyPrint = PrettyPrint + ConstAst
   sem getConstStringCode (indent : Int) =
   -- intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConst t -> (env,getConstStringCode indent t.val)
 end
 
@@ -324,7 +324,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst
   sem getTypeStringCode (indent : Int) =
   -- Intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
     match _getStr t.ident env with (env,str) then
       let str = conString str in
@@ -351,10 +351,10 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
   sem isAtomic =
   | TmMatch _ -> false
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   -- intentionally left blank
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmMatch t ->
     let i = indent in
     let ii = incr indent in
@@ -376,7 +376,7 @@ lang UtestPrettyPrint = PrettyPrint + UtestAst
   sem isAtomic =
   | TmUtest _ -> false
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmUtest t ->
     match pprintCode indent env t.test with (env,test) then
       match pprintCode indent env t.expected with (env,expected) then
@@ -393,7 +393,7 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
   sem isAtomic =
   | TmSeq _ -> true
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmSeq t ->
     let extract_char = lam e.
       match e with TmConst t1 then
@@ -402,7 +402,9 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
         else None ()
       else None ()
     in
-    let is_char = lam e. match extract_char e with Some c then true else false in
+    let is_char =
+        lam e. match extract_char e with Some c then true else false
+    in
     if all is_char t.tms then
       (env,concat "\""
         (concat
@@ -420,7 +422,7 @@ lang NeverPrettyPrint = PrettyPrint + NeverAst
   sem isAtomic =
   | TmNever _ -> true
 
-  sem pprintCode (indent : Int) (env: Env) =
+  sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmNever {} -> (env,"never")
 end
 
@@ -506,7 +508,8 @@ end
 -- PATTERNS --
 --------------
 
-let _pprint_patname: Env -> PatName -> (Env, String) = lam env. lam pname.
+let _pprint_patname: PprintEnv -> PatName -> (PprintEnv, String) =
+lam env. lam pname.
   match pname with PName name then
     match _getStr name env with (env, str) then (env, varString str) else never
   else match pname with PWildcard () then
@@ -517,11 +520,13 @@ lang VarPatPrettyPrint = VarPat
   sem patIsAtomic =
   | PVar _ -> true
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PVar {ident = patname} -> _pprint_patname env patname
 end
 
-let _pprint_patseq: (Int -> Env -> Pat -> (Env, String)) -> Int -> Env -> [Pat] -> (Env, String) = lam recur. lam indent. lam env. lam pats.
+let _pprint_patseq: (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int ->
+                    PprintEnv -> [Pat] -> (PprintEnv, String) =
+lam recur. lam indent. lam env. lam pats.
   use CharPat in
   let extract_char = lam e.
     match e with PChar c then Some c.val
@@ -538,7 +543,7 @@ lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
   sem patIsAtomic =
   | PSeqTot _ -> true
 
-  sem getPatStringCode (indent : Int) (env : Env) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
@@ -546,7 +551,7 @@ lang SeqEdgePatPrettyPrint = SeqEdgePat
   sem patIsAtomic =
   | PSeqEdge _ -> false
 
-  sem getPatStringCode (indent : Int) (env : Env) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PSeqEdge {prefix = pre, middle = patname, postfix = post} ->
     match _pprint_patseq getPatStringCode indent env pre with (env, pre) then
     match _pprint_patname env patname with (env, pname) then
@@ -559,7 +564,7 @@ lang RecordPatPrettyPrint = RecordPat
   sem patIsAtomic =
   | PRecord _ -> true
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PRecord {bindings = bindings} ->
     match
       assocMapAccum {eq=eqString}
@@ -577,12 +582,13 @@ lang DataPatPrettyPrint = DataPat
   sem patIsAtomic =
   | PCon _ -> false
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PCon t ->
     match _getStr t.ident env with (env,str) then
       let name = conString str in
       match getPatStringCode indent env t.subpat with (env,subpat) then
-        let subpat = if patIsAtomic t.subpat then subpat else join ["(", subpat, ")"]
+        let subpat = if patIsAtomic t.subpat then subpat
+                     else join ["(", subpat, ")"]
         in (env, join [name, " ", subpat])
       else never
     else never
@@ -592,7 +598,7 @@ lang IntPatPrettyPrint = IntPat
   sem patIsAtomic =
   | PInt _ -> true
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PInt t -> (env, int2string t.val)
 end
 
@@ -600,7 +606,7 @@ lang CharPatPrettyPrint = CharPat
   sem patIsAtomic =
   | PChar _ -> true
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PChar t -> (env, ['\'', t.val, '\''])  -- TODO(vipa, 2020-09-23): should escape t.val probably?
 end
 
@@ -608,7 +614,7 @@ lang BoolPatPrettyPrint = BoolPat
   sem patIsAtomic =
   | PBool _ -> true
 
-  sem getPatStringCode (indent : Int) (env: Env) =
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PBool b -> (env, if b.val then "true" else "false")
 end
 
@@ -616,7 +622,7 @@ lang AndPatPrettyPrint = AndPat
   sem patIsAtomic =
   | PAnd _ -> false
 
-  sem getPatStringCode (indent : Int) (env : Env) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PAnd {lpat = l, rpat = r} ->
     match getPatStringCode indent env l with (env, l2) then
     match getPatStringCode indent env r with (env, r2) then
@@ -630,7 +636,7 @@ lang OrPatPrettyPrint = OrPat
   sem patIsAtomic =
   | POr _ -> false
 
-  sem getPatStringCode (indent : Int) (env : Env) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | POr {lpat = l, rpat = r} ->
     match getPatStringCode indent env l with (env, l2) then
     match getPatStringCode indent env r with (env, r2) then
@@ -644,7 +650,7 @@ lang NotPatPrettyPrint = NotPat
   sem patIsAtomic =
   | PNot _ -> false  -- OPT(vipa, 2020-09-23): this could possibly be true, just because it binds stronger than everything else
 
-  sem getPatStringCode (indent : Int) (env : Env) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PNot {subpat = p} ->
     match getPatStringCode indent env p with (env, p2) then
     let p2 = if patIsAtomic p then p2 else join ["(", p2, ")"] in
@@ -657,9 +663,11 @@ end
 -----------
 -- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
-lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
-                       TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst +
-                       BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint + TypeVarAst
+lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst +
+                       SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst +
+                       ArithTypeAst + BoolTypeAst + AppTypeAst + FunAst +
+                       DataPrettyPrint + TypeVarAst
+
     sem getTypeStringCode (indent : Int) =
     | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
                                getTypeStringCode indent t.to, ")"]
@@ -680,7 +688,8 @@ lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + Seq
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
     | TyApp t ->
-      join ["(", getTypeStringCode indent t.lhs, ") (", getTypeStringCode indent t.rhs, ")"]
+      join ["(", getTypeStringCode indent t.lhs, ") (",
+            getTypeStringCode indent t.rhs, ")"]
     | TyVar t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #var
 end
 
