@@ -21,8 +21,6 @@ let pprintNewline = lam indent. concat "\n" (pprintSpacing indent)
 -- Increment [indent] by 2
 let pprintIncr = lam indent. addi indent 2
 
-let symbolDelim = "'"
-
 ---------------------------------
 -- PRETTY PRINTING ENVIRONMENT --
 ---------------------------------
