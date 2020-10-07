@@ -17,7 +17,7 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
 # General function for building the project
 build() {
-    mkdir -p build 
+    mkdir -p build
     dune build 
     cp -f _build/install/default/bin/boot.mi build/mi
 }
