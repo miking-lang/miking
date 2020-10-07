@@ -39,4 +39,8 @@ utest pyconvert (pycall builtins "str" ((),)) with "None" in
 let none = pycall builtins "print" ("",) in
 utest pyconvert (pycall builtins "str" (none,)) with "None" in
 utest pyconvert none with () in
+
+let e = pycallkw builtins "enumerate" ([1,2,3],) {start = 1} in
+utest pyconvert (pycall builtins "list" (e,)) with [(1,1), (2,2), (3,3)] in
+
 ()
