@@ -396,7 +396,7 @@ lang SeqEdgePatEq = SeqEdgePat
                 match fpEnv with (f,p) then
                   eqPat env f p ps.0 ps.1 
                 else never)
-                (free,patEnv) z2
+                (f1,p1) z2
             else None ()
           else None ()
         else None ()
@@ -461,7 +461,7 @@ lang AndPatEq = AndPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | PAnd {lpat = l2, rpat = r2} ->
     match lhs with PAnd {lpat = l1, rpat = r1} then
-      match eqPat env free patEnv l1 l2 with Some (f,p) then
+      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
       else None ()
     else None ()
@@ -471,9 +471,9 @@ lang OrPatEq = OrPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
   | POr {lpat = l2, rpat = r2} ->
     match lhs with POr {lpat = l1, rpat = r1} then
-      match eqPat env free patEnv l1 l2 with Some (f,p) then
+      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
-  else None ()
+      else None ()
     else None ()
 end
 
@@ -670,22 +670,18 @@ let pand6 = pand_ pdata2 pchar2 in
 let pand7 = pand_ pdata2 pchar3e in
 let pand8 = pand_ pvar1 pbool1 in
 let pand9 = pand_ pvar2 pbool1 in
-let pand10 = pand_ pvar1 pdata1 in
-let pand11 = pand_ pvar2 pdata2 in
-let pand12 = pand_ pdata1 pvar1 in
-let pand13 = pand_ pdata2 pvar2 in
-let pand14 = pand_ pdata3e pvar2 in
-let pand15 = pand_ pvar2 pdata3e in
-utest pgen pand1 with pgen pand2 using eqExpr in
+let pand10 = pand_ pvar1 prec1 in
+let pand11 = pand_ pvar2 prec2 in
+let pand12 = pand_ pvar1 pdata1 in
+let pand13 = pand_ pvar2 pdata2 in
+utest pgen (pand_ pand1 pand2) with pgen (pand_ pand1 pand2) using eqExpr in
 utest pgen pand5 with pgen pand6 using eqExpr in
 utest pgen pand8 with pgen pand9 using eqExpr in
 utest pgen pand10 with pgen pand11 using eqExpr in
-utest pgen pand12 with pgen pand13 using eqExpr in
 utest eqExpr (pgen pand1) (pgen pand3) with false in
 utest eqExpr (pgen pand3) (pgen pand4) with false in
 utest eqExpr (pgen pand6) (pgen pand7) with false in
-utest eqExpr (pgen pand13) (pgen pand14) with false in
-utest eqExpr (pgen pand14) (pgen pand15) with false in
+utest eqExpr (pgen pand12) (pgen pand13) with false in
 
 let por1 = por_ pbool1 pbool1 in
 let por2 = por_ pbool2 pbool2 in
@@ -696,22 +692,18 @@ let por6 = por_ pdata2 pchar2 in
 let por7 = por_ pdata2 pchar3e in
 let por8 = por_ pvar1 pbool1 in
 let por9 = por_ pvar2 pbool1 in
-let por10 = por_ pvar1 pdata1 in
-let por11 = por_ pvar2 pdata2 in
-let por12 = por_ pdata1 pvar1 in
-let por13 = por_ pdata2 pvar2 in
-let por14 = por_ pdata3e pvar2 in
-let por15 = por_ pvar2 pdata3e in
+let por10 = por_ pvar1 prec1 in
+let por11 = por_ pvar2 prec2 in
+let por12 = por_ pvar1 pdata1 in
+let por13 = por_ pvar2 pdata2 in
 utest pgen por1 with pgen por2 using eqExpr in
 utest pgen por5 with pgen por6 using eqExpr in
 utest pgen por8 with pgen por9 using eqExpr in
 utest pgen por10 with pgen por11 using eqExpr in
-utest pgen por12 with pgen por13 using eqExpr in
 utest eqExpr (pgen por1) (pgen por3) with false in
 utest eqExpr (pgen por3) (pgen por4) with false in
 utest eqExpr (pgen por6) (pgen por7) with false in
-utest eqExpr (pgen por13) (pgen por14) with false in
-utest eqExpr (pgen por11) (pgen por15) with false in
+utest eqExpr (pgen por12) (pgen por13) with false in
 
 let pnot1 = pnot_ pbool1 in
 let pnot2 = pnot_ pbool2 in
@@ -740,6 +732,7 @@ let pSeqTot8 = pseqtot_ [pvar2,pfalse_,pfalse_] in
 let pSeqTot9 = pseqtot_ [pvar2,pdata1,pfalse_] in
 let pSeqTot10 = pseqtot_ [pvar2,pdata2,pfalse_] in
 let pSeqTot11 = pseqtot_ [pvar2,pdata3e,pfalse_] in
+let pSeqTot12 = pseqtot_ [pvar1,pdata1,pfalse_] in
 utest pgen pSeqTot1 with pgen pSeqTot2 using eqExpr in
 utest pgen pSeqTot5 with pgen pSeqTot6 using eqExpr in
 utest pgen pSeqTot7 with pgen pSeqTot8 using eqExpr in
@@ -748,6 +741,7 @@ utest eqExpr (pgen pSeqTot2) (pgen pSeqTot3) with false in
 utest eqExpr (pgen pSeqTot3) (pgen pSeqTot4) with false in
 utest eqExpr (pgen pSeqTot8) (pgen pSeqTot9) with false in
 utest eqExpr (pgen pSeqTot10) (pgen pSeqTot11) with false in
+utest eqExpr (pgen pSeqTot10) (pgen pSeqTot12) with false in
 
 let pSeqEdge1 = pseqedgew_ [pint_ 1, pint_ 2] [pint_ 3] in
 let pSeqEdge2 = pseqedgew_ [pint_ 1, pint_ 2] [pint_ 3] in
@@ -763,6 +757,7 @@ let pSeqEdge11 = pseqedgew_ [pvar2] [pdata2,pint_ 4] in
 let pSeqEdge12 = pseqedgen_ [pvar2] "x" [pdata1,pint_ 4] in
 let pSeqEdge13 = pseqedgen_ [pvar2] "y" [pdata2,pint_ 4] in
 let pSeqEdge14 = pseqedgen_ [pvar2] "x" [pdata3e,pint_ 4] in
+let pSeqEdge15 = pseqedgen_ [pdata3e] "x" [pdata3e,pint_ 4] in
 utest pgen pSeqEdge1 with pgen pSeqEdge2 using eqExpr in
 utest pgen pSeqEdge4 with pgen pSeqEdge5 using eqExpr in
 utest pgen pSeqEdge8 with pgen pSeqEdge9 using eqExpr in
@@ -774,6 +769,7 @@ utest eqExpr (pgen pSeqEdge5) (pgen pSeqEdge6) with false in
 utest eqExpr (pgen pSeqEdge6) (pgen pSeqEdge7) with false in
 utest eqExpr (pgen pSeqEdge11) (pgen pSeqEdge12) with false in
 utest eqExpr (pgen pSeqEdge13) (pgen pSeqEdge14) with false in
+utest eqExpr (pgen (pand_ (pand_ pSeqEdge14 pSeqEdge3) pSeqEdge3)) (pgen (pand_ (pand_ pSeqEdge15 pSeqEdge3) pSeqEdge3)) with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
