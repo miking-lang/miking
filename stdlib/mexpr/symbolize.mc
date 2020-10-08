@@ -302,9 +302,6 @@ lang MExprSym =
   + VarPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
-  -- Debugging
-  + MExprPrettyPrint
-
 -----------
 -- TESTS --
 -----------
@@ -312,9 +309,11 @@ lang MExprSym =
 -- of symbols, so we are just evaluating the below for errors. Unit
 -- testing in eval.mc also implicitly covers symbolizeExpr.
 
+lang TestLang = MExprSym + MExprPrettyPrint
+
 mexpr
 
-use MExprSym in
+use TestLang in
 
 let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
 
