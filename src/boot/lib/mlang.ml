@@ -65,12 +65,12 @@ type lang_data = {
     syns: (info * cdecl list) Record.t;
   }
 
-let spprint_inter_data ({info; cases}): ustring =
-  List.map (fun (fi, {pat}) -> us"  " ^. ustring_of_pat pat ^. us" at " ^. info2str fi) cases
+let spprint_inter_data ({info; cases; _}): ustring =
+  List.map (fun (fi, {pat; _}) -> us"  " ^. ustring_of_pat pat ^. us" at " ^. info2str fi) cases
   |> Ustring.concat (us"\n")
   |> (fun msg -> us"My location is " ^. info2str info ^. us"\n" ^. msg)
 
-let spprint_lang_data ({inters}): ustring =
+let spprint_lang_data ({inters; _}): ustring =
   Record.bindings inters
   |> List.map (fun (name, data) -> name ^. us"\n" ^. spprint_inter_data data)
   |> Ustring.concat (us"\n")
