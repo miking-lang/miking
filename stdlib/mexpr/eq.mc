@@ -370,7 +370,7 @@ lang SeqTotPatEq = SeqTotPat
         let z = zipWith (lam p1. lam p2. (p1,p2)) ps1 ps2 in
         optionFoldlM (lam fpEnv. lam ps.
           match fpEnv with (f,p) then
-            eqPat env f p ps.0 ps.1 
+            eqPat env f p ps.0 ps.1
           else never)
           (free,patEnv) z
       else None ()
@@ -387,14 +387,14 @@ lang SeqEdgePatEq = SeqEdgePat
           let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
           let fl = optionFoldlM (lam fpEnv. lam ps.
             match fpEnv with (f,p) then
-              eqPat env f p ps.0 ps.1 
+              eqPat env f p ps.0 ps.1
             else never)
             (free,patEnv) z1 in
           match fl with Some (f1,p1) then
             if eqi (length post1) (length post2) then
               optionFoldlM (lam fpEnv. lam ps.
                 match fpEnv with (f,p) then
-                  eqPat env f p ps.0 ps.1 
+                  eqPat env f p ps.0 ps.1
                 else never)
                 (f1,p1) z2
             else None ()
@@ -770,6 +770,80 @@ utest eqExpr (pgen pSeqEdge6) (pgen pSeqEdge7) with false in
 utest eqExpr (pgen pSeqEdge11) (pgen pSeqEdge12) with false in
 utest eqExpr (pgen pSeqEdge13) (pgen pSeqEdge14) with false in
 utest eqExpr (pgen (pand_ (pand_ pSeqEdge14 pSeqEdge3) pSeqEdge3)) (pgen (pand_ (pand_ pSeqEdge15 pSeqEdge3) pSeqEdge3)) with false in
+
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest x with y using eqExpr in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "a")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "x")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using eqExpr in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "a")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "y") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_ (por_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (por_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using eqExpr in
+let x = match_ (var_ "a") (por_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ (var_ "x") (por_ (pvar_ "z") (pvar_ "y")) (var_ "z") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "y", pvar_ "y"])
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "y", pvar_ "y"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "z", pvar_ "z"])
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "z", pvar_ "z"]))
+  (var_ "a") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "a") true_ in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "z") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (por_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (por_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "z") true_ in
+utest x with y using eqExpr in
+
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
