@@ -7,7 +7,6 @@ include "mexpr/symbolize.mc"
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 
-
 let escapeFirstChar = lam c.
   if or (isLowerAlpha c) (eqChar c '_') then c
   else '_'
@@ -21,13 +20,21 @@ let escapeChar = lam c.
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeString = lam s.
-  if gti (length s) 0 then
-    cons (escapeFirstChar (head s)) (map escapeChar (tail s))
+  let default = "var" in
+  let n = length s in
+  if gti n 0 then
+    let hd = head s in
+    let tl = tail s in
+    if or (neqi n 1) (isLowerAlpha hd) then
+      cons (escapeFirstChar hd) (map escapeChar tl)
+    else
+      default
   else
-    "var"
+    default
 
 utest escapeString "abcABC/:@_'" with "abcABC____'"
 utest escapeString "" with "var"
+utest escapeString "@" with "var"
 utest escapeString "ABC123" with "_BC123"
 utest escapeString "'a/b/c" with "_a_b_c"
 utest escapeString "123" with "_23"
@@ -69,13 +76,19 @@ mexpr
 
 use OCamlTest in
 
+-- Test identifier escaping
+
+-- Vars
 utest generate (var_ "abcABC/:@_'") with var_ "abcABC____'" in
+
+-- Abstractions
 utest generate (ulam_ "ABC123" (ulam_ "'a/b/c" (app_ (var_ "ABC123")
                                                (var_ "'a/b/c"))))
 with ulam_ "_BC123" (ulam_ "_a_b_c" (app_ (var_ "_BC123")
                                           (var_ "_a_b_c")))
 in
 
+-- Lets
 utest generate (let_ "abcABC/:@_'" (var_ "abcABC/:@_'"))
 with (let_ "abcABC____'" (var_ "abcABC____'")) in
 
@@ -118,10 +131,15 @@ in
 
 utest generate mutRec with mutRecExpected in
 
+-- Test semantics
+
+-- Parse helper
 let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
+-- Evaluates OCaml expressions [strConvert] given as string, applied
+-- to [p], and parses it as a mexpr expression.
 let ocamlEval = lam p. lam strConvert.
   let subprocess = pyimport "subprocess" in
   let blt = pyimport "builtins" in
@@ -139,6 +157,8 @@ let ocamlEval = lam p. lam strConvert.
   parseAsMExpr (pyconvert stdout)
 in
 
+-- Compares evaluation of [mexprAst] as a mexpr and evaluation of
+-- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
   let mexprVal =
     use MExprEval in
@@ -166,14 +186,12 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
   else error "Unsupported value"
 in
 
+-- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
 utest addInt1 with generate (symbolize addInt1) using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 utest addInt2 with generate (symbolize addInt2) using sameSemantics in
-
-let boolNot = not_ (not_ true_) in
-utest boolNot with generate (symbolize boolNot) using sameSemantics in
 
 let compareInt1 = eqi_ (int_ 1) (int_ 2) in
 utest compareInt1 with generate (symbolize compareInt1)
@@ -183,8 +201,35 @@ let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 utest compareInt2 with generate (symbolize compareInt2)
 using sameSemantics in
 
+-- Booleans
+let boolNot = not_ (not_ true_) in
+utest boolNot with generate (symbolize boolNot) using sameSemantics in
+
+-- Chars
 let charLiteral = char_ 'c' in
 utest charLiteral with generate (symbolize charLiteral)
 using sameSemantics in
+
+-- Abstractions
+let fun = ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))) in
+let app2fun = symbolize (appSeq_ fun [int_ 1, int_ 2]) in
+utest app2fun with generate app2fun using sameSemantics in
+
+-- Lets
+let testLet =
+  symbolize
+  (bindall_ [let_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
+in
+utest testLet with generate testLet using sameSemantics in
+
+let testLetRec =
+  symbolize
+  (bind_
+     (reclets_add "$" (ulam_ "%" (app_ (var_ "%") (int_ 1)))
+       (reclets_add "@" (ulam_ "^" (var_ "^"))
+          reclets_empty))
+   (app_ (var_ "$") (var_ "@")))
+in
+utest testLetRec with generate testLetRec using sameSemantics in
 
 ()

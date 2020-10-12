@@ -8,6 +8,10 @@ include "name.mc"
 lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
 
+  sem isAtomic =
+  | TmLam _ -> false
+  | TmRecLets _ -> false
+
   sem _pprintBinding (indent : Int) (env: PPrintEnv) =
   | {ident = id, body = b} ->
     join [nameGetStr id, " = ", pprintCode indent b]
