@@ -212,9 +212,13 @@ utest charLiteral with generate (symbolize charLiteral)
 using sameSemantics in
 
 -- Abstractions
-let fun = ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))) in
-let app2fun = symbolize (appSeq_ fun [int_ 1, int_ 2]) in
-utest app2fun with generate app2fun using sameSemantics in
+let fun =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
+    [int_ 1, int_ 2])
+in
+utest fun with generate fun using sameSemantics in
 
 let funShadowed =
   symbolize
