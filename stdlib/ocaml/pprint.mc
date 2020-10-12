@@ -5,8 +5,8 @@ include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
 
-lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint + LetPrettyPrint
-                        + ConstPrettyPrint + OCamlAst
+lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
+                        + LetPrettyPrint + ConstPrettyPrint + OCamlAst
 
   sem _pprintBinding (indent : Int) (env: PPrintEnv) =
   | {ident = id, body = b} ->
@@ -100,13 +100,17 @@ let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 
 let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
 
-let compareFloat2 = lti_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+let compareFloat2 =
+  lti_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.)
+in
 
 let charLiteral = char_ 'c' in
 
 let fun = ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) in
 
-let testLet = bindall_ [let_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)] in
+let testLet =
+  bindall_ [let_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)]
+in
 
 let testRec =
   bind_
