@@ -52,8 +52,8 @@ runtests() {
     cd ../stdlib
     ../build/mi test mexpr
     ../build/mi test ad
-		../build/mi test ext
-		../build/mi test ocaml
+    ../build/mi test ext
+    ../build/mi test ocaml
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
