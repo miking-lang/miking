@@ -5,17 +5,14 @@ include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
 
-lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
-                        + LetPrettyPrint + OCamlAst
+lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint + LetPrettyPrint
+                        + ConstPrettyPrint + OCamlAst
 
   sem _pprintBinding (indent : Int) (env: PPrintEnv) =
   | {ident = id, body = b} ->
     join [nameGetStr id, " = ", pprintCode indent b]
 
-  sem isAtomic =
-  | TmConst _ -> true
-
-  sem pprintConst =
+  sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
   | CAddi _ -> "(+)"
   | CSubi _ -> "(-)"
@@ -41,7 +38,6 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CChar {val = c} -> show_char c
 
   sem pprintCode (indent : Int) (env: PPrintEnv) =
-  | TmConst {val = c} -> (env, pprintConst c)
   | TmLam {ident = id, body = b} ->
     match pprintEnvGetStr id env with (env,str) then
       let ident = pprintVarString str in
