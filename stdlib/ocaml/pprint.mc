@@ -77,9 +77,9 @@ lang TestLang = OCamlPrettyPrint + MExprSym
 mexpr
 use TestLang in
 
-let pprintProg = lam p.
+let pprintProg = lam mexprAst.
   let _ = print "\n\n" in
-  print (expr2str (symbolize p))
+  print (expr2str (symbolize mexprAst))
 in
 
 let addInt1 = addi_ (int_ 1) (int_ 2) in
@@ -104,7 +104,7 @@ let compareFloat2 = lti_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
 
 let charLiteral = char_ 'c' in
 
-let fun = ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y"))) in
+let fun = ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) in
 
 let testLet = bindall_ [let_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)] in
 
@@ -141,4 +141,6 @@ let asts = [
   mutRec
 ] in
 
-map pprintProg asts
+-- let _ = map pprintProg asts in
+
+()

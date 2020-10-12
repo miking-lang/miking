@@ -2,6 +2,11 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
+include "mexpr/parser.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/eval.mc"
+include "mexpr/eq.mc"
+
 
 let escapeFirstChar = lam c.
   if or (isLowerAlpha c) (eqChar c '_') then c
@@ -55,7 +60,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | t -> smap_Expr_Expr generate t
 end
 
-lang OCamlTest = OCamlGenerate + OCamlPrettyPrint
+lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq + IntEq
+                 + BoolEq + CharEq
 
 mexpr
 
@@ -101,6 +107,64 @@ let mutRecExpected =
         reclets_empty))
     (app_ (var_ "_a_b_c") (int_ 1))
 in
+
 utest generate mutRec with mutRecExpected in
+
+let parseAsMExpr = lam s.
+  use MExprParser in parseExpr (initPos "") s
+in
+
+let ocamlEval = lam p. lam strConvert.
+  let subprocess = pyimport "subprocess" in
+  let blt = pyimport "builtins" in
+  let cmd = pycall blt "str" (join ["print_endline (", strConvert, "(", p, "))"],) in
+  let encoded = pycall cmd "encode" () in
+  let p = pycallkw subprocess "run" (["ocaml", "-stdin"],) {input=encoded, capture_output=true} in
+  let stdout = pycall (pycall blt "getattr" (p,"stdout")) "decode" () in
+  parseAsMExpr (pyconvert stdout)
+in
+
+let sameSemantics = lam mexprAst. lam ocamlAst.
+  let mexprVal =
+    use MExprEval in
+    eval {env = []} mexprAst
+  in
+  match mexprVal with TmConst t then
+    match t.val with CInt _ then
+      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_int" in
+      match ocamlVal with TmConst {val = CInt _} then
+        eqExpr mexprVal ocamlVal
+      else error "Values mismatch"
+    else match t.val with CBool _ then
+      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_bool" in
+      match ocamlVal with TmConst {val = CBool _} then
+        eqExpr mexprVal ocamlVal
+      else error "Values mismatch"
+    else match t.val with CChar _ then
+      let ocamlVal = ocamlEval (expr2str ocamlAst) "Printf.sprintf \"'%c'\"" in
+      match ocamlVal with TmConst {val = CChar _} then
+        eqExpr mexprVal ocamlVal
+      else error "Values mismatch"
+    else error "Unsupported constant"
+  else error "Unsupported value"
+in
+
+let addInt1 = addi_ (int_ 1) (int_ 2) in
+utest addInt1 with generate (symbolize addInt1) using sameSemantics in
+
+let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest addInt2 with generate (symbolize addInt2) using sameSemantics in
+
+let boolNot = not_ (not_ true_) in
+utest boolNot with generate (symbolize boolNot) using sameSemantics in
+
+let compareInt1 = eqi_ (int_ 1) (int_ 2) in
+utest compareInt1 with generate (symbolize compareInt1) using sameSemantics in
+
+let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt2 with generate (symbolize compareInt2) using sameSemantics in
+
+let charLiteral = char_ 'c' in
+utest charLiteral with generate (symbolize charLiteral) using sameSemantics in
 
 ()
