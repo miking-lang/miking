@@ -81,6 +81,7 @@ case $1 in
     test-all)
         export MI_TEST_PYTHON=1
         export MI_TEST_SUNDIALS=1
+        export MI_TEST_OCAML=1
         build
         runtests
         ;;
