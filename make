@@ -41,9 +41,13 @@ runtests_sundials() {
 # Run the test suite for python intrinsic tests
 runtests_py() {
     (cd test
-     ../build/mi test py/*
-     cd ../stdlib
-     ../build/mi test ocaml)
+     ../build/mi test py/*)
+}
+
+# Run the test suite for OCaml compiler
+runtests_ocaml() {
+    (cd stdlib
+     ../build/mi test ocaml/*)
 }
 
 # Run the test suite
@@ -63,6 +67,9 @@ runtests() {
     fi
     if [ -n "$MI_TEST_SUNDIALS" ]; then
         runtests_sundials
+    fi
+    if [ -n "$MI_TEST_OCAML" ]; then
+        runtests_ocaml
     fi
 }
 
