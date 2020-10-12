@@ -18,7 +18,7 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 # General function for building the project
 build() {
     mkdir -p build
-    dune build 
+    dune build
     cp -f _build/install/default/bin/boot.mi build/mi
 }
 
@@ -53,6 +53,7 @@ runtests() {
     ../build/mi test mexpr
     ../build/mi test ad
 		../build/mi test ext
+		../build/mi test ocaml
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
