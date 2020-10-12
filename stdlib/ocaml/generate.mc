@@ -34,8 +34,8 @@ let escapeString = lam s.
     defaultIdentName
 
 utest escapeString "abcABC/:@_'" with "abcABC____'"
-utest escapeString "" with "var"
-utest escapeString "@" with "var"
+utest escapeString "" with defaultIdentName
+utest escapeString "@" with defaultIdentName
 utest escapeString "ABC123" with "_BC123"
 utest escapeString "'a/b/c" with "_a_b_c"
 utest escapeString "123" with "_23"
