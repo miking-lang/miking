@@ -41,7 +41,9 @@ runtests_sundials() {
 # Run the test suite for python intrinsic tests
 runtests_py() {
     (cd test
-     ../build/mi test py/*)
+     ../build/mi test py/*
+     cd ../stdlib
+     ../build/mi test ocaml)
 }
 
 # Run the test suite
@@ -53,7 +55,6 @@ runtests() {
     ../build/mi test mexpr
     ../build/mi test ad
     ../build/mi test ext
-    ../build/mi test ocaml
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
