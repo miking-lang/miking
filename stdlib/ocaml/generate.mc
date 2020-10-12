@@ -7,6 +7,8 @@ include "mexpr/symbolize.mc"
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 
+let defaultIdentName = "var"
+
 let escapeFirstChar = lam c.
   if or (isLowerAlpha c) (eqChar c '_') then c
   else '_'
@@ -20,7 +22,6 @@ let escapeChar = lam c.
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeString = lam s.
-  let default = "var" in
   let n = length s in
   if gti n 0 then
     let hd = head s in
@@ -28,9 +29,9 @@ let escapeString = lam s.
     if or (neqi n 1) (isLowerAlpha hd) then
       cons (escapeFirstChar hd) (map escapeChar tl)
     else
-      default
+      defaultIdentName
   else
-    default
+    defaultIdentName
 
 utest escapeString "abcABC/:@_'" with "abcABC____'"
 utest escapeString "" with "var"
@@ -121,10 +122,10 @@ let mutRec =
 in
 let mutRecExpected =
   bind_
-    (reclets_add "_a_b_c" (ulam_ "var" (app_ (var_ "_23")
-                                             (var_ "var")))
-      (reclets_add "_23" (ulam_ "var" (app_ (var_ "_a_b_c")
-                                            (var_ "var")))
+    (reclets_add "_a_b_c" (ulam_ defaultIdentName (app_ (var_ "_23")
+                                             (var_ defaultIdentName)))
+      (reclets_add "_23" (ulam_ defaultIdentName (app_ (var_ "_a_b_c")
+                                            (var_ defaultIdentName)))
         reclets_empty))
     (app_ (var_ "_a_b_c") (int_ 1))
 in
