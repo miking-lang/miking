@@ -215,6 +215,14 @@ let fun = ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))) in
 let app2fun = symbolize (appSeq_ fun [int_ 1, int_ 2]) in
 utest app2fun with generate app2fun using sameSemantics in
 
+let funShadowed =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
+    [ulam_ "@" (var_ "@"), int_ 2])
+in
+utest funShadowed with generate funShadowed using sameSemantics in
+
 -- Lets
 let testLet =
   symbolize
@@ -222,12 +230,20 @@ let testLet =
 in
 utest testLet with generate testLet using sameSemantics in
 
+let testLetShadowed =
+  symbolize
+  (bindall_ [let_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
+             app_ (var_ "@") (int_ 1)])
+in
+utest testLetShadowed with generate testLetShadowed
+using sameSemantics in
+
 let testLetRec =
   symbolize
   (bind_
-     (reclets_add "$" (ulam_ "%" (app_ (var_ "%") (int_ 1)))
-       (reclets_add "@" (ulam_ "^" (var_ "^"))
-          reclets_empty))
+     (reclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
+     (reclets_add "@" (ulam_ "" (var_ ""))
+     reclets_empty))
    (app_ (var_ "$") (var_ "@")))
 in
 utest testLetRec with generate testLetRec using sameSemantics in
