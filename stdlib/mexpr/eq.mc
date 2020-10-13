@@ -362,14 +362,46 @@ lang VarPatEq = VarPat
     else None ()
 end
 
-lang SeqTotPatEq
+lang SeqTotPatEq = SeqTotPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO(dlunde,2020-09-29)
+  | PSeqTot {pats = ps2} ->
+    match lhs with PSeqTot {pats = ps1} then
+      if eqi (length ps2) (length ps1) then
+        let z = zipWith (lam p1. lam p2. (p1,p2)) ps1 ps2 in
+        optionFoldlM (lam fpEnv. lam ps.
+          match fpEnv with (f,p) then
+            eqPat env f p ps.0 ps.1
+          else never)
+          (free,patEnv) z
+      else None ()
+    else None ()
 end
 
-lang SeqEdgPatEq
+lang SeqEdgePatEq = SeqEdgePat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO(dlunde,2020-09-29)
+  | PSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
+    match lhs with PSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
+      match _eqpatname patEnv free mid1 mid2 with Some (f,p) then
+        if eqi (length pre1) (length pre2) then
+          let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
+          let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
+          let fl = optionFoldlM (lam fpEnv. lam ps.
+            match fpEnv with (f,p) then
+              eqPat env f p ps.0 ps.1
+            else never)
+            (free,patEnv) z1 in
+          match fl with Some (f1,p1) then
+            if eqi (length post1) (length post2) then
+              optionFoldlM (lam fpEnv. lam ps.
+                match fpEnv with (f,p) then
+                  eqPat env f p ps.0 ps.1
+                else never)
+                (f1,p1) z2
+            else None ()
+          else None ()
+        else None ()
+      else None ()
+    else None ()
 end
 
 lang RecordPatEq = RecordPat
@@ -425,19 +457,32 @@ lang BoolPatEq = BoolPat
     else None ()
 end
 
-lang AndPatEq
+lang AndPatEq = AndPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO(dlunde,2020-09-29)
+  | PAnd {lpat = l2, rpat = r2} ->
+    match lhs with PAnd {lpat = l1, rpat = r1} then
+      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
+        eqPat env free patEnv r1 r2
+      else None ()
+    else None ()
 end
 
-lang OrPatEq
+lang OrPatEq = OrPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO(dlunde,2020-09-29)
+  | POr {lpat = l2, rpat = r2} ->
+    match lhs with POr {lpat = l1, rpat = r1} then
+      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
+        eqPat env free patEnv r1 r2
+      else None ()
+    else None ()
 end
 
-lang NotPatEq
+lang NotPatEq = NotPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  -- TODO(dlunde,2020-09-29)
+  | PNot {subpat = p2} ->
+    match lhs with PNot {subpat = p1} then
+      eqPat env free patEnv p1 p2
+    else None ()
 end
 
 -----------------------------
@@ -457,7 +502,7 @@ lang MExprEq =
   CharEq + SymbEq + CmpSymbEq + SeqOpEq
 
   -- Patterns
-  + VarPatEq + SeqTotPatEq + SeqEdgPatEq + RecordPatEq + DataPatEq + IntPatEq +
+  + VarPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
   CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
 
 end
@@ -615,6 +660,190 @@ let pbool2 = ptrue_ in
 let pbool3e = pfalse_ in
 utest pgen pbool1 with pgen pbool2 using eqExpr in
 utest eqExpr (pgen pbool1) (pgen pbool3e) with false in
+
+let pand1 = pand_ pbool1 pbool1 in
+let pand2 = pand_ pbool2 pbool2 in
+let pand3 = pand_ pbool2 pbool3e in
+let pand4 = pand_ pbool3e pbool2 in
+let pand5 = pand_ pdata1 pchar1 in
+let pand6 = pand_ pdata2 pchar2 in
+let pand7 = pand_ pdata2 pchar3e in
+let pand8 = pand_ pvar1 pbool1 in
+let pand9 = pand_ pvar2 pbool1 in
+let pand10 = pand_ pvar1 prec1 in
+let pand11 = pand_ pvar2 prec2 in
+let pand12 = pand_ pvar1 pdata1 in
+let pand13 = pand_ pvar2 pdata2 in
+utest pgen (pand_ pand1 pand2) with pgen (pand_ pand1 pand2) using eqExpr in
+utest pgen pand5 with pgen pand6 using eqExpr in
+utest pgen pand8 with pgen pand9 using eqExpr in
+utest pgen pand10 with pgen pand11 using eqExpr in
+utest eqExpr (pgen pand1) (pgen pand3) with false in
+utest eqExpr (pgen pand3) (pgen pand4) with false in
+utest eqExpr (pgen pand6) (pgen pand7) with false in
+utest eqExpr (pgen pand12) (pgen pand13) with false in
+
+let por1 = por_ pbool1 pbool1 in
+let por2 = por_ pbool2 pbool2 in
+let por3 = por_ pbool2 pbool3e in
+let por4 = por_ pbool3e pbool2 in
+let por5 = por_ pdata1 pchar1 in
+let por6 = por_ pdata2 pchar2 in
+let por7 = por_ pdata2 pchar3e in
+let por8 = por_ pvar1 pbool1 in
+let por9 = por_ pvar2 pbool1 in
+let por10 = por_ pvar1 prec1 in
+let por11 = por_ pvar2 prec2 in
+let por12 = por_ pvar1 pdata1 in
+let por13 = por_ pvar2 pdata2 in
+utest pgen por1 with pgen por2 using eqExpr in
+utest pgen por5 with pgen por6 using eqExpr in
+utest pgen por8 with pgen por9 using eqExpr in
+utest pgen por10 with pgen por11 using eqExpr in
+utest eqExpr (pgen por1) (pgen por3) with false in
+utest eqExpr (pgen por3) (pgen por4) with false in
+utest eqExpr (pgen por6) (pgen por7) with false in
+utest eqExpr (pgen por12) (pgen por13) with false in
+
+let pnot1 = pnot_ pbool1 in
+let pnot2 = pnot_ pbool2 in
+let pnot3 = pnot_ pbool3e in
+let pnot4 = pnot_ pdata1 in
+let pnot5 = pnot_ pdata2 in
+let pnot6 = pnot_ pnot1 in
+let pnot7 = pnot_ pnot2 in
+let pnot8 = pnot_ pvar1 in
+let pnot9 = pnot_ pvar2 in
+utest pgen pnot1 with pgen pnot2 using eqExpr in
+utest pgen pnot4 with pgen pnot5 using eqExpr in
+utest pgen pnot6 with pgen pnot7 using eqExpr in
+utest pgen pnot8 with pgen pnot9 using eqExpr in
+utest eqExpr (pgen pnot4) (pgen pnot6) with false in
+utest eqExpr (pgen pnot3) (pgen pnot6) with false in
+
+let pSeqTot1 = pseqtot_ [ptrue_, pfalse_] in
+let pSeqTot2 = pseqtot_ [ptrue_, pfalse_] in
+let pSeqTot3 = pseqtot_ [pfalse_, pfalse_] in
+let pSeqTot4 = pseqtot_ [pfalse_, pfalse_,pfalse_] in
+let pSeqTot5 = pseqtot_ [por1,pfalse_,pfalse_] in
+let pSeqTot6 = pseqtot_ [por2,pfalse_,pfalse_] in
+let pSeqTot7 = pseqtot_ [pvar1,pfalse_,pfalse_] in
+let pSeqTot8 = pseqtot_ [pvar2,pfalse_,pfalse_] in
+let pSeqTot9 = pseqtot_ [pvar2,pdata1,pfalse_] in
+let pSeqTot10 = pseqtot_ [pvar2,pdata2,pfalse_] in
+let pSeqTot11 = pseqtot_ [pvar2,pdata3e,pfalse_] in
+let pSeqTot12 = pseqtot_ [pvar1,pdata1,pfalse_] in
+utest pgen pSeqTot1 with pgen pSeqTot2 using eqExpr in
+utest pgen pSeqTot5 with pgen pSeqTot6 using eqExpr in
+utest pgen pSeqTot7 with pgen pSeqTot8 using eqExpr in
+utest pgen pSeqTot9 with pgen pSeqTot10 using eqExpr in
+utest eqExpr (pgen pSeqTot2) (pgen pSeqTot3) with false in
+utest eqExpr (pgen pSeqTot3) (pgen pSeqTot4) with false in
+utest eqExpr (pgen pSeqTot8) (pgen pSeqTot9) with false in
+utest eqExpr (pgen pSeqTot10) (pgen pSeqTot11) with false in
+utest eqExpr (pgen pSeqTot10) (pgen pSeqTot12) with false in
+
+let pSeqEdge1 = pseqedgew_ [pint_ 1, pint_ 2] [pint_ 3] in
+let pSeqEdge2 = pseqedgew_ [pint_ 1, pint_ 2] [pint_ 3] in
+let pSeqEdge3 = pseqedgew_ [pint_ 2, pint_ 3] [pint_ 4] in
+let pSeqEdge4 = pseqedgew_ [pSeqTot1, pint_ 2] [pint_ 3] in
+let pSeqEdge5 = pseqedgew_ [pSeqTot2, pint_ 2] [pint_ 3] in
+let pSeqEdge6 = pseqedgew_ [pSeqTot2, pint_ 2] [pint_ 3,pint_ 4] in
+let pSeqEdge7 = pseqedgew_ [pSeqTot2] [pint_ 3,pint_ 4] in
+let pSeqEdge8 = pseqedgew_ [pvar1] [pint_ 3,pint_ 4] in
+let pSeqEdge9 = pseqedgew_ [pvar2] [pint_ 3,pint_ 4] in
+let pSeqEdge10 = pseqedgew_ [pvar2] [pdata1,pint_ 4] in
+let pSeqEdge11 = pseqedgew_ [pvar2] [pdata2,pint_ 4] in
+let pSeqEdge12 = pseqedgen_ [pvar2] "x" [pdata1,pint_ 4] in
+let pSeqEdge13 = pseqedgen_ [pvar2] "y" [pdata2,pint_ 4] in
+let pSeqEdge14 = pseqedgen_ [pvar2] "x" [pdata3e,pint_ 4] in
+let pSeqEdge15 = pseqedgen_ [pdata3e] "x" [pdata3e,pint_ 4] in
+utest pgen pSeqEdge1 with pgen pSeqEdge2 using eqExpr in
+utest pgen pSeqEdge4 with pgen pSeqEdge5 using eqExpr in
+utest pgen pSeqEdge8 with pgen pSeqEdge9 using eqExpr in
+utest pgen pSeqEdge10 with pgen pSeqEdge11 using eqExpr in
+utest pgen pSeqEdge12 with pgen pSeqEdge13 using eqExpr in
+utest eqExpr (pgen pSeqEdge2) (pgen pSeqEdge3) with false in
+utest eqExpr (pgen pSeqEdge3) (pgen pSeqEdge4) with false in
+utest eqExpr (pgen pSeqEdge5) (pgen pSeqEdge6) with false in
+utest eqExpr (pgen pSeqEdge6) (pgen pSeqEdge7) with false in
+utest eqExpr (pgen pSeqEdge11) (pgen pSeqEdge12) with false in
+utest eqExpr (pgen pSeqEdge13) (pgen pSeqEdge14) with false in
+utest eqExpr (pgen (pand_ (pand_ pSeqEdge14 pSeqEdge3) pSeqEdge3)) (pgen (pand_ (pand_ pSeqEdge15 pSeqEdge3) pSeqEdge3)) with false in
+
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest x with y using eqExpr in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "a")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "x")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using eqExpr in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "a")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_ (pand_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (pand_ (pvar_ "x") (pvar_ "y")) (var_ "y") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_ (por_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ false_ (por_ (pvar_ "x") (pvar_ "y")) (var_ "x") true_ in
+utest symbolize x with x using eqExpr in
+utest symbolize y with y using eqExpr in
+utest x with y using eqExpr in
+let x = match_ (var_ "a") (por_ (pvar_ "a") (pvar_ "b")) (var_ "a") true_ in
+let y = match_ (var_ "x") (por_ (pvar_ "z") (pvar_ "y")) (var_ "z") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "y", pvar_ "y"])
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "y", pvar_ "y"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "z", pvar_ "z"])
+    (pseqedge_ [pvar_ "x"] "a" [pvar_ "z", pvar_ "z"]))
+  (var_ "a") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "a") true_ in
+utest x with y using lam a. lam b. not (eqExpr a b) in
+let x = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (pand_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "z") true_ in
+utest x with y using eqExpr in
+let x = match_ false_
+  (por_
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"])
+    (pseqedge_ [pvar_ "x"] "x" [pvar_ "x", pvar_ "x"]))
+  (var_ "a") true_ in
+let y = match_ false_
+  (por_
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"])
+    (pseqedge_ [pvar_ "a"] "a" [pvar_ "a", pvar_ "a"]))
+  (var_ "z") true_ in
+utest x with y using eqExpr in
+
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
