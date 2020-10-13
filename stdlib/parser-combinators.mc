@@ -156,6 +156,8 @@ let bind = lam p. lam f. lam st.
 
 -- Control combinators
 
+-- void: Parser a -> Parser ()
+--
 -- Run parser and ignore result
 let void = apl (pure ())
 
@@ -442,7 +444,7 @@ recursive
         try ( -- This 'try' makes the parser consume the whole string or nothing
           bind (lexChar c) (lam _ .
           bind (lexString cs) (lam _ .
-          pure (cons c cs)))
+          pure s))
         ))
 end
 
@@ -461,7 +463,7 @@ utest
   ) "abcde"
 with Success ("abcd", ("e", {file = "", row = 1, col = 5}))
 
--- Parser Char
+-- lexCharLit : Parser Char
 --
 -- Parse a character literal.
 -- TODO(?,?): Support escaped characters (also in OCaml parser)
@@ -470,7 +472,7 @@ let lexCharLit = wrappedIn (lexChar ''') (lexChar ''') next
 utest testParser lexCharLit "'\n'"
 with Success (head "\n", ("", {file = "", row = 2, col = 2}))
 
--- Parser String
+-- lexStringLit : Parser String
 --
 -- Parse a string literal.
 let lexStringLit =
@@ -611,7 +613,7 @@ let isValidChar = lam c.
   or (isAlphanum c) (eqChar c '_')
 in
 
--- reserved : String -> Parser String
+-- reserved : String -> Parser ()
 --
 -- Parse a specific string and fail if it is followed by
 -- additional valid identifier characters.
