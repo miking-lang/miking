@@ -444,7 +444,7 @@ recursive
         try ( -- This 'try' makes the parser consume the whole string or nothing
           bind (lexChar c) (lam _ .
           bind (lexString cs) (lam _ .
-          pure (cons c cs)))
+          pure s))
         ))
 end
 
