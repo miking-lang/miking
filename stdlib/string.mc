@@ -14,6 +14,12 @@ recursive
            else false
 end
 
+utest eqString "" "" with true
+utest eqString "" "a" with false
+utest eqString "a" "" with false
+utest eqString "a" "a" with true
+utest eqString "a" "aa" with false
+
 let str2upper = lam s. map char2upper s
 let str2lower = lam s. map char2lower s
 
