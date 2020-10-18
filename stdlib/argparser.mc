@@ -3,9 +3,10 @@
 --
 -- An argument parser library.
 --
--- TODO(johnwikman, 2020-10-05): OrderedPositional, and UnorderedPositional
--- TODO(johnwikman, 2020-10-04): Set exhaustive match on Modifiers.
+-- TODO(johnwikman, 2020-10-05): OrderedPositional, and UnorderedPositional (partially done, need to fix setup of relations...)
 -- TODO(johnwikman, 2020-10-04): Add APDefault modifier.
+-- TODO(johnwikman, 2020-10-12): Remove Match Conditions, does not give a whole lot, just causes a bunch of ambiguity...
+-- TODO(johnwikman, 2020-10-17): Add built-in --help option.
 --
 -- birka update
 -- birka download <package>
@@ -17,6 +18,42 @@
 -- update|download|source|configure = Positional [Name "mode", Required, Once, Position 0, Values ["update", "download", "source", "configure"]]
 -- add|remove = Positional [Name "srcmode", Required, Once, Position 1, Parent ("mode", "source"), Values ["add", "remove"]]
 -- text = Positional [Name "confmode", Required, Once, Position 1, Parent ("mode", "configure"), Values ["text"]]
+--
+-- OPT(johnwikman, 2020-10-12):
+-- Maybe skip the distinction of ordered positionals and unordered positionals?
+-- The ordered positionals could just be a special case of the unordered
+-- positionals where the ordered positionals follow a tree hierarchy and the
+-- the root of that tree is the first required positional. Though this would
+-- probably take some thinking to get it right, such that it does not limit the
+-- expressiveness of the Enabled/Disabled functionality of the unordered
+-- positionals. Would also make it more complicated to print the usage if no
+-- simple procedure is found to handle if one of these tree structures does not
+-- appear as the first positional. If done right, this would likely be the
+-- optimal solution.
+--
+-- OPT(johnwikman, 2020-10-14): It could probably be possible to reexpress the
+-- whole parent-child relation into specifying who enables a positional, which
+-- positional that should have precedent ("the first"), and which positionals
+-- that it enables. Then make sure that the argparser in unambiguous by
+-- constructing a DFA for it and check that there any no collisions on
+-- transaction. The only issue is that this could result in an exponential
+-- number of states, making it too slow to use in practice. However, it could
+-- be implemented for the utest-part instead.
+--
+-- So an ordered positional now becomes an enabled positional that has "OnlyThis"
+-- priority, such that no other enabled positionals can be matched on when the
+-- ordered positional is enabled. This moves the special case from the configuration
+-- to the usage print, which has to keep track of leading "OnlyThis" positionals.
+-- The sanity checking required now is that:
+--  - Two "OnlyThis" positionals cannot be enabled at the same time.
+--  - Values specified in two non-OnlyThis positionals active at the same time
+--    cannot overlap. There can only be one such positional active at any time
+--    that have no values specified. There are potentially an exponential
+--    number of cases to check here, so this should not be enforced as standard.
+--  - Each specified positional should be reachable and each of its enabling
+--    and disabling policy should relate to a valid value in its specified
+--    positional. The disabling and enabling policies should also not be in
+--    conflict.
 
 include "bool.mc"
 include "char.mc"
@@ -27,6 +64,77 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 
+
+-- Local hashmap definitions
+let _str_traits = hashmapStrTraits
+let _str_empty = hashmapEmpty
+let _str_size = hashmapSize _str_traits
+let _str_mem = hashmapMem _str_traits
+let _str_lookupOrElse = hashmapLookupOrElse _str_traits
+let _str_lookupOr = hashmapLookupOr _str_traits
+let _str_lookup = hashmapLookup _str_traits
+let _str_insert = hashmapInsert _str_traits
+let _str_remove = hashmapRemove _str_traits
+let _str_filter = hashmapFilter _str_traits
+let _str_filterKeys = hashmapFilterKeys _str_traits
+let _str_filterValues = hashmapFilterValues _str_traits
+let _str_keys = hashmapKeys _str_traits
+let _str_values = hashmapValues _str_traits
+
+let _char_traits = {eq = eqChar, hashfn = char2int}
+let _char_empty = hashmapEmpty
+let _char_size = hashmapSize _char_traits
+let _char_mem = hashmapMem _char_traits
+let _char_lookupOrElse = hashmapLookupOrElse _char_traits
+let _char_lookupOr = hashmapLookupOr _char_traits
+let _char_lookup = hashmapLookup _char_traits
+let _char_insert = hashmapInsert _char_traits
+let _char_remove = hashmapRemove _char_traits
+let _char_filter = hashmapFilter _char_traits
+let _char_filterKeys = hashmapFilterKeys _char_traits
+let _char_filterValues = hashmapFilterValues _char_traits
+let _char_keys = hashmapKeys _char_traits
+let _char_values = hashmapValues _char_traits
+
+let _optstr_traits = {
+  eq = lam x. lam y.
+    match (x,y) with (Some a, Some b) then
+      eqString a b
+    else match (x,y) with (None (), None ()) then
+      true
+    else
+      false,
+  hashfn = optionMapOr 0 hashmapStrTraits.hashfn
+}
+let _optstr_empty = hashmapEmpty
+let _optstr_size = hashmapSize _optstr_traits
+let _optstr_mem = hashmapMem _optstr_traits
+let _optstr_lookupOrElse = hashmapLookupOrElse _optstr_traits
+let _optstr_lookupOr = hashmapLookupOr _optstr_traits
+let _optstr_lookup = hashmapLookup _optstr_traits
+let _optstr_insert = hashmapInsert _optstr_traits
+let _optstr_remove = hashmapRemove _optstr_traits
+let _optstr_filter = hashmapFilter _optstr_traits
+let _optstr_filterKeys = hashmapFilterKeys _optstr_traits
+let _optstr_filterValues = hashmapFilterValues _optstr_traits
+let _optstr_keys = hashmapKeys _optstr_traits
+let _optstr_values = hashmapValues _optstr_traits
+
+
+-- Returns true iff both first values match and both second values are None, or
+-- if both first values match and both second values contains the same string.
+let _eqStrOptTuple: (String, Option String) -> (String, Option String) -> Bool =
+  lam t1. lam t2.
+  if not (eqString t1.0 t2.1) then
+    false
+  else match (t1.0, t2.0) with (None (), None ()) then
+    true
+  else match (t1.0, t2.0) with (Some v1, Some v2) then
+    eqString v1 v2
+  else
+    false
+
+
 -- Public types
 type APModifier a
 -- OPTION ONLY MODIFIERS
@@ -36,12 +144,9 @@ con APMetavar: String -> APModifier a
 con APApply: (a -> a) -> APModifier a
 -- POSITIONAL ONLY MODIFIERS
 con APName: String -> APModifier a
-con APFirst: () -> APModifier a
-con APParent: String -> APModifier a
-con APParentValue: (String, String) -> APModifier a
-con APMatchCond: (String -> Bool) -> APModifier a
-con APEnabledBy: [String] -> APModifier a
-con APDisabledBy: [String] -> APModifier a
+con APOnlyThis: () -> APModifier a
+con APEnabledBy: (String, Option String) -> APModifier a
+con APDisabledBy: (String, Option String) -> APModifier a
 -- GENERIC MODIFIERS
 con APDescription: String -> APModifier a
 con APApplyVal: (String -> a -> a) -> APModifier a
@@ -49,7 +154,6 @@ con APValue: (String, String) -> APModifier a
 con APValues: [String] -> APModifier a
 con APValueDescription: (String, String) -> APModifier a
 con APRequired: () -> APModifier a
-con APOnce: () -> APModifier a
 con APPostCond: ((a -> Bool), String) -> APModifier a -- A check that will be performed if this has been matched with an input argument
 
 type APConfiguration a
@@ -65,6 +169,7 @@ con APMany: {name: String, description: String, apply: String -> a -> a} -> APCo
 con APMode: {name: String, values: [String], description: String, apply: String -> a -> a} -> APConfiguration a
 con APSubmode: {name: String, parent: String, values: [String], description: String, apply: String -> a -> a} -> APConfiguration a
 con APSubmodeSpecific: {name: String, parent: String, parentval: String, values: [String], description: String, apply: String -> a -> a} -> APConfiguration a
+con APUniqueOnlyThisEnable: String -> APConfiguration a
 
 -- Invalid characters
 let _invalidChars = ['-', '=', ' ', '\r', '\n', '\t']
@@ -79,30 +184,29 @@ type APOptionItem_ a = {
   description: Option String,
   apply: String -> a -> a,
   -- values: <ValueName> -> <Description>
-  values: HashMap String String,
+  values: HashMap String (Option String),
   required: Bool,
-  once: Bool,
-  postconds: [((String -> Bool), String)]
+  postconds: [((a -> Bool), String)]
 }
+
 type APPositionalItem_ a = {
   name: String,
   description: Option String,
-  first: Bool,
-  children: HashMap String String, -- if value is key, then child is next positional. Empty key indicates wildcard, a.k.a. match this if nothing else specific matches
-  enables: [String],  -- the positionals this will enable on match
-  disables: [String], -- the positionals this will disable on match
-  apply: Option (String -> a -> a),
-  matchconds: [String -> Bool],
+  apply: String -> a -> a,
+  onlyThis: Bool,
+  -- enables/disables map "value match" -> positonal name. None () value
+  -- indicates a wildcard.
+  enables: HashMap (Option String) [String],
+  disables: HashMap (Option String) [String]
   -- values: <ValueName> -> <Description>
-  values: HashMap String String,
+  values: HashMap String (Option String),
   required: Bool,
-  once: Bool,
   postconds: [((a -> Bool), String)],
   -- INTERMEDIARY VALUES
-  parent: Option (String, String), -- Empty second string implies a match all parent values
-  enabledBy: [String],
-  disabledBy: [String]
+  enabledBy: [(String, Option String)],
+  disabledBy: [(String, Option String)]
 }
+
 type ArgParser_ a = {
   -- The name of the program being run, specified by `head args`.
   name: String,
@@ -114,8 +218,8 @@ type ArgParser_ a = {
   optExclusions: HashMap String [String],
   -- All positionals as a map name -> positional record
   positionals: HashMap String (APPositionalItem_ a),
-  -- The potential positional to be scanned first
-  firstPositional: Some String,
+  -- Default enabled positionals
+  initiallyEnabledPositionals: [String],
   -- Lines of error messages that has been produced during the argument
   -- parsing. An empty list indicates that no error has occurred. These should
   -- ideally be printed as `strJoin "\n" ap.errors`. The reason for not
@@ -125,39 +229,18 @@ type ArgParser_ a = {
 }
 
 
--- Local hashmap definitions
-let _str_traits = hashmapStrTraits
-let _str_mem = hashmapMem _str_traits
-let _str_lookupOrElse = hashmapLookupOrElse _str_traits
-let _str_lookup = hashmapLookup _str_traits
-let _str_insert = hashmapInsert _str_traits
-let _str_remove = hashmapRemove _str_traits
-let _str_keys = hashmapKeys _str_traits
-let _str_values = hashmapValues _str_traits
-
-let _char_traits = {eq = eqchar, hashfn = char2int}
-let _char_mem = hashmapMem _char_traits
-let _char_lookupOrElse = hashmapLookupOrElse _char_traits
-let _char_lookup = hashmapLookup _char_traits
-let _char_insert = hashmapInsert _char_traits
-let _char_remove = hashmapRemove _char_traits
-let _char_keys = hashmapKeys _char_traits
-let _char_values = hashmapValues _char_traits
-
-
 -- Takes the settings list to an APOption and returns either a tuple
 -- containing the long option name with list of error messages, or a
 -- well-formed option.
-let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) = lam mods.
+let _formOption: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) = lam mods.
   let opt: APOptionItem_ a = {
     short = None (),
     long = "",
     metavar = None (),
-    description = "",
+    description = None (),
     apply = lam _. lam o. o,
-    values = hashmapEmpty,
+    values = _str_empty,
     required = false,
-    once = false,
     postconds = []
   } in
 
@@ -165,6 +248,7 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
+    -- VALID OPTION MODIFIERS
     match mod with APShort c then
       if _isInvalidChar c then
         {acc with errs = snoc acc.errs (join ["Invalid short modifier ", showChar c])}
@@ -188,38 +272,58 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
       else
         {acc with errs = snoc acc.errs "Multiple metavars"}
     else match mod with APDescription s then
-      {acc with opt = {acc.opt with description = s}}
-    else match mod with APValue (val,desc) then
-      {acc with opt = {acc.opt with values = _str_insert val desc acc.opt.values}}
-    else match mod with APValues vs then
-      if null vs then
-        {acc with errs = snoc acc.errs "Empty value list"}
+      if optionIsNone app.opt.description then
+        {acc with opt = {acc.opt with description = s}}
       else
-        {acc with opt = {acc.opt with values = foldl (lam hm. lam v.
-            if _str_mem v hm then
-              hm -- do not overwrite binding if present!
-            else
-              _str_insert v "" hm
-          ) acc.opt.values vs}}
-    else match mod with APOnce _ then
-      {acc with opt = {acc.opt with once = true}}
+        {acc with errs = snoc acc.errs "Multiple descriptions"}
+    else match mod with APValue (val, desc) then
+      if _str_mem val acc.opt.values then
+        {acc with errs = snoc acc.errs (join ["Specified duplicate value \"", val, "\""])}
+      else
+        {acc with opt = {acc.opt with values = _str_insert val (Some desc) acc.opt.values}}
+    else match mod with APValues vs then
+      foldl (lam accInternal. lam v.
+        if _str_mem v accInternal.opt.values then
+          {accInternal with errs = snoc accInternal.errs (join ["Specified duplicate value \"", v, "\""])}
+        else
+          {accInternal with opt = {accInternal.opt with values = _str_insert v (None ()) accInternal.opt.values}}
+      ) acc vs
     else match mod with APRequired _ then
       {acc with opt = {acc.opt with required = true}}
     else match mod with APPostCond pctup then
       {acc with opt = {acc.opt with postconds = cons pctup acc.opt.postconds}}
-    else
-      -- Process this at a later stage
+
+    -- OPTION MODIFIERS TO BE PROCESSED LATER
+    else match mod with APValueDescription _ then
       {acc with unprocessed = snoc acc.unprocessed mod}
+    else match mod with APApply _ then
+      {acc with unprocessed = snoc acc.unprocessed mod}
+    else match mod with APApplyVal _ then
+      {acc with unprocessed = snoc acc.unprocessed mod}
+
+    -- INVALID OPTION MODIFIERS
+    else match mod with APName _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APName\""}
+    else match mod with APFirst _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APOnlyThis\""}
+    else match mod with APEnabledBy _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APEnabledBy\""}
+    else match mod with APDisabledBy _ then
+      {acc with errs = snoc acc.errs "Invalid option setting \"APDisabledBy\""}
+
+    -- This should be a complete match
+    else never
   ) state mods in
 
   -- Process options that depends on previously processed settings
   let state = foldl (lam acc. lam mod.
     match mod with APValueDescription (val, desc) then
-      -- Only add description to a value if it actually exists.
-      if _str_mem val acc.opt.values then
-        {acc with opt = {acc.opt with values = _str_insert val desc acc.opt.values}}
-      else
+      if not (_str_mem val acc.opt.values) then
         {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
+      else if optionIsSome (_str_lookupOr (None ()) val acc.opt.values) then
+        {acc with errs = snoc acc.errs (join ["Duplicate description for value \"", val, "\""])}
+      else
+        {acc with opt = {acc.opt with values = _str_insert val (Some desc) acc.opt.values}}
     else match mod with APApply fn then
       if acc.hasApply then
         {acc with errs = snoc acc.errs "Multiple apply functions"}
@@ -235,29 +339,8 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
         {{acc with opt = {acc.opt with apply = fn}}
               with hasApply = true}
     else
-      -- Process this at a later stage
-      {acc with unprocessed = snoc acc.unprocessed mod}
-  ) {state with unprocessed = []} state.unprocessed in
-
-  -- Check for settings that are not applicable to an option
-  let state = foldl (lam acc. lam mod.
-    match mod with APName _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APName\""}
-    else match mod with APFirst _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APFirst\""}
-    else match mod with APMatchCond _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APMatchCond\""}
-    else match mod with APParent _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APParent\""}
-    else match mod with APParentValue _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APParentValue\""}
-    else match mod with APEnabledBy _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APEnabledBy\""}
-    else match mod with APDisabledBy _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APDisabledBy\""}
-    else
-      -- Process this at a later stage
-      {acc with unprocessed = snoc acc.unprocessed mod}
+      -- This should be unreachable
+      {state with errs = snoc state.errs "INTERNAL ERROR: Unprocessed option modifier"}
   ) {state with unprocessed = []} state.unprocessed in
 
   -- Check that an option has a long name
@@ -277,46 +360,35 @@ let formOption_: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
       state
   in
 
-  -- Internal error if we still have unprocessed modifiers
-  let state =
-    if not (null state.unprocessed) then
-      {state with errs = snoc state.errs "Unprocessed option modifiers\n"}
-    else
-      state
-  in
-
   if not (null state.errs) then
     Left (state.opt.long, state.errs)
   else
     Right state.opt
 
 
--- Takes the settings list to an APPositional and returns either a tuple
--- that contains identifying name with a list of error messages, or a
--- well-formed positional.
-let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalItem_ a) = lam mods.
+-- Takes the settings list to an APPositional and returns either a tuple that
+-- contains identifying name with a list of error messages, or a well-formed
+-- positional.
+let _formPositional: [APModifier a] -> Either (String, [String]) (APPositionalItem_ a) = lam mods.
   let pos: APPositionalItem_ a = {
     name = "",
-    description = "",
-    first = false,
-    children = hashmapEmpty,
-    enables = [],
-    disables = [],
+    description = None (),
     apply = lam _. lam o. o,
-    matchconds = [],
-    values = hashmapEmpty,
+    onlyThis = false,
+    enables = _optstr_empty,
+    disables = _optstr_empty,
+    values = _str_empty,
     required = false,
-    once = false,
     postconds = [],
-    parent = None (),
     enabledBy = [],
     disabledBy = []
   } in
 
-  let accrecord = {pos = pos, errs = [], hasName = false, hasApply = false, unprocessed = []} in
+  let state = {pos = pos, errs = [], hasName = false, hasApply = false, unprocessed = []} in
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
+    -- VALID ORDERED POSITIONAL MODIFIERS
     match mod with APName s then
       if null s then
         {acc with errs = snoc acc.errs "Empty name specified for positional"}
@@ -325,83 +397,73 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
               with hasName = true}
       else
         {acc with errs = snoc acc.errs "Multiple names for positional"}
-    else match mod with APFirst _ then
-      {acc with pos = {acc.pos with first = true}}
-    else match mod with APParent pname then
-      if isSome acc.pos then
-        {acc with errs = snoc acc.errs "Multiple parents specified"}
-      else
-        {acc with pos = {acc.pos with parent = Some (pname, "")}}
-    else match mod with APParentValue (pname, pvalue) then
-      if isSome acc.pos then
-        {acc with errs = snoc acc.errs "Multiple parents specified"}
-      else if null pvalue then
-        {acc with errs = snoc acc.errs "No value specified on parent match"}
-      else
-        {acc with pos = {acc.pos with parent = Some (pname, pvalue)}}
-    else match mod with APMatchCond condfn then
-      {acc with pos = {acc.pos with matchconds = cons condfn acc.pos.matchconds}}
-    else match mod with APEnabledBy names then
-      {acc with pos = {acc.pos with enabledBy = concat names acc.pos.enabledBy}}
-    else match mod with APDisabledBy names then
-      {acc with pos = {acc.pos with disabledBy = concat names acc.pos.disabledBy}}
     else match mod with APDescription s then
-      {acc with pos = {acc.pos with description = s}}
-    else match mod with APValue (val,desc) then
-      {acc with pos = {acc.pos with values = _str_insert val desc acc.pos.values}}
-    else match mod with APValues vs then
-      if null vs then
-        {acc with errs = snoc acc.errs "Empty value list"}
+      if optionIsNone app.pos.description then
+        {acc with pos = {acc.pos with description = s}}
       else
-        {acc with pos = {acc.pos with values = foldl (lam hm. lam v.
-            if _str_mem v hm then
-              hm -- do not overwrite binding if present!
-            else
-              _str_insert v "" hm
-          ) acc.pos.values vs}}
-    else match mod with APRequired _ then
-      {acc with pos = {acc.pos with required = true}}
-    else match mod with APOnce _ then
-      {acc with pos = {acc.pos with once = true}}
-    else match mod with APPostCond pctup then
-      {acc with pos = {acc.pos with postconds = cons pctup acc.pos.postconds}}
-    else
-      -- Process this at a later stage
-      {acc with unprocessed = snoc acc.unprocessed mod}
-  ) state mods in
-
-  -- Process options that depends on previously processed settings
-  let state = foldl (lam acc. lam mod.
-    match mod with APValueDescription (val, desc) then
-      -- Only add description to a value if it actually exists.
-      if _str_mem val acc.pos.values then
-        {acc with pos = {acc.pos with values = _str_insert val desc acc.pos.values}}
-      else
-        {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
+        {acc with errs = snoc acc.errs "Multiple descriptions"}
     else match mod with APApplyVal fn then
       if pos.hasApply then
         {acc with errs = snoc acc.errs "Multiple apply functions"}
       else
         {{acc with pos = {acc.pos with apply = fn}}
               with hasApply = true}
-    else
-      -- Process this at a later stage
-      {acc with unprocessed = snoc acc.unprocessed mod}
-  ) {state with unprocessed = []} state.unprocessed in
+    else match mod with APOnlyThis _ then
+      {acc with pos = {acc.pos with onlyThis = true}}
+    else match mod with EnabledBy t1 then
+      -- NOTE(johnwikman, 2020-10-18): No sanity checking here for either
+      -- EnabledBy or DisabledBy since these lists might get modified after an
+      -- invocation to this function.
+      {acc with pos = {acc.pos with enabledBy = snoc acc.pos.enabledBy t1}}
+    else match mod with DisabledBy t1 then
+      {acc with pos = {acc.pos with disabledBy = snoc acc.pos.disabledBy t1}}
+    else match mod with APValue (val, desc) then
+      if _str_mem val acc.pos.values then
+        {acc with errs = snoc acc.errs (join ["Specified duplicate value \"", val, "\""])}
+      else
+        {acc with pos = {acc.pos with values = _str_insert val (Some desc) acc.pos.values}}
+    else match mod with APValues vs then
+      foldl (lam accInternal. lam v.
+        if _str_mem v accInternal.pos.values then
+          {accInternal with errs = snoc accInternal.errs (join ["Specified duplicate value \"", v, "\""])}
+        else
+          {accInternal with pos = {accInternal.pos with values = _str_insert v (None ()) accInternal.pos.values}}
+      ) acc vs
+    else match mod with APRequired _ then
+      {acc with pos = {acc.pos with required = true}}
+    else match mod with APPostCond pctup then
+      {acc with pos = {acc.pos with postconds = cons pctup acc.pos.postconds}}
 
-  -- Check for settings that are not applicable to a positional
-  let state = foldl (lam acc. lam mod.
-    match mod with APShort _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"APShort\""}
-    else match mod with APLong _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"APLong\""}
-    else match mod with APMetavar _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"APMetavar\""}
-    else match mod with APApply _ then
-      {acc with errs = snoc acc.errs "Invalid positional setting \"APApply\""}
-    else
-      -- Process this at a later stage
+    -- ORDERED POSITIONAL MODIFIERS TO BE PROCESSED LATER
+    else match mod with APValueDescription _ then
       {acc with unprocessed = snoc acc.unprocessed mod}
+
+    -- INVALID ORDERED POSITIONAL MODIFIERS
+    else match mod with APShort _ then
+      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APShort\""}
+    else match mod with APLong _ then
+      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APLong\""}
+    else match mod with APMetavar _ then
+      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APMetavar\""}
+    else match mod with APApply _ then
+      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APApply\""}
+
+    -- This should be a complete match
+    else never
+  ) state mods in
+
+  -- Process options that depends on previously processed settings
+  let state = foldl (lam acc. lam mod.
+    match mod with APValueDescription (val, desc) then
+      if not (_str_mem val acc.pos.values) then
+        {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
+      else if optionIsSome (_str_lookupOr (None ()) val acc.pos.values) then
+        {acc with errs = snoc acc.errs (join ["Duplicate description for value \"", val, "\""])}
+      else
+        {acc with pos = {acc.pos with values = _str_insert val (Some desc) acc.pos.values}}
+    else
+      -- This should be unreachable
+      {state with errs = snoc state.errs "INTERNAL ERROR: Unprocessed ordered positional modifier"}
   ) {state with unprocessed = []} state.unprocessed in
 
   -- Check that positional has a name
@@ -421,10 +483,10 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
       state
   in
 
-  -- Internal error if we still have unprocessed modifiers
+  -- Check, if non-first, that it has a parent
   let state =
-    if not (null state.unprocessed) then
-      {state with errs = snoc state.errs "Unprocessed positional modifiers\n"}
+    if and (not (state.pos.first)) (optionIsNone state.pos.parent) then
+      {state with errs = snoc state.errs "Non-first ordered positional missing parent"}
     else
       state
   in
@@ -438,7 +500,7 @@ let formPositional_: [APModifier a] -> Either (String, [String]) (APPositionalIt
 -- Adds a parsed option result to the ArgParser if it passes all checks.
 -- Otherwise concatenates the error messages to the internal list of error
 -- messages.
-let addOption_: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> ArgParser_ a =
+let _addOption: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> ArgParser_ a =
   lam eitherOpt. lam ap.
   match eitherOpt with Left (long, errs) then
     {ap with errors = join [
@@ -462,10 +524,10 @@ let addOption_: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> A
       {ap with options = _str_insert opt.long opt ap.options}
   else never
 
--- Adds a parsed positionalal result to the ArgParser if it passes all checks.
+-- Adds a parsed positional result to the ArgParser if it passes all checks.
 -- Otherwise concatenates the error messages to the internal list of error
 -- messages.
-let addPositional_: Either (String, [String]) (APPositionalItem_ a) -> ArgParser_ a -> ArgParser_ a =
+let _addPositional: Either (String, [String]) (APPositionalItem_ a) -> ArgParser_ a -> ArgParser_ a =
   lam eitherPos. lam ap.
   match eitherPos with Left (name, errs) then
     {ap with errors = join [
@@ -486,257 +548,409 @@ let addPositional_: Either (String, [String]) (APPositionalItem_ a) -> ArgParser
 
 
 -- Translates a list of ArgParser configurations into an internal ArgParser representation.
-recursive let translateConfig_: [APConfiguration a] -> [APConfiguration a] -> ArgParser_ a -> ArgParser_ a =
+recursive let _translateConfig: [APConfiguration a] -> [APConfiguration a] -> ArgParser_ a -> ArgParser_ a =
   lam configs. lam postconfigs. lam ap.
-  match configs with [config] ++ remaining then
-    -- Scan primary configs
-    let config = head configs in
-    let remaining = tail configs in
+
+  -- SCAN PRIMARY CONFIGURATION
+  match configs with [conf] ++ remaining then
     match config with APOption mods then
-      let optret = formOption_ mods in
-      translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with APPositional mods then
-      let posret = formPositional_ mods in
-      translateConfig_ remaining postconfigs (addPositional_ modret ap)
-    else match configs with APFlag r then
-      let optret = formOption_ [
+      let optret = _formOption mods in
+      _translateConfig remaining postconfigs (_addOption optret ap)
+    else match conf with APOrderedPositional mods then
+      let posret = _formOrderedPositional mods in
+      _translateConfig remaining postconfigs (_addOrderedPositional posret ap)
+    else match conf with APUnorderedPositional mods then
+      let posret = _formUnorderedPositional mods in
+      _translateConfig remaining postconfigs (_addUnorderedPositional posret ap)
+    else match conf with APFlag r then
+      let optret = _formOption [
         APShort r.short,
         APLong r.long,
         APDescription r.description,
         APApply r.apply
       ] in
-      translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with APLongFlag r then
-      let optret = formOption_ [
+      _translateConfig remaining postconfigs (_addOption optret ap)
+    else match conf with APLongFlag r then
+      let optret = _formOption [
         APLong r.long,
         APDescription r.description,
         APApply r.apply
       ] in
-      translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with APMetavarFlag r then
-      let optret = formOption_ [
+      _translateConfig remaining postconfigs (_addOption optret ap)
+    else match conf with APMetavarFlag r then
+      let optret = _formOption [
         APShort r.short,
         APLong r.long,
         APMetavar r.metavar,
         APDescription r.description,
         APApplyVal r.apply
       ] in
-      translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with APLongMetavarFlag r then
-      let optret = formOption_ [
+      _translateConfig remaining postconfigs (_addOption optret ap)
+    else match conf with APLongMetavarFlag r then
+      let optret = _formOption [
         APLong r.long,
         APMetavar r.metavar,
         APDescription r.description,
         APApplyVal r.apply
       ] in
-      translateConfig_ remaining postconfigs (addOption_ optret ap)
-    else match configs with APAny r then
-      let posret = formOption_ [
+      _translateConfig remaining postconfigs (_addOption optret ap)
+    else match conf with APAny r then
+      let posret = _formPositional [
         APName r.name,
         APDescription r.description,
         APApplyVal r.apply
       ] in
-      translateConfig_ remaining postconfigs (addPositional_ posret ap)
-    else match configs with APMany r then
-      let posret = formOption_ [
+      _translateConfig remaining postconfigs (_addPositional posret ap)
+    else match conf with APMany r then
+      let posret = _formPositional [
         APName r.name,
         APDescription r.description,
         APRequired (),
         APApplyVal r.apply
       ] in
-      translateConfig_ remaining postconfigs (addPositional_ posret ap)
-    else match configs with APMode r then
-      let posret = formOption_ [
+      _translateConfig remaining postconfigs (_addPositional posret ap)
+    else match conf with APMode r then
+      -- FIX THIS!!!!
+      let posret = _formPositional [
         APName r.name,
-        APFirst (),
         APDescription r.description,
         APValues r.values,
+        APApplyVal r.apply,
+        APOnlyThis (),
         APRequired (),
-        APApplyVal r.apply
+        APDisabledBy (r.name, None ()) -- disable itself directly after match
       ] in
-      translateConfig_ remaining postconfigs (addPositional_ posret ap)
-    else match configs with APSubmode r then
-      let posret = formOption_ [
+      _translateConfig remaining postconfigs (_addPositional posret ap)
+    else match conf with APSubmode r then
+      let posret = _formPositional [
         APName r.name,
-        APParent r.parent,
         APDescription r.description,
         APValues r.values,
+        APApplyVal r.apply,
+        APOnlyThis (),
         APRequired (),
-        APApplyVal r.apply
+        APEnabledBy (r.parent, None ()), -- wildcard match
+        APDisabledBy (r.name, None ()) -- disable itself directly after match
       ] in
-      translateConfig_ remaining postconfigs (addPositional_ posret ap)
-    else match configs with APSubmodeSpecific r then
-      let posret = formOption_ [
+      -- Make sure that this enable is unique, i.e. that it does not collide
+      -- with a specific submode, by adding the uniqueness to the postconfig
+      _translateConfig remaining
+                       (snoc postconfigs (APUniqueOnlyThisEnable r.name))
+                       (_addPositional posret ap)
+    else match conf with APSubmodeSpecific r then
+      let posret = _formPositional [
         APName r.name,
-        APParentValue (r.parent, r.parentval),
         APDescription r.description,
         APValues r.values,
+        APApplyVal r.apply,
+        APOnlyThis (),
         APRequired (),
-        APApplyVal r.apply
+        APEnabledBy (r.parent, Some r.parentval),
+        APDisabledBy (r.name, None ()) -- disable itself directly after match
       ] in
-      translateConfig_ remaining postconfigs (addPositional_ posret ap)
-    else
-      -- Handle this config after the primary configs. Most likely due to
-      -- that it needs to have all names specified
-      translateConfig_ remaining (snoc configs postconfigs) ap
-  else match postconfigs with [postconfig] ++ remaining then
-    match postconfig with APMutuallyExclusiveOptions longs then
+      _translateConfig remaining postconfigs (_addPositional posret ap)
+
+    -- Scan these as secondary configurations, as they might depend on other
+    -- configurations being scanned first.
+    else match conf with APMutuallyExclusiveOptions _ then
+      _translateConfig remaining (snoc postconfigs conf) ap
+    else match conf with APUniqueOnlyThisEnable _ then
+      _translateConfig remaining (snoc postconfigs conf) ap
+
+    -- Should be a complete match
+    else never
+
+  -- SCAN SECONDARY CONFIGURATION (that depends on primary configurations)
+  else match postconfigs with [conf] ++ remaining then
+    match conf with APMutuallyExclusiveOptions longs then
       -- Check that all specified names actually exists
-      let check = foldl (lam acc: Option [String]. lam long.
-        if _str_mem long ap.options then
-          acc -- OK
-        else
-          optionMapOr (Some long) (cons long) acc
-      ) (None ()) longs in
-      match check with Some invalidLongs then
-        translateConfig_ [] remaining {ap with errors = snoc ap.errors (
+      let invalidLongs = filter (lam l. not (_str_mem l ap.options)) longs in
+      if not (null invalidLongs) then
+        _translateConfig [] remaining {ap with errors = snoc ap.errors (
           join ["Cannot set mutual exclusion for non-existent options: ",
                 strJoin ", " invalidLongs])}
       else
         let updatedAp = foldl (lam accap. lam long.
           let existing = _str_lookupOrElse (lam _. []) long accap.optExclusions in
           -- Mark all _other_ longs as mutually exclusive to this one
-          let mutExludes = filter (lam s. not eqstr long s) longs in
+          let mutExludes = filter (lam s. not (eqString long s)) longs in
           {accap with optExclusions = _str_insert long (concat existing mutExludes) accap.optExclusions}
         ) ap longs in
-        translateConfig_ [] remaining updatedAp
+        _translateConfig [] remaining updatedAp
+    else match conf with APUniqueOnlyThisEnable name then
+      -- Check that the specified name is an actual positional
+      match _str_lookup name ap.positionals with Some pos then
+        if not (pos.onlyThis) then
+          _translateConfig [] remaining {ap with errors = snoc ap.errors (
+            join ["Cannot set unique OnlyThis enable for non-OnlyThis positional \"", name, "\""])}
+        else --continue
+          let candidatePositionals = _str_filterValues (lam p. and p.onlyThis (not (eqString pos.name p.name))) ap.positionals in
+          let candidateEnables = join (map (lam p. p.enabledBy) candidatePositionals) in
+          -- Do not disable on wildcard!
+          let toBeDisabledBy = filter (lam e. optionIsSome e.1) candidateEnables in
+
+          let newPos = {pos with disabledBy = concat pos.disabledBy toBeDisabledBy} in
+          _translateConfig [] remaining {ap with positionals = _str_insert newPos.name newPos ap.positionals}
+      else
+        _translateConfig [] remaining {ap with errors = snoc ap.errors (
+          join ["Cannot set unique OnlyThis enable for non-existent positional \"", name, "\""])}
     else
-      translateConfig_ [] remaining {ap with errors = snoc ap.errors "Internal check failed: Unprocessed configuration"}
+      _translateConfig [] remaining {ap with errors = snoc ap.errors "INTERNAL ERROR: Unprocessed configuration"}
+
+  -- No more configs to translate!
   else
-    -- No more configs to translate!
     ap
 end
 
--- Sets up the positional relations and performs sanity checks
-let setupPositionalRelations_: ArgParser_ a -> ArgParser_ a = lam ap.
-  -- STAGE 1: Setup and verify Parent-Child relations
-  -- If positional has a parent, add this positional as a child of that parent.
+
+-- BRIEF: Sets up the enables+disables relations for positionals
+-- Also check that the enable-disable logic is sound for individual positionals.
+let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
+  foldl (lam ap. lam pos.
+    let ap =
+      foldl (lam ap. lam enable.
+        -- Sanity check that this enable is not also a disable
+        -- NOTE(johnwikman, 2020-10-18): This really does not even need to be
+        -- performed, as something being directly disabled after being enabled
+        -- is the same effect as not being enabled in the first place. However,
+        -- being disabled just after being enabled is quite funky and something
+        -- that is most likely not intended.
+        let isCollision: (String, Option String) -> Bool = lam disable.
+          if not (eqString enable.0 disable.0) then
+            false
+          else match (enable.1, disable.1) with (Some ev, Some dv) then
+            eqString ev dv
+          else match (enable.1, disable.1) with (_, None ()) then
+            true -- disabled in all cases, which collides with the enable
+          else
+            -- disable is specific, and enable is None. Should probably have a
+            -- "never" after this, but not sure if this is too advanced to check.
+            false
+        in
+        if any isCollision pos.disabledBy then
+          {ap with errors = snoc ap.errors (join ["Incompatible enable and disable ",
+           "conditions for positional \"", pos.name, "\" that is both enabled and ",
+           "disabled by \"", enable.0, "\""])}
+        else -- Sanity Check: OK
+
+        -- Add this enable to its referenced parent
+        match _str_lookup enable.0 ap.positionals with Some parent then
+          let newParent = {parent with enables = _optstr_insert enable.1 pos.name parent.enables} in
+          {ap with positionals = _str_insert parent.name newParent ap.positionals}
+        else
+          {ap with errors = snoc ap.errors (join ["Referenced enabler positional \"",
+           enable.0, "\" from positional \"", pos.name, "\" does not exist."])}
+      ) ap pos.enabledBy
+    in
+
+    -- Add disables in the same way as for enables, except that it is not
+    -- necessary to perform sanity checking here.
+    foldl (lam ap. lam disable.
+      match _str_lookup disable.0 ap.positionals with Some parent then
+        let newParent = {parent with disables = _optstr_insert disable.1 pos.name parent.disables} in
+        {ap with positionals = _str_insert parent.name newParent ap.positionals}
+      else
+        {ap with errors = snoc ap.errors (join ["Referenced disabler positional \"",
+         disable.0, "\" from positional \"", pos.name, "\" does not exist."])}
+    ) ap pos.disabledBy
+  ) ap (_str_values ap.positionals)
+
+
+-- BRIEF: Sets up the positionals that should be enabled by default. These are
+-- the positionals without an explicit enabler.
+let _setupInitialPositionals: ArgParser_ a -> ArgParser_ a = lam ap.
+  let initial = _str_filterValues (lam pos. null pos.enabledBy) ap.positionals in
+  {ap with initiallyEnabledPositionals = map (lam pos. pos.name) initial}
+
+
+-- BRIEF: Verify that a state cannot be reached where a match would be ambiguous.
+--
+-- This is potentially very costly and should probably not be used in runtime.
+let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
+  -- Convert a sequence of strings to a single string representation. Use the
+  -- invalid '-' character as a separator.
+  let seqAsString: [String] -> String = lam seq. strJoin "-" seq in
+
+  -- Add an element to the visited list, putting it in sorted order.
+  let insertIntoSeq: String -> [String] -> [String] = lam s. lam seq.
+    TODO
+  in
+  TODO
+
+
+-- BRIEF: Sets up and verifies the ordered positionals in the ArgParser
+--
+-- This assumes that each ordered positional is well-formed. This just
+-- configures the relations between them.
+let _setupOrderedPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
+  if leqi (_str_size ap.orderedPositionals) 0 then
+    -- Does not contain any ordered positionals, ignore setup
+    ap
+  else -- continue
+
+  -- STAGE 1: Check that one and exactly one positional is marked as the first
+  let firsts = _str_filterValues (lam p. p.first) ap.orderedPositionals in
+  let ap =
+    match firsts with [] then
+      {ap with errors = snoc ap.errors "Missing a first ordered positional"}
+    else match firsts with [fst] then
+      {ap with firstPositional = Some fst} -- OK, exactly one first ord. pos.
+    else
+      {ap with errors = snoc ap.errors (join ["Multiple first ordered positionals: ",
+                                              strJoin ", " firsts])}
+  in
+
+  -- STAGE 2: Convert from parent data to children data
   let ap =
     foldl (lam apAcc. lam pos.
       match pos.parent with Some (pname, pvalue) then
-        match _str_lookup pname apAcc.positionals with Some parent then
-          match _str_lookup pvalue parent.children with Some childname then
-            {apAcc with errors = snoc apAcc.errors (join ["Duplicate children \"", childname, "\" and \"", pos.name, "\""
-                                                          " for positional \"", pos.name "\" on value \"", pvalue, "\""])}
+        match _str_lookup pname apAcc.orderedPositionals with Some parent then
+          match _optstr_lookup pvalue parent.children with Some childname then
+            -- Two children with exact same relation to parent
+            let name = optionMapOr "wildcard" (lam s. ['\"', s, '\"']) pvalue in
+            {apAcc with errors = snoc apAcc.errors (join ["Ordered positionals \"", pname,
+                                                          "\" and \"", childname, "\" have ",
+                                                          "exact same relation to parent."])}
           else
             let newParent =
-              {parent with children = _str_insert pvalue pos.name parent.children}
+              {parent with children = _optstr_insert pvalue pos.name parent.children}
             in
-            {apAcc with positionals = _str_insert pname newParent apAcc.positionals}
+            -- If parent has a limited range of values and parent value is
+            -- specified, then verify that parent has that value in range.
+            match (_str_keys parent.values, pvalue) with ([_] + _, Some val) then
+              if _str_mem val parent.values then
+                {apAcc with orderedPositionals = _str_insert pname newParent apAcc.orderedPositionals}
+              else
+                {apAcc with errors = snoc apAcc.errors (join ["Parent \"", pname, "\" (of positional \"",
+                                                              pos.name, "\") does not have \"",
+                                                              val, "\" in its valid range of values."])}
+            else
+              {apAcc with orderedPositionals = _str_insert pname newParent apAcc.orderedPositionals}
         else
           {apAcc with errors = snoc apAcc.errors (join ["Parent \"", pname, "\" does not exist for positional \"", pos.name "\""])}
       else
+        -- No parent
         apAcc
-    ) ap (_str_values ap.positionals)
+    ) ap (_str_values ap.orderedPositionals)
   in
 
-  -- STAGE 2: Set the first positional if existent
-  let firsts = filter (lam pos. pos.first) (_str_values ap.positionals) in
-  let ap =
-    if null firsts then
-      ap
-    else if eqi (length firsts) 1 then
-      -- STAGE 2.5: Check that this positional does not have a parent
-      let fst = head firsts in
-      match fst.parent with Some pname then
-        {ap with errors = snoc ap.errors (join ["First positional \"", fst.name, "\" has a parent \"", pname "\""])}
-      else
-        {ap with firstPositional = Some (head firsts).name}
-    else
-      {ap with errors = snoc ap.errors (join ["Muliple first positionals ",
-                                              strJoin ", " (map (lam fst. join ["\"", fst.name, "\""]) firsts)])}
-  in
-
-  -- STAGE 3: Check that there are no relational loops, such that no one is its own distant relative
-  recursive let traversePosTree = lam apAcc. lam visited. lam current.
+  -- STAGE 3: Check for relational loops
+  recursive let traversePosTree: [String] -> ArgParser_ a -> String -> ArgParser_ a =
+    lam visited. lam apAcc. lam current.
     -- Check loop
-    match lastIndex (eqstr current) visited with Some idx then
+    match lastIndex (eqString current) visited with Some idx then
       let path = snoc (splitAt visited idx).1 current in
-      {apAcc with errors = snoc apAcc.errors (join ["Positional loop detected: ",
+      {apAcc with errors = snoc apAcc.errors (join ["Ordered positional loop detected: ",
                                                     strJoin " -> " path])}
     else
-      -- No loop so far...
-      let positional = _str_lookupOrElse (lam _. error "unreachable") current apAcc.positionals in
-      let children = _str_values positionals.children in
+      -- No loop so far
+      let positional = _str_lookupOrElse (lam _. error "unreachable") current apAcc.orderedPositionals in
       foldl (lam apAcc. lam child.
-        traversePosTree apAcc (snoc visited current) child
-      ) apAcc children
+        traversePosTree (snoc visited current) apAcc child
+      ) apAcc (_optstr_values positional.children)
   in
-  let ap = optionMapOr ap (traversePosTree ap []) ap.firstPositional in
+  let ap = optionMapOr ap (traversePosTree [] ap) ap.firstPositional in
 
-  -- STAGE 4: Verify that no positional with a parent (or the first positional) also has a match condition
-  let ap = foldl (lam apAcc. lam pos.
-    if and (or (optionIsSome pos.parent)
-               (pos.first))
-           (not (null pos.matchconds)) then
-      {apAcc with errors = snoc apAcc.errors (join ["Positional \"", pos.name, "\" cannot have both a parent positional (or be first) and a match condition"])}
-    else
-      apAcc
-  ) ap (_str_values ap.positionals) in
+  -- All checks done
+  ap
 
-  -- STAGE 5: Verify that no positional with a parent (or the first positional) also has an enabler or disabler
-  let ap = foldl (lam apAcc. lam pos.
-    if and (or (optionIsSome pos.parent)
-               (pos.first))
-           (or (not (null pos.enabledBy))
-               (not (null pos.disabledBy))) then
-      {apAcc with errors = snoc apAcc.errors (join ["Positional \"", pos.name, "\" cannot both have a parent positional (or be first) and enablers/disablers"])}
-    else
-      apAcc
-  ) ap (_str_values ap.positionals) in
+/-
+- BRIEF: Sets up and verifies the unordered positionals in the ArgParser
+-
+- This assumes that each unordered positional is well-formed. This just
+- configures the relations between them and the ordered positionals. This also
+- assumes that the setup of the ordered positionals was successful without any
+- errors.
+-
+- This checks for the obvious ambiguities, that might arise from
+- misconfiguration. This does NOT evaluate any of the specified match
+- conditions the check for ambiguity that was, mainly due to that we do not
+- know at this stage how computationally heavy those are.
+-
+- TODO(johnwikman, 2020-10-12): Add option to perform extra ambiguity checks,
+-                               though not enabled by default.
+-/
+let _setupUnorderedPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
+  let allUnorderedPositionals = _str_values ap.unorderedPositionals in
 
-  -- STAGE 6: Setup enablers/disablers and verify that they only refer to positionals with parents or the first positional
-  let firstOrChildPositionals = filter (lam pos. or (pos.first) (optionIsSome pos.parent)) ap.positionals in
-  let ap = foldl (lam apAcc. lam pos.
-    if or (pos.first) (optionIsSome pos.parent) then
-      apAcc -- This does not have enablers or disablers
-    else
-      let names = concat pos.enabledBy pos.disabledBy in
-      let invalids = filter (lam s. not (any (eqString s) firstOrChildPositionals)) names in
-      if not (null invalids) then
-        {apAcc with errors = snoc apAcc.errors
-                             (join ["Positional \"", pos.name, "\" have enablers/disablers that are not first "
-                                    "or child positionals: ", strJoin ", " invalids])}
+  -- STAGE 1: Set a unordered positionals to be enabled from the start, those who are not configured to be enabled by anything
+  let initiallyEnabled = filter (lam pos. null pos.enabledBy) allUnorderedPositionals in
+  let ap = {ap with initiallyEnabledUnorderedPositionals = initiallyEnabled} in
+
+
+  -- Check that the enabled unordered positionals are not known at this stage to have an ambiguous match
+  let checkAmbiguity: String -> [String] -> [String] -> ArgParser_ a -> ArgParser_ a =
+    lam errmsgPrefix. lam enabledUnordered. lam enabledOrdered. lam ap.
+
+    -- Extract all the positionals that match the entered names
+    let unordered = _str_filterValues (lam uop. any (eqString uop.name) enabledUnordered) ap.unorderedPositionals in
+    let ordered = _str_filterValues (lam op. any (eqString op.name) enabledOrdered) ap.orderedPositionals in
+
+    -- Set ambiguity if two unordered positionals lack match-conditions and specified values
+    let ap =
+      let ambiguous = filter (lam uop. and (null uop.matchconds) (neqi (_str_size uop.values))) unordered in
+      let ambiguousNames = map (lam uop. uop.name) ambiguous in
+
+      let wildcardOrdered = filter (lam op. TODO) ordered in
+
+      if geqi (length ambiguousNames) 2 then
+        {ap with errors = snoc ap.errors (join [errmsgPrefix, "Ambiguous unordered positionals ",
+                                                strJoin ", " ambiguousNames])}
       else
-        -- Enable this positional on match with the mentioned enabledBy positionals
-        let apAccNew = foldl (lam apAcc. lam ename.
-          match _str_lookup ename apAcc.positionals with Some epos then
-            {apAcc with positionals = _str_insert ename
-                                                  {epos with enables = cons pos.name epos.enables}
-                                                  apAcc.positionals}
-          else
-            {apAcc with errors = snoc apAcc.errors (join ["Could not find enabler \"", ename, "\" for positional \"", pos.name, "\""])}
-        ) apAcc pos.enabledBy in
+        ASDF
+    in
 
-        -- Disable this positional on match with the mentioned disabledBy positionals
-        foldl (lam apAcc. lam dname.
-          match _str_lookup dname apAcc.positionals with Some dpos then
-            {apAcc with positionals = _str_insert dname
-                                                  {dpos with disables = cons pos.name dpos.disables}
-                                                  apAcc.positionals}
-          else
-            {apAcc with errors = snoc apAcc.errors (join ["Could not find disabler \"", dname, "\" for positional \"", pos.name, "\""])}
-        ) apAccNew pos.disabledBy
-  ) ap (_str_values ap.positionals) in
+    -- Extract all values
 
-  TODO ))))))) Check That These Are Not Enabled At The Same Time, Otherwise They Are Not Ambiguous
-
-  -- STAGE 7: Check that no two positionals without parents also lack match conditions
-  let ambiguousPositionals = filter (lam pos. and (null pos.matchconds) (optionIsNone pos.parent)) (_str_values ap.positionals) in
-  let ap =
-    if null ambiguousPositionals then
-      ap
-    else
-      {ap with errors = snoc ap.errors (join ["Ambiguous positionals ",
-                                              strJoin ", " (map (lam pos. join ["\"", pos.name, "\""]) ambiguousPositionals)])}
+    TODO!
   in
 
-  -- DONE. Positionals are well-formed and all set up
+  -- STAGE 2: Setup each ordered Positional such that if it is enabled by something, then it is also enabled by its children, unless one of its children instead disables it.
+  --          A.k.a. propagate the enabling
+  --
+  -- STAGE 2.5: Check ambiguity at the same time, between the active unordered positionals, but also against a possible non-required ordered positional
+  recursive let traverseEnableDisable: [String] -> ArgParser_ a -> String -> ArgParser_ a =
+    lam enabled. lam apAcc. lam posname.
+
+    let newEnables = filter (lam uop. any (eqString posname) uop.enabledBy) allUnorderedPositionals in
+    let newEnableNames = map (lam uop. uop.name) newEnables in
+
+    let newDisables = filter (lam uop. any (eqString posname) uop.enabledBy) allUnorderedPositionals in
+    let newDisableNames = map (lam uop. uop.name) newDisables in
+
+    -- Add the new enables (and make sure to remove duplicates)
+    let enabled = distinct eqString (concat enabled newEnableNames) in
+
+    -- Remove those listed as newly disabled
+    let enabled = filter (lam s. not (any (eqString s) newDisableNames)) enabled in
+
+    let pos = _str_lookupOrElse (lam _. error "unreachable") posname ap.orderedPositionals in
+    let pos = {pos with enables = enabled} in
+
+    -- IF: This ordered positional is not required to be filled in, then there cannot be any ambiguity whether
+    -- the argparser should match any of the unordered positionals or the "optional" ordered positional. Or also,
+    -- if this does not have a wildcard child, then it should also make sure that none of its children also
+    -- produce an ambiguous match with the enabled unordered positionals.
+    TODO!
+  in
+
+  let ap =
+    match ap.firstOrderedPositional with Some name then
+      traverseEnableDisable ap.initiallyEnabledUnorderedPositionals ap name
+    else
+      ap
+  in
+
+  -- STAGE 2.5: Check that no two unordered positionals, active at the same time, lack 
+  --          match conditions. In which case they are known already at this stage to
+  --          cause ambiguous parsing. Though they still might cause ambiguous parsing
+  --          later on.
+  TODO ))))
   ap
 
 
 -- Constructs a parser based on the provided configuration
-let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
+let _createParser: [APConfiguration a] -> String -> ArgParser_ a =
   lam configs. lam progname.
   let ap = {
     name = progname,
@@ -745,12 +959,25 @@ let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
     optExclusions = hashmapEmpty,
     positionals = hashmapEmpty,
     firstPositional = None (),
+    initiallyEnabledUnorderedPositionals = [],
     errors = []
   } in
 
   -- Scan configuration and form initial parser
   let ap = translateConfig_ configs [] ap in
-  let ap = setupPositionalRelations_ ap in
+  if not (null ap.errors) then
+    ap
+  else -- continue
+
+  let ap = _setupOrderedPositionalRelations ap in
+  if not (null ap.errors) then
+    ap
+  else -- continue
+
+  let ap = _setupUnorderedPositionalRelations ap in
+  if not (null ap.errors) then
+    ap
+  else -- continue
 
   ap
 
@@ -758,7 +985,7 @@ let createParser_: [APConfiguration a] -> String -> ArgParser_ a =
 -- Checks whether the argparser is well-formed. Returns None () on success.
 -- Otherwise Some String containing the error message.
 let argparserCheckError: [APConfiguration a] -> Some String = lam configs.
-  let ap = createParser_ configs "<confcheck>" in
+  let ap = _createParser configs "<confcheck>" in
   if null ap.errors then
     None ()
   else
@@ -768,7 +995,7 @@ let argparserCheckError: [APConfiguration a] -> Some String = lam configs.
 -- argparserParse. Parse
 let argparserParse: [APConfiguration a] -> a -> [String] -> Either String a =
   lam configs. lam defaults. lam args.
-  let apret = createParser_ configs (head args) in
+  let apret = _createParser configs (head args) in
   match apret with Left errs then
     Left (strJoin "\n" (cons "Misformed ArgParser:" errs))
   else match apret with Right ap then
