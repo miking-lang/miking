@@ -20,6 +20,38 @@ utest eqString "a" "" with false
 utest eqString "a" "a" with true
 utest eqString "a" "aa" with false
 
+-- Lexicographical ordering of strings. ltString s1 s2 is true iff s1 is
+-- lexicographically smaller than s2.
+recursive
+  let ltString: String -> String -> Bool = lam s1. lam s2.
+    if null s2 then
+      false
+    else if null s1 then
+      true
+    else if eqChar (head s1) (head s2) then
+      ltString (tail s1) (tail s2)
+    else
+      ltChar (head s1) (head s2)
+end
+
+-- Returns true iff s1 is lexicographically greater than s2.
+let gtString: String -> String -> Bool = lam s1. lam s2. ltString s2 s1
+
+utest ltString "" "" with false
+utest ltString "" "A" with true
+utest ltString "A" "" with false
+utest ltString "A" "B" with true
+utest ltString "BA" "B" with false
+utest ltString "AB" "B" with true
+
+utest gtString "" "" with false
+utest gtString "" "x" with false
+utest gtString "x" "" with true
+utest gtString "x" "y" with false
+utest gtString "yx" "y" with true
+utest gtString "xy" "y" with false
+
+
 let str2upper = lam s. map char2upper s
 let str2lower = lam s. map char2lower s
 
