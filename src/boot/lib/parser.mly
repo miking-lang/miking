@@ -12,6 +12,7 @@
   open Ustring.Op
   open Msg
   open Ast
+  open Intrinsics
 
   (** Create a new info, taking left and right part *)
   let mkinfo fi1 fi2 =
@@ -319,9 +320,9 @@ atom:
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NEVER                { TmNever($1.i) }
-  | STRING               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
-                                                  (Mseq.of_ustring $1.v)) }
-  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.of_list $2) }
+  | STRING               { TmSeq($1.i, Mseq.Helpers.map (fun x -> TmConst($1.i,CChar(x)))
+                                                  (Mseq.Helpers.of_ustring $1.v)) }
+  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.Helpers.of_list $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, Mseq.empty) }
   | LBRACKET labels RBRACKET
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
@@ -395,16 +396,16 @@ pat_atom:
   | con_ident pat_atom
       { PatCon(mkinfo $1.i (pat_info $2), $1.v, nosym, $2) }
   | patseq
-      { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.of_list) }
+      { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.Helpers.of_list) }
   | patseq CONCAT name CONCAT patseq
       { let fi = mkinfo (fst $1) (fst $5) in
-        let l = $1 |> snd |> Mseq.of_list in
-        let r = $5 |> snd |> Mseq.of_list in
+        let l = $1 |> snd |> Mseq.Helpers.of_list in
+        let r = $5 |> snd |> Mseq.Helpers.of_list in
         PatSeqEdg(fi, l, snd $3, r) }
   | patseq CONCAT name
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.of_list, snd $3, Mseq.empty) }
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.Helpers.of_list, snd $3, Mseq.empty) }
   | name CONCAT patseq
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.of_list) }
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN

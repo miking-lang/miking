@@ -11,6 +11,7 @@
 open Ast
 open Format
 open Ustring.Op
+open Intrinsics
 
 (** Global configuration for symbol printing. Needed because of the unwieldy
  *  interface to the Format module *)
@@ -43,7 +44,7 @@ let lit_of_uchar c =
 let ustring_of_pat p =
   let rec ppp pat =
     let ppSeq s =
-      s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
+      s |> Mseq.Helpers.to_list |> List.map ppp |> Ustring.concat (us",")
     in
     let ppName = function NameStr(x,s) -> ustring_of_var x s | NameWildcard -> us"_" in
     match pat with
@@ -340,7 +341,7 @@ and print_tm' fmt t = match t with
         with
         | _ ->
           let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
-          let inner = List.map print (Mseq.to_list tms) in
+          let inner = List.map print (Mseq.Helpers.to_list tms) in
           fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
       end
 

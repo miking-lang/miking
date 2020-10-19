@@ -8,7 +8,7 @@
 
 open Ustring.Op
 open Msg
-
+open Intrinsics
 
 (* Debug options *)
 let enable_debug_eval_tm = ref false
@@ -225,7 +225,7 @@ let rec map_tm f = function
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
-  | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.map (map_tm f) tms))
+  | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.Helpers.map (map_tm f) tms))
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
@@ -275,16 +275,16 @@ let pat_info = function
 
 (* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
-  Mseq.map (fun x ->
+  Mseq.Helpers.map (fun x ->
       match x with | TmConst(_,CChar(i)) -> i
                    | _ -> raise_error fi "The term is not a string") s
-  |> Mseq.to_ustring
+  |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =
   s
-  |> Mseq.of_ustring
-  |> Mseq.map (fun x -> TmConst(fi,CChar(x)))
+  |> Mseq.Helpers.of_ustring
+  |> Mseq.Helpers.map (fun x -> TmConst(fi,CChar(x)))
 
 (* Converts a list of terms (for a tuple) to a record term *)
 let tuple2record fi lst =

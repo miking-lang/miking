@@ -10,6 +10,7 @@ open Pyast
 open Pypprint
 open Ustring.Op
 open Msg
+open Intrinsics
 
 let mk_py fi p = TmConst(fi, CPy(p))
 
@@ -34,7 +35,7 @@ let rec val_to_python fi = function
   | TmSeq(_,s) ->
     begin
       try tmseq2ustring fi s |> Ustring.to_utf8 |> Py.String.of_string
-      with _ -> Mseq.to_list s |> Py.List.of_list_map (val_to_python fi)
+      with _ -> Mseq.Helpers.to_list s |> Py.List.of_list_map (val_to_python fi)
     end
   | TmRecord(_,r) when r = Record.empty -> Py.none
   | TmRecord(_,r) ->
@@ -70,7 +71,7 @@ let rec python_to_val fi obj =
     TmSeq(fi,ustring2tmseq fi ustr)
   | Py.Type.List ->
     let lst = Py.List.to_list_map (python_to_val fi) obj in
-    TmSeq(fi,Mseq.of_list lst)
+    TmSeq(fi,Mseq.Helpers.of_list lst)
   | Py.Type.Tuple ->
     let lst = Py.Tuple.to_list_map (python_to_val fi) obj in
     tuple2record fi lst

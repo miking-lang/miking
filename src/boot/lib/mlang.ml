@@ -9,7 +9,7 @@ open Ast
 open Msg
 open Ustring.Op
 open Pprint
-
+open Intrinsics
 open Patterns
 
 let accum_map (f: 'acc -> 'a -> 'acc * 'b) (acc: 'acc) (l: 'a list): 'acc * 'b list =
@@ -206,9 +206,9 @@ let translate_cases f target cases =
   let translate_case (pat, handler) inner =
     TmMatch (pat_info pat, target, pat, handler, inner)
   in
-  let msg = Mseq.map (fun c -> TmConst(NoInfo,CChar(c)))
+  let msg = Mseq.Helpers.map (fun c -> TmConst(NoInfo,CChar(c)))
               ((us"No matching case for function " ^. f)
-               |> Mseq.of_ustring)
+               |> Mseq.Helpers.of_ustring)
   in
   let no_match =
     let_ (us"_") nosym   (* TODO(?,?): we should probably have a special sort for let with wildcards *)
@@ -268,7 +268,7 @@ let rec desugar_tm nss env =
       | NameStr(n,s) -> (delete_id env n, NameStr(empty_mangle n,s))
       | NameWildcard -> (env, NameWildcard) in
     let rec desugar_pat_seq env pats =
-      Mseq.fold_right
+      Mseq.Helpers.fold_right
         (fun p (env, pats) -> desugar_pat env p
                               |> map_right (fun p -> Mseq.cons p pats))
         pats
@@ -313,7 +313,7 @@ let rec desugar_tm nss env =
       | Some ns -> desugar_tm nss (merge_env_overwrite env ns) body)
   (* Simple recursions *)
   | TmApp(fi, a, b) -> TmApp(fi, desugar_tm nss env a, desugar_tm nss env b)
-  | TmSeq(fi, tms) -> TmSeq(fi, Mseq.map (desugar_tm nss env) tms)
+  | TmSeq(fi, tms) -> TmSeq(fi, Mseq.Helpers.map (desugar_tm nss env) tms)
   | TmRecord(fi, r) -> TmRecord(fi, Record.map (desugar_tm nss env) r)
   | TmRecordUpdate(fi, a, lab, b) -> TmRecordUpdate(fi, desugar_tm nss env a, lab, desugar_tm nss env b)
   | TmUtest(fi, a, b, using, body) ->

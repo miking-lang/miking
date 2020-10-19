@@ -9,6 +9,7 @@ open Msg
 open Ast
 open Pprint
 open Printf
+open Intrinsics
 
 (* This function determines how to print program output.
    It's used to redirect standard output of a program,
@@ -53,12 +54,12 @@ let builtin =
    ("print",f(Cprint));("dprint",f(Cdprint));
    ("readLine",f(CreadLine));("readBytesAsString",f(CreadBytesAsString));
    ("argv",TmSeq(NoInfo,argv_prog
-                        |> Mseq.of_array
-                        |> Mseq.map (fun s ->
+                        |> Mseq.Helpers.of_array
+                        |> Mseq.Helpers.map (fun s ->
                                TmSeq(NoInfo,s
                                             |> us
-                                            |> Mseq.of_ustring
-                                            |> Mseq.map (fun x->
+                                            |> Mseq.Helpers.of_ustring
+                                            |> Mseq.Helpers.map (fun x->
                                                    TmConst(NoInfo,CChar(x)))))));
    ("readFile",f(CreadFile)); ("writeFile",f(CwriteFile(None)));
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
@@ -169,12 +170,6 @@ let arity = function
   | CrandIntU(Some(_)) -> 1
   | CrandSetSeed       -> 1
 
-
-(* API for generating unique symbol ids *)
-let symid = ref 0
-let gen_symid _ =
-  symid := !symid + 1;
-  !symid
 
 (* Random number generation *)
 let rand_is_seeded = ref false
@@ -329,7 +324,7 @@ let delta eval env fi c v  =
           | _ -> fail_constapp fi
         in
         let f = s
-                |> Mseq.map to_char |> Mseq.to_array
+                |> Mseq.Helpers.map to_char |> Mseq.Helpers.to_array
                 |> Ustring.from_uchars |> Ustring.to_utf8
         in
         TmConst(fi, CFloat(Float.of_string f))
@@ -474,7 +469,7 @@ let delta eval env fi c v  =
     | Cexit, TmConst(_,CInt(x)) -> exit x
     | Cexit,_ -> fail_constapp fi
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gensym()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqsym(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqsym(Some(id)))
     | Ceqsym(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
@@ -520,7 +515,7 @@ let unittest_failed fi t1 t2 tusing =
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
-  | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
+  | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.Helpers.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmConapp(_,_,sym1,v1),TmConapp(_,_,sym2,v2) -> sym1 = sym2 && val_equal v1 v2
@@ -551,7 +546,7 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
     | Some s -> (patEnv, s)
     | None -> let s = gensym() in ((x,s)::patEnv, s) in
   let rec s_pat_sequence patEnv pats =
-    Mseq.fold_right
+    Mseq.Helpers.fold_right
       (fun p (patEnv, ps) -> let (patEnv, p) = sPat patEnv p in (patEnv, Mseq.cons p ps))
       pats
       (patEnv, Mseq.empty)
@@ -611,7 +606,7 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   | TmApp(fi,t1,t2) -> TmApp(fi,symbolize env t1,symbolize env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
+  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.Helpers.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
   | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
@@ -661,7 +656,7 @@ let rec try_match env value pat =
      let npats = Mseq.length pats in
      (match value with
       | TmSeq(_, vs) when npats = Mseq.length vs ->
-         Mseq.fold_right2 go vs pats (Some env)
+         Mseq.Helpers.fold_right2 go vs pats (Some env)
       | _ -> None)
   | PatSeqEdg(_, l, x, r) ->
      let npre = Mseq.length l in
@@ -670,9 +665,9 @@ let rec try_match env value pat =
       | TmSeq(fi, vs) when npre + npost <= Mseq.length vs ->
          let (pre, vs) = split_nth_or_double_empty npre vs in
          let (vs, post) = split_nth_or_double_empty (Mseq.length vs - npost) vs
-         in Mseq.fold_right2 go post r (Some env)
+         in Mseq.Helpers.fold_right2 go post r (Some env)
             |> bind fi x vs
-            |> Mseq.fold_right2 go pre l
+            |> Mseq.Helpers.fold_right2 go pre l
       | _ -> None)
   | PatRecord(_, pats) ->
      (match value with
@@ -749,7 +744,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* Sequences *)
-  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (eval env) tms)
+  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.Helpers.map (eval env) tms)
   (* Records *)
   | TmRecord(fi,tms) -> TmRecord(fi,Record.map (eval env) tms)
   | TmRecordUpdate(fi,t1,l,t2) ->
