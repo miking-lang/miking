@@ -13,7 +13,7 @@ lang ANF = LetAst + VarAst
   -- Intentionally left blank
 
   sem normalizeTerm =
-  | m -> normalize (lam x. x) m
+  | m -> normalizeName (lam x. x) m
 
   sem normalize (k : Expr -> Expr) =
   -- Intentionally left blank
@@ -45,7 +45,7 @@ lang AppANF = ANF + AppAst
   | TmApp _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmApp t -> normalizeNames (lam app. bind k app) (TmApp t)
+  | TmApp t -> normalizeNames k (TmApp t)
 
   sem normalizeNames (k : Expr -> Expr) =
   | TmApp {lhs = lhs, rhs = rhs} ->
@@ -74,7 +74,7 @@ lang RecordANF = ANF + RecordAst
 
   sem normalize (k : Expr -> Expr) =
   | TmRecord {bindings = bindings} ->
-    let acc = lam bs. bind k (TmRecord {bindings = bs}) in
+    let acc = lam bs. k (TmRecord {bindings = bs}) in
     let f =
       (lam acc. lam k. lam e.
          (lam bs.
@@ -89,8 +89,7 @@ lang RecordANF = ANF + RecordAst
       (lam vrec.
         normalizeName
           (lam vvalue.
-            let ru = (TmRecordUpdate {rec = vrec, key = key, value = vvalue}) in
-            bind k ru)
+            k (TmRecordUpdate {rec = vrec, key = key, value = vvalue}))
         value)
       rec
 
@@ -103,7 +102,7 @@ lang LetANF = ANF + LetAst
   sem normalize (k : Expr -> Expr) =
   | TmLet {ident = ident, body = m1, inexpr = m2} ->
     normalize
-      (lam n1. (TmLet {ident = ident, body = n1, inexpr = normalize k m2}))
+      (lam n1. (TmLet {ident = ident, body = n1, inexpr = normalizeName k m2}))
       m1
 
 end
@@ -140,7 +139,7 @@ lang DataANF = ANF + DataAst
 
   | TmConApp {ident = ident, body = body } ->
     normalizeName
-      (lam b. bind k (TmConApp {ident = ident, body = b})) body
+      (lam b. k (TmConApp {ident = ident, body = b})) body
 
 end
 
@@ -151,8 +150,8 @@ lang MatchANF = ANF + MatchAst
   sem normalize (k : Expr -> Expr) =
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     normalizeName
-      (lam t. bind k (TmMatch {target = t, pat = pat, thn = normalizeTerm thn,
-                                                      els = normalizeTerm els}))
+      (lam t. k (TmMatch {target = t, pat = pat, thn = normalizeTerm thn,
+                                                 els = normalizeTerm els}))
       target
 
 end
@@ -175,7 +174,7 @@ lang SeqANF = ANF + SeqAst
 
   sem normalize (k : Expr -> Expr) =
   | TmSeq {tms = tms} ->
-    let acc = lam ts. bind k (TmSeq {tms = ts}) in
+    let acc = lam ts. k (TmSeq {tms = ts}) in
     let f =
       (lam acc. lam e.
          (lam ts.
@@ -263,6 +262,11 @@ in
 
 let smatch = if_ (app_ (int_ 1) (int_ 2)) (int_ 3) (int_ 4) in
 
+let simple = bind_ (let_ "x" (int_ 1)) (var_ "x") in
+
+let simple2 = app_ (int_ 1) simple in
+
+
 let debug = false in
 
 let debugPrint = lam t.
@@ -290,7 +294,9 @@ let _ =
      const,
      data,
      seq,
-     smatch
+     smatch,
+     simple,
+     simple2
    ]
 in
 ()
