@@ -27,7 +27,7 @@ let string_of_ustring = Ustring.to_utf8
 (** Create string representation of variable *)
 let ustring_of_var x s =
   if !ref_symbol then
-    x ^. (if s == Symb.Helpers.nosym then us"#" else us"#" ^. Symb.Helpers.ustring_of_sym s)
+    x ^. (if Symb.eqsym Symb.Helpers.nosym s then us"#" else us"#" ^. Symb.Helpers.ustring_of_sym s)
   else x
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
