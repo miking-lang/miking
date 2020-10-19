@@ -75,7 +75,7 @@ let builtin =
   @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals)
-  |> List.map (fun (x,t) -> (x,gensym(),t))
+  |> List.map (fun (x,t) -> (x,Symb.gensym(),t))
 
 (* Mapping name to symbol *)
 let builtin_name2sym = List.map (fun (x,s,_) -> (IdVar(usid x),s)) builtin
@@ -469,12 +469,13 @@ let delta eval env fi c v  =
     | Cexit, TmConst(_,CInt(x)) -> exit x
     | Cexit,_ -> fail_constapp fi
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gensym()))
+    | Cgensym, TmRecord(fi,x) when Record.is_empty x ->
+        TmConst(fi, CSymb(Symb.gensym()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqsym(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqsym(Some(id)))
     | Ceqsym(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqsym(_),_ -> fail_constapp fi
-    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
+    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(Symb.hash id))
     | Csym2hash,_ -> fail_constapp fi
 
     (* Python intrinsics *)
@@ -533,7 +534,7 @@ let findsym fi id env =
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
    constructs TmConapp terms from the combination of variables and function applications.  *)
-let rec symbolize (env : (ident * sym) list) (t : tm) =
+let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
    * e.g., [a] | [a, _] should give the same symbol to both "a"s.
@@ -541,16 +542,16 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
    * in a pattern in other cases. In particular, this means that, e.g., the pattern
    * [a, a] assigns the same symbol to both "a"s, which may or may not be desirable. Which
    * introduced binding gets used then depends on what try_match does for the pattern. *)
-  let add_name (x: ident) (patEnv: (ident * int) list) =
+  let add_name (x: ident) (patEnv: (ident * Symb.t) list) =
     match List.assoc_opt x patEnv with
     | Some s -> (patEnv, s)
-    | None -> let s = gensym() in ((x,s)::patEnv, s) in
+    | None -> let s = Symb.gensym() in ((x,s)::patEnv, s) in
   let rec s_pat_sequence patEnv pats =
     Mseq.Helpers.fold_right
       (fun p (patEnv, ps) -> let (patEnv, p) = sPat patEnv p in (patEnv, Mseq.cons p ps))
       pats
       (patEnv, Mseq.empty)
-  and sPat (patEnv : (ident * int) list) = function
+  and sPat (patEnv : (ident * Symb.t) list) = function
     | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name (IdVar(sid_of_ustring x)) patEnv
                                    in (patEnv, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (patEnv, pat)
@@ -596,11 +597,11 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   in
   match t with
   | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi (IdVar(sid_of_ustring x)) env)
-  | TmLam(fi,x,_,ty,t1) -> let s = gensym() in TmLam(fi,x,s,ty,symbolize ((IdVar(sid_of_ustring x),s)::env) t1)
+  | TmLam(fi,x,_,ty,t1) -> let s = Symb.gensym() in TmLam(fi,x,s,ty,symbolize ((IdVar(sid_of_ustring x),s)::env) t1)
   | TmClos(_,_,_,_,_,_) -> failwith "Closures should not be available."
-  | TmLet(fi,x,_,t1,t2) -> let s = gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((IdVar(sid_of_ustring x),s)::env) t2)
+  | TmLet(fi,x,_,t1,t2) -> let s = Symb.gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((IdVar(sid_of_ustring x),s)::env) t2)
   | TmRecLets(fi,lst,tm) ->
-     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = Symb.gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
      TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
        lst, symbolize env2 tm)
   | TmApp(fi,t1,t2) -> TmApp(fi,symbolize env t1,symbolize env t2)
@@ -609,7 +610,7 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   | TmSeq(fi,tms) -> TmSeq(fi,Mseq.Helpers.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
-  | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
+  | TmCondef(fi,x,_,ty,t) -> let s = Symb.gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
   | TmConapp(fi,x,_,t) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,symbolize env t)
   | TmMatch(fi,t1,p,t2,t3) ->
      let (matchedEnv, p) = sPat [] p in
@@ -622,18 +623,18 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
 
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term *)
-let rec symbolize_toplevel (env : (ident * sym) list) = function
+let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
   | TmLet(fi,x,_,t1,t2) ->
-    let s = gensym() in
+    let s = Symb.gensym() in
     let (new_env, new_t2) = symbolize_toplevel ((IdVar(sid_of_ustring x),s)::env) t2 in
     (new_env, TmLet(fi,x,s,symbolize env t1,new_t2))
   | TmRecLets(fi,lst,tm) ->
-    let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+    let env2 = List.fold_left (fun env (_,x,_,_) -> let s = Symb.gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
     let (new_env, new_tm) = symbolize_toplevel env2 tm in
     (new_env, TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
        lst, new_tm))
   | TmCondef(fi,x,_,ty,t) ->
-    let s = gensym() in
+    let s = Symb.gensym() in
     let (new_env, new_t2) = symbolize_toplevel ((IdCon(sid_of_ustring x),s)::env) t in
     (new_env, TmCondef(fi,x,s,ty,new_t2))
   | t -> (env, symbolize env t)
@@ -708,7 +709,7 @@ let rec try_match env value pat =
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
-let rec eval (env : (sym * tm) list) (t : tm) =
+let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
@@ -789,7 +790,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
-let rec eval_toplevel (env : (sym * tm) list) = function
+let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet(_,_,s,t1,t2) -> eval_toplevel ((s,eval env t1)::env) t2
   | TmRecLets(_,lst,t2) ->
      let rec env' = lazy

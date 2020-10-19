@@ -1,3 +1,5 @@
+open Ustring.Op
+
 module Mseq = struct
   type 'a t = 'a BatFingerTree.t
 
@@ -30,8 +32,8 @@ module Mseq = struct
     let to_list = BatFingerTree.to_list
     let of_array a = of_list (Array.to_list a)
     let to_array s = Array.of_list (to_list s)
-    let of_ustring u = of_list (Ustring.Op.ustring2list u)
-    let to_ustring s = Ustring.Op.list2ustring (to_list s)
+    let of_ustring u = of_list (ustring2list u)
+    let to_ustring s = list2ustring (to_list s)
 
     let equal = BatFingerTree.equal
 
@@ -56,11 +58,18 @@ end
 module Symb = struct
   type t = int
 
+  let nosym = -1
   let symid = ref 0
 
   let gensym _ =
     symid := !symid + 1;
     !symid
 
-    let eqsym l r = l = r
+  let eqsym l r = l = r
+
+  let ustring_of_sym = ustring_of_int
+
+  let string_of_sym s = to_utf8 (ustring_of_sym s)
+
+  let hash s = s
 end

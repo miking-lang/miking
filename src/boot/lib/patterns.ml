@@ -395,7 +395,7 @@ let pat_example normpat =
     | NSPat (SPatInt i) -> PatInt(NoInfo, i)
     | NSPat (SPatChar c) -> PatChar(NoInfo, c)
     | NSPat (SPatBool b) -> PatBool(NoInfo, b)
-    | NSPat (SPatCon (str, np)) -> PatCon(NoInfo, str, nosym, npat_to_pat np)
+    | NSPat (SPatCon (str, np)) -> PatCon(NoInfo, str, Symb.nosym, npat_to_pat np)
     | NPatRecord (r, neg) ->
        let pos = PatRecord(NoInfo, Record.map npat_to_pat r) in
        UstringSet.elements neg
@@ -423,7 +423,7 @@ let pat_example normpat =
                 | IntCon i -> PatInt(NoInfo, i)
                 | CharCon c -> PatChar(NoInfo, c)
                 | BoolCon b -> PatBool(NoInfo, b)
-                | ConCon str -> PatCon(NoInfo, str, nosym, wildpat)
+                | ConCon str -> PatCon(NoInfo, str, Symb.nosym, wildpat)
                 | RecCon -> PatRecord(NoInfo, Record.empty)) in
        match seqs @ cons with
        | [] -> wildpat
