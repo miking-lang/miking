@@ -58,7 +58,6 @@ end
 module Symb = struct
   type t = int
 
-  let nosym = -1
   let symid = ref 0
 
   let gensym _ =
@@ -67,9 +66,10 @@ module Symb = struct
 
   let eqsym l r = l = r
 
-  let ustring_of_sym = ustring_of_int
-
-  let string_of_sym s = to_utf8 (ustring_of_sym s)
-
-  let hash s = s
+  module Helpers = struct
+    let nosym = -1
+    let ustring_of_sym = ustring_of_int
+    let string_of_sym s = Ustring.to_utf8 (ustring_of_sym s)
+    let hash s = s
+  end
 end

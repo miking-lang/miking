@@ -27,7 +27,7 @@ let string_of_ustring = Ustring.to_utf8
 (** Create string representation of variable *)
 let ustring_of_var x s =
   if !ref_symbol then
-    x ^. (if s == Symb.nosym then us"#" else us"#" ^. Symb.ustring_of_sym s)
+    x ^. (if s == Symb.Helpers.nosym then us"#" else us"#" ^. Symb.Helpers.ustring_of_sym s)
   else x
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
@@ -240,7 +240,7 @@ let rec print_const fmt = function
 
   (* MCore Symbols *)
   | CSymb(id) ->
-      fprintf fmt "symb(%s)" (Symb.string_of_sym id)
+      fprintf fmt "symb(%s)" (Symb.Helpers.string_of_sym id)
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqsym(_)   -> fprintf fmt "eqsym"
   | Csym2hash  -> fprintf fmt "sym2hash"
@@ -461,7 +461,7 @@ and print_tm' fmt t = match t with
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
   let print (s,t) = (fun fmt ->
-    fprintf fmt "#%s -> %a" (Symb.string_of_sym s) print_tm (Match, t))
+    fprintf fmt "#%s -> %a" (Symb.Helpers.string_of_sym s) print_tm (Match, t))
   in
   let inner = List.map print env in
   fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)

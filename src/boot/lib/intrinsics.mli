@@ -34,8 +34,11 @@ module Symb : sig
 
   val gensym : unit -> t
   val eqsym : t -> t -> bool
-  val nosym : t
-  val ustring_of_sym : t -> ustring
-  val string_of_sym : t -> string
-  val hash :  t -> int
+
+  module Helpers : sig
+    val nosym : t
+    val ustring_of_sym : t -> ustring
+    val string_of_sym : t -> string
+    val hash :  t -> int
+  end
 end
