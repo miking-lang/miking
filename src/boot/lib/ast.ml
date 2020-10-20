@@ -8,7 +8,7 @@
 
 open Ustring.Op
 open Msg
-
+open Intrinsics
 
 (* Debug options *)
 let enable_debug_eval_tm = ref false
@@ -27,16 +27,9 @@ let utest_fail_local = ref 0    (* Counts local failed tests for one file *)
 (* Map type for record implementation *)
 module Record = Map.Make(Ustring)
 
-(* Symbols for name association *)
-type sym = int
-let sym_no = ref 0
-let gensym() = sym_no := !sym_no + 1; !sym_no
-
-
-
 
 (* Evaluation environment *)
-type env = (sym * tm) list
+type env = (Symb.t * tm) list
 
 
 and const =
@@ -111,9 +104,9 @@ and const =
 | Cerror
 | Cexit
 (* MCore Symbols *)
-| CSymb of int
+| CSymb of Symb.t
 | Cgensym
-| Ceqsym of int option
+| Ceqsym of Symb.t option
 | Csym2hash
 (* External functions TODO(?,?): Should not be part of core language *)
 | CExt of Extast.ext
@@ -144,28 +137,28 @@ and program = Program of include_ list * top list * tm
 
 (* Terms in MExpr *)
 and tm =
-| TmVar     of info * ustring * sym                                 (* Variable *)
-| TmLam     of info * ustring * sym * ty * tm                       (* Lambda abstraction *)
-| TmLet     of info * ustring * sym * tm * tm                       (* Let *)
-| TmRecLets of info * (info * ustring * sym * tm) list * tm         (* Recursive lets *)
+| TmVar     of info * ustring * Symb.t                                 (* Variable *)
+| TmLam     of info * ustring * Symb.t * ty * tm                       (* Lambda abstraction *)
+| TmLet     of info * ustring * Symb.t * tm * tm                       (* Let *)
+| TmRecLets of info * (info * ustring * Symb.t * tm) list * tm         (* Recursive lets *)
 | TmApp     of info * tm * tm                                       (* Application *)
 | TmConst   of info * const                                         (* Constant *)
 | TmSeq     of info * tm Mseq.t                                     (* Sequence *)
 | TmRecord  of info * tm Record.t                                   (* Record *)
 | TmRecordUpdate of info * tm * ustring * tm                        (* Record update *)
-| TmCondef  of info * ustring * sym * ty * tm                       (* Constructor definition *)
-| TmConapp  of info * ustring * sym * tm                            (* Constructor application *)
+| TmCondef  of info * ustring * Symb.t * ty * tm                       (* Constructor definition *)
+| TmConapp  of info * ustring * Symb.t * tm                            (* Constructor application *)
 | TmMatch   of info * tm * pat * tm * tm                            (* Match data *)
 | TmUse     of info * ustring * tm                                  (* Use a language *)
 | TmUtest   of info * tm * tm * tm option * tm                      (* Unit testing *)
 | TmNever   of info                                                 (* Never term *)
 (* Only part of the runtime system *)
-| TmClos    of info * ustring * sym * ty * tm * env Lazy.t          (* Closure *)
+| TmClos    of info * ustring * Symb.t * ty * tm * env Lazy.t          (* Closure *)
 | TmFix     of info                                                 (* Fix point *)
 
 (* Kind of pattern name *)
 and patName =
-| NameStr of ustring * sym                        (* A normal pattern name *)
+| NameStr of ustring * Symb.t                        (* A normal pattern name *)
 | NameWildcard                                    (* Pattern wildcard *)
 
 (* Patterns *)
@@ -174,7 +167,7 @@ and pat =
 | PatSeqTot of info * pat Mseq.t                  (* Exact sequence patterns *)
 | PatSeqEdg of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
 | PatRecord of info * pat Record.t                (* Record pattern *)
-| PatCon    of info * ustring * sym * pat         (* Constructor pattern *)
+| PatCon    of info * ustring * Symb.t * pat         (* Constructor pattern *)
 | PatInt    of info * int                         (* Int pattern *)
 | PatChar   of info * int                         (* Char pattern *)
 | PatBool   of info * bool                        (* Boolean pattern *)
@@ -209,9 +202,6 @@ and ident =
 
 let tmUnit = TmRecord(NoInfo,Record.empty)
 
-(* Value -1 means that there is no symbol yet assigned *)
-let nosym = -1
-
 module Option = BatOption
 
 (* General (bottom-up) map over terms *)
@@ -225,7 +215,7 @@ let rec map_tm f = function
   | TmApp(fi,t1,t2) -> f (TmApp(fi,map_tm f t1,map_tm f t2))
   | TmConst(_,_) as t -> f t
   | TmFix(_) as t -> f t
-  | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.map (map_tm f) tms))
+  | TmSeq(fi,tms) -> f (TmSeq(fi,Mseq.Helpers.map (map_tm f) tms))
   | TmRecord(fi,r) -> f (TmRecord(fi,Record.map (map_tm f) r))
   | TmRecordUpdate(fi,r,l,t) -> f (TmRecordUpdate(fi,map_tm f r,l,map_tm f t))
   | TmCondef(fi,x,s,ty,t1) -> f (TmCondef(fi,x,s,ty,map_tm f t1))
@@ -275,16 +265,16 @@ let pat_info = function
 
 (* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
-  Mseq.map (fun x ->
+  Mseq.Helpers.map (fun x ->
       match x with | TmConst(_,CChar(i)) -> i
                    | _ -> raise_error fi "The term is not a string") s
-  |> Mseq.to_ustring
+  |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =
   s
-  |> Mseq.of_ustring
-  |> Mseq.map (fun x -> TmConst(fi,CChar(x)))
+  |> Mseq.Helpers.of_ustring
+  |> Mseq.Helpers.map (fun x -> TmConst(fi,CChar(x)))
 
 (* Converts a list of terms (for a tuple) to a record term *)
 let tuple2record fi lst =

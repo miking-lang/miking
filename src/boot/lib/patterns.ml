@@ -1,6 +1,7 @@
 open Utils
 open Ast
 open Ustring.Op
+open Intrinsics
 
 module UstringSet = Set.Make(Ustring)
 
@@ -358,13 +359,13 @@ let normpat_overlap (a: normpat) (b: normpat): bool =
 let rec pat_to_normpat = function
   | PatNamed _ -> NPatSet.singleton wildpat
   | PatSeqTot(_, pats) ->
-     Mseq.to_list pats
+     Mseq.Helpers.to_list pats
      |> traverse (fun p -> pat_to_normpat p |> NPatSet.elements)
      |> List.map (fun pats -> NPatSeqTot pats)
      |> NPatSet.of_list
   | PatSeqEdg(_, pre, _, post) ->
      Mseq.concat pre post
-     |> Mseq.to_list
+     |> Mseq.Helpers.to_list
      |> traverse (fun p -> pat_to_normpat p |> NPatSet.elements)
      |> List.map (fun pats -> let pre, post = split_at (Mseq.length pre) pats in NPatSeqEdg(pre, post))
      |> NPatSet.of_list
@@ -394,7 +395,7 @@ let pat_example normpat =
     | NSPat (SPatInt i) -> PatInt(NoInfo, i)
     | NSPat (SPatChar c) -> PatChar(NoInfo, c)
     | NSPat (SPatBool b) -> PatBool(NoInfo, b)
-    | NSPat (SPatCon (str, np)) -> PatCon(NoInfo, str, nosym, npat_to_pat np)
+    | NSPat (SPatCon (str, np)) -> PatCon(NoInfo, str, Symb.Helpers.nosym, npat_to_pat np)
     | NPatRecord (r, neg) ->
        let pos = PatRecord(NoInfo, Record.map npat_to_pat r) in
        UstringSet.elements neg
@@ -404,25 +405,25 @@ let pat_example normpat =
            | x::xs ->
               let neg = PatNot(NoInfo, List.fold_left (fun a b -> PatOr(NoInfo, a, b)) x xs) in
               if Record.is_empty r then neg else PatAnd(NoInfo, pos, neg))
-    | NPatSeqTot nps -> PatSeqTot(NoInfo, List.map npat_to_pat nps |> Mseq.of_list)
+    | NPatSeqTot nps -> PatSeqTot(NoInfo, List.map npat_to_pat nps |> Mseq.Helpers.of_list)
     | NPatSeqEdg (pre, post) ->
        PatSeqEdg(NoInfo,
-                 List.map npat_to_pat pre |> Mseq.of_list,
+                 List.map npat_to_pat pre |> Mseq.Helpers.of_list,
                  NameWildcard,
-                 List.map npat_to_pat post |> Mseq.of_list)
+                 List.map npat_to_pat post |> Mseq.Helpers.of_list)
     | NPatNot (seqs, cons) ->
        let seqs = match seqs with
          | None -> [PatSeqEdg(NoInfo, Mseq.empty, NameWildcard, Mseq.empty)]
          | Some lens ->
             IntSet.elements lens
-            |> List.map (fun len -> PatSeqTot(NoInfo, repeat len wildpat |> Mseq.of_list)) in
+            |> List.map (fun len -> PatSeqTot(NoInfo, repeat len wildpat |> Mseq.Helpers.of_list)) in
        let cons =
          ConSet.elements cons
          |> List.map (function
                 | IntCon i -> PatInt(NoInfo, i)
                 | CharCon c -> PatChar(NoInfo, c)
                 | BoolCon b -> PatBool(NoInfo, b)
-                | ConCon str -> PatCon(NoInfo, str, nosym, wildpat)
+                | ConCon str -> PatCon(NoInfo, str, Symb.Helpers.nosym, wildpat)
                 | RecCon -> PatRecord(NoInfo, Record.empty)) in
        match seqs @ cons with
        | [] -> wildpat
