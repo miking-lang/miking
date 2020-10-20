@@ -1,4 +1,4 @@
-(lang dune 1.10)
+(lang dune 2.0)
 (generate_opam_files true)
 (name boot)
 (maintainers "David Broman <dbro@kth.se>")
