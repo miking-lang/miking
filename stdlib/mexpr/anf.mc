@@ -7,6 +7,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
 
 lang ANF = LetAst + VarAst
   sem isValue =
@@ -196,21 +197,38 @@ lang NeverANF = ANF + NeverAst
 end
 
 lang MExprANF =
+  VarANF + AppANF + FunANF + RecordANF + LetANF + RecLetsANF + ConstANF +
+  DataANF + MatchANF + UtestANF + SeqANF + NeverANF
 
-  VarANF + AppANF + FunANF + RecordANF + LetANF + RecLetsANF + ConstANF
-  + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
+-----------
+-- TESTS --
+-----------
 
-  + MExprSym
-
-  + MExprPrettyPrint
+lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 
 mexpr
-use MExprANF in
+use TestLang in
+
+let _anf = compose normalizeTerm symbolize in
 
 let basic =
   bind_ (let_ "f" (ulam_ "x" (var_ "x")))
   (addi_ (addi_ (int_ 2) (int_ 2))
     (bind_ (let_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
+
+utest _anf basic
+with
+  bindall_ [
+    let_ "f" (ulam_ "x" (var_ "x")),
+    let_ "t" (addi_ (int_ 2) (int_ 2)),
+    let_ "x1" (int_ 1),
+    let_ "t1" (app_ (var_ "f") (var_ "x1")),
+    let_ "t2" (addi_ (var_ "t") (var_ "t1")),
+    var_ "t2"
+  ]
+using eqExpr in
+
+-- TODO(dlunde,2020-10-21): Convert below to proper utests (as for basic above)
 
 let ext =
   bindall_
@@ -266,18 +284,21 @@ let simple = bind_ (let_ "x" (int_ 1)) (var_ "x") in
 
 let simple2 = app_ (int_ 1) simple in
 
+let inv1 = bind_ (let_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
+utest _anf inv1 with inv1 using eqExpr in
+
 
 let debug = false in
 
 let debugPrint = lam t.
+  let s = symbolize t in
+  let n = normalizeTerm s in
   if debug then
     let _ = printLn "--- BEFORE ANF ---" in
-    let t = symbolize t in
-    let _ = printLn (expr2str t) in
+    let _ = printLn (expr2str s) in
     let _ = print "\n" in
     let _ = printLn "--- AFTER ANF ---" in
-    let t = normalizeTerm t in
-    let _ = printLn (expr2str t) in
+    let _ = printLn (expr2str n) in
     let _ = print "\n" in
     ()
   else () in
