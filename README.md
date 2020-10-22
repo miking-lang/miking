@@ -1,4 +1,3 @@
-
 # Miking
 
 Miking (Meta vIKING) is a meta language system for creating embedded domain-specific and general-purpose languages. Miking is not a programming language, but rather a language system for
@@ -943,20 +942,25 @@ ln -s /some_path/libpython*.dylib /usr/local/lib/
 The bindings should now work properly.
 
 ## Contributing
+
 1. Before making a pull request please make sure that all tests pass. Run
-   appropriate tests as described above.
+appropriate tests as described above.
 
 2. Make sure you follow the conventions declared in the
-   [wiki](https://github.com/miking-lang/miking/wiki/Conventions).
+[wiki](https://github.com/miking-lang/miking/wiki/Conventions).
 
 3. We use [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) to
-   automatically format ocaml source code. Install the package via `opam` using
-   `opam install ocamlformat`. Then you can then run `dune build @fmt` to see a
-   diff between your code and the formatted code. To promote the changes run
-   `dune promote`. To do these two steps in one run `dune build @fmt
-   --auto-promote`. If you want to, you can run `ocamlformat` in watch mode to
-   continuously format the source as you work on it with the command `dune build
-   @fmt --auto-promote -w`.
+automatically format ocaml source code. Install the package via `opam` using
+`opam install ocamlformat`. Then you can then run `dune build @fmt` to see a
+diff between your code and the formatted code. To promote the changes run `dune
+promote`. To do these two steps in one run `dune build @fmt --auto-promote`. If
+you want to, you can run `ocamlformat` in watch mode to continuously format the
+source as you work on it with the command `dune build @fmt --auto-promote -w`.
+You can also find instructions for tighter editor integration at *ocamlformat's*
+GitHub page.
+
+4. For convenience, `make lint` will run `dune build @fmt` and `make fix` will run
+`dune build @fmt --auto-promote`.
 
 ## MIT License
 Miking is licensed under the MIT license.
