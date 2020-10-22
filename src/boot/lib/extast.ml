@@ -1,6 +1,2 @@
-type ext =
-  (* Elementary functions *)
-  | Esin
-  | Ecos
-  | Eatan
-  | Eexp
+type ext = (* Elementary functions *)
+  | Esin | Ecos | Eatan | Eexp

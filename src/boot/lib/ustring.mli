@@ -43,53 +43,80 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     is distributed under the "New BSD License".
 *)
 
-type uchar = int
 (** Unicode char type. It is a basic integer. *)
+type uchar = int
 
-
-
-module Op :
-sig
-
-  type ustring
+(** Sub module {!Ustring.Op} is containing Unicode versions of several functions
+    available in the [Pervasives] module, as well as operators and functions
+    for simple string creation and manipulation (for example string concatenation
+    operator [^.], ustring equality operator [=.] and string creation [us"string"]).
+    Use it by opening the op module [open Ustring.Op] Do not open module [Ustring]
+    directly, since there is a risk for name conflicts.
+*)
+module Op : sig
   (** Unicode string type *)
+  type ustring
 
-  type sid
   (** Type of an string identifier *)
+  type sid
 
-
-  module SidSet :
-  sig
+  (** Module for handling  set of string identifiers. Uses OCaml's standard set module *)
+  module SidSet : sig
     type elt = sid
+
     type t
+
     val empty : t
+
     val is_empty : t -> bool
+
     val mem : elt -> t -> bool
+
     val add : elt -> t -> t
+
     val singleton : elt -> t
+
     val remove : elt -> t -> t
+
     val union : t -> t -> t
+
     val inter : t -> t -> t
+
     val diff : t -> t -> t
+
     val compare : t -> t -> int
+
     val equal : t -> t -> bool
+
     val subset : t -> t -> bool
+
     val iter : (elt -> unit) -> t -> unit
+
     val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
+
     val for_all : (elt -> bool) -> t -> bool
+
     val exists : (elt -> bool) -> t -> bool
+
     val filter : (elt -> bool) -> t -> t
+
     val partition : (elt -> bool) -> t -> t * t
+
     val cardinal : t -> int
+
     val elements : t -> elt list
+
     val min_elt : t -> elt
+
     val max_elt : t -> elt
+
     val choose : t -> elt
+
     val split : elt -> t -> t * bool * t
   end
-  (** Module for handling  set of string identifiers. Uses OCaml's standard set module *)
 
   type sidset = SidSet.t
+
   (* Set of string identifiers *)
 
   val ( ^. ) : ustring -> ustring -> ustring
@@ -153,6 +180,7 @@ sig
       Same as expression [sid_of_ustring (us s)] *)
 
   (** {6 Module Pervasives's functions} *)
+
   (** The following section defines the Unicode version of several functions
       available in the [Pervasives] module. *)
 
@@ -210,7 +238,6 @@ sig
   (** Prints a new line and flushes the standard output.
       Same as pervasives function print_newline *)
 
-
   val list2ustring : int list -> ustring
 
   val ustring2list : ustring -> int list
@@ -219,32 +246,26 @@ sig
 
   val uprint_bool : bool -> unit
   (** Prints the string representation of an boolean to the standard output. *)
-
 end
-(** Sub module {!Ustring.Op} is containing Unicode versions of several functions
-    available in the [Pervasives] module, as well as operators and functions
-    for simple string creation and manipulation (for example string concatenation
-    operator [^.], ustring equality operator [=.] and string creation [us"string"]).
-    Use it by opening the op module [open Ustring.Op] Do not open module [Ustring]
-    directly, since there is a risk for name conflicts.
-*)
 
+(** Alias for the type [Op.ustring] *)
 type t = Op.ustring
-(** Alias for the type [Op.ustring] *)
 
-type ustring = Op.ustring
 (** Alias for the type [Op.ustring] *)
+type ustring = Op.ustring
 
 type encoding =
-  | Ascii   (** Standard ASCII (values 0-127) *)
+  | Ascii  (** Standard ASCII (values 0-127) *)
   | Latin1  (** Latin-1 encoding. Supports most European languages. *)
-  | Utf8    (** UTF-8 encoding. Full Unicode encoding, where each character
+  | Utf8
+      (** UTF-8 encoding. Full Unicode encoding, where each character
                is represented by 1-4 bytes. *)
-  | Utf16le (** Not yet supported *)
-  | Utf16be (** Not yet supported *)
-  | Utf32le (** Not yet supported *)
-  | Utf32be (** Not yet supported *)
-  | Auto    (** Not a specific encoding, but a method for how encoded data
+  | Utf16le  (** Not yet supported *)
+  | Utf16be  (** Not yet supported *)
+  | Utf32le  (** Not yet supported *)
+  | Utf32be  (** Not yet supported *)
+  | Auto
+      (** Not a specific encoding, but a method for how encoded data
                 is interpreted. If the input data have a
                 byte order mark (BOM) in the beginning of the sequence, the
                 encoding type stated in the BOM will be used.
@@ -257,8 +278,6 @@ type encoding =
 		If it is not an UTF encoded character, Latin-1 will be assumed
 		for the rest of the data sequence. Any later illegal decoding
 		will then be reported as an error. *)
-
-
 
 (** {6 Module String's functions} *)
 
@@ -417,8 +436,7 @@ val write_file : ?encode_type:encoding -> string -> ustring -> unit
 (** Function [Ustring.write_file fn s] writes unicode string [s] to a
     a file named [fn]. The default character encoding is UTF-8. *)
 
-val read_from_channel : ?encode_type:encoding -> in_channel ->
-                        (int -> ustring)
+val read_from_channel : ?encode_type:encoding -> in_channel -> int -> ustring
 (** Function [Ustring.read_from_channel ic] returns a function which
     can read from the in_channel. The returned function has one argument stating
     the number of Unicode characters that should be read from the stream.
@@ -432,14 +450,12 @@ val read_from_channel : ?encode_type:encoding -> in_channel ->
     only be called once to get the read function [int -> ustring] and no
     other function is allowed to read from this channel at the same time.*)
 
-
 (** {6 Encoding} *)
 
-
-exception Decode_error of (encoding * int)
 (** Exception raised when a decode error occurrs. First parameter represents
     the encoding method used when the error occurred and the second parameter
     is the position in the stream/string/channel. *)
+exception Decode_error of (encoding * int)
 
 val from_latin1 : string -> ustring
 (** Creates an ustring from a string that is
@@ -475,7 +491,6 @@ val to_utf8 : ustring -> string
 val to_uchars : ustring -> uchar array
 (** Returns an array of uchars. *)
 
-
 val validate_utf8_string : string -> int -> int
 (** Expression [Ustring.validate_utf8_string s n] checks if the first [n] characters
     of string [s] have valid UTF-8 encoding. If the input is valid, but not all data
@@ -485,7 +500,6 @@ val validate_utf8_string : string -> int -> int
     [Decode_error enc pos] if the string has not a valid
     UTF-8 encoding. Argument [enc] is the encoding type and [pos] is the position
     in string [s] of the decode error. *)
-
 
 (** {6 Lexing} *)
 
@@ -510,25 +524,24 @@ val lexing_from_channel : ?encode_type:encoding -> in_channel -> Lexing.lexbuf
     and [pos] is number of bytes read from [inchan] when the decoding error
     occurred. *)
 
-
-val lexing_from_ustring :  ustring -> Lexing.lexbuf
+val lexing_from_ustring : ustring -> Lexing.lexbuf
 (** Creates a new [Lexing.lexbuf] that reads from a ustring. The stream of
     characters that are returned to the lexical analyzer is
     always UTF-8. *)
 
 (** {6 Comparison and Standard Collections} *)
 
-val equal: t -> t -> bool
+val equal : t -> t -> bool
 (** Safe structural equality comparison function for ustrings.
     For easy usage, use the equivalent operator [=.] which is defined in
     module {!Ustring.Op}. *)
 
-val not_equal: t -> t -> bool
+val not_equal : t -> t -> bool
 (** Safe structural inequality comparison function for ustrings.
     For easy usage, use the equivalent operator [<>.] which is defined in
     module {!Ustring.Op}. *)
 
-val compare: t -> t -> int
+val compare : t -> t -> int
 (** Comparison function for ustrings. Uses the same specification as
     [Pervasives.compare]. Since both type [t] and function [compare] is
     implemented, module [UString] can be passed directly to functors such
