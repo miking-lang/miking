@@ -435,6 +435,10 @@ end
 lang CharTypeAst
   syn Type =
   | TyChar {}
+end
+
+lang StringTypeAst
+  syn Type =
   | TyString {}
 end
 
@@ -456,10 +460,15 @@ end
 
 lang DataTypeAst
   syn Type =
-  | TyCon {ident : String}
+  | TyCon {ident : Name}
 end
 
-lang ArithTypeAst
+lang IntTypeAst
+  syn Type =
+  | TyInt {}
+end
+
+lang FloatTypeAst
   syn Type =
   | TyInt {}
 end
@@ -476,7 +485,7 @@ end
 
 lang TypeVarAst
   syn Type =
-  | TyVar {ident : String}
+  | TyVar {ident : Name}
 end
 
 ------------------------
@@ -498,6 +507,6 @@ lang MExprAst =
   BoolPat + AndPat + OrPat + NotPat
 
   -- Types
-  + FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + SeqTypeAst +
-  TupleTypeAst + RecordTypeAst + DataTypeAst + ArithTypeAst + BoolTypeAst +
-  AppTypeAst + TypeVarAst
+  + FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
+  SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
+  FloatTypeAst + BoolTypeAst + AppTypeAst + TypeVarAst

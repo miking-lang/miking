@@ -688,10 +688,11 @@ end
 -----------
 -- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
-lang TypePrettyPrint = FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst +
-                       SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst +
-                       ArithTypeAst + BoolTypeAst + AppTypeAst + FunAst +
-                       DataPrettyPrint + TypeVarAst
+lang TypePrettyPrint =
+  FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
+  SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
+  FloatTypeAst + BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint +
+  TypeVarAst
 
     sem getTypeStringCode (indent : Int) =
     | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",

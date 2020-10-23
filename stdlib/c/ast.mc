@@ -2,50 +2,85 @@
 
 include "mexpr/ast.mc"
 
+include "name.mc"
+
+-- Missing:
+-- * Storage class specifiers (auto, register, static, extern)
+-- * Type qualifiers (const, volatile)
+-- * typedef
+-- * Standard operators. We cannot reuse operators from mexpr (such as CAddi) since
+--   they are curried. Maybe this will change in the future?
+
 lang CExprAst = VarAst + ConstAst + IntAst + FloatAst + CharAst
   syn Expr =
-    | TmAssg { lhs: Expr, rhs: Expr }
-    | TmApp { fun: String, args: [Expr] }
+  | TmAssg     { lhs: Expr, rhs: Expr }
+  | TmApp      { fun: Name, args: [Expr] }
+  | TmSubScr   { lhs: Expr, rhs: Expr }
+  | TmSubScr   { lhs: Expr, rhs: Expr }
+  | TmMemb     { lhs: Expr, rhs: String }
+  | TmCast     { lhs: Type, rhs: Expr }
+  | TmSize     { arg: Expr }
+  | TmSizeType { arg: Type }
 
-    -- TODO(dlunde,2020-09-29): Many other things missing, for instance:
-    -- * Operators. We cannot reuse operators from mexpr (such as CAddi) since
-    --   they are curried. Maybe this will change in the future?
-    -- * Pointers
-    -- * Arrays
-    -- * Unions (NOTE(dlunde,2020-09-29): not tagged unions, aka variants)
-    -- * Enums (variants with only nullary constructors)
-    -- * Structs (should be reusable if we decompose RecordAst a bit)
+  -- NOTE(dlunde,2020-10-21): The below things are missing
+
+  -- Missing:
+  -- * Struct pointer access (e.g. structptr->item)
 end
 
--- TODO(dlunde,2020-09-29): Types (Some reuse from mexpr should be possible after some refactoring)
-lang CTypeAst
+lang CTypeAst = CharTypeAst + IntTypeAst + FloatTypeAst + TypeVarAst
+  syn Type =
+  | TyFun { ret: Type, args: [Type] }
+  | TyPtr { to: Type }
+  | TyArr { ty: Type, size: Int }
+  | TyStruct { id: Option Name, mem: [(Type, String)] }
+  | TyUnion { id: Option Name, mem: [(Type, String)] }
+  | TEnum { id: Option Name, mem: [Name]}
+end
+
+lang CDeclAst
+  -- Missing:
+  -- * Mulitple declarators within the same declaration.
+  -- * Designated initializers (e.g. struct s pi = { .z = "Pi", .x = 3, .y =
+  -- 3.1415 };)
+  syn Decl =
+  | Decl { ty: Type, id: Option Name, init: Option Expr }
+
+  syn Init =
+  | IExpr { expr: Expr }
+  | IList { inits: [Init] }
+
+end
 
 lang CStmtAst = CExprAst + CTypeAst
   syn Stmt =
-    | SDecl     { ty: Type, id: String }
-    | SIf       { cond: Expr, thn: Stmt, els: Stmt }
-    | SWhile    { cond: Expr, body: Stmt }
-    | SFor      { init: Expr, cond: Expr, after: Expr }
-    | SRet      { val: Option }
-    | SExpr     { expr: Expr }
-    | SBlock    { stmts: [Stmt] }
-    | SNop      {}
+  | SDecl     { decl: Decl }
+  | SIf       { cond: Expr, thn: Stmt, els: Stmt }
+  | SWhile    { cond: Expr, body: Stmt }
+  | SFor      { init: Expr, cond: Expr, after: Expr }
+  | SRet      { val: Option Expr }
+  | SExpr     { expr: Expr }
+  | SComp     { stmts: [Stmt] }
+
+  -- Missing:
+  -- * switch
+  -- * continue
+  -- * break
+  -- * do-while
+  -- * goto
 end
 
 lang CTopAst = CStmtAst + CTypeAst
   syn Top =
-    | TDecl    { ty: Type, id: String }
-    | TFunDecl { ty: Type,
-                 id: String,
-                 params: [{ ty: Type, id: String }]}
-    | TFun     { ty: Type,
-                 id: String,
-                 params: [{ ty: Type, id: String }],
-                 body: Stmt }
+  | TDecl    { decl: Decl }
+  | TFun     { ty: Type,
+               id: Name,
+               params: [(Type, Name)],
+               body: Stmt }
 end
 
 lang CAst = CTopAst
-  syn Prog =
-    | Prog { tops: [Top] }
+  syn C =
+  | CProg { tops: [Top] }
 end
 
