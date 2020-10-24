@@ -3,9 +3,7 @@
 --
 -- An argument parser library.
 --
--- TODO(johnwikman, 2020-10-05): OrderedPositional, and UnorderedPositional (partially done, need to fix setup of relations...)
 -- TODO(johnwikman, 2020-10-04): Add APDefault modifier.
--- TODO(johnwikman, 2020-10-12): Remove Match Conditions, does not give a whole lot, just causes a bunch of ambiguity...
 -- TODO(johnwikman, 2020-10-17): Add built-in --help option.
 --
 -- birka update
@@ -73,6 +71,8 @@ let _str_mem = hashmapMem _str_traits
 let _str_lookupOrElse = hashmapLookupOrElse _str_traits
 let _str_lookupOr = hashmapLookupOr _str_traits
 let _str_lookup = hashmapLookup _str_traits
+let _str_any = hashmapAny _str_traits
+let _str_all = hashmapAll _str_traits
 let _str_insert = hashmapInsert _str_traits
 let _str_remove = hashmapRemove _str_traits
 let _str_filter = hashmapFilter _str_traits
@@ -706,6 +706,15 @@ end
 -- BRIEF: Sets up the enables+disables relations for positionals
 -- Also check that the enable-disable logic is sound for individual positionals.
 let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
+  -- Helper function used for internal sanity checking whether this parent can
+  -- enable or disable on this value.
+  let validParentTriggerValue: Option String -> APPositionalItem_ a -> Bool = lam os. lam parent.
+    match os with Some value then
+      _str_any (lam v. lam _. eqString value) parent.values
+    else
+      true -- wildcard is always valid
+  in
+
   foldl (lam ap. lam pos.
     let ap =
       foldl (lam ap. lam enable.
@@ -735,8 +744,13 @@ let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
 
         -- Add this enable to its referenced parent
         match _str_lookup enable.0 ap.positionals with Some parent then
-          let newParent = {parent with enables = _optstr_insert enable.1 pos.name parent.enables} in
-          {ap with positionals = _str_insert parent.name newParent ap.positionals}
+          if validParentTriggerValue enable.1 parent then
+            let newParent = {parent with enables = _optstr_insert enable.1 pos.name parent.enables} in
+            {ap with positionals = _str_insert parent.name newParent ap.positionals}
+          else
+            {ap with errors = snoc ap.errors (join ["Referenced enabler positional \"",
+             enable.0, "\" on value \"", enab"\" from positional \"", pos.name,
+             "\" can never be matched on the specified value \"", optionGetOr "" enable.1, "\"."])}
         else
           {ap with errors = snoc ap.errors (join ["Referenced enabler positional \"",
            enable.0, "\" from positional \"", pos.name, "\" does not exist."])}
@@ -747,8 +761,13 @@ let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
     -- necessary to perform sanity checking here.
     foldl (lam ap. lam disable.
       match _str_lookup disable.0 ap.positionals with Some parent then
-        let newParent = {parent with disables = _optstr_insert disable.1 pos.name parent.disables} in
-        {ap with positionals = _str_insert parent.name newParent ap.positionals}
+        if validParentTriggerValue disable.1 parent then
+          let newParent = {parent with disables = _optstr_insert disable.1 pos.name parent.disables} in
+          {ap with positionals = _str_insert parent.name newParent ap.positionals}
+        else
+          {ap with errors = snoc ap.errors (join ["Referenced disabler positional \"",
+           disable.0, "\" on value \"", enab"\" from positional \"", pos.name,
+           "\" can never be matched on the specified value \"", optionGetOr "" disable.1, "\"."])}
       else
         {ap with errors = snoc ap.errors (join ["Referenced disabler positional \"",
          disable.0, "\" from positional \"", pos.name, "\" does not exist."])}
@@ -771,182 +790,119 @@ let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
   -- invalid '-' character as a separator.
   let seqAsString: [String] -> String = lam seq. strJoin "-" seq in
 
-  -- Add an element to the visited list, putting it in sorted order.
-  let insertIntoSeq: String -> [String] -> [String] = lam s. lam seq.
-    TODO
-  in
-  TODO
-
-
--- BRIEF: Sets up and verifies the ordered positionals in the ArgParser
---
--- This assumes that each ordered positional is well-formed. This just
--- configures the relations between them.
-let _setupOrderedPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
-  if leqi (_str_size ap.orderedPositionals) 0 then
-    -- Does not contain any ordered positionals, ignore setup
-    ap
-  else -- continue
-
-  -- STAGE 1: Check that one and exactly one positional is marked as the first
-  let firsts = _str_filterValues (lam p. p.first) ap.orderedPositionals in
-  let ap =
-    match firsts with [] then
-      {ap with errors = snoc ap.errors "Missing a first ordered positional"}
-    else match firsts with [fst] then
-      {ap with firstPositional = Some fst} -- OK, exactly one first ord. pos.
+  -- Insert an element to the visited list, putting it in sorted order.
+  recursive let insertIntoSeq: String -> [String] -> [String] = lam s. lam seq.
+    match seq with [x] ++ xs then
+      if ltString s x then
+        cons s seq
+      else if eqString s x then
+        seq -- ignore duplicate
+      else
+        cons x (insertIntoSeq s xs)
     else
-      {ap with errors = snoc ap.errors (join ["Multiple first ordered positionals: ",
-                                              strJoin ", " firsts])}
+      [s]
   in
 
-  -- STAGE 2: Convert from parent data to children data
-  let ap =
-    foldl (lam apAcc. lam pos.
-      match pos.parent with Some (pname, pvalue) then
-        match _str_lookup pname apAcc.orderedPositionals with Some parent then
-          match _optstr_lookup pvalue parent.children with Some childname then
-            -- Two children with exact same relation to parent
-            let name = optionMapOr "wildcard" (lam s. ['\"', s, '\"']) pvalue in
-            {apAcc with errors = snoc apAcc.errors (join ["Ordered positionals \"", pname,
-                                                          "\" and \"", childname, "\" have ",
-                                                          "exact same relation to parent."])}
+  -- Remove an element from the visited list
+  recursive let removeFromSeq: String -> [String] -> [String] = lam s. lam seq.
+    match seq with [x] ++ xs then
+      if eqString s x then
+        xs -- remove element
+      else
+        cons x (removeFromSeq s xs)
+    else
+      []
+  in
+
+  -- This essentially acts as a hashset, a hashmap with unit values.
+  let visitedStates: HashMap String () = _str_empty in
+
+  let initiallyActive = foldl (lam seq. lam name.
+    insertIntoSeq name seq
+  ) [] ap.initiallyEnabledPositionals in
+
+  -- Returns on the left-hand side any error messages that have been encountered.
+  recursive let traverse: [String] -> [String] -> HashMap String () -> ([String], HashMap String ()) =
+    lam path. lam active. lam visitedStates.
+    let activeString = seqAsString active in
+    if _str_mem activeString visitedStates then
+      -- Already checkted this state
+      ([], visitedStates)
+    else -- continue
+
+    let visitedStates = _str_insert activeString () visitedStates in
+
+    -- Filter out the active positionals
+    let positionals = _str_filterValues (lam pos. any (eqString pos.name) active) ap.positionals in
+
+    let onlyTheses = filter (lam pos. pos.onlyThis) positionals in
+    if geqi (length onlyTheses) 2 then
+      let names = map (lam pos. join ["\"", pos.name, "\""]) onlyTheses in
+      ([join ["Positionals ", strJoin ", " names, " with the OnlyThis property ",
+              "are active at the same time after matching on the chain of "
+              "positionals ", strJoin " -> " path]], visitedStates)
+    else -- continue
+
+    -- Just focus on the single "only this" positional if it is enabled. None of the
+    -- other will ever get matched on
+    let positionals = if eqi (length onlyTheses) 1 then onlyTheses else positionals in
+
+    -- Check that only one wildcard can exist, i.e. where no specified values exist
+    let wildcards = filter (lam pos. eqi (_str_size pos.values) 0) positionals in
+    if geqi (length wildcards) 2 then
+      let names = map (lam pos. join ["\"", pos.name, "\""]) wildcards in
+      ([join ["Positionals ", strJoin ", " names, " that can match on any value ",
+              "are active at the same time after matching on the chain of "
+              "positionals ", strJoin " -> " path]], visitedStates)
+    else -- continue
+
+    -- Check that the possible values between the active positionals are distinct
+    -- Not using a simple fold here since I want to decrease the search space with
+    -- each iteration, avoiding duplicate error messages.
+    recursive let iterate = lam positionals.
+      match positionals with [pos] ++ remaining then
+        let errors = foldl (lam errAcc. lam value.
+          let collisions = filter (lam p. _str_mem value p.values) remaining in
+          let names = map (lam p. join ["\"", p.name, "\""]) (cons pos collisions) in
+          if geqi (length names) 2 then
+            snoc errAcc (join ["Positionals ", strJoin ", " names, " that all ",
+                               "match on the same value \"", value, "\" are active ",
+                               "at the same time after matching on the chain of "
+                               "positionals ", strJoin " -> " path])
           else
-            let newParent =
-              {parent with children = _optstr_insert pvalue pos.name parent.children}
-            in
-            -- If parent has a limited range of values and parent value is
-            -- specified, then verify that parent has that value in range.
-            match (_str_keys parent.values, pvalue) with ([_] + _, Some val) then
-              if _str_mem val parent.values then
-                {apAcc with orderedPositionals = _str_insert pname newParent apAcc.orderedPositionals}
-              else
-                {apAcc with errors = snoc apAcc.errors (join ["Parent \"", pname, "\" (of positional \"",
-                                                              pos.name, "\") does not have \"",
-                                                              val, "\" in its valid range of values."])}
-            else
-              {apAcc with orderedPositionals = _str_insert pname newParent apAcc.orderedPositionals}
-        else
-          {apAcc with errors = snoc apAcc.errors (join ["Parent \"", pname, "\" does not exist for positional \"", pos.name "\""])}
+            errAcc
+        ) [] (_str_keys pos.values) in
+        concat errors (iterate remaining)
       else
-        -- No parent
-        apAcc
-    ) ap (_str_values ap.orderedPositionals)
-  in
-
-  -- STAGE 3: Check for relational loops
-  recursive let traversePosTree: [String] -> ArgParser_ a -> String -> ArgParser_ a =
-    lam visited. lam apAcc. lam current.
-    -- Check loop
-    match lastIndex (eqString current) visited with Some idx then
-      let path = snoc (splitAt visited idx).1 current in
-      {apAcc with errors = snoc apAcc.errors (join ["Ordered positional loop detected: ",
-                                                    strJoin " -> " path])}
-    else
-      -- No loop so far
-      let positional = _str_lookupOrElse (lam _. error "unreachable") current apAcc.orderedPositionals in
-      foldl (lam apAcc. lam child.
-        traversePosTree (snoc visited current) apAcc child
-      ) apAcc (_optstr_values positional.children)
-  in
-  let ap = optionMapOr ap (traversePosTree [] ap) ap.firstPositional in
-
-  -- All checks done
-  ap
-
-/-
-- BRIEF: Sets up and verifies the unordered positionals in the ArgParser
--
-- This assumes that each unordered positional is well-formed. This just
-- configures the relations between them and the ordered positionals. This also
-- assumes that the setup of the ordered positionals was successful without any
-- errors.
--
-- This checks for the obvious ambiguities, that might arise from
-- misconfiguration. This does NOT evaluate any of the specified match
-- conditions the check for ambiguity that was, mainly due to that we do not
-- know at this stage how computationally heavy those are.
--
-- TODO(johnwikman, 2020-10-12): Add option to perform extra ambiguity checks,
--                               though not enabled by default.
--/
-let _setupUnorderedPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
-  let allUnorderedPositionals = _str_values ap.unorderedPositionals in
-
-  -- STAGE 1: Set a unordered positionals to be enabled from the start, those who are not configured to be enabled by anything
-  let initiallyEnabled = filter (lam pos. null pos.enabledBy) allUnorderedPositionals in
-  let ap = {ap with initiallyEnabledUnorderedPositionals = initiallyEnabled} in
-
-
-  -- Check that the enabled unordered positionals are not known at this stage to have an ambiguous match
-  let checkAmbiguity: String -> [String] -> [String] -> ArgParser_ a -> ArgParser_ a =
-    lam errmsgPrefix. lam enabledUnordered. lam enabledOrdered. lam ap.
-
-    -- Extract all the positionals that match the entered names
-    let unordered = _str_filterValues (lam uop. any (eqString uop.name) enabledUnordered) ap.unorderedPositionals in
-    let ordered = _str_filterValues (lam op. any (eqString op.name) enabledOrdered) ap.orderedPositionals in
-
-    -- Set ambiguity if two unordered positionals lack match-conditions and specified values
-    let ap =
-      let ambiguous = filter (lam uop. and (null uop.matchconds) (neqi (_str_size uop.values))) unordered in
-      let ambiguousNames = map (lam uop. uop.name) ambiguous in
-
-      let wildcardOrdered = filter (lam op. TODO) ordered in
-
-      if geqi (length ambiguousNames) 2 then
-        {ap with errors = snoc ap.errors (join [errmsgPrefix, "Ambiguous unordered positionals ",
-                                                strJoin ", " ambiguousNames])}
-      else
-        ASDF
+        []
     in
+    let errors = iterate positionals in
+    if not (null errors) then
+      (errors, visitedStates)
+    else -- continue, no ambiguity at this state!
 
-    -- Extract all values
+    foldl (lam acc. lam pos.
+      let errorsAcc = acc.0 in
+      let visitedStatesAcc = acc.1 in
 
-    TODO!
+      -- Mark all enabled values as active
+      let active = foldl (lam seq. lam name.
+        insertIntoSeq name seq
+      ) active (_optstr_values pos.enables) in
+
+      -- Mark all disabled values as not active
+      let active = foldl (lam seq. lam name.
+        removeFromSeq name seq
+      ) active (_optstr_values pos.disables) in
+
+      -- Traverse down this path
+      let ret = traverse (snoc path pos.name) active visitedStatesAcc in
+      (concat errorsAcc ret.0, ret.1)
+    ) ([], visitedStates) positionals
   in
 
-  -- STAGE 2: Setup each ordered Positional such that if it is enabled by something, then it is also enabled by its children, unless one of its children instead disables it.
-  --          A.k.a. propagate the enabling
-  --
-  -- STAGE 2.5: Check ambiguity at the same time, between the active unordered positionals, but also against a possible non-required ordered positional
-  recursive let traverseEnableDisable: [String] -> ArgParser_ a -> String -> ArgParser_ a =
-    lam enabled. lam apAcc. lam posname.
-
-    let newEnables = filter (lam uop. any (eqString posname) uop.enabledBy) allUnorderedPositionals in
-    let newEnableNames = map (lam uop. uop.name) newEnables in
-
-    let newDisables = filter (lam uop. any (eqString posname) uop.enabledBy) allUnorderedPositionals in
-    let newDisableNames = map (lam uop. uop.name) newDisables in
-
-    -- Add the new enables (and make sure to remove duplicates)
-    let enabled = distinct eqString (concat enabled newEnableNames) in
-
-    -- Remove those listed as newly disabled
-    let enabled = filter (lam s. not (any (eqString s) newDisableNames)) enabled in
-
-    let pos = _str_lookupOrElse (lam _. error "unreachable") posname ap.orderedPositionals in
-    let pos = {pos with enables = enabled} in
-
-    -- IF: This ordered positional is not required to be filled in, then there cannot be any ambiguity whether
-    -- the argparser should match any of the unordered positionals or the "optional" ordered positional. Or also,
-    -- if this does not have a wildcard child, then it should also make sure that none of its children also
-    -- produce an ambiguous match with the enabled unordered positionals.
-    TODO!
-  in
-
-  let ap =
-    match ap.firstOrderedPositional with Some name then
-      traverseEnableDisable ap.initiallyEnabledUnorderedPositionals ap name
-    else
-      ap
-  in
-
-  -- STAGE 2.5: Check that no two unordered positionals, active at the same time, lack 
-  --          match conditions. In which case they are known already at this stage to
-  --          cause ambiguous parsing. Though they still might cause ambiguous parsing
-  --          later on.
-  TODO ))))
-  ap
+  let ret = traverse [] initiallyActive visitedStates in
+  {ap with errors = concat ap.errors ret.0}
 
 
 -- Constructs a parser based on the provided configuration
@@ -969,15 +925,17 @@ let _createParser: [APConfiguration a] -> String -> ArgParser_ a =
     ap
   else -- continue
 
-  let ap = _setupOrderedPositionalRelations ap in
+  let ap = _setupPositionalRelations ap in
   if not (null ap.errors) then
     ap
   else -- continue
 
-  let ap = _setupUnorderedPositionalRelations ap in
+  let ap = _setupInitialPositionals ap in
   if not (null ap.errors) then
     ap
   else -- continue
+
+  -- NOTE(johnwikman, 2020-10-22): Skip ambiguity check here
 
   ap
 
@@ -986,10 +944,15 @@ let _createParser: [APConfiguration a] -> String -> ArgParser_ a =
 -- Otherwise Some String containing the error message.
 let argparserCheckError: [APConfiguration a] -> Some String = lam configs.
   let ap = _createParser configs "<confcheck>" in
-  if null ap.errors then
-    None ()
-  else
+  if not (null ap.errors) then
     Some (strJoin "\n" (cons "Misformed ArgParser:" errs))
+  else -- continue
+
+  let ap = _checkPositionalAmbiguity ap in
+  if not (null ap.errors) then
+    Some (strJoin "\n" (cons "Ambiguous ArgParser:" errs))
+  else
+    None ()
 
 
 -- argparserParse. Parse
