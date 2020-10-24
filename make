@@ -18,7 +18,7 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 # General function for building the project
 build() {
     mkdir -p build
-    dune build -p boot
+    dune build
     cp -f _build/install/default/bin/boot.mi build/mi
 }
 
@@ -44,6 +44,12 @@ runtests_py() {
      ../build/mi test py/*)
 }
 
+# Run the test suite for OCaml compiler
+runtests_ocaml() {
+    (cd stdlib
+     ../build/mi test ocaml/*)
+}
+
 # Run the test suite
 runtests() {
     (cd test
@@ -52,7 +58,7 @@ runtests() {
     cd ../stdlib
     ../build/mi test mexpr
     ../build/mi test ad
-		../build/mi test ext
+    ../build/mi test ext
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
@@ -61,6 +67,9 @@ runtests() {
     fi
     if [ -n "$MI_TEST_SUNDIALS" ]; then
         runtests_sundials
+    fi
+    if [ -n "$MI_TEST_OCAML" ]; then
+        runtests_ocaml
     fi
 }
 
@@ -72,6 +81,7 @@ case $1 in
     test-all)
         export MI_TEST_PYTHON=1
         export MI_TEST_SUNDIALS=1
+        export MI_TEST_OCAML=1
         build
         runtests
         ;;

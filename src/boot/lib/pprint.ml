@@ -11,6 +11,7 @@
 open Ast
 open Format
 open Ustring.Op
+open Intrinsics
 
 (** Global configuration for symbol printing. Needed because of the unwieldy
  *  interface to the Format module *)
@@ -25,8 +26,9 @@ let string_of_ustring = Ustring.to_utf8
 
 (** Create string representation of variable *)
 let ustring_of_var x s =
-  if !ref_symbol
-  then x ^. (if s == -1 then us"#" else us(sprintf "#%d" s)) else x
+  if !ref_symbol then
+    x ^. (if Symb.eqsym Symb.Helpers.nosym s then us"#" else us"#" ^. Symb.Helpers.ustring_of_sym s)
+  else x
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -43,7 +45,7 @@ let lit_of_uchar c =
 let ustring_of_pat p =
   let rec ppp pat =
     let ppSeq s =
-      s |> Mseq.to_list |> List.map ppp |> Ustring.concat (us",")
+      s |> Mseq.Helpers.to_list |> List.map ppp |> Ustring.concat (us",")
     in
     let ppName = function NameStr(x,s) -> ustring_of_var x s | NameWildcard -> us"_" in
     match pat with
@@ -201,6 +203,8 @@ let rec print_const fmt = function
 
   (* MCore intrinsic: characters *)
   | CChar(v)  -> fprintf fmt "%s" (lit_of_uchar v)
+  | Ceqc(None)     -> fprintf fmt "eqc"
+  | Ceqc(Some(v))  -> fprintf fmt "eqc(%d)" v
   | Cchar2int -> fprintf fmt "char2int"
   | Cint2char -> fprintf fmt "int2char"
 
@@ -235,7 +239,8 @@ let rec print_const fmt = function
   | Cexit              -> fprintf fmt "exit"
 
   (* MCore Symbols *)
-  | CSymb(id) -> fprintf fmt "symb(%d)" id
+  | CSymb(id) ->
+      fprintf fmt "symb(%s)" (Symb.Helpers.string_of_sym id)
   | Cgensym   -> fprintf fmt "gensym"
   | Ceqsym(_)   -> fprintf fmt "eqsym"
   | Csym2hash  -> fprintf fmt "sym2hash"
@@ -338,7 +343,7 @@ and print_tm' fmt t = match t with
         with
         | _ ->
           let print t = (fun fmt -> fprintf fmt "%a" print_tm (App,t)) in
-          let inner = List.map print (Mseq.to_list tms) in
+          let inner = List.map print (Mseq.Helpers.to_list tms) in
           fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
       end
 
@@ -455,7 +460,9 @@ and print_tm' fmt t = match t with
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =
-  let print (s,t) = (fun fmt -> fprintf fmt "#%d -> %a" s print_tm (Match, t)) in
+  let print (s,t) = (fun fmt ->
+    fprintf fmt "#%s -> %a" (Symb.Helpers.string_of_sym s) print_tm (Match, t))
+  in
   let inner = List.map print env in
   fprintf fmt "[@[<hov 0>%a@]]" concat (Comma,inner)
 

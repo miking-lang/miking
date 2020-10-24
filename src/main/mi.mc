@@ -7,6 +7,7 @@ include "argparser.mc"
 include "seq.mc"
 include "string.mc"
 include "compile.mc"
+include "assoc.mc"
 
 mexpr
 

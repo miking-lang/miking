@@ -9,6 +9,7 @@ open Msg
 open Ast
 open Pprint
 open Printf
+open Intrinsics
 
 (* This function determines how to print program output.
    It's used to redirect standard output of a program,
@@ -44,6 +45,7 @@ let builtin =
    ("eqf",f(Ceqf(None)));("neqf",f(Cneqf(None)));
    ("floorfi", f(Cfloorfi)); ("ceilfi", f(Cceilfi)); ("roundfi", f(Croundfi));
    ("int2float", f(Cint2float)); ("string2float", f(Cstring2float));
+   ("eqc",f(Ceqc(None)));
    ("char2int",f(Cchar2int));("int2char",f(Cint2char));
    ("makeSeq",f(CmakeSeq(None))); ("length",f(Clength));("concat",f(Cconcat(None)));
    ("get",f(Cget(None)));("set",f(Cset(None,None)));
@@ -52,12 +54,12 @@ let builtin =
    ("print",f(Cprint));("dprint",f(Cdprint));
    ("readLine",f(CreadLine));("readBytesAsString",f(CreadBytesAsString));
    ("argv",TmSeq(NoInfo,argv_prog
-                        |> Mseq.of_array
-                        |> Mseq.map (fun s ->
+                        |> Mseq.Helpers.of_array
+                        |> Mseq.Helpers.map (fun s ->
                                TmSeq(NoInfo,s
                                             |> us
-                                            |> Mseq.of_ustring
-                                            |> Mseq.map (fun x->
+                                            |> Mseq.Helpers.of_ustring
+                                            |> Mseq.Helpers.map (fun x->
                                                    TmConst(NoInfo,CChar(x)))))));
    ("readFile",f(CreadFile)); ("writeFile",f(CwriteFile(None)));
    ("fileExists", f(CfileExists)); ("deleteFile", f(CdeleteFile));
@@ -73,7 +75,7 @@ let builtin =
   @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals)
-  |> List.map (fun (x,t) -> (x,gensym(),t))
+  |> List.map (fun (x,t) -> (x,Symb.gensym(),t))
 
 (* Mapping name to symbol *)
 let builtin_name2sym = List.map (fun (x,s,_) -> (IdVar(usid x),s)) builtin
@@ -124,6 +126,7 @@ let arity = function
   | Cstring2float -> 1
   (* MCore intrinsic: characters *)
   | CChar(_)    -> 0
+  | Ceqc(_)     -> 2
   | Cchar2int   -> 1
   | Cint2char   -> 1
   (* MCore intrinsic: sequences *)
@@ -167,12 +170,6 @@ let arity = function
   | CrandIntU(Some(_)) -> 1
   | CrandSetSeed       -> 1
 
-
-(* API for generating unique symbol ids *)
-let symid = ref 0
-let gen_symid _ =
-  symid := !symid + 1;
-  !symid
 
 (* Random number generation *)
 let rand_is_seeded = ref false
@@ -327,7 +324,7 @@ let delta eval env fi c v  =
           | _ -> fail_constapp fi
         in
         let f = s
-                |> Mseq.map to_char |> Mseq.to_array
+                |> Mseq.Helpers.map to_char |> Mseq.Helpers.to_array
                 |> Ustring.from_uchars |> Ustring.to_utf8
         in
         TmConst(fi, CFloat(Float.of_string f))
@@ -348,6 +345,9 @@ let delta eval env fi c v  =
     (* MCore intrinsic: characters *)
     | CChar(_),_ -> fail_constapp fi
 
+    | Ceqc(None),TmConst(fi,CChar(v)) -> TmConst(fi,Ceqc(Some(v)))
+    | Ceqc(Some(v1)),TmConst(fi,CChar(v2)) -> TmConst(fi,CBool(v1 = v2))
+    | Ceqc(None),_ | Ceqc(Some(_)),_  -> fail_constapp fi
     | Cchar2int,TmConst(fi,CChar(v)) -> TmConst(fi,CInt(v))
     | Cchar2int,_ -> fail_constapp fi
 
@@ -408,14 +408,14 @@ let delta eval env fi c v  =
        else TmConst(fi, CInt(rand_int_u v1 v2))
     | CrandIntU(_),_ -> fail_constapp fi
 
-    | CrandSetSeed,TmConst(fi,CInt(v)) -> rand_set_seed v; tmUnit
+    | CrandSetSeed,TmConst(_,CInt(v)) -> rand_set_seed v; tmUnit
     | CrandSetSeed,_ -> fail_constapp fi
 
     (* MCore intrinsic: time *)
     | CwallTimeMs, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CFloat(get_wall_time_ms ()))
     | CwallTimeMs, _ -> fail_constapp fi
 
-    | CsleepMs, TmConst(fi, CInt(v)) -> sleep_ms v ; tmUnit
+    | CsleepMs, TmConst(_, CInt(v)) -> sleep_ms v ; tmUnit
     | CsleepMs, _ -> fail_constapp fi
 
     (* MCore debug and stdio intrinsics *)
@@ -469,12 +469,13 @@ let delta eval env fi c v  =
     | Cexit, TmConst(_,CInt(x)) -> exit x
     | Cexit,_ -> fail_constapp fi
     | CSymb(_),_ -> fail_constapp fi
-    | Cgensym, TmRecord(fi,x) when Record.is_empty x -> TmConst(fi, CSymb(gen_symid()))
+    | Cgensym, TmRecord(fi,x) when Record.is_empty x ->
+        TmConst(fi, CSymb(Symb.gensym()))
     | Cgensym,_ -> fail_constapp fi
     | Ceqsym(None), TmConst(fi,CSymb(id)) -> TmConst(fi, Ceqsym(Some(id)))
     | Ceqsym(Some(id)), TmConst(fi,CSymb(id')) -> TmConst(fi, CBool(id == id'))
     | Ceqsym(_),_ -> fail_constapp fi
-    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(id))
+    | Csym2hash, TmConst(fi,CSymb(id)) -> TmConst(fi, CInt(Symb.Helpers.hash id))
     | Csym2hash,_ -> fail_constapp fi
 
     (* Python intrinsics *)
@@ -515,7 +516,7 @@ let unittest_failed fi t1 t2 tusing =
 (* Check if two value terms are equal *)
 let rec val_equal v1 v2 =
   match v1,v2 with
-  | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.equal val_equal s1 s2
+  | TmSeq(_,s1), TmSeq(_,s2) -> Mseq.Helpers.equal val_equal s1 s2
   | TmRecord(_,r1), TmRecord(_,r2) -> Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst(_,c1),TmConst(_,c2) -> c1 = c2
   | TmConapp(_,_,sym1,v1),TmConapp(_,_,sym2,v2) -> sym1 = sym2 && val_equal v1 v2
@@ -533,7 +534,7 @@ let findsym fi id env =
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
    constructs TmConapp terms from the combination of variables and function applications.  *)
-let rec symbolize (env : (ident * sym) list) (t : tm) =
+let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
    * e.g., [a] | [a, _] should give the same symbol to both "a"s.
@@ -541,16 +542,16 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
    * in a pattern in other cases. In particular, this means that, e.g., the pattern
    * [a, a] assigns the same symbol to both "a"s, which may or may not be desirable. Which
    * introduced binding gets used then depends on what try_match does for the pattern. *)
-  let add_name (x: ident) (patEnv: (ident * int) list) =
+  let add_name (x: ident) (patEnv: (ident * Symb.t) list) =
     match List.assoc_opt x patEnv with
     | Some s -> (patEnv, s)
-    | None -> let s = gensym() in ((x,s)::patEnv, s) in
+    | None -> let s = Symb.gensym() in ((x,s)::patEnv, s) in
   let rec s_pat_sequence patEnv pats =
-    Mseq.fold_right
+    Mseq.Helpers.fold_right
       (fun p (patEnv, ps) -> let (patEnv, p) = sPat patEnv p in (patEnv, Mseq.cons p ps))
       pats
       (patEnv, Mseq.empty)
-  and sPat (patEnv : (ident * int) list) = function
+  and sPat (patEnv : (ident * Symb.t) list) = function
     | PatNamed(fi,NameStr(x,_)) -> let (patEnv, s) = add_name (IdVar(sid_of_ustring x)) patEnv
                                    in (patEnv, PatNamed(fi,NameStr(x,s)))
     | PatNamed(_,NameWildcard) as pat -> (patEnv, pat)
@@ -596,20 +597,20 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
   in
   match t with
   | TmVar(fi,x,_) -> TmVar(fi,x,findsym fi (IdVar(sid_of_ustring x)) env)
-  | TmLam(fi,x,_,ty,t1) -> let s = gensym() in TmLam(fi,x,s,ty,symbolize ((IdVar(sid_of_ustring x),s)::env) t1)
+  | TmLam(fi,x,_,ty,t1) -> let s = Symb.gensym() in TmLam(fi,x,s,ty,symbolize ((IdVar(sid_of_ustring x),s)::env) t1)
   | TmClos(_,_,_,_,_,_) -> failwith "Closures should not be available."
-  | TmLet(fi,x,_,t1,t2) -> let s = gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((IdVar(sid_of_ustring x),s)::env) t2)
+  | TmLet(fi,x,_,t1,t2) -> let s = Symb.gensym() in TmLet(fi,x,s,symbolize env t1,symbolize ((IdVar(sid_of_ustring x),s)::env) t2)
   | TmRecLets(fi,lst,tm) ->
-     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+     let env2 = List.fold_left (fun env (_,x,_,_) -> let s = Symb.gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
      TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
        lst, symbolize env2 tm)
   | TmApp(fi,t1,t2) -> TmApp(fi,symbolize env t1,symbolize env t2)
   | TmConst(_,_) -> t
   | TmFix(_) -> t
-  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (symbolize env) tms)
+  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.Helpers.map (symbolize env) tms)
   | TmRecord(fi,r) -> TmRecord(fi,Record.map (symbolize env) r)
   | TmRecordUpdate(fi,t1,l,t2) -> TmRecordUpdate(fi,symbolize env t1,l,symbolize env t2)
-  | TmCondef(fi,x,_,ty,t) -> let s = gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
+  | TmCondef(fi,x,_,ty,t) -> let s = Symb.gensym() in TmCondef(fi,x,s,ty,symbolize ((IdCon(sid_of_ustring x),s)::env) t)
   | TmConapp(fi,x,_,t) -> TmConapp(fi,x,findsym fi (IdCon(sid_of_ustring x)) env,symbolize env t)
   | TmMatch(fi,t1,p,t2,t3) ->
      let (matchedEnv, p) = sPat [] p in
@@ -622,18 +623,18 @@ let rec symbolize (env : (ident * sym) list) (t : tm) =
 
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term *)
-let rec symbolize_toplevel (env : (ident * sym) list) = function
+let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
   | TmLet(fi,x,_,t1,t2) ->
-    let s = gensym() in
+    let s = Symb.gensym() in
     let (new_env, new_t2) = symbolize_toplevel ((IdVar(sid_of_ustring x),s)::env) t2 in
     (new_env, TmLet(fi,x,s,symbolize env t1,new_t2))
   | TmRecLets(fi,lst,tm) ->
-    let env2 = List.fold_left (fun env (_,x,_,_) -> let s = gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
+    let env2 = List.fold_left (fun env (_,x,_,_) -> let s = Symb.gensym() in (IdVar(sid_of_ustring x),s)::env) env lst in
     let (new_env, new_tm) = symbolize_toplevel env2 tm in
     (new_env, TmRecLets(fi,List.map (fun (fi,x,_,t) -> (fi,x,findsym fi (IdVar(sid_of_ustring x)) env2, symbolize env2 t))
        lst, new_tm))
   | TmCondef(fi,x,_,ty,t) ->
-    let s = gensym() in
+    let s = Symb.gensym() in
     let (new_env, new_t2) = symbolize_toplevel ((IdCon(sid_of_ustring x),s)::env) t in
     (new_env, TmCondef(fi,x,s,ty,new_t2))
   | t -> (env, symbolize env t)
@@ -656,7 +657,7 @@ let rec try_match env value pat =
      let npats = Mseq.length pats in
      (match value with
       | TmSeq(_, vs) when npats = Mseq.length vs ->
-         Mseq.fold_right2 go vs pats (Some env)
+         Mseq.Helpers.fold_right2 go vs pats (Some env)
       | _ -> None)
   | PatSeqEdg(_, l, x, r) ->
      let npre = Mseq.length l in
@@ -665,9 +666,9 @@ let rec try_match env value pat =
       | TmSeq(fi, vs) when npre + npost <= Mseq.length vs ->
          let (pre, vs) = split_nth_or_double_empty npre vs in
          let (vs, post) = split_nth_or_double_empty (Mseq.length vs - npost) vs
-         in Mseq.fold_right2 go post r (Some env)
+         in Mseq.Helpers.fold_right2 go post r (Some env)
             |> bind fi x vs
-            |> Mseq.fold_right2 go pre l
+            |> Mseq.Helpers.fold_right2 go pre l
       | _ -> None)
   | PatRecord(_, pats) ->
      (match value with
@@ -708,7 +709,7 @@ let rec try_match env value pat =
 
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
-let rec eval (env : (sym * tm) list) (t : tm) =
+let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
@@ -744,7 +745,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
   (* Constant and fix *)
   | TmConst(_,_) | TmFix(_) -> t
   (* Sequences *)
-  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.map (eval env) tms)
+  | TmSeq(fi,tms) -> TmSeq(fi,Mseq.Helpers.map (eval env) tms)
   (* Records *)
   | TmRecord(fi,tms) -> TmRecord(fi,Record.map (eval env) tms)
   | TmRecordUpdate(fi,t1,l,t2) ->
@@ -789,7 +790,7 @@ let rec eval (env : (sym * tm) list) (t : tm) =
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
-let rec eval_toplevel (env : (sym * tm) list) = function
+let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet(_,_,s,t1,t2) -> eval_toplevel ((s,eval env t1)::env) t2
   | TmRecLets(_,lst,t2) ->
      let rec env' = lazy

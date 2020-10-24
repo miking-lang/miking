@@ -1,8 +1,18 @@
 include "seq.mc"
 
-let eqChar = lam c1. lam c2. eqi (char2int c1) (char2int c2)
+
+let eqChar = lam c1. lam c2. eqc c1 c2
+let neqChar = lam c1. lam c2. not (eqc c1 c2)
+utest eqChar 'a' 'a' with true
+utest eqChar 'A' 'B' with false
+utest neqChar 'a' 'a' with false
+utest neqChar 'A' 'B' with true
+
+let ltChar = lam c1. lam c2. lti (char2int c1) (char2int c2)
+let gtChar = lam c1. lam c2. gti (char2int c1) (char2int c2)
 let leqChar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
 let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
+
 
 -- Display characters
 let showChar = lam c.
@@ -18,6 +28,9 @@ utest showChar '0' with "\'0\'"
 utest showChar '\n' with "\'\\n\'"
 utest showChar '\r' with "\'\\r\'"
 utest showChar '\t' with "\'\\t\'"
+
+let show_char = lam c. concat "'" (concat [c] "'")
+
 
 -- Character conversion
 let char2upper = lam c.

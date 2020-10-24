@@ -12,6 +12,7 @@
   open Ustring.Op
   open Msg
   open Ast
+  open Intrinsics
 
   (** Create a new info, taking left and right part *)
   let mkinfo fi1 fi2 =
@@ -253,20 +254,20 @@ mexpr:
       { $6 }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
-        let lst = List.map (fun (fi,x,t) -> (fi,x,0,t)) $2 in
+        let lst = List.map (fun (fi,x,t) -> (fi,x,Symb.Helpers.nosym,t)) $2 in
          TmRecLets(fi,lst,$4) }
   | LET var_ident ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
-        TmLet(fi,$2.v,0,$5,$7) }
+        TmLet(fi,$2.v,Symb.Helpers.nosym,$5,$7) }
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$2.v,0,$3,$5) }
+        TmLam(fi,$2.v,Symb.Helpers.nosym,$3,$5) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
   | CON con_ident ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmCondef(fi,$2.v,0,$3,$5)}
+        TmCondef(fi,$2.v,Symb.Helpers.nosym,$3,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
          TmMatch(fi,$2,$4,$6,$8) }
@@ -297,31 +298,31 @@ left:
         TmApp(fi,$1,$2) }
   | con_ident atom
       { let fi = mkinfo $1.i (tm_info $2) in
-        TmConapp(fi,$1.v,nosym,$2) }
+        TmConapp(fi,$1.v,Symb.Helpers.nosym,$2) }
 
 
 atom:
   | atom DOT proj_label
       { let fi = mkinfo (tm_info $1) (fst $3) in
         let id = unique_ident in
-        TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,nosym)))),
-                                TmVar(fi,id,nosym), TmNever(fi)) }
+        TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,Symb.Helpers.nosym)))),
+                                TmVar(fi,id,Symb.Helpers.nosym), TmNever(fi)) }
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
   | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
-  | var_ident                { TmVar($1.i,$1.v,nosym) }
+  | var_ident                { TmVar($1.i,$1.v,Symb.Helpers.nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
   | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NEVER                { TmNever($1.i) }
-  | STRING               { TmSeq($1.i, Mseq.map (fun x -> TmConst($1.i,CChar(x)))
-                                                  (Mseq.of_ustring $1.v)) }
-  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.of_list $2) }
+  | STRING               { TmSeq($1.i, Mseq.Helpers.map (fun x -> TmConst($1.i,CChar(x)))
+                                                  (Mseq.Helpers.of_ustring $1.v)) }
+  | LSQUARE seq RSQUARE  { TmSeq(mkinfo $1.i $3.i, Mseq.Helpers.of_list $2) }
   | LSQUARE RSQUARE      { TmSeq(mkinfo $1.i $2.i, Mseq.empty) }
   | LBRACKET labels RBRACKET
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
@@ -375,7 +376,7 @@ name:
   | var_ident
       { if $1.v =. us"_"
         then ($1.i, NameWildcard)
-        else ($1.i, NameStr($1.v,0)) }
+        else ($1.i, NameStr($1.v,Symb.Helpers.nosym)) }
 
 pat:
   | pat_conj BAR pat
@@ -393,18 +394,18 @@ pat_atom:
   | NOT pat_atom
       { PatNot(mkinfo $1.i (pat_info $2), $2) }
   | con_ident pat_atom
-      { PatCon(mkinfo $1.i (pat_info $2), $1.v, nosym, $2) }
+      { PatCon(mkinfo $1.i (pat_info $2), $1.v, Symb.Helpers.nosym, $2) }
   | patseq
-      { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.of_list) }
+      { PatSeqTot($1 |> fst, $1 |> snd |> Mseq.Helpers.of_list) }
   | patseq CONCAT name CONCAT patseq
       { let fi = mkinfo (fst $1) (fst $5) in
-        let l = $1 |> snd |> Mseq.of_list in
-        let r = $5 |> snd |> Mseq.of_list in
+        let l = $1 |> snd |> Mseq.Helpers.of_list in
+        let r = $5 |> snd |> Mseq.Helpers.of_list in
         PatSeqEdg(fi, l, snd $3, r) }
   | patseq CONCAT name
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.of_list, snd $3, Mseq.empty) }
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.Helpers.of_list, snd $3, Mseq.empty) }
   | name CONCAT patseq
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.of_list) }
+      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
