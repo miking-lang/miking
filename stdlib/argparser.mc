@@ -465,7 +465,7 @@ let _addOption: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> A
     else if optionMapOr false (lam c. _char_mem c ap.shortOptLookup) opt.short then
       {ap with errors = snoc ap.errors (
         -- We know that opt.short is `Some c`, only using '-' as a placeholder.
-        join ["Duplicate short option name \"", optionGetOr '-' opt.short, "\""]
+        join ["Duplicate short option name \'", [optionGetOr '-' opt.short], "\'"]
        )}
     else
       -- Insert short lookup (if it exists)
