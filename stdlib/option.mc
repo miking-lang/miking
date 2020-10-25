@@ -4,6 +4,23 @@ type Option a
 con Some : a -> Option a
 con None : () -> Option a
 
+-- Equality check between two options. Returns true if both are None, false if
+-- exactly one of them are None, and the result of evaluating the provided
+-- function if both are Some.
+let optionEq: (a -> b -> Bool) -> Option a -> Option b -> Bool =
+  lam f. lam o1. lam o2.
+    match (o1, o2) with (Some v1, Some v2) then
+      f v1 v2
+    else match (o1, o2) with (None (), None ()) then
+      true
+    else
+      false
+
+utest optionEq eqi (Some 10) (Some 10) with true
+utest optionEq eqi (Some 10) (Some 11) with false
+utest optionEq eqi (Some 10) (None ()) with false
+utest optionEq eqi (None ()) (None ()) with true
+
 -- Applies a function to the contained value (if any).
 let optionMap: (a -> b) -> Option a -> Option b = lam f. lam o.
   match o with Some t then
