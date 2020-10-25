@@ -66,7 +66,7 @@ include "string.mc"
 -- Local hashmap definitions
 let _str_traits = hashmapStrTraits
 let _str_empty = hashmapEmpty
-let _str_size = hashmapSize _str_traits
+let _str_count = hashmapCount _str_traits
 let _str_mem = hashmapMem _str_traits
 let _str_lookupOrElse = hashmapLookupOrElse _str_traits
 let _str_lookupOr = hashmapLookupOr _str_traits
@@ -83,7 +83,7 @@ let _str_values = hashmapValues _str_traits
 
 let _char_traits = {eq = eqChar, hashfn = char2int}
 let _char_empty = hashmapEmpty
-let _char_size = hashmapSize _char_traits
+let _char_count = hashmapCount _char_traits
 let _char_mem = hashmapMem _char_traits
 let _char_lookupOrElse = hashmapLookupOrElse _char_traits
 let _char_lookupOr = hashmapLookupOr _char_traits
@@ -107,7 +107,7 @@ let _optstr_traits = {
   hashfn = optionMapOr 0 hashmapStrTraits.hashfn
 }
 let _optstr_empty = hashmapEmpty
-let _optstr_size = hashmapSize _optstr_traits
+let _optstr_count = hashmapCount _optstr_traits
 let _optstr_mem = hashmapMem _optstr_traits
 let _optstr_lookupOrElse = hashmapLookupOrElse _optstr_traits
 let _optstr_lookupOr = hashmapLookupOr _optstr_traits
@@ -172,8 +172,10 @@ con APSubmodeSpecific: {name: String, parent: String, parentval: String, values:
 con APUniqueOnlyThisEnable: String -> APConfiguration a
 
 -- Invalid characters
-let _invalidChars = ['-', '=', ' ', '\r', '\n', '\t']
+let _invalidChars = ['=', ' ', '\r', '\n', '\t']
+let _invalidStartChars = concat ['-'] _invalidChars
 let _isInvalidChar = lam c. any (eqChar c) _invalidChars
+let _isInvalidStartChar = lam c. any (eqChar c) _invalidStartChars
 
 
 -- Internal types
@@ -197,7 +199,7 @@ type APPositionalItem_ a = {
   -- enables/disables map "value match" -> positonal name. None () value
   -- indicates a wildcard.
   enables: HashMap (Option String) [String],
-  disables: HashMap (Option String) [String]
+  disables: HashMap (Option String) [String],
   -- values: <ValueName> -> <Description>
   values: HashMap String (Option String),
   required: Bool,
@@ -244,47 +246,49 @@ let _formOption: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
     postconds = []
   } in
 
-  let accrecord = {opt = opt, errs = [], hasLong = false, hasApply = false, unprocessed = []} in
+  let state = {opt = opt, errors = [], hasLong = false, hasApply = false, unprocessed = []} in
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
     -- VALID OPTION MODIFIERS
     match mod with APShort c then
-      if _isInvalidChar c then
-        {acc with errs = snoc acc.errs (join ["Invalid short modifier ", showChar c])}
+      if _isInvalidStartChar c then
+        {acc with errors = snoc acc.errors (join ["Invalid short modifier ", showChar c])}
       else if optionIsNone acc.opt.short then
         {acc with opt = {acc.opt with short = Some c}}
       else
-        {acc with errs = snoc acc.errs "Multiple short modifiers"}
+        {acc with errors = snoc acc.errors "Multiple short modifiers"}
     else match mod with APLong s then
       match find _isInvalidChar s with Some c then
-        {acc with errs = snoc acc.errs (join ["Invalid character ", showChar c, " in long modifier"])}
+        {acc with errors = snoc acc.errors (join ["Invalid character ", showChar c, " in long modifier"])}
       else if null s then
-        {acc with errs = snoc acc.errs "Empty long modifier"}
+        {acc with errors = snoc acc.errors "Empty long modifier"}
+      else if _isInvalidStartChar (head s) then
+        {acc with errors = snoc acc.errors (join ["Invalid start character ", showChar (head s), " in long modifier"])}
       else if not acc.hasLong then
         {{acc with opt = {acc.opt with long = s}}
               with hasLong = true}
       else
-        {acc with errs = snoc acc.errs "Multiple long modifiers"}
+        {acc with errors = snoc acc.errors "Multiple long modifiers"}
     else match mod with APMetavar mv then
       if optionIsNone acc.opt.metavar then
         {acc with opt = {acc.opt with metavar = Some mv}}
       else
-        {acc with errs = snoc acc.errs "Multiple metavars"}
+        {acc with errors = snoc acc.errors "Multiple metavars"}
     else match mod with APDescription s then
-      if optionIsNone app.opt.description then
+      if optionIsNone acc.opt.description then
         {acc with opt = {acc.opt with description = s}}
       else
-        {acc with errs = snoc acc.errs "Multiple descriptions"}
+        {acc with errors = snoc acc.errors "Multiple descriptions"}
     else match mod with APValue (val, desc) then
       if _str_mem val acc.opt.values then
-        {acc with errs = snoc acc.errs (join ["Specified duplicate value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Specified duplicate value \"", val, "\""])}
       else
         {acc with opt = {acc.opt with values = _str_insert val (Some desc) acc.opt.values}}
     else match mod with APValues vs then
       foldl (lam accInternal. lam v.
         if _str_mem v accInternal.opt.values then
-          {accInternal with errs = snoc accInternal.errs (join ["Specified duplicate value \"", v, "\""])}
+          {accInternal with errors = snoc accInternal.errors (join ["Specified duplicate value \"", v, "\""])}
         else
           {accInternal with opt = {accInternal.opt with values = _str_insert v (None ()) accInternal.opt.values}}
       ) acc vs
@@ -303,13 +307,13 @@ let _formOption: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
 
     -- INVALID OPTION MODIFIERS
     else match mod with APName _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APName\""}
-    else match mod with APFirst _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APOnlyThis\""}
+      {acc with errors = snoc acc.errors "Invalid option setting \"APName\""}
+    else match mod with APOnlyThis _ then
+      {acc with errors = snoc acc.errors "Invalid option setting \"APOnlyThis\""}
     else match mod with APEnabledBy _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APEnabledBy\""}
+      {acc with errors = snoc acc.errors "Invalid option setting \"APEnabledBy\""}
     else match mod with APDisabledBy _ then
-      {acc with errs = snoc acc.errs "Invalid option setting \"APDisabledBy\""}
+      {acc with errors = snoc acc.errors "Invalid option setting \"APDisabledBy\""}
 
     -- This should be a complete match
     else never
@@ -319,34 +323,34 @@ let _formOption: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
   let state = foldl (lam acc. lam mod.
     match mod with APValueDescription (val, desc) then
       if not (_str_mem val acc.opt.values) then
-        {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Cannot set description for non-existent value \"", val, "\""])}
       else if optionIsSome (_str_lookupOr (None ()) val acc.opt.values) then
-        {acc with errs = snoc acc.errs (join ["Duplicate description for value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Duplicate description for value \"", val, "\""])}
       else
         {acc with opt = {acc.opt with values = _str_insert val (Some desc) acc.opt.values}}
     else match mod with APApply fn then
       if acc.hasApply then
-        {acc with errs = snoc acc.errs "Multiple apply functions"}
+        {acc with errors = snoc acc.errors "Multiple apply functions"}
       else
         {{acc with opt = {acc.opt with apply = lam _. fn}}
               with hasApply = true}
     else match mod with APApplyVal fn then
       if optionIsNone acc.opt.metavar then
-        {acc with errs = snoc acc.errs "Cannot apply value to an option without a metavar"}
-      else if opt.hasApply then
-        {acc with errs = snoc acc.errs "Multiple apply functions"}
+        {acc with errors = snoc acc.errors "Cannot apply value to an option without a metavar"}
+      else if acc.hasApply then
+        {acc with errors = snoc acc.errors "Multiple apply functions"}
       else
         {{acc with opt = {acc.opt with apply = fn}}
               with hasApply = true}
     else
       -- This should be unreachable
-      {state with errs = snoc state.errs "INTERNAL ERROR: Unprocessed option modifier"}
+      {state with errors = snoc state.errors "INTERNAL ERROR: Unprocessed option modifier"}
   ) {state with unprocessed = []} state.unprocessed in
 
   -- Check that an option has a long name
   let state =
     if not state.hasLong then
-      {{state with errs = snoc state.errs "Missing long option name"}
+      {{state with errors = snoc state.errors "Missing long option name"}
               with opt = {state.opt with long = "<unnamed>"}}
     else
       state
@@ -355,13 +359,13 @@ let _formOption: [APModifier a] -> Either (String, [String]) (APOptionItem_ a) =
   -- Check that a method of applying the option exists
   let state =
     if not state.hasApply then
-      {state with errs = snoc state.errs "Missing option apply function"}
+      {state with errors = snoc state.errors "Missing option apply function"}
     else
       state
   in
 
-  if not (null state.errs) then
-    Left (state.opt.long, state.errs)
+  if not (null state.errors) then
+    Left (state.opt.long, state.errors)
   else
     Right state.opt
 
@@ -384,48 +388,48 @@ let _formPositional: [APModifier a] -> Either (String, [String]) (APPositionalIt
     disabledBy = []
   } in
 
-  let state = {pos = pos, errs = [], hasName = false, hasApply = false, unprocessed = []} in
+  let state = {pos = pos, errors = [], hasName = false, hasApply = false, unprocessed = []} in
 
   -- Set basic properties
   let state = foldl (lam acc. lam mod.
     -- VALID ORDERED POSITIONAL MODIFIERS
     match mod with APName s then
       if null s then
-        {acc with errs = snoc acc.errs "Empty name specified for positional"}
+        {acc with errors = snoc acc.errors "Empty name specified for positional"}
       else if not acc.hasName then
         {{acc with pos = {acc.pos with name = s}}
               with hasName = true}
       else
-        {acc with errs = snoc acc.errs "Multiple names for positional"}
+        {acc with errors = snoc acc.errors "Multiple names for positional"}
     else match mod with APDescription s then
-      if optionIsNone app.pos.description then
+      if optionIsNone acc.pos.description then
         {acc with pos = {acc.pos with description = s}}
       else
-        {acc with errs = snoc acc.errs "Multiple descriptions"}
+        {acc with errors = snoc acc.errors "Multiple descriptions"}
     else match mod with APApplyVal fn then
-      if pos.hasApply then
-        {acc with errs = snoc acc.errs "Multiple apply functions"}
+      if acc.hasApply then
+        {acc with errors = snoc acc.errors "Multiple apply functions"}
       else
         {{acc with pos = {acc.pos with apply = fn}}
               with hasApply = true}
     else match mod with APOnlyThis _ then
       {acc with pos = {acc.pos with onlyThis = true}}
-    else match mod with EnabledBy t1 then
+    else match mod with APEnabledBy t1 then
       -- NOTE(johnwikman, 2020-10-18): No sanity checking here for either
-      -- EnabledBy or DisabledBy since these lists might get modified after an
+      -- APEnabledBy or APDisabledBy since these lists might get modified after an
       -- invocation to this function.
       {acc with pos = {acc.pos with enabledBy = snoc acc.pos.enabledBy t1}}
-    else match mod with DisabledBy t1 then
+    else match mod with APDisabledBy t1 then
       {acc with pos = {acc.pos with disabledBy = snoc acc.pos.disabledBy t1}}
     else match mod with APValue (val, desc) then
       if _str_mem val acc.pos.values then
-        {acc with errs = snoc acc.errs (join ["Specified duplicate value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Specified duplicate value \"", val, "\""])}
       else
         {acc with pos = {acc.pos with values = _str_insert val (Some desc) acc.pos.values}}
     else match mod with APValues vs then
       foldl (lam accInternal. lam v.
         if _str_mem v accInternal.pos.values then
-          {accInternal with errs = snoc accInternal.errs (join ["Specified duplicate value \"", v, "\""])}
+          {accInternal with errors = snoc accInternal.errors (join ["Specified duplicate value \"", v, "\""])}
         else
           {accInternal with pos = {accInternal.pos with values = _str_insert v (None ()) accInternal.pos.values}}
       ) acc vs
@@ -440,13 +444,13 @@ let _formPositional: [APModifier a] -> Either (String, [String]) (APPositionalIt
 
     -- INVALID ORDERED POSITIONAL MODIFIERS
     else match mod with APShort _ then
-      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APShort\""}
+      {acc with errors = snoc acc.errors "Invalid ordered positional setting \"APShort\""}
     else match mod with APLong _ then
-      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APLong\""}
+      {acc with errors = snoc acc.errors "Invalid ordered positional setting \"APLong\""}
     else match mod with APMetavar _ then
-      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APMetavar\""}
+      {acc with errors = snoc acc.errors "Invalid ordered positional setting \"APMetavar\""}
     else match mod with APApply _ then
-      {acc with errs = snoc acc.errs "Invalid ordered positional setting \"APApply\""}
+      {acc with errors = snoc acc.errors "Invalid ordered positional setting \"APApply\""}
 
     -- This should be a complete match
     else never
@@ -456,20 +460,20 @@ let _formPositional: [APModifier a] -> Either (String, [String]) (APPositionalIt
   let state = foldl (lam acc. lam mod.
     match mod with APValueDescription (val, desc) then
       if not (_str_mem val acc.pos.values) then
-        {acc with errs = snoc acc.errs (join ["Cannot set description for non-existent value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Cannot set description for non-existent value \"", val, "\""])}
       else if optionIsSome (_str_lookupOr (None ()) val acc.pos.values) then
-        {acc with errs = snoc acc.errs (join ["Duplicate description for value \"", val, "\""])}
+        {acc with errors = snoc acc.errors (join ["Duplicate description for value \"", val, "\""])}
       else
         {acc with pos = {acc.pos with values = _str_insert val (Some desc) acc.pos.values}}
     else
       -- This should be unreachable
-      {state with errs = snoc state.errs "INTERNAL ERROR: Unprocessed ordered positional modifier"}
+      {state with errors = snoc state.errors "INTERNAL ERROR: Unprocessed ordered positional modifier"}
   ) {state with unprocessed = []} state.unprocessed in
 
   -- Check that positional has a name
   let state =
     if not state.hasName then
-      {{state with errs = snoc state.errs "Missing positional name"}
+      {{state with errors = snoc state.errors "Missing positional name"}
               with pos = {state.pos with name = "<unnamed>"}}
     else
       state
@@ -478,21 +482,13 @@ let _formPositional: [APModifier a] -> Either (String, [String]) (APPositionalIt
   -- Check that a method of applying the positional exists
   let state =
     if not state.hasApply then
-      {state with errs = snoc state.errs "Missing apply function"}
+      {state with errors = snoc state.errors "Missing apply function"}
     else
       state
   in
 
-  -- Check, if non-first, that it has a parent
-  let state =
-    if and (not (state.pos.first)) (optionIsNone state.pos.parent) then
-      {state with errs = snoc state.errs "Non-first ordered positional missing parent"}
-    else
-      state
-  in
-
-  if not (null state.errs) then
-    Left (state.pos.name, state.errs)
+  if not (null state.errors) then
+    Left (state.pos.name, state.errors)
   else
     Right state.pos
 
@@ -520,7 +516,7 @@ let _addOption: Either (String, [String]) (APOptionItem_ a) -> ArgParser_ a -> A
        )}
     else
       -- Insert short lookup (if it exists)
-      let ap = optionMapOr ap (lam c. _char_insert c opt.long ap.shortOptLookup) opt.short in
+      let ap = optionMapOr ap (lam c. {ap with shortOptLookup = _char_insert c opt.long ap.shortOptLookup}) opt.short in
       {ap with options = _str_insert opt.long opt ap.options}
   else never
 
@@ -537,11 +533,9 @@ let _addPositional: Either (String, [String]) (APPositionalItem_ a) -> ArgParser
     ]}
   else match eitherPos with Right pos then
     if _str_mem pos.name ap.positionals then
-      {ap with errors = join [
-        ap.errors,
-        [join ["Duplicate positional name \"", name, "\":"]],
-        map (concat "  - ") errs -- <- apply indendation
-      ]}
+      {ap with errors = snoc ap.errors (
+        join ["Duplicate positional name \"", pos.name, "\":"]
+       )}
     else
     {ap with positionals = _str_insert pos.name pos ap.positionals}
   else never
@@ -553,15 +547,12 @@ recursive let _translateConfig: [APConfiguration a] -> [APConfiguration a] -> Ar
 
   -- SCAN PRIMARY CONFIGURATION
   match configs with [conf] ++ remaining then
-    match config with APOption mods then
+    match conf with APOption mods then
       let optret = _formOption mods in
       _translateConfig remaining postconfigs (_addOption optret ap)
-    else match conf with APOrderedPositional mods then
-      let posret = _formOrderedPositional mods in
-      _translateConfig remaining postconfigs (_addOrderedPositional posret ap)
-    else match conf with APUnorderedPositional mods then
-      let posret = _formUnorderedPositional mods in
-      _translateConfig remaining postconfigs (_addUnorderedPositional posret ap)
+    else match conf with APPositional mods then
+      let posret = _formPositional mods in
+      _translateConfig remaining postconfigs (_addPositional posret ap)
     else match conf with APFlag r then
       let optret = _formOption [
         APShort r.short,
@@ -710,9 +701,13 @@ let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
   -- enable or disable on this value.
   let validParentTriggerValue: Option String -> APPositionalItem_ a -> Bool = lam os. lam parent.
     match os with Some value then
-      _str_any (lam v. lam _. eqString value) parent.values
+      _str_any (lam v. lam _. eqString value v) parent.values
     else
       true -- wildcard is always valid
+  in
+
+  let showMatchVal: Option String -> String = lam opt.
+    optionMapOr "default" (lam s. join ["value \"", s, "\""]) opt
   in
 
   foldl (lam ap. lam pos.
@@ -739,17 +734,18 @@ let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
         if any isCollision pos.disabledBy then
           {ap with errors = snoc ap.errors (join ["Incompatible enable and disable ",
            "conditions for positional \"", pos.name, "\" that is both enabled and ",
-           "disabled by \"", enable.0, "\""])}
+           "disabled by \"", enable.0, "\" on ", showMatchVal enable.1])}
         else -- Sanity Check: OK
 
         -- Add this enable to its referenced parent
         match _str_lookup enable.0 ap.positionals with Some parent then
           if validParentTriggerValue enable.1 parent then
-            let newParent = {parent with enables = _optstr_insert enable.1 pos.name parent.enables} in
+            let newEnables = snoc (_optstr_lookupOr [] enable.1 parent.enables) pos.name in
+            let newParent = {parent with enables = _optstr_insert enable.1 newEnables parent.enables} in
             {ap with positionals = _str_insert parent.name newParent ap.positionals}
           else
             {ap with errors = snoc ap.errors (join ["Referenced enabler positional \"",
-             enable.0, "\" on value \"", enab"\" from positional \"", pos.name,
+             enable.0, "\" on ", showMatchVal enable.1, " from positional \"", pos.name,
              "\" can never be matched on the specified value \"", optionGetOr "" enable.1, "\"."])}
         else
           {ap with errors = snoc ap.errors (join ["Referenced enabler positional \"",
@@ -762,11 +758,12 @@ let _setupPositionalRelations: ArgParser_ a -> ArgParser_ a = lam ap.
     foldl (lam ap. lam disable.
       match _str_lookup disable.0 ap.positionals with Some parent then
         if validParentTriggerValue disable.1 parent then
-          let newParent = {parent with disables = _optstr_insert disable.1 pos.name parent.disables} in
+          let newDisables = snoc (_optstr_lookupOr [] disable.1 parent.disables) pos.name in
+          let newParent = {parent with disables = _optstr_insert disable.1 newDisables parent.disables} in
           {ap with positionals = _str_insert parent.name newParent ap.positionals}
         else
           {ap with errors = snoc ap.errors (join ["Referenced disabler positional \"",
-           disable.0, "\" on value \"", enab"\" from positional \"", pos.name,
+           disable.0, "\" on ", showMatchVal disable.1, " from positional \"", pos.name,
            "\" can never be matched on the specified value \"", optionGetOr "" disable.1, "\"."])}
       else
         {ap with errors = snoc ap.errors (join ["Referenced disabler positional \"",
@@ -839,8 +836,8 @@ let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
     if geqi (length onlyTheses) 2 then
       let names = map (lam pos. join ["\"", pos.name, "\""]) onlyTheses in
       ([join ["Positionals ", strJoin ", " names, " with the OnlyThis property ",
-              "are active at the same time after matching on the chain of "
-              "positionals ", strJoin " -> " path]], visitedStates)
+              "are active at the same time after matching on the chain of ",
+              "positionals: ", strJoin " -> " path]], visitedStates)
     else -- continue
 
     -- Just focus on the single "only this" positional if it is enabled. None of the
@@ -848,12 +845,12 @@ let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
     let positionals = if eqi (length onlyTheses) 1 then onlyTheses else positionals in
 
     -- Check that only one wildcard can exist, i.e. where no specified values exist
-    let wildcards = filter (lam pos. eqi (_str_size pos.values) 0) positionals in
+    let wildcards = filter (lam pos. eqi (_str_count pos.values) 0) positionals in
     if geqi (length wildcards) 2 then
       let names = map (lam pos. join ["\"", pos.name, "\""]) wildcards in
       ([join ["Positionals ", strJoin ", " names, " that can match on any value ",
-              "are active at the same time after matching on the chain of "
-              "positionals ", strJoin " -> " path]], visitedStates)
+              "are active at the same time after matching on the chain of ",
+              "positionals: ", strJoin " -> " path]], visitedStates)
     else -- continue
 
     -- Check that the possible values between the active positionals are distinct
@@ -867,8 +864,8 @@ let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
           if geqi (length names) 2 then
             snoc errAcc (join ["Positionals ", strJoin ", " names, " that all ",
                                "match on the same value \"", value, "\" are active ",
-                               "at the same time after matching on the chain of "
-                               "positionals ", strJoin " -> " path])
+                               "at the same time after matching on the chain of ",
+                               "positionals: ", strJoin " -> " path])
           else
             errAcc
         ) [] (_str_keys pos.values) in
@@ -882,22 +879,35 @@ let _checkPositionalAmbiguity: ArgParser_ a -> ArgParser_ a = lam ap.
     else -- continue, no ambiguity at this state!
 
     foldl (lam acc. lam pos.
-      let errorsAcc = acc.0 in
-      let visitedStatesAcc = acc.1 in
+      -- Extract the values that can be enabled or disabled on by this positional
+      let values = concat (_optstr_keys pos.enables) (_optstr_keys pos.disables) in
+      let values = distinct _optstr_traits.eq values in
 
-      -- Mark all enabled values as active
-      let active = foldl (lam seq. lam name.
-        insertIntoSeq name seq
-      ) active (_optstr_values pos.enables) in
+      let wildcardDisables = _optstr_lookupOr [] (None ()) pos.disables in
+      let wildcardEnables = _optstr_lookupOr [] (None ()) pos.enables in
 
-      -- Mark all disabled values as not active
-      let active = foldl (lam seq. lam name.
-        removeFromSeq name seq
-      ) active (_optstr_values pos.disables) in
+      -- Iterate over all the values
+      foldl (lam acc. lam value.
+        let errorsAcc = acc.0 in
+        let visitedStatesAcc = acc.1 in
 
-      -- Traverse down this path
-      let ret = traverse (snoc path pos.name) active visitedStatesAcc in
-      (concat errorsAcc ret.0, ret.1)
+        let enables = _optstr_lookupOr [] value pos.enables in
+        let enables = concat wildcardEnables enables in
+        let disables = _optstr_lookupOr [] value pos.disables in
+        let disables = concat wildcardDisables disables in
+
+        let active = foldl (lam seq. lam name.
+          insertIntoSeq name seq
+        ) active enables in
+
+        let active = foldl (lam seq. lam name.
+          removeFromSeq name seq
+        ) active disables in
+
+        -- Traverse down this path
+        let ret = traverse (snoc path pos.name) active visitedStatesAcc in
+        (concat errorsAcc ret.0, ret.1)
+      ) acc values
     ) ([], visitedStates) positionals
   in
 
@@ -915,12 +925,12 @@ let _createParser: [APConfiguration a] -> String -> ArgParser_ a =
     optExclusions = hashmapEmpty,
     positionals = hashmapEmpty,
     firstPositional = None (),
-    initiallyEnabledUnorderedPositionals = [],
+    initiallyEnabledPositionals = [],
     errors = []
   } in
 
   -- Scan configuration and form initial parser
-  let ap = translateConfig_ configs [] ap in
+  let ap = _translateConfig configs [] ap in
   if not (null ap.errors) then
     ap
   else -- continue
@@ -942,15 +952,15 @@ let _createParser: [APConfiguration a] -> String -> ArgParser_ a =
 
 -- Checks whether the argparser is well-formed. Returns None () on success.
 -- Otherwise Some String containing the error message.
-let argparserCheckError: [APConfiguration a] -> Some String = lam configs.
+let argparserCheck: [APConfiguration a] -> Some String = lam configs.
   let ap = _createParser configs "<confcheck>" in
   if not (null ap.errors) then
-    Some (strJoin "\n" (cons "Misformed ArgParser:" errs))
+    Some (strJoin "\n" (cons "Misformed ArgParser:" ap.errors))
   else -- continue
 
   let ap = _checkPositionalAmbiguity ap in
   if not (null ap.errors) then
-    Some (strJoin "\n" (cons "Ambiguous ArgParser:" errs))
+    Some (strJoin "\n" (cons "Ambiguous ArgParser:" ap.errors))
   else
     None ()
 
@@ -1025,37 +1035,45 @@ let apconfig = [
                      description = "Handle global toolchain configuration.",
                      apply = lam v. lam o. {o with confmode = v}},
   APPositional [
-    APName "mcore file",
-    APApplyVal (lam f. lam o. {o with mcfiles = cons f o.mc}),
-    APMatchOn (lam m. isSuffix eqChar ".mc" m),
-    APDescription "MCore input source files. (ends in .mc)",
+    APName "files",
+    APApplyVal (lam f. lam o. {o with mcfiles = cons f o}),
+    APDescription "Input source files.",
     -- This should not be available when specifying config
-    APDisabledBy [("mode", "config")]
+    APEnabledBy ("mode", Some "compile"),
+    APEnabledBy ("mode", Some "eval"),
+    APEnabledBy ("mode", Some "repl"),
+    APEnabledBy ("mode", Some "test")
   ],
 
   -- <prog> config get <get name>:
   APPositional [
     APName "get name",
     APDescription "The configuration variable to get.",
-    APParentValue ("confmode", "get"),
+    APEnabledBy ("confmode", Some "get"),
+    APDisabledBy ("get name", None ()), -- match once, then disable itself
     APApplyVal (lam v. lam o. {o with getName = v}),
-    APRequired ()
+    APRequired (),
+    APOnlyThis ()
   ],
 
   -- <prog> config set <set name> <set value>:
   APPositional [
     APName "set name",
     APDescription "The configuration variable to set.",
-    APParentValue ("confmode", "set"),
+    APEnabledBy ("confmode", Some "set"),
+    APDisabledBy ("set name", None ()), -- match once, then disable itself
     APApplyVal (lam v. lam o. {o with setName = v}),
-    APRequired ()
+    APRequired (),
+    APOnlyThis ()
   ],
   APPositional [
     APName "set value",
     APDescription "The value to set the variable to.",
-    APParent "set name",
+    APEnabledBy ("set name", None ()),
+    APDisabledBy ("set value", None ()), -- match once, then disable itself
     APApplyVal (lam v. lam o. {o with setValue = v}),
-    APRequired ()
+    APRequired (),
+    APOnlyThis ()
   ],
 
   -- Backend
@@ -1063,132 +1081,61 @@ let apconfig = [
     APLong "target",
     APMetavar "PLATFORM",
     APValues ["native", "ocaml", "amd64", "llvm"],
-    APDefault "native",
     APDescription "Specifies compilation backend. (Default: native)",
     APApplyVal (lam t. lam o. {o with target = t}),
+    -- OPT(johnwikman, 2020-10-24): This could be replaced by allowing
+    -- APEnabledBy on options.
     APPostCond (lam o. eqString o.mode "compile",
-                "Can only specify target in compile mode."),
-    APOnce ()
+                "Can only specify target in compile mode.")
   ]
 ] in
 
-let argspec = [
-  APLongFlag ("ocaml", "Targets OCaml backend", lam o. {o with ocaml = true}),
-  APFlag ('V', "verbose", "Increases verbosity", lam o. {o with verbosity = addi o.verbosity 1}),
-  -- What I expect to have in the end:
-  AP.Positional [
-    AP.Name "mcore file",
-    AP.ApplyVal (lam f. lam o. {o with mcfiles = cons f o.mcfiles}),
-    AP.MatchOn (Str.isSuffix ".mc"),
-    AP.Description "MCore input source files. (ends in .mc)"
-  ],
-  AP.Positional [
-    AP.Name "ragnar file",
-    AP.ApplyVal (lam f. lam o. {o with rgfiles = cons f o.rgfiles}),
-    AP.MatchOn (Str.isSuffix ".rg"),
-    AP.Description "Ragnar input source files. (ends in .rg)"
-  ],
-  AP.Positional [
-    AP.Name "mode",
-    AP.ApplyVal (lam m. lam o. {o with mode = m}),
-    AP.Position 1,
-    AP.Values ["compile", "eval", "test", "repl"],
-    AP.Description "The mode to use the compiler with.",
-    AP.ValueDescription ("compile", "Compiles the input source files."),
-    AP.ValueDescription ("eval", "Evaluates the input source files"),
-    AP.ValueDescription ("test", "Runs the utest statements in the input source files."),
-    AP.ValueDescription ("repl", "Launches the MCore REPL.")
-  ],
-  AP.Option [
-    AP.Long "target",
-    AP.Metavar "PLATFORM",
-    AP.Values ["native", "ocaml", "amd64", "llvm"],
-    AP.Default "native",
-    AP.Description "Specifies compilation backend. (Default: native)",
-    AP.ApplyVal (lam t. lam o. {o with o.target = t}),
-    AP.Cond (lam o. eqstr o.mode "compile",
-             "Can only specify target when compiling."),
-    AP.Once ()
-  ],
-  AP.Flag ('a', "all", "Runs everything", lam o. {o with o.all = true})
-] in
+let ret = argparserCheck apconfig in
+match ret with Some s then
+  print (join ["\n", s, "\n"])
+else -- OK!
 
-let args = argparserParse argspec (tail argv) in
+
+--let args = argparserParse argspec (tail argv) in
 
 
 
-let parser: ArgParser TestArgs = argparserNew "test" defaults in
-
-let parser = argparserAddOption 'h' "help"
-                                "Prints usage and a help message."
-                                (lam o. {o with help = true})
-                                parser
-in
-
-let parser = argparserAddOption 'v' "version"
-                                "Prints version and exits."
-                                (lam o. {o with version = true})
-                                parser
-in
-
-let parser = argparserAddLongOption "debug-parser"
-                                    "Shows debug prints during parsing."
-                                    (lam o. {o with debugParser = true})
-                                    parser
-in
-
-let parser = argparserAddParamOption 'O' "optimization-level" "LEVEL"
-                                     "Sets the optimization level."
-                                     (lam p. lam o. {o with optLevel = string2int p})
-                                     parser
-in
-
-let parser = argparserAddParamOption 'D' "define" "DEFINITION"
-                                     "Add C preprocessor definition."
-                                     (lam p. lam o. {o with defines = snoc o.defines p})
-                                     parser
-in
-
-let parser = argparserAddLongParamOption "a-very-long-option-name" "fooparam"
-                                         "Dummy option with a very long name."
-                                         (lam _. lam o. o)
-                                         parser
-in
+-- THIS IS OLD CODE, TO BE UPDATED
 
 -- Used to test usage print with linewidth 80. Make sure this is commented out
 -- when finished testing the usage print.
-let _ = print (join ["\n", argparserUsage 80 parser, "\n"]) in
+--let _ = print (join ["\n", argparserUsage 80 parser, "\n"]) in
 
-utest argparserParse [] parser with defaults in
-utest argparserParse ["-h"] parser with {defaults with help = true} in
-utest argparserParse ["--help"] parser with {defaults with help = true} in
-utest argparserParse ["--debug-parser"] parser with {defaults with debugParser = true} in
-
-utest argparserParse ["-hv"] parser with {{defaults with help = true}
-                                                    with version = true} in
-utest argparserParse ["-vh"] parser with {{defaults with help = true}
-                                                    with version = true} in
-
-utest argparserParse ["-v", "--help"] parser with {{defaults with help = true}
-                                                             with version = true} in
-
-utest argparserParse ["--optimization-level=2"] parser with {defaults with optLevel = 2} in
-utest argparserParse ["--optimization-level", "71"] parser with {defaults with optLevel = 71} in
-utest argparserParse ["-O=2"] parser with {defaults with optLevel = 2} in
-utest argparserParse ["-O", "2"] parser with {defaults with optLevel = 2} in
-utest argparserParse ["-O2"] parser with {defaults with optLevel = 2} in
-utest argparserParse ["-O42"] parser with {defaults with optLevel = 42} in
-
-utest argparserParse ["-vhO2"] parser with {{{defaults with help = true}
-                                                       with version = true}
-                                                       with optLevel = 2} in
-
-utest argparserParse ["-vhO", "2"] parser with {{{defaults with help = true}
-                                                           with version = true}
-                                                           with optLevel = 2} in
-
-utest argparserParse ["-DMCORE"] parser with {defaults with defines = ["MCORE"]} in
-
-utest argparserParse ["-Dh", "--define", "TEST"] parser with {defaults with defines = ["h", "TEST"]} in
+--utest argparserParse [] parser with defaults in
+--utest argparserParse ["-h"] parser with {defaults with help = true} in
+--utest argparserParse ["--help"] parser with {defaults with help = true} in
+--utest argparserParse ["--debug-parser"] parser with {defaults with debugParser = true} in
+--
+--utest argparserParse ["-hv"] parser with {{defaults with help = true}
+--                                                    with version = true} in
+--utest argparserParse ["-vh"] parser with {{defaults with help = true}
+--                                                    with version = true} in
+--
+--utest argparserParse ["-v", "--help"] parser with {{defaults with help = true}
+--                                                             with version = true} in
+--
+--utest argparserParse ["--optimization-level=2"] parser with {defaults with optLevel = 2} in
+--utest argparserParse ["--optimization-level", "71"] parser with {defaults with optLevel = 71} in
+--utest argparserParse ["-O=2"] parser with {defaults with optLevel = 2} in
+--utest argparserParse ["-O", "2"] parser with {defaults with optLevel = 2} in
+--utest argparserParse ["-O2"] parser with {defaults with optLevel = 2} in
+--utest argparserParse ["-O42"] parser with {defaults with optLevel = 42} in
+--
+--utest argparserParse ["-vhO2"] parser with {{{defaults with help = true}
+--                                                       with version = true}
+--                                                       with optLevel = 2} in
+--
+--utest argparserParse ["-vhO", "2"] parser with {{{defaults with help = true}
+--                                                           with version = true}
+--                                                           with optLevel = 2} in
+--
+--utest argparserParse ["-DMCORE"] parser with {defaults with defines = ["MCORE"]} in
+--
+--utest argparserParse ["-Dh", "--define", "TEST"] parser with {defaults with defines = ["h", "TEST"]} in
 
 ()
