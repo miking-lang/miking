@@ -65,8 +65,8 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
 
 -- Get a string for the current name. Returns both the string and a new
 -- environment.
-let pprintEnvGetStr : Name -> PprintEnv -> (PprintEnv, String) =
-lam name. lam env.
+let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
+lam env. lam name.
   match pprintEnvLookup name env with Some str then (env,str)
   else
     let baseStr = nameGetStr name in
@@ -96,6 +96,10 @@ let _parserStr = lam str. lam prefix. lam cond.
   if eqi (length str) 0 then concat prefix "\"\""
   else if cond str then str
   else join [prefix, "\"", str, "\""]
+
+-- TODO(dlunde,2020-10-28): For reusability in other languages than MExpr, me
+-- might want to change the below semantic functions instead, to allow for
+-- overriding them.
 
 -- Constructor string parser translation
 let pprintConString = lam str.
@@ -174,7 +178,7 @@ lang VarPrettyPrint = PrettyPrint + VarAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident} ->
-    match pprintEnvGetStr ident env with (env,str)
+    match pprintEnvGetStr env ident with (env,str)
     then (env,pprintVarString str) else never
 end
 
@@ -208,7 +212,7 @@ lang FunPrettyPrint = PrettyPrint + FunAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
-    match pprintEnvGetStr t.ident env with (env,str) then
+    match pprintEnvGetStr env t.ident with (env,str) then
       let ident = pprintVarString str in
       let tpe =
         match t.tpe with Some t1 then
@@ -280,7 +284,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
-    match pprintEnvGetStr t.ident env with (env,str) then
+    match pprintEnvGetStr env t.ident with (env,str) then
       let ident = pprintVarString str in
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
@@ -303,7 +307,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecLets t ->
     let lname = lam env. lam bind.
-      match pprintEnvGetStr bind.ident env with (env,str) then
+      match pprintEnvGetStr env bind.ident with (env,str) then
         (env,pprintVarString str)
       else never in
     let lbody = lam env. lam bind.
@@ -346,7 +350,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
-    match pprintEnvGetStr t.ident env with (env,str) then
+    match pprintEnvGetStr env t.ident with (env,str) then
       let str = pprintConString str in
       let tpe =
         match t.tpe with Some t1 then
@@ -359,7 +363,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst
     else never
 
   | TmConApp t ->
-    match pprintEnvGetStr t.ident env with (env,str) then
+    match pprintEnvGetStr env t.ident with (env,str) then
       let l = pprintConString str in
       match printParen (pprintIncr indent) env t.body with (env,body) then
         (env, join [l, pprintNewline (pprintIncr indent), body])
@@ -534,7 +538,7 @@ end
 let _pprint_patname: PprintEnv -> PatName -> (PprintEnv, String) =
 lam env. lam pname.
   match pname with PName name then
-    match pprintEnvGetStr name env with (env, str)
+    match pprintEnvGetStr env name with (env, str)
     then (env, pprintVarString str) else never
   else match pname with PWildcard () then
     (env, "_")
@@ -609,7 +613,7 @@ lang DataPatPrettyPrint = DataPat
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PCon t ->
-    match pprintEnvGetStr t.ident env with (env,str) then
+    match pprintEnvGetStr env t.ident with (env,str) then
       let name = pprintConString str in
       match getPatStringCode indent env t.subpat with (env,subpat) then
         let subpat = if patIsAtomic t.subpat then subpat

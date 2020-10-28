@@ -1,244 +1,121 @@
--- AST fragments for the C language.
-
-include "mexpr/ast.mc"
+-- AST fragment for a subset of the C language, suitable for code generation.
 
 include "name.mc"
 
----------------
--- TEMPLATES --
----------------
+lang CAst =
 
-lang Expr
+  -------------------
+  -- C EXPRESSIONS --
+  -------------------
+  -- Missing:
+  -- * TODO(dlunde,2020-10-26): Many operators.
+  --
+  -- NOTE(dlunde,2020-10-28): We cannot reuse operators from mexpr (such as
+  -- CAddi) since they are curried. Maybe this will change in the future?
+
   syn Expr =
-  -- Intentionally left blank
-end
+  | TmVar        { id: Name }
+  | TmApp        { fun: Name, args: [Expr] }
+  | TmInt        { i: Int }
+  | TmFloat      { f: Float }
+  | TmChar       { c: Char }
+  | TmUnOp       { op: BinOp, arg: Expr }
+  | TmBinOp      { op: UnOp, lhs: Expr, rhs: Expr }
+  | TmMemb       { lhs: Expr, id: Name }
+  | TmCast       { ty: Type, rhs: Expr }
+  | TmSizeOfType { ty: Type }
 
-lang Type
+  syn BinOp =
+  | OAssg {}
+  | OSubScr {}
+  | OOr {}
+  | OAnd {}
+  | OEq {}
+  | ONeq {}
+  | OLt {}
+  | OGt {}
+  | OLe {}
+  | OGe {}
+  | OShiftL {}
+  | OShiftR {}
+  | OAdd {}
+  | OSub {}
+  | OMul {}
+  | ODiv {}
+  | OMod {}
+  | OBOr {}
+  | OBAnd {}
+  | OXor {}
+
+  syn UnOp =
+  | OSizeOf {}
+  | ODeref {}
+  | OAddrOf {}
+  | ONeg {}
+  | ONot {}
+
+  -------------
+  -- C TYPES --
+  -------------
+
+  -- We keep type expressions minimal to avoid dealing with the C type syntax.
+  -- To use more complicated types, you first need to bind these to type
+  -- identifiers (see Top below).
   syn Type =
-  -- Intentionally left blank
-end
+  | TyIdent { id: Name }
+  | TyChar {}
+  | TyInt {}
+  | TyDouble {}
+  | TyVoid {}
 
-lang Decl
-  syn Decl =
-  -- Intentionally left blank
-end
+  -------------------
+  -- C DEFINITIONS --
+  -------------------
+  -- Missing:
+  -- * More storage class specifiers (auto, register, static, extern)
+  -- * Type qualifiers (const, volatile)
 
-lang Stmt
-  syn Stmt =
-  -- Intentionally left blank
-end
+  syn Def =
+  | DVar { ty: Type, id: Name, init: Option Init }
 
-
--------------------
--- C EXPRESSIONS --
--------------------
--- Missing:
--- * TODO Standard operators. We cannot reuse operators from mexpr (such as
--- CAddi) since they are curried. Maybe this will change in the future?
--- * Struct pointer access (e.g. structptr->item)
-
-lang AssgExpr
-  syn Expr =
-  | TmAssg { lhs: Expr, rhs: Expr }
-end
-
-lang AppExpr
-  syn Expr =
-  | TmApp { fun: Name, args: [Expr] }
-end
-
-lang SubScrExpr
-  syn Expr =
-  | TmSubScr { lhs: Expr, rhs: Expr }
-end
-
-lang MembExpr
-  syn Expr =
-  | TmMemb { lhs: Expr, rhs: String }
-end
-
-lang CastExpr = Type
-  syn Expr =
-  | TmCast { lhs: Type, rhs: Expr }
-end
-
-lang SizeOfExpr
-  syn Expr =
-  | TmSizeOf { arg: Expr }
-end
-
-lang SizeOfTypeExpr = Type
-  syn Expr =
-  | TmSizeOfType { arg: Type }
-end
-
-
--------------
--- C TYPES --
--------------
-
-lang FunType
-  syn Type =
-  | TyFun { ret: Type, params: [Type] }
-end
-
-lang PtrType
-  syn Type =
-  | TyPtr { ty: Type }
-end
-
-lang ArrType
-  syn Type =
-  | TyArr { ty: Type, size: Int }
-end
-
-lang StructType
-  syn Type =
-  | TyStruct { id: Option Name, mem: [(Type, String)] }
-end
-
-lang UnionType
-  syn Type =
-  | TyUnion { id: Option Name, mem: [(Type, String)] }
-end
-
-lang EnumType
-  syn Type =
-  | TyEnum { id: Option Name, mem: [Name]}
-end
-
-
---------------------
--- C DECLARATIONS --
---------------------
--- Missing:
--- * Multiple declarators within the same declaration.
--- * Designated initializers (e.g. struct s pi = { .z = "Pi", .x = 3, .y =
--- 3.1415 };)
--- * Storage class specifiers (auto, register, static, extern)
--- * Type qualifiers (const, volatile)
-
-lang DeclDecl = Type + Expr
-  syn Decl =
-  | DDecl { ty: Type, id: Option Name, init: Option Init }
-
-  -- NOTE(dlunde,2020-10-24): Declarations with initializers could form a
-  -- separate language fragment.
   syn Init =
   | IExpr { expr: Expr }
   | IList { inits: [Init] }
 
-end
+  ------------------
+  -- C STATEMENTS --
+  ------------------
+  -- Missing:
+  -- * Labeled statements and goto
 
-lang TypeDefDecl = Type
-  syn Decl =
-  | DTypeDef { ty: Type, id: Name }
-end
-
-
-------------------
--- C STATEMENTS --
-------------------
--- Missing:
--- * goto (including labeled statements)
-
-lang DeclStmt = Decl
   syn Stmt =
-  | SDecl { decl: Decl }
-end
-
-lang IfStmt = Expr
-  syn Stmt =
-  | SIf { cond: Expr, thn: Stmt, els: Stmt }
-end
-
-lang SwitchStmt
-  syn Stmt =
-  | SSwitch { cond: Expr, body: [(Int, Stmt)], default: Option Stmt }
-end
-
-lang WhileStmt
-  syn Stmt =
-  | SWhile { cond: Expr, body: Stmt }
-end
-
-lang DoWhileStmt
-  syn Stmt =
-  | SDoWhile { body: Stmt, cond: Expr }
-end
-
-lang ForStmt
-  syn Stmt =
-  | SFor { init: Expr, cond: Expr, after: Expr, body: Stmt }
-end
-
-lang ExprStmt
-  syn Stmt =
-  | SExpr { expr: Expr }
-end
-
-lang CompStmt
-  syn Stmt =
-  | SComp { stmts: [Stmt] }
-end
-
-lang RetStmt
-  syn Stmt =
-  | SRet { val: Option Expr }
-end
-
-lang ContStmt
-  syn Stmt =
-  | SCont {}
-end
-
-lang BreakStmt
-  syn Stmt =
-  | SBreak {}
-end
+  | SDef     { def: Def }
+  | SIf      { cond: Expr, thn: Stmt, els: Stmt }
+  | SSwitch  { cond: Expr, body: [(Int, [Stmt])], default: Option [Stmt] }
+  | SWhile   { cond: Expr, body: Stmt }
+  | SExpr    { expr: Expr }
+  | SComp    { stmts: [Stmt] }
+  | SRet     { val: Option Expr }
+  | SCont    { }
+  | SBreak   { }
 
 
------------------
--- C TOP-LEVEL --
------------------
+  -----------------
+  -- C TOP-LEVEL --
+  -----------------
 
-lang DeclTop
   syn Top =
-  | TDecl { decl: Decl }
+  | TDef      { def: Def }
+  | TPtrTy    { ty: Type, id: Name }
+  | TFunTy    { ret: Type, id: Name, params: [Type] }
+  | TArrTy    { ty: Type, size: Int }
+  | TStructTy { id: Name, mem: Option [Def] }
+  | TUnionTy  { id: Name, mem: Option [Def] }
+  | TEnumTy   { id: Name, mem: Option [Name] }
+  | TFun      { ty: Type, id: Name, params: [(Type, Name)], body: [Stmt] }
+
+  syn Prog =
+  | CProg { tops: [Top] }
+
 end
-
-lang FunTop
-  syn Top =
-  | TFun { ty: Type, id: Name, params: [(Type, Name)], body: Stmt }
-end
-
-lang CompTop
-  syn Top =
-  | TComp { tops: [Top] }
-end
-
-
---------------------
--- C AST FRAGMENT --
---------------------
-
-lang CAst =
-
-  -- Expressions (some reuse from mexpr/ast.mc)
-  VarAst + ConstAst + IntAst + FloatAst + CharAst + AssgExpr + AppExpr +
-  SubScrExpr + MembExpr + CastExpr + SizeOfExpr + SizeOfTypeExpr +
-
-  -- Types (some reuse from mexpr/ast.mc)
-  CharTypeAst + IntTypeAst + FloatTypeAst + TypeVarAst + FunType + PtrType +
-  ArrType + StructType + UnionType + EnumType +
-
-  -- Declarations
-  DeclDecl + TypeDefDecl +
-
-  -- Statements
-  DeclStmt + IfStmt + SwitchStmt + WhileStmt + DoWhileStmt + ForStmt + ExprStmt
-  + CompStmt + RetStmt + ContStmt + BreakStmt +
-
-  -- Top-level
-  DeclTop + FunTop + CompTop
 
