@@ -4,6 +4,23 @@ type Option a
 con Some : a -> Option a
 con None : () -> Option a
 
+-- Equality check between two options. Returns true if both are None, false if
+-- exactly one of them are None, and the result of evaluating the provided
+-- equality function if both are Some.
+let optionEq: (a -> b -> Bool) -> Option a -> Option b -> Bool =
+  lam eq. lam o1. lam o2.
+    match (o1, o2) with (Some v1, Some v2) then
+      eq v1 v2
+    else match (o1, o2) with (None (), None ()) then
+      true
+    else
+      false
+
+utest optionEq eqi (Some 10) (Some 10) with true
+utest optionEq eqi (Some 10) (Some 11) with false
+utest optionEq eqi (Some 10) (None ()) with false
+utest optionEq eqi (None ()) (None ()) with true
+
 -- Applies a function to the contained value (if any).
 let optionMap: (a -> b) -> Option a -> Option b = lam f. lam o.
   match o with Some t then
@@ -42,6 +59,44 @@ let optionCompose: (b -> Option c) -> (a -> Option b) -> a -> Option c =
 utest optionCompose (lam t. Some (addi 1 t)) (lam t. Some (muli 2 t)) 2 with Some 5
 utest optionCompose (lam t. None ()) (lam t. Some (muli 2 t)) 2 with None ()
 utest optionCompose (lam t. Some (addi 1 t)) (lam t. None ()) 2 with None ()
+
+-- 'optionZipWith f o1 o2' applies the function f on the values contained in
+-- o1 and o2. If either o1 or o2 is None, then None is returned.
+let optionZipWith: (a -> b -> c) -> (Option a) -> (Option b) -> Option c =
+  lam f. lam o1. lam o2.
+    match (o1, o2) with (Some v1, Some v2) then
+      Some (f v1 v2)
+    else
+      None ()
+
+utest optionZipWith concat (Some "f") (Some "oo") with Some "foo"
+utest optionZipWith concat (Some "f") (None ()) with None ()
+utest optionZipWith concat (None ()) (None ()) with None ()
+
+-- 'optionZipWithOrElse d f o1 o2' applies the function f on the values
+-- contained in o1 and o2. If either o1 or o2 is None, then d is evaluated to
+-- produce a default value.
+let optionZipWithOrElse: (Unit -> c) -> (a -> b -> c) -> (Option a) -> (Option b) -> c =
+  lam d. lam f. lam o1. lam o2.
+    match (o1, o2) with (Some v1, Some v2) then
+      f v1 v2
+    else
+      d ()
+
+utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (Some 'i') with "mi"
+utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (None ()) with "ERROR"
+utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (None ()) (None ()) with "ERROR"
+
+-- 'optionZipWithOr v f o1 o2' applies the function f on the values contained
+-- in o1 and o2. If either o1 or o2 is None, then v is returned.
+let optionZipWithOr: c -> (a -> b -> c) -> (Option a) -> (Option b) -> c =
+  lam v. optionZipWithOrElse (lam _. v)
+
+utest optionZipWithOr false eqi (Some 10) (Some 11) with false
+utest optionZipWithOr false eqi (Some 10) (Some 10) with true
+utest optionZipWithOr false eqi (Some 10) (None ()) with false
+utest optionZipWithOr false eqi (None ()) (None ()) with false
+
 
 -- Try to retrieve the contained value, or compute a default value
 let optionGetOrElse: (Unit -> a) -> Option a -> a = lam d. lam o.
