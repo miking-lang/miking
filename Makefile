@@ -22,6 +22,12 @@ test-all:
 install:
 	@./make install
 
+lint:
+	@./make lint
+
+fix:
+	@./make fix
+
 clean:
 	@./make clean
 

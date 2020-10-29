@@ -73,7 +73,23 @@ runtests() {
     fi
 }
 
+# Lint ocaml source code
+lint () {
+    dune build @fmt
+}
+
+# lints and then fixes ocaml source code
+fix () {
+    dune build @fmt --auto-promote
+}
+
 case $1 in
+    lint)
+        lint
+        ;;
+    fix)
+        fix
+        ;;
     test)
         build
         runtests
@@ -82,6 +98,7 @@ case $1 in
         export MI_TEST_PYTHON=1
         export MI_TEST_SUNDIALS=1
         export MI_TEST_OCAML=1
+        lint
         build
         runtests
         ;;
