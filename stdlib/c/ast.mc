@@ -28,8 +28,8 @@ lang CAst
   | EFloat      { f: Float }
   | EChar       { c: Char }
   | EString     { s: String }
-  | EUnOp       { op: BinOp, arg: Expr }
   | EBinOp      { op: UnOp, lhs: Expr, rhs: Expr }
+  | EUnOp       { op: BinOp, arg: Expr }
   | EMemb       { lhs: Expr, id: Name }
   | ECast       { ty: Type, rhs: Expr }
   | ESizeOfType { ty: Type }
@@ -102,7 +102,7 @@ lang CAst
   -- allowed to be a definition. To do this properly, we would need to separate
   -- statements and definitions into different data types.
   syn Stmt =
-  | SDef     { ty: Type, id: Name, init: Option Init }
+  | SDef     { ty: Type, id: Option Name, init: Option Init }
   | SIf      { cond: Expr, thn: [Stmt], els: [Stmt] }
   | SSwitch  { cond: Expr, body: [(Int, [Stmt])], default: Option [Stmt] }
   | SWhile   { cond: Expr, body: [Stmt] }
@@ -118,7 +118,7 @@ lang CAst
   -----------------
 
   syn Top =
-  | TDef      { ty: Type, id: Name, init: Option Init }
+  | TDef      { ty: Type, id: Option Name, init: Option Init }
   | TFun      { ret: Type, id: Name, params: [(Type,Name)], body: [Stmt] }
 
   syn Prog =

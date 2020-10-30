@@ -1,3 +1,21 @@
+-- Pretty printer for C.
+--
+-- NOTE(dlunde,2020-10-30):
+--
+-- * Identifiers are _not_ checked for validity. You must make sure they are
+--   valid in your own code.
+--
+-- * Definitions have optional ids to allow for declaring struct/union/enum
+--   types without instantiating them:
+--   ```
+--   struct ty { ... members ... };
+--   ```
+--   To keep the AST clean, this currently also allows for definitions such as
+--   ```
+--   int *;
+--   ```
+--   which are not valid in C.
+
 include "ast.mc"
 
 include "mexpr/pprint.mc"
@@ -6,17 +24,14 @@ include "mexpr/pprint.mc"
 -- HELPERS --
 -------------
 
+-- Surrounds a string with parentheses
 let _par = lam str. join ["(",str,")"]
 
+-- Combines two strings with space in between (if the second string is non-empty)
+let _joinSpace = lam fst. lam snd.
+  if eqString "" snd then fst else join [fst, " ", snd]
+
 lang CPrettyPrint = CAst + PrettyPrint
-
-  -------------------
-  -- C IDENTIFIERS --
-  -------------------
-  sem printId (env: PprintEnv) =
-  -- TODO: Throw error if id is not a valid C identifier
-  | id -> pprintEnvGetStr env id
-
 
   -------------------
   -- C EXPRESSIONS --
@@ -24,12 +39,12 @@ lang CPrettyPrint = CAst + PrettyPrint
 
   sem printExpr (env: PprintEnv) =
 
-  | EVar { id = id } -> printId env id
+  | EVar { id = id } -> pprintEnvGetStr env id
 
-  | EApp { fun = fun, args = args} ->
-    match printId env fun with (env,fun) then
+  | EApp { fun = fun, args = args } ->
+    match pprintEnvGetStr env fun with (env,fun) then
       match mapAccumL printExpr env args with (env,args) then
-        (env, _par (join [fun, "(", (strJoin ", " args)], ")"))
+        (env, _par (join [fun, "(", (strJoin ", " args), ")"]))
       else never
     else never
 
@@ -40,11 +55,6 @@ lang CPrettyPrint = CAst + PrettyPrint
   -- TODO(dlunde,2020-10-29): Escape characters
   | EString { s = s } -> (env, join ["\"", s, "\""])
 
-  | EUnOp { op = op, arg = arg } ->
-    match printExpr env arg with (env,arg) then
-      (env, _par (printUnOp arg op))
-    else never
-
   | EBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match printExpr env lhs with (env,lhs) then
       match printExpr env rhs with (env,rhs) then
@@ -52,9 +62,14 @@ lang CPrettyPrint = CAst + PrettyPrint
       else never
     else never
 
+  | EUnOp { op = op, arg = arg } ->
+    match printExpr env arg with (env,arg) then
+      (env, _par (printUnOp arg op))
+    else never
+
   | EMemb { lhs = lhs, id = id } ->
     match printExpr env lhs with (env,lhs) then
-      match printId env id with (env,id) then
+      match pprintEnvGetStr env id with (env,id) then
         (env, _par (join [lhs, ".", id]))
       else never
     else never
@@ -105,13 +120,27 @@ lang CPrettyPrint = CAst + PrettyPrint
   -- C TYPES --
   -------------
 
+  -- Helper function for printing declarations and definitions
+  sem printDef (env: PprintEnv) (ty: Type) (id: Option Name) =
+  | init ->
+    let tmp = match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match tmp with (env,id) then
+      match printType id env ty with (env,decl) then
+        match init with Some init then
+          match printInit env init with (env,init) then
+            (env, join [decl, " = ", init])
+          else never
+        else (env, decl)
+      else never
+    else never
+
   sem printType (decl: String) (env: PprintEnv) =
   -- TyIdent not really needed unless we add typedef
-  --| TyIdent  { id = id } -> printId env id
-  | TyChar { } -> (env, join ["char ", decl])
-  | TyInt { }  -> (env, join ["int ", decl])
-  | TyDouble { } -> (env, join ["double ", decl])
-  | TyVoid { } -> (env, join ["void ", decl])
+  --| TyIdent  { id = id } -> pprintEnvGetStr env id
+  | TyChar { } -> (env, _joinSpace "char" decl)
+  | TyInt { }  -> (env, _joinSpace "int" decl)
+  | TyDouble { } -> (env, _joinSpace "double" decl)
+  | TyVoid { } -> (env, _joinSpace "void" decl)
   | TyPtr { ty = ty } -> printType (join ["(*", decl, ")"]) env ty
 
   | TyFun { ret = ret, params = params } ->
@@ -125,56 +154,43 @@ lang CPrettyPrint = CAst + PrettyPrint
     printType (join [decl, "[", subscr, "]"]) env ty
 
   | TyStruct { id = id, mem = mem } ->
-    match printId env id with (env,id) then
+    match pprintEnvGetStr env id with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+        let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
         match mapAccumL f env mem with (env,mem) then
-          let mem = map (lam s. join [s,";"]) in
+          let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
-          (env, join ["struct ", id, "{", mem, "} ", decl])
+          (env, _joinSpace (join ["struct ", id, " {", mem, "}"]) decl)
         else never
-      else (env, join ["struct ", id, " ", decl])
+      else (env, _joinSpace (join ["struct ", id]) decl)
     else never
 
   | TyUnion { id = id, mem = mem } ->
-    match printId env id with (env,id) then
+    match pprintEnvGetStr env id with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+        let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) in
           let mem = strJoin " " mem in
-          (env, join ["union ", id, "{", mem, "} ", decl])
+          (env, _joinSpace (join ["union ", id, " {", mem, "}"]) decl)
         else never
-      else (env, join ["union ", id, " ", decl])
+      else (env, _joinSpace (join ["union ", id]) decl)
     else never
 
   | TyEnum { id = id, mem = mem } ->
-    match printId env id with (env,id) then
+    match pprintEnvGetStr env id with (env,id) then
       match mem with Some mem then
-        match mapAccumL printId env mem with (env,mem) then
+        match mapAccumL pprintEnvGetStr env mem with (env,mem) then
           let mem = strJoin ", " mem in
-          (env, join ["enum ", id, "{", mem, "} ", decl])
+          (env, _joinSpace (join ["enum ", id, " {", mem, "}"]) decl)
         else never
-      else (env, join ["enum ", id, " ", decl])
+      else (env, _joinSpace (join ["enum ", id]) decl)
     else never
 
 
   -------------------
-  -- C INITIALIERS --
+  -- C INITIALIZERS --
   -------------------
-
-  -- Helper function for printing declarations and definitions
-  sem printDef (env: PprintEnv) (ty: Type) (id: Name) =
-  | init ->
-    match printId env id with (env,id) then
-      match printType id env ty with (env,decl) then
-        match init with Some init then
-          match printInit env init with (env,init) then
-            (env, join [decl, " = ", init])
-          else never
-        else (env, decl)
-      else never
-    else never
 
   sem printInit (env: PprintEnv) =
   | IExpr { expr = expr } -> printExpr env expr
@@ -266,7 +282,7 @@ lang CPrettyPrint = CAst + PrettyPrint
   | SRet { val = val } ->
     match val with Some val then
       match printExpr env val with (env,val) then
-        (env, join ["return", val, ";"])
+        (env, join ["return ", val, ";"])
       else never
     else (env, "return;")
 
@@ -287,8 +303,8 @@ lang CPrettyPrint = CAst + PrettyPrint
   | TFun { ret = ret, id = id, params = params, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
-    match printId env id with (env,id) then
-      let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+    match pprintEnvGetStr env id with (env,id) then
+      let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
       match mapAccumL f env params with (env,params) then
         let params = join ["(", strJoin ", " params, ")"] in
         match printType (join [id, params]) env ret with (env,ty) then
@@ -304,7 +320,7 @@ lang CPrettyPrint = CAst + PrettyPrint
     -- If main is found, we must make sure it is printed as "main"
     recursive let findMain = lam tops.
       match tops with [h] ++ tl then
-        match h with TDef { id = id } | TFun { id = id } then
+        match h with TDef { id = Some id } | TFun { id = id } then
           if eqString (nameGetStr id) "main" then Some id
           else findMain tl
         else findMain tl
@@ -326,13 +342,125 @@ end
 mexpr
 use CPrettyPrint in
 
-let def = TDef { ty = TyInt {}, id = nameSym "x", init = None () } in
+let xname = nameSym "x" in
+let funname = nameSym "fun" in
 
-let definit = TDef {
-  ty = TyChar {}, id = nameSym "y",
+
+let var = SExpr { expr = EVar { id = xname } } in
+let app = SExpr {
+  expr = EApp { fun = funname, args = [EInt { i = 1 }, EChar { c = 'a' }] }
+} in
+
+let deftop = TDef { ty = TyInt {}, id = Some xname, init = None () } in
+let definittop = TDef {
+  ty = TyChar {}, id = Some (nameSym "y"),
   init = Some (IExpr { expr = EChar { c = 'c'}})
-}
-in
+} in
+
+let structtyname = nameSym "structty" in
+let structmemname = nameSym "x" in
+
+let structtop = TDef {
+  ty = TyStruct {
+    id = structtyname,
+    mem = Some (
+      [(TyInt {}, structmemname),
+       (TyDouble {}, nameSym "y")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+
+let defstmt = SDef {
+  ty = TyDouble {}, id = Some (nameSym "x"),
+  init = Some (IExpr { expr = EFloat { f = 0.1 }} )
+} in
+
+let ifstmt = SIf {
+  cond = EInt { i = 2 },
+  thn = [
+    var,
+    app
+  ],
+  els = [
+  ]
+} in
+
+let strinit = SDef {
+  ty = TyArr { ty = TyChar {}, size = None () }, id = Some (nameSym "strinit"),
+  init = Some (IExpr { expr = EString { s = "strinit" } })
+} in
+
+let op = SExpr {
+  expr = EBinOp {
+    op = OAssg {},
+    lhs = EVar { id = xname },
+    rhs = EBinOp {
+      op = OMul {},
+      lhs = EUnOp { op = ONeg {}, arg = EInt { i = 1 } },
+      rhs = EInt { i = 3 }
+    }
+  }
+} in
+
+let structname = nameSym "s" in
+
+let defstruct = SDef {
+  ty = TyStruct { id = structtyname, mem = None () },
+  id = Some structname,
+  init = None ()
+} in
+
+let memb = SExpr {
+  expr = EMemb { lhs = EVar { id = structname }, id = structmemname }
+} in
+
+let advty =
+TyPtr {
+  ty = TyFun {
+    ret = TyPtr {
+      ty = TyFun {
+        ret = TyPtr {
+          ty = TyStruct { id = structtyname, mem = None ()}
+        },
+        params = [TyFun { ret = TyInt {}, params = [TyDouble {}] }]
+      }
+    },
+    params = [TyChar {}]
+  }
+} in
+
+let cast = SExpr {
+  expr = ECast { ty = advty, rhs = EInt { i = 1 } }
+} in
+
+let sizety = SExpr {
+  expr = ESizeOfType { ty = advty }
+} in
+
+let funbody = [
+  defstmt,
+  strinit,
+  defstruct,
+  memb,
+  cast,
+  sizety,
+  op,
+  app,
+  ifstmt
+] in
+
+let mainname = nameSym "main" in
+let arg2name = nameSym "arg2" in
+
+let fun = TFun {
+  ret =
+    TyPtr { ty = TyFun { ret = TyChar {}, params = [TyInt {}, TyDouble {}] } },
+  id = funname,
+  params = [(TyInt {}, nameSym "main"), (TyChar {}, arg2name)],
+  body = funbody
+} in
 
 let main = TFun {
   ret = TyInt {}, id = nameSym "main",
@@ -340,12 +468,22 @@ let main = TFun {
     (TyInt {}, nameSym "argc"),
     (TyArr { ty = TyPtr { ty = TyChar {}}, size = None ()}, nameSym "argv")
   ],
-  body = [SRet { val = None () }] }
+  body = [ SRet { val = Some (EInt { i = 1 }) }] }
 in
 
+-- union
+-- enum
+-- initializer list
+-- switch (incl. break)
+-- while (incl. cont)
+-- comp
+-- return without value
+
 let tops = [
-  def,
-  definit,
+  deftop,
+  definittop,
+  structtop,
+  fun,
   main
 ] in
 
