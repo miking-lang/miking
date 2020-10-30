@@ -66,26 +66,31 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
 -- Get a string for the current name. Returns both the string and a new
 -- environment.
 let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
-lam env. lam name.
-  match pprintEnvLookup name env with Some str then (env,str)
-  else
-    let baseStr = nameGetStr name in
-    if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
+  lam env. lam name.
+    match pprintEnvLookup name env with Some str then (env,str)
     else
-      match env with {count = count} then
-        let start =
-          match assocLookup {eq = eqString} baseStr count
-          with Some i then i else 1 in
-        recursive let findFree : String -> Int -> (String, Int) =
-          lam baseStr. lam i.
-            let proposal = concat baseStr (int2string i) in
-            if pprintEnvFree proposal env then (proposal, i)
-            else findFree baseStr (addi i 1)
-        in
-        match findFree baseStr start with (str, i) then
-          (pprintEnvAdd name str (addi i 1) env, str)
+      let baseStr = nameGetStr name in
+      if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
+      else
+        match env with {count = count} then
+          let start =
+            match assocLookup {eq = eqString} baseStr count
+            with Some i then i else 1 in
+          recursive let findFree : String -> Int -> (String, Int) =
+            lam baseStr. lam i.
+              let proposal = concat baseStr (int2string i) in
+              if pprintEnvFree proposal env then (proposal, i)
+              else findFree baseStr (addi i 1)
+          in
+          match findFree baseStr start with (str, i) then
+            (pprintEnvAdd name str (addi i 1) env, str)
+          else never
         else never
-      else never
+
+-- Adds the given name to the environment (if it does not already exist)
+let pprintAddStr : PprintEnv -> Name -> PprintEnv =
+  lam env. lam name.
+    match pprintEnvGetStr env name with (env,_) then env else never
 
 ---------------------------------
 -- IDENTIFIER PARSER FUNCTIONS --

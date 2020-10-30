@@ -6,7 +6,7 @@ include "mexpr/pprint.mc"
 -- HELPERS --
 -------------
 
-let _par = lam str. join ["(",str,")"] in
+let _par = lam str. join ["(",str,")"]
 
 lang CPrettyPrint = CAst + PrettyPrint
 
@@ -24,45 +24,49 @@ lang CPrettyPrint = CAst + PrettyPrint
 
   sem printExpr (env: PprintEnv) =
 
-  | TmVar { id = id } -> printId env id
+  | EVar { id = id } -> printId env id
 
-  | TmApp { fun = fun, args = args} ->
-    match prindId env fun with (env,fun) then
+  | EApp { fun = fun, args = args} ->
+    match printId env fun with (env,fun) then
       match mapAccumL printExpr env args with (env,args) then
         (env, _par (join [fun, "(", (strJoin ", " args)], ")"))
       else never
     else never
 
-  | TmInt   { i = i } -> (env, int2string i)
-  | TmFloat { f = f } -> (env, float2string f)
-  | TmChar  { c = c } -> (env, ['\'', c, '\''])
+  | EInt    { i = i } -> (env, int2string i)
+  | EFloat  { f = f } -> (env, float2string f)
+  | EChar   { c = c } -> (env, ['\'', c, '\''])
 
-  | TmUnOp { op = op, arg = arg } ->
-    match printExpr env arg with (env,arg) then (env, _par (printUnOp arg op))
+  -- TODO(dlunde,2020-10-29): Escape characters
+  | EString { s = s } -> (env, join ["\"", s, "\""])
+
+  | EUnOp { op = op, arg = arg } ->
+    match printExpr env arg with (env,arg) then
+      (env, _par (printUnOp arg op))
     else never
 
-  | TmBinOp { op = op, lhs = lhs, rhs = rgs } ->
+  | EBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match printExpr env lhs with (env,lhs) then
       match printExpr env rhs with (env,rhs) then
         (env, _par (printBinOp lhs rhs op))
       else never
     else never
 
-  | TmMemb { lhs = lhs, id = id } ->
+  | EMemb { lhs = lhs, id = id } ->
     match printExpr env lhs with (env,lhs) then
-      match printId env id with (env,id)
+      match printId env id with (env,id) then
         (env, _par (join [lhs, ".", id]))
       else never
     else never
 
-  | TmCast { ty = ty, rhs = rhs } ->
+  | ECast { ty = ty, rhs = rhs } ->
     match printType env ty with (env,ty) then
-      match printExpr env rhs with (env,rhs)
+      match printExpr env rhs with (env,rhs) then
         (env, _par (join ["(",ty,") ", rhs]))
       else never
     else never
 
-  | TmSizeOfType { ty = ty } ->
+  | ESizeOfType { ty = ty } ->
     match printType env ty with (env,ty) then
       (env, _par (join ["sizeof ", ty]))
     else never
@@ -87,7 +91,7 @@ lang CPrettyPrint = CAst + PrettyPrint
   | OMod    {} -> join [lhs, " % ", rhs]
   | OBOr    {} -> join [lhs, " | ", rhs]
   | OBAnd   {} -> join [lhs, " & ", rhs]
-  | OBXor   {} -> join [lhs, " ^ ", rhs]
+  | OXor    {} -> join [lhs, " ^ ", rhs]
 
   sem printUnOp (arg: String) =
   | OSizeOf {} -> join ["sizeof ", arg]
@@ -110,19 +114,20 @@ lang CPrettyPrint = CAst + PrettyPrint
 
 
   -------------------
-  -- C DEFINITIONS --
+  -- C INITIALIERS --
   -------------------
 
-  sem printDef (env: PprintEnv) =
-  | DVar { ty = ty, id = id, init = init } ->
+  -- Helper function for printing declarations and definitions
+  sem printDef (env: PprintEnv) (ty: Type) (id: Name) =
+  | init ->
     match printType env ty with (env,ty) then
       match printId env id with (env,id) then
         let decl = join [ty, " ", id] in
         match init with Some init then
           match printInit env init with (env,init) then
-            (env, join [decl, " = ", init ";"])
+            (env, join [decl, " = ", init])
           else never
-        else (env, join [decl, ";"])
+        else (env, decl)
       else never
     else never
 
@@ -139,18 +144,30 @@ lang CPrettyPrint = CAst + PrettyPrint
   -- C STATEMENTS --
   ------------------
 
-  sem printStmt (indent : Int) (env: PprintEnv) =
-  | SDef { def = def } -> printDef env def
+  -- Print a line-separated list of statements at the given indentation level.
+  sem printStmts (indent: Int) (env: PprintEnv) =
+  | stmts ->
+    match mapAccumL (printStmt indent) env stmts with (env,stmts) then
+      (env, strJoin (pprintNewline indent) stmts)
+    else never
+
+  sem printStmt (indent: Int) (env: PprintEnv) =
+  | SDef { ty = ty, id = id, init = init } ->
+    match printDef env ty id init with (env,str) then
+      (env, join [str, ";"])
+    else never
 
   | SIf { cond = cond, thn = thn, els = els } ->
     let i = indent in
     let ii = pprintIncr i in
     match printExpr env cond with (env,cond) then
-      match printStmt ii env thn with (env,thn) then
-        match printStmt ii env els with (env,els) then
-          (env, join ["if (", cond, ")", pprintNewline ii,
+      match printStmts ii env thn with (env,thn) then
+        match printStmts ii env els with (env,els) then
+          (env, join ["if (", cond, ") {", pprintNewline ii,
                       thn, pprintNewline i,
-                      "else", pprintNewline ii, els])
+                      "} else {", pprintNewline ii,
+                      els, pprintNewline i,
+                      "}"])
         else never
       else never
     else never
@@ -159,21 +176,19 @@ lang CPrettyPrint = CAst + PrettyPrint
     let i = indent in
     let ii = pprintIncr i in
     let iii = pprintIncr ii in
-    let iv = pprintIncr iii in
     match printExpr env cond with (env,cond) then
       let f = lam env. lam t.
-        match printStmt iv env t.1 with (env,t1) then (t.0, t1) else never in
+        match printStmts iii env t.1 with (env,t1) then (t.0,t1) else never in
       match mapAccumL f env body with (env,body) then
         let f = lam t.
-          join ["case ", int2string t.0, ":", pprintNewline iv, t.1] in
-        let body = strJoin (pprintNewline iii) (map f body) in
-        let str = join ["switch (", cond, ")", pprintNewline ii,
-                        "{", body] in
+          join ["case ", int2string t.0, ":", pprintNewline iii, t.1] in
+        let body = strJoin (pprintNewline ii) (map f body) in
+        let str = join ["switch (", cond, ") {", pprintNewline ii, body] in
         match default with Some default then
-          match printStmt iv default with (env,default) then
-            (env join [str, pprintNewline iii,
-                       "default:", pprintNewline iv,
-                       default, pprintNewline ii,
+          match printStmts iii default with (env,default) then
+            (env join [str, pprintNewline ii,
+                       "default:", pprintNewline iii,
+                       default, pprintNewline i,
                        "}"])
           else never
         else (env, join [str, pprintNewline ii, "}"])
@@ -184,8 +199,10 @@ lang CPrettyPrint = CAst + PrettyPrint
     let i = indent in
     let ii = pprintIncr i in
     match printExpr env cond with (env,cond) then
-      match printStmt ii env body with (env,body) then
-        (env, join ["while (", cond, ")", pprintNewline ii, body])
+      match printStmts ii env body with (env,body) then
+        (env, join ["while (", cond, ") {", pprintNewline ii,
+                    body, pprintNewline i,
+                    "}"])
       else never
     else never
 
@@ -197,15 +214,14 @@ lang CPrettyPrint = CAst + PrettyPrint
   | SComp { stmts = stmts } ->
     let i = indent in
     let ii = pprintIncr i in
-    match mapAccumL printStmt ii env stmts with (env,stmts) then
-      let stmts = strJoin (pprintNewline ii) stmts in
-      (env, join ["{", pprintNewline ii, stmts, pprintNewline i, "}"]
+    match printStmts ii env stmts with (env,stmts) then
+      (env, join ["{", pprintNewline ii, stmts, pprintNewline i, "}"])
     else never
 
   | SRet { val = val } ->
     match val with Some val then
       match printExpr env val with (env,val) then
-        (env, join ["return", expr, ";"])
+        (env, join ["return", val, ";"])
       else never
     else (env, "return;")
 
@@ -218,16 +234,143 @@ lang CPrettyPrint = CAst + PrettyPrint
   -----------------
 
   sem printTop (indent : Int) (env: PprintEnv) =
-  | TDef      { def = def } ->
-  | TPtrTy    { ty = ty, id = id} ->
-  | TFunTy    { ret = ret, id = id, params = params} ->
-  | TArrTy    { ty = ty, size = size} ->
-  | TStructTy { id = id, mem = mem} ->
-  | TUnionTy  { id = id, mem = mem} ->
-  | TEnumTy   { id = id, mem = mem} ->
-  | TFun      { ty = ty, id = id, params = params, body = body} ->
+  | TDef { ty = ty, id = id, init = init } ->
+    match printDef env ty id init with (env,str) then
+      (env, join [str, ";"])
+    else never
+
+  | TFun { ret = ret, id = id, params = params, body = body } ->
+    let i = indent in
+    let ii = pprintIncr indent in
+    match printType env ret with (env,ret) then
+      match printId env id with (env,id) then
+        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+        match mapAccumL f env params with (env,params) then
+          let params = strJoin ", " params in
+          match printStmts ii env body with (env,body) then
+            (env, join [ret, " ", id, "(", params, ") {", pprintNewline ii,
+                        body, pprintNewline i,
+                        "}"])
+          else never
+        else never
+      else never
+    else never
+
+  | TPtrTy { ty = ty, id = id } ->
+    match printType env ty with (env,ty) then
+      match printId env id with (env,id) then
+        (env, join ["typedef ", ty, " *", id, ";"])
+      else never
+    else never
+
+  | TFunTy { ret = ret, id = id, params = params } ->
+    match printType env ret with (env,ret) then
+      match printId env id with (env,id) then
+        match mapAccumL printType env params with (env,params) then
+          let params = strJoin ", " params in
+          (env, join ["typedef ", ret, " ", id, "(", params, ");"])
+        else never
+      else never
+    else never
+
+  | TArrTy { ty = ty, id = id, size = size } ->
+    match printType env ty with (env,ty) then
+      let subscr = match size with Some size then int2string size else "" in
+      (env, join ["typedef ", ty, " ", id, "[", subscr, "];"])
+    else never
+
+  | TStructTy { id = id, mem = mem } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match printId env id with (env,id) then
+      match mem with Some mem then
+        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+        match mapAccumL f env mem with (env,mem) then
+          let mem = strJoin (pprintNewline ii) mem in
+          (env, join ["typedef struct ", id, " {", pprintNewline ii,
+                      mem, pprintNewline i,
+                      "};"])
+        else never
+      else (env, join ["typedef struct ", id, " ", id, ";"])
+    else never
+
+  | TUnionTy { id = id, mem = mem } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match printId env id with (env,id) then
+      match mem with Some mem then
+        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
+        match mapAccumL f env mem with (env,mem) then
+          let mem = strJoin (pprintNewline ii) mem in
+          (env, join ["typedef union ", id, " {", pprintNewline ii,
+                      mem, pprintNewline i,
+                      "};"])
+        else never
+      else (env, join ["typedef union ", id, " ", id, ";"])
+    else never
+
+  | TEnumTy { id = id, mem = mem } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match printId env id with (env,id) then
+      match mem with Some mem then
+        match mapAccumL printId env mem with (env,mem) then
+          let mem = strJoin (pprintNewline ii) mem in
+          (env, join ["typedef enum ", id, " {", pprintNewline ii,
+                      mem, pprintNewline i,
+                      "};"])
+        else never
+      else (env, join ["typedef enum ", id, " ", id, ";"])
+    else never
 
   sem printProg =
-  | CProg { tops = tops} ->
+  | PProg { tops = tops } ->
+    -- If main is found, we must make sure it is printed as "main"
+    recursive let findMain = lam tops.
+      match tops with [h] ++ tl then
+        match h with TDef { id = id } | TFun { id = id } then
+          if eqString (nameGetStr id) "main" then Some id
+          else findMain tl
+        else findMain tl
+      else match tops with [] then None ()
+      else never
+    in
+    let indent = 0 in
+    let env =
+      match findMain tops with Some name then
+        pprintAddStr pprintEnvEmpty name
+      else pprintEnvEmpty
+    in
+    match mapAccumL (printTop indent) env tops with (env,tops) then
+      strJoin (pprintNewline indent) tops
+    else never
 
 end
+
+mexpr
+use CPrettyPrint in
+
+let def = TDef { ty = TyInt {}, id = nameSym "x", init = None () } in
+
+let definit = TDef {
+  ty = TyChar {}, id = nameSym "y",
+  init = Some (IExpr { expr = EChar { c = 'c'}})
+}
+in
+
+let main = TFun {
+  ret = TyInt {}, id = nameSym "main",
+  params = [], body = [SRet { val = None () }] }
+in
+
+let tops = [
+  def,
+  definit,
+  main
+] in
+
+let prog = PProg { tops = tops } in
+
+let _ = printLn (printProg prog) in
+
+()
