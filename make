@@ -57,6 +57,7 @@ runtests() {
     ../build/mi test mlang
     cd ../stdlib
     ../build/mi test mexpr
+    ../build/mi test c
     ../build/mi test ad
     ../build/mi test ext
     cd ..

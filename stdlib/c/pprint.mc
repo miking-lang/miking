@@ -567,6 +567,9 @@ let tops = [
 
 let prog = PProg { tops = tops } in
 
-let _ = printLn (printProg prog) in
+-- let _ = printLn (printProg prog) in
+
+-- Test making sure printProg does not crash
+utest geqi (length (printProg prog)) 0 with true in
 
 ()
