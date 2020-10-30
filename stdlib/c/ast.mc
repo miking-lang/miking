@@ -3,8 +3,9 @@
 -- NOTE(dlunde,2020-10-29): Missing functionality (most things are probably not
 -- needed for code generation or can be expressed through other language
 -- constructs):
+-- * Includes/module system
 -- * Labeled statements and goto
--- * Storage class specifiers (auto, register, static, extern)
+-- * Storage class specifiers (typedef, auto, register, static, extern)
 -- * Type qualifiers (const, volatile)
 -- * Increment/decrement operators
 -- * Combined assignment operators (e.g. +=, *=)
@@ -66,16 +67,20 @@ lang CAst
   -------------
   -- C TYPES --
   -------------
-  -- We keep type expressions minimal to avoid dealing with the C type syntax.
-  -- To use more complicated types, you first need to bind these to type
-  -- identifiers at top-level (see below).
 
   syn Type =
-  | TyIdent { id: Name }
+  -- TyIdent not really needed unless we add typedef
+--| TyIdent { id: Name }
   | TyChar {}
   | TyInt {}
   | TyDouble {}
   | TyVoid {}
+  | TyPtr { ty: Type }
+  | TyFun { ret: Type, params: [Type] }
+  | TyArr { ty: Type, size: Option Int }
+  | TyStruct { id: Name, mem: Option [(Type,Name)] }
+  | TyUnion { id: Name, mem: Option [(Type,Name)] }
+  | TyEnum { id: Name, mem: Option [Name] }
 
 
   --------------------
@@ -115,12 +120,6 @@ lang CAst
   syn Top =
   | TDef      { ty: Type, id: Name, init: Option Init }
   | TFun      { ret: Type, id: Name, params: [(Type,Name)], body: [Stmt] }
-  | TPtrTy    { ty: Type, id: Name }
-  | TFunTy    { ret: Type, id: Name, params: [Type] }
-  | TArrTy    { ty: Type, id: Name, size: Option Int }
-  | TStructTy { id: Name, mem: Option [(Type,Name)] }
-  | TUnionTy  { id: Name, mem: Option [(Type,Name)] }
-  | TEnumTy   { id: Name, mem: Option [Name] }
 
   syn Prog =
   | PProg { tops: [Top] }
