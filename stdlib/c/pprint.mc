@@ -1,20 +1,4 @@
 -- Pretty printer for C.
---
--- NOTE(dlunde,2020-10-30):
---
--- * Identifiers are _not_ checked for validity. You must make sure they are
---   valid in your own code.
---
--- * Definitions have optional ids to allow for declaring struct/union/enum
---   types without instantiating them:
---   ```
---   struct ty { ... members ... };
---   ```
---   To keep the AST clean, this currently also allows for definitions such as
---   ```
---   int *;
---   ```
---   which are not valid in C.
 
 include "ast.mc"
 
@@ -48,9 +32,9 @@ lang CPrettyPrint = CAst + PrettyPrint
       else never
     else never
 
-  | EInt    { i = i } -> (env, int2string i)
-  | EFloat  { f = f } -> (env, float2string f)
-  | EChar   { c = c } -> (env, ['\'', c, '\''])
+  | EInt   { i = i } -> (env, int2string i)
+  | EFloat { f = f } -> (env, float2string f)
+  | EChar  { c = c } -> (env, ['\'', c, '\''])
 
   -- TODO(dlunde,2020-10-29): Escape characters
   | EString { s = s } -> (env, join ["\"", s, "\""])
@@ -67,7 +51,7 @@ lang CPrettyPrint = CAst + PrettyPrint
       (env, _par (printUnOp arg op))
     else never
 
-  | EMemb { lhs = lhs, id = id } ->
+  | EMember { lhs = lhs, id = id } ->
     match printExpr env lhs with (env,lhs) then
       match pprintEnvGetStr env id with (env,id) then
         (env, _par (join [lhs, ".", id]))
@@ -87,26 +71,26 @@ lang CPrettyPrint = CAst + PrettyPrint
     else never
 
   sem printBinOp (lhs: String) (rhs: String) =
-  | OAssg   {} -> join [lhs, " = ", rhs]
-  | OSubScr {} -> join [lhs, "[", rhs, "]"]
-  | OOr     {} -> join [lhs, " || ", rhs]
-  | OAnd    {} -> join [lhs, " && ", rhs]
-  | OEq     {} -> join [lhs, " == ", rhs]
-  | ONeq    {} -> join [lhs, " != ", rhs]
-  | OLt     {} -> join [lhs, " < ", rhs]
-  | OGt     {} -> join [lhs, " > ", rhs]
-  | OLe     {} -> join [lhs, " <= ", rhs]
-  | OGe     {} -> join [lhs, " >= ", rhs]
-  | OShiftL {} -> join [lhs, " << ", rhs]
-  | OShiftR {} -> join [lhs, " >> ", rhs]
-  | OAdd    {} -> join [lhs, " + ", rhs]
-  | OSub    {} -> join [lhs, " - ", rhs]
-  | OMul    {} -> join [lhs, " * ", rhs]
-  | ODiv    {} -> join [lhs, " / ", rhs]
-  | OMod    {} -> join [lhs, " % ", rhs]
-  | OBOr    {} -> join [lhs, " | ", rhs]
-  | OBAnd   {} -> join [lhs, " & ", rhs]
-  | OXor    {} -> join [lhs, " ^ ", rhs]
+  | OAssign    {} -> join [lhs, " = ", rhs]
+  | OSubScript {} -> join [lhs, "[", rhs, "]"]
+  | OOr        {} -> join [lhs, " || ", rhs]
+  | OAnd       {} -> join [lhs, " && ", rhs]
+  | OEq        {} -> join [lhs, " == ", rhs]
+  | ONeq       {} -> join [lhs, " != ", rhs]
+  | OLt        {} -> join [lhs, " < ", rhs]
+  | OGt        {} -> join [lhs, " > ", rhs]
+  | OLe        {} -> join [lhs, " <= ", rhs]
+  | OGe        {} -> join [lhs, " >= ", rhs]
+  | OShiftL    {} -> join [lhs, " << ", rhs]
+  | OShiftR    {} -> join [lhs, " >> ", rhs]
+  | OAdd       {} -> join [lhs, " + ", rhs]
+  | OSub       {} -> join [lhs, " - ", rhs]
+  | OMul       {} -> join [lhs, " * ", rhs]
+  | ODiv       {} -> join [lhs, " / ", rhs]
+  | OMod       {} -> join [lhs, " % ", rhs]
+  | OBOr       {} -> join [lhs, " | ", rhs]
+  | OBAnd      {} -> join [lhs, " & ", rhs]
+  | OXor       {} -> join [lhs, " ^ ", rhs]
 
   sem printUnOp (arg: String) =
   | OSizeOf {} -> join ["sizeof(", arg, ")"]
@@ -135,12 +119,14 @@ lang CPrettyPrint = CAst + PrettyPrint
     else never
 
   sem printType (decl: String) (env: PprintEnv) =
+
   -- TyIdent not really needed unless we add typedef
   --| TyIdent  { id = id } -> pprintEnvGetStr env id
-  | TyChar { } -> (env, _joinSpace "char" decl)
-  | TyInt { }  -> (env, _joinSpace "int" decl)
-  | TyDouble { } -> (env, _joinSpace "double" decl)
-  | TyVoid { } -> (env, _joinSpace "void" decl)
+
+  | TyChar {} -> (env, _joinSpace "char" decl)
+  | TyInt {}  -> (env, _joinSpace "int" decl)
+  | TyDouble {} -> (env, _joinSpace "double" decl)
+  | TyVoid {} -> (env, _joinSpace "void" decl)
   | TyPtr { ty = ty } -> printType (join ["(*", decl, ")"]) env ty
 
   | TyFun { ret = ret, params = params } ->
@@ -149,7 +135,7 @@ lang CPrettyPrint = CAst + PrettyPrint
       printType (join [decl, params]) env ret
     else never
 
-  | TyArr { ty = ty, size = size } ->
+  | TyArray { ty = ty, size = size } ->
     let subscr = match size with Some size then int2string size else "" in
     printType (join [decl, "[", subscr, "]"]) env ty
 
@@ -170,7 +156,7 @@ lang CPrettyPrint = CAst + PrettyPrint
       match mem with Some mem then
         let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
         match mapAccumL f env mem with (env,mem) then
-          let mem = map (lam s. join [s,";"]) in
+          let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
           (env, _joinSpace (join ["union ", id, " {", mem, "}"]) decl)
         else never
@@ -188,16 +174,16 @@ lang CPrettyPrint = CAst + PrettyPrint
     else never
 
 
-  -------------------
+  --------------------
   -- C INITIALIZERS --
-  -------------------
+  --------------------
 
   sem printInit (env: PprintEnv) =
   | IExpr { expr = expr } -> printExpr env expr
 
   | IList { inits = inits } ->
     match mapAccumL printInit env inits with (env,inits) then
-      (env, join ["{ ", strJoin ", " inits, " }"])
+      (env, join ["{", strJoin ", " inits, "}"])
     else never
 
 
@@ -213,6 +199,7 @@ lang CPrettyPrint = CAst + PrettyPrint
     else never
 
   sem printStmt (indent: Int) (env: PprintEnv) =
+
   | SDef { ty = ty, id = id, init = init } ->
     match printDef env ty id init with (env,str) then
       (env, join [str, ";"])
@@ -239,15 +226,17 @@ lang CPrettyPrint = CAst + PrettyPrint
     let iii = pprintIncr ii in
     match printExpr env cond with (env,cond) then
       let f = lam env. lam t.
-        match printStmts iii env t.1 with (env,t1) then (t.0,t1) else never in
+        match printStmts iii env t.1 with (env,t1) then
+          (env,(t.0,t1))
+        else never in
       match mapAccumL f env body with (env,body) then
         let f = lam t.
           join ["case ", int2string t.0, ":", pprintNewline iii, t.1] in
         let body = strJoin (pprintNewline ii) (map f body) in
         let str = join ["switch (", cond, ") {", pprintNewline ii, body] in
         match default with Some default then
-          match printStmts iii default with (env,default) then
-            (env join [str, pprintNewline ii,
+          match printStmts iii env default with (env,default) then
+            (env, join [str, pprintNewline ii,
                        "default:", pprintNewline iii,
                        default, pprintNewline i,
                        "}"])
@@ -286,7 +275,7 @@ lang CPrettyPrint = CAst + PrettyPrint
       else never
     else (env, "return;")
 
-  | SCont { } -> (env, "cont;")
+  | SCont { } -> (env, "continue;")
   | SBreak { } -> (env, "break;")
 
 
@@ -317,7 +306,6 @@ lang CPrettyPrint = CAst + PrettyPrint
 
   sem printProg =
   | PProg { tops = tops } ->
-    -- If main is found, we must make sure it is printed as "main"
     recursive let findMain = lam tops.
       match tops with [h] ++ tl then
         match h with TDef { id = Some id } | TFun { id = id } then
@@ -328,6 +316,8 @@ lang CPrettyPrint = CAst + PrettyPrint
       else never
     in
     let indent = 0 in
+    -- If a main function exists, we must make sure it is printed as "main". We
+    -- do this by adding that name first to the environment.
     let env =
       match findMain tops with Some name then
         pprintAddStr pprintEnvEmpty name
@@ -342,9 +332,11 @@ end
 mexpr
 use CPrettyPrint in
 
+-- TODO(dlunde,2020-10-30): We should add proper utests here. For now, we just
+-- print a C program containing all the features above.
+
 let xname = nameSym "x" in
 let funname = nameSym "fun" in
-
 
 let var = SExpr { expr = EVar { id = xname } } in
 let app = SExpr {
@@ -388,13 +380,13 @@ let ifstmt = SIf {
 } in
 
 let strinit = SDef {
-  ty = TyArr { ty = TyChar {}, size = None () }, id = Some (nameSym "strinit"),
+  ty = TyArray { ty = TyChar {}, size = None () }, id = Some (nameSym "strinit"),
   init = Some (IExpr { expr = EString { s = "strinit" } })
 } in
 
 let op = SExpr {
   expr = EBinOp {
-    op = OAssg {},
+    op = OAssign {},
     lhs = EVar { id = xname },
     rhs = EBinOp {
       op = OMul {},
@@ -406,14 +398,14 @@ let op = SExpr {
 
 let structname = nameSym "s" in
 
-let defstruct = SDef {
+let struct = SDef {
   ty = TyStruct { id = structtyname, mem = None () },
   id = Some structname,
   init = None ()
 } in
 
 let memb = SExpr {
-  expr = EMemb { lhs = EVar { id = structname }, id = structmemname }
+  expr = EMember { lhs = EVar { id = structname }, id = structmemname }
 } in
 
 let advty =
@@ -439,20 +431,107 @@ let sizety = SExpr {
   expr = ESizeOfType { ty = advty }
 } in
 
+let union = SDef {
+  ty = TyUnion {
+    id = nameSym "unionty",
+    mem = Some (
+      [(TyInt {}, nameSym "x"),
+       (TyDouble {}, nameSym "y")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+
+let enum = SDef {
+  ty = TyEnum {
+    id = nameSym "enumty",
+    mem = Some (
+      [(nameSym "CONST"),
+       (nameSym "CONST")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+
+
+let switch = SSwitch {
+  cond = EInt { i = 1 },
+  body = [
+    (2,[
+      op,
+      SBreak {}
+    ]),
+    (5,[
+      var
+    ]),
+    (7,[
+      app,
+      SBreak {}
+    ])
+  ],
+  default = Some ([
+    memb
+  ])
+} in
+
+let while = SWhile {
+  cond = EInt { i = 42 },
+  body = [
+    app,
+    SComp { stmts = [
+      var,
+      memb
+    ] },
+    SCont {},
+    memb
+  ]
+} in
+
 let funbody = [
   defstmt,
   strinit,
-  defstruct,
+  struct,
+  union,
+  enum,
   memb,
   cast,
   sizety,
   op,
   app,
-  ifstmt
+  ifstmt,
+  switch,
+  while
 ] in
 
 let mainname = nameSym "main" in
 let arg2name = nameSym "arg2" in
+
+let arrinit = TDef {
+  ty = TyArray {
+    ty = TyArray { ty = TyInt {}, size = Some 3 }, size = None ()
+  },
+  id = Some (nameSym "arrinit"),
+  init = Some ( IList {
+    inits = [
+      IList {
+        inits = [
+          IExpr { expr = EInt { i = 1 } },
+          IExpr { expr = EInt { i = 2 } },
+          IExpr { expr = EInt { i = 3 } }
+        ]
+      },
+      IList {
+        inits = [
+          IExpr { expr = EInt { i = 4 } },
+          IExpr { expr = EInt { i = 5 } },
+          IExpr { expr = EInt { i = 6 } }
+        ]
+      }
+    ]
+  } )
+} in
 
 let fun = TFun {
   ret =
@@ -466,24 +545,23 @@ let main = TFun {
   ret = TyInt {}, id = nameSym "main",
   params = [
     (TyInt {}, nameSym "argc"),
-    (TyArr { ty = TyPtr { ty = TyChar {}}, size = None ()}, nameSym "argv")
+    (TyArray { ty = TyPtr { ty = TyChar {}}, size = None ()}, nameSym "argv")
   ],
   body = [ SRet { val = Some (EInt { i = 1 }) }] }
 in
 
--- union
--- enum
--- initializer list
--- switch (incl. break)
--- while (incl. cont)
--- comp
--- return without value
+let noreturn = TFun {
+  ret = TyVoid {}, id = nameSym "noreturn",
+  params = [],
+  body = [ SRet { val = None () }] } in
 
 let tops = [
   deftop,
   definittop,
   structtop,
+  arrinit,
   fun,
+  noreturn,
   main
 ] in
 

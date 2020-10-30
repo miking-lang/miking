@@ -3,6 +3,7 @@
 -- NOTE(dlunde,2020-10-29): Missing functionality (most things are probably not
 -- needed for code generation or can be expressed through other language
 -- constructs):
+--
 -- * Includes/module system
 -- * Labeled statements and goto
 -- * Storage class specifiers (typedef, auto, register, static, extern)
@@ -10,6 +11,32 @@
 -- * Increment/decrement operators
 -- * Combined assignment operators (e.g. +=, *=)
 -- * Ternary operator (cond ? expr : expr)
+-- * DoWhile, For
+
+-- NOTE(dlunde,2020-10-30):
+--
+-- * Identifiers are _not_ checked for validity. You must make sure they are
+--   valid in your own code.
+--
+-- * Definitions have optional identifiers and initializers to allow for
+--   declaring struct/union/enum types without instantiating them
+--   ```
+--   struct ty { ... members ... };
+--   ```
+--   and to initialize variables directly
+--   ```
+--   int arr[] = {1, 2, 3};
+--   ```
+--   To keep the AST clean, however, this currently also allows for incorrect
+--   definitions such as
+--   ```
+--   int *;
+--   ```
+--   and
+--   ```
+--   int = 1;
+--   ```
+--   which are not valid in C.
 
 include "name.mc"
 
@@ -18,8 +45,6 @@ lang CAst
   -------------------
   -- C EXPRESSIONS --
   -------------------
-  -- NOTE(dlunde,2020-10-28): We cannot reuse operators from mexpr (such as
-  -- CAddi) since they are curried. Maybe this will change in the future?
 
   syn Expr =
   | EVar        { id: Name }
@@ -30,13 +55,13 @@ lang CAst
   | EString     { s: String }
   | EBinOp      { op: UnOp, lhs: Expr, rhs: Expr }
   | EUnOp       { op: BinOp, arg: Expr }
-  | EMemb       { lhs: Expr, id: Name }
+  | EMember     { lhs: Expr, id: Name }
   | ECast       { ty: Type, rhs: Expr }
   | ESizeOfType { ty: Type }
 
   syn BinOp =
-  | OAssg {}
-  | OSubScr {}
+  | OAssign {}
+  | OSubScript {}
   | OOr {}
   | OAnd {}
   | OEq {}
@@ -77,7 +102,7 @@ lang CAst
   | TyVoid {}
   | TyPtr { ty: Type }
   | TyFun { ret: Type, params: [Type] }
-  | TyArr { ty: Type, size: Option Int }
+  | TyArray { ty: Type, size: Option Int }
   | TyStruct { id: Name, mem: Option [(Type,Name)] }
   | TyUnion { id: Name, mem: Option [(Type,Name)] }
   | TyEnum { id: Name, mem: Option [Name] }
@@ -95,12 +120,12 @@ lang CAst
   ------------------
   -- C STATEMENTS --
   ------------------
-
   -- We force if, switch, and while to introduce new scopes (by setting the
   -- body type to [Stmt] rather than Stmt). It is allowed in C to have a single
   -- (i.e., not compound) statement as the body, but this statement is NOT
   -- allowed to be a definition. To do this properly, we would need to separate
   -- statements and definitions into different data types.
+
   syn Stmt =
   | SDef     { ty: Type, id: Option Name, init: Option Init }
   | SIf      { cond: Expr, thn: [Stmt], els: [Stmt] }
