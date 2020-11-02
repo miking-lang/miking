@@ -55,7 +55,7 @@ lang CAst
   | EString     { s: String }
   | EBinOp      { op: UnOp, lhs: Expr, rhs: Expr }
   | EUnOp       { op: BinOp, arg: Expr }
-  | EMember     { lhs: Expr, id: Name }
+  | EMember     { lhs: Expr, id: String }
   | ECast       { ty: Type, rhs: Expr }
   | ESizeOfType { ty: Type }
 
@@ -103,8 +103,8 @@ lang CAst
   | TyPtr { ty: Type }
   | TyFun { ret: Type, params: [Type] }
   | TyArray { ty: Type, size: Option Int }
-  | TyStruct { id: Name, mem: Option [(Type,Name)] }
-  | TyUnion { id: Name, mem: Option [(Type,Name)] }
+  | TyStruct { id: Name, mem: Option [(Type,String)] }
+  | TyUnion { id: Name, mem: Option [(Type,String)] }
   | TyEnum { id: Name, mem: Option [Name] }
 
 

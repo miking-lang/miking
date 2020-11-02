@@ -11,9 +11,15 @@ include "mexpr/pprint.mc"
 -- Surrounds a string with parentheses
 let _par = lam str. join ["(",str,")"]
 
--- Combines two strings with space in between (if the second string is non-empty)
+-- Combines two strings with space in between (if the second string is
+-- non-empty)
 let _joinSpace = lam fst. lam snd.
   if eqString "" snd then fst else join [fst, " ", snd]
+
+-- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
+-- argument. If it is None (), the returned string is "".
+let pprintEnvGetOptStr = lam env. lam id.
+  match id with Some id then pprintEnvGetStr env id else (env,"")
 
 lang CPrettyPrint = CAst + PrettyPrint
 
@@ -53,9 +59,7 @@ lang CPrettyPrint = CAst + PrettyPrint
 
   | EMember { lhs = lhs, id = id } ->
     match printExpr env lhs with (env,lhs) then
-      match pprintEnvGetStr env id with (env,id) then
-        (env, _par (join [lhs, ".", id]))
-      else never
+      (env, _par (join [lhs, ".", id]))
     else never
 
   | ECast { ty = ty, rhs = rhs } ->
@@ -105,17 +109,14 @@ lang CPrettyPrint = CAst + PrettyPrint
   -------------
 
   -- Helper function for printing declarations and definitions
-  sem printDef (env: PprintEnv) (ty: Type) (id: Option Name) =
+  sem printDef (env: PprintEnv) (ty: Type) (id: String) =
   | init ->
-    let tmp = match id with Some id then pprintEnvGetStr env id else (env, "") in
-    match tmp with (env,id) then
-      match printType id env ty with (env,decl) then
-        match init with Some init then
-          match printInit env init with (env,init) then
-            (env, join [decl, " = ", init])
-          else never
-        else (env, decl)
-      else never
+    match printType id env ty with (env,decl) then
+      match init with Some init then
+        match printInit env init with (env,init) then
+          (env, join [decl, " = ", init])
+        else never
+      else (env, decl)
     else never
 
   sem printType (decl: String) (env: PprintEnv) =
@@ -142,7 +143,7 @@ lang CPrettyPrint = CAst + PrettyPrint
   | TyStruct { id = id, mem = mem } ->
     match pprintEnvGetStr env id with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
+        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -154,7 +155,7 @@ lang CPrettyPrint = CAst + PrettyPrint
   | TyUnion { id = id, mem = mem } ->
     match pprintEnvGetStr env id with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
+        let f = lam env. lam t. printDef env t.0 t.1 (None ()) in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -201,8 +202,10 @@ lang CPrettyPrint = CAst + PrettyPrint
   sem printStmt (indent: Int) (env: PprintEnv) =
 
   | SDef { ty = ty, id = id, init = init } ->
-    match printDef env ty id init with (env,str) then
-      (env, join [str, ";"])
+    match pprintEnvGetOptStr env id with (env,id) then
+      match printDef env ty id init with (env,str) then
+        (env, join [str, ";"])
+      else never
     else never
 
   | SIf { cond = cond, thn = thn, els = els } ->
@@ -285,15 +288,20 @@ lang CPrettyPrint = CAst + PrettyPrint
 
   sem printTop (indent : Int) (env: PprintEnv) =
   | TDef { ty = ty, id = id, init = init } ->
-    match printDef env ty id init with (env,str) then
-      (env, join [str, ";"])
+    match pprintEnvGetOptStr env id with (env,id) then
+      match printDef env ty id init with (env,str) then
+        (env, join [str, ";"])
+      else never
     else never
 
   | TFun { ret = ret, id = id, params = params, body = body } ->
     let i = indent in
     let ii = pprintIncr indent in
     match pprintEnvGetStr env id with (env,id) then
-      let f = lam env. lam t. printDef env t.0 (Some t.1) (None ()) in
+      let f = lam env. lam t.
+        match pprintEnvGetStr env t.1 with (env,t1) then
+          printDef env t.0 t1 (None ())
+        else never in
       match mapAccumL f env params with (env,params) then
         let params = join ["(", strJoin ", " params, ")"] in
         match printType (join [id, params]) env ret with (env,ty) then
@@ -350,14 +358,13 @@ let definittop = TDef {
 } in
 
 let structtyname = nameSym "structty" in
-let structmemname = nameSym "x" in
 
 let structtop = TDef {
   ty = TyStruct {
     id = structtyname,
     mem = Some (
-      [(TyInt {}, structmemname),
-       (TyDouble {}, nameSym "y")]
+      [(TyInt {}, "x"),
+       (TyDouble {}, "y")]
     )
   },
   id = None (),
@@ -405,7 +412,7 @@ let struct = SDef {
 } in
 
 let memb = SExpr {
-  expr = EMember { lhs = EVar { id = structname }, id = structmemname }
+  expr = EMember { lhs = EVar { id = structname }, id = "x" }
 } in
 
 let advty =
@@ -435,8 +442,8 @@ let union = SDef {
   ty = TyUnion {
     id = nameSym "unionty",
     mem = Some (
-      [(TyInt {}, nameSym "x"),
-       (TyDouble {}, nameSym "y")]
+      [(TyInt {}, "x"),
+       (TyDouble {}, "y")]
     )
   },
   id = None (),

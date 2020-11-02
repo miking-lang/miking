@@ -41,7 +41,7 @@ end
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
-           tpe   : Option,
+           tpe   : Option Type,
            body  : Expr,
            fi    : Info}
 
@@ -124,7 +124,7 @@ end
 lang DataAst
   syn Expr =
   | TmConDef {ident  : Name,
-              tpe    : Option,
+              tpe    : Option Type,
               inexpr : Expr}
   | TmConApp {ident : Name,
               body : Expr}
