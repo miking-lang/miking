@@ -1,9 +1,15 @@
--- Compilation from MExpr to C (only supports a small subset of MExpr
--- programs). We currently do not have checks for this, so some MExpr programs
+-- Compilation from MExpr to C. Only supports a small subset of MExpr
+-- programs. We currently do not have checks for this, so some MExpr programs
 -- will compile (without error) to invalid C programs.
 --
 -- Assumptions:
 -- * All identifiers are unique (i.e., are symbolized)
+-- * All lets and lambdas have proper type annotations
+-- (TODO(dlunde,2020-10-03): Add type annotations to lets). This requirement
+-- can (probably?) be weakened when we have a type system.
+
+include "mexpr/ast.mc"
+include "ast.mc"
 
 
 -- TODO(dlunde,2020-11-02): Right now, this fragment definition merges the ASTs
@@ -13,89 +19,67 @@
 lang CompileMExprC = MExprAst + CAst
 
   sem compile =
-  | prog -> -- Call `compileTop` and build final program from result.
+  | prog -> error "TODO"
+    -- Call `compileTop` and build final program from result.
 
   sem compileTop =
-  | TmLet ->
+  | TmLet _ -> error "TODO"
     -- Check for and specially handle let x = lam. ....
     -- Otherwise, compile and move initialization to `main` function (leave
     -- declaration here though)
-  | TmRecLets ->
+  | TmRecLets _ -> error "TODO"
     -- Only allow let x = lam. ....
     -- Identical to a sequence of TmLets, but also forward declare all
     -- functions involved.
-  | TmConDef ->
-    -- These should be handled by a prior compiler phase (which also receives
-    -- input from the type checker)
-  | TmUtest ->
-    -- Skip
-  | rest ->
-    -- Return value of function `main` (call compileStmt)
+  | TmConDef _ -> error "TODO"
+    -- Fail or skip. These should be handled by a prior compiler phase.
+  | TmUtest _ -> error "TODO"
+    -- Fail or skip.
+  | rest -> error "TODO"
+    -- This is the return value of function `main` (call compileStmt)
 
   sem compileStmt =
-  | TmLet ->
+  | TmLet _ -> error "TODO"
     -- Declare variable and call `compileExpr` on body. TmMatch requires
     -- special handling (translates to if-statement).
-  | TmRecLets -> fail
+  | TmRecLets _ -> error "TODO"
     -- Not allowed.
-  | TmConDef -> fail
+  | TmConDef _ -> error "TODO"
     -- Should have been handled by prior compiler phase/type checker
-  | TmUtest -> fail
-    -- Not allowed
-  | TmNever -> fail
-    -- Should not occur at this level
-
-  -- The below will be very similar to compileExpr, except the value is
-  -- returned and not written to a variable. Reuse possible?
-  | TmVar ->
-    -- Return contents of variable
-  | TmApp ->
-    -- Return the result of calling a function. Fail if lhs is not TmVar
-  | TmLam -> fail
-    -- Return anonymous function, not allowed
-  | TmRecord -> fail
-    -- Return struct (or struct pointer) in C (allow?)
-  | TmRecordUpdate -> fail
-    -- Return struct (or struct pointer)in C (allow?)
-  | TmConst ->
-    -- Return a literal.
-  | TmConApp -> fail
-    -- Return struct (or struct pointer) in C (allow?)
-  | TmMatch ->
-    -- Translates depending on pattern. Most basic things can be encoded using
-    -- if-statements.
-  | TmSeq -> fail
-    -- Return struct/array (or struct pointer) in C (allow?)
+  | TmUtest _ -> error "TODO"
+    -- Skip or fail
+  | rest -> error "TODO"
+    -- Call compileExpr
 
   sem compileExpr =
-  | TmVar ->
+  | TmVar _ -> error "TODO"
     -- Direct translation
-  | TmApp ->
-    -- Fail if lhs is not TmVar
-  | TmLam -> fail
+  | TmApp _ -> error "TODO"
+    -- Fail if lhs is not TmVar (or a predetermined set of consts)
+  | TmLam _ -> error "TODO"
     -- Anonymous function, not allowed
-  | TmRecord -> fail
+  | TmRecord _ -> error "TODO"
     -- Create a new struct (allow?)
-  | TmRecordUpdate -> fail
+  | TmRecordUpdate _ -> error "TODO"
     -- Create a new struct (allow?)
-  | TmLet ->
+  | TmLet _ -> error "TODO"
     -- Equivalent to starting a new scope?
-  | TmRecLets -> fail
+  | TmRecLets _ -> error "TODO"
     -- Not allowed.
-  | TmConst ->
+  | TmConst _ -> error "TODO"
     -- Literal
-  | TmConDef -> fail
+  | TmConDef _ -> error "TODO"
     -- Should have been handled by prior compiler phase/type checker
-  | TmConApp -> fail
+  | TmConApp _ -> error "TODO"
     -- Will be equivalent to returning a C struct, which is not allowed.
-  | TmMatch ->
+  | TmMatch _ -> error "TODO"
     -- Translates depending on pattern. Most basic things can be encoded using
     -- if-statements.
-  | TmUtest -> fail
+  | TmUtest _ -> error "TODO"
     -- Not allowed
-  | TmSeq -> fail
+  | TmSeq _ -> error "TODO"
     -- Create a new struct/array (allow?)
-  | TmNever -> fail
-    -- Create a new struct/array (allow?)
+  | TmNever _ -> error "TODO"
+    -- Should not occur here
 
 end
