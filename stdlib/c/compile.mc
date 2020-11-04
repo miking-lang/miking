@@ -5,17 +5,27 @@
 -- Assumptions:
 -- * All identifiers are unique (i.e., are symbolized)
 -- * All lets and lambdas have proper type annotations
--- (TODO(dlunde,2020-10-03): Add type annotations to lets). This requirement
--- can (probably?) be weakened when we have a type system.
+-- (TODO(dlunde,2020-10-03): Add type annotations to all lets). This requirement
+-- can be weakened when we have a type system.
 
 include "mexpr/ast.mc"
 include "ast.mc"
 
+-- NOTE(dlunde,2020-11-04) Compiler phases:
+-- 1. Identify compound types and define them at top-level (structs, tagged
+-- unions). NOTE: Do we want to support curried data constructors?
+-- 2. Do a (partial) ANF transformation, lifting out construction of compound
+-- data types from expressions (i.e., we avoid anonymous
+-- record/sequence/variant construction in the middle of expressions). By doing
+-- this, construction of complex data types is explicit and always bound to
+-- variables, which makes translation to C straightforward.
+-- 3. Translate to C program.
 
 -- TODO(dlunde,2020-11-02): Right now, this fragment definition merges the ASTs
 -- of both MExpr and C. This results in, for instance, Expr including both
 -- MExpr and C expressions. In the future, we need some type of qualified
 -- fragment include or similar to resolve this.
+-- See https://github.com/miking-lang/miking/issues/213.
 lang CompileMExprC = MExprAst + CAst
 
   sem compile =
@@ -40,46 +50,50 @@ lang CompileMExprC = MExprAst + CAst
 
   sem compileStmt =
   | TmLet _ -> error "TODO"
-    -- Declare variable and call `compileExpr` on body. TmMatch requires
-    -- special handling (translates to if-statement).
+    -- Declare variable and call `compileExpr` on body.
+    -- The following bodies require special handling:
+    -- * TmMatch: translate to if or switch statement.
+    -- * TmSeq: allocate and create a new struct/array.
+    -- * TmConApp: allocate and create a new struct.
+    -- * TmRecord: allocate and create new struct.
+    -- * TmRecordUpdate: allocate and create new struct.
   | TmRecLets _ -> error "TODO"
-    -- Not allowed.
+    -- Not allowed here.
   | TmConDef _ -> error "TODO"
-    -- Should have been handled by prior compiler phase/type checker
+    -- Should have been handled by prior compiler phase/type checker.
   | TmUtest _ -> error "TODO"
     -- Skip or fail
   | rest -> error "TODO"
-    -- Call compileExpr
+    -- Return result of `compileExpr`
 
   sem compileExpr =
   | TmVar _ -> error "TODO"
-    -- Direct translation
+    -- Direct translation.
   | TmApp _ -> error "TODO"
-    -- Fail if lhs is not TmVar (or a predetermined set of consts)
+    -- Fail if lhs is not TmVar (or a predetermined set of consts).
   | TmLam _ -> error "TODO"
-    -- Anonymous function, not allowed
+    -- Anonymous function, not allowed.
   | TmRecord _ -> error "TODO"
-    -- Create a new struct (allow?)
+    -- Should not occur here because of prior compiler phase.
   | TmRecordUpdate _ -> error "TODO"
-    -- Create a new struct (allow?)
+    -- Should not occur here because of prior compiler phase.
   | TmLet _ -> error "TODO"
-    -- Equivalent to starting a new scope?
+    -- Should not occur here because of prior compiler phase.
   | TmRecLets _ -> error "TODO"
-    -- Not allowed.
+    -- Not allowed here.
   | TmConst _ -> error "TODO"
-    -- Literal
+    -- Translate to Literal.
   | TmConDef _ -> error "TODO"
-    -- Should have been handled by prior compiler phase/type checker
+    -- Should have been handled by prior compiler phase/type checker.
   | TmConApp _ -> error "TODO"
-    -- Will be equivalent to returning a C struct, which is not allowed.
+    -- Should not occur here because of prior compiler phase.
   | TmMatch _ -> error "TODO"
-    -- Translates depending on pattern. Most basic things can be encoded using
-    -- if-statements.
+    -- Should not occur here because of prior compiler phase.
   | TmUtest _ -> error "TODO"
-    -- Not allowed
+    -- Not allowed.
   | TmSeq _ -> error "TODO"
-    -- Create a new struct/array (allow?)
+    -- Should not occur here because of prior compiler phase.
   | TmNever _ -> error "TODO"
-    -- Should not occur here
+    -- Should not occur here.
 
 end
