@@ -72,11 +72,11 @@ end
 
 lang FunSym = Sym + FunAst + VarSym + AppSym
   sem symbolizeExpr (env : Env) =
-  | TmLam {ident = ident, tpe = tpe, body = body} ->
+  | TmLam {ident = ident, ty = ty, body = body} ->
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
     let env = _symInsert (IdVar str) ident env in
-    TmLam {ident = ident, tpe = tpe, body = symbolizeExpr env body}
+    TmLam {ident = ident, ty = ty, body = symbolizeExpr env body}
 end
 
 lang RecordSym = Sym + RecordAst
@@ -91,12 +91,12 @@ end
 
 lang LetSym = Sym + LetAst
   sem symbolizeExpr (env : Env) =
-  | TmLet {ident = ident,  body = body, inexpr = inexpr} ->
+  | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
     let ident = nameSetNewSym ident in
     let str = nameGetStr ident in
     let body = symbolizeExpr env body in
     let env = _symInsert (IdVar str) ident env in
-    TmLet {ident = ident, body = body, inexpr = symbolizeExpr env inexpr}
+    TmLet {ident = ident, ty = ty, body = body, inexpr = symbolizeExpr env inexpr}
 end
 
 lang RecLetsSym = Sym + RecLetsAst
@@ -130,11 +130,11 @@ end
 
 lang DataSym = Sym + DataAst
   sem symbolizeExpr (env : Env) =
-  | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
+  | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
     let str = nameGetStr ident in
     let ident = nameSetNewSym ident in
     let env = _symInsert (IdCon str) ident env in
-    TmConDef {ident = ident, tpe = tpe, inexpr = symbolizeExpr env inexpr}
+    TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
   | TmConApp {ident = ident, body = body} ->
     let str = nameGetStr ident in
     match _symLookup (IdCon str) env
@@ -199,11 +199,11 @@ let _symbolize_patname: Env ->  (Env, PatName) = lam patEnv. lam pname.
     (patEnv, PWildcard ())
   else never
 
-lang VarPatSym = VarPat
+lang NamedPatSym = NamedPat
   sem symbolizePat (env : Env) (patEnv : Env) =
-  | PVar p ->
+  | PNamed p ->
     match _symbolize_patname patEnv p.ident with (patEnv, patname) then
-      (patEnv, PVar {p with ident = patname})
+      (patEnv, PNamed {p with ident = patname})
     else never
 end
 
@@ -299,7 +299,7 @@ lang MExprSym =
   DataSym + MatchSym + UtestSym + SeqSym + NeverSym
 
   -- Patterns
-  + VarPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
+  + NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
 -----------
@@ -319,10 +319,10 @@ let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
 
 let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
 
-let letin = bind_ (let_ "x" rec) (app_ (var_ "x") base) in
+let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
 
 let rlets =
-  bind_ (reclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
+  bind_ (ureclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
     (app_ (var_ "x") (var_ "y")) in
 
 let const = int_ 1 in
@@ -355,14 +355,14 @@ let seq = seq_ [base, data, const] in
 
 let nev = never_ in
 
-let matchand = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pand_ (pint_ 1) (pvar_ "a")) (var_ "a") (never_)) in
+let matchand = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (pand_ (pint_ 1) (pvar_ "a")) (var_ "a") (never_)) in
 
-let matchor = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar_ "a")) (var_ "a") (never_)) in
+let matchor = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pvar_ "a") (pvar_ "a")) (var_ "a") (never_)) in
 
--- NOTE(vipa, 2020-09-23): (var_ "a") should refer to the "a" from let_, not the pattern, that's intended, in case someone happens to notice and finds it odd
-let matchnot = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
+-- NOTE(vipa, 2020-09-23): (var_ "a") should refer to the "a" from ulet_, not the pattern, that's intended, in case someone happens to notice and finds it odd
+let matchnot = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (pnot_ (pvar_ "a")) (var_ "a") (never_)) in
 
-let matchoredge = bind_ (let_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
+let matchoredge = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [pchar_ 'a'] "a" []) (pseqedge_ [pchar_ 'b'] "a" [])) (var_ "a") (never_)) in
 
 let debug = false in
 

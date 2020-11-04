@@ -121,7 +121,10 @@ lang RecordEval = RecordAst
     else error "Not updating a record"
 end
 
-lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval
+lang RecLetsEval =
+  RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
+  UnknownTypeAst
+
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
     let foldli = lam f. lam init. lam seq.
@@ -134,8 +137,9 @@ lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEva
       foldli
         (lam i. lam bodyacc. lam binding.
           TmLet {ident = binding.ident,
+                 ty = TyUnknown {},
                  body = TmLam {ident = eta_name,
-                               tpe = None (),
+                               ty = TyUnknown {},
                                body = TmApp {lhs = dtupleproj_ i var,
                                              rhs = eta_var}},
                  inexpr = bodyacc}
@@ -146,7 +150,7 @@ lang RecLetsEval = RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEva
     let lst_var = TmVar {ident = lst_name} in
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
-                               tpe = None (),
+                               ty = TyUnknown {},
                                body = unpack_from lst_var func_tuple} in
     eval {ctx with env =
             _evalInsert lst_name (TmApp {lhs = TmFix (), rhs = unfixed_tuple})
@@ -476,10 +480,10 @@ end
 -- PATTERNS --
 --------------
 
-lang VarPatEval = VarPat
+lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PVar {ident = PName name} -> Some (_evalInsert name t env)
-  | PVar {ident = PWildcard ()} -> Some env
+  | PNamed {ident = PName name} -> Some (_evalInsert name t env)
+  | PNamed {ident = PWildcard ()} -> Some env
 end
 
 lang SeqTotPatEval = SeqTotPat + SeqAst
@@ -607,7 +611,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval
 
   -- Patterns
-  + VarPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
+  + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
 end
@@ -687,14 +691,14 @@ let matchOuter =
 
 let deconstruct = lam t.
   bindall_
-    [(let_ "e1" (tupleproj_ 0 t)), (let_ "e2" (tupleproj_ 1 t)), matchOuter] in
+    [(ulet_ "e1" (tupleproj_ 0 t)), (ulet_ "e2" (tupleproj_ 1 t)), matchOuter] in
 
 let addCase = lam arg. lam els.
   match_ arg (pcon_ "Add" (pvar_ "t")) (deconstruct (var_ "t")) els in
 
  -- fix (lam eval. lam e. match e with then ... else ())
 let evalFn =
-  reclet_ "eval" (ulam_ "e" (num_case (var_ "e") (addCase (var_ "e") unit_))) in
+  ureclet_ "eval" (ulam_ "e" (num_case (var_ "e") (addCase (var_ "e") unit_))) in
 
 -- con Num in con Add in let eval = ... in t
 let wrapInDecls = lam t.
@@ -705,7 +709,7 @@ let addOneTwoThree = add (add one two) three in
 let evalAdd2 = wrapInDecls (app_ (var_ "eval") addOneTwoThree) in
 
 let srl = bind_
-  (reclet_ "test" (ulam_ "x"
+  (ureclet_ "test" (ulam_ "x"
      (if_ (eqi_ (var_ "x") (int_ 0))
        true_
        (app_ (var_ "test") (subi_ (var_ "x") (int_ 1))))))
@@ -722,7 +726,7 @@ utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqExpr in
 
 let oddEven = lam bdy.
   bind_
-    (reclets_
+    (ureclets_
        [("odd",
          ulam_ "x"
            (if_ (eqi_ (var_ "x") (int_ 1))
@@ -761,15 +765,15 @@ with conapp_ "Num" (int_ 3)
 using eqExpr in
 
 let recordProj =
-  bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "b" (var_ "myrec")) in
 
 let recordUpdate =
-  bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "c" (recordupdate_ (var_ "myrec") "c" (int_ 11))) in
 
 let recordUpdate2 =
-  bind_ (let_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "a" (recordupdate_ (var_ "myrec") "a" (int_ 1729))) in
 
 utest eval recordProj with (int_ 37) in
@@ -868,7 +872,7 @@ utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
 -- Unit tests for SymbEval and CmpSymbEval
 utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
-utest eval (bind_ (let_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
+utest eval (bind_ (ulet_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
 with true_ in
 
 utest eval (match_

@@ -292,7 +292,7 @@ module AstHelpers = struct
 
   let app l r = TmApp (NoInfo, l, r)
 
-  let let_ x s e body = TmLet (NoInfo, x, s, e, body)
+  let let_ x s e body = TmLet (NoInfo, x, s, TyUnknown, e, body)
 end
 
 open AstHelpers
@@ -358,24 +358,25 @@ let rec desugar_tm nss env =
   | TmLam (fi, name, s, ty, body) ->
       TmLam
         (fi, empty_mangle name, s, ty, desugar_tm nss (delete_id env name) body)
-  | TmLet (fi, name, s, e, body) ->
+  | TmLet (fi, name, s, ty, e, body) ->
       TmLet
         ( fi
         , empty_mangle name
         , s
+        , ty
         , desugar_tm nss env e
         , desugar_tm nss (delete_id env name) body )
   | TmRecLets (fi, bindings, body) ->
       let env' =
         List.fold_left
-          (fun env' (_, name, _, _) -> delete_id env' name)
+          (fun env' (_, name, _, _, _) -> delete_id env' name)
           env bindings
       in
       TmRecLets
         ( fi
         , List.map
-            (fun (fi, name, s, e) ->
-              (fi, empty_mangle name, s, desugar_tm nss env' e))
+            (fun (fi, name, s, ty, e) ->
+              (fi, empty_mangle name, s, ty, desugar_tm nss env' e))
             bindings
         , desugar_tm nss env' body )
   | TmCondef (fi, name, s, ty, body) ->
@@ -408,11 +409,11 @@ let rec desugar_tm nss env =
         | PatSeqTot (fi, pats) ->
             let env, pats = desugar_pat_seq env pats in
             (env, PatSeqTot (fi, pats))
-        | PatSeqEdg (fi, l, x, r) ->
+        | PatSeqEdge (fi, l, x, r) ->
             let env, l = desugar_pat_seq env l in
             let env, x = desugar_pname env x in
             let env, r = desugar_pat_seq env r in
-            (env, PatSeqEdg (fi, l, x, r))
+            (env, PatSeqEdge (fi, l, x, r))
         | PatRecord (fi, pats) ->
             let env = ref env in
             let pats =
@@ -526,7 +527,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           ( fi
           , target
           , Symb.Helpers.nosym
-          , TyDyn
+          , TyUnknown
           , translate_cases fname (var target) cases )
         |> List.fold_right wrap_param params
         |> desugar_tm nss ns
@@ -537,6 +538,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
               ( fi
               , mangle name
               , Symb.Helpers.nosym
+              , TyUnknown
               , inter_to_tm name fi params cases )
         | _ ->
             None
@@ -548,12 +550,13 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       in
       (USMap.add langName ns nss, wrap :: stack)
   (* The other tops are trivial translations *)
-  | TopLet (Let (fi, id, tm)) ->
+  | TopLet (Let (fi, id, ty, tm)) ->
       let wrap tm' =
         TmLet
           ( fi
           , empty_mangle id
           , Symb.Helpers.nosym
+          , ty
           , desugar_tm nss emptyMlangEnv tm
           , tm' )
       in
@@ -563,10 +566,11 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
         TmRecLets
           ( fi
           , List.map
-              (fun (fi', id, tm) ->
+              (fun (fi', id, ty, tm) ->
                 ( fi'
                 , empty_mangle id
                 , Symb.Helpers.nosym
+                , ty
                 , desugar_tm nss emptyMlangEnv tm ))
               lets
           , tm' )

@@ -41,7 +41,7 @@ end
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
-           tpe   : Option Type,
+           ty    : Type,
            body  : Expr,
            fi    : Info}
 
@@ -75,6 +75,7 @@ end
 lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
+           ty     : Type,
            body   : Expr,
            inexpr : Expr,
 	   fi     : Info}
@@ -92,6 +93,7 @@ end
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : Name,
+                            ty    : Type,
                             body  : Expr}],
                inexpr   : Expr}
 
@@ -124,7 +126,7 @@ end
 lang DataAst
   syn Expr =
   | TmConDef {ident  : Name,
-              tpe    : Option Type,
+              ty     : Type,
               inexpr : Expr}
   | TmConApp {ident : Name,
               body : Expr}
@@ -286,15 +288,15 @@ type PatName
 con PName     : Name -> PatName
 con PWildcard : ()   -> PatName
 
-lang VarPat
+lang NamedPat
   syn Pat =
-  | PVar {ident : PatName}
+  | PNamed {ident : PatName}
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PVar p -> PVar p
+  | PNamed p -> PNamed p
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PVar _ -> acc
+  | PNamed _ -> acc
 end
 
 lang SeqTotPat
@@ -414,53 +416,20 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO(dlunde,2020-09-29): Update (also not up to date in boot?)
-
-lang FunTypeAst
-  syn Type =
-  | TyArrow {from : Type,
-             to   : Type}
-end
-
-lang DynTypeAst
-  syn Type =
-  | TyDyn {}
-end
 
 lang UnitTypeAst
   syn Type =
   | TyUnit {}
 end
 
-lang CharTypeAst
+lang UnknownTypeAst
   syn Type =
-  | TyChar {}
+  | TyUnknown {}
 end
 
-lang StringTypeAst
+lang BoolTypeAst
   syn Type =
-  | TyString {}
-end
-
-lang SeqTypeAst
-  syn Type =
-  | TySeq {tpe : Type}
-end
-
-lang TupleTypeAst
-  syn Type =
-  | TyProd {tpes : [Type]}
-end
-
-lang RecordTypeAst
-  syn Type =
-  | TyRecord {tpes : [{ident : String,
-                       tpe   : Type}]}
-end
-
-lang DataTypeAst
-  syn Type =
-  | TyCon {ident : Name}
+  | TyBool {}
 end
 
 lang IntTypeAst
@@ -470,17 +439,49 @@ end
 
 lang FloatTypeAst
   syn Type =
-  | TyInt {}
+  | TyFloat {}
 end
 
-lang BoolTypeAst
+lang CharTypeAst
   syn Type =
-  | TyBool {}
+  | TyChar {}
+end
+
+lang FunTypeAst
+  syn Type =
+  | TyArrow {from : Type,
+             to   : Type}
+end
+
+lang SeqTypeAst
+  syn Type =
+  | TySeq {ty : Type}
+end
+
+lang TupleTypeAst
+  syn Type =
+  | TyTuple {tys : [Type]}
+end
+
+lang RecordTypeAst
+  syn Type =
+  | TyRecord {fields : [{ident : String,
+                         ty    : Type}]}
+end
+
+lang DataTypeAst
+  syn Type =
+  | TyCon {ident : Name}
 end
 
 lang AppTypeAst
   syn Type =
   | TyApp {lhs : Type, rhs : Type}
+end
+
+lang StringTypeAst
+  syn Type =
+  | TyString {}
 end
 
 lang TypeVarAst
@@ -503,10 +504,10 @@ lang MExprAst =
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
 
   -- Patterns
-  + VarPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
+  + NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
   BoolPat + AndPat + OrPat + NotPat
 
   -- Types
-  + FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
+  + FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
   SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
   FloatTypeAst + BoolTypeAst + AppTypeAst + TypeVarAst

@@ -208,7 +208,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     else error "Impossible"
 end
 
-lang FunPrettyPrint = PrettyPrint + FunAst
+lang FunPrettyPrint = PrettyPrint + FunAst + UnknownTypeAst
   sem isAtomic =
   | TmLam _ -> false
 
@@ -219,14 +219,13 @@ lang FunPrettyPrint = PrettyPrint + FunAst
   | TmLam t ->
     match pprintEnvGetStr env t.ident with (env,str) then
       let ident = pprintVarString str in
-      let tpe =
-        match t.tpe with Some t1 then
-          concat " : " (getTypeStringCode indent t1)
-        else ""
+      let ty =
+        match t.ty with TyUnknown {} then ""
+        else concat " : " (getTypeStringCode indent t.ty)
       in
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         (env,
-         join ["lam ", ident, tpe, ".", pprintNewline (pprintIncr indent),
+         join ["lam ", ident, ty, ".", pprintNewline (pprintIncr indent),
                body])
       else never
     else never
@@ -280,7 +279,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
     else never
 end
 
-lang LetPrettyPrint = PrettyPrint + LetAst
+lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
   sem isAtomic =
   | TmLet _ -> false
 
@@ -293,7 +292,11 @@ lang LetPrettyPrint = PrettyPrint + LetAst
       let ident = pprintVarString str in
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
-          (env, join ["let ", ident, " =", pprintNewline (pprintIncr indent),
+          let ty =
+            match t.ty with TyUnknown {} then ""
+            else concat " : " (getTypeStringCode indent t.ty)
+          in
+          (env, join ["let ", ident, ty, " =", pprintNewline (pprintIncr indent),
                       body, pprintNewline indent,
                       "in", pprintNewline indent,
                       inexpr])
@@ -302,7 +305,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst
     else never
 end
 
-lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
+lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
   sem isAtomic =
   | TmRecLets _ -> false
 
@@ -311,25 +314,28 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecLets t ->
-    let lname = lam env. lam bind.
-      match pprintEnvGetStr env bind.ident with (env,str) then
-        (env,pprintVarString str)
-      else never in
-    let lbody = lam env. lam bind.
-      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
-      with (env,str) then (env,str)
-      else never in
-    match mapAccumL lname env t.bindings with (env,idents) then
-      match mapAccumL lbody env t.bindings with (env,bodies) then
-        match pprintCode indent env t.inexpr with (env,inexpr) then
-          let fzip = lam ident. lam body.
-            join [pprintNewline (pprintIncr indent),
-                  "let ", ident, " =",
-                  pprintNewline (pprintIncr (pprintIncr indent)), body]
+    let i = indent in
+    let ii = pprintIncr i in
+    let iii = pprintIncr ii in
+    let f = lam env. lam bind.
+      match pprintEnvGetStr env bind.ident with (env,ident) then
+        let ident = pprintVarString ident in
+        match pprintCode iii env bind.body with (env,body) then
+          let ty =
+            match bind.ty with TyUnknown {} then ""
+            else concat " : " (getTypeStringCode indent bind.ty)
           in
-          (env,join ["recursive", join (zipWith fzip idents bodies),
-                 pprintNewline indent, "in", pprintNewline indent, inexpr])
+          (env, join ["let ", ident, ty, " =", pprintNewline iii, body])
         else never
+      else never
+    in
+    match mapAccumL f env t.bindings with (env,bindings) then
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        let bindings = strJoin (pprintNewline ii) bindings in
+        (env,join ["recursive", pprintNewline ii,
+                   bindings, pprintNewline i,
+                   "in", pprintNewline i,
+                   inexpr])
       else never
     else never
 end
@@ -345,7 +351,7 @@ lang ConstPrettyPrint = PrettyPrint + ConstAst
   | TmConst t -> (env,getConstStringCode indent t.val)
 end
 
-lang DataPrettyPrint = PrettyPrint + DataAst
+lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
   sem isAtomic =
   | TmConDef _ -> false
   | TmConApp _ -> false
@@ -357,13 +363,12 @@ lang DataPrettyPrint = PrettyPrint + DataAst
   | TmConDef t ->
     match pprintEnvGetStr env t.ident with (env,str) then
       let str = pprintConString str in
-      let tpe =
-        match t.tpe with Some t1 then
-          concat " : " (getTypeStringCode indent t1)
-        else ""
+      let ty =
+        match t.ty with TyUnknown {} then ""
+        else concat " : " (getTypeStringCode indent t.ty)
       in
       match pprintCode indent env t.inexpr with (env,inexpr) then
-        (env,join ["con ", str, tpe, " in", pprintNewline indent, inexpr])
+        (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
       else never
     else never
 
@@ -549,12 +554,12 @@ lam env. lam pname.
     (env, "_")
   else never
 
-lang VarPatPrettyPrint = VarPat
+lang NamedPatPrettyPrint = NamedPat
   sem patIsAtomic =
-  | PVar _ -> true
+  | PNamed _ -> true
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
-  | PVar {ident = patname} -> _pprint_patname env patname
+  | PNamed {ident = patname} -> _pprint_patname env patname
 end
 
 let _pprint_patseq: (Int -> PprintEnv -> Pat -> (PprintEnv, String)) -> Int ->
@@ -698,7 +703,7 @@ end
 -- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
 lang TypePrettyPrint =
-  FunTypeAst + DynTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
+  FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
   SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
   FloatTypeAst + BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint +
   TypeVarAst
@@ -706,19 +711,19 @@ lang TypePrettyPrint =
     sem getTypeStringCode (indent : Int) =
     | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
                                getTypeStringCode indent t.to, ")"]
-    | TyDyn _ -> "Dyn"
+    | TyUnknown _ -> error "Cannot print unknown type"
     | TyUnit _ -> "()"
     | TyChar _ -> "Char"
     | TyString _ -> "String"
-    | TySeq t -> join ["[", getTypeStringCode indent t.tpe, "]"]
-    | TyProd t ->
-      let tpes = map (lam x. getTypeStringCode indent x) t.tpes in
-      join ["(", strJoin ", " tpes, ")"]
+    | TySeq t -> join ["[", getTypeStringCode indent t.ty, "]"]
+    | TyTuple t ->
+      let tys = map (lam x. getTypeStringCode indent x) t.tys in
+      join ["(", strJoin ", " tys, ")"]
     | TyRecord t ->
       let conventry = lam entry.
-          join [entry.ident, " : ", getTypeStringCode indent entry.tpe]
+          join [entry.ident, " : ", getTypeStringCode indent entry.ty]
       in
-      join ["{", strJoin ", " (map conventry t.tpes), "}"]
+      join ["{", strJoin ", " (map conventry t.fields), "}"]
     | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
     | TyInt _ -> "Int"
     | TyBool _ -> "Bool"
@@ -746,7 +751,7 @@ lang MExprPrettyPrint =
   + SeqOpPrettyPrint
 
   -- Patterns
-  + VarPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
+  + NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
   OrPatPrettyPrint + NotPatPrettyPrint
@@ -772,16 +777,16 @@ let concat_ = appf2_ (var_ "concat") in
 --     addi (bar babar) a
 -- in
 let func_foo =
-  let_ "foo" (
-    lam_ "a" (None ()) (
-      lam_ "b" (None ()) (
+  ulet_ "foo" (
+    lam_ "a" (TyUnknown {}) (
+      lam_ "b" (TyUnknown {}) (
         bindall_ [
-          let_ "bar" (
-            lam_ "x" (None ()) (
+          ulet_ "bar" (
+            lam_ "x" (TyUnknown {}) (
               addi_ (var_ "b") (var_ "x")
             )
           ),
-          let_ "babar" (int_ 3),
+          ulet_ "babar" (int_ 3),
           addi_ (app_ (var_ "bar")
                       (var_ "babar"))
                 (var_ "a")
@@ -798,8 +803,8 @@ in
 --       muli n (factorial (subi n 1))
 -- in
 let func_factorial =
-    reclets_add "factorial"
-        (lam_ "n" (Some (tyint_))
+    ureclets_add "factorial"
+        (lam_ "n" (tyint_)
             (if_ (eqi_ (var_ "n") (int_ 0))
                  (int_ 1)
                  (muli_ (var_ "n")
@@ -820,14 +825,14 @@ in
 --         else not (even (subi x 1))
 -- in
 let funcs_evenodd =
-    reclets_add "even"
-        (lam_ "x" (None ())
+    ureclets_add "even"
+        (lam_ "x" (TyUnknown {})
             (if_ (eqi_ (var_ "x") (int_ 0))
                  (true_)
                  (not_ (app_ (var_ "odd")
                              (subi_ (var_ "x") (int_ 1))))))
-    (reclets_add "odd"
-        (lam_ "x" (None ())
+    (ureclets_add "odd"
+        (lam_ "x" (TyUnknown {})
             (if_ (eqi_ (var_ "x") (int_ 1))
                  (true_)
                  (not_ (app_ (var_ "even")
@@ -838,7 +843,7 @@ in
 
 -- let recget = {i = 5, s = "hello!"} in
 let func_recget =
-    let_ "recget" (
+    ulet_ "recget" (
         record_add "i" (int_ 5) (
         record_add "s" (str_ "hello!")
         record_empty))
@@ -846,7 +851,7 @@ in
 
 -- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in
 let func_recconcs =
-    let_ "recconcs" (lam_ "rec" (None ()) (lam_ "s" (Some (tystr_)) (
+    ulet_ "recconcs" (lam_ "rec" (TyUnknown {}) (lam_ "s" (tystr_) (
         recordupdate_ (var_ "rec")
                       "s"
                       (concat_ (recordproj_ "s" (var_ "rec"))
@@ -854,10 +859,10 @@ let func_recconcs =
 in
 
 -- con MyConA in
-let func_mycona = condef_ "MyConA" (None ()) in
+let func_mycona = ucondef_ "MyConA" in
 
 -- con #con"myConB" : (Bool, Int) in
-let func_myconb = condef_ "myConB" (Some (typrod_ [tybool_, tyint_])) in
+let func_myconb = condef_ "myConB" (tytuple_ [tybool_, tyint_]) in
 
 -- let isconb : Bool = lam c : #con"myConB".
 --     match c with #con"myConB" (true, 17) then
@@ -865,8 +870,8 @@ let func_myconb = condef_ "myConB" (Some (typrod_ [tybool_, tyint_])) in
 --     else
 --         false
 let func_isconb =
-    let_ "isconb" (
-        lam_ "c" (Some (tycon_ "myConB")) (
+    ulet_ "isconb" (
+        lam_ "c" (tycon_ "myConB") (
             match_ (var_ "c")
                    (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
                    (true_)
@@ -875,9 +880,9 @@ in
 
 -- let addone : Int -> Int = lam i : Int. (lam x : Int. addi x 1) i
 let func_addone =
-  let_ "addone" (
-      lam_ "i" (Some (tyint_)) (
-        app_ (lam_ "x" (Some (tyint_)) (addi_ (var_ "x") (int_ 1)))
+  ulet_ "addone" (
+      lam_ "i" (tyint_) (
+        app_ (lam_ "x" (tyint_) (addi_ (var_ "x") (int_ 1)))
              (var_ "i")
       )
   )
@@ -886,8 +891,8 @@ in
 -- let beginsWithBinaryDigit : String -> Bool = lam s : String.
 --   match s with ['0' | '1'] ++ _ then true else false
 let func_beginsWithBinaryDigit =
-  let_ "beginsWithBinaryDigit" (
-    lam_ "s" (Some (tycon_ "Bool")) (
+  ulet_ "beginsWithBinaryDigit" (
+    lam_ "s" (tycon_ "Bool") (
       match_ (var_ "s")
              (pseqedgew_
                [por_ (pchar_ '0') (pchar_ '1')]
@@ -901,8 +906,8 @@ in
 -- let pedanticIsSome : Option a -> Bool = lam o : Option a.
 --   match o with !(None ()) & Some _ then true else false
 let func_pedanticIsSome =
-  let_ "pedanticIsSome" (
-    lam_ "s" (Some (tyapp_ (tycon_ "Option") (tyvar_ "a"))) (
+  ulet_ "pedanticIsSome" (
+    lam_ "s" (tyapp_ (tycon_ "Option") (tyvar_ "a")) (
       match_ (var_ "o")
              (pand_
                (pnot_ (pcon_ "None" punit_))
@@ -914,8 +919,8 @@ let func_pedanticIsSome =
 in
 
 let func_is123 =
-  let_ "is123" (
-    lam_ "l" (Some (tyseq_ tyint_)) (
+  ulet_ "is123" (
+    lam_ "l" (tyseq_ tyint_) (
       match_ (var_ "l")
              (pseqtot_ [pint_ 1, pint_ 2, pint_ 3])
              (true_)

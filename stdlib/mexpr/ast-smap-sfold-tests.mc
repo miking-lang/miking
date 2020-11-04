@@ -35,17 +35,17 @@ utest smap_Expr_Expr map2varX tmLam with ulam_ "x" tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmLam with [tmApp] in
 
 
-let tmLet = bind_ (let_ "y" tmLam) tmVarY in
+let tmLet = bind_ (ulet_ "y" tmLam) tmVarY in
 
-utest smap_Expr_Expr map2varX tmLet with bind_ (let_ "y" tmVarX) tmVarX in
+utest smap_Expr_Expr map2varX tmLet with bind_ (ulet_ "y" tmVarX) tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmLet with [tmVarY, tmLam] in
 
 
-let tmRecLets = bind_ (reclets_ [("x", tmApp), ("u", tmVarW)]) tmVarU in
+let tmRecLets = bind_ (ureclets_ [("x", tmApp), ("u", tmVarW)]) tmVarU in
 
 utest smap_Expr_Expr map2varX tmRecLets
 with
-bind_ (reclets_ [("x", tmVarX), ("u", tmVarX)])
+bind_ (ureclets_ [("x", tmVarX), ("u", tmVarX)])
   tmVarX
 in
 utest sfold_Expr_Expr fold2seq [] tmRecLets with [tmVarU, tmVarW, tmApp] in

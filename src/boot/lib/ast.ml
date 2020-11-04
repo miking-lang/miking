@@ -130,9 +130,9 @@ and decl =
 
 and mlang = Lang of info * ustring * ustring list * decl list
 
-and let_decl = Let of info * ustring * tm
+and let_decl = Let of info * ustring * ty * tm
 
-and rec_let_decl = RecLet of info * (info * ustring * tm) list
+and rec_let_decl = RecLet of info * (info * ustring * ty * tm) list
 
 and con_decl = Con of info * ustring * ty
 
@@ -153,8 +153,8 @@ and program = Program of include_ list * top list * tm
 and tm =
   | TmVar of info * ustring * Symb.t (* Variable *)
   | TmLam of info * ustring * Symb.t * ty * tm (* Lambda abstraction *)
-  | TmLet of info * ustring * Symb.t * tm * tm (* Let *)
-  | TmRecLets of info * (info * ustring * Symb.t * tm) list * tm (* Recursive lets *)
+  | TmLet of info * ustring * Symb.t * ty * tm * tm (* Let *)
+  | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm (* Recursive lets *)
   | TmApp of info * tm * tm (* Application *)
   | TmConst of info * const (* Constant *)
   | TmSeq of info * tm Mseq.t (* Sequence *)
@@ -167,7 +167,7 @@ and tm =
   | TmUtest of info * tm * tm * tm option * tm (* Unit testing *)
   | TmNever of info (* Never term *)
   (* Only part of the runtime system *)
-  | TmClos of info * ustring * Symb.t * ty * tm * env Lazy.t (* Closure *)
+  | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
   | TmFix of info
 
 (* Fix point *)
@@ -183,7 +183,7 @@ and patName =
 and pat =
   | PatNamed of info * patName (* Named, capturing wildcard *)
   | PatSeqTot of info * pat Mseq.t (* Exact sequence patterns *)
-  | PatSeqEdg of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
+  | PatSeqEdge of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
   | PatRecord of info * pat Record.t (* Record pattern *)
   | PatCon of info * ustring * Symb.t * pat (* Constructor pattern *)
   | PatInt of info * int (* Int pattern *)
@@ -198,7 +198,7 @@ and pat =
 (* Types *)
 and ty =
   | TyUnit (* Unit type *)
-  | TyDyn (* Dynamic type *)
+  | TyUnknown (* Unknown type *)
   | TyBool (* Boolean type *)
   | TyInt (* Int type *)
   | TyFloat (* Floating-point type *)
@@ -231,15 +231,15 @@ let rec map_tm f = function
       f t
   | TmLam (fi, x, s, ty, t1) ->
       f (TmLam (fi, x, s, ty, map_tm f t1))
-  | TmClos (fi, x, s, ty, t1, env) ->
-      f (TmClos (fi, x, s, ty, map_tm f t1, env))
-  | TmLet (fi, x, s, t1, t2) ->
-      f (TmLet (fi, x, s, map_tm f t1, map_tm f t2))
+  | TmClos (fi, x, s, t1, env) ->
+      f (TmClos (fi, x, s, map_tm f t1, env))
+  | TmLet (fi, x, s, ty, t1, t2) ->
+      f (TmLet (fi, x, s, ty, map_tm f t1, map_tm f t2))
   | TmRecLets (fi, lst, tm) ->
       f
         (TmRecLets
            ( fi
-           , List.map (fun (fi, x, s, t) -> (fi, x, s, map_tm f t)) lst
+           , List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, map_tm f t)) lst
            , map_tm f tm ))
   | TmApp (fi, t1, t2) ->
       f (TmApp (fi, map_tm f t1, map_tm f t2))
@@ -273,9 +273,9 @@ let tm_info = function
       fi
   | TmLam (fi, _, _, _, _) ->
       fi
-  | TmClos (fi, _, _, _, _, _) ->
+  | TmClos (fi, _, _, _, _) ->
       fi
-  | TmLet (fi, _, _, _, _) ->
+  | TmLet (fi, _, _, _, _, _) ->
       fi
   | TmRecLets (fi, _, _) ->
       fi
@@ -309,7 +309,7 @@ let pat_info = function
       fi
   | PatSeqTot (fi, _) ->
       fi
-  | PatSeqEdg (fi, _, _, _) ->
+  | PatSeqEdge (fi, _, _, _) ->
       fi
   | PatRecord (fi, _) ->
       fi

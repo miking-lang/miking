@@ -63,7 +63,7 @@ let ustring_of_pat p =
     match pat with
     | PatNamed (_, NameStr (x, s)) ->
         ustring_of_var x s
-    | PatSeqEdg (_, l, x, r) ->
+    | PatSeqEdge (_, l, x, r) ->
         if Mseq.length l = 0 && Mseq.length r = 0 then us "[] ++ " ^. ppName x
         else
           let rStr =
@@ -111,8 +111,8 @@ let ustring_of_pat p =
 let rec ustring_of_ty = function
   | TyUnit ->
       us "()"
-  | TyDyn ->
-      us "Dyn"
+  | TyUnknown ->
+      us "Unknown"
   | TyBool ->
       us "Bool"
   | TyInt ->
@@ -421,15 +421,17 @@ and print_tm' fmt t =
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]" !ref_indent x ty print_tm
         (Lam, t1)
-  | TmLet (_, x, s, t1, t2) ->
+  | TmLet (_, x, s, ty, t1, t2) ->
       let x = string_of_ustring (ustring_of_var x s) in
-      fprintf fmt "@[<hov 0>@[<hov %d>let %s =@ %a in@]@ %a@]" !ref_indent x
-        print_tm (Match, t1) print_tm (Match, t2)
+      let ty = ty |> ustring_of_ty |> string_of_ustring in
+      fprintf fmt "@[<hov 0>@[<hov %d>let %s:%s =@ %a in@]@ %a@]" !ref_indent x
+        ty print_tm (Match, t1) print_tm (Match, t2)
   | TmRecLets (_, lst, t2) ->
-      let print (_, x, s, t) =
+      let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in
+        let ty = ty |> ustring_of_ty |> string_of_ustring in
         fun fmt ->
-          fprintf fmt "@[<hov %d>let %s =@ %a@]" !ref_indent x print_tm
+          fprintf fmt "@[<hov %d>let %s:%s =@ %a@]" !ref_indent x ty print_tm
             (Match, t)
       in
       let inner = List.map print lst in
@@ -494,11 +496,9 @@ and print_tm' fmt t =
         "@[<hov 0>@[<hov %d>utest@ @[<hov 0>%a with@ %a using@ %a in@]@]@ %a@]"
         !ref_indent print_tm (Match, t1) print_tm (Match, t2) print_tm
         (Match, t3) print_tm (Match, t4)
-  | TmClos (_, x, _, ty, t1, _) ->
+  | TmClos (_, x, _, t1, _) ->
       let x = string_of_ustring x in
-      let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov %d>clos %s:%s.@ %a@]" !ref_indent x ty print_tm
-        (Lam, t1)
+      fprintf fmt "@[<hov %d>clos %s.@ %a@]" !ref_indent x print_tm (Lam, t1)
   | TmFix _ ->
       fprintf fmt "fix"
   | TmNever _ ->

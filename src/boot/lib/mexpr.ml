@@ -862,7 +862,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
     | PatSeqTot (fi, pats) ->
         let patEnv, pats = s_pat_sequence patEnv pats in
         (patEnv, PatSeqTot (fi, pats))
-    | PatSeqEdg (fi, l, x, r) ->
+    | PatSeqEdge (fi, l, x, r) ->
         let patEnv, l = s_pat_sequence patEnv l in
         let patEnv, x =
           match x with
@@ -873,7 +873,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
               (patEnv, NameStr (x, s))
         in
         let patEnv, r = s_pat_sequence patEnv r in
-        (patEnv, PatSeqEdg (fi, l, x, r))
+        (patEnv, PatSeqEdge (fi, l, x, r))
     | PatRecord (fi, pats) ->
         let patEnv = ref patEnv in
         let pats =
@@ -918,20 +918,21 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   | TmLam (fi, x, _, ty, t1) ->
       let s = Symb.gensym () in
       TmLam (fi, x, s, ty, symbolize ((IdVar (sid_of_ustring x), s) :: env) t1)
-  | TmClos (_, _, _, _, _, _) ->
+  | TmClos (_, _, _, _, _) ->
       failwith "Closures should not be available."
-  | TmLet (fi, x, _, t1, t2) ->
+  | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in
       TmLet
         ( fi
         , x
         , s
+        , ty
         , symbolize env t1
         , symbolize ((IdVar (sid_of_ustring x), s) :: env) t2 )
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left
-          (fun env (_, x, _, _) ->
+          (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
             (IdVar (sid_of_ustring x), s) :: env)
           env lst
@@ -939,10 +940,11 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       TmRecLets
         ( fi
         , List.map
-            (fun (fi, x, _, t) ->
+            (fun (fi, x, _, ty, t) ->
               ( fi
               , x
               , findsym fi (IdVar (sid_of_ustring x)) env2
+              , ty
               , symbolize env2 t ))
             lst
         , symbolize env2 tm )
@@ -985,16 +987,16 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term *)
 let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
-  | TmLet (fi, x, _, t1, t2) ->
+  | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in
       let new_env, new_t2 =
         symbolize_toplevel ((IdVar (sid_of_ustring x), s) :: env) t2
       in
-      (new_env, TmLet (fi, x, s, symbolize env t1, new_t2))
+      (new_env, TmLet (fi, x, s, ty, symbolize env t1, new_t2))
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left
-          (fun env (_, x, _, _) ->
+          (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
             (IdVar (sid_of_ustring x), s) :: env)
           env lst
@@ -1004,10 +1006,11 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
       , TmRecLets
           ( fi
           , List.map
-              (fun (fi, x, _, t) ->
+              (fun (fi, x, _, ty, t) ->
                 ( fi
                 , x
                 , findsym fi (IdVar (sid_of_ustring x)) env2
+                , ty
                 , symbolize env2 t ))
               lst
           , new_tm ) )
@@ -1044,7 +1047,7 @@ let rec try_match env value pat =
           Mseq.Helpers.fold_right2 go vs pats (Some env)
       | _ ->
           None )
-  | PatSeqEdg (_, l, x, r) -> (
+  | PatSeqEdge (_, l, x, r) -> (
       let npre = Mseq.length l in
       let npost = Mseq.length r in
       match value with
@@ -1115,26 +1118,26 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmVar (_, _, s) ->
       eval env (List.assoc s env)
   (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, ty, t1) ->
-      TmClos (fi, x, s, ty, t1, lazy env)
-  | TmClos (_, _, _, _, _, _) ->
+  | TmLam (fi, x, s, _ty, t1) ->
+      TmClos (fi, x, s, t1, lazy env)
+  | TmClos (_, _, _, _, _) ->
       t
   (* Let *)
-  | TmLet (_, _, s, t1, t2) ->
+  | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env t1) :: env) t2
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
       let rec env' =
         lazy
           (let wraplambda = function
-             | TmLam (fi, x, s, ty, t1) ->
-                 TmClos (fi, x, s, ty, t1, env')
+             | TmLam (fi, x, s, _ty, t1) ->
+                 TmClos (fi, x, s, t1, env')
              | tm ->
                  raise_error (tm_info tm)
                    "Right-hand side of recursive let must be a lambda"
            in
            List.fold_left
-             (fun env (_, _, s, rhs) -> (s, wraplambda rhs) :: env)
+             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
              env lst)
       in
       eval (Lazy.force env') t2
@@ -1142,7 +1145,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
     (* Closure application *)
-    | TmClos (_, _, s, _, t3, env2) ->
+    | TmClos (_, _, s, t3, env2) ->
         eval ((s, eval env t2) :: Lazy.force env2) t3
     (* Constant application using the delta function *)
     | TmConst (_, c) ->
@@ -1150,7 +1153,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
     (* Fix *)
     | TmFix _ -> (
       match eval env t2 with
-      | TmClos (fi, _, s, _, t3, env2) as tt ->
+      | TmClos (fi, _, s, t3, env2) as tt ->
           eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
       | _ ->
           raise_error (tm_info t1) "Incorrect CFix" )
@@ -1225,20 +1228,20 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
 let rec eval_toplevel (env : (Symb.t * tm) list) = function
-  | TmLet (_, _, s, t1, t2) ->
+  | TmLet (_, _, s, _ty, t1, t2) ->
       eval_toplevel ((s, eval env t1) :: env) t2
   | TmRecLets (_, lst, t2) ->
       let rec env' =
         lazy
           (let wraplambda = function
-             | TmLam (fi, x, s, ty, t1) ->
-                 TmClos (fi, x, s, ty, t1, env')
+             | TmLam (fi, x, s, _ty, t1) ->
+                 TmClos (fi, x, s, t1, env')
              | tm ->
                  raise_error (tm_info tm)
                    "Right-hand side of recursive let must be a lambda"
            in
            List.fold_left
-             (fun env (_, _, s, rhs) -> (s, wraplambda rhs) :: env)
+             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
              env lst)
       in
       eval_toplevel (Lazy.force env') t2

@@ -9,7 +9,7 @@ include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/eq.mc"
 
-lang ANF = LetAst + VarAst
+lang ANF = LetAst + VarAst + UnknownTypeAst
   sem isValue =
   -- Intentionally left blank
 
@@ -22,7 +22,8 @@ lang ANF = LetAst + VarAst
   sem bind (k : Expr -> Expr) =
   | n ->
     let ident = nameSym "t" in
-    (TmLet {ident = ident, body = n, inexpr = k (TmVar {ident = ident})})
+    (TmLet {ident = ident, ty = TyUnknown {},
+            body = n, inexpr = k (TmVar {ident = ident})})
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (isValue n) then k n else bind k n) m
@@ -62,8 +63,8 @@ lang FunANF = ANF + FunAst
   | TmLam _ -> true
 
   sem normalize (k : Expr -> Expr) =
-  | TmLam {ident = ident, tpe = tpe, body = body} ->
-    k (TmLam {ident = ident, tpe = tpe, body = normalizeTerm body})
+  | TmLam {ident = ident, ty = ty, body = body} ->
+    k (TmLam {ident = ident, ty = ty, body = normalizeTerm body})
 
 end
 
@@ -101,9 +102,10 @@ lang LetANF = ANF + LetAst
   | TmLet _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmLet {ident = ident, body = m1, inexpr = m2} ->
+  | TmLet {ident = ident, ty = ty, body = m1, inexpr = m2} ->
     normalize
-      (lam n1. (TmLet {ident = ident, body = n1, inexpr = normalizeName k m2}))
+      (lam n1. (TmLet {ident = ident, ty = ty,
+                       body = n1, inexpr = normalizeName k m2}))
       m1
 
 end
@@ -135,8 +137,8 @@ lang DataANF = ANF + DataAst
   | TmConApp _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmConDef {ident = ident, tpe = tpe, inexpr = inexpr} ->
-    TmConDef {ident = ident, tpe = tpe, inexpr = normalize k inexpr}
+  | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
+    TmConDef {ident = ident, ty = ty, inexpr = normalize k inexpr}
 
   | TmConApp {ident = ident, body = body } ->
     normalizeName
@@ -212,18 +214,18 @@ use TestLang in
 let _anf = compose normalizeTerm symbolize in
 
 let basic =
-  bind_ (let_ "f" (ulam_ "x" (var_ "x")))
+  bind_ (ulet_ "f" (ulam_ "x" (var_ "x")))
   (addi_ (addi_ (int_ 2) (int_ 2))
-    (bind_ (let_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
+    (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
 
 utest _anf basic
 with
   bindall_ [
-    let_ "f" (ulam_ "x" (var_ "x")),
-    let_ "t" (addi_ (int_ 2) (int_ 2)),
-    let_ "x1" (int_ 1),
-    let_ "t1" (app_ (var_ "f") (var_ "x1")),
-    let_ "t2" (addi_ (var_ "t") (var_ "t1")),
+    ulet_ "f" (ulam_ "x" (var_ "x")),
+    ulet_ "t" (addi_ (int_ 2) (int_ 2)),
+    ulet_ "x1" (int_ 1),
+    ulet_ "t1" (app_ (var_ "f") (var_ "x1")),
+    ulet_ "t2" (addi_ (var_ "t") (var_ "t1")),
     var_ "t2"
   ]
 using eqExpr in
@@ -232,14 +234,14 @@ using eqExpr in
 
 let ext =
   bindall_
-    [let_ "f" (ulam_ "x" (var_ "x")),
-     let_ "x" (int_ 3),
+    [ulet_ "f" (ulam_ "x" (var_ "x")),
+     ulet_ "x" (int_ 3),
      (addi_ (addi_ (int_ 2) (var_ "x")))
-       (bind_ (let_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
+       (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
 
 let lambda =
   app_
-    (ulam_ "x" (bind_ (let_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
+    (ulam_ "x" (bind_ (ulet_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
     (int_ 4)
 in
 
@@ -259,7 +261,7 @@ let rupdate =
   recordupdate_ record "b" (int_ 7) in
 
 let factorial =
-  reclet_ "fact"
+  ureclet_ "fact"
     (ulam_ "n"
       (if_ (eqi_ (var_ "n") (int_ 0))
         (int_ 1)
@@ -280,11 +282,11 @@ in
 
 let smatch = if_ (app_ (int_ 1) (int_ 2)) (int_ 3) (int_ 4) in
 
-let simple = bind_ (let_ "x" (int_ 1)) (var_ "x") in
+let simple = bind_ (ulet_ "x" (int_ 1)) (var_ "x") in
 
 let simple2 = app_ (int_ 1) simple in
 
-let inv1 = bind_ (let_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
+let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
 utest _anf inv1 with inv1 using eqExpr in
 
 

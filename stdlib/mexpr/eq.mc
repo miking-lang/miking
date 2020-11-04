@@ -139,6 +139,7 @@ end
 
 lang LetEq = Eq + LetAst
   sem eqExprH (env : Env) (free : Env) (lhs : Expr) =
+  -- NOTE(dlunde,2020-11-04): The type annotation is currently ignored.
   | TmLet {ident = i2, body = b2, inexpr = ie2} ->
     match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
       match eqExprH env free b1 b2 with Some free then
@@ -156,6 +157,7 @@ lang RecLetsEq = Eq + RecLetsAst
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
+    -- NOTE(dlunde,2020-11-04): The type annotations are currently ignored.
     match env with {varEnv = varEnv} then
       match lhs with TmRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
@@ -354,10 +356,10 @@ let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
     else match (p1,p2) with (PWildcard _,PWildcard _) then Some (free,penv)
     else None ()
 
-lang VarPatEq = VarPat
+lang NamedPatEq = NamedPat
   sem eqPat (env : Env) (free : Env) (patEnv : NameEnv) (lhs : Pat) =
-  | PVar {ident = p2} ->
-    match lhs with PVar {ident = p1} then
+  | PNamed {ident = p2} ->
+    match lhs with PNamed {ident = p1} then
       _eqpatname patEnv free p1 p2
     else None ()
 end
@@ -502,7 +504,7 @@ lang MExprEq =
   CharEq + SymbEq + CmpSymbEq + SeqOpEq
 
   -- Patterns
-  + VarPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
+  + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
   CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
 
 end
@@ -574,18 +576,18 @@ utest eqExpr ru1 ru3e with false in
 utest eqExpr ru1 ru4e with false in
 
 -- Let and recursive let
-let let1 = bind_ (let_ "x" lam1) a1 in
-let let2 = bind_ (let_ "y" lam2) a2 in
-let let3e = bind_ (let_ "x" (int_ 1)) a1 in
-let let4e = bind_ (let_ "x" lam2) lam1 in
+let let1 = bind_ (ulet_ "x" lam1) a1 in
+let let2 = bind_ (ulet_ "y" lam2) a2 in
+let let3e = bind_ (ulet_ "x" (int_ 1)) a1 in
+let let4e = bind_ (ulet_ "x" lam2) lam1 in
 utest let1 with let2 using eqExpr in
 utest eqExpr let1 let3e with false in
 utest eqExpr let1 let4e with false in
 
-let rlet1 = reclets_ [("x", a1), ("y", lam1)] in
-let rlet2 = reclets_ [("x", a2), ("y", lam2)] in
-let rlet3 = reclets_ [("y", a2), ("x", lam2)] in
-let rlet4e = reclets_ [("y", lam1), ("x", a1)] in -- Order matters
+let rlet1 = ureclets_ [("x", a1), ("y", lam1)] in
+let rlet2 = ureclets_ [("x", a2), ("y", lam2)] in
+let rlet3 = ureclets_ [("y", a2), ("x", lam2)] in
+let rlet4e = ureclets_ [("y", lam1), ("x", a1)] in -- Order matters
 utest rlet1 with rlet2 using eqExpr in
 utest rlet1 with rlet3 using eqExpr in
 utest eqExpr rlet1 rlet4e with false in
