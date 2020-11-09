@@ -7,6 +7,7 @@ include "name.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/programs.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -808,50 +809,9 @@ let func_foo =
   )
 in
 
--- recursive let factorial = lam n.
---     if eqi n 0 then
---       1
---     else
---       muli n (factorial (subi n 1))
--- in
-let func_factorial =
-    ureclets_add "factorial"
-        (lam_ "n" (tyint_)
-            (if_ (eqi_ (var_ "n") (int_ 0))
-                 (int_ 1)
-                 (muli_ (var_ "n")
-                        (app_ (var_ "factorial")
-                              (subi_ (var_ "n")
-                                     (int_ 1))))))
-    reclets_empty
-in
+let func_factorial = programsFactorial in
 
--- recursive
---     let even = lam x.
---         if eqi x 0
---         then true
---         else not (odd (subi x 1))
---     let odd = lam x.
---         if eqi x 1
---         then true
---         else not (even (subi x 1))
--- in
-let funcs_evenodd =
-    ureclets_add "even"
-        (lam_ "x" (TyUnknown {})
-            (if_ (eqi_ (var_ "x") (int_ 0))
-                 (true_)
-                 (not_ (app_ (var_ "odd")
-                             (subi_ (var_ "x") (int_ 1))))))
-    (ureclets_add "odd"
-        (lam_ "x" (TyUnknown {})
-            (if_ (eqi_ (var_ "x") (int_ 1))
-                 (true_)
-                 (not_ (app_ (var_ "even")
-                             (subi_ (var_ "x") (int_ 1))))))
-    reclets_empty)
-in
-
+let funcs_oddeven = programsOddEven in
 
 -- let recget = {i = 5, s = "hello!"} in
 let func_recget =
@@ -967,7 +927,7 @@ let sample_ast =
   bindall_ [
     func_foo,
     func_factorial,
-    funcs_evenodd,
+    funcs_oddeven,
     func_recget,
     func_recconcs,
     func_mycona,

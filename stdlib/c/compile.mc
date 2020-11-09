@@ -9,7 +9,11 @@
 -- can be weakened when we have a type system.
 
 include "mexpr/ast.mc"
+include "mexpr/anf.mc"
+include "mexpr/programs.mc"
+
 include "ast.mc"
+include "pprint.mc"
 
 -- NOTE(dlunde,2020-11-04) Compiler phases:
 -- 1. Identify compound types and define them at top-level (structs, tagged
@@ -26,10 +30,14 @@ include "ast.mc"
 -- MExpr and C expressions. In the future, we need some type of qualified
 -- fragment include or similar to resolve this.
 -- See https://github.com/miking-lang/miking/issues/213.
-lang CompileMExprC = MExprAst + CAst
+lang CompileMExprC = MExprAst + CAst + MExprANF
+
+  -- TODO: Minimize ANF transform
 
   sem compile =
-  | prog -> error "TODO"
+  | prog ->
+    let prog = normalizeTerm prog in
+    error "TODO"
     -- Call `compileTop` and build final program from result.
 
   sem compileTop =
@@ -97,3 +105,29 @@ lang CompileMExprC = MExprAst + CAst
     -- Should not occur here.
 
 end
+
+-- TODO Throws error
+-- lang TestLang = CompileMExprC + MExprPrettyPrint + CPrettyPrint
+lang TestLang = CompileMExprC + CPrettyPrint + MExprPrettyPrint
+
+mexpr
+use TestLang in
+
+-- global data
+-- odd
+-- even
+-- factorial
+-- function creating and returning record
+-- nested match
+
+let mprog = bindall_ [
+  programsFactorial,
+  programsOddEven
+]
+in
+
+let _ = tyint_ in
+
+let _ = print (expr2str mprog) in
+
+()
