@@ -191,6 +191,10 @@ let ureclets_ = use MExprAst in
   lam bs.
   reclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
 
+let reclet_ = use MExprAst in
+  lam s. lam ty. lam body.
+  reclets_ [(s, ty, body)]
+
 let ureclet_ = use MExprAst in
   lam s. lam body.
   ureclets_ [(s, body)]

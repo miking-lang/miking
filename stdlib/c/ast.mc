@@ -143,8 +143,8 @@ lang CAst
   -----------------
 
   syn CTop =
-  | CTDef      { ty: CType, id: Option Name, init: Option CInit }
-  | CTFun      { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
+  | CTDef { ty: CType, id: Option Name, init: Option CInit }
+  | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
   syn CProg =
   | CPProg { tops: [CTop] }

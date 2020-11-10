@@ -4,9 +4,9 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
 let programsOddEven =
-  ureclets_ [
+  reclets_ [
 
-    ("odd",
+    ("odd", tyarrow_ tyint_ tybool_,
      lam_ "x" (tyint_)
        (if_ (eqi_ (var_ "x") (int_ 1))
           true_
@@ -14,7 +14,7 @@ let programsOddEven =
              false_
              (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))),
 
-    ("even",
+    ("even", tyarrow_ tyint_ tybool_,
      lam_ "x" (tyint_)
        (if_ (eqi_ (var_ "x") (int_ 0))
           true_
@@ -25,7 +25,7 @@ let programsOddEven =
   ]
 
 let programsFactorial =
-  ureclet_ "factorial"
+  reclet_ "factorial" (tyarrow_ tyint_ tyint_)
     (lam_ "n" (tyint_)
       (if_ (eqi_ (var_ "n") (int_ 0))
         (int_ 1)
