@@ -46,108 +46,108 @@ lang CAst
   -- C EXPRESSIONS --
   -------------------
 
-  syn Expr =
-  | EVar        { id: Name }
-  | EApp        { fun: Name, args: [Expr] }
-  | EInt        { i: Int }
-  | EFloat      { f: Float }
-  | EChar       { c: Char }
-  | EString     { s: String }
-  | EBinOp      { op: UnOp, lhs: Expr, rhs: Expr }
-  | EUnOp       { op: BinOp, arg: Expr }
-  | EMember     { lhs: Expr, id: String }
-  | ECast       { ty: Type, rhs: Expr }
-  | ESizeOfType { ty: Type }
+  syn CExpr =
+  | CEVar        { id: Name }
+  | CEApp        { fun: Name, args: [CExpr] }
+  | CEInt        { i: Int }
+  | CEFloat      { f: Float }
+  | CEChar       { c: Char }
+  | CEString     { s: String }
+  | CEBinOp      { op: CUnOp, lhs: CExpr, rhs: CExpr }
+  | CEUnOp       { op: CBinOp, arg: CExpr }
+  | CEMember     { lhs: CExpr, id: String }
+  | CECast       { ty: CType, rhs: CExpr }
+  | CESizeOfType { ty: CType }
 
-  syn BinOp =
-  | OAssign {}
-  | OSubScript {}
-  | OOr {}
-  | OAnd {}
-  | OEq {}
-  | ONeq {}
-  | OLt {}
-  | OGt {}
-  | OLe {}
-  | OGe {}
-  | OShiftL {}
-  | OShiftR {}
-  | OAdd {}
-  | OSub {}
-  | OMul {}
-  | ODiv {}
-  | OMod {}
-  | OBOr {}
-  | OBAnd {}
-  | OXor {}
+  syn CBinOp =
+  | COAssign {}
+  | COSubScript {}
+  | COOr {}
+  | COAnd {}
+  | COEq {}
+  | CONeq {}
+  | COLt {}
+  | COGt {}
+  | COLe {}
+  | COGe {}
+  | COShiftL {}
+  | COShiftR {}
+  | COAdd {}
+  | COSub {}
+  | COMul {}
+  | CODiv {}
+  | COMod {}
+  | COBOr {}
+  | COBAnd {}
+  | COXor {}
 
-  syn UnOp =
-  | OSizeOf {}
-  | ODeref {}
-  | OAddrOf {}
-  | ONeg {}
-  | ONot {}
+  syn CUnOp =
+  | COSizeOf {}
+  | CODeref {}
+  | COAddrOf {}
+  | CONeg {}
+  | CONot {}
 
 
   -------------
   -- C TYPES --
   -------------
 
-  syn Type =
-  -- TyIdent not really needed unless we add typedef
---| TyIdent { id: Name }
-  | TyChar {}
-  | TyInt {}
-  | TyDouble {}
-  | TyVoid {}
-  | TyPtr { ty: Type }
-  | TyFun { ret: Type, params: [Type] }
-  | TyArray { ty: Type, size: Option Int }
-  | TyStruct { id: Name, mem: Option [(Type,String)] }
-  | TyUnion { id: Name, mem: Option [(Type,String)] }
-  | TyEnum { id: Name, mem: Option [Name] }
+  syn CType =
+  -- CTyIdent not really needed unless we add typedef
+--| CTyIdent { id: Name }
+  | CTyChar {}
+  | CTyInt {}
+  | CTyDouble {}
+  | CTyVoid {}
+  | CTyPtr { ty: CType }
+  | CTyFun { ret: CType, params: [CType] }
+  | CTyArray { ty: CType, size: Option Int }
+  | CTyStruct { id: Name, mem: Option [(CType,String)] }
+  | CTyUnion { id: Name, mem: Option [(CType,String)] }
+  | CTyEnum { id: Name, mem: Option [Name] }
 
 
   --------------------
   -- C INITIALIZERS --
   --------------------
 
-  syn Init =
-  | IExpr { expr: Expr }
-  | IList { inits: [Init] }
+  syn CInit =
+  | CIExpr { expr: CExpr }
+  | CIList { inits: [CInit] }
 
 
   ------------------
   -- C STATEMENTS --
   ------------------
   -- We force if, switch, and while to introduce new scopes (by setting the
-  -- body type to [Stmt] rather than Stmt). It is allowed in C to have a single
+  -- body type to [CStmt] rather than CStmt). It is allowed in C to have a single
   -- (i.e., not compound) statement as the body, but this statement is NOT
   -- allowed to be a definition. To do this properly, we would need to separate
   -- statements and definitions into different data types.
 
-  syn Stmt =
-  | SDef     { ty: Type, id: Option Name, init: Option Init }
-  | SIf      { cond: Expr, thn: [Stmt], els: [Stmt] }
-  | SSwitch  { cond: Expr, body: [(Int, [Stmt])], default: Option [Stmt] }
-  | SWhile   { cond: Expr, body: [Stmt] }
-  | SExpr    { expr: Expr }
-  | SComp    { stmts: [Stmt] }
-  | SRet     { val: Option Expr }
-  | SCont    { }
-  | SBreak   { }
+  syn CStmt =
+  | CSDef     { ty: CType, id: Option Name, init: Option CInit }
+  | CSIf      { cond: CExpr, thn: [CStmt], els: [CStmt] }
+  | CSSwitch  { cond: CExpr, body: [(Int, [CStmt])], default: Option [CStmt] }
+  | CSWhile   { cond: CExpr, body: [CStmt] }
+  | CSExpr    { expr: CExpr }
+  | CSComp    { stmts: [CStmt] }
+  | CSRet     { val: Option CExpr }
+  | CSCont    { }
+  | CSBreak   { }
 
 
   -----------------
   -- C TOP-LEVEL --
   -----------------
 
-  syn Top =
-  | TDef      { ty: Type, id: Option Name, init: Option Init }
-  | TFun      { ret: Type, id: Name, params: [(Type,Name)], body: [Stmt] }
+  syn CTop =
+  | CTDef      { ty: CType, id: Option Name, init: Option CInit }
+  | CTFun      { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
-  syn Prog =
-  | PProg { tops: [Top] }
+  syn CProg =
+  | CPProg { tops: [CTop] }
 
 end
 
