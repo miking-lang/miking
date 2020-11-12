@@ -139,7 +139,7 @@ let eval_with_envs (langs, nss, name2sym, sym2term) term =
 (* Wrap the final mexpr in a lambda application to prevent scope leak *)
 let wrap_mexpr (Program (inc, tops, tm)) =
   let lambda_wrapper =
-    TmLam (NoInfo, us "_", Symb.Helpers.nosym, TyArrow (TyInt, TyDyn), tm)
+    TmLam (NoInfo, us "_", Symb.Helpers.nosym, TyArrow (TyInt, TyUnknown), tm)
   in
   let new_tm = TmApp (NoInfo, lambda_wrapper, TmConst (NoInfo, CInt 0)) in
   Program (inc, tops, new_tm)

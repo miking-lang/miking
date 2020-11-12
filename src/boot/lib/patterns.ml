@@ -79,7 +79,7 @@ and npat =
   | NSPat of simple_pat
   | NPatRecord of npat Record.t * UstringSet.t (* The set is disallowed labels *)
   | NPatSeqTot of npat list
-  | NPatSeqEdg of npat list * npat list
+  | NPatSeqEdge of npat list * npat list
   | NPatNot of
       IntSet.t option
       (* Some lengths -> the disallowed sequence lengths, None -> no sequences allowed *)
@@ -153,27 +153,27 @@ module NPatOrd = struct
         if rec_res = 0 then UstringSet.compare d1 d2 else rec_res
     | NPatSeqTot a, NPatSeqTot b ->
         compare_list a b
-    | NPatSeqEdg (pre1, post1), NPatSeqEdg (pre2, post2) ->
+    | NPatSeqEdge (pre1, post1), NPatSeqEdge (pre2, post2) ->
         let pre_res = compare_list pre1 pre2 in
         if pre_res = 0 then compare_list post1 post2 else pre_res
     | NPatNot (seqs1, cons1), NPatNot (seqs2, cons2) ->
         let seq_res = Option.compare ~cmp:IntSet.compare seqs1 seqs2 in
         if seq_res <> 0 then seq_res else ConSet.compare cons1 cons2
-    | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) ->
+    | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdge _ | NPatNot _) ->
         -1
-    | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _ | NPatNot _), NSPat _ ->
+    | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdge _ | NPatNot _), NSPat _ ->
         1
-    | NPatRecord _, (NPatSeqTot _ | NPatSeqEdg _ | NPatNot _) ->
+    | NPatRecord _, (NPatSeqTot _ | NPatSeqEdge _ | NPatNot _) ->
         -1
-    | (NPatSeqTot _ | NPatSeqEdg _ | NPatNot _), NPatRecord _ ->
+    | (NPatSeqTot _ | NPatSeqEdge _ | NPatNot _), NPatRecord _ ->
         1
-    | NPatSeqTot _, (NPatSeqEdg _ | NPatNot _) ->
+    | NPatSeqTot _, (NPatSeqEdge _ | NPatNot _) ->
         -1
-    | (NPatSeqEdg _ | NPatNot _), NPatSeqTot _ ->
+    | (NPatSeqEdge _ | NPatNot _), NPatSeqTot _ ->
         1
-    | NPatSeqEdg _, NPatNot _ ->
+    | NPatSeqEdge _, NPatNot _ ->
         -1
-    | NPatNot _, NPatSeqEdg _ ->
+    | NPatNot _, NPatSeqEdge _ ->
         -1
 end
 
@@ -285,13 +285,13 @@ and npat_complement : npat -> normpat = function
   | NPatSeqTot pats ->
       list_complement (fun pats -> NPatSeqTot pats) pats
       |> NPatSet.add (notpat_seq_len <| List.length pats)
-  | NPatSeqEdg (pre, post) ->
+  | NPatSeqEdge (pre, post) ->
       let lenPre, lenPost = (List.length pre, List.length post) in
       let complemented_product =
         list_complement
           (fun pats ->
             let pre, post = split_at lenPre pats in
-            NPatSeqEdg (pre, post))
+            NPatSeqEdge (pre, post))
           (pre @ post)
       in
       let allowed_lengths =
@@ -304,7 +304,7 @@ and npat_complement : npat -> normpat = function
       let seqs =
         match seq_lens with
         | None ->
-            NPatSeqEdg ([], []) |> NPatSet.singleton
+            NPatSeqEdge ([], []) |> NPatSet.singleton
         | Some seq_lens ->
             IntSet.elements seq_lens
             |> List.map (fun n -> NPatSeqTot (repeat n wildpat))
@@ -346,15 +346,15 @@ and npat_intersect (a : npat) (b : npat) : normpat =
   | NPatNot (_, cons), (NPatRecord _ as pat)
   | (NPatRecord _ as pat), NPatNot (_, cons) ->
       if ConSet.mem RecCon cons then NPatSet.empty else NPatSet.singleton pat
-  | NPatNot (None, _), (NPatSeqTot _ | NPatSeqEdg _)
-  | (NPatSeqTot _ | NPatSeqEdg _), NPatNot (None, _) ->
+  | NPatNot (None, _), (NPatSeqTot _ | NPatSeqEdge _)
+  | (NPatSeqTot _ | NPatSeqEdge _), NPatNot (None, _) ->
       NPatSet.empty
   | NPatNot (Some lens, _), (NPatSeqTot pats as pat)
   | (NPatSeqTot pats as pat), NPatNot (Some lens, _) ->
       if IntSet.mem (List.length pats) lens then NPatSet.empty
       else NPatSet.singleton pat
-  | NPatNot (Some lens, _), (NPatSeqEdg (pre, post) as pat)
-  | (NPatSeqEdg (pre, post) as pat), NPatNot (Some lens, _) -> (
+  | NPatNot (Some lens, _), (NPatSeqEdge (pre, post) as pat)
+  | (NPatSeqEdge (pre, post) as pat), NPatNot (Some lens, _) -> (
     match IntSet.max_elt_opt lens with
     | None ->
         NPatSet.singleton pat
@@ -369,7 +369,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
                    (pre @ List.rev_append (repeat n_extras wildpat) post))
           |> NPatSet.of_list
           |> NPatSet.add
-               (NPatSeqEdg
+               (NPatSeqEdge
                   ( pre
                   , List.rev_append
                       (repeat (max_forbidden_len - min_len + 1) wildpat)
@@ -386,8 +386,8 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         npat_intersect p1 p2 |> NPatSet.map (fun p -> NSPat (SPatCon (s1, p)))
     | _ ->
         NPatSet.empty )
-  | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _)
-  | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdg _), NSPat _ ->
+  | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdge _)
+  | (NPatRecord _ | NPatSeqTot _ | NPatSeqEdge _), NSPat _ ->
       NPatSet.empty
   | NPatRecord (r1, neg1), NPatRecord (r2, neg2) ->
       if
@@ -410,8 +410,8 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         |> List.map (fun bindings ->
                NPatRecord (List.to_seq bindings |> Record.of_seq, neg))
         |> NPatSet.of_list
-  | NPatRecord _, (NPatSeqTot _ | NPatSeqEdg _)
-  | (NPatSeqTot _ | NPatSeqEdg _), NPatRecord _ ->
+  | NPatRecord _, (NPatSeqTot _ | NPatSeqEdge _)
+  | (NPatSeqTot _ | NPatSeqEdge _), NPatRecord _ ->
       NPatSet.empty
   | NPatSeqTot pats1, NPatSeqTot pats2 ->
       if List.length pats1 <> List.length pats2 then NPatSet.empty
@@ -420,7 +420,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         |> traverse NPatSet.elements
         |> List.map (fun pats -> NPatSeqTot pats)
         |> NPatSet.of_list
-  | NPatSeqEdg (pre1, post1), NPatSeqEdg (pre2, post2) ->
+  | NPatSeqEdge (pre1, post1), NPatSeqEdge (pre2, post2) ->
       let pre = map2_keep_extras npat_intersect pre1 pre2 in
       let rev_post =
         map2_keep_extras npat_intersect (List.rev post1) (List.rev post2)
@@ -431,7 +431,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         pre @ post |> traverse NPatSet.elements
         |> List.map (fun pats ->
                let pre, post = split_at (List.length pre) pats in
-               NPatSeqEdg (pre, post))
+               NPatSeqEdge (pre, post))
         |> NPatSet.of_list
       in
       let overlapping =
@@ -452,8 +452,8 @@ and npat_intersect (a : npat) (b : npat) : normpat =
             NPatSet.empty
       in
       NPatSet.union simple overlapping
-  | NPatSeqEdg (pre, post), NPatSeqTot pats
-  | NPatSeqTot pats, NPatSeqEdg (pre, post) ->
+  | NPatSeqEdge (pre, post), NPatSeqTot pats
+  | NPatSeqTot pats, NPatSeqEdge (pre, post) ->
       let len_pre, len_post, len_pats =
         (List.length pre, List.length post, List.length pats)
       in
@@ -490,12 +490,12 @@ let rec pat_to_normpat = function
       |> traverse (fun p -> pat_to_normpat p |> NPatSet.elements)
       |> List.map (fun pats -> NPatSeqTot pats)
       |> NPatSet.of_list
-  | PatSeqEdg (_, pre, _, post) ->
+  | PatSeqEdge (_, pre, _, post) ->
       Mseq.concat pre post |> Mseq.Helpers.to_list
       |> traverse (fun p -> pat_to_normpat p |> NPatSet.elements)
       |> List.map (fun pats ->
              let pre, post = split_at (Mseq.length pre) pats in
-             NPatSeqEdg (pre, post))
+             NPatSeqEdge (pre, post))
       |> NPatSet.of_list
   | PatRecord (_, r) ->
       Record.bindings r
@@ -549,8 +549,8 @@ let pat_example normpat =
             if Record.is_empty r then neg else PatAnd (NoInfo, pos, neg) )
     | NPatSeqTot nps ->
         PatSeqTot (NoInfo, List.map npat_to_pat nps |> Mseq.Helpers.of_list)
-    | NPatSeqEdg (pre, post) ->
-        PatSeqEdg
+    | NPatSeqEdge (pre, post) ->
+        PatSeqEdge
           ( NoInfo
           , List.map npat_to_pat pre |> Mseq.Helpers.of_list
           , NameWildcard
@@ -559,7 +559,7 @@ let pat_example normpat =
         let seqs =
           match seqs with
           | None ->
-              [PatSeqEdg (NoInfo, Mseq.empty, NameWildcard, Mseq.empty)]
+              [PatSeqEdge (NoInfo, Mseq.empty, NameWildcard, Mseq.empty)]
           | Some lens ->
               IntSet.elements lens
               |> List.map (fun len ->

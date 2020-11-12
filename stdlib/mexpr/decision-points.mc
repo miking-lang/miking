@@ -26,7 +26,7 @@ let drecordproj_ = use MExprAst in
 
 lang HoleAst
   syn Expr =
-  | TmHole {tp : Type,
+  | TmHole {ty : Type,
             startGuess : Expr,
             depth : Int}
   sem symbolizeExpr (env : Env) =
@@ -42,7 +42,7 @@ lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
       match pprintCode indent env1 h.depth with (env2, depthStr) then
         (env2,
           join ["Hole (",
-                strJoin ", " [getTypeStringCode indent h.tp, startStr, depthStr],
+                strJoin ", " [getTypeStringCode indent h.ty, startStr, depthStr],
                 ")"])
       else never
     else never
@@ -51,7 +51,7 @@ end
 -- Temporary workaround: uniquely labeled decision points
 lang LHoleAst = HoleAst
   syn Expr =
-  | LTmHole {tp : Type,
+  | LTmHole {ty : Type,
              startGuess : Expr,
              depth : Int}
 
@@ -59,11 +59,11 @@ lang LHoleAst = HoleAst
   | LTmHole h -> LTmHole h
 
   sem fromTmHole =
-  | TmHole h -> LTmHole {tp = h.tp, startGuess = h.startGuess,
+  | TmHole h -> LTmHole {ty = h.ty, startGuess = h.startGuess,
                          depth = h.depth, id = symb_ (gensym ())}
 
   sem toTmHole =
-  | LTmHole h -> TmHole {tp = h.tp, startGuess = h.startGuess, depth = h.depth}
+  | LTmHole h -> TmHole {ty = h.ty, startGuess = h.startGuess, depth = h.depth}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | LTmHole h -> LTmHole h
@@ -81,8 +81,8 @@ lang LHoleAstPrettyPrint = LHoleAst + HoleAstPrettyPrint
 end
 
 let hole_ = use LHoleAst in
-  lam tpe. lam startGuess. lam depth.
-  fromTmHole (TmHole {tp = tpe, startGuess = startGuess, depth = depth})
+  lam ty. lam startGuess. lam depth.
+  fromTmHole (TmHole {ty = ty, startGuess = startGuess, depth = depth})
 
 
 -- Temporary workaround: uniquely labeled TmApps
@@ -258,13 +258,13 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let transRenamed = rename isPublic renameF trans in
 
     -- Define initial call context
-    let defCallCtx = nlet_ _callCtx (seq_ []) in
+    let defCallCtx = nulet_ _callCtx (seq_ []) in
 
     -- Define initial lookup table
     let lookupTable = initLookupTable (cons _top publicFns) ltm in
     -- AST-ify the lookup table
     let defLookupTable =
-      nlet_ _lookupTable
+      nulet_ _lookupTable
         (seq_ (map (lam r. record_ [("id", r.id), ("path", seq_ (map symb_ r.path)), ("value", r.value)]) lookupTable))
     in
 
@@ -274,7 +274,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       else max subi (map (lam r. length r.path) lookupTable)
     in
     -- AST-ify the maxDepth variable
-    let defMaxDepth = nlet_ _maxDepth (int_ maxDepth) in
+    let defMaxDepth = nulet_ _maxDepth (int_ maxDepth) in
 
     -- AST-ify filter
     -- recursive let filter = lam p. lam s.
@@ -289,12 +289,12 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let p = nameSym "p" in
       let s = nameSym "s" in
       let f = nameSym "f" in
-      nreclets_add _filter
+      nureclets_add _filter
         (nulam_ p (nulam_ s
           (if_ (null_ (nvar_ s))
                (seq_ [])
                (if_ (app_ (nvar_ p) (head_ (nvar_ s)))
-                    (bind_ (nlet_ f (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s))))
+                    (bind_ (nulet_ f (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s))))
                            (cons_ (head_ (nvar_ s)) (nvar_ f)))
                     (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s)))))))
       reclets_empty
@@ -317,15 +317,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let e = nameSym "e" in
       let h = nameNoSym "h" in
       let t = nameNoSym "t" in
-      nlet_ _max
+      nulet_ _max
         (nulam_ cmp (
           (nulam_ seq
-          (bindall_ [(nreclets_add work
+          (bindall_ [(nureclets_add work
                        (nulam_ e (nulam_ seq
                          (if_ (null_ (nvar_ seq))
                            (nvar_ e)
-                           (bindall_ [nlet_ h (head_ (nvar_ seq)),
-                                      nlet_ t (tail_ (nvar_ seq)),
+                           (bindall_ [nulet_ h (head_ (nvar_ seq)),
+                                      nulet_ t (tail_ (nvar_ seq)),
                                       if_ (lti_ (appf2_ (nvar_ cmp) (nvar_ h) (nvar_ e)) (int_ 0))
                                           (appf2_ (nvar_ work) (nvar_ e) (nvar_ t))
                                           (appf2_ (nvar_ work) (nvar_ h) (nvar_ t))]) )))
@@ -344,7 +344,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let eq = nameSym "eq" in
       let s1 = nameSym "s1" in
       let s2 = nameSym "s2" in
-      nreclets_add _isPrefix (
+      nureclets_add _isPrefix (
       (nulam_ eq (nulam_ s1 (nulam_ s2
         (if_ (null_ (nvar_ s1))
              (true_)
@@ -364,7 +364,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let eq = nameSym "eq" in
       let s1 = nameSym "s1" in
       let s2 = nameSym "s2" in
-      nlet_ _isSuffix
+      nulet_ _isSuffix
         (nulam_ eq (nulam_ s1 (nulam_ s2
           (appf3_ (nvar_ _isPrefix)
                   (nvar_ eq)
@@ -390,24 +390,24 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let x = nameSym "x" in
       let t1 = nameSym "t1" in
       let t2 = nameSym "t2" in
-      nlet_ _lookup
+      nulet_ _lookup
         (nulam_ _callCtx (nulam_ id
         (bindall_ [
-          nlet_ entries (
+          nulet_ entries (
               appf2_ (nvar_ _filter)
                      (nulam_ t (eqs_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
                      (nvar_ _lookupTable)),
-          nlet_ eqsym (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
-          nlet_ entriesSuffix
+          nulet_ eqsym (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
+          nulet_ entriesSuffix
                (appf2_ (nvar_ _filter)
                        (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqsym) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))
                        (nvar_ entries)),
-          nlet_ cmp
+          nulet_ cmp
             (nulam_ t1 (nulam_ t2
               (subi_
                  (length_ (drecordproj_ "path" (nvar_ t1)))
                  (length_ (drecordproj_ "path" (nvar_ t2)))))),
-          nlet_ entriesLongestSuffix (appf2_ (nvar_ _max) (nvar_ cmp) (nvar_ entriesSuffix)),
+          nulet_ entriesLongestSuffix (appf2_ (nvar_ _max) (nvar_ cmp) (nvar_ entriesSuffix)),
           drecordproj_ "value" (nvar_ entriesLongestSuffix)])))
     in
     let defLookup = bindall_ [isPrefix, isSuffix, max, filter, lookup] in
@@ -420,7 +420,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     --     snoc callCtx lbl
     let defAddCall =
       let lbl = nameSym "lbl" in
-      nlet_ _addCall (
+      nulet_ _addCall (
         nulam_ _callCtx (nulam_ lbl (
           if_ (eqi_ (nvar_ _maxDepth) (int_ 0)) (nvar_ _callCtx)
             (if_ (lti_ (length_ (nvar_ _callCtx)) (nvar_ _maxDepth))
@@ -440,8 +440,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Extract expressions from the body of identifiers for which p is true using extractor function
   sem extract (p : String -> Bool)
               (extractor : String -> Expr -> Expr) =
-  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
     let res =
       if p t.ident then
         let newBody = extractor t.ident t.body in
@@ -465,8 +465,8 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
 
   -- Rename identifiers for which p is true, with renaming function rf
   sem rename (p : String -> Bool) (rf : String -> String) =
-  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
     let newIdent =
       if p t.ident then
         rf t.ident
@@ -501,11 +501,11 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   -- Transform program to use call context, considering identifiers for which p is true.
   sem transformCallCtx (p : String -> Bool) (prev : String) =
   -- Add call context as extra argument in function definitions
-  | TmLet {body = TmLam lm, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ident=ident, inexpr=inexpr} in
+  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
+    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
     -- Is the name one of the nodes in the call graph?
     if p t.ident then
-      let newBody = nlam_ _callCtx (None ())
+      let newBody = nulam_ _callCtx
                       (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
       TmLet {{t with body = newBody} with inexpr = transformCallCtx p prev t.inexpr}
     else TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
@@ -671,7 +671,7 @@ let constant = {
 
 -- let foo = lam x. x in ()
 let identity = {
-  ast = let_ "foo" (ulam_ "x" (var_ "x")),
+  ast = ulet_ "foo" (ulam_ "x" (var_ "x")),
   expected = unit_,
   vs = ["top", "foo"],
   calls = []
@@ -680,8 +680,8 @@ let identity = {
 -- let foo = lam x. x in
 -- let bar = lam x. foo x in ()
 let funCall = {
-  ast = bind_ (let_ "foo" (ulam_ "x" (var_ "x")))
-              (let_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
+  ast = bind_ (ulet_ "foo" (ulam_ "x" (var_ "x")))
+              (ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
   expected = unit_,
   vs = ["top", "foo", "bar"],
   calls = [("bar", "foo")]
@@ -692,7 +692,7 @@ let funCall = {
 -- bar 1
 let ast =
   bindall_ [identity.ast,
-            let_ "bar" (ulam_ "x" (addi_ (app_ (var_ "foo") (var_ "x"))
+            ulet_ "bar" (ulam_ "x" (addi_ (app_ (var_ "foo") (var_ "x"))
                                          (app_ (var_ "foo") (var_ "x")))),
             (app_ (var_ "bar") (int_ 1))] in
 let callSameFunctionTwice = {
@@ -706,7 +706,7 @@ let callSameFunctionTwice = {
 --foo 1 2
 let twoArgs = {
   ast = bind_
-          (let_ "foo"
+          (ulet_ "foo"
             (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))))
           (appf2_ (var_ "foo") (int_ 1) (int_ 2)),
   expected = int_ 3,
@@ -720,10 +720,10 @@ let twoArgs = {
 --     addi (bar b) a
 -- in ()
 let innerFun = {
-  ast = let_ "foo" (ulam_ "a" (ulam_ "b" (
-          let bar = let_ "bar" (ulam_ "x"
+  ast = ulet_ "foo" (ulam_ "a" (ulam_ "b" (
+          let bar = ulet_ "bar" (ulam_ "x"
                          (addi_ (var_ "b") (var_ "x"))) in
-          let babar = let_ "b" (int_ 3) in
+          let babar = ulet_ "b" (int_ 3) in
           bind_ bar (
           bind_ babar (
             addi_ (app_ (var_ "bar")
@@ -738,8 +738,8 @@ let innerFun = {
 -- let a = foo 1 in
 -- a
 let letWithFunCall = {
-  ast = let foo = let_ "foo" (ulam_ "x" (var_ "x")) in
-        let a = let_ "a" (app_ (var_ "foo") (int_ 1)) in
+  ast = let foo = ulet_ "foo" (ulam_ "x" (var_ "x")) in
+        let a = ulet_ "a" (app_ (var_ "foo") (int_ 1)) in
         bind_ (bind_ foo a) (var_ "a"),
   expected = int_ 1,
   vs = ["top", "foo"],
@@ -755,8 +755,8 @@ let letWithFunCall = {
 -- factorial 4
 let factorial = {
   ast = bind_
-    (reclets_add "factorial"
-           (lam_ "n" (Some (TyInt {}))
+    (ureclets_add "factorial"
+           (lam_ "n" (TyInt {})
                  (if_ (eqi_ (var_ "n") (int_ 0))
                       (int_ 1)
                       (muli_ (var_ "n")
@@ -782,10 +782,10 @@ let factorial = {
 -- in even 4
 let evenOdd ={
   ast = bind_
-    (reclets_add "even" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 0))
+    (ureclets_add "even" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 0))
                                        (true_)
                                        (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
-    (reclets_add "odd" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 1))
+    (ureclets_add "odd" (ulam_ "x" (if_ (eqi_ (var_ "x") (int_ 1))
                                       (true_)
                                       (app_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
      reclets_empty))
@@ -800,8 +800,8 @@ let evenOdd ={
 -- foo bar 1
 let hiddenCall = {
   ast = bindall_ [
-          let_ "bar" (ulam_ "y" (var_ "y")),
-          let_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x")))),
+          ulet_ "bar" (ulam_ "y" (var_ "y")),
+          ulet_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x")))),
           appf2_ (var_ "foo") (var_ "bar") (int_ 1)],
   expected = int_ 1,
   vs = ["top", "foo", "bar"],
@@ -815,9 +815,9 @@ let hiddenCall = {
 let hole1 = {
   ast =
     bind_
-      (let_ "foo"
+      (ulet_ "foo"
            (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                           (bind_ (let_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
+                           (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
                                   (addi_ (var_ "x") (var_ "d"))))))
       (app_ (var_ "foo") (int_ 42)),
   expected = int_ 42,
@@ -835,11 +835,11 @@ let hole1 = {
 let hole2 = {
   ast =
     bind_
-      (let_ "foo"
+      (ulet_ "foo"
         (ulam_ "x" (bind_
-          ((bind_ (let_ "d1" (hole_ tyint_ (int_ 1) (int_ 2)))
-             (let_ "bar"
-               (ulam_ "y" (bind_ (let_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
+          ((bind_ (ulet_ "d1" (hole_ tyint_ (int_ 1) (int_ 2)))
+             (ulet_ "bar"
+               (ulam_ "y" (bind_ (ulet_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
                                  (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
           (app_ (var_ "bar") (int_ 1)))
         ))
@@ -863,19 +863,19 @@ let hole2 = {
 -- let b2 = bar 2 in
 -- foo 1
 let hole3 = {
-  ast = bindall_ [let_ "bar" (ulam_ "x"
-                    (bind_ (let_ "h" (hole_ tybool_ true_ (int_ 2)))
+  ast = bindall_ [ulet_ "bar" (ulam_ "x"
+                    (bind_ (ulet_ "h" (hole_ tybool_ true_ (int_ 2)))
                            (if_ (var_ "h")
                                 (var_ "x")
                                 (addi_ (var_ "x") (int_ 1))))),
-                  reclets_add
+                  ureclets_add
                     "foo" (ulam_ "x"
                       (if_ (eqi_ (var_ "x") (int_ 1))
                            (app_ (var_ "foo") (int_ 2))
                            (app_ (var_ "bar") (var_ "x"))))
                   reclets_empty,
-                  let_ "b1" (app_ (var_ "bar") (int_ 1)),
-                  let_ "b2" (app_ (var_ "bar") (int_ 2)),
+                  ulet_ "b1" (app_ (var_ "bar") (int_ 1)),
+                  ulet_ "b2" (app_ (var_ "bar") (int_ 2)),
                   app_ (var_ "foo") (int_ 1)],
   expected = int_ 2,
   vs = ["top", "bar", "foo"],

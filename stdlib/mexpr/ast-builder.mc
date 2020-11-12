@@ -5,14 +5,14 @@ include "assoc.mc"
 
 let npvar_ = use MExprAst in
   lam n.
-  PVar {ident = PName n}
+  PNamed {ident = PName n}
 
 let pvar_ = use MExprAst in
   lam s.
   npvar_ (nameNoSym s)
 
 let pvarw_ = use MExprAst in
-  PVar {ident = PWildcard ()}
+  PNamed {ident = PWildcard ()}
 
 let punit_ = use MExprAst in
   PRecord { bindings = assocEmpty }
@@ -86,11 +86,11 @@ let tyarrow_ = use MExprAst in
   TyArrow {from = from, to = to}
 
 let tyarrows_ = use MExprAst in
-  lam tpes.
-  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tpes
+  lam tys.
+  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tys
 
-let tydyn_ = use MExprAst in
-  TyDyn ()
+let tyunknown_ = use MExprAst in
+  TyUnknown ()
 
 let tyunit_ = use MExprAst in
   TyUnit ()
@@ -108,20 +108,20 @@ let tystr_ = use MExprAst in
   TyString ()
 
 let tyseq_ = use MExprAst in
-  lam tpe.
-  TySeq {tpe = tpe}
+  lam ty.
+  TySeq {ty = ty}
 
-let typrod_ = use MExprAst in
-  lam tpes.
-  TyProd {tpes = tpes}
+let tytuple_ = use MExprAst in
+  lam tys.
+  TyTuple {tys = tys}
 
 let tyrecord_ = use MExprAst in
-  lam tpes.
-  TyRecord {tpes = tpes}
+  lam fields.
+  TyRecord {fields = fields}
 
 let tyrecord_fromtups = use MExprAst in
-  lam tpetups.
-  tyrecord_ (map (lam t. {ident = t.0, tpe = t.1}) tpetups)
+  lam fieldtups.
+  tyrecord_ (map (lam t. {ident = t.0, ty = t.1}) fieldtups)
 
 let tycon_ = use MExprAst in
   lam ident.
@@ -159,56 +159,80 @@ let unit_ = use MExprAst in
   TmRecord {bindings = assocEmpty}
 
 let nlet_ = use MExprAst in
-  lam n. lam body.
-  TmLet {ident = n, body = body, inexpr = unit_}
+  lam n. lam ty. lam body.
+  TmLet {ident = n, ty = ty, body = body, inexpr = unit_}
 
 let let_ = use MExprAst in
+  lam s. lam ty. lam body.
+  nlet_ (nameNoSym s) ty body
+
+let nulet_ = use MExprAst in
+  lam n. lam body.
+  nlet_ n tyunknown_ body
+
+let ulet_ = use MExprAst in
   lam s. lam body.
-  nlet_ (nameNoSym s) body
+  let_ s tyunknown_ body
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. {ident = t.0, body = t.1}) bs,
+  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2}) bs,
              inexpr = unit_}
 
 let reclets_ = use MExprAst in
   lam bs.
-  nreclets_ (map (lam b. (nameNoSym b.0, b.1)) bs)
+  nreclets_ (map (lam b. (nameNoSym b.0, b.1, b.2)) bs)
 
-let reclet_ = use MExprAst in
+let nureclets_ = use MExprAst in
+  lam bs.
+  nreclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+
+let ureclets_ = use MExprAst in
+  lam bs.
+  reclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+
+let ureclet_ = use MExprAst in
   lam s. lam body.
-  reclets_ [(s, body)]
+  ureclets_ [(s, body)]
 
 let reclets_empty = use MExprAst in
   reclets_ []
 
 let nreclets_add = use MExprAst in
-  lam n. lam body. lam reclets.
+  lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, body = body} in
+    let newbind = {ident = n, ty = ty, body = body} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     error "reclets is not a TmRecLets construct"
 
 let reclets_add = use MExprAst in
+  lam s. lam ty. lam body. lam reclets.
+  nreclets_add (nameNoSym s) ty body reclets
+
+let nureclets_add = use MExprAst in
+  lam n. lam body. lam reclets.
+  nreclets_add n tyunknown_ body reclets
+
+let ureclets_add = use MExprAst in
   lam s. lam body. lam reclets.
-  nreclets_add (nameNoSym s) body reclets
+  reclets_add s tyunknown_ body reclets
 
 let ncondef_ = use MExprAst in
-  lam n. lam tpe.
-  TmConDef {ident = n, tpe = tpe, inexpr = unit_}
+  lam n. lam ty.
+  TmConDef {ident = n, ty = ty, inexpr = unit_}
 
 let condef_ = use MExprAst in
-  lam s. lam tpe.
-  ncondef_ (nameNoSym s) tpe
+  lam s. lam ty.
+  ncondef_ (nameNoSym s) ty
 
 let nucondef_ = use MExprAst in
   lam n.
-  ncondef_ n tydyn_
+  ncondef_ n tyunknown_
 
 let ucondef_ = use MExprAst in
   lam s.
-  condef_ s tydyn_
+  condef_ s tyunknown_
 
 let nvar_ = use MExprAst in
   lam n.
@@ -231,20 +255,20 @@ let const_ = use MExprAst in
   TmConst {val = c}
 
 let nlam_ = use MExprAst in
-  lam n. lam tpe. lam body.
-  TmLam {ident = n, tpe = tpe, body = body}
+  lam n. lam ty. lam body.
+  TmLam {ident = n, ty = ty, body = body}
 
 let lam_ = use MExprAst in
-  lam s. lam tpe. lam body.
-  nlam_ (nameNoSym s) tpe body
+  lam s. lam ty. lam body.
+  nlam_ (nameNoSym s) ty body
 
 let nulam_ = use MExprAst in
   lam n. lam body.
-  nlam_ n tydyn_ body
+  nlam_ n tyunknown_ body
 
 let ulam_ = use MExprAst in
   lam s. lam body.
-  lam_ s tydyn_ body
+  lam_ s tyunknown_ body
 
 let ulams_ = use MExprAst in
   lam idents. lam body.

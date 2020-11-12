@@ -113,20 +113,20 @@ let charLiteral = char_ 'c' in
 let fun = ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) in
 
 let testLet =
-  bindall_ [let_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)]
+  bindall_ [ulet_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)]
 in
 
 let testRec =
   bind_
-    (reclets_add "foo" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))
+    (ureclets_add "foo" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))
       reclets_empty)
     (app_ (var_ "foo") (int_ 1))
 in
 
 let mutRec =
   bind_
-    (reclets_add "foo" (ulam_ "x" (app_ (var_ "bar") (var_ "x")))
-      (reclets_add "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))
+    (ureclets_add "foo" (ulam_ "x" (app_ (var_ "bar") (var_ "x")))
+      (ureclets_add "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))
          reclets_empty))
     (app_ (var_ "foo") (int_ 1))
 in

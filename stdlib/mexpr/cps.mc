@@ -43,7 +43,7 @@ lang FunCPS = FunSym + FunEq
   | TmLam t ->
     let k = nameSym "k" in
     let kvar = nvar_ k in
-    nlam_ t.ident t.tpe (nulam_ k (cpsC kvar t.body))
+    nlam_ t.ident t.ty (nulam_ k (cpsC kvar t.body))
 
 end
 

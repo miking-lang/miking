@@ -55,15 +55,16 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | TmVar t -> TmVar {t with ident = escapeName t.ident}
   | TmLam t ->
       TmLam {ident = escapeName t.ident,
-             tpe = t.tpe,
+             ty = t.ty,
              body = generate t.body}
   | TmLet t ->
       TmLet {ident = escapeName t.ident,
+             ty = t.ty,
              body = generate t.body,
              inexpr = generate t.inexpr}
   | TmRecLets t ->
-      let bs = map (lam b. {ident = escapeName b.ident,
-                            body = generate b.body})
+      let bs = map (lam b. {{b with ident = escapeName b.ident}
+                               with body = generate b.body})
                    t.bindings
       in
       TmRecLets {bindings = bs, inexpr = generate t.inexpr}
@@ -90,12 +91,12 @@ with ulam_ "_BC123" (ulam_ "_a_b_c" (app_ (var_ "_BC123")
 in
 
 -- Lets
-utest generate (let_ "abcABC/:@_'" (var_ "abcABC/:@_'"))
-with (let_ "abcABC____'" (var_ "abcABC____'")) in
+utest generate (ulet_ "abcABC/:@_'" (var_ "abcABC/:@_'"))
+with (ulet_ "abcABC____'" (var_ "abcABC____'")) in
 
 let testRec =
   bind_
-    (reclets_add "abcABC/:@_'" (ulam_ "ABC123"
+    (ureclets_add "abcABC/:@_'" (ulam_ "ABC123"
                                (app_ (var_ "abcABC/:@_'")
                                      (var_ "ABC123")))
       reclets_empty)
@@ -104,7 +105,7 @@ in
 
 let testRecExpected =
   bind_
-    (reclets_add "abcABC____'" (ulam_ "_BC123"
+    (ureclets_add "abcABC____'" (ulam_ "_BC123"
                                (app_ (var_ "abcABC____'")
                                (var_ "_BC123")))
       reclets_empty)
@@ -115,16 +116,16 @@ utest generate testRec with testRecExpected in
 
 let mutRec =
   bind_
-    (reclets_add "'a/b/c" (ulam_ "" (app_ (var_ "123") (var_ "")))
-      (reclets_add "123" (ulam_ "" (app_ (var_ "'a/b/c") (var_ "")))
+    (ureclets_add "'a/b/c" (ulam_ "" (app_ (var_ "123") (var_ "")))
+      (ureclets_add "123" (ulam_ "" (app_ (var_ "'a/b/c") (var_ "")))
          reclets_empty))
     (app_ (var_ "'a/b/c") (int_ 1))
 in
 let mutRecExpected =
   bind_
-    (reclets_add "_a_b_c" (ulam_ defaultIdentName (app_ (var_ "_23")
+    (ureclets_add "_a_b_c" (ulam_ defaultIdentName (app_ (var_ "_23")
                                              (var_ defaultIdentName)))
-      (reclets_add "_23" (ulam_ defaultIdentName (app_ (var_ "_a_b_c")
+      (ureclets_add "_23" (ulam_ defaultIdentName (app_ (var_ "_a_b_c")
                                             (var_ defaultIdentName)))
         reclets_empty))
     (app_ (var_ "_a_b_c") (int_ 1))
@@ -231,13 +232,13 @@ utest funShadowed with generate funShadowed using sameSemantics in
 -- Lets
 let testLet =
   symbolize
-  (bindall_ [let_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
+  (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
 in
 utest testLet with generate testLet using sameSemantics in
 
 let testLetShadowed =
   symbolize
-  (bindall_ [let_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
+  (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
              app_ (var_ "@") (int_ 1)])
 in
 utest testLetShadowed with generate testLetShadowed
@@ -246,8 +247,8 @@ using sameSemantics in
 let testLetRec =
   symbolize
   (bind_
-     (reclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
-     (reclets_add "@" (ulam_ "" (var_ ""))
+     (ureclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
+     (ureclets_add "@" (ulam_ "" (var_ ""))
      reclets_empty))
    (app_ (var_ "$") (var_ "@")))
 in

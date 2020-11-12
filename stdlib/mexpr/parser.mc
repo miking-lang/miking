@@ -298,14 +298,16 @@ end
 
 
 -- Parsing of a lambda
-lang FunParser = ExprParser + IdentParser + KeywordUtils + FunAst 
+lang FunParser =
+  ExprParser + IdentParser + KeywordUtils + FunAst + UnknownTypeAst
+
   sem nextIdent (p: Pos) (xs: String) =
   | "lam" ->
     let r = eatWSAC (advanceCol p 3) xs in
     let r2 = parseIdent false r.pos r.str in
     let r3 = matchKeyword "." r2.pos r2.str  in
     let e = parseExprMain r3.pos 0 r3.str in
-    {val = TmLam {ident = nameNoSym r2.val, tpe = None (),
+    {val = TmLam {ident = nameNoSym r2.val, ty = TyUnknown {},
                   body = e.val, fi = makeInfo p e.pos},
      pos = e.pos, str = e.str}
     -- TODO (David, 2020-09-27): Add parsing of type     
@@ -313,7 +315,8 @@ end
 
 
 -- Parsing let expressions
-lang LetParser = ExprParser + IdentParser + KeywordUtils + LetAst
+lang LetParser =
+  ExprParser + IdentParser + KeywordUtils + LetAst + UnknownTypeAst
   sem nextIdent (p: Pos) (xs: String) =
   | "let" ->
     let r = eatWSAC (advanceCol p 3) xs in
@@ -322,7 +325,7 @@ lang LetParser = ExprParser + IdentParser + KeywordUtils + LetAst
     let e1 = parseExprMain r3.pos 0 r3.str in
     let r4 = matchKeyword "in" e1.pos e1.str in
     let e2 = parseExprMain r4.pos 0 r4.str in
-    {val = TmLet {ident = nameNoSym r2.val, body = e1.val,
+    {val = TmLet {ident = nameNoSym r2.val, ty = TyUnknown {}, body = e1.val,
                   inexpr = e2.val, fi = makeInfo p e2.pos},
      pos = e2.pos, str = e2.str}
 end

@@ -151,7 +151,7 @@ top:
 toplet:
   | LET var_ident ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
-      Let (fi, $2.v, $5) }
+      Let (fi, $2.v, $3, $5) }
 
 topRecLet:
   | REC lets END
@@ -254,11 +254,11 @@ mexpr:
       { $6 }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
-        let lst = List.map (fun (fi,x,t) -> (fi,x,Symb.Helpers.nosym,t)) $2 in
+        let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
          TmRecLets(fi,lst,$4) }
   | LET var_ident ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
-        TmLet(fi,$2.v,Symb.Helpers.nosym,$5,$7) }
+        TmLet(fi,$2.v,Symb.Helpers.nosym,$3,$5,$7) }
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,Symb.Helpers.nosym,$3,$5) }
@@ -284,10 +284,10 @@ mexpr:
 lets:
   | LET var_ident ty_op EQ mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        [(fi, $2.v, $5)] }
+        [(fi, $2.v, $3, $5)] }
   | LET var_ident ty_op EQ mexpr lets
       { let fi = mkinfo $1.i (tm_info $5) in
-        (fi, $2.v, $5)::$6 }
+        (fi, $2.v, $3, $5)::$6 }
 
 
 left:
@@ -401,11 +401,11 @@ pat_atom:
       { let fi = mkinfo (fst $1) (fst $5) in
         let l = $1 |> snd |> Mseq.Helpers.of_list in
         let r = $5 |> snd |> Mseq.Helpers.of_list in
-        PatSeqEdg(fi, l, snd $3, r) }
+        PatSeqEdge(fi, l, snd $3, r) }
   | patseq CONCAT name
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.Helpers.of_list, snd $3, Mseq.empty) }
+      { PatSeqEdge(mkinfo (fst $1) (fst $3), $1 |> snd |> Mseq.Helpers.of_list, snd $3, Mseq.empty) }
   | name CONCAT patseq
-      { PatSeqEdg(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
+      { PatSeqEdge(mkinfo (fst $1) (fst $3), Mseq.empty, snd $1, $3 |> snd |> Mseq.Helpers.of_list) }
   | LPAREN pat RPAREN
       { $2 }
   | LPAREN pat COMMA pat_list RPAREN
@@ -440,7 +440,7 @@ ty_op:
   | COLON ty
       { $2 }
   |
-      { TyDyn }
+      { TyUnknown }
 
 
 ty:
@@ -470,13 +470,13 @@ ty_atom:
       { TyRecord($2) }
   | type_ident
       {match Ustring.to_utf8 $1.v with
-       | "Dyn"    -> TyDyn
-       | "Bool"   -> TyBool
-       | "Int"    -> TyInt
-       | "Float"  -> TyFloat
-       | "Char"   -> TyChar
-       | "String" -> TySeq(TyChar)
-       | s        -> TyCon(us s)
+       | "Unknown" -> TyUnknown
+       | "Bool"    -> TyBool
+       | "Int"     -> TyInt
+       | "Float"   -> TyFloat
+       | "Char"    -> TyChar
+       | "String"  -> TySeq(TyChar)
+       | s         -> TyCon(us s)
       }
 
 ty_list:
