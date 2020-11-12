@@ -6,11 +6,12 @@ include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
+include "ocaml/compile.mc"
 
-let defaultIdentName = "var"
+let defaultIdentName = "_var"
 
 let escapeFirstChar = lam c.
-  if or (isLowerAlpha c) (eqChar c '_') then c
+  if isLowerAlphaOrUnderscore c then c
   else '_'
 
 utest map escapeFirstChar "abcABC/:@_'" with "abc________"
@@ -145,18 +146,10 @@ in
 let ocamlEval = lam p. lam strConvert.
   let subprocess = pyimport "subprocess" in
   let blt = pyimport "builtins" in
-  let cmd =
-        pycall blt "str"
-               (join ["print_endline (", strConvert, "(", p, "))"],)
-  in
-  let encoded = pycall cmd "encode" () in
-  let p = pycallkw subprocess "run" (["ocaml", "-stdin"],)
-                              {input=encoded, capture_output=true}
-  in
-  let stdout =
-    pycall (pycall blt "getattr" (p,"stdout")) "decode" ()
-  in
-  parseAsMExpr (pyconvert stdout)
+    let res = compile (join ["print_string (", strConvert, "(", p, "))"]) in
+    let out = (res.run "" []).stdout in
+    let _ = res.cleanup () in
+    parseAsMExpr out
 in
 
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of

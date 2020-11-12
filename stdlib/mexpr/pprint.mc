@@ -112,11 +112,11 @@ let pprintConString = lam str.
 
 -- Variable string parser translation
 let pprintVarString = lam str.
-  _parserStr str "#var" (lam str. isLowerAlpha (head str))
+  _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
 -- Label string parser translation for records
 let pprintLabelString = lam str.
-  _parserStr str "#label" (lam str. isLowerAlpha (head str))
+  _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
 
 ----------------------
 -- HELPER FUNCTIONS --
