@@ -1,62 +1,110 @@
 include "string.mc"
+include "python/python.mc"
 
 let _blt = pyimport "builtins"
 let _subprocess = pyimport "subprocess"
 let _tempfile = pyimport "tempfile"
+let _pathlib = pyimport "pathlib"
+let _shutil = pyimport "shutil"
 
-type Program = String -> [String] -> {stdout: String, stderr: String, returncode: Int}
+type ExecResult = {stdout: String, stderr: String, returncode: Int}
+type Program = String -> [String] -> ExecResult
 
-let writeToFile = lam str. lam filename.
+let _writeToFile = lam str. lam filename.
   let f = pycall _blt "open" (filename, "w+") in
-  let _ = pycallkw _subprocess "run" (["echo", str],) {stdout=f} in
+  let _ = pycall f "write" (str,) in
   let _ = pycall f "close" () in
   ()
 
-let runCommand = lam cmd. lam cwd. lam exitOnFailure.
-  let r = pycallkw _subprocess "run" (cmd,) {cwd=cwd, capture_output=true} in
-  let returncode = pyconvert (pycall _blt "getattr" (r,"returncode")) in
-  let stdout =
-    pyconvert (pycall (pycall _blt "getattr" (r,"stdout")) "decode" ())
-  in
-  let stderr =
-    pyconvert (pycall (pycall _blt "getattr" (r,"stderr")) "decode" ())
-  in
-  if and (neqi returncode 0) exitOnFailure then
-    exit returncode
-  else
+let _runCommand : String->String->String->ExecResult =
+  lam cmd. lam stdin. lam cwd.
+    let r = pycallkw _subprocess "run" (cmd,)
+            { cwd=cwd,
+              input=pycall (pycall _blt "str" (stdin,)) "encode" (),
+              capture_output=true } in
+    let returncode = pyconvert (pythonGetAttr r "returncode") in
+    let stdout =
+      pyconvert (pycall (pythonGetAttr r "stdout") "decode" ())
+    in
+    let stderr =
+      pyconvert (pycall (pythonGetAttr r "stderr") "decode" ())
+    in
     {stdout=stdout, stderr=stderr, returncode=returncode}
 
-let compile : String -> Program = lam p.
-  let symlink = lam from. lam to.
-    pycall _subprocess "run" (["ln", "-sf", from, to],)
-  in
-
+let compile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
   let dunefile = "(executable (name program) (libraries batteries boot))" in
   let td = pycall _tempfile "TemporaryDirectory" () in
-  let dir = pyconvert (pycall _blt "getattr" (td, "name")) in
-  let tempfile = lam f. strJoin "/" [dir, f] in
+  let dir = pythonGetAttr td "name" in
+  let tempfile = lam f.
+    let p = pycall _pathlib "Path" (dir,) in
+    pycall _blt "str" (pycall p "joinpath" (f,),)
+  in
 
-  let _ = writeToFile p (tempfile "program.ml") in
-  let _ = writeToFile dunefile (tempfile "dune") in
+  let _ = _writeToFile p (tempfile "program.ml") in
+  let _ = _writeToFile dunefile (tempfile "dune") in
 
   let command = ["dune", "build"] in
-  let _ = runCommand command (tempfile "") true in
+  let r = _runCommand command "" (tempfile "") in
+  let _ =
+    if neqi r.returncode 0 then
+      let _ = print (join ["'dune build' failed:\nexit code: ",
+                           int2string r.returncode,
+                           "\nstandard error:\n", r.stderr]) in
+      exit 1
+    else ()
+  in
 
-  lam stdin. lam args.
-    let command = ["dune", "exec", "./program.exe", "--", strJoin " " args] in
-    runCommand command (tempfile "") false
+  {
+    run =
+      lam stdin. lam args.
+        let command =
+          concat ["dune", "exec", "./program.exe", "--"] args
+        in
+          _runCommand command stdin (tempfile ""),
+    cleanup =
+      lam _.
+        let _ = pycall _shutil "rmtree" (dir,) in
+        ()
+  }
 
 mexpr
 
-let run =
-  compile "print_endline (\"This is the sym: \" ^ (Boot.Intrinsics.Symb.Helpers.string_of_sym (Boot.Intrinsics.Symb.gensym ())))"
+let sym =
+  compile "print_int (Boot.Intrinsics.Mseq.length Boot.Intrinsics.Mseq.empty)"
 in
 
-let run2 =
-  compile "print_endline \"Hello World!\""
+let hello =
+  compile "print_string \"Hello World!\""
 in
 
-let _ = dprint (run "" [""]) in
-let _ = dprint (run2 "" [""]) in
-let _ = dprint (run "" [""]) in
+let echo =
+  compile "print_string (read_line ())"
+in
+
+let args =
+  compile "print_string (Sys.argv.(1))"
+in
+
+let err =
+  compile "Printf.eprintf \"Hello World!\""
+in
+
+let manyargs =
+  compile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
+in
+
+utest (sym.run "" [""]).stdout with "0" in
+utest (hello.run "" [""]).stdout with "Hello World!" in
+utest (echo.run "hello" [""]).stdout with "hello" in
+utest (args.run "" ["world"]).stdout with "world" in
+utest (err.run "" [""]).stderr with "Hello World!" in
+utest (manyargs.run "" ["hello", "world"]).stderr with "hello world" in
+
+let _ = sym.cleanup () in
+let _ = hello.cleanup () in
+let _ = echo.cleanup () in
+let _ = args.cleanup () in
+let _ = err.cleanup () in
+let _ = manyargs.cleanup () in
+
 ()
