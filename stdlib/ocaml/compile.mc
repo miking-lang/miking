@@ -16,6 +16,13 @@ let _writeToFile = lam str. lam filename.
   let _ = pycall f "close" () in
   ()
 
+let _readFile = lam filename.
+  let f = pycall _blt "open" (filename, "r+") in
+  let content = pycall f "read" () in
+  let _ = pycall f "close" () in
+  pyconvert content
+
+
 let _runCommand : String->String->String->ExecResult =
   lam cmd. lam stdin. lam cwd.
     let r = pycallkw _subprocess "run" (cmd,)
@@ -47,9 +54,11 @@ let compile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
   let r = _runCommand command "" (tempfile "") in
   let _ =
     if neqi r.returncode 0 then
-      let _ = print (join ["'dune build' failed:\nexit code: ",
+      let _ = print (join ["'dune build' failed on program:\n\n",
+                           _readFile (tempfile "program.ml"),
+                           "\n\nexit code: ",
                            int2string r.returncode,
-                           "\nstandard error:\n", r.stderr]) in
+                           "\n\nstandard error:\n", r.stderr]) in
       exit 1
     else ()
   in
@@ -93,11 +102,11 @@ let manyargs =
   compile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
 in
 
-utest (sym.run "" [""]).stdout with "0" in
-utest (hello.run "" [""]).stdout with "Hello World!" in
-utest (echo.run "hello" [""]).stdout with "hello" in
+utest (sym.run "" []).stdout with "0" in
+utest (hello.run "" []).stdout with "Hello World!" in
+utest (echo.run "hello" []).stdout with "hello" in
 utest (args.run "" ["world"]).stdout with "world" in
-utest (err.run "" [""]).stderr with "Hello World!" in
+utest (err.run "" []).stderr with "Hello World!" in
 utest (manyargs.run "" ["hello", "world"]).stderr with "hello world" in
 
 let _ = sym.cleanup () in

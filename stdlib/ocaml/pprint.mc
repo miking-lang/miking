@@ -44,7 +44,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem pprintCode (indent : Int) (env: PPrintEnv) =
   | TmLam {ident = id, body = b} ->
     match pprintEnvGetStr env id with (env,str) then
-      let ident = pprintVarString str in
+      let ident = str in
       match pprintCode (pprintIncr indent) env b with (env,body) then
         (env,join ["fun ", ident, " ->",
          pprintNewline (pprintIncr indent), body])
@@ -53,11 +53,11 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
     let lname = lam env. lam bind.
       match pprintEnvGetStr env bind.ident with (env,str) then
-        (env,pprintVarString str)
+        (env, str)
       else never in
     let lbody = lam env. lam bind.
       match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
-      with (env,str) then (env,pprintVarString str)
+      with (env,str) then (env, str)
       else never in
     match mapAccumL lname env bindings with (env,idents) then
       match mapAccumL lbody env bindings with (env,bodies) then
