@@ -72,6 +72,9 @@ let isUpperAlpha = lam c.
 
 let isAlpha = lam c. or (isLowerAlpha c) (isUpperAlpha c)
 
+let isLowerAlphaOrUnderscore = lam c.
+  or (isLowerAlpha c) (eqChar c '_')
+
 utest isAlpha 'a' with true
 utest isAlpha 'm' with true
 utest isAlpha 'z' with true
@@ -100,3 +103,25 @@ utest isAlphanum '9' with true
 utest isAlphanum 'A' with true
 utest isAlphanum 'z' with true
 utest isAlphanum '_' with false
+
+utest isLowerAlpha 'a' with true
+utest isLowerAlpha 'z' with true
+utest isLowerAlpha 'A' with false
+utest isLowerAlpha 'Z' with false
+utest isLowerAlpha '\n' with false
+utest isLowerAlpha '7' with false
+utest isLowerAlpha '_' with false
+
+utest isUpperAlpha '0' with false
+utest isUpperAlpha 'a' with false
+utest isUpperAlpha '_' with false
+utest isUpperAlpha 'X' with true
+utest isUpperAlpha 'K' with true
+utest isUpperAlpha '%' with false
+
+utest isLowerAlphaOrUnderscore '0' with false
+utest isLowerAlphaOrUnderscore 'a' with true
+utest isLowerAlphaOrUnderscore 'A' with false
+utest isLowerAlphaOrUnderscore '{' with false
+utest isLowerAlphaOrUnderscore '_' with true
+utest isLowerAlphaOrUnderscore '\n' with false
