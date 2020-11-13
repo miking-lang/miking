@@ -1,7 +1,9 @@
 -- Symbolization of the MExpr ast.
 --
--- TODO(dlunde,2020-09-25): Add support for leaving existing symbols intact when
--- running symbolize on an already partially symbolized term?
+-- NOTE(dlunde,2020-09-25):
+-- * Add support for leaving existing symbols intact when running symbolize on
+-- an already partially symbolized term?
+-- * Add support for unbound variables and constructors (similarly to eq.mc)?
 
 include "name.mc"
 include "string.mc"
@@ -19,7 +21,7 @@ include "mexpr/pprint.mc"
 -- use strings directly.
 
 -- TODO(dlunde,2020-09-25): We should probably use separate environments for the
--- below instead (as in eq.mc)
+-- below instead (as in eq.mc), and remove the Ident type.
 type Ident
 con IdVar   : String -> Ident
 con IdCon   : String -> Ident

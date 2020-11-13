@@ -8,7 +8,6 @@ include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/eq.mc"
-include "mexpr/programs.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
   sem isValue =
@@ -261,7 +260,13 @@ in
 let rupdate =
   recordupdate_ record "b" (int_ 7) in
 
-let factorial = programsFactorial in
+let factorial =
+  ureclet_ "fact"
+    (ulam_ "n"
+      (if_ (eqi_ (var_ "n") (int_ 0))
+        (int_ 1)
+        (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))
+in
 
 let const = (int_ 1) in
 

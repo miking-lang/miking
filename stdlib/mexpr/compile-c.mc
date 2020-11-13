@@ -8,14 +8,31 @@
 -- (TODO(dlunde,2020-10-03): Add type annotations to all lets). This requirement
 -- can be weakened when we have a type system.
 
-include "mexpr/ast.mc"
-include "mexpr/anf.mc"
-include "mexpr/programs.mc"
-
 include "ast.mc"
-include "pprint.mc"
+include "ast-builder.mc"
+include "anf.mc"
+include "symbolize.mc"
+
+include "c/ast.mc"
+include "c/pprint.mc"
+
+----------------------
+-- PREDEFINED NAMES --
+----------------------
+
+let _mainName = nameSym "main"
+let _argcName = nameSym "argc"
+let _argvName = nameSym "argv"
+
+-------------------------
+-- MEXPR -> C COMPILER --
+-------------------------
 
 lang MExprCCompile = MExprAst + CAst + MExprANF
+
+  -- TODO: Cannot override previous definition of TmApp?
+  -- sem isValue =
+  -- | TmApp _ -> true
 
   sem compile =
   | prog ->
@@ -32,7 +49,7 @@ lang MExprCCompile = MExprAst + CAst + MExprANF
 
     -- 3. Translate to C program. Call `compileTops` and build final program
     -- from result.
-    CPProg {tops = compileTops [] [] prog}
+    CPProg {includes = [], tops = compileTops [] [] prog}
 
 
   -------------
@@ -53,12 +70,12 @@ lang MExprCCompile = MExprAst + CAst + MExprANF
       CTyFun {ret = ret, params = map compileType params}
     else never
 
-  -- How do we handle this properly?
   | TyUnknown _ -> CTyVoid {}
 
   | TySeq _ | TyTuple _ | TyRecord _
   | TyCon _ | TyApp _ | TyString _
   | TyVar _ -> error "Type not currently supported"
+
 
   -----------------
   -- C TOP-LEVEL --
@@ -135,11 +152,10 @@ lang MExprCCompile = MExprAst + CAst + MExprANF
   -- Set up main function
   | rest ->
     let main = CTFun {
-      ret = CTyInt {}, id = nameSym "main",
+      ret = CTyInt {}, id = _mainName,
       params = [
-        (CTyInt {}, nameSym "argc"),
-        (CTyArray {ty = CTyPtr {ty = CTyChar {}}, size = None ()},
-         nameSym "argv")
+        (CTyInt {}, _argcName),
+        (CTyArray {ty = CTyPtr {ty = CTyChar {}}, size = None ()}, _argvName)
       ],
       body = compileStmts (None ()) accMain rest
     }
@@ -296,7 +312,11 @@ lang MExprCCompile = MExprAst + CAst + MExprANF
 
 end
 
-lang TestLang = MExprCCompile + MExprPrettyPrint + CPrettyPrint
+lang TestLang =
+
+  MExprCCompile + MExprPrettyPrint + CPrettyPrint
+
+  + MExprSym
 
 mexpr
 use TestLang in
@@ -305,12 +325,63 @@ use TestLang in
 -- * global data
 -- * function creating and returning record
 
-let mprog = bindall_ [
-  programsFactorial,
-  programsOddEven
-]
+-- Heavily type-annotated version of factorial function
+let factorial =
+  reclet_ "factorial" (tyarrow_ tyint_ tyint_)
+    (lam_ "n" tyint_
+      (asc_ tyint_
+        (if_ (asc_ tybool_ (eqi_ (var_ "n") (int_ 0)))
+          (int_ 1)
+          (asc_ tyint_
+            (muli_ (var_ "n")
+              (asc_ tyint_
+                (app_ (var_ "factorial")
+                  (asc_ tyint_ (subi_ (var_ "n") (int_ 1))))))))))
 in
 
-let _ = print (printCProg (compile mprog)) in
+-- Heavily type-annotated versions of mutually recursive odd and even functions
+let oddEven = reclets_ [
+
+    ("odd", tyarrow_ tyint_ tybool_,
+     lam_ "x" tyint_
+       (asc_ tybool_
+         (if_ (asc_ tybool_ (eqi_ (var_ "x") (int_ 1)))
+           true_
+           (asc_ tybool_
+             (if_ (asc_ tybool_ (lti_ (var_ "x") (int_ 1)))
+                false_
+                (asc_ tybool_
+                  (app_ (var_ "even")
+                    (asc_ tyint_ (subi_ (var_ "x") (int_ 1)))))))))),
+
+    ("even", tyarrow_ tyint_ tybool_,
+     lam_ "x" tyint_
+       (asc_ tybool_
+         (if_ (asc_ tybool_ (eqi_ (var_ "x") (int_ 0)))
+            true_
+            (asc_ tybool_
+              (if_ (asc_ tybool_ (lti_ (var_ "x") (int_ 0)))
+                 false_
+                 (asc_ tybool_
+                   (app_ (var_ "odd")
+                     (asc_ tyint_ (subi_ (var_ "x") (int_ 1))))))))))
+
+] in
+
+
+
+let mprog = bindall_ [
+  factorial,
+  oddEven,
+  asc_ tyunit_ unit_
+] in
+
+let mprog = symbolize mprog in
+
+-- let _ = printLn (expr2str mprog) in
+
+let nameInit = [_mainName, _argcName, _argvName] in
+
+-- let _ = printLn (printCProg nameInit (compile mprog)) in
 
 ()

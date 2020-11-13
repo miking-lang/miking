@@ -7,7 +7,6 @@ include "name.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/programs.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -88,10 +87,15 @@ let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
           else never
         else never
 
--- Adds the given name to the environment (if it does not already exist)
-let pprintAddStr : PprintEnv -> Name -> PprintEnv =
+-- Adds the given name to the environment, if its exact string is not already
+-- mapped to. If the exact string is already mapped to, return None (). This
+-- function is useful if you have names which must be printed with their exact
+-- strings (e.g., library functions or similar).
+let pprintAddStr : PprintEnv -> Name -> Option PprintEnv =
   lam env. lam name.
-    match pprintEnvGetStr env name with (env,_) then env else never
+    let baseStr = nameGetStr name in
+    if pprintEnvFree baseStr env then Some (pprintEnvAdd name baseStr 1 env)
+    else None ()
 
 ---------------------------------
 -- IDENTIFIER PARSER FUNCTIONS --
@@ -736,6 +740,7 @@ lang TypePrettyPrint =
       join ["{", strJoin ", " (map conventry t.fields), "}"]
     | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
     | TyInt _ -> "Int"
+    | TyFloat _ -> "Float"
     | TyBool _ -> "Bool"
     | TyApp t ->
       join ["(", getTypeStringCode indent t.lhs, ") (",
@@ -809,9 +814,50 @@ let func_foo =
   )
 in
 
-let func_factorial = programsFactorial in
+-- recursive let factorial = lam n.
+--     if eqi n 0 then
+--       1
+--     else
+--       muli n (factorial (subi n 1))
+-- in
+let func_factorial =
+    ureclets_add "factorial"
+        (lam_ "n" (tyint_)
+            (if_ (eqi_ (var_ "n") (int_ 0))
+                 (int_ 1)
+                 (muli_ (var_ "n")
+                        (app_ (var_ "factorial")
+                              (subi_ (var_ "n")
+                                     (int_ 1))))))
+    reclets_empty
+in
 
-let funcs_oddeven = programsOddEven in
+-- recursive
+--     let even = lam x.
+--         if eqi x 0
+--         then true
+--         else not (odd (subi x 1))
+--     let odd = lam x.
+--         if eqi x 1
+--         then true
+--         else not (even (subi x 1))
+-- in
+let funcs_evenodd =
+    ureclets_add "even"
+        (lam_ "x" (TyUnknown {})
+            (if_ (eqi_ (var_ "x") (int_ 0))
+                 (true_)
+                 (not_ (app_ (var_ "odd")
+                             (subi_ (var_ "x") (int_ 1))))))
+    (ureclets_add "odd"
+        (lam_ "x" (TyUnknown {})
+            (if_ (eqi_ (var_ "x") (int_ 1))
+                 (true_)
+                 (not_ (app_ (var_ "even")
+                             (subi_ (var_ "x") (int_ 1))))))
+    reclets_empty)
+in
+
 
 -- let recget = {i = 5, s = "hello!"} in
 let func_recget =
@@ -927,7 +973,7 @@ let sample_ast =
   bindall_ [
     func_foo,
     func_factorial,
-    funcs_oddeven,
+    funcs_evenodd,
     func_recget,
     func_recconcs,
     func_mycona,

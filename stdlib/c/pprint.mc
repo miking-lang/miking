@@ -312,27 +312,31 @@ lang CPrettyPrint = CAst
       else never
     else never
 
-  sem printCProg =
-  | CPProg { tops = tops } ->
-    recursive let findMain = lam tops.
-      match tops with [h] ++ tl then
-        match h with CTDef { id = Some id } | CTFun { id = id } then
-          if eqString (nameGetStr id) "main" then Some id
-          else findMain tl
-        else findMain tl
-      else match tops with [] then None ()
-      else never
-    in
-    let indent = 0 in
+  sem printCProg (nameInit: [Name]) =
+  | CPProg { includes = includes, tops = tops } ->
+    -- TODO(dlunde,2020-11-13): The following functionality was here
+    -- previously, but is probably more suitable in a future C parser or
+    -- similar.
     -- If a main function exists, we must make sure it is printed as "main". We
     -- do this by adding that name first to the environment.
-    let env =
-      match findMain tops with Some name then
-        pprintAddStr pprintEnvEmpty name
-      else pprintEnvEmpty
+    --     recursive let findMain = lam tops.
+    --       match tops with [h] ++ tl then
+    --         match h with CTDef { id = Some id } | CTFun { id = id } then
+    --           if eqString (nameGetStr id) "main" then Some id
+    --           else findMain tl
+    --         else findMain tl
+    --       else match tops with [] then None ()
+    --       else never
+    --     in
+    let indent = 0 in
+    let includes = map (lam inc. join ["#include ", inc]) includes in
+    let addName = lam env. lam name.
+      match pprintAddStr env name with Some env then env
+      else error (join ["Duplicate name in printCProg: ", nameGetStr name])
     in
+    let env = foldl addName pprintEnvEmpty nameInit in
     match mapAccumL (printCTop indent) env tops with (env,tops) then
-      strJoin (pprintNewline indent) tops
+      strJoin (pprintNewline indent) (join [includes, tops])
     else never
 
 end
@@ -549,7 +553,7 @@ let fun = CTFun {
 } in
 
 let main = CTFun {
-  ret = CTyInt {}, id = nameSym "main",
+  ret = CTyInt {}, id = mainname,
   params = [
     (CTyInt {}, nameSym "argc"),
     (CTyArray { ty = CTyPtr { ty = CTyChar {}}, size = None ()}, nameSym "argv")
@@ -572,11 +576,11 @@ let tops = [
   main
 ] in
 
-let prog = CPProg { tops = tops } in
+let prog = CPProg { includes = ["<stdio.h>"], tops = tops } in
 
--- let _ = printLn (printCProg prog) in
+-- let _ = printLn (printCProg [mainname] prog) in
 
 -- Test making sure printCProg does not crash
-utest geqi (length (printCProg prog)) 0 with true in
+utest geqi (length (printCProg [mainname] prog)) 0 with true in
 
 ()

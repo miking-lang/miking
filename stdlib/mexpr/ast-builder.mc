@@ -98,6 +98,9 @@ let tyunit_ = use MExprAst in
 let tyint_ = use MExprAst in
   TyInt ()
 
+let tyfloat_ = use MExprAst in
+  TyFloat ()
+
 let tybool_ = use MExprAst in
   TyBool ()
 
@@ -117,11 +120,7 @@ let tytuple_ = use MExprAst in
 
 let tyrecord_ = use MExprAst in
   lam fields.
-  TyRecord {fields = fields}
-
-let tyrecord_fromtups = use MExprAst in
-  lam fieldtups.
-  tyrecord_ (map (lam t. {ident = t.0, ty = t.1}) fieldtups)
+  TyRecord {fields = map (lam t. {ident = t.0, ty = t.1}) fields}
 
 let tycon_ = use MExprAst in
   lam ident.
@@ -274,6 +273,10 @@ let ulam_ = use MExprAst in
   lam s. lam body.
   lam_ s tyunknown_ body
 
+let lams_ = use MExprAst in
+  lam params. lam body.
+  foldr (lam p. lam acc. lam_ p.0 p.1 acc) body params
+
 let ulams_ = use MExprAst in
   lam idents. lam body.
   foldr (lam s. lam acc. ulam_ s acc) body idents
@@ -380,6 +383,12 @@ let appf8_ = use MExprAst in
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
   TmUtest {test = t, expected = e, next = n}
+
+
+-- Ascription
+let asc_ = use MExprAst in
+  lam ty. lam expr.
+  bind_ (let_ "x" ty expr) (var_ "x")
 
 -- Constants --
 

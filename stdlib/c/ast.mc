@@ -147,7 +147,7 @@ lang CAst
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
   syn CProg =
-  | CPProg { tops: [CTop] }
+  | CPProg { includes: [String], tops: [CTop] }
 
 end
 
