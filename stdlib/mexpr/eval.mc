@@ -49,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 -- TERMS --
 -----------
 
-lang VarEval = VarAst
+lang VarEval = VarAst + IdentifierPrettyPrint
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match _evalLookup ident ctx.env with Some t then
@@ -614,6 +614,8 @@ lang MExprEval =
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
+  -- Pretty Printing of Identifiers
+  + MExprIdentifierPrettyPrint
 end
 
 

@@ -107,15 +107,15 @@ let _parserStr = lam str. lam prefix. lam cond.
 -- overriding them.
 
 -- Constructor string parser translation
-let pprintConString = lam str.
+let _pprintConString = lam str.
   _parserStr str "#con" (lam str. isUpperAlpha (head str))
 
 -- Variable string parser translation
-let pprintVarString = lam str.
+let _pprintVarString = lam str.
   _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
 -- Label string parser translation for records
-let pprintLabelString = lam str.
+let _pprintLabelString = lam str.
   _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
 
 ----------------------
@@ -148,7 +148,24 @@ let _record2tuple = lam tm.
 -- TERMS --
 -----------
 
-lang PrettyPrint
+lang IdentifierPrettyPrint
+  sem pprintConString =
+  sem pprintVarString =
+  sem pprintLabelString =
+end
+
+lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
+  sem pprintConString =
+  | s -> _pprintConString s
+
+  sem pprintVarString =
+  | s -> _pprintVarString s
+
+  sem pprintLabelString =
+  | s -> _pprintLabelString s
+end
+
+lang PrettyPrint = IdentifierPrettyPrint
   sem isAtomic =
   -- Intentionally left blank
 
@@ -545,16 +562,15 @@ end
 -- PATTERNS --
 --------------
 
-let _pprint_patname: PprintEnv -> PatName -> (PprintEnv, String) =
-lam env. lam pname.
-  match pname with PName name then
+lang PrettyPrintPatName = IdentifierPrettyPrint
+  sem _pprint_patname (env : PprintEnv) =
+  | PName name ->
     match pprintEnvGetStr env name with (env, str)
     then (env, pprintVarString str) else never
-  else match pname with PWildcard () then
-    (env, "_")
-  else never
+  | PWildcard () -> (env, "_")
+end
 
-lang NamedPatPrettyPrint = NamedPat
+lang NamedPatPrettyPrint = NamedPat + PrettyPrintPatName
   sem patIsAtomic =
   | PNamed _ -> true
 
@@ -586,7 +602,7 @@ lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
   | PSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
-lang SeqEdgePatPrettyPrint = SeqEdgePat
+lang SeqEdgePatPrettyPrint = SeqEdgePat + PrettyPrintPatName
   sem patIsAtomic =
   | PSeqEdge _ -> false
 
@@ -599,7 +615,7 @@ lang SeqEdgePatPrettyPrint = SeqEdgePat
     else never else never else never
 end
 
-lang RecordPatPrettyPrint = RecordPat
+lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
   sem patIsAtomic =
   | PRecord _ -> true
 
@@ -617,7 +633,7 @@ lang RecordPatPrettyPrint = RecordPat
     else never
 end
 
-lang DataPatPrettyPrint = DataPat
+lang DataPatPrettyPrint = DataPat + IdentifierPrettyPrint
   sem patIsAtomic =
   | PCon _ -> false
 
@@ -758,6 +774,9 @@ lang MExprPrettyPrint =
 
   -- Types
   + TypePrettyPrint
+
+  -- Identifiers
+  + MExprIdentifierPrettyPrint
 
 end
 
