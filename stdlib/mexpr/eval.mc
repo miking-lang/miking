@@ -836,8 +836,12 @@ with int_ 3 in
 
 -- Builtin sequence functions
 -- get [1,2,3] 1 -> 2
-let getAst = nth_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1) in
+let getAst = get_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1) in
 utest eval getAst with int_ 2 in
+
+-- set [1,2] 0 3 -> [3,2]
+let setAst = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
+utest eval setAst with seq_ [int_ 3, int_ 2] in
 
 -- cons 1 [2, 3] -> [1,2,3]
 let consAst = cons_ (int_ 1) (seq_ [int_ 2, int_ 3]) in
@@ -854,14 +858,21 @@ let concatAst = concat_
 utest eval concatAst
 with seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5, int_ 6] in
 
--- length [1, 2, 3] = 3
+-- length [1, 2, 3] -> 3
 let lengthAst = length_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 utest eval lengthAst with int_ 3 in
 
--- reverse [1, 2, 3] = [3, 2, 1]
+-- reverse [1, 2, 3] -> [3, 2, 1]
 let reverseAst = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] in
 
+-- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
+let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) int_ 2 in
+utest eval splitAtAst with (seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]) in
+
+-- makeSeq 3 42 -> [42, 42, 42]
+let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
+utest eval makeSeqAst with (seq_ [int_ 42, int_ 42, int_ 42]) in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in

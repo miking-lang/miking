@@ -591,10 +591,10 @@ let delta eval env fi c v =
   | Cint2char, _ ->
       fail_constapp fi
   (* MCore intrinsic: sequences *)
-  | CmakeSeq None, TmConst (fi, CInt v) ->
-      TmConst (fi, CmakeSeq (Some v))
-  | CmakeSeq (Some v1), t ->
-      TmSeq (tm_info t, Mseq.make v1 (fun _ -> t))
+  | CmakeSeq None, TmConst (fi, CInt n) ->
+      TmConst (fi, CmakeSeq (Some n))
+  | CmakeSeq (Some n), t ->
+      TmSeq (tm_info t, Mseq.make n t)
   | CmakeSeq None, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->

@@ -329,14 +329,14 @@ end
 lang SeqOpEq = SeqOpAst
   sem eqConst (lhs : Const) =
   | CGet {} -> match lhs with CGet _ then true else false
+  | CSet {} -> match lhs with CSet _ then true else false
+  | CMakeSeq {} -> match lhs with CMakeSeq _ then true else false
   | CCons {} -> match lhs with CCons _ then true else false
   | CSnoc {} -> match lhs with CSnoc _ then true else false
   | CConcat {} -> match lhs with CConcat _ then true else false
   | CLength {} -> match lhs with CLength _ then true else false
-  | CHead {} -> match lhs with CHead _ then true else false
-  | CTail {} -> match lhs with CTail _ then true else false
-  | CNull {} -> match lhs with CNull _ then true else false
   | CReverse {} -> match lhs with CReverse _ then true else false
+  | CSplitAt {} -> match lhs with CSplitAt _ then true else false
 end
 
 --------------

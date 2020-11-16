@@ -461,13 +461,13 @@ let ltf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLtf ())) a b
 
-let nth_ = use MExprAst in
+let get_ = use MExprAst in
   lam s. lam i.
   appf2_ (const_ (CGet ())) s i
 
 let set_ = use MExprAst in
-  lam s. lam i.
-  appf2_ (const_ (CSet ())) s i
+  lam s. lam i. lam v.
+  appf3_ (const_ (CSet ())) s i v
 
 let cons_ = use MExprAst in
   lam x. lam s.

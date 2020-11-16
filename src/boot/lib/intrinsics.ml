@@ -3,7 +3,7 @@ open Ustring.Op
 module Mseq = struct
   type 'a t = 'a BatFingerTree.t
 
-  let make n f = BatFingerTree.of_list (List.init n f)
+  let make n v = BatFingerTree.of_list (List.init n (fun _ -> v))
 
   let empty = BatFingerTree.empty
 

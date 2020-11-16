@@ -7,6 +7,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 include "ocaml/compile.mc"
+include "hashmap.mc"
 
 let defaultIdentName = "_var"
 
@@ -51,7 +52,44 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
+let _seqOps = [
+  "make",
+  "empty",
+  "length",
+  "concat",
+  "get",
+  "set",
+  "cons",
+  "snoc",
+  "reverse",
+  "split_at"
+]
+
+let _seqOpHashMap =
+  let mkOp = lam op.
+    nameSym (join ["Boot.Intrinsics.Mseq.", op])
+  in
+  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
+        hashmapEmpty _seqOps
+
+let _seqOp = lam op.
+  nvar_ (hashmapLookupOrElse
+    hashmapStrTraits
+    (lam _. error (strJoin " " ["Operation", op, "not found"]))
+    op _seqOpHashMap)
+
 lang OCamlGenerate = MExprAst + OCamlAst
+  sem generateConst =
+  | CMakeSeq {} -> _seqOp "make"
+  | CLength {} -> _seqOp "length"
+  | CCons {} -> _seqOp "cons"
+  | CSnoc {} -> _seqOp "snoc"
+  | CGet {} -> _seqOp "get"
+  | CSet {} -> _seqOp "set"
+  | CSplitAt {} -> _seqOp "split_at"
+  | CReverse {} -> _seqOp "reverse"
+  | v -> TmConst { val = v }
+
   sem generate =
   | TmVar t -> TmVar {t with ident = escapeName t.ident}
   | TmLam t ->
@@ -69,6 +107,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
                    t.bindings
       in
       TmRecLets {bindings = bs, inexpr = generate t.inexpr}
+  | TmSeq {tms = tms} ->
+    let tms = map generate tms in
+    foldr (lam tm. lam a. appSeq_ (_seqOp "cons") [tm, a])
+          (_seqOp "empty")
+          tms
+  | TmConst {val = val} -> generateConst val
   | t -> smap_Expr_Expr generate t
 end
 
@@ -246,5 +290,68 @@ let testLetRec =
    (app_ (var_ "$") (var_ "@")))
 in
 utest testLetRec with generate testLetRec using sameSemantics in
+
+-- Sequences
+let testEmpty = symbolize (length_ (seq_ [])) in
+utest testEmpty with generate testEmpty using sameSemantics in
+
+let nonEmpty = seq_ [int_ 1, int_ 2, int_ 3] in
+let len = length_ nonEmpty in
+let fst = get_ nonEmpty (int_ 0) in
+let snd = get_ nonEmpty (int_ 1) in
+let thrd = get_ nonEmpty (int_ 2) in
+utest int_ 3 with generate len using sameSemantics in
+utest int_ 1 with generate fst using sameSemantics in
+utest int_ 2 with generate snd using sameSemantics in
+utest int_ 3 with generate thrd using sameSemantics in
+
+let testMake = makeseq_ (int_ 2) (int_ 0) in
+let len = length_ testMake in
+let fst = get_ testMake (int_ 0) in
+let lst = get_ testMake (int_ 1) in
+utest int_ 2 with generate len using sameSemantics in
+utest int_ 0 with generate fst using sameSemantics in
+utest int_ 0 with generate lst using sameSemantics in
+
+let testSet = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
+let len = length_ testSet in
+let fst = get_ testSet (int_ 0) in
+let snd = get_ testSet (int_ 1) in
+utest int_ 2 with generate len using sameSemantics in
+utest int_ 3 with generate fst using sameSemantics in
+utest int_ 2 with generate snd using sameSemantics in
+
+let testCons = cons_  (int_ 1) (seq_ [int_ 2, int_ 3]) in
+let len = length_ testCons in
+let fst = get_ testCons (int_ 0) in
+let snd = get_ testCons (int_ 1) in
+let thrd = get_ testCons (int_ 2) in
+utest int_ 3 with generate len using sameSemantics in
+utest int_ 1 with generate fst using sameSemantics in
+utest int_ 2 with generate snd using sameSemantics in
+utest int_ 3 with generate thrd using sameSemantics in
+
+let testSnoc = snoc_ (seq_ [int_ 1, int_ 2]) (int_ 3) in
+let len = length_ testSnoc in
+let fst = get_ testSnoc (int_ 0) in
+let snd = get_ testSnoc (int_ 1) in
+let thrd = get_ testSnoc (int_ 2) in
+utest int_ 3 with generate len using sameSemantics in
+utest int_ 1 with generate fst using sameSemantics in
+utest int_ 2 with generate snd using sameSemantics in
+utest int_ 3 with generate thrd using sameSemantics in
+
+let testReverse = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
+let len = length_ testReverse in
+let fst = get_ testReverse (int_ 0) in
+let snd = get_ testReverse (int_ 1) in
+let thrd = get_ testReverse (int_ 2) in
+utest int_ 3 with generate len using sameSemantics in
+utest int_ 3 with generate fst using sameSemantics in
+utest int_ 2 with generate snd using sameSemantics in
+utest int_ 1 with generate thrd using sameSemantics in
+
+-- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
+-- projection.
 
 ()

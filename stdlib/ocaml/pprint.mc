@@ -7,6 +7,14 @@ include "name.mc"
 
 lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
+                        + IdentifierPrettyPrint
+
+  sem pprintVarString =
+  | s -> s
+  sem pprintLabelString =
+  | s -> s
+  sem pprintConString =
+  | s -> s
 
   sem isAtomic =
   | TmLam _ -> false
