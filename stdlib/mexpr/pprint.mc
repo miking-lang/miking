@@ -548,14 +548,14 @@ end
 lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   sem getConstStringCode (indent : Int) =
   | CGet _ -> "get"
+  | CSet _ -> "set"
   | CCons _ -> "cons"
   | CSnoc _ -> "snoc"
   | CConcat _ -> "concat"
   | CLength _ -> "length"
-  | CHead _ -> "head"
-  | CTail _ -> "tail"
-  | CNull _ -> "null"
   | CReverse _ -> "reverse"
+  | CMakeSeq _ -> "makeSeq"
+  | CSplitAt _ -> "splitAt"
 end
 
 --------------

@@ -419,9 +419,13 @@ end
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
+  | CSet2 [Expr]
+  | CSet3 ([Expr], Int)
   | CCons2 Expr
   | CSnoc2 [Expr]
   | CConcat2 [Expr]
+  | CSplitAt2 [Expr]
+  | CMakeSeq2 Int
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -432,6 +436,16 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     match arg with TmConst {val = CInt n} then
       get tms n.val
     else error "n in get is not a number"
+  | CSet _ ->
+    match arg with TmSeq s then
+      TmConst {val = CSet2 s.tms}
+    else error "Not a set of a constant sequence"
+  | CSet2 tms ->
+    match arg with TmConst {val = CInt n} then
+      TmConst {val = CSet3 (tms, n.val)}
+    else error "n in set is not a number"
+  | CSet3 tms ->
+    TmSeq {tms = set tms.0 tms.1 arg}
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
@@ -456,24 +470,24 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     match arg with TmSeq s then
       TmConst {val = CInt {val = (length s.tms)}}
     else error "Not length of a constant sequence"
-  | CHead _ ->
-    match arg with TmSeq s then
-      head s.tms
-    else error "Not head of a constant sequence"
-  | CTail _ ->
-    match arg with TmSeq s then
-      TmSeq {tms = tail s.tms}
-    else error "Not tail of a constant sequence"
-  | CNull _ ->
-    match arg with TmSeq s then
-      if null s.tms
-      then TmConst {val = CBool {val = true}}
-      else TmConst {val = CBool {val = false}}
-    else error "Not null of a constant sequence"
   | CReverse _ ->
     match arg with TmSeq s then
       TmSeq {tms = reverse s.tms}
     else error "Not reverse of a constant sequence"
+  | CSplitAt2 tms ->
+    match arg with TmConst {val = CInt n} then
+      TmSeq {tms = splitAt tms n.val}
+    else error "n in splitAt is not a number"
+  | CSplitAt _ ->
+    match arg with TmSeq s then
+      TmSeq {tms = CSplitAt2 s.tms}
+    else error "Not splitAt of a constant sequence"
+  | CMakeSeq _ ->
+    match arg with TmConst {val = CInt n} then
+      TmConst {val = CMakeSeq2 n}
+    else error "n in makeSeq is not a number"
+  | CMakeSeq2 n ->
+    TmSeq {tms = makeSeq n arg}
 end
 
 --------------
@@ -843,22 +857,6 @@ with seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5, int_ 6] in
 -- length [1, 2, 3] = 3
 let lengthAst = length_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 utest eval lengthAst with int_ 3 in
-
--- tail [1, 2, 3] = [2, 3]
-let tailAst = tail_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval tailAst with seq_ [int_ 2, int_ 3] in
-
--- head [1, 2, 3] = 1
-let headAst = head_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval headAst with int_ 1 in
-
--- null [1, 2, 3] = false
-let nullAst = null_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval nullAst with false_ in
-
--- null [] = true
-let nullAst = null_ (seq_ []) in
-utest eval nullAst with true_ in
 
 -- reverse [1, 2, 3] = [3, 2, 1]
 let reverseAst = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
