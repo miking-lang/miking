@@ -73,10 +73,11 @@ let _seqOpHashMap =
         hashmapEmpty _seqOps
 
 let _seqOp = lam op.
-  nvar_ (hashmapLookupOrElse
-    hashmapStrTraits
-    (lam _. error (strJoin " " ["Operation", op, "not found"]))
-    op _seqOpHashMap)
+  nvar_
+  (hashmapLookupOrElse hashmapStrTraits
+                       (lam _. error (strJoin " " ["Operation", op, "not found"]))
+                       op
+                       _seqOpHashMap)
 
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
