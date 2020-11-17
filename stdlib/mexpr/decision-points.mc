@@ -14,6 +14,10 @@ include "prelude.mc"
 
 let _top = nameSym "top"
 
+let _head = lam s. get_ s (int_ 0)
+let _tail = lam s. tupleproj_ 1 (splitat_ s (int_ 1))
+let _null = lam s. eqi_ (int_ 0) (length_ s)
+
 let _eqn = lam n1. lam n2.
   if and (nameHasSym n1) (nameHasSym n2) then
     nameEqSym n1 n2
@@ -291,12 +295,12 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let f = nameSym "f" in
       nureclets_add _filter
         (nulam_ p (nulam_ s
-          (if_ (null_ (nvar_ s))
+          (if_ (_null (nvar_ s))
                (seq_ [])
-               (if_ (app_ (nvar_ p) (head_ (nvar_ s)))
-                    (bind_ (nulet_ f (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s))))
-                           (cons_ (head_ (nvar_ s)) (nvar_ f)))
-                    (appf2_ (nvar_ _filter) (nvar_ p) (tail_ (nvar_ s)))))))
+               (if_ (app_ (nvar_ p) (_head (nvar_ s)))
+                    (bind_ (nulet_ f (appf2_ (nvar_ _filter) (nvar_ p) (_tail (nvar_ s))))
+                           (cons_ (_head (nvar_ s)) (nvar_ f)))
+                    (appf2_ (nvar_ _filter) (nvar_ p) (_tail (nvar_ s)))))))
       reclets_empty
     in
 
@@ -322,15 +326,15 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
           (nulam_ seq
           (bindall_ [(nureclets_add work
                        (nulam_ e (nulam_ seq
-                         (if_ (null_ (nvar_ seq))
+                         (if_ (_null (nvar_ seq))
                            (nvar_ e)
-                           (bindall_ [nulet_ h (head_ (nvar_ seq)),
-                                      nulet_ t (tail_ (nvar_ seq)),
+                           (bindall_ [nulet_ h (_head (nvar_ seq)),
+                                      nulet_ t (_tail (nvar_ seq)),
                                       if_ (lti_ (appf2_ (nvar_ cmp) (nvar_ h) (nvar_ e)) (int_ 0))
                                           (appf2_ (nvar_ work) (nvar_ e) (nvar_ t))
                                           (appf2_ (nvar_ work) (nvar_ h) (nvar_ t))]) )))
                      reclets_empty),
-                     appf2_ (nvar_ work) (head_ (nvar_ seq)) (tail_ (nvar_ seq))]))))
+                     appf2_ (nvar_ work) (_head (nvar_ seq)) (_tail (nvar_ seq))]))))
     in
 
     -- AST-ify isPrefix
@@ -346,12 +350,12 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
       let s2 = nameSym "s2" in
       nureclets_add _isPrefix (
       (nulam_ eq (nulam_ s1 (nulam_ s2
-        (if_ (null_ (nvar_ s1))
+        (if_ (_null (nvar_ s1))
              (true_)
-             (if_ (null_ (nvar_ s2))
+             (if_ (_null (nvar_ s2))
                   (false_)
-                  (if_ (appf2_ (nvar_ eq) (head_ (nvar_ s1)) (head_ (nvar_ s2)))
-                       (appf3_ (nvar_ _isPrefix) (nvar_ eq) (tail_ (nvar_ s1)) (tail_ (nvar_ s2)) )
+                  (if_ (appf2_ (nvar_ eq) (_head (nvar_ s1)) (_head (nvar_ s2)))
+                       (appf3_ (nvar_ _isPrefix) (nvar_ eq) (_tail (nvar_ s1)) (_tail (nvar_ s2)) )
                        (false_))) )))))
       reclets_empty
     in
@@ -425,7 +429,7 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
           if_ (eqi_ (nvar_ _maxDepth) (int_ 0)) (nvar_ _callCtx)
             (if_ (lti_ (length_ (nvar_ _callCtx)) (nvar_ _maxDepth))
               (snoc_ (nvar_ _callCtx) (nvar_ lbl))
-              (snoc_ (tail_ (nvar_ _callCtx)) (nvar_ lbl))) )))
+              (snoc_ (_tail (nvar_ _callCtx)) (nvar_ lbl))) )))
     in
 
     -- Put all the pieces together
