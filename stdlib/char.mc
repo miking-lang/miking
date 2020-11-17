@@ -14,14 +14,27 @@ let leqChar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
 let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
 
 
+-- Escape characters
+let escapes = [
+  ('\n', "\\n"),
+  ('\t', "\\t"),
+  ('\r', "\\r"),
+  ('\\', "\\\\"),
+  ('\"', "\\\""),
+  ('\'', "\\\'")
+]
+let escapeChar = lam c.
+  match find (lam e. eqChar c e.0) escapes with Some (_, v) then v
+  else [c]
+
+utest escapeChar 'e' with "e"
+utest escapeChar '0' with "0"
+utest escapeChar '\n' with "\\n"
+utest escapeChar '\r' with "\\r"
+utest escapeChar '\t' with "\\t"
+
 -- Display characters
-let showChar = lam c.
-  let escapes = [('\n', "n"), ('\t', "t"), ('\r', "r"),
-                 ('\\', "\\"), ('\"', "\""), ('\'', "\'")] in
-  match find (lam e. eqChar c e.0) escapes with Some (_, v) then
-    join ["\'\\", v, "\'"]
-  else
-    ['\'', c, '\'']
+let showChar = lam c. join ["\'", escapeChar c, "\'"]
 
 utest showChar 'e' with "\'e\'"
 utest showChar '0' with "\'0\'"

@@ -42,8 +42,7 @@ lang CPrettyPrint = CAst
   | CEFloat { f = f } -> (env, float2string f)
   | CEChar  { c = c } -> (env, ['\'', c, '\''])
 
-  -- TODO(dlunde,2020-10-29): Escape characters
-  | CEString { s = s } -> (env, join ["\"", s, "\""])
+  | CEString { s = s } -> (env, join ["\"", escapeString s, "\""])
 
   | CEBinOp { op = op, lhs = lhs, rhs = rhs } ->
     match printCExpr env lhs with (env,lhs) then
