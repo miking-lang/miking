@@ -562,7 +562,7 @@ end
 -- PATTERNS --
 --------------
 
-lang PrettyPrintPatName = IdentifierPrettyPrint
+lang PatNamePrettyPrint = IdentifierPrettyPrint
   sem _pprint_patname (env : PprintEnv) =
   | PName name ->
     match pprintEnvGetStr env name with (env, str)
@@ -570,7 +570,7 @@ lang PrettyPrintPatName = IdentifierPrettyPrint
   | PWildcard () -> (env, "_")
 end
 
-lang NamedPatPrettyPrint = NamedPat + PrettyPrintPatName
+lang NamedPatPrettyPrint = NamedPat + PatNamePrettyPrint
   sem patIsAtomic =
   | PNamed _ -> true
 
@@ -602,7 +602,7 @@ lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
   | PSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
-lang SeqEdgePatPrettyPrint = SeqEdgePat + PrettyPrintPatName
+lang SeqEdgePatPrettyPrint = SeqEdgePat + PatNamePrettyPrint
   sem patIsAtomic =
   | PSeqEdge _ -> false
 
