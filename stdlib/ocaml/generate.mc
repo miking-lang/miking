@@ -190,7 +190,7 @@ in
 let ocamlEval = lam p. lam strConvert.
   let subprocess = pyimport "subprocess" in
   let blt = pyimport "builtins" in
-    let res = compile (join ["print_string (", strConvert, "(", p, "))"]) in
+    let res = ocamlCompile (join ["print_string (", strConvert, "(", p, "))"]) in
     let out = (res.run "" []).stdout in
     let _ = res.cleanup () in
     parseAsMExpr out
