@@ -418,7 +418,6 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
     else error "Second argument in eqsym is not a symbol"
 end
 
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
@@ -436,19 +435,19 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CGet2 s.tms}
     else error "Not a get of a constant sequence"
   | CGet2 tms ->
-    match arg with TmConst {val = CInt n} then
-      get tms n.val
+    match arg with TmConst {val = CInt {val = n}} then
+      get tms n
     else error "n in get is not a number"
   | CSet _ ->
     match arg with TmSeq s then
       TmConst {val = CSet2 s.tms}
     else error "Not a set of a constant sequence"
   | CSet2 tms ->
-    match arg with TmConst {val = CInt n} then
-      TmConst {val = CSet3 (tms, n.val)}
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSet3 (tms, n)}
     else error "n in set is not a number"
-  | CSet3 tms ->
-    TmSeq {tms = set tms.0 tms.1 arg}
+  | CSet3 (tms,n) ->
+    TmSeq {tms = set tms n arg}
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
@@ -477,14 +476,15 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     match arg with TmSeq s then
       TmSeq {tms = reverse s.tms}
     else error "Not reverse of a constant sequence"
-  | CSplitAt2 tms ->
-    match arg with TmConst {val = CInt n} then
-      TmSeq {tms = splitAt tms n.val}
-    else error "n in splitAt is not a number"
   | CSplitAt _ ->
     match arg with TmSeq s then
-      TmSeq {tms = CSplitAt2 s.tms}
+      TmConst {val = CSplitAt2 s.tms}
     else error "Not splitAt of a constant sequence"
+  | CSplitAt2 tms ->
+    match arg with TmConst {val = CInt {val = n}} then
+      let t = splitAt tms n in
+      tuple_ [seq_ t.0, seq_ t.1]
+    else error "n in splitAt is not a number"
   | CMakeSeq _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CMakeSeq2 n}
@@ -871,8 +871,8 @@ utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] in
 
 -- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
 let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
--- utest eval splitAtAst
--- with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
+utest eval splitAtAst
+with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
 
 -- makeSeq 3 42 -> [42, 42, 42]
 let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
