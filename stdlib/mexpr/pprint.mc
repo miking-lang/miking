@@ -102,22 +102,6 @@ let _parserStr = lam str. lam prefix. lam cond.
   else if cond str then str
   else join [prefix, "\"", str, "\""]
 
--- TODO(dlunde,2020-10-28): For reusability in other languages than MExpr, me
--- might want to change the below semantic functions instead, to allow for
--- overriding them.
-
--- Constructor string parser translation
-let _pprintConString = lam str.
-  _parserStr str "#con" (lam str. isUpperAlpha (head str))
-
--- Variable string parser translation
-let _pprintVarString = lam str.
-  _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
-
--- Label string parser translation for records
-let _pprintLabelString = lam str.
-  _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
-
 ----------------------
 -- HELPER FUNCTIONS --
 ----------------------
@@ -149,20 +133,20 @@ let _record2tuple = lam tm.
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintConString =
-  sem pprintVarString =
-  sem pprintLabelString =
+  sem pprintConString =         -- Constructor string parser translation
+  sem pprintVarString =         -- Variable string parser translation
+  sem pprintLabelString =       -- Label string parser translation for records
 end
 
 lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
   sem pprintConString =
-  | s -> _pprintConString s
+  | str -> _parserStr str "#con" (lam str. isUpperAlpha (head str))
 
   sem pprintVarString =
-  | s -> _pprintVarString s
+  | str -> _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
   sem pprintLabelString =
-  | s -> _pprintLabelString s
+  | str -> _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
 end
 
 lang PrettyPrint = IdentifierPrettyPrint
