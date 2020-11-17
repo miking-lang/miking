@@ -128,9 +128,12 @@ lang RecLetsEval =
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
     let foldli = lam f. lam init. lam seq.
-      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
-    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
-      with "0a1b2c" in
+      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1
+    in
+    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x)
+                 ""
+                 ["a", "b", "c"]
+    with "0a1b2c" in
     let eta_name = nameSym "eta" in
     let eta_var = TmVar {ident = eta_name} in
     let unpack_from = lam var. lam body.
