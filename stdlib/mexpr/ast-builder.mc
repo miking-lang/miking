@@ -490,8 +490,8 @@ let reverse_ = use MExprAst in
   appf1_ (const_ (CReverse ())) s
 
 let splitat_ = use MExprAst in
-  lam s.
-  appf1_ (const_ (CSplitAt ())) s
+  lam s. lam n.
+  appf2_ (const_ (CSplitAt ())) s n
 
 let makeseq_ = use MExprAst in
   lam n. lam v.
