@@ -53,8 +53,8 @@ lang CAst
   | CEFloat      { f: Float }
   | CEChar       { c: Char }
   | CEString     { s: String }
-  | CEBinOp      { op: CUnOp, lhs: CExpr, rhs: CExpr }
-  | CEUnOp       { op: CBinOp, arg: CExpr }
+  | CEBinOp      { op: CBinOp, lhs: CExpr, rhs: CExpr }
+  | CEUnOp       { op: CUnOp, arg: CExpr }
   | CEMember     { lhs: CExpr, id: String }
   | CECast       { ty: CType, rhs: CExpr }
   | CESizeOfType { ty: CType }
