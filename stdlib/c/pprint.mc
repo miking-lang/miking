@@ -313,20 +313,6 @@ lang CPrettyPrint = CAst
 
   sem printCProg (nameInit: [Name]) =
   | CPProg { includes = includes, tops = tops } ->
-    -- TODO(dlunde,2020-11-13): The following functionality was here
-    -- previously, but is probably more suitable in a future C parser or
-    -- similar.
-    -- If a main function exists, we must make sure it is printed as "main". We
-    -- do this by adding that name first to the environment.
-    --     recursive let findMain = lam tops.
-    --       match tops with [h] ++ tl then
-    --         match h with CTDef { id = Some id } | CTFun { id = id } then
-    --           if eqString (nameGetStr id) "main" then Some id
-    --           else findMain tl
-    --         else findMain tl
-    --       else match tops with [] then None ()
-    --       else never
-    --     in
     let indent = 0 in
     let includes = map (lam inc. join ["#include ", inc]) includes in
     let addName = lam env. lam name.

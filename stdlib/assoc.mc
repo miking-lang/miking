@@ -151,7 +151,7 @@ let lookupPred = assocLookupPred in
 let any = assocAny in
 let all = assocAll in
 let insert = assocInsert traits in
-let construct = assocConstruct traits in
+let seq2assoc = se2assoc traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
 let keys = assocKeys traits in
@@ -190,7 +190,7 @@ utest
   then true else false
 with true in
 
-let m = construct [(1, '1'), (2, '2'), (3, '3')] in
+let m = seq2assoc [(1, '1'), (2, '2'), (3, '3')] in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 
