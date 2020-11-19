@@ -27,10 +27,10 @@ let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
                     (lam i. set m i (k,v))
                     (index (lam t. traits.eq k t.0) m)
 
--- 'assocConstruct traits ls' constructs a new association map from a sequence
+-- 'seq2assoc traits ls' constructs a new association map from a sequence
 -- of tuples 'ls'. Bindings to the right overwrites previous equal bindings to
 -- the left.
-let assocConstruct : AssocTraits k -> [(k,v)] -> AssocMap k v =
+let seq2assoc : AssocTraits k -> [(k,v)] -> AssocMap k v =
   lam traits. lam ls.
     foldl (lam acc. lam t. assocInsert traits t.0 t.1 acc) assocEmpty ls
 

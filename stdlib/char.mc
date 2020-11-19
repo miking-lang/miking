@@ -15,7 +15,7 @@ let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
 
 
 -- Escape characters
-let escapes = [
+let _escapes = [
   ('\n', "\\n"),
   ('\t', "\\t"),
   ('\r', "\\r"),
@@ -24,7 +24,7 @@ let escapes = [
   ('\'', "\\\'")
 ]
 let escapeChar = lam c.
-  match find (lam e. eqChar c e.0) escapes with Some (_, v) then v
+  match find (lam e. eqChar c e.0) _escapes with Some (_, v) then v
   else [c]
 
 utest escapeChar 'e' with "e"
