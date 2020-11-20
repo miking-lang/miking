@@ -3,13 +3,13 @@
 -- will compile (without error) to invalid C programs.
 --
 
-include "ast.mc"
-include "ast-builder.mc"
-include "anf.mc"
-include "symbolize.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/anf.mc"
+include "mexpr/symbolize.mc"
 
-include "c/ast.mc"
-include "c/pprint.mc"
+include "ast.mc"
+include "pprint.mc"
 
 include "assoc.mc"
 
@@ -110,7 +110,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
 
     -- Symbolize program
     let varEnv =
-      assocConstruct {eq=eqString} (map (lam n. (nameGetStr n, n)) _names) in
+      seq2assoc {eq=eqString} (map (lam n. (nameGetStr n, n)) _names) in
     let prog = symbolizeExpr {varEnv = varEnv, conEnv = assocEmpty} prog in
     let _ = debug "_2-sym.mc" (use MExprPrettyPrint in expr2str prog) in
 
