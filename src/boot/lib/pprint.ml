@@ -109,36 +109,44 @@ let ustring_of_pat p =
  *  TODO(dlunde,?): Precedence
  *  TODO(dlunde,?): Use Format module printing *)
 let rec ustring_of_ty = function
-  | TyUnit ->
-      us "()"
-  | TyUnknown ->
+  | TyUnknown _ ->
       us "Unknown"
-  | TyBool ->
+  | TyBool _ ->
       us "Bool"
-  | TyInt ->
+  | TyInt _ ->
       us "Int"
-  | TyFloat ->
+  | TyFloat _ ->
       us "Float"
-  | TyChar ->
+  | TyChar _ ->
       us "Char"
-  | TyArrow (ty1, ty2) ->
+  | TyArrow (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us "->" ^. ustring_of_ty ty2 ^. us ")"
-  | TySeq ty1 ->
-      if ty1 = TyChar then us "String"
-      else us "[" ^. ustring_of_ty ty1 ^. us "]"
-  | TyTuple tys ->
-      us "(" ^. Ustring.concat (us ",") (List.map ustring_of_ty tys) ^. us ")"
-  | TyRecord tys ->
+  | TySeq (_, ty1) -> (
+    match ty1 with
+    | TyChar _ ->
+        us "String"
+    | _ ->
+        us "[" ^. ustring_of_ty ty1 ^. us "]" )
+  | TyRecord (_, tys) when tys = Record.empty ->
+      us "()"
+  | TyRecord (_, tys) ->
       let pprint_ty_label = function
         | l, ty ->
             l ^. us " : " ^. ustring_of_ty ty
       in
       us "{"
-      ^. Ustring.concat (us ",") (List.map pprint_ty_label tys)
+      ^. Ustring.concat (us ",")
+           (List.map pprint_ty_label (Record.bindings tys))
       ^. us "}"
-  | TyCon s ->
-      s
-  | TyApp (ty1, ty2) ->
+  | TyVariant (_, tys) -> (
+    match tys with
+    | [] ->
+        us "<>"
+    | _ ->
+        failwith "Printing of non-empty variant types not yet supported" )
+  | TyVar (_, x, s) ->
+      ustring_of_var x s
+  | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
 (** Simple enum used in the concat function in ustring_of_tm *)
@@ -384,12 +392,11 @@ and print_tm fmt (prec, t) =
     match t with
     | TmMatch (_, _, PatBool (_, true), _, _) ->
         If
-    | TmMatch _ | TmLet _ ->
+    | TmMatch _ | TmLet _ | TmType _ ->
         Match
     | TmLam _ ->
         Lam
-    | TmConapp _
-    | TmSeq _ ->
+    | TmConapp _ | TmSeq _ ->
         Semicolon
     | TmApp _ ->
         App
@@ -426,6 +433,11 @@ and print_tm' fmt t =
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>@[<hov %d>let %s:%s =@ %a in@]@ %a@]" !ref_indent x
         ty print_tm (Match, t1) print_tm (Match, t2)
+  | TmType (_, x, s, ty, t1) ->
+      let x = string_of_ustring (ustring_of_var x s) in
+      let ty = ty |> ustring_of_ty |> string_of_ustring in
+      fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
+        ty print_tm (Match, t1)
   | TmRecLets (_, lst, t2) ->
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in

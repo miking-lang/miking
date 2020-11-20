@@ -419,7 +419,7 @@ end
 
 lang UnitTypeAst
   syn Type =
-  | TyUnit {}
+  | TyUnit {} -- TODO: Remove
 end
 
 lang UnknownTypeAst
@@ -460,7 +460,7 @@ end
 
 lang TupleTypeAst
   syn Type =
-  | TyTuple {tys : [Type]}
+  | TyTuple {tys : [Type]} --TODO Remove
 end
 
 lang RecordTypeAst
@@ -471,7 +471,7 @@ end
 
 lang DataTypeAst
   syn Type =
-  | TyCon {ident : Name}
+  | TyCon {ident : Name} --TODO: Remove and replace with TyVar
 end
 
 lang AppTypeAst
@@ -481,7 +481,12 @@ end
 
 lang StringTypeAst
   syn Type =
-  | TyString {}
+  | TyString {} --TODO: Remove
+end
+
+lang VariantTypeAst
+  syn Type =
+  | TyVariant {} -- TODO: Add
 end
 
 lang TypeVarAst

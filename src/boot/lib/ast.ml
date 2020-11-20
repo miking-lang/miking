@@ -132,6 +132,8 @@ and mlang = Lang of info * ustring * ustring list * decl list
 
 and let_decl = Let of info * ustring * ty * tm
 
+and type_decl = Type of info * ustring * ty
+
 and rec_let_decl = RecLet of info * (info * ustring * ty * tm) list
 
 and con_decl = Con of info * ustring * ty
@@ -141,6 +143,7 @@ and utest_top = Utest of info * tm * tm * tm option
 and top =
   | TopLang of mlang
   | TopLet of let_decl
+  | TopType of type_decl
   | TopRecLet of rec_let_decl
   | TopCon of con_decl
   | TopUtest of utest_top
@@ -154,6 +157,7 @@ and tm =
   | TmVar of info * ustring * Symb.t (* Variable *)
   | TmLam of info * ustring * Symb.t * ty * tm (* Lambda abstraction *)
   | TmLet of info * ustring * Symb.t * ty * tm * tm (* Let *)
+  | TmType of info * ustring * Symb.t * ty * tm (* Type let *)
   | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm (* Recursive lets *)
   | TmApp of info * tm * tm (* Application *)
   | TmConst of info * const (* Constant *)
@@ -197,21 +201,19 @@ and pat =
 
 (* Types *)
 and ty =
-  | TyUnit (* Unit type *)
-  | TyUnknown (* Unknown type *)
-  | TyBool (* Boolean type *)
-  | TyInt (* Int type *)
-  | TyFloat (* Floating-point type *)
-  | TyChar (* Character type *)
-  | TyArrow of ty * ty (* Function type *)
-  | TySeq of ty (* Sequence type *)
-  | TyTuple of ty list (* Tuple type *) (* TODO: Remove? Subsumed by record *)
-  | TyRecord of (ustring * ty) list (* Record type *)
-  | TyCon of ustring (* Type constructor *) (* TODO: TyVar + TyLam instead? *)
-  | TyApp of (ty * ty)
-  (* TODO: Add TyVariant, so that the meaning of "type Type in" can be parsed as "type Type = TyVariant { types = []} in" *)
+  | TyUnknown of info (* Unknown type *)
+  | TyBool of info (* Boolean type *)
+  | TyInt of info (* Int type *)
+  | TyFloat of info (* Floating-point type *)
+  | TyChar of info (* Character type *)
+  | TyArrow of info * ty * ty (* Function type *)
+  | TySeq of info * ty (* Sequence type *)
+  | TyRecord of info * ty Record.t (* Record type *)
+  | TyVariant of info * (ustring * Symb.t * ty) list (* Variant type *)
+  | TyVar of info * ustring * Symb.t (* Type variables *)
+  | TyApp of info * ty * ty
 
-(* Type constructor application *)
+(* Type application, currently only used for documenation purposes *)
 
 (* Kind of identifier *)
 and ident =
@@ -223,6 +225,8 @@ and ident =
 (* A label identifier *)
 
 let tmUnit = TmRecord (NoInfo, Record.empty)
+
+let tyUnit fi = TyRecord (fi, Record.empty)
 
 module Option = BatOption
 
@@ -236,6 +240,8 @@ let rec map_tm f = function
       f (TmClos (fi, x, s, map_tm f t1, env))
   | TmLet (fi, x, s, ty, t1, t2) ->
       f (TmLet (fi, x, s, ty, map_tm f t1, map_tm f t2))
+  | TmType (fi, x, s, ty, t1) ->
+      f (TmType (fi, x, s, ty, map_tm f t1))
   | TmRecLets (fi, lst, tm) ->
       f
         (TmRecLets
@@ -277,6 +283,8 @@ let tm_info = function
   | TmClos (fi, _, _, _, _) ->
       fi
   | TmLet (fi, _, _, _, _, _) ->
+      fi
+  | TmType (fi, _, _, _, _) ->
       fi
   | TmRecLets (fi, _, _) ->
       fi
@@ -329,6 +337,20 @@ let pat_info = function
   | PatNot (fi, _) ->
       fi
 
+let ty_info = function
+  | TyUnknown fi
+  | TyBool fi
+  | TyInt fi
+  | TyFloat fi
+  | TyChar fi
+  | TyArrow (fi, _, _)
+  | TySeq (fi, _)
+  | TyRecord (fi, _)
+  | TyVariant (fi, _)
+  | TyVar (fi, _, _)
+  | TyApp (fi, _, _) ->
+      fi
+
 (* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
   Mseq.Helpers.map
@@ -354,6 +376,15 @@ let tuple2record fi lst =
       (0, Record.empty) lst
   in
   TmRecord (fi, snd r)
+
+(* Converts a list of types (for a tuple type) to a record type *)
+let tuplety2recordty fi lst =
+  let r =
+    List.fold_left
+      (fun (i, a) x -> (i + 1, Record.add (ustring_of_int i) x a))
+      (0, Record.empty) lst
+  in
+  TyRecord (fi, snd r)
 
 (* Converts a record map to an optional list of terms. Returns Some list if
    the record represents a tuple, None otherwise. *)

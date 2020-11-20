@@ -912,6 +912,23 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
          * refer to the right symbol. *)
         (patEnv, PatNot (fi, p))
   in
+  let rec sType env ty =
+    match ty with
+    | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ ->
+        ty
+    | TyArrow (fi, ty1, ty2) ->
+        TyArrow (fi, sType env ty1, sType env ty2)
+    | TySeq (fi, ty) ->
+        TySeq (fi, sType env ty)
+    | TyRecord _ ->
+        ty (* TODO *)
+    | TyVariant _ ->
+        ty (* TODO *)
+    | TyVar _ ->
+        ty (* TODO *)
+    | TyApp (fi, ty1, ty2) ->
+        TyApp (fi, sType env ty1, sType env ty2)
+  in
   match t with
   | TmVar (fi, x, _) ->
       TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env)
@@ -926,9 +943,17 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         ( fi
         , x
         , s
-        , ty
+        , sType env ty
         , symbolize env t1
         , symbolize ((IdVar (sid_of_ustring x), s) :: env) t2 )
+  | TmType (fi, x, _, ty, t1) ->
+      let s = Symb.gensym () in
+      TmType
+        ( fi
+        , x
+        , s
+        , sType env ty
+        , symbolize ((IdType (sid_of_ustring x), s) :: env) t1 )
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left
@@ -1125,6 +1150,9 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env t1) :: env) t2
+  (* Type (ignore) *)
+  | TmType (_, _, _, _, t1) ->
+      eval env t1
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
       let rec env' =

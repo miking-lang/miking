@@ -264,7 +264,7 @@ let data_to_lang info name includes {inters; syns} : mlang =
 
 let flatten_lang (prev_langs : lang_data Record.t) :
     top -> lang_data Record.t * top = function
-  | (TopLet _ | TopRecLet _ | TopCon _ | TopUtest _) as top ->
+  | (TopLet _ | TopType _ | TopRecLet _ | TopCon _ | TopUtest _) as top ->
       (prev_langs, top)
   | TopLang (Lang (info, name, includes, _) as lang) ->
       let self_data = compute_lang_data lang in
@@ -292,7 +292,7 @@ module AstHelpers = struct
 
   let app l r = TmApp (NoInfo, l, r)
 
-  let let_ x s e body = TmLet (NoInfo, x, s, TyUnknown, e, body)
+  let let_ x s e body = TmLet (NoInfo, x, s, TyUnknown NoInfo, e, body)
 end
 
 open AstHelpers
@@ -366,6 +366,8 @@ let rec desugar_tm nss env =
         , ty
         , desugar_tm nss env e
         , desugar_tm nss (delete_id env name) body )
+  | TmType (fi, name, s, ty, body) ->
+      TmType (fi, name, s, ty, desugar_tm nss env body)
   | TmRecLets (fi, bindings, body) ->
       let env' =
         List.fold_left
@@ -505,7 +507,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
-          , TyArrow (ty, TyCon ty_name)
+          , TyArrow (NoInfo, ty, TyVar (NoInfo, ty_name, Symb.Helpers.nosym))
           , tm )
       in
       (* TODO(vipa,?): the type will likely be incorrect once we start doing product extensions of constructors *)
@@ -527,7 +529,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           ( fi
           , target
           , Symb.Helpers.nosym
-          , TyUnknown
+          , TyUnknown NoInfo
           , translate_cases fname (var target) cases )
         |> List.fold_right wrap_param params
         |> desugar_tm nss ns
@@ -538,7 +540,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
               ( fi
               , mangle name
               , Symb.Helpers.nosym
-              , TyUnknown
+              , TyUnknown NoInfo
               , inter_to_tm name fi params cases )
         | _ ->
             None
@@ -560,6 +562,9 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           , desugar_tm nss emptyMlangEnv tm
           , tm' )
       in
+      (nss, wrap :: stack)
+  | TopType (Type (fi, id, ty)) ->
+      let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
       (nss, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
