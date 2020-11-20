@@ -205,10 +205,11 @@ and ty =
   | TyChar (* Character type *)
   | TyArrow of ty * ty (* Function type *)
   | TySeq of ty (* Sequence type *)
-  | TyTuple of ty list (* Tuple type *)
+  | TyTuple of ty list (* Tuple type *) (* TODO: Remove? Subsumed by record *)
   | TyRecord of (ustring * ty) list (* Record type *)
-  | TyCon of ustring (* Type constructor *)
+  | TyCon of ustring (* Type constructor *) (* TODO: TyVar + TyLam instead? *)
   | TyApp of (ty * ty)
+  (* TODO: Add TyVariant, so that the meaning of "type Type in" can be parsed as "type Type = TyVariant { types = []} in" *)
 
 (* Type constructor application *)
 

@@ -1,0 +1,5 @@
+-- Lifts types to the top of an MExpr program.
+--
+-- NOTE(dlunde,2020-11-20)
+-- Should probably be run after type checking, since typing information is
+-- possibly lost due to our "open" variant types with condef.

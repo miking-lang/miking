@@ -388,6 +388,7 @@ and print_tm fmt (prec, t) =
         Match
     | TmLam _ ->
         Lam
+    | TmConapp _
     | TmSeq _ ->
         Semicolon
     | TmApp _ ->
@@ -398,7 +399,6 @@ and print_tm fmt (prec, t) =
     | TmRecord _
     | TmRecordUpdate _
     | TmCondef _
-    | TmConapp _
     | TmUse _
     | TmUtest _
     | TmClos _

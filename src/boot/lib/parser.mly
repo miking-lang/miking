@@ -250,8 +250,16 @@ mexpr:
       { $1 }
   | TYPE type_ident IN mexpr
       { $4 }
+  //    { -- Type parameters are currently ignored
+  //      let fi = mkinfo $1.i $5.i in
+  //      TmDeclTy(fi, $2.v, Symb.Helpers.nosym, $5) }
+
   | TYPE type_ident EQ ty IN mexpr
       { $6 }
+  //    { -- Type parameters are currently ignored
+  //      let fi = mkinfo $1.i $6.i in
+  //      TmLetTy(fi, $2.v, Symb.Helpers.nosym, $4, $6) }
+
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
