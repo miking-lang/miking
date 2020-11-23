@@ -982,9 +982,9 @@ let sample_ast =
   ]
 in
 
-let _ = print "\n\n" in
-let _ = print (expr2str sample_ast) in
-let _ = print "\n\n" in
+-- let _ = print "\n\n" in
+-- let _ = print (expr2str sample_ast) in
+-- let _ = print "\n\n" in
 
 utest length (expr2str sample_ast) with 0 using geqi in
 ()
