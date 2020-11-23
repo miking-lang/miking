@@ -133,14 +133,16 @@ let _record2tuple = lam tm.
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintConString =         -- Constructor string parser translation
+  sem pprintConString (env : PprintEnv) =         -- Constructor string parser translation
   sem pprintVarString =         -- Variable string parser translation
   sem pprintLabelString =       -- Label string parser translation for records
 end
 
 lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
-  sem pprintConString =
-  | str -> _parserStr str "#con" (lam str. isUpperAlpha (head str))
+  sem pprintConString (env: PprintEnv) =
+  | str ->
+    let s = _parserStr str "#con" (lam str. isUpperAlpha (head str)) in
+    pprintEnvGetStr env s
 
   sem pprintVarString =
   | str -> _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
@@ -362,8 +364,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let str = pprintConString str in
+    match pprintConString env t.ident with (env,str) then
       let ty =
         match t.ty with TyUnknown {} then ""
         else concat " : " (getTypeStringCode indent t.ty)
@@ -374,10 +375,9 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
     else never
 
   | TmConApp t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let l = pprintConString str in
+    match pprintConString env t.ident with (env,str) then
       match printParen (pprintIncr indent) env t.body with (env,body) then
-        (env, join [l, pprintNewline (pprintIncr indent), body])
+        (env, join [str, pprintNewline (pprintIncr indent), body])
       else never
     else never
 end
@@ -623,12 +623,11 @@ lang DataPatPrettyPrint = DataPat + IdentifierPrettyPrint
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PCon t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let name = pprintConString str in
+    match pprintConString env t.ident with (env,str) then
       match getPatStringCode indent env t.subpat with (env,subpat) then
         let subpat = if patIsAtomic t.subpat then subpat
                      else join ["(", subpat, ")"]
-        in (env, join [name, " ", subpat])
+        in (env, join [str, " ", subpat])
       else never
     else never
 end
@@ -949,9 +948,9 @@ let sample_ast =
   ]
 in
 
--- let _ = print "\n\n" in
--- let _ = print (expr2str sample_ast) in
--- let _ = print "\n\n" in
+let _ = print "\n\n" in
+let _ = print (expr2str sample_ast) in
+let _ = print "\n\n" in
 
 utest length (expr2str sample_ast) with 0 using geqi in
 ()
