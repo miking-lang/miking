@@ -311,64 +311,37 @@ let rec map_tm f = function
 
 (* Returns the info field from a term *)
 let tm_info = function
-  | TmVar (fi, _, _) ->
-      fi
-  | TmLam (fi, _, _, _, _) ->
-      fi
-  | TmClos (fi, _, _, _, _) ->
-      fi
-  | TmLet (fi, _, _, _, _, _) ->
-      fi
-  | TmType (fi, _, _, _, _) ->
-      fi
-  | TmRecLets (fi, _, _) ->
-      fi
-  | TmApp (fi, _, _) ->
-      fi
-  | TmConst (fi, _) ->
-      fi
-  | TmFix fi ->
-      fi
-  | TmSeq (fi, _) ->
-      fi
-  | TmRecord (fi, _) ->
-      fi
-  | TmRecordUpdate (fi, _, _, _) ->
-      fi
-  | TmCondef (fi, _, _, _, _) ->
-      fi
-  | TmConapp (fi, _, _, _) ->
-      fi
-  | TmMatch (fi, _, _, _, _) ->
-      fi
-  | TmUse (fi, _, _) ->
-      fi
-  | TmUtest (fi, _, _, _, _) ->
-      fi
+  | TmVar (fi, _, _)
+  | TmLam (fi, _, _, _, _)
+  | TmClos (fi, _, _, _, _)
+  | TmLet (fi, _, _, _, _, _)
+  | TmType (fi, _, _, _, _)
+  | TmRecLets (fi, _, _)
+  | TmApp (fi, _, _)
+  | TmConst (fi, _)
+  | TmFix fi
+  | TmSeq (fi, _)
+  | TmRecord (fi, _)
+  | TmRecordUpdate (fi, _, _, _)
+  | TmCondef (fi, _, _, _, _)
+  | TmConapp (fi, _, _, _)
+  | TmMatch (fi, _, _, _, _)
+  | TmUse (fi, _, _)
+  | TmUtest (fi, _, _, _, _)
   | TmNever fi ->
       fi
 
 let pat_info = function
-  | PatNamed (fi, _) ->
-      fi
-  | PatSeqTot (fi, _) ->
-      fi
-  | PatSeqEdge (fi, _, _, _) ->
-      fi
-  | PatRecord (fi, _) ->
-      fi
-  | PatCon (fi, _, _, _) ->
-      fi
-  | PatInt (fi, _) ->
-      fi
-  | PatChar (fi, _) ->
-      fi
-  | PatBool (fi, _) ->
-      fi
-  | PatAnd (fi, _, _) ->
-      fi
-  | PatOr (fi, _, _) ->
-      fi
+  | PatNamed (fi, _)
+  | PatSeqTot (fi, _)
+  | PatSeqEdge (fi, _, _, _)
+  | PatRecord (fi, _)
+  | PatCon (fi, _, _, _)
+  | PatInt (fi, _)
+  | PatChar (fi, _)
+  | PatBool (fi, _)
+  | PatAnd (fi, _, _)
+  | PatOr (fi, _, _)
   | PatNot (fi, _) ->
       fi
 
