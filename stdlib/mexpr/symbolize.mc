@@ -21,10 +21,12 @@ include "mexpr/pprint.mc"
 
 type SymEnv = {
   varEnv: AssocMap String Name,
-  conEnv: AssocMap String Name
+  conEnv: AssocMap String Name,
+  tyEnv: AssocMap String Name
 }
 
-let symEnvEmpty = {varEnv = assocEmpty, conEnv = assocEmpty}
+let symEnvEmpty =
+  {varEnv = assocEmpty, conEnv = assocEmpty, tyEnv = assocEmpty}
 
 -----------
 -- TERMS --
@@ -59,9 +61,13 @@ lang AppSym = Sym + AppAst
 end
 
 lang FunSym = Sym + FunAst + VarSym + AppSym
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmLam {ident = ident, ty = ty, body = body} ->
     match env with {varEnv = varEnv} then
+      let ty = symbolizeType env ty in
       if nameHasSym ident then
         TmLam {ident = ident, ty = ty, body = symbolizeExpr env body}
       else
@@ -84,20 +90,43 @@ lang RecordSym = Sym + RecordAst
 end
 
 lang LetSym = Sym + LetAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
     match env with {varEnv = varEnv} then
+      let ty = symbolizeType env ty in
+      let body = symbolizeExpr env body in
       if nameHasSym ident then
-        TmLet {ident = ident, ty = ty, body = symbolizeExpr env body,
+        TmLet {ident = ident, ty = ty, body = body,
                inexpr = symbolizeExpr env inexpr}
       else
-        let body = symbolizeExpr env body in
         let ident = nameSetNewSym ident in
         let str = nameGetStr ident in
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLet {ident = ident, ty = ty, body = body,
                inexpr = symbolizeExpr env inexpr}
+    else never
+end
+
+lang TypeSym = Sym + TypeAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
+  sem symbolizeExpr (env : SymEnv) =
+  | TmType {ident = ident, ty = ty, inexpr = inexpr} ->
+    match env with {tyEnv = tyEnv} then
+      let ty = symbolizeType env ty in
+      if nameHasSym ident then
+        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+      else
+        let ident = nameSetNewSym ident in
+        let str = nameGetStr ident in
+        let tyEnv = assocInsert {eq=eqString} str ident tyEnv in
+        let env = {env with tyEnv = tyEnv} in
+        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
     else never
 end
 
@@ -137,9 +166,13 @@ lang ConstSym = Sym + ConstAst
 end
 
 lang DataSym = Sym + DataAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
     match env with {conEnv = conEnv} then
+      let ty = symbolizeType env ty in
       if nameHasSym ident then
         TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
       else
@@ -203,6 +236,17 @@ end
 lang NeverSym = Sym + NeverAst
   sem symbolizeExpr (env : SymEnv) =
   | TmNever {} -> TmNever {}
+end
+
+-----------
+-- TYPES --
+-----------
+
+-- TODO
+lang UnknownTypeSym
+  sem symbolizeType (env : SymEnv) =
+  | a -> a -- TODO
+
 end
 
 --------------
@@ -330,11 +374,14 @@ end
 lang MExprSym =
 
   -- Terms
-  VarSym + AppSym + FunSym + RecordSym + LetSym + RecLetsSym + ConstSym +
-  DataSym + MatchSym + UtestSym + SeqSym + NeverSym
+  VarSym + AppSym + FunSym + RecordSym + LetSym + TypeSym + RecLetsSym +
+  ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym +
+
+  -- Types
+  UnknownTypeSym +
 
   -- Patterns
-  + NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
+  NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
 -----------

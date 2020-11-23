@@ -242,7 +242,7 @@ and ty =
   (* Record type *)
   | TyRecord of info * ty Record.t
   (* Variant type *)
-  | TyVariant of info * (ustring * Symb.t * ty) list
+  | TyVariant of info * (ustring * Symb.t) list
   (* Type variables *)
   | TyVar of info * ustring * Symb.t
   (* Type application, currently only used for documenation purposes *)

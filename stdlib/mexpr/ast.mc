@@ -90,6 +90,25 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
+-- TODO
+lang TypeAst
+  syn Expr =
+  | TmType {ident  : Name,
+            ty     : Type,
+            inexpr : Expr,
+            fi     : Info}
+
+  sem info =
+  | TmType r -> r.fi
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmType t -> TmType {t with inexpr = f t.inexpr}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmType t -> f acc t.inexpr
+end
+
+
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : Name,
@@ -198,7 +217,11 @@ lang NeverAst
   sem info =
   | TmNever r -> r.fi
 
-  -- TODO(dlunde,2020-09-29): smap, sfold
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmNever _ & t -> t
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmNever _ & t -> acc
 end
 
 ---------------
@@ -417,11 +440,6 @@ end
 -- TYPES --
 -----------
 
-lang UnitTypeAst
-  syn Type =
-  | TyUnit {} -- TODO: Remove
-end
-
 lang UnknownTypeAst
   syn Type =
   | TyUnknown {}
@@ -458,15 +476,9 @@ lang SeqTypeAst
   | TySeq {ty : Type}
 end
 
-lang TupleTypeAst
-  syn Type =
-  | TyTuple {tys : [Type]} --TODO Remove
-end
-
 lang RecordTypeAst
   syn Type =
-  | TyRecord {fields : [{ident : String,
-                         ty    : Type}]}
+  | TyRecord {fields : AssocMap String Type}
 end
 
 lang DataTypeAst
@@ -501,8 +513,8 @@ end
 lang MExprAst =
 
   -- Terms
-  VarAst + AppAst + FunAst + RecordAst + LetAst + RecLetsAst + ConstAst +
-  DataAst + MatchAst + UtestAst + SeqAst + NeverAst
+  VarAst + AppAst + FunAst + RecordAst + LetAst + TypeAst + RecLetsAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst
 
   -- Constants
   + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
@@ -513,6 +525,6 @@ lang MExprAst =
   BoolPat + AndPat + OrPat + NotPat
 
   -- Types
-  + FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
-  SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
+  + FunTypeAst + UnknownTypeAst + CharTypeAst + StringTypeAst +
+  SeqTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
   FloatTypeAst + BoolTypeAst + AppTypeAst + TypeVarAst

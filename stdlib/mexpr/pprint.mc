@@ -709,9 +709,11 @@ end
 -- TYPES --
 -----------
 
+-- TODO(dlunde,2020-11-23): This should be split into separate fragments
+-- TODO(dlunde,2020-11-23): Thread pprintEnv properly
 lang TypePrettyPrint =
-  FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
-  SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
+  FunTypeAst + UnknownTypeAst + CharTypeAst + StringTypeAst +
+  SeqTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
   FloatTypeAst + BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint +
   TypeVarAst
 
@@ -719,18 +721,34 @@ lang TypePrettyPrint =
     | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
                                getTypeStringCode indent t.to, ")"]
     | TyUnknown _ -> error "Cannot print unknown type"
-    | TyUnit _ -> "()"
     | TyChar _ -> "Char"
     | TyString _ -> "String"
     | TySeq t -> join ["[", getTypeStringCode indent t.ty, "]"]
-    | TyTuple t ->
-      let tys = map (lam x. getTypeStringCode indent x) t.tys in
-      join ["(", strJoin ", " tys, ")"]
     | TyRecord t ->
-      let conventry = lam entry.
-          join [entry.ident, " : ", getTypeStringCode indent entry.ty]
-      in
-      join ["{", strJoin ", " (map conventry t.fields), "}"]
+      if eqi (assocLength t.fields) 0 then "()" else
+        let tuple =
+          let seq = assoc2seq {eq=eqString} t.fields in
+          if all (lam t. stringIsInt t.0) seq then
+            let seq = map (lam t. (string2int t.0, t.1)) seq in
+            let seq = sort (lam l. lam r. subi l.0 r.0) seq in
+            let first = (head seq).0 in
+            let last = (last seq).0 in
+            if eqi first 0 then
+              if eqi last (subi (length seq) 1) then
+                Some (map (lam t. t.1) seq)
+              else None ()
+            else None ()
+          else None ()
+        in
+        match tuple with Some tuple then
+          let tuple = map (lam x. getTypeStringCode indent x) tuple in
+          join ["(", strJoin ", " tuple, ")"]
+        else
+          let conventry = lam entry.
+              join [entry.ident, " : ", getTypeStringCode indent entry.ty]
+          in
+          let fields = assoc2seq {eq=eqString} t.fields in
+          join ["{", strJoin ", " (map conventry t.fields), "}"]
     | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
     | TyInt _ -> "Int"
     | TyFloat _ -> "Float"

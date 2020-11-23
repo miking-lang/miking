@@ -138,12 +138,10 @@ let rec ustring_of_ty = function
       ^. Ustring.concat (us ",")
            (List.map pprint_ty_label (Record.bindings tys))
       ^. us "}"
-  | TyVariant (_, tys) -> (
-    match tys with
-    | [] ->
-        us "<>"
-    | _ ->
-        failwith "Printing of non-empty variant types not yet supported" )
+  | TyVariant (_, tys) when tys = [] ->
+      us "<>"
+  | TyVariant _ ->
+      failwith "Printing of non-empty variant types not yet supported"
   | TyVar (_, x, s) ->
       ustring_of_var x s
   | TyApp (_, ty1, ty2) ->

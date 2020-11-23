@@ -40,6 +40,11 @@ let tmLet = bind_ (ulet_ "y" tmLam) tmVarY in
 utest smap_Expr_Expr map2varX tmLet with bind_ (ulet_ "y" tmVarX) tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmLet with [tmVarY, tmLam] in
 
+let tmTy = bind_ (type_ "X" tyint_) tmVarY in
+
+utest smap_Expr_Expr map2varX tmTy with bind_ (type_ "X" tyint_) tmVarX in
+utest sfold_Expr_Expr fold2seq [] tmTy with [tmVarY] in
+
 
 let tmRecLets = bind_ (ureclets_ [("x", tmApp), ("u", tmVarW)]) tmVarU in
 
@@ -116,6 +121,14 @@ with match_ tmVarX punit_ tmVarX tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmMatch with [tmVarZ, tmVarY, tmApp] in
 
 let tmUtest = utest_ tmApp tmVarY tmVarZ in
+
+utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX in
+utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp] in
+
+let tmnever = never_ in
+
+utest smap_Expr_Expr map2varX never_ with never_ in
+utest sfold_Expr_Expr fold2seq [] never_ with [] in
 
 utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX in
 utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp] in

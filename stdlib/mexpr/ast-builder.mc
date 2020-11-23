@@ -93,7 +93,7 @@ let tyunknown_ = use MExprAst in
   TyUnknown ()
 
 let tyunit_ = use MExprAst in
-  TyUnit ()
+  TyRecord {fields = assocEmpty}
 
 let tyint_ = use MExprAst in
   TyInt ()
@@ -114,13 +114,15 @@ let tyseq_ = use MExprAst in
   lam ty.
   TySeq {ty = ty}
 
-let tytuple_ = use MExprAst in
-  lam tys.
-  TyTuple {tys = tys}
-
 let tyrecord_ = use MExprAst in
   lam fields.
-  TyRecord {fields = map (lam t. {ident = t.0, ty = t.1}) fields}
+  TyRecord {
+    fields = foldl (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
+               assocEmpty fields }
+
+let tytuple_ = use MExprAst in
+  lam tys.
+  tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
 
 let tycon_ = use MExprAst in
   lam ident.
@@ -146,6 +148,8 @@ recursive let bind_ = use MExprAst in
     TmRecLets {t with inexpr = bind_ t.inexpr expr}
   else match letexpr with TmConDef t then
     TmConDef {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmType t then
+    TmType {t with inexpr = bind_ t.inexpr expr}
   else
     expr -- Insert at the end of the chain
 end
@@ -172,6 +176,14 @@ let nulet_ = use MExprAst in
 let ulet_ = use MExprAst in
   lam s. lam body.
   let_ s tyunknown_ body
+
+let ntype_ = use MExprAst in
+  lam n. lam ty.
+  TmType {ident = n, ty = ty, inexpr = unit_}
+
+let type_ = use MExprAst in
+  lam s. lam ty.
+  ntype_ (nameNoSym s) ty
 
 let nreclets_ = use MExprAst in
   lam bs.
