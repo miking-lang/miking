@@ -102,9 +102,11 @@ let _parserStr = lam str. lam prefix. lam cond.
   else if cond str then str
   else join [prefix, "\"", str, "\""]
 
+-- Variable string parser translation
 let pprintVarString = lam str.
   _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
+-- Constructor string parser translation
 let pprintConString = lam str.
   _parserStr str "#con" (lam str. isUpperAlpha (head str))
 ----------------------
@@ -138,8 +140,8 @@ let _record2tuple = lam tm.
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintConName (env : PprintEnv) =    -- Constructor string parser translation
-  sem pprintVarName (env : PprintEnv) =    -- Variable string parser translation
+  sem pprintConName (env : PprintEnv) =    
+  sem pprintVarName (env : PprintEnv) =
   sem pprintLabelString =                  -- Label string parser translation for records
 end
 
