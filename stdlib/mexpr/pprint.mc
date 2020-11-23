@@ -51,7 +51,8 @@ let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
     not (assocAny f nameMap)
-  else never
+  else
+    never
 
 -- Add a binding to the environment
 let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
@@ -140,12 +141,15 @@ end
 
 lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
   sem pprintConString (env: PprintEnv) =
-  | str ->
-    let s = _parserStr str "#con" (lam str. isUpperAlpha (head str)) in
-    pprintEnvGetStr env s
+  | name ->
+    match pprintEnvGetStr env name with (env,str) then
+      let s = _parserStr str "#con" (lam str. isUpperAlpha (head str)) in
+      (env, s)
+    else never
 
   sem pprintVarString =
-  | str -> _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
+  | str ->
+    _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
   sem pprintLabelString =
   | str -> _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
@@ -866,6 +870,14 @@ let func_mycona = ucondef_ "MyConA" in
 -- con #con"myConB" : (Bool, Int) in
 let func_myconb = condef_ "myConB" (tytuple_ [tybool_, tyint_]) in
 
+-- con MyConA1 in
+-- con MyConA2
+let func_mycona_mycona =
+  let n1 = nameSym "MyConA" in
+  let n2 = nameSym "MyConA" in
+  bindall_ [nucondef_ n1, nucondef_ n2]
+in
+
 -- let isconb : Bool = lam c : #con"myConB".
 --     match c with #con"myConB" (true, 17) then
 --         true
@@ -939,6 +951,7 @@ let sample_ast =
     func_recget,
     func_recconcs,
     func_mycona,
+    func_mycona_mycona,
     func_myconb,
     func_isconb,
     func_addone,
