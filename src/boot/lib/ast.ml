@@ -154,27 +154,42 @@ and program = Program of include_ list * top list * tm
 
 (* Terms in MExpr *)
 and tm =
-  | TmVar of info * ustring * Symb.t (* Variable *)
-  | TmLam of info * ustring * Symb.t * ty * tm (* Lambda abstraction *)
-  | TmLet of info * ustring * Symb.t * ty * tm * tm (* Let *)
-  | TmType of info * ustring * Symb.t * ty * tm (* Type let *)
-  | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm (* Recursive lets *)
-  | TmApp of info * tm * tm (* Application *)
-  | TmConst of info * const (* Constant *)
-  | TmSeq of info * tm Mseq.t (* Sequence *)
-  | TmRecord of info * tm Record.t (* Record *)
-  | TmRecordUpdate of info * tm * ustring * tm (* Record update *)
-  | TmCondef of info * ustring * Symb.t * ty * tm (* Constructor definition *)
-  | TmConapp of info * ustring * Symb.t * tm (* Constructor application *)
-  | TmMatch of info * tm * pat * tm * tm (* Match data *)
-  | TmUse of info * ustring * tm (* Use a language *)
-  | TmUtest of info * tm * tm * tm option * tm (* Unit testing *)
-  | TmNever of info (* Never term *)
+  (* Variable *)
+  | TmVar of info * ustring * Symb.t
+  (* Lambda abstraction *)
+  | TmLam of info * ustring * Symb.t * ty * tm
+  (* Let *)
+  | TmLet of info * ustring * Symb.t * ty * tm * tm
+  (* Type let *)
+  | TmType of info * ustring * Symb.t * ty * tm
+  (* Recursive lets *)
+  | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm
+  (* Application *)
+  | TmApp of info * tm * tm
+  (* Constant *)
+  | TmConst of info * const
+  (* Sequence *)
+  | TmSeq of info * tm Mseq.t
+  (* Record *)
+  | TmRecord of info * tm Record.t
+  (* Record update *)
+  | TmRecordUpdate of info * tm * ustring * tm
+  (* Constructor definition *)
+  | TmCondef of info * ustring * Symb.t * ty * tm
+  (* Constructor application *)
+  | TmConapp of info * ustring * Symb.t * tm
+  (* Match data *)
+  | TmMatch of info * tm * pat * tm * tm
+  (* Use a language *)
+  | TmUse of info * ustring * tm
+  (* Unit testing *)
+  | TmUtest of info * tm * tm * tm option * tm
+  (* Never term *)
+  | TmNever of info
   (* Only part of the runtime system *)
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
+  (* Fix point *)
   | TmFix of info
-
-(* Fix point *)
 
 (* Kind of pattern name *)
 and patName =
@@ -185,44 +200,64 @@ and patName =
 
 (* Patterns *)
 and pat =
-  | PatNamed of info * patName (* Named, capturing wildcard *)
-  | PatSeqTot of info * pat Mseq.t (* Exact sequence patterns *)
-  | PatSeqEdge of info * pat Mseq.t * patName * pat Mseq.t (* Sequence edge patterns *)
-  | PatRecord of info * pat Record.t (* Record pattern *)
-  | PatCon of info * ustring * Symb.t * pat (* Constructor pattern *)
-  | PatInt of info * int (* Int pattern *)
-  | PatChar of info * int (* Char pattern *)
-  | PatBool of info * bool (* Boolean pattern *)
-  | PatAnd of info * pat * pat (* And pattern *)
-  | PatOr of info * pat * pat (* Or pattern *)
+  (* Named, capturing wildcard *)
+  | PatNamed of info * patName
+  (* Exact sequence patterns *)
+  | PatSeqTot of info * pat Mseq.t
+  (* Sequence edge patterns *)
+  | PatSeqEdge of info * pat Mseq.t * patName * pat Mseq.t
+  (* Record pattern *)
+  | PatRecord of info * pat Record.t
+  (* Constructor pattern *)
+  | PatCon of info * ustring * Symb.t * pat
+  (* Int pattern *)
+  | PatInt of info * int
+  (* Char pattern *)
+  | PatChar of info * int
+  (* Boolean pattern *)
+  | PatBool of info * bool
+  (* And pattern *)
+  | PatAnd of info * pat * pat
+  (* Or pattern *)
+  | PatOr of info * pat * pat
+  (* Not pattern *)
   | PatNot of info * pat
-
-(* Not pattern *)
 
 (* Types *)
 and ty =
-  | TyUnknown of info (* Unknown type *)
-  | TyBool of info (* Boolean type *)
-  | TyInt of info (* Int type *)
-  | TyFloat of info (* Floating-point type *)
-  | TyChar of info (* Character type *)
-  | TyArrow of info * ty * ty (* Function type *)
-  | TySeq of info * ty (* Sequence type *)
-  | TyRecord of info * ty Record.t (* Record type *)
-  | TyVariant of info * (ustring * Symb.t * ty) list (* Variant type *)
-  | TyVar of info * ustring * Symb.t (* Type variables *)
+  (* Unknown type *)
+  | TyUnknown of info
+  (* Boolean type *)
+  | TyBool of info
+  (* Int type *)
+  | TyInt of info
+  (* Floating-point type *)
+  | TyFloat of info
+  (* Character type *)
+  | TyChar of info
+  (* Function type *)
+  | TyArrow of info * ty * ty
+  (* Sequence type *)
+  | TySeq of info * ty
+  (* Record type *)
+  | TyRecord of info * ty Record.t
+  (* Variant type *)
+  | TyVariant of info * (ustring * Symb.t * ty) list
+  (* Type variables *)
+  | TyVar of info * ustring * Symb.t
+  (* Type application, currently only used for documenation purposes *)
   | TyApp of info * ty * ty
-
-(* Type application, currently only used for documenation purposes *)
 
 (* Kind of identifier *)
 and ident =
-  | IdVar of sid (* A variable identifier *)
-  | IdCon of sid (* A constructor identifier *)
-  | IdType of sid (* A type identifier *)
+  (* A variable identifier *)
+  | IdVar of sid
+  (* A constructor identifier *)
+  | IdCon of sid
+  (* A type identifier *)
+  | IdType of sid
+  (* A label identifier *)
   | IdLabel of sid
-
-(* A label identifier *)
 
 let tmUnit = TmRecord (NoInfo, Record.empty)
 
