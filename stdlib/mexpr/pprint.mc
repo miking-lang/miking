@@ -51,8 +51,7 @@ let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
     not (assocAny f nameMap)
-  else
-    never
+  else never
 
 -- Add a binding to the environment
 let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
@@ -141,7 +140,7 @@ let _record2tuple = lam tm.
 lang IdentifierPrettyPrint
   sem pprintConName (env : PprintEnv) =    -- Constructor string parser translation
   sem pprintVarName (env : PprintEnv) =    -- Variable string parser translation
-  sem pprintLabelString =                    -- Label string parser translation for records
+  sem pprintLabelString =                  -- Label string parser translation for records
 end
 
 lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
