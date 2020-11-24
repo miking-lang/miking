@@ -29,6 +29,7 @@ install() {
     mkdir -p $bin_path $lib_path
     cp -f build/mi $bin_path/mi; chmod +x $bin_path/mi
     rm -rf $lib_path; cp -rf stdlib $lib_path
+    dune install
 }
 
 # Run the test suite for sundials
