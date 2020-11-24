@@ -823,7 +823,7 @@ let findsym fi id env =
       | IdCon x ->
           (x, "constructor")
       | IdType x ->
-          (x, "type")
+          (x, "type variable")
       | IdLabel x ->
           (x, "label")
     in

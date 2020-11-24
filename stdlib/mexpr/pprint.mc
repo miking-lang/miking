@@ -233,20 +233,19 @@ lang FunPrettyPrint = PrettyPrint + FunAst + UnknownTypeAst
   sem isAtomic =
   | TmLam _ -> false
 
-  sem getTypeStringCode (indent : Int) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
     match pprintVarName env t.ident with (env,str) then
-      let ty =
-        match t.ty with TyUnknown {} then ""
-        else concat " : " (getTypeStringCode indent t.ty)
-      in
-      match pprintCode (pprintIncr indent) env t.body with (env,body) then
-        (env,
-         join ["lam ", str, ty, ".", pprintNewline (pprintIncr indent),
-               body])
+      match getTypeStringCode indent env t.ty with (env, ty) then
+        let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+        match pprintCode (pprintIncr indent) env t.body with (env,body) then
+          (env,
+           join ["lam ", str, ty, ".", pprintNewline (pprintIncr indent),
+                 body])
+        else never
       else never
     else never
 end
@@ -303,7 +302,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
   sem isAtomic =
   | TmLet _ -> false
 
-  sem getTypeStringCode (indent : Int) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
@@ -311,12 +310,43 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
     match pprintVarName env t.ident with (env,str) then
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
+<<<<<<< HEAD
           let ty =
             match t.ty with TyUnknown {} then ""
             else concat " : " (getTypeStringCode indent t.ty)
           in
           (env, join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
                       body, pprintNewline indent,
+=======
+          match getTypeStringCode indent env t.ty with (env, ty) then
+            let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+            (env,
+             join ["let ", ident, ty, " =", pprintNewline (pprintIncr indent),
+                   body, pprintNewline indent,
+                   "in", pprintNewline indent,
+                   inexpr])
+          else never
+        else never
+      else never
+    else never
+end
+
+lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
+  sem isAtomic =
+  | TmType _ -> false
+
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  -- Intentionally left blank
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmType t ->
+    match pprintEnvGetStr env t.ident with (env,str) then
+      let ident = str in -- TODO(dlunde,2020-11-24): format str properly with #type
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        match getTypeStringCode indent env t.ty with (env, ty) then
+          (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
+                      ty, pprintNewline indent,
+>>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
                       "in", pprintNewline indent,
                       inexpr])
         else never
@@ -328,7 +358,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
   sem isAtomic =
   | TmRecLets _ -> false
 
-  sem getTypeStringCode (indent : Int) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
@@ -339,11 +369,18 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let f = lam env. lam bind.
       match pprintVarName env bind.ident with (env,str) then
         match pprintCode iii env bind.body with (env,body) then
+<<<<<<< HEAD
           let ty =
             match bind.ty with TyUnknown {} then ""
             else concat " : " (getTypeStringCode indent bind.ty)
           in
           (env, join ["let ", str, ty, " =", pprintNewline iii, body])
+=======
+          match getTypeStringCode indent env bind.ty with (env, ty) then
+            let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+            (env, join ["let ", ident, ty, " =", pprintNewline iii, body])
+          else never
+>>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
         else never
       else never
     in
@@ -374,11 +411,12 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
   | TmConDef _ -> false
   | TmConApp _ -> false
 
-  sem getTypeStringCode (indent : Int) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
+<<<<<<< HEAD
     match pprintConName env t.ident with (env,str) then
       let ty =
         match t.ty with TyUnknown {} then ""
@@ -386,6 +424,15 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
       in
       match pprintCode indent env t.inexpr with (env,inexpr) then
         (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
+=======
+    match pprintEnvGetStr env t.ident with (env,str) then
+      let str = pprintConString str in
+      match getTypeStringCode indent env t.ty with (env, ty) then
+        let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+        match pprintCode indent env t.inexpr with (env,inexpr) then
+          (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
+        else never
+>>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
       else never
     else never
 
@@ -708,56 +755,106 @@ end
 -----------
 -- TYPES --
 -----------
+-- TODO(dlunde,2020-11-24): Type printing is using a lot of unnecessary
+-- parentheses.
 
--- TODO(dlunde,2020-11-23): This should be split into separate fragments
--- TODO(dlunde,2020-11-23): Thread pprintEnv properly
-lang TypePrettyPrint =
-  FunTypeAst + UnknownTypeAst + CharTypeAst + StringTypeAst +
-  SeqTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
-  FloatTypeAst + BoolTypeAst + AppTypeAst + FunAst + DataPrettyPrint +
-  TypeVarAst
+lang UnknownTypePrettyPrint = UnknownTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyUnknown _ -> (env,"Unknown")
+end
 
-    sem getTypeStringCode (indent : Int) =
-    | TyArrow t -> join ["(", getTypeStringCode indent t.from, ") -> (",
-                               getTypeStringCode indent t.to, ")"]
-    | TyUnknown _ -> error "Cannot print unknown type"
-    | TyChar _ -> "Char"
-    | TyString _ -> "String"
-    | TySeq t -> join ["[", getTypeStringCode indent t.ty, "]"]
-    | TyRecord t ->
-      if eqi (assocLength t.fields) 0 then "()" else
-        let tuple =
-          let seq = assoc2seq {eq=eqString} t.fields in
-          if all (lam t. stringIsInt t.0) seq then
-            let seq = map (lam t. (string2int t.0, t.1)) seq in
-            let seq = sort (lam l. lam r. subi l.0 r.0) seq in
-            let first = (head seq).0 in
-            let last = (last seq).0 in
-            if eqi first 0 then
-              if eqi last (subi (length seq) 1) then
-                Some (map (lam t. t.1) seq)
-              else None ()
+lang BoolTypePrettyPrint = BoolTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyBool _ -> (env,"Bool")
+end
+
+lang IntTypePrettyPrint = IntTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyInt _ -> (env,"Int")
+end
+
+lang FloatTypePrettyPrint = FloatTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyFloat _ -> (env,"Float")
+end
+
+lang CharTypePrettyPrint = CharTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyChar _ -> (env,"Char")
+end
+
+lang FunTypePrettyPrint = FunTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyArrow t ->
+    match getTypeStringCode indent env t.from with (env, from) then
+      match getTypeStringCode indent env t.to with (env, to) then
+        (env, join ["(", from, ") -> (", to, ")"])
+      else never
+    else never
+end
+
+lang SeqTypePrettyPrint = SeqTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TySeq t ->
+    match getTypeStringCode indent env t.ty with (env, ty) then
+      (env, join ["[", ty, "]"])
+    else never
+end
+
+lang RecordTypePrettyPrint = RecordTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyRecord t ->
+    if eqi (assocLength t.fields) 0 then "()" else
+      let tuple =
+        let seq = assoc2seq {eq=eqString} t.fields in
+        if all (lam t. stringIsInt t.0) seq then
+          let seq = map (lam t. (string2int t.0, t.1)) seq in
+          let seq = sort (lam l. lam r. subi l.0 r.0) seq in
+          let first = (head seq).0 in
+          let last = (last seq).0 in
+          if eqi first 0 then
+            if eqi last (subi (length seq) 1) then
+              Some (map (lam t. t.1) seq)
             else None ()
           else None ()
-        in
-        match tuple with Some tuple then
-          let tuple = map (lam x. getTypeStringCode indent x) tuple in
-          join ["(", strJoin ", " tuple, ")"]
-        else
-          let conventry = lam entry.
-              join [entry.ident, " : ", getTypeStringCode indent entry.ty]
-          in
-          let fields = assoc2seq {eq=eqString} t.fields in
-          join ["{", strJoin ", " (map conventry t.fields), "}"]
-    | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
-    | TyInt _ -> "Int"
-    | TyFloat _ -> "Float"
-    | TyBool _ -> "Bool"
-    | TyApp t ->
-      join ["(", getTypeStringCode indent t.lhs, ") (",
-            getTypeStringCode indent t.rhs, ")"]
-    | TyVar t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #var
+        else None ()
+      in
+      match tuple with Some tuple then
+        match mapAccumL (getTypeStringCode indent) env tuple with (env, tuple)
+        then (env, join ["(", strJoin ", " tuple, ")"])
+        else never
+      else
+        let f = lam env. lam _. lam v. getTypeStringCode indent env v in
+        match assocMapAccum {eq=eqString} f t.fields with (env, fields) then
+          let fields = assoc2seq {eq=eqString} fields in
+          let conventry = lam entry. join [entry.0, ": ", entry.1] in
+          (env,join ["{", strJoin ", " (map conventry fields), "}"])
+        else never
 end
+
+lang VariantTypePrettyPrint = VariantTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyVariant {constrs = []} -> (env,"<>")
+  | TyVariant t -> error "Printing of non-empty variant types not yet supported"
+end
+
+lang VarTypePrettyPrint = VarTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyVar t ->
+    match pprintEnvGetStr env t.ident with (env,str)
+    then (env, str) else never -- TODO(vipa, 2020-09-23): format properly with #type
+end
+
+lang AppTypePrettyPrint = AppTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyApp t ->
+    match getTypeStringCode indent env t.lhs with (env,lhs) then
+      match getTypeStringCode indent env t.rhs with (env,rhs) then
+        (env,join ["(", lhs, ") (", rhs, ")"])
+      else never
+    else never
+end
+
 
 ---------------------------
 -- MEXPR PPRINT FRAGMENT --
@@ -767,23 +864,26 @@ lang MExprPrettyPrint =
 
   -- Terms
   VarPrettyPrint + AppPrettyPrint + FunPrettyPrint + RecordPrettyPrint +
-  LetPrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + DataPrettyPrint +
-  MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint + NeverPrettyPrint
+  LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + DataPrettyPrint +
+  MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint + NeverPrettyPrint +
 
   -- Constants
-  + IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
+  IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
-  + SeqOpPrettyPrint
+  + SeqOpPrettyPrint +
 
   -- Patterns
-  + NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
+  NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
-  OrPatPrettyPrint + NotPatPrettyPrint
+  OrPatPrettyPrint + NotPatPrettyPrint +
 
   -- Types
-  + TypePrettyPrint
+  UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
+  FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
+  SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
+  VarTypePrettyPrint + AppTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
@@ -919,7 +1019,7 @@ in
 --         false
 let func_isconb =
     ulet_ "isconb" (
-        lam_ "c" (tycon_ "myConB") (
+        lam_ "c" (tyvar_ "myConBType") (
             match_ (var_ "c")
                    (pcon_ "myConB" (ptuple_ [ptrue_, pint_ 17]))
                    (true_)
@@ -940,7 +1040,7 @@ in
 --   match s with ['0' | '1'] ++ _ then true else false
 let func_beginsWithBinaryDigit =
   ulet_ "beginsWithBinaryDigit" (
-    lam_ "s" (tycon_ "Bool") (
+    lam_ "s" (tystr_) (
       match_ (var_ "s")
              (pseqedgew_
                [por_ (pchar_ '0') (pchar_ '1')]
@@ -955,7 +1055,7 @@ in
 --   match o with !(None ()) & Some _ then true else false
 let func_pedanticIsSome =
   ulet_ "pedanticIsSome" (
-    lam_ "s" (tyapp_ (tycon_ "Option") (tyvar_ "a")) (
+    lam_ "s" (tyapp_ (tyvar_ "Option") (tyvar_ "a")) (
       match_ (var_ "o")
              (pand_
                (pnot_ (pcon_ "None" punit_))

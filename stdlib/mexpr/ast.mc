@@ -90,7 +90,6 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
--- TODO
 lang TypeAst
   syn Expr =
   | TmType {ident  : Name,
@@ -481,9 +480,14 @@ lang RecordTypeAst
   | TyRecord {fields : AssocMap String Type}
 end
 
-lang DataTypeAst
+lang VariantTypeAst
   syn Type =
-  | TyCon {ident : Name} --TODO: Remove and replace with TyVar
+  | TyVariant {constrs : [Name]}
+end
+
+lang VarTypeAst
+  syn Type =
+  | TyVar {ident : Name}
 end
 
 lang AppTypeAst
@@ -491,20 +495,6 @@ lang AppTypeAst
   | TyApp {lhs : Type, rhs : Type}
 end
 
-lang StringTypeAst
-  syn Type =
-  | TyString {} --TODO: Remove
-end
-
-lang VariantTypeAst
-  syn Type =
-  | TyVariant {} -- TODO: Add
-end
-
-lang TypeVarAst
-  syn Type =
-  | TyVar {ident : Name}
-end
 
 ------------------------
 -- MEXPR AST FRAGMENT --
@@ -514,17 +504,17 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + FunAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
-  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
-  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
+  IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
 
   -- Patterns
-  + NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
-  BoolPat + AndPat + OrPat + NotPat
+  NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
+  BoolPat + AndPat + OrPat + NotPat +
 
   -- Types
-  + FunTypeAst + UnknownTypeAst + CharTypeAst + StringTypeAst +
-  SeqTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
-  FloatTypeAst + BoolTypeAst + AppTypeAst + TypeVarAst
+  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
+  AppTypeAst

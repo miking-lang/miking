@@ -242,11 +242,71 @@ end
 -- TYPES --
 -----------
 
--- TODO
-lang UnknownTypeSym
+lang UnknownTypeSym = UnknownTypeAst
   sem symbolizeType (env : SymEnv) =
-  | a -> a -- TODO
+  | TyUnknown _ & ty -> ty
+end
 
+lang BoolTypeSym = BoolTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyBool {} & ty -> ty
+end
+
+lang IntTypeSym = IntTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyInt {} & ty -> ty
+end
+
+lang FloatTypeSym = FloatTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyFloat {} & ty -> ty
+end
+
+lang CharTypeSym = CharTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyChar {} & ty -> ty
+end
+
+lang FunTypeSym = FunTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyArrow {from = from, to = to} ->
+    TyArrow {from = symbolizeType env from, to = symbolizeType env to}
+end
+
+lang SeqTypeSym = SeqTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TySeq {ty = ty} -> TySeq {ty = symbolizeType env ty}
+end
+
+lang RecordTypeSym = RecordTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyRecord {fields = fields} ->
+    TyRecord {fields = assocMap {eq=eqString} (symbolizeType env) fields}
+end
+
+lang VariantTypeSym = VariantTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyVariant {constrs = []} & ty -> ty
+  | TyVariant t -> error "Symbolizing non-empty variant types not yet supported"
+end
+
+lang VarTypeSym = VarTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyVar {ident = ident} & ty ->
+    match env with {tyEnv = tyEnv} then
+      if nameHasSym ident then ty
+      else
+        let str = nameGetStr ident in
+        match assocLookup {eq=eqString} str tyEnv with Some ident then
+          TyVar {ident = ident}
+        else error (concat "Unknown type variable in symbolizeExpr: " str)
+    else never
+end
+
+lang AppTypeSym = AppTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyApp {lhs = lhs, rhs = rhs} ->
+    TyApp {lhs = symbolizeType env lhs, rhs = symbolizeType env rhs}
 end
 
 --------------
@@ -378,7 +438,9 @@ lang MExprSym =
   ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym +
 
   -- Types
-  UnknownTypeSym +
+  UnknownTypeSym + BoolTypeSym + IntTypeSym + FloatTypeSym + CharTypeSym +
+  FunTypeSym + SeqTypeSym + RecordTypeSym + VariantTypeSym + VarTypeSym +
+  AppTypeSym +
 
   -- Patterns
   NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
@@ -402,6 +464,12 @@ let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
 let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
 
 let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
+
+let lettypein = bindall_ [
+  type_ "Type" tystr_,
+  type_ "Type" (tyvar_ "Type"),
+  lam_ "Type" (tyvar_ "Type") (var_ "Type")
+] in
 
 let rlets =
   bind_ (ureclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
@@ -448,10 +516,10 @@ let matchoredge = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [
 
 let debug = false in
 
-let debugPrint = lam t.
+let debugPrint = lam i. lam t.
   let r = symbolize t in
   if debug then
-    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+    let _ = printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]) in
     let _ = printLn (expr2str t) in
     let _ = print "\n" in
     let _ = printLn "--- AFTER SYMBOLIZE ---" in
@@ -462,10 +530,11 @@ let debugPrint = lam t.
 in
 
 let _ =
-  map debugPrint [
+  mapi debugPrint [
     base,
     rec,
     letin,
+    lettypein,
     rlets,
     const,
     data,

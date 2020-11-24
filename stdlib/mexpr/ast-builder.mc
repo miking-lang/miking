@@ -108,7 +108,7 @@ let tychar_ = use MExprAst in
   TyChar ()
 
 let tystr_ = use MExprAst in
-  TyString ()
+  TySeq {ty = tychar_}
 
 let tyseq_ = use MExprAst in
   lam ty.
@@ -124,18 +124,17 @@ let tytuple_ = use MExprAst in
   lam tys.
   tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
 
-let tycon_ = use MExprAst in
-  lam ident.
-  TyCon {ident = ident}
-
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}
 
-let tyvar_ = use MExprAst in
-  lam ident.
-  TyVar {ident = ident}
+let ntyvar_ = use MExprAst in
+  lam n.
+  TyVar {ident = n}
 
+let tyvar_ = use MExprAst in
+  lam s.
+  ntyvar_ (nameNoSym s)
 
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
