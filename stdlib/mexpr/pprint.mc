@@ -804,7 +804,7 @@ end
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyRecord t ->
-    if eqi (assocLength t.fields) 0 then "()" else
+    if eqi (assocLength t.fields) 0 then (env,"()") else
       let tuple =
         let seq = assoc2seq {eq=eqString} t.fields in
         if all (lam t. stringIsInt t.0) seq then
@@ -825,7 +825,7 @@ lang RecordTypePrettyPrint = RecordTypeAst
         else never
       else
         let f = lam env. lam _. lam v. getTypeStringCode indent env v in
-        match assocMapAccum {eq=eqString} f t.fields with (env, fields) then
+        match assocMapAccum {eq=eqString} f env t.fields with (env, fields) then
           let fields = assoc2seq {eq=eqString} fields in
           let conventry = lam entry. join [entry.0, ": ", entry.1] in
           (env,join ["{", strJoin ", " (map conventry fields), "}"])

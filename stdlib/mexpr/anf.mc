@@ -110,6 +110,16 @@ lang LetANF = ANF + LetAst
 
 end
 
+lang TypeANF = ANF + TypeAst
+  sem isValue =
+  | TmType _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmType {ident = ident, ty = ty, inexpr = m1} ->
+    TmType {ident = ident, ty = ty, inexpr = normalizeName k m1}
+
+end
+
 lang RecLetsANF = ANF + RecLetsAst
   sem isValue =
   | TmRecLets _ -> false
@@ -199,8 +209,8 @@ lang NeverANF = ANF + NeverAst
 end
 
 lang MExprANF =
-  VarANF + AppANF + FunANF + RecordANF + LetANF + RecLetsANF + ConstANF +
-  DataANF + MatchANF + UtestANF + SeqANF + NeverANF
+  VarANF + AppANF + FunANF + RecordANF + LetANF + TypeANF + RecLetsANF +
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
 
 -----------
 -- TESTS --
