@@ -1,4 +1,5 @@
--- Symbolization of the MExpr ast.
+-- Symbolization of the MExpr ast. Ignores already symbolized variables,
+-- constructors, and type variables.
 --
 -- NOTE(dlunde,2020-09-25):
 -- * Add support for unbound variables and constructors (similarly to eq.mc)?
