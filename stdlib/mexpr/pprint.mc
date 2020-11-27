@@ -102,22 +102,13 @@ let _parserStr = lam str. lam prefix. lam cond.
   else if cond str then str
   else join [prefix, "\"", str, "\""]
 
--- TODO(dlunde,2020-10-28): For reusability in other languages than MExpr, me
--- might want to change the below semantic functions instead, to allow for
--- overriding them.
-
--- Constructor string parser translation
-let pprintConString = lam str.
-  _parserStr str "#con" (lam str. isUpperAlpha (head str))
-
 -- Variable string parser translation
 let pprintVarString = lam str.
   _parserStr str "#var" (lam str. isLowerAlphaOrUnderscore (head str))
 
--- Label string parser translation for records
-let pprintLabelString = lam str.
-  _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
-
+-- Constructor string parser translation
+let pprintConString = lam str.
+  _parserStr str "#con" (lam str. isUpperAlpha (head str))
 ----------------------
 -- HELPER FUNCTIONS --
 ----------------------
@@ -148,7 +139,32 @@ let _record2tuple = lam tm.
 -- TERMS --
 -----------
 
-lang PrettyPrint
+lang IdentifierPrettyPrint
+  sem pprintConName (env : PprintEnv) =    
+  sem pprintVarName (env : PprintEnv) =
+  sem pprintLabelString =                  -- Label string parser translation for records
+end
+
+lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
+  sem pprintConName (env: PprintEnv) =
+  | name ->
+    match pprintEnvGetStr env name with (env,str) then
+      let s = pprintConString str in
+      (env, s)
+    else never
+
+  sem pprintVarName (env: PprintEnv) =
+  | name ->
+    match pprintEnvGetStr env name with (env,str) then
+      let s = pprintVarString str in
+      (env, s)
+    else never
+
+  sem pprintLabelString =
+  | str -> _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
+end
+
+lang PrettyPrint = IdentifierPrettyPrint
   sem isAtomic =
   -- Intentionally left blank
 
@@ -183,8 +199,8 @@ lang VarPrettyPrint = PrettyPrint + VarAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmVar {ident = ident} ->
-    match pprintEnvGetStr env ident with (env,str)
-    then (env,pprintVarString str) else never
+    match pprintVarName env ident with (env, str)
+    then (env,str) else never
 end
 
 lang AppPrettyPrint = PrettyPrint + AppAst
@@ -217,15 +233,14 @@ lang FunPrettyPrint = PrettyPrint + FunAst + UnknownTypeAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let ident = pprintVarString str in
+    match pprintVarName env t.ident with (env,str) then
       let ty =
         match t.ty with TyUnknown {} then ""
         else concat " : " (getTypeStringCode indent t.ty)
       in
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         (env,
-         join ["lam ", ident, ty, ".", pprintNewline (pprintIncr indent),
+         join ["lam ", str, ty, ".", pprintNewline (pprintIncr indent),
                body])
       else never
     else never
@@ -288,15 +303,14 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let ident = pprintVarString str in
+    match pprintVarName env t.ident with (env,str) then
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
           let ty =
             match t.ty with TyUnknown {} then ""
             else concat " : " (getTypeStringCode indent t.ty)
           in
-          (env, join ["let ", ident, ty, " =", pprintNewline (pprintIncr indent),
+          (env, join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
                       body, pprintNewline indent,
                       "in", pprintNewline indent,
                       inexpr])
@@ -318,14 +332,13 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let ii = pprintIncr i in
     let iii = pprintIncr ii in
     let f = lam env. lam bind.
-      match pprintEnvGetStr env bind.ident with (env,ident) then
-        let ident = pprintVarString ident in
+      match pprintVarName env bind.ident with (env,str) then
         match pprintCode iii env bind.body with (env,body) then
           let ty =
             match bind.ty with TyUnknown {} then ""
             else concat " : " (getTypeStringCode indent bind.ty)
           in
-          (env, join ["let ", ident, ty, " =", pprintNewline iii, body])
+          (env, join ["let ", str, ty, " =", pprintNewline iii, body])
         else never
       else never
     in
@@ -361,8 +374,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let str = pprintConString str in
+    match pprintConName env t.ident with (env,str) then
       let ty =
         match t.ty with TyUnknown {} then ""
         else concat " : " (getTypeStringCode indent t.ty)
@@ -373,10 +385,9 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
     else never
 
   | TmConApp t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let l = pprintConString str in
+    match pprintConName env t.ident with (env,str) then
       match printParen (pprintIncr indent) env t.body with (env,body) then
-        (env, join [l, pprintNewline (pprintIncr indent), body])
+        (env, join [str, pprintNewline (pprintIncr indent), body])
       else never
     else never
 end
@@ -531,30 +542,29 @@ end
 lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   sem getConstStringCode (indent : Int) =
   | CGet _ -> "get"
+  | CSet _ -> "set"
   | CCons _ -> "cons"
   | CSnoc _ -> "snoc"
   | CConcat _ -> "concat"
   | CLength _ -> "length"
-  | CHead _ -> "head"
-  | CTail _ -> "tail"
-  | CNull _ -> "null"
   | CReverse _ -> "reverse"
+  | CMakeSeq _ -> "makeSeq"
+  | CSplitAt _ -> "splitAt"
 end
 
 --------------
 -- PATTERNS --
 --------------
 
-let _pprint_patname: PprintEnv -> PatName -> (PprintEnv, String) =
-lam env. lam pname.
-  match pname with PName name then
-    match pprintEnvGetStr env name with (env, str)
-    then (env, pprintVarString str) else never
-  else match pname with PWildcard () then
-    (env, "_")
-  else never
+lang PatNamePrettyPrint = IdentifierPrettyPrint
+  sem _pprint_patname (env : PprintEnv) =
+  | PName name ->
+    match pprintVarName env name with (env, str)
+    then (env,str) else never
+  | PWildcard () -> (env, "_")
+end
 
-lang NamedPatPrettyPrint = NamedPat
+lang NamedPatPrettyPrint = NamedPat + PatNamePrettyPrint
   sem patIsAtomic =
   | PNamed _ -> true
 
@@ -586,7 +596,7 @@ lang SeqTotPatPrettyPrint = SeqTotPat + CharPat
   | PSeqTot {pats = pats} -> _pprint_patseq getPatStringCode indent env pats
 end
 
-lang SeqEdgePatPrettyPrint = SeqEdgePat
+lang SeqEdgePatPrettyPrint = SeqEdgePat + PatNamePrettyPrint
   sem patIsAtomic =
   | PSeqEdge _ -> false
 
@@ -599,7 +609,7 @@ lang SeqEdgePatPrettyPrint = SeqEdgePat
     else never else never else never
 end
 
-lang RecordPatPrettyPrint = RecordPat
+lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
   sem patIsAtomic =
   | PRecord _ -> true
 
@@ -617,18 +627,17 @@ lang RecordPatPrettyPrint = RecordPat
     else never
 end
 
-lang DataPatPrettyPrint = DataPat
+lang DataPatPrettyPrint = DataPat + IdentifierPrettyPrint
   sem patIsAtomic =
   | PCon _ -> false
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PCon t ->
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let name = pprintConString str in
+    match pprintConName env t.ident with (env,str) then
       match getPatStringCode indent env t.subpat with (env,subpat) then
         let subpat = if patIsAtomic t.subpat then subpat
                      else join ["(", subpat, ")"]
-        in (env, join [name, " ", subpat])
+        in (env, join [str, " ", subpat])
       else never
     else never
 end
@@ -759,6 +768,9 @@ lang MExprPrettyPrint =
   -- Types
   + TypePrettyPrint
 
+  -- Identifiers
+  + MExprIdentifierPrettyPrint
+
 end
 
 -----------
@@ -864,6 +876,14 @@ let func_mycona = ucondef_ "MyConA" in
 -- con #con"myConB" : (Bool, Int) in
 let func_myconb = condef_ "myConB" (tytuple_ [tybool_, tyint_]) in
 
+-- con MyConA1 in
+-- con MyConA2
+let func_mycona_mycona =
+  let n1 = nameSym "MyConA" in
+  let n2 = nameSym "MyConA" in
+  bindall_ [nucondef_ n1, nucondef_ n2]
+in
+
 -- let isconb : Bool = lam c : #con"myConB".
 --     match c with #con"myConB" (true, 17) then
 --         true
@@ -929,6 +949,20 @@ let func_is123 =
   )
 in
 
+-- let var = 1 in let var1 = 2 in addi var var1
+let n1 = nameSym "var" in
+let n2 = nameSym "var" in
+let var_var =
+  bindall_ [nulet_ n1 (int_ 1), nulet_ n2 (int_ 2), addi_ (nvar_ n1) (nvar_ n2)]
+in
+
+-- let #var"" = 1 in let #var"1" = 2 in addi #var"" #var"1"
+let n1 = nameSym "" in
+let n2 = nameSym "" in
+let empty_empty =
+  bindall_ [nulet_ n1 (int_ 1), nulet_ n2 (int_ 2), addi_ (nvar_ n1) (nvar_ n2)]
+in
+
 let sample_ast =
   bindall_ [
     func_foo,
@@ -937,12 +971,15 @@ let sample_ast =
     func_recget,
     func_recconcs,
     func_mycona,
+    func_mycona_mycona,
     func_myconb,
     func_isconb,
     func_addone,
     func_beginsWithBinaryDigit,
     func_pedanticIsSome,
-    func_is123
+    func_is123,
+    var_var,
+    empty_empty
   ]
 in
 

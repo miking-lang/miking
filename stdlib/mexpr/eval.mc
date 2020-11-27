@@ -49,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 -- TERMS --
 -----------
 
-lang VarEval = VarAst
+lang VarEval = VarAst + IdentifierPrettyPrint
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match _evalLookup ident ctx.env with Some t then
@@ -128,9 +128,12 @@ lang RecLetsEval =
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
     let foldli = lam f. lam init. lam seq.
-      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1 in
-    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x) "" ["a", "b", "c"]
-      with "0a1b2c" in
+      (foldl (lam acc. lam x. (addi acc.0 1, f acc.0 acc.1 x)) (0, init) seq).1
+    in
+    utest foldli (lam i. lam acc. lam x. concat (concat acc (int2string i)) x)
+                 ""
+                 ["a", "b", "c"]
+    with "0a1b2c" in
     let eta_name = nameSym "eta" in
     let eta_var = TmVar {ident = eta_name} in
     let unpack_from = lam var. lam body.
@@ -415,13 +418,16 @@ lang CmpSymbEval = CmpSymbAst + ConstEval
     else error "Second argument in eqsym is not a symbol"
 end
 
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   syn Const =
   | CGet2 [Expr]
+  | CSet2 [Expr]
+  | CSet3 ([Expr], Int)
   | CCons2 Expr
   | CSnoc2 [Expr]
   | CConcat2 [Expr]
+  | CSplitAt2 [Expr]
+  | CMakeSeq2 Int
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -429,9 +435,19 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CGet2 s.tms}
     else error "Not a get of a constant sequence"
   | CGet2 tms ->
-    match arg with TmConst {val = CInt n} then
-      get tms n.val
+    match arg with TmConst {val = CInt {val = n}} then
+      get tms n
     else error "n in get is not a number"
+  | CSet _ ->
+    match arg with TmSeq s then
+      TmConst {val = CSet2 s.tms}
+    else error "Not a set of a constant sequence"
+  | CSet2 tms ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSet3 (tms, n)}
+    else error "n in set is not a number"
+  | CSet3 (tms,n) ->
+    TmSeq {tms = set tms n arg}
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
@@ -456,24 +472,25 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     match arg with TmSeq s then
       TmConst {val = CInt {val = (length s.tms)}}
     else error "Not length of a constant sequence"
-  | CHead _ ->
-    match arg with TmSeq s then
-      head s.tms
-    else error "Not head of a constant sequence"
-  | CTail _ ->
-    match arg with TmSeq s then
-      TmSeq {tms = tail s.tms}
-    else error "Not tail of a constant sequence"
-  | CNull _ ->
-    match arg with TmSeq s then
-      if null s.tms
-      then TmConst {val = CBool {val = true}}
-      else TmConst {val = CBool {val = false}}
-    else error "Not null of a constant sequence"
   | CReverse _ ->
     match arg with TmSeq s then
       TmSeq {tms = reverse s.tms}
     else error "Not reverse of a constant sequence"
+  | CSplitAt _ ->
+    match arg with TmSeq s then
+      TmConst {val = CSplitAt2 s.tms}
+    else error "Not splitAt of a constant sequence"
+  | CSplitAt2 tms ->
+    match arg with TmConst {val = CInt {val = n}} then
+      let t = splitAt tms n in
+      tuple_ [seq_ t.0, seq_ t.1]
+    else error "n in splitAt is not a number"
+  | CMakeSeq _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CMakeSeq2 n}
+    else error "n in makeSeq is not a number"
+  | CMakeSeq2 n ->
+    TmSeq {tms = makeSeq n arg}
 end
 
 --------------
@@ -614,6 +631,8 @@ lang MExprEval =
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
   IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 
+  -- Pretty Printing of Identifiers
+  + MExprIdentifierPrettyPrint
 end
 
 
@@ -820,8 +839,12 @@ with int_ 3 in
 
 -- Builtin sequence functions
 -- get [1,2,3] 1 -> 2
-let getAst = nth_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1) in
+let getAst = get_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1) in
 utest eval getAst with int_ 2 in
+
+-- set [1,2] 0 3 -> [3,2]
+let setAst = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
+utest eval setAst with seq_ [int_ 3, int_ 2] in
 
 -- cons 1 [2, 3] -> [1,2,3]
 let consAst = cons_ (int_ 1) (seq_ [int_ 2, int_ 3]) in
@@ -838,30 +861,22 @@ let concatAst = concat_
 utest eval concatAst
 with seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5, int_ 6] in
 
--- length [1, 2, 3] = 3
+-- length [1, 2, 3] -> 3
 let lengthAst = length_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 utest eval lengthAst with int_ 3 in
 
--- tail [1, 2, 3] = [2, 3]
-let tailAst = tail_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval tailAst with seq_ [int_ 2, int_ 3] in
-
--- head [1, 2, 3] = 1
-let headAst = head_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval headAst with int_ 1 in
-
--- null [1, 2, 3] = false
-let nullAst = null_ (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest eval nullAst with false_ in
-
--- null [] = true
-let nullAst = null_ (seq_ []) in
-utest eval nullAst with true_ in
-
--- reverse [1, 2, 3] = [3, 2, 1]
+-- reverse [1, 2, 3] -> [3, 2, 1]
 let reverseAst = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] in
 
+-- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
+let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
+utest eval splitAtAst
+with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
+
+-- makeSeq 3 42 -> [42, 42, 42]
+let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
+utest eval makeSeqAst with (seq_ [int_ 42, int_ 42, int_ 42]) in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in

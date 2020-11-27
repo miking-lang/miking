@@ -3,7 +3,7 @@ open Ustring.Op
 module Mseq : sig
   type 'a t
 
-  val make : int -> (int -> 'a) -> 'a t
+  val make : int -> 'a -> 'a t
 
   val empty : 'a t
 

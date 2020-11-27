@@ -461,9 +461,13 @@ let ltf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLtf ())) a b
 
-let nth_ = use MExprAst in
+let get_ = use MExprAst in
   lam s. lam i.
   appf2_ (const_ (CGet ())) s i
+
+let set_ = use MExprAst in
+  lam s. lam i. lam v.
+  appf3_ (const_ (CSet ())) s i v
 
 let cons_ = use MExprAst in
   lam x. lam s.
@@ -481,21 +485,17 @@ let length_ = use MExprAst in
   lam s.
   appf1_ (const_ (CLength ())) s
 
-let head_ = use MExprAst in
-  lam s.
-  appf1_ (const_ (CHead ())) s
-
-let tail_ = use MExprAst in
-  lam s.
-  appf1_ (const_ (CTail ())) s
-
-let null_ = use MExprAst in
-  lam s.
-  appf1_ (const_ (CNull ())) s
-
 let reverse_ = use MExprAst in
   lam s.
   appf1_ (const_ (CReverse ())) s
+
+let splitat_ = use MExprAst in
+  lam s. lam n.
+  appf2_ (const_ (CSplitAt ())) s n
+
+let makeseq_ = use MExprAst in
+  lam n. lam v.
+  appf2_ (const_ (CMakeSeq ())) n v
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in
@@ -503,4 +503,3 @@ let and_ = use MExprAst in
 
 let or_ = use MExprAst in
   lam a. lam b. if_ a true_ b
-

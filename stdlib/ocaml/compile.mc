@@ -38,7 +38,7 @@ let _runCommand : String->String->String->ExecResult =
     in
     {stdout=stdout, stderr=stderr, returncode=returncode}
 
-let compile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
+let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
   let dunefile = "(executable (name program) (libraries batteries boot))" in
   let td = pycall _tempfile "TemporaryDirectory" () in
   let dir = pythonGetAttr td "name" in
@@ -69,7 +69,7 @@ let compile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
         let command =
           concat ["dune", "exec", "./program.exe", "--"] args
         in
-          _runCommand command stdin (tempfile ""),
+        _runCommand command stdin (tempfile ""),
     cleanup =
       lam _.
         let _ = pycall _shutil "rmtree" (dir,) in
@@ -79,27 +79,28 @@ let compile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
 mexpr
 
 let sym =
-  compile "print_int (Boot.Intrinsics.Mseq.length Boot.Intrinsics.Mseq.empty)"
+  ocamlCompile
+  "print_int (Boot.Intrinsics.Mseq.length Boot.Intrinsics.Mseq.empty)"
 in
 
 let hello =
-  compile "print_string \"Hello World!\""
+  ocamlCompile "print_string \"Hello World!\""
 in
 
 let echo =
-  compile "print_string (read_line ())"
+  ocamlCompile "print_string (read_line ())"
 in
 
 let args =
-  compile "print_string (Sys.argv.(1))"
+  ocamlCompile "print_string (Sys.argv.(1))"
 in
 
 let err =
-  compile "Printf.eprintf \"Hello World!\""
+  ocamlCompile "Printf.eprintf \"Hello World!\""
 in
 
 let manyargs =
-  compile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
+  ocamlCompile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
 in
 
 utest (sym.run "" []).stdout with "0" in

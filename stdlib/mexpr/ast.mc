@@ -269,15 +269,15 @@ end
 -- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
+  | CSet {}
   | CGet {}
   | CCons {}
   | CSnoc {}
   | CConcat {}
   | CLength {}
-  | CHead {}
-  | CTail {}
-  | CNull {}
   | CReverse {}
+  | CMakeSeq {}
+  | CSplitAt {}
 end
 
 --------------

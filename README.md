@@ -941,6 +941,19 @@ ln -s /some_path/libpython*.dylib /usr/local/lib/
 
 The bindings should now work properly.
 
+## Compiling to OCaml
+The standard library contains functions for compiling and running `mexpr`
+programs targeting OCaml. See the implementation in
+[stdlib/ocaml](stdlib/ocaml). This library requires the python intrinsics and
+that the `boot` package is installed globally for your user. To do the latter,
+run
+
+```
+dune install
+```
+
+after building miking with python intrinsics support.
+
 ## Contributing
 
 1. Before making a pull request please make sure that all tests pass. Run
