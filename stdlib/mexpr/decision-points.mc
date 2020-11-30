@@ -401,9 +401,9 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
         (bindall_ [
           nulet_ entries (
               appf2_ (nvar_ _filter)
-                     (nulam_ t (eqs_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
+                     (nulam_ t (eqsym_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
                      (nvar_ _lookupTable)),
-          nulet_ eqsym (nulam_ x (nulam_ y (eqs_ (nvar_ x) (nvar_ y)))),
+          nulet_ eqsym (nulam_ x (nulam_ y (eqsym_ (nvar_ x) (nvar_ y)))),
           nulet_ entriesSuffix
                (appf2_ (nvar_ _filter)
                        (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqsym) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))

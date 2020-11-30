@@ -281,6 +281,7 @@ end
 lang SymbAst = ConstAst
   syn Const =
   | CSymb {val : Symb}
+  | CGensym {}
   | CSym2hash {}
 end
 

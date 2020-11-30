@@ -477,10 +477,6 @@ let eqf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CEqf ())) a b
 
-let eqs_ = use MExprAst in
-  lam s1. lam s2.
-  appf2_ (const_ (CEqsym ())) s1 s2
-
 let ltf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLtf ())) a b
@@ -528,7 +524,14 @@ let and_ = use MExprAst in
 let or_ = use MExprAst in
   lam a. lam b. if_ a true_ b
 
--- Sym2hash
+-- Symbol operations
+let gensym_ = use MExprAst in
+  lam u. appf1_ (const_ (CGensym ())) u
+
+let eqsym_ = use MExprAst in
+  lam s1. lam s2.
+  appf2_ (const_ (CEqsym ())) s1 s2
+
 let sym2hash_ = use MExprAst in
   lam s.
   appf1_ (const_ (CSym2hash ())) s

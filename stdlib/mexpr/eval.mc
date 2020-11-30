@@ -400,8 +400,12 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
     else error "Not comparing a constant"
 end
 
-lang SymbEval = SymbAst + IntAst + ConstEval
+lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
   sem delta (arg : Expr) =
+  | CGensym _ ->
+    match arg with TmRecord {bindings = []} then
+      TmConst {val = CSymb {val = gensym ()}}
+    else error "Argument in gensym is not unit"
   | CSym2hash _ ->
     match arg with TmConst {val = CSymb s} then
       TmConst {val = CInt {val = sym2hash s.val}}
@@ -890,17 +894,27 @@ utest eval (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
--- Unit tests for SymbEval and CmpSymbEval
-utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
-utest eval (bind_ (ulet_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
+-- Unit tests for Symbols
+
+-- gensym
+let s1 = eval (gensym_ unit_) in
+let s2 = eval (gensym_ unit_) in
+utest s1 with s1 in
+utest s2 with s2 in
+
+-- eqsym
+utest eval (eqsym_ s1 s1) with true_ in
+utest eval (eqsym_ s1 s2) with false_ in
+utest eval (eqsym_ s2 s1) with false_ in
+utest eval (bind_ (ulet_ "s" s1) (eqsym_ (var_ "s") (var_ "s")))
 with true_ in
 
--- Unit test for Symb2hash
-let s1 = symb_ (gensym ()) in
-let s2 = symb_ (gensym ()) in
+-- sym2hash
 utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s1)) with true_ in
 utest eval (eqi_ (sym2hash_ s2) (sym2hash_ s1)) with false_ in
 utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ in
+
+-- End Unit tests for Symbols
 
 utest eval (match_
   (tuple_ [true_, true_])
