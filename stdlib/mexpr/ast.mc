@@ -303,6 +303,36 @@ lang SeqOpAst = SeqAst
   | CSplitAt {}
 end
 
+lang FileOpAst = ConstAst
+  syn Const =
+  | CFileRead {}
+  | CFileWrite {}
+  | CFileExists {}
+  | CFileDelete {}
+end
+
+lang IOAst = ConstAst
+  syn Const =
+  | CPrintString {}
+  | CReadLine {}
+end
+
+lang RandomNumberGeneratorAst = ConstAst
+  syn Const =
+  | CRandIntU {}
+  | CRandSetSeed {}
+end
+
+lang ExitAst = ConstAst
+  syn Const =
+  | CExit {}
+end
+
+lang ErrorAst = ConstAst
+  syn Const =
+  | CError {}
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -508,8 +538,9 @@ lang MExprAst =
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
-  IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
+  FileOpAst + IOAst + RandomNumberGeneratorAst + ErrorAst + ExitAst
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

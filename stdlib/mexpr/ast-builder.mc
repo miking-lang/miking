@@ -535,3 +535,38 @@ let eqsym_ = use MExprAst in
 let sym2hash_ = use MExprAst in
   lam s.
   appf1_ (const_ (CSym2hash ())) s
+
+-- File operations
+let readFile_ = use MExprAst in
+  lam f. appf1_ (const_ (CFileRead ())) f
+
+let writeFile_ = use MExprAst in
+  lam f. lam d. appf2_ (const_ (CFileWrite ())) f d
+
+let fileExists_ = use MExprAst in
+  lam f. appf1_ (const_ (CFileExists ())) f
+
+let deleteFile_ = use MExprAst in
+  lam f. appf1_ (const_ (CFileDelete ())) f
+
+-- I/O operations
+let printString_ = use MExprAst in
+  lam s. app_ (const_ (CPrintString ())) s
+
+let readLine_ = use MExprAst in
+  lam u. app_ (const_ (CReadLine ())) u
+
+-- Random number generation
+let randIntU_ = use MExprAst in
+  lam lo. lam hi. appf2_ (const_ (CRandIntU ())) lo hi
+
+let randSetSeed_ = use MExprAst in
+  lam s. appf1_ (const_ (CRandSetSeed ())) s
+
+-- Error
+let error_ = use MExprAst in
+  lam s. appf1_ (const_ (CError ())) s
+
+-- Exit
+let exit_ = use MExprAst in
+  lam n. appf1_ (const_ (CExit ())) n
