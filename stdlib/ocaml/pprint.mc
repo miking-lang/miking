@@ -210,13 +210,28 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
     let ii = pprintIncr i in
     match pprintCode ii env target with (env, target) then
       match pprintCode ii env thn with (env, thn) then
-        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition this will be wrong, it should be `printParen` instead of `printCode`.
+        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
           (env, join ["if", pprintNewline ii,
                       target, pprintNewline i,
                       "then", pprintNewline ii,
                       thn, pprintNewline i,
                       "else", pprintNewline ii,
                       els])
+        else never
+      else never
+    else never
+  | OTmMatch { target = target, arms = [(pat, expr)] } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match pprintCode ii env target with (env, target) then
+      match getPatStringCode ii env pat with (env, pat) then
+        match pprintCode ii env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
+          (env, join ["let", pprintNewline ii,
+                      pat, pprintNewline i,
+                      "=", pprintNewline ii,
+                      target, pprintNewline i,
+                      "in", pprintNewline ii,
+                      expr])
         else never
       else never
     else never
@@ -345,6 +360,10 @@ let testIfNested =
   OTmMatch {target = true_, arms = [(pfalse_, t (lam x. addi_ false_ x)), (ptrue_, t (lam x. addi_ true_ x))]}
 in
 
+let testPatLet =
+  OTmMatch {target = true_, arms = [(pvar_ "a", var_ "a")]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -368,7 +387,8 @@ let asts = [
   testMatchSimple,
   testMatchNested,
   testIf,
-  testIfNested
+  testIfNested,
+  testPatLet
 ] in
 
 let _ = map pprintProg asts in
