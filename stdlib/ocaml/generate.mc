@@ -40,7 +40,7 @@ let _seqOps = [
 let _seqOp = _op (_opHashMap "Boot.Intrinsics.Mseq." _seqOps)
 
 let _symbOps = [
-  "gensym".
+  "gensym",
   "eqsym",
   "hash"
 ]
