@@ -707,25 +707,22 @@ let delta eval env fi c v =
       fail_constapp fi
   | CreadFile, TmSeq (fi, lst) ->
       TmSeq
-        ( fi
-        , Ustring.read_file (Ustring.to_utf8 (tmseq2ustring fi lst))
-          |> ustring2tmseq fi )
+        (fi, tmseq2ustring fi lst |> Intrinsics.File.read |> ustring2tmseq fi)
   | CreadFile, _ ->
       fail_constapp fi
   | CwriteFile None, TmSeq (fi, l) ->
       TmConst (fi, CwriteFile (Some (tmseq2ustring fi l)))
   | CwriteFile (Some fname), TmSeq (fi, lst) ->
-      Ustring.write_file (Ustring.to_utf8 fname) (tmseq2ustring fi lst) ;
+      Intrinsics.File.write fname (tmseq2ustring fi lst) ;
       tmUnit
   | CwriteFile None, _ | CwriteFile (Some _), _ ->
       fail_constapp fi
   | CfileExists, TmSeq (fi, lst) ->
-      TmConst
-        (fi, CBool (Sys.file_exists (Ustring.to_utf8 (tmseq2ustring fi lst))))
+      TmConst (fi, CBool (Intrinsics.File.exists (tmseq2ustring fi lst)))
   | CfileExists, _ ->
       fail_constapp fi
   | CdeleteFile, TmSeq (fi, lst) ->
-      Sys.remove (Ustring.to_utf8 (tmseq2ustring fi lst)) ;
+      Intrinsics.File.delete (tmseq2ustring fi lst) ;
       tmUnit
   | CdeleteFile, _ ->
       fail_constapp fi

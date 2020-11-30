@@ -66,3 +66,13 @@ module Symb : sig
     val string_of_sym : t -> string
   end
 end
+
+module File : sig
+  val read : ustring -> ustring
+
+  val write : ustring -> ustring -> unit
+
+  val exists : ustring -> bool
+
+  val delete : ustring -> unit
+end

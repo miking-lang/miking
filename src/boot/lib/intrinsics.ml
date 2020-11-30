@@ -93,3 +93,13 @@ module Symb = struct
     let string_of_sym s = Ustring.to_utf8 (ustring_of_sym s)
   end
 end
+
+module File = struct
+  let read f = f |> Ustring.to_utf8 |> Ustring.read_file
+
+  let write f d = Ustring.write_file (Ustring.to_utf8 f) d
+
+  let exists f = f |> Ustring.to_utf8 |> Sys.file_exists
+
+  let delete f = f |> Ustring.to_utf8 |> Sys.remove
+end
