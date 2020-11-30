@@ -750,7 +750,7 @@ let delta eval env fi c v =
   | Ceqsym _, _ ->
       fail_constapp fi
   | Csym2hash, TmConst (fi, CSymb id) ->
-      TmConst (fi, CInt (Symb.Helpers.hash id))
+      TmConst (fi, CInt (Symb.hash id))
   | Csym2hash, _ ->
       fail_constapp fi
   (* Python intrinsics *)

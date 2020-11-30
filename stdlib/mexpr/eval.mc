@@ -400,7 +400,12 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
     else error "Not comparing a constant"
 end
 
-lang SymbEval = SymbAst + ConstEval
+lang SymbEval = SymbAst + IntAst + ConstEval
+  sem delta (arg : Expr) =
+  | CSym2hash _ ->
+    match arg with TmConst {val = CSymb s} then
+      TmConst {val = CInt {val = sym2hash s.val}}
+    else error "Argument in sym2hash is not a symbol"
 end
 
 lang CmpSymbEval = CmpSymbAst + ConstEval
@@ -889,6 +894,13 @@ utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
 utest eval (bind_ (ulet_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
 with true_ in
+
+-- Unit test for Symb2hash
+let s1 = symb_ (gensym ()) in
+let s2 = symb_ (gensym ()) in
+utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s1)) with true_ in
+utest eval (eqi_ (sym2hash_ s2) (sym2hash_ s1)) with false_ in
+utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ in
 
 utest eval (match_
   (tuple_ [true_, true_])

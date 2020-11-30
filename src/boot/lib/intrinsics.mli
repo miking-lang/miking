@@ -56,13 +56,13 @@ module Symb : sig
 
   val eqsym : t -> t -> bool
 
+  val hash : t -> int
+
   module Helpers : sig
     val nosym : t
 
     val ustring_of_sym : t -> ustring
 
     val string_of_sym : t -> string
-
-    val hash : t -> int
   end
 end

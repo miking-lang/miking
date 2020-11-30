@@ -527,3 +527,8 @@ let and_ = use MExprAst in
 
 let or_ = use MExprAst in
   lam a. lam b. if_ a true_ b
+
+-- Sym2hash
+let sym2hash_ = use MExprAst in
+  lam s.
+  appf1_ (const_ (CSym2hash ())) s
