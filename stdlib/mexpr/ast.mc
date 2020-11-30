@@ -290,7 +290,6 @@ lang CmpSymbAst = SymbAst + BoolAst
   | CEqsym {}
 end
 
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
   | CSet {}
