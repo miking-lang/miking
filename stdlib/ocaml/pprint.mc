@@ -1,6 +1,6 @@
 include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/symbolize.mc"
+include "ocaml/symbolize.mc"
 include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
@@ -127,6 +127,8 @@ with ("_BC123", gensym ()).0
 lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
                         + IdentifierPrettyPrint + UnknownTypePrettyPrint
+                        + NamedPatPrettyPrint + IntPatPrettyPrint
+                        + CharPatPrettyPrint + BoolPatPrettyPrint
 
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
@@ -136,6 +138,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | OTmMatch _ -> false
 
   sem _pprintBinding (indent : Int) (env: PprintEnv) =
   | {ident = id, body = b} ->
@@ -197,9 +200,26 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
+  | OTmMatch {target = target, arms = arms} ->
+    let i = indent in
+    let ii = pprintIncr i in
+    let iii = pprintIncr ii in
+    match pprintCode ii env target with (env, target) then
+      let pprintArm = lam env. lam arm. match arm with (pat, expr) then
+        match getPatStringCode ii env pat with (env, pat) then
+          match pprintCode iii env expr with (env, expr) then
+            (env, join [pprintNewline i, "| ", pat, " ->", pprintNewline iii, expr])
+          else never
+        else never
+      else never in
+      match mapAccumL pprintArm env arms with (env, arms) then
+        (env, join ["match", pprintNewline ii, target, pprintNewline i,
+                    "with", join arms])
+      else never
+    else never
 end
 
-lang TestLang = OCamlPrettyPrint + MExprSym
+lang TestLang = OCamlPrettyPrint + OCamlSym
 
 mexpr
 use TestLang in
@@ -281,6 +301,12 @@ let testMutRecEscape =
     (app_ (var_ "'a/b/c") (int_ 1))
 in
 
+let testMatchSimple =
+  let armA = (pvar_ "a", var_ "a") in
+  let armB = (pvarw_, int_ 3) in
+  OTmMatch {target = true_, arms = [armA, armB]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -300,9 +326,10 @@ let asts = [
   testLamEscape,
   testLetEscape,
   testRecEscape,
-  testMutRecEscape
+  testMutRecEscape,
+  testMatchSimple
 ] in
 
--- let _ = map pprintProg asts in
+let _ = map pprintProg asts in
 
 ()
