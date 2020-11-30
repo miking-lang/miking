@@ -207,7 +207,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
     match pprintCode ii env target with (env, target) then
       let pprintArm = lam env. lam arm. match arm with (pat, expr) then
         match getPatStringCode ii env pat with (env, pat) then
-          match pprintCode iii env expr with (env, expr) then
+          match printParen iii env expr with (env, expr) then
             (env, join [pprintNewline i, "| ", pat, " ->", pprintNewline iii, expr])
           else never
         else never
@@ -307,6 +307,15 @@ let testMatchSimple =
   OTmMatch {target = true_, arms = [armA, armB]}
 in
 
+let testMatchNested =
+  let armA = (pvar_ "a", var_ "a") in
+  let armB = (pvarw_, var_ "b") in
+  let inner = OTmMatch {target = true_, arms = [armA]} in
+  let armB = (pvar_ "b", inner) in
+  let armC = (pvar_ "c", false_) in
+  OTmMatch {target = true_, arms = [armB, armC]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -327,7 +336,8 @@ let asts = [
   testLetEscape,
   testRecEscape,
   testMutRecEscape,
-  testMatchSimple
+  testMatchSimple,
+  testMatchNested
 ] in
 
 let _ = map pprintProg asts in
