@@ -16,7 +16,6 @@ in
 foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
 hashmapEmpty ops
 
-
 let _op = lam opHashMap. lam op.
 nvar_
 (hashmapLookupOrElse hashmapStrTraits
@@ -41,6 +40,7 @@ let _seqOps = [
 let _seqOp = _op (_opHashMap "Boot.Intrinsics.Mseq." _seqOps)
 
 let _symbOps = [
+  "gensym".
   "eqsym",
   "hash"
 ]
@@ -59,6 +59,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | CSplitAt {} -> _seqOp "split_at"
   | CReverse {} -> _seqOp "reverse"
   -- Symbol intrinsics
+  | CGensym {} -> _symbOp "gensym"
   | CEqsym {} -> _symbOp "eqsym"
   | CSym2hash {} -> _symbOp "hash"
   | v -> TmConst { val = v }
@@ -255,5 +256,8 @@ utest int_ 1 with generate thrd using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
+
+-- TODO(Oscar Eriksson, 2020-12-30) Test symbol operations when we have
+-- implemented tuples/records.
 
 ()
