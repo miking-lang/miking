@@ -200,6 +200,26 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
+  | OTmMatch {
+    target = target,
+    arms
+      = [ (PBool {val = true}, thn), (PBool {val = false}, els) ]
+      | [ (PBool {val = false}, els), (PBool {val = true}, thn) ]
+    } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match pprintCode ii env target with (env, target) then
+      match pprintCode ii env thn with (env, thn) then
+        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition this will be wrong, it should be `printParen` instead of `printCode`.
+          (env, join ["if", pprintNewline ii,
+                      target, pprintNewline i,
+                      "then", pprintNewline ii,
+                      thn, pprintNewline i,
+                      "else", pprintNewline ii,
+                      els])
+        else never
+      else never
+    else never
   | OTmMatch {target = target, arms = arms} ->
     let i = indent in
     let ii = pprintIncr i in
@@ -316,6 +336,15 @@ let testMatchNested =
   OTmMatch {target = true_, arms = [armB, armC]}
 in
 
+let testIf =
+  OTmMatch {target = true_, arms = [(ptrue_, true_), (pfalse_, false_)]}
+in
+
+let testIfNested =
+  let t = lam v. OTmMatch {target = true_, arms = [(ptrue_, v true_), (pfalse_, v false_)]} in
+  OTmMatch {target = true_, arms = [(pfalse_, t (lam x. addi_ false_ x)), (ptrue_, t (lam x. addi_ true_ x))]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -337,7 +366,9 @@ let asts = [
   testRecEscape,
   testMutRecEscape,
   testMatchSimple,
-  testMatchNested
+  testMatchNested,
+  testIf,
+  testIfNested
 ] in
 
 let _ = map pprintProg asts in
