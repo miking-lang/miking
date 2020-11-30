@@ -257,7 +257,7 @@ utest int_ 1 with generate thrd using sameSemantics in
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
 
--- TODO(Oscar Eriksson, 2020-12-30) Test symbol operations when we have
+-- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
 
 ()

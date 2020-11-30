@@ -595,7 +595,7 @@ end
 lang ExitEval = ExitAst + IntAst
   sem delta (arg : Expr) =
   | CExit _ ->
-    match arg with TmConst{val = CInt {val = n}} then
+    match arg with TmConst {val = CInt {val = n}} then
       exit n
     else
       error "n in exit not an integer"
