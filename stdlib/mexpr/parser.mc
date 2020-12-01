@@ -178,7 +178,7 @@ let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
       then work (advanceCol p2 1) xs (snoc num x)
       else {val = num, pos = p2, str = str}
     else {val = num, pos = p2, str = str}
-  in work (advanceCol p 1) (tail str) ([head str])
+  in work p str ""
 
 utest parseUInt (initPos "") "123"
   with {val = "123", pos = posVal "" 1 3, str = ""}
@@ -188,12 +188,15 @@ utest parseUInt (initPos "") "12.0"
   with {val = "12", pos = posVal "" 1 2, str = ".0"}
 utest parseUInt (initPos "") "2x"
   with {val = "2", pos = posVal "" 1 1, str = "x"}
+utest parseUInt (initPos "") "Not a number"
+  with {val = "", pos = posVal "" 1 0, str = "Not a number"}
 
 let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
   lam p. lam str.
     match str with ['+' | '-'] ++ xs & s then
       let n = parseUInt (advanceCol p 1) xs in
-      {val = join [[head s], n.val], pos = n.pos, str = n.str}
+      match n.val with "" then n
+      else {val = cons (head s) n.val, pos = n.pos, str = n.str}
     else
       parseUInt p str
 
@@ -205,6 +208,8 @@ utest parseFloatExponent (initPos "") "+3"
   with {val = "+3", pos = posVal "" 1 2, str = ""}
 utest parseFloatExponent (initPos "") "-2.5"
   with {val = "-2", pos = posVal "" 1 2, str = ".5"}
+utest parseFloatExponent (initPos "") "Not an exponent"
+  with {val = "", pos = posVal "" 1 0, str = "Not an exponent"}
 
 -- Parsing of an unsigned number
 lang UNumParser = ExprParser
@@ -227,21 +232,27 @@ lang UIntParser = UNumParser + ConstAst + IntAst
 end
 
 -- Parsing of an unsigned float
-lang UFloatParser = UNumParser + ConstAst + FloatAst
+lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst
   sem nextNum (p: Pos) (xs: String) =
   | (n, Some '.') | (n, Some 'e') | (n, Some 'E') ->
     let exponentHelper = lam currpos. lam pre. lam s.
       let exp = parseFloatExponent (advanceCol currpos 1) s in
-      let floatStr = join [pre, "e", exp.val] in
-      {val = TmConst {val = CFloat {val = string2float floatStr},
-                      fi = makeInfo p exp.pos},
-       pos = exp.pos, str = exp.str}
+      match exp.val with "" then
+        let pos = advanceCol p (length n) in
+        {val = TmConst {val = CInt {val = string2int n}, fi = makeInfo p pos},
+         pos = pos, str = xs}
+      else
+        let floatStr = join [pre, "e", exp.val] in
+        {val = TmConst {val = CFloat {val = string2float floatStr},
+                        fi = makeInfo p exp.pos},
+         pos = exp.pos, str = exp.str}
     in
+    let p2 = advanceCol p (length n) in
     match xs with ['.'] ++ s then
-      let p2 = advanceCol (advanceCol p (length n)) 1 in
+      let p3 = advanceCol p2 1 in
       match s with ['0' | '1' | '2' | '3' | '4' |
                     '5' | '6' | '7' | '8' | '9'] ++ s2 then
-        let n2 = parseUInt p2 s in
+        let n2 = parseUInt p3 s in
         let preExponentStr = join [n, ".", n2.val] in
         match n2.str with ['e' | 'E'] ++ s3 then
           exponentHelper n2.pos preExponentStr s3
@@ -250,13 +261,12 @@ lang UFloatParser = UNumParser + ConstAst + FloatAst
                           fi = makeInfo p n2.pos},
            pos = n2.pos, str = n2.str}
       else match s with ['e' | 'E'] ++ s2 then
-        exponentHelper p2 n s2
+        exponentHelper p3 n s2
       else
         {val = TmConst {val = CFloat {val = string2float n},
-                        fi = makeInfo p p2},
-         pos = p2, str = s}
-         --else match xs with ['e' | 'E'] ++ s then
-    else match xs with ['e' | 'E'] ++ s then 
+                        fi = makeInfo p p3},
+         pos = p3, str = s}
+    else match xs with ['e' | 'E'] ++ s then
       exponentHelper (advanceCol p (length n)) n s
     else
       error (strJoin " " ["Unexpected char:", [head xs]])
@@ -513,6 +523,22 @@ utest parseExprMain (initPos "file") 0 " 4.E+1 " with
 utest parseExprMain (initPos "file") 0 " 1.E-3 " with
       {val = TmConst {val = CFloat {val = 0.001}, fi = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 " 1E " with
+      {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = "E "} in
+utest parseExprMain (initPos "file") 0 " 1e " with
+       {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = "e "} in
+utest parseExprMain (initPos "file") 0 " 1.e++2 " with
+       {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = ".e++2 "} in
+utest parseExprMain (initPos "file") 0 " 1.e++2 " with
+       {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = ".e++2 "} in
+utest parseExprMain (initPos "file") 0 " 1.0e++2 " with
+       {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 4},
+       pos = posVal "file" 1 4, str = "e++2 "} in
+
 --If expression
 utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos
   with posVal "" 1 21 in
