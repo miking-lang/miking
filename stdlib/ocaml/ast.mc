@@ -11,10 +11,18 @@ lang OCamlMatch
   syn Pat =
 end
 
+lang OCamlTuple
+  syn Expr =
+  | OTmTuple { values : [Expr] }
+
+  syn Pat =
+  | OPTuple { pats : [Pat] }
+end
+
 lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst
                 + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
                 + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
-                + BoolPat
+                + BoolPat + OCamlTuple
 end
 
 mexpr

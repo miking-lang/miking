@@ -139,6 +139,10 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | TmLam _ -> false
   | TmRecLets _ -> false
   | OTmMatch _ -> false
+  | OTmTuple _ -> true
+
+  sem patIsAtomic =
+  | OPTuple _ -> true
 
   sem _pprintBinding (indent : Int) (env: PprintEnv) =
   | {ident = id, body = b} ->
@@ -200,6 +204,11 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
+  | OTmTuple {values = values} ->
+    match mapAccumL (pprintCode indent) env values
+    with (env, values) then
+      (env, join ["(", strJoin ", " values, ")"])
+    else never
   | OTmMatch {
     target = target,
     arms
@@ -251,6 +260,12 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         (env, join ["match", pprintNewline ii, target, pprintNewline i,
                     "with", join arms])
       else never
+    else never
+
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
+  | OPTuple {pats = pats} ->
+    match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
+      (env, join ["(", strJoin ", " pats, ")"])
     else never
 end
 
@@ -364,6 +379,12 @@ let testPatLet =
   OTmMatch {target = true_, arms = [(pvar_ "a", var_ "a")]}
 in
 
+let testTuple =
+  OTmMatch
+  { target = OTmTuple {values = [true_, false_]}
+  , arms = [(OPTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -388,7 +409,8 @@ let asts = [
   testMatchNested,
   testIf,
   testIfNested,
-  testPatLet
+  testPatLet,
+  testTuple
 ] in
 
 let _ = map pprintProg asts in

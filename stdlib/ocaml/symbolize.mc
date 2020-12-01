@@ -4,7 +4,7 @@ include "mexpr/symbolize.mc"
 lang OCamlSym =
   VarSym + AppSym + FunSym + LetSym + RecLetsSym + ConstSym
   + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
-  + OCamlMatch
+  + OCamlMatch + OCamlTuple
 
   sem symbolizeExpr (env : Env) =
   | OTmMatch {target = target, arms = arms} ->
@@ -13,4 +13,12 @@ lang OCamlSym =
         (pat, symbolizeExpr (_symOverwrite env patEnv) expr)
       else never else never in
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
+  | OTmTuple { values = values } ->
+    OTmTuple { values = map (symbolizeExpr env) values }
+
+  sem symbolizePat (env : Env) (patEnv : Env) =
+  | OPTuple { pats = pats } ->
+    match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
+      (patEnv, OPTuple { pats = pats })
+    else never
 end
