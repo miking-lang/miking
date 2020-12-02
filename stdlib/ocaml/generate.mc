@@ -47,6 +47,30 @@ let _symbOps = [
 
 let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
 
+-- Input is a map from name to be introduced to name containing the value to be bound to that location
+-- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
+-- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
+-- (where ' splices things into expressions) binds the appropriate names to the appropriate values
+-- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
+let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
+  let cmp = lam n1. lam n2. subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
+  match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
+    (OPTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
+  else never
+
+-- Construct a match expression that matches against an option
+let _someName = nameSym "Option.Some"
+let _noneName = nameSym "Option.None"
+let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneExpr.
+  OTmMatch
+  { target = target
+  , arms =
+    [ (OPCon {ident = _someName, args = [somePat]}, someExpr)
+    , (OPCon {ident = _noneName, args = []}, noneExpr)]}
+let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
+let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
+let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
+
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
   -- Sequence intrinsics
@@ -71,7 +95,58 @@ lang OCamlGenerate = MExprAst + OCamlAst
           (_seqOp "empty")
           tms
   | TmConst {val = val} -> generateConst val
+  | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
+    let tname = nameSym "target" in
+    match generatePat tname pat with (nameMap, wrap) then
+      match _mkFinalPatExpr nameMap with (pat, expr) then
+        _optMatch
+          (bind_ (nlet_ tname tyunknown_ (generate target)) (wrap (_some expr)))
+          pat
+          (generate thn)
+          (generate els)
+      else never
+    else never
   | t -> smap_Expr_Expr generate t
+
+  sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
+  | PNamed {ident = PWildcard _} -> (assocEmpty, identity)
+  | PNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
+  | PBool {val = val} ->
+    let wrap = lam cont.
+      if_ (nvar_ targetName)
+        (if val then cont else _none)
+        (if val then _none else cont)
+    in (assocEmpty, wrap)
+  | PSeqTot {pats = pats} ->
+    let genOne = lam i. lam pat.
+      let n = nameSym "seqElem" in
+      match generatePat n pat with (names, innerWrap) then
+        let wrap = lam cont.
+          bind_
+            (nlet_ n tyunknown_ (appf2_ (_seqOp "get") (nvar_ targetName) (int_ i)))
+            (innerWrap cont)
+        in (names, wrap)
+      else let _ = dprint (generatePat n pat) in never in
+    match unzip (mapi genOne pats) with (allNames, allWraps) then
+      let wrap = lam cont.
+        _if (eqi_ (app_ (_seqOp "length") (nvar_ targetName)) (int_ (length pats)))
+          (foldr (lam f. lam v. f v) cont allWraps)
+          _none in
+      ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
+      , wrap
+      )
+    else never
+  | POr {lpat = lpat, rpat = rpat} -> never
+    -- TODO(vipa, 2020-12-01): Build something that generates this:
+    -- match
+    --   match mkFinal (genPat lpat) with
+    --   | Some x -> Some x
+    --   | None -> mkFinal (genPat rpat)
+    -- with
+    -- | Some names -> cont
+    -- | None -> None
+  | PInt {val = val} ->
+    (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
@@ -127,6 +202,35 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     else error "Unsupported constant"
   else error "Unsupported value"
 in
+
+-- Match
+let matchSeq = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest matchSeq with generate matchSeq using sameSemantics in
+
+let noMatchSeq1 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeq1 with generate noMatchSeq1 using sameSemantics in
+
+let noMatchSeqLen = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen with generate noMatchSeqLen using sameSemantics in
+
+let noMatchSeqLen2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen2 with generate noMatchSeqLen2 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
