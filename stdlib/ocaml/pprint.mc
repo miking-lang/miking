@@ -210,10 +210,6 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | OPCon {args = []} -> true
   | OPCon _ -> false
 
-  sem _pprintBinding (indent : Int) (env: PprintEnv) =
-  | {ident = id, body = b} ->
-    join [nameGetStr id, " = ", pprintCode indent b]
-
   sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
   | CAddi _ -> "(+)"
@@ -243,7 +239,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
-      match printParen env indent arg with (env, arg) then
+      match printParen indent env arg with (env, arg) then
         (env, join [ident, " ", arg])
       else never
     else never
@@ -283,7 +279,6 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
-  | OTmConApp {ident = ident, args = args}
   | OTmTuple {values = values} ->
     match mapAccumL (pprintCode indent) env values
     with (env, values) then
@@ -350,7 +345,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | OPCon {ident = ident, args = []} -> pprintConName env ident
   | OPCon {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
-      match printPatParen env indent arg with (env, arg) then
+      match printPatParen indent env arg with (env, arg) then
         (env, join [ident, " ", arg])
       else never
     else never
