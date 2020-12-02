@@ -145,7 +145,7 @@ let _record2tuple = lam tm.
 -----------
 
 lang IdentifierPrettyPrint
-  sem pprintConName (env : PprintEnv) =    
+  sem pprintConName (env : PprintEnv) =
   sem pprintVarName (env : PprintEnv) =
   sem pprintLabelString =                  -- Label string parser translation for records
 end
@@ -172,8 +172,12 @@ end
 lang PrettyPrint = IdentifierPrettyPrint
   sem isAtomic =
   -- Intentionally left blank
+  sem patIsAtomic =
+  -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  -- Intentionally left blank
+  sem getPatStringCode (indent : Int) (env: PprintEnv) =
   -- Intentionally left blank
 
   sem expr2str =
@@ -194,6 +198,15 @@ lang PrettyPrint = IdentifierPrettyPrint
   | exprs ->
     match mapAccumL (printParen indent) env exprs with (env,args) then
       (env, strJoin (pprintNewline indent) args)
+    else never
+
+  -- Helper function for printing parentheses (around patterns)
+  sem printPatParen (indent : Int) (env : PprintEnv) =
+  | pat ->
+    let i = if patIsAtomic pat then indent else addi 1 indent in
+    match getPatStringCode i env pat with (env, str) then
+      if patIsAtomic pat then (env, str)
+      else (env, join ["(", str, ")"])
     else never
 
 end
@@ -684,42 +697,37 @@ lang BoolPatPrettyPrint = BoolPat
   | PBool b -> (env, if b.val then "true" else "false")
 end
 
-lang AndPatPrettyPrint = AndPat
+lang AndPatPrettyPrint = PrettyPrint + AndPat
   sem patIsAtomic =
   | PAnd _ -> false
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PAnd {lpat = l, rpat = r} ->
-    match getPatStringCode indent env l with (env, l2) then
-    match getPatStringCode indent env r with (env, r2) then
-    let l2 = if patIsAtomic l then l2 else join ["(", l2, ")"] in
-    let r2 = if patIsAtomic r then r2 else join ["(", r2, ")"] in
+    match printPatParen indent env l with (env, l2) then
+    match printPatParen indent env r with (env, r2) then
     (env, join [l2, " & ", r2])
     else never else never
 end
 
-lang OrPatPrettyPrint = OrPat
+lang OrPatPrettyPrint = PrettyPrint + OrPat
   sem patIsAtomic =
   | POr _ -> false
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | POr {lpat = l, rpat = r} ->
-    match getPatStringCode indent env l with (env, l2) then
-    match getPatStringCode indent env r with (env, r2) then
-    let l2 = if patIsAtomic l then l2 else join ["(", l2, ")"] in
-    let r2 = if patIsAtomic r then r2 else join ["(", r2, ")"] in
+    match printPatParen indent env l with (env, l2) then
+    match printPatParen indent env r with (env, r2) then
     (env, join [l2, " | ", r2])
     else never else never
 end
 
-lang NotPatPrettyPrint = NotPat
+lang NotPatPrettyPrint = PrettyPrint + NotPat
   sem patIsAtomic =
   | PNot _ -> false  -- OPT(vipa, 2020-09-23): this could possibly be true, just because it binds stronger than everything else
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PNot {subpat = p} ->
-    match getPatStringCode indent env p with (env, p2) then
-    let p2 = if patIsAtomic p then p2 else join ["(", p2, ")"] in
+    match printPatParen indent env p with (env, p2) then
     (env, join ["!", p2])
     else never
 end
