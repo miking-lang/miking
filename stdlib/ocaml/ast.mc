@@ -19,10 +19,18 @@ lang OCamlTuple
   | OPTuple { pats : [Pat] }
 end
 
+lang OCamlData
+  syn Expr =
+  | OTmConApp { ident : Name, args : [Expr] }
+
+  syn Pat =
+  | OPCon { ident : Name, args : [Pat] }
+end
+
 lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst
                 + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
                 + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
-                + BoolPat + OCamlTuple
+                + BoolPat + OCamlTuple + OCamlData
 end
 
 mexpr
