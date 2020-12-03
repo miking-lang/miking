@@ -538,9 +538,9 @@ lang MExprAst =
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
-  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
-  FileOpAst + IOAst + RandomNumberGeneratorAst + ErrorAst + ExitAst
+  FileOpAst + IOAst + RandomNumberGeneratorAst + ErrorAst + ExitAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
