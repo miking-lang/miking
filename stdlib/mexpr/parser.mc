@@ -234,7 +234,7 @@ end
 -- Parsing of an unsigned float
 lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst
   sem nextNum (p: Pos) (xs: String) =
-  | ((n, Some '.') | (n, Some 'e') | (n, Some 'E')) & (n, Some c) ->
+  | (n, (Some ('.' | 'e' | 'E'))) & (n, Some c) ->
     let exponentHelper = lam pos. lam pre. lam expChar. lam s. lam isFloat.
       let exp = parseFloatExponent (advanceCol pos 1) s in
       match exp.val with "" then
