@@ -117,6 +117,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
+  | PInt {val = val} ->
+    (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
   | PSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "seqElem" in
@@ -136,17 +138,45 @@ lang OCamlGenerate = MExprAst + OCamlAst
       , wrap
       )
     else never
-  | POr {lpat = lpat, rpat = rpat} -> never
-    -- TODO(vipa, 2020-12-01): Build something that generates this:
-    -- match
-    --   match mkFinal (genPat lpat) with
-    --   | Some x -> Some x
-    --   | None -> mkFinal (genPat rpat)
-    -- with
-    -- | Some names -> cont
-    -- | None -> None
-  | PInt {val = val} ->
-    (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
+  | POr {lpat = lpat, rpat = rpat} ->
+    match generatePat targetName lpat with (lnames, lwrap) then
+      match generatePat targetName rpat with (rnames, rwrap) then
+        match _mkFinalPatExpr lnames with (lpat, lexpr) then
+          match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
+            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam _. k) lnames in
+            let xname = nameSym "x" in
+            let wrap = lam cont.
+              _optMatch
+                (_optMatch
+                   (lwrap (_some lexpr))
+                   (npvar_ xname)
+                   (_some (nvar_ xname))
+                   (rwrap (_some rexpr)))
+                lpat
+                cont
+                _none
+            in (names, wrap)
+          else never
+        else never
+      else never
+    else never
+  | PAnd {lpat = lpat, rpat = rpat} ->
+    match generatePat targetName lpat with (lnames, lwrap) then
+      match generatePat targetName rpat with (rnames, rwrap) then
+        let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
+        let wrap = lam cont. lwrap (rwrap cont) in
+        (names, wrap)
+      else never
+    else never
+  | PNot {subpat = pat} ->
+    match generatePat targetName pat with (_, innerWrap) then
+      let wrap = lam cont.
+        _optMatch (innerWrap (_some (OTmTuple {values = []})))
+          pvarw_
+          _none
+          cont in
+      (assocEmpty, wrap)
+    else never
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
@@ -231,6 +261,97 @@ let noMatchSeqLen2 = symbolize
     (addi_ (var_ "a") (var_ "b"))
     (int_ 42)) in
 utest noMatchSeqLen2 with generate noMatchSeqLen2 using sameSemantics in
+
+let matchOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr1 with generate matchOr1 using sameSemantics in
+
+let matchOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr2 with generate matchOr2 using sameSemantics in
+
+let matchOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr3 with generate matchOr3 using sameSemantics in
+
+let matchNestedOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr1 with generate matchNestedOr1 using sameSemantics in
+
+let matchNestedOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr2 with generate matchNestedOr2 using sameSemantics in
+
+let matchNestedOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr3 with generate matchNestedOr3 using sameSemantics in
+
+let matchNestedOr4 = symbolize
+  (match_ (seq_ [int_ 4, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr4 with generate matchNestedOr4 using sameSemantics in
+
+let matchNot1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot1 with generate matchNot1 using sameSemantics in
+
+let matchNot2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot2 with generate matchNot2 using sameSemantics in
+
+let matchAnd1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd1 with generate matchAnd1 using sameSemantics in
+
+let matchAnd2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd2 with generate matchAnd2 using sameSemantics in
+
+let matchAnd3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd3 with generate matchAnd3 using sameSemantics in
+
+let matchAnd4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd4 with generate matchAnd4 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in

@@ -112,6 +112,11 @@ let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
   lam _. lam f. lam m.
     map (lam t. (t.0, f t.1)) m
 
+-- 'assocMapWithKey f m' maps over the values of 'm' using function 'f', where 'f' additionally has access to the key of the value being operated upon.
+let assocMapWithKey : AssocTraits k -> (k -> v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
+  lam _. lam f. lam m.
+    map (lam t. (t.0, f t.0 t.1)) m
+
 -- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
 -- 'acc'.
 -- IMPORTANT: The folding order is unspecified.
@@ -168,6 +173,7 @@ let remove = assocRemove traits in
 let keys = assocKeys traits in
 let values = assocValues traits in
 let map = assocMap traits in
+let mapWithKey = assocMapWithKey traits in
 let fold = assocFold traits in
 let foldOption = assocFoldlM traits in
 let mapAccum = assocMapAccum traits in
@@ -206,6 +212,11 @@ let m = seq2assoc seq in
 
 utest sort (lam l. lam r. subi l.0 r.0) (assoc2seq m)
 with [(1, '1'), (2, '2'), (3, '3')] in
+
+let withKeyMap = mapWithKey (lam k. lam v. (k, v)) m in
+utest lookup 1 withKeyMap with (1, '1') in
+utest lookup 2 withKeyMap with (2, '2') in
+utest lookup 3 withKeyMap with (3, '3') in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 
