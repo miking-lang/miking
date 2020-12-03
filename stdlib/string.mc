@@ -3,6 +3,14 @@ include "option.mc"
 include "seq.mc"
 include "math.mc"
 
+let escapeString = lam s. join (map escapeChar s)
+
+utest escapeString "e" with "e"
+utest escapeString "0" with "0"
+utest escapeString "\n" with "\\n"
+utest escapeString "\r" with "\\r"
+utest escapeString "\t" with "\\t"
+
 recursive
   let eqString = lam s1. lam s2.
       if neqi (length s1) (length s2)

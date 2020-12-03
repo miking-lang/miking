@@ -87,10 +87,15 @@ let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
           else never
         else never
 
--- Adds the given name to the environment (if it does not already exist)
-let pprintAddStr : PprintEnv -> Name -> PprintEnv =
+-- Adds the given name to the environment, if its exact string is not already
+-- mapped to. If the exact string is already mapped to, return None (). This
+-- function is useful if you have names which must be printed with their exact
+-- strings (e.g., library functions or similar).
+let pprintAddStr : PprintEnv -> Name -> Option PprintEnv =
   lam env. lam name.
-    match pprintEnvGetStr env name with (env,_) then env else never
+    let baseStr = nameGetStr name in
+    if pprintEnvFree baseStr env then Some (pprintEnvAdd name baseStr 1 env)
+    else None ()
 
 ---------------------------------
 -- IDENTIFIER PARSER FUNCTIONS --
@@ -447,14 +452,8 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
         else None ()
       else None ()
     in
-    let is_char =
-        lam e. match extract_char e with Some c then true else false
-    in
-    if all is_char t.tms then
-      (env,concat "\""
-        (concat
-           (map (lam e. match extract_char e with Some c then c else '?') t.tms)  -- TODO(vipa, 2020-09-23): escape characters
-           "\""))
+    match optionMapM extract_char t.tms with Some str then
+      (env, join ["\"", escapeString str, "\""])
     else
     match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
                     env t.tms
@@ -655,7 +654,7 @@ lang CharPatPrettyPrint = CharPat
   | PChar _ -> true
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
-  | PChar t -> (env, ['\'', t.val, '\''])  -- TODO(vipa, 2020-09-23): should escape t.val probably?
+  | PChar t -> (env, join ["\'", escapeChar t.val, "\'"])
 end
 
 lang BoolPatPrettyPrint = BoolPat
@@ -709,7 +708,6 @@ end
 -----------
 -- TYPES --
 -----------
--- TODO(dlunde,2020-09-29) Update (also not up to date in boot?)
 
 lang TypePrettyPrint =
   FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
@@ -735,6 +733,7 @@ lang TypePrettyPrint =
       join ["{", strJoin ", " (map conventry t.fields), "}"]
     | TyCon t -> t.ident  -- TODO(vipa, 2020-09-23): format properly with #con
     | TyInt _ -> "Int"
+    | TyFloat _ -> "Float"
     | TyBool _ -> "Bool"
     | TyApp t ->
       join ["(", getTypeStringCode indent t.lhs, ") (",
@@ -779,6 +778,17 @@ end
 
 mexpr
 use MExprPrettyPrint in
+
+let pchar = match_ (var_ "x") (pchar_ '\n') (true_) (false_) in
+utest expr2str pchar with
+"match
+  x
+with
+  '\\n'
+then
+  true
+else
+  false" in
 
 let cons_ = appf2_ (var_ "cons") in
 let concat_ = appf2_ (var_ "concat") in
@@ -857,7 +867,7 @@ in
 let func_recget =
     ulet_ "recget" (
         record_add "i" (int_ 5) (
-        record_add "s" (str_ "hello!")
+        record_add "s" (str_ "hel\nlo!")
         record_empty))
 in
 
@@ -988,4 +998,5 @@ in
 -- let _ = print "\n\n" in
 
 utest length (expr2str sample_ast) with 0 using geqi in
+
 ()

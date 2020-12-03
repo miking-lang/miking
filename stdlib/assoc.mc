@@ -27,6 +27,13 @@ let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
                     (lam i. set m i (k,v))
                     (index (lam t. traits.eq k t.0) m)
 
+-- 'seq2assoc traits ls' constructs a new association map from a sequence
+-- of tuples 'ls'. Bindings to the right overwrites previous equal bindings to
+-- the left.
+let seq2assoc : AssocTraits k -> [(k,v)] -> AssocMap k v =
+  lam traits. lam ls.
+    foldl (lam acc. lam t. assocInsert traits t.0 t.1 acc) assocEmpty ls
+
 -- 'assocRemove traits k m' returns a new map, where 'k' is not a key. If 'k' is
 -- not a key in 'm', the map remains unchanged after the operation.
 let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
@@ -144,6 +151,7 @@ let lookupPred = assocLookupPred in
 let any = assocAny in
 let all = assocAll in
 let insert = assocInsert traits in
+let seq2assoc = seq2assoc traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
 let keys = assocKeys traits in
@@ -181,6 +189,8 @@ utest
   match values m with "123" | "132" | "213" | "231" | "312" | "321"
   then true else false
 with true in
+
+let m = seq2assoc [(1, '1'), (2, '2'), (3, '3')] in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 

@@ -33,14 +33,14 @@ lang HoleAst
   | TmHole {ty : Type,
             startGuess : Expr,
             depth : Int}
-  sem symbolizeExpr (env : Env) =
+  sem symbolizeExpr (env : SymEnv) =
 end
 
 lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
   sem isAtomic =
   | TmHole _ -> false
 
-  sem pprintCode (indent : Int) (env : Env) =
+  sem pprintCode (indent : Int) (env : SymEnv) =
   | TmHole h ->
     match pprintCode indent env h.startGuess with (env1, startStr) then
       match pprintCode indent env1 h.depth with (env2, depthStr) then
@@ -59,7 +59,7 @@ lang LHoleAst = HoleAst
              startGuess : Expr,
              depth : Int}
 
-  sem symbolizeExpr (env : Env) =
+  sem symbolizeExpr (env : SymEnv) =
   | LTmHole h -> LTmHole h
 
   sem fromTmHole =
@@ -80,7 +80,7 @@ lang LHoleAstPrettyPrint = LHoleAst + HoleAstPrettyPrint
   sem isAtomic =
   | LTmHole _ -> false
 
-  sem pprintCode (indent : Int) (env : Env) =
+  sem pprintCode (indent : Int) (env : SymEnv) =
   | LTmHole h -> pprintCode indent env (toTmHole (LTmHole h))
 end
 
@@ -112,12 +112,12 @@ lang LAppAst = AppAst
     fromAppAst (TmApp {lhs = labelApps t.lhs, rhs = labelApps t.rhs})
   | tm -> smap_Expr_Expr labelApps tm
 
-  sem symbolizeExpr (env : Env) =
+  sem symbolizeExpr (env : SymEnv) =
   | TmLApp t -> fromAppAst (symbolizeExpr env (toAppAst (TmLApp t)))
 end
 
 lang LAppEval = LAppAst + AppEval
-  sem eval (ctx : {env : Env}) =
+  sem eval (ctx : {env : SymEnv}) =
   | TmLApp t -> eval ctx (toAppAst (TmLApp t))
 end
 
@@ -125,7 +125,7 @@ lang LAppPrettyPrint = LAppAst + AppPrettyPrint
   sem isAtomic =
   | TmLApp _ -> false
 
-  sem pprintCode (indent : Int) (env : Env) =
+  sem pprintCode (indent : Int) (env : SymEnv) =
   | TmLApp t ->
     let s = pprintCode indent env (toAppAst (TmLApp t)) in
     s
@@ -605,7 +605,8 @@ let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
 
 -- Shorthand for symbolize
-let symbolize = symbolizeExpr assocEmpty in
+-- NOTE(dlunde,2020-11-16): Available by default now
+-- let symbolize = symbolizeExpr symEnvEmpty in
 
 -- Prettyprinting
 let pprint = lam ast.
