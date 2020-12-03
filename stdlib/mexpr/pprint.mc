@@ -310,18 +310,10 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
     match pprintVarName env t.ident with (env,str) then
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
-<<<<<<< HEAD
-          let ty =
-            match t.ty with TyUnknown {} then ""
-            else concat " : " (getTypeStringCode indent t.ty)
-          in
-          (env, join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
-                      body, pprintNewline indent,
-=======
           match getTypeStringCode indent env t.ty with (env, ty) then
             let ty = if eqString ty "Unknown" then "" else concat ": " ty in
             (env,
-             join ["let ", ident, ty, " =", pprintNewline (pprintIncr indent),
+             join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
                    body, pprintNewline indent,
                    "in", pprintNewline indent,
                    inexpr])
@@ -341,12 +333,11 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmType t ->
     match pprintEnvGetStr env t.ident with (env,str) then
-      let ident = str in -- TODO(dlunde,2020-11-24): format str properly with #type
+      let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.ty with (env, ty) then
           (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
                       ty, pprintNewline indent,
->>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
                       "in", pprintNewline indent,
                       inexpr])
         else never
@@ -369,18 +360,10 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let f = lam env. lam bind.
       match pprintVarName env bind.ident with (env,str) then
         match pprintCode iii env bind.body with (env,body) then
-<<<<<<< HEAD
-          let ty =
-            match bind.ty with TyUnknown {} then ""
-            else concat " : " (getTypeStringCode indent bind.ty)
-          in
-          (env, join ["let ", str, ty, " =", pprintNewline iii, body])
-=======
           match getTypeStringCode indent env bind.ty with (env, ty) then
             let ty = if eqString ty "Unknown" then "" else concat ": " ty in
-            (env, join ["let ", ident, ty, " =", pprintNewline iii, body])
+            (env, join ["let ", str, ty, " =", pprintNewline iii, body])
           else never
->>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
         else never
       else never
     in
@@ -416,23 +399,12 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
-<<<<<<< HEAD
     match pprintConName env t.ident with (env,str) then
-      let ty =
-        match t.ty with TyUnknown {} then ""
-        else concat " : " (getTypeStringCode indent t.ty)
-      in
-      match pprintCode indent env t.inexpr with (env,inexpr) then
-        (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
-=======
-    match pprintEnvGetStr env t.ident with (env,str) then
-      let str = pprintConString str in
       match getTypeStringCode indent env t.ty with (env, ty) then
         let ty = if eqString ty "Unknown" then "" else concat ": " ty in
         match pprintCode indent env t.inexpr with (env,inexpr) then
           (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
         else never
->>>>>>> Finish type revision for interpreter (including symbolization and pretty printing)
       else never
     else never
 
