@@ -823,11 +823,35 @@ let findsym fi id env =
       | IdCon x ->
           (x, "constructor")
       | IdType x ->
-          (x, "identifier")
+          (x, "type variable")
       | IdLabel x ->
           (x, "label")
     in
     raise_error fi ("Unknown " ^ kindstr ^ " '" ^ string_of_sid x ^ "'")
+
+let rec symbolize_type env ty =
+  match ty with
+  | TyUnknown _ | TyBool _ | TyInt _ | TyFloat _ | TyChar _ ->
+      ty
+  | TyArrow (fi, ty1, ty2) ->
+      TyArrow (fi, symbolize_type env ty1, symbolize_type env ty2)
+  | TySeq (fi, ty) ->
+      TySeq (fi, symbolize_type env ty)
+  | TyRecord (fi, tyr) ->
+      let tyr = Record.map (fun ty -> symbolize_type env ty) tyr in
+      TyRecord (fi, tyr)
+  | TyVariant (_, tys) when tys = [] ->
+      ty
+  | TyVariant _ ->
+      failwith "Symbolizing non-empty variant types not yet supported"
+  | TyVar (fi, x, s) ->
+      (* NOTE(dlunde,2020-11-24): Currently, unbound type variables are heavily
+         used for documentation purposes. Hence, we simply ignore these for
+         now. *)
+      let s = try findsym fi (IdType (sid_of_ustring x)) env with _ -> s in
+      TyVar (fi, x, s)
+  | TyApp (fi, ty1, ty2) ->
+      TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
    constructs TmConapp terms from the combination of variables and function applications.  *)
@@ -917,7 +941,12 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       TmVar (fi, x, findsym fi (IdVar (sid_of_ustring x)) env)
   | TmLam (fi, x, _, ty, t1) ->
       let s = Symb.gensym () in
-      TmLam (fi, x, s, ty, symbolize ((IdVar (sid_of_ustring x), s) :: env) t1)
+      TmLam
+        ( fi
+        , x
+        , s
+        , symbolize_type env ty
+        , symbolize ((IdVar (sid_of_ustring x), s) :: env) t1 )
   | TmClos (_, _, _, _, _) ->
       failwith "Closures should not be available."
   | TmLet (fi, x, _, ty, t1, t2) ->
@@ -926,9 +955,19 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         ( fi
         , x
         , s
-        , ty
+        , symbolize_type env ty
         , symbolize env t1
         , symbolize ((IdVar (sid_of_ustring x), s) :: env) t2 )
+  | TmType (fi, x, _, ty, t1) ->
+      (* TODO(dlunde,2020-11-23): Should type lets be recursive? Right now,
+         they are not.*)
+      let s = Symb.gensym () in
+      TmType
+        ( fi
+        , x
+        , s
+        , symbolize_type env ty
+        , symbolize ((IdType (sid_of_ustring x), s) :: env) t1 )
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left
@@ -944,7 +983,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
               ( fi
               , x
               , findsym fi (IdVar (sid_of_ustring x)) env2
-              , ty
+              , symbolize_type env ty
               , symbolize env2 t ))
             lst
         , symbolize env2 tm )
@@ -963,7 +1002,11 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   | TmCondef (fi, x, _, ty, t) ->
       let s = Symb.gensym () in
       TmCondef
-        (fi, x, s, ty, symbolize ((IdCon (sid_of_ustring x), s) :: env) t)
+        ( fi
+        , x
+        , s
+        , symbolize_type env ty
+        , symbolize ((IdCon (sid_of_ustring x), s) :: env) t )
   | TmConapp (fi, x, _, t) ->
       TmConapp
         (fi, x, findsym fi (IdCon (sid_of_ustring x)) env, symbolize env t)
@@ -985,14 +1028,21 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
- along with the symbolized term *)
+ along with the symbolized term. *)
 let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
   | TmLet (fi, x, _, ty, t1, t2) ->
       let s = Symb.gensym () in
       let new_env, new_t2 =
         symbolize_toplevel ((IdVar (sid_of_ustring x), s) :: env) t2
       in
-      (new_env, TmLet (fi, x, s, ty, symbolize env t1, new_t2))
+      ( new_env
+      , TmLet (fi, x, s, symbolize_type env ty, symbolize env t1, new_t2) )
+  | TmType (fi, x, _, ty, t1) ->
+      let s = Symb.gensym () in
+      let new_env, new_t1 =
+        symbolize_toplevel ((IdType (sid_of_ustring x), s) :: env) t1
+      in
+      (new_env, TmType (fi, x, s, symbolize_type env ty, new_t1))
   | TmRecLets (fi, lst, tm) ->
       let env2 =
         List.fold_left
@@ -1010,7 +1060,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
                 ( fi
                 , x
                 , findsym fi (IdVar (sid_of_ustring x)) env2
-                , ty
+                , symbolize_type env ty
                 , symbolize env2 t ))
               lst
           , new_tm ) )
@@ -1019,8 +1069,21 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
       let new_env, new_t2 =
         symbolize_toplevel ((IdCon (sid_of_ustring x), s) :: env) t
       in
-      (new_env, TmCondef (fi, x, s, ty, new_t2))
-  | t ->
+      (new_env, TmCondef (fi, x, s, symbolize_type env ty, new_t2))
+  | ( TmVar _
+    | TmLam _
+    | TmApp _
+    | TmConst _
+    | TmSeq _
+    | TmRecord _
+    | TmRecordUpdate _
+    | TmConapp _
+    | TmMatch _
+    | TmUse _
+    | TmUtest _
+    | TmNever _
+    | TmClos _
+    | TmFix _ ) as t ->
       (env, symbolize env t)
 
 let rec try_match env value pat =
@@ -1125,6 +1188,9 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
       eval ((s, eval env t1) :: env) t2
+  (* Type (ignore) *)
+  | TmType (_, _, _, _, t1) ->
+      eval env t1
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
       let rec env' =

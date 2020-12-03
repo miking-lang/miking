@@ -21,10 +21,12 @@ include "mexpr/pprint.mc"
 
 type SymEnv = {
   varEnv: AssocMap String Name,
-  conEnv: AssocMap String Name
+  conEnv: AssocMap String Name,
+  tyEnv: AssocMap String Name
 }
 
-let symEnvEmpty = {varEnv = assocEmpty, conEnv = assocEmpty}
+let symEnvEmpty =
+  {varEnv = assocEmpty, conEnv = assocEmpty, tyEnv = assocEmpty}
 
 -----------
 -- TERMS --
@@ -59,9 +61,13 @@ lang AppSym = Sym + AppAst
 end
 
 lang FunSym = Sym + FunAst + VarSym + AppSym
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmLam {ident = ident, ty = ty, body = body} ->
     match env with {varEnv = varEnv} then
+      let ty = symbolizeType env ty in
       if nameHasSym ident then
         TmLam {ident = ident, ty = ty, body = symbolizeExpr env body}
       else
@@ -84,20 +90,43 @@ lang RecordSym = Sym + RecordAst
 end
 
 lang LetSym = Sym + LetAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
     match env with {varEnv = varEnv} then
+      let ty = symbolizeType env ty in
+      let body = symbolizeExpr env body in
       if nameHasSym ident then
-        TmLet {ident = ident, ty = ty, body = symbolizeExpr env body,
+        TmLet {ident = ident, ty = ty, body = body,
                inexpr = symbolizeExpr env inexpr}
       else
-        let body = symbolizeExpr env body in
         let ident = nameSetNewSym ident in
         let str = nameGetStr ident in
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLet {ident = ident, ty = ty, body = body,
                inexpr = symbolizeExpr env inexpr}
+    else never
+end
+
+lang TypeSym = Sym + TypeAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
+  sem symbolizeExpr (env : SymEnv) =
+  | TmType {ident = ident, ty = ty, inexpr = inexpr} ->
+    match env with {tyEnv = tyEnv} then
+      let ty = symbolizeType env ty in
+      if nameHasSym ident then
+        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+      else
+        let ident = nameSetNewSym ident in
+        let str = nameGetStr ident in
+        let tyEnv = assocInsert {eq=eqString} str ident tyEnv in
+        let env = {env with tyEnv = tyEnv} in
+        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
     else never
 end
 
@@ -137,9 +166,13 @@ lang ConstSym = Sym + ConstAst
 end
 
 lang DataSym = Sym + DataAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
   sem symbolizeExpr (env : SymEnv) =
   | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
     match env with {conEnv = conEnv} then
+      let ty = symbolizeType env ty in
       if nameHasSym ident then
         TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
       else
@@ -203,6 +236,77 @@ end
 lang NeverSym = Sym + NeverAst
   sem symbolizeExpr (env : SymEnv) =
   | TmNever {} -> TmNever {}
+end
+
+-----------
+-- TYPES --
+-----------
+
+lang UnknownTypeSym = UnknownTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyUnknown _ & ty -> ty
+end
+
+lang BoolTypeSym = BoolTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyBool {} & ty -> ty
+end
+
+lang IntTypeSym = IntTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyInt {} & ty -> ty
+end
+
+lang FloatTypeSym = FloatTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyFloat {} & ty -> ty
+end
+
+lang CharTypeSym = CharTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyChar {} & ty -> ty
+end
+
+lang FunTypeSym = FunTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyArrow {from = from, to = to} ->
+    TyArrow {from = symbolizeType env from, to = symbolizeType env to}
+end
+
+lang SeqTypeSym = SeqTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TySeq {ty = ty} -> TySeq {ty = symbolizeType env ty}
+end
+
+lang RecordTypeSym = RecordTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyRecord {fields = fields} ->
+    TyRecord {fields = assocMap {eq=eqString} (symbolizeType env) fields}
+end
+
+lang VariantTypeSym = VariantTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyVariant {constrs = []} & ty -> ty
+  | TyVariant t -> error "Symbolizing non-empty variant types not yet supported"
+end
+
+lang VarTypeSym = VarTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyVar {ident = ident} & ty ->
+    match env with {tyEnv = tyEnv} then
+      if nameHasSym ident then ty
+      else
+        let str = nameGetStr ident in
+        match assocLookup {eq=eqString} str tyEnv with Some ident then
+          TyVar {ident = ident}
+        else error (concat "Unknown type variable in symbolizeExpr: " str)
+    else never
+end
+
+lang AppTypeSym = AppTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyApp {lhs = lhs, rhs = rhs} ->
+    TyApp {lhs = symbolizeType env lhs, rhs = symbolizeType env rhs}
 end
 
 --------------
@@ -330,11 +434,16 @@ end
 lang MExprSym =
 
   -- Terms
-  VarSym + AppSym + FunSym + RecordSym + LetSym + RecLetsSym + ConstSym +
-  DataSym + MatchSym + UtestSym + SeqSym + NeverSym
+  VarSym + AppSym + FunSym + RecordSym + LetSym + TypeSym + RecLetsSym +
+  ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym +
+
+  -- Types
+  UnknownTypeSym + BoolTypeSym + IntTypeSym + FloatTypeSym + CharTypeSym +
+  FunTypeSym + SeqTypeSym + RecordTypeSym + VariantTypeSym + VarTypeSym +
+  AppTypeSym +
 
   -- Patterns
-  + NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
+  NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
   IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
 
 -----------
@@ -355,6 +464,12 @@ let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
 let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
 
 let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
+
+let lettypein = bindall_ [
+  type_ "Type" tystr_,
+  type_ "Type" (tyvar_ "Type"),
+  lam_ "Type" (tyvar_ "Type") (var_ "Type")
+] in
 
 let rlets =
   bind_ (ureclets_ [("x", (var_ "y")), ("y", (var_ "x"))])
@@ -401,10 +516,10 @@ let matchoredge = bind_ (ulet_ "a" (int_ 2)) (match_ (int_ 1) (por_ (pseqedge_ [
 
 let debug = false in
 
-let debugPrint = lam t.
+let debugPrint = lam i. lam t.
   let r = symbolize t in
   if debug then
-    let _ = printLn "--- BEFORE SYMBOLIZE ---" in
+    let _ = printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]) in
     let _ = printLn (expr2str t) in
     let _ = print "\n" in
     let _ = printLn "--- AFTER SYMBOLIZE ---" in
@@ -415,10 +530,11 @@ let debugPrint = lam t.
 in
 
 let _ =
-  map debugPrint [
+  mapi debugPrint [
     base,
     rec,
     letin,
+    lettypein,
     rlets,
     const,
     data,

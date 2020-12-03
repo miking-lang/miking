@@ -34,6 +34,12 @@ let seq2assoc : AssocTraits k -> [(k,v)] -> AssocMap k v =
   lam traits. lam ls.
     foldl (lam acc. lam t. assocInsert traits t.0 t.1 acc) assocEmpty ls
 
+-- 'assoc2seq traits m' constructs a new sequence of tuples representing the association map 'm'.
+-- The order of the elements in the sequence is unspecified.
+let assoc2seq : AssocTraits k -> AssocMap k v -> [(k,v)] =
+  lam traits. lam m.
+    m
+
 -- 'assocRemove traits k m' returns a new map, where 'k' is not a key. If 'k' is
 -- not a key in 'm', the map remains unchanged after the operation.
 let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
@@ -152,6 +158,7 @@ let any = assocAny in
 let all = assocAll in
 let insert = assocInsert traits in
 let seq2assoc = seq2assoc traits in
+let assoc2seq = assoc2seq traits in
 let mem = assocMem traits in
 let remove = assocRemove traits in
 let keys = assocKeys traits in
@@ -190,7 +197,11 @@ utest
   then true else false
 with true in
 
-let m = seq2assoc [(1, '1'), (2, '2'), (3, '3')] in
+let seq = [(1, '1'), (2, '2'), (3, '3')] in
+let m = seq2assoc seq in
+
+utest sort (lam l. lam r. subi l.0 r.0) (assoc2seq m)
+with [(1, '1'), (2, '2'), (3, '3')] in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 

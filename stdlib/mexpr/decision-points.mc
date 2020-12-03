@@ -44,10 +44,12 @@ lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
   | TmHole h ->
     match pprintCode indent env h.startGuess with (env1, startStr) then
       match pprintCode indent env1 h.depth with (env2, depthStr) then
-        (env2,
-          join ["Hole (",
-                strJoin ", " [getTypeStringCode indent h.ty, startStr, depthStr],
-                ")"])
+        match getTypeStringCode indent env2 h.ty with (env3, ty) then
+          (env3,
+            join ["Hole (",
+                  strJoin ", " [ty, startStr, depthStr],
+                  ")"])
+        else never
       else never
     else never
 end

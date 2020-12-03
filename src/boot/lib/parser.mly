@@ -124,11 +124,6 @@ tops:
     { $1 :: $2 }
   |
     { [] }
-  // TODO(?,?): These should matter with a type system
-  | TYPE type_ident type_params tops
-    { $4 }
-  | TYPE type_ident type_params EQ ty tops
-    { $6 }
 
 type_params:
   | type_ident type_params
@@ -141,6 +136,8 @@ top:
     { TopLang($1) }
   | toplet
     { TopLet($1) }
+  | toptype
+    { TopType($1) }
   | topRecLet
     { TopRecLet($1) }
   | topcon
@@ -152,6 +149,16 @@ toplet:
   | LET var_ident ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
       Let (fi, $2.v, $3, $5) }
+
+toptype:
+  | TYPE type_ident type_params
+     // Type parameters are currently ignored
+     { let fi = mkinfo $1.i $2.i in
+       Type (fi, $2.v, TyVariant (fi, [])) }
+  | TYPE type_ident type_params EQ ty
+     // Type parameters are currently ignored
+     { let fi = mkinfo $1.i (ty_info $5) in
+       Type (fi, $2.v, $5) }
 
 topRecLet:
   | REC lets END
@@ -223,7 +230,7 @@ constr_params:
   | ty
     { $1 }
   |
-    { TyUnit }
+    { tyUnit NoInfo }
 
 params:
   | LPAREN var_ident COLON ty RPAREN params
@@ -248,10 +255,14 @@ case:
 mexpr:
   | left
       { $1 }
-  | TYPE type_ident IN mexpr
-      { $4 }
-  | TYPE type_ident EQ ty IN mexpr
-      { $6 }
+  | TYPE type_ident type_params IN mexpr
+      // Type parameters are currently ignored
+      { let fi = mkinfo $1.i (tm_info $5) in
+        TmType(fi, $2.v, Symb.Helpers.nosym, TyVariant (fi, []), $5) }
+  | TYPE type_ident type_params EQ ty IN mexpr
+      // Type parameters are currently ignored
+      { let fi = mkinfo $1.i (tm_info $7) in
+        TmType(fi, $2.v, Symb.Helpers.nosym, $5, $7) }
   | REC lets IN mexpr
       { let fi = mkinfo $1.i $3.i in
         let lst = List.map (fun (fi,x,ty,t) -> (fi,x,Symb.Helpers.nosym,ty,t)) $2 in
@@ -440,43 +451,46 @@ ty_op:
   | COLON ty
       { $2 }
   |
-      { TyUnknown }
+      { TyUnknown NoInfo }
 
 
 ty:
   | ty_left
       { $1 }
   | ty_left ARROW ty
-      { TyArrow($1,$3) }
+      { let fi = mkinfo (ty_info $1) (ty_info $3) in
+        TyArrow(fi,$1,$3) }
 
 ty_left:
   | ty_atom
     { $1 }
   | ty_left ty_atom
-    { TyApp($1,$2) }
+    { let fi = mkinfo (ty_info $1) (ty_info $2) in
+      TyApp(fi,$1,$2) }
 
 ty_atom:
   | LPAREN RPAREN
-      { TyUnit }
+      { tyUnit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
       { $2 }
   | LSQUARE ty RSQUARE
-      { TySeq($2) }
+      { TySeq(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
-      { TyTuple ($2::$4) }
+      { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LBRACKET RBRACKET
-      { TyRecord [] }
+      { tyUnit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
-      { TyRecord($2) }
+      { TyRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
+        (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | type_ident
       {match Ustring.to_utf8 $1.v with
-       | "Unknown" -> TyUnknown
-       | "Bool"    -> TyBool
-       | "Int"     -> TyInt
-       | "Float"   -> TyFloat
-       | "Char"    -> TyChar
-       | "String"  -> TySeq(TyChar)
-       | s         -> TyCon(us s)
+       | "Unknown" -> TyUnknown $1.i
+       | "Bool"    -> TyBool $1.i
+       | "Int"     -> TyInt $1.i
+       | "Float"   -> TyFloat $1.i
+       | "Char"    -> TyChar $1.i
+       | "String"  -> TySeq($1.i,TyChar $1.i)
+       | s         -> TyVar($1.i,us s,Symb.Helpers.nosym)
       }
 
 ty_list:

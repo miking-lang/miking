@@ -90,6 +90,24 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
+lang TypeAst
+  syn Expr =
+  | TmType {ident  : Name,
+            ty     : Type,
+            inexpr : Expr,
+            fi     : Info}
+
+  sem info =
+  | TmType r -> r.fi
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmType t -> TmType {t with inexpr = f t.inexpr}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmType t -> f acc t.inexpr
+end
+
+
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : Name,
@@ -198,7 +216,11 @@ lang NeverAst
   sem info =
   | TmNever r -> r.fi
 
-  -- TODO(dlunde,2020-09-29): smap, sfold
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmNever _ & t -> t
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmNever _ & t -> acc
 end
 
 ---------------
@@ -417,11 +439,6 @@ end
 -- TYPES --
 -----------
 
-lang UnitTypeAst
-  syn Type =
-  | TyUnit {}
-end
-
 lang UnknownTypeAst
   syn Type =
   | TyUnknown {}
@@ -458,20 +475,19 @@ lang SeqTypeAst
   | TySeq {ty : Type}
 end
 
-lang TupleTypeAst
-  syn Type =
-  | TyTuple {tys : [Type]}
-end
-
 lang RecordTypeAst
   syn Type =
-  | TyRecord {fields : [{ident : String,
-                         ty    : Type}]}
+  | TyRecord {fields : AssocMap String Type}
 end
 
-lang DataTypeAst
+lang VariantTypeAst
   syn Type =
-  | TyCon {ident : Name}
+  | TyVariant {constrs : [Name]}
+end
+
+lang VarTypeAst
+  syn Type =
+  | TyVar {ident : Name}
 end
 
 lang AppTypeAst
@@ -479,15 +495,6 @@ lang AppTypeAst
   | TyApp {lhs : Type, rhs : Type}
 end
 
-lang StringTypeAst
-  syn Type =
-  | TyString {}
-end
-
-lang TypeVarAst
-  syn Type =
-  | TyVar {ident : Name}
-end
 
 ------------------------
 -- MEXPR AST FRAGMENT --
@@ -496,18 +503,18 @@ end
 lang MExprAst =
 
   -- Terms
-  VarAst + AppAst + FunAst + RecordAst + LetAst + RecLetsAst + ConstAst +
-  DataAst + MatchAst + UtestAst + SeqAst + NeverAst
+  VarAst + AppAst + FunAst + RecordAst + LetAst + TypeAst + RecLetsAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
-  + IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
-  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst
+  IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
+  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
 
   -- Patterns
-  + NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
-  BoolPat + AndPat + OrPat + NotPat
+  NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
+  BoolPat + AndPat + OrPat + NotPat +
 
   -- Types
-  + FunTypeAst + UnknownTypeAst + UnitTypeAst + CharTypeAst + StringTypeAst +
-  SeqTypeAst + TupleTypeAst + RecordTypeAst + DataTypeAst + IntTypeAst +
-  FloatTypeAst + BoolTypeAst + AppTypeAst + TypeVarAst
+  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
+  AppTypeAst

@@ -126,7 +126,7 @@ with ("_BC123", gensym ()).0
 
 lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
-                        + IdentifierPrettyPrint
+                        + IdentifierPrettyPrint + UnknownTypePrettyPrint
 
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
