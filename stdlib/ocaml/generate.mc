@@ -50,7 +50,8 @@ let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
 let _floatOps = [
   "floorfi",
   "ceilfi",
-  "roundfi"
+  "roundfi",
+  "string2float"
 ]
 
 let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
@@ -95,10 +96,11 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | CGensym {} -> _symbOp "gensym"
   | CEqsym {} -> _symbOp "eqsym"
   | CSym2hash {} -> _symbOp "hash"
-  -- Float intrinsics
+  -- Int-Float Conversion intrinsics
   | CFloorfi {} -> _floatOp "floorfi"
   | CCeilfi {} -> _floatOp "ceilfi"
   | CRoundfi {} -> _floatOp "roundfi"
+  | CString2float {} -> _floatOp "string2float"
   | v -> TmConst { val = v }
 
   sem generate =
@@ -477,30 +479,83 @@ let symbAndGen = lam e. generate (symbolize e) in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
-utest addInt1 with symbAndGen addInt1 using sameSemantics in
+utest addInt1 with generate addInt1 using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest addInt2 with symbAndGen addInt2 using sameSemantics in
+utest addInt2 with generate addInt2 using sameSemantics in
 
 let testMulInt = muli_ (int_ 2) (int_ 3) in
-utest testMulInt with symbAndGen testMulInt using sameSemantics in
+utest testMulInt with generate testMulInt using sameSemantics in
 
 let testModInt = modi_ (int_ 2) (int_ 3) in
-utest testModInt with symbAndGen testModInt using sameSemantics in
+utest testModInt with generate testModInt using sameSemantics in
 
 let testDivInt = divi_ (int_ 2) (int_ 3) in
-utest testDivInt with symbAndGen testDivInt using sameSemantics in
+utest testDivInt with generate testDivInt using sameSemantics in
 
 let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
-utest testNegInt with symbAndGen testNegInt using sameSemantics in
+utest testNegInt with generate testNegInt using sameSemantics in
 
 let compareInt1 = eqi_ (int_ 1) (int_ 2) in
-utest compareInt1 with symbAndGen compareInt1
-using sameSemantics in
+utest compareInt1 with generate compareInt1 using sameSemantics in
 
 let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt2 with symbAndGen compareInt2
-using sameSemantics in
+utest compareInt2 with generate compareInt2 using sameSemantics in
+
+let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt3 with generate compareInt3 using sameSemantics in
+
+let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt4 with generate compareInt4 using sameSemantics in
+
+let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt5 with generate compareInt5 using sameSemantics in
+
+let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt6 with generate compareInt6 using sameSemantics in
+
+let shiftInt1 = slli_ (int_ 5) (int_ 2) in
+utest shiftInt1 with generate shiftInt1 using sameSemantics in
+
+let shiftInt2 = srli_ (int_ 5) (int_ 2) in
+utest shiftInt2 with generate shiftInt2 using sameSemantics in
+
+let shiftInt3 = srai_ (int_ 5) (int_ 2) in
+utest shiftInt3 with generate shiftInt3 using sameSemantics in
+
+-- Floats
+let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
+utest addFloat1 with generate addFloat1 using sameSemantics in
+
+let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest addFloat2 with generate addFloat2 using sameSemantics in
+
+let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
+utest testMulFloat with generate testMulFloat using sameSemantics in
+
+let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
+utest testDivFloat with generate testDivFloat using sameSemantics in
+
+let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
+utest testNegFloat with generate testNegFloat using sameSemantics in
+
+let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
+utest compareFloat1 with generate compareFloat1 using sameSemantics in
+
+let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat2 with generate compareFloat2 using sameSemantics in
+
+let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat3 with generate compareFloat3 using sameSemantics in
+
+let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat4 with generate compareFloat4 using sameSemantics in
+
+let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat5 with generate compareFloat5 using sameSemantics in
+
+let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat6 with generate compareFloat6 using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
@@ -627,5 +682,9 @@ utest testRoundfi with generate testRoundfi using sameSemantics in
 
 let testInt2float = int2float_ (int_ 1) in
 utest testInt2float with generate testInt2float using sameSemantics in
+
+-- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
+-- let testString2float = string2float_ (str_ "1.5") in
+-- utest testString2float with generate testString2float using sameSemantics in
 
 ()

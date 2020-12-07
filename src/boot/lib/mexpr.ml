@@ -552,9 +552,9 @@ let delta eval env fi c v =
       in
       let f =
         s |> Mseq.Helpers.map to_char |> Mseq.Helpers.to_array
-        |> Ustring.from_uchars |> Ustring.to_utf8
+        |> Ustring.from_uchars
       in
-      TmConst (fi, CFloat (Float.of_string f))
+      TmConst (fi, CFloat (Intrinsics.FloatConversion.string2float f))
   | Cstring2float, _ ->
       fail_constapp fi
   | Cfloorfi, TmConst (fi, CFloat v) ->

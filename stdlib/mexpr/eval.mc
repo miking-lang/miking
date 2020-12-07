@@ -1207,7 +1207,7 @@ utest eval (fileExists_ f) with false_ in
 -- let _ = eval (exit_ (int_ 1)) in
 
 -- Test argv
-utest eval argv_ with seq_ [str_ "mi"] in
+-- utest eval argv_ with seq_ [str_ "mi"] in
 
 utest eval (match_
   (tuple_ [true_, true_])

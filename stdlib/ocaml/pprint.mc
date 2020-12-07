@@ -233,8 +233,19 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
   | CEqi _ -> "(=)"
   | CLti _ -> "(<)"
+  | CLeqi _ -> "(<=)"
+  | CGti _ -> "(>)"
+  | CGeqi _ -> "(>=)"
+  | CNeqi _ -> "(!=)"
+  | CSlli _ -> "Int.shift_left"
+  | CSrli _ -> "Int.shift_right_logical"
+  | CSrai _ -> "Int.shift_right"
   | CEqf _ -> "(=)"
   | CLtf _ -> "(<)"
+  | CLeqf _ -> "(<=)"
+  | CGtf _ -> "(>)"
+  | CGeqf _ -> "(>=)"
+  | CNeqf _ -> "(!=)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> show_char c
 

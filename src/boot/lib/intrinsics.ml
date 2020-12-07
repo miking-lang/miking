@@ -110,4 +110,6 @@ module FloatConversion = struct
   let ceilfi f = f |> Float.ceil |> int_of_float
 
   let roundfi f = f |> Float.round |> int_of_float
+
+  let string2float s = s |> Ustring.to_utf8 |> Float.of_string
 end

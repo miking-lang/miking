@@ -83,4 +83,6 @@ module FloatConversion : sig
   val ceilfi : float -> int
 
   val roundfi : float -> int
+
+  val string2float : ustring -> float
 end
