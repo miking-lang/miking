@@ -70,6 +70,7 @@ let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneE
 let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
 let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
+let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPTuple {pats = pats}, body)]}
 
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
@@ -128,7 +129,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
             (nlet_ n tyunknown_ (appf2_ (_seqOp "get") (nvar_ targetName) (int_ i)))
             (innerWrap cont)
         in (names, wrap)
-      else let _ = dprint (generatePat n pat) in never in
+      else never in
     match unzip (mapi genOne pats) with (allNames, allWraps) then
       let wrap = lam cont.
         _if (eqi_ (app_ (_seqOp "length") (nvar_ targetName)) (int_ (length pats)))
@@ -137,6 +138,38 @@ lang OCamlGenerate = MExprAst + OCamlAst
       ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
       , wrap
       )
+    else never
+  | PSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
+    let apply = lam f. lam x. f x in
+    let mergeNames = assocMergePreferRight {eq=nameEqSym} in
+    let minLen = addi (length prefix) (length postfix) in
+    let preName = nameSym "prefix" in
+    let tempName = nameSym "splitTemp" in
+    let midName = nameSym "middle" in
+    let postName = nameSym "postfix" in
+    let genOne = lam targetName. lam i. lam pat.
+      let n = nameSym "seqElem" in
+      match generatePat n pat with (names, innerWrap) then
+        let wrap = lam cont.
+          bind_
+            (nlet_ n tyunknown_ (appf2_ (_seqOp "get") (nvar_ targetName) (int_ i)))
+            (innerWrap cont)
+        in (names, wrap)
+      else never in
+    match unzip (mapi (genOne preName) prefix) with (preNames, preWraps) then
+      match unzip (mapi (genOne postName) postfix) with (postNames, postWraps) then
+        let names = foldl mergeNames assocEmpty (concat preNames postNames) in
+        let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
+        let wrap = lam cont.
+          _if (lti_ (appf1_ (_seqOp "length") (nvar_ targetName)) (int_ minLen))
+            _none
+            (_tuplet [npvar_ preName, npvar_ tempName]
+              (appf2_ (_seqOp "split_at") (nvar_ targetName) (int_ (length prefix)))
+              (_tuplet [npvar_ midName, npvar_ postName]
+                (appf2_ (_seqOp "split_at") (nvar_ tempName) (subi_ (appf1_ (_seqOp "length") (nvar_ tempName)) (int_ (length postfix))))
+                (foldr apply (foldr apply cont postWraps) preWraps))) in
+        (names, wrap)
+      else never
     else never
   | POr {lpat = lpat, rpat = rpat} ->
     match generatePat targetName lpat with (lnames, lwrap) then
@@ -352,6 +385,54 @@ let matchAnd4 = symbolize
     (var_ "a")
     (int_ 53)) in
 utest matchAnd4 with generate matchAnd4 using sameSemantics in
+
+let matchSeqEdge1 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge1 with generate matchSeqEdge1 using sameSemantics in
+
+let matchSeqEdge2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge2 with generate matchSeqEdge2 using sameSemantics in
+
+let matchSeqEdge3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge3 with generate matchSeqEdge3 using sameSemantics in
+
+let matchSeqEdge4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
+    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge4 with generate matchSeqEdge4 using sameSemantics in
+
+let matchSeqEdge5 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge5 with generate matchSeqEdge5 using sameSemantics in
+
+let matchSeqEdge6 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge6 with generate matchSeqEdge6 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in

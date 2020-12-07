@@ -10,7 +10,7 @@ lang OCamlSym =
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm. match arm with (pat, expr) then
       match symbolizePat env assocEmpty pat with (patEnv, pat) then
-        (pat, symbolizeExpr (_symOverwrite env patEnv) expr)
+        (pat, symbolizeExpr (assocMergePreferRight {eq=eqString} env patEnv) expr)
       else never else never in
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
   | OTmTuple { values = values } ->

@@ -40,7 +40,7 @@ let _runCommand : String->String->String->ExecResult =
 
 let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
   -- NOTE(vipa, 2020-12-03): Disable unused-variable warning since it's annoying to alter compilation depending on whether results are used or not
-  let dunefile = "(env (dev (flags (:standard -w -26)))) (executable (name program) (libraries batteries boot))" in
+  let dunefile = "(env (dev (flags (:standard -w -26 -w -27)))) (executable (name program) (libraries batteries boot))" in
   let td = pycall _tempfile "TemporaryDirectory" () in
   let dir = pythonGetAttr td "name" in
   let tempfile = lam f.
