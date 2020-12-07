@@ -361,7 +361,7 @@ lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
   | PRecord {bindings = bindings} ->
     match assocMapAccum {eq=eqString}
-            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) env bindings
+            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
       (env, PRecord {bindings = bindings})
     else never

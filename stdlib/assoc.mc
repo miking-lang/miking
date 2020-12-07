@@ -214,9 +214,9 @@ utest sort (lam l. lam r. subi l.0 r.0) (assoc2seq m)
 with [(1, '1'), (2, '2'), (3, '3')] in
 
 let withKeyMap = mapWithKey (lam k. lam v. (k, v)) m in
-utest lookup 1 withKeyMap with (1, '1') in
-utest lookup 2 withKeyMap with (2, '2') in
-utest lookup 3 withKeyMap with (3, '3') in
+utest lookup 1 withKeyMap with Some (1, '1') in
+utest lookup 2 withKeyMap with Some (2, '2') in
+utest lookup 3 withKeyMap with Some (3, '3') in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 

@@ -153,6 +153,7 @@ recursive let bind_ = use MExprAst in
     expr -- Insert at the end of the chain
 end
 
+-- OPT(vipa, 2020-12-03): This is quadratic, no?
 let bindall_ = use MExprAst in
   lam exprs.
   foldl1 bind_ exprs
