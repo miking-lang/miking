@@ -76,3 +76,11 @@ module File : sig
 
   val delete : ustring -> unit
 end
+
+module FloatConversion : sig
+  val floorfi : float -> int
+
+  val ceilfi : float -> int
+
+  val roundfi : float -> int
+end

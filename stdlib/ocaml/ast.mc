@@ -31,6 +31,7 @@ lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst
                 + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
                 + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
                 + BoolPat + OCamlTuple + OCamlData
+                + CharAst + FloatIntConversionAst
 end
 
 mexpr

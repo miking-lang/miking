@@ -47,6 +47,14 @@ let _symbOps = [
 
 let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
 
+let _floatOps = [
+  "floorfi",
+  "ceilfi",
+  "roundfi"
+]
+
+let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
+
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
@@ -87,6 +95,10 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | CGensym {} -> _symbOp "gensym"
   | CEqsym {} -> _symbOp "eqsym"
   | CSym2hash {} -> _symbOp "hash"
+  -- Float intrinsics
+  | CFloorfi {} -> _floatOp "floorfi"
+  | CCeilfi {} -> _floatOp "ceilfi"
+  | CRoundfi {} -> _floatOp "roundfi"
   | v -> TmConst { val = v }
 
   sem generate =
@@ -456,29 +468,38 @@ let matchSeqEdge7 = symbolize
     (var_ "a")
     (int_ 75)) in
 utest matchSeqEdge7 with generate matchSeqEdge7 using sameSemantics in
+let symbAndGen = lam e. generate (symbolize e) in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
-utest addInt1 with generate (symbolize addInt1) using sameSemantics in
+utest addInt1 with symbAndGen addInt1 using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest addInt2 with generate (symbolize addInt2) using sameSemantics in
+utest addInt2 with symbAndGen addInt2 using sameSemantics in
+
+let testMulInt = muli_ (int_ 2) (int_ 3) in
+utest testMulInt with symbAndGen testMulInt using sameSemantics in
+
+let testModInt = modi_ (int_ 2) (int_ 3) in
+utest testModInt with symbAndGen testModInt using sameSemantics in
+
+let testDivInt = divi_ (int_ 2) (int_ 3) in
+utest testDivInt with symbAndGen testDivInt using sameSemantics in
+
+let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
+utest testNegInt with symbAndGen testNegInt using sameSemantics in
 
 let compareInt1 = eqi_ (int_ 1) (int_ 2) in
-utest compareInt1 with generate (symbolize compareInt1)
+utest compareInt1 with symbAndGen compareInt1
 using sameSemantics in
 
 let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt2 with generate (symbolize compareInt2)
+utest compareInt2 with symbAndGen compareInt2
 using sameSemantics in
-
--- Booleans
-let boolNot = not_ (not_ true_) in
-utest boolNot with generate (symbolize boolNot) using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
-utest charLiteral with generate (symbolize charLiteral)
+utest charLiteral with symbAndGen charLiteral
 using sameSemantics in
 
 -- Abstractions
@@ -588,5 +609,18 @@ utest int_ 1 with generate thrd using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
+
+-- Float-Integer conversions
+let testFloorfi = floorfi_ (float_ 1.5) in
+utest testFloorfi with generate testFloorfi using sameSemantics in
+
+let testCeilfi = ceilfi_ (float_ 1.5) in
+utest testCeilfi with generate testCeilfi using sameSemantics in
+
+let testRoundfi = roundfi_ (float_ 1.5) in
+utest testRoundfi with generate testRoundfi using sameSemantics in
+
+-- let testInt2float = int2float_ (int_ 1) in
+-- utest testInt2float with generate testInt2float using sameSemantics in
 
 ()

@@ -558,15 +558,15 @@ let delta eval env fi c v =
   | Cstring2float, _ ->
       fail_constapp fi
   | Cfloorfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.floor v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.floorfi v))
   | Cfloorfi, _ ->
       fail_constapp fi
   | Cceilfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.ceil v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.ceilfi v))
   | Cceilfi, _ ->
       fail_constapp fi
   | Croundfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.round v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.roundfi v))
   | Croundfi, _ ->
       fail_constapp fi
   | Cint2float, TmConst (fi, CInt v) ->
