@@ -442,6 +442,18 @@ let muli_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CMuli ())) a b
 
+let divi_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CDivi ())) a b
+
+let modi_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CModi ())) a b
+
+let negi_ = use MExprAst in
+  lam n.
+  appf1_ (const_ (CNegi ())) n
+
 let addf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CAddf ())) a b
@@ -462,17 +474,61 @@ let negf_ = use MExprAst in
   lam a.
   appf1_ (const_ (CNegf ())) a
 
-let not_ = use MExprAst in
-  lam a.
-  appf1_ (const_ (CNot ())) a
+let floorfi_ = use MExprAst in
+  lam x.
+  appf1_ (const_ (CFloorfi ())) x
+
+let ceilfi_ = use MExprAst in
+  lam x.
+  appf1_ (const_ (CCeilfi ())) x
+
+let roundfi_ = use MExprAst in
+  lam x.
+  appf1_ (const_ (CRoundfi ())) x
+
+let int2float_ = use MExprAst in
+  lam x.
+  appf1_ (const_ (CInt2float ())) x
 
 let eqi_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CEqi ())) a b
 
+let neqi_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CNeqi ())) a b
+
 let lti_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLti ())) a b
+
+let gti_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CGti ())) a b
+
+let leqi_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CLeqi ())) a b
+
+let geqi_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CGeqi ())) a b
+
+let eqc_ = use MExprAst in
+  lam c1. lam c2.
+  appf2_ (const_ (CEqc ())) c1 c2
+
+let int2char_ = use MExprAst in
+  lam i.
+  app_ (const_ (CInt2Char ())) i
+
+let char2int_ = use MExprAst in
+  lam c.
+  app_ (const_ (CChar2Int ())) c
+
+let string2float_ = use MExprAst in
+  lam s.
+  app_ (const_ (CString2float ())) s
 
 let eqf_ = use MExprAst in
   lam a. lam b.
@@ -481,6 +537,34 @@ let eqf_ = use MExprAst in
 let ltf_ = use MExprAst in
   lam a. lam b.
   appf2_ (const_ (CLtf ())) a b
+
+let leqf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CLeqf ())) a b
+
+let gtf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CGtf ())) a b
+
+let geqf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CGeqf ())) a b
+
+let neqf_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CNeqf ())) a b
+
+let slli_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CSlli ())) a b
+
+let srli_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CSrli ())) a b
+
+let srai_ = use MExprAst in
+  lam a. lam b.
+  appf2_ (const_ (CSrai ())) a b
 
 let get_ = use MExprAst in
   lam s. lam i.
@@ -524,6 +608,9 @@ let and_ = use MExprAst in
 
 let or_ = use MExprAst in
   lam a. lam b. if_ a true_ b
+
+let not_ = use MExprAst in
+  lam b. if_ b false_ true_
 
 -- Symbol operations
 let gensym_ = use MExprAst in
@@ -571,3 +658,14 @@ let error_ = use MExprAst in
 -- Exit
 let exit_ = use MExprAst in
   lam n. appf1_ (const_ (CExit ())) n
+
+-- Argv
+let argv_ = use MExprAst in
+  const_ (CArgv ())
+
+-- Time operations
+let wallTimeMs_ = use MExprAst in
+  lam u. appf1_ (const_ (CWallTimeMs ())) u
+
+let sleepMs_ = use MExprAst in
+  lam n. appf1_ (const_ (CSleepMs ())) n

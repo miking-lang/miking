@@ -540,7 +540,6 @@ end
 lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CBool b -> if b.val then "true" else "false"
-  | CNot _ -> "not"
 end
 
 lang CmpIntPrettyPrint = CmpIntAst + ConstPrettyPrint

@@ -170,13 +170,15 @@ lang RecLetsEval =
          (unpack_from lst_var t.inexpr)
 end
 
-lang ConstEval = ConstAst
+lang ConstEval = ConstAst + SysAst + SeqAst
   sem delta (arg : Expr) =
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmConst c -> delta arg c.val
 
   sem eval (ctx : {env : Env}) =
+  | TmConst {val = CArgv {}} ->
+    TmSeq {tms = map str_ argv}
   | TmConst c -> TmConst c
 end
 
@@ -231,44 +233,87 @@ lang ArithIntEval = ArithIntAst + ConstEval
   | CAddi2 Int
   | CSubi2 Int
   | CMuli2 Int
+  | CDivi2 Int
+  | CModi2 Int
 
   sem delta (arg : Expr) =
   | CAddi _ ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        TmConst {val = CAddi2 n.val}
-      else error "Not adding a numeric constant"
-    else error "Not adding a constant"
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CAddi2 n}
+    else error "Not adding an integer"
   | CAddi2 n1 ->
-    match arg with TmConst c then
-      match c.val with CInt n2 then
-        TmConst {val = CInt {val = addi n1 n2.val}}
-      else error "Not adding a numeric constant"
-    else error "Not adding a constant"
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (addi n1 n2)
+    else error "Not adding an integer"
   | CSubi _ ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        TmConst {val = CSubi2 n.val}
-      else error "Not subbing a numeric constant"
-    else error "Not subbing a constant"
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSubi2 n}
+    else error "Not substracting an integer"
   | CSubi2 n1 ->
-    match arg with TmConst c then
-      match c.val with CInt n2 then
-        TmConst {val = CInt {val = subi n1 n2.val}}
-      else error "Not subbing a numeric constant"
-    else error "Not subbing a constant"
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (subi n1 n2)
+    else error "Not substracting an integer"
   | CMuli _ ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        TmConst {val = CMuli2 n.val}
-      else error "Not multiplying a numeric constant"
-    else error "Not multiplying a constant"
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CMuli2 n}
+    else error "Not multiplying an integer"
   | CMuli2 n1 ->
-    match arg with TmConst c then
-      match c.val with CInt n2 then
-        TmConst {val = CInt {val = muli n1 n2.val}}
-      else error "Not multiplying a numeric constant"
-    else error "Not multiplying a constant"
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (muli n1 n2)
+    else error "Not multiplying an integer"
+  | CDivi _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CDivi2 n}
+    else error "Not dividing number"
+  | CDivi2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (divi n1 n2)
+    else error "Not dividing with number"
+  | CModi _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CModi2 n}
+    else error "Not taking modulo of number"
+  | CModi2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (modi n1 n2)
+    else error "Not taking modulo with number"
+  | CNegi _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      int_ (negi n)
+    else error "Not negating a number"
+end
+
+lang ShiftIntEval = ShiftIntAst + ConstEval
+  syn Const =
+  | CSlli2 Int
+  | CSrli2 Int
+  | CSrai2 Int
+
+  sem delta (arg : Expr) =
+  | CSlli _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSlli2 n}
+    else error "Not shifting a constant integer"
+  | CSlli2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (slli n1 n2)
+    else error "Not shifting by a constant integer"
+  | CSrli _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSrli2 n}
+    else error "Not shifting a constant integer"
+  | CSrli2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (srli n1 n2)
+    else error "Not shifting by a constant integer"
+  | CSrai _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CSrai2 n}
+    else error "Not shifting a constant integer"
+  | CSrai2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      int_ (srai n1 n2)
+    else error "Not shifting by a constant integer"
 end
 
 lang ArithFloatEval = ArithFloatAst + ConstEval
@@ -335,52 +380,121 @@ lang ArithFloatEval = ArithFloatAst + ConstEval
     else error "Not negating a constant"
 end
 
-lang BoolEval = BoolAst + ConstEval
+lang FloatIntConversionEval = FloatIntConversionAst
   sem delta (arg : Expr) =
-  | CNot _ ->
-    match arg with TmConst c then
-      match c.val with CBool b then
-        TmConst {val = CBool {val = not b.val}}
-      else error "Not negating a boolean constant"
-    else error "Not negating a constant"
+  | CFloorfi _ ->
+    match arg with TmConst {val = CFloat {val = r}} then
+      int_ (floorfi r)
+    else error "Not flooring a float"
+  | CCeilfi _ ->
+    match arg with TmConst {val = CFloat {val = r}} then
+      int_ (ceilfi r)
+    else error "Not ceiling a float"
+  | CRoundfi _ ->
+    match arg with TmConst {val = CFloat {val = r}} then
+      int_ (roundfi r)
+    else error "Not rounding a float"
+  | CInt2float _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      float_ (int2float n)
+    else error "Not converting a integer"
 end
 
 lang CmpIntEval = CmpIntAst + ConstEval
   syn Const =
   | CEqi2 Int
+  | CNeqi2 Int
   | CLti2 Int
+  | CGti2 Int
+  | CLeqi2 Int
+  | CGeqi2 Int
 
   sem delta (arg : Expr) =
   | CEqi _ ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        TmConst {val = CEqi2 n.val}
-      else error "Not comparing a numeric constant"
-    else error "Not comparing a constant"
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CEqi2 n}
+    else error "Not comparing an integer constant"
   | CEqi2 n1 ->
-    match arg with TmConst c then
-      match c.val with CInt n2 then
-        TmConst {val = CBool {val = eqi n1 n2.val}}
-      else error "Not comparing a numeric constant"
-    else error "Not comparing a constant"
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = eqi n1 n2}}
+    else error "Not comparing an integer constant"
+  | CNeqi _ ->
+    match arg with TmConst {val = CInt {val = n1}} then
+      TmConst {val = CNeqi2 n1}
+    else error "Not comparing an integer constant"
+  | CNeqi2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = neqi n1 n2}}
+    else error "Not comparing an integer constant"
   | CLti _ ->
-    match arg with TmConst c then
-      match c.val with CInt n then
-        TmConst {val = CLti2 n.val}
-      else error "Not comparing a numeric constant"
-    else error "Not comparing a constant"
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CLti2 n}
+    else error "Not comparing an integer constant"
   | CLti2 n1 ->
-    match arg with TmConst c then
-      match c.val with CInt n2 then
-        TmConst {val = CBool {val = lti n1 n2.val}}
-      else error "Not comparing a numeric constant"
-    else error "Not comparing a constant"
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = lti n1 n2}}
+    else error "Not comparing an integer constant"
+  | CGti _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CGti2 n}
+    else error "Not comparing an integer constant"
+  | CGti2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = gti n1 n2}}
+    else error "Not comparing an integer constant"
+  | CLeqi _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CLeqi2 n}
+    else error "Not comparing an integer constant"
+  | CLeqi2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = leqi n1 n2}}
+    else error "Not comparing an integer constant"
+  | CGeqi _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CGeqi2 n}
+    else error "Not comparing an integer constant"
+  | CGeqi2 n1 ->
+    match arg with TmConst {val = CInt {val = n2}} then
+      TmConst {val = CBool {val = geqi n1 n2}}
+    else error "Not comparing an integer constant"
+end
+
+lang CmpCharEval = CmpCharAst + ConstEval
+  syn Const =
+  | CEqc2 Char
+
+  sem delta (arg : Expr) =
+  | CEqc _ ->
+    match arg with TmConst {val = CChar {val = c}} then
+      TmConst {val = CEqc2 c}
+    else error "Not comparing a character constant"
+  | CEqc2 c1 ->
+    match arg with TmConst {val = CChar {val = c2}} then
+      TmConst {val = CBool {val = eqc c1 c2}}
+    else error "Not comparing a character constant"
+end
+
+lang IntCharConversionEval = IntCharConversionAst + ConstEval
+  sem delta (arg : Expr) =
+  | CInt2Char _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CChar {val = int2char n}}
+    else error "Not int2char of an integer constant"
+  | CChar2Int _ ->
+    match arg with TmConst {val = CChar {val = c}} then
+      TmConst {val = CInt {val = char2int c}}
+    else error "Not char2int of a character constant"
 end
 
 lang CmpFloatEval = CmpFloatAst + ConstEval
   syn Const =
   | CEqf2 Float
   | CLtf2 Float
+  | CLeqf2 Float
+  | CGtf2 Float
+  | CGeqf2 Float
+  | CNeqf2 Float
 
   sem delta (arg : Expr) =
   | CEqf _ ->
@@ -407,6 +521,38 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
         TmConst {val = CBool {val = ltf f1 f2.val}}
       else error "Not comparing a numeric constant"
     else error "Not comparing a constant"
+  | CLeqf _ ->
+    match arg with TmConst {val = CFloat {val = f1}} then
+      TmConst {val = CLeqf2 f1}
+    else error "Not comparing a floating-point constant"
+  | CLeqf2 f1 ->
+    match arg with TmConst {val = CFloat {val = f2}} then
+      TmConst {val = CBool {val = leqf f1 f2}}
+    else error "Not comparing a floating-point constant"
+  | CGtf _ ->
+    match arg with TmConst {val = CFloat {val = f1}} then
+      TmConst {val = CGtf2 f1}
+    else error "Not comparing a floating-point constant"
+  | CGtf2 f1 ->
+    match arg with TmConst {val = CFloat {val = f2}} then
+      TmConst {val = CBool {val = gtf f1 f2}}
+    else error "Not comparing a floating-point constant"
+  | CGeqf _ ->
+    match arg with TmConst {val = CFloat {val = f1}} then
+      TmConst {val = CGeqf2 f1}
+    else error "Not comparing a floating-point constant"
+  | CGeqf2 f1 ->
+    match arg with TmConst {val = CFloat {val = f2}} then
+      TmConst {val = CBool {val = geqf f1 f2}}
+    else error "Not comparing a floating-point constant"
+  | CNeqf _ ->
+    match arg with TmConst {val = CFloat {val = f1}} then
+      TmConst {val = CNeqf2 f1}
+    else error "Not comparing a floating-point constant"
+  | CNeqf2 f1 ->
+    match arg with TmConst {val = CFloat {val = f2}} then
+      TmConst {val = CBool {val = neqf f1 f2}}
+    else error "Not comparing a floating-point constant"
 end
 
 lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
@@ -511,6 +657,15 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     TmSeq {tms = makeSeq n arg}
 end
 
+lang FloatStringConversionEval = FloatStringConversionAst
+  sem delta (arg : Expr) =
+  | CString2float _ ->
+    match arg with TmSeq {tms = tms} then
+      let s = _seqOfCharToString tms in
+      float_ (string2float s)
+    else error "Not converting a sequence"
+end
+
 lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst
   syn Const =
   | CFileWrite2 string
@@ -583,17 +738,13 @@ lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
     else error "s in randSetSeed not a constant"
 end
 
-lang ErrorEval = ErrorAst + SeqAst + CharAst
+lang SysEval = SysAst + SeqAst + IntAst + CharAst
   sem delta (arg : Expr) =
   | CError _ ->
     match arg with TmSeq s then
       error (_seqOfCharToString s.tms)
     else
       error "s in error not a sequence"
-end
-
-lang ExitEval = ExitAst + IntAst
-  sem delta (arg : Expr) =
   | CExit _ ->
     match arg with TmConst {val = CInt {val = n}} then
       exit n
@@ -601,6 +752,16 @@ lang ExitEval = ExitAst + IntAst
       error "n in exit not an integer"
 end
 
+lang TimeEval = TimeAst + IntAst
+  sem delta (arg : Expr) =
+  | CSleepMs _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      let _ = sleepMs n in
+      unit_
+    else error "n in wallTimeMs not a constant integer"
+  | CWallTimeMs _ ->
+    float_ (wallTimeMs ())
+end
 
 --------------
 -- PATTERNS --
@@ -733,9 +894,10 @@ lang MExprEval =
   ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval
 
   -- Constants
-  + ArithIntEval + ArithFloatEval + BoolEval + CmpIntEval + CmpFloatEval +
-  SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + ErrorEval +
-  ExitEval + RandomNumberGeneratorEval
+  + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
+  SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
+  RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
+  IntCharConversionEval + FloatStringConversionEval + TimeEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -989,11 +1151,24 @@ let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
 utest eval makeSeqAst with (seq_ [int_ 42, int_ 42, int_ 42]) in
 
 -- Unit tests for CmpFloatEval
+utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ in
 utest eval (eqf_ (float_ 1.0) (float_ 1.0)) with true_ in
-utest eval (eqf_ (float_ 1.0) (float_ 0.0)) with false_ in
+utest eval (eqf_ (float_ 0.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
+utest eval (leqf_ (float_ 2.0) (float_ 1.0)) with false_ in
+utest eval (leqf_ (float_ 1.0) (float_ 1.0)) with true_ in
+utest eval (leqf_ (float_ 0.0) (float_ 1.0)) with true_ in
+utest eval (gtf_ (float_ 2.0) (float_ 1.0)) with true_ in
+utest eval (gtf_ (float_ 1.0) (float_ 1.0)) with false_ in
+utest eval (gtf_ (float_ 0.0) (float_ 1.0)) with false_ in
+utest eval (geqf_ (float_ 2.0) (float_ 1.0)) with true_ in
+utest eval (geqf_ (float_ 1.0) (float_ 1.0)) with true_ in
+utest eval (geqf_ (float_ 0.0) (float_ 1.0)) with false_ in
+utest eval (neqf_ (float_ 2.0) (float_ 1.0)) with true_ in
+utest eval (neqf_ (float_ 1.0) (float_ 1.0)) with false_ in
+utest eval (neqf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
 -- Unit tests for symbols
 
@@ -1030,6 +1205,9 @@ utest eval (fileExists_ f) with false_ in
 
 -- Test exit
 -- let _ = eval (exit_ (int_ 1)) in
+
+-- Test argv
+utest eval argv_ with seq_ [str_ "mi"] in
 
 utest eval (match_
   (tuple_ [true_, true_])
@@ -1163,5 +1341,73 @@ utest eval (randIntU_ (int_ 0) (int_ 3)) with [0, 1, 2] using
       any (eqi n) seq
     else false
 in
+
+-- Time operations
+let t = eval (wallTimeMs_ unit_) in
+utest eval (or_ (leqf_ t (float_ 0.0)) (geqf_ t (float_ 0.0))) with true_ in
+-- utest eval (sleepMs_ (int_ 1000)) with unit_ in
+
+-- Integer arithmetics
+utest eval (addi_ (int_ 4) (int_ 2)) with int_ 6 in
+utest eval (subi_ (int_ 4) (int_ 2)) with int_ 2 in
+utest eval (muli_ (int_ 4) (int_ 2)) with int_ 8 in
+utest eval (divi_ (int_ 4) (int_ 2)) with int_ 2 in
+utest eval (divi_ (int_ 4) (int_ 3)) with int_ 1 in
+utest eval (modi_ (int_ 4) (int_ 2)) with int_ 0 in
+utest eval (modi_ (int_ 4) (int_ 3)) with int_ 1 in
+utest eval (addi_ (int_ 4) (negi_ (int_ 2))) with int_ 2 in
+
+-- Float arithmetics
+utest eval (addf_ (float_ 4.) (float_ 2.)) with float_ 6. in
+utest eval (subf_ (float_ 4.) (float_ 2.)) with float_ 2. in
+utest eval (mulf_ (float_ 4.) (float_ 2.)) with float_ 8. in
+utest eval (divf_ (float_ 4.) (float_ 2.)) with float_ 2. in
+utest eval (addf_ (float_ 4.) (negf_ (float_ 2.))) with float_ 2. in
+
+-- Integer shifting
+utest eval (slli_ (int_ 1) (int_ 2)) with int_ 4 in
+utest eval (slli_ (int_ 2) (int_ 5)) with int_ 64 in
+utest eval (slli_ (negi_ (int_ 1)) (int_ 1)) with eval (negi_ (int_ 2)) in
+utest eval (srli_ (int_ 4) (int_ 2)) with int_ 1 in
+utest eval (srli_ (int_ 64) (int_ 5)) with int_ 2 in
+utest eval (srli_ (negi_ (int_ 2)) (int_ 1)) with int_ 4611686018427387903 in -- NOTE(larshum, 2020-12-07): Assumes 63-bit integers (used in 64-bit OCaml).
+utest eval (srai_ (int_ 4) (int_ 2)) with int_ 1 in
+utest eval (srai_ (int_ 64) (int_ 5)) with int_ 2 in
+utest eval (srai_ (negi_ (int_ 2)) (int_ 1)) with eval (negi_ (int_ 1)) in
+
+-- Integer comparison
+utest eval (eqi_ (int_ 2) (int_ 2)) with true_ in
+utest eval (eqi_ (negi_ (int_ 2)) (int_ 2)) with false_ in
+utest eval (neqi_ (negi_ (int_ 2)) (int_ 2)) with true_ in
+utest eval (neqi_ (int_ 5) (int_ 5)) with false_ in
+utest eval (lti_ (int_ 1) (int_ 3)) with true_ in
+utest eval (lti_ (int_ 1) (int_ 1)) with false_ in
+utest eval (gti_ (int_ 3) (int_ 0)) with true_ in
+utest eval (gti_ (int_ 1) (int_ 1)) with false_ in
+utest eval (leqi_ (int_ 4) (int_ 9)) with true_ in
+utest eval (leqi_ (int_ 1) (int_ 1)) with true_ in
+utest eval (leqi_ (int_ 2) (int_ 1)) with false_ in
+utest eval (geqi_ (int_ 23) (int_ 22)) with true_ in
+utest eval (geqi_ (int_ 1) (int_ 1)) with true_ in
+utest eval (geqi_ (int_ 0) (int_ 1)) with false_ in
+
+-- Integer-Float conversion
+utest eval (floorfi_ (float_ 1.5)) with int_ 1 in
+utest eval (ceilfi_ (float_ 1.5)) with int_ 2 in
+utest eval (roundfi_ (float_ 1.5)) with int_ 2 in
+utest eval (roundfi_ (float_ 1.49)) with int_ 1 in
+utest eval (int2float_ (int_ 1)) with float_ 1. in
+
+-- Char comparison
+utest eval (eqc_ (char_ 'a') (char_ 'a')) with true_ in
+utest eval (eqc_ (char_ '\n') (char_ '\n')) with true_ in
+utest eval (eqc_ (char_ 'X') (char_ 'x')) with false_ in
+
+-- Integer-Char conversion
+utest eval (int2char_ (int_ 65)) with char_ 'A' in
+utest eval (char2int_ (char_ '\t')) with int_ 9 in
+
+-- String-Float conversion
+utest eval (string2float_ (str_ "1.5")) with float_ 1.5 in
 
 ()

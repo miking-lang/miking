@@ -293,7 +293,6 @@ lang BoolEq = BoolAst
   sem eqConst (lhs : Const) =
   | CBool {val = v2} ->
     match lhs with CBool {val = v1} then eqBool v1 v2 else false
-  | CNot {} -> match lhs with CNot _ then true else false
 end
 
 lang CmpIntEq = CmpIntAst
