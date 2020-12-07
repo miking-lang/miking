@@ -227,7 +227,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
-                 + IntEq + BoolEq + CharEq
+                 + IntEq + BoolEq + CharEq + FloatEq
 
 mexpr
 
@@ -262,6 +262,11 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     match t.val with CInt _ then
       let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_int" in
       match ocamlVal with TmConst {val = CInt _} then
+        eqExpr mexprVal ocamlVal
+      else error "Values mismatch"
+    else match t.val with CFloat _ then
+      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_float" in
+      match ocamlVal with TmConst {val = CFloat _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CBool _ then
@@ -620,7 +625,7 @@ utest testCeilfi with generate testCeilfi using sameSemantics in
 let testRoundfi = roundfi_ (float_ 1.5) in
 utest testRoundfi with generate testRoundfi using sameSemantics in
 
--- let testInt2float = int2float_ (int_ 1) in
--- utest testInt2float with generate testInt2float using sameSemantics in
+let testInt2float = int2float_ (int_ 1) in
+utest testInt2float with generate testInt2float using sameSemantics in
 
 ()
