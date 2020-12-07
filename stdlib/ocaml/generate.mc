@@ -120,6 +120,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
     in (assocEmpty, wrap)
   | PInt {val = val} ->
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
+  | PChar {val = val} ->
+    (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (char_ val)) cont _none)
   | PSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "seqElem" in
@@ -267,6 +269,20 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
 in
 
 -- Match
+let matchChar1 = symbolize
+  (match_ (char_ 'a')
+    (pchar_ 'a')
+    true_
+    false_) in
+utest matchChar1 with generate matchChar1 using sameSemantics in
+
+let matchChar2 = symbolize
+  (match_ (char_ 'a')
+    (pchar_ 'b')
+    true_
+    false_) in
+utest matchChar2 with generate matchChar2 using sameSemantics in
+
 let matchSeq = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
