@@ -9,6 +9,21 @@ include "mexpr/eq.mc"
 include "ocaml/compile.mc"
 include "hashmap.mc"
 
+let _opHashMap = lam prefix. lam ops.
+let mkOp = lam op.
+nameSym (join [prefix, op])
+in
+foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
+hashmapEmpty ops
+
+let _op = lam opHashMap. lam op.
+nvar_
+(hashmapLookupOrElse hashmapStrTraits
+  (lam _.
+    error (strJoin " " ["Operation", op, "not found"]))
+    op
+    opHashMap)
+
 let _seqOps = [
   "make",
   "empty",
@@ -22,22 +37,19 @@ let _seqOps = [
   "split_at"
 ]
 
-let _seqOpHashMap =
-  let mkOp = lam op.
-    nameSym (join ["Boot.Intrinsics.Mseq.", op])
-  in
-  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
-        hashmapEmpty _seqOps
+let _seqOp = _op (_opHashMap "Boot.Intrinsics.Mseq." _seqOps)
 
-let _seqOp = lam op.
-  nvar_
-  (hashmapLookupOrElse hashmapStrTraits
-                       (lam _. error (strJoin " " ["Operation", op, "not found"]))
-                       op
-                       _seqOpHashMap)
+let _symbOps = [
+  "gensym",
+  "eqsym",
+  "hash"
+]
+
+let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
 
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
+  -- Sequence intrinsics
   | CMakeSeq {} -> _seqOp "make"
   | CLength {} -> _seqOp "length"
   | CCons {} -> _seqOp "cons"
@@ -46,6 +58,10 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | CSet {} -> _seqOp "set"
   | CSplitAt {} -> _seqOp "split_at"
   | CReverse {} -> _seqOp "reverse"
+  -- Symbol intrinsics
+  | CGensym {} -> _symbOp "gensym"
+  | CEqsym {} -> _symbOp "eqsym"
+  | CSym2hash {} -> _symbOp "hash"
   | v -> TmConst { val = v }
 
   sem generate =
@@ -240,5 +256,8 @@ utest int_ 1 with generate thrd using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
+
+-- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
+-- implemented tuples/records.
 
 ()

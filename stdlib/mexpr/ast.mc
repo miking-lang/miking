@@ -281,6 +281,8 @@ end
 lang SymbAst = ConstAst
   syn Const =
   | CSymb {val : Symb}
+  | CGensym {}
+  | CSym2hash {}
 end
 
 lang CmpSymbAst = SymbAst + BoolAst
@@ -288,7 +290,6 @@ lang CmpSymbAst = SymbAst + BoolAst
   | CEqsym {}
 end
 
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpAst = SeqAst
   syn Const =
   | CSet {}
@@ -300,6 +301,36 @@ lang SeqOpAst = SeqAst
   | CReverse {}
   | CMakeSeq {}
   | CSplitAt {}
+end
+
+lang FileOpAst = ConstAst
+  syn Const =
+  | CFileRead {}
+  | CFileWrite {}
+  | CFileExists {}
+  | CFileDelete {}
+end
+
+lang IOAst = ConstAst
+  syn Const =
+  | CPrintString {}
+  | CReadLine {}
+end
+
+lang RandomNumberGeneratorAst = ConstAst
+  syn Const =
+  | CRandIntU {}
+  | CRandSetSeed {}
+end
+
+lang ExitAst = ConstAst
+  syn Const =
+  | CExit {}
+end
+
+lang ErrorAst = ConstAst
+  syn Const =
+  | CError {}
 end
 
 --------------
@@ -509,6 +540,7 @@ lang MExprAst =
   -- Constants
   IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
+  FileOpAst + IOAst + RandomNumberGeneratorAst + ErrorAst + ExitAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

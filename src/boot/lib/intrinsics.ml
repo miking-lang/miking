@@ -83,13 +83,23 @@ module Symb = struct
 
   let eqsym l r = l = r
 
+  let hash s = s
+
   module Helpers = struct
     let nosym = -1
 
     let ustring_of_sym = ustring_of_int
 
     let string_of_sym s = Ustring.to_utf8 (ustring_of_sym s)
-
-    let hash s = s
   end
+end
+
+module File = struct
+  let read f = f |> Ustring.to_utf8 |> Ustring.read_file
+
+  let write f d = Ustring.write_file (Ustring.to_utf8 f) d
+
+  let exists f = f |> Ustring.to_utf8 |> Sys.file_exists
+
+  let delete f = f |> Ustring.to_utf8 |> Sys.remove
 end

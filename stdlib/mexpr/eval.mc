@@ -44,6 +44,15 @@ let dtupleproj_ = use MExprAst in
   lam i. lam t.
   drecordproj_ (int2string i) t
 
+-- Converts a sequence of characters to a string
+let _seqOfCharToString = use MExprAst in
+  lam tms.
+    let f = lam c.
+      match c with TmConst {val = CChar c} then
+        c.val
+      else error "Not a character"
+    in
+    map f tms
 
 -----------
 -- TERMS --
@@ -400,7 +409,16 @@ lang CmpFloatEval = CmpFloatAst + ConstEval
     else error "Not comparing a constant"
 end
 
-lang SymbEval = SymbAst + ConstEval
+lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
+  sem delta (arg : Expr) =
+  | CGensym _ ->
+    match arg with TmRecord {bindings = []} then
+      TmConst {val = CSymb {val = gensym ()}}
+    else error "Argument in gensym is not unit"
+  | CSym2hash _ ->
+    match arg with TmConst {val = CSymb s} then
+      TmConst {val = CInt {val = sym2hash s.val}}
+    else error "Argument in sym2hash is not a symbol"
 end
 
 lang CmpSymbEval = CmpSymbAst + ConstEval
@@ -492,6 +510,97 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CMakeSeq2 n ->
     TmSeq {tms = makeSeq n arg}
 end
+
+lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst
+  syn Const =
+  | CFileWrite2 string
+
+  sem delta (arg : Expr) =
+  | CFileRead _ ->
+    match arg with TmSeq s then
+      let f = _seqOfCharToString s.tms in
+      str_ (readFile f)
+    else error "f in readFile not a sequence"
+  | CFileWrite _ ->
+    match arg with TmSeq s then
+      let f = _seqOfCharToString s.tms in
+      TmConst {val = CFileWrite2 f}
+    else error "f in writeFile not a sequence"
+  | CFileWrite2 f ->
+    match arg with TmSeq s then
+      let d = _seqOfCharToString s.tms in
+      let _ = writeFile f d in
+      unit_
+    else error "d in writeFile not a sequence"
+  | CFileExists _ ->
+    match arg with TmSeq s then
+      let f = _seqOfCharToString s.tms in
+      TmConst {val = CBool {val = fileExists f}}
+    else error "f in fileExists not a sequence"
+  | CFileDelete _ ->
+    match arg with TmSeq s then
+      let f = _seqOfCharToString s.tms in
+      let _ = deleteFile f in
+      unit_
+    else error "f in deleteFile not a sequence"
+end
+
+lang IOEval = IOAst + SeqAst
+  sem delta (arg : Expr) =
+  | CPrintString _ ->
+    match arg with TmSeq s then
+      let s = _seqOfCharToString s.tms in
+      let _ = print s in
+      unit_
+    else error "string to print is not a string"
+  | CReadLine _ ->
+    let s = readLine () in
+    TmSeq {tms = map char_ s}
+end
+
+lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
+  syn Const =
+  | CRandIntU2 Int
+
+  sem delta (arg : Expr) =
+  | CRandIntU _ ->
+    match arg with TmConst c then
+      match c.val with CInt lo then
+        TmConst {val = CRandIntU2 lo.val}
+      else error "lo in randIntU not a constant integer"
+    else error "lo in randIntU not a constant"
+  | CRandIntU2 lo ->
+    match arg with TmConst c then
+      match c.val with CInt hi then
+        TmConst {val = CInt {val = randIntU lo hi.val}}
+      else error "hi in randIntU not a constant integer"
+    else error "hi in randIntU not a constant"
+  | CRandSetSeed _ ->
+    match arg with TmConst c then
+      match c.val with CInt {val = s} then
+        TmConst {val = CInt {val = randSetSeed s}}
+      else error "s in randSetSeed not a constant integer"
+    else error "s in randSetSeed not a constant"
+end
+
+lang ErrorEval = ErrorAst + SeqAst + CharAst
+  sem delta (arg : Expr) =
+  | CError _ ->
+    match arg with TmSeq s then
+      error (_seqOfCharToString s.tms)
+    else
+      error "s in error not a sequence"
+end
+
+lang ExitEval = ExitAst + IntAst
+  sem delta (arg : Expr) =
+  | CExit _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      exit n
+    else
+      error "n in exit not an integer"
+end
+
 
 --------------
 -- PATTERNS --
@@ -625,7 +734,8 @@ lang MExprEval =
 
   -- Constants
   + ArithIntEval + ArithFloatEval + BoolEval + CmpIntEval + CmpFloatEval +
-  SymbEval + CmpSymbEval + SeqOpEval
+  SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + ErrorEval +
+  ExitEval + RandomNumberGeneratorEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -885,10 +995,41 @@ utest eval (ltf_ (float_ 2.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 1.0) (float_ 1.0)) with false_ in
 utest eval (ltf_ (float_ 0.0) (float_ 1.0)) with true_ in
 
--- Unit tests for SymbEval and CmpSymbEval
-utest eval (eqs_ (symb_ (gensym ())) (symb_ (gensym ()))) with false_ in
-utest eval (bind_ (ulet_ "s" (symb_ (gensym ()))) (eqs_ (var_ "s") (var_ "s")))
+-- Unit tests for symbols
+
+-- gensym
+let s1 = eval (gensym_ unit_) in
+let s2 = eval (gensym_ unit_) in
+utest s1 with s1 in
+utest s2 with s2 in
+
+-- eqsym
+utest eval (eqsym_ s1 s1) with true_ in
+utest eval (eqsym_ s1 s2) with false_ in
+utest eval (eqsym_ s2 s1) with false_ in
+utest eval (bind_ (ulet_ "s" s1) (eqsym_ (var_ "s") (var_ "s")))
 with true_ in
+
+-- sym2hash
+utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s1)) with true_ in
+utest eval (eqi_ (sym2hash_ s2) (sym2hash_ s1)) with false_ in
+utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ in
+
+-- Unit tests for file operations
+let f = str_ "test_file_ops" in
+let d = str_ "$&!@" in
+utest eval (fileExists_ f) with false_ in
+utest eval (writeFile_ f d) with unit_ in
+utest eval (fileExists_ f) with true_ in
+utest eval (readFile_ f) with d in
+utest eval (deleteFile_ f) with unit_ in
+utest eval (fileExists_ f) with false_ in
+
+-- Test error
+-- let _ = eval (error_ (str_ "test error message")) in
+
+-- Test exit
+-- let _ = eval (exit_ (int_ 1)) in
 
 utest eval (match_
   (tuple_ [true_, true_])
@@ -994,5 +1135,26 @@ utest eval (match_
   (tuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
 with false_ in
+
+-- I/O operations
+-- utest eval (printString_ (str_ "Hello World")) with unit_ in
+-- utest eval (printString_ (readLine_ unit_)) with unit_ in
+
+-- Random number generation
+utest eval (bind_ (ulet_ "_" (randSetSeed_ (int_ 42)))
+                  (randIntU_ (int_ 1) (int_ 10)))
+                  with [1, 2, 3, 4, 5, 6, 7, 8, 9] using
+  lam r. lam seq.
+    match r with TmConst {val = CInt {val = n}} then
+      any (eqi n) seq
+    else false
+in
+
+utest eval (randIntU_ (int_ 0) (int_ 3)) with [0, 1, 2] using
+  lam r. lam seq.
+    match r with TmConst {val = CInt {val = n}} then
+      any (eqi n) seq
+    else false
+in
 
 ()
