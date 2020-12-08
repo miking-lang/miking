@@ -86,13 +86,13 @@ lang ExprParser = WSACParser
     let r2 = eatWSAC r1.pos r1.str in
     if eqi (length r2.str) 0 then r1.val
     else posErrorExit r2.pos "Parse error. Unknown characters."
-  
+
   sem parseExprMain (p: Pos) (prec: Int) =
   | s ->
     let r1 = eatWSAC p s in
     let exp = parseExprImp r1.pos r1.str in
     let r2 = eatWSAC exp.pos exp.str in
-    parseInfix r2.pos prec exp r2.str 
+    parseInfix r2.pos prec exp r2.str
 
   sem parseInfix (p: Pos) (prec: Int) (exp: Expr) =
 
@@ -120,7 +120,7 @@ let parseIdent = lam upper. lam p. lam str.
       let m2 = or (not first) (not upper) in
       if or (or (and m1 (isUpperAlpha x))
                 (and m2 (or (eqChar x '_') (isLowerAlpha x))))
-	    (and (not first) (isDigit x))	    
+	    (and (not first) (isDigit x))
       then work (snoc acc x) false (advanceCol p 1) xs
       else {val = acc, pos = p, str = str}
     else {val = acc, pos = p, str = str}
@@ -143,13 +143,13 @@ utest parseIdent true (initPos "") "Asd12 "
 
 
 -- Parse identifier
-lang IdentParser = ExprParser 
+lang IdentParser = ExprParser
   sem parseExprImp (p: Pos) =
   | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ] ++ s) & xs ->
     let r = parseIdent false p xs in
-    nextIdent p r.str r.val 
+    nextIdent p r.str r.val
 
   sem nextIdent (p: Pos) (xs: string) =
 end
@@ -168,24 +168,114 @@ lang BoolParser = ExprParser + IdentParser + ConstAst + BoolAst
        pos = p2, str = xs}
 end
 
+let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
+  lam p. lam str.
+  recursive
+  let work = lam p2. lam str. lam num.
+    match str with [x] ++ xs then
+      let c = char2int x in
+      if and (geqi c 48) (leqi c 57)
+      then work (advanceCol p2 1) xs (snoc num x)
+      else {val = num, pos = p2, str = str}
+    else {val = num, pos = p2, str = str}
+  in work p str ""
 
--- Parsing of an unsigned integer
-lang UIntParser = ExprParser + ConstAst + IntAst
+utest parseUInt (initPos "") "123"
+  with {val = "123", pos = posVal "" 1 3, str = ""}
+utest parseUInt (initPos "") "1 "
+  with {val = "1", pos = posVal "" 1 1, str = " "}
+utest parseUInt (initPos "") "12.0"
+  with {val = "12", pos = posVal "" 1 2, str = ".0"}
+utest parseUInt (initPos "") "2x"
+  with {val = "2", pos = posVal "" 1 1, str = "x"}
+utest parseUInt (initPos "") "Not a number"
+  with {val = "", pos = posVal "" 1 0, str = "Not a number"}
+
+let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
+  lam p. lam str.
+    match str with ['+' | '-'] ++ xs & s then
+      let n = parseUInt (advanceCol p 1) xs in
+      match n.val with "" then n
+      else {val = cons (head s) n.val, pos = n.pos, str = n.str}
+    else
+      parseUInt p str
+
+utest parseFloatExponent (initPos "") "1"
+  with {val = "1", pos = posVal "" 1 1, str = ""}
+utest parseFloatExponent (initPos "") "-12  "
+  with {val = "-12", pos = posVal "" 1 3, str = "  "}
+utest parseFloatExponent (initPos "") "+3"
+  with {val = "+3", pos = posVal "" 1 2, str = ""}
+utest parseFloatExponent (initPos "") "-2.5"
+  with {val = "-2", pos = posVal "" 1 2, str = ".5"}
+utest parseFloatExponent (initPos "") "Not an exponent"
+  with {val = "", pos = posVal "" 1 0, str = "Not an exponent"}
+
+-- Parsing of an unsigned number
+lang UNumParser = ExprParser
   sem parseExprImp (p : Pos) =
-  | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ s) & xs -> 
-    recursive
-    let work = lam p2. lam str. lam num.
-      match str with [x] ++ xs then
-        let c = char2int x in
-        if and (geqi c 48) (leqi c 57)
-        then work (advanceCol p2 1) xs (snoc num x)
-        else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2},
-              pos = p2, str = str}
-      else {val = TmConst {val = CInt {val = string2int num}, fi = makeInfo p p2},
-            pos = p2, str = str}
-    in work (advanceCol p 1) s ([head xs])
+  | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ s) & xs ->
+    let n = parseUInt p xs in
+    let nextChar = if null n.str then None () else Some (head n.str) in
+    nextNum p n.str (n.val, nextChar)
+
+  sem nextNum (p: Pos) (xs: String) =
 end
 
+-- Parsing of an unsigned integer
+lang UIntParser = UNumParser + ConstAst + IntAst
+  sem nextNum (p: Pos) (xs: String) =
+  | (n, _) ->
+    let p2 = advanceCol p (length n) in
+    {val = TmConst {val = CInt {val = string2int n}, fi = makeInfo p p2},
+     pos = p2, str = xs}
+end
+
+-- Parsing of an unsigned float
+lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst
+  sem nextNum (p: Pos) (xs: String) =
+  | (n, (Some ('.' | 'e' | 'E'))) & (n, Some c) ->
+    let exponentHelper = lam pos. lam pre. lam expChar. lam s. lam isFloat.
+      let exp = parseFloatExponent (advanceCol pos 1) s in
+      match exp.val with "" then
+        let constVal =
+          if isFloat then
+            CFloat {val = string2float pre}
+          else
+            CInt {val = string2int pre}
+        in {val = TmConst {val = constVal, fi = makeInfo p pos},
+            pos = pos, str = cons expChar s}
+      else
+        let floatStr = join [pre, "e", exp.val] in
+        {val = TmConst {val = CFloat {val = string2float floatStr},
+                        fi = makeInfo p exp.pos},
+         pos = exp.pos, str = exp.str}
+    in
+    let p2 = advanceCol p (length n) in
+    match c with '.' then
+      let p3 = advanceCol p2 1 in
+      let s = tail xs in
+      match s with ['0' | '1' | '2' | '3' | '4' |
+                    '5' | '6' | '7' | '8' | '9'] ++ s2 then
+        let n2 = parseUInt p3 s in
+        let preExponentStr = join [n, ".", n2.val] in
+        match n2.str with ['e' | 'E'] ++ s3 then
+          exponentHelper n2.pos preExponentStr (head n2.str) s3 true
+        else
+          {val = TmConst {val = CFloat {val = string2float preExponentStr},
+                          fi = makeInfo p n2.pos},
+           pos = n2.pos, str = n2.str}
+      else match s with ['e' | 'E'] ++ s2 then
+        exponentHelper p3 n (head s) s2 true
+      else
+        {val = TmConst {val = CFloat {val = string2float n},
+                        fi = makeInfo p p3},
+         pos = p3, str = s}
+    else match c with 'e' | 'E' then
+      exponentHelper (advanceCol p (length n)) n c (tail xs) false
+    else
+      never
+end
 
 -- Fragment for simple parsing of keyword
 lang KeywordUtils = WSACParser
@@ -226,10 +316,10 @@ lang ParenthesesParser = ExprParser + KeywordUtils
     {val = e.val, pos = r.pos, str = r.str}
 end
 
--- Parses a sequence of 
+-- Parses a sequence of
 lang SeqParser = ExprParser + KeywordUtils + SeqAst
   sem parseExprImp (p: Pos) =
-  | "[" ++ xs -> 
+  | "[" ++ xs ->
       recursive let work = lam acc. lam first. lam p2. lam str.
         let r = eatWSAC p2 str in
   	match r.str with "]" ++ xs then
@@ -238,12 +328,12 @@ lang SeqParser = ExprParser + KeywordUtils + SeqAst
 	else
 	  let r2 = if first then r else matchKeyword "," r.pos r.str in
 	  let e = parseExprMain r2.pos 0 r2.str in
-	  work (snoc acc e.val) false e.pos e.str  
+	  work (snoc acc e.val) false e.pos e.str
       in work [] true (advanceCol p 1) xs
 end
 
 
--- Matches a character (including escape character). 
+-- Matches a character (including escape character).
 let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
   lam p. lam str.
   let ret = lam c. lam s. lam n. {val = c, pos = (advanceCol p n), str = s} in
@@ -251,7 +341,7 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
       match xs with "\\" ++ xs then ret '\\' xs 2 else
       match xs with "n" ++ xs then ret '\n' xs 2 else
       match xs with "t" ++ xs then ret '\t' xs 2 else
-      match xs with "\"" ++ xs then ret '\"' xs 2 else 
+      match xs with "\"" ++ xs then ret '\"' xs 2 else
       match xs with "'" ++ xs then ret '\'' xs 2 else
       posErrorExit (advanceCol p 1) "Unknown escape character."
     else match str with [x] ++ xs then ret x xs 1
@@ -267,7 +357,7 @@ lang StringParser = ExprParser + SeqAst + CharAst
       match str with "\"" ++ xs then
         {val = TmSeq {tms = acc, fi = makeInfo p (advanceCol p2 1)},
 	 pos = advanceCol p2 1, str = xs}
-      else	  
+      else
         let r =  matchChar p2 str in
         let v = TmConst {val = CChar {val = r.val}, fi = makeInfo p2 r.pos} in
 	work (snoc acc v) r.pos r.str
@@ -310,7 +400,7 @@ lang FunParser =
     {val = TmLam {ident = nameNoSym r2.val, ty = TyUnknown {},
                   body = e.val, fi = makeInfo p e.pos},
      pos = e.pos, str = e.str}
-    -- TODO (David, 2020-09-27): Add parsing of type     
+    -- TODO (David, 2020-09-27): Add parsing of type
 end
 
 
@@ -333,7 +423,7 @@ end
 
 -- General fragment for handling infix operations
 lang ExprInfixParser = ExprParser
-  syn Associativity = 
+  syn Associativity =
   | LeftAssoc ()
   | RightAssoc ()
 
@@ -345,13 +435,13 @@ lang ExprInfixParser = ExprParser
         let prec2 = match op.assoc with LeftAssoc ()
                     then addi op.prec 1
                     else op.prec in
-        let exp2 = parseExprMain op.pos prec2 op.str in 
+        let exp2 = parseExprMain op.pos prec2 op.str in
         let exp3 = {val = op.val exp.val exp2.val,
                     pos = exp2.pos, str = exp2.str} in
 	parseInfix exp3.pos prec exp3 exp3.str
       else exp
     else exp
-    
+
   sem parseInfixImp (p: Pos) =
 end
 
@@ -362,7 +452,7 @@ lang ExprInfixParserClosed = ExprInfixParser
   | _ -> None ()
 end
 
--- This parser should be used for application using juxaposition 
+-- This parser should be used for application using juxaposition
 lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
   sem parseInfixImp (p: Pos) =
   | str ->
@@ -373,11 +463,12 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
 end
 
 
-lang MExprParserBase = BoolParser + UIntParser + IfParser + 
+lang MExprParserBase = BoolParser + UIntParser + IfParser +
                        ParenthesesParser + MExprWSACParser +
-		       SeqParser + 
-		       StringParser + CharParser +
-		       VarParser + FunParser + LetParser
+                       UFloatParser +
+		                   SeqParser +
+		                   StringParser + CharParser +
+		                   VarParser + FunParser + LetParser
 
 lang MExprParser = MExprParserBase + ExprParserNoInfix
 
@@ -394,17 +485,72 @@ use MExprParser in
 utest parseExprMain (initPos "file") 0 "  123foo" with
       {val = TmConst {val = CInt {val = 123}, fi = infoVal "file" 1 2 1 5},
        pos = posVal "file" 1 5, str = "foo"} in
-      
+-- Unsigned floats
+utest parseExprMain (initPos "file") 0 "  1.0 " with
+      {val = TmConst {val = CFloat {val = 1.0}, fi = infoVal "file" 1 2 1 5},
+       pos = posVal "file" 1 5, str = " "} in
+utest parseExprMain (initPos "file") 0 " 1234.  " with
+      {val = TmConst {val = CFloat {val = 1234.}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = "  "} in
+utest parseExprMain (initPos "file") 0 " 13.37 " with
+      {val = TmConst {val = CFloat {val = 13.37}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 "  1.0e-2" with
+      {val = TmConst {val = CFloat {val = 0.01}, fi = infoVal "file" 1 2 1 8},
+       pos = posVal "file" 1 8, str = ""} in
+utest parseExprMain (initPos "file") 0 " 2.5e+2  " with
+      {val = TmConst {val = CFloat {val = 250.0}, fi = infoVal "file" 1 1 1 7},
+       pos = posVal "file" 1 7, str = "  "} in
+utest parseExprMain (initPos "file") 0 "   2e3" with
+      {val = TmConst {val = CFloat {val = 2000.0}, fi = infoVal "file" 1 3 1 6},
+       pos = posVal "file" 1 6, str = ""} in
+utest parseExprMain (initPos "file") 0 "   2E3 " with
+       {val = TmConst {val = CFloat {val = 2000.0}, fi = infoVal "file" 1 3 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 "   2.0e3" with
+      {val = TmConst {val = CFloat {val = 2000.0}, fi = infoVal "file" 1 3 1 8},
+       pos = posVal "file" 1 8, str = ""} in
+utest parseExprMain (initPos "file") 0 " 1.e2 " with
+      {val = TmConst {val = CFloat {val = 100.0}, fi = infoVal "file" 1 1 1 5},
+       pos = posVal "file" 1 5, str = " "} in
+utest parseExprMain (initPos "file") 0 " 2.e+1 " with
+      {val = TmConst {val = CFloat {val = 20.0}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 " 3.e-4 " with
+      {val = TmConst {val = CFloat {val = 0.0003}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 "  2.E3 " with
+      {val = TmConst {val = CFloat {val = 2000.0}, fi = infoVal "file" 1 2 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 " 4.E+1 " with
+      {val = TmConst {val = CFloat {val = 40.0}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 " 1.E-3 " with
+      {val = TmConst {val = CFloat {val = 0.001}, fi = infoVal "file" 1 1 1 6},
+       pos = posVal "file" 1 6, str = " "} in
+utest parseExprMain (initPos "file") 0 " 1E " with
+      {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = "E "} in
+utest parseExprMain (initPos "file") 0 " 1e " with
+       {val = TmConst {val = CInt {val = 1}, fi = infoVal "file" 1 1 1 2},
+       pos = posVal "file" 1 2, str = "e "} in
+utest parseExprMain (initPos "file") 0 " 1.e++2 " with
+       {val = TmConst {val = CFloat {val = 1.0}, fi = infoVal "file" 1 1 1 3},
+       pos = posVal "file" 1 3, str = "e++2 "} in
+utest parseExprMain (initPos "file") 0 " 3.1992e--2 " with
+       {val = TmConst {val = CFloat {val = 3.1992}, fi = infoVal "file" 1 1 1 7},
+       pos = posVal "file" 1 7, str = "e--2 "} in
+
 --If expression
 utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos
   with posVal "" 1 21 in
 -- Boolean literal 'true'
 utest parseExpr (initPos "f") " true " with
-      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
+      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in
 -- Boolean literal 'false'
 utest parseExpr (initPos "f") " true " with
-      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in 
--- Parentheses 
+      TmConst {val = CBool {val = true}, fi = infoVal "f" 1 1 1 5} in
+-- Parentheses
 utest parseExpr (initPos "") " ( 123) " with
       TmConst {val = CInt {val = 123}, fi = infoVal "" 1 3 1 6} in
 -- Sequences
@@ -419,7 +565,7 @@ utest parseExprMain (initPos "") 0 " [ 17 ] " with
 utest parseExpr (initPos "") " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
-      TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17} in 
+      TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17} in
 -- Strings
 let makeChar = lam k. lam c. lam n.
     TmConst {val = CChar {val = c}, fi = infoVal "" 1 n 1 (addi n k)} in
@@ -436,7 +582,7 @@ utest parseExprMain (initPos "") 0 " \'A\' " with
   {val = TmConst {val = CChar {val = 'A'}, fi = infoVal "" 1 1 1 4},
    pos = posVal "" 1 4, str = " "} in
 utest parseExpr (initPos "") " \'\\n\' " with
-  TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5} in 
+  TmConst {val = CChar {val = '\n'}, fi = infoVal "" 1 1 1 5} in
 -- Var
 utest (parseExprMain (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
 utest (parseExprMain (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
@@ -445,7 +591,7 @@ utest (parseExprMain (initPos "") 0 " lam x . x ").pos
   with posVal "" 1 10 in
 -- Let
 utest (parseExprMain (initPos "") 0 "  let x = 5 in 8 ").pos
-  with posVal "" 1 16 in 
+  with posVal "" 1 16 in
 
 
 ()
