@@ -963,8 +963,16 @@ appropriate tests as described above.
 [wiki](https://github.com/miking-lang/miking/wiki/Conventions).
 
 3. We use [ocamlformat](https://github.com/ocaml-ppx/ocamlformat) to
-automatically format ocaml source code. Install the package via `opam` using
-`opam install ocamlformat`. Then you can then run `dune build @fmt` to see a
+automatically format ocaml source code.
+
+###  Setup and use `ocamlformat`
+
+We are currently using this package at version `0.15.0`. To pin and/or install
+the package at this version using `opam` do
+```
+opam pin ocamlformat 0.15.0
+```
+Then you can then run `dune build @fmt` to see a
 diff between your code and the formatted code. To promote the changes run `dune
 promote`. To do these two steps in one run `dune build @fmt --auto-promote`. If
 you want to, you can run `ocamlformat` in watch mode to continuously format the
@@ -972,8 +980,8 @@ source as you work on it with the command `dune build @fmt --auto-promote -w`.
 You can also find instructions for tighter editor integration at *ocamlformat's*
 GitHub page.
 
-4. For convenience, `make lint` will run `dune build @fmt` and `make fix` will
-run `dune build @fmt --auto-promote`.
+For convenience, `make lint` will run `dune build @fmt` and `make fix` will run
+`dune build @fmt --auto-promote`.
 
 ### Git Blame
 
