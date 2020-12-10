@@ -2,6 +2,8 @@
 -- programs. We currently do not have checks for this, so some MExpr programs
 -- will compile (without error) to invalid C programs.
 --
+-- TODO
+-- * Types need to be revised after changes in MExpr
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -99,7 +101,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
 
     -- Debugging function
     let debug = lam file. lam str.
-      if false then writeFile file str
+      if true then writeFile file str
       else ()
     in
 
@@ -137,11 +139,10 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
   -------------
 
   sem compileType (env: CompileCEnv) =
-  | TyUnit _           -> (env, CTyVoid {})
-  | TyInt _ | TyBool _ -> (env, CTyInt {})
-  | TyFloat _          -> (env, CTyDouble {})
-  | TyChar _           -> (env, CTyChar {})
-  | TyString _         -> (env, CTyPtr { ty = CTyChar {}})
+  | TyInt _ | TyBool _      -> (env, CTyInt {})
+  | TyFloat _               -> (env, CTyDouble {})
+  | TyChar _                -> (env, CTyChar {})
+  | TySeq { ty = TyChar _ } -> (env, CTyPtr { ty = CTyChar {}})
 
   | TyArrow _ & ty ->
     recursive let params = lam acc. lam ty.
@@ -157,14 +158,17 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
       else never
     else never
 
-  | TyRecord _ -> error "TODO" -- TODO: This is where we modify the environment
-  | TyCon _ -> error "TODO" -- TODO: This is where we modify the environment
+  | TyRecord { fields = fields } ->
+    -- Check for unit type
+    if eqi (assocLength fields) 0 then (env, CTyVoid {}) else
+      error "TODO" -- TODO: This is where we modify the environment
+  | TyVar _ -> error "TODO" -- TODO: This is where we modify the environment
 
   --| TyUnknown _ -> CTyVoid {}
   | TyUnknown _ -> error "Unknown type in compileType"
 
-  | TySeq _ | TyTuple _
-  | TyApp _ | TyVar _ -> error "Type not currently supported"
+  | TySeq _
+  | TyApp _ -> error "Type not currently supported"
 
 
   -------------
@@ -390,8 +394,8 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
   | CGet _ -> error "TODO: Array indexing"
 
   | CCons _   | CSnoc _
-  | CConcat _ | CLength _ | CHead _
-  | CTail _   | CNull _   | CReverse _ -> error "List functions not supported"
+  | CConcat _ | CLength _
+  | CReverse _ -> error "List functions not supported"
 
   | CEqsym _ -> error "CEqsym not supported"
 
