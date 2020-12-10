@@ -101,7 +101,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     match generatePat tname pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nlet_ tname tyunknown_ (generate target)) (wrap (_some expr)))
+          (bind_ (nulet_ tname (generate target)) (wrap (_some expr)))
           pat
           (generate thn)
           (generate els)
@@ -449,6 +449,13 @@ let matchSeqEdge6 = symbolize
       (int_ 84))
     (int_ 75)) in
 utest matchSeqEdge6 with generate matchSeqEdge6 using sameSemantics in
+
+let matchSeqEdge7 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedgew_ [pvar_ "a"] [])
+    (var_ "a")
+    (int_ 75)) in
+utest matchSeqEdge7 with generate matchSeqEdge7 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in

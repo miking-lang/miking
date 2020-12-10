@@ -103,10 +103,6 @@ let assocValues : AssocTraits k -> AssocMap k v -> [v] =
   lam _. lam m.
     map (lam t. t.1) m
 
--- 'assoc2seq traits m' returns a sequence of all pairs stored in 'm'
-let assoc2seq : AssocTraits k -> AssocMap k v -> [(k, v)] =
-    lam _. lam m. m
-
 -- 'assocMap traits f m' maps over the values of 'm' using function 'f'.
 let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
   lam _. lam f. lam m.
