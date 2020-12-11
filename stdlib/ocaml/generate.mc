@@ -10,19 +10,18 @@ include "ocaml/compile.mc"
 include "hashmap.mc"
 
 let _opHashMap = lam prefix. lam ops.
-let mkOp = lam op.
-nameSym (join [prefix, op])
-in
-foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
-hashmapEmpty ops
+  let mkOp = lam op. nameSym (join [prefix, op]) in
+  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
+        hashmapEmpty
+        ops
 
 let _op = lam opHashMap. lam op.
-nvar_
-(hashmapLookupOrElse hashmapStrTraits
-  (lam _.
-    error (strJoin " " ["Operation", op, "not found"]))
-    op
-    opHashMap)
+  nvar_
+  (hashmapLookupOrElse hashmapStrTraits
+    (lam _.
+      error (strJoin " " ["Operation", op, "not found"]))
+      op
+      opHashMap)
 
 let _seqOps = [
   "make",
@@ -353,28 +352,32 @@ utest matchOr3 with generate matchOr3 using sameSemantics in
 
 let matchNestedOr1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr1 with generate matchNestedOr1 using sameSemantics in
 
 let matchNestedOr2 = symbolize
   (match_ (seq_ [int_ 2, int_ 1])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr2 with generate matchNestedOr2 using sameSemantics in
 
 let matchNestedOr3 = symbolize
   (match_ (seq_ [int_ 3, int_ 7])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr3 with generate matchNestedOr3 using sameSemantics in
 
 let matchNestedOr4 = symbolize
   (match_ (seq_ [int_ 4, int_ 7])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr4 with generate matchNestedOr4 using sameSemantics in
@@ -475,7 +478,6 @@ let matchSeqEdge7 = symbolize
     (var_ "a")
     (int_ 75)) in
 utest matchSeqEdge7 with generate matchSeqEdge7 using sameSemantics in
-let symbAndGen = lam e. generate (symbolize e) in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
@@ -559,7 +561,7 @@ utest compareFloat6 with generate compareFloat6 using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
-utest charLiteral with symbAndGen charLiteral
+utest charLiteral with generate charLiteral
 using sameSemantics in
 
 -- Abstractions
