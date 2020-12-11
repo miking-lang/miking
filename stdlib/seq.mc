@@ -112,6 +112,8 @@ with (9, [2,3,4])
 utest mapAccumR (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
 with ([1,2,3], [1,2,3])
 
+let unzip : [(a, b)] -> ([a], [b]) = mapAccumL (lam l. lam p. (snoc l p.0, p.1)) []
+
 -- Predicates
 recursive
   let any = lam p. lam seq.

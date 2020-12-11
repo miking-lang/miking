@@ -143,8 +143,7 @@ utest nameGetStr (nameSym "foo") with "foo"
 
 -- 'nameGetSym n' returns optionally the symbol of name 'n'.
 -- If 'n' has no symbol, 'None' is returned.
--- TODO(dlunde,2020-09-29): Update signature when we have polymorphic types.
-let nameGetSym : Name -> OptionSymbol =
+let nameGetSym : Name -> Option Symbol =
   lam n. if eqsym n.1 _noSymbol then None () else Some n.1
 
 let _s = gensym ()

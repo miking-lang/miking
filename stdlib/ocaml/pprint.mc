@@ -1,15 +1,20 @@
 include "ocaml/ast.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/symbolize.mc"
+include "ocaml/symbolize.mc"
 include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
 
 let defaultIdentName = "_var"
+let defaultConName = "Con"
 
 let escapeFirstChar = lam c.
   if isLowerAlphaOrUnderscore c then c
   else '_'
+
+let escapeFirstConChar = lam c.
+  if isUpperAlpha c then c
+  else 'C'
 
 utest map escapeFirstChar "abcABC/:@_'" with "abc________"
 
@@ -30,6 +35,10 @@ let isIdentifierString = lam s.
     and (isLowerAlphaOrUnderscore hd) (all isValidChar tl)
   else
     all isLowerAlpha s
+
+let isConString = lam s.
+  if null s then false else
+  and (isUpperAlpha (head s)) (all isValidChar (tail s))
 
 utest isIdentifierString "__" with true
 utest isIdentifierString "_1" with true
@@ -74,6 +83,13 @@ let isModuleCallString = lam s.
   else
     and (all isModuleString modules) (isIdentifierString (last parts))
 
+let isModuleConString = lam s.
+  let parts = strSplit "." s in
+  let modules = init parts in
+  if null modules then false
+  else
+    and (all isModuleString modules) (isConString (last parts))
+
 utest isModuleCallString "Foo.bar" with true
 utest isModuleCallString "A.B.C.D.E.F.G.hello" with true
 utest isModuleCallString "Foo.Bar.foo" with true
@@ -92,6 +108,24 @@ utest isModuleCallString "Foo.bar.foo" with false
 utest isModuleCallString "Foo.B@r.foo" with false
 utest isModuleCallString "foo.Bar.foo" with false
 
+utest isModuleConString "Foo.Bar" with true
+utest isModuleConString "A.B.C.D.E.F.G.Hello" with true
+utest isModuleConString "Foo.Bar.Foo" with true
+utest isModuleConString "Foo.Bar.__" with false
+utest isModuleConString "Foo.Bar._a" with false
+utest isModuleConString "Foo.Bar._A" with false
+utest isModuleConString "Foo.Bar._" with false
+utest isModuleConString "Foo.Bar.a" with false
+utest isModuleConString "Foo.Bar.*" with false
+utest isModuleConString "a" with false
+utest isModuleConString "A" with false
+utest isModuleConString "_a" with false
+utest isModuleConString "Foo.@" with false
+utest isModuleConString "foo.Bar" with false
+utest isModuleConString "Foo.bar.Foo" with false
+utest isModuleConString "Foo.B@r.Foo" with false
+utest isModuleConString "foo.Bar.Foo" with false
+
 let escapeString = lam s.
   let n = length s in
   if gti n 0 then
@@ -107,6 +141,21 @@ let escapeString = lam s.
   else
     defaultIdentName
 
+let escapeConString = lam s.
+  let n = length s in
+  if gti n 0 then
+    if isModuleConString s then
+      s
+    else
+      let hd = head s in
+      let tl = tail s in
+      if or (neqi n 1) (isUpperAlpha hd) then
+        cons (escapeFirstConChar hd) (map escapeChar tl)
+      else
+        defaultConName
+  else
+    defaultConName
+
 utest escapeString "abcABC/:@_'" with "abcABC____'"
 utest escapeString "" with defaultIdentName
 utest escapeString "@" with defaultIdentName
@@ -114,8 +163,19 @@ utest escapeString "ABC123" with "_BC123"
 utest escapeString "'a/b/c" with "_a_b_c"
 utest escapeString "123" with "_23"
 
+utest escapeConString "abcABC/:@_'" with "CbcABC____'"
+utest escapeConString "" with defaultConName
+utest escapeConString "@" with defaultConName
+utest escapeConString "ABC123" with "ABC123"
+utest escapeConString "'a/b/c" with "Ca_b_c"
+utest escapeConString "123" with "C23"
+
 let escapeName = lam n.
   match n with (str,symb) then (escapeString str, symb)
+  else never
+
+let escapeConName = lam n.
+  match n with (str,symb) then (escapeConString str, symb)
   else never
 
 utest (escapeName ("abcABC/:@_'", gensym ())).0
@@ -127,7 +187,11 @@ with ("_BC123", gensym ()).0
 lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
                         + IdentifierPrettyPrint + UnknownTypePrettyPrint
+                        + NamedPatPrettyPrint + IntPatPrettyPrint
+                        + CharPatPrettyPrint + BoolPatPrettyPrint
 
+  sem pprintConName (env : PprintEnv) =
+  | name -> pprintEnvGetStr env (escapeConName name)
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
   sem pprintLabelString =
@@ -136,10 +200,15 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | OTmMatch _ -> false
+  | OTmTuple _ -> true
+  | OTmConApp {args = []} -> true
+  | OTmConApp _ -> false
 
-  sem _pprintBinding (indent : Int) (env: PprintEnv) =
-  | {ident = id, body = b} ->
-    join [nameGetStr id, " = ", pprintCode indent b]
+  sem patIsAtomic =
+  | OPTuple _ -> true
+  | OPCon {args = []} -> true
+  | OPCon _ -> false
 
   sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
@@ -167,6 +236,19 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CChar {val = c} -> show_char c
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | OTmConApp {ident = ident, args = []} -> pprintConName env ident
+  | OTmConApp {ident = ident, args = [arg]} ->
+    match pprintConName env ident with (env, ident) then
+      match printParen indent env arg with (env, arg) then
+        (env, join [ident, " ", arg])
+      else never
+    else never
+  | OTmConApp {ident = ident, args = args} ->
+    match pprintConName env ident with (env, ident) then
+      match mapAccumL (pprintCode indent) env args with (env, args) then
+        (env, join [ident, " (", strJoin ", " args, ")"])
+      else never
+    else never
   | TmLam {ident = id, body = b} ->
     match pprintVarName env id with (env,str) then
       match pprintCode (pprintIncr indent) env b with (env,body) then
@@ -197,16 +279,96 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
+  | OTmTuple {values = values} ->
+    match mapAccumL (pprintCode indent) env values
+    with (env, values) then
+      (env, join ["(", strJoin ", " values, ")"])
+    else never
+  | OTmMatch {
+    target = target,
+    arms
+      = [ (PBool {val = true}, thn), (PBool {val = false}, els) ]
+      | [ (PBool {val = false}, els), (PBool {val = true}, thn) ]
+    } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match pprintCode ii env target with (env, target) then
+      match pprintCode ii env thn with (env, thn) then
+        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
+          (env, join ["if", pprintNewline ii,
+                      target, pprintNewline i,
+                      "then", pprintNewline ii,
+                      thn, pprintNewline i,
+                      "else", pprintNewline ii,
+                      els])
+        else never
+      else never
+    else never
+  | OTmMatch { target = target, arms = [(pat, expr)] } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match pprintCode ii env target with (env, target) then
+      match getPatStringCode ii env pat with (env, pat) then
+        match pprintCode ii env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
+          (env, join ["let", pprintNewline ii,
+                      pat, pprintNewline i,
+                      "=", pprintNewline ii,
+                      target, pprintNewline i,
+                      "in", pprintNewline ii,
+                      expr])
+        else never
+      else never
+    else never
+  | OTmMatch {target = target, arms = arms} ->
+    let i = indent in
+    let ii = pprintIncr i in
+    let iii = pprintIncr ii in
+    match pprintCode ii env target with (env, target) then
+      let pprintArm = lam env. lam arm. match arm with (pat, expr) then
+        match getPatStringCode ii env pat with (env, pat) then
+          match printParen iii env expr with (env, expr) then
+            (env, join [pprintNewline i, "| ", pat, " ->", pprintNewline iii, expr])
+          else never
+        else never
+      else never in
+      match mapAccumL pprintArm env arms with (env, arms) then
+        (env, join ["match", pprintNewline ii, target, pprintNewline i,
+                    "with", join arms])
+      else never
+    else never
+
+  sem getPatStringCode (indent : Int) (env : PprintEnv) =
+  | OPTuple {pats = pats} ->
+    match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
+      (env, join ["(", strJoin ", " pats, ")"])
+    else never
+  | OPCon {ident = ident, args = []} -> pprintConName env ident
+  | OPCon {ident = ident, args = [arg]} ->
+    match pprintConName env ident with (env, ident) then
+      match printPatParen indent env arg with (env, arg) then
+        (env, join [ident, " ", arg])
+      else never
+    else never
+  | OPCon {ident = ident, args = args} ->
+    match pprintConName env ident with (env, ident) then
+      match mapAccumL (getPatStringCode indent) env args with (env, args) then
+        (env, join [ident, " (", strJoin ", " args, ")"])
+      else never
+    else never
 end
 
-lang TestLang = OCamlPrettyPrint + MExprSym
+lang TestLang = OCamlPrettyPrint + OCamlSym
 
 mexpr
 use TestLang in
 
+let debugPrint = false in
+
 let pprintProg = lam ast.
-  let _ = print "\n\n" in
-  print (expr2str (symbolize ast))
+  if debugPrint then
+    let _ = print "\n\n" in
+    print (expr2str (symbolize ast))
+  else ()
 in
 
 let testAddInt1 = addi_ (int_ 1) (int_ 2) in
@@ -281,6 +443,40 @@ let testMutRecEscape =
     (app_ (var_ "'a/b/c") (int_ 1))
 in
 
+let testMatchSimple =
+  let armA = (pvar_ "a", var_ "a") in
+  let armB = (pvarw_, int_ 3) in
+  OTmMatch {target = true_, arms = [armA, armB]}
+in
+
+let testMatchNested =
+  let armA = (pvar_ "a", var_ "a") in
+  let armB = (pvarw_, var_ "b") in
+  let inner = OTmMatch {target = true_, arms = [armA]} in
+  let armB = (pvar_ "b", inner) in
+  let armC = (pvar_ "c", false_) in
+  OTmMatch {target = true_, arms = [armB, armC]}
+in
+
+let testIf =
+  OTmMatch {target = true_, arms = [(ptrue_, true_), (pfalse_, false_)]}
+in
+
+let testIfNested =
+  let t = lam v. OTmMatch {target = true_, arms = [(ptrue_, v true_), (pfalse_, v false_)]} in
+  OTmMatch {target = true_, arms = [(pfalse_, t (lam x. addi_ false_ x)), (ptrue_, t (lam x. addi_ true_ x))]}
+in
+
+let testPatLet =
+  OTmMatch {target = true_, arms = [(pvar_ "a", var_ "a")]}
+in
+
+let testTuple =
+  OTmMatch
+  { target = OTmTuple {values = [true_, false_]}
+  , arms = [(OPTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -300,9 +496,15 @@ let asts = [
   testLamEscape,
   testLetEscape,
   testRecEscape,
-  testMutRecEscape
+  testMutRecEscape,
+  testMatchSimple,
+  testMatchNested,
+  testIf,
+  testIfNested,
+  testPatLet,
+  testTuple
 ] in
 
--- let _ = map pprintProg asts in
+let _ = map pprintProg asts in
 
 ()

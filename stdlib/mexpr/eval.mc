@@ -1136,6 +1136,13 @@ utest eval (match_
   false_)
 with false_ in
 
+utest eval (match_
+  (tuple_ [int_ 1, int_ 2])
+  (pand_ (pvar_ "a") (ptuple_ [pvar_ "b", pint_ 2]))
+  (tuple_ [var_ "a", var_ "b"])
+  (tuple_ [tuple_ [int_ 70, int_ 72], int_ 71]))
+with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1] in
+
 -- I/O operations
 -- utest eval (printString_ (str_ "Hello World")) with unit_ in
 -- utest eval (printString_ (readLine_ unit_)) with unit_ in

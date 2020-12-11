@@ -202,21 +202,18 @@ lang MatchSym = Sym + MatchAst
   -- nice to pass via state monad or something.  env is the
   -- environment from the outside, plus the names added thus far in
   -- the pattern patEnv is only the newly added names
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   -- Intentionally left blank
 
   sem symbolizeExpr (env : SymEnv) =
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
-    match env with {varEnv = varEnv, conEnv = conEnv} then
-      match symbolizePat env symEnvEmpty pat
-      with ({varEnv = thnVarEnv, conEnv = thnConEnv}, pat) then
-        let m = assocMergePreferRight {eq=eqString} in
-        let thnPatEnv = {varEnv = m varEnv thnVarEnv,
-                         conEnv = m conEnv thnConEnv} in
-        TmMatch {target = symbolizeExpr env target,
-                 pat = pat, thn = symbolizeExpr thnPatEnv thn,
-                 els = symbolizeExpr env els}
-      else never
+    match symbolizePat env assocEmpty pat
+    with (thnVarEnv, pat) then
+      let m = assocMergePreferRight {eq=eqString} in
+      let thnPatEnv = {env with varEnv = m env.varEnv thnVarEnv} in
+      TmMatch {target = symbolizeExpr env target,
+               pat = pat, thn = symbolizeExpr thnPatEnv thn,
+               els = symbolizeExpr env els}
     else never
 end
 
@@ -314,26 +311,23 @@ end
 --------------
 
 let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
-  lam patEnv. lam pname.
-    match patEnv with {varEnv = varEnv} then
-      match pname with PName name then
-        if nameHasSym name then (patEnv, PName name)
-        else
-          let str = nameGetStr name in
-          let res = assocLookup {eq=eqString} str varEnv in
-          match res with Some name then (patEnv, PName name)
-          else match res with None () then
-            let name = nameSetNewSym name in
-            let varEnv = assocInsert {eq=eqString} str name varEnv in
-            let patEnv = {patEnv with varEnv = varEnv} in
-            (patEnv, PName name)
-          else never
-      else match pname with PWildcard () then (patEnv, PWildcard ())
-      else never
+  lam varEnv. lam pname.
+    match pname with PName name then
+      if nameHasSym name then (varEnv, PName name)
+      else
+        let str = nameGetStr name in
+        let res = assocLookup {eq=eqString} str varEnv in
+        match res with Some name then (varEnv, PName name)
+        else match res with None () then
+          let name = nameSetNewSym name in
+          let varEnv = assocInsert {eq=eqString} str name varEnv in
+          (varEnv, PName name)
+        else never
+    else match pname with PWildcard () then (varEnv, PWildcard ())
     else never
 
 lang NamedPatSym = NamedPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PNamed p ->
     match _symbolize_patname patEnv p.ident with (patEnv, patname) then
       (patEnv, PNamed {p with ident = patname})
@@ -341,14 +335,14 @@ lang NamedPatSym = NamedPat
 end
 
 lang SeqTotPatSym = SeqTotPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PSeqTot p ->
     let res = mapAccumL (symbolizePat env) patEnv p.pats in
     (res.0, PSeqTot {p with pats = res.1})
 end
 
 lang SeqEdgePatSym = SeqEdgePat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PSeqEdge p ->
     let preRes = mapAccumL (symbolizePat env) patEnv p.prefix in
     let midRes = _symbolize_patname preRes.0 p.middle in
@@ -358,17 +352,17 @@ lang SeqEdgePatSym = SeqEdgePat
 end
 
 lang RecordPatSym = RecordPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PRecord {bindings = bindings} ->
     match assocMapAccum {eq=eqString}
-            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) env bindings
+            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
       (env, PRecord {bindings = bindings})
     else never
 end
 
 lang DataPatSym = DataPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PCon {ident = ident, subpat = subpat} ->
     match env with {conEnv = conEnv} then
       let ident =
@@ -385,22 +379,22 @@ lang DataPatSym = DataPat
 end
 
 lang IntPatSym = IntPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PInt i -> (patEnv, PInt i)
 end
 
 lang CharPatSym = CharPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PChar c -> (patEnv, PChar c)
 end
 
 lang BoolPatSym = BoolPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PBool b -> (patEnv, PBool b)
 end
 
 lang AndPatSym = AndPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PAnd p ->
     let lRes = symbolizePat env patEnv p.lpat in
     let rRes = symbolizePat env lRes.0 p.rpat in
@@ -408,7 +402,7 @@ lang AndPatSym = AndPat
 end
 
 lang OrPatSym = OrPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | POr p ->
     let lRes = symbolizePat env patEnv p.lpat in
     let rRes = symbolizePat env lRes.0 p.rpat in
@@ -416,7 +410,7 @@ lang OrPatSym = OrPat
 end
 
 lang NotPatSym = NotPat
-  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
+  sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PNot p ->
     -- NOTE(vipa, 2020-09-23): new names in a not-pattern do not
     -- matter since they will never bind (it should probably be an

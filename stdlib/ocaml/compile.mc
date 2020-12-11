@@ -5,7 +5,6 @@ let _blt = pyimport "builtins"
 let _subprocess = pyimport "subprocess"
 let _tempfile = pyimport "tempfile"
 let _pathlib = pyimport "pathlib"
-let _shutil = pyimport "shutil"
 
 type ExecResult = {stdout: String, stderr: String, returncode: Int}
 type Program = String -> [String] -> ExecResult
@@ -28,7 +27,8 @@ let _runCommand : String->String->String->ExecResult =
     let r = pycallkw _subprocess "run" (cmd,)
             { cwd=cwd,
               input=pycall (pycall _blt "str" (stdin,)) "encode" (),
-              capture_output=true } in
+              stdout = pythonGetAttr _subprocess "PIPE",
+              stderr = pythonGetAttr _subprocess "PIPE" } in
     let returncode = pyconvert (pythonGetAttr r "returncode") in
     let stdout =
       pyconvert (pycall (pythonGetAttr r "stdout") "decode" ())
@@ -38,8 +38,11 @@ let _runCommand : String->String->String->ExecResult =
     in
     {stdout=stdout, stderr=stderr, returncode=returncode}
 
-let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
-  let dunefile = "(executable (name program) (libraries batteries boot))" in
+let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} = lam config. lam p.
+  let config = if config.warnings
+    then ""
+    else "(env (dev (flags (:standard -w -a)))) " in
+  let dunefile = concat config "(executable (name program) (libraries batteries boot))" in
   let td = pycall _tempfile "TemporaryDirectory" () in
   let dir = pythonGetAttr td "name" in
   let tempfile = lam f.
@@ -72,9 +75,12 @@ let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
         _runCommand command stdin (tempfile ""),
     cleanup =
       lam _.
-        let _ = pycall _shutil "rmtree" (dir,) in
+        let _ = pycall td "cleanup" () in
         ()
   }
+
+let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
+  ocamlCompileWithConfig {warnings=true}
 
 mexpr
 
