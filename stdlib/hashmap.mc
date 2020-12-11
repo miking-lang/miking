@@ -137,7 +137,7 @@ let hashmapLookupOrElse : HashMapTraits k -> (Unit -> v) -> k -> HashMap k v -> 
   lam traits. lam d. lam key. lam hm.
     optionGetOrElse d (hashmapLookup traits key hm)
 
--- 'hashmapLookupOr traits default key hm': like hashmapLookupOpt, but returns
+-- 'hashmapLookupOr traits default key hm': like hashmapLookupOrElse, but returns
 -- 'default' if no element was found.
 let hashmapLookupOr : HashMapTraits k -> v -> k -> HashMap k v -> v =
   lam traits. lam default. lam key. lam hm.

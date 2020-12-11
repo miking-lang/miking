@@ -277,7 +277,10 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     -- Compute maximum depth of the decision points
     let maxDepth =
       match lookupTable with [] then 0
-      else max subi (map (lam r. length r.path) lookupTable)
+      else
+        maxOrElse (lam _. error "undefined")
+                  subi
+                  (map (lam r. length r.path) lookupTable)
     in
     -- AST-ify the maxDepth variable
     let defMaxDepth = nulet_ _maxDepth (int_ maxDepth) in

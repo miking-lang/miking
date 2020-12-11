@@ -204,7 +204,7 @@ utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
 utest sort (lam l. lam r. subi l r) [] with []
 
 -- Max/Min
-let minOpt = lam cmp. lam seq.
+let min = lam cmp. lam seq.
   recursive let work = lam e. lam seq.
     if null seq then Some e
     else
@@ -214,26 +214,29 @@ let minOpt = lam cmp. lam seq.
   in
   if null seq then None () else work (head seq) (tail seq)
 
-utest minOpt (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3
-utest minOpt (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3
-utest minOpt (lam l. lam r. subi l r) [] with None ()
-
-let maxOpt = lam cmp. minOpt (lam l. lam r. cmp r l)
-
-utest maxOpt (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20
-utest maxOpt (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20
-
-let min = lam cmp. lam seq.
-  optionGetOrElse (lam _. error "Undefined")
-                  (minOpt cmp seq)
-
-utest min (lam l. lam r. subi l r) [3,4,8,9,20] with 3
-utest min (lam l. lam r. subi l r) [9,8,4,20,3] with 3
+utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3
+utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3
+utest min (lam l. lam r. subi l r) [] with None ()
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
-utest max (lam l. lam r. subi l r) [3,4,8,9,20] with 20
-utest max (lam l. lam r. subi l r) [9,8,4,20,3] with 20
+utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20
+utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20
+utest max (lam l. lam r. subi l r) [] with None ()
+
+let minOrElse = lam d. lam cmp. lam seq.
+  let p = min cmp seq in
+  match p with Some x then x else
+  match p with None _ then d ()
+  else never
+
+utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
+utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
+
+let maxOrElse = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
+
+utest maxOrElse (lam _. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 20
+utest maxOrElse (lam _. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 20
 
 -- First index in seq that satifies pred
 let index = lam pred. lam seq.
