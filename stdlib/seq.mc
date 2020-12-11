@@ -225,10 +225,7 @@ utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20
 utest max (lam l. lam r. subi l r) [] with None ()
 
 let minOrElse = lam d. lam cmp. lam seq.
-  let p = min cmp seq in
-  match p with Some x then x else
-  match p with None _ then d ()
-  else never
+  optionGetOrElse d (min cmp seq)
 
 utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
 utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
