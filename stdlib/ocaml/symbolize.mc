@@ -4,13 +4,14 @@ include "mexpr/symbolize.mc"
 lang OCamlSym =
   VarSym + AppSym + FunSym + LetSym + RecLetsSym + ConstSym
   + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
-  + OCamlMatch + OCamlTuple + OCamlData
+  + OCamlMatch + OCamlTuple + OCamlData + UnknownTypeSym
 
   sem symbolizeExpr (env : Env) =
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm. match arm with (pat, expr) then
       match symbolizePat env assocEmpty pat with (patEnv, pat) then
-        (pat, symbolizeExpr (assocMergePreferRight {eq=eqString} env patEnv) expr)
+        let thnEnv = {env with varEnv = assocMergePreferRight {eq=eqString} env.varEnv patEnv} in
+        (pat, symbolizeExpr thnEnv expr)
       else never else never in
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
   | OTmTuple { values = values } ->

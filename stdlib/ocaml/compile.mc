@@ -38,9 +38,11 @@ let _runCommand : String->String->String->ExecResult =
     in
     {stdout=stdout, stderr=stderr, returncode=returncode}
 
-let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
-  -- NOTE(vipa, 2020-12-03): Disable unused-variable warning since it's annoying to alter compilation depending on whether results are used or not
-  let dunefile = "(env (dev (flags (:standard -w -26 -w -27)))) (executable (name program) (libraries batteries boot))" in
+let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} = lam config. lam p.
+  let config = if config.warnings
+    then ""
+    else "(env (dev (flags (:standard -w -a)))) " in
+  let dunefile = concat config "(executable (name program) (libraries batteries boot))" in
   let td = pycall _tempfile "TemporaryDirectory" () in
   let dir = pythonGetAttr td "name" in
   let tempfile = lam f.
@@ -76,6 +78,9 @@ let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} = lam p.
         let _ = pycall td "cleanup" () in
         ()
   }
+
+let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
+  ocamlCompileWithConfig {warnings=true}
 
 mexpr
 

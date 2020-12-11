@@ -362,9 +362,13 @@ lang TestLang = OCamlPrettyPrint + OCamlSym
 mexpr
 use TestLang in
 
+let debugPrint = false in
+
 let pprintProg = lam ast.
-  let _ = print "\n\n" in
-  print (expr2str (symbolize ast))
+  if debugPrint then
+    let _ = print "\n\n" in
+    print (expr2str (symbolize ast))
+  else ()
 in
 
 let testAddInt1 = addi_ (int_ 1) (int_ 2) in

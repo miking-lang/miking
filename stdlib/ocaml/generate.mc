@@ -97,7 +97,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
           tms
   | TmConst {val = val} -> generateConst val
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
-    let tname = nameSym "target" in
+    let tname = nameSym "_target" in
     match generatePat tname pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
@@ -124,7 +124,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (char_ val)) cont _none)
   | PSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
-      let n = nameSym "seqElem" in
+      let n = nameSym "_seqElem" in
       match generatePat n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
@@ -145,12 +145,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let apply = lam f. lam x. f x in
     let mergeNames = assocMergePreferRight {eq=nameEqSym} in
     let minLen = addi (length prefix) (length postfix) in
-    let preName = nameSym "prefix" in
-    let tempName = nameSym "splitTemp" in
-    let midName = nameSym "middle" in
-    let postName = nameSym "postfix" in
+    let preName = nameSym "_prefix" in
+    let tempName = nameSym "_splitTemp" in
+    let midName = nameSym "_middle" in
+    let postName = nameSym "_postfix" in
     let genOne = lam targetName. lam i. lam pat.
-      let n = nameSym "seqElem" in
+      let n = nameSym "_seqElem" in
       match generatePat n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
@@ -179,7 +179,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
           match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
             let names = assocMapWithKey {eq=nameEqSym} (lam k. lam _. k) lnames in
-            let xname = nameSym "x" in
+            let xname = nameSym "_x" in
             let wrap = lam cont.
               _optMatch
                 (_optMatch
@@ -233,7 +233,7 @@ in
 let ocamlEval = lam p. lam strConvert.
   let subprocess = pyimport "subprocess" in
   let blt = pyimport "builtins" in
-    let res = ocamlCompile (join ["print_string (", strConvert, "(", p, "))"]) in
+    let res = ocamlCompileWithConfig {warnings=false} (join ["print_string (", strConvert, "(", p, "))"]) in
     let out = (res.run "" []).stdout in
     let _ = res.cleanup () in
     parseAsMExpr out
