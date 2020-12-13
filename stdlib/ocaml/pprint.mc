@@ -215,12 +215,15 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CAddi _ -> "(+)"
   | CSubi _ -> "(-)"
   | CMuli _ -> "( * )"
+  | CDivi _ -> "(/)"
+  | CModi _ -> "(mod)"
+  | CNegi _ -> "(~-)"
   | CFloat {val = f} -> float2string f
   | CAddf _ -> "(+.)"
   | CSubf _ -> "(-.)"
   | CMulf _ -> "( *. )"
   | CDivf _ -> "(/.)"
-  | CNegf _ -> "Float.neg"
+  | CNegf _ -> "(~-.)"
   | CBool {val = b} ->
       match b with true then
         "true"
@@ -228,11 +231,22 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         match b with false then
           "false"
         else never
-  | CNot _ -> "not"
   | CEqi _ -> "(=)"
   | CLti _ -> "(<)"
+  | CLeqi _ -> "(<=)"
+  | CGti _ -> "(>)"
+  | CGeqi _ -> "(>=)"
+  | CNeqi _ -> "(!=)"
+  | CSlli _ -> "Int.shift_left"
+  | CSrli _ -> "Int.shift_right_logical"
+  | CSrai _ -> "Int.shift_right"
   | CEqf _ -> "(=)"
   | CLtf _ -> "(<)"
+  | CLeqf _ -> "(<=)"
+  | CGtf _ -> "(>)"
+  | CGeqf _ -> "(>=)"
+  | CNeqf _ -> "(!=)"
+  | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> show_char c
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
@@ -375,13 +389,19 @@ let testAddInt1 = addi_ (int_ 1) (int_ 2) in
 
 let testAddInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 
+let testMulInt = muli_ (int_ 2) (int_ 3) in
+
+let testModInt = modi_ (int_ 2) (int_ 3) in
+
+let testDivInt = divi_ (int_ 2) (int_ 3) in
+
+let testNegInt = negi_ (int_ 2) in
+
 let testAddFloat1 = addf_ (float_ 1.) (float_ 2.) in
 
 let testAddFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
 
 let testNegFloat = negf_ (float_ 1.) in
-
-let testBoolNot = not_ (not_ true_) in
 
 let testCompareInt1 = eqi_ (int_ 1) (int_ 2) in
 
@@ -480,10 +500,13 @@ in
 let asts = [
   testAddInt1,
   testAddInt2,
+  testMulInt,
+  testModInt,
+  testDivInt,
+  testNegInt,
   testAddFloat1,
   testAddFloat2,
   testNegFloat,
-  testBoolNot,
   testCompareInt1,
   testCompareInt2,
   testCompareFloat1,

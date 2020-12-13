@@ -27,10 +27,11 @@ lang OCamlData
   | OPCon { ident : Name, args : [Pat] }
 end
 
-lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst
+lang OCamlAst = FunAst + LetAst + RecLetsAst + ArithIntAst + ShiftIntAst
                 + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
                 + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
                 + BoolPat + OCamlTuple + OCamlData
+                + CharAst + FloatIntConversionAst
 end
 
 mexpr

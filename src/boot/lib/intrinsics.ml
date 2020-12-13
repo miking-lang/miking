@@ -103,3 +103,13 @@ module File = struct
 
   let delete f = f |> Ustring.to_utf8 |> Sys.remove
 end
+
+module FloatConversion = struct
+  let floorfi f = f |> Float.floor |> int_of_float
+
+  let ceilfi f = f |> Float.ceil |> int_of_float
+
+  let roundfi f = f |> Float.round |> int_of_float
+
+  let string2float s = s |> Ustring.to_utf8 |> Float.of_string
+end

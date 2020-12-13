@@ -239,6 +239,16 @@ lang ArithIntAst = ConstAst + IntAst
   | CAddi {}
   | CSubi {}
   | CMuli {}
+  | CDivi {}
+  | CNegi {}
+  | CModi {}
+end
+
+lang ShiftIntAst = ConstAst + IntAst
+  syn Const =
+  | CSlli {}
+  | CSrli {}
+  | CSrai {}
 end
 
 lang FloatAst = ConstAst
@@ -255,27 +265,58 @@ lang ArithFloatAst = ConstAst + FloatAst
   | CNegf {}
 end
 
+lang FloatIntConversionAst = IntAst + FloatAst
+  syn Const =
+  | CFloorfi {}
+  | CCeilfi {}
+  | CRoundfi {}
+  | CInt2float {}
+end
+
 lang BoolAst = ConstAst
   syn Const =
   | CBool {val : Bool}
-  | CNot {} -- TODO(dlunde,2020-09-29): This constant does not exist in boot. Remove?
 end
 
 lang CmpIntAst = IntAst + BoolAst
   syn Const =
   | CEqi {}
+  | CNeqi {}
   | CLti {}
+  | CGti {}
+  | CLeqi {}
+  | CGeqi {}
 end
 
 lang CmpFloatAst = FloatAst + BoolAst
   syn Const =
   | CEqf {}
   | CLtf {}
+  | CLeqf {}
+  | CGtf {}
+  | CGeqf {}
+  | CNeqf {}
 end
 
 lang CharAst = ConstAst
   syn Const =
   | CChar {val : Char}
+end
+
+lang CmpCharAst = CharAst + BoolAst
+  syn Const =
+  | CEqc {}
+end
+
+lang IntCharConversionAst = IntAst + CharAst
+  syn Const =
+  | CInt2Char {}
+  | CChar2Int {}
+end
+
+lang FloatStringConversionAst = SeqAst + FloatAst
+  syn Const =
+  | CString2float {}
 end
 
 lang SymbAst = ConstAst
@@ -315,6 +356,7 @@ lang IOAst = ConstAst
   syn Const =
   | CPrintString {}
   | CReadLine {}
+  | CReadBytesAsString {}
 end
 
 lang RandomNumberGeneratorAst = ConstAst
@@ -323,14 +365,17 @@ lang RandomNumberGeneratorAst = ConstAst
   | CRandSetSeed {}
 end
 
-lang ExitAst = ConstAst
+lang SysAst = ConstAst
   syn Const =
   | CExit {}
+  | CError {}
+  | CArgv {}
 end
 
-lang ErrorAst = ConstAst
+lang TimeAst = ConstAst
   syn Const =
-  | CError {}
+  | CWallTimeMs {}
+  | CSleepMs {}
 end
 
 --------------
@@ -538,9 +583,11 @@ lang MExprAst =
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
-  IntAst + ArithIntAst + FloatAst + ArithFloatAst + BoolAst +
-  CmpIntAst + CmpFloatAst + CharAst + SymbAst + CmpSymbAst + SeqOpAst +
-  FileOpAst + IOAst + RandomNumberGeneratorAst + ErrorAst + ExitAst +
+  IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
+  CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
+  SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
+  RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
+  FloatStringConversionAst + TimeAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

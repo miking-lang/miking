@@ -10,19 +10,18 @@ include "ocaml/compile.mc"
 include "hashmap.mc"
 
 let _opHashMap = lam prefix. lam ops.
-let mkOp = lam op.
-nameSym (join [prefix, op])
-in
-foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
-hashmapEmpty ops
+  let mkOp = lam op. nameSym (join [prefix, op]) in
+  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
+        hashmapEmpty
+        ops
 
 let _op = lam opHashMap. lam op.
-nvar_
-(hashmapLookupOrElse hashmapStrTraits
-  (lam _.
-    error (strJoin " " ["Operation", op, "not found"]))
-    op
-    opHashMap)
+  nvar_
+  (hashmapLookupOrElse hashmapStrTraits
+    (lam _.
+      error (strJoin " " ["Operation", op, "not found"]))
+      op
+      opHashMap)
 
 let _seqOps = [
   "make",
@@ -46,6 +45,15 @@ let _symbOps = [
 ]
 
 let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
+
+let _floatOps = [
+  "floorfi",
+  "ceilfi",
+  "roundfi",
+  "string2float"
+]
+
+let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
@@ -87,6 +95,11 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | CGensym {} -> _symbOp "gensym"
   | CEqsym {} -> _symbOp "eqsym"
   | CSym2hash {} -> _symbOp "hash"
+  -- Int-Float Conversion intrinsics
+  | CFloorfi {} -> _floatOp "floorfi"
+  | CCeilfi {} -> _floatOp "ceilfi"
+  | CRoundfi {} -> _floatOp "roundfi"
+  | CString2float {} -> _floatOp "string2float"
   | v -> TmConst { val = v }
 
   sem generate =
@@ -215,7 +228,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
-                 + IntEq + BoolEq + CharEq
+                 + IntEq + BoolEq + CharEq + FloatEq
 
 mexpr
 
@@ -250,6 +263,11 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     match t.val with CInt _ then
       let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_int" in
       match ocamlVal with TmConst {val = CInt _} then
+        eqExpr mexprVal ocamlVal
+      else error "Values mismatch"
+    else match t.val with CFloat _ then
+      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_float" in
+      match ocamlVal with TmConst {val = CFloat _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CBool _ then
@@ -334,28 +352,32 @@ utest matchOr3 with generate matchOr3 using sameSemantics in
 
 let matchNestedOr1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr1 with generate matchNestedOr1 using sameSemantics in
 
 let matchNestedOr2 = symbolize
   (match_ (seq_ [int_ 2, int_ 1])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr2 with generate matchNestedOr2 using sameSemantics in
 
 let matchNestedOr3 = symbolize
   (match_ (seq_ [int_ 3, int_ 7])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr3 with generate matchNestedOr3 using sameSemantics in
 
 let matchNestedOr4 = symbolize
   (match_ (seq_ [int_ 4, int_ 7])
-    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"])) (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
 utest matchNestedOr4 with generate matchNestedOr4 using sameSemantics in
@@ -459,26 +481,87 @@ utest matchSeqEdge7 with generate matchSeqEdge7 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
-utest addInt1 with generate (symbolize addInt1) using sameSemantics in
+utest addInt1 with generate addInt1 using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest addInt2 with generate (symbolize addInt2) using sameSemantics in
+utest addInt2 with generate addInt2 using sameSemantics in
+
+let testMulInt = muli_ (int_ 2) (int_ 3) in
+utest testMulInt with generate testMulInt using sameSemantics in
+
+let testModInt = modi_ (int_ 2) (int_ 3) in
+utest testModInt with generate testModInt using sameSemantics in
+
+let testDivInt = divi_ (int_ 2) (int_ 3) in
+utest testDivInt with generate testDivInt using sameSemantics in
+
+let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
+utest testNegInt with generate testNegInt using sameSemantics in
 
 let compareInt1 = eqi_ (int_ 1) (int_ 2) in
-utest compareInt1 with generate (symbolize compareInt1)
-using sameSemantics in
+utest compareInt1 with generate compareInt1 using sameSemantics in
 
 let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt2 with generate (symbolize compareInt2)
-using sameSemantics in
+utest compareInt2 with generate compareInt2 using sameSemantics in
 
--- Booleans
-let boolNot = not_ (not_ true_) in
-utest boolNot with generate (symbolize boolNot) using sameSemantics in
+let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt3 with generate compareInt3 using sameSemantics in
+
+let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt4 with generate compareInt4 using sameSemantics in
+
+let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt5 with generate compareInt5 using sameSemantics in
+
+let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt6 with generate compareInt6 using sameSemantics in
+
+let shiftInt1 = slli_ (int_ 5) (int_ 2) in
+utest shiftInt1 with generate shiftInt1 using sameSemantics in
+
+let shiftInt2 = srli_ (int_ 5) (int_ 2) in
+utest shiftInt2 with generate shiftInt2 using sameSemantics in
+
+let shiftInt3 = srai_ (int_ 5) (int_ 2) in
+utest shiftInt3 with generate shiftInt3 using sameSemantics in
+
+-- Floats
+let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
+utest addFloat1 with generate addFloat1 using sameSemantics in
+
+let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest addFloat2 with generate addFloat2 using sameSemantics in
+
+let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
+utest testMulFloat with generate testMulFloat using sameSemantics in
+
+let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
+utest testDivFloat with generate testDivFloat using sameSemantics in
+
+let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
+utest testNegFloat with generate testNegFloat using sameSemantics in
+
+let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
+utest compareFloat1 with generate compareFloat1 using sameSemantics in
+
+let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat2 with generate compareFloat2 using sameSemantics in
+
+let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat3 with generate compareFloat3 using sameSemantics in
+
+let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat4 with generate compareFloat4 using sameSemantics in
+
+let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat5 with generate compareFloat5 using sameSemantics in
+
+let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat6 with generate compareFloat6 using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
-utest charLiteral with generate (symbolize charLiteral)
+utest charLiteral with generate charLiteral
 using sameSemantics in
 
 -- Abstractions
@@ -588,5 +671,22 @@ utest int_ 1 with generate thrd using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
+
+-- Float-Integer conversions
+let testFloorfi = floorfi_ (float_ 1.5) in
+utest testFloorfi with generate testFloorfi using sameSemantics in
+
+let testCeilfi = ceilfi_ (float_ 1.5) in
+utest testCeilfi with generate testCeilfi using sameSemantics in
+
+let testRoundfi = roundfi_ (float_ 1.5) in
+utest testRoundfi with generate testRoundfi using sameSemantics in
+
+let testInt2float = int2float_ (int_ 1) in
+utest testInt2float with generate testInt2float using sameSemantics in
+
+-- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
+-- let testString2float = string2float_ (str_ "1.5") in
+-- utest testString2float with generate testString2float using sameSemantics in
 
 ()

@@ -552,21 +552,21 @@ let delta eval env fi c v =
       in
       let f =
         s |> Mseq.Helpers.map to_char |> Mseq.Helpers.to_array
-        |> Ustring.from_uchars |> Ustring.to_utf8
+        |> Ustring.from_uchars
       in
-      TmConst (fi, CFloat (Float.of_string f))
+      TmConst (fi, CFloat (Intrinsics.FloatConversion.string2float f))
   | Cstring2float, _ ->
       fail_constapp fi
   | Cfloorfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.floor v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.floorfi v))
   | Cfloorfi, _ ->
       fail_constapp fi
   | Cceilfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.ceil v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.ceilfi v))
   | Cceilfi, _ ->
       fail_constapp fi
   | Croundfi, TmConst (fi, CFloat v) ->
-      TmConst (fi, CInt (Float.round v |> int_of_float))
+      TmConst (fi, CInt (Intrinsics.FloatConversion.roundfi v))
   | Croundfi, _ ->
       fail_constapp fi
   | Cint2float, TmConst (fi, CInt v) ->
