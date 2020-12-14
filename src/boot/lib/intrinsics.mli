@@ -84,5 +84,32 @@ module FloatConversion : sig
 
   val roundfi : float -> int
 
-  val string2float : ustring -> float
+  val string2float : int Mseq.t -> float
+end
+
+module IO : sig
+  val print : int Mseq.t -> unit
+
+  val read_line : unit -> int Mseq.t
+end
+
+module RNG : sig
+  val set_seed : int -> unit
+
+  val int_u : int -> int -> int
+end
+
+module MSys : sig
+
+  val exit : int -> unit
+
+  val error : int Mseq.t -> exn
+
+  val argv : int Mseq.t Mseq.t
+end
+
+module Time : sig
+  val get_wall_time_ms : unit -> float
+
+  val sleep_ms : int -> unit
 end

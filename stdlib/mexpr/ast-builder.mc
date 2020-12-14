@@ -293,6 +293,10 @@ let ulams_ = use MExprAst in
   lam idents. lam body.
   foldr (lam s. lam acc. ulam_ s acc) body idents
 
+let nulams_ = use MExprAst in
+  lam names. lam body.
+  foldr (lam n. lam acc. nulam_ n acc) body names
+
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
@@ -574,6 +578,9 @@ let set_ = use MExprAst in
   lam s. lam i. lam v.
   appf3_ (const_ (CSet ())) s i v
 
+let empty_ = use MExprAst in
+  const_ (seq_ [])
+
 let cons_ = use MExprAst in
   lam x. lam s.
   appf2_ (const_ (CCons ())) x s
@@ -638,8 +645,8 @@ let deleteFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileDelete ())) f
 
 -- I/O operations
-let printString_ = use MExprAst in
-  lam s. app_ (const_ (CPrintString ())) s
+let print_ = use MExprAst in
+  lam s. app_ (const_ (CPrint ())) s
 
 let readLine_ = use MExprAst in
   lam u. app_ (const_ (CReadLine ())) u

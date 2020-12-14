@@ -46,7 +46,7 @@ module Mseq = struct
 
     let of_ustring u = of_list (ustring2list u)
 
-    let to_ustring s = list2ustring (to_list s)
+    let to_ustring s = s |> to_array |> Ustring.from_uchars
 
     let equal = BatFingerTree.equal
 
@@ -111,5 +111,48 @@ module FloatConversion = struct
 
   let roundfi f = f |> Float.round |> int_of_float
 
-  let string2float s = s |> Ustring.to_utf8 |> Float.of_string
+  let string2float s =
+    s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Float.of_string
+end
+
+module IO = struct
+  let print s = s |> Mseq.Helpers.to_ustring |> uprint_string
+
+  let read_line _ =
+    let line = try read_line () with End_of_file -> "" in
+    line |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array
+end
+
+module RNG = struct
+  let is_seeded = ref false
+
+  let set_seed seed =
+    Random.init seed ;
+    is_seeded := true
+
+  let int_u lower upper =
+    if !is_seeded then ()
+    else (
+      Random.self_init () ;
+      is_seeded := true ) ;
+    lower + Random.int (upper - lower)
+end
+
+module MSys = struct
+  exception Error of ustring
+
+  let exit = exit
+
+  let error m = raise (Error (Mseq.Helpers.to_ustring m))
+
+  let argv =
+    Sys.argv |> Mseq.Helpers.of_array
+    |> Mseq.Helpers.map (fun a ->
+           a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array)
+end
+
+module Time = struct
+  let get_wall_time_ms _ = Unix.gettimeofday () *. 1000.
+
+  let sleep_ms ms = Thread.delay (float_of_int ms /. 1000.)
 end

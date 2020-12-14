@@ -248,6 +248,9 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CNeqf _ -> "(!=)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> show_char c
+  | CEqc _ -> "(=)"
+  | CChar2Int _ -> "int_of_char"
+  | CInt2Char _ -> "char_of_int"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
