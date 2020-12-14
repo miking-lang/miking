@@ -29,9 +29,12 @@ end
 
 lang OCamlAst = LamAst + LetAst + RecLetsAst + ArithIntAst + ShiftIntAst
                 + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
-                + CharAst + OCamlMatch + NamedPat + IntPat + CharPat
-                + BoolPat + OCamlTuple + OCamlData
-                + CharAst + FloatIntConversionAst
+                + CharAst + CmpCharAst + OCamlMatch + NamedPat + IntPat
+                + CharPat + BoolPat + OCamlTuple + OCamlData
+                + IntCharConversionAst + FloatIntConversionAst
+                + FileOpAst + RandomNumberGeneratorAst + TimeAst
+                + FloatStringConversionAst + SeqOpAst + IOAst + SysAst + SymbAst
+                + CmpSymbAst
 end
 
 mexpr
