@@ -19,6 +19,7 @@ include "option.mc"
 include "seq.mc"
 include "set.mc"
 include "assoc.mc"
+include "math.mc"
 
 type Digraph = { adj : AssocMap,
                  eqv : a -> a -> Bool,
@@ -171,7 +172,6 @@ let digraphReverse = lam g.
 -- From the paper: Depth-First Search and Linear Graph Algorithms, Tarjan 72.
 -- https://doi.org/10.1137/0201010
 let digraphTarjan = lam g.
-  let minOrElse = lam l. lam r. if lti l r then l else r in
   let mapMem = assocMem {eq=g.eqv} in
   let mapLookup = assocLookupOrElse {eq=g.eqv} (lam _. error "Lookup failed") in
   let mapInsert = assocInsert {eq=g.eqv} in
@@ -181,11 +181,11 @@ let digraphTarjan = lam g.
     let traverseSuccessors = lam s. lam w.
       if not (mapMem w s.number) then
         let s = strongConnect s w in
-        let n = minOrElse (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
+        let n = mini (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
         {s with lowlink = mapInsert v n s.lowlink}
       else if lti (mapLookup w s.number) (mapLookup v s.number) then
         if setMem w s.stack then
-          let n = minOrElse (mapLookup v s.lowlink) (mapLookup w s.number) in
+          let n = mini (mapLookup v s.lowlink) (mapLookup w s.number) in
           {s with lowlink = mapInsert v n s.lowlink}
         else s
       else s
