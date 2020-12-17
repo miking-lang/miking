@@ -39,8 +39,10 @@ lam w.
     {
       w = w,
       n = n,
-      lus = map (max subi) w,   -- assign feasible labels, e.g.
-      lvs = zerov,              -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
+      -- assign feasible labels, e.g.
+      lus = map (maxOrElse (lam _. error "undefined") subi) w,
+      -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
+      lvs = zerov,
       mus = negv,
       mvs = negv,
       ss = [],
@@ -165,7 +167,9 @@ recursive
   let augment = lam state.
   let s =
     -- min slack over v's not in T
-    min cmpSlack (filter (lam s. not (memT s.v state)) state.slacks)
+    minOrElse (lam _. error "undefined")
+              cmpSlack
+              (filter (lam s. not (memT s.v state)) state.slacks)
   in
 
   -- Since we can only expand the matching in the equality graph, e.g. slack =

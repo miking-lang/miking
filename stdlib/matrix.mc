@@ -62,7 +62,7 @@ let matrixMul = lam add. lam mul. lam mtx1. lam mtx2.
 
 -- Minimum element of mtx given comparator cmp.
 let matrixMin = lam cmp. lam mtx.
-  min cmp (map (min cmp) mtx)
+  optionBind (optionMapM (min cmp) mtx) (min cmp)
 
 -- Maximum element of mtx given comparator cmp.
 let matrixMax = lam cmp. matrixMin (lam l. lam r. cmp r l)
@@ -143,8 +143,8 @@ utest matrixMul [[1], [2]] [[1, 2]] with [[1,2], [2,4]] in
 utest matrixMul [[1,2]] [[1],[2]] with [[5]] in
 utest matrixMul [[1],[2]] [[3]] with [[3],[6]] in
 
-utest matrixMin subi matA with 1 in
-utest matrixMax subi matA with 4 in
+utest matrixMin subi matA with Some 1 in
+utest matrixMax subi matA with Some 4 in
 
 utest matrixFoldij (lam a. lam i. lam j. lam x. snoc a (i,j,x)) [] matA
 with [(0,0,1),(0,1,3),(1,0,2),(1,1,4)] in
