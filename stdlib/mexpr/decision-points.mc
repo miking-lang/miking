@@ -163,7 +163,7 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst
     sfold_Expr_Expr digraphUnion cgraph (smap_Expr_Expr (_findEdges cgraph prev) tm)
 end
 
--- Define variable names to be used in transformed program
+-- Variable names to be used in transformed program
 let _callCtx = nameSym "callCtx"
 let _lookupTable = nameSym "lookupTable"
 let _lookup = nameSym "lookup"
@@ -173,6 +173,27 @@ let _filter = nameSym "filter"
 let _max = nameSym "max"
 let _isPrefix = nameSym "isPrefix"
 let _isSuffix = nameSym "isSuffix"
+
+let _handleAppsCallCtx = use AppAst in use VarAst in
+  lam f. lam p. lam id. lam prev. lam app.
+    recursive let appHelper = lam app.
+      match app with TmApp {lhs = TmVar v, rhs = rhs} then
+        if p v.ident then
+          let isRecCall = _eqn prev v.ident in
+          let newCallCtx =
+            if isRecCall then (nvar_ _callCtx)
+            else appf2_ (nvar_ _addCall) (nvar_ _callCtx) id
+          in
+          app_ (app_ (TmVar v) newCallCtx)
+               (f p prev rhs)
+        else app
+      else match app with TmApp {lhs = TmApp a, rhs = rhs} then
+        let resLhs = appHelper (TmApp a) in
+        app_ resLhs (f p prev rhs)
+      else match app with TmApp a then
+        app_ (f p prev a.lhs) (f p prev a.rhs)
+      else never
+    in appHelper app
 
 lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   -- Transform the program
@@ -463,14 +484,12 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   -- Add call context as extra argument in function definitions
   | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
     let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
-    -- Is the name one of the nodes in the call graph?
     if p t.ident then
       let newBody = nulam_ _callCtx
                       (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
       TmLet {{t with body = newBody} with inexpr = transformCallCtx p prev t.inexpr}
     else TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
 
-  -- Same as for TmLet, but for each binding
   | TmRecLets t ->
     let handleLetExpr = lam le.
       if p le.ident then
@@ -484,26 +503,16 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     in
     TmRecLets {{t with bindings = foldl (lam a. lam b. cons (handleLetExpr b) a) [] t.bindings}
                 with inexpr = transformCallCtx p prev t.inexpr}
-
-  -- Insert call context as extra argument in function calls (not recursive ones)
-  -- TODO: handle multiple arguments
-  | TmLet ({body = TmApp {lhs = TmVar v, rhs = rhs}} & t) ->
-    if p v.ident then
-      let isRecursiveCall = _eqn prev v.ident in
-      let newCallCtx =
-        if isRecursiveCall then (nvar_ _callCtx)
-        else appf2_ (nvar_ _addCall) (nvar_ _callCtx) (symb_ (_getSym t.ident))
-      in
-      let newApp = TmApp {lhs = app_ (TmVar v) newCallCtx,
-                          rhs = transformCallCtx p prev rhs}
-      in TmLet {{t with body = newApp}
-                 with inexpr = transformCallCtx p prev t.inexpr}
-    else
-      TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
-
+   -- Insert call context as extra argument in function calls (not recursive ones)
+  | TmLet ({body = TmApp a} & t) ->
+    let id = symb_ (_getSym t.ident) in
+    let resBody = _handleAppsCallCtx transformCallCtx p id prev (TmApp a) in
+    TmLet {{t with body = resBody}
+            with inexpr = transformCallCtx p prev t.inexpr}
+  -- Replace holes with lookups
   | TmLet ({body = TmHole h} & t) ->
-    let sym = _getSym t.ident in
-    let lookupHole = app_ (app_ (nvar_ _lookup) (nvar_ _callCtx)) (symb_ sym) in
+    let id = symb_ (_getSym t.ident) in
+    let lookupHole = app_ (app_ (nvar_ _lookup) (nvar_ _callCtx)) id in
     TmLet {{t with body = lookupHole}
             with inexpr = transformCallCtx p prev t.inexpr}
 
@@ -567,7 +576,7 @@ let printEnabled = true in
 let print = if printEnabled then print else lam x. x in
 
 -- Enable/disable eval
-let evalEnabled = false in
+let evalEnabled = true in
 let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
 
@@ -587,10 +596,8 @@ let dprintTransform = lam ast.
   let _ = pprint ast in
   let _ = print "-------------- AFTER ANF --------------" in
   let _ = pprint anfast in
-  let _ = print "\n-------------- BEFORE TRANSFORMATION --------------" in
-  let _ = pprint ast in
   let _ = print "-------------- AFTER TRANSFORMATION --------------" in
-  let ast = transform [] ast in
+  let ast = transform [] anfast in
   let _ = pprint ast in
   let _ = print "-------------- END OF TRANSFORMED AST --------------" in
   ast
@@ -769,18 +776,18 @@ let hiddenCall = {
   calls = [("top", "foo")]
 } in
 
--- let foo = lam x.
+-- let foo = lam x. lam y.
 --   if (<hole>) then x
 --   else let d = <hole> in addi x d
--- in foo 42
+-- in foo 42 3
 let hole1 = {
   ast =
     bind_
       (ulet_ "foo"
-           (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
+           (ulam_ "x" (ulam_ "y" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
                            (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
-                                  (addi_ (var_ "x") (var_ "d"))))))
-      (app_ (var_ "foo") (int_ 42)),
+                                  (addi_ (var_ "x") (var_ "d")))))))
+      (appf2_ (var_ "foo") (int_ 42) (int_ 3)),
   expected = int_ 42,
   vs = ["top", "foo"],
   calls = [("top", "foo")]
@@ -858,7 +865,7 @@ let allTests = [
   , hiddenCall
 ] in
 
-let tTests = [hole1, hole2, hole3] in
+let tTests = [hole1] in
 let cgTests = allTests in
 
 let _ = map testTransform tTests in
