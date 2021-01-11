@@ -5,6 +5,7 @@ include "string.mc"
 include "ast-builder.mc"
 include "eq-paths.mc"
 include "prelude.mc"
+include "anf.mc"
 
 -- This file contains implementations related to decision points. In particular,
 -- it implements:
@@ -14,19 +15,19 @@ include "prelude.mc"
 
 let _top = nameSym "top"
 
+let _projName = nameSym "x"
 let _head = lam s. get_ s (int_ 0)
-let _tail = lam s. tupleproj_ 1 (splitat_ s (int_ 1))
+let _tail = lam s. ntupleproj_ _projName 1 (splitat_ s (int_ 1))
 let _null = lam s. eqi_ (int_ 0) (length_ s)
+let drecordproj_ = use MExprAst in
+  lam key. lam r.
+  nrecordproj_ _projName key r
 
 let _eqn = lam n1. lam n2.
   if and (nameHasSym n1) (nameHasSym n2) then
     nameEqSym n1 n2
   else
     error "Name without symbol."
-
-let drecordproj_ = use MExprAst in
-  lam key. lam r.
-  nrecordproj_ (nameSym "x") key r
 
 lang HoleAst
   syn Expr =
@@ -594,24 +595,23 @@ let expr2str = use PPrintLang in
     with (_,str)
     then str else never
 
-lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang
+lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang + MExprANF
 
 mexpr
 
 use TestLang in
 
+-- TODO: perhaps move anf to the transform
+let _anf = compose normalizeTerm symbolize in
+
 -- Enable/disable printing
-let printEnabled = false in
+let printEnabled = true in
 let print = if printEnabled then print else lam x. x in
 
 -- Enable/disable eval
 let evalEnabled = false in
 let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
-
--- Shorthand for symbolize
--- NOTE(dlunde,2020-11-16): Available by default now
--- let symbolize = symbolizeExpr symEnvEmpty in
 
 -- Prettyprinting
 let pprint = lam ast.
@@ -632,7 +632,7 @@ with (match last with TmLApp t then t.rhs else error "error") in
 -- Perform transform tests
 let dprintTransform = lam ast.
   -- Symbolize
-  let ast = symbolize ast in
+  let ast = _anf ast in
   -- Label applications
   let ast = labelApps ast in
   let _ = print "\n-------------- BEFORE TRANSFORMATION --------------" in
@@ -657,7 +657,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
       (digraphAddVertices (map nameGetStr (digraphVertices ng))
                           (digraphEmpty eqString eqsym))
   in
-  let g = toCallGraph (labelApps (symbolize ast)) in
+  let g = toCallGraph (labelApps (_anf ast)) in
   let sg = toStr g in
 
   utest setEqual eqString strVs (digraphVertices sg) with true in
@@ -667,7 +667,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
   map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
 in
 let testCallgraph = lam r.
-  callGraphTests r.ast r.vs r.calls
+  callGraphTests (normalizeTerm r.ast) r.vs r.calls
 in
 
 
@@ -824,12 +824,13 @@ let hiddenCall = {
 -- in foo 42
 let hole1 = {
   ast =
-    bind_
-      (ulet_ "foo"
-           (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                           (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
-                                  (addi_ (var_ "x") (var_ "d"))))))
-      (app_ (var_ "foo") (int_ 42)),
+    symbolize (
+      bind_
+        (ulet_ "foo"
+             (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
+                             (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
+                                    (addi_ (var_ "x") (var_ "d"))))))
+        (app_ (var_ "foo") (int_ 42))),
   expected = int_ 42,
   vs = ["top", "foo"],
   calls = [("top", "foo")]
@@ -893,9 +894,9 @@ let hole3 = {
 } in
 
 let allTests = [
-  hole1,
-  hole2,
-  hole3,
+  -- hole1
+  --hole2,
+  --hole3
   constant,
   identity,
   funCall,
@@ -908,10 +909,10 @@ let allTests = [
   hiddenCall
 ] in
 
-let tTests = [hole1, hole2, hole3] in
+--let tTests = [hole1, hole2, hole3] in
 let cgTests = allTests in
 
-let _ = map testTransform tTests in
+--let _ = map testTransform tTests in
 let _ = map testCallgraph cgTests in
 
 ()
