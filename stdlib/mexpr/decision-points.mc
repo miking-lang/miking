@@ -29,15 +29,24 @@ let _eqn = lam n1. lam n2.
   else
     error "Name without symbol."
 
+-- TODO: remove type annotation
 lang HoleAst
   syn Expr =
   | TmHole {ty : Type,
             startGuess : Expr,
             depth : Int}
+
   sem symbolizeExpr (env : SymEnv) =
+  | TmHole h -> TmHole h
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmHole h -> TmHole h
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmHole h -> acc
 end
 
-lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
+lang HolePrettyPrint = HoleAst + TypePrettyPrint
   sem isAtomic =
   | TmHole _ -> false
 
@@ -55,42 +64,18 @@ lang HoleAstPrettyPrint = HoleAst + TypePrettyPrint
     else never
 end
 
--- Temporary workaround: uniquely labeled decision points
-lang LHoleAst = HoleAst
-  syn Expr =
-  | LTmHole {ty : Type,
-             startGuess : Expr,
-             depth : Int}
+lang HoleANF = HoleAst + ANF
+  sem isValue =
+  | TmHole _ -> false
 
-  sem symbolizeExpr (env : SymEnv) =
-  | LTmHole h -> LTmHole h
-
-  sem fromTmHole =
-  | TmHole h -> LTmHole {ty = h.ty, startGuess = h.startGuess,
-                         depth = h.depth, id = symb_ (gensym ())}
-
-  sem toTmHole =
-  | LTmHole h -> TmHole {ty = h.ty, startGuess = h.startGuess, depth = h.depth}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | LTmHole h -> LTmHole h
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | LTmHole h -> acc
+  sem normalize (k : Expr -> Expr) =
+  | TmHole {ty = ty, startGuess = startGuess, depth = depth} ->
+    k (TmHole {ty = ty, startGuess = normalizeTerm startGuess, depth = depth})
 end
 
-lang LHoleAstPrettyPrint = LHoleAst + HoleAstPrettyPrint
-  sem isAtomic =
-  | LTmHole _ -> false
-
-  sem pprintCode (indent : Int) (env : SymEnv) =
-  | LTmHole h -> pprintCode indent env (toTmHole (LTmHole h))
-end
-
-let hole_ = use LHoleAst in
+let hole_ = use HoleAst in
   lam ty. lam startGuess. lam depth.
-  fromTmHole (TmHole {ty = ty, startGuess = startGuess, depth = depth})
-
+  TmHole {ty = ty, startGuess = startGuess, depth = depth}
 
 -- Temporary workaround: uniquely labeled TmApps
 lang LAppAst = AppAst
@@ -221,7 +206,7 @@ let _max = nameSym "max"
 let _isPrefix = nameSym "isPrefix"
 let _isSuffix = nameSym "isSuffix"
 
-lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
+lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   -- Transform the program
   sem transform (publicFns : [Name]) =
   | tm ->
@@ -546,9 +531,18 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     else
       TmLApp {lhs = TmVar v, rhs = transformCallCtx p prev rhs, id = id}
 
-  -- Replace holes with a call to lookup function
-  | LTmHole t ->
-    TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = t.id}
+  | TmLet ({body = TmHole h} & t) ->
+    let sym = optionGetOrElse
+               (lam _. error "Expected symbol")
+               (nameGetSym t.ident) in
+    let lookupHole = app_ (app_ (nvar_ _lookup) (nvar_ _callCtx)) (symb_ sym) in
+    TmLet {{t with body = lookupHole}
+            with inexpr = transformCallCtx p prev t.inexpr}
+
+  -- -- Replace holes with a call to lookup function
+  -- | TmHole t ->
+  --   --TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = t.id}
+  --   TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = symb_ 1}
 
   | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
 
@@ -560,11 +554,11 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
     let zip = zipWith (lam a. lam b. (a,b)) in
     foldl (lam acc. lam t.
                let fun = t.0 in
-               let hole = match t.1 with LTmHole h then h else error "Internal error" in
+               let hole = match t.1 with TmHole h then h else error "Internal error" in
                let depth = match hole.depth with TmConst {val = CInt n} then n.val
                            else error "Depth must be a constant integer" in
                let allPaths = eqPaths g fun depth publicFns in
-               let idPathValTriples = map (lam path. {id=hole.id, path=path, value=hole.startGuess}) allPaths
+               let idPathValTriples = map (lam path. {id=t.2, path=path, value=hole.startGuess}) allPaths
                in concat acc idPathValTriples) --
            [] functionIDPairs
 
@@ -573,21 +567,24 @@ lang ContextAwareHoles = Ast2CallGraph + LHoleAst + IntAst + SymbAst
   | tm -> allFunHoles2 _top tm
 
   sem allFunHoles2 (prev : Name) =
+  | TmLet ({body = TmHole h} & t) ->
+    let id = optionGetOrElse
+               (lam _. error "Expected symbol")
+               (nameGetSym t.ident)
+    in concat [(prev, TmHole h, symb_ id)] (allFunHoles2 prev t.inexpr)
   | TmLet t ->
     let res_body =
       match t.body with TmLam lm
       then allFunHoles2 t.ident lm.body
       else allFunHoles2 prev t.body
     in concat res_body (allFunHoles2 prev t.inexpr)
- | LTmHole h ->
-   [(prev, LTmHole h)]
  | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (allFunHoles2 prev) tm)
 
 end
 
 -- TODO(dlunde,2020-09-29): Why does the include order matter here? If I place
 -- MExprPrettyPrint first, I get a pattern matching error.
-lang PPrintLang = LAppPrettyPrint + LHoleAstPrettyPrint + MExprPrettyPrint
+lang PPrintLang = LAppPrettyPrint + HolePrettyPrint + MExprPrettyPrint
 let expr2str = use PPrintLang in
   lam expr.
     match
@@ -595,7 +592,7 @@ let expr2str = use PPrintLang in
     with (_,str)
     then str else never
 
-lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang + MExprANF
+lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang + MExprANF + HoleANF
 
 mexpr
 
@@ -632,9 +629,14 @@ with (match last with TmLApp t then t.rhs else error "error") in
 -- Perform transform tests
 let dprintTransform = lam ast.
   -- Symbolize
-  let ast = _anf ast in
+  let ast = symbolize ast in
+  let anfast = _anf ast in
   -- Label applications
   let ast = labelApps ast in
+  let _ = print "\n-------------- BEFORE ANF --------------" in
+  let _ = pprint ast in
+  let _ = print "-------------- AFTER ANF --------------" in
+  let _ = pprint anfast in
   let _ = print "\n-------------- BEFORE TRANSFORMATION --------------" in
   let _ = pprint ast in
   let _ = print "-------------- AFTER TRANSFORMATION --------------" in
@@ -657,7 +659,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
       (digraphAddVertices (map nameGetStr (digraphVertices ng))
                           (digraphEmpty eqString eqsym))
   in
-  let g = toCallGraph (labelApps (_anf ast)) in
+  let g = toCallGraph (labelApps (symbolize ast)) in
   let sg = toStr g in
 
   utest setEqual eqString strVs (digraphVertices sg) with true in
@@ -667,7 +669,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
   map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
 in
 let testCallgraph = lam r.
-  callGraphTests (normalizeTerm r.ast) r.vs r.calls
+  callGraphTests (symbolize r.ast) r.vs r.calls
 in
 
 
@@ -824,13 +826,12 @@ let hiddenCall = {
 -- in foo 42
 let hole1 = {
   ast =
-    symbolize (
-      bind_
-        (ulet_ "foo"
-             (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                             (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
-                                    (addi_ (var_ "x") (var_ "d"))))))
-        (app_ (var_ "foo") (int_ 42))),
+    bind_
+      (ulet_ "foo"
+           (ulam_ "x" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
+                           (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
+                                  (addi_ (var_ "x") (var_ "d"))))))
+      (app_ (var_ "foo") (int_ 42)),
   expected = int_ 42,
   vs = ["top", "foo"],
   calls = [("top", "foo")]
@@ -861,7 +862,7 @@ let hole2 = {
 } in
 
 -- let bar = lam x.
---   let h = LTmHole {depth = 2, startGuess = true} in
+--   let h = TmHole {depth = 2, startGuess = true} in
 --   if h then x else (addi x 1)
 -- in
 -- recursive let foo = lam x.
@@ -894,9 +895,9 @@ let hole3 = {
 } in
 
 let allTests = [
-  -- hole1
-  --hole2,
-  --hole3
+  hole1,
+  hole2,
+  hole3,
   constant,
   identity,
   funCall,
@@ -910,9 +911,10 @@ let allTests = [
 ] in
 
 --let tTests = [hole1, hole2, hole3] in
+let tTests = [hole1] in
 let cgTests = allTests in
 
---let _ = map testTransform tTests in
+let _ = map testTransform tTests in
 let _ = map testCallgraph cgTests in
 
 ()
