@@ -29,6 +29,11 @@ let _eqn = lam n1. lam n2.
   else
     error "Name without symbol."
 
+let _getSym = lam n.
+  (optionGetOrElse
+    (lam _. error "Expected symbol")
+    (nameGetSym n))
+
 -- TODO: remove type annotation
 lang HoleAst
   syn Expr =
@@ -77,49 +82,6 @@ let hole_ = use HoleAst in
   lam ty. lam startGuess. lam depth.
   TmHole {ty = ty, startGuess = startGuess, depth = depth}
 
--- Temporary workaround: uniquely labeled TmApps
-lang LAppAst = AppAst
-  syn Expr =
-  | TmLApp {lhs : Expr, rhs : Expr, id : Symbol}
-
-  sem fromAppAst =
-  | TmApp t -> TmLApp {lhs = t.lhs, rhs = t. rhs, id = gensym ()}
-
-  sem toAppAst =
-  | TmLApp t -> TmApp {lhs = t.lhs, rhs = t.rhs}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmLApp t -> TmLApp {lhs = f t.lhs, rhs = f t.rhs, id = t.id}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmLApp t -> f (f acc t.lhs) t.rhs
-
-  -- Traverse an expression and label all TmApps
-  sem labelApps =
-  | TmApp t ->
-    fromAppAst (TmApp {lhs = labelApps t.lhs, rhs = labelApps t.rhs})
-  | tm -> smap_Expr_Expr labelApps tm
-
-  sem symbolizeExpr (env : SymEnv) =
-  | TmLApp t -> fromAppAst (symbolizeExpr env (toAppAst (TmLApp t)))
-end
-
-lang LAppEval = LAppAst + AppEval
-  sem eval (ctx : {env : SymEnv}) =
-  | TmLApp t -> eval ctx (toAppAst (TmLApp t))
-end
-
-lang LAppPrettyPrint = LAppAst + AppPrettyPrint
-  sem isAtomic =
-  | TmLApp _ -> false
-
-  sem pprintCode (indent : Int) (env : SymEnv) =
-  | TmLApp t ->
-    let s = pprintCode indent env (toAppAst (TmLApp t)) in
-    s
-end
-
-
 -- Create a call graph from an AST.
 -- * Vertices (represented as strings) are functions f defined as: let f = lam. ...
 -- * There is an edge between f1 and f2 iff f1 calls f2: let f1 = lam. ... (f2 a)
@@ -138,61 +100,67 @@ let _handleLetEdge = use FunAst in
     then f g letexpr.ident lm.body
     else f g prev letexpr.body
 
+let _handleApps = use AppAst in use VarAst in
+  lam id. lam f. lam prev. lam g. lam app.
+    recursive let appHelper = lam g. lam app.
+      match app with TmApp {lhs = TmVar v, rhs = rhs} then
+        let resLhs =
+          if digraphHasVertex v.ident g then
+            digraphAddEdge prev v.ident id g
+          else g
+        in f resLhs prev rhs
+      else match app with TmApp ({lhs = TmApp a, rhs = rhs}) then
+        let resLhs = appHelper g (TmApp a) in
+        f resLhs prev rhs
+      else match app with TmApp a then
+        f (f g prev a.lhs) prev a.rhs
+      else never
+  in appHelper g app
+
 -- Complexity (I think): O(|V|*|F|), as we visit each node exactly once and each
 -- time potentially perform a graph union operation, which we assume has
 -- complexity O(|F|). V is the set of nodes in the AST and F is the set of nodes
 -- in the call graph (i.e. set of functions in the AST).
-lang Ast2CallGraph = LetAst + FunAst + RecLetsAst + LAppAst
+lang Ast2CallGraph = LetAst + FunAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    let vs = findVertices arg in
+    let vs = _findVertices arg in
     let gempty = digraphAddVertex _top (digraphEmpty _eqn eqsym) in
     let gvs = foldl (lam g. lam v. digraphAddVertex v g) gempty vs in
-    findEdges gvs _top arg
+    _findEdges gvs _top arg
 
-  -- Find all vertices of the call graph
-  sem findVertices =
+  sem _findVertices =
   | TmLet t ->
-    let res_body = _handleLetVertex t findVertices
-    in concat res_body (findVertices t.inexpr)
+    let res_body = _handleLetVertex t _findVertices
+    in concat res_body (_findVertices t.inexpr)
 
   | TmRecLets t ->
     let res =
-      foldl (lam a. lam b. concat a (_handleLetVertex b findVertices))
+      foldl (lam a. lam b. concat a (_handleLetVertex b _findVertices))
             [] t.bindings
-    in concat res (findVertices t.inexpr)
+    in concat res (_findVertices t.inexpr)
 
   | tm ->
-    sfold_Expr_Expr concat [] (smap_Expr_Expr findVertices tm)
+    sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
 
-  -- Find all edges of the call graph
-  sem findEdges (cgraph : DiGraph) (prev : String) =
-  | TmLet t ->
-    -- let <fun-name> = lam. ...
-    let res_body = _handleLetEdge t findEdges cgraph prev
-    in findEdges res_body prev t.inexpr
+  sem _findEdges (cgraph : DiGraph) (prev : Name) =
+  | TmLet ({body = TmApp a} & t) ->
+    let id = _getSym t.ident in
+    let resBody = _handleApps id _findEdges prev cgraph t.body in
+    _findEdges resBody prev t.inexpr
 
-  | TmLApp t ->
-    let res_lhs =
-      match t.lhs with TmVar n then
-        -- <fun-name> <argument>
-        if digraphHasVertex n.ident cgraph
-        then digraphAddEdge prev n.ident t.id cgraph
-        else cgraph
-      else
-        findEdges cgraph prev t.lhs
-    in findEdges res_lhs prev t.rhs
-
-  | TmApp t -> error "TmApps should be labeled by converting to TmLApp"
+  | TmLet ({body = TmLam lm} & t) ->
+    let resBody = _findEdges cgraph t.ident lm.body in
+    _findEdges resBody prev t.inexpr
 
   | TmRecLets t ->
     let res =
-      foldl (lam g. lam b. digraphUnion g (_handleLetEdge b findEdges g prev))
+      foldl (lam g. lam b. digraphUnion g (_handleLetEdge b _findEdges g prev))
             cgraph t.bindings
-    in findEdges res prev t.inexpr
+    in _findEdges res prev t.inexpr
 
   | tm ->
-    sfold_Expr_Expr digraphUnion cgraph (smap_Expr_Expr (findEdges cgraph prev) tm)
+    sfold_Expr_Expr digraphUnion cgraph (smap_Expr_Expr (_findEdges cgraph prev) tm)
 end
 
 -- Define variable names to be used in transformed program
@@ -210,11 +178,8 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   -- Transform the program
   sem transform (publicFns : [Name]) =
   | tm ->
-    -- Equip TmApps with unique labels
-    let ltm = labelApps tm in
-
      -- Compute the call graph
-    let callGraph = toCallGraph ltm in
+    let callGraph = toCallGraph tm in
 
     -- Renaming function for public functions
     let renameF = lam ident.
@@ -240,11 +205,11 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
       in work tm []
     in
     -- Extract dummy functions from the AST, to replace public functions
-    let dummies = extract isPublic makeDummy ltm in
+    let dummies = extract isPublic makeDummy tm in
     let defDummies = match dummies with [] then unit_ else bindall_ dummies in
 
     -- Transform program to use call context
-    let trans = transformCallCtx isFun _top ltm in
+    let trans = transformCallCtx isFun _top tm in
 
     -- Rename public functions
     let transRenamed = rename isPublic renameF trans in
@@ -253,7 +218,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     let defCallCtx = nulet_ _callCtx (seq_ []) in
 
     -- Define initial lookup table
-    let lookupTable = initLookupTable (cons _top publicFns) ltm in
+    let lookupTable = initLookupTable (cons _top publicFns) tm in
     -- AST-ify the lookup table
     let defLookupTable =
       nulet_ _lookupTable
@@ -494,7 +459,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   | tm -> smap_Expr_Expr (rename p rf) tm
 
   -- Transform program to use call context, considering identifiers for which p is true.
-  sem transformCallCtx (p : String -> Bool) (prev : String) =
+  sem transformCallCtx (p : String -> Bool) (prev : Name) =
   -- Add call context as extra argument in function definitions
   | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
     let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
@@ -521,28 +486,26 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
                 with inexpr = transformCallCtx p prev t.inexpr}
 
   -- Insert call context as extra argument in function calls (not recursive ones)
-  | TmLApp {lhs = TmVar v, rhs = rhs, id = id} ->
+  -- TODO: handle multiple arguments
+  | TmLet ({body = TmApp {lhs = TmVar v, rhs = rhs}} & t) ->
     if p v.ident then
-      -- Append to call context (only if not recursive call)
       let isRecursiveCall = _eqn prev v.ident in
-      let addToCallCtx = if isRecursiveCall then (nvar_ _callCtx)
-                         else appf2_ (nvar_ _addCall) (nvar_ _callCtx) (symb_ id)
-      in TmLApp {lhs = app_ (TmVar v) addToCallCtx, rhs = transformCallCtx p prev rhs, id = id}
+      let newCallCtx =
+        if isRecursiveCall then (nvar_ _callCtx)
+        else appf2_ (nvar_ _addCall) (nvar_ _callCtx) (symb_ (_getSym t.ident))
+      in
+      let newApp = TmApp {lhs = app_ (TmVar v) newCallCtx,
+                          rhs = transformCallCtx p prev rhs}
+      in TmLet {{t with body = newApp}
+                 with inexpr = transformCallCtx p prev t.inexpr}
     else
-      TmLApp {lhs = TmVar v, rhs = transformCallCtx p prev rhs, id = id}
+      TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
 
   | TmLet ({body = TmHole h} & t) ->
-    let sym = optionGetOrElse
-               (lam _. error "Expected symbol")
-               (nameGetSym t.ident) in
+    let sym = _getSym t.ident in
     let lookupHole = app_ (app_ (nvar_ _lookup) (nvar_ _callCtx)) (symb_ sym) in
     TmLet {{t with body = lookupHole}
             with inexpr = transformCallCtx p prev t.inexpr}
-
-  -- -- Replace holes with a call to lookup function
-  -- | TmHole t ->
-  --   --TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = t.id}
-  --   TmApp {lhs = TmApp {lhs = nvar_ _lookup, rhs = nvar_ _callCtx}, rhs = symb_ 1}
 
   | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
 
@@ -568,10 +531,8 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
 
   sem allFunHoles2 (prev : Name) =
   | TmLet ({body = TmHole h} & t) ->
-    let id = optionGetOrElse
-               (lam _. error "Expected symbol")
-               (nameGetSym t.ident)
-    in concat [(prev, TmHole h, symb_ id)] (allFunHoles2 prev t.inexpr)
+    let id = _getSym t.ident in
+    concat [(prev, TmHole h, symb_ id)] (allFunHoles2 prev t.inexpr)
   | TmLet t ->
     let res_body =
       match t.body with TmLam lm
@@ -584,7 +545,7 @@ end
 
 -- TODO(dlunde,2020-09-29): Why does the include order matter here? If I place
 -- MExprPrettyPrint first, I get a pattern matching error.
-lang PPrintLang = LAppPrettyPrint + HolePrettyPrint + MExprPrettyPrint
+lang PPrintLang = HolePrettyPrint + MExprPrettyPrint
 let expr2str = use PPrintLang in
   lam expr.
     match
@@ -592,7 +553,7 @@ let expr2str = use PPrintLang in
     with (_,str)
     then str else never
 
-lang TestLang = MExpr + ContextAwareHoles + LAppEval + PPrintLang + MExprANF + HoleANF
+lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
 
 mexpr
 
@@ -616,23 +577,12 @@ let pprint = lam ast.
   let _ = print (expr2str ast) in
   let _ = print "\n\n" in () in
 
--- Labeled application tests
-let ast = app_ (var_ "foo") (int_ 1) in
-let last = labelApps ast in
-
-utest (match ast with TmApp t then t.lhs else error "error")
-with (match last with TmLApp t then t.lhs else error "error") in
-
-utest (match ast with TmApp t then t.rhs else error "error")
-with (match last with TmLApp t then t.rhs else error "error") in
-
 -- Perform transform tests
 let dprintTransform = lam ast.
   -- Symbolize
   let ast = symbolize ast in
   let anfast = _anf ast in
   -- Label applications
-  let ast = labelApps ast in
   let _ = print "\n-------------- BEFORE ANF --------------" in
   let _ = pprint ast in
   let _ = print "-------------- AFTER ANF --------------" in
@@ -659,7 +609,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
       (digraphAddVertices (map nameGetStr (digraphVertices ng))
                           (digraphEmpty eqString eqsym))
   in
-  let g = toCallGraph (labelApps (symbolize ast)) in
+  let g = toCallGraph ast in
   let sg = toStr g in
 
   utest setEqual eqString strVs (digraphVertices sg) with true in
@@ -669,9 +619,8 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
   map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
 in
 let testCallgraph = lam r.
-  callGraphTests (symbolize r.ast) r.vs r.calls
+  callGraphTests (_anf r.ast) r.vs r.calls
 in
-
 
 -- 1
 let constant = {
@@ -895,23 +844,21 @@ let hole3 = {
 } in
 
 let allTests = [
-  hole1,
-  hole2,
-  hole3,
-  constant,
-  identity,
-  funCall,
-  callSameFunctionTwice,
-  twoArgs,
-  innerFun,
-  letWithFunCall,
-  factorial,
-  evenOdd,
-  hiddenCall
+    hole1
+  , hole2
+  , hole3
+  , constant
+  , identity
+  , funCall
+  , callSameFunctionTwice
+  , innerFun
+  , letWithFunCall
+  , factorial
+  , evenOdd
+  , hiddenCall
 ] in
 
---let tTests = [hole1, hole2, hole3] in
-let tTests = [hole1] in
+let tTests = [hole1, hole2, hole3] in
 let cgTests = allTests in
 
 let _ = map testTransform tTests in
