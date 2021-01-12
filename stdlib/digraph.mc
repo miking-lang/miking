@@ -21,9 +21,9 @@ include "set.mc"
 include "assoc.mc"
 include "math.mc"
 
-type Digraph = { adj : AssocMap,
-                 eqv : a -> a -> Bool,
-                 eql : b -> b -> Bool }
+type Digraph v l = { adj : AssocMap v [(v,v,l)],
+                     eqv : v -> v -> Bool,
+                     eql : l -> l -> Bool }
 
 -- Returns an empty graph. Input: equality functions for vertices and labels.
 let digraphEmpty = lam eqv. lam eql.

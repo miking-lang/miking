@@ -4,8 +4,8 @@ include "digraph.mc"
 include "string.mc"
 include "ast-builder.mc"
 include "eq-paths.mc"
-include "prelude.mc"
 include "anf.mc"
+include "name.mc"
 
 -- This file contains implementations related to decision points. In particular,
 -- it implements:
@@ -19,7 +19,8 @@ let _projName = nameSym "x"
 let _head = lam s. get_ s (int_ 0)
 let _tail = lam s. ntupleproj_ _projName 1 (splitat_ s (int_ 1))
 let _null = lam s. eqi_ (int_ 0) (length_ s)
-let drecordproj_ = use MExprAst in
+
+let _drecordproj = use MExprAst in
   lam key. lam r.
   nrecordproj_ _projName key r
 
@@ -34,11 +35,9 @@ let _getSym = lam n.
     (lam _. error "Expected symbol")
     (nameGetSym n))
 
--- TODO: remove type annotation
 lang HoleAst
   syn Expr =
-  | TmHole {ty : Type,
-            startGuess : Expr,
+  | TmHole {startGuess : Expr,
             depth : Int}
 
   sem symbolizeExpr (env : SymEnv) =
@@ -59,12 +58,8 @@ lang HolePrettyPrint = HoleAst + TypePrettyPrint
   | TmHole h ->
     match pprintCode indent env h.startGuess with (env1, startStr) then
       match pprintCode indent env1 h.depth with (env2, depthStr) then
-        match getTypeStringCode indent env2 h.ty with (env3, ty) then
-          (env3,
-            join ["Hole (",
-                  strJoin ", " [ty, startStr, depthStr],
-                  ")"])
-        else never
+        (env2,
+           join ["Hole (", strJoin ", " [startStr, depthStr],")"])
       else never
     else never
 end
@@ -74,20 +69,21 @@ lang HoleANF = HoleAst + ANF
   | TmHole _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmHole {ty = ty, startGuess = startGuess, depth = depth} ->
-    k (TmHole {ty = ty, startGuess = normalizeTerm startGuess, depth = depth})
+  | TmHole {startGuess = startGuess, depth = depth} ->
+    k (TmHole {startGuess = normalizeTerm startGuess, depth = depth})
 end
 
 let hole_ = use HoleAst in
-  lam ty. lam startGuess. lam depth.
-  TmHole {ty = ty, startGuess = startGuess, depth = depth}
+  lam startGuess. lam depth.
+  TmHole {startGuess = startGuess, depth = depth}
 
 -- Create a call graph from an AST.
--- * Vertices (represented as strings) are functions f defined as: let f = lam. ...
+-- * Vertices (identifier names) are functions f defined as: let f = lam. ...
 -- * There is an edge between f1 and f2 iff f1 calls f2: let f1 = lam. ... (f2 a)
 -- * "top" is the top of the graph (i.e., no incoming edges)
 
--- Helper functions
+type CallGraph = DiGraph Name Symbol
+
 let _handleLetVertex = use FunAst in
   lam letexpr. lam f.
     match letexpr.body with TmLam lm
@@ -124,10 +120,9 @@ let _handleApps = use AppAst in use VarAst in
 lang Ast2CallGraph = LetAst + FunAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    let vs = _findVertices arg in
     let gempty = digraphAddVertex _top (digraphEmpty _eqn eqsym) in
-    let gvs = foldl (lam g. lam v. digraphAddVertex v g) gempty vs in
-    _findEdges gvs _top arg
+    let g = digraphAddVertices (_findVertices arg) gempty in
+    _findEdges g _top arg
 
   sem _findVertices =
   | TmLet t ->
@@ -143,24 +138,24 @@ lang Ast2CallGraph = LetAst + FunAst + RecLetsAst
   | tm ->
     sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
 
-  sem _findEdges (cgraph : DiGraph) (prev : Name) =
+  sem _findEdges (cg : CallGraph) (prev : Name) =
   | TmLet ({body = TmApp a} & t) ->
     let id = _getSym t.ident in
-    let resBody = _handleApps id _findEdges prev cgraph t.body in
+    let resBody = _handleApps id _findEdges prev cg t.body in
     _findEdges resBody prev t.inexpr
 
   | TmLet ({body = TmLam lm} & t) ->
-    let resBody = _findEdges cgraph t.ident lm.body in
+    let resBody = _findEdges cg t.ident lm.body in
     _findEdges resBody prev t.inexpr
 
   | TmRecLets t ->
     let res =
       foldl (lam g. lam b. digraphUnion g (_handleLetEdge b _findEdges g prev))
-            cgraph t.bindings
+            cg t.bindings
     in _findEdges res prev t.inexpr
 
   | tm ->
-    sfold_Expr_Expr digraphUnion cgraph (smap_Expr_Expr (_findEdges cgraph prev) tm)
+    sfold_Expr_Expr digraphUnion cg (smap_Expr_Expr (_findEdges cg prev) tm)
 end
 
 -- Variable names to be used in transformed program
@@ -196,50 +191,51 @@ let _handleAppsCallCtx = use AppAst in use VarAst in
     in appHelper app
 
 lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
-  -- Transform the program
   sem transform (publicFns : [Name]) =
   | tm ->
-     -- Compute the call graph
     let callGraph = toCallGraph tm in
 
-    -- Renaming function for public functions
-    let renameF = lam ident.
-      let nameStr = nameGetStr ident in
-      let newNameStr = concat nameStr "Pr" in
-      nameNoSym newNameStr in
+    -- Check if identifier is a function in the call graph
+    let isVertex = lam ident.
+      optionIsSome (find (_eqn ident) (digraphVertices callGraph)) in
 
     -- Check if identifier is a public function
     let isPublic = lam ident.
       optionIsSome (find (_eqn ident) publicFns) in
 
-    -- Check if identifier is a function in the call graph
-    let isFun = lam ident.
-      optionIsSome (find (_eqn ident) (digraphVertices callGraph)) in
+    -- Renaming function for public functions
+    let renamePub = lam ident.
+      let nameStr = nameGetStr ident in
+      let newNameStr = concat nameStr "Pr" in
+      nameNoSym newNameStr in
 
     -- Replacer function for public functions
-    let makeDummy = lam funName. lam tm.
+    let makePubDummy = lam funName. lam tm.
       recursive let work = lam tm. lam acc.
         match tm with TmLam t then
           TmLam {t with body=work t.body (snoc acc t.ident)}
         else
-          foldl (lam a. lam x. app_ a (nvar_ x)) (app_ (nvar_ (renameF funName)) (nvar_ _callCtx)) acc
+          foldl
+            (lam a. lam x. app_ a (nvar_ x))
+            (app_ (nvar_ (renamePub funName))
+            (nvar_ _callCtx)) acc
       in work tm []
     in
     -- Extract dummy functions from the AST, to replace public functions
-    let dummies = extract isPublic makeDummy tm in
+    let dummies = _extract isPublic makePubDummy tm in
     let defDummies = match dummies with [] then unit_ else bindall_ dummies in
 
     -- Transform program to use call context
-    let trans = transformCallCtx isFun _top tm in
+    let trans = _transformCallCtx isVertex _top tm in
 
     -- Rename public functions
-    let transRenamed = rename isPublic renameF trans in
+    let transRenamed = _renameIdents isPublic renamePub trans in
 
     -- Define initial call context
     let defCallCtx = nulet_ _callCtx (seq_ []) in
 
     -- Define initial lookup table
-    let lookupTable = initLookupTable (cons _top publicFns) tm in
+    let lookupTable = _initLookupTable (cons _top publicFns) callGraph tm in
     -- AST-ify the lookup table
     let defLookupTable =
       nulet_ _lookupTable
@@ -250,11 +246,10 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     let maxDepth =
       match lookupTable with [] then 0
       else
-        maxOrElse (lam _. error "undefined")
+        maxOrElse (lam _. error "Expected non-empty lookup table")
                   subi
                   (map (lam r. length r.path) lookupTable)
     in
-    -- AST-ify the maxDepth variable
     let defMaxDepth = nulet_ _maxDepth (int_ maxDepth) in
 
     -- AST-ify filter
@@ -266,7 +261,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     --   else (filter p (tail s))
     -- in
     let filter =
-      -- Define local variables
+      -- Local variables
       let p = nameSym "p" in
       let s = nameSym "s" in
       let f = nameSym "f" in
@@ -376,20 +371,20 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
         (bindall_ [
           nulet_ entries (
               appf2_ (nvar_ _filter)
-                     (nulam_ t (eqsym_ (nvar_ id) (drecordproj_ "id" (nvar_ t))))
+                     (nulam_ t (eqsym_ (nvar_ id) (_drecordproj "id" (nvar_ t))))
                      (nvar_ _lookupTable)),
           nulet_ eqsym (nulam_ x (nulam_ y (eqsym_ (nvar_ x) (nvar_ y)))),
           nulet_ entriesSuffix
                (appf2_ (nvar_ _filter)
-                       (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqsym) (drecordproj_ "path" (nvar_ t)) (nvar_ _callCtx)))
+                       (nulam_ t (appf3_ (nvar_ _isSuffix) (nvar_ eqsym) (_drecordproj "path" (nvar_ t)) (nvar_ _callCtx)))
                        (nvar_ entries)),
           nulet_ cmp
             (nulam_ t1 (nulam_ t2
               (subi_
-                 (length_ (drecordproj_ "path" (nvar_ t1)))
-                 (length_ (drecordproj_ "path" (nvar_ t2)))))),
+                 (length_ (_drecordproj "path" (nvar_ t1)))
+                 (length_ (_drecordproj "path" (nvar_ t2)))))),
           nulet_ entriesLongestSuffix (appf2_ (nvar_ _max) (nvar_ cmp) (nvar_ entriesSuffix)),
-          drecordproj_ "value" (nvar_ entriesLongestSuffix)])))
+          _drecordproj "value" (nvar_ entriesLongestSuffix)])))
     in
     let defLookup = bindall_ [isPrefix, isSuffix, max, filter, lookup] in
 
@@ -418,8 +413,9 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
               defDummies,
               transRenamed]
 
-  -- Extract expressions from the body of identifiers for which p is true using extractor function
-  sem extract (p : String -> Bool)
+  -- Extract expressions from the body of identifiers using extractor.
+  -- Consider identifier for which p is true.
+  sem _extract (p : String -> Bool)
               (extractor : String -> Expr -> Expr) =
   | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
     let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
@@ -428,7 +424,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
         let newBody = extractor t.ident t.body in
         [TmLet {{t with body = newBody} with inexpr=unit_}]
       else []
-    in concat res (extract p extractor t.inexpr)
+    in concat res (_extract p extractor t.inexpr)
 
   | TmRecLets t ->
     let handleLet = lam le.
@@ -436,16 +432,21 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
         match le.body with TmLam lm then
           let newBody = extractor le.ident le.body in
           [{le with body=newBody}]
-        else error (strJoin "" ["Expected identifier ", le.ident, " to define a lambda."])
+        else
+          error (strJoin "" ["Expected identifier ",
+                             le.ident,
+                             " to define a lambda."])
       else []
     in
-    let binds = foldl (lam acc. lam b. concat acc (handleLet b)) [] t.bindings in
-    concat [TmRecLets {inexpr=unit_, bindings=binds}] (extract p extractor t.inexpr)
+    let binds =
+      foldl (lam acc. lam b. concat acc (handleLet b)) [] t.bindings
+    in concat [TmRecLets {inexpr=unit_, bindings=binds}]
+              (_extract p extractor t.inexpr)
 
-  | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (extract p extractor) tm)
+  | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (_extract p extractor) tm)
 
   -- Rename identifiers for which p is true, with renaming function rf
-  sem rename (p : String -> Bool) (rf : String -> String) =
+  sem _renameIdents (p : String -> Bool) (rf : String -> String) =
   | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
     let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
     let newIdent =
@@ -454,8 +455,8 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
       else
         t.ident
     in TmLet {{{t with ident = newIdent}
-                with body = rename p rf t.body}
-                with inexpr = rename p rf t.inexpr}
+                with body = _renameIdents p rf t.body}
+                with inexpr = _renameIdents p rf t.inexpr}
 
   | TmRecLets t ->
     let handleLet = lam le.
@@ -463,32 +464,35 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
       if p le.ident then
         match le.body with TmLam lm then
           let newIdent = rf le.ident in
-          let newBody = rename p rf le.body in
+          let newBody = _renameIdents p rf le.body in
           {{le with ident=newIdent} with body=newBody}
         else
-          error (strJoin "" ["Identifier ", le.ident, " expected to refer to a function."])
-      else
-        le
-     in TmRecLets {{t with bindings = map handleLet t.bindings}
-                    with inexpr = rename p rf t.inexpr}
+          error (strJoin "" ["Identifier ",
+                             le.ident,
+                             " expected to refer to a function."])
+      else le
+    in TmRecLets {{t with bindings = map handleLet t.bindings}
+                   with inexpr = _renameIdents p rf t.inexpr}
 
   | TmVar v ->
     if p v.ident then
       TmVar {v with ident = rf v.ident}
     else TmVar v
 
-  | tm -> smap_Expr_Expr (rename p rf) tm
+  | tm -> smap_Expr_Expr (_renameIdents p rf) tm
 
-  -- Transform program to use call context, considering identifiers for which p is true.
-  sem transformCallCtx (p : String -> Bool) (prev : Name) =
+  -- Transform program to use call context.
+  -- Considers only identifiers for which p is true.
+  sem _transformCallCtx (p : Name -> Bool) (prev : Name) =
   -- Add call context as extra argument in function definitions
-  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
+  | TmLet ({body = TmLam lm} & t) ->
     if p t.ident then
-      let newBody = nulam_ _callCtx
-                      (TmLam {lm with body = transformCallCtx p t.ident lm.body}) in
-      TmLet {{t with body = newBody} with inexpr = transformCallCtx p prev t.inexpr}
-    else TmLet {t with inexpr = transformCallCtx p prev t.inexpr}
+      let newBody =
+        nulam_ _callCtx
+               (TmLam {lm with body = _transformCallCtx p t.ident lm.body})
+      in TmLet {{t with body = newBody}
+                 with inexpr = _transformCallCtx p prev t.inexpr}
+    else TmLet {t with inexpr = _transformCallCtx p prev t.inexpr}
 
   | TmRecLets t ->
     let handleLetExpr = lam le.
@@ -496,71 +500,70 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
         match le.body with TmLam lm then
           let newBody =
             nulam_ _callCtx
-              (TmLam {lm with body = transformCallCtx p le.ident lm.body})
+              (TmLam {lm with body = _transformCallCtx p le.ident lm.body})
           in {le with body = newBody}
-        else error "Internal error: this letexpr should have a TmLam in its body"
+        else
+          error "Expected letexpr to have a TmLam in its body"
       else le
     in
-    TmRecLets {{t with bindings = foldl (lam a. lam b. cons (handleLetExpr b) a) [] t.bindings}
-                with inexpr = transformCallCtx p prev t.inexpr}
+    let binds = foldl (lam a. lam b. cons (handleLetExpr b) a) [] t.bindings in
+    TmRecLets {{t with bindings = binds}
+                with inexpr = _transformCallCtx p prev t.inexpr}
    -- Insert call context as extra argument in function calls (not recursive ones)
   | TmLet ({body = TmApp a} & t) ->
     let id = symb_ (_getSym t.ident) in
-    let resBody = _handleAppsCallCtx transformCallCtx p id prev (TmApp a) in
+    let resBody = _handleAppsCallCtx _transformCallCtx p id prev (TmApp a) in
     TmLet {{t with body = resBody}
-            with inexpr = transformCallCtx p prev t.inexpr}
+            with inexpr = _transformCallCtx p prev t.inexpr}
   -- Replace holes with lookups
   | TmLet ({body = TmHole h} & t) ->
     let id = symb_ (_getSym t.ident) in
     let lookupHole = app_ (app_ (nvar_ _lookup) (nvar_ _callCtx)) id in
     TmLet {{t with body = lookupHole}
-            with inexpr = transformCallCtx p prev t.inexpr}
+            with inexpr = _transformCallCtx p prev t.inexpr}
 
-  | tm -> smap_Expr_Expr (transformCallCtx p prev) tm
+  | tm -> smap_Expr_Expr (_transformCallCtx p prev) tm
 
   -- Initialise lookup table as a list of triples (id, path, startGuess)
-  sem initLookupTable (publicFns : [Name]) =
+  sem _initLookupTable (publicFns : [Name]) (g : CallGraph) =
   | tm ->
-    let g = toCallGraph tm in
-    let functionIDPairs = allFunHoles tm in
-    let zip = zipWith (lam a. lam b. (a,b)) in
-    foldl (lam acc. lam t.
-               let fun = t.0 in
-               let hole = match t.1 with TmHole h then h else error "Internal error" in
-               let depth = match hole.depth with TmConst {val = CInt n} then n.val
-                           else error "Depth must be a constant integer" in
-               let allPaths = eqPaths g fun depth publicFns in
-               let idPathValTriples = map (lam path. {id=t.2, path=path, value=hole.startGuess}) allPaths
-               in concat acc idPathValTriples) --
-           [] functionIDPairs
+    let holeInfo = _holeInfo tm in
+    let zip = zipWith (lam a. lam b. (a, b)) in
+    foldl
+      (lam acc. lam t.
+         let fun = t.fun in
+         let hole = t.hole in
+         let depth =
+           match hole.depth with TmConst {val = CInt n} then n.val
+           else error "Depth must be a constant integer"
+         in
+         let paths = eqPaths g fun depth publicFns in
+         let idPathValInfo =
+           map (lam path. {id=t.id, path=path, value=hole.startGuess})
+               paths
+         in concat acc idPathValInfo)
+      [] holeInfo
 
-  -- Return a list of pairs (function name, hole) for all holes in tm
-  sem allFunHoles =
-  | tm -> allFunHoles2 _top tm
+  -- Return a list of records with keys (function name, hole, id) for all holes
+  sem _holeInfo =
+  | tm -> _holeInfo2 _top tm
 
-  sem allFunHoles2 (prev : Name) =
+  sem _holeInfo2 (prev : Name) =
   | TmLet ({body = TmHole h} & t) ->
     let id = _getSym t.ident in
-    concat [(prev, TmHole h, symb_ id)] (allFunHoles2 prev t.inexpr)
-  | TmLet t ->
-    let res_body =
-      match t.body with TmLam lm
-      then allFunHoles2 t.ident lm.body
-      else allFunHoles2 prev t.body
-    in concat res_body (allFunHoles2 prev t.inexpr)
- | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (allFunHoles2 prev) tm)
+    concat [{fun=prev, hole=h, id=symb_ id}]
+           (_holeInfo2 prev t.inexpr)
 
+  | TmLet ({body = TmLam lm} & t) ->
+    let resBody = _holeInfo2 t.ident lm.body in
+    concat resBody (_holeInfo2 prev t.inexpr)
+
+  | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (_holeInfo2 prev) tm)
 end
 
 -- TODO(dlunde,2020-09-29): Why does the include order matter here? If I place
 -- MExprPrettyPrint first, I get a pattern matching error.
-lang PPrintLang = HolePrettyPrint + MExprPrettyPrint
-let expr2str = use PPrintLang in
-  lam expr.
-    match
-      pprintCode 0 {nameMap = assocEmpty, strMap = assocEmpty, count = assocEmpty} expr
-    with (_,str)
-    then str else never
+lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
 
 lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
 
@@ -568,15 +571,14 @@ mexpr
 
 use TestLang in
 
--- TODO: perhaps move anf to the transform
-let _anf = compose normalizeTerm symbolize in
+let anf = compose normalizeTerm symbolize in
 
 -- Enable/disable printing
-let printEnabled = true in
+let printEnabled = false in
 let print = if printEnabled then print else lam x. x in
 
 -- Enable/disable eval
-let evalEnabled = true in
+let evalEnabled = false in
 let evalE = lam expr. lam expected.
   if evalEnabled then eval {env = []} expr else expected in
 
@@ -590,7 +592,7 @@ let pprint = lam ast.
 let dprintTransform = lam ast.
   -- Symbolize
   let ast = symbolize ast in
-  let anfast = _anf ast in
+  let anfast = anf ast in
   -- Label applications
   let _ = print "\n-------------- BEFORE ANF --------------" in
   let _ = pprint ast in
@@ -626,7 +628,7 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
   map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
 in
 let testCallgraph = lam r.
-  callGraphTests (_anf r.ast) r.vs r.calls
+  callGraphTests (anf r.ast) r.vs r.calls
 in
 
 -- 1
@@ -784,8 +786,8 @@ let hole1 = {
   ast =
     bind_
       (ulet_ "foo"
-           (ulam_ "x" (ulam_ "y" (if_ ((hole_ tybool_ true_ (int_ 2))) (var_ "x")
-                           (bind_ (ulet_ "d" (hole_ tyint_ (int_ 1) (int_ 2)))
+           (ulam_ "x" (ulam_ "y" (if_ ((hole_ true_ (int_ 2))) (var_ "x")
+                           (bind_ (ulet_ "d" (hole_ (int_ 1) (int_ 2)))
                                   (addi_ (var_ "x") (var_ "d")))))))
       (appf2_ (var_ "foo") (int_ 42) (int_ 3)),
   expected = int_ 42,
@@ -805,9 +807,9 @@ let hole2 = {
     bind_
       (ulet_ "foo"
         (ulam_ "x" (bind_
-          ((bind_ (ulet_ "d1" (hole_ tyint_ (int_ 1) (int_ 2)))
+          ((bind_ (ulet_ "d1" (hole_ (int_ 1) (int_ 2)))
              (ulet_ "bar"
-               (ulam_ "y" (bind_ (ulet_ "d2" (hole_ tyint_ (int_ 3) (int_ 2)))
+               (ulam_ "y" (bind_ (ulet_ "d2" (hole_ (int_ 3) (int_ 2)))
                                  (addi_  (var_ "d1") (addi_ (var_ "d2") (var_ "y"))))))))
           (app_ (var_ "bar") (int_ 1)))
         ))
@@ -832,7 +834,7 @@ let hole2 = {
 -- foo 1
 let hole3 = {
   ast = bindall_ [ulet_ "bar" (ulam_ "x"
-                    (bind_ (ulet_ "h" (hole_ tybool_ true_ (int_ 2)))
+                    (bind_ (ulet_ "h" (hole_ true_ (int_ 2)))
                            (if_ (var_ "h")
                                 (var_ "x")
                                 (addi_ (var_ "x") (int_ 1))))),
@@ -865,7 +867,7 @@ let allTests = [
   , hiddenCall
 ] in
 
-let tTests = [hole1] in
+let tTests = [hole1, hole2, hole3] in
 let cgTests = allTests in
 
 let _ = map testTransform tTests in
