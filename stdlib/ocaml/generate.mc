@@ -555,26 +555,48 @@ in
 -- Evaluates OCaml expressions [strConvert] given as string, applied
 -- to [p], and parses it as a mexpr expression.
 let ocamlEval = lam p. lam strConvert.
+  let t1 = wallTimeMs () in
+
+  let res =
   let subprocess = pyimport "subprocess" in
   let blt = pyimport "builtins" in
     let res = ocamlCompileWithConfig {warnings=false} (join ["print_string (", strConvert, "(", p, "))"]) in
     let out = (res.run "" []).stdout in
     let _ = res.cleanup () in
     parseAsMExpr out
+  in
+  let t2 = wallTimeMs () in
+  let _ = print (join ["-- ocamlEval: ", float2string (divf (subf t2 t1) 1000.), " s\n"]) in
+  res
 in
 
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
+  let start = wallTimeMs () in
   let mexprVal =
     use MExprEval in
-    eval {env = []} mexprAst
+    let t1 = wallTimeMs () in
+    let res = eval {env = []} mexprAst in
+    let t2 = wallTimeMs () in
+    let _ = print (join ["-- MExpr eval: ", float2string (divf (subf t2 t1) 1000.), " s\n"]) in
+    res
   in
+  let res =
   match mexprVal with TmConst t then
     match t.val with CInt _ then
-      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_int" in
+      let t1 = wallTimeMs () in
+      let str = expr2str ocamlAst in
+      -- let _ = print str in
+      let t2 = wallTimeMs () in
+      let _ = print (join ["-- expr2str: ", float2string (divf (subf t2 t1) 1000.), " s\n"]) in
+      let ocamlVal = ocamlEval (str) "string_of_int" in
       match ocamlVal with TmConst {val = CInt _} then
-        eqExpr mexprVal ocamlVal
+        let t1 = wallTimeMs () in
+        let res = eqExpr mexprVal ocamlVal in
+        let t2 = wallTimeMs () in
+        let _ = print (join ["-- eqExpr: ", float2string (divf (subf t2 t1) 1000.), " s\n"]) in
+        res
       else error "Values mismatch"
     else match t.val with CFloat _ then
       let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_float" in
@@ -595,6 +617,10 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
       else error "Values mismatch"
     else error "Unsupported constant"
   else error "Unsupported value"
+  in
+  let eend = wallTimeMs () in
+  let _ = print (join ["-- sameSemantics: ", float2string (divf (subf eend start) 1000.), " s\n"]) in
+  res
 in
 
 let objWrapGenerate = lam a. objWrap (generate a) in
@@ -794,10 +820,13 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
+let t1 = wallTimeMs () in
 let p = objWrapGenerate addInt1 in
+let t2 = wallTimeMs () in
+let _ = print (join ["\n-- objWrapGenerate: ", float2string (divf (subf t2 t1) 1000.), " s\n"]) in
 utest addInt1 with p using sameSemantics in
 
-let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+-- let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest addInt2 with p using sameSemantics in
 
 -- let testMulInt = muli_ (int_ 2) (int_ 3) in

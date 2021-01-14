@@ -67,25 +67,29 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
 -- environment.
 let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
   lam env. lam name.
-    match pprintEnvLookup name env with Some str then (env,str)
-    else
-      let baseStr = nameGetStr name in
-      if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
-      else
-        match env with {count = count} then
-          let start =
-            match assocLookup {eq = eqString} baseStr count
-            with Some i then i else 1 in
-          recursive let findFree : String -> Int -> (String, Int) =
-            lam baseStr. lam i.
-              let proposal = concat baseStr (int2string i) in
-              if pprintEnvFree proposal env then (proposal, i)
-              else findFree baseStr (addi i 1)
-          in
-          match findFree baseStr start with (str, i) then
-            (pprintEnvAdd name str (addi i 1) env, str)
-          else never
-        else never
+    -- PERFORMANCE
+
+    -- match pprintEnvLookup name env with Some str then (env,str)
+    -- else
+    --   let baseStr = nameGetStr name in
+    --   if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
+    --   else
+    --     match env with {count = count} then
+    --       let start =
+    --         match assocLookup {eq = eqString} baseStr count
+    --         with Some i then i else 1 in
+    --       recursive let findFree : String -> Int -> (String, Int) =
+    --         lam baseStr. lam i.
+    --           let proposal = concat baseStr (int2string i) in
+    --           if pprintEnvFree proposal env then (proposal, i)
+    --           else findFree baseStr (addi i 1)
+    --       in
+    --       match findFree baseStr start with (str, i) then
+    --         (pprintEnvAdd name str (addi i 1) env, str)
+    --       else never
+    --     else never
+
+    (env, nameGetStr name)
 
 -- Adds the given name to the environment, if its exact string is not already
 -- mapped to. If the exact string is already mapped to, return None (). This

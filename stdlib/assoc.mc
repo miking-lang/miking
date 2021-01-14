@@ -23,9 +23,11 @@ let assocLength : AssocMap k v -> Int =
 -- overwritten.
 let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam v. lam m.
-    optionMapOrElse (lam _. cons (k,v) m)
-                    (lam i. set m i (k,v))
-                    (index (lam t. traits.eq k t.0) m)
+    -- PERFORMANCE
+    -- optionMapOrElse (lam _. cons (k,v) m)
+    --                 (lam i. set m i (k,v))
+    --                 (index (lam t. traits.eq k t.0) m)
+    cons (k,v) m
 
 -- 'seq2assoc traits ls' constructs a new association map from a sequence
 -- of tuples 'ls'. Bindings to the right overwrites previous equal bindings to
