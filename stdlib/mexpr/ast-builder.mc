@@ -344,6 +344,10 @@ let recordproj_ = use MExprAst in
   lam key. lam r.
   nrecordproj_ (nameNoSym "x") key r
 
+let ntupleproj_ = use MExprAst in
+  lam name. lam i. lam t.
+  nrecordproj_ name (int2string i) t
+
 let tupleproj_ = use MExprAst in
   lam i. lam t.
   recordproj_ (int2string i) t
