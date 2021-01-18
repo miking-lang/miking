@@ -113,3 +113,23 @@ module FloatConversion = struct
 
   let string2float s = s |> Ustring.to_utf8 |> Float.of_string
 end
+
+module Ref = struct
+  type t = int
+
+  let table = ref Mseq.empty
+
+  let index r = Mseq.length !table - r
+
+  let mkref v =
+    table := Mseq.cons v !table ;
+    Mseq.length !table
+
+  let deref r = Mseq.get !table (index r)
+
+  let modref r v =
+    table := Mseq.set !table (index r) v ;
+    ()
+
+  let string_of_ref r = Ustring.to_utf8 (ustring_of_int r)
+end

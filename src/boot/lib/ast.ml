@@ -113,6 +113,10 @@ and const =
   | Cgensym
   | Ceqsym of Symb.t option
   | Csym2hash
+  (* MCore references *)
+  | Cref
+  | CmodRef of Ref.t option
+  | CdeRef
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
@@ -190,6 +194,8 @@ and tm =
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
   (* Fix point *)
   | TmFix of info
+  (* Reference *)
+  | TmRef of info * Ref.t
 
 (* Kind of pattern name *)
 and patName =
@@ -308,6 +314,8 @@ let rec map_tm f = function
       f (TmUtest (fi, map_tm f t1, map_tm f t2, tusing_mapped, map_tm f tnext))
   | TmNever _ as t ->
       f t
+  | TmRef _ as t ->
+      f t
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -328,7 +336,8 @@ let tm_info = function
   | TmMatch (fi, _, _, _, _)
   | TmUse (fi, _, _)
   | TmUtest (fi, _, _, _, _)
-  | TmNever fi ->
+  | TmNever fi
+  | TmRef (fi, _) ->
       fi
 
 let pat_info = function

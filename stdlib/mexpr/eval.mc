@@ -222,6 +222,11 @@ lang NeverEval = NeverAst
   --TODO(?,?)
 end
 
+lang RefEval = RefAst
+  sem eval (ctx : {env : Env}) =
+  | TmRef r -> TmRef r
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -763,6 +768,31 @@ lang TimeEval = TimeAst + IntAst
     float_ (wallTimeMs ())
 end
 
+lang RefOpEval = RefOpAst + IntAst
+  syn Const =
+  | CModRef2 Ref
+
+  sem delta (arg : Expr) =
+  | CRef _ ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmRef {loc = ref n}
+    else error "v in ref v not an integer"
+  | CModRef _ ->
+    match arg with TmRef {loc = r} then
+      TmConst {val = CModRef2 r}
+    else error "first argument of modref not a reference"
+  | CModRef2 r ->
+    match arg with TmConst {val = CInt {val = n}} then
+      let _ = modref r n in
+      unit_
+    else error "second argument of modref not an integer"
+  | CDeRef _ ->
+    match arg with TmRef {loc = r} then
+      TmConst {val = CInt {val = deref r}}
+    else "not a deref of a reference"
+end
+
+
 --------------
 -- PATTERNS --
 --------------
@@ -891,13 +921,13 @@ lang MExprEval =
 
   -- Terms
   + VarEval + AppEval + FunEval + FixEval + RecordEval + RecLetsEval +
-  ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval
+  ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
 
   -- Constants
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
-  IntCharConversionEval + FloatStringConversionEval + TimeEval
+  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1409,5 +1439,23 @@ utest eval (char2int_ (char_ '\t')) with int_ 9 in
 
 -- String-Float conversion
 utest eval (string2float_ (str_ "1.5")) with float_ 1.5 in
+
+-- References
+let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),
+                  ulet_ "r2" (ref_ (int_ 2)),
+                  ulet_ "r3" (var_ "r1")]
+in
+utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with unit_ in
+utest
+  eval (bind_ p
+    (tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]))
+with tuple_ [int_ 1, int_ 2, int_ 1] in
+
+utest
+  eval (bind_ p (bindall_
+    [ulet_ "_" (modref_ (var_ "r1") (int_ 3)),
+     ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
+     tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
+with tuple_ [int_ 4, int_ 2, int_ 4] in
 
 ()

@@ -223,6 +223,18 @@ lang NeverAst
   | TmNever _ & t -> acc
 end
 
+lang RefAst
+  syn Expr =
+  | TmRef {loc : Ref}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmRef _ & t -> t
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmRef _ & t -> acc
+end
+
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -376,6 +388,13 @@ lang TimeAst = ConstAst
   syn Const =
   | CWallTimeMs {}
   | CSleepMs {}
+end
+
+lang RefOpAst = ConstAst + RefAst
+  syn Const =
+  | CRef {}
+  | CModRef {}
+  | CDeRef {}
 end
 
 --------------
@@ -580,14 +599,14 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + FunAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + RefAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst +
+  FloatStringConversionAst + TimeAst + RefOpAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
