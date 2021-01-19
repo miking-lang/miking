@@ -78,6 +78,12 @@ let assocLookupPred : (k -> Bool) -> AssocMap k v -> Option v =
                 (lam t. Some t.1)
                 (find (lam t. p t.0) m)
 
+-- 'assocPairsPred p m' returns all key-value pairs that satisfy 'p'.
+let assocPairsPred : (k -> Bool) -> AssocMap k v -> [v] =
+  lam p. lam m.
+    filter (lam t. p t.0 t.1) m
+
+
 -- 'assocAny p m' returns true if at least one (k,v) pair in the map satisfies
 -- the predicate 'p'.
 let assocAny : (k -> v -> Bool) -> AssocMap k v -> Bool =
@@ -161,6 +167,7 @@ let length = assocLength in
 let lookup = assocLookup traits in
 let lookupOrElse = assocLookupOrElse traits in
 let lookupPred = assocLookupPred in
+let pairsPred = assocPairsPred in
 let any = assocAny in
 let all = assocAll in
 let insert = assocInsert traits in
@@ -192,6 +199,11 @@ utest lookupOrElse (lam _. 42) 1 m with '1' in
 utest lookupOrElse (lam _. 42) 2 m with '2' in
 utest lookupOrElse (lam _. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
+utest
+  match pairsPred (lam x. lam _. leqi x 2) m with [(1, '1'), (2, '2')] | [(2, '2'), (1, '1')]
+    then true
+    else false
+  with true in
 utest any (lam k. lam v. eqChar v '2') m with true in
 utest any (lam k. lam v. eqChar v '4') m with false in
 utest all (lam k. lam v. gti k 0) m with true in

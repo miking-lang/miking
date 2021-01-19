@@ -40,10 +40,20 @@ type PprintEnv = {
 
 let pprintEnvEmpty = {nameMap = assocEmpty, count = assocEmpty}
 
--- Look up the string associated with a name in the environment
-let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
+-- Look up the string associated with a name in the environment and
+-- check if the base string of the name is free in the environment
+let pprintEnvLookup : Name -> PprintEnv -> (Option String, Bool) = lam name. lam env.
   match env with { nameMap = nameMap } then
-    assocLookup {eq = nameEq} name nameMap
+    let baseStr = nameGetStr name in
+    let p = lam n. lam s. or (nameEq name n) (eqString baseStr s) in
+    let res = assocPairsPred p nameMap in
+    match partition (lam t. nameEq name t.0) res with (nameMatch, strMatch) then
+      match nameMatch with [] then
+        (None (), null strMatch)
+      else match nameMatch with [(_, s)] then
+        (Some s, false)
+      else never
+    else never
   else never
 
 -- Check if a string is free in the environment.
@@ -67,29 +77,30 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
 -- environment.
 let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
   lam env. lam name.
-    -- PERFORMANCE
-
-    -- match pprintEnvLookup name env with Some str then (env,str)
-    -- else
-    --   let baseStr = nameGetStr name in
-    --   if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
-    --   else
-    --     match env with {count = count} then
-    --       let start =
-    --         match assocLookup {eq = eqString} baseStr count
-    --         with Some i then i else 1 in
-    --       recursive let findFree : String -> Int -> (String, Int) =
-    --         lam baseStr. lam i.
-    --           let proposal = concat baseStr (int2string i) in
-    --           if pprintEnvFree proposal env then (proposal, i)
-    --           else findFree baseStr (addi i 1)
-    --       in
-    --       match findFree baseStr start with (str, i) then
-    --         (pprintEnvAdd name str (addi i 1) env, str)
-    --       else never
-    --     else never
-
-    (env, nameGetStr name)
+    match pprintEnvLookup name env with (nameMatch, strIsFree) then
+      match nameMatch with Some s then (env, s)
+      else match nameMatch with None () then
+        let baseStr = nameGetStr name in
+        match strIsFree with true then
+          (pprintEnvAdd name baseStr 1 env, baseStr)
+        else match strIsFree with false then
+          match env with {count = count} then
+            let start =
+              match assocLookup {eq = eqString} baseStr count
+              with Some i then i else 1 in
+            recursive let findFree : String -> Int -> (String, Int) =
+              lam baseStr. lam i.
+                let proposal = concat baseStr (int2string i) in
+                if pprintEnvFree proposal env then (proposal, i)
+                else findFree baseStr (addi i 1)
+            in
+            match findFree baseStr start with (str, i) then
+              (pprintEnvAdd name str (addi i 1) env, str)
+            else never
+          else never
+        else never
+      else never
+    else never
 
 -- Adds the given name to the environment, if its exact string is not already
 -- mapped to. If the exact string is already mapped to, return None (). This
