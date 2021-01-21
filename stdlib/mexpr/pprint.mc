@@ -4,6 +4,7 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "name.mc"
+include "hashmap.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -32,13 +33,15 @@ type PprintEnv = {
 
   -- Count the number of occurrences of each (base) string to assist with
   -- assigning unique strings.
-  count: AssocMap String Int
+  count: HashMap String Int
 
 }
 
+let _countTraits = hashmapStrTraits
+
 -- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
-let pprintEnvEmpty = {nameMap = assocEmpty, count = assocEmpty}
+let pprintEnvEmpty = {nameMap = assocEmpty, count = hashmapEmpty}
 
 -- Look up the string associated with a name in the environment and
 -- check if the base string of the name is free in the environment
@@ -68,7 +71,7 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
   lam name. lam str. lam i. lam env.
     match env with {nameMap = nameMap, count = count} then
       let baseStr = nameGetStr name in
-      let count = assocInsert {eq = eqString} baseStr i count in
+      let count = hashmapInsert _countTraits baseStr i count in
       let nameMap = assocInsert {eq = nameEq} name str nameMap in
       {nameMap = nameMap, count = count}
     else never
@@ -86,7 +89,7 @@ let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
         else match strIsFree with false then
           match env with {count = count} then
             let start =
-              match assocLookup {eq = eqString} baseStr count
+              match hashmapLookup _countTraits baseStr count
               with Some i then i else 1 in
             recursive let findFree : String -> Int -> (String, Int) =
               lam baseStr. lam i.
