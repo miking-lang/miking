@@ -29,7 +29,7 @@ let pprintIncr = lam indent. addi indent 2
 type PprintEnv = {
 
   -- Used to keep track of strings assigned to names
-  nameMap: AssocMap Name String,
+  nameMap: HashMap Name String,
 
   -- Count the number of occurrences of each (base) string to assist with
   -- assigning unique strings.
@@ -37,33 +37,49 @@ type PprintEnv = {
 
 }
 
-let _countTraits = hashmapStrTraits
-
 -- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
-let pprintEnvEmpty = {nameMap = assocEmpty, count = hashmapEmpty}
+let pprintEnvEmpty = {nameMap = hashmapEmpty, count = hashmapEmpty}
 
--- Look up the string associated with a name in the environment and
--- check if the base string of the name is free in the environment
-let pprintEnvLookup : Name -> PprintEnv -> (Option String, Bool) = lam name. lam env.
-  match env with { nameMap = nameMap } then
-    let baseStr = nameGetStr name in
-    let p = lam n. lam s. or (nameEq name n) (eqString baseStr s) in
-    let res = assocPairsPred p nameMap in
-    match partition (lam t. nameEq name t.0) res with (nameMatch, strMatch) then
-      match nameMatch with [] then
-        (None (), null strMatch)
-      else match nameMatch with [(_, s)] then
-        (Some s, false)
-      else never
-    else never
-  else never
+-- Hash functions for environment maps
+let _countTraits = hashmapStrTraits
+let _nameTraits =
+  let strHash = hashmapStrTraits.hashfn in
+  let nameHash = lam n.
+    if nameHasSym n then
+      sym2hash (optionGetOrElse (lam _. error "Expected symbol") (nameGetSym n))
+    else strHash (nameGetStr n)
+in { eq = nameEq, hashfn = nameHash }
 
 -- Check if a string is free in the environment.
 let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
-    not (assocAny f nameMap)
+    not (hashmapAny f nameMap)
+  else never
+
+-- Look up the string associated with a name in the environment and
+-- check if the base string of the name is free in the environment
+let pprintEnvLookup : Name -> PprintEnv -> (Option String, Bool) = lam name. lam env.
+  let assoc = false in
+  if assoc then
+    match env with { nameMap = nameMap } then
+      let baseStr = nameGetStr name in
+      let p = lam n. lam s. or (nameEq name n) (eqString baseStr s) in
+      let res = assocPairsPred p nameMap in
+      match partition (lam t. nameEq name t.0) res with (nameMatch, strMatch) then
+        match nameMatch with [] then
+          (None (), null strMatch)
+        else match nameMatch with [(_, s)] then
+          (Some s, false)
+        else never
+      else never
+    else never
+  else match env with { nameMap = nameMap } then
+    match hashmapLookup _nameTraits name nameMap with Some v then
+      (Some v, false)
+    else
+      (None (), pprintEnvFree (nameGetStr name) env)
   else never
 
 -- Add a binding to the environment
@@ -72,7 +88,7 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
     match env with {nameMap = nameMap, count = count} then
       let baseStr = nameGetStr name in
       let count = hashmapInsert _countTraits baseStr i count in
-      let nameMap = assocInsert {eq = nameEq} name str nameMap in
+      let nameMap = hashmapInsert _nameTraits name str nameMap in
       {nameMap = nameMap, count = count}
     else never
 
