@@ -234,7 +234,6 @@ lang RefAst
   | TmRef _ & t -> acc
 end
 
-
 ---------------
 -- CONSTANTS --
 ---------------

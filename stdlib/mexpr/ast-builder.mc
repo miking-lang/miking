@@ -638,7 +638,6 @@ let deref_ = use MExprAst in
 let modref_ = use MExprAst in
   lam r. lam v. appf2_ (const_ (CModRef ())) r v
 
-
 -- File operations
 let readFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileRead ())) f

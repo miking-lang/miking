@@ -858,8 +858,9 @@ lang MExprPrettyPrint =
 
   -- Terms
   VarPrettyPrint + AppPrettyPrint + FunPrettyPrint + RecordPrettyPrint +
-  LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + DataPrettyPrint +
-  MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint + NeverPrettyPrint + RefPrettyPrint +
+  LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
+  DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
+  NeverPrettyPrint + RefPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
