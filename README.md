@@ -152,6 +152,8 @@ containing `utest` expressions. Please see the following files:
 
 * [Symbol intrinsics](test/mexpr/symbs.mc)
 
+* [Reference intrinsics](test/mexpr/references.mc)
+
 * [Random number generation intrinsics](test/mexpr/random.mc)
 
 * [Time intrinsics](test/mexpr/time.mc)
@@ -226,6 +228,7 @@ let fact = lam n.
   if eqi n 0
     then 1
     else muli n (fact (subi n 1))
+
 in
 
 utest fact 0 with 1 in
