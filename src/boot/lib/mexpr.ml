@@ -33,6 +33,13 @@ let argv_boot, argv_prog =
       ( try Array.sub Sys.argv (n + 1) (Array.length Sys.argv - n - 1)
         with _ -> [||] ) )
 
+module type MyMapModule = sig
+  type +'a t
+  type key = tm
+  val empty : 'a t
+  val add : key -> 'a -> 'a t -> 'a t
+end
+
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -104,6 +111,8 @@ let builtin =
   ; ("eqsym", f (Ceqsym None))
   ; ("gensym", f Cgensym)
   ; ("sym2hash", f Csym2hash)
+  ; ("mapEmpty", f CmapEmpty)
+  ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -340,6 +349,17 @@ let arity = function
       1
   | CdeRef ->
       1
+  (* Map intrinsics *)
+  | CMap _ ->
+    0
+  | CmapEmpty ->
+    1
+  | CmapInsert (None, None) ->
+    3
+  | CmapInsert (Some _, None) ->
+    2
+  | CmapInsert (_, Some _) ->
+    1
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -776,6 +796,46 @@ let delta eval env fi c v =
       !r
   | CdeRef, _ ->
       fail_constapp fi
+  | CMap _, _ ->
+    fail_constapp fi
+  | CmapEmpty, clos ->
+    let compare (x : tm) (y : tm) =
+      let app = TmApp(fi, TmApp(fi, clos, x), y) in
+      match eval env app with
+      | TmConst(_, CBool(true)) -> 0
+      | TmConst(_, CBool(false)) -> 1
+      | _ -> fail_constapp fi
+    in let module Ord = struct
+         type t = tm
+         let compare = compare
+       end
+    in let module MapModule = Map.Make(Ord)
+    in TmConst(fi, CMap((Obj.repr compare, (module MapModule : Map.S), Obj.repr MapModule.empty)))
+  | CmapInsert (None, None), k ->
+    TmConst(fi, CmapInsert (Some k, None))
+  | CmapInsert (Some k, None), v ->
+    TmConst(fi, CmapInsert (Some k, Some v))
+  | CmapInsert (Some k, Some v), TmConst(_, CMap((cmp, mo, mp))) ->
+    let module Ord = struct
+      type t = tm
+      let compare = Obj.obj cmp
+    end
+    in let module MapModule = Map.Make(Ord) in
+    let mp2 = MapModule.add k v (Obj.obj mp) in
+    TmConst(fi, CMap((cmp, mo, Obj.repr mp2)))
+
+    (* let module MapModule = (val mo : Map.S) in
+     * let module MapModule2 =
+     * struct
+     *   include MapModule
+     *   type key = tm
+     * end in
+     * let _ = print_endline "Before add" in
+     * let mp2 = MapModule2.add k v (Obj.obj mp) in
+     * let _ = print_endline "After add" in
+     * TmConst(fi, CMap((mo, Obj.repr mp2))) *)
+  | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
+    fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
