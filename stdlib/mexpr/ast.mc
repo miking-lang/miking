@@ -228,10 +228,10 @@ lang RefAst
   | TmRef {ref : Ref}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRef _ & t -> t
+  | TmRef t -> TmRef t
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRef _ & t -> acc
+  | TmRef t -> acc
 end
 
 ---------------
