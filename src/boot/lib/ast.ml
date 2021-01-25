@@ -115,7 +115,7 @@ and const =
   | Csym2hash
   (* MCore references *)
   | Cref
-  | CmodRef of Ref.t option
+  | CmodRef of tm ref option
   | CdeRef
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
@@ -195,7 +195,7 @@ and tm =
   (* Fix point *)
   | TmFix of info
   (* Reference *)
-  | TmRef of info * Ref.t
+  | TmRef of info * tm ref
 
 (* Kind of pattern name *)
 and patName =

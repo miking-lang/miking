@@ -773,23 +773,18 @@ lang RefOpEval = RefOpAst + IntAst
   | CModRef2 Ref
 
   sem delta (arg : Expr) =
-  | CRef _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmRef {loc = ref n}
-    else error "v in ref v not an integer"
+  | CRef _ -> TmRef {ref = ref arg}
   | CModRef _ ->
-    match arg with TmRef {loc = r} then
+    match arg with TmRef {ref = r} then
       TmConst {val = CModRef2 r}
     else error "first argument of modref not a reference"
   | CModRef2 r ->
-    match arg with TmConst {val = CInt {val = n}} then
-      let _ = modref r n in
-      unit_
-    else error "second argument of modref not an integer"
+    let _ = modref r arg in
+    unit_
   | CDeRef _ ->
-    match arg with TmRef {loc = r} then
-      TmConst {val = CInt {val = deref r}}
-    else "not a deref of a reference"
+    match arg with TmRef {ref = r} then
+      deref r
+    else error "not a deref of a reference"
 end
 
 
@@ -1442,20 +1437,26 @@ utest eval (string2float_ (str_ "1.5")) with float_ 1.5 in
 
 -- References
 let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),
-                  ulet_ "r2" (ref_ (int_ 2)),
-                  ulet_ "r3" (var_ "r1")]
+                  ulet_ "r2" (ref_ (float_ 2.)),
+                  ulet_ "r3" (var_ "r1"),
+                  ulet_ "r4"
+                    (ref_ (ulam_ "x" (concat_ (str_ "Hello ") (var_ "x"))))]
 in
 utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with unit_ in
 utest
   eval (bind_ p
-    (tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]))
-with tuple_ [int_ 1, int_ 2, int_ 1] in
+    (tuple_ [deref_ (var_ "r1"),
+             deref_ (var_ "r2"),
+             deref_ (var_ "r3"),
+             app_ (deref_ (var_ "r4")) (str_ "test")]))
+with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"] in
 
 utest
   eval (bind_ p (bindall_
     [ulet_ "_" (modref_ (var_ "r1") (int_ 3)),
+     ulet_ "_" (modref_ (var_ "r2") (float_ 3.14)),
      ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
      tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
-with tuple_ [int_ 4, int_ 2, int_ 4] in
+with tuple_ [int_ 4, float_ 3.14, int_ 4] in
 
 ()

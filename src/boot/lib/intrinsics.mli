@@ -86,15 +86,3 @@ module FloatConversion : sig
 
   val string2float : ustring -> float
 end
-
-module Ref : sig
-  type t
-
-  val mkref : int -> t
-
-  val modref : t -> int -> unit
-
-  val deref : t -> int
-
-  val string_of_ref : t -> string
-end

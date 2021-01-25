@@ -502,7 +502,7 @@ lang RefPrettyPrint = PrettyPrint + RefAst
   | TmRef _ -> true
 
   sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmRef _ -> (env, "ref")
+  | TmRef _ -> (env, "(ref)")
 end
 
 lang NeverPrettyPrint = PrettyPrint + NeverAst

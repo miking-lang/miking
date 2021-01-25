@@ -763,18 +763,17 @@ let delta eval env fi c v =
   | Csym2hash, _ ->
       fail_constapp fi
   (* MCore intrinsic: references *)
-  | Cref, TmConst (fi, CInt v) ->
-      TmRef (fi, Ref.mkref v)
-  | Cref, _ ->
+  | Cref, v ->
+      TmRef (fi, ref v)
+  | CmodRef None, TmRef (fi, r) ->
+      TmConst (fi, CmodRef (Some r))
+  | CmodRef (Some r), v ->
+      r := v ;
+      tmUnit
+  | CmodRef None, _ ->
       fail_constapp fi
-  | CmodRef None, TmRef (fi, loc) ->
-      TmConst (fi, CmodRef (Some loc))
-  | CmodRef (Some loc), TmConst (_, CInt v) ->
-      Ref.modref loc v ; tmUnit
-  | CmodRef (Some _), _ | CmodRef None, _ ->
-      fail_constapp fi
-  | CdeRef, TmRef (fi, loc) ->
-      TmConst (fi, CInt (Ref.deref loc))
+  | CdeRef, TmRef (_, r) ->
+      !r
   | CdeRef, _ ->
       fail_constapp fi
   (* Python intrinsics *)

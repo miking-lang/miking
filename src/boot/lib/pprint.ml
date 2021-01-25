@@ -521,8 +521,8 @@ and print_tm' fmt t =
       fprintf fmt "fix"
   | TmNever _ ->
       fprintf fmt "never"
-  | TmRef (_, loc) ->
-      fprintf fmt "ref(%s)" (Ref.string_of_ref loc)
+  | TmRef (_, r) ->
+      fprintf fmt "ref(%a)" print_tm (Atom, r.contents)
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

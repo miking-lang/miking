@@ -225,7 +225,7 @@ end
 
 lang RefAst
   syn Expr =
-  | TmRef {loc : Ref}
+  | TmRef {ref : Ref}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRef _ & t -> t
