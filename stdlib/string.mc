@@ -59,6 +59,35 @@ utest gtString "x" "y" with false
 utest gtString "yx" "y" with true
 utest gtString "xy" "y" with false
 
+-- String comparison giving a total ordering of strings.
+-- cmpString s1 s2 returns >0 or <0 if s1 lexicographically
+-- greater respectively smaller than s2, else 0.
+recursive
+  let cmpString: String -> String -> Int = lam s1. lam s2.
+    if and (null s1) (null s2) then
+      0
+    else if null s1 then
+      subi 0 1
+    else if null s2 then
+      1
+    else
+      let d = cmpChar (head s1) (head s2) in
+      match d with 0 then
+        cmpString (tail s1) (tail s2)
+      else d
+end
+
+utest cmpString "" "" with 0
+utest cmpString "Hello" "Hello" with 0
+utest
+  match gti (cmpString "a" "") 0 with true then true else false
+  with true
+utest
+  match lti (cmpString "aa" "aaa") 0 with true then true else false
+  with true
+utest
+  match lti (cmpString "aaa" "aab") 0 with true then true else false
+  with true
 
 let str2upper = lam s. map char2upper s
 let str2lower = lam s. map char2lower s

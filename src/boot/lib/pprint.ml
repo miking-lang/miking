@@ -379,6 +379,8 @@ let rec print_const fmt = function
     fprintf fmt "mapInsert"
   | CmapLookup _ ->
     fprintf fmt "mapLookup"
+  | CmapAny _ ->
+    fprintf fmt "mapAny"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

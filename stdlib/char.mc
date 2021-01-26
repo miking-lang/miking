@@ -12,7 +12,11 @@ let ltChar = lam c1. lam c2. lti (char2int c1) (char2int c2)
 let gtChar = lam c1. lam c2. gti (char2int c1) (char2int c2)
 let leqChar = lam c1. lam c2. leqi (char2int c1) (char2int c2)
 let geqChar = lam c1. lam c2. geqi (char2int c1) (char2int c2)
+let cmpChar = lam c1. lam c2. subi (char2int c1) (char2int c2)
 
+utest cmpChar 'a' 'a' with 0
+utest cmpChar 'a' 'A' with 32
+utest cmpChar '\t' '\n' with subi 0 1
 
 -- Escape characters
 let _escapes = [

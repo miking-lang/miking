@@ -34,11 +34,8 @@ let utest_fail_local = ref 0 (* Counts local failed tests for one file *)
 (* Map type for record implementation *)
 module Record = Map.Make (Ustring)
 
-(* Type for built-in maps: a tuple module * map object *)
-type map = Obj.t * (module Map.S) * Obj.t
-
 (* Evaluation environment *)
-and env = (Symb.t * tm) list
+type env = (Symb.t * tm) list
 
 and const =
   (* MCore intrinsic: Boolean constant and operations. See test/mexpr/bool.mc *)
@@ -121,10 +118,11 @@ and const =
   | CmodRef of tm ref option
   | CdeRef
   (* Map intrinsics *)
-  | CMap of map
+  | CMap of (tm -> tm -> int) * Obj.t
   | CmapEmpty
   | CmapInsert of tm option * tm option
   | CmapLookup of tm option
+  | CmapAny of (tm -> tm -> bool) option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext

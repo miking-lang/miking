@@ -33,13 +33,6 @@ let argv_boot, argv_prog =
       ( try Array.sub Sys.argv (n + 1) (Array.length Sys.argv - n - 1)
         with _ -> [||] ) )
 
-module type MyMapModule = sig
-  type +'a t
-  type key = tm
-  val empty : 'a t
-  val add : key -> 'a -> 'a t -> 'a t
-end
-
 (* Mapping between named builtin functions (intrinsics) and the
    correspond constants *)
 let builtin =
@@ -114,6 +107,7 @@ let builtin =
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapLookup", f (CmapLookup None))
+  ; ("mapAny", f (CmapAny None))
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -364,6 +358,10 @@ let arity = function
   | CmapLookup None ->
     2
   | CmapLookup (Some _) ->
+    1
+  | CmapAny None ->
+    2
+  | CmapAny (Some _) ->
     1
   (* Python intrinsics *)
   | CPy v ->
@@ -804,7 +802,6 @@ let delta eval env fi c v =
   | CMap _, _ ->
     fail_constapp fi
   | CmapEmpty, clos ->
-    (* TODO: compare doesn't have to be Obj.t *)
     let compare (x : tm) (y : tm) =
       let app = TmApp(fi, TmApp(fi, clos, x), y) in
       match eval env app with
@@ -814,32 +811,48 @@ let delta eval env fi c v =
          type t = tm
          let compare = compare
        end
-    in let module MapModule = Map.Make(Ord)
-    in TmConst(fi, CMap((Obj.repr compare, (module MapModule : Map.S), Obj.repr MapModule.empty)))
-  | CmapInsert (None, None), k ->
-    TmConst(fi, CmapInsert (Some k, None))
-  | CmapInsert (Some k, None), v ->
-    TmConst(fi, CmapInsert (Some k, Some v))
-  | CmapInsert (Some k, Some v), TmConst(_, CMap((cmp, mo, mp))) ->
+    in let module MapModule = Map.Make(Ord) in
+    TmConst(fi, CMap(compare, Obj.repr MapModule.empty))
+  | CmapInsert (None, None), key ->
+    TmConst(fi, CmapInsert (Some key, None))
+  | CmapInsert (Some key, None), v ->
+    TmConst(fi, CmapInsert (Some key, Some v))
+  | CmapInsert (Some k, Some v), TmConst(_, CMap(cmp, m)) ->
     let module Ord = struct
       type t = tm
-      let compare = Obj.obj cmp
+      let compare = cmp
     end
     in let module MapModule = Map.Make(Ord) in
-    let mp2 = MapModule.add k v (Obj.obj mp) in
-    TmConst(fi, CMap((cmp, mo, Obj.repr mp2)))
+    let m = MapModule.add k v (Obj.obj m) in
+    TmConst(fi, CMap(cmp, Obj.repr m))
   | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
     fail_constapp fi
   | CmapLookup None, t ->
     TmConst(fi, CmapLookup(Some t))
-  | CmapLookup (Some k), TmConst(_, CMap(cmp, _mo, mp)) ->
+  | CmapLookup (Some k), TmConst(_, CMap(cmp, mp)) ->
     let module Ord = struct
       type t = tm
-      let compare = Obj.obj cmp
+      let compare = cmp
     end
     in let module MapModule = Map.Make(Ord) in
     MapModule.find k (Obj.obj mp)
   | CmapLookup (Some _), _ ->
+    fail_constapp fi
+  | CmapAny None, p ->
+    let pred (x : tm) (y : tm) =
+      let app = TmApp(fi, TmApp(fi, p, x), y) in
+      match eval env app with
+      | TmConst(_, CBool(b)) -> b
+      | _ -> fail_constapp fi
+    in TmConst(fi, CmapAny(Some pred))
+  | CmapAny (Some p), TmConst(_, CMap(cmp, m)) ->
+    let module Ord = struct
+      type t = tm
+      let compare = cmp
+    end
+    in let module MapModule = Map.Make(Ord) in
+    TmConst(fi, CBool(MapModule.exists p (Obj.obj m)))
+  | CmapAny(Some _), _ ->
     fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
