@@ -121,7 +121,8 @@ and const =
   | CMap of (tm -> tm -> int) * Obj.t
   | CmapEmpty
   | CmapInsert of tm option * tm option
-  | CmapLookup of tm option
+  | CmapFind of tm option
+  | CmapMem of tm option
   | CmapAny of (tm -> tm -> bool) option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext

@@ -9,6 +9,7 @@ mexpr
 
 -- TODO
 -- mapAny
+-- mapMem
 
 -- Int map
 let m = mapEmpty subi in
@@ -19,10 +20,13 @@ let m = mapInsert 3 "3" m in
 let m = mapInsert 4 "4" m in
 let m = mapInsert 4 "5" m in
 
-utest mapLookup 1 m with "1" in
-utest mapLookup 2 m with "2" in
-utest mapLookup 3 m with "3" in
-utest mapLookup 4 m with "5" in
+utest mapFind 1 m with "1" in
+utest mapFind 2 m with "2" in
+utest mapFind 3 m with "3" in
+utest mapFind 4 m with "5" in
+
+utest mapMem 1 m with true in
+utest mapMem 42 m with false in
 
 utest mapAny (lam k. lam v. eqi 1 k) m with true in
 utest mapAny (lam k. lam v. eqString "5" v) m with true in
@@ -43,9 +47,9 @@ let m = mapInsert ("1", 2) 2 m in
 let m = mapInsert ("Hello", 42) 3 m in
 let m = mapInsert ("Hello!", 42) 4 m in
 
-utest mapLookup ("1", 1) m with 1 in
-utest mapLookup ("1", 2) m with 2 in
-utest mapLookup ("Hello", 42) m with 3 in
-utest mapLookup ("Hello!", 42) m with 4 in
+utest mapFind ("1", 1) m with 1 in
+utest mapFind ("1", 2) m with 2 in
+utest mapFind ("Hello", 42) m with 3 in
+utest mapFind ("Hello!", 42) m with 4 in
 
 ()

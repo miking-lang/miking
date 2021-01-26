@@ -4,6 +4,7 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "name.mc"
+include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -38,19 +39,19 @@ type PprintEnv = {
 
 -- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
-let pprintEnvEmpty = {nameMap = assocEmpty, count = assocEmpty}
+let pprintEnvEmpty = {nameMap = mapEmpty nameCmp, count = mapEmpty cmpString}
 
 -- Look up the string associated with a name in the environment
 let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
   match env with { nameMap = nameMap } then
-    assocLookup {eq = nameEq} name nameMap
+    mapLookup name nameMap
   else never
 
 -- Check if a string is free in the environment.
 let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
   match env with { nameMap = nameMap } then
     let f = lam _. lam v. eqString str v in
-    not (assocAny f nameMap)
+    not (mapAny f nameMap)
   else never
 
 -- Add a binding to the environment
@@ -58,8 +59,8 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
   lam name. lam str. lam i. lam env.
     match env with {nameMap = nameMap, count = count} then
       let baseStr = nameGetStr name in
-      let count = assocInsert {eq = eqString} baseStr i count in
-      let nameMap = assocInsert {eq = nameEq} name str nameMap in
+      let count = mapInsert baseStr i count in
+      let nameMap = mapInsert name str nameMap in
       {nameMap = nameMap, count = count}
     else never
 
@@ -74,7 +75,7 @@ let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
       else
         match env with {count = count} then
           let start =
-            match assocLookup {eq = eqString} baseStr count
+            match mapLookup baseStr count
             with Some i then i else 1 in
           recursive let findFree : String -> Int -> (String, Int) =
             lam baseStr. lam i.
