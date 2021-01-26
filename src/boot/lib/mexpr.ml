@@ -113,6 +113,7 @@ let builtin =
   ; ("sym2hash", f Csym2hash)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
+  ; ("mapLookup", f (CmapLookup None))
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -359,6 +360,10 @@ let arity = function
   | CmapInsert (Some _, None) ->
     2
   | CmapInsert (_, Some _) ->
+    1
+  | CmapLookup None ->
+    2
+  | CmapLookup (Some _) ->
     1
   (* Python intrinsics *)
   | CPy v ->
@@ -799,11 +804,11 @@ let delta eval env fi c v =
   | CMap _, _ ->
     fail_constapp fi
   | CmapEmpty, clos ->
+    (* TODO: compare doesn't have to be Obj.t *)
     let compare (x : tm) (y : tm) =
       let app = TmApp(fi, TmApp(fi, clos, x), y) in
       match eval env app with
-      | TmConst(_, CBool(true)) -> 0
-      | TmConst(_, CBool(false)) -> 1
+      | TmConst(_, CInt(i)) -> i
       | _ -> fail_constapp fi
     in let module Ord = struct
          type t = tm
@@ -823,18 +828,18 @@ let delta eval env fi c v =
     in let module MapModule = Map.Make(Ord) in
     let mp2 = MapModule.add k v (Obj.obj mp) in
     TmConst(fi, CMap((cmp, mo, Obj.repr mp2)))
-
-    (* let module MapModule = (val mo : Map.S) in
-     * let module MapModule2 =
-     * struct
-     *   include MapModule
-     *   type key = tm
-     * end in
-     * let _ = print_endline "Before add" in
-     * let mp2 = MapModule2.add k v (Obj.obj mp) in
-     * let _ = print_endline "After add" in
-     * TmConst(fi, CMap((mo, Obj.repr mp2))) *)
   | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
+    fail_constapp fi
+  | CmapLookup None, t ->
+    TmConst(fi, CmapLookup(Some t))
+  | CmapLookup (Some k), TmConst(_, CMap(cmp, _mo, mp)) ->
+    let module Ord = struct
+      type t = tm
+      let compare = Obj.obj cmp
+    end
+    in let module MapModule = Map.Make(Ord) in
+    MapModule.find k (Obj.obj mp)
+  | CmapLookup (Some _), _ ->
     fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

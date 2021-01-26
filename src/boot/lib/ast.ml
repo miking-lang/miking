@@ -124,6 +124,7 @@ and const =
   | CMap of map
   | CmapEmpty
   | CmapInsert of tm option * tm option
+  | CmapLookup of tm option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
