@@ -7,10 +7,6 @@ include "../../stdlib/string.mc"
 
 mexpr
 
--- TODO
--- mapAny
--- mapMem
-
 -- Int map
 let m = mapEmpty subi in
 
