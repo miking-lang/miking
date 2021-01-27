@@ -502,9 +502,47 @@ utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else []
 with [["a","b"]] in
 ```
 
+### References
 
+A mutable reference to an MExpr value can be created with the `ref` operator. For instance
 
+```
+let r = ref 3 in
+```
 
+allocates a reference to a cell in memory with an initial value `3`, and binds
+the reference to the variable `r`.
+
+The `deref` operator is used for dereferencing, that is, to read the value that
+a reference points to:
+
+```
+let r = ref 3 in
+utest deref r with 3 in ()
+```
+
+The value that a reference points to can be modified using the `modref` operator:
+
+```
+let r = ref 3 in
+let _ = modref r 4 in
+utest deref r with 4 in ()
+```
+
+Note that the return value of `modref` is an MExpr unit value.
+
+It is possible have aliases for the same memory cell by binding several
+variables to the same reference. As an example, in the program
+
+```
+let r1 = ref "A" in
+let r2 = r1 in
+let _ = modref r2 "B" in
+utest deref r1 with "B" in ()
+```
+
+the change made to the referenced value via the variable `r2` is visible when
+dereferencing the reference via the variable `r1`.
 
 ## MLang
 
