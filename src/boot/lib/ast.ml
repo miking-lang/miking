@@ -118,6 +118,7 @@ and const =
   | CmodRef of tm ref option
   | CdeRef
   (* Map intrinsics *)
+  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of (tm -> tm -> int) * Obj.t
   | CmapEmpty
   | CmapInsert of tm option * tm option
