@@ -29,17 +29,25 @@ let pprintIncr = lam indent. addi indent 2
 type PprintEnv = {
 
   -- Used to keep track of strings assigned to names
-  nameMap: AssocMap Name String,
+  nameMap: Map Name String,
 
   -- Count the number of occurrences of each (base) string to assist with
   -- assigning unique strings.
-  count: AssocMap String Int
+  count: Map String Int,
+
+  -- Set of strings currently in use in the environment. Equals the set of
+  -- values in 'nameMap'.
+  -- OPT(Linnea, 2021-01-27): Maps offer the most efficient lookups as for now.
+  -- Could be replaced by an efficient set data structure, were we to have one.
+  strings: Map String Int
 
 }
 
 -- TODO(dlunde,2020-09-29) Make it possible to debug the actual symbols
 
-let pprintEnvEmpty = {nameMap = mapEmpty nameCmp, count = mapEmpty cmpString}
+let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
+                       count = mapEmpty cmpString,
+                       strings = mapEmpty cmpString }
 
 -- Look up the string associated with a name in the environment
 let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
@@ -49,19 +57,19 @@ let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
 
 -- Check if a string is free in the environment.
 let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
-  match env with { nameMap = nameMap } then
-    let f = lam _. lam v. eqString str v in
-    not (mapAny f nameMap)
+  match env with { strings = strings } then
+    not (mapMem str strings)
   else never
 
 -- Add a binding to the environment
 let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
   lam name. lam str. lam i. lam env.
-    match env with {nameMap = nameMap, count = count} then
+    match env with {nameMap = nameMap, count = count, strings = strings} then
       let baseStr = nameGetStr name in
       let count = mapInsert baseStr i count in
       let nameMap = mapInsert name str nameMap in
-      {nameMap = nameMap, count = count}
+      let strings = mapInsert str 0 strings in
+      {nameMap = nameMap, count = count, strings = strings}
     else never
 
 -- Get a string for the current name. Returns both the string and a new
