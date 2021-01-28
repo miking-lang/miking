@@ -358,7 +358,7 @@ let recordupdate_ = use MExprAst in
 
 let app_ = use MExprAst in
   lam l. lam r.
-  TmApp {lhs = l, rhs = r}
+  TmApp {lhs = l, rhs = r, ty = TyUnknown {}}
 
 let appSeq_ = use MExprAst in
   lam f. lam seq.

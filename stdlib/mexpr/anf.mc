@@ -55,10 +55,11 @@ lang AppANF = ANF + AppAst
   | TmApp t -> normalizeNames k (TmApp t)
 
   sem normalizeNames (k : Expr -> Expr) =
-  | TmApp {lhs = lhs, rhs = rhs} ->
+  | TmApp t ->
     normalizeNames
-      (lam l. normalizeName (lam r. k (TmApp {lhs = l, rhs = r})) rhs)
-      lhs
+      (lam l. normalizeName (lam r. k (TmApp {{t with lhs = l}
+                                                 with rhs = r})) t.rhs)
+      t.lhs
   | t -> normalizeName k t
 
 end

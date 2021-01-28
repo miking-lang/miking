@@ -56,8 +56,9 @@ end
 
 lang AppSym = Sym + AppAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmApp {lhs = lhs, rhs = rhs} ->
-    TmApp {lhs = symbolizeExpr env lhs, rhs = symbolizeExpr env rhs}
+  | TmApp t ->
+    TmApp {{t with lhs = symbolizeExpr env lhs}
+              with rhs = symbolizeExpr env rhs}
 end
 
 lang FunSym = Sym + FunAst + VarSym + AppSym

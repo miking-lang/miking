@@ -25,13 +25,14 @@ end
 
 lang AppAst
   syn Expr =
-  | TmApp {lhs : Expr, rhs : Expr, fi: Info}
+  | TmApp {lhs : Expr, rhs : Expr, ty: Type, fi: Info}
 
   sem info =
   | TmApp r -> r.fi
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmApp t -> TmApp {lhs = f t.lhs, rhs = f t.rhs}
+  | TmApp t -> TmApp {{t with lhs = f t.lhs}
+                         with rhs = f t.rhs}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmApp t -> f (f acc t.lhs) t.rhs

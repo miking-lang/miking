@@ -453,12 +453,12 @@ lang ExprInfixParserClosed = ExprInfixParser
 end
 
 -- This parser should be used for application using juxaposition
-lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst
+lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst + UnknownTypeAst
   sem parseInfixImp (p: Pos) =
   | str ->
     Some {
       val = lam x. lam y.
-        TmApp {lhs = x, rhs = y, fi = mergeInfo (info x) (info y)},
+        TmApp {lhs = x, rhs = y, ty = TyUnknown {}, fi = mergeInfo (info x) (info y)},
       pos = p, str = str, assoc = LeftAssoc (), prec = 50}
 end
 
