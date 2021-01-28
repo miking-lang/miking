@@ -207,14 +207,15 @@ lang MatchSym = Sym + MatchAst
   -- Intentionally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
-    match symbolizePat env assocEmpty pat
+  | TmMatch t ->
+    match symbolizePat env assocEmpty t.pat
     with (thnVarEnv, pat) then
       let m = assocMergePreferRight {eq=eqString} in
       let thnPatEnv = {env with varEnv = m env.varEnv thnVarEnv} in
-      TmMatch {target = symbolizeExpr env target,
-               pat = pat, thn = symbolizeExpr thnPatEnv thn,
-               els = symbolizeExpr env els}
+      TmMatch {{{{t with target = symbolizeExpr env t.target}
+                    with pat = pat}
+                    with thn = symbolizeExpr thnPatEnv t.thn}
+                    with els = symbolizeExpr env t.els}
     else never
 end
 

@@ -295,11 +295,11 @@ let ulams_ = use MExprAst in
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
-  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els}
+  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els, ty = TyUnknown {}}
 
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
-  TmMatch {target = target, pat = pat, thn = thn, els = els}
+  TmMatch {target = target, pat = pat, thn = thn, els = els, ty = TyUnknown {}}
 
 let seq_ = use MExprAst in
   lam tms.

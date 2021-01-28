@@ -291,7 +291,9 @@ end
 
 
 -- Parsing if expressions
-lang IfParser = ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat
+lang IfParser =
+  ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat + UnknownTypeAst
+
   sem nextIdent (p: Pos) (xs: String) =
   | "if" ->
      let e1 = parseExprMain (advanceCol p 2) 0 xs in
@@ -300,7 +302,8 @@ lang IfParser = ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat
      let r2 = matchKeyword "else" e2.pos e2.str  in
      let e3 = parseExprMain r2.pos 0 r2.str in
      {val = TmMatch {target = e1.val, pat = PBool {val = true, fi = NoInfo ()},
-                     thn = e2.val, els = e3.val, fi = makeInfo p e3.pos},
+                     thn = e2.val, els = e3.val, ty = TyUnknown {},
+                     fi = makeInfo p e3.pos},
       pos = e3.pos,
       str = e3.str}
  end

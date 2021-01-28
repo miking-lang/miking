@@ -165,6 +165,7 @@ lang MatchAst
              pat    : Pat,
              thn    : Expr,
              els    : Expr,
+             ty     : Type,
              fi     : Info}
 
   syn Pat =

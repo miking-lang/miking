@@ -81,8 +81,8 @@ lang RecordANF = ANF + RecordAst
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmRecord {bindings = bindings} ->
-    let acc = lam bs. k (TmRecord {bindings = bs}) in
+  | TmRecord t ->
+    let acc = lam bs. k (TmRecord {t with bindings = bs}) in
     let f =
       (lam acc. lam k. lam e.
          (lam bs.
@@ -90,16 +90,17 @@ lang RecordANF = ANF + RecordAst
               (lam v. acc (assocInsert {eq=eqString} k v bs))
               e))
     in
-    (assocFold {eq=eqString} f acc bindings) assocEmpty
+    (assocFold {eq=eqString} f acc t.bindings) assocEmpty
 
-  | TmRecordUpdate {rec = rec, key = key, value = value} ->
+  | TmRecordUpdate t ->
     normalizeName
       (lam vrec.
         normalizeName
           (lam vvalue.
-            k (TmRecordUpdate {rec = vrec, key = key, value = vvalue}))
-        value)
-      rec
+            k (TmRecordUpdate {{t with rec = vrec}
+                                  with value = vvalue}))
+        t.value)
+      t.rec
 
 end
 
@@ -167,11 +168,12 @@ lang MatchANF = ANF + MatchAst
   | TmMatch _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
+  | TmMatch t ->
     normalizeName
-      (lam t. k (TmMatch {target = t, pat = pat, thn = normalizeTerm thn,
-                                                 els = normalizeTerm els}))
-      target
+      (lam t2. k (TmMatch {{{t with target = t2}
+                               with thn = normalizeTerm t.thn}
+                               with els = normalizeTerm t.els}))
+      t.target
 
 end
 
