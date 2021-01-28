@@ -11,7 +11,7 @@ include "mexpr/info.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name, fi: Info}
+  | TmVar {ident : Name, ty: Type, fi: Info}
 
   sem info =
   | TmVar r -> r.fi

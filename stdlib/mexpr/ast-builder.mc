@@ -251,7 +251,7 @@ let ucondef_ = use MExprAst in
 
 let nvar_ = use MExprAst in
   lam n.
-  TmVar {ident = n}
+  TmVar {ident = n, ty = TyUnknown {}}
 
 let var_ = use MExprAst in
   lam s.

@@ -43,13 +43,13 @@ end
 
 lang VarSym = Sym + VarAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmVar {ident = ident} & var ->
+  | TmVar t & var ->
     match env with {varEnv = varEnv} then
-      if nameHasSym ident then var
+      if nameHasSym t.ident then var
       else
-        let str = nameGetStr ident in
+        let str = nameGetStr t.ident in
         match assocLookup {eq=eqString} str varEnv with Some ident then
-          TmVar {ident = ident}
+          TmVar {t with ident = ident}
         else error (concat "Unknown variable in symbolizeExpr: " str)
     else never
 end

@@ -22,8 +22,13 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
   sem bind (k : Expr -> Expr) =
   | n ->
     let ident = nameSym "t" in
-    (TmLet {ident = ident, ty = TyUnknown {},
-            body = n, inexpr = k (TmVar {ident = ident})})
+    let var = TmVar {
+      ident = ident,
+      ty = TyUnknown {},
+      fi = NoInfo {}
+    } in
+    TmLet {ident = ident, ty = TyUnknown {},
+           body = n, inexpr = k var}
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (isValue n) then k n else bind k n) m

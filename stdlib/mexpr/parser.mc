@@ -378,11 +378,11 @@ end
 
 
 -- Parse variable
-lang VarParser = ExprParser + IdentParser + VarAst
+lang VarParser = ExprParser + IdentParser + VarAst + UnknownTypeAst
   sem nextIdent (p: Pos) (xs: string) =
   | x ->
       let p2 = advanceCol p (length x) in
-      {val = TmVar {ident = nameNoSym x, fi = makeInfo p p2},
+      {val = TmVar {ident = nameNoSym x, ty = TyUnknown {}, fi = makeInfo p p2},
        pos = p2, str = xs}
 end
 
