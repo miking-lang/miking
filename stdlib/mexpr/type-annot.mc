@@ -49,6 +49,7 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
     in
     let bindings = sortBindingsByKey t.bindings in
     TyRecord {fields = assocFold {eq=eqString} f assocEmpty bindings}
+  | TmRecordUpdate t -> typeExpr env t.rec
 end
 
 lang LetTypeAnnot = TypeAnnot + LetAst
@@ -102,10 +103,11 @@ let nestedRec = lam ty1. lam ty2.
       ("e", float_ 1.2)
     ]),
     nlet_ y ty2 (record_ [
-      ("a", record_ [("b", int_ 0), ("c", int_ 1), ("d", record_ [])]),
-      ("e", nvar_ x)
+      ("a", record_ [("b", int_ 0), ("c", record_ [])]),
+      ("d", nvar_ x),
+      ("e", int_ 5)
     ]),
-    nlet_ z ty2 (nvar_ y),
+    nlet_ z ty2 (recordupdate_ (nvar_ y) "e" (int_ 4)),
     nvar_ z
   ]
 in
@@ -118,9 +120,10 @@ let xType = tyrecord_ [
 ] in
 let yType = tyrecord_ [
   ("a", tyrecord_ [
-    ("b", tyunknown_), ("c", tyunknown_), ("d", tyrecord_ [])
+    ("b", tyunknown_), ("c", tyrecord_ [])
   ]),
-  ("e", xType)
+  ("d", xType),
+  ("e", tyunknown_)
 ] in
 utest typeAnnot (nestedRec tyunknown_ tyunknown_)
 with  nestedRec xType yType in
