@@ -1,6 +1,5 @@
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
-include "mexpr/symbolize.mc"
 
 type TypeEnv = AssocMap Name Type
 
@@ -9,7 +8,6 @@ let _tyEnvLookup = assocLookup {eq = nameEqSym}
 
 lang TypeAnnot = UnknownTypeAst
   sem typeExpr (env : TypeEnv) =
-  | t -> TyUnknown {}
 
   sem typeAnnotExpr (env : TypeEnv) =
 
@@ -20,13 +18,36 @@ end
 lang VarTypeAnnot = TypeAnnot + VarAst
   sem typeExpr (env : TypeEnv) =
   | TmVar t ->
-    match _tyEnvLookup t.ident env with Some ty then
-      ty
-    else
-      TyUnknown {}
+    match t.ty with TyUnknown {} then
+      match _tyEnvLookup t.ident env with Some ty then
+        ty
+      else t.ty
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | var & TmVar t ->
+    TmVar {t with ty = typeExpr env var}
 end
 
-lang FunTypeAnnot = TypeAnnot + FunAst
+lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst
+  sem typeExpr (env : TypeEnv) =
+  | TmApp t ->
+    match t.ty with TyUnknown {} then
+      TyArrow {from = typeExpr env t.lhs, to = typeExpr env t.rhs}
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | app & TmApp t ->
+    TmApp {{{t with ty = typeExpr env app}
+               with lhs = typeAnnotExpr env t.lhs}
+               with rhs = typeAnnotExpr env t.rhs}
+end
+
+lang FunTypeAnnot = TypeAnnot + FunAst + FunTypeAst
+  sem typeExpr (env : TypeEnv) =
+  | TmLam t ->
+    TyArrow {from = t.ty, to = typeExpr env t.body}
+
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     let env = _tyEnvInsert t.ident t.ty env in
@@ -39,34 +60,30 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
     let f = lam acc. lam k. lam v.
       assocInsert {eq=eqString} k (typeExpr env v) acc
     in
-    let sortBindingsByKey = lam bindings.
-      let cmpKey = lam l. lam r.
-        match ltString l.0 r.0 with true then (negi 1) else
-        match gtString l.0 r.0 with true then 1 else 0
-      in
-      let traits = {eq=eqString} in
-      seq2assoc traits (sort cmpKey (assoc2seq traits bindings))
-    in
-    let bindings = sortBindingsByKey t.bindings in
-    TyRecord {fields = assocFold {eq=eqString} f assocEmpty bindings}
+    TyRecord {fields = assocFold {eq=eqString} f assocEmpty t.bindings}
   | TmRecordUpdate t -> typeExpr env t.rec
 end
 
 lang LetTypeAnnot = TypeAnnot + LetAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeExpr (env : TypeEnv) =
   | TmLet t ->
-    let ty =
-      match t.ty with TyUnknown {} then
-        typeExpr env t.body
-      else t.ty
-    in
+    match t.ty with TyUnknown {} then
+      typeExpr env t.body
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | l & TmLet t ->
+    let ty = typeExpr env l in
     let env2 = _tyEnvInsert t.ident ty env in
     TmLet {{{t with ty = ty}
                with body = typeAnnotExpr env t.body}
                with inexpr = typeAnnotExpr env2 t.inexpr}
 end
 
-lang MExprTypeAnnot = VarTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot
+lang MExprTypeAnnot = VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot
+  sem typeExpr (env : TypeEnv) =
+  | t -> TyUnknown {}
+
   sem typeAnnotExpr (env : TypeEnv) =
   | t -> smap_Expr_Expr (typeAnnotExpr env) t
 end
