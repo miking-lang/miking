@@ -124,8 +124,8 @@ lang RecordEval = RecordAst
   | TmRecordUpdate u ->
     match eval ctx u.rec with TmRecord t then
       if assocMem {eq = eqString} u.key t.bindings then
-        TmRecord { bindings = assocInsert {eq = eqString}
-                                u.key (eval ctx u.value) t.bindings }
+        TmRecord {t with bindings = assocInsert {eq = eqString}
+                                u.key (eval ctx u.value) t.bindings}
       else error "Key does not exist in record"
     else error "Not updating a record"
 end

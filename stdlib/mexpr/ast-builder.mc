@@ -159,7 +159,7 @@ let bindall_ = use MExprAst in
   foldl1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty}
+  TmRecord {bindings = assocEmpty, ty = TyRecord {fields = assocEmpty}}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
@@ -311,8 +311,9 @@ let record_ = use MExprAst in
     bindings =
       foldl
         (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings
-    }
+        assocEmpty bindings,
+    ty = TyUnknown {}
+  }
 
 let tuple_ = use MExprAst in
   lam tms.
@@ -354,7 +355,7 @@ let tupleproj_ = use MExprAst in
 
 let recordupdate_ = use MExprAst in
   lam rec. lam key. lam value.
-  TmRecordUpdate {rec = rec, key = key, value = value}
+  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}}
 
 let app_ = use MExprAst in
   lam l. lam r.

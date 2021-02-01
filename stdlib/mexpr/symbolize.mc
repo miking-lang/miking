@@ -43,9 +43,9 @@ end
 
 lang VarSym = Sym + VarAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmVar t & var ->
+  | TmVar t ->
     match env with {varEnv = varEnv} then
-      if nameHasSym t.ident then var
+      if nameHasSym t.ident then TmVar t
       else
         let str = nameGetStr t.ident in
         match assocLookup {eq=eqString} str varEnv with Some ident then
@@ -82,12 +82,12 @@ end
 
 lang RecordSym = Sym + RecordAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmRecord {bindings = bindings} ->
-    TmRecord {bindings = assocMap {eq=eqString} (symbolizeExpr env) bindings}
+  | TmRecord t ->
+    TmRecord {t with bindings = assocMap {eq=eqString} (symbolizeExpr env) t.bindings}
 
-  | TmRecordUpdate {rec = rec, key = key, value = value} ->
-    TmRecordUpdate {rec = symbolizeExpr env rec, key = key,
-                    value = symbolizeExpr env value}
+  | TmRecordUpdate t ->
+    TmRecordUpdate {{t with rec = symbolizeExpr env t.rec}
+                       with value = symbolizeExpr env t.value}
 end
 
 lang LetSym = Sym + LetAst

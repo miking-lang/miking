@@ -58,13 +58,15 @@ end
 
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMap String Expr}
+  | TmRecord {bindings : AssocMap String Expr,
+              ty : Type}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
-                    value : Expr}
+                    value : Expr,
+                    ty    : Type}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqString} f t.bindings}
+  | TmRecord t -> TmRecord {t with bindings = assocMap {eq=eqString} f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
@@ -79,7 +81,7 @@ lang LetAst = VarAst
            ty     : Type,
            body   : Expr,
            inexpr : Expr,
-	   fi     : Info}
+           fi     : Info}
 
   sem info =
   | TmLet r -> r.fi
