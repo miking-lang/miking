@@ -107,7 +107,10 @@ let builtin =
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
-  ; ("sleepMs", f CsleepMs) ]
+  ; ("sleepMs", f CsleepMs)
+  ; ("ref", f Cref)
+  ; ("deref", f CdeRef)
+  ; ("modref", f (CmodRef None)) ]
   (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -327,6 +330,15 @@ let arity = function
   | Ceqsym (Some _) ->
       1
   | Csym2hash ->
+      1
+  (* MCore intrinsic: references *)
+  | Cref ->
+      1
+  | CmodRef None ->
+      2
+  | CmodRef (Some _) ->
+      1
+  | CdeRef ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -750,6 +762,20 @@ let delta eval env fi c v =
       TmConst (fi, CInt (Symb.hash id))
   | Csym2hash, _ ->
       fail_constapp fi
+  (* MCore intrinsic: references *)
+  | Cref, v ->
+      TmRef (fi, ref v)
+  | CmodRef None, TmRef (fi, r) ->
+      TmConst (fi, CmodRef (Some r))
+  | CmodRef (Some r), v ->
+      r := v ;
+      tmUnit
+  | CmodRef None, _ ->
+      fail_constapp fi
+  | CdeRef, TmRef (_, r) ->
+      !r
+  | CdeRef, _ ->
+      fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
@@ -1023,6 +1049,8 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         (fi, symbolize env t1, symbolize env t2, sym_using, symbolize env tnext)
   | TmNever _ ->
       t
+  | TmRef _ ->
+      t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term. *)
@@ -1080,7 +1108,8 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmUtest _
     | TmNever _
     | TmClos _
-    | TmFix _ ) as t ->
+    | TmFix _
+    | TmRef _ ) as t ->
       (env, symbolize env t)
 
 let rec try_match env value pat =
@@ -1287,6 +1316,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
       raise_error fi
         "Reached a never term, which should be impossible in a well-typed \
          program."
+  | TmRef _ ->
+      t
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)

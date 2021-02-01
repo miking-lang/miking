@@ -628,6 +628,16 @@ let sym2hash_ = use MExprAst in
   lam s.
   appf1_ (const_ (CSym2hash ())) s
 
+-- References
+let ref_ = use MExprAst in
+  lam v. appf1_ (const_ (CRef ())) v
+
+let deref_ = use MExprAst in
+  lam r. appf1_ (const_ (CDeRef ())) r
+
+let modref_ = use MExprAst in
+  lam r. lam v. appf2_ (const_ (CModRef ())) r v
+
 -- File operations
 let readFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileRead ())) f

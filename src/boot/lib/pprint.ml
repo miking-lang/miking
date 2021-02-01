@@ -363,6 +363,13 @@ let rec print_const fmt = function
       fprintf fmt "eqsym"
   | Csym2hash ->
       fprintf fmt "sym2hash"
+  (* MCore references *)
+  | Cref ->
+      fprintf fmt "ref"
+  | CmodRef _ ->
+      fprintf fmt "modref"
+  | CdeRef ->
+      fprintf fmt "deref"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
@@ -408,7 +415,8 @@ and print_tm fmt (prec, t) =
     | TmUtest _
     | TmClos _
     | TmFix _
-    | TmNever _ ->
+    | TmNever _
+    | TmRef _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -513,6 +521,8 @@ and print_tm' fmt t =
       fprintf fmt "fix"
   | TmNever _ ->
       fprintf fmt "never"
+  | TmRef (_, _) ->
+      fprintf fmt "(ref)"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

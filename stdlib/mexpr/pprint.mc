@@ -497,6 +497,14 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
     else never
 end
 
+lang RefPrettyPrint = PrettyPrint + RefAst
+  sem isAtomic =
+  | TmRef _ -> true
+
+  sem pprintCode (indent : Int) (env : PprintEnv) =
+  | TmRef _ -> (env, "(ref)")
+end
+
 lang NeverPrettyPrint = PrettyPrint + NeverAst
   sem isAtomic =
   | TmNever _ -> true
@@ -580,6 +588,13 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CReverse _ -> "reverse"
   | CMakeSeq _ -> "makeSeq"
   | CSplitAt _ -> "splitAt"
+end
+
+lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CRef _ -> "ref"
+  | CModRef _ -> "modref"
+  | CDeRef _ -> "deref"
 end
 
 --------------
@@ -843,14 +858,15 @@ lang MExprPrettyPrint =
 
   -- Terms
   VarPrettyPrint + AppPrettyPrint + FunPrettyPrint + RecordPrettyPrint +
-  LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint + DataPrettyPrint +
-  MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint + NeverPrettyPrint +
+  LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
+  DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
+  NeverPrettyPrint + RefPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
-  + SeqOpPrettyPrint +
+  + SeqOpPrettyPrint + RefOpPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
