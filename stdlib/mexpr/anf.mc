@@ -154,12 +154,12 @@ lang DataANF = ANF + DataAst
   | TmConApp _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
-    TmConDef {ident = ident, ty = ty, inexpr = normalize k inexpr}
+  | TmConDef t ->
+    TmConDef {t with inexpr = normalize k t.inexpr}
 
-  | TmConApp {ident = ident, body = body } ->
+  | TmConApp t ->
     normalizeName
-      (lam b. k (TmConApp {ident = ident, body = b})) body
+      (lam b. k (TmConApp {t with body = b})) t.body
 
 end
 

@@ -259,7 +259,7 @@ let var_ = use MExprAst in
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
-  TmConApp {ident = n, body = b}
+  TmConApp {ident = n, body = b, ty = TyUnknown {}}
 
 let conapp_ = use MExprAst in
   lam s. lam b.

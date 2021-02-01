@@ -184,14 +184,15 @@ lang DataSym = Sym + DataAst
         TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
     else never
 
-  | TmConApp {ident = ident, body = body} ->
+  | TmConApp {ident = ident, body = body, ty = ty} ->
     match env with {conEnv = conEnv} then
+      let ty = symbolizeType env ty in
       if nameHasSym ident then
-        TmConApp {ident = ident, body = symbolizeExpr env body}
+        TmConApp {ident = ident, body = symbolizeExpr env body, ty = ty}
       else
         let str = nameGetStr ident in
         match assocLookup {eq=eqString} str conEnv with Some ident then
-          TmConApp {ident = ident, body = symbolizeExpr env body}
+          TmConApp {ident = ident, body = symbolizeExpr env body, ty = ty}
         else error (concat "Unknown constructor in symbolizeExpr: " str)
     else never
 end

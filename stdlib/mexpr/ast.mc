@@ -150,7 +150,8 @@ lang DataAst
               ty     : Type,
               inexpr : Expr}
   | TmConApp {ident : Name,
-              body : Expr}
+              body  : Expr,
+              ty    : Type}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
