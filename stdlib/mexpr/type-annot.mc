@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
 type TypeEnv = AssocMap Name Type
@@ -80,6 +81,52 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                with inexpr = typeAnnotExpr env2 t.inexpr}
 end
 
+lang DataTypeAnnot = TypeAnnot + DataAst
+  sem typeExpr (env : TypeEnv) =
+  | TmConApp t ->
+    match t.ty with TyUnknown {} then
+      match _tyEnvLookup t.ident env with Some ty then
+        ty
+      else t.ty
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | c & TmConDef t ->
+    let env = _tyEnvInsert t.ident t.ty env in
+    TmConDef {t with inexpr = typeAnnotExpr env t.inexpr}
+  | c & TmConApp t ->
+    TmConApp {{t with ty = typeExpr env c}
+                 with body = typeAnnotExpr env t.body}
+end
+
+lang MatchTypeAnnot = TypeAnnot + MatchAst
+  sem typeExpr (env : TypeEnv) =
+  | TmMatch t ->
+    match t.ty with TyUnknown {} then
+      typeExpr env t.thn
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | m & TmMatch t ->
+    TmMatch {{{{t with ty = typeExpr env m}
+                  with target = typeAnnotExpr env t.target}
+                  with thn = typeAnnotExpr env t.thn}
+                  with els = typeAnnotExpr env t.els}
+end
+
+lang SeqTypeAnnot = TypeAnnot + SeqAst
+  sem typeExpr (env : TypeEnv) =
+  | TmSeq t ->
+    match t.ty with TyUnknown {} then
+      typeExpr env (get t.tms 0)
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | s & TmSeq t ->
+    TmSeq {{t with ty = typeExpr env s}
+              with tms = map (typeAnnotExpr env) t.tms}
+end
+
 lang MExprTypeAnnot = VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot
   sem typeExpr (env : TypeEnv) =
   | t -> TyUnknown {}
@@ -88,7 +135,7 @@ lang MExprTypeAnnot = VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnn
   | t -> smap_Expr_Expr (typeAnnotExpr env) t
 end
 
-lang TestLang = MExprTypeAnnot + MExprPrettyPrint
+lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
 
 mexpr
 
@@ -99,8 +146,8 @@ let y = nameSym "y" in
 let z = nameSym "z" in
 let n = nameSym "n" in
 
-let base = nulam_ x (nulam_ y (app_ (nvar_ x) (var_ y))) in
-utest typeAnnot base with base in
+let base = nulam_ x (nvar_ x) in
+utest typeAnnot base with base using eqExpr in
 
 let letexp = lam ty.
   bind_
@@ -108,9 +155,10 @@ let letexp = lam ty.
       ("a", int_ 5),
       ("b", float_ 2.718)
     ]))
-    (nvar_ x) in
+    unit_ in
 utest typeAnnot (letexp tyunknown_)
-with  letexp (tyrecord_ [("a", tyunknown_), ("b", tyunknown_)]) in
+with  letexp (tyrecord_ [("a", tyunknown_), ("b", tyunknown_)])
+using eqExpr in
 
 let nestedRec = lam ty1. lam ty2.
   bindall_ [
@@ -121,11 +169,11 @@ let nestedRec = lam ty1. lam ty2.
     ]),
     nlet_ y ty2 (record_ [
       ("a", record_ [("b", int_ 0), ("c", record_ [])]),
-      ("d", nvar_ x),
+      ("d", TmVar {ident = x, ty = ty1}),
       ("e", int_ 5)
     ]),
-    nlet_ z ty2 (recordupdate_ (nvar_ y) "e" (int_ 4)),
-    nvar_ z
+    nlet_ z ty2 (recordupdate_ (TmVar {ident = y, ty = ty2}) "e" (int_ 4)),
+    unit_
   ]
 in
 let xType = tyrecord_ [
@@ -143,29 +191,30 @@ let yType = tyrecord_ [
   ("e", tyunknown_)
 ] in
 utest typeAnnot (nestedRec tyunknown_ tyunknown_)
-with  nestedRec xType yType in
+with  nestedRec xType yType
+using eqExpr in
 
 let nestedTuple = lam ty.
   bind_
     (nlet_ x ty (tuple_ [int_ 0, float_ 2.5, tuple_ [int_ 0, int_ 1]]))
-    (nvar_ x)
+    unit_
 in
 let tupleType = tytuple_ [
   tyunknown_, tyunknown_, tytuple_ [tyunknown_, tyunknown_]
 ] in
 utest typeAnnot (nestedTuple tyunknown_)
-with  nestedTuple tupleType in
+with  nestedTuple tupleType
+using eqExpr in
 
 let recordInLambda = lam ty.
   bindall_ [
-    nulet_ x (
-      nulam_ n (
-        bind_ (nlet_ y ty (record_ [("value", nvar_ n)])) (nvar_ y)
-    )),
-    app_ (nvar_ x) (int_ 5)
+    nulam_ n (
+      bind_ (nlet_ y ty (record_ [("value", nvar_ n)])) unit_
+    )
   ]
 in
 utest typeAnnot (recordInLambda tyunknown_)
-with  recordInLambda (tyrecord_ [("value", tyunknown_)]) in
+with  recordInLambda (tyrecord_ [("value", tyunknown_)])
+using eqExpr in
 
 ()
