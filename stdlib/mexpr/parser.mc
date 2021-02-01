@@ -320,13 +320,13 @@ lang ParenthesesParser = ExprParser + KeywordUtils
 end
 
 -- Parses a sequence of
-lang SeqParser = ExprParser + KeywordUtils + SeqAst
+lang SeqParser = ExprParser + KeywordUtils + SeqAst + UnknownTypeAst
   sem parseExprImp (p: Pos) =
   | "[" ++ xs ->
       recursive let work = lam acc. lam first. lam p2. lam str.
         let r = eatWSAC p2 str in
   	match r.str with "]" ++ xs then
-	  {val = TmSeq{tms = acc, fi = makeInfo p (advanceCol r.pos 1)},
+	  {val = TmSeq{tms = acc, ty = TyUnknown {}, fi = makeInfo p (advanceCol r.pos 1)},
 	   pos = advanceCol r.pos 1, str = xs}
 	else
 	  let r2 = if first then r else matchKeyword "," r.pos r.str in
@@ -353,12 +353,12 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
     -- TODO (David, 2020-09-27): Add all other relevant escape characters
 
 -- Parses strings, including escape characters
-lang StringParser = ExprParser + SeqAst + CharAst
+lang StringParser = ExprParser + SeqAst + CharAst + UnknownTypeAst
   sem parseExprImp (p: Pos) =
   | "\"" ++ xs ->
     recursive let work = lam acc. lam p2. lam str.
       match str with "\"" ++ xs then
-        {val = TmSeq {tms = acc, fi = makeInfo p (advanceCol p2 1)},
+        {val = TmSeq {tms = acc, ty = TyUnknown {}, fi = makeInfo p (advanceCol p2 1)},
 	 pos = advanceCol p2 1, str = xs}
       else
         let r =  matchChar p2 str in
@@ -558,17 +558,17 @@ utest parseExpr (initPos "") " ( 123) " with
       TmConst {val = CInt {val = 123}, fi = infoVal "" 1 3 1 6} in
 -- Sequences
 utest parseExpr (initPos "") "[]" with
-      TmSeq {tms = [], fi = infoVal "" 1 0 1 2} in
+      TmSeq {tms = [], ty = TyUnknown {}, fi = infoVal "" 1 0 1 2} in
 utest parseExpr (initPos "") " [ ] " with
-      TmSeq {tms = [], fi = infoVal "" 1 1 1 4} in
+      TmSeq {tms = [], ty = TyUnknown {}, fi = infoVal "" 1 1 1 4} in
 utest parseExprMain (initPos "") 0 " [ 17 ] " with
       let v = TmConst {val = CInt {val = 17}, fi = infoVal "" 1 3 1 5} in
-      {val = TmSeq {tms = [v], fi = infoVal "" 1 1 1 7},
+      {val = TmSeq {tms = [v], ty = TyUnknown {}, fi = infoVal "" 1 1 1 7},
        pos = posVal "" 1 7, str = " "} in
 utest parseExpr (initPos "") " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, fi = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, fi = infoVal "" 1 11 1 13} in
-      TmSeq {tms = [v1,v2], fi = infoVal "" 1 1 1 17} in
+      TmSeq {tms = [v1,v2], ty = TyUnknown {}, fi = infoVal "" 1 1 1 17} in
 -- Strings
 let makeChar = lam k. lam c. lam n.
     TmConst {val = CChar {val = c}, fi = infoVal "" 1 n 1 (addi n k)} in
@@ -576,10 +576,10 @@ let mkc = makeChar 1 in
 let mkc2 = makeChar 2 in
 utest parseExpr (initPos "") " \"Foo\" " with
   let str = [mkc 'F' 2, mkc 'o' 3, mkc 'o' 4] in
-  TmSeq {tms = str, fi = infoVal "" 1 1 1 6} in
+  TmSeq {tms = str, ty = TyUnknown {}, fi = infoVal "" 1 1 1 6} in
 utest parseExpr (initPos "") " \" a\\\\ \\n\" " with
   let str = [mkc ' ' 2, mkc 'a' 3, mkc2 '\\' 4, mkc ' ' 6, mkc2 '\n' 7] in
-  TmSeq {tms = str, fi = infoVal "" 1 1 1 10} in
+  TmSeq {tms = str, ty = TyUnknown {}, fi = infoVal "" 1 1 1 10} in
 -- Chars
 utest parseExprMain (initPos "") 0 " \'A\' " with
   {val = TmConst {val = CChar {val = 'A'}, fi = infoVal "" 1 1 1 4},

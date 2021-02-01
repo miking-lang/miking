@@ -170,7 +170,7 @@ lang RecLetsEval =
          (unpack_from lst_var t.inexpr)
 end
 
-lang ConstEval = ConstAst + SysAst + SeqAst
+lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
   sem delta (arg : Expr) =
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
@@ -178,7 +178,7 @@ lang ConstEval = ConstAst + SysAst + SeqAst
 
   sem eval (ctx : {env : Env}) =
   | TmConst {val = CArgv {}} ->
-    TmSeq {tms = map str_ argv}
+    TmSeq {tms = map str_ argv, ty = TyUnknown {}}
   | TmConst c -> TmConst c
 end
 
@@ -611,26 +611,26 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CSet3 (tms, n)}
     else error "n in set is not a number"
   | CSet3 (tms,n) ->
-    TmSeq {tms = set tms n arg}
+    TmSeq {tms = set tms n arg, ty = TyUnknown {}}
   | CCons _ ->
     TmConst {val = CCons2 arg}
   | CCons2 tm ->
     match arg with TmSeq s then
-      TmSeq {tms = cons tm s.tms}
+      TmSeq {s with tms = cons tm s.tms}
     else error "Not a cons of a constant sequence"
   | CSnoc _ ->
     match arg with TmSeq s then
       TmConst {val = CSnoc2 s.tms}
     else error "Not a snoc of a constant sequence"
   | CSnoc2 tms ->
-    TmSeq {tms = snoc tms arg}
+    TmSeq {tms = snoc tms arg, ty = TyUnknown {}}
   | CConcat _ ->
     match arg with TmSeq s then
       TmConst {val = CConcat2 s.tms}
     else error "Not a concat of a constant sequence"
   | CConcat2 tms ->
     match arg with TmSeq s then
-      TmSeq {tms = concat tms s.tms}
+      TmSeq {tms = concat tms s.tms, ty = TyUnknown {}}
     else error "Not a concat of a constant sequence"
   | CLength _ ->
     match arg with TmSeq s then
@@ -638,7 +638,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     else error "Not length of a constant sequence"
   | CReverse _ ->
     match arg with TmSeq s then
-      TmSeq {tms = reverse s.tms}
+      TmSeq {tms = reverse s.tms, ty = TyUnknown {}}
     else error "Not reverse of a constant sequence"
   | CSplitAt _ ->
     match arg with TmSeq s then
@@ -654,7 +654,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CMakeSeq2 n}
     else error "n in makeSeq is not a number"
   | CMakeSeq2 n ->
-    TmSeq {tms = makeSeq n arg}
+    TmSeq {tms = makeSeq n arg, ty = TyUnknown {}}
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst
@@ -700,7 +700,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst
     else error "f in deleteFile not a sequence"
 end
 
-lang IOEval = IOAst + SeqAst
+lang IOEval = IOAst + SeqAst + UnknownTypeAst
   sem delta (arg : Expr) =
   | CPrintString _ ->
     match arg with TmSeq s then
@@ -710,7 +710,7 @@ lang IOEval = IOAst + SeqAst
     else error "string to print is not a string"
   | CReadLine _ ->
     let s = readLine () in
-    TmSeq {tms = map char_ s}
+    TmSeq {tms = map char_ s, ty = TyUnknown {}}
 end
 
 lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
@@ -1148,7 +1148,7 @@ with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
 
 -- makeSeq 3 42 -> [42, 42, 42]
 let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
-utest eval makeSeqAst with (seq_ [int_ 42, int_ 42, int_ 42]) in
+utest eval makeSeqAst with seq_ [int_ 42, int_ 42, int_ 42] in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ in

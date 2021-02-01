@@ -230,7 +230,7 @@ end
 
 lang SeqSym = Sym + SeqAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmSeq {tms = tms} -> TmSeq {tms = map (symbolizeExpr env) tms}
+  | TmSeq t -> TmSeq {t with tms = map (symbolizeExpr env) t.tms}
 end
 
 lang NeverSym = Sym + NeverAst

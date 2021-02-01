@@ -194,8 +194,8 @@ lang SeqANF = ANF + SeqAst
   | TmSeq _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmSeq {tms = tms} ->
-    let acc = lam ts. k (TmSeq {tms = ts}) in
+  | TmSeq t ->
+    let acc = lam ts. k (TmSeq {t with tms = ts}) in
     let f =
       (lam acc. lam e.
          (lam ts.
@@ -203,7 +203,7 @@ lang SeqANF = ANF + SeqAst
               (lam v. acc (cons v ts))
               e))
     in
-    (foldl f acc tms) []
+    (foldl f acc t.tms) []
 
 end
 

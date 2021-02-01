@@ -202,7 +202,7 @@ end
 
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr], fi: Info}
+  | TmSeq {tms : [Expr], ty: Type, fi: Info}
 
   sem info =
   | TmSeq r -> r.fi

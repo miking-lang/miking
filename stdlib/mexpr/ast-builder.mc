@@ -159,7 +159,7 @@ let bindall_ = use MExprAst in
   foldl1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty, ty = TyRecord {fields = assocEmpty}}
+  TmRecord {bindings = assocEmpty, ty = TyUnknown {}}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
@@ -303,7 +303,7 @@ let match_ = use MExprAst in
 
 let seq_ = use MExprAst in
   lam tms.
-  TmSeq {tms = tms}
+  TmSeq {tms = tms, ty = TyUnknown {}}
 
 let record_ = use MExprAst in
   lam bindings.
@@ -429,7 +429,7 @@ let char_ = use MExprAst in
 
 let str_ = use MExprAst in
   lam s.
-  TmSeq {tms = map char_ s}
+  TmSeq {tms = map char_ s, ty = TyUnknown {}}
 
 let symb_ = use MExprAst in
   lam c.
