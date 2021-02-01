@@ -81,6 +81,13 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                with inexpr = typeAnnotExpr env2 t.inexpr}
 end
 
+lang ConstTypeAnnot = TypeAnnot + ConstAst
+  sem typeConst =
+
+  sem typeExpr (env : TypeEnv) =
+  | TmConst {val = v} -> typeConst v
+end
+
 lang DataTypeAnnot = TypeAnnot + DataAst
   sem typeExpr (env : TypeEnv) =
   | TmConApp t ->
@@ -127,7 +134,108 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst
               with tms = map (typeAnnotExpr env) t.tms}
 end
 
-lang MExprTypeAnnot = VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot
+lang IntTypeAnnot = ConstTypeAnnot + IntAst
+  sem typeConst =
+  | CInt _ -> tyint_
+end
+
+lang ArithIntTypeAnnot = ConstTypeAnnot + ArithIntAst
+  sem typeConst =
+  | CAddi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CSubi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CMuli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CDivi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CNegi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CModi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+end
+
+lang ShiftIntTypeAnnot = ConstTypeAnnot + ShiftIntAst
+  sem typeConst =
+  | CSlli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CSrli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CSrai _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+end
+
+lang FloatTypeAnnot = ConstTypeAnnot + FloatAst
+  sem typeConst =
+  | CFloat _ -> tyfloat_
+end
+
+lang ArithFloatTypeAnnot = ConstTypeAnnot + ArithFloatAst
+  sem typeConst =
+  | CAddf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
+  | CSubf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
+  | CMulf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
+  | CDivf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
+  | CNegf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
+end
+
+lang FloatIntConversionTypeAnnot = ConstTypeAnnot + FloatIntConversionAst
+  sem typeConst =
+  | CFloorfi _ -> tyarrow_ tyfloat_ tyint_
+  | CCeilfi _ -> tyarrow_ tyfloat_ tyint_
+  | CRoundfi _ -> tyarrow_ tyfloat_ tyint_
+  | CInt2float _ -> tyarrow_ tyint_ tyfloat_
+end
+
+lang BoolTypeAnnot = ConstTypeAnnot + BoolAst
+  sem typeConst =
+  | CBool _ -> tybool_
+end
+
+lang CmpIntTypeAnnot = ConstTypeAnnot + CmpIntAst
+  sem typeConst =
+  | CEqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+  | CNeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+  | CLti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+  | CGti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+  | CLeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+  | CGeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
+end
+
+lang CmpFloatTypeAnnot = ConstTypeAnnot + CmpFloatAst
+  sem typeConst =
+  | CEqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+  | CNeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+  | CLtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+  | CGtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+  | CLeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+  | CGeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
+end
+
+lang CharTypeAnnot = ConstTypeAnnot + CharAst
+  sem typeConst =
+  | CChar _ -> tychar_
+end
+
+lang CmpCharTypeAnnot = ConstTypeAnnot + CmpCharAst
+  sem typeConst =
+  | CEqc _ -> tyarrow_ tychar_ (tyarrow_ tychar_ tybool_)
+end
+
+lang IntCharConversionTypeAnnot = ConstTypeAnnot + IntCharConversionAst
+  sem typeConst =
+  | CInt2Char _ -> tyarrow_ tyint_ tychar_
+  | CChar2Int _ -> tyarrow_ tychar_ tyint_
+end
+
+lang FloatStringConversionTypeAnnot = ConstTypeAnnot + FloatStringConversionAst
+  sem typeConst =
+  | CString2float _ -> tyarrow_ tystr_ tyfloat_
+end
+
+lang MExprTypeAnnot =
+
+  -- Terms
+  VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
+  ConstTypeAnnot + DataTypeAnnot + MatchTypeAnnot + SeqTypeAnnot +
+
+  -- Constants
+  IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
+  ArithFloatTypeAnnot + FloatIntConversionTypeAnnot + BoolTypeAnnot +
+  CmpIntTypeAnnot + CmpFloatTypeAnnot + CharTypeAnnot + CmpCharTypeAnnot +
+  IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot
+
   sem typeExpr (env : TypeEnv) =
   | t -> TyUnknown {}
 
@@ -157,7 +265,7 @@ let letexp = lam ty.
     ]))
     unit_ in
 utest typeAnnot (letexp tyunknown_)
-with  letexp (tyrecord_ [("a", tyunknown_), ("b", tyunknown_)])
+with  letexp (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
 using eqExpr in
 
 let nestedRec = lam ty1. lam ty2.
@@ -177,18 +285,18 @@ let nestedRec = lam ty1. lam ty2.
   ]
 in
 let xType = tyrecord_ [
-  ("a", tyunknown_),
+  ("a", tyint_),
   ("b", tyrecord_ [
-    ("c", tyunknown_), ("d", tyunknown_)
+    ("c", tyfloat_), ("d", tyfloat_)
   ]),
-  ("e", tyunknown_)
+  ("e", tyfloat_)
 ] in
 let yType = tyrecord_ [
   ("a", tyrecord_ [
-    ("b", tyunknown_), ("c", tyrecord_ [])
+    ("b", tyint_), ("c", tyrecord_ [])
   ]),
   ("d", xType),
-  ("e", tyunknown_)
+  ("e", tyint_)
 ] in
 utest typeAnnot (nestedRec tyunknown_ tyunknown_)
 with  nestedRec xType yType
@@ -200,7 +308,7 @@ let nestedTuple = lam ty.
     unit_
 in
 let tupleType = tytuple_ [
-  tyunknown_, tyunknown_, tytuple_ [tyunknown_, tyunknown_]
+  tyint_, tyfloat_, tytuple_ [tyint_, tyint_]
 ] in
 utest typeAnnot (nestedTuple tyunknown_)
 with  nestedTuple tupleType
