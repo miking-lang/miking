@@ -3,6 +3,8 @@
 --
 -- Defines auxiliary functions for the map intrinsics.
 
+include "option.mc"
+
 let mapLookup : k -> Map k v -> Option v =
   lam k. lam m.
     match mapMem k m with false then None ()
