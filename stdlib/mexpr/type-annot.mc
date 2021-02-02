@@ -7,6 +7,12 @@ type TypeEnv = AssocMap Name Type
 let _tyEnvInsert = assocInsert {eq = nameEqSym}
 let _tyEnvLookup = assocLookup {eq = nameEqSym}
 
+let _isTypeAscription = use MExprAst in
+  lam letTerm.
+  match letTerm.inexpr with TmVar {ident = id} then
+    nameEq letTerm.ident id
+  else false
+
 lang TypeAnnot = UnknownTypeAst
   sem typeExpr (env : TypeEnv) =
 
@@ -30,29 +36,39 @@ lang VarTypeAnnot = TypeAnnot + VarAst
     TmVar {t with ty = typeExpr env var}
 end
 
-lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst
+lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmApp t ->
     match t.ty with TyUnknown {} then
-      TyArrow {from = typeExpr env t.lhs, to = typeExpr env t.rhs}
+      match typeExpr env t.lhs with TyArrow {from = from, to = to} then
+        let ty = typeExpr env t.rhs in
+        if eqType from ty then
+          to
+        else
+          error "Unexpected type of right-hand side of application"
+      else
+        error "Unexpected type of left-hand side of application"
     else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
-  | app & TmApp t ->
-    TmApp {{{t with ty = typeExpr env app}
-               with lhs = typeAnnotExpr env t.lhs}
-               with rhs = typeAnnotExpr env t.rhs}
+  | TmApp t ->
+    let t = {{t with lhs = typeAnnotExpr env t.lhs}
+                with rhs = typeAnnotExpr env t.rhs} in
+    TmApp {t with ty = typeExpr env (TmApp t)}
 end
 
 lang FunTypeAnnot = TypeAnnot + FunAst + FunTypeAst
   sem typeExpr (env : TypeEnv) =
   | TmLam t ->
-    TyArrow {from = t.ty, to = typeExpr env t.body}
+    match t.ty with TyUnknown {} then
+      TyArrow {from = t.ty, to = typeExpr env t.body}
+    else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     let env = _tyEnvInsert t.ident t.ty env in
-    TmLam {t with body = typeAnnotExpr env t.body}
+    let t = {t with body = typeAnnotExpr env t.body} in
+    TmLam {t with ty = typeExpr env (TmLam t)}
 end
 
 lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
@@ -74,11 +90,15 @@ lang LetTypeAnnot = TypeAnnot + LetAst
 
   sem typeAnnotExpr (env : TypeEnv) =
   | l & TmLet t ->
-    let ty = typeExpr env l in
-    let env2 = _tyEnvInsert t.ident ty env in
-    TmLet {{{t with ty = ty}
-               with body = typeAnnotExpr env t.body}
-               with inexpr = typeAnnotExpr env2 t.inexpr}
+    if _isTypeAscription t then
+      let ty = typeExpr env l in
+      withType ty t.body
+    else
+      let t = {t with body = typeAnnotExpr env t.body} in
+      let ty = typeExpr env (TmLet t) in
+      let env = _tyEnvInsert t.ident ty env in
+      TmLet {{t with ty = ty}
+                with inexpr = typeAnnotExpr env t.inexpr}
 end
 
 lang ConstTypeAnnot = TypeAnnot + ConstAst
@@ -86,24 +106,6 @@ lang ConstTypeAnnot = TypeAnnot + ConstAst
 
   sem typeExpr (env : TypeEnv) =
   | TmConst {val = v} -> typeConst v
-end
-
-lang DataTypeAnnot = TypeAnnot + DataAst
-  sem typeExpr (env : TypeEnv) =
-  | TmConApp t ->
-    match t.ty with TyUnknown {} then
-      match _tyEnvLookup t.ident env with Some ty then
-        ty
-      else t.ty
-    else t.ty
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | c & TmConDef t ->
-    let env = _tyEnvInsert t.ident t.ty env in
-    TmConDef {t with inexpr = typeAnnotExpr env t.inexpr}
-  | c & TmConApp t ->
-    TmConApp {{t with ty = typeExpr env c}
-                 with body = typeAnnotExpr env t.body}
 end
 
 lang MatchTypeAnnot = TypeAnnot + MatchAst
@@ -114,24 +116,29 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst
     else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
-  | m & TmMatch t ->
-    TmMatch {{{{t with ty = typeExpr env m}
-                  with target = typeAnnotExpr env t.target}
-                  with thn = typeAnnotExpr env t.thn}
-                  with els = typeAnnotExpr env t.els}
+  | TmMatch t ->
+    let t = {{{t with target = typeAnnotExpr env t.target}
+                 with thn = typeAnnotExpr env t.thn}
+                 with els = typeAnnotExpr env t.els} in
+    TmMatch {t with ty = typeExpr env (TmMatch t)}
 end
 
-lang SeqTypeAnnot = TypeAnnot + SeqAst
+lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmSeq t ->
     match t.ty with TyUnknown {} then
-      typeExpr env (get t.tms 0)
+      let tpes = map (typeExpr env) t.tms in
+      let fst = get tpes 0 in
+      if all (lam t. eqType t fst) tpes then
+        tyseq_ fst
+      else
+        error "Sequence contains elements of different types"
     else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
-  | s & TmSeq t ->
-    TmSeq {{t with ty = typeExpr env s}
-              with tms = map (typeAnnotExpr env) t.tms}
+  | TmSeq t ->
+    let t = {t with tms = map (typeAnnotExpr env) t.tms} in
+    TmSeq {t with ty = typeExpr env (TmSeq t)}
 end
 
 lang IntTypeAnnot = ConstTypeAnnot + IntAst
@@ -228,7 +235,7 @@ lang MExprTypeAnnot =
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
-  ConstTypeAnnot + DataTypeAnnot + MatchTypeAnnot + SeqTypeAnnot +
+  ConstTypeAnnot + MatchTypeAnnot + SeqTypeAnnot +
 
   -- Constants
   IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
@@ -254,75 +261,84 @@ let y = nameSym "y" in
 let z = nameSym "z" in
 let n = nameSym "n" in
 
-let base = nulam_ x (nvar_ x) in
-utest typeAnnot base with base using eqExpr in
 
-let letexp = lam ty.
+-- Type annotation of terms
+
+let ascription = lam body.
+  bind_ (nlet_ x tyunknown_ body) (nvar_ x)
+in
+
+let appBody = addi_ (int_ 5) (int_ 2) in
+utest typeAnnot (ascription appBody)
+with  withType tyint_ appBody
+using eqExpr in
+
+let lamBody = nulam_ y (float_ 2.718) in
+utest typeAnnot (ascription lamBody)
+with  withType (tyarrow_ tyunknown_ tyfloat_) lamBody
+using eqExpr in
+
+let recordBody = record_ [("a", int_ 2), ("b", float_ 2.0), ("c", false_)] in
+let recordType = tyrecord_ [
+  ("a", tyint_), ("b", tyfloat_), ("c", tybool_)
+] in
+utest typeAnnot (ascription recordBody)
+with  withType recordType recordBody
+using eqExpr in
+
+let constBody = const_ (int_ 0) in
+utest typeAnnot (ascription constBody)
+with  withType tyint_ constBody
+using eqExpr in
+
+let matchBody = if_ true_ (int_ 2) (int_ 3) in
+utest typeAnnot (ascription matchBody)
+with  withType tyint_ matchBody
+using eqExpr in
+
+let seqBody = seq_ [int_ 2, int_ 3, int_ 4] in
+utest typeAnnot (ascription seqBody)
+with  withType (tyseq_ tyint_) seqBody
+using eqExpr in
+
+-- Type annotation of constant terms
+
+let constlet = lam body. lam ty.
+  bind_ (nlet_ x ty body) unit_ in
+
+let intLiteralLet = constlet (int_ 4) in
+utest typeAnnot (intLiteralLet tyunknown_)
+with  intLiteralLet tyint_
+using eqExpr in
+
+let addiLet = constlet (const_ (CAddi ())) in
+utest typeAnnot (addiLet tyunknown_)
+with  addiLet (tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
+using eqExpr in
+
+let floatLiteralLet = constlet (float_ 4.0) in
+utest typeAnnot (floatLiteralLet tyunknown_)
+with  floatLiteralLet tyfloat_
+using eqExpr in
+
+let boolLiteralLet = constlet true_ in
+utest typeAnnot (boolLiteralLet tyunknown_)
+with  boolLiteralLet tybool_
+using eqExpr in
+
+let charLiteralLet = constlet (char_ 'a') in
+utest typeAnnot (charLiteralLet tyunknown_)
+with  charLiteralLet tychar_
+using eqExpr in
+
+let partialApp = lam ty1. lam ty2.
   bind_
-    (nlet_ x ty (record_ [
-      ("a", int_ 5),
-      ("b", float_ 2.718)
-    ]))
-    unit_ in
-utest typeAnnot (letexp tyunknown_)
-with  letexp (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
-using eqExpr in
-
-let nestedRec = lam ty1. lam ty2.
-  bindall_ [
-    nlet_ x ty1 (record_ [
-      ("a", int_ 5),
-      ("b", record_ [("c", float_ 2.718), ("d", float_ 3.14)]),
-      ("e", float_ 1.2)
-    ]),
-    nlet_ y ty2 (record_ [
-      ("a", record_ [("b", int_ 0), ("c", record_ [])]),
-      ("d", TmVar {ident = x, ty = ty1}),
-      ("e", int_ 5)
-    ]),
-    nlet_ z ty2 (recordupdate_ (TmVar {ident = y, ty = ty2}) "e" (int_ 4)),
-    unit_
-  ]
+    (nlet_ x ty1 (withType ty1 (app_ (const_ (CLtf ())) (float_ 3.14))))
+    (withType ty2 (app_ (withType ty1 (nvar_ x)) (float_ 2.718)))
 in
-let xType = tyrecord_ [
-  ("a", tyint_),
-  ("b", tyrecord_ [
-    ("c", tyfloat_), ("d", tyfloat_)
-  ]),
-  ("e", tyfloat_)
-] in
-let yType = tyrecord_ [
-  ("a", tyrecord_ [
-    ("b", tyint_), ("c", tyrecord_ [])
-  ]),
-  ("d", xType),
-  ("e", tyint_)
-] in
-utest typeAnnot (nestedRec tyunknown_ tyunknown_)
-with  nestedRec xType yType
-using eqExpr in
-
-let nestedTuple = lam ty.
-  bind_
-    (nlet_ x ty (tuple_ [int_ 0, float_ 2.5, tuple_ [int_ 0, int_ 1]]))
-    unit_
-in
-let tupleType = tytuple_ [
-  tyint_, tyfloat_, tytuple_ [tyint_, tyint_]
-] in
-utest typeAnnot (nestedTuple tyunknown_)
-with  nestedTuple tupleType
-using eqExpr in
-
-let recordInLambda = lam ty.
-  bindall_ [
-    nulam_ n (
-      bind_ (nlet_ y ty (record_ [("value", nvar_ n)])) unit_
-    )
-  ]
-in
-utest typeAnnot (recordInLambda tyunknown_)
-with  recordInLambda (tyrecord_ [("value", tyunknown_)])
+utest typeAnnot (partialApp tyunknown_ tyunknown_)
+with  partialApp (tyarrow_ tyfloat_ tybool_) tybool_
 using eqExpr in
 
 ()
+

@@ -16,6 +16,9 @@ lang VarAst
   sem info =
   | TmVar r -> r.fi
 
+  sem withType (ty : Type) =
+  | TmVar t -> TmVar {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
 
@@ -29,6 +32,9 @@ lang AppAst
 
   sem info =
   | TmApp r -> r.fi
+
+  sem withType (ty : Type) =
+  | TmApp t -> TmApp {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmApp t -> TmApp {{t with lhs = f t.lhs}
@@ -49,6 +55,9 @@ lang FunAst = VarAst + AppAst
   sem info =
   | TmLam r -> r.fi
 
+  sem withType (ty : Type) =
+  | TmLam t -> TmLam {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
 
@@ -64,6 +73,10 @@ lang RecordAst
                     key   : String,
                     value : Expr,
                     ty    : Type}
+
+  sem withType (ty : Type) =
+  | TmRecord t -> TmRecord {t with ty = ty}
+  | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecord t -> TmRecord {t with bindings = assocMap {eq=eqString} f t.bindings}
@@ -85,6 +98,9 @@ lang LetAst = VarAst
 
   sem info =
   | TmLet r -> r.fi
+
+  sem withType (ty : Type) =
+  | TmLet t -> TmLet {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}
@@ -153,6 +169,10 @@ lang DataAst
               body  : Expr,
               ty    : Type}
 
+  sem withType (ty : Type) =
+  | TmConDef t -> TmConDef {t with ty = ty}
+  | TmConApp t -> TmConApp {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
   | TmConApp t -> TmConApp {t with body = f t.body}
@@ -175,6 +195,9 @@ lang MatchAst
 
   sem info =
   | TmMatch r -> r.fi
+
+  sem withType (ty : Type) =
+  | TmMatch t -> TmMatch {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmMatch t -> TmMatch {{{t with target = f t.target}
@@ -206,6 +229,9 @@ lang SeqAst
 
   sem info =
   | TmSeq r -> r.fi
+
+  sem withType (ty : Type) =
+  | TmSeq t -> TmSeq {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
