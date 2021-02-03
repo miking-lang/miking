@@ -583,6 +583,12 @@ lang VarTypeEq = Eq + VarTypeAst
       nameEq l.ident r.ident
     else false
 end
+
+lang AppTypeEq = Eq + AppTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyApp r ->
+    match _unwrapType typeEnv lhs with Some (TyApp l) then
+      and (eqType typeEnv l.lhs r.lhs) (eqType typeEnv l.rhs r.rhs)
     else false
 end
 
@@ -608,7 +614,7 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq + AppTypeEq
 end
 
 -----------
@@ -1003,6 +1009,18 @@ utest ntyvar_ t with tyint_ using eqType tyEnv1 in
 utest tyint_ with ntyvar_ t using eqType tyEnv1 in
 utest eqType tyEnv1 (ntyvar_ t) tybool_ with false in
 utest ntyvar_ t with tybool_ using eqType tyEnv2 in
+
+let tyApp1 = tyapp_ tyint_ tyint_ in
+let tyApp2 = tyapp_ (ntyvar_ t) tyint_ in
+let tyApp3 = tyapp_ tyint_ (ntyvar_ t) in
+utest tyApp1 with tyApp1 using eqType emptyEnv in
+utest tyApp2 with tyApp2 using eqType emptyEnv in
+utest tyApp3 with tyApp3 using eqType emptyEnv in
+utest tyApp1 with tyApp2 using eqType tyEnv1 in
+utest tyApp2 with tyApp3 using eqType tyEnv1 in
+utest eqType tyEnv2 tyApp1 tyApp2 with false in
+utest eqType tyEnv2 tyApp2 tyApp3 with false in
+utest eqType tyEnv2 tyApp1 tyApp3 with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in
