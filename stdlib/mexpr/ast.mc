@@ -16,6 +16,9 @@ lang VarAst
   sem info =
   | TmVar r -> r.fi
 
+  sem ty =
+  | TmVar t -> t.ty
+
   sem withType (ty : Type) =
   | TmVar t -> TmVar {t with ty = ty}
 
@@ -32,6 +35,9 @@ lang AppAst
 
   sem info =
   | TmApp r -> r.fi
+
+  sem ty =
+  | TmApp t -> t.ty
 
   sem withType (ty : Type) =
   | TmApp t -> TmApp {t with ty = ty}
@@ -55,6 +61,9 @@ lang FunAst = VarAst + AppAst
   sem info =
   | TmLam r -> r.fi
 
+  sem ty =
+  | TmLam t -> t.ty
+
   sem withType (ty : Type) =
   | TmLam t -> TmLam {t with ty = ty}
 
@@ -73,6 +82,10 @@ lang RecordAst
                     key   : String,
                     value : Expr,
                     ty    : Type}
+
+  sem ty =
+  | TmRecord t -> t.ty
+  | TmRecordUpdate t -> t.ty
 
   sem withType (ty : Type) =
   | TmRecord t -> TmRecord {t with ty = ty}
@@ -99,6 +112,9 @@ lang LetAst = VarAst
   sem info =
   | TmLet r -> r.fi
 
+  sem ty =
+  | TmLet t -> t.ty
+
   sem withType (ty : Type) =
   | TmLet t -> TmLet {t with ty = ty}
 
@@ -118,6 +134,12 @@ lang TypeAst
 
   sem info =
   | TmType r -> r.fi
+
+  sem ty =
+  | TmType t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmType t -> TmType {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmType t -> TmType {t with inexpr = f t.inexpr}
@@ -153,6 +175,9 @@ lang ConstAst
   sem info =
   | TmConst r -> r.fi
 
+  sem ty =
+  | TmConst t -> t.ty
+
   sem withType (ty : Type) =
   | TmConst t -> TmConst {t with ty = ty}
 
@@ -171,6 +196,10 @@ lang DataAst
   | TmConApp {ident : Name,
               body  : Expr,
               ty    : Type}
+
+  sem ty =
+  | TmConDef t -> t.ty
+  | TmConApp t -> t.ty
 
   sem withType (ty : Type) =
   | TmConDef t -> TmConDef {t with ty = ty}
@@ -198,6 +227,9 @@ lang MatchAst
 
   sem info =
   | TmMatch r -> r.fi
+
+  sem ty =
+  | TmMatch t -> t.ty
 
   sem withType (ty : Type) =
   | TmMatch t -> TmMatch {t with ty = ty}
@@ -232,6 +264,9 @@ lang SeqAst
 
   sem info =
   | TmSeq r -> r.fi
+
+  sem ty =
+  | TmSeq t -> t.ty
 
   sem withType (ty : Type) =
   | TmSeq t -> TmSeq {t with ty = ty}
