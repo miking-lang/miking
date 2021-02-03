@@ -1409,7 +1409,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           let shape = shape_str rhs in
           let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
           let info = info2str fi in
-          Printf.eprintf "%-40s: %-40s (%s)\n" (Ustring.to_utf8 sym) (Ustring.to_utf8 shape) (Ustring.to_utf8 info)
+          Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym) (Ustring.to_utf8 shape) (Ustring.to_utf8 info)
       end;
       TmConapp (fi, x, s, rhs)
   | TmMatch (_, t1, p, t2, t3) -> (
