@@ -574,11 +574,15 @@ end
 
 lang VarTypeEq = Eq + VarTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | rhs & TyVar _ ->
+  | rhs & TyVar r ->
     match _unwrapType typeEnv lhs with Some lty then
       match _unwrapType typeEnv rhs with Some rty then
         eqType typeEnv lty rty
       else false
+    else match lhs with TyVar l then
+      nameEq l.ident r.ident
+    else false
+end
     else false
 end
 
