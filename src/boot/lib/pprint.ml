@@ -25,8 +25,8 @@ let ref_indent = ref 2
 let string_of_ustring = Ustring.to_utf8
 
 (** Create string representation of variable *)
-let ustring_of_var x s =
-  if !ref_symbol then
+let ustring_of_var ?(symbol = !ref_symbol) x s =
+  if symbol then
     x
     ^.
     if Symb.eqsym Symb.Helpers.nosym s then us "#"

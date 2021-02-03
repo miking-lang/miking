@@ -908,6 +908,27 @@ let debug_eval env t =
     uprint_endline (env_str ^. tm_str) )
   else ()
 
+let shape_str = function
+  | TmRecord(_, record) ->
+     Record.bindings record
+     |> List.map fst
+     |> Ustring.concat (us",")
+     |> fun x -> us"record: {" ^. x ^. us"}"
+  | TmSeq _ -> us"Sequence"
+  | TmConapp(_, x, s, _) ->
+     ustring_of_var ~symbol:!enable_debug_symbol_print x s
+  | TmConst(_, CInt _) -> us"Int"
+  | TmConst(_, CBool _) -> us"Bool"
+  | TmConst(_, CFloat _) -> us"Float"
+  | TmConst(_, CChar _) -> us"Char"
+  | TmConst(_, CSymb _) -> us"Symbol"
+  | TmConst(_, CMap _) -> us"Intrinsic Map"
+  | TmConst(_, CPy _) -> us"Python Const"
+  | TmConst(_, _) -> us"Other Const"
+  | TmClos _ -> us"(closure)"
+  | TmRef _ -> us"(ref)"
+  | _ -> us"Other tm"
+
 (* Print out error message when a unit test fails *)
 let unittest_failed fi t1 t2 tusing =
   uprint_endline
@@ -1383,7 +1404,14 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmCondef (_, _, _, _, t) ->
       eval env t
   | TmConapp (fi, x, s, t) ->
-      TmConapp (fi, x, s, eval env t)
+      let rhs = eval env t in
+      if !enable_debug_con_shape then begin
+          let shape = shape_str rhs in
+          let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
+          let info = info2str fi in
+          Printf.eprintf "%-40s: %-40s (%s)\n" (Ustring.to_utf8 sym) (Ustring.to_utf8 shape) (Ustring.to_utf8 info)
+      end;
+      TmConapp (fi, x, s, rhs)
   | TmMatch (_, t1, p, t2, t3) -> (
     match try_match env (eval env t1) p with
     | Some env ->
