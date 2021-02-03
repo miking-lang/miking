@@ -106,6 +106,10 @@ lang ConstTypeAnnot = TypeAnnot + ConstAst
 
   sem typeExpr (env : TypeEnv) =
   | TmConst {val = v} -> typeConst v
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | const & TmConst t ->
+    TmConst {t with ty = typeExpr env const}
 end
 
 lang MatchTypeAnnot = TypeAnnot + MatchAst
@@ -286,7 +290,7 @@ utest typeAnnot (ascription recordBody)
 with  withType recordType recordBody
 using eqExpr in
 
-let constBody = const_ (int_ 0) in
+let constBody = int_ 0 in
 utest typeAnnot (ascription constBody)
 with  withType tyint_ constBody
 using eqExpr in

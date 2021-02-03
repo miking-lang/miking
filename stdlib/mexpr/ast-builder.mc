@@ -267,7 +267,7 @@ let conapp_ = use MExprAst in
 
 let const_ = use MExprAst in
   lam c.
-  TmConst {val = c}
+  TmConst {val = c, ty = TyUnknown {}}
 
 let nlam_ = use MExprAst in
   lam n. lam ty. lam body.

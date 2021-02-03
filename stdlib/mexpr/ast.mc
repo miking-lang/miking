@@ -148,10 +148,13 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const, fi: Info}
+  | TmConst {val : Const, ty: Type, fi: Info}
 
   sem info =
   | TmConst r -> r.fi
+
+  sem withType (ty : Type) =
+  | TmConst t -> TmConst {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t

@@ -172,7 +172,8 @@ let tmRecordC = mkTmRecordXY tmApp11C tmConst3C in
 let cInt2cChar =
 lam e. match e with TmConst t then
          match t.val with CInt i
-           then TmConst {val = CChar {val = int2char i.val}}
+           then TmConst {val = CChar {val = int2char i.val},
+                         ty = TyUnknown {}}
          else e
        else e
 in
