@@ -104,6 +104,11 @@ let builtin =
   ; ("eqsym", f (Ceqsym None))
   ; ("gensym", f Cgensym)
   ; ("sym2hash", f Csym2hash)
+  ; ("mapEmpty", f CmapEmpty)
+  ; ("mapInsert", f (CmapInsert (None, None)))
+  ; ("mapFind", f (CmapFind None))
+  ; ("mapAny", f (CmapAny None))
+  ; ("mapMem", f (CmapMem None))
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -339,6 +344,29 @@ let arity = function
   | CmodRef (Some _) ->
       1
   | CdeRef ->
+      1
+  (* Map intrinsics *)
+  | CMap _ ->
+      0
+  | CmapEmpty ->
+      1
+  | CmapInsert (None, None) ->
+      3
+  | CmapInsert (Some _, None) ->
+      2
+  | CmapInsert (_, Some _) ->
+      1
+  | CmapFind None ->
+      2
+  | CmapFind (Some _) ->
+      1
+  | CmapAny None ->
+      2
+  | CmapAny (Some _) ->
+      1
+  | CmapMem None ->
+      2
+  | CmapMem (Some _) ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -775,6 +803,83 @@ let delta eval env fi c v =
   | CdeRef, TmRef (_, r) ->
       !r
   | CdeRef, _ ->
+      fail_constapp fi
+  | CMap _, _ ->
+      fail_constapp fi
+  | CmapEmpty, cmp ->
+      let compare x y =
+        let app = TmApp (fi, TmApp (fi, cmp, x), y) in
+        match eval env app with
+        | TmConst (_, CInt i) ->
+            i
+        | _ ->
+            fail_constapp fi
+      in
+      let module Ord = struct
+        type t = tm
+
+        let compare = compare
+      end in
+      let module MapModule = Map.Make (Ord) in
+      TmConst (fi, CMap (compare, Obj.repr MapModule.empty))
+  | CmapInsert (None, None), key ->
+      TmConst (fi, CmapInsert (Some key, None))
+  | CmapInsert (Some key, None), v ->
+      TmConst (fi, CmapInsert (Some key, Some v))
+  | CmapInsert (Some k, Some v), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let m = MapModule.add k v (Obj.obj m) in
+      TmConst (fi, CMap (cmp, Obj.repr m))
+  | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
+      fail_constapp fi
+  | CmapFind None, t ->
+      TmConst (fi, CmapFind (Some t))
+  | CmapFind (Some k), TmConst (_, CMap (cmp, mp)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      MapModule.find k (Obj.obj mp)
+  | CmapFind (Some _), _ ->
+      fail_constapp fi
+  | CmapAny None, p ->
+      let pred x y =
+        let app = TmApp (fi, TmApp (fi, p, x), y) in
+        match eval env app with
+        | TmConst (_, CBool b) ->
+            b
+        | _ ->
+            fail_constapp fi
+      in
+      TmConst (fi, CmapAny (Some pred))
+  | CmapAny (Some p), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      TmConst (fi, CBool (MapModule.exists p (Obj.obj m)))
+  | CmapAny (Some _), _ ->
+      fail_constapp fi
+  | CmapMem None, key ->
+      TmConst (fi, CmapMem (Some key))
+  | CmapMem (Some k), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      TmConst (fi, CBool (MapModule.mem k (Obj.obj m)))
+  | CmapMem (Some _), _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

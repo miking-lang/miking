@@ -117,6 +117,14 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
+  (* Map intrinsics *)
+  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
+  | CMap of (tm -> tm -> int) * Obj.t
+  | CmapEmpty
+  | CmapInsert of tm option * tm option
+  | CmapFind of tm option
+  | CmapMem of tm option
+  | CmapAny of (tm -> tm -> bool) option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext

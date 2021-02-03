@@ -370,6 +370,19 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
+  (* Map intrinsics *)
+  | CMap _ ->
+      fprintf fmt "map"
+  | CmapEmpty ->
+      fprintf fmt "mapEmpty"
+  | CmapInsert _ ->
+      fprintf fmt "mapInsert"
+  | CmapFind _ ->
+      fprintf fmt "mapLookup"
+  | CmapAny _ ->
+      fprintf fmt "mapAny"
+  | CmapMem _ ->
+      fprintf fmt "mapMem"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

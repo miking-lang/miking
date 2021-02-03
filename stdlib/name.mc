@@ -149,3 +149,28 @@ let nameGetSym : Name -> Option Symbol =
 let _s = gensym ()
 utest nameGetSym (nameNoSym "foo") with None ()
 utest nameGetSym (nameSetSym (nameNoSym "foo") _s) with Some _s
+
+-- NOTE(Linnea, 2021-01-26): This function is temporarily added for performance
+-- experiments. It is not a total ordering since symbols are not ordered.
+-- 'nameCmp n1 n2' compares two names lexicographically.
+let nameCmp : Name -> Name -> Int =
+  lam n1. lam n2.
+    if nameEq n1 n2 then
+      0
+    else if and (nameHasSym n1) (nameHasSym n2) then
+      subi (sym2hash (optionGetOrElse (lam _. error "Expected symbol") (nameGetSym n1)))
+           (sym2hash (optionGetOrElse (lam _. error "Expected symbol") (nameGetSym n2)))
+    else if (nameHasSym n1) then subi 0 1
+    else if (nameHasSym n2) then 1
+    else
+      cmpString (nameGetStr n1) (nameGetStr n2)
+
+let _s1 = gensym ()
+let _s2 = gensym ()
+utest nameCmp (nameSetSym (nameNoSym "foo") _s1) (nameSetSym (nameNoSym "foo") _s1) with 0
+utest nameCmp (nameSetSym (nameNoSym "foo") _s1) (nameSetSym (nameNoSym "foo") _s2) with (subi 0 1)
+utest nameCmp (nameSetSym (nameNoSym "foo") _s2) (nameSetSym (nameNoSym "foo") _s1) with 1
+utest nameCmp (nameNoSym "foo") (nameNoSym "foo") with 0
+utest nameCmp (nameNoSym "a") (nameNoSym "A") with 32
+utest nameCmp (nameSetSym (nameNoSym "foo") _s1) (nameNoSym "foo") with subi 0 1
+utest nameCmp (nameNoSym "foo") (nameSetSym (nameNoSym "foo") _s1) with 1
