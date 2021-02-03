@@ -194,12 +194,18 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     TmConApp {t with ty = typeExpr env (TmConApp t)}
 end
 
-lang MatchTypeAnnot = TypeAnnot + MatchAst
+lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmMatch t ->
-    match t.ty with TyUnknown {} then
-      typeExpr env t.thn
-    else t.ty
+    match env with {tyEnv = tyEnv} then
+      match t.ty with TyUnknown {} then
+        let thnty = typeExpr env t.thn in
+        let elsty = typeExpr env t.els in
+        if eqType tyEnv thnty elsty then
+          thnty
+        else error "Types of match branches have different types"
+      else t.ty
+    else never
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMatch t ->
