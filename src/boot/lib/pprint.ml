@@ -385,6 +385,8 @@ let rec print_const fmt = function
       fprintf fmt "mapMem"
   | CmapMap _ ->
       fprintf fmt "mapMap"
+  | CmapMapWithKey _ ->
+      fprintf fmt "mapMapWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
   (* Python intrinsics *)

@@ -110,6 +110,7 @@ let builtin =
   ; ("mapAny", f (CmapAny None))
   ; ("mapMem", f (CmapMem None))
   ; ("mapMap", f (CmapMap None))
+  ; ("mapMapWithKey", f (CmapMapWithKey None))
   ; ("mapBindings", f CmapBindings)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
@@ -373,6 +374,10 @@ let arity = function
   | CmapMap None ->
       2
   | CmapMap (Some _) ->
+      1
+  | CmapMapWithKey None ->
+      2
+  | CmapMapWithKey (Some _) ->
       1
   | CmapBindings ->
       1
@@ -902,6 +907,20 @@ let delta eval env fi c v =
       let m = MapModule.map f (Obj.obj m) in
       TmConst (fi, CMap (cmp, Obj.repr m))
   | CmapMap (Some _), _ ->
+      fail_constapp fi
+  | CmapMapWithKey None, f ->
+      let mapf k v = TmApp (fi, TmApp (fi, f, k), v) |> eval env in
+      TmConst (fi, CmapMapWithKey (Some mapf))
+  | CmapMapWithKey (Some f), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let m = MapModule.mapi f (Obj.obj m) in
+      TmConst (fi, CMap (cmp, Obj.repr m))
+  | CmapMapWithKey (Some _), _ ->
       fail_constapp fi
   | CmapBindings, TmConst (_, CMap (cmp, m)) ->
       let module Ord = struct

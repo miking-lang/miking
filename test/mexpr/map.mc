@@ -31,6 +31,9 @@ utest mapBindings m with [(1,'1'), (2,'2'), (3,'3'), (4,'5')] in
 let m = mapMap (lam c. int2char (addi 1 (char2int c))) m in
 utest mapBindings m with [(1,'2'), (2,'3'), (3,'4'), (4,'6')] in
 
+let m = mapMapWithKey (lam k. lam v. int2char (addi k (char2int v))) m in
+utest mapBindings m with [(1,'3'), (2,'5'), (3,'7'), (4,':')] in
+
 -- Int tuple map
 let cmpTuple = lam t1. lam t2.
   let d = subi t1.0 t2.0 in
