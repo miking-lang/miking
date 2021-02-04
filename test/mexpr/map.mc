@@ -26,6 +26,11 @@ utest mapAny (lam k. lam v. eqi 1 k) m with true in
 utest mapAny (lam k. lam v. eqi (char2int '5') (char2int v)) m with true in
 utest mapAny (lam k. lam v. eqi (char2int '4') (char2int v)) m with false in
 
+utest mapBindings m with [(1,'1'), (2,'2'), (3,'3'), (4,'5')] in
+
+let m = mapMap (lam c. int2char (addi 1 (char2int c))) m in
+utest mapBindings m with [(1,'2'), (2,'3'), (3,'4'), (4,'6')] in
+
 -- Int tuple map
 let cmpTuple = lam t1. lam t2.
   let d = subi t1.0 t2.0 in
