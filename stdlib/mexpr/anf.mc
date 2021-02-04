@@ -134,9 +134,10 @@ lang RecLetsANF = ANF + RecLetsAst
   sem normalize (k : Expr -> Expr) =
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
-  | TmRecLets {bindings = bindings, inexpr = inexpr} ->
-    let bindings = map (lam b. {b with body = normalizeTerm b.body}) bindings in
-    TmRecLets {bindings = bindings, inexpr = normalize k inexpr}
+  | TmRecLets t ->
+    let bindings = map (lam b. {b with body = normalizeTerm b.body}) t.bindings in
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = normalize k t.inexpr}
 end
 
 lang ConstANF = ANF + ConstAst
@@ -182,10 +183,10 @@ lang UtestANF = ANF + UtestAst
   | TmUtest _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmUtest {test = test, expected = expected, next = next} ->
-    TmUtest {test = normalizeTerm test,
-             expected = normalizeTerm expected,
-             next = normalize k next}
+  | TmUtest t ->
+    TmUtest {{{t with test = normalizeTerm t.test}
+                 with expected = normalizeTerm t.expected}
+                 with next = normalize k t.next}
 
 end
 

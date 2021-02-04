@@ -188,7 +188,7 @@ let type_ = use MExprAst in
 let nreclets_ = use MExprAst in
   lam bs.
   TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2}) bs,
-             inexpr = unit_}
+             inexpr = unit_, ty = TyUnknown {}}
 
 let reclets_ = use MExprAst in
   lam bs.
@@ -332,7 +332,7 @@ let record_add_bindings = lam bindings. lam record.
   foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
-  TmNever {}
+  TmNever {ty = TyUnknown {}}
 
 let nrecordproj_ = use MExprAst in
   lam name. lam key. lam r.
@@ -399,7 +399,7 @@ let appf8_ = use MExprAst in
 
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n}
+  TmUtest {test = t, expected = e, next = n, ty = TyUnknown {}}
 
 
 -- Ascription

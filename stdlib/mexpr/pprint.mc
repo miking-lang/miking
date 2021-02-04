@@ -502,7 +502,7 @@ lang NeverPrettyPrint = PrettyPrint + NeverAst
   | TmNever _ -> true
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmNever {} -> (env,"never")
+  | TmNever _ -> (env,"never")
 end
 
 ---------------

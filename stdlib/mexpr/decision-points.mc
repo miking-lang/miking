@@ -440,7 +440,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     in
     let binds =
       foldl (lam acc. lam b. concat acc (handleLet b)) [] t.bindings
-    in concat [TmRecLets {inexpr=unit_, bindings=binds}]
+    in concat [TmRecLets {{t with inexpr=unit_} with bindings=binds}]
               (_extract p extractor t.inexpr)
 
   | tm -> sfold_Expr_Expr concat [] (smap_Expr_Expr (_extract p extractor) tm)

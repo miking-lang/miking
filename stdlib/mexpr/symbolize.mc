@@ -133,7 +133,7 @@ end
 
 lang RecLetsSym = Sym + RecLetsAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmRecLets {bindings = bindings, inexpr = inexpr} ->
+  | TmRecLets t ->
     match env with {varEnv = varEnv} then
 
     -- Generate fresh symbols for all identifiers
@@ -141,7 +141,7 @@ lang RecLetsSym = Sym + RecLetsAst
       map (lam bind.
              if nameHasSym bind.ident then bind
              else {bind with ident = nameSetNewSym bind.ident})
-        bindings in
+        t.bindings in
 
     -- Add all identifiers to environment
     let varEnv =
@@ -156,7 +156,8 @@ lang RecLetsSym = Sym + RecLetsAst
       map (lam bind. {bind with body = symbolizeExpr env bind.body})
         bindings in
 
-    TmRecLets {bindings = bindings, inexpr = symbolizeExpr env inexpr}
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = symbolizeExpr env t.inexpr}
 
     else never
 end
@@ -222,10 +223,10 @@ end
 
 lang UtestSym = Sym + UtestAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmUtest {test = test, expected = expected, next = next} ->
-    TmUtest {test = symbolizeExpr env test,
-             expected = symbolizeExpr env expected,
-             next = symbolizeExpr env next}
+  | TmUtest t ->
+    TmUtest {{{t with test = symbolizeExpr env t.test}
+                 with expected = symbolizeExpr env t.expected}
+                 with next = symbolizeExpr env t.next}
 end
 
 lang SeqSym = Sym + SeqAst
@@ -235,7 +236,7 @@ end
 
 lang NeverSym = Sym + NeverAst
   sem symbolizeExpr (env : SymEnv) =
-  | TmNever {} -> TmNever {}
+  | TmNever t -> TmNever t
 end
 
 -----------

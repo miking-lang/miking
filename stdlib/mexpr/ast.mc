@@ -154,7 +154,14 @@ lang RecLetsAst = VarAst
   | TmRecLets {bindings : [{ident : Name,
                             ty    : Type,
                             body  : Expr}],
-               inexpr   : Expr}
+               inexpr   : Expr,
+               ty       : Type}
+
+  sem ty =
+  | TmRecLets t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmRecLets t -> TmRecLets {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
@@ -247,7 +254,14 @@ lang UtestAst
   syn Expr =
   | TmUtest {test     : Expr,
              expected : Expr,
-             next     : Expr}
+             next     : Expr,
+             ty       : Type}
+
+  sem ty =
+  | TmUtest t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmUtest t -> TmUtest {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmUtest t -> TmUtest {{{t with test = f t.test}
@@ -280,10 +294,16 @@ end
 
 lang NeverAst
   syn Expr =
-  | TmNever {fi: Info}
+  | TmNever {ty: Type, fi: Info}
 
   sem info =
   | TmNever r -> r.fi
+
+  sem ty =
+  | TmNever t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmNever t -> TmNever {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmNever _ & t -> t
