@@ -125,6 +125,9 @@ and const =
   | CmapFind of tm option
   | CmapMem of tm option
   | CmapAny of (tm -> tm -> bool) option
+  | CmapMap of (tm -> tm) option
+  | CmapMapWithKey of (tm -> tm -> tm) option
+  | CmapBindings
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext

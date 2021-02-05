@@ -109,6 +109,9 @@ let builtin =
   ; ("mapFind", f (CmapFind None))
   ; ("mapAny", f (CmapAny None))
   ; ("mapMem", f (CmapMem None))
+  ; ("mapMap", f (CmapMap None))
+  ; ("mapMapWithKey", f (CmapMapWithKey None))
+  ; ("mapBindings", f CmapBindings)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -367,6 +370,16 @@ let arity = function
   | CmapMem None ->
       2
   | CmapMem (Some _) ->
+      1
+  | CmapMap None ->
+      2
+  | CmapMap (Some _) ->
+      1
+  | CmapMapWithKey None ->
+      2
+  | CmapMapWithKey (Some _) ->
+      1
+  | CmapBindings ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -880,6 +893,48 @@ let delta eval env fi c v =
       let module MapModule = Map.Make (Ord) in
       TmConst (fi, CBool (MapModule.mem k (Obj.obj m)))
   | CmapMem (Some _), _ ->
+      fail_constapp fi
+  | CmapMap None, f ->
+      let mapf x = eval env (TmApp (fi, f, x)) in
+      TmConst (fi, CmapMap (Some mapf))
+  | CmapMap (Some f), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let m = MapModule.map f (Obj.obj m) in
+      TmConst (fi, CMap (cmp, Obj.repr m))
+  | CmapMap (Some _), _ ->
+      fail_constapp fi
+  | CmapMapWithKey None, f ->
+      let mapf k v = TmApp (fi, TmApp (fi, f, k), v) |> eval env in
+      TmConst (fi, CmapMapWithKey (Some mapf))
+  | CmapMapWithKey (Some f), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let m = MapModule.mapi f (Obj.obj m) in
+      TmConst (fi, CMap (cmp, Obj.repr m))
+  | CmapMapWithKey (Some _), _ ->
+      fail_constapp fi
+  | CmapBindings, TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let binds =
+        MapModule.bindings (Obj.obj m)
+        |> List.map (fun (k, v) -> tuple2record fi [k; v])
+      in
+      TmSeq (fi, Mseq.Helpers.of_list binds)
+  | CmapBindings, _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
