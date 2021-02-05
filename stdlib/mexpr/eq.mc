@@ -43,6 +43,8 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
+type TypeEnv = AssocMap Name Type
+
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
 -- environment. If (i1,i2) is inconsistent with either environment, return None
@@ -62,6 +64,11 @@ let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
       -- unbound variables cannot shadow one another).
       Some (biInsert (i1,i2) free)
 
+let _unwrapType = use MExprAst in
+  lam typeEnv. lam ty.
+  match ty with TyVar {ident = id} then
+    assocLookup {eq=nameEq} id typeEnv
+  else Some ty
 
 -----------
 -- TERMS --
@@ -73,6 +80,9 @@ lang Eq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
 
+  sem eqType (typeEnv : TypeEnv) (lhs : Expr) =
+  -- Intentionally left blank
+
   sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
@@ -81,10 +91,10 @@ end
 
 lang VarEq = Eq + VarAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmVar {ident = i2} ->
-    match lhs with TmVar {ident = i1} then
+  | TmVar r ->
+    match lhs with TmVar l then
       match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) then
-        match _eqCheck i1 i2 varEnv freeVarEnv with Some freeVarEnv then
+        match _eqCheck l.ident r.ident varEnv freeVarEnv with Some freeVarEnv then
           Some {free with varEnv = freeVarEnv}
         else None ()
       else never
@@ -93,45 +103,44 @@ end
 
 lang AppEq = Eq + AppAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmApp {lhs = rl, rhs = rr} ->
-    match lhs with TmApp {lhs = ll, rhs = lr} then
-      match eqExprH env free ll rl with Some free then
-        eqExprH env free lr rr
+  | TmApp r ->
+    match lhs with TmApp l then
+      match eqExprH env free l.lhs r.lhs with Some free then
+        eqExprH env free l.rhs r.rhs
       else None ()
     else None ()
 end
 
 lang FunEq = Eq + FunAst + VarEq + AppEq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  -- NOTE(dlunde,2020-09-26): The type annotation is currently ignored.
-  | TmLam {ident = i2, body = b2} ->
+  | TmLam r ->
     match env with {varEnv = varEnv} then
-      match lhs with TmLam {ident = i1, body = b1} then
-        let varEnv = biInsert (i1,i2) varEnv in
-        eqExprH {env with varEnv = varEnv} free b1 b2
+      match lhs with TmLam l then
+        let varEnv = biInsert (l.ident,r.ident) varEnv in
+        eqExprH {env with varEnv = varEnv} free l.body r.body
       else None ()
     else never
 end
 
 lang RecordEq = Eq + RecordAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmRecord {bindings = bs2} ->
-    match lhs with TmRecord {bindings = bs1} then
-      if eqi (assocLength bs1) (assocLength bs2) then
+  | TmRecord r ->
+    match lhs with TmRecord l then
+      if eqi (assocLength l.bindings) (assocLength r.bindings) then
         assocFoldlM {eq=eqString}
           (lam free. lam k1. lam v1.
-            match assocLookup {eq=eqString} k1 bs2 with Some v2 then
+            match assocLookup {eq=eqString} k1 r.bindings with Some v2 then
               eqExprH env free v1 v2
             else None ())
-          free bs1
+          free l.bindings
       else None ()
     else None ()
 
-  | TmRecordUpdate {rec = r2, key = k2, value = v2} ->
-    match lhs with TmRecordUpdate {rec = r1, key = k1, value = v1} then
-      if eqString k1 k2 then
-        match eqExprH env free r1 r2 with Some free then
-          eqExprH env free v1 v2
+  | TmRecordUpdate r ->
+    match lhs with TmRecordUpdate l then
+      if eqString l.key r.key then
+        match eqExprH env free l.rec r.rec with Some free then
+          eqExprH env free l.value r.value
         else None ()
       else None ()
     else None ()
@@ -139,7 +148,6 @@ end
 
 lang LetEq = Eq + LetAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  -- NOTE(dlunde,2020-11-04): The type annotation is currently ignored.
   | TmLet {ident = i2, body = b2, inexpr = ie2} ->
     match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
       match eqExprH env free b1 b2 with Some free then
@@ -157,7 +165,6 @@ lang RecLetsEq = Eq + RecLetsAst
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
-    -- NOTE(dlunde,2020-11-04): The type annotations are currently ignored.
     match env with {varEnv = varEnv} then
       match lhs with TmRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
@@ -190,17 +197,16 @@ end
 
 lang DataEq = Eq + DataAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  -- Type annotation ignored here as well
-  | TmConDef {ident = i2, inexpr = ie2} ->
+  | TmConDef {ident = i2, inexpr = ie2, ty = ty2} ->
     match env with {conEnv = conEnv} then
-      match lhs with TmConDef {ident = i1, inexpr = ie1} then
+      match lhs with TmConDef {ident = i1, inexpr = ie1, ty = ty1} then
         let conEnv = biInsert (i1,i2) conEnv in
         eqExprH {env with conEnv = conEnv} free ie1 ie2
       else None ()
     else never
 
-  | TmConApp {ident = i2, body = b2} ->
-    match lhs with TmConApp {ident = i1, body = b1} then
+  | TmConApp {ident = i2, body = b2, ty = ty2} ->
+    match lhs with TmConApp {ident = i1, body = b1, ty = ty1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
         match _eqCheck i1 i2 conEnv freeConEnv with Some freeConEnv then
           eqExprH env {free with conEnv = freeConEnv} b1 b2
@@ -214,8 +220,8 @@ lang MatchEq = Eq + MatchAst
   -- Intentionally left blank
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmMatch {target = t2, pat = p2, thn = thn2, els = els2} ->
-    match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1} then
+  | TmMatch {target = t2, pat = p2, thn = thn2, els = els2, ty = ty2} ->
+    match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1, ty = ty1} then
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free els1 els2 with Some free then
           match eqPat env free biEmpty p1 p2 with Some (free,patEnv) then
@@ -244,8 +250,8 @@ end
 
 lang SeqEq = Eq + SeqAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmSeq {tms = ts2} ->
-    match lhs with TmSeq {tms = ts1} then
+  | TmSeq {tms = ts2, ty = ty2} ->
+    match lhs with TmSeq {tms = ts1, ty = ty1} then
       if eqi (length ts1) (length ts2) then
         let z = zipWith (lam t1. lam t2. (t1,t2)) ts1 ts2 in
         optionFoldlM (lam free. lam tp. eqExprH env free tp.0 tp.1) free z
@@ -486,6 +492,108 @@ lang NotPatEq = NotPat
     else None ()
 end
 
+-----------
+-- TYPES --
+-----------
+
+lang UnknownTypeEq = Eq + UnknownTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyUnknown {} ->
+    match _unwrapType typeEnv lhs with Some (TyUnknown {}) then true else false
+end
+
+lang BoolTypeEq = Eq + BoolTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyBool {} ->
+    match _unwrapType typeEnv lhs with Some (TyBool {}) then true else false
+end
+
+lang IntTypeEq = Eq + IntTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyInt {} ->
+    match _unwrapType typeEnv lhs with Some (TyInt {}) then true else false
+end
+
+lang FloatTypeEq = Eq + FloatTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyFloat {} ->
+    match _unwrapType typeEnv lhs with Some (TyFloat {}) then true else false
+end
+
+lang CharTypeEq = Eq + CharTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyChar {} ->
+    match _unwrapType typeEnv lhs with Some (TyChar {}) then true else false
+end
+
+lang FunTypeEq = Eq + FunTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyArrow r ->
+    match _unwrapType typeEnv lhs with Some (TyArrow l) then
+      and (eqType typeEnv l.from r.from) (eqType typeEnv l.to r.to)
+    else false
+end
+
+lang SeqTypeEq = Eq + SeqTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TySeq r ->
+    match _unwrapType typeEnv lhs with Some (TySeq l) then
+      eqType typeEnv l.ty r.ty
+    else false
+end
+
+lang RecordTypeEq = Eq + RecordTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyRecord r ->
+    let f = lam k. lam ty1.
+      match assocLookup {eq=eqString} k r.fields with Some ty2 then
+        eqType typeEnv ty1 ty2
+      else false
+    in
+    match _unwrapType typeEnv lhs with Some (TyRecord l) then
+      if eqi (assocLength l.fields) (assocLength r.fields) then
+        assocAll f l.fields
+      else false
+    else false
+end
+
+lang VariantTypeEq = Eq + VariantTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyVariant r ->
+    -- OPT(larshum, 2021-02-05): This comparison is quadratic in the number of
+    -- constructors
+    let f = lam lname.
+      match find (lam rname. nameEq lname rname) r.constrs with Some _ then
+        true
+      else false
+    in
+    match _unwrapType typeEnv lhs with Some (TyVariant l) then
+      if eqi (length l.constrs) (length r.constrs) then
+        all (lam lname. f lname) l.constrs
+      else false
+    else false
+end
+
+lang VarTypeEq = Eq + VarTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | rhs & TyVar r ->
+    match _unwrapType typeEnv lhs with Some lty then
+      match _unwrapType typeEnv rhs with Some rty then
+        eqType typeEnv lty rty
+      else false
+    else match lhs with TyVar l then
+      nameEq l.ident r.ident
+    else false
+end
+
+lang AppTypeEq = Eq + AppTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyApp r ->
+    match _unwrapType typeEnv lhs with Some (TyApp l) then
+      and (eqType typeEnv l.lhs r.lhs) (eqType typeEnv l.rhs r.rhs)
+    else false
+end
+
 -----------------------------
 -- MEXPR ALPHA EQUIVALENCE --
 -----------------------------
@@ -506,6 +614,9 @@ lang MExprEq =
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
   CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
 
+  -- Types
+  + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq + AppTypeEq
 end
 
 -----------
@@ -845,6 +956,73 @@ let y = match_ false_
   (var_ "z") true_ in
 utest x with y using eqExpr in
 
+-- Types
+let x = nameSym "x" in
+let y = nameSym "y" in
+let f = nameSym "f" in
+let t = nameSym "T" in
+let letexpr = lam ty.
+  nlet_ x ty (app_ (nvar_ f) (nvar_ y))
+in
+let emptyEnv = assocEmpty in
+
+let letu = letexpr tyunknown_ in
+let letb = letexpr tybool_ in
+let leti = letexpr tyint_ in
+let letfl = letexpr tyfloat_ in
+let letch = letexpr tychar_ in
+utest tyunknown_ with tyunknown_ using eqType emptyEnv in
+utest tybool_ with tybool_ using eqType emptyEnv in
+utest tyint_ with tyint_ using eqType emptyEnv in
+utest tyfloat_ with tyfloat_ using eqType emptyEnv in
+utest tychar_ with tychar_ using eqType emptyEnv in
+utest eqType emptyEnv tyunknown_ tybool_ with false in
+utest eqType emptyEnv tybool_ tyint_ with false in
+utest eqType emptyEnv tyint_ tyfloat_ with false in
+utest eqType emptyEnv tyint_ tychar_ with false in
+
+let tyarr1 = tyarrow_ tyunknown_ tyunknown_ in
+let tyarr2 = tyarrow_ tyint_ tyunknown_ in
+let tyarr3 = tyarrow_ tyunknown_ tyint_ in
+let tyarr4 = tyarrow_ (tyarrow_ tyint_ tyint_) tyint_ in
+let tyseq = lam ty. tyseq_ ty in
+let tyrec1 = tyrecord_ [("0", tyint_), ("1", tyunknown_)] in
+let tyrec2 = tyrecord_ [("1", tyunknown_), ("0", tyunknown_)] in
+let tyrec3 = tytuple_ [tyunknown_, tyunknown_] in
+utest tyarr1 with tyarr1 using eqType emptyEnv in
+utest tyarr2 with tyarr2 using eqType emptyEnv in
+utest tyarr3 with tyarr3 using eqType emptyEnv in
+utest tyarr4 with tyarr4 using eqType emptyEnv in
+utest eqType emptyEnv tyarr1 tyarr2 with false in
+utest eqType emptyEnv tyarr2 tyarr3 with false in
+utest eqType emptyEnv tyarr3 tyarr4 with false in
+utest tystr_ with tystr_ using eqType emptyEnv in
+utest tyseq tyint_ with tyseq tyint_ using eqType emptyEnv in
+utest eqType emptyEnv tystr_ (tyseq tyint_) with false in
+utest tyrec1 with tyrec1 using eqType emptyEnv in
+utest tyrec2 with tyrec3 using eqType emptyEnv in
+utest eqType emptyEnv tyrec1 tyrec2 with false in
+
+let tyEnv1 = seq2assoc {eq=nameEq} [(t, tyint_)] in
+let tyEnv2 = seq2assoc {eq=nameEq} [(t, tybool_)] in
+utest eqType emptyEnv (ntyvar_ t) tyint_ with false in
+utest eqType emptyEnv tyint_ (ntyvar_ t) with false in
+utest ntyvar_ t with tyint_ using eqType tyEnv1 in
+utest tyint_ with ntyvar_ t using eqType tyEnv1 in
+utest eqType tyEnv1 (ntyvar_ t) tybool_ with false in
+utest ntyvar_ t with tybool_ using eqType tyEnv2 in
+
+let tyApp1 = tyapp_ tyint_ tyint_ in
+let tyApp2 = tyapp_ (ntyvar_ t) tyint_ in
+let tyApp3 = tyapp_ tyint_ (ntyvar_ t) in
+utest tyApp1 with tyApp1 using eqType emptyEnv in
+utest tyApp2 with tyApp2 using eqType emptyEnv in
+utest tyApp3 with tyApp3 using eqType emptyEnv in
+utest tyApp1 with tyApp2 using eqType tyEnv1 in
+utest tyApp2 with tyApp3 using eqType tyEnv1 in
+utest eqType tyEnv2 tyApp1 tyApp2 with false in
+utest eqType tyEnv2 tyApp2 tyApp3 with false in
+utest eqType tyEnv2 tyApp1 tyApp3 with false in
 
 -- Utest
 let ut1 = utest_ lam1 lam2 v3 in

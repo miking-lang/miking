@@ -11,10 +11,16 @@ include "mexpr/info.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name, fi: Info}
+  | TmVar {ident : Name, ty: Type, fi: Info}
 
   sem info =
   | TmVar r -> r.fi
+
+  sem ty =
+  | TmVar t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmVar t -> TmVar {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmVar t -> TmVar t
@@ -25,13 +31,20 @@ end
 
 lang AppAst
   syn Expr =
-  | TmApp {lhs : Expr, rhs : Expr, fi: Info}
+  | TmApp {lhs : Expr, rhs : Expr, ty: Type, fi: Info}
 
   sem info =
   | TmApp r -> r.fi
 
+  sem ty =
+  | TmApp t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmApp t -> TmApp {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmApp t -> TmApp {lhs = f t.lhs, rhs = f t.rhs}
+  | TmApp t -> TmApp {{t with lhs = f t.lhs}
+                         with rhs = f t.rhs}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmApp t -> f (f acc t.lhs) t.rhs
@@ -48,6 +61,12 @@ lang FunAst = VarAst + AppAst
   sem info =
   | TmLam r -> r.fi
 
+  sem ty =
+  | TmLam t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmLam t -> TmLam {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLam t -> TmLam {t with body = f t.body}
 
@@ -57,13 +76,23 @@ end
 
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMap String Expr}
+  | TmRecord {bindings : AssocMap String Expr,
+              ty : Type}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
-                    value : Expr}
+                    value : Expr,
+                    ty    : Type}
+
+  sem ty =
+  | TmRecord t -> t.ty
+  | TmRecordUpdate t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmRecord t -> TmRecord {t with ty = ty}
+  | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {bindings = assocMap {eq=eqString} f t.bindings}
+  | TmRecord t -> TmRecord {t with bindings = assocMap {eq=eqString} f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
@@ -75,13 +104,20 @@ end
 lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
-           ty     : Type,
+           tyBody : Type,
            body   : Expr,
            inexpr : Expr,
-	   fi     : Info}
+           ty     : Type,
+           fi     : Info}
 
   sem info =
   | TmLet r -> r.fi
+
+  sem ty =
+  | TmLet t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmLet t -> TmLet {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmLet t -> TmLet {{t with body = f t.body} with inexpr = f t.inexpr}
@@ -100,6 +136,12 @@ lang TypeAst
   sem info =
   | TmType r -> r.fi
 
+  sem ty =
+  | TmType t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmType t -> TmType {t with ty = ty}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmType t -> TmType {t with inexpr = f t.inexpr}
 
@@ -113,7 +155,14 @@ lang RecLetsAst = VarAst
   | TmRecLets {bindings : [{ident : Name,
                             ty    : Type,
                             body  : Expr}],
-               inexpr   : Expr}
+               inexpr   : Expr,
+               ty       : Type}
+
+  sem ty =
+  | TmRecLets t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmRecLets t -> TmRecLets {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
@@ -129,10 +178,16 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const, fi: Info}
+  | TmConst {val : Const, ty: Type, fi: Info}
 
   sem info =
   | TmConst r -> r.fi
+
+  sem ty =
+  | TmConst t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmConst t -> TmConst {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConst t -> TmConst t
@@ -147,7 +202,16 @@ lang DataAst
               ty     : Type,
               inexpr : Expr}
   | TmConApp {ident : Name,
-              body : Expr}
+              body  : Expr,
+              ty    : Type}
+
+  sem ty =
+  | TmConDef t -> t.ty
+  | TmConApp t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmConDef t -> TmConDef {t with ty = ty}
+  | TmConApp t -> TmConApp {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmConDef t -> TmConDef {t with inexpr = f t.inexpr}
@@ -164,12 +228,19 @@ lang MatchAst
              pat    : Pat,
              thn    : Expr,
              els    : Expr,
+             ty     : Type,
              fi     : Info}
 
   syn Pat =
 
   sem info =
   | TmMatch r -> r.fi
+
+  sem ty =
+  | TmMatch t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmMatch t -> TmMatch {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmMatch t -> TmMatch {{{t with target = f t.target}
@@ -184,7 +255,14 @@ lang UtestAst
   syn Expr =
   | TmUtest {test     : Expr,
              expected : Expr,
-             next     : Expr}
+             next     : Expr,
+             ty       : Type}
+
+  sem ty =
+  | TmUtest t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmUtest t -> TmUtest {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmUtest t -> TmUtest {{{t with test = f t.test}
@@ -197,10 +275,16 @@ end
 
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr], fi: Info}
+  | TmSeq {tms : [Expr], ty: Type, fi: Info}
 
   sem info =
   | TmSeq r -> r.fi
+
+  sem ty =
+  | TmSeq t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmSeq t -> TmSeq {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmSeq t -> TmSeq {t with tms = map f t.tms}
@@ -211,10 +295,16 @@ end
 
 lang NeverAst
   syn Expr =
-  | TmNever {fi: Info}
+  | TmNever {ty: Type, fi: Info}
 
   sem info =
   | TmNever r -> r.fi
+
+  sem ty =
+  | TmNever t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmNever t -> TmNever {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmNever _ & t -> t
