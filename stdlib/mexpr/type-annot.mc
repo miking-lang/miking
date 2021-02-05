@@ -197,7 +197,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + FunAst
     in
     match t.ty with TyUnknown {} then
       let _ = map f t.bindings in
-      tyunit_
+      typeExpr env t.inexpr
     else t.ty
   sem typeAnnotExpr (env : TypeEnv) =
   | rl & TmRecLets t ->
@@ -275,7 +275,7 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
         let lty = typeExpr env t.test in
         let rty = typeExpr env t.expected in
         if eqType tyEnv lty rty then
-          tyunit_
+          typeExpr env t.next
         else
           error "Utest comparing terms of different types"
       else never
@@ -311,10 +311,7 @@ end
 -- TODO(larshum, 2021-02-05): Never terms should have a bottom type
 lang NeverTypeAnnot = TypeAnnot + NeverAst
   sem typeExpr (env : TypeEnv) =
-  | TmNever t ->
-    match t.ty with TyUnknown {} then
-      tyunit_
-    else t.ty
+  | TmNever t -> TyUnknown {}
 
   sem typeAnnotExpr (env : TypeEnv) =
   | n & TmNever t -> TmNever {t with ty = typeExpr env n}
@@ -483,6 +480,9 @@ in
 utest typeOfInnerLet
 with  tyarrow_ tyunknown_ tyint_
 using eqType assocEmpty in
+utest ty (typeAnnot recletsBody)
+with  tyunit_
+using eqType assocEmpty in
 
 let constBody = int_ 0 in
 utest ty (typeAnnot (ascription constBody))
@@ -503,6 +503,9 @@ in
 utest typeOfInnerExpression
 with  tyint_
 using eqType assocEmpty in
+utest ty (typeAnnot utestBody)
+with  tyunit_
+using eqType assocEmpty in
 
 let seqBody = seq_ [int_ 2, int_ 3, int_ 4] in
 utest ty (typeAnnot (ascription seqBody))
@@ -510,7 +513,7 @@ with  tyseq_ tyint_
 using eqType assocEmpty in
 
 utest ty (typeAnnot never_)
-with  tyunit_
+with  tyunknown_
 using eqType assocEmpty in
 
 let treeName = nameSym "Tree" in
