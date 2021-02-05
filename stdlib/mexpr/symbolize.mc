@@ -95,20 +95,23 @@ lang LetSym = Sym + LetAst
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
+  | TmLet t ->
     match env with {varEnv = varEnv} then
-      let ty = symbolizeType env ty in
-      let body = symbolizeExpr env body in
-      if nameHasSym ident then
-        TmLet {ident = ident, ty = ty, body = body,
-               inexpr = symbolizeExpr env inexpr}
+      let tyBody = symbolizeType env t.tyBody in
+      let body = symbolizeExpr env t.body in
+      if nameHasSym t.ident then
+        TmLet {{{t with tyBody = tyBody}
+                   with body = body}
+                   with inexpr = symbolizeExpr env t.inexpr}
       else
-        let ident = nameSetNewSym ident in
+        let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLet {ident = ident, ty = ty, body = body,
-               inexpr = symbolizeExpr env inexpr}
+        TmLet {{{{t with ident = ident}
+                    with tyBody = tyBody}
+                    with body = body}
+                    with inexpr = symbolizeExpr env t.inexpr}
     else never
 end
 

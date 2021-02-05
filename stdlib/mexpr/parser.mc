@@ -432,8 +432,9 @@ lang LetParser =
     let e1 = parseExprMain r3.pos 0 r3.str in
     let r4 = matchKeyword "in" e1.pos e1.str in
     let e2 = parseExprMain r4.pos 0 r4.str in
-    {val = TmLet {ident = nameNoSym r2.val, ty = TyUnknown {}, body = e1.val,
-                  inexpr = e2.val, fi = makeInfo p e2.pos},
+    {val = TmLet {ident = nameNoSym r2.val, tyBody = TyUnknown {},
+                  body = e1.val, inexpr = e2.val, ty = TyUnknown {},
+                  fi = makeInfo p e2.pos},
      pos = e2.pos, str = e2.str}
 end
 

@@ -417,8 +417,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
   -- Consider identifier for which p is true.
   sem _extract (p : String -> Bool)
               (extractor : String -> Expr -> Expr) =
-  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
+  | TmLet ({body = TmLam lm} & t) ->
     let res =
       if p t.ident then
         let newBody = extractor t.ident t.body in
@@ -447,8 +446,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
 
   -- Rename identifiers for which p is true, with renaming function rf
   sem _renameIdents (p : String -> Bool) (rf : String -> String) =
-  | TmLet {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} ->
-    let t = {body = TmLam lm, ty = ty, ident=ident, inexpr=inexpr} in
+  | TmLet ({body = TmLam lm} & t) ->
     let newIdent =
       if p t.ident then
         rf t.ident

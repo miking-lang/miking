@@ -149,12 +149,13 @@ lang RecLetsEval =
       foldli
         (lam i. lam bodyacc. lam binding.
           TmLet {ident = binding.ident,
-                 ty = TyUnknown {},
+                 tyBody = TyUnknown {},
                  body = TmLam {ident = eta_name,
                                ty = TyUnknown {},
                                body = TmApp {lhs = dtupleproj_ i var,
                                              rhs = eta_var}},
-                 inexpr = bodyacc}
+                 inexpr = bodyacc,
+                 ty = TyUnknown {}}
         )
         body
         t.bindings in

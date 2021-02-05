@@ -141,25 +141,31 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
     TmRecordUpdate {t with ty = typeExpr env (TmRecordUpdate t)}
 end
 
-lang LetTypeAnnot = TypeAnnot + LetAst
+lang LetTypeAnnot = TypeAnnot + LetAst + MExprPrettyPrint
   sem typeExpr (env : TypeEnv) =
   | TmLet t ->
     match t.ty with TyUnknown {} then
-      typeExpr env t.body
+      typeExpr env t.inexpr
     else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | l & TmLet t ->
+    let tyBody =
+      match t.tyBody with TyUnknown {} then
+        typeExpr env t.body
+      else t.tyBody
+    in
     if _isTypeAscription t then
-      let ty = typeExpr env l in
-      withType ty t.body
+      withType tyBody t.body
     else
-      let t = {t with body = typeAnnotExpr env t.body} in
+      let t = {t with inexpr = typeAnnotExpr env t.inexpr} in
       let ty = typeExpr env (TmLet t) in
+      let body = withType tyBody t.body in
       match env with {varEnv = varEnv} then
-        let env = {env with varEnv = _envInsert t.ident ty varEnv} in
-        TmLet {{t with ty = ty}
-                  with inexpr = typeAnnotExpr env t.inexpr}
+        let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
+        TmLet {{{t with tyBody = tyBody}
+                   with body = body}
+                   with ty = ty}
       else never
 end
 
@@ -432,7 +438,7 @@ let n = nameSym "n" in
 -- Type annotation of terms
 
 let ascription = lam body.
-  bind_ (nlet_ x tyunknown_ body) (nvar_ x)
+  bind_ (nulet_ x body) (nvar_ x)
 in
 
 let appBody = addi_ (int_ 5) (int_ 2) in
@@ -444,6 +450,16 @@ let lamBody = nulam_ y (float_ 2.718) in
 utest ty (typeAnnot (ascription lamBody))
 with  tyarrow_ tyunknown_ tyfloat_
 using eqType assocEmpty in
+
+let letWithTypedBody = bind_ (nulet_ x (int_ 0)) unit_ in
+let typedLet = typeAnnot letWithTypedBody in
+let letBodyType =
+  match typedLet with TmLet {tyBody = tyBody} then
+    tyBody
+  else never
+in
+utest letBodyType with tyint_ using eqType assocEmpty in
+utest ty typedLet with tyunit_ using eqType assocEmpty in
 
 let recordBody = record_ [("a", int_ 2), ("b", float_ 2.0), ("c", false_)] in
 let recordType = tyrecord_ [

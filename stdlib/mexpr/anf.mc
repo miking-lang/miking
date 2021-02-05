@@ -27,8 +27,8 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
       ty = TyUnknown {},
       fi = NoInfo {}
     } in
-    TmLet {ident = ident, ty = TyUnknown {},
-           body = n, inexpr = k var}
+    TmLet {ident = ident, tyBody = TyUnknown {},
+           body = n, inexpr = k var, ty = TyUnknown {}}
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (isValue n) then k n else bind k n) m
@@ -109,11 +109,11 @@ lang LetANF = ANF + LetAst
   | TmLet _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmLet {ident = ident, ty = ty, body = m1, inexpr = m2} ->
+  | TmLet t ->
     normalize
-      (lam n1. (TmLet {ident = ident, ty = ty,
-                       body = n1, inexpr = normalizeName k m2}))
-      m1
+      (lam n1. (TmLet {{t with body = n1}
+                          with inexpr = normalizeName k t.inexpr}))
+      t.body
 
 end
 

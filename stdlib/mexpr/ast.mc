@@ -104,9 +104,10 @@ end
 lang LetAst = VarAst
   syn Expr =
   | TmLet {ident  : Name,
-           ty     : Type,
+           tyBody : Type,
            body   : Expr,
            inexpr : Expr,
+           ty     : Type,
            fi     : Info}
 
   sem info =

@@ -163,7 +163,7 @@ let unit_ = use MExprAst in
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLet {ident = n, ty = ty, body = body, inexpr = unit_}
+  TmLet {ident = n, tyBody = ty, body = body, inexpr = unit_, ty = TyUnknown {}}
 
 let let_ = use MExprAst in
   lam s. lam ty. lam body.
