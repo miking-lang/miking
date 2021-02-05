@@ -148,8 +148,8 @@ end
 
 lang LetEq = Eq + LetAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmLet {ident = i2, body = b2, inexpr = ie2, ty = ty2} ->
-    match lhs with TmLet {ident = i1, body = b1, inexpr = ie1, ty = ty1} then
+  | TmLet {ident = i2, body = b2, inexpr = ie2} ->
+    match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
       match eqExprH env free b1 b2 with Some free then
         match env with {varEnv = varEnv} then
           let varEnv = biInsert (i1,i2) varEnv in
