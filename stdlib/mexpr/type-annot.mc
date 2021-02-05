@@ -82,16 +82,16 @@ end
 lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmApp t ->
-    match env with {tyEnv = tyEnv} then
-      match t.ty with TyUnknown {} then
+    match t.ty with TyUnknown {} then
+      match env with {tyEnv = tyEnv} then
         match typeExpr env t.lhs with TyArrow {from = from, to = to} then
           let ty = typeExpr env t.rhs in
           if eqType tyEnv from ty then
             to
           else error "Unexpected type of right-hand side of application"
         else error "Unexpected type of left-hand side of application"
-      else t.ty
-    else never
+      else never
+    else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmApp t ->
@@ -122,8 +122,23 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
     let f = lam acc. lam k. lam v.
       assocInsert {eq=eqString} k (typeExpr env v) acc
     in
-    TyRecord {fields = assocFold {eq=eqString} f assocEmpty t.bindings}
-  | TmRecordUpdate t -> typeExpr env t.rec
+    match t.ty with TyUnknown {} then
+      TyRecord {fields = assocFold {eq=eqString} f assocEmpty t.bindings}
+    else t.ty
+  | TmRecordUpdate t ->
+    match t.ty with TyUnknown {} then
+      typeExpr env t.rec
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmRecord t ->
+    let bindings = assocMap {eq=eqString} (typeAnnotExpr env) t.bindings in
+    let t = {t with bindings = bindings} in
+    TmRecord {t with ty = typeExpr env (TmRecord t)}
+  | TmRecordUpdate t ->
+    let t = {{t with rec = typeAnnotExpr env t.rec}
+                with value = typeAnnotExpr env t.value} in
+    TmRecordUpdate {t with ty = typeExpr env (TmRecordUpdate t)}
 end
 
 lang LetTypeAnnot = TypeAnnot + LetAst
@@ -163,11 +178,42 @@ lang TypeTypeAnnot = TypeAnnot + TypeAst
                with inexpr = typeAnnotExpr env t.inexpr}
 end
 
+lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + FunAst
+  sem typeExpr (env : TypeEnv) =
+  | TmRecLets t ->
+    let f = lam b.
+      match b.ty with TyUnknown {} then
+        match b.body with TmLam _ then
+          typeExpr env b.body
+        else
+          error "Right-hand side of recursive let must be a lambda"
+      else b.ty
+    in
+    match t.ty with TyUnknown {} then
+      let _ = map f t.bindings in
+      tyunit_
+    else t.ty
+  sem typeAnnotExpr (env : TypeEnv) =
+  | rl & TmRecLets t ->
+    let bindingf = lam binding.
+      let body = typeAnnotExpr env binding.body in
+      {{binding with body = body}
+                with ty = ty body}
+    in
+    let t = {{t with bindings = map bindingf t.bindings}
+                with inexpr = typeAnnotExpr env t.inexpr} in
+    TmRecLets {t with ty = typeExpr env (TmRecLets t)}
+end
+
 lang ConstTypeAnnot = TypeAnnot + ConstAst
   sem typeConst =
+  -- Intentionally left blank
 
   sem typeExpr (env : TypeEnv) =
-  | TmConst {val = v} -> typeConst v
+  | TmConst t ->
+    match t.ty with TyUnknown {} then
+      typeConst t.val
+    else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | const & TmConst t ->
@@ -197,15 +243,15 @@ end
 lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmMatch t ->
-    match env with {tyEnv = tyEnv} then
-      match t.ty with TyUnknown {} then
+    match t.ty with TyUnknown {} then
+      match env with {tyEnv = tyEnv} then
         let thnty = typeExpr env t.thn in
         let elsty = typeExpr env t.els in
         if eqType tyEnv thnty elsty then
           thnty
         else error "Types of match branches have different types"
-      else t.ty
-    else never
+      else never
+    else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMatch t ->
@@ -215,23 +261,57 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
     TmMatch {t with ty = typeExpr env (TmMatch t)}
 end
 
+lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
+  sem typeExpr (env : TypeEnv) =
+  | TmUtest t ->
+    match t.ty with TyUnknown {} then
+      match env with {tyEnv = tyEnv} then
+        let lty = typeExpr env t.test in
+        let rty = typeExpr env t.expected in
+        if eqType tyEnv lty rty then
+          tyunit_
+        else
+          error "Utest comparing terms of different types"
+      else never
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmUtest t ->
+    let t = {{{t with test = typeAnnotExpr env t.test}
+                 with expected = typeAnnotExpr env t.expected}
+                 with next = typeAnnotExpr env t.next} in
+    TmUtest {t with ty = typeExpr env (TmUtest t)}
+end
+
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
   sem typeExpr (env : TypeEnv) =
   | TmSeq t ->
-    match env with {tyEnv = tyEnv} then
-      match t.ty with TyUnknown {} then
+    match t.ty with TyUnknown {} then
+      match env with {tyEnv = tyEnv} then
         let fstType = typeExpr env (get t.tms 0) in
         if all (lam t. eqType tyEnv fstType (typeExpr env t)) t.tms then
           tyseq_ fstType
         else
           error "Sequence contains elements of different types"
-      else t.ty
-    else never
+      else never
+    else t.ty
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmSeq t ->
     let t = {t with tms = map (typeAnnotExpr env) t.tms} in
     TmSeq {t with ty = typeExpr env (TmSeq t)}
+end
+
+-- TODO(larshum, 2021-02-05): Never terms should have a bottom type
+lang NeverTypeAnnot = TypeAnnot + NeverAst
+  sem typeExpr (env : TypeEnv) =
+  | TmNever t ->
+    match t.ty with TyUnknown {} then
+      tyunit_
+    else t.ty
+
+  sem typeAnnotExpr (env : TypeEnv) =
+  | n & TmNever t -> TmNever {t with ty = typeExpr env n}
 end
 
 lang IntTypeAnnot = ConstTypeAnnot + IntAst
@@ -328,19 +408,14 @@ lang MExprTypeAnnot =
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
-  TypeTypeAnnot + ConstTypeAnnot + DataTypeAnnot + MatchTypeAnnot + SeqTypeAnnot +
+  TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
+  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
 
   -- Constants
   IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
   ArithFloatTypeAnnot + FloatIntConversionTypeAnnot + BoolTypeAnnot +
   CmpIntTypeAnnot + CmpFloatTypeAnnot + CharTypeAnnot + CmpCharTypeAnnot +
   IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot
-
-  sem typeExpr (env : TypeEnv) =
-  | t -> TyUnknown {}
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | t -> smap_Expr_Expr (typeAnnotExpr env) t
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
@@ -378,6 +453,21 @@ utest ty (typeAnnot (ascription recordBody))
 with  recordType
 using eqType assocEmpty in
 
+let recletsBody =
+  bind_
+    (nreclets_ [
+      (x, tyunknown_, nulam_ y (int_ 5))
+    ])
+    unit_ in
+let typeOfInnerLet =
+  match typeAnnot recletsBody with TmRecLets {bindings = [t] ++ bindings} then
+    ty (t.body)
+  else never
+in
+utest typeOfInnerLet
+with  tyarrow_ tyunknown_ tyint_
+using eqType assocEmpty in
+
 let constBody = int_ 0 in
 utest ty (typeAnnot (ascription constBody))
 with  tyint_
@@ -388,9 +478,23 @@ utest ty (typeAnnot (ascription matchBody))
 with  tyint_
 using eqType assocEmpty in
 
+let utestBody = utest_ (int_ 2) (int_ 4) unit_ in
+let typeOfInnerExpression =
+  match typeAnnot utestBody with TmUtest {test = test} then
+    ty test
+  else never
+in
+utest typeOfInnerExpression
+with  tyint_
+using eqType assocEmpty in
+
 let seqBody = seq_ [int_ 2, int_ 3, int_ 4] in
 utest ty (typeAnnot (ascription seqBody))
 with  tyseq_ tyint_
+using eqType assocEmpty in
+
+utest ty (typeAnnot never_)
+with  tyunit_
 using eqType assocEmpty in
 
 let treeName = nameSym "Tree" in
@@ -402,8 +506,8 @@ let dataType = lam t.
     ntype_ treeName (TyVariant {constrs = []}),
     ncondef_ nodeName (treeConType (tytuple_ [ntyvar_ treeName, ntyvar_ treeName])),
     ncondef_ leafName (treeConType tyint_),
-  t
-]
+    t
+  ]
 in
 let expectedVariantType = TyVariant {constrs = [nodeName, leafName]} in
 utest ty (typeAnnot (dataType unit_))

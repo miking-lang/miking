@@ -560,6 +560,8 @@ end
 lang VariantTypeEq = Eq + VariantTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyVariant r ->
+    -- OPT(larshum, 2021-02-05): This comparison is quadratic in the number of
+    -- constructors
     let f = lam lname.
       match find (lam rname. nameEq lname rname) r.constrs with Some _ then
         true
