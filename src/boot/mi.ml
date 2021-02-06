@@ -85,6 +85,10 @@ let main =
     ; ( "--debug-eval-env"
       , Arg.Set enable_debug_eval_env
       , " Enables output of the environment in each eval step." )
+    ; ( "--debug-con-shapes"
+      , Arg.Set enable_debug_con_shape
+      , " Enables printing of the shape of values given to constructors, to \
+         stderr." )
     ; ( "--symbol"
       , Arg.Set enable_debug_symbol_print
       , " Enables output of symbols for variables. Affects all other debug \
