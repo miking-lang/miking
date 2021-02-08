@@ -4,7 +4,6 @@
 
 include "string.mc"
 include "seq.mc"
-include "mexpr/ast.mc"
 include "mexpr/info.mc"
 
 
@@ -23,7 +22,8 @@ lang TokenParser = WSACParser
       parseToken pos str
     else never
 
-  sem parseToken (pos : Pos) /- : {String -> {token : Token, stream : {pos : Pos, str : String}}} -/ =
+  sem parseToken (pos : Pos) /- : String -> {token : Token, lit : String, stream : {pos : Pos, str : String}} -/ =
+  sem tokKindEq (tok : Token) /- : Token -> Bool -/ =
 end
 
 -- Eats whitespace
@@ -73,8 +73,6 @@ lang MultilineCommentParser = WSACParser
     in remove (advanceCol p 2) xs 1
 end
 
-
--- TODO(vipa, 2021-02-03): move tests to new fragment
 -- Commbined WSAC parser for MExpr
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 
@@ -94,7 +92,10 @@ lang EOFTokenParser = TokenParser
   | EOFTok {pos : Pos}
 
   sem parseToken (pos : Pos) =
-  | [] -> {token = EOFTok {pos = pos}, stream = {pos = pos, str = []}}
+  | [] -> {token = EOFTok {pos = pos}, lit = "", stream = {pos = pos, str = []}}
+
+  sem tokKindEq (tok : Tok) =
+  | EOFTok _ -> match tok with EOFTok _ then true else false
 end
 
 -- Parses the continuation of an identifier, i.e., upper and lower
@@ -129,10 +130,16 @@ lang LIdentTokenParser = TokenParser
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ) & c] ++ str ->
     match parseIdentCont (advanceCol pos 1) str with {val = val, pos = pos2, str = str}
-    then { token = LIdentTok {fi = makeInfo pos pos2, val = cons c val}
-         , stream = {pos = pos2, str = str}
-         }
+    then
+      let val = cons c val in
+      { token = LIdentTok {fi = makeInfo pos pos2, val = val}
+      , lit = val
+      , stream = {pos = pos2, str = str}
+      }
     else never
+
+  sem tokKindEq (tok : Tok) =
+  | LIdentTok _ -> match tok with LIdentTok _ then true else false
 end
 
 lang UIdentTokenParser = TokenParser
@@ -143,11 +150,18 @@ lang UIdentTokenParser = TokenParser
   | [('A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' |
       'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' |
       'X' | 'Y' | 'Z' ) & c] ++ str ->
-    match parseIdentCont pos str with {val = val, pos = pos2, str = str}
-    then { token = UIdentTok {fi = makeInfo pos pos2, val = val}
-         , stream = {pos = pos2, str = str}
-         }
+    match parseIdentCont (advanceCol pos 1) str with {val = val, pos = pos2, str = str}
+    then
+      let val = cons c val in
+      { token = UIdentTok {fi = makeInfo pos pos2, val = val}
+      , lit = val
+      , stream = {pos = pos2, str = str}
+      }
     else never
+
+
+  sem tokKindEq (tok : Tok) =
+  | UIdentTok _ -> match tok with UIdentTok _ then true else false
 end
 
 let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -186,8 +200,12 @@ lang UIntTokenParser = TokenParser
   sem parseIntCont (acc : String) (pos1 : Pos) (pos2 : Pos) =
   | str ->
     { token = IntTok {fi = makeInfo pos1 pos2, val = string2int acc}
+    , lit = ""
     , stream = {pos = pos2, str = str}
     }
+
+  sem tokKindEq (tok : Tok) =
+  | IntTok _ -> match tok with IntTok _ then true else false
 end
 
 let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -220,7 +238,9 @@ lang UFloatTokenParser = UIntTokenParser
   | (['.', '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _) & str ->
     match parseFloatExponent (advanceCol pos2 1) (tail str)
     with {val = val, pos = pos3, str = str}
-    then parseFloatCont (join [acc, ".", val]) pos1 pos3 str
+    then
+      let acc = join [acc, ".", val] in
+      parseFloatCont acc pos1 pos3 str
     else never
   | ( [ 'e' | 'E'] ++ _
     & ( [_, '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _
@@ -229,20 +249,26 @@ lang UFloatTokenParser = UIntTokenParser
     ) & str -> parseFloatCont acc pos1 pos2 str
 
   sem parseFloatCont (acc : String) (pos1 : Pos) (pos2 : Pos) =
-  | ( [ 'e' | 'E'] ++ _
+  | ( [ ('e' | 'E') & e] ++ _
     & ( [_, '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _
       | [_, '+' | '-', '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _
       )
     ) & str ->
     match parseFloatExponent (advanceCol pos2 1) (tail str) with {val = val, pos = pos2, str = str}
-    then { token = FloatTok {fi = makeInfo pos1 pos2, val = string2float (join [acc, "e", val])}
-         , stream = {pos = pos2, str = str}
-         }
+    then
+      { token = FloatTok {fi = makeInfo pos1 pos2, val = string2float (join [acc, "e", val])}
+      , lit = ""
+      , stream = {pos = pos2, str = str}
+      }
     else never
   | str ->
     { token = FloatTok {fi = makeInfo pos1 pos2, val = string2float acc}
+    , lit = ""
     , stream = {pos = pos2, str = str}
     }
+
+  sem tokKindEq (tok : Tok) =
+  | FloatTok _ -> match tok with FloatTok _ then true else false
 end
 
 let parseOperatorCont : Pos -> String -> {val : String, stream : {pos : Pos, str : String}} = lam p. lam str.
@@ -273,8 +299,15 @@ lang OperatorTokenParser = TokenParser
   | [('%' | '<' | '>' | '!' | '?' | '~' | ':' | '.' | '$' | '&' | '*' |
       '+' | '-' | '/' | '=' | '@' | '^' | '|') & c] ++ str ->
     match parseOperatorCont (advanceCol pos 1) str with {val = val, stream = stream}
-    then {token = OperatorTok {fi = makeInfo pos stream.pos, val = cons c val}, stream = stream}
+    then
+      let val = cons c val in
+      { token = OperatorTok {fi = makeInfo pos stream.pos, val = val}
+      , lit = val
+      , stream = stream}
     else never
+
+  sem tokKindEq (tok : Tok) =
+  | OperatorTok _ -> match tok with OperatorTok _ then true else false
 end
 
 lang BracketTokenParser = TokenParser
@@ -289,22 +322,30 @@ lang BracketTokenParser = TokenParser
   sem parseToken (pos : Pos) =
   | "(" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = LParenTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = LParenTok {fi = makeInfo pos pos2}, lit = "(", stream = {pos = pos2, str = str}}
   | ")" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = RParenTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = RParenTok {fi = makeInfo pos pos2}, lit = ")", stream = {pos = pos2, str = str}}
   | "[" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = LBracketTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = LBracketTok {fi = makeInfo pos pos2}, lit = "[", stream = {pos = pos2, str = str}}
   | "]" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = RBracketTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = RBracketTok {fi = makeInfo pos pos2}, lit = "]", stream = {pos = pos2, str = str}}
   | "{" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = LBraceTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = LBraceTok {fi = makeInfo pos pos2}, lit = "{", stream = {pos = pos2, str = str}}
   | "}" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = RBraceTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = RBraceTok {fi = makeInfo pos pos2}, lit = "}", stream = {pos = pos2, str = str}}
+
+  sem tokKindEq (tok : Tok) =
+  | LParenTok _ -> match tok with LParenTok _ then true else false
+  | RParenTok _ -> match tok with RParenTok _ then true else false
+  | LBracketTok _ -> match tok with LBracketTok _ then true else false
+  | RBracketTok _ -> match tok with RBracketTok _ then true else false
+  | LBraceTok _ -> match tok with LBraceTok _ then true else false
+  | RBraceTok _ -> match tok with RBraceTok _ then true else false
 end
 
 lang SemiTokenParser = TokenParser
@@ -314,7 +355,10 @@ lang SemiTokenParser = TokenParser
   sem parseToken (pos : Pos) =
   | ";" ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = SemiTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = SemiTok {fi = makeInfo pos pos2}, lit = ";", stream = {pos = pos2, str = str}}
+
+  sem tokKindEq (tok : Tok) =
+  | SemiTok _ -> match tok with SemiTok _ then true else false
 end
 
 lang CommaTokenParser = TokenParser
@@ -324,7 +368,10 @@ lang CommaTokenParser = TokenParser
   sem parseToken (pos : Pos) =
   | "," ++ str ->
     let pos2 = advanceCol pos 1 in
-    {token = CommaTok {fi = makeInfo pos pos2}, stream = {pos = pos2, str = str}}
+    {token = CommaTok {fi = makeInfo pos pos2}, lit = ",", stream = {pos = pos2, str = str}}
+
+  sem tokKindEq (tok : Tok) =
+  | CommaTok _ -> match tok with CommaTok _ then true else false
 end
 
 -- Matches a character (including escape character).
@@ -359,9 +406,13 @@ lang StringTokenParser = TokenParser
       else never
     in match work "" (advanceCol pos 1) str with {val = val, pos = pos2, str = str} then
       { token = StringTok {fi = makeInfo pos pos2, val = val}
+      , lit = ""
       , stream = {pos = pos2, str = str}
       }
     else never
+
+  sem tokKindEq (tok : Tok) =
+  | StringTok _ -> match tok with StringTok _ then true else false
 end
 
 lang CharTokenParser = TokenParser
@@ -374,10 +425,14 @@ lang CharTokenParser = TokenParser
       match str with "'" ++ str then
         let pos2 = advanceCol pos2 1 in
         { token = CharTok {fi = makeInfo pos pos2, val = val}
+        , lit = ""
         , stream = {pos = pos2, str = str}
         }
       else posErrorExit pos "Expected ' to close character literal."
     else never
+
+  sem tokKindEq (tok : Tok) =
+  | CharTok _ -> match tok with CharTok _ then true else false
 end
 
 lang HashStringTokenParser = TokenParser
@@ -396,11 +451,17 @@ lang HashStringTokenParser = TokenParser
           else never
         in match work "" (advanceCol pos2 1) str with {val = val, pos = pos2, str = str} then
           { token = HashStringTok {fi = makeInfo pos pos2, hash = hash, val = val}
+          , lit = ""
           , stream = {pos = pos2, str = str}
           }
         else never
       else posErrorExit pos2 "Expected \" to begin hash string"
     else never
+
+  sem tokKindEq (tok : Tok) =
+  | HashStringTok {hash = hash} -> match tok with HashStringTok {hash = hash2}
+    then eqString hash hash2
+    else false
 end
 
 lang Lexer
@@ -411,6 +472,37 @@ lang Lexer
   + StringTokenParser + CharTokenParser
   + HashStringTokenParser
 
+-- NOTE(vipa, 2021-02-05): This is not a semantic function in a
+-- language fragment since the output for each case must be distinct
+-- from the output for any other fragment, meaning that there would be
+-- an invisible dependency between them
+let _tokKindInt = use Lexer in lam tok.
+  match tok with EOFTok _ then 1 else
+  match tok with LIdentTok _ then 2 else
+  match tok with UIdentTok _ then 3 else
+  match tok with IntTok _ then 4 else
+  match tok with FloatTok _ then 5 else
+  match tok with OperatorTok _ then 6 else
+  match tok with LParenTok _ then 7 else
+  match tok with RParenTok _ then 8 else
+  match tok with LBracketTok _ then 9 else
+  match tok with RBracketTok _ then 10 else
+  match tok with LBraceTok _ then 11 else
+  match tok with RBraceTok _ then 12 else
+  match tok with SemiTok _ then 13 else
+  match tok with CommaTok _ then 14 else
+  match tok with StringTok _ then 15 else
+  match tok with CharTok _ then 16 else
+  match tok with HashStringTok _ then 17 else
+  never
+
+let compareTokKind = use Lexer in lam ltok. lam rtok.
+  let pair = (ltok, rtok) in
+  match pair with (HashStringTok {hash = h1}, HashStringTok {hash = h2}) then cmpString h1 h2 else
+  match pair with (HashStringTok _, _) then negi 1 else
+  match pair with (_, HashStringTok _) then 1 else
+  subi (_tokKindInt ltok) (_tokKindInt rtok)
+
 mexpr
 
 use Lexer in
@@ -420,211 +512,259 @@ let parse = lam str. nextToken {pos = start, str = str} in
 
 utest parse " --foo \n  bar " with
   { token = LIdentTok {val = "bar", fi = infoVal "file" 2 2 2 5}
+  , lit = "bar"
   , stream = {pos = posVal "file" 2 5 , str = " "}
   } in
 
 utest parse " /- foo -/ bar" with
   { token = LIdentTok {val = "bar", fi = infoVal "file" 1 11 1 14}
+  , lit = "bar"
   , stream = {pos = posVal "file" 1 14 , str = ""}
   } in
 
 utest parse " /- foo\n x \n -/ \nbar " with
   { token = LIdentTok {val = "bar", fi = infoVal "file" 4 0 4 3}
+  , lit = "bar"
   , stream = {pos = posVal "file" 4 3 , str = " "}
   } in
 
 utest parse " /- x -- y /- foo \n -/ -/ !" with
   { token = OperatorTok {val = "!", fi = infoVal "file" 2 7 2 8}
+  , lit = "!"
   , stream = {pos = posVal "file" 2 8 , str = ""}
   } in
 
 utest parse "  123foo" with
   { token = IntTok {val = 123, fi = infoVal "file" 1 2 1 5}
+  , lit = ""
   , stream = {pos = posVal "file" 1 5 , str = "foo"}
   } in
 
 utest parse "  1.0" with
   { token = FloatTok {val = 1.0, fi = infoVal "file" 1 2 1 5}
+  , lit = ""
   , stream = {pos = posVal "file" 1 5 , str = ""}
   } in
 
 utest parse " 1234.  " with
   { token = FloatTok {val = 1234.0, fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6 , str = "  "}
   } in
 
 utest parse " 13.37 " with
   { token = FloatTok {val = 13.37, fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = " "}
   } in
 
 utest parse "  1.0e-2" with
   { token = FloatTok {val = 0.01, fi = infoVal "file" 1 2 1 8}
+  , lit = ""
   , stream = {pos = posVal "file" 1 8, str = ""}
   } in
 
 utest parse " 2.5e+2  " with
   { token = FloatTok {val = 250.0, fi = infoVal "file" 1 1 1 7}
+  , lit = ""
   , stream = {pos = posVal "file" 1 7, str = "  "}
   } in
 
 utest parse "   2e3" with
   { token = FloatTok {val = 2000.0, fi = infoVal "file" 1 3 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = ""}
   } in
 
 utest parse "   2E3" with
   { token = FloatTok {val = 2000.0, fi = infoVal "file" 1 3 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = ""}
   } in
 
 utest parse "   2.0E3" with
   { token = FloatTok {val = 2000.0, fi = infoVal "file" 1 3 1 8}
+  , lit = ""
   , stream = {pos = posVal "file" 1 8, str = ""}
   } in
 
 utest parse "   2.E3" with
   { token = FloatTok {val = 2000.0, fi = infoVal "file" 1 3 1 7}
+  , lit = ""
   , stream = {pos = posVal "file" 1 7, str = ""}
   } in
 
 utest parse " 1.e2 " with
   { token = FloatTok {val = 100.0, fi = infoVal "file" 1 1 1 5}
+  , lit = ""
   , stream = {pos = posVal "file" 1 5, str = " "}
   } in
 
 utest parse " 3.e-4 " with
   { token = FloatTok {val = 0.0003, fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = " "}
   } in
 
 utest parse " 4.E+1 " with
   { token = FloatTok {val = 40.0, fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = " "}
   } in
 
 utest parse " 1.E-3 " with
   { token = FloatTok {val = 0.001, fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = " "}
   } in
 
 utest parse " 1E " with
   { token = IntTok {val = 1, fi = infoVal "file" 1 1 1 2}
+  , lit = ""
   , stream = {pos = posVal "file" 1 2, str = "E "}
   } in
 
 utest parse " 1e " with
   { token = IntTok {val = 1, fi = infoVal "file" 1 1 1 2}
+  , lit = ""
   , stream = {pos = posVal "file" 1 2, str = "e "}
   } in
 
 utest parse " 1.e++2 " with
   { token = FloatTok {val = 1.0, fi = infoVal "file" 1 1 1 3}
+  , lit = ""
   , stream = {pos = posVal "file" 1 3, str = "e++2 "}
   } in
 
 utest parse " 3.1992e--2 " with
   { token = FloatTok {val = 3.1992, fi = infoVal "file" 1 1 1 7}
+  , lit = ""
   , stream = {pos = posVal "file" 1 7, str = "e--2 "}
   } in
 
 utest parse "  if 1 then 22 else 3" with
   { token = LIdentTok {val = "if", fi = infoVal "file" 1 2 1 4}
+  , lit = "if"
   , stream = {pos = posVal "file" 1 4, str = " 1 then 22 else 3"}
   } in
 
 utest parse " true " with
   { token = LIdentTok {val = "true", fi = infoVal "file" 1 1 1 5}
+  , lit = "true"
   , stream = {pos = posVal "file" 1 5, str = " "}
   } in
 
 utest parse " ( 123) " with
   { token = LParenTok {fi = infoVal "file" 1 1 1 2}
+  , lit = "("
   , stream = {pos = posVal "file" 1 2, str = " 123) "}
   } in
 
 utest parse "[]" with
   { token = LBracketTok {fi = infoVal "file" 1 0 1 1}
+  , lit = "["
   , stream = {pos = posVal "file" 1 1, str = "]"}
   } in
 
 utest parse " [ ] " with
   { token = LBracketTok {fi = infoVal "file" 1 1 1 2}
+  , lit = "["
   , stream = {pos = posVal "file" 1 2, str = " ] "}
   } in
 
 utest parse " [ 17 ] " with
   { token = LBracketTok {fi = infoVal "file" 1 1 1 2}
+  , lit = "["
   , stream = {pos = posVal "file" 1 2, str = " 17 ] "}
   } in
 
 utest parse " [ 232 , ( 19 ) ] " with
   { token = LBracketTok {fi = infoVal "file" 1 1 1 2}
+  , lit = "["
   , stream = {pos = posVal "file" 1 2, str = " 232 , ( 19 ) ] "}
   } in
 
 utest parse " \"Foo\" " with
   { token = StringTok {val = "Foo", fi = infoVal "file" 1 1 1 6}
+  , lit = ""
   , stream = {pos = posVal "file" 1 6, str = " "}
   } in
 
 utest parse " \" a\\\\ \\n\" " with
   { token = StringTok {val = " a\\ \n", fi = infoVal "file" 1 1 1 10}
+  , lit = ""
   , stream = {pos = posVal "file" 1 10, str = " "}
   } in
 
 utest parse " \'A\' " with
   { token = CharTok {val = 'A', fi = infoVal "file" 1 1 1 4}
+  , lit = ""
   , stream = {pos = posVal "file" 1 4, str = " "}
   } in
 
 utest parse " \'\\n\' " with
   { token = CharTok {val = '\n', fi = infoVal "file" 1 1 1 5}
+  , lit = ""
   , stream = {pos = posVal "file" 1 5, str = " "}
   } in
 
 utest parse " _xs " with
   { token = LIdentTok {val = "_xs", fi = infoVal "file" 1 1 1 4}
+  , lit = "_xs"
   , stream = {pos = posVal "file" 1 4, str = " "}
   } in
 
 utest parse " fOO_12a " with
   { token = LIdentTok {val = "fOO_12a", fi = infoVal "file" 1 1 1 8}
+  , lit = "fOO_12a"
   , stream = {pos = posVal "file" 1 8, str = " "}
   } in
 
 utest parse " lam x . x " with
   { token = LIdentTok {val = "lam", fi = infoVal "file" 1 1 1 4}
+  , lit = "lam"
+  , stream = {pos = posVal "file" 1 4, str = " x . x "}
+  } in
+
+utest parse " Lam x . x " with
+  { token = UIdentTok {val = "Lam", fi = infoVal "file" 1 1 1 4}
+  , lit = "Lam"
   , stream = {pos = posVal "file" 1 4, str = " x . x "}
   } in
 
 utest parse "  let x = 5 in 8 " with
   { token = LIdentTok {val = "let", fi = infoVal "file" 1 2 1 5}
+  , lit = "let"
   , stream = {pos = posVal "file" 1 5, str = " x = 5 in 8 "}
   } in
 
 utest parse " += 47;" with
   { token = OperatorTok {val = "+=", fi = infoVal "file" 1 1 1 3}
+  , lit = "+="
   , stream = {pos = posVal "file" 1 3, str = " 47;"}
   } in
 
 utest parse " ; println foo" with
   { token = SemiTok {fi = infoVal "file" 1 1 1 2}
+  , lit = ";"
   , stream = {pos = posVal "file" 1 2, str = " println foo"}
   } in
 
 utest parse " #foo\"Zomething\"more" with
   { token = HashStringTok {hash = "foo", val = "Zomething", fi = infoVal "file" 1 1 1 16}
+  , lit = ""
   , stream = {pos = posVal "file" 1 16, str = "more"}
   } in
 
 utest parse " #\"Zomething\"more" with
   { token = HashStringTok {hash = "", val = "Zomething", fi = infoVal "file" 1 1 1 13}
+  , lit = ""
   , stream = {pos = posVal "file" 1 13, str = "more"}
   } in
 
 utest parse " #123\"Zomething\"more" with
   { token = HashStringTok {hash = "123", val = "Zomething", fi = infoVal "file" 1 1 1 16}
+  , lit = ""
   , stream = {pos = posVal "file" 1 16, str = "more"}
   } in
 
