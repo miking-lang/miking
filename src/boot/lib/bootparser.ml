@@ -73,38 +73,49 @@ let parseMExprString str = Parserutils.parse_mexpr_string str
 (* Returns a tuple with the following elements
    1. ID field 
    2. Info field
-   3. List of types
-   4. List of terms
-   5. List of strings
-   6. List of integers
+   3. List of list lengths
+   4. List of types
+   5. List of terms
+   6. List of strings
+   7. List of integers
  *)
 let getData = function
   | PTreeTm (TmVar (fi, x, _)) ->
-      (idTmVar, fi, [], [], [x], [])
+      (idTmVar, [fi], [], [], [], [x], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
-      (idTmLam, fi, [ty], [t], [x], [])
+      (idTmLam, [fi], [], [ty], [t], [x], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
-      (idTmLet, fi, [ty], [t1; t2], [x], [])
+      (idTmLet, [fi], [], [ty], [t1; t2], [x], [])
   | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, fi, [ty], [t], [x], [])
-  (* | WrapTm(TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm *)
+      (idTmType, [fi], [], [ty], [t], [x], [])
+  | PTreeTm (TmRecLets (fi, lst, t)) ->
+      let fis = fi :: List.map (fun (fi, _, _, _, _) -> fi) lst in
+      let len = List.length lst in
+      let tys = List.map (fun (_, _, _, ty, _) -> ty) lst in
+      let tms = List.map (fun (_, _, _, _, t) -> t) lst @ [t] in
+      let strs = List.map (fun (_, s, _, _, _) -> s) lst in
+      (idTmRecLets, fis, [len], tys, tms, strs, [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
-      (idTmApp, fi, [], [t1; t2], [], [])
+      (idTmApp, [fi], [], [], [t1; t2], [], [])
   | _ ->
       failwith "TODO"
 
 let getId t =
-  let id, _, _, _, _, _ = getData t in
+  let id, _, _, _, _, _, _ = getData t in
   id
 
 let getTerm t n =
-  let _, _, _, lst, _, _ = getData t in
+  let _, _, _, _, lst, _, _ = getData t in
   PTreeTm (List.nth lst n)
 
 let getString t n =
-  let _, _, _, _, lst, _ = getData t in
+  let _, _, _, _, _, lst, _ = getData t in
   List.nth lst n
 
 let getInt t n =
-  let _, _, _, _, _, lst = getData t in
+  let _, _, _, _, _, _, lst = getData t in
+  List.nth lst n
+
+let getListLength t n =
+  let _, _, lst, _, _, _, _ = getData t in
   List.nth lst n

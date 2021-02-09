@@ -7,7 +7,16 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 
 let gstr = lam t. lam n. nameNoSym (bootParserGetString t n)
-let gint = lam t. lam n. addi n  (bootParserGetInt t n)
+let gint = lam t. lam n. addi n (bootParserGetInt t n)
+let glistlen = lam t. lam n. addi n (bootParserGetListLength t n)
+
+
+let makei = lam f. lam len.
+  recursive
+    let work = lam acc. lam n.
+      if eqi n len then acc else work (snoc acc (f n)) (addi n 1)
+  in
+    work [] 0
 
 
 lang BootParser = MExprAst
@@ -35,15 +44,22 @@ lang BootParser = MExprAst
                             ty = TyUnknown(),
                             fi = ginfo t}
   | 103 /-TmType-/ -> TmType {ident = gstr t 0,
-                             ty = gty t 0,
-                             inexpr = gterm t 0,
-                             fi = ginfo t}
-
+                            ty = gty t 0,
+                            inexpr = gterm t 0,
+                            fi = ginfo t}
+  | 104 /-TmRecLets-/ ->
+                      TmRecLets {
+                            bindings =
+                              makei (lam n. {ident = gstr t n,
+                                             ty = gty t n,
+                                             body = gterm t n}) (glistlen t 0),
+                            inexpr = gterm t (glistlen t 0),
+                            ty = TyUnknown()}
+                            
   | 105 /-TmApp-/ -> TmApp {lhs = gterm t 0,
                             rhs = gterm t 1,
                             ty = TyUnknown(),
                             fi = ginfo t}     
-
 
   -- Functions for transferring types and info are not yet implemented.  
   -- These functions are place holders.
@@ -80,6 +96,15 @@ utest lside s with rside s in
 let s = "type Foo in x" in
 utest lside s with rside s in
 
+-- TmRecLets, TmLam
+let s = "recursive let x = lam x.x in x" in
+utest lside s with rside s in
+let s = "recursive let x = lam x.x let y = lam x. x in y" in
+utest lside s with rside s in
+
+-- TmApp, TmLam
+let s = "(lam x. lam y. x) z1 z2" in
+utest lside s with rside s in
 
 
 ()

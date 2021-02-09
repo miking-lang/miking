@@ -137,6 +137,7 @@ and const =
   | CbootParserGetTerm of tm option
   | CbootParserGetString of tm option
   | CbootParserGetInt of tm option
+  | CbootParserGetListLength of tm option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
