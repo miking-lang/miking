@@ -6,7 +6,6 @@ include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 
-let gterm = lam t. lam n. bootParserGetTerm t n 
 let gstr = lam t. lam n. nameNoSym (bootParserGetString t n)
 let gint = lam t. lam n. addi n  (bootParserGetInt t n)
 
@@ -17,8 +16,9 @@ lang BootParser = MExprAst
     let t = bootParserParseMExprString str in
     parseInternal t (bootParserGetId t)
 
-  sem next =
-  | t -> parseInternal t (bootParserGetId t)
+  sem gterm (t:Unkown) =
+  | n -> let t2 = bootParserGetTerm t n in
+         parseInternal t2 (bootParserGetId t2)
 
   sem parseInternal (t:Unknown) =
   | 100 /-TmVar-/ -> TmVar {ident = gstr t 0,
@@ -27,15 +27,22 @@ lang BootParser = MExprAst
   | 101 /-TmLam-/ -> TmLam {ident = gstr t 0,
                             ty = gty t 0,
                             info = ginfo t,
-                            body = next (gterm t 0)}
+                            body = gterm t 0}
   | 102 /-TmLet-/ -> TmLet {ident = gstr t 0,
                             tyBody = gty t 0,
-                            body = next (gterm t 0),
-                            inexpr = next (gterm t 1),
+                            body = gterm t 0,
+                            inexpr = gterm t 1,
                             ty = TyUnknown(),
                             fi = ginfo t}
-  | 105 /-TmApp-/ -> TmApp {lhs = next (gterm t 0), rhs = next (gterm t 1),
-                            ty = TyUnknown(), fi = NoInfo()}     
+  | 103 /-TmType-/ -> TmType {ident = gstr t 0,
+                             ty = gty t 0,
+                             inexpr = gterm t 0,
+                             fi = ginfo t}
+
+  | 105 /-TmApp-/ -> TmApp {lhs = gterm t 0,
+                            rhs = gterm t 1,
+                            ty = TyUnknown(),
+                            fi = ginfo t}     
 
 
   -- Functions for transferring types and info are not yet implemented.  
@@ -67,6 +74,10 @@ utest lside s with rside s in
 
 -- TmLet, TmLam
 let s = "let y = lam x.x in y" in
+utest lside s with rside s in
+
+-- TmType
+let s = "type Foo in x" in
 utest lside s with rside s in
 
 
