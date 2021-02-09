@@ -76,7 +76,7 @@ let _sanitizeStack = use ParserGenerated in use ParserSpec in lam stack.
     {seen = item.seen, rest = map genSymToSym item.rest, label = item.label} in
   map work stack
 
-let parseWithTable : Table parseLabel -> String -> String -> Either (ParseError parseLabel) Dyn = use ParserGenerated in use ParserConcrete in
+let ll1ParseWithTable : Table parseLabel -> String -> String -> Either (ParseError parseLabel) Dyn = use ParserGenerated in use ParserConcrete in
   lam table. lam filename. lam contents. match table with {start = start, lits = lits} then
     let getNextToken = lam stream.
       match nextToken stream with {token = token, lit = lit, info = info, stream = stream} then
@@ -130,7 +130,7 @@ let parseWithTable : Table parseLabel -> String -> String -> Either (ParseError 
 
 type GenError prodLabel = Map NonTerminal (Map Symbol [prodLabel])
 
-let genParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodLabel) = use ParserSpec in lam grammar.
+let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodLabel) = use ParserSpec in lam grammar.
   match grammar with {productions = productions, start = startNt} then
     type SymSet = {eps: Bool, syms: Map Symbol ()} in
 
@@ -306,21 +306,31 @@ let genParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodLabe
       else Right {start = {nt = startNt, table = mapFind startNt table}, lits = lits}
   else never
 
-let nonTerminal : String -> NonTerminal = identity
+let ll1NonTerminal : String -> NonTerminal = identity
 
-let nt : NonTerminal -> Symbol = use ParserSpec in lam nt. NtSpec nt
-let lit : String -> Symbol = use ParserSpec in lam str.
+let ll1Nt : NonTerminal -> Symbol = use ParserSpec in lam nt. NtSpec nt
+let ll1Lit : String -> Symbol = use ParserSpec in lam str.
   match nextToken {str = str, pos = posVal "" 1 1} with {lit = lit, stream = {str = unlexed}} then
     match (unlexed, lit) with ([], ![]) then Lit {lit = str}
     else error (join ["A literal token does not lex as a single token: \"", str, "\""])
   else never
-let lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", fi = NoInfo ()})
-let uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", fi = NoInfo ()})
-let int : Symbol = use ParserSpec in Tok (IntTok {val = 0, fi = NoInfo ()})
+let ll1Lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", fi = NoInfo ()})
+let ll1Uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", fi = NoInfo ()})
+let ll1Int : Symbol = use ParserSpec in Tok (IntTok {val = 0, fi = NoInfo ()})
 
 mexpr
 
 use ParserSpec in
+
+let genParser = ll1GenParser in
+let parseWithTable = ll1ParseWithTable in
+
+let nonTerminal = ll1NonTerminal in
+let nt = ll1Nt in
+let lit = ll1Lit in
+let lident = ll1Lident in
+let uident = ll1Uident in
+let int = ll1Int in
 
 let errorMapToBindingsExc = lam m.
   match m with Left m then
