@@ -24,6 +24,8 @@ let fixMutual =
 -- Printing stuff
 let printLn = lam s. print (concat s "\n")
 
+let dprintLn = lam x. let _ = dprint x in printLn ""
+
 mexpr
 
 utest apply identity 42 with identity 42 in

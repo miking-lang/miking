@@ -63,8 +63,6 @@ let _iterateUntilFixpoint : (a -> a -> Bool) -> (a -> a) -> a -> a =
 -- NOTE(vipa, 2021-02-08): This should be opaque, and the first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
 type Table prodLabel = {start: {nt: NonTerminal, table: (Ref (Map Symbol {syms: [Symbol], label: prodLabel, action: Action}))}, lits: Map String ()}
 
-let dprintLn = lam x. let _ = dprint x in printLn ""
-
 type StackItem prodLabel = {seen: [Symbol], rest: [Symbol], label: String}
 
 type ParseError prodLabel
@@ -130,7 +128,9 @@ let parseWithTable : Table parseLabel -> String -> String -> Either (ParseError 
       else never
   else never
 
-let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam grammar.
+type GenError prodLabel = Map NonTerminal (Map Symbol [prodLabel])
+
+let genParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodLabel) = use ParserSpec in lam grammar.
   match grammar with {productions = productions, start = startNt} then
     type SymSet = {eps: Bool, syms: Map Symbol ()} in
 
@@ -177,25 +177,25 @@ let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam gra
       let prods = mapFind nt groupedProds in
       foldl (lam symset. lam prod. addProdToFirst prev prod symset) symset prods in
 
-    let dprintFirstSet = lam firstSet.
-      let _ = printLn "" in
-      let _ = dprint (mapBindings (mapMap (lam symset. {symset with syms = mapBindings symset.syms}) firstSet)) in
-      let _ = printLn "" in
-      firstSet in
+    -- let dprintFirstSet = lam firstSet.
+    --   let _ = printLn "" in
+    --   let _ = dprint (mapBindings (mapMap (lam symset. {symset with syms = mapBindings symset.syms}) firstSet)) in
+    --   let _ = printLn "" in
+    --   firstSet in
 
-    let dprintFollowSet = lam followSet.
-      let _ = printLn "" in
-      let _ = dprint (mapBindings (mapMap mapBindings followSet)) in
-      let _ = printLn "" in
-      followSet in
+    -- let dprintFollowSet = lam followSet.
+    --   let _ = printLn "" in
+    --   let _ = dprint (mapBindings (mapMap mapBindings followSet)) in
+    --   let _ = printLn "" in
+    --   followSet in
 
     let firstSet : Map NonTerminal SymSet =
       _iterateUntilFixpoint eqFirstSet
         (lam prev. mapMapWithKey (addNtToFirstSet prev) prev)
         (mapMap (lam _. {eps = false, syms = mapEmpty _compareSymbol}) groupedProds) in
 
-    let _ = print "\n\nFirsts:" in
-    let _ = dprintFirstSet firstSet in
+    -- let _ = print "\n\nFirsts:" in
+    -- let _ = dprintFirstSet firstSet in
 
     let firstOfRhs : [Symbol] -> SymSet =
       recursive let work = lam symset. lam rhs.
@@ -233,8 +233,8 @@ let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam gra
         (mapInsert startNt (mapInsert (Tok (EOFTok {fi = NoInfo ()})) () (mapEmpty _compareSymbol))
           (mapMap (lam _. mapEmpty _compareSymbol) groupedProds)) in
 
-    let _ = print "\n\nFollows:" in
-    let _ = dprintFollowSet followSet in
+    -- let _ = print "\n\nFollows:" in
+    -- let _ = dprintFollowSet followSet in
 
     -- The first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
     let table : Map NonTerminal (Ref (Map Symbol {syms : [Symbol], action: Action})) =
@@ -253,6 +253,9 @@ let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam gra
     let specSymToGenSym = lam sym.
       match sym with NtSpec nt then NtSym {nt = nt, table = (mapFind nt table)} else sym in
 
+    let hasLl1Error = ref false in
+    let ll1Errors = mapMap (lam _. ref (mapEmpty _compareSymbol)) groupedProds in
+
     let addProdToTable = lam prod. match prod with {nt = prodNt, label = label, rhs = rhs, action = action} then
       let tableRef = mapFind prodNt table in
       let prev = deref tableRef in
@@ -262,7 +265,22 @@ let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam gra
         else firstSymset.syms in
       let newProd = {action = action, label = label, syms = map specSymToGenSym rhs} in
       let tableAdditions = mapMap (lam _. newProd) symset in
-      -- TODO(vipa, 2021-02-08): This will silently discard duplicate actions, i.e., if the grammar isn't LL(1) this will just silently ignore that
+      let _ = iter
+        (lam binding.
+          match binding with (sym, {label = label}) then
+            let sym = binding.0 in
+            match mapLookup sym prev with Some prevProd then
+              let _ = modref hasLl1Error true in
+              let errRef = mapFind prodNt ll1Errors in
+              let errTab = deref errRef in
+              let errList = match mapLookup sym errTab
+                with Some prods then snoc prods label
+                else [prevProd.label, label] in
+              modref errRef (mapInsert sym errList errTab)
+            else ()
+          else never
+        )
+        (mapBindings tableAdditions) in
       modref tableRef (mapUnion prev tableAdditions)
     else never in
 
@@ -277,13 +295,15 @@ let genParser : Grammar prodLabel -> Table prodLabel = use ParserSpec in lam gra
       (mapEmpty cmpString)
       productions in
 
-    let dprintTablePair = lam nt. lam actions.
-      dprintLn (nt, mapBindings (deref actions))
-    in
-    let _ = printLn "\n\nParse table:" in
-    let _ = mapMapWithKey dprintTablePair table in
+    -- let dprintTablePair = lam nt. lam actions.
+    --   dprintLn (nt, mapBindings (deref actions))
+    -- in
+    -- let _ = printLn "\n\nParse table:" in
+    -- let _ = mapMapWithKey dprintTablePair table in
 
-    {start = {nt = startNt, table = mapFind startNt table}, lits = lits}
+    if deref hasLl1Error
+      then Left (mapFromList cmpString (filter (lam binding. not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
+      else Right {start = {nt = startNt, table = mapFind startNt table}, lits = lits}
   else never
 
 let nonTerminal : String -> NonTerminal = identity
@@ -302,14 +322,106 @@ mexpr
 
 use ParserSpec in
 
+let errorMapToBindingsExc = lam m.
+  match m with Left m then
+    mapBindings (mapMap mapBindings m)
+  else error "Expected a left result" in
+let unwrapTableExc = lam m.
+  match m with Right m then m
+  else error "Expected a right result" in
+
 let top = nonTerminal "File" in
 let topAtom = nonTerminal "FileAtom" in
 let topInfix = nonTerminal "FileInfix" in
 let topFollow = nonTerminal "FileFollow" in
 let decl = nonTerminal "Declaration" in
 let expr = nonTerminal "Expression" in
+let exprAtom = nonTerminal "ExpressionAtom" in
+let exprFollow = nonTerminal "ExpressionFollow" in
+let exprInfix = nonTerminal "ExpressionInfix" in
+let exprPrefix = nonTerminal "ExpressionPrefix" in
+let exprPrefixes = nonTerminal "ExpressionPrefixes" in
 
 let wrap = lam label. lam x. {label = label, val = x} in
+
+let gFailOnce : Grammar String =
+  { start = top
+  , productions =
+    [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
+    , {nt = topAtom, label = "topdecl", rhs = [nt decl], action = wrap "topdecl"}
+    , {nt = topFollow, label = "topfollowsome", rhs = [nt topInfix, nt topAtom, nt topFollow], action = wrap "topfollowsome"}
+    , {nt = topFollow, label = "topfollownone", rhs = [], action = wrap "topfollownone"}
+    , {nt = topInfix, label = "topinfixjuxt", rhs = [], action = wrap "topinfixjuxt"}
+    , {nt = decl, label = "decllet", rhs = [lit "let", lident, lit "=", nt expr], action = wrap "decllet"}
+    , {nt = decl, label = "declletrec", rhs = [lit "let", lit "rec", lident, lit "=", nt expr], action = wrap "declletrec"}
+    , {nt = expr, label = "exprint", rhs = [int], action = wrap "exprint"}
+    ]
+  } in
+
+utest errorMapToBindingsExc (genParser gFailOnce)
+with [ ( "Declaration"
+  , [ ( ParserBase_Lit { lit = "let" }
+      , [ "decllet" , "declletrec" ]
+      )
+    ]
+  )
+]
+in
+
+let gFailTwice : Grammar String =
+  { start = top
+  , productions =
+    [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
+    , {nt = topAtom, label = "topdecl", rhs = [nt decl], action = wrap "topdecl"}
+    , {nt = topFollow, label = "topfollowsome", rhs = [nt topInfix, nt topAtom, nt topFollow], action = wrap "topfollowsome"}
+    , {nt = topFollow, label = "topfollownone", rhs = [], action = wrap "topfollownone"}
+    , {nt = topInfix, label = "topinfixjuxt", rhs = [], action = wrap "topinfixjuxt"}
+    , {nt = decl, label = "decllet", rhs = [lit "let", lident, lit "=", nt expr], action = wrap "decllet"}
+    , {nt = decl, label = "declletrec", rhs = [lit "let", lit "rec", lident, lit "=", nt expr], action = wrap "declletrec"}
+    , {nt = decl, label = "declletmut", rhs = [lit "let", lit "mut", lident, lit "=", nt expr], action = wrap "declletmut"}
+    , {nt = expr, label = "exprint", rhs = [int], action = wrap "exprint"}
+    ]
+  } in
+
+utest errorMapToBindingsExc (genParser gFailTwice)
+with [ ( "Declaration"
+  , [ ( ParserBase_Lit { lit = "let" }
+      , [ "decllet" , "declletrec" , "declletmut" ]
+      )
+    ]
+  )
+]
+in
+
+let gFailLet : Grammar String =
+  { start = top
+  , productions =
+    [ {nt = top, label = "toptop", rhs = [nt topAtom, nt topFollow], action = wrap "toptop"}
+    , {nt = topAtom, label = "topdecl", rhs = [nt decl], action = wrap "topdecl"}
+    , {nt = topFollow, label = "topfollowsome", rhs = [nt topInfix, nt topAtom, nt topFollow], action = wrap "topfollowsome"}
+    , {nt = topFollow, label = "topfollownone", rhs = [], action = wrap "topfollownone"}
+    , {nt = topInfix, label = "topinfixjuxt", rhs = [], action = wrap "topinfixjuxt"}
+    , {nt = decl, label = "decllet", rhs = [lit "let", lident, lit "=", nt expr], action = wrap "decllet"}
+    , {nt = expr, label = "exprtop", rhs = [nt exprPrefixes, nt exprAtom, nt exprFollow], action = wrap "exprtop"}
+    , {nt = exprPrefixes, label = "exprpresome", rhs = [nt exprPrefix, nt exprPrefixes], action = wrap "exprpresome"}
+    , {nt = exprPrefixes, label = "exprprenone", rhs = [], action = wrap "exprprenone"}
+    , {nt = exprFollow, label = "exprfollowsome", rhs = [nt exprInfix, nt exprPrefixes, nt exprAtom, nt exprFollow], action = wrap "exprfollowsome"}
+    , {nt = exprFollow, label = "exprfollownone", rhs = [], action = wrap "exprfollownone"}
+    , {nt = exprPrefix, label = "exprlet", rhs = [lit "let", lident, lit "=", nt expr, lit "in"], action = wrap "exprlet"}
+    , {nt = exprInfix, label = "exprinfixjuxt", rhs = [], action = wrap "exprinfixjuxt"}
+    , {nt = exprAtom, label = "exprint", rhs = [int], action = wrap "exprint"}
+    ]
+  } in
+
+utest errorMapToBindingsExc (genParser gFailLet)
+with [ ( "ExpressionFollow"
+  , [ ( ParserBase_Lit { lit = "let" }
+      , [ "exprfollowsome" , "exprfollownone" ]
+      )
+    ]
+  )
+]
+in
 
 let g : Grammar String =
   { start = top
@@ -324,8 +436,9 @@ let g : Grammar String =
     ]
   } in
 
-let table = genParser g in
+let table = unwrapTableExc (genParser g) in
 let parse = parseWithTable table "file" in
+
 utest parse "let a = 1"
 with Right
   { label = "toptop"
