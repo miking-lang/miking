@@ -390,18 +390,18 @@ let rec print_const fmt = function
   | CmapBindings ->
       fprintf fmt "mapBindings"
   (* MCore intrinsics: Boot parser *)
-  | CparserTree _ -> 
-      fprintf fmt "parseTree"
-  | CparserParseString ->
-      fprintf fmt "parserParseString"
-  | CparserGetId ->
-      fprintf fmt "parserParseGetId"
-  | CparserGetTerm _ ->
-      fprintf fmt "parserParseGetTerm"
-  | CparserGetString _ ->
-      fprintf fmt "parserParseGetString"
-  | CparserGetInt _ ->
-      fprintf fmt "parserParseGetInt"
+  | CbootParserTree _ -> 
+      fprintf fmt "bootParseTree"
+  | CbootParserParseMExprString ->
+      fprintf fmt "bootParserParseMExprString"
+  | CbootParserGetId ->
+      fprintf fmt "bootParserParseGetId"
+  | CbootParserGetTerm _ ->
+      fprintf fmt "bootParserParseGetTerm"
+  | CbootParserGetString _ ->
+      fprintf fmt "bootParserParseGetString"
+  | CbootParserGetInt _ ->
+      fprintf fmt "bootParserParseGetInt"
 
   (* Python intrinsics *)
   | CPy v ->

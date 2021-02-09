@@ -5,18 +5,18 @@
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 
-let gterm = lam t. lam n. parserGetTerm t n 
-let gstr = lam t. lam n. nameNoSym (parserGetString t n)
-let gint = lam t. lam n. addi n  (parserGetInt t n)
+let gterm = lam t. lam n. bootParserGetTerm t n 
+let gstr = lam t. lam n. nameNoSym (bootParserGetString t n)
+let gint = lam t. lam n. addi n  (bootParserGetInt t n)
 
 lang BootParser = MExprAst
-  sem parseString =
+  sem parseMExprString =
   | str ->
-    let t = parserParseString str in
-    parseInternal t (parserGetId t)
+    let t = bootParserParseMExprString str in
+    parseInternal t (bootParserGetId t)
 
   sem next =
-  | t -> parseInternal t (parserGetId t)
+  | t -> parseInternal t (bootParserGetId t)
 
   sem parseInternal (t:Unknown) =
   | 100 /-TmVar-/ -> TmVar {ident = gstr t 0, ty = TyUnknown(), info = NoInfo()}
@@ -27,3 +27,11 @@ lang BootParser = MExprAst
 end
 
 
+mexpr
+use BootParser in
+
+utest parseMExprString "hi"  with 1 in
+
+
+
+()

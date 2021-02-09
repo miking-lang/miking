@@ -131,12 +131,12 @@ and const =
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
   (* MCore intrinsics: Boot parser *) 
-  | CparserTree of ptree
-  | CparserParseString
-  | CparserGetId
-  | CparserGetTerm of tm option
-  | CparserGetString of tm option
-  | CparserGetInt of tm option
+  | CbootParserTree of ptree
+  | CbootParserParseMExprString
+  | CbootParserGetId
+  | CbootParserGetTerm of tm option
+  | CbootParserGetString of tm option
+  | CbootParserGetInt of tm option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext

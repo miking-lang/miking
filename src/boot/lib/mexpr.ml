@@ -130,11 +130,11 @@ let builtin =
   ; ("mapMapWithKey", f (CmapMapWithKey None))
   ; ("mapBindings", f CmapBindings)
   (* MCore intrinsics: Boot parser *)
-  ; ("parserParseString", f CparserParseString)
-  ; ("parserGetId", f CparserGetId)
-  ; ("parserGetTerm", f (CparserGetTerm None))
-  ; ("parserGetString", f (CparserGetString None))
-  ; ("parserGetInt", f (CparserGetInt None))]
+  ; ("bootParserParseMExprString", f CbootParserParseMExprString)
+  ; ("bootParserGetId", f CbootParserGetId)
+  ; ("bootParserGetTerm", f (CbootParserGetTerm None))
+  ; ("bootParserGetString", f (CbootParserGetString None))
+  ; ("bootParserGetInt", f (CbootParserGetInt None))]
   (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -405,15 +405,15 @@ let arity = function
   | CmapBindings ->
       1
   (* MCore intrinsics: Boot parser *) 
-  | CparserTree _ -> 0
-  | CparserParseString -> 1
-  | CparserGetId -> 1
-  | CparserGetTerm None -> 2
-  | CparserGetTerm (Some _) -> 1
-  | CparserGetString None -> 2
-  | CparserGetString (Some _) -> 1
-  | CparserGetInt None -> 2
-  | CparserGetInt (Some _) -> 1
+  | CbootParserTree _ -> 0
+  | CbootParserParseMExprString -> 1
+  | CbootParserGetId -> 1
+  | CbootParserGetTerm None -> 2
+  | CbootParserGetTerm (Some _) -> 1
+  | CbootParserGetString None -> 2
+  | CbootParserGetString (Some _) -> 1
+  | CbootParserGetInt None -> 2
+  | CbootParserGetInt (Some _) -> 1
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -965,37 +965,37 @@ let delta eval env fi c v =
   | CmapBindings, _ ->
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
-  | CparserTree _, _ ->
+  | CbootParserTree _, _ ->
       fail_constapp fi
-  | CparserParseString, TmSeq(fi,seq) ->
-     let t = Bootparser.parseString (tmseq2ustring fi seq) in
-     TmConst(fi, CparserTree(PTreeTm(t)))
-  | CparserParseString, _ -> fail_constapp fi 
+  | CbootParserParseMExprString, TmSeq(fi,seq) ->
+     let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
+     TmConst(fi, CbootParserTree(PTreeTm(t)))
+  | CbootParserParseMExprString, _ -> fail_constapp fi 
 
-  | CparserGetId, TmConst(fi, CparserTree(ptree)) ->
+  | CbootParserGetId, TmConst(fi, CbootParserTree(ptree)) ->
      TmConst(fi, CInt(Bootparser.getId ptree))
-  | CparserGetId, _ -> fail_constapp fi
+  | CbootParserGetId, _ -> fail_constapp fi
 
-  | CparserGetTerm None, t ->
-      TmConst(fi, CparserGetTerm (Some t))
-  | CparserGetTerm Some (TmConst(fi, CparserTree(ptree))), TmConst(_, CInt n) ->
-     TmConst(fi, CparserTree(Bootparser.getTerm ptree n))
-  | CparserGetTerm (Some _), _ ->
+  | CbootParserGetTerm None, t ->
+      TmConst(fi, CbootParserGetTerm (Some t))
+  | CbootParserGetTerm Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
+     TmConst(fi, CbootParserTree(Bootparser.getTerm ptree n))
+  | CbootParserGetTerm (Some _), _ ->
      fail_constapp fi
 
-  | CparserGetString None, t ->
-      TmConst(fi, CparserGetString (Some t))
-  | CparserGetString Some (TmConst(fi, CparserTree(ptree))), TmConst(_, CInt n) ->
+  | CbootParserGetString None, t ->
+      TmConst(fi, CbootParserGetString (Some t))
+  | CbootParserGetString Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
      TmSeq(fi, Mseq.Helpers.map (fun x -> TmConst(NoInfo,CChar(x)))
                  (Mseq.Helpers.of_ustring (Bootparser.getString ptree n)))
-  | CparserGetString (Some _), _ ->
+  | CbootParserGetString (Some _), _ ->
      fail_constapp fi
 
-  | CparserGetInt None, t ->
-      TmConst(fi, CparserGetInt (Some t))
-  | CparserGetInt Some (TmConst(fi, CparserTree(ptree))), TmConst(_, CInt n) ->
+  | CbootParserGetInt None, t ->
+      TmConst(fi, CbootParserGetInt (Some t))
+  | CbootParserGetInt Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
      TmConst(fi, CInt(Bootparser.getInt ptree n))
-  | CparserGetInt (Some _), _ ->
+  | CbootParserGetInt (Some _), _ ->
      fail_constapp fi
 
   (* Python intrinsics *)

@@ -1,9 +1,11 @@
-
+(* 
+ * Miking is licensed under the MIT license.
+ * Copyright (C) David Broman. See file LICENSE.txt
+ *)
 
 open Ast
 open Intrinsics
-
-
+open Ustring.Op
 
 (* Terms *)
 let idTmVar     = 100
@@ -39,8 +41,8 @@ let idTyVar     = 209
 let idTyApp     = 210
 
     
-
-let parseString str = TmVar(NoInfo, str, Symb.gensym())
+let sym = Symb.gensym() 
+let parseMExprString str = TmLam(NoInfo, us"x", sym, TyUnknown(NoInfo), TmVar(NoInfo, str, sym))
 
 
 (* Returns a tuple with the following elements
