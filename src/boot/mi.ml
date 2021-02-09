@@ -52,12 +52,6 @@ let testprog lst =
     printf "ERROR! %d successful tests and %d failed tests.\n\n" !utest_ok
       !utest_fail
 
-(* Run program *)
-let runprog name lst =
-  (* TODO(?,?): prog_argv is never used anywhere *)
-  prog_argv := lst ;
-  evalprog name
-
 (* Run the REPL *)
 let runrepl _ = start_repl ()
 
@@ -119,8 +113,8 @@ let main =
     | "repl" :: lst ->
         runrepl lst
     (* Run one program with program arguments without typechecking *)
-    | "run" :: name :: lst | name :: lst ->
-        runprog name lst
+    | "run" :: name :: _ | name :: _ ->
+        evalprog name
     (* Show the menu *)
     | _ ->
         Arg.usage speclist usage_msg

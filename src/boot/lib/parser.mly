@@ -91,9 +91,11 @@
 
 %start main
 %start main_mexpr
+%start main_mexpr_tm
 
 %type <Ast.program> main
 %type <Ast.program> main_mexpr
+%type <Ast.tm> main_mexpr_tm
 
 %%
 
@@ -104,6 +106,10 @@ main:
 main_mexpr:
   | mexpr EOF
     { Program ([], [], $1) }
+
+main_mexpr_tm:
+  | mexpr EOF
+    { $1 }
 
 includes:
   | include_ includes

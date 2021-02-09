@@ -15,6 +15,7 @@ open Mlang
 open Msg
 open Pprint
 open Intrinsics
+open Parserutils
 module Option = BatOption
 
 let initial_prompt = ">> "

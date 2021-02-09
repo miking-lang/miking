@@ -130,7 +130,7 @@ and const =
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
-  (* MCore intrinsics: Boot parser *) 
+  (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString
   | CbootParserGetId
@@ -143,11 +143,7 @@ and const =
   | CPy of tm Pyast.ext
 
 (* Parser tree. Used by the boot parser intrinsics *)
-and ptree =
-  | PTreeTm of tm
-  | PTreeTy of ty
-  | PTreePat of pat
-
+and ptree = PTreeTm of tm | PTreeTy of ty | PTreePat of pat
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty

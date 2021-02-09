@@ -53,8 +53,7 @@ let builtin =
   ; ("slli", f (Cslli None))
   ; ("srli", f (Csrli None))
   ; ("srai", f (Csrai None))
-  ; ("arity", f Carity)
-  (* MCore intrinsics: Floating-point numbers *)
+  ; ("arity", f Carity) (* MCore intrinsics: Floating-point numbers *)
   ; ("addf", f (Caddf None))
   ; ("subf", f (Csubf None))
   ; ("mulf", f (Cmulf None))
@@ -70,12 +69,10 @@ let builtin =
   ; ("ceilfi", f Cceilfi)
   ; ("roundfi", f Croundfi)
   ; ("int2float", f Cint2float)
-  ; ("string2float", f Cstring2float)
-  (* MCore intrinsics: Characters *)
+  ; ("string2float", f Cstring2float) (* MCore intrinsics: Characters *)
   ; ("eqc", f (Ceqc None))
   ; ("char2int", f Cchar2int)
-  ; ("int2char", f Cint2char)
-  (* MCore intrinsics: Sequences *)
+  ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
   ; ("makeSeq", f (CmakeSeq None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
@@ -84,14 +81,11 @@ let builtin =
   ; ("cons", f (Ccons None))
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
-  ; ("reverse", f Creverse)
-  (* MCore intrinsics: Random numbers *)
+  ; ("reverse", f Creverse) (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
-  ; ("randSetSeed", f CrandSetSeed)
-  (* MCore intrinsics: Time *)
+  ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)
   ; ("wallTimeMs", f CwallTimeMs)
-  ; ("sleepMs", f CsleepMs)
-  (* MCore intrinsics: Debug and I/O *)
+  ; ("sleepMs", f CsleepMs) (* MCore intrinsics: Debug and I/O *)
   ; ("print", f Cprint)
   ; ("dprint", f Cdprint)
   ; ("readLine", f CreadLine)
@@ -111,16 +105,13 @@ let builtin =
   ; ("fileExists", f CfileExists)
   ; ("deleteFile", f CdeleteFile)
   ; ("error", f Cerror)
-  ; ("exit", f Cexit)
-  (* MCore intrinsics: Symbols *)
+  ; ("exit", f Cexit) (* MCore intrinsics: Symbols *)
   ; ("eqsym", f (Ceqsym None))
   ; ("gensym", f Cgensym)
-  ; ("sym2hash", f Csym2hash)
-  (* MCore intrinsics: References *)
+  ; ("sym2hash", f Csym2hash) (* MCore intrinsics: References *)
   ; ("ref", f Cref)
   ; ("deref", f CdeRef)
-  ; ("modref", f (CmodRef None)) 
-  (* MCore intrinsics: Maps *)
+  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapFind", f (CmapFind None))
@@ -128,13 +119,12 @@ let builtin =
   ; ("mapMem", f (CmapMem None))
   ; ("mapMap", f (CmapMap None))
   ; ("mapMapWithKey", f (CmapMapWithKey None))
-  ; ("mapBindings", f CmapBindings)
-  (* MCore intrinsics: Boot parser *)
+  ; ("mapBindings", f CmapBindings) (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f CbootParserParseMExprString)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
   ; ("bootParserGetString", f (CbootParserGetString None))
-  ; ("bootParserGetInt", f (CbootParserGetInt None))]
+  ; ("bootParserGetInt", f (CbootParserGetInt None)) ]
   (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -404,16 +394,25 @@ let arity = function
       1
   | CmapBindings ->
       1
-  (* MCore intrinsics: Boot parser *) 
-  | CbootParserTree _ -> 0
-  | CbootParserParseMExprString -> 1
-  | CbootParserGetId -> 1
-  | CbootParserGetTerm None -> 2
-  | CbootParserGetTerm (Some _) -> 1
-  | CbootParserGetString None -> 2
-  | CbootParserGetString (Some _) -> 1
-  | CbootParserGetInt None -> 2
-  | CbootParserGetInt (Some _) -> 1
+  (* MCore intrinsics: Boot parser *)
+  | CbootParserTree _ ->
+      0
+  | CbootParserParseMExprString ->
+      1
+  | CbootParserGetId ->
+      1
+  | CbootParserGetTerm None ->
+      2
+  | CbootParserGetTerm (Some _) ->
+      1
+  | CbootParserGetString None ->
+      2
+  | CbootParserGetString (Some _) ->
+      1
+  | CbootParserGetInt None ->
+      2
+  | CbootParserGetInt (Some _) ->
+      1
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -843,7 +842,7 @@ let delta eval env fi c v =
   | CdeRef, TmRef (_, r) ->
       !r
   | CdeRef, _ ->
-     fail_constapp fi
+      fail_constapp fi
   (* MCore intrinsics: Map *)
   | CMap _, _ ->
       fail_constapp fi
@@ -967,37 +966,40 @@ let delta eval env fi c v =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString, TmSeq(fi,seq) ->
-     let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
-     TmConst(fi, CbootParserTree(PTreeTm(t)))
-  | CbootParserParseMExprString, _ -> fail_constapp fi 
-
-  | CbootParserGetId, TmConst(fi, CbootParserTree(ptree)) ->
-     TmConst(fi, CInt(Bootparser.getId ptree))
-  | CbootParserGetId, _ -> fail_constapp fi
-
+  | CbootParserParseMExprString, TmSeq (fi, seq) ->
+      let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
+      TmConst (fi, CbootParserTree (PTreeTm t))
+  | CbootParserParseMExprString, _ ->
+      fail_constapp fi
+  | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
+      TmConst (fi, CInt (Bootparser.getId ptree))
+  | CbootParserGetId, _ ->
+      fail_constapp fi
   | CbootParserGetTerm None, t ->
-      TmConst(fi, CbootParserGetTerm (Some t))
-  | CbootParserGetTerm Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
-     TmConst(fi, CbootParserTree(Bootparser.getTerm ptree n))
+      TmConst (fi, CbootParserGetTerm (Some t))
+  | ( CbootParserGetTerm (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getTerm ptree n))
   | CbootParserGetTerm (Some _), _ ->
-     fail_constapp fi
-
+      fail_constapp fi
   | CbootParserGetString None, t ->
-      TmConst(fi, CbootParserGetString (Some t))
-  | CbootParserGetString Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
-     TmSeq(fi, Mseq.Helpers.map (fun x -> TmConst(NoInfo,CChar(x)))
-                 (Mseq.Helpers.of_ustring (Bootparser.getString ptree n)))
+      TmConst (fi, CbootParserGetString (Some t))
+  | ( CbootParserGetString (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmSeq
+        ( fi
+        , Mseq.Helpers.map
+            (fun x -> TmConst (NoInfo, CChar x))
+            (Mseq.Helpers.of_ustring (Bootparser.getString ptree n)) )
   | CbootParserGetString (Some _), _ ->
-     fail_constapp fi
-
+      fail_constapp fi
   | CbootParserGetInt None, t ->
-      TmConst(fi, CbootParserGetInt (Some t))
-  | CbootParserGetInt Some (TmConst(fi, CbootParserTree(ptree))), TmConst(_, CInt n) ->
-     TmConst(fi, CInt(Bootparser.getInt ptree n))
+      TmConst (fi, CbootParserGetInt (Some t))
+  | ( CbootParserGetInt (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CInt (Bootparser.getInt ptree n))
   | CbootParserGetInt (Some _), _ ->
-     fail_constapp fi
-
+      fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t

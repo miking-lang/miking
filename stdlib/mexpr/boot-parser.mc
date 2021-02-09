@@ -4,10 +4,12 @@
 
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
+include "mexpr/pprint.mc"
 
 let gterm = lam t. lam n. bootParserGetTerm t n 
 let gstr = lam t. lam n. nameNoSym (bootParserGetString t n)
 let gint = lam t. lam n. addi n  (bootParserGetInt t n)
+
 
 lang BootParser = MExprAst
   sem parseMExprString =
@@ -19,18 +21,53 @@ lang BootParser = MExprAst
   | t -> parseInternal t (bootParserGetId t)
 
   sem parseInternal (t:Unknown) =
-  | 100 /-TmVar-/ -> TmVar {ident = gstr t 0, ty = TyUnknown(), info = NoInfo()}
-  | 101 /-TmLam-/ -> TmLam {ident = gstr t 0, ty = TyUnknown(), info = NoInfo(),
-                     body = next (gterm t 0)}
+  | 100 /-TmVar-/ -> TmVar {ident = gstr t 0,
+                            ty = TyUnknown(),
+                            info = ginfo t}
+  | 101 /-TmLam-/ -> TmLam {ident = gstr t 0,
+                            ty = gty t 0,
+                            info = ginfo t,
+                            body = next (gterm t 0)}
+  | 102 /-TmLet-/ -> TmLet {ident = gstr t 0,
+                            tyBody = gty t 0,
+                            body = next (gterm t 0),
+                            inexpr = next (gterm t 1),
+                            ty = TyUnknown(),
+                            fi = ginfo t}
   | 105 /-TmApp-/ -> TmApp {lhs = next (gterm t 0), rhs = next (gterm t 1),
                             ty = TyUnknown(), fi = NoInfo()}     
+
+
+  -- Functions for transferring types and info are not yet implemented.  
+  -- These functions are place holders.
+  sem gty (t:Unknown) = | n -> TyUnknown()
+  sem ginfo = | t -> NoInfo()
 end
 
+lang BootParserTest = BootParser + MExprPrettyPrint 
 
 mexpr
-use BootParser in
+use BootParserTest in
 
-utest parseMExprString "hi"  with 1 in
+
+
+-- Tests where strings of MExpr text is parsed and then pretty printed again.
+-- All terms are tested in this way.
+let norm = lam str. 
+  filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
+
+let lside = lam s. norm (expr2str (parseMExprString s)) in
+let rside = norm in
+
+-- TmVar and TmLam
+let s = "_asdXA123" in
+utest lside s with rside s in
+let s = "lam x. lam y. x" in
+utest lside s with rside s in
+
+-- TmLet, TmLam
+let s = "let y = lam x.x in y" in
+utest lside s with rside s in
 
 
 
