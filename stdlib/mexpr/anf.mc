@@ -258,6 +258,19 @@ let ext =
      (addi_ (addi_ (int_ 2) (var_ "x")))
        (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
 
+utest _anf ext
+with
+  bindall_ [
+    ulet_ "f" (ulam_ "x" (var_ "x")),
+    ulet_ "x1" (int_ 3),
+    ulet_ "t" (addi_ (int_ 2) (var_ "x1")),
+    ulet_ "x2" (int_ 1),
+    ulet_ "t1" (app_ (var_ "f") (var_ "x2")),
+    ulet_ "t2" (addi_ (var_ "t") (var_ "t1")),
+    (var_ "t2")
+  ]
+using eqExpr in
+
 let lambda =
   app_
     (ulam_ "x" (bind_ (ulet_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
@@ -306,6 +319,7 @@ let simple = bind_ (ulet_ "x" (int_ 1)) (var_ "x") in
 let simple2 = app_ (int_ 1) simple in
 
 let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
+
 utest _anf inv1 with inv1 using eqExpr in
 
 

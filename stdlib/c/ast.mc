@@ -4,7 +4,6 @@
 -- needed for code generation or can be expressed through other language
 -- constructs):
 --
--- * Includes/module system
 -- * Labeled statements and goto
 -- * Storage class specifiers (typedef, auto, register, static, extern)
 -- * Type qualifiers (const, volatile)
@@ -12,30 +11,32 @@
 -- * Combined assignment operators (e.g. +=, *=)
 -- * Ternary operator (cond ? expr : expr)
 -- * DoWhile, For
+--
+-- The above list is of course not exhaustive.
 
 -- NOTE(dlunde,2020-10-30):
 --
 -- * Identifiers are _not_ checked for validity. You must make sure they are
---   valid in your own code.
+--   valid C identifiers in your own code.
 --
 -- * Definitions have optional identifiers and initializers to allow for
 --   declaring struct/union/enum types without instantiating them
---   ```
+--
 --   struct ty { ... members ... };
---   ```
+--
 --   and to initialize variables directly
---   ```
+--
 --   int arr[] = {1, 2, 3};
---   ```
+--
 --   To keep the AST clean, however, this currently also allows for incorrect
 --   definitions such as
---   ```
+--
 --   int *;
---   ```
+--
 --   and
---   ```
+--
 --   int = 1;
---   ```
+--
 --   which are not valid in C.
 
 include "name.mc"

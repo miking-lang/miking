@@ -1,3 +1,5 @@
+-- Helper functions for creating AST nodes.
+
 include "mexpr/ast.mc"
 include "assoc.mc"
 
