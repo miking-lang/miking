@@ -73,7 +73,7 @@ lang VarEval = VarAst + IdentifierPrettyPrint + FixAst + AppAst
         eval ctx t
       else t
     else
-      error (concat "Unknown variable: " (pprintVarString ident))
+      error (concat "Unknown variable: " (pprintVarString (nameGetStr ident)))
 end
 
 lang AppEval = AppAst
