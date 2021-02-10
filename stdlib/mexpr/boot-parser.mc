@@ -99,11 +99,14 @@ lang BootParser = MExprAst
                     value = gterm t 1,
                     ty = TyUnknown(),
                     fi = ginfo t}
-
-  | 110 /-TmCondef-/ ->
+  | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                ty = gtype t 0,
                inexpr = gterm t 0}
+  | 111 /-TmConApp-/ ->
+     TmConApp {ident = gname t 0,
+               body = gterm t 0,
+               ty = TyUnknown()}
 
 
   -- Functions for transferring types and info are not yet implemented.  
@@ -192,5 +195,10 @@ let s = "con Foo in x" in
 utest lside s with rside s in
 let s = "con Foo : Int -> Tree in x" in
 utest lside s with rside "con Foo in x" in
+
+-- TmConApp
+let s = "Foo {a = 5}" in
+utest lside s with rside s in
+
 
 ()

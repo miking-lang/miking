@@ -122,7 +122,11 @@ let getData = function
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [])
   | PTreeTm (TmCondef (fi, x, _, ty, t)) ->
-      (idTmCondef, [fi], [], [ty], [t], [x], [], [], [])
+     (idTmCondef, [fi], [], [ty], [t], [x], [], [], [])
+  | PTreeTm (TmConapp (fi, x, _, t)) ->
+     (idTmConapp, [fi], [],[], [t], [x], [], [], [])     
+
+
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
