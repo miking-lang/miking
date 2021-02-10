@@ -66,6 +66,15 @@ let idTyVar = 209
 
 let idTyApp = 210
 
+(* Const literals *)
+let idCBool = 300
+
+let idCInt = 301
+
+let idCFloat = 302
+
+let idCChar = 303
+
 let sym = Symb.gensym ()
 
 let parseMExprString str = Parserutils.parse_mexpr_string str
@@ -78,44 +87,68 @@ let parseMExprString str = Parserutils.parse_mexpr_string str
    5. List of terms
    6. List of strings
    7. List of integers
- *)
+   8. List of floating-point numbers
+   9. List of const
+*)
+
 let getData = function
+  (* Terms *)
   | PTreeTm (TmVar (fi, x, _)) ->
-      (idTmVar, [fi], [], [], [], [x], [])
+      (idTmVar, [fi], [], [], [], [x], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
-      (idTmLam, [fi], [], [ty], [t], [x], [])
+      (idTmLam, [fi], [], [ty], [t], [x], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
-      (idTmLet, [fi], [], [ty], [t1; t2], [x], [])
+      (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [])
   | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [])
+      (idTmType, [fi], [], [ty], [t], [x], [], [], [])
   | PTreeTm (TmRecLets (fi, lst, t)) ->
       let fis = fi :: List.map (fun (fi, _, _, _, _) -> fi) lst in
       let len = List.length lst in
       let tys = List.map (fun (_, _, _, ty, _) -> ty) lst in
       let tms = List.map (fun (_, _, _, _, t) -> t) lst @ [t] in
       let strs = List.map (fun (_, s, _, _, _) -> s) lst in
-      (idTmRecLets, fis, [len], tys, tms, strs, [])
+      (idTmRecLets, fis, [len], tys, tms, strs, [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
-      (idTmApp, [fi], [], [], [t1; t2], [], [])
+      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [])
+  | PTreeTm (TmConst (fi, c)) ->
+      (idTmConst, [fi], [], [], [], [], [], [], [c])
+  (* Const *)
+  | PTreeConst (CBool v) ->
+      let i = if v then 1 else 0 in
+      (idCBool, [], [], [], [], [], [i], [], [])
+  | PTreeConst (CInt v) ->
+      (idCInt, [], [], [], [], [], [v], [], [])
+  | PTreeConst (CFloat v) ->
+      (idCFloat, [], [], [], [], [], [], [v], [])
+  | PTreeConst (CChar v) ->
+      (idCChar, [], [], [], [], [], [v], [], [])
   | _ ->
       failwith "TODO"
 
 let getId t =
-  let id, _, _, _, _, _, _ = getData t in
+  let id, _, _, _, _, _, _, _, _ = getData t in
   id
 
 let getTerm t n =
-  let _, _, _, _, lst, _, _ = getData t in
+  let _, _, _, _, lst, _, _, _, _ = getData t in
   PTreeTm (List.nth lst n)
 
 let getString t n =
-  let _, _, _, _, _, lst, _ = getData t in
+  let _, _, _, _, _, lst, _, _, _ = getData t in
   List.nth lst n
 
 let getInt t n =
-  let _, _, _, _, _, _, lst = getData t in
+  let _, _, _, _, _, _, lst, _, _ = getData t in
+  List.nth lst n
+
+let getFloat t n =
+  let _, _, _, _, _, _, _, lst, _ = getData t in
   List.nth lst n
 
 let getListLength t n =
-  let _, _, lst, _, _, _, _ = getData t in
+  let _, _, lst, _, _, _, _, _, _ = getData t in
   List.nth lst n
+
+let getConst t n =
+  let _, _, _, _, _, _, _, _, lst = getData t in
+  PTreeConst (List.nth lst n)

@@ -125,7 +125,9 @@ let builtin =
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
   ; ("bootParserGetString", f (CbootParserGetString None))
   ; ("bootParserGetInt", f (CbootParserGetInt None))
-  ; ("bootParserGetListLength", f (CbootParserGetListLength None)) ]
+  ; ("bootParserGetFloat", f (CbootParserGetFloat None))
+  ; ("bootParserGetListLength", f (CbootParserGetListLength None))
+  ; ("bootParserGetConst", f (CbootParserGetConst None)) ]
   (* Append external functions TODO(?,?): Should not be part of core language *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -414,9 +416,17 @@ let arity = function
       2
   | CbootParserGetInt (Some _) ->
       1
+  | CbootParserGetFloat None ->
+      2
+  | CbootParserGetFloat (Some _) ->
+      1
   | CbootParserGetListLength None ->
       2
   | CbootParserGetListLength (Some _) ->
+      1
+  | CbootParserGetConst None ->
+      2
+  | CbootParserGetConst (Some _) ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -1005,12 +1015,26 @@ let delta eval env fi c v =
       TmConst (fi, CInt (Bootparser.getInt ptree n))
   | CbootParserGetInt (Some _), _ ->
       fail_constapp fi
+  | CbootParserGetFloat None, t ->
+      TmConst (fi, CbootParserGetFloat (Some t))
+  | ( CbootParserGetFloat (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CFloat (Bootparser.getFloat ptree n))
+  | CbootParserGetFloat (Some _), _ ->
+      fail_constapp fi
   | CbootParserGetListLength None, t ->
       TmConst (fi, CbootParserGetListLength (Some t))
   | ( CbootParserGetListLength (Some (TmConst (fi, CbootParserTree ptree)))
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CInt (Bootparser.getListLength ptree n))
   | CbootParserGetListLength (Some _), _ ->
+      fail_constapp fi
+  | CbootParserGetConst None, t ->
+      TmConst (fi, CbootParserGetConst (Some t))
+  | ( CbootParserGetConst (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getConst ptree n))
+  | CbootParserGetConst (Some _), _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

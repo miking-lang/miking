@@ -137,14 +137,20 @@ and const =
   | CbootParserGetTerm of tm option
   | CbootParserGetString of tm option
   | CbootParserGetInt of tm option
+  | CbootParserGetFloat of tm option
   | CbootParserGetListLength of tm option
+  | CbootParserGetConst of tm option
   (* External functions TODO(?,?): Should not be part of core language *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
 
 (* Parser tree. Used by the boot parser intrinsics *)
-and ptree = PTreeTm of tm | PTreeTy of ty | PTreePat of pat
+and ptree =
+  | PTreeTm of tm
+  | PTreeTy of ty
+  | PTreePat of pat
+  | PTreeConst of const
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty

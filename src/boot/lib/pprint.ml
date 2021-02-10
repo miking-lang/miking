@@ -402,8 +402,12 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetString"
   | CbootParserGetInt _ ->
       fprintf fmt "bootParserParseGetInt"
+  | CbootParserGetFloat _ ->
+      fprintf fmt "bootParserParseGetFloat"
   | CbootParserGetListLength _ ->
       fprintf fmt "bootParserParseGetListLength"
+  | CbootParserGetConst _ ->
+      fprintf fmt "bootParserParseGetConst"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
