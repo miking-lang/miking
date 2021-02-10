@@ -361,3 +361,30 @@ utest isSuffix eqi [2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
+
+recursive
+let seqCmp : (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
+  if and (null s1) (null s2) then 0
+  else if null s1 then subi 0 1
+  else if null s2 then 1
+  else
+    let d = cmp (head s1) (head s2) in
+    match d with 0 then
+      seqCmp cmp (tail s1) (tail s2)
+    else d
+end
+
+utest seqCmp subi [] [] with 0
+utest seqCmp subi [1,2,3] [1,2,3] with 0
+utest
+  match lti (seqCmp subi [1,2] [1,2,3]) 0 with true then true else false
+  with true
+utest
+  match gti (seqCmp subi [1,2,3] [1,2]) 0 with true then true else false
+  with true
+utest
+  match lti (seqCmp subi [1,1] [1,2]) 0 with true then true else false
+  with true
+utest
+  match gti (seqCmp subi [1,2] [1,1]) 0 with true then true else false
+  with true
