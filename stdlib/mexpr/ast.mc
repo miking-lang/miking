@@ -77,11 +77,17 @@ end
 lang RecordAst
   syn Expr =
   | TmRecord {bindings : AssocMap String Expr,
-              ty : Type}
+              ty : Type, 
+              fi : Info}
   | TmRecordUpdate {rec   : Expr,
                     key   : String,
                     value : Expr,
-                    ty    : Type}
+                    ty    : Type,
+                    fi : Info}
+
+  sem info =
+  | TmRecord r -> r.fi
+  | TmRecordUpdate r -> r.fi
 
   sem ty =
   | TmRecord t -> t.ty

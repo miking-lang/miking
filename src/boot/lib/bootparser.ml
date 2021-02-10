@@ -113,15 +113,12 @@ let getData = function
   | PTreeTm (TmConst (fi, c)) ->
       (idTmConst, [fi], [], [], [], [], [], [], [c])
   | PTreeTm (TmSeq (fi, ts)) ->
-      ( idTmSeq
-      , [fi]
-      , [Mseq.length ts]
-      , []
-      , Mseq.Helpers.to_list ts
-      , []
-      , []
-      , []
-      , [] )
+      let len = Mseq.length ts in
+      let tms = Mseq.Helpers.to_list ts in
+      (idTmSeq, [fi], [len], [], tms, [], [], [], [])
+  | PTreeTm (TmRecord (fi, tmmap)) ->
+      let slst, tlst = tmmap |> Record.bindings |> List.split in
+      (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [])
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in

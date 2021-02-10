@@ -5,8 +5,10 @@
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
+include "string.mc"
 
-let gstr = lam t. lam n. nameNoSym (bootParserGetString t n)
+let gstr = lam t. lam n. bootParserGetString t n
+let gname = lam t. lam n. nameNoSym (bootParserGetString t n)
 let gint = lam t. lam n. bootParserGetInt t n
 let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
@@ -42,29 +44,29 @@ lang BootParser = MExprAst
 
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
-      TmVar {ident = gstr t 0,
+      TmVar {ident = gname t 0,
              ty = TyUnknown(),
              info = ginfo t}
   | 101 /-TmLam-/ ->
-      TmLam {ident = gstr t 0,
+      TmLam {ident = gname t 0,
              ty = gty t 0,
              info = ginfo t,
              body = gterm t 0}
   | 102 /-TmLet-/ ->
-      TmLet {ident = gstr t 0,
+      TmLet {ident = gname t 0,
              tyBody = gty t 0,
              body = gterm t 0,
              inexpr = gterm t 1,
              ty = TyUnknown(),
              fi = ginfo t}
   | 103 /-TmType-/ ->
-      TmType {ident = gstr t 0,
+      TmType {ident = gname t 0,
               ty = gty t 0,
               inexpr = gterm t 0,
               fi = ginfo t}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
-                   makeSeq (lam n. {ident = gstr t n,
+                   makeSeq (lam n. {ident = gname t n,
                                  ty = gty t n,
                                  body = gterm t n}) (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
@@ -86,7 +88,12 @@ lang BootParser = MExprAst
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
              ty =  TyUnknown(),
              fi = ginfo t}
-
+  | 108 /-TmRecord-/ ->
+     let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
+      TmRecord {bindings = seq2assoc {eq = eqString} lst,
+               ty = TyUnknown(),
+               fi = ginfo t}
+     
 
 
   -- Functions for transferring types and info are not yet implemented.  
@@ -155,5 +162,12 @@ utest lside s with rside s in
 let s = "\"Hello world\"" in
 utest lside s with rside s in
 
+-- TmRecord
+let s = "{}" in
+utest lside s with rside s in
+let s = "{a = 5}" in
+utest lside s with rside s in
+let s = "{foo = 123, bar = \"Hello\"}" in
+utest lside s with rside s in
 
 ()
