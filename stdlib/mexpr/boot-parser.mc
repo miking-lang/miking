@@ -28,10 +28,6 @@ lang BootParser = MExprAst
     let t = bootParserParseMExprString str in
     matchTerm t (bootParserGetId t)
 
-  sem gterm (t:Unkown) =
-  | n -> let t2 = bootParserGetTerm t n in
-         matchTerm t2 (bootParserGetId t2)
-
   sem gconst(t:Unkown) =
   | n -> let t2 = bootParserGetConst t n in
          matchConst t2 (bootParserGetId t2)
@@ -41,6 +37,10 @@ lang BootParser = MExprAst
   | 301 /-CInt-/   -> CInt {val = gint t 0 } 
   | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
   | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
+
+  sem gterm (t:Unkown) =
+  | n -> let t2 = bootParserGetTerm t n in
+         matchTerm t2 (bootParserGetId t2)
 
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
@@ -107,7 +107,36 @@ lang BootParser = MExprAst
      TmConApp {ident = gname t 0,
                body = gterm t 0,
                ty = TyUnknown()}
+  | 112 /-TmMatch-/ ->
+     TmMatch {target = gterm t 0,
+              pat = gpat t 0,
+              thn = gterm t 1,
+              els = gterm t 2,
+              ty = TyUnknown(),
+              fi = ginfo t}
+  
+  sem gpat (t:Unkown) =
+  | n -> let t2 = bootParserGetPat t n in
+         matchPat t2 (bootParserGetId t2)
 
+  sem matchPat (t:Unknown) =
+  | 400 /-PatNamed-/ ->
+     match gstr t 0 with "" then PNamed {ident = PWildcard ()}
+     else PNamed {ident = PName (gname t 0)}
+
+/-
+let idPatNamed = 400
+let idPatSeqTot = 401
+let idPatSeqEdge = 402
+let idPatRecord = 403
+let idPatCon = 404
+let idPatInt = 405
+let idPatChar = 406
+let idPatBool = 407
+let idPatAnd = 408
+let idPatOr = 409
+let idPatNot = 410
+-/
 
   -- Functions for transferring types and info are not yet implemented.  
   -- These functions are place holders.
@@ -200,5 +229,12 @@ utest lside s with rside "con Foo in x" in
 let s = "Foo {a = 5}" in
 utest lside s with rside s in
 
+-- TmMatch, PatNamed
+let s = "match 5 with x then x else 2" in
+utest lside s with rside s in
+let s = "match foo with _ then 7 else 2" in
+utest lside s with rside s in
+
+--parseMExprString
 
 ()

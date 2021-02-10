@@ -3,6 +3,7 @@
  * Copyright (C) David Broman. See file LICENSE.txt
  *)
 
+open Ustring.Op
 open Ast
 open Intrinsics
 
@@ -75,6 +76,20 @@ let idCFloat = 302
 
 let idCChar = 303
 
+(* Patterns *)
+let idPatNamed = 400
+let idPatSeqTot = 401
+let idPatSeqEdge = 402
+let idPatRecord = 403
+let idPatCon = 404
+let idPatInt = 405
+let idPatChar = 406
+let idPatBool = 407
+let idPatAnd = 408
+let idPatOr = 409
+let idPatNot = 410
+
+
 let sym = Symb.gensym ()
 
 let parseMExprString str = Parserutils.parse_mexpr_string str
@@ -89,81 +104,95 @@ let parseMExprString str = Parserutils.parse_mexpr_string str
    7. List of integers
    8. List of floating-point numbers
    9. List of const
+  10. List of patterns
 *)
 
 let getData = function
   (* Terms *)
   | PTreeTm (TmVar (fi, x, _)) ->
-      (idTmVar, [fi], [], [], [], [x], [], [], [])
+      (idTmVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
-      (idTmLam, [fi], [], [ty], [t], [x], [], [], [])
+      (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
-      (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [])
+      (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
   | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [], [], [])
+      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmRecLets (fi, lst, t)) ->
       let fis = fi :: List.map (fun (fi, _, _, _, _) -> fi) lst in
       let len = List.length lst in
       let tys = List.map (fun (_, _, _, ty, _) -> ty) lst in
       let tms = List.map (fun (_, _, _, _, t) -> t) lst @ [t] in
       let strs = List.map (fun (_, s, _, _, _) -> s) lst in
-      (idTmRecLets, fis, [len], tys, tms, strs, [], [], [])
+      (idTmRecLets, fis, [len], tys, tms, strs, [], [], [], [])
   | PTreeTm (TmApp (fi, t1, t2)) ->
-      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [])
+      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmConst (fi, c)) ->
-      (idTmConst, [fi], [], [], [], [], [], [], [c])
+      (idTmConst, [fi], [], [], [], [], [], [], [c], [])
   | PTreeTm (TmSeq (fi, ts)) ->
       let len = Mseq.length ts in
       let tms = Mseq.Helpers.to_list ts in
-      (idTmSeq, [fi], [len], [], tms, [], [], [], [])
+      (idTmSeq, [fi], [len], [], tms, [], [], [], [], [])
   | PTreeTm (TmRecord (fi, tmmap)) ->
       let slst, tlst = tmmap |> Record.bindings |> List.split in
-      (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [])
+      (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
-      (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [])
+      (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
   | PTreeTm (TmCondef (fi, x, _, ty, t)) ->
-     (idTmCondef, [fi], [], [ty], [t], [x], [], [], [])
+     (idTmCondef, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmConapp (fi, x, _, t)) ->
-     (idTmConapp, [fi], [],[], [t], [x], [], [], [])     
+     (idTmConapp, [fi], [],[], [t], [x], [], [], [], [])     
+  | PTreeTm (TmMatch (fi, t1, p, t2, t3)) -> 
+     (idTmMatch, [fi], [],[],[t1;t2;t3], [], [], [], [], [p])
 
 
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
-      (idCBool, [], [], [], [], [], [i], [], [])
+      (idCBool, [], [], [], [], [], [i], [], [], [])
   | PTreeConst (CInt v) ->
-      (idCInt, [], [], [], [], [], [v], [], [])
+      (idCInt, [], [], [], [], [], [v], [], [], [])
   | PTreeConst (CFloat v) ->
-      (idCFloat, [], [], [], [], [], [], [v], [])
+      (idCFloat, [], [], [], [], [], [], [v], [], [])
   | PTreeConst (CChar v) ->
-      (idCChar, [], [], [], [], [], [v], [], [])
+     (idCChar, [], [], [], [], [], [v], [], [], [])
+
+  (* Patterns *)
+  | PTreePat (PatNamed(fi,NameStr(x,_))) ->
+     (idPatNamed, [fi] , [], [], [], [x], [],[],[],[])
+  | PTreePat (PatNamed(fi,NameWildcard)) ->
+     (idPatNamed, [fi] , [], [], [], [us""], [],[],[],[])
+
   | _ ->
       failwith "TODO"
 
 let getId t =
-  let id, _, _, _, _, _, _, _, _ = getData t in
+  let id, _, _, _, _, _, _, _, _, _= getData t in
   id
 
 let getTerm t n =
-  let _, _, _, _, lst, _, _, _, _ = getData t in
+  let _, _, _, _, lst, _, _, _, _, _ = getData t in
   PTreeTm (List.nth lst n)
 
 let getString t n =
-  let _, _, _, _, _, lst, _, _, _ = getData t in
+  let _, _, _, _, _, lst, _, _, _, _ = getData t in
   List.nth lst n
 
 let getInt t n =
-  let _, _, _, _, _, _, lst, _, _ = getData t in
+  let _, _, _, _, _, _, lst, _, _, _ = getData t in
   List.nth lst n
 
 let getFloat t n =
-  let _, _, _, _, _, _, _, lst, _ = getData t in
+  let _, _, _, _, _, _, _, lst, _, _ = getData t in
   List.nth lst n
 
 let getListLength t n =
-  let _, _, lst, _, _, _, _, _, _ = getData t in
+  let _, _, lst, _, _, _, _, _, _, _ = getData t in
   List.nth lst n
 
 let getConst t n =
-  let _, _, _, _, _, _, _, _, lst = getData t in
+  let _, _, _, _, _, _, _, _, lst, _ = getData t in
   PTreeConst (List.nth lst n)
+
+let getPat t n =
+  let _, _, _, _, _, _, _, _, _, lst = getData t in
+  PTreePat (List.nth lst n)

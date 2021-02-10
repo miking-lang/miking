@@ -140,7 +140,8 @@ and const =
   | CbootParserGetFloat of tm option
   | CbootParserGetListLength of tm option
   | CbootParserGetConst of tm option
-  (* External functions TODO(?,?): Should not be part of core language *)
+  | CbootParserGetPat of tm option
+  (* External functions *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
