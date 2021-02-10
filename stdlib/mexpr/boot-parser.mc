@@ -12,7 +12,7 @@ let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
 
 
-let makei = lam f. lam len.
+let makeSeq = lam f. lam len.
   recursive
     let work = lam acc. lam n.
       if eqi n len then acc else work (snoc acc (f n)) (addi n 1)
@@ -64,9 +64,9 @@ lang BootParser = MExprAst
               fi = ginfo t}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
-                   makei (lam n. {ident = gstr t n,
-                                  ty = gty t n,
-                                  body = gterm t n}) (glistlen t 0),
+                   makeSeq (lam n. {ident = gstr t n,
+                                 ty = gty t n,
+                                 body = gterm t n}) (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
                  ty = TyUnknown()}                            
   | 105 /-TmApp-/ ->
@@ -82,6 +82,11 @@ lang BootParser = MExprAst
                     match c with CFloat _ then TyFloat {} else
                     TyChar {},
                fi = ginfo t}
+  | 107 /-TmSeq-/ ->
+      TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
+             ty =  TyUnknown(),
+             fi = ginfo t}
+
 
 
   -- Functions for transferring types and info are not yet implemented.  
@@ -94,7 +99,6 @@ lang BootParserTest = BootParser + MExprPrettyPrint
 
 mexpr
 use BootParserTest in
-
 
 
 -- Tests where strings of MExpr text is parsed and then pretty printed again.
@@ -140,5 +144,16 @@ let s = "1.70e+1" in
 utest lside s with rside s in
 let s = "'a'" in
 utest lside s with rside s in
+
+-- TmSeq
+let s = "\"\"" in
+utest lside s with rside s in
+let s = "[3,4,1123,21,91]" in
+utest lside s with rside s in
+let s = "[[1],[12,42311],[23,21,91]]" in
+utest lside s with rside s in
+let s = "\"Hello world\"" in
+utest lside s with rside s in
+
 
 ()

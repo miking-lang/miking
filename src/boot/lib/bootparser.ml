@@ -112,6 +112,16 @@ let getData = function
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [])
   | PTreeTm (TmConst (fi, c)) ->
       (idTmConst, [fi], [], [], [], [], [], [], [c])
+  | PTreeTm (TmSeq (fi, ts)) ->
+      ( idTmSeq
+      , [fi]
+      , [Mseq.length ts]
+      , []
+      , Mseq.Helpers.to_list ts
+      , []
+      , []
+      , []
+      , [] )
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
