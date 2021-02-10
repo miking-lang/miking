@@ -452,7 +452,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                          + MExprPrettyPrint
   syn Intermediate =
   | Complete {prog: Expr, table: Table}
-  | Partial {part: Lookup -> Expr}
+  | Partial {part: Lookup -> Expr} -- TODO
 
   -- Find the initial mapping from decision points to values
   -- Returns a function of type 'Lookup'.
