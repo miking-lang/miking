@@ -119,6 +119,9 @@ let getData = function
   | PTreeTm (TmRecord (fi, tmmap)) ->
       let slst, tlst = tmmap |> Record.bindings |> List.split in
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [])
+  | PTreeTm (TmRecordUpdate(fi, t1, x, t2)) ->
+      (idTmRecordUpdate, [fi], [], [], [t1;t2], [x], [], [], [])
+
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in

@@ -93,7 +93,12 @@ lang BootParser = MExprAst
       TmRecord {bindings = seq2assoc {eq = eqString} lst,
                ty = TyUnknown(),
                fi = ginfo t}
-     
+  | 109 /-TmRecordUpdate-/ ->
+     TmRecordUpdate {rec = gterm t 0,
+                    key = gstr t 0,
+                    value = gterm t 1,
+                    ty = TyUnknown(),
+                    fi = ginfo t}
 
 
   -- Functions for transferring types and info are not yet implemented.  
@@ -169,5 +174,12 @@ let s = "{a = 5}" in
 utest lside s with rside s in
 let s = "{foo = 123, bar = \"Hello\"}" in
 utest lside s with rside s in
+
+-- TmRecordUpdate
+let s = "{a with foo = 5}" in
+utest lside s with rside s in
+let s = "{{foo=7, bar='a'} with bar = 'b'}" in
+utest lside s with rside s in
+
 
 ()

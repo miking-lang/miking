@@ -220,7 +220,8 @@ and tm =
   | TmUtest of info * tm * tm * tm option * tm
   (* Never term *)
   | TmNever of info
-  (* Only part of the runtime system *)
+  (* -- The rest is ONLY part of the runtime system *)
+  (* Closure *)
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
   (* Fix point *)
   | TmFix of info
