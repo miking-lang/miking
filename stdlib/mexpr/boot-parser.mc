@@ -49,25 +49,25 @@ lang BootParser = MExprAst
              info = ginfo t}
   | 101 /-TmLam-/ ->
       TmLam {ident = gname t 0,
-             ty = gty t 0,
+             ty = gtype t 0,
              info = ginfo t,
              body = gterm t 0}
   | 102 /-TmLet-/ ->
       TmLet {ident = gname t 0,
-             tyBody = gty t 0,
+             tyBody = gtype t 0,
              body = gterm t 0,
              inexpr = gterm t 1,
              ty = TyUnknown(),
              fi = ginfo t}
   | 103 /-TmType-/ ->
       TmType {ident = gname t 0,
-              ty = gty t 0,
+              ty = gtype t 0,
               inexpr = gterm t 0,
               fi = ginfo t}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
-                                 ty = gty t n,
+                                 ty = gtype t n,
                                  body = gterm t n}) (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
                  ty = TyUnknown()}                            
@@ -100,10 +100,15 @@ lang BootParser = MExprAst
                     ty = TyUnknown(),
                     fi = ginfo t}
 
+  | 110 /-TmCondef-/ ->
+     TmConDef {ident = gname t 0,
+               ty = gtype t 0,
+               inexpr = gterm t 0}
+
 
   -- Functions for transferring types and info are not yet implemented.  
   -- These functions are place holders.
-  sem gty (t:Unknown) = | n -> TyUnknown()
+  sem gtype (t:Unknown) = | n -> TyUnknown()
   sem ginfo = | t -> NoInfo()
 end
 
@@ -118,7 +123,8 @@ use BootParserTest in
 let norm = lam str. 
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
-let lside = lam s. norm (expr2str (parseMExprString s)) in
+let parse = lam s. expr2str (parseMExprString s) in
+let lside = lam s. norm (parse s) in
 let rside = norm in
 
 -- TmVar and TmLam
@@ -181,5 +187,10 @@ utest lside s with rside s in
 let s = "{{foo=7, bar='a'} with bar = 'b'}" in
 utest lside s with rside s in
 
+-- TmConDef
+let s = "con Foo in x" in
+utest lside s with rside s in
+let s = "con Foo : Int -> Tree in x" in
+utest lside s with rside "con Foo in x" in
 
 ()
