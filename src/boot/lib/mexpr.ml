@@ -1523,6 +1523,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
 let rec eval_toplevel (env : (Symb.t * tm) list) = function
   | TmLet (_, _, s, _ty, t1, t2) ->
       eval_toplevel ((s, eval env t1) :: env) t2
+  | TmType (_, _, _, _, t1) ->
+      eval_toplevel env t1
   | TmRecLets (_, lst, t2) ->
       let rec env' =
         lazy
@@ -1540,5 +1542,19 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
       eval_toplevel (Lazy.force env') t2
   | TmCondef (_, _, _, _, t) ->
       eval_toplevel env t
-  | t ->
+  | ( TmVar _
+    | TmLam _
+    | TmClos _
+    | TmApp _
+    | TmConst _
+    | TmFix _
+    | TmSeq _
+    | TmRecord _
+    | TmRecordUpdate _
+    | TmConapp _
+    | TmMatch _
+    | TmUse _
+    | TmUtest _
+    | TmNever _
+    | TmRef _ ) as t ->
       (env, eval env t)
