@@ -151,7 +151,7 @@ let split_at_array (s : 'a array t) (idx : int) : 'a array t * 'a array t =
       | Leaf a ->
           let n = Array.length a in
           ( if i + n < idx then Array.blit a 0 lhs i n
-          else if not (i < idx) then Array.blit a 0 rhs (idx - i) (n - idx)
+          else if not (i < idx) then Array.blit a 0 rhs (i - idx) n
           else
             let lhs_copy_length = idx - i in
             Array.blit a 0 lhs i lhs_copy_length ;
@@ -179,7 +179,7 @@ let split_at_bigarray (s : ('a, 'b) ba t) (idx : int) :
           ( if i + n < idx then
             let dst = Array1.sub lhs i n in
             Array1.blit a dst
-          else if not (idx < i) then
+          else if not (i < idx) then
             let dst = Array1.sub rhs (i - idx) n in
             Array1.blit a dst
           else
