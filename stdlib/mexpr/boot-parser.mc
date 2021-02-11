@@ -120,7 +120,7 @@ lang BootParser = MExprAst
          matchPat t2 (bootParserGetId t2)
 
   sem matchPat (t:Unknown) =
-  | 400 /-PatNamed-/ -> strToPatName (gstr t 0) 
+  | 400 /-PatNamed-/ -> PNamed {ident = strToPatName (gstr t 0)}
   | 401 /-PatSeqTot-/ ->
     PSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0) }
   | 402 /-PatSeqEdge-/ ->
@@ -151,8 +151,8 @@ let idPatNot = 410
   sem ginfo = | t -> NoInfo()
 
   sem strToPatName =
-  | "" ->  PNamed {ident = PWildcard ()}
-  | x -> PNamed {ident = PName (nameNoSym x)}
+  | "" ->  PWildcard ()
+  | x -> PName (nameNoSym x)
 
 end
 

@@ -662,7 +662,7 @@ lang SeqEdgePatPrettyPrint = SeqEdgePat + PatNamePrettyPrint
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | PSeqEdge {prefix = pre, middle = patname, postfix = post} ->
     match _pprint_patseq getPatStringCode indent env pre with (env, pre) then
-    match getPatStringCode indent env patname with (env, pname) then
+    match _pprint_patname env patname with (env, pname) then
     match _pprint_patseq getPatStringCode indent env post with (env, post) then
       (env, join [pre, " ++ ", pname, " ++ ", post])
     else never else never else never
