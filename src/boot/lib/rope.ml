@@ -436,7 +436,7 @@ module Convert = struct
 
   let of_array_array (a : 'a array) : 'a array t = ref (Leaf a)
 
-  let of_int_array (a : int array) : int_ba t =
+  let of_array_int_bigarray (a : int array) : int_ba t =
     let n = Array.length a in
     let dst = uninit_bigarray Int n in
     for i = 0 to n - 1 do
@@ -444,7 +444,7 @@ module Convert = struct
     done ;
     ref (Leaf dst)
 
-  let of_float_array (a : float array) : float_ba t =
+  let of_array_float_bigarray (a : float array) : float_ba t =
     let n = Array.length a in
     let dst = uninit_bigarray Float64 n in
     for i = 0 to n - 1 do
@@ -461,10 +461,11 @@ module Convert = struct
   let of_list_array (l : 'a list) : 'a array t =
     of_array_array (Array.of_list l)
 
-  let of_int_list (l : int list) : int_ba t = of_int_array (Array.of_list l)
+  let of_list_int_bigarray (l : int list) : int_ba t =
+    of_array_int_bigarray (Array.of_list l)
 
-  let of_float_list (l : float list) : float_ba t =
-    of_float_array (Array.of_list l)
+  let of_list_float_bigarray (l : float list) : float_ba t =
+    of_array_float_bigarray (Array.of_list l)
 
   let to_ustring_array (s : int array t) : ustring =
     array2ustring (to_array_array s)
@@ -476,5 +477,16 @@ module Convert = struct
     of_array_array (ustring2array u)
 
   let of_ustring_bigarray (u : ustring) : int_ba t =
-    of_int_array (ustring2array u)
+    of_array_int_bigarray (ustring2array u)
+
+  let to_int_bigarray_bigarray (s : int_ba t) : int_ba = collapse_bigarray s
+
+  let to_int_bigarray_array (s : int array t) : int_ba =
+    collapse_bigarray (map_array_bigarray Int (fun x -> x) s)
+
+  let to_float_bigarray_bigarray (s : float_ba t) : float_ba =
+    collapse_bigarray s
+
+  let to_float_bigarray_array (s : float array t) : float_ba =
+    collapse_bigarray (map_array_bigarray Float64 (fun x -> x) s)
 end

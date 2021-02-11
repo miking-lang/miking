@@ -100,9 +100,9 @@ module Convert : sig
 
   val of_array_array : 'a array -> 'a array t
 
-  val of_int_array : int array -> int_ba t
+  val of_array_int_bigarray : int array -> int_ba t
 
-  val of_float_array : float array -> float_ba t
+  val of_array_float_bigarray : float array -> float_ba t
 
   val to_list_array : 'a array t -> 'a list
 
@@ -110,9 +110,9 @@ module Convert : sig
 
   val of_list_array : 'a list -> 'a array t
 
-  val of_int_list : int list -> int_ba t
+  val of_list_int_bigarray : int list -> int_ba t
 
-  val of_float_list : float list -> float_ba t
+  val of_list_float_bigarray : float list -> float_ba t
 
   val to_ustring_array : int array t -> ustring
 
@@ -121,4 +121,12 @@ module Convert : sig
   val of_ustring_array : ustring -> int array t
 
   val of_ustring_bigarray : ustring -> int_ba t
+
+  val to_int_bigarray_bigarray : int_ba t -> int_ba
+
+  val to_int_bigarray_array : int array t -> int_ba
+
+  val to_float_bigarray_bigarray : float_ba t -> float_ba
+
+  val to_float_bigarray_array : float array t -> float_ba
 end
