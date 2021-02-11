@@ -200,37 +200,49 @@ let sub_array (s : 'a array t) (from : int) (len : int) : 'a array t =
   let n = length_array s in
   if n = 0 then empty_array
   else
-    let len = if from + len < n then len else n - (from + len) in
     let dst = Array.make len (get_array s 0) in
     let rec fill s i =
       match s with
       | Leaf a ->
           let n = Array.length a in
-          let src_offset = if i < from then from - i else 0 in
-          let copy_len = min (n - src_offset) len in
-          Array.blit a src_offset dst i copy_len ;
+          let src_offset = max (from - i) 0 in
+          let dst_offset = max (i - from) 0 in
+          let copy_len = min (n - src_offset) (len - dst_offset) in
+          Array.blit a src_offset dst dst_offset copy_len ;
           i + n
       | Concat {lhs; rhs; _} ->
-          fill rhs (fill lhs i)
+          let n = _length_array lhs in
+          if i + n < from then
+            fill rhs (i + n)
+          else if from + len < i + n then
+            fill lhs i
+          else
+            fill rhs (fill lhs i)
     in
     let _ = fill !s 0 in
     ref (Leaf dst)
 
 let sub_bigarray (s : ('a, 'b) ba t) (from : int) (len : int) : ('a, 'b) ba t =
   let k = _bigarray_kind !s in
-  let n = length_bigarray s in
-  let len = if from + len < n then len else n - (from + len) in
   let dst = uninit_bigarray k len in
   let rec fill s i =
     match s with
     | Leaf a ->
         let n = Array1.dim a in
-        let src_offset = if i < from then from - i else 0 in
-        let copy_len = min (n - src_offset) len in
-        let dst_sub = Array1.sub dst i copy_len in
-        Array1.blit a dst_sub ; i + n
+        let src_offset = max (from - i) 0 in
+        let dst_offset = max (i - from) 0 in
+        let copy_len = min (n - src_offset) (len - dst_offset) in
+        let src_sub = Array1.sub a src_offset copy_len in
+        let dst_sub = Array1.sub dst dst_offset copy_len in
+        Array1.blit src_sub dst_sub ; i + n
     | Concat {lhs; rhs; _} ->
-        fill rhs (fill lhs i)
+        let n = _length_bigarray lhs in
+        if i + n < from then
+          fill rhs (i + n)
+        else if from + len < i + n then
+          fill lhs i
+        else
+          fill rhs (fill lhs i)
   in
   let _ = fill !s 0 in
   ref (Leaf dst)
