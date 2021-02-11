@@ -131,7 +131,18 @@ lang BootParser = MExprAst
   | 403 /-PatRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
      PRecord {bindings = seq2assoc {eq = eqString} lst}
-
+  | 404 /-PatCon-/ ->
+     PCon {ident = gname t 0, 
+           subpat = gpat t 0}
+  | 405 /-PatInt-/ ->     
+     PInt {val = gint t 0}
+  | 406 /-PatChar-/ ->     
+     PChar {val = int2char (gint t 0)}
+  | 407 /-PatBool-/ ->     
+     PBool {val = eqi (gint t 0) 1,
+            fi = ginfo t}
+     
+   
 
 
 /-
@@ -267,5 +278,21 @@ let s = "match x with {} then x else 2" in
 utest lside s with rside s in
 let s = "match x with {foo=x, bar=_} then x else 2" in
 utest lside s with rside s in
+
+--TmMatch, PatCon
+let s = "match x with Foo {foo = x} then x else 100" in
+utest lside s with rside s in
+
+
+--TmMatch, PatInt, PatBool, PatChar
+let s = "match x with [1,2,12] then x else x" in
+utest lside s with rside s in
+let s = "match x with 'A' then x else x" in
+utest lside s with rside s in
+let s = "match x with [true,false] then x else x" in
+utest lside s with rside s in
+
+--utest parseMExprString s with () in
+
 
 ()
