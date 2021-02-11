@@ -6,13 +6,13 @@ include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
+include "seq.mc"
 
 let gstr = lam t. lam n. bootParserGetString t n
 let gname = lam t. lam n. nameNoSym (bootParserGetString t n)
 let gint = lam t. lam n. bootParserGetInt t n
 let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
-
 
 let makeSeq = lam f. lam len.
   recursive
@@ -120,9 +120,16 @@ lang BootParser = MExprAst
          matchPat t2 (bootParserGetId t2)
 
   sem matchPat (t:Unknown) =
-  | 400 /-PatNamed-/ ->
-     match gstr t 0 with "" then PNamed {ident = PWildcard ()}
-     else PNamed {ident = PName (gname t 0)}
+  | 400 /-PatNamed-/ -> strToPatName (gstr t 0) 
+  | 401 /-PatSeqTot-/ ->
+    PSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0) }
+  | 402 /-PatSeqEdge-/ ->
+    let len = glistlen t 0 in
+    PSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
+              middle = strToPatName (gstr t 0),
+              postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1)}
+
+
 
 /-
 let idPatNamed = 400
@@ -142,6 +149,11 @@ let idPatNot = 410
   -- These functions are place holders.
   sem gtype (t:Unknown) = | n -> TyUnknown()
   sem ginfo = | t -> NoInfo()
+
+  sem strToPatName =
+  | "" ->  PNamed {ident = PWildcard ()}
+  | x -> PNamed {ident = PName (nameNoSym x)}
+
 end
 
 lang BootParserTest = BootParser + MExprPrettyPrint 
@@ -233,6 +245,12 @@ utest lside s with rside s in
 let s = "match 5 with x then x else 2" in
 utest lside s with rside s in
 let s = "match foo with _ then 7 else 2" in
+utest lside s with rside s in
+
+-- TmMatch, PatSeqTot, PatSeqEdge
+let s = "match x with [x,y,z] then x else 2" in
+utest lside s with rside s in
+let s = "match x with [a] ++ v ++ [x,y,z] then x else 2" in
 utest lside s with rside s in
 
 --parseMExprString

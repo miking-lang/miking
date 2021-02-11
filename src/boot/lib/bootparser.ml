@@ -78,19 +78,30 @@ let idCChar = 303
 
 (* Patterns *)
 let idPatNamed = 400
+
 let idPatSeqTot = 401
+
 let idPatSeqEdge = 402
+
 let idPatRecord = 403
+
 let idPatCon = 404
+
 let idPatInt = 405
+
 let idPatChar = 406
+
 let idPatBool = 407
+
 let idPatAnd = 408
+
 let idPatOr = 409
+
 let idPatNot = 410
 
-
 let sym = Symb.gensym ()
+
+let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
 let parseMExprString str = Parserutils.parse_mexpr_string str
 
@@ -138,13 +149,11 @@ let getData = function
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
   | PTreeTm (TmCondef (fi, x, _, ty, t)) ->
-     (idTmCondef, [fi], [], [ty], [t], [x], [], [], [], [])
+      (idTmCondef, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmConapp (fi, x, _, t)) ->
-     (idTmConapp, [fi], [],[], [t], [x], [], [], [], [])     
-  | PTreeTm (TmMatch (fi, t1, p, t2, t3)) -> 
-     (idTmMatch, [fi], [],[],[t1;t2;t3], [], [], [], [], [p])
-
-
+      (idTmConapp, [fi], [], [], [t], [x], [], [], [], [])
+  | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
+      (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
@@ -154,19 +163,26 @@ let getData = function
   | PTreeConst (CFloat v) ->
       (idCFloat, [], [], [], [], [], [], [v], [], [])
   | PTreeConst (CChar v) ->
-     (idCChar, [], [], [], [], [], [v], [], [], [])
-
+      (idCChar, [], [], [], [], [], [v], [], [], [])
   (* Patterns *)
-  | PTreePat (PatNamed(fi,NameStr(x,_))) ->
-     (idPatNamed, [fi] , [], [], [], [x], [],[],[],[])
-  | PTreePat (PatNamed(fi,NameWildcard)) ->
-     (idPatNamed, [fi] , [], [], [], [us""], [],[],[],[])
-
+  | PTreePat (PatNamed (fi, x)) ->
+      (idPatNamed, [fi], [], [], [], [patNameToStr x], [], [], [], [])
+  | PTreePat (PatSeqTot (fi, pats)) ->
+      let len = Mseq.length pats in
+      let ps = Mseq.Helpers.to_list pats in
+      (idPatSeqTot, [fi], [len], [], [], [], [], [], [], ps)
+  | PTreePat (PatSeqEdge (fi, pats1, px, pats2)) ->
+      let len1 = Mseq.length pats1 in
+      let ps1 = Mseq.Helpers.to_list pats1 in
+      let len2 = Mseq.length pats2 in
+      let ps2 = Mseq.Helpers.to_list pats2 in
+      let x = patNameToStr px in
+      (idPatSeqEdge, [fi], [len1; len2], [], [], [x], [], [], [], ps1 @ ps2)
   | _ ->
-      failwith "TODO"
+      failwith "TODO2"
 
 let getId t =
-  let id, _, _, _, _, _, _, _, _, _= getData t in
+  let id, _, _, _, _, _, _, _, _, _ = getData t in
   id
 
 let getTerm t n =
