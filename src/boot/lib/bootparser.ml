@@ -182,7 +182,7 @@ let getData = function
       let slst, plst = pats |> Record.bindings |> List.split in
       let len = List.length slst in
       (idPatRecord, [fi], [len], [], [], slst, [], [], [], plst)
-  | PTreePat (PatCon (fi, x,_,p)) ->
+  | PTreePat (PatCon (fi, x, _, p)) ->
       (idPatCon, [fi], [], [], [], [x], [], [], [], [p])
   | PTreePat (PatInt (fi, v)) ->
       (idPatInt, [fi], [], [], [], [], [v], [], [], [])
@@ -191,8 +191,7 @@ let getData = function
   | PTreePat (PatBool (fi, v)) ->
       let b = if v then 1 else 0 in
       (idPatBool, [fi], [], [], [], [], [b], [], [], [])
-    
-(*
+  (*
   (* Int pattern *)
   | PatInt of info * int
   (* Char pattern *)
@@ -206,7 +205,6 @@ let getData = function
   (* Not pattern *)
   | PatNot of info * pat
  *)
-
   | _ ->
       failwith "TODO2"
 
