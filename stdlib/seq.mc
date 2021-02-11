@@ -12,6 +12,22 @@ utest tail [2,4,8] with [4,8]
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
+let eqSeq = lam eq : (a -> a -> Bool).
+  recursive let work = lam as. lam bs.
+    let pair = (as, bs) in
+    match pair with ([], []) then true else
+    match pair with ([a] ++ as, [b] ++ bs) then
+      if eq a b then work as bs else false
+    else false
+  in work
+
+utest eqSeq eqi [] [] with true
+utest eqSeq eqi [1] [] with false
+utest eqSeq eqi [] [1] with false
+utest eqSeq eqi [1] [1] with true
+utest eqSeq eqi [1] [2] with false
+utest eqSeq eqi [2] [1] with false
+
 let slice = lam seq. lam off. lam cnt.
   let seq = (splitAt seq off).1 in
   let cnt = if gti cnt (length seq) then length seq else cnt in
