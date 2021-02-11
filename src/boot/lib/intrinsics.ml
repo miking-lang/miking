@@ -1,50 +1,50 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t = 'a Rope.t
+  type 'a t = 'a array Rope.t
 
-  let make n v = Rope.make n v
+  let make = Rope.make_array
 
-  let empty = Rope.empty
+  let empty = Rope.empty_array
 
-  let length = Rope.length
+  let length = Rope.length_array
 
-  let concat = Rope.concat
+  let concat = Rope.concat_array
 
-  let get = Rope.get
+  let get = Rope.get_array
 
-  let set = Rope.set
+  let set = Rope.set_array
 
-  let cons = Rope.cons
+  let cons = Rope.cons_array
 
-  let snoc = Rope.snoc
+  let snoc = Rope.snoc_array
 
-  let reverse = Rope.reverse
+  let reverse = Rope.reverse_array
 
-  let split_at = Rope.split_at
+  let split_at = Rope.split_at_array
 
   module Helpers = struct
-    let of_list = Rope.Convert.of_list
+    let of_list = Rope.Convert.of_list_array
 
-    let to_list = Rope.Convert.to_list
+    let to_list = Rope.Convert.to_list_array
 
-    let of_array = Rope.Convert.of_array
+    let of_array = Rope.Convert.of_array_array
 
-    let to_array = Rope.Convert.to_array
+    let to_array = Rope.Convert.to_array_array
 
-    let of_ustring = Rope.Convert.of_ustring
+    let of_ustring = Rope.Convert.of_ustring_array
 
-    let to_ustring = Rope.Convert.to_ustring
+    let to_ustring = Rope.Convert.to_ustring_array
 
-    let equal = Rope.equal
+    let equal = Rope.equal_array
 
-    let map = Rope.map
+    let map = Rope.map_array_array
 
-    let fold_right = Rope.foldr
+    let fold_right = Rope.foldr_array
 
-    let combine = Rope.combine
+    let combine = Rope.combine_array_array
 
-    let fold_right2 = Rope.foldr2
+    let fold_right2 = Rope.foldr2_array
   end
 end
 
