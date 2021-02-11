@@ -178,6 +178,30 @@ let getData = function
       let ps2 = Mseq.Helpers.to_list pats2 in
       let x = patNameToStr px in
       (idPatSeqEdge, [fi], [len1; len2], [], [], [x], [], [], [], ps1 @ ps2)
+  | PTreePat (PatRecord (fi, pats)) ->
+      let slst, plst = pats |> Record.bindings |> List.split in
+      let len = List.length slst in
+      (idPatRecord, [fi], [len], [], [], slst, [], [], [], plst)
+  
+(*
+  (* Record pattern *)
+  | PatRecord of info * pat Record.t
+  (* Constructor pattern *)
+  | PatCon of info * ustring * Symb.t * pat
+  (* Int pattern *)
+  | PatInt of info * int
+  (* Char pattern *)
+  | PatChar of info * int
+  (* Boolean pattern *)
+  | PatBool of info * bool
+  (* And pattern *)
+  | PatAnd of info * pat * pat
+  (* Or pattern *)
+  | PatOr of info * pat * pat
+  (* Not pattern *)
+  | PatNot of info * pat
+ *)
+
   | _ ->
       failwith "TODO2"
 

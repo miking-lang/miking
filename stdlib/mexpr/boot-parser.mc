@@ -128,6 +128,9 @@ lang BootParser = MExprAst
     PSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
               middle = strToPatName (gstr t 0),
               postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1)}
+  | 403 /-PatRecord-/ ->
+     let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
+     PRecord {bindings = seq2assoc {eq = eqString} lst}
 
 
 
@@ -248,11 +251,21 @@ let s = "match foo with _ then 7 else 2" in
 utest lside s with rside s in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
+let s = "match x with \"\" then x else 2" in
+utest lside s with rside s in
 let s = "match x with [x,y,z] then x else 2" in
 utest lside s with rside s in
 let s = "match x with [a] ++ v ++ [x,y,z] then x else 2" in
 utest lside s with rside s in
+let s = "match x with \"\" ++ x ++ [y] then x else x" in
+utest lside s with rside s in
+let s = "match x with [z] ++ x ++ \"\" then z else 2" in
+utest lside s with rside s in
 
---parseMExprString
+--TmMatch, PatRecord
+let s = "match x with {} then x else 2" in
+utest lside s with rside s in
+let s = "match x with {foo=x, bar=_} then x else 2" in
+utest lside s with rside s in
 
 ()
