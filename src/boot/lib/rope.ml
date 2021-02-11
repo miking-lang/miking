@@ -52,7 +52,7 @@ let rec _get_array (s : 'a array u) (i : int) : 'a =
       a.(i)
   | Concat {lhs; rhs; _} ->
       let n = _length_array lhs in
-      if i < n then _get_array lhs i else _get_array rhs (n - i)
+      if i < n then _get_array lhs i else _get_array rhs (i - n)
 
 let get_array (s : 'a array t) (i : int) : 'a = _get_array !s i
 
@@ -62,7 +62,7 @@ let rec _get_bigarray (s : ('a, 'b) ba u) (i : int) : 'a =
       Array1.unsafe_get a i
   | Concat {lhs; rhs; _} ->
       let n = _length_bigarray lhs in
-      if i < n then _get_bigarray lhs i else _get_bigarray rhs (n - i)
+      if i < n then _get_bigarray lhs i else _get_bigarray rhs (i - n)
 
 let get_bigarray (s : ('a, 'b) ba t) (i : int) : 'a = _get_bigarray !s i
 
