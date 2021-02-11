@@ -236,9 +236,7 @@ let basic =
   bind_ (ulet_ "f" (ulam_ "x" (var_ "x")))
   (addi_ (addi_ (int_ 2) (int_ 2))
     (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))) in
-
-utest _anf basic
-with
+utest _anf basic with
   bindall_ [
     ulet_ "f" (ulam_ "x" (var_ "x")),
     ulet_ "t" (addi_ (int_ 2) (int_ 2)),
@@ -249,7 +247,6 @@ with
   ]
 using eqExpr in
 
--- TODO(dlunde,2020-10-21): Convert below to proper utests (as for basic above)
 
 let ext =
   bindall_
@@ -257,9 +254,7 @@ let ext =
      ulet_ "x" (int_ 3),
      (addi_ (addi_ (int_ 2) (var_ "x")))
        (bind_ (ulet_ "x" (int_ 1)) (app_ (var_ "f") (var_ "x")))] in
-
-utest _anf ext
-with
+utest _anf ext with
   bindall_ [
     ulet_ "f" (ulam_ "x" (var_ "x")),
     ulet_ "x1" (int_ 3),
@@ -267,7 +262,7 @@ with
     ulet_ "x2" (int_ 1),
     ulet_ "t1" (app_ (var_ "f") (var_ "x2")),
     ulet_ "t2" (addi_ (var_ "t") (var_ "t1")),
-    (var_ "t2")
+    var_ "t2"
   ]
 using eqExpr in
 
@@ -276,10 +271,32 @@ let lambda =
     (ulam_ "x" (bind_ (ulet_ "y" (int_ 3)) (addi_ (var_ "x") (var_ "y"))))
     (int_ 4)
 in
+utest _anf lambda with
+  bindall_ [
+    ulet_ "t"
+      (app_
+        (ulam_ "x" (bindall_ [
+          (ulet_ "y" (int_ 3)),
+          (ulet_ "t1" (addi_ (var_ "x") (var_ "y"))),
+          (var_ "t1")
+        ]))
+        (int_ 4)),
+    var_ "t"
+  ]
+using eqExpr in
 
 let apps =
   app_ (app_ (int_ 1) (app_ (int_ 2) (int_ 3))) (app_ (int_ 4) (app_ (int_ 5) (int_ 6)))
 in
+utest _anf apps with
+  bindall_ [
+    ulet_ "x"  (app_ (int_ 2) (int_ 3)),
+    ulet_ "x1" (app_ (int_ 5) (int_ 6)),
+    ulet_ "x2" (app_ (int_ 4) (var_ "x1")),
+    ulet_ "x3" (app_ (app_ (int_ 1) (var_ "x")) (var_ "x2")),
+    var_ "x3"
+  ]
+using eqExpr in
 
 let record =
   record_ [
@@ -288,9 +305,37 @@ let record =
     ("c", (app_ (int_ 5) (int_ 6)))
   ]
 in
+utest _anf record with
+  bindall_ [
+    ulet_ "t" (app_ (int_ 2) (int_ 3)),
+    ulet_ "t1" (app_ (int_ 1) (var_ "t")),
+    ulet_ "t2" (app_ (int_ 5) (int_ 6)),
+    ulet_ "t3" (record_ [
+      ("a", var_ "t1"),
+      ("b", int_ 4),
+      ("c", var_ "t2")
+    ]),
+    var_ "t3"
+  ]
+using eqExpr in
+
 
 let rupdate =
   recordupdate_ record "b" (int_ 7) in
+utest _anf rupdate with
+  bindall_ [
+    ulet_ "t" (app_ (int_ 2) (int_ 3)),
+    ulet_ "t1" (app_ (int_ 1) (var_ "t")),
+    ulet_ "t2" (app_ (int_ 5) (int_ 6)),
+    ulet_ "t3" (record_ [
+      ("a", var_ "t1"),
+      ("b", int_ 4),
+      ("c", var_ "t2")
+    ]),
+    ulet_ "t4" (recordupdate_ (var_ "t3") "b" (int_ 7)),
+    var_ "t4"
+  ]
+using eqExpr in
 
 let factorial =
   ureclet_ "fact"
@@ -299,10 +344,41 @@ let factorial =
         (int_ 1)
         (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))))
 in
+utest _anf factorial with
+  bindall_ [
+    ureclet_ "fact"
+      (ulam_ "n" (bindall_ [
+        ulet_ "t" (eqi_ (var_ "n") (int_ 0)),
+        ulet_ "t1" (if_ (var_ "t")
+          (int_ 1)
+          (bindall_ [
+            ulet_ "t2" (subi_ (var_ "n") (int_ 1)),
+            ulet_ "t3" (app_ (var_ "fact") (var_ "t2")),
+            ulet_ "t4" (muli_ (var_ "n") (var_ "t3")),
+            var_ "t4"
+          ])
+        ),
+        var_ "t1"
+      ])),
+    ulet_ "t5" unit_,
+    var_ "t5"
+  ]
+using eqExpr in
 
 let const = (int_ 1) in
+utest _anf const with
+  (int_ 1)
+using eqExpr in
 
 let data = bind_ (ucondef_ "A") (conapp_ "A" (app_ (int_ 1) (int_ 2))) in
+utest _anf data with
+  bindall_ [
+    (ucondef_ "A"),
+    ulet_ "t" (app_ (int_ 1) (int_ 2)),
+    ulet_ "t1" (conapp_ "A" (var_ "t")),
+    var_ "t1"
+  ]
+using eqExpr in
 
 let seq =
   seq_ [
@@ -311,24 +387,46 @@ let seq =
     (app_ (int_ 5) (int_ 6))
   ]
 in
+utest _anf seq with
+  bindall_ [
+    ulet_ "t" (app_ (int_ 5) (int_ 6)),
+    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
+    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
+    ulet_ "t3" (seq_ [var_ "t2", (int_ 4), var_ "t"]),
+    var_ "t3"
+  ]
+using eqExpr in
 
 let smatch = if_ (app_ (int_ 1) (int_ 2)) (int_ 3) (int_ 4) in
+utest _anf smatch with
+  bindall_ [
+    ulet_ "t" (app_ (int_ 1) (int_ 2)),
+    ulet_ "t1" (if_ (var_ "t") (int_ 3) (int_ 4)),
+    var_ "t1"
+  ]
+using eqExpr in
 
 let simple = bind_ (ulet_ "x" (int_ 1)) (var_ "x") in
+utest _anf simple with simple using eqExpr in
 
 let simple2 = app_ (int_ 1) simple in
+utest _anf simple2 with
+  bindall_ [
+    ulet_ "x" (int_ 1),
+    ulet_ "t" (app_ (int_ 1) (var_ "x")),
+    var_ "t"
+  ]
+using eqExpr in
 
 let inv1 = bind_ (ulet_ "x" (app_ (int_ 1) (int_ 2))) (var_ "x") in
-
 utest _anf inv1 with inv1 using eqExpr in
 
 
 let debug = false in
 
 let debugPrint = lam t.
-  let s = symbolize t in
-  let n = normalizeTerm s in
-  if debug then
+    let s = symbolize t in
+    let n = normalizeTerm s in
     let _ = printLn "--- BEFORE ANF ---" in
     let _ = printLn (expr2str s) in
     let _ = print "\n" in
@@ -336,23 +434,22 @@ let debugPrint = lam t.
     let _ = printLn (expr2str n) in
     let _ = print "\n" in
     ()
-  else () in
-
-let _ =
-  map debugPrint [
-     basic,
-     ext,
-     lambda,
-     apps,
-     record,
-     rupdate,
-     factorial,
-     const,
-     data,
-     seq,
-     smatch,
-     simple,
-     simple2
-   ]
 in
-()
+
+if debug then
+  map debugPrint [
+    basic,
+    ext,
+    lambda,
+    apps,
+    record,
+    rupdate,
+    factorial,
+    const,
+    data,
+    seq,
+    smatch,
+    simple,
+    simple2
+  ]
+else ()
