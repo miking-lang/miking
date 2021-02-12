@@ -38,7 +38,6 @@ let idTmUtest = 113
 
 let idTmNever = 114
 
-
 (* Types *)
 let idTyUnknown = 200
 
@@ -149,14 +148,14 @@ let getData = function
       (idTmConapp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
-  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3 )) ->
-     (match t4_op with
-      | Some t4 ->  (idTmUtest, [fi], [4], [], [t1;t2;t3;t4], [], [], [], [], [])
-      | None ->  (idTmUtest, [fi], [3], [], [t1;t2;t3], [], [], [], [], []))
-
-
-
-  (* Unit testing *)
+  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (
+    match t4_op with
+    | Some t4 ->
+        (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [])
+    | None ->
+        (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
+  | PTreeTm (TmNever fi) ->
+      (idTmNever, [fi], [], [], [], [], [], [], [], [])
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
@@ -201,7 +200,7 @@ let getData = function
   | PTreePat (PatNot (fi, p)) ->
       (idPatNot, [fi], [], [], [], [], [], [], [], [p])
   | _ ->
-      failwith "TODO"
+      failwith "The AST node is unknown"
 
 let getId t =
   let id, _, _, _, _, _, _, _, _, _ = getData t in

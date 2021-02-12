@@ -230,7 +230,6 @@ and tm =
   (* Reference *)
   | TmRef of info * tm ref
 
-
 (* Kind of pattern name *)
 and patName =
   | NameStr of ustring * Symb.t (* A normal pattern name *)

@@ -28,16 +28,6 @@ lang BootParser = MExprAst
     let t = bootParserParseMExprString str in
     matchTerm t (bootParserGetId t)
 
-  sem gconst(t:Unkown) =
-  | n -> let t2 = bootParserGetConst t n in
-         matchConst t2 (bootParserGetId t2)
-
-  sem matchConst (t:Unknown) =
-  | 300 /-CBool-/  -> CBool {val = eqi (gint t 0) 1 }
-  | 301 /-CInt-/   -> CInt {val = gint t 0 } 
-  | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
-  | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
-
   sem gterm (t:Unkown) =
   | n -> let t2 = bootParserGetTerm t n in
          matchTerm t2 (bootParserGetId t2)
@@ -119,8 +109,22 @@ lang BootParser = MExprAst
               expected = gterm t 1,
               next = gterm t 2,  
               ty = TyUnknown()}
+  | 114 /-TmNever-/ ->
+     TmNever {ty = TyUnknown(),
+              fi = ginfo t}
 
-  
+
+  sem gconst(t:Unkown) =
+  | n -> let t2 = bootParserGetConst t n in
+         matchConst t2 (bootParserGetId t2)
+
+  sem matchConst (t:Unknown) =
+  | 300 /-CBool-/  -> CBool {val = eqi (gint t 0) 1 }
+  | 301 /-CInt-/   -> CInt {val = gint t 0 } 
+  | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
+  | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
+
+
   sem gpat (t:Unkown) =
   | n -> let t2 = bootParserGetPat t n in
          matchPat t2 (bootParserGetId t2)
@@ -302,8 +306,8 @@ utest lside s with rside s in
 let s = "utest lam x.x with 4 in 0" in
 utest lside s with rside s in
 
-
---utest parseMExprString s with () in
-
+-- TmNever
+let s = "never" in
+utest lside s with rside s in
 
 ()
