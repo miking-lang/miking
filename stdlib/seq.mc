@@ -53,6 +53,28 @@ utest mapi (lam i. lam x. i) [] with []
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
 utest map (lam x. addi x 1) [] with []
 
+let mapOption
+  : (a -> Option b)
+  -> [a]
+  -> [b]
+  = lam f.
+    recursive let work = lam as.
+      match as with [a] ++ as then
+        match f a with Some b
+        then cons b (work as)
+        else work as
+      else []
+    in work
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2, 3, 4, 5, 6]
+with [34, 35, 36]
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2]
+with []
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
+with []
+
 -- Folds
 recursive
   let foldl = lam f. lam acc. lam seq.
