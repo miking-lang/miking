@@ -215,12 +215,13 @@ and tm =
   | TmConapp of info * ustring * Symb.t * tm
   (* Match data *)
   | TmMatch of info * tm * pat * tm * tm
-  (* Use a language *)
-  | TmUse of info * ustring * tm
   (* Unit testing *)
   | TmUtest of info * tm * tm * tm option * tm
   (* Never term *)
   | TmNever of info
+  (* -- The following term is removed during MLang desugaring *)
+  (* Use a language *)
+  | TmUse of info * ustring * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
@@ -228,6 +229,7 @@ and tm =
   | TmFix of info
   (* Reference *)
   | TmRef of info * tm ref
+
 
 (* Kind of pattern name *)
 and patName =

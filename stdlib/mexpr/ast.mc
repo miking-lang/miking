@@ -261,8 +261,8 @@ lang UtestAst
   syn Expr =
   | TmUtest {test     : Expr,
              expected : Expr,
-             next     : Expr,
-             ty       : Type}
+             next     : Expr,   
+             ty       : Type} 
 
   sem ty =
   | TmUtest t -> t.ty

@@ -34,15 +34,10 @@ let idTmConapp = 111
 
 let idTmMatch = 112
 
-let idTmUse = 113
+let idTmUtest = 113
 
-let idTmUtest = 114
+let idTmNever = 114
 
-let idTmNever = 115
-
-let idTmClos = 116
-
-let idTmFix = 117
 
 (* Types *)
 let idTyUnknown = 200
@@ -154,6 +149,14 @@ let getData = function
       (idTmConapp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
+  | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3 )) ->
+     (match t4_op with
+      | Some t4 ->  (idTmUtest, [fi], [4], [], [t1;t2;t3;t4], [], [], [], [], [])
+      | None ->  (idTmUtest, [fi], [3], [], [t1;t2;t3], [], [], [], [], []))
+
+
+
+  (* Unit testing *)
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in

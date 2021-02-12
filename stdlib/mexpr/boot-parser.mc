@@ -114,6 +114,12 @@ lang BootParser = MExprAst
               els = gterm t 2,
               ty = TyUnknown(),
               fi = ginfo t}
+  | 113 /-TmUtest-/ ->
+     TmUtest {test = gterm t 0,
+              expected = gterm t 1,
+              next = gterm t 2,  
+              ty = TyUnknown()}
+
   
   sem gpat (t:Unkown) =
   | n -> let t2 = bootParserGetPat t n in
@@ -150,23 +156,6 @@ lang BootParser = MExprAst
   | 410 /-PatNot-/ ->     
      PNot {subpat = gpat t 0}
        
-   
-
-
-/-
-let idPatNamed = 400
-let idPatSeqTot = 401
-let idPatSeqEdge = 402
-let idPatRecord = 403
-let idPatCon = 404
-let idPatInt = 405
-let idPatChar = 406
-let idPatBool = 407
-let idPatAnd = 408
-let idPatOr = 409
-let idPatNot = 410
--/
-
   -- Functions for transferring types and info are not yet implemented.  
   -- These functions are place holders.
   sem gtype (t:Unknown) = | n -> TyUnknown()
@@ -307,6 +296,10 @@ utest lside s with rside s in
 let s = "match x with !y then x else x" in
 utest lside s with rside s in
 let s = "match 1 with (a & b) | (!c) then x else x" in
+utest lside s with rside s in
+
+-- TmUtest
+let s = "utest lam x.x with 4 in 0" in
 utest lside s with rside s in
 
 
