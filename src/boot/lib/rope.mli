@@ -17,7 +17,9 @@ val make_float_bigarray : int -> float -> (float, float64_elt) ba t
 
 val empty_array : 'a array t
 
-val empty_bigarray : ('a, 'b) kind -> ('a, 'b) ba t
+val empty_int_bigarray : int_ba t
+
+val empty_float_bigarray : float_ba t
 
 val length_array : 'a array t -> int
 
