@@ -40,9 +40,9 @@ module Record = Map.Make (Ustring)
 type env = (Symb.t * tm) list
 
 and const =
-  (* MCore intrinsic: Boolean constant and operations. See test/mexpr/bool.mc *)
+  (* MCore intrinsics: Booleans *)
   | CBool of bool
-  (* MCore intrinsic: Integer constant and operations *)
+  (* MCore intrinsics: Integers *)
   | CInt of int
   | Caddi of int option
   | Csubi of int option
@@ -60,7 +60,7 @@ and const =
   | Csrli of int option
   | Csrai of int option
   | Carity
-  (* MCore intrinsic: Floating-point number constant and operations *)
+  (* MCore intrinsics: Floating-point numbers *)
   | CFloat of float
   | Caddf of float option
   | Csubf of float option
@@ -78,12 +78,12 @@ and const =
   | Croundfi
   | Cint2float
   | Cstring2float
-  (* MCore intrinsic: characters *)
+  (* MCore intrinsics: Characters *)
   | CChar of int
   | Ceqc of int option
   | Cchar2int
   | Cint2char
-  (* MCore intrinsic: sequences *)
+  (* MCore intrinsics: Sequences *)
   | CmakeSeq of int option
   | Clength
   | Cconcat of tm Mseq.t option
@@ -93,13 +93,13 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
-  (* MCore intrinsic: random numbers *)
+  (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
   | CrandSetSeed
-  (* MCore intrinsic: time *)
+  (* MCore intrinsics: Time *)
   | CwallTimeMs
   | CsleepMs
-  (* MCore debug and I/O intrinsics *)
+  (* MCore intrinsics: Debug and I/O *)
   | Cprint
   | Cdprint
   | CreadLine
@@ -110,16 +110,16 @@ and const =
   | CdeleteFile
   | Cerror
   | Cexit
-  (* MCore Symbols *)
+  (* MCore intrinsics: Symbols *)
   | CSymb of Symb.t
   | Cgensym
   | Ceqsym of Symb.t option
   | Csym2hash
-  (* MCore references *)
+  (* MCore intrinsics: References *)
   | Cref
   | CmodRef of tm ref option
   | CdeRef
-  (* Map intrinsics *)
+  (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of (tm -> tm -> int) * Obj.t
   | CmapEmpty
@@ -130,10 +130,28 @@ and const =
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
-  (* External functions TODO(?,?): Should not be part of core language *)
+  (* MCore intrinsics: Boot parser *)
+  | CbootParserTree of ptree
+  | CbootParserParseMExprString
+  | CbootParserGetId
+  | CbootParserGetTerm of tm option
+  | CbootParserGetString of tm option
+  | CbootParserGetInt of tm option
+  | CbootParserGetFloat of tm option
+  | CbootParserGetListLength of tm option
+  | CbootParserGetConst of tm option
+  | CbootParserGetPat of tm option
+  (* External functions *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
+
+(* Parser tree. Used by the boot parser intrinsics *)
+and ptree =
+  | PTreeTm of tm
+  | PTreeTy of ty
+  | PTreePat of pat
+  | PTreeConst of const
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty
@@ -197,13 +215,15 @@ and tm =
   | TmConapp of info * ustring * Symb.t * tm
   (* Match data *)
   | TmMatch of info * tm * pat * tm * tm
-  (* Use a language *)
-  | TmUse of info * ustring * tm
   (* Unit testing *)
   | TmUtest of info * tm * tm * tm option * tm
   (* Never term *)
   | TmNever of info
-  (* Only part of the runtime system *)
+  (* -- The following term is removed during MLang desugaring *)
+  (* Use a language *)
+  | TmUse of info * ustring * tm
+  (* -- The rest is ONLY part of the runtime system *)
+  (* Closure *)
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
   (* Fix point *)
   | TmFix of info

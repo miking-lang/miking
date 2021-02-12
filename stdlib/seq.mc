@@ -1,5 +1,5 @@
-include "bool.mc"
 include "option.mc"
+include "bool.mc"
 
 let null = lam seq. eqi 0 (length seq)
 let head = lam seq. get (splitAt seq 1).0 0
@@ -305,3 +305,7 @@ utest isSuffix eqi [2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
+
+
+
+
