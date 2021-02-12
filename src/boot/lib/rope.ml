@@ -349,7 +349,7 @@ let reverse_bigarray (s : ('a, 'b) ba t) : ('a, 'b) ba t =
 let combine_array_array (l : 'a array t) (r : 'b array t) : ('a * 'b) array t =
   let ln = length_array l in
   let rn = length_array r in
-  if ln != rn then failwith "combine: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.combine")
   else
     let a1, a2 = (_collapse_array l, _collapse_array r) in
     ref (Leaf (Array.map2 (fun x y -> (x, y)) a1 a2))
@@ -358,7 +358,7 @@ let combine_array_bigarray (l : 'a array t) (r : ('b, 'c) ba t) :
     ('a * 'b) array t =
   let ln = length_array l in
   let rn = length_bigarray r in
-  if ln != rn then failwith "combine: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.combine")
   else if ln = 0 then empty_array
   else
     let a1, a2 = (_collapse_array l, _collapse_bigarray r) in
@@ -372,7 +372,7 @@ let combine_bigarray_array (l : ('a, 'c) ba t) (r : 'b array t) :
     ('a * 'b) array t =
   let ln = length_bigarray l in
   let rn = length_array r in
-  if ln != rn then failwith "combine: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.combine")
   else if ln = 0 then empty_array
   else
     let a1, a2 = (_collapse_bigarray l, _collapse_array r) in
@@ -386,7 +386,7 @@ let combine_bigarray_bigarray (l : ('a, 'c) ba t) (r : ('b, 'd) ba t) :
     ('a * 'b) array t =
   let ln = length_bigarray l in
   let rn = length_bigarray r in
-  if ln != rn then failwith "combine: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.combine")
   else if ln = 0 then empty_array
   else
     let a1, a2 = (_collapse_bigarray l, _collapse_bigarray r) in
@@ -400,7 +400,7 @@ let equal_array (f : 'a -> 'a -> bool) (l : 'a array t) (r : 'a array t) : bool
     =
   let ln = length_array l in
   let rn = length_array r in
-  if ln != rn then failwith "equal: sequences of different length"
+  if ln != rn then false
   else
     let a1, a2 = (_collapse_array l, _collapse_array r) in
     let r = ref true in
@@ -411,7 +411,7 @@ let equal_bigarray (f : 'a -> 'a -> bool) (l : ('a, 'b) ba t)
     (r : ('a, 'b) ba t) : bool =
   let ln = length_bigarray l in
   let rn = length_bigarray r in
-  if ln != rn then failwith "equal: sequences of different length"
+  if ln != rn then false
   else
     let a1, a2 = (_collapse_bigarray l, _collapse_bigarray r) in
     let r = ref true in
@@ -438,7 +438,7 @@ let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a array t) (r : 'b array t)
     (acc : 'c) : 'c =
   let ln = length_array l in
   let rn = length_array r in
-  if ln != rn then failwith "foldr2: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.foldr2")
   else
     let a1, a2 = (_collapse_array l, _collapse_array r) in
     let r = ref acc in
@@ -451,7 +451,7 @@ let foldr2_bigarray (f : 'a -> 'b -> 'c -> 'c) (l : ('a, 'd) ba t)
     (r : ('b, 'e) ba t) (acc : 'c) : 'c =
   let ln = length_bigarray l in
   let rn = length_bigarray r in
-  if ln != rn then failwith "foldr2: sequences of different length"
+  if ln != rn then raise (Invalid_argument "Rope.foldr2")
   else
     let a1, a2 = (_collapse_bigarray l, _collapse_bigarray r) in
     let r = ref acc in
@@ -519,14 +519,14 @@ module Convert = struct
   let of_ustring_bigarray (u : ustring) : int_ba t =
     of_array_int_bigarray (ustring2array u)
 
-  let to_int_bigarray_bigarray (s : int_ba t) : int_ba = _collapse_bigarray s
-
   let to_int_bigarray_array (s : int array t) : int_ba =
     _collapse_bigarray (map_array_bigarray Int (fun x -> x) s)
 
-  let to_float_bigarray_bigarray (s : float_ba t) : float_ba =
-    _collapse_bigarray s
+  let to_int_bigarray_bigarray (s : int_ba t) : int_ba = _collapse_bigarray s
 
   let to_float_bigarray_array (s : float array t) : float_ba =
     _collapse_bigarray (map_array_bigarray Float64 (fun x -> x) s)
+
+  let to_float_bigarray_bigarray (s : float_ba t) : float_ba =
+    _collapse_bigarray s
 end
