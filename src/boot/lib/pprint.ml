@@ -389,6 +389,29 @@ let rec print_const fmt = function
       fprintf fmt "mapMapWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  (* MCore intrinsics: Tensors *)
+  | CTensor _ ->
+      fprintf fmt "tensor"
+  | CtensorCreate _ ->
+      fprintf fmt "tensorCreate"
+  | CtensorGetExn _ ->
+      fprintf fmt "tensorGetExn"
+  | CtensorSetExn _ ->
+      fprintf fmt "tensorSetExn"
+  | CtensorRank ->
+      fprintf fmt "tensorRank"
+  | CtensorShape ->
+      fprintf fmt "tensorShape"
+  | CtensorCopyExn _ ->
+      fprintf fmt "tensorCopyExn"
+  | CtensorReshapeExn _ ->
+      fprintf fmt "tensorReshapeExn"
+  | CtensorSliceExn _ ->
+      fprintf fmt "tensorSliceExn"
+  | CtensorSubExn _ ->
+      fprintf fmt "tensorSubExn"
+  | CtensorIteri _ ->
+      fprintf fmt "tensorIteri"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"

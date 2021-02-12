@@ -48,6 +48,19 @@ module Mseq = struct
   end
 end
 
+module T = struct
+  type 'a t =
+    | Int of (int, Tensor.Num.int_elt) Tensor.Num.t
+    | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
+    | NoNum of 'a Tensor.NoNum.t
+
+  let int t = Int t
+
+  let float t = Float t
+
+  let no_num t = NoNum t
+end
+
 module Symb = struct
   type t = int
 

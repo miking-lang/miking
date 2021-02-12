@@ -49,6 +49,19 @@ module Mseq : sig
   end
 end
 
+module T : sig
+  type 'a t =
+    | Int of (int, Tensor.Num.int_elt) Tensor.Num.t
+    | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
+    | NoNum of 'a Tensor.NoNum.t
+
+  val int : (int, Tensor.Num.int_elt) Tensor.Num.t -> 'a t
+
+  val float : (float, Tensor.Num.float_elt) Tensor.Num.t -> 'a t
+
+  val no_num : 'a Tensor.NoNum.t -> 'a t
+end
+
 module Symb : sig
   type t
 
