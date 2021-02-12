@@ -148,7 +148,7 @@ lang BootParser = MExprAst
      POr {lpat = gpat t 0,
            rpat = gpat t 1}
   | 410 /-PatNot-/ ->     
-     PNot {lpat = gpat t 0}
+     PNot {subpat = gpat t 0}
        
    
 
@@ -303,6 +303,10 @@ utest lside s with rside s in
 let s = "match x with 1 & x then x else x" in
 utest lside s with rside s in
 let s = "match x with 1 | x then x else x" in
+utest lside s with rside s in
+let s = "match x with !y then x else x" in
+utest lside s with rside s in
+let s = "match 1 with (a & b) | (!c) then x else x" in
 utest lside s with rside s in
 
 
