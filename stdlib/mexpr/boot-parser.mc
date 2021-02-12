@@ -141,7 +141,15 @@ lang BootParser = MExprAst
   | 407 /-PatBool-/ ->     
      PBool {val = eqi (gint t 0) 1,
             fi = ginfo t}
-     
+  | 408 /-PatAnd-/ ->     
+     PAnd {lpat = gpat t 0,
+           rpat = gpat t 1}
+  | 409 /-PatOr-/ ->     
+     POr {lpat = gpat t 0,
+           rpat = gpat t 1}
+  | 410 /-PatNot-/ ->     
+     PNot {lpat = gpat t 0}
+       
    
 
 
@@ -283,7 +291,6 @@ utest lside s with rside s in
 let s = "match x with Foo {foo = x} then x else 100" in
 utest lside s with rside s in
 
-
 --TmMatch, PatInt, PatBool, PatChar
 let s = "match x with [1,2,12] then x else x" in
 utest lside s with rside s in
@@ -291,6 +298,11 @@ let s = "match x with 'A' then x else x" in
 utest lside s with rside s in
 let s = "match x with [true,false] then x else x" in
 utest lside s with rside s in
+
+-- TmMatch, PatAnd, PatOr, PatNot
+let s = "match x with 1 & x then x else x" in
+utest lside s with rside s in
+
 
 --utest parseMExprString s with () in
 

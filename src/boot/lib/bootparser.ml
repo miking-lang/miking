@@ -191,22 +191,14 @@ let getData = function
   | PTreePat (PatBool (fi, v)) ->
       let b = if v then 1 else 0 in
       (idPatBool, [fi], [], [], [], [], [b], [], [], [])
-  (*
-  (* Int pattern *)
-  | PatInt of info * int
-  (* Char pattern *)
-  | PatChar of info * int
-  (* Boolean pattern *)
-  | PatBool of info * bool
-  (* And pattern *)
-  | PatAnd of info * pat * pat
-  (* Or pattern *)
-  | PatOr of info * pat * pat
-  (* Not pattern *)
-  | PatNot of info * pat
- *)
+  | PTreePat (PatAnd (fi, p1, p2)) ->
+      (idPatAnd, [fi], [], [], [], [], [], [], [], [p1; p2])
+  | PTreePat (PatOr (fi, p1, p2)) ->
+      (idPatOr, [fi], [], [], [], [], [], [], [], [p1; p2])
+  | PTreePat (PatNot (fi, p)) ->
+      (idPatNot, [fi], [], [], [], [], [], [], [], [p])
   | _ ->
-      failwith "TODO2"
+      failwith "TODO"
 
 let getId t =
   let id, _, _, _, _, _, _, _, _, _ = getData t in
