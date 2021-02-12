@@ -1,6 +1,6 @@
--- Alpha equivalence for MExpr terms. Supports both non-symbolized and
--- symbolized terms (including partially symbolized terms). Also supports terms
--- with unbound (free) variables and constructors.
+-- Alpha equivalence for MExpr terms and types. Supports both non-symbolized
+-- and symbolized terms (including partially symbolized terms). Also supports
+-- terms with unbound (free) variables and constructors.
 
 include "name.mc"
 include "bool.mc"
