@@ -329,27 +329,22 @@ let foldl_bigarray (f : 'a -> 'b -> 'a) (acc : 'a) (s : ('b, 'c) ba t) : 'a =
   !r
 
 let reverse_array (s : 'a array t) : 'a array t =
-  let n = length_array s in
-  if n < 2 then s
-  else
-    let a = _collapse_array s in
-    let a' = Array.copy a in
-    let n = Array.length a' in
-    for i = 0 to n - 1 do
-      a'.(i) <- a.(n - i - 1)
-    done ;
-    ref (Leaf a')
+  let a = _collapse_array s in
+  let a' = Array.copy a in
+  let n = Array.length a' in
+  for i = 0 to n - 1 do
+    a'.(i) <- a.(n - i - 1)
+  done ;
+  ref (Leaf a')
 
 let reverse_bigarray (s : ('a, 'b) ba t) : ('a, 'b) ba t =
-  let n = length_bigarray s in
-  if n < 2 then s
-  else
-    let a = _collapse_bigarray s in
-    let a' = _uninit_bigarray (_bigarray_kind !s) n in
-    for i = 0 to n - 1 do
-      Array1.unsafe_set a' i (Array1.unsafe_get a (n - i - 1))
-    done ;
-    ref (Leaf a')
+  let a = _collapse_bigarray s in
+  let n = Array1.dim a in
+  let a' = _uninit_bigarray (_bigarray_kind !s) n in
+  for i = 0 to n - 1 do
+    Array1.unsafe_set a' i (Array1.unsafe_get a (n - i - 1))
+  done ;
+  ref (Leaf a')
 
 let combine_array_array (l : 'a array t) (r : 'b array t) : ('a * 'b) array t =
   let ln = length_array l in
