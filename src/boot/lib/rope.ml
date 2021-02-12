@@ -111,16 +111,34 @@ let collapse_bigarray (s : ('a, 'b) ba t) : ('a, 'b) ba =
       s := Leaf dst ;
       dst
 
-let set_array (s : 'a array t) (i : int) (v : 'a) : 'a array t =
-  let a = collapse_array s in
-  let a' = Array.copy a in
-  a'.(i) <- v ; ref (Leaf a')
+let set_array (s : 'a array t) (idx : int) (v : 'a) : 'a array t =
+  let rec helper s i =
+    match s with
+    | Leaf a ->
+        let a' = Array.copy a in
+        a'.(i) <- v ;
+        Leaf a'
+    | Concat {lhs; rhs; len} ->
+        let n = _length_array lhs in
+        if i < n then Concat {lhs= helper lhs i; rhs; len}
+        else Concat {lhs; rhs= helper rhs (i - n); len}
+  in
+  ref (helper !s idx)
 
-let set_bigarray (s : ('a, 'b) ba t) (i : int) (v : 'a) : ('a, 'b) ba t =
-  let a = collapse_bigarray s in
-  let n = Array1.dim a in
-  let a' = uninit_bigarray (_bigarray_kind !s) n in
-  Array1.blit a a' ; Array1.unsafe_set a' i v ; ref (Leaf a')
+let set_bigarray (s : ('a, 'b) ba t) (idx : int) (v : 'a) : ('a, 'b) ba t =
+  let k = _bigarray_kind !s in
+  let rec helper s i =
+    match s with
+    | Leaf a ->
+        let n = Array1.dim a in
+        let a' = uninit_bigarray k n in
+        Array1.blit a a' ; Array1.unsafe_set a' i v ; Leaf a'
+    | Concat {lhs; rhs; len} ->
+        let n = _length_bigarray lhs in
+        if i < n then Concat {lhs= helper lhs i; rhs; len}
+        else Concat {lhs; rhs= helper rhs (i - n); len}
+  in
+  ref (helper !s idx)
 
 let cons_array (v : 'a) (s : 'a array t) : 'a array t =
   ref (Concat {lhs= Leaf [|v|]; rhs= !s; len= length_array s + 1})
