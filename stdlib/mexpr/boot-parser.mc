@@ -302,6 +302,8 @@ utest lside s with rside s in
 -- TmMatch, PatAnd, PatOr, PatNot
 let s = "match x with 1 & x then x else x" in
 utest lside s with rside s in
+let s = "match x with 1 | x then x else x" in
+utest lside s with rside s in
 
 
 --utest parseMExprString s with () in
