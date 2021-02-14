@@ -224,6 +224,8 @@ utest l_info "  _aas_12 " with r_info 1 2 1 9 in
 let s = "let y = lam x.x in y" in
 utest lside s with rside s in
 utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
+utest info (match parseMExprString s with TmLet r then r.body else ())
+with r_info 1 8 1 15 in
 
 -- TmType
 let s = "type Foo in x" in
