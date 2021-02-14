@@ -93,6 +93,12 @@ let idPatOr = 409
 
 let idPatNot = 410
 
+(* Info *)
+
+let idInfo = 500
+
+let idNoInfo = 501
+
 let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
@@ -199,6 +205,11 @@ let getData = function
       (idPatOr, [fi], [], [], [], [], [], [], [], [p1; p2])
   | PTreePat (PatNot (fi, p)) ->
       (idPatNot, [fi], [], [], [], [], [], [], [], [p])
+  (* Info *)
+  | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
+      (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [])
+  | PTreeInfo NoInfo ->
+      (idNoInfo, [], [], [], [], [], [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
@@ -233,3 +244,7 @@ let getConst t n =
 let getPat t n =
   let _, _, _, _, _, _, _, _, _, lst = getData t in
   PTreePat (List.nth lst n)
+
+let getInfo t n =
+  let _, lst, _, _, _, _, _, _, _, _ = getData t in
+  PTreeInfo (List.nth lst n)

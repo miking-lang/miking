@@ -141,6 +141,7 @@ and const =
   | CbootParserGetListLength of tm option
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
+  | CbootParserGetInfo of tm option
   (* External functions *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
@@ -152,6 +153,7 @@ and ptree =
   | PTreeTy of ty
   | PTreePat of pat
   | PTreeConst of const
+  | PTreeInfo of info
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty

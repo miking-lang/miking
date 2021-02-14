@@ -128,7 +128,8 @@ let builtin =
   ; ("bootParserGetFloat", f (CbootParserGetFloat None))
   ; ("bootParserGetListLength", f (CbootParserGetListLength None))
   ; ("bootParserGetConst", f (CbootParserGetConst None))
-  ; ("bootParserGetPat", f (CbootParserGetPat None)) ]
+  ; ("bootParserGetPat", f (CbootParserGetPat None))
+  ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
   (* Append external functions *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -432,6 +433,10 @@ let arity = function
   | CbootParserGetPat None ->
       2
   | CbootParserGetPat (Some _) ->
+      1
+  | CbootParserGetInfo None ->
+      2
+  | CbootParserGetInfo (Some _) ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -1047,6 +1052,13 @@ let delta eval env fi c v =
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CbootParserTree (Bootparser.getPat ptree n))
   | CbootParserGetPat (Some _), _ ->
+      fail_constapp fi
+  | CbootParserGetInfo None, t ->
+      TmConst (fi, CbootParserGetInfo (Some t))
+  | ( CbootParserGetInfo (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
+  | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

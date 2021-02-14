@@ -11,10 +11,12 @@ include "mexpr/info.mc"
 
 lang VarAst
   syn Expr =
-  | TmVar {ident : Name, ty: Type, fi: Info}
+  | TmVar {ident : Name,
+           ty: Type,
+           info: Info}
 
   sem info =
-  | TmVar r -> r.fi
+  | TmVar r -> r.info
 
   sem ty =
   | TmVar t -> t.ty
@@ -31,10 +33,13 @@ end
 
 lang AppAst
   syn Expr =
-  | TmApp {lhs : Expr, rhs : Expr, ty: Type, fi: Info}
+  | TmApp {lhs : Expr,
+           rhs : Expr,
+           ty: Type,
+           info: Info}
 
   sem info =
-  | TmApp r -> r.fi
+  | TmApp r -> r.info
 
   sem ty =
   | TmApp t -> t.ty
@@ -54,12 +59,12 @@ end
 lang FunAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
-           ty    : Type,
-           body  : Expr,
-           fi    : Info}
+           body : Expr,
+           ty : Type,
+           info : Info}
 
   sem info =
-  | TmLam r -> r.fi
+  | TmLam r -> r.info
 
   sem ty =
   | TmLam t -> t.ty

@@ -410,6 +410,8 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetConst"
   | CbootParserGetPat _ ->
       fprintf fmt "bootParserParseGetPat"
+  | CbootParserGetInfo _ ->
+      fprintf fmt "bootParserParseGetInfo"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

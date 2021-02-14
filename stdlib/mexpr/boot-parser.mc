@@ -28,10 +28,12 @@ lang BootParser = MExprAst
     let t = bootParserParseMExprString str in
     matchTerm t (bootParserGetId t)
 
+  -- Get term help function
   sem gterm (t:Unkown) =
   | n -> let t2 = bootParserGetTerm t n in
          matchTerm t2 (bootParserGetId t2)
 
+  -- Match term from ID
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
       TmVar {ident = gname t 0,
@@ -113,22 +115,24 @@ lang BootParser = MExprAst
      TmNever {ty = TyUnknown(),
               fi = ginfo t}
 
-
+  -- Get constant help function
   sem gconst(t:Unkown) =
   | n -> let t2 = bootParserGetConst t n in
          matchConst t2 (bootParserGetId t2)
 
+  -- Match constant from ID
   sem matchConst (t:Unknown) =
   | 300 /-CBool-/  -> CBool {val = eqi (gint t 0) 1 }
   | 301 /-CInt-/   -> CInt {val = gint t 0 } 
   | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
   | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
 
-
+  -- Get pattern help function
   sem gpat (t:Unkown) =
   | n -> let t2 = bootParserGetPat t n in
          matchPat t2 (bootParserGetId t2)
 
+  -- Match pattern from ID
   sem matchPat (t:Unknown) =
   | 400 /-PatNamed-/ -> PNamed {ident = strToPatName (gstr t 0)}
   | 401 /-PatSeqTot-/ ->
@@ -159,11 +163,28 @@ lang BootParser = MExprAst
            rpat = gpat t 1}
   | 410 /-PatNot-/ ->     
      PNot {subpat = gpat t 0}
-       
+
+
+  -- Get info help function
+  sem ginfo =
+  | t -> let t2 = bootParserGetInfo t 0 in
+         matchInfo t2 (bootParserGetId t2)
+
+  -- Match info from ID
+  sem matchInfo (t:Unknown) =
+  | 500 /-Info-/ -> 
+      Info {filename = gstr t 0,
+            row1 = gint t 0,
+            col1 = gint t 1,
+            row2 = gint t 2,
+            col2 = gint t 3}
+  | 501 /-NoInfo-/ ->
+      NoInfo {} 
+
+
   -- Functions for transferring types and info are not yet implemented.  
   -- These functions are place holders.
   sem gtype (t:Unknown) = | n -> TyUnknown()
-  sem ginfo = | t -> NoInfo()
 
   sem strToPatName =
   | "" ->  PWildcard ()
@@ -182,19 +203,27 @@ use BootParserTest in
 let norm = lam str. 
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
+-- Test the combination of parsing and pretty printing
 let parse = lam s. expr2str (parseMExprString s) in
 let lside = lam s. norm (parse s) in
 let rside = norm in
+
+-- Test that info gives the right columns and rows
+let l_info = lam s.  info (parseMExprString s) in
+let r_info = lam r1. lam c1. lam r2. lam c2.
+      Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
 
 -- TmVar and TmLam
 let s = "_asdXA123" in
 utest lside s with rside s in
 let s = "lam x. lam y. x" in
 utest lside s with rside s in
+utest l_info "  _aas_12 " with r_info 1 2 1 9 in
 
 -- TmLet, TmLam
 let s = "let y = lam x.x in y" in
 utest lside s with rside s in
+utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
 
 -- TmType
 let s = "type Foo in x" in
