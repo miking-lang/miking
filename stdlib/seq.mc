@@ -182,6 +182,16 @@ utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
 utest join [[],[],[]] with []
 
+-- Monadic and Applicative operations
+
+let seqLiftA2
+  : (a -> b -> c) -> [a] -> [b] -> [c]
+  = lam f. lam as. lam bs.
+    join (map (lam a. map (f a) bs) as)
+
+utest seqLiftA2 addi [10, 20, 30] [1, 2, 3]
+with [11, 12, 13, 21, 22, 23, 31, 32, 33]
+
 -- Searching
 recursive
   let filter = lam p. lam seq.
@@ -327,7 +337,3 @@ utest isSuffix eqi [2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
-
-
-
-
