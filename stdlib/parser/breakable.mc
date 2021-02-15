@@ -2,6 +2,90 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
+/-
+
+This file contains support for parsing operator expressions with
+precedence and shallow forbids/allows. We support ambiguities
+properly; the parsing procedure produces a shared packed parse forest
+(SPPF), which can then be analyzed to determine the exact scope of any
+ambiguities involved.
+
+# Left-open, right-open, left-closed, and right-closed
+
+A central concept herein is whether a "thing" (an operator or an
+expression) is open or closed on either side. For example, the infix
+operator "+" is both left-open and right-open, while the atomic
+expression "7" is both left-closed and right-closed. These properties
+transfer to partially constructed ASTs as well, "(_ + 4)" is left-open
+but right-closed, while "(1 + 2)" is both left-closed and
+right-closed.
+
+# Precedence
+
+The precedence definition used herein is less strict than the
+conventional definition; it need not be total, nor transitive.
+Instead, it is defined as follows: given a right-open operator `a` and
+a left-open operator `b`, if we had a fully closed thing between them,
+would it be permissible to group it
+
+- only to the left, written as `a` <- `b`,
+- only to the right, written as `a` -> `b`,
+- either, written as `a` <-> `b`, or
+, neither, written as `a` - `b`?
+
+For example, we would likely give the following definitions for
+addition and multiplication:
+
+- `+` -> `*` (normal precedence)
+- `*` <- `+` (normal precedence)
+- `+` <- `+` (left-associative)
+- `*` <- `*` (left-associative)
+
+# Shallow forbids/allows
+
+Operators may also pose restrictions on which other operators are
+allowed to be their direct children. This is used to allow breaking
+other kinds of productions into operators that are then limited to the
+normal interactions. The canonical example is `if then else` (where
+`else` is optional), which can be specified as follows:
+
+- Prefix `if condition then`
+- Infix `else`, where the left child must be exactly `if condition
+  then`
+
+This means that each `else` must have a corresponding `if condition
+then`, but we can handle any ambiguities arising using the same
+approach as for operators, i.e., we can resolve them with grouping
+parentheses.
+
+As a consequence, the only ambiguities that can arise when using this
+approach are those where it is unclear how things in the input
+connect, as opposed to what their fundamental meaning is, which I
+(vipa) hypothesize is quite helpful for the understandability of
+ambiguities.
+
+# Mid-level usage
+
+1. Create a value of the `BreakableGrammar` type. See the tests at the
+end of the file for examples.
+2. Call `breakableGenGrammar`. You can now query the result for the
+value the parser expects you to supply when each operator is parsed in step 4.
+3. Call `breakableInitState` to start parsing an expression. Values of
+type `State` are mutable and should never be reused, consider them
+consumed when they are passed to a function.
+4. Call `breakableAddAtom`, `breakableAddPrefix`, `breakableAddInfix`,
+and `breakableAddPostfix` repeatedly to add one "thing" at a time to
+the parse. Note that these functions are quite strongly typed, e.g.,
+you cannot call `breakableAddAtom` when the currently parsed
+expression is already right-closed. See the tests for an example of
+how to handle this when the calling code does not have the same
+strictness in its types.
+5. Call `breakableFinalizeParse` to create an SPPF of the parse.
+6. Call `breakableConstructResult` to extract the single unambiguous
+parse, or an ambiguity error.
+
+-/
+
 include "map.mc"
 include "either.mc"
 include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the tests, but we can't put an include only there
