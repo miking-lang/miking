@@ -77,7 +77,7 @@ lang AppEval = AppAst
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
-lang FunEval = FunAst + VarEval + AppEval
+lang FunEval = LamAst + VarEval + AppEval
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Env}
 
@@ -97,7 +97,7 @@ lang LetEval = LetAst + VarEval
 end
 
 -- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
-lang FixAst = FunAst
+lang FixAst = LamAst
   syn Expr =
   | TmFix ()
 end

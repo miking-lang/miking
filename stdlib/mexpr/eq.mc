@@ -111,7 +111,7 @@ lang AppEq = Eq + AppAst
     else None ()
 end
 
-lang FunEq = Eq + FunAst + VarEq + AppEq
+lang FunEq = Eq + LamAst + VarEq + AppEq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmLam r ->
     match env with {varEnv = varEnv} then

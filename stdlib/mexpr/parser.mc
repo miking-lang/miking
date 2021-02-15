@@ -399,14 +399,14 @@ lang VarParser = ExprParser + IdentParser + VarAst + UnknownTypeAst
   sem nextIdent (p: Pos) (xs: string) =
   | x ->
       let p2 = advanceCol p (length x) in
-      {val = TmVar {ident = nameNoSym x, ty = TyUnknown {}, fi = makeInfo p p2},
+      {val = TmVar {ident = nameNoSym x, ty = TyUnknown {}, info = makeInfo p p2},
        pos = p2, str = xs}
 end
 
 
 -- Parsing of a lambda
 lang FunParser =
-  ExprParser + IdentParser + KeywordUtils + FunAst + UnknownTypeAst
+  ExprParser + IdentParser + KeywordUtils + LamAst + UnknownTypeAst
 
   sem nextIdent (p: Pos) (xs: String) =
   | "lam" ->
@@ -415,9 +415,8 @@ lang FunParser =
     let r3 = matchKeyword "." r2.pos r2.str  in
     let e = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, ty = TyUnknown {},
-                  body = e.val, fi = makeInfo p e.pos},
+                  body = e.val, info = makeInfo p e.pos},
      pos = e.pos, str = e.str}
-    -- TODO (David, 2020-09-27): Add parsing of type
 end
 
 
@@ -476,7 +475,7 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst + UnknownTypeAst
   | str ->
     Some {
       val = lam x. lam y.
-        TmApp {lhs = x, rhs = y, ty = TyUnknown {}, fi = mergeInfo (info x) (info y)},
+        TmApp {lhs = x, rhs = y, ty = TyUnknown {}, info = mergeInfo (info x) (info y)},
       pos = p, str = str, assoc = LeftAssoc (), prec = 50}
 end
 

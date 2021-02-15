@@ -56,7 +56,7 @@ lang AppAst
 
 end
 
-lang FunAst = VarAst + AppAst
+lang LamAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
            body : Expr,
@@ -698,7 +698,7 @@ end
 lang MExprAst =
 
   -- Terms
-  VarAst + AppAst + FunAst + RecordAst + LetAst + TypeAst + RecLetsAst +
+  VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + RefAst +
 
   -- Constants

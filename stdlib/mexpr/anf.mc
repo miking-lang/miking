@@ -64,7 +64,7 @@ lang AppANF = ANF + AppAst
 
 end
 
-lang FunANF = ANF + FunAst
+lang FunANF = ANF + LamAst
   sem isValue =
   | TmLam _ -> true
 

@@ -84,13 +84,13 @@ let hole_ = use HoleAst in
 
 type CallGraph = DiGraph Name Symbol
 
-let _handleLetVertex = use FunAst in
+let _handleLetVertex = use LamAst in
   lam letexpr. lam f.
     match letexpr.body with TmLam lm
     then cons letexpr.ident (f lm.body)
     else f letexpr.body
 
-let _handleLetEdge = use FunAst in
+let _handleLetEdge = use LamAst in
   lam letexpr. lam f. lam g. lam prev.
     match letexpr.body with TmLam lm
     then f g letexpr.ident lm.body
@@ -117,7 +117,7 @@ let _handleApps = use AppAst in use VarAst in
 -- time potentially perform a graph union operation, which we assume has
 -- complexity O(|F|). V is the set of nodes in the AST and F is the set of nodes
 -- in the call graph (i.e. set of functions in the AST).
-lang Ast2CallGraph = LetAst + FunAst + RecLetsAst
+lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
     let gempty = digraphAddVertex _top (digraphEmpty _eqn eqsym) in

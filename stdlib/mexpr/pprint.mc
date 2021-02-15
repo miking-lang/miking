@@ -251,7 +251,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     else error "Impossible"
 end
 
-lang FunPrettyPrint = PrettyPrint + FunAst + UnknownTypeAst
+lang FunPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
   sem isAtomic =
   | TmLam _ -> false
 

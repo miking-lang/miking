@@ -61,7 +61,7 @@ lang AppSym = Sym + AppAst
               with rhs = symbolizeExpr env t.rhs}
 end
 
-lang FunSym = Sym + FunAst + VarSym + AppSym
+lang FunSym = Sym + LamAst + VarSym + AppSym
   sem symbolizeType (env : SymEnv) =
   -- Intentinally left blank
 
