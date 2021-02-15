@@ -1,7 +1,5 @@
 -- Interpreters for the various fragments of MExpr.
 
--- TODO(?,?): Add types
-
 include "string.mc"
 include "char.mc"
 include "assoc.mc"
@@ -77,7 +75,7 @@ lang AppEval = AppAst
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
-lang FunEval = LamAst + VarEval + AppEval
+lang LamEval = LamAst + VarEval + AppEval
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Env}
 
@@ -102,7 +100,7 @@ lang FixAst = LamAst
   | TmFix ()
 end
 
-lang FixEval = FixAst + FunEval
+lang FixEval = FixAst + LamEval
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
     match arg with TmClos clos then
@@ -918,7 +916,7 @@ lang MExprEval =
   MExprSym + MExprEq
 
   -- Terms
-  + VarEval + AppEval + FunEval + FixEval + RecordEval + RecLetsEval +
+  + VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
   ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
 
   -- Constants

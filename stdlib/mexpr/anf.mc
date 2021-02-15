@@ -64,7 +64,7 @@ lang AppANF = ANF + AppAst
 
 end
 
-lang FunANF = ANF + LamAst
+lang LamANF = ANF + LamAst
   sem isValue =
   | TmLam _ -> true
 
@@ -218,7 +218,7 @@ lang NeverANF = ANF + NeverAst
 end
 
 lang MExprANF =
-  VarANF + AppANF + FunANF + RecordANF + LetANF + TypeANF + RecLetsANF +
+  VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
 
 -----------

@@ -61,7 +61,7 @@ lang AppSym = Sym + AppAst
               with rhs = symbolizeExpr env t.rhs}
 end
 
-lang FunSym = Sym + LamAst + VarSym + AppSym
+lang LamSym = Sym + LamAst + VarSym + AppSym
   sem symbolizeType (env : SymEnv) =
   -- Intentinally left blank
 
@@ -435,7 +435,7 @@ end
 lang MExprSym =
 
   -- Terms
-  VarSym + AppSym + FunSym + RecordSym + LetSym + TypeSym + RecLetsSym +
+  VarSym + AppSym + LamSym + RecordSym + LetSym + TypeSym + RecLetsSym +
   ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym +
 
   -- Types

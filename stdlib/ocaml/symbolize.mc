@@ -2,7 +2,7 @@ include "ocaml/ast.mc"
 include "mexpr/symbolize.mc"
 
 lang OCamlSym =
-  VarSym + AppSym + FunSym + LetSym + RecLetsSym + ConstSym
+  VarSym + AppSym + LamSym + LetSym + RecLetsSym + ConstSym
   + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
   + OCamlMatch + OCamlTuple + OCamlData + UnknownTypeSym
 
