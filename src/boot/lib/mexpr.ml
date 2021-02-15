@@ -1522,33 +1522,6 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (_, _, s) ->
       eval env (List.assoc s env)
-  (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, _ty, t1) ->
-      TmClos (fi, x, s, t1, lazy env)
-  | TmClos (_, _, _, _, _) ->
-      t
-  (* Let *)
-  | TmLet (_, _, s, _, t1, t2) ->
-      eval ((s, eval env t1) :: env) t2
-  (* Type (ignore) *)
-  | TmType (_, _, _, _, t1) ->
-      eval env t1
-  (* Recursive lets *)
-  | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
-      in
-      eval (Lazy.force env') t2
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
@@ -1569,8 +1542,30 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         raise_error fiapp
           ( "Incorrect application. This is not a function: "
           ^ Ustring.to_utf8 (ustring_of_tm f) ) )
-  (* Constant and fix *)
-  | TmConst (_, _) | TmFix _ ->
+  (* Lambda and closure conversions *)
+  | TmLam (fi, x, s, _ty, t1) ->
+      TmClos (fi, x, s, t1, lazy env)
+  (* Let *)
+  | TmLet (_, _, s, _, t1, t2) ->
+      eval ((s, eval env t1) :: env) t2
+  (* Recursive lets *)
+  | TmRecLets (_, lst, t2) ->
+      let rec env' =
+        lazy
+          (let wraplambda = function
+             | TmLam (fi, x, s, _ty, t1) ->
+                 TmClos (fi, x, s, t1, env')
+             | tm ->
+                 raise_error (tm_info tm)
+                   "Right-hand side of recursive let must be a lambda"
+           in
+           List.fold_left
+             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
+             env lst)
+      in
+      eval (Lazy.force env') t2
+  (* Constant *)
+  | TmConst (_, _) ->
       t
   (* Sequences *)
   | TmSeq (fi, tms) ->
@@ -1578,6 +1573,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Records *)
   | TmRecord (fi, tms) ->
       TmRecord (fi, Record.map (eval env) tms)
+  (* Records update *)
   | TmRecordUpdate (fi, t1, l, t2) -> (
     match eval env t1 with
     | TmRecord (fi, r) ->
@@ -1590,9 +1586,13 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         raise_error fi
           ( "Cannot update the term. The term is not a record: "
           ^ Ustring.to_utf8 (ustring_of_tm v) ) )
-  (* Data constructors and match *)
+  (* Type (ignore) *)
+  | TmType (_, _, _, _, t1) ->
+      eval env t1
+  (* Data constructors *)
   | TmCondef (_, _, _, _, t) ->
       eval env t
+  (* Constructor application *)
   | TmConapp (fi, x, s, t) ->
       let rhs = eval env t in
       ( if !enable_debug_con_shape then
@@ -1602,14 +1602,13 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConapp (fi, x, s, rhs)
+  (* Match *)
   | TmMatch (_, t1, p, t2, t3) -> (
     match try_match env (eval env t1) p with
     | Some env ->
         eval env t2
     | None ->
         eval env t3 )
-  | TmUse (fi, _, _) ->
-      raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
@@ -1635,10 +1634,21 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
       eval env tnext
+  (* Never term *)
   | TmNever fi ->
       raise_error fi
         "Reached a never term, which should be impossible in a well-typed \
          program."
+  (* Use *)
+  | TmUse (fi, _, _) ->
+      raise_error fi "A 'use' of a language was not desugared"
+  (* Closure - Only at runtime *)
+  | TmClos (_, _, _, _, _) ->
+      t
+  (* Fix-point - Only at runtime *)
+  | TmFix _ ->
+      t
+  (* Ref - Only at runtime *)
   | TmRef _ ->
       t
 
