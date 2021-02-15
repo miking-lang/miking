@@ -433,7 +433,7 @@ lang LetParser =
     let e2 = parseExprMain r4.pos 0 r4.str in
     {val = TmLet {ident = nameNoSym r2.val, tyBody = TyUnknown {},
                   body = e1.val, inexpr = e2.val, ty = TyUnknown {},
-                  fi = makeInfo p e2.pos},
+                  info = makeInfo p e2.pos},
      pos = e2.pos, str = e2.str}
 end
 

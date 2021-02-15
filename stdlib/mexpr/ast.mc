@@ -88,15 +88,15 @@ end
 -- TmLet --
 lang LetAst = VarAst
   syn Expr =
-  | TmLet {ident  : Name,
+  | TmLet {ident : Name,
            tyBody : Type,
-           body   : Expr,
+           body : Expr,
            inexpr : Expr,
-           ty     : Type,
-           fi     : Info}
+           ty : Type,
+           info : Info}
 
   sem info =
-  | TmLet r -> r.fi
+  | TmLet r -> r.info
 
   sem ty =
   | TmLet t -> t.ty
@@ -116,10 +116,15 @@ end
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : Name,
-                            ty    : Type,
-                            body  : Expr}],
-               inexpr   : Expr,
-               ty       : Type}
+                            ty : Type,
+                            body : Expr,
+                            info : Info}],
+               inexpr : Expr,
+               ty : Type,
+               info : Info}
+
+  sem info =
+  | TmRecLets r -> r.info
 
   sem ty =
   | TmRecLets t -> t.ty

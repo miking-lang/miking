@@ -38,16 +38,16 @@ lang BootParser = MExprAst
   | 100 /-TmVar-/ ->
       TmVar {ident = gname t 0,
              ty = TyUnknown(),
-             info = ginfo t}
+             info = ginfo t 0}
   | 101 /-TmApp-/ ->
       TmApp {lhs = gterm t 0,
              rhs = gterm t 1,
              ty = TyUnknown(),
-             fi = ginfo t}     
+             info = ginfo t 0}     
   | 102 /-TmLam-/ ->
       TmLam {ident = gname t 0,
              ty = gtype t 0,
-             info = ginfo t,
+             info = ginfo t 0,
              body = gterm t 0}
   | 103 /-TmLet-/ ->
       TmLet {ident = gname t 0,
@@ -55,14 +55,16 @@ lang BootParser = MExprAst
              body = gterm t 0,
              inexpr = gterm t 1,
              ty = TyUnknown(),
-             fi = ginfo t}
+             info = ginfo t 0}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
                                  ty = gtype t n,
                                  body = gterm t n}) (glistlen t 0),
+                                 info = ginfo t (addi n 1),
                  inexpr = gterm t (glistlen t 0),
-                 ty = TyUnknown()}                            
+                 ty = TyUnknown(),
+                 info = ginfo t 0}                            
   | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
@@ -70,27 +72,27 @@ lang BootParser = MExprAst
                     match c with CInt _ then TyInt {} else
                     match c with CFloat _ then TyFloat {} else
                     TyChar {},
-               fi = ginfo t}
+               info = ginfo t 0}
   | 106 /-TmSeq-/ ->
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
              ty =  TyUnknown(),
-             fi = ginfo t}
+             info = ginfo t 0}
   | 107 /-TmRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
       TmRecord {bindings = seq2assoc {eq = eqString} lst,
                ty = TyUnknown(),
-               fi = ginfo t}
+               info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
      TmRecordUpdate {rec = gterm t 0,
                     key = gstr t 0,
                     value = gterm t 1,
                     ty = TyUnknown(),
-                    fi = ginfo t}
+                    info = ginfo t 0}
   | 109 /-TmType-/ ->
       TmType {ident = gname t 0,
               ty = gtype t 0,
               inexpr = gterm t 0,
-              fi = ginfo t}
+              info = ginfo t 0}
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                ty = gtype t 0,
@@ -105,7 +107,7 @@ lang BootParser = MExprAst
               thn = gterm t 1,
               els = gterm t 2,
               ty = TyUnknown(),
-              fi = ginfo t}
+              info = ginfo t 0}
   | 113 /-TmUtest-/ ->
      TmUtest {test = gterm t 0,
               expected = gterm t 1,
@@ -113,7 +115,7 @@ lang BootParser = MExprAst
               ty = TyUnknown()}
   | 114 /-TmNever-/ ->
      TmNever {ty = TyUnknown(),
-              fi = ginfo t}
+              info = ginfo t 0}
 
   -- Get constant help function
   sem gconst(t:Unkown) =
@@ -154,7 +156,7 @@ lang BootParser = MExprAst
      PChar {val = int2char (gint t 0)}
   | 407 /-PatBool-/ ->     
      PBool {val = eqi (gint t 0) 1,
-            fi = ginfo t}
+            info = ginfo t 0}
   | 408 /-PatAnd-/ ->     
      PAnd {lpat = gpat t 0,
            rpat = gpat t 1}
@@ -166,8 +168,8 @@ lang BootParser = MExprAst
 
 
   -- Get info help function
-  sem ginfo =
-  | t -> let t2 = bootParserGetInfo t 0 in
+  sem ginfo (t:Unknown) =
+  | n -> let t2 = bootParserGetInfo t n in
          matchInfo t2 (bootParserGetId t2)
 
   -- Match info from ID
@@ -213,10 +215,19 @@ let l_info = lam s.  info (parseMExprString s) in
 let r_info = lam r1. lam c1. lam r2. lam c2.
       Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
 
--- TmVar and TmLam
+-- TmVar 
 let s = "_asdXA123" in
 utest lside s with rside s in
+
+-- TmApp
+let s = "f x" in
+utest lside s with rside s in
+utest l_info "   (foo f1) f2  " with r_info 1 4 1 14 in
+
+-- TmLam
 let s = "lam x. lam y. x" in
+utest lside s with rside s in
+let s = "(lam x. lam y. x) z1 z2" in
 utest lside s with rside s in
 utest l_info "  _aas_12 " with r_info 1 2 1 9 in
 
@@ -226,20 +237,14 @@ utest lside s with rside s in
 utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
 utest info (match parseMExprString s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
-
--- TmType
-let s = "type Foo in x" in
-utest lside s with rside s in
+utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
 
 -- TmRecLets, TmLam
 let s = "recursive let x = lam x.x in x" in
 utest lside s with rside s in
 let s = "recursive let x = lam x.x let y = lam x. x in y" in
 utest lside s with rside s in
-
--- TmApp, TmLam
-let s = "(lam x. lam y. x) z1 z2" in
-utest lside s with rside s in
+utest l_info "   recursive let x = 5 \n let foo = 7 in x "  with r_info 1 3 2 15 in
 
 -- TmConst
 let s = "true" in
@@ -282,6 +287,12 @@ let s = "con Foo in x" in
 utest lside s with rside s in
 let s = "con Foo : Int -> Tree in x" in
 utest lside s with rside "con Foo in x" in
+
+-- TmType
+let s = "type Foo in x" in
+utest lside s with rside s in
+
+-- TmConDef
 
 -- TmConApp
 let s = "Foo {a = 5}" in
