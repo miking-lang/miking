@@ -238,7 +238,7 @@ recursive let _iter = lam f. lam xs.
 end
 let _for = lam xs. lam f. _iter f xs
 
-let inAllowSet
+let breakableInAllowSet
   : id
   -> AllowSet id
   -> Bool
@@ -247,7 +247,7 @@ let inAllowSet
     match set with DisallowSet s then not (mapMem id s) else
     never
 
-let mapAllowSet
+let breakableMapAllowSet
   : (a -> b)
   -> (b -> b -> Int)
   -> AllowSet a
@@ -322,15 +322,15 @@ let breakableGenGrammar
         match prod with BreakableAtom {construct = construct} then
           updateRef atoms (cons (label, AtomI {id = id, construct = construct}))
         else match prod with BreakablePrefix {construct = c, rightAllow = r} then
-          let r = mapAllowSet toOpId _cmpOpId r in
+          let r = breakableMapAllowSet toOpId _cmpOpId r in
           updateRef prefixes (cons (label, PrefixI {id = id, construct = c, rightAllow = r}))
         else match prod with BreakableInfix {construct = c, leftAllow = l, rightAllow = r} then
-          let l = mapAllowSet toOpId _cmpOpId l in
-          let r = mapAllowSet toOpId _cmpOpId r in
+          let l = breakableMapAllowSet toOpId _cmpOpId l in
+          let r = breakableMapAllowSet toOpId _cmpOpId r in
           let p = getGroupingByRight id in
           updateRef infixes (cons (label, InfixI {id = id, construct = c, leftAllow = l, rightAllow = r, precWhenThisIsRight = p}))
         else match prod with BreakablePostfix {construct = c, leftAllow = l} then
-          let l = mapAllowSet toOpId _cmpOpId l in
+          let l = breakableMapAllowSet toOpId _cmpOpId l in
           let p = getGroupingByRight id in
           updateRef postfixes (cons (label, PostfixI {id = id, construct = c, leftAllow = l, precWhenThisIsRight = p}))
         else never)
@@ -369,7 +369,7 @@ let _shallowAllowedLeft
   = lam parent. lam child.
     match child with TentativeLeaf {node = node} then
       match parent with InfixI {leftAllow = s} | PostfixI {leftAllow = s} then
-        if inAllowSet (_opIdP node) s then Some node else None ()
+        if breakableInAllowSet (_opIdP node) s then Some node else None ()
       else never
     else never
 
@@ -381,7 +381,7 @@ let _shallowAllowedRight
     match child with TentativeLeaf {node = node} then
       match parent with TentativeRoot _ then Some node else
       match parent with TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})} then
-        if inAllowSet (_opIdP node) s then Some node else None ()
+        if breakableInAllowSet (_opIdP node) s then Some node else None ()
       else let _ = dprintLn parent in never
     else never
 
