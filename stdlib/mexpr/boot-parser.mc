@@ -39,23 +39,23 @@ lang BootParser = MExprAst
       TmVar {ident = gname t 0,
              ty = TyUnknown(),
              info = ginfo t}
-  | 101 /-TmLam-/ ->
+  | 101 /-TmApp-/ ->
+      TmApp {lhs = gterm t 0,
+             rhs = gterm t 1,
+             ty = TyUnknown(),
+             fi = ginfo t}     
+  | 102 /-TmLam-/ ->
       TmLam {ident = gname t 0,
              ty = gtype t 0,
              info = ginfo t,
              body = gterm t 0}
-  | 102 /-TmLet-/ ->
+  | 103 /-TmLet-/ ->
       TmLet {ident = gname t 0,
              tyBody = gtype t 0,
              body = gterm t 0,
              inexpr = gterm t 1,
              ty = TyUnknown(),
              fi = ginfo t}
-  | 103 /-TmType-/ ->
-      TmType {ident = gname t 0,
-              ty = gtype t 0,
-              inexpr = gterm t 0,
-              fi = ginfo t}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
@@ -63,12 +63,7 @@ lang BootParser = MExprAst
                                  body = gterm t n}) (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
                  ty = TyUnknown()}                            
-  | 105 /-TmApp-/ ->
-      TmApp {lhs = gterm t 0,
-             rhs = gterm t 1,
-             ty = TyUnknown(),
-             fi = ginfo t}     
-  | 106 /-TmConst-/ ->
+  | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
                ty = match c with CBool _ then TyBool {} else
@@ -76,21 +71,26 @@ lang BootParser = MExprAst
                     match c with CFloat _ then TyFloat {} else
                     TyChar {},
                fi = ginfo t}
-  | 107 /-TmSeq-/ ->
+  | 106 /-TmSeq-/ ->
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
              ty =  TyUnknown(),
              fi = ginfo t}
-  | 108 /-TmRecord-/ ->
+  | 107 /-TmRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
       TmRecord {bindings = seq2assoc {eq = eqString} lst,
                ty = TyUnknown(),
                fi = ginfo t}
-  | 109 /-TmRecordUpdate-/ ->
+  | 108 /-TmRecordUpdate-/ ->
      TmRecordUpdate {rec = gterm t 0,
                     key = gstr t 0,
                     value = gterm t 1,
                     ty = TyUnknown(),
                     fi = ginfo t}
+  | 109 /-TmType-/ ->
+      TmType {ident = gname t 0,
+              ty = gtype t 0,
+              inexpr = gterm t 0,
+              fi = ginfo t}
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                ty = gtype t 0,
