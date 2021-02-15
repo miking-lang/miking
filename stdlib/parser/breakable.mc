@@ -31,7 +31,7 @@ would it be permissible to group it
 - only to the left, written as `a` <- `b`,
 - only to the right, written as `a` -> `b`,
 - either, written as `a` <-> `b`, or
-, neither, written as `a` - `b`?
+- neither, written as `a` - `b`?
 
 For example, we would likely give the following definitions for
 addition and multiplication:
