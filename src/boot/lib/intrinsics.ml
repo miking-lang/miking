@@ -3,6 +3,8 @@ open Ustring.Op
 module Mseq = struct
   type 'a t = 'a array Rope.t
 
+  let create = Rope.create_array
+
   let make = Rope.make_array
 
   let empty = Rope.empty_array

@@ -72,6 +72,7 @@ let builtin =
   ; ("eqc", f (Ceqc None))
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char)
+  ; ("create", f (Ccreate None))
   ; ("makeSeq", f (CmakeSeq None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
@@ -266,6 +267,10 @@ let arity = function
   | Cint2char ->
       1
   (* MCore intrinsic: sequences *)
+  | Ccreate None ->
+      2
+  | Ccreate (Some _) ->
+      1
   | CmakeSeq None ->
       2
   | CmakeSeq (Some _) ->
@@ -644,6 +649,13 @@ let delta eval env fi c v =
   | Cint2char, _ ->
       fail_constapp fi
   (* MCore intrinsic: sequences *)
+  | Ccreate None, TmConst (_, CInt n) ->
+      TmConst (fi, Ccreate (Some n))
+  | Ccreate (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create n createf)
+  | Ccreate None, _ ->
+      fail_constapp fi
   | CmakeSeq None, TmConst (fi, CInt n) ->
       TmConst (fi, CmakeSeq (Some n))
   | CmakeSeq (Some n), t ->
