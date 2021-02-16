@@ -59,9 +59,10 @@ lang BootParser = MExprAst
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
-                                 ty = gtype t n,
-                                 body = gterm t n}) (glistlen t 0),
-                                 info = ginfo t (addi n 1),
+                                    ty = gtype t n,
+                                    body = gterm t n,
+                                    info = ginfo t (addi n 1)})
+                                      (glistlen t 0),                                 
                  inexpr = gterm t (glistlen t 0),
                  ty = TyUnknown(),
                  info = ginfo t 0}                            
@@ -244,7 +245,10 @@ let s = "recursive let x = lam x.x in x" in
 utest lside s with rside s in
 let s = "recursive let x = lam x.x let y = lam x. x in y" in
 utest lside s with rside s in
-utest l_info "   recursive let x = 5 \n let foo = 7 in x "  with r_info 1 3 2 15 in
+let s = "   recursive let x = 5 \n let foo = 7 in x " in
+utest l_info s with r_info 1 3 2 15 in
+utest match parseMExprString s with TmRecLets r then (head (r.bindings)).info else ()
+with r_info 1 13 1 22 in
 
 -- TmConst
 let s = "true" in

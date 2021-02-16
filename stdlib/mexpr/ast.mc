@@ -148,10 +148,12 @@ lang ConstAst
   syn Const =
 
   syn Expr =
-  | TmConst {val : Const, ty: Type, fi: Info}
+  | TmConst {val : Const,
+             ty: Type,
+             info: Info}
 
   sem info =
-  | TmConst r -> r.fi
+  | TmConst r -> r.info
 
   sem ty =
   | TmConst t -> t.ty
