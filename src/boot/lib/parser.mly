@@ -83,6 +83,7 @@
 %token <unit Ast.tokendata> RBRACKET      /* "}"   */
 %token <unit Ast.tokendata> COLON         /* ":"   */
 %token <unit Ast.tokendata> COMMA         /* ","   */
+%token <unit Ast.tokendata> SEMI         /* ";"   */
 %token <unit Ast.tokendata> DOT           /* "."   */
 %token <unit Ast.tokendata> BAR           /* "|"   */
 %token <unit Ast.tokendata> AND           /* "&"   */
@@ -262,7 +263,7 @@ case:
 
 
 mexpr:
-  | left
+  | sequence
       { $1 }
   | TYPE type_ident type_params IN mexpr
       // Type parameters are currently ignored
@@ -309,6 +310,12 @@ lets:
       { let fi = mkinfo $1.i (tm_info $5) in
         (fi, $2.v, $3, $5)::$6 }
 
+sequence:
+  | left
+     { $1 }
+  | left SEMI mexpr
+     { let fi = tm_info $1 in
+       TmLet(fi, us"_", Symb.Helpers.nosym, TyUnknown(NoInfo), $1, $3) } 
 
 left:
   | atom
@@ -319,7 +326,6 @@ left:
   | con_ident atom
       { let fi = mkinfo $1.i (tm_info $2) in
         TmConApp(fi,$1.v,Symb.Helpers.nosym,$2) }
-
 
 atom:
   | atom DOT proj_label
