@@ -208,7 +208,7 @@ rule main = parse
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let esc_s = Ustring.convert_escaped_chars s in
 	 let rval = Parser.STRING{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
-	 add_colno 2; rval}
+	 rval}
   | eof
       { Parser.EOF }
   | utf8 as c

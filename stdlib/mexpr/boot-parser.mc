@@ -140,35 +140,46 @@ lang BootParser = MExprAst
 
   -- Match pattern from ID
   sem matchPat (t:Unknown) =
-  | 400 /-PatNamed-/ -> PNamed {ident = strToPatName (gstr t 0)}
+  | 400 /-PatNamed-/ ->
+    PNamed {ident = strToPatName (gstr t 0),
+            info = ginfo t 0}
   | 401 /-PatSeqTot-/ ->
-    PSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0) }
+    PSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0),
+             info = ginfo t 0}
   | 402 /-PatSeqEdge-/ ->
     let len = glistlen t 0 in
     PSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
               middle = strToPatName (gstr t 0),
-              postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1)}
+              postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1),
+              info = ginfo t 0}
   | 403 /-PatRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
-     PRecord {bindings = seq2assoc {eq = eqString} lst}
+     PRecord {bindings = seq2assoc {eq = eqString} lst,
+              info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PCon {ident = gname t 0, 
-           subpat = gpat t 0}
+           subpat = gpat t 0,
+           info = ginfo t 0}
   | 405 /-PatInt-/ ->     
-     PInt {val = gint t 0}
+     PInt {val = gint t 0,
+           info = ginfo t 0}
   | 406 /-PatChar-/ ->     
-     PChar {val = int2char (gint t 0)}
+     PChar {val = int2char (gint t 0),
+            info = ginfo t 0}
   | 407 /-PatBool-/ ->     
      PBool {val = eqi (gint t 0) 1,
             info = ginfo t 0}
   | 408 /-PatAnd-/ ->     
      PAnd {lpat = gpat t 0,
-           rpat = gpat t 1}
+           rpat = gpat t 1,
+           info = ginfo t 0}
   | 409 /-PatOr-/ ->     
      POr {lpat = gpat t 0,
-           rpat = gpat t 1}
+           rpat = gpat t 1,
+           info = ginfo t 0}
   | 410 /-PatNot-/ ->     
-     PNot {subpat = gpat t 0}
+     PNot {subpat = gpat t 0,
+           info = ginfo t 0}
 
 
   -- Get info help function
@@ -318,51 +329,82 @@ utest lside s with rside s in
 utest l_info "  Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
 
 -- TmMatch, PatNamed
-let s = "match 5 with x then x else 2" in
+let s =  "match 5 with x then x else 2"  in
 utest lside s with rside s in
 let s = "match foo with _ then 7 else 2" in
 utest lside s with rside s in
 utest l_info "match [4] with x then x else [] " with r_info 1 0 1 31 in
+let s = " match bar with Foo {a = x} then x else 2" in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 16 1 27 in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
 let s = "match x with \"\" then x else 2" in
 utest lside s with rside s in
 let s = "match x with [x,y,z] then x else 2" in
 utest lside s with rside s in
-let s = "match x with [a] ++ v ++ [x,y,z] then x else 2" in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 20 in
+let s = " match x with [a] ++ v ++ [x,y,z] then x else 2" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 14 1 33 in
 let s = "match x with \"\" ++ x ++ [y] then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 27 in
 let s = "match x with [z] ++ x ++ \"\" then z else 2" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 27 in
 
 --TmMatch, PatRecord
 let s = "match x with {} then x else 2" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 15 in
 let s = "match x with {foo=x, bar=_} then x else 2" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 27 in
 
 --TmMatch, PatCon
 let s = "match x with Foo {foo = x} then x else 100" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 26 in
 
 --TmMatch, PatInt, PatBool, PatChar
 let s = "match x with [1,2,12] then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 21 in
 let s = "match x with 'A' then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 16 in
 let s = "match x with [true,false] then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 25 in
 
 -- TmMatch, PatAnd, PatOr, PatNot
 let s = "match x with 1 & x then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 18 in
 let s = "match x with 1 | x then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 18 in
 let s = "match x with !y then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 13 1 15 in
 let s = "match 1 with (a & b) | (!c) then x else x" in
 utest lside s with rside s in
+utest match parseMExprString s with TmMatch r then info r.pat else ()
+with r_info 1 14 1 26 in
 
 -- TmUtest
 let s = "utest lam x.x with 4 in 0" in
