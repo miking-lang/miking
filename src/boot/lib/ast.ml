@@ -212,9 +212,9 @@ and tm =
   (* Type let *)
   | TmType of info * ustring * Symb.t * ty * tm
   (* Constructor definition *)
-  | TmCondef of info * ustring * Symb.t * ty * tm
+  | TmConDef of info * ustring * Symb.t * ty * tm
   (* Constructor application *)
-  | TmConapp of info * ustring * Symb.t * tm
+  | TmConApp of info * ustring * Symb.t * tm
   (* Match data *)
   | TmMatch of info * tm * pat * tm * tm
   (* Unit testing *)
@@ -332,10 +332,10 @@ let rec map_tm f = function
       f (TmRecordUpdate (fi, map_tm f r, l, map_tm f t))
   | TmType (fi, x, s, ty, t1) ->
       f (TmType (fi, x, s, ty, map_tm f t1))
-  | TmCondef (fi, x, s, ty, t1) ->
-      f (TmCondef (fi, x, s, ty, map_tm f t1))
-  | TmConapp (fi, k, s, t) ->
-      f (TmConapp (fi, k, s, t))
+  | TmConDef (fi, x, s, ty, t1) ->
+      f (TmConDef (fi, x, s, ty, map_tm f t1))
+  | TmConApp (fi, k, s, t) ->
+      f (TmConApp (fi, k, s, t))
   | TmMatch (fi, t1, p, t2, t3) ->
       f (TmMatch (fi, map_tm f t1, p, map_tm f t2, map_tm f t3))
   | TmUtest (fi, t1, t2, tusing, tnext) ->
@@ -364,8 +364,8 @@ let tm_info = function
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
   | TmType (fi, _, _, _, _)
-  | TmCondef (fi, _, _, _, _)
-  | TmConapp (fi, _, _, _)
+  | TmConDef (fi, _, _, _, _)
+  | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)
   | TmUtest (fi, _, _, _, _)
   | TmNever fi

@@ -28,9 +28,9 @@ let idTmRecordUpdate = 108
 
 let idTmType = 109
 
-let idTmCondef = 110
+let idTmConDef = 110
 
-let idTmConapp = 111
+let idTmConApp = 111
 
 let idTmMatch = 112
 
@@ -148,10 +148,10 @@ let getData = function
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
   | PTreeTm (TmType (fi, x, _, ty, t)) ->
       (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
-  | PTreeTm (TmCondef (fi, x, _, ty, t)) ->
-      (idTmCondef, [fi], [], [ty], [t], [x], [], [], [], [])
-  | PTreeTm (TmConapp (fi, x, _, t)) ->
-      (idTmConapp, [fi], [], [], [t], [x], [], [], [], [])
+  | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
+      (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmConApp (fi, x, _, t)) ->
+      (idTmConApp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
   | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (

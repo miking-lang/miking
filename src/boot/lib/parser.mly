@@ -287,7 +287,7 @@ mexpr:
         TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
   | CON con_ident ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmCondef(fi,$2.v,Symb.Helpers.nosym,$3,$5)}
+        TmConDef(fi,$2.v,Symb.Helpers.nosym,$3,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
          TmMatch(fi,$2,$4,$6,$8) }
@@ -318,7 +318,7 @@ left:
         TmApp(fi,$1,$2) }
   | con_ident atom
       { let fi = mkinfo $1.i (tm_info $2) in
-        TmConapp(fi,$1.v,Symb.Helpers.nosym,$2) }
+        TmConApp(fi,$1.v,Symb.Helpers.nosym,$2) }
 
 
 atom:

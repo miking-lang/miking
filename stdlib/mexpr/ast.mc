@@ -193,7 +193,7 @@ lang SeqAst
 end
 
 
--- TmRecord and TmRecorsUpdate -- 
+-- TmRecord and TmRecordUpdate -- 
 lang RecordAst
   syn Expr =
   | TmRecord {bindings : AssocMap String Expr,

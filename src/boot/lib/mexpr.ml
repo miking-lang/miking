@@ -1094,7 +1094,7 @@ let shape_str = function
       |> fun x -> us "record: {" ^. x ^. us "}"
   | TmSeq _ ->
       us "Sequence"
-  | TmConapp (_, x, s, _) ->
+  | TmConApp (_, x, s, _) ->
       ustring_of_var ~symbol:!enable_debug_symbol_print x s
   | TmConst (_, CInt _) ->
       us "Int"
@@ -1147,7 +1147,7 @@ let rec val_equal v1 v2 =
       Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst (_, c1), TmConst (_, c2) ->
       c1 = c2
-  | TmConapp (_, _, sym1, v1), TmConapp (_, _, sym2, v2) ->
+  | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
       sym1 = sym2 && val_equal v1 v2
   | _ ->
       false
@@ -1193,7 +1193,7 @@ let rec symbolize_type env ty =
       TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
-   constructs TmConapp terms from the combination of variables and function applications.  *)
+   constructs TmConApp terms from the combination of variables and function applications.  *)
 let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
@@ -1338,16 +1338,16 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       TmRecord (fi, Record.map (symbolize env) r)
   | TmRecordUpdate (fi, t1, l, t2) ->
       TmRecordUpdate (fi, symbolize env t1, l, symbolize env t2)
-  | TmCondef (fi, x, _, ty, t) ->
+  | TmConDef (fi, x, _, ty, t) ->
       let s = Symb.gensym () in
-      TmCondef
+      TmConDef
         ( fi
         , x
         , s
         , symbolize_type env ty
         , symbolize ((IdCon (sid_of_ustring x), s) :: env) t )
-  | TmConapp (fi, x, _, t) ->
-      TmConapp
+  | TmConApp (fi, x, _, t) ->
+      TmConApp
         (fi, x, findsym fi (IdCon (sid_of_ustring x)) env, symbolize env t)
   | TmMatch (fi, t1, p, t2, t3) ->
       let matchedEnv, p = sPat [] p in
@@ -1405,12 +1405,12 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
                 , symbolize env2 t ))
               lst
           , new_tm ) )
-  | TmCondef (fi, x, _, ty, t) ->
+  | TmConDef (fi, x, _, ty, t) ->
       let s = Symb.gensym () in
       let new_env, new_t2 =
         symbolize_toplevel ((IdCon (sid_of_ustring x), s) :: env) t
       in
-      (new_env, TmCondef (fi, x, s, symbolize_type env ty, new_t2))
+      (new_env, TmConDef (fi, x, s, symbolize_type env ty, new_t2))
   | ( TmVar _
     | TmLam _
     | TmApp _
@@ -1418,7 +1418,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
-    | TmConapp _
+    | TmConApp _
     | TmMatch _
     | TmUse _
     | TmUtest _
@@ -1486,7 +1486,7 @@ let rec try_match env value pat =
         None )
   | PatCon (_, _, s1, p) -> (
     match value with
-    | TmConapp (_, _, s2, v) when s1 = s2 ->
+    | TmConApp (_, _, s2, v) when s1 = s2 ->
         try_match env v p
     | _ ->
         None )
@@ -1590,10 +1590,10 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmType (_, _, _, _, t1) ->
       eval env t1
   (* Data constructors *)
-  | TmCondef (_, _, _, _, t) ->
+  | TmConDef (_, _, _, _, t) ->
       eval env t
   (* Constructor application *)
-  | TmConapp (fi, x, s, t) ->
+  | TmConApp (fi, x, s, t) ->
       let rhs = eval env t in
       ( if !enable_debug_con_shape then
         let shape = shape_str rhs in
@@ -1601,7 +1601,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         let info = info2str fi in
         Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
-      TmConapp (fi, x, s, rhs)
+      TmConApp (fi, x, s, rhs)
   (* Match *)
   | TmMatch (_, t1, p, t2, t3) -> (
     match try_match env (eval env t1) p with
@@ -1674,7 +1674,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
              env lst)
       in
       eval_toplevel (Lazy.force env') t2
-  | TmCondef (_, _, _, _, t) ->
+  | TmConDef (_, _, _, _, t) ->
       eval_toplevel env t
   | ( TmVar _
     | TmLam _
@@ -1685,7 +1685,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
-    | TmConapp _
+    | TmConApp _
     | TmMatch _
     | TmUse _
     | TmUtest _
