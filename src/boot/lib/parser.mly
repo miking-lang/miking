@@ -266,7 +266,7 @@ mexpr:
       { $1 }
   | TYPE type_ident type_params IN mexpr
       // Type parameters are currently ignored
-      { let fi = mkinfo $1.i (tm_info $5) in
+      { let fi = mkinfo $1.i $4.i in
         TmType(fi, $2.v, Symb.Helpers.nosym, TyVariant (fi, []), $5) }
   | TYPE type_ident type_params EQ ty IN mexpr
       // Type parameters are currently ignored
@@ -295,7 +295,7 @@ mexpr:
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
   | UTEST mexpr WITH mexpr IN mexpr
-      { let fi = mkinfo $1.i (tm_info $4) in
+      { let fi = mkinfo $1.i $5.i in
         TmUtest(fi,$2,$4,None,$6) }
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in

@@ -3,6 +3,7 @@
 include "string.mc"
 include "name.mc"
 include "assoc.mc"
+include "info.mc"
 include "mexpr/info.mc"
 
 -----------
@@ -171,10 +172,12 @@ end
 -- TmSeq --
 lang SeqAst
   syn Expr =
-  | TmSeq {tms : [Expr], ty: Type, fi: Info}
+  | TmSeq {tms : [Expr],
+           ty: Type,
+           info: Info}
 
   sem info =
-  | TmSeq r -> r.fi
+  | TmSeq r -> r.info
 
   sem ty =
   | TmSeq t -> t.ty
@@ -195,16 +198,16 @@ lang RecordAst
   syn Expr =
   | TmRecord {bindings : AssocMap String Expr,
               ty : Type, 
-              fi : Info}
-  | TmRecordUpdate {rec   : Expr,
-                    key   : String,
+              info : Info}
+  | TmRecordUpdate {rec : Expr,
+                    key : String,
                     value : Expr,
-                    ty    : Type,
-                    fi : Info}
+                    ty : Type,
+                    info : Info}
 
   sem info =
-  | TmRecord r -> r.fi
-  | TmRecordUpdate r -> r.fi
+  | TmRecord r -> r.info
+  | TmRecordUpdate r -> r.info
 
   sem ty =
   | TmRecord t -> t.ty
@@ -227,13 +230,13 @@ end
 -- TmType -- 
 lang TypeAst
   syn Expr =
-  | TmType {ident  : Name,
-            ty     : Type,
+  | TmType {ident : Name,
+            ty : Type,
             inexpr : Expr,
-            fi     : Info}
+            info : Info}
 
   sem info =
-  | TmType r -> r.fi
+  | TmType r -> r.info
 
   sem ty =
   | TmType t -> t.ty
@@ -251,12 +254,18 @@ end
 -- TmCondef and TmConApp --
 lang DataAst
   syn Expr =
-  | TmConDef {ident  : Name,
-              ty     : Type,
-              inexpr : Expr}
+  | TmConDef {ident : Name,
+              ty : Type,
+              inexpr : Expr,
+              info : Info}
   | TmConApp {ident : Name,
-              body  : Expr,
-              ty    : Type}
+              body : Expr,
+              ty : Type,
+              info: Info}
+
+  sem info =
+  | TmConDef r -> r.info
+  | TmConApp r -> r.info
 
   sem ty =
   | TmConDef t -> t.ty
@@ -283,12 +292,12 @@ lang MatchAst
              thn    : Expr,
              els    : Expr,
              ty     : Type,
-             fi     : Info}
+             info     : Info}
 
   syn Pat =
 
   sem info =
-  | TmMatch r -> r.fi
+  | TmMatch r -> r.info
 
   sem ty =
   | TmMatch t -> t.ty
@@ -309,10 +318,14 @@ end
 -- TmUtest --
 lang UtestAst
   syn Expr =
-  | TmUtest {test     : Expr,
+  | TmUtest {test : Expr,
              expected : Expr,
-             next     : Expr,   
-             ty       : Type} 
+             next : Expr,   
+             ty : Type,
+             info : Info} 
+
+  sem info =
+  | TmUtest r -> r.info
 
   sem ty =
   | TmUtest t -> t.ty
@@ -333,10 +346,11 @@ end
 -- TmNever --
 lang NeverAst
   syn Expr =
-  | TmNever {ty: Type, fi: Info}
+  | TmNever {ty: Type,
+            info: Info}
 
   sem info =
-  | TmNever r -> r.fi
+  | TmNever r -> r.info
 
   sem ty =
   | TmNever t -> t.ty
@@ -353,9 +367,14 @@ end
 
 
 -- TmRef --
+-- TODO (dbro, 2020-02-16): this term should be moved into an evaluation term
+-- in the same way as for closures. Eventually, this should be a rank 0 tensor.
 lang RefAst
   syn Expr =
   | TmRef {ref : Ref}
+
+  sem info =
+  | TmRef r -> NoInfo ()
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRef t -> TmRef t

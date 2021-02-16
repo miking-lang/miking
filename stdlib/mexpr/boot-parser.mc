@@ -97,11 +97,13 @@ lang BootParser = MExprAst
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                ty = gtype t 0,
-               inexpr = gterm t 0}
+               inexpr = gterm t 0,
+               info = ginfo t 0}
   | 111 /-TmConApp-/ ->
      TmConApp {ident = gname t 0,
                body = gterm t 0,
-               ty = TyUnknown()}
+               ty = TyUnknown(),
+               info = ginfo t 0}
   | 112 /-TmMatch-/ ->
      TmMatch {target = gterm t 0,
               pat = gpat t 0,
@@ -113,7 +115,8 @@ lang BootParser = MExprAst
      TmUtest {test = gterm t 0,
               expected = gterm t 1,
               next = gterm t 2,  
-              ty = TyUnknown()}
+              ty = TyUnknown(),
+              info = ginfo t 0}
   | 114 /-TmNever-/ ->
      TmNever {ty = TyUnknown(),
               info = ginfo t 0}
@@ -261,6 +264,12 @@ let s = "1.70e+1" in
 utest lside s with rside s in
 let s = "'a'" in
 utest lside s with rside s in
+utest l_info " true " with r_info 1 1 1 5 in
+utest l_info "  false " with r_info 1 2 1 7 in
+utest l_info " 1234 " with r_info 1 1 1 5 in
+utest l_info " 123.121 " with r_info 1 1 1 8 in
+utest l_info "\n  'A' " with r_info 2 2 2 5 in
+
 
 -- TmSeq
 let s = "\"\"" in
@@ -271,6 +280,8 @@ let s = "[[1],[12,42311],[23,21,91]]" in
 utest lside s with rside s in
 let s = "\"Hello world\"" in
 utest lside s with rside s in
+utest l_info "  [12,2,1] " with r_info 1 2 1 10 in
+
 
 -- TmRecord
 let s = "{}" in
@@ -279,34 +290,39 @@ let s = "{a = 5}" in
 utest lside s with rside s in
 let s = "{foo = 123, bar = \"Hello\"}" in
 utest lside s with rside s in
+utest l_info " {} " with r_info 1 1 1 3 in
+utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 
 -- TmRecordUpdate
 let s = "{a with foo = 5}" in
 utest lside s with rside s in
 let s = "{{foo=7, bar='a'} with bar = 'b'}" in
 utest lside s with rside s in
+utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
+
+-- TmType
+let s = "type Foo in x" in
+utest lside s with rside s in
+utest l_info "  type Bar in () " with r_info 1 2 1 13 in
 
 -- TmConDef
 let s = "con Foo in x" in
 utest lside s with rside s in
 let s = "con Foo : Int -> Tree in x" in
 utest lside s with rside "con Foo in x" in
-
--- TmType
-let s = "type Foo in x" in
-utest lside s with rside s in
-
--- TmConDef
+utest l_info "  con Bar in 10 " with r_info 1 2 1 12 in
 
 -- TmConApp
 let s = "Foo {a = 5}" in
 utest lside s with rside s in
+utest l_info "  Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
 
 -- TmMatch, PatNamed
 let s = "match 5 with x then x else 2" in
 utest lside s with rside s in
 let s = "match foo with _ then 7 else 2" in
 utest lside s with rside s in
+utest l_info "match [4] with x then x else [] " with r_info 1 0 1 31 in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
 let s = "match x with \"\" then x else 2" in
@@ -351,9 +367,11 @@ utest lside s with rside s in
 -- TmUtest
 let s = "utest lam x.x with 4 in 0" in
 utest lside s with rside s in
+utest l_info "\n utest 3 with 4 in () " with r_info 2 1 2 18 in
 
 -- TmNever
 let s = "never" in
 utest lside s with rside s in
+utest l_info "  \n  never " with r_info 2 2 2 7 in
 
 ()
