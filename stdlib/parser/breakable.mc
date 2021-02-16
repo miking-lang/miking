@@ -14,10 +14,10 @@ ambiguities involved.
 
 A central concept herein is whether a "thing" (an operator or an
 expression) is open or closed on either side. For example, the infix
-operator "+" is both left-open and right-open, while the atomic
-expression "7" is both left-closed and right-closed. These properties
-transfer to partially constructed ASTs as well, "(_ + 4)" is left-open
-but right-closed, while "(1 + 2)" is both left-closed and
+operator `+` is both left-open and right-open, while the atomic
+expression `7` is both left-closed and right-closed. These properties
+transfer to partially constructed ASTs as well, `(_ + 4)` is left-open
+but right-closed, while `(1 + 2)` is both left-closed and
 right-closed.
 
 # Precedence
@@ -54,9 +54,9 @@ normal interactions. The canonical example is `if then else` (where
   then`
 
 This means that each `else` must have a corresponding `if condition
-then`, but we can handle any ambiguities arising using the same
-approach as for operators, i.e., we can resolve them with grouping
-parentheses.
+then`, but we can handle any ambiguities that arise
+(e.g. dangling-`else`) using the same approach as for operators, i.e.,
+we can resolve them with grouping parentheses.
 
 As a consequence, the only ambiguities that can arise when using this
 approach are those where it is unclear how things in the input
@@ -64,7 +64,7 @@ connect, as opposed to what their fundamental meaning is, which I
 (vipa) hypothesize is quite helpful for the understandability of
 ambiguities.
 
-# Mid-level usage
+# Mid-level usage instructions
 
 1. Create a value of the `BreakableGrammar` type. See the tests at the
 end of the file for examples.
