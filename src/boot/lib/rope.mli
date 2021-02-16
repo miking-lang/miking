@@ -9,6 +9,14 @@ type float_ba = (float, float64_elt) ba
 
 type 'a t
 
+val create_array : int -> (int -> 'a) -> 'a array t
+(** [Rope.create_* n f] returns a new rope of length [n] where the element at
+    index [i] is initialized as the result of [f i]. *)
+
+val create_int_bigarray : int -> (int -> int) -> int_ba t
+
+val create_float_bigarray : int -> (int -> float) -> float_ba t
+
 val make_array : int -> 'a -> 'a array t
 (** [Rope.make_* n v] returns a new rope of length [n] where all elements have
     been initialized to [v]. *)

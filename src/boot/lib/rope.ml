@@ -21,6 +21,23 @@ let rec _bigarray_kind (s : ('a, 'b) ba u) : ('a, 'c) kind =
 let _uninit_bigarray (k : ('a, 'b) kind) (n : int) : ('a, 'b) ba =
   Array1.create k c_layout n
 
+let _create_bigarray (k : ('a, 'b) kind) (n : int) (f : int -> 'a) :
+    ('a, 'b) ba =
+  let a = _uninit_bigarray k n in
+  for i = 0 to n - 1 do
+    Array1.unsafe_set a i (f i)
+  done ;
+  a
+
+let create_array (n : int) (f : int -> 'a) : 'a array t =
+  ref (Leaf (Array.init n f))
+
+let create_int_bigarray (n : int) (f : int -> int) : int_ba t =
+  ref (Leaf (_create_bigarray Int n f))
+
+let create_float_bigarray (n : int) (f : int -> float) : float_ba t =
+  ref (Leaf (_create_bigarray Float64 n f))
+
 let _make_bigarray (k : ('a, 'b) kind) (n : int) (v : 'a) : ('a, 'b) ba t =
   let a = _uninit_bigarray k n in
   Array1.fill a v ; ref (Leaf a)
