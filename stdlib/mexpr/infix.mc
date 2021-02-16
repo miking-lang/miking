@@ -16,14 +16,14 @@ include "mexpr/pprint.mc"
 include "ast-builder.mc"
 
 -- Fragment for constructing constant binary operators. Used by InfixArithParser
-lang MExprMakeConstBinOp = ArithIntAst + AppAst
+lang MExprMakeConstBinOp = ArithIntAst + AppAst + UnknownTypeAst
   sem makeConstBinOp (n: Int) (p: Pos) (xs: String)
                      (assoc: Associativity) (prec: Int) =
   | op ->
     let p2 = advanceCol p 1 in
     Some {
       val = lam x. lam y.
-        let op = TmConst {val = op, fi = makeInfo p p2} in
+        let op = TmConst {val = op, ty = TyUnknown (), info = makeInfo p p2} in
         let app = lam x. lam y. 
                 TmApp {lhs = x, rhs = y, info = mergeInfo (info x) (info y)} in
         let res = (app (app op x) y) in

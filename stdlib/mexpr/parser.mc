@@ -162,13 +162,13 @@ lang BoolParser = ExprParser + IdentParser + ConstAst + BoolAst + UnknownTypeAst
       let p2 = advanceCol p 4 in
       {val = TmConst {val = CBool {val = true},
                       ty = TyUnknown {},
-                      fi = makeInfo p p2},
+                      info = makeInfo p p2},
        pos = p2, str = xs}
   | "false" ->
       let p2 = advanceCol p 5 in
       {val = TmConst {val = CBool {val = false},
                       ty = TyUnknown {},
-                      fi = makeInfo p p2},
+                      info = makeInfo p p2},
        pos = p2, str = xs}
 end
 
@@ -233,7 +233,7 @@ lang UIntParser = UNumParser + ConstAst + IntAst + UnknownTypeAst
     let p2 = advanceCol p (length n) in
     {val = TmConst {val = CInt {val = string2int n},
                     ty = TyUnknown {},
-                    fi = makeInfo p p2},
+                    info = makeInfo p p2},
      pos = p2, str = xs}
 end
 
@@ -251,13 +251,13 @@ lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst + UnknownTypeAst
             CInt {val = string2int pre}
         in {val = TmConst {val = constVal,
                            ty = TyUnknown {},
-                           fi = makeInfo p pos},
+                           info = makeInfo p pos},
             pos = pos, str = cons expChar s}
       else
         let floatStr = join [pre, "e", exp.val] in
         {val = TmConst {val = CFloat {val = string2float floatStr},
                         ty = TyUnknown {},
-                        fi = makeInfo p exp.pos},
+                        info = makeInfo p exp.pos},
          pos = exp.pos, str = exp.str}
     in
     let p2 = advanceCol p (length n) in
@@ -273,14 +273,14 @@ lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst + UnknownTypeAst
         else
           {val = TmConst {val = CFloat {val = string2float preExponentStr},
                           ty = TyUnknown {},
-                          fi = makeInfo p n2.pos},
+                          info = makeInfo p n2.pos},
            pos = n2.pos, str = n2.str}
       else match s with ['e' | 'E'] ++ s2 then
         exponentHelper p3 n (head s) s2 true
       else
         {val = TmConst {val = CFloat {val = string2float n},
                         ty = TyUnknown {},
-                        fi = makeInfo p p3},
+                        info = makeInfo p p3},
          pos = p3, str = s}
     else match c with 'e' | 'E' then
       exponentHelper (advanceCol p (length n)) n c (tail xs) false
@@ -312,9 +312,9 @@ lang IfParser =
      let e2 = parseExprMain r1.pos 0 r1.str in
      let r2 = matchKeyword "else" e2.pos e2.str  in
      let e3 = parseExprMain r2.pos 0 r2.str in
-     {val = TmMatch {target = e1.val, pat = PBool {val = true, fi = NoInfo ()},
+     {val = TmMatch {target = e1.val, pat = PBool {val = true, info = NoInfo ()},
                      thn = e2.val, els = e3.val, ty = TyUnknown {},
-                     fi = makeInfo p e3.pos},
+                     info = makeInfo p e3.pos},
       pos = e3.pos,
       str = e3.str}
  end
@@ -337,7 +337,7 @@ lang SeqParser = ExprParser + KeywordUtils + SeqAst + UnknownTypeAst
       recursive let work = lam acc. lam first. lam p2. lam str.
         let r = eatWSAC p2 str in
   	match r.str with "]" ++ xs then
-	  {val = TmSeq{tms = acc, ty = TyUnknown {}, fi = makeInfo p (advanceCol r.pos 1)},
+	  {val = TmSeq{tms = acc, ty = TyUnknown {}, info = makeInfo p (advanceCol r.pos 1)},
 	   pos = advanceCol r.pos 1, str = xs}
 	else
 	  let r2 = if first then r else matchKeyword "," r.pos r.str in
@@ -370,12 +370,12 @@ lang StringParser = ExprParser + SeqAst + CharAst + UnknownTypeAst
     recursive let work = lam acc. lam p2. lam str.
       match str with "\"" ++ xs then
         {val = TmSeq {tms = acc, ty = TyUnknown {},
-                      fi = makeInfo p (advanceCol p2 1)},
+                      info = makeInfo p (advanceCol p2 1)},
 	 pos = advanceCol p2 1, str = xs}
       else
         let r =  matchChar p2 str in
         let v = TmConst {val = CChar {val = r.val}, ty = TyUnknown {},
-                         fi = makeInfo p2 r.pos} in
+                         info = makeInfo p2 r.pos} in
 	work (snoc acc v) r.pos r.str
     in
       work [] (advanceCol p 1) xs
@@ -388,7 +388,7 @@ lang CharParser = ExprParser + KeywordUtils + CharAst + UnknownTypeAst
       let r =  matchChar (advanceCol p 1) xs in
       let r2 = matchKeyword "\'" r.pos r.str in
       {val = TmConst {val = CChar {val = r.val}, ty = TyUnknown {},
-                      fi = makeInfo p r2.pos},
+                      info = makeInfo p r2.pos},
        pos = r2.pos, str = r2.str}
 end
 
@@ -501,80 +501,80 @@ use MExprParser in
 -- Unsigned integer
 utest parseExprMain (initPos "file") 0 "  123foo" with
       {val = TmConst {val = CInt {val = 123}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 2 1 5},
+                      info = infoVal "file" 1 2 1 5},
        pos = posVal "file" 1 5, str = "foo"} in
 -- Unsigned floats
 utest parseExprMain (initPos "file") 0 "  1.0 " with
       {val = TmConst {val = CFloat {val = 1.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 2 1 5},
+                      info = infoVal "file" 1 2 1 5},
        pos = posVal "file" 1 5, str = " "} in
 utest parseExprMain (initPos "file") 0 " 1234.  " with
       {val = TmConst {val = CFloat {val = 1234.}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = "  "} in
 utest parseExprMain (initPos "file") 0 " 13.37 " with
       {val = TmConst {val = CFloat {val = 13.37}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 "  1.0e-2" with
       {val = TmConst {val = CFloat {val = 0.01}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 2 1 8},
+                      info = infoVal "file" 1 2 1 8},
        pos = posVal "file" 1 8, str = ""} in
 utest parseExprMain (initPos "file") 0 " 2.5e+2  " with
       {val = TmConst {val = CFloat {val = 250.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 7},
+                      info = infoVal "file" 1 1 1 7},
        pos = posVal "file" 1 7, str = "  "} in
 utest parseExprMain (initPos "file") 0 "   2e3" with
       {val = TmConst {val = CFloat {val = 2000.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 3 1 6},
+                      info = infoVal "file" 1 3 1 6},
        pos = posVal "file" 1 6, str = ""} in
 utest parseExprMain (initPos "file") 0 "   2E3 " with
        {val = TmConst {val = CFloat {val = 2000.0}, ty = TyUnknown {},
-                       fi = infoVal "file" 1 3 1 6},
+                       info = infoVal "file" 1 3 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 "   2.0e3" with
       {val = TmConst {val = CFloat {val = 2000.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 3 1 8},
+                      info = infoVal "file" 1 3 1 8},
        pos = posVal "file" 1 8, str = ""} in
 utest parseExprMain (initPos "file") 0 " 1.e2 " with
       {val = TmConst {val = CFloat {val = 100.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 5},
+                      info = infoVal "file" 1 1 1 5},
        pos = posVal "file" 1 5, str = " "} in
 utest parseExprMain (initPos "file") 0 " 2.e+1 " with
       {val = TmConst {val = CFloat {val = 20.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 " 3.e-4 " with
       {val = TmConst {val = CFloat {val = 0.0003}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 "  2.E3 " with
       {val = TmConst {val = CFloat {val = 2000.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 2 1 6},
+                      info = infoVal "file" 1 2 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 " 4.E+1 " with
       {val = TmConst {val = CFloat {val = 40.0}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 " 1.E-3 " with
       {val = TmConst {val = CFloat {val = 0.001}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 6},
+                      info = infoVal "file" 1 1 1 6},
        pos = posVal "file" 1 6, str = " "} in
 utest parseExprMain (initPos "file") 0 " 1E " with
       {val = TmConst {val = CInt {val = 1}, ty = TyUnknown {},
-                      fi = infoVal "file" 1 1 1 2},
+                      info = infoVal "file" 1 1 1 2},
        pos = posVal "file" 1 2, str = "E "} in
 utest parseExprMain (initPos "file") 0 " 1e " with
        {val = TmConst {val = CInt {val = 1}, ty = TyUnknown {},
-                       fi = infoVal "file" 1 1 1 2},
+                       info = infoVal "file" 1 1 1 2},
        pos = posVal "file" 1 2, str = "e "} in
 utest parseExprMain (initPos "file") 0 " 1.e++2 " with
        {val = TmConst {val = CFloat {val = 1.0}, ty = TyUnknown {},
-                       fi = infoVal "file" 1 1 1 3},
+                       info = infoVal "file" 1 1 1 3},
        pos = posVal "file" 1 3, str = "e++2 "} in
 utest parseExprMain (initPos "file") 0 " 3.1992e--2 " with
        {val = TmConst {val = CFloat {val = 3.1992}, ty = TyUnknown {},
-                       fi = infoVal "file" 1 1 1 7},
+                       info = infoVal "file" 1 1 1 7},
        pos = posVal "file" 1 7, str = "e--2 "} in
 
 --If expression
@@ -583,51 +583,51 @@ utest (parseExprMain (initPos "") 0 "  if 1 then 22 else 3").pos
 -- Boolean literal 'true'
 utest parseExpr (initPos "f") " true " with
       TmConst {val = CBool {val = true}, ty = TyUnknown {},
-               fi = infoVal "f" 1 1 1 5} in
+               info = infoVal "f" 1 1 1 5} in
 -- Boolean literal 'false'
 utest parseExpr (initPos "f") " true " with
       TmConst {val = CBool {val = true}, ty = TyUnknown {},
-               fi = infoVal "f" 1 1 1 5} in
+               info = infoVal "f" 1 1 1 5} in
 -- Parentheses
 utest parseExpr (initPos "") " ( 123) " with
       TmConst {val = CInt {val = 123}, ty = TyUnknown {},
-               fi = infoVal "" 1 3 1 6} in
+               info = infoVal "" 1 3 1 6} in
 -- Sequences
 utest parseExpr (initPos "") "[]" with
-      TmSeq {tms = [], ty = TyUnknown {}, fi = infoVal "" 1 0 1 2} in
+      TmSeq {tms = [], ty = TyUnknown {}, info = infoVal "" 1 0 1 2} in
 utest parseExpr (initPos "") " [ ] " with
-      TmSeq {tms = [], ty = TyUnknown {}, fi = infoVal "" 1 1 1 4} in
+      TmSeq {tms = [], ty = TyUnknown {}, info = infoVal "" 1 1 1 4} in
 utest parseExprMain (initPos "") 0 " [ 17 ] " with
       let v = TmConst {val = CInt {val = 17}, ty = TyUnknown {},
-                       fi = infoVal "" 1 3 1 5} in
-      {val = TmSeq {tms = [v], ty = TyUnknown {}, fi = infoVal "" 1 1 1 7},
+                       info = infoVal "" 1 3 1 5} in
+      {val = TmSeq {tms = [v], ty = TyUnknown {}, info = infoVal "" 1 1 1 7},
        pos = posVal "" 1 7, str = " "} in
 utest parseExpr (initPos "") " [ 232 , ( 19 ) ] " with
       let v1 = TmConst {val = CInt {val = 232}, ty = TyUnknown {},
-                        fi = infoVal "" 1 3 1 6} in
+                        info = infoVal "" 1 3 1 6} in
       let v2 = TmConst {val = CInt {val = 19}, ty = TyUnknown {},
-                        fi = infoVal "" 1 11 1 13} in
-      TmSeq {tms = [v1,v2], ty = TyUnknown {}, fi = infoVal "" 1 1 1 17} in
+                        info = infoVal "" 1 11 1 13} in
+      TmSeq {tms = [v1,v2], ty = TyUnknown {}, info = infoVal "" 1 1 1 17} in
 -- Strings
 let makeChar = lam k. lam c. lam n.
     TmConst {val = CChar {val = c}, ty = TyUnknown {},
-             fi = infoVal "" 1 n 1 (addi n k)} in
+             info = infoVal "" 1 n 1 (addi n k)} in
 let mkc = makeChar 1 in
 let mkc2 = makeChar 2 in
 utest parseExpr (initPos "") " \"Foo\" " with
   let str = [mkc 'F' 2, mkc 'o' 3, mkc 'o' 4] in
-  TmSeq {tms = str, ty = TyUnknown {}, fi = infoVal "" 1 1 1 6} in
+  TmSeq {tms = str, ty = TyUnknown {}, info = infoVal "" 1 1 1 6} in
 utest parseExpr (initPos "") " \" a\\\\ \\n\" " with
   let str = [mkc ' ' 2, mkc 'a' 3, mkc2 '\\' 4, mkc ' ' 6, mkc2 '\n' 7] in
-  TmSeq {tms = str, ty = TyUnknown {}, fi = infoVal "" 1 1 1 10} in
+  TmSeq {tms = str, ty = TyUnknown {}, info = infoVal "" 1 1 1 10} in
 -- Chars
 utest parseExprMain (initPos "") 0 " \'A\' " with
   {val = TmConst {val = CChar {val = 'A'}, ty = TyUnknown {},
-                  fi = infoVal "" 1 1 1 4},
+                  info = infoVal "" 1 1 1 4},
    pos = posVal "" 1 4, str = " "} in
 utest parseExpr (initPos "") " \'\\n\' " with
   TmConst {val = CChar {val = '\n'}, ty = TyUnknown {},
-           fi = infoVal "" 1 1 1 5} in
+           info = infoVal "" 1 1 1 5} in
 -- Var
 utest (parseExprMain (initPos "") 0 " _xs ").pos with posVal "" 1 4 in
 utest (parseExprMain (initPos "") 0 " fOO_12a ").pos with posVal "" 1 8 in
