@@ -74,8 +74,7 @@ lang AppEval = AppAst
   | _ -> error "Bad application"
 
   sem eval (ctx : {env : Env}) =
-  | TmApp t ->
-    apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
+  | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
 lang FunEval = FunAst + VarEval + AppEval
