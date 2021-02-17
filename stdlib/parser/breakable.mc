@@ -312,15 +312,6 @@ let _addedNodesRightChildren
     match node with TentativeRoot{addedNodesRightChildren = x} | TentativeMid{addedNodesRightChildren = x}
     then x
     else never
--- NOTE(vipa, 2021-02-08): This should possibly be in the stdlib, but it might depend on opinions on side effects down the line
-recursive let _iter = lam f. lam xs.
-  match xs with [x] ++ xs then
-    let _ = f x in _iter f xs
-  else match xs with [] then
-    ()
-  else let _ = dprintLn xs in never
-end
-let _for = lam xs. lam f. _iter f xs
 
 let breakableInAllowSet
   : id
@@ -399,7 +390,7 @@ let breakableGenGrammar
     let updateRef : Ref a -> (a -> a) -> ()
       = lam ref. lam f. modref ref (f (deref ref)) in
 
-    let _ = _for grammar.productions
+    let _ = for_ grammar.productions
       (lam prod.
         let label = label prod in
         let id = toOpId label in
@@ -542,7 +533,7 @@ let _addLeftChildToParent
       match deref target with (lastUpdate, prev) then
         if _isBefore lastUpdate time then
           let leftChildrenHere = ref [child] in
-          let _ = _iter (lam p. modref (_addedNodesLeftChildren p) (time, leftChildrenHere)) parents in
+          let _ = for_ parents (lam p. modref (_addedNodesLeftChildren p) (time, leftChildrenHere)) in
           Some parents
         else
           let _ = modref prev (cons child (deref prev)) in
@@ -639,7 +630,7 @@ let _addLOpen
       -> Option [TentativeNode res self ROpen] -- NonEmpty
       = lam queue. lam child.
         match _getParents child with Some parents then
-          let _ = _for parents
+          let _ = for_ parents
             (lam parent.
               if not (_mayGroupLeft parent input) then () else
               match _shallowAllowedRight parent child with Some child then
@@ -735,7 +726,7 @@ let breakableFinalizeParse
       -> ()
       = lam queue. lam child.
         match _getParents child with Some parents then
-          _for parents
+          for_ parents
             (lam parent.
               match _shallowAllowedRight parent child with Some child then
                 match _addRightChildToParent time child parent with Some parent then
@@ -763,7 +754,7 @@ let breakableFinalizeParse
 
     let frontier = st.frontier in
     let queue = _newQueueFromFrontier frontier in
-    let _ = _iter (handleLeaf queue) frontier in
+    let _ = iter (handleLeaf queue) frontier in
     work queue
 
 type BreakableError self

@@ -75,6 +75,33 @@ with []
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with []
 
+recursive let iter
+  : (a -> ())
+  -> [a]
+  -> ()
+  = lam f. lam xs.
+    match xs with [x] ++ xs then
+      let _ = f x in iter f xs
+    else match xs with [] then
+      ()
+    else never
+end
+
+utest iter (lam x. addi x 1) [1, 2, 3]
+with ()
+
+utest
+  let r = ref 0 in
+  let _ = iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4] in
+  deref r
+with 10
+
+let for_
+  : [a]
+  -> (a -> ())
+  -> ()
+  = lam xs. lam f. iter f xs
+
 -- Folds
 recursive
   let foldl = lam f. lam acc. lam seq.
