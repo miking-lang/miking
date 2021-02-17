@@ -59,6 +59,55 @@ utest mapi (lam i. lam x. i) [] with []
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
 utest map (lam x. addi x 1) [] with []
 
+let mapOption
+  : (a -> Option b)
+  -> [a]
+  -> [b]
+  = lam f.
+    recursive let work = lam as.
+      match as with [a] ++ as then
+        match f a with Some b
+        then cons b (work as)
+        else work as
+      else []
+    in work
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2, 3, 4, 5, 6]
+with [34, 35, 36]
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2]
+with []
+
+utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
+with []
+
+recursive let iter
+  : (a -> ())
+  -> [a]
+  -> ()
+  = lam f. lam xs.
+    match xs with [x] ++ xs then
+      let _ = f x in iter f xs
+    else match xs with [] then
+      ()
+    else never
+end
+
+utest iter (lam x. addi x 1) [1, 2, 3]
+with ()
+
+utest
+  let r = ref 0 in
+  let _ = iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4] in
+  deref r
+with 10
+
+let for_
+  : [a]
+  -> (a -> ())
+  -> ()
+  = lam xs. lam f. iter f xs
+
 -- Folds
 recursive
   let foldl = lam f. lam acc. lam seq.
@@ -165,6 +214,16 @@ let join = lam seqs. foldl concat [] seqs
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
 utest join [[],[],[]] with []
+
+-- Monadic and Applicative operations
+
+let seqLiftA2
+  : (a -> b -> c) -> [a] -> [b] -> [c]
+  = lam f. lam as. lam bs.
+    join (map (lam a. map (f a) bs) as)
+
+utest seqLiftA2 addi [10, 20, 30] [1, 2, 3]
+with [11, 12, 13, 21, 22, 23, 31, 32, 33]
 
 -- Searching
 recursive
@@ -311,7 +370,3 @@ utest isSuffix eqi [2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
-
-
-
-

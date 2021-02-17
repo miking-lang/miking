@@ -111,7 +111,7 @@ lang AppEq = Eq + AppAst
     else None ()
 end
 
-lang FunEq = Eq + FunAst + VarEq + AppEq
+lang LamEq = Eq + LamAst + VarEq + AppEq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmLam r ->
     match env with {varEnv = varEnv} then
@@ -603,7 +603,7 @@ lang MExprEq =
   MExprSym
 
   -- Terms
-  + VarEq + AppEq + FunEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
+  + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
   MatchEq + UtestEq + SeqEq + NeverEq
 
   -- Constants

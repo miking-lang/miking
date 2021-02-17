@@ -100,7 +100,7 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     TmApp {t with ty = typeExpr env (TmApp t)}
 end
 
-lang FunTypeAnnot = TypeAnnot + FunAst + FunTypeAst
+lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
   sem typeExpr (env : TypeEnv) =
   | TmLam t ->
     match t.ty with TyUnknown {} then
@@ -184,7 +184,7 @@ lang TypeTypeAnnot = TypeAnnot + TypeAst
                with inexpr = typeAnnotExpr env t.inexpr}
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + FunAst
+lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
   sem typeExpr (env : TypeEnv) =
   | TmRecLets t ->
     let f = lam b.
@@ -410,7 +410,7 @@ end
 lang MExprTypeAnnot =
 
   -- Terms
-  VarTypeAnnot + AppTypeAnnot + FunTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
+  VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
 

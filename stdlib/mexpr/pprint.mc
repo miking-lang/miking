@@ -251,7 +251,7 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     else error "Impossible"
 end
 
-lang FunPrettyPrint = PrettyPrint + FunAst + UnknownTypeAst
+lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
   sem isAtomic =
   | TmLam _ -> false
 
@@ -871,7 +871,7 @@ end
 lang MExprPrettyPrint =
 
   -- Terms
-  VarPrettyPrint + AppPrettyPrint + FunPrettyPrint + RecordPrettyPrint +
+  VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
   DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
   NeverPrettyPrint + RefPrettyPrint +

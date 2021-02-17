@@ -240,14 +240,6 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     let table : Map NonTerminal (Ref (Map Symbol {syms : [Symbol], action: Action})) =
       mapMap (lam _. ref (mapEmpty _compareSymbol)) groupedProds in
 
-    -- NOTE(vipa, 2021-02-08): This should possibly be in the stdlib, but it might depend on opinions on side effects down the line
-    recursive let iter = lam f. lam xs.
-      match xs with [x] ++ xs then
-        let _ = f x in iter f xs
-      else match xs with [] then
-        ()
-      else never in
-
     use ParserGenerated in
 
     let specSymToGenSym = lam sym.
@@ -265,7 +257,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
         else firstSymset.syms in
       let newProd = {action = action, label = label, syms = map specSymToGenSym rhs} in
       let tableAdditions = mapMap (lam _. newProd) symset in
-      let _ = iter
+      let _ = for_ (mapBindings tableAdditions)
         (lam binding.
           match binding with (sym, {label = label}) then
             let sym = binding.0 in
@@ -278,9 +270,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
                 else [prevProd.label, label] in
               modref errRef (mapInsert sym errList errTab)
             else ()
-          else never
-        )
-        (mapBindings tableAdditions) in
+          else never) in
       modref tableRef (mapUnion prev tableAdditions)
     else never in
 

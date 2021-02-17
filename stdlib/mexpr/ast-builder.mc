@@ -2,6 +2,7 @@
 
 include "mexpr/ast.mc"
 include "assoc.mc"
+include "info.mc"
 
 -- Patterns --
 
@@ -14,28 +15,28 @@ let pvar_ = use MExprAst in
   npvar_ (nameNoSym s)
 
 let pvarw_ = use MExprAst in
-  PNamed {ident = PWildcard ()}
+  PNamed {ident = PWildcard (), info = NoInfo()}
 
 let punit_ = use MExprAst in
-  PRecord { bindings = assocEmpty }
+  PRecord { bindings = assocEmpty, info = NoInfo() }
 
 let pint_ = use MExprAst in
   lam i.
-  PInt {val = i}
+  PInt {val = i, info = NoInfo()}
 
 let pchar_ = use MExprAst in
   lam c.
-  PChar {val = c}
+  PChar {val = c, info = NoInfo()}
 
 let ptrue_ = use MExprAst in
-  PBool {val = true}
+  PBool {val = true, info = NoInfo()}
 
 let pfalse_ = use MExprAst in
-  PBool {val = false}
+  PBool {val = false, info = NoInfo()}
 
 let npcon_ = use MExprAst in
   lam n. lam cp.
-  PCon {ident = n, subpat = cp}
+  PCon {ident = n, subpat = cp, info = NoInfo()}
 
 let pcon_ = use MExprAst in
   lam cs. lam cp.
@@ -47,7 +48,8 @@ let prec_ = use MExprAst in
     bindings =
       foldl
         (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings
+        assocEmpty bindings,
+    info = NoInfo()
     }
 
 let ptuple_ = use MExprAst in
@@ -56,15 +58,15 @@ let ptuple_ = use MExprAst in
 
 let pseqtot_ = use MExprAst in
   lam ps.
-  PSeqTot {pats = ps}
+  PSeqTot {pats = ps, info = NoInfo()}
 
 let pseqedgew_ = use MExprAst in
   lam pre. lam post.
-  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post}
+  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo()}
 
 let pseqedgen_ = use MExprAst in
   lam pre. lam middle. lam post.
-  PSeqEdge {prefix = pre, middle = PName middle, postfix = post}
+  PSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo()}
 
 let pseqedge_ = use MExprAst in
   lam pre. lam middle. lam post.
@@ -72,15 +74,15 @@ let pseqedge_ = use MExprAst in
 
 let pand_ = use MExprAst in
   lam l. lam r.
-  PAnd {lpat = l, rpat = r}
+  PAnd {lpat = l, rpat = r, info = NoInfo()}
 
 let por_ = use MExprAst in
   lam l. lam r.
-  POr {lpat = l, rpat = r}
+  POr {lpat = l, rpat = r, info = NoInfo()}
 
 let pnot_ = use MExprAst in
   lam p.
-  PNot {subpat = p}
+  PNot {subpat = p, info = NoInfo()}
 
 -- Types --
 let tyarrow_ = use MExprAst in
@@ -160,11 +162,12 @@ let bindall_ = use MExprAst in
   foldr1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty, ty = TyUnknown {}}
+  TmRecord {bindings = assocEmpty, ty = TyUnknown {}, info = NoInfo ()}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLet {ident = n, tyBody = ty, body = body, inexpr = unit_, ty = TyUnknown {}}
+  TmLet {ident = n, tyBody = ty, body = body,
+  inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
 
 let let_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -180,7 +183,7 @@ let ulet_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, ty = ty, inexpr = unit_}
+  TmType {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
@@ -188,8 +191,8 @@ let type_ = use MExprAst in
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2}) bs,
-             inexpr = unit_, ty = TyUnknown {}}
+  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2, info = NoInfo ()}) bs,
+             inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
   lam bs.
@@ -217,7 +220,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, ty = ty, body = body} in
+    let newbind = {ident = n, ty = ty, body = body, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     error "reclets is not a TmRecLets construct"
@@ -236,7 +239,7 @@ let ureclets_add = use MExprAst in
 
 let ncondef_ = use MExprAst in
   lam n. lam ty.
-  TmConDef {ident = n, ty = ty, inexpr = unit_}
+  TmConDef {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
 
 let condef_ = use MExprAst in
   lam s. lam ty.
@@ -252,7 +255,7 @@ let ucondef_ = use MExprAst in
 
 let nvar_ = use MExprAst in
   lam n.
-  TmVar {ident = n, ty = TyUnknown {}}
+  TmVar {ident = n, ty = TyUnknown {}, info = NoInfo ()}
 
 let var_ = use MExprAst in
   lam s.
@@ -260,7 +263,7 @@ let var_ = use MExprAst in
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
-  TmConApp {ident = n, body = b, ty = TyUnknown {}}
+  TmConApp {ident = n, body = b, ty = TyUnknown {}, info = NoInfo ()}
 
 let conapp_ = use MExprAst in
   lam s. lam b.
@@ -268,11 +271,11 @@ let conapp_ = use MExprAst in
 
 let const_ = use MExprAst in
   lam c.
-  TmConst {val = c, ty = TyUnknown {}}
+  TmConst {val = c, ty = TyUnknown {}, info = NoInfo ()}
 
 let nlam_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLam {ident = n, ty = ty, body = body}
+  TmLam {ident = n, ty = ty, body = body, info = NoInfo ()}
 
 let lam_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -296,15 +299,17 @@ let ulams_ = use MExprAst in
 
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
-  TmMatch {target = cond, pat = ptrue_, thn = thn, els = els, ty = TyUnknown {}}
+  TmMatch {target = cond, pat = ptrue_, thn = thn,
+           els = els, ty = TyUnknown {}, info = NoInfo ()}
 
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
-  TmMatch {target = target, pat = pat, thn = thn, els = els, ty = TyUnknown {}}
+  TmMatch {target = target, pat = pat, thn = thn, els = els,
+           ty = TyUnknown {}, info = NoInfo ()}
 
 let seq_ = use MExprAst in
   lam tms.
-  TmSeq {tms = tms, ty = TyUnknown {}}
+  TmSeq {tms = tms, ty = TyUnknown {}, info = NoInfo ()}
 
 let record_ = use MExprAst in
   lam bindings.
@@ -313,7 +318,8 @@ let record_ = use MExprAst in
       foldl
         (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
         assocEmpty bindings,
-    ty = TyUnknown {}
+    ty = TyUnknown {},
+    info = NoInfo ()
   }
 
 let tuple_ = use MExprAst in
@@ -333,7 +339,7 @@ let record_add_bindings = lam bindings. lam record.
   foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
-  TmNever {ty = TyUnknown {}}
+  TmNever {ty = TyUnknown {}, info = NoInfo ()}
 
 let nrecordproj_ = use MExprAst in
   lam name. lam key. lam r.
@@ -356,11 +362,11 @@ let tupleproj_ = use MExprAst in
 
 let recordupdate_ = use MExprAst in
   lam rec. lam key. lam value.
-  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}}
+  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}, info = NoInfo ()}
 
 let app_ = use MExprAst in
   lam l. lam r.
-  TmApp {lhs = l, rhs = r, ty = TyUnknown {}}
+  TmApp {lhs = l, rhs = r, ty = TyUnknown {}, info = NoInfo ()}
 
 let appSeq_ = use MExprAst in
   lam f. lam seq.
@@ -400,7 +406,7 @@ let appf8_ = use MExprAst in
 
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n, ty = TyUnknown {}}
+  TmUtest {test = t, expected = e, next = n, ty = TyUnknown {}, info = NoInfo ()}
 
 
 -- Ascription
@@ -430,7 +436,7 @@ let char_ = use MExprAst in
 
 let str_ = use MExprAst in
   lam s.
-  TmSeq {tms = map char_ s, ty = TyUnknown {}}
+  TmSeq {tms = map char_ s, ty = TyUnknown {}, info = NoInfo ()}
 
 let symb_ = use MExprAst in
   lam c.

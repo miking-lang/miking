@@ -128,7 +128,8 @@ let builtin =
   ; ("bootParserGetFloat", f (CbootParserGetFloat None))
   ; ("bootParserGetListLength", f (CbootParserGetListLength None))
   ; ("bootParserGetConst", f (CbootParserGetConst None))
-  ; ("bootParserGetPat", f (CbootParserGetPat None)) ]
+  ; ("bootParserGetPat", f (CbootParserGetPat None))
+  ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
   (* Append external functions *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -432,6 +433,10 @@ let arity = function
   | CbootParserGetPat None ->
       2
   | CbootParserGetPat (Some _) ->
+      1
+  | CbootParserGetInfo None ->
+      2
+  | CbootParserGetInfo (Some _) ->
       1
   (* Python intrinsics *)
   | CPy v ->
@@ -1049,6 +1054,13 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getPat ptree n))
   | CbootParserGetPat (Some _), _ ->
       fail_constapp fi
+  | CbootParserGetInfo None, t ->
+      TmConst (fi, CbootParserGetInfo (Some t))
+  | ( CbootParserGetInfo (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
+  | CbootParserGetInfo (Some _), _ ->
+      fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
@@ -1083,7 +1095,7 @@ let shape_str = function
       |> fun x -> us "record: {" ^. x ^. us "}"
   | TmSeq _ ->
       us "Sequence"
-  | TmConapp (_, x, s, _) ->
+  | TmConApp (_, x, s, _) ->
       ustring_of_var ~symbol:!enable_debug_symbol_print x s
   | TmConst (_, CInt _) ->
       us "Int"
@@ -1136,7 +1148,7 @@ let rec val_equal v1 v2 =
       Record.equal (fun t1 t2 -> val_equal t1 t2) r1 r2
   | TmConst (_, c1), TmConst (_, c2) ->
       c1 = c2
-  | TmConapp (_, _, sym1, v1), TmConapp (_, _, sym2, v2) ->
+  | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
       sym1 = sym2 && val_equal v1 v2
   | _ ->
       false
@@ -1182,7 +1194,7 @@ let rec symbolize_type env ty =
       TyApp (fi, symbolize_type env ty1, symbolize_type env ty2)
 
 (* Add symbol associations between lambdas, patterns, and variables. The function also
-   constructs TmConapp terms from the combination of variables and function applications.  *)
+   constructs TmConApp terms from the combination of variables and function applications.  *)
 let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   (* add_name is only called in sPat and it reuses previously generated symbols.
    * This is imperative for or-patterns, since both branches should give the same symbols,
@@ -1327,16 +1339,16 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       TmRecord (fi, Record.map (symbolize env) r)
   | TmRecordUpdate (fi, t1, l, t2) ->
       TmRecordUpdate (fi, symbolize env t1, l, symbolize env t2)
-  | TmCondef (fi, x, _, ty, t) ->
+  | TmConDef (fi, x, _, ty, t) ->
       let s = Symb.gensym () in
-      TmCondef
+      TmConDef
         ( fi
         , x
         , s
         , symbolize_type env ty
         , symbolize ((IdCon (sid_of_ustring x), s) :: env) t )
-  | TmConapp (fi, x, _, t) ->
-      TmConapp
+  | TmConApp (fi, x, _, t) ->
+      TmConApp
         (fi, x, findsym fi (IdCon (sid_of_ustring x)) env, symbolize env t)
   | TmMatch (fi, t1, p, t2, t3) ->
       let matchedEnv, p = sPat [] p in
@@ -1394,12 +1406,12 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
                 , symbolize env2 t ))
               lst
           , new_tm ) )
-  | TmCondef (fi, x, _, ty, t) ->
+  | TmConDef (fi, x, _, ty, t) ->
       let s = Symb.gensym () in
       let new_env, new_t2 =
         symbolize_toplevel ((IdCon (sid_of_ustring x), s) :: env) t
       in
-      (new_env, TmCondef (fi, x, s, symbolize_type env ty, new_t2))
+      (new_env, TmConDef (fi, x, s, symbolize_type env ty, new_t2))
   | ( TmVar _
     | TmLam _
     | TmApp _
@@ -1407,7 +1419,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
-    | TmConapp _
+    | TmConApp _
     | TmMatch _
     | TmUse _
     | TmUtest _
@@ -1475,7 +1487,7 @@ let rec try_match env value pat =
         None )
   | PatCon (_, _, s1, p) -> (
     match value with
-    | TmConapp (_, _, s2, v) when s1 = s2 ->
+    | TmConApp (_, _, s2, v) when s1 = s2 ->
         try_match env v p
     | _ ->
         None )
@@ -1511,33 +1523,6 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (_, _, s) ->
       eval env (List.assoc s env)
-  (* Lambda and closure conversions *)
-  | TmLam (fi, x, s, _ty, t1) ->
-      TmClos (fi, x, s, t1, lazy env)
-  | TmClos (_, _, _, _, _) ->
-      t
-  (* Let *)
-  | TmLet (_, _, s, _, t1, t2) ->
-      eval ((s, eval env t1) :: env) t2
-  (* Type (ignore) *)
-  | TmType (_, _, _, _, t1) ->
-      eval env t1
-  (* Recursive lets *)
-  | TmRecLets (_, lst, t2) ->
-      let rec env' =
-        lazy
-          (let wraplambda = function
-             | TmLam (fi, x, s, _ty, t1) ->
-                 TmClos (fi, x, s, t1, env')
-             | tm ->
-                 raise_error (tm_info tm)
-                   "Right-hand side of recursive let must be a lambda"
-           in
-           List.fold_left
-             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
-      in
-      eval (Lazy.force env') t2
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
@@ -1558,8 +1543,30 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         raise_error fiapp
           ( "Incorrect application. This is not a function: "
           ^ Ustring.to_utf8 (ustring_of_tm f) ) )
-  (* Constant and fix *)
-  | TmConst (_, _) | TmFix _ ->
+  (* Lambda and closure conversions *)
+  | TmLam (fi, x, s, _ty, t1) ->
+      TmClos (fi, x, s, t1, lazy env)
+  (* Let *)
+  | TmLet (_, _, s, _, t1, t2) ->
+      eval ((s, eval env t1) :: env) t2
+  (* Recursive lets *)
+  | TmRecLets (_, lst, t2) ->
+      let rec env' =
+        lazy
+          (let wraplambda = function
+             | TmLam (fi, x, s, _ty, t1) ->
+                 TmClos (fi, x, s, t1, env')
+             | tm ->
+                 raise_error (tm_info tm)
+                   "Right-hand side of recursive let must be a lambda"
+           in
+           List.fold_left
+             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
+             env lst)
+      in
+      eval (Lazy.force env') t2
+  (* Constant *)
+  | TmConst (_, _) ->
       t
   (* Sequences *)
   | TmSeq (fi, tms) ->
@@ -1567,6 +1574,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Records *)
   | TmRecord (fi, tms) ->
       TmRecord (fi, Record.map (eval env) tms)
+  (* Records update *)
   | TmRecordUpdate (fi, t1, l, t2) -> (
     match eval env t1 with
     | TmRecord (fi, r) ->
@@ -1579,10 +1587,14 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         raise_error fi
           ( "Cannot update the term. The term is not a record: "
           ^ Ustring.to_utf8 (ustring_of_tm v) ) )
-  (* Data constructors and match *)
-  | TmCondef (_, _, _, _, t) ->
+  (* Type (ignore) *)
+  | TmType (_, _, _, _, t1) ->
+      eval env t1
+  (* Data constructors *)
+  | TmConDef (_, _, _, _, t) ->
       eval env t
-  | TmConapp (fi, x, s, t) ->
+  (* Constructor application *)
+  | TmConApp (fi, x, s, t) ->
       let rhs = eval env t in
       ( if !enable_debug_con_shape then
         let shape = shape_str rhs in
@@ -1590,15 +1602,14 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         let info = info2str fi in
         Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
-      TmConapp (fi, x, s, rhs)
+      TmConApp (fi, x, s, rhs)
+  (* Match *)
   | TmMatch (_, t1, p, t2, t3) -> (
     match try_match env (eval env t1) p with
     | Some env ->
         eval env t2
     | None ->
         eval env t3 )
-  | TmUse (fi, _, _) ->
-      raise_error fi "A 'use' of a language was not desugared"
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       ( if !utest then
@@ -1624,10 +1635,21 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
       eval env tnext
+  (* Never term *)
   | TmNever fi ->
       raise_error fi
         "Reached a never term, which should be impossible in a well-typed \
          program."
+  (* Use *)
+  | TmUse (fi, _, _) ->
+      raise_error fi "A 'use' of a language was not desugared"
+  (* Closure - Only at runtime *)
+  | TmClos (_, _, _, _, _) ->
+      t
+  (* Fix-point - Only at runtime *)
+  | TmFix _ ->
+      t
+  (* Ref - Only at runtime *)
   | TmRef _ ->
       t
 
@@ -1653,7 +1675,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
              env lst)
       in
       eval_toplevel (Lazy.force env') t2
-  | TmCondef (_, _, _, _, t) ->
+  | TmConDef (_, _, _, _, t) ->
       eval_toplevel env t
   | ( TmVar _
     | TmLam _
@@ -1664,7 +1686,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmSeq _
     | TmRecord _
     | TmRecordUpdate _
-    | TmConapp _
+    | TmConApp _
     | TmMatch _
     | TmUse _
     | TmUtest _
