@@ -17,7 +17,7 @@ mexpr
 
 -- Generate a sequence of random numbers
 let randSeq = lam lower. lam upper. lam length.
-  map (lam _. randIntU lower upper) (makeSeq length 0) in
+  map (lam _. randIntU lower upper) (create length (lam _. 0)) in
 
 -- With high probability all possible elements are present in the random sequence
 utest [2,3,4,5,6] with distinct eqi (randSeq 2 7 1000) using setEqual eqi in

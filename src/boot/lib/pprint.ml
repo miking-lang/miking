@@ -307,8 +307,6 @@ let rec print_const fmt = function
   (* MCore intrinsic: sequences *)
   | Ccreate _ ->
       fprintf fmt "create"
-  | CmakeSeq _ ->
-      fprintf fmt "makeSeq"
   | Clength ->
       fprintf fmt "length"
   | Cconcat _ ->

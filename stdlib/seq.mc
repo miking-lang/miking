@@ -1,6 +1,12 @@
 include "bool.mc"
 include "option.mc"
 
+let make = lam n. lam v. create n (lam _. v)
+
+utest make 3 5 with [5,5,5]
+utest make 4 'a' with ['a', 'a', 'a', 'a']
+utest make 0 100 with []
+
 let null = lam seq. eqi 0 (length seq)
 let head = lam seq. get (splitAt seq 1).0 0
 let tail = lam seq. (splitAt seq 1).1

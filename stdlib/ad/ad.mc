@@ -16,7 +16,7 @@ let num = dualnumNum
 let dnum = dualnumDNum
 let genEpsilon = dualnumGenEpsilon
 let pertubation = dualnumPertubation
-let zeron = lam n. makeSeq n (num 0.)
+let zeron = lam n. make n (num 0.)
 
 -- directed derivative of vector function f at x in the direction xp
 let dder : ([DualNum] -> [DualNum]) -> [DualNum] -> [DualNum] -> ([DualNum] -> [DualNum]) =

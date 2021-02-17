@@ -10,11 +10,13 @@ utest [] with [] in
 utest [1,2] with [1,2] in
 utest [[2,3,10],7] with [[2,3,10],7] in
 
--- 'makeSeq n v' creates a new sequence with 'n' element of value 'v'
--- Int -> a -> [a]
-utest makeSeq 3 10 with [10,10,10] in
-utest makeSeq 8 'a' with ['a','a','a','a','a','a','a','a'] in
-utest makeSeq 0 100 with [] in
+-- 'create n f' creates a new sequence with 'n' elements of value given
+-- by calling function 'f' with the index of the element
+-- Int -> (Int -> a) -> [a]
+utest create 3 (lam _. 10) with [10,10,10] in
+utest create 8 (lam _. 'a') with ['a','a','a','a','a','a','a','a'] in
+utest create 4 (lam i. muli 2 i) with [0,2,4,6] in
+utest create 0 (lam i. i) with [] in
 
 -- 'length s' returns the length of a sequence (or a string)
 utest length [] with 0 in

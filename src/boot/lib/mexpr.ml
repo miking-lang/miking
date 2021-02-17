@@ -73,7 +73,6 @@ let builtin =
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char)
   ; ("create", f (Ccreate None))
-  ; ("makeSeq", f (CmakeSeq None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
   ; ("get", f (Cget None))
@@ -270,10 +269,6 @@ let arity = function
   | Ccreate None ->
       2
   | Ccreate (Some _) ->
-      1
-  | CmakeSeq None ->
-      2
-  | CmakeSeq (Some _) ->
       1
   | Clength ->
       1
@@ -655,12 +650,6 @@ let delta eval env fi c v =
       let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
       TmSeq (tm_info f, Mseq.create n createf)
   | Ccreate None, _ ->
-      fail_constapp fi
-  | CmakeSeq None, TmConst (fi, CInt n) ->
-      TmConst (fi, CmakeSeq (Some n))
-  | CmakeSeq (Some n), t ->
-      TmSeq (tm_info t, Mseq.make n t)
-  | CmakeSeq None, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))
