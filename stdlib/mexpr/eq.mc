@@ -363,16 +363,16 @@ let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
 
 lang NamedPatEq = NamedPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PNamed {ident = p2} ->
-    match lhs with PNamed {ident = p1} then
+  | PatNamed {ident = p2} ->
+    match lhs with PatNamed {ident = p1} then
       _eqpatname patEnv free p1 p2
     else None ()
 end
 
 lang SeqTotPatEq = SeqTotPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PSeqTot {pats = ps2} ->
-    match lhs with PSeqTot {pats = ps1} then
+  | PatSeqTot {pats = ps2} ->
+    match lhs with PatSeqTot {pats = ps1} then
       if eqi (length ps2) (length ps1) then
         let z = zipWith (lam p1. lam p2. (p1,p2)) ps1 ps2 in
         optionFoldlM (lam fpEnv. lam ps.
@@ -386,8 +386,8 @@ end
 
 lang SeqEdgePatEq = SeqEdgePat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
-    match lhs with PSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
+  | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
+    match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
       match _eqpatname patEnv free mid1 mid2 with Some (f,p) then
         if eqi (length pre1) (length pre2) then
           let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
@@ -413,8 +413,8 @@ end
 
 lang RecordPatEq = RecordPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PRecord {bindings = bs2} ->
-    match lhs with PRecord {bindings = bs1} then
+  | PatRecord {bindings = bs2} ->
+    match lhs with PatRecord {bindings = bs1} then
       if eqi (assocLength bs1) (assocLength bs2) then
         assocFoldlM {eq=eqString}
           (lam tEnv. lam k1. lam p1.
@@ -430,8 +430,8 @@ end
 
 lang DataPatEq = DataPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PCon {ident = i2, subpat = s2} ->
-    match lhs with PCon {ident = i1, subpat = s1} then
+  | PatCon {ident = i2, subpat = s2} ->
+    match lhs with PatCon {ident = i1, subpat = s1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
         match _eqCheck i1 i2 conEnv freeConEnv with Some freeConEnv then
           eqPat env {free with conEnv = freeConEnv} patEnv s1 s2
@@ -442,32 +442,32 @@ end
 
 lang IntPatEq = IntPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PInt {val = i2} ->
-    match lhs with PInt {val = i1} then
+  | PatInt {val = i2} ->
+    match lhs with PatInt {val = i1} then
       if eqi i1 i2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang CharPatEq = CharPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PChar {val = c2} ->
-    match lhs with PChar {val = c1} then
+  | PatChar {val = c2} ->
+    match lhs with PatChar {val = c1} then
       if eqChar c1 c2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang BoolPatEq = BoolPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PBool {val = b2} ->
-    match lhs with PBool {val = b1} then
+  | PatBool {val = b2} ->
+    match lhs with PatBool {val = b1} then
       if eqBool b1 b2 then Some (free,patEnv) else None ()
     else None ()
 end
 
 lang AndPatEq = AndPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PAnd {lpat = l2, rpat = r2} ->
-    match lhs with PAnd {lpat = l1, rpat = r1} then
+  | PatAnd {lpat = l2, rpat = r2} ->
+    match lhs with PatAnd {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
       else None ()
@@ -476,8 +476,8 @@ end
 
 lang OrPatEq = OrPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | POr {lpat = l2, rpat = r2} ->
-    match lhs with POr {lpat = l1, rpat = r1} then
+  | PatOr {lpat = l2, rpat = r2} ->
+    match lhs with PatOr {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
         eqPat env free patEnv r1 r2
       else None ()
@@ -486,8 +486,8 @@ end
 
 lang NotPatEq = NotPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
-  | PNot {subpat = p2} ->
-    match lhs with PNot {subpat = p1} then
+  | PatNot {subpat = p2} ->
+    match lhs with PatNot {subpat = p1} then
       eqPat env free patEnv p1 p2
     else None ()
 end

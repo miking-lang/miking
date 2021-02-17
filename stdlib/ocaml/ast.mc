@@ -24,7 +24,7 @@ lang OCamlData
   | OTmConApp { ident : Name, args : [Expr] }
 
   syn Pat =
-  | OPCon { ident : Name, args : [Pat] }
+  | OPatCon { ident : Name, args : [Pat] }
 end
 
 lang OCamlAst = LamAst + LetAst + RecLetsAst + ArithIntAst + ShiftIntAst

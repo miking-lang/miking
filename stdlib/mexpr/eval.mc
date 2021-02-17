@@ -812,13 +812,13 @@ end
 
 lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PNamed {ident = PName name} -> Some (_evalInsert name t env)
-  | PNamed {ident = PWildcard ()} -> Some env
+  | PatNamed {ident = PName name} -> Some (_evalInsert name t env)
+  | PatNamed {ident = PWildcard ()} -> Some env
 end
 
 lang SeqTotPatEval = SeqTotPat + SeqAst
   sem tryMatch (env : Env) (t : Expr) =
-  | PSeqTot {pats = pats} ->
+  | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
       if eqi (length tms) (length pats) then
         optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env
@@ -829,7 +829,7 @@ end
 
 lang SeqEdgePatEval = SeqEdgePat + SeqAst
   sem tryMatch (env : Env) (t : Expr) =
-  | PSeqEdge {prefix = pre, middle = middle, postfix = post} ->
+  | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq {tms = tms} then
       if geqi (length tms) (addi (length pre) (length post)) then
         match splitAt tms (length pre) with (preTm, tms) then
@@ -848,7 +848,7 @@ end
 
 lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PRecord r ->
+  | PatRecord r ->
     match t with TmRecord {bindings = bs} then
       assocFoldlM {eq = eqString}
         (lam env. lam k. lam p.
@@ -862,7 +862,7 @@ end
 
 lang DataPatEval = DataAst + DataPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PCon {ident = ident, subpat = subpat} ->
+  | PatCon {ident = ident, subpat = subpat} ->
     match t with TmConApp cn then
       let constructor = cn.ident in
       let subexpr = cn.body in
@@ -874,7 +874,7 @@ end
 
 lang IntPatEval = IntAst + IntPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PInt i ->
+  | PatInt i ->
     match t with TmConst c then
       match c.val with CInt i2 then
         if eqi i.val i2.val then Some env else None ()
@@ -884,7 +884,7 @@ end
 
 lang CharPatEval = CharAst + CharPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PChar ch ->
+  | PatChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
         if eqChar ch.val ch2.val then Some env else None ()
@@ -894,7 +894,7 @@ end
 
 lang BoolPatEval = BoolAst + BoolPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PBool b ->
+  | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
     match t with TmConst c then
       match c.val with CBool b2 then
@@ -905,19 +905,19 @@ end
 
 lang AndPatEval = AndPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PAnd {lpat = l, rpat = r} ->
+  | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
 lang OrPatEval = OrPat
   sem tryMatch (env : Env) (t : Expr) =
-  | POr {lpat = l, rpat = r} ->
+  | PatOr {lpat = l, rpat = r} ->
     optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
 end
 
 lang NotPatEval = NotPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PNot {subpat = p} ->
+  | PatNot {subpat = p} ->
     let res = tryMatch env t p in
     match res with None _ then Some env else
     match res with Some _ then None () else never

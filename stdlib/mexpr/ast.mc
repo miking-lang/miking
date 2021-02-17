@@ -555,175 +555,175 @@ con PWildcard : () -> PatName
 
 lang NamedPat
   syn Pat =
-  | PNamed {ident : PatName,
-            info : Info}
+  | PatNamed {ident : PatName,
+              info : Info}
 
   sem info =
-  | PNamed r -> r.info
+  | PatNamed r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PNamed p -> PNamed p
+  | PatNamed p -> PatNamed p
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PNamed _ -> acc
+  | PatNamed _ -> acc
 end
 
 lang SeqTotPat
   syn Pat =
-  | PSeqTot {pats : [Pat],
-             info : Info}
+  | PatSeqTot {pats : [Pat],
+               info : Info}
 
   sem info =
-  | PSeqTot r -> r.info
+  | PatSeqTot r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PSeqTot p -> PSeqTot {p with pats = map f p.pats}
+  | PatSeqTot p -> PatSeqTot {p with pats = map f p.pats}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PSeqTot {pats = pats} -> foldl f acc pats
+  | PatSeqTot {pats = pats} -> foldl f acc pats
 end
 
 lang SeqEdgePat
   syn Pat =
-  | PSeqEdge {prefix : [Pat],
-              middle: PatName,
-              postfix : [Pat],
-              info: Info}
+  | PatSeqEdge {prefix : [Pat],
+                middle: PatName,
+                postfix : [Pat],
+                info: Info}
 
   sem info =
-  | PSeqEdge r -> r.info
+  | PatSeqEdge r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PSeqEdge p ->
-      PSeqEdge {{p with prefix = map f p.prefix} with postfix = map f p.postfix}
+  | PatSeqEdge p ->
+      PatSeqEdge {{p with prefix = map f p.prefix} with postfix = map f p.postfix}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PSeqEdge {prefix = pre, postfix = post} -> foldl f (foldl f acc pre) post
+  | PatSeqEdge {prefix = pre, postfix = post} -> foldl f (foldl f acc pre) post
 end
 
 lang RecordPat
   syn Pat =
-  | PRecord {bindings : AssocMap String Pat,
-             info: Info}
+  | PatRecord {bindings : AssocMap String Pat,
+               info: Info}
 
   sem info =
-  | PRecord r -> r.info
+  | PatRecord r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PRecord b ->
-      PRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
+  | PatRecord b ->
+      PatRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PRecord {bindings = bindings} -> assocFold {eq=eqString}
+  | PatRecord {bindings = bindings} -> assocFold {eq=eqString}
                     (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
   syn Pat =
-  | PCon {ident : Name,
-          subpat : Pat,
-          info : Info}
+  | PatCon {ident : Name,
+            subpat : Pat,
+            info : Info}
 
   sem info =
-  | PCon r -> r.info
+  | PatCon r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PCon c -> PCon {c with subpat = f c.subpat}
+  | PatCon c -> PatCon {c with subpat = f c.subpat}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PCon {subpat = subpat} -> f acc subpat
+  | PatCon {subpat = subpat} -> f acc subpat
 end
 
 lang IntPat = IntAst
   syn Pat =
-  | PInt {val : Int,
+  | PatInt {val : Int,
           info : Info}
 
   sem info =
-  | PInt r -> r.info
+  | PatInt r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PInt v -> PInt v
+  | PatInt v -> PatInt v
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PInt _ -> acc
+  | PatInt _ -> acc
 end
 
 lang CharPat
   syn Pat =
-  | PChar {val : Char,
-           info : Info}
+  | PatChar {val : Char,
+             info : Info}
 
   sem info =
-  | PChar r -> r.info
+  | PatChar r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PChar v -> PChar v
+  | PatChar v -> PatChar v
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PChar _ -> acc
+  | PatChar _ -> acc
 end
 
 lang BoolPat = BoolAst
   syn Pat =
-  | PBool {val : Bool,
-           info : Info}
+  | PatBool {val : Bool,
+             info : Info}
 
   sem info =
-  | PBool r -> r.info
+  | PatBool r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PBool v -> PBool v
+  | PatBool v -> PatBool v
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PBool _ -> acc
+  | PatBool _ -> acc
 end
 
 lang AndPat
   syn Pat =
-  | PAnd {lpat : Pat,
-          rpat : Pat,
-          info : Info}
+  | PatAnd {lpat : Pat,
+            rpat : Pat,
+            info : Info}
 
   sem info =
-  | PAnd r -> r.info
+  | PatAnd r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PAnd p -> PAnd {{p with lpat = f p.lpat} with rpat = f p.rpat}
+  | PatAnd p -> PatAnd {{p with lpat = f p.lpat} with rpat = f p.rpat}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PAnd {lpat = l, rpat = r} -> f (f acc l) r
+  | PatAnd {lpat = l, rpat = r} -> f (f acc l) r
 end
 
 lang OrPat
   syn Pat =
-  | POr {lpat : Pat,
-         rpat : Pat,
-         info : Info}
+  | PatOr {lpat : Pat,
+           rpat : Pat,
+           info : Info}
 
   sem info =
-  | POr r -> r.info
+  | PatOr r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | POr p -> POr {{p with lpat = f p.lpat} with rpat = f p.rpat}
+  | PatOr p -> PatOr {{p with lpat = f p.lpat} with rpat = f p.rpat}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | POr {lpat = l, rpat = r} -> f (f acc l) r
+  | PatOr {lpat = l, rpat = r} -> f (f acc l) r
 end
 
 lang NotPat
   syn Pat =
-  | PNot {subpat : Pat,
-          info : Info}
+  | PatNot {subpat : Pat,
+            info : Info}
 
   sem info =
-  | PNot r -> r.info
+  | PatNot r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
-  | PNot p -> PNot {p with subpat = f p.subpat}
+  | PatNot p -> PatNot {p with subpat = f p.subpat}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PNot {subpat = p} -> f acc p
+  | PatNot {subpat = p} -> f acc p
 end
 
 -----------
