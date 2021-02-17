@@ -7,8 +7,20 @@ type int_ba = (int, int_elt) ba
 
 type float_ba = (float, float64_elt) ba
 
+(* The tree of a rope is either a Leaf or a Concat node.
+
+   A Leaf node consists of an element container. They represent a part of the
+   sequence.
+
+   A Concat node represents the concatentation of two ropes. It contains the
+   two recursive tree structures and a length field corresponding to the
+   combined length of the two ropes, so that we can look up the length in
+   constant time. *)
 type 'a u = Leaf of 'a | Concat of {lhs: 'a u; rhs: 'a u; len: int}
 
+(* A rope is represented as a reference to its tree data structure. This lets
+   us collapse the tree before performing an operation on it, which in turn
+   allows constant time concatenation. *)
 type 'a t = 'a u ref
 
 let rec _bigarray_kind (s : ('a, 'b) ba u) : ('a, 'c) kind =
