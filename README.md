@@ -173,7 +173,6 @@ x
 introduces a new name `x`. The built-in function `addi` performs an addition between two integers. Note that MCore uses a call-by-value evaluation order, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-
 ### Functions
 
 Functions are always defined anonymously as lambda functions. If you would like to give a function a name, a `let` expression can be used. For instance, the following program defines a function `double` that doubles the value of its argument.
@@ -204,6 +203,30 @@ utest foo 2 3 with 5 in
 ()
 ```
 creates a function `foo` that takes two arguments.
+
+### Sequencing
+
+Sometimes an expression has a side effect and you are not interested
+in the returned value. If that is the case, you can use the sequence
+operator `;`. For instance, suppose you would like to print a value in
+a function before it returns:
+
+```
+let foo = lam x.
+  print x;
+  x
+```
+
+The sequence operator `;` is not a construct of pure MExpr, but
+syntactic sugar for a `let` construct. For instance, the pure version
+(without syntactic sugar) of the program above is as follows:
+
+```
+let foo = lam x.
+  let _ = print x in
+  x
+```
+
 
 ### `if` Expressions
 

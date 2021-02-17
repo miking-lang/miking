@@ -335,10 +335,14 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
           match getTypeStringCode indent env t.tyBody with (env, ty) then
             let ty = if eqString ty "Unknown" then "" else concat ": " ty in
             (env,
-             join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
-                   body, pprintNewline indent,
-                   "in", pprintNewline indent,
-                   inexpr])
+             if eqString str "_" then
+               join [body, pprintNewline indent, ";",
+                     inexpr]
+             else
+               join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
+                     body, pprintNewline indent,
+                     "in", pprintNewline indent,
+                     inexpr])
           else never
         else never
       else never
