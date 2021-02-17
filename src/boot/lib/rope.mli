@@ -17,14 +17,6 @@ val create_int_bigarray : int -> (int -> int) -> int_ba t
 
 val create_float_bigarray : int -> (int -> float) -> float_ba t
 
-val make_array : int -> 'a -> 'a array t
-(** [Rope.make_* n v] returns a new rope of length [n] where all elements have
-    been initialized to [v]. *)
-
-val make_int_bigarray : int -> int -> (int, int_elt) ba t
-
-val make_float_bigarray : int -> float -> (float, float64_elt) ba t
-
 val empty_array : 'a array t
 (** [Rope.empty_*] returns the representation of an empty rope. *)
 

@@ -50,17 +50,6 @@ let create_int_bigarray (n : int) (f : int -> int) : int_ba t =
 let create_float_bigarray (n : int) (f : int -> float) : float_ba t =
   ref (Leaf (_create_bigarray Float64 n f))
 
-let _make_bigarray (k : ('a, 'b) kind) (n : int) (v : 'a) : ('a, 'b) ba t =
-  let a = _uninit_bigarray k n in
-  Array1.fill a v ; ref (Leaf a)
-
-let make_array (n : int) (v : 'a) : 'a array t = ref (Leaf (Array.make n v))
-
-let make_int_bigarray (n : int) (v : int) : int_ba t = _make_bigarray Int n v
-
-let make_float_bigarray (n : int) (v : float) : float_ba t =
-  _make_bigarray Float64 n v
-
 let empty_array = Obj.magic (ref (Leaf [||]))
 
 let _empty_bigarray (k : ('a, 'b) kind) : ('a, 'b) ba t =

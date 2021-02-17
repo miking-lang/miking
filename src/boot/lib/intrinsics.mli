@@ -5,8 +5,6 @@ module Mseq : sig
 
   val create : int -> (int -> 'a) -> 'a t
 
-  val make : int -> 'a -> 'a t
-
   val empty : 'a t
 
   val length : 'a t -> int

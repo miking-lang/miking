@@ -5,8 +5,6 @@ module Mseq = struct
 
   let create = Rope.create_array
 
-  let make = Rope.make_array
-
   let empty = Rope.empty_array
 
   let length = Rope.length_array
