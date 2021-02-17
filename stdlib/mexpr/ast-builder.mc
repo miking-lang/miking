@@ -15,28 +15,28 @@ let pvar_ = use MExprAst in
   npvar_ (nameNoSym s)
 
 let pvarw_ = use MExprAst in
-  PNamed {ident = PWildcard ()}
+  PNamed {ident = PWildcard (), info = NoInfo()}
 
 let punit_ = use MExprAst in
-  PRecord { bindings = assocEmpty }
+  PRecord { bindings = assocEmpty, info = NoInfo() }
 
 let pint_ = use MExprAst in
   lam i.
-  PInt {val = i}
+  PInt {val = i, info = NoInfo()}
 
 let pchar_ = use MExprAst in
   lam c.
-  PChar {val = c}
+  PChar {val = c, info = NoInfo()}
 
 let ptrue_ = use MExprAst in
-  PBool {val = true}
+  PBool {val = true, info = NoInfo()}
 
 let pfalse_ = use MExprAst in
-  PBool {val = false}
+  PBool {val = false, info = NoInfo()}
 
 let npcon_ = use MExprAst in
   lam n. lam cp.
-  PCon {ident = n, subpat = cp}
+  PCon {ident = n, subpat = cp, info = NoInfo()}
 
 let pcon_ = use MExprAst in
   lam cs. lam cp.
@@ -48,7 +48,8 @@ let prec_ = use MExprAst in
     bindings =
       foldl
         (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings
+        assocEmpty bindings,
+    info = NoInfo()
     }
 
 let ptuple_ = use MExprAst in
@@ -57,15 +58,15 @@ let ptuple_ = use MExprAst in
 
 let pseqtot_ = use MExprAst in
   lam ps.
-  PSeqTot {pats = ps}
+  PSeqTot {pats = ps, info = NoInfo()}
 
 let pseqedgew_ = use MExprAst in
   lam pre. lam post.
-  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post}
+  PSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo()}
 
 let pseqedgen_ = use MExprAst in
   lam pre. lam middle. lam post.
-  PSeqEdge {prefix = pre, middle = PName middle, postfix = post}
+  PSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo()}
 
 let pseqedge_ = use MExprAst in
   lam pre. lam middle. lam post.
@@ -73,15 +74,15 @@ let pseqedge_ = use MExprAst in
 
 let pand_ = use MExprAst in
   lam l. lam r.
-  PAnd {lpat = l, rpat = r}
+  PAnd {lpat = l, rpat = r, info = NoInfo()}
 
 let por_ = use MExprAst in
   lam l. lam r.
-  POr {lpat = l, rpat = r}
+  POr {lpat = l, rpat = r, info = NoInfo()}
 
 let pnot_ = use MExprAst in
   lam p.
-  PNot {subpat = p}
+  PNot {subpat = p, info = NoInfo()}
 
 -- Types --
 let tyarrow_ = use MExprAst in

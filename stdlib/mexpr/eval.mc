@@ -101,7 +101,7 @@ lang FixAst = LamAst
   | TmFix ()
 end
 
-lang FixEval = FixAst + LamEval
+lang FixEval = FixAst + LamEval + UnknownTypeAst
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
     match arg with TmClos clos then
@@ -109,7 +109,9 @@ lang FixEval = FixAst + LamEval
       let body = clos.body in
       let env =
         _evalInsert ident (TmApp {lhs = TmFix (),
-                           rhs = TmClos clos, info = NoInfo()}) clos.env in
+                                  rhs = TmClos clos,
+                                  ty = TyUnknown {},
+                                  info = NoInfo()}) clos.env in
       eval {ctx with env = env} body
     else
       error "Not fixing a function"
@@ -134,7 +136,7 @@ end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst
+  UnknownTypeAst 
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -146,16 +148,18 @@ lang RecLetsEval =
                  ["a", "b", "c"]
     with "0a1b2c" in
     let eta_name = nameSym "eta" in
-    let eta_var = TmVar {ident = eta_name, info = NoInfo()} in
+    let eta_var = TmVar {ident = eta_name, ty = TyUnknown{}, info = NoInfo()} in
     let unpack_from = lam var. lam body.
       foldli
         (lam i. lam bodyacc. lam binding.
           TmLet {ident = binding.ident,
                  tyBody = TyUnknown {},
                  body = TmLam {ident = eta_name,
-                               ty = TyUnknown {},
                                body = TmApp {lhs = dtupleproj_ i var,
-                                             rhs = eta_var},
+                                             rhs = eta_var,
+                                             ty = TyUnknown(),
+                                             info = NoInfo()},
+                               ty = TyUnknown {},
                                info = NoInfo()     
                                },
                                
@@ -166,14 +170,19 @@ lang RecLetsEval =
         body
         t.bindings in
     let lst_name = nameSym "lst" in
-    let lst_var = TmVar {ident = lst_name, info = NoInfo()} in
+    let lst_var = TmVar {ident = lst_name,
+                         ty = TyUnknown {},
+                         info = NoInfo()} in
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
-                               ty = TyUnknown {},
                                body = unpack_from lst_var func_tuple,
+                               ty = TyUnknown {},
                                info = NoInfo()} in
     eval {ctx with env =
-            _evalInsert lst_name (TmApp {lhs = TmFix (), rhs = unfixed_tuple, info = NoInfo()})
+            _evalInsert lst_name (TmApp {lhs = TmFix (),
+                                         rhs = unfixed_tuple,
+                                         ty = TyUnknown {},
+                                         info = NoInfo()})
             ctx.env}
          (unpack_from lst_var t.inexpr)
 end

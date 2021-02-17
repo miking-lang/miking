@@ -66,17 +66,23 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmLam {ident = ident, ty = ty, body = body} ->
+  | TmLam {ident = ident, body = body, ty = ty, info = info} ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env ty in
       if nameHasSym ident then
-        TmLam {ident = ident, ty = ty, body = symbolizeExpr env body}
+        TmLam {ident = ident,
+               body = symbolizeExpr env body,
+               ty = ty,
+               info = info}
       else
         let ident = nameSetNewSym ident in
         let str = nameGetStr ident in
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
-        TmLam {ident = ident, ty = ty, body = symbolizeExpr env body}
+        TmLam {ident = ident,
+               body = symbolizeExpr env body,
+               ty = ty,
+               info = info}
     else never
 end
 
@@ -175,28 +181,40 @@ lang DataSym = Sym + DataAst
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmConDef {ident = ident, ty = ty, inexpr = inexpr} ->
+  | TmConDef {ident = ident, inexpr = inexpr, ty = ty, info = info} ->
     match env with {conEnv = conEnv} then
       let ty = symbolizeType env ty in
       if nameHasSym ident then
-        TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+        TmConDef {ident = ident,
+                  inexpr = symbolizeExpr env inexpr,
+                  ty = ty,
+                  info = info}
       else
         let str = nameGetStr ident in
         let ident = nameSetNewSym ident in
         let conEnv = assocInsert {eq=eqString} str ident conEnv in
         let env = {env with conEnv = conEnv} in
-        TmConDef {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+        TmConDef {ident = ident,
+                  inexpr = symbolizeExpr env inexpr,
+                  ty = ty,
+                  info = info}
     else never
 
-  | TmConApp {ident = ident, body = body, ty = ty} ->
+  | TmConApp {ident = ident, body = body, ty = ty, info = info} ->
     match env with {conEnv = conEnv} then
       let ty = symbolizeType env ty in
       if nameHasSym ident then
-        TmConApp {ident = ident, body = symbolizeExpr env body, ty = ty}
+        TmConApp {ident = ident,
+                  body = symbolizeExpr env body,
+                  ty = ty,
+                  info = info}
       else
         let str = nameGetStr ident in
         match assocLookup {eq=eqString} str conEnv with Some ident then
-          TmConApp {ident = ident, body = symbolizeExpr env body, ty = ty}
+          TmConApp {ident = ident,
+                    body = symbolizeExpr env body,
+                    ty = ty,
+                    info = info}
         else error (concat "Unknown constructor in symbolizeExpr: " str)
     else never
 end
@@ -360,17 +378,17 @@ end
 
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PRecord {bindings = bindings} ->
+  | PRecord {bindings = bindings, info = info} ->
     match assocMapAccum {eq=eqString}
             (lam patEnv. lam _. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
-      (env, PRecord {bindings = bindings})
+      (env, PRecord {bindings = bindings, info = info})
     else never
 end
 
 lang DataPatSym = DataPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PCon {ident = ident, subpat = subpat} ->
+  | PCon {ident = ident, subpat = subpat, info = info} ->
     match env with {conEnv = conEnv} then
       let ident =
         if nameHasSym ident then ident
@@ -380,7 +398,7 @@ lang DataPatSym = DataPat
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match symbolizePat env patEnv subpat with (patEnv, subpat) then
-        (patEnv, PCon {ident = ident, subpat = subpat})
+        (patEnv, PCon {ident = ident, subpat = subpat, info = info})
       else never
     else never
 end
