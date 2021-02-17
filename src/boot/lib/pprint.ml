@@ -172,10 +172,10 @@ type prec = Match | Lam | Semicolon | If | Tup | App | Atom
  *  TODO(dlunde,?): Precendece?
  *  TODO(dlunde,?): Break hints? *)
 let rec print_const fmt = function
-  (* MCore Intrinsic Booleans *)
+  (* MCore intrinsics: Booleans *)
   | CBool b ->
       fprintf fmt "%B" b
-  (* MCore Intrinsic Integers *)
+  (* MCore intrinsics: Integers *)
   | CInt v ->
       fprintf fmt "%d" v
   | Caddi None ->
@@ -238,7 +238,7 @@ let rec print_const fmt = function
       fprintf fmt "srai(%d)" v
   | Carity ->
       fprintf fmt "arity"
-  (* MCore intrinsic: Floating-point number constant and operations *)
+  (* MCore intrinsics: Floating-point numbers *)
   | CFloat v ->
       fprintf fmt "%f" v
   | Caddf None ->
@@ -293,7 +293,7 @@ let rec print_const fmt = function
       fprintf fmt "int2float"
   | Cstring2float ->
       fprintf fmt "string2float"
-  (* MCore intrinsic: characters *)
+  (* MCore intrinsics: Characters *)
   | CChar v ->
       fprintf fmt "%s" (lit_of_uchar v)
   | Ceqc None ->
@@ -323,17 +323,17 @@ let rec print_const fmt = function
       fprintf fmt "splitAt"
   | Creverse ->
       fprintf fmt "reverse"
-  (* MCore intrinsic: random numbers *)
+  (* MCore intrinsics: Random numbers *)
   | CrandIntU _ ->
       fprintf fmt "randIntU"
   | CrandSetSeed ->
       fprintf fmt "randSetSeed"
-  (* MCore intrinsic: elapsed time *)
+  (* MCore intrinsics: Time *)
   | CwallTimeMs ->
       fprintf fmt "wallTimeMs"
   | CsleepMs ->
       fprintf fmt "sleepMs"
-  (* MCore debug and stdio intrinsics *)
+  (* MCore intrinsics: Debug and I/O *)
   | Cprint ->
       fprintf fmt "print"
   | Cdprint ->
@@ -354,7 +354,7 @@ let rec print_const fmt = function
       fprintf fmt "error"
   | Cexit ->
       fprintf fmt "exit"
-  (* MCore Symbols *)
+  (* MCore intrinsics: Symbols *)
   | CSymb id ->
       fprintf fmt "symb(%s)" (Symb.Helpers.string_of_sym id)
   | Cgensym ->
@@ -363,14 +363,14 @@ let rec print_const fmt = function
       fprintf fmt "eqsym"
   | Csym2hash ->
       fprintf fmt "sym2hash"
-  (* MCore references *)
+  (* MCore intrinsics: References *)
   | Cref ->
       fprintf fmt "ref"
   | CmodRef _ ->
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
-  (* Map intrinsics *)
+  (* MCore intrinsics: Maps *)
   | CMap _ ->
       fprintf fmt "map"
   | CmapEmpty ->
@@ -389,6 +389,27 @@ let rec print_const fmt = function
       fprintf fmt "mapMapWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  (* MCore intrinsics: Boot parser *)
+  | CbootParserTree _ ->
+      fprintf fmt "bootParseTree"
+  | CbootParserParseMExprString ->
+      fprintf fmt "bootParserParseMExprString"
+  | CbootParserGetId ->
+      fprintf fmt "bootParserParseGetId"
+  | CbootParserGetTerm _ ->
+      fprintf fmt "bootParserParseGetTerm"
+  | CbootParserGetString _ ->
+      fprintf fmt "bootParserParseGetString"
+  | CbootParserGetInt _ ->
+      fprintf fmt "bootParserParseGetInt"
+  | CbootParserGetFloat _ ->
+      fprintf fmt "bootParserParseGetFloat"
+  | CbootParserGetListLength _ ->
+      fprintf fmt "bootParserParseGetListLength"
+  | CbootParserGetConst _ ->
+      fprintf fmt "bootParserParseGetConst"
+  | CbootParserGetPat _ ->
+      fprintf fmt "bootParserParseGetPat"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
