@@ -1,11 +1,10 @@
 -- Interpreters for the various fragments of MExpr.
 
--- TODO(?,?): Add types
-
 include "string.mc"
 include "char.mc"
 include "assoc.mc"
 include "name.mc"
+include "info.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -50,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 let _seqOfCharToString = use MExprAst in
   lam tms.
     let f = lam c.
-      match c with TmConst {val = CChar c} then
+      match c with TmConst {val = CChar c, info = NoInfo()} then
         c.val
       else error "Not a character"
     in
@@ -77,7 +76,7 @@ lang AppEval = AppAst
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
-lang FunEval = FunAst + VarEval + AppEval
+lang LamEval = LamAst + VarEval + AppEval
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Env}
 
@@ -85,7 +84,7 @@ lang FunEval = FunAst + VarEval + AppEval
   | TmClos t -> eval {ctx with env = _evalInsert t.ident arg t.env} t.body
 
   sem eval (ctx : {env : Env}) =
-  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env}
+  | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env, info = NoInfo()}
   | TmClos t -> TmClos t
 end
 
@@ -97,19 +96,22 @@ lang LetEval = LetAst + VarEval
 end
 
 -- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
-lang FixAst = FunAst
+lang FixAst = LamAst
   syn Expr =
   | TmFix ()
 end
 
-lang FixEval = FixAst + FunEval
+lang FixEval = FixAst + LamEval + UnknownTypeAst
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
     match arg with TmClos clos then
       let ident = clos.ident in
       let body = clos.body in
       let env =
-        _evalInsert ident (TmApp {lhs = TmFix (), rhs = TmClos clos}) clos.env in
+        _evalInsert ident (TmApp {lhs = TmFix (),
+                                  rhs = TmClos clos,
+                                  ty = TyUnknown {},
+                                  info = NoInfo()}) clos.env in
       eval {ctx with env = env} body
     else
       error "Not fixing a function"
@@ -134,7 +136,7 @@ end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst
+  UnknownTypeAst 
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -146,29 +148,41 @@ lang RecLetsEval =
                  ["a", "b", "c"]
     with "0a1b2c" in
     let eta_name = nameSym "eta" in
-    let eta_var = TmVar {ident = eta_name} in
+    let eta_var = TmVar {ident = eta_name, ty = TyUnknown{}, info = NoInfo()} in
     let unpack_from = lam var. lam body.
       foldli
         (lam i. lam bodyacc. lam binding.
           TmLet {ident = binding.ident,
                  tyBody = TyUnknown {},
                  body = TmLam {ident = eta_name,
-                               ty = TyUnknown {},
                                body = TmApp {lhs = dtupleproj_ i var,
-                                             rhs = eta_var}},
+                                             rhs = eta_var,
+                                             ty = TyUnknown(),
+                                             info = NoInfo()},
+                               ty = TyUnknown {},
+                               info = NoInfo()     
+                               },
+                               
                  inexpr = bodyacc,
-                 ty = TyUnknown {}}
+                 ty = TyUnknown {},
+                 info = NoInfo()}                 
         )
         body
         t.bindings in
     let lst_name = nameSym "lst" in
-    let lst_var = TmVar {ident = lst_name} in
+    let lst_var = TmVar {ident = lst_name,
+                         ty = TyUnknown {},
+                         info = NoInfo()} in
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
+                               body = unpack_from lst_var func_tuple,
                                ty = TyUnknown {},
-                               body = unpack_from lst_var func_tuple} in
+                               info = NoInfo()} in
     eval {ctx with env =
-            _evalInsert lst_name (TmApp {lhs = TmFix (), rhs = unfixed_tuple})
+            _evalInsert lst_name (TmApp {lhs = TmFix (),
+                                         rhs = unfixed_tuple,
+                                         ty = TyUnknown {},
+                                         info = NoInfo()})
             ctx.env}
          (unpack_from lst_var t.inexpr)
 end
@@ -181,7 +195,7 @@ lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
   | TmConst {val = CArgv {}} ->
-    TmSeq {tms = map str_ argv, ty = TyUnknown {}}
+    TmSeq {tms = map str_ argv, ty = TyUnknown {}, info = NoInfo()}
   | TmConst c -> TmConst c
 end
 
@@ -567,7 +581,7 @@ lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
   sem delta (arg : Expr) =
   | CGensym _ ->
     match arg with TmRecord {bindings = []} then
-      TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}}
+      TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}, info = NoInfo()}
     else error "Argument in gensym is not unit"
   | CSym2hash _ ->
     match arg with TmConst (t & {val = CSymb s}) then
@@ -604,7 +618,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   sem delta (arg : Expr) =
   | CGet _ ->
     match arg with TmSeq s then
-      TmConst {val = CGet2 s.tms, ty = TyUnknown {}}
+      TmConst {val = CGet2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not a get of a constant sequence"
   | CGet2 tms ->
     match arg with TmConst {val = CInt {val = n}} then
@@ -612,57 +626,57 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     else error "n in get is not a number"
   | CSet _ ->
     match arg with TmSeq s then
-      TmConst {val = CSet2 s.tms, ty = TyUnknown {}}
+      TmConst {val = CSet2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not a set of a constant sequence"
   | CSet2 tms ->
     match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CSet3 (tms, n)}
+      TmConst {val = CSet3 (tms, n), ty = TyUnknown {}, info = NoInfo()}
     else error "n in set is not a number"
   | CSet3 (tms,n) ->
-    TmSeq {tms = set tms n arg, ty = TyUnknown {}}
+    TmSeq {tms = set tms n arg, ty = TyUnknown {}, info = NoInfo()}
   | CCons _ ->
-    TmConst {val = CCons2 arg, ty = TyUnknown {}}
+    TmConst {val = CCons2 arg, ty = TyUnknown {}, info = NoInfo()}
   | CCons2 tm ->
     match arg with TmSeq s then
       TmSeq {s with tms = cons tm s.tms}
     else error "Not a cons of a constant sequence"
   | CSnoc _ ->
     match arg with TmSeq s then
-      TmConst {val = CSnoc2 s.tms, ty = TyUnknown {}}
+      TmConst {val = CSnoc2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not a snoc of a constant sequence"
   | CSnoc2 tms ->
-    TmSeq {tms = snoc tms arg, ty = TyUnknown {}}
+    TmSeq {tms = snoc tms arg, ty = TyUnknown {}, info = NoInfo()}
   | CConcat _ ->
     match arg with TmSeq s then
-      TmConst {val = CConcat2 s.tms, ty = TyUnknown {}}
+      TmConst {val = CConcat2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not a concat of a constant sequence"
   | CConcat2 tms ->
     match arg with TmSeq s then
-      TmSeq {tms = concat tms s.tms, ty = TyUnknown {}}
+      TmSeq {tms = concat tms s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not a concat of a constant sequence"
   | CLength _ ->
     match arg with TmSeq s then
-      TmConst {val = CInt {val = length s.tms}, ty = TyUnknown {}}
+      TmConst {val = CInt {val = length s.tms}, ty = TyUnknown {}, info = NoInfo()}
     else error "Not length of a constant sequence"
   | CReverse _ ->
     match arg with TmSeq s then
-      TmSeq {tms = reverse s.tms, ty = TyUnknown {}}
+      TmSeq {tms = reverse s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not reverse of a constant sequence"
   | CSplitAt _ ->
     match arg with TmSeq s then
-      TmConst {val = CSplitAt2 s.tms, ty = TyUnknown {}}
+      TmConst {val = CSplitAt2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not splitAt of a constant sequence"
   | CSplitAt2 tms ->
-    match arg with TmConst {val = CInt {val = n}} then
+    match arg with TmConst {val = CInt {val = n}, ty = TyUnknown {}, info = NoInfo()} then
       let t = splitAt tms n in
       tuple_ [seq_ t.0, seq_ t.1]
     else error "n in splitAt is not a number"
   | CMakeSeq _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CMakeSeq2 n, ty = TyUnknown {}}
+      TmConst {val = CMakeSeq2 n, ty = TyUnknown {}, info = NoInfo()}
     else error "n in makeSeq is not a number"
   | CMakeSeq2 n ->
-    TmSeq {tms = makeSeq n arg, ty = TyUnknown {}}
+    TmSeq {tms = makeSeq n arg, ty = TyUnknown {}, info = NoInfo()}
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst
@@ -687,7 +701,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileWrite _ ->
     match arg with TmSeq s then
       let f = _seqOfCharToString s.tms in
-      TmConst {val = CFileWrite2 f, ty = TyUnknown {}}
+      TmConst {val = CFileWrite2 f, ty = TyUnknown {}, info = NoInfo()}
     else error "f in writeFile not a sequence"
   | CFileWrite2 f ->
     match arg with TmSeq s then
@@ -698,7 +712,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileExists _ ->
     match arg with TmSeq s then
       let f = _seqOfCharToString s.tms in
-      TmConst {val = CBool {val = fileExists f}, ty = TyUnknown {}}
+      TmConst {val = CBool {val = fileExists f}, ty = TyUnknown {}, info = NoInfo()}
     else error "f in fileExists not a sequence"
   | CFileDelete _ ->
     match arg with TmSeq s then
@@ -718,7 +732,7 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
     else error "string to print is not a string"
   | CReadLine _ ->
     let s = readLine () in
-    TmSeq {tms = map char_ s, ty = TyUnknown {}}
+    TmSeq {tms = map char_ s, ty = TyUnknown {}, info = NoInfo()}
 end
 
 lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
@@ -779,7 +793,7 @@ lang RefOpEval = RefOpAst + IntAst
   | CRef _ -> TmRef {ref = ref arg}
   | CModRef _ ->
     match arg with TmRef {ref = r} then
-      TmConst {val = CModRef2 r}
+      TmConst {val = CModRef2 r, info = NoInfo()}
     else error "first argument of modref not a reference"
   | CModRef2 r ->
     let _ = modref r arg in
@@ -918,7 +932,7 @@ lang MExprEval =
   MExprSym + MExprEq
 
   -- Terms
-  + VarEval + AppEval + FunEval + FixEval + RecordEval + RecLetsEval +
+  + VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
   ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
 
   -- Constants

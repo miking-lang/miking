@@ -1,5 +1,6 @@
 include "ast.mc"
 include "ast-builder.mc"
+include "info.mc"
 
 -- This file contains tests for the sfold and smap semantic functions
 -- defined in "ast.mc". These will eventually be automatically generated,
@@ -173,7 +174,7 @@ let cInt2cChar =
 lam e. match e with TmConst t then
          match t.val with CInt i
            then TmConst {val = CChar {val = int2char i.val},
-                         ty = TyUnknown {}}
+                         ty = TyUnknown {}, info = NoInfo()}
          else e
        else e
 in

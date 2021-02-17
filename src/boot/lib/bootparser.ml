@@ -10,27 +10,27 @@ open Intrinsics
 (* Terms *)
 let idTmVar = 100
 
-let idTmLam = 101
+let idTmApp = 101
 
-let idTmLet = 102
+let idTmLam = 102
 
-let idTmType = 103
+let idTmLet = 103
 
 let idTmRecLets = 104
 
-let idTmApp = 105
+let idTmConst = 105
 
-let idTmConst = 106
+let idTmSeq = 106
 
-let idTmSeq = 107
+let idTmRecord = 107
 
-let idTmRecord = 108
+let idTmRecordUpdate = 108
 
-let idTmRecordUpdate = 109
+let idTmType = 109
 
-let idTmCondef = 110
+let idTmConDef = 110
 
-let idTmConapp = 111
+let idTmConApp = 111
 
 let idTmMatch = 112
 
@@ -93,6 +93,12 @@ let idPatOr = 409
 
 let idPatNot = 410
 
+(* Info *)
+
+let idInfo = 500
+
+let idNoInfo = 501
+
 let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
@@ -116,12 +122,12 @@ let getData = function
   (* Terms *)
   | PTreeTm (TmVar (fi, x, _)) ->
       (idTmVar, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTm (TmApp (fi, t1, t2)) ->
+      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, ty, t)) ->
       (idTmLam, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmLet (fi, x, _, ty, t1, t2)) ->
       (idTmLet, [fi], [], [ty], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmType (fi, x, _, ty, t)) ->
-      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
   | PTreeTm (TmRecLets (fi, lst, t)) ->
       let fis = fi :: List.map (fun (fi, _, _, _, _) -> fi) lst in
       let len = List.length lst in
@@ -129,8 +135,6 @@ let getData = function
       let tms = List.map (fun (_, _, _, _, t) -> t) lst @ [t] in
       let strs = List.map (fun (_, s, _, _, _) -> s) lst in
       (idTmRecLets, fis, [len], tys, tms, strs, [], [], [], [])
-  | PTreeTm (TmApp (fi, t1, t2)) ->
-      (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [])
   | PTreeTm (TmConst (fi, c)) ->
       (idTmConst, [fi], [], [], [], [], [], [], [c], [])
   | PTreeTm (TmSeq (fi, ts)) ->
@@ -142,10 +146,12 @@ let getData = function
       (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [])
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [])
-  | PTreeTm (TmCondef (fi, x, _, ty, t)) ->
-      (idTmCondef, [fi], [], [ty], [t], [x], [], [], [], [])
-  | PTreeTm (TmConapp (fi, x, _, t)) ->
-      (idTmConapp, [fi], [], [], [t], [x], [], [], [], [])
+  | PTreeTm (TmType (fi, x, _, ty, t)) ->
+      (idTmType, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
+      (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmConApp (fi, x, _, t)) ->
+      (idTmConApp, [fi], [], [], [t], [x], [], [], [], [])
   | PTreeTm (TmMatch (fi, t1, p, t2, t3)) ->
       (idTmMatch, [fi], [], [], [t1; t2; t3], [], [], [], [], [p])
   | PTreeTm (TmUtest (fi, t1, t2, t4_op, t3)) -> (
@@ -199,6 +205,11 @@ let getData = function
       (idPatOr, [fi], [], [], [], [], [], [], [], [p1; p2])
   | PTreePat (PatNot (fi, p)) ->
       (idPatNot, [fi], [], [], [], [], [], [], [], [p])
+  (* Info *)
+  | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
+      (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [])
+  | PTreeInfo NoInfo ->
+      (idNoInfo, [], [], [], [], [], [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
@@ -233,3 +244,7 @@ let getConst t n =
 let getPat t n =
   let _, _, _, _, _, _, _, _, _, lst = getData t in
   PTreePat (List.nth lst n)
+
+let getInfo t n =
+  let _, lst, _, _, _, _, _, _, _, _ = getData t in
+  PTreeInfo (List.nth lst n)

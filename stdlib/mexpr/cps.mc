@@ -8,7 +8,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/eq.mc"
 
-lang FunCPS = FunSym + FunEq + UnknownTypeSym + UnknownTypeEq
+lang FunCPS = LamSym + LamEq + UnknownTypeSym + UnknownTypeEq
 
   sem cpsK (cont: Expr -> Expr) =
   | TmLam t -> cont (cpsM (TmLam t))

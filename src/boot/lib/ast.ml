@@ -141,6 +141,7 @@ and const =
   | CbootParserGetListLength of tm option
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
+  | CbootParserGetInfo of tm option
   (* External functions *)
   | CExt of Extast.ext
   | CSd of Sdast.ext
@@ -152,6 +153,7 @@ and ptree =
   | PTreeTy of ty
   | PTreePat of pat
   | PTreeConst of const
+  | PTreeInfo of info
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty
@@ -191,16 +193,14 @@ and program = Program of include_ list * top list * tm
 and tm =
   (* Variable *)
   | TmVar of info * ustring * Symb.t
+  (* Application *)
+  | TmApp of info * tm * tm
   (* Lambda abstraction *)
   | TmLam of info * ustring * Symb.t * ty * tm
   (* Let *)
   | TmLet of info * ustring * Symb.t * ty * tm * tm
-  (* Type let *)
-  | TmType of info * ustring * Symb.t * ty * tm
   (* Recursive lets *)
   | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm
-  (* Application *)
-  | TmApp of info * tm * tm
   (* Constant *)
   | TmConst of info * const
   (* Sequence *)
@@ -209,10 +209,12 @@ and tm =
   | TmRecord of info * tm Record.t
   (* Record update *)
   | TmRecordUpdate of info * tm * ustring * tm
+  (* Type let *)
+  | TmType of info * ustring * Symb.t * ty * tm
   (* Constructor definition *)
-  | TmCondef of info * ustring * Symb.t * ty * tm
+  | TmConDef of info * ustring * Symb.t * ty * tm
   (* Constructor application *)
-  | TmConapp of info * ustring * Symb.t * tm
+  | TmConApp of info * ustring * Symb.t * tm
   (* Match data *)
   | TmMatch of info * tm * pat * tm * tm
   (* Unit testing *)
@@ -308,25 +310,19 @@ module Option = BatOption
 let rec map_tm f = function
   | TmVar (_, _, _) as t ->
       f t
+  | TmApp (fi, t1, t2) ->
+      f (TmApp (fi, map_tm f t1, map_tm f t2))
   | TmLam (fi, x, s, ty, t1) ->
       f (TmLam (fi, x, s, ty, map_tm f t1))
-  | TmClos (fi, x, s, t1, env) ->
-      f (TmClos (fi, x, s, map_tm f t1, env))
   | TmLet (fi, x, s, ty, t1, t2) ->
       f (TmLet (fi, x, s, ty, map_tm f t1, map_tm f t2))
-  | TmType (fi, x, s, ty, t1) ->
-      f (TmType (fi, x, s, ty, map_tm f t1))
   | TmRecLets (fi, lst, tm) ->
       f
         (TmRecLets
            ( fi
            , List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, map_tm f t)) lst
            , map_tm f tm ))
-  | TmApp (fi, t1, t2) ->
-      f (TmApp (fi, map_tm f t1, map_tm f t2))
   | TmConst (_, _) as t ->
-      f t
-  | TmFix _ as t ->
       f t
   | TmSeq (fi, tms) ->
       f (TmSeq (fi, Mseq.Helpers.map (map_tm f) tms))
@@ -334,18 +330,24 @@ let rec map_tm f = function
       f (TmRecord (fi, Record.map (map_tm f) r))
   | TmRecordUpdate (fi, r, l, t) ->
       f (TmRecordUpdate (fi, map_tm f r, l, map_tm f t))
-  | TmCondef (fi, x, s, ty, t1) ->
-      f (TmCondef (fi, x, s, ty, map_tm f t1))
-  | TmConapp (fi, k, s, t) ->
-      f (TmConapp (fi, k, s, t))
+  | TmType (fi, x, s, ty, t1) ->
+      f (TmType (fi, x, s, ty, map_tm f t1))
+  | TmConDef (fi, x, s, ty, t1) ->
+      f (TmConDef (fi, x, s, ty, map_tm f t1))
+  | TmConApp (fi, k, s, t) ->
+      f (TmConApp (fi, k, s, t))
   | TmMatch (fi, t1, p, t2, t3) ->
       f (TmMatch (fi, map_tm f t1, p, map_tm f t2, map_tm f t3))
-  | TmUse (fi, l, t1) ->
-      f (TmUse (fi, l, map_tm f t1))
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       let tusing_mapped = Option.map (map_tm f) tusing in
       f (TmUtest (fi, map_tm f t1, map_tm f t2, tusing_mapped, map_tm f tnext))
   | TmNever _ as t ->
+      f t
+  | TmUse (fi, l, t1) ->
+      f (TmUse (fi, l, map_tm f t1))
+  | TmClos (fi, x, s, t1, env) ->
+      f (TmClos (fi, x, s, map_tm f t1, env))
+  | TmFix _ as t ->
       f t
   | TmRef _ as t ->
       f t
@@ -353,23 +355,23 @@ let rec map_tm f = function
 (* Returns the info field from a term *)
 let tm_info = function
   | TmVar (fi, _, _)
-  | TmLam (fi, _, _, _, _)
-  | TmClos (fi, _, _, _, _)
-  | TmLet (fi, _, _, _, _, _)
-  | TmType (fi, _, _, _, _)
-  | TmRecLets (fi, _, _)
   | TmApp (fi, _, _)
+  | TmLam (fi, _, _, _, _)
+  | TmLet (fi, _, _, _, _, _)
+  | TmRecLets (fi, _, _)
   | TmConst (fi, _)
-  | TmFix fi
   | TmSeq (fi, _)
   | TmRecord (fi, _)
   | TmRecordUpdate (fi, _, _, _)
-  | TmCondef (fi, _, _, _, _)
-  | TmConapp (fi, _, _, _)
+  | TmType (fi, _, _, _, _)
+  | TmConDef (fi, _, _, _, _)
+  | TmConApp (fi, _, _, _)
   | TmMatch (fi, _, _, _, _)
-  | TmUse (fi, _, _)
   | TmUtest (fi, _, _, _, _)
   | TmNever fi
+  | TmUse (fi, _, _)
+  | TmClos (fi, _, _, _, _)
+  | TmFix fi
   | TmRef (fi, _) ->
       fi
 

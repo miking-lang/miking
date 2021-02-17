@@ -410,6 +410,8 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetConst"
   | CbootParserGetPat _ ->
       fprintf fmt "bootParserParseGetPat"
+  | CbootParserGetInfo _ ->
+      fprintf fmt "bootParserParseGetInfo"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
@@ -441,7 +443,7 @@ and print_tm fmt (prec, t) =
         Match
     | TmLam _ ->
         Lam
-    | TmConapp _ | TmSeq _ ->
+    | TmConApp _ | TmSeq _ ->
         Semicolon
     | TmApp _ ->
         App
@@ -450,7 +452,7 @@ and print_tm fmt (prec, t) =
     | TmConst _
     | TmRecord _
     | TmRecordUpdate _
-    | TmCondef _
+    | TmConDef _
     | TmUse _
     | TmUtest _
     | TmClos _
@@ -526,11 +528,11 @@ and print_tm' fmt t =
       let l = string_of_ustring l in
       (* TODO(?,?): The below Atom precedences can probably be made less conservative *)
       fprintf fmt "{%a with %s = %a}" print_tm (Atom, t1) l print_tm (Atom, t2)
-  | TmCondef (_, x, s, ty, t) ->
+  | TmConDef (_, x, s, ty, t) ->
       let str = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>con %s:%s in@ %a@]" str ty print_tm (Match, t)
-  | TmConapp (_, x, sym, t) ->
+  | TmConApp (_, x, sym, t) ->
       let str = string_of_ustring (ustring_of_var x sym) in
       fprintf fmt "%s %a" str print_tm (Atom, t)
   (* If expressions *)

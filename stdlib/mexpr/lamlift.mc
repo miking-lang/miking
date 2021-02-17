@@ -284,7 +284,7 @@
 --                            with rhs = lamliftReplaceIdentifiers newnames t.rhs}
 -- end
 --
--- lang FunLamlift = VarLamlift + FunAst + ConstAst + UnitAst
+-- lang FunLamlift = VarLamlift + LamAst + ConstAst + UnitAst
 --     syn Expr =
 --     | TmLamChain {body : Expr}
 --

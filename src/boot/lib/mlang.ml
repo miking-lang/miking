@@ -1,7 +1,7 @@
 (*
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
- *)
+*)
 
 open Ast
 open Msg
@@ -381,15 +381,15 @@ let rec desugar_tm nss env =
               (fi, empty_mangle name, s, ty, desugar_tm nss env' e))
             bindings
         , desugar_tm nss env' body )
-  | TmCondef (fi, name, s, ty, body) ->
-      TmCondef
+  | TmConDef (fi, name, s, ty, body) ->
+      TmConDef
         ( fi
         , empty_mangle name
         , s
         , ty
         , desugar_tm nss (delete_con env name) body )
-  | TmConapp (fi, x, s, t) ->
-      TmConapp (fi, resolve_con env x, s, desugar_tm nss env t)
+  | TmConApp (fi, x, s, t) ->
+      TmConApp (fi, resolve_con env x, s, desugar_tm nss env t)
   | TmClos _ as tm ->
       tm
   (* Both introducing and referencing *)
@@ -503,7 +503,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       let ns = List.fold_left add_decl previous_ns decls in
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
-        TmCondef
+        TmConDef
           ( fi
           , mangle cname
           , Symb.Helpers.nosym
@@ -583,7 +583,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       (nss, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
-        TmCondef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
+        TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
       (nss, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->

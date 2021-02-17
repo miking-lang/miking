@@ -8,6 +8,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/eq.mc"
+include "mexpr/info.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
   sem isValue =
@@ -25,10 +26,14 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let var = TmVar {
       ident = ident,
       ty = TyUnknown {},
-      fi = NoInfo {}
+      info = NoInfo {}
     } in
-    TmLet {ident = ident, tyBody = TyUnknown {},
-           body = n, inexpr = k var, ty = TyUnknown {}}
+    TmLet {ident = ident,
+           tyBody = TyUnknown {},
+           body = n,
+           inexpr = k var,
+           ty = TyUnknown {},
+           info = NoInfo{}}
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (isValue n) then k n else bind k n) m
@@ -64,13 +69,13 @@ lang AppANF = ANF + AppAst
 
 end
 
-lang FunANF = ANF + FunAst
+lang LamANF = ANF + LamAst
   sem isValue =
   | TmLam _ -> true
 
   sem normalize (k : Expr -> Expr) =
-  | TmLam {ident = ident, ty = ty, body = body} ->
-    k (TmLam {ident = ident, ty = ty, body = normalizeTerm body})
+  | TmLam {ident = ident, ty = ty, body = body, info = info} ->
+    k (TmLam {ident = ident, body = normalizeTerm body, ty = ty, info = info})
 
 end
 
@@ -122,8 +127,8 @@ lang TypeANF = ANF + TypeAst
   | TmType _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmType {ident = ident, ty = ty, inexpr = m1} ->
-    TmType {ident = ident, ty = ty, inexpr = normalizeName k m1}
+  | TmType {ident = ident, inexpr = m1, ty = ty, info = info} ->
+    TmType {ident = ident, ty = ty, inexpr = normalizeName k m1, info = info}
 
 end
 
@@ -218,7 +223,7 @@ lang NeverANF = ANF + NeverAst
 end
 
 lang MExprANF =
-  VarANF + AppANF + FunANF + RecordANF + LetANF + TypeANF + RecLetsANF +
+  VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
 
 -----------
