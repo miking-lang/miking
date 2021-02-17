@@ -24,7 +24,7 @@ let _op = lam opHashMap. lam op.
       opHashMap)
 
 let _seqOps = [
-  "make",
+  "create",
   "empty",
   "length",
   "concat",
@@ -83,7 +83,7 @@ let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = va
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
   -- Sequence intrinsics
-  | CMakeSeq {} -> _seqOp "make"
+  | CCreate {} -> _seqOp "create"
   | CLength {} -> _seqOp "length"
   | CCons {} -> _seqOp "cons"
   | CSnoc {} -> _seqOp "snoc"
@@ -620,7 +620,7 @@ utest int_ 1 with generate fst using sameSemantics in
 utest int_ 2 with generate snd using sameSemantics in
 utest int_ 3 with generate thrd using sameSemantics in
 
-let testMake = makeseq_ (int_ 2) (int_ 0) in
+let testMake = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
 let len = length_ testMake in
 let fst = get_ testMake (int_ 0) in
 let lst = get_ testMake (int_ 1) in

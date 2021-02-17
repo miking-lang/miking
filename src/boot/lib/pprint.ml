@@ -304,9 +304,9 @@ let rec print_const fmt = function
       fprintf fmt "char2int"
   | Cint2char ->
       fprintf fmt "int2char"
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq _ ->
-      fprintf fmt "makeSeq"
+  (* MCore intrinsic: sequences *)
+  | Ccreate _ ->
+      fprintf fmt "create"
   | Clength ->
       fprintf fmt "length"
   | Cconcat _ ->

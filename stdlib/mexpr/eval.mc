@@ -613,7 +613,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CSnoc2 [Expr]
   | CConcat2 [Expr]
   | CSplitAt2 [Expr]
-  | CMakeSeq2 Int
+  | CCreate2 Int
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -671,12 +671,13 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       let t = splitAt tms n in
       tuple_ [seq_ t.0, seq_ t.1]
     else error "n in splitAt is not a number"
-  | CMakeSeq _ ->
+  | CCreate _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CMakeSeq2 n, ty = TyUnknown {}, info = NoInfo()}
-    else error "n in makeSeq is not a number"
-  | CMakeSeq2 n ->
-    TmSeq {tms = makeSeq n arg, ty = TyUnknown {}, info = NoInfo()}
+      TmConst {val = CCreate2 n, ty = TyUnknown {}, info = NoInfo()}
+    else error "n in create is not a number"
+  | CCreate2 n ->
+    let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
+    TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst
@@ -1188,9 +1189,14 @@ let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
 with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
 
--- makeSeq 3 42 -> [42, 42, 42]
-let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
-utest eval makeSeqAst with seq_ [int_ 42, int_ 42, int_ 42] in
+-- create 3 (lam _. 42) -> [42, 42, 42]
+let createAst = create_ (int_ 3) (ulam_ "_" (int_ 42)) in
+utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] in
+
+-- create 3 (lam i. i) -> [0, 1, 2]
+let i = nameSym "i" in
+let createAst2 = create_ (int_ 3) (nulam_ i (nvar_ i)) in
+utest eval createAst2 with seq_ [int_ 0, int_ 1, int_ 2] in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ in

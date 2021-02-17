@@ -11,7 +11,7 @@ let matrixIsMatrix = lam mtx.
            mtx)
 
 -- Makes matrix of dimensions d = (m, n) with elements c.
-let matrixConst = lam d. lam c. makeSeq d.0 (makeSeq d.1 c)
+let matrixConst = lam d. lam c. make d.0 (make d.1 c)
 
 -- Get element (i, j) from matrix mtx.
 let matrixGet = lam mtx. lam i. lam j. get (get mtx i) j

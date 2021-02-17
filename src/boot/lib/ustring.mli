@@ -242,6 +242,10 @@ module Op : sig
 
   val ustring2list : ustring -> int list
 
+  val array2ustring : int array -> ustring
+
+  val ustring2array : ustring -> int array
+
   (** {6 Other functions} *)
 
   val uprint_bool : bool -> unit

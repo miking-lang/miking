@@ -34,8 +34,8 @@ lam w.
   if neqi d.1 n then error "Expected square weight matrix"
   else
   let vs = unfoldr (lam a. if eqi a n then None () else Some (a, addi a 1)) 0 in
-  let negv = makeSeq n (negi 1) in
-  let zerov = makeSeq n 0 in
+  let negv = make n (negi 1) in
+  let zerov = make n 0 in
     {
       w = w,
       n = n,
@@ -47,7 +47,7 @@ lam w.
       mvs = negv,
       ss = [],
       vs = vs,
-      ts = makeSeq n false,
+      ts = make n false,
       slacks = [],
       preds = negv
     }
@@ -90,7 +90,7 @@ let slackVal = lam u. lam v. lam state.
   subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.w u v)
 
 -- T <- {}
-let emptyT = lam state. {state with ts = makeSeq state.n false}
+let emptyT = lam state. {state with ts = make state.n false}
 
 -- v in T
 let memT = lam v. lam state. get state.ts v

@@ -610,9 +610,9 @@ let splitat_ = use MExprAst in
   lam s. lam n.
   appf2_ (const_ (CSplitAt ())) s n
 
-let makeseq_ = use MExprAst in
-  lam n. lam v.
-  appf2_ (const_ (CMakeSeq ())) n v
+let create_ = use MExprAst in
+  lam n. lam f.
+  appf2_ (const_ (CCreate ())) n f
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in

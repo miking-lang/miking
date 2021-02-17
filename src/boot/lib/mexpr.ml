@@ -73,7 +73,7 @@ let builtin =
   ; ("eqc", f (Ceqc None))
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
-  ; ("makeSeq", f (CmakeSeq None))
+  ; ("create", f (Ccreate None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
   ; ("get", f (Cget None))
@@ -276,10 +276,10 @@ let arity = function
       1
   | Cint2char ->
       1
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq None ->
+  (* MCore intrinsic: sequences *)
+  | Ccreate None ->
       2
-  | CmakeSeq (Some _) ->
+  | Ccreate (Some _) ->
       1
   | Clength ->
       1
@@ -693,12 +693,13 @@ let delta eval env fi c v =
       TmConst (fi, CChar v)
   | Cint2char, _ ->
       fail_constapp fi
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq None, TmConst (fi, CInt n) ->
-      TmConst (fi, CmakeSeq (Some n))
-  | CmakeSeq (Some n), t ->
-      TmSeq (tm_info t, Mseq.make n t)
-  | CmakeSeq None, _ ->
+  (* MCore intrinsic: sequences *)
+  | Ccreate None, TmConst (_, CInt n) ->
+      TmConst (fi, Ccreate (Some n))
+  | Ccreate (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create n createf)
+  | Ccreate None, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))

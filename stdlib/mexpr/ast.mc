@@ -500,7 +500,7 @@ lang SeqOpAst = SeqAst
   | CConcat {}
   | CLength {}
   | CReverse {}
-  | CMakeSeq {}
+  | CCreate {}
   | CSplitAt {}
 end
 

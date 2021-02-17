@@ -335,7 +335,7 @@ lang SeqOpEq = SeqOpAst
   sem eqConst (lhs : Const) =
   | CGet {} -> match lhs with CGet _ then true else false
   | CSet {} -> match lhs with CSet _ then true else false
-  | CMakeSeq {} -> match lhs with CMakeSeq _ then true else false
+  | CCreate {} -> match lhs with CCreate _ then true else false
   | CCons {} -> match lhs with CCons _ then true else false
   | CSnoc {} -> match lhs with CSnoc _ then true else false
   | CConcat {} -> match lhs with CConcat _ then true else false

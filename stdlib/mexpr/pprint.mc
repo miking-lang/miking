@@ -14,7 +14,7 @@ include "mexpr/ast-builder.mc"
 ----------------------------
 
 -- Indentation consisting of [indent] spaces
-let pprintSpacing = lam indent. makeSeq indent ' '
+let pprintSpacing = lam indent. make indent ' '
 
 -- Newline followed by [indent] spaces
 let pprintNewline = lam indent. concat "\n" (pprintSpacing indent)
@@ -600,7 +600,7 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CConcat _ -> "concat"
   | CLength _ -> "length"
   | CReverse _ -> "reverse"
-  | CMakeSeq _ -> "makeSeq"
+  | CCreate _ -> "create"
   | CSplitAt _ -> "splitAt"
 end
 

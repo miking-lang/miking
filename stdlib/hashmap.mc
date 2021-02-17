@@ -33,7 +33,7 @@ let _hashmapBucketIdx = lam hash. lam hm. modi (absi hash) (length hm.buckets)
 
 -- 'hashmapEmpty' is an empty hashmap with a default number of buckets.
 let hashmapEmpty : HashMap k v =
-  {buckets = makeSeq _hashmapDefaultBucketCount [],
+  {buckets = make _hashmapDefaultBucketCount [],
    nelems = 0}
 
 -- 'hashmap2seq hm' converts the hashmap 'hm' to a sequence of tuples.

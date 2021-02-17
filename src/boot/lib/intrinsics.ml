@@ -1,74 +1,50 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t = 'a BatFingerTree.t
+  type 'a t = 'a array Rope.t
 
-  let make n v = BatFingerTree.of_list (List.init n (fun _ -> v))
+  let create = Rope.create_array
 
-  let empty = BatFingerTree.empty
+  let empty = Rope.empty_array
 
-  let length = BatFingerTree.size
+  let length = Rope.length_array
 
-  let concat = BatFingerTree.append
+  let concat = Rope.concat_array
 
-  let get = BatFingerTree.get
+  let get = Rope.get_array
 
-  let set = BatFingerTree.set
+  let set = Rope.set_array
 
-  let cons e s = BatFingerTree.cons s e
+  let cons = Rope.cons_array
 
-  let snoc = BatFingerTree.snoc
+  let snoc = Rope.snoc_array
 
-  let reverse = BatFingerTree.reverse
+  let reverse = Rope.reverse_array
 
-  let split_at s n =
-    if n == 0 then (empty, s) (* O(1) *)
-    else if n == 1 then
-      ( BatFingerTree.singleton (BatFingerTree.head_exn s)
-      , BatFingerTree.tail_exn s ) (* Amortized O(1) *)
-    else if n == length s - 1 then
-      ( BatFingerTree.init_exn s
-      , BatFingerTree.singleton (BatFingerTree.last_exn s) )
-      (* Amortized O(1) *)
-    else if n == length s then (s, empty) (* O(1) *)
-    else BatFingerTree.split_at s n
-
-  (* O(log n) *)
+  let split_at = Rope.split_at_array
 
   module Helpers = struct
-    let of_list = BatFingerTree.of_list
+    let of_list = Rope.Convert.of_list_array
 
-    let to_list = BatFingerTree.to_list
+    let to_list = Rope.Convert.to_list_array
 
-    let of_array a = of_list (Array.to_list a)
+    let of_array = Rope.Convert.of_array_array
 
-    let to_array s = Array.of_list (to_list s)
+    let to_array = Rope.Convert.to_array_array
 
-    let of_ustring u = of_list (ustring2list u)
+    let of_ustring = Rope.Convert.of_ustring_array
 
-    let to_ustring s = list2ustring (to_list s)
+    let to_ustring = Rope.Convert.to_ustring_array
 
-    let equal = BatFingerTree.equal
+    let equal = Rope.equal_array
 
-    let map = BatFingerTree.map
+    let map = Rope.map_array_array
 
-    let fold_right f s a = BatFingerTree.fold_right (fun a x -> f x a) a s
+    let fold_right = Rope.foldr_array
 
-    let combine s1 s2 =
-      let rec work a s1 s2 =
-        if length s1 == 0 then a
-        else
-          work
-            (snoc a (BatFingerTree.head_exn s1, BatFingerTree.head_exn s2))
-            (BatFingerTree.tail_exn s1)
-            (BatFingerTree.tail_exn s2)
-      in
-      if length s1 != length s2 then
-        raise (Invalid_argument "sequences of different length")
-      else work empty s1 s2
+    let combine = Rope.combine_array_array
 
-    let fold_right2 f s1 s2 a =
-      fold_right (fun x a -> f (fst x) (snd x) a) (combine s1 s2) a
+    let fold_right2 = Rope.foldr2_array
   end
 end
 
