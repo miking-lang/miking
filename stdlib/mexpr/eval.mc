@@ -673,11 +673,11 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     else error "n in splitAt is not a number"
   | CCreate _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CCreate2 n, ty = TyUnknown {}}
+      TmConst {val = CCreate2 n, ty = TyUnknown {}, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
     let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
-    TmSeq {tms = create n f, ty = TyUnknown {}}
+    TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst

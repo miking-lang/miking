@@ -576,9 +576,9 @@ let _newQueueFromFrontier
     -- TODO(vipa, 2021-02-12): This could use a `make : (Int -> a) -> Int -> [a]` that we discussed a while back
     map
       (lam _. ref [])
-      (makeSeq
+      (create
         (addi 1 (maxOrElse (lam _. 0) subi (map _maxDistanceFromRoot frontier)))
-        ())
+        (lam _. ()))
 let _addToQueue
   : TentativeNode res self ROpen
   -> BreakableQueue res self
