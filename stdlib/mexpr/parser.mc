@@ -312,7 +312,7 @@ lang IfParser =
      let e2 = parseExprMain r1.pos 0 r1.str in
      let r2 = matchKeyword "else" e2.pos e2.str  in
      let e3 = parseExprMain r2.pos 0 r2.str in
-     {val = TmMatch {target = e1.val, pat = PBool {val = true, info = NoInfo ()},
+     {val = TmMatch {target = e1.val, pat = PatBool {val = true, info = NoInfo ()},
                      thn = e2.val, els = e3.val, ty = TyUnknown {},
                      info = makeInfo p e3.pos},
       pos = e3.pos,

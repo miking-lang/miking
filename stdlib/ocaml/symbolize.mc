@@ -23,5 +23,5 @@ lang OCamlSym =
     match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
       (patEnv, OPTuple { pats = pats })
     else never
-  | OPCon _ -> error "We're not quite done with adt's in ocaml yet, so symbolize won't work with programs that use them (in this case OPCon)"
+  | OPatCon _ -> error "We're not quite done with adt's in ocaml yet, so symbolize won't work with programs that use them (in this case OPatCon)"
 end

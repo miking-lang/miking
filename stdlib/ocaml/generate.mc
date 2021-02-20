@@ -73,8 +73,8 @@ let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneE
   OTmMatch
   { target = target
   , arms =
-    [ (OPCon {ident = _someName, args = [somePat]}, someExpr)
-    , (OPCon {ident = _noneName, args = []}, noneExpr)]}
+    [ (OPatCon {ident = _someName, args = [somePat]}, someExpr)
+    , (OPatCon {ident = _noneName, args = []}, noneExpr)]}
 let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
 let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
@@ -123,19 +123,19 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | t -> smap_Expr_Expr generate t
 
   sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
-  | PNamed {ident = PWildcard _} -> (assocEmpty, identity)
-  | PNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
-  | PBool {val = val} ->
+  | PatNamed {ident = PWildcard _} -> (assocEmpty, identity)
+  | PatNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
+  | PatBool {val = val} ->
     let wrap = lam cont.
       if_ (nvar_ targetName)
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
-  | PInt {val = val} ->
+  | PatInt {val = val} ->
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
-  | PChar {val = val} ->
+  | PatChar {val = val} ->
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (char_ val)) cont _none)
-  | PSeqTot {pats = pats} ->
+  | PatSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
       match generatePat n pat with (names, innerWrap) then
@@ -154,7 +154,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       , wrap
       )
     else never
-  | PSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
+  | PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
     let apply = lam f. lam x. f x in
     let mergeNames = assocMergePreferRight {eq=nameEqSym} in
     let minLen = addi (length prefix) (length postfix) in
@@ -186,7 +186,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         (names, wrap)
       else never
     else never
-  | POr {lpat = lpat, rpat = rpat} ->
+  | PatOr {lpat = lpat, rpat = rpat} ->
     match generatePat targetName lpat with (lnames, lwrap) then
       match generatePat targetName rpat with (rnames, rwrap) then
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
@@ -208,7 +208,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else never
     else never
-  | PAnd {lpat = lpat, rpat = rpat} ->
+  | PatAnd {lpat = lpat, rpat = rpat} ->
     match generatePat targetName lpat with (lnames, lwrap) then
       match generatePat targetName rpat with (rnames, rwrap) then
         let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
@@ -216,7 +216,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         (names, wrap)
       else never
     else never
-  | PNot {subpat = pat} ->
+  | PatNot {subpat = pat} ->
     match generatePat targetName pat with (_, innerWrap) then
       let wrap = lam cont.
         _optMatch (innerWrap (_some (OTmTuple {values = []})))

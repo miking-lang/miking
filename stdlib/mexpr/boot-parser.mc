@@ -141,44 +141,44 @@ lang BootParser = MExprAst
   -- Match pattern from ID
   sem matchPat (t:Unknown) =
   | 400 /-PatNamed-/ ->
-    PNamed {ident = strToPatName (gstr t 0),
+    PatNamed {ident = strToPatName (gstr t 0),
             info = ginfo t 0}
   | 401 /-PatSeqTot-/ ->
-    PSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0),
+    PatSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0),
              info = ginfo t 0}
   | 402 /-PatSeqEdge-/ ->
     let len = glistlen t 0 in
-    PSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
+    PatSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
               middle = strToPatName (gstr t 0),
               postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1),
               info = ginfo t 0}
   | 403 /-PatRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
-     PRecord {bindings = seq2assoc {eq = eqString} lst,
+     PatRecord {bindings = seq2assoc {eq = eqString} lst,
               info = ginfo t 0}
   | 404 /-PatCon-/ ->
-     PCon {ident = gname t 0, 
+     PatCon {ident = gname t 0, 
            subpat = gpat t 0,
            info = ginfo t 0}
   | 405 /-PatInt-/ ->     
-     PInt {val = gint t 0,
+     PatInt {val = gint t 0,
            info = ginfo t 0}
   | 406 /-PatChar-/ ->     
-     PChar {val = int2char (gint t 0),
+     PatChar {val = int2char (gint t 0),
             info = ginfo t 0}
   | 407 /-PatBool-/ ->     
-     PBool {val = eqi (gint t 0) 1,
+     PatBool {val = eqi (gint t 0) 1,
             info = ginfo t 0}
   | 408 /-PatAnd-/ ->     
-     PAnd {lpat = gpat t 0,
+     PatAnd {lpat = gpat t 0,
            rpat = gpat t 1,
            info = ginfo t 0}
   | 409 /-PatOr-/ ->     
-     POr {lpat = gpat t 0,
+     PatOr {lpat = gpat t 0,
            rpat = gpat t 1,
            info = ginfo t 0}
   | 410 /-PatNot-/ ->     
-     PNot {subpat = gpat t 0,
+     PatNot {subpat = gpat t 0,
            info = ginfo t 0}
 
 
