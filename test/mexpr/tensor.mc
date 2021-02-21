@@ -1,5 +1,5 @@
 -- Some helper functions
-let tensorCreateConstant = lam shape. lam v.
+let tensorRepeat = lam shape. lam v.
   tensorCreate shape (lam _. v)
 
 let tensorFill = lam t. lam v.
@@ -18,7 +18,7 @@ let testTensors = lam fromInt. lam v.
 
 
   -- Set and Get
-  let t = tensorCreateConstant [] v.0 in
+  let t = tensorRepeat [] v.0 in
   let _ = tensorSetExn t [] v.1 in
   utest tensorGetExn t [] with v.1 in
   utest tensorRank t with 0 in
@@ -41,7 +41,7 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t [2, 3] with v.12 in
 
   -- Copy
-  let t1 = tensorCreateConstant [3, 4] v.0 in
+  let t1 = tensorRepeat [3, 4] v.0 in
   let t2 = mkRank2TestTensor () in
   let _ = tensorCopyExn t2 t1 in
   utest tensorGetExn t1 [0, 0] with v.1 in
@@ -76,19 +76,19 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t1 [11] with v.12 in
 
   -- Slice
-  let t = tensorCreateConstant [] v.0 in
+  let t = tensorRepeat [] v.0 in
   let t1 = tensorSliceExn t [] in
   utest tensorShape t1 with [] in
   utest tensorRank t1 with 0 in
   utest tensorGetExn t1 [] with v.0 in
 
-  let t = tensorCreateConstant [1] v.0 in
+  let t = tensorRepeat [1] v.0 in
   let t1 = tensorSliceExn t [] in
   utest tensorShape t1 with [1] in
   utest tensorRank t1 with 1 in
   utest tensorGetExn t1 [0] with v.0 in
 
-  let t = tensorCreateConstant [1] v.0 in
+  let t = tensorRepeat [1] v.0 in
   let t1 = tensorSliceExn t [0] in
   utest tensorShape t1 with [] in
   utest tensorRank t1 with 0 in
@@ -229,7 +229,7 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t [2, 3] with v.1 in
 
   -- Iteri
-  let t = tensorCreateConstant [2, 2] v.0 in
+  let t = tensorRepeat [2, 2] v.0 in
   let _ = tensorIteri (lam i. lam row.
                          tensorIteri (lam j. lam e.
                                         tensorSetExn e [] (fromInt (addi (muli i 2) j)))
