@@ -71,13 +71,24 @@ utest
 with [2, 3, 4, 5]
 
 
--- Fill the tensor t with values v.
+-- Fill a tensor with values.
 let tensorFill : Tensor a -> a -> Unit =
 lam t. lam v. tensorMapExn (lam _. v) t t
 
 utest
   let t = tensorOfSeqExn [1, 2, 3, 4] in
   let _ = tensorFill t 0 in
+  tensorToSeqExn t
+with [0, 0, 0, 0]
+
+
+-- Create a tensor filled with values.
+let tensorRepeat : [Int] -> a -> Tensor a =
+lam shape. lam v.
+  tensorCreate shape (lam _. v)
+
+utest
+  let t = tensorRepeat [4] 0 in
   tensorToSeqExn t
 with [0, 0, 0, 0]
 

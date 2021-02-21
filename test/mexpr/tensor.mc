@@ -16,7 +16,6 @@ let testTensors = lam fromInt. lam v.
                           let j = get is 1 in
                           fromInt (addi (addi (muli i 4) j) 1)) in
 
-
   -- Set and Get
   let t = tensorRepeat [] v.0 in
   let _ = tensorSetExn t [] v.1 in
