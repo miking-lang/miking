@@ -56,8 +56,7 @@ module NoNum = struct
   let create shape f =
     let rank = Array.length shape in
     let size = prod shape in
-    let n = if rank = 0 then 1 else size in
-    let data = Array.init n (fun i -> f (inverse_row_major_ofs shape i)) in
+    let data = Array.init size (fun i -> f (inverse_row_major_ofs shape i)) in
     let left_ofs = 0 in
     {data; rank; shape; left_ofs; size}
 
