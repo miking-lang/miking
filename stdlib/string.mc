@@ -101,7 +101,7 @@ let string2int = lam s.
     then 0
     else
       let lsd = subi (char2int (get s last)) (char2int '0') in
-      let rest = muli 10 (string2int_rechelper (slice s 0 last)) in
+      let rest = muli 10 (string2int_rechelper (sub s 0 last)) in
       addi rest lsd
   in
   match s with [] then 0 else
@@ -245,8 +245,8 @@ recursive
   let strSplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
-    else if eqString delim (slice s 0 (length delim))
-         then cons [] (strSplit delim (slice s (length delim) (length s)))
+    else if eqString delim (sub s 0 (length delim))
+         then cons [] (strSplit delim (sub s (length delim) (length s)))
          else let remaining = strSplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
 end

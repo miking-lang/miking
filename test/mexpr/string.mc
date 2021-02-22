@@ -30,8 +30,8 @@ utest int2char 13 with '\r' in
 -- See seq.mc as well. Strings are sequences.
 utest concat "This " "is" with "This is" in
 utest get "Hello" 1 with 'e' in
-utest slice "This is all" 3 6 with "s is a" in
-utest slice "This is all" 3 6 with ['s',' ','i','s',' ','a'] in
+utest sub "This is all" 3 6 with "s is a" in
+utest sub "This is all" 3 6 with ['s',' ','i','s',' ','a'] in
 
 -- Nop
 utest () with () in

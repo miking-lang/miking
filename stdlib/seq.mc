@@ -34,13 +34,6 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
-let slice = lam seq. lam off. lam cnt. sub seq off cnt
-
-utest slice [1,3,5] 0 2 with [1,3]
-utest slice [3,7,10,20] 1 3 with [7,10,20]
-utest slice ['a','b'] 1 10 with ['b']
-utest slice [1,3] 2 10 with []
-
 -- Maps
 let mapi = lam f. lam seq.
   recursive let work = lam i. lam f. lam seq.

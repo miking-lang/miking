@@ -131,7 +131,7 @@
 --           let _ = dprint e in
 --           let _ = print "\n" in
 --           error "st_addGenargsToEnv: Generated argument above was expected to be TmLamliftTypedVar"
---       ) st (slice st_w_genargs.genargs 0 genarg_diff_count)
+--       ) st (sub st_w_genargs.genargs 0 genarg_diff_count)
 --     else
 --       st
 --

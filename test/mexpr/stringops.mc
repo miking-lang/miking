@@ -8,7 +8,7 @@ include "char.mc"
 mexpr
 
 let head = lam seq. get seq 0 in
-let tail = lam seq. slice seq 1 (length seq) in
+let tail = lam seq. sub seq 1 (length seq) in
 
 recursive
   let map = lam f. lam seq.
@@ -49,8 +49,8 @@ recursive
   let strsplit = lam delim. lam s.
     if or (eqi (length delim) 0) (lti (length s) (length delim))
     then cons s []
-    else if eqString delim (slice s 0 (length delim))
-         then cons [] (strsplit delim (slice s (length delim) (length s)))
+    else if eqString delim (sub s 0 (length delim))
+         then cons [] (strsplit delim (sub s (length delim) (length s)))
          else let remaining = strsplit delim (tail s) in
               cons (cons (head s) (head remaining)) (tail remaining)
 in
