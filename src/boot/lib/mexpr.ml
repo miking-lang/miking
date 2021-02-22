@@ -113,7 +113,11 @@ let builtin =
   ; ("sym2hash", f Csym2hash) (* MCore intrinsics: References *)
   ; ("ref", f Cref)
   ; ("deref", f CdeRef)
-  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
+  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Multicore *)
+  ; ("atomicMake", f CatomicMake)
+  ; ("atomicGet", f CatomicGet)
+  ; ("atomicSet", f (CatomicSet None))
+  ; ("atomicCAS", f (CatomicCAS (None, None))) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapFind", f (CmapFind None))
@@ -383,6 +387,21 @@ let arity = function
   | CmodRef (Some _) ->
       1
   | CdeRef ->
+      1
+  (* MCore intrinsics: Multicore *)
+  | CatomicMake ->
+      1
+  | CatomicGet ->
+      1
+  | CatomicSet None ->
+      2
+  | CatomicSet (Some _) ->
+      1
+  | CatomicCAS (None, None) ->
+      3
+  | CatomicCAS (Some _, None) ->
+      2
+  | CatomicCAS (_, Some _) ->
       1
   (* MCore intrinsics: Maps *)
   | CMap _ ->
@@ -954,6 +973,27 @@ let delta eval env fi c v =
       !r
   | CdeRef, _ ->
       fail_constapp fi
+  (* MCore intrinsics: Atomic references *)
+  | CatomicMake, v ->
+      TmAtomicRef (fi, Atomic.make v)
+  | CatomicGet, TmAtomicRef (_, r) ->
+      Atomic.get r
+  | CatomicGet, _ ->
+      fail_constapp fi
+  | CatomicSet None, TmAtomicRef (fi, r) ->
+      TmConst (fi, CatomicSet (Some r))
+  | CatomicSet (Some r), v ->
+      Atomic.set r v ; tmUnit
+  | CatomicSet None, _ ->
+      fail_constapp fi
+  | CatomicCAS (None, None), TmAtomicRef (fi, r) ->
+      TmConst (fi, CatomicCAS (Some r, None))
+  | CatomicCAS (Some r, None), v ->
+      TmConst (fi, CatomicCAS (Some r, Some v))
+  | CatomicCAS (Some r, Some v1), v2 ->
+      TmConst (fi, CBool (Atomic.compare_and_set r v1 v2))
+  | CatomicCAS (_, _), _ ->
+      fail_constapp fi
   (* MCore intrinsics: Map *)
   | CMap _, _ ->
       fail_constapp fi
@@ -1404,6 +1444,8 @@ let shape_str = function
       us "(closure)"
   | TmRef _ ->
       us "(ref)"
+  | TmAtomicRef _ ->
+      us "(atomic ref)"
   | _ ->
       us "Other tm"
 
@@ -1655,6 +1697,8 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       t
   | TmRef _ ->
       t
+  | TmAtomicRef _ ->
+      t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term. *)
@@ -1713,7 +1757,8 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmNever _
     | TmClos _
     | TmFix _
-    | TmRef _ ) as t ->
+    | TmRef _
+    | TmAtomicRef _ ) as t ->
       (env, symbolize env t)
 
 let rec try_match env value pat =
@@ -1968,6 +2013,9 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Ref - Only at runtime *)
   | TmRef _ ->
       t
+  (* Atomic ref - Only at runtime *)
+  | TmAtomicRef _ ->
+      t
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
@@ -2007,5 +2055,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmUse _
     | TmUtest _
     | TmNever _
-    | TmRef _ ) as t ->
+    | TmRef _
+    | TmAtomicRef _ ) as t ->
       (env, eval env t)

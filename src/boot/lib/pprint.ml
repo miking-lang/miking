@@ -372,6 +372,15 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
+  (* MCore intrinsics: Multicore *)
+  | CatomicMake ->
+      fprintf fmt "atomicMake"
+  | CatomicGet ->
+      fprintf fmt "atomicGet"
+  | CatomicSet _ ->
+      fprintf fmt "atomicSet"
+  | CatomicCAS _ ->
+      fprintf fmt "atomicCAS"
   (* MCore intrinsics: Maps *)
   | CMap _ ->
       fprintf fmt "map"
@@ -492,7 +501,8 @@ and print_tm fmt (prec, t) =
     | TmClos _
     | TmFix _
     | TmNever _
-    | TmRef _ ->
+    | TmRef _
+    | TmAtomicRef _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -599,6 +609,8 @@ and print_tm' fmt t =
       fprintf fmt "never"
   | TmRef (_, _) ->
       fprintf fmt "(ref)"
+  | TmAtomicRef (_, _) ->
+      fprintf fmt "(atomic ref)"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

@@ -122,6 +122,11 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
+  (* MCore intrinsics: Multicore *)
+  | CatomicMake
+  | CatomicGet
+  | CatomicSet of tm Atomic.t option
+  | CatomicCAS of tm Atomic.t option * tm option
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of (tm -> tm -> int) * Obj.t
@@ -246,6 +251,8 @@ and tm =
   | TmFix of info
   (* Reference *)
   | TmRef of info * tm ref
+  (* Atomic reference *)
+  | TmAtomicRef of info * tm Atomic.t
 
 (* Kind of pattern name *)
 and patName =
@@ -366,6 +373,8 @@ let rec map_tm f = function
       f t
   | TmRef _ as t ->
       f t
+  | TmAtomicRef _ as t ->
+      f t
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -387,7 +396,8 @@ let tm_info = function
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _)
   | TmFix fi
-  | TmRef (fi, _) ->
+  | TmRef (fi, _)
+  | TmAtomicRef (fi, _) ->
       fi
 
 let pat_info = function
