@@ -8,9 +8,9 @@ utest make 4 'a' with ['a', 'a', 'a', 'a']
 utest make 0 100 with []
 
 let null = lam seq. eqi 0 (length seq)
-let head = lam seq. get (splitAt seq 1).0 0
+let head = lam seq. get seq 0
 let tail = lam seq. (splitAt seq 1).1
-let last = lam seq. get (splitAt seq (subi (length seq) 1)).1 0
+let last = lam seq. get seq (subi (length seq) 1)
 let init = lam seq. (splitAt seq (subi (length seq) 1)).0
 
 utest head [2,3,5] with 2
