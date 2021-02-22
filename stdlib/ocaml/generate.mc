@@ -342,7 +342,7 @@ let _string2floatName = nameSym "string2float"
 let _eqcName = nameSym "eqc"
 let _char2intName = nameSym "char2int"
 let _int2charName = nameSym "int2char"
-let _makeSeqName = nameSym "makeSeq"
+let _createName = nameSym "create"
 let _lengthName = nameSym "length"
 let _concatName = nameSym "concat"
 let _getName = nameSym "getName"
@@ -436,7 +436,7 @@ let _preamble =
     , intr2 _eqcName eqc_
     , intr1 _char2intName char2int_
     , intr1 _int2charName int2char_
-    , intr2 _makeSeqName (appf2_ (_seqOp "make"))
+    , intr2 _createName (appf2_ (_seqOp "create"))
     , intr1 _lengthName (appf1_ (_seqOp "length"))
     , intr2 _concatName (appf2_ (_seqOp "concat"))
     , intr2 _getName (appf2_ (_seqOp "get"))
@@ -499,7 +499,7 @@ lang OCamlObjWrap = OCamlAst
   | CEqc _ -> nvar_ _eqcName
   | CChar2Int _ -> nvar_ _char2intName
   | CInt2Char _ -> nvar_ _int2charName
-  | CMakeSeq _ -> nvar_ _makeSeqName
+  | CCreate _ -> nvar_ _createName
   | CLength _ -> nvar_ _lengthName
   | CConcat _ -> nvar_ _concatName
   | CGet _ -> nvar_ _getName
@@ -606,63 +606,63 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --     true_
 --     false_) in
 -- utest matchChar1 with objWrapGenerate matchChar1 using sameSemantics in
---
+
 -- let matchChar2 = symbolize
 --   (match_ (char_ 'a')
 --     (pchar_ 'b')
 --     true_
 --     false_) in
 -- utest matchChar2 with objWrapGenerate matchChar2 using sameSemantics in
---
+
 -- let matchSeq = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
 --     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
 --     (addi_ (var_ "a") (var_ "b"))
 --     (int_ 42)) in
 -- utest matchSeq with objWrapGenerate matchSeq using sameSemantics in
---
+
 -- let noMatchSeq1 = symbolize
 --   (match_ (seq_ [int_ 2, int_ 2, int_ 3])
 --     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
 --     (addi_ (var_ "a") (var_ "b"))
 --     (int_ 42)) in
 -- utest noMatchSeq1 with objWrapGenerate noMatchSeq1 using sameSemantics in
---
+
 -- let noMatchSeqLen = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
 --     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
 --     (addi_ (var_ "a") (var_ "b"))
 --     (int_ 42)) in
 -- utest noMatchSeqLen with objWrapGenerate noMatchSeqLen using sameSemantics in
---
+
 -- let noMatchSeqLen2 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
 --     (addi_ (var_ "a") (var_ "b"))
 --     (int_ 42)) in
 -- utest noMatchSeqLen2 with objWrapGenerate noMatchSeqLen2 using sameSemantics in
---
+
 -- let matchOr1 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchOr1 with objWrapGenerate matchOr1 using sameSemantics in
---
+
 -- let matchOr2 = symbolize
 --   (match_ (seq_ [int_ 2, int_ 1])
 --     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchOr2 with objWrapGenerate matchOr2 using sameSemantics in
---
+
 -- let matchOr3 = symbolize
 --   (match_ (seq_ [int_ 3, int_ 1])
 --     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchOr3 with objWrapGenerate matchOr3 using sameSemantics in
---
+
 -- let matchNestedOr1 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
@@ -670,7 +670,7 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchNestedOr1 with objWrapGenerate matchNestedOr1 using sameSemantics in
---
+
 -- let matchNestedOr2 = symbolize
 --   (match_ (seq_ [int_ 2, int_ 1])
 --     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
@@ -678,7 +678,7 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchNestedOr2 with objWrapGenerate matchNestedOr2 using sameSemantics in
---
+
 -- let matchNestedOr3 = symbolize
 --   (match_ (seq_ [int_ 3, int_ 7])
 --     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
@@ -686,7 +686,7 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchNestedOr3 with objWrapGenerate matchNestedOr3 using sameSemantics in
---
+
 -- let matchNestedOr4 = symbolize
 --   (match_ (seq_ [int_ 4, int_ 7])
 --     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
@@ -694,77 +694,77 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --     (var_ "a")
 --     (int_ 42)) in
 -- utest matchNestedOr4 with objWrapGenerate matchNestedOr4 using sameSemantics in
---
+
 -- let matchNot1 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
 --     true_
 --     false_) in
 -- utest matchNot1 with objWrapGenerate matchNot1 using sameSemantics in
---
+
 -- let matchNot2 = symbolize
 --   (match_ (seq_ [int_ 2, int_ 2])
 --     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
 --     true_
 --     false_) in
 -- utest matchNot2 with objWrapGenerate matchNot2 using sameSemantics in
---
+
 -- let matchAnd1 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
 --     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
 --     (int_ 53)) in
 -- utest matchAnd1 with objWrapGenerate matchAnd1 using sameSemantics in
---
+
 -- let matchAnd2 = symbolize
 --   (match_ (seq_ [int_ 2, int_ 2])
 --     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
 --     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
 --     (int_ 53)) in
 -- utest matchAnd2 with objWrapGenerate matchAnd2 using sameSemantics in
---
+
 -- let matchAnd3 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
 --     (var_ "a")
 --     (int_ 53)) in
 -- utest matchAnd3 with objWrapGenerate matchAnd3 using sameSemantics in
---
+
 -- let matchAnd4 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
 --     (var_ "a")
 --     (int_ 53)) in
 -- utest matchAnd4 with objWrapGenerate matchAnd4 using sameSemantics in
---
+
 -- let matchSeqEdge1 = symbolize
 --   (match_ (seq_ [int_ 1])
 --     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
 --     (addi_ (var_ "a") (var_ "c"))
 --     (int_ 75)) in
 -- utest matchSeqEdge1 with objWrapGenerate matchSeqEdge1 using sameSemantics in
---
+
 -- let matchSeqEdge2 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2])
 --     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
 --     (addi_ (var_ "a") (var_ "c"))
 --     (int_ 75)) in
 -- utest matchSeqEdge2 with objWrapGenerate matchSeqEdge2 using sameSemantics in
---
+
 -- let matchSeqEdge3 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
 --     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
 --     (addi_ (var_ "a") (var_ "c"))
 --     (int_ 75)) in
 -- utest matchSeqEdge3 with objWrapGenerate matchSeqEdge3 using sameSemantics in
---
+
 -- let matchSeqEdge4 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
 --     (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
 --     (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
 --     (int_ 75)) in
 -- utest matchSeqEdge4 with objWrapGenerate matchSeqEdge4 using sameSemantics in
---
+
 -- let matchSeqEdge5 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
 --     (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
@@ -774,7 +774,7 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --       (int_ 84))
 --     (int_ 75)) in
 -- utest matchSeqEdge5 with objWrapGenerate matchSeqEdge5 using sameSemantics in
---
+
 -- let matchSeqEdge6 = symbolize
 --   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
 --     (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
@@ -784,158 +784,159 @@ let objWrapGenerate = lam a. objWrap (generate a) in
 --       (int_ 84))
 --     (int_ 75)) in
 -- utest matchSeqEdge6 with objWrapGenerate matchSeqEdge6 using sameSemantics in
---
+
 -- let matchSeqEdge7 = symbolize
 --   (match_ (seq_ [int_ 1])
 --     (pseqedgew_ [pvar_ "a"] [])
 --     (var_ "a")
 --     (int_ 75)) in
 -- utest matchSeqEdge7 with objWrapGenerate matchSeqEdge7 using sameSemantics in
---
+
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
-let p = objWrapGenerate addInt1 in
-utest addInt1 with p using sameSemantics in
+utest addInt1 with objWrapGenerate addInt1 using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest addInt2 with p using sameSemantics in
+utest addInt2 with objWrapGenerate addInt2 using sameSemantics in
 
--- let testMulInt = muli_ (int_ 2) (int_ 3) in
--- utest testMulInt with objWrapGenerate testMulInt using sameSemantics in
---
--- let testModInt = modi_ (int_ 2) (int_ 3) in
--- utest testModInt with objWrapGenerate testModInt using sameSemantics in
---
--- let testDivInt = divi_ (int_ 2) (int_ 3) in
--- utest testDivInt with objWrapGenerate testDivInt using sameSemantics in
---
--- let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
--- utest testNegInt with objWrapGenerate testNegInt using sameSemantics in
---
--- let compareInt1 = eqi_ (int_ 1) (int_ 2) in
--- utest compareInt1 with objWrapGenerate compareInt1 using sameSemantics in
---
--- let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest compareInt2 with objWrapGenerate compareInt2 using sameSemantics in
---
--- let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest compareInt3 with objWrapGenerate compareInt3 using sameSemantics in
---
--- let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest compareInt4 with objWrapGenerate compareInt4 using sameSemantics in
---
--- let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest compareInt5 with objWrapGenerate compareInt5 using sameSemantics in
---
--- let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
--- utest compareInt6 with objWrapGenerate compareInt6 using sameSemantics in
---
--- let shiftInt1 = slli_ (int_ 5) (int_ 2) in
--- utest shiftInt1 with objWrapGenerate shiftInt1 using sameSemantics in
---
--- let shiftInt2 = srli_ (int_ 5) (int_ 2) in
--- utest shiftInt2 with objWrapGenerate shiftInt2 using sameSemantics in
---
--- let shiftInt3 = srai_ (int_ 5) (int_ 2) in
--- utest shiftInt3 with objWrapGenerate shiftInt3 using sameSemantics in
---
--- -- Floats
--- let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
--- utest addFloat1 with objWrapGenerate addFloat1 using sameSemantics in
---
--- let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest addFloat2 with objWrapGenerate addFloat2 using sameSemantics in
---
--- let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
--- utest testMulFloat with objWrapGenerate testMulFloat using sameSemantics in
---
--- let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
--- utest testDivFloat with objWrapGenerate testDivFloat using sameSemantics in
---
--- let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
--- utest testNegFloat with objWrapGenerate testNegFloat using sameSemantics in
---
--- let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
--- utest compareFloat1 with objWrapGenerate compareFloat1 using sameSemantics in
---
--- let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest compareFloat2 with objWrapGenerate compareFloat2 using sameSemantics in
---
--- let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest compareFloat3 with objWrapGenerate compareFloat3 using sameSemantics in
---
--- let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest compareFloat4 with objWrapGenerate compareFloat4 using sameSemantics in
---
--- let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest compareFloat5 with objWrapGenerate compareFloat5 using sameSemantics in
---
--- let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
--- utest compareFloat6 with objWrapGenerate compareFloat6 using sameSemantics in
---
--- -- Chars
--- let charLiteral = char_ 'c' in
--- utest charLiteral with objWrapGenerate charLiteral
--- using sameSemantics in
---
--- let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
--- utest compareChar1 with objWrapGenerate compareChar1 using sameSemantics in
---
--- let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
--- utest compareChar2 with objWrapGenerate compareChar2 using sameSemantics in
---
--- let testCharToInt = char2int_ (char_ '0') in
--- utest testCharToInt with objWrapGenerate testCharToInt using sameSemantics in
---
--- let testIntToChar = int2char_ (int_ 48) in
--- utest testIntToChar with objWrapGenerate testIntToChar using sameSemantics in
---
--- -- Abstractions
--- let fun =
---   symbolize
---   (appSeq_
---     (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
---     [int_ 1, int_ 2])
--- in
--- utest fun with objWrapGenerate fun using sameSemantics in
---
--- let funShadowed =
---   symbolize
---   (appSeq_
---     (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
---     [ulam_ "@" (var_ "@"), int_ 2])
--- in
--- utest funShadowed with objWrapGenerate funShadowed using sameSemantics in
---
--- -- Lets
--- let testLet =
---   symbolize
---   (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
--- in
--- utest testLet with objWrapGenerate testLet using sameSemantics in
---
--- let testLetShadowed =
---   symbolize
---   (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
---              app_ (var_ "@") (int_ 1)])
--- in
--- utest testLetShadowed with objWrapGenerate testLetShadowed
--- using sameSemantics in
---
--- let testLetRec =
---   symbolize
---   (bind_
---      (ureclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
---      (ureclets_add "@" (ulam_ "" (var_ ""))
---      reclets_empty))
---    (app_ (var_ "$") (var_ "@")))
--- in
--- utest testLetRec with objWrapGenerate testLetRec using sameSemantics in
---
--- -- Sequences
+let testMulInt = muli_ (int_ 2) (int_ 3) in
+utest testMulInt with objWrapGenerate testMulInt using sameSemantics in
+
+let testModInt = modi_ (int_ 2) (int_ 3) in
+utest testModInt with objWrapGenerate testModInt using sameSemantics in
+
+let testDivInt = divi_ (int_ 2) (int_ 3) in
+utest testDivInt with objWrapGenerate testDivInt using sameSemantics in
+
+let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
+utest testNegInt with objWrapGenerate testNegInt using sameSemantics in
+
+let compareInt1 = eqi_ (int_ 1) (int_ 2) in
+utest compareInt1 with objWrapGenerate compareInt1 using sameSemantics in
+
+let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt2 with objWrapGenerate compareInt2 using sameSemantics in
+
+let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt3 with objWrapGenerate compareInt3 using sameSemantics in
+
+let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt4 with objWrapGenerate compareInt4 using sameSemantics in
+
+let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt5 with objWrapGenerate compareInt5 using sameSemantics in
+
+let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt6 with objWrapGenerate compareInt6 using sameSemantics in
+
+let shiftInt1 = slli_ (int_ 5) (int_ 2) in
+utest shiftInt1 with objWrapGenerate shiftInt1 using sameSemantics in
+
+let shiftInt2 = srli_ (int_ 5) (int_ 2) in
+utest shiftInt2 with objWrapGenerate shiftInt2 using sameSemantics in
+
+let shiftInt3 = srai_ (int_ 5) (int_ 2) in
+utest shiftInt3 with objWrapGenerate shiftInt3 using sameSemantics in
+
+-- Floats
+let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
+utest addFloat1 with objWrapGenerate addFloat1 using sameSemantics in
+
+let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest addFloat2 with objWrapGenerate addFloat2 using sameSemantics in
+
+let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
+utest testMulFloat with objWrapGenerate testMulFloat using sameSemantics in
+
+let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
+utest testDivFloat with objWrapGenerate testDivFloat using sameSemantics in
+
+let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
+utest testNegFloat with objWrapGenerate testNegFloat using sameSemantics in
+
+let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
+utest compareFloat1 with objWrapGenerate compareFloat1 using sameSemantics in
+
+let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat2 with objWrapGenerate compareFloat2 using sameSemantics in
+
+let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat3 with objWrapGenerate compareFloat3 using sameSemantics in
+
+let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat4 with objWrapGenerate compareFloat4 using sameSemantics in
+
+let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat5 with objWrapGenerate compareFloat5 using sameSemantics in
+
+let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat6 with objWrapGenerate compareFloat6 using sameSemantics in
+
+
+-- Chars
+let charLiteral = char_ 'c' in
+utest charLiteral with objWrapGenerate charLiteral
+using sameSemantics in
+
+let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
+utest compareChar1 with objWrapGenerate compareChar1 using sameSemantics in
+
+let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
+utest compareChar2 with objWrapGenerate compareChar2 using sameSemantics in
+
+let testCharToInt = char2int_ (char_ '0') in
+utest testCharToInt with objWrapGenerate testCharToInt using sameSemantics in
+
+let testIntToChar = int2char_ (int_ 48) in
+utest testIntToChar with objWrapGenerate testIntToChar using sameSemantics in
+
+
+-- Abstractions
+let fun =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
+    [int_ 1, int_ 2])
+in
+utest fun with objWrapGenerate fun using sameSemantics in
+
+let funShadowed =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
+    [ulam_ "@" (var_ "@"), int_ 2])
+in
+utest funShadowed with objWrapGenerate funShadowed using sameSemantics in
+
+-- Lets
+let testLet =
+  symbolize
+  (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
+in
+utest testLet with objWrapGenerate testLet using sameSemantics in
+
+let testLetShadowed =
+  symbolize
+  (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
+             app_ (var_ "@") (int_ 1)])
+in
+utest testLetShadowed with objWrapGenerate testLetShadowed
+using sameSemantics in
+
+let testLetRec =
+  symbolize
+  (bind_
+     (ureclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
+     (ureclets_add "@" (ulam_ "" (var_ ""))
+     reclets_empty))
+   (app_ (var_ "$") (var_ "@")))
+in
+utest testLetRec with objWrapGenerate testLetRec using sameSemantics in
+
+-- Sequences
 -- let testEmpty = symbolize (length_ (seq_ [])) in
 -- utest testEmpty with objWrapGenerate testEmpty using sameSemantics in
---
+
 -- let nonEmpty = seq_ [int_ 1, int_ 2, int_ 3] in
 -- let len = length_ nonEmpty in
 -- let fst = get_ nonEmpty (int_ 0) in
@@ -945,7 +946,7 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 1 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 2 with objWrapGenerate snd using sameSemantics in
 -- utest int_ 3 with objWrapGenerate thrd using sameSemantics in
---
+
 -- let testMake = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
 -- let len = length_ testMake in
 -- let fst = get_ testMake (int_ 0) in
@@ -953,7 +954,7 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 2 with objWrapGenerate len using sameSemantics in
 -- utest int_ 0 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 0 with objWrapGenerate lst using sameSemantics in
---
+
 -- let testSet = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
 -- let len = length_ testSet in
 -- let fst = get_ testSet (int_ 0) in
@@ -961,7 +962,7 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 2 with objWrapGenerate len using sameSemantics in
 -- utest int_ 3 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 2 with objWrapGenerate snd using sameSemantics in
---
+
 -- let testCons = cons_  (int_ 1) (seq_ [int_ 2, int_ 3]) in
 -- let len = length_ testCons in
 -- let fst = get_ testCons (int_ 0) in
@@ -971,7 +972,7 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 1 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 2 with objWrapGenerate snd using sameSemantics in
 -- utest int_ 3 with objWrapGenerate thrd using sameSemantics in
---
+
 -- let testSnoc = snoc_ (seq_ [int_ 1, int_ 2]) (int_ 3) in
 -- let len = length_ testSnoc in
 -- let fst = get_ testSnoc (int_ 0) in
@@ -981,7 +982,7 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 1 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 2 with objWrapGenerate snd using sameSemantics in
 -- utest int_ 3 with objWrapGenerate thrd using sameSemantics in
---
+
 -- let testReverse = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 -- let len = length_ testReverse in
 -- let fst = get_ testReverse (int_ 0) in
@@ -991,39 +992,38 @@ let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
 -- utest int_ 3 with objWrapGenerate fst using sameSemantics in
 -- utest int_ 2 with objWrapGenerate snd using sameSemantics in
 -- utest int_ 1 with objWrapGenerate thrd using sameSemantics in
---
+
 -- -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- -- projection.
---
+
 -- -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- -- implemented tuples/records.
---
--- -- Float-Integer conversions
+
+-- Float-Integer conversions
 -- let testFloorfi = floorfi_ (float_ 1.5) in
 -- utest testFloorfi with objWrapGenerate testFloorfi using sameSemantics in
---
+
 -- let testCeilfi = ceilfi_ (float_ 1.5) in
 -- utest testCeilfi with objWrapGenerate testCeilfi using sameSemantics in
---
+
 -- let testRoundfi = roundfi_ (float_ 1.5) in
 -- utest testRoundfi with objWrapGenerate testRoundfi using sameSemantics in
---
+
 -- let testInt2float = int2float_ (int_ 1) in
 -- utest testInt2float with objWrapGenerate testInt2float using sameSemantics in
---
 
 -- let testString2float = string2float_ (str_ "1.5") in
 -- utest testString2float with objWrapGenerate testString2float using sameSemantics in
---
+
 -- -- File operations
 -- let testFileExists = fileExists_ (str_ "test_file_ops") in
 -- utest testFileExists with objWrapGenerate testFileExists using sameSemantics in
 
--- IO operations
+-- -- IO operations
 -- let testPrint = print_ (str_ "tested print") in
 -- utest testPrint with generate testPrint using sameSemantics in
 
--- Random number generation operations
+-- -- Random number generation operations
 -- let testUnseededRandomNumber = randIntU_ (int_ 1) (int_ 4) in
 -- utest testUnseededRandomNumber with objWrapGenerate testUnseededRandomNumber
 -- using sameSemantics in
