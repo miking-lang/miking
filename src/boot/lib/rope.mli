@@ -65,8 +65,9 @@ val split_at_array : 'a array t -> int -> 'a array t * 'a array t
 val split_at_bigarray : ('a, 'b) ba t -> int -> ('a, 'b) ba t * ('a, 'b) ba t
 
 val sub_array : 'a array t -> int -> int -> 'a array t
-(** [Rope.sub_* s i len] returns a sub-rope representing the interval i..i+len
-    of [s]. *)
+(** [Rope.sub_* s off cnt] returns a sub-rope representing the interval
+    off..off+x of [s], where x is the minimum of the length of [s] minus [off]
+    and [cnt]. *)
 
 val sub_bigarray : ('a, 'b) ba t -> int -> int -> ('a, 'b) ba t
 

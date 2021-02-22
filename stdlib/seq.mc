@@ -9,9 +9,9 @@ utest make 0 100 with []
 
 let null = lam seq. eqi 0 (length seq)
 let head = lam seq. get seq 0
-let tail = lam seq. (splitAt seq 1).1
+let tail = lam seq. sub seq 1 (subi (length seq) 1)
 let last = lam seq. get seq (subi (length seq) 1)
-let init = lam seq. (splitAt seq (subi (length seq) 1)).0
+let init = lam seq. sub seq 0 (subi (length seq) 1)
 
 utest head [2,3,5] with 2
 utest tail [2,4,8] with [4,8]
@@ -34,10 +34,7 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
-let slice = lam seq. lam off. lam cnt.
-  let seq = (splitAt seq off).1 in
-  let cnt = if gti cnt (length seq) then length seq else cnt in
-  (splitAt seq cnt).0
+let slice = lam seq. lam off. lam cnt. sub seq off cnt
 
 utest slice [1,3,5] 0 2 with [1,3]
 utest slice [3,7,10,20] 1 3 with [7,10,20]
