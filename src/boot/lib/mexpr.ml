@@ -1064,10 +1064,10 @@ let delta eval env fi c v =
   | CtensorCreate None, TmSeq (_, seq) ->
       let shape = tm_seq2int_array fi seq in
       TmConst (fi, CtensorCreate (Some shape))
-  | CtensorCreate (Some shape), (TmClos (clfi, _, _, _, _) as cl) ->
+  | CtensorCreate (Some shape), tm ->
       let f is =
-        let tmseq = int_array2tm_seq clfi is in
-        TmApp (fi, cl, tmseq) |> eval env
+        let tmseq = int_array2tm_seq (tm_info tm) is in
+        TmApp (fi, tm, tmseq) |> eval env
       in
       let is0 = Array.make (Array.length shape) 0 in
       let tm0 = f is0 in
@@ -1234,14 +1234,14 @@ let delta eval env fi c v =
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSubExn _, _ ->
       fail_constapp fi
-  | CtensorIteri None, (TmClos _ as cl) ->
-      TmConst (fi, CtensorIteri (Some cl))
-  | CtensorIteri (Some cl), TmConst (_, CTensor t) -> (
+  | CtensorIteri None, tm ->
+      TmConst (fi, CtensorIteri (Some tm))
+  | CtensorIteri (Some tm), TmConst (_, CTensor t) -> (
       let iterf tkind i t =
         let _ =
           TmApp
             ( fi
-            , TmApp (fi, cl, TmConst (fi, CInt i))
+            , TmApp (fi, tm, TmConst (fi, CInt i))
             , TmConst (fi, CTensor (tkind t)) )
           |> eval env
         in
