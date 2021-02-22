@@ -309,6 +309,20 @@ let ll1Lit : String -> Symbol = use ParserSpec in lam str.
 let ll1Lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", fi = NoInfo ()})
 let ll1Uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", fi = NoInfo ()})
 let ll1Int : Symbol = use ParserSpec in Tok (IntTok {val = 0, fi = NoInfo ()})
+let ll1Float : Symbol = use ParserSpec in Tok (FloatTok {val = 0.0, fi = NoInfo ()})
+let ll1Operator : Symbol = use ParserSpec in Tok (OperatorTok {val = "", fi = NoInfo ()})
+let ll1LParen : Symbol = use ParserSpec in Tok (LParenTok {fi = NoInfo ()})
+let ll1RParen = use ParserSpec in Tok (RParenTok {fi = NoInfo ()})
+let ll1LBracket = use ParserSpec in Tok (LBracketTok {fi = NoInfo ()})
+let ll1RBracket = use ParserSpec in Tok (RBracketTok {fi = NoInfo ()})
+let ll1LBrace = use ParserSpec in Tok (LBraceTok {fi = NoInfo ()})
+let ll1RBrace = use ParserSpec in Tok (RBraceTok {fi = NoInfo ()})
+let ll1Semi = use ParserSpec in Tok (SemiTok {fi = NoInfo ()})
+let ll1Comma = use ParserSpec in Tok (CommaTok {fi = NoInfo ()})
+let ll1String = use ParserSpec in Tok (StringTok {val = "", fi = NoInfo ()})
+let ll1Char = use ParserSpec in Tok (CharTok {val = ' ', fi = NoInfo ()})
+let ll1HashString = use ParserSpec in
+  lam hash. Tok (HashStringTok {val = "", hash = hash, fi = NoInfo ()})
 
 mexpr
 
