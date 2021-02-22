@@ -506,9 +506,9 @@ with [["a","b"]] in
 Tensors are mutable data structures and can be of up to rank 16. The index
 of an element is represented as a sequence of integers.
 
-We construct tensors using `tensorCreate shape f`, where `shape` is a
-sequence denoting the shape of the tensor and `f` is a function taking a
-index as an argument and returning the element at that index.
+We construct tensors using `tensorCreate shape f`, where `shape` is a sequence
+denoting the shape of the tensor and `f` is a function taking an index as an
+argument and returning the element at that index.
 
 We can construct a zero-order tensor with value `'a'` as
 ```
