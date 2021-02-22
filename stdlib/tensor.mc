@@ -101,7 +101,7 @@ mexpr
 -- sequence denoting the shape of the tensor and `f` is a function taking a
 -- index as an argument and returning the element at that index.
 
--- We can construct a zero-order tensor with value 1 as
+-- We can construct a zero-order tensor with value 'a' as
 let t0 = tensorCreate [] (lam _. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
