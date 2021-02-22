@@ -61,11 +61,12 @@ module NoNum = struct
     {data; rank; shape; left_ofs; size}
 
   let is_valid_index shape is =
-    Array.length shape = Array.length is
-    && Array.for_all2 (fun n i -> i >= 0 && i < n) shape is
+    let valid = ref true in
+    Array.iteri (fun i n -> valid := !valid && n >= 0 && n < shape.(i)) is ;
+    !valid
 
   let get_exn t is =
-    if is_valid_index t.shape is then
+    if Array.length is = rank t && is_valid_index t.shape is then
       let ofs = row_major_ofs t.shape is + t.left_ofs in
       t.data.(ofs)
     else raise (Invalid_argument tensor_shape_and_index_does_not_match)
@@ -91,14 +92,9 @@ module NoNum = struct
       {t with shape; rank}
     else raise (Invalid_argument tensor_shape_mismatch)
 
-  let is_valid_slice shape slice =
-    let valid = ref true in
-    Array.iteri (fun i n -> valid := !valid && n >= 0 && n < shape.(i)) slice ;
-    !valid
-
   let slice_exn t slice =
     if Array.length slice = 0 then t
-    else if is_valid_slice t.shape slice then
+    else if is_valid_index t.shape slice then
       let n = Array.length slice in
       let left_ofs = row_major_ofs t.shape slice + t.left_ofs in
       let rank = t.rank - n in
