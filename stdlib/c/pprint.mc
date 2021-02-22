@@ -21,6 +21,10 @@ let _joinSpace = lam fst. lam snd.
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
+---------------------
+-- PRETTY PRINTING --
+---------------------
+
 lang CPrettyPrint = CAst
 
   -------------------
