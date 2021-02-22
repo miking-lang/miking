@@ -264,8 +264,8 @@ let sub_array (s : 'a array t) (off : int) (cnt : int) : 'a array t =
           let n = Array.length a in
           let src_offset = max (off - i) 0 in
           let dst_offset = max (i - off) 0 in
-          let copy_cnt = min (n - src_offset) (cnt - dst_offset) in
-          Array.blit a src_offset dst dst_offset copy_cnt ;
+          let copy_len = min (n - src_offset) (cnt - dst_offset) in
+          Array.blit a src_offset dst dst_offset copy_len ;
           i + n
       | Concat {lhs; rhs; _} ->
           let n = _length_array lhs in
@@ -287,9 +287,9 @@ let sub_bigarray (s : ('a, 'b) ba t) (off : int) (cnt : int) : ('a, 'b) ba t =
         let n = Array1.dim a in
         let src_offset = max (off - i) 0 in
         let dst_offset = max (i - off) 0 in
-        let copy_cnt = min (n - src_offset) (cnt - dst_offset) in
-        let src_sub = Array1.sub a src_offset copy_cnt in
-        let dst_sub = Array1.sub dst dst_offset copy_cnt in
+        let copy_len = min (n - src_offset) (cnt - dst_offset) in
+        let src_sub = Array1.sub a src_offset copy_len in
+        let dst_sub = Array1.sub dst dst_offset copy_len in
         Array1.blit src_sub dst_sub ;
         i + n
     | Concat {lhs; rhs; _} ->
