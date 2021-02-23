@@ -9,8 +9,26 @@ Before you can use the Miking system, you need to install
 [OCaml](https://ocaml.org/) and the
 [OPAM](https://opam.ocaml.org/) package manager.
 
+After the installation, you need to create an OPAM switch for the multicore OCaml compiler by
+running the following:
 
-After the installation, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
+```
+opam switch create 4.10.0+multicore --packages=ocaml-variants.4.10.0+multicore --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+```
+
+Whenever you want to switch back to the default OCaml compiler you can do so by running:
+
+```
+opam switch default
+```
+
+To use the multicore switch, the command is:
+
+```
+opam switch 4.10.0+multicore
+```
+
+When you are on the multicore switch, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
 
 ```
 opam install dune batteries linenoise
