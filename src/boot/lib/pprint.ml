@@ -381,6 +381,28 @@ let rec print_const fmt = function
       fprintf fmt "atomicSet"
   | CatomicCAS _ ->
       fprintf fmt "atomicCAS"
+  | CProcess p ->
+      fprintf fmt "Process(%d)" (Process.id p |> Process.id_to_int)
+  | CProcessID pid ->
+      fprintf fmt "ProcessID(%d)" (Process.id_to_int pid)
+  | CprocessID2int ->
+      fprintf fmt "processID2int"
+  | CprocessSpawn ->
+      fprintf fmt "processSpawn"
+  | CprocessJoin ->
+      fprintf fmt "processJoin"
+  | CprocessGetID ->
+      fprintf fmt "processGetID"
+  | CprocessSelf ->
+      fprintf fmt "processSelf"
+  | CprocessWait ->
+      fprintf fmt "processWait"
+  | CprocessNotify ->
+      fprintf fmt "processNotify"
+  | CprocessCriticalSection ->
+      fprintf fmt "processCriticalSection"
+  | CprocessCPURelax ->
+      fprintf fmt "processCPURelax"
   (* MCore intrinsics: Maps *)
   | CMap _ ->
       fprintf fmt "map"

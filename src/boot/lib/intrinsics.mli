@@ -101,3 +101,27 @@ module FloatConversion : sig
 
   val string2float : ustring -> float
 end
+
+module Process : sig
+  type 'a t
+
+  type id
+
+  val spawn : (unit -> 'a) -> 'a t
+
+  val join : 'a t -> 'a
+
+  val id : 'a t -> id
+
+  val id_to_int : id -> int
+
+  val self : unit -> id
+
+  val wait : unit -> unit
+
+  val notify : id -> unit
+
+  val critical_section : (unit -> 'a) -> 'a
+
+  val cpu_relax : unit -> unit
+end

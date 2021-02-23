@@ -117,7 +117,16 @@ let builtin =
   ; ("atomicMake", f CatomicMake)
   ; ("atomicGet", f CatomicGet)
   ; ("atomicSet", f (CatomicSet None))
-  ; ("atomicCAS", f (CatomicCAS (None, None))) (* MCore intrinsics: Maps *)
+  ; ("atomicCAS", f (CatomicCAS (None, None)))
+  ; ("processID2int", f CprocessID2int)
+  ; ("processSpawn", f CprocessSpawn)
+  ; ("processJoin", f CprocessJoin)
+  ; ("processGetID", f CprocessGetID)
+  ; ("processSelf", f CprocessSelf)
+  ; ("processWait", f CprocessWait)
+  ; ("processNotify", f CprocessNotify)
+  ; ("processCriticalSection", f CprocessCriticalSection)
+  ; ("processCPURelax", f CprocessCPURelax) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapFind", f (CmapFind None))
@@ -402,6 +411,28 @@ let arity = function
   | CatomicCAS (Some _, None) ->
       2
   | CatomicCAS (_, Some _) ->
+      1
+  | CProcess _ ->
+      0
+  | CProcessID _ ->
+      0
+  | CprocessID2int ->
+      1
+  | CprocessSpawn ->
+      1
+  | CprocessJoin ->
+      1
+  | CprocessGetID ->
+      1
+  | CprocessSelf ->
+      1
+  | CprocessWait ->
+      1
+  | CprocessNotify ->
+      1
+  | CprocessCriticalSection ->
+      1
+  | CprocessCPURelax ->
       1
   (* MCore intrinsics: Maps *)
   | CMap _ ->
@@ -973,7 +1004,11 @@ let delta eval env fi c v =
       !r
   | CdeRef, _ ->
       fail_constapp fi
-  (* MCore intrinsics: Atomic references *)
+  (* MCore intrinsics: Multicore *)
+  | CProcess _, _ ->
+      fail_constapp fi
+  | CProcessID _, _ ->
+      fail_constapp fi
   | CatomicMake, v ->
       TmAtomicRef (fi, Atomic.make v)
   | CatomicGet, TmAtomicRef (_, r) ->
@@ -993,6 +1028,41 @@ let delta eval env fi c v =
   | CatomicCAS (Some r, Some v1), v2 ->
       TmConst (fi, CBool (Atomic.compare_and_set r v1 v2))
   | CatomicCAS (_, _), _ ->
+      fail_constapp fi
+  | CprocessID2int, TmConst (_, CProcessID pid) ->
+      TmConst (fi, CInt (Process.id_to_int pid))
+  | CprocessID2int, _ ->
+      fail_constapp fi
+  | CprocessSpawn, f ->
+      TmConst
+        ( fi
+        , CProcess (Process.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))
+        )
+  | CprocessJoin, TmConst (_, CProcess p) ->
+      Process.join p
+  | CprocessJoin, _ ->
+      fail_constapp fi
+  | CprocessGetID, TmConst (_, CProcess p) ->
+      TmConst (fi, CProcessID (Process.id p))
+  | CprocessGetID, _ ->
+      fail_constapp fi
+  | CprocessSelf, TmRecord (_, x) when Record.is_empty x ->
+      TmConst (fi, CProcessID (Process.self ()))
+  | CprocessSelf, _ ->
+      fail_constapp fi
+  | CprocessWait, TmRecord (_, x) when Record.is_empty x ->
+      Process.wait () ; tmUnit
+  | CprocessWait, _ ->
+      fail_constapp fi
+  | CprocessNotify, TmConst (_, CProcessID pid) ->
+      Process.notify pid ; tmUnit
+  | CprocessNotify, _ ->
+      fail_constapp fi
+  | CprocessCriticalSection, f ->
+      Process.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
+  | CprocessCPURelax, TmRecord (_, x) when Record.is_empty x ->
+      Process.cpu_relax () ; tmUnit
+  | CprocessCPURelax, _ ->
       fail_constapp fi
   (* MCore intrinsics: Map *)
   | CMap _, _ ->
