@@ -502,6 +502,89 @@ utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else []
 with [["a","b"]] in
 ```
 
+### Tensors
+Tensors are mutable data structures and can be of up to rank 16. The index
+of an element is represented as a sequence of integers.
+
+We construct tensors using `tensorCreate shape f`, where `shape` is a sequence
+denoting the shape of the tensor and `f` is a function taking an index as an
+argument and returning the element at that index.
+
+We can construct a zero-order tensor with value `'a'` as
+```
+let t0 = tensorCreate [] (lam _. 'a') in
+utest tensorRank t0 with 0 in
+utest tensorShape t0 with [] in
+```
+
+We can access and mutate elements in a tensor using
+```
+utest tensorSetExn t0 [] 'b' with () in
+utest tensorGetExn t0 [] with 'b' in
+```
+
+We can construct a rank 1 tensor (i.e. vector) as
+```
+let t1 = tensorCreate [9] (lam i. addi (get i 0) 1) in
+utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
+```
+where `tensorToSeqExn` is defined in `tensor.mc`.
+
+We can reshape our rank 1 tensor into a rank 2 tensor (i.e. a matrix).
+```
+let t2 = tensorReshapeExn t1 [3, 3] in
+```
+
+Reshape does no copying and the data is shared between `t1` and `t2`
+```
+let _ = tensorSetExn t2 [0, 0] 2 in
+utest tensorGetExn t1 [0] with 2 in
+```
+
+We can slice the second row from `t2` as
+```
+let r2 = tensorSliceExn t2 [1] in
+utest tensorToSeqExn r2 with [4, 5, 6] in
+```
+
+Slicing reduces the rank of the tensor
+```
+utest tensorRank r2 with 1 in
+```
+
+We can slice multiple dimensions at once
+```
+let e = tensorSliceExn t2 [1, 1] in
+utest tensorGetExn e [] with 5 in
+utest tensorRank e with 0 in
+```
+
+A slice shares data with the original tensor and no copying of data is done.
+```
+let _ = tensorFill r2 0 in
+utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
+```
+where we use `tensorFill` from `tensor.mc`.
+
+We can get a subset of the rows of t2 by restricting its 0th dimension.
+```
+let s1 = tensorSubExn t2 1 2 in
+utest tensorShape s1 with [2, 3] in
+utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
+```
+
+We can also copy the content of one tensor to another
+```
+let s2 = tensorSubExn t2 0 2 in
+utest tensorCopyExn s1 s2 with () in
+```
+
+As before, none of these operations (except copy) does any copying
+and the data is shared.
+```
+utest tensorToSeqExn t1 with [0, 0, 0, 7, 8, 9, 7, 8, 9] in
+```
+
 ### References
 
 A mutable reference to an MExpr value can be created with the `ref` operator. For instance

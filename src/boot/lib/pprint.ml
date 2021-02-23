@@ -389,6 +389,38 @@ let rec print_const fmt = function
       fprintf fmt "mapMapWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  (* MCore intrinsics: Tensors *)
+  | CTensor t ->
+      t
+      |> (function
+           | T.Int t' ->
+               Tensor.Num.shape t'
+           | T.Float t' ->
+               Tensor.Num.shape t'
+           | T.NoNum t' ->
+               Tensor.NoNum.shape t')
+      |> Array.to_list |> List.map string_of_int |> String.concat ","
+      |> fprintf fmt "tensor[%s]"
+  | CtensorCreate _ ->
+      fprintf fmt "tensorCreate"
+  | CtensorGetExn _ ->
+      fprintf fmt "tensorGetExn"
+  | CtensorSetExn _ ->
+      fprintf fmt "tensorSetExn"
+  | CtensorRank ->
+      fprintf fmt "tensorRank"
+  | CtensorShape ->
+      fprintf fmt "tensorShape"
+  | CtensorCopyExn _ ->
+      fprintf fmt "tensorCopyExn"
+  | CtensorReshapeExn _ ->
+      fprintf fmt "tensorReshapeExn"
+  | CtensorSliceExn _ ->
+      fprintf fmt "tensorSliceExn"
+  | CtensorSubExn _ ->
+      fprintf fmt "tensorSubExn"
+  | CtensorIteri _ ->
+      fprintf fmt "tensorIteri"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"

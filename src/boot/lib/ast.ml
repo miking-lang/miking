@@ -130,6 +130,18 @@ and const =
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
+  (* MCore intrinsics: Tensors *)
+  | CTensor of tm T.t
+  | CtensorCreate of int array option
+  | CtensorGetExn of tm T.t option
+  | CtensorSetExn of tm T.t option * int array option
+  | CtensorRank
+  | CtensorShape
+  | CtensorCopyExn of tm T.t option
+  | CtensorReshapeExn of tm T.t option
+  | CtensorSliceExn of tm T.t option
+  | CtensorSubExn of tm T.t option * int option
+  | CtensorIteri of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString
