@@ -1,11 +1,13 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "ocaml/ast.mc"
-include "ocaml/pprint.mc"
+include "mexpr/eq.mc"
+include "mexpr/eval.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/eval.mc"
-include "mexpr/eq.mc"
+include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
+include "ocaml/ast.mc"
+include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
 include "hashmap.mc"
 
@@ -120,6 +122,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
           (generate els)
       else never
     else never
+  | TmType t -> generate t.inexpr
+  | TmConDef t -> generate t.inexpr
+  | TmConApp t -> OTmConApp {ident = t.ident, args = [t.body]}
   | t -> smap_Expr_Expr generate t
 
   sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
@@ -227,8 +232,83 @@ lang OCamlGenerate = MExprAst + OCamlAst
     else never
 end
 
-lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
-                 + IntEq + BoolEq + CharEq + FloatEq
+let _objTypeName = nameSym "Obj.t"
+let _objType = ntyvar_ _objTypeName
+
+let _unnestRecordTypes = lam recordTypes.
+  use MExprAst in
+  recursive let unnestRecordType = lam acc. lam ty.
+    match ty with TyRecord t then
+      let fields = assoc2seq {eq=eqString} t.fields in
+      if null fields then acc
+      else
+        let acc = snoc acc ty in
+        let fieldTypes = map (lam f. f.1) fields in
+        foldl unnestRecordType acc fieldTypes
+    else match ty with TyUnknown {} then
+      error "Cannot generate type declaration from untyped record"
+    else acc
+  in
+  foldl unnestRecordType [] recordTypes
+
+let _objTypedRecordFields = lam recordTypes.
+  use RecordTypeAst in
+  let objFields = lam ty.
+    match ty with TyRecord t then
+      let fields = assocMap {eq=eqString} (lam _. _objType) t.fields in
+      TyRecord {t with fields = fields}
+    else never
+  in
+  map objFields recordTypes
+
+lang OCamlRecordDeclGenerate = OCamlAst + MExprEq + RecordAst
+  sem generateOCamlRecords (namedRecords : [(Name, Type)]) =
+  | TmRecord t ->
+    if null t.bindings then OTmRecord {bindings = []}
+    else
+      let ty = get (_objTypedRecordFields [t.ty]) 0 in
+      match find (lam r. eqType assocEmpty ty r.1) namedRecords with Some r then
+        let bindings = assocMap {eq=eqString} (generateOCamlRecords namedRecords) t.bindings in
+        let bindings = assoc2seq {eq=eqString} bindings in
+        OTmConApp {ident = r.0, args = [OTmRecord {bindings = bindings}]}
+      else never
+  | t -> smap_Expr_Expr (generateOCamlRecords namedRecords) t
+
+  sem generateRecordDecl (recordTypes : [Type]) =
+  | expr ->
+    let objRecords =
+      distinct (eqType assocEmpty)
+               (_objTypedRecordFields (_unnestRecordTypes recordTypes))
+    in
+    let namedObjRecords = map (lam r. (nameSym "Rec", r)) objRecords in
+    let expr = generateOCamlRecords namedObjRecords expr in
+    let f = lam acc. lam record.
+      OTmVariantTypeDecl {
+        ident = nameSym "record",
+        constrs = [record],
+        inexpr = acc
+      }
+    in
+    foldl f expr namedObjRecords
+end
+
+lang OCamlVariantDeclGenerate
+  sem generateVariantDecl (variantTypes: [(Name, Type)]) =
+  | expr -> expr
+end
+
+lang OCamlDeclGenerate =
+  MExprTypeLift + OCamlRecordDeclGenerate + OCamlVariantDeclGenerate
+  sem generateDecl =
+  | expr ->
+    let recordTypes = liftRecords [] expr in
+    let variantTypes = liftVariants [] expr in
+    generateVariantDecl variantTypes (generateRecordDecl recordTypes expr)
+end
+
+lang OCamlTest = OCamlGenerate + OCamlDeclGenerate + OCamlPrettyPrint +
+                 MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
+                 MExprTypeAnnot
 
 mexpr
 
@@ -688,5 +768,24 @@ utest testInt2float with generate testInt2float using sameSemantics in
 -- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
 -- let testString2float = string2float_ (str_ "1.5") in
 -- utest testString2float with generate testString2float using sameSemantics in
+let x = nameSym "x" in
+let y = nameSym "y" in
+let z = nameSym "z" in
+
+let test1 = bindall_ [
+  nulet_ x unit_,
+  int_ 0
+] in
+utest test1 with generate (generateDecl (typeAnnot test1)) using sameSemantics in
+
+
+let test2 = bindall_ [
+  nulet_ x (record_ [("a", record_ []), ("b", tuple_ [int_ 1, int_ 2])]),
+  --nulet_ y (recordproj_ "a" (nvar_ x)),
+  --nulet_ z (tupleproj_ 0 (nvar_ y)),
+  int_ 0
+] in
+let t = generate (generateDecl (typeAnnot test2)) in
+let _ = printLn (expr2str t) in
 
 ()

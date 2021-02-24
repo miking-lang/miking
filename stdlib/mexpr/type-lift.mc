@@ -33,9 +33,6 @@ lang MExprVariantTypeLift = TypeAst + DataAst + VariantTypeAst
 end
 
 lang MExprTypeLift = MExprRecordTypeLift + MExprVariantTypeLift
-  sem lift =
-  | expr -> (liftRecords [] expr, liftVariants [] expr)
-end
 
 lang TestLang = MExprTypeLift + MExprTypeAnnot
 
@@ -67,7 +64,8 @@ let eqVariantTypes = lam a. lam b.
 in
 
 let lift = lam t.
-  lift (typeAnnot t)
+  let t = typeAnnot t in
+  (liftRecords [] t, liftVariants [] t)
 in
 
 let a = record_ [("a", int_ 2), ("b", float_ 1.5)] in
