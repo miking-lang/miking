@@ -141,7 +141,7 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
     TmRecordUpdate {t with ty = typeExpr env (TmRecordUpdate t)}
 end
 
-lang LetTypeAnnot = TypeAnnot + LetAst + MExprPrettyPrint
+lang LetTypeAnnot = TypeAnnot + LetAst
   sem typeExpr (env : TypeEnv) =
   | TmLet t ->
     match t.ty with TyUnknown {} then
