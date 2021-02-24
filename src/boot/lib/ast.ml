@@ -127,17 +127,17 @@ and const =
   | CatomicGet
   | CatomicSet of tm Atomic.t option
   | CatomicCAS of tm Atomic.t option * tm option
-  | CProcess of tm Process.t
-  | CProcessID of Process.id
-  | CprocessID2int
-  | CprocessSpawn
-  | CprocessJoin
-  | CprocessGetID
-  | CprocessSelf
-  | CprocessWait
-  | CprocessNotify
-  | CprocessCriticalSection
-  | CprocessCPURelax
+  | CThread of tm Par.t
+  | CThreadID of Par.id
+  | CthreadID2int
+  | CthreadSpawn
+  | CthreadJoin
+  | CthreadGetID
+  | CthreadSelf
+  | CthreadWait
+  | CthreadNotify
+  | CthreadCriticalSection
+  | CthreadCPURelax
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of (tm -> tm -> int) * Obj.t

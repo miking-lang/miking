@@ -381,28 +381,28 @@ let rec print_const fmt = function
       fprintf fmt "atomicSet"
   | CatomicCAS _ ->
       fprintf fmt "atomicCAS"
-  | CProcess p ->
-      fprintf fmt "Process(%d)" (Process.id p |> Process.id_to_int)
-  | CProcessID pid ->
-      fprintf fmt "ProcessID(%d)" (Process.id_to_int pid)
-  | CprocessID2int ->
-      fprintf fmt "processID2int"
-  | CprocessSpawn ->
-      fprintf fmt "processSpawn"
-  | CprocessJoin ->
-      fprintf fmt "processJoin"
-  | CprocessGetID ->
-      fprintf fmt "processGetID"
-  | CprocessSelf ->
-      fprintf fmt "processSelf"
-  | CprocessWait ->
-      fprintf fmt "processWait"
-  | CprocessNotify ->
-      fprintf fmt "processNotify"
-  | CprocessCriticalSection ->
-      fprintf fmt "processCriticalSection"
-  | CprocessCPURelax ->
-      fprintf fmt "processCPURelax"
+  | CThread p ->
+      fprintf fmt "Thread(%d)" (Par.id p |> Par.id_to_int)
+  | CThreadID tid ->
+      fprintf fmt "ThreadID(%d)" (Par.id_to_int tid)
+  | CthreadID2int ->
+      fprintf fmt "threadID2int"
+  | CthreadSpawn ->
+      fprintf fmt "threadSpawn"
+  | CthreadJoin ->
+      fprintf fmt "threadJoin"
+  | CthreadGetID ->
+      fprintf fmt "threadGetID"
+  | CthreadSelf ->
+      fprintf fmt "threadSelf"
+  | CthreadWait ->
+      fprintf fmt "threadWait"
+  | CthreadNotify ->
+      fprintf fmt "threadNotify"
+  | CthreadCriticalSection ->
+      fprintf fmt "threadCriticalSection"
+  | CthreadCPURelax ->
+      fprintf fmt "threadCPURelax"
   (* MCore intrinsics: Maps *)
   | CMap _ ->
       fprintf fmt "map"

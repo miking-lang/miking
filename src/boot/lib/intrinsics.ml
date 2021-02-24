@@ -105,7 +105,7 @@ module FloatConversion = struct
   let string2float s = s |> Ustring.to_utf8 |> Float.of_string
 end
 
-module Process = struct
+module Par = struct
   type 'a t = 'a Domain.t
 
   type id = Domain.id

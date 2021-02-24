@@ -118,15 +118,15 @@ let builtin =
   ; ("atomicGet", f CatomicGet)
   ; ("atomicSet", f (CatomicSet None))
   ; ("atomicCAS", f (CatomicCAS (None, None)))
-  ; ("processID2int", f CprocessID2int)
-  ; ("processSpawn", f CprocessSpawn)
-  ; ("processJoin", f CprocessJoin)
-  ; ("processGetID", f CprocessGetID)
-  ; ("processSelf", f CprocessSelf)
-  ; ("processWait", f CprocessWait)
-  ; ("processNotify", f CprocessNotify)
-  ; ("processCriticalSection", f CprocessCriticalSection)
-  ; ("processCPURelax", f CprocessCPURelax) (* MCore intrinsics: Maps *)
+  ; ("threadID2int", f CthreadID2int)
+  ; ("threadSpawn", f CthreadSpawn)
+  ; ("threadJoin", f CthreadJoin)
+  ; ("threadGetID", f CthreadGetID)
+  ; ("threadSelf", f CthreadSelf)
+  ; ("threadWait", f CthreadWait)
+  ; ("threadNotify", f CthreadNotify)
+  ; ("threadCriticalSection", f CthreadCriticalSection)
+  ; ("threadCPURelax", f CthreadCPURelax) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapFind", f (CmapFind None))
@@ -412,27 +412,27 @@ let arity = function
       2
   | CatomicCAS (_, Some _) ->
       1
-  | CProcess _ ->
+  | CThread _ ->
       0
-  | CProcessID _ ->
+  | CThreadID _ ->
       0
-  | CprocessID2int ->
+  | CthreadID2int ->
       1
-  | CprocessSpawn ->
+  | CthreadSpawn ->
       1
-  | CprocessJoin ->
+  | CthreadJoin ->
       1
-  | CprocessGetID ->
+  | CthreadGetID ->
       1
-  | CprocessSelf ->
+  | CthreadSelf ->
       1
-  | CprocessWait ->
+  | CthreadWait ->
       1
-  | CprocessNotify ->
+  | CthreadNotify ->
       1
-  | CprocessCriticalSection ->
+  | CthreadCriticalSection ->
       1
-  | CprocessCPURelax ->
+  | CthreadCPURelax ->
       1
   (* MCore intrinsics: Maps *)
   | CMap _ ->
@@ -1005,9 +1005,9 @@ let delta eval env fi c v =
   | CdeRef, _ ->
       fail_constapp fi
   (* MCore intrinsics: Multicore *)
-  | CProcess _, _ ->
+  | CThread _, _ ->
       fail_constapp fi
-  | CProcessID _, _ ->
+  | CThreadID _, _ ->
       fail_constapp fi
   | CatomicMake, v ->
       TmAtomicRef (fi, Atomic.make v)
@@ -1029,40 +1029,40 @@ let delta eval env fi c v =
       TmConst (fi, CBool (Atomic.compare_and_set r v1 v2))
   | CatomicCAS (_, _), _ ->
       fail_constapp fi
-  | CprocessID2int, TmConst (_, CProcessID pid) ->
-      TmConst (fi, CInt (Process.id_to_int pid))
-  | CprocessID2int, _ ->
+  | CthreadID2int, TmConst (_, CThreadID tid) ->
+      TmConst (fi, CInt (Par.id_to_int tid))
+  | CthreadID2int, _ ->
       fail_constapp fi
-  | CprocessSpawn, f ->
+  | CthreadSpawn, f ->
       TmConst
         ( fi
-        , CProcess (Process.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))
+        , CThread (Par.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))
         )
-  | CprocessJoin, TmConst (_, CProcess p) ->
-      Process.join p
-  | CprocessJoin, _ ->
+  | CthreadJoin, TmConst (_, CThread p) ->
+      Par.join p
+  | CthreadJoin, _ ->
       fail_constapp fi
-  | CprocessGetID, TmConst (_, CProcess p) ->
-      TmConst (fi, CProcessID (Process.id p))
-  | CprocessGetID, _ ->
+  | CthreadGetID, TmConst (_, CThread p) ->
+      TmConst (fi, CThreadID (Par.id p))
+  | CthreadGetID, _ ->
       fail_constapp fi
-  | CprocessSelf, TmRecord (_, x) when Record.is_empty x ->
-      TmConst (fi, CProcessID (Process.self ()))
-  | CprocessSelf, _ ->
+  | CthreadSelf, TmRecord (_, x) when Record.is_empty x ->
+      TmConst (fi, CThreadID (Par.self ()))
+  | CthreadSelf, _ ->
       fail_constapp fi
-  | CprocessWait, TmRecord (_, x) when Record.is_empty x ->
-      Process.wait () ; tmUnit
-  | CprocessWait, _ ->
+  | CthreadWait, TmRecord (_, x) when Record.is_empty x ->
+      Par.wait () ; tmUnit
+  | CthreadWait, _ ->
       fail_constapp fi
-  | CprocessNotify, TmConst (_, CProcessID pid) ->
-      Process.notify pid ; tmUnit
-  | CprocessNotify, _ ->
+  | CthreadNotify, TmConst (_, CThreadID tid) ->
+      Par.notify tid ; tmUnit
+  | CthreadNotify, _ ->
       fail_constapp fi
-  | CprocessCriticalSection, f ->
-      Process.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
-  | CprocessCPURelax, TmRecord (_, x) when Record.is_empty x ->
-      Process.cpu_relax () ; tmUnit
-  | CprocessCPURelax, _ ->
+  | CthreadCriticalSection, f ->
+      Par.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
+  | CthreadCPURelax, TmRecord (_, x) when Record.is_empty x ->
+      Par.cpu_relax () ; tmUnit
+  | CthreadCPURelax, _ ->
       fail_constapp fi
   (* MCore intrinsics: Map *)
   | CMap _, _ ->

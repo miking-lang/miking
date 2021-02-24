@@ -102,7 +102,7 @@ module FloatConversion : sig
   val string2float : ustring -> float
 end
 
-module Process : sig
+module Par : sig
   type 'a t
 
   type id
