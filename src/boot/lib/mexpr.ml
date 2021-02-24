@@ -113,22 +113,7 @@ let builtin =
   ; ("sym2hash", f Csym2hash) (* MCore intrinsics: References *)
   ; ("ref", f Cref)
   ; ("deref", f CdeRef)
-  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Multicore *)
-  ; ("atomicMake", f CatomicMake)
-  ; ("atomicGet", f CatomicGet)
-  ; ("atomicSet", f (CatomicSet None))
-  ; ("atomicCAS", f (CatomicCAS (None, None)))
-  ; ("atomicExchange", f (CatomicExchange None))
-  ; ("atomicFetchAndAdd", f (CatomicFetchAndAdd None))
-  ; ("threadID2int", f CthreadID2int)
-  ; ("threadSpawn", f CthreadSpawn)
-  ; ("threadJoin", f CthreadJoin)
-  ; ("threadGetID", f CthreadGetID)
-  ; ("threadSelf", f CthreadSelf)
-  ; ("threadWait", f CthreadWait)
-  ; ("threadNotify", f CthreadNotify)
-  ; ("threadCriticalSection", f CthreadCriticalSection)
-  ; ("threadCPURelax", f CthreadCPURelax) (* MCore intrinsics: Maps *)
+  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapFind", f (CmapFind None))
@@ -157,6 +142,8 @@ let builtin =
   ; ("bootParserGetConst", f (CbootParserGetConst None))
   ; ("bootParserGetPat", f (CbootParserGetPat None))
   ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
+  (* Append multicore intrinsics *)
+  @ Par.externals
   (* Append external functions *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -399,51 +386,6 @@ let arity = function
       1
   | CdeRef ->
       1
-  (* MCore intrinsics: Multicore *)
-  | CatomicMake ->
-      1
-  | CatomicGet ->
-      1
-  | CatomicSet None ->
-      2
-  | CatomicSet (Some _) ->
-      1
-  | CatomicCAS (None, None) ->
-      3
-  | CatomicCAS (Some _, None) ->
-      2
-  | CatomicCAS (_, Some _) ->
-      1
-  | CatomicExchange None ->
-      2
-  | CatomicExchange (Some _) ->
-      1
-  | CatomicFetchAndAdd None ->
-      2
-  | CatomicFetchAndAdd (Some _) ->
-      1
-  | CThread _ ->
-      0
-  | CThreadID _ ->
-      0
-  | CthreadID2int ->
-      1
-  | CthreadSpawn ->
-      1
-  | CthreadJoin ->
-      1
-  | CthreadGetID ->
-      1
-  | CthreadSelf ->
-      1
-  | CthreadWait ->
-      1
-  | CthreadNotify ->
-      1
-  | CthreadCriticalSection ->
-      1
-  | CthreadCPURelax ->
-      1
   (* MCore intrinsics: Maps *)
   | CMap _ ->
       0
@@ -559,6 +501,9 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
+  (* Multicore *)
+  | CPar v ->
+      Par.arity v
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1014,87 +959,6 @@ let delta eval env fi c v =
       !r
   | CdeRef, _ ->
       fail_constapp fi
-  (* MCore intrinsics: Multicore *)
-  | CThread _, _ ->
-      fail_constapp fi
-  | CThreadID _, _ ->
-      fail_constapp fi
-  | CatomicMake, TmConst (_, CInt i) ->
-      TmAtomicRef (fi, A.Int (A.Int.make i))
-  | CatomicMake, v ->
-      TmAtomicRef (fi, A.NoInt (A.NoInt.make v))
-  | CatomicGet, TmAtomicRef (_, Int r) ->
-      TmConst (fi, CInt (A.Int.get r))
-  | CatomicGet, TmAtomicRef (_, NoInt r) ->
-      A.NoInt.get r
-  | CatomicGet, _ ->
-      fail_constapp fi
-  | CatomicSet None, TmAtomicRef (fi, r) ->
-      TmConst (fi, CatomicSet (Some r))
-  | CatomicSet (Some (Int r)), TmConst (_, CInt i) ->
-      A.Int.set r i ; tmUnit
-  | CatomicSet (Some (NoInt r)), v ->
-      A.NoInt.set r v ; tmUnit
-  | CatomicSet _, _ ->
-      fail_constapp fi
-  | CatomicCAS (None, None), TmAtomicRef (fi, r) ->
-      TmConst (fi, CatomicCAS (Some r, None))
-  | CatomicCAS (Some r, None), v ->
-      TmConst (fi, CatomicCAS (Some r, Some v))
-  | CatomicCAS (Some (Int r), Some (TmConst (_, CInt i1))), TmConst (_, CInt i2)
-    ->
-      TmConst (fi, CBool (A.Int.compare_and_set r i1 i2))
-  | CatomicCAS (Some (NoInt r), Some v1), v2 ->
-      TmConst (fi, CBool (A.NoInt.compare_and_set r v1 v2))
-  | CatomicCAS (_, _), _ ->
-      fail_constapp fi
-  | CatomicExchange None, TmAtomicRef (_, r) ->
-      TmConst (fi, CatomicExchange (Some r))
-  | CatomicExchange (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (A.Int.exchange r i))
-  | CatomicExchange (Some (NoInt r)), v ->
-      A.NoInt.exchange r v
-  | CatomicExchange _, _ ->
-      fail_constapp fi
-  | CatomicFetchAndAdd _, TmAtomicRef (_, Int r) ->
-      TmConst (fi, CatomicFetchAndAdd (Some (Int r)))
-  | CatomicFetchAndAdd (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (A.Int.fetch_and_add r i))
-  | CatomicFetchAndAdd _, _ ->
-      fail_constapp fi
-  | CthreadID2int, TmConst (_, CThreadID tid) ->
-      TmConst (fi, CInt (Par.id_to_int tid))
-  | CthreadID2int, _ ->
-      fail_constapp fi
-  | CthreadSpawn, f ->
-      TmConst
-        (fi, CThread (Par.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env)))
-  | CthreadJoin, TmConst (_, CThread p) ->
-      Par.join p
-  | CthreadJoin, _ ->
-      fail_constapp fi
-  | CthreadGetID, TmConst (_, CThread p) ->
-      TmConst (fi, CThreadID (Par.id p))
-  | CthreadGetID, _ ->
-      fail_constapp fi
-  | CthreadSelf, TmRecord (_, x) when Record.is_empty x ->
-      TmConst (fi, CThreadID (Par.self ()))
-  | CthreadSelf, _ ->
-      fail_constapp fi
-  | CthreadWait, TmRecord (_, x) when Record.is_empty x ->
-      Par.wait () ; tmUnit
-  | CthreadWait, _ ->
-      fail_constapp fi
-  | CthreadNotify, TmConst (_, CThreadID tid) ->
-      Par.notify tid ; tmUnit
-  | CthreadNotify, _ ->
-      fail_constapp fi
-  | CthreadCriticalSection, f ->
-      Par.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
-  | CthreadCPURelax, TmRecord (_, x) when Record.is_empty x ->
-      Par.cpu_relax () ; tmUnit
-  | CthreadCPURelax, _ ->
-      fail_constapp fi
   (* MCore intrinsics: Map *)
   | CMap _, _ ->
       fail_constapp fi
@@ -1489,6 +1353,9 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
+  (* Multicore *)
+  | CPar v, t ->
+      Par.delta eval env fi v t
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
@@ -1545,8 +1412,6 @@ let shape_str = function
       us "(closure)"
   | TmRef _ ->
       us "(ref)"
-  | TmAtomicRef _ ->
-      us "(atomic ref)"
   | _ ->
       us "Other tm"
 
@@ -1798,8 +1663,6 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       t
   | TmRef _ ->
       t
-  | TmAtomicRef _ ->
-      t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
  along with the symbolized term. *)
@@ -1858,8 +1721,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmNever _
     | TmClos _
     | TmFix _
-    | TmRef _
-    | TmAtomicRef _ ) as t ->
+    | TmRef _ ) as t ->
       (env, symbolize env t)
 
 let rec try_match env value pat =
@@ -2114,9 +1976,6 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Ref - Only at runtime *)
   | TmRef _ ->
       t
-  (* Atomic ref - Only at runtime *)
-  | TmAtomicRef _ ->
-      t
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
@@ -2156,6 +2015,5 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmUse _
     | TmUtest _
     | TmNever _
-    | TmRef _
-    | TmAtomicRef _ ) as t ->
+    | TmRef _ ) as t ->
       (env, eval env t)

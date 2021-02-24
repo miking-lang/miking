@@ -372,41 +372,6 @@ let rec print_const fmt = function
       fprintf fmt "modref"
   | CdeRef ->
       fprintf fmt "deref"
-  (* MCore intrinsics: Multicore *)
-  | CatomicMake ->
-      fprintf fmt "atomicMake"
-  | CatomicGet ->
-      fprintf fmt "atomicGet"
-  | CatomicSet _ ->
-      fprintf fmt "atomicSet"
-  | CatomicCAS _ ->
-      fprintf fmt "atomicCAS"
-  | CatomicExchange _ ->
-      fprintf fmt "atomicExchange"
-  | CatomicFetchAndAdd _ ->
-      fprintf fmt "fetchAndAdd"
-  | CThread p ->
-      fprintf fmt "Thread(%d)" (Par.id p |> Par.id_to_int)
-  | CThreadID tid ->
-      fprintf fmt "ThreadID(%d)" (Par.id_to_int tid)
-  | CthreadID2int ->
-      fprintf fmt "threadID2int"
-  | CthreadSpawn ->
-      fprintf fmt "threadSpawn"
-  | CthreadJoin ->
-      fprintf fmt "threadJoin"
-  | CthreadGetID ->
-      fprintf fmt "threadGetID"
-  | CthreadSelf ->
-      fprintf fmt "threadSelf"
-  | CthreadWait ->
-      fprintf fmt "threadWait"
-  | CthreadNotify ->
-      fprintf fmt "threadNotify"
-  | CthreadCriticalSection ->
-      fprintf fmt "threadCriticalSection"
-  | CthreadCPURelax ->
-      fprintf fmt "threadCPURelax"
   (* MCore intrinsics: Maps *)
   | CMap _ ->
       fprintf fmt "map"
@@ -481,6 +446,9 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetPat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
+  (* Multicore *)
+  | CPar v ->
+      fprintf fmt "%s" (string_of_ustring (Parpprint.pprint v))
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
@@ -527,8 +495,7 @@ and print_tm fmt (prec, t) =
     | TmClos _
     | TmFix _
     | TmNever _
-    | TmRef _
-    | TmAtomicRef _ ->
+    | TmRef _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -635,8 +602,6 @@ and print_tm' fmt t =
       fprintf fmt "never"
   | TmRef (_, _) ->
       fprintf fmt "(ref)"
-  | TmAtomicRef (_, _) ->
-      fprintf fmt "(atomic ref)"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

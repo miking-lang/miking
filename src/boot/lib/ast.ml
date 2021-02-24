@@ -122,24 +122,6 @@ and const =
   | Cref
   | CmodRef of tm ref option
   | CdeRef
-  (* MCore intrinsics: Multicore *)
-  | CatomicMake
-  | CatomicGet
-  | CatomicSet of tm A.t option
-  | CatomicExchange of tm A.t option
-  | CatomicFetchAndAdd of tm A.t option
-  | CatomicCAS of tm A.t option * tm option
-  | CThread of tm Par.t
-  | CThreadID of Par.id
-  | CthreadID2int
-  | CthreadSpawn
-  | CthreadJoin
-  | CthreadGetID
-  | CthreadSelf
-  | CthreadWait
-  | CthreadNotify
-  | CthreadCriticalSection
-  | CthreadCPURelax
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of (tm -> tm -> int) * Obj.t
@@ -176,6 +158,7 @@ and const =
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
   (* External functions *)
+  | CPar of tm Parast.ext
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
@@ -264,8 +247,6 @@ and tm =
   | TmFix of info
   (* Reference *)
   | TmRef of info * tm ref
-  (* Atomic reference *)
-  | TmAtomicRef of info * tm A.t
 
 (* Kind of pattern name *)
 and patName =
@@ -386,8 +367,6 @@ let rec map_tm f = function
       f t
   | TmRef _ as t ->
       f t
-  | TmAtomicRef _ as t ->
-      f t
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -409,8 +388,7 @@ let tm_info = function
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _)
   | TmFix fi
-  | TmRef (fi, _)
-  | TmAtomicRef (fi, _) ->
+  | TmRef (fi, _) ->
       fi
 
 let pat_info = function
