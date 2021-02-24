@@ -118,6 +118,8 @@ let builtin =
   ; ("atomicGet", f CatomicGet)
   ; ("atomicSet", f (CatomicSet None))
   ; ("atomicCAS", f (CatomicCAS (None, None)))
+  ; ("atomicExchange", f (CatomicExchange None))
+  ; ("atomicFetchAndAdd", f (CatomicFetchAndAdd None))
   ; ("threadID2int", f CthreadID2int)
   ; ("threadSpawn", f CthreadSpawn)
   ; ("threadJoin", f CthreadJoin)
@@ -411,6 +413,14 @@ let arity = function
   | CatomicCAS (Some _, None) ->
       2
   | CatomicCAS (_, Some _) ->
+      1
+  | CatomicExchange None ->
+      2
+  | CatomicExchange (Some _) ->
+      1
+  | CatomicFetchAndAdd None ->
+      2
+  | CatomicFetchAndAdd (Some _) ->
       1
   | CThread _ ->
       0
@@ -1009,25 +1019,48 @@ let delta eval env fi c v =
       fail_constapp fi
   | CThreadID _, _ ->
       fail_constapp fi
+  | CatomicMake, TmConst (_, CInt i) ->
+      TmAtomicRef (fi, A.Int (A.Int.make i))
   | CatomicMake, v ->
-      TmAtomicRef (fi, Atomic.make v)
-  | CatomicGet, TmAtomicRef (_, r) ->
-      Atomic.get r
+      TmAtomicRef (fi, A.NoInt (A.NoInt.make v))
+  | CatomicGet, TmAtomicRef (_, Int r) ->
+      TmConst (fi, CInt (A.Int.get r))
+  | CatomicGet, TmAtomicRef (_, NoInt r) ->
+      A.NoInt.get r
   | CatomicGet, _ ->
       fail_constapp fi
   | CatomicSet None, TmAtomicRef (fi, r) ->
       TmConst (fi, CatomicSet (Some r))
-  | CatomicSet (Some r), v ->
-      Atomic.set r v ; tmUnit
-  | CatomicSet None, _ ->
+  | CatomicSet (Some (Int r)), TmConst (_, CInt i) ->
+      A.Int.set r i ; tmUnit
+  | CatomicSet (Some (NoInt r)), v ->
+      A.NoInt.set r v ; tmUnit
+  | CatomicSet _, _ ->
       fail_constapp fi
   | CatomicCAS (None, None), TmAtomicRef (fi, r) ->
       TmConst (fi, CatomicCAS (Some r, None))
   | CatomicCAS (Some r, None), v ->
       TmConst (fi, CatomicCAS (Some r, Some v))
-  | CatomicCAS (Some r, Some v1), v2 ->
-      TmConst (fi, CBool (Atomic.compare_and_set r v1 v2))
+  | CatomicCAS (Some (Int r), Some (TmConst (_, CInt i1))), TmConst (_, CInt i2)
+    ->
+      TmConst (fi, CBool (A.Int.compare_and_set r i1 i2))
+  | CatomicCAS (Some (NoInt r), Some v1), v2 ->
+      TmConst (fi, CBool (A.NoInt.compare_and_set r v1 v2))
   | CatomicCAS (_, _), _ ->
+      fail_constapp fi
+  | CatomicExchange None, TmAtomicRef (_, r) ->
+      TmConst (fi, CatomicExchange (Some r))
+  | CatomicExchange (Some (Int r)), TmConst (_, CInt i) ->
+      TmConst (fi, CInt (A.Int.exchange r i))
+  | CatomicExchange (Some (NoInt r)), v ->
+      A.NoInt.exchange r v
+  | CatomicExchange _, _ ->
+      fail_constapp fi
+  | CatomicFetchAndAdd _, TmAtomicRef (_, Int r) ->
+      TmConst (fi, CatomicFetchAndAdd (Some (Int r)))
+  | CatomicFetchAndAdd (Some (Int r)), TmConst (_, CInt i) ->
+      TmConst (fi, CInt (A.Int.fetch_and_add r i))
+  | CatomicFetchAndAdd _, _ ->
       fail_constapp fi
   | CthreadID2int, TmConst (_, CThreadID tid) ->
       TmConst (fi, CInt (Par.id_to_int tid))
@@ -1035,9 +1068,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | CthreadSpawn, f ->
       TmConst
-        ( fi
-        , CThread (Par.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))
-        )
+        (fi, CThread (Par.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env)))
   | CthreadJoin, TmConst (_, CThread p) ->
       Par.join p
   | CthreadJoin, _ ->

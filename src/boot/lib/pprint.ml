@@ -381,6 +381,10 @@ let rec print_const fmt = function
       fprintf fmt "atomicSet"
   | CatomicCAS _ ->
       fprintf fmt "atomicCAS"
+  | CatomicExchange _ ->
+      fprintf fmt "atomicExchange"
+  | CatomicFetchAndAdd _ ->
+      fprintf fmt "fetchAndAdd"
   | CThread p ->
       fprintf fmt "Thread(%d)" (Par.id p |> Par.id_to_int)
   | CThreadID tid ->

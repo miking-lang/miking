@@ -125,8 +125,10 @@ and const =
   (* MCore intrinsics: Multicore *)
   | CatomicMake
   | CatomicGet
-  | CatomicSet of tm Atomic.t option
-  | CatomicCAS of tm Atomic.t option * tm option
+  | CatomicSet of tm A.t option
+  | CatomicExchange of tm A.t option
+  | CatomicFetchAndAdd of tm A.t option
+  | CatomicCAS of tm A.t option * tm option
   | CThread of tm Par.t
   | CThreadID of Par.id
   | CthreadID2int
@@ -263,7 +265,7 @@ and tm =
   (* Reference *)
   | TmRef of info * tm ref
   (* Atomic reference *)
-  | TmAtomicRef of info * tm Atomic.t
+  | TmAtomicRef of info * tm A.t
 
 (* Kind of pattern name *)
 and patName =
