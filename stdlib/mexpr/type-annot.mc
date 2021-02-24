@@ -150,17 +150,18 @@ lang LetTypeAnnot = TypeAnnot + LetAst
 
   sem typeAnnotExpr (env : TypeEnv) =
   | l & TmLet t ->
-    let tyBody =
+    let body =
       match t.tyBody with TyUnknown {} then
-        typeExpr env t.body
-      else t.tyBody
+        typeAnnotExpr env t.body
+      else
+        withType t.tyBody t.body
     in
+    let tyBody = ty body in
     if _isTypeAscription t then
-      withType tyBody t.body
+      body
     else
       let t = {t with inexpr = typeAnnotExpr env t.inexpr} in
       let ty = typeExpr env (TmLet t) in
-      let body = withType tyBody t.body in
       match env with {varEnv = varEnv} then
         let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
         TmLet {{{t with tyBody = tyBody}
@@ -466,6 +467,25 @@ utest ty (typeAnnot (ascription recordBody))
 with  recordType
 using eqType assocEmpty in
 
+let nestedRecord = record_ [("a", record_ []), ("b", tuple_ [int_ 1])] in
+let nestedRecordType = tyrecord_ [
+  ("a", tyunit_), ("b", tytuple_ [tyint_])
+] in
+let typedRecord = typeAnnot (ascription nestedRecord) in
+let innerRecord1 =
+  match typedRecord with TmRecord t then
+    get (assoc2seq {eq=eqString} t.bindings) 1
+  else never
+in
+let innerRecord2 =
+  match typedRecord with TmRecord t then
+    get (assoc2seq {eq=eqString} t.bindings) 0
+  else never
+in
+utest ty typedRecord with nestedRecordType using eqType assocEmpty in
+utest ty innerRecord1.1 with tyunit_ using eqType assocEmpty in
+utest ty innerRecord2.1 with tytuple_ [tyint_] using eqType assocEmpty in
+
 let recletsBody =
   bind_
     (nreclets_ [
@@ -534,17 +554,7 @@ with  expectedVariantType
 using eqType assocEmpty in
 
 let tyEnv = seq2assoc {eq=nameEq} [(treeName, expectedVariantType)] in
-let typeOfDataType = lam dataType.
-  match dataType with TmType t then
-    match t.inexpr with TmConDef t then
-      match t.inexpr with TmConDef t then
-        match t.inexpr with TmConApp t then
-          t.ty
-        else never
-      else never
-    else never
-  else never
-in
+let typeOfDataType = lam dataType. ty dataType in
 let treeLeafApp = nconapp_ leafName (int_ 5) in
 utest typeOfDataType (typeAnnot (dataType treeLeafApp))
 with  expectedVariantType
