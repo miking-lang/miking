@@ -109,8 +109,28 @@ let t = lift (bindall_ [
   ncondef_ nodeName (tyarrow_ (tytuple_ [treeType, treeType]) treeType),
   int_ 0
 ]) in
-let variantType = TyVariant {constrs = [leafName, nodeName]} in
+let treeVariantType = TyVariant {constrs = [leafName, nodeName]} in
 utest t.0 with [] using eqRecordTypes in
-utest t.1 with [(treeName, variantType)] using eqVariantTypes in
+utest t.1 with [(treeName, treeVariantType)] using eqVariantTypes in
+
+let exprName = nameSym "Expr" in
+let exprType = ntyvar_ exprName in
+let intName = nameSym "Int" in
+let floatName = nameSym "Float" in
+let addName = nameSym "Add" in
+let addConType = tyrecord_ [("lhs", exprType), ("rhs", exprType)] in
+let t = lift (bindall_ [
+  ntype_ exprName tyunknown_,
+  ncondef_ intName (tyarrow_ tyint_ exprType),
+  ncondef_ floatName (tyarrow_ tyfloat_ exprType),
+  ncondef_ addName (tyarrow_ addConType exprType),
+  nconapp_ addName (record_ [
+    ("lhs", nconapp_ intName (int_ 5)),
+    ("rhs", nconapp_ floatName (float_ 2.718))
+  ])
+]) in
+let exprVariantType = TyVariant {constrs = [intName, floatName, addName]} in
+utest t.0 with [addConType] using eqRecordTypes in
+utest t.1 with [(exprName, exprVariantType)] using eqVariantTypes in
 
 ()
