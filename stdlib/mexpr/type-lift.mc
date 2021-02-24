@@ -23,21 +23,18 @@ lang MExprRecordTypeLift = MExprEq + RecordAst + RecordTypeAst
   | t -> sfold_Expr_Expr liftRecords acc t
 end
 
-lang MExprDataTypeTypeLift = TypeAst + DataAst + VariantTypeAst
-  sem liftDataTypes (acc : DataTypes) =
+lang MExprVariantTypeLift = TypeAst + DataAst + VariantTypeAst
+  sem liftVariants (acc : DataTypes) =
   | TmType t ->
     match t.ty with TyVariant {constrs = constrs} then
       setInsert eqDataType (t.ident, t.ty) acc
     else error "Cannot lift type of untyped type declaration"
-  | t -> sfold_Expr_Expr liftDataTypes acc t
+  | t -> sfold_Expr_Expr liftVariants acc t
 end
 
-lang MExprTypeLift = MExprRecordTypeLift + MExprDataTypeTypeLift
+lang MExprTypeLift = MExprRecordTypeLift + MExprVariantTypeLift
   sem lift =
-  | expr ->
-    let recs = liftRecords [] expr in
-    let dts = liftDataTypes [] expr in
-    (recs, dts)
+  | expr -> (liftRecords [] expr, liftVariants [] expr)
 end
 
 lang TestLang = MExprTypeLift + MExprTypeAnnot
