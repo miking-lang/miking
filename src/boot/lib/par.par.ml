@@ -83,21 +83,21 @@ let delta eval env fi c v =
   | ParAtomicRef _, _ ->
       fail_constapp fi
   | ParatomicMake, TmConst (_, CInt i) ->
-      TmConst (fi, CPar (ParAtomicRef (A.Int (A.Int.make i))))
+      TmConst (fi, CPar (ParAtomicRef (Atomic.Int (Atomic.Int.make i))))
   | ParatomicMake, v ->
-      TmConst (fi, CPar (ParAtomicRef (A.NoInt (A.NoInt.make v))))
+      TmConst (fi, CPar (ParAtomicRef (Atomic.NoInt (Atomic.NoInt.make v))))
   | ParatomicGet, TmConst (_, CPar (ParAtomicRef (Int r))) ->
-      TmConst (fi, CInt (A.Int.get r))
+      TmConst (fi, CInt (Atomic.Int.get r))
   | ParatomicGet, TmConst (_, CPar (ParAtomicRef (NoInt r))) ->
-      A.NoInt.get r
+      Atomic.NoInt.get r
   | ParatomicGet, _ ->
       fail_constapp fi
   | ParatomicSet None, TmConst (_, CPar (ParAtomicRef r)) ->
       TmConst (fi, CPar (ParatomicSet (Some r)))
   | ParatomicSet (Some (Int r)), TmConst (_, CInt i) ->
-      A.Int.set r i ; tmUnit
+      Atomic.Int.set r i ; tmUnit
   | ParatomicSet (Some (NoInt r)), v ->
-      A.NoInt.set r v ; tmUnit
+      Atomic.NoInt.set r v ; tmUnit
   | ParatomicSet _, _ ->
       fail_constapp fi
   | ParatomicCAS (None, None), TmConst (_, CPar (ParAtomicRef r)) ->
@@ -106,23 +106,23 @@ let delta eval env fi c v =
       TmConst (fi, CPar (ParatomicCAS (Some r, Some v)))
   | ( ParatomicCAS (Some (Int r), Some (TmConst (_, CInt i1)))
     , TmConst (_, CInt i2) ) ->
-      TmConst (fi, CBool (A.Int.compare_and_set r i1 i2))
+      TmConst (fi, CBool (Atomic.Int.compare_and_set r i1 i2))
   | ParatomicCAS (Some (NoInt r), Some v1), v2 ->
-      TmConst (fi, CBool (A.NoInt.compare_and_set r v1 v2))
+      TmConst (fi, CBool (Atomic.NoInt.compare_and_set r v1 v2))
   | ParatomicCAS (_, _), _ ->
       fail_constapp fi
   | ParatomicExchange None, TmConst (_, CPar (ParAtomicRef r)) ->
       TmConst (fi, CPar (ParatomicExchange (Some r)))
   | ParatomicExchange (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (A.Int.exchange r i))
+      TmConst (fi, CInt (Atomic.Int.exchange r i))
   | ParatomicExchange (Some (NoInt r)), v ->
-      A.NoInt.exchange r v
+      Atomic.NoInt.exchange r v
   | ParatomicExchange _, _ ->
       fail_constapp fi
   | ParatomicFetchAndAdd _, TmConst (_, CPar (ParAtomicRef (Int r))) ->
       TmConst (fi, CPar (ParatomicFetchAndAdd (Some (Int r))))
   | ParatomicFetchAndAdd (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (A.Int.fetch_and_add r i))
+      TmConst (fi, CInt (Atomic.Int.fetch_and_add r i))
   | ParatomicFetchAndAdd _, _ ->
       fail_constapp fi
   | ParThread _, _ ->
@@ -130,7 +130,7 @@ let delta eval env fi c v =
   | ParThreadID _, _ ->
       fail_constapp fi
   | ParthreadID2int, TmConst (_, CPar (ParThreadID tid)) ->
-      TmConst (fi, CInt (ParThread.id_to_int tid))
+      TmConst (fi, CInt (Thread.id_to_int tid))
   | ParthreadID2int, _ ->
       fail_constapp fi
   | ParthreadSpawn, f ->
@@ -138,31 +138,30 @@ let delta eval env fi c v =
         ( fi
         , CPar
             (ParThread
-               (ParThread.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env)))
-        )
+               (Thread.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))) )
   | ParthreadJoin, TmConst (_, CPar (ParThread p)) ->
-      ParThread.join p
+      Thread.join p
   | ParthreadJoin, _ ->
       fail_constapp fi
   | ParthreadGetID, TmConst (_, CPar (ParThread p)) ->
-      TmConst (fi, CPar (ParThreadID (ParThread.id p)))
+      TmConst (fi, CPar (ParThreadID (Thread.id p)))
   | ParthreadGetID, _ ->
       fail_constapp fi
   | ParthreadSelf, TmRecord (_, x) when Record.is_empty x ->
-      TmConst (fi, CPar (ParThreadID (ParThread.self ())))
+      TmConst (fi, CPar (ParThreadID (Thread.self ())))
   | ParthreadSelf, _ ->
       fail_constapp fi
   | ParthreadWait, TmRecord (_, x) when Record.is_empty x ->
-      ParThread.wait () ; tmUnit
+      Thread.wait () ; tmUnit
   | ParthreadWait, _ ->
       fail_constapp fi
   | ParthreadNotify, TmConst (_, CPar (ParThreadID tid)) ->
-      ParThread.notify tid ; tmUnit
+      Thread.notify tid ; tmUnit
   | ParthreadNotify, _ ->
       fail_constapp fi
   | ParthreadCriticalSection, f ->
-      ParThread.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
+      Thread.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
   | ParthreadCPURelax, TmRecord (_, x) when Record.is_empty x ->
-      ParThread.cpu_relax () ; tmUnit
+      Thread.cpu_relax () ; tmUnit
   | ParthreadCPURelax, _ ->
       fail_constapp fi

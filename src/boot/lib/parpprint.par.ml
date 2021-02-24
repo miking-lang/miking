@@ -19,9 +19,9 @@ let pprint = function
   | ParatomicFetchAndAdd _ ->
       us "fetchAndAdd"
   | ParThread p ->
-      us (sprintf "Thread(%d)" (ParThread.id p |> ParThread.id_to_int))
+      us (sprintf "Thread(%d)" (Thread.id p |> Thread.id_to_int))
   | ParThreadID tid ->
-      us (sprintf "ThreadID(%d)" (ParThread.id_to_int tid))
+      us (sprintf "ThreadID(%d)" (Thread.id_to_int tid))
   | ParthreadID2int ->
       us "threadID2int"
   | ParthreadSpawn ->

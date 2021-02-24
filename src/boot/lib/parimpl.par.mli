@@ -1,4 +1,4 @@
-module A : sig
+module Atomic : sig
   type 'a t = Int : int Atomic.t -> 'a t | NoInt : 'a Atomic.t -> 'a t
 
   module Int : sig
@@ -28,7 +28,7 @@ module A : sig
   end
 end
 
-module ParThread : sig
+module Thread : sig
   type 'a t
 
   type id

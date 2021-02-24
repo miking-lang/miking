@@ -1,15 +1,15 @@
 open Parimpl
 
 type 'a ext =
-  | ParAtomicRef of 'a A.t
+  | ParAtomicRef of 'a Atomic.t
   | ParatomicMake
   | ParatomicGet
-  | ParatomicSet of 'a A.t option
-  | ParatomicExchange of 'a A.t option
-  | ParatomicFetchAndAdd of 'a A.t option
-  | ParatomicCAS of 'a A.t option * 'a option
-  | ParThread of 'a ParThread.t
-  | ParThreadID of ParThread.id
+  | ParatomicSet of 'a Atomic.t option
+  | ParatomicExchange of 'a Atomic.t option
+  | ParatomicFetchAndAdd of 'a Atomic.t option
+  | ParatomicCAS of 'a Atomic.t option * 'a option
+  | ParThread of 'a Thread.t
+  | ParThreadID of Thread.id
   | ParthreadID2int
   | ParthreadSpawn
   | ParthreadJoin

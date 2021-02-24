@@ -1,4 +1,4 @@
-module A = struct
+module Atomic = struct
   type 'a t = Int : int Atomic.t -> 'a t | NoInt : 'a Atomic.t -> 'a t
 
   module Int = struct
@@ -28,7 +28,7 @@ module A = struct
   end
 end
 
-module ParThread = struct
+module Thread = struct
   type 'a t = 'a Domain.t
 
   type id = Domain.id
