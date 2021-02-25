@@ -156,6 +156,8 @@ let escapeConString = lam s.
   else
     defaultConName
 
+let escapeLabelStr = lam s. cons '_' (map escapeChar s)
+
 utest escapeVarString "abcABC/:@_'" with "abcABC____'"
 utest escapeVarString "" with defaultIdentName
 utest escapeVarString "@" with defaultIdentName
@@ -190,15 +192,22 @@ lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + FunTypePrettyPrint + VariantTypePrettyPrint +
   VarTypePrettyPrint + AppTypePrettyPrint
+  sem pprintLabelString =
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyRecord t ->
     if eqi (assocLength t.fields) 0 then (env,"()") else
-      let f = lam env. lam _. lam v. getTypeStringCode indent env v in
-      match assocMapAccum {eq=eqString} f env t.fields with (env, fields) then
-        let fields = assoc2seq {eq=eqString} fields in
-        let conventry = lam entry. join [entry.0, ": ", entry.1] in
-        (env,join ["{", strJoin "; " (map conventry fields), "}"])
+      let f = lam env. lam tuple.
+        match tuple with (fieldStr,fieldTy) then
+          match getTypeStringCode indent env fieldTy with (env,ty) then
+            let str = pprintLabelString fieldStr in
+            (env, join [str, ": ", ty])
+          else never
+        else never
+      in
+      let fields = assoc2seq {eq=eqString} t.fields in
+      match mapAccumL f env fields with (env,fields) then
+        (env,join ["{", strJoin "; " fields, "}"])
       else never
   | _ -> (env,_objTypeStr)
 end
@@ -214,7 +223,7 @@ lang OCamlPrettyPrint =
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
   sem pprintLabelString =
-  | s -> s
+  | s -> escapeLabelStr s
 
   sem isAtomic =
   | TmLam _ -> false
