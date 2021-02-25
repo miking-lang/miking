@@ -82,7 +82,8 @@ let builtin =
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
   ; ("reverse", f Creverse)
-  ; ("sub", f (Csub (None, None))) (* MCore intrinsics: Random numbers *)
+  ; ("subsequence", f (Csubsequence (None, None)))
+    (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -312,11 +313,11 @@ let arity = function
       1
   | Creverse ->
       1
-  | Csub (None, None) ->
+  | Csubsequence (None, None) ->
       3
-  | Csub (Some _, None) ->
+  | Csubsequence (Some _, None) ->
       2
-  | Csub (_, Some _) ->
+  | Csubsequence (_, Some _) ->
       1
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None ->
@@ -762,13 +763,13 @@ let delta eval env fi c v =
       TmSeq (fi, Mseq.reverse s)
   | Creverse, _ ->
       fail_constapp fi
-  | Csub (None, None), TmSeq (fi, s) ->
-      TmConst (fi, Csub (Some s, None))
-  | Csub (Some s, None), TmConst (_, CInt off) ->
-      TmConst (fi, Csub (Some s, Some off))
-  | Csub (Some s, Some off), TmConst (_, CInt n) ->
-      TmSeq (fi, Mseq.sub s off n)
-  | Csub _, _ ->
+  | Csubsequence (None, None), TmSeq (fi, s) ->
+      TmConst (fi, Csubsequence (Some s, None))
+  | Csubsequence (Some s, None), TmConst (_, CInt off) ->
+      TmConst (fi, Csubsequence (Some s, Some off))
+  | Csubsequence (Some s, Some off), TmConst (_, CInt n) ->
+      TmSeq (fi, Mseq.subsequence s off n)
+  | Csubsequence _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None, TmConst (fi, CInt v) ->

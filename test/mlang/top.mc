@@ -1,5 +1,5 @@
 let head = lam s. get s 0
-let tail = lam s. sub s 1 (length s)
+let tail = lam s. subsequence s 1 (length s)
 
 lang WrappedList
   syn List =

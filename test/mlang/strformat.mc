@@ -96,8 +96,8 @@ lang StrFormatBase
         -- sequence of non-alpha chars.
         let found_idx = index isAlpha s in
         match found_idx with Some i then
-          let fmtstr = sub s 0 (addi i 1) in
-          let remaining = sub s (addi i 1) (length s) in
+          let fmtstr = subsequence s 0 (addi i 1) in
+          let remaining = subsequence s (addi i 1) (length s) in
           concat (toFormat fmtstr (head args)) (strFormat (tail args) remaining)
         else
           error (concat "StrFormatBase: strFormat: Unrecognized format: " s)
