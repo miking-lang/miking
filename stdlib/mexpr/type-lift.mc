@@ -16,9 +16,10 @@ let eqDataType = lam a. lam b.
 
 lang MExprRecordTypeLift = MExprEq + RecordAst + RecordTypeAst
   sem liftRecords (acc : RecordTypes) =
-  | TmRecord t ->
+  | r & TmRecord t ->
     match t.ty with TyRecord _ then
-      setInsert (eqType assocEmpty) t.ty acc
+      let acc = setInsert (eqType assocEmpty) t.ty acc in
+      sfold_Expr_Expr liftRecords acc r
     else error "Cannot lift type of untyped record"
   | t -> sfold_Expr_Expr liftRecords acc t
 end
