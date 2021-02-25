@@ -9,26 +9,8 @@ Before you can use the Miking system, you need to install
 [OCaml](https://ocaml.org/) and the
 [OPAM](https://opam.ocaml.org/) package manager.
 
-After the installation, you need to create an OPAM switch for the multicore OCaml compiler by
-running the following:
 
-```
-opam switch create 4.10.0+multicore --packages=ocaml-variants.4.10.0+multicore --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
-```
-
-Whenever you want to switch back to the default OCaml compiler you can do so by running:
-
-```
-opam switch default
-```
-
-To use the multicore switch, the command is:
-
-```
-opam switch 4.10.0+multicore
-```
-
-When you are on the multicore switch, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
+After the installation, you need to install the `opam` packages `dune`, `batteries`, and `linenoise` by running the following:
 
 ```
 opam install dune batteries linenoise
@@ -960,6 +942,188 @@ interpreters to achieve the same thing.
 As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
 Miking that does not need these external dependencies.
+
+### Parallel Programming
+One such optional feature is support for shared-memory parallelism using atomic
+operations and threads running on multiple cores. To build the project with
+parallel programming integration, you need to create an OPAM switch for the
+multicore OCaml compiler by running the following:
+
+```
+opam switch create 4.10.0+multicore --packages=ocaml-variants.4.10.0+multicore --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+```
+
+The `opam switch` command lets you have several OCaml installations on your
+system. Whenever you want to switch back to the default OCaml compiler you can
+do so by running:
+
+```
+opam switch default
+```
+
+And when you wish to switch to multicore mode, the command is:
+
+```
+opam switch 4.10.0+multicore
+```
+
+Additionally, you may need to run `eval $(opam env)` in order make your OCaml
+environment in sync with the current switch each time you do an `opam switch`.
+
+When you are on the multicore switch, you need to re-install the `opam` packages
+listed in the [Getting started section](#getting-started), as each `opam` switch
+has with its own set of installed packages. In addition, you need to install the
+[`domainslib`](https://github.com/ocaml-multicore/domainslib) package by running
+the following:
+
+```
+opam install domainslib
+```
+
+`mi` will automatically be compiled with sundials support when the `domainslib`
+package is installed. To run the parallel programming-specific test suite, set
+the `MI_TEST_PAR` variable before running `make test`:
+
+```
+MI_TEST_MULTICORE=1 make test
+```
+
+To install for the current user, run `make install` as usual.
+
+#### Usage
+
+The parallel programming primitives consist of atomic references and functions
+for creating and synchronizing threads. In addition to the examples below, more
+documentation can be found in the [multicore test
+suite](test/multicore/multicore.mc).
+
+##### Atomic References
+
+Atomic references are similar to ordinary references, except that operations
+performed on them are *atomic*, which means that no other execution thread can
+interfere with the result. In other words, they are safe to use in
+multi-threaded execution.
+
+`makeAtomic` creates a new atomic reference and gives it an initial value. The
+value of the atomic reference can be read by `atomicGet`:
+
+```
+let a = makeAtomic 0 in
+utest atomicGet a with 0 in
+```
+
+`atomicCAS` performs an atomic compare-and-set, that is, it only updates the
+value of the reference if its current value is physically identical to the
+provided value, and then returns a Boolean representing if the update was
+successful or not:
+
+```
+utest atomicCAS a 0 1 with true in
+utest atomicCAS a 42 3 with false in
+utest atomicGet a with 1 in
+```
+
+To unconditionally set the value, we can use `atomicExchange`, which also
+returns the old value of the reference:
+
+```
+utest atomicExchange a 2 with 1 in
+```
+
+Finally, for integer references, we can use `atomicFetchAndAdd` to increase or
+decrease the value of the reference. The function returns the old value of the
+reference:
+
+```
+utest atomicFetchAndAdd a 1 with 2 in
+-- Current value is now 3
+utest atomicFetchAndAdd a (subi 0 45) with 3 in
+-- Current value is now -42
+```
+
+##### Multi-Threaded Execution
+
+The following example program spawns 10 number of threads that compete for printing
+their IDs:
+
+```
+include "string.mc"
+mexpr
+let place = atomicMake 1 in
+let threads = create 10 (lam _. threadSpawn (lam _. 
+  printLn (join 
+    [int2string (atomicFetchAndAdd place 1)
+    , ": thread ID "
+    , int2string (threadID2int (threadSelf ()))
+    ]))
+) in
+map threadJoin threads
+```
+
+where `threadSpawn` takes a function of type `Unit -> a` as argument,
+`threadSelf` returns the ID of the current thread, and `threadID2int` converts a
+thread ID to a unique integer. Note that `threadJoin` must be called once for
+each call to `threadSpawn`. The output of the above program might be:
+
+```
+1: thread ID 1
+2: thread ID 2
+3: thread ID 129
+4: thread ID 130
+5: thread ID 3
+6: thread ID 257
+7: thread ID 258
+8: thread ID 131
+9: thread ID 385
+10: thread ID 386
+```
+
+However, the values and order of the thread IDs might be different over
+different runs.
+
+To control the execution order of threads, some form of thread synchronization
+is necessary. This can be done either using atomic references, or using the
+functions `threadCriticalSection`, `threadWait` and `threadNotify`, or both.
+In the following example:
+
+```
+let inCriticalSection = atomicMake false in
+let afterWait = atomicMake false in
+
+let t = threadSpawn (lam _.
+  threadCriticalSection (
+    lam _.
+      let _ = atomicExchange inCriticalSection true in
+      let _ = threadWait () in
+      atomicExchange afterWait true
+  )
+) in
+```
+
+the thread `t` enters a critical section, where it first atomically sets the
+`inCriticalSection` flag to true, before calling `threadWait`, which will block
+the execution until another thread calls `threadNotify`. In the following, the
+main thread first waits for `t` to set the `inCriticalSection` flag, before
+making a call to `threadNotify`:
+
+```
+recursive let waitForFlag = lam flag.
+  match atomicGet flag with true then ()
+  else waitForFlag flag
+in
+let _ = waitForFlag inCriticalSection in
+let _ = threadNotify (threadGetID t) in
+```
+
+The `threadNotify` will block the execution of the main thread until `t` has
+finished its critical section, which means that we know that the flag
+`afterWait` must now be true:
+
+```
+utest atomicGet afterWait true in
+-- Don't forget to clean up!
+let _ = threadJoin t in
+```
 
 ### Sundials
 One of the external dependencies is Sundials, a numerical library for
