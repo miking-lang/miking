@@ -35,7 +35,7 @@ install() {
 # Run the test suite for parallel programming
 runtests_par() {
     (cd test
-     ../build/mi test par/*)
+     ../build/mi test multicore/*)
     build/mi test stdlib/multicore/*
 }
 
