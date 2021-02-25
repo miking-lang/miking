@@ -1,7 +1,3 @@
-include "../../stdlib/string.mc"
-
-let tid2str = lam tid.
-  int2string (threadID2int tid)
 
 mexpr
 
