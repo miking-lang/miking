@@ -1043,8 +1043,8 @@ utest atomicFetchAndAdd a (subi 0 45) with 3 in
 
 ##### Multi-Threaded Execution
 
-The following example program spawns 10 number of threads that compete for printing
-their IDs:
+The following example program spawns 10 threads that compete for printing their
+IDs:
 
 ```
 include "string.mc"
