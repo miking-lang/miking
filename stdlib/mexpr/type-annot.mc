@@ -160,10 +160,10 @@ lang LetTypeAnnot = TypeAnnot + LetAst
     if _isTypeAscription t then
       body
     else
-      let t = {t with inexpr = typeAnnotExpr env t.inexpr} in
-      let ty = typeExpr env (TmLet t) in
       match env with {varEnv = varEnv} then
         let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
+        let t = {t with inexpr = typeAnnotExpr env t.inexpr} in
+        let ty = typeExpr env (TmLet t) in
         TmLet {{{t with tyBody = tyBody}
                    with body = body}
                    with ty = ty}
@@ -438,6 +438,18 @@ let n = nameSym "n" in
 let ascription = lam body.
   bind_ (nulet_ x body) (nvar_ x)
 in
+
+let varBody =
+  bind_ (nulet_ x (int_ 5)) (addi_ (int_ 1) (nvar_ x))
+in
+let innerVarTy =
+  match typeAnnot varBody with TmLet {inexpr = TmApp {rhs = TmVar {ty = ty}}} then
+    ty
+  else never
+in
+utest innerVarTy
+with  tyint_
+using eqType assocEmpty in
 
 let appBody = addi_ (int_ 5) (int_ 2) in
 utest ty (typeAnnot (ascription appBody))
