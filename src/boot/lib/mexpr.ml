@@ -1798,8 +1798,11 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
     (* Closure application *)
-    | TmClos (_, _, s, t3, env2) ->
-        eval ((s, eval env t2) :: Lazy.force env2) t3
+    | TmClos (_, _, s, t3, env2) -> (
+      try eval ((s, eval env t2) :: Lazy.force env2) t3
+      with Error _ as e ->
+        uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+        raise e )
     (* Constant application using the delta function *)
     | TmConst (_, c) ->
         delta eval env fiapp c (eval env t2)
