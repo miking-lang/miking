@@ -980,9 +980,9 @@ the following:
 opam install domainslib
 ```
 
-`mi` will automatically be compiled with sundials support when the `domainslib`
-package is installed. To run the parallel programming-specific test suite, set
-the `MI_TEST_PAR` variable before running `make test`:
+`mi` will automatically be compiled with parallel programming support when the
+`domainslib` package is installed. To run the parallel programming-specific test
+suite, set the `MI_TEST_PAR` variable before running `make test`:
 
 ```
 MI_TEST_PAR=1 make test
