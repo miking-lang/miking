@@ -1120,7 +1120,7 @@ finished its critical section, which means that we know that the flag
 `afterWait` must now be true:
 
 ```
-utest atomicGet afterWait true in
+utest atomicGet afterWait with true in
 -- Don't forget to clean up!
 let _ = threadJoin t in
 ```
