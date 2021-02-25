@@ -972,7 +972,7 @@ environment in sync with the current switch each time you do an `opam switch`.
 
 When you are on the multicore switch, you need to re-install the `opam` packages
 listed in the [Getting started section](#getting-started), as each `opam` switch
-has with its own set of installed packages. In addition, you need to install the
+has its own set of installed packages. In addition, you need to install the
 [`domainslib`](https://github.com/ocaml-multicore/domainslib) package by running
 the following:
 
@@ -985,7 +985,7 @@ package is installed. To run the parallel programming-specific test suite, set
 the `MI_TEST_PAR` variable before running `make test`:
 
 ```
-MI_TEST_MULTICORE=1 make test
+MI_TEST_PAR=1 make test
 ```
 
 To install for the current user, run `make install` as usual.
