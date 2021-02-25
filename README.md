@@ -1004,11 +1004,11 @@ performed on them are *atomic*, which means that no other execution thread can
 interfere with the result. In other words, they are safe to use in
 multi-threaded execution.
 
-`makeAtomic` creates a new atomic reference and gives it an initial value. The
+`atomicMake` creates a new atomic reference and gives it an initial value. The
 value of the atomic reference can be read by `atomicGet`:
 
 ```
-let a = makeAtomic 0 in
+let a = atomicMake 0 in
 utest atomicGet a with 0 in
 ```
 
