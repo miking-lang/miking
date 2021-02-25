@@ -1,4 +1,5 @@
 -- Pretty printer for C.
+-- TODO(dlunde,2021-02-25): Add handling for arbitrary variable names.
 
 include "ast.mc"
 

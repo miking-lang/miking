@@ -107,7 +107,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
 
     let _ = debug "_1-init.mc" (use MExprPrettyPrint in expr2str prog) in
 
-    -- Identify compound types and define them at top-level (structs, tagged
+    -- TODO Identify compound types and define them at top-level (structs, tagged
     -- unions).
 
     -- Symbolize program
@@ -116,7 +116,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
     let prog = symbolizeExpr {varEnv = varEnv, conEnv = assocEmpty} prog in
     let _ = debug "_2-sym.mc" (use MExprPrettyPrint in expr2str prog) in
 
-    -- Do a (TODO(dlunde,2020-11-16): partial?) ANF transformation, including
+    -- Perform (TODO(dlunde,2020-11-16): partial?) ANF transformation, including
     -- lifting out construction of compound data types from expressions (i.e.,
     -- we avoid anonymous record/sequence/variant construction in the middle of
     -- expressions). By doing this, construction of complex data types is
@@ -215,7 +215,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
   sem compileLet (env: CompileCEnv) (ident: Name) (ty: Type) =
 
   -- TmMatch with true as pattern: translate to if statement.
-  | TmMatch {target = target, pat = PBool {val = true}, thn = thn, els = els} ->
+  | TmMatch {target = target, pat = PatBool {val = true}, thn = thn, els = els} ->
     match compileType env ty with (env, ty) then
       let def = match ty with CTyVoid _ then None () else
         Some {ty = ty, id = Some ident, init = None ()}
@@ -264,13 +264,13 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
 
   sem compileTops (env: CompileCEnv) (accTop: [CTop]) (accMain: [CStmt]) =
 
-  | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
+  | TmLet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
     match body with TmLam _ then
-      match compileFun env ident ty body with (env, fun) then
+      match compileFun env ident tyBody body with (env, fun) then
         compileTops env (snoc accTop fun) accMain inexpr
       else never
     else
-      match compileLet env ident ty body with (env, def, init) then
+      match compileLet env ident tyBody body with (env, def, init) then
         -- We need to specially handle direct initialization, since most things
         -- are not allowed at top-level.
         let t = (def, init) in
@@ -343,8 +343,8 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
   sem compileStmts
     (env: CompileCEnv) (final: {ty: CType, name: Option Name}) (acc: [CStmt]) =
 
-  | TmLet {ident = ident, ty = ty, body = body, inexpr = inexpr} ->
-    match compileLet env ident ty body with (env, def, init) then
+  | TmLet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
+    match compileLet env ident tyBody body with (env, def, init) then
       let acc =
         match def with Some def then snoc acc (CSDef def) else acc in
       let acc =
@@ -477,14 +477,14 @@ use TestLang in
 let factorial =
   reclet_ "factorial" (tyarrow_ tyint_ tyint_)
     (lam_ "n" tyint_
-      (asc_ tyint_
-        (if_ (asc_ tybool_ (eqi_ (var_ "n") (int_ 0)))
+      (withType tyint_
+        (if_ (withType tybool_ (eqi_ (var_ "n") (int_ 0)))
           (int_ 1)
-          (asc_ tyint_
+          (withType tyint_
             (muli_ (var_ "n")
-              (asc_ tyint_
+              (withType tyint_
                 (app_ (var_ "factorial")
-                  (asc_ tyint_ (subi_ (var_ "n") (int_ 1))))))))))
+                  (withType tyint_ (subi_ (var_ "n") (int_ 1))))))))))
 in
 
 -- Heavily type-annotated versions of mutually recursive odd and even functions
@@ -492,47 +492,44 @@ let oddEven = reclets_ [
 
     ("odd", tyarrow_ tyint_ tybool_,
      lam_ "x" tyint_
-       (asc_ tybool_
-         (if_ (asc_ tybool_ (eqi_ (var_ "x") (int_ 1)))
+       (withType tybool_
+         (if_ (withType tybool_ (eqi_ (var_ "x") (int_ 1)))
            true_
-           (asc_ tybool_
-             (if_ (asc_ tybool_ (lti_ (var_ "x") (int_ 1)))
+           (withType tybool_
+             (if_ (withType tybool_ (lti_ (var_ "x") (int_ 1)))
                 false_
-                (asc_ tybool_
+                (withType tybool_
                   (app_ (var_ "even")
-                    (asc_ tyint_ (subi_ (var_ "x") (int_ 1)))))))))),
+                    (withType tyint_ (subi_ (var_ "x") (int_ 1)))))))))),
 
     ("even", tyarrow_ tyint_ tybool_,
      lam_ "x" tyint_
-       (asc_ tybool_
-         (if_ (asc_ tybool_ (eqi_ (var_ "x") (int_ 0)))
+       (withType tybool_
+         (if_ (withType tybool_ (eqi_ (var_ "x") (int_ 0)))
             true_
-            (asc_ tybool_
-              (if_ (asc_ tybool_ (lti_ (var_ "x") (int_ 0)))
+            (withType tybool_
+              (if_ (withType tybool_ (lti_ (var_ "x") (int_ 0)))
                  false_
-                 (asc_ tybool_
+                 (withType tybool_
                    (app_ (var_ "odd")
-                     (asc_ tyint_ (subi_ (var_ "x") (int_ 1))))))))))
+                     (withType tyint_ (subi_ (var_ "x") (int_ 1))))))))))
 
 ] in
 
 let printf = lam str. lam ls.
-  asc_ tyunit_
-    (appSeq_ (var_ "printf")
-       (cons (asc_ tystr_ (str_ str))
-          ls))
+  appSeq_ (var_ "printf") (cons (withType tystr_ (str_ str)) ls)
 in
 
 let mprog = bindall_ [
   factorial,
   oddEven,
-  printf "factorial(5) is: %d\n" [
-    asc_ tyint_ (app_ (var_ "factorial") (int_ 5))
-  ],
+  let_ "_" tyunit_ (printf "factorial(5) is: %d\n" [
+    withType tyint_ (app_ (var_ "factorial") (int_ 5))
+  ]),
   let_ "boolres" tystr_
-    (if_ (asc_ tybool_ (app_ (var_ "odd") (int_ 7)))
-       (asc_ tystr_ (str_ "true")) (asc_ tystr_ (str_ "false"))),
-  printf "7 odd? %s.\n" [(var_ "boolres")],
+    (if_ (withType tybool_ (app_ (var_ "odd") (int_ 7)))
+       (withType tystr_ (str_ "true")) (withType tystr_ (str_ "false"))),
+  let_ "_" tyunit_ (printf "7 odd? %s.\n" [(var_ "boolres")]),
   int_ 0 -- Main must return an integer
 ] in
 
