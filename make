@@ -32,6 +32,13 @@ install() {
     dune install
 }
 
+# Run the test suite for parallel programming
+runtests_par() {
+    (cd test
+     ../build/mi test par/*)
+    build/mi test stdlib/multicore/*
+}
+
 # Run the test suite for sundials
 runtests_sundials() {
     (cd test
@@ -65,6 +72,9 @@ runtests() {
     cd ..
     export MCORE_STDLIB='@@@'
     build/mi test stdlib)
+    if [ -n "$MI_TEST_PAR" ]; then
+        runtests_par
+    fi
     if [ -n "$MI_TEST_PYTHON" ]; then
         runtests_py
     fi

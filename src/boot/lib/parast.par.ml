@@ -4,7 +4,6 @@ type 'a ext =
   | ParAtomicRef of 'a Atomic.t
   | ParatomicMake
   | ParatomicGet
-  | ParatomicSet of 'a Atomic.t option
   | ParatomicExchange of 'a Atomic.t option
   | ParatomicFetchAndAdd of 'a Atomic.t option
   | ParatomicCAS of 'a Atomic.t option * 'a option

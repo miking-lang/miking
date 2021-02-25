@@ -10,8 +10,6 @@ let pprint = function
       us "atomicMake"
   | ParatomicGet ->
       us "atomicGet"
-  | ParatomicSet _ ->
-      us "atomicSet"
   | ParatomicCAS _ ->
       us "atomicCAS"
   | ParatomicExchange _ ->

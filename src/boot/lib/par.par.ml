@@ -8,7 +8,6 @@ let externals =
   let f p = TmConst (NoInfo, CPar p) in
   [ ("atomicMake", f ParatomicMake)
   ; ("atomicGet", f ParatomicGet)
-  ; ("atomicSet", f (ParatomicSet None))
   ; ("atomicCAS", f (ParatomicCAS (None, None)))
   ; ("atomicExchange", f (ParatomicExchange None))
   ; ("atomicFetchAndAdd", f (ParatomicFetchAndAdd None))
@@ -28,10 +27,6 @@ let arity = function
   | ParatomicMake ->
       1
   | ParatomicGet ->
-      1
-  | ParatomicSet None ->
-      2
-  | ParatomicSet (Some _) ->
       1
   | ParatomicCAS (None, None) ->
       3
@@ -91,14 +86,6 @@ let delta eval env fi c v =
   | ParatomicGet, TmConst (_, CPar (ParAtomicRef (NoInt r))) ->
       Atomic.NoInt.get r
   | ParatomicGet, _ ->
-      fail_constapp fi
-  | ParatomicSet None, TmConst (_, CPar (ParAtomicRef r)) ->
-      TmConst (fi, CPar (ParatomicSet (Some r)))
-  | ParatomicSet (Some (Int r)), TmConst (_, CInt i) ->
-      Atomic.Int.set r i ; tmUnit
-  | ParatomicSet (Some (NoInt r)), v ->
-      Atomic.NoInt.set r v ; tmUnit
-  | ParatomicSet _, _ ->
       fail_constapp fi
   | ParatomicCAS (None, None), TmConst (_, CPar (ParAtomicRef r)) ->
       TmConst (fi, CPar (ParatomicCAS (Some r, None)))
