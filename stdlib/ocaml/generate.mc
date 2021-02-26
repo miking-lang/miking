@@ -245,7 +245,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
     -- the matched record.
     let n = nameSym "Rec" in
     match unzip genPats with (allNames, allWraps) then
-      let precord = OPRecord {bindings = bindings} in
+      let f = lam id. lam _. pvar_ id in
+      let precord = OPRecord {bindings = assocMapWithKey {eq=eqString} f bindings} in
       let wrap = lam cont.
         OTmMatch {
           target = nvar_ targetName,
