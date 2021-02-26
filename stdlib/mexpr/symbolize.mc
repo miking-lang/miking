@@ -66,11 +66,13 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmLam {ident = ident, body = body, ty = ty, info = info} ->
+  | TmLam {ident = ident, tyIdent = tyIdent, body = body, ty = ty, info = info} ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env ty in
+      let tyIdent = symbolizeType env tyIdent in
       if nameHasSym ident then
         TmLam {ident = ident,
+               tyIdent = tyIdent,
                body = symbolizeExpr env body,
                ty = ty,
                info = info}
@@ -80,6 +82,7 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLam {ident = ident,
+               tyIdent = tyIdent,
                body = symbolizeExpr env body,
                ty = ty,
                info = info}

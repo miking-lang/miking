@@ -110,9 +110,18 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = _envInsert t.ident t.ty varEnv} in
-      let t = {t with body = typeAnnotExpr env t.body} in
-      TmLam {t with ty = typeExpr env (TmLam t)}
+      let tyIdent =
+        match t.tyIdent with TyUnknown {} then
+          match _envLookup t.ident varEnv with Some ty then
+            ty
+          else t.tyIdent
+        else t.tyIdent
+      in
+      let env = {env with varEnv = _envInsert t.ident tyIdent varEnv} in
+      let ty = TyArrow {from = tyIdent, to = typeExpr env t.body} in
+      TmLam {{{t with tyIdent = tyIdent}
+                 with body = withType ty t.body}
+                 with ty = ty}
     else never
 end
 
@@ -199,6 +208,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       let _ = map f t.bindings in
       typeExpr env t.inexpr
     else t.ty
+
   sem typeAnnotExpr (env : TypeEnv) =
   | rl & TmRecLets t ->
     let bindingf = lam binding.
@@ -557,6 +567,18 @@ let treeNodeApp = nconapp_ nodeName (tuple_ [
 utest typeOfDataType (typeAnnot (dataType treeNodeApp))
 with  expectedVariantType
 using eqType tyEnv in
+
+-- Type annotation of terms with annotations of subterms
+
+let annotatedLambda = nlam_ x tyint_ (nvar_ x) in
+utest ty (typeAnnot annotatedLambda)
+with  tyarrow_ tyint_ tyint_
+using eqType assocEmpty in
+
+let annotatedLet = bind_ (nlet_ y tyint_ (nvar_ x)) (nvar_ y) in
+utest ty (typeAnnot annotatedLet)
+with  tyint_
+using eqType assocEmpty in
 
 -- Type annotation of constant terms
 

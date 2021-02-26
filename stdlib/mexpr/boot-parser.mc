@@ -43,10 +43,11 @@ lang BootParser = MExprAst
       TmApp {lhs = gterm t 0,
              rhs = gterm t 1,
              ty = TyUnknown(),
-             info = ginfo t 0}     
+             info = ginfo t 0}
   | 102 /-TmLam-/ ->
       TmLam {ident = gname t 0,
-             ty = gtype t 0,
+             tyBody = gtype t 0,
+             ty = TyUnknown {},
              info = ginfo t 0,
              body = gterm t 0}
   | 103 /-TmLet-/ ->
@@ -62,10 +63,10 @@ lang BootParser = MExprAst
                                     ty = gtype t n,
                                     body = gterm t n,
                                     info = ginfo t (addi n 1)})
-                                      (glistlen t 0),                                 
+                                      (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
                  ty = TyUnknown(),
-                 info = ginfo t 0}                            
+                 info = ginfo t 0}
   | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
@@ -114,7 +115,7 @@ lang BootParser = MExprAst
   | 113 /-TmUtest-/ ->
      TmUtest {test = gterm t 0,
               expected = gterm t 1,
-              next = gterm t 2,  
+              next = gterm t 2,
               ty = TyUnknown(),
               info = ginfo t 0}
   | 114 /-TmNever-/ ->
@@ -129,7 +130,7 @@ lang BootParser = MExprAst
   -- Match constant from ID
   sem matchConst (t:Unknown) =
   | 300 /-CBool-/  -> CBool {val = eqi (gint t 0) 1 }
-  | 301 /-CInt-/   -> CInt {val = gint t 0 } 
+  | 301 /-CInt-/   -> CInt {val = gint t 0 }
   | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
   | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
 
@@ -157,27 +158,27 @@ lang BootParser = MExprAst
      PatRecord {bindings = seq2assoc {eq = eqString} lst,
               info = ginfo t 0}
   | 404 /-PatCon-/ ->
-     PatCon {ident = gname t 0, 
+     PatCon {ident = gname t 0,
            subpat = gpat t 0,
            info = ginfo t 0}
-  | 405 /-PatInt-/ ->     
+  | 405 /-PatInt-/ ->
      PatInt {val = gint t 0,
            info = ginfo t 0}
-  | 406 /-PatChar-/ ->     
+  | 406 /-PatChar-/ ->
      PatChar {val = int2char (gint t 0),
             info = ginfo t 0}
-  | 407 /-PatBool-/ ->     
+  | 407 /-PatBool-/ ->
      PatBool {val = eqi (gint t 0) 1,
             info = ginfo t 0}
-  | 408 /-PatAnd-/ ->     
+  | 408 /-PatAnd-/ ->
      PatAnd {lpat = gpat t 0,
            rpat = gpat t 1,
            info = ginfo t 0}
-  | 409 /-PatOr-/ ->     
+  | 409 /-PatOr-/ ->
      PatOr {lpat = gpat t 0,
            rpat = gpat t 1,
            info = ginfo t 0}
-  | 410 /-PatNot-/ ->     
+  | 410 /-PatNot-/ ->
      PatNot {subpat = gpat t 0,
            info = ginfo t 0}
 
@@ -189,17 +190,17 @@ lang BootParser = MExprAst
 
   -- Match info from ID
   sem matchInfo (t:Unknown) =
-  | 500 /-Info-/ -> 
+  | 500 /-Info-/ ->
       Info {filename = gstr t 0,
             row1 = gint t 0,
             col1 = gint t 1,
             row2 = gint t 2,
             col2 = gint t 3}
   | 501 /-NoInfo-/ ->
-      NoInfo {} 
+      NoInfo {}
 
 
-  -- Functions for transferring types and info are not yet implemented.  
+  -- Functions for transferring types and info are not yet implemented.
   -- These functions are place holders.
   sem gtype (t:Unknown) = | n -> TyUnknown()
 
@@ -209,7 +210,7 @@ lang BootParser = MExprAst
 
 end
 
-lang BootParserTest = BootParser + MExprPrettyPrint 
+lang BootParserTest = BootParser + MExprPrettyPrint
 
 mexpr
 use BootParserTest in
@@ -217,7 +218,7 @@ use BootParserTest in
 
 -- Tests where strings of MExpr text is parsed and then pretty printed again.
 -- All terms are tested in this way.
-let norm = lam str. 
+let norm = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
 -- Test the combination of parsing and pretty printing
@@ -230,7 +231,7 @@ let l_info = lam s.  info (parseMExprString s) in
 let r_info = lam r1. lam c1. lam r2. lam c2.
       Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
 
--- TmVar 
+-- TmVar
 let s = "_asdXA123" in
 utest lside s with rside s in
 

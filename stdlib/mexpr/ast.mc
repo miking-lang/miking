@@ -65,6 +65,7 @@ end
 lang LamAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
+           tyIdent : Type,
            body : Expr,
            ty : Type,
            info : Info}

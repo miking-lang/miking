@@ -275,7 +275,7 @@ let const_ = use MExprAst in
 
 let nlam_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLam {ident = n, ty = ty, body = body, info = NoInfo ()}
+  TmLam {ident = n, tyIdent = ty, ty = TyUnknown {}, body = body, info = NoInfo ()}
 
 let lam_ = use MExprAst in
   lam s. lam ty. lam body.
