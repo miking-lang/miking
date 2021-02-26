@@ -1090,10 +1090,10 @@ automatically format ocaml source code.
 
 ###  Setup and use `ocamlformat`
 
-We are currently using this package at version `0.15.0`. To pin and/or install
+We are currently using this package at version `0.16.0`. To pin and/or install
 the package at this version using `opam` do
 ```
-opam pin ocamlformat 0.15.0
+opam pin ocamlformat 0.16.0
 ```
 Then you can then run `dune build @fmt` to see a
 diff between your code and the formatted code. To promote the changes run `dune

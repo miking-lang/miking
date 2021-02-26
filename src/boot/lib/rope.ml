@@ -326,8 +326,8 @@ let map_bigarray_array (f : 'a -> 'b) (s : ('a, 'c) ba t) : 'b array t =
     done ;
     ref (Leaf dst)
 
-let map_bigarray_bigarray (k : ('b, 'd) kind) (f : 'a -> 'b)
-    (s : ('a, 'c) ba t) : ('b, 'd) ba t =
+let map_bigarray_bigarray (k : ('b, 'd) kind) (f : 'a -> 'b) (s : ('a, 'c) ba t)
+    : ('b, 'd) ba t =
   let a = _collapse_bigarray s in
   let n = Array1.dim a in
   let dst = _uninit_bigarray k n in

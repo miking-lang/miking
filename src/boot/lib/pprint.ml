@@ -400,7 +400,7 @@ let rec print_const fmt = function
            | T.Float t' ->
                Tensor.Num.shape t'
            | T.NoNum t' ->
-               Tensor.NoNum.shape t')
+               Tensor.NoNum.shape t' )
       |> Array.to_list |> List.map string_of_int |> String.concat ","
       |> fprintf fmt "tensor[%s]"
   | CtensorCreate _ ->

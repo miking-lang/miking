@@ -143,8 +143,7 @@ let delta _ _ fi c v =
   | Pycall (None, None), _ ->
       fail_constapp fi
   | Pycall (Some m, None), TmSeq (fi, lst) ->
-      mk_py fi
-        (Pycall (Some m, Some (tmseq2ustring fi lst |> Ustring.to_utf8)))
+      mk_py fi (Pycall (Some m, Some (tmseq2ustring fi lst |> Ustring.to_utf8)))
   | Pycall (Some _, None), _ ->
       fail_constapp fi
   | Pycall (Some m, Some s), TmRecord (fi, args) ->
@@ -162,7 +161,8 @@ let delta _ _ fi c v =
       fail_constapp fi
   | PycallKw (Some m, None, None), TmSeq (fi, lst) ->
       mk_py fi
-        (PycallKw (Some m, Some (tmseq2ustring fi lst |> Ustring.to_utf8), None))
+        (PycallKw (Some m, Some (tmseq2ustring fi lst |> Ustring.to_utf8), None)
+        )
   | PycallKw (Some _, None, None), _ ->
       fail_constapp fi
   | PycallKw (Some m, Some s, None), TmRecord (fi, args) ->
