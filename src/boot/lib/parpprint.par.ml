@@ -15,7 +15,7 @@ let pprint = function
   | ParatomicExchange _ ->
       us "atomicExchange"
   | ParatomicFetchAndAdd _ ->
-      us "fetchAndAdd"
+      us "atomicFetchAndAdd"
   | ParThread p ->
       us (sprintf "Thread(%d)" (Thread.id p |> Thread.id_to_int))
   | ParThreadID tid ->
