@@ -18,6 +18,9 @@ lang OCamlRecord
   syn Expr =
   | OTmRecord {bindings : [(String, Expr)]}
 
+  syn Pat =
+  | OPRecord {bindings : AssocMap String Pat}
+
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmRecord t -> OTmRecord {t with bindings = map (lam b. (b.0, f b.1)) t.bindings}
 

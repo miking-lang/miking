@@ -124,7 +124,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     else never
   | TmType t -> generate t.inexpr
   | TmConDef t -> generate t.inexpr
-  | TmConApp t -> OTmConApp {ident = t.ident, args = [t.body]}
+  | TmConApp t -> OTmConApp {ident = t.ident, args = [generate t.body]}
   | t -> smap_Expr_Expr generate t
 
   sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
@@ -229,6 +229,46 @@ lang OCamlGenerate = MExprAst + OCamlAst
           _none
           cont in
       (assocEmpty, wrap)
+    else never
+  | PRecord {bindings = bindings} ->
+    let genBindingPat = lam id. lam pat.
+      let n = nameSym "_recordElem" in
+      match generatePat n pat with (names,innerWrap) then
+        let wrap = lam cont.
+          bind_ (nulet_ n (nvar_ (nameNoSym id))) (innerWrap cont)
+        in
+        (names, wrap)
+      else never
+    in
+    let genPats = map (lam p. genBindingPat p.0 p.1) (assoc2seq {eq=eqString} bindings) in
+    -- TODO(larshum, 20210226): This name should be chosen based on the type of
+    -- the matched record.
+    let n = nameSym "Rec" in
+    match unzip genPats with (allNames, allWraps) then
+      let precord = OPRecord {bindings = bindings} in
+      let wrap = lam cont.
+        OTmMatch {
+          target = nvar_ targetName,
+          arms = [
+            (OPCon {ident = n, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
+          ]
+        }
+      in
+      ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
+      , wrap
+      )
+    else never
+  | PCon {ident = id, subpat = subpat} ->
+    match generatePat targetName subpat with (names, subwrap) then
+      let wrap = lam cont.
+        OTmMatch {
+          target = subwrap (nvar_ targetName),
+          arms = [
+            (OPCon {ident = id, args = [pvarw_]}, cont),
+            (pvarw_, _none)
+          ]
+        } in
+      (names, wrap)
     else never
 end
 
@@ -771,21 +811,54 @@ utest testInt2float with generate testInt2float using sameSemantics in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let z = nameSym "z" in
-
+/-
 let test1 = bindall_ [
   nulet_ x unit_,
   int_ 0
 ] in
 utest test1 with generate (generateDecl (typeAnnot test1)) using sameSemantics in
 
-
 let test2 = bindall_ [
   nulet_ x (record_ [("a", record_ []), ("b", tuple_ [int_ 1, int_ 2])]),
-  --nulet_ y (recordproj_ "a" (nvar_ x)),
+  --nulet_ y (nrecordproj_ (nameNoSym "a") "a" (nvar_ x)),
   --nulet_ z (tupleproj_ 0 (nvar_ y)),
   int_ 0
 ] in
 let t = generate (generateDecl (typeAnnot test2)) in
 let _ = printLn (expr2str t) in
+
+let expr = nameSym "Expr" in
+let exprty = ntyvar_ expr in
+let cint = nameSym "CInt" in
+let tmconst = nameSym "TmConst" in
+let pair = nameSym "Pair" in
+
+let pat = npcon_ pair (pvar_ "t") in
+let test3 = bindall_ [
+  ntype_ expr tyunknown_,
+  ncondef_ cint (tyarrow_ tyint_ exprty),
+  ncondef_ tmconst (tyarrow_ (tyrecord_ [("val", exprty)]) exprty),
+  ncondef_ pair (tyarrow_ (tyrecord_ [("lhs", exprty), ("rhs", exprty)]) exprty),
+  nulet_ y (nconapp_ pair (record_ [
+    ("lhs", nconapp_ cint (int_ 4)),
+    ("rhs", nconapp_ tmconst (record_ [
+      ("val", nconapp_ cint (int_ 2))
+    ]))
+  ])),
+  match_ (nvar_ y) pat (int_ 1) (int_ 0)
+] in
+let t = generate (generateDecl (typeAnnot (symbolize test3))) in
+let _ = printLn (expr2str t) in
+-/
+let pat = prec_ [("a", pvar_ "a")] in
+let test4 = bindall_ [
+  nulet_ x (record_ [("a", int_ 1), ("b", float_ 0.0)]),
+  match_ (nvar_ x) pat (withType tyint_ (var_ "a")) (int_ 0)
+] in
+let t = generate (generateDecl (typeAnnot test4)) in
+let _ =
+  use OCamlSym in
+  printLn (expr2str (symbolize t))
+in
 
 ()

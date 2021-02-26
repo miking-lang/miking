@@ -236,6 +236,7 @@ lang OCamlPrettyPrint =
   | OTmVariantTypeDecl _ -> false
 
   sem patIsAtomic =
+  | OPRecord _ -> false
   | OPTuple _ -> true
   | OPCon {args = []} -> true
   | OPCon _ -> false
@@ -434,6 +435,13 @@ lang OCamlPrettyPrint =
     else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
+  | OPRecord {bindings = bindings} ->
+    let labels = map pprintLabelString (assocKeys {eq=eqString} bindings) in
+    let pats = assocValues {eq=eqString} bindings in
+    match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
+      let strs = mapi (lam i. lam p. join [get labels i, " = ", p]) pats in
+      (env, join ["{", strJoin ";" strs, "}"])
+    else never
   | OPTuple {pats = pats} ->
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       (env, join ["(", strJoin ", " pats, ")"])
