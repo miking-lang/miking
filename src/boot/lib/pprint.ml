@@ -323,6 +323,8 @@ let rec print_const fmt = function
       fprintf fmt "splitAt"
   | Creverse ->
       fprintf fmt "reverse"
+  | Csubsequence _ ->
+      fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)
   | CrandIntU _ ->
       fprintf fmt "randIntU"

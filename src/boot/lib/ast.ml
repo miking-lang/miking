@@ -93,6 +93,7 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
+  | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
   | CrandSetSeed

@@ -81,7 +81,9 @@ let builtin =
   ; ("cons", f (Ccons None))
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
-  ; ("reverse", f Creverse) (* MCore intrinsics: Random numbers *)
+  ; ("reverse", f Creverse)
+  ; ("subsequence", f (Csubsequence (None, None)))
+    (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -320,6 +322,12 @@ let arity = function
   | CsplitAt (Some _) ->
       1
   | Creverse ->
+      1
+  | Csubsequence (None, None) ->
+      3
+  | Csubsequence (Some _, None) ->
+      2
+  | Csubsequence (_, Some _) ->
       1
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None ->
@@ -823,6 +831,14 @@ let delta eval env fi c v =
   | Creverse, TmSeq (fi, s) ->
       TmSeq (fi, Mseq.reverse s)
   | Creverse, _ ->
+      fail_constapp fi
+  | Csubsequence (None, None), TmSeq (fi, s) ->
+      TmConst (fi, Csubsequence (Some s, None))
+  | Csubsequence (Some s, None), TmConst (_, CInt off) ->
+      TmConst (fi, Csubsequence (Some s, Some off))
+  | Csubsequence (Some s, Some off), TmConst (_, CInt n) ->
+      TmSeq (fi, Mseq.subsequence s off n)
+  | Csubsequence _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None, TmConst (fi, CInt v) ->
@@ -1792,8 +1808,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s) ->
-      eval env (List.assoc s env)
+  | TmVar (_, _, s) -> (
+    match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with

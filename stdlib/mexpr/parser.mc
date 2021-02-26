@@ -295,7 +295,7 @@ lang KeywordUtils = WSACParser
      let r = eatWSAC p s in
      if isPrefix eqc keyword r.str then
        let l = length keyword in
-       {pos = advanceCol r.pos l, str = slice r.str l (subi (length r.str) l)}
+       {pos = advanceCol r.pos l, str = subsequence r.str l (subi (length r.str) l)}
      else
        posErrorExit r.pos (join ["Unknown character. Expected '", keyword, "'."])
 end

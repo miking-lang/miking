@@ -23,6 +23,8 @@ module Mseq = struct
 
   let split_at = Rope.split_at_array
 
+  let subsequence = Rope.sub_array
+
   module Helpers = struct
     let of_list = Rope.Convert.of_list_array
 

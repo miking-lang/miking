@@ -23,6 +23,8 @@ module Mseq : sig
 
   val split_at : 'a t -> int -> 'a t * 'a t
 
+  val subsequence : 'a t -> int -> int -> 'a t
+
   module Helpers : sig
     val of_list : 'a list -> 'a t
 
