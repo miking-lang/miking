@@ -950,7 +950,8 @@ parallel programming integration, you need to create an OPAM switch for the
 multicore OCaml compiler by running the following:
 
 ```
-opam switch create 4.10.0+multicore --packages=ocaml-variants.4.10.0+multicore --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+opam update
+opam switch create 4.10.0+multicore+no-effect-syntax --packages=ocaml-variants.4.10.0+multicore+no-effect-syntax --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
 ```
 
 The `opam switch` command lets you have several OCaml installations on your
@@ -964,7 +965,7 @@ opam switch default
 And when you wish to switch to multicore mode, the command is:
 
 ```
-opam switch 4.10.0+multicore
+opam switch 4.10.0+multicore+no-effect-syntax
 ```
 
 Additionally, you may need to run `eval $(opam env)` in order make your OCaml
