@@ -101,7 +101,7 @@ lang MExprCCompile = MExprAst + MExprANF + MExprSym + CAst + CPrettyPrint
 
     -- Debugging function
     let debug = lam file. lam str.
-      if true then writeFile file str
+      if false then writeFile file str
       else ()
     in
 
