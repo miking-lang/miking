@@ -17,13 +17,16 @@ let _typeEnvEmpty = {
 let _envInsert = assocInsert {eq = nameEqSym}
 let _envLookup = assocLookup {eq = nameEqSym}
 
+-- Given two types that are possibly unknown, this function attempts to find a
+-- type that does not contradict the other, in a given type environment. It is
+-- similar to type equality, except that an unknown type is consistent with any
+-- other type.
 recursive
 let _consistentType =
-  use UnknownTypeAst in
+  use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, TyUnknown {}) then Some (TyUnknown {})
-  else match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
   else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
   else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
     match _consistentType tyEnv t1.from t2.from with Some a then
