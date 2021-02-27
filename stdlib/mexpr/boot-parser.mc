@@ -92,11 +92,13 @@ lang BootParser = MExprAst
                     info = ginfo t 0}
   | 109 /-TmType-/ ->
       TmType {ident = gname t 0,
-              ty = gtype t 0,
+              tyIdent = gtype t 0,
+              ty = TyUnknown {},
               inexpr = gterm t 0,
               info = ginfo t 0}
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
+               tyIdent = TyUnknown {},
                ty = gtype t 0,
                inexpr = gterm t 0,
                info = ginfo t 0}

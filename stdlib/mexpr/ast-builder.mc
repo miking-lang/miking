@@ -183,7 +183,7 @@ let ulet_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
+  TmType {ident = n, tyIdent = ty, ty = TyUnknown {}, inexpr = unit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
@@ -239,7 +239,8 @@ let ureclets_add = use MExprAst in
 
 let ncondef_ = use MExprAst in
   lam n. lam ty.
-  TmConDef {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
+  TmConDef {ident = n, tyIdent = ty, ty = TyUnknown {},
+            inexpr = unit_, info = NoInfo ()}
 
 let condef_ = use MExprAst in
   lam s. lam ty.
