@@ -87,7 +87,7 @@ lang FooCombined = FooA + FooTrans
 
 mexpr
 
-use ArithBool2 in
+(use ArithBool2 in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
@@ -97,9 +97,9 @@ use ArithBool2 in
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
-  in ();
+  in ());
 
-use ArithBool in
+(use ArithBool in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (True ()
                  ,Num 1
@@ -109,15 +109,15 @@ use ArithBool in
                   ,If (False ()
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
-  in ();
+  in ());
 
 
-use User in
+(use User in
   utest inspect (Unit ()) with 3 in
   utest bump (inspect (Unit ())) (Unit ()) with 4 in
-  ();
+  ());
 
-use Overlap in
+(use Overlap in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
@@ -127,7 +127,7 @@ use Overlap in
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13 in
-  ();
+  ());
 
 let e1 = use ArithBool in If(True(), Num 1, Num 2) in
 let e2 = use ArithBool2 in If(True(), Num 1, Num 2) in
@@ -139,10 +139,10 @@ let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
 utest e1 with e2 in
 
 
-use FooCombined in
+(use FooCombined in
   utest foo (A {}) with "A" in
   utest foo (B {}) with "B" in
-  ();
+  ());
 
 
 ()
