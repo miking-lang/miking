@@ -204,6 +204,12 @@ utest foo 2 3 with 5 in
 ```
 creates a function `foo` that takes two arguments.
 
+A lambda can also be defined without a variable, e.g., `lam. e`, where
+`e` is some expression representing the body of the function. Such
+notation is useful if the actual variable is not used inside `e`. Note
+that `lam. e` is syntactic sugar for a normal lambda `lam #var"". e`,
+where the identifier of the variable name is the empty identifier.
+
 ### Sequencing
 
 Sometimes an expression has a side effect and you are not interested
@@ -223,10 +229,17 @@ syntactic sugar for a `let` construct. For instance, the pure version
 
 ```
 let foo = lam x.
-  let _ = print x in
+  let #var"" = print x in
   x
 ```
 
+Note that a variable with an empty identifier is used in the `let` expression. Moreover, note that a `let` expression
+
+```
+let _ = foo x in ...
+```
+
+is syntactically not valid since `let` expressions always bind a value to a variable. Underscore `_` is a pattern and patterns are only allowed in `match` expressions.
 
 ### `if` Expressions
 
@@ -240,6 +253,18 @@ utest answer with "yes" in
 ```
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
+
+Note that an `if` expression is not a construct in pure MExpr. It is a syntactic sugar for a `match` expression. That is, expression
+
+```
+if x then e1 else e2
+```
+
+is translated into
+
+```
+match x with true then e1 else e2
+```
 
 ### Recursion
 
