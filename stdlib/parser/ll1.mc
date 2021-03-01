@@ -17,7 +17,7 @@ type NonTerminal = String
 lang ParserBase = Lexer
   syn Symbol =
   | Tok Token
-  | Lit {lit: String, fi: Info}
+  | Lit {lit: String, info: Info}
 
   -- NOTE(vipa, 2021-02-08): This should be ParserConcrete.Symbol -> Dyn
   -- type Action = [Symbol] -> Dyn
@@ -87,7 +87,7 @@ let ll1ParseWithTable : Table parseLabel -> String -> String -> Either (ParseErr
         -- OPT(vipa, 2021-02-08): Could use the hash of the lit to maybe optimize this, either by using a hashmap, or by first checking against the hash in a bloom filter or something like that
         if if (eqString "" lit) then true else not (mapMem lit lits)
           then {token = Tok token, stream = stream}
-          else {token = Lit {lit = lit, fi = info }, stream = stream}
+          else {token = Lit {lit = lit, info = info }, stream = stream}
       else never in
     recursive
       let openNt = lam nt. lam token. lam stack. lam stream.
@@ -243,7 +243,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     let followSet : Map NonTerminal (Map Symbol ()) =
       _iterateUntilFixpoint eqFollowSet
         (lam prev. foldl (lam prev. lam prod. addProdToFollow prod prev) prev productions)
-        (mapInsert startNt (mapInsert (Tok (EOFTok {fi = NoInfo ()})) () (mapEmpty _compareSymbol))
+        (mapInsert startNt (mapInsert (Tok (EOFTok {info = NoInfo ()})) () (mapEmpty _compareSymbol))
           (mapMap (lam. mapEmpty _compareSymbol) groupedProds)) in
 
     -- let _ = print "\n\nFollows:" in
@@ -321,23 +321,23 @@ let ll1Lit : String -> Symbol = use ParserSpec in lam str.
     match (unlexed, lit) with ([], ![]) then Lit {lit = str}
     else error (join ["A literal token does not lex as a single token: \"", str, "\""])
   else never
-let ll1Lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", fi = NoInfo ()})
-let ll1Uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", fi = NoInfo ()})
-let ll1Int : Symbol = use ParserSpec in Tok (IntTok {val = 0, fi = NoInfo ()})
-let ll1Float : Symbol = use ParserSpec in Tok (FloatTok {val = 0.0, fi = NoInfo ()})
-let ll1Operator : Symbol = use ParserSpec in Tok (OperatorTok {val = "", fi = NoInfo ()})
-let ll1LParen : Symbol = use ParserSpec in Tok (LParenTok {fi = NoInfo ()})
-let ll1RParen = use ParserSpec in Tok (RParenTok {fi = NoInfo ()})
-let ll1LBracket = use ParserSpec in Tok (LBracketTok {fi = NoInfo ()})
-let ll1RBracket = use ParserSpec in Tok (RBracketTok {fi = NoInfo ()})
-let ll1LBrace = use ParserSpec in Tok (LBraceTok {fi = NoInfo ()})
-let ll1RBrace = use ParserSpec in Tok (RBraceTok {fi = NoInfo ()})
-let ll1Semi = use ParserSpec in Tok (SemiTok {fi = NoInfo ()})
-let ll1Comma = use ParserSpec in Tok (CommaTok {fi = NoInfo ()})
-let ll1String = use ParserSpec in Tok (StringTok {val = "", fi = NoInfo ()})
-let ll1Char = use ParserSpec in Tok (CharTok {val = ' ', fi = NoInfo ()})
+let ll1Lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", info = NoInfo ()})
+let ll1Uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", info = NoInfo ()})
+let ll1Int : Symbol = use ParserSpec in Tok (IntTok {val = 0, info = NoInfo ()})
+let ll1Float : Symbol = use ParserSpec in Tok (FloatTok {val = 0.0, info = NoInfo ()})
+let ll1Operator : Symbol = use ParserSpec in Tok (OperatorTok {val = "", info = NoInfo ()})
+let ll1LParen : Symbol = use ParserSpec in Tok (LParenTok {info = NoInfo ()})
+let ll1RParen = use ParserSpec in Tok (RParenTok {info = NoInfo ()})
+let ll1LBracket = use ParserSpec in Tok (LBracketTok {info = NoInfo ()})
+let ll1RBracket = use ParserSpec in Tok (RBracketTok {info = NoInfo ()})
+let ll1LBrace = use ParserSpec in Tok (LBraceTok {info = NoInfo ()})
+let ll1RBrace = use ParserSpec in Tok (RBraceTok {info = NoInfo ()})
+let ll1Semi = use ParserSpec in Tok (SemiTok {info = NoInfo ()})
+let ll1Comma = use ParserSpec in Tok (CommaTok {info = NoInfo ()})
+let ll1String = use ParserSpec in Tok (StringTok {val = "", info = NoInfo ()})
+let ll1Char = use ParserSpec in Tok (CharTok {val = ' ', info = NoInfo ()})
 let ll1HashString = use ParserSpec in
-  lam hash. Tok (HashStringTok {val = "", hash = hash, fi = NoInfo ()})
+  lam hash. Tok (HashStringTok {val = "", hash = hash, info = NoInfo ()})
 
 mexpr
 
@@ -482,17 +482,17 @@ with Right
           , val =
             [ ParserBase_Lit
               { lit = "let"
-              , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
+              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
               }
             , ParserBase_Tok
               ( LIdentTokenParser_LIdentTok
                 { val = "a"
-                , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+                , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
                 }
               )
             , ParserBase_Lit
               { lit = "="
-              , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
+              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
               }
             , ParserConcrete_UserSym
               { label = "exprint"
@@ -500,7 +500,7 @@ with Right
                 [ ParserBase_Tok
                   ( UIntTokenParser_IntTok
                     { val = 1
-                    , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
+                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
                     }
                   )
                 ]
@@ -527,17 +527,17 @@ with Right
           , val =
             [ ParserBase_Lit
               { lit = "let"
-              , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
+              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 3 , col1 = 0 }
               }
             , ParserBase_Tok
               ( LIdentTokenParser_LIdentTok
                 { val = "a"
-                , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
+                , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 5 , col1 = 4 }
                 }
               )
             , ParserBase_Lit
               { lit = "="
-              , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
+              , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 7 , col1 = 6 }
               }
             , ParserConcrete_UserSym
               { label = "exprint"
@@ -545,7 +545,7 @@ with Right
                 [ ParserBase_Tok
                   ( UIntTokenParser_IntTok
                     { val = 1
-                    , fi = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
+                    , info = Info { filename = "file" , row2 = 1 , row1 = 1 , col2 = 9 , col1 = 8 }
                     }
                   )
                 ]
@@ -566,17 +566,17 @@ with Right
               , val =
                 [ ParserBase_Lit
                   { lit = "let"
-                  , fi = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 3 , col1 = 0 }
+                  , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 3 , col1 = 0 }
                   }
                 , ParserBase_Tok
                   ( LIdentTokenParser_LIdentTok
                     { val = "b"
-                    , fi = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 5 , col1 = 4 }
+                    , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 5 , col1 = 4 }
                     }
                   )
                 , ParserBase_Lit
                   { lit = "="
-                  , fi = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 7 , col1 = 6 }
+                  , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 7 , col1 = 6 }
                   }
                 , ParserConcrete_UserSym
                   { label = "exprint"
@@ -584,7 +584,7 @@ with Right
                     [ ParserBase_Tok
                       ( UIntTokenParser_IntTok
                         { val = 4
-                        , fi = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 9 , col1 = 8 }
+                        , info = Info { filename = "file" , row2 = 2 , row1 = 2 , col2 = 9 , col1 = 8 }
                         }
                       )
                     ]
@@ -602,49 +602,49 @@ in
 
 utest parse "let"
 with Left (UnexpectedToken
-  { expected = (ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),fi = (NoInfo ())}))
+  { expected = (ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())}))
   , stack = (
     [ {label = ("toptop"),seen = ([]),rest = ([(ParserSpec_NtSpec ("FileFollow"))])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
-      , seen = ([(ParserBase_Lit {lit = ("let"),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),fi = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
+      , seen = ([(ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
+      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
       }
     ])
-  , found = (ParserBase_Tok (EOFTokenParser_EOFTok {fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 3})}))
+  , found = (ParserBase_Tok (EOFTokenParser_EOFTok {info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 3})}))
   })
 in
 
 utest parse "let x ="
 with Left (UnexpectedFirst
   { expected =
-    [ Tok (IntTok {fi = NoInfo (), val = 0})
+    [ Tok (IntTok {info = NoInfo (), val = 0})
     ]
   , stack = (
     [ {label = ("toptop"),seen = ([]),rest = ([(ParserSpec_NtSpec ("FileFollow"))])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
-      , seen = ([(ParserBase_Lit {lit = ("let"),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})}),(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ("x"),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 5,col1 = 4})})),(ParserBase_Lit {lit = ("="),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 6})})])
+      , seen = ([(ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})}),(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ("x"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 5,col1 = 4})})),(ParserBase_Lit {lit = ("="),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 6})})])
       , rest = ([])
       }
     ])
-  , found = (ParserBase_Tok (EOFTokenParser_EOFTok {fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 7})}))
+  , found = (ParserBase_Tok (EOFTokenParser_EOFTok {info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 7})}))
   , nt = ("Expression")
   })
 in
 
 utest parse "let let = 4"
 with Left (UnexpectedToken
-  { expected = (ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),fi = (NoInfo ())}))
+  { expected = (ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())}))
   , stack = (
     [ {label = ("toptop"),seen = ([]),rest = ([(ParserSpec_NtSpec ("FileFollow"))])}
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
-      , seen = ([(ParserBase_Lit {lit = ("let"),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),fi = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
+      , seen = ([(ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
+      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
       }
     ])
-  , found = (ParserBase_Lit {lit = ("let"),fi = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 4})})
+  , found = (ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 4})})
   })
 in
 
