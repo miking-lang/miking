@@ -1,3 +1,7 @@
+-- Miking is licensed under the MIT license.
+-- Copyright (C) David Broman. See file LICENSE.txt
+--
+
 include "lexer.mc"
 include "map.mc"
 include "string.mc"
@@ -136,6 +140,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
   match grammar with {productions = productions, start = startNt} then
     type SymSet = {eps: Bool, syms: Map Symbol ()} in
 
+    let emptySymSet = {eps = false, syms = mapEmpty _compareSymbol} in
     let eqSymSet = lam s1. lam s2.
       match (s1, s2) with ({eps = e1, syms = s1}, {eps = e2, syms = s2}) then
         and (eqBool e1 e2) (eqSeq (lam a. lam b. _eqSymbol a.0 b.0) (mapBindings s1) (mapBindings s2))
@@ -163,7 +168,9 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
           else match rhs with [(Tok _ | Lit _) & t] ++ _ then
             {symset with syms = mapInsert t () symset.syms}
           else match rhs with [NtSpec nt] ++ rhs then
-            let otherSymset = mapFind nt prev in
+            let otherSymset = match mapLookup nt prev
+              with Some s then s
+              else {eps = false, syms = mapEmpty _compareSymbol} in
             let symset = {symset with syms = mapUnion symset.syms otherSymset.syms} in
             if otherSymset.eps then work symset rhs else symset
           else never
@@ -194,7 +201,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     let firstSet : Map NonTerminal SymSet =
       _iterateUntilFixpoint eqFirstSet
         (lam prev. mapMapWithKey (addNtToFirstSet prev) prev)
-        (mapMap (lam. {eps = false, syms = mapEmpty _compareSymbol}) groupedProds) in
+        (mapMap (lam. emptySymSet) groupedProds) in
 
     -- let _ = print "\n\nFirsts:" in
     -- let _ = dprintFirstSet firstSet in
@@ -205,7 +212,9 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
         else match rhs with [(Tok _ | Lit _) & t] ++ _ then
           {symset with syms = mapInsert t () symset.syms}
         else match rhs with [NtSpec nt] ++ rhs then
-          let otherSymset = mapFind nt firstSet in
+          let otherSymset = match mapLookup nt firstSet
+            with Some s then s
+            else emptySymSet in
           let symset = {symset with syms = mapUnion symset.syms otherSymset.syms} in
           if otherSymset.eps then work symset rhs else symset
         else never
@@ -216,7 +225,9 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
         recursive let work = lam follow. lam rhs.
           match rhs with [] then follow
           else match rhs with [NtSpec nt] ++ rhs then
-            let ntFollow = mapFind nt follow in
+            let ntFollow = match mapLookup nt follow
+              with Some s then s
+              else mapEmpty _compareSymbol in
             let otherSymset = firstOfRhs rhs in
             let ntFollow = mapUnion ntFollow otherSymset.syms in
             let ntFollow = if otherSymset.eps
@@ -239,13 +250,17 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     -- let _ = dprintFollowSet followSet in
 
     -- The first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
+    let emptyTableTarget = ref (mapEmpty _compareSymbol) in
     let table : Map NonTerminal (Ref (Map Symbol {syms : [Symbol], action: Action})) =
       mapMap (lam. ref (mapEmpty _compareSymbol)) groupedProds in
 
     use ParserGenerated in
 
     let specSymToGenSym = lam sym.
-      match sym with NtSpec nt then NtSym {nt = nt, table = (mapFind nt table)} else sym in
+      match sym with NtSpec nt
+      then NtSym {nt = nt, table = optionGetOr emptyTableTarget (mapLookup nt table)}
+      else sym
+    in
 
     let hasLl1Error = ref false in
     let ll1Errors = mapMap (lam. ref (mapEmpty _compareSymbol)) groupedProds in
