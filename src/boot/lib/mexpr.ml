@@ -116,6 +116,7 @@ let builtin =
   ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
   ; ("mapInsert", f (CmapInsert (None, None)))
+  ; ("mapRemove", f (CmapRemove None))
   ; ("mapFind", f (CmapFind None))
   ; ("mapAny", f (CmapAny None))
   ; ("mapMem", f (CmapMem None))
@@ -394,6 +395,10 @@ let arity = function
   | CmapInsert (Some _, None) ->
       2
   | CmapInsert (_, Some _) ->
+      1
+  | CmapRemove None ->
+      2
+  | CmapRemove (Some _) ->
       1
   | CmapFind None ->
       2
@@ -987,6 +992,19 @@ let delta eval env fi c v =
       let m = MapModule.add k v (Obj.obj m) in
       TmConst (fi, CMap (cmp, Obj.repr m))
   | CmapInsert (Some _, Some _), _ | CmapInsert (None, Some _), _ ->
+      fail_constapp fi
+  | CmapRemove None, key ->
+      TmConst (fi, CmapRemove (Some key))
+  | CmapRemove (Some k), TmConst (_, CMap (cmp, m)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      let m = MapModule.remove k (Obj.obj m) in
+      TmConst (fi, CMap (cmp, Obj.repr m))
+  | CmapRemove (Some _), _ ->
       fail_constapp fi
   | CmapFind None, t ->
       TmConst (fi, CmapFind (Some t))

@@ -379,6 +379,8 @@ let rec print_const fmt = function
       fprintf fmt "mapEmpty"
   | CmapInsert _ ->
       fprintf fmt "mapInsert"
+  | CmapRemove _ ->
+      fprintf fmt "mapRemove"
   | CmapFind _ ->
       fprintf fmt "mapLookup"
   | CmapAny _ ->
