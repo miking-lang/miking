@@ -548,28 +548,6 @@ lang RefOpAst = ConstAst + RefAst
   | CDeRef {}
 end
 
-lang AtomicAst = ConstAst
-  syn Const =
-  | CAtomicMake {}
-  | CAtomicGet {}
-  | CAtomicExchange {}
-  | CAtomicFetchAndAdd {}
-  | CAtomicCAS {}
-end
-
-lang ThreadAst = ConstAst
-  syn Const =
-  | CThreadSpawn {}
-  | CThreadJoin {}
-  | CThreadGetID {}
-  | CThreadID2Int {}
-  | CThreadSelf {}
-  | CThreadWait {}
-  | CThreadNotify {}
-  | CThreadCriticalSection {}
-  | CThreadCPURelax {}
-end
-
 --------------
 -- PATTERNS --
 --------------
@@ -827,7 +805,7 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst + AtomicAst + ThreadAst +
+  FloatStringConversionAst + TimeAst + RefOpAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
