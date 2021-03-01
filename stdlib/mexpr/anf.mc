@@ -432,12 +432,12 @@ let debug = false in
 let debugPrint = lam t.
     let s = symbolize t in
     let n = normalizeTerm s in
-    let _ = printLn "--- BEFORE ANF ---" in
-    let _ = printLn (expr2str s) in
-    let _ = print "\n" in
-    let _ = printLn "--- AFTER ANF ---" in
-    let _ = printLn (expr2str n) in
-    let _ = print "\n" in
+    printLn "--- BEFORE ANF ---";
+    printLn (expr2str s);
+    print "\n";
+    printLn "--- AFTER ANF ---";
+    printLn (expr2str n);
+    print "\n";
     ()
 in
 

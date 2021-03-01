@@ -74,7 +74,7 @@ lam e. lam n.
 
 -- generate unique epsilon e1 that fulfills the invariant e1 > e for all
 -- previously generated epsilons e.
-let dualnumGenEpsilon : Unit -> Eps = lam _. error "Not implemented"
+let dualnumGenEpsilon : Unit -> Eps = lam. error "Not implemented"
 
 mexpr
 

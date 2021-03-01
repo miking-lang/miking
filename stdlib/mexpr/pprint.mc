@@ -142,7 +142,7 @@ let _record2tuple = lam tm.
       -- Note: Quadratic complexity. Sorting the association list directly
       -- w.r.t. key would improve complexity to n*log(n).
       Some (map (lam key. assocLookupOrElse {eq=eqString}
-                            (lam _. error "Key not found")
+                            (lam. error "Key not found")
                             (int2string key) t.bindings)
                  sortedKeys)
     else None ()
@@ -335,7 +335,7 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
           match getTypeStringCode indent env t.tyBody with (env, ty) then
             let ty = if eqString ty "Unknown" then "" else concat ": " ty in
             (env,
-             if eqString str "_" then
+             if eqString (nameGetStr t.ident) "" then
                join [body, pprintNewline indent, ";",
                      inexpr]
              else
@@ -836,7 +836,7 @@ lang RecordTypePrettyPrint = RecordTypeAst
         then (env, join ["(", strJoin ", " tuple, ")"])
         else never
       else
-        let f = lam env. lam _. lam v. getTypeStringCode indent env v in
+        let f = lam env. lam. lam v. getTypeStringCode indent env v in
         match assocMapAccum {eq=eqString} f env t.fields with (env, fields) then
           let fields = assoc2seq {eq=eqString} fields in
           let conventry = lam entry. join [entry.0, ": ", entry.1] in

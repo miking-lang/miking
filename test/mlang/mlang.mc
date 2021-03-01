@@ -87,8 +87,7 @@ lang FooCombined = FooA + FooTrans
 
 mexpr
 
-let _ =
-  use ArithBool2 in
+use ArithBool2 in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
@@ -98,10 +97,9 @@ let _ =
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
-  in ()
-in
-let _ =
-  use ArithBool in
+  in ();
+
+use ArithBool in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (True ()
                  ,Num 1
@@ -111,16 +109,15 @@ let _ =
                   ,If (False ()
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13
-  in ()
-in
-let _ =
-  use User in
+  in ();
+
+
+use User in
   utest inspect (Unit ()) with 3 in
   utest bump (inspect (Unit ())) (Unit ()) with 4 in
-  ()
-in
-let _ =
-  use Overlap in
+  ();
+
+use Overlap in
   utest eval (Add (Num 1, Num 2)) with 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
@@ -130,27 +127,22 @@ let _ =
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
                       ,Add (Num 5, (Num (negi 2)))))) with 13 in
-  ()
-in
-let _ =
-  let e1 = use ArithBool in If(True(), Num 1, Num 2) in
-  let e2 = use ArithBool2 in If(True(), Num 1, Num 2) in
-  utest e1 with e2 in
-  ()
-in
+  ();
 
-let _ =
-  let e1 = use A in ACon{afield = 1, aextfield = 2} in -- TODO(vipa,?): this should break once we start typechecking product extensions of a constructor
-  let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
-  utest e1 with e2 in
-  ()
-in
+let e1 = use ArithBool in If(True(), Num 1, Num 2) in
+let e2 = use ArithBool2 in If(True(), Num 1, Num 2) in
+utest e1 with e2 in
 
-let _ =
-  use FooCombined in
+
+let e1 = use A in ACon{afield = 1, aextfield = 2} in -- TODO(vipa,?): this should break once we start typechecking product extensions of a constructor
+let e2 = use AExtend in ACon{afield = 1, aextfield = 2} in
+utest e1 with e2 in
+
+
+use FooCombined in
   utest foo (A {}) with "A" in
   utest foo (B {}) with "B" in
-  ()
-in
+  ();
+
 
 ()

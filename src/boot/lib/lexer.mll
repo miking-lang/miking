@@ -60,6 +60,7 @@ let reserved_strings = [
   ("|",             fun(i) -> Parser.BAR{i=i;v=()});
   ("&",             fun(i) -> Parser.AND{i=i;v=()});
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
+  ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
 
 ]

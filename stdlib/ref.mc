@@ -1,5 +1,5 @@
 -- Construct a reference
-let ref = lam x. tensorCreate [] (lam _. x)
+let ref = lam x. tensorCreate [] (lam. x)
 
 -- De-reference
 let deref = lam t. tensorGetExn t []

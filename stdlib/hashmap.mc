@@ -141,7 +141,7 @@ let hashmapLookupOrElse : HashMapTraits k -> (Unit -> v) -> k -> HashMap k v -> 
 -- 'default' if no element was found.
 let hashmapLookupOr : HashMapTraits k -> v -> k -> HashMap k v -> v =
   lam traits. lam default. lam key. lam hm.
-    hashmapLookupOrElse traits (lam _. default) key hm
+    hashmapLookupOrElse traits (lam. default) key hm
 
 -- 'hashmapLookupPred p hm' returns the value of a key that satisfies the
 -- predicate 'p'. If several keys satisfies 'p', the one that happens to be
@@ -211,12 +211,12 @@ let hashmapFilterValues : HashMapTraits k -> (v -> Bool) -> HashMap k v -> [v] =
 -- 'hashmapKeys hm' returns a list of all keys stored in 'hm'
 let hashmapKeys : HashMapTraits k -> HashMap k v -> [k] =
   lam traits. lam hm.
-    hashmapFilterKeys traits (lam _. true) hm
+    hashmapFilterKeys traits (lam. true) hm
 
 -- 'hashmapValues hm' returns a list of all values stored in 'hm'
 let hashmapValues : HashMapTraits k -> HashMap k v -> [v] =
   lam traits. lam hm.
-    hashmapFilterValues traits (lam _. true) hm
+    hashmapFilterValues traits (lam. true) hm
 
 
 mexpr
@@ -251,21 +251,21 @@ let m = insert "foo" "aaa" m in
 utest count m with 1 in
 utest mem "foo" m with true in
 utest lookup "foo" m with Some ("aaa") in
-utest lookupOrElse (lam _. 42) "foo" m with "aaa" in
+utest lookupOrElse (lam. 42) "foo" m with "aaa" in
 
 let m = insert "bar" "bbb" m in
 
 utest count m with 2 in
 utest mem "bar" m with true in
-utest any (lam _. lam b. eqString "BBB" (str2upper b)) m with true in
-utest any (lam a. lam _. eqString "FOO" (str2upper a)) m with true in
+utest any (lam. lam b. eqString "BBB" (str2upper b)) m with true in
+utest any (lam a. lam. eqString "FOO" (str2upper a)) m with true in
 utest any (lam a. lam b. eqString a b) m with false in
-utest any (lam a. lam _. eqString "bar" a) m with true in
-utest all (lam a. lam _. eqString "bar" a) m with false in
-utest all (lam a. lam _. eqi (length a) 3) m with true in
-utest all (lam _. lam b. eqi (length b) 3) m with true in
+utest any (lam a. lam. eqString "bar" a) m with true in
+utest all (lam a. lam. eqString "bar" a) m with false in
+utest all (lam a. lam. eqi (length a) 3) m with true in
+utest all (lam. lam b. eqi (length b) 3) m with true in
 utest lookup "bar" m with Some ("bbb") in
-utest lookupOrElse (lam _. "BABAR") "bar" m with "bbb" in
+utest lookupOrElse (lam. "BABAR") "bar" m with "bbb" in
 utest lookupOr "bananas" "bar42" m with "bananas" in
 utest lookupPred (eqString "bar") m with Some "bbb" in
 utest
@@ -281,8 +281,8 @@ utest
   then true else false
 with true in
 utest filter (eqString) m with empty in
-utest hashmap2seq (filter (lam a. lam _. eqString "foo" a) m) with [("foo", "aaa")] in
-utest hashmap2seq (filter (lam _. lam b. eqString "bbb" b) m) with [("bar", "bbb")] in
+utest hashmap2seq (filter (lam a. lam. eqString "foo" a) m) with [("foo", "aaa")] in
+utest hashmap2seq (filter (lam. lam b. eqString "bbb" b) m) with [("bar", "bbb")] in
 utest filterKeys (lam a. optionIsSome (strIndex 'o' a)) m with ["foo"] in
 utest filterValues (lam a. optionIsSome (strIndex 'b' a)) m with ["bbb"] in
 
@@ -298,8 +298,8 @@ let m = insert "foo" "ccc" m in
 utest count m with 2 in
 utest mem "foo" m with true in
 utest lookup "foo" m with Some ("ccc") in
-utest lookupOrElse (lam _. 42) "foo" m with "ccc" in
-utest lookupOrElse (lam _. 42) "abc" m with 42 in
+utest lookupOrElse (lam. 42) "foo" m with "ccc" in
+utest lookupOrElse (lam. 42) "abc" m with 42 in
 
 let m = remove "foo" m in
 
@@ -324,7 +324,7 @@ let m = insert "" "ddd" m in
 utest count m with 2 in
 utest mem "" m with true in
 utest lookup "" m with Some ("ddd") in
-utest lookupOrElse (lam _. 1) "" m with "ddd" in
+utest lookupOrElse (lam. 1) "" m with "ddd" in
 
 -- Test with collisions
 let n = addi _hashmapDefaultBucketCount 10 in
@@ -350,7 +350,7 @@ recursive let checkmem = lam i.
     utest lookup key m with Some (i) in
     checkmem (addi i 1)
 in
-let _ = checkmem 0 in
+checkmem 0;
 
 recursive let removeall = lam i. lam hm.
   if geqi i n then

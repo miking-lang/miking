@@ -126,7 +126,7 @@ let eitherBindLeft: Either a b -> (a -> Either c b) -> Either c b =
   else never
 
 utest eitherBindLeft (Left "a") (lam s. Left (head s)) with Left 'a'
-utest eitherBindLeft (Left "a") (lam _. Right 42) with Right 42
+utest eitherBindLeft (Left "a") (lam. Right 42) with Right 42
 utest eitherBindLeft (Right 42) (lam s. Left (head s)) with Right 42
 
 --  *-
@@ -150,7 +150,7 @@ let eitherBindRight: Either a b -> (b -> Either a c) -> Either a c =
 
 utest eitherBindRight (Left "a") (lam i. Right [int2char i]) with Left "a"
 utest eitherBindRight (Right 10) (lam i. Right [int2char i]) with Right "\n"
-utest eitherBindRight (Right 11) (lam _. Left "c") with Left "c"
+utest eitherBindRight (Right 11) (lam. Left "c") with Left "c"
 
 --  *-
 --  * .brief Partitions a list of Eithers into the Left case values and the
@@ -242,7 +242,7 @@ utest eitherIsRight (Right (Left 1)) with true
 --  *
 --  * .return The Left case value or the default value.
 -- -*
-let eitherFromLeft: a -> Either a b -> a = lam v. eitherEither (lam x. x) (lam _. v)
+let eitherFromLeft: a -> Either a b -> a = lam v. eitherEither (lam x. x) (lam. v)
 
 utest eitherFromLeft "a" (Right 5) with "a"
 utest eitherFromLeft "a" (Left "foo") with "foo"
@@ -256,7 +256,7 @@ utest eitherFromLeft "a" (Left "foo") with "foo"
 --  *
 --  * .return The Right case value or the default value.
 -- -*
-let eitherFromRight: b -> Either a b -> b = lam v. eitherEither (lam _. v) (lam x. x)
+let eitherFromRight: b -> Either a b -> b = lam v. eitherEither (lam. v) (lam x. x)
 
 utest eitherFromRight 0 (Left "foo") with 0
 utest eitherFromRight 0 (Right 42) with 42

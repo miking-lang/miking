@@ -47,7 +47,7 @@ let jacj = lam f. lam x. lam j.
 
 -- transpose of Jacobian of f at x
 let jac : ([DualNum] -> [DualNum]) -> [DualNum] -> [[DualNum]] =
-lam f. lam x. mapi (lam j. lam _. jacj f x j) x
+lam f. lam x. mapi (lam j. lam. jacj f x j) x
 
 -- gradient of f at x
 let grad : ([DualNum] -> DualNum) -> [DualNum] -> [DualNum] =

@@ -40,7 +40,7 @@ lam w.
       w = w,
       n = n,
       -- assign feasible labels, e.g.
-      lus = map (maxOrElse (lam _. error "undefined") subi) w,
+      lus = map (maxOrElse (lam. error "undefined") subi) w,
       -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
       lvs = zerov,
       mus = negv,
@@ -53,23 +53,23 @@ lam w.
     }
 
 let debugShowState = lam state.
-  let _ = printLn "===" in
-  let _ = print "lus: " in
-  let _ = dprint state.lus in
-  let _ = print "lvs: " in
-  let _ = dprint state.lvs in
-  let _ = print "mus: " in
-  let _ = dprint state.mus in
-  let _ = print "mvs: " in
-  let _ = dprint state.mvs in
-  let _ = print "ss: " in
-  let _ = dprint state.ss in
-  let _ = print "ts: " in
-  let _ = dprint state.ts in
-  let _ = print "slacks: " in
-  let _ = dprint state.slacks in
-  let _ = print "preds: " in
-  let _ = dprint state.preds in
+  printLn "===";
+  print "lus: ";
+  dprint state.lus;
+  print "lvs: ";
+  dprint state.lvs;
+  print "mus: ";
+  dprint state.mus;
+  print "mvs: ";
+  dprint state.mvs;
+  print "ss: ";
+  dprint state.ss;
+  print "ts: ";
+  dprint state.ts;
+  print "slacks: ";
+  dprint state.slacks;
+  print "preds: ";
+  dprint state.preds;
   ()
 
 ------------------------------------------------------------
@@ -82,7 +82,7 @@ let isMatch = lam x. neqi x (negi 1)
 let isPerfectMatch = all isMatch
 
 let findNonCovered = lam x.
-  optionGetOrElse (lam _. error "All nodes are covered")
+  optionGetOrElse (lam. error "All nodes are covered")
                   (index (lam x. not (isMatch x)) x)
 
 -- lu[u] + lv[v] - w[u][v]
@@ -167,7 +167,7 @@ recursive
   let augment = lam state.
   let s =
     -- min slack over v's not in T
-    minOrElse (lam _. error "undefined")
+    minOrElse (lam. error "undefined")
               cmpSlack
               (filter (lam s. not (memT s.v state)) state.slacks)
   in

@@ -7,6 +7,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
 include "seq.mc"
+include "name.mc"
 
 let gstr = lam t. lam n. bootParserGetString t n
 let gname = lam t. lam n. nameNoSym (bootParserGetString t n)
@@ -233,6 +234,8 @@ let r_info = lam r1. lam c1. lam r2. lam c2.
 -- TmVar 
 let s = "_asdXA123" in
 utest lside s with rside s in
+utest match parseMExprString "#var\"\"" with TmVar r
+      then nameGetStr r.ident else "ERROR" with "" in
 
 -- TmApp
 let s = "f x" in

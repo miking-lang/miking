@@ -26,10 +26,10 @@ lam f. lam t.
             0
 
 let tensorOfSeqExn : [a] -> Tensor a =
-  tensorOfSeqOrElse (lam _. error "Empty seq in tensorOfSeqExn")
+  tensorOfSeqOrElse (lam. error "Empty seq in tensorOfSeqExn")
 
 let tensorToSeqExn : Tensor a -> [a] =
-  tensorToSeqOrElse (lam _. error "Not rank 1 tensor in tensorToSeqExn")
+  tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
 utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
 
@@ -39,8 +39,8 @@ let tensorSize : Tensor a -> Int =
 lam t.
   foldl muli 1 (tensorShape t)
 
-utest tensorSize (tensorCreate [1, 2, 3] (lam _. 0)) with 6
-utest tensorSize (tensorCreate [] (lam _. 0)) with 1
+utest tensorSize (tensorCreate [1, 2, 3] (lam. 0)) with 6
+utest tensorSize (tensorCreate [] (lam. 0)) with 1
 
 -- Map the elements of t1 to the elements of t2 using the function f, where t1
 -- and t2 has to have the same shape.
@@ -55,29 +55,29 @@ lam f. lam g. lam t1. lam t2.
   else f ()
 
 let tensorMapExn =
-  tensorMapOrElse (lam _. error "Tensor shape mismatch in tensorMap")
+  tensorMapOrElse (lam. error "Tensor shape mismatch in tensorMap")
 
 utest
   let t1 = tensorOfSeqExn [1, 2, 3, 4] in
-  let t2 = tensorCreate [4] (lam _. []) in
-  let _ = tensorMapExn (lam x. [x]) t1 t2 in
+  let t2 = tensorCreate [4] (lam. []) in
+  tensorMapExn (lam x. [x]) t1 t2;
   tensorToSeqExn t2
 with [[1], [2], [3], [4]]
 
 utest
   let t = tensorOfSeqExn [1, 2, 3, 4] in
-  let _ = tensorMapExn (addi 1) t t in
+  tensorMapExn (addi 1) t t;
   tensorToSeqExn t
 with [2, 3, 4, 5]
 
 
 -- Fill a tensor with values.
 let tensorFill : Tensor a -> a -> Unit =
-lam t. lam v. tensorMapExn (lam _. v) t t
+lam t. lam v. tensorMapExn (lam. v) t t
 
 utest
   let t = tensorOfSeqExn [1, 2, 3, 4] in
-  let _ = tensorFill t 0 in
+  tensorFill t 0;
   tensorToSeqExn t
 with [0, 0, 0, 0]
 
@@ -85,7 +85,7 @@ with [0, 0, 0, 0]
 -- Create a tensor filled with values.
 let tensorRepeat : [Int] -> a -> Tensor a =
 lam shape. lam v.
-  tensorCreate shape (lam _. v)
+  tensorCreate shape (lam. v)
 
 utest
   let t = tensorRepeat [4] 0 in
@@ -102,7 +102,7 @@ mexpr
 -- index as an argument and returning the element at that index.
 
 -- We can construct a zero-order tensor with value 'a' as
-let t0 = tensorCreate [] (lam _. 'a') in
+let t0 = tensorCreate [] (lam. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
 
@@ -119,7 +119,7 @@ utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
 let t2 = tensorReshapeExn t1 [3, 3] in
 
 -- Reshape does no copying and the data is shared between `t1` and `t2`
-let _ = tensorSetExn t2 [0, 0] 2 in
+tensorSetExn t2 [0, 0] 2;
 utest tensorGetExn t1 [0] with 2 in
 
 -- We can slice the second row from `t2` as
@@ -135,7 +135,7 @@ utest tensorGetExn e [] with 5 in
 utest tensorRank e with 0 in
 
 -- A slice shares data with the original tensor and no copying of data is done.
-let _ = tensorFill r2 0 in
+tensorFill r2 0;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
 -- where we use `tensorFill` from `tensor.mc`
 
