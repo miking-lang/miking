@@ -254,7 +254,7 @@ utest answer with "yes" in
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
 
-Note that an `if` expression is not a construct in pure MExpr. It is a syntactic sugar for a `match` expression. That is, expression
+Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, expression
 
 ```
 if x then e1 else e2
