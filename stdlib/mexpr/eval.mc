@@ -785,7 +785,7 @@ lang TimeEval = TimeAst + IntAst
     match arg with TmConst {val = CInt {val = n}} then
       sleepMs n;
       unit_
-    else error "n in wallTimeMs not a constant integer"
+    else error "n in sleepMs not a constant integer"
   | CWallTimeMs _ ->
     float_ (wallTimeMs ())
 end
@@ -878,6 +878,51 @@ lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
     match arg with TmConst ({val = CInt {val = i}} & t) then
       TmConst {t with val = CBool {val = atomicCAS r seen i}}
     else error "third argument to atomicCAS not an integer"
+end
+
+lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
+  syn Const =
+  | CThread (Thread Expr)
+  | CThreadID Tid
+
+  sem delta (arg : Expr) =
+  | CThreadSpawn _ ->
+    let app = TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()} in
+    TmConst {val = CThread (threadSpawn (lam _. eval {env = []} app)), info = NoInfo (), ty = TyUnknown ()}
+  | CThreadJoin _ ->
+    match arg with TmConst {val = CThread t} then
+      threadJoin t
+    else error "not a threadJoin of a thread"
+  | CThreadSelf _ ->
+    match arg with TmRecord {bindings = []} then
+      TmConst {val = CThreadID (threadSelf ()), info = NoInfo (), ty = TyUnknown ()}
+    else error "Argument in threadSelf is not unit"
+  | CThreadGetID _ ->
+    match arg with TmConst ({val = CThread thr} & t) then
+      TmConst {t with val = CThreadID (threadGetID thr)}
+    else error "Argument in threadGetID is not a thread"
+  | CThreadID2Int _ ->
+    match arg with TmConst ({val = CThreadID id} & t) then
+      TmConst {t with val = CInt {val = threadID2int id}}
+    else error "Argument to threadID2int not a thread ID"
+  | CThreadWait _ ->
+    match arg with TmRecord {bindings = []} then
+      let _ = threadWait () in
+      unit_
+    else error "Argument to threadWait is not unit"
+  | CThreadNotify _ ->
+    match arg with TmConst ({val = CThreadID id} & t) then
+      let _ = threadNotify id in
+      unit_
+    else error "Argument to threadNotify not a thread ID"
+  | CThreadCriticalSection _ ->
+    let app = TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()} in
+    threadCriticalSection (lam _. eval {env = []} app)
+  | CThreadCPURelax _ ->
+    match arg with TmRecord {bindings = []} then
+      let _ = threadCPURelax () in
+      unit_
+    else error "Argument to threadCPURelax is not unit"
 end
 
 --------------
@@ -1015,7 +1060,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  AtomicEval
+  AtomicEval + ThreadEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1587,7 +1632,7 @@ with true_ in
 let p = ulet_ "r" (atomicMake_ (record_ [("foo", int_ 1)])) in
 utest eval (bind_ p (bindall_
   [ ulet_ "v" (atomicGet_ (var_ "r"))
-  -- TODO(Linnea, 2021-03-01): because of the evaluation rues, the record
+  -- TODO(Linnea, 2021-03-01): because of the evaluation rules, the record
   -- returned when evaluating (var_ "v") is not physically identical to the
   -- record stored in the atomic reference, so this test fails.
   , atomicCAS_ (var_ "r") (var_ "v") (record_ [])
@@ -1595,7 +1640,47 @@ utest eval (bind_ p (bindall_
 ))
 with true_ in
 
+utest eval (bindall_
+  [ ulet_ "v" (int_ 43)
+  , ulet_ "t" (threadSpawn_ (ulam_ "_" (addi_ (var_ "v") (int_ 1))))
+  , threadJoin_ (var_ "t")
+  ])
+with int_ 44 in
 
+utest eval (bindall_
+  [ ulet_ "t" (threadSpawn_ (TmConst {val = CThreadSelf {}, ty = TyUnknown (), info = NoInfo ()}))
+  , ulet_ "tid" (threadGetID_ (var_ "t"))
+  , eqi_ (threadID2Int_ (var_ "tid")) (threadID2Int_ (threadJoin_ (var_ "t")))
+  ])
+with true_ in
 
+let waitForFlag = ureclet_ "waitForFlag" (ulam_ "flag"
+  (if_ (atomicGet_ (var_ "flag"))
+       unit_
+       (bind_
+          (ulet_ "_" (threadCPURelax_ unit_))
+          (app_ (var_ "waitForFlag") (var_ "flag")))))
+in
+
+utest eval (bindall_
+  [ ulet_ "inCriticalSection" (atomicMake_ false_)
+  , ulet_ "afterWait" (atomicMake_ false_)
+  , ulet_ "t" (threadSpawn_ (ulam_ "_" (threadCriticalSection_
+      (ulam_ "_" (
+        bindall_
+          [ ulet_ "_" (atomicExchange_ (var_ "inCriticalSection") true_)
+          , ulet_ "_" (threadWait_ unit_)
+          , ulet_ "_" (sleepMs_ (int_ 100))
+          , ulet_ "_" (atomicExchange_ (var_ "afterWait") true_)
+          , int_ 42
+          ])))))
+  , waitForFlag
+  , ulet_ "_" (app_ (var_ "waitForFlag") (var_ "inCriticalSection"))
+  , ulet_ "v1" (atomicGet_ (var_ "afterWait"))
+  , ulet_ "_" (threadNotify_ (threadGetID_ (var_ "t")))
+  , ulet_ "v2" (atomicGet_ (var_ "afterWait"))
+  , seq_ [var_ "v1", var_ "v2", threadJoin_ (var_ "t")]
+  ])
+with seq_ [false_, true_, int_ 42] in
 
 ()

@@ -663,6 +663,33 @@ let atomicFetchAndAdd_ = use MExprAst in
 let atomicCAS_ = use MExprAst in
   lam r. lam seen. lam v. appf3_ (const_ (CAtomicCAS ())) r seen v
 
+-- Threads
+let threadSpawn_ = use MExprAst in
+  lam f. appf1_ (const_ (CThreadSpawn ())) f
+
+let threadJoin_ = use MExprAst in
+  lam t. appf1_ (const_ (CThreadJoin ())) t
+
+let threadGetID_ = use MExprAst in
+  lam t. appf1_ (const_ (CThreadGetID ())) t
+
+let threadID2Int_ = use MExprAst in
+  lam id. appf1_ (const_ (CThreadID2Int ())) id
+
+let threadSelf_ = use MExprAst in
+  lam u. appf1_ (const_ (CThreadJoin ())) u
+
+let threadWait_ = use MExprAst in
+  lam u. appf1_ (const_ (CThreadWait ())) u
+
+let threadNotify_ = use MExprAst in
+  lam id. appf1_ (const_ (CThreadNotify ())) id
+
+let threadCriticalSection_ = use MExprAst in
+  lam f. appf1_ (const_ (CThreadCriticalSection ())) f
+
+let threadCPURelax_ = use MExprAst in
+  lam u. appf1_ (const_ (CThreadCPURelax ())) u
 
 -- File operations
 let readFile_ = use MExprAst in

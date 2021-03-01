@@ -562,6 +562,7 @@ lang ThreadAst = ConstAst
   | CThreadSpawn {}
   | CThreadJoin {}
   | CThreadGetID {}
+  | CThreadID2Int {}
   | CThreadSelf {}
   | CThreadWait {}
   | CThreadNotify {}
