@@ -2,6 +2,20 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
+/-
+
+This file implements breakable operators (`breakable.mc`) on top of a
+more normal parsing strategy, in this case LL(1) (`ll1.mc`).
+
+For more info on how precedence works, and basic ideas on how to break
+productions into operators, see `breakable.mc`.
+
+The primary entry-points to this module are `semanticGrammar` and
+`semanticParseFile`. All other exported values are used to help define
+a grammar, see the tests for examples on how to use them.
+
+-/
+
 include "lexer.mc"
 include "ll1.mc"
 include "breakable.mc"
@@ -128,8 +142,21 @@ let semanticAmbAssoc
   -> ((Production, Production), Precedence)
   = lam prod. semanticGroupEither prod prod
 
--- Make all productions in the list ambiguous relative to each other
--- production in the list
+/-
+Apply the given grouping between all given operators, regardless of
+order. For example, `semanticPairwiseGroup semanticGroupLeft [a, b,
+c]` is equivalent with
+
+```
+[ semanticGroupLeft a b
+, semanticGroupLeft b a
+, semanticGroupLeft a c
+, semanticGroupLeft c a
+, semanticGroupLeft b c
+, semanticGroupLeft c b
+]
+```
+-/
 recursive let semanticPairwiseGroup
   : (Production -> Production -> Precedence)
   -> [Production]
@@ -171,7 +198,8 @@ let semanticProduction
   = lam prod.
     { sym = gensym (), spec = prod }
 
--- TODO(vipa, 2021-03-01): See the TODO at 2021-02-24 that also refers to non-terminals.
+-- TODO(vipa, 2021-03-01): See the TODO at 2021-02-24 that also refers
+-- to non-terminals.
 let semanticNt
   : NonTerminal
   -> Symbol
@@ -203,11 +231,11 @@ type SemanticParseError
 con SemanticParseBreakableError : {nt : String, info : Info} -> SemanticParseError
 con SemanticParseAmbiguityError : {info : Info, irrelevant : [Info]} -> SemanticParseError
 con SemanticParseError : ParseError String -> SemanticParseError
--- NOTE(vipa, 2021-02-25): All ll1 productions generated here
--- will follow the convention that we can always get the range
--- of a Symbol. In particular, each `UserSym` that goes
--- between non-terminals (i.e., once we've finished a
--- breakable parse) will carry a `(Info, res)`.
+-- NOTE(vipa, 2021-02-25): All ll1 productions generated here will
+-- follow the convention that we can always get the range of a
+-- Symbol. In particular, each `UserSym` that goes between
+-- non-terminals (i.e., once we've finished a breakable parse) will
+-- carry an `Either [SemanticParseError] (Info, res)`.
 let _symInfo
   : Symbol
   -> Info
