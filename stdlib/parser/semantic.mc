@@ -176,6 +176,21 @@ let semanticNt
   : NonTerminal
   -> Symbol
   = lam nt. ll1Nt nt.name
+let semanticLit
+  : String
+  -> Symbol
+  = ll1Lit
+let semanticInt : Symbol = ll1Int
+let semanticFloat : Symbol = ll1Float
+let semanticOperator : Symbol = ll1Operator
+let semanticString : Symbol = ll1String
+let semanticChar : Symbol = ll1Char
+let semanticLIdent : Symbol = ll1LIdent
+let semanticUIdent : Symbol = ll1UIdent
+let semanticHashString
+  : String
+  -> Symbol
+  = ll1HashString
 
 type Parser
 
@@ -646,7 +661,7 @@ let intP = semanticProduction
   { name = "int"
   , nt = exprNT
   , ptype = semanticDefAtom
-  , rhs = [ll1Int]
+  , rhs = [semanticInt]
   , action = wrap "int"
   } in
 
@@ -654,7 +669,7 @@ let addP = semanticProduction
   { name = "add"
   , nt = exprNT
   , ptype = semanticDefInfix
-  , rhs = [ll1Lit "+"]
+  , rhs = [semanticLit "+"]
   , action = wrap "add"
   } in
 
@@ -662,7 +677,7 @@ let minusP = semanticProduction
   { name = "minus"
   , nt = exprNT
   , ptype = semanticDefInfix
-  , rhs = [ll1Lit "-"]
+  , rhs = [semanticLit "-"]
   , action = wrap "minus"
   } in
 
@@ -670,7 +685,7 @@ let mulP = semanticProduction
   { name = "mul"
   , nt = exprNT
   , ptype = semanticDefInfix
-  , rhs = [ll1Lit "*"]
+  , rhs = [semanticLit "*"]
   , action = wrap "mul"
   } in
 
@@ -678,7 +693,7 @@ let negP = semanticProduction
   { name = "neg"
   , nt = exprNT
   , ptype = semanticDefPrefix
-  , rhs = [ll1Lit "-"]
+  , rhs = [semanticLit "-"]
   , action = wrap "neg"
   } in
 
@@ -686,7 +701,7 @@ let parP = semanticProduction
   { name = "par"
   , nt = exprNT
   , ptype = semanticDefAtom
-  , rhs = [ll1LParen, semanticNt exprNT, ll1RParen]
+  , rhs = [semanticLit "(", semanticNt exprNT, semanticLit ")"]
   , action = wrap "par"
   } in
 
@@ -694,7 +709,7 @@ let fieldAccessP = semanticProduction
   { name = "fieldAccess"
   , nt = exprNT
   , ptype = semanticDefPostfix
-  , rhs = [ll1Lit ".", ll1Lident]
+  , rhs = [semanticLit ".", semanticLIdent]
   , action = wrap "fieldAccess"
   } in
 
@@ -702,7 +717,7 @@ let ifP = semanticProduction
   { name = "if"
   , nt = exprNT
   , ptype = semanticDefPrefix
-  , rhs = [ll1Lit "if", semanticNt exprNT, ll1Lit "then"]
+  , rhs = [semanticLit "if", semanticNt exprNT, semanticLit "then"]
   , action = wrap "if"
   } in
 
@@ -714,7 +729,7 @@ let elseP = semanticProduction
     , left = semanticDefNotIn
     , right = semanticDefIn
     }
-  , rhs = [ll1Lit "else"]
+  , rhs = [semanticLit "else"]
   , action = wrap "else"
   } in
 
@@ -722,7 +737,7 @@ let defP = semanticProduction
   { name = "def"
   , nt = declNT
   , ptype = semanticDefAtom
-  , rhs = [ll1Lit "def", ll1Lident, ll1Lit "=", semanticNt exprNT]
+  , rhs = [semanticLit "def", semanticLIdent, semanticLit "=", semanticNt exprNT]
   , action = wrap "def"
   } in
 
@@ -951,12 +966,12 @@ utest semanticParseFile g "file" "(-1).foo"
 with () using lam x. lam _. use ParserConcrete in match x
 with Right ("fieldAccess",
   [ UserSym ("par",
-    [ Tok (LParenTok _)
+    [ Lit {lit = "("}
     , UserSym ("neg",
       [ Lit {lit = "-"}
       , UserSym ("int", [Tok (IntTok {val = 1})])
       ])
-    , Tok (RParenTok _)
+    , Lit {lit = ")"}
     ])
   , Lit {lit = "."}
   , Tok (LIdentTok {val = "foo"})
