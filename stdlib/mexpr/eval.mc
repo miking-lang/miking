@@ -138,7 +138,7 @@ end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst 
+  UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -199,7 +199,8 @@ lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
   sem eval (ctx : {env : Env}) =
   | TmConst {val = CArgv {}} ->
     TmSeq {tms = map str_ argv, ty = TyUnknown {}, info = NoInfo()}
-  | TmConst c -> TmConst c
+  | (TmConst c) & t ->
+    t
 end
 
 lang DataEval = DataAst + AppEval
@@ -808,6 +809,76 @@ lang RefOpEval = RefOpAst + IntAst
     else error "not a deref of a reference"
 end
 
+lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
+  syn Const =
+  | CAtomicRef {ref : ARef Expr}
+  | CAtomicRefInt {ref : ARef Int}
+  | CAtomicExchange2 (ARef Expr)
+  | CAtomicExchangeInt2 (ARef Int)
+  | CAtomicFetchAndAdd2 (ARef Int)
+  | CAtomicCAS2 (ARef Expr)
+  | CAtomicCASInt2 (ARef Int)
+  | CAtomicCAS3 (ARef Expr, Expr)
+  | CAtomicCASInt3 (ARef Int, Int)
+
+  sem delta (arg : Expr) =
+  | CAtomicMake _ ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CAtomicRefInt {ref = atomicMake i}}
+    else
+      TmConst {val = CAtomicRef {ref = atomicMake arg}, info = NoInfo()}
+  | CAtomicGet _ ->
+    match arg with TmConst {val = CAtomicRef {ref = r}} then
+      atomicGet r
+    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
+      TmConst {t with val = CInt {val = atomicGet r}}
+    else error "argument to atomicGet not an atomic reference"
+  | CAtomicExchange _ ->
+    match arg with TmConst ({val = CAtomicRef {ref = r}} & t) then
+      TmConst {t with val = CAtomicExchange2 r}
+    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
+      TmConst {t with val = CAtomicExchangeInt2 r}
+    else error "first argument to atomicExchange not an atomic reference"
+  | CAtomicExchange2 r ->
+    atomicExchange r arg
+  | CAtomicExchangeInt2 r ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CInt {val = atomicExchange r i}}
+    else error "second argument to atomicExchange not an integer"
+  | CAtomicFetchAndAdd _ ->
+    match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
+      TmConst {t with val = CAtomicFetchAndAdd2 r}
+    else error
+       "first argument to atomicFetchAndAdd not an integer atomic reference"
+  | CAtomicFetchAndAdd2 r ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CInt {val = atomicFetchAndAdd r i}}
+    else error "second argument to atomicFetchAndAdd not an integer"
+  | CAtomicCAS _ ->
+    match arg with TmConst ({val = CAtomicRef {ref = r}} & t) then
+      TmConst {t with val = CAtomicCAS2 r}
+    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
+      TmConst {t with val = CAtomicCASInt2 r}
+    else error "first argument to atomicCAS not an atomic reference"
+  | CAtomicCAS2 r ->
+      TmConst { val = CAtomicCAS3 (r, arg)
+              , info = NoInfo ()
+              , ty = TyUnknown ()
+              }
+  | CAtomicCASInt2 r ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CAtomicCASInt3 (r, i)}
+    else error "second argument to atomicCAS not an integer"
+  | CAtomicCAS3 (r, seen) ->
+      TmConst { val = CBool {val = atomicCAS r seen arg}
+              , info = NoInfo ()
+              , ty = TyUnknown {}
+              }
+  | CAtomicCASInt3 (r, seen) ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CBool {val = atomicCAS r seen i}}
+    else error "third argument to atomicCAS not an integer"
+end
 
 --------------
 -- PATTERNS --
@@ -943,7 +1014,8 @@ lang MExprEval =
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
-  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval
+  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
+  AtomicEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1484,5 +1556,46 @@ utest
      ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
      tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
 with tuple_ [int_ 4, float_ 3.14, int_ 4] in
+
+-- Atomic references
+let p = ulet_ "r" (atomicMake_ (int_ 0)) in
+utest eval (bind_ p (atomicGet_ (var_ "r"))) with int_ 0 in
+utest eval (bind_ p (atomicExchange_ (var_ "r") (int_ 1))) with int_ 0 in
+utest eval (bind_ p (bindall_
+  [ ulet_ "_" (atomicExchange_ (var_ "r") (int_ 1))
+  , atomicExchange_ (var_ "r") (int_ 2)
+  ]))
+with int_ 1 in
+utest eval (bind_ p (atomicFetchAndAdd_ (var_ "r") (int_ 3))) with int_ 0 in
+utest eval (bind_ p (atomicCAS_ (var_ "r") (int_ 0) (int_ 1))) with true_ in
+
+let p = ulet_ "r" (atomicMake_ (float_ 0.0)) in
+utest eval (bind_ p (atomicGet_ (var_ "r"))) with float_ 0.0 in
+utest eval (bind_ p (atomicExchange_ (var_ "r") (float_ 1.0))) with float_ 0.0 in
+utest eval (bind_ p (bindall_
+  [ ulet_ "_" (atomicExchange_ (var_ "r") (float_ 1.0))
+  , atomicExchange_ (var_ "r") (float_ 2.0)
+  ]))
+with float_ 1.0 in
+utest eval (bind_ p (bindall_
+  [ ulet_ "v" (float_ 1.0)
+  , ulet_ "_" (atomicExchange_ (var_ "r") (var_ "v"))
+  , atomicCAS_ (var_ "r") (var_ "v") (float_ 2.0)
+  ]))
+with true_ in
+
+let p = ulet_ "r" (atomicMake_ (record_ [("foo", int_ 1)])) in
+utest eval (bind_ p (bindall_
+  [ ulet_ "v" (atomicGet_ (var_ "r"))
+  -- TODO(Linnea, 2021-03-01): because of the evaluation rues, the record
+  -- returned when evaluating (var_ "v") is not physically identical to the
+  -- record stored in the atomic reference, so this test fails.
+  , atomicCAS_ (var_ "r") (var_ "v") (record_ [])
+  ]
+))
+with true_ in
+
+
+
 
 ()

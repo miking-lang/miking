@@ -647,6 +647,23 @@ let deref_ = use MExprAst in
 let modref_ = use MExprAst in
   lam r. lam v. appf2_ (const_ (CModRef ())) r v
 
+-- Atomic references
+let atomicMake_ = use MExprAst in
+  lam v. appf1_ (const_ (CAtomicMake ())) v
+
+let atomicGet_ = use MExprAst in
+  lam r. appf1_ (const_ (CAtomicGet ())) r
+
+let atomicExchange_ = use MExprAst in
+  lam r. lam v. appf2_ (const_ (CAtomicExchange ())) r v
+
+let atomicFetchAndAdd_ = use MExprAst in
+  lam r. lam v. appf2_ (const_ (CAtomicFetchAndAdd ())) r v
+
+let atomicCAS_ = use MExprAst in
+  lam r. lam seen. lam v. appf3_ (const_ (CAtomicCAS ())) r seen v
+
+
 -- File operations
 let readFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileRead ())) f
