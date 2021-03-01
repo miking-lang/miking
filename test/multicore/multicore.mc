@@ -74,8 +74,8 @@ recursive let work : (ARef a -> Unit) -> Int -> Unit = lam op. lam n.
     work op (subi n 1)
 in
 
-let nIncr = 100000 in
-let nDecr = 10000 in
+let nIncr = 10000 in
+let nDecr = 1000 in
 let nSpawns = 8 in
 
 let threads = create nSpawns (lam _. threadSpawn (lam _. work incr nIncr)) in
