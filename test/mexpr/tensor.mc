@@ -1,16 +1,16 @@
 -- Some helper functions
 let tensorRepeat = lam shape. lam v.
-  tensorCreate shape (lam _. v)
+  tensorCreate shape (lam. v)
 
 let tensorFill = lam t. lam v.
   let n = foldl muli 1 (tensorShape t) in
   let t1 = tensorReshapeExn t [n] in
-  tensorIteri (lam _. lam e. tensorSetExn e [] v) t1
+  tensorIteri (lam. lam e. tensorSetExn e [] v) t1
 
 -- Run all tests
 let testTensors = lam fromInt. lam v.
  -- Rank < 2 Tensors
-  let mkRank2TestTensor = lam _.
+  let mkRank2TestTensor = lam.
     tensorCreate [3, 4] (lam is.
                           let i = get is 0 in
                           let j = get is 1 in
@@ -18,7 +18,7 @@ let testTensors = lam fromInt. lam v.
 
   -- Set and Get
   let t = tensorRepeat [] v.0 in
-  let _ = tensorSetExn t [] v.1 in
+  tensorSetExn t [] v.1;
   utest tensorGetExn t [] with v.1 in
   utest tensorRank t with 0 in
   utest tensorShape t with [] in
@@ -42,7 +42,7 @@ let testTensors = lam fromInt. lam v.
   -- Copy
   let t1 = tensorRepeat [3, 4] v.0 in
   let t2 = mkRank2TestTensor () in
-  let _ = tensorCopyExn t2 t1 in
+  tensorCopyExn t2 t1;
   utest tensorGetExn t1 [0, 0] with v.1 in
   utest tensorGetExn t1 [0, 1] with v.2 in
   utest tensorGetExn t1 [0, 2] with v.3 in
@@ -123,7 +123,7 @@ let testTensors = lam fromInt. lam v.
   let t = mkRank2TestTensor () in
   let t1 = tensorSliceExn t [0] in
   let t2 = tensorSliceExn t [1] in
-  let _ = tensorFill t1 v.0 in
+  tensorFill t1 v.0;
   utest tensorGetExn t [0, 0] with v.0 in
   utest tensorGetExn t [0, 1] with v.0 in
   utest tensorGetExn t [0, 2] with v.0 in
@@ -136,7 +136,7 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t [2, 1] with v.10 in
   utest tensorGetExn t [2, 2] with v.11 in
   utest tensorGetExn t [2, 3] with v.12 in
-  let _ = tensorFill t2 v.1 in
+  tensorFill t2 v.1;
   utest tensorGetExn t [0, 0] with v.0 in
   utest tensorGetExn t [0, 1] with v.0 in
   utest tensorGetExn t [0, 2] with v.0 in
@@ -154,7 +154,7 @@ let testTensors = lam fromInt. lam v.
   let t = mkRank2TestTensor () in
   let t1 = tensorSliceExn t [0] in
   let t2 = tensorSliceExn t [1] in
-  let _ = tensorCopyExn t1 t2 in
+  tensorCopyExn t1 t2;
   utest tensorGetExn t [0, 0] with v.1 in
   utest tensorGetExn t [0, 1] with v.2 in
   utest tensorGetExn t [0, 2] with v.3 in
@@ -200,7 +200,7 @@ let testTensors = lam fromInt. lam v.
   let t1 = tensorSubExn t 0 1 in
   let t2 = tensorSubExn t 1 2 in
 
-  let _ = tensorFill t1 v.0 in
+  tensorFill t1 v.0;
   utest tensorGetExn t [0, 0] with v.0 in
   utest tensorGetExn t [0, 1] with v.0 in
   utest tensorGetExn t [0, 2] with v.0 in
@@ -213,7 +213,7 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t [2, 1] with v.10 in
   utest tensorGetExn t [2, 2] with v.11 in
   utest tensorGetExn t [2, 3] with v.12 in
-  let _ = tensorFill t2 v.1 in
+  tensorFill t2 v.1;
   utest tensorGetExn t [0, 0] with v.0 in
   utest tensorGetExn t [0, 1] with v.0 in
   utest tensorGetExn t [0, 2] with v.0 in
@@ -229,12 +229,11 @@ let testTensors = lam fromInt. lam v.
 
   -- Iteri
   let t = tensorRepeat [2, 2] v.0 in
-  let _ = tensorIteri (lam i. lam row.
+  tensorIteri (lam i. lam row.
                          tensorIteri (lam j. lam e.
                                         tensorSetExn e [] (fromInt (addi (muli i 2) j)))
                                       row)
-                      t
-  in
+                      t;
 
   utest tensorGetExn t [0, 0] with v.0 in
   utest tensorGetExn t [0, 1] with v.1 in
@@ -242,7 +241,7 @@ let testTensors = lam fromInt. lam v.
   utest tensorGetExn t [1, 1] with v.3 in
 
   -- Rank 3 Tensors
-  let mkRank3TestTensor = lam _.
+  let mkRank3TestTensor = lam.
     tensorCreate [2, 2, 3] (lam is.
                               let i = get is 0 in
                               let j = get is 1 in
@@ -305,8 +304,8 @@ let testTensors = lam fromInt. lam v.
   let t = mkRank3TestTensor () in
   let t1 = tensorSliceExn t [0, 1] in
   let t2 = tensorSliceExn t [1] in
-  let _ = tensorFill t1 v.0 in
-  let _ = tensorFill t2 v.1 in
+  tensorFill t1 v.0;
+  tensorFill t2 v.1;
   utest tensorGetExn t [0, 0, 0] with v.1 in
   utest tensorGetExn t [0, 0, 1] with v.2 in
   utest tensorGetExn t [0, 0, 2] with v.3 in
@@ -334,7 +333,7 @@ let testTensors = lam fromInt. lam v.
   -- Sub and Fill
   let t = mkRank3TestTensor () in
   let t1 = tensorSubExn t 1 1 in
-  let _ = tensorFill t1 v.0 in
+  tensorFill t1 v.0;
   utest tensorGetExn t [0, 0, 0] with v.1 in
   utest tensorGetExn t [0, 0, 1] with v.2 in
   utest tensorGetExn t [0, 0, 2] with v.3 in
@@ -352,7 +351,7 @@ let testTensors = lam fromInt. lam v.
   let t = mkRank3TestTensor () in
   let t1 = tensorSliceExn t [1] in
   let t2 = tensorSubExn t1 1 1 in
-  let _ = tensorFill t2 v.0 in
+  tensorFill t2 v.0;
   utest tensorGetExn t [0, 0, 0] with v.1 in
   utest tensorGetExn t [0, 0, 1] with v.2 in
   utest tensorGetExn t [0, 0, 2] with v.3 in
@@ -369,10 +368,10 @@ let testTensors = lam fromInt. lam v.
   ()
 
 let v = ([0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12])
-let _ = testTensors (lam x. [x]) v
+let _void = testTensors (lam x. [x]) v
 
 let v = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
-let _ = testTensors (lam x. x) v
+let _void = testTensors (lam x. x) v
 
 let v = (0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.)
-let _ = testTensors int2float v
+let _void = testTensors int2float v

@@ -380,7 +380,7 @@ lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PatRecord {bindings = bindings, info = info} ->
     match assocMapAccum {eq=eqString}
-            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) patEnv bindings
+            (lam patEnv. lam. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
       (env, PatRecord {bindings = bindings, info = info})
     else never
@@ -538,18 +538,17 @@ let debug = false in
 let debugPrint = lam i. lam t.
   let r = symbolize t in
   if debug then
-    let _ = printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]) in
-    let _ = printLn (expr2str t) in
-    let _ = print "\n" in
-    let _ = printLn "--- AFTER SYMBOLIZE ---" in
-    let _ = printLn (expr2str r) in
-    let _ = print "\n" in
+    printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]);
+    printLn (expr2str t);
+    print "\n";
+    printLn "--- AFTER SYMBOLIZE ---";
+    printLn (expr2str r);
+    print "\n";
     ()
   else ()
 in
 
-let _ =
-  mapi debugPrint [
+mapi debugPrint [
     base,
     rec,
     letin,
@@ -568,7 +567,7 @@ let _ =
     matchor,
     matchnot,
     matchoredge
-  ]
-in
+  ];
+
 
 ()

@@ -93,7 +93,7 @@ lam e. lam p.
        (removeIf (lam t. not (memq e t.0)) (terms p)))
 
 -- generate unique epsilon
-let dualnumGenEpsilon : Unit -> Eps = lam _. gensym ()
+let dualnumGenEpsilon : Unit -> Eps = lam. gensym ()
 
 mexpr
 

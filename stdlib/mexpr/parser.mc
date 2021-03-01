@@ -25,15 +25,6 @@ lang WhitespaceParser = WSACParser
   | x -> {str = x, pos = p}
 end
 
-let _ = use WhitespaceParser in
-  utest eatWSAC (initPos "") "  foo"
-    with {str = "foo", pos = (posVal "" 1 2)} in
-  utest eatWSAC (initPos "") " \tfoo"
-    with {str = "foo", pos = (posVal "" 1 3)} in
-  utest eatWSAC (initPos "") " \n    bar "
-    with {str = "bar ", pos = (posVal "" 2 4)} in
-  ()
-
 -- Eat line comments of the form --
 lang LineCommentParser = WSACParser
   sem eatWSAC (p : Pos)  =
@@ -65,16 +56,6 @@ end
 -- Commbined WSAC parser for MExpr
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 
-let _ = use MExprWSACParser in
-  utest eatWSAC (initPos "") " --foo \n  bar "
-    with {str = "bar ", pos = posVal "" 2 2} in
-  utest eatWSAC (initPos "") " /- foo -/ bar"
-    with {str = "bar", pos = posVal "" 1 11} in
-  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar "
-    with {str = "bar ", pos = posVal "" 4 0} in
-  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !"
-    with {str = "!", pos = posVal "" 2 7} in
-  ()
 
 
 
@@ -127,19 +108,20 @@ let parseIdent = lam upper. lam p. lam str.
   in work "" true p str
 
 utest parseIdent false (initPos "") "+"
-  with {val = "", str = "+", pos = posVal "" 1 0}
+  with {val = "", str = "+", pos = posVal "" 1 0} 
 utest parseIdent false (initPos "") "a "
-  with {val = "a", str = " ", pos = posVal "" 1 1}
+  with {val = "a", str = " ", pos = posVal "" 1 1} 
 utest parseIdent false (initPos "") "ba"
-  with {val = "ba", str = "", pos = posVal "" 1 2}
+  with {val = "ba", str = "", pos = posVal "" 1 2} 
 utest parseIdent false (initPos "") "_asd "
-  with {val = "_asd", str = " ", pos = posVal "" 1 4}
+  with {val = "_asd", str = " ", pos = posVal "" 1 4} 
 utest parseIdent true (initPos "") "_asd "
-  with {val = "", str = "_asd ", pos = posVal "" 1 0}
+  with {val = "", str = "_asd ", pos = posVal "" 1 0} 
 utest parseIdent false (initPos "") "Asd12 "
-  with {val = "", str = "Asd12 ", pos = posVal "" 1 0}
+  with {val = "", str = "Asd12 ", pos = posVal "" 1 0} 
 utest parseIdent true (initPos "") "Asd12 "
-  with {val = "Asd12", str = " ", pos = posVal "" 1 5}
+  with {val = "Asd12", str = " ", pos = posVal "" 1 5} 
+
 
 
 -- Parse identifier
@@ -493,6 +475,27 @@ lang MExprParser = MExprParserBase + ExprParserNoInfix
 
 
 mexpr
+
+use WhitespaceParser in
+  utest eatWSAC (initPos "") "  foo"
+    with {str = "foo", pos = (posVal "" 1 2)} in
+  utest eatWSAC (initPos "") " \tfoo"
+    with {str = "foo", pos = (posVal "" 1 3)} in
+  utest eatWSAC (initPos "") " \n    bar "
+    with {str = "bar ", pos = (posVal "" 2 4)} in
+  ();
+
+use MExprWSACParser in
+  utest eatWSAC (initPos "") " --foo \n  bar "
+    with {str = "bar ", pos = posVal "" 2 2} in
+  utest eatWSAC (initPos "") " /- foo -/ bar"
+    with {str = "bar", pos = posVal "" 1 11} in
+  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar "
+    with {str = "bar ", pos = posVal "" 4 0} in
+  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !"
+    with {str = "!", pos = posVal "" 2 7} in
+  ();
+
 
 
 

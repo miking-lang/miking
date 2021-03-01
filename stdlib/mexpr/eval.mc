@@ -224,7 +224,7 @@ lang UtestEval = Eq + UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n";
     eval ctx t.next
 end
 
@@ -707,7 +707,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileWrite2 f ->
     match arg with TmSeq s then
       let d = _seqOfCharToString s.tms in
-      let _ = writeFile f d in
+      writeFile f d;
       unit_
     else error "d in writeFile not a sequence"
   | CFileExists _ ->
@@ -718,7 +718,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileDelete _ ->
     match arg with TmSeq s then
       let f = _seqOfCharToString s.tms in
-      let _ = deleteFile f in
+      deleteFile f;
       unit_
     else error "f in deleteFile not a sequence"
 end
@@ -728,7 +728,7 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
   | CPrintString _ ->
     match arg with TmSeq s then
       let s = _seqOfCharToString s.tms in
-      let _ = print s in
+      print s;
       unit_
     else error "string to print is not a string"
   | CReadLine _ ->
@@ -779,7 +779,7 @@ lang TimeEval = TimeAst + IntAst
   sem delta (arg : Expr) =
   | CSleepMs _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      let _ = sleepMs n in
+      sleepMs n;
       unit_
     else error "n in wallTimeMs not a constant integer"
   | CWallTimeMs _ ->
@@ -797,7 +797,7 @@ lang RefOpEval = RefOpAst + IntAst
       TmConst {val = CModRef2 r, info = NoInfo()}
     else error "first argument of modref not a reference"
   | CModRef2 r ->
-    let _ = modref r arg in
+    modref r arg;
     unit_
   | CDeRef _ ->
     match arg with TmRef {ref = r} then
@@ -912,7 +912,7 @@ end
 lang OrPatEval = OrPat
   sem tryMatch (env : Env) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
-    optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
+    optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
 end
 
 lang NotPatEval = NotPat
@@ -1189,7 +1189,7 @@ let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
 with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
 
--- create 3 (lam _. 42) -> [42, 42, 42]
+-- create 3 (lam. 42) -> [42, 42, 42]
 let createAst = create_ (int_ 3) (ulam_ "_" (int_ 42)) in
 utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] in
 

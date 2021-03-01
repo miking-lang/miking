@@ -18,7 +18,7 @@ let _opHashMap = lam prefix. lam ops.
 let _op = lam opHashMap. lam op.
   nvar_
   (hashmapLookupOrElse hashmapStrTraits
-    (lam _.
+    (lam.
       error (strJoin " " ["Operation", op, "not found"]))
       op
       opHashMap)
@@ -191,7 +191,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       match generatePat targetName rpat with (rnames, rwrap) then
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
           match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
-            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam _. k) lnames in
+            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam. k) lnames in
             let xname = nameSym "_x" in
             let wrap = lam cont.
               _optMatch
@@ -248,7 +248,7 @@ let ocamlEval = lam p. lam strConvert.
   let blt = pyimport "builtins" in
     let res = ocamlCompileWithConfig {warnings=false} (join ["print_string (", strConvert, "(", p, "))"]) in
     let out = (res.run "" []).stdout in
-    let _ = res.cleanup () in
+    res.cleanup ();
     parseAsMExpr out
 in
 

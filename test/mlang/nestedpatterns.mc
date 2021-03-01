@@ -157,8 +157,7 @@ utest use RecordsWithNegation in foo {blue = true} with 4 in
 utest use RecordsWithNegation in foo {red = true} with 2 in
 utest use RecordsWithNegation in foo {blue = false} with 3 in
 
-let _ =
-  use Lexer in
+use Lexer in
   utest lex "" with Some [] in
   utest lex "0" with Some [IntTok "0"] in
   utest lex "0109" with Some [IntTok "0109"] in
@@ -167,6 +166,3 @@ let _ =
   utest lex "0b 10" with None () in
   utest lex "  32 " with Some [IntTok "32"] in
   ()
-in
-
-()
