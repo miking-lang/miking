@@ -615,6 +615,20 @@ lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   | CDeRef _ -> "deref"
 end
 
+lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CTensorCreate _ -> "tensorCreate"
+  | CTensorGetExn _ -> "tensorGetExn"
+  | CTensorSetExn _ -> "tensorSetExn"
+  | CTensorRank _ -> "tensorRank"
+  | CTensorShape _ -> "tensorShape"
+  | CTensorReshapeExn _ -> "tensorReshapeExn"
+  | CTensorCopyExn _ -> "tensorCopyExn"
+  | CTensorSliceExn _ -> "tensorSliceExn"
+  | CTensorSubExn _ -> "tensorSubExn"
+  | CTensorIteri _ -> "tensorIteri"
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -884,7 +898,7 @@ lang MExprPrettyPrint =
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
-  + SeqOpPrettyPrint + RefOpPrettyPrint +
+  + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

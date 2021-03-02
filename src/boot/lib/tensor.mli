@@ -36,6 +36,8 @@ module Num : sig
   val iteri : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
   val of_array : ('a, 'b) kind -> 'a array -> ('a, 'b) t
+
+  val data_to_array : ('a, 'b) t -> 'a array
 end
 
 module NoNum : sig
@@ -60,4 +62,10 @@ module NoNum : sig
   val sub_exn : 'a t -> int -> int -> 'a t
 
   val iteri : (int -> 'a t -> unit) -> 'a t -> unit
+
+  val equal : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
+
+  val of_array : 'a array -> 'a t
+
+  val data_to_array : 'a t -> 'a array
 end

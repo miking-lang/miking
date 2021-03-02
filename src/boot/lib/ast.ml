@@ -135,7 +135,6 @@ and const =
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
   (* MCore intrinsics: Tensors *)
-  | CTensor of tm T.t
   | CtensorCreate of int array option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int array option
@@ -248,6 +247,8 @@ and tm =
   | TmFix of info
   (* Reference *)
   | TmRef of info * tm ref
+  (* Tensor *)
+  | TmTensor of info * tm T.t
 
 (* Kind of pattern name *)
 and patName =
@@ -368,6 +369,8 @@ let rec map_tm f = function
       f t
   | TmRef _ as t ->
       f t
+  | TmTensor _ as t ->
+      f t
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -389,7 +392,8 @@ let tm_info = function
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _)
   | TmFix fi
-  | TmRef (fi, _) ->
+  | TmRef (fi, _)
+  | TmTensor (fi, _) ->
       fi
 
 let pat_info = function

@@ -386,6 +386,7 @@ lang RefAst
   | TmRef t -> acc
 end
 
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -513,6 +514,20 @@ lang FileOpAst = ConstAst
   | CFileWrite {}
   | CFileExists {}
   | CFileDelete {}
+end
+
+lang TensorOpAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
 end
 
 lang IOAst = ConstAst
@@ -805,7 +820,7 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + TensorOpAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
