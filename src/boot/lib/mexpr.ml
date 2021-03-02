@@ -1819,12 +1819,12 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (_, _, s) -> (
-      match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
+    match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
-      match eval env t1 with
-      (* Closure application *)
-      | TmClos (ficlos, _, s, t3, env2) ->
+    match eval env t1 with
+    (* Closure application *)
+    | TmClos (ficlos, _, s, t3, env2) -> (
         if !enable_debug_profiling then (
           let t1 = get_wall_time_ms () in
           let res =
@@ -1836,108 +1836,108 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           let t2 = get_wall_time_ms () in
           add_call ficlos (t2 -. t1) ;
           res )
-        else (
+        else
           try eval ((s, eval env t2) :: Lazy.force env2) t3
           with Error _ as e ->
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
             raise e )
-      (* Constant application using the delta function *)
-      | TmConst (_, c) ->
+    (* Constant application using the delta function *)
+    | TmConst (_, c) ->
         delta eval env fiapp c (eval env t2)
-      (* Fix *)
-      | TmFix _ -> (
-          match eval env t2 with
-          | TmClos (fi, _, s, t3, env2) as tt ->
-            eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
-          | _ ->
-            raise_error (tm_info t1) "Incorrect CFix" )
-      | f ->
+    (* Fix *)
+    | TmFix _ -> (
+      match eval env t2 with
+      | TmClos (fi, _, s, t3, env2) as tt ->
+          eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
+      | _ ->
+          raise_error (tm_info t1) "Incorrect CFix" )
+    | f ->
         raise_error fiapp
           ( "Incorrect application. This is not a function: "
-            ^ Ustring.to_utf8 (ustring_of_tm f) ) )
+          ^ Ustring.to_utf8 (ustring_of_tm f) ) )
   (* Lambda and closure conversions *)
   | TmLam (fi, x, s, _ty, t1) ->
-    TmClos (fi, x, s, t1, lazy env)
+      TmClos (fi, x, s, t1, lazy env)
   (* Let *)
   | TmLet (_, _, s, _, t1, t2) ->
-    eval ((s, eval env t1) :: env) t2
+      eval ((s, eval env t1) :: env) t2
   (* Recursive lets *)
   | TmRecLets (_, lst, t2) ->
-    let rec env' =
-      lazy
-        (let wraplambda = function
-            | TmLam (fi, x, s, _ty, t1) ->
-              TmClos (fi, x, s, t1, env')
-            | tm ->
-              raise_error (tm_info tm)
-                "Right-hand side of recursive let must be a lambda"
-         in
-         List.fold_left
-           (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-           env lst)
-    in
-    eval (Lazy.force env') t2
+      let rec env' =
+        lazy
+          (let wraplambda = function
+             | TmLam (fi, x, s, _ty, t1) ->
+                 TmClos (fi, x, s, t1, env')
+             | tm ->
+                 raise_error (tm_info tm)
+                   "Right-hand side of recursive let must be a lambda"
+           in
+           List.fold_left
+             (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
+             env lst)
+      in
+      eval (Lazy.force env') t2
   (* Constant *)
   | TmConst (_, _) ->
-    t
+      t
   (* Sequences *)
   | TmSeq (fi, tms) ->
-    TmSeq (fi, Mseq.Helpers.map (eval env) tms)
+      TmSeq (fi, Mseq.Helpers.map (eval env) tms)
   (* Records *)
   | TmRecord (fi, tms) ->
-    TmRecord (fi, Record.map (eval env) tms)
+      TmRecord (fi, Record.map (eval env) tms)
   (* Records update *)
   | TmRecordUpdate (fi, t1, l, t2) -> (
-      match eval env t1 with
-      | TmRecord (fi, r) ->
+    match eval env t1 with
+    | TmRecord (fi, r) ->
         if Record.mem l r then TmRecord (fi, Record.add l (eval env t2) r)
         else
           raise_error fi
             ( "No label '" ^ Ustring.to_utf8 l ^ "' in record "
-              ^ Ustring.to_utf8 (ustring_of_tm (TmRecord (fi, r))) )
-      | v ->
+            ^ Ustring.to_utf8 (ustring_of_tm (TmRecord (fi, r))) )
+    | v ->
         raise_error fi
           ( "Cannot update the term. The term is not a record: "
-            ^ Ustring.to_utf8 (ustring_of_tm v) ) )
+          ^ Ustring.to_utf8 (ustring_of_tm v) ) )
   (* Type (ignore) *)
   | TmType (_, _, _, _, t1) ->
-    eval env t1
+      eval env t1
   (* Data constructors *)
   | TmConDef (_, _, _, _, t) ->
-    eval env t
+      eval env t
   (* Constructor application *)
   | TmConApp (fi, x, s, t) ->
-    let rhs = eval env t in
-    ( if !enable_debug_con_shape then
+      let rhs = eval env t in
+      ( if !enable_debug_con_shape then
         let shape = shape_str rhs in
         let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
         let info = info2str fi in
         Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
           (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
-    TmConApp (fi, x, s, rhs)
+      TmConApp (fi, x, s, rhs)
   (* Match *)
   | TmMatch (_, t1, p, t2, t3) -> (
-      match try_match env (eval env t1) p with
-      | Some env ->
+    match try_match env (eval env t1) p with
+    | Some env ->
         eval env t2
-      | None ->
+    | None ->
         eval env t3 )
   (* Unit testing *)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
-    ( if !utest then
+      ( if !utest then
         let v1, v2 = (eval env t1, eval env t2) in
         let equal =
           match tusing with
           | Some t -> (
-              match eval env (TmApp (fi, TmApp (fi, t, v1), v2)) with
-              | TmConst (_, CBool b) ->
+            match eval env (TmApp (fi, TmApp (fi, t, v1), v2)) with
+            | TmConst (_, CBool b) ->
                 b
-              | _ ->
+            | _ ->
                 raise_error fi
                   ( "Invalid equivalence function: "
-                    ^ Ustring.to_utf8 (ustring_of_tm t) ) )
+                  ^ Ustring.to_utf8 (ustring_of_tm t) ) )
           | None ->
-            val_equal v1 v2
+              val_equal v1 v2
         in
         if equal then (
           printf "." ;
@@ -1946,24 +1946,24 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           unittest_failed fi v1 v2 tusing ;
           utest_fail := !utest_fail + 1 ;
           utest_fail_local := !utest_fail_local + 1 ) ) ;
-    eval env tnext
+      eval env tnext
   (* Never term *)
   | TmNever fi ->
-    raise_error fi
-      "Reached a never term, which should be impossible in a well-typed \
-       program."
+      raise_error fi
+        "Reached a never term, which should be impossible in a well-typed \
+         program."
   (* Use *)
   | TmUse (fi, _, _) ->
-    raise_error fi "A 'use' of a language was not desugared"
+      raise_error fi "A 'use' of a language was not desugared"
   (* Closure - Only at runtime *)
   | TmClos (_, _, _, _, _) ->
-    t
+      t
   (* Fix-point - Only at runtime *)
   | TmFix _ ->
-    t
+      t
   (* Ref - Only at runtime *)
   | TmRef _ ->
-    t
+      t
 
 (* Same as eval, but records all toplevel definitions and returns them along
   with the evaluated result *)
