@@ -125,7 +125,7 @@ let delta eval env fi c v =
         ( fi
         , CPar
             (ParThread
-               (Thread.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env))) )
+               (Thread.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env)) ) )
   | ParthreadJoin, TmConst (_, CPar (ParThread p)) ->
       Thread.join p
   | ParthreadJoin, _ ->
