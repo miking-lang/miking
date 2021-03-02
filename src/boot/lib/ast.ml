@@ -25,6 +25,8 @@ let enable_debug_symbol_print = ref false
 
 let enable_debug_con_shape = ref false
 
+let enable_debug_profiling = ref false
+
 let utest = ref false (* Set to true if unit testing is enabled *)
 
 let utest_ok = ref 0 (* Counts the number of successful unit tests *)
