@@ -15,7 +15,7 @@ utest deref r2 with 2. in
 utest deref r3 with 1 in
 utest (deref r4) "there" "!" with "Hello there!" in
 
-let _ = modref r3 4 in
+modref r3 4;
 utest deref r1 with 4 in
 utest deref r3 with 4 in
 

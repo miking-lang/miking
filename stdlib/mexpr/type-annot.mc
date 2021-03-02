@@ -409,9 +409,7 @@ let recLets = typeAnnot (bindall_ [
 ]) in
 utest ty recLets with tyunit_ using eqType assocEmpty in
 
--- NOTE(larshum, 20210227): Type annotation of mutually recursive definitions
--- is only performed in one step.
-let _ =
+let _ignored =
   match recLets with TmRecLets {bindings = bindings} then
     let xTy = tyarrow_ tyunit_ tyint_ in
     let yTy = tyarrow_ tyunit_ tyint_ in
@@ -481,7 +479,7 @@ let matchInteger = typeAnnot (bindall_ [
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
 utest ty matchInteger with tyint_ using eqType assocEmpty in
-let _ =
+let _ignored =
   match matchInteger with TmLet {inexpr = TmMatch t} then
     utest ty t.target with tyint_ using eqType assocEmpty in
     utest ty t.thn with tyint_ using eqType assocEmpty in
@@ -494,7 +492,7 @@ let matchDistinct = typeAnnot (
   match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
 ) in
 utest ty matchDistinct with tyunknown_ using eqType assocEmpty in
-let _ =
+let _ignored =
   match matchDistinct with TmMatch t then
     utest ty t.target with tyint_ using eqType assocEmpty in
     utest ty t.thn with tyint_ using eqType assocEmpty in
@@ -507,7 +505,7 @@ let utestAnnot = typeAnnot (
   utest_ (int_ 0) false_ (char_ 'c')
 ) in
 utest ty utestAnnot with tychar_ using eqType assocEmpty in
-let _ =
+let _ignored =
   match utestAnnot with TmUtest t then
     utest ty t.test with tyint_ using eqType assocEmpty in
     utest ty t.expected with tybool_ using eqType assocEmpty in

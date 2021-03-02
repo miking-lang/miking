@@ -7,6 +7,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
 include "seq.mc"
+include "name.mc"
 
 let gstr = lam t. lam n. bootParserGetString t n
 let gname = lam t. lam n. nameNoSym (bootParserGetString t n)
@@ -236,6 +237,8 @@ let r_info = lam r1. lam c1. lam r2. lam c2.
 -- TmVar
 let s = "_asdXA123" in
 utest lside s with rside s in
+utest match parseMExprString "#var\"\"" with TmVar r
+      then nameGetStr r.ident else "ERROR" with "" in
 
 -- TmApp
 let s = "f x" in
@@ -256,6 +259,9 @@ utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
 utest info (match parseMExprString s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
 utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
+let s = "print x; 10" in
+utest lside s with rside s in
+
 
 -- TmRecLets, TmLam
 let s = "recursive let x = lam x.x in x" in

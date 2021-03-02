@@ -32,7 +32,7 @@ let _eqn = lam n1. lam n2.
 
 let _getSym = lam n.
   (optionGetOrElse
-    (lam _. error "Expected symbol")
+    (lam. error "Expected symbol")
     (nameGetSym n))
 
 lang HoleAst
@@ -246,7 +246,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     let maxDepth =
       match lookupTable with [] then 0
       else
-        maxOrElse (lam _. error "Expected non-empty lookup table")
+        maxOrElse (lam. error "Expected non-empty lookup table")
                   subi
                   (map (lam r. length r.path) lookupTable)
     in
@@ -582,9 +582,9 @@ let evalE = lam expr. lam expected.
 
 -- Prettyprinting
 let pprint = lam ast.
-  let _ = print "\n\n" in
-  let _ = print (expr2str ast) in
-  let _ = print "\n\n" in () in
+  print "\n\n";
+  print (expr2str ast);
+  print "\n\n" in ();
 
 -- Perform transform tests
 let dprintTransform = lam ast.
@@ -592,14 +592,14 @@ let dprintTransform = lam ast.
   let ast = symbolize ast in
   let anfast = anf ast in
   -- Label applications
-  let _ = print "\n-------------- BEFORE ANF --------------" in
-  let _ = pprint ast in
-  let _ = print "-------------- AFTER ANF --------------" in
-  let _ = pprint anfast in
-  let _ = print "-------------- AFTER TRANSFORMATION --------------" in
+  print "\n-------------- BEFORE ANF --------------";
+  pprint ast;
+  print "-------------- AFTER ANF --------------";
+  pprint anfast;
+  print "-------------- AFTER TRANSFORMATION --------------";
   let ast = transform [] anfast in
-  let _ = pprint ast in
-  let _ = print "-------------- END OF TRANSFORMED AST --------------" in
+  pprint ast;
+  print "-------------- END OF TRANSFORMED AST --------------";
   ast
 in
 let testTransform = lam r.
@@ -868,7 +868,7 @@ let allTests = [
 let tTests = [hole1, hole2, hole3] in
 let cgTests = allTests in
 
-let _ = map testTransform tTests in
-let _ = map testCallgraph cgTests in
+map testTransform tTests;
+map testCallgraph cgTests;
 
 ()

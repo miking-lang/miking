@@ -35,7 +35,7 @@ let matrixMapij = lam f. lam mtx.
   mapi (lam i. lam c. mapi (lam j. lam v. f i j v) c) mtx
 
 -- Applies function f x over the elements of mtx, where x is the elements value.
-let matrixMap = lam f. matrixMapij (lam _. lam _. lam x. f x)
+let matrixMap = lam f. matrixMapij (lam. lam. lam x. f x)
 
 -- Size of matrix mtx.
 let matrixSize = lam mtx. (length mtx, length (get mtx 0))
@@ -127,7 +127,7 @@ let matB = matrixSet matB 1 1 4 in
 utest matB with matA in
 utest matrixAdd matA matB with [[2,6],[4,8]] in
 
-utest matrixMapij (lam i. lam j. lam _. (i, j)) (matrixConst (2,2) (0,0))
+utest matrixMapij (lam i. lam j. lam. (i, j)) (matrixConst (2,2) (0,0))
 with [[(0,0),(0,1)],[(1,0),(1,1)]] in
 
 utest matrixSMul 3 matA with [[3,9],[6,12]] in

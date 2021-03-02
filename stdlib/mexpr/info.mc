@@ -60,7 +60,7 @@ let infoErrorString : Info -> String -> String = lam fi. lam str.
 
 -- Print an error with info struct info and exit (error code 1)
 let infoErrorExit : Info -> String -> () = lam fi. lam str.
-  let _ = print (join ["\n", (infoErrorString fi str), "\n"]) in
+  print (join ["\n", (infoErrorString fi str), "\n"]);
   exit 1
 
 -- Print an error with position info and exit (error code 1)

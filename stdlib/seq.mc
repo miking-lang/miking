@@ -1,7 +1,7 @@
 include "option.mc"
 include "bool.mc"
 
-let make = lam n. lam v. create n (lam _. v)
+let make = lam n. lam v. create n (lam. v)
 
 utest make 3 5 with [5,5,5]
 utest make 4 'a' with ['a', 'a', 'a', 'a']
@@ -42,7 +42,7 @@ let mapi = lam f. lam seq.
   in
   work 0 f seq
 
-let map = lam f. mapi (lam _. lam x. f x)
+let map = lam f. mapi (lam. lam x. f x)
 
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
 utest mapi (lam i. lam x. i) [] with []
@@ -77,7 +77,8 @@ recursive let iter
   -> ()
   = lam f. lam xs.
     match xs with [x] ++ xs then
-      let _ = f x in iter f xs
+      f x;
+      iter f xs
     else match xs with [] then
       ()
     else never
@@ -88,7 +89,7 @@ with ()
 
 utest
   let r = ref 0 in
-  let _ = iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4] in
+  iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4];
   deref r
 with 10
 
@@ -224,7 +225,7 @@ recursive
 end
 
 utest filter (lam x. eqi x 1) [1,2,4] with [1]
-utest filter (lam _. false) [3,5,234,1,43] with []
+utest filter (lam. false) [3,5,234,1,43] with []
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43]
 
 recursive
@@ -300,13 +301,13 @@ utest max (lam l. lam r. subi l r) [] with None ()
 let minOrElse = lam d. lam cmp. lam seq.
   optionGetOrElse d (min cmp seq)
 
-utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
-utest minOrElse (lam _. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
+utest minOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 3
+utest minOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 3
 
 let maxOrElse = lam d. lam cmp. minOrElse d (lam l. lam r. cmp r l)
 
-utest maxOrElse (lam _. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 20
-utest maxOrElse (lam _. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 20
+utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [3,4,8,9,20] with 20
+utest maxOrElse (lam. 0) (lam l. lam r. subi l r) [9,8,4,20,3] with 20
 
 -- First index in seq that satifies pred
 let index = lam pred. lam seq.

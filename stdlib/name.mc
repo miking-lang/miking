@@ -158,8 +158,8 @@ let nameCmp : Name -> Name -> Int =
     if nameEq n1 n2 then
       0
     else if and (nameHasSym n1) (nameHasSym n2) then
-      subi (sym2hash (optionGetOrElse (lam _. error "Expected symbol") (nameGetSym n1)))
-           (sym2hash (optionGetOrElse (lam _. error "Expected symbol") (nameGetSym n2)))
+      subi (sym2hash (optionGetOrElse (lam. error "Expected symbol") (nameGetSym n1)))
+           (sym2hash (optionGetOrElse (lam. error "Expected symbol") (nameGetSym n2)))
     else if (nameHasSym n1) then subi 0 1
     else if (nameHasSym n2) then 1
     else

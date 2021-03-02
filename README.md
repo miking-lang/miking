@@ -173,7 +173,6 @@ x
 introduces a new name `x`. The built-in function `addi` performs an addition between two integers. Note that MCore uses a call-by-value evaluation order, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-
 ### Functions
 
 Functions are always defined anonymously as lambda functions. If you would like to give a function a name, a `let` expression can be used. For instance, the following program defines a function `double` that doubles the value of its argument.
@@ -205,6 +204,43 @@ utest foo 2 3 with 5 in
 ```
 creates a function `foo` that takes two arguments.
 
+A lambda can also be defined without a variable, e.g., `lam. e`, where
+`e` is some expression representing the body of the function. Such
+notation is useful if the actual variable is not used inside `e`. Note
+that `lam. e` is syntactic sugar for a normal lambda `lam #var"". e`,
+where the identifier of the variable name is the empty identifier.
+
+### Sequencing
+
+Sometimes an expression has a side effect and you are not interested
+in the returned value. If that is the case, you can use the sequence
+operator `;`. For instance, suppose you would like to print a value in
+a function before it returns:
+
+```
+let foo = lam x.
+  print x;
+  x
+```
+
+The sequence operator `;` is not a construct of pure MExpr, but
+syntactic sugar for a `let` construct. For instance, the pure version
+(without syntactic sugar) of the program above is as follows:
+
+```
+let foo = lam x.
+  let #var"" = print x in
+  x
+```
+
+Note that a variable with an empty identifier is used in the `let` expression. Moreover, note that a `let` expression
+
+```
+let _ = foo x in ...
+```
+
+is syntactically not valid since `let` expressions always bind a value to a variable. Underscore `_` is a pattern and patterns are only allowed in `match` expressions.
+
 ### `if` Expressions
 
 Conditional expressions can be expressed using `if` expressions. The program
@@ -217,6 +253,18 @@ utest answer with "yes" in
 ```
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
+
+Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, expression
+
+```
+if x then e1 else e2
+```
+
+is translated into
+
+```
+match x with true then e1 else e2
+```
 
 ### Recursion
 

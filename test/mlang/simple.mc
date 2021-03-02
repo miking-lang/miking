@@ -52,44 +52,37 @@ end
 
 mexpr
 
-let _ =
-  use Empty in
-  ()
-in
-let _ =
-  use Bool in
+use Empty in
+  ();
+
+use Bool in
   utest my_not (True ()) with False () in
-  ()
-in
-let _ =
-  use AlsoBool in
+  ();
+
+use AlsoBool in
   utest my_not (True ()) with (False ()) in
-  ()
-in
-let _ =
-  use AlsoAlsoBool in
+  ();
+
+use AlsoAlsoBool in
   utest to_bool(my_not (True ())) with false in
-  ()
-in
-let _ =
-  use Recursive in
+  ();
+
+use Recursive in
   utest my_not 5 (True ()) with False () in
-  ()
-in
-let _ =
-  use Mutual in
+  ();
+
+use Mutual in
   utest my_not 10 (True ()) with (False ()) in
   utest my_not2 5 (True ()) with (False ()) in
   utest my_not 42 (False ()) with (True ()) in
   utest my_not2 1 (False ()) with (True ()) in
-  ()
-in
-let _ =
-  use And in
+  ();
+
+use And in
   utest my_and (True ()) (True ()) with (True ()) in
   utest my_and (True ()) (False ()) with (False ()) in
   utest my_and (False ()) (True ()) with (False ()) in
   utest my_and (False ()) (False ()) with (False ()) in
   ()
-in
-()
+
+

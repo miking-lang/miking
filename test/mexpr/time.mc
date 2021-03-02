@@ -12,7 +12,7 @@ mexpr
 -- 'sleepMs ms : Int -> Unit' pauses the execution for 'ms' number of ms.
 
 let t1 = wallTimeMs () in
-let _ = sleepMs 1 in
+sleepMs 1;
 let t2 = wallTimeMs () in
 
 utest t2 with t1 using gtf in ()

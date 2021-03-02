@@ -83,10 +83,12 @@
 %token <unit Ast.tokendata> RBRACKET      /* "}"   */
 %token <unit Ast.tokendata> COLON         /* ":"   */
 %token <unit Ast.tokendata> COMMA         /* ","   */
+%token <unit Ast.tokendata> SEMI          /* ";"   */
 %token <unit Ast.tokendata> DOT           /* "."   */
 %token <unit Ast.tokendata> BAR           /* "|"   */
 %token <unit Ast.tokendata> AND           /* "&"   */
 %token <unit Ast.tokendata> NOT           /* "!"   */
+%token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
 
 %start main
@@ -262,7 +264,7 @@ case:
 
 
 mexpr:
-  | left
+  | sequence
       { $1 }
   | TYPE type_ident type_params IN mexpr
       // Type parameters are currently ignored
@@ -282,6 +284,9 @@ mexpr:
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
         TmLam(fi,$2.v,Symb.Helpers.nosym,$3,$5) }
+  | LAM DOT mexpr
+      { let fi = mkinfo $1.i (tm_info $3) in
+        TmLam(fi,us"",Symb.Helpers.nosym,TyUnknown(fi),$3) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
@@ -309,6 +314,12 @@ lets:
       { let fi = mkinfo $1.i (tm_info $5) in
         (fi, $2.v, $3, $5)::$6 }
 
+sequence:
+  | left
+     { $1 }
+  | left SEMI mexpr
+     { let fi = tm_info $1 in
+       TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(NoInfo), $1, $3) } 
 
 left:
   | atom
@@ -319,7 +330,6 @@ left:
   | con_ident atom
       { let fi = mkinfo $1.i (tm_info $2) in
         TmConApp(fi,$1.v,Symb.Helpers.nosym,$2) }
-
 
 atom:
   | atom DOT proj_label
@@ -392,11 +402,12 @@ pat_labels:
     {($1.v, $3)::$5}
 
 
+
 name:
   | var_ident
-      { if $1.v =. us"_"
-        then ($1.i, NameWildcard)
-        else ($1.i, NameStr($1.v,Symb.Helpers.nosym)) }
+    { ($1.i, NameStr($1.v,Symb.Helpers.nosym)) }
+  | UNDERSCORE
+    { ($1.i, NameWildcard) }
 
 pat:
   | pat_conj BAR pat

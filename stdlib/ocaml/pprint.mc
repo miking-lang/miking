@@ -380,7 +380,7 @@ let debugPrint = false in
 
 let pprintProg = lam ast.
   if debugPrint then
-    let _ = print "\n\n" in
+    print "\n\n";
     print (expr2str (symbolize ast))
   else ()
 in
@@ -528,6 +528,6 @@ let asts = [
   testTuple
 ] in
 
-let _ = map pprintProg asts in
+map pprintProg asts;
 
 ()

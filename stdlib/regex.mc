@@ -40,7 +40,7 @@ let regEx2str = lam sym2str. lam reg.
   pprint reg
 
 let regExPprint = lam sym2str. lam reg.
-  let _ = print (regEx2str sym2str reg) in
+  print (regEx2str sym2str reg);
   print "\n"
 
 -- Checks structural equivalence of two regexes.
@@ -237,7 +237,7 @@ let regexFromDFA = lam dfa.
                       let mergedSuccessors =
                         map (lam s1.
                               optionGetOrElse
-                                (lam _. error "Expected transition between states")
+                                (lam. error "Expected transition between states")
                                 (pairMergeTrans dfa s s1))
                             (nfaOutStates s dfa) in
                       concat acc mergedSuccessors)
