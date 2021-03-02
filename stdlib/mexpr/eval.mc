@@ -59,11 +59,19 @@ let _seqOfCharToString = use MExprAst in
 -- TERMS --
 -----------
 
-lang VarEval = VarAst + IdentifierPrettyPrint
+-- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
+lang FixAst = LamAst
+  syn Expr =
+  | TmFix ()
+end
+
+lang VarEval = VarAst + IdentifierPrettyPrint + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match _evalLookup ident ctx.env with Some t then
-      eval ctx t
+      match t with TmApp {lhs = TmFix _} then
+        eval ctx t
+      else t
     else
       error (concat "Unknown variable: " (pprintVarString ident))
 end
@@ -93,12 +101,6 @@ lang LetEval = LetAst + VarEval
   | TmLet t ->
     eval {ctx with env = _evalInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
-end
-
--- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
-lang FixAst = LamAst
-  syn Expr =
-  | TmFix ()
 end
 
 lang FixEval = FixAst + LamEval + UnknownTypeAst

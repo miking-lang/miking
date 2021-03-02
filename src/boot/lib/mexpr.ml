@@ -1819,7 +1819,11 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (_, _, s) -> (
-    match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
+    match List.assoc s env with
+    | TmApp (_, TmFix _, _) as t ->
+        eval env t
+    | t ->
+        t )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
