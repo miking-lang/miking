@@ -74,8 +74,9 @@ lang LamANF = ANF + LamAst
   | TmLam _ -> true
 
   sem normalize (k : Expr -> Expr) =
-  | TmLam {ident = ident, ty = ty, body = body, info = info} ->
-    k (TmLam {ident = ident, body = normalizeTerm body, ty = ty, info = info})
+  | TmLam {ident = ident, ty = ty, tyIdent = tyIdent, body = body, info = info} ->
+    k (TmLam {ident = ident, body = normalizeTerm body,
+              ty = ty, tyIdent = tyIdent, info = info})
 
 end
 
@@ -127,8 +128,9 @@ lang TypeANF = ANF + TypeAst
   | TmType _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmType {ident = ident, inexpr = m1, ty = ty, info = info} ->
-    TmType {ident = ident, ty = ty, inexpr = normalizeName k m1, info = info}
+  | TmType {ident = ident, tyIdent = tyIdent, inexpr = m1, ty = ty, info = info} ->
+    TmType {ident = ident, tyIdent = tyIdent, ty = ty,
+            inexpr = normalizeName k m1, info = info}
 
 end
 

@@ -244,7 +244,7 @@ let rec list_complement (constr : npat list -> npat) (l : npat list) : normpat
      normpat (since it's a set) up to the top-most list, which we can do using `traverse`
      in the list monad. *)
   |> concat_map ~f:(fun np_list ->
-         traverse NPatSet.elements np_list |> List.map constr)
+         traverse NPatSet.elements np_list |> List.map constr )
   |> NPatSet.of_list
 
 (* construct a normpat *)
@@ -263,7 +263,7 @@ and npat_complement : npat -> normpat = function
       let with_forbidden_labels =
         UstringSet.elements neg_labels
         |> List.map (fun label ->
-               NPatRecord (Record.add label wildpat pats, UstringSet.empty))
+               NPatRecord (Record.add label wildpat pats, UstringSet.empty) )
         |> NPatSet.of_list
       in
       let labels, pats = Record.bindings pats |> List.split in
@@ -271,13 +271,13 @@ and npat_complement : npat -> normpat = function
         list_complement
           (fun pats ->
             List.combine labels pats |> List.to_seq |> Record.of_seq
-            |> fun x -> NPatRecord (x, UstringSet.empty))
+            |> fun x -> NPatRecord (x, UstringSet.empty) )
           pats
       in
       let missing_labels =
         labels
         |> List.map (fun label ->
-               NPatRecord (Record.empty, UstringSet.singleton label))
+               NPatRecord (Record.empty, UstringSet.singleton label) )
         |> NPatSet.of_list
       in
       NPatSet.union complemented_product missing_labels
@@ -291,7 +291,7 @@ and npat_complement : npat -> normpat = function
         list_complement
           (fun pats ->
             let pre, post = split_at lenPre pats in
-            NPatSeqEdge (pre, post))
+            NPatSeqEdge (pre, post) )
           (pre @ post)
       in
       let allowed_lengths =
@@ -322,7 +322,7 @@ and npat_complement : npat -> normpat = function
              | ConCon c ->
                  NSPat (SPatCon (c, wildpat))
              | RecCon ->
-                 NPatRecord (Record.empty, UstringSet.empty))
+                 NPatRecord (Record.empty, UstringSet.empty) )
         |> NPatSet.of_list
       in
       NPatSet.union seqs cons
@@ -366,14 +366,14 @@ and npat_intersect (a : npat) (b : npat) : normpat =
           |> List.filter (fun n -> IntSet.mem (n + min_len) lens |> not)
           |> List.map (fun n_extras ->
                  NPatSeqTot
-                   (pre @ List.rev_append (repeat n_extras wildpat) post))
+                   (pre @ List.rev_append (repeat n_extras wildpat) post) )
           |> NPatSet.of_list
           |> NPatSet.add
                (NPatSeqEdge
                   ( pre
                   , List.rev_append
                       (repeat (max_forbidden_len - min_len + 1) wildpat)
-                      post )) )
+                      post ) ) )
   | NSPat p1, NSPat p2 -> (
     match (p1, p2) with
     | SPatInt i1, SPatInt i2 when i1 = i2 ->
@@ -408,7 +408,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         Record.merge merge_f r1 r2 |> Record.bindings
         |> traverse (fun (k, vs) -> List.map (fun v -> (k, v)) vs)
         |> List.map (fun bindings ->
-               NPatRecord (List.to_seq bindings |> Record.of_seq, neg))
+               NPatRecord (List.to_seq bindings |> Record.of_seq, neg) )
         |> NPatSet.of_list
   | NPatRecord _, (NPatSeqTot _ | NPatSeqEdge _)
   | (NPatSeqTot _ | NPatSeqEdge _), NPatRecord _ ->
@@ -431,7 +431,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
         pre @ post |> traverse NPatSet.elements
         |> List.map (fun pats ->
                let pre, post = split_at (List.length pre) pats in
-               NPatSeqEdge (pre, post))
+               NPatSeqEdge (pre, post) )
         |> NPatSet.of_list
       in
       let overlapping =
@@ -444,7 +444,7 @@ and npat_intersect (a : npat) (b : npat) : normpat =
             List.init (List.length pre_extras) (fun n ->
                 List.rev_append (repeat n wildpat) post_extras
                 |> map2_with_extras npat_intersect wildpat wildpat pre_extras
-                |> fun mid -> pre @ mid @ post)
+                |> fun mid -> pre @ mid @ post )
             |> concat_map ~f:(traverse NPatSet.elements)
             |> List.map (fun pats -> NPatSeqTot pats)
             |> NPatSet.of_list
@@ -495,15 +495,15 @@ let rec pat_to_normpat = function
       |> traverse (fun p -> pat_to_normpat p |> NPatSet.elements)
       |> List.map (fun pats ->
              let pre, post = split_at (Mseq.length pre) pats in
-             NPatSeqEdge (pre, post))
+             NPatSeqEdge (pre, post) )
       |> NPatSet.of_list
   | PatRecord (_, r) ->
       Record.bindings r
       |> traverse (fun (k, p) ->
-             pat_to_normpat p |> NPatSet.elements |> List.map (fun p -> (k, p)))
+             pat_to_normpat p |> NPatSet.elements |> List.map (fun p -> (k, p)) )
       |> List.map (fun bindings ->
              NPatRecord
-               (List.to_seq bindings |> Record.of_seq, UstringSet.empty))
+               (List.to_seq bindings |> Record.of_seq, UstringSet.empty) )
       |> NPatSet.of_list
   | PatCon (_, c, _, p) ->
       pat_to_normpat p |> NPatSet.map (fun p -> NSPat (SPatCon (c, p)))
@@ -537,7 +537,7 @@ let pat_example normpat =
         let pos = PatRecord (NoInfo, Record.map npat_to_pat r) in
         UstringSet.elements neg
         |> List.map (fun label ->
-               PatRecord (NoInfo, Record.singleton label wildpat))
+               PatRecord (NoInfo, Record.singleton label wildpat) )
         |> function
         | [] ->
             pos
@@ -564,7 +564,7 @@ let pat_example normpat =
               IntSet.elements lens
               |> List.map (fun len ->
                      PatSeqTot
-                       (NoInfo, repeat len wildpat |> Mseq.Helpers.of_list))
+                       (NoInfo, repeat len wildpat |> Mseq.Helpers.of_list) )
         in
         let cons =
           ConSet.elements cons
@@ -578,7 +578,7 @@ let pat_example normpat =
                | ConCon str ->
                    PatCon (NoInfo, str, Symb.Helpers.nosym, wildpat)
                | RecCon ->
-                   PatRecord (NoInfo, Record.empty))
+                   PatRecord (NoInfo, Record.empty) )
         in
         match seqs @ cons with
         | [] ->

@@ -397,7 +397,8 @@ lang FunParser =
     let r3 = matchKeyword "." r2.pos r2.str  in
     let e = parseExprMain r3.pos 0 r3.str in
     {val = TmLam {ident = nameNoSym r2.val, ty = TyUnknown {},
-                  body = e.val, info = makeInfo p e.pos},
+                  tyBody = TyUnknown {}, body = e.val,
+                  info = makeInfo p e.pos},
      pos = e.pos, str = e.str}
 end
 

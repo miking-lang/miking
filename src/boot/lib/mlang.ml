@@ -74,7 +74,7 @@ type lang_data =
 let spprint_inter_data {info; cases; _} : ustring =
   List.map
     (fun (fi, {pat; _}) ->
-      us "  " ^. ustring_of_pat pat ^. us " at " ^. info2str fi)
+      us "  " ^. ustring_of_pat pat ^. us " at " ^. info2str fi )
     cases
   |> Ustring.concat (us "\n")
   |> fun msg -> us "My location is " ^. info2str info ^. us "\n" ^. msg
@@ -199,7 +199,7 @@ let merge_lang_data fi {inters= i1; syns= s1} {inters= i2; syns= s2} :
           let c2 =
             List.filter
               (fun (fi, _) ->
-                List.exists (fun (fi2, _) -> eq_info fi fi2) c1 |> not)
+                List.exists (fun (fi2, _) -> eq_info fi fi2) c1 |> not )
               c2
           in
           let subsets =
@@ -378,7 +378,7 @@ let rec desugar_tm nss env =
         ( fi
         , List.map
             (fun (fi, name, s, ty, e) ->
-              (fi, empty_mangle name, s, ty, desugar_tm nss env' e))
+              (fi, empty_mangle name, s, ty, desugar_tm nss env' e) )
             bindings
         , desugar_tm nss env' body )
   | TmConDef (fi, name, s, ty, body) ->
@@ -403,7 +403,7 @@ let rec desugar_tm nss env =
       let rec desugar_pat_seq env pats =
         Mseq.Helpers.fold_right
           (fun p (env, pats) ->
-            desugar_pat env p |> map_right (fun p -> Mseq.cons p pats))
+            desugar_pat env p |> map_right (fun p -> Mseq.cons p pats) )
           pats (env, Mseq.empty)
       and desugar_pat env = function
         | PatNamed (fi, name) ->
@@ -423,7 +423,7 @@ let rec desugar_tm nss env =
               |> Record.map (fun p ->
                      let env', p = desugar_pat !env p in
                      env := env' ;
-                     p)
+                     p )
             in
             (!env, PatRecord (fi, pats))
         | PatAnd (fi, l, r) ->
@@ -576,7 +576,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
                 , empty_mangle id
                 , Symb.Helpers.nosym
                 , ty
-                , desugar_tm nss emptyMlangEnv tm ))
+                , desugar_tm nss emptyMlangEnv tm ) )
               lets
           , tm' )
       in

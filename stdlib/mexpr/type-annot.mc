@@ -17,6 +17,34 @@ let _typeEnvEmpty = {
 let _envInsert = assocInsert {eq = nameEqSym}
 let _envLookup = assocLookup {eq = nameEqSym}
 
+-- Given two types that are possibly unknown, this function attempts to find a
+-- type that does not contradict the other, in a given type environment. It is
+-- similar to type equality, except that an unknown type is consistent with any
+-- other type.
+--
+-- If no consistent type can be found, None is returned. This happens when two
+-- known, but distinct, types are given.
+recursive
+let _consistentType =
+  use MExprAst in
+  use MExprEq in
+  lam tyEnv. lam ty1. lam ty2.
+  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+    match _consistentType tyEnv t1.from t2.from with Some a then
+      match _consistentType tyEnv t1.to t2.to with Some b then
+        Some (TyArrow {from = a, to = b})
+      else None ()
+    else None ()
+  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+    match _consistentType tyEnv t1.ty ty2.ty with Some t then
+      Some (TySeq {ty = t})
+    else None ()
+  else if eqType tyEnv ty1 ty2 then Some ty1
+  else None ()
+end
+
 let _isTypeAscription = use MExprAst in
   lam letTerm.
   match letTerm.inexpr with TmVar {ident = id} then
@@ -26,296 +54,208 @@ let _isTypeAscription = use MExprAst in
 lang TypeAnnot =
   UnknownTypeAst + TypeAst + DataAst + FunTypeAst + VarTypeAst + VariantTypeAst
 
-  sem typeExpr (env : TypeEnv) =
-
   sem typeAnnotExpr (env : TypeEnv) =
 
-  sem collectDataTypes (env : TypeEnv) =
-  | TmType t ->
-    match env with {tyEnv = tyEnv} then
-      let emptyVariantType = TyVariant {constrs = []} in
-      let env = {env with tyEnv = _envInsert t.ident emptyVariantType tyEnv} in
-      collectDataTypes env t.inexpr
-    else never
-  | TmConDef t ->
-    match env with {conEnv = conEnv, tyEnv = tyEnv} then
-      match t.ty with TyArrow {from = from, to = TyVar {ident = id}} then
-        match _envLookup id tyEnv with Some (TyVariant c) then
-          let tyv = TyVariant {c with constrs = cons t.ident c.constrs} in
-          let env = {{env with tyEnv = _envInsert id tyv tyEnv}
-                          with conEnv = _envInsert t.ident t.ty conEnv} in
-          collectDataTypes env t.inexpr
-        else
-          error (join [
-            "Type constructor ",
-            nameGetStr t.ident,
-            " references undefined type ",
-            nameGetStr id
-          ])
-      else
-        error (join ["Invalid type of type constructor ", nameGetStr t.ident])
-    else never
-  | t -> sfold_Expr_Expr collectDataTypes env t
-
   sem typeAnnot =
-  | expr ->
-    let env = collectDataTypes _typeEnvEmpty expr in
-    typeAnnotExpr env expr
+  | expr -> typeAnnotExpr _typeEnvEmpty expr
 end
 
 lang VarTypeAnnot = TypeAnnot + VarAst
-  sem typeExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) =
   | TmVar t ->
-    match t.ty with TyUnknown {} then
+    let ty =
       match env with {varEnv = varEnv} then
-        match _envLookup t.ident varEnv with Some ty then
-          ty
+        match t.ty with TyUnknown {} then
+          match _envLookup t.ident varEnv with Some ty then
+            ty
+          else t.ty
         else t.ty
       else never
-    else t.ty
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | var & TmVar t ->
-    TmVar {t with ty = typeExpr env var}
+    in
+    TmVar {t with ty = ty}
 end
 
 lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
-  sem typeExpr (env : TypeEnv) =
-  | TmApp t ->
-    match t.ty with TyUnknown {} then
-      match env with {tyEnv = tyEnv} then
-        match typeExpr env t.lhs with TyArrow {from = from, to = to} then
-          let ty = typeExpr env t.rhs in
-          if eqType tyEnv from ty then
-            to
-          else error "Unexpected type of right-hand side of application"
-        else error "Unexpected type of left-hand side of application"
-      else never
-    else t.ty
-
   sem typeAnnotExpr (env : TypeEnv) =
   | TmApp t ->
-    let t = {{t with lhs = typeAnnotExpr env t.lhs}
-                with rhs = typeAnnotExpr env t.rhs} in
-    TmApp {t with ty = typeExpr env (TmApp t)}
+    let lhs = typeAnnotExpr env t.lhs in
+    let rhs = typeAnnotExpr env t.rhs in
+    let ty =
+      match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
+        if eqType assocEmpty from ty then to else tyunknown_
+      else tyunknown_
+    in
+    TmApp {{{t with lhs = lhs}
+               with rhs = rhs}
+               with ty = ty}
 end
 
 lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
-  sem typeExpr (env : TypeEnv) =
-  | TmLam t ->
-    match t.ty with TyUnknown {} then
-      TyArrow {from = t.ty, to = typeExpr env t.body}
-    else t.ty
-
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = _envInsert t.ident t.ty varEnv} in
-      let t = {t with body = typeAnnotExpr env t.body} in
-      TmLam {t with ty = typeExpr env (TmLam t)}
+      let env = {env with varEnv = _envInsert t.ident t.tyIdent varEnv} in
+      let body = typeAnnotExpr env t.body in
+      let ty = tyarrow_ t.tyIdent (ty body) in
+      TmLam {{t with body = body}
+                with ty = ty}
     else never
-end
-
-lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
-  sem typeExpr (env : TypeEnv) =
-  | TmRecord t ->
-    let f = lam acc. lam k. lam v.
-      assocInsert {eq=eqString} k (typeExpr env v) acc
-    in
-    match t.ty with TyUnknown {} then
-      TyRecord {fields = assocFold {eq=eqString} f assocEmpty t.bindings}
-    else t.ty
-  | TmRecordUpdate t ->
-    match t.ty with TyUnknown {} then
-      typeExpr env t.rec
-    else t.ty
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | TmRecord t ->
-    let bindings = assocMap {eq=eqString} (typeAnnotExpr env) t.bindings in
-    let t = {t with bindings = bindings} in
-    TmRecord {t with ty = typeExpr env (TmRecord t)}
-  | TmRecordUpdate t ->
-    let t = {{t with rec = typeAnnotExpr env t.rec}
-                with value = typeAnnotExpr env t.value} in
-    TmRecordUpdate {t with ty = typeExpr env (TmRecordUpdate t)}
 end
 
 lang LetTypeAnnot = TypeAnnot + LetAst
-  sem typeExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
-    match t.ty with TyUnknown {} then
-      typeExpr env t.inexpr
-    else t.ty
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | l & TmLet t ->
-    let body =
-      match t.tyBody with TyUnknown {} then
-        typeAnnotExpr env t.body
-      else
-        withType t.tyBody t.body
-    in
-    let tyBody = ty body in
-    if _isTypeAscription t then
-      body
-    else
-      match env with {varEnv = varEnv} then
-        let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
-        let t = {t with inexpr = typeAnnotExpr env t.inexpr} in
-        let ty = typeExpr env (TmLet t) in
-        TmLet {{{t with tyBody = tyBody}
-                   with body = body}
-                   with ty = ty}
-      else never
-end
-
-lang TypeTypeAnnot = TypeAnnot + TypeAst
-  sem typeExpr (env : TypeEnv) =
-  | TmType t ->
-    match env with {tyEnv = tyEnv} then
-      match _envLookup t.ident tyEnv with Some ty then
-        ty
-      else t.ty
+    match env with {varEnv = varEnv, tyEnv = tyEnv} then
+      let body = typeAnnotExpr env t.body in
+      match _consistentType tyEnv t.tyBody (ty body) with Some tyBody then
+        if _isTypeAscription t then
+          withType tyBody body
+        else
+          let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
+          let inexpr = typeAnnotExpr env t.inexpr in
+          TmLet {{{{t with tyBody = tyBody}
+                      with body = body}
+                      with inexpr = inexpr}
+                      with ty = ty inexpr}
+      else error "Inconsistent type annotation of let-term"
     else never
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | tpe & TmType t ->
-    TmType {{t with ty = typeExpr env tpe}
-               with inexpr = typeAnnotExpr env t.inexpr}
 end
 
 lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
-  sem typeExpr (env : TypeEnv) =
-  | TmRecLets t ->
-    let f = lam b.
-      match b.ty with TyUnknown {} then
-        match b.body with TmLam _ then
-          typeExpr env b.body
-        else
-          error "Right-hand side of recursive let must be a lambda"
-      else b.ty
-    in
-    match t.ty with TyUnknown {} then
-      map f t.bindings;
-      typeExpr env t.inexpr
-    else t.ty
   sem typeAnnotExpr (env : TypeEnv) =
-  | rl & TmRecLets t ->
-    let bindingf = lam binding.
-      let body = typeAnnotExpr env binding.body in
-      {{binding with body = body}
-                with ty = ty body}
+  | TmRecLets t ->
+    let foldBinding = lam acc. lam binding.
+      _envInsert binding.ident binding.ty acc
     in
-    let t = {{t with bindings = map bindingf t.bindings}
-                with inexpr = typeAnnotExpr env t.inexpr} in
-    TmRecLets {t with ty = typeExpr env (TmRecLets t)}
+    let annotBinding = lam env. lam binding.
+      let body = typeAnnotExpr env binding.body in
+      match env with {tyEnv = tyEnv} then
+        let tyBody =
+          match _consistentType tyEnv binding.ty (ty body) with Some tyBody then
+            tyBody
+          else tyunknown_
+        in
+        {{binding with body = body}
+                  with ty = tyBody}
+      else never
+    in
+    match env with {varEnv = varEnv} then
+      let env = {env with varEnv = foldl foldBinding varEnv t.bindings} in
+      let bindings = map (annotBinding env) t.bindings in
+      let inexpr = typeAnnotExpr env t.inexpr in
+      TmRecLets {{{t with bindings = bindings}
+                     with inexpr = inexpr}
+                     with ty = ty inexpr}
+    else never
 end
 
 lang ConstTypeAnnot = TypeAnnot + ConstAst
   sem typeConst =
   -- Intentionally left blank
 
-  sem typeExpr (env : TypeEnv) =
-  | TmConst t ->
-    match t.ty with TyUnknown {} then
-      typeConst t.val
-    else t.ty
-
   sem typeAnnotExpr (env : TypeEnv) =
-  | const & TmConst t ->
-    TmConst {t with ty = typeExpr env const}
+  | TmConst t -> TmConst {t with ty = typeConst t.val}
+end
+
+lang SeqTypeAnnot = TypeAnnot + SeqAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmSeq t ->
+    let tms = map (typeAnnotExpr env) t.tms in
+    let elemTy =
+      if eqi (length tms) 0 then tyunknown_
+      else ty (get tms 0)
+    in
+    TmSeq {{t with tms = tms}
+              with ty = tyseq_ elemTy}
+end
+
+lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmRecord t ->
+    let bindings = assocMap {eq=eqString} (typeAnnotExpr env) t.bindings in
+    let bindingTypes = assocMap {eq=eqString} ty bindings in
+    let ty = TyRecord {fields = bindingTypes} in
+    TmRecord {{t with bindings = bindings}
+                 with ty = ty}
+  | TmRecordUpdate t ->
+    let rec = typeAnnotExpr env t.rec in
+    let value = typeAnnotExpr env t.value in
+    TmRecordUpdate {{{t with rec = rec}
+                        with value = value}
+                        with ty = ty rec}
+end
+
+lang TypeTypeAnnot = TypeAnnot + TypeAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmType t ->
+    match env with {tyEnv = tyEnv} then
+      let env = {env with tyEnv = _envInsert t.ident t.tyIdent tyEnv} in
+      let inexpr = typeAnnotExpr env t.inexpr in
+      TmType {{t with inexpr = inexpr}
+                 with ty = ty inexpr}
+    else never
 end
 
 lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
-  sem typeExpr (env : TypeEnv) =
-  | TmConDef t -> t.ty
-  | TmConApp t ->
-    match env with {tyEnv = tyEnv, conEnv = conEnv} then
-      match _envLookup t.ident conEnv with Some (TyArrow a) then
-        if eqType tyEnv a.from (typeExpr env t.body) then
-          a.to
-        else error "Invalid type of right-hand side of constructor application"
-      else error "Invalid type of left-hand side of constructor application"
-    else never
-
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConDef t ->
-    TmConDef {t with inexpr = typeAnnotExpr env t.inexpr}
+    match env with {conEnv = conEnv} then
+      let env = {env with conEnv = _envInsert t.ident t.tyIdent conEnv} in
+      let inexpr = typeAnnotExpr env t.inexpr in
+      TmConDef {{t with inexpr = inexpr}
+                   with ty = ty inexpr}
+    else never
   | TmConApp t ->
-    let t = {t with body = typeAnnotExpr env t.body} in
-    TmConApp {t with ty = typeExpr env (TmConApp t)}
+    let body = typeAnnotExpr env t.body in
+    match env with {conEnv = conEnv, tyEnv = tyEnv} then
+      let ty =
+        match _envLookup t.ident conEnv with Some lty then
+          match lty with TyArrow {from = from, to = TyVar target} then
+            match _consistentType tyEnv t.ty from with Some _ then
+              TyVar target
+            else tyunknown_
+          else tyunknown_
+        else error "Application of undefined constructor"
+      in
+      TmConApp {{t with body = body}
+                   with ty = ty}
+    else never
 end
 
 lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
-  sem typeExpr (env : TypeEnv) =
-  | TmMatch t ->
-    match t.ty with TyUnknown {} then
-      match env with {tyEnv = tyEnv} then
-        let thnty = typeExpr env t.thn in
-        let elsty = typeExpr env t.els in
-        if eqType tyEnv thnty elsty then
-          thnty
-        else error "Types of match branches have different types"
-      else never
-    else t.ty
-
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMatch t ->
-    let t = {{{t with target = typeAnnotExpr env t.target}
-                 with thn = typeAnnotExpr env t.thn}
-                 with els = typeAnnotExpr env t.els} in
-    TmMatch {t with ty = typeExpr env (TmMatch t)}
+    let target = typeAnnotExpr env t.target in
+    let thn = typeAnnotExpr env t.thn in
+    let els = typeAnnotExpr env t.els in
+    let ty =
+      match env with {tyEnv = tyEnv} then
+        match _consistentType tyEnv (ty thn) (ty els) with Some ty then
+          ty
+        else tyunknown_
+      else never
+    in
+    TmMatch {{{{t with target = target}
+                  with thn = thn}
+                  with els = els}
+                  with ty = ty}
 end
 
 lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
-  sem typeExpr (env : TypeEnv) =
-  | TmUtest t ->
-    match t.ty with TyUnknown {} then
-      match env with {tyEnv = tyEnv} then
-        let lty = typeExpr env t.test in
-        let rty = typeExpr env t.expected in
-        if eqType tyEnv lty rty then
-          typeExpr env t.next
-        else
-          error "Utest comparing terms of different types"
-      else never
-    else t.ty
-
   sem typeAnnotExpr (env : TypeEnv) =
   | TmUtest t ->
-    let t = {{{t with test = typeAnnotExpr env t.test}
-                 with expected = typeAnnotExpr env t.expected}
-                 with next = typeAnnotExpr env t.next} in
-    TmUtest {t with ty = typeExpr env (TmUtest t)}
+    let test = typeAnnotExpr env t.test in
+    let expected = typeAnnotExpr env t.expected in
+    let next = typeAnnotExpr env t.next in
+    TmUtest {{{{t with test = test}
+                  with expected = expected}
+                  with next = next}
+                  with ty = ty next}
 end
 
-lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
-  sem typeExpr (env : TypeEnv) =
-  | TmSeq t ->
-    match t.ty with TyUnknown {} then
-      match env with {tyEnv = tyEnv} then
-        let fstType = typeExpr env (get t.tms 0) in
-        if all (lam t. eqType tyEnv fstType (typeExpr env t)) t.tms then
-          tyseq_ fstType
-        else
-          error "Sequence contains elements of different types"
-      else never
-    else t.ty
-
-  sem typeAnnotExpr (env : TypeEnv) =
-  | TmSeq t ->
-    let t = {t with tms = map (typeAnnotExpr env) t.tms} in
-    TmSeq {t with ty = typeExpr env (TmSeq t)}
-end
-
--- TODO(larshum, 2021-02-05): Never terms should have a bottom type
 lang NeverTypeAnnot = TypeAnnot + NeverAst
-  sem typeExpr (env : TypeEnv) =
-  | TmNever t -> TyUnknown {}
-
   sem typeAnnotExpr (env : TypeEnv) =
-  | n & TmNever t -> TmNever {t with ty = typeExpr env n}
+  | TmNever t -> TmNever {t with ty = tyunknown_}
 end
 
 lang IntTypeAnnot = ConstTypeAnnot + IntAst
@@ -433,191 +373,147 @@ let y = nameSym "y" in
 let z = nameSym "z" in
 let n = nameSym "n" in
 
--- Type annotation of terms
+let appConst = addi_ (int_ 5) (int_ 2) in
+utest ty (typeAnnot appConst) with tyint_ using eqType assocEmpty in
 
-let ascription = lam body.
-  bind_ (nulet_ x body) (nvar_ x)
-in
+let variableType = tyarrow_ tyint_ tybool_ in
+let appVariable = app_ (withType variableType (nvar_ x)) (int_ 0) in
+utest ty (typeAnnot appVariable) with tybool_ using eqType assocEmpty in
 
-let varBody =
-  bind_ (nulet_ x (int_ 5)) (addi_ (int_ 1) (nvar_ x))
-in
-let innerVarTy =
-  match typeAnnot varBody with TmLet {inexpr = TmApp {rhs = TmVar {ty = ty}}} then
-    ty
-  else never
-in
-utest innerVarTy
-with  tyint_
+let partialAppConst = nlam_ x tyint_ (addi_ (int_ 5) (nvar_ x)) in
+utest ty (typeAnnot partialAppConst)
+with  tyarrow_ tyint_ tyint_
 using eqType assocEmpty in
 
-let appBody = addi_ (int_ 5) (int_ 2) in
-utest ty (typeAnnot (ascription appBody))
-with  tyint_
-using eqType assocEmpty in
-
-let lamBody = nulam_ y (float_ 2.718) in
-utest ty (typeAnnot (ascription lamBody))
-with  tyarrow_ tyunknown_ tyfloat_
-using eqType assocEmpty in
-
-let letWithTypedBody = bind_ (nulet_ x (int_ 0)) unit_ in
-let typedLet = typeAnnot letWithTypedBody in
-let letBodyType =
-  match typedLet with TmLet {tyBody = tyBody} then
-    tyBody
-  else never
-in
-utest letBodyType with tyint_ using eqType assocEmpty in
-utest ty typedLet with tyunit_ using eqType assocEmpty in
-
-let recordBody = record_ [("a", int_ 2), ("b", float_ 2.0), ("c", false_)] in
-let recordType = tyrecord_ [
-  ("a", tyint_), ("b", tyfloat_), ("c", tybool_)
+let badApp = bindall_ [
+  nulet_ x (int_ 5),
+  app_ (nvar_ x) (float_ 3.14)
 ] in
-utest ty (typeAnnot (ascription recordBody))
-with  recordType
-using eqType assocEmpty in
+utest ty (typeAnnot badApp) with tyunknown_ using eqType assocEmpty in
 
-let nestedRecord = record_ [("a", record_ []), ("b", tuple_ [int_ 1])] in
-let nestedRecordType = tyrecord_ [
-  ("a", tyunit_), ("b", tytuple_ [tyint_])
-] in
-let typedRecord = typeAnnot (ascription nestedRecord) in
-let innerRecord1 =
-  match typedRecord with TmRecord t then
-    get (assoc2seq {eq=eqString} t.bindings) 1
-  else never
-in
-let innerRecord2 =
-  match typedRecord with TmRecord t then
-    get (assoc2seq {eq=eqString} t.bindings) 0
-  else never
-in
-utest ty typedRecord with nestedRecordType using eqType assocEmpty in
-utest ty innerRecord1.1 with tyunit_ using eqType assocEmpty in
-utest ty innerRecord2.1 with tytuple_ [tyint_] using eqType assocEmpty in
-
-let recletsBody =
-  bind_
-    (nreclets_ [
-      (x, tyunknown_, nulam_ y (int_ 5))
-    ])
-    unit_ in
-let typeOfInnerLet =
-  match typeAnnot recletsBody with TmRecLets {bindings = [t] ++ bindings} then
-    ty (t.body)
-  else never
-in
-utest typeOfInnerLet
+let lamConstantReturnType = nulam_ x (int_ 0) in
+utest ty (typeAnnot lamConstantReturnType)
 with  tyarrow_ tyunknown_ tyint_
 using eqType assocEmpty in
-utest ty (typeAnnot recletsBody)
-with  tyunit_
-using eqType assocEmpty in
 
-let constBody = int_ 0 in
-utest ty (typeAnnot (ascription constBody))
-with  tyint_
-using eqType assocEmpty in
+let letAscription = bind_ (nlet_ x tyint_ (nvar_ y)) (nvar_ x) in
+utest ty (typeAnnot letAscription) with tyint_ using eqType assocEmpty in
 
-let matchBody = if_ true_ (int_ 2) (int_ 3) in
-utest ty (typeAnnot (ascription matchBody))
-with  tyint_
-using eqType assocEmpty in
+let recLets = typeAnnot (bindall_ [
+  nreclets_ [
+    (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) unit_)),
+    (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) unit_)),
+    (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) unit_) (int_ 1)))
+  ],
+  unit_
+]) in
+utest ty recLets with tyunit_ using eqType assocEmpty in
 
-let utestBody = utest_ (int_ 2) (int_ 4) unit_ in
-let typeOfInnerExpression =
-  match typeAnnot utestBody with TmUtest {test = test} then
-    ty test
+let _ignored =
+  match recLets with TmRecLets {bindings = bindings} then
+    let xTy = tyarrow_ tyunit_ tyint_ in
+    let yTy = tyarrow_ tyunit_ tyint_ in
+    let zTy = tyarrow_ tyunit_ tyunknown_ in
+    utest (get bindings 0).ty with xTy using eqType assocEmpty in
+    utest (get bindings 1).ty with yTy using eqType assocEmpty in
+    utest (get bindings 2).ty with zTy using eqType assocEmpty in
+    ()
   else never
 in
-utest typeOfInnerExpression
-with  tyint_
-using eqType assocEmpty in
-utest ty (typeAnnot utestBody)
-with  tyunit_
-using eqType assocEmpty in
 
-let seqBody = seq_ [int_ 2, int_ 3, int_ 4] in
-utest ty (typeAnnot (ascription seqBody))
-with  tyseq_ tyint_
-using eqType assocEmpty in
+utest ty (typeAnnot (int_ 4)) with tyint_ using eqType assocEmpty in
+utest ty (typeAnnot (char_ 'c')) with tychar_ using eqType assocEmpty in
+utest ty (typeAnnot (float_ 1.2)) with tyfloat_ using eqType assocEmpty in
+utest ty (typeAnnot true_) with tybool_ using eqType assocEmpty in
 
-utest ty (typeAnnot never_)
-with  tyunknown_
-using eqType assocEmpty in
+let emptySeq = typeAnnot (seq_ []) in
+utest ty emptySeq with tyseq_ tyunknown_ using eqType assocEmpty in
 
-let treeName = nameSym "Tree" in
-let nodeName = nameSym "Node" in
-let leafName = nameSym "Leaf" in
-let treeConType = lam lty. tyarrow_ lty (ntyvar_ treeName) in
-let dataType = lam t.
-  bindall_ [
-    ntype_ treeName (TyVariant {constrs = []}),
-    ncondef_ nodeName (treeConType (tytuple_ [ntyvar_ treeName, ntyvar_ treeName])),
-    ncondef_ leafName (treeConType tyint_),
-    t
-  ]
-in
-let expectedVariantType = TyVariant {constrs = [nodeName, leafName]} in
-utest ty (typeAnnot (dataType unit_))
-with  expectedVariantType
-using eqType assocEmpty in
+let intSeq = typeAnnot (seq_ [int_ 1, int_ 2, int_ 3]) in
+utest ty intSeq with tyseq_ tyint_ using eqType assocEmpty in
 
-let tyEnv = seq2assoc {eq=nameEq} [(treeName, expectedVariantType)] in
-let typeOfDataType = lam dataType. ty dataType in
-let treeLeafApp = nconapp_ leafName (int_ 5) in
-utest typeOfDataType (typeAnnot (dataType treeLeafApp))
-with  expectedVariantType
-using eqType tyEnv in
+let intMatrix = typeAnnot (seq_ [seq_ [int_ 1, int_ 2],
+                                 seq_ [int_ 3, int_ 4]]) in
+utest ty intMatrix with tyseq_ (tyseq_ tyint_) using eqType assocEmpty in
 
-let treeNodeApp = nconapp_ nodeName (tuple_ [
-  nconapp_ leafName (int_ 0),
-  nconapp_ leafName (int_ 1)
+let unknownSeq = typeAnnot (seq_ [nvar_ x, nvar_ y]) in
+utest ty unknownSeq with tyseq_ tyunknown_ using eqType assocEmpty in
+
+let emptyRecord = typeAnnot unit_ in
+utest ty emptyRecord with tyunit_ using eqType assocEmpty in
+
+let record = typeAnnot (record_ [
+  ("a", int_ 0), ("b", float_ 2.718), ("c", record_ []),
+  ("d", record_ [
+    ("e", seq_ [int_ 1, int_ 2]),
+    ("f", record_ [
+      ("x", nvar_ x), ("y", nvar_ y), ("z", nvar_ z)
+    ])
+  ])
 ]) in
-utest typeOfDataType (typeAnnot (dataType treeNodeApp))
-with  expectedVariantType
-using eqType tyEnv in
+let expectedRecordType = tyrecord_ [
+  ("a", tyint_), ("b", tyfloat_), ("c", tyunit_),
+  ("d", tyrecord_ [
+    ("e", tyseq_ tyint_),
+    ("f", tyrecord_ [
+      ("x", tyunknown_), ("y", tyunknown_), ("z", tyunknown_)
+    ])
+  ])
+] in
+utest ty record with expectedRecordType using eqType assocEmpty in
+let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
+utest ty recordUpdate with expectedRecordType using eqType assocEmpty in
 
--- Type annotation of constant terms
+let typeDecl = bind_ (ntype_ n tyunknown_) unit_ in
+utest ty (typeAnnot typeDecl) with tyunit_ using eqType assocEmpty in
 
-let constlet = lam body. lam ty.
-  bind_ (nlet_ x ty body) (nvar_ x)
+let conApp = bindall_ [
+  ntype_ n tyunknown_,
+  ncondef_ x (tyarrow_ tyint_ (ntyvar_ n)),
+  nconapp_ x (int_ 4)
+] in
+utest ty (typeAnnot conApp) with ntyvar_ n using eqType assocEmpty in
+
+let matchInteger = typeAnnot (bindall_ [
+  nlet_ x tyint_ (int_ 0),
+  match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
+]) in
+utest ty matchInteger with tyint_ using eqType assocEmpty in
+let _ignored =
+  match matchInteger with TmLet {inexpr = TmMatch t} then
+    utest ty t.target with tyint_ using eqType assocEmpty in
+    utest ty t.thn with tyint_ using eqType assocEmpty in
+    utest ty t.els with tyint_ using eqType assocEmpty in
+    ()
+  else never
 in
 
-let intLiteralLet = constlet (int_ 4) tyunknown_ in
-utest ty (typeAnnot intLiteralLet)
-with  tyint_
-using eqType assocEmpty in
-
-let addiLet = constlet (const_ (CAddi ())) tyunknown_ in
-utest ty (typeAnnot addiLet)
-with  tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-using eqType assocEmpty in
-
-let floatLiteralLet = constlet (float_ 4.0) tyunknown_ in
-utest ty (typeAnnot floatLiteralLet)
-with  tyfloat_
-using eqType assocEmpty in
-
-let boolLiteralLet = constlet true_ tyunknown_ in
-utest ty (typeAnnot boolLiteralLet)
-with  tybool_
-using eqType assocEmpty in
-
-let charLiteralLet = constlet (char_ 'a') tyunknown_ in
-utest ty (typeAnnot charLiteralLet)
-with  tychar_
-using eqType assocEmpty in
-
-let partialApp = lam ty1. lam ty2.
-  bind_
-    (nlet_ x ty1 (withType ty1 (app_ (const_ (CLtf ())) (float_ 3.14))))
-    (nvar_ x)
+let matchDistinct = typeAnnot (
+  match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
+) in
+utest ty matchDistinct with tyunknown_ using eqType assocEmpty in
+let _ignored =
+  match matchDistinct with TmMatch t then
+    utest ty t.target with tyint_ using eqType assocEmpty in
+    utest ty t.thn with tyint_ using eqType assocEmpty in
+    utest ty t.els with tychar_ using eqType assocEmpty in
+    ()
+  else never
 in
-utest ty (typeAnnot (partialApp tyunknown_ tyunknown_))
-with  tyarrow_ tyfloat_ tybool_
-using eqType assocEmpty in
+
+let utestAnnot = typeAnnot (
+  utest_ (int_ 0) false_ (char_ 'c')
+) in
+utest ty utestAnnot with tychar_ using eqType assocEmpty in
+let _ignored =
+  match utestAnnot with TmUtest t then
+    utest ty t.test with tyint_ using eqType assocEmpty in
+    utest ty t.expected with tybool_ using eqType assocEmpty in
+    utest ty t.next with tychar_ using eqType assocEmpty in
+    ()
+  else never
+in
+
+utest ty (typeAnnot never_) with tyunknown_ using eqType assocEmpty in
 
 ()

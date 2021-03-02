@@ -116,7 +116,7 @@ let rec merge_includes root visited = function
       let included_tops =
         included
         |> List.map (function Program (_, tops, _) ->
-               List.filter not_test tops)
+               List.filter not_test tops )
         |> List.concat
       in
       Program (includes, included_tops @ tops, tm)

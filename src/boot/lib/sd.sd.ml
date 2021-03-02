@@ -154,7 +154,7 @@ let delta eval env fi c v =
              [ float_ NoInfo t
              ; sa_array_ NoInfo y
              ; sa_array_ NoInfo y'
-             ; sa_array_ NoInfo r ])
+             ; sa_array_ NoInfo r ] )
       in
       ()
     in
@@ -294,7 +294,7 @@ let delta eval env fi c v =
                    ; float_ NoInfo cj
                    ; sa_array_ NoInfo y
                    ; sa_array_ NoInfo y'
-                   ; sa_matrix_dense_ NoInfo mm ])
+                   ; sa_matrix_dense_ NoInfo mm ] )
             in
             ()
       in
@@ -303,25 +303,26 @@ let delta eval env fi c v =
   | SIdaInitDenseJac (Some tol, Some jacf, None, None, None, None), tm_resf ->
       sd_ (tm_info tm_resf)
         (SIdaInitDenseJac
-           (Some tol, Some jacf, Some (mk_idafun tm_resf), None, None, None))
+           (Some tol, Some jacf, Some (mk_idafun tm_resf), None, None, None) )
   | ( SIdaInitDenseJac (Some tol, Some jacf, Some resf, None, None, None)
     , TmRecord (_, r) ) ->
       let n, rootf = get_roots fi r in
       sd_ fi
         (SIdaInitDenseJac
-           (Some tol, Some jacf, Some resf, Some (n, rootf), None, None))
+           (Some tol, Some jacf, Some resf, Some (n, rootf), None, None) )
   | ( SIdaInitDenseJac
         (Some tol, Some jacf, Some resf, Some (n, rootf), None, None)
     , TmConst (_, CFloat t0) ) ->
       sd_ fi
         (SIdaInitDenseJac
-           (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0, None))
+           (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0, None) )
   | ( SIdaInitDenseJac
         (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0, None)
     , TmConst (fi, CSd (SArray y0)) ) ->
       sd_ fi
         (SIdaInitDenseJac
-           (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0, Some y0))
+           (Some tol, Some jacf, Some resf, Some (n, rootf), Some t0, Some y0)
+        )
   | ( SIdaInitDenseJac
         ( Some (rtol, atol)
         , Some jacf
@@ -376,8 +377,7 @@ let delta eval env fi c v =
     ->
       sd_ fi (SIdaCalcICYYYP (Some s, None, None, None))
   | SIdaCalcICYYYP (Some s, None, None, None), TmConst (_, CSd (SArray y)) ->
-      sd_ fi
-        (SIdaCalcICYYYP (Some s, Some (Nvector_serial.wrap y), None, None))
+      sd_ fi (SIdaCalcICYYYP (Some s, Some (Nvector_serial.wrap y), None, None))
   | SIdaCalcICYYYP (Some s, Some y, None, None), TmConst (_, CSd (SArray y'))
     ->
       sd_ fi

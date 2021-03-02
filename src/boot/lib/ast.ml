@@ -25,6 +25,8 @@ let enable_debug_symbol_print = ref false
 
 let enable_debug_con_shape = ref false
 
+let enable_debug_profiling = ref false
+
 let utest = ref false (* Set to true if unit testing is enabled *)
 
 let utest_ok = ref 0 (* Counts the number of successful unit tests *)
@@ -156,6 +158,7 @@ and const =
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
   (* External functions *)
+  | CPar of tm Parast.ext
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
@@ -334,7 +337,7 @@ let rec map_tm f = function
         (TmRecLets
            ( fi
            , List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, map_tm f t)) lst
-           , map_tm f tm ))
+           , map_tm f tm ) )
   | TmConst (_, _) as t ->
       f t
   | TmSeq (fi, tms) ->
@@ -424,7 +427,7 @@ let tmseq2ustring fi s =
       | TmConst (_, CChar i) ->
           i
       | _ ->
-          raise_error fi "The term is not a string")
+          raise_error fi "The term is not a string" )
     s
   |> Mseq.Helpers.to_ustring
 

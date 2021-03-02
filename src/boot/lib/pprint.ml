@@ -400,7 +400,7 @@ let rec print_const fmt = function
            | T.Float t' ->
                Tensor.Num.shape t'
            | T.NoNum t' ->
-               Tensor.NoNum.shape t')
+               Tensor.NoNum.shape t' )
       |> Array.to_list |> List.map string_of_int |> String.concat ","
       |> fprintf fmt "tensor[%s]"
   | CtensorCreate _ ->
@@ -446,6 +446,9 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetPat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
+  (* Multicore *)
+  | CPar v ->
+      fprintf fmt "%s" (string_of_ustring (Parpprint.pprint v))
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

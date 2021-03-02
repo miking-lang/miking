@@ -101,7 +101,7 @@ let builtin =
                    ( NoInfo
                    , s |> us |> Mseq.Helpers.of_ustring
                      |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   )) ) )
+                   ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)
@@ -142,6 +142,8 @@ let builtin =
   ; ("bootParserGetConst", f (CbootParserGetConst None))
   ; ("bootParserGetPat", f (CbootParserGetPat None))
   ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
+  (* Append multicore intrinsics *)
+  @ Par.externals
   (* Append external functions *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -499,6 +501,9 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
+  (* Multicore *)
+  | CPar v ->
+      Par.arity v
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -547,7 +552,7 @@ let delta eval env fi c v =
          | TmConst (_, CInt n) ->
              n
          | _ ->
-             fail_constapp fi)
+             fail_constapp fi )
     |> Mseq.Helpers.to_array
   in
   let int_array2tm_seq fi a =
@@ -1115,7 +1120,7 @@ let delta eval env fi c v =
                Tensor.Num.create Tensor.Num.Float shape f' |> T.float
            | tm ->
                let f' is = if is = is0 then tm else f is in
-               Tensor.NoNum.create shape f' |> T.no_num)
+               Tensor.NoNum.create shape f' |> T.no_num )
       |> fun t -> TmConst (fi, CTensor t)
   | CtensorCreate _, _ ->
       fail_constapp fi
@@ -1348,6 +1353,9 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
+  (* Multicore *)
+  | CPar v, t ->
+      Par.delta eval env fi v t
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
@@ -1502,7 +1510,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
     Mseq.Helpers.fold_right
       (fun p (patEnv, ps) ->
         let patEnv, p = sPat patEnv p in
-        (patEnv, Mseq.cons p ps))
+        (patEnv, Mseq.cons p ps) )
       pats (patEnv, Mseq.empty)
   and sPat (patEnv : (ident * Symb.t) list) = function
     | PatNamed (fi, NameStr (x, _)) ->
@@ -1532,7 +1540,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
             (fun p ->
               let patEnv', p = sPat !patEnv p in
               patEnv := patEnv' ;
-              p)
+              p )
             pats
         in
         (!patEnv, PatRecord (fi, pats))
@@ -1600,7 +1608,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         List.fold_left
           (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
-            (IdVar (sid_of_ustring x), s) :: env)
+            (IdVar (sid_of_ustring x), s) :: env )
           env lst
       in
       TmRecLets
@@ -1611,7 +1619,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
               , x
               , findsym fi (IdVar (sid_of_ustring x)) env2
               , symbolize_type env ty
-              , symbolize env2 t ))
+              , symbolize env2 t ) )
             lst
         , symbolize env2 tm )
   | TmApp (fi, t1, t2) ->
@@ -1677,7 +1685,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
         List.fold_left
           (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
-            (IdVar (sid_of_ustring x), s) :: env)
+            (IdVar (sid_of_ustring x), s) :: env )
           env lst
       in
       let new_env, new_tm = symbolize_toplevel env2 tm in
@@ -1690,7 +1698,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
                 , x
                 , findsym fi (IdVar (sid_of_ustring x)) env2
                 , symbolize_type env ty
-                , symbolize env2 t ))
+                , symbolize env2 t ) )
               lst
           , new_tm ) )
   | TmConDef (fi, x, _, ty, t) ->
@@ -1803,22 +1811,48 @@ let rec try_match env value pat =
   | PatNot (_, p) -> (
     match try_match env value p with Some _ -> None | None -> Some env )
 
+(* Tracks the number of calls and cumulative runtime of closures *)
+let runtimes = Hashtbl.create 1024
+
+(* Record a call to a closure *)
+let add_call fi ms =
+  if Hashtbl.mem runtimes fi then
+    let old_count, old_time = Hashtbl.find runtimes fi in
+    Hashtbl.replace runtimes fi (old_count + 1, old_time +. ms)
+  else Hashtbl.add runtimes fi (1, ms)
+
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (_, _, s) -> (
-    match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
+    match List.assoc s env with
+    | TmApp (_, TmFix _, _) as t ->
+        eval env t
+    | t ->
+        t )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
     (* Closure application *)
-    | TmClos (_, _, s, t3, env2) -> (
-      try eval ((s, eval env t2) :: Lazy.force env2) t3
-      with Error _ as e ->
-        uprint_endline (us "TRACE: " ^. info2str fiapp) ;
-        raise e )
+    | TmClos (ficlos, _, s, t3, env2) -> (
+        if !enable_debug_profiling then (
+          let t1 = get_wall_time_ms () in
+          let res =
+            try eval ((s, eval env t2) :: Lazy.force env2) t3
+            with Error _ as e ->
+              uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+              raise e
+          in
+          let t2 = get_wall_time_ms () in
+          add_call ficlos (t2 -. t1) ;
+          res )
+        else
+          try eval ((s, eval env t2) :: Lazy.force env2) t3
+          with Error _ as e ->
+            uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+            raise e )
     (* Constant application using the delta function *)
     | TmConst (_, c) ->
         delta eval env fiapp c (eval env t2)
@@ -1852,7 +1886,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
            in
            List.fold_left
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
+             env lst )
       in
       eval (Lazy.force env') t2
   (* Constant *)
@@ -1962,7 +1996,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
            in
            List.fold_left
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
+             env lst )
       in
       eval_toplevel (Lazy.force env') t2
   | TmConDef (_, _, _, _, t) ->

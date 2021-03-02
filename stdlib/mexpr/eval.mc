@@ -59,11 +59,19 @@ let _seqOfCharToString = use MExprAst in
 -- TERMS --
 -----------
 
-lang VarEval = VarAst + IdentifierPrettyPrint
+-- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
+lang FixAst = LamAst
+  syn Expr =
+  | TmFix ()
+end
+
+lang VarEval = VarAst + IdentifierPrettyPrint + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match _evalLookup ident ctx.env with Some t then
-      eval ctx t
+      match t with TmApp {lhs = TmFix _} then
+        eval ctx t
+      else t
     else
       error (concat "Unknown variable: " (pprintVarString ident))
 end
@@ -93,12 +101,6 @@ lang LetEval = LetAst + VarEval
   | TmLet t ->
     eval {ctx with env = _evalInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
-end
-
--- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
-lang FixAst = LamAst
-  syn Expr =
-  | TmFix ()
 end
 
 lang FixEval = FixAst + LamEval + UnknownTypeAst
@@ -159,13 +161,13 @@ lang RecLetsEval =
                                              rhs = eta_var,
                                              ty = TyUnknown(),
                                              info = NoInfo()},
+                               tyBody = TyUnknown {},
                                ty = TyUnknown {},
-                               info = NoInfo()     
+                               info = NoInfo()
                                },
-                               
                  inexpr = bodyacc,
                  ty = TyUnknown {},
-                 info = NoInfo()}                 
+                 info = NoInfo()}
         )
         body
         t.bindings in
@@ -176,6 +178,7 @@ lang RecLetsEval =
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
+                               tyBody = TyUnknown {},
                                ty = TyUnknown {},
                                info = NoInfo()} in
     eval {ctx with env =

@@ -33,9 +33,9 @@ let files_of_folders lst =
         |> List.map (fun x -> add_slash v ^ x)
         |> List.filter (fun x -> not (Sys.is_directory x))
         |> List.filter (fun x ->
-               not (String.contains x '#' || String.contains x '~')) )
+               not (String.contains x '#' || String.contains x '~') ) )
         @ a
-      else v :: a)
+      else v :: a )
     [] lst
 
 (* Iterate over all potential test files and run tests *)
@@ -83,6 +83,10 @@ let main =
       , Arg.Set enable_debug_con_shape
       , " Enables printing of the shape of values given to constructors, to \
          stderr." )
+    ; ( "--debug-profile"
+      , Arg.Set enable_debug_profiling
+      , " Enables printing of number of calls to and cumulative runtime of \
+         closures." )
     ; ( "--symbol"
       , Arg.Set enable_debug_symbol_print
       , " Enables output of symbols for variables. Affects all other debug \

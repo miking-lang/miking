@@ -66,11 +66,13 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmLam {ident = ident, body = body, ty = ty, info = info} ->
+  | TmLam {ident = ident, tyIdent = tyIdent, body = body, ty = ty, info = info} ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env ty in
+      let tyIdent = symbolizeType env tyIdent in
       if nameHasSym ident then
         TmLam {ident = ident,
+               tyIdent = tyIdent,
                body = symbolizeExpr env body,
                ty = ty,
                info = info}
@@ -80,6 +82,7 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
         let varEnv = assocInsert {eq=eqString} str ident varEnv in
         let env = {env with varEnv = varEnv} in
         TmLam {ident = ident,
+               tyIdent = tyIdent,
                body = symbolizeExpr env body,
                ty = ty,
                info = info}
@@ -126,17 +129,20 @@ lang TypeSym = Sym + TypeAst
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmType {ident = ident, ty = ty, inexpr = inexpr} ->
+  | TmType {ident = ident, tyIdent = tyIdent, ty = ty, inexpr = inexpr} ->
     match env with {tyEnv = tyEnv} then
+      let tyIdent = symbolizeType env tyIdent in
       let ty = symbolizeType env ty in
       if nameHasSym ident then
-        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+        TmType {ident = ident, tyIdent = tyIdent,
+                ty = ty, inexpr = symbolizeExpr env inexpr}
       else
         let ident = nameSetNewSym ident in
         let str = nameGetStr ident in
         let tyEnv = assocInsert {eq=eqString} str ident tyEnv in
         let env = {env with tyEnv = tyEnv} in
-        TmType {ident = ident, ty = ty, inexpr = symbolizeExpr env inexpr}
+        TmType {ident = ident, tyIdent = tyIdent,
+                ty = ty, inexpr = symbolizeExpr env inexpr}
     else never
 end
 
@@ -181,11 +187,13 @@ lang DataSym = Sym + DataAst
   -- Intentinally left blank
 
   sem symbolizeExpr (env : SymEnv) =
-  | TmConDef {ident = ident, inexpr = inexpr, ty = ty, info = info} ->
+  | TmConDef {ident = ident, tyIdent = tyIdent, inexpr = inexpr, ty = ty, info = info} ->
     match env with {conEnv = conEnv} then
+      let tyIdent = symbolizeType env tyIdent in
       let ty = symbolizeType env ty in
       if nameHasSym ident then
         TmConDef {ident = ident,
+                  tyIdent = tyIdent,
                   inexpr = symbolizeExpr env inexpr,
                   ty = ty,
                   info = info}
@@ -195,6 +203,7 @@ lang DataSym = Sym + DataAst
         let conEnv = assocInsert {eq=eqString} str ident conEnv in
         let env = {env with conEnv = conEnv} in
         TmConDef {ident = ident,
+                  tyIdent = tyIdent,
                   inexpr = symbolizeExpr env inexpr,
                   ty = ty,
                   info = info}

@@ -84,7 +84,7 @@ let string_of_intlist il =
   |> List.fold_left
        (fun i x ->
          Bytes.set s i (char_of_int x) ;
-         i + 1)
+         i + 1 )
        0
   |> ignore ;
   Bytes.to_string s
