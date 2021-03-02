@@ -64,11 +64,11 @@ let minimize : (SearchState v c -> Bool) -> (SearchState v c -> Unit) -> SearchS
           ({sstate with stuck = true}, mstate)
         else
           let mstate = next.1 in
-          let cur = optionGetOrElse (lam _. error "Expected a solution") newCur in
+          let cur = optionGetOrElse (lam. error "Expected a solution") newCur in
           -- New best solution?
           let inc = if lti (sstate.cmp cur.1 sstate.inc.1) 0 then cur else sstate.inc in
           let sstate = {{sstate with cur = cur} with inc = inc} in
-          let _ = callAfterEachIter sstate in
+          callAfterEachIter sstate;
           search sstate mstate
       else
         (sstate, mstate)
@@ -104,7 +104,7 @@ let stepSA : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
         let proposalOpt = select (neighbourhood state) state in
         -- Leave meta unchanged if stuck
         match proposalOpt with None () then (None (), meta) else
-        let proposal = optionGetOrElse (lam _. error "Expected a solution") proposalOpt in
+        let proposal = optionGetOrElse (lam. error "Expected a solution") proposalOpt in
         -- Metropolis condition
         if leqi (state.cmp proposal.1 state.cur.1) 0 then
           -- Always accept improving solution
@@ -244,7 +244,7 @@ let randElem = lam seq.
 let randomBest = lam ns. lam state.
   match ns with [] then None () else
   let costs = map cost ns in
-  let minCost = minOrElse (lam _. error "undefined") subi costs in
+  let minCost = minOrElse (lam. error "undefined") subi costs in
   let nsCosts = zipWith (lam n. lam c. (n,c)) ns costs in
   let minNs = filter (lam t. eqi t.1 minCost) nsCosts in
   randElem minNs
@@ -290,8 +290,8 @@ let metaTabu = (tabuState, stepTabu (neighbours g) randomBest) in
 -- Solve the problem --
 -----------------------
 
-let _ = print "Choose a random best solution:\n" in
-let _ = printIter initState in
+print "Choose a random best solution:\n";
+printIter initState;
 let r = minimizeTSP1 (lam st. geqi st.iter 50) metaRandBest in
 
 let sstate = r.0 in
@@ -299,16 +299,16 @@ utest sstate.iter with 50 in
 utest sstate.inc.1 with 251 in -- optimum
 utest sstate.stuck with false in
 
-let _ = print "Steepest descent:\n" in
-let _ = printIter initState in
+print "Steepest descent:\n";
+printIter initState;
 let r = minimizeTSP1 (lam st. geqi st.iter 100) metaSteepDesc in
 
 let sstate = r.0 in
 utest sstate.inc.1 with 251 in
 utest sstate.stuck with true in
 
-let _ = print "Simulated annealing:\n" in
-let _ = printIter initState in
+print "Simulated annealing:\n";
+printIter initState;
 let r = minimizeTSP metaSA in
 
 let sstate = r.0 in
@@ -317,8 +317,8 @@ utest sstate.iter with 3 in
 utest sstate.stuck with false in
 utest mstate.temp with mulf 0.95 (mulf 0.95 (mulf 0.95 100.0)) in
 
-let _ = print "Tabu search:\n" in
-let _ = printIter initState in
+print "Tabu search:\n";
+printIter initState;
 let r = minimizeTSP metaTabu in
 
 let sstate = r.0 in
@@ -331,10 +331,10 @@ utest mstate.isTabu sstate.cur.0 mstate.tabu with true in
 utest mstate.isTabu sstate.inc.0 mstate.tabu with true in
 
 -- Switch between meta-heuristics during search
-let _ = print "Start with tabu search:\n" in
-let _ = printIter initState in
+print "Start with tabu search:\n";
+printIter initState;
 let r = minimizeTSP2 (lam state. geqi state.iter 5) initState metaTabu in
-let _ = print "Switch to simulated annealing:\n" in
+print "Switch to simulated annealing:\n";
 let r = minimizeTSP2 (lam state. geqi state.iter 10) r.0 metaSA in
 
 ------------------------------------
@@ -350,8 +350,8 @@ let fooStep : StepFun = lam state. lam mstate.
 
 let metaHeurFoo = (FooMetaState {foo = 0}, fooStep) in
 
-let _ = print "Foo search:\n" in
-let _ = printIter initState in
+print "Foo search:\n";
+printIter initState;
 let r = minimizeTSP metaHeurFoo in
 
 let fooVal = match r.1 with FooMetaState s then s.foo else error "Not a FooMetaState" in

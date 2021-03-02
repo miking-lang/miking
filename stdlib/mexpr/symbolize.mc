@@ -353,42 +353,42 @@ let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
 
 lang NamedPatSym = NamedPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PNamed p ->
+  | PatNamed p ->
     match _symbolize_patname patEnv p.ident with (patEnv, patname) then
-      (patEnv, PNamed {p with ident = patname})
+      (patEnv, PatNamed {p with ident = patname})
     else never
 end
 
 lang SeqTotPatSym = SeqTotPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PSeqTot p ->
+  | PatSeqTot p ->
     let res = mapAccumL (symbolizePat env) patEnv p.pats in
-    (res.0, PSeqTot {p with pats = res.1})
+    (res.0, PatSeqTot {p with pats = res.1})
 end
 
 lang SeqEdgePatSym = SeqEdgePat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PSeqEdge p ->
+  | PatSeqEdge p ->
     let preRes = mapAccumL (symbolizePat env) patEnv p.prefix in
     let midRes = _symbolize_patname preRes.0 p.middle in
     let postRes = mapAccumL (symbolizePat env) midRes.0 p.postfix in
-    (postRes.0, PSeqEdge
+    (postRes.0, PatSeqEdge
       {{{p with prefix = preRes.1} with middle = midRes.1} with postfix = postRes.1})
 end
 
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PRecord {bindings = bindings, info = info} ->
+  | PatRecord {bindings = bindings, info = info} ->
     match assocMapAccum {eq=eqString}
-            (lam patEnv. lam _. lam p. symbolizePat env patEnv p) patEnv bindings
+            (lam patEnv. lam. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
-      (env, PRecord {bindings = bindings, info = info})
+      (env, PatRecord {bindings = bindings, info = info})
     else never
 end
 
 lang DataPatSym = DataPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PCon {ident = ident, subpat = subpat, info = info} ->
+  | PatCon {ident = ident, subpat = subpat, info = info} ->
     match env with {conEnv = conEnv} then
       let ident =
         if nameHasSym ident then ident
@@ -398,52 +398,52 @@ lang DataPatSym = DataPat
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match symbolizePat env patEnv subpat with (patEnv, subpat) then
-        (patEnv, PCon {ident = ident, subpat = subpat, info = info})
+        (patEnv, PatCon {ident = ident, subpat = subpat, info = info})
       else never
     else never
 end
 
 lang IntPatSym = IntPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PInt i -> (patEnv, PInt i)
+  | PatInt i -> (patEnv, PatInt i)
 end
 
 lang CharPatSym = CharPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PChar c -> (patEnv, PChar c)
+  | PatChar c -> (patEnv, PatChar c)
 end
 
 lang BoolPatSym = BoolPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PBool b -> (patEnv, PBool b)
+  | PatBool b -> (patEnv, PatBool b)
 end
 
 lang AndPatSym = AndPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PAnd p ->
+  | PatAnd p ->
     let lRes = symbolizePat env patEnv p.lpat in
     let rRes = symbolizePat env lRes.0 p.rpat in
-    (rRes.0, PAnd {{p with lpat = lRes.1} with rpat = rRes.1})
+    (rRes.0, PatAnd {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang OrPatSym = OrPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | POr p ->
+  | PatOr p ->
     let lRes = symbolizePat env patEnv p.lpat in
     let rRes = symbolizePat env lRes.0 p.rpat in
-    (rRes.0, POr {{p with lpat = lRes.1} with rpat = rRes.1})
+    (rRes.0, PatOr {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang NotPatSym = NotPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
-  | PNot p ->
+  | PatNot p ->
     -- NOTE(vipa, 2020-09-23): new names in a not-pattern do not
     -- matter since they will never bind (it should probably be an
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
     -- symbolizeExpr though, constructors must refer to the right symbol.
     let res = symbolizePat env patEnv p.subpat in
-    (patEnv, PNot {p with subpat = res.1})
+    (patEnv, PatNot {p with subpat = res.1})
 end
 
 ------------------------------
@@ -538,18 +538,17 @@ let debug = false in
 let debugPrint = lam i. lam t.
   let r = symbolize t in
   if debug then
-    let _ = printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]) in
-    let _ = printLn (expr2str t) in
-    let _ = print "\n" in
-    let _ = printLn "--- AFTER SYMBOLIZE ---" in
-    let _ = printLn (expr2str r) in
-    let _ = print "\n" in
+    printLn (join ["--- ", int2string i, " BEFORE SYMBOLIZE ---"]);
+    printLn (expr2str t);
+    print "\n";
+    printLn "--- AFTER SYMBOLIZE ---";
+    printLn (expr2str r);
+    print "\n";
     ()
   else ()
 in
 
-let _ =
-  mapi debugPrint [
+mapi debugPrint [
     base,
     rec,
     letin,
@@ -568,7 +567,7 @@ let _ =
     matchor,
     matchnot,
     matchoredge
-  ]
-in
+  ];
+
 
 ()

@@ -83,8 +83,8 @@ and const =
   | Ceqc of int option
   | Cchar2int
   | Cint2char
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq of int option
+  (* MCore intrinsic: sequences *)
+  | Ccreate of int option
   | Clength
   | Cconcat of tm Mseq.t option
   | Cget of tm Mseq.t option
@@ -93,6 +93,7 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
+  | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
   | CrandSetSeed
@@ -130,6 +131,18 @@ and const =
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapBindings
+  (* MCore intrinsics: Tensors *)
+  | CTensor of tm T.t
+  | CtensorCreate of int array option
+  | CtensorGetExn of tm T.t option
+  | CtensorSetExn of tm T.t option * int array option
+  | CtensorRank
+  | CtensorShape
+  | CtensorCopyExn of tm T.t option
+  | CtensorReshapeExn of tm T.t option
+  | CtensorSliceExn of tm T.t option
+  | CtensorSubExn of tm T.t option * int option
+  | CtensorIteri of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString

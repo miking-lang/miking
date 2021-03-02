@@ -173,7 +173,6 @@ x
 introduces a new name `x`. The built-in function `addi` performs an addition between two integers. Note that MCore uses a call-by-value evaluation order, which means that expressions are evaluated into a value before they are applied to a function or substituted using a `let` expression. Hence, the expression `addi 1 2` is evaluated before it is substituted for `x` in the rest of the expression.
 
 
-
 ### Functions
 
 Functions are always defined anonymously as lambda functions. If you would like to give a function a name, a `let` expression can be used. For instance, the following program defines a function `double` that doubles the value of its argument.
@@ -205,6 +204,43 @@ utest foo 2 3 with 5 in
 ```
 creates a function `foo` that takes two arguments.
 
+A lambda can also be defined without a variable, e.g., `lam. e`, where
+`e` is some expression representing the body of the function. Such
+notation is useful if the actual variable is not used inside `e`. Note
+that `lam. e` is syntactic sugar for a normal lambda `lam #var"". e`,
+where the identifier of the variable name is the empty identifier.
+
+### Sequencing
+
+Sometimes an expression has a side effect and you are not interested
+in the returned value. If that is the case, you can use the sequence
+operator `;`. For instance, suppose you would like to print a value in
+a function before it returns:
+
+```
+let foo = lam x.
+  print x;
+  x
+```
+
+The sequence operator `;` is not a construct of pure MExpr, but
+syntactic sugar for a `let` construct. For instance, the pure version
+(without syntactic sugar) of the program above is as follows:
+
+```
+let foo = lam x.
+  let #var"" = print x in
+  x
+```
+
+Note that a variable with an empty identifier is used in the `let` expression. Moreover, note that a `let` expression
+
+```
+let _ = foo x in ...
+```
+
+is syntactically not valid since `let` expressions always bind a value to a variable. Underscore `_` is a pattern and patterns are only allowed in `match` expressions.
+
 ### `if` Expressions
 
 Conditional expressions can be expressed using `if` expressions. The program
@@ -217,6 +253,18 @@ utest answer with "yes" in
 ```
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
+
+Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, expression
+
+```
+if x then e1 else e2
+```
+
+is translated into
+
+```
+match x with true then e1 else e2
+```
 
 ### Recursion
 
@@ -500,6 +548,89 @@ Again, matching can be combined and nested:
 ```
 utest match (1,[["a","b"],["c"]],76) with (1,b++[["c"]],76) then b else []
 with [["a","b"]] in
+```
+
+### Tensors
+Tensors are mutable data structures and can be of up to rank 16. The index
+of an element is represented as a sequence of integers.
+
+We construct tensors using `tensorCreate shape f`, where `shape` is a sequence
+denoting the shape of the tensor and `f` is a function taking an index as an
+argument and returning the element at that index.
+
+We can construct a zero-order tensor with value `'a'` as
+```
+let t0 = tensorCreate [] (lam _. 'a') in
+utest tensorRank t0 with 0 in
+utest tensorShape t0 with [] in
+```
+
+We can access and mutate elements in a tensor using
+```
+utest tensorSetExn t0 [] 'b' with () in
+utest tensorGetExn t0 [] with 'b' in
+```
+
+We can construct a rank 1 tensor (i.e. vector) as
+```
+let t1 = tensorCreate [9] (lam i. addi (get i 0) 1) in
+utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
+```
+where `tensorToSeqExn` is defined in `tensor.mc`.
+
+We can reshape our rank 1 tensor into a rank 2 tensor (i.e. a matrix).
+```
+let t2 = tensorReshapeExn t1 [3, 3] in
+```
+
+Reshape does no copying and the data is shared between `t1` and `t2`
+```
+let _ = tensorSetExn t2 [0, 0] 2 in
+utest tensorGetExn t1 [0] with 2 in
+```
+
+We can slice the second row from `t2` as
+```
+let r2 = tensorSliceExn t2 [1] in
+utest tensorToSeqExn r2 with [4, 5, 6] in
+```
+
+Slicing reduces the rank of the tensor
+```
+utest tensorRank r2 with 1 in
+```
+
+We can slice multiple dimensions at once
+```
+let e = tensorSliceExn t2 [1, 1] in
+utest tensorGetExn e [] with 5 in
+utest tensorRank e with 0 in
+```
+
+A slice shares data with the original tensor and no copying of data is done.
+```
+let _ = tensorFill r2 0 in
+utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
+```
+where we use `tensorFill` from `tensor.mc`.
+
+We can get a subset of the rows of t2 by restricting its 0th dimension.
+```
+let s1 = tensorSubExn t2 1 2 in
+utest tensorShape s1 with [2, 3] in
+utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
+```
+
+We can also copy the content of one tensor to another
+```
+let s2 = tensorSubExn t2 0 2 in
+utest tensorCopyExn s1 s2 with () in
+```
+
+As before, none of these operations (except copy) does any copying
+and the data is shared.
+```
+utest tensorToSeqExn t1 with [0, 0, 0, 7, 8, 9, 7, 8, 9] in
 ```
 
 ### References

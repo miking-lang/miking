@@ -20,7 +20,7 @@ utest if false then dprint ["message\n","hi"] else 0 with 0 in
 -- String -> String -> ()
 let str1 = "A unicode string.\n島" in
 let file = "_testfile" in
-let _ = writeFile file str1 in
+writeFile file str1;
 
 
 -- 'readFile fname' reads a text file with filename 'fname' and returns a string
@@ -34,7 +34,7 @@ utest fileExists file with true in
 
 
 -- 'deleteFile fname' deletes a file with name 'fname'
-let _ = deleteFile file in
+deleteFile file;
 utest fileExists file with false in
 
 
@@ -44,7 +44,7 @@ utest if false then error "message" else 0 with 0 in
 
 
 -- 'argv' contains the program arguments
-utest slice argv 1 2 with [] in
+utest subsequence argv 1 2 with [] in
 
 -- 'exit c' exits the program with error code 'c'
 utest if true then () else exit 1 with () in

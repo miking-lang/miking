@@ -339,9 +339,9 @@ let breakableGenGrammar
   -> BreakableGenGrammar prodLabel res self
   = lam cmp. lam grammar.
     let nOpId : Ref OpId = ref _firstOpId in
-    let newOpId : () -> OpId = lam _.
+    let newOpId : () -> OpId = lam.
       let res = deref nOpId in
-      let _ = modref nOpId (_nextOpId res) in
+      modref nOpId (_nextOpId res);
       res in
 
     let label
@@ -390,7 +390,7 @@ let breakableGenGrammar
     let updateRef : Ref a -> (a -> a) -> ()
       = lam ref. lam f. modref ref (f (deref ref)) in
 
-    let _ = for_ grammar.productions
+    for_ grammar.productions
       (lam prod.
         let label = label prod in
         let id = toOpId label in
@@ -408,8 +408,7 @@ let breakableGenGrammar
           let l = breakableMapAllowSet toOpId _cmpOpId l in
           let p = getGroupingByRight id in
           updateRef postfixes (cons (label, PostfixI {id = id, construct = c, leftAllow = l, precWhenThisIsRight = p}))
-        else never)
-    in
+        else never);
 
     { atoms = mapFromList cmp (deref atoms)
     , prefixes = mapFromList cmp (deref prefixes)
@@ -433,8 +432,9 @@ recursive let _maxDistanceFromRoot
   = lam n.
     match n with TentativeMid {maxDistanceFromRoot = r} then r else
     match n with TentativeRoot _ then 0 else
-    match n with TentativeLeaf {parents = parents} then maxOrElse (lam _. 0) subi (map _maxDistanceFromRoot parents) else
-    let _ = dprintLn n in never
+    match n with TentativeLeaf {parents = parents} then maxOrElse (lam. 0) subi (map _maxDistanceFromRoot parents) else
+    dprintLn n;
+    never
 end
 
 let _shallowAllowedLeft
@@ -457,7 +457,7 @@ let _shallowAllowedRight
       match parent with TentativeRoot _ then Some node else
       match parent with TentativeMid {tentativeData = (InfixT {input = InfixI {rightAllow = s}} | PrefixT {input = PrefixI {rightAllow = s}})} then
         if breakableInAllowSet (_opIdP node) s then Some node else None ()
-      else let _ = dprintLn parent in never
+      else dprintLn parent; never
     else never
 
 let _addRightChildren
@@ -495,7 +495,7 @@ let _addLeftChildren
         { parents = parents
         , addedNodesLeftChildren = addedLeft
         , addedNodesRightChildren = addedRight
-        , maxDistanceFromRoot = addi 1 (maxOrElse (lam _. 0) subi (map _maxDistanceFromRoot parents))
+        , maxDistanceFromRoot = addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot parents))
         , tentativeData = InfixT {input = input, self = self, leftChildAlts = leftChildren}
         }
     else match input with PostfixI _ then
@@ -515,10 +515,10 @@ let _addRightChildToParent
     let target = _addedNodesRightChildren parent in
     match deref target with (lastUpdate, prev) then
       if _isBefore lastUpdate time then
-        let _ = modref target (time, [child]) in
+        modref target (time, [child]);
         Some parent
       else
-        let _ = modref target (time, cons child prev) in
+        modref target (time, cons child prev);
         None ()
     else never
 
@@ -533,10 +533,10 @@ let _addLeftChildToParent
       match deref target with (lastUpdate, prev) then
         if _isBefore lastUpdate time then
           let leftChildrenHere = ref [child] in
-          let _ = for_ parents (lam p. modref (_addedNodesLeftChildren p) (time, leftChildrenHere)) in
+          for_ parents (lam p. modref (_addedNodesLeftChildren p) (time, leftChildrenHere));
           Some parents
         else
-          let _ = modref prev (cons child (deref prev)) in
+          modref prev (cons child (deref prev));
           None ()
       else never
     else never -- TODO(vipa, 2021-02-12): this isn't technically never for the typesystem, since we're matching against a possibly empty list. However, the list will never be empty, by the comment about NonEmpty above
@@ -575,10 +575,10 @@ let _newQueueFromFrontier
   = lam frontier.
     -- TODO(vipa, 2021-02-12): This could use a `make : (Int -> a) -> Int -> [a]` that we discussed a while back
     map
-      (lam _. ref [])
-      (makeSeq
-        (addi 1 (maxOrElse (lam _. 0) subi (map _maxDistanceFromRoot frontier)))
-        ())
+      (lam. ref [])
+      (create
+        (addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier)))
+        (lam. ()))
 let _addToQueue
   : TentativeNode res self ROpen
   -> BreakableQueue res self
@@ -594,7 +594,7 @@ recursive let _popFromQueue
     match queue with queue ++ [target] then
       let nodes = deref target in
       match nodes with [node] ++ nodes then
-        let _ = modref target nodes in
+        modref target nodes;
         Some node
       else _popFromQueue queue
     else None ()
@@ -610,7 +610,7 @@ let _addLOpen
   -> Option (State res self rstyle)
   = lam input. lam self. lam st.
     let time = addi 1 (deref st.timestep) in
-    let _ = modref st.timestep time in
+    modref st.timestep time;
 
     let makeNewParents
       : [TentativeNode res self ROpen] -- NonEmpty
@@ -630,14 +630,14 @@ let _addLOpen
       -> Option [TentativeNode res self ROpen] -- NonEmpty
       = lam queue. lam child.
         match _getParents child with Some parents then
-          let _ = for_ parents
+          for_ parents
             (lam parent.
               if not (_mayGroupLeft parent input) then () else
               match _shallowAllowedRight parent child with Some child then
                 match _addRightChildToParent time child parent with Some parent then
                   _addToQueue parent queue
                 else ()
-              else ()) in
+              else ());
           match (_shallowAllowedLeft input child, filter (lam l. _mayGroupRight l input) parents)
           with (Some child, parents & [_] ++ _) then
             _addLeftChildToParent time child parents
@@ -684,7 +684,7 @@ let breakableAddPrefix
         { parents = frontier
         , addedNodesLeftChildren = addedLeft
         , addedNodesRightChildren = addedRight
-        , maxDistanceFromRoot = addi 1 (maxOrElse (lam _. 0) subi (map _maxDistanceFromRoot frontier))
+        , maxDistanceFromRoot = addi 1 (maxOrElse (lam. 0) subi (map _maxDistanceFromRoot frontier))
         , tentativeData = PrefixT {input = input, self = self}
         }
       ]
@@ -718,7 +718,7 @@ let breakableFinalizeParse
   -> [PermanentNode res self]
   = lam st.
     let time = addi 1 (deref st.timestep) in
-    let _ = modref st.timestep time in
+    modref st.timestep time;
 
     let handleLeaf
       : BreakableQueue res self
@@ -744,7 +744,7 @@ let breakableFinalizeParse
           let children = (deref (_addedNodesRightChildren p)).1 in
           match p with TentativeRoot _ then children
           else match (p, children) with (TentativeMid _, [_] ++ _) then
-            let _ = handleLeaf queue (_addRightChildren st p children) in
+            handleLeaf queue (_addRightChildren st p children);
             work queue
           else match p with TentativeMid _ then
             error "Somehow reached a TentativeMid without right children, that was still added to the queue"
@@ -754,7 +754,7 @@ let breakableFinalizeParse
 
     let frontier = st.frontier in
     let queue = _newQueueFromFrontier frontier in
-    let _ = iter (handleLeaf queue) frontier in
+    iter (handleLeaf queue) frontier;
     work queue
 
 type BreakableError self
@@ -811,9 +811,9 @@ let breakableConstructResult
             -- TODO(vipa, 2021-02-15): Compute valid elisons, and use those to
             -- populate the 'irrelevant' field
             let err = {first = err.first, last = err.last, irrelevant = []} in
-            let _ = modref ambiguities (cons err (deref ambiguities)) in
+            modref ambiguities (cons err (deref ambiguities));
             None ()
-          else let _ = dprintLn nodes in never
+          else dprintLn nodes; never
       let workOne
         : PermanentNode res self
         -> Option res

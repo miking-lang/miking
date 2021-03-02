@@ -96,8 +96,8 @@ lang StrFormatBase
         -- sequence of non-alpha chars.
         let found_idx = index isAlpha s in
         match found_idx with Some i then
-          let fmtstr = slice s 0 (addi i 1) in
-          let remaining = slice s (addi i 1) (length s) in
+          let fmtstr = subsequence s 0 (addi i 1) in
+          let remaining = subsequence s (addi i 1) (length s) in
           concat (toFormat fmtstr (head args)) (strFormat (tail args) remaining)
         else
           error (concat "StrFormatBase: strFormat: Unrecognized format: " s)
@@ -122,6 +122,6 @@ utest sprintf "Hello, %s!" [FmtStr("John Doe")] with "Hello, John Doe!" in
 utest sprintf "My initials are %c.%c." [FmtChar('J'), FmtChar('D')] with "My initials are J.D." in
 utest sprintf "%* means %*" [FmtStr("Five"), FmtInt(5)] with "Five means 5" in
 
-utest sprintf "%s should be %_s or %^s" (makeSeq 3 (FmtStr ("cAsE"))) with "cAsE should be case or CASE" in
+utest sprintf "%s should be %_s or %^s" (create 3 (lam. (FmtStr ("cAsE")))) with "cAsE should be case or CASE" in
 
 ()

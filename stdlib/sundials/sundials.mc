@@ -6,7 +6,7 @@ let idaRCStopTimeReached = 1
 let idaVarIdDifferential = 1.
 let idaVarIdAlgebraic = 0.
 
-let noroots = (0, lam _. error "Called noroots")
+let noroots = (0, lam. error "Called noroots")
 
 let sArr2Seq = lam a.
   recursive let work = lam seq. lam i.

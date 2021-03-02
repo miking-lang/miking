@@ -28,24 +28,18 @@ let fooAC = use AC in (TmFoo ()) in
 utest fooA2 with fooA in
 utest fooAC with fooA in
 
-let _ = 
-  use A in
+use A in
   utest isA (TmFoo ()) with true in
   utest isB (TmFoo ()) with false in
-  ()
-in
+  ();
 
-let _ = 
-  use AC in
+use AC in
   utest isA (TmFoo ()) with true in
   utest isB (TmFoo ()) with false in
-  ()
-in
+  ();
 
-let _ = 
-  use B in
+
+use B in
   utest isA (TmFoo ()) with false in
   utest isB (TmFoo ()) with true in
   ()
-in
-()

@@ -56,11 +56,11 @@ lang OCamlSym =
     OTmRecord {t with bindings = bindings}
 
   sem symbolizePat (env : Env) (patEnv : Env) =
-  | OPTuple { pats = pats } ->
+  | OPatTuple { pats = pats } ->
     match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
-      (patEnv, OPTuple { pats = pats })
+      (patEnv, OPatTuple { pats = pats })
     else never
-  | OPCon t ->
+  | OPatCon t ->
     match env with {conEnv = conEnv} then
       let ident =
         if nameHasSym t.ident then t.ident
@@ -70,13 +70,13 @@ lang OCamlSym =
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match mapAccumL (symbolizePat env) patEnv t.args with (patEnv, args) then
-        (patEnv, OPCon {{t with ident = ident}
+        (patEnv, OPatCon {{t with ident = ident}
                            with args = args})
       else never
     else never
-  | OPRecord t ->
-    let symf = lam patEnv. lam _. lam p. symbolizePat env patEnv p in
+  | OPatRecord t ->
+    let symf = lam patEnv. lam _i. lam p. symbolizePat env patEnv p in
     match assocMapAccum {eq=eqString} symf patEnv t.bindings with (env, bindings) then
-      (env, OPRecord {t with bindings = bindings})
+      (env, OPatRecord {t with bindings = bindings})
     else never
 end

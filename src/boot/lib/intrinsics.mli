@@ -3,7 +3,7 @@ open Ustring.Op
 module Mseq : sig
   type 'a t
 
-  val make : int -> 'a -> 'a t
+  val create : int -> (int -> 'a) -> 'a t
 
   val empty : 'a t
 
@@ -22,6 +22,8 @@ module Mseq : sig
   val reverse : 'a t -> 'a t
 
   val split_at : 'a t -> int -> 'a t * 'a t
+
+  val subsequence : 'a t -> int -> int -> 'a t
 
   module Helpers : sig
     val of_list : 'a list -> 'a t
@@ -47,6 +49,19 @@ module Mseq : sig
     val fold_right2 :
       ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
   end
+end
+
+module T : sig
+  type 'a t =
+    | Int of (int, Tensor.Num.int_elt) Tensor.Num.t
+    | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
+    | NoNum of 'a Tensor.NoNum.t
+
+  val int : (int, Tensor.Num.int_elt) Tensor.Num.t -> 'a t
+
+  val float : (float, Tensor.Num.float_elt) Tensor.Num.t -> 'a t
+
+  val no_num : 'a Tensor.NoNum.t -> 'a t
 end
 
 module Symb : sig

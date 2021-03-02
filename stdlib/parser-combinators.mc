@@ -268,7 +268,7 @@ let satisfy = lam cnd. lam expected. lam st.
   bind next (lam c.
   if cnd c
   then pure c
-  else lam _ . fail (showChar c) expected st) st
+  else lam. fail (showChar c) expected st) st
 
 -- try : Parser a -> Parser a
 --
@@ -442,8 +442,8 @@ recursive
       let cs = tail s in
       label (concat "'" (concat s "'")) (
         try ( -- This 'try' makes the parser consume the whole string or nothing
-          bind (lexChar c) (lam _ .
-          bind (lexString cs) (lam _ .
+          bind (lexChar c) (lam.
+          bind (lexString cs) (lam.
           pure s))
         ))
 end
@@ -656,10 +656,10 @@ recursive
 -- Innermost expression parser.
   let atom = lam st.
     let varAccess =
-      let _ = debug "== Parsing varAccess" in
+      debug "== Parsing varAccess";
       fmap (lam x. Var x) identifier in
     let num =
-      let _ = debug "== Parsing num ==" in
+      debug "== Parsing num ==";
       fmap (lam n. Num n) number
     in
       label "atomic expression"
@@ -677,30 +677,30 @@ recursive
       pure (foldl1 (curry (lam x. App x)) as))
     in
     let abs =
-      let _ = debug "== Parsing abstraction ==" in
-      bind (reserved "lam") (lam _.
+      debug "== Parsing abstraction ==";
+      bind (reserved "lam") (lam.
       bind identifier (lam x.
-      bind (symbol ".") (lam _.
+      bind (symbol ".") (lam.
       bind expr (lam e.
       pure (Abs (x, e))))))
     in
     let let_ =
-      let _ = debug "== Parsing let ==" in
-      bind (reserved "let") (lam _.
+      debug "== Parsing let ==";
+      bind (reserved "let") (lam.
       bind identifier (lam x.
-      bind (symbol "=") (lam _.
+      bind (symbol "=") (lam.
       bind expr (lam e.
-      bind (symbol "in") (lam _.
+      bind (symbol "in") (lam.
       bind expr (lam body.
       pure (Let (x, e, body))))))))
     in
     let if_ =
-      let _ = debug "== Parsing if ==" in
-      bind (reserved "if") (lam _.
+      debug "== Parsing if ==";
+      bind (reserved "if") (lam.
       bind expr (lam cnd.
-      bind (reserved "then") (lam _.
+      bind (reserved "then") (lam.
       bind expr (lam thn.
-      bind (reserved "else") (lam _.
+      bind (reserved "else") (lam.
       bind expr (lam els.
       pure (If(cnd, thn, els))))))))
     in

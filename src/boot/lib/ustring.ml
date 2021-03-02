@@ -345,6 +345,10 @@ module Op = struct
 
   let ustring2list s = Array.to_list (collapse !s)
 
+  let array2ustring a = ref (Uchars a)
+
+  let ustring2array s = collapse !s
+
   let uprint_bool b = print_string (if b then "true" else "false")
 end
 

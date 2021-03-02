@@ -224,7 +224,7 @@ lang UtestEval = Eq + UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    let _ = if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n" in
+    if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n";
     eval ctx t.next
 end
 
@@ -613,7 +613,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CSnoc2 [Expr]
   | CConcat2 [Expr]
   | CSplitAt2 [Expr]
-  | CMakeSeq2 Int
+  | CCreate2 Int
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -671,12 +671,13 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       let t = splitAt tms n in
       tuple_ [seq_ t.0, seq_ t.1]
     else error "n in splitAt is not a number"
-  | CMakeSeq _ ->
+  | CCreate _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CMakeSeq2 n, ty = TyUnknown {}, info = NoInfo()}
-    else error "n in makeSeq is not a number"
-  | CMakeSeq2 n ->
-    TmSeq {tms = makeSeq n arg, ty = TyUnknown {}, info = NoInfo()}
+      TmConst {val = CCreate2 n, ty = TyUnknown {}, info = NoInfo()}
+    else error "n in create is not a number"
+  | CCreate2 n ->
+    let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
+    TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst
@@ -706,7 +707,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileWrite2 f ->
     match arg with TmSeq s then
       let d = _seqOfCharToString s.tms in
-      let _ = writeFile f d in
+      writeFile f d;
       unit_
     else error "d in writeFile not a sequence"
   | CFileExists _ ->
@@ -717,7 +718,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   | CFileDelete _ ->
     match arg with TmSeq s then
       let f = _seqOfCharToString s.tms in
-      let _ = deleteFile f in
+      deleteFile f;
       unit_
     else error "f in deleteFile not a sequence"
 end
@@ -727,7 +728,7 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
   | CPrintString _ ->
     match arg with TmSeq s then
       let s = _seqOfCharToString s.tms in
-      let _ = print s in
+      print s;
       unit_
     else error "string to print is not a string"
   | CReadLine _ ->
@@ -778,7 +779,7 @@ lang TimeEval = TimeAst + IntAst
   sem delta (arg : Expr) =
   | CSleepMs _ ->
     match arg with TmConst {val = CInt {val = n}} then
-      let _ = sleepMs n in
+      sleepMs n;
       unit_
     else error "n in wallTimeMs not a constant integer"
   | CWallTimeMs _ ->
@@ -796,7 +797,7 @@ lang RefOpEval = RefOpAst + IntAst
       TmConst {val = CModRef2 r, info = NoInfo()}
     else error "first argument of modref not a reference"
   | CModRef2 r ->
-    let _ = modref r arg in
+    modref r arg;
     unit_
   | CDeRef _ ->
     match arg with TmRef {ref = r} then
@@ -811,13 +812,13 @@ end
 
 lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PNamed {ident = PName name} -> Some (_evalInsert name t env)
-  | PNamed {ident = PWildcard ()} -> Some env
+  | PatNamed {ident = PName name} -> Some (_evalInsert name t env)
+  | PatNamed {ident = PWildcard ()} -> Some env
 end
 
 lang SeqTotPatEval = SeqTotPat + SeqAst
   sem tryMatch (env : Env) (t : Expr) =
-  | PSeqTot {pats = pats} ->
+  | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
       if eqi (length tms) (length pats) then
         optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env
@@ -828,7 +829,7 @@ end
 
 lang SeqEdgePatEval = SeqEdgePat + SeqAst
   sem tryMatch (env : Env) (t : Expr) =
-  | PSeqEdge {prefix = pre, middle = middle, postfix = post} ->
+  | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq {tms = tms} then
       if geqi (length tms) (addi (length pre) (length post)) then
         match splitAt tms (length pre) with (preTm, tms) then
@@ -847,7 +848,7 @@ end
 
 lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PRecord r ->
+  | PatRecord r ->
     match t with TmRecord {bindings = bs} then
       assocFoldlM {eq = eqString}
         (lam env. lam k. lam p.
@@ -861,7 +862,7 @@ end
 
 lang DataPatEval = DataAst + DataPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PCon {ident = ident, subpat = subpat} ->
+  | PatCon {ident = ident, subpat = subpat} ->
     match t with TmConApp cn then
       let constructor = cn.ident in
       let subexpr = cn.body in
@@ -873,7 +874,7 @@ end
 
 lang IntPatEval = IntAst + IntPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PInt i ->
+  | PatInt i ->
     match t with TmConst c then
       match c.val with CInt i2 then
         if eqi i.val i2.val then Some env else None ()
@@ -883,7 +884,7 @@ end
 
 lang CharPatEval = CharAst + CharPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PChar ch ->
+  | PatChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
         if eqChar ch.val ch2.val then Some env else None ()
@@ -893,7 +894,7 @@ end
 
 lang BoolPatEval = BoolAst + BoolPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PBool b ->
+  | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
     match t with TmConst c then
       match c.val with CBool b2 then
@@ -904,19 +905,19 @@ end
 
 lang AndPatEval = AndPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PAnd {lpat = l, rpat = r} ->
+  | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
 lang OrPatEval = OrPat
   sem tryMatch (env : Env) (t : Expr) =
-  | POr {lpat = l, rpat = r} ->
-    optionOrElse (lam _. tryMatch env t r) (tryMatch env t l)
+  | PatOr {lpat = l, rpat = r} ->
+    optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
 end
 
 lang NotPatEval = NotPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PNot {subpat = p} ->
+  | PatNot {subpat = p} ->
     let res = tryMatch env t p in
     match res with None _ then Some env else
     match res with Some _ then None () else never
@@ -1188,9 +1189,14 @@ let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
 with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
 
--- makeSeq 3 42 -> [42, 42, 42]
-let makeSeqAst = makeseq_ (int_ 3) (int_ 42) in
-utest eval makeSeqAst with seq_ [int_ 42, int_ 42, int_ 42] in
+-- create 3 (lam. 42) -> [42, 42, 42]
+let createAst = create_ (int_ 3) (ulam_ "_" (int_ 42)) in
+utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] in
+
+-- create 3 (lam i. i) -> [0, 1, 2]
+let i = nameSym "i" in
+let createAst2 = create_ (int_ 3) (nulam_ i (nvar_ i)) in
+utest eval createAst2 with seq_ [int_ 0, int_ 1, int_ 2] in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ in

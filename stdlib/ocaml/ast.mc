@@ -19,7 +19,7 @@ lang OCamlRecord
   | OTmRecord {bindings : [(String, Expr)]}
 
   syn Pat =
-  | OPRecord {bindings : AssocMap String Pat}
+  | OPatRecord {bindings : AssocMap String Pat}
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmRecord t -> OTmRecord {t with bindings = map (lam b. (b.0, f b.1)) t.bindings}
@@ -43,7 +43,7 @@ lang OCamlTuple
   | OTmTuple { values : [Expr] }
 
   syn Pat =
-  | OPTuple { pats : [Pat] }
+  | OPatTuple { pats : [Pat] }
 end
 
 lang OCamlData
@@ -51,7 +51,7 @@ lang OCamlData
   | OTmConApp { ident : Name, args : [Expr] }
 
   syn Pat =
-  | OPCon { ident : Name, args : [Pat] }
+  | OPatCon { ident : Name, args : [Pat] }
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmConApp t -> OTmConApp {t with args = map f t.args}

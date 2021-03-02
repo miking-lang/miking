@@ -36,14 +36,6 @@ lang WhitespaceParser = WSACParser
   | x -> {str = x, pos = p}
 end
 
-let _ = use WhitespaceParser in
-  utest eatWSAC (initPos "") "  foo"
-    with {str = "foo", pos = (posVal "" 1 2)} in
-  utest eatWSAC (initPos "") " \tfoo"
-    with {str = "foo", pos = (posVal "" 1 3)} in
-  utest eatWSAC (initPos "") " \n    bar "
-    with {str = "bar ", pos = (posVal "" 2 4)} in
-  ()
 
 -- Eat line comments of the form --
 lang LineCommentParser = WSACParser
@@ -75,17 +67,6 @@ end
 
 -- Commbined WSAC parser for MExpr
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
-
-let _ = use MExprWSACParser in
-  utest eatWSAC (initPos "") " --foo \n  bar "
-    with {str = "bar ", pos = posVal "" 2 2} in
-  utest eatWSAC (initPos "") " /- foo -/ bar"
-    with {str = "bar", pos = posVal "" 1 11} in
-  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar "
-    with {str = "bar ", pos = posVal "" 4 0} in
-  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !"
-    with {str = "!", pos = posVal "" 2 7} in
-  ()
 
 lang EOFTokenParser = TokenParser
   syn Token =
@@ -532,6 +513,31 @@ let compareTokKind = use Lexer in lam ltok. lam rtok.
   subi (_tokKindInt ltok) (_tokKindInt rtok)
 
 mexpr
+
+
+use WhitespaceParser in
+  utest eatWSAC (initPos "") "  foo"
+    with {str = "foo", pos = (posVal "" 1 2)} in
+  utest eatWSAC (initPos "") " \tfoo"
+    with {str = "foo", pos = (posVal "" 1 3)} in
+  utest eatWSAC (initPos "") " \n    bar "
+    with {str = "bar ", pos = (posVal "" 2 4)} in
+  ();
+
+
+
+use MExprWSACParser in
+  utest eatWSAC (initPos "") " --foo \n  bar "
+    with {str = "bar ", pos = posVal "" 2 2} in
+  utest eatWSAC (initPos "") " /- foo -/ bar"
+    with {str = "bar", pos = posVal "" 1 11} in
+  utest eatWSAC (initPos "") " /- foo\n x \n -/ \nbar "
+    with {str = "bar ", pos = posVal "" 4 0} in
+  utest eatWSAC (initPos "") " /- x -- y /- foo \n -/ -/ !"
+    with {str = "!", pos = posVal "" 2 7} in
+  ();
+
+
 
 use Lexer in
 

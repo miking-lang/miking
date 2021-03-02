@@ -11,14 +11,14 @@ type Program = String -> [String] -> ExecResult
 
 let _writeToFile = lam str. lam filename.
   let f = pycall _blt "open" (filename, "w+") in
-  let _ = pycall f "write" (str,) in
-  let _ = pycall f "close" () in
+  pycall f "write" (str,);
+  pycall f "close" ();
   ()
 
 let _readFile = lam filename.
   let f = pycall _blt "open" (filename, "r+") in
   let content = pycall f "read" () in
-  let _ = pycall f "close" () in
+  pycall f "close" ();
   pyconvert content
 
 
@@ -50,21 +50,20 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
     pycall _blt "str" (pycall p "joinpath" (f,),)
   in
 
-  let _ = _writeToFile p (tempfile "program.ml") in
-  let _ = _writeToFile dunefile (tempfile "dune") in
+  _writeToFile p (tempfile "program.ml");
+  _writeToFile dunefile (tempfile "dune");
 
   let command = ["dune", "build"] in
   let r = _runCommand command "" (tempfile "") in
-  let _ =
-    if neqi r.returncode 0 then
-      let _ = print (join ["'dune build' failed on program:\n\n",
-                           _readFile (tempfile "program.ml"),
-                           "\n\nexit code: ",
-                           int2string r.returncode,
-                           "\n\nstandard error:\n", r.stderr]) in
+  if neqi r.returncode 0 then
+      print (join ["'dune build' failed on program:\n\n",
+                   _readFile (tempfile "program.ml"),
+                   "\n\nexit code: ",
+                   int2string r.returncode,
+                   "\n\nstandard error:\n", r.stderr]);
       exit 1
-    else ()
-  in
+  else ();
+  
 
   {
     run =
@@ -74,8 +73,8 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
         in
         _runCommand command stdin (tempfile ""),
     cleanup =
-      lam _.
-        let _ = pycall td "cleanup" () in
+      lam.
+        pycall td "cleanup" ();
         ()
   }
 
@@ -116,11 +115,11 @@ utest (args.run "" ["world"]).stdout with "world" in
 utest (err.run "" []).stderr with "Hello World!" in
 utest (manyargs.run "" ["hello", "world"]).stderr with "hello world" in
 
-let _ = sym.cleanup () in
-let _ = hello.cleanup () in
-let _ = echo.cleanup () in
-let _ = args.cleanup () in
-let _ = err.cleanup () in
-let _ = manyargs.cleanup () in
+sym.cleanup ();
+hello.cleanup ();
+echo.cleanup ();
+args.cleanup ();
+err.cleanup ();
+manyargs.cleanup ();
 
 ()

@@ -6,7 +6,7 @@ include "option.mc"
 
 -- Function stuff
 let identity = lam x. x
-let const = lam x. lam _. x
+let const = lam x. lam. x
 let apply = lam f. lam x. f x
 let compose = lam f. lam g. lam x. f (g x)
 let curry = lam f. lam x. lam y. f(x, y)
@@ -24,7 +24,7 @@ let fixMutual =
 -- Printing stuff
 let printLn = lam s. print (concat s "\n")
 
-let dprintLn = lam x. let _ = dprint x in printLn ""
+let dprintLn = lam x. dprint x; printLn ""
 
 mexpr
 

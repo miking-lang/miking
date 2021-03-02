@@ -131,7 +131,7 @@
 --           let _ = dprint e in
 --           let _ = print "\n" in
 --           error "st_addGenargsToEnv: Generated argument above was expected to be TmLamliftTypedVar"
---       ) st (slice st_w_genargs.genargs 0 genarg_diff_count)
+--       ) st (sub st_w_genargs.genargs 0 genarg_diff_count)
 --     else
 --       st
 --
@@ -673,8 +673,8 @@
 --                                    (st_addLambdaref newname (TmVar {ident = newname}) state)) in
 --       (updatedstate, PVar {t with ident = newname})
 --     | PUnit t -> (state, PUnit t)
---     | PInt t -> (state, PInt t)
---     | PBool t -> (state, PBool t)
+--     | PatInt t -> (state, PatInt t)
+--     | PatBool t -> (state, PatBool t)
 --     | PTuple t ->
 --       -- acc.0: state
 --       -- acc.1: list of patterns
@@ -684,16 +684,16 @@
 --       in
 --       let foldret = foldl liftpats (state, []) t.pats in
 --       (foldret.0, PTuple {t with pats = foldret.1})
---     | PCon t ->
+--     | PatCon t ->
 --       let newident = find (lam e. eqString (e.key) t.ident) state.env.econ in
 --       let subret = lamliftPat state t.subpat in
 --       match newident with Some t1 then
 --         match t1.value with TmConFun t2 then
---           (subret.0, PCon {{t with ident = t2.ident} with subpat = subret.1})
+--           (subret.0, PatCon {{t with ident = t2.ident} with subpat = subret.1})
 --         else
---           (subret.0, PCon {t with subpat = subret.1})
+--           (subret.0, PatCon {t with subpat = subret.1})
 --       else
---         (subret.0, PCon {t with subpat = subret.1})
+--         (subret.0, PatCon {t with subpat = subret.1})
 -- end
 --
 -- lang UtestLamlift = UtestAst

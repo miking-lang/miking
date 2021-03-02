@@ -20,13 +20,13 @@ let _opHashMap = lam prefix. lam ops.
 let _op = lam opHashMap. lam op.
   nvar_
   (hashmapLookupOrElse hashmapStrTraits
-    (lam _.
+    (lam.
       error (strJoin " " ["Operation", op, "not found"]))
       op
       opHashMap)
 
 let _seqOps = [
-  "make",
+  "create",
   "empty",
   "length",
   "concat",
@@ -58,14 +58,14 @@ let _floatOps = [
 let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
--- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
+-- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
 -- (where ' splices things into expressions) binds the appropriate names to the appropriate values
 -- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
 let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
   let cmp = lam n1. lam n2. subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
   match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
-    (OPTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
+    (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
 
 -- Construct a match expression that matches against an option
@@ -75,17 +75,17 @@ let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneE
   OTmMatch
   { target = target
   , arms =
-    [ (OPCon {ident = _someName, args = [somePat]}, someExpr)
-    , (OPCon {ident = _noneName, args = []}, noneExpr)]}
+    [ (OPatCon {ident = _someName, args = [somePat]}, someExpr)
+    , (OPatCon {ident = _noneName, args = []}, noneExpr)]}
 let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
 let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
-let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPTuple {pats = pats}, body)]}
+let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
 
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generateConst =
   -- Sequence intrinsics
-  | CMakeSeq {} -> _seqOp "make"
+  | CCreate {} -> _seqOp "create"
   | CLength {} -> _seqOp "length"
   | CCons {} -> _seqOp "cons"
   | CSnoc {} -> _seqOp "snoc"
@@ -128,19 +128,19 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | t -> smap_Expr_Expr generate t
 
   sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
-  | PNamed {ident = PWildcard _} -> (assocEmpty, identity)
-  | PNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
-  | PBool {val = val} ->
+  | PatNamed {ident = PWildcard _} -> (assocEmpty, identity)
+  | PatNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
+  | PatBool {val = val} ->
     let wrap = lam cont.
       if_ (nvar_ targetName)
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
-  | PInt {val = val} ->
+  | PatInt {val = val} ->
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (int_ val)) cont _none)
-  | PChar {val = val} ->
+  | PatChar {val = val} ->
     (assocEmpty, lam cont. _if (eqi_ (nvar_ targetName) (char_ val)) cont _none)
-  | PSeqTot {pats = pats} ->
+  | PatSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
       match generatePat n pat with (names, innerWrap) then
@@ -159,7 +159,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       , wrap
       )
     else never
-  | PSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
+  | PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
     let apply = lam f. lam x. f x in
     let mergeNames = assocMergePreferRight {eq=nameEqSym} in
     let minLen = addi (length prefix) (length postfix) in
@@ -191,12 +191,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
         (names, wrap)
       else never
     else never
-  | POr {lpat = lpat, rpat = rpat} ->
+  | PatOr {lpat = lpat, rpat = rpat} ->
     match generatePat targetName lpat with (lnames, lwrap) then
       match generatePat targetName rpat with (rnames, rwrap) then
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
           match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
-            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam _. k) lnames in
+            let names = assocMapWithKey {eq=nameEqSym} (lam k. lam. k) lnames in
             let xname = nameSym "_x" in
             let wrap = lam cont.
               _optMatch
@@ -213,7 +213,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else never
     else never
-  | PAnd {lpat = lpat, rpat = rpat} ->
+  | PatAnd {lpat = lpat, rpat = rpat} ->
     match generatePat targetName lpat with (lnames, lwrap) then
       match generatePat targetName rpat with (rnames, rwrap) then
         let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
@@ -221,7 +221,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         (names, wrap)
       else never
     else never
-  | PNot {subpat = pat} ->
+  | PatNot {subpat = pat} ->
     match generatePat targetName pat with (_, innerWrap) then
       let wrap = lam cont.
         _optMatch (innerWrap (_some (OTmTuple {values = []})))
@@ -230,7 +230,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
           cont in
       (assocEmpty, wrap)
     else never
-  | PRecord {bindings = bindings} ->
+  | PatRecord {bindings = bindings} ->
     let genBindingPat = lam id. lam pat.
       let n = nameSym "_recordElem" in
       match generatePat n pat with (names,innerWrap) then
@@ -245,13 +245,13 @@ lang OCamlGenerate = MExprAst + OCamlAst
     -- the matched record.
     let n = nameSym "Rec" in
     match unzip genPats with (allNames, allWraps) then
-      let f = lam id. lam _. pvar_ id in
-      let precord = OPRecord {bindings = assocMapWithKey {eq=eqString} f bindings} in
+      let f = lam id. lam _v. pvar_ id in
+      let precord = OPatRecord {bindings = assocMapWithKey {eq=eqString} f bindings} in
       let wrap = lam cont.
         OTmMatch {
           target = nvar_ targetName,
           arms = [
-            (OPCon {ident = n, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
+            (OPatCon {ident = n, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
           ]
         }
       in
@@ -259,13 +259,13 @@ lang OCamlGenerate = MExprAst + OCamlAst
       , wrap
       )
     else never
-  | PCon {ident = id, subpat = subpat} ->
+  | PatCon {ident = id, subpat = subpat} ->
     match generatePat targetName subpat with (names, subwrap) then
       let wrap = lam cont.
         OTmMatch {
           target = subwrap (nvar_ targetName),
           arms = [
-            (OPCon {ident = id, args = [pvarw_]}, cont),
+            (OPatCon {ident = id, args = [pvarw_]}, cont),
             (pvarw_, _none)
           ]
         } in
@@ -296,7 +296,7 @@ let _objTypedRecordFields = lam recordTypes.
   use RecordTypeAst in
   let objFields = lam ty.
     match ty with TyRecord t then
-      let fields = assocMap {eq=eqString} (lam _. _objType) t.fields in
+      let fields = assocMap {eq=eqString} (lam _f. _objType) t.fields in
       TyRecord {t with fields = fields}
     else never
   in
@@ -342,8 +342,8 @@ lang OCamlDeclGenerate =
   MExprTypeLift + OCamlRecordDeclGenerate + OCamlVariantDeclGenerate
   sem generateDecl =
   | expr ->
-    let recordTypes = liftRecords [] expr in
-    let variantTypes = liftVariants [] expr in
+    let recordTypes = liftRecords expr in
+    let variantTypes = liftVariants expr in
     generateVariantDecl variantTypes (generateRecordDecl recordTypes expr)
 end
 
@@ -369,7 +369,7 @@ let ocamlEval = lam p. lam strConvert.
   let blt = pyimport "builtins" in
     let res = ocamlCompileWithConfig {warnings=false} (join ["print_string (", strConvert, "(", p, "))"]) in
     let out = (res.run "" []).stdout in
-    let _ = res.cleanup () in
+    res.cleanup ();
     parseAsMExpr out
 in
 
@@ -741,7 +741,7 @@ utest int_ 1 with generate fst using sameSemantics in
 utest int_ 2 with generate snd using sameSemantics in
 utest int_ 3 with generate thrd using sameSemantics in
 
-let testMake = makeseq_ (int_ 2) (int_ 0) in
+let testMake = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
 let len = length_ testMake in
 let fst = get_ testMake (int_ 0) in
 let lst = get_ testMake (int_ 1) in
@@ -849,7 +849,7 @@ let test3 = bindall_ [
   match_ (nvar_ y) pat (int_ 1) (int_ 0)
 ] in
 let t = generate (generateDecl (typeAnnot (symbolize test3))) in
-let _ = printLn (expr2str t) in
+let _x = printLn (expr2str t) in
 -/
 let pat = prec_ [("a", pvar_ "a")] in
 let test4 = bindall_ [
@@ -857,7 +857,7 @@ let test4 = bindall_ [
   match_ (nvar_ x) pat (withType tyint_ (var_ "a")) (int_ 0)
 ] in
 let t = generate (generateDecl (typeAnnot test4)) in
-let _ =
+let _x =
   use OCamlSym in
   printLn (expr2str (symbolize t))
 in

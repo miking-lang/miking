@@ -34,42 +34,42 @@ lam w.
   if neqi d.1 n then error "Expected square weight matrix"
   else
   let vs = unfoldr (lam a. if eqi a n then None () else Some (a, addi a 1)) 0 in
-  let negv = makeSeq n (negi 1) in
-  let zerov = makeSeq n 0 in
+  let negv = make n (negi 1) in
+  let zerov = make n 0 in
     {
       w = w,
       n = n,
       -- assign feasible labels, e.g.
-      lus = map (maxOrElse (lam _. error "undefined") subi) w,
+      lus = map (maxOrElse (lam. error "undefined") subi) w,
       -- lu[u] + lv[v] => w[u][v] for all v in V, u in U
       lvs = zerov,
       mus = negv,
       mvs = negv,
       ss = [],
       vs = vs,
-      ts = makeSeq n false,
+      ts = make n false,
       slacks = [],
       preds = negv
     }
 
 let debugShowState = lam state.
-  let _ = printLn "===" in
-  let _ = print "lus: " in
-  let _ = dprint state.lus in
-  let _ = print "lvs: " in
-  let _ = dprint state.lvs in
-  let _ = print "mus: " in
-  let _ = dprint state.mus in
-  let _ = print "mvs: " in
-  let _ = dprint state.mvs in
-  let _ = print "ss: " in
-  let _ = dprint state.ss in
-  let _ = print "ts: " in
-  let _ = dprint state.ts in
-  let _ = print "slacks: " in
-  let _ = dprint state.slacks in
-  let _ = print "preds: " in
-  let _ = dprint state.preds in
+  printLn "===";
+  print "lus: ";
+  dprint state.lus;
+  print "lvs: ";
+  dprint state.lvs;
+  print "mus: ";
+  dprint state.mus;
+  print "mvs: ";
+  dprint state.mvs;
+  print "ss: ";
+  dprint state.ss;
+  print "ts: ";
+  dprint state.ts;
+  print "slacks: ";
+  dprint state.slacks;
+  print "preds: ";
+  dprint state.preds;
   ()
 
 ------------------------------------------------------------
@@ -82,7 +82,7 @@ let isMatch = lam x. neqi x (negi 1)
 let isPerfectMatch = all isMatch
 
 let findNonCovered = lam x.
-  optionGetOrElse (lam _. error "All nodes are covered")
+  optionGetOrElse (lam. error "All nodes are covered")
                   (index (lam x. not (isMatch x)) x)
 
 -- lu[u] + lv[v] - w[u][v]
@@ -90,7 +90,7 @@ let slackVal = lam u. lam v. lam state.
   subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.w u v)
 
 -- T <- {}
-let emptyT = lam state. {state with ts = makeSeq state.n false}
+let emptyT = lam state. {state with ts = make state.n false}
 
 -- v in T
 let memT = lam v. lam state. get state.ts v
@@ -167,7 +167,7 @@ recursive
   let augment = lam state.
   let s =
     -- min slack over v's not in T
-    minOrElse (lam _. error "undefined")
+    minOrElse (lam. error "undefined")
               cmpSlack
               (filter (lam s. not (memT s.v state)) state.slacks)
   in

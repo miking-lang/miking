@@ -17,15 +17,15 @@ mexpr
 
 -- Generate a sequence of random numbers
 let randSeq = lam lower. lam upper. lam length.
-  map (lam _. randIntU lower upper) (makeSeq length 0) in
+  map (lam. randIntU lower upper) (create length (lam. 0)) in
 
 -- With high probability all possible elements are present in the random sequence
 utest [2,3,4,5,6] with distinct eqi (randSeq 2 7 1000) using setEqual eqi in
 
 -- The same seed should give the same sequence of numbers
-let _ = randSetSeed 42 in
+randSetSeed 42;
 let randSeq1 = randSeq 123 89018 100 in
-let _ = randSetSeed 42 in
+randSetSeed 42;
 let randSeq2 = randSeq 123 89018 100 in
 utest randSeq1 with randSeq2 using setEqual eqi in
 

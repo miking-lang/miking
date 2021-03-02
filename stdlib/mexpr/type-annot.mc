@@ -197,7 +197,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       else b.ty
     in
     match t.ty with TyUnknown {} then
-      let _ = map f t.bindings in
+      map f t.bindings;
       typeExpr env t.inexpr
     else t.ty
   sem typeAnnotExpr (env : TypeEnv) =

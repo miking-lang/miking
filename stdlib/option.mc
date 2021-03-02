@@ -48,7 +48,7 @@ let optionBind: Option a -> (a -> Option b) -> Option b = lam o. lam f.
 
 utest optionBind (None ()) (lam t. Some (addi 1 t)) with (None ())
 utest optionBind (Some 1) (lam t. Some (addi 1 t)) with (Some 2)
-utest optionBind (Some 1) (lam _. None ()) with (None ())
+utest optionBind (Some 1) (lam. None ()) with (None ())
 
 -- 'optionCompose f g' composes the option-producing functions 'f' and 'g' into
 -- a new function, which only succeeds if both 'f' and 'g' succeed.
@@ -83,14 +83,14 @@ let optionZipWithOrElse: (Unit -> c) -> (a -> b -> c) -> (Option a) -> (Option b
     else
       d ()
 
-utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (Some 'i') with "mi"
-utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (None ()) with "ERROR"
-utest optionZipWithOrElse (lam _. "ERROR") (lam a. lam b. [a,b]) (None ()) (None ()) with "ERROR"
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (Some 'i') with "mi"
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (None ()) with "ERROR"
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (None ()) (None ()) with "ERROR"
 
 -- 'optionZipWithOr v f o1 o2' applies the function f on the values contained
 -- in o1 and o2. If either o1 or o2 is None, then v is returned.
 let optionZipWithOr: c -> (a -> b -> c) -> (Option a) -> (Option b) -> c =
-  lam v. optionZipWithOrElse (lam _. v)
+  lam v. optionZipWithOrElse (lam. v)
 
 utest optionZipWithOr false eqi (Some 10) (Some 11) with false
 utest optionZipWithOr false eqi (Some 10) (Some 10) with true
@@ -105,12 +105,12 @@ let optionGetOrElse: (Unit -> a) -> Option a -> a = lam d. lam o.
   else
     d ()
 
-utest optionGetOrElse (lam _. 3) (Some 1) with 1
-utest optionGetOrElse (lam _. 3) (None ()) with 3
+utest optionGetOrElse (lam. 3) (Some 1) with 1
+utest optionGetOrElse (lam. 3) (None ()) with 3
 
 -- Try to retrieve the contained value, or fallback to a default value
 let optionGetOr: a -> Option a -> a = lam d.
-  optionGetOrElse (lam _. d)
+  optionGetOrElse (lam. d)
 
 utest optionGetOr 3 (Some 1) with 1
 utest optionGetOr 3 (None ()) with 3
@@ -120,8 +120,8 @@ utest optionGetOr 3 (None ()) with 3
 let optionMapOrElse: (Unit -> b) -> (a -> b) -> Option a -> b = lam d. lam f. lam o.
   optionGetOrElse d (optionMap f o)
 
-utest optionMapOrElse (lam _. 3) (addi 1) (Some 1) with 2
-utest optionMapOrElse (lam _. 3) (addi 1) (None ()) with 3
+utest optionMapOrElse (lam. 3) (addi 1) (Some 1) with 2
+utest optionMapOrElse (lam. 3) (addi 1) (None ()) with 3
 
 -- Applies a function to the contained value (if any),
 -- or returns the provided default (if not).
@@ -188,7 +188,7 @@ utest optionContains (Some 2) (eqi 1) with false
 utest optionContains (None ()) (eqi 1) with false
 
 -- Returns `true` if the option is a `Some` value.
-let optionIsSome: Option a -> Bool = lam o. optionContains o (lam _. true)
+let optionIsSome: Option a -> Bool = lam o. optionContains o (lam. true)
 
 utest optionIsSome (Some 1) with true
 utest optionIsSome (None ()) with false
@@ -228,13 +228,13 @@ utest optionFilter (eqi 2) (None ()) with (None ())
 let optionOrElse: (Unit -> Option a) -> Option a -> Option a = lam f. lam o.
   optionGetOrElse f (optionMap (lam x. Some x) o)
 
-utest optionOrElse (lam _. Some 2) (Some 1) with (Some 1)
-utest optionOrElse (lam _. Some 2) (None ()) with (Some 2)
+utest optionOrElse (lam. Some 2) (Some 1) with (Some 1)
+utest optionOrElse (lam. Some 2) (None ()) with (Some 2)
 
 -- Returns the first option if it contains a value, otherwise returns
 -- the second option.
 let optionOr: Option a -> Option a -> Option a = lam o1. lam o2.
-  optionOrElse (lam _. o2) o1
+  optionOrElse (lam. o2) o1
 
 utest optionOr (Some 1) (Some 2) with (Some 1)
 utest optionOr (Some 1) (None ()) with (Some 1)

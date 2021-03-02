@@ -16,7 +16,7 @@ let num = dualnumNum
 let dnum = dualnumDNum
 let genEpsilon = dualnumGenEpsilon
 let pertubation = dualnumPertubation
-let zeron = lam n. makeSeq n (num 0.)
+let zeron = lam n. make n (num 0.)
 
 -- directed derivative of vector function f at x in the direction xp
 let dder : ([DualNum] -> [DualNum]) -> [DualNum] -> [DualNum] -> ([DualNum] -> [DualNum]) =
@@ -47,7 +47,7 @@ let jacj = lam f. lam x. lam j.
 
 -- transpose of Jacobian of f at x
 let jac : ([DualNum] -> [DualNum]) -> [DualNum] -> [[DualNum]] =
-lam f. lam x. mapi (lam j. lam _. jacj f x j) x
+lam f. lam x. mapi (lam j. lam. jacj f x j) x
 
 -- gradient of f at x
 let grad : ([DualNum] -> DualNum) -> [DualNum] -> [DualNum] =

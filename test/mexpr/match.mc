@@ -101,8 +101,8 @@ utest match s1 with [1,3,5,10] then true else false with true in
 utest match s1 with [1,3] ++ _ then true else false with true in
 utest match s1 with [2,3] ++ _ then true else false with false in
 utest match s1 with [1,a] ++ _ then a else 0 with 3 in
-utest let _ = [] in match s1 with [b] ++ _ then let a = 2 in (a, b, _) else (0, 0, []) with (2, 1, []) in
-utest let _ = [] in match s1 with _ ++ [b] then let a = 2 in (a, b, _) else (0, 0, []) with (2, 10, []) in
+utest match s1 with [b] ++ _ then let a = 2 in (a, b, []) else (0, 0, []) with (2, 1, []) in
+utest match s1 with _ ++ [b] then let a = 2 in (a, b, []) else (0, 0, []) with (2, 10, []) in
 utest match s1 with [_,a] ++ b then (a,b) else (0,[]) with (3,[5,10]) in
 utest match s1 with _ ++ [5,10] then true else false with true in
 utest match s1 with _ ++ [5,11] then true else false with false in

@@ -236,10 +236,10 @@ lang OCamlPrettyPrint =
   | OTmVariantTypeDecl _ -> false
 
   sem patIsAtomic =
-  | OPRecord _ -> false
-  | OPTuple _ -> true
-  | OPCon {args = []} -> true
-  | OPCon _ -> false
+  | OPatRecord _ -> false
+  | OPatTuple _ -> true
+  | OPatCon {args = []} -> true
+  | OPatCon _ -> false
 
   sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
@@ -384,8 +384,8 @@ lang OCamlPrettyPrint =
   | OTmMatch {
     target = target,
     arms
-      = [ (PBool {val = true}, thn), (PBool {val = false}, els) ]
-      | [ (PBool {val = false}, els), (PBool {val = true}, thn) ]
+      = [ (PatBool {val = true}, thn), (PatBool {val = false}, els) ]
+      | [ (PatBool {val = false}, els), (PatBool {val = true}, thn) ]
     } ->
     let i = indent in
     let ii = pprintIncr i in
@@ -435,25 +435,25 @@ lang OCamlPrettyPrint =
     else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
-  | OPRecord {bindings = bindings} ->
+  | OPatRecord {bindings = bindings} ->
     let labels = map pprintLabelString (assocKeys {eq=eqString} bindings) in
     let pats = assocValues {eq=eqString} bindings in
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       let strs = mapi (lam i. lam p. join [get labels i, " = ", p]) pats in
       (env, join ["{", strJoin ";" strs, "}"])
     else never
-  | OPTuple {pats = pats} ->
+  | OPatTuple {pats = pats} ->
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       (env, join ["(", strJoin ", " pats, ")"])
     else never
-  | OPCon {ident = ident, args = []} -> pprintConName env ident
-  | OPCon {ident = ident, args = [arg]} ->
+  | OPatCon {ident = ident, args = []} -> pprintConName env ident
+  | OPatCon {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
       match printPatParen indent env arg with (env, arg) then
         (env, join [ident, " ", arg])
       else never
     else never
-  | OPCon {ident = ident, args = args} ->
+  | OPatCon {ident = ident, args = args} ->
     match pprintConName env ident with (env, ident) then
       match mapAccumL (getPatStringCode indent) env args with (env, args) then
         (env, join [ident, " (", strJoin ", " args, ")"])
@@ -470,7 +470,7 @@ let debugPrint = false in
 
 let pprintProg = lam ast.
   if debugPrint then
-    let _ = print "\n\n" in
+    print "\n\n";
     print (expr2str (symbolize ast))
   else ()
 in
@@ -584,7 +584,7 @@ in
 let testTuple =
   OTmMatch
   { target = OTmTuple {values = [true_, false_]}
-  , arms = [(OPTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
+  , arms = [(OPatTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
 in
 
 let asts = [
@@ -618,6 +618,6 @@ let asts = [
   testTuple
 ] in
 
-let _ = map pprintProg asts in
+map pprintProg asts;
 
 ()

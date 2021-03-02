@@ -73,7 +73,7 @@ let builtin =
   ; ("eqc", f (Ceqc None))
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
-  ; ("makeSeq", f (CmakeSeq None))
+  ; ("create", f (Ccreate None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
   ; ("get", f (Cget None))
@@ -81,7 +81,9 @@ let builtin =
   ; ("cons", f (Ccons None))
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
-  ; ("reverse", f Creverse) (* MCore intrinsics: Random numbers *)
+  ; ("reverse", f Creverse)
+  ; ("subsequence", f (Csubsequence (None, None)))
+    (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
   ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)
   ; ("wallTimeMs", f CwallTimeMs)
@@ -119,7 +121,17 @@ let builtin =
   ; ("mapMem", f (CmapMem None))
   ; ("mapMap", f (CmapMap None))
   ; ("mapMapWithKey", f (CmapMapWithKey None))
-  ; ("mapBindings", f CmapBindings) (* MCore intrinsics: Boot parser *)
+  ; ("mapBindings", f CmapBindings)
+  ; ("tensorCreate", f (CtensorCreate None)) (* MCore intrinsics: Tensors *)
+  ; ("tensorGetExn", f (CtensorGetExn None))
+  ; ("tensorSetExn", f (CtensorSetExn (None, None)))
+  ; ("tensorRank", f CtensorRank)
+  ; ("tensorShape", f CtensorShape)
+  ; ("tensorReshapeExn", f (CtensorReshapeExn None))
+  ; ("tensorCopyExn", f (CtensorCopyExn None))
+  ; ("tensorSliceExn", f (CtensorSliceExn None))
+  ; ("tensorSubExn", f (CtensorSubExn (None, None)))
+  ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f CbootParserParseMExprString)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
@@ -276,10 +288,10 @@ let arity = function
       1
   | Cint2char ->
       1
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq None ->
+  (* MCore intrinsic: sequences *)
+  | Ccreate None ->
       2
-  | CmakeSeq (Some _) ->
+  | Ccreate (Some _) ->
       1
   | Clength ->
       1
@@ -310,6 +322,12 @@ let arity = function
   | CsplitAt (Some _) ->
       1
   | Creverse ->
+      1
+  | Csubsequence (None, None) ->
+      3
+  | Csubsequence (Some _, None) ->
+      2
+  | Csubsequence (_, Some _) ->
       1
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None ->
@@ -399,6 +417,49 @@ let arity = function
       1
   | CmapBindings ->
       1
+  (* MCore intrinsics: Tensor *)
+  | CTensor _ ->
+      0
+  | CtensorCreate None ->
+      2
+  | CtensorCreate (Some _) ->
+      1
+  | CtensorGetExn None ->
+      2
+  | CtensorGetExn (Some _) ->
+      1
+  | CtensorSetExn (None, None) ->
+      3
+  | CtensorSetExn (_, None) ->
+      2
+  | CtensorSetExn (_, Some _) ->
+      1
+  | CtensorRank ->
+      1
+  | CtensorShape ->
+      1
+  | CtensorCopyExn None ->
+      2
+  | CtensorCopyExn (Some _) ->
+      1
+  | CtensorReshapeExn None ->
+      2
+  | CtensorReshapeExn (Some _) ->
+      1
+  | CtensorSliceExn None ->
+      2
+  | CtensorSliceExn (Some _) ->
+      1
+  | CtensorSubExn (None, None) ->
+      3
+  | CtensorSubExn (_, None) ->
+      2
+  | CtensorSubExn (_, Some _) ->
+      1
+  | CtensorIteri None ->
+      2
+  | CtensorIteri (Some _) ->
+      1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
@@ -480,6 +541,22 @@ let sleep_ms ms = Thread.delay (float_of_int ms /. 1000.)
 let delta eval env fi c v =
   let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
   let fail_constapp = fail_constapp c v in
+  let tm_seq2int_array fi tmseq =
+    tmseq
+    |> Mseq.Helpers.map (function
+         | TmConst (_, CInt n) ->
+             n
+         | _ ->
+             fail_constapp fi)
+    |> Mseq.Helpers.to_array
+  in
+  let int_array2tm_seq fi a =
+    let seq =
+      a |> Mseq.Helpers.of_array
+      |> Mseq.Helpers.map (fun n -> TmConst (fi, CInt n))
+    in
+    TmSeq (fi, seq)
+  in
   match (c, v) with
   (* MCore intrinsics: Booleans *)
   | CBool _, _ ->
@@ -693,12 +770,13 @@ let delta eval env fi c v =
       TmConst (fi, CChar v)
   | Cint2char, _ ->
       fail_constapp fi
-  (* MCore intrinsics: Sequences *)
-  | CmakeSeq None, TmConst (fi, CInt n) ->
-      TmConst (fi, CmakeSeq (Some n))
-  | CmakeSeq (Some n), t ->
-      TmSeq (tm_info t, Mseq.make n t)
-  | CmakeSeq None, _ ->
+  (* MCore intrinsic: sequences *)
+  | Ccreate None, TmConst (_, CInt n) ->
+      TmConst (fi, Ccreate (Some n))
+  | Ccreate (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create n createf)
+  | Ccreate None, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))
@@ -753,6 +831,14 @@ let delta eval env fi c v =
   | Creverse, TmSeq (fi, s) ->
       TmSeq (fi, Mseq.reverse s)
   | Creverse, _ ->
+      fail_constapp fi
+  | Csubsequence (None, None), TmSeq (fi, s) ->
+      TmConst (fi, Csubsequence (Some s, None))
+  | Csubsequence (Some s, None), TmConst (_, CInt off) ->
+      TmConst (fi, Csubsequence (Some s, Some off))
+  | Csubsequence (Some s, Some off), TmConst (_, CInt n) ->
+      TmSeq (fi, Mseq.subsequence s off n)
+  | Csubsequence _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Random numbers *)
   | CrandIntU None, TmConst (fi, CInt v) ->
@@ -987,6 +1073,208 @@ let delta eval env fi c v =
       in
       TmSeq (fi, Mseq.Helpers.of_list binds)
   | CmapBindings, _ ->
+      fail_constapp fi
+  (* MCore intrinsics: Tensors *)
+  | CTensor _, _ ->
+      fail_constapp fi
+  | CtensorCreate None, TmSeq (_, seq) ->
+      let shape = tm_seq2int_array fi seq in
+      TmConst (fi, CtensorCreate (Some shape))
+  | CtensorCreate (Some shape), tm ->
+      let f is =
+        let tmseq = int_array2tm_seq (tm_info tm) is in
+        TmApp (fi, tm, tmseq) |> eval env
+      in
+      let is0 = Array.make (Array.length shape) 0 in
+      let tm0 = f is0 in
+      tm0
+      |> (function
+           | TmConst (_, CInt n) ->
+               let f' is =
+                 if is = is0 then n
+                 else
+                   f is
+                   |> function
+                   | TmConst (_, CInt n') ->
+                       n'
+                   | _ ->
+                       raise_error fi "Expected integer"
+               in
+               Tensor.Num.create Tensor.Num.Int shape f' |> T.int
+           | TmConst (_, CFloat r) ->
+               let f' is =
+                 if is = is0 then r
+                 else
+                   f is
+                   |> function
+                   | TmConst (_, CFloat r') ->
+                       r'
+                   | _ ->
+                       raise_error fi "Expected float"
+               in
+               Tensor.Num.create Tensor.Num.Float shape f' |> T.float
+           | tm ->
+               let f' is = if is = is0 then tm else f is in
+               Tensor.NoNum.create shape f' |> T.no_num)
+      |> fun t -> TmConst (fi, CTensor t)
+  | CtensorCreate _, _ ->
+      fail_constapp fi
+  | CtensorGetExn None, TmConst (_, CTensor t) ->
+      TmConst (fi, CtensorGetExn (Some t))
+  | CtensorGetExn (Some t), TmSeq (_, seq) -> (
+      let is = tm_seq2int_array fi seq in
+      try
+        t
+        |> function
+        | T.Int t' ->
+            TmConst (fi, CInt (Tensor.Num.get_exn t' is))
+        | T.Float t' ->
+            TmConst (fi, CFloat (Tensor.Num.get_exn t' is))
+        | T.NoNum t' ->
+            Tensor.NoNum.get_exn t' is
+      with Invalid_argument msg -> raise_error fi msg )
+  | CtensorGetExn _, _ ->
+      fail_constapp fi
+  | CtensorSetExn (None, None), TmConst (_, CTensor t) ->
+      TmConst (fi, CtensorSetExn (Some t, None))
+  | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
+      let is = tm_seq2int_array fi seq in
+      TmConst (fi, CtensorSetExn (Some t, Some is))
+  | CtensorSetExn (Some (T.Int t), Some is), TmConst (_, CInt n) -> (
+    try Tensor.Num.set_exn t is n ; tmUnit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorSetExn (Some (T.Float t), Some is), TmConst (_, CFloat r) -> (
+    try Tensor.Num.set_exn t is r ; tmUnit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorSetExn (Some (T.NoNum t), Some is), tm -> (
+    try
+      Tensor.NoNum.set_exn t is tm ;
+      tmUnit
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorSetExn _, _ ->
+      fail_constapp fi
+  | CtensorRank, TmConst (_, CTensor t) ->
+      let n =
+        t
+        |> function
+        | T.Int t' ->
+            Tensor.Num.rank t'
+        | T.Float t' ->
+            Tensor.Num.rank t'
+        | NoNum t' ->
+            Tensor.NoNum.rank t'
+      in
+      TmConst (fi, CInt n)
+  | CtensorRank, _ ->
+      fail_constapp fi
+  | CtensorShape, TmConst (_, CTensor t) ->
+      let shape =
+        t
+        |> function
+        | T.Int t' ->
+            Tensor.Num.shape t'
+        | T.Float t' ->
+            Tensor.Num.shape t'
+        | T.NoNum t' ->
+            Tensor.NoNum.shape t'
+      in
+      int_array2tm_seq fi shape
+  | CtensorShape, _ ->
+      fail_constapp fi
+  | CtensorCopyExn None, TmConst (_, CTensor t1) ->
+      TmConst (fi, CtensorCopyExn (Some t1))
+  | CtensorCopyExn (Some (T.Int t1)), TmConst (_, CTensor (T.Int t2)) ->
+      Tensor.Num.copy_exn t1 t2 ; tmUnit
+  | CtensorCopyExn (Some (T.Float t1)), TmConst (_, CTensor (T.Float t2)) ->
+      Tensor.Num.copy_exn t1 t2 ; tmUnit
+  | CtensorCopyExn (Some (T.NoNum t1)), TmConst (_, CTensor (T.NoNum t2)) ->
+      Tensor.NoNum.copy_exn t1 t2 ;
+      tmUnit
+  | CtensorCopyExn _, _ ->
+      fail_constapp fi
+  | CtensorReshapeExn None, TmConst (_, CTensor t) ->
+      TmConst (fi, CtensorReshapeExn (Some t))
+  | CtensorReshapeExn (Some t), TmSeq (_, seq) -> (
+      let is = tm_seq2int_array fi seq in
+      try
+        let t' =
+          t
+          |> function
+          | T.Int t'' ->
+              Tensor.Num.reshape_exn t'' is |> T.int
+          | T.Float t'' ->
+              Tensor.Num.reshape_exn t'' is |> T.float
+          | T.NoNum t'' ->
+              Tensor.NoNum.reshape_exn t'' is |> T.no_num
+        in
+        TmConst (fi, CTensor t')
+      with Invalid_argument msg -> raise_error fi msg )
+  | CtensorReshapeExn _, _ ->
+      fail_constapp fi
+  | CtensorSliceExn None, TmConst (_, CTensor t) ->
+      TmConst (fi, CtensorSliceExn (Some t))
+  | CtensorSliceExn (Some t), TmSeq (_, seq) -> (
+      let is = tm_seq2int_array fi seq in
+      try
+        let t' =
+          t
+          |> function
+          | T.Int t'' ->
+              Tensor.Num.slice_exn t'' is |> T.int
+          | T.Float t'' ->
+              Tensor.Num.slice_exn t'' is |> T.float
+          | T.NoNum t'' ->
+              Tensor.NoNum.slice_exn t'' is |> T.no_num
+        in
+        TmConst (fi, CTensor t')
+      with Invalid_argument msg -> raise_error fi msg )
+  | CtensorSliceExn _, _ ->
+      fail_constapp fi
+  | CtensorSubExn (None, None), TmConst (_, CTensor t) ->
+      TmConst (fi, CtensorSubExn (Some t, None))
+  | CtensorSubExn (Some t, None), TmConst (_, CInt ofs) ->
+      TmConst (fi, CtensorSubExn (Some t, Some ofs))
+  | CtensorSubExn (Some t, Some ofs), TmConst (_, CInt len) -> (
+    try
+      let t' =
+        t
+        |> function
+        | T.Int t'' ->
+            Tensor.Num.sub_exn t'' ofs len |> T.int
+        | T.Float t'' ->
+            Tensor.Num.sub_exn t'' ofs len |> T.float
+        | T.NoNum t'' ->
+            Tensor.NoNum.sub_exn t'' ofs len |> T.no_num
+      in
+      TmConst (fi, CTensor t')
+    with Invalid_argument msg -> raise_error fi msg )
+  | CtensorSubExn _, _ ->
+      fail_constapp fi
+  | CtensorIteri None, tm ->
+      TmConst (fi, CtensorIteri (Some tm))
+  | CtensorIteri (Some tm), TmConst (_, CTensor t) -> (
+      let iterf tkind i t =
+        let _ =
+          TmApp
+            ( fi
+            , TmApp (fi, tm, TmConst (fi, CInt i))
+            , TmConst (fi, CTensor (tkind t)) )
+          |> eval env
+        in
+        ()
+      in
+      try
+        ( t
+        |> function
+        | T.Int t' ->
+            Tensor.Num.iteri (iterf T.int) t'
+        | T.Float t' ->
+            Tensor.Num.iteri (iterf T.float) t'
+        | T.NoNum t' ->
+            Tensor.NoNum.iteri (iterf T.no_num) t' ) ;
+        tmUnit
+      with Invalid_argument msg -> raise_error fi msg )
+  | CtensorIteri _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
@@ -1520,14 +1808,17 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s) ->
-      eval env (List.assoc s env)
+  | TmVar (_, _, s) -> (
+    match List.assoc s env with TmFix _ as t -> eval env t | t -> t )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
     (* Closure application *)
-    | TmClos (_, _, s, t3, env2) ->
-        eval ((s, eval env t2) :: Lazy.force env2) t3
+    | TmClos (_, _, s, t3, env2) -> (
+      try eval ((s, eval env t2) :: Lazy.force env2) t3
+      with Error _ as e ->
+        uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+        raise e )
     (* Constant application using the delta function *)
     | TmConst (_, c) ->
         delta eval env fiapp c (eval env t2)

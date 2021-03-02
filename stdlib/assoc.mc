@@ -23,7 +23,7 @@ let assocLength : AssocMap k v -> Int =
 -- overwritten.
 let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
   lam traits. lam k. lam v. lam m.
-    optionMapOrElse (lam _. cons (k,v) m)
+    optionMapOrElse (lam. cons (k,v) m)
                     (lam i. set m i (k,v))
                     (index (lam t. traits.eq k t.0) m)
 
@@ -95,22 +95,22 @@ let assocMem : AssocTraits k -> k -> AssocMap k v -> Bool =
 
 -- 'assocKeys traits m' returns a list of all keys stored in 'm'
 let assocKeys : AssocTraits k -> AssocMap k v -> [k] =
-  lam _. lam m.
+  lam. lam m.
     map (lam t. t.0) m
 
 -- 'assocValues traits m' returns a list of all values stored in 'm'
 let assocValues : AssocTraits k -> AssocMap k v -> [v] =
-  lam _. lam m.
+  lam. lam m.
     map (lam t. t.1) m
 
 -- 'assocMap traits f m' maps over the values of 'm' using function 'f'.
 let assocMap : AssocTraits k -> (v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
-  lam _. lam f. lam m.
+  lam. lam f. lam m.
     map (lam t. (t.0, f t.1)) m
 
 -- 'assocMapWithKey f m' maps over the values of 'm' using function 'f', where 'f' additionally has access to the key of the value being operated upon.
 let assocMapWithKey : AssocTraits k -> (k -> v1 -> v2) -> AssocMap k v1 -> AssocMap k v2 =
-  lam _. lam f. lam m.
+  lam. lam f. lam m.
     map (lam t. (t.0, f t.0 t.1)) m
 
 -- 'assocFold traits f acc m' folds over 'm' using function 'f' and accumulator
@@ -118,7 +118,7 @@ let assocMapWithKey : AssocTraits k -> (k -> v1 -> v2) -> AssocMap k v1 -> Assoc
 -- IMPORTANT: The folding order is unspecified.
 let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
                   -> acc -> AssocMap k v -> acc =
-  lam _. lam f. lam acc. lam m.
+  lam. lam f. lam acc. lam m.
     foldl (lam acc. lam t. f acc t.0 t.1) acc m
 
 -- 'assocFoldlM traits f acc m' folds over 'm' using function 'f' and accumulator
@@ -126,7 +126,7 @@ let assocFold : AssocTraits k -> (acc -> k -> v -> acc)
 -- IMPORTANT: The folding order is unspecified.
 let assocFoldlM : AssocTraits k -> (acc -> k -> v -> Option acc)
                         -> acc -> AssocMap k v -> Option acc =
-  lam _. lam f. lam acc. lam m.
+  lam. lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t. f acc t.0 t.1) acc m
 
 -- 'assocMapAccum traits f acc m' simultaneously performs a map (over values)
@@ -134,7 +134,7 @@ let assocFoldlM : AssocTraits k -> (acc -> k -> v -> Option acc)
 -- IMPORTANT: The folding order is unspecified.
 let assocMapAccum : AssocTraits k -> (acc -> k -> v1 -> (acc, v2))
                       -> acc -> AssocMap k v1 -> (acc, AssocMap k v2) =
-  lam _. lam f. lam acc. lam m.
+  lam. lam f. lam acc. lam m.
     mapAccumL
       (lam acc. lam t.
          match f acc t.0 t.1 with (acc, b) then (acc, (t.0, b)) else never)
@@ -186,9 +186,9 @@ utest lookup 1 m with Some '1' in
 utest lookup 2 m with Some '2' in
 utest lookup 3 m with Some '3' in
 utest lookup 4 m with None () in
-utest lookupOrElse (lam _. 42) 1 m with '1' in
-utest lookupOrElse (lam _. 42) 2 m with '2' in
-utest lookupOrElse (lam _. 42) 3 m with '3' in
+utest lookupOrElse (lam. 42) 1 m with '1' in
+utest lookupOrElse (lam. 42) 2 m with '2' in
+utest lookupOrElse (lam. 42) 3 m with '3' in
 utest lookupPred (eqi 2) m with Some '2' in
 utest any (lam k. lam v. eqChar v '2') m with true in
 utest any (lam k. lam v. eqChar v '4') m with false in
