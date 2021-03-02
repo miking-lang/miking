@@ -161,13 +161,13 @@ lang RecLetsEval =
                                              rhs = eta_var,
                                              ty = TyUnknown(),
                                              info = NoInfo()},
+                               tyBody = TyUnknown {},
                                ty = TyUnknown {},
-                               info = NoInfo()     
+                               info = NoInfo()
                                },
-                               
                  inexpr = bodyacc,
                  ty = TyUnknown {},
-                 info = NoInfo()}                 
+                 info = NoInfo()}
         )
         body
         t.bindings in
@@ -178,6 +178,7 @@ lang RecLetsEval =
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
+                               tyBody = TyUnknown {},
                                ty = TyUnknown {},
                                info = NoInfo()} in
     eval {ctx with env =

@@ -34,7 +34,7 @@ lang VarAst
 end
 
 
--- TmAst --
+-- TmApp --
 lang AppAst
   syn Expr =
   | TmApp {lhs : Expr,
@@ -61,10 +61,11 @@ lang AppAst
 end
 
 
--- TmLam -- 
+-- TmLam --
 lang LamAst = VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
+           tyIdent : Type,
            body : Expr,
            ty : Type,
            info : Info}
@@ -193,11 +194,11 @@ lang SeqAst
 end
 
 
--- TmRecord and TmRecordUpdate -- 
+-- TmRecord and TmRecordUpdate --
 lang RecordAst
   syn Expr =
   | TmRecord {bindings : AssocMap String Expr,
-              ty : Type, 
+              ty : Type,
               info : Info}
   | TmRecordUpdate {rec : Expr,
                     key : String,
@@ -227,12 +228,13 @@ lang RecordAst
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
--- TmType -- 
+-- TmType --
 lang TypeAst
   syn Expr =
   | TmType {ident : Name,
-            ty : Type,
+            tyIdent : Type,
             inexpr : Expr,
+            ty : Type,
             info : Info}
 
   sem info =
@@ -251,12 +253,13 @@ lang TypeAst
   | TmType t -> f acc t.inexpr
 end
 
--- TmCondef and TmConApp --
+-- TmConDef and TmConApp --
 lang DataAst
   syn Expr =
   | TmConDef {ident : Name,
-              ty : Type,
+              tyIdent : Type,
               inexpr : Expr,
+              ty : Type,
               info : Info}
   | TmConApp {ident : Name,
               body : Expr,
@@ -320,9 +323,9 @@ lang UtestAst
   syn Expr =
   | TmUtest {test : Expr,
              expected : Expr,
-             next : Expr,   
+             next : Expr,
              ty : Type,
-             info : Info} 
+             info : Info}
 
   sem info =
   | TmUtest r -> r.info
