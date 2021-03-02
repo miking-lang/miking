@@ -1051,7 +1051,7 @@ IDs:
 include "string.mc"
 mexpr
 let place = atomicMake 1 in
-let threads = create 10 (lam _. threadSpawn (lam _. 
+let threads = create 10 (lam. threadSpawn (lam.
   printLn (join 
     [int2string (atomicFetchAndAdd place 1)
     , ": thread ID "
@@ -1091,11 +1091,11 @@ In the following example:
 let inCriticalSection = atomicMake false in
 let afterWait = atomicMake false in
 
-let t = threadSpawn (lam _.
+let t = threadSpawn (lam.
   threadCriticalSection (
-    lam _.
-      let _ = atomicExchange inCriticalSection true in
-      let _ = threadWait () in
+    lam.
+      atomicExchange inCriticalSection true;
+      threadWait ();
       atomicExchange afterWait true
   )
 ) in
@@ -1112,8 +1112,8 @@ recursive let waitForFlag = lam flag.
   match atomicGet flag with true then ()
   else waitForFlag flag
 in
-let _ = waitForFlag inCriticalSection in
-let _ = threadNotify (threadGetID t) in
+waitForFlag inCriticalSection;
+threadNotify (threadGetID t);
 ```
 
 The `threadNotify` will block the execution of the main thread until `t` has
@@ -1123,7 +1123,7 @@ finished its critical section, which means that we know that the flag
 ```
 utest atomicGet afterWait with true in
 -- Don't forget to clean up!
-let _ = threadJoin t in
+threadJoin t;
 ```
 
 ### Sundials

@@ -5,15 +5,15 @@
 
 -- 'atomicSet r v' sets the value of the atomic reference 'r' to 'v'.
 let atomicSet : ARef a -> a -> Unit = lam r. lam v.
-  let _ = atomicExchange r v in ()
+  atomicExchange r v; ()
 
 -- 'atomicIncr r' increments the value of the atomic reference 'r' by 1.
 let atomicIncr : ARef -> Unit = lam r.
-  let _ = atomicFetchAndAdd r 1 in ()
+  atomicFetchAndAdd r 1; ()
 
 -- 'atomicDecr r' decrements the value of the atomic reference 'r' by 1.
 let atomicDecr : ARef -> Unit = lam r.
-  let _ = atomicFetchAndAdd r (subi 0 1) in ()
+  atomicFetchAndAdd r (subi 0 1); ()
 
 mexpr
 

@@ -36,7 +36,7 @@ utest atomicCAS a v 1.0 with true in
 
 -- Threads --
 
-let selfTID : Unit -> Int = lam _.
+let selfTID : Unit -> Int = lam.
   -- 'threadID2int tid' converts the thread ID 'tid' to a unique integer.
   -- : Tid -> Int
   threadID2int (
@@ -49,7 +49,7 @@ in
 -- 'threadSpawn f' spawns a new thread, which will execute 'f' in parallel with
 -- the current thread.
 -- : (Unit -> a) -> Thread a
-let ps = create 10 (lam _. threadSpawn selfTID) in
+let ps = create 10 (lam. threadSpawn selfTID) in
 
 -- 'threadJoin t' blocks until the thread 't' runs to completion. Returns the
 -- value returned by running 't'.
@@ -70,7 +70,7 @@ let a = atomicMake 0 in
 recursive let work : (ARef a -> Unit) -> Int -> Unit = lam op. lam n.
   match n with 0 then ()
   else
-    let _ = op a in
+    op a;
     work op (subi n 1)
 in
 
@@ -78,10 +78,10 @@ let nIncr = 10000 in
 let nDecr = 1000 in
 let nSpawns = 8 in
 
-let threads = create nSpawns (lam _. threadSpawn (lam _. work incr nIncr)) in
-let _ = work decr nDecr in
+let threads = create nSpawns (lam. threadSpawn (lam. work incr nIncr)) in
+work decr nDecr;
 
-let _ = iter threadJoin threads in
+iter threadJoin threads;
 
 utest atomicGet a with subi (muli nIncr nSpawns) nDecr in
 
@@ -101,21 +101,21 @@ recursive let loop : Int -> Tid -> Unit = lam n. lam friend.
     else
       -- 'threadCPURelax ()' may improve performance during busy waiting.
       -- : Unit -> Unit
-      let _ = threadCPURelax () in
+      threadCPURelax ();
       loop n friend
 in
 let n = 100 in
-let t = threadSpawn (lam _. loop n me) in
-let _ = loop n (threadID2int (threadGetID t)) in
+let t = threadSpawn (lam. loop n me) in
+loop n (threadID2int (threadGetID t));
 -- Does not loop forever = the test has passed!
-let _ = threadJoin t in
+threadJoin t;
 
 
 -- Wait, notify, and critical section --
 let inCriticalSection = atomicMake false in
 let afterWait = atomicMake false in
 
-let t = threadSpawn (lam _.
+let t = threadSpawn (lam.
   -- 'threadCriticalSection f' runs 'f' as a critical section in the current
   -- thread 't'. A critical section means that 'f' may include a call to
   -- 'threadWait' (see below), and that any call to 'threadNotify t' (see below)
@@ -125,16 +125,16 @@ let t = threadSpawn (lam _.
   -- t'. Once it is notified, it stays notified.
   -- : (Unit -> a) -> a
   threadCriticalSection (
-    lam _.
-      let _ = atomicExchange inCriticalSection true in
+    lam.
+      atomicExchange inCriticalSection true;
       -- 'threadWait ()' must be called from within a critical section. Blocks
       -- until the critical section becomes notified.
       -- [NOTE] two calls to 'threadWait' within the same critical section is
       -- meaningless, as the second one will always immediately return.
-      let _ = threadWait () in
+      threadWait ();
       -- Sleep for a while, to make it clear that the other thread waits for the
       -- critical section to finish.
-      let _ = sleepMs 1000 in
+      sleepMs 1000;
       atomicExchange afterWait true
   )
 ) in
@@ -143,7 +143,7 @@ recursive let waitForFlag : ARef a -> Unit = lam flag.
   match atomicGet flag with true then ()
   else waitForFlag flag
 in
-let _ = waitForFlag inCriticalSection in
+waitForFlag inCriticalSection;
 
 -- When inCriticalSection is set, we know that t is in the critical section, so
 -- threadNotify will unblock the threadWait.
@@ -151,13 +151,13 @@ let _ = waitForFlag inCriticalSection in
 -- 'threadNotify tid' notifies any in-progress critical section in the thread
 -- with ID 'tid'. Blocks until any in-progress critical section in that thread
 -- runs to completion.
-let _ = threadNotify (threadGetID t) in
+threadNotify (threadGetID t);
 
 -- Since threadNotify blocks until the critical section exits, afterWait must be
 -- set to true now.
 utest atomicGet afterWait with true in
 
 -- Don't forget to clean up!
-let _ = threadJoin t in
+threadJoin t;
 
 ()
