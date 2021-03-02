@@ -83,6 +83,10 @@ let main =
       , Arg.Set enable_debug_con_shape
       , " Enables printing of the shape of values given to constructors, to \
          stderr." )
+    ; ( "--debug-profile"
+      , Arg.Set enable_debug_profiling
+      , " Enables printing of number of calls to and cumulative runtime of \
+         closures." )
     ; ( "--symbol"
       , Arg.Set enable_debug_symbol_print
       , " Enables output of symbols for variables. Affects all other debug \

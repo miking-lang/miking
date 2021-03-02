@@ -9,6 +9,7 @@ open Ast
 open Msg
 open Mexpr
 open Parserutils
+open Ustring
 
 let add_prelude = function
   | Program (includes, tops, tm) ->
@@ -53,4 +54,14 @@ let evalprog filename =
         utest_fail_local := !utest_fail_local + 1 )
       else fprintf stderr "%s\n" error_string ) ;
   parsed_files := [] ;
-  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n"
+  if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n" ;
+  if !enable_debug_profiling then
+    Hashtbl.iter
+      (fun k (c, t) ->
+        printf "%s: %d call%s, %f ms\n"
+          (k |> info2str |> to_utf8)
+          c
+          (if c == 1 then "" else "s")
+          t)
+      runtimes
+  else ()

@@ -1803,6 +1803,16 @@ let rec try_match env value pat =
   | PatNot (_, p) -> (
     match try_match env value p with Some _ -> None | None -> Some env )
 
+(* Tracks the number of calls and cumulative runtime of closures *)
+let runtimes = Hashtbl.create 1024
+
+(* Record a call to a closure *)
+let add_call fi ms =
+  if Hashtbl.mem runtimes fi then
+    let old_count, old_time = Hashtbl.find runtimes fi in
+    Hashtbl.replace runtimes fi (old_count + 1, old_time +. ms)
+  else Hashtbl.add runtimes fi (1, ms)
+
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
@@ -1814,11 +1824,23 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
     (* Closure application *)
-    | TmClos (_, _, s, t3, env2) -> (
-      try eval ((s, eval env t2) :: Lazy.force env2) t3
-      with Error _ as e ->
-        uprint_endline (us "TRACE: " ^. info2str fiapp) ;
-        raise e )
+    | TmClos (ficlos, _, s, t3, env2) -> (
+        if !enable_debug_profiling then (
+          let t1 = get_wall_time_ms () in
+          let res =
+            try eval ((s, eval env t2) :: Lazy.force env2) t3
+            with Error _ as e ->
+              uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+              raise e
+          in
+          let t2 = get_wall_time_ms () in
+          add_call ficlos (t2 -. t1) ;
+          res )
+        else
+          try eval ((s, eval env t2) :: Lazy.force env2) t3
+          with Error _ as e ->
+            uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+            raise e )
     (* Constant application using the delta function *)
     | TmConst (_, c) ->
         delta eval env fiapp c (eval env t2)
