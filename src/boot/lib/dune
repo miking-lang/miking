@@ -13,6 +13,31 @@
   ;; Note that this will change the result of compiling `mi` depending on
   ;; which packages are available in the environment.
   (select
+   par.ml
+   from
+   (domainslib -> par.par.ml)
+   (-> par.par-skel.ml))
+  (select
+   parast.ml
+   from
+   (domainslib -> parast.par.ml)
+   (-> parast.par-skel.ml))
+  (select
+   parimpl.mli
+   from
+   (domainslib -> parimpl.par.mli)
+   (-> parimpl.par-skel.mli))
+  (select
+   parimpl.ml
+   from
+   (domainslib -> parimpl.par.ml)
+   (-> parimpl.par-skel.ml))
+  (select
+   parpprint.ml
+   from
+   (domainslib -> parpprint.par.ml)
+   (-> parpprint.par-skel.ml))
+  (select
    pyffi.ml
    from
    (pyml -> pyffi.py.ml)

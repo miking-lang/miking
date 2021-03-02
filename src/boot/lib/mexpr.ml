@@ -142,6 +142,8 @@ let builtin =
   ; ("bootParserGetConst", f (CbootParserGetConst None))
   ; ("bootParserGetPat", f (CbootParserGetPat None))
   ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
+  (* Append multicore intrinsics *)
+  @ Par.externals
   (* Append external functions *)
   @ Ext.externals
   (* Append sundials intrinsics *)
@@ -499,6 +501,9 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
+  (* Multicore *)
+  | CPar v ->
+      Par.arity v
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1348,6 +1353,9 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
+  (* Multicore *)
+  | CPar v, t ->
+      Par.delta eval env fi v t
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t

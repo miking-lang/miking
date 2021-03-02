@@ -158,6 +158,7 @@ and const =
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
   (* External functions *)
+  | CPar of tm Parast.ext
   | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
