@@ -21,6 +21,9 @@ let _envLookup = assocLookup {eq = nameEqSym}
 -- type that does not contradict the other, in a given type environment. It is
 -- similar to type equality, except that an unknown type is consistent with any
 -- other type.
+--
+-- If no consistent type can be found, None is returned. This happens when two
+-- known, but distinct, types are given.
 recursive
 let _consistentType =
   use MExprAst in
