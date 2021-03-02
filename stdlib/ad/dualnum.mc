@@ -9,7 +9,7 @@
 
 
 
-include "dualnum-symb.mc"
+include "dualnum-tree.mc"
 include "dualnum-helpers.mc"
 include "string.mc"
 
