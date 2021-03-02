@@ -11,6 +11,12 @@ let mapLookup : k -> Map k v -> Option v =
     match mapMem k m with false then None ()
     else Some (mapFind k m)
 
+let mapInsertWith : (v -> v -> v) -> k -> v -> Map k v -> Map k v =
+  lam f. lam k. lam v. lam m.
+    match mapLookup k m with Some prev then
+      mapInsert k (f prev v) m
+    else mapInsert k v m
+
 let mapUnion : Map k v -> Map k v -> Map k v = lam l. lam r.
   foldl (lam acc. lam binding. mapInsert binding.0 binding.1 acc) l (mapBindings r)
 
@@ -51,5 +57,10 @@ let m = mapFromList subi
 utest mapLookup 1 m with Some "1" in
 utest mapLookup 2 m with Some "2" in
 utest mapLookup 3 m with None () in
+
+let m2 = mapInsertWith concat 1 "blub" m in
+utest mapLookup 1 m2 with Some "1blub" in
+utest mapLookup 2 m2 with mapLookup 2 m in
+utest mapLookup 3 m2 with mapLookup 3 m in
 
 ()
