@@ -23,7 +23,7 @@ type ext =
       (float * float) option
       * (   (RealArray.t Ida.triple, RealArray.t) Ida.jacobian_arg
          -> Matrix.Dense.t
-         -> unit)
+         -> unit )
         option
       * (float -> RealArray.t -> RealArray.t -> RealArray.t -> unit) option
       * (int * (float -> RealArray.t -> RealArray.t -> RealArray.t -> unit))

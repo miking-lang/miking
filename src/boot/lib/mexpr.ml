@@ -101,7 +101,7 @@ let builtin =
                    ( NoInfo
                    , s |> us |> Mseq.Helpers.of_ustring
                      |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   )) ) )
+                   ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)
@@ -547,7 +547,7 @@ let delta eval env fi c v =
          | TmConst (_, CInt n) ->
              n
          | _ ->
-             fail_constapp fi)
+             fail_constapp fi )
     |> Mseq.Helpers.to_array
   in
   let int_array2tm_seq fi a =
@@ -1115,7 +1115,7 @@ let delta eval env fi c v =
                Tensor.Num.create Tensor.Num.Float shape f' |> T.float
            | tm ->
                let f' is = if is = is0 then tm else f is in
-               Tensor.NoNum.create shape f' |> T.no_num)
+               Tensor.NoNum.create shape f' |> T.no_num )
       |> fun t -> TmConst (fi, CTensor t)
   | CtensorCreate _, _ ->
       fail_constapp fi
@@ -1502,7 +1502,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
     Mseq.Helpers.fold_right
       (fun p (patEnv, ps) ->
         let patEnv, p = sPat patEnv p in
-        (patEnv, Mseq.cons p ps))
+        (patEnv, Mseq.cons p ps) )
       pats (patEnv, Mseq.empty)
   and sPat (patEnv : (ident * Symb.t) list) = function
     | PatNamed (fi, NameStr (x, _)) ->
@@ -1532,7 +1532,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
             (fun p ->
               let patEnv', p = sPat !patEnv p in
               patEnv := patEnv' ;
-              p)
+              p )
             pats
         in
         (!patEnv, PatRecord (fi, pats))
@@ -1600,7 +1600,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         List.fold_left
           (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
-            (IdVar (sid_of_ustring x), s) :: env)
+            (IdVar (sid_of_ustring x), s) :: env )
           env lst
       in
       TmRecLets
@@ -1611,7 +1611,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
               , x
               , findsym fi (IdVar (sid_of_ustring x)) env2
               , symbolize_type env ty
-              , symbolize env2 t ))
+              , symbolize env2 t ) )
             lst
         , symbolize env2 tm )
   | TmApp (fi, t1, t2) ->
@@ -1677,7 +1677,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
         List.fold_left
           (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
-            (IdVar (sid_of_ustring x), s) :: env)
+            (IdVar (sid_of_ustring x), s) :: env )
           env lst
       in
       let new_env, new_tm = symbolize_toplevel env2 tm in
@@ -1690,7 +1690,7 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
                 , x
                 , findsym fi (IdVar (sid_of_ustring x)) env2
                 , symbolize_type env ty
-                , symbolize env2 t ))
+                , symbolize env2 t ) )
               lst
           , new_tm ) )
   | TmConDef (fi, x, _, ty, t) ->
@@ -1874,7 +1874,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
            in
            List.fold_left
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
+             env lst )
       in
       eval (Lazy.force env') t2
   (* Constant *)
@@ -1984,7 +1984,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
            in
            List.fold_left
              (fun env (_, _, s, _ty, rhs) -> (s, wraplambda rhs) :: env)
-             env lst)
+             env lst )
       in
       eval_toplevel (Lazy.force env') t2
   | TmConDef (_, _, _, _, t) ->

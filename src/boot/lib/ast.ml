@@ -336,7 +336,7 @@ let rec map_tm f = function
         (TmRecLets
            ( fi
            , List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, map_tm f t)) lst
-           , map_tm f tm ))
+           , map_tm f tm ) )
   | TmConst (_, _) as t ->
       f t
   | TmSeq (fi, tms) ->
@@ -426,7 +426,7 @@ let tmseq2ustring fi s =
       | TmConst (_, CChar i) ->
           i
       | _ ->
-          raise_error fi "The term is not a string")
+          raise_error fi "The term is not a string" )
     s
   |> Mseq.Helpers.to_ustring
 

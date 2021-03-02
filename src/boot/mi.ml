@@ -33,9 +33,9 @@ let files_of_folders lst =
         |> List.map (fun x -> add_slash v ^ x)
         |> List.filter (fun x -> not (Sys.is_directory x))
         |> List.filter (fun x ->
-               not (String.contains x '#' || String.contains x '~')) )
+               not (String.contains x '#' || String.contains x '~') ) )
         @ a
-      else v :: a)
+      else v :: a )
     [] lst
 
 (* Iterate over all potential test files and run tests *)

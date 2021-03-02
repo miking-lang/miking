@@ -188,9 +188,8 @@ let rec to_latin1 s =
 let from_uchars a =
   Array.iter
     (fun c ->
-      if not (valid_uchar c) then
-        raise (Invalid_argument "Ustring.from_uchars")
-      else ())
+      if not (valid_uchar c) then raise (Invalid_argument "Ustring.from_uchars")
+      else () )
     a ;
   ref (Uchars a)
 
@@ -203,7 +202,7 @@ let rec to_utf8 s =
         if ae <= 0b1111111 then n + 1
         else if ae <= 0b11111111111 then n + 2
         else if ae <= 0b1111111111111111 then n + 3
-        else n + 4)
+        else n + 4 )
       0 a
   in
   match !s with
@@ -320,8 +319,7 @@ module Op = struct
   let ustring_of_int i = us (string_of_int i)
 
   let int_of_ustring s =
-    try int_of_string (to_latin1 s)
-    with _ -> raise (Failure "int_of_ustring")
+    try int_of_string (to_latin1 s) with _ -> raise (Failure "int_of_ustring")
 
   let ustring_of_float f = us (string_of_float f)
 
