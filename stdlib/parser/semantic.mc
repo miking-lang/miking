@@ -593,7 +593,7 @@ let semanticGrammar
           , { nt = contNt
             , label = concat "empty " contNt
             , rhs = []
-            , action = lam _. (NoInfo (), lam x. Some x, [])
+            , action = lam. (NoInfo (), lam x. Some x, [])
             }
           , { nt = contNt
             , label = contNt
@@ -618,7 +618,7 @@ let semanticGrammar
           , { nt = prefixesNt
             , label = concat "empty " prefixesNt
             , rhs = []
-            , action = lam _. []
+            , action = lam. []
             }
           , { nt = prefixesNt
             , label = prefixesNt
@@ -631,7 +631,7 @@ let semanticGrammar
           , { nt = postfixesNt
             , label = concat "empty " postfixesNt
             , rhs = []
-            , action = lam _. []
+            , action = lam. []
             }
           , { nt = postfixesNt
             , label = postfixesNt
@@ -677,7 +677,7 @@ let shortenError = lam p.
       (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
       precs in
     ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
-  else let _ = dprintLn p in never
+  else dprintLn p; never
 in
 
 let wrap = lam label. lam x. (label, x) in
@@ -787,7 +787,7 @@ utest semanticGrammar
   , overrideAllow = []
   , overrideDisallow = []
   , precedences = []
-  } with () using lam x. lam _. match x
+  } with () using lam x. lam. match x
 with Left
   [ UndefinedPrecedence
     { left = {spec = {name = "add"}}
@@ -806,14 +806,14 @@ let g =
       [ [semanticAmbAssoc addP]
       ]
     } in
-  utest res with () using lam x. lam _. match x
+  utest res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
 in
 
 utest semanticParseFile g "file" ""
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left [SemanticParseError (UnexpectedFirst
   { expected = [Tok (IntTok _)]
   , found = Tok (EOFTok _)
@@ -821,14 +821,14 @@ with Left [SemanticParseError (UnexpectedFirst
 then true else false in
 
 utest semanticParseFile g "file" "7"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("int",
   [ Tok (IntTok {val = 7})
   ])
 then true else false in
 
 utest semanticParseFile g "file" "7 +"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left [SemanticParseError (UnexpectedFirst
   { expected = [Tok (IntTok _)]
   , stack = [{label = "expression"}] ++ _
@@ -838,7 +838,7 @@ with Left [SemanticParseError (UnexpectedFirst
 then true else false in
 
 utest semanticParseFile g "file" "7 + 43"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("add",
   [ UserSym ("int", [Tok (IntTok {val = 7})])
   , Lit {lit = "+"}
@@ -852,7 +852,7 @@ then true else false in
 -- code is implemented, at which point we'll update the tests
 -- properly.
 utest semanticParseFile g "file" "7 + 43 + 9"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 10}
@@ -878,14 +878,14 @@ let g =
       , semanticPairwiseGroup semanticGroupLeft [addP, minusP]
       ]
     } in
-  utest res with () using lam x. lam _. match x
+  utest res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
 in
 
 utest semanticParseFile g "file" "7 + 43 + 9"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("add",
   [ UserSym ("add",
     [ UserSym ("int", [Tok (IntTok {val = 7})])
@@ -898,7 +898,7 @@ with Right ("add",
 then true else false in
 
 utest semanticParseFile g "file" "7 + 43 * 8 * 9"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 4, row2 = 1, col2 = 14}
@@ -908,7 +908,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "-1"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("neg",
   [ Lit {lit = "-"}
   , UserSym ("int", [Tok (IntTok {val = 1})])
@@ -916,7 +916,7 @@ with Right ("neg",
 then true else false in
 
 utest semanticParseFile g "file" "-1 + 8 * -2"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("add",
   [ UserSym ("neg", [Lit {lit = "-"}, UserSym ("int", [Tok (IntTok {val = 1})])])
   , Lit {lit = "+"}
@@ -929,7 +929,7 @@ with Right ("add",
 then true else false in
 
 utest semanticParseFile g "file" "-1 - - 8"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("minus",
   [ UserSym ("neg", [Lit {lit = "-"}, UserSym ("int", [Tok (IntTok {val = 1})])])
   , Lit {lit = "-"}
@@ -955,14 +955,14 @@ let g =
       , semanticPairwiseGroup semanticGroupEither [negP, fieldAccessP]
       ]
     } in
-  utest res with () using lam x. lam _. match x
+  utest res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
 in
 
 utest semanticParseFile g "file" "1 .foo"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("fieldAccess",
   [ UserSym ("int", [Tok (IntTok {val = 1})])
   , Lit {lit = "."}
@@ -971,7 +971,7 @@ with Right ("fieldAccess",
 then true else false in
 
 utest semanticParseFile g "file" "-1 .foo"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 7}
@@ -981,7 +981,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "-1 .foo + 32"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 7}
@@ -991,7 +991,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "(-1).foo"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("fieldAccess",
   [ UserSym ("par",
     [ Lit {lit = "("}
@@ -1007,7 +1007,7 @@ with Right ("fieldAccess",
 then true else false in
 
 utest semanticParseFile g "file" "(1 * 2 * 3) * 8 * 9"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 1, row2 = 1, col2 = 10}
@@ -1043,7 +1043,7 @@ utest semanticGrammar
     , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
     ]
   }
-with () using lam x. lam _. match x
+with () using lam x. lam. match x
 with Left
   [ DuplicatedPrecedence
     [ (({name = "else"}, {name = "fieldAccess"}), {mayGroupLeft = false, mayGroupRight = true})
@@ -1074,14 +1074,14 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam _. match x
+  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
 in
 
 utest semanticParseFile g "file" "2 else 3"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseBreakableError
     { info = Info {filename = "file", row1 = 1, row2 = 1, col1 = 0, col2 = 8}
@@ -1091,7 +1091,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "if 1 then 2 else 3"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("else",
   [ UserSym ("if",
     [ Lit {lit = "if"}
@@ -1105,7 +1105,7 @@ with Right ("else",
 then true else false in
 
 utest semanticParseFile g "file" "if 1 + 11 then 2 * 22 else 3 - 33"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("else",
   [ UserSym ("if",
     [ Lit {lit = "if"}
@@ -1131,7 +1131,7 @@ with Right ("else",
 then true else false in
 
 utest semanticParseFile g "file" "if 0 then if 1 then 2 else 3"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 28}
@@ -1141,7 +1141,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "if 0 then -if 1 then 2 else 3"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 29}
@@ -1151,7 +1151,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "if 0 then 1 + if 1 then 2 else 3"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 32}
@@ -1161,7 +1161,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "if 0 then if 1 then 2 else 3 .foo"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseAmbiguityError
     { info = Info {filename = "file", row1 = 1, col1 = 0, row2 = 1, col2 = 33}
@@ -1171,7 +1171,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "if 1 then 2 else 3 .foo"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("else",
   [ UserSym ("if",
     [ Lit {lit = "if"}
@@ -1212,14 +1212,14 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam _. match x
+  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
 in
 
 utest semanticParseFile g "file" ""
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseError
     (UnexpectedFirst
@@ -1233,7 +1233,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "7"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Left
   [ SemanticParseError
     (UnexpectedFirst
@@ -1247,7 +1247,7 @@ with Left
 then true else false in
 
 utest semanticParseFile g "file" "def x = 7"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("def",
   [ Lit {lit = "def"}
   , Tok (LIdentTok {val = "x"})
@@ -1257,7 +1257,7 @@ with Right ("def",
 then true else false in
 
 utest semanticParseFile g "file" "def x = 7 def y = 8"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("twoDef",
   [ UserSym ("def",
     [ Lit {lit = "def"}
@@ -1275,7 +1275,7 @@ with Right ("twoDef",
 then true else false in
 
 utest semanticParseFile g "file" "def x = 7\ndef y = 8\ndef z = 1 + 2"
-with () using lam x. lam _. use ParserConcrete in match x
+with () using lam x. lam. use ParserConcrete in match x
 with Right ("twoDef",
   [ UserSym ("twoDef",
     [ UserSym ("def",
