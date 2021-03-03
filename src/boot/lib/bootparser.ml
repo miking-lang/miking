@@ -103,7 +103,8 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-let parseMExprString str = Parserutils.parse_mexpr_string str
+  
+
 
 (* Returns a tuple with the following elements
    1. ID field 

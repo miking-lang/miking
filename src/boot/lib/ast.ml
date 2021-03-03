@@ -149,6 +149,7 @@ and const =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString
+  | CbootParserParseMCoreFile
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetString of tm option

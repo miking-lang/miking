@@ -8,6 +8,19 @@ module Option = BatOption
 (* Tab length when calculating the info field *)
 let tablength = 8
 
+
+let error_to_ustring e =
+  match e with
+  | Lexer.Lex_error m ->
+      message2str m
+  | Parsing.Parse_error ->
+      message2str (Lexer.parse_error_message ())
+  | Error m ->
+      message2str m
+  | _ ->
+      us (Printexc.to_string e)
+
+
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =
   match Sys.getenv_opt "HOME" with
@@ -26,6 +39,11 @@ let default_includes =
   | None ->
       if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then prelude
       else []
+
+let add_prelude = function
+  | Program (includes, tops, tm) ->
+      Program (default_includes @ includes, tops, tm)
+
 
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
@@ -67,12 +85,8 @@ let debug_after_mlang t =
 (* Keep track of which files have been parsed to avoid double includes *)
 let parsed_files = ref []
 
-let parse_mexpr_string ustring =
-  Lexer.init (us "internal") tablength ;
-  ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
-
 (* Open a file and parse it into an MCore program *)
-let parse_mcore_file filename =
+let local_parse_mcore_file filename =
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength ;
@@ -99,7 +113,7 @@ let rec merge_includes root visited = function
             else if List.mem filename !parsed_files then None
               (* File already included *)
             else if Sys.file_exists filename then
-              parse_mcore_file filename
+              local_parse_mcore_file filename
               |> merge_includes
                    (Filename.dirname filename)
                    (filename :: visited)
@@ -120,3 +134,22 @@ let rec merge_includes root visited = function
         |> List.concat
       in
       Program (includes, included_tops @ tops, tm)
+
+
+let parse_mexpr_string ustring =
+  Lexer.init (us "internal") tablength ;
+  ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
+
+
+let parse_mcore_file filename =
+  try
+    let filename = Ustring.to_utf8 filename in
+    local_parse_mcore_file filename
+    |> add_prelude
+    |> merge_includes (Filename.dirname filename) [filename]
+    |> Mlang.flatten |> Mlang.desugar_post_flatten 
+  with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
+    let error_string = Ustring.to_utf8 (error_to_ustring e) in
+    fprintf stderr "%s\n" error_string; exit 1
+
+  

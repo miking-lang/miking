@@ -24,6 +24,16 @@ let makeSeq = lam f. lam len.
 
 
 lang BootParser = MExprAst
+
+  -- Parse a complete MCore file, including MLang code
+  -- This function returns the final MExpr AST. The MCore
+  -- file can refer to other files using include statements
+  sem parseMCoreFile =
+  | filename ->
+    let t = bootParserParseMCoreFile filename in
+    matchTerm t (bootParserGetId t) 
+
+  -- Parses an MExpr string and returns the final MExpr AST
   sem parseMExprString =
   | str ->
     let t = bootParserParseMExprString str in
