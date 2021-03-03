@@ -1984,7 +1984,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
     (* Closure application *)
     | TmClos (ficlos, _, s, t3, env2) -> (
         if !enable_debug_profiling then (
-          let t1 = get_wall_time_ms () in
+          let t1 = Time.get_wall_time_ms () in
           let res =
             try eval ((s, eval env t2) :: Lazy.force env2) t3
             with e ->
@@ -1992,7 +1992,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
                 uprint_endline (us "TRACE: " ^. info2str fiapp) ;
               raise e
           in
-          let t2 = get_wall_time_ms () in
+          let t2 = Time.get_wall_time_ms () in
           add_call ficlos (t2 -. t1) ;
           res )
         else

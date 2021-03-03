@@ -120,6 +120,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
   | OTmConApp {args = []} -> true
@@ -229,31 +230,40 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
         else never
       else never
     else never
+  | OTmArray t ->
+    match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
+                    env t.tms
+    with (env,tms) then
+      let merged =
+        strJoin (concat ";" (pprintNewline (pprintIncr indent))) tms
+      in
+      (env,join ["[| ", merged, " |]"])
+    else never
   | OTmTuple {values = values} ->
     match mapAccumL (pprintCode indent) env values
     with (env, values) then
       (env, join ["(", strJoin ", " values, ")"])
     else never
-  | OTmMatch {
-    target = target,
-    arms
-      = [ (PatBool {val = true}, thn), (PatBool {val = false}, els) ]
-      | [ (PatBool {val = false}, els), (PatBool {val = true}, thn) ]
-    } ->
-    let i = indent in
-    let ii = pprintIncr i in
-    match pprintCode ii env target with (env, target) then
-      match pprintCode ii env thn with (env, thn) then
-        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
-          (env, join ["if", pprintNewline ii,
-                      target, pprintNewline i,
-                      "then", pprintNewline ii,
-                      thn, pprintNewline i,
-                      "else", pprintNewline ii,
-                      els])
-        else never
-      else never
-    else never
+  -- | OTmMatch {
+  --   target = target,
+  --   arms
+  --     = [ (PatBool {val = true}, thn), (PatBool {val = false}, els) ]
+  --     | [ (PatBool {val = false}, els), (PatBool {val = true}, thn) ]
+  --   } ->
+  --   let i = indent in
+  --   let ii = pprintIncr i in
+  --   match pprintCode ii env target with (env, target) then
+  --     match pprintCode ii env thn with (env, thn) then
+  --       match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
+  --         (env, join ["if", pprintNewline ii,
+  --                     target, pprintNewline i,
+  --                     "then", pprintNewline ii,
+  --                     thn, pprintNewline i,
+  --                     "else", pprintNewline ii,
+  --                     els])
+  --       else never
+  --     else never
+  --   else never
   | OTmMatch { target = target, arms = [(pat, expr)] } ->
     let i = indent in
     let ii = pprintIncr i in
