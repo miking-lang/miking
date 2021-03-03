@@ -30,7 +30,11 @@ end
 -- This fragment contains variants of other ocaml constructs where the
 -- names should appear exactly as specified, intended to be used to
 -- refer to externally defined names, e.g., in the ocaml standard
--- library
+-- library. Note that these names will not affect other names in any
+-- way, meaning that these names should be chosen so that they
+-- *cannot* overlap with other names. An easy way to do that is to
+-- always use fully qualified names, since normal names cannot contain
+-- dots.
 lang OCamlExternal
   syn Expr =
   | OTmVarExt { ident : Name }
