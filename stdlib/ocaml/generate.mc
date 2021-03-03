@@ -490,9 +490,9 @@ lang OCamlObjWrap = OCamlAst
   | TmConst {val = c} ->
     intrinsic2name c
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
-  --| OTmMatch t ->
-  --  _objObj (OTmMatch {{t with target = _objObj (objWrapRec t.target)}
-  --                        with arms = map (lam p. (p.0, objWrapRec p.1)) t.arms})
+  | OTmMatch t ->
+    OTmMatch {{t with target = _objObj (objWrapRec t.target)}
+                 with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
 
   sem objWrap =
@@ -567,197 +567,197 @@ in
 let objWrapGenerate = lam a. objWrap (generate a) in
 
 -- Match
--- let matchChar1 = symbolize
---  (match_ (char_ 'a')
---    (pchar_ 'a')
---    true_
---    false_) in
--- utest matchChar1 with objWrapGenerate matchChar1 using sameSemantics in
+let matchChar1 = symbolize
+ (match_ (char_ 'a')
+   (pchar_ 'a')
+   true_
+   false_) in
+utest matchChar1 with objWrapGenerate matchChar1 using sameSemantics in
 
--- let matchChar2 = symbolize
---   (match_ (char_ 'a')
---     (pchar_ 'b')
---     true_
---     false_) in
--- utest matchChar2 with objWrapGenerate matchChar2 using sameSemantics in
---
--- let matchSeq = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---     (addi_ (var_ "a") (var_ "b"))
---     (int_ 42)) in
--- utest matchSeq with objWrapGenerate matchSeq using sameSemantics in
+ let matchChar2 = symbolize
+   (match_ (char_ 'a')
+     (pchar_ 'b')
+     true_
+     false_) in
+ utest matchChar2 with objWrapGenerate matchChar2 using sameSemantics in
 
--- let noMatchSeq1 = symbolize
---   (match_ (seq_ [int_ 2, int_ 2, int_ 3])
---     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---     (addi_ (var_ "a") (var_ "b"))
---     (int_ 42)) in
--- utest noMatchSeq1 with objWrapGenerate noMatchSeq1 using sameSemantics in
+let matchSeq = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest matchSeq with objWrapGenerate matchSeq using sameSemantics in
 
--- let noMatchSeqLen = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---     (addi_ (var_ "a") (var_ "b"))
---     (int_ 42)) in
--- utest noMatchSeqLen with objWrapGenerate noMatchSeqLen using sameSemantics in
+let noMatchSeq1 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeq1 with objWrapGenerate noMatchSeq1 using sameSemantics in
 
--- let noMatchSeqLen2 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---     (addi_ (var_ "a") (var_ "b"))
---     (int_ 42)) in
--- utest noMatchSeqLen2 with objWrapGenerate noMatchSeqLen2 using sameSemantics in
+let noMatchSeqLen = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen with objWrapGenerate noMatchSeqLen using sameSemantics in
 
--- let matchOr1 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchOr1 with objWrapGenerate matchOr1 using sameSemantics in
+let noMatchSeqLen2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen2 with objWrapGenerate noMatchSeqLen2 using sameSemantics in
 
--- let matchOr2 = symbolize
---   (match_ (seq_ [int_ 2, int_ 1])
---     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchOr2 with objWrapGenerate matchOr2 using sameSemantics in
+let matchOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr1 with objWrapGenerate matchOr1 using sameSemantics in
 
--- let matchOr3 = symbolize
---   (match_ (seq_ [int_ 3, int_ 1])
---     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchOr3 with objWrapGenerate matchOr3 using sameSemantics in
+let matchOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr2 with objWrapGenerate matchOr2 using sameSemantics in
 
--- let matchNestedOr1 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---           (pseqtot_ [pint_ 3, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchNestedOr1 with objWrapGenerate matchNestedOr1 using sameSemantics in
+let matchOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr3 with objWrapGenerate matchOr3 using sameSemantics in
 
--- let matchNestedOr2 = symbolize
---   (match_ (seq_ [int_ 2, int_ 1])
---     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---           (pseqtot_ [pint_ 3, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchNestedOr2 with objWrapGenerate matchNestedOr2 using sameSemantics in
+let matchNestedOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr1 with objWrapGenerate matchNestedOr1 using sameSemantics in
 
--- let matchNestedOr3 = symbolize
---   (match_ (seq_ [int_ 3, int_ 7])
---     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---           (pseqtot_ [pint_ 3, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchNestedOr3 with objWrapGenerate matchNestedOr3 using sameSemantics in
+let matchNestedOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr2 with objWrapGenerate matchNestedOr2 using sameSemantics in
 
--- let matchNestedOr4 = symbolize
---   (match_ (seq_ [int_ 4, int_ 7])
---     (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---           (pseqtot_ [pint_ 3, pvar_ "a"]))
---     (var_ "a")
---     (int_ 42)) in
--- utest matchNestedOr4 with objWrapGenerate matchNestedOr4 using sameSemantics in
+let matchNestedOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr3 with objWrapGenerate matchNestedOr3 using sameSemantics in
 
--- let matchNot1 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---     true_
---     false_) in
--- utest matchNot1 with objWrapGenerate matchNot1 using sameSemantics in
+let matchNestedOr4 = symbolize
+  (match_ (seq_ [int_ 4, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr4 with objWrapGenerate matchNestedOr4 using sameSemantics in
 
--- let matchNot2 = symbolize
---   (match_ (seq_ [int_ 2, int_ 2])
---     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---     true_
---     false_) in
--- utest matchNot2 with objWrapGenerate matchNot2 using sameSemantics in
+let matchNot1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot1 with objWrapGenerate matchNot1 using sameSemantics in
 
--- let matchAnd1 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---     (int_ 53)) in
--- utest matchAnd1 with objWrapGenerate matchAnd1 using sameSemantics in
+let matchNot2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot2 with objWrapGenerate matchNot2 using sameSemantics in
 
--- let matchAnd2 = symbolize
---   (match_ (seq_ [int_ 2, int_ 2])
---     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---     (int_ 53)) in
--- utest matchAnd2 with objWrapGenerate matchAnd2 using sameSemantics in
+let matchAnd1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd1 with objWrapGenerate matchAnd1 using sameSemantics in
 
--- let matchAnd3 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
---     (var_ "a")
---     (int_ 53)) in
--- utest matchAnd3 with objWrapGenerate matchAnd3 using sameSemantics in
+let matchAnd2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd2 with objWrapGenerate matchAnd2 using sameSemantics in
 
--- let matchAnd4 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
---     (var_ "a")
---     (int_ 53)) in
--- utest matchAnd4 with objWrapGenerate matchAnd4 using sameSemantics in
+let matchAnd3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd3 with objWrapGenerate matchAnd3 using sameSemantics in
 
--- let matchSeqEdge1 = symbolize
---   (match_ (seq_ [int_ 1])
---     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---     (addi_ (var_ "a") (var_ "c"))
---     (int_ 75)) in
--- utest matchSeqEdge1 with objWrapGenerate matchSeqEdge1 using sameSemantics in
+let matchAnd4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd4 with objWrapGenerate matchAnd4 using sameSemantics in
 
--- let matchSeqEdge2 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2])
---     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---     (addi_ (var_ "a") (var_ "c"))
---     (int_ 75)) in
--- utest matchSeqEdge2 with objWrapGenerate matchSeqEdge2 using sameSemantics in
+let matchSeqEdge1 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge1 with objWrapGenerate matchSeqEdge1 using sameSemantics in
 
--- let matchSeqEdge3 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---     (addi_ (var_ "a") (var_ "c"))
---     (int_ 75)) in
--- utest matchSeqEdge3 with objWrapGenerate matchSeqEdge3 using sameSemantics in
+let matchSeqEdge2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge2 with objWrapGenerate matchSeqEdge2 using sameSemantics in
 
--- let matchSeqEdge4 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---     (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
---     (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
---     (int_ 75)) in
--- utest matchSeqEdge4 with objWrapGenerate matchSeqEdge4 using sameSemantics in
+let matchSeqEdge3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge3 with objWrapGenerate matchSeqEdge3 using sameSemantics in
 
--- let matchSeqEdge5 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---     (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
---     (match_ (var_ "b")
---       (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---       (addi_ (var_ "a") (var_ "c"))
---       (int_ 84))
---     (int_ 75)) in
--- utest matchSeqEdge5 with objWrapGenerate matchSeqEdge5 using sameSemantics in
+let matchSeqEdge4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
+    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge4 with objWrapGenerate matchSeqEdge4 using sameSemantics in
 
--- let matchSeqEdge6 = symbolize
---   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---     (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
---     (match_ (var_ "b")
---       (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---       (addi_ (var_ "a") (var_ "c"))
---       (int_ 84))
---     (int_ 75)) in
--- utest matchSeqEdge6 with objWrapGenerate matchSeqEdge6 using sameSemantics in
+let matchSeqEdge5 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge5 with objWrapGenerate matchSeqEdge5 using sameSemantics in
 
--- let matchSeqEdge7 = symbolize
---   (match_ (seq_ [int_ 1])
---     (pseqedgew_ [pvar_ "a"] [])
---     (var_ "a")
---     (int_ 75)) in
--- utest matchSeqEdge7 with objWrapGenerate matchSeqEdge7 using sameSemantics in
+let matchSeqEdge6 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge6 with objWrapGenerate matchSeqEdge6 using sameSemantics in
+
+let matchSeqEdge7 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedgew_ [pvar_ "a"] [])
+    (var_ "a")
+    (int_ 75)) in
+utest matchSeqEdge7 with objWrapGenerate matchSeqEdge7 using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in

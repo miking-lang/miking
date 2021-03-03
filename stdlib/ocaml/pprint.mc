@@ -251,26 +251,26 @@ lang OCamlPrettyPrint = VarPrettyPrint
     with (env, values) then
       (env, join ["(", strJoin ", " values, ")"])
     else never
-  -- | OTmMatch {
-  --   target = target,
-  --   arms
-  --     = [ (PatBool {val = true}, thn), (PatBool {val = false}, els) ]
-  --     | [ (PatBool {val = false}, els), (PatBool {val = true}, thn) ]
-  --   } ->
-  --   let i = indent in
-  --   let ii = pprintIncr i in
-  --   match pprintCode ii env target with (env, target) then
-  --     match pprintCode ii env thn with (env, thn) then
-  --       match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
-  --         (env, join ["if", pprintNewline ii,
-  --                     target, pprintNewline i,
-  --                     "then", pprintNewline ii,
-  --                     thn, pprintNewline i,
-  --                     "else", pprintNewline ii,
-  --                     els])
-  --       else never
-  --     else never
-  --   else never
+  | OTmMatch {
+    target = target,
+    arms
+      = [ (PatBool {val = true}, thn), (PatBool {val = false}, els) ]
+      | [ (PatBool {val = false}, els), (PatBool {val = true}, thn) ]
+    } ->
+    let i = indent in
+    let ii = pprintIncr i in
+    match pprintCode ii env target with (env, target) then
+      match pprintCode ii env thn with (env, thn) then
+        match pprintCode ii env els with (env, els) then  -- NOTE(vipa, 2020-11-30): if we add sequential composition (`;`) this will be wrong, it should be `printParen` instead of `printCode`.
+          (env, join ["if", pprintNewline ii,
+                      target, pprintNewline i,
+                      "then", pprintNewline ii,
+                      thn, pprintNewline i,
+                      "else", pprintNewline ii,
+                      els])
+        else never
+      else never
+    else never
   | OTmMatch { target = target, arms = [(pat, expr)] } ->
     let i = indent in
     let ii = pprintIncr i in
