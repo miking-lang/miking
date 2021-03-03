@@ -37,7 +37,7 @@ end
 -- dots.
 lang OCamlExternal
   syn Expr =
-  | OTmVarExt { ident : Name }
+  | OTmVarExt { ident : String }
   | OTmConAppExt { ident : String, args : [Expr] }
 
   syn Pat =
