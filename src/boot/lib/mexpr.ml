@@ -1859,7 +1859,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           let t1 = get_wall_time_ms () in
           let res =
             try eval ((s, eval env t2) :: Lazy.force env2) t3
-            with Error _ as e ->
+            with e ->
               uprint_endline (us "TRACE: " ^. info2str fiapp) ;
               raise e
           in
@@ -1868,7 +1868,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           res )
         else
           try eval ((s, eval env t2) :: Lazy.force env2) t3
-          with Error _ as e ->
+          with e ->
             uprint_endline (us "TRACE: " ^. info2str fiapp) ;
             raise e )
     (* Constant application using the delta function *)
