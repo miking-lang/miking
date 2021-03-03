@@ -10,8 +10,6 @@ open Mexpr
 open Parserutils
 open Ustring
 
-
-
 (* Main function for evaluating a program. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
 let evalprog filename =

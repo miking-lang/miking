@@ -103,9 +103,6 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-  
-
-
 (* Returns a tuple with the following elements
    1. ID field 
    2. Info field

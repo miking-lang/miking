@@ -133,7 +133,7 @@ let builtin =
   ; ("tensorSliceExn", f (CtensorSliceExn None))
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
   ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
-  ; ("bootParserParseMExprString", f CbootParserParseMExprString) 
+  ; ("bootParserParseMExprString", f CbootParserParseMExprString)
   ; ("bootParserParseMCoreFile", f CbootParserParseMCoreFile)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
@@ -1304,8 +1304,7 @@ let delta eval env fi c v =
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
-     fail_constapp fi
-
+      fail_constapp fi
   | CbootParserParseMExprString, TmSeq (fi, seq) ->
       let t = Parserutils.parse_mexpr_string (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree (PTreeTm t))
@@ -1316,7 +1315,6 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMCoreFile, _ ->
       fail_constapp fi
-
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
       TmConst (fi, CInt (Bootparser.getId ptree))
   | CbootParserGetId, _ ->

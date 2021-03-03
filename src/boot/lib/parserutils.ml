@@ -8,7 +8,6 @@ module Option = BatOption
 (* Tab length when calculating the info field *)
 let tablength = 8
 
-
 let error_to_ustring e =
   match e with
   | Lexer.Lex_error m ->
@@ -19,7 +18,6 @@ let error_to_ustring e =
       message2str m
   | _ ->
       us (Printexc.to_string e)
-
 
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =
@@ -43,7 +41,6 @@ let default_includes =
 let add_prelude = function
   | Program (includes, tops, tm) ->
       Program (default_includes @ includes, tops, tm)
-
 
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
@@ -135,11 +132,9 @@ let rec merge_includes root visited = function
       in
       Program (includes, included_tops @ tops, tm)
 
-
 let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
   ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
-
 
 let parse_mcore_file filename =
   try
@@ -147,9 +142,8 @@ let parse_mcore_file filename =
     local_parse_mcore_file filename
     |> add_prelude
     |> merge_includes (Filename.dirname filename) [filename]
-    |> Mlang.flatten |> Mlang.desugar_post_flatten 
+    |> Mlang.flatten |> Mlang.desugar_post_flatten
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
-    fprintf stderr "%s\n" error_string; exit 1
-
-  
+    fprintf stderr "%s\n" error_string ;
+    exit 1
