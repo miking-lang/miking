@@ -1032,10 +1032,6 @@ utest testFileExists with objWrapGenerate testFileExists using sameSemantics in
 -- utest testPrint with generate testPrint using sameSemantics in
 
 -- Random number generation operations
-let testUnseededRandomNumber = randIntU_ (int_ 1) (int_ 4) in
-utest testUnseededRandomNumber with objWrapGenerate testUnseededRandomNumber
-using sameSemantics in
-
 let testSeededRandomNumber =
  symbolize
  (bindall_ [ulet_ "_" (randSetSeed_ (int_ 42)),
