@@ -81,15 +81,21 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
 
   sem delta (arg : Expr) =
   | CThreadSpawn _ ->
-    let app = TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()} in
-    TmConst {val = CThread (threadSpawn (lam _. eval {env = []} app)), info = NoInfo (), ty = TyUnknown ()}
+    let app =
+      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
+    in
+    TmConst {val = CThread (threadSpawn (lam. eval {env = []} app))
+            , info = NoInfo ()
+            , ty = TyUnknown ()
+            }
   | CThreadJoin _ ->
     match arg with TmConst {val = CThread t} then
       threadJoin t
     else error "not a threadJoin of a thread"
   | CThreadSelf _ ->
     match arg with TmRecord {bindings = []} then
-      TmConst {val = CThreadID (threadSelf ()), info = NoInfo (), ty = TyUnknown ()}
+      TmConst {val = CThreadID (threadSelf ()),
+               info = NoInfo (), ty = TyUnknown ()}
     else error "Argument in threadSelf is not unit"
   | CThreadGetID _ ->
     match arg with TmConst ({val = CThread thr} & t) then
@@ -101,20 +107,21 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     else error "Argument to threadID2int not a thread ID"
   | CThreadWait _ ->
     match arg with TmRecord {bindings = []} then
-      let _ = threadWait () in
+      threadWait ();
       unit_
     else error "Argument to threadWait is not unit"
   | CThreadNotify _ ->
     match arg with TmConst ({val = CThreadID id} & t) then
-      let _ = threadNotify id in
+      threadNotify id;
       unit_
     else error "Argument to threadNotify not a thread ID"
   | CThreadCriticalSection _ ->
-    let app = TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()} in
-    threadCriticalSection (lam _. eval {env = []} app)
+    let app =
+      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
+    in threadCriticalSection (lam. eval {env = []} app)
   | CThreadCPURelax _ ->
     match arg with TmRecord {bindings = []} then
-      let _ = threadCPURelax () in
+      threadCPURelax ();
       unit_
     else error "Argument to threadCPURelax is not unit"
 end
