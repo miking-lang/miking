@@ -115,7 +115,6 @@ module RNG : sig
 end
 
 module MSys : sig
-
   val exit : int -> unit
 
   val error : int Mseq.t -> exn

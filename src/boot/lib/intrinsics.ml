@@ -139,7 +139,7 @@ module MSys = struct
   let argv =
     Sys.argv |> Mseq.Helpers.of_array
     |> Mseq.Helpers.map (fun a ->
-           a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array)
+           a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
 end
 
 module Time = struct

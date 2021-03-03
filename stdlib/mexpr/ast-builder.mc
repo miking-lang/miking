@@ -592,7 +592,7 @@ let set_ = use MExprAst in
   appf3_ (const_ (CSet ())) s i v
 
 let empty_ = use MExprAst in
-  const_ (seq_ [])
+  seq_ []
 
 let cons_ = use MExprAst in
   lam x. lam s.
