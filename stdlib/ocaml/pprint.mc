@@ -104,7 +104,7 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
-lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
+lang OCamlPrettyPrint = VarPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
                         + IdentifierPrettyPrint + UnknownTypePrettyPrint
                         + NamedPatPrettyPrint + IntPatPrettyPrint
@@ -120,6 +120,7 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | TmApp _ -> false
   | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
@@ -228,6 +229,12 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                      (zipWith fzip idents bodies),
                      pprintNewline indent, "in ", inexpr])
         else never
+      else never
+    else never
+  | TmApp t ->
+    match pprintCode indent env t.lhs with (env,l) then
+      match pprintCode indent env t.rhs with (env,r) then
+        (env, join ["(", l, ") (", r, ")"])
       else never
     else never
   | OTmArray t ->
