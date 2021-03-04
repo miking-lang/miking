@@ -199,8 +199,7 @@ lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
   sem eval (ctx : {env : Env}) =
   | TmConst {val = CArgv {}} ->
     TmSeq {tms = map str_ argv, ty = TyUnknown {}, info = NoInfo()}
-  | (TmConst c) & t ->
-    t
+  | TmConst c -> TmConst c
 end
 
 lang DataEval = DataAst + AppEval

@@ -76,33 +76,33 @@ end
 
 lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   syn Const =
-  | CThread (Thread Expr)
-  | CThreadID Tid
+  | CThread {thread : Thread Expr}
+  | CThreadID {id : Tid}
 
   sem delta (arg : Expr) =
   | CThreadSpawn _ ->
     let app =
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
     in
-    TmConst {val = CThread (threadSpawn (lam. eval {env = []} app))
+    TmConst {val = CThread {thread = threadSpawn (lam. eval {env = []} app)}
             , info = NoInfo ()
             , ty = TyUnknown ()
             }
   | CThreadJoin _ ->
-    match arg with TmConst {val = CThread t} then
-      threadJoin t
+    match arg with TmConst {val = CThread {thread = thread}} then
+      threadJoin thread
     else error "not a threadJoin of a thread"
   | CThreadSelf _ ->
     match arg with TmRecord {bindings = []} then
-      TmConst {val = CThreadID (threadSelf ()),
+      TmConst {val = CThreadID {id = threadSelf ()},
                info = NoInfo (), ty = TyUnknown ()}
     else error "Argument in threadSelf is not unit"
   | CThreadGetID _ ->
-    match arg with TmConst ({val = CThread thr} & t) then
-      TmConst {t with val = CThreadID (threadGetID thr)}
+    match arg with TmConst ({val = CThread {thread = thread}} & t) then
+      TmConst {t with val = CThreadID {id = threadGetID thread}}
     else error "Argument in threadGetID is not a thread"
   | CThreadID2Int _ ->
-    match arg with TmConst ({val = CThreadID id} & t) then
+    match arg with TmConst ({val = CThreadID {id = id}} & t) then
       TmConst {t with val = CInt {val = threadID2int id}}
     else error "Argument to threadID2int not a thread ID"
   | CThreadWait _ ->
@@ -111,7 +111,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
       unit_
     else error "Argument to threadWait is not unit"
   | CThreadNotify _ ->
-    match arg with TmConst ({val = CThreadID id} & t) then
+    match arg with TmConst ({val = CThreadID {id = id}} & t) then
       threadNotify id;
       unit_
     else error "Argument to threadNotify not a thread ID"
@@ -126,7 +126,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     else error "Argument to threadCPURelax is not unit"
 end
 
-lang MExprParEval = MExprEval + AtomicEval + ThreadEval
+lang MExprParEval = MExprEval + AtomicEval + ThreadEval + MExprPrettyPrint
 
 mexpr
 
@@ -166,13 +166,38 @@ with true_ in
 let p = ulet_ "r" (atomicMake_ (record_ [("foo", int_ 1)])) in
 utest eval (bind_ p (bindall_
   [ ulet_ "v" (atomicGet_ (var_ "r"))
-  -- TODO(Linnea, 2021-03-01): because of the evaluation rules, the record
-  -- returned when evaluating (var_ "v") is not physically identical to the
-  -- record stored in the atomic reference, so this test fails.
   , atomicCAS_ (var_ "r") (var_ "v") (record_ [])
   ]
 ))
 with true_ in
+
+utest eval (bindall_
+  [ ucondef_ "Foo"
+  , ulet_ "r" (atomicMake_ (conapp_ "Foo" (int_ 1)))
+  , ulet_ "v" (atomicGet_ (var_ "r"))
+  , atomicCAS_ (var_ "r") (var_ "v") (conapp_ "Foo" (int_ 2))
+  ]
+)
+with true_ in
+
+utest eval (bindall_
+  [ ucondef_ "Foo"
+  , ulet_ "r" (atomicMake_ (conapp_ "Foo" (int_ 1)))
+  , ulet_ "foo2" (conapp_ "Foo" (int_ 2))
+  , ulet_ "_" (atomicExchange_ (var_ "r") (var_ "foo2"))
+  , atomicCAS_ (var_ "r") (var_ "foo2") (conapp_ "Foo" (int_ 3))
+  ]
+)
+with true_ in
+
+
+let f = ureclet_ "foo" (ulam_ "x" (app_ (var_ "foo") (var_ "x"))) in
+utest eval (bindall_
+  [ ulet_ "r" (atomicMake_ f)
+  , ulet_ "v" (atomicGet_ (var_ "r"))
+  , atomicCAS_ (var_ "r") (var_ "v") f
+  ]
+) with true_ in
 
 utest eval (bindall_
   [ ulet_ "v" (int_ 43)
