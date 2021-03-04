@@ -5,6 +5,7 @@ lang OCamlSym =
   VarSym + AppSym + LamSym + LetSym + RecLetsSym + ConstSym
   + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
   + OCamlMatch + OCamlTuple + OCamlData + UnknownTypeSym
+  + OCamlExternal
 
   sem symbolizeExpr (env : Env) =
   | OTmMatch {target = target, arms = arms} ->
@@ -17,6 +18,8 @@ lang OCamlSym =
   | OTmTuple { values = values } ->
     OTmTuple { values = map (symbolizeExpr env) values }
   | OTmConApp { ident = ident, args = args } -> error "We're not quite done with adt's in ocaml yet, so symbolize won't work with programs that use them (in this case OTmConApp)"
+  | OTmVarExt t -> t
+  | OTmConAppExt ({ args = args } & t) -> OTmConAppExt {t with args = map (symbolizeExpr env) args}
 
   sem symbolizePat (env : Env) (patEnv : Env) =
   | OPTuple { pats = pats } ->
@@ -24,4 +27,8 @@ lang OCamlSym =
       (patEnv, OPTuple { pats = pats })
     else never
   | OPatCon _ -> error "We're not quite done with adt's in ocaml yet, so symbolize won't work with programs that use them (in this case OPatCon)"
+  | OPatConExt ({ args = pats } & t) ->
+    match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
+      (patEnv, OPatConExt { t with args = pats })
+    else never
 end
