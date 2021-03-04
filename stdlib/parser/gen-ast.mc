@@ -2,6 +2,7 @@ include "mexpr/eq.mc"
 
 type SynType = String
 let _eqSynType = eqString
+let _cmpSynType = cmpString
 let _synTypeToString = identity
 
 type CarriedType =
@@ -24,10 +25,21 @@ type SemanticFunction =
   , cases : [(Pat, Expr)]
   }
 
+type LanguageFragment =
+  { name : String
+  , extends : [String]
+  , synTypes : Map SynType [Constructor]
+  , semanticFunctions : [SemanticFunction]
+  }
+
+type GenInput =
+  { namePrefix : String
+  , constructors : [Constructor]
+  , requestedSFunctions : [(SynType, Type)]
+  }
+
 let _equalTypes = use MExprEq in eqType assocEmpty
 let _typeToString = use MExprPrettyPrint in lam ty. (getTypeStringCode 0 pprintEnvEmpty ty).1
-let _patToString = use MExprPrettyPrint in lam pat. (getPatStringCode 0 pprintEnvEmpty pat).1
-let _exprToString = use MExprPrettyPrint in expr2str
 let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
   { ident = n
   , body = body
@@ -40,21 +52,65 @@ let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
 let _pprintSemanticFunction
   : SemanticFunction
   -> String
-  = lam func.
+  = lam func. use MExprPrettyPrint in
     match func with {name = name, preCaseArgs = preCaseArgs, cases = cases} then
-      let pprintArg = lam arg.
+      let pprintArg = lam env. lam arg.
         match arg with (name, ty) then
-          join [" (", nameGetStr name, " : ", _typeToString ty, ")"]
+          match pprintVarName env name with (env, str) then
+            match getTypeStringCode 2 env ty with (env, ty) then
+              (env, join [" (", str, " : ", ty, ")"])
+            else never
+          else never
         else never in
-      let pprintCase = lam case.
+      let pprintCase = lam env. lam case.
         match case with (pat, expr) then
-          join ["| ", _patToString pat, " -> ", _exprToString expr, "\n"]
+          match getPatStringCode 4 env pat with (env, pat) then
+            match pprintCode 4 env expr with (env, expr) then
+              (env, join ["  | ", pat, " ->\n    ", expr, "\n"])
+            else never
+          else never
         else never in
+      let env = pprintEnvEmpty in
+      match mapAccumL pprintArg env preCaseArgs with (env, args) then
+        match mapAccumL pprintCase env cases with (env, cases) then
+          join
+            [ "  sem ", name
+            , join args
+            , " =\n"
+            , join cases
+            ]
+        else never
+      else never
+    else never
+
+let _pprintLanguageFragment
+  : LanguageFragment
+  -> String
+  = lam frag.
+    match frag with {name = name, extends = extends, synTypes = synTypes, semanticFunctions = semanticFunctions} then
+      let extends = match extends
+        with [] then ""
+        else concat " = " (strJoin " + " extends) in
+      let pprintConstructor = lam constructor.
+        match constructor with {name = name, carried = {repr = ty}} then
+          join ["\n  | ", nameGetStr name, " ", _typeToString ty]
+        else never in
+      let synDefns = map
+        (lam binding.
+          match binding with (synType, constructors) then
+            join
+              [ "  syn ", _synTypeToString synType, " ="
+              , join (map pprintConstructor constructors)
+              , "\n"
+              ]
+          else never)
+        (mapBindings synTypes) in
       join
-        [ "sem ", name
-        , join (map pprintArg preCaseArgs)
-        , " =\n"
-        , join (map pprintCase cases)
+        [ "lang ", name, extends , "\n"
+        , join synDefns
+        , "\n"
+        , strJoin "\n" (map _pprintSemanticFunction semanticFunctions)
+        , "\nend"
         ]
     else never
 
@@ -76,13 +132,19 @@ let _mkSmapAccumL
             , (accName, tyvar_ "a")
             ]
           , cases =
-            [ (npcon_ constructor.name (npvar_ valName), mkNew accName valName)
+            [ ( npcon_ constructor.name (npvar_ valName)
+              , match_
+                (mkNew accName valName)
+                (ptuple_ [npvar_ accName, npvar_ valName])
+                (tuple_ [nvar_ accName, nconapp_ constructor.name (nvar_ valName)])
+                never_
+              )
             ]
           }
       else None ()
     else None ()
 
-let _mkSfuncStubs
+let _mkSFuncStubs
   : SynType
   -> Type
   -> [SemanticFunction]
@@ -201,11 +263,14 @@ let recordType
             mappingFields
           in match mappedFields with (constr, mappedFields) then
             constr
-              (foldl
-                (lam acc. lam update.
-                  recordupdate_ acc update.0 (nvar_ update.1))
-                (nvar_ valName)
-                mappedFields)
+              (tuple_
+                [ nvar_ accName
+                , (foldl
+                    (lam acc. lam update.
+                      recordupdate_ acc update.0 (nvar_ update.1))
+                    (nvar_ valName)
+                    mappedFields)
+                ])
           else never
         )
     }
@@ -215,29 +280,89 @@ let tupleType
   -> CarriedType
   = lam fields. recordType (mapi (lam i. lam field. (int2string i, field)) fields)
 
+let mkLanguages
+  : GenInput
+  -> String
+  = lam input.
+    match input with {namePrefix = namePrefix, constructors = constructors, requestedSFunctions = requestedSFunctions} then
+      let synTypes = foldl
+        (lam acc. lam c. mapInsert c.synType [] acc)
+        (mapEmpty _cmpSynType)
+        constructors in
+      let baseLangName = concat namePrefix "Base" in
+      let baseLang =
+        { name = baseLangName
+        , extends = []
+        , synTypes = synTypes
+        , semanticFunctions = join
+          (map (lam request. _mkSFuncStubs request.0 request.1) requestedSFunctions)
+        } in
+      let mkConstructorLang = lam constructor.
+        match constructor with {name = name, synType = synType, carried = carried} then
+          { name = concat namePrefix (nameGetStr name)
+          , extends = [baseLangName]
+          , synTypes = mapInsert synType [constructor] (mapEmpty _cmpSynType)
+          , semanticFunctions = mapOption
+            (lam request. _mkSmapAccumL request.0 request.1 constructor)
+            requestedSFunctions
+          }
+        else never in
+      let constructorLangs = map mkConstructorLang constructors in
+      strJoin "\n\n" (map _pprintLanguageFragment (cons baseLang constructorLangs))
+    else never
+
 mexpr
 
 let tyInfo = bareType (tyvar_ "Info") in
+let tyName = bareType (tyvar_ "Name") in
 let tyString = bareType tystr_ in
 let tyExpr = bareType (tyvar_ "Expr") in
+let tyType = bareType (tyvar_ "Type") in
 let tyField = tupleType [tyString, tyExpr] in
 let tyFields = seqType tyField in
 let tyRecord = recordType
   [ ("info", tyInfo)
+  , ("ty", tyType)
   , ("fields", tyFields)
   ] in
+
 let recordConstructor =
   { name = nameSym "TmRecord"
   , synType = "Expr"
   , carried = tyRecord
   } in
 
-for_ (_mkSfuncStubs "Expr" (tyvar_ "Info"))
-  (lam semFunc. printLn (_pprintSemanticFunction semFunc));
+let varConstructor =
+  { name = nameSym "TmVar"
+  , synType = "Expr"
+  , carried = recordType
+    [ ("info", tyInfo)
+    , ("ty", tyType)
+    , ("ident", tyName)
+    ]
+  } in
 
-(match _mkSmapAccumL "Expr" (tyvar_ "Info") recordConstructor with Some semFunc then
-  printLn (_pprintSemanticFunction semFunc)
-else never);
+let seqConstructor =
+  { name = nameSym "TmSeq"
+  , synType = "Expr"
+  , carried = recordType
+    [ ("info", tyInfo)
+    , ("ty", tyType)
+    , ("tms", seqType tyExpr)
+    ]
+  } in
+
+let input =
+  { namePrefix = "MExpr"
+  , constructors = [recordConstructor, varConstructor, seqConstructor]
+  , requestedSFunctions =
+    [ ("Expr", tyvar_ "Info")
+    , ("Expr", tyvar_ "Expr")
+    , ("Expr", tyvar_ "Type")
+    ]
+  } in
+
+-- printLn (mkLanguages input);
 
 ()
 
