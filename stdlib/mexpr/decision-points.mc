@@ -9,13 +9,11 @@ include "name.mc"
 include "hashmap.mc"
 include "eq.mc"
 
-let dprintLn = lam x. let _ = dprint x in printLn ""
-
 -- This file contains implementations related to decision points.
 
 let _getSym = lam n.
   optionGetOrElse
-    (lam _. error "Expected symbol")
+    (lam. error "Expected symbol")
     (nameGetSym n)
 
 let _eqn = lam n1. lam n2.
@@ -219,7 +217,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxInfo =
         (lam e. match e with (_, _, lbl) then lbl else never)
         (lam e.
            match e with (from, _, _) then
-             optionGetOrElse (lam _. error "Internal error: lookup failed")
+             optionGetOrElse (lam. error "Internal error: lookup failed")
                (hashmapLookup {eq = _eqn, hashfn = _nameHash} from fun2inc)
            else never)
     in
@@ -262,14 +260,14 @@ let callCtxFunLookup : Name -> CallCtxInfo -> Option Name = lam name. lam info.
 -- Get the incoming variable name of a function, giving an error if the function
 -- name is not part of the call graph.
 let callCtxFun2Inc : Name -> CallCtxInfo -> Name = lam name. lam info.
-  optionGetOrElse (lam _. error "fun2inc lookup failed")
+  optionGetOrElse (lam. error "fun2inc lookup failed")
                   (callCtxFunLookup name info)
 
 -- Get the incoming variable name of an edge label, giving an error if the edge
 -- is not part of the call graph.
 let callCtxLbl2Inc : Name -> CallCtxInfo -> Name = lam lbl. lam info.
   match info with { lbl2inc = lbl2inc } then
-    optionGetOrElse (lam _. error "lbl2inc lookup failed")
+    optionGetOrElse (lam. error "lbl2inc lookup failed")
                     (hashmapLookup {eq = _eqn, hashfn = _nameHash}
                                    lbl lbl2inc)
   else never
@@ -278,7 +276,7 @@ let callCtxLbl2Inc : Name -> CallCtxInfo -> Name = lam lbl. lam info.
 -- the call graph.
 let callCtxLbl2Count : Name -> CallCtxInfo -> Int = lam lbl. lam info.
   match info with { lbl2count = lbl2count } then
-    optionGetOrElse (lam _. error "lbl2count lookup failed")
+    optionGetOrElse (lam. error "lbl2count lookup failed")
                     (hashmapLookup {eq = _eqn, hashfn = _nameHash}
                                    lbl lbl2count)
   else never
@@ -306,7 +304,7 @@ let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
       (mapEmpty _cmpPaths, count)
       paths
     with (m, count) then
-      let _ = modref hole2idx (mapInsert name m (deref hole2idx)) in
+      modref hole2idx (mapInsert name m (deref hole2idx));
       {info with count = count}
     else never else never
 
@@ -396,10 +394,10 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skelet
           let startVals = foldl (lam acc. lam p.
                                    setInsert _eqn (head p) acc)
                                 [] paths in
-          let partition = (create (length startVals) (lam _. [])) in
+          let partition = (create (length startVals) (lam. [])) in
           let partition =
             mapi
-              (lam i. lam _. filter (lam p. _eqn (head p) (get startVals i)) paths)
+              (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
               partition
           in
           (startVals, partition)
@@ -796,7 +794,7 @@ let cgTests = [
   , hiddenCall
 ] in
 
-let _ = map doCallGraphTests cgTests in
+map doCallGraphTests cgTests;
 
 
 ---------------------------
@@ -807,20 +805,20 @@ let debug = false in
 
 let debugPrint = lam ast. lam pub.
   if debug then
-    let _ = printLn "----- BEFORE ANF -----\n" in
-    let _ = printLn (expr2str ast) in
+    printLn "----- BEFORE ANF -----\n";
+    printLn (expr2str ast);
     let ast = anf ast in
-    let _ = printLn "\n----- AFTER ANF -----\n" in
-    let _ = printLn (expr2str ast) in
+    printLn "\n----- AFTER ANF -----\n";
+    printLn (expr2str ast);
     match transform pub ast with Complete { prog = prog } then
-      let _ = printLn "\n----- AFTER TRANSFORMATION -----\n" in
-      let _ = printLn (expr2str prog) in
+      printLn "\n----- AFTER TRANSFORMATION -----\n";
+      printLn (expr2str prog);
       ()
     else never
   else ()
 in
 
--- let funA = lam _.
+-- let funA = lam.
 --   let h = hole 0 2 in
 --   h
 -- in
@@ -861,17 +859,17 @@ let ast = bindall_ [  nulet_ funA (ulam_ "_"
                                (nvar_ callCB)))
                    ]
 in
-let _ = debugPrint ast [funB, funC] in
+debugPrint ast [funB, funC];
 let ast = anf ast in
 
 match transform [funB, funC] ast with Complete { table = table, prog = prog } then
 match mapBindings table with [(_, m)] then
 
-let _ =
-  if debug then
-    let _ = printLn "Mapped paths" in
-    map dprintLn (sort (lam t1. lam t2. subi t1.1 t2.1) (mapBindings m))
-  else () in
+
+if debug then
+  printLn "Mapped paths";
+  map dprintLn (sort (lam t1. lam t2. subi t1.1 t2.1) (mapBindings m))
+else ();
 
 let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
   let ast = bind_ (bind_ (nulet_ _table table) ast) ext in
@@ -879,7 +877,7 @@ let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
 in
 
 let idxs = map (lam t. t.1) (mapBindings m) in
-let table = seq_ (mapi (lam i. lam _. int_ (addi 1 i)) idxs) in
+let table = seq_ (mapi (lam i. lam. int_ (addi 1 i)) idxs) in
 
 let eval = evalWithArgv table in
 
@@ -888,31 +886,31 @@ utest eval prog (
   app_ (nvar_ funC) true_
 ) with int_ 1 in
 
--- Path 2: B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ false_
-) with int_ 2 in
+-- -- Path 2: B (1)-> A
+-- utest eval prog (
+--   appf2_ (nvar_ funB) true_ false_
+-- ) with int_ 2 in
 
--- Path 3: B -> B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ true_
-) with int_ 3 in
+-- -- Path 3: B -> B (1)-> A
+-- utest eval prog (
+--   appf2_ (nvar_ funB) true_ true_
+-- ) with int_ 3 in
 
--- Path 4: C -> B (2)-> A
-utest eval prog (
-  app_ (nvar_ funC) false_
-) with int_ 4 in
+-- -- Path 4: C -> B (2)-> A
+-- utest eval prog (
+--   app_ (nvar_ funC) false_
+-- ) with int_ 4 in
 
--- Path 5: B (2)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) false_ false_
-) with int_ 5 in
+-- -- Path 5: B (2)-> A
+-- utest eval prog (
+--   appf2_ (nvar_ funB) false_ false_
+-- ) with int_ 5 in
 
--- Path 5 again
-utest eval prog (
-  bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
-        (appf2_ (nvar_ funB) false_ false_)
-) with int_ 5 in
+-- -- Path 5 again
+-- utest eval prog (
+--   bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
+--         (appf2_ (nvar_ funB) false_ false_)
+-- ) with int_ 5 in
 
 -- Path 6: B -> B (2)-> A
 -- unreachable
