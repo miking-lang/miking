@@ -364,7 +364,7 @@ with  (appf2_ (nvar_ _y) (nvar_ _y) (int_ 4))
 
 -- Replace the innermost body in a nested lambda expression by the result of a
 -- function that operates on the list of arguments of the lambda.
-let _lamWithBody : ([Name] -> Expr) -> Expr -> Expr = use FunAst in
+let _lamWithBody : ([Name] -> Expr) -> Expr -> Expr = use LamAst in
   lam f. lam tm.
     recursive let work : [Name] -> Expr -> Expr = lam acc. lam tm.
       match tm with TmLam ({ body = TmLam lm, ident = ident } & t) then
@@ -396,7 +396,7 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skelet
           let startVals = foldl (lam acc. lam p.
                                    setInsert _eqn (head p) acc)
                                 [] paths in
-          let partition = (makeSeq (length startVals) []) in
+          let partition = (create (length startVals) (lam _. [])) in
           let partition =
             mapi
               (lam i. lam _. filter (lam p. _eqn (head p) (get startVals i)) paths)
@@ -430,7 +430,7 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skelet
 -- public function with a forwarding call to the hidden function.
 type Binding = {ident : Name, ty : Type, body : Expr}
 let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
-  use FunAst in
+  use LamAst in
     lam local. lam f. lam bind.
       let fwdVar = _fwdVarFromName bind.ident in
       let newBody = lam args.
