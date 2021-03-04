@@ -36,6 +36,13 @@ lang OCamlMatch
     }
 
   syn Pat =
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmMatch t -> OTmMatch {{t with target = f t.target}
+                               with arms = map (lam a. (a.0, f a.1)) t.arms}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmMatch t -> foldl (lam acc. lam a. f acc a.1) (f acc t.target) t.arms
 end
 
 lang OCamlTuple
@@ -44,6 +51,12 @@ lang OCamlTuple
 
   syn Pat =
   | OPatTuple { pats : [Pat] }
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmTuple t -> OTmTuple {t with values = map f t.values}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmTuple t -> foldl f acc t.values
 end
 
 lang OCamlData

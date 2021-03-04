@@ -431,7 +431,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
     match pprintConName env t.ident with (env,str) then
-      match getTypeStringCode indent env t.ty with (env, ty) then
+      match getTypeStringCode indent env t.tyIdent with (env, ty) then
         let ty = if eqString ty "Unknown" then "" else concat ": " ty in
         match pprintCode indent env t.inexpr with (env,inexpr) then
           (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])

@@ -294,8 +294,9 @@ lang OCamlPrettyPrint =
     match pprintVarName env t.ident with (env, ident) then
       match mapAccumL f env t.constrs with (env, constrs) then
         match pprintCode indent env t.inexpr with (env, inexpr) then
+          let constrs = strJoin (pprintNewline (pprintIncr indent)) constrs in
           (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
-                      strJoin "\n" constrs, ";;", pprintNewline indent,
+                      constrs, ";;", pprintNewline indent,
                       inexpr])
         else never
       else never
