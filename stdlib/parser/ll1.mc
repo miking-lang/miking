@@ -183,7 +183,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
         productions in
 
     let addNtToFirstSet = lam prev. lam nt. lam symset.
-      let prods = mapFind nt groupedProds in
+      let prods = mapFindWithErr nt groupedProds in
       foldl (lam symset. lam prod. addProdToFirst prev prod symset) symset prods in
 
     -- let dprintFirstSet = lam firstSet.
@@ -231,7 +231,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
             let otherSymset = firstOfRhs rhs in
             let ntFollow = mapUnion ntFollow otherSymset.syms in
             let ntFollow = if otherSymset.eps
-              then mapUnion ntFollow (mapFind prodNt follow)
+              then mapUnion ntFollow (mapFindWithErr prodNt follow)
               else ntFollow in
             work (mapInsert nt ntFollow follow) rhs
           else match rhs with [_] ++ rhs then
@@ -266,11 +266,11 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     let ll1Errors = mapMap (lam. ref (mapEmpty _compareSymbol)) groupedProds in
 
     let addProdToTable = lam prod. match prod with {nt = prodNt, label = label, rhs = rhs, action = action} then
-      let tableRef = mapFind prodNt table in
+      let tableRef = mapFindWithErr prodNt table in
       let prev = deref tableRef in
       let firstSymset = firstOfRhs rhs in
       let symset = if firstSymset.eps
-        then mapUnion firstSymset.syms (mapFind prodNt followSet)
+        then mapUnion firstSymset.syms (mapFindWithErr prodNt followSet)
         else firstSymset.syms in
       let newProd = {action = action, label = label, syms = map specSymToGenSym rhs} in
       let tableAdditions = mapMap (lam. newProd) symset in
@@ -280,7 +280,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
             let sym = binding.0 in
             match mapLookup sym prev with Some prevProd then
               modref hasLl1Error true;
-              let errRef = mapFind prodNt ll1Errors in
+              let errRef = mapFindWithErr prodNt ll1Errors in
               let errTab = deref errRef in
               let errList = match mapLookup sym errTab
                 with Some prods then snoc prods label
@@ -310,7 +310,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
 
     if deref hasLl1Error
       then Left (mapFromList cmpString (filter (lam binding. not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
-      else Right {start = {nt = startNt, table = mapFind startNt table}, lits = lits}
+      else Right {start = {nt = startNt, table = mapFindWithErr startNt table}, lits = lits}
   else never
 
 let ll1NonTerminal : String -> NonTerminal = identity

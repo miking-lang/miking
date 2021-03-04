@@ -3,6 +3,7 @@ include "char.mc"
 include "option.mc"
 include "seq.mc"
 include "string.mc"
+include "stringid.mc"
 include "name.mc"
 include "map.mc"
 
@@ -132,7 +133,7 @@ let pprintConString = lam str.
 let _record2tuple = lam tm.
   use RecordAst in
   match tm with TmRecord t then
-    let keys = assocKeys {eq=eqString} t.bindings in
+    let keys = map sidToString (mapKeys t.bindings) in
     match all stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
@@ -141,7 +142,7 @@ let _record2tuple = lam tm.
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
       -- Note: Quadratic complexity. Sorting the association list directly
       -- w.r.t. key would improve complexity to n*log(n).
-      Some (map (lam key. assocLookupOrElse {eq=eqString}
+      Some (map (lam key. mapLookupOrElse
                             (lam. error "Key not found")
                             (int2string key) t.bindings)
                  sortedKeys)
@@ -175,7 +176,7 @@ lang MExprIdentifierPrettyPrint = IdentifierPrettyPrint
     else never
 
   sem pprintLabelString =
-  | str -> _parserStr str "#label" (lam str. isLowerAlphaOrUnderscore (head str))
+  | sid -> _parserStr (sidToString sid) "#label" (lam str. isLowerAlphaOrUnderscore (head str))
 end
 
 lang PrettyPrint = IdentifierPrettyPrint
@@ -279,7 +280,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecord t ->
-    if eqi (length t.bindings) 0 then (env,"{}")
+    if mapIsEmpty t.bindings then (env,"{}")
     else match _record2tuple (TmRecord t) with Some tms then
       match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
       with (env,tupleExprs) then
@@ -291,7 +292,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
     else
       let innerIndent = pprintIncr (pprintIncr indent) in
       match
-        assocMapAccum {eq=eqString}
+        mapMapAccum
           (lam env. lam k. lam v.
              match pprintCode innerIndent env v with (env, str) then
                (env,
@@ -300,7 +301,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
              else never)
            env t.bindings
       with (env, bindMap) then
-        let binds = assocValues {eq=eqString} bindMap in
+        let binds = mapValues bindMap in
         let merged =
           strJoin (concat "," (pprintNewline (pprintIncr indent))) binds
         in
@@ -693,14 +694,14 @@ lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
     match
-      assocMapAccum {eq=eqString}
+      mapMapAccum
         (lam env. lam k. lam v.
            match getPatStringCode indent env v with (env,str) then
              (env,join [pprintLabelString k, " = ", str])
            else never)
          env bindings
     with (env,bindMap) then
-      (env,join ["{", strJoin ", " (assocValues {eq=eqString} bindMap), "}"])
+      (env,join ["{", strJoin ", " (mapValues bindMap), "}"])
     else never
 end
 
@@ -830,9 +831,9 @@ end
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyRecord t ->
-    if eqi (assocLength t.fields) 0 then (env,"()") else
+    if mapIsEmpty t.fields then (env,"()") else
       let tuple =
-        let seq = assoc2seq {eq=eqString} t.fields in
+        let seq = map (lam b. (sidToString b.0, b.1)) (mapBindings t.fields) in
         if all (lam t. stringIsInt t.0) seq then
           let seq = map (lam t. (string2int t.0, t.1)) seq in
           let seq = sort (lam l. lam r. subi l.0 r.0) seq in
@@ -851,8 +852,9 @@ lang RecordTypePrettyPrint = RecordTypeAst
         else never
       else
         let f = lam env. lam. lam v. getTypeStringCode indent env v in
-        match assocMapAccum {eq=eqString} f env t.fields with (env, fields) then
-          let fields = assoc2seq {eq=eqString} fields in
+        match mapMapAccum f env t.fields with (env, fields) then
+          let fields =
+            map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
           let conventry = lam entry. join [entry.0, ": ", entry.1] in
           (env,join ["{", strJoin ", " (map conventry fields), "}"])
         else never
@@ -1138,9 +1140,9 @@ let sample_ast =
   ]
 in
 
--- let _ = print "\n\n" in
--- let _ = print (expr2str sample_ast) in
--- let _ = print "\n\n" in
+-- print "\n\n";
+-- print (expr2str sample_ast);
+-- print "\n\n";
 
 utest length (expr2str sample_ast) with 0 using geqi in
 

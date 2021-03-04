@@ -124,16 +124,21 @@ and const =
   | CdeRef
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
-  | CMap of (tm -> tm -> int) * Obj.t
+  | CMap of tm * Obj.t
   | CmapEmpty
+  | CmapIsEmpty
+  | CmapGetCmpFun
   | CmapInsert of tm option * tm option
   | CmapRemove of tm option
-  | CmapFind of tm option
+  | CmapFindWithErr of tm option
+  | CmapFindOrElse of tm option * tm option
   | CmapMem of tm option
   | CmapAny of (tm -> tm -> bool) option
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
+  | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
+  | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreate of int array option
   | CtensorGetExn of tm T.t option

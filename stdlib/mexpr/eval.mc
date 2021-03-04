@@ -125,13 +125,12 @@ lang FixEval = FixAst + LamEval + UnknownTypeAst
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = assocMap {eq=eqString} (eval ctx) t.bindings in
+    let bs = mapMap (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
     match eval ctx u.rec with TmRecord t then
-      if assocMem {eq = eqString} u.key t.bindings then
-        TmRecord {t with bindings = assocInsert {eq = eqString}
-                                u.key (eval ctx u.value) t.bindings}
+      if mapMem u.key t.bindings then
+        TmRecord {t with bindings = mapInsert u.key (eval ctx u.value) t.bindings}
       else error "Key does not exist in record"
     else error "Not updating a record"
 end
@@ -596,8 +595,10 @@ end
 lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
   sem delta (arg : Expr) =
   | CGensym _ ->
-    match arg with TmRecord {bindings = []} then
-      TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}, info = NoInfo()}
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}, info = NoInfo()}
+      else error "Argument in gensym is not unit"
     else error "Argument in gensym is not unit"
   | CSym2hash _ ->
     match arg with TmConst (t & {val = CSymb s}) then
@@ -1085,9 +1086,9 @@ lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
-      assocFoldlM {eq = eqString}
+      mapFoldlM
         (lam env. lam k. lam p.
-          match assocLookup {eq = eqString} k bs with Some v then
+          match mapLookup k bs with Some v then
             tryMatch env v p
           else None ())
         env
@@ -1164,11 +1165,8 @@ end
 
 lang MExprEval =
 
-  -- Symbolize is required before eval, and MExprEq is used below when testing.
-  MExprSym + MExprEq
-
   -- Terms
-  + VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
+  VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
   ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
 
   -- Constants
@@ -1191,9 +1189,11 @@ end
 -- TESTS --
 -----------
 
+lang TestLang = MExprEval + MExprPrettyPrint + MExprEq + MExprSym
+
 mexpr
 
-use MExprEval in
+use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize =
@@ -1356,7 +1356,7 @@ utest eval recordUpdate2 with (int_ 1729) in
 
 let recordUpdateNonValue =
   (recordupdate_ (record_ [("a", int_ 10)]) "a" (addi_ (int_ 1729) (int_ 1))) in
-utest eval recordUpdateNonValue with record_ [("a", int_ 1730)] in
+utest eval recordUpdateNonValue with record_ [("a", int_ 1730)] using eqExpr in
 
 
 -- Commented out to not clutter the test suite
@@ -1426,11 +1426,12 @@ utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] in
 -- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
 let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
-with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
+with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]]
+using eqExpr in
 
 -- create 3 (lam. 42) -> [42, 42, 42]
 let createAst = create_ (int_ 3) (ulam_ "_" (int_ 42)) in
-utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] in
+utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] using eqExpr in
 
 -- create 3 (lam i. i) -> [0, 1, 2]
 let i = nameSym "i" in
@@ -1564,14 +1565,16 @@ utest eval (match_
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
   (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5] in
+with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3])
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
   (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3] in
+with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2])
@@ -1585,7 +1588,8 @@ utest eval (match_
   (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
   (tuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
-with tuple_ [int_ 1, int_ 2, int_ 3] in
+with tuple_ [int_ 1, int_ 2, int_ 3]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
@@ -1606,7 +1610,8 @@ utest eval (match_
   (pand_ (pvar_ "a") (ptuple_ [pvar_ "b", pint_ 2]))
   (tuple_ [var_ "a", var_ "b"])
   (tuple_ [tuple_ [int_ 70, int_ 72], int_ 71]))
-with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1] in
+with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1]
+using eqExpr in
 
 -- I/O operations
 -- utest eval (printString_ (str_ "Hello World")) with unit_ in
@@ -1711,7 +1716,8 @@ utest
              deref_ (var_ "r2"),
              deref_ (var_ "r3"),
              app_ (deref_ (var_ "r4")) (str_ "test")]))
-with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"] in
+with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"]
+using eqExpr in
 
 utest
   eval (bind_ p (bindall_
@@ -1719,7 +1725,8 @@ utest
      ulet_ "_" (modref_ (var_ "r2") (float_ 3.14)),
      ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
      tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
-with tuple_ [int_ 4, float_ 3.14, int_ 4] in
+with tuple_ [int_ 4, float_ 3.14, int_ 4]
+using eqExpr in
 
 -- Tensors
 let testTensors = lam v.

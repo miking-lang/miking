@@ -377,12 +377,18 @@ let rec print_const fmt = function
       fprintf fmt "map"
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
+  | CmapIsEmpty ->
+      fprintf fmt "mapIsEmpty"
+  | CmapGetCmpFun ->
+      fprintf fmt "mapGetCmpFun"
   | CmapInsert _ ->
       fprintf fmt "mapInsert"
   | CmapRemove _ ->
       fprintf fmt "mapRemove"
-  | CmapFind _ ->
-      fprintf fmt "mapLookup"
+  | CmapFindWithErr _ ->
+      fprintf fmt "mapFindWithErr"
+  | CmapFindOrElse _ ->
+      fprintf fmt "mapFindOrElse"
   | CmapAny _ ->
       fprintf fmt "mapAny"
   | CmapMem _ ->
@@ -391,8 +397,12 @@ let rec print_const fmt = function
       fprintf fmt "mapMap"
   | CmapMapWithKey _ ->
       fprintf fmt "mapMapWithKey"
+  | CmapFoldWithKey _ ->
+      fprintf fmt "mapFoldWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  | CmapEq _ ->
+      fprintf fmt "mapEq"
   (* MCore intrinsics: Tensors *)
   | CtensorCreate _ ->
       fprintf fmt "tensorCreate"
