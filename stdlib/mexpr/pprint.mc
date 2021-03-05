@@ -130,10 +130,11 @@ let pprintConString = lam str.
 
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
-let _record2tuple = lam tm.
-  use RecordAst in
-  match tm with TmRecord t then
-    let keys = map sidToString (mapKeys t.bindings) in
+let _record2tuple
+  : Map String a
+  -> Option [a]
+  = lam bindings.
+    let keys = map sidToString (mapKeys bindings) in
     match all stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
@@ -144,10 +145,9 @@ let _record2tuple = lam tm.
       -- w.r.t. key would improve complexity to n*log(n).
       Some (map (lam key. mapLookupOrElse
                             (lam. error "Key not found")
-                            (int2string key) t.bindings)
+                            (stringToSid (int2string key)) bindings)
                  sortedKeys)
     else None ()
-  else error "Not a record"
 
 
 -----------
@@ -279,9 +279,9 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
   | TmRecordUpdate _ -> true
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmRecord t ->
-    if mapIsEmpty t.bindings then (env,"{}")
-    else match _record2tuple (TmRecord t) with Some tms then
+  | TmRecord {bindings = bindings} ->
+    if mapIsEmpty bindings then (env,"{}")
+    else match _record2tuple bindings with Some tms then
       match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
       with (env,tupleExprs) then
         let merged = match tupleExprs with [e] then
@@ -299,7 +299,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
                 join [pprintLabelString k, " =", pprintNewline innerIndent,
                       str])
              else never)
-           env t.bindings
+           env bindings
       with (env, bindMap) then
         let binds = mapValues bindMap in
         let merged =
@@ -693,7 +693,17 @@ lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
-    match
+    if mapIsEmpty bindings then (env, "{}")
+    else match _record2tuple bindings with Some pats then
+      match mapAccumL (lam env. lam e. getPatStringCode indent env e) env pats
+      with (env, tuplePats) then
+        let merged =
+          match tuplePats with [e]
+          then concat e ","
+          else strJoin ", " tuplePats in
+        (env, join ["(", merged, ")"])
+      else never
+    else match
       mapMapAccum
         (lam env. lam k. lam v.
            match getPatStringCode indent env v with (env,str) then
