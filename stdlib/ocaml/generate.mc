@@ -536,9 +536,12 @@ lang OCamlObjWrap = OCamlAst
                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
 
+  sem _objWrapNoPreamable =
+  | t -> objWrapRec (_objObj t)
+
   sem objWrap =
   | t ->
-    bind_ _preamble (_objObj (objWrapRec t))
+    bind_ _preamble (_objWrapNoPreamable t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
@@ -569,6 +572,14 @@ let ocamlEval = lam p. lam strConvert.
     parseAsMExpr out
 in
 
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamable here the make
+-- the test run faster. This is an ugly hack!
+let premableStr =
+  let str = expr2str (bind_ _preamble (int_ 0)) in
+  let len = length str in
+  subsequence str 0 (subi len 1)
+in
+
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
@@ -576,27 +587,34 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     use MExprEval in
     eval {env = []} mexprAst
   in
+
+  -- NOTE(oerikss, 2021-03-05): Here we paste the pre- pretty-printed preamable
+  -- to our program. This is part of the above mentioned hack.
+  let ocamlExpr2str = lam ast.
+    concat premableStr (expr2str ocamlAst)
+  in
+
   -- dprintLn ocamlAst;
   -- use OCamlPrettyPrint in printLn (expr2str ocamlAst);
   match mexprVal with TmConst t then
     match t.val with CInt _ then
-      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_int" in
+      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_int" in
       match ocamlVal with TmConst {val = CInt _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CFloat _ then
-      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_float" in
+      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_float" in
       match ocamlVal with TmConst {val = CFloat _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CBool _ then
-      let ocamlVal = ocamlEval (expr2str ocamlAst) "string_of_bool" in
+      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_bool" in
       match ocamlVal with TmConst {val = CBool _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CChar _ then
       let ocamlVal =
-        ocamlEval (expr2str ocamlAst) "Printf.sprintf \"'%c'\""
+        ocamlEval (ocamlExpr2str ocamlAst) "Printf.sprintf \"'%c'\""
       in
       match ocamlVal with TmConst {val = CChar _} then
         eqExpr mexprVal ocamlVal
@@ -605,7 +623,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
   else error "Unsupported value"
 in
 
-let objWrapGenerate = lam a. objWrap (generate a) in
+let objWrapGenerate = lam a. _objWrapNoPreamable (generate a) in
 
 -- Match
 let matchChar1 = symbolize
