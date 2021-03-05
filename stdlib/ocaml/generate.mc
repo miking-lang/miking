@@ -302,13 +302,19 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else error "Generation of record pattern requires more type information"
     else never
-  | PatCon {ident = id, subpat = PatRecord {bindings = bindings}} ->
-    error "Patterns with records in constructors not supported yet"
   | PatCon {ident = id, subpat = subpat} ->
     match env with {variants = variants} then
       match mapLookup id variants with Some innerTy then
         let conVarName = nameSym "_n" in
-        match generatePat env innerTy conVarName subpat with (names, subwrap) then
+        let innerTargetName =
+          -- Records are treated differently because we are not allowed to
+          -- access an inlined record. Instead we "cast" the constructor as a
+          -- constructor for the record, which we can destructure.
+          match subpat with PatRecord _ then
+            targetName
+          else conVarName
+        in
+        match generatePat env innerTy innerTargetName subpat with (names, subwrap) then
           let wrap = lam cont.
             OTmMatch {
               target = nvar_ targetName,
