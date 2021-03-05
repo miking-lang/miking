@@ -326,8 +326,8 @@ let breakableInsertAllowSet
   -> AllowSet id
   -> AllowSet id
   = lam id. lam set.
-    match set with AllowSet s then AllowSet (mapInsert id s) else
-    match set with DisallowSet s then DisallowSet (mapRemove id s) else
+    match set with AllowSet s then AllowSet (mapInsert id () s) else
+    match set with DisallowSet s then DisallowSet (mapRemove id () s) else
     never
 
 let breakableRemoveAllowSet

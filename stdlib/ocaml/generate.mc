@@ -9,52 +9,11 @@ include "mexpr/eq.mc"
 include "ocaml/compile.mc"
 include "hashmap.mc"
 
-let _opHashMap = lam prefix. lam ops.
-  let mkOp = lam op. nameSym (join [prefix, op]) in
-  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
-        hashmapEmpty
-        ops
+let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
 
-let _op = lam opHashMap. lam op.
-  nvar_
-  (hashmapLookupOrElse hashmapStrTraits
-    (lam.
-      error (strJoin " " ["Operation", op, "not found"]))
-      op
-      opHashMap)
+let _symbOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
 
-let _seqOps = [
-  "create",
-  "empty",
-  "length",
-  "concat",
-  "get",
-  "set",
-  "cons",
-  "snoc",
-  "reverse",
-  "split_at",
-  "Helpers.of_array"
-]
-
-let _seqOp = _op (_opHashMap "Boot.Intrinsics.Mseq." _seqOps)
-
-let _symbOps = [
-  "gensym",
-  "eqsym",
-  "hash"
-]
-
-let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
-
-let _floatOps = [
-  "floorfi",
-  "ceilfi",
-  "roundfi",
-  "string2float"
-]
-
-let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
+let _floatOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
 
 let _fileOps = [
   "read",
@@ -106,16 +65,16 @@ let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap
   else never
 
 -- Construct a match expression that matches against an option
-let _someName = nameSym "Option.Some"
-let _noneName = nameSym "Option.None"
+let _someName = "Option.Some"
+let _noneName = "Option.None"
 let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneExpr.
   OTmMatch
   { target = target
   , arms =
-    [ (OPatCon {ident = _someName, args = [somePat]}, someExpr)
-    , (OPatCon {ident = _noneName, args = []}, noneExpr)]}
-let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
-let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
+    [ (OPatConExt {ident = _someName, args = [somePat]}, someExpr)
+    , (OPatConExt {ident = _noneName, args = []}, noneExpr)]}
+let _some = use OCamlAst in lam val. OTmConAppExt {ident = _someName, args = [val]}
+let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
 let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPTuple {pats = pats}, body)]}
 

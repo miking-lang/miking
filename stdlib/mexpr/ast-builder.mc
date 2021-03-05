@@ -622,6 +622,10 @@ let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (const_ (CCreate ())) n f
 
+let subsequence_ = use MExprAst in
+  lam s. lam off. lam n.
+  appf2_ (const_ (CSubsequence ())) s off n
+
 -- Short circuit logical expressions
 let and_ = use MExprAst in
   lam a. lam b. if_ a b false_
