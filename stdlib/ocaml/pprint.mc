@@ -408,12 +408,12 @@ lang OCamlPrettyPrint =
     let ii = pprintIncr i in
     match pprintCode ii env target with (env, target) then
       match getPatStringCode ii env pat with (env, pat) then
-        match pprintCode ii env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
+        match pprintCode i env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
           (env, join ["let", pprintNewline ii,
                       pat, pprintNewline i,
                       "=", pprintNewline ii,
                       target, pprintNewline i,
-                      "in", pprintNewline ii,
+                      "in", pprintNewline i,
                       expr])
         else never
       else never
