@@ -302,18 +302,25 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else error "Generation of record pattern requires more type information"
     else never
+  | PatCon {ident = id, subpat = PatRecord {bindings = bindings}} ->
+    error "Patterns with records in constructors not supported yet"
   | PatCon {ident = id, subpat = subpat} ->
-    let conVarName = nameSym "_n" in
-    match generatePat env targetTy conVarName subpat with (names, subwrap) then
-      let wrap = lam cont.
-        OTmMatch {
-          target = subwrap (nvar_ targetName),
-          arms = [
-            (OPatCon {ident = id, args = [npvar_ conVarName]}, cont),
-            (pvarw_, _none)
-          ]
-        } in
-      (names, wrap)
+    match env with {variants = variants} then
+      match mapLookup id variants with Some innerTy then
+        let conVarName = nameSym "_n" in
+        match generatePat env innerTy conVarName subpat with (names, subwrap) then
+          let wrap = lam cont.
+            OTmMatch {
+              target = nvar_ targetName,
+              arms = [
+                (OPatCon {ident = id, args = [npvar_ conVarName]}, subwrap cont),
+                (pvarw_, _none)
+              ]
+            }
+          in
+          (names, wrap)
+        else never
+      else error (join ["Unknown type constructor: ", id])
     else never
 end
 
@@ -355,14 +362,29 @@ let _objTypedConstructors = lam constructors.
 lang OCamlRecordDeclGenerate = OCamlAst + MExprEq + RecordAst
   sem generateOCamlRecords (namedRecords : [(Name, Type)]) =
   | TmRecord t ->
-    if null t.bindings then OTmRecord {bindings = []}
+    if null t.bindings then TmRecord t
     else
       let ty = get (_objTypedRecordFields [t.ty]) 0 in
       match find (lam r. eqType assocEmpty ty r.1) namedRecords with Some r then
         let bindings = assocMap {eq=eqString} (generateOCamlRecords namedRecords) t.bindings in
         let bindings = assoc2seq {eq=eqString} bindings in
-        OTmConApp {ident = r.0, args = [OTmRecord {bindings = bindings}]}
+        TmConApp {
+          ident = r.0,
+          body = OTmRecord {bindings = bindings},
+          ty = t.ty,
+          info = t.info
+        }
       else never
+  | TmConApp t ->
+    let body =
+      match t.body with TmRecord r then
+        let bindings = assocMap {eq=eqString} (generateOCamlRecords namedRecords) r.bindings in
+        let bindings = assoc2seq {eq=eqString} bindings in
+        OTmRecord {bindings = bindings}
+      else
+        generateOCamlRecords namedRecords t.body
+    in
+    TmConApp {t with body = body}
   | t -> smap_Expr_Expr (generateOCamlRecords namedRecords) t
 
   sem generateRecordDecl (recordTypes : [Type]) =
@@ -839,7 +861,7 @@ let r = record_ [
 ] in
 let matchRecord1 = symbolize (
   (match_ r
-    (prec_ [("c", int_ 3), ("d", pvar_ "n")])
+    (prec_ [("c", pint_ 3), ("d", pvar_ "n")])
     (var_ "n")
     (float_ 0.0))) in
 utest stripTypeDecls matchRecord1 with generateTypeAnnotated matchRecord1
@@ -855,7 +877,7 @@ using sameSemantics in
 
 let matchRecord3 = symbolize (
   (match_ r
-    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", int_ 0)])
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 0)])
     (var_ "ch")
     (char_ '0'))) in
 utest stripTypeDecls matchRecord3 with generateTypeAnnotated matchRecord3
@@ -863,7 +885,7 @@ using sameSemantics in
 
 let matchRecord4 = symbolize (
   (match_ r
-    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", int_ 7)])
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 7)])
     (var_ "ch")
     (char_ '0'))) in
 utest stripTypeDecls matchRecord4 with generateTypeAnnotated matchRecord4
@@ -871,7 +893,7 @@ using sameSemantics in
 
 let matchNestedRecord1 = symbolize (
   (match_ r
-    (prec_ [("a", prec_ [("x", pvar_ "m")]), ("c", pint_ "n")])
+    (prec_ [("a", prec_ [("x", pvar_ "m")]), ("c", pvar_ "n")])
     (addi_ (var_ "m") (var_ "n"))
     (int_ 0))) in
 utest stripTypeDecls matchNestedRecord1 with generateTypeAnnotated matchNestedRecord1
@@ -881,7 +903,7 @@ let matchNestedRecord2 = symbolize (
   (match_ r
     (prec_ [
       ("a", prec_ [("z", pseqtot_ [pvar_ "m", pint_ 2, pvarw_])]),
-      ("c", pint_ "n")])
+      ("c", pvar_ "n")])
     (addi_ (var_ "m") (var_ "n"))
     (int_ 0))) in
 utest stripTypeDecls matchNestedRecord2 with generateTypeAnnotated matchNestedRecord2
@@ -1146,14 +1168,11 @@ let test3 = bindall_ [
 ] in
 let t = generate (generateDecl (typeAnnot (symbolize test3))) in
 let _x = printLn (expr2str t) in
--/
-/-
 let pat = prec_ [("a", pvar_ "a")] in
 let t = bindall_ [
   nulet_ x (record_ [("a", int_ 1), ("b", float_ 0.0)]),
   match_ (nvar_ x) pat (var_ "a") (int_ 0)
 ] in
--/
 let pat = prec_ [("a", prec_ [("x", pvar_ "m")]), ("b", prec_ [("w", pvar_ "n")])] in
 let t = bindall_ [
   nulet_ x (record_ [
@@ -1162,8 +1181,8 @@ let t = bindall_ [
   ]),
   match_ (nvar_ x) pat (addi_ (var_ "m") (var_ "n")) (int_ 0)
 ] in
+-/
 
-/-
 let intopt = nameSym "IntResult" in
 let intoptty = ntyvar_ intopt in
 let ok = nameSym "Ok" in
@@ -1176,7 +1195,7 @@ let t = bindall_ [
   nulet_ x (nconapp_ ok (int_ 2)),
   match_ (nvar_ x) pat (var_ "n") (int_ 0)
 ] in
--/
+
 let #var"" =
   use MExprPrettyPrint in
   printLn (expr2str t)

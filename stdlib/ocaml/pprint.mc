@@ -227,6 +227,7 @@ lang OCamlPrettyPrint =
 
   sem isAtomic =
   | TmLam _ -> false
+  | TmLet _ -> false
   | TmRecLets _ -> false
   | OTmMatch _ -> false
   | OTmTuple _ -> true
