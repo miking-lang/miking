@@ -308,8 +308,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
         let conVarName = nameSym "_n" in
         let innerTargetName =
           -- Records are treated differently because we are not allowed to
-          -- access an inlined record. Instead we "cast" the constructor as a
-          -- constructor for the record, which we can destructure.
+          -- access an inlined record. Instead we treat the target as a
+          -- constructor for the record. The target is then destructured in the
+          -- compilation of the record pattern.
           match subpat with PatRecord _ then
             targetName
           else conVarName
