@@ -771,42 +771,41 @@ let eitherMatch = lam matchTerm.
     ncondef_ nested (tyarrow_ intEitherTy intEitherTy),
     matchTerm
   ] in
-
 let matchCon1 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ left (int_ 7))
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
       (npcon_ left (pvar_ "n"))
       (withType tyint_ (var_ "n"))
       (int_ 0))) in
 utest stripTypeDecls matchCon1 with generateTypeAnnotated matchCon1 using sameSemantics in
 
 let matchCon2 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ left (int_ 7))
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
       (npcon_ right (pvar_ "n"))
       (withType tyint_ (var_ "n"))
       (int_ 0))) in
 utest stripTypeDecls matchCon2 with generateTypeAnnotated matchCon2 using sameSemantics in
 
 let matchCon3 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ left (int_ 7))
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
       (npcon_ left (pint_ 7))
       (int_ 1)
       (int_ 0))) in
 utest stripTypeDecls matchCon3 with generateTypeAnnotated matchCon3 using sameSemantics in
 
 let matchCon4 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ left (int_ 7))
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
       (npcon_ right (pint_ 7))
       (int_ 1)
       (int_ 0))) in
 utest stripTypeDecls matchCon4 with generateTypeAnnotated matchCon4 using sameSemantics in
 
 let matchNestedCon1 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
       (npcon_ nested (pvar_ "n"))
       (int_ 1)
       (int_ 0))) in
@@ -814,8 +813,8 @@ utest stripTypeDecls matchNestedCon1 with generateTypeAnnotated matchNestedCon1
 using sameSemantics in
 
 let matchNestedCon2 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
       (npcon_ nested (npcon_ left (pvar_ "n")))
       (withType tyint_ (var_ "n"))
       (int_ 0))) in
@@ -823,8 +822,8 @@ utest stripTypeDecls matchNestedCon2 with generateTypeAnnotated matchNestedCon2
 using sameSemantics in
 
 let matchNestedCon3 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
       (npcon_ nested (npcon_ left (pint_ 7)))
       (int_ 1)
       (int_ 0))) in
@@ -832,8 +831,8 @@ utest stripTypeDecls matchNestedCon3 with generateTypeAnnotated matchNestedCon3
 using sameSemantics in
 
 let matchNestedCon4 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
       (npcon_ nested (pvar_ "n1"))
       (match_ (var_ "n1")
         (npcon_ left (pvar_ "n2"))
@@ -844,8 +843,8 @@ utest stripTypeDecls matchNestedCon4 with generateTypeAnnotated matchNestedCon4
 using sameSemantics in
 
 let matchNestedCon5 = symbolize (
-  eitherMatch
-    (match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
       (npcon_ nested (pvar_ "n1"))
       (match_ (var_ "n1")
         (npcon_ right (pvar_ "n2"))
@@ -866,34 +865,34 @@ let r = record_ [
   ("d", float_ 1.2)
 ] in
 let matchRecord1 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [("c", pint_ 3), ("d", pvar_ "n")])
     (var_ "n")
-    (float_ 0.0))) in
+    (float_ 0.0)) in
 utest stripTypeDecls matchRecord1 with generateTypeAnnotated matchRecord1
 using sameSemantics in
 
 let matchRecord2 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [("c", pvar_ "c"), ("d", pvar_ "n")])
     (var_ "n")
-    (float_ 0.5))) in
+    (float_ 0.5)) in
 utest stripTypeDecls matchRecord2 with generateTypeAnnotated matchRecord2
 using sameSemantics in
 
 let matchRecord3 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 0)])
     (var_ "ch")
-    (char_ '0'))) in
+    (char_ '0')) in
 utest stripTypeDecls matchRecord3 with generateTypeAnnotated matchRecord3
 using sameSemantics in
 
 let matchRecord4 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 7)])
     (var_ "ch")
-    (char_ '0'))) in
+    (char_ '0')) in
 utest stripTypeDecls matchRecord4 with generateTypeAnnotated matchRecord4
 using sameSemantics in
 
@@ -906,22 +905,83 @@ utest stripTypeDecls matchNestedRecord1 with generateTypeAnnotated matchNestedRe
 using sameSemantics in
 
 let matchNestedRecord2 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [
       ("a", prec_ [("z", pseqtot_ [pvar_ "m", pint_ 2, pvarw_])]),
       ("c", pvar_ "n")])
     (addi_ (var_ "m") (var_ "n"))
-    (int_ 0))) in
+    (int_ 0)) in
 utest stripTypeDecls matchNestedRecord2 with generateTypeAnnotated matchNestedRecord2
 using sameSemantics in
 
 let matchNestedRecord3 = symbolize (
-  (match_ r
+  match_ r
     (prec_ [
       ("a", prec_ [("y", pvar_ "b"), ("z", pvarw_)])])
     (var_ "b")
-    false_)) in
+    false_) in
 utest stripTypeDecls matchNestedRecord3 with generateTypeAnnotated matchNestedRecord3
+using sameSemantics in
+
+let tree = nameSym "Tree" in
+let tyTree = ntyvar_ tree in
+let branch = nameSym "Branch" in
+let tyBranch = tyrecord_ [("lhs", tyTree), ("rhs", tyTree)] in
+let leaf = nameSym "Leaf" in
+let conMatch = lam m.
+  bindall_ [
+    ntype_ tree tyunknown_,
+    ncondef_ branch (tyarrow_ tyBranch tyTree),
+    ncondef_ leaf (tyarrow_ tyint_ tyTree),
+    ulet_ "x" (nconapp_ branch (record_ [
+      ("lhs", nconapp_ branch (record_ [
+        ("lhs", nconapp_ leaf (int_ 1)),
+        ("rhs", nconapp_ leaf (int_ 3))
+      ])),
+      ("rhs", nconapp_ leaf (int_ 2))
+    ])),
+    m
+  ] in
+let matchRecordCon1 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (pvarw_)),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (var_ "r")
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon1 with generateTypeAnnotated matchRecordCon1
+using sameSemantics in
+
+let matchRecordCon2 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (prec_ [
+          ("lhs", npcon_ leaf (pvar_ "ll")),
+          ("rhs", npcon_ leaf (pint_ 3))
+        ])),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (addi_ (var_ "r") (var_ "ll"))
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon2 with generateTypeAnnotated matchRecordCon2
+using sameSemantics in
+
+let matchRecordCon3 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (prec_ [
+          ("lhs", npcon_ leaf (pvar_ "ll")),
+          ("rhs", npcon_ leaf (pint_ 0))
+        ])),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (addi_ (var_ "r") (var_ "ll"))
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
 using sameSemantics in
 
 -- Ints
