@@ -364,30 +364,8 @@ let input =
 
 -- printLn (mkLanguages input);
 
-()
+-- TODO(vipa, 2021-03-05): The tests here need to parse and evaluate
+-- MLang, so I'm holding off on doing it in an automated fashion until
+-- `boot-parser.mc` handles that
 
--- match
---   let fields = x.fields in
---   mapAccumL
---     (lam acc. lam x2.
---          match
---            let #var"1" = x2.1 in
---            f acc1 #var"1"
---          with
---            {#label"1" = #var"1", #label"0" = acc1}
---          then
---            { x2
---              with
---              #label"1" =
---                #var"1" }
---          else
---            never)
---     acc
---     fields
--- with {#label"1" = fields, #label"0" = acc} then
---   { x
---     with
---     fields =
---       fields }
--- else
---   never
+()
