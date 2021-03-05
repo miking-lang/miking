@@ -1,5 +1,159 @@
 include "mexpr/eq.mc"
 
+/-
+
+This library assists in automatically generating MLang fragments for
+arbitrary AST nodes, while also generating shallow mapping functions
+(see the [recursion
+cookbook](https://github.com/miking-lang/miking/wiki/Recursion-Cookbook)).
+
+Input is a list of constructors and a list of shallow mappings to
+generate. Each constructor gets a name, a syn type, and a carried
+type. The carried type, represented by `CarriedType`, is the type of
+the value the constructor is applied to. A `CarriedType` knows what
+type it is representing (in the form of a `Type` value) and how to
+build `smapAccumL` given a targeted type. It's built using a few
+helper functions: `targetableType`, `untargetableType`, `seqType`,
+`recordType`, and `tupleType`. `targetableType` and `untargetableType`
+are intended to be atomic from the generator's point of view, the
+former can be targeted by a shallow mapping while the latter
+cannot. The others represent composite types that know how to traverse
+themselves.
+
+`untargetableType` is intended to be used for things that the AST node
+doesn't "contain", but are rather information about it, e.g., info
+fields and type annotations, as opposed to sub-expressions or the type
+of the lambda parameter.
+
+-- NOTE(vipa, 2021-03-05): It is my hypothesis that we don't want a
+`smap_Expr_Type` to map over the `ty` field, hence this library
+supports untargetable types, but it remains to be seen if this is the
+case. Default to `targetableType`, use `untargetableType` if you have
+a good reason to suspect that most traversals won't want to include
+the given field.
+
+For example, we can declare something like `TmRecord` like this:
+
+```
+let recordConstructor =
+  { name = nameSym "TmRecord"
+  , synType = stringToSynType "Expr"
+  , carried = recordType
+    [ ("info", targetableType (tyvar_ "Info"))
+    , ("ty", untargetableType (tyvar_ "Type"))
+    , ( "bindings"
+      , seqType
+        (tupleType
+          [ targetableType tystr_
+          , targetableType (tyvar_ "Expr")])
+      )
+    ]
+  }
+```
+
+We can then generate some language fragments:
+
+```
+use CarriedBasic in mkLanguages
+  { namePrefix = "MExpr"
+  , constructors = [recordConstructor]
+  , requestedSFunctions =
+    [ (stringToSynType "Expr", tyvar_ "Expr")
+    ]
+  }
+
+-- This is what's generated:
+
+lang MExprBase
+  syn Expr =
+
+  sem smapAccumL_Expr_Expr (f : (a) -> ((Expr) -> ((a, Expr)))) (acc : a) =
+  | x ->
+    (acc, x)
+
+  sem smap_Expr_Expr (f : (Expr) -> (Expr)) =
+  | x ->
+    (smapAccumL_Expr_Expr
+       (lam #var"".
+          lam x.
+            ({}, f
+              x))
+       {}
+       x).#label"1"
+
+  sem sfold_Expr_Expr (f : (a) -> ((Expr) -> (a))) (acc : a) =
+  | x ->
+    (smapAccumL_Expr_Expr
+       (lam acc.
+          lam x.
+            (f
+              acc
+              x, x))
+       acc
+       x).#label"0"
+
+end
+
+lang MExprTmRecord = MExprBase
+  syn Expr =
+  | TmRecord {bindings: [([Char], Expr)], ty: Type, info: Info}
+
+  sem smapAccumL_Expr_Expr (f : (a) -> ((Expr) -> ((a, Expr)))) (acc : a) =
+  | TmRecord x ->
+    match
+      match
+        let bindings =
+          x.bindings
+        in
+        mapAccumL
+          (lam acc1.
+             lam x1.
+               match
+                 let #var"1" =
+                   x1.#label"1"
+                 in
+                 f
+                   acc1
+                   #var"1"
+               with
+                 (acc1, #var"1")
+               then
+                 (acc1, { x1
+                   with
+                   #label"1" =
+                     #var"1" })
+               else
+                 never)
+          acc
+          bindings
+      with
+        (acc, bindings)
+      then
+        (acc, { x
+          with
+          bindings =
+            bindings })
+      else
+        never
+    with
+      (acc, x)
+    then
+      (acc, TmRecord
+        x)
+    else
+      never
+
+end
+
+```
+
+-- NOTE(vipa, 2021-03-05): Since we do not yet self-host MLang this
+file uses local and temporary definitions of language fragments. These
+are not intended to be public, and should be replaced once we do
+bootstrap MLang.
+
+-/
+
 type SynType = String
 let stringToSynType = identity
 let _eqSynType = eqString
@@ -400,7 +554,31 @@ let input =
     ]
   } in
 
--- printLn (mkLanguages input);
+let res = mkLanguages input in
+-- printLn res;
+
+let recordConstructor =
+  { name = nameSym "TmRecord"
+  , synType = stringToSynType "Expr"
+  , carried = recordType
+    [ ("info", untargetableType (tyvar_ "Info"))
+    , ("ty", untargetableType (tyvar_ "Type"))
+    , ( "bindings"
+      , seqType
+        (tupleType
+          [ targetableType tystr_
+          , targetableType (tyvar_ "Expr")])
+      )
+    ]
+  } in
+let res = mkLanguages
+  { namePrefix = "MExpr"
+  , constructors = [recordConstructor]
+  , requestedSFunctions =
+    [ (stringToSynType "Expr", tyvar_ "Expr")
+    ]
+  } in
+-- printLn res;
 
 -- TODO(vipa, 2021-03-05): The tests here need to parse and evaluate
 -- MLang, so I'm holding off on doing it in an automated fashion until
