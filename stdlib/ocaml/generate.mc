@@ -536,12 +536,12 @@ lang OCamlObjWrap = OCamlAst
                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
 
-  sem _objWrapNoPreamable =
+  sem _objWrapNoPremable =
   | t -> objWrapRec (_objObj t)
 
   sem objWrap =
   | t ->
-    bind_ _preamble (_objWrapNoPreamable t)
+    bind_ _preamble (_objWrapNoPremable t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
@@ -572,7 +572,7 @@ let ocamlEval = lam p. lam strConvert.
     parseAsMExpr out
 in
 
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamable here the make
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the premable here the make
 -- the test run faster. This is an ugly hack!
 let premableStr =
   let str = expr2str (bind_ _preamble (int_ 0)) in
@@ -623,7 +623,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
   else error "Unsupported value"
 in
 
-let objWrapGenerate = lam a. _objWrapNoPreamable (generate a) in
+let objWrapGenerate = lam a. _objWrapNoPremable (generate a) in
 
 -- Match
 let matchChar1 = symbolize
