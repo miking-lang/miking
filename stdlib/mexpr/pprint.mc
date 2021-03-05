@@ -456,7 +456,10 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
   -- intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmMatch t ->
+  | TmMatch t -> pprintTmMatchNormally indent env t
+
+  sem pprintTmMatchNormally (indent : Int) (env: PprintEnv) =
+  | t ->
     let i = indent in
     let ii = pprintIncr indent in
     match pprintCode ii env t.target with (env,target) then
@@ -471,6 +474,26 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
         else never
       else never
     else never
+end
+
+lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmMatch (t &
+    { pat = PatRecord
+      { bindings =
+        [ (fieldLabel, PatNamed {ident = PName patName})
+        ]
+      }
+    , thn = TmVar {ident = exprName}
+    , els = TmNever _
+    , target = expr
+    })
+  -> if nameEq patName exprName
+    then
+      match printParen indent env expr with (env, expr) then
+        (env, join [expr, ".", pprintLabelString fieldLabel])
+      else never
+    else pprintTmMatchNormally indent env t
 end
 
 lang UtestPrettyPrint = PrettyPrint + UtestAst
@@ -926,6 +949,9 @@ lang MExprPrettyPrint =
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
+
+  -- Syntactic Sugar
+  + RecordProjectionSyntaxSugarPrettyPrint
 
 end
 
