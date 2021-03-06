@@ -389,6 +389,8 @@ let rec print_const fmt = function
       fprintf fmt "mapFindWithErr"
   | CmapFindOrElse _ ->
       fprintf fmt "mapFindOrElse"
+  | CmapFindApplyOrElse _ ->
+      fprintf fmt "mapFindOrElse"
   | CmapAny _ ->
       fprintf fmt "mapAny"
   | CmapMem _ ->

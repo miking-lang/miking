@@ -33,6 +33,10 @@ utest mapFindOrElse (lam. '0') 3 m with '3' in
 utest mapFindOrElse (lam. '0') 4 m with '5' in
 utest mapFindOrElse (lam. '0') 5 m with '0' in
 
+utest mapFindApplyOrElse char2int (lam. 0) 1 m with 49 in
+utest mapFindApplyOrElse char2int (lam. 0) 2 m with 50 in
+utest mapFindApplyOrElse char2int (lam. 0) 5 m with 0 in
+
 utest mapMem 1 m with true in
 utest mapMem 42 m with false in
 

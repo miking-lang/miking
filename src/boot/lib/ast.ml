@@ -132,6 +132,7 @@ and const =
   | CmapRemove of tm option
   | CmapFindWithErr of tm option
   | CmapFindOrElse of tm option * tm option
+  | CmapFindApplyOrElse of tm option * tm option * tm option
   | CmapMem of tm option
   | CmapAny of (tm -> tm -> bool) option
   | CmapMap of (tm -> tm) option

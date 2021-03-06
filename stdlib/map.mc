@@ -9,15 +9,15 @@ include "seq.mc"
 let mapLength : Map k v -> Int =
   lam m. mapFoldWithKey (lam acc. lam. lam. addi 1 acc) 0 m
 
+-- Aliases
 let mapLookupOrElse : (Unit -> v) -> k -> Map k v -> v =
   mapFindOrElse
+let mapLookupApplyOrElse : (v1 -> v2) -> (Unit -> v2) -> k -> Map k v1 -> v2 =
+  mapFindApplyOrElse
 
 let mapLookup : k -> Map k v -> Option v =
   lam k. lam m.
-    let res = mapLookupOrElse (lam. None ()) k m in
-    match res with None () then None ()
-    else match res with x then Some x
-    else never
+    mapFindApplyOrElse (lam v. Some v) (lam. None ()) k m
 
 let mapInsertWith : (v -> v -> v) -> k -> v -> Map k v -> Map k v =
   lam f. lam k. lam v. lam m.
@@ -44,7 +44,7 @@ let mapMapAccum : (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map 
          match f tacc.0 k v1 with (acc, v2) then (acc, mapInsert k v2 tacc.1) else never)
       (acc, mapEmpty (mapGetCmpFun m)) m
 
-let mapFoldlM : (acc -> k -> v -> Option acc)
+let mapFoldlOption : (acc -> k -> v -> Option acc)
                   -> acc -> Map k v -> Option acc =
   lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t. f acc t.0 t.1) acc (mapBindings m)
@@ -54,6 +54,7 @@ mexpr
 let m = mapEmpty subi in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
+utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
 
 utest mapLookup 1 m with None () in
@@ -81,8 +82,8 @@ utest mapLookup 4 merged with Some "44" in
 utest mapLookup (negi 1) merged with Some "-1" in
 utest mapLookup 5 merged with None () in
 
-utest mapFoldlM (lam acc. lam k. lam v. Some v) 0 m with Some "3" in
-utest mapFoldlM
+utest mapFoldlOption (lam acc. lam k. lam v. Some v) 0 m with Some "3" in
+utest mapFoldlOption
   (lam acc. lam k. lam v. if eqi k acc then None () else Some acc) 3 m
 with None () in
 

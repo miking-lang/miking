@@ -121,6 +121,7 @@ let builtin =
   ; ("mapRemove", f (CmapRemove None))
   ; ("mapFindWithErr", f (CmapFindWithErr None))
   ; ("mapFindOrElse", f (CmapFindOrElse (None, None)))
+  ; ("mapFindApplyOrElse", f (CmapFindApplyOrElse (None, None, None)))
   ; ("mapAny", f (CmapAny None))
   ; ("mapMem", f (CmapMem None))
   ; ("mapMap", f (CmapMap None))
@@ -420,6 +421,14 @@ let arity = function
   | CmapFindOrElse (Some _, None) ->
       2
   | CmapFindOrElse (_, Some _) ->
+      1
+  | CmapFindApplyOrElse (None, None, None) ->
+      4
+  | CmapFindApplyOrElse (Some _, None, None) ->
+      3
+  | CmapFindApplyOrElse (_, Some _, None) ->
+      2
+  | CmapFindApplyOrElse (_, _, Some _) ->
       1
   | CmapAny None ->
       2
@@ -1075,6 +1084,27 @@ let delta eval env fi c v =
       | None ->
           eval env (TmApp (fi, f, tmUnit)) )
   | CmapFindOrElse _, _ ->
+      fail_constapp fi
+  | CmapFindApplyOrElse (None, None, None), f ->
+      TmConst (fi, CmapFindApplyOrElse (Some f, None, None))
+  | CmapFindApplyOrElse (Some f, None, None), felse ->
+      TmConst (fi, CmapFindApplyOrElse (Some f, Some felse, None))
+  | CmapFindApplyOrElse (Some f, Some felse, None), k ->
+      TmConst (fi, CmapFindApplyOrElse (Some f, Some felse, Some k))
+  | ( CmapFindApplyOrElse (Some f, Some felse, Some k)
+    , TmConst (_, CMap (cmp, mp)) ) -> (
+      let module Ord = struct
+        type t = tm
+
+        let compare = mapCompare cmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      match MapModule.find_opt k (Obj.obj mp) with
+      | Some v ->
+          eval env (TmApp (fi, f, v))
+      | None ->
+          eval env (TmApp (fi, felse, tmUnit)) )
+  | CmapFindApplyOrElse _, _ ->
       fail_constapp fi
   | CmapAny None, p ->
       let pred x y =
