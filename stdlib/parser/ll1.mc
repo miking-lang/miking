@@ -321,8 +321,8 @@ let ll1Lit : String -> Symbol = use ParserSpec in lam str.
     match (unlexed, lit) with ([], ![]) then Lit {lit = str}
     else error (join ["A literal token does not lex as a single token: \"", str, "\""])
   else never
-let ll1Lident : Symbol = use ParserSpec in Tok (LIdentTok {val = "", info = NoInfo ()})
-let ll1Uident : Symbol = use ParserSpec in Tok (UIdentTok {val = "", info = NoInfo ()})
+let ll1LIdent : Symbol = use ParserSpec in Tok (LIdentTok {val = "", info = NoInfo ()})
+let ll1UIdent : Symbol = use ParserSpec in Tok (UIdentTok {val = "", info = NoInfo ()})
 let ll1Int : Symbol = use ParserSpec in Tok (IntTok {val = 0, info = NoInfo ()})
 let ll1Float : Symbol = use ParserSpec in Tok (FloatTok {val = 0.0, info = NoInfo ()})
 let ll1Operator : Symbol = use ParserSpec in Tok (OperatorTok {val = "", info = NoInfo ()})
@@ -349,8 +349,8 @@ let parseWithTable = ll1ParseWithTable in
 let nonTerminal = ll1NonTerminal in
 let nt = ll1Nt in
 let lit = ll1Lit in
-let lident = ll1Lident in
-let uident = ll1Uident in
+let lident = ll1LIdent in
+let uident = ll1UIdent in
 let int = ll1Int in
 
 let errorMapToBindingsExc = lam m.

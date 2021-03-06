@@ -129,6 +129,9 @@ lang LIdentTokenParser = TokenParser
 
   sem tokKindEq (tok : Tok) =
   | LIdentTok _ -> match tok with LIdentTok _ then true else false
+
+  sem tokInfo =
+  | LIdentTok {info = info} -> info
 end
 
 lang UIdentTokenParser = TokenParser
