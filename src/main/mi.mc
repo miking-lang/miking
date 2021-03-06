@@ -15,17 +15,17 @@ let menu = strJoin "\n" [
   "Usage: mi [run] <files>",
   "",
   "Options:",
-  "  --print-ast     Pretty print the AST after parsing"]
+  "  --debug-parse      Print the AST after parsing"]
 in
 
 -- Option structure
 let options = {
-  printAst = false
+  debugParse = false
 } in
 
 -- Option map, maps strings to structure updates
 let optionsMap = [
-("--print-ast", lam o. {o with printAst = true})
+("--debug-parse", lam o. {o with debugParse = true})
 ] in
 
 -- Commands map, maps command strings to functions. The functions

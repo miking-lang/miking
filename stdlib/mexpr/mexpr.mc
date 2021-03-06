@@ -10,7 +10,7 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "seq.mc"
 
-lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint 
+lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
 
 
 -- Evaluate an expression into a value expression

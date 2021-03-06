@@ -34,11 +34,21 @@ let symEnvEmpty =
 
 lang Sym
   sem symbolizeExpr (env : SymEnv) =
-  -- Intentionally left blank
 
+  -- Symbolize with empty environments
   sem symbolize =
   | expr -> symbolizeExpr symEnvEmpty expr
 
+  -- Symbolize with existing environments with names (including symbols)
+  sem symbolizeWithNameEnvironments (varEnv: [Name]) (conEnv: [Name]) (tyEnv: [Name]) =
+  | expr ->
+    let env = {
+          varEnv = map (lam x. (nameGetStr x, x)) varEnv,
+          conEnv = map (lam x. (nameGetStr x, x)) conEnv,
+          tyEnv = map (lam x. (nameGetStr x, x)) tyEnv
+        }
+    in
+      symbolizeExpr env expr
 end
 
 lang VarSym = Sym + VarAst

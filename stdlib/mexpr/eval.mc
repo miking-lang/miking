@@ -49,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 let _seqOfCharToString = use MExprAst in
   lam tms.
     let f = lam c.
-      match c with TmConst {val = CChar c, info = NoInfo()} then
+      match c with TmConst {val = CChar c} then
         c.val
       else error "Not a character"
     in
