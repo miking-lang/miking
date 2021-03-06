@@ -626,6 +626,10 @@ let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (const_ (CCreate ())) n f
 
+let subsequence_ = use MExprAst in
+  lam s. lam off. lam n.
+  appf3_ (const_ (CSubsequence ())) s off n
+
 -- Short circuit logical expressions
 let and_ = use MExprAst in
   lam a. lam b. if_ a b false_
@@ -744,3 +748,42 @@ let tensorSubExn_ = use MExprAst in
 let tensorIteri_ = use MExprAst in
   lam f. lam t.
   appf2_ (const_ (CTensorIteri ())) f t
+
+-- Bootparser
+let bootParserParseMExprString_ = use MExprAst in
+  lam str. appf1_ (const_ (CBootParserParseMExprString ())) str
+
+let bootParserGetId_ = use MExprAst in
+  lam pt. appf1_ (const_ (CBootParserGetId ())) pt
+
+let bootParserGetTerm_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetTerm ())) pt n
+
+let bootParserGetString_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetString ())) pt n
+
+let bootParserGetInt_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInt ())) pt n
+
+let bootParserGetFloat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetFloat ())) pt n
+
+let bootParserGetListLength_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetListLength ())) pt n
+
+let bootParserGetConst_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetConst ())) pt n
+
+let bootParserGetPat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetPat ())) pt n
+
+let bootParserGetInfo_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInfo ())) pt n
