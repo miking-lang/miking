@@ -549,6 +549,47 @@ lang RefOpAst = ConstAst + RefAst
   | CDeRef {}
 end
 
+lang MapAst = ConstAst
+  syn Const =
+  | CMapEmpty {}
+  | CMapInsert {}
+  | CMapRemove {}
+  | CMapFind {}
+  | CMapMem {}
+  | CMapAny {}
+  | CMapMap {}
+  | CMapMapWithKey {}
+  | CMapBindings {}
+end
+
+lang TensorAst = ConstAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
+end
+
+lang BootParserAst = ConstAst
+  syn Const =
+  | CBootParserParseMExprString {}
+  | CBootParserGetId {}
+  | CBootParserGetTerm {}
+  | CBootParserGetString {}
+  | CBootParserGetInt {}
+  | CBootParserGetFloat {}
+  | CBootParserGetListLength {}
+  | CBootParserGetConst {}
+  | CBootParserGetPat {}
+  | CBootParserGetInfo {}
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -806,7 +847,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorAst +
+  BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

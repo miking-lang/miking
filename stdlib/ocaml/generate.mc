@@ -7,7 +7,6 @@ include "mexpr/symbolize.mc"
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 include "ocaml/compile.mc"
-include "hashmap.mc"
 
 let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
 
@@ -15,43 +14,23 @@ let _symbOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics
 
 let _floatOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
 
-let _fileOps = [
-  "read",
-  "write",
-  "exists",
-  "delete"
-]
+let _fileOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
 
-let _fileOp = _op (_opHashMap "Boot.Intrinsics.File." _fileOps)
+let _ioOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
 
-let _ioOps = [
-  "print",
-  "read_line"
-]
+let _sysOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
 
-let _ioOp = _op (_opHashMap "Boot.Intrinsics.IO." _ioOps)
+let _randOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
 
-let _sysOps = [
-  "exit",
-  "error",
-  "argv"
-]
+let _timeOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
 
-let _sysOp = _op (_opHashMap "Boot.Intrinsics.MSys." _sysOps)
+let _numTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.Num." op}
 
-let _randOps = [
-  "int_u",
-  "set_seed"
-]
+let _numTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.Num." op}
 
-let _randOp = _op (_opHashMap "Boot.Intrinsics.RNG." _randOps)
+let _noNumTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.NoNum." op}
 
-let _timeOps = [
-  "get_wall_time_ms",
-  "sleep_ms"
-]
-
-let _timeOp = _op (_opHashMap "Boot.Intrinsics.Time." _timeOps)
+let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
@@ -121,6 +100,7 @@ let _consName = nameSym "cons"
 let _snocName = nameSym "snoc"
 let _splitAtName = nameSym "splitAt"
 let _reverseName = nameSym "reverse"
+let _subsequenceName = nameSym "subsequence"
 let _ofArrayName = nameSym "of_array"
 let _printName = nameSym "print"
 let _readLineName = nameSym "readLine"
@@ -139,52 +119,40 @@ let _randIntUName = nameSym "randIntU"
 let _randSetSeedName = nameSym "randSetSeed"
 let _wallTimeMsName = nameSym "wallTime"
 let _sleepMsName = nameSym "sleepMs"
+let _mapEmptyName = nameSym "mapEmpty"
+let _mapInsertName = nameSym "mapInsert"
+let _mapRemoveName = nameSym "mapRemove"
+let _mapFindName = nameSym "mapFind"
+let _mapAnyName = nameSym "mapAny"
+let _mapMemName = nameSym "mapMem"
+let _mapMapName = nameSym "mapMap"
+let _mapMapWithKeyName = nameSym "mapMapWithKey"
+let _mapBindingsName = nameSym "mapBindings"
+let _tensorCreateName = nameSym "tensorCreate"
+let _tensorGetExnName = nameSym "tensorGetExn"
+let _tensorSetExnName = nameSym "tensorSetExn"
+let _tensorRankName = nameSym "tensorRank"
+let _tensorShapeName = nameSym "tensorShape"
+let _tensorReshapeExnName = nameSym "tensorReshapeExn"
+let _tensorCopyExnName = nameSym "tensorCopyExn"
+let _tensorSliceExnName = nameSym "tensorSliceExn"
+let _tensorSubExnName = nameSym "tensorSubExn"
+let _tensorIteriName = nameSym "tensorIteri"
+let _bootParserParseMExprStringName = nameSym "bootParserParseMExprString"
+let _bootParserGetIdName = nameSym "bootParserGetId"
+let _bootParserGetTermName = nameSym "bootParserGetTerm"
+let _bootParserGetStringName = nameSym "bootParserGetString"
+let _bootParserGetIntName = nameSym "bootParserGetInt"
+let _bootParserGetFloatName = nameSym "bootParserGetFloat"
+let _bootParserGetListLengthName = nameSym "bootParserGetListLength"
+let _bootParserGetConstName = nameSym "bootParserGetConst"
+let _bootParserGetPatName = nameSym "bootParserGetPat"
+let _bootParserGetInfoName = nameSym "bootParserGetInfo"
 
 lang OCamlGenerate = MExprAst + OCamlAst
-  sem generateConst =
-  -- Sequence intrinsics
-  | CCreate {} -> _seqOp "create"
-  | CLength {} -> _seqOp "length"
-  | CCons {} -> _seqOp "cons"
-  | CSnoc {} -> _seqOp "snoc"
-  | CGet {} -> _seqOp "get"
-  | CSet {} -> _seqOp "set"
-  | CSplitAt {} -> _seqOp "split_at"
-  | CReverse {} -> _seqOp "reverse"
-  -- Symbol intrinsics
-  | CGensym {} -> _symbOp "gensym"
-  | CEqsym {} -> _symbOp "eqsym"
-  | CSym2hash {} -> _symbOp "hash"
-  -- Int-Float Conversion intrinsics
-  | CFloorfi {} -> _floatOp "floorfi"
-  | CCeilfi {} -> _floatOp "ceilfi"
-  | CRoundfi {} -> _floatOp "roundfi"
-  | CString2float {} -> _floatOp "string2float"
-  -- File intrinsics
-  | CFileRead {} -> _fileOp "read"
-  | CFileWrite {} -> _fileOp "write"
-  | CFileExists {} -> _fileOp "exists"
-  | CFileDelete {} -> _fileOp "delete"
-  -- Random number generation intrinsics
-  | CRandIntU {} -> _randOp "int_u"
-  | CRandSetSeed {} -> _randOp "set_seed"
-  -- Time Intrinsics
-  | CWallTimeMs {} -> _timeOp "get_wall_time_ms"
-  | CSleepMs {} -> _timeOp "sleep_ms"
-  -- Sys intrinsics
-  | CExit {} -> _sysOp "exit"
-  | CError {} -> _sysOp "error"
-  | CArgv {} -> _sysOp "argv"
-  -- IO intrinsics
-  | CPrint {} -> _ioOp "print"
-  | CReadLine {} -> _ioOp "read_line"
-  -- Base case
-  | v -> TmConst { val = v }
-
   sem generate =
   | TmSeq {tms = tms} ->
     app_ (nvar_ _ofArrayName) (OTmArray {tms = map generate tms})
-  -- | TmConst {val = val} -> generateConst val
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     let tname = nameSym "_target" in
     match generatePat tname pat with (nameMap, wrap) then
@@ -312,12 +280,11 @@ recursive let _isIntrinsicApp = use OCamlAst in
     else false
 end
 
-let _objReprName = nameSym "Obj.repr"
 let _objTName = nameSym "Obj.t"
-let _objObjName = nameSym "Obj.obj"
-
-let _objRepr = lam t. app_ (nvar_ _objReprName) t
-let _objObj = lam t. app_ (nvar_ _objObjName) t
+let _objRepr = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
+let _objObj = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
 
 let _preamble =
   let objObjVar = lam a. _objObj (nvar_ a) in
@@ -395,6 +362,7 @@ let _preamble =
     , intr2 _snocName (appf2_ (_seqOp "snoc"))
     , intr2 _splitAtName (appf2_ (_seqOp "split_at"))
     , intr1 _reverseName (appf1_ (_seqOp "reverse"))
+    , intr3 _subsequenceName (appf3_ (_seqOp "subsequence"))
     , intr1 _ofArrayName (appf1_ (_seqOp "Helpers.of_array"))
     , intr1 _printName (appf1_ (_ioOp "print"))
     , intr1 _readLineName (appf1_ (_ioOp "read_line"))
@@ -412,9 +380,19 @@ let _preamble =
     , intr1 _randSetSeedName (appf1_ (_randOp "set_seed"))
     , intr1 _wallTimeMsName (appf1_ (_timeOp "get_wall_time_ms"))
     , intr1 _sleepMsName (appf1_ (_timeOp "sleep_ms"))
+    , intr1 _bootParserParseMExprStringName (appf1_ (_bootparserOp "parseMExprString"))
+    , intr1 _bootParserGetIdName (appf1_ (_bootparserOp "getId"))
+    , intr2 _bootParserGetTermName (appf2_ (_bootparserOp "getTerm"))
+    , intr2 _bootParserGetStringName (appf2_ (_bootparserOp "getString"))
+    , intr2 _bootParserGetIntName (appf2_ (_bootparserOp "getInt"))
+    , intr2 _bootParserGetFloatName (appf2_ (_bootparserOp "getFloat"))
+    , intr2 _bootParserGetListLengthName (appf2_ (_bootparserOp "getListLength"))
+    , intr2 _bootParserGetConstName (appf2_ (_bootparserOp "getConst"))
+    , intr2 _bootParserGetPatName (appf2_ (_bootparserOp "getPat"))
+    , intr1 _bootParserGetInfoName (appf1_ (_bootparserOp "getInfo"))
   ]
 
-lang OCamlObjWrap = OCamlAst
+lang OCamlObjWrap = MExprAst + OCamlAst
   sem intrinsic2name =
   | CAddi _ -> nvar_ _addiName
   | CSubi _ -> nvar_ _subiName
@@ -459,6 +437,7 @@ lang OCamlObjWrap = OCamlAst
   | CSnoc _ -> nvar_ _snocName
   | CSplitAt _ -> nvar_ _splitAtName
   | CReverse _ -> nvar_ _reverseName
+  | CSubsequence _ -> nvar_ _subsequenceName
   | CPrint _ -> nvar_ _printName
   | CReadLine _ -> nvar_ _readLineName
   | CArgv _ -> nvar_ _argvName
@@ -475,6 +454,35 @@ lang OCamlObjWrap = OCamlAst
   | CRandSetSeed _ -> nvar_ _randSetSeedName
   | CWallTimeMs _ -> nvar_ _wallTimeMsName
   | CSleepMs _ -> nvar_ _sleepMsName
+  | CMapEmpty _ -> nvar_ _mapEmptyName
+  | CMapInsert _ -> nvar_ _mapInsertName
+  | CMapRemove _ -> nvar_ _mapRemoveName
+  | CMapFind _ -> nvar_ _mapFindName
+  | CMapAny _ -> nvar_ _mapAnyName
+  | CMapMem _ -> nvar_ _mapMemName
+  | CMapMap _ -> nvar_ _mapMapName
+  | CMapMapWithKey _ -> nvar_ _mapMapWithKeyName
+  | CMapBindings _ -> nvar_ _mapBindingsName
+  | CTensorCreate _ -> nvar_ _tensorCreateName
+  | CTensorGetExn _ -> nvar_ _tensorGetExnName
+  | CTensorSetExn _ -> nvar_ _tensorSetExnName
+  | CTensorRank _ -> nvar_ _tensorRankName
+  | CTensorShape _ -> nvar_ _tensorShapeName
+  | CTensorReshapeExn _ -> nvar_ _tensorReshapeExnName
+  | CTensorCopyExn _ -> nvar_ _tensorCopyExnName
+  | CTensorSliceExn _ -> nvar_ _tensorSliceExnName
+  | CTensorSubExn _ -> nvar_ _tensorSubExnName
+  | CTensorIteri _ -> nvar_ _tensorIteriName
+  | CBootParserParseMExprString _ -> nvar_ _bootParserParseMExprStringName
+  | CBootParserGetId _ -> nvar_ _bootParserGetIdName
+  | CBootParserGetTerm _ -> nvar_ _bootParserGetTermName
+  | CBootParserGetString _ -> nvar_ _bootParserGetStringName
+  | CBootParserGetInt _ -> nvar_ _bootParserGetIntName
+  | CBootParserGetFloat _ -> nvar_ _bootParserGetFloatName
+  | CBootParserGetListLength _ -> nvar_ _bootParserGetListLengthName
+  | CBootParserGetConst _ -> nvar_ _bootParserGetConstName
+  | CBootParserGetPat _ -> nvar_ _bootParserGetPatName
+  | CBootParserGetInfo _ -> nvar_ _bootParserGetInfoName
   | t -> dprintLn t; error "Intrinsic not implemented"
 
   sem objWrapRec =
@@ -553,8 +561,6 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     concat premableStr (expr2str ocamlAst)
   in
 
-  -- dprintLn ocamlAst;
-  -- use OCamlPrettyPrint in printLn (expr2str ocamlAst);
   match mexprVal with TmConst t then
     match t.val with CInt _ then
       let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_int" in
@@ -978,6 +984,16 @@ utest int_ 3 with objWrapGenerate fst using sameSemantics in
 utest int_ 2 with objWrapGenerate snd using sameSemantics in
 utest int_ 1 with objWrapGenerate thrd using sameSemantics in
 
+let testSeq = seq_ [int_ 1, int_ 2, int_ 3] in
+let testSubseq1 = subsequence_ testSeq (int_ 0) (int_ 2) in
+let testSubseq2 = subsequence_ testSeq (int_ 1) (int_ 2) in
+let testSubseq3 = subsequence_ testSeq (int_ 2) (int_ 100) in
+let fst = get_ testSubseq3 (int_ 0) in
+utest int_ 2 with objWrapGenerate (length_ testSubseq1) using sameSemantics in
+utest int_ 2 with objWrapGenerate (length_ testSubseq2) using sameSemantics in
+utest int_ 1 with objWrapGenerate (length_ testSubseq3) using sameSemantics in
+utest int_ 3 with objWrapGenerate fst using sameSemantics in
+
 -- -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- -- projection.
 
@@ -1030,9 +1046,7 @@ using sameSemantics in
 
 -- TODO(oerikss, 2020-12-14): Sys operations are not tested
 
--- Obj wrap
--- let add = objWrap (addi_ (int_ 1) (int_ 2)) in
--- utest add with objWrapGenerate add using sameSemantics in
--- let _ = dprint w in
+-- TODO(larshum, 2021-03-06): Add tests for boot parser, map and tensor
+-- intrinsics
 
 ()
