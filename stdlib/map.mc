@@ -7,7 +7,7 @@ include "option.mc"
 include "seq.mc"
 
 let mapLength : Map k v -> Int =
-  lam m. mapFoldWithKey (lam acc. lam. lam. addi 1 acc) 0 m
+  mapFoldWithKey (lam acc. lam. lam. addi 1 acc) 0
 
 -- Aliases
 let mapLookupOrElse : (Unit -> v) -> k -> Map k v -> v =
