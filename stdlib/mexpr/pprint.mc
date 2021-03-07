@@ -572,6 +572,9 @@ lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
   | CAddi _ -> "addi"
   | CSubi _ -> "subi"
   | CMuli _ -> "muli"
+  | CModi _ -> "modi"
+  | CDivi _ -> "divi"
+  | CNegi _ -> "negi"
 end
 
 lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
