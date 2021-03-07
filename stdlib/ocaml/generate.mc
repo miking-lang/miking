@@ -527,25 +527,50 @@ in
 
 -- Evaluates OCaml expressions [strConvert] given as string, applied
 -- to [p], and parses it as a mexpr expression.
-let ocamlEval = lam p. lam strConvert.
-  let subprocess = pyimport "subprocess" in
-  let blt = pyimport "builtins" in
-    let res =
-      ocamlCompileWithConfig {warnings=false}
-                             (join ["print_string (", strConvert, "(", p, "))"])
-    in
-    let out = (res.run "" []).stdout in
-    res.cleanup ();
-    parseAsMExpr out
+let ocamlEval = lam strConvert. lam p.
+  let res =
+    ocamlCompileWithConfig {warnings=false}
+                           (join ["print_string (", strConvert, "(", p, "))"])
+  in
+  let out = (res.run "" []).stdout in
+  res.cleanup ();
+  parseAsMExpr out
 in
 
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the premable here the make
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the premable here to make
 -- the test run faster. This is an ugly hack!
 let premableStr =
   let str = expr2str (bind_ _preamble (int_ 0)) in
   let len = length str in
   subsequence str 0 (subi len 1)
 in
+
+-- NOTE(oerikss, 2021-03-05): Here we paste the pre- pretty-printed preamable
+-- to our program. This is part of the above mentioned hack.
+let ocamlExpr2str = lam ast.
+  concat premableStr (expr2str ast)
+in
+
+let ocamlEvalInt = lam ast.
+  ocamlEval "string_of_int" (ocamlExpr2str ast)
+in
+
+let ocamlEvalFloat = lam ast.
+  ocamlEval "string_of_float" (ocamlExpr2str ast)
+in
+
+let ocamlEvalBool = lam ast.
+  ocamlEval "string_of_bool" (ocamlExpr2str ast)
+in
+
+let ocamlEvalChar = lam ast.
+  ocamlEval "Printf.sprintf \"'%c'\"" (ocamlExpr2str ast)
+in
+
+utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
+utest ocamlEvalFloat (float_ 1.) with float_ 1. using eqExpr in
+utest ocamlEvalBool true_ with true_ using eqExpr in
+utest ocamlEvalChar (char_ '1') with char_ '1' using eqExpr in
 
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
@@ -555,35 +580,27 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     eval {env = []} mexprAst
   in
 
-  -- NOTE(oerikss, 2021-03-05): Here we paste the pre- pretty-printed preamable
-  -- to our program. This is part of the above mentioned hack.
-  let ocamlExpr2str = lam ast.
-    concat premableStr (expr2str ocamlAst)
-  in
-
   match mexprVal with TmConst t then
     match t.val with CInt _ then
-      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_int" in
+      let ocamlVal = ocamlEvalInt ocamlAst in
       match ocamlVal with TmConst {val = CInt _} then
         eqExpr mexprVal ocamlVal
-      else error "Values mismatch"
+      else error "Value mismatch"
     else match t.val with CFloat _ then
-      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_float" in
+      let ocamlVal = ocamlEvalFloat ocamlAst in
       match ocamlVal with TmConst {val = CFloat _} then
         eqExpr mexprVal ocamlVal
-      else error "Values mismatch"
+      else error "Value mismatch"
     else match t.val with CBool _ then
-      let ocamlVal = ocamlEval (ocamlExpr2str ocamlAst) "string_of_bool" in
+      let ocamlVal = ocamlEvalBool ocamlAst in
       match ocamlVal with TmConst {val = CBool _} then
         eqExpr mexprVal ocamlVal
-      else error "Values mismatch"
+      else error "Value mismatch"
     else match t.val with CChar _ then
-      let ocamlVal =
-        ocamlEval (ocamlExpr2str ocamlAst) "Printf.sprintf \"'%c'\""
-      in
+      let ocamlVal = ocamlEvalChar ocamlAst in
       match ocamlVal with TmConst {val = CChar _} then
         eqExpr mexprVal ocamlVal
-      else error "Values mismatch"
+      else error "Value mismatch"
     else error "Unsupported constant"
   else error "Unsupported value"
 in
