@@ -844,14 +844,14 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorReshapeExn2 t ->
     let is = _ofTmSeq arg in
     match t with TInt t then
-      let tnew = tensorReshapeExn t is in
-      TmTensor { val = TInt tnew }
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TInt view }
     else match t with TFloat t then
-      let tnew = tensorReshapeExn t is in
-      TmTensor { val = TFloat tnew }
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TFloat view }
     else match t with TExpr t then
-      let tnew = tensorReshapeExn t is in
-      TmTensor { val = TExpr tnew }
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TExpr view }
     else never
   | CTensorCopyExn _ ->
     match arg with TmTensor { val = t } then
@@ -879,14 +879,14 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorSliceExn2 t ->
     let is = _ofTmSeq arg in
     match t with TInt t then
-      let tnew = tensorSliceExn t is in
-      TmTensor { val = TInt tnew }
+      let view = tensorSliceExn t is in
+      TmTensor { val = TInt view }
     else match t with TFloat t then
-      let tnew = tensorSliceExn t is in
-      TmTensor { val = TFloat tnew }
+      let view = tensorSliceExn t is in
+      TmTensor { val = TFloat view }
     else match t with TExpr t then
-      let tnew = tensorSliceExn t is in
-      TmTensor { val = TExpr tnew }
+      let view = tensorSliceExn t is in
+      TmTensor { val = TExpr view }
     else never
   | CTensorSubExn _ ->
     match arg with TmTensor { val = t } then
@@ -901,14 +901,14 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorSubExn3 (t, ofs) ->
     match arg with TmConst { val = CInt { val = len }} then
       match t with TInt t then
-        let tnew = tensorSubExn t ofs len in
-        TmTensor { val = TInt tnew }
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TInt view }
       else match t with TFloat t then
-        let tnew = tensorSubExn t ofs len in
-        TmTensor { val = TFloat tnew }
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TFloat view }
       else match t with TExpr t then
-        let tnew = tensorSubExn t ofs len in
-        TmTensor { val = TExpr tnew }
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TExpr view }
       else never
     else error "Second argument to CTensorSubExn not an integer"
   | CTensorIteri _ ->
