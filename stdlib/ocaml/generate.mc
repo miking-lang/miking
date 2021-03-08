@@ -183,9 +183,9 @@ let _bootParserGetPatName = nameSym "bootParserGetPat"
 let _bootParserGetInfoName = nameSym "bootParserGetInfo"
 
 lang OCamlGenerate = MExprAst + OCamlAst
-  sem generate =
+  sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
-    app_ (nvar_ _ofArrayName) (OTmArray {tms = map generate tms})
+    app_ (nvar_ _ofArrayName) (OTmArray {tms = map (generate env) tms})
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     let tname = nameSym "_target" in
     match generatePat env (ty target) tname pat with (nameMap, wrap) then
@@ -731,6 +731,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | TmConst {val = c} ->
     intrinsic2name c
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
+  | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | OTmMatch t ->
     OTmMatch {{t with target = _objObj (objWrapRec t.target)}
                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
