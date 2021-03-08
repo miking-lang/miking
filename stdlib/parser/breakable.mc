@@ -127,8 +127,7 @@ type BreakableGrammar prodLabel res self =
 -- look up precedence and the like
 type OpId = Int
 
--- Each node in the parsed SPPF has a unique ID (it will likely not be
--- unique when comparing between two different SPPFs though).
+-- Each node in the parsed SPPF has a unique ID via `gensym`.
 type PermanentId = Symbol
 
 -- This is the type that is used to describe an item to be added to the parse
@@ -320,6 +319,24 @@ let breakableInAllowSet
   = lam id. lam set.
     match set with AllowSet s then mapMem id s else
     match set with DisallowSet s then not (mapMem id s) else
+    never
+
+let breakableInsertAllowSet
+  : id
+  -> AllowSet id
+  -> AllowSet id
+  = lam id. lam set.
+    match set with AllowSet s then AllowSet (mapInsert id () s) else
+    match set with DisallowSet s then DisallowSet (mapRemove id () s) else
+    never
+
+let breakableRemoveAllowSet
+  : id
+  -> AllowSet id
+  -> AllowSet id
+  = lam id. lam set.
+    match set with AllowSet s then AllowSet (mapRemove id s) else
+    match set with DisallowSet s then DisallowSet (mapInsert id s) else
     never
 
 let breakableMapAllowSet
@@ -713,9 +730,14 @@ let breakableAddAtom
     let id = _uniqueID () in
     { st with frontier = [TentativeLeaf {parents = st.frontier, node = AtomP {id = id, input = input, self = self}}] }
 
+-- TODO(vipa, 2021-02-15): There should be more information in case of
+-- a parse failure, but it's not obvious precisely how the information
+-- should be presented, it's not obvious to me that there will always
+-- be a single cause of the failure that is easy to find
+-- algorithmically
 let breakableFinalizeParse
   : State res self RClosed
-  -> [PermanentNode res self]
+  -> Option [PermanentNode res self] -- NonEmpty
   = lam st.
     let time = addi 1 (deref st.timestep) in
     modref st.timestep time;
@@ -755,23 +777,15 @@ let breakableFinalizeParse
     let frontier = st.frontier in
     let queue = _newQueueFromFrontier frontier in
     iter (handleLeaf queue) frontier;
-    work queue
+    match work queue with res & [_] ++ _ then Some res else None ()
 
 type BreakableError self
 con Ambiguities : [{first: self, last: self, irrelevant: [{first: self, last: self}]}] -> BreakableError self
--- TODO(vipa, 2021-02-15): There should be more information in case of
--- a parse failure, but it's not obvious precisely how the information
--- should be presented, it's not obvious to me that there will always
--- be a single cause of the failure that is easy to find
--- algorithmically
-con InvalidParse : () -> BreakableError self
 
 let breakableConstructResult
-  : [PermanentNode res self]
+  : [PermanentNode res self] -- NonEmpty
   -> Either (BreakableError self) res
   = lam nodes.
-    match nodes with [] then InvalidParse () else
-
     -- NOTE(vipa, 2021-02-15): All alternatives for children at the
     -- same point in the tree have the exact same range in the input,
     -- i.e., they will have exactly the same input as first and last
@@ -974,8 +988,8 @@ let testParse
             workRClosed pos (breakableAddAtom input self st) tokens
           else match t with TestPrefix {x = self, input = input} then
             workROpen pos (breakableAddPrefix input self st) tokens
-          else Left (InvalidParse ())
-        else Left (InvalidParse ())
+          else None ()
+        else None ()
       let workRClosed = lam pos. lam st. lam tokens.
         match tokens with [t] ++ tokens then
           let t = t pos in
@@ -983,72 +997,72 @@ let testParse
           match t with TestInfix {x = self, input = input} then
             match breakableAddInfix input self st with Some st
             then workROpen pos st tokens
-            else Left (InvalidParse ())
+            else None ()
           else match t with TestPostfix {x = self, input = input} then
             match breakableAddPostfix input self st with Some st
             then workRClosed pos st tokens
-            else Left (InvalidParse ())
-          else Left (InvalidParse ())
-        else breakableConstructResult (breakableFinalizeParse st)
+            else None ()
+          else None ()
+        else optionMap breakableConstructResult (breakableFinalizeParse st)
     in workROpen 0 (breakableInitState ())
 in
 
 utest testParse []
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_int 4]
-with Right (IntA {val = 4,pos = 0})
+with Some (Right (IntA {val = 4,pos = 0}))
 in
 
 utest testParse [_int 4, _plus]
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_int 4, _plus, _int 7]
-with Right
+with Some (Right
   (PlusA
     { pos = 1
     , l = (IntA {val = 4,pos = 0})
     , r = (IntA {val = 7,pos = 2})
-    })
+    }))
 in
 
 utest testParse [_negate, _int 8]
-with Right
+with Some (Right
   (NegateA
     { pos = 0
     , r = (IntA {val = 8,pos = 1})
-    })
+    }))
 in
 
 utest testParse [_negate, _negate, _int 8]
-with Right
+with Some (Right
   (NegateA
     { pos = 0
     , r = (NegateA
       { pos = 1
       , r = (IntA {val = 8,pos = 2})
       })
-    })
+    }))
 in
 
 utest testParse [_int 9, _nonZero, _nonZero]
-with Right
+with Some (Right
   (NonZeroA
     { pos = 2
     , l = (NonZeroA
       { pos = 1
       , l = (IntA {val = 9,pos = 0})})
-    })
+    }))
 in
 
 utest testParse [_negate, _nonZero]
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_int 1, _plus, _int 2, _times, _int 3]
-with Right
+with Some (Right
   (PlusA
     { pos = 1
     , l = (IntA {val = 1,pos = 0})
@@ -1057,11 +1071,11 @@ with Right
       , l = (IntA {val = 2,pos = 2})
       , r = (IntA {val = 3,pos = 4})
       })
-    })
+    }))
 in
 
 utest testParse [_int 1, _times, _int 2, _plus, _int 3]
-with Right
+with Some (Right
   (PlusA
     { pos = 3
     , l = (TimesA
@@ -1070,49 +1084,49 @@ with Right
       , r = (IntA {val = 2,pos = 2})
       })
     , r = (IntA {val = 3,pos = 4})
-    })
+    }))
 in
 
 utest testParse [_int 1, _times, _int 2, _divide, _int 3]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 1,pos = 0}
     , last = {val = 3,pos = 4}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 1,pos = 0}
     , last = {val = 3,pos = 4}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 1,pos = 2}
     , last = {val = 3,pos = 6}
     }
-  ]))
+  ])))
 in
 
 -- TODO(vipa, 2021-02-15): When we compute elisons we can report two ambiguities here, the nested one is independent
 utest testParse [_int 0, _plus, _int 1, _times, _int 2, _divide, _int 3, _plus, _int 4]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 0,pos = 0}
     , last = {val = 4,pos = 8}
     }
-  ]))
+  ])))
 in
 
 -- TODO(vipa, 2021-02-15): Do we want to specify the order of the returned ambiguities in some way?
 utest testParse [_int 1, _times, _int 2, _divide, _int 3, _plus, _int 4, _divide, _int 5, _times, _int 6]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 4, pos = 6}
     , last = {val = 6, pos = 10}
@@ -1121,19 +1135,19 @@ with Left (Ambiguities (
     , first = {val = 1,pos = 0}
     , last = {val = 3,pos = 4}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_if, _int 1]
-with Right
+with Some (Right
   (IfA
     { pos = 0
     , r = (IntA {val = 1,pos = 1})
-    })
+    }))
 in
 
 utest testParse [_if, _int 1, _else, _int 2]
-with Right
+with Some (Right
   (ElseA
     { pos = 2
     , l = (IfA
@@ -1141,25 +1155,25 @@ with Right
       , r = (IntA {val = 1,pos = 1})
       })
     , r = (IntA {val = 2,pos = 3})
-    })
+    }))
 
 in
 
 utest testParse [_if, _int 1, _else, _int 2, _else, _int 3]
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_if, _if, _int 1, _else, _int 2]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 0,pos = 0}
     , last = {val = 2,pos = 4}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_negate, _if, _int 1, _else, _int 2]
-with Right
+with Some (Right
   (NegateA
     { pos = 0
     , r = (ElseA
@@ -1170,29 +1184,29 @@ with Right
         })
       , r = (IntA {val = 2,pos = 4})
       })
-    })
+    }))
 in
 
 utest testParse [_if, _negate, _if, _int 1, _else, _int 2]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 0,pos = 0}
     , last = {val = 2,pos = 5}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_int 1, _plus, _if, _negate, _if, _int 1, _else, _int 2]
-with Left (Ambiguities (
+with Some (Left (Ambiguities (
   [ { irrelevant = ([])
     , first = {val = 0,pos = 2}
     , last = {val = 2,pos = 7}
     }
-  ]))
+  ])))
 in
 
 utest testParse [_int 1, _times, _if, _int 7, _else, _int 12]
-with Right
+with Some (Right
   (TimesA
     { pos = 1
     , l = (IntA {val = 1,pos = 0})
@@ -1204,19 +1218,19 @@ with Right
         })
       , r = (IntA {val = 12,pos = 5})
       })
-    })
+    }))
 in
 
 utest testParse [_int 1, _plus, _plus, _int 2]
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_int 1, _plus, _nonZero]
-with Left (InvalidParse ())
+with None ()
 in
 
 utest testParse [_int 1, _nonZero, _plus, _int 2]
-with Right
+with Some (Right
   (PlusA
     { pos = 2
     , l = (NonZeroA
@@ -1224,7 +1238,7 @@ with Right
       , l = (IntA {val = 1,pos = 0})
       })
     , r = (IntA {val = 2,pos = 3})
-    })
+    }))
 in
 
 ()

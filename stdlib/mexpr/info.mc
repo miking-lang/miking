@@ -39,9 +39,9 @@ let mergeInfo : Info -> Info -> Info = lam fi1. lam fi2.
     match fi2 with Info r2 then
       Info {filename = r1.filename, row1 = r1.row1, col1 = r1.col1,
             row2 = r2.row2, col2 = r2.col2}
-    else NoInfo ()
-  else NoInfo ()
-  
+    else fi1
+  else fi2
+
 -- Create an info structure
 let infoVal : String -> Int -> Int -> Int -> Int =
   lam filename. lam r1. lam c1. lam r2. lam c2.

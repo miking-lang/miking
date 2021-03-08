@@ -52,107 +52,27 @@ utest isIdentifierString "AA" with false
 utest isIdentifierString "__*" with false
 utest isIdentifierString "" with false
 
-let isModuleString = lam s.
-  if not (null s) then
-    if isUpperAlpha (head s) then
-      let s = cons (char2lower (head s)) (tail s) in
-      isIdentifierString s
-    else false
-  else
-    false
-
-utest isModuleString "A" with true
-utest isModuleString "ABCD" with true
-utest isModuleString "AbCd" with true
-utest isModuleString "Aa123" with true
-utest isModuleString "A_" with true
-utest isModuleString "__" with false
-utest isModuleString "a" with false
-utest isModuleString "_" with false
-utest isModuleString "aa" with false
-utest isModuleString "A*" with false
-utest isModuleString "1a" with false
-utest isModuleString "1" with false
-utest isModuleString "aA" with false
-utest isModuleString "" with false
-
-let isModuleCallString = lam s.
-  let parts = strSplit "." s in
-  let modules = init parts in
-  if null modules then false
-  else
-    and (all isModuleString modules) (isIdentifierString (last parts))
-
-let isModuleConString = lam s.
-  let parts = strSplit "." s in
-  let modules = init parts in
-  if null modules then false
-  else
-    and (all isModuleString modules) (isConString (last parts))
-
-utest isModuleCallString "Foo.bar" with true
-utest isModuleCallString "A.B.C.D.E.F.G.hello" with true
-utest isModuleCallString "Foo.Bar.foo" with true
-utest isModuleCallString "Foo.Bar.__" with true
-utest isModuleCallString "Foo.Bar._a" with true
-utest isModuleCallString "Foo.Bar._A" with true
-utest isModuleCallString "Foo.Bar._" with false
-utest isModuleCallString "Foo.Bar.A" with false
-utest isModuleCallString "Foo.Bar.*" with false
-utest isModuleCallString "a" with false
-utest isModuleCallString "A" with false
-utest isModuleCallString "_a" with false
-utest isModuleCallString "Foo.@" with false
-utest isModuleCallString "foo.bar" with false
-utest isModuleCallString "Foo.bar.foo" with false
-utest isModuleCallString "Foo.B@r.foo" with false
-utest isModuleCallString "foo.Bar.foo" with false
-
-utest isModuleConString "Foo.Bar" with true
-utest isModuleConString "A.B.C.D.E.F.G.Hello" with true
-utest isModuleConString "Foo.Bar.Foo" with true
-utest isModuleConString "Foo.Bar.__" with false
-utest isModuleConString "Foo.Bar._a" with false
-utest isModuleConString "Foo.Bar._A" with false
-utest isModuleConString "Foo.Bar._" with false
-utest isModuleConString "Foo.Bar.a" with false
-utest isModuleConString "Foo.Bar.*" with false
-utest isModuleConString "a" with false
-utest isModuleConString "A" with false
-utest isModuleConString "_a" with false
-utest isModuleConString "Foo.@" with false
-utest isModuleConString "foo.Bar" with false
-utest isModuleConString "Foo.bar.Foo" with false
-utest isModuleConString "Foo.B@r.Foo" with false
-utest isModuleConString "foo.Bar.Foo" with false
-
 let escapeVarString = lam s.
   let n = length s in
   if gti n 0 then
-    if isModuleCallString s then
-      s
+    let hd = head s in
+    let tl = tail s in
+    if or (neqi n 1) (isLowerAlpha hd) then
+      cons (escapeFirstChar hd) (map escapeChar tl)
     else
-      let hd = head s in
-      let tl = tail s in
-      if or (neqi n 1) (isLowerAlpha hd) then
-        cons (escapeFirstChar hd) (map escapeChar tl)
-      else
-        defaultIdentName
+      defaultIdentName
   else
     defaultIdentName
 
 let escapeConString = lam s.
   let n = length s in
   if gti n 0 then
-    if isModuleConString s then
-      s
+    let hd = head s in
+    let tl = tail s in
+    if or (neqi n 1) (isUpperAlpha hd) then
+      cons (escapeFirstConChar hd) (map escapeChar tl)
     else
-      let hd = head s in
-      let tl = tail s in
-      if or (neqi n 1) (isUpperAlpha hd) then
-        cons (escapeFirstConChar hd) (map escapeChar tl)
-      else
-        defaultConName
+      defaultConName
   else
     defaultConName
 
@@ -186,8 +106,6 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
-let _objTypeStr = "Obj.t"
-
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + FunTypePrettyPrint + VariantTypePrettyPrint +
@@ -209,14 +127,13 @@ lang OCamlTypePrettyPrint =
       match mapAccumL f env fields with (env,fields) then
         (env,join ["{", strJoin "; " fields, "}"])
       else never
-  | _ -> (env,_objTypeStr)
+  | _ -> (env, "Obj.t")
 end
 
 lang OCamlPrettyPrint =
   VarPrettyPrint + AppPrettyPrint + ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
-  CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
-  SeqPrettyPrint
+  CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
   sem pprintConName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeConName name)
@@ -229,18 +146,23 @@ lang OCamlPrettyPrint =
   | TmLam _ -> false
   | TmLet _ -> false
   | TmRecLets _ -> false
+  | TmApp _ -> false
+  | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
   | OTmRecord _ -> true
   | OTmConApp {args = []} -> true
   | OTmConApp _ -> false
   | OTmVariantTypeDecl _ -> false
+  | OTmVarExt _ -> true
+  | OTmConAppExt _ -> false
 
   sem patIsAtomic =
   | OPatRecord _ -> false
   | OPatTuple _ -> true
   | OPatCon {args = []} -> true
   | OPatCon _ -> false
+  | OPatConExt _ -> false
 
   sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
@@ -280,6 +202,9 @@ lang OCamlPrettyPrint =
   | CNeqf _ -> "(!=)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> show_char c
+  | CEqc _ -> "(=)"
+  | CChar2Int _ -> "int_of_char"
+  | CInt2Char _ -> "char_of_int"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->
@@ -302,6 +227,7 @@ lang OCamlPrettyPrint =
         else never
       else never
     else never
+  | OTmVarExt {ident = ident} -> (env, ident)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->
     match pprintConName env ident with (env, ident) then
@@ -314,6 +240,15 @@ lang OCamlPrettyPrint =
       match mapAccumL (pprintCode indent) env args with (env, args) then
         (env, join [ident, " (", strJoin ", " args, ")"])
       else never
+    else never
+  | OTmConAppExt {ident = ident, args = []} -> (env, ident)
+  | OTmConAppExt {ident = ident, args = [arg]} ->
+    match printParen ident env arg with (env, arg) then
+      (env, join [ident, " ", arg])
+    else never
+  | OTmConAppExt {ident = ident, args = args} ->
+    match mapAccumL (pprintCode indent) env args with (env, args) then
+      (env, join [ident, " (", strJoin ", " args, ")"])
     else never
   | TmLam {ident = id, body = b} ->
     match pprintVarName env id with (env,str) then
@@ -377,6 +312,21 @@ lang OCamlPrettyPrint =
                      pprintNewline indent, "in ", inexpr])
         else never
       else never
+    else never
+  | TmApp t ->
+    match pprintCode indent env t.lhs with (env,l) then
+      match pprintCode indent env t.rhs with (env,r) then
+        (env, join ["(", l, ") (", r, ")"])
+      else never
+    else never
+  | OTmArray t ->
+    match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
+                    env t.tms
+    with (env,tms) then
+      let merged =
+        strJoin (concat ";" (pprintNewline (pprintIncr indent))) tms
+      in
+      (env,join ["[| ", merged, " |]"])
     else never
   | OTmTuple {values = values} ->
     match mapAccumL (pprintCode indent) env values
@@ -460,6 +410,15 @@ lang OCamlPrettyPrint =
       match mapAccumL (getPatStringCode indent) env args with (env, args) then
         (env, join [ident, " (", strJoin ", " args, ")"])
       else never
+    else never
+  | OPatConExt {ident = ident, args = []} -> (env, ident)
+  | OPatConExt {ident = ident, args = [arg]} ->
+    match printPatParen indent env arg with (env, arg) then
+      (env, join [ident, " ", arg])
+    else never
+  | OPatConExt {ident = ident, args = args} ->
+    match mapAccumL (getPatStringCode indent) env args with (env, args) then
+      (env, join [ident, " (", strJoin ", " args, ")"])
     else never
 end
 

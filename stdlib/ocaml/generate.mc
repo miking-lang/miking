@@ -9,7 +9,6 @@ include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
-include "hashmap.mc"
 
 type GenerateEnv = {
   variants : Map Name Name,
@@ -37,51 +36,29 @@ let _emptyGenerateEnv = {
   records = mapEmpty _recordFieldCmp
 }
 
-let _opHashMap = lam prefix. lam ops.
-  let mkOp = lam op. nameSym (join [prefix, op]) in
-  foldl (lam a. lam op. hashmapInsert hashmapStrTraits op (mkOp op) a)
-        hashmapEmpty
-        ops
+let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
 
-let _op = lam opHashMap. lam op.
-  nvar_
-  (hashmapLookupOrElse hashmapStrTraits
-    (lam.
-      error (strJoin " " ["Operation", op, "not found"]))
-      op
-      opHashMap)
+let _symbOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
 
-let _seqOps = [
-  "create",
-  "empty",
-  "length",
-  "concat",
-  "get",
-  "set",
-  "cons",
-  "snoc",
-  "reverse",
-  "split_at"
-]
+let _floatOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
 
-let _seqOp = _op (_opHashMap "Boot.Intrinsics.Mseq." _seqOps)
+let _fileOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
 
-let _symbOps = [
-  "gensym",
-  "eqsym",
-  "hash"
-]
+let _ioOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
 
-let _symbOp = _op (_opHashMap "Boot.Intrinsics.Symb." _symbOps)
+let _sysOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
 
-let _floatOps = [
-  "floorfi",
-  "ceilfi",
-  "roundfi",
-  "string2float"
-]
+let _randOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
 
-let _floatOp = _op (_opHashMap "Boot.Intrinsics.FloatConversion." _floatOps)
+let _timeOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
+
+let _numTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.Num." op}
+
+let _numTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.Num." op}
+
+let _noNumTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.NoNum." op}
+
+let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 
 let _recordTypeFields : Type -> [String] = use RecordTypeAst in lam ty.
   match ty with TyRecord {fields = fields} then
@@ -100,48 +77,115 @@ let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap
   else never
 
 -- Construct a match expression that matches against an option
-let _someName = nameSym "Option.Some"
-let _noneName = nameSym "Option.None"
+let _someName = "Option.Some"
+let _noneName = "Option.None"
 let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneExpr.
   OTmMatch
   { target = target
   , arms =
-    [ (OPatCon {ident = _someName, args = [somePat]}, someExpr)
-    , (OPatCon {ident = _noneName, args = []}, noneExpr)]}
-let _some = use OCamlAst in lam val. OTmConApp {ident = _someName, args = [val]}
-let _none = use OCamlAst in OTmConApp {ident = _noneName, args = []}
+    [ (OPatConExt {ident = _someName, args = [somePat]}, someExpr)
+    , (OPatConExt {ident = _noneName, args = []}, noneExpr)]}
+let _some = use OCamlAst in lam val. OTmConAppExt {ident = _someName, args = [val]}
+let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
 let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
 
-lang OCamlGenerate = MExprAst + OCamlAst
-  sem generateConst =
-  -- Sequence intrinsics
-  | CCreate {} -> _seqOp "create"
-  | CLength {} -> _seqOp "length"
-  | CCons {} -> _seqOp "cons"
-  | CSnoc {} -> _seqOp "snoc"
-  | CGet {} -> _seqOp "get"
-  | CSet {} -> _seqOp "set"
-  | CSplitAt {} -> _seqOp "split_at"
-  | CReverse {} -> _seqOp "reverse"
-  -- Symbol intrinsics
-  | CGensym {} -> _symbOp "gensym"
-  | CEqsym {} -> _symbOp "eqsym"
-  | CSym2hash {} -> _symbOp "hash"
-  -- Int-Float Conversion intrinsics
-  | CFloorfi {} -> _floatOp "floorfi"
-  | CCeilfi {} -> _floatOp "ceilfi"
-  | CRoundfi {} -> _floatOp "roundfi"
-  | CString2float {} -> _floatOp "string2float"
-  | v -> TmConst { val = v }
+let _addiName = nameSym "addi"
+let _subiName = nameSym "subi"
+let _muliName = nameSym "muli"
+let _diviName = nameSym "divi"
+let _modiName = nameSym "modi"
+let _negiName = nameSym "negi"
+let _ltiName = nameSym "lti"
+let _leqiName = nameSym "leqi"
+let _gtiName = nameSym "gti"
+let _geqiName = nameSym "geqi"
+let _eqiName = nameSym "eqi"
+let _neqiName = nameSym "neqi"
+let _slliName = nameSym "slli"
+let _srliName = nameSym "srli"
+let _sraiName = nameSym "srai"
+let _addfName = nameSym "addf"
+let _subfName = nameSym "subf"
+let _mulfName = nameSym "mulf"
+let _divfName = nameSym "divf"
+let _negfName = nameSym "negf"
+let _ltfName = nameSym "ltf"
+let _leqfName = nameSym "leqf"
+let _gtfName = nameSym "gtf"
+let _geqfName = nameSym "geq"
+let _eqfName = nameSym "eqf"
+let _neqfName = nameSym "neqf"
+let _floorfiName = nameSym "floorfi"
+let _ceilfiName = nameSym "ceilfi"
+let _roundfiName = nameSym "roundfi"
+let _int2floatName = nameSym "int2float"
+let _string2floatName = nameSym "string2float"
+let _eqcName = nameSym "eqc"
+let _char2intName = nameSym "char2int"
+let _int2charName = nameSym "int2char"
+let _createName = nameSym "create"
+let _lengthName = nameSym "length"
+let _concatName = nameSym "concat"
+let _getName = nameSym "getName"
+let _setName = nameSym "setName"
+let _consName = nameSym "cons"
+let _snocName = nameSym "snoc"
+let _splitAtName = nameSym "splitAt"
+let _reverseName = nameSym "reverse"
+let _subsequenceName = nameSym "subsequence"
+let _ofArrayName = nameSym "of_array"
+let _printName = nameSym "print"
+let _readLineName = nameSym "readLine"
+let _readBytesAsStringName = nameSym "readBytesAsString"
+let _argvName = nameSym "argv"
+let _readFileName = nameSym "readFile"
+let _writeFileName = nameSym "writeFile"
+let _fileExistsName = nameSym "fileExists"
+let _deleteFileName = nameSym "deleteFile"
+let _errorName = nameSym "error"
+let _exitName = nameSym "exit"
+let _eqsymName = nameSym "eqsym"
+let _gensymName = nameSym "gensym"
+let _sym2hashName = nameSym "sym2hash"
+let _randIntUName = nameSym "randIntU"
+let _randSetSeedName = nameSym "randSetSeed"
+let _wallTimeMsName = nameSym "wallTime"
+let _sleepMsName = nameSym "sleepMs"
+let _mapEmptyName = nameSym "mapEmpty"
+let _mapInsertName = nameSym "mapInsert"
+let _mapRemoveName = nameSym "mapRemove"
+let _mapFindName = nameSym "mapFind"
+let _mapAnyName = nameSym "mapAny"
+let _mapMemName = nameSym "mapMem"
+let _mapMapName = nameSym "mapMap"
+let _mapMapWithKeyName = nameSym "mapMapWithKey"
+let _mapBindingsName = nameSym "mapBindings"
+let _tensorCreateName = nameSym "tensorCreate"
+let _tensorGetExnName = nameSym "tensorGetExn"
+let _tensorSetExnName = nameSym "tensorSetExn"
+let _tensorRankName = nameSym "tensorRank"
+let _tensorShapeName = nameSym "tensorShape"
+let _tensorReshapeExnName = nameSym "tensorReshapeExn"
+let _tensorCopyExnName = nameSym "tensorCopyExn"
+let _tensorSliceExnName = nameSym "tensorSliceExn"
+let _tensorSubExnName = nameSym "tensorSubExn"
+let _tensorIteriName = nameSym "tensorIteri"
+let _bootParserParseMExprStringName = nameSym "bootParserParseMExprString"
+let _bootParserGetIdName = nameSym "bootParserGetId"
+let _bootParserGetTermName = nameSym "bootParserGetTerm"
+let _bootParserGetStringName = nameSym "bootParserGetString"
+let _bootParserGetIntName = nameSym "bootParserGetInt"
+let _bootParserGetFloatName = nameSym "bootParserGetFloat"
+let _bootParserGetListLengthName = nameSym "bootParserGetListLength"
+let _bootParserGetConstName = nameSym "bootParserGetConst"
+let _bootParserGetPatName = nameSym "bootParserGetPat"
+let _bootParserGetInfoName = nameSym "bootParserGetInfo"
 
-  sem generate (env : GenerateEnv) =
+lang OCamlGenerate = MExprAst + OCamlAst
+  sem generate =
   | TmSeq {tms = tms} ->
-    let tms = map (generate env) tms in
-    foldr (lam tm. lam a. appSeq_ (_seqOp "cons") [tm, a])
-          (_seqOp "empty")
-          tms
-  | TmConst {val = val} -> generateConst val
+    app_ (nvar_ _ofArrayName) (OTmArray {tms = map generate tms})
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     let tname = nameSym "_target" in
     match generatePat env (ty target) tname pat with (nameMap, wrap) then
@@ -178,13 +222,13 @@ lang OCamlGenerate = MExprAst + OCamlAst
       match generatePat env targetTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
-            (nlet_ n tyunknown_ (appf2_ (_seqOp "get") (nvar_ targetName) (int_ i)))
+            (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
             (innerWrap cont)
         in (names, wrap)
       else never in
     match unzip (mapi genOne pats) with (allNames, allWraps) then
       let wrap = lam cont.
-        _if (eqi_ (app_ (_seqOp "length") (nvar_ targetName)) (int_ (length pats)))
+        _if (eqi_ (length_ (nvar_ targetName)) (int_ (length pats)))
           (foldr (lam f. lam v. f v) cont allWraps)
           _none in
       ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
@@ -204,7 +248,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       match generatePat env targetTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
-            (nlet_ n tyunknown_ (appf2_ (_seqOp "get") (nvar_ targetName) (int_ i)))
+            (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
             (innerWrap cont)
         in (names, wrap)
       else never in
@@ -213,12 +257,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
         let names = foldl mergeNames assocEmpty (concat preNames postNames) in
         let names = match middle with PName n then assocInsert {eq=nameEqSym} n midName names else names in
         let wrap = lam cont.
-          _if (lti_ (appf1_ (_seqOp "length") (nvar_ targetName)) (int_ minLen))
+          _if (lti_ (length_ (nvar_ targetName)) (int_ minLen))
             _none
             (_tuplet [npvar_ preName, npvar_ tempName]
-              (appf2_ (_seqOp "split_at") (nvar_ targetName) (int_ (length prefix)))
+              (splitat_ (nvar_ targetName) (int_ (length prefix)))
               (_tuplet [npvar_ midName, npvar_ postName]
-                (appf2_ (_seqOp "split_at") (nvar_ tempName) (subi_ (appf1_ (_seqOp "length") (nvar_ tempName)) (int_ (length postfix))))
+                (splitat_ (nvar_ tempName) (subi_ (length_ (nvar_ tempName)) (int_ (length postfix))))
                 (foldr apply (foldr apply cont postWraps) preWraps))) in
         (names, wrap)
       else never
@@ -460,23 +504,244 @@ lang OCamlDeclGenerate =
     else never
 end
 
-let _objReprName = nameSym "Obj.repr"
+recursive let _isIntrinsicApp = use OCamlAst in
+  lam t.
+    match t with TmApp {lhs = TmConst _} then
+      true
+    else match t with TmApp {lhs = (TmApp _) & lhs} then
+      _isIntrinsicApp lhs
+    else false
+end
+
 let _objTName = nameSym "Obj.t"
-let _objObjName = nameSym "Obj.obj"
+let _objRepr = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
+let _objObj = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
 
-let _objRepr = lam t. app_ (nvar_ _objReprName) t
-let _objObj = lam t. app_ (nvar_ _objObjName) t
+let _preamble =
+  let objObjVar = lam a. _objObj (nvar_ a) in
 
-lang OCamlObjWrap = MExprAst
+  let mkBody = lam op. lam args.
+    nulams_ args (_objRepr (foldl (lam t. lam a. t (objObjVar a)) op args))
+  in
+
+  let intr0 = lam name. lam op.
+    nulet_ name (mkBody op [])
+  in
+
+  let intr1 = lam name. lam op.
+      nulet_ name
+        (let a = nameSym "a" in
+         mkBody op [a])
+  in
+
+  let intr2 = lam name. lam op.
+      nulet_ name
+        (let a = nameSym "a" in
+         let b = nameSym "b" in
+         mkBody op [a, b])
+  in
+
+  let intr3 = lam name. lam op.
+      nulet_ name
+        (let a = nameSym "a" in
+         let b = nameSym "b" in
+         let c = nameSym "c" in
+         mkBody op [a, b, c])
+  in
+
+  bindall_ [
+      intr2 _addiName addi_
+    , intr2 _subiName subi_
+    , intr2 _muliName muli_
+    , intr2 _diviName divi_
+    , intr2 _modiName modi_
+    , intr1 _negiName negi_
+    , intr2 _ltiName lti_
+    , intr2 _leqiName leqi_
+    , intr2 _gtiName gti_
+    , intr2 _geqiName geqi_
+    , intr2 _eqiName eqi_
+    , intr2 _neqiName neqi_
+    , intr2 _slliName slli_
+    , intr2 _srliName srli_
+    , intr2 _sraiName srai_
+    , intr2 _addfName addf_
+    , intr2 _subfName subf_
+    , intr2 _mulfName mulf_
+    , intr2 _divfName divf_
+    , intr1 _negfName negf_
+    , intr2 _ltfName ltf_
+    , intr2 _leqfName leqf_
+    , intr2 _gtfName gtf_
+    , intr2 _geqfName geqf_
+    , intr2 _eqfName eqf_
+    , intr2 _neqfName neqf_
+    , intr1 _floorfiName (appf1_ (_floatOp "floorfi"))
+    , intr1 _ceilfiName (appf1_ (_floatOp "ceilfi"))
+    , intr1 _roundfiName (appf1_ (_floatOp "roundfi"))
+    , intr1 _int2floatName int2float_
+    , intr1 _string2floatName (appf1_ (_floatOp "string2float"))
+    , intr2 _eqcName eqc_
+    , intr1 _char2intName char2int_
+    , intr1 _int2charName int2char_
+    , intr2 _createName (appf2_ (_seqOp "create"))
+    , intr1 _lengthName (appf1_ (_seqOp "length"))
+    , intr2 _concatName (appf2_ (_seqOp "concat"))
+    , intr2 _getName (appf2_ (_seqOp "get"))
+    , intr3 _setName (appf3_ (_seqOp "set"))
+    , intr2 _consName (appf2_ (_seqOp "cons"))
+    , intr2 _snocName (appf2_ (_seqOp "snoc"))
+    , intr2 _splitAtName (appf2_ (_seqOp "split_at"))
+    , intr1 _reverseName (appf1_ (_seqOp "reverse"))
+    , intr3 _subsequenceName (appf3_ (_seqOp "subsequence"))
+    , intr1 _ofArrayName (appf1_ (_seqOp "Helpers.of_array"))
+    , intr1 _printName (appf1_ (_ioOp "print"))
+    , intr1 _readLineName (appf1_ (_ioOp "read_line"))
+    , intr0 _argvName (_sysOp "argv")
+    , intr1 _readFileName (appf1_ (_fileOp "read"))
+    , intr2 _writeFileName (appf2_ (_fileOp "write"))
+    , intr1 _fileExistsName (appf1_ (_fileOp "exists"))
+    , intr1 _deleteFileName (appf1_ (_fileOp "delete"))
+    , intr1 _errorName (appf1_ (_sysOp "error"))
+    , intr1 _exitName (appf1_ (_sysOp "exit"))
+    , intr2 _eqsymName (appf2_ (_symbOp "eqsym"))
+    , intr1 _gensymName (appf1_ (_symbOp "gensym"))
+    , intr1 _sym2hashName (appf1_ (_symbOp "hash"))
+    , intr2 _randIntUName (appf2_ (_randOp "int_u"))
+    , intr1 _randSetSeedName (appf1_ (_randOp "set_seed"))
+    , intr1 _wallTimeMsName (appf1_ (_timeOp "get_wall_time_ms"))
+    , intr1 _sleepMsName (appf1_ (_timeOp "sleep_ms"))
+    , intr1 _bootParserParseMExprStringName (appf1_ (_bootparserOp "parseMExprString"))
+    , intr1 _bootParserGetIdName (appf1_ (_bootparserOp "getId"))
+    , intr2 _bootParserGetTermName (appf2_ (_bootparserOp "getTerm"))
+    , intr2 _bootParserGetStringName (appf2_ (_bootparserOp "getString"))
+    , intr2 _bootParserGetIntName (appf2_ (_bootparserOp "getInt"))
+    , intr2 _bootParserGetFloatName (appf2_ (_bootparserOp "getFloat"))
+    , intr2 _bootParserGetListLengthName (appf2_ (_bootparserOp "getListLength"))
+    , intr2 _bootParserGetConstName (appf2_ (_bootparserOp "getConst"))
+    , intr2 _bootParserGetPatName (appf2_ (_bootparserOp "getPat"))
+    , intr1 _bootParserGetInfoName (appf1_ (_bootparserOp "getInfo"))
+  ]
+
+lang OCamlObjWrap = MExprAst + OCamlAst
+  sem intrinsic2name =
+  | CAddi _ -> nvar_ _addiName
+  | CSubi _ -> nvar_ _subiName
+  | CMuli _ -> nvar_ _muliName
+  | CDivi _ -> nvar_ _diviName
+  | CModi _ -> nvar_ _modiName
+  | CNegi _ -> nvar_ _negiName
+  | CLti _ -> nvar_ _ltiName
+  | CLeqi _ -> nvar_ _leqiName
+  | CGti _ -> nvar_ _gtiName
+  | CGeqi _ -> nvar_ _geqiName
+  | CEqi _ -> nvar_ _eqiName
+  | CNeqi _ -> nvar_ _neqiName
+  | CSlli _ -> nvar_ _slliName
+  | CSrli _ -> nvar_ _srliName
+  | CSrai _ -> nvar_ _sraiName
+  | CAddf _ -> nvar_ _addfName
+  | CSubf _ -> nvar_ _subfName
+  | CMulf _ -> nvar_ _mulfName
+  | CDivf _ -> nvar_ _divfName
+  | CNegf _ -> nvar_ _negfName
+  | CLtf _ -> nvar_ _ltfName
+  | CLeqf _ -> nvar_ _leqfName
+  | CGtf _ -> nvar_ _gtfName
+  | CGeqf _ -> nvar_ _geqfName
+  | CEqf _ -> nvar_ _eqfName
+  | CNeqf _ -> nvar_ _neqfName
+  | CFloorfi _ -> nvar_ _floorfiName
+  | CCeilfi _ -> nvar_ _ceilfiName
+  | CRoundfi _ -> nvar_ _roundfiName
+  | CInt2float _ -> nvar_ _int2floatName
+  | CString2float _ -> nvar_ _string2floatName
+  | CEqc _ -> nvar_ _eqcName
+  | CChar2Int _ -> nvar_ _char2intName
+  | CInt2Char _ -> nvar_ _int2charName
+  | CCreate _ -> nvar_ _createName
+  | CLength _ -> nvar_ _lengthName
+  | CConcat _ -> nvar_ _concatName
+  | CGet _ -> nvar_ _getName
+  | CSet _ -> nvar_ _setName
+  | CCons _ -> nvar_ _consName
+  | CSnoc _ -> nvar_ _snocName
+  | CSplitAt _ -> nvar_ _splitAtName
+  | CReverse _ -> nvar_ _reverseName
+  | CSubsequence _ -> nvar_ _subsequenceName
+  | CPrint _ -> nvar_ _printName
+  | CReadLine _ -> nvar_ _readLineName
+  | CArgv _ -> nvar_ _argvName
+  | CFileRead _ -> nvar_ _readFileName
+  | CFileWrite _ -> nvar_ _writeFileName
+  | CFileExists _ -> nvar_ _fileExistsName
+  | CFileDelete _ -> nvar_ _deleteFileName
+  | CError _ -> nvar_ _errorName
+  | CExit _ -> nvar_ _exitName
+  | CEqsym _ -> nvar_ _eqsymName
+  | CGensym _ -> nvar_ _gensymName
+  | CSym2hash _ -> nvar_ _sym2hashName
+  | CRandIntU _ -> nvar_ _randIntUName
+  | CRandSetSeed _ -> nvar_ _randSetSeedName
+  | CWallTimeMs _ -> nvar_ _wallTimeMsName
+  | CSleepMs _ -> nvar_ _sleepMsName
+  | CMapEmpty _ -> nvar_ _mapEmptyName
+  | CMapInsert _ -> nvar_ _mapInsertName
+  | CMapRemove _ -> nvar_ _mapRemoveName
+  | CMapFind _ -> nvar_ _mapFindName
+  | CMapAny _ -> nvar_ _mapAnyName
+  | CMapMem _ -> nvar_ _mapMemName
+  | CMapMap _ -> nvar_ _mapMapName
+  | CMapMapWithKey _ -> nvar_ _mapMapWithKeyName
+  | CMapBindings _ -> nvar_ _mapBindingsName
+  | CTensorCreate _ -> nvar_ _tensorCreateName
+  | CTensorGetExn _ -> nvar_ _tensorGetExnName
+  | CTensorSetExn _ -> nvar_ _tensorSetExnName
+  | CTensorRank _ -> nvar_ _tensorRankName
+  | CTensorShape _ -> nvar_ _tensorShapeName
+  | CTensorReshapeExn _ -> nvar_ _tensorReshapeExnName
+  | CTensorCopyExn _ -> nvar_ _tensorCopyExnName
+  | CTensorSliceExn _ -> nvar_ _tensorSliceExnName
+  | CTensorSubExn _ -> nvar_ _tensorSubExnName
+  | CTensorIteri _ -> nvar_ _tensorIteriName
+  | CBootParserParseMExprString _ -> nvar_ _bootParserParseMExprStringName
+  | CBootParserGetId _ -> nvar_ _bootParserGetIdName
+  | CBootParserGetTerm _ -> nvar_ _bootParserGetTermName
+  | CBootParserGetString _ -> nvar_ _bootParserGetStringName
+  | CBootParserGetInt _ -> nvar_ _bootParserGetIntName
+  | CBootParserGetFloat _ -> nvar_ _bootParserGetFloatName
+  | CBootParserGetListLength _ -> nvar_ _bootParserGetListLengthName
+  | CBootParserGetConst _ -> nvar_ _bootParserGetConstName
+  | CBootParserGetPat _ -> nvar_ _bootParserGetPatName
+  | CBootParserGetInfo _ -> nvar_ _bootParserGetInfoName
+  | t -> dprintLn t; error "Intrinsic not implemented"
+
   sem objWrapRec =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
     _objRepr t
-  | TmConst {val = c} -> c
+  | TmApp t ->
+    if _isIntrinsicApp t.lhs then
+      TmApp {{t with lhs = objWrapRec t.lhs}
+                with rhs = _objRepr (objWrapRec t.rhs)}
+    else
+      TmApp {{t with lhs = objWrapRec t.lhs}
+                with rhs = objWrapRec t.rhs}
+  | TmConst {val = c} ->
+    intrinsic2name c
+  | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
+  | OTmMatch t ->
+    OTmMatch {{t with target = _objObj (objWrapRec t.target)}
+                 with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
+
+  sem _objWrapNoPremable =
+  | t -> objWrapRec (_objObj t)
 
   sem objWrap =
   | t ->
-    _objObj (objWrapRec t)
+    bind_ _preamble (_objWrapNoPremable t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlDeclGenerate + OCamlPrettyPrint +
@@ -506,6 +771,14 @@ let ocamlEval = lam p.
   parseAsMExpr out
 in
 
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the premable here the make
+-- the test run faster. This is an ugly hack!
+let preambleStr =
+  let str = expr2str (bind_ _preamble (int_ 0)) in
+  let len = length str in
+  subsequence str 0 (subi len 1)
+in
+
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
@@ -519,7 +792,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
       OTmVariantTypeDecl {t with inexpr = ocamlAstWithPrinting t.inexpr printTerm}
     else app_ printTerm ast
   in
-  let printfVar = nvar_ (nameSym "Printf.printf") in
+  let printfVar = OTmVarExit {ident = "Printf.printf"} in
   let ocamlAst = ocamlAstWithPrinting ocamlAst in
   match mexprVal with TmConst t then
     match t.val with CInt _ then
@@ -567,197 +840,197 @@ let stripTypeDecls = lam t.
 in
 
 -- Match
---let matchChar1 = symbolize
---  (match_ (char_ 'a')
---    (pchar_ 'a')
---    true_
---    false_) in
---utest matchChar1 with generateEmptyEnv matchChar1 using sameSemantics in
---
---let matchChar2 = symbolize
---  (match_ (char_ 'a')
---    (pchar_ 'b')
---    true_
---    false_) in
---utest matchChar2 with generateEmptyEnv matchChar2 using sameSemantics in
---
---let matchSeq = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest matchSeq with generateEmptyEnv matchSeq using sameSemantics in
---
---let noMatchSeq1 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeq1 with generateEmptyEnv noMatchSeq1 using sameSemantics in
---
---let noMatchSeqLen = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeqLen with generateEmptyEnv noMatchSeqLen using sameSemantics in
---
---let noMatchSeqLen2 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeqLen2 with generateEmptyEnv noMatchSeqLen2 using sameSemantics in
---
---let matchOr1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr1 with generateEmptyEnv matchOr1 using sameSemantics in
---
---let matchOr2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 1])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr2 with generateEmptyEnv matchOr2 using sameSemantics in
---
---let matchOr3 = symbolize
---  (match_ (seq_ [int_ 3, int_ 1])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr3 with generateEmptyEnv matchOr3 using sameSemantics in
---
---let matchNestedOr1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr1 with generateEmptyEnv matchNestedOr1 using sameSemantics in
---
---let matchNestedOr2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 1])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr2 with generateEmptyEnv matchNestedOr2 using sameSemantics in
---
---let matchNestedOr3 = symbolize
---  (match_ (seq_ [int_ 3, int_ 7])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr3 with generateEmptyEnv matchNestedOr3 using sameSemantics in
---
---let matchNestedOr4 = symbolize
---  (match_ (seq_ [int_ 4, int_ 7])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr4 with generateEmptyEnv matchNestedOr4 using sameSemantics in
---
---let matchNot1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---    true_
---    false_) in
---utest matchNot1 with generateEmptyEnv matchNot1 using sameSemantics in
---
---let matchNot2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2])
---    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---    true_
---    false_) in
---utest matchNot2 with generateEmptyEnv matchNot2 using sameSemantics in
---
---let matchAnd1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---    (int_ 53)) in
---utest matchAnd1 with generateEmptyEnv matchAnd1 using sameSemantics in
---
---let matchAnd2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---    (int_ 53)) in
---utest matchAnd2 with generateEmptyEnv matchAnd2 using sameSemantics in
---
---let matchAnd3 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
---    (var_ "a")
---    (int_ 53)) in
---utest matchAnd3 with generateEmptyEnv matchAnd3 using sameSemantics in
---
---let matchAnd4 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
---    (var_ "a")
---    (int_ 53)) in
---utest matchAnd4 with generateEmptyEnv matchAnd4 using sameSemantics in
---
---let matchSeqEdge1 = symbolize
---  (match_ (seq_ [int_ 1])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge1 with generateEmptyEnv matchSeqEdge1 using sameSemantics in
---
---let matchSeqEdge2 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge2 with generateEmptyEnv matchSeqEdge2 using sameSemantics in
---
---let matchSeqEdge3 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge3 with generateEmptyEnv matchSeqEdge3 using sameSemantics in
---
---let matchSeqEdge4 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
---    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge4 with generateEmptyEnv matchSeqEdge4 using sameSemantics in
---
---let matchSeqEdge5 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
---    (match_ (var_ "b")
---      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---      (addi_ (var_ "a") (var_ "c"))
---      (int_ 84))
---    (int_ 75)) in
---utest matchSeqEdge5 with generateEmptyEnv matchSeqEdge5 using sameSemantics in
---
---let matchSeqEdge6 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
---    (match_ (var_ "b")
---      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---      (addi_ (var_ "a") (var_ "c"))
---      (int_ 84))
---    (int_ 75)) in
---utest matchSeqEdge6 with generateEmptyEnv matchSeqEdge6 using sameSemantics in
---
---let matchSeqEdge7 = symbolize
---  (match_ (seq_ [int_ 1])
---    (pseqedgew_ [pvar_ "a"] [])
---    (var_ "a")
---    (int_ 75)) in
---utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
+let matchChar1 = symbolize
+ (match_ (char_ 'a')
+   (pchar_ 'a')
+   true_
+   false_) in
+utest matchChar1 with generateEmptyEnv matchChar1 using sameSemantics in
+
+ let matchChar2 = symbolize
+   (match_ (char_ 'a')
+     (pchar_ 'b')
+     true_
+     false_) in
+ utest matchChar2 with generateEmptyEnv matchChar2 using sameSemantics in
+
+let matchSeq = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest matchSeq with generateEmptyEnv matchSeq using sameSemantics in
+
+let noMatchSeq1 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeq1 with generateEmptyEnv noMatchSeq1 using sameSemantics in
+
+let noMatchSeqLen = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen with generateEmptyEnv noMatchSeqLen using sameSemantics in
+
+let noMatchSeqLen2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen2 with generateEmptyEnv noMatchSeqLen2 using sameSemantics in
+
+let matchOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr1 with generateEmptyEnv matchOr1 using sameSemantics in
+
+let matchOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr2 with generateEmptyEnv matchOr2 using sameSemantics in
+
+let matchOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr3 with generateEmptyEnv matchOr3 using sameSemantics in
+
+let matchNestedOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr1 with generateEmptyEnv matchNestedOr1 using sameSemantics in
+
+let matchNestedOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr2 with generateEmptyEnv matchNestedOr2 using sameSemantics in
+
+let matchNestedOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr3 with generateEmptyEnv matchNestedOr3 using sameSemantics in
+
+let matchNestedOr4 = symbolize
+  (match_ (seq_ [int_ 4, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr4 with generateEmptyEnv matchNestedOr4 using sameSemantics in
+
+let matchNot1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot1 with generateEmptyEnv matchNot1 using sameSemantics in
+
+let matchNot2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot2 with generateEmptyEnv matchNot2 using sameSemantics in
+
+let matchAnd1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd1 with generateEmptyEnv matchAnd1 using sameSemantics in
+
+let matchAnd2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd2 with generateEmptyEnv matchAnd2 using sameSemantics in
+
+let matchAnd3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd3 with generateEmptyEnv matchAnd3 using sameSemantics in
+
+let matchAnd4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd4 with generateEmptyEnv matchAnd4 using sameSemantics in
+
+let matchSeqEdge1 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge1 with generateEmptyEnv matchSeqEdge1 using sameSemantics in
+
+let matchSeqEdge2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge2 with generateEmptyEnv matchSeqEdge2 using sameSemantics in
+
+let matchSeqEdge3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge3 with generateEmptyEnv matchSeqEdge3 using sameSemantics in
+
+let matchSeqEdge4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
+    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge4 with generateEmptyEnv matchSeqEdge4 using sameSemantics in
+
+let matchSeqEdge5 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge5 with generateEmptyEnv matchSeqEdge5 using sameSemantics in
+
+let matchSeqEdge6 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge6 with generateEmptyEnv matchSeqEdge6 using sameSemantics in
+
+let matchSeqEdge7 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedgew_ [pvar_ "a"] [])
+    (var_ "a")
+    (int_ 75)) in
+utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
 
 let intEither = nameSym "IntEither" in
 let intEitherTy = ntyvar_ intEither in
@@ -1031,7 +1304,7 @@ utest shiftInt2 with generateEmptyEnv shiftInt2 using sameSemantics in
 let shiftInt3 = srai_ (int_ 5) (int_ 2) in
 utest shiftInt3 with generateEmptyEnv shiftInt3 using sameSemantics in
 
--- Floats
+---- Floats
 let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
 utest addFloat1 with generateEmptyEnv addFloat1 using sameSemantics in
 
@@ -1067,8 +1340,20 @@ utest compareFloat6 with generateEmptyEnv compareFloat6 using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
-utest charLiteral with generateEmptyEnv charLiteral
-using sameSemantics in
+utest charLiteral with generateEmptyEnv charLiteral using sameSemantics in
+
+let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
+utest compareChar1 with generateEmptyEnv compareChar1 using sameSemantics in
+
+let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
+utest compareChar2 with generateEmptyEnv compareChar2 using sameSemantics in
+
+let testCharToInt = char2int_ (char_ '0') in
+utest testCharToInt with generateEmptyEnv testCharToInt using sameSemantics in
+
+let testIntToChar = int2char_ (int_ 48) in
+utest testIntToChar with generateEmptyEnv testIntToChar using sameSemantics in
+
 
 -- Abstractions
 let fun =
@@ -1088,7 +1373,7 @@ in
 utest funShadowed with generateEmptyEnv funShadowed using sameSemantics in
 
 -- Lets
-let testLet =
+ let testLet =
   symbolize
   (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
 in
@@ -1172,6 +1457,16 @@ utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 utest int_ 2 with generateEmptyEnv snd using sameSemantics in
 utest int_ 1 with generateEmptyEnv thrd using sameSemantics in
 
+let testSeq = seq_ [int_ 1, int_ 2, int_ 3] in
+let testSubseq1 = subsequence_ testSeq (int_ 0) (int_ 2) in
+let testSubseq2 = subsequence_ testSeq (int_ 1) (int_ 2) in
+let testSubseq3 = subsequence_ testSeq (int_ 2) (int_ 100) in
+let fst = get_ testSubseq3 (int_ 0) in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq1) using sameSemantics in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
+utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
 
@@ -1191,87 +1486,47 @@ utest testRoundfi with generateEmptyEnv testRoundfi using sameSemantics in
 let testInt2float = int2float_ (int_ 1) in
 utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
 
+let testString2float = string2float_ (str_ "1.5") in
+utest testString2float with generateEmptyEnv testString2float using sameSemantics in
+
 -- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
 -- let testString2float = string2float_ (str_ "1.5") in
 -- utest testString2float with generate testString2float using sameSemantics in
 let x = nameSym "x" in
 let y = nameSym "y" in
 let z = nameSym "z" in
-/-
-let test1 = bindall_ [
-  nulet_ x unit_,
-  int_ 0
-] in
-utest test1 with generate (generateDecl (typeAnnot test1)) using sameSemantics in
 
-let test2 = bindall_ [
-  nulet_ x (record_ [("a", record_ []), ("b", tuple_ [int_ 1, int_ 2])]),
-  --nulet_ y (nrecordproj_ (nameNoSym "a") "a" (nvar_ x)),
-  --nulet_ z (tupleproj_ 0 (nvar_ y)),
-  int_ 0
-] in
-let t = generate (generateDecl (typeAnnot test2)) in
-let _ = printLn (expr2str t) in
+-- File operations
+let testFileExists = fileExists_ (str_ "test_file_ops") in
+utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 
-let expr = nameSym "Expr" in
-let exprty = ntyvar_ expr in
-let cint = nameSym "CInt" in
-let tmconst = nameSym "TmConst" in
-let pair = nameSym "Pair" in
+-- -- IO operations
+-- let testPrint = print_ (str_ "tested print") in
+-- utest testPrint with generate testPrint using sameSemantics in
 
-let pat = npcon_ pair (pvar_ "t") in
-let test3 = bindall_ [
-  ntype_ expr tyunknown_,
-  ncondef_ cint (tyarrow_ tyint_ exprty),
-  ncondef_ tmconst (tyarrow_ (tyrecord_ [("val", exprty)]) exprty),
-  ncondef_ pair (tyarrow_ (tyrecord_ [("lhs", exprty), ("rhs", exprty)]) exprty),
-  nulet_ y (nconapp_ pair (record_ [
-    ("lhs", nconapp_ cint (int_ 4)),
-    ("rhs", nconapp_ tmconst (record_ [
-      ("val", nconapp_ cint (int_ 2))
-    ]))
-  ])),
-  match_ (nvar_ y) pat (int_ 1) (int_ 0)
-] in
-let t = generate (generateDecl (typeAnnot (symbolize test3))) in
-let _x = printLn (expr2str t) in
-let pat = prec_ [("a", pvar_ "a")] in
-let t = bindall_ [
-  nulet_ x (record_ [("a", int_ 1), ("b", float_ 0.0)]),
-  match_ (nvar_ x) pat (var_ "a") (int_ 0)
-] in
-let pat = prec_ [("a", prec_ [("x", pvar_ "m")]), ("b", prec_ [("w", pvar_ "n")])] in
-let t = bindall_ [
-  nulet_ x (record_ [
-    ("a", record_ [("x", int_ 2), ("y", str_ "")]),
-    ("b", record_ [("z", char_ 'a'), ("w", int_ 5)])
-  ]),
-  match_ (nvar_ x) pat (addi_ (var_ "m") (var_ "n")) (int_ 0)
-] in
--/
-
-let intopt = nameSym "IntResult" in
-let intoptty = ntyvar_ intopt in
-let ok = nameSym "Ok" in
-let err = nameSym "Err" in
-let pat = npcon_ ok (pvar_ "n") in
-let t = bindall_ [
-  ntype_ intopt tyunknown_,
-  ncondef_ ok (tyarrow_ tyint_ intoptty),
-  ncondef_ err (tyarrow_ tyunit_ intoptty),
-  nulet_ x (nconapp_ ok (int_ 2)),
-  match_ (nvar_ x) pat (var_ "n") (int_ 0)
-] in
-
-let #var"" =
-  use MExprPrettyPrint in
-  printLn (expr2str t)
+-- Random number generation operations
+let testSeededRandomNumber =
+ symbolize
+ (bindall_ [ulet_ "_" (randSetSeed_ (int_ 42)),
+            randIntU_ (int_ 0) (int_ 10)])
 in
-printLn "==========" ;
-let t = symbolize t in
-let t = typeAnnot t in
-match generateDecl t with (t, env) then
-  let t = generate env t in
-  let t = expr2str t in
-  printLn t
-else never
+utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
+using sameSemantics in
+
+-- Time operations
+
+-- NOTE(larshum, 2020-12-14): Cannot test time operations until unit types
+-- are supported.
+
+-- let testWallTimeMs = wallTimeMs_ unit_ in
+-- utest testWallTimeMs with generateEmptyEnv testWallTimeMs using sameSemantics in
+
+-- let testSleepMs = sleepMs_ (int_ 10) in
+-- utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
+
+-- TODO(oerikss, 2020-12-14): Sys operations are not tested
+
+-- TODO(larshum, 2021-03-06): Add tests for boot parser, map and tensor
+-- intrinsics
+
+()

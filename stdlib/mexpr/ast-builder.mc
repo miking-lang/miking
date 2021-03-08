@@ -298,6 +298,10 @@ let ulams_ = use MExprAst in
   lam idents. lam body.
   foldr (lam s. lam acc. ulam_ s acc) body idents
 
+let nulams_ = use MExprAst in
+  lam names. lam body.
+  foldr (lam n. lam acc. nulam_ n acc) body names
+
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn,
@@ -587,6 +591,9 @@ let set_ = use MExprAst in
   lam s. lam i. lam v.
   appf3_ (const_ (CSet ())) s i v
 
+let empty_ = use MExprAst in
+  seq_ []
+
 let cons_ = use MExprAst in
   lam x. lam s.
   appf2_ (const_ (CCons ())) x s
@@ -614,6 +621,10 @@ let splitat_ = use MExprAst in
 let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (const_ (CCreate ())) n f
+
+let subsequence_ = use MExprAst in
+  lam s. lam off. lam n.
+  appf3_ (const_ (CSubsequence ())) s off n
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in
@@ -661,8 +672,8 @@ let deleteFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileDelete ())) f
 
 -- I/O operations
-let printString_ = use MExprAst in
-  lam s. app_ (const_ (CPrintString ())) s
+let print_ = use MExprAst in
+  lam s. app_ (const_ (CPrint ())) s
 
 let readLine_ = use MExprAst in
   lam u. app_ (const_ (CReadLine ())) u
@@ -692,3 +703,42 @@ let wallTimeMs_ = use MExprAst in
 
 let sleepMs_ = use MExprAst in
   lam n. appf1_ (const_ (CSleepMs ())) n
+
+-- Bootparser
+let bootParserParseMExprString_ = use MExprAst in
+  lam str. appf1_ (const_ (CBootParserParseMExprString ())) str
+
+let bootParserGetId_ = use MExprAst in
+  lam pt. appf1_ (const_ (CBootParserGetId ())) pt
+
+let bootParserGetTerm_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetTerm ())) pt n
+
+let bootParserGetString_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetString ())) pt n
+
+let bootParserGetInt_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInt ())) pt n
+
+let bootParserGetFloat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetFloat ())) pt n
+
+let bootParserGetListLength_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetListLength ())) pt n
+
+let bootParserGetConst_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetConst ())) pt n
+
+let bootParserGetPat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetPat ())) pt n
+
+let bootParserGetInfo_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInfo ())) pt n

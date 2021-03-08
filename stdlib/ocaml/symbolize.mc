@@ -17,7 +17,7 @@ lang OCamlSym =
   + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
   + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData + OCamlRecord
   + UnknownTypeSym + IntTypeSym + BoolTypeSym + FloatTypeSym + CharTypeSym
-  + RecordTypeSym + VarTypeSym
+  + RecordTypeSym + VarTypeSym + OCamlExternal
 
   sem symbolizeExpr (env : Env) =
   | OTmVariantTypeDecl t ->
@@ -54,6 +54,8 @@ lang OCamlSym =
   | OTmRecord t ->
     let bindings = map (lam b. (b.0, symbolizeExpr env b.1)) t.bindings in
     OTmRecord {t with bindings = bindings}
+  | OTmVarExt t -> t
+  | OTmConAppExt ({ args = args } & t) -> OTmConAppExt {t with args = map (symbolizeExpr env) args}
 
   sem symbolizePat (env : Env) (patEnv : Env) =
   | OPatTuple { pats = pats } ->
@@ -73,6 +75,10 @@ lang OCamlSym =
         (patEnv, OPatCon {{t with ident = ident}
                            with args = args})
       else never
+    else never
+  | OPatConExt ({ args = pats } & t) ->
+    match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
+      (patEnv, OPatConExt { t with args = pats })
     else never
   | OPatRecord t ->
     let symf = lam patEnv. lam _i. lam p. symbolizePat env patEnv p in
