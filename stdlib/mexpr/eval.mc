@@ -1722,24 +1722,24 @@ utest
 with tuple_ [int_ 4, float_ 3.14, int_ 4] in
 
 -- Tensors
-let testTensors = lam vs.
-  let t0 = eval (tensorCreate_ (seq_ []) (ulam_ "x" vs.0)) in
-  let t1 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" vs.0)) in
-  let t2 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" vs.1)) in
+let testTensors = lam v.
+  let t0 = eval (tensorCreate_ (seq_ []) (ulam_ "x" v.0)) in
+  let t1 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.0)) in
+  let t2 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.1)) in
 
   let evaln = evalNoSymbolize in
 
-  utest evaln (tensorGetExn_ t0 (seq_ [])) with vs.0 in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with vs.0 in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with vs.0 in
+  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.0 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.0 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.0 in
 
-  utest evaln (tensorSetExn_ t0 (seq_ []) vs.1) with unit_ in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) vs.1) with unit_ in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) vs.2) with unit_ in
+  utest evaln (tensorSetExn_ t0 (seq_ []) v.1) with unit_ in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ in
 
-  utest evaln (tensorGetExn_ t0 (seq_ [])) with vs.1 in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with vs.1 in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with vs.2 in
+  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.1 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.1 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.2 in
 
   utest evaln (tensorRank_ t0) with int_ 0 in
   utest evaln (tensorRank_ t1) with int_ 1 in
@@ -1767,10 +1767,10 @@ let testTensors = lam vs.
   utest evaln (tensorShape_ (tensorSubExn_ t1 (int_ 0) (int_ 2)))
   with seq_ [int_ 2] in
 
-  let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" vs.0)) in
+  let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
   let f = eval (ulam_ "i"
                   (ulam_ "x"
-                     unit_))
+                     (tensorCopyExn_ (var_ "x") (var_ "x"))))
   in
   utest evaln (tensorIteri_ f t3) with unit_ in
   ()
