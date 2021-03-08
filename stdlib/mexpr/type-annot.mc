@@ -348,6 +348,77 @@ lang FloatStringConversionTypeAnnot = ConstTypeAnnot + FloatStringConversionAst
   | CString2float _ -> tyarrow_ tystr_ tyfloat_
 end
 
+-- NOTE(larshum, 2021-03-08): There is currently no type for symbols, so they
+-- are considered to be of an unknown type.
+lang SymbTypeAnnot = ConstTypeAnnot + SymbAst
+  sem typeConst =
+  | CSymb _ -> tyunknown_
+  | CGensym _ -> tyarrow_ tyunit_ tyunknown_
+  | CSym2hash _ -> tyarrow_ tyunknown_ tyint_
+end
+
+lang CmpSymbTypeAnnot = ConstTypeAnnot + CmpSymbAst
+  sem typeConst =
+  | CEqsym _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
+end
+
+lang SeqOpTypeAnnot = ConstTypeAnnot + SeqOpAst
+  sem typeConst =
+  | CSet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyunknown_ utyseq_))
+  | CGet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ utyseq_)
+  | CCons _ -> tyarrow_ tyunknown_ (tyarrow_ utyseq_ utyseq_)
+  | CSnoc _ -> tyarrow_ utyseq_ (tyarrow_ tyunknown_ utyseq_)
+  | CConcat _ -> tyarrow_ utyseq_ (tyarrow_ utyseq_ utyseq_)
+  | CLength _ -> tyarrow_ utyseq_ tyint_
+  | CReverse _ -> tyarrow_ utyseq_ utyseq_
+  | CCreate _ -> tyarrow_ tyint_ (tyarrow_ (tyarrow_ tyint_ tyunknown_) utyseq_)
+  | CSplitAt _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tytuple_ [utyseq_, utyseq_]))
+  | CSubsequence _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyint_ utyseq_))
+end
+
+lang FileOpTypeAnnot = ConstTypeAnnot + FileOpAst
+  sem typeConst =
+  | CFileRead _ -> tyarrow_ tystr_ tystr_
+  | CFileWrite _ -> tyarrow_ tystr_ (tyarrow_ tystr_ tyunit_)
+  | CFileExists _ -> tyarrow_ tystr_ tybool_
+  | CFileDelete _ -> tyarrow_ tystr_ tyunit_
+end
+
+lang IOTypeAnnot = ConstTypeAnnot + IOAst
+  sem typeConst =
+  | CPrintString _ -> tyarrow_ tystr_ tyunit_
+  | CReadLine _ -> tyarrow_ tyunit_ tystr_
+  | CReadBytesAsString _ -> tyunknown_
+end
+
+lang RandomNumberGeneratorTypeAnnot = ConstTypeAnnot + RandomNumberGeneratorAst
+  sem typeConst =
+  | CRandIntU _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
+  | CRandSetSeed _ -> tyarrow_ tyint_ tyunit_
+end
+
+lang SysTypeAnnot = ConstTypeAnnot + SysAst
+  sem typeConst =
+  | CExit _ -> tyarrow_ tyint_ tyunknown_
+  | CError _ -> tyarrow_ tystr_ tyunknown_
+  | CArgv _ -> tyseq_ tystr_
+end
+
+lang TimeTypeAnnot = ConstTypeAnnot + TimeAst
+  sem typeConst =
+  | CWallTimeMs _ -> tyarrow_ tyunit_ tyfloat_
+  | CSleepMs _ -> tyarrow_ tyint_ tyunit_
+end
+
+-- NOTE(larshum, 2021-03-08): There is currently no reference type in MExpr, so
+-- they are considered to be of an unknown type.
+lang RefOpTypeAnnot = ConstTypeAnnot + RefOpAst
+  sem typeConst =
+  | CRef _ -> tyarrow_ tyunknown_ tyunknown_
+  | CModRef _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunit_)
+  | CDeRef _ -> tyarrow_ tyunknown_ tyunknown_
+end
+
 lang MExprTypeAnnot =
 
   -- Terms
@@ -359,7 +430,10 @@ lang MExprTypeAnnot =
   IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
   ArithFloatTypeAnnot + FloatIntConversionTypeAnnot + BoolTypeAnnot +
   CmpIntTypeAnnot + CmpFloatTypeAnnot + CharTypeAnnot + CmpCharTypeAnnot +
-  IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot
+  IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot + SymbTypeAnnot +
+  CmpSymbTypeAnnot + SeqOpTypeAnnot + FileOpTypeAnnot + IOTypeAnnot +
+  RandomNumberGeneratorTypeAnnot + SysTypeAnnot + TimeTypeAnnot +
+  RefOpTypeAnnot
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
