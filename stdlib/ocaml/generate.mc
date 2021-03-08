@@ -208,7 +208,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | PatNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
-      if_ (nvar_ targetName)
+      _if (nvar_ targetName)
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
@@ -371,7 +371,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
           in
           (names, wrap)
         else never
-      else error (join ["Unknown type constructor: ", id])
+      else error (join ["Unknown type constructor: ", nameGetStr id])
     else never
 end
 
