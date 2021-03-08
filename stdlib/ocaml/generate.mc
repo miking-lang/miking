@@ -788,6 +788,13 @@ let withPreamble = lam t.
   addPreamble t
 in
 
+-- Determines whether two given floating-point numbers are equal within a given
+-- epsilon.
+let eqFloat = lam f1. lam f2. lam eps.
+  let d = absf (subf f1 f2) in
+  leqf d eps
+in
+
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.
@@ -814,7 +821,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     else match t.val with CFloat {val = f1} then
       let ocamlVal = ocamlEval (ocamlAst (printfFmt "%f")) in
       match ocamlVal with TmConst {val = CFloat {val = f2}} then
-        eqExpr mexprVal ocamlVal
+        eqFloat f1 f2 1e-6
       else error "Values mismatch"
     else match t.val with CBool _ then
       let ocamlVal = ocamlEval (ocamlAst (printfFmt "%b")) in
