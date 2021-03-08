@@ -1430,10 +1430,10 @@ utest int_ 1 with generateEmptyEnv fst using sameSemantics in
 utest int_ 2 with generateEmptyEnv snd using sameSemantics in
 utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
 
-let testMake = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
-let len = length_ testMake in
-let fst = get_ testMake (int_ 0) in
-let lst = get_ testMake (int_ 1) in
+let testCreate = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
+let len = length_ testCreate in
+let fst = get_ testCreate (int_ 0) in
+let lst = get_ testCreate (int_ 1) in
 utest int_ 2 with generateEmptyEnv len using sameSemantics in
 utest int_ 0 with generateEmptyEnv fst using sameSemantics in
 utest int_ 0 with generateEmptyEnv lst using sameSemantics in
@@ -1507,13 +1507,6 @@ utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
 
 let testString2float = string2float_ (str_ "1.5") in
 utest testString2float with generateEmptyEnv testString2float using sameSemantics in
-
--- TODO(Oscar Eriksson, 2020-12-7) We need to think about how we should compile strings.
--- let testString2float = string2float_ (str_ "1.5") in
--- utest testString2float with generate testString2float using sameSemantics in
-let x = nameSym "x" in
-let y = nameSym "y" in
-let z = nameSym "z" in
 
 -- File operations
 let testFileExists = fileExists_ (str_ "test_file_ops") in
