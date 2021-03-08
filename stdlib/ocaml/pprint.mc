@@ -131,7 +131,7 @@ lang OCamlTypePrettyPrint =
 end
 
 lang OCamlPrettyPrint =
-  VarPrettyPrint + AppPrettyPrint + ConstPrettyPrint + OCamlAst +
+  VarPrettyPrint + ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
@@ -384,6 +384,10 @@ lang OCamlPrettyPrint =
         (env, join ["match", pprintNewline ii, target, pprintNewline i,
                     "with", join arms])
       else never
+    else never
+  | OTmPreambleText t ->
+    match pprintCode indent env t.inexpr with (env, inexpr) then
+      (env, join [t.text, inexpr])
     else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =

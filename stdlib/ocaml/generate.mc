@@ -736,12 +736,10 @@ lang OCamlObjWrap = MExprAst + OCamlAst
                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
 
-  sem _objWrapNoPremable =
-  | t -> objWrapRec (_objObj t)
-
   sem objWrap =
-  | t ->
-    bind_ _preamble (_objWrapNoPremable t)
+  | OTmVariantTypeDecl t ->
+    OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
+  | t -> objWrapRec (_objObj t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlDeclGenerate + OCamlPrettyPrint +
@@ -767,7 +765,6 @@ let ocamlEval = lam p.
   let res = ocamlCompileWithConfig {warnings=false} (expr2str p) in
   let out = (res.run "" []).stdout in
   res.cleanup ();
-  printLn (expr2str p);
   parseAsMExpr out
 in
 
@@ -777,6 +774,18 @@ let preambleStr =
   let str = expr2str (bind_ _preamble (int_ 0)) in
   let len = length str in
   subsequence str 0 (subi len 1)
+in
+
+-- NOTE(larshum, 2021-03-08): Adds the preamble to the top of a given term,
+-- but places it after all variant type declarations.
+let withPreamble = lam t.
+  recursive let addPreamble = lam t.
+    match t with OTmVariantTypeDecl tt then
+      OTmVariantTypeDecl {tt with inexpr = addPreamble tt.inexpr}
+    else
+      OTmPreambleText {text = preambleStr, inexpr = t}
+  in
+  addPreamble t
 in
 
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
@@ -792,26 +801,28 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
       OTmVariantTypeDecl {t with inexpr = ocamlAstWithPrinting t.inexpr printTerm}
     else app_ printTerm ast
   in
-  let printfVar = OTmVarExit {ident = "Printf.printf"} in
-  let ocamlAst = ocamlAstWithPrinting ocamlAst in
+  let printfFmt = lam fmt.
+    OTmVarExt {ident = join ["Printf.printf \"", fmt, "\""]}
+  in
+  let ocamlAst = ocamlAstWithPrinting (withPreamble ocamlAst) in
   match mexprVal with TmConst t then
     match t.val with CInt _ then
-      let ocamlVal = ocamlEval (ocamlAst (app_ printfVar (str_ "%d"))) in
+      let ocamlVal = ocamlEval (ocamlAst (printfFmt "%d")) in
       match ocamlVal with TmConst {val = CInt _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
-    else match t.val with CFloat _ then
-      let ocamlVal = ocamlEval (ocamlAst (app_ printfVar (str_ "%f"))) in
-      match ocamlVal with TmConst {val = CFloat _} then
+    else match t.val with CFloat {val = f1} then
+      let ocamlVal = ocamlEval (ocamlAst (printfFmt "%f")) in
+      match ocamlVal with TmConst {val = CFloat {val = f2}} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CBool _ then
-      let ocamlVal = ocamlEval (ocamlAst (app_ printfVar (str_ "%b"))) in
+      let ocamlVal = ocamlEval (ocamlAst (printfFmt "%b")) in
       match ocamlVal with TmConst {val = CBool _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
     else match t.val with CChar _ then
-      let ocamlVal = ocamlEval (ocamlAst (app_ printfVar (str_ "'%c'"))) in
+      let ocamlVal = ocamlEval (ocamlAst (printfFmt "'%c'")) in
       match ocamlVal with TmConst {val = CChar _} then
         eqExpr mexprVal ocamlVal
       else error "Values mismatch"
@@ -825,7 +836,7 @@ in
 
 let generateTypeAnnotated = lam t.
   match generateDecl (typeAnnot t) with (t, env) then
-    generate env t
+    objWrap (generate env t)
   else never
 in
 
