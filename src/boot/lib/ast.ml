@@ -140,6 +140,7 @@ and const =
   | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
+  | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreate of int array option
   | CtensorGetExn of tm T.t option

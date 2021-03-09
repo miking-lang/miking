@@ -405,6 +405,8 @@ let rec print_const fmt = function
       fprintf fmt "mapBindings"
   | CmapEq _ ->
       fprintf fmt "mapEq"
+  | CmapCmp _ ->
+      fprintf fmt "mapCmp"
   (* MCore intrinsics: Tensors *)
   | CtensorCreate _ ->
       fprintf fmt "tensorCreate"

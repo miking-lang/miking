@@ -80,12 +80,15 @@ utest mapFindWithErr (1, 2) m with 2 in
 utest mapFindWithErr (2, 42) m with 3 in
 utest mapFindWithErr (3, 42) m with 4 in
 
--- NOTE(dlunde,2021-03-04): mapEq is a bit hazardous, since the compare
+-- NOTE(dlunde,2021-03-04): mapEq and mapCmp are a bit hazardous, since the compare
 -- function for keys bundled with the first map is always used when doing the
 -- comparison. I assume we only use this as a temporary solution (I'm not sure
 -- how this would be type checked otherwise)
 utest mapEq eqi m m with true in
 utest mapEq neqi m m with false in
 utest mapEq eqi (mapInsert (2,2) 42 m) m with false in
+utest mapCmp subi m m with 0 in
+utest mapCmp subi (mapInsert (2,2) 42 m) m with negi 40 in
+utest mapCmp subi m (mapInsert (2,2) 42 m) with 40 in
 
 ()

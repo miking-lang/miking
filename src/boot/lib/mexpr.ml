@@ -129,6 +129,7 @@ let builtin =
   ; ("mapFoldWithKey", f (CmapFoldWithKey (None, None)))
   ; ("mapBindings", f CmapBindings)
   ; ("mapEq", f (CmapEq (None, None)))
+  ; ("mapCmp", f (CmapCmp (None, None)))
   ; ("tensorCreate", f (CtensorCreate None)) (* MCore intrinsics: Tensors *)
   ; ("tensorGetExn", f (CtensorGetExn None))
   ; ("tensorSetExn", f (CtensorSetExn (None, None)))
@@ -459,6 +460,12 @@ let arity = function
   | CmapEq (Some _, None) ->
       2
   | CmapEq (_, Some _) ->
+      1
+  | CmapCmp (None, None) ->
+      3
+  | CmapCmp (Some _, None) ->
+      2
+  | CmapCmp (_, Some _) ->
       1
   (* MCore intrinsics: Tensor *)
   | CtensorCreate None ->
@@ -1218,6 +1225,27 @@ let delta eval env fi c v =
       let module MapModule = Map.Make (Ord) in
       TmConst (fi, CBool (MapModule.equal veq (Obj.obj m1) (Obj.obj m2)))
   | CmapEq _, _ ->
+      fail_constapp fi
+  | CmapCmp (None, None), f ->
+      let vcmp v1 v2 =
+        match TmApp (fi, TmApp (fi, f, v1), v2) |> eval env with
+        | TmConst (_, CInt i) ->
+            i
+        | _ ->
+            fail_constapp fi
+      in
+      TmConst (fi, CmapCmp (Some vcmp, None))
+  | CmapCmp (Some vcmp, None), TmConst (_, CMap (kcmp, m1)) ->
+      TmConst (fi, CmapCmp (Some vcmp, Some (kcmp, m1)))
+  | CmapCmp (Some vcmp, Some (kcmp, m1)), TmConst (_, CMap (_, m2)) ->
+      let module Ord = struct
+        type t = tm
+
+        let compare = mapCompare kcmp
+      end in
+      let module MapModule = Map.Make (Ord) in
+      TmConst (fi, CInt (MapModule.compare vcmp (Obj.obj m1) (Obj.obj m2)))
+  | CmapCmp _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
   | CtensorCreate None, TmSeq (_, seq) ->
