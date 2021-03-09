@@ -115,11 +115,11 @@ let builtin =
   ; ("deref", f CdeRef)
   ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
   ; ("mapEmpty", f CmapEmpty)
-  ; ("mapIsEmpty", f CmapIsEmpty)
+  ; ("mapSize", f CmapSize)
   ; ("mapGetCmpFun", f CmapGetCmpFun)
   ; ("mapInsert", f (CmapInsert (None, None)))
   ; ("mapRemove", f (CmapRemove None))
-  ; ("mapFindWithErr", f (CmapFindWithErr None))
+  ; ("mapFindWithExn", f (CmapFindWithExn None))
   ; ("mapFindOrElse", f (CmapFindOrElse (None, None)))
   ; ("mapFindApplyOrElse", f (CmapFindApplyOrElse (None, None, None)))
   ; ("mapAny", f (CmapAny None))
@@ -399,7 +399,7 @@ let arity = function
       0
   | CmapEmpty ->
       1
-  | CmapIsEmpty ->
+  | CmapSize ->
       1
   | CmapGetCmpFun ->
       1
@@ -413,9 +413,9 @@ let arity = function
       2
   | CmapRemove (Some _) ->
       1
-  | CmapFindWithErr None ->
+  | CmapFindWithExn None ->
       2
-  | CmapFindWithErr (Some _) ->
+  | CmapFindWithExn (Some _) ->
       1
   | CmapFindOrElse (None, None) ->
       3
@@ -1020,15 +1020,15 @@ let delta eval env fi c v =
       end in
       let module MapModule = Map.Make (Ord) in
       TmConst (fi, CMap (cmp, Obj.repr MapModule.empty))
-  | CmapIsEmpty, TmConst (_, CMap (cmp, m)) ->
+  | CmapSize, TmConst (_, CMap (cmp, m)) ->
       let module Ord = struct
         type t = tm
 
         let compare = mapCompare cmp
       end in
       let module MapModule = Map.Make (Ord) in
-      TmConst (fi, CBool (MapModule.is_empty (Obj.obj m)))
-  | CmapIsEmpty, _ ->
+      TmConst (fi, CInt (MapModule.cardinal (Obj.obj m)))
+  | CmapSize, _ ->
       fail_constapp fi
   | CmapGetCmpFun, TmConst (_, CMap (cmp, _)) ->
       cmp
@@ -1062,9 +1062,9 @@ let delta eval env fi c v =
       TmConst (fi, CMap (cmp, Obj.repr m))
   | CmapRemove (Some _), _ ->
       fail_constapp fi
-  | CmapFindWithErr None, k ->
-      TmConst (fi, CmapFindWithErr (Some k))
-  | CmapFindWithErr (Some k), TmConst (_, CMap (cmp, mp)) ->
+  | CmapFindWithExn None, k ->
+      TmConst (fi, CmapFindWithExn (Some k))
+  | CmapFindWithExn (Some k), TmConst (_, CMap (cmp, mp)) ->
       let module Ord = struct
         type t = tm
 
@@ -1072,7 +1072,7 @@ let delta eval env fi c v =
       end in
       let module MapModule = Map.Make (Ord) in
       MapModule.find k (Obj.obj mp)
-  | CmapFindWithErr (Some _), _ ->
+  | CmapFindWithExn (Some _), _ ->
       fail_constapp fi
   | CmapFindOrElse (None, None), f ->
       TmConst (fi, CmapFindOrElse (Some f, None))

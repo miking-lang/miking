@@ -128,11 +128,11 @@ and const =
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap of tm * Obj.t
   | CmapEmpty
-  | CmapIsEmpty
+  | CmapSize
   | CmapGetCmpFun
   | CmapInsert of tm option * tm option
   | CmapRemove of tm option
-  | CmapFindWithErr of tm option
+  | CmapFindWithExn of tm option
   | CmapFindOrElse of tm option * tm option
   | CmapFindApplyOrElse of tm option * tm option * tm option
   | CmapMem of tm option

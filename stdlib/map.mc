@@ -6,14 +6,15 @@
 include "option.mc"
 include "seq.mc"
 
-let mapLength : Map k v -> Int =
-  mapFoldWithKey (lam acc. lam. lam. addi 1 acc) 0
 
 -- Aliases
+let mapLength : Map k v -> Int = mapSize
 let mapLookupOrElse : (Unit -> v) -> k -> Map k v -> v =
   mapFindOrElse
 let mapLookupApplyOrElse : (v1 -> v2) -> (Unit -> v2) -> k -> Map k v1 -> v2 =
   mapFindApplyOrElse
+
+let mapIsEmpty : Map k v -> Bool = lam m. eqi (mapSize m) 0
 
 let mapLookup : k -> Map k v -> Option v =
   lam k. lam m.
@@ -56,6 +57,7 @@ let m = mapEmpty subi in
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
 utest mapLength m with 0 in
+utest mapIsEmpty m with true in
 
 utest mapLookup 1 m with None () in
 
@@ -64,6 +66,7 @@ let m = mapInsert 2 "2" m in
 let m = mapInsert 3 "3" m in
 
 utest mapLength m with 3 in
+utest mapIsEmpty m with false in
 
 utest mapLookup 1 m with Some "1" in
 utest mapLookup 2 m with Some "2" in

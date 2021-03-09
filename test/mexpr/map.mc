@@ -12,7 +12,7 @@ let m = mapEmpty subi in
 
 utest (mapGetCmpFun m) 2 1 with 1 in
 
-utest mapIsEmpty m with true in
+utest mapSize m with 0 in
 
 let m = mapInsert 1 '1' m in
 let m = mapInsert 2 '2' m in
@@ -20,12 +20,12 @@ let m = mapInsert 3 '3' m in
 let m = mapInsert 4 '4' m in
 let m = mapInsert 4 '5' m in
 
-utest mapIsEmpty m with false in
+utest mapSize m with 4 in
 
-utest mapFindWithErr 1 m with '1' in
-utest mapFindWithErr 2 m with '2' in
-utest mapFindWithErr 3 m with '3' in
-utest mapFindWithErr 4 m with '5' in
+utest mapFindWithExn 1 m with '1' in
+utest mapFindWithExn 2 m with '2' in
+utest mapFindWithExn 3 m with '3' in
+utest mapFindWithExn 4 m with '5' in
 
 utest mapFindOrElse (lam. '0') 1 m with '1' in
 utest mapFindOrElse (lam. '0') 2 m with '2' in
@@ -75,10 +75,10 @@ let m = mapInsert (1, 2) 2 m in
 let m = mapInsert (2, 42) 3 m in
 let m = mapInsert (3, 42) 4 m in
 
-utest mapFindWithErr (1, 1) m with 2 in
-utest mapFindWithErr (1, 2) m with 2 in
-utest mapFindWithErr (2, 42) m with 3 in
-utest mapFindWithErr (3, 42) m with 4 in
+utest mapFindWithExn (1, 1) m with 2 in
+utest mapFindWithExn (1, 2) m with 2 in
+utest mapFindWithExn (2, 42) m with 3 in
+utest mapFindWithExn (3, 42) m with 4 in
 
 -- NOTE(dlunde,2021-03-04): mapEq and mapCmp are a bit hazardous, since the compare
 -- function for keys bundled with the first map is always used when doing the
