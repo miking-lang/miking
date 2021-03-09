@@ -23,7 +23,7 @@ let run = lam files. lam options.
   -- Evaluate list of programs
   let env = map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin in
   let names = match unzip env with (n,_) then n else never in
-  let eval = lam t. eval {env = env} (symbolizeWithNameEnvironments names [] [] t) in
+  let eval = lam t. eval {env = env} (symbolizeExpr (symVarNameEnv names) t) in
   map eval asts
 
 
