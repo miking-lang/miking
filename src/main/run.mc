@@ -16,7 +16,7 @@ let run = lam files. lam options.
 
   -- Parse MCore files and return a list of ASTs
   let asts = map parseMCoreFile files in
-
+  
   -- If option --debug-parse, then pretty print all the ASTs
   (if options.debugParse then print (strJoin "\n" (map expr2str asts)) else ());
 

@@ -105,21 +105,28 @@ let rec merge_includes root visited = function
               Filename.concat root (Ustring.to_utf8 path)
               |> Utils.normalize_path
             in
+            let file_stdloc =
+              Filename.concat stdlib_loc (Ustring.to_utf8 path)
+            in
             if List.mem filename visited then
               raise_error info ("Cycle detected in included files: " ^ filename)
             else if List.mem filename !parsed_files then None
-              (* File already included *)
+            else if
+              Sys.file_exists filename
+              && Sys.file_exists file_stdloc
+              && file_stdloc <> filename
+            then
+              raise_error info
+                ( "File exists both locally and in standard library: "
+                ^ filename ) (* File already included *)
             else if Sys.file_exists filename then
               local_parse_mcore_file filename
               |> merge_includes
                    (Filename.dirname filename)
                    (filename :: visited)
               |> Option.some
-            else if
-              root != stdlib_loc
-              && Sys.file_exists
-                 @@ Filename.concat stdlib_loc (Ustring.to_utf8 path)
-            then parse_include stdlib_loc inc
+            else if root != stdlib_loc && Sys.file_exists file_stdloc then
+              parse_include stdlib_loc inc
             else raise_error info ("No such file: \"" ^ filename ^ "\"")
       in
       let included = includes |> List.filter_map (parse_include root) in
@@ -138,9 +145,10 @@ let parse_mexpr_string ustring =
 
 let parse_mcore_file filename =
   try
+    parsed_files := [] ;
     let filename = Ustring.to_utf8 filename in
     local_parse_mcore_file filename
-    |> add_prelude
+    (*  |> add_prelude  *)
     |> merge_includes (Filename.dirname filename) [filename]
     |> Mlang.flatten |> Mlang.desugar_post_flatten
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->

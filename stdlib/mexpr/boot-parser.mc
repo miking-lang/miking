@@ -57,10 +57,10 @@ lang BootParser = MExprAst
              info = ginfo t 0}
   | 102 /-TmLam-/ ->
       TmLam {ident = gname t 0,
-             tyBody = gtype t 0,
+             tyIdent = TyUnknown(),
+             body = gterm t 0,
              ty = TyUnknown {},
-             info = ginfo t 0,
-             body = gterm t 0}
+             info = ginfo t 0}
   | 103 /-TmLet-/ ->
       TmLet {ident = gname t 0,
              tyBody = gtype t 0,
@@ -104,14 +104,14 @@ lang BootParser = MExprAst
   | 109 /-TmType-/ ->
       TmType {ident = gname t 0,
               tyIdent = gtype t 0,
-              ty = TyUnknown {},
               inexpr = gterm t 0,
+              ty = TyUnknown {},
               info = ginfo t 0}
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                tyIdent = TyUnknown {},
-               ty = gtype t 0,
                inexpr = gterm t 0,
+               ty = gtype t 0,
                info = ginfo t 0}
   | 111 /-TmConApp-/ ->
      TmConApp {ident = gname t 0,
