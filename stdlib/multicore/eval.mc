@@ -79,10 +79,13 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
       threadJoin thread
     else error "not a threadJoin of a thread"
   | CThreadSelf _ ->
-    match arg with TmRecord {bindings = []} then
-      TmConst {val = CThreadID {id = threadSelf ()},
-               info = NoInfo (), ty = TyUnknown ()}
-    else error "Argument in threadSelf is not unit"
+    let err = "Argument in threadSelf is not unit" in
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        TmConst {val = CThreadID {id = threadSelf ()},
+                 info = NoInfo (), ty = TyUnknown ()}
+      else error err
+    else error err
   | CThreadGetID _ ->
     match arg with TmConst ({val = CThread {thread = thread}} & t) then
       TmConst {t with val = CThreadID {id = threadGetID thread}}
@@ -92,10 +95,13 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
       TmConst {t with val = CInt {val = threadID2int id}}
     else error "Argument to threadID2int not a thread ID"
   | CThreadWait _ ->
-    match arg with TmRecord {bindings = []} then
-      threadWait ();
-      unit_
-    else error "Argument to threadWait is not unit"
+    let err = "Argument to threadWait is not unit" in
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        threadWait ();
+        unit_
+      else error err
+    else error err
   | CThreadNotify _ ->
     match arg with TmConst ({val = CThreadID {id = id}} & t) then
       threadNotify id;
@@ -106,13 +112,17 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
     in threadCriticalSection (lam. eval {env = []} app)
   | CThreadCPURelax _ ->
-    match arg with TmRecord {bindings = []} then
-      threadCPURelax ();
-      unit_
-    else error "Argument to threadCPURelax is not unit"
+    let err = "Argument to threadCPURelax is not unit" in
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        threadCPURelax ();
+        unit_
+      else error err
+    else error err
 end
 
 lang MExprParEval = MExprEval + AtomicEval + ThreadEval + MExprPrettyPrint
+  + MExprSym
 
 mexpr
 
