@@ -172,8 +172,8 @@ end
 lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecord t ->
-    let bindings = assocMap {eq=eqString} (typeAnnotExpr env) t.bindings in
-    let bindingTypes = assocMap {eq=eqString} ty bindings in
+    let bindings = mapMap (typeAnnotExpr env) t.bindings in
+    let bindingTypes = mapMap ty bindings in
     let ty = TyRecord {fields = bindingTypes} in
     TmRecord {{t with bindings = bindings}
                  with ty = ty}

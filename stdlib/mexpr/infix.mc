@@ -68,7 +68,7 @@ end
 lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed +
                       ExprInfixTestParser
 
-lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint
+lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint + MExprSym
 
 
 -- Evaluate an expression into a value expression

@@ -92,7 +92,7 @@ end
 lang RecordSym = Sym + RecordAst
   sem symbolizeExpr (env : SymEnv) =
   | TmRecord t ->
-    TmRecord {t with bindings = assocMap {eq=eqString} (symbolizeExpr env) t.bindings}
+    TmRecord {t with bindings = mapMap (symbolizeExpr env) t.bindings}
 
   | TmRecordUpdate t ->
     TmRecordUpdate {{t with rec = symbolizeExpr env t.rec}
@@ -312,7 +312,7 @@ end
 lang RecordTypeSym = RecordTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyRecord {fields = fields} ->
-    TyRecord {fields = assocMap {eq=eqString} (symbolizeType env) fields}
+    TyRecord {fields = mapMap (symbolizeType env) fields}
 end
 
 lang VariantTypeSym = VariantTypeAst
@@ -388,7 +388,7 @@ end
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PatRecord {bindings = bindings, info = info} ->
-    match assocMapAccum {eq=eqString}
+    match mapMapAccum
             (lam patEnv. lam. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
       (env, PatRecord {bindings = bindings, info = info})

@@ -3,6 +3,8 @@
 include "mexpr/ast.mc"
 include "assoc.mc"
 include "info.mc"
+include "stringid.mc"
+include "map.mc"
 
 -- Patterns --
 
@@ -18,7 +20,7 @@ let pvarw_ = use MExprAst in
   PatNamed {ident = PWildcard (), info = NoInfo()}
 
 let punit_ = use MExprAst in
-  PatRecord { bindings = assocEmpty, info = NoInfo() }
+  PatRecord { bindings = mapEmpty cmpSID, info = NoInfo() }
 
 let pint_ = use MExprAst in
   lam i.
@@ -46,9 +48,7 @@ let prec_ = use MExprAst in
   lam bindings.
   PatRecord {
     bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
+      mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
     info = NoInfo()
     }
 
@@ -97,7 +97,7 @@ let tyunknown_ = use MExprAst in
   TyUnknown ()
 
 let tyunit_ = use MExprAst in
-  TyRecord {fields = assocEmpty}
+  TyRecord {fields = mapEmpty cmpSID}
 
 let tyint_ = use MExprAst in
   TyInt ()
@@ -121,8 +121,9 @@ let tyseq_ = use MExprAst in
 let tyrecord_ = use MExprAst in
   lam fields.
   TyRecord {
-    fields = foldl (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-               assocEmpty fields }
+    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields)
+  }
+
 
 let tytuple_ = use MExprAst in
   lam tys.
@@ -162,7 +163,7 @@ let bindall_ = use MExprAst in
   foldr1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecord {bindings = mapEmpty cmpSID, ty = TyUnknown {}, info = NoInfo ()}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
@@ -315,10 +316,7 @@ let seq_ = use MExprAst in
 let record_ = use MExprAst in
   lam bindings.
   TmRecord {
-    bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
+    bindings = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
     ty = TyUnknown {},
     info = NoInfo ()
   }
@@ -332,7 +330,7 @@ let record_empty = unit_
 let record_add = use MExprAst in
   lam key. lam value. lam record.
   match record with TmRecord t then
-      TmRecord {t with bindings = cons (key, value) t.bindings}
+      TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
       error "record is not a TmRecord construct"
 
@@ -363,7 +361,13 @@ let tupleproj_ = use MExprAst in
 
 let recordupdate_ = use MExprAst in
   lam rec. lam key. lam value.
-  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecordUpdate {
+    rec = rec,
+    key = stringToSid key,
+    value = value,
+    ty = TyUnknown {},
+    info = NoInfo ()
+  }
 
 let app_ = use MExprAst in
   lam l. lam r.

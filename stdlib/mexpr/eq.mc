@@ -5,6 +5,7 @@
 include "name.mc"
 include "bool.mc"
 include "tensor.mc"
+include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/symbolize.mc"
@@ -128,10 +129,10 @@ lang RecordEq = Eq + RecordAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmRecord r ->
     match lhs with TmRecord l then
-      if eqi (assocLength l.bindings) (assocLength r.bindings) then
-        assocFoldlM {eq=eqString}
+      if eqi (mapLength l.bindings) (mapLength r.bindings) then
+        mapFoldlOption
           (lam free. lam k1. lam v1.
-            match assocLookup {eq=eqString} k1 r.bindings with Some v2 then
+            match mapLookup k1 r.bindings with Some v2 then
               eqExprH env free v1 v2
             else None ())
           free l.bindings
@@ -140,7 +141,7 @@ lang RecordEq = Eq + RecordAst
 
   | TmRecordUpdate r ->
     match lhs with TmRecordUpdate l then
-      if eqString l.key r.key then
+      if eqSID l.key r.key then
         match eqExprH env free l.rec r.rec with Some free then
           eqExprH env free l.value r.value
         else None ()
@@ -431,11 +432,11 @@ lang RecordPatEq = RecordPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
-      if eqi (assocLength bs1) (assocLength bs2) then
-        assocFoldlM {eq=eqString}
+      if eqi (mapLength bs1) (mapLength bs2) then
+        mapFoldlOption
           (lam tEnv. lam k1. lam p1.
              match tEnv with (free,patEnv) then
-               match assocLookup {eq=eqString} k1 bs2 with Some p2 then
+               match mapLookup k1 bs2 with Some p2 then
                  eqPat env free patEnv p1 p2
                else None ()
              else never)
@@ -561,15 +562,8 @@ end
 lang RecordTypeEq = Eq + RecordTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyRecord r ->
-    let f = lam k. lam ty1.
-      match assocLookup {eq=eqString} k r.fields with Some ty2 then
-        eqType typeEnv ty1 ty2
-      else false
-    in
     match _unwrapType typeEnv lhs with Some (TyRecord l) then
-      if eqi (assocLength l.fields) (assocLength r.fields) then
-        assocAll f l.fields
-      else false
+      mapEq (eqType typeEnv) l.fields r.fields
     else false
 end
 

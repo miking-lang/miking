@@ -6,6 +6,7 @@ include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
+include "stringid.mc"
 include "seq.mc"
 include "name.mc"
 
@@ -82,12 +83,14 @@ lang BootParser = MExprAst
              info = ginfo t 0}
   | 107 /-TmRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
-      TmRecord {bindings = seq2assoc {eq = eqString} lst,
+      TmRecord {bindings =
+                 mapFromList cmpSID
+                   (map (lam b. (stringToSid b.0, b.1)) lst),
                ty = TyUnknown(),
                info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
      TmRecordUpdate {rec = gterm t 0,
-                    key = gstr t 0,
+                    key = stringToSid (gstr t 0),
                     value = gterm t 1,
                     ty = TyUnknown(),
                     info = ginfo t 0}
@@ -158,7 +161,10 @@ lang BootParser = MExprAst
               info = ginfo t 0}
   | 403 /-PatRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
-     PatRecord {bindings = seq2assoc {eq = eqString} lst,
+
+     PatRecord {bindings =
+                 mapFromList cmpSID
+                   (map (lam b. (stringToSid b.0, b.1)) lst),
               info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
@@ -308,7 +314,7 @@ let s = "{}" in
 utest lside s with rside s in
 let s = "{a = 5}" in
 utest lside s with rside s in
-let s = "{foo = 123, bar = \"Hello\"}" in
+let s = "{bar = \"Hello\", foo = 123}" in
 utest lside s with rside s in
 utest l_info " {} " with r_info 1 1 1 3 in
 utest l_info " {foo = 123} " with r_info 1 1 1 12 in
@@ -316,7 +322,7 @@ utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 -- TmRecordUpdate
 let s = "{a with foo = 5}" in
 utest lside s with rside s in
-let s = "{{foo=7, bar='a'} with bar = 'b'}" in
+let s = "{{bar='a', foo=7} with bar = 'b'}" in
 utest lside s with rside s in
 utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
 
@@ -372,7 +378,7 @@ let s = "match x with {} then x else 2" in
 utest lside s with rside s in
 utest match parseMExprString s with TmMatch r then info r.pat else ()
 with r_info 1 13 1 15 in
-let s = "match x with {foo=x, bar=_} then x else 2" in
+let s = "match x with {bar=_, foo=x} then x else 2" in
 utest lside s with rside s in
 utest match parseMExprString s with TmMatch r then info r.pat else ()
 with r_info 1 13 1 27 in
