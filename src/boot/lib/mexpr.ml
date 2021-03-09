@@ -2007,7 +2007,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
           let res =
             try eval ((s, eval env t2) :: Lazy.force env2) t3
             with e ->
-              uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+              if !enable_debug_stack_trace then
+                uprint_endline (us "TRACE: " ^. info2str fiapp) ;
               raise e
           in
           let t2 = get_wall_time_ms () in
@@ -2016,7 +2017,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
         else
           try eval ((s, eval env t2) :: Lazy.force env2) t3
           with e ->
-            uprint_endline (us "TRACE: " ^. info2str fiapp) ;
+            if !enable_debug_stack_trace then
+              uprint_endline (us "TRACE: " ^. info2str fiapp) ;
             raise e )
     (* Constant application using the delta function *)
     | TmConst (_, c) ->

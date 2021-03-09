@@ -25,6 +25,8 @@ let enable_debug_symbol_print = ref false
 
 let enable_debug_con_shape = ref false
 
+let enable_debug_stack_trace = ref false
+
 let enable_debug_profiling = ref false
 
 let utest = ref false (* Set to true if unit testing is enabled *)
