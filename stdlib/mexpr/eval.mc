@@ -1086,7 +1086,7 @@ lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
-      mapFoldlM
+      mapFoldlOption
         (lam env. lam k. lam p.
           match mapLookup k bs with Some v then
             tryMatch env v p

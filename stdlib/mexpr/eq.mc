@@ -5,6 +5,7 @@
 include "name.mc"
 include "bool.mc"
 include "tensor.mc"
+include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/symbolize.mc"
@@ -129,7 +130,7 @@ lang RecordEq = Eq + RecordAst
   | TmRecord r ->
     match lhs with TmRecord l then
       if eqi (mapLength l.bindings) (mapLength r.bindings) then
-        mapFoldlM
+        mapFoldlOption
           (lam free. lam k1. lam v1.
             match mapLookup k1 r.bindings with Some v2 then
               eqExprH env free v1 v2
@@ -432,7 +433,7 @@ lang RecordPatEq = RecordPat
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
       if eqi (mapLength bs1) (mapLength bs2) then
-        mapFoldlM
+        mapFoldlOption
           (lam tEnv. lam k1. lam p1.
              match tEnv with (free,patEnv) then
                match mapLookup k1 bs2 with Some p2 then
