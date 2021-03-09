@@ -394,17 +394,6 @@ let rec print_const fmt = function
   | CmapBindings ->
       fprintf fmt "mapBindings"
   (* MCore intrinsics: Tensors *)
-  | CTensor t ->
-      t
-      |> (function
-           | T.Int t' ->
-               Tensor.Num.shape t'
-           | T.Float t' ->
-               Tensor.Num.shape t'
-           | T.NoNum t' ->
-               Tensor.NoNum.shape t' )
-      |> Array.to_list |> List.map string_of_int |> String.concat ","
-      |> fprintf fmt "tensor[%s]"
   | CtensorCreate _ ->
       fprintf fmt "tensorCreate"
   | CtensorGetExn _ ->
@@ -497,7 +486,8 @@ and print_tm fmt (prec, t) =
     | TmClos _
     | TmFix _
     | TmNever _
-    | TmRef _ ->
+    | TmRef _
+    | TmTensor _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -604,6 +594,28 @@ and print_tm' fmt t =
       fprintf fmt "never"
   | TmRef (_, _) ->
       fprintf fmt "(ref)"
+  | TmTensor (_, t) ->
+      let float_ f = TmConst (NoInfo, CFloat f) in
+      let int_ n = TmConst (NoInfo, CInt n) in
+      let shape, data =
+        t
+        |> function
+        | T.Int t' ->
+            ( t' |> Tensor.Num.shape
+            , t' |> Tensor.Num.data_to_array |> Array.map int_ )
+        | T.Float t' ->
+            ( t' |> Tensor.Num.shape
+            , t' |> Tensor.Num.data_to_array |> Array.map float_ )
+        | T.NoNum t' ->
+            (t' |> Tensor.NoNum.shape, t' |> Tensor.NoNum.data_to_array)
+      in
+      let print t fmt = fprintf fmt "%a" print_tm (App, t) in
+      let shape' =
+        shape |> Array.map int_ |> Array.to_list |> List.map print
+      in
+      let data' = List.map print (Array.to_list data) in
+      fprintf fmt "Tensor([@[<hov 0>%a@]], [@[<hov 0>%a@]])" concat
+        (Comma, shape') concat (Comma, data')
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

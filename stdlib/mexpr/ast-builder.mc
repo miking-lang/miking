@@ -692,3 +692,44 @@ let wallTimeMs_ = use MExprAst in
 
 let sleepMs_ = use MExprAst in
   lam n. appf1_ (const_ (CSleepMs ())) n
+
+-- Tensors
+let tensorCreate_ = use MExprAst in
+  lam s. lam f.
+  appf2_ (const_ (CTensorCreate ())) s f
+
+let tensorGetExn_ = use MExprAst in
+  lam t. lam is.
+  appf2_ (const_ (CTensorGetExn ())) t is
+
+let tensorSetExn_ = use MExprAst in
+  lam t. lam is. lam v.
+  appf3_ (const_ (CTensorSetExn ())) t is v
+
+let tensorRank_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorRank ())) t
+
+let tensorShape_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorShape ())) t
+
+let tensorReshapeExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorReshapeExn ())) t s
+
+let tensorCopyExn_ = use MExprAst in
+  lam t1. lam t2.
+  appf2_ (const_ (CTensorCopyExn ())) t1 t2
+
+let tensorSliceExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorSliceExn ())) t s
+
+let tensorSubExn_ = use MExprAst in
+  lam t. lam ofs. lam len.
+  appf3_ (const_ (CTensorSubExn ())) t ofs len
+
+let tensorIteri_ = use MExprAst in
+  lam f. lam t.
+  appf2_ (const_ (CTensorIteri ())) f t

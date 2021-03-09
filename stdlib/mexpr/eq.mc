@@ -4,9 +4,11 @@
 
 include "name.mc"
 include "bool.mc"
+include "tensor.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/symbolize.mc"
+
 
 -----------------
 -- ENVIRONMENT --
@@ -344,6 +346,20 @@ lang SeqOpEq = SeqOpAst
   | CSplitAt {} -> match lhs with CSplitAt _ then true else false
 end
 
+lang TensorOpEq = TensorOpAst
+  sem eqConst (lhs : Const) =
+  | CTensorCreate {} -> match lhs with CTensorCreate _ then true else false
+  | CTensorGetExn {} -> match lhs with CTensorGetExn _ then true else false
+  | CTensorSetExn {} -> match lhs with CTensorSetExn _ then true else false
+  | CTensorRank {} -> match lhs with CTensorRank _ then true else false
+  | CTensorShape {} -> match lhs with CTensorShape _ then true else false
+  | CTensorReshapeExn {} -> match lhs with CTensorReshapeExn _ then true else false
+  | CTensorCopyExn {} -> match lhs with CTensorCopyExn _ then true else false
+  | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
+  | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
+  | CTensorIteri {} -> match lhs with CTensorIteri _ then true else false
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -608,7 +624,7 @@ lang MExprEq =
 
   -- Constants
   + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq
+  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
@@ -1041,6 +1057,7 @@ let s2 = seq_ [lam2, lam1, v4] in
 let s3e = seq_ [lam1, v5e, v3] in
 utest s1 with s2 using eqExpr in
 utest eqExpr s1 s3e with false in
+utest eqExpr (seq_ [c1]) (seq_ [c2]) with false in
 
 -- Never
 utest never_ with never_ using eqExpr in

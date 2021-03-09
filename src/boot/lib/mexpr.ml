@@ -425,8 +425,6 @@ let arity = function
   | CmapBindings ->
       1
   (* MCore intrinsics: Tensor *)
-  | CTensor _ ->
-      0
   | CtensorCreate None ->
       2
   | CtensorCreate (Some _) ->
@@ -1098,8 +1096,6 @@ let delta eval env fi c v =
   | CmapBindings, _ ->
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
-  | CTensor _, _ ->
-      fail_constapp fi
   | CtensorCreate None, TmSeq (_, seq) ->
       let shape = tm_seq2int_array fi seq in
       TmConst (fi, CtensorCreate (Some shape))
@@ -1139,10 +1135,10 @@ let delta eval env fi c v =
            | tm ->
                let f' is = if is = is0 then tm else f is in
                Tensor.NoNum.create shape f' |> T.no_num )
-      |> fun t -> TmConst (fi, CTensor t)
+      |> fun t -> TmTensor (fi, t)
   | CtensorCreate _, _ ->
       fail_constapp fi
-  | CtensorGetExn None, TmConst (_, CTensor t) ->
+  | CtensorGetExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorGetExn (Some t))
   | CtensorGetExn (Some t), TmSeq (_, seq) -> (
       let is = tm_seq2int_array fi seq in
@@ -1158,7 +1154,7 @@ let delta eval env fi c v =
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorGetExn _, _ ->
       fail_constapp fi
-  | CtensorSetExn (None, None), TmConst (_, CTensor t) ->
+  | CtensorSetExn (None, None), TmTensor (_, t) ->
       TmConst (fi, CtensorSetExn (Some t, None))
   | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
       let is = tm_seq2int_array fi seq in
@@ -1176,7 +1172,7 @@ let delta eval env fi c v =
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
       fail_constapp fi
-  | CtensorRank, TmConst (_, CTensor t) ->
+  | CtensorRank, TmTensor (_, t) ->
       let n =
         t
         |> function
@@ -1190,7 +1186,7 @@ let delta eval env fi c v =
       TmConst (fi, CInt n)
   | CtensorRank, _ ->
       fail_constapp fi
-  | CtensorShape, TmConst (_, CTensor t) ->
+  | CtensorShape, TmTensor (_, t) ->
       let shape =
         t
         |> function
@@ -1204,18 +1200,18 @@ let delta eval env fi c v =
       int_array2tm_seq fi shape
   | CtensorShape, _ ->
       fail_constapp fi
-  | CtensorCopyExn None, TmConst (_, CTensor t1) ->
+  | CtensorCopyExn None, TmTensor (_, t1) ->
       TmConst (fi, CtensorCopyExn (Some t1))
-  | CtensorCopyExn (Some (T.Int t1)), TmConst (_, CTensor (T.Int t2)) ->
+  | CtensorCopyExn (Some (T.Int t1)), TmTensor (_, T.Int t2) ->
       Tensor.Num.copy_exn t1 t2 ; tmUnit
-  | CtensorCopyExn (Some (T.Float t1)), TmConst (_, CTensor (T.Float t2)) ->
+  | CtensorCopyExn (Some (T.Float t1)), TmTensor (_, T.Float t2) ->
       Tensor.Num.copy_exn t1 t2 ; tmUnit
-  | CtensorCopyExn (Some (T.NoNum t1)), TmConst (_, CTensor (T.NoNum t2)) ->
+  | CtensorCopyExn (Some (T.NoNum t1)), TmTensor (_, T.NoNum t2) ->
       Tensor.NoNum.copy_exn t1 t2 ;
       tmUnit
   | CtensorCopyExn _, _ ->
       fail_constapp fi
-  | CtensorReshapeExn None, TmConst (_, CTensor t) ->
+  | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))
   | CtensorReshapeExn (Some t), TmSeq (_, seq) -> (
       let is = tm_seq2int_array fi seq in
@@ -1230,11 +1226,11 @@ let delta eval env fi c v =
           | T.NoNum t'' ->
               Tensor.NoNum.reshape_exn t'' is |> T.no_num
         in
-        TmConst (fi, CTensor t')
+        TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorReshapeExn _, _ ->
       fail_constapp fi
-  | CtensorSliceExn None, TmConst (_, CTensor t) ->
+  | CtensorSliceExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorSliceExn (Some t))
   | CtensorSliceExn (Some t), TmSeq (_, seq) -> (
       let is = tm_seq2int_array fi seq in
@@ -1249,11 +1245,11 @@ let delta eval env fi c v =
           | T.NoNum t'' ->
               Tensor.NoNum.slice_exn t'' is |> T.no_num
         in
-        TmConst (fi, CTensor t')
+        TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorSliceExn _, _ ->
       fail_constapp fi
-  | CtensorSubExn (None, None), TmConst (_, CTensor t) ->
+  | CtensorSubExn (None, None), TmTensor (_, t) ->
       TmConst (fi, CtensorSubExn (Some t, None))
   | CtensorSubExn (Some t, None), TmConst (_, CInt ofs) ->
       TmConst (fi, CtensorSubExn (Some t, Some ofs))
@@ -1269,19 +1265,17 @@ let delta eval env fi c v =
         | T.NoNum t'' ->
             Tensor.NoNum.sub_exn t'' ofs len |> T.no_num
       in
-      TmConst (fi, CTensor t')
+      TmTensor (fi, t')
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSubExn _, _ ->
       fail_constapp fi
   | CtensorIteri None, tm ->
       TmConst (fi, CtensorIteri (Some tm))
-  | CtensorIteri (Some tm), TmConst (_, CTensor t) -> (
+  | CtensorIteri (Some tm), TmTensor (_, t) -> (
       let iterf tkind i t =
         let _ =
           TmApp
-            ( fi
-            , TmApp (fi, tm, TmConst (fi, CInt i))
-            , TmConst (fi, CTensor (tkind t)) )
+            (fi, TmApp (fi, tm, TmConst (fi, CInt i)), TmTensor (fi, tkind t))
           |> eval env
         in
         ()
@@ -1463,6 +1457,12 @@ let rec val_equal v1 v2 =
       c1 = c2
   | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
       sym1 = sym2 && val_equal v1 v2
+  | TmTensor (_, T.Int t1), TmTensor (_, T.Int t2) ->
+      t1 = t2
+  | TmTensor (_, T.Float t1), TmTensor (_, T.Float t2) ->
+      t1 = t2
+  | TmTensor (_, T.NoNum t1), TmTensor (_, T.NoNum t2) ->
+      Tensor.NoNum.equal val_equal t1 t2
   | _ ->
       false
 
@@ -1642,10 +1642,6 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
         , symbolize env2 tm )
   | TmApp (fi, t1, t2) ->
       TmApp (fi, symbolize env t1, symbolize env t2)
-  | TmConst (_, _) ->
-      t
-  | TmFix _ ->
-      t
   | TmSeq (fi, tms) ->
       TmSeq (fi, Mseq.Helpers.map (symbolize env) tms)
   | TmRecord (fi, r) ->
@@ -1677,9 +1673,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       let sym_using = Option.map (fun t -> symbolize env t) tusing in
       TmUtest
         (fi, symbolize env t1, symbolize env t2, sym_using, symbolize env tnext)
-  | TmNever _ ->
-      t
-  | TmRef _ ->
+  | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as symbolize, but records all toplevel definitions and returns them
@@ -1739,7 +1733,8 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
     | TmNever _
     | TmClos _
     | TmFix _
-    | TmRef _ ) as t ->
+    | TmRef _
+    | TmTensor _ ) as t ->
       (env, symbolize env t)
 
 let rec try_match env value pat =
@@ -1985,14 +1980,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Use *)
   | TmUse (fi, _, _) ->
       raise_error fi "A 'use' of a language was not desugared"
-  (* Closure - Only at runtime *)
-  | TmClos (_, _, _, _, _) ->
-      t
-  (* Fix-point - Only at runtime *)
-  | TmFix _ ->
-      t
-  (* Ref - Only at runtime *)
-  | TmRef _ ->
+  (* Only at runtime *)
+  | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
       t
 
 (* Same as eval, but records all toplevel definitions and returns them along
@@ -2033,5 +2022,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmUse _
     | TmUtest _
     | TmNever _
-    | TmRef _ ) as t ->
+    | TmRef _
+    | TmTensor _ ) as t ->
       (env, eval env t)
