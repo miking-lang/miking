@@ -138,7 +138,7 @@ end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst 
+  UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -784,7 +784,7 @@ lang TimeEval = TimeAst + IntAst
     match arg with TmConst {val = CInt {val = n}} then
       sleepMs n;
       unit_
-    else error "n in wallTimeMs not a constant integer"
+    else error "n in sleepMs not a constant integer"
   | CWallTimeMs _ ->
     float_ (wallTimeMs ())
 end
