@@ -29,10 +29,6 @@ utest atomicFetchAndAdd a 2 with 0 in
 -- : ARef a -> a
 utest atomicGet a with 2 in
 
-let v = 0.0 in
-let a = atomicMake v in
-utest atomicCAS a v 1.0 with true in
-
 
 -- Threads --
 

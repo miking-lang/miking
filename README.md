@@ -1024,24 +1024,8 @@ utest atomicCAS a 42 3 with false in
 utest atomicGet a with 1 in
 ```
 
-Note that for atomic references storing integers, the `oldVal` can be a literal
-or any integer variable. However, for any other type `oldVal` needs to be a
-variable referring to either a previously read value (a result from
-`atomicGet`), or a value passed to the reference (via `atomicMake`,
-`atomicExchange`, or as a `newVal` of `atomicCAS`). For example, if we have an
-atomic reference to a record
-
-```
-let a = atomicMake {foo = 1, bar = 2}
-```
-
-then we first need to read the value of the reference before performing the
-`atomicCAS`:
-
-```
-let v = atomicGet a in
-let b = atomicCAS a v {foo = 2, bar = 5} in
-```
+The compare-and-set operation is currently supported for integer atomic
+references only.
 
 To unconditionally set the value of an atomic reference, we can use
 `atomicExchange`, which also returns the old value of the reference:

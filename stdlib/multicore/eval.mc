@@ -10,9 +10,7 @@ lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
   | CAtomicExchange2 (ARef Expr)
   | CAtomicExchangeInt2 (ARef Int)
   | CAtomicFetchAndAdd2 (ARef Int)
-  | CAtomicCAS2 (ARef Expr)
   | CAtomicCASInt2 (ARef Int)
-  | CAtomicCAS3 (ARef Expr, Expr)
   | CAtomicCASInt3 (ARef Int, Int)
 
   sem delta (arg : Expr) =
@@ -49,25 +47,13 @@ lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
       TmConst {t with val = CInt {val = atomicFetchAndAdd r i}}
     else error "second argument to atomicFetchAndAdd not an integer"
   | CAtomicCAS _ ->
-    match arg with TmConst ({val = CAtomicRef {ref = r}} & t) then
-      TmConst {t with val = CAtomicCAS2 r}
-    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
+    match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
       TmConst {t with val = CAtomicCASInt2 r}
-    else error "first argument to atomicCAS not an atomic reference"
-  | CAtomicCAS2 r ->
-      TmConst { val = CAtomicCAS3 (r, arg)
-              , info = NoInfo ()
-              , ty = TyUnknown ()
-              }
+    else error "first argument to atomicCAS not an integer atomic reference"
   | CAtomicCASInt2 r ->
     match arg with TmConst ({val = CInt {val = i}} & t) then
       TmConst {t with val = CAtomicCASInt3 (r, i)}
     else error "second argument to atomicCAS not an integer"
-  | CAtomicCAS3 (r, seen) ->
-      TmConst { val = CBool {val = atomicCAS r seen arg}
-              , info = NoInfo ()
-              , ty = TyUnknown {}
-              }
   | CAtomicCASInt3 (r, seen) ->
     match arg with TmConst ({val = CInt {val = i}} & t) then
       TmConst {t with val = CBool {val = atomicCAS r seen i}}
@@ -156,49 +142,18 @@ utest eval (bind_ p (bindall_
   , atomicExchange_ (var_ "r") (float_ 2.0)
   ]))
 with float_ 1.0 in
-utest eval (bind_ p (bindall_
-  [ ulet_ "v" (float_ 1.0)
-  , ulet_ "_" (atomicExchange_ (var_ "r") (var_ "v"))
-  , atomicCAS_ (var_ "r") (var_ "v") (float_ 2.0)
-  ]))
-with true_ in
-
-let p = ulet_ "r" (atomicMake_ (record_ [("foo", int_ 1)])) in
-utest eval (bind_ p (bindall_
-  [ ulet_ "v" (atomicGet_ (var_ "r"))
-  , atomicCAS_ (var_ "r") (var_ "v") (record_ [])
-  ]
-))
-with true_ in
-
-utest eval (bindall_
-  [ ucondef_ "Foo"
-  , ulet_ "r" (atomicMake_ (conapp_ "Foo" (int_ 1)))
-  , ulet_ "v" (atomicGet_ (var_ "r"))
-  , atomicCAS_ (var_ "r") (var_ "v") (conapp_ "Foo" (int_ 2))
-  ]
-)
-with true_ in
 
 utest eval (bindall_
   [ ucondef_ "Foo"
   , ulet_ "r" (atomicMake_ (conapp_ "Foo" (int_ 1)))
   , ulet_ "foo2" (conapp_ "Foo" (int_ 2))
-  , ulet_ "_" (atomicExchange_ (var_ "r") (var_ "foo2"))
-  , atomicCAS_ (var_ "r") (var_ "foo2") (conapp_ "Foo" (int_ 3))
+  , ulet_ "foo1" (atomicExchange_ (var_ "r") (var_ "foo2"))
+  , match_ (var_ "foo1") (pcon_ "Foo" (pint_ 1)) true_ false_
   ]
 )
 with true_ in
 
-
-let f = ureclet_ "foo" (ulam_ "x" (app_ (var_ "foo") (var_ "x"))) in
-utest eval (bindall_
-  [ ulet_ "r" (atomicMake_ f)
-  , ulet_ "v" (atomicGet_ (var_ "r"))
-  , atomicCAS_ (var_ "r") (var_ "v") f
-  ]
-) with true_ in
-
+-- Threads
 utest eval (bindall_
   [ ulet_ "v" (int_ 43)
   , ulet_ "t" (threadSpawn_ (ulam_ "_" (addi_ (var_ "v") (int_ 1))))
