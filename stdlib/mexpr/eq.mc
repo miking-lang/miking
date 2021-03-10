@@ -2,6 +2,7 @@
 -- and symbolized terms (including partially symbolized terms). Also supports
 -- terms with unbound (free) variables and constructors.
 
+include "assoc-seq.mc"
 include "name.mc"
 include "bool.mc"
 include "tensor.mc"
@@ -46,7 +47,7 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
-type TypeEnv = AssocMap Name Type
+type TypeEnv = AssocSeq Name Type
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
@@ -974,7 +975,7 @@ let t = nameSym "T" in
 let letexpr = lam ty.
   nlet_ x ty (app_ (nvar_ f) (nvar_ y))
 in
-let emptyEnv = assocEmpty in
+let emptyEnv = assocSeqEmpty in
 
 let letu = letexpr tyunknown_ in
 let letb = letexpr tybool_ in
@@ -1013,8 +1014,8 @@ utest tyrec1 with tyrec1 using eqType emptyEnv in
 utest tyrec2 with tyrec3 using eqType emptyEnv in
 utest eqType emptyEnv tyrec1 tyrec2 with false in
 
-let tyEnv1 = seq2assoc {eq=nameEq} [(t, tyint_)] in
-let tyEnv2 = seq2assoc {eq=nameEq} [(t, tybool_)] in
+let tyEnv1 = seq2assocSeq [(t, tyint_)] in
+let tyEnv2 = seq2assocSeq [(t, tybool_)] in
 utest eqType emptyEnv (ntyvar_ t) tyint_ with false in
 utest eqType emptyEnv tyint_ (ntyvar_ t) with false in
 utest ntyvar_ t with tyint_ using eqType tyEnv1 in

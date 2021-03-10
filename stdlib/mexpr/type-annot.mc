@@ -1,3 +1,4 @@
+include "assoc-seq.mc"
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
@@ -82,7 +83,7 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
-        if eqType assocEmpty from ty then to else tyunknown_
+        if eqType assocSeqEmpty from ty then to else tyunknown_
       else tyunknown_
     in
     TmApp {{{t with lhs = lhs}
@@ -368,36 +369,38 @@ mexpr
 
 use TestLang in
 
+let eqTypeEmptyEnv = eqType assocSeqEmpty in
+
 let x = nameSym "x" in
 let y = nameSym "y" in
 let z = nameSym "z" in
 let n = nameSym "n" in
 
 let appConst = addi_ (int_ 5) (int_ 2) in
-utest ty (typeAnnot appConst) with tyint_ using eqType assocEmpty in
+utest ty (typeAnnot appConst) with tyint_ using eqTypeEmptyEnv in
 
 let variableType = tyarrow_ tyint_ tybool_ in
 let appVariable = app_ (withType variableType (nvar_ x)) (int_ 0) in
-utest ty (typeAnnot appVariable) with tybool_ using eqType assocEmpty in
+utest ty (typeAnnot appVariable) with tybool_ using eqTypeEmptyEnv in
 
 let partialAppConst = nlam_ x tyint_ (addi_ (int_ 5) (nvar_ x)) in
 utest ty (typeAnnot partialAppConst)
 with  tyarrow_ tyint_ tyint_
-using eqType assocEmpty in
+using eqTypeEmptyEnv in
 
 let badApp = bindall_ [
   nulet_ x (int_ 5),
   app_ (nvar_ x) (float_ 3.14)
 ] in
-utest ty (typeAnnot badApp) with tyunknown_ using eqType assocEmpty in
+utest ty (typeAnnot badApp) with tyunknown_ using eqTypeEmptyEnv in
 
 let lamConstantReturnType = nulam_ x (int_ 0) in
 utest ty (typeAnnot lamConstantReturnType)
 with  tyarrow_ tyunknown_ tyint_
-using eqType assocEmpty in
+using eqTypeEmptyEnv in
 
 let letAscription = bind_ (nlet_ x tyint_ (nvar_ y)) (nvar_ x) in
-utest ty (typeAnnot letAscription) with tyint_ using eqType assocEmpty in
+utest ty (typeAnnot letAscription) with tyint_ using eqTypeEmptyEnv in
 
 let recLets = typeAnnot (bindall_ [
   nreclets_ [
@@ -407,40 +410,40 @@ let recLets = typeAnnot (bindall_ [
   ],
   unit_
 ]) in
-utest ty recLets with tyunit_ using eqType assocEmpty in
+utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
 let _ignored =
   match recLets with TmRecLets {bindings = bindings} then
     let xTy = tyarrow_ tyunit_ tyint_ in
     let yTy = tyarrow_ tyunit_ tyint_ in
     let zTy = tyarrow_ tyunit_ tyunknown_ in
-    utest (get bindings 0).ty with xTy using eqType assocEmpty in
-    utest (get bindings 1).ty with yTy using eqType assocEmpty in
-    utest (get bindings 2).ty with zTy using eqType assocEmpty in
+    utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
+    utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
+    utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
     ()
   else never
 in
 
-utest ty (typeAnnot (int_ 4)) with tyint_ using eqType assocEmpty in
-utest ty (typeAnnot (char_ 'c')) with tychar_ using eqType assocEmpty in
-utest ty (typeAnnot (float_ 1.2)) with tyfloat_ using eqType assocEmpty in
-utest ty (typeAnnot true_) with tybool_ using eqType assocEmpty in
+utest ty (typeAnnot (int_ 4)) with tyint_ using eqTypeEmptyEnv in
+utest ty (typeAnnot (char_ 'c')) with tychar_ using eqTypeEmptyEnv in
+utest ty (typeAnnot (float_ 1.2)) with tyfloat_ using eqTypeEmptyEnv in
+utest ty (typeAnnot true_) with tybool_ using eqTypeEmptyEnv in
 
 let emptySeq = typeAnnot (seq_ []) in
-utest ty emptySeq with tyseq_ tyunknown_ using eqType assocEmpty in
+utest ty emptySeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
 
 let intSeq = typeAnnot (seq_ [int_ 1, int_ 2, int_ 3]) in
-utest ty intSeq with tyseq_ tyint_ using eqType assocEmpty in
+utest ty intSeq with tyseq_ tyint_ using eqTypeEmptyEnv in
 
 let intMatrix = typeAnnot (seq_ [seq_ [int_ 1, int_ 2],
                                  seq_ [int_ 3, int_ 4]]) in
-utest ty intMatrix with tyseq_ (tyseq_ tyint_) using eqType assocEmpty in
+utest ty intMatrix with tyseq_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 
 let unknownSeq = typeAnnot (seq_ [nvar_ x, nvar_ y]) in
-utest ty unknownSeq with tyseq_ tyunknown_ using eqType assocEmpty in
+utest ty unknownSeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
 
 let emptyRecord = typeAnnot unit_ in
-utest ty emptyRecord with tyunit_ using eqType assocEmpty in
+utest ty emptyRecord with tyunit_ using eqTypeEmptyEnv in
 
 let record = typeAnnot (record_ [
   ("a", int_ 0), ("b", float_ 2.718), ("c", record_ []),
@@ -460,30 +463,30 @@ let expectedRecordType = tyrecord_ [
     ])
   ])
 ] in
-utest ty record with expectedRecordType using eqType assocEmpty in
+utest ty record with expectedRecordType using eqTypeEmptyEnv in
 let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
-utest ty recordUpdate with expectedRecordType using eqType assocEmpty in
+utest ty recordUpdate with expectedRecordType using eqTypeEmptyEnv in
 
 let typeDecl = bind_ (ntype_ n tyunknown_) unit_ in
-utest ty (typeAnnot typeDecl) with tyunit_ using eqType assocEmpty in
+utest ty (typeAnnot typeDecl) with tyunit_ using eqTypeEmptyEnv in
 
 let conApp = bindall_ [
   ntype_ n tyunknown_,
   ncondef_ x (tyarrow_ tyint_ (ntyvar_ n)),
   nconapp_ x (int_ 4)
 ] in
-utest ty (typeAnnot conApp) with ntyvar_ n using eqType assocEmpty in
+utest ty (typeAnnot conApp) with ntyvar_ n using eqTypeEmptyEnv in
 
 let matchInteger = typeAnnot (bindall_ [
   nlet_ x tyint_ (int_ 0),
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
-utest ty matchInteger with tyint_ using eqType assocEmpty in
+utest ty matchInteger with tyint_ using eqTypeEmptyEnv in
 let _ignored =
   match matchInteger with TmLet {inexpr = TmMatch t} then
-    utest ty t.target with tyint_ using eqType assocEmpty in
-    utest ty t.thn with tyint_ using eqType assocEmpty in
-    utest ty t.els with tyint_ using eqType assocEmpty in
+    utest ty t.target with tyint_ using eqTypeEmptyEnv in
+    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+    utest ty t.els with tyint_ using eqTypeEmptyEnv in
     ()
   else never
 in
@@ -491,12 +494,12 @@ in
 let matchDistinct = typeAnnot (
   match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
 ) in
-utest ty matchDistinct with tyunknown_ using eqType assocEmpty in
+utest ty matchDistinct with tyunknown_ using eqTypeEmptyEnv in
 let _ignored =
   match matchDistinct with TmMatch t then
-    utest ty t.target with tyint_ using eqType assocEmpty in
-    utest ty t.thn with tyint_ using eqType assocEmpty in
-    utest ty t.els with tychar_ using eqType assocEmpty in
+    utest ty t.target with tyint_ using eqTypeEmptyEnv in
+    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+    utest ty t.els with tychar_ using eqTypeEmptyEnv in
     ()
   else never
 in
@@ -504,16 +507,16 @@ in
 let utestAnnot = typeAnnot (
   utest_ (int_ 0) false_ (char_ 'c')
 ) in
-utest ty utestAnnot with tychar_ using eqType assocEmpty in
+utest ty utestAnnot with tychar_ using eqTypeEmptyEnv in
 let _ignored =
   match utestAnnot with TmUtest t then
-    utest ty t.test with tyint_ using eqType assocEmpty in
-    utest ty t.expected with tybool_ using eqType assocEmpty in
-    utest ty t.next with tychar_ using eqType assocEmpty in
+    utest ty t.test with tyint_ using eqTypeEmptyEnv in
+    utest ty t.expected with tybool_ using eqTypeEmptyEnv in
+    utest ty t.next with tychar_ using eqTypeEmptyEnv in
     ()
   else never
 in
 
-utest ty (typeAnnot never_) with tyunknown_ using eqType assocEmpty in
+utest ty (typeAnnot never_) with tyunknown_ using eqTypeEmptyEnv in
 
 ()
