@@ -37,10 +37,16 @@ let ustring_of_var ?(symbol = !ref_symbol) x s =
 let lit_of_uchar c =
   let str =
     match string_of_ustring (Ustring.from_uchars [|c|]) with
-    (* TODO(dlunde,?): This is a temporary fix for newlines only. How do we do this
-       properly? *)
     | "\n" ->
         "\\n"
+    | "\t" ->
+        "\\t"
+    | "\\" ->
+        "\\\\"
+    | "\'" ->
+        "\\'"
+    | "\"" ->
+        "\\\""
     | str ->
         str
   in
