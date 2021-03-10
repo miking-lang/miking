@@ -517,6 +517,9 @@ and print_tm fmt (prec, t) =
 
 (** Auxiliary print function *)
 and print_tm' fmt t =
+  let print_ty_if_known tystr =
+    if tystr = "Unknown" then "" else ":" ^ tystr
+  in
   match t with
   | TmVar (_, x, s) ->
       let print = string_of_ustring (ustring_of_var x s) in
@@ -525,13 +528,13 @@ and print_tm' fmt t =
   | TmLam (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]" !ref_indent x ty print_tm
-        (Lam, t1)
+      fprintf fmt "@[<hov %d>lam %s%s.@ %a@]" !ref_indent x
+        (print_ty_if_known ty) print_tm (Lam, t1)
   | TmLet (_, x, s, ty, t1, t2) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>let %s:%s =@ %a in@]@ %a@]" !ref_indent x
-        ty print_tm (Match, t1) print_tm (Match, t2)
+      fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent x
+        (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
   | TmType (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
@@ -542,8 +545,8 @@ and print_tm' fmt t =
         let x = string_of_ustring (ustring_of_var x s) in
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fun fmt ->
-          fprintf fmt "@[<hov %d>let %s:%s =@ %a@]" !ref_indent x ty print_tm
-            (Match, t)
+          fprintf fmt "@[<hov %d>let %s%s =@ %a@]" !ref_indent x
+            (print_ty_if_known ty) print_tm (Match, t)
       in
       let inner = List.map print lst in
       fprintf fmt "@[<hov 0>@[<hov %d>recursive@ @[<hov 0>%a@] in@]@ %a@]"
@@ -582,7 +585,8 @@ and print_tm' fmt t =
   | TmConDef (_, x, s, ty, t) ->
       let str = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>con %s:%s in@ %a@]" str ty print_tm (Match, t)
+      fprintf fmt "@[<hov 0>con %s%s in@ %a@]" str (print_ty_if_known ty)
+        print_tm (Match, t)
   | TmConApp (_, x, sym, t) ->
       let str = string_of_ustring (ustring_of_var x sym) in
       fprintf fmt "%s %a" str print_tm (Atom, t)
