@@ -362,14 +362,14 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
     match pprintEnvGetStr env t.ident with (env,str) then
       let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
       match pprintCode indent env t.inexpr with (env,inexpr) then
-        match getTypeStringCode indent env t.ty with (env, ty) then
-          match t.ty with TyUnknown{} then
+        match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
+          match t.tyIdent with TyUnknown{} then
             (env, join ["type ", ident, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
           else
             (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
-                      ty, pprintNewline indent,
+                      tyIdent, pprintNewline indent,
                       "in", pprintNewline indent,
                       inexpr])
         else never
