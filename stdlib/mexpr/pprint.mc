@@ -131,7 +131,7 @@ let pprintConString = lam str.
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
 let _record2tuple
-  : Map String a
+  : Map SID a
   -> Option [a]
   = lam bindings.
     let keys = map sidToString (mapKeys bindings) in
@@ -480,19 +480,20 @@ lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + Nev
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmMatch (t &
     { pat = PatRecord
-      { bindings =
-        [ (fieldLabel, PatNamed {ident = PName patName})
-        ]
+      { bindings = bindings
       }
     , thn = TmVar {ident = exprName}
     , els = TmNever _
     , target = expr
     })
-  -> if nameEq patName exprName
+  -> match mapBindings bindings with [(fieldLabel, PatNamed {ident = PName patName})]
     then
-      match printParen indent env expr with (env, expr) then
-        (env, join [expr, ".", pprintLabelString fieldLabel])
-      else never
+      if nameEq patName exprName
+      then
+        match printParen indent env expr with (env, expr) then
+          (env, join [expr, ".", pprintLabelString fieldLabel])
+        else never
+      else pprintTmMatchNormally indent env t
     else pprintTmMatchNormally indent env t
 end
 
