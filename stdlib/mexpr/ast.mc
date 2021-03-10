@@ -506,6 +506,7 @@ lang SeqOpAst = SeqAst
   | CReverse {}
   | CCreate {}
   | CSplitAt {}
+  | CSubsequence {}
 end
 
 lang FileOpAst = ConstAst
