@@ -862,8 +862,9 @@ end
 
 lang VariantTypePrettyPrint = VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyVariant {constrs = []} -> (env,"<>")
-  | TyVariant t -> error "Printing of non-empty variant types not yet supported"
+  | TyVariant t ->
+    if eqi (mapLength t.constrs) 0 then (env,"<>")
+    else error "Printing of non-empty variant types not yet supported"
 end
 
 lang VarTypePrettyPrint = VarTypeAst

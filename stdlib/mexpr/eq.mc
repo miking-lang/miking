@@ -571,17 +571,8 @@ end
 lang VariantTypeEq = Eq + VariantTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyVariant r ->
-    -- OPT(larshum, 2021-02-05): This comparison is quadratic in the number of
-    -- constructors
-    let f = lam lname.
-      match find (lam rname. nameEq lname rname) r.constrs with Some _ then
-        true
-      else false
-    in
     match _unwrapType typeEnv lhs with Some (TyVariant l) then
-      if eqi (length l.constrs) (length r.constrs) then
-        all (lam lname. f lname) l.constrs
-      else false
+      mapEq (eqType typeEnv) l.constrs r.constrs
     else false
 end
 
