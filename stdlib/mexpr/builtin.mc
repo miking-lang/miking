@@ -20,7 +20,7 @@ let builtin = use MExprAst in [
   ("srli", CSrli ()),
   ("srai", CSrai ()),
   -- ("arity", CArity ()),   -- Arity is not yet implemented
-  ("print", CPrintString ())
+  ("print", CPrint ())
 ]
 
 
