@@ -833,7 +833,7 @@ end
 
 lang VariantTypeAst
   syn Type =
-  | TyVariant {constrs : [Name]}
+  | TyVariant {constrs : Map Name Type}
 end
 
 lang VarTypeAst

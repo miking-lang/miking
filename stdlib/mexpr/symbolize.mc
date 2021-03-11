@@ -320,8 +320,9 @@ end
 
 lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyVariant {constrs = []} & ty -> ty
-  | TyVariant t -> error "Symbolizing non-empty variant types not yet supported"
+  | TyVariant t & ty ->
+    if eqi (mapLength t.constrs) 0 then ty
+    else error "Symbolizing non-empty variant types not yet supported"
 end
 
 lang VarTypeSym = VarTypeAst
