@@ -9,15 +9,9 @@ include "seq.mc"
 type AssocSeq k v = [(k, v)]
 type AssocTraits k = {eq: k -> k -> Bool}
 
-let assocSeqEmpty : AssocSeq k v = []
-
 let assocSeqInsert : k -> v -> AssocSeq k v -> AssocSeq k v =
   lam k. lam v. lam s.
     cons (k,v) s
-
-let assocSeqLength : AssocSeq k v -> Int =
-  lam s.
-    length s
 
 let assocSeqLookup : AssocTraits k -> k -> AssocSeq k v -> Option v =
   lam traits. lam k. lam s.
@@ -32,11 +26,3 @@ let assocSeqMap : (v1 -> v2) -> AssocSeq k v1 -> AssocSeq k v2 =
 let assocSeqFold : (acc -> k -> v -> acc) -> acc -> AssocSeq k v -> acc =
   lam f. lam acc. lam s.
     foldl (lam acc. lam kv. f acc kv.0 kv.1) acc s
-
-let seq2assocSeq : [(k, v)] -> AssocSeq k v =
-  lam s.
-    assocSeqFold (lam acc. lam k. lam v. assocSeqInsert k v acc) assocSeqEmpty s
-
-let assocSeq2seq : AssocSeq k v -> [(k, v)] =
-  lam s.
-    s

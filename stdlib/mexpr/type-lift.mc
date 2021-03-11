@@ -447,10 +447,10 @@ let eqEnv = lam lenv. lam renv.
   use MExprEq in
   let elemCmp = lam l. lam r.
     and (eqString (nameGetStr l.0) (nameGetStr r.0))
-        (eqType assocSeqEmpty l.1 r.1)
+        (eqType [] l.1 r.1)
   in
-  if eqi (assocSeqLength lenv) (assocSeqLength renv) then
-    eqSeq elemCmp (assocSeq2seq lenv) (assocSeq2seq renv)
+  if eqi (length lenv) (length renv) then
+    eqSeq elemCmp lenv renv
   else false
 in
 
@@ -459,7 +459,7 @@ let unitNotLifted = typeAnnot (symbolize (bindall_ [
   unit_
 ])) in
 (match typeLift unitNotLifted with (env, t) then
-  utest env with assocSeqEmpty using eqEnv in
+  utest env with [] using eqEnv in
   utest t with unitNotLifted using eqExpr in
   ()
 else never);
@@ -471,7 +471,7 @@ let noVariantsOrRecords = typeAnnot (symbolize (bindall_ [
   var_ "z"
 ])) in
 (match typeLift noVariantsOrRecords with (env, t) then
-  utest env with assocSeqEmpty using eqEnv in
+  utest env with [] using eqEnv in
   utest t with noVariantsOrRecords using eqExpr in
   ()
 else never);
@@ -487,7 +487,7 @@ let variant = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   unit_
 ])) in
-let expectedEnv = seq2assocSeq [
+let expectedEnv = [
   (treeName, tyvariant_ [
     (branchName, tytuple_ [ntyvar_ treeName, ntyvar_ treeName]),
     (leafName, tyint_)
@@ -511,13 +511,13 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   lastTerm
 ])) in
-let expectedEnv = seq2assocSeq [
+let expectedEnv = [
+  (nameNoSym "Rec", tyrecord_ [
+    ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
+  ]),
   (treeName, tyvariant_ [
     (branchName, tyrecord_ [("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)]),
     (leafName, tyint_)
-  ]),
-  (nameNoSym "Rec", tyrecord_ [
-    ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
   ])
 ] in
 (match typeLift variantWithRecords with (env, t) then
@@ -537,12 +537,7 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   ]),
   unit_
 ])) in
-let expectedEnv = seq2assocSeq [
-  (nameNoSym "Rec", tyrecord_ [
-    ("x", tyint_),
-    ("y", tyfloat_),
-    ("z", tyunit_)
-  ]),
+let expectedEnv = [
   (nameNoSym "Rec", tyrecord_ [
     ("a", tyrecord_ [
       ("x", tyint_),
@@ -550,6 +545,11 @@ let expectedEnv = seq2assocSeq [
       ("z", tyunit_)
     ]),
     ("b", tyint_)
+  ]),
+  (nameNoSym "Rec", tyrecord_ [
+    ("x", tyint_),
+    ("y", tyfloat_),
+    ("z", tyunit_)
   ])
 ] in
 (match typeLift nestedRecord with (env, t) then
@@ -563,9 +563,9 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 2), ("b", true_)]),
   unit_
 ])) in
-let expectedEnv = seq2assocSeq [
-  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tyint_)]),
-  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tybool_)])
+let expectedEnv = [
+  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tybool_)]),
+  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tyint_)])
 ] in
 (match typeLift recordsSameFieldsDifferentTypes with (env, t) then
   utest env with expectedEnv using eqEnv in
@@ -578,7 +578,7 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 3), ("b", int_ 6)]),
   unit_
 ])) in
-let expectedEnv = seq2assocSeq [
+let expectedEnv = [
   (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tyint_)])
 ] in
 (match typeLift recordsSameFieldsSameTypes with (env, t) then
@@ -594,7 +594,7 @@ let record = typeAnnot (symbolize (record_ [
 (match typeLift record with (env, t) then
   match ty t with TyVar {ident = ident} then
     match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
-      utest recordTy with ty record using eqType assocSeqEmpty in
+      utest recordTy with ty record using eqType [] in
       ()
     else never
   else never
@@ -608,7 +608,7 @@ let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 (match typeLift recordUpdate with (env, t) then
   match t with TmLet {tyBody = TyVar {ident = ident}} then
     match assocSeqLookup {eq=nameEq} ident env with Some ty then
-      utest ty with recordType using eqType assocSeqEmpty in
+      utest ty with recordType using eqType [] in
       ()
     else never
   else never

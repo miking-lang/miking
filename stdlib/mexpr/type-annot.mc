@@ -83,7 +83,7 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
-        if eqType assocSeqEmpty from ty then to else tyunknown_
+        if eqType [] from ty then to else tyunknown_
       else tyunknown_
     in
     TmApp {{{t with lhs = lhs}
@@ -369,7 +369,7 @@ mexpr
 
 use TestLang in
 
-let eqTypeEmptyEnv = eqType assocSeqEmpty in
+let eqTypeEmptyEnv = eqType [] in
 
 let x = nameSym "x" in
 let y = nameSym "y" in
