@@ -360,11 +360,7 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
     else match mapLookup fields env.records with Some name then
       match assocSeqLookup {eq=nameEq} name env.typeEnv with Some recTyVar then
         (env, recTyVar)
-      else
-        dprintLn (mapBindings fields);
-        dprintLn name;
-        dprintLn env.typeEnv;
-        error "Record mapped to unknown type"
+      else error "Record mapped to unknown type"
     else
       let recName = nameSym "Rec" in
       let recVar = ntyvar_ recName in
