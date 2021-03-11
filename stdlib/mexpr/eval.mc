@@ -49,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 let _seqOfCharToString = use MExprAst in
   lam tms.
     let f = lam c.
-      match c with TmConst {val = CChar c, info = NoInfo()} then
+      match c with TmConst {val = CChar c} then
         c.val
       else error "Not a character"
     in
@@ -962,7 +962,7 @@ end
 
 lang IOEval = IOAst + SeqAst + UnknownTypeAst
   sem delta (arg : Expr) =
-  | CPrintString _ ->
+  | CPrint _ ->
     match arg with TmSeq s then
       let s = _seqOfCharToString s.tms in
       print s;
@@ -1614,8 +1614,8 @@ with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1]
 using eqExpr in
 
 -- I/O operations
--- utest eval (printString_ (str_ "Hello World")) with unit_ in
--- utest eval (printString_ (readLine_ unit_)) with unit_ in
+-- utest eval (print_ (str_ "Hello World")) with unit_ in
+-- utest eval (print_ (readLine_ unit_)) with unit_ in
 
 -- Random number generation
 utest eval (bind_ (ulet_ "_" (randSetSeed_ (int_ 42)))

@@ -28,17 +28,20 @@ type SymEnv = {
 let symEnvEmpty =
   {varEnv = assocEmpty, conEnv = assocEmpty, tyEnv = assocEmpty}
 
+let symVarNameEnv = lam varNameEnv : [Name].
+  {symEnvEmpty with varEnv = map (lam x. (nameGetStr x, x)) varNameEnv}
+ 
 -----------
 -- TERMS --
 -----------
 
 lang Sym
+  -- Symbolize with an environment
   sem symbolizeExpr (env : SymEnv) =
-  -- Intentionally left blank
 
+  -- Symbolize with empty environments
   sem symbolize =
   | expr -> symbolizeExpr symEnvEmpty expr
-
 end
 
 lang VarSym = Sym + VarAst

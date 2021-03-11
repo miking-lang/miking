@@ -130,10 +130,11 @@ let pprintConString = lam str.
 
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
-let _record2tuple = lam tm.
-  use RecordAst in
-  match tm with TmRecord t then
-    let keys = map sidToString (mapKeys t.bindings) in
+let _record2tuple
+  : Map SID a
+  -> Option [a]
+  = lam bindings.
+    let keys = map sidToString (mapKeys bindings) in
     match all stringIsInt keys with false then None () else
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
@@ -142,10 +143,9 @@ let _record2tuple = lam tm.
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
       Some (map (lam key. mapLookupOrElse
                             (lam. error "Key not found")
-                            (stringToSid (int2string key)) t.bindings)
+                            (stringToSid (int2string key)) bindings)
                  sortedKeys)
     else None ()
-  else error "Not a record"
 
 
 -----------
@@ -277,9 +277,9 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
   | TmRecordUpdate _ -> true
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmRecord t ->
-    if mapIsEmpty t.bindings then (env,"{}")
-    else match _record2tuple (TmRecord t) with Some tms then
+  | TmRecord {bindings = bindings} ->
+    if mapIsEmpty bindings then (env,"{}")
+    else match _record2tuple bindings with Some tms then
       match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
       with (env,tupleExprs) then
         let merged = match tupleExprs with [e] then
@@ -297,7 +297,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
                 join [pprintLabelString k, " =", pprintNewline innerIndent,
                       str])
              else never)
-           env t.bindings
+           env bindings
       with (env, bindMap) then
         let binds = mapValues bindMap in
         let merged =
@@ -454,7 +454,10 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
   -- intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmMatch t ->
+  | TmMatch t -> pprintTmMatchNormally indent env t
+
+  sem pprintTmMatchNormally (indent : Int) (env: PprintEnv) =
+  | t ->
     let i = indent in
     let ii = pprintIncr indent in
     match pprintCode ii env t.target with (env,target) then
@@ -469,6 +472,27 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
         else never
       else never
     else never
+end
+
+lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmMatch (t &
+    { pat = PatRecord
+      { bindings = bindings
+      }
+    , thn = TmVar {ident = exprName}
+    , els = TmNever _
+    , target = expr
+    })
+  -> match mapBindings bindings with [(fieldLabel, PatNamed {ident = PName patName})]
+    then
+      if nameEq patName exprName
+      then
+        match printParen indent env expr with (env, expr) then
+          (env, join [expr, ".", pprintLabelString fieldLabel])
+        else never
+      else pprintTmMatchNormally indent env t
+    else pprintTmMatchNormally indent env t
 end
 
 lang UtestPrettyPrint = PrettyPrint + UtestAst
@@ -546,6 +570,9 @@ lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
   | CAddi _ -> "addi"
   | CSubi _ -> "subi"
   | CMuli _ -> "muli"
+  | CModi _ -> "modi"
+  | CDivi _ -> "divi"
+  | CNegi _ -> "negi"
 end
 
 lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
@@ -691,7 +718,17 @@ lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
 
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
-    match
+    if mapIsEmpty bindings then (env, "{}")
+    else match _record2tuple bindings with Some pats then
+      match mapAccumL (lam env. lam e. getPatStringCode indent env e) env pats
+      with (env, tuplePats) then
+        let merged =
+          match tuplePats with [e]
+          then concat e ","
+          else strJoin ", " tuplePats in
+        (env, join ["(", merged, ")"])
+      else never
+    else match
       mapMapAccum
         (lam env. lam k. lam v.
            match getPatStringCode indent env v with (env,str) then
@@ -915,6 +952,9 @@ lang MExprPrettyPrint =
 
   -- Identifiers
   + MExprIdentifierPrettyPrint
+
+  -- Syntactic Sugar
+  + RecordProjectionSyntaxSugarPrettyPrint
 
 end
 

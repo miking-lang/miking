@@ -104,7 +104,7 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
-lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
+lang OCamlPrettyPrint = VarPrettyPrint
                         + LetPrettyPrint + ConstPrettyPrint + OCamlAst
                         + IdentifierPrettyPrint + UnknownTypePrettyPrint
                         + NamedPatPrettyPrint + IntPatPrettyPrint
@@ -120,6 +120,8 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   sem isAtomic =
   | TmLam _ -> false
   | TmRecLets _ -> false
+  | TmApp _ -> false
+  | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
   | OTmConApp {args = []} -> true
@@ -171,6 +173,9 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
   | CNeqf _ -> "(!=)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> show_char c
+  | CEqc _ -> "(=)"
+  | CChar2Int _ -> "int_of_char"
+  | CInt2Char _ -> "char_of_int"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVarExt {ident = ident} -> (env, ident)
@@ -225,6 +230,21 @@ lang OCamlPrettyPrint = VarPrettyPrint + AppPrettyPrint
                      pprintNewline indent, "in ", inexpr])
         else never
       else never
+    else never
+  | TmApp t ->
+    match pprintCode indent env t.lhs with (env,l) then
+      match pprintCode indent env t.rhs with (env,r) then
+        (env, join ["(", l, ") (", r, ")"])
+      else never
+    else never
+  | OTmArray t ->
+    match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
+                    env t.tms
+    with (env,tms) then
+      let merged =
+        strJoin (concat ";" (pprintNewline (pprintIncr indent))) tms
+      in
+      (env,join ["[| ", merged, " |]"])
     else never
   | OTmTuple {values = values} ->
     match mapAccumL (pprintCode indent) env values

@@ -506,6 +506,7 @@ lang SeqOpAst = SeqAst
   | CReverse {}
   | CCreate {}
   | CSplitAt {}
+  | CSubsequence {}
 end
 
 lang FileOpAst = ConstAst
@@ -532,7 +533,7 @@ end
 
 lang IOAst = ConstAst
   syn Const =
-  | CPrintString {}
+  | CPrint {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
@@ -561,6 +562,47 @@ lang RefOpAst = ConstAst + RefAst
   | CRef {}
   | CModRef {}
   | CDeRef {}
+end
+
+lang MapAst = ConstAst
+  syn Const =
+  | CMapEmpty {}
+  | CMapInsert {}
+  | CMapRemove {}
+  | CMapFind {}
+  | CMapMem {}
+  | CMapAny {}
+  | CMapMap {}
+  | CMapMapWithKey {}
+  | CMapBindings {}
+end
+
+lang TensorAst = ConstAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
+end
+
+lang BootParserAst = ConstAst
+  syn Const =
+  | CBootParserParseMExprString {}
+  | CBootParserGetId {}
+  | CBootParserGetTerm {}
+  | CBootParserGetString {}
+  | CBootParserGetInt {}
+  | CBootParserGetFloat {}
+  | CBootParserGetListLength {}
+  | CBootParserGetConst {}
+  | CBootParserGetPat {}
+  | CBootParserGetInfo {}
 end
 
 --------------
@@ -820,7 +862,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst + TensorOpAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorAst +
+  TensorOpAst + BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

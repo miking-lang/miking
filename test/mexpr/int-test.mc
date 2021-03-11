@@ -2,6 +2,7 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- Integer intrinsics
+include "bool.mc"
 
 mexpr
 
@@ -21,7 +22,6 @@ utest 1 with modi 9 2 in              -- modulo
 -- int -> int
 utest 15 with addi 20 (negi 5) in
 utest negi 1 with negi 1 in
-
 -- Integer comparison operators
 -- int -> int -> bool
 let neg = lam f. lam x. lam y. not (f x y) in
@@ -44,19 +44,12 @@ utest 100 with 10 using neqi in       -- Not equal !=
 utest 10 with 20 using neqi in
 utest 10 with 10 using neg neqi in
 
+
 -- Bit-shifting operators
 -- int -> int -> int
 utest 12 with slli 3 2 in             -- shift left logical
 utest negi 12 with slli (negi 6) 1 in
 utest 3 with srli 24 3 in             -- shift right logical
 utest negi 3 with srai (negi 24) 3 in -- shift right arithmetic
-
-
--- Arity of intrinsic functions
-utest arity with arity in
-utest arity addi with 2 in
-utest arity arity with 1 in
-utest arity subf with 2 in
-utest arity negi with 1 in
 
 ()

@@ -141,6 +141,7 @@ let builtin =
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
   ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f CbootParserParseMExprString)
+  ; ("bootParserParseMCoreFile", f CbootParserParseMCoreFile)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
   ; ("bootParserGetString", f (CbootParserGetString None))
@@ -513,6 +514,8 @@ let arity = function
       0
   | CbootParserParseMExprString ->
       1
+  | CbootParserParseMCoreFile ->
+      1
   | CbootParserGetId ->
       1
   | CbootParserGetTerm None ->
@@ -560,29 +563,12 @@ let arity = function
   | CExt v ->
       Ext.arity v
 
-(* Random number generation *)
-let rand_is_seeded = ref false
-
-let rand_set_seed seed =
-  Random.init seed ;
-  rand_is_seeded := true
-
-let rand_int_u lower upper =
-  if !rand_is_seeded then () else Random.self_init () ;
-  lower + Random.int (upper - lower)
-
 let fail_constapp f v fi =
   raise_error fi
     ( "Incorrect application. function: "
     ^ Ustring.to_utf8 (ustring_of_const f)
     ^ " value: "
     ^ Ustring.to_utf8 (ustring_of_tm v) )
-
-(* Get current time stamp *)
-let get_wall_time_ms _ = Unix.gettimeofday () *. 1000.
-
-(* Sleep a number of ms *)
-let sleep_ms ms = Thread.delay (float_of_int ms /. 1000.)
 
 (* Evaluates a constant application. This is the standard delta function
    delta(c,v) with the exception that it returns an expression and not
@@ -785,10 +771,7 @@ let delta eval env fi c v =
         | _ ->
             fail_constapp fi
       in
-      let f =
-        s |> Mseq.Helpers.map to_char |> Mseq.Helpers.to_array
-        |> Ustring.from_uchars
-      in
+      let f = s |> Mseq.Helpers.map to_char in
       TmConst (fi, CFloat (Intrinsics.FloatConversion.string2float f))
   | Cstring2float, _ ->
       fail_constapp fi
@@ -902,20 +885,20 @@ let delta eval env fi c v =
       if v1 >= v2 then
         raise_error fi
           "Lower bound to randInt must be smaller than upper bound"
-      else TmConst (fi, CInt (rand_int_u v1 v2))
+      else TmConst (fi, CInt (RNG.int_u v1 v2))
   | CrandIntU _, _ ->
       fail_constapp fi
   | CrandSetSeed, TmConst (_, CInt v) ->
-      rand_set_seed v ; tmUnit
+      RNG.set_seed v ; tmUnit
   | CrandSetSeed, _ ->
       fail_constapp fi
   (* MCore intrinsics: Time *)
   | CwallTimeMs, TmRecord (fi, x) when Record.is_empty x ->
-      TmConst (fi, CFloat (get_wall_time_ms ()))
+      TmConst (fi, CFloat (Time.get_wall_time_ms ()))
   | CwallTimeMs, _ ->
       fail_constapp fi
   | CsleepMs, TmConst (_, CInt v) ->
-      sleep_ms v ; tmUnit
+      Time.sleep_ms v ; tmUnit
   | CsleepMs, _ ->
       fail_constapp fi
   (* MCore intrinsics: Debug and I/O *)
@@ -928,8 +911,9 @@ let delta eval env fi c v =
       !program_output (ustring_of_tm t) ;
       tmUnit
   | CreadLine, TmRecord (_, r) when r = Record.empty ->
-      let line = try read_line () with End_of_file -> "" in
-      TmSeq (fi, line |> Ustring.from_utf8 |> ustring2tmseq fi)
+      let line = Intrinsics.IO.read_line () in
+      let tms = Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) line in
+      TmSeq (fi, tms)
   | CreadLine, _ ->
       fail_constapp fi
   | CreadBytesAsString, TmConst (_, CInt v) ->
@@ -1449,9 +1433,16 @@ let delta eval env fi c v =
   | CbootParserTree _, _ ->
       fail_constapp fi
   | CbootParserParseMExprString, TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
+      let t = Parserutils.parse_mexpr_string (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMExprString, _ ->
+      fail_constapp fi
+  | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
+      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
+      (* Call symbolize just to get better error messages *)
+      (* let _ = symbolize builtin_name2sym t in *)
+      TmConst (fi, CbootParserTree (PTreeTm t))
+  | CbootParserParseMCoreFile, _ ->
       fail_constapp fi
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
       TmConst (fi, CInt (Bootparser.getId ptree))
@@ -2003,7 +1994,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
     (* Closure application *)
     | TmClos (ficlos, _, s, t3, env2) -> (
         if !enable_debug_profiling then (
-          let t1 = get_wall_time_ms () in
+          let t1 = Time.get_wall_time_ms () in
           let res =
             try eval ((s, eval env t2) :: Lazy.force env2) t3
             with e ->
@@ -2011,7 +2002,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
                 uprint_endline (us "TRACE: " ^. info2str fiapp) ;
               raise e
           in
-          let t2 = get_wall_time_ms () in
+          let t2 = Time.get_wall_time_ms () in
           add_call ficlos (t2 -. t1) ;
           res )
         else
