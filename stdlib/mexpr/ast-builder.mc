@@ -129,6 +129,12 @@ let tytuple_ = use MExprAst in
   lam tys.
   tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
 
+let tyvariant_ = use MExprAst in
+  lam constrs.
+  TyVariant {
+    constrs = mapFromList nameCmp constrs
+  }
+
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
   TyApp {lhs = lhs, rhs = rhs}

@@ -33,8 +33,9 @@ type TypeLiftEnv = {
   variants: Map Name (Map Name Type)
 }
 
--- This type is added for type lifting to allow distinguishing between variant
--- types in the type environment, before their constructors have been added.
+-- This type is added specifically the for type lifting to allow distinguishing
+-- between variant types in the type environment before their constructors
+-- have been added.
 lang VariantNameTypeAst
   syn Type =
   | TyVariantName {ident : Name}
@@ -60,9 +61,9 @@ let _collectTypeLiftEnv = lam env.
   in
   assocSeqMap f env.typeEnv
 
--- NOTE(larshum, 2021-03-10): This function is a simple comparison function for
--- types. It is required to be able to compare the record types in the records
--- map of the type-lifting environment.
+-- This function is a simple comparison function for types. It is required to
+-- be able to compare the record types in the records map of the type-lifting
+-- environment.
 recursive let _cmpType = lam ty1. lam ty2.
   use MExprAst in
   let _typeId = lam ty.
@@ -224,7 +225,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
   | TmType t ->
     let tyIdent =
       match t.tyIdent with TyUnknown {} then
-        TyVariant {constrs = mapEmpty nameCmp}
+        tyvariant_ []
       else t.tyIdent
     in
     let env =
@@ -458,12 +459,11 @@ let variant = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   unit_
 ])) in
-let variantConstrs = mapFromList nameCmp [
-  (branchName, tytuple_ [ntyvar_ treeName, ntyvar_ treeName]),
-  (leafName, tyint_)
-] in
 let expectedEnv = seq2assocSeq [
-  (treeName, TyVariant {constrs = variantConstrs})
+  (treeName, tyvariant_ [
+    (branchName, tytuple_ [ntyvar_ treeName, ntyvar_ treeName]),
+    (leafName, tyint_)
+  ])
 ] in
 (match typeLift variant with (env, t) then
   utest env with expectedEnv using eqEnv in
@@ -476,7 +476,7 @@ let lastTerm = nconapp_ branchName (record_ [
   ("rhs", nconapp_ leafName (int_ 2))
 ]) in
 let variantWithRecords = typeAnnot (symbolize (bindall_ [
-  ntype_ treeName (TyVariant {constrs = mapEmpty nameCmp}),
+  ntype_ treeName (tyvariant_ []),
   ncondef_ branchName (tyarrow_ (tyrecord_ [
     ("lhs", ntyvar_ treeName),
     ("rhs", ntyvar_ treeName)]) (ntyvar_ treeName)),
@@ -484,10 +484,10 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   lastTerm
 ])) in
 let expectedEnv = seq2assocSeq [
-  (treeName, TyVariant {constrs = mapFromList nameCmp [
+  (treeName, tyvariant_ [
     (branchName, tyrecord_ [("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)]),
     (leafName, tyint_)
-  ]}),
+  ]),
   (nameNoSym "Rec", tyrecord_ [
     ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
   ])
