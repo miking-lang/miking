@@ -106,6 +106,16 @@ recursive let _cmpType = lam ty1. lam ty2.
   else diff
 end
 
+-- Adds a record type with the given fields to the type lifting environment.
+let _addRecordTypeVar = lam env. lam fields.
+  use MExprAst in
+  let record = TyRecord {fields = fields} in
+  let recName = nameSym "Rec" in
+  let recTyVar = ntyvar_ recName in
+  let env = {{env with records = mapInsert fields recName env.records}
+                  with typeEnv = assocSeqInsert recName record env.typeEnv} in
+  (env, recTyVar)
+
 -----------
 -- TERMS --
 -----------
@@ -259,18 +269,26 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
       match t.tyIdent with TyUnknown {} then tyvariant_ []
       else t.tyIdent
     in
-    let env =
-      -- Ignore any existing constructors in the variant type because otherwise
-      -- we may get duplicates.
-      match tyIdent with TyVariant _ then
-        let variantNameTy = TyVariantName {ident = t.ident} in
-        {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
-              with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
-      else
-        {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
-    in
-    match typeLiftExpr env t.inexpr with (env, inexpr) then
-      (env, inexpr)
+    match typeLiftType env tyIdent with (env, tyIdent) then
+      let env =
+        -- Ignore any existing constructors in the variant type.
+        match tyIdent with TyVariant _ then
+          let variantNameTy = TyVariantName {ident = t.ident} in
+          {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
+                with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
+        else match tyIdent with TyRecord {fields = fields} then
+          let f = lam env. lam. lam ty. typeLiftType env ty in
+          match mapMapAccum f env fields with (env, fields) then
+            match _addRecordTypeVar env fields with (env, _) then
+              env
+            else never
+          else never
+        else
+          {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
+      in
+      match typeLiftExpr env t.inexpr with (env, inexpr) then
+        (env, inexpr)
+      else never
     else never
 end
 
@@ -404,12 +422,7 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
         match mapLookup fields env.records with Some name then
           (env, ntyvar_ name)
         else
-          let ty = TyRecord {fields = fields} in
-          let recName = nameSym "Rec" in
-          let recTyVar = ntyvar_ recName in
-          let env = {{env with records = mapInsert fields recName env.records}
-                          with typeEnv = assocSeqInsert recName ty env.typeEnv} in
-          (env, recTyVar)
+          _addRecordTypeVar env fields
       else never
 end
 
@@ -628,6 +641,48 @@ let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
       ()
     else never
   else never
+else never);
+
+let typeAliases = typeAnnot (symbolize (bindall_ [
+  type_ "GlobalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "LocalEnv" (tyseq_ (tytuple_ [tystr_, tyint_])),
+  type_ "Env" (tyrecord_ [
+    ("global", tyvar_ "GlobalEnv"),
+    ("local", tyvar_ "LocalEnv")
+  ]),
+  ulet_ "env" (record_ [
+    ("global", seq_ [tuple_ [str_ "x", int_ 4]]),
+    ("local", seq_ [tuple_ [str_ "a", int_ 0]])
+  ]),
+  var_ "env"
+])) in
+(match typeLift typeAliases with (env, t) then
+  -- Note that records and variants are added to the front of the environment
+  -- as they are processed, so the last record in the given term will be first
+  -- in the environment.
+  let ids = map (lam p. p.0) env in
+  let fstRecordId = get ids 5 in -- type Rec1 = {0 : [Char], 1 : Int}
+  let globalEnvId = get ids 4 in -- type GlobalEnv = [Rec1]
+  let localEnvId = get ids 3 in  -- type LocalEnv = [Rec1]
+  let sndRecordId = get ids 2 in -- type Rec2 = {global : GlobalEnv, local : LocalEnv}
+  let envId = get ids 1 in       -- type Env = Rec2
+  let trdRecordId = get ids 0 in -- type Rec3 = {global : [Rec1], local : [Rec1]}
+  let expectedEnv = [
+    (trdRecordId, tyrecord_ [
+      ("local", tyseq_ (ntyvar_ fstRecordId)),
+      ("global", tyseq_ (ntyvar_ fstRecordId))
+    ]),
+    (envId, ntyvar_ sndRecordId),
+    (sndRecordId, tyrecord_ [
+      ("local", ntyvar_ localEnvId),
+      ("global", ntyvar_ globalEnvId)
+    ]),
+    (localEnvId, tyseq_ (ntyvar_ fstRecordId)),
+    (globalEnvId, tyseq_ (ntyvar_ fstRecordId)),
+    (fstRecordId, tytuple_ [tystr_, tyint_])
+  ] in
+  utest env with expectedEnv using eqEnv in
+  ()
 else never);
 
 ()
