@@ -111,7 +111,10 @@ end
 -----------
 
 lang TypeLift = MExprEq
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  -- Intentionally left blank
+
+  sem typeLiftType (env : TypeLiftEnv) =
   -- Intentionally left blank
 
   sem typeLift =
@@ -121,113 +124,130 @@ lang TypeLift = MExprEq
       records = mapEmpty (mapCmp _cmpType),
       variants = mapEmpty nameCmp
     } in
-    match typeLiftH emptyEnv e with (env, t) then
+    match typeLiftExpr emptyEnv e with (env, t) then
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
 end
 
 lang VarTypeLift = TypeLift + VarAst
-  sem typeLiftH (env : TypeLiftEnv) =
-  | TmVar t -> (env, TmVar t)
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmVar t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TmVar {t with ty = ty})
+    else never
 end
 
 lang AppTypeLift = TypeLift + AppAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmApp t ->
-    match typeLiftH env t.lhs with (env, lhs) then
-      match typeLiftH env t.rhs with (env, rhs) then
-        (env, TmApp {{t with lhs = lhs}
-                        with rhs = rhs})
+    match typeLiftExpr env t.lhs with (env, lhs) then
+      match typeLiftExpr env t.rhs with (env, rhs) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmApp {{{t with lhs = lhs}
+                           with rhs = rhs}
+                           with ty = ty})
+        else never
       else never
     else never
 end
 
 lang LamTypeLift = TypeLift + LamAst
-  sem liftType (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmLam t ->
-    match liftType env t.tyIdent with (env, tyIdent) then
-      match typeLiftH env t.body with (env, body) then
-        (env, TmLam {{t with tyIdent = tyIdent}
-                        with body = body})
+    match typeLiftType env t.tyIdent with (env, tyIdent) then
+      match typeLiftExpr env t.body with (env, body) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmLam {{{t with tyIdent = tyIdent}
+                           with body = body}
+                           with ty = ty})
+        else never
       else never
     else never
 end
 
 lang LetTypeLift = TypeLift + LetAst
-  sem liftType (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmLet t ->
-    match typeLiftH env t.body with (env, body) then
-      match liftType env t.tyBody with (env, tyBody) then
-        match typeLiftH env t.inexpr with (env, inexpr) then
-          (env, TmLet {{{t with body = body}
-                           with tyBody = tyBody}
-                           with inexpr = inexpr})
+    match typeLiftExpr env t.body with (env, body) then
+      match typeLiftType env t.tyBody with (env, tyBody) then
+        match typeLiftExpr env t.inexpr with (env, inexpr) then
+          match typeLiftType env t.ty with (env, ty) then
+            (env, TmLet {{{{t with body = body}
+                              with tyBody = tyBody}
+                              with inexpr = inexpr}
+                              with ty = ty})
+          else never
         else never
       else never
     else never
 end
 
 lang RecLetsTypeLift = TypeLift + RecLetsAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmRecLets t ->
-    let f = lam env. lam binding. typeLiftH env binding.body in
+    let f = lam env. lam binding. typeLiftExpr env binding.body in
     match mapAccumL f env t.bindings with (env, bindings) then
-      match typeLiftH env t.inexpr with (env, inexpr) then
-        (env, TmRecLets {{t with bindings = bindings}
-                            with inexpr = inexpr})
+      match typeLiftExpr env t.inexpr with (env, inexpr) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmRecLets {{{t with bindings = bindings}
+                               with inexpr = inexpr}
+                               with ty = ty})
+        else never
       else never
     else never
 end
 
 lang ConstTypeLift = TypeLift + ConstAst
-  sem typeLiftH (env : TypeLiftEnv) =
-  | TmConst t -> (env, TmConst t)
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmConst t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TmConst {t with ty = ty})
+    else never
 end
 
 lang SeqTypeLift = TypeLift + SeqAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmSeq t ->
-    match mapAccumL typeLiftH env t.tms with (env, tms) then
-      (env, TmSeq {t with tms = tms})
+    match mapAccumL typeLiftExpr env t.tms with (env, tms) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmSeq {{t with tms = tms}
+                        with ty = ty})
+      else never
     else never
 end
 
 lang RecordTypeLift = TypeLift + RecordAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   -- Intentionally left blank
 
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmRecord t ->
-    let f = lam env. lam. lam v. typeLiftH env v in
+    let f = lam env. lam. lam v. typeLiftExpr env v in
     match mapMapAccum f env t.bindings with (env, bindings) then
-      match liftType env t.ty with (env, ty) then
+      match typeLiftType env t.ty with (env, ty) then
         (env, TmRecord {{t with bindings = bindings}
                            with ty = ty})
       else never
     else never
   | TmRecordUpdate t ->
-    match typeLiftH env t.rec with (env, rec) then
-      match typeLiftH env t.value with (env, value) then
-        (env, TmRecordUpdate {{t with rec = rec}
-                                 with value = value})
+    match typeLiftExpr env t.rec with (env, rec) then
+      match typeLiftExpr env t.value with (env, value) then
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmRecordUpdate {{{t with rec = rec}
+                                    with value = value}
+                                    with ty = ty})
+        else never
       else never
     else never
 end
 
 lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
                     VariantNameTypeAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
     let tyIdent =
-      match t.tyIdent with TyUnknown {} then
-        tyvariant_ []
+      match t.tyIdent with TyUnknown {} then tyvariant_ []
       else t.tyIdent
     in
     let env =
@@ -240,16 +260,16 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
       else
         {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
     in
-    match typeLiftH env t.inexpr with (env, inexpr) then
+    match typeLiftExpr env t.inexpr with (env, inexpr) then
       (env, inexpr)
     else never
 end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   -- Intentionally left blank
 
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmConDef t ->
     let env =
       match t.tyIdent with TyArrow {from = from, to = TyVar {ident = ident}} then
@@ -263,46 +283,58 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
         {env with variants = mapInsert ident variantMap env.variants}
       else env
     in
-    match typeLiftH env t.inexpr with (env, inexpr) then
+    match typeLiftExpr env t.inexpr with (env, inexpr) then
       (env, inexpr)
     else never
   | TmConApp t ->
-    match typeLiftH env t.body with (env, body) then
-      (env, TmConApp {t with body = body})
+    match typeLiftExpr env t.body with (env, body) then
+      match typeLiftType env t.ty with (env, ty) then
+        (env, TmConApp {{t with body = body}
+                           with ty = ty})
+      else never
     else never
 end
 
 lang MatchTypeLift = TypeLift + MatchAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
-    match typeLiftH env t.target with (env, target) then
-      match typeLiftH env t.thn with (env, thn) then
-        match typeLiftH env t.els with (env, els) then
-          (env, TmMatch {{{t with target = target}
-                             with thn = thn}
-                             with els = els})
+    match typeLiftExpr env t.target with (env, target) then
+      match typeLiftExpr env t.thn with (env, thn) then
+        match typeLiftExpr env t.els with (env, els) then
+          match typeLiftType env t.ty with (env, ty) then
+            (env, TmMatch {{{{t with target = target}
+                                with thn = thn}
+                                with els = els}
+                                with ty = ty})
+          else never
         else never
       else never
     else never
 end
 
 lang UtestTypeLift = TypeLift + UtestAst
-  sem typeLiftH (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) =
   | TmUtest t ->
-    match typeLiftH env t.test with (env, test) then
-      match typeLiftH env t.expected with (env, expected) then
-        match typeLiftH env t.next with (env, next) then
-          (env, TmUtest {{{t with test = test}
-                             with expected = expected}
-                             with next = next})
+    match typeLiftExpr env t.test with (env, test) then
+      match typeLiftExpr env t.expected with (env, expected) then
+        match typeLiftExpr env t.next with (env, next) then
+          match typeLiftType env t.ty with (env, ty) then
+            (env, TmUtest {{{{t with test = test}
+                                with expected = expected}
+                                with next = next}
+                                with ty = ty})
+          else never
         else never
       else never
     else never
 end
 
 lang NeverTypeLift = TypeLift + NeverAst
-  sem typeLiftH (env : TypeLiftEnv) =
-  | TmNever t -> (env, TmNever t)
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmNever t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TmNever {t with ty = ty})
+    else never
 end
 
 -----------
@@ -310,87 +342,85 @@ end
 -----------
 
 lang UnknownTypeTypeLift = TypeLift + UnknownTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyUnknown {} -> (env, TyUnknown {})
 end
 
 lang BoolTypeTypeLift = TypeLift + BoolTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyBool {} -> (env, TyBool {})
 end
 
 lang IntTypeTypeLift = TypeLift + IntTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyInt {} -> (env, TyInt {})
 end
 
 lang FloatTypeTypeLift = TypeLift + FloatTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyFloat {} -> (env, TyFloat {})
 end
 
 lang CharTypeTypeLift = TypeLift + CharTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyChar {} -> (env, TyChar {})
 end
 
 lang FunTypeTypeLift = TypeLift + FunTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyArrow t ->
-    match liftType env t.from with (env, from) then
-      match liftType env t.to with (env, to) then
+    match typeLiftType env t.from with (env, from) then
+      match typeLiftType env t.to with (env, to) then
         (env, TyArrow {from = from, to = to})
       else never
     else never
 end
 
 lang SeqTypeTypeLift = TypeLift + SeqTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TySeq t ->
-    match liftType env t.ty with (env, ty) then
+    match typeLiftType env t.ty with (env, ty) then
       (env, TySeq {ty = ty})
     else never
 end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyRecord {fields = fields} & ty ->
     if eqi (mapLength fields) 0 then
       (env, ty)
     else match mapLookup fields env.records with Some name then
-      match assocSeqLookup {eq=nameEq} name env.typeEnv with Some recTyVar then
-        (env, recTyVar)
-      else error "Record mapped to unknown type"
+      (env, ntyvar_ name)
     else
       let recName = nameSym "Rec" in
-      let recVar = ntyvar_ recName in
+      let recTyVar = ntyvar_ recName in
       let env = {{env with records = mapInsert fields recName env.records}
                       with typeEnv = assocSeqInsert recName ty env.typeEnv} in
-      (env, recVar)
+      (env, recTyVar)
 end
 
 lang VariantTypeTypeLift = TypeLift + VariantTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyVariant t -> (env, TyVariant t)
 end
 
 lang VarTypeTypeLift = TypeLift + VarTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyVar t -> (env, TyVar t)
 end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyApp t ->
-    match liftType env t.lhs with (env, lhs) then
-      match liftType env t.rhs with (env, rhs) then
+    match typeLiftType env t.lhs with (env, lhs) then
+      match typeLiftType env t.rhs with (env, rhs) then
         (env, TyApp {lhs = lhs, rhs = rhs})
       else never
     else never
 end
 
 lang VariantNameTypeTypeLift = TypeLift + VariantNameTypeAst
-  sem liftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) =
   | TyVariantName t -> (env, TyVariantName t)
 end
 
@@ -555,6 +585,33 @@ let expectedEnv = seq2assocSeq [
   utest env with expectedEnv using eqEnv in
   utest t with recordsSameFieldsSameTypes using eqExpr in
   ()
+else never);
+
+let record = typeAnnot (symbolize (record_ [
+  ("a", int_ 2),
+  ("b", float_ 1.5)
+])) in
+(match typeLift record with (env, t) then
+  match ty t with TyVar {ident = ident} then
+    match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
+      utest recordTy with ty record using eqType assocSeqEmpty in
+      ()
+    else never
+  else never
+else never);
+
+let recordUpdate = typeAnnot (symbolize (bindall_ [
+  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
+  recordupdate_ (var_ "x") "a" (int_ 2)
+])) in
+let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
+(match typeLift recordUpdate with (env, t) then
+  match t with TmLet {tyBody = TyVar {ident = ident}} then
+    match assocSeqLookup {eq=nameEq} ident env with Some ty then
+      utest ty with recordType using eqType assocSeqEmpty in
+      ()
+    else never
+  else never
 else never);
 
 ()
