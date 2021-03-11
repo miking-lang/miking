@@ -386,17 +386,22 @@ end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyRecord {fields = fields} & ty ->
-    if eqi (mapLength fields) 0 then
+  | TyRecord t & ty ->
+    if eqi (mapLength t.fields) 0 then
       (env, ty)
-    else match mapLookup fields env.records with Some name then
-      (env, ntyvar_ name)
     else
-      let recName = nameSym "Rec" in
-      let recTyVar = ntyvar_ recName in
-      let env = {{env with records = mapInsert fields recName env.records}
-                      with typeEnv = assocSeqInsert recName ty env.typeEnv} in
-      (env, recTyVar)
+      let f = lam env. lam. lam ty. typeLiftType env ty in
+      match mapMapAccum f env t.fields with (env, fields) then
+        match mapLookup fields env.records with Some name then
+          (env, ntyvar_ name)
+        else
+          let ty = TyRecord {fields = fields} in
+          let recName = nameSym "Rec" in
+          let recTyVar = ntyvar_ recName in
+          let env = {{env with records = mapInsert fields recName env.records}
+                          with typeEnv = assocSeqInsert recName ty env.typeEnv} in
+          (env, recTyVar)
+      else never
 end
 
 lang VariantTypeTypeLift = TypeLift + VariantTypeAst
@@ -446,7 +451,7 @@ use TestLang in
 let eqEnv = lam lenv. lam renv.
   use MExprEq in
   let elemCmp = lam l. lam r.
-    and (eqString (nameGetStr l.0) (nameGetStr r.0))
+    and (nameEq l.0 r.0)
         (eqType [] l.1 r.1)
   in
   if eqi (length lenv) (length renv) then
@@ -511,16 +516,17 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   lastTerm
 ])) in
-let expectedEnv = [
-  (nameNoSym "Rec", tyrecord_ [
-    ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
-  ]),
-  (treeName, tyvariant_ [
-    (branchName, tyrecord_ [("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)]),
-    (leafName, tyint_)
-  ])
-] in
 (match typeLift variantWithRecords with (env, t) then
+  let recid = (get env 0).0 in
+  let expectedEnv = [
+    (recid, tyrecord_ [
+      ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
+    ]),
+    (treeName, tyvariant_ [
+      (branchName, tyrecord_ [("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)]),
+      (leafName, tyint_)
+    ])
+  ] in
   utest env with expectedEnv using eqEnv in
   utest t with lastTerm using eqExpr in
   ()
@@ -537,22 +543,20 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   ]),
   unit_
 ])) in
-let expectedEnv = [
-  (nameNoSym "Rec", tyrecord_ [
-    ("a", tyrecord_ [
+(match typeLift nestedRecord with (env, t) then
+  let fstid = (get env 0).0 in
+  let sndid = (get env 1).0 in
+  let expectedEnv = [
+    (fstid, tyrecord_ [
+      ("a", ntyvar_ sndid),
+      ("b", tyint_)
+    ]),
+    (sndid, tyrecord_ [
       ("x", tyint_),
       ("y", tyfloat_),
       ("z", tyunit_)
-    ]),
-    ("b", tyint_)
-  ]),
-  (nameNoSym "Rec", tyrecord_ [
-    ("x", tyint_),
-    ("y", tyfloat_),
-    ("z", tyunit_)
-  ])
-] in
-(match typeLift nestedRecord with (env, t) then
+    ])
+  ] in
   utest env with expectedEnv using eqEnv in
   utest t with nestedRecord using eqExpr in
   ()
@@ -563,11 +567,13 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 2), ("b", true_)]),
   unit_
 ])) in
-let expectedEnv = [
-  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tybool_)]),
-  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tyint_)])
-] in
 (match typeLift recordsSameFieldsDifferentTypes with (env, t) then
+  let fstid = (get env 0).0 in
+  let sndid = (get env 1).0 in
+  let expectedEnv = [
+    (fstid, tyrecord_ [("a", tyint_), ("b", tybool_)]),
+    (sndid, tyrecord_ [("a", tyint_), ("b", tyint_)])
+  ] in
   utest env with expectedEnv using eqEnv in
   utest t with recordsSameFieldsDifferentTypes using eqExpr in
   ()
@@ -578,10 +584,11 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 3), ("b", int_ 6)]),
   unit_
 ])) in
-let expectedEnv = [
-  (nameNoSym "Rec", tyrecord_ [("a", tyint_), ("b", tyint_)])
-] in
 (match typeLift recordsSameFieldsSameTypes with (env, t) then
+  let recid = (get env 0).0 in
+  let expectedEnv = [
+    (recid, tyrecord_ [("a", tyint_), ("b", tyint_)])
+  ] in
   utest env with expectedEnv using eqEnv in
   utest t with recordsSameFieldsSameTypes using eqExpr in
   ()
