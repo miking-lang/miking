@@ -140,11 +140,9 @@ let _record2tuple = lam tm.
     -- Check if keys are a sequence 0..(n-1)
     match and (eqi 0 (head sortedKeys))
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
-      -- Note: Quadratic complexity. Sorting the association list directly
-      -- w.r.t. key would improve complexity to n*log(n).
       Some (map (lam key. mapLookupOrElse
                             (lam. error "Key not found")
-                            (int2string key) t.bindings)
+                            (stringToSid (int2string key)) t.bindings)
                  sortedKeys)
     else None ()
   else error "Not a record"
