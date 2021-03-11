@@ -33,9 +33,9 @@ type TypeLiftEnv = {
   variants: Map Name (Map Name Type)
 }
 
--- This type is added specifically the for type lifting to allow distinguishing
--- between variant types in the type environment before their constructors
--- have been added.
+-- This type is added specifically for the type lifting to allow distinguishing
+-- between variant types in the type environment before their constructors have
+-- been added.
 lang VariantNameTypeAst
   syn Type =
   | TyVariantName {ident : Name}
@@ -47,7 +47,10 @@ lang VariantNameTypeAst
     else false
 end
 
-let _collectTypeLiftEnv = lam env.
+-- Replaces all variant type names with the variant type they represent. This
+-- function is called after going through the program, at which point all
+-- variant constructors have been identified.
+let _replaceVariantNamesInTypeEnv = lam env.
   use VariantTypeAst in
   use VariantNameTypeAst in
   let f = lam ty.
@@ -61,9 +64,8 @@ let _collectTypeLiftEnv = lam env.
   in
   assocSeqMap f env.typeEnv
 
--- This function is a simple comparison function for types. It is required to
--- be able to compare the record types in the records map of the type-lifting
--- environment.
+-- This function is a simple comparison function for types. It required as a
+-- comparison function for the records map of the type-lifting environment.
 recursive let _cmpType = lam ty1. lam ty2.
   use MExprAst in
   let _typeId = lam ty.
@@ -120,7 +122,7 @@ lang TypeLift = MExprEq
       variants = mapEmpty nameCmp
     } in
     match typeLiftH emptyEnv e with (env, t) then
-      let typeEnv = _collectTypeLiftEnv env in
+      let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
 end
