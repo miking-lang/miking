@@ -117,7 +117,16 @@ lang TypeLift = MExprEq
   sem typeLiftType (env : TypeLiftEnv) =
   -- Intentionally left blank
 
-  sem typeLift =
+  -- Lifts all records, variants and type aliases from the given expression
+  -- `e`. The result is returned as an environment containing tuples of names
+  -- and their corresponding types, together with a modified version of the
+  -- expression `e` where:
+  -- * `TmType`s and `TmConDef`s have been removed.
+  -- * `TyRecord`s have been replaced with a `TyVar` whose name is
+  --   contained in the resulting environment.
+  -- * The constructor names and argument types have been added to the
+  --   `TyVariant`s.
+  sem typeLift = -- Expr -> (AssocSeq Name Type, Expr)
   | e ->
     let emptyEnv = {
       typeEnv = [],
