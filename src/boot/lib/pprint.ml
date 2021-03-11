@@ -433,6 +433,8 @@ let rec print_const fmt = function
       fprintf fmt "bootParseTree"
   | CbootParserParseMExprString ->
       fprintf fmt "bootParserParseMExprString"
+  | CbootParserParseMCoreFile ->
+      fprintf fmt "bootParserParseMCoreFile"
   | CbootParserGetId ->
       fprintf fmt "bootParserParseGetId"
   | CbootParserGetTerm _ ->

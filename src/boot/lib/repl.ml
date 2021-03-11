@@ -8,7 +8,6 @@
 
 open Ustring.Op
 open Printf
-open Eval
 open Mexpr
 open Ast
 open Mlang
