@@ -127,3 +127,35 @@ module Time : sig
 
   val sleep_ms : int -> unit
 end
+
+module Mmap : sig
+  val empty : ('a -> 'a -> int) -> Obj.t
+
+  val insert : 'a -> 'b -> Obj.t -> Obj.t
+
+  val find : 'a -> Obj.t -> 'b
+
+  val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
+
+  val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> Obj.t -> 'c
+
+  val bindings : Obj.t -> ('a * 'b) list
+
+  val size : Obj.t -> int
+
+  val remove : 'a -> Obj.t -> Obj.t
+
+  val mem : 'a -> Obj.t -> bool
+
+  val any : ('a -> 'b -> bool) -> Obj.t -> bool
+
+  val map : ('b -> 'c) -> Obj.t -> Obj.t
+
+  val map_with_key : ('a -> 'b -> 'c) -> Obj.t -> Obj.t
+
+  val fold_with_key : ('a -> 'b -> 'c -> 'c) -> 'c -> Obj.t -> 'c
+
+  val eq : ('b -> 'b -> bool) -> Obj.t -> Obj.t -> bool
+
+  val cmp : ('b -> 'b -> int) -> Obj.t -> Obj.t -> int
+end
