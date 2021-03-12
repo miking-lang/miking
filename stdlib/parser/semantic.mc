@@ -648,7 +648,7 @@ let semanticGrammar
     let res = eitherPartition res in
     match res with ([], productions) then
       eitherMapLeft
-        (lam x. SemanticGrammarLL1Error x)
+        (lam x. [SemanticGrammarLL1Error x])
         (ll1GenParser {productions = join productions, start = grammar.start.name})
     else Left (join res.0)
 
@@ -664,21 +664,26 @@ let semanticParseFile
     match res with Right (Right (_, res)) then Right res else
     never
 
-mexpr
-
 -- Small helper to make smaller errors by discarding information that
 -- is typically not interesting
-let shortenError = lam p.
-  match p with UndefinedPrecedence {left = {spec = {name = lname}}, right = {spec = {name = rname}}} then
-    ("undefPrec", join [lname, " -?- ", rname])
-  else match p with DuplicatedPrecedence ([(({name = lname}, {name = rname}), _)] ++ _ & precs) then
-    let precs = map (lam x. x.1) precs in
-    let precs = map
-      (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
-      precs in
-    ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
-  else dprintLn p; never
-in
+let semanticShortenErrors
+  : [SemanticGrammarError]
+  -> [(String, String)]
+  = let shortenOne = lam err.
+      match err with UndefinedPrecedence {left = {spec = {name = lname}}, right = {spec = {name = rname}}} then
+        ("undefPrec", join [lname, " -?- ", rname])
+      else match err with DuplicatedPrecedence ([(({name = lname}, {name = rname}), _)] ++ _ & precs) then
+        let precs = map (lam x. x.1) precs in
+        let precs = map
+          (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
+          precs in
+        ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
+      else match err with SemanticGrammarLL1Error err then
+        dprintLn (map (lam x. {x with #label"1" = mapBindings x.1}) (mapBindings err)); ("ll1error", "dprinted above")
+      else dprintLn err; never
+    in map shortenOne
+
+mexpr
 
 let wrap = lam label. lam x. (label, x) in
 
@@ -1074,7 +1079,7 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
+  utest eitherMapLeft semanticShortenErrors res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
@@ -1212,7 +1217,7 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
+  utest eitherMapLeft semanticShortenErrors res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
