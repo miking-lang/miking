@@ -445,6 +445,10 @@ let true_ = use MExprAst in
 let false_ = use MExprAst in
   const_ (CBool {val = false})
 
+let bool_ = use MExprAst in
+  lam v.
+  const_ (CBool {val = v})
+
 let char_ = use MExprAst in
   lam c.
   const_ (CChar {val = c})
