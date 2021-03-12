@@ -316,18 +316,17 @@ lang OCamlGenerate = MExprAst + OCamlAst
       (assocEmpty, wrap)
     else never
   | PatRecord {bindings = bindings} ->
-    let genBindingPat = lam fields. lam id. lam pat.
+    let genBindingPat = lam patNames. lam fields. lam id. lam pat.
       let ty =
         match mapLookup id fields with Some ty then
           ty
         else error (join ["Field ", id, " not found in record"])
       in
-      let n = nameSym "_recordElem" in
-      match generatePat env ty n pat with (names,innerWrap) then
-        let wrap = lam cont.
-          bind_ (nulet_ n (nvar_ (nameNoSym (sidToString id)))) (innerWrap cont)
-        in
-        (names, wrap)
+      match mapLookup id patNames with Some n then
+        match generatePat env ty n pat with (names, innerWrap) then
+          let wrap = lam cont. innerWrap cont in
+          (names, wrap)
+        else never
       else never
     in
     match env with {records = records, constrs = constrs} then
@@ -341,11 +340,16 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       in
       match mapLookup fields records with Some name then
+        let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) bindings in
         let genPats = mapValues
-          (mapMapWithKey (lam k. lam v. genBindingPat fields k v) bindings)
+          (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) bindings)
         in
         match unzip genPats with (allNames, allWraps) then
-          let f = lam id. lam. pvar_ (sidToString id) in
+          let f = lam id. lam.
+            match mapLookup id patNames with Some n then
+              npvar_ n
+            else never
+          in
           let precord = OPatRecord {bindings = mapMapWithKey f bindings} in
           let wrap = lam cont.
             OTmMatch {
@@ -435,7 +439,6 @@ lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecl =
   | expr ->
     match typeLift expr with (env, t) then
-      (use MExprPrettyPrint in printLn (expr2str t));
       let generateEnv = _typeLiftEnvToGenerateEnv env in
       let t = _addTypeDeclarations env t in
       (generateEnv, t)
@@ -778,7 +781,6 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
       rhs = OTmString {text = fmt}
     }
   in
-  (use OCamlPrettyPrint in printLn (expr2str ocamlAst));
   match mexprVal with TmConst t then
     match t.val with CInt _ then
       let ocamlVal = ocamlEvalInt ocamlAst in
@@ -825,363 +827,363 @@ let stripTypeDecls = lam t.
 in
 
 -- Match
---let matchChar1 = symbolize
--- (match_ (char_ 'a')
---   (pchar_ 'a')
---   true_
---   false_) in
---utest matchChar1 with generateEmptyEnv matchChar1 using sameSemantics in
---
---let matchChar2 = symbolize
---  (match_ (char_ 'a')
---    (pchar_ 'b')
---    true_
---    false_) in
---utest matchChar2 with generateEmptyEnv matchChar2 using sameSemantics in
---
---let matchSeq = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest matchSeq with generateEmptyEnv matchSeq using sameSemantics in
---
---let noMatchSeq1 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeq1 with generateEmptyEnv noMatchSeq1 using sameSemantics in
---
---let noMatchSeqLen = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeqLen with generateEmptyEnv noMatchSeqLen using sameSemantics in
---
---let noMatchSeqLen2 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
---    (addi_ (var_ "a") (var_ "b"))
---    (int_ 42)) in
---utest noMatchSeqLen2 with generateEmptyEnv noMatchSeqLen2 using sameSemantics in
---
---let matchOr1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr1 with generateEmptyEnv matchOr1 using sameSemantics in
---
---let matchOr2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 1])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr2 with generateEmptyEnv matchOr2 using sameSemantics in
---
---let matchOr3 = symbolize
---  (match_ (seq_ [int_ 3, int_ 1])
---    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchOr3 with generateEmptyEnv matchOr3 using sameSemantics in
---
---let matchNestedOr1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr1 with generateEmptyEnv matchNestedOr1 using sameSemantics in
---
---let matchNestedOr2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 1])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr2 with generateEmptyEnv matchNestedOr2 using sameSemantics in
---
---let matchNestedOr3 = symbolize
---  (match_ (seq_ [int_ 3, int_ 7])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr3 with generateEmptyEnv matchNestedOr3 using sameSemantics in
---
---let matchNestedOr4 = symbolize
---  (match_ (seq_ [int_ 4, int_ 7])
---    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
---          (pseqtot_ [pint_ 3, pvar_ "a"]))
---    (var_ "a")
---    (int_ 42)) in
---utest matchNestedOr4 with generateEmptyEnv matchNestedOr4 using sameSemantics in
---
---let matchNot1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---    true_
---    false_) in
---utest matchNot1 with generateEmptyEnv matchNot1 using sameSemantics in
---
---let matchNot2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2])
---    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
---    true_
---    false_) in
---utest matchNot2 with generateEmptyEnv matchNot2 using sameSemantics in
---
---let matchAnd1 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---    (int_ 53)) in
---utest matchAnd1 with generateEmptyEnv matchAnd1 using sameSemantics in
---
---let matchAnd2 = symbolize
---  (match_ (seq_ [int_ 2, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
---    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
---    (int_ 53)) in
---utest matchAnd2 with generateEmptyEnv matchAnd2 using sameSemantics in
---
---let matchAnd3 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
---    (var_ "a")
---    (int_ 53)) in
---utest matchAnd3 with generateEmptyEnv matchAnd3 using sameSemantics in
---
---let matchAnd4 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
---    (var_ "a")
---    (int_ 53)) in
---utest matchAnd4 with generateEmptyEnv matchAnd4 using sameSemantics in
---
---let matchSeqEdge1 = symbolize
---  (match_ (seq_ [int_ 1])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge1 with generateEmptyEnv matchSeqEdge1 using sameSemantics in
---
---let matchSeqEdge2 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge2 with generateEmptyEnv matchSeqEdge2 using sameSemantics in
---
---let matchSeqEdge3 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
---    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
---    (addi_ (var_ "a") (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge3 with generateEmptyEnv matchSeqEdge3 using sameSemantics in
---
---let matchSeqEdge4 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
---    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
---    (int_ 75)) in
---utest matchSeqEdge4 with generateEmptyEnv matchSeqEdge4 using sameSemantics in
---
---let matchSeqEdge5 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
---    (match_ (var_ "b")
---      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---      (addi_ (var_ "a") (var_ "c"))
---      (int_ 84))
---    (int_ 75)) in
---utest matchSeqEdge5 with generateEmptyEnv matchSeqEdge5 using sameSemantics in
---
---let matchSeqEdge6 = symbolize
---  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
---    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
---    (match_ (var_ "b")
---      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
---      (addi_ (var_ "a") (var_ "c"))
---      (int_ 84))
---    (int_ 75)) in
---utest matchSeqEdge6 with generateEmptyEnv matchSeqEdge6 using sameSemantics in
---
---let matchSeqEdge7 = symbolize
---  (match_ (seq_ [int_ 1])
---    (pseqedgew_ [pvar_ "a"] [])
---    (var_ "a")
---    (int_ 75)) in
---utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
---
---let intEither = nameSym "IntEither" in
---let intEitherTy = ntyvar_ intEither in
---let left = nameSym "Left" in
---let right = nameSym "Right" in
---let nested = nameSym "Nested" in
---let eitherMatch = lam matchTerm.
---  bindall_ [
---    ntype_ intEither tyunknown_,
---    ncondef_ left (tyarrow_ tyint_ intEitherTy),
---    ncondef_ right (tyarrow_ tyint_ intEitherTy),
---    ncondef_ nested (tyarrow_ intEitherTy intEitherTy),
---    matchTerm
---  ] in
---let matchCon1 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ left (int_ 7))
---      (npcon_ left (pvar_ "n"))
---      (withType tyint_ (var_ "n"))
---      (int_ 0))) in
---utest stripTypeDecls matchCon1 with generateTypeAnnotated matchCon1 using sameSemantics in
---
---let matchCon2 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ left (int_ 7))
---      (npcon_ right (pvar_ "n"))
---      (withType tyint_ (var_ "n"))
---      (int_ 0))) in
---utest stripTypeDecls matchCon2 with generateTypeAnnotated matchCon2 using sameSemantics in
---
---let matchCon3 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ left (int_ 7))
---      (npcon_ left (pint_ 7))
---      (int_ 1)
---      (int_ 0))) in
---utest stripTypeDecls matchCon3 with generateTypeAnnotated matchCon3 using sameSemantics in
---
---let matchCon4 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ left (int_ 7))
---      (npcon_ right (pint_ 7))
---      (int_ 1)
---      (int_ 0))) in
---utest stripTypeDecls matchCon4 with generateTypeAnnotated matchCon4 using sameSemantics in
---
---let matchNestedCon1 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
---      (npcon_ nested (pvar_ "n"))
---      (int_ 1)
---      (int_ 0))) in
---utest stripTypeDecls matchNestedCon1 with generateTypeAnnotated matchNestedCon1
---using sameSemantics in
---
---let matchNestedCon2 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
---      (npcon_ nested (npcon_ left (pvar_ "n")))
---      (withType tyint_ (var_ "n"))
---      (int_ 0))) in
---utest stripTypeDecls matchNestedCon2 with generateTypeAnnotated matchNestedCon2
---using sameSemantics in
---
---let matchNestedCon3 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
---      (npcon_ nested (npcon_ left (pint_ 7)))
---      (int_ 1)
---      (int_ 0))) in
---utest stripTypeDecls matchNestedCon3 with generateTypeAnnotated matchNestedCon3
---using sameSemantics in
---
---let matchNestedCon4 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
---      (npcon_ nested (pvar_ "n1"))
---      (match_ (var_ "n1")
---        (npcon_ left (pvar_ "n2"))
---        (var_ "n2")
---        (int_ 1))
---      (int_ 2))) in
---utest stripTypeDecls matchNestedCon4 with generateTypeAnnotated matchNestedCon4
---using sameSemantics in
---
---let matchNestedCon5 = symbolize (
---  eitherMatch (
---    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
---      (npcon_ nested (pvar_ "n1"))
---      (match_ (var_ "n1")
---        (npcon_ right (pvar_ "n2"))
---        (var_ "n2")
---        (int_ 1))
---      (int_ 2))) in
---utest stripTypeDecls matchNestedCon5 with generateTypeAnnotated matchNestedCon5
---using sameSemantics in
---
---let r = record_ [
---  ("a", record_ [
---    ("x", int_ 4),
---    ("y", true_),
---    ("z", seq_ [int_ 1, int_ 2, int_ 3])
---  ]),
---  ("b", char_ 'x'),
---  ("c", int_ 7),
---  ("d", float_ 1.2)
---] in
---let matchRecord1 = symbolize (
---  match_ r
---    (prec_ [("c", pint_ 3), ("d", pvar_ "n")])
---    (var_ "n")
---    (float_ 0.0)) in
---utest stripTypeDecls matchRecord1 with generateTypeAnnotated matchRecord1
---using sameSemantics in
---
---let matchRecord2 = symbolize (
---  match_ r
---    (prec_ [("c", pvar_ "c"), ("d", pvar_ "n")])
---    (var_ "n")
---    (float_ 0.5)) in
---utest stripTypeDecls matchRecord2 with generateTypeAnnotated matchRecord2
---using sameSemantics in
---
---let matchRecord3 = symbolize (
---  match_ r
---    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 0)])
---    (var_ "ch")
---    (char_ '0')) in
---utest stripTypeDecls matchRecord3 with generateTypeAnnotated matchRecord3
---using sameSemantics in
---
---let matchRecord4 = symbolize (
---  match_ r
---    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 7)])
---    (var_ "ch")
---    (char_ '0')) in
---utest stripTypeDecls matchRecord4 with generateTypeAnnotated matchRecord4
---using sameSemantics in
---
---let matchNestedRecord1 = symbolize (
---  (match_ r
---    (prec_ [("a", prec_ [("x", pvar_ "m")]), ("c", pvar_ "n")])
---    (addi_ (var_ "m") (var_ "n"))
---    (int_ 0))) in
---utest stripTypeDecls matchNestedRecord1 with generateTypeAnnotated matchNestedRecord1
---using sameSemantics in
---
---let matchNestedRecord2 = symbolize (
---  match_ r
---    (prec_ [
---      ("a", prec_ [("z", pseqtot_ [pvar_ "m", pint_ 2, pvarw_])]),
---      ("c", pvar_ "n")])
---    (addi_ (var_ "m") (var_ "n"))
---    (int_ 0)) in
---utest stripTypeDecls matchNestedRecord2 with generateTypeAnnotated matchNestedRecord2
---using sameSemantics in
---
---let matchNestedRecord3 = symbolize (
---  match_ r
---    (prec_ [
---      ("a", prec_ [("y", pvar_ "b"), ("z", pvarw_)])])
---    (var_ "b")
---    false_) in
---utest stripTypeDecls matchNestedRecord3 with generateTypeAnnotated matchNestedRecord3
---using sameSemantics in
---
+let matchChar1 = symbolize
+ (match_ (char_ 'a')
+   (pchar_ 'a')
+   true_
+   false_) in
+utest matchChar1 with generateEmptyEnv matchChar1 using sameSemantics in
+
+let matchChar2 = symbolize
+  (match_ (char_ 'a')
+    (pchar_ 'b')
+    true_
+    false_) in
+utest matchChar2 with generateEmptyEnv matchChar2 using sameSemantics in
+
+let matchSeq = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest matchSeq with generateEmptyEnv matchSeq using sameSemantics in
+
+let noMatchSeq1 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2, int_ 3])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeq1 with generateEmptyEnv noMatchSeq1 using sameSemantics in
+
+let noMatchSeqLen = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen with generateEmptyEnv noMatchSeqLen using sameSemantics in
+
+let noMatchSeqLen2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
+    (addi_ (var_ "a") (var_ "b"))
+    (int_ 42)) in
+utest noMatchSeqLen2 with generateEmptyEnv noMatchSeqLen2 using sameSemantics in
+
+let matchOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr1 with generateEmptyEnv matchOr1 using sameSemantics in
+
+let matchOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr2 with generateEmptyEnv matchOr2 using sameSemantics in
+
+let matchOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 1])
+    (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchOr3 with generateEmptyEnv matchOr3 using sameSemantics in
+
+let matchNestedOr1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr1 with generateEmptyEnv matchNestedOr1 using sameSemantics in
+
+let matchNestedOr2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 1])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr2 with generateEmptyEnv matchNestedOr2 using sameSemantics in
+
+let matchNestedOr3 = symbolize
+  (match_ (seq_ [int_ 3, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr3 with generateEmptyEnv matchNestedOr3 using sameSemantics in
+
+let matchNestedOr4 = symbolize
+  (match_ (seq_ [int_ 4, int_ 7])
+    (por_ (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
+          (pseqtot_ [pint_ 3, pvar_ "a"]))
+    (var_ "a")
+    (int_ 42)) in
+utest matchNestedOr4 with generateEmptyEnv matchNestedOr4 using sameSemantics in
+
+let matchNot1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot1 with generateEmptyEnv matchNot1 using sameSemantics in
+
+let matchNot2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
+    true_
+    false_) in
+utest matchNot2 with generateEmptyEnv matchNot2 using sameSemantics in
+
+let matchAnd1 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd1 with generateEmptyEnv matchAnd1 using sameSemantics in
+
+let matchAnd2 = symbolize
+  (match_ (seq_ [int_ 2, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
+    (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
+    (int_ 53)) in
+utest matchAnd2 with generateEmptyEnv matchAnd2 using sameSemantics in
+
+let matchAnd3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd3 with generateEmptyEnv matchAnd3 using sameSemantics in
+
+let matchAnd4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
+    (var_ "a")
+    (int_ 53)) in
+utest matchAnd4 with generateEmptyEnv matchAnd4 using sameSemantics in
+
+let matchSeqEdge1 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge1 with generateEmptyEnv matchSeqEdge1 using sameSemantics in
+
+let matchSeqEdge2 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge2 with generateEmptyEnv matchSeqEdge2 using sameSemantics in
+
+let matchSeqEdge3 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3])
+    (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
+    (addi_ (var_ "a") (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge3 with generateEmptyEnv matchSeqEdge3 using sameSemantics in
+
+let matchSeqEdge4 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
+    (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
+    (int_ 75)) in
+utest matchSeqEdge4 with generateEmptyEnv matchSeqEdge4 using sameSemantics in
+
+let matchSeqEdge5 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [pint_ 1] "b" []))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge5 with generateEmptyEnv matchSeqEdge5 using sameSemantics in
+
+let matchSeqEdge6 = symbolize
+  (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
+    (por_ (pseqedge_ [pint_ 2] "b" []) (pseqedge_ [] "b" [pint_ 4]))
+    (match_ (var_ "b")
+      (pseqedgew_ [pvar_ "a"] [pvar_ "c"])
+      (addi_ (var_ "a") (var_ "c"))
+      (int_ 84))
+    (int_ 75)) in
+utest matchSeqEdge6 with generateEmptyEnv matchSeqEdge6 using sameSemantics in
+
+let matchSeqEdge7 = symbolize
+  (match_ (seq_ [int_ 1])
+    (pseqedgew_ [pvar_ "a"] [])
+    (var_ "a")
+    (int_ 75)) in
+utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
+
+let intEither = nameSym "IntEither" in
+let intEitherTy = ntyvar_ intEither in
+let left = nameSym "Left" in
+let right = nameSym "Right" in
+let nested = nameSym "Nested" in
+let eitherMatch = lam matchTerm.
+  bindall_ [
+    ntype_ intEither tyunknown_,
+    ncondef_ left (tyarrow_ tyint_ intEitherTy),
+    ncondef_ right (tyarrow_ tyint_ intEitherTy),
+    ncondef_ nested (tyarrow_ intEitherTy intEitherTy),
+    matchTerm
+  ] in
+let matchCon1 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ left (pvar_ "n"))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchCon1 with generateTypeAnnotated matchCon1 using sameSemantics in
+
+let matchCon2 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ right (pvar_ "n"))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchCon2 with generateTypeAnnotated matchCon2 using sameSemantics in
+
+let matchCon3 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ left (pint_ 7))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchCon3 with generateTypeAnnotated matchCon3 using sameSemantics in
+
+let matchCon4 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ right (pint_ 7))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchCon4 with generateTypeAnnotated matchCon4 using sameSemantics in
+
+let matchNestedCon1 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n"))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon1 with generateTypeAnnotated matchNestedCon1
+using sameSemantics in
+
+let matchNestedCon2 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (npcon_ left (pvar_ "n")))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon2 with generateTypeAnnotated matchNestedCon2
+using sameSemantics in
+
+let matchNestedCon3 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (npcon_ left (pint_ 7)))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon3 with generateTypeAnnotated matchNestedCon3
+using sameSemantics in
+
+let matchNestedCon4 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n1"))
+      (match_ (var_ "n1")
+        (npcon_ left (pvar_ "n2"))
+        (var_ "n2")
+        (int_ 1))
+      (int_ 2))) in
+utest stripTypeDecls matchNestedCon4 with generateTypeAnnotated matchNestedCon4
+using sameSemantics in
+
+let matchNestedCon5 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n1"))
+      (match_ (var_ "n1")
+        (npcon_ right (pvar_ "n2"))
+        (var_ "n2")
+        (int_ 1))
+      (int_ 2))) in
+utest stripTypeDecls matchNestedCon5 with generateTypeAnnotated matchNestedCon5
+using sameSemantics in
+
+let r = record_ [
+  ("a", record_ [
+    ("x", int_ 4),
+    ("y", true_),
+    ("z", seq_ [int_ 1, int_ 2, int_ 3])
+  ]),
+  ("b", char_ 'x'),
+  ("c", int_ 7),
+  ("d", float_ 1.2)
+] in
+let matchRecord1 = symbolize (
+  match_ r
+    (prec_ [("c", pint_ 3), ("d", pvar_ "n")])
+    (var_ "n")
+    (float_ 0.0)) in
+utest stripTypeDecls matchRecord1 with generateTypeAnnotated matchRecord1
+using sameSemantics in
+
+let matchRecord2 = symbolize (
+  match_ r
+    (prec_ [("c", pvar_ "c"), ("d", pvar_ "n")])
+    (var_ "n")
+    (float_ 0.5)) in
+utest stripTypeDecls matchRecord2 with generateTypeAnnotated matchRecord2
+using sameSemantics in
+
+let matchRecord3 = symbolize (
+  match_ r
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 0)])
+    (var_ "ch")
+    (char_ '0')) in
+utest stripTypeDecls matchRecord3 with generateTypeAnnotated matchRecord3
+using sameSemantics in
+
+let matchRecord4 = symbolize (
+  match_ r
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 7)])
+    (var_ "ch")
+    (char_ '0')) in
+utest stripTypeDecls matchRecord4 with generateTypeAnnotated matchRecord4
+using sameSemantics in
+
+let matchNestedRecord1 = symbolize (
+  (match_ r
+    (prec_ [("a", prec_ [("x", pvar_ "m")]), ("c", pvar_ "n")])
+    (addi_ (var_ "m") (var_ "n"))
+    (int_ 0))) in
+utest stripTypeDecls matchNestedRecord1 with generateTypeAnnotated matchNestedRecord1
+using sameSemantics in
+
+let matchNestedRecord2 = symbolize (
+  match_ r
+    (prec_ [
+      ("a", prec_ [("z", pseqtot_ [pvar_ "m", pint_ 2, pvarw_])]),
+      ("c", pvar_ "n")])
+    (addi_ (var_ "m") (var_ "n"))
+    (int_ 0)) in
+utest stripTypeDecls matchNestedRecord2 with generateTypeAnnotated matchNestedRecord2
+using sameSemantics in
+
+let matchNestedRecord3 = symbolize (
+  match_ r
+    (prec_ [
+      ("a", prec_ [("y", pvar_ "b"), ("z", pvarw_)])])
+    (var_ "b")
+    false_) in
+utest stripTypeDecls matchNestedRecord3 with generateTypeAnnotated matchNestedRecord3
+using sameSemantics in
+
 let tree = nameSym "Tree" in
 let tyTree = ntyvar_ tree in
 let branch = nameSym "Branch" in
@@ -1201,17 +1203,17 @@ let conMatch = lam m.
     ])),
     m
   ] in
---let matchRecordCon1 = symbolize (
---  conMatch (
---    match_ (var_ "x")
---      (npcon_ branch (prec_ [
---        ("lhs", npcon_ branch (pvarw_)),
---        ("rhs", npcon_ leaf (pvar_ "r"))
---      ]))
---      (var_ "r")
---      (int_ 0))) in
---utest stripTypeDecls matchRecordCon1 with generateTypeAnnotated matchRecordCon1
---using sameSemantics in
+let matchRecordCon1 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (pvarw_)),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (var_ "r")
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon1 with generateTypeAnnotated matchRecordCon1
+using sameSemantics in
 
 let matchRecordCon2 = symbolize (
   conMatch (
@@ -1225,271 +1227,270 @@ let matchRecordCon2 = symbolize (
       ]))
       (addi_ (var_ "r") (var_ "ll"))
       (int_ 0))) in
-(use MExprPrettyPrint in printLn (expr2str matchRecordCon2));
 utest stripTypeDecls matchRecordCon2 with generateTypeAnnotated matchRecordCon2
 using sameSemantics in
 
---let matchRecordCon3 = symbolize (
---  conMatch (
---    match_ (var_ "x")
---      (npcon_ branch (prec_ [
---        ("lhs", npcon_ branch (prec_ [
---          ("lhs", npcon_ leaf (pvar_ "ll")),
---          ("rhs", npcon_ leaf (pint_ 0))
---        ])),
---        ("rhs", npcon_ leaf (pvar_ "r"))
---      ]))
---      (addi_ (var_ "r") (var_ "ll"))
---      (int_ 0))) in
---utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
---using sameSemantics in
+let matchRecordCon3 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (prec_ [
+          ("lhs", npcon_ leaf (pvar_ "ll")),
+          ("rhs", npcon_ leaf (pint_ 0))
+        ])),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (addi_ (var_ "r") (var_ "ll"))
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
+using sameSemantics in
 
 -- Ints
---let addInt1 = addi_ (int_ 1) (int_ 2) in
---utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
---
---let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest addInt2 with generateEmptyEnv addInt2 using sameSemantics in
---
---let testMulInt = muli_ (int_ 2) (int_ 3) in
---utest testMulInt with generateEmptyEnv testMulInt using sameSemantics in
---
---let testModInt = modi_ (int_ 2) (int_ 3) in
---utest testModInt with generateEmptyEnv testModInt using sameSemantics in
---
---let testDivInt = divi_ (int_ 2) (int_ 3) in
---utest testDivInt with generateEmptyEnv testDivInt using sameSemantics in
---
---let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
---utest testNegInt with generateEmptyEnv testNegInt using sameSemantics in
---
---let compareInt1 = eqi_ (int_ 1) (int_ 2) in
---utest compareInt1 with generateEmptyEnv compareInt1 using sameSemantics in
---
---let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest compareInt2 with generateEmptyEnv compareInt2 using sameSemantics in
---
---let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest compareInt3 with generateEmptyEnv compareInt3 using sameSemantics in
---
---let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest compareInt4 with generateEmptyEnv compareInt4 using sameSemantics in
---
---let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest compareInt5 with generateEmptyEnv compareInt5 using sameSemantics in
---
---let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
---utest compareInt6 with generateEmptyEnv compareInt6 using sameSemantics in
---
---let shiftInt1 = slli_ (int_ 5) (int_ 2) in
---utest shiftInt1 with generateEmptyEnv shiftInt1 using sameSemantics in
---
---let shiftInt2 = srli_ (int_ 5) (int_ 2) in
---utest shiftInt2 with generateEmptyEnv shiftInt2 using sameSemantics in
---
---let shiftInt3 = srai_ (int_ 5) (int_ 2) in
---utest shiftInt3 with generateEmptyEnv shiftInt3 using sameSemantics in
---
------- Floats
---let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
---utest addFloat1 with generateEmptyEnv addFloat1 using sameSemantics in
---
---let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest addFloat2 with generateEmptyEnv addFloat2 using sameSemantics in
---
---let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
---utest testMulFloat with generateEmptyEnv testMulFloat using sameSemantics in
---
---let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
---utest testDivFloat with generateEmptyEnv testDivFloat using sameSemantics in
---
---let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
---utest testNegFloat with generateEmptyEnv testNegFloat using sameSemantics in
---
---let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
---utest compareFloat1 with generateEmptyEnv compareFloat1 using sameSemantics in
---
---let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest compareFloat2 with generateEmptyEnv compareFloat2 using sameSemantics in
---
---let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest compareFloat3 with generateEmptyEnv compareFloat3 using sameSemantics in
---
---let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest compareFloat4 with generateEmptyEnv compareFloat4 using sameSemantics in
---
---let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest compareFloat5 with generateEmptyEnv compareFloat5 using sameSemantics in
---
---let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
---utest compareFloat6 with generateEmptyEnv compareFloat6 using sameSemantics in
---
----- Chars
---let charLiteral = char_ 'c' in
---utest charLiteral with generateEmptyEnv charLiteral using sameSemantics in
---
---let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
---utest compareChar1 with generateEmptyEnv compareChar1 using sameSemantics in
---
---let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
---utest compareChar2 with generateEmptyEnv compareChar2 using sameSemantics in
---
---let testCharToInt = char2int_ (char_ '0') in
---utest testCharToInt with generateEmptyEnv testCharToInt using sameSemantics in
---
---let testIntToChar = int2char_ (int_ 48) in
---utest testIntToChar with generateEmptyEnv testIntToChar using sameSemantics in
---
----- Abstractions
---let fun =
---  symbolize
---  (appSeq_
---    (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
---    [int_ 1, int_ 2])
---in
---utest fun with generateEmptyEnv fun using sameSemantics in
---
---let funShadowed =
---  symbolize
---  (appSeq_
---    (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
---    [ulam_ "@" (var_ "@"), int_ 2])
---in
---utest funShadowed with generateEmptyEnv funShadowed using sameSemantics in
---
----- Lets
--- let testLet =
---  symbolize
---  (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
---in
---utest testLet with generateEmptyEnv testLet using sameSemantics in
---
---let testLetShadowed =
---  symbolize
---  (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
---             app_ (var_ "@") (int_ 1)])
---in
---utest testLetShadowed with generateEmptyEnv testLetShadowed
---using sameSemantics in
---
---let testLetRec =
---  symbolize
---  (bind_
---     (ureclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
---     (ureclets_add "@" (ulam_ "" (var_ ""))
---     reclets_empty))
---   (app_ (var_ "$") (var_ "@")))
---in
---utest testLetRec with generateEmptyEnv testLetRec using sameSemantics in
---
----- Sequences
---let testEmpty = symbolize (length_ (seq_ [])) in
---utest testEmpty with generateEmptyEnv testEmpty using sameSemantics in
---
---let nonEmpty = seq_ [int_ 1, int_ 2, int_ 3] in
---let len = length_ nonEmpty in
---let fst = get_ nonEmpty (int_ 0) in
---let snd = get_ nonEmpty (int_ 1) in
---let thrd = get_ nonEmpty (int_ 2) in
---utest int_ 3 with generateEmptyEnv len using sameSemantics in
---utest int_ 1 with generateEmptyEnv fst using sameSemantics in
---utest int_ 2 with generateEmptyEnv snd using sameSemantics in
---utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
---
---let testCreate = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
---let len = length_ testCreate in
---let fst = get_ testCreate (int_ 0) in
---let lst = get_ testCreate (int_ 1) in
---utest int_ 2 with generateEmptyEnv len using sameSemantics in
---utest int_ 0 with generateEmptyEnv fst using sameSemantics in
---utest int_ 0 with generateEmptyEnv lst using sameSemantics in
---
---let testSet = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
---let len = length_ testSet in
---let fst = get_ testSet (int_ 0) in
---let snd = get_ testSet (int_ 1) in
---utest int_ 2 with generateEmptyEnv len using sameSemantics in
---utest int_ 3 with generateEmptyEnv fst using sameSemantics in
---utest int_ 2 with generateEmptyEnv snd using sameSemantics in
---
---let testCons = cons_  (int_ 1) (seq_ [int_ 2, int_ 3]) in
---let len = length_ testCons in
---let fst = get_ testCons (int_ 0) in
---let snd = get_ testCons (int_ 1) in
---let thrd = get_ testCons (int_ 2) in
---utest int_ 3 with generateEmptyEnv len using sameSemantics in
---utest int_ 1 with generateEmptyEnv fst using sameSemantics in
---utest int_ 2 with generateEmptyEnv snd using sameSemantics in
---utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
---
---let testSnoc = snoc_ (seq_ [int_ 1, int_ 2]) (int_ 3) in
---let len = length_ testSnoc in
---let fst = get_ testSnoc (int_ 0) in
---let snd = get_ testSnoc (int_ 1) in
---let thrd = get_ testSnoc (int_ 2) in
---utest int_ 3 with generateEmptyEnv len using sameSemantics in
---utest int_ 1 with generateEmptyEnv fst using sameSemantics in
---utest int_ 2 with generateEmptyEnv snd using sameSemantics in
---utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
---
---let testReverse = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
---let len = length_ testReverse in
---let fst = get_ testReverse (int_ 0) in
---let snd = get_ testReverse (int_ 1) in
---let thrd = get_ testReverse (int_ 2) in
---utest int_ 3 with generateEmptyEnv len using sameSemantics in
---utest int_ 3 with generateEmptyEnv fst using sameSemantics in
---utest int_ 2 with generateEmptyEnv snd using sameSemantics in
---utest int_ 1 with generateEmptyEnv thrd using sameSemantics in
---
---let testSeq = seq_ [int_ 1, int_ 2, int_ 3] in
---let testSubseq1 = subsequence_ testSeq (int_ 0) (int_ 2) in
---let testSubseq2 = subsequence_ testSeq (int_ 1) (int_ 2) in
---let testSubseq3 = subsequence_ testSeq (int_ 2) (int_ 100) in
---let fst = get_ testSubseq3 (int_ 0) in
---utest int_ 2 with generateEmptyEnv (length_ testSubseq1) using sameSemantics in
---utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
---utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
---utest int_ 3 with generateEmptyEnv fst using sameSemantics in
---
----- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
----- projection.
---
----- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
----- implemented tuples/records.
---
----- Float-Integer conversions
---let testFloorfi = floorfi_ (float_ 1.5) in
---utest testFloorfi with generateEmptyEnv testFloorfi using sameSemantics in
---
---let testCeilfi = ceilfi_ (float_ 1.5) in
---utest testCeilfi with generateEmptyEnv testCeilfi using sameSemantics in
---
---let testRoundfi = roundfi_ (float_ 1.5) in
---utest testRoundfi with generateEmptyEnv testRoundfi using sameSemantics in
---
---let testInt2float = int2float_ (int_ 1) in
---utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
---
---let testString2float = string2float_ (str_ "1.5") in
---utest testString2float with generateEmptyEnv testString2float using sameSemantics in
---
----- File operations
---let testFileExists = fileExists_ (str_ "test_file_ops") in
---utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
---
----- -- IO operations
----- let testPrint = print_ (str_ "tested print") in
----- utest testPrint with generate testPrint using sameSemantics in
---
----- Random number generation operations
---let testSeededRandomNumber =
--- symbolize
--- (bindall_ [ulet_ "_" (randSetSeed_ (int_ 42)),
---            randIntU_ (int_ 0) (int_ 10)])
---in
---utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
---using sameSemantics in
+let addInt1 = addi_ (int_ 1) (int_ 2) in
+utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
+
+let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest addInt2 with generateEmptyEnv addInt2 using sameSemantics in
+
+let testMulInt = muli_ (int_ 2) (int_ 3) in
+utest testMulInt with generateEmptyEnv testMulInt using sameSemantics in
+
+let testModInt = modi_ (int_ 2) (int_ 3) in
+utest testModInt with generateEmptyEnv testModInt using sameSemantics in
+
+let testDivInt = divi_ (int_ 2) (int_ 3) in
+utest testDivInt with generateEmptyEnv testDivInt using sameSemantics in
+
+let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
+utest testNegInt with generateEmptyEnv testNegInt using sameSemantics in
+
+let compareInt1 = eqi_ (int_ 1) (int_ 2) in
+utest compareInt1 with generateEmptyEnv compareInt1 using sameSemantics in
+
+let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt2 with generateEmptyEnv compareInt2 using sameSemantics in
+
+let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt3 with generateEmptyEnv compareInt3 using sameSemantics in
+
+let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt4 with generateEmptyEnv compareInt4 using sameSemantics in
+
+let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt5 with generateEmptyEnv compareInt5 using sameSemantics in
+
+let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
+utest compareInt6 with generateEmptyEnv compareInt6 using sameSemantics in
+
+let shiftInt1 = slli_ (int_ 5) (int_ 2) in
+utest shiftInt1 with generateEmptyEnv shiftInt1 using sameSemantics in
+
+let shiftInt2 = srli_ (int_ 5) (int_ 2) in
+utest shiftInt2 with generateEmptyEnv shiftInt2 using sameSemantics in
+
+let shiftInt3 = srai_ (int_ 5) (int_ 2) in
+utest shiftInt3 with generateEmptyEnv shiftInt3 using sameSemantics in
+
+---- Floats
+let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
+utest addFloat1 with generateEmptyEnv addFloat1 using sameSemantics in
+
+let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest addFloat2 with generateEmptyEnv addFloat2 using sameSemantics in
+
+let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
+utest testMulFloat with generateEmptyEnv testMulFloat using sameSemantics in
+
+let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
+utest testDivFloat with generateEmptyEnv testDivFloat using sameSemantics in
+
+let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
+utest testNegFloat with generateEmptyEnv testNegFloat using sameSemantics in
+
+let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
+utest compareFloat1 with generateEmptyEnv compareFloat1 using sameSemantics in
+
+let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat2 with generateEmptyEnv compareFloat2 using sameSemantics in
+
+let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat3 with generateEmptyEnv compareFloat3 using sameSemantics in
+
+let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat4 with generateEmptyEnv compareFloat4 using sameSemantics in
+
+let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat5 with generateEmptyEnv compareFloat5 using sameSemantics in
+
+let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
+utest compareFloat6 with generateEmptyEnv compareFloat6 using sameSemantics in
+
+-- Chars
+let charLiteral = char_ 'c' in
+utest charLiteral with generateEmptyEnv charLiteral using sameSemantics in
+
+let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
+utest compareChar1 with generateEmptyEnv compareChar1 using sameSemantics in
+
+let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
+utest compareChar2 with generateEmptyEnv compareChar2 using sameSemantics in
+
+let testCharToInt = char2int_ (char_ '0') in
+utest testCharToInt with generateEmptyEnv testCharToInt using sameSemantics in
+
+let testIntToChar = int2char_ (int_ 48) in
+utest testIntToChar with generateEmptyEnv testIntToChar using sameSemantics in
+
+-- Abstractions
+let fun =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
+    [int_ 1, int_ 2])
+in
+utest fun with generateEmptyEnv fun using sameSemantics in
+
+let funShadowed =
+  symbolize
+  (appSeq_
+    (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
+    [ulam_ "@" (var_ "@"), int_ 2])
+in
+utest funShadowed with generateEmptyEnv funShadowed using sameSemantics in
+
+-- Lets
+ let testLet =
+  symbolize
+  (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
+in
+utest testLet with generateEmptyEnv testLet using sameSemantics in
+
+let testLetShadowed =
+  symbolize
+  (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
+             app_ (var_ "@") (int_ 1)])
+in
+utest testLetShadowed with generateEmptyEnv testLetShadowed
+using sameSemantics in
+
+let testLetRec =
+  symbolize
+  (bind_
+     (ureclets_add "$" (ulam_ "%" (app_ (var_ "@") (int_ 1)))
+     (ureclets_add "@" (ulam_ "" (var_ ""))
+     reclets_empty))
+   (app_ (var_ "$") (var_ "@")))
+in
+utest testLetRec with generateEmptyEnv testLetRec using sameSemantics in
+
+-- Sequences
+let testEmpty = symbolize (length_ (seq_ [])) in
+utest testEmpty with generateEmptyEnv testEmpty using sameSemantics in
+
+let nonEmpty = seq_ [int_ 1, int_ 2, int_ 3] in
+let len = length_ nonEmpty in
+let fst = get_ nonEmpty (int_ 0) in
+let snd = get_ nonEmpty (int_ 1) in
+let thrd = get_ nonEmpty (int_ 2) in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
+
+let testCreate = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
+let len = length_ testCreate in
+let fst = get_ testCreate (int_ 0) in
+let lst = get_ testCreate (int_ 1) in
+utest int_ 2 with generateEmptyEnv len using sameSemantics in
+utest int_ 0 with generateEmptyEnv fst using sameSemantics in
+utest int_ 0 with generateEmptyEnv lst using sameSemantics in
+
+let testSet = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
+let len = length_ testSet in
+let fst = get_ testSet (int_ 0) in
+let snd = get_ testSet (int_ 1) in
+utest int_ 2 with generateEmptyEnv len using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+
+let testCons = cons_  (int_ 1) (seq_ [int_ 2, int_ 3]) in
+let len = length_ testCons in
+let fst = get_ testCons (int_ 0) in
+let snd = get_ testCons (int_ 1) in
+let thrd = get_ testCons (int_ 2) in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
+
+let testSnoc = snoc_ (seq_ [int_ 1, int_ 2]) (int_ 3) in
+let len = length_ testSnoc in
+let fst = get_ testSnoc (int_ 0) in
+let snd = get_ testSnoc (int_ 1) in
+let thrd = get_ testSnoc (int_ 2) in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
+
+let testReverse = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
+let len = length_ testReverse in
+let fst = get_ testReverse (int_ 0) in
+let snd = get_ testReverse (int_ 1) in
+let thrd = get_ testReverse (int_ 2) in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 1 with generateEmptyEnv thrd using sameSemantics in
+
+let testSeq = seq_ [int_ 1, int_ 2, int_ 3] in
+let testSubseq1 = subsequence_ testSeq (int_ 0) (int_ 2) in
+let testSubseq2 = subsequence_ testSeq (int_ 1) (int_ 2) in
+let testSubseq3 = subsequence_ testSeq (int_ 2) (int_ 100) in
+let fst = get_ testSubseq3 (int_ 0) in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq1) using sameSemantics in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
+utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+
+-- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
+-- projection.
+
+-- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
+-- implemented tuples/records.
+
+-- Float-Integer conversions
+let testFloorfi = floorfi_ (float_ 1.5) in
+utest testFloorfi with generateEmptyEnv testFloorfi using sameSemantics in
+
+let testCeilfi = ceilfi_ (float_ 1.5) in
+utest testCeilfi with generateEmptyEnv testCeilfi using sameSemantics in
+
+let testRoundfi = roundfi_ (float_ 1.5) in
+utest testRoundfi with generateEmptyEnv testRoundfi using sameSemantics in
+
+let testInt2float = int2float_ (int_ 1) in
+utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
+
+let testString2float = string2float_ (str_ "1.5") in
+utest testString2float with generateEmptyEnv testString2float using sameSemantics in
+
+-- File operations
+let testFileExists = fileExists_ (str_ "test_file_ops") in
+utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
+
+-- -- IO operations
+-- let testPrint = print_ (str_ "tested print") in
+-- utest testPrint with generate testPrint using sameSemantics in
+
+-- Random number generation operations
+let testSeededRandomNumber =
+ symbolize
+ (bindall_ [ulet_ "_" (randSetSeed_ (int_ 42)),
+            randIntU_ (int_ 0) (int_ 10)])
+in
+utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
+using sameSemantics in
 
 -- Time operations
 
