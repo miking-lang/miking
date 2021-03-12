@@ -64,6 +64,8 @@ let _semanticDefaultInName = nameSym "DefaultIn"
 let _semanticDefaultNotInName = nameSym "DefaultNotIn"
 let _semanticLitName = nameSym "semanticLit"
 let _semanticLIdentName = nameSym "semanticLIdent"
+let _semanticUIdentName = nameSym "semanticUIdent"
+let _semanticNtName = nameSym "semanticNt"
 let _semanticShortenErrorsName = nameSym "semanticShortenErrors"
 let _rightConName = nameSym "Right"
 let _leftConName = nameSym "Left"
@@ -94,6 +96,8 @@ let _env =
     , _semanticDefaultNotInName
     , _semanticLitName
     , _semanticLIdentName
+    , _semanticUIdentName
+    , _semanticNtName
     , _semanticShortenErrorsName
     , _rightConName
     , _leftConName
@@ -123,8 +127,10 @@ let _semanticInfix_ = nconapp_ _semanticInfixName
 let _semanticPostfix_ = nconapp_ _semanticPostfixName
 let _semanticDefaultIn_ = nconapp_ _semanticDefaultInName unit_
 let _semanticDefaultNotIn_ = nconapp_ _semanticDefaultNotInName unit_
-let _semanticLit_ = app_ _semanticLitName
+let _semanticLit_ = app_ (nvar_ _semanticLitName)
 let _semanticLIdent_ = nvar_ _semanticLIdentName
+let _semanticUIdent_ = nvar_ _semanticUIdentName
+let _semanticNt_ = app_ (nvar_ _semanticNtName)
 let _semanticShortenErrors_ = app_ (nvar_ _semanticShortenErrorsName)
 let _symSeqInfo_ = app_ (nvar_ _symSeqInfoName)
 let _head_ = app_ (nvar_ _headName)
@@ -140,6 +146,20 @@ let _sequentialComposition_ = lam a. lam b. use LetAst in TmLet
   , info = NoInfo ()
   , ty = tyunknown_
   }
+
+let _stageSymbol = lam sym.
+  match sym with GeneratorLit {lit = lit} then
+    _semanticLit_ (str_ lit)
+  else match sym with GeneratorLIdent _ then
+    _semanticLIdent_
+  else match sym with GeneratorNt {nt = nt} then
+    _semanticNt_ (var_ nt)
+  else dprintLn sym; never-- TODO(vipa, 2021-03-12): Implement
+
+let _stageInclude = lam inc.
+  match inc with DefaultIn _ then _semanticDefaultIn_ else
+  match inc with DefaultNotIn _ then _semanticDefaultNotIn_ else
+  never
 
 let generatorProd
   : { constructorName : String
@@ -174,12 +194,6 @@ let generatorProd
             Some (name, targetableType (tyvar_ nt))
           else None ()
       in
-      let stageSymbol = lam sym.
-        match sym with GeneratorLit {lit = lit} then
-          _semanticLit_ (str_ lit)
-        else match sym with GeneratorLIdent _ then
-          _semanticLIdent_
-        else never in-- TODO(vipa, 2021-03-12): Implement
       let constructorName = nameSym constructorStr in
       let wrappedSyntax =
         match prodType with GeneratorAtom _ then syntax
@@ -208,28 +222,24 @@ let generatorProd
 
       -- Staged production spec, i.e., input for semantic.mc
       let stagedSpec =
-        let stageInclude = lam inc.
-          match inc with DefaultIn _ then _semanticDefaultIn_ else
-          match inc with DefaultNotIn _ then _semanticDefaultNotIn_ else
-          never in
         let stagedProdType =
           match prodType with GeneratorAtom {self = self} then
-            _semanticAtom_ (record_ [("self", stageInclude self)])
+            _semanticAtom_ (record_ [("self", _stageInclude self)])
           else match prodType with GeneratorPrefix {self = self, right = right} then
-            _semanticPrefix_ (record_ [("self", stageInclude self), ("right", stageInclude right)])
+            _semanticPrefix_ (record_ [("self", _stageInclude self), ("right", _stageInclude right)])
           else match prodType with GeneratorInfix {self = self, left = left, right = right} then
-            _semanticInfix_ (record_ [("self", stageInclude self), ("left", stageInclude left), ("right", stageInclude right)])
+            _semanticInfix_ (record_ [("self", _stageInclude self), ("left", _stageInclude left), ("right", _stageInclude right)])
           else match prodType with GeneratorPostfix {self = self, left = left} then
-            _semanticPostfix_ (record_ [("self", stageInclude self), ("left", stageInclude left)])
+            _semanticPostfix_ (record_ [("self", _stageInclude self), ("left", _stageInclude left)])
           else never in
         let stageField = lam sym.
           match sym with GeneratorLIdent {field = Some field} then
-            let valName = nameSym "ident" in
+            let valName = nameSym field in
             ( Some (npcon_ _ll1TokName (npcon_ _lexerLIdentName (prec_ [("val", npvar_ valName)])))
             , Some (field, nvar_ valName)
             )
           else match sym with GeneratorUIdent {field = Some field} then
-            let valName = nameSym "ident" in
+            let valName = nameSym field in
             ( Some (npcon_ _ll1TokName (npcon_ _lexerUIdentName (prec_ [("val", npvar_ valName)])))
             , Some (field, nvar_ valName)
             )
@@ -238,11 +248,11 @@ let generatorProd
             , Some (field, val)
             )
           else match sym with GeneratorNt {field = Some field} then
-            let valName = nameSym "val" in
+            let valName = nameSym field in
             ( Some (npcon_ _ll1UserSymName (ptuple_ [pvarw_, npvar_ valName]))
             , Some (field, nvar_ valName)
             )
-          else (pvarw_, None ()) in-- TODO(vipa, 2021-03-12): fill in all constructors
+          else (Some pvarw_, None ()) in-- TODO(vipa, 2021-03-12): fill in all constructors
         let stagedAction =
           let infoName = nameSym "info" in
           let paramName = nameSym "syms" in
@@ -264,7 +274,7 @@ let generatorProd
           [ ("name", str_ constructorStr)
           , ("nt", var_ nonTerminal)
           , ("ptype", stagedProdType)
-          , ("rhs" , seq_ (map stageSymbol syntax))
+          , ("rhs" , seq_ (map _stageSymbol syntax))
           , ("action", stagedAction)
           ]
       in
@@ -283,7 +293,50 @@ let generatorBracket
     , rightBracket : [GeneratorSymbol]
     }
   -> GeneratorProduction
-  = lam spec. never
+  = lam spec.
+    match spec with
+      { nonTerminal = nonTerminal
+      , leftBracket = leftBracket
+      , rightBracket = rightBracket
+      }
+    then
+      let sym = gensym () in
+
+      let stagedSpec =
+        let allSymbols = join
+          [ leftBracket
+          , [GeneratorNt {field = None (), nt = nonTerminal}]
+          , rightBracket
+          ] in
+        let stagedAction =
+          let infoName = nameSym "info" in
+          let paramName = nameSym "syms" in
+          let valName = nameSym "val" in
+          nulam_ paramName
+            (_nulet_ infoName (_symSeqInfo_ (nvar_ paramName))
+              (tuple_
+                [ nvar_ infoName
+                , match_ (get_ (nvar_ paramName) (int_ (length leftBracket)))
+                  (npcon_ _ll1UserSymName (ptuple_ [pvarw_, npvar_ valName]))
+                  (nvar_ valName)
+                  never_
+                ]))
+        in
+        record_
+          [ ("name", str_ (concat "grouping " nonTerminal))
+          , ("nt", var_ nonTerminal)
+          , ("ptype", _semanticAtom_ (record_ [("self", _stageInclude (DefaultIn ()))]))
+          , ("rhs", seq_ (map _stageSymbol allSymbols))
+          , ("action", stagedAction)
+          ]
+      in
+
+      { constructor = None ()
+      , sym = sym
+      , stagedSpec = stagedSpec
+      , nonTerminal = nonTerminal
+      }
+    else never
 
 -- TODO(vipa, 2021-03-10): We should run `semanticGrammar` once before
 -- we generate the code and report errors there, then we know that the
@@ -376,7 +429,7 @@ let generatorGrammar
         let sourceName = nameSym "source" in
         let parseFuncStr = join
           [ "let parse", langName, "File = use ", composedName, " in use ParserConcrete in \n  "
-          , (pprintCode 2 _env
+          , let res =
               (_nulet_ resName
                 (_semanticGrammar_ (bindall_ (snoc (concat ntLets prodLets) semanticGrammar)))
                 (match_ (nvar_ resName)
@@ -390,7 +443,8 @@ let generatorGrammar
                     (_sequentialComposition_
                       (_dprintLn_ (_semanticShortenErrors_ (nvar_ errsName)))
                       (error_ (str_ "Invalid grammar")))
-                    never_)))).1
+                    never_)))
+            in dprintLn res; (pprintCode 2 _env res).1
           , "\n"
           ] in
         use CarriedBasic in
@@ -442,10 +496,16 @@ let appP = generatorProd
   , syntax = []
   } in
 
+let groupingP = generatorBracket
+  { nonTerminal = "Expr"
+  , leftBracket = [lit_ "("]
+  , rightBracket = [lit_ ")"]
+  } in
+
 let res = generatorGrammar
   { langName = "MExpr"
   , start = "Expr"
-  , productions = [varP, appP]
+  , productions = [varP, appP, groupingP]
   , overrideAllow = []
   , overrideDisallow = []
   , precedences = join
