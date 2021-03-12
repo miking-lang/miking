@@ -44,11 +44,6 @@ let _noNumTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Ten
 
 let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 
-let _recordTypeFields : Type -> [SID] = use RecordTypeAst in lam ty.
-  match ty with TyRecord {fields = fields} then
-    mapKeys fields
-  else never
-
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
@@ -182,9 +177,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
       else never
     else never
   | TmRecord t ->
-    if eqi (mapLength t.bindings) 0 then TmRecord t
+    if mapIsEmpty t.bindings then TmRecord t
     else
-      let ty = t.ty in
       match t.ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           match mapLookup fields env.records with Some id then
@@ -201,8 +195,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | TmConApp t ->
     let body =
       match t.body with TmRecord r then
-        let bindings = mapMap (generate env) r.bindings in
-        TmRecord {r with bindings = bindings}
+        TmRecord {r with bindings = mapMap (generate env) r.bindings}
       else generate env t.body
     in
     OTmConApp {
@@ -682,7 +675,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   sem objWrap =
   | OTmVariantTypeDecl t ->
     OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
-  | t -> bind_ _preamble (objWrapRec (_objObj t))
+  | t -> objWrapRec (_objObj t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
@@ -777,12 +770,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     use MExprEval in
     eval {env = []} mexprAst
   in
-  let printfFmt = lam fmt.
-    TmApp {
-      lhs = OTmVarExt {ident = "Printf.printf"},
-      rhs = OTmString {text = fmt}
-    }
-  in
+  let ocamlAst = withPreamble ocamlAst in
   match mexprVal with TmConst t then
     match t.val with CInt _ then
       let ocamlVal = ocamlEvalInt ocamlAst in

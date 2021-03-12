@@ -262,15 +262,18 @@ lang OCamlPrettyPrint =
       match pprintCode (pprintIncr indent) env t.body with (env,body) then
         match pprintCode indent env t.inexpr with (env,inexpr) then
           (env,
-           join ["let ", str, " =", pprintNewline (pprintIncr indent),
-                 body, pprintNewline indent,
-                 "in", pprintNewline indent,
-                 inexpr])
+           if eqString (nameGetStr t.ident) "" then
+             join [body, pprintNewline indent, ";", inexpr]
+           else
+             join ["let ", str, " =", pprintNewline (pprintIncr indent),
+                   body, pprintNewline indent,
+                   "in", pprintNewline indent,
+                   inexpr])
         else never
       else never
     else never
   | TmRecord t ->
-    if eqi (mapLength t.bindings) 0 then (env, "()")
+    if mapIsEmpty t.bindings then (env, "()")
     else
       let innerIndent = pprintIncr (pprintIncr indent) in
       match
