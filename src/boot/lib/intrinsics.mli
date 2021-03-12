@@ -133,6 +133,8 @@ module Mmap : sig
 
   val insert : 'a -> 'b -> Obj.t -> Obj.t
 
+  val remove : 'a -> Obj.t -> Obj.t
+
   val find : 'a -> Obj.t -> 'b
 
   val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
@@ -142,8 +144,6 @@ module Mmap : sig
   val bindings : Obj.t -> ('a * 'b) list
 
   val size : Obj.t -> int
-
-  val remove : 'a -> Obj.t -> Obj.t
 
   val mem : 'a -> Obj.t -> bool
 

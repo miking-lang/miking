@@ -570,11 +570,17 @@ lang MapAst = ConstAst
   | CMapInsert {}
   | CMapRemove {}
   | CMapFind {}
+  | CMapFindOrElse {}
+  | CMapFindApplyOrElse {}
+  | CMapBindings {}
+  | CMapSize {}
   | CMapMem {}
   | CMapAny {}
   | CMapMap {}
   | CMapMapWithKey {}
-  | CMapBindings {}
+  | CMapFoldWithKey {}
+  | CMapEq {}
+  | CMapCmp {}
 end
 
 lang TensorAst = ConstAst

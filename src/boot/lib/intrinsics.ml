@@ -169,37 +169,6 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     Obj.repr (MapModule.add (Obj.repr k) v m, cmp)
 
-  let find k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.find (Obj.repr k) m
-
-  let bindings mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    let binds = MapModule.bindings m in
-    List.map (fun (k, v) -> (Obj.obj k, v)) binds
-
-  let size mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.cardinal m
-
   let remove k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
     let module Ord = struct
@@ -210,7 +179,7 @@ module Mmap = struct
     let module MapModule = Map.Make (Ord) in
     Obj.repr (MapModule.remove (Obj.repr k) m, cmp)
 
-  let mem k mCmpPair =
+  let find k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
     let module Ord = struct
       type t = Obj.t
@@ -218,7 +187,7 @@ module Mmap = struct
       let compare = cmp
     end in
     let module MapModule = Map.Make (Ord) in
-    MapModule.mem (Obj.repr k) m
+    MapModule.find (Obj.repr k) m
 
   let find_or_else f k mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
@@ -243,6 +212,37 @@ module Mmap = struct
         f v
     | None ->
         felse ()
+
+  let bindings mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    let binds = MapModule.bindings m in
+    List.map (fun (k, v) -> (Obj.obj k, v)) binds
+
+  let size mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    MapModule.cardinal m
+
+  let mem k mCmpPair =
+    let m, cmp = Obj.obj mCmpPair in
+    let module Ord = struct
+      type t = Obj.t
+
+      let compare = cmp
+    end in
+    let module MapModule = Map.Make (Ord) in
+    MapModule.mem (Obj.repr k) m
 
   let any p mCmpPair =
     let m, cmp = Obj.obj mCmpPair in
