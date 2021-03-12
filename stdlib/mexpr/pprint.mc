@@ -641,6 +641,13 @@ lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   | CDeRef _ -> "deref"
 end
 
+lang SysPrettyPrint = SysAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CExit _ -> "exit"
+  | CError _ -> "error"
+  | CArgv _ -> "argv"
+end
+
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CTensorCreate _ -> "tensorCreate"
@@ -937,6 +944,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
   + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
+  SysPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
