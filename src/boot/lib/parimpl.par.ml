@@ -16,15 +16,13 @@ module Atomic = struct
   end
 
   module NoInt = struct
-    let make v = Atomic.make v
+    let make = Atomic.make
 
     let get = Atomic.get
 
     let set = Atomic.set
 
     let exchange = Atomic.exchange
-
-    let compare_and_set = Atomic.compare_and_set
   end
 end
 

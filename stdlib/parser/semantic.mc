@@ -520,10 +520,10 @@ let semanticGrammar
             (lam pair. (pair.0, (head pair.1).1))
             (mapBindings groupedPrecs)
           } in
-        let atom = lam sym. mapFind sym breakablePrecomputed.atoms in
-        let prefix = lam sym. mapFind sym breakablePrecomputed.prefixes in
-        let postfix = lam sym. mapFind sym breakablePrecomputed.postfixes in
-        let infix = lam sym. mapFind sym breakablePrecomputed.infixes in
+        let atom = lam sym. mapFindWithExn sym breakablePrecomputed.atoms in
+        let prefix = lam sym. mapFindWithExn sym breakablePrecomputed.prefixes in
+        let postfix = lam sym. mapFindWithExn sym breakablePrecomputed.postfixes in
+        let infix = lam sym. mapFindWithExn sym breakablePrecomputed.infixes in
 
         -- TODO(vipa, 2021-02-24): There will be a bug if multiple
         -- non-terminals have the same name, they will be merged, even

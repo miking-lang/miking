@@ -2,11 +2,15 @@
 -- and symbolized terms (including partially symbolized terms). Also supports
 -- terms with unbound (free) variables and constructors.
 
+include "assoc-seq.mc"
 include "name.mc"
 include "bool.mc"
+include "tensor.mc"
+include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/symbolize.mc"
+
 
 -----------------
 -- ENVIRONMENT --
@@ -43,7 +47,7 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
-type TypeEnv = AssocMap Name Type
+type TypeEnv = AssocSeq Name Type
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
@@ -126,10 +130,10 @@ lang RecordEq = Eq + RecordAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmRecord r ->
     match lhs with TmRecord l then
-      if eqi (assocLength l.bindings) (assocLength r.bindings) then
-        assocFoldlM {eq=eqString}
+      if eqi (mapLength l.bindings) (mapLength r.bindings) then
+        mapFoldlOption
           (lam free. lam k1. lam v1.
-            match assocLookup {eq=eqString} k1 r.bindings with Some v2 then
+            match mapLookup k1 r.bindings with Some v2 then
               eqExprH env free v1 v2
             else None ())
           free l.bindings
@@ -138,7 +142,7 @@ lang RecordEq = Eq + RecordAst
 
   | TmRecordUpdate r ->
     match lhs with TmRecordUpdate l then
-      if eqString l.key r.key then
+      if eqSID l.key r.key then
         match eqExprH env free l.rec r.rec with Some free then
           eqExprH env free l.value r.value
         else None ()
@@ -344,6 +348,20 @@ lang SeqOpEq = SeqOpAst
   | CSplitAt {} -> match lhs with CSplitAt _ then true else false
 end
 
+lang TensorOpEq = TensorOpAst
+  sem eqConst (lhs : Const) =
+  | CTensorCreate {} -> match lhs with CTensorCreate _ then true else false
+  | CTensorGetExn {} -> match lhs with CTensorGetExn _ then true else false
+  | CTensorSetExn {} -> match lhs with CTensorSetExn _ then true else false
+  | CTensorRank {} -> match lhs with CTensorRank _ then true else false
+  | CTensorShape {} -> match lhs with CTensorShape _ then true else false
+  | CTensorReshapeExn {} -> match lhs with CTensorReshapeExn _ then true else false
+  | CTensorCopyExn {} -> match lhs with CTensorCopyExn _ then true else false
+  | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
+  | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
+  | CTensorIteri {} -> match lhs with CTensorIteri _ then true else false
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -415,11 +433,11 @@ lang RecordPatEq = RecordPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
-      if eqi (assocLength bs1) (assocLength bs2) then
-        assocFoldlM {eq=eqString}
+      if eqi (mapLength bs1) (mapLength bs2) then
+        mapFoldlOption
           (lam tEnv. lam k1. lam p1.
              match tEnv with (free,patEnv) then
-               match assocLookup {eq=eqString} k1 bs2 with Some p2 then
+               match mapLookup k1 bs2 with Some p2 then
                  eqPat env free patEnv p1 p2
                else None ()
              else never)
@@ -545,32 +563,16 @@ end
 lang RecordTypeEq = Eq + RecordTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyRecord r ->
-    let f = lam k. lam ty1.
-      match assocLookup {eq=eqString} k r.fields with Some ty2 then
-        eqType typeEnv ty1 ty2
-      else false
-    in
     match _unwrapType typeEnv lhs with Some (TyRecord l) then
-      if eqi (assocLength l.fields) (assocLength r.fields) then
-        assocAll f l.fields
-      else false
+      mapEq (eqType typeEnv) l.fields r.fields
     else false
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyVariant r ->
-    -- OPT(larshum, 2021-02-05): This comparison is quadratic in the number of
-    -- constructors
-    let f = lam lname.
-      match find (lam rname. nameEq lname rname) r.constrs with Some _ then
-        true
-      else false
-    in
     match _unwrapType typeEnv lhs with Some (TyVariant l) then
-      if eqi (length l.constrs) (length r.constrs) then
-        all (lam lname. f lname) l.constrs
-      else false
+      mapEq (eqType typeEnv) l.constrs r.constrs
     else false
 end
 
@@ -608,7 +610,7 @@ lang MExprEq =
 
   -- Constants
   + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq
+  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
@@ -964,22 +966,21 @@ let t = nameSym "T" in
 let letexpr = lam ty.
   nlet_ x ty (app_ (nvar_ f) (nvar_ y))
 in
-let emptyEnv = assocEmpty in
 
 let letu = letexpr tyunknown_ in
 let letb = letexpr tybool_ in
 let leti = letexpr tyint_ in
 let letfl = letexpr tyfloat_ in
 let letch = letexpr tychar_ in
-utest tyunknown_ with tyunknown_ using eqType emptyEnv in
-utest tybool_ with tybool_ using eqType emptyEnv in
-utest tyint_ with tyint_ using eqType emptyEnv in
-utest tyfloat_ with tyfloat_ using eqType emptyEnv in
-utest tychar_ with tychar_ using eqType emptyEnv in
-utest eqType emptyEnv tyunknown_ tybool_ with false in
-utest eqType emptyEnv tybool_ tyint_ with false in
-utest eqType emptyEnv tyint_ tyfloat_ with false in
-utest eqType emptyEnv tyint_ tychar_ with false in
+utest tyunknown_ with tyunknown_ using eqType [] in
+utest tybool_ with tybool_ using eqType [] in
+utest tyint_ with tyint_ using eqType [] in
+utest tyfloat_ with tyfloat_ using eqType [] in
+utest tychar_ with tychar_ using eqType [] in
+utest eqType [] tyunknown_ tybool_ with false in
+utest eqType [] tybool_ tyint_ with false in
+utest eqType [] tyint_ tyfloat_ with false in
+utest eqType [] tyint_ tychar_ with false in
 
 let tyarr1 = tyarrow_ tyunknown_ tyunknown_ in
 let tyarr2 = tyarrow_ tyint_ tyunknown_ in
@@ -989,24 +990,24 @@ let tyseq = lam ty. tyseq_ ty in
 let tyrec1 = tyrecord_ [("0", tyint_), ("1", tyunknown_)] in
 let tyrec2 = tyrecord_ [("1", tyunknown_), ("0", tyunknown_)] in
 let tyrec3 = tytuple_ [tyunknown_, tyunknown_] in
-utest tyarr1 with tyarr1 using eqType emptyEnv in
-utest tyarr2 with tyarr2 using eqType emptyEnv in
-utest tyarr3 with tyarr3 using eqType emptyEnv in
-utest tyarr4 with tyarr4 using eqType emptyEnv in
-utest eqType emptyEnv tyarr1 tyarr2 with false in
-utest eqType emptyEnv tyarr2 tyarr3 with false in
-utest eqType emptyEnv tyarr3 tyarr4 with false in
-utest tystr_ with tystr_ using eqType emptyEnv in
-utest tyseq tyint_ with tyseq tyint_ using eqType emptyEnv in
-utest eqType emptyEnv tystr_ (tyseq tyint_) with false in
-utest tyrec1 with tyrec1 using eqType emptyEnv in
-utest tyrec2 with tyrec3 using eqType emptyEnv in
-utest eqType emptyEnv tyrec1 tyrec2 with false in
+utest tyarr1 with tyarr1 using eqType [] in
+utest tyarr2 with tyarr2 using eqType [] in
+utest tyarr3 with tyarr3 using eqType [] in
+utest tyarr4 with tyarr4 using eqType [] in
+utest eqType [] tyarr1 tyarr2 with false in
+utest eqType [] tyarr2 tyarr3 with false in
+utest eqType [] tyarr3 tyarr4 with false in
+utest tystr_ with tystr_ using eqType [] in
+utest tyseq tyint_ with tyseq tyint_ using eqType [] in
+utest eqType [] tystr_ (tyseq tyint_) with false in
+utest tyrec1 with tyrec1 using eqType [] in
+utest tyrec2 with tyrec3 using eqType [] in
+utest eqType [] tyrec1 tyrec2 with false in
 
-let tyEnv1 = seq2assoc {eq=nameEq} [(t, tyint_)] in
-let tyEnv2 = seq2assoc {eq=nameEq} [(t, tybool_)] in
-utest eqType emptyEnv (ntyvar_ t) tyint_ with false in
-utest eqType emptyEnv tyint_ (ntyvar_ t) with false in
+let tyEnv1 = [(t, tyint_)] in
+let tyEnv2 = [(t, tybool_)] in
+utest eqType [] (ntyvar_ t) tyint_ with false in
+utest eqType [] tyint_ (ntyvar_ t) with false in
 utest ntyvar_ t with tyint_ using eqType tyEnv1 in
 utest tyint_ with ntyvar_ t using eqType tyEnv1 in
 utest eqType tyEnv1 (ntyvar_ t) tybool_ with false in
@@ -1015,9 +1016,9 @@ utest ntyvar_ t with tybool_ using eqType tyEnv2 in
 let tyApp1 = tyapp_ tyint_ tyint_ in
 let tyApp2 = tyapp_ (ntyvar_ t) tyint_ in
 let tyApp3 = tyapp_ tyint_ (ntyvar_ t) in
-utest tyApp1 with tyApp1 using eqType emptyEnv in
-utest tyApp2 with tyApp2 using eqType emptyEnv in
-utest tyApp3 with tyApp3 using eqType emptyEnv in
+utest tyApp1 with tyApp1 using eqType [] in
+utest tyApp2 with tyApp2 using eqType [] in
+utest tyApp3 with tyApp3 using eqType [] in
 utest tyApp1 with tyApp2 using eqType tyEnv1 in
 utest tyApp2 with tyApp3 using eqType tyEnv1 in
 utest eqType tyEnv2 tyApp1 tyApp2 with false in
@@ -1041,6 +1042,7 @@ let s2 = seq_ [lam2, lam1, v4] in
 let s3e = seq_ [lam1, v5e, v3] in
 utest s1 with s2 using eqExpr in
 utest eqExpr s1 s3e with false in
+utest eqExpr (seq_ [c1]) (seq_ [c2]) with false in
 
 -- Never
 utest never_ with never_ using eqExpr in

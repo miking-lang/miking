@@ -49,7 +49,7 @@ let dtupleproj_ = use MExprAst in
 let _seqOfCharToString = use MExprAst in
   lam tms.
     let f = lam c.
-      match c with TmConst {val = CChar c, info = NoInfo()} then
+      match c with TmConst {val = CChar c} then
         c.val
       else error "Not a character"
     in
@@ -125,20 +125,19 @@ lang FixEval = FixAst + LamEval + UnknownTypeAst
 lang RecordEval = RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
-    let bs = assocMap {eq=eqString} (eval ctx) t.bindings in
+    let bs = mapMap (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
   | TmRecordUpdate u ->
     match eval ctx u.rec with TmRecord t then
-      if assocMem {eq = eqString} u.key t.bindings then
-        TmRecord {t with bindings = assocInsert {eq = eqString}
-                                u.key (eval ctx u.value) t.bindings}
+      if mapMem u.key t.bindings then
+        TmRecord {t with bindings = mapInsert u.key (eval ctx u.value) t.bindings}
       else error "Key does not exist in record"
     else error "Not updating a record"
 end
 
 lang RecLetsEval =
   RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
-  UnknownTypeAst 
+  UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
   | TmRecLets t ->
@@ -245,6 +244,19 @@ end
 lang RefEval = RefAst
   sem eval (ctx : {env : Env}) =
   | TmRef r -> TmRef r
+end
+
+type T
+con TInt : Tensor Int -> T
+con TFloat : Tensor Float -> T
+con TExpr : Tensor Expr -> T
+
+lang TensorEval
+  syn Expr =
+  | TmTensor { val : T }
+
+  sem eval (ctx : {env : Env}) =
+  | TmTensor t -> TmTensor t
 end
 
 ---------------
@@ -583,8 +595,10 @@ end
 lang SymbEval = SymbAst + IntAst + RecordAst + ConstEval
   sem delta (arg : Expr) =
   | CGensym _ ->
-    match arg with TmRecord {bindings = []} then
-      TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}, info = NoInfo()}
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        TmConst {val = CSymb {val = gensym ()}, ty = TyUnknown {}, info = NoInfo()}
+      else error "Argument in gensym is not unit"
     else error "Argument in gensym is not unit"
   | CSym2hash _ ->
     match arg with TmConst (t & {val = CSymb s}) then
@@ -681,6 +695,226 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCreate2 n ->
     let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
     TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
+end
+
+lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval
+  syn Const =
+  | CTensorCreate2 [Int]
+  | CTensorGetExn2 T
+  | CTensorSetExn2 T
+  | CTensorSetExn3 (T, [Int])
+  | CTensorReshapeExn2 T
+  | CTensorCopyExn2 T
+  | CTensorSliceExn2 T
+  | CTensorSubExn2 T
+  | CTensorSubExn3 (T, Int)
+  | CTensorIteri2 Expr
+
+  sem _ofTmSeq =
+  | TmSeq { tms = tms } ->
+    map (lam tm. match tm with TmConst { val = CInt { val = n }} then n
+                 else error "Not an integer sequence")
+        tms
+  | tm -> dprint tm; error "Not an integer sequence"
+
+  sem _toTmSeq =
+  | is ->
+    let tms = map (lam i. int_ i) is in
+    seq_ tms
+
+  sem apply (ctx : {env : Env}) (arg : Expr) =
+  | TmConst { val = CTensorCreate2 shape } ->
+    let is0 = create (length shape) (lam. 0) in -- First index
+
+    -- Value when applying f to the first index. This determines the type of
+    -- the tensor.
+    let res0 = apply ctx (_toTmSeq is0) arg in
+
+    -- The structure of f is reusable for all types of tensors.
+    let mkf = lam resf. lam x0. lam is.
+      if eqSeq eqi is is0 then x0
+      else
+        let res = apply ctx (_toTmSeq is0) arg in
+        resf res
+    in
+
+    match res0 with TmConst { val = CInt { val = n0 } } then
+      let resf = lam res.
+          match res with TmConst { val = CInt { val = n } } then n
+          else error "Expected integer from f in CTensorCreate"
+      in
+      let f = mkf resf n0 in
+      TmTensor { val = TInt (tensorCreate shape f) }
+    else match res0 with TmConst { val = CFloat { val = r0 } } then
+      let resf = lam res.
+          match res with TmConst { val = CFloat { val = r } } then r
+          else error "Expected float from f in CTensorCreate"
+      in
+      let f = mkf resf r0 in
+      TmTensor { val = TFloat (tensorCreate shape f) }
+    else
+      let f = mkf (lam x. x) res0 in
+      TmTensor { val = TExpr (tensorCreate shape f) }
+  | TmConst { val = CTensorIteri2 f } ->
+    match arg with TmTensor { val = t } then
+
+      let mkg = lam mkt. lam i. lam r.
+        let res =
+          apply ctx (TmTensor { val = mkt r })  (apply ctx (int_ i) f)
+        in
+        ()
+      in
+
+      match t with TInt t then
+        let g = mkg (lam t. TInt t) in
+        tensorIteri g t;
+        unit_
+      else match t with TFloat t then
+        let g = mkg (lam t. TFloat t) in
+        tensorIteri g t;
+        unit_
+      else match t with TExpr t then
+        let g = mkg (lam t. TExpr t) in
+        tensorIteri g t;
+        unit_
+      else never
+    else error "Second argument to CTensorIteri not a tensor"
+
+  sem delta (arg : Expr) =
+  | CTensorCreate _ ->
+    let val = CTensorCreate2 (_ofTmSeq arg) in
+    const_ val
+  | CTensorGetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorGetExn2 t in
+      const_ val
+    else error "First argument to CTensorGetExn not a tensor"
+  | CTensorGetExn2 t ->
+    let is = _ofTmSeq arg in
+    match t with TInt t then
+      let val = tensorGetExn t is in
+      int_ val
+    else match t with TFloat t then
+      let val = tensorGetExn t is in
+      float_ val
+    else match t with TExpr t then
+      let val = tensorGetExn t is in
+      val
+    else never
+  | CTensorSetExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorSetExn2 t in
+      const_ val
+    else error "First argument to CTensorSetExn not a tensor"
+  | CTensorSetExn2 t ->
+    let is = _ofTmSeq arg in
+    let val = CTensorSetExn3 (t, is) in
+    const_ val
+  | CTensorSetExn3 (t, is) ->
+    match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
+      tensorSetExn t is v;
+      unit_
+    else
+    match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
+      tensorSetExn t is v;
+      unit_
+    else
+    match (t, arg) with (TExpr t, v) then
+      tensorSetExn t is v;
+      unit_
+    else error "Tensor and value type does not match in CTensorSetExn"
+  | CTensorRank _ ->
+    match arg with TmTensor { val = t } then
+      match t with TInt t | TFloat t | TExpr t then
+        let val = tensorRank t in
+        int_ val
+      else never
+    else error "First argument to CTensorRank not a tensor"
+  | CTensorShape _ ->
+    match arg with TmTensor { val = t } then
+      match t with TInt t | TFloat t | TExpr t then
+        let shape = tensorShape t in
+        _toTmSeq shape
+      else never
+    else error "First argument to CTensorRank not a tensor"
+  | CTensorReshapeExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorReshapeExn2 t in
+      const_ val
+    else error "First argument to CTensorReshapeExn not a tensor"
+  | CTensorReshapeExn2 t ->
+    let is = _ofTmSeq arg in
+    match t with TInt t then
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TInt view }
+    else match t with TFloat t then
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TFloat view }
+    else match t with TExpr t then
+      let view = tensorReshapeExn t is in
+      TmTensor { val = TExpr view }
+    else never
+  | CTensorCopyExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorCopyExn2 t in
+      const_ val
+    else error "First argument to CTensorCopyExn not a tensor"
+  | CTensorCopyExn2 t1 ->
+    match arg with TmTensor { val = t2 } then
+      match (t1, t2) with (TInt t1, TInt t2) then
+        tensorCopyExn t1 t2;
+        unit_
+      else match (t1, t2) with (TFloat t1, TFloat t2) then
+        tensorCopyExn t1 t2;
+        unit_
+      else match (t1, t2) with (TExpr t1, TExpr t2) then
+        tensorCopyExn t1 t2;
+        unit_
+      else error "Tensor type mismatch in CTensorCopyExn"
+    else error "First argument to CTensorCopyExn not a tensor"
+  | CTensorSliceExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorSliceExn2 t in
+      const_ val
+    else error "First argument to CTensorSliceExn not a tensor"
+  | CTensorSliceExn2 t ->
+    let is = _ofTmSeq arg in
+    match t with TInt t then
+      let view = tensorSliceExn t is in
+      TmTensor { val = TInt view }
+    else match t with TFloat t then
+      let view = tensorSliceExn t is in
+      TmTensor { val = TFloat view }
+    else match t with TExpr t then
+      let view = tensorSliceExn t is in
+      TmTensor { val = TExpr view }
+    else never
+  | CTensorSubExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorSubExn2 t in
+      const_ val
+    else error "First argument to CTensorSubExn not a tensor"
+  | CTensorSubExn2 t ->
+    match arg with TmConst { val = CInt { val = ofs }} then
+      let val = CTensorSubExn3 (t, ofs) in
+      const_ val
+    else error "Second argument to CTensorSubExn not an integer"
+  | CTensorSubExn3 (t, ofs) ->
+    match arg with TmConst { val = CInt { val = len }} then
+      match t with TInt t then
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TInt view }
+      else match t with TFloat t then
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TFloat view }
+      else match t with TExpr t then
+        let view = tensorSubExn t ofs len in
+        TmTensor { val = TExpr view }
+      else never
+    else error "Second argument to CTensorSubExn not an integer"
+  | CTensorIteri _ ->
+    let val = CTensorIteri2 arg in
+    const_ val
 end
 
 lang FloatStringConversionEval = FloatStringConversionAst
@@ -784,7 +1018,7 @@ lang TimeEval = TimeAst + IntAst
     match arg with TmConst {val = CInt {val = n}} then
       sleepMs n;
       unit_
-    else error "n in wallTimeMs not a constant integer"
+    else error "n in sleepMs not a constant integer"
   | CWallTimeMs _ ->
     float_ (wallTimeMs ())
 end
@@ -807,7 +1041,6 @@ lang RefOpEval = RefOpAst + IntAst
       deref r
     else error "not a deref of a reference"
 end
-
 
 --------------
 -- PATTERNS --
@@ -853,9 +1086,9 @@ lang RecordPatEval = RecordAst + RecordPat
   sem tryMatch (env : Env) (t : Expr) =
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
-      assocFoldlM {eq = eqString}
+      mapFoldlOption
         (lam env. lam k. lam p.
-          match assocLookup {eq = eqString} k bs with Some v then
+          match mapLookup k bs with Some v then
             tryMatch env v p
           else None ())
         env
@@ -932,18 +1165,16 @@ end
 
 lang MExprEval =
 
-  -- Symbolize is required before eval, and MExprEq is used below when testing.
-  MExprSym + MExprEq
-
   -- Terms
-  + VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
+  VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
   ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
 
   -- Constants
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
-  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval
+  IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
+  TensorOpEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -958,13 +1189,18 @@ end
 -- TESTS --
 -----------
 
+lang TestLang = MExprEval + MExprPrettyPrint + MExprEq + MExprSym
+
 mexpr
 
-use MExprEval in
+use TestLang in
 
 -- Evaluation shorthand used in tests below
+let evalNoSymbolize =
+  lam t. eval {env = assocEmpty} t in
+
 let eval =
-  lam t. eval {env = assocEmpty} (symbolize t) in
+  lam t. evalNoSymbolize (symbolize t) in
 
 let id = ulam_ "x" (var_ "x") in
 let bump = ulam_ "x" (addi_ (var_ "x") (int_ 1)) in
@@ -1120,7 +1356,7 @@ utest eval recordUpdate2 with (int_ 1729) in
 
 let recordUpdateNonValue =
   (recordupdate_ (record_ [("a", int_ 10)]) "a" (addi_ (int_ 1729) (int_ 1))) in
-utest eval recordUpdateNonValue with record_ [("a", int_ 1730)] in
+utest eval recordUpdateNonValue with record_ [("a", int_ 1730)] using eqExpr in
 
 
 -- Commented out to not clutter the test suite
@@ -1190,11 +1426,12 @@ utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] in
 -- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
 let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
-with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]] in
+with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]]
+using eqExpr in
 
 -- create 3 (lam. 42) -> [42, 42, 42]
 let createAst = create_ (int_ 3) (ulam_ "_" (int_ 42)) in
-utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] in
+utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] using eqExpr in
 
 -- create 3 (lam i. i) -> [0, 1, 2]
 let i = nameSym "i" in
@@ -1328,14 +1565,16 @@ utest eval (match_
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
   (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5] in
+with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3])
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
   (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3] in
+with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2])
@@ -1349,7 +1588,8 @@ utest eval (match_
   (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
   (tuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
-with tuple_ [int_ 1, int_ 2, int_ 3] in
+with tuple_ [int_ 1, int_ 2, int_ 3]
+using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
@@ -1370,7 +1610,8 @@ utest eval (match_
   (pand_ (pvar_ "a") (ptuple_ [pvar_ "b", pint_ 2]))
   (tuple_ [var_ "a", var_ "b"])
   (tuple_ [tuple_ [int_ 70, int_ 72], int_ 71]))
-with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1] in
+with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1]
+using eqExpr in
 
 -- I/O operations
 -- utest eval (print_ (str_ "Hello World")) with unit_ in
@@ -1475,7 +1716,8 @@ utest
              deref_ (var_ "r2"),
              deref_ (var_ "r3"),
              app_ (deref_ (var_ "r4")) (str_ "test")]))
-with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"] in
+with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"]
+using eqExpr in
 
 utest
   eval (bind_ p (bindall_
@@ -1483,6 +1725,79 @@ utest
      ulet_ "_" (modref_ (var_ "r2") (float_ 3.14)),
      ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
      tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
-with tuple_ [int_ 4, float_ 3.14, int_ 4] in
+with tuple_ [int_ 4, float_ 3.14, int_ 4]
+using eqExpr in
+
+-- Tensors
+let testTensors = lam v.
+  let t0 = eval (tensorCreate_ (seq_ []) (ulam_ "x" v.0)) in
+  let t1 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.0)) in
+  let t2 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.1)) in
+
+  let evaln = evalNoSymbolize in
+
+  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.0 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.0 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.0 in
+
+  utest evaln (tensorSetExn_ t0 (seq_ []) v.1) with unit_ in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ in
+
+  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.1 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.1 in
+  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.2 in
+
+  utest evaln (tensorRank_ t0) with int_ 0 in
+  utest evaln (tensorRank_ t1) with int_ 1 in
+
+  utest evaln (tensorShape_ t0) with seq_ [] in
+  utest evaln (tensorShape_ t1) with seq_ [int_ 4] in
+
+  utest evaln (tensorShape_ (tensorReshapeExn_ t0 (seq_ [int_ 1])))
+  with seq_ [int_ 1] in
+
+  utest evaln (tensorShape_ (tensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
+  with seq_ [int_ 2, int_ 2] in
+
+  utest evaln (tensorCopyExn_ t1 t2) with unit_ in
+
+  utest evaln (tensorRank_ (tensorSliceExn_ t1 (seq_ [int_ 0])))
+  with int_ 0 in
+
+  utest evaln (tensorShape_ (tensorSliceExn_ t1 (seq_ [int_ 0])))
+  with seq_ [] in
+
+  utest evaln (tensorRank_ (tensorSubExn_ t1 (int_ 0) (int_ 2)))
+  with int_ 1 in
+
+  utest evaln (tensorShape_ (tensorSubExn_ t1 (int_ 0) (int_ 2)))
+  with seq_ [int_ 2] in
+
+  let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
+  let f = eval (ulam_ "i"
+                  (ulam_ "x"
+                     (tensorCopyExn_ (var_ "x") (var_ "x"))))
+  in
+  utest evaln (tensorIteri_ f t3) with unit_ in
+  ()
+in
+
+let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" (int_ 0))) in
+let f = eval (ulam_ "i"
+                (ulam_ "x"
+                   (tensorSetExn_ (var_ "x") (seq_ []) (var_ "i"))))
+in
+
+let evaln = evalNoSymbolize in
+
+utest evaln (tensorIteri_ f t3) with unit_ in
+utest evaln (tensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 in
+utest evaln (tensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 in
+utest evaln (tensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 in
+
+testTensors (int_ 0, int_ 1, int_ 2);
+testTensors (float_ 0., float_ 1., float_ 2.);
+testTensors (seq_ [int_ 0], seq_ [int_ 1], seq_ [int_ 2]);
 
 ()

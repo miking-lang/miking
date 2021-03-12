@@ -13,11 +13,12 @@ let _symbolizeVarName = lam env. lam ident.
   else never
 
 lang OCamlSym =
-  VarSym + AppSym + LamSym + LetSym + RecLetsSym + ConstSym
-  + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym
-  + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData + OCamlRecord
+  VarSym + AppSym + LamSym + LetSym + RecLetsSym + RecordSym + ConstSym
+  + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym + RecordSym
+  + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData
   + UnknownTypeSym + IntTypeSym + BoolTypeSym + FloatTypeSym + CharTypeSym
-  + RecordTypeSym + VarTypeSym + OCamlExternal
+  + RecordTypeSym + VarTypeSym + OCamlExternal + OCamlPreambleHack
+  + OCamlString + OCamlRecord
 
   sem symbolizeExpr (env : Env) =
   | OTmVariantTypeDecl t ->
@@ -51,11 +52,12 @@ lang OCamlSym =
       OTmConApp {{t with ident = ident}
                     with args = args}
     else never
-  | OTmRecord t ->
-    let bindings = map (lam b. (b.0, symbolizeExpr env b.1)) t.bindings in
-    OTmRecord {t with bindings = bindings}
   | OTmVarExt t -> t
-  | OTmConAppExt ({ args = args } & t) -> OTmConAppExt {t with args = map (symbolizeExpr env) args}
+  | OTmConAppExt ({ args = args } & t) ->
+    OTmConAppExt {t with args = map (symbolizeExpr env) args}
+  | OTmPreambleText t ->
+    OTmPreambleText {t with inexpr = symbolizeExpr env t.inexpr}
+  | OTmString t -> t
 
   sem symbolizePat (env : Env) (patEnv : Env) =
   | OPatTuple { pats = pats } ->
@@ -82,7 +84,7 @@ lang OCamlSym =
     else never
   | OPatRecord t ->
     let symf = lam patEnv. lam _i. lam p. symbolizePat env patEnv p in
-    match assocMapAccum {eq=eqString} symf patEnv t.bindings with (env, bindings) then
+    match mapMapAccum symf patEnv t.bindings with (env, bindings) then
       (env, OPatRecord {t with bindings = bindings})
     else never
 end

@@ -3,7 +3,7 @@ include "mexpr/ast-builder.mc"
 
 lang OCamlTypeDeclAst
   syn Expr =
-  | OTmVariantTypeDecl { ident : Name, constrs : [(Name, Type)], inexpr : Expr }
+  | OTmVariantTypeDecl { ident : Name, constrs : Map Name Type, inexpr : Expr }
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmVariantTypeDecl t ->
@@ -15,17 +15,8 @@ lang OCamlTypeDeclAst
 end
 
 lang OCamlRecord
-  syn Expr =
-  | OTmRecord {bindings : [(String, Expr)]}
-
   syn Pat =
-  | OPatRecord {bindings : AssocMap String Pat}
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmRecord t -> OTmRecord {t with bindings = map (lam b. (b.0, f b.1)) t.bindings}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmRecord t -> foldl (lam acc. lam b. f acc b.1) acc t.bindings
+  | OPatRecord {bindings : Map SID Pat}
 end
 
 lang OCamlMatch
@@ -85,6 +76,17 @@ lang OCamlData
   | OTmConApp t -> foldl f acc t.args
 end
 
+lang OCamlString
+  syn Expr =
+  | OTmString { text : String }
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmString t -> OTmString t
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmString t -> acc
+end
+
 -- This fragment is a hack used to enable inserting the preamble after variant
 -- type declarations, but before the rest of the program.
 lang OCamlPreambleHack
@@ -123,12 +125,13 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
-lang OCamlAst = LamAst + LetAst + RecLetsAst + ArithIntAst + ShiftIntAst
-                + ArithFloatAst + BoolAst + CmpIntAst + CmpFloatAst
-                + CharAst + CmpCharAst + OCamlMatch + NamedPat + IntPat
-                + CharPat + BoolPat + OCamlTuple + OCamlArray + OCamlData
-                + OCamlExternal + FloatIntConversionAst + IntCharConversionAst
-                + OCamlRecord + OCamlTypeDeclAst + OCamlPreambleHack
+lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
+                + ShiftIntAst + ArithFloatAst + BoolAst + CmpIntAst
+                + CmpFloatAst + CharAst + CmpCharAst + OCamlMatch + NamedPat
+                + IntPat + CharPat + BoolPat + OCamlTuple + OCamlArray
+                + OCamlData + OCamlExternal + FloatIntConversionAst
+                + IntCharConversionAst + OCamlTypeDeclAst + OCamlPreambleHack
+                + OCamlRecord + OCamlString
 end
 
 mexpr

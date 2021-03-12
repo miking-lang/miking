@@ -1013,10 +1013,10 @@ let a = atomicMake 0 in
 utest atomicGet a with 0 in
 ```
 
-`atomicCAS` performs an atomic compare-and-set, that is, it only updates the
-value of the reference if its current value is physically identical to the
-provided value, and then returns a Boolean representing if the update was
-successful or not:
+`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
+updates the value of `a` to `newVal` if the current value is identical to
+`oldVal`, and then returns a Boolean representing if the update was successful
+or not:
 
 ```
 utest atomicCAS a 0 1 with true in
@@ -1024,8 +1024,11 @@ utest atomicCAS a 42 3 with false in
 utest atomicGet a with 1 in
 ```
 
-To unconditionally set the value, we can use `atomicExchange`, which also
-returns the old value of the reference:
+The compare-and-set operation is currently supported for integer atomic
+references only.
+
+To unconditionally set the value of an atomic reference, we can use
+`atomicExchange`, which also returns the old value of the reference:
 
 ```
 utest atomicExchange a 2 with 1 in
