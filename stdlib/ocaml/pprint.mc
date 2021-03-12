@@ -106,6 +106,12 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
+-- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
+-- want to specify the type names in general. Record types are printed in a
+-- different way because their types must be declared at the top of the program
+-- in order to use them (e.g. for pattern matching). As type-lifting replaces
+-- all nested record types with type variables, all fields of a record type
+-- will be printed as Obj.t.
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
@@ -115,7 +121,8 @@ lang OCamlTypePrettyPrint =
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyRecord t ->
-    if eqi (mapLength t.fields) 0 then (env,"()")
+    if mapIsEmpty t.bindings then
+      error "Unit record type not supported in OCaml"
     else
       let f = lam env. lam sid. lam ty.
         let str = sidToString sid in
