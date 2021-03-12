@@ -329,41 +329,43 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else never
     in
+    let lookupRecordFields = lam ty. lam constrs.
+      match ty with TyRecord {fields = fields} then
+        Some fields
+      else match ty with TyVar {ident = ident} then
+        match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
+          Some fields
+        else None ()
+      else None ()
+    in
     match env with {records = records, constrs = constrs} then
-      let fields =
-        match targetTy with TyVar {ident = ident} then
-          match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
-            fields
+      match lookupRecordFields targetTy constrs with Some fields then
+        match mapLookup fields records with Some name then
+          let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) bindings in
+          let genPats = mapValues
+            (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) bindings)
+          in
+          match unzip genPats with (allNames, allWraps) then
+            let f = lam id. lam.
+              match mapLookup id patNames with Some n then
+                npvar_ n
+              else never
+            in
+            let precord = OPatRecord {bindings = mapMapWithKey f bindings} in
+            let wrap = lam cont.
+              OTmMatch {
+                target = nvar_ targetName,
+                arms = [
+                  (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
+                ]
+              }
+            in
+            ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
+            , wrap
+            )
           else never
-        else match targetTy with TyRecord {fields = fields} then
-          fields
-        else never
-      in
-      match mapLookup fields records with Some name then
-        let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) bindings in
-        let genPats = mapValues
-          (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) bindings)
-        in
-        match unzip genPats with (allNames, allWraps) then
-          let f = lam id. lam.
-            match mapLookup id patNames with Some n then
-              npvar_ n
-            else never
-          in
-          let precord = OPatRecord {bindings = mapMapWithKey f bindings} in
-          let wrap = lam cont.
-            OTmMatch {
-              target = nvar_ targetName,
-              arms = [
-                (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
-              ]
-            }
-          in
-          ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
-          , wrap
-          )
-        else never
-      else error "Generation of record pattern requires more type information"
+        else error "Generation of record pattern requires more type information"
+      else error "Could not infer type of record pattern"
     else never
   | PatCon {ident = id, subpat = subpat} ->
     match env with {constrs = constrs} then
