@@ -532,9 +532,13 @@ and print_tm' fmt t =
         (print_ty_if_known ty) print_tm (Lam, t1)
   | TmLet (_, x, s, ty, t1, t2) ->
       let x = string_of_ustring (ustring_of_var x s) in
-      let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent x
-        (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
+      if x = "" then
+        fprintf fmt "@[<hov 0>@[<hov %d>%a;@]@ %a@]" !ref_indent print_tm
+          (Match, t1) print_tm (Match, t2)
+      else
+        let ty = ty |> ustring_of_ty |> string_of_ustring in
+        fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
+          x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
   | TmType (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
