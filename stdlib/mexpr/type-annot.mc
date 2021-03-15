@@ -57,10 +57,9 @@ let _isTypeAscription = use MExprAst in
     nameEq letTerm.ident id
   else false
 
-lang TypeAnnot =
-  UnknownTypeAst + TypeAst + DataAst + FunTypeAst + VarTypeAst + VariantTypeAst
-
+lang TypeAnnot
   sem typeAnnotExpr (env : TypeEnv) =
+  -- Intentionally left blank
 
   sem typeAnnot =
   | expr -> typeAnnotExpr _typeEnvEmpty expr
