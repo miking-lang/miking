@@ -158,13 +158,16 @@ lang ConstTypeAnnot = TypeAnnot + ConstAst
   | TmConst t -> TmConst {t with ty = typeConst t.val}
 end
 
-lang SeqTypeAnnot = TypeAnnot + SeqAst
+lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
   | TmSeq t ->
     let tms = map (typeAnnotExpr env) t.tms in
     let elemTy =
       if eqi (length tms) 0 then tyunknown_
-      else ty (get tms 0)
+      else
+        let fstty = ty (get tms 0) in
+        if all (lam tm. eqType env.tyEnv fstty (ty tm)) tms then fstty
+        else tyunknown_
     in
     TmSeq {{t with tms = tms}
               with ty = tyseq_ elemTy}
