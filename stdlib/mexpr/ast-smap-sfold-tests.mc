@@ -1,4 +1,5 @@
 include "ast.mc"
+include "eq.mc"
 include "ast-builder.mc"
 include "info.mc"
 
@@ -10,8 +11,10 @@ include "info.mc"
 -- "ast-builder.mc" includes "ast.mc" though, so we can't use it inside "ast.mc",
 -- thus we create this file instead.
 
+lang TestLang = MExprAst + MExprEq
+
 mexpr
-use MExprAst in
+use TestLang in
 
 let tmVarX = (var_ "x") in
 let tmVarY = (var_ "y") in
@@ -190,7 +193,7 @@ in
 let countNodes = bottomUp (sfold_Expr_Expr addi 1) in
 
 utest bottomUp identity tmVarX with tmVarX in
-utest bottomUp cInt2cChar tmRecordI with tmRecordC in
+utest bottomUp cInt2cChar tmRecordI with tmRecordC using eqExpr in
 utest countNodes tmVarX with 1 in
 utest countNodes tmApp11C with 3 in
 utest countNodes tmRecordC with 5 in

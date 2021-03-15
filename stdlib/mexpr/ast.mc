@@ -197,11 +197,11 @@ end
 -- TmRecord and TmRecordUpdate --
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMap String Expr,
+  | TmRecord {bindings : Map SID Expr,
               ty : Type,
               info : Info}
   | TmRecordUpdate {rec : Expr,
-                    key : String,
+                    key : SID,
                     value : Expr,
                     ty : Type,
                     info : Info}
@@ -219,12 +219,12 @@ lang RecordAst
   | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {t with bindings = assocMap {eq=eqString} f t.bindings}
+  | TmRecord t -> TmRecord {t with bindings = mapMap f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc t.bindings
+  | TmRecord t -> mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc t.bindings
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -386,6 +386,7 @@ lang RefAst
   | TmRef t -> acc
 end
 
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -516,9 +517,23 @@ lang FileOpAst = ConstAst
   | CFileDelete {}
 end
 
+lang TensorOpAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
+end
+
 lang IOAst = ConstAst
   syn Const =
-  | CPrintString {}
+  | CPrint {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
@@ -547,6 +562,47 @@ lang RefOpAst = ConstAst + RefAst
   | CRef {}
   | CModRef {}
   | CDeRef {}
+end
+
+lang MapAst = ConstAst
+  syn Const =
+  | CMapEmpty {}
+  | CMapInsert {}
+  | CMapRemove {}
+  | CMapFind {}
+  | CMapMem {}
+  | CMapAny {}
+  | CMapMap {}
+  | CMapMapWithKey {}
+  | CMapBindings {}
+end
+
+lang TensorAst = ConstAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
+end
+
+lang BootParserAst = ConstAst
+  syn Const =
+  | CBootParserParseMExprString {}
+  | CBootParserGetId {}
+  | CBootParserGetTerm {}
+  | CBootParserGetString {}
+  | CBootParserGetInt {}
+  | CBootParserGetFloat {}
+  | CBootParserGetListLength {}
+  | CBootParserGetConst {}
+  | CBootParserGetPat {}
+  | CBootParserGetInfo {}
 end
 
 --------------
@@ -607,7 +663,7 @@ end
 
 lang RecordPat
   syn Pat =
-  | PatRecord {bindings : AssocMap String Pat,
+  | PatRecord {bindings : Map SID Pat,
                info: Info}
 
   sem info =
@@ -615,11 +671,11 @@ lang RecordPat
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PatRecord b ->
-      PatRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
+      PatRecord {b with bindings = mapMap f b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatRecord {bindings = bindings} -> assocFold {eq=eqString}
-                    (lam acc. lam _k. lam v. f acc v) acc bindings
+  | PatRecord {bindings = bindings} ->
+      mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
@@ -772,12 +828,12 @@ end
 
 lang RecordTypeAst
   syn Type =
-  | TyRecord {fields : AssocMap String Type}
+  | TyRecord {fields : Map SID Type}
 end
 
 lang VariantTypeAst
   syn Type =
-  | TyVariant {constrs : [Name]}
+  | TyVariant {constrs : Map Name Type}
 end
 
 lang VarTypeAst
@@ -806,7 +862,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorAst +
+  TensorOpAst + BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

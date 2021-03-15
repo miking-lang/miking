@@ -28,17 +28,20 @@ type SymEnv = {
 let symEnvEmpty =
   {varEnv = assocEmpty, conEnv = assocEmpty, tyEnv = assocEmpty}
 
+let symVarNameEnv = lam varNameEnv : [Name].
+  {symEnvEmpty with varEnv = map (lam x. (nameGetStr x, x)) varNameEnv}
+ 
 -----------
 -- TERMS --
 -----------
 
 lang Sym
+  -- Symbolize with an environment
   sem symbolizeExpr (env : SymEnv) =
-  -- Intentionally left blank
 
+  -- Symbolize with empty environments
   sem symbolize =
   | expr -> symbolizeExpr symEnvEmpty expr
-
 end
 
 lang VarSym = Sym + VarAst
@@ -92,7 +95,7 @@ end
 lang RecordSym = Sym + RecordAst
   sem symbolizeExpr (env : SymEnv) =
   | TmRecord t ->
-    TmRecord {t with bindings = assocMap {eq=eqString} (symbolizeExpr env) t.bindings}
+    TmRecord {t with bindings = mapMap (symbolizeExpr env) t.bindings}
 
   | TmRecordUpdate t ->
     TmRecordUpdate {{t with rec = symbolizeExpr env t.rec}
@@ -312,13 +315,14 @@ end
 lang RecordTypeSym = RecordTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyRecord {fields = fields} ->
-    TyRecord {fields = assocMap {eq=eqString} (symbolizeType env) fields}
+    TyRecord {fields = mapMap (symbolizeType env) fields}
 end
 
 lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyVariant {constrs = []} & ty -> ty
-  | TyVariant t -> error "Symbolizing non-empty variant types not yet supported"
+  | TyVariant t & ty ->
+    if eqi (mapLength t.constrs) 0 then ty
+    else error "Symbolizing non-empty variant types not yet supported"
 end
 
 lang VarTypeSym = VarTypeAst
@@ -388,7 +392,7 @@ end
 lang RecordPatSym = RecordPat
   sem symbolizePat (env : SymEnv) (patEnv : AssocMap String Name) =
   | PatRecord {bindings = bindings, info = info} ->
-    match assocMapAccum {eq=eqString}
+    match mapMapAccum
             (lam patEnv. lam. lam p. symbolizePat env patEnv p) patEnv bindings
     with (env,bindings) then
       (env, PatRecord {bindings = bindings, info = info})

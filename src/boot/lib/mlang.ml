@@ -478,7 +478,7 @@ let rec desugar_tm nss env =
   | TmNever fi ->
       TmNever fi
   (* Non-recursive *)
-  | (TmConst _ | TmFix _ | TmRef (_, _)) as tm ->
+  | (TmConst _ | TmFix _ | TmRef _ | TmTensor _) as tm ->
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)

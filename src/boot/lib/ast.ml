@@ -25,6 +25,8 @@ let enable_debug_symbol_print = ref false
 
 let enable_debug_con_shape = ref false
 
+let enable_debug_stack_trace = ref false
+
 let enable_debug_profiling = ref false
 
 let utest = ref false (* Set to true if unit testing is enabled *)
@@ -124,18 +126,24 @@ and const =
   | CdeRef
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
-  | CMap of (tm -> tm -> int) * Obj.t
+  | CMap of tm * Obj.t
   | CmapEmpty
+  | CmapSize
+  | CmapGetCmpFun
   | CmapInsert of tm option * tm option
   | CmapRemove of tm option
-  | CmapFind of tm option
+  | CmapFindWithExn of tm option
+  | CmapFindOrElse of tm option * tm option
+  | CmapFindApplyOrElse of tm option * tm option * tm option
   | CmapMem of tm option
   | CmapAny of (tm -> tm -> bool) option
   | CmapMap of (tm -> tm) option
   | CmapMapWithKey of (tm -> tm -> tm) option
+  | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
+  | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
+  | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CTensor of tm T.t
   | CtensorCreate of int array option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int array option
@@ -149,6 +157,7 @@ and const =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString
+  | CbootParserParseMCoreFile
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetString of tm option
@@ -248,6 +257,8 @@ and tm =
   | TmFix of info
   (* Reference *)
   | TmRef of info * tm ref
+  (* Tensor *)
+  | TmTensor of info * tm T.t
 
 (* Kind of pattern name *)
 and patName =
@@ -368,6 +379,8 @@ let rec map_tm f = function
       f t
   | TmRef _ as t ->
       f t
+  | TmTensor _ as t ->
+      f t
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -389,7 +402,8 @@ let tm_info = function
   | TmUse (fi, _, _)
   | TmClos (fi, _, _, _, _)
   | TmFix fi
-  | TmRef (fi, _) ->
+  | TmRef (fi, _)
+  | TmTensor (fi, _) ->
       fi
 
 let pat_info = function

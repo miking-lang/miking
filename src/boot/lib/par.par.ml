@@ -87,17 +87,6 @@ let delta eval env fi c v =
       Atomic.NoInt.get r
   | ParatomicGet, _ ->
       fail_constapp fi
-  | ParatomicCAS (None, None), TmConst (_, CPar (ParAtomicRef r)) ->
-      TmConst (fi, CPar (ParatomicCAS (Some r, None)))
-  | ParatomicCAS (Some r, None), v ->
-      TmConst (fi, CPar (ParatomicCAS (Some r, Some v)))
-  | ( ParatomicCAS (Some (Int r), Some (TmConst (_, CInt i1)))
-    , TmConst (_, CInt i2) ) ->
-      TmConst (fi, CBool (Atomic.Int.compare_and_set r i1 i2))
-  | ParatomicCAS (Some (NoInt r), Some v1), v2 ->
-      TmConst (fi, CBool (Atomic.NoInt.compare_and_set r v1 v2))
-  | ParatomicCAS (_, _), _ ->
-      fail_constapp fi
   | ParatomicExchange None, TmConst (_, CPar (ParAtomicRef r)) ->
       TmConst (fi, CPar (ParatomicExchange (Some r)))
   | ParatomicExchange (Some (Int r)), TmConst (_, CInt i) ->
@@ -106,7 +95,16 @@ let delta eval env fi c v =
       Atomic.NoInt.exchange r v
   | ParatomicExchange _, _ ->
       fail_constapp fi
-  | ParatomicFetchAndAdd _, TmConst (_, CPar (ParAtomicRef (Int r))) ->
+  | ParatomicCAS (None, None), TmConst (_, CPar (ParAtomicRef (Int r))) ->
+      TmConst (fi, CPar (ParatomicCAS (Some (Int r), None)))
+  | ParatomicCAS (Some (Int r), None), (TmConst (_, CInt _) as v) ->
+      TmConst (fi, CPar (ParatomicCAS (Some (Int r), Some v)))
+  | ( ParatomicCAS (Some (Int r), Some (TmConst (_, CInt i1)))
+    , TmConst (_, CInt i2) ) ->
+      TmConst (fi, CBool (Atomic.Int.compare_and_set r i1 i2))
+  | ParatomicCAS (_, _), _ ->
+      fail_constapp fi
+  | ParatomicFetchAndAdd None, TmConst (_, CPar (ParAtomicRef (Int r))) ->
       TmConst (fi, CPar (ParatomicFetchAndAdd (Some (Int r))))
   | ParatomicFetchAndAdd (Some (Int r)), TmConst (_, CInt i) ->
       TmConst (fi, CInt (Atomic.Int.fetch_and_add r i))

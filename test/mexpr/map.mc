@@ -10,16 +10,32 @@ mexpr
 -- Int map
 let m = mapEmpty subi in
 
+utest (mapGetCmpFun m) 2 1 with 1 in
+
+utest mapSize m with 0 in
+
 let m = mapInsert 1 '1' m in
 let m = mapInsert 2 '2' m in
 let m = mapInsert 3 '3' m in
 let m = mapInsert 4 '4' m in
 let m = mapInsert 4 '5' m in
 
-utest mapFind 1 m with '1' in
-utest mapFind 2 m with '2' in
-utest mapFind 3 m with '3' in
-utest mapFind 4 m with '5' in
+utest mapSize m with 4 in
+
+utest mapFindWithExn 1 m with '1' in
+utest mapFindWithExn 2 m with '2' in
+utest mapFindWithExn 3 m with '3' in
+utest mapFindWithExn 4 m with '5' in
+
+utest mapFindOrElse (lam. '0') 1 m with '1' in
+utest mapFindOrElse (lam. '0') 2 m with '2' in
+utest mapFindOrElse (lam. '0') 3 m with '3' in
+utest mapFindOrElse (lam. '0') 4 m with '5' in
+utest mapFindOrElse (lam. '0') 5 m with '0' in
+
+utest mapFindApplyOrElse char2int (lam. 0) 1 m with 49 in
+utest mapFindApplyOrElse char2int (lam. 0) 2 m with 50 in
+utest mapFindApplyOrElse char2int (lam. 0) 5 m with 0 in
 
 utest mapMem 1 m with true in
 utest mapMem 42 m with false in
@@ -38,6 +54,9 @@ utest bindsSort (mapBindings m) with [(1,'2'), (2,'3'), (3,'4'), (4,'6')] in
 let m = mapMapWithKey (lam k. lam v. int2char (addi k (char2int v))) m in
 utest bindsSort (mapBindings m) with [(1,'3'), (2,'5'), (3,'7'), (4,':')] in
 
+utest mapFoldWithKey (lam acc. lam k. lam v. addi (addi k acc) (char2int v)) 0 m
+with 227 in
+
 -- Int tuple map
 let cmpTuple = lam t1. lam t2.
   let d = subi t1.0 t2.0 in
@@ -48,15 +67,28 @@ in
 
 let m = mapEmpty cmpTuple in
 
+utest (mapGetCmpFun m) (1, 1) (1, 2) with negi 1 in
+
 let m = mapInsert (1, 1) 1 m in
 let m = mapInsert (1, 1) 2 m in
 let m = mapInsert (1, 2) 2 m in
 let m = mapInsert (2, 42) 3 m in
 let m = mapInsert (3, 42) 4 m in
 
-utest mapFind (1, 1) m with 2 in
-utest mapFind (1, 2) m with 2 in
-utest mapFind (2, 42) m with 3 in
-utest mapFind (3, 42) m with 4 in
+utest mapFindWithExn (1, 1) m with 2 in
+utest mapFindWithExn (1, 2) m with 2 in
+utest mapFindWithExn (2, 42) m with 3 in
+utest mapFindWithExn (3, 42) m with 4 in
+
+-- NOTE(dlunde,2021-03-04): mapEq and mapCmp are a bit hazardous, since the compare
+-- function for keys bundled with the first map is always used when doing the
+-- comparison. I assume we only use this as a temporary solution (I'm not sure
+-- how this would be type checked otherwise)
+utest mapEq eqi m m with true in
+utest mapEq neqi m m with false in
+utest mapEq eqi (mapInsert (2,2) 42 m) m with false in
+utest mapCmp subi m m with 0 in
+utest mapCmp subi (mapInsert (2,2) 42 m) m with negi 40 in
+utest mapCmp subi m (mapInsert (2,2) 42 m) with 40 in
 
 ()

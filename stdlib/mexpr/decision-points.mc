@@ -564,6 +564,7 @@ end
 lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
 
 lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
+  + MExprSym
 
 mexpr
 

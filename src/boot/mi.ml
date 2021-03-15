@@ -83,6 +83,9 @@ let main =
       , Arg.Set enable_debug_con_shape
       , " Enables printing of the shape of values given to constructors, to \
          stderr." )
+    ; ( "--debug-stack-trace"
+      , Arg.Set enable_debug_stack_trace
+      , " Enables printing of a stack trace when errors occur." )
     ; ( "--debug-profile"
       , Arg.Set enable_debug_profiling
       , " Enables printing of number of calls to and cumulative runtime of \

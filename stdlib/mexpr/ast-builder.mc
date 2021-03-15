@@ -3,6 +3,8 @@
 include "mexpr/ast.mc"
 include "assoc.mc"
 include "info.mc"
+include "stringid.mc"
+include "map.mc"
 
 -- Patterns --
 
@@ -18,7 +20,7 @@ let pvarw_ = use MExprAst in
   PatNamed {ident = PWildcard (), info = NoInfo()}
 
 let punit_ = use MExprAst in
-  PatRecord { bindings = assocEmpty, info = NoInfo() }
+  PatRecord { bindings = mapEmpty cmpSID, info = NoInfo() }
 
 let pint_ = use MExprAst in
   lam i.
@@ -46,9 +48,7 @@ let prec_ = use MExprAst in
   lam bindings.
   PatRecord {
     bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
+      mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
     info = NoInfo()
     }
 
@@ -97,7 +97,7 @@ let tyunknown_ = use MExprAst in
   TyUnknown ()
 
 let tyunit_ = use MExprAst in
-  TyRecord {fields = assocEmpty}
+  TyRecord {fields = mapEmpty cmpSID}
 
 let tyint_ = use MExprAst in
   TyInt ()
@@ -124,12 +124,19 @@ let utyseq_ = use MExprAst in
 let tyrecord_ = use MExprAst in
   lam fields.
   TyRecord {
-    fields = foldl (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-               assocEmpty fields }
+    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields)
+  }
+
 
 let tytuple_ = use MExprAst in
   lam tys.
   tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
+
+let tyvariant_ = use MExprAst in
+  lam constrs.
+  TyVariant {
+    constrs = mapFromList nameCmp constrs
+  }
 
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
@@ -165,7 +172,7 @@ let bindall_ = use MExprAst in
   foldr1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecord {bindings = mapEmpty cmpSID, ty = TyUnknown {}, info = NoInfo ()}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
@@ -301,6 +308,10 @@ let ulams_ = use MExprAst in
   lam idents. lam body.
   foldr (lam s. lam acc. ulam_ s acc) body idents
 
+let nulams_ = use MExprAst in
+  lam names. lam body.
+  foldr (lam n. lam acc. nulam_ n acc) body names
+
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn,
@@ -318,10 +329,7 @@ let seq_ = use MExprAst in
 let record_ = use MExprAst in
   lam bindings.
   TmRecord {
-    bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
+    bindings = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
     ty = TyUnknown {},
     info = NoInfo ()
   }
@@ -335,7 +343,7 @@ let record_empty = unit_
 let record_add = use MExprAst in
   lam key. lam value. lam record.
   match record with TmRecord t then
-      TmRecord {t with bindings = cons (key, value) t.bindings}
+      TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
       error "record is not a TmRecord construct"
 
@@ -366,7 +374,13 @@ let tupleproj_ = use MExprAst in
 
 let recordupdate_ = use MExprAst in
   lam rec. lam key. lam value.
-  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecordUpdate {
+    rec = rec,
+    key = stringToSid key,
+    value = value,
+    ty = TyUnknown {},
+    info = NoInfo ()
+  }
 
 let app_ = use MExprAst in
   lam l. lam r.
@@ -590,6 +604,9 @@ let set_ = use MExprAst in
   lam s. lam i. lam v.
   appf3_ (const_ (CSet ())) s i v
 
+let empty_ = use MExprAst in
+  seq_ []
+
 let cons_ = use MExprAst in
   lam x. lam s.
   appf2_ (const_ (CCons ())) x s
@@ -617,6 +634,10 @@ let splitat_ = use MExprAst in
 let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (const_ (CCreate ())) n f
+
+let subsequence_ = use MExprAst in
+  lam s. lam off. lam n.
+  appf3_ (const_ (CSubsequence ())) s off n
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in
@@ -664,8 +685,8 @@ let deleteFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileDelete ())) f
 
 -- I/O operations
-let printString_ = use MExprAst in
-  lam s. app_ (const_ (CPrintString ())) s
+let print_ = use MExprAst in
+  lam s. app_ (const_ (CPrint ())) s
 
 let readLine_ = use MExprAst in
   lam u. app_ (const_ (CReadLine ())) u
@@ -695,3 +716,83 @@ let wallTimeMs_ = use MExprAst in
 
 let sleepMs_ = use MExprAst in
   lam n. appf1_ (const_ (CSleepMs ())) n
+
+-- Tensors
+let tensorCreate_ = use MExprAst in
+  lam s. lam f.
+  appf2_ (const_ (CTensorCreate ())) s f
+
+let tensorGetExn_ = use MExprAst in
+  lam t. lam is.
+  appf2_ (const_ (CTensorGetExn ())) t is
+
+let tensorSetExn_ = use MExprAst in
+  lam t. lam is. lam v.
+  appf3_ (const_ (CTensorSetExn ())) t is v
+
+let tensorRank_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorRank ())) t
+
+let tensorShape_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorShape ())) t
+
+let tensorReshapeExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorReshapeExn ())) t s
+
+let tensorCopyExn_ = use MExprAst in
+  lam t1. lam t2.
+  appf2_ (const_ (CTensorCopyExn ())) t1 t2
+
+let tensorSliceExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorSliceExn ())) t s
+
+let tensorSubExn_ = use MExprAst in
+  lam t. lam ofs. lam len.
+  appf3_ (const_ (CTensorSubExn ())) t ofs len
+
+let tensorIteri_ = use MExprAst in
+  lam f. lam t.
+  appf2_ (const_ (CTensorIteri ())) f t
+
+-- Bootparser
+let bootParserParseMExprString_ = use MExprAst in
+  lam str. appf1_ (const_ (CBootParserParseMExprString ())) str
+
+let bootParserGetId_ = use MExprAst in
+  lam pt. appf1_ (const_ (CBootParserGetId ())) pt
+
+let bootParserGetTerm_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetTerm ())) pt n
+
+let bootParserGetString_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetString ())) pt n
+
+let bootParserGetInt_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInt ())) pt n
+
+let bootParserGetFloat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetFloat ())) pt n
+
+let bootParserGetListLength_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetListLength ())) pt n
+
+let bootParserGetConst_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetConst ())) pt n
+
+let bootParserGetPat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetPat ())) pt n
+
+let bootParserGetInfo_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInfo ())) pt n

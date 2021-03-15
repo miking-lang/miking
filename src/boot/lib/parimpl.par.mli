@@ -23,8 +23,6 @@ module Atomic : sig
     val set : 'a Atomic.t -> 'a -> unit
 
     val exchange : 'a Atomic.t -> 'a -> 'a
-
-    val compare_and_set : 'a Atomic.t -> 'a -> 'a -> bool
   end
 end
 
