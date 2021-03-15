@@ -394,7 +394,7 @@ lang IOTypeAnnot = ConstTypeAnnot + IOAst
   sem typeConst =
   | CPrint _ -> tyarrow_ tystr_ tyunit_
   | CReadLine _ -> tyarrow_ tyunit_ tystr_
-  | CReadBytesAsString _ -> tyunknown_
+  | CReadBytesAsString _ -> tyarrow_ tyint_ (tytuple_ [tystr_, tyint_])
 end
 
 lang RandomNumberGeneratorTypeAnnot = ConstTypeAnnot + RandomNumberGeneratorAst
