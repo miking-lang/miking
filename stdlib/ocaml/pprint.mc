@@ -121,7 +121,7 @@ lang OCamlTypePrettyPrint =
 
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyRecord t ->
-    if mapIsEmpty t.bindings then
+    if mapIsEmpty t.fields then
       error "Unit record type not supported in OCaml"
     else
       let f = lam env. lam sid. lam ty.
