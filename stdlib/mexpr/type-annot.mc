@@ -387,7 +387,7 @@ end
 
 lang IOTypeAnnot = ConstTypeAnnot + IOAst
   sem typeConst =
-  | CPrintString _ -> tyarrow_ tystr_ tyunit_
+  | CPrint _ -> tyarrow_ tystr_ tyunit_
   | CReadLine _ -> tyarrow_ tyunit_ tystr_
   | CReadBytesAsString _ -> tyunknown_
 end
