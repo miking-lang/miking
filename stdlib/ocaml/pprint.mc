@@ -156,6 +156,7 @@ lang OCamlPrettyPrint =
   | TmRecLets _ -> false
   | TmApp _ -> false
   | TmRecord _ -> true
+  | TmRecordUpdate _ -> true
   | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
@@ -297,6 +298,18 @@ lang OCamlPrettyPrint =
         in
         (env, join ["{ ", merged, " }"])
       else never
+  | TmRecordUpdate t ->
+    let i = pprintIncr indent in
+    let ii = pprintIncr i in
+    match pprintCode i env t.rec with (env,rec) then
+      match pprintCode ii env t.value with (env,value) then
+        let key = sidToString t.key in
+        (env,join ["{ ", rec, pprintNewline i,
+                   "with", pprintNewline i,
+                   pprintLabelString key, " =", pprintNewline ii, value,
+                   " }"])
+      else never
+    else never
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
     let lname = lam env. lam bind.
       match pprintVarName env bind.ident with (env,str) then

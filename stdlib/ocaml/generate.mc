@@ -190,8 +190,27 @@ lang OCamlGenerate = MExprAst + OCamlAst
           else never
         else never
       else never
-  | TmType t -> generate env t.inexpr
-  | TmConDef t -> generate env t.inexpr
+  | TmRecordUpdate t ->
+    match t.ty with TyVar {ident = ident} then
+      match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+        match mapLookup fields env.records with Some id then
+          let rec = generate env t.rec in
+          let key = sidToString t.key in
+          let value = generate env t.value in
+          let inlineRecordName = nameSym "_rec" in
+          OTmMatch {
+            target = rec,
+            arms = [
+              ( OPatCon {ident = id, args = [npvar_ inlineRecordName]}
+              , OTmConApp {ident = id, args = [
+                  recordupdate_ (nvar_ inlineRecordName) key value
+                ]}
+              )
+            ]
+          }
+        else never
+      else never
+    else never
   | TmConApp t ->
     let body =
       match t.body with TmRecord r then
@@ -1247,6 +1266,29 @@ let matchRecordCon3 = symbolize (
       (addi_ (var_ "r") (var_ "ll"))
       (int_ 0))) in
 utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
+using sameSemantics in
+
+let recordUpdate1 = symbolize (
+  match_ (recordupdate_ (record_ [("a", int_ 0)]) "a" (int_ 1))
+    (prec_ [("a", pvar_ "a")])
+      (var_ "a")
+      (int_ 0)) in
+utest recordUpdate1 with generateTypeAnnotated recordUpdate1
+using sameSemantics in
+
+let recordUpdate2 = symbolize (
+  bindall_ [
+    ulet_ "r" (record_ [
+      ("a", int_ 2), ("b", true_), ("c", float_ 3.14)
+    ]),
+    ulet_ "r" (recordupdate_ (var_ "r") "c" (float_ 2.0)),
+    match_ (var_ "r")
+      (prec_ [("c", pvar_ "c")])
+      (var_ "c")
+      (float_ 0.0)
+  ])
+in
+utest recordUpdate2 with generateTypeAnnotated recordUpdate2
 using sameSemantics in
 
 -- Ints
