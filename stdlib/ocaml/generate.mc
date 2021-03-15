@@ -202,6 +202,13 @@ lang OCamlGenerate = MExprAst + OCamlAst
       ident = t.ident,
       args = [body]
     }
+  | TmNever t ->
+    TmApp {
+      lhs = OTmVarExt {ident = "failwith"},
+      rhs = OTmString {text = "Reached a never term, which should be impossible in a well-typed program"},
+      ty = t.ty,
+      info = t.info
+    }
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
