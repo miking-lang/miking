@@ -2,10 +2,16 @@ include "mexpr/ast-builder.mc"
 include "semantic.mc"
 include "gen-ast.mc"
 
-type GeneratorSymbol-- TODO(vipa, 2021-03-08): Create remaining cases
+type GeneratorSymbol
 -- TODO(vipa, 2021-03-12): We want to support alternatives as well, or
 -- at least optional elements, but to make that easy we probably want
 -- to add support for that in `semantic.mc`
+con GeneratorInt : {field : Option String} -> GeneratorSymbol
+con GeneratorFloat : {field : Option String} -> GeneratorSymbol
+con GeneratorOperator : {field : Option String} -> GeneratorSymbol
+con GeneratorString : {field : Option String} -> GeneratorSymbol
+con GeneratorChar : {field : Option String} -> GeneratorSymbol
+con GeneratorHashString : {field : Option String, tag : String} -> GeneratorSymbol
 con GeneratorLit : {lit : String} -> GeneratorSymbol
 con GeneratorLIdent : {field : Option String} -> GeneratorSymbol
 con GeneratorUIdent : {field : Option String} -> GeneratorSymbol
@@ -62,6 +68,12 @@ let _semanticInfixName = nameSym "Infix"
 let _semanticPostfixName = nameSym "Postfix"
 let _semanticDefaultInName = nameSym "DefaultIn"
 let _semanticDefaultNotInName = nameSym "DefaultNotIn"
+let _semanticIntName = nameSym "semanticInt"
+let _semanticFloatName = nameSym "semanticFloat"
+let _semanticOperatorName = nameSym "semanticOperator"
+let _semanticStringName = nameSym "semanticString"
+let _semanticCharName = nameSym "semanticChar"
+let _semanticHashStringName = nameSym "semanticHashString"
 let _semanticLitName = nameSym "semanticLit"
 let _semanticLIdentName = nameSym "semanticLIdent"
 let _semanticUIdentName = nameSym "semanticUIdent"
@@ -76,6 +88,12 @@ let _headName = nameSym "head"
 let _lastName = nameSym "last"
 let _ll1TokName = nameSym "Tok"
 let _ll1UserSymName = nameSym "UserSym"
+let _lexerIntName = nameSym "IntTok"
+let _lexerFloatName = nameSym "FloatTok"
+let _lexerOperatorName = nameSym "OperatorTok"
+let _lexerStringName = nameSym "StringTok"
+let _lexerCharName = nameSym "CharTok"
+let _lexerHashStringName = nameSym "HashStringTok"
 let _lexerLIdentName = nameSym "LIdentTok"
 let _lexerUIdentName = nameSym "UIdentTok"
 let _dprintLnName = nameSym "dprintLn"
@@ -94,6 +112,12 @@ let _env =
     , _semanticPostfixName
     , _semanticDefaultInName
     , _semanticDefaultNotInName
+    , _semanticIntName
+    , _semanticFloatName
+    , _semanticOperatorName
+    , _semanticStringName
+    , _semanticCharName
+    , _semanticHashStringName
     , _semanticLitName
     , _semanticLIdentName
     , _semanticUIdentName
@@ -108,6 +132,12 @@ let _env =
     , _lastName
     , _ll1TokName
     , _ll1UserSymName
+    , _lexerIntName
+    , _lexerFloatName
+    , _lexerOperatorName
+    , _lexerStringName
+    , _lexerCharName
+    , _lexerHashStringName
     , _lexerLIdentName
     , _lexerUIdentName
     , _dprintLnName
@@ -127,6 +157,12 @@ let _semanticInfix_ = nconapp_ _semanticInfixName
 let _semanticPostfix_ = nconapp_ _semanticPostfixName
 let _semanticDefaultIn_ = nconapp_ _semanticDefaultInName unit_
 let _semanticDefaultNotIn_ = nconapp_ _semanticDefaultNotInName unit_
+let _semanticInt_ = nvar_ _semanticIntName
+let _semanticFloat_ = nvar_ _semanticFloatName
+let _semanticOperator_ = nvar_ _semanticOperatorName
+let _semanticString_ = nvar_ _semanticStringName
+let _semanticChar_ = nvar_ _semanticCharName
+let _semanticHashString_ = app_ (nvar_ _semanticHashStringName)
 let _semanticLit_ = app_ (nvar_ _semanticLitName)
 let _semanticLIdent_ = nvar_ _semanticLIdentName
 let _semanticUIdent_ = nvar_ _semanticUIdentName
@@ -148,13 +184,29 @@ let _sequentialComposition_ = lam a. lam b. use LetAst in TmLet
   }
 
 let _stageSymbol = lam sym.
-  match sym with GeneratorLit {lit = lit} then
-    _semanticLit_ (str_ lit)
+  match sym with GeneratorInt _ then
+    Some _semanticInt_
+  else match sym with GeneratorFloat _ then
+    Some _semanticFloat_
+  else match sym with GeneratorOperator _ then
+    Some _semanticOperator_
+  else match sym with GeneratorString _ then
+    Some _semanticString_
+  else match sym with GeneratorChar _ then
+    Some _semanticChar_
+  else match sym with GeneratorHashString {tag = tag} then
+    Some (_semanticHashString_ (str_ tag))
+  else match sym with GeneratorLit {lit = lit} then
+    Some (_semanticLit_ (str_ lit))
   else match sym with GeneratorLIdent _ then
-    _semanticLIdent_
+    Some _semanticLIdent_
+  else match sym with GeneratorUIdent _ then
+    Some _semanticUIdent_
+  else match sym with GeneratorNonSyntax _ then
+    None ()
   else match sym with GeneratorNt {nt = nt} then
-    _semanticNt_ (var_ nt)
-  else dprintLn sym; never-- TODO(vipa, 2021-03-12): Implement
+    Some (_semanticNt_ (var_ nt))
+  else dprintLn sym; never
 
 let _stageInclude = lam inc.
   match inc with DefaultIn _ then _semanticDefaultIn_ else
@@ -183,7 +235,20 @@ let generatorProd
         : GeneratorSymbol
         -> Option (String, CarriedType)
         = lam sym.
-          match sym with GeneratorLit _ then None () else-- TODO(vipa, 2021-03-10): Fill in remaining cases
+          match sym with GeneratorInt {field = Some name} then
+            Some (name, untargetableType tyint_) else
+          match sym with GeneratorFloat {field = Some name} then
+            Some (name, untargetableType tyfloat_) else
+          match sym with GeneratorOperator {field = Some name} then
+            Some (name, untargetableType tystr_) else
+          match sym with GeneratorString {field = Some name} then
+            Some (name, untargetableType tystr_) else
+          match sym with GeneratorChar {field = Some name} then
+            Some (name, untargetableType tychar_) else
+          match sym with GeneratorHashString {field = Some name} then
+            Some (name, untargetableType tystr_) else
+          match sym with GeneratorLit _ then
+            None () else
           match sym with GeneratorLIdent {field = Some name} then
             Some (name, untargetableType tystr_) else
           match sym with GeneratorUIdent {field = Some name} then
@@ -233,16 +298,27 @@ let generatorProd
             _semanticPostfix_ (record_ [("self", _stageInclude self), ("left", _stageInclude left)])
           else never in
         let stageField = lam sym.
-          match sym with GeneratorLIdent {field = Some field} then
+          let simpleResult = lam field. lam conName.
             let valName = nameSym field in
-            ( Some (npcon_ _ll1TokName (npcon_ _lexerLIdentName (prec_ [("val", npvar_ valName)])))
+            ( Some (npcon_ _ll1TokName (npcon_ conName (prec_ [("val", npvar_ valName)])))
             , Some (field, nvar_ valName)
-            )
+            ) in
+          match sym with GeneratorInt {field = Some field} then
+            simpleResult field _lexerIntName
+          else match sym with GeneratorFloat {field = Some field} then
+            simpleResult field _lexerFloatName
+          else match sym with GeneratorOperator {field = Some field} then
+            simpleResult field _lexerOperatorName
+          else match sym with GeneratorString {field = Some field} then
+            simpleResult field _lexerStringName
+          else match sym with GeneratorChar {field = Some field} then
+            simpleResult field _lexerCharName
+          else match sym with GeneratorHashString {field = Some field} then
+            simpleResult field _lexerHashStringName
+          else match sym with GeneratorLIdent {field = Some field} then
+            simpleResult field _lexerLIdentName
           else match sym with GeneratorUIdent {field = Some field} then
-            let valName = nameSym field in
-            ( Some (npcon_ _ll1TokName (npcon_ _lexerUIdentName (prec_ [("val", npvar_ valName)])))
-            , Some (field, nvar_ valName)
-            )
+            simpleResult field _lexerUIdentName
           else match sym with GeneratorNonSyntax {field = field, fieldValue = val} then
             ( None ()
             , Some (field, val)
@@ -252,7 +328,7 @@ let generatorProd
             ( Some (npcon_ _ll1UserSymName (ptuple_ [pvarw_, npvar_ valName]))
             , Some (field, nvar_ valName)
             )
-          else (Some pvarw_, None ()) in-- TODO(vipa, 2021-03-12): fill in all constructors
+          else (Some pvarw_, None ()) in
         let stagedAction =
           let infoName = nameSym "info" in
           let paramName = nameSym "syms" in
@@ -274,7 +350,7 @@ let generatorProd
           [ ("name", str_ constructorStr)
           , ("nt", var_ nonTerminal)
           , ("ptype", stagedProdType)
-          , ("rhs" , seq_ (map _stageSymbol syntax))
+          , ("rhs" , seq_ (mapOption _stageSymbol syntax))
           , ("action", stagedAction)
           ]
       in
@@ -326,7 +402,7 @@ let generatorBracket
           [ ("name", str_ (concat "grouping " nonTerminal))
           , ("nt", var_ nonTerminal)
           , ("ptype", _semanticAtom_ (record_ [("self", _stageInclude (DefaultIn ()))]))
-          , ("rhs", seq_ (map _stageSymbol allSymbols))
+          , ("rhs", seq_ (mapOption _stageSymbol allSymbols))
           , ("action", stagedAction)
           ]
       in

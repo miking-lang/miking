@@ -215,10 +215,7 @@ let semanticString : Symbol = ll1String
 let semanticChar : Symbol = ll1Char
 let semanticLIdent : Symbol = ll1LIdent
 let semanticUIdent : Symbol = ll1UIdent
-let semanticHashString
-  : String
-  -> Symbol
-  = ll1HashString
+let semanticHashString : String -> Symbol = ll1HashString
 
 type Parser
 
