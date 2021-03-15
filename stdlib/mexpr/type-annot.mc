@@ -4,19 +4,16 @@ include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
 type TypeEnv = {
-  varEnv: AssocMap Name Type,
-  conEnv: AssocMap Name Type,
-  tyEnv : AssocMap Name Type
+  varEnv: Map Name Type,
+  conEnv: Map Name Type,
+  tyEnv : AssocSeq Name Type
 }
 
 let _typeEnvEmpty = {
-  varEnv = assocEmpty,
-  conEnv = assocEmpty,
-  tyEnv  = assocEmpty
+  varEnv = mapEmpty nameCmp,
+  conEnv = mapEmpty nameCmp,
+  tyEnv  = []
 }
-
-let _envInsert = assocInsert {eq = nameEqSym}
-let _envLookup = assocLookup {eq = nameEqSym}
 
 -- Given two types that are possibly unknown, this function attempts to find a
 -- type that does not contradict the other, in a given type environment. It is
@@ -67,7 +64,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
     let ty =
       match env with {varEnv = varEnv} then
         match t.ty with TyUnknown {} then
-          match _envLookup t.ident varEnv with Some ty then
+          match mapLookup t.ident varEnv with Some ty then
             ty
           else t.ty
         else t.ty
@@ -95,7 +92,7 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = _envInsert t.ident t.tyIdent varEnv} in
+      let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
       let body = typeAnnotExpr env t.body in
       let ty = tyarrow_ t.tyIdent (ty body) in
       TmLam {{t with body = body}
@@ -112,7 +109,7 @@ lang LetTypeAnnot = TypeAnnot + LetAst
         if _isTypeAscription t then
           withType tyBody body
         else
-          let env = {env with varEnv = _envInsert t.ident tyBody varEnv} in
+          let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
           let inexpr = typeAnnotExpr env t.inexpr in
           TmLet {{{{t with tyBody = tyBody}
                       with body = body}
@@ -126,7 +123,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     let foldBinding = lam acc. lam binding.
-      _envInsert binding.ident binding.ty acc
+      mapInsert binding.ident binding.ty acc
     in
     let annotBinding = lam env. lam binding.
       let body = typeAnnotExpr env binding.body in
@@ -192,19 +189,17 @@ end
 lang TypeTypeAnnot = TypeAnnot + TypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmType t ->
-    match env with {tyEnv = tyEnv} then
-      let env = {env with tyEnv = _envInsert t.ident t.tyIdent tyEnv} in
-      let inexpr = typeAnnotExpr env t.inexpr in
-      TmType {{t with inexpr = inexpr}
-                 with ty = ty inexpr}
-    else never
+    let tyEnv = assocSeqInsert {eq=nameEqSym} t.ident t.tyIdent env.tyEnv in
+    let inexpr = typeAnnotExpr {env with tyEnv = tyEnv} t.inexpr in
+    TmType {{t with inexpr = inexpr}
+               with ty = ty inexpr}
 end
 
 lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConDef t ->
     match env with {conEnv = conEnv} then
-      let env = {env with conEnv = _envInsert t.ident t.tyIdent conEnv} in
+      let env = {env with conEnv = mapInsert t.ident t.tyIdent conEnv} in
       let inexpr = typeAnnotExpr env t.inexpr in
       TmConDef {{t with inexpr = inexpr}
                    with ty = ty inexpr}
@@ -213,7 +208,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     let body = typeAnnotExpr env t.body in
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
-        match _envLookup t.ident conEnv with Some lty then
+        match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = TyVar target} then
             match _consistentType tyEnv t.ty from with Some _ then
               TyVar target
