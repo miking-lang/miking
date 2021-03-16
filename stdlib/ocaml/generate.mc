@@ -2,6 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/eval.mc"
+include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
@@ -208,9 +209,17 @@ lang OCamlGenerate = MExprAst + OCamlAst
               )
             ]
           }
-        else never
-      else never
-    else never
+        else
+          let msg = join ["No record type could be found in the environment. ",
+                          "This was caused by an error in the type-lifting."] in
+          infoErrorExit t.info msg
+      else
+        let msg = join ["Record update was annotated with an invalid type."] in
+        infoErrorExit t.info msg
+    else
+      let msg = join ["Expected type to be a TyVar.",
+                      "This was caused by an error in the type-lifting."] in
+      infoErrorExit t.info msg
   | TmConApp t ->
     let body =
       match t.body with TmRecord r then
@@ -222,11 +231,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
       args = [body]
     }
   | TmNever t ->
+    let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {
       lhs = OTmVarExt {ident = "failwith"},
-      rhs = OTmString {text = "Reached a never term, which should be impossible in a well-typed program"},
+      rhs = OTmString {text = infoErrorString t.info msg},
       ty = t.ty,
-      info = t.info
+      info = NoInfo ()
     }
   | t -> smap_Expr_Expr (generate env) t
 
