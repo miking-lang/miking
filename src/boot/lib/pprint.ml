@@ -37,18 +37,18 @@ let parser_str s prefix cond =
 (** Variable string parser translation *)
 let pprint_var_str s =
   parser_str s (us "#var") (fun s ->
-      is_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
 
 (** Constructor string parser translation *)
 let pprint_con_str s =
   parser_str s (us "#con") (fun s ->
       let c = Ustring.get s 0 in
-      is_upper_alpha c )
+      is_ascii_upper_alpha c )
 
 (** Label string parser translation *)
 let pprint_label_str s =
   parser_str s (us "#label") (fun s ->
-      is_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
 
 (** Create string representation of an identifier *)
 let ustring_of_ident symbol pprint_ident x s =
@@ -66,6 +66,10 @@ let ustring_of_var ?(symbol = !ref_symbol) x s =
 (** Create string representation of a constructor *)
 let ustring_of_con ?(symbol = !ref_symbol) x s =
   ustring_of_ident symbol pprint_con_str x s
+
+(** Create string representation of a type or type variable *)
+let ustring_of_type ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol (fun x -> x) x s
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -184,7 +188,7 @@ let rec ustring_of_ty = function
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
   | TyVar (_, x, s) ->
-      ustring_of_con x s
+      ustring_of_type x s
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -575,7 +579,7 @@ and print_tm' fmt t =
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
   | TmType (_, x, s, ty, t1) ->
-      let x = string_of_ustring (ustring_of_con x s) in
+      let x = string_of_ustring (ustring_of_type x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
         ty print_tm (Match, t1)

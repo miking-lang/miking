@@ -279,9 +279,9 @@ module Op = struct
 
   let uc c = int_of_char (if c = '\x0D' then '\x0A' else c)
 
-  let is_lower_alpha c = uc 'a' <= c && c <= uc 'z'
+  let is_ascii_lower_alpha c = uc 'a' <= c && c <= uc 'z'
 
-  let is_upper_alpha c = uc 'A' <= c && c <= uc 'Z'
+  let is_ascii_upper_alpha c = uc 'A' <= c && c <= uc 'Z'
 
   module OrderedUString = struct
     type t = ustring
