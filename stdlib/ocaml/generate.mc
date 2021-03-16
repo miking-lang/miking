@@ -124,7 +124,7 @@ let _sleepMsName = nameSym "sleepMs"
 let _mapEmptyName = nameSym "mapEmpty"
 let _mapInsertName = nameSym "mapInsert"
 let _mapRemoveName = nameSym "mapRemove"
-let _mapFindName = nameSym "mapFind"
+let _mapFindWithExnName = nameSym "mapFindWithExn"
 let _mapFindOrElseName = nameSym "mapFindOrElse"
 let _mapFindApplyOrElseName = nameSym "mapFindApplyOrElse"
 let _mapBindingsName = nameSym "mapBindings"
@@ -411,7 +411,7 @@ let _preamble =
     , intr1 _mapEmptyName (appf1_ (_mapOp "empty"))
     , intr3 _mapInsertName (appf3_ (_mapOp "insert"))
     , intr2 _mapRemoveName (appf2_ (_mapOp "remove"))
-    , intr2 _mapFindName (appf2_ (_mapOp "find"))
+    , intr2 _mapFindWithExnName (appf2_ (_mapOp "find"))
     , intr3 _mapFindOrElseName (appf3_ (_mapOp "find_or_else"))
     , intr4 _mapFindApplyOrElseName (appf4_ (_mapOp "find_apply_or_else"))
     , intr1 _mapBindingsName (appf1_ (_mapOp "bindings"))
@@ -491,7 +491,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapEmpty _ -> nvar_ _mapEmptyName
   | CMapInsert _ -> nvar_ _mapInsertName
   | CMapRemove _ -> nvar_ _mapRemoveName
-  | CMapFind _ -> nvar_ _mapFindName
+  | CMapFindWithExn _ -> nvar_ _mapFindWithExnName
   | CMapFindOrElse _ -> nvar_ _mapFindOrElseName
   | CMapFindApplyOrElse _ -> nvar_ _mapFindApplyOrElseName
   | CMapBindings _ -> nvar_ _mapBindingsName
@@ -1119,7 +1119,7 @@ let mapInsertFindTest = bindall_
   [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
-  , mapFind_ (int_ 42) (var_ "m")
+  , mapFindWithExn_ (int_ 42) (var_ "m")
   ] in
 utest ocamlEvalInt (objWrapGenerate mapInsertFindTest)
 with int_ 1 using eqExpr in
@@ -1226,7 +1226,7 @@ let mapMapTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
-  , mapFind_ (int_ 3) (var_ "m")
+  , mapFindWithExn_ (int_ 3) (var_ "m")
   ] in
 utest ocamlEvalInt (objWrapGenerate mapMapTest)
 with int_ 100 using eqExpr in
@@ -1238,7 +1238,7 @@ let mapMapWithKeyTest = bindall_
   , ulet_ "m"
     (mapMapWithKey_ (ulam_ "k" (ulam_ "v"
       (addi_ (var_ "k") (var_ "v")))) (var_ "m"))
-  , mapFind_ (int_ 3) (var_ "m")
+  , mapFindWithExn_ (int_ 3) (var_ "m")
   ] in
 utest ocamlEvalInt (objWrapGenerate mapMapWithKeyTest)
 with int_ 59 using eqExpr in

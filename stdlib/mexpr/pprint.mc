@@ -662,12 +662,19 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapEmpty _ -> "mapEmpty"
   | CMapInsert _ -> "mapInsert"
   | CMapRemove _ -> "mapRemove"
-  | CMapFind _ -> "mapFind"
+  | CMapFindWithExn _ -> "mapFind"
+  | CMapFindOrElse _ -> "mapFindOrElse"
+  | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
+  | CMapBindings _ -> "mapBindings"
+  | CMapSize _ -> "mapSize"
   | CMapMem _ -> "mapMem"
   | CMapAny _ -> "mapAny"
   | CMapMap _ -> "mapMap"
   | CMapMapWithKey _ -> "mapMapWithKey"
-  | CMapBindings _ -> "mapBindings"
+  | CMapFoldWithKey _ -> "mapFoldWithKey"
+  | CMapEq _ -> "mapEq"
+  | CMapCmp _ -> "mapCmp"
+  | CMapGetCmpFun _ -> "mapGetCmpFun"
 end
 
 

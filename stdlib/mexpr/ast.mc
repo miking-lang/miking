@@ -569,7 +569,7 @@ lang MapAst = ConstAst
   | CMapEmpty {}
   | CMapInsert {}
   | CMapRemove {}
-  | CMapFind {}
+  | CMapFindWithExn {}
   | CMapFindOrElse {}
   | CMapFindApplyOrElse {}
   | CMapBindings {}

@@ -800,9 +800,9 @@ let mapRemove_ = use MExprAst in
   lam k. lam m.
   appf2_ (const_ (CMapRemove ())) k m
 
-let mapFind_ = use MExprAst in
+let mapFindWithExn_ = use MExprAst in
   lam k. lam m.
-  appf2_ (const_ (CMapFind ())) k m
+  appf2_ (const_ (CMapFindWithExn ())) k m
 
 let mapFindOrElse_ = use MExprAst in
   lam f. lam k. lam m.
