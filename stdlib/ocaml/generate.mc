@@ -2,6 +2,7 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/eval.mc"
+include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
@@ -308,12 +309,13 @@ lang OCamlGenerate = MExprAst + OCamlAst
           cont in
       (assocEmpty, wrap)
     else never
-  | PatRecord {bindings = bindings} ->
+  | PatRecord t ->
     let genBindingPat = lam patNames. lam fields. lam id. lam pat.
       let ty =
         match mapLookup id fields with Some ty then
           ty
-        else error (join ["Field ", id, " not found in record"])
+        else
+          infoErrorExit t.info (join ["Field ", id, " not found in record"])
       in
       match mapLookup id patNames with Some n then
         match generatePat env ty n pat with (names, innerWrap) then
@@ -334,9 +336,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
     match env with {records = records, constrs = constrs} then
       match lookupRecordFields targetTy constrs with Some fields then
         match mapLookup fields records with Some name then
-          let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) bindings in
+          let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
           let genPats = mapValues
-            (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) bindings)
+            (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) t.bindings)
           in
           match unzip genPats with (allNames, allWraps) then
             let f = lam id. lam.
@@ -344,7 +346,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
                 npvar_ n
               else never
             in
-            let precord = OPatRecord {bindings = mapMapWithKey f bindings} in
+            let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
             let wrap = lam cont.
               OTmMatch {
                 target = nvar_ targetName,
@@ -357,12 +359,18 @@ lang OCamlGenerate = MExprAst + OCamlAst
             , wrap
             )
           else never
-        else error "Generation of record pattern requires more type information"
-      else error "Could not infer type of record pattern"
+        else
+          let msg = join ["Pattern refers to record type that was not handled by type-lifting. ",
+                          "This is an internal error."] in
+          infoErrorExit t.info msg
+      else
+        let msg = join ["Pattern refers to an unknown record type. ",
+                        "The target term must be annotated with a type."] in
+        infoErrorExit t.info msg
     else never
-  | PatCon {ident = id, subpat = subpat} ->
+  | PatCon t ->
     match env with {constrs = constrs} then
-      match mapLookup id constrs with Some innerTy then
+      match mapLookup t.ident constrs with Some innerTy then
         let conVarName = nameSym "_n" in
         let innerTargetName =
           -- Records are treated differently because we are not allowed to
@@ -372,27 +380,27 @@ lang OCamlGenerate = MExprAst + OCamlAst
           -- specific constructor. This works for both inlined records and
           -- free records, as they are wrapped in this record-specific
           -- constructor.
-          match subpat with PatRecord _ then
+          match innerTy with TyRecord _ then
             targetName
-          else match innerTy with TyRecord _ then
-            match subpat with PatNamed _ then
-              targetName
-            else conVarName
           else conVarName
         in
-        match generatePat env innerTy innerTargetName subpat with (names, subwrap) then
+        match generatePat env innerTy innerTargetName t.subpat with (names, subwrap) then
           let wrap = lam cont.
             OTmMatch {
               target = nvar_ targetName,
               arms = [
-                (OPatCon {ident = id, args = [npvar_ conVarName]}, subwrap cont),
+                (OPatCon {ident = t.ident, args = [npvar_ conVarName]}, subwrap cont),
                 (pvarw_, _none)
               ]
             }
           in
           (names, wrap)
         else never
-      else error (join ["Unknown type constructor ", nameGetStr id])
+      else
+        let msg = join ["Pattern refers to unknown type constructor: ",
+                        nameGetStr t.ident,
+                        ". The target term must be annotated with a type."] in
+        infoErrorExit t.info msg
     else never
 end
 
