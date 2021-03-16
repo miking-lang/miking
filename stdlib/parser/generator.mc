@@ -44,8 +44,6 @@ type GeneratorOverride
 con GeneratorLeftChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
 con GeneratorRightChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
 
-let generatorLit_ : String -> GeneratorSymbol = lam lit. GeneratorLit {lit = lit}
-
 -- A `GeneratorStaged t` is an expression of type `t`.
 type GeneratorStaged t = Expr
 
@@ -547,47 +545,181 @@ let _symSeqInfo
     match syms with [first] ++ _ ++ [last] then mergeInfo (getInfo first) (getInfo last) else
     never
 
+let generatorNamespace =
+  -- Grammar construction and code generation
+  let prod = generatorProd in
+  let bracket = generatorBracket in
+  let grammar = generatorGrammar in
+
+  -- Production types
+  let defAtom = GeneratorAtom
+    { self = DefaultIn ()
+    } in
+  let defPrefix = lam rname. GeneratorPrefix
+    { self = DefaultIn (), right = DefaultIn ()
+    , rightField = Some rname
+    } in
+  let defInfix = lam lname. lam rname. GeneratorInfix
+    { self = DefaultIn (), left = DefaultIn (), right = DefaultIn ()
+    , leftField = Some lname, rightField = Some rname
+    } in
+  let defPostfix = lam lname. GeneratorPostfix
+    { self = DefaultIn (), left = DefaultIn ()
+    , leftField = Some lname
+    } in
+
+  -- Precedence helpers
+  let groupLeft = semanticGroupLeft in
+  let groupRight = semanticGroupRight in
+  let groupEither = semanticGroupEither in
+  let groupNeither = semanticGroupNeither in
+  let highLowPrec = semanticHighLowPrec in
+  let precTableNoEq = semanticPrecTableNoEq in
+  let leftAssoc = semanticLeftAssoc in
+  let rightAssoc = semanticRightAssoc in
+  let nonAssoc = semanticNonAssoc in
+  let ambAssoc = semanticAmbAssoc in
+  let pairwiseGroup = semanticPairwiseGroup in
+
+  -- Token symbols
+  let int = lam field. GeneratorInt {field = Some field} in
+  let int_ = GeneratorInt {field = None ()} in
+  let float = lam field. GeneratorFloat {field = Some field} in
+  let float_ = GeneratorFloat {field = None ()} in
+  let operator = lam field. GeneratorOperator {field = Some field} in
+  let operator_ = GeneratorOperator {field = None ()} in
+  let string = lam field. GeneratorString {field = Some field} in
+  let string_ = GeneratorString {field = None ()} in
+  let char = lam field. GeneratorChar {field = Some field} in
+  let char_ = GeneratorChar {field = None ()} in
+  let hashString = lam field. lam tag. GeneratorHashString {field = Some field, tag = tag} in
+  let hashString_ = lam tag. GeneratorHashString {field = None (), tag = tag} in
+  let lit_ = lam lit. GeneratorLit {lit = lit} in
+  let lident = lam field. GeneratorLIdent {field = Some field} in
+  let lident_ = GeneratorLIdent {field = None ()} in
+  let uident = lam field. GeneratorUIdent {field = Some field} in
+  let uident_ = GeneratorUIdent {field = None ()} in
+  let nonsyntax = lam field. lam fieldType. lam fieldValue. GeneratorNonSyntax {field = field, fieldType = fieldType, fieldValue = fieldValue} in
+  let nt = lam field. lam nt. GeneratorNt {field = Some field, nt = nt} in
+  let nt_ = lam nt. GeneratorNt {field = None (), nt = nt} in
+
+  -- Namespace as a record
+  { prod = prod, bracket = bracket, grammar = grammar
+  , defAtom = defAtom, defPrefix = defPrefix, defInfix = defInfix, defPostfix = defPostfix
+  , groupLeft = groupLeft, groupRight = groupRight, groupEither = groupEither
+  , groupNeither = groupNeither, highLowPrec = highLowPrec, precTableNoEq = precTableNoEq
+  , leftAssoc = leftAssoc, rightAssoc = rightAssoc, nonAssoc = nonAssoc, ambAssoc = ambAssoc
+  , pairwiseGroup = pairwiseGroup
+  , int = int, int_ = int_, float = float, float_ = float_
+  , operator = operator , operator_ = operator_, string = string, string_ = string_
+  , char = char, char_ = char_ , hashString = hashString, hashString_ = hashString_
+  , lit_ = lit_, lident = lident , lident_ = lident_, uident = uident, uident_ = uident_
+  , nonsyntax = nonsyntax , nt = nt, nt_ = nt_
+  }
+
 mexpr
 
-let lit_ = lam lit. GeneratorLit {lit = lit} in
-let lident = lam field. GeneratorLIdent {field = Some field} in
-let lident_ = GeneratorLIdent {field = None ()} in
-let uident = lam field. GeneratorUIdent {field = Some field} in
-let uident_ = GeneratorUIdent {field = None ()} in
-let nonsyntax = lam field. lam fieldType. lam fieldValue. GeneratorNonSyntax {field = field, fieldType = fieldType, fieldValue = fieldValue} in
-let nt = lam field. lam nt. GeneratorNt {field = Some field, nt = nt} in
-let nt_ = lam nt. GeneratorNt {field = None (), nt = nt} in
+let g = generatorNamespace in
 
-let varP = generatorProd
+let varP = g.prod
   { constructorName = "TmVar"
   , nonTerminal = "Expr"
-  , prodType = GeneratorAtom {self = DefaultIn ()}
-  , syntax = [lident "ident"]
+  , prodType = g.defAtom
+  , syntax = [g.lident "ident"]
   } in
 
-let appP = generatorProd
+let appP = g.prod
   { constructorName = "TmApp"
   , nonTerminal = "Expr"
-  , prodType = GeneratorInfix {self = DefaultIn (), left = DefaultIn (), right = DefaultIn (), leftField = Some "f", rightField = Some "a"}
+  , prodType = g.defInfix "f" "a"
   , syntax = []
   } in
 
-let groupingP = generatorBracket
+let groupingP = g.bracket
   { nonTerminal = "Expr"
-  , leftBracket = [lit_ "("]
-  , rightBracket = [lit_ ")"]
+  , leftBracket = [g.lit_ "("]
+  , rightBracket = [g.lit_ ")"]
   } in
 
-let res = generatorGrammar
+let ifP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmIfBroken"
+  , prodType = g.defPrefix "thenExpr"
+  , syntax = [g.lit_ "if", g.nt "condition" "Expr", g.lit_ "then"]
+  } in
+
+let elseP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmElseBroken"
+  , prodType = GeneratorInfix
+    { self = DefaultIn ()
+    , left = DefaultNotIn ()
+    , right = DefaultIn ()
+    , leftField = Some "ifExpr"
+    , rightField = Some "elseExpr"
+    }
+  , syntax = [g.lit_ "else"]
+  } in
+
+let matchP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmMatchBroken"
+  , prodType = GeneratorAtom {self = DefaultNotIn ()}
+  , syntax = [g.lit_ "match", g.nt "target" "Expr", g.lit_ "with"]
+  } in
+
+let matchArmP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmMatchArmBroken"
+  , prodType = GeneratorInfix
+    { self = DefaultIn ()
+    , left = DefaultNotIn ()
+    , right = DefaultIn ()
+    , leftField = Some "prev"
+    , rightField = Some "armExpr"
+    }
+  , syntax = [g.lit_ "|", g.nt "pat" "Pat", g.lit_ "->"]
+  } in
+
+let intPatP = g.prod
+  { nonTerminal = "Pat"
+  , constructorName = "PatInt"
+  , prodType = g.defAtom
+  , syntax = [g.int "val"]
+  } in
+
+let res = g.grammar
   { langName = "MExpr"
   , start = "Expr"
-  , productions = [varP, appP, groupingP]
-  , overrideAllow = []
+  , productions = [varP, appP, groupingP, ifP, elseP, matchP, matchArmP, intPatP]
+  , overrideAllow =
+    [ GeneratorLeftChild {parent = elseP, child = ifP}
+    , GeneratorLeftChild {parent = matchArmP, child = matchP}
+    , GeneratorLeftChild {parent = matchArmP, child = matchArmP}
+    ]
   , overrideDisallow = []
   , precedences = join
-    [ [semanticGroupLeft appP appP]
+    [ map g.leftAssoc [appP]
+    , g.precTableNoEq
+      [ [appP]
+      , [ifP]
+      ]
+    -- NOTE(vipa, 2021-03-16): These stem from if and match having
+    -- lower precedence than the things to the right, but they can't
+    -- be specified in the normal way because it should only apply to
+    -- their right children
+    , seqLiftA2 g.groupRight [elseP, matchArmP] [appP]
+    -- NOTE(vipa, 2021-03-16): Precedence with things to the left have
+    -- to be treated as ambiguous (groupEither) to allow them to float
+    -- to the appropriate thing they must attach to (ifP, matchP,
+    -- matchArmP)
+    , seqLiftA2 g.groupEither [appP, ifP, elseP, matchArmP] [elseP, matchArmP]
     ]
-  , sfunctions = [("Expr", "Expr")]
+  , sfunctions =
+    [ ("Expr", "Expr")
+    , ("Expr", "Pat")
+    , ("Pat", "Pat")
+    ]
   } in
 
 printLn res;
