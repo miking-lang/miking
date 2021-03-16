@@ -2,6 +2,149 @@ include "mexpr/ast-builder.mc"
 include "semantic.mc"
 include "gen-ast.mc"
 
+/-
+
+This file implements a small DSL for writing grammars and then
+auto-generating language fragments for the AST as well as a parser
+using `semantic.mc`. The main interface consists of the record
+`generatorNamespace` which contains a field for every exported
+function.
+
+The main working function is `grammar`, which takes a grammar and
+produces a string containing the generated code.
+
+-- TODO(vipa, 2021-03-16): Once we have proper AST types for language
+fragments we should probably return those instead, maybe have a
+convenience function that produces the string.
+
+The generated AST types will be in broken form and will typically
+require a post-processing step to unbreak. This post-processing can
+typically be expressed fairly concisely with `smap`, for example:
+
+```
+let g = generatorNamespace in
+
+-- Broken "if"
+let ifP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmIfBroken"
+  , prodType = g.defPrefix "thenExpr"
+  , syntax = [g.lit_ "if", g.nt "condition" "Expr", g.lit_ "then", tyField]
+  } in
+
+let elseP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmElseBroken"
+  , prodType = GeneratorInfix
+    { self = DefaultIn ()
+    , left = DefaultNotIn ()
+    , right = DefaultIn ()
+    , leftField = Some "ifExpr"
+    , rightField = Some "elseExpr"
+    }
+  , syntax = [g.lit_ "else", tyField]
+  } in
+
+-- Broken "match"
+let matchP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmMatch"
+  , prodType = GeneratorAtom {self = DefaultNotIn ()}
+  , syntax =
+    [ g.lit_ "match", g.nt "target" "Expr", g.lit_ "with"
+    , g.nonsyntax "arms"
+      (seqType
+        (tupleType
+          [ targetableType (tyvar_ "Pat")
+          , targetableType (tyvar_ "Expr")
+          ]))
+      (seq_ [])
+    , tyField]
+  } in
+
+let matchArmP = g.prod
+  { nonTerminal = "Expr"
+  , constructorName = "TmMatchArmBroken"
+  , prodType = GeneratorInfix
+    { self = DefaultIn ()
+    , left = DefaultNotIn ()
+    , right = DefaultIn ()
+    , leftField = Some "prev"
+    , rightField = Some "armExpr"
+    }
+  , syntax = [g.lit_ "|", g.nt "pat" "Pat", g.lit_ "->", tyField]
+  } in
+
+-- After grammar generation we (manually) write the following language
+fragments:
+lang MExprpostProcess = MExprComposed
+  sem postProcessExpr =
+  | t -> postProcessExprUp (smap_Expr_Expr postProcessExpr (postProcessExprDown t))
+
+  sem postProcessExprDown =
+  | t -> t
+  sem postProcessExprUp =
+  | t -> t
+end
+
+lang MExprTmIf = MExprBase
+  syn Expr =
+  | TmIf {info : Info, condition : Expr, thenExpr : Expr, elseExpr : Option Expr, ty : Type}
+
+  -- omitted smapAccumL_Expr_Expr
+end
+
+lang MExprUnbreakIf = MExprpostProcess + MExprTmIf
+  sem postProcessExprDown =
+  | TmElseBroken
+    { info = info
+    , ifExpr = TmIfBroken
+      { condition = condition
+      , thenExpr = thenExpr
+      }
+    , elseExpr = elseExpr
+    } ->
+    TmIf
+      { info = info
+      , condition = condition
+      , thenExpr = thenExpr
+      , elseExpr = Some elseExpr
+      , ty = TyUnknown ()
+      }
+  | TmIfBroken
+    { info = info
+    , condition = condition
+    , thenExpr = thenExpr
+    } ->
+    TmIf
+      { info = info
+      , condition = condition
+      , thenExpr = thenExpr
+      , elseExpr = None ()
+      }
+end
+
+lang MExprUnbreakMatch = MExprpostProcess
+  sem postProcessExprUp =
+  | TmMatchArmBroken
+    { info = info
+    , prev = TmMatch r
+    , pat = pat
+    , armExpr = armExpr
+    } ->
+    TmMatch {{r with arms = snoc r.arms (pat, armExpr) } with info = info}
+end
+
+lang Unbreaking = MExprUnbreakIf + MExprUnbreakMatch
+
+-- We can then "unbreak" a value "tm" of type "Expr" like so:
+
+use Unbreaking in postprocessExpr tm
+
+```
+
+-/
+
 type GeneratorSymbol
 -- TODO(vipa, 2021-03-12): We want to support alternatives as well, or
 -- at least optional elements, but to make that easy we probably want
