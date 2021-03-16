@@ -160,6 +160,14 @@ module Op : sig
   val uc : char -> uchar
   (** Creates a uchar from a Latin-1 encoded char. *)
 
+  val is_lower_alpha : uchar -> bool
+  (** Returns ["true"] if the [uchar] represents a lower-case alphabetical
+      character, otherwise ["false"]. *)
+
+  val is_upper_alpha : uchar -> bool
+  (** Returns ["true"] if the [uchar] represents an upper-case alphabetical
+      character, otherwise ["false"]. *)
+
   val sid_of_ustring : ustring -> sid
   (** Returns a unique string identifier for the ustring. This identifier can
       only be checked for equality using the standard = operator and for

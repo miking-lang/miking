@@ -24,14 +24,48 @@ let ref_indent = ref 2
 (** Alias for converting from ustring to string *)
 let string_of_ustring = Ustring.to_utf8
 
-(** Create string representation of variable *)
-let ustring_of_var ?(symbol = !ref_symbol) x s =
+(** Ensure strings can be parsed *)
+let parser_str s prefix cond =
+  match Ustring.length s with
+  | 0 ->
+      prefix ^. us "\"\""
+  | _ when cond s ->
+      s
+  | _ ->
+      prefix ^. us "\"" ^. s ^. us "\""
+
+(** Variable string parser translation *)
+let pprint_var_str s =
+  parser_str s (us "#var") (fun s ->
+      is_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+
+(** Constructor string parser translation *)
+let pprint_con_str s =
+  parser_str s (us "#con") (fun s ->
+      let c = Ustring.get s 0 in
+      is_upper_alpha c )
+
+(** Label string parser translation *)
+let pprint_label_str s =
+  parser_str s (us "#label") (fun s ->
+      is_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+
+(** Create string representation of an identifier *)
+let ustring_of_ident symbol pprint_ident x s =
   if symbol then
-    x
+    pprint_ident x
     ^.
     if Symb.eqsym Symb.Helpers.nosym s then us "#"
     else us "#" ^. Symb.Helpers.ustring_of_sym s
-  else x
+  else pprint_ident x
+
+(** Create string representation of a variable *)
+let ustring_of_var ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_var_str x s
+
+(** Create string representation of a constructor *)
+let ustring_of_con ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_con_str x s
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
@@ -88,12 +122,13 @@ let ustring_of_pat p =
     | PatRecord (_, ps) ->
         let ps =
           Record.bindings ps
-          |> List.map (fun (label, p) -> label ^. us " = " ^. ppp p)
+          |> List.map (fun (label, p) ->
+                 pprint_label_str label ^. us " = " ^. ppp p )
           |> Ustring.concat (us ",")
         in
         us "{" ^. ps ^. us "}"
     | PatCon (_, x, n, p) ->
-        let con = ustring_of_var x n in
+        let con = ustring_of_con x n in
         let inner = ppp p in
         con ^. us "(" ^. inner ^. us ")"
     | PatInt (_, i) ->
@@ -138,7 +173,7 @@ let rec ustring_of_ty = function
   | TyRecord (_, tys) ->
       let pprint_ty_label = function
         | l, ty ->
-            l ^. us " : " ^. ustring_of_ty ty
+            pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
       us "{"
       ^. Ustring.concat (us ",")
@@ -149,7 +184,7 @@ let rec ustring_of_ty = function
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
   | TyVar (_, x, s) ->
-      ustring_of_var x s
+      ustring_of_con x s
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -475,7 +510,7 @@ let rec print_const fmt = function
 (** Pretty print a record *)
 and print_record fmt r =
   let print (l, t) =
-    let l = string_of_ustring l in
+    let l = string_of_ustring (pprint_label_str l) in
     fun fmt -> fprintf fmt "%s = %a" l print_tm (App, t)
   in
   let inner = List.map print r in
@@ -540,7 +575,7 @@ and print_tm' fmt t =
         fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
           x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
   | TmType (_, x, s, ty, t1) ->
-      let x = string_of_ustring (ustring_of_var x s) in
+      let x = string_of_ustring (ustring_of_con x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
         ty print_tm (Match, t1)
@@ -587,12 +622,12 @@ and print_tm' fmt t =
       (* TODO(?,?): The below Atom precedences can probably be made less conservative *)
       fprintf fmt "{%a with %s = %a}" print_tm (Atom, t1) l print_tm (Atom, t2)
   | TmConDef (_, x, s, ty, t) ->
-      let str = string_of_ustring (ustring_of_var x s) in
+      let str = string_of_ustring (ustring_of_con x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>con %s%s in@ %a@]" str (print_ty_if_known ty)
         print_tm (Match, t)
   | TmConApp (_, x, sym, t) ->
-      let str = string_of_ustring (ustring_of_var x sym) in
+      let str = string_of_ustring (ustring_of_con x sym) in
       fprintf fmt "%s %a" str print_tm (Atom, t)
   (* If expressions *)
   | TmMatch (_, t1, PatBool (_, true), t2, t3) ->
