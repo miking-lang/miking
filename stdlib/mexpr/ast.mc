@@ -581,6 +581,7 @@ lang MapAst = ConstAst
   | CMapFoldWithKey {}
   | CMapEq {}
   | CMapCmp {}
+  | CMapGetCmpFun {}
 end
 
 lang TensorAst = ConstAst

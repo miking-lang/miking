@@ -847,3 +847,7 @@ let mapEq_ = use MExprAst in
 let mapCmp_ = use MExprAst in
   lam vcmp. lam m1. lam m2.
   appf3_ (const_ (CMapCmp ())) vcmp m1 m2
+
+let mapGetCmpFun_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapGetCmpFun ())) m

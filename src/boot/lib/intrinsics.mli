@@ -158,4 +158,6 @@ module Mmap : sig
   val eq : ('b -> 'b -> bool) -> Obj.t -> Obj.t -> bool
 
   val cmp : ('b -> 'b -> int) -> Obj.t -> Obj.t -> int
+
+  val key_cmp : Obj.t -> 'a -> 'a -> int
 end

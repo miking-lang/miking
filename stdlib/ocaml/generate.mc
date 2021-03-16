@@ -136,6 +136,7 @@ let _mapMapWithKeyName = nameSym "mapMapWithKey"
 let _mapFoldWithKeyName = nameSym "mapFoldWithKey"
 let _mapEqName = nameSym "mapEq"
 let _mapCmpName = nameSym "mapCmp"
+let _mapGetCmpFunHelperName = nameSym "mapGetCmpFunHelper"
 let _tensorCreateName = nameSym "tensorCreate"
 let _tensorGetExnName = nameSym "tensorGetExn"
 let _tensorSetExnName = nameSym "tensorSetExn"
@@ -422,6 +423,7 @@ let _preamble =
     , intr3 _mapFoldWithKeyName (appf3_ (_mapOp "fold_with_key"))
     , intr3 _mapEqName (appf3_ (_mapOp "eq"))
     , intr3 _mapCmpName (appf3_ (_mapOp "cmp"))
+    , intr3 _mapGetCmpFunHelperName (appf3_ (_mapOp "key_cmp"))
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
@@ -501,6 +503,11 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapFoldWithKey _ -> nvar_ _mapFoldWithKeyName
   | CMapEq _ -> nvar_ _mapEqName
   | CMapCmp _ -> nvar_ _mapCmpName
+  | CMapGetCmpFun _ ->
+    let k1 = nameSym "k1" in
+    let k2 = nameSym "k2" in
+    nulam_ k1 (nulam_ k2
+       (appf2_ (nvar_ _mapGetCmpFunHelperName) (nvar_ k1) (nvar_ k2)))
   | CTensorCreate _ -> nvar_ _tensorCreateName
   | CTensorGetExn _ -> nvar_ _tensorGetExnName
   | CTensorSetExn _ -> nvar_ _tensorSetExnName
@@ -1298,6 +1305,14 @@ let mapCmpNEqTest = bindall_
   ] in
 utest ocamlEvalInt (objWrapGenerate mapCmpNEqTest)
 with int_ 1 using eqExpr in
+
+let mapGetCmpFunTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "f" (mapGetCmpFun_ (var_ "m"))
+  , appf2_ (var_ "f") (int_ 12) (int_ 2)
+  ] in
+utest ocamlEvalInt (objWrapGenerate mapGetCmpFunTest)
+with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
 
