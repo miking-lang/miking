@@ -661,7 +661,7 @@ let generatorGrammar
                       (_dprintLn_ (_semanticShortenErrors_ (nvar_ errsName)))
                       (error_ (str_ "Invalid grammar")))
                     never_)))
-            in dprintLn res; (pprintCode 2 _env res).1
+            in (pprintCode 2 _env res).1
           , "\n"
           ] in
         use CarriedBasic in
@@ -892,7 +892,7 @@ let res = g.grammar
     ]
   } in
 
-printLn res;
+-- printLn res;
 
 ()
 
