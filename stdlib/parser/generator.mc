@@ -15,7 +15,7 @@ con GeneratorHashString : {field : Option String, tag : String} -> GeneratorSymb
 con GeneratorLit : {lit : String} -> GeneratorSymbol
 con GeneratorLIdent : {field : Option String} -> GeneratorSymbol
 con GeneratorUIdent : {field : Option String} -> GeneratorSymbol
-con GeneratorNonSyntax : {field : String, fieldType : Type, fieldValue : Expr} -> GeneratorSymbol
+con GeneratorNonSyntax : {field : String, fieldType : CarriedType, fieldValue : Expr} -> GeneratorSymbol
 con GeneratorNt : {field : Option String, nt : NonTerminal} -> GeneratorSymbol
 
 type GeneratorProdType
@@ -252,7 +252,7 @@ let generatorProd
           match sym with GeneratorUIdent {field = Some name} then
             Some (name, untargetableType tystr_) else
           match sym with GeneratorNonSyntax {field = name, fieldType = ty} then
-            Some (name, untargetableType ty) else
+            Some (name, ty) else
           match sym with GeneratorNt {field = Some name, nt = nt} then
             Some (name, targetableType (tyvar_ nt))
           else None ()
@@ -621,18 +621,33 @@ mexpr
 
 let g = generatorNamespace in
 
+let unknownTyP = g.prod
+  { nonTerminal = "Type"
+  , constructorName = "TyUnknown"
+  , prodType = g.defAtom
+  , syntax = [g.lit_ "Unknown"]
+  } in
+
+-- TODO(vipa, 2021-03-16): This is ugly, the result from g.prod should
+-- be opaque, but we need the precise name the constructor will use to
+-- get it to pretty print correctly. There should be a better way to
+-- solve it later (more or less running symbolize before printing),
+-- but not at present.
+match unknownTyP with {constructor = Some {name = unknownTyConstructorName}} then
+let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (nconapp_ unknownTyConstructorName unit_) in
+
 let varP = g.prod
   { constructorName = "TmVar"
   , nonTerminal = "Expr"
   , prodType = g.defAtom
-  , syntax = [g.lident "ident"]
+  , syntax = [g.lident "ident", tyField]
   } in
 
 let appP = g.prod
   { constructorName = "TmApp"
   , nonTerminal = "Expr"
   , prodType = g.defInfix "f" "a"
-  , syntax = []
+  , syntax = [tyField]
   } in
 
 let groupingP = g.bracket
@@ -645,7 +660,7 @@ let ifP = g.prod
   { nonTerminal = "Expr"
   , constructorName = "TmIfBroken"
   , prodType = g.defPrefix "thenExpr"
-  , syntax = [g.lit_ "if", g.nt "condition" "Expr", g.lit_ "then"]
+  , syntax = [g.lit_ "if", g.nt "condition" "Expr", g.lit_ "then", tyField]
   } in
 
 let elseP = g.prod
@@ -658,14 +673,23 @@ let elseP = g.prod
     , leftField = Some "ifExpr"
     , rightField = Some "elseExpr"
     }
-  , syntax = [g.lit_ "else"]
+  , syntax = [g.lit_ "else", tyField]
   } in
 
 let matchP = g.prod
   { nonTerminal = "Expr"
-  , constructorName = "TmMatchBroken"
+  , constructorName = "TmMatch"
   , prodType = GeneratorAtom {self = DefaultNotIn ()}
-  , syntax = [g.lit_ "match", g.nt "target" "Expr", g.lit_ "with"]
+  , syntax =
+    [ g.lit_ "match", g.nt "target" "Expr", g.lit_ "with"
+    , g.nonsyntax "arms"
+      (seqType
+        (tupleType
+          [ targetableType (tyvar_ "Pat")
+          , targetableType (tyvar_ "Expr")
+          ]))
+      (seq_ [])
+    , tyField]
   } in
 
 let matchArmP = g.prod
@@ -678,20 +702,20 @@ let matchArmP = g.prod
     , leftField = Some "prev"
     , rightField = Some "armExpr"
     }
-  , syntax = [g.lit_ "|", g.nt "pat" "Pat", g.lit_ "->"]
+  , syntax = [g.lit_ "|", g.nt "pat" "Pat", g.lit_ "->", tyField]
   } in
 
 let intPatP = g.prod
   { nonTerminal = "Pat"
   , constructorName = "PatInt"
   , prodType = g.defAtom
-  , syntax = [g.int "val"]
+  , syntax = [g.int "val", tyField]
   } in
 
 let res = g.grammar
   { langName = "MExpr"
   , start = "Expr"
-  , productions = [varP, appP, groupingP, ifP, elseP, matchP, matchArmP, intPatP]
+  , productions = [varP, appP, groupingP, ifP, elseP, matchP, matchArmP, intPatP, unknownTyP]
   , overrideAllow =
     [ GeneratorLeftChild {parent = elseP, child = ifP}
     , GeneratorLeftChild {parent = matchArmP, child = matchP}
@@ -717,11 +741,16 @@ let res = g.grammar
     ]
   , sfunctions =
     [ ("Expr", "Expr")
+    , ("Expr", "Type")
     , ("Expr", "Pat")
     , ("Pat", "Pat")
+    , ("Pat", "Type")
+    , ("Type", "Type")
     ]
   } in
 
 printLn res;
 
 ()
+
+else never
