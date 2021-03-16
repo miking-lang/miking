@@ -431,7 +431,7 @@ let semanticGrammar
           let defaultDisallow = filter
             (lam prod. match _prodTypeSelf prod.spec.ptype with DefaultNotIn _ then true else false)
             productions in
-          let syms = map (lam x. x.sym) defaultDisallow in
+          let syms = map (lam x. (x.sym, ())) defaultDisallow in
           DisallowSet (mapFromList _cmpSym syms)
         in
 
