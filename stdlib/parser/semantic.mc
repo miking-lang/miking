@@ -100,10 +100,10 @@ let semanticGroupNeither = lam l. lam r. ((l, r), { mayGroupLeft = false, mayGro
 -- Take two lists of productions, make each production in the `high`
 -- list have higher precedence than each production in the `low` list.
 let semanticHighLowPrec
-  : { high : [Production]
-    , low : [Production]
+  : { high : [prod]
+    , low : [prod]
     }
-  -> [((Production, Production), Precedence)]
+  -> [((prod, prod), Precedence)]
   = let mkGrouping = lam high. lam low.
       [ semanticGroupLeft high low
       , semanticGroupRight low high
@@ -114,8 +114,8 @@ let semanticHighLowPrec
 -- and impose the implied precedences. Note that no precedence is
 -- applied between productions on the same precedence level.
 recursive let semanticPrecTableNoEq
-  : [[Production]]
-  -> [((Production, Production) Precedence)]
+  : [[prod]]
+  -> [((prod, prod), Precedence)]
   = lam table.
     match table with [high] ++ lows then
       concat (semanticHighLowPrec {high = high, low = join lows}) (semanticPrecTableNoEq lows)
@@ -123,23 +123,23 @@ recursive let semanticPrecTableNoEq
 end
 
 let semanticLeftAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupLeft prod prod
 
 let semanticRightAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupRight prod prod
 
 let semanticNonAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupNeither prod prod
 
 let semanticAmbAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupEither prod prod
 
 /-
@@ -158,9 +158,9 @@ c]` is equivalent with
 ```
 -/
 recursive let semanticPairwiseGroup
-  : (Production -> Production -> Precedence)
-  -> [Production]
-  -> [((Production, Production), Precedence)]
+  : (prod -> prod -> Precedence)
+  -> [prod]
+  -> [((prod, prod), Precedence)]
   = lam group.
     recursive let work = lam prods.
       match prods with [prod] ++ prods then
@@ -215,10 +215,7 @@ let semanticString : Symbol = ll1String
 let semanticChar : Symbol = ll1Char
 let semanticLIdent : Symbol = ll1LIdent
 let semanticUIdent : Symbol = ll1UIdent
-let semanticHashString
-  : String
-  -> Symbol
-  = ll1HashString
+let semanticHashString : String -> Symbol = ll1HashString
 
 type Parser
 
@@ -434,7 +431,7 @@ let semanticGrammar
           let defaultDisallow = filter
             (lam prod. match _prodTypeSelf prod.spec.ptype with DefaultNotIn _ then true else false)
             productions in
-          let syms = map (lam x. x.sym) defaultDisallow in
+          let syms = map (lam x. (x.sym, ())) defaultDisallow in
           DisallowSet (mapFromList _cmpSym syms)
         in
 
@@ -648,7 +645,7 @@ let semanticGrammar
     let res = eitherPartition res in
     match res with ([], productions) then
       eitherMapLeft
-        (lam x. SemanticGrammarLL1Error x)
+        (lam x. [SemanticGrammarLL1Error x])
         (ll1GenParser {productions = join productions, start = grammar.start.name})
     else Left (join res.0)
 
@@ -664,21 +661,26 @@ let semanticParseFile
     match res with Right (Right (_, res)) then Right res else
     never
 
-mexpr
-
 -- Small helper to make smaller errors by discarding information that
 -- is typically not interesting
-let shortenError = lam p.
-  match p with UndefinedPrecedence {left = {spec = {name = lname}}, right = {spec = {name = rname}}} then
-    ("undefPrec", join [lname, " -?- ", rname])
-  else match p with DuplicatedPrecedence ([(({name = lname}, {name = rname}), _)] ++ _ & precs) then
-    let precs = map (lam x. x.1) precs in
-    let precs = map
-      (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
-      precs in
-    ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
-  else dprintLn p; never
-in
+let semanticShortenErrors
+  : [SemanticGrammarError]
+  -> [(String, String)]
+  = let shortenOne = lam err.
+      match err with UndefinedPrecedence {left = {spec = {name = lname}}, right = {spec = {name = rname}}} then
+        ("undefPrec", join [lname, " -?- ", rname])
+      else match err with DuplicatedPrecedence ([(({name = lname}, {name = rname}), _)] ++ _ & precs) then
+        let precs = map (lam x. x.1) precs in
+        let precs = map
+          (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
+          precs in
+        ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
+      else match err with SemanticGrammarLL1Error err then
+        dprintLn (map (lam x. {x with #label"1" = mapBindings x.1}) (mapBindings err)); ("ll1error", "dprinted above")
+      else dprintLn err; never
+    in map shortenOne
+
+mexpr
 
 let wrap = lam label. lam x. (label, x) in
 
@@ -1074,7 +1076,7 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
+  utest eitherMapLeft semanticShortenErrors res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
@@ -1212,7 +1214,7 @@ let g =
       , seqLiftA2 semanticGroupEither [addP, negP, mulP, minusP, ifP] [elseP]
       ]
     } in
-  utest eitherMapLeft (map shortenError) res with () using lam x. lam. match x
+  utest eitherMapLeft semanticShortenErrors res with () using lam x. lam. match x
   with Right _
   then true else false in
   match res with Right x then x else never
