@@ -100,10 +100,10 @@ let semanticGroupNeither = lam l. lam r. ((l, r), { mayGroupLeft = false, mayGro
 -- Take two lists of productions, make each production in the `high`
 -- list have higher precedence than each production in the `low` list.
 let semanticHighLowPrec
-  : { high : [Production]
-    , low : [Production]
+  : { high : [prod]
+    , low : [prod]
     }
-  -> [((Production, Production), Precedence)]
+  -> [((prod, prod), Precedence)]
   = let mkGrouping = lam high. lam low.
       [ semanticGroupLeft high low
       , semanticGroupRight low high
@@ -114,8 +114,8 @@ let semanticHighLowPrec
 -- and impose the implied precedences. Note that no precedence is
 -- applied between productions on the same precedence level.
 recursive let semanticPrecTableNoEq
-  : [[Production]]
-  -> [((Production, Production) Precedence)]
+  : [[prod]]
+  -> [((prod, prod), Precedence)]
   = lam table.
     match table with [high] ++ lows then
       concat (semanticHighLowPrec {high = high, low = join lows}) (semanticPrecTableNoEq lows)
@@ -123,23 +123,23 @@ recursive let semanticPrecTableNoEq
 end
 
 let semanticLeftAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupLeft prod prod
 
 let semanticRightAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupRight prod prod
 
 let semanticNonAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupNeither prod prod
 
 let semanticAmbAssoc
-  : Production
-  -> ((Production, Production), Precedence)
+  : prod
+  -> ((prod, prod), Precedence)
   = lam prod. semanticGroupEither prod prod
 
 /-
@@ -158,9 +158,9 @@ c]` is equivalent with
 ```
 -/
 recursive let semanticPairwiseGroup
-  : (Production -> Production -> Precedence)
-  -> [Production]
-  -> [((Production, Production), Precedence)]
+  : (prod -> prod -> Precedence)
+  -> [prod]
+  -> [((prod, prod), Precedence)]
   = lam group.
     recursive let work = lam prods.
       match prods with [prod] ++ prods then
