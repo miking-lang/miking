@@ -118,6 +118,9 @@ let tyseq_ = use MExprAst in
   lam ty.
   TySeq {ty = ty}
 
+let utyseq_ = use MExprAst in
+  TySeq {ty = TyUnknown ()}
+
 let tyrecord_ = use MExprAst in
   lam fields.
   TyRecord {
