@@ -569,12 +569,19 @@ lang MapAst = ConstAst
   | CMapEmpty {}
   | CMapInsert {}
   | CMapRemove {}
-  | CMapFind {}
+  | CMapFindWithExn {}
+  | CMapFindOrElse {}
+  | CMapFindApplyOrElse {}
+  | CMapBindings {}
+  | CMapSize {}
   | CMapMem {}
   | CMapAny {}
   | CMapMap {}
   | CMapMapWithKey {}
-  | CMapBindings {}
+  | CMapFoldWithKey {}
+  | CMapEq {}
+  | CMapCmp {}
+  | CMapGetCmpFun {}
 end
 
 lang TensorAst = ConstAst
