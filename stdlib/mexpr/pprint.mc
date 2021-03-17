@@ -970,7 +970,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
   + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  MapPrettyPrint + SysPrettyPrint
+  MapPrettyPrint + SysPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
