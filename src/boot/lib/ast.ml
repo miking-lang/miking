@@ -160,6 +160,7 @@ and const =
   | CbootParserParseMCoreFile
   | CbootParserGetId
   | CbootParserGetTerm of tm option
+  | CbootParserGetType of tm option
   | CbootParserGetString of tm option
   | CbootParserGetInt of tm option
   | CbootParserGetFloat of tm option

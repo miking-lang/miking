@@ -799,58 +799,92 @@ end
 
 lang UnknownTypeAst
   syn Type =
-  | TyUnknown {}
+  | TyUnknown {info : Info}
+
+  sem info =
+  | TyUnknown r -> r.info
 end
 
 lang BoolTypeAst
   syn Type =
-  | TyBool {}
+  | TyBool {info  : Info}
+
+  sem info =
+  | TyBool r -> r.info
 end
 
 lang IntTypeAst
   syn Type =
-  | TyInt {}
+  | TyInt {info : Info}
+
+  sem info =
+  | TyInt r -> r.info
 end
 
 lang FloatTypeAst
   syn Type =
-  | TyFloat {}
+  | TyFloat {info : Info}
+
+  sem info =
+  | TyFloat r -> r.info
 end
 
 lang CharTypeAst
   syn Type =
-  | TyChar {}
+  | TyChar {info  : Info}
+
+  sem info =
+  | TyChar r -> r.info
 end
 
 lang FunTypeAst
   syn Type =
-  | TyArrow {from : Type,
+  | TyArrow {info : Info,
+             from : Type,
              to   : Type}
+  sem info =
+  | TyArrow r -> r.info
 end
 
 lang SeqTypeAst
   syn Type =
-  | TySeq {ty : Type}
+  | TySeq {info : Info,
+           ty   : Type}
+  sem info =
+  | TySeq r -> r.info
 end
 
 lang RecordTypeAst
   syn Type =
-  | TyRecord {fields : Map SID Type}
+  | TyRecord {info    : Info,
+              fields  : Map SID Type}
+  sem info =
+  | TyRecord r -> r.info
 end
 
 lang VariantTypeAst
   syn Type =
-  | TyVariant {constrs : Map Name Type}
+  | TyVariant {info     : Info,
+               constrs  : Map Name Type}
+  sem info =
+  | TyVariant r -> r.info
 end
 
 lang VarTypeAst
   syn Type =
-  | TyVar {ident : Name}
+  | TyVar {info   : Info,
+           ident  : Name}
+  sem info =
+  | TyVar r -> r.info
 end
 
 lang AppTypeAst
   syn Type =
-  | TyApp {lhs : Type, rhs : Type}
+  | TyApp {info : Info,
+           lhs  : Type,
+           rhs  : Type}
+  sem info =
+  | TyApp r -> r.info
 end
 
 

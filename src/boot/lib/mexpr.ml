@@ -144,6 +144,7 @@ let builtin =
   ; ("bootParserParseMCoreFile", f CbootParserParseMCoreFile)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
+  ; ("bootParserGetType", f (CbootParserGetType None))
   ; ("bootParserGetString", f (CbootParserGetString None))
   ; ("bootParserGetInt", f (CbootParserGetInt None))
   ; ("bootParserGetFloat", f (CbootParserGetFloat None))
@@ -521,6 +522,10 @@ let arity = function
   | CbootParserGetTerm None ->
       2
   | CbootParserGetTerm (Some _) ->
+      1
+  | CbootParserGetType None ->
+      2
+  | CbootParserGetType (Some _) ->
       1
   | CbootParserGetString None ->
       2
@@ -1354,6 +1359,13 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getTerm ptree n))
   | CbootParserGetTerm (Some _), _ ->
       fail_constapp fi
+  | CbootParserGetType None, t ->
+      TmConst (fi, CbootParserGetType (Some t))
+  | ( CbootParserGetType (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getType ptree n))
+  | CbootParserGetType (Some _), _ ->
+    fail_constapp fi
   | CbootParserGetString None, t ->
       TmConst (fi, CbootParserGetString (Some t))
   | ( CbootParserGetString (Some (TmConst (fi, CbootParserTree ptree)))
