@@ -28,17 +28,20 @@ type SymEnv = {
 let symEnvEmpty =
   {varEnv = assocEmpty, conEnv = assocEmpty, tyEnv = assocEmpty}
 
+let symVarNameEnv = lam varNameEnv : [Name].
+  {symEnvEmpty with varEnv = map (lam x. (nameGetStr x, x)) varNameEnv}
+ 
 -----------
 -- TERMS --
 -----------
 
 lang Sym
+  -- Symbolize with an environment
   sem symbolizeExpr (env : SymEnv) =
-  -- Intentionally left blank
 
+  -- Symbolize with empty environments
   sem symbolize =
   | expr -> symbolizeExpr symEnvEmpty expr
-
 end
 
 lang VarSym = Sym + VarAst
@@ -317,8 +320,9 @@ end
 
 lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyVariant {constrs = []} & ty -> ty
-  | TyVariant t -> error "Symbolizing non-empty variant types not yet supported"
+  | TyVariant t & ty ->
+    if eqi (mapLength t.constrs) 0 then ty
+    else error "Symbolizing non-empty variant types not yet supported"
 end
 
 lang VarTypeSym = VarTypeAst

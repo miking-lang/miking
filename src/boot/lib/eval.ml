@@ -3,28 +3,12 @@
    Copyright (C) David Broman. See file LICENSE.txt
 *)
 
-open Ustring.Op
 open Printf
 open Ast
 open Msg
 open Mexpr
 open Parserutils
 open Ustring
-
-let add_prelude = function
-  | Program (includes, tops, tm) ->
-      Program (default_includes @ includes, tops, tm)
-
-let error_to_ustring e =
-  match e with
-  | Lexer.Lex_error m ->
-      message2str m
-  | Parsing.Parse_error ->
-      message2str (Lexer.parse_error_message ())
-  | Error m ->
-      message2str m
-  | _ ->
-      us (Printexc.to_string e)
 
 (* Main function for evaluating a program. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
@@ -38,7 +22,7 @@ let evalprog filename =
   if !utest then printf "%s: " filename ;
   utest_fail_local := 0 ;
   ( try
-      let parsed = parse_mcore_file filename in
+      let parsed = local_parse_mcore_file filename in
       parsed |> add_prelude
       |> merge_includes (Filename.dirname filename) [filename]
       |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang

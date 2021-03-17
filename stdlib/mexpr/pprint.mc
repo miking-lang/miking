@@ -141,8 +141,6 @@ let _record2tuple
     -- Check if keys are a sequence 0..(n-1)
     match and (eqi 0 (head sortedKeys))
               (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
-      -- Note: Quadratic complexity. Sorting the association list directly
-      -- w.r.t. key would improve complexity to n*log(n).
       Some (map (lam key. mapLookupOrElse
                             (lam. error "Key not found")
                             (stringToSid (int2string key)) bindings)
@@ -362,14 +360,14 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
     match pprintEnvGetStr env t.ident with (env,str) then
       let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
       match pprintCode indent env t.inexpr with (env,inexpr) then
-        match getTypeStringCode indent env t.ty with (env, ty) then
-          match t.ty with TyUnknown{} then
+        match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
+          match t.tyIdent with TyUnknown{} then
             (env, join ["type ", ident, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
           else
             (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
-                      ty, pprintNewline indent,
+                      tyIdent, pprintNewline indent,
                       "in", pprintNewline indent,
                       inexpr])
         else never
@@ -432,7 +430,7 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
     match pprintConName env t.ident with (env,str) then
-      match getTypeStringCode indent env t.ty with (env, ty) then
+      match getTypeStringCode indent env t.tyIdent with (env, ty) then
         let ty = if eqString ty "Unknown" then "" else concat ": " ty in
         match pprintCode indent env t.inexpr with (env,inexpr) then
           (env,join ["con ", str, ty, " in", pprintNewline indent, inexpr])
@@ -610,6 +608,11 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
+  | CChar {val = '\n'} -> "\\n"
+  | CChar {val = '\t'} -> "\\t"
+  | CChar {val = '\\'} -> "\\\\"
+  | CChar {val = '\''} -> "\\'"
+  | CChar {val = '\"'} -> "\\\""
   | CChar c -> ['\'', c.val, '\'']
 end
 
@@ -641,6 +644,13 @@ lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   | CRef _ -> "ref"
   | CModRef _ -> "modref"
   | CDeRef _ -> "deref"
+end
+
+lang SysPrettyPrint = SysAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CExit _ -> "exit"
+  | CError _ -> "error"
+  | CArgv _ -> "argv"
 end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
@@ -920,8 +930,9 @@ end
 
 lang VariantTypePrettyPrint = VariantTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
-  | TyVariant {constrs = []} -> (env,"<>")
-  | TyVariant t -> error "Printing of non-empty variant types not yet supported"
+  | TyVariant t ->
+    if eqi (mapLength t.constrs) 0 then (env,"<>")
+    else error "Printing of non-empty variant types not yet supported"
 end
 
 lang VarTypePrettyPrint = VarTypeAst
@@ -959,7 +970,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
   + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  MapPrettyPrint +
+  MapPrettyPrint + SysPrettyPrint
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

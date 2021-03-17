@@ -60,6 +60,7 @@ use CarriedBasic in mkLanguages
   , requestedSFunctions =
     [ (stringToSynType "Expr", tyvar_ "Expr")
     ]
+  , composedName = Some "Composed"
   }
 
 -- This is what's generated:
@@ -96,7 +97,7 @@ end
 
 lang MExprTmRecord = MExprBase
   syn Expr =
-  | TmRecord {bindings: [([Char], Expr)], ty: Type, info: Info}
+  | TmRecord {info: Info, ty: Type, bindings: [([Char], Expr)]}
 
   sem smapAccumL_Expr_Expr (f : (a) -> ((Expr) -> ((a, Expr)))) (acc : a) =
   | TmRecord x ->
@@ -145,6 +146,10 @@ lang MExprTmRecord = MExprBase
 
 end
 
+lang Composed = MExprTmRecord
+
+
+end
 ```
 
 -- NOTE(vipa, 2021-03-05): Since we do not yet self-host MLang this
@@ -191,6 +196,7 @@ type GenInput =
   { namePrefix : String
   , constructors : [Constructor]
   , requestedSFunctions : [(SynType, Type)]
+  , composedName : Option String
   }
 
 lang CarriedTypeBase
@@ -471,7 +477,7 @@ let tupleType
 lang CarriedTypeGenerate = CarriedTypeHelpers
   sem mkLanguages = /- GenInput -> String -/
   | input ->
-    match input with {namePrefix = namePrefix, constructors = constructors, requestedSFunctions = requestedSFunctions} then
+    match input with {namePrefix = namePrefix, constructors = constructors, requestedSFunctions = requestedSFunctions, composedName = composedName} then
       let synTypes = foldl
         (lam acc. lam c. mapInsert c.synType [] acc)
         (mapEmpty _cmpSynType)
@@ -495,6 +501,16 @@ lang CarriedTypeGenerate = CarriedTypeHelpers
           }
         else never in
       let constructorLangs = map mkConstructorLang constructors in
+      let constructorLangs =
+        match composedName with Some name then
+          snoc
+            constructorLangs
+            { name = name
+            , extends = map (lam x. x.name) constructorLangs
+            , synTypes = mapEmpty _cmpSynType
+            , semanticFunctions = []
+            }
+        else constructorLangs in
       strJoin "\n\n" (map _pprintLanguageFragment (cons baseLang constructorLangs))
     else never
 end
@@ -552,6 +568,7 @@ let input =
     , (stringToSynType "Expr", tyvar_ "Expr")
     , (stringToSynType "Expr", tyvar_ "Type")
     ]
+  , composedName = Some "Composed"
   } in
 
 let res = mkLanguages input in
@@ -577,6 +594,7 @@ let res = mkLanguages
   , requestedSFunctions =
     [ (stringToSynType "Expr", tyvar_ "Expr")
     ]
+  , composedName = Some "Composed"
   } in
 -- printLn res;
 

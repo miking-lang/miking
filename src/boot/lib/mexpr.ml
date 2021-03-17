@@ -141,6 +141,7 @@ let builtin =
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
   ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f CbootParserParseMExprString)
+  ; ("bootParserParseMCoreFile", f CbootParserParseMCoreFile)
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
   ; ("bootParserGetString", f (CbootParserGetString None))
@@ -512,6 +513,8 @@ let arity = function
   | CbootParserTree _ ->
       0
   | CbootParserParseMExprString ->
+      1
+  | CbootParserParseMCoreFile ->
       1
   | CbootParserGetId ->
       1
@@ -1329,9 +1332,16 @@ let delta eval env fi c v =
   | CbootParserTree _, _ ->
       fail_constapp fi
   | CbootParserParseMExprString, TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
+      let t = Parserutils.parse_mexpr_string (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMExprString, _ ->
+      fail_constapp fi
+  | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
+      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
+      (* Call symbolize just to get better error messages *)
+      (* let _ = symbolize builtin_name2sym t in *)
+      TmConst (fi, CbootParserTree (PTreeTm t))
+  | CbootParserParseMCoreFile, _ ->
       fail_constapp fi
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
       TmConst (fi, CInt (Bootparser.getId ptree))
