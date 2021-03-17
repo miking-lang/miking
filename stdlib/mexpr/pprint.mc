@@ -667,6 +667,27 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorIteri _ -> "tensorIteri"
 end
 
+lang MapPrettyPrint = MapAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CMapEmpty _ -> "mapEmpty"
+  | CMapInsert _ -> "mapInsert"
+  | CMapRemove _ -> "mapRemove"
+  | CMapFindWithExn _ -> "mapFind"
+  | CMapFindOrElse _ -> "mapFindOrElse"
+  | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
+  | CMapBindings _ -> "mapBindings"
+  | CMapSize _ -> "mapSize"
+  | CMapMem _ -> "mapMem"
+  | CMapAny _ -> "mapAny"
+  | CMapMap _ -> "mapMap"
+  | CMapMapWithKey _ -> "mapMapWithKey"
+  | CMapFoldWithKey _ -> "mapFoldWithKey"
+  | CMapEq _ -> "mapEq"
+  | CMapCmp _ -> "mapCmp"
+  | CMapGetCmpFun _ -> "mapGetCmpFun"
+end
+
+
 --------------
 -- PATTERNS --
 --------------
@@ -949,7 +970,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
   + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  SysPrettyPrint +
+  MapPrettyPrint + SysPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
