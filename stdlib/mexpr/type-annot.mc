@@ -425,6 +425,52 @@ lang RefOpTypeAnnot = ConstTypeAnnot + RefOpAst
   | CDeRef _ -> tyarrow_ tyunknown_ tyunknown_
 end
 
+lang MapTypeAnnot = ConstTypeAnnot + MapAst
+  sem typeConst =
+  | CMapEmpty _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_)) tyunknown_
+  | CMapInsert _ ->
+    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
+  | CMapRemove _ ->
+    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
+  | CMapFindWithExn _ ->
+    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
+  | CMapFindOrElse _ ->
+    tyarrow_ (tyarrow_ tyunit_ tyunknown_)
+             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
+  | CMapFindApplyOrElse _ ->
+    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
+             (tyarrow_ (tyarrow_ tyunit_ tyunknown_)
+                       (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
+  | CMapBindings _ ->
+    tyarrow_ tyunknown_ (tyseq_ (tytuple_ [tyunknown_, tyunknown_]))
+  | CMapSize _ ->
+    tyarrow_ tyunknown_ tyint_
+  | CMapMem _ ->
+    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
+  | CMapAny _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
+             (tyarrow_ tyunknown_ tybool_)
+  | CMapMap _ ->
+    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
+             (tyarrow_ tyunknown_ tyunknown_)
+  | CMapMapWithKey _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
+             (tyarrow_ tyunknown_ tyunknown_)
+  | CMapFoldWithKey _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
+             tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
+  | CMapEq _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
+             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
+  | CMapCmp _ ->
+    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
+             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
+  | CMapGetCmpFun _ ->
+    tyarrow_ tyunknown_ (tyarrow_ tyunknown_
+                        (tyarrow_ tyunknown_ tyint_))
+end
+
 lang MExprTypeAnnot =
 
   -- Terms
