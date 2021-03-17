@@ -608,6 +608,11 @@ end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
+  | CChar {val = '\n'} -> "\\n"
+  | CChar {val = '\t'} -> "\\t"
+  | CChar {val = '\\'} -> "\\\\"
+  | CChar {val = '\''} -> "\\'"
+  | CChar {val = '\"'} -> "\\\""
   | CChar c -> ['\'', c.val, '\'']
 end
 
@@ -641,6 +646,13 @@ lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   | CDeRef _ -> "deref"
 end
 
+lang SysPrettyPrint = SysAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CExit _ -> "exit"
+  | CError _ -> "error"
+  | CArgv _ -> "argv"
+end
+
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CTensorCreate _ -> "tensorCreate"
@@ -654,6 +666,27 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorSubExn _ -> "tensorSubExn"
   | CTensorIteri _ -> "tensorIteri"
 end
+
+lang MapPrettyPrint = MapAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CMapEmpty _ -> "mapEmpty"
+  | CMapInsert _ -> "mapInsert"
+  | CMapRemove _ -> "mapRemove"
+  | CMapFindWithExn _ -> "mapFind"
+  | CMapFindOrElse _ -> "mapFindOrElse"
+  | CMapFindApplyOrElse _ -> "mapFindApplyOrElse"
+  | CMapBindings _ -> "mapBindings"
+  | CMapSize _ -> "mapSize"
+  | CMapMem _ -> "mapMem"
+  | CMapAny _ -> "mapAny"
+  | CMapMap _ -> "mapMap"
+  | CMapMapWithKey _ -> "mapMapWithKey"
+  | CMapFoldWithKey _ -> "mapFoldWithKey"
+  | CMapEq _ -> "mapEq"
+  | CMapCmp _ -> "mapCmp"
+  | CMapGetCmpFun _ -> "mapGetCmpFun"
+end
+
 
 --------------
 -- PATTERNS --
@@ -937,6 +970,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
   + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
+  MapPrettyPrint + SysPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

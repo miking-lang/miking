@@ -45,6 +45,8 @@ let _noNumTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Ten
 
 let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 
+let _mapOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
+
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
@@ -135,12 +137,19 @@ let _sleepMsName = nameSym "sleepMs"
 let _mapEmptyName = nameSym "mapEmpty"
 let _mapInsertName = nameSym "mapInsert"
 let _mapRemoveName = nameSym "mapRemove"
-let _mapFindName = nameSym "mapFind"
-let _mapAnyName = nameSym "mapAny"
+let _mapFindWithExnName = nameSym "mapFindWithExn"
+let _mapFindOrElseName = nameSym "mapFindOrElse"
+let _mapFindApplyOrElseName = nameSym "mapFindApplyOrElse"
+let _mapBindingsName = nameSym "mapBindings"
+let _mapSizeName = nameSym "mapSize"
 let _mapMemName = nameSym "mapMem"
+let _mapAnyName = nameSym "mapAny"
 let _mapMapName = nameSym "mapMap"
 let _mapMapWithKeyName = nameSym "mapMapWithKey"
-let _mapBindingsName = nameSym "mapBindings"
+let _mapFoldWithKeyName = nameSym "mapFoldWithKey"
+let _mapEqName = nameSym "mapEq"
+let _mapCmpName = nameSym "mapCmp"
+let _mapGetCmpFunHelperName = nameSym "mapGetCmpFunHelper"
 let _tensorCreateName = nameSym "tensorCreate"
 let _tensorGetExnName = nameSym "tensorGetExn"
 let _tensorSetExnName = nameSym "tensorSetExn"
@@ -456,10 +465,10 @@ lang OCamlTypeDeclGenerate = MExprTypeLift
 end
 
 recursive let _isIntrinsicApp = use OCamlAst in
-  lam t.
-    match t with TmApp {lhs = TmConst _} then
-      true
-    else match t with TmApp {lhs = (TmApp _) & lhs} then
+  lam lhs.
+    match lhs with TmConst _ then true
+    else match lhs with TmApp {lhs = TmConst _} then true
+    else match lhs with TmApp {lhs = (TmApp _) & lhs} then
       _isIntrinsicApp lhs
     else false
 end
@@ -501,8 +510,17 @@ let _preamble =
          mkBody op [a, b, c])
   in
 
-  bindall_ [
-      intr2 _addiName addi_
+  let intr4 = lam name. lam op.
+      nulet_ name
+        (let a = nameSym "a" in
+         let b = nameSym "b" in
+         let c = nameSym "c" in
+         let d = nameSym "d" in
+         mkBody op [a, b, c, d])
+  in
+
+  bindall_
+    [ intr2 _addiName addi_
     , intr2 _subiName subi_
     , intr2 _muliName muli_
     , intr2 _diviName divi_
@@ -573,7 +591,23 @@ let _preamble =
     , intr2 _bootParserGetConstName (appf2_ (_bootparserOp "getConst"))
     , intr2 _bootParserGetPatName (appf2_ (_bootparserOp "getPat"))
     , intr1 _bootParserGetInfoName (appf1_ (_bootparserOp "getInfo"))
-  ]
+    , intr1 _mapEmptyName (appf1_ (_mapOp "empty"))
+    , intr3 _mapInsertName (appf3_ (_mapOp "insert"))
+    , intr2 _mapRemoveName (appf2_ (_mapOp "remove"))
+    , intr2 _mapFindWithExnName (appf2_ (_mapOp "find"))
+    , intr3 _mapFindOrElseName (appf3_ (_mapOp "find_or_else"))
+    , intr4 _mapFindApplyOrElseName (appf4_ (_mapOp "find_apply_or_else"))
+    , intr1 _mapBindingsName (appf1_ (_mapOp "bindings"))
+    , intr1 _mapSizeName (appf1_ (_mapOp "size"))
+    , intr2 _mapMemName (appf2_ (_mapOp "mem"))
+    , intr2 _mapAnyName (appf2_ (_mapOp "any"))
+    , intr2 _mapMapName (appf2_ (_mapOp "map"))
+    , intr2 _mapMapWithKeyName (appf2_ (_mapOp "map_with_key"))
+    , intr3 _mapFoldWithKeyName (appf3_ (_mapOp "fold_with_key"))
+    , intr3 _mapEqName (appf3_ (_mapOp "eq"))
+    , intr3 _mapCmpName (appf3_ (_mapOp "cmp"))
+    , intr3 _mapGetCmpFunHelperName (appf3_ (_mapOp "key_cmp"))
+    ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
   sem intrinsic2name =
@@ -640,12 +674,23 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapEmpty _ -> nvar_ _mapEmptyName
   | CMapInsert _ -> nvar_ _mapInsertName
   | CMapRemove _ -> nvar_ _mapRemoveName
-  | CMapFind _ -> nvar_ _mapFindName
-  | CMapAny _ -> nvar_ _mapAnyName
+  | CMapFindWithExn _ -> nvar_ _mapFindWithExnName
+  | CMapFindOrElse _ -> nvar_ _mapFindOrElseName
+  | CMapFindApplyOrElse _ -> nvar_ _mapFindApplyOrElseName
+  | CMapBindings _ -> nvar_ _mapBindingsName
+  | CMapSize _ -> nvar_ _mapSizeName
   | CMapMem _ -> nvar_ _mapMemName
+  | CMapAny _ -> nvar_ _mapAnyName
   | CMapMap _ -> nvar_ _mapMapName
   | CMapMapWithKey _ -> nvar_ _mapMapWithKeyName
-  | CMapBindings _ -> nvar_ _mapBindingsName
+  | CMapFoldWithKey _ -> nvar_ _mapFoldWithKeyName
+  | CMapEq _ -> nvar_ _mapEqName
+  | CMapCmp _ -> nvar_ _mapCmpName
+  | CMapGetCmpFun _ ->
+    let k1 = nameSym "k1" in
+    let k2 = nameSym "k2" in
+    nulam_ k1 (nulam_ k2
+       (appf2_ (nvar_ _mapGetCmpFunHelperName) (nvar_ k1) (nvar_ k2)))
   | CTensorCreate _ -> nvar_ _tensorCreateName
   | CTensorGetExn _ -> nvar_ _tensorGetExnName
   | CTensorSetExn _ -> nvar_ _tensorSetExnName
@@ -708,15 +753,6 @@ let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
--- Evaluates OCaml expressions [strConvert] given as string, applied
--- to [p], and parses it as a mexpr expression.
-let ocamlEval = lam p.
-  let res = ocamlCompileWithConfig {warnings=false} (expr2str p) in
-  let out = (res.run "" []).stdout in
-  res.cleanup ();
-  parseAsMExpr out
-in
-
 -- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here the make
 -- the test run faster. This is an ugly hack!
 let preambleStr =
@@ -732,6 +768,16 @@ recursive let withPreamble = lam t.
     OTmVariantTypeDecl {tt with inexpr = withPreamble tt.inexpr}
   else
     OTmPreambleText {text = preambleStr, inexpr = t}
+in
+
+-- Evaluates OCaml expressions [strConvert] given as string, applied
+-- to [p], and parses it as a mexpr expression.
+let ocamlEval = lam ast.
+  let ast = withPreamble ast in
+  let res = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
+  let out = (res.run "" []).stdout in
+  res.cleanup ();
+  parseAsMExpr out
 in
 
 -- Determines whether two given floating-point numbers are equal within a given
@@ -785,7 +831,6 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     use MExprEval in
     eval {env = []} mexprAst
   in
-  let ocamlAst = withPreamble ocamlAst in
   match mexprVal with TmConst t then
     match t.val with CInt _ then
       let ocamlVal = ocamlEvalInt ocamlAst in
@@ -1510,7 +1555,215 @@ using sameSemantics in
 
 -- TODO(oerikss, 2020-12-14): Sys operations are not tested
 
--- TODO(larshum, 2021-03-06): Add tests for boot parser, map and tensor
+-- Map intrinsics
+let mapEmptyTest = bind_
+  (ulet_ "m" (mapEmpty_ (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y"))))))
+  (int_ 42) in
+
+utest ocamlEvalInt (generateEmptyEnv mapEmptyTest) with int_ 42 using eqExpr in
+
+let mapInsertFindTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
+  , mapFindWithExn_ (int_ 42) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapInsertFindTest)
+with int_ 1 using eqExpr in
+
+let mapMemTrueTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapMem_ (int_ 42) (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapMemTrueTest)
+with true_ using eqExpr in
+
+let mapMemFalseTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapMem_ (int_ 78) (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapMemFalseTest)
+with false_ using eqExpr in
+
+let mapRemoveTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , ulet_ "m" (mapRemove_ (int_ 42) (var_ "m"))
+  , mapMem_ (int_ 42) (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapRemoveTest)
+with false_ using eqExpr in
+
+let mapFindOrElseTrueTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 42) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFindOrElseTrueTest)
+with int_ 1 using eqExpr in
+
+let mapFindOrElseFalseTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 3) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFindOrElseFalseTest)
+with int_ 123 using eqExpr in
+
+let mapFindApplyOrElseTrueTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapFindApplyOrElse_
+      (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
+      (ulam_ "" (int_ 7))
+      (int_ 42) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseTrueTest)
+with int_ 2 using eqExpr in
+
+let mapFindApplyOrElseFalseTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , mapFindApplyOrElse_
+     (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
+     (ulam_ "" (int_ 7))
+     (int_ 3) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseFalseTest)
+with int_ 7 using eqExpr in
+
+let mapSizeEmptyTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , mapSize_ (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapSizeEmptyTest)
+with int_ 0 using eqExpr in
+
+let mapSizeTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 100) (int_ 567) (var_ "m"))
+  , mapSize_ (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapSizeTest)
+with int_ 2 using eqExpr in
+
+let mapAnyTrueTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , mapAny_ (ulam_ "k" (ulam_ "v" (geqi_ (var_ "k") (var_ "v")))) (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapAnyTrueTest)
+with true_ using eqExpr in
+
+let mapAnyFalseTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 0) (negi_ (int_ 1)) (var_ "m"))
+  , mapAny_ (ulam_ "k" (ulam_ "v" (eqi_ (var_ "k") (var_ "v")))) (var_ "m")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapAnyFalseTest)
+with false_ using eqExpr in
+
+let mapMapTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
+  , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
+  , mapFindWithExn_ (int_ 3) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapMapTest)
+with int_ 100 using eqExpr in
+
+let mapMapWithKeyTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
+  , ulet_ "m"
+    (mapMapWithKey_ (ulam_ "k" (ulam_ "v"
+      (addi_ (var_ "k") (var_ "v")))) (var_ "m"))
+  , mapFindWithExn_ (int_ 3) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapMapWithKeyTest)
+with int_ 59 using eqExpr in
+
+let mapFoldWithKeyTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
+  , mapFoldWithKey_
+      (ulam_ "acc" (ulam_ "k" (ulam_ "v"
+        (addi_ (var_ "acc") (addi_ (var_ "k") (var_ "v")))))) (int_ 0) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
+with int_ 103 using eqExpr in
+
+let mapEqTrueTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "m2" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
+  , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
+  , mapEq_ (ulam_ "v1" (ulam_ "v2"
+      (eqi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapEqTrueTest)
+with true_ using eqExpr in
+
+let mapEqFalseTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "m2" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 3) (var_ "m2"))
+  , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
+  , mapEq_ (ulam_ "v1" (ulam_ "v2"
+      (eqi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
+  ] in
+utest ocamlEvalBool (generateEmptyEnv mapEqFalseTest)
+with false_ using eqExpr in
+
+let mapCmpEqTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "m2" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
+  , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
+  , mapCmp_ (ulam_ "v1" (ulam_ "v2"
+      (subi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapCmpEqTest)
+with int_ 0 using eqExpr in
+
+let mapCmpNEqTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "m2" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 1) (var_ "m2"))
+  , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
+  , mapCmp_ (ulam_ "v1" (ulam_ "v2"
+      (subi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapCmpNEqTest)
+with int_ 1 using eqExpr in
+
+let mapGetCmpFunTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "f" (mapGetCmpFun_ (var_ "m"))
+  , appf2_ (var_ "f") (int_ 12) (int_ 2)
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
+with int_ 10 using eqExpr in
+
+-- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
+
+-- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics
 
 ()

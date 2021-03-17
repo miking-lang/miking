@@ -1208,7 +1208,7 @@ let fst = ulam_ "t" (tupleproj_ 0 (var_ "t")) in
 let appIdUnit = app_ id unit_ in
 let appBump3 = app_ bump (int_ 3) in
 let appFst = app_ fst (tuple_ [not_ false_, addi_ (int_ 1) (int_ 2)]) in
-utest eval appIdUnit with unit_ in
+utest eval appIdUnit with unit_ using eqExpr in
 utest eval appBump3 with (int_ 4) in
 utest eval appFst with true_ in
 
@@ -1219,7 +1219,7 @@ let dataDecl =
       (tupleproj_ 0 (var_ "u"))
       id) in
 
-utest eval dataDecl with unit_ in
+utest eval dataDecl with unit_ using eqExpr in
 
 -- Commented out to not clutter the test suite
 -- let utest_test1 = utest_ (int_ 1) (int_ 2) unit_ in
@@ -1482,10 +1482,10 @@ utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ in
 let f = str_ "test_file_ops" in
 let d = str_ "$&!@" in
 utest eval (fileExists_ f) with false_ in
-utest eval (writeFile_ f d) with unit_ in
+utest eval (writeFile_ f d) with unit_ using eqExpr in
 utest eval (fileExists_ f) with true_ in
 utest eval (readFile_ f) with d in
-utest eval (deleteFile_ f) with unit_ in
+utest eval (deleteFile_ f) with unit_ using eqExpr in
 utest eval (fileExists_ f) with false_ in
 
 -- Test error
@@ -1709,7 +1709,7 @@ let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),
                   ulet_ "r4"
                     (ref_ (ulam_ "x" (concat_ (str_ "Hello ") (var_ "x"))))]
 in
-utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with unit_ in
+utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with unit_ using eqExpr in
 utest
   eval (bind_ p
     (tuple_ [deref_ (var_ "r1"),
@@ -1740,9 +1740,9 @@ let testTensors = lam v.
   utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.0 in
   utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.0 in
 
-  utest evaln (tensorSetExn_ t0 (seq_ []) v.1) with unit_ in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ in
+  utest evaln (tensorSetExn_ t0 (seq_ []) v.1) with unit_ using eqExpr in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ using eqExpr in
+  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ using eqExpr in
 
   utest evaln (tensorGetExn_ t0 (seq_ [])) with v.1 in
   utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.1 in
@@ -1760,7 +1760,7 @@ let testTensors = lam v.
   utest evaln (tensorShape_ (tensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
   with seq_ [int_ 2, int_ 2] in
 
-  utest evaln (tensorCopyExn_ t1 t2) with unit_ in
+  utest evaln (tensorCopyExn_ t1 t2) with unit_ using eqExpr in
 
   utest evaln (tensorRank_ (tensorSliceExn_ t1 (seq_ [int_ 0])))
   with int_ 0 in
@@ -1779,7 +1779,7 @@ let testTensors = lam v.
                   (ulam_ "x"
                      (tensorCopyExn_ (var_ "x") (var_ "x"))))
   in
-  utest evaln (tensorIteri_ f t3) with unit_ in
+  utest evaln (tensorIteri_ f t3) with unit_ using eqExpr in
   ()
 in
 
@@ -1791,7 +1791,7 @@ in
 
 let evaln = evalNoSymbolize in
 
-utest evaln (tensorIteri_ f t3) with unit_ in
+utest evaln (tensorIteri_ f t3) with unit_ using eqExpr in
 utest evaln (tensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 in
 utest evaln (tensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 in
 utest evaln (tensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 in
