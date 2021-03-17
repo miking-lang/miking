@@ -92,7 +92,7 @@ let mkTmRecordXY = lam x. lam y. record_ [("x", x), ("y", y)] in
 let tmRecordI = mkTmRecordXY tmApp11 tmConst3 in
 
 utest smap_Expr_Expr map2varX tmRecordI
-with record_ [("x", tmVarX), ("y", tmVarX)] in
+with record_ [("x", tmVarX), ("y", tmVarX)] using eqExpr in
 
 -- TODO(vipa, 2020-09-24): the best test here would be one that collects all the children to see that we see all of them. The issue is that we shouldn't depend on the enumeration order, so we would like to collect the (multi-)set of children, not a sequence.
 -- We would thus like something like `sfold_Expr_Expr (lam acc. lam c. setInsert c acc) emptySet tmRecordI with setFromList [tmConst3, tmApp11] using setEqual`
@@ -101,9 +101,14 @@ utest sfold_Expr_Expr (lam acc. lam. addi acc 1) 0 tmRecordI with 2 in
 
 let tmRecordUpdate = recordupdate_ tmRecordI "x" tmVarY in
 
-utest smap_Expr_Expr map2varX tmRecordUpdate with recordupdate_ tmVarX "x" tmVarX in
-utest sfold_Expr_Expr fold2seq [] tmRecordUpdate with [tmVarY, tmRecordI] in
+utest smap_Expr_Expr map2varX tmRecordUpdate
+with recordupdate_ tmVarX "x" tmVarX using eqExpr in
 
+match sfold_Expr_Expr fold2seq [] tmRecordUpdate with [x, y] then
+  utest x with tmVarY in
+  utest y with tmRecordI using eqExpr in
+  ()
+else never;
 
 let tmCon = bind_ (ucondef_ "y") tmApp in
 

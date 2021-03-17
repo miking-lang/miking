@@ -448,6 +448,10 @@ let true_ = use MExprAst in
 let false_ = use MExprAst in
   const_ (CBool {val = false})
 
+let bool_ = use MExprAst in
+  lam v.
+  const_ (CBool {val = v})
+
 let char_ = use MExprAst in
   lam c.
   const_ (CChar {val = c})
@@ -796,3 +800,67 @@ let bootParserGetPat_ = use MExprAst in
 let bootParserGetInfo_ = use MExprAst in
   lam pt. lam n.
   appf2_ (const_ (CBootParserGetInfo ())) pt n
+
+let mapEmpty_ = use MExprAst in
+  lam cmp.
+  appf1_ (const_ (CMapEmpty ())) cmp
+
+let mapInsert_ = use MExprAst in
+  lam k. lam v. lam m.
+  appf3_ (const_ (CMapInsert ())) k v m
+
+let mapRemove_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapRemove ())) k m
+
+let mapFindWithExn_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapFindWithExn ())) k m
+
+let mapFindOrElse_ = use MExprAst in
+  lam f. lam k. lam m.
+  appf3_ (const_ (CMapFindOrElse ())) f k m
+
+let mapFindApplyOrElse_ = use MExprAst in
+  lam f. lam felse. lam k. lam m.
+  appf4_ (const_ (CMapFindApplyOrElse ())) f felse k m
+
+let mapBindings_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapBindings ())) m
+
+let mapSize_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapSize ())) m
+
+let mapMem_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapMem ())) k m
+
+let mapAny_ = use MExprAst in
+  lam p. lam m.
+  appf2_ (const_ (CMapAny ())) p m
+
+let mapMap_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (const_ (CMapMap ())) f m
+
+let mapMapWithKey_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (const_ (CMapMapWithKey ())) f m
+
+let mapFoldWithKey_ = use MExprAst in
+  lam f. lam z. lam m.
+  appf3_ (const_ (CMapFoldWithKey ())) f z m
+
+let mapEq_ = use MExprAst in
+  lam veq. lam m1. lam m2.
+  appf3_ (const_ (CMapEq ())) veq m1 m2
+
+let mapCmp_ = use MExprAst in
+  lam vcmp. lam m1. lam m2.
+  appf3_ (const_ (CMapCmp ())) vcmp m1 m2
+
+let mapGetCmpFun_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapGetCmpFun ())) m
