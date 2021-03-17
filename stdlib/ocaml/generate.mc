@@ -1,12 +1,25 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "ocaml/ast.mc"
-include "ocaml/pprint.mc"
+include "mexpr/eq.mc"
+include "mexpr/eval.mc"
+include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
-include "mexpr/eval.mc"
-include "mexpr/eq.mc"
+include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
+include "ocaml/ast.mc"
+include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
+
+type GenerateEnv = {
+  constrs : Map Name Type,
+  records : Map (Map SID Type) Name
+}
+
+let _emptyGenerateEnv = {
+  constrs = mapEmpty nameCmp,
+  records = mapEmpty (mapCmp _cmpType)
+}
 
 let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
 
@@ -35,14 +48,14 @@ let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Boot
 let _mapOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
--- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPTuple pats, TmTuple exprs)`
+-- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
 -- (where ' splices things into expressions) binds the appropriate names to the appropriate values
 -- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
 let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
   let cmp = lam n1. lam n2. subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
   match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
-    (OPTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
+    (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
 
 -- Construct a match expression that matches against an option
@@ -57,7 +70,7 @@ let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneE
 let _some = use OCamlAst in lam val. OTmConAppExt {ident = _someName, args = [val]}
 let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
-let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPTuple {pats = pats}, body)]}
+let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
 
 let _addiName = nameSym "addi"
 let _subiName = nameSym "subi"
@@ -96,8 +109,8 @@ let _int2charName = nameSym "int2char"
 let _createName = nameSym "create"
 let _lengthName = nameSym "length"
 let _concatName = nameSym "concat"
-let _getName = nameSym "getName"
-let _setName = nameSym "setName"
+let _getName = nameSym "get"
+let _setName = nameSym "set"
 let _consName = nameSym "cons"
 let _snocName = nameSym "snoc"
 let _splitAtName = nameSym "splitAt"
@@ -159,28 +172,55 @@ let _bootParserGetPatName = nameSym "bootParserGetPat"
 let _bootParserGetInfoName = nameSym "bootParserGetInfo"
 
 lang OCamlGenerate = MExprAst + OCamlAst
-  sem generate =
+  sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
-    app_ (nvar_ _ofArrayName) (OTmArray {tms = map generate tms})
+    app_ (nvar_ _ofArrayName) (OTmArray {tms = map (generate env) tms})
   | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
     let tname = nameSym "_target" in
-    match generatePat tname pat with (nameMap, wrap) then
+    match generatePat env (ty target) tname pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nulet_ tname (generate target)) (wrap (_some expr)))
+          (bind_ (nulet_ tname (generate env target)) (wrap (_some expr)))
           pat
-          (generate thn)
-          (generate els)
+          (generate env thn)
+          (generate env els)
       else never
     else never
-  | t -> smap_Expr_Expr generate t
+  | TmRecord t ->
+    if mapIsEmpty t.bindings then TmRecord t
+    else
+      match t.ty with TyVar {ident = ident} then
+        match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+          match mapLookup fields env.records with Some id then
+            let bindings = mapMap (generate env) t.bindings in
+            OTmConApp {
+              ident = id,
+              args = [TmRecord {t with bindings = bindings}]
+            }
+          else never
+        else never
+      else never
+  | TmType t -> generate env t.inexpr
+  | TmConDef t -> generate env t.inexpr
+  | TmConApp t ->
+    let body =
+      match t.body with TmRecord r then
+        TmRecord {r with bindings = mapMap (generate env) r.bindings}
+      else generate env t.body
+    in
+    OTmConApp {
+      ident = t.ident,
+      args = [body]
+    }
+  | t -> smap_Expr_Expr (generate env) t
 
-  sem generatePat (targetName : Name) /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/ =
+  /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
+  sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
   | PatNamed {ident = PWildcard _} -> (assocEmpty, identity)
   | PatNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
-      if_ (nvar_ targetName)
+      _if (nvar_ targetName)
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
@@ -191,7 +231,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | PatSeqTot {pats = pats} ->
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat n pat with (names, innerWrap) then
+      match generatePat env targetTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
@@ -217,7 +257,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let postName = nameSym "_postfix" in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat n pat with (names, innerWrap) then
+      match generatePat env targetTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
@@ -240,8 +280,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
       else never
     else never
   | PatOr {lpat = lpat, rpat = rpat} ->
-    match generatePat targetName lpat with (lnames, lwrap) then
-      match generatePat targetName rpat with (rnames, rwrap) then
+    match generatePat env targetTy targetName lpat with (lnames, lwrap) then
+      match generatePat env targetTy targetName rpat with (rnames, rwrap) then
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
           match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
             let names = assocMapWithKey {eq=nameEqSym} (lam k. lam. k) lnames in
@@ -262,21 +302,165 @@ lang OCamlGenerate = MExprAst + OCamlAst
       else never
     else never
   | PatAnd {lpat = lpat, rpat = rpat} ->
-    match generatePat targetName lpat with (lnames, lwrap) then
-      match generatePat targetName rpat with (rnames, rwrap) then
+    match generatePat env targetTy targetName lpat with (lnames, lwrap) then
+      match generatePat env targetTy targetName rpat with (rnames, rwrap) then
         let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
         let wrap = lam cont. lwrap (rwrap cont) in
         (names, wrap)
       else never
     else never
   | PatNot {subpat = pat} ->
-    match generatePat targetName pat with (_, innerWrap) then
+    match generatePat env targetTy targetName pat with (_, innerWrap) then
       let wrap = lam cont.
         _optMatch (innerWrap (_some (OTmTuple {values = []})))
           pvarw_
           _none
           cont in
       (assocEmpty, wrap)
+    else never
+  | PatRecord t ->
+    let genBindingPat = lam patNames. lam fields. lam id. lam pat.
+      let ty =
+        match mapLookup id fields with Some ty then
+          ty
+        else
+          infoErrorExit t.info (join ["Field ", id, " not found in record"])
+      in
+      match mapLookup id patNames with Some n then
+        match generatePat env ty n pat with (names, innerWrap) then
+          let wrap = lam cont. innerWrap cont in
+          (names, wrap)
+        else never
+      else never
+    in
+    let lookupRecordFields = lam ty. lam constrs.
+      match ty with TyRecord {fields = fields} then
+        Some fields
+      else match ty with TyVar {ident = ident} then
+        match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
+          Some fields
+        else None ()
+      else None ()
+    in
+    match env with {records = records, constrs = constrs} then
+      match lookupRecordFields targetTy constrs with Some fields then
+        match mapLookup fields records with Some name then
+          let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
+          let genPats = mapValues
+            (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) t.bindings)
+          in
+          match unzip genPats with (allNames, allWraps) then
+            let f = lam id. lam.
+              match mapLookup id patNames with Some n then
+                npvar_ n
+              else never
+            in
+            let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
+            let wrap = lam cont.
+              OTmMatch {
+                target = nvar_ targetName,
+                arms = [
+                  (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
+                ]
+              }
+            in
+            ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
+            , wrap
+            )
+          else never
+        else
+          let msg = join ["Pattern refers to record type that was not handled by type-lifting. ",
+                          "This is an internal error."] in
+          infoErrorExit t.info msg
+      else
+        let msg = join ["Pattern refers to an unknown record type. ",
+                        "The target term must be annotated with a type."] in
+        infoErrorExit t.info msg
+    else never
+  | PatCon t ->
+    match env with {constrs = constrs} then
+      match mapLookup t.ident constrs with Some innerTy then
+        let conVarName = nameSym "_n" in
+        let innerTargetName =
+          -- Records are treated differently because we are not allowed to
+          -- access an inlined record. Instead of returning the inlined record,
+          -- the constructor containing it is returned. When we want to access
+          -- the inlined record, the constructor will be treated as a record
+          -- specific constructor. This works for both inlined records and
+          -- free records, as they are wrapped in this record-specific
+          -- constructor.
+          match innerTy with TyRecord _ then
+            targetName
+          else conVarName
+        in
+        match generatePat env innerTy innerTargetName t.subpat with (names, subwrap) then
+          let wrap = lam cont.
+            OTmMatch {
+              target = nvar_ targetName,
+              arms = [
+                (OPatCon {ident = t.ident, args = [npvar_ conVarName]}, subwrap cont),
+                (pvarw_, _none)
+              ]
+            }
+          in
+          (names, wrap)
+        else never
+      else
+        let msg = join ["Pattern refers to unknown type constructor: ",
+                        nameGetStr t.ident,
+                        ". The target term must be annotated with a type."] in
+        infoErrorExit t.info msg
+    else never
+end
+
+let _objTyped = lam.
+  use OCamlExternal in
+  OTmVarExt {ident = "Obj.t"}
+
+let _typeLiftEnvToGenerateEnv = lam typeLiftEnv.
+  use MExprAst in
+  let f = lam env. lam entry.
+    match entry with (name, ty) then
+      match ty with TyRecord {fields = fields} then
+        {{env with records = mapInsert fields name env.records}
+              with constrs = mapInsert name ty env.constrs}
+      else match ty with TyVariant {constrs = constrs} then
+        {env with constrs = mapUnion env.constrs constrs}
+      else env
+    else never
+  in
+  foldl f _emptyGenerateEnv typeLiftEnv
+
+let _addTypeDeclarations = lam typeLiftEnv. lam t.
+  use MExprAst in
+  use OCamlTypeDeclAst in
+  let f = lam t. lam envEntry.
+    match envEntry with (name, ty) then
+      match ty with TyRecord {fields = fields} then
+        let objTypedFields = mapMap _objTyped fields in
+        OTmVariantTypeDecl {
+          ident = nameSym "record",
+          constrs = mapInsert name ty (mapEmpty nameCmp),
+          inexpr = t
+        }
+      else match ty with TyVariant {constrs = constrs} then
+        OTmVariantTypeDecl {
+          ident = name,
+          constrs = constrs,
+          inexpr = t
+        }
+      else t
+    else never
+  in
+  foldl f t typeLiftEnv
+
+lang OCamlTypeDeclGenerate = MExprTypeLift
+  sem generateTypeDecl =
+  | expr ->
+    match typeLift expr with (env, t) then
+      let generateEnv = _typeLiftEnvToGenerateEnv env in
+      let t = _addTypeDeclarations env t in
+      (generateEnv, t)
     else never
 end
 
@@ -289,7 +473,6 @@ recursive let _isIntrinsicApp = use OCamlAst in
     else false
 end
 
-let _objTName = nameSym "Obj.t"
 let _objRepr = use OCamlAst in
   lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
 let _objObj = use OCamlAst in
@@ -543,21 +726,21 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | TmConst {val = c} ->
     intrinsic2name c
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
+  | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | OTmMatch t ->
     OTmMatch {{t with target = _objObj (objWrapRec t.target)}
                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
   | t -> smap_Expr_Expr objWrapRec t
 
-  sem _objWrapNoPremable =
-  | t -> objWrapRec (_objObj t)
-
   sem objWrap =
-  | t ->
-    bind_ _preamble (_objWrapNoPremable t)
+  | OTmVariantTypeDecl t ->
+    OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
+  | t -> objWrapRec (_objObj t)
 end
 
-lang OCamlTest = OCamlGenerate + OCamlPrettyPrint + MExprSym + ConstEq
-                 + IntEq + BoolEq + CharEq + FloatEq + OCamlObjWrap
+lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
+                 MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
+                 MExprTypeAnnot + OCamlObjWrap
 
 mexpr
 
@@ -570,46 +753,70 @@ let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
--- Evaluates OCaml expressions [strConvert] given as string, applied
--- to [p], and parses it as a mexpr expression.
-let ocamlEval = lam strConvert. lam p.
-  let res =
-    ocamlCompileWithConfig {warnings=false}
-                           (join ["print_string (", strConvert, "(", p, "))"])
-  in
-  let out = (res.run "" []).stdout in
-  res.cleanup ();
-  parseAsMExpr out
-in
-
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the premable here to make
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here the make
 -- the test run faster. This is an ugly hack!
-let premableStr =
+let preambleStr =
   let str = expr2str (bind_ _preamble (int_ 0)) in
   let len = length str in
   subsequence str 0 (subi len 1)
 in
 
--- NOTE(oerikss, 2021-03-05): Here we paste the pre- pretty-printed preamable
--- to our program. This is part of the above mentioned hack.
-let ocamlExpr2str = lam ast.
-  concat premableStr (expr2str ast)
+-- NOTE(larshum, 2021-03-08): Adds the preamble to the top of a given term,
+-- but places it after all variant type declarations.
+recursive let withPreamble = lam t.
+  match t with OTmVariantTypeDecl tt then
+    OTmVariantTypeDecl {tt with inexpr = withPreamble tt.inexpr}
+  else
+    OTmPreambleText {text = preambleStr, inexpr = t}
+in
+
+-- Evaluates OCaml expressions [strConvert] given as string, applied
+-- to [p], and parses it as a mexpr expression.
+let ocamlEval = lam ast.
+  let ast = withPreamble ast in
+  let res = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
+  let out = (res.run "" []).stdout in
+  res.cleanup ();
+  parseAsMExpr out
+in
+
+-- Determines whether two given floating-point numbers are equal within a given
+-- epsilon.
+let eqFloat = lam f1. lam f2. lam eps.
+  let d = absf (subf f1 f2) in
+  leqf d eps
+in
+
+-- Wraps the OCaml AST in a print term, but makes sure to place it after all
+-- type declarations as that would result in a type errror.
+recursive let wrapOCamlAstInPrint = lam ast. lam printTerm.
+  use OCamlAst in
+  match ast with OTmVariantTypeDecl t then
+    OTmVariantTypeDecl {t with inexpr = wrapOCamlAstInPrint t.inexpr printTerm}
+  else app_ printTerm ast
+in
+
+let printf = lam fmt.
+  TmApp {
+    lhs = OTmVarExt {ident = "Printf.printf"},
+    rhs = OTmString {text = fmt}
+  }
 in
 
 let ocamlEvalInt = lam ast.
-  ocamlEval "string_of_int" (ocamlExpr2str ast)
+  ocamlEval (wrapOCamlAstInPrint ast (printf "%d"))
 in
 
 let ocamlEvalFloat = lam ast.
-  ocamlEval "string_of_float" (ocamlExpr2str ast)
+  ocamlEval (wrapOCamlAstInPrint ast (printf "%f"))
 in
 
 let ocamlEvalBool = lam ast.
-  ocamlEval "string_of_bool" (ocamlExpr2str ast)
+  ocamlEval (wrapOCamlAstInPrint ast (printf "%b"))
 in
 
 let ocamlEvalChar = lam ast.
-  ocamlEval "Printf.sprintf \"'%c'\"" (ocamlExpr2str ast)
+  ocamlEval (wrapOCamlAstInPrint ast (printf "'%c'"))
 in
 
 utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
@@ -624,18 +831,17 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
     use MExprEval in
     eval {env = []} mexprAst
   in
-
   match mexprVal with TmConst t then
     match t.val with CInt _ then
       let ocamlVal = ocamlEvalInt ocamlAst in
       match ocamlVal with TmConst {val = CInt _} then
         eqExpr mexprVal ocamlVal
-      else error "Value mismatch"
-    else match t.val with CFloat _ then
+      else error "Values mismatch"
+    else match t.val with CFloat {val = f1} then
       let ocamlVal = ocamlEvalFloat ocamlAst in
-      match ocamlVal with TmConst {val = CFloat _} then
-        eqExpr mexprVal ocamlVal
-      else error "Value mismatch"
+      match ocamlVal with TmConst {val = CFloat {val = f2}} then
+        eqFloat f1 f2 1e-6
+      else error "Values mismatch"
     else match t.val with CBool _ then
       let ocamlVal = ocamlEvalBool ocamlAst in
       match ocamlVal with TmConst {val = CBool _} then
@@ -650,7 +856,25 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
   else error "Unsupported value"
 in
 
-let objWrapGenerate = lam a. _objWrapNoPremable (generate a) in
+let generateEmptyEnv = lam t.
+  objWrap (generate _emptyGenerateEnv t)
+in
+
+let generateTypeAnnotated = lam t.
+  match generateTypeDecl (typeAnnot t) with (env, t) then
+    objWrap (generate env t)
+  else never
+in
+
+let stripTypeDecls = lam t.
+  recursive
+  let stripDecls = lam t.
+    match t with TmType {inexpr = inexpr} then stripDecls inexpr
+    else match t with TmConDef {inexpr = inexpr} then stripDecls inexpr
+    else smap_Expr_Expr stripDecls t
+  in
+  stripDecls t
+in
 
 -- Match
 let matchChar1 = symbolize
@@ -658,63 +882,63 @@ let matchChar1 = symbolize
    (pchar_ 'a')
    true_
    false_) in
- utest matchChar1 with objWrapGenerate matchChar1 using sameSemantics in
+utest matchChar1 with generateEmptyEnv matchChar1 using sameSemantics in
 
- let matchChar2 = symbolize
-   (match_ (char_ 'a')
-     (pchar_ 'b')
-     true_
-     false_) in
- utest matchChar2 with objWrapGenerate matchChar2 using sameSemantics in
+let matchChar2 = symbolize
+  (match_ (char_ 'a')
+    (pchar_ 'b')
+    true_
+    false_) in
+utest matchChar2 with generateEmptyEnv matchChar2 using sameSemantics in
 
 let matchSeq = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
     (addi_ (var_ "a") (var_ "b"))
     (int_ 42)) in
-utest matchSeq with objWrapGenerate matchSeq using sameSemantics in
+utest matchSeq with generateEmptyEnv matchSeq using sameSemantics in
 
 let noMatchSeq1 = symbolize
   (match_ (seq_ [int_ 2, int_ 2, int_ 3])
     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
     (addi_ (var_ "a") (var_ "b"))
     (int_ 42)) in
-utest noMatchSeq1 with objWrapGenerate noMatchSeq1 using sameSemantics in
+utest noMatchSeq1 with generateEmptyEnv noMatchSeq1 using sameSemantics in
 
 let noMatchSeqLen = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
     (addi_ (var_ "a") (var_ "b"))
     (int_ 42)) in
-utest noMatchSeqLen with objWrapGenerate noMatchSeqLen using sameSemantics in
+utest noMatchSeqLen with generateEmptyEnv noMatchSeqLen using sameSemantics in
 
 let noMatchSeqLen2 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pseqtot_ [pint_ 1, pvar_ "a", pvar_ "b"])
     (addi_ (var_ "a") (var_ "b"))
     (int_ 42)) in
-utest noMatchSeqLen2 with objWrapGenerate noMatchSeqLen2 using sameSemantics in
+utest noMatchSeqLen2 with generateEmptyEnv noMatchSeqLen2 using sameSemantics in
 
 let matchOr1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchOr1 with objWrapGenerate matchOr1 using sameSemantics in
+utest matchOr1 with generateEmptyEnv matchOr1 using sameSemantics in
 
 let matchOr2 = symbolize
   (match_ (seq_ [int_ 2, int_ 1])
     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchOr2 with objWrapGenerate matchOr2 using sameSemantics in
+utest matchOr2 with generateEmptyEnv matchOr2 using sameSemantics in
 
 let matchOr3 = symbolize
   (match_ (seq_ [int_ 3, int_ 1])
     (por_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ [pint_ 2, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchOr3 with objWrapGenerate matchOr3 using sameSemantics in
+utest matchOr3 with generateEmptyEnv matchOr3 using sameSemantics in
 
 let matchNestedOr1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
@@ -722,7 +946,7 @@ let matchNestedOr1 = symbolize
           (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchNestedOr1 with objWrapGenerate matchNestedOr1 using sameSemantics in
+utest matchNestedOr1 with generateEmptyEnv matchNestedOr1 using sameSemantics in
 
 let matchNestedOr2 = symbolize
   (match_ (seq_ [int_ 2, int_ 1])
@@ -730,7 +954,7 @@ let matchNestedOr2 = symbolize
           (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchNestedOr2 with objWrapGenerate matchNestedOr2 using sameSemantics in
+utest matchNestedOr2 with generateEmptyEnv matchNestedOr2 using sameSemantics in
 
 let matchNestedOr3 = symbolize
   (match_ (seq_ [int_ 3, int_ 7])
@@ -738,7 +962,7 @@ let matchNestedOr3 = symbolize
           (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchNestedOr3 with objWrapGenerate matchNestedOr3 using sameSemantics in
+utest matchNestedOr3 with generateEmptyEnv matchNestedOr3 using sameSemantics in
 
 let matchNestedOr4 = symbolize
   (match_ (seq_ [int_ 4, int_ 7])
@@ -746,77 +970,77 @@ let matchNestedOr4 = symbolize
           (pseqtot_ [pint_ 3, pvar_ "a"]))
     (var_ "a")
     (int_ 42)) in
-utest matchNestedOr4 with objWrapGenerate matchNestedOr4 using sameSemantics in
+utest matchNestedOr4 with generateEmptyEnv matchNestedOr4 using sameSemantics in
 
 let matchNot1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
     true_
     false_) in
-utest matchNot1 with objWrapGenerate matchNot1 using sameSemantics in
+utest matchNot1 with generateEmptyEnv matchNot1 using sameSemantics in
 
 let matchNot2 = symbolize
   (match_ (seq_ [int_ 2, int_ 2])
     (pnot_ (pseqtot_ [pint_ 1, pvar_ "a"]))
     true_
     false_) in
-utest matchNot2 with objWrapGenerate matchNot2 using sameSemantics in
+utest matchNot2 with generateEmptyEnv matchNot2 using sameSemantics in
 
 let matchAnd1 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
     (int_ 53)) in
-utest matchAnd1 with objWrapGenerate matchAnd1 using sameSemantics in
+utest matchAnd1 with generateEmptyEnv matchAnd1 using sameSemantics in
 
 let matchAnd2 = symbolize
   (match_ (seq_ [int_ 2, int_ 2])
     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pvar_ "b"))
     (addi_ (var_ "a") (get_ (var_ "b") (int_ 1)))
     (int_ 53)) in
-utest matchAnd2 with objWrapGenerate matchAnd2 using sameSemantics in
+utest matchAnd2 with generateEmptyEnv matchAnd2 using sameSemantics in
 
 let matchAnd3 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pand_ (pseqtot_ [pint_ 1, pvar_ "a"]) (pseqtot_ []))
     (var_ "a")
     (int_ 53)) in
-utest matchAnd3 with objWrapGenerate matchAnd3 using sameSemantics in
+utest matchAnd3 with generateEmptyEnv matchAnd3 using sameSemantics in
 
 let matchAnd4 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pand_ (pseqtot_ []) (pseqtot_ [pint_ 1, pvar_ "a"]))
     (var_ "a")
     (int_ 53)) in
-utest matchAnd4 with objWrapGenerate matchAnd4 using sameSemantics in
+utest matchAnd4 with generateEmptyEnv matchAnd4 using sameSemantics in
 
 let matchSeqEdge1 = symbolize
   (match_ (seq_ [int_ 1])
     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
     (addi_ (var_ "a") (var_ "c"))
     (int_ 75)) in
-utest matchSeqEdge1 with objWrapGenerate matchSeqEdge1 using sameSemantics in
+utest matchSeqEdge1 with generateEmptyEnv matchSeqEdge1 using sameSemantics in
 
 let matchSeqEdge2 = symbolize
   (match_ (seq_ [int_ 1, int_ 2])
     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
     (addi_ (var_ "a") (var_ "c"))
     (int_ 75)) in
-utest matchSeqEdge2 with objWrapGenerate matchSeqEdge2 using sameSemantics in
+utest matchSeqEdge2 with generateEmptyEnv matchSeqEdge2 using sameSemantics in
 
 let matchSeqEdge3 = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3])
     (pseqedge_ [pvar_ "a"] "b" [pvar_ "c"])
     (addi_ (var_ "a") (var_ "c"))
     (int_ 75)) in
-utest matchSeqEdge3 with objWrapGenerate matchSeqEdge3 using sameSemantics in
+utest matchSeqEdge3 with generateEmptyEnv matchSeqEdge3 using sameSemantics in
 
 let matchSeqEdge4 = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
     (pseqedge_ [pvar_ "a", pvar_ "d"] "b" [pvar_ "c"])
     (addi_ (addi_ (var_ "d") (var_ "a")) (var_ "c"))
     (int_ 75)) in
-utest matchSeqEdge4 with objWrapGenerate matchSeqEdge4 using sameSemantics in
+utest matchSeqEdge4 with generateEmptyEnv matchSeqEdge4 using sameSemantics in
 
 let matchSeqEdge5 = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
@@ -826,7 +1050,7 @@ let matchSeqEdge5 = symbolize
       (addi_ (var_ "a") (var_ "c"))
       (int_ 84))
     (int_ 75)) in
-utest matchSeqEdge5 with objWrapGenerate matchSeqEdge5 using sameSemantics in
+utest matchSeqEdge5 with generateEmptyEnv matchSeqEdge5 using sameSemantics in
 
 let matchSeqEdge6 = symbolize
   (match_ (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
@@ -836,113 +1060,336 @@ let matchSeqEdge6 = symbolize
       (addi_ (var_ "a") (var_ "c"))
       (int_ 84))
     (int_ 75)) in
-utest matchSeqEdge6 with objWrapGenerate matchSeqEdge6 using sameSemantics in
+utest matchSeqEdge6 with generateEmptyEnv matchSeqEdge6 using sameSemantics in
 
 let matchSeqEdge7 = symbolize
   (match_ (seq_ [int_ 1])
     (pseqedgew_ [pvar_ "a"] [])
     (var_ "a")
     (int_ 75)) in
-utest matchSeqEdge7 with objWrapGenerate matchSeqEdge7 using sameSemantics in
+utest matchSeqEdge7 with generateEmptyEnv matchSeqEdge7 using sameSemantics in
+
+let intEither = nameSym "IntEither" in
+let intEitherTy = ntyvar_ intEither in
+let left = nameSym "Left" in
+let right = nameSym "Right" in
+let nested = nameSym "Nested" in
+let eitherMatch = lam matchTerm.
+  bindall_ [
+    ntype_ intEither tyunknown_,
+    ncondef_ left (tyarrow_ tyint_ intEitherTy),
+    ncondef_ right (tyarrow_ tyint_ intEitherTy),
+    ncondef_ nested (tyarrow_ intEitherTy intEitherTy),
+    matchTerm
+  ] in
+let matchCon1 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ left (pvar_ "n"))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchCon1 with generateTypeAnnotated matchCon1 using sameSemantics in
+
+let matchCon2 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ right (pvar_ "n"))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchCon2 with generateTypeAnnotated matchCon2 using sameSemantics in
+
+let matchCon3 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ left (pint_ 7))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchCon3 with generateTypeAnnotated matchCon3 using sameSemantics in
+
+let matchCon4 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ left (int_ 7))
+      (npcon_ right (pint_ 7))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchCon4 with generateTypeAnnotated matchCon4 using sameSemantics in
+
+let matchNestedCon1 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n"))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon1 with generateTypeAnnotated matchNestedCon1
+using sameSemantics in
+
+let matchNestedCon2 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (npcon_ left (pvar_ "n")))
+      (withType tyint_ (var_ "n"))
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon2 with generateTypeAnnotated matchNestedCon2
+using sameSemantics in
+
+let matchNestedCon3 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (npcon_ left (pint_ 7)))
+      (int_ 1)
+      (int_ 0))) in
+utest stripTypeDecls matchNestedCon3 with generateTypeAnnotated matchNestedCon3
+using sameSemantics in
+
+let matchNestedCon4 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n1"))
+      (match_ (var_ "n1")
+        (npcon_ left (pvar_ "n2"))
+        (var_ "n2")
+        (int_ 1))
+      (int_ 2))) in
+utest stripTypeDecls matchNestedCon4 with generateTypeAnnotated matchNestedCon4
+using sameSemantics in
+
+let matchNestedCon5 = symbolize (
+  eitherMatch (
+    match_ (nconapp_ nested (nconapp_ left (int_ 7)))
+      (npcon_ nested (pvar_ "n1"))
+      (match_ (var_ "n1")
+        (npcon_ right (pvar_ "n2"))
+        (var_ "n2")
+        (int_ 1))
+      (int_ 2))) in
+utest stripTypeDecls matchNestedCon5 with generateTypeAnnotated matchNestedCon5
+using sameSemantics in
+
+let r = record_ [
+  ("a", record_ [
+    ("x", int_ 4),
+    ("y", true_),
+    ("z", seq_ [int_ 1, int_ 2, int_ 3])
+  ]),
+  ("b", char_ 'x'),
+  ("c", int_ 7),
+  ("d", float_ 1.2)
+] in
+let matchRecord1 = symbolize (
+  match_ r
+    (prec_ [("c", pint_ 3), ("d", pvar_ "n")])
+    (var_ "n")
+    (float_ 0.0)) in
+utest stripTypeDecls matchRecord1 with generateTypeAnnotated matchRecord1
+using sameSemantics in
+
+let matchRecord2 = symbolize (
+  match_ r
+    (prec_ [("c", pvar_ "c"), ("d", pvar_ "n")])
+    (var_ "n")
+    (float_ 0.5)) in
+utest stripTypeDecls matchRecord2 with generateTypeAnnotated matchRecord2
+using sameSemantics in
+
+let matchRecord3 = symbolize (
+  match_ r
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 0)])
+    (var_ "ch")
+    (char_ '0')) in
+utest stripTypeDecls matchRecord3 with generateTypeAnnotated matchRecord3
+using sameSemantics in
+
+let matchRecord4 = symbolize (
+  match_ r
+    (prec_ [("d", pvar_ "d"), ("b", pvar_ "ch"), ("c", pint_ 7)])
+    (var_ "ch")
+    (char_ '0')) in
+utest stripTypeDecls matchRecord4 with generateTypeAnnotated matchRecord4
+using sameSemantics in
+
+let matchNestedRecord1 = symbolize (
+  (match_ r
+    (prec_ [("a", prec_ [("x", pvar_ "m")]), ("c", pvar_ "n")])
+    (addi_ (var_ "m") (var_ "n"))
+    (int_ 0))) in
+utest stripTypeDecls matchNestedRecord1 with generateTypeAnnotated matchNestedRecord1
+using sameSemantics in
+
+let matchNestedRecord2 = symbolize (
+  match_ r
+    (prec_ [
+      ("a", prec_ [("z", pseqtot_ [pvar_ "m", pint_ 2, pvarw_])]),
+      ("c", pvar_ "n")])
+    (addi_ (var_ "m") (var_ "n"))
+    (int_ 0)) in
+utest stripTypeDecls matchNestedRecord2 with generateTypeAnnotated matchNestedRecord2
+using sameSemantics in
+
+let matchNestedRecord3 = symbolize (
+  match_ r
+    (prec_ [
+      ("a", prec_ [("y", pvar_ "b"), ("z", pvarw_)])])
+    (var_ "b")
+    false_) in
+utest stripTypeDecls matchNestedRecord3 with generateTypeAnnotated matchNestedRecord3
+using sameSemantics in
+
+let tree = nameSym "Tree" in
+let tyTree = ntyvar_ tree in
+let branch = nameSym "Branch" in
+let tyBranch = tyrecord_ [("lhs", tyTree), ("rhs", tyTree)] in
+let leaf = nameSym "Leaf" in
+let conMatch = lam m.
+  bindall_ [
+    ntype_ tree tyunknown_,
+    ncondef_ branch (tyarrow_ tyBranch tyTree),
+    ncondef_ leaf (tyarrow_ tyint_ tyTree),
+    ulet_ "x" (nconapp_ branch (record_ [
+      ("lhs", nconapp_ branch (record_ [
+        ("lhs", nconapp_ leaf (int_ 1)),
+        ("rhs", nconapp_ leaf (int_ 3))
+      ])),
+      ("rhs", nconapp_ leaf (int_ 2))
+    ])),
+    m
+  ] in
+let matchRecordCon1 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (pvarw_)),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (var_ "r")
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon1 with generateTypeAnnotated matchRecordCon1
+using sameSemantics in
+
+let matchRecordCon2 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (prec_ [
+          ("lhs", npcon_ leaf (pvar_ "ll")),
+          ("rhs", npcon_ leaf (pint_ 3))
+        ])),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (addi_ (var_ "r") (var_ "ll"))
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon2 with generateTypeAnnotated matchRecordCon2
+using sameSemantics in
+
+let matchRecordCon3 = symbolize (
+  conMatch (
+    match_ (var_ "x")
+      (npcon_ branch (prec_ [
+        ("lhs", npcon_ branch (prec_ [
+          ("lhs", npcon_ leaf (pvar_ "ll")),
+          ("rhs", npcon_ leaf (pint_ 0))
+        ])),
+        ("rhs", npcon_ leaf (pvar_ "r"))
+      ]))
+      (addi_ (var_ "r") (var_ "ll"))
+      (int_ 0))) in
+utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
+using sameSemantics in
 
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
-utest addInt1 with objWrapGenerate addInt1 using sameSemantics in
+utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
 
 let addInt2 = addi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest addInt2 with objWrapGenerate addInt2 using sameSemantics in
+utest addInt2 with generateEmptyEnv addInt2 using sameSemantics in
 
 let testMulInt = muli_ (int_ 2) (int_ 3) in
-utest testMulInt with objWrapGenerate testMulInt using sameSemantics in
+utest testMulInt with generateEmptyEnv testMulInt using sameSemantics in
 
 let testModInt = modi_ (int_ 2) (int_ 3) in
-utest testModInt with objWrapGenerate testModInt using sameSemantics in
+utest testModInt with generateEmptyEnv testModInt using sameSemantics in
 
 let testDivInt = divi_ (int_ 2) (int_ 3) in
-utest testDivInt with objWrapGenerate testDivInt using sameSemantics in
+utest testDivInt with generateEmptyEnv testDivInt using sameSemantics in
 
 let testNegInt = addi_ (int_ 2) (negi_ (int_ 2)) in
-utest testNegInt with objWrapGenerate testNegInt using sameSemantics in
+utest testNegInt with generateEmptyEnv testNegInt using sameSemantics in
 
 let compareInt1 = eqi_ (int_ 1) (int_ 2) in
-utest compareInt1 with objWrapGenerate compareInt1 using sameSemantics in
+utest compareInt1 with generateEmptyEnv compareInt1 using sameSemantics in
 
 let compareInt2 = lti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt2 with objWrapGenerate compareInt2 using sameSemantics in
+utest compareInt2 with generateEmptyEnv compareInt2 using sameSemantics in
 
 let compareInt3 = leqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt3 with objWrapGenerate compareInt3 using sameSemantics in
+utest compareInt3 with generateEmptyEnv compareInt3 using sameSemantics in
 
 let compareInt4 = gti_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt4 with objWrapGenerate compareInt4 using sameSemantics in
+utest compareInt4 with generateEmptyEnv compareInt4 using sameSemantics in
 
 let compareInt5 = geqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt5 with objWrapGenerate compareInt5 using sameSemantics in
+utest compareInt5 with generateEmptyEnv compareInt5 using sameSemantics in
 
 let compareInt6 = neqi_ (addi_ (int_ 1) (int_ 2)) (int_ 3) in
-utest compareInt6 with objWrapGenerate compareInt6 using sameSemantics in
+utest compareInt6 with generateEmptyEnv compareInt6 using sameSemantics in
 
 let shiftInt1 = slli_ (int_ 5) (int_ 2) in
-utest shiftInt1 with objWrapGenerate shiftInt1 using sameSemantics in
+utest shiftInt1 with generateEmptyEnv shiftInt1 using sameSemantics in
 
 let shiftInt2 = srli_ (int_ 5) (int_ 2) in
-utest shiftInt2 with objWrapGenerate shiftInt2 using sameSemantics in
+utest shiftInt2 with generateEmptyEnv shiftInt2 using sameSemantics in
 
 let shiftInt3 = srai_ (int_ 5) (int_ 2) in
-utest shiftInt3 with objWrapGenerate shiftInt3 using sameSemantics in
+utest shiftInt3 with generateEmptyEnv shiftInt3 using sameSemantics in
 
 ---- Floats
 let addFloat1 = addf_ (float_ 1.) (float_ 2.) in
-utest addFloat1 with objWrapGenerate addFloat1 using sameSemantics in
+utest addFloat1 with generateEmptyEnv addFloat1 using sameSemantics in
 
 let addFloat2 = addf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest addFloat2 with objWrapGenerate addFloat2 using sameSemantics in
+utest addFloat2 with generateEmptyEnv addFloat2 using sameSemantics in
 
 let testMulFloat = mulf_ (float_ 2.) (float_ 3.) in
-utest testMulFloat with objWrapGenerate testMulFloat using sameSemantics in
+utest testMulFloat with generateEmptyEnv testMulFloat using sameSemantics in
 
 let testDivFloat = divf_ (float_ 6.) (float_ 3.) in
-utest testDivFloat with objWrapGenerate testDivFloat using sameSemantics in
+utest testDivFloat with generateEmptyEnv testDivFloat using sameSemantics in
 
 let testNegFloat = addf_ (float_ 2.) (negf_ (float_ 2.)) in
-utest testNegFloat with objWrapGenerate testNegFloat using sameSemantics in
+utest testNegFloat with generateEmptyEnv testNegFloat using sameSemantics in
 
 let compareFloat1 = eqf_ (float_ 1.) (float_ 2.) in
-utest compareFloat1 with objWrapGenerate compareFloat1 using sameSemantics in
+utest compareFloat1 with generateEmptyEnv compareFloat1 using sameSemantics in
 
 let compareFloat2 = ltf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest compareFloat2 with objWrapGenerate compareFloat2 using sameSemantics in
+utest compareFloat2 with generateEmptyEnv compareFloat2 using sameSemantics in
 
 let compareFloat3 = leqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest compareFloat3 with objWrapGenerate compareFloat3 using sameSemantics in
+utest compareFloat3 with generateEmptyEnv compareFloat3 using sameSemantics in
 
 let compareFloat4 = gtf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest compareFloat4 with objWrapGenerate compareFloat4 using sameSemantics in
+utest compareFloat4 with generateEmptyEnv compareFloat4 using sameSemantics in
 
 let compareFloat5 = geqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest compareFloat5 with objWrapGenerate compareFloat5 using sameSemantics in
+utest compareFloat5 with generateEmptyEnv compareFloat5 using sameSemantics in
 
 let compareFloat6 = neqf_ (addf_ (float_ 1.) (float_ 2.)) (float_ 3.) in
-utest compareFloat6 with objWrapGenerate compareFloat6 using sameSemantics in
-
+utest compareFloat6 with generateEmptyEnv compareFloat6 using sameSemantics in
 
 -- Chars
 let charLiteral = char_ 'c' in
-utest charLiteral with objWrapGenerate charLiteral
-using sameSemantics in
+utest charLiteral with generateEmptyEnv charLiteral using sameSemantics in
 
 let compareChar1 = eqc_ (char_ 'a') (char_ 'b') in
-utest compareChar1 with objWrapGenerate compareChar1 using sameSemantics in
+utest compareChar1 with generateEmptyEnv compareChar1 using sameSemantics in
 
 let compareChar2 = eqc_ (char_ 'a') (char_ 'a') in
-utest compareChar2 with objWrapGenerate compareChar2 using sameSemantics in
+utest compareChar2 with generateEmptyEnv compareChar2 using sameSemantics in
 
 let testCharToInt = char2int_ (char_ '0') in
-utest testCharToInt with objWrapGenerate testCharToInt using sameSemantics in
+utest testCharToInt with generateEmptyEnv testCharToInt using sameSemantics in
 
 let testIntToChar = int2char_ (int_ 48) in
-utest testIntToChar with objWrapGenerate testIntToChar using sameSemantics in
-
+utest testIntToChar with generateEmptyEnv testIntToChar using sameSemantics in
 
 -- Abstractions
 let fun =
@@ -951,7 +1398,7 @@ let fun =
     (ulam_ "@" (ulam_ "%" (addi_ (var_ "@") (var_ "%"))))
     [int_ 1, int_ 2])
 in
-utest fun with objWrapGenerate fun using sameSemantics in
+utest fun with generateEmptyEnv fun using sameSemantics in
 
 let funShadowed =
   symbolize
@@ -959,21 +1406,21 @@ let funShadowed =
     (ulam_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))))
     [ulam_ "@" (var_ "@"), int_ 2])
 in
-utest funShadowed with objWrapGenerate funShadowed using sameSemantics in
+utest funShadowed with generateEmptyEnv funShadowed using sameSemantics in
 
 -- Lets
  let testLet =
   symbolize
   (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
 in
-utest testLet with objWrapGenerate testLet using sameSemantics in
+utest testLet with generateEmptyEnv testLet using sameSemantics in
 
 let testLetShadowed =
   symbolize
   (bindall_ [ulet_ "@" (ulam_ "@" (addi_ (var_ "@") (var_ "@"))),
              app_ (var_ "@") (int_ 1)])
 in
-utest testLetShadowed with objWrapGenerate testLetShadowed
+utest testLetShadowed with generateEmptyEnv testLetShadowed
 using sameSemantics in
 
 let testLetRec =
@@ -984,103 +1431,103 @@ let testLetRec =
      reclets_empty))
    (app_ (var_ "$") (var_ "@")))
 in
-utest testLetRec with objWrapGenerate testLetRec using sameSemantics in
+utest testLetRec with generateEmptyEnv testLetRec using sameSemantics in
 
 -- Sequences
 let testEmpty = symbolize (length_ (seq_ [])) in
-utest testEmpty with objWrapGenerate testEmpty using sameSemantics in
+utest testEmpty with generateEmptyEnv testEmpty using sameSemantics in
 
 let nonEmpty = seq_ [int_ 1, int_ 2, int_ 3] in
 let len = length_ nonEmpty in
 let fst = get_ nonEmpty (int_ 0) in
 let snd = get_ nonEmpty (int_ 1) in
 let thrd = get_ nonEmpty (int_ 2) in
-utest int_ 3 with objWrapGenerate len using sameSemantics in
-utest int_ 1 with objWrapGenerate fst using sameSemantics in
-utest int_ 2 with objWrapGenerate snd using sameSemantics in
-utest int_ 3 with objWrapGenerate thrd using sameSemantics in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
 
 let testCreate = create_ (int_ 2) (ulam_ "_" (int_ 0)) in
 let len = length_ testCreate in
 let fst = get_ testCreate (int_ 0) in
 let lst = get_ testCreate (int_ 1) in
-utest int_ 2 with objWrapGenerate len using sameSemantics in
-utest int_ 0 with objWrapGenerate fst using sameSemantics in
-utest int_ 0 with objWrapGenerate lst using sameSemantics in
+utest int_ 2 with generateEmptyEnv len using sameSemantics in
+utest int_ 0 with generateEmptyEnv fst using sameSemantics in
+utest int_ 0 with generateEmptyEnv lst using sameSemantics in
 
 let testSet = set_ (seq_ [int_ 1, int_ 2]) (int_ 0) (int_ 3) in
 let len = length_ testSet in
 let fst = get_ testSet (int_ 0) in
 let snd = get_ testSet (int_ 1) in
-utest int_ 2 with objWrapGenerate len using sameSemantics in
-utest int_ 3 with objWrapGenerate fst using sameSemantics in
-utest int_ 2 with objWrapGenerate snd using sameSemantics in
+utest int_ 2 with generateEmptyEnv len using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
 
 let testCons = cons_  (int_ 1) (seq_ [int_ 2, int_ 3]) in
 let len = length_ testCons in
 let fst = get_ testCons (int_ 0) in
 let snd = get_ testCons (int_ 1) in
 let thrd = get_ testCons (int_ 2) in
-utest int_ 3 with objWrapGenerate len using sameSemantics in
-utest int_ 1 with objWrapGenerate fst using sameSemantics in
-utest int_ 2 with objWrapGenerate snd using sameSemantics in
-utest int_ 3 with objWrapGenerate thrd using sameSemantics in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
 
 let testSnoc = snoc_ (seq_ [int_ 1, int_ 2]) (int_ 3) in
 let len = length_ testSnoc in
 let fst = get_ testSnoc (int_ 0) in
 let snd = get_ testSnoc (int_ 1) in
 let thrd = get_ testSnoc (int_ 2) in
-utest int_ 3 with objWrapGenerate len using sameSemantics in
-utest int_ 1 with objWrapGenerate fst using sameSemantics in
-utest int_ 2 with objWrapGenerate snd using sameSemantics in
-utest int_ 3 with objWrapGenerate thrd using sameSemantics in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 1 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 3 with generateEmptyEnv thrd using sameSemantics in
 
 let testReverse = reverse_ (seq_ [int_ 1, int_ 2, int_ 3]) in
 let len = length_ testReverse in
 let fst = get_ testReverse (int_ 0) in
 let snd = get_ testReverse (int_ 1) in
 let thrd = get_ testReverse (int_ 2) in
-utest int_ 3 with objWrapGenerate len using sameSemantics in
-utest int_ 3 with objWrapGenerate fst using sameSemantics in
-utest int_ 2 with objWrapGenerate snd using sameSemantics in
-utest int_ 1 with objWrapGenerate thrd using sameSemantics in
+utest int_ 3 with generateEmptyEnv len using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv snd using sameSemantics in
+utest int_ 1 with generateEmptyEnv thrd using sameSemantics in
 
 let testSeq = seq_ [int_ 1, int_ 2, int_ 3] in
 let testSubseq1 = subsequence_ testSeq (int_ 0) (int_ 2) in
 let testSubseq2 = subsequence_ testSeq (int_ 1) (int_ 2) in
 let testSubseq3 = subsequence_ testSeq (int_ 2) (int_ 100) in
 let fst = get_ testSubseq3 (int_ 0) in
-utest int_ 2 with objWrapGenerate (length_ testSubseq1) using sameSemantics in
-utest int_ 2 with objWrapGenerate (length_ testSubseq2) using sameSemantics in
-utest int_ 1 with objWrapGenerate (length_ testSubseq3) using sameSemantics in
-utest int_ 3 with objWrapGenerate fst using sameSemantics in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq1) using sameSemantics in
+utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
+utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
+utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
--- -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
--- -- projection.
+-- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
+-- projection.
 
--- -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
--- -- implemented tuples/records.
+-- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
+-- implemented tuples/records.
 
 -- Float-Integer conversions
 let testFloorfi = floorfi_ (float_ 1.5) in
-utest testFloorfi with objWrapGenerate testFloorfi using sameSemantics in
+utest testFloorfi with generateEmptyEnv testFloorfi using sameSemantics in
 
 let testCeilfi = ceilfi_ (float_ 1.5) in
-utest testCeilfi with objWrapGenerate testCeilfi using sameSemantics in
+utest testCeilfi with generateEmptyEnv testCeilfi using sameSemantics in
 
 let testRoundfi = roundfi_ (float_ 1.5) in
-utest testRoundfi with objWrapGenerate testRoundfi using sameSemantics in
+utest testRoundfi with generateEmptyEnv testRoundfi using sameSemantics in
 
 let testInt2float = int2float_ (int_ 1) in
-utest testInt2float with objWrapGenerate testInt2float using sameSemantics in
+utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
 
 let testString2float = string2float_ (str_ "1.5") in
-utest testString2float with objWrapGenerate testString2float using sameSemantics in
+utest testString2float with generateEmptyEnv testString2float using sameSemantics in
 
 -- File operations
 let testFileExists = fileExists_ (str_ "test_file_ops") in
-utest testFileExists with objWrapGenerate testFileExists using sameSemantics in
+utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 
 -- -- IO operations
 -- let testPrint = print_ (str_ "tested print") in
@@ -1092,7 +1539,7 @@ let testSeededRandomNumber =
  (bindall_ [ulet_ "_" (randSetSeed_ (int_ 42)),
             randIntU_ (int_ 0) (int_ 10)])
 in
-utest testSeededRandomNumber with objWrapGenerate testSeededRandomNumber
+utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
 using sameSemantics in
 
 -- Time operations
@@ -1101,10 +1548,10 @@ using sameSemantics in
 -- are supported.
 
 -- let testWallTimeMs = wallTimeMs_ unit_ in
--- utest testWallTimeMs with objWrapGenerate testWallTimeMs using sameSemantics in
+-- utest testWallTimeMs with generateEmptyEnv testWallTimeMs using sameSemantics in
 
 -- let testSleepMs = sleepMs_ (int_ 10) in
--- utest testSleepMs with objWrapGenerate testSleepMs using sameSemantics in
+-- utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
 
 -- TODO(oerikss, 2020-12-14): Sys operations are not tested
 
@@ -1113,7 +1560,7 @@ let mapEmptyTest = bind_
   (ulet_ "m" (mapEmpty_ (ulam_ "x" (ulam_ "y" (subi_ (var_ "x") (var_ "y"))))))
   (int_ 42) in
 
-utest ocamlEvalInt (objWrapGenerate mapEmptyTest) with int_ 42 using eqExpr in
+utest ocamlEvalInt (generateEmptyEnv mapEmptyTest) with int_ 42 using eqExpr in
 
 let mapInsertFindTest = bindall_
   [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
@@ -1121,7 +1568,7 @@ let mapInsertFindTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
   , mapFindWithExn_ (int_ 42) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapInsertFindTest)
+utest ocamlEvalInt (generateEmptyEnv mapInsertFindTest)
 with int_ 1 using eqExpr in
 
 let mapMemTrueTest = bindall_
@@ -1129,7 +1576,7 @@ let mapMemTrueTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapMemTrueTest)
+utest ocamlEvalBool (generateEmptyEnv mapMemTrueTest)
 with true_ using eqExpr in
 
 let mapMemFalseTest = bindall_
@@ -1137,7 +1584,7 @@ let mapMemFalseTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 78) (var_ "m")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapMemFalseTest)
+utest ocamlEvalBool (generateEmptyEnv mapMemFalseTest)
 with false_ using eqExpr in
 
 let mapRemoveTest = bindall_
@@ -1146,7 +1593,7 @@ let mapRemoveTest = bindall_
   , ulet_ "m" (mapRemove_ (int_ 42) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapRemoveTest)
+utest ocamlEvalBool (generateEmptyEnv mapRemoveTest)
 with false_ using eqExpr in
 
 let mapFindOrElseTrueTest = bindall_
@@ -1154,7 +1601,7 @@ let mapFindOrElseTrueTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 42) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapFindOrElseTrueTest)
+utest ocamlEvalInt (generateEmptyEnv mapFindOrElseTrueTest)
 with int_ 1 using eqExpr in
 
 let mapFindOrElseFalseTest = bindall_
@@ -1162,7 +1609,7 @@ let mapFindOrElseFalseTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 3) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapFindOrElseFalseTest)
+utest ocamlEvalInt (generateEmptyEnv mapFindOrElseFalseTest)
 with int_ 123 using eqExpr in
 
 let mapFindApplyOrElseTrueTest = bindall_
@@ -1173,7 +1620,7 @@ let mapFindApplyOrElseTrueTest = bindall_
       (ulam_ "" (int_ 7))
       (int_ 42) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapFindApplyOrElseTrueTest)
+utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseTrueTest)
 with int_ 2 using eqExpr in
 
 let mapFindApplyOrElseFalseTest = bindall_
@@ -1184,14 +1631,14 @@ let mapFindApplyOrElseFalseTest = bindall_
      (ulam_ "" (int_ 7))
      (int_ 3) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapFindApplyOrElseFalseTest)
+utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseFalseTest)
 with int_ 7 using eqExpr in
 
 let mapSizeEmptyTest = bindall_
   [ ulet_ "m" (mapEmpty_ (TmConst {val = CSubi {}}))
   , mapSize_ (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapSizeEmptyTest)
+utest ocamlEvalInt (generateEmptyEnv mapSizeEmptyTest)
 with int_ 0 using eqExpr in
 
 let mapSizeTest = bindall_
@@ -1201,7 +1648,7 @@ let mapSizeTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 100) (int_ 567) (var_ "m"))
   , mapSize_ (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapSizeTest)
+utest ocamlEvalInt (generateEmptyEnv mapSizeTest)
 with int_ 2 using eqExpr in
 
 let mapAnyTrueTest = bindall_
@@ -1209,7 +1656,7 @@ let mapAnyTrueTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (geqi_ (var_ "k") (var_ "v")))) (var_ "m")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapAnyTrueTest)
+utest ocamlEvalBool (generateEmptyEnv mapAnyTrueTest)
 with true_ using eqExpr in
 
 let mapAnyFalseTest = bindall_
@@ -1218,7 +1665,7 @@ let mapAnyFalseTest = bindall_
   , ulet_ "m" (mapInsert_ (int_ 0) (negi_ (int_ 1)) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (eqi_ (var_ "k") (var_ "v")))) (var_ "m")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapAnyFalseTest)
+utest ocamlEvalBool (generateEmptyEnv mapAnyFalseTest)
 with false_ using eqExpr in
 
 let mapMapTest = bindall_
@@ -1228,7 +1675,7 @@ let mapMapTest = bindall_
   , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
   , mapFindWithExn_ (int_ 3) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapMapTest)
+utest ocamlEvalInt (generateEmptyEnv mapMapTest)
 with int_ 100 using eqExpr in
 
 let mapMapWithKeyTest = bindall_
@@ -1240,7 +1687,7 @@ let mapMapWithKeyTest = bindall_
       (addi_ (var_ "k") (var_ "v")))) (var_ "m"))
   , mapFindWithExn_ (int_ 3) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapMapWithKeyTest)
+utest ocamlEvalInt (generateEmptyEnv mapMapWithKeyTest)
 with int_ 59 using eqExpr in
 
 let mapFoldWithKeyTest = bindall_
@@ -1251,7 +1698,7 @@ let mapFoldWithKeyTest = bindall_
       (ulam_ "acc" (ulam_ "k" (ulam_ "v"
         (addi_ (var_ "acc") (addi_ (var_ "k") (var_ "v")))))) (int_ 0) (var_ "m")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapFoldWithKeyTest)
+utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
 with int_ 103 using eqExpr in
 
 let mapEqTrueTest = bindall_
@@ -1264,7 +1711,7 @@ let mapEqTrueTest = bindall_
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
       (eqi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapEqTrueTest)
+utest ocamlEvalBool (generateEmptyEnv mapEqTrueTest)
 with true_ using eqExpr in
 
 let mapEqFalseTest = bindall_
@@ -1277,7 +1724,7 @@ let mapEqFalseTest = bindall_
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
       (eqi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
   ] in
-utest ocamlEvalBool (objWrapGenerate mapEqFalseTest)
+utest ocamlEvalBool (generateEmptyEnv mapEqFalseTest)
 with false_ using eqExpr in
 
 let mapCmpEqTest = bindall_
@@ -1290,7 +1737,7 @@ let mapCmpEqTest = bindall_
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
       (subi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapCmpEqTest)
+utest ocamlEvalInt (generateEmptyEnv mapCmpEqTest)
 with int_ 0 using eqExpr in
 
 let mapCmpNEqTest = bindall_
@@ -1303,7 +1750,7 @@ let mapCmpNEqTest = bindall_
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
       (subi_ (var_ "v1") (var_ "v2")))) (var_ "m1") (var_ "m2")
   ] in
-utest ocamlEvalInt (objWrapGenerate mapCmpNEqTest)
+utest ocamlEvalInt (generateEmptyEnv mapCmpNEqTest)
 with int_ 1 using eqExpr in
 
 let mapGetCmpFunTest = bindall_
@@ -1311,7 +1758,7 @@ let mapGetCmpFunTest = bindall_
   , ulet_ "f" (mapGetCmpFun_ (var_ "m"))
   , appf2_ (var_ "f") (int_ 12) (int_ 2)
   ] in
-utest ocamlEvalInt (objWrapGenerate mapGetCmpFunTest)
+utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
 with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.

@@ -205,7 +205,11 @@ end
 lang RecLetsTypeLift = TypeLift + RecLetsAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmRecLets t ->
-    let f = lam env. lam binding. typeLiftExpr env binding.body in
+    let f = lam env. lam binding.
+      match typeLiftExpr env binding.body with (env, body) then
+        (env, {binding with body = body})
+      else never
+    in
     match mapAccumL f env t.bindings with (env, bindings) then
       match typeLiftExpr env t.inexpr with (env, inexpr) then
         match typeLiftType env t.ty with (env, ty) then

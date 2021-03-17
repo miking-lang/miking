@@ -52,7 +52,7 @@ utest isIdentifierString "AA" with false
 utest isIdentifierString "__*" with false
 utest isIdentifierString "" with false
 
-let escapeString = lam s.
+let escapeVarString = lam s.
   let n = length s in
   if gti n 0 then
     let hd = head s in
@@ -76,12 +76,14 @@ let escapeConString = lam s.
   else
     defaultConName
 
-utest escapeString "abcABC/:@_'" with "abcABC____'"
-utest escapeString "" with defaultIdentName
-utest escapeString "@" with defaultIdentName
-utest escapeString "ABC123" with "_BC123"
-utest escapeString "'a/b/c" with "_a_b_c"
-utest escapeString "123" with "_23"
+let escapeLabelStr = lam s. cons '_' (map escapeChar s)
+
+utest escapeVarString "abcABC/:@_'" with "abcABC____'"
+utest escapeVarString "" with defaultIdentName
+utest escapeVarString "@" with defaultIdentName
+utest escapeVarString "ABC123" with "_BC123"
+utest escapeVarString "'a/b/c" with "_a_b_c"
+utest escapeVarString "123" with "_23"
 
 utest escapeConString "abcABC/:@_'" with "CbcABC____'"
 utest escapeConString "" with defaultConName
@@ -91,7 +93,7 @@ utest escapeConString "'a/b/c" with "Ca_b_c"
 utest escapeConString "123" with "C23"
 
 let escapeName = lam n.
-  match n with (str,symb) then (escapeString str, symb)
+  match n with (str,symb) then (escapeVarString str, symb)
   else never
 
 let escapeConName = lam n.
@@ -104,33 +106,69 @@ with ("abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("_BC123", gensym ()).0
 
-lang OCamlPrettyPrint = VarPrettyPrint
-                        + LetPrettyPrint + ConstPrettyPrint + OCamlAst
-                        + IdentifierPrettyPrint + UnknownTypePrettyPrint
-                        + NamedPatPrettyPrint + IntPatPrettyPrint
-                        + CharPatPrettyPrint + BoolPatPrettyPrint
+-- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
+-- want to specify the type names in general. Record types are printed in a
+-- different way because their types must be declared at the top of the program
+-- in order to use them (e.g. for pattern matching). As type-lifting replaces
+-- all nested record types with type variables, all fields of a record type
+-- will be printed as Obj.t.
+lang OCamlTypePrettyPrint =
+  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
+  FunTypePrettyPrint + AppTypePrettyPrint
+
+  sem pprintLabelString =
+
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyRecord t ->
+    if mapIsEmpty t.fields then
+      error "Unit record type not supported in OCaml"
+    else
+      let f = lam env. lam sid. lam ty.
+        let str = sidToString sid in
+        match getTypeStringCode indent env ty with (env,ty) then
+          let str = pprintLabelString str in
+          (env, join [str, ": ", ty])
+        else never
+      in
+      match mapMapAccum f env t.fields with (env, fields) then
+        let fieldStrs = mapValues fields in
+        (env, join ["{", strJoin "; " fieldStrs, "}"])
+      else never
+  | _ -> (env, "Obj.t")
+end
+
+lang OCamlPrettyPrint =
+  VarPrettyPrint + ConstPrettyPrint + OCamlAst +
+  IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
+  CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
   sem pprintConName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeConName name)
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
   sem pprintLabelString =
-  | s -> s
+  | s -> escapeLabelStr s
 
   sem isAtomic =
   | TmLam _ -> false
+  | TmLet _ -> false
   | TmRecLets _ -> false
   | TmApp _ -> false
+  | TmRecord _ -> true
   | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
   | OTmConApp {args = []} -> true
   | OTmConApp _ -> false
+  | OTmVariantTypeDecl _ -> false
   | OTmVarExt _ -> true
   | OTmConAppExt _ -> false
+  | OTmString _ -> true
 
   sem patIsAtomic =
-  | OPTuple _ -> true
+  | OPatRecord _ -> false
+  | OPatTuple _ -> true
   | OPatCon {args = []} -> true
   | OPatCon _ -> false
   | OPatConExt _ -> false
@@ -178,6 +216,25 @@ lang OCamlPrettyPrint = VarPrettyPrint
   | CInt2Char _ -> "char_of_int"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | OTmVariantTypeDecl t ->
+    let f = lam env. lam ident. lam ty.
+      match pprintConName env ident with (env, ident) then
+        match getTypeStringCode indent env ty with (env, ty) then
+          (env, join ["| ", ident, " of ", ty])
+        else never
+      else never
+    in
+    match pprintVarName env t.ident with (env, ident) then
+      match mapMapAccum f env t.constrs with (env, constrs) then
+        match pprintCode indent env t.inexpr with (env, inexpr) then
+          let constrs = strJoin (pprintNewline (pprintIncr indent))
+                                (mapValues constrs) in
+          (env, join ["type ", ident, " =", pprintNewline (pprintIncr indent),
+                      constrs, ";;", pprintNewline indent,
+                      inexpr])
+        else never
+      else never
+    else never
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->
@@ -207,6 +264,39 @@ lang OCamlPrettyPrint = VarPrettyPrint
         (env,join ["fun ", str, " ->", pprintNewline (pprintIncr indent), body])
       else never
     else never
+  | TmLet t ->
+    match pprintVarName env t.ident with (env,str) then
+      match pprintCode (pprintIncr indent) env t.body with (env,body) then
+        match pprintCode indent env t.inexpr with (env,inexpr) then
+          (env,
+           if eqString (nameGetStr t.ident) "" then
+             join [body, pprintNewline indent, ";", inexpr]
+           else
+             join ["let ", str, " =", pprintNewline (pprintIncr indent),
+                   body, pprintNewline indent,
+                   "in", pprintNewline indent,
+                   inexpr])
+        else never
+      else never
+    else never
+  | TmRecord t ->
+    if mapIsEmpty t.bindings then (env, "()")
+    else
+      let innerIndent = pprintIncr (pprintIncr indent) in
+      match
+        mapMapAccum (lam env. lam k. lam v.
+          let k = sidToString k in
+          match pprintCode innerIndent env v with (env, str) then
+            (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
+                        str])
+          else never) env t.bindings
+      with (env, binds) then
+        let binds = mapValues binds in
+        let merged =
+          strJoin (concat ";" (pprintNewline (pprintIncr indent))) binds
+        in
+        (env, join ["{ ", merged, " }"])
+      else never
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
     let lname = lam env. lam bind.
       match pprintVarName env bind.ident with (env,str) then
@@ -276,12 +366,12 @@ lang OCamlPrettyPrint = VarPrettyPrint
     let ii = pprintIncr i in
     match pprintCode ii env target with (env, target) then
       match getPatStringCode ii env pat with (env, pat) then
-        match pprintCode ii env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
+        match pprintCode i env expr with (env, expr) then  -- NOTE(vipa, 2020-11-30): the NOTE above with the same date does not apply here; `let` has lower precedence than `;`
           (env, join ["let", pprintNewline ii,
                       pat, pprintNewline i,
                       "=", pprintNewline ii,
                       target, pprintNewline i,
-                      "in", pprintNewline ii,
+                      "in", pprintNewline i,
                       expr])
         else never
       else never
@@ -303,9 +393,22 @@ lang OCamlPrettyPrint = VarPrettyPrint
                     "with", join arms])
       else never
     else never
+  | OTmPreambleText t ->
+    match pprintCode indent env t.inexpr with (env, inexpr) then
+      (env, join [t.text, inexpr])
+    else never
+  | OTmString t -> (env, join ["\"", t.text, "\""])
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
-  | OPTuple {pats = pats} ->
+  | OPatRecord {bindings = bindings} ->
+    let bindingLabels = map sidToString (mapKeys bindings) in
+    let labels = map pprintLabelString bindingLabels in
+    let pats = mapValues bindings in
+    match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
+      let strs = mapi (lam i. lam p. join [get labels i, " = ", p]) pats in
+      (env, join ["{", strJoin ";" strs, "}"])
+    else never
+  | OPatTuple {pats = pats} ->
     match mapAccumL (getPatStringCode indent) env pats with (env, pats) then
       (env, join ["(", strJoin ", " pats, ")"])
     else never
@@ -456,7 +559,7 @@ in
 let testTuple =
   OTmMatch
   { target = OTmTuple {values = [true_, false_]}
-  , arms = [(OPTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
+  , arms = [(OPatTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
 in
 
 let asts = [
