@@ -3,6 +3,7 @@
 --
 -- File miking.mi is the main file of the Miking tool chain.
 
+include "compile.mc"
 include "seq.mc"
 include "string.mc"
 include "run.mc"
@@ -12,7 +13,7 @@ mexpr
 
 -- Menu
 let menu = strJoin "\n" [
-  "Usage: mi [run] <files>",
+  "Usage: mi [compile|run] <files>",
   "",
   "Options:",
   "  --debug-parse      Print the AST after parsing"]
@@ -31,19 +32,20 @@ let optionsMap = [
 -- Commands map, maps command strings to functions. The functions
 -- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
-("run", run)
+("run", run),
+("compile", compile)
 ] in
 
 -- Lookup for a string map
 let mapStringLookup = assocLookup {eq = eqString} in
 
 -- Simple handling of options before we have an argument parsing library.
-let parseOptions = lam xs. 
+let parseOptions = lam xs.
   foldl
-    (lam accOps. lam s. 
+    (lam accOps. lam s.
       match mapStringLookup s optionsMap with Some f
       then f accOps
-      else printLn (concat "Unknown option " s); exit 1 
+      else printLn (concat "Unknown option " s); exit 1
     ) options xs
 in
 

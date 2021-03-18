@@ -20,6 +20,9 @@ let phReadFile = lam filename.
   pycall f "close" ();
   pyconvert content
 
+let phMoveFile = lam fromFile. lam toFile.
+  pycall _subprocess "run" (["mv", fromFile, toFile],)
+
 let phJoinPath = lam p1. lam p2.
   let p = pycall _pathlib "Path" (p1,) in
   pycall _blt "str" (pycall p "joinpath" (p2,),)
