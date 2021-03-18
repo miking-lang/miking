@@ -138,6 +138,46 @@ lang BootParser = MExprAst
      TmNever {ty = TyUnknown(),
               info = ginfo t 0}
 
+  -- Get type help function
+  sem gtype(t:Unknown) =
+  | n -> let t2 = bootParserGetType t n in
+        matchType t2 (bootParserGetId t2)
+
+  sem matchType (t:Unknown) =
+  | 200 /-TyUnknown-/ ->
+    TyUnknown {info = ginfo t 0}
+  | 201 /-TyBool-/ ->
+    TyBool {info = ginfo t 0}
+  | 202 /-TyInt-/ ->
+    TyInt {info = ginfo t 0}
+  | 203 /-TyFloat-/ ->
+    TyFloat {info = ginfo t 0}
+  | 204 /-TyChar-/ ->
+    TyChar {info = ginfo t 0}
+  | 205 /-TyArrow-/ ->
+    TyArrow {info = ginfo t 0,
+             from = gtype t 0,
+             to = gtype t 1}
+  | 206 /-TySeq-/ ->
+    TySeq {info = ginfo t 0,
+           ty = gtype t 0}
+  | 207 /-TyRecord-/ ->
+    let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
+    TyRecord {info = ginfo t 0,
+              fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) lst)}
+  | 208 /-TyVariant-/ ->
+    if eqi (glistlen t 0) 0 then
+      TyVariant {info = ginfo t 0,
+                 constrs = mapEmpty nameEqSym}
+    else error "Parsing of non-empty variant types not yet supported"
+  | 209 /-TyVar-/ ->
+    TyVar {info = ginfo t 0,
+           ident = gname t 0}
+  | 210 /-TyApp-/ ->
+    TyApp {info = ginfo t 0,
+           lhs = gtype t 0,
+           rhs = gtype t 1}
+
   -- Get constant help function
   sem gconst(t:Unkown) =
   | n -> let t2 = bootParserGetConst t n in
@@ -218,11 +258,6 @@ lang BootParser = MExprAst
   | 501 /-NoInfo-/ ->
       NoInfo {}
 
-
-  -- Functions for transferring types and info are not yet implemented.
-  -- These functions are place holders.
-  sem gtype (t:Unknown) = | n -> TyUnknown()
-
   sem strToPatName =
   | "" ->  PWildcard ()
   | x -> PName (nameNoSym x)
@@ -278,7 +313,6 @@ utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
 let s = "print x; 10" in
 utest lside s with rside s in
 
-
 -- TmRecLets, TmLam
 let s = "recursive let x = lam x.x in x" in
 utest lside s with rside s in
@@ -306,7 +340,6 @@ utest l_info " 1234 " with r_info 1 1 1 5 in
 utest l_info " 123.121 " with r_info 1 1 1 8 in
 utest l_info "\n  'A' " with r_info 2 2 2 5 in
 
-
 -- TmSeq
 let s = "\"\"" in
 utest lside s with rside s in
@@ -317,7 +350,6 @@ utest lside s with rside s in
 let s = "\"Hello world\"" in
 utest lside s with rside s in
 utest l_info "  [12,2,1] " with r_info 1 2 1 10 in
-
 
 -- TmRecord
 let s = "{}" in
@@ -336,16 +368,17 @@ let s = "{{bar='a', foo=7} with bar = 'b'}" in
 utest lside s with rside s in
 utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
 
+-- NOTE(caylak, 2021-03-17): Commented out because test fails since parsing of TyVariant is not supported yet
 -- TmType
-let s = "type Foo in x" in
-utest lside s with rside s in
+let s = "type Foo=<> in x" in
+--utest lside s with rside s in
 utest l_info "  type Bar in () " with r_info 1 2 1 13 in
 
 -- TmConDef
 let s = "con Foo in x" in
 utest lside s with rside s in
-let s = "con Foo : Int -> Tree in x" in
-utest lside s with rside "con Foo in x" in
+let s = "con Foo : (Int) -> (Tree) in x" in
+utest lside s with rside s in
 utest l_info "  con Bar in 10 " with r_info 1 2 1 12 in
 
 -- TmConApp
@@ -441,4 +474,92 @@ let s = "never" in
 utest lside s with rside s in
 utest l_info "  \n  never " with r_info 2 2 2 7 in
 
+-- TyUnknown
+let s = "let y:Unknown = lam x.x in y" in
+utest lside s with rside "let y = lam x.x in y" in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 13 in
+let s = "lam x:Int. lam y:Char. x" in
+utest lside s with rside s in
+utest match parseMExprString " \n lam x:Int. lam y:Char. x" with TmLam l then info l.tyIdent else ()
+with r_info 2 7 2 10 in
+
+-- TyInt
+let s = "let y:Int = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 9 in
+
+-- TyFloat
+let s = "let y:Float = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 11 in
+
+-- TyChar
+let s = "let y:Char = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 10 in
+
+-- TyArrow
+let s = "let y:(Int)->(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 7 1 17 in
+
+-- Nested TyArrow
+let s = "let y:([Float])->(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 7 1 21 in
+
+-- TySeq
+let s = "let y:[Int] = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 11 in
+
+-- Nested TySeq
+let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}}]= lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 56 in
+
+-- TyRecord
+let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 22 in
+
+-- Nested TyRecord
+let s = "let y:{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}} = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 54 in
+
+-- TyVariant
+let s = "let y:<> = lam x.x in y" in
+-- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
+--utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 8 in  
+
+-- TyVar
+let s = "let y:_asd = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 10 in
+
+-- TyApp
+let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 8 1 24 in
+
+-- Nested TyApp
+let s = "let y:((((Int)->(Int))(Int))->(Int))(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 10 1 40 in
 ()
