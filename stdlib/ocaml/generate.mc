@@ -243,7 +243,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {
       lhs = OTmVarExt {ident = "failwith"},
-      rhs = OTmString {text = infoErrorString t.info msg},
+      rhs = OTmString {text = escapeString (infoErrorString t.info msg)},
       ty = t.ty,
       info = NoInfo ()
     }

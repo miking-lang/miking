@@ -29,7 +29,6 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
       exit 1
   else ();
 
-
   {
     run =
       lam stdin. lam args.
@@ -37,11 +36,12 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
           concat ["dune", "exec", "./program.exe", "--"] args
         in
         phRunCommand command stdin (tempfile ""),
-    cleanup = phTempDirDelete td
+    cleanup = phTempDirDelete td,
+    binaryPath = pyconvert (tempfile "_build/default/program.exe")
   }
 
 let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
-  ocamlCompileWithConfig {warnings=true}
+  ocamlCompileWithConfig {warnings=false}
 
 mexpr
 
