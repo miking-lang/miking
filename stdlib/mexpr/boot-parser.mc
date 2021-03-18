@@ -169,9 +169,6 @@ lang BootParser = MExprAst
     if eqi (glistlen t 0) 0 then
       TyVariant {info = ginfo t 0,
                  constrs = mapEmpty nameEqSym}
-      --let lst = makeSeq (lam n. (gname t n, gtype t n)) (glistlen t 0) in
-      --TyVariant {info = ginfo t 0,
-      --          constrs = mapFromList nameEqSym (map (lam b. (b.0, b.1)) lst)}
     else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
