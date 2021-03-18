@@ -65,7 +65,7 @@ lang FixAst = LamAst
   | TmFix ()
 end
 
-lang VarEval = VarAst + IdentifierPrettyPrint + FixAst + AppAst
+lang VarEval = VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match _evalLookup ident ctx.env with Some t then
@@ -73,7 +73,7 @@ lang VarEval = VarAst + IdentifierPrettyPrint + FixAst + AppAst
         eval ctx t
       else t
     else
-      error (concat "Unknown variable: " (pprintVarString ident))
+      error (concat "Unknown variable: " (pprintVarString (nameGetStr ident)))
 end
 
 lang AppEval = AppAst
@@ -631,6 +631,8 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CConcat2 [Expr]
   | CSplitAt2 [Expr]
   | CCreate2 Int
+  | CSubsequence2 [Expr]
+  | CSubsequence3 ([Expr], Int)
 
   sem delta (arg : Expr) =
   | CGet _ ->
@@ -695,6 +697,18 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCreate2 n ->
     let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
     TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
+  | CSubsequence _ ->
+    match arg with TmSeq s then
+      TmConst {val = CSubsequence2 s.tms, ty = TyUnknown {}, info = NoInfo()}
+    else error "Not subsequence of a constant sequence"
+  | CSubsequence2 tms ->
+    match arg with TmConst ({val = CInt {val = i}} & t) then
+      TmConst {t with val = CSubsequence3 (tms, i)}
+    else error "Second argument to subsequence not a number"
+  | CSubsequence3 (tms,offset) ->
+    match arg with TmConst ({val = CInt {val = len}} & t) then
+      TmSeq {tms = subsequence tms offset len, ty = TyUnknown {}, info = NoInfo()}
+    else error "Third argument to subsequence not a number"
 end
 
 lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval
@@ -1437,6 +1451,10 @@ utest eval createAst with seq_ [int_ 42, int_ 42, int_ 42] using eqExpr in
 let i = nameSym "i" in
 let createAst2 = create_ (int_ 3) (nulam_ i (nvar_ i)) in
 utest eval createAst2 with seq_ [int_ 0, int_ 1, int_ 2] in
+
+-- subsequence [3,5,8,6] 2 4 -> [8,6]
+let subseqAst = subsequence_ (seq_ [int_ 3, int_ 5, int_ 8, int_ 6]) (int_ 2) (int_ 4) in
+utest eval subseqAst with seq_ [int_ 8, int_ 6] in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ in
