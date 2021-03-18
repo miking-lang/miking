@@ -23,6 +23,9 @@ let phReadFile = lam filename.
 let phMoveFile = lam fromFile. lam toFile.
   pycall _subprocess "run" (["mv", "-f", fromFile, toFile],)
 
+let phChmodWriteAccessFile = lam file.
+  pycall _subprocess "run" (["chmod", "+w", file],)
+
 let phJoinPath = lam p1. lam p2.
   let p = pycall _pathlib "Path" (p1,) in
   pycall _blt "str" (pycall p "joinpath" (p2,),)

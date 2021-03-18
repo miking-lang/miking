@@ -40,7 +40,8 @@ let ocamlCompile = lam sourcePath. lam ocamlAst.
       subsequence sourcePath 0 idx
     else sourcePath
   in
-  phMoveFile p.binaryPath pathWithoutExtension
+  phMoveFile p.binaryPath pathWithoutExtension;
+  phChmodWriteAccessFile pathWithoutExtension
 
 let compile = lam files. lam options.
   use MCoreCompile in
