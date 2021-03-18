@@ -1365,7 +1365,7 @@ let delta eval env fi c v =
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CbootParserTree (Bootparser.getType ptree n))
   | CbootParserGetType (Some _), _ ->
-    fail_constapp fi
+      fail_constapp fi
   | CbootParserGetString None, t ->
       TmConst (fi, CbootParserGetString (Some t))
   | ( CbootParserGetString (Some (TmConst (fi, CbootParserTree ptree)))

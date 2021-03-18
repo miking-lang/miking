@@ -175,20 +175,20 @@ let getData = function
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
-  | PTreeTy (TySeq (fi,ty)) ->
+  | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyRecord (fi, tymap)) ->
       let slst, tylst = tymap |> Record.bindings |> List.split in
       let len = List.length slst in
       (idTyRecord, [fi], [len], tylst, [], slst, [], [], [], [])
   | PTreeTy (TyVariant (fi, lst)) ->
-      let strs = List.map (fun (x,_) -> x) lst in
+      let strs = List.map (fun (x, _) -> x) lst in
       let len = List.length lst in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
   | PTreeTy (TyVar (fi, x, _)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
-      (idTyApp, [fi], [], [ty1;ty2], [], [], [], [], [], [])
+      (idTyApp, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   (* Const *)
   | PTreeConst (CBool v) ->
       let i = if v then 1 else 0 in
