@@ -166,9 +166,13 @@ lang BootParser = MExprAst
     TyRecord {info = ginfo t 0,
               fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
-    let lst = makeSeq (lam n. (gname t n, gtype t n)) (glistlen t 0) in
-    TyVariant {info = ginfo t 0,
-               constrs = mapFromList nameEqSym (map (lam b. (b.0, b.1)) lst)}
+    if eqi (glistlen t 0) 0 then
+      TyVariant {info = ginfo t 0,
+                 constrs = mapEmpty nameEqSym}
+      --let lst = makeSeq (lam n. (gname t n, gtype t n)) (glistlen t 0) in
+      --TyVariant {info = ginfo t 0,
+      --          constrs = mapFromList nameEqSym (map (lam b. (b.0, b.1)) lst)}
+    else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
            ident = gname t 0}
@@ -312,7 +316,6 @@ utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
 let s = "print x; 10" in
 utest lside s with rside s in
 
-
 -- TmRecLets, TmLam
 let s = "recursive let x = lam x.x in x" in
 utest lside s with rside s in
@@ -340,7 +343,6 @@ utest l_info " 1234 " with r_info 1 1 1 5 in
 utest l_info " 123.121 " with r_info 1 1 1 8 in
 utest l_info "\n  'A' " with r_info 2 2 2 5 in
 
-
 -- TmSeq
 let s = "\"\"" in
 utest lside s with rside s in
@@ -351,7 +353,6 @@ utest lside s with rside s in
 let s = "\"Hello world\"" in
 utest lside s with rside s in
 utest l_info "  [12,2,1] " with r_info 1 2 1 10 in
-
 
 -- TmRecord
 let s = "{}" in
@@ -370,19 +371,17 @@ let s = "{{bar='a', foo=7} with bar = 'b'}" in
 utest lside s with rside s in
 utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
 
--- NOTE(caylak, 2021-03-17): Commented out because test fails due to variant syntax <> is parsed as variables 
+-- NOTE(caylak, 2021-03-17): Commented out because test fails since parsing of TyVariant is not supported yet
 -- TmType
-let s = "type Foo in x" in
--- dprint (parseMExprString s);
+let s = "type Foo=<> in x" in
 --utest lside s with rside s in
 utest l_info "  type Bar in () " with r_info 1 2 1 13 in
 
 -- TmConDef
 let s = "con Foo in x" in
 utest lside s with rside s in
-let s = "con Foo : Int -> Tree in x" in
--- NOTE(caylak, 2021-03-17): Commented out because test fails since pprint print types
--- utest lside s with rside "con Foo in x" in
+let s = "con Foo : (Int) -> (Tree) in x" in
+utest lside s with rside s in
 utest l_info "  con Bar in 10 " with r_info 1 2 1 12 in
 
 -- TmConApp
@@ -480,8 +479,7 @@ utest l_info "  \n  never " with r_info 2 2 2 7 in
 
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in
--- NOTE(caylak,2021-03-17) pprint does not print TyUnknown
--- utest lside s with rside s in
+utest lside s with rside "let y = lam x.x in y" in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 13 in
 let s = "lam x:Int. lam y:Char. x" in
@@ -513,11 +511,23 @@ utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 7 1 17 in
 
+-- Nested TyArrow
+let s = "let y:([Float])->(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 7 1 21 in
+
 -- TySeq
 let s = "let y:[Int] = lam x.x in y" in
 utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 11 in
+
+-- Nested TySeq
+let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}}]= lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 56 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
@@ -525,10 +535,16 @@ utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 22 in
 
+-- Nested TyRecord
+let s = "let y:{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}} = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 54 in
+
 -- TyVariant
 let s = "let y:<> = lam x.x in y" in
--- NOTE(caylak,2021-03-17) pprint does not print TyVariant
--- utest lside s with rside s in
+-- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
+--utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 8 in  
 
@@ -543,4 +559,10 @@ let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in
 utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 8 1 24 in
+
+-- Nested TyApp
+let s = "let y:((((Int)->(Int))(Int))->(Int))(Int) = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 10 1 40 in
 ()
