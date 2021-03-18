@@ -43,7 +43,7 @@ let int2string = lam n.
 in
 
 let utestTestPassed = lam.
-  --print \".\";
+  print \".\";
   modref utestPassed (addi (deref utestPassed) 1)
 in
 
