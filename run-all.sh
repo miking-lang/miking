@@ -35,6 +35,7 @@ files=(
 # "test/mexpr/records.mc"
 # "test/mexpr/stringops.mc"
 # "test/mlang/catchall.mc"
+# "test/mlang/subfolder/inclib.mc"
 # "test/mlang/utest.mc"
 # "test/mlang/include.mc"
 # "test/mlang/strformat.mc"
@@ -127,6 +128,12 @@ files=(
 # "stdlib/ocaml/generate.mc"
 # "stdlib/ocaml/compile.mc"
 # "stdlib/ocaml/ast.mc"
+# "stdlib/python/python.mc"
+# "test/sundials/sundials.mc"
+# "stdlib/sundials/sundials.mc"
+# "src/main/mi.mc"
+# "src/main/compile.mc"
+# "src/main/run.mc"
 )
 
 for i in "${files[@]}"; do
