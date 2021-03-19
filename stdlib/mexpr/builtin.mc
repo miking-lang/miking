@@ -1,5 +1,5 @@
-
 include "ast.mc"
+include "ast-builder.mc"
 
 let builtin = use MExprAst in
   [ ("addi", CAddi ())
