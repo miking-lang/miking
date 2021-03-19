@@ -1570,9 +1570,6 @@ let testStr = str_ "foobar" in
 let testSplit = symbolize (bind_ (ulet_ "_" (splitat_ testStr (int_ 2))) (int_ 0)) in
 utest testSplit  with generateEmptyEnv testSplit using sameSemantics in
 
--- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
--- implemented tuples/records.
-
 -- eqsym
 let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
 utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
@@ -1603,7 +1600,8 @@ let testFileExists = fileExists_ (str_ "test_file_ops") in
 utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 
 -- -- IO operations
-let testPrint = symbolize (bind_ (print_ (str_ "tested print")) (int_ 0)) in
+--  NOTE(gizem, 21-03-19): This test file prints an empty string.
+let testPrint = symbolize (bind_ (ulet_ "_" (print_ (str_ ""))) (int_ 0)) in
 utest testPrint with generateEmptyEnv testPrint using sameSemantics in
 
 let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
