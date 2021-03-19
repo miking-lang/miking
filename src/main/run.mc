@@ -23,12 +23,12 @@ let run = lam files. lam options.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
-    let ast = typeAnnot ast in
-
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     let ast =
       if options.runTests then
+        -- Add type annotations as they are required by utestGen
+        let ast = typeAnnot ast in
         utestGen ast
       else
         utestStrip ast
