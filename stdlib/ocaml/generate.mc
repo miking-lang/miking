@@ -1594,8 +1594,8 @@ let testFileExists = fileExists_ (str_ "test_file_ops") in
 utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 
 -- -- IO operations
--- let testPrint = print_ (str_ "tested print") in
--- utest testPrint with generate testPrint using sameSemantics in
+let testPrint = symbolize (bind_ (print_ (str_ "tested print")) (int_ 0)) in
+utest testPrint with generateEmptyEnv testPrint using sameSemantics in
 
 let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
 utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
@@ -1838,4 +1838,12 @@ utest ocamlEvalInt (generateEmptyEnv mapBindingsTest) with int_ 2 using eqExpr i
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics
 
+-- eqsym
+let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
+utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
+
+-- sym2hash
+let sym2hashTest = symbolize (bindall_
+        [ ulet_ "x" (gensym_ unit_)
+        , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
 ()
