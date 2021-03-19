@@ -1573,6 +1573,15 @@ utest testSplit  with generateEmptyEnv testSplit using sameSemantics in
 -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
 
+-- eqsym
+let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
+utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
+
+-- sym2hash
+let sym2hashTest = symbolize (bindall_
+        [ ulet_ "x" (gensym_ unit_)
+        , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
+
 -- Float-Integer conversions
 let testFloorfi = floorfi_ (float_ 1.5) in
 utest testFloorfi with generateEmptyEnv testFloorfi using sameSemantics in
@@ -1838,12 +1847,4 @@ utest ocamlEvalInt (generateEmptyEnv mapBindingsTest) with int_ 2 using eqExpr i
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics
 
--- eqsym
-let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
-utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
-
--- sym2hash
-let sym2hashTest = symbolize (bindall_
-        [ ulet_ "x" (gensym_ unit_)
-        , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
 ()
