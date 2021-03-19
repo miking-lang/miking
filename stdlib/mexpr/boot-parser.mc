@@ -82,10 +82,7 @@ lang BootParser = MExprAst
   | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
-               ty = match c with CBool _ then TyBool {} else
-                    match c with CInt _ then TyInt {} else
-                    match c with CFloat _ then TyFloat {} else
-                    TyChar {},
+               ty = TyUnknown(),
                info = ginfo t 0}
   | 106 /-TmSeq-/ ->
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),

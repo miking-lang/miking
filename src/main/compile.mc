@@ -57,6 +57,8 @@ let compile = lam files. lam options.
     -- all utest nodes from the AST.
     let ast =
       if options.runTests then
+        -- Add type annotations as they are required by utestGen
+        let ast = typeAnnot ast in
         utestGen ast
       else
         utestStrip ast
