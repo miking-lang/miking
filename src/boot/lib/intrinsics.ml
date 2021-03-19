@@ -224,7 +224,7 @@ module Mmap = struct
     end in
     let module MapModule = Map.Make (Ord) in
     let binds = MapModule.bindings m in
-    List.map (fun (k, v) -> (Obj.obj k, v)) binds
+    Mseq.Helpers.of_list (List.map (fun (k, v) -> (Obj.obj k, v)) binds)
 
   let size mCmpPair =
     let m, cmp = Obj.obj mCmpPair in

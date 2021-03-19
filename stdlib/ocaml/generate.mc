@@ -914,10 +914,6 @@ let stripTypeDecls = lam t.
   stripDecls t
 in
 
-let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
-utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
-exit 1;
-
 -- Match
 let matchChar1 = symbolize
  (match_ (char_ 'a')
@@ -1570,10 +1566,9 @@ utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
---let testStr:[Char] = str_ "foobar" in
---let testSplit:([Char],[Char]) = withType (tytuple_ [tystr_,tystr_]) (splitat_ testStr (int_ 2)) in
---utest (str_ "foo") with generateTypeAnnotated (tupleproj_ 0 testSplit) using sameSemantics in
---utest (str_ "bar") with generateTypeAnnotated (tupleproj_ 1 testSplit) using sameSemantics in
+let testStr = str_ "foobar" in
+let testSplit = symbolize (bind_ (ulet_ "_" (splitat_ testStr (int_ 2))) (int_ 0)) in
+utest testSplit  with generateEmptyEnv testSplit using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
@@ -1602,7 +1597,7 @@ utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 -- let testPrint = print_ (str_ "tested print") in
 -- utest testPrint with generate testPrint using sameSemantics in
 
-let testDPrint = symbolize (ulet_ "_" (dprint_ (str_ ""))) in
+let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
 utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
 
 -- Random number generation operations
@@ -1615,15 +1610,11 @@ utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
 using sameSemantics in
 
 -- Time operations
+let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ unit_), divf_ (var_ "x") (var_ "x")] in
+utest ocamlEvalFloat (generateEmptyEnv testWallTimeMs) with float_ 1.0 using eqExpr in
 
--- NOTE(larshum, 2020-12-14): Cannot test time operations until unit types
--- are supported.
-
--- let testWallTimeMs = wallTimeMs_ unit_ in
--- utest testWallTimeMs with generateEmptyEnv testWallTimeMs using sameSemantics in
-
--- let testSleepMs = sleepMs_ (int_ 10) in
--- utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
+let testSleepMs = symbolize (bind_ (sleepMs_ (int_ 10)) (int_ 5)) in
+utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
 
 -- TODO(oerikss, 2020-12-14): Sys operations are not tested
 
@@ -1834,14 +1825,15 @@ utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
 with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
---let mapBindingsTest = [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
---  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
---  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
---  , mapBindings_ (var_ "m1") 
---  ] in
+let mapBindingsTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "seq" (mapBindings_ (var_ "m1"))
+  , length_ (var_ "seq")
+  ] in
 
---utest ocamlEvalInt (generateEmptyEnv (tupleproj_ 0 (get mapBindingsTest 0)))
---with int_ 42 using eqExpr in
+utest ocamlEvalInt (generateEmptyEnv mapBindingsTest) with int_ 2 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics

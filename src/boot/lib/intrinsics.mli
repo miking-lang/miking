@@ -143,7 +143,7 @@ module Mmap : sig
 
   val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> Obj.t -> 'c
 
-  val bindings : Obj.t -> ('a * 'b) list
+  val bindings : Obj.t -> ('a * 'b) Mseq.t
 
   val size : Obj.t -> int
 
