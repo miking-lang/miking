@@ -61,6 +61,7 @@ let builtin = use MExprAst in
   -- , ("dprint", CDprint ())   -- dprint is not yet implemented
   , ("readLine", CReadLine ())
   , ("readBytesAsString", CReadBytesAsString ())
+  , ("argv", CArgv ())
   , ("readFile", CFileRead ())
   , ("writeFile", CFileWrite ())
   , ("fileExists", CFileExists ())
@@ -91,7 +92,7 @@ let builtin = use MExprAst in
   , ("mapFoldWithKey", CMapFoldWithKey ())
   , ("mapBindings", CMapBindings ())
   , ("mapEq", CMapEq ())
-  , ("mapCMp", CMapCmp ())
+  , ("mapCmp", CMapCmp ())
   -- Tensors
   , ("tensorCreate", CTensorCreate ())
   , ("tensorGetExn", CTensorGetExn ())
