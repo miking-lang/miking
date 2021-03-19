@@ -692,6 +692,9 @@ let deleteFile_ = use MExprAst in
 let print_ = use MExprAst in
   lam s. app_ (const_ (CPrint ())) s
 
+let dprint_ = use MExprAst in
+  lam s. app_ (const_ (CDPrint ())) s
+
 let readLine_ = use MExprAst in
   lam u. app_ (const_ (CReadLine ())) u
 

@@ -982,6 +982,7 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
       print s;
       unit_
     else error "string to print is not a string"
+  | CDPrint _ -> unit_
   | CReadLine _ ->
     let s = readLine () in
     TmSeq {tms = map char_ s, ty = TyUnknown {}, info = NoInfo()}

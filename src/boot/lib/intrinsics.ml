@@ -109,6 +109,8 @@ end
 module IO = struct
   let print s = s |> Mseq.Helpers.to_ustring |> uprint_string
 
+  let dprint _ = ()
+
   let read_line _ =
     let line = try read_line () with End_of_file -> "" in
     line |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array

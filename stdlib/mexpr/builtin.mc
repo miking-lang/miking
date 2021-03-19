@@ -40,5 +40,6 @@ let builtin = use MExprAst in [
   ("deref", CDeRef ()),
   ("modref", CModRef ()),
   -- IO operations
-  ("print", CPrint ())
+  ("print", CPrint ()),
+  ("dprint", CDPrint ())
 ]

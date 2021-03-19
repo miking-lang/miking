@@ -534,6 +534,7 @@ end
 lang IOAst = ConstAst
   syn Const =
   | CPrint {}
+  | CDPrint {}
   | CReadLine {}
   | CReadBytesAsString {}
 end

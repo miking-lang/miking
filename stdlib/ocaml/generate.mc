@@ -117,6 +117,7 @@ let _splitAtName = nameSym "splitAt"
 let _reverseName = nameSym "reverse"
 let _subsequenceName = nameSym "subsequence"
 let _ofArrayName = nameSym "of_array"
+let _dprintName = nameSym "dprint"
 let _printName = nameSym "print"
 let _readLineName = nameSym "readLine"
 let _readBytesAsStringName = nameSym "readBytesAsString"
@@ -600,6 +601,7 @@ let _preamble =
     , intr1 _reverseName (appf1_ (_seqOp "reverse"))
     , intr3 _subsequenceName (appf3_ (_seqOp "subsequence"))
     , intr1 _ofArrayName (appf1_ (_seqOp "Helpers.of_array"))
+    , intr1 _dprintName (appf1_ (_ioOp "dprint"))
     , intr1 _printName (appf1_ (_ioOp "print"))
     , intr1 _readLineName (appf1_ (_ioOp "read_line"))
     , intr0 _argvName (_sysOp "argv")
@@ -690,6 +692,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CSplitAt _ -> nvar_ _splitAtName
   | CReverse _ -> nvar_ _reverseName
   | CSubsequence _ -> nvar_ _subsequenceName
+  | CDPrint _ -> nvar_ _dprintName
   | CPrint _ -> nvar_ _printName
   | CReadLine _ -> nvar_ _readLineName
   | CArgv _ -> nvar_ _argvName
@@ -910,6 +913,10 @@ let stripTypeDecls = lam t.
   in
   stripDecls t
 in
+
+let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
+utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
+exit 1;
 
 -- Match
 let matchChar1 = symbolize
@@ -1563,6 +1570,10 @@ utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
+--let testStr:[Char] = str_ "foobar" in
+--let testSplit:([Char],[Char]) = withType (tytuple_ [tystr_,tystr_]) (splitat_ testStr (int_ 2)) in
+--utest (str_ "foo") with generateTypeAnnotated (tupleproj_ 0 testSplit) using sameSemantics in
+--utest (str_ "bar") with generateTypeAnnotated (tupleproj_ 1 testSplit) using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
 -- implemented tuples/records.
@@ -1590,6 +1601,9 @@ utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 -- -- IO operations
 -- let testPrint = print_ (str_ "tested print") in
 -- utest testPrint with generate testPrint using sameSemantics in
+
+let testDPrint = symbolize (ulet_ "_" (dprint_ (str_ ""))) in
+utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
 
 -- Random number generation operations
 let testSeededRandomNumber =
@@ -1820,6 +1834,14 @@ utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
 with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
+--let mapBindingsTest = [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+--  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+--  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+--  , mapBindings_ (var_ "m1") 
+--  ] in
+
+--utest ocamlEvalInt (generateEmptyEnv (tupleproj_ 0 (get mapBindingsTest 0)))
+--with int_ 42 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics
