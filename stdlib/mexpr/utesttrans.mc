@@ -67,13 +67,13 @@ in
 ()
 "
 
-let _builtinEnv =
-  map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin
+let _builtinNames = map (lam intr. intr.0) builtinEnv
 
-let _names = match unzip _builtinEnv with (n,_) then n else never
-
-let utestRunner = use BootParser in
-  parseMExprString _utestRunnerStr
+let utestRunner =
+  use BootParser in
+  use MExprSym in
+  symbolizeExpr (symVarNameEnv _builtinNames)
+                (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
