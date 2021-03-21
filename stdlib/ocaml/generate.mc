@@ -674,7 +674,11 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | TmConst {val = c} ->
     intrinsic2name c
   | TmRecord t ->
-    TmRecord {t with bindings = mapMap (lam expr. _objRepr (objWrapRec expr)) t.bindings}
+    if mapIsEmpty t.bindings then
+      _objRepr (TmRecord t)
+    else
+      let bindings = mapMap (lam expr. _objRepr (objWrapRec expr)) t.bindings in
+      TmRecord {t with bindings = bindings}
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | OTmMatch t ->
