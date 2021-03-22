@@ -58,7 +58,7 @@ let builtin = use MExprAst in
   , ("sleepMs", CSleepMs ())
   -- MCore intrinsics: Debug and I/O
   , ("print", CPrint ())
-  , ("dprint", CDprint ())
+  , ("dprint", CDPrint ())
   , ("readLine", CReadLine ())
   , ("readBytesAsString", CReadBytesAsString ())
   , ("argv", CArgv ())
