@@ -8,23 +8,32 @@ include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
+include "mexpr/type-annot.mc"
+include "mexpr/utesttrans.mc"
 
-lang ExtMCore = BootParser + MExpr
+lang ExtMCore = BootParser + MExpr + MExprTypeAnnot + MExprUtestTrans
 
 let run = lam files. lam options.
   use ExtMCore in
+  let builtinNames = map (lam x. x.0) builtinEnv in
+  let runFile = lam file.
+    let ast = parseMCoreFile file in
 
-  -- Parse MCore files and return a list of ASTs
-  let asts = map parseMCoreFile files in
-  
-  -- If option --debug-parse, then pretty print all the ASTs
-  (if options.debugParse then print (strJoin "\n" (map expr2str asts)) else ());
+    -- If option --debug-parse, then pretty print the AST
+    (if options.debugParse then printLn (expr2str ast) else ());
 
-  -- Evaluate list of programs
-  let env = map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin in
-  let names = match unzip env with (n,_) then n else never in
-  let eval = lam t. eval {env = env} (symbolizeExpr (symVarNameEnv names) t) in
-  map eval asts
+    -- If option --test, then generate utest runner calls. Otherwise strip away
+    -- all utest nodes from the AST.
+    let ast =
+      if options.runTests then
+        -- Add type annotations as they are required by utestGen
+        let ast = typeAnnot ast in
+        utestGen ast
+      else
+        utestStrip ast
+    in
 
-
-  
+    -- Evaluate the symbolized program
+    eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) ast)
+  in
+  iter runFile files
