@@ -73,6 +73,12 @@ let _isTypeAscription = use MExprAst in
     nameEq letTerm.ident id
   else false
 
+let _pprintType = use MExprPrettyPrint in
+  lam ty.
+  match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
+    tyStr
+  else never
+
 lang TypeAnnot
   sem typeAnnotExpr (env : TypeEnv) =
   -- Intentionally left blank
@@ -89,7 +95,15 @@ lang VarTypeAnnot = TypeAnnot + VarAst
         match mapLookup t.ident varEnv with Some ty then
           match compatibleType tyEnv t.ty ty with Some ty then
             ty
-          else error "Inconsistent type of annotated variable"
+          else
+            let annotTyStr = _pprintType t.ty in
+            let envTyStr = _pprintType ty in
+            let msg = join [
+              "Type of variable is inconsistent with environment\n",
+              "Variable annotated with type: ", annotTyStr, "\n",
+              "Type in variable environment: ", envTyStr
+            ] in
+            infoErrorExit t.info msg
         else t.ty
       else never
     in
@@ -138,7 +152,15 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                       with body = body}
                       with inexpr = inexpr}
                       with ty = ty inexpr}
-      else error "Inconsistent type annotation of let-term"
+      else
+        let annotTyStr = _pprintType t.tyBody in
+        let inferredTyStr = _pprintType (ty body) in
+        let msg = join [
+          "Inconsistent type annotation of let-expression\n",
+          "Expected type: ", inferredTyStr, "\n",
+          "Annotated type: ", annotTyStr
+        ] in
+        infoErrorExit t.info msg
     else never
 end
 
@@ -235,9 +257,20 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
           match lty with TyArrow {from = from, to = TyVar target} then
             match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
-            else error "Inconsistent type annotation of constructor application"
+            else
+              let fromStr = _pprintType from in
+              let tyBodyStr = _pprintType (ty body) in
+              let msg = [
+                "Inconsistent types of constructor application",
+                "Constructor expected argument of type ", fromStr,
+                ", but the actual type was ", tyBodyStr
+              ] in
+              infoErrorExit t.info msg
           else tyunknown_
-        else error "Application of undefined constructor"
+        else
+          let msg = ["Application of undefined constructor: ",
+                     nameGetStr t.ident] in
+          infoErrorExit t.info msg
       in
       TmConApp {{t with body = body}
                    with ty = ty}
