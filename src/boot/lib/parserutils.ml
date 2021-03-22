@@ -108,6 +108,14 @@ let rec merge_includes root visited = function
             let file_stdloc =
               Filename.concat stdlib_loc (Ustring.to_utf8 path)
             in
+            let is_suffix_of suff s =
+              let n = String.length suff in
+              let ns = String.length s in
+              if ns > n then
+                let s' = String.sub s (ns - n) n in
+                String.equal suff s'
+              else false
+            in
             if List.mem filename visited then
               raise_error info ("Cycle detected in included files: " ^ filename)
             else if List.mem filename !parsed_files then None
@@ -115,6 +123,8 @@ let rec merge_includes root visited = function
               Sys.file_exists filename
               && Sys.file_exists file_stdloc
               && file_stdloc <> filename
+              (* This should not apply to files in the standard library *)
+              && not (is_suffix_of filename file_stdloc)
             then
               raise_error info
                 ( "File exists both locally and in standard library: "
