@@ -159,7 +159,7 @@ let _generateUtest = lam t.
       {filename = "", row = "0"}
     else never
   in
-  match _compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
+  match compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
     utestAst ty utestInfo t.test t.expected
   else error "Type error"
 

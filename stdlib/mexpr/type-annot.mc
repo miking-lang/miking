@@ -31,23 +31,39 @@ let _typeEnvEmpty = {
 -- compatible with any other type. If no compatible type can be found, `None`
 -- is returned.
 recursive
-let _compatibleType =
+let compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _compatibleType tyEnv t1.from t2.from with Some a then
-      match _compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {from = a, to = b})
+  match (unwrapType tyEnv ty1, unwrapType tyEnv ty2)
+  with (Some ty1, Some ty2) then
+    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+      match compatibleType tyEnv t1.from t2.from with Some a then
+        match compatibleType tyEnv t1.to t2.to with Some b then
+          Some (TyArrow {{t1 with from = a} with to = b})
+        else None ()
       else None ()
+    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+      match compatibleType tyEnv t1.ty t2.ty with Some t then
+        Some (TySeq {t1 with ty = t})
+      else None ()
+    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+      let fieldCompatibleType = lam k. lam ty1.
+        match mapLookup k t2.fields with Some ty2 then
+          compatibleType tyEnv ty1 ty2
+        else None ()
+      in
+      let fields = mapMapWithKey fieldCompatibleType t1.fields in
+      let allSome = all (lam o. match o with Some _ then true else false)
+                        (mapValues fields) in
+      if allSome then
+        Some (TyRecord {t1 with fields = fields})
+      else
+        None ()
+    else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _compatibleType tyEnv t1.ty ty2.ty with Some t then
-      Some (TySeq {ty = t})
-    else None ()
-  else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
 
@@ -71,7 +87,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
     let ty =
       match env with {varEnv = varEnv, tyEnv = tyEnv} then
         match mapLookup t.ident varEnv with Some ty then
-          match _compatibleType tyEnv t.ty ty with Some ty then
+          match compatibleType tyEnv t.ty ty with Some ty then
             ty
           else error "Inconsistent type of annotated variable"
         else t.ty
@@ -112,7 +128,7 @@ lang LetTypeAnnot = TypeAnnot + LetAst
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = typeAnnotExpr env t.body in
-      match _compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
+      match compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
         if _isTypeAscription t then
           withType tyBody body
         else
@@ -136,7 +152,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       let body = typeAnnotExpr env binding.body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match _compatibleType tyEnv binding.ty (ty body) with Some tyBody then
+          match compatibleType tyEnv binding.ty (ty body) with Some tyBody then
             tyBody
           else error "Inconsistent type annotation of recursive let-term"
         in
@@ -217,7 +233,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
       let ty =
         match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = TyVar target} then
-            match _compatibleType tyEnv (ty body) from with Some _ then
+            match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
             else error "Inconsistent type annotation of constructor application"
           else tyunknown_
@@ -236,7 +252,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
     let els = typeAnnotExpr env t.els in
     let ty =
       match env with {tyEnv = tyEnv} then
-        match _compatibleType tyEnv (ty thn) (ty els) with Some ty then
+        match compatibleType tyEnv (ty thn) (ty els) with Some ty then
           ty
         else tyunknown_
       else never
