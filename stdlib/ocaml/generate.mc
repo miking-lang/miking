@@ -514,6 +514,7 @@ let _preamble =
     , intr3 "subsequence" (appf3_ (_seqOp "subsequence"))
     , intr1 "ofArray" (appf1_ (_seqOp "Helpers.of_array"))
     , intr1 "print" (appf1_ (_ioOp "print"))
+    , intr1 "dprint" (appf1_ (_ioOp "dprint"))
     , intr1 "readLine" (appf1_ (_ioOp "read_line"))
     , intr0 "argv" (_sysOp "argv")
     , intr1 "readFile" (appf1_ (_fileOp "read"))
@@ -604,6 +605,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CReverse _ -> nvar_ (_intrinsicName "reverse")
   | CSubsequence _ -> nvar_ (_intrinsicName "subsequence")
   | CPrint _ -> nvar_ (_intrinsicName "print")
+  | CDPrint _ -> nvar_ (_intrinsicName "dprint")
   | CReadLine _ -> nvar_ (_intrinsicName "readLine")
   | CArgv _ -> nvar_ (_intrinsicName "argv")
   | CFileRead _ -> nvar_ (_intrinsicName "readFile")
@@ -1482,9 +1484,18 @@ utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
 -- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
 -- projection.
+let testStr = str_ "foobar" in
+let testSplit = symbolize (bind_ (ulet_ "_" (splitat_ testStr (int_ 2))) (int_ 0)) in
+utest testSplit  with generateEmptyEnv testSplit using sameSemantics in
 
--- TODO(Oscar Eriksson, 2020-11-30) Test symbol operations when we have
--- implemented tuples/records.
+-- eqsym
+let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
+utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
+
+-- sym2hash
+let sym2hashTest = symbolize (bindall_
+        [ ulet_ "x" (gensym_ unit_)
+        , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
 
 -- Float-Integer conversions
 let testFloorfi = floorfi_ (float_ 1.5) in
@@ -1507,8 +1518,12 @@ let testFileExists = fileExists_ (str_ "test_file_ops") in
 utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 
 -- -- IO operations
--- let testPrint = print_ (str_ "tested print") in
--- utest testPrint with generate testPrint using sameSemantics in
+--  NOTE(gizem, 21-03-19): This test file prints an empty string.
+let testPrint = symbolize (bind_ (ulet_ "_" (print_ (str_ ""))) (int_ 0)) in
+utest testPrint with generateEmptyEnv testPrint using sameSemantics in
+
+let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
+utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
 
 -- Random number generation operations
 let testSeededRandomNumber =
@@ -1520,15 +1535,11 @@ utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
 using sameSemantics in
 
 -- Time operations
+let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ unit_), divf_ (var_ "x") (var_ "x")] in
+utest ocamlEvalFloat (generateEmptyEnv testWallTimeMs) with float_ 1.0 using eqExpr in
 
--- NOTE(larshum, 2020-12-14): Cannot test time operations until unit types
--- are supported.
-
--- let testWallTimeMs = wallTimeMs_ unit_ in
--- utest testWallTimeMs with generateEmptyEnv testWallTimeMs using sameSemantics in
-
--- let testSleepMs = sleepMs_ (int_ 10) in
--- utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
+let testSleepMs = symbolize (bind_ (sleepMs_ (int_ 10)) (int_ 5)) in
+utest testSleepMs with generateEmptyEnv testSleepMs using sameSemantics in
 
 -- TODO(oerikss, 2020-12-14): Sys operations are not tested
 
@@ -1739,6 +1750,15 @@ utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
 with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
+let mapBindingsTest = bindall_
+  [ ulet_ "m1" (mapEmpty_ (TmConst {val = CSubi {}}))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , ulet_ "seq" (mapBindings_ (var_ "m1"))
+  , length_ (var_ "seq")
+  ] in
+
+utest ocamlEvalInt (generateEmptyEnv mapBindingsTest) with int_ 2 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics

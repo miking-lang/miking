@@ -1100,9 +1100,10 @@ let delta eval env fi c v =
       fail_constapp fi
   | CmapBindings, TmConst (_, CMap (_, m)) ->
       let binds =
-        Mmap.bindings m |> List.map (fun (k, v) -> tuple2record fi [k; v])
+        Mmap.bindings m
+        |> Mseq.Helpers.map (fun (k, v) -> tuple2record fi [k; v])
       in
-      TmSeq (fi, Mseq.Helpers.of_list binds)
+      TmSeq (fi, binds)
   | CmapBindings, _ ->
       fail_constapp fi
   | CmapEq (None, None), f ->
