@@ -201,7 +201,11 @@ let type_ = use MExprAst in
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2, info = NoInfo ()}) bs,
+  TmRecLets {bindings = map (lam t. { ident = t.0
+                                    , tyBody = t.1
+                                    , body = t.2
+                                    , ty = TyUnknown {}
+                                    , info = NoInfo ()}) bs,
              inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
