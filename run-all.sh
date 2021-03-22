@@ -7,7 +7,7 @@
 # Run a file
 run() {
     echo $1
-    build/mi src/main/mi.mc -- run $1
+    build/mi src/main/mi.mc -- run --test $1
 }
 
 files=(
