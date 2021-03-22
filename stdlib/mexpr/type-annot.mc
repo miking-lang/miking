@@ -96,12 +96,10 @@ lang VarTypeAnnot = TypeAnnot + VarAst
           match compatibleType tyEnv t.ty ty with Some ty then
             ty
           else
-            let annotTyStr = _pprintType t.ty in
-            let envTyStr = _pprintType ty in
             let msg = join [
               "Type of variable is inconsistent with environment\n",
-              "Variable annotated with type: ", annotTyStr, "\n",
-              "Type in variable environment: ", envTyStr
+              "Variable annotated with type: ", _pprintType t.ty, "\n",
+              "Type in variable environment: ", _pprintType ty
             ] in
             infoErrorExit t.info msg
         else t.ty
@@ -153,12 +151,10 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                       with inexpr = inexpr}
                       with ty = ty inexpr}
       else
-        let annotTyStr = _pprintType t.tyBody in
-        let inferredTyStr = _pprintType (ty body) in
         let msg = join [
           "Inconsistent type annotation of let-expression\n",
-          "Expected type: ", inferredTyStr, "\n",
-          "Annotated type: ", annotTyStr
+          "Expected type: ", _pprintType (ty body), "\n",
+          "Annotated type: ", _pprintType t.tyBody
         ] in
         infoErrorExit t.info msg
     else never
@@ -176,7 +172,13 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
         let tyBody =
           match compatibleType tyEnv binding.ty (ty body) with Some tyBody then
             tyBody
-          else error "Inconsistent type annotation of recursive let-term"
+          else
+            let msg = [
+              "Inconsistent type annotation of recursive let-expression\n"
+              "Expected type: ", _pprintType (ty body), "\n",
+              "Annotated type: ", _pprintType t.ty
+            ] in
+            infoErrorExit t.info msg
         in
         {{binding with body = body}
                   with ty = tyBody}
@@ -258,17 +260,15 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
             match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
             else
-              let fromStr = _pprintType from in
-              let tyBodyStr = _pprintType (ty body) in
               let msg = [
                 "Inconsistent types of constructor application",
-                "Constructor expected argument of type ", fromStr,
-                ", but the actual type was ", tyBodyStr
+                "Constructor expected argument of type ", _pprintType from,
+                ", but the actual type was ", _pprintType (ty body)
               ] in
               infoErrorExit t.info msg
           else tyunknown_
         else
-          let msg = ["Application of undefined constructor: ",
+          let msg = ["Application of untyped constructor: ",
                      nameGetStr t.ident] in
           infoErrorExit t.info msg
       in
