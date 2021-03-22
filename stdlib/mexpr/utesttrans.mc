@@ -10,11 +10,6 @@ include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 
 let _utestRunnerStr = "
-let utestFirstTest = ref true in
-let utestPassed = ref 0 in
-let utestLocalOK = ref true in
-let utestFailed = ref 0 in
-
 recursive
   let foldl = lam f. lam acc. lam seq.
     if eqi 0 (length seq) then acc
@@ -43,8 +38,7 @@ let int2string = lam n.
 in
 
 let utestTestPassed = lam.
-  print \".\";
-  modref utestPassed (addi (deref utestPassed) 1)
+  print \".\"
 in
 
 let utestTestFailed =
@@ -54,8 +48,7 @@ let utestTestFailed =
   printLn \"\";
   printLn (join [\" ** Unit test FAILED on line \", line, \" **\"]);
   printLn (join [\"    LHS: \", lhsStr]);
-  printLn (join [\"    RHS: \", rhsStr]);
-  modref utestFailed (addi (deref utestFailed) 1)
+  printLn (join [\"    RHS: \", rhsStr])
 in
 
 let utestRunner =
@@ -64,11 +57,6 @@ let utestRunner =
   lam eqfunc : Unknown -> Unknown -> Bool.
   lam lhs    : Unknown.
   lam rhs    : Unknown.
-  -- Check whether we are using a new file
-  (if deref utestFirstTest then
-     print (join [info.filename, \": \"]);
-     modref utestFirstTest false
-  else ());
   -- Comparison
   if eqfunc lhs rhs then
     utestTestPassed ()
@@ -79,15 +67,13 @@ in
 ()
 "
 
-let _builtinEnv =
-  map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin
-
-let _names = match unzip _builtinEnv with (n,_) then n else never
+let _builtinNames = map (lam intr. intr.0) builtinEnv
 
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolizeExpr (symVarNameEnv _names) (parseMExprString _utestRunnerStr)
+  symbolizeExpr (symVarNameEnv _builtinNames)
+                (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -115,20 +101,20 @@ let withUtestRunner = lam term.
   bind_ utestRunner term
 
 recursive
-let _consistentType =
+let _compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
   match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
   else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
   else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _consistentType tyEnv t1.from t2.from with Some a then
-      match _consistentType tyEnv t1.to t2.to with Some b then
+    match _compatibleType tyEnv t1.from t2.from with Some a then
+      match _compatibleType tyEnv t1.to t2.to with Some b then
         Some (TyArrow {from = a, to = b})
       else None ()
     else None ()
   else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _consistentType tyEnv t1.ty ty2.ty with Some t then
+    match _compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {ty = t})
     else None ()
   else if eqType tyEnv ty1 ty2 then Some ty1
@@ -180,7 +166,7 @@ let _generateUtest = lam t.
       {filename = "", row = "0"}
     else never
   in
-  match _consistentType assocEmpty (ty t.test) (ty t.expected) with Some ty then
+  match _compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
     utestAst ty utestInfo t.test t.expected
   else error "Type error"
 
@@ -196,7 +182,7 @@ lang MExprUtestTrans = MExprAst
 
   sem utestGenH =
   | TmUtest t ->
-    bind_ (ulet_ "" (_generateUtest t)) t.next
+    bind_ (ulet_ "" (_generateUtest t)) (utestGenH t.next)
   | t -> smap_Expr_Expr utestGenH t
 
   sem utestGen =
