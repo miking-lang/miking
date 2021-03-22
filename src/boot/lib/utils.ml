@@ -150,9 +150,7 @@ let list_zip_right = function
 
 let normalize_path p =
   let p =
-    if Filename.is_relative p then
-      Filename.concat (Sys.getcwd ()) p
-    else p
+    if Filename.is_relative p then Filename.concat (Sys.getcwd ()) p else p
   in
   let delim = Str.regexp_string Filename.dir_sep in
   let rec recur = function
