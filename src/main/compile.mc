@@ -31,6 +31,7 @@ recursive let _withPreamble = lam expr.
     OTmPreambleText {text = _preambleStr, inexpr = expr}
 end
 
+-- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
     subsequence path (addi idx 1) (length path)
