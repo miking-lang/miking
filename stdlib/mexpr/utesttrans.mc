@@ -114,27 +114,6 @@ let int2stringName = optionGetOrElse
 let withUtestRunner = lam term.
   bind_ utestRunner term
 
-recursive
-let _consistentType =
-  use MExprAst in
-  use MExprEq in
-  lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _consistentType tyEnv t1.from t2.from with Some a then
-      match _consistentType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {from = a, to = b})
-      else None ()
-    else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _consistentType tyEnv t1.ty ty2.ty with Some t then
-      Some (TySeq {ty = t})
-    else None ()
-  else if eqType tyEnv ty1 ty2 then Some ty1
-  else None ()
-end
-
 recursive let _printFunc = use MExprAst in
   lam ty.
   match ty with TyInt {} then
@@ -180,7 +159,7 @@ let _generateUtest = lam t.
       {filename = "", row = "0"}
     else never
   in
-  match _consistentType assocEmpty (ty t.test) (ty t.expected) with Some ty then
+  match _compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
     utestAst ty utestInfo t.test t.expected
   else error "Type error"
 
