@@ -253,9 +253,11 @@ lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
     let test = typeAnnotExpr env t.test in
     let expected = typeAnnotExpr env t.expected in
     let next = typeAnnotExpr env t.next in
-    TmUtest {{{{t with test = test}
+    let tusing = optionMap (typeAnnotExpr env) t.tusing in
+    TmUtest {{{{{t with test = test}
                   with expected = expected}
                   with next = next}
+                  with tusing = tusing}
                   with ty = ty next}
 end
 

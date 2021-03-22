@@ -422,10 +422,13 @@ let appf8_ = use MExprAst in
   lam f. lam a1. lam a2. lam a3. lam a4. lam a5. lam a6. lam a7. lam a8.
   app_ (appf7_ f a1 a2 a3 a4 a5 a6 a7) a8
 
+let utestu_ = use MExprAst in
+  lam t. lam e. lam n. lam u.
+  TmUtest {test = t, expected = e, next = n, tusing = u, ty = TyUnknown {}, info = NoInfo ()}
+
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n, ty = TyUnknown {}, info = NoInfo ()}
-
+  TmUtest {test = t, expected = e, next = n, tusing = None (), ty = TyUnknown {}, info = NoInfo ()}
 
 -- Ascription
 let asc_ = use MExprAst in

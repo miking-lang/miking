@@ -129,9 +129,13 @@ lang BootParser = MExprAst
               ty = TyUnknown(),
               info = ginfo t 0}
   | 113 /-TmUtest-/ ->
+     let tusing = match (glistlen t 0) with 4 then
+                    Some (gterm t 3)
+                  else None () in
      TmUtest {test = gterm t 0,
               expected = gterm t 1,
               next = gterm t 2,
+              tusing = tusing,
               ty = TyUnknown(),
               info = ginfo t 0}
   | 114 /-TmNever-/ ->

@@ -6,7 +6,7 @@
 
 
 -- Logical NOT
-let not: Bool -> Bool -> Bool =
+let not: Bool -> Bool =
   lam a. if a then false else true
 
 utest not true with false

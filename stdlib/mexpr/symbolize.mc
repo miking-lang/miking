@@ -257,9 +257,11 @@ end
 lang UtestSym = Sym + UtestAst
   sem symbolizeExpr (env : SymEnv) =
   | TmUtest t ->
-    TmUtest {{{t with test = symbolizeExpr env t.test}
+    let tusing = optionMap (symbolizeExpr env) t.tusing in
+    TmUtest {{{{t with test = symbolizeExpr env t.test}
                  with expected = symbolizeExpr env t.expected}
                  with next = symbolizeExpr env t.next}
+                 with tusing = tusing}
 end
 
 lang SeqSym = Sym + SeqAst
@@ -533,7 +535,9 @@ let litpat =
 
 let ut = utest_ base base base in
 
-let seq = seq_ [base, data, const] in
+let utu = utestu_ base base base eqi_ in
+
+let seq = seq_ [base, data, const, utu] in
 
 let nev = never_ in
 
