@@ -163,20 +163,27 @@ end
 lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
-    let foldBinding = lam acc. lam binding.
+    -- Add mapping from binding identifier to annotated type before doing type
+    -- annotations of the bindings. This is to make annotations work for
+    -- mutually recursive functions, given correct type annotations.
+    let foldBindingInit = lam acc. lam binding.
+      mapInsert binding.ident binding.tyBody acc
+    in
+    -- Add mapping from binding identifier to the inferred type.
+    let foldBindingAfter = lam acc. lam binding.
       mapInsert binding.ident binding.ty acc
     in
     let annotBinding = lam env. lam binding.
       let body = typeAnnotExpr env binding.body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match compatibleType tyEnv binding.ty (ty body) with Some tyBody then
+          match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
             tyBody
           else
             let msg = [
               "Inconsistent type annotation of recursive let-expression\n"
               "Expected type: ", _pprintType (ty body), "\n",
-              "Annotated type: ", _pprintType t.ty
+              "Annotated type: ", _pprintType t.tyBody
             ] in
             infoErrorExit t.info msg
         in
@@ -185,8 +192,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       else never
     in
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = foldl foldBinding varEnv t.bindings} in
+      let env = {env with varEnv = foldl foldBindingInit varEnv t.bindings} in
       let bindings = map (annotBinding env) t.bindings in
+      let env = {env with varEnv = foldl foldBindingAfter varEnv bindings} in
       let inexpr = typeAnnotExpr env t.inexpr in
       TmRecLets {{{t with bindings = bindings}
                      with inexpr = inexpr}
