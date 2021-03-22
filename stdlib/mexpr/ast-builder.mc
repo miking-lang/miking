@@ -87,44 +87,42 @@ let pnot_ = use MExprAst in
 -- Types --
 let tyarrow_ = use MExprAst in
   lam from. lam to.
-  TyArrow {from = from, to = to}
+  TyArrow {from = from, to = to, info = NoInfo ()}
 
 let tyarrows_ = use MExprAst in
   lam tys.
-  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tys
+  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
 let tyunknown_ = use MExprAst in
-  TyUnknown ()
+  TyUnknown {info = NoInfo ()}
 
 let tyunit_ = use MExprAst in
-  TyRecord {fields = mapEmpty cmpSID}
+  TyRecord {fields = mapEmpty cmpSID, info = NoInfo ()}
 
 let tyint_ = use MExprAst in
-  TyInt ()
+  TyInt {info = NoInfo ()}
 
 let tyfloat_ = use MExprAst in
-  TyFloat ()
+  TyFloat {info = NoInfo ()}
 
 let tybool_ = use MExprAst in
-  TyBool ()
+  TyBool {info = NoInfo ()}
 
 let tychar_ = use MExprAst in
-  TyChar ()
-
-let tystr_ = use MExprAst in
-  TySeq {ty = tychar_}
+  TyChar {info = NoInfo ()}
 
 let tyseq_ = use MExprAst in
   lam ty.
-  TySeq {ty = ty}
+  TySeq {ty = ty, info = NoInfo ()}
 
-let utyseq_ = use MExprAst in
-  TySeq {ty = TyUnknown ()}
+let tystr_ = use MExprAst in
+  tyseq_ tychar_
 
 let tyrecord_ = use MExprAst in
   lam fields.
   TyRecord {
-    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields)
+    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields),
+    info = NoInfo ()
   }
 
 
@@ -135,16 +133,17 @@ let tytuple_ = use MExprAst in
 let tyvariant_ = use MExprAst in
   lam constrs.
   TyVariant {
-    constrs = mapFromList nameCmp constrs
+    constrs = mapFromList nameCmp constrs,
+    info = NoInfo ()
   }
 
 let tyapp_ = use MExprAst in
   lam lhs. lam rhs.
-  TyApp {lhs = lhs, rhs = rhs}
+  TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
 let ntyvar_ = use MExprAst in
   lam n.
-  TyVar {ident = n}
+  TyVar {ident = n, info = NoInfo ()}
 
 let tyvar_ = use MExprAst in
   lam s.
