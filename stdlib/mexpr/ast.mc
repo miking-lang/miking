@@ -602,8 +602,10 @@ end
 lang BootParserAst = ConstAst
   syn Const =
   | CBootParserParseMExprString {}
+  | CBootParserParseMCoreFile {}
   | CBootParserGetId {}
   | CBootParserGetTerm {}
+  | CBootParserGetType ()
   | CBootParserGetString {}
   | CBootParserGetInt {}
   | CBootParserGetFloat {}

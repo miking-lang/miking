@@ -60,10 +60,10 @@ in
 
 let utestRunner =
   lam info   : {filename : String, row : String}.
-  lam printf : a -> String.
-  lam eqfunc : a -> a -> Bool.
-  lam lhs    : a.
-  lam rhs    : a.
+  lam printf : Unknown -> String.
+  lam eqfunc : Unknown -> Unknown -> Bool.
+  lam lhs    : Unknown.
+  lam rhs    : Unknown.
   -- Check whether we are using a new file
   (if deref utestFirstTest then
      print (join [info.filename, \": \"]);

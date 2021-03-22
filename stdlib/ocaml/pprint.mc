@@ -5,19 +5,6 @@ include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
 
-let defaultIdentName = "_var"
-let defaultConName = "Con"
-
-let escapeFirstChar = lam c.
-  if isLowerAlphaOrUnderscore c then c
-  else '_'
-
-let escapeFirstConChar = lam c.
-  if isUpperAlpha c then c
-  else 'C'
-
-utest map escapeFirstChar "abcABC/:@_'" with "abc________"
-
 let isValidChar = lam c.
   or (isAlphanum c) (or (eqChar c '_') (eqChar c '\''))
 
@@ -26,71 +13,28 @@ let escapeChar = lam c.
 
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
-let isIdentifierString = lam s.
-  let n = length s in
-  if null s then false
-  else if gti n 1 then
-    let hd = head s in
-    let tl = tail s in
-    and (isLowerAlphaOrUnderscore hd) (all isValidChar tl)
-  else
-    all isLowerAlpha s
-
-let isConString = lam s.
-  if null s then false else
-  and (isUpperAlpha (head s)) (all isValidChar (tail s))
-
-utest isIdentifierString "__" with true
-utest isIdentifierString "_1" with true
-utest isIdentifierString "_A" with true
-utest isIdentifierString "a" with true
-utest isIdentifierString "a123" with true
-utest isIdentifierString "aA" with true
-utest isIdentifierString "_" with false
-utest isIdentifierString "A" with false
-utest isIdentifierString "AA" with false
-utest isIdentifierString "__*" with false
-utest isIdentifierString "" with false
-
 let escapeVarString = lam s.
-  let n = length s in
-  if gti n 0 then
-    let hd = head s in
-    let tl = tail s in
-    if or (neqi n 1) (isLowerAlpha hd) then
-      cons (escapeFirstChar hd) (map escapeChar tl)
-    else
-      defaultIdentName
-  else
-    defaultIdentName
+  concat "var_" (map escapeChar s)
 
 let escapeConString = lam s.
-  let n = length s in
-  if gti n 0 then
-    let hd = head s in
-    let tl = tail s in
-    if or (neqi n 1) (isUpperAlpha hd) then
-      cons (escapeFirstConChar hd) (map escapeChar tl)
-    else
-      defaultConName
-  else
-    defaultConName
+  concat "Con_" (map escapeChar s)
 
-let escapeLabelStr = lam s. cons '_' (map escapeChar s)
+let escapeLabelString = lam s.
+  concat "label_" (map escapeChar s)
 
-utest escapeVarString "abcABC/:@_'" with "abcABC____'"
-utest escapeVarString "" with defaultIdentName
-utest escapeVarString "@" with defaultIdentName
-utest escapeVarString "ABC123" with "_BC123"
-utest escapeVarString "'a/b/c" with "_a_b_c"
-utest escapeVarString "123" with "_23"
+utest escapeVarString "abcABC/:@_'" with "var_abcABC____'"
+utest escapeVarString "" with "var_"
+utest escapeVarString "@" with "var__"
+utest escapeVarString "ABC123" with "var_ABC123"
+utest escapeVarString "'a/b/c" with "var_'a_b_c"
+utest escapeVarString "123" with "var_123"
 
-utest escapeConString "abcABC/:@_'" with "CbcABC____'"
-utest escapeConString "" with defaultConName
-utest escapeConString "@" with defaultConName
-utest escapeConString "ABC123" with "ABC123"
-utest escapeConString "'a/b/c" with "Ca_b_c"
-utest escapeConString "123" with "C23"
+utest escapeConString "abcABC/:@_'" with "Con_abcABC____'"
+utest escapeConString "" with "Con_"
+utest escapeConString "@" with "Con__"
+utest escapeConString "ABC123" with "Con_ABC123"
+utest escapeConString "'a/b/c" with "Con_'a_b_c"
+utest escapeConString "123" with "Con_123"
 
 let escapeName = lam n.
   match n with (str,symb) then (escapeVarString str, symb)
@@ -101,10 +45,10 @@ let escapeConName = lam n.
   else never
 
 utest (escapeName ("abcABC/:@_'", gensym ())).0
-with ("abcABC____'", gensym ()).0
+with ("var_abcABC____'", gensym ()).0
 
 utest (escapeName ("ABC123", gensym ())).0
-with ("_BC123", gensym ()).0
+with ("var_ABC123", gensym ()).0
 
 -- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
 -- want to specify the type names in general. Record types are printed in a
@@ -148,7 +92,7 @@ lang OCamlPrettyPrint =
   sem pprintVarName (env : PprintEnv) =
   | name -> pprintEnvGetStr env (escapeName name)
   sem pprintLabelString =
-  | s -> escapeLabelStr s
+  | s -> escapeLabelString s
 
   sem isAtomic =
   | TmLam _ -> false
