@@ -15,8 +15,7 @@ lang ExtMCore = BootParser + MExpr + MExprTypeAnnot + MExprUtestTrans
 
 let run = lam files. lam options.
   use ExtMCore in
-  let env = map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin in
-  let names = match unzip env with (n,_) then n else never in
+  let builtinNames = map (lam x. x.0) builtinEnv in
   let runFile = lam file.
     let ast = parseMCoreFile file in
 
@@ -35,6 +34,6 @@ let run = lam files. lam options.
     in
 
     -- Evaluate the symbolized program
-    eval {env = env} (symbolizeExpr (symVarNameEnv names) ast)
+    eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) ast)
   in
   iter runFile files
