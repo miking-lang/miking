@@ -30,7 +30,7 @@ let symEnvEmpty =
 
 let symVarNameEnv = lam varNameEnv : [Name].
   {symEnvEmpty with varEnv = map (lam x. (nameGetStr x, x)) varNameEnv}
- 
+
 -----------
 -- TERMS --
 -----------
@@ -41,7 +41,9 @@ lang Sym
 
   -- Symbolize with empty environments
   sem symbolize =
-  | expr -> symbolizeExpr symEnvEmpty expr
+  | expr ->
+    let env = symVarNameEnv builtinNames in
+    symbolizeExpr env expr
 end
 
 lang VarSym = Sym + VarAst

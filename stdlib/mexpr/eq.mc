@@ -277,44 +277,16 @@ lang IntEq = IntAst
   | CInt {val = v2} -> match lhs with CInt {val = v1} then eqi v1 v2 else false
 end
 
-lang ArithEq = ArithIntAst
-  sem eqConst (lhs : Const) =
-  | CAddi {} -> match lhs with CAddi _ then true else false
-  | CSubi {} -> match lhs with CSubi _ then true else false
-  | CMuli {} -> match lhs with CMuli _ then true else false
-end
-
 lang FloatEq = FloatAst
   sem eqConst (lhs : Const) =
   | CFloat {val = v2} ->
     match lhs with CFloat {val = v1} then eqf v1 v2 else false
 end
 
-lang ArithFloatEq = ArithFloatAst
-  sem eqConst (lhs : Const) =
-  | CAddf {} -> match lhs with CAddf _ then true else false
-  | CSubf {} -> match lhs with CSubf _ then true else false
-  | CMulf {} -> match lhs with CMulf _ then true else false
-  | CDivf {} -> match lhs with CDivf _ then true else false
-  | CNegf {} -> match lhs with CNegf _ then true else false
-end
-
 lang BoolEq = BoolAst
   sem eqConst (lhs : Const) =
   | CBool {val = v2} ->
     match lhs with CBool {val = v1} then eqBool v1 v2 else false
-end
-
-lang CmpIntEq = CmpIntAst
-  sem eqConst (lhs : Const) =
-  | CEqi {} -> match lhs with CEqi _ then true else false
-  | CLti {} -> match lhs with CLti _ then true else false
-end
-
-lang CmpFloatEq = CmpFloatAst
-  sem eqConst (lhs : Const) =
-  | CEqf {} -> match lhs with CEqf _ then true else false
-  | CLtf {} -> match lhs with CLtf _ then true else false
 end
 
 lang CharEq = CharAst
@@ -327,39 +299,6 @@ lang SymbEq = SymbAst
   sem eqConst (lhs : Const) =
   | CSymb {val = v2} ->
     match lhs with CSymb {val = v1} then eqsym v1 v2 else false
-end
-
-lang CmpSymbEq = CmpSymbAst
-  sem eqConst (lhs : Const) =
-  | CEqsym {} -> match lhs with CEqsym _ then true else false
-end
-
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
-lang SeqOpEq = SeqOpAst
-  sem eqConst (lhs : Const) =
-  | CGet {} -> match lhs with CGet _ then true else false
-  | CSet {} -> match lhs with CSet _ then true else false
-  | CCreate {} -> match lhs with CCreate _ then true else false
-  | CCons {} -> match lhs with CCons _ then true else false
-  | CSnoc {} -> match lhs with CSnoc _ then true else false
-  | CConcat {} -> match lhs with CConcat _ then true else false
-  | CLength {} -> match lhs with CLength _ then true else false
-  | CReverse {} -> match lhs with CReverse _ then true else false
-  | CSplitAt {} -> match lhs with CSplitAt _ then true else false
-end
-
-lang TensorOpEq = TensorOpAst
-  sem eqConst (lhs : Const) =
-  | CTensorCreate {} -> match lhs with CTensorCreate _ then true else false
-  | CTensorGetExn {} -> match lhs with CTensorGetExn _ then true else false
-  | CTensorSetExn {} -> match lhs with CTensorSetExn _ then true else false
-  | CTensorRank {} -> match lhs with CTensorRank _ then true else false
-  | CTensorShape {} -> match lhs with CTensorShape _ then true else false
-  | CTensorReshapeExn {} -> match lhs with CTensorReshapeExn _ then true else false
-  | CTensorCopyExn {} -> match lhs with CTensorCopyExn _ then true else false
-  | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
-  | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
-  | CTensorIteri {} -> match lhs with CTensorIteri _ then true else false
 end
 
 --------------

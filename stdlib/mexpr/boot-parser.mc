@@ -307,7 +307,7 @@ utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
 utest info (match parseMExprString s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
 utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
-let s = "print x; 10" in
+let s = "printLn x; 10" in
 utest lside s with rside s in
 
 -- TmRecLets, TmLam

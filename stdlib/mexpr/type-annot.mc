@@ -62,7 +62,9 @@ lang TypeAnnot
   -- Intentionally left blank
 
   sem typeAnnot =
-  | expr -> typeAnnotExpr _typeEnvEmpty expr
+  | expr ->
+    let env = {_typeEnvEmpty with varEnv = builtinNameTypeMap} in
+    typeAnnotExpr env expr
 end
 
 lang VarTypeAnnot = TypeAnnot + VarAst
@@ -271,43 +273,9 @@ lang IntTypeAnnot = ConstTypeAnnot + IntAst
   | CInt _ -> tyint_
 end
 
-lang ArithIntTypeAnnot = ConstTypeAnnot + ArithIntAst
-  sem typeConst =
-  | CAddi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSubi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CMuli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CDivi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CNegi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CModi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-end
-
-lang ShiftIntTypeAnnot = ConstTypeAnnot + ShiftIntAst
-  sem typeConst =
-  | CSlli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSrli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSrai _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-end
-
 lang FloatTypeAnnot = ConstTypeAnnot + FloatAst
   sem typeConst =
   | CFloat _ -> tyfloat_
-end
-
-lang ArithFloatTypeAnnot = ConstTypeAnnot + ArithFloatAst
-  sem typeConst =
-  | CAddf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CSubf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CMulf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CDivf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CNegf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-end
-
-lang FloatIntConversionTypeAnnot = ConstTypeAnnot + FloatIntConversionAst
-  sem typeConst =
-  | CFloorfi _ -> tyarrow_ tyfloat_ tyint_
-  | CCeilfi _ -> tyarrow_ tyfloat_ tyint_
-  | CRoundfi _ -> tyarrow_ tyfloat_ tyint_
-  | CInt2float _ -> tyarrow_ tyint_ tyfloat_
 end
 
 lang BoolTypeAnnot = ConstTypeAnnot + BoolAst
@@ -315,45 +283,9 @@ lang BoolTypeAnnot = ConstTypeAnnot + BoolAst
   | CBool _ -> tybool_
 end
 
-lang CmpIntTypeAnnot = ConstTypeAnnot + CmpIntAst
-  sem typeConst =
-  | CEqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CNeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CLti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CGti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CLeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CGeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-end
-
-lang CmpFloatTypeAnnot = ConstTypeAnnot + CmpFloatAst
-  sem typeConst =
-  | CEqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CNeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CLtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CGtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CLeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CGeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-end
-
 lang CharTypeAnnot = ConstTypeAnnot + CharAst
   sem typeConst =
   | CChar _ -> tychar_
-end
-
-lang CmpCharTypeAnnot = ConstTypeAnnot + CmpCharAst
-  sem typeConst =
-  | CEqc _ -> tyarrow_ tychar_ (tyarrow_ tychar_ tybool_)
-end
-
-lang IntCharConversionTypeAnnot = ConstTypeAnnot + IntCharConversionAst
-  sem typeConst =
-  | CInt2Char _ -> tyarrow_ tyint_ tychar_
-  | CChar2Int _ -> tyarrow_ tychar_ tyint_
-end
-
-lang FloatStringConversionTypeAnnot = ConstTypeAnnot + FloatStringConversionAst
-  sem typeConst =
-  | CString2float _ -> tyarrow_ tystr_ tyfloat_
 end
 
 -- NOTE(larshum, 2021-03-08): There is currently no type for symbols, so they
@@ -361,116 +293,6 @@ end
 lang SymbTypeAnnot = ConstTypeAnnot + SymbAst
   sem typeConst =
   | CSymb _ -> tyunknown_
-  | CGensym _ -> tyarrow_ tyunit_ tyunknown_
-  | CSym2hash _ -> tyarrow_ tyunknown_ tyint_
-end
-
-lang CmpSymbTypeAnnot = ConstTypeAnnot + CmpSymbAst
-  sem typeConst =
-  | CEqsym _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
-end
-
-lang SeqOpTypeAnnot = ConstTypeAnnot + SeqOpAst
-  sem typeConst =
-  | CSet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyunknown_ utyseq_))
-  | CGet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ utyseq_)
-  | CCons _ -> tyarrow_ tyunknown_ (tyarrow_ utyseq_ utyseq_)
-  | CSnoc _ -> tyarrow_ utyseq_ (tyarrow_ tyunknown_ utyseq_)
-  | CConcat _ -> tyarrow_ utyseq_ (tyarrow_ utyseq_ utyseq_)
-  | CLength _ -> tyarrow_ utyseq_ tyint_
-  | CReverse _ -> tyarrow_ utyseq_ utyseq_
-  | CCreate _ -> tyarrow_ tyint_ (tyarrow_ (tyarrow_ tyint_ tyunknown_) utyseq_)
-  | CSplitAt _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tytuple_ [utyseq_, utyseq_]))
-  | CSubsequence _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyint_ utyseq_))
-end
-
-lang FileOpTypeAnnot = ConstTypeAnnot + FileOpAst
-  sem typeConst =
-  | CFileRead _ -> tyarrow_ tystr_ tystr_
-  | CFileWrite _ -> tyarrow_ tystr_ (tyarrow_ tystr_ tyunit_)
-  | CFileExists _ -> tyarrow_ tystr_ tybool_
-  | CFileDelete _ -> tyarrow_ tystr_ tyunit_
-end
-
-lang IOTypeAnnot = ConstTypeAnnot + IOAst
-  sem typeConst =
-  | CPrint _ -> tyarrow_ tystr_ tyunit_
-  | CReadLine _ -> tyarrow_ tyunit_ tystr_
-  | CReadBytesAsString _ -> tyarrow_ tyint_ (tytuple_ [tystr_, tyint_])
-end
-
-lang RandomNumberGeneratorTypeAnnot = ConstTypeAnnot + RandomNumberGeneratorAst
-  sem typeConst =
-  | CRandIntU _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CRandSetSeed _ -> tyarrow_ tyint_ tyunit_
-end
-
-lang SysTypeAnnot = ConstTypeAnnot + SysAst
-  sem typeConst =
-  | CExit _ -> tyarrow_ tyint_ tyunknown_
-  | CError _ -> tyarrow_ tystr_ tyunknown_
-  | CArgv _ -> tyseq_ tystr_
-end
-
-lang TimeTypeAnnot = ConstTypeAnnot + TimeAst
-  sem typeConst =
-  | CWallTimeMs _ -> tyarrow_ tyunit_ tyfloat_
-  | CSleepMs _ -> tyarrow_ tyint_ tyunit_
-end
-
--- NOTE(larshum, 2021-03-08): There is currently no reference type in MExpr, so
--- they are considered to be of an unknown type.
-lang RefOpTypeAnnot = ConstTypeAnnot + RefOpAst
-  sem typeConst =
-  | CRef _ -> tyarrow_ tyunknown_ tyunknown_
-  | CModRef _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunit_)
-  | CDeRef _ -> tyarrow_ tyunknown_ tyunknown_
-end
-
-lang MapTypeAnnot = ConstTypeAnnot + MapAst
-  sem typeConst =
-  | CMapEmpty _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_)) tyunknown_
-  | CMapInsert _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-  | CMapRemove _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFindWithExn _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFindOrElse _ ->
-    tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-  | CMapFindApplyOrElse _ ->
-    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-             (tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-                       (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
-  | CMapBindings _ ->
-    tyarrow_ tyunknown_ (tyseq_ (tytuple_ [tyunknown_, tyunknown_]))
-  | CMapSize _ ->
-    tyarrow_ tyunknown_ tyint_
-  | CMapMem _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
-  | CMapAny _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-             (tyarrow_ tyunknown_ tybool_)
-  | CMapMap _ ->
-    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-             (tyarrow_ tyunknown_ tyunknown_)
-  | CMapMapWithKey _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-             (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFoldWithKey _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
-             tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapEq _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-  | CMapCmp _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
-  | CMapGetCmpFun _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_
-                        (tyarrow_ tyunknown_ tyint_))
 end
 
 lang MExprTypeAnnot =
@@ -481,13 +303,7 @@ lang MExprTypeAnnot =
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
 
   -- Constants
-  IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
-  ArithFloatTypeAnnot + FloatIntConversionTypeAnnot + BoolTypeAnnot +
-  CmpIntTypeAnnot + CmpFloatTypeAnnot + CharTypeAnnot + CmpCharTypeAnnot +
-  IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot + SymbTypeAnnot +
-  CmpSymbTypeAnnot + SeqOpTypeAnnot + FileOpTypeAnnot + IOTypeAnnot +
-  RandomNumberGeneratorTypeAnnot + SysTypeAnnot + TimeTypeAnnot +
-  RefOpTypeAnnot
+  IntTypeAnnot + FloatTypeAnnot + BoolTypeAnnot + CharTypeAnnot + SymbTypeAnnot
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq

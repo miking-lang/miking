@@ -120,45 +120,9 @@ lang OCamlPrettyPrint =
 
   sem getConstStringCode (indent : Int) =
   | CInt {val = i} -> int2string i
-  | CAddi _ -> "(+)"
-  | CSubi _ -> "(-)"
-  | CMuli _ -> "( * )"
-  | CDivi _ -> "(/)"
-  | CModi _ -> "(mod)"
-  | CNegi _ -> "(~-)"
   | CFloat {val = f} -> float2string f
-  | CAddf _ -> "(+.)"
-  | CSubf _ -> "(-.)"
-  | CMulf _ -> "( *. )"
-  | CDivf _ -> "(/.)"
-  | CNegf _ -> "(~-.)"
-  | CBool {val = b} ->
-      match b with true then
-        "true"
-      else
-        match b with false then
-          "false"
-        else never
-  | CEqi _ -> "(=)"
-  | CLti _ -> "(<)"
-  | CLeqi _ -> "(<=)"
-  | CGti _ -> "(>)"
-  | CGeqi _ -> "(>=)"
-  | CNeqi _ -> "(!=)"
-  | CSlli _ -> "Int.shift_left"
-  | CSrli _ -> "Int.shift_right_logical"
-  | CSrai _ -> "Int.shift_right"
-  | CEqf _ -> "(=)"
-  | CLtf _ -> "(<)"
-  | CLeqf _ -> "(<=)"
-  | CGtf _ -> "(>)"
-  | CGeqf _ -> "(>=)"
-  | CNeqf _ -> "(!=)"
-  | CInt2float _ -> "float_of_int"
+  | CBool {val = b} -> if b then "true" else "false"
   | CChar {val = c} -> show_char c
-  | CEqc _ -> "(=)"
-  | CChar2Int _ -> "int_of_char"
-  | CInt2Char _ -> "char_of_int"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->

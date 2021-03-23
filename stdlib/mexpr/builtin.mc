@@ -1,177 +1,258 @@
-include "ast.mc"
-include "ast-builder.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "stringid.mc"
+
+let _intType = use MExprAst in TyInt {info = NoInfo ()}
+let _floatType = use MExprAst in TyFloat {info = NoInfo ()}
+let _boolType = use MExprAst in TyBool {info = NoInfo ()}
+let _charType = use MExprAst in TyChar {info = NoInfo ()}
+let _unknownType = use MExprAst in TyUnknown {info = NoInfo ()}
+
+let _seqType = use MExprAst in
+  lam elemTy.
+  TySeq {ty = elemTy, info = NoInfo ()}
+let _strType = _seqType _charType
+let _arrowType = use MExprAst in
+  lam from. lam to.
+  TyArrow {from = from, to = to, info = NoInfo ()}
+let _recordType = use MExprAst in
+  lam fields.
+  TyRecord {
+    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields),
+    info = NoInfo ()
+  }
+let _tupleType = lam types.
+  _recordType (mapi (lam i. lam ty. (int2string i, ty)) types)
+let _unitType = _recordType []
+
+-- Use TyUnknown as a placeholder for terms that cannot be represented using
+-- the existing types.
+let _symType = _unknownType
+let _refType = _unknownType
+let _mapType = _unknownType
+let _tensorType = _unknownType
+let _parseTreeType = _unknownType
+let _genericType = _unknownType
+let _genericSeqType = _seqType _genericType
 
 let builtin = use MExprAst in
-  [ ("addi", CAddi (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("subi", CSubi (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("muli", CMuli (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("divi", CDivi (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("modi", CModi (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("negi", CNegi (), tyarrow_ tyint_ tyint_)
-  , ("lti", CLti (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("leqi", CLeqi (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("gti", CGti (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("geqi", CGeqi (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("eqi", CEqi (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("neqi", CNeqi (), tyarrow_ tyint_ (tyarrow_ tyint_ tybool_))
-  , ("slli", CSlli (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("srli", CSrli (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("srai", CSrai (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
+  [ ("addi", CAddi (), _arrowType _intType (_arrowType _intType _intType))
+  , ("subi", CSubi (), _arrowType _intType (_arrowType _intType _intType))
+  , ("muli", CMuli (), _arrowType _intType (_arrowType _intType _intType))
+  , ("divi", CDivi (), _arrowType _intType (_arrowType _intType _intType))
+  , ("modi", CModi (), _arrowType _intType (_arrowType _intType _intType))
+  , ("negi", CNegi (), _arrowType _intType _intType)
+  , ("lti", CLti (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("leqi", CLeqi (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("gti", CGti (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("geqi", CGeqi (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("eqi", CEqi (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("neqi", CNeqi (), _arrowType _intType (_arrowType _intType _boolType))
+  , ("slli", CSlli (), _arrowType _intType (_arrowType _intType _intType))
+  , ("srli", CSrli (), _arrowType _intType (_arrowType _intType _intType))
+  , ("srai", CSrai (), _arrowType _intType (_arrowType _intType _intType))
   -- , ("arity", Carity ())   -- Arity is not yet implemented
   -- Floating-point numbers
-  , ("addf", CAddf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_))
-  , ("subf", CSubf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_))
-  , ("mulf", CMulf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_))
-  , ("divf", CDivf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_))
-  , ("negf", CNegf (), tyarrow_ tyfloat_ tyfloat_)
-  , ("ltf", CLtf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("leqf", CLeqf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("gtf", CGtf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("geqf", CGeqf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("eqf", CEqf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("neqf", CNeqf (), tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_))
-  , ("floorfi", CFloorfi (), tyarrow_ tyfloat_ tyint_)
-  , ("ceilfi", CCeilfi (), tyarrow_ tyfloat_ tyint_)
-  , ("roundfi", CRoundfi (), tyarrow_ tyfloat_ tyint_)
-  , ("int2float", CInt2float (), tyarrow_ tyint_ tyfloat_)
-  , ("string2float", CString2float (), tyarrow_ tystr_ tyfloat_)
+  , ("addf", CAddf (), _arrowType _floatType (_arrowType _floatType _floatType))
+  , ("subf", CSubf (), _arrowType _floatType (_arrowType _floatType _floatType))
+  , ("mulf", CMulf (), _arrowType _floatType (_arrowType _floatType _floatType))
+  , ("divf", CDivf (), _arrowType _floatType (_arrowType _floatType _floatType))
+  , ("negf", CNegf (), _arrowType _floatType _floatType)
+  , ("ltf", CLtf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("leqf", CLeqf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("gtf", CGtf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("geqf", CGeqf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("eqf", CEqf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("neqf", CNeqf (), _arrowType _floatType (_arrowType _floatType _boolType))
+  , ("floorfi", CFloorfi (), _arrowType _floatType _intType)
+  , ("ceilfi", CCeilfi (), _arrowType _floatType _intType)
+  , ("roundfi", CRoundfi (), _arrowType _floatType _intType)
+  , ("int2float", CInt2float (), _arrowType _intType _floatType)
+  , ("string2float", CString2float (), _arrowType _strType _floatType)
   -- Characters
-  , ("eqc", CEqc (), tyarrow_ tychar_ (tyarrow_ tychar_ tybool_))
-  , ("char2int", CChar2Int (), tyarrow_ tyint_ tychar_)
-  , ("int2char", CInt2Char (), tyarrow_ tychar_ tyint_)
+  , ("eqc", CEqc (), _arrowType _charType (_arrowType _charType _boolType))
+  , ("char2int", CChar2Int (), _arrowType _intType _charType)
+  , ("int2char", CInt2Char (), _arrowType _charType _intType)
   -- Sequences
   , ("create", CCreate (),
-     tyarrow_ tyint_ (tyarrow_ (tyarrow_ tyint_ tyunknown_) utyseq_))
-  , ("length", CLength (), tyarrow_ utyseq_ tyint_)
-  , ("concat", CConcat (), tyarrow_ utyseq_ (tyarrow_ utyseq_ utyseq_))
-  , ("get", CGet (), tyarrow_ utyseq_ (tyarrow_ tyint_ utyseq_))
+      _arrowType
+        _intType
+        (_arrowType (_arrowType _intType _genericType)
+                    _genericSeqType))
+  , ("length", CLength (), _arrowType _genericSeqType _intType)
+  , ("concat", CConcat (),
+      _arrowType _genericSeqType
+                 (_arrowType _genericSeqType _genericSeqType))
+  , ("get", CGet (),
+      _arrowType _genericSeqType
+                 (_arrowType _intType _genericSeqType))
   , ("set", CSet (),
-     tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyunknown_ utyseq_)))
-  , ("cons", CCons (), tyarrow_ tyunknown_ (tyarrow_ utyseq_ utyseq_))
-  , ("snoc", CSnoc (), tyarrow_ utyseq_ (tyarrow_ tyunknown_ utyseq_))
+      _arrowType _genericSeqType
+                 (_arrowType _intType (_arrowType _genericType _genericSeqType)))
+  , ("cons", CCons (),
+      _arrowType _genericType
+                 (_arrowType _genericSeqType _genericSeqType))
+  , ("snoc", CSnoc (),
+      _arrowType _genericSeqType
+                 (_arrowType _genericType _genericSeqType))
   , ("splitAt", CSplitAt (),
-     tyarrow_ utyseq_ (tyarrow_ tyint_ (tytuple_ [utyseq_, utyseq_])))
-  , ("reverse", CReverse (), tyarrow_ utyseq_ utyseq_)
+      _arrowType _genericSeqType
+                 (_arrowType _intType
+                             (_tupleType [_genericSeqType, _genericSeqType])))
+  , ("reverse", CReverse (), _arrowType _genericSeqType _genericSeqType)
   , ("subsequence", CSubsequence (),
-     tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyint_ utyseq_)))
+      _arrowType _genericSeqType
+                 (_arrowType _intType
+                             (_arrowType _intType _genericSeqType)))
   -- Random numbers
-  , ("randIntU", CRandIntU (), tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
-  , ("randSetSeed", CRandSetSeed (), tyarrow_ tyint_ tyunit_)
+  , ("randIntU", CRandIntU (),
+      _arrowType _intType (_arrowType _intType _intType))
+  , ("randSetSeed", CRandSetSeed (), _arrowType _intType _unitType)
   -- MCore intrinsics: Time
-  , ("wallTimeMs", CWallTimeMs (), tyarrow_ tyunit_ tyfloat_)
-  , ("sleepMs", CSleepMs (), tyarrow_ tyint_ tyunit_)
+  , ("wallTimeMs", CWallTimeMs (), _arrowType _unitType _floatType)
+  , ("sleepMs", CSleepMs (), _arrowType _intType _unitType)
   -- MCore intrinsics: Debug and I/O
-  , ("print", CPrint (), tyarrow_ tystr_ tyunit_)
-  , ("dprint", CDPrint (), tyarrow_ tystr_ tyunit_)
-  , ("readLine", CReadLine (), tyarrow_ tyunit_ tystr_)
+  , ("print", CPrint (), _arrowType _strType _unitType)
+  , ("dprint", CDPrint (), _arrowType _strType _unitType)
+  , ("readLine", CReadLine (), _arrowType _unitType _strType)
   , ("readBytesAsString", CReadBytesAsString (),
-     tyarrow_ tyint_ (tytuple_ [tystr_, tystr_]))
-  , ("argv", CArgv (), tyseq_ tystr_)
-  , ("readFile", CFileRead (), tyarrow_ tystr_ tystr_)
-  , ("writeFile", CFileWrite (), tyarrow_ tystr_ (tyarrow_ tystr_ tyunit_))
-  , ("fileExists", CFileExists (), tyarrow_ tystr_ tybool_)
-  , ("deleteFile", CFileDelete (), tyarrow_ tystr_ tyunit_)
-  , ("error", CError (), tyarrow_ tyint_ tyunknown_)
-  , ("exit", CExit (), tyarrow_ tyint_ tyunknown_)
+      _arrowType _intType (_tupleType [_strType, _strType]))
+  , ("argv", CArgv (), _seqType _strType)
+  , ("readFile", CFileRead (), _arrowType _strType _strType)
+  , ("writeFile", CFileWrite (),
+      _arrowType _strType (_arrowType _strType _unitType))
+  , ("fileExists", CFileExists (), _arrowType _strType _boolType)
+  , ("deleteFile", CFileDelete (), _arrowType _strType _unitType)
+  , ("error", CError (), _arrowType _intType _unknownType)
+  , ("exit", CExit (), _arrowType _intType _unknownType)
   -- Symbols
-  , ("eqsym", CEqsym (), tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-  , ("gensym", CGensym (), tyarrow_ tyunit_ tyunknown_)
-  , ("sym2hash", CSym2hash (), tyarrow_ tyunknown_ tyint_)
+  , ("eqsym", CEqsym (), _arrowType _symType (_arrowType _symType _boolType))
+  , ("gensym", CGensym (), _arrowType _unitType _symType)
+  , ("sym2hash", CSym2hash (), _arrowType _symType _intType)
   -- References
-  , ("ref", CRef (), tyarrow_ tyunknown_ tyunknown_)
-  , ("deref", CDeRef (), tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunit_))
-  , ("modref", CModRef (), tyarrow_ tyunknown_ tyunknown_)
+  , ("ref", CRef (), _arrowType _genericType _refType)
+  , ("deref", CDeRef (), _arrowType _refType _genericType)
+  , ("modref", CModRef (), _arrowType _refType (_arrowType _genericType _unitType))
   -- Maps
   , ("mapEmpty", CMapEmpty (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_)) tyunknown_)
-  , ("mapSize", CMapSize (), tyarrow_ tyunknown_ tyint_)
+      _arrowType (_arrowType _genericType (_arrowType _genericType _intType)) _mapType)
+  , ("mapSize", CMapSize (), _arrowType _mapType _intType)
   , ("mapGetCmpFun", CMapGetCmpFun (),
-     tyarrow_ tyunknown_ (tyarrow_ tyunknown_
-                         (tyarrow_ tyunknown_ tyint_)))
+      _arrowType _mapType
+                 (_arrowType _genericType (_arrowType _genericType _intType)))
   , ("mapInsert", CMapInsert (),
-     tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
+      _arrowType _genericType (_arrowType _genericType (_arrowType _mapType _mapType)))
   , ("mapRemove", CMapRemove (),
-     tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
+      _arrowType _genericType (_arrowType _genericType _mapType))
   , ("mapFindWithExn", CMapFindWithExn (),
-     tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
+      _arrowType _genericType (_arrowType _mapType _genericType))
   , ("mapFindOrElse", CMapFindOrElse (),
-     tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-              (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
+      _arrowType (_arrowType _unitType _genericType)
+                 (_arrowType _genericType (_arrowType _mapType _mapType)))
   , ("mapFindApplyOrElse", CMapFindApplyOrElse (),
-     tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-              (tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-                        (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))))
+      _arrowType (_arrowType _genericType _genericType)
+                 (_arrowType (_arrowType _unitType _genericType)
+                             (_arrowType _genericType
+                                         (_arrowType _mapType _genericType))))
   , ("mapAny", CMapAny (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-              (tyarrow_ tyunknown_ tybool_))
+      _arrowType (_arrowType _genericType (_arrowType _genericType _boolType))
+                 (_arrowType _mapType _boolType))
   , ("mapMem", CMapMem (),
-     tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
+     _arrowType _genericType (_arrowType _mapType _boolType))
   , ("mapMap", CMapMap (),
-     tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-              (tyarrow_ tyunknown_ tyunknown_))
+      _arrowType (_arrowType _genericType _genericType)
+                 (_arrowType _mapType _mapType))
   , ("mapMapWithKey", CMapMapWithKey (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-              (tyarrow_ tyunknown_ tyunknown_))
+      _arrowType (_arrowType _genericType (_arrowType _genericType _genericType))
+                 (_arrowType _mapType _mapType))
   , ("mapFoldWithKey", CMapFoldWithKey (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
-              (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
+      _arrowType
+        (_arrowType _genericType
+                    (_arrowType _genericType
+                                (_arrowType _genericType _genericType)))
+        (_arrowType _genericType (_arrowType _mapType _mapType)))
   , ("mapBindings", CMapBindings (),
-     tyarrow_ tyunknown_ (tyseq_ (tytuple_ [tyunknown_, tyunknown_])))
+      _arrowType _mapType (_seqType (_tupleType [_genericType, _genericType])))
   , ("mapEq", CMapEq (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-              (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)))
+      _arrowType (_arrowType _genericType (_arrowType _genericType _boolType))
+                 (_arrowType _mapType (_arrowType _mapType _boolType)))
   , ("mapCmp", CMapCmp (),
-     tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
-              (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_)))
+      _arrowType (_arrowType _genericType (_arrowType _genericType _intType))
+                 (_arrowType _mapType (_arrowType _mapType _intType)))
   -- Tensors
   , ("tensorCreate", CTensorCreate (),
-     tyarrow_ (tyseq_ tyint_)
-              (tyarrow_ (tyseq_ tyint_) tyunknown_))
+      _arrowType (_seqType _intType)
+                 (_arrowType (_seqType _intType) _tensorType))
   , ("tensorGetExn", CTensorGetExn (),
-     tyarrow_ tyunknown_
-              (tyarrow_ (tyseq_ tyint_) tyunknown_))
+      _arrowType _tensorType
+                 (_arrowType (_seqType _intType) _tensorType))
   , ("tensorSetExn", CTensorSetExn (),
-     tyarrow_ tyunknown_
-              (tyarrow_ (tyseq_ tyint_)
-                        (tyarrow_ tyunknown_ tyunit_)))
-  , ("tensorRank", CTensorRank (), tyarrow_ tyunknown_ tyint_)
-  , ("tensorShape", CTensorShape (), tyarrow_ tyunknown_ (tyseq_ tyint_))
+      _arrowType _tensorType
+                 (_arrowType (_seqType _intType)
+                             (_arrowType _unknownType _unitType)))
+  , ("tensorRank", CTensorRank (), _arrowType _tensorType _intType)
+  , ("tensorShape", CTensorShape (), _arrowType _tensorType (_seqType _intType))
   , ("tensorReshapeExn", CTensorReshapeExn (),
-     tyarrow_ tyunknown_ (tyarrow_ (tyseq_ tyint_) tyunknown_))
-  , ("tensorCopyExn", CTensorCopyExn (), tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _tensorType (_arrowType (_seqType _intType) _tensorType))
+  , ("tensorCopyExn", CTensorCopyExn (),
+      _arrowType _tensorType (_arrowType _tensorType _unknownType))
   , ("tensorSliceExn", CTensorSliceExn (),
-     tyarrow_ tyunknown_ (tyarrow_ (tyseq_ tyint_) tyunknown_))
+      _arrowType _tensorType (_arrowType (_seqType _intType) _tensorType))
   , ("tensorSubExn", CTensorSubExn (),
-     tyarrow_ tyunknown_
-              (tyarrow_ tyint_ (tyarrow_ tyint_ tyunknown_)))
+      _arrowType _tensorType
+                 (_arrowType _intType (_arrowType _intType _tensorType)))
   , ("tensorIteri", CTensorIteri (),
-     tyarrow_ (tyarrow_ tyint_ (tyarrow_ tyunknown_ tyunit_))
-              (tyarrow_ tyunknown_ tyunit_))
+      _arrowType (_arrowType _intType (_arrowType _tensorType _unitType))
+                 (_arrowType _tensorType _unitType))
   -- Boot parser
   , ("bootParserParseMExprString", CBootParserParseMExprString (),
-     tyarrow_ tystr_ tyunknown_)
+      _arrowType _strType _parseTreeType)
   , ("bootParserParseMCoreFile", CBootParserParseMCoreFile (),
-     tyarrow_ tystr_ tyunknown_)
+      _arrowType _strType _parseTreeType)
   , ("bootParserGetId", CBootParserGetId (),
-     tyarrow_ tyunknown_ tyint_)
+      _arrowType _parseTreeType _intType)
   , ("bootParserGetTerm", CBootParserGetTerm (),
-     tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _parseTreeType _parseTreeType)
   , ("bootParserGetType", CBootParserGetType (),
-     tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _parseTreeType _parseTreeType)
   , ("bootParserGetString", CBootParserGetString (),
-     tyarrow_ tyunknown_ tystr_)
+      _arrowType _parseTreeType _strType)
   , ("bootParserGetInt", CBootParserGetInt (),
-     tyarrow_ tyunknown_ tyint_)
+      _arrowType _parseTreeType _intType)
   , ("bootParserGetFloat", CBootParserGetFloat (),
-     tyarrow_ tyunknown_ tyfloat_)
+      _arrowType _parseTreeType _floatType)
   , ("bootParserGetListLength", CBootParserGetListLength (),
-     tyarrow_ tyunknown_ tyint_)
+      _arrowType _parseTreeType _intType)
   , ("bootParserGetConst", CBootParserGetConst (),
-     tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _parseTreeType _parseTreeType)
   , ("bootParserGetPat", CBootParserGetPat (),
-     tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _parseTreeType _parseTreeType)
   , ("bootParserGetInfo", CBootParserGetInfo (),
-     tyarrow_ tyunknown_ tyunknown_)
+      _arrowType _parseTreeType _parseTreeType)
   ]
 
-let builtinEnv = map (lam x. match x with (s,c,ty) then (nameSym s, const_ c, ty) else never) builtin
+let builtinStrNodeType = use MExprAst in
+  map
+    (lam x.
+      match x with (s,c,ty) then
+        ( nameSym s
+        , TmConst {val = c, ty = TyUnknown (), info = NoInfo ()}
+        , ty)
+      else never)
+    builtin
+
+let builtinEnv = use MExprAst in
+  map (lam x. (x.0, x.1)) builtinStrNodeType
+
+let builtinNames : [Name] = map (lam intr. intr.0) builtinEnv
+
+let builtinNameMap : Map String Name =
+  mapFromList cmpString (map (lam x. (nameGetStr x.0, x.0)) builtinEnv)
+
+let builtinIntrinsicName : String -> Name = lam str.
+  match mapLookup str builtinNameMap with Some name then
+    name
+  else error (join ["Could not find intrinsic: ", str])
+
+let builtinNameTypeMap : Map Name Type =
+  mapFromList nameCmp (map (lam x. (x.0, x.2)) builtinStrNodeType)

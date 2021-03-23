@@ -1212,7 +1212,7 @@ use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize =
-  lam t. eval {env = assocEmpty} t in
+  lam t. eval {env = builtinEnv} t in
 
 let eval =
   lam t. evalNoSymbolize (symbolize t) in

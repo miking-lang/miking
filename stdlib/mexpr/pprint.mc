@@ -189,8 +189,21 @@ lang PrettyPrint = IdentifierPrettyPrint
   -- Intentionally left blank
 
   sem expr2str =
-  | expr -> match pprintCode 0 pprintEnvEmpty expr with (_,str)
-            then str else never
+  | expr ->
+    let builtinNameMap =
+      mapFromList
+        nameCmp
+        (map (lam n. (n, nameGetStr n)) builtinNames) in
+    let builtinCount =
+      mapFromList
+        cmpString
+        (map (lam n. (nameGetStr n, 1)) builtinNames) in
+    let builtinStrings = mapMapWithKey (lam str. lam. (str, 0)) builtinCount in
+    let defaultPprintEnv = {{{pprintEnvEmpty with nameMap = builtinNameMap}
+                                             with count = builtinCount}
+                                             with strings = builtinStrings} in
+    match pprintCode 0 defaultPprintEnv expr with (_,str)
+    then str else never
 
   -- Helper function for printing parentheses
   sem printParen (indent : Int) (env: PprintEnv) =

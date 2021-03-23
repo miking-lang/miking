@@ -130,7 +130,7 @@ use MExprParEval in
 
 -- Evaluation shorthand used in tests below
 let eval =
-  lam t. eval {env = assocEmpty} (symbolize t) in
+  lam t. eval {env = builtinEnv} (symbolize t) in
 
 -- Atomic references
 let p = ulet_ "r" (atomicMake_ (int_ 0)) in
