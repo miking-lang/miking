@@ -72,8 +72,9 @@ lang BootParser = MExprAst
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
-                                    ty = gtype t n,
+                                    tyBody = gtype t n,
                                     body = gterm t n,
+                                    ty = TyUnknown(),
                                     info = ginfo t (addi n 1)})
                                       (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),

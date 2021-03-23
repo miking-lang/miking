@@ -118,8 +118,9 @@ end
 lang RecLetsAst = VarAst
   syn Expr =
   | TmRecLets {bindings : [{ident : Name,
-                            ty : Type,
+                            tyBody : Type,
                             body : Expr,
+                            ty : Type,
                             info : Info}],
                inexpr : Expr,
                ty : Type,
