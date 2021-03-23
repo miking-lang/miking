@@ -535,7 +535,7 @@ let litpat =
 
 let ut = utest_ base base base in
 
-let utu = utestu_ base base base eqi_ in
+let utu = utestu_ base base base (const_ (CEqi{})) in
 
 let seq = seq_ [base, data, const, utu] in
 

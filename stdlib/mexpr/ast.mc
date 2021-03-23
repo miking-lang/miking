@@ -324,7 +324,7 @@ lang UtestAst
   | TmUtest {test : Expr,
              expected : Expr,
              next : Expr,
-             tusing : Expr,
+             tusing : Option Expr,
              ty : Type,
              info : Info}
 

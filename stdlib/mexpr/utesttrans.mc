@@ -231,13 +231,13 @@ let utestu_info_ =
   TmUtest { test = t
           , expected = e
           , next = n
-          , tusing = u
+          , tusing = Some u
           , ty = TyUnknown {}
           , info = default_info}
 in
 
 let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
-let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ eqi_) in
+let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CEqi{}))) in
 -- eval {env = _builtinEnv} (symbolizeExpr (symVarNameEnv _names) (utestGen t));
 
 utest utestStrip t with unit_ using eqExpr in

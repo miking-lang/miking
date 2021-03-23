@@ -424,7 +424,7 @@ let appf8_ = use MExprAst in
 
 let utestu_ = use MExprAst in
   lam t. lam e. lam n. lam u.
-  TmUtest {test = t, expected = e, next = n, tusing = u, ty = TyUnknown {}, info = NoInfo ()}
+  TmUtest {test = t, expected = e, next = n, tusing = Some u, ty = TyUnknown {}, info = NoInfo ()}
 
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
