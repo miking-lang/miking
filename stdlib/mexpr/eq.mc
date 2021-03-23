@@ -548,8 +548,7 @@ lang MExprEq =
   MatchEq + UtestEq + SeqEq + NeverEq
 
   -- Constants
-  + IntEq + ArithEq + FloatEq + ArithFloatEq + BoolEq + CmpIntEq + CmpFloatEq +
-  CharEq + SymbEq + CmpSymbEq + SeqOpEq + TensorOpEq
+  + IntEq + FloatEq + BoolEq + CharEq + SymbEq
 
   -- Patterns
   + NamedPatEq + SeqTotPatEq + SeqEdgePatEq + RecordPatEq + DataPatEq + IntPatEq +
