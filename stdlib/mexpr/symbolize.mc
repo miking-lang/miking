@@ -335,7 +335,10 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
         let str = nameGetStr t.ident in
         match assocLookup {eq=eqString} str tyEnv with Some ident then
           TyVar {t with ident = ident}
-        else error (concat "Unknown type variable in symbolizeExpr: " str)
+        else
+          -- NOTE(larshum, 2021-03-24): Unknown type variables are symbolized
+          -- as TyUnknown for now.
+          TyUnknown {info = t.info}
     else never
 end
 
