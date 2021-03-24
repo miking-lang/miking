@@ -31,23 +31,39 @@ let _typeEnvEmpty = {
 -- compatible with any other type. If no compatible type can be found, `None`
 -- is returned.
 recursive
-let _compatibleType =
+let compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _compatibleType tyEnv t1.from t2.from with Some a then
-      match _compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {from = a, to = b})
+  match (unwrapType tyEnv ty1, unwrapType tyEnv ty2)
+  with (Some ty1, Some ty2) then
+    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+      match compatibleType tyEnv t1.from t2.from with Some a then
+        match compatibleType tyEnv t1.to t2.to with Some b then
+          Some (TyArrow {{t1 with from = a} with to = b})
+        else None ()
       else None ()
+    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+      match compatibleType tyEnv t1.ty t2.ty with Some t then
+        Some (TySeq {t1 with ty = t})
+      else None ()
+    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+      let fieldCompatibleType = lam k. lam ty1.
+        match mapLookup k t2.fields with Some ty2 then
+          compatibleType tyEnv ty1 ty2
+        else None ()
+      in
+      let fields = mapMapWithKey fieldCompatibleType t1.fields in
+      let allSome = all (lam o. match o with Some _ then true else false)
+                        (mapValues fields) in
+      if allSome then
+        Some (TyRecord {t1 with fields = fields})
+      else
+        None ()
+    else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TySeq {ty = t})
-    else None ()
-  else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
 
@@ -56,6 +72,12 @@ let _isTypeAscription = use MExprAst in
   match letTerm.inexpr with TmVar {ident = id} then
     nameEq letTerm.ident id
   else false
+
+let _pprintType = use MExprPrettyPrint in
+  lam ty.
+  match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
+    tyStr
+  else never
 
 lang TypeAnnot
   sem typeAnnotExpr (env : TypeEnv) =
@@ -71,9 +93,15 @@ lang VarTypeAnnot = TypeAnnot + VarAst
     let ty =
       match env with {varEnv = varEnv, tyEnv = tyEnv} then
         match mapLookup t.ident varEnv with Some ty then
-          match _compatibleType tyEnv t.ty ty with Some ty then
+          match compatibleType tyEnv t.ty ty with Some ty then
             ty
-          else error "Inconsistent type of annotated variable"
+          else
+            let msg = join [
+              "Type of variable is inconsistent with environment\n",
+              "Variable annotated with type: ", _pprintType t.ty, "\n",
+              "Type in variable environment: ", _pprintType ty
+            ] in
+            infoErrorExit t.info msg
         else t.ty
       else never
     in
@@ -87,7 +115,7 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
-        match _compatibleType env.tyEnv from ty with Some _ then
+        match compatibleType env.tyEnv from ty with Some _ then
           to
         else tyunknown_
       else tyunknown_
@@ -114,7 +142,7 @@ lang LetTypeAnnot = TypeAnnot + LetAst
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = typeAnnotExpr env t.body in
-      match _compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
+      match compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
         if _isTypeAscription t then
           withType tyBody body
         else
@@ -124,7 +152,13 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                       with body = body}
                       with inexpr = inexpr}
                       with ty = ty inexpr}
-      else error "Inconsistent type annotation of let-term"
+      else
+        let msg = join [
+          "Inconsistent type annotation of let-expression\n",
+          "Expected type: ", _pprintType (ty body), "\n",
+          "Annotated type: ", _pprintType t.tyBody
+        ] in
+        infoErrorExit t.info msg
     else never
 end
 
@@ -145,9 +179,15 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       let body = typeAnnotExpr env binding.body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match _compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
+          match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
             tyBody
-          else error "Inconsistent type annotation of recursive let-term"
+          else
+            let msg = [
+              "Inconsistent type annotation of recursive let-expression\n"
+              "Expected type: ", _pprintType (ty body), "\n",
+              "Annotated type: ", _pprintType t.tyBody
+            ] in
+            infoErrorExit t.info msg
         in
         {{binding with body = body}
                   with ty = tyBody}
@@ -227,11 +267,20 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
       let ty =
         match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = TyVar target} then
-            match _compatibleType tyEnv (ty body) from with Some _ then
+            match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
-            else error "Inconsistent type annotation of constructor application"
+            else
+              let msg = [
+                "Inconsistent types of constructor application",
+                "Constructor expected argument of type ", _pprintType from,
+                ", but the actual type was ", _pprintType (ty body)
+              ] in
+              infoErrorExit t.info msg
           else tyunknown_
-        else error "Application of undefined constructor"
+        else
+          let msg = ["Application of untyped constructor: ",
+                     nameGetStr t.ident] in
+          infoErrorExit t.info msg
       in
       TmConApp {{t with body = body}
                    with ty = ty}
@@ -246,7 +295,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
     let els = typeAnnotExpr env t.els in
     let ty =
       match env with {tyEnv = tyEnv} then
-        match _compatibleType tyEnv (ty thn) (ty els) with Some ty then
+        match compatibleType tyEnv (ty thn) (ty els) with Some ty then
           ty
         else tyunknown_
       else never
