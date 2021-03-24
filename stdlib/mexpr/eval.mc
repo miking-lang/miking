@@ -27,9 +27,6 @@ let _eqn =
     else
       error "Found name without symbol in eval. Did you run symbolize?"
 
-let _evalLookup = mapLookup
-let _evalInsert = mapInsert
-
 -------------
 -- HELPERS --
 -------------
@@ -68,7 +65,7 @@ end
 lang VarEval = VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
-    match _evalLookup ident ctx.env with Some t then
+    match mapLookup ident ctx.env with Some t then
       match t with TmApp {lhs = TmFix _} then
         eval ctx t
       else t
@@ -89,7 +86,7 @@ lang LamEval = LamAst + VarEval + AppEval
   | TmClos {ident : Name, body : Expr, env : Env}
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
-  | TmClos t -> eval {ctx with env = _evalInsert t.ident arg t.env} t.body
+  | TmClos t -> eval {ctx with env = mapInsert t.ident arg t.env} t.body
 
   sem eval (ctx : {env : Env}) =
   | TmLam t -> TmClos {ident = t.ident, body = t.body, env = ctx.env, info = NoInfo()}
@@ -99,7 +96,7 @@ end
 lang LetEval = LetAst + VarEval
   sem eval (ctx : {env : Env}) =
   | TmLet t ->
-    eval {ctx with env = _evalInsert t.ident (eval ctx t.body) ctx.env}
+    eval {ctx with env = mapInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
 
@@ -110,7 +107,7 @@ lang FixEval = FixAst + LamEval + UnknownTypeAst
       let ident = clos.ident in
       let body = clos.body in
       let env =
-        _evalInsert ident (TmApp {lhs = TmFix (),
+        mapInsert ident (TmApp {lhs = TmFix (),
                                   rhs = TmClos clos,
                                   ty = TyUnknown {},
                                   info = NoInfo()}) clos.env in
@@ -181,7 +178,7 @@ lang RecLetsEval =
                                ty = TyUnknown {},
                                info = NoInfo()} in
     eval {ctx with env =
-            _evalInsert lst_name (TmApp {lhs = TmFix (),
+            mapInsert lst_name (TmApp {lhs = TmFix (),
                                          rhs = unfixed_tuple,
                                          ty = TyUnknown {},
                                          info = NoInfo()})
@@ -695,7 +692,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CCreate2 n, ty = TyUnknown {}, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
-    let f = lam i. eval {env = assocEmpty} (app_ arg (int_ i)) in
+    let f = lam i. eval {env = builtinEnv} (app_ arg (int_ i)) in
     TmSeq {tms = create n f, ty = TyUnknown {}, info = NoInfo()}
   | CSubsequence _ ->
     match arg with TmSeq s then
@@ -1063,7 +1060,7 @@ end
 
 lang NamedPatEval = NamedPat
   sem tryMatch (env : Env) (t : Expr) =
-  | PatNamed {ident = PName name} -> Some (_evalInsert name t env)
+  | PatNamed {ident = PName name} -> Some (mapInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
@@ -1089,7 +1086,7 @@ lang SeqEdgePatEval = SeqEdgePat + SeqAst
         let paired = zipWith pair (concat preTm postTm) (concat pre post) in
         let env = optionFoldlM (lam env. lam pair. tryMatch env pair.0 pair.1) env paired in
         match middle with PName name then
-          optionMap (_evalInsert name (seq_ tms)) env
+          optionMap (mapInsert name (seq_ tms)) env
         else match middle with PWildcard () then
           env
         else never else never else never

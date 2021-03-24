@@ -70,7 +70,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     let app =
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
     in
-    TmConst {val = CThread {thread = threadSpawn (lam. eval {env = []} app)}
+    TmConst {val = CThread {thread = threadSpawn (lam. eval {env = builtinEnv} app)}
             , info = NoInfo ()
             , ty = TyUnknown ()
             }
@@ -110,7 +110,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   | CThreadCriticalSection _ ->
     let app =
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
-    in threadCriticalSection (lam. eval {env = []} app)
+    in threadCriticalSection (lam. eval {env = builtinEnv} app)
   | CThreadCPURelax _ ->
     let err = "Argument to threadCPURelax is not unit" in
     match arg with TmRecord {bindings = bindings} then
