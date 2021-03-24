@@ -535,6 +535,7 @@ end
 lang IOAst = ConstAst
   syn Const =
   | CPrint {}
+  | CDPrint {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
@@ -602,8 +603,10 @@ end
 lang BootParserAst = ConstAst
   syn Const =
   | CBootParserParseMExprString {}
+  | CBootParserParseMCoreFile {}
   | CBootParserGetId {}
   | CBootParserGetTerm {}
+  | CBootParserGetType ()
   | CBootParserGetString {}
   | CBootParserGetInt {}
   | CBootParserGetFloat {}

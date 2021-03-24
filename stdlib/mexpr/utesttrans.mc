@@ -10,11 +10,6 @@ include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 
 let _utestRunnerStr = "
-let utestFirstTest = ref true in
-let utestPassed = ref 0 in
-let utestLocalOK = ref true in
-let utestFailed = ref 0 in
-
 recursive
   let foldl = lam f. lam acc. lam seq.
     if eqi 0 (length seq) then acc
@@ -43,8 +38,7 @@ let int2string = lam n.
 in
 
 let utestTestPassed = lam.
-  print \".\";
-  modref utestPassed (addi (deref utestPassed) 1)
+  print \".\"
 in
 
 let utestTestFailed =
@@ -54,8 +48,7 @@ let utestTestFailed =
   printLn \"\";
   printLn (join [\" ** Unit test FAILED on line \", line, \" **\"]);
   printLn (join [\"    LHS: \", lhsStr]);
-  printLn (join [\"    RHS: \", rhsStr]);
-  modref utestFailed (addi (deref utestFailed) 1)
+  printLn (join [\"    RHS: \", rhsStr])
 in
 
 let utestRunner =
@@ -64,11 +57,6 @@ let utestRunner =
   lam eqfunc : Unknown -> Unknown -> Bool.
   lam lhs    : Unknown.
   lam rhs    : Unknown.
-  -- Check whether we are using a new file
-  (if deref utestFirstTest then
-     print (join [info.filename, \": \"]);
-     modref utestFirstTest false
-  else ());
   -- Comparison
   if eqfunc lhs rhs then
     utestTestPassed ()
@@ -79,15 +67,13 @@ in
 ()
 "
 
-let _builtinEnv =
-  map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin
-
-let _names = match unzip _builtinEnv with (n,_) then n else never
+let _builtinNames = map (lam intr. intr.0) builtinEnv
 
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolizeExpr (symVarNameEnv _names) (parseMExprString _utestRunnerStr)
+  symbolizeExpr (symVarNameEnv _builtinNames)
+                (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -175,7 +161,7 @@ lang MExprUtestTrans = MExprAst
 
   sem utestGenH =
   | TmUtest t ->
-    bind_ (ulet_ "" (_generateUtest t)) t.next
+    bind_ (ulet_ "" (_generateUtest t)) (utestGenH t.next)
   | t -> smap_Expr_Expr utestGenH t
 
   sem utestGen =

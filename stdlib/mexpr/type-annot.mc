@@ -115,7 +115,9 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
-        if eqType [] from ty then to else tyunknown_
+        match compatibleType env.tyEnv from ty with Some _ then
+          to
+        else tyunknown_
       else tyunknown_
     in
     TmApp {{{t with lhs = lhs}
@@ -594,17 +596,15 @@ let recLets = typeAnnot (bindall_ [
 ]) in
 utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
-let _ignored =
-  match recLets with TmRecLets {bindings = bindings} then
-    let xTy = tyarrow_ tyunit_ tyint_ in
-    let yTy = tyarrow_ tyunit_ tyint_ in
-    let zTy = tyarrow_ tyunit_ tyunknown_ in
-    utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
-    utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
-    utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match recLets with TmRecLets {bindings = bindings} then
+  let xTy = tyarrow_ tyunit_ tyint_ in
+  let yTy = tyarrow_ tyunit_ tyint_ in
+  let zTy = tyarrow_ tyunit_ tyint_ in
+  utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
+  utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
+  utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
+  ()
+else never);
 
 utest ty (typeAnnot (int_ 4)) with tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot (char_ 'c')) with tychar_ using eqTypeEmptyEnv in
@@ -664,40 +664,34 @@ let matchInteger = typeAnnot (bindall_ [
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
 utest ty matchInteger with tyint_ using eqTypeEmptyEnv in
-let _ignored =
-  match matchInteger with TmLet {inexpr = TmMatch t} then
-    utest ty t.target with tyint_ using eqTypeEmptyEnv in
-    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
-    utest ty t.els with tyint_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match matchInteger with TmLet {inexpr = TmMatch t} then
+  utest ty t.target with tyint_ using eqTypeEmptyEnv in
+  utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+  utest ty t.els with tyint_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 let matchDistinct = typeAnnot (
   match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
 ) in
 utest ty matchDistinct with tyunknown_ using eqTypeEmptyEnv in
-let _ignored =
-  match matchDistinct with TmMatch t then
-    utest ty t.target with tyint_ using eqTypeEmptyEnv in
-    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
-    utest ty t.els with tychar_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match matchDistinct with TmMatch t then
+  utest ty t.target with tyint_ using eqTypeEmptyEnv in
+  utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+  utest ty t.els with tychar_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 let utestAnnot = typeAnnot (
   utest_ (int_ 0) false_ (char_ 'c')
 ) in
 utest ty utestAnnot with tychar_ using eqTypeEmptyEnv in
-let _ignored =
-  match utestAnnot with TmUtest t then
-    utest ty t.test with tyint_ using eqTypeEmptyEnv in
-    utest ty t.expected with tybool_ using eqTypeEmptyEnv in
-    utest ty t.next with tychar_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match utestAnnot with TmUtest t then
+  utest ty t.test with tyint_ using eqTypeEmptyEnv in
+  utest ty t.expected with tybool_ using eqTypeEmptyEnv in
+  utest ty t.next with tychar_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 utest ty (typeAnnot never_) with tyunknown_ using eqTypeEmptyEnv in
 

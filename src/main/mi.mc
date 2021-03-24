@@ -21,12 +21,14 @@ in
 
 -- Option structure
 let options = {
-  debugParse = false
+  debugParse = false,
+  runTests = false
 } in
 
 -- Option map, maps strings to structure updates
 let optionsMap = [
-("--debug-parse", lam o. {o with debugParse = true})
+("--debug-parse", lam o. {o with debugParse = true}),
+("--test", lam o. {o with runTests = true})
 ] in
 
 -- Commands map, maps command strings to functions. The functions
