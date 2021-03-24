@@ -350,10 +350,19 @@ lang UtestTypeLift = TypeLift + UtestAst
       match typeLiftExpr env t.expected with (env, expected) then
         match typeLiftExpr env t.next with (env, next) then
           match typeLiftType env t.ty with (env, ty) then
-            (env, TmUtest {{{{t with test = test}
-                                with expected = expected}
-                                with next = next}
-                                with ty = ty})
+            match t.tusing with Some tusing then
+              match typeLiftType env t.tusing with (env, tusing) then
+                (env, TmUtest {{{{{t with test = test}
+                                    with expected = expected}
+                                    with next = next}
+                                    with tusing = t.tusing}
+                                    with ty = ty})
+              else never
+            else (env, TmUtest {{{{{t with test = test}
+                                    with expected = expected}
+                                    with next = next}
+                                    with tusing = t.tusing}
+                                    with ty = ty})
           else never
         else never
       else never

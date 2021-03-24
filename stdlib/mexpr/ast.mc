@@ -325,6 +325,7 @@ lang UtestAst
   | TmUtest {test : Expr,
              expected : Expr,
              next : Expr,
+             tusing : Option Expr,
              ty : Type,
              info : Info}
 
@@ -338,12 +339,14 @@ lang UtestAst
   | TmUtest t -> TmUtest {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmUtest t -> TmUtest {{{t with test = f t.test}
+  | TmUtest t -> let tusing = optionMap f t.tusing in
+                 TmUtest {{{{t with test = f t.test}
                               with expected = f t.expected}
                               with next = f t.next}
+                              with tusing = tusing}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmUtest t -> f (f (f acc t.test) t.expected) t.next
+  | TmUtest t -> f (f (f (f acc t.test) t.expected) t.next) t.tusing
 end
 
 

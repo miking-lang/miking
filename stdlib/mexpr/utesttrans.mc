@@ -183,13 +183,25 @@ let utest_info_ =
   TmUtest { test = t
           , expected = e
           , next = n
+          , tusing = None ()
+          , ty = TyUnknown {}
+          , info = default_info}
+in
+
+let utestu_info_ =
+  lam t. lam e. lam n. lam u.
+  TmUtest { test = t
+          , expected = e
+          , next = n
+          , tusing = Some u
           , ty = TyUnknown {}
           , info = default_info}
 in
 
 let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
+let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CEqi{}))) in
 -- eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) (utestGen t));
 
 utest utestStrip t with unit_ using eqExpr in
-
+utest utestStrip t1 with unit_ using eqExpr in
 ()

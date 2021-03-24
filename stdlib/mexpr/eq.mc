@@ -242,11 +242,18 @@ end
 
 lang UtestEq = Eq + UtestAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmUtest {test = t2, expected = e2, next = n2} ->
-    match lhs with TmUtest {test = t1, expected = e1, next = n1} then
+  | TmUtest {test = t2, expected = e2, next = n2, tusing = u2} ->
+    match lhs with TmUtest {test = t1, expected = e1, next = n1, tusing = u1} then
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free e1 e2 with Some free then
-          eqExprH env free n1 n2
+          match (u1, u2) with (Some tu1, Some tu2) then
+            match eqExprH env free u1 u2 with Some free then
+              eqExprH env free n1 n2
+            else None ()
+          else
+            match (u1, u2) with (None (), None ()) then
+              eqExprH env free n1 n2
+            else None ()
         else None ()
       else None ()
     else None ()

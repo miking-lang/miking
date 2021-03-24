@@ -223,7 +223,12 @@ lang UtestEval = Eq + UtestAst
   | TmUtest t ->
     let v1 = eval ctx t.test in
     let v2 = eval ctx t.expected in
-    if eqExpr v1 v2 then print "Test passed\n" else print "Test failed\n";
+    let tusing = optionMap (eval ctx) t.tusing in
+    let result = match tusing with Some tusing then
+      tusing v1 v2
+    else
+      eqExpr v1 v2 in
+    if result then print "Test passed\n" else print "Test failed\n";
     eval ctx t.next
 end
 
