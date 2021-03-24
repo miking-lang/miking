@@ -72,8 +72,9 @@ lang BootParser = MExprAst
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
-                                    ty = gtype t n,
+                                    tyBody = gtype t n,
                                     body = gterm t n,
+                                    ty = TyUnknown(),
                                     info = ginfo t (addi n 1)})
                                       (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
@@ -82,10 +83,7 @@ lang BootParser = MExprAst
   | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
-               ty = match c with CBool _ then TyBool {} else
-                    match c with CInt _ then TyInt {} else
-                    match c with CFloat _ then TyFloat {} else
-                    TyChar {},
+               ty = TyUnknown(),
                info = ginfo t 0}
   | 106 /-TmSeq-/ ->
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
@@ -314,7 +312,7 @@ utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
 utest info (match parseMExprString s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
 utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
-let s = "print x; 10" in
+let s = "printLn x; 10" in
 utest lside s with rside s in
 
 -- TmRecLets, TmLam

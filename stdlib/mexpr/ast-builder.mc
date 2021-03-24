@@ -1,4 +1,5 @@
 -- Helper functions for creating AST nodes.
+-- Functions for types are defined in ast.mc
 
 include "mexpr/ast.mc"
 include "assoc.mc"
@@ -85,69 +86,64 @@ let pnot_ = use MExprAst in
   PatNot {subpat = p, info = NoInfo()}
 
 -- Types --
-let tyarrow_ = use MExprAst in
-  lam from. lam to.
-  TyArrow {from = from, to = to}
 
-let tyarrows_ = use MExprAst in
-  lam tys.
-  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tys
+let tyint_ = use IntTypeAst in
+  TyInt {info = NoInfo ()}
 
-let tyunknown_ = use MExprAst in
-  TyUnknown ()
+let tyfloat_ = use FloatTypeAst in
+  TyFloat {info = NoInfo ()}
 
-let tyunit_ = use MExprAst in
-  TyRecord {fields = mapEmpty cmpSID}
+let tybool_ = use BoolTypeAst in
+  TyBool {info = NoInfo ()}
 
-let tyint_ = use MExprAst in
-  TyInt ()
+let tychar_ = use CharTypeAst in
+  TyChar {info = NoInfo ()}
 
-let tyfloat_ = use MExprAst in
-  TyFloat ()
+let tyunknown_ = use UnknownTypeAst in
+  TyUnknown {info = NoInfo ()}
 
-let tybool_ = use MExprAst in
-  TyBool ()
-
-let tychar_ = use MExprAst in
-  TyChar ()
-
-let tystr_ = use MExprAst in
-  TySeq {ty = tychar_}
-
-let tyseq_ = use MExprAst in
+let tyseq_ = use SeqTypeAst in
   lam ty.
-  TySeq {ty = ty}
+  TySeq {ty = ty, info = NoInfo ()}
 
-let utyseq_ = use MExprAst in
-  TySeq {ty = TyUnknown ()}
+let tystr_ = tyseq_ tychar_
 
-let tyrecord_ = use MExprAst in
+let tyarrow_ = use FunTypeAst in
+  lam from. lam to.
+  TyArrow {from = from, to = to, info = NoInfo ()}
+
+let tyarrows_ = use FunTypeAst in
+  lam tys.
+  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
+
+let tyrecord_ = use RecordTypeAst in
   lam fields.
   TyRecord {
-    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields)
+    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields),
+    info = NoInfo ()
   }
 
+let tytuple_ = lam tys.
+  tyrecord_ (mapi (lam i. lam ty. (int2string i, ty)) tys)
 
-let tytuple_ = use MExprAst in
-  lam tys.
-  tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
+let tyunit_ = tyrecord_ []
 
-let tyvariant_ = use MExprAst in
+let tyvariant_ = use VariantTypeAst in
   lam constrs.
   TyVariant {
-    constrs = mapFromList nameCmp constrs
+    constrs = mapFromList nameCmp constrs,
+    info = NoInfo ()
   }
 
-let tyapp_ = use MExprAst in
+let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
-  TyApp {lhs = lhs, rhs = rhs}
+  TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
-let ntyvar_ = use MExprAst in
+let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n}
+  TyVar {ident = n, info = NoInfo ()}
 
-let tyvar_ = use MExprAst in
-  lam s.
+let tyvar_ = lam s.
   ntyvar_ (nameNoSym s)
 
 -- Terms --
@@ -201,7 +197,11 @@ let type_ = use MExprAst in
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2, info = NoInfo ()}) bs,
+  TmRecLets {bindings = map (lam t. { ident = t.0
+                                    , tyBody = t.1
+                                    , body = t.2
+                                    , ty = TyUnknown {}
+                                    , info = NoInfo ()}) bs,
              inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
 
 let reclets_ = use MExprAst in

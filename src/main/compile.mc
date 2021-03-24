@@ -6,13 +6,14 @@ include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/utesttrans.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 
 lang MCoreCompile =
   BootParser +
-  MExprSym + MExprTypeAnnot +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
 end
 
@@ -31,29 +32,45 @@ recursive let _withPreamble = lam expr.
     OTmPreambleText {text = _preambleStr, inexpr = expr}
 end
 
+-- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
+let filename = lam path.
+  match strLastIndex '/' path with Some idx then
+    subsequence path (addi idx 1) (length path)
+  else path
+
+let filenameWithoutExtension = lam filename.
+  match strLastIndex '.' filename with Some idx then
+    subsequence filename 0 idx
+  else filename
+
 let ocamlCompile = lam sourcePath. lam ocamlAst.
   use MCoreCompile in
   let p = ocamlCompile (expr2str ocamlAst) in
-  -- Imperfect solution: assumes the path contains at most one dot
-  let pathWithoutExtension =
-    match strLastIndex '.' sourcePath with Some idx then
-      subsequence sourcePath 0 idx
-    else sourcePath
-  in
-  phMoveFile p.binaryPath pathWithoutExtension;
-  phChmodWriteAccessFile pathWithoutExtension
+  let destinationFile = filenameWithoutExtension (filename sourcePath) in
+  phMoveFile p.binaryPath destinationFile;
+  phChmodWriteAccessFile destinationFile
 
 let compile = lam files. lam options.
   use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile file in
-    let names = map (lam x. match x with (s,_) then nameSym s else never) builtin in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then print (expr2str ast) else ());
+    (if options.debugParse then printLn (expr2str ast) else ());
+
+    -- If option --test, then generate utest runner calls. Otherwise strip away
+    -- all utest nodes from the AST.
+    let ast =
+      if options.runTests then
+        -- Add type annotations as they are required by utestGen
+        let ast = typeAnnot ast in
+        utestGen ast
+      else
+        utestStrip ast
+    in
 
     -- Symbolize the MExpr AST and annotate it with types
-    let ast = symbolizeExpr (symVarNameEnv names) ast in
+    let ast = symbolizeExpr (symVarNameEnv builtinNames) ast in
     let ast = typeAnnot ast in
 
     -- Translate the MExpr AST into an OCaml AST
@@ -68,4 +85,4 @@ let compile = lam files. lam options.
     -- Compile OCaml AST
     ocamlCompile file ocamlAst
   in
-  map compileFile files
+  iter compileFile files

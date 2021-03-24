@@ -7,7 +7,7 @@
 # Compile a file
 compile() {
     echo $1
-    build/mi src/main/mi.mc -- compile $1
+    build/mi src/main/mi.mc -- compile --test $1
 }
 
 files=(

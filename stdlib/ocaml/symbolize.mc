@@ -52,12 +52,12 @@ lang OCamlSym =
       OTmConApp {{t with ident = ident}
                     with args = args}
     else never
-  | OTmVarExt t -> t
+  | OTmVarExt t -> OTmVarExt t
   | OTmConAppExt ({ args = args } & t) ->
     OTmConAppExt {t with args = map (symbolizeExpr env) args}
   | OTmPreambleText t ->
     OTmPreambleText {t with inexpr = symbolizeExpr env t.inexpr}
-  | OTmString t -> t
+  | OTmString t -> OTmString t
 
   sem symbolizePat (env : Env) (patEnv : Env) =
   | OPatTuple { pats = pats } ->

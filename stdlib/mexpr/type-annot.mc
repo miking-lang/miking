@@ -10,6 +10,7 @@
 -- Requires that the types of constructors are included in the `tyIdent` field.
 include "assoc-seq.mc"
 include "mexpr/ast.mc"
+include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
@@ -31,23 +32,39 @@ let _typeEnvEmpty = {
 -- compatible with any other type. If no compatible type can be found, `None`
 -- is returned.
 recursive
-let _compatibleType =
+let compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _compatibleType tyEnv t1.from t2.from with Some a then
-      match _compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {from = a, to = b})
+  match (unwrapType tyEnv ty1, unwrapType tyEnv ty2)
+  with (Some ty1, Some ty2) then
+    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+      match compatibleType tyEnv t1.from t2.from with Some a then
+        match compatibleType tyEnv t1.to t2.to with Some b then
+          Some (TyArrow {{t1 with from = a} with to = b})
+        else None ()
       else None ()
+    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+      match compatibleType tyEnv t1.ty t2.ty with Some t then
+        Some (TySeq {t1 with ty = t})
+      else None ()
+    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+      let fieldCompatibleType = lam k. lam ty1.
+        match mapLookup k t2.fields with Some ty2 then
+          compatibleType tyEnv ty1 ty2
+        else None ()
+      in
+      let fields = mapMapWithKey fieldCompatibleType t1.fields in
+      let allSome = all (lam o. match o with Some _ then true else false)
+                        (mapValues fields) in
+      if allSome then
+        Some (TyRecord {t1 with fields = fields})
+      else
+        None ()
+    else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _compatibleType tyEnv t1.ty ty2.ty with Some t then
-      Some (TySeq {ty = t})
-    else None ()
-  else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
 
@@ -57,12 +74,20 @@ let _isTypeAscription = use MExprAst in
     nameEq letTerm.ident id
   else false
 
+let _pprintType = use MExprPrettyPrint in
+  lam ty.
+  match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
+    tyStr
+  else never
+
 lang TypeAnnot
   sem typeAnnotExpr (env : TypeEnv) =
   -- Intentionally left blank
 
   sem typeAnnot =
-  | expr -> typeAnnotExpr _typeEnvEmpty expr
+  | expr ->
+    let env = {_typeEnvEmpty with varEnv = builtinNameTypeMap} in
+    typeAnnotExpr env expr
 end
 
 lang VarTypeAnnot = TypeAnnot + VarAst
@@ -71,9 +96,15 @@ lang VarTypeAnnot = TypeAnnot + VarAst
     let ty =
       match env with {varEnv = varEnv, tyEnv = tyEnv} then
         match mapLookup t.ident varEnv with Some ty then
-          match _compatibleType tyEnv t.ty ty with Some ty then
+          match compatibleType tyEnv t.ty ty with Some ty then
             ty
-          else error "Inconsistent type of annotated variable"
+          else
+            let msg = join [
+              "Type of variable is inconsistent with environment\n",
+              "Variable annotated with type: ", _pprintType t.ty, "\n",
+              "Type in variable environment: ", _pprintType ty
+            ] in
+            infoErrorExit t.info msg
         else t.ty
       else never
     in
@@ -87,7 +118,9 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
     let rhs = typeAnnotExpr env t.rhs in
     let ty =
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
-        if eqType [] from ty then to else tyunknown_
+        match compatibleType env.tyEnv from ty with Some _ then
+          to
+        else tyunknown_
       else tyunknown_
     in
     TmApp {{{t with lhs = lhs}
@@ -112,7 +145,7 @@ lang LetTypeAnnot = TypeAnnot + LetAst
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = typeAnnotExpr env t.body in
-      match _compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
+      match compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
         if _isTypeAscription t then
           withType tyBody body
         else
@@ -122,31 +155,51 @@ lang LetTypeAnnot = TypeAnnot + LetAst
                       with body = body}
                       with inexpr = inexpr}
                       with ty = ty inexpr}
-      else error "Inconsistent type annotation of let-term"
+      else
+        let msg = join [
+          "Inconsistent type annotation of let-expression\n",
+          "Expected type: ", _pprintType (ty body), "\n",
+          "Annotated type: ", _pprintType t.tyBody
+        ] in
+        infoErrorExit t.info msg
     else never
 end
 
 lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
-    let foldBinding = lam acc. lam binding.
+    -- Add mapping from binding identifier to annotated type before doing type
+    -- annotations of the bindings. This is to make annotations work for
+    -- mutually recursive functions, given correct type annotations.
+    let foldBindingInit = lam acc. lam binding.
+      mapInsert binding.ident binding.tyBody acc
+    in
+    -- Add mapping from binding identifier to the inferred type.
+    let foldBindingAfter = lam acc. lam binding.
       mapInsert binding.ident binding.ty acc
     in
     let annotBinding = lam env. lam binding.
       let body = typeAnnotExpr env binding.body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
-          match _compatibleType tyEnv binding.ty (ty body) with Some tyBody then
+          match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
             tyBody
-          else error "Inconsistent type annotation of recursive let-term"
+          else
+            let msg = [
+              "Inconsistent type annotation of recursive let-expression\n"
+              "Expected type: ", _pprintType (ty body), "\n",
+              "Annotated type: ", _pprintType t.tyBody
+            ] in
+            infoErrorExit t.info msg
         in
         {{binding with body = body}
                   with ty = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then
-      let env = {env with varEnv = foldl foldBinding varEnv t.bindings} in
+      let env = {env with varEnv = foldl foldBindingInit varEnv t.bindings} in
       let bindings = map (annotBinding env) t.bindings in
+      let env = {env with varEnv = foldl foldBindingAfter varEnv bindings} in
       let inexpr = typeAnnotExpr env t.inexpr in
       TmRecLets {{{t with bindings = bindings}
                      with inexpr = inexpr}
@@ -154,12 +207,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
     else never
 end
 
-lang ConstTypeAnnot = TypeAnnot + ConstAst
-  sem typeConst =
-  -- Intentionally left blank
-
+lang ConstTypeAnnot = TypeAnnot + MExprConstType
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmConst t -> TmConst {t with ty = typeConst t.val}
+  | TmConst t -> TmConst {t with ty = tyConst t.val}
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -217,11 +267,20 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
       let ty =
         match mapLookup t.ident conEnv with Some lty then
           match lty with TyArrow {from = from, to = TyVar target} then
-            match _compatibleType tyEnv (ty body) from with Some _ then
+            match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
-            else error "Inconsistent type annotation of constructor application"
+            else
+              let msg = [
+                "Inconsistent types of constructor application",
+                "Constructor expected argument of type ", _pprintType from,
+                ", but the actual type was ", _pprintType (ty body)
+              ] in
+              infoErrorExit t.info msg
           else tyunknown_
-        else error "Application of undefined constructor"
+        else
+          let msg = ["Application of untyped constructor: ",
+                     nameGetStr t.ident] in
+          infoErrorExit t.info msg
       in
       TmConApp {{t with body = body}
                    with ty = ty}
@@ -236,7 +295,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
     let els = typeAnnotExpr env t.els in
     let ty =
       match env with {tyEnv = tyEnv} then
-        match _compatibleType tyEnv (ty thn) (ty els) with Some ty then
+        match compatibleType tyEnv (ty thn) (ty els) with Some ty then
           ty
         else tyunknown_
       else never
@@ -266,228 +325,10 @@ lang NeverTypeAnnot = TypeAnnot + NeverAst
   | TmNever t -> TmNever {t with ty = tyunknown_}
 end
 
-lang IntTypeAnnot = ConstTypeAnnot + IntAst
-  sem typeConst =
-  | CInt _ -> tyint_
-end
-
-lang ArithIntTypeAnnot = ConstTypeAnnot + ArithIntAst
-  sem typeConst =
-  | CAddi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSubi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CMuli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CDivi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CNegi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CModi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-end
-
-lang ShiftIntTypeAnnot = ConstTypeAnnot + ShiftIntAst
-  sem typeConst =
-  | CSlli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSrli _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CSrai _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-end
-
-lang FloatTypeAnnot = ConstTypeAnnot + FloatAst
-  sem typeConst =
-  | CFloat _ -> tyfloat_
-end
-
-lang ArithFloatTypeAnnot = ConstTypeAnnot + ArithFloatAst
-  sem typeConst =
-  | CAddf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CSubf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CMulf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CDivf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-  | CNegf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)
-end
-
-lang FloatIntConversionTypeAnnot = ConstTypeAnnot + FloatIntConversionAst
-  sem typeConst =
-  | CFloorfi _ -> tyarrow_ tyfloat_ tyint_
-  | CCeilfi _ -> tyarrow_ tyfloat_ tyint_
-  | CRoundfi _ -> tyarrow_ tyfloat_ tyint_
-  | CInt2float _ -> tyarrow_ tyint_ tyfloat_
-end
-
-lang BoolTypeAnnot = ConstTypeAnnot + BoolAst
-  sem typeConst =
-  | CBool _ -> tybool_
-end
-
-lang CmpIntTypeAnnot = ConstTypeAnnot + CmpIntAst
-  sem typeConst =
-  | CEqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CNeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CLti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CGti _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CLeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-  | CGeqi _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tybool_)
-end
-
-lang CmpFloatTypeAnnot = ConstTypeAnnot + CmpFloatAst
-  sem typeConst =
-  | CEqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CNeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CLtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CGtf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CLeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-  | CGeqf _ -> tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tybool_)
-end
-
-lang CharTypeAnnot = ConstTypeAnnot + CharAst
-  sem typeConst =
-  | CChar _ -> tychar_
-end
-
-lang CmpCharTypeAnnot = ConstTypeAnnot + CmpCharAst
-  sem typeConst =
-  | CEqc _ -> tyarrow_ tychar_ (tyarrow_ tychar_ tybool_)
-end
-
-lang IntCharConversionTypeAnnot = ConstTypeAnnot + IntCharConversionAst
-  sem typeConst =
-  | CInt2Char _ -> tyarrow_ tyint_ tychar_
-  | CChar2Int _ -> tyarrow_ tychar_ tyint_
-end
-
-lang FloatStringConversionTypeAnnot = ConstTypeAnnot + FloatStringConversionAst
-  sem typeConst =
-  | CString2float _ -> tyarrow_ tystr_ tyfloat_
-end
-
--- NOTE(larshum, 2021-03-08): There is currently no type for symbols, so they
--- are considered to be of an unknown type.
-lang SymbTypeAnnot = ConstTypeAnnot + SymbAst
-  sem typeConst =
-  | CSymb _ -> tyunknown_
-  | CGensym _ -> tyarrow_ tyunit_ tyunknown_
-  | CSym2hash _ -> tyarrow_ tyunknown_ tyint_
-end
-
-lang CmpSymbTypeAnnot = ConstTypeAnnot + CmpSymbAst
-  sem typeConst =
-  | CEqsym _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
-end
-
-lang SeqOpTypeAnnot = ConstTypeAnnot + SeqOpAst
-  sem typeConst =
-  | CSet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyunknown_ utyseq_))
-  | CGet _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ utyseq_)
-  | CCons _ -> tyarrow_ tyunknown_ (tyarrow_ utyseq_ utyseq_)
-  | CSnoc _ -> tyarrow_ utyseq_ (tyarrow_ tyunknown_ utyseq_)
-  | CConcat _ -> tyarrow_ utyseq_ (tyarrow_ utyseq_ utyseq_)
-  | CLength _ -> tyarrow_ utyseq_ tyint_
-  | CReverse _ -> tyarrow_ utyseq_ utyseq_
-  | CCreate _ -> tyarrow_ tyint_ (tyarrow_ (tyarrow_ tyint_ tyunknown_) utyseq_)
-  | CSplitAt _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tytuple_ [utyseq_, utyseq_]))
-  | CSubsequence _ -> tyarrow_ utyseq_ (tyarrow_ tyint_ (tyarrow_ tyint_ utyseq_))
-end
-
-lang FileOpTypeAnnot = ConstTypeAnnot + FileOpAst
-  sem typeConst =
-  | CFileRead _ -> tyarrow_ tystr_ tystr_
-  | CFileWrite _ -> tyarrow_ tystr_ (tyarrow_ tystr_ tyunit_)
-  | CFileExists _ -> tyarrow_ tystr_ tybool_
-  | CFileDelete _ -> tyarrow_ tystr_ tyunit_
-end
-
-lang IOTypeAnnot = ConstTypeAnnot + IOAst
-  sem typeConst =
-  | CPrint _ -> tyarrow_ tystr_ tyunit_
-  | CReadLine _ -> tyarrow_ tyunit_ tystr_
-  | CReadBytesAsString _ -> tyarrow_ tyint_ (tytuple_ [tystr_, tyint_])
-end
-
-lang RandomNumberGeneratorTypeAnnot = ConstTypeAnnot + RandomNumberGeneratorAst
-  sem typeConst =
-  | CRandIntU _ -> tyarrow_ tyint_ (tyarrow_ tyint_ tyint_)
-  | CRandSetSeed _ -> tyarrow_ tyint_ tyunit_
-end
-
-lang SysTypeAnnot = ConstTypeAnnot + SysAst
-  sem typeConst =
-  | CExit _ -> tyarrow_ tyint_ tyunknown_
-  | CError _ -> tyarrow_ tystr_ tyunknown_
-  | CArgv _ -> tyseq_ tystr_
-end
-
-lang TimeTypeAnnot = ConstTypeAnnot + TimeAst
-  sem typeConst =
-  | CWallTimeMs _ -> tyarrow_ tyunit_ tyfloat_
-  | CSleepMs _ -> tyarrow_ tyint_ tyunit_
-end
-
--- NOTE(larshum, 2021-03-08): There is currently no reference type in MExpr, so
--- they are considered to be of an unknown type.
-lang RefOpTypeAnnot = ConstTypeAnnot + RefOpAst
-  sem typeConst =
-  | CRef _ -> tyarrow_ tyunknown_ tyunknown_
-  | CModRef _ -> tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunit_)
-  | CDeRef _ -> tyarrow_ tyunknown_ tyunknown_
-end
-
-lang MapTypeAnnot = ConstTypeAnnot + MapAst
-  sem typeConst =
-  | CMapEmpty _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_)) tyunknown_
-  | CMapInsert _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-  | CMapRemove _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFindWithExn _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFindOrElse _ ->
-    tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-  | CMapFindApplyOrElse _ ->
-    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-             (tyarrow_ (tyarrow_ tyunit_ tyunknown_)
-                       (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
-  | CMapBindings _ ->
-    tyarrow_ tyunknown_ (tyseq_ (tytuple_ [tyunknown_, tyunknown_]))
-  | CMapSize _ ->
-    tyarrow_ tyunknown_ tyint_
-  | CMapMem _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_)
-  | CMapAny _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-             (tyarrow_ tyunknown_ tybool_)
-  | CMapMap _ ->
-    tyarrow_ (tyarrow_ tyunknown_ tyunknown_)
-             (tyarrow_ tyunknown_ tyunknown_)
-  | CMapMapWithKey _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_))
-             (tyarrow_ tyunknown_ tyunknown_)
-  | CMapFoldWithKey _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)))
-             tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyunknown_)
-  | CMapEq _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tybool_))
-  | CMapCmp _ ->
-    tyarrow_ (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
-             (tyarrow_ tyunknown_ (tyarrow_ tyunknown_ tyint_))
-  | CMapGetCmpFun _ ->
-    tyarrow_ tyunknown_ (tyarrow_ tyunknown_
-                        (tyarrow_ tyunknown_ tyint_))
-end
-
 lang MExprTypeAnnot =
-
-  -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
-  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
-
-  -- Constants
-  IntTypeAnnot + ArithIntTypeAnnot + ShiftIntTypeAnnot + FloatTypeAnnot +
-  ArithFloatTypeAnnot + FloatIntConversionTypeAnnot + BoolTypeAnnot +
-  CmpIntTypeAnnot + CmpFloatTypeAnnot + CharTypeAnnot + CmpCharTypeAnnot +
-  IntCharConversionTypeAnnot + FloatStringConversionTypeAnnot + SymbTypeAnnot +
-  CmpSymbTypeAnnot + SeqOpTypeAnnot + FileOpTypeAnnot + IOTypeAnnot +
-  RandomNumberGeneratorTypeAnnot + SysTypeAnnot + TimeTypeAnnot +
-  RefOpTypeAnnot
+  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
@@ -539,17 +380,15 @@ let recLets = typeAnnot (bindall_ [
 ]) in
 utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
-let _ignored =
-  match recLets with TmRecLets {bindings = bindings} then
-    let xTy = tyarrow_ tyunit_ tyint_ in
-    let yTy = tyarrow_ tyunit_ tyint_ in
-    let zTy = tyarrow_ tyunit_ tyunknown_ in
-    utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
-    utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
-    utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match recLets with TmRecLets {bindings = bindings} then
+  let xTy = tyarrow_ tyunit_ tyint_ in
+  let yTy = tyarrow_ tyunit_ tyint_ in
+  let zTy = tyarrow_ tyunit_ tyint_ in
+  utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
+  utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
+  utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
+  ()
+else never);
 
 utest ty (typeAnnot (int_ 4)) with tyint_ using eqTypeEmptyEnv in
 utest ty (typeAnnot (char_ 'c')) with tychar_ using eqTypeEmptyEnv in
@@ -609,40 +448,34 @@ let matchInteger = typeAnnot (bindall_ [
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
 utest ty matchInteger with tyint_ using eqTypeEmptyEnv in
-let _ignored =
-  match matchInteger with TmLet {inexpr = TmMatch t} then
-    utest ty t.target with tyint_ using eqTypeEmptyEnv in
-    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
-    utest ty t.els with tyint_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match matchInteger with TmLet {inexpr = TmMatch t} then
+  utest ty t.target with tyint_ using eqTypeEmptyEnv in
+  utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+  utest ty t.els with tyint_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 let matchDistinct = typeAnnot (
   match_ (int_ 0) (pvar_ n) (int_ 0) (char_ '1')
 ) in
 utest ty matchDistinct with tyunknown_ using eqTypeEmptyEnv in
-let _ignored =
-  match matchDistinct with TmMatch t then
-    utest ty t.target with tyint_ using eqTypeEmptyEnv in
-    utest ty t.thn with tyint_ using eqTypeEmptyEnv in
-    utest ty t.els with tychar_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match matchDistinct with TmMatch t then
+  utest ty t.target with tyint_ using eqTypeEmptyEnv in
+  utest ty t.thn with tyint_ using eqTypeEmptyEnv in
+  utest ty t.els with tychar_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 let utestAnnot = typeAnnot (
   utest_ (int_ 0) false_ (char_ 'c')
 ) in
 utest ty utestAnnot with tychar_ using eqTypeEmptyEnv in
-let _ignored =
-  match utestAnnot with TmUtest t then
-    utest ty t.test with tyint_ using eqTypeEmptyEnv in
-    utest ty t.expected with tybool_ using eqTypeEmptyEnv in
-    utest ty t.next with tychar_ using eqTypeEmptyEnv in
-    ()
-  else never
-in
+(match utestAnnot with TmUtest t then
+  utest ty t.test with tyint_ using eqTypeEmptyEnv in
+  utest ty t.expected with tybool_ using eqTypeEmptyEnv in
+  utest ty t.next with tychar_ using eqTypeEmptyEnv in
+  ()
+else never);
 
 utest ty (typeAnnot never_) with tyunknown_ using eqTypeEmptyEnv in
 
