@@ -132,13 +132,7 @@ lang OCamlPrettyPrint =
   | CMulf _ -> "( *. )"
   | CDivf _ -> "(/.)"
   | CNegf _ -> "(~-.)"
-  | CBool {val = b} ->
-      match b with true then
-        "true"
-      else
-        match b with false then
-          "false"
-        else never
+  | CBool {val = b} -> if b then "true" else "false"
   | CEqi _ -> "(=)"
   | CLti _ -> "(<)"
   | CLeqi _ -> "(<=)"

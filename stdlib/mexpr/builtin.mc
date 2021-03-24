@@ -1,5 +1,7 @@
-include "ast.mc"
-include "ast-builder.mc"
+include "mexpr/ast.mc"
+include "mexpr/const-types.mc"
+include "map.mc"
+include "stringid.mc"
 
 let builtin = use MExprAst in
   [ ("addi", CAddi ())
@@ -119,4 +121,27 @@ let builtin = use MExprAst in
   , ("bootParserGetInfo", CBootParserGetInfo ())
   ]
 
-let builtinEnv = map (lam x. match x with (s,c) then (nameSym s, const_ c) else never) builtin
+let builtinEnv : Map Name Expr = use MExprAst in
+  mapFromList
+    nameCmp
+    (map
+      (lam x.
+        match x with (s,c) then
+          (nameSym s, TmConst {val = c, ty = TyUnknown (), info = NoInfo ()})
+        else never)
+      builtin)
+
+let builtinNames : [Name] = mapKeys builtinEnv
+
+let builtinNameMap : Map String Name =
+  mapFromList cmpString (map (lam x. (nameGetStr x, x)) builtinNames)
+
+let builtinNameTypeMap : Map Name Type =
+  use ConstAst in
+  use MExprConstType in
+  mapMap
+    (lam v.
+      match v with TmConst {val = c} then
+        tyConst c
+      else never)
+    builtinEnv

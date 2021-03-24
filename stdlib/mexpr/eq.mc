@@ -334,7 +334,6 @@ lang CmpSymbEq = CmpSymbAst
   | CEqsym {} -> match lhs with CEqsym _ then true else false
 end
 
--- TODO(dlunde,2020-09-29): Remove constants no longer available in boot?
 lang SeqOpEq = SeqOpAst
   sem eqConst (lhs : Const) =
   | CGet {} -> match lhs with CGet _ then true else false

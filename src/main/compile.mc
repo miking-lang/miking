@@ -52,7 +52,6 @@ let ocamlCompile = lam sourcePath. lam ocamlAst.
 
 let compile = lam files. lam options.
   use MCoreCompile in
-  let builtinNames = map (lam x. x.0) builtinEnv in
   let compileFile = lam file.
     let ast = parseMCoreFile file in
 

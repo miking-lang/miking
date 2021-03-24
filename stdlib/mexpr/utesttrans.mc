@@ -67,13 +67,10 @@ in
 ()
 "
 
-let _builtinNames = map (lam intr. intr.0) builtinEnv
-
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolizeExpr (symVarNameEnv _builtinNames)
-                (parseMExprString _utestRunnerStr)
+  symbolize (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -191,7 +188,7 @@ let utest_info_ =
 in
 
 let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
--- eval {env = _builtinEnv} (symbolizeExpr (symVarNameEnv _names) (utestGen t));
+-- eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) (utestGen t));
 
 utest utestStrip t with unit_ using eqExpr in
 
