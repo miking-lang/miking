@@ -211,7 +211,7 @@ lang MatchEval = MatchAst
   sem eval (ctx : {env : Env}) =
   | TmMatch t ->
     match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
-      eval {ctx with env = mapUnion newEnv ctx.env} t.thn
+      eval {ctx with env = newEnv} t.thn
     else eval ctx t.els
 
   sem tryMatch (env : Env) (t : Expr) =
