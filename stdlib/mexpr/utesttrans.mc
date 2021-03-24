@@ -70,8 +70,7 @@ in
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolizeExpr (symVarNameEnv builtinNames)
-                (parseMExprString _utestRunnerStr)
+  symbolize (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
