@@ -230,7 +230,7 @@ lang OCamlPrettyPrint =
           let k = sidToString k in
           match pprintCode innerIndent env v with (env, str) then
             (env, join [pprintLabelString k, " =", pprintNewline innerIndent,
-                        str])
+                        "(", str, ")"])
           else never) env t.bindings
       with (env, binds) then
         let binds = mapValues binds in
