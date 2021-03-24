@@ -15,7 +15,7 @@ lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExpr in lam t. eval {env = assocEmpty} (symbolize t)
+  use MExpr in lam t. eval {env = builtinEnv} (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =

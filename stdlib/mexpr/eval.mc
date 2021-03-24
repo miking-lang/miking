@@ -18,7 +18,7 @@ include "mexpr/pprint.mc"
 
 type Symbol = Int
 
-type Env = AssocMap Name Expr
+type Env = Map Name Expr
 
 let _eqn =
   lam n1. lam n2.
@@ -27,8 +27,8 @@ let _eqn =
     else
       error "Found name without symbol in eval. Did you run symbolize?"
 
-let _evalLookup = assocLookup {eq = _eqn}
-let _evalInsert = assocInsert {eq = _eqn}
+let _evalLookup = mapLookup
+let _evalInsert = mapInsert
 
 -------------
 -- HELPERS --
@@ -211,7 +211,7 @@ lang MatchEval = MatchAst
   sem eval (ctx : {env : Env}) =
   | TmMatch t ->
     match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
-      eval {ctx with env = concat newEnv ctx.env} t.thn
+      eval {ctx with env = mapUnion newEnv ctx.env} t.thn
     else eval ctx t.els
 
   sem tryMatch (env : Env) (t : Expr) =

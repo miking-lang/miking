@@ -158,12 +158,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
     else never
 end
 
-lang ConstTypeAnnot = TypeAnnot + ConstAst
-  sem typeConst =
-  -- Intentionally left blank
-
+lang ConstTypeAnnot = TypeAnnot + MExprAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmConst t -> TmConst {t with ty = typeConst t.val}
+  | TmConst t -> TmConst {t with ty = tyConst t.val}
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -268,42 +265,10 @@ lang NeverTypeAnnot = TypeAnnot + NeverAst
   | TmNever t -> TmNever {t with ty = tyunknown_}
 end
 
-lang IntTypeAnnot = ConstTypeAnnot + IntAst
-  sem typeConst =
-  | CInt _ -> tyint_
-end
-
-lang FloatTypeAnnot = ConstTypeAnnot + FloatAst
-  sem typeConst =
-  | CFloat _ -> tyfloat_
-end
-
-lang BoolTypeAnnot = ConstTypeAnnot + BoolAst
-  sem typeConst =
-  | CBool _ -> tybool_
-end
-
-lang CharTypeAnnot = ConstTypeAnnot + CharAst
-  sem typeConst =
-  | CChar _ -> tychar_
-end
-
--- NOTE(larshum, 2021-03-08): There is currently no type for symbols, so they
--- are considered to be of an unknown type.
-lang SymbTypeAnnot = ConstTypeAnnot + SymbAst
-  sem typeConst =
-  | CSymb _ -> tyunknown_
-end
-
 lang MExprTypeAnnot =
-
-  -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
-  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
-
-  -- Constants
-  IntTypeAnnot + FloatTypeAnnot + BoolTypeAnnot + CharTypeAnnot + SymbTypeAnnot
+  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
