@@ -32,17 +32,23 @@ recursive let _withPreamble = lam expr.
     OTmPreambleText {text = _preambleStr, inexpr = expr}
 end
 
+-- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
+let filename = lam path.
+  match strLastIndex '/' path with Some idx then
+    subsequence path (addi idx 1) (length path)
+  else path
+
+let filenameWithoutExtension = lam filename.
+  match strLastIndex '.' filename with Some idx then
+    subsequence filename 0 idx
+  else filename
+
 let ocamlCompile = lam sourcePath. lam ocamlAst.
   use MCoreCompile in
   let p = ocamlCompile (expr2str ocamlAst) in
-  -- Imperfect solution: assumes the path contains at most one dot
-  let pathWithoutExtension =
-    match strLastIndex '.' sourcePath with Some idx then
-      subsequence sourcePath 0 idx
-    else sourcePath
-  in
-  phMoveFile p.binaryPath pathWithoutExtension;
-  phChmodWriteAccessFile pathWithoutExtension
+  let destinationFile = filenameWithoutExtension (filename sourcePath) in
+  phMoveFile p.binaryPath destinationFile;
+  phChmodWriteAccessFile destinationFile
 
 let compile = lam files. lam options.
   use MCoreCompile in
