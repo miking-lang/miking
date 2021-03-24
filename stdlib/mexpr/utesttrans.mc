@@ -67,13 +67,10 @@ in
 ()
 "
 
-let _builtinNames = map (lam intr. intr.0) builtinEnv
-
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolizeExpr (symVarNameEnv _builtinNames)
-                (parseMExprString _utestRunnerStr)
+  symbolize (parseMExprString _utestRunnerStr)
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -99,27 +96,6 @@ let int2stringName = optionGetOrElse
 
 let withUtestRunner = lam term.
   bind_ utestRunner term
-
-recursive
-let _compatibleType =
-  use MExprAst in
-  use MExprEq in
-  lam tyEnv. lam ty1. lam ty2.
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match _compatibleType tyEnv t1.from t2.from with Some a then
-      match _compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {from = a, to = b})
-      else None ()
-    else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match _compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TySeq {ty = t})
-    else None ()
-  else if eqType tyEnv ty1 ty2 then Some ty1
-  else None ()
-end
 
 recursive let _printFunc = use MExprAst in
   lam ty.
@@ -166,7 +142,7 @@ let _generateUtest = lam t.
       {filename = "", row = "0"}
     else never
   in
-  match _compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
+  match compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
     utestAst ty utestInfo t.test t.expected
   else error "Type error"
 
@@ -212,7 +188,7 @@ let utest_info_ =
 in
 
 let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
--- eval {env = _builtinEnv} (symbolizeExpr (symVarNameEnv _names) (utestGen t));
+-- eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) (utestGen t));
 
 utest utestStrip t with unit_ using eqExpr in
 

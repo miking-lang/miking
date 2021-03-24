@@ -579,7 +579,7 @@ let print = if printEnabled then print else lam x. x in
 -- Enable/disable eval
 let evalEnabled = false in
 let evalE = lam expr. lam expected.
-  if evalEnabled then eval {env = []} expr else expected in
+  if evalEnabled then eval {env = builtinEnv} expr else expected in
 
 -- Prettyprinting
 let pprint = lam ast.

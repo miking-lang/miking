@@ -1,10 +1,10 @@
 -- Language fragments of MExpr
 
-include "string.mc"
-include "name.mc"
+include "mexpr/info.mc"
 include "assoc.mc"
 include "info.mc"
-include "mexpr/info.mc"
+include "name.mc"
+include "string.mc"
 
 -----------
 -- TERMS --
@@ -387,12 +387,9 @@ lang RefAst
   | TmRef t -> acc
 end
 
-
 ---------------
 -- CONSTANTS --
 ---------------
--- All constants in boot have not been implemented. Missing ones can be added
--- as needed.
 
 lang IntAst = ConstAst
   syn Const =
@@ -518,20 +515,6 @@ lang FileOpAst = ConstAst
   | CFileDelete {}
 end
 
-lang TensorOpAst
-  syn Const =
-  | CTensorCreate {}
-  | CTensorGetExn {}
-  | CTensorSetExn {}
-  | CTensorRank {}
-  | CTensorShape {}
-  | CTensorReshapeExn {}
-  | CTensorCopyExn {}
-  | CTensorSliceExn {}
-  | CTensorSubExn {}
-  | CTensorIteri {}
-end
-
 lang IOAst = ConstAst
   syn Const =
   | CPrint {}
@@ -586,7 +569,7 @@ lang MapAst = ConstAst
   | CMapGetCmpFun {}
 end
 
-lang TensorAst = ConstAst
+lang TensorOpAst = ConstAst
   syn Const =
   | CTensorCreate {}
   | CTensorGetExn {}
@@ -891,7 +874,6 @@ lang AppTypeAst
   | TyApp r -> r.info
 end
 
-
 ------------------------
 -- MEXPR AST FRAGMENT --
 ------------------------
@@ -907,8 +889,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorAst +
-  TensorOpAst + BootParserAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorOpAst +
+  BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

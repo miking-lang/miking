@@ -15,7 +15,6 @@ lang ExtMCore = BootParser + MExpr + MExprTypeAnnot + MExprUtestTrans
 
 let run = lam files. lam options.
   use ExtMCore in
-  let builtinNames = map (lam x. x.0) builtinEnv in
   let runFile = lam file.
     let ast = parseMCoreFile file in
 
