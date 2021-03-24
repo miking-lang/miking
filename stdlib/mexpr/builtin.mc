@@ -145,17 +145,3 @@ let builtinNameTypeMap : Map Name Type =
         tyConst c
       else never)
     builtinEnv
-
-let builtinPprintNameMap =
-  mapFromList nameCmp (map (lam n. (n, nameGetStr n)) builtinNames)
-
-let builtinPprintCount =
-  mapFromList cmpString (map (lam n. (nameGetStr n, 1)) builtinNames)
-
-let builtinPprintStrings = mapMap (lam. 0) builtinPprintCount
-
-let builtinPprintEnv =
-  { nameMap = builtinPprintNameMap
-  , count = builtinPprintCount
-  , strings = builtinPprintStrings
-  }
