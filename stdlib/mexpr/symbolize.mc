@@ -283,39 +283,40 @@ end
 
 lang BoolTypeSym = BoolTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyBool {} & ty -> ty
+  | TyBool _ & ty -> ty
 end
 
 lang IntTypeSym = IntTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyInt {} & ty -> ty
+  | TyInt _ & ty -> ty
 end
 
 lang FloatTypeSym = FloatTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyFloat {} & ty -> ty
+  | TyFloat _ & ty -> ty
 end
 
 lang CharTypeSym = CharTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyChar {} & ty -> ty
+  | TyChar _ & ty -> ty
 end
 
 lang FunTypeSym = FunTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyArrow {from = from, to = to} ->
-    TyArrow {from = symbolizeType env from, to = symbolizeType env to}
+  | TyArrow t ->
+    TyArrow {{t with from = symbolizeType env t.from}
+                with to = symbolizeType env t.to}
 end
 
 lang SeqTypeSym = SeqTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TySeq {ty = ty} -> TySeq {ty = symbolizeType env ty}
+  | TySeq t -> TySeq {t with ty = symbolizeType env t.ty}
 end
 
 lang RecordTypeSym = RecordTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyRecord {fields = fields} ->
-    TyRecord {fields = mapMap (symbolizeType env) fields}
+  | TyRecord t ->
+    TyRecord {t with fields = mapMap (symbolizeType env) t.fields}
 end
 
 lang VariantTypeSym = VariantTypeAst
@@ -325,23 +326,24 @@ lang VariantTypeSym = VariantTypeAst
     else error "Symbolizing non-empty variant types not yet supported"
 end
 
-lang VarTypeSym = VarTypeAst
+lang VarTypeSym = VarTypeAst + UnknownTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyVar {ident = ident} & ty ->
+  | TyVar t & ty ->
     match env with {tyEnv = tyEnv} then
-      if nameHasSym ident then ty
+      if nameHasSym t.ident then ty
       else
-        let str = nameGetStr ident in
+        let str = nameGetStr t.ident in
         match assocLookup {eq=eqString} str tyEnv with Some ident then
-          TyVar {ident = ident}
+          TyVar {t with ident = ident}
         else error (concat "Unknown type variable in symbolizeExpr: " str)
     else never
 end
 
 lang AppTypeSym = AppTypeAst
   sem symbolizeType (env : SymEnv) =
-  | TyApp {lhs = lhs, rhs = rhs} ->
-    TyApp {lhs = symbolizeType env lhs, rhs = symbolizeType env rhs}
+  | TyApp t ->
+    TyApp {{t with lhs = symbolizeType env t.lhs}
+              with rhs = symbolizeType env t.rhs}
 end
 
 --------------
