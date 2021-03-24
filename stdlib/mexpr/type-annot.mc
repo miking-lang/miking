@@ -10,6 +10,7 @@
 -- Requires that the types of constructors are included in the `tyIdent` field.
 include "assoc-seq.mc"
 include "mexpr/ast.mc"
+include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 
@@ -158,7 +159,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
     else never
 end
 
-lang ConstTypeAnnot = TypeAnnot + MExprAst
+lang ConstTypeAnnot = TypeAnnot + MExprConstType
   sem typeAnnotExpr (env : TypeEnv) =
   | TmConst t -> TmConst {t with ty = tyConst t.val}
 end

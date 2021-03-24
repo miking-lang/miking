@@ -9,6 +9,7 @@ include "map.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/builtin.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --
@@ -190,19 +191,7 @@ lang PrettyPrint = IdentifierPrettyPrint
 
   sem expr2str =
   | expr ->
-    let builtinNameMap =
-      mapFromList
-        nameCmp
-        (map (lam n. (n, nameGetStr n)) builtinNames) in
-    let builtinCount =
-      mapFromList
-        cmpString
-        (map (lam n. (nameGetStr n, 1)) builtinNames) in
-    let builtinStrings = mapMapWithKey (lam str. lam. (str, 0)) builtinCount in
-    let defaultPprintEnv = {{{pprintEnvEmpty with nameMap = builtinNameMap}
-                                             with count = builtinCount}
-                                             with strings = builtinStrings} in
-    match pprintCode 0 defaultPprintEnv expr with (_,str)
+    match pprintCode 0 builtinPprintEnv expr with (_,str)
     then str else never
 
   -- Helper function for printing parentheses

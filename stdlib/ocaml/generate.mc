@@ -77,7 +77,7 @@ let _builtinNameMap : Map String Name =
     (mapFromList cmpString
       (map (lam s. (s, nameSym s)) ["ofArray"]))
 
-let _intrinsicName = lam str.
+let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then
     name
   else error (join ["Unsupported intrinsic: ", str])
@@ -412,7 +412,9 @@ end
 
 recursive let _isIntrinsicApp = use OCamlAst in
   lam t.
-    match t with TmApp {lhs = TmVar {ident = ident}} then
+    match t with TmApp {lhs = TmConst _} then
+      true
+    else match t with TmApp {lhs = TmVar {ident = ident}} then
       mapMem ident builtinNameTypeMap
     else match t with TmApp {lhs = (TmApp _) & lhs} then
       _isIntrinsicApp lhs
@@ -467,46 +469,41 @@ let _preamble =
          mkBody op [a, b, c, d])
   in
 
-  let ocamlFunc = use OCamlAst in
-    lam str.
-    OTmVarExt {ident = str}
-  in
-
   bindall_
-    [ intr2 "addi" (appf2_ (ocamlFunc "(+)"))
-    , intr2 "subi" (appf2_ (ocamlFunc "(-)"))
-    , intr2 "muli" (appf2_ (ocamlFunc "( * )"))
-    , intr2 "divi" (appf2_ (ocamlFunc "(/)"))
-    , intr2 "modi" (appf2_ (ocamlFunc "(mod)"))
-    , intr1 "negi" (appf1_ (ocamlFunc "~-"))
-    , intr2 "lti" (appf2_ (ocamlFunc "(<)"))
-    , intr2 "leqi" (appf2_ (ocamlFunc "(<=)"))
-    , intr2 "gti" (appf2_ (ocamlFunc "(>)"))
-    , intr2 "geqi" (appf2_ (ocamlFunc "(>=)"))
-    , intr2 "eqi" (appf2_ (ocamlFunc "(=)"))
-    , intr2 "neqi" (appf2_ (ocamlFunc "(!=)"))
-    , intr2 "slli" (appf2_ (ocamlFunc "Int.shift_left"))
-    , intr2 "srli" (appf2_ (ocamlFunc "Int.shift_right_logical"))
-    , intr2 "srai" (appf2_ (ocamlFunc "Int.shift_right"))
-    , intr2 "addf" (appf2_ (ocamlFunc "(+.)"))
-    , intr2 "subf" (appf2_ (ocamlFunc "(-.)"))
-    , intr2 "mulf" (appf2_ (ocamlFunc "( *. )"))
-    , intr2 "divf" (appf2_ (ocamlFunc "( /. )"))
-    , intr1 "negf" (appf1_ (ocamlFunc "(~-.)"))
-    , intr2 "ltf" (appf2_ (ocamlFunc "(<)"))
-    , intr2 "leqf" (appf2_ (ocamlFunc "(<=)"))
-    , intr2 "gtf" (appf2_ (ocamlFunc "(>)"))
-    , intr2 "geqf" (appf2_ (ocamlFunc "(>=)"))
-    , intr2 "eqf" (appf2_ (ocamlFunc "(=)"))
-    , intr2 "neqf" (appf2_ (ocamlFunc "(!=)"))
+    [ intr2 "addi" addi_
+    , intr2 "subi" subi_
+    , intr2 "muli" muli_
+    , intr2 "divi" divi_
+    , intr2 "modi" modi_
+    , intr1 "negi" negi_
+    , intr2 "lti" lti_
+    , intr2 "leqi" leqi_
+    , intr2 "gti" gti_
+    , intr2 "geqi" geqi_
+    , intr2 "eqi" eqi_
+    , intr2 "neqi" neqi_
+    , intr2 "slli" slli_
+    , intr2 "srli" srli_
+    , intr2 "srai" srai_
+    , intr2 "addf" addf_
+    , intr2 "subf" subf_
+    , intr2 "mulf" mulf_
+    , intr2 "divf" divf_
+    , intr1 "negf" negf_
+    , intr2 "ltf" ltf_
+    , intr2 "leqf" leqf_
+    , intr2 "gtf" gtf_
+    , intr2 "geqf" geqf_
+    , intr2 "eqf" eqf_
+    , intr2 "neqf" neqf_
     , intr1 "floorfi" (appf1_ (_floatOp "floorfi"))
     , intr1 "ceilfi" (appf1_ (_floatOp "ceilfi"))
     , intr1 "roundfi" (appf1_ (_floatOp "roundfi"))
-    , intr1 "int2float" (appf1_ (ocamlFunc "float_of_int"))
+    , intr1 "int2float" int2float_
     , intr1 "string2float" (appf1_ (_floatOp "string2float"))
-    , intr2 "eqc" (appf2_ (ocamlFunc "(=)"))
-    , intr1 "char2int" (appf1_ (ocamlFunc "int_of_char"))
-    , intr1 "int2char" (appf1_ (ocamlFunc "char_of_int"))
+    , intr2 "eqc" eqc_
+    , intr1 "char2int" char2int_
+    , intr1 "int2char" int2char_
     , intr2 "create" (appf2_ (_seqOp "create"))
     , intr1 "length" (appf1_ (_seqOp "length"))
     , intr2 "concat" (appf2_ (_seqOp "concat"))
@@ -564,9 +561,110 @@ let _preamble =
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
+  sem intrinsic2name =
+  | CAddi _ -> nvar_ (_intrinsicName "addi")
+  | CSubi _ -> nvar_ (_intrinsicName "subi")
+  | CMuli _ -> nvar_ (_intrinsicName "muli")
+  | CDivi _ -> nvar_ (_intrinsicName "divi")
+  | CModi _ -> nvar_ (_intrinsicName "modi")
+  | CNegi _ -> nvar_ (_intrinsicName "negi")
+  | CLti _ -> nvar_ (_intrinsicName "lti")
+  | CLeqi _ -> nvar_ (_intrinsicName "leqi")
+  | CGti _ -> nvar_ (_intrinsicName "gti")
+  | CGeqi _ -> nvar_ (_intrinsicName "geqi")
+  | CEqi _ -> nvar_ (_intrinsicName "eqi")
+  | CNeqi _ -> nvar_ (_intrinsicName "neqi")
+  | CSlli _ -> nvar_ (_intrinsicName "slli")
+  | CSrli _ -> nvar_ (_intrinsicName "srli")
+  | CSrai _ -> nvar_ (_intrinsicName "srai")
+  | CAddf _ -> nvar_ (_intrinsicName "addf")
+  | CSubf _ -> nvar_ (_intrinsicName "subf")
+  | CMulf _ -> nvar_ (_intrinsicName "mulf")
+  | CDivf _ -> nvar_ (_intrinsicName "divf")
+  | CNegf _ -> nvar_ (_intrinsicName "negf")
+  | CLtf _ -> nvar_ (_intrinsicName "ltf")
+  | CLeqf _ -> nvar_ (_intrinsicName "leqf")
+  | CGtf _ -> nvar_ (_intrinsicName "gtf")
+  | CGeqf _ -> nvar_ (_intrinsicName "geqf")
+  | CEqf _ -> nvar_ (_intrinsicName "eqf")
+  | CNeqf _ -> nvar_ (_intrinsicName "neqf")
+  | CFloorfi _ -> nvar_ (_intrinsicName "floorfi")
+  | CCeilfi _ -> nvar_ (_intrinsicName "ceilfi")
+  | CRoundfi _ -> nvar_ (_intrinsicName "roundfi")
+  | CInt2float _ -> nvar_ (_intrinsicName "int2float")
+  | CString2float _ -> nvar_ (_intrinsicName "string2float")
+  | CEqc _ -> nvar_ (_intrinsicName "eqc")
+  | CChar2Int _ -> nvar_ (_intrinsicName "char2int")
+  | CInt2Char _ -> nvar_ (_intrinsicName "int2char")
+  | CCreate _ -> nvar_ (_intrinsicName "create")
+  | CLength _ -> nvar_ (_intrinsicName "length")
+  | CConcat _ -> nvar_ (_intrinsicName "concat")
+  | CGet _ -> nvar_ (_intrinsicName "get")
+  | CSet _ -> nvar_ (_intrinsicName "set")
+  | CCons _ -> nvar_ (_intrinsicName "cons")
+  | CSnoc _ -> nvar_ (_intrinsicName "snoc")
+  | CSplitAt _ -> nvar_ (_intrinsicName "splitAt")
+  | CReverse _ -> nvar_ (_intrinsicName "reverse")
+  | CSubsequence _ -> nvar_ (_intrinsicName "subsequence")
+  | CPrint _ -> nvar_ (_intrinsicName "print")
+  | CDPrint _ -> nvar_ (_intrinsicName "dprint")
+  | CReadLine _ -> nvar_ (_intrinsicName "readLine")
+  | CArgv _ -> nvar_ (_intrinsicName "argv")
+  | CFileRead _ -> nvar_ (_intrinsicName "readFile")
+  | CFileWrite _ -> nvar_ (_intrinsicName "writeFile")
+  | CFileExists _ -> nvar_ (_intrinsicName "fileExists")
+  | CFileDelete _ -> nvar_ (_intrinsicName "deleteFile")
+  | CError _ -> nvar_ (_intrinsicName "error")
+  | CExit _ -> nvar_ (_intrinsicName "exit")
+  | CEqsym _ -> nvar_ (_intrinsicName "eqsym")
+  | CGensym _ -> nvar_ (_intrinsicName "gensym")
+  | CSym2hash _ -> nvar_ (_intrinsicName "sym2hash")
+  | CRandIntU _ -> nvar_ (_intrinsicName "randIntU")
+  | CRandSetSeed _ -> nvar_ (_intrinsicName "randSetSeed")
+  | CWallTimeMs _ -> nvar_ (_intrinsicName "wallTimeMs")
+  | CSleepMs _ -> nvar_ (_intrinsicName "sleepMs")
+  | CMapEmpty _ -> nvar_ (_intrinsicName "mapEmpty")
+  | CMapInsert _ -> nvar_ (_intrinsicName "mapInsert")
+  | CMapRemove _ -> nvar_ (_intrinsicName "mapRemove")
+  | CMapFindWithExn _ -> nvar_ (_intrinsicName "mapFindWithExn")
+  | CMapFindOrElse _ -> nvar_ (_intrinsicName "mapFindOrElse")
+  | CMapFindApplyOrElse _ -> nvar_ (_intrinsicName "mapFindApplyOrElse")
+  | CMapBindings _ -> nvar_ (_intrinsicName "mapBindings")
+  | CMapSize _ -> nvar_ (_intrinsicName "mapSize")
+  | CMapMem _ -> nvar_ (_intrinsicName "mapMem")
+  | CMapAny _ -> nvar_ (_intrinsicName "mapAny")
+  | CMapMap _ -> nvar_ (_intrinsicName "mapMap")
+  | CMapMapWithKey _ -> nvar_ (_intrinsicName "mapMapWithKey")
+  | CMapFoldWithKey _ -> nvar_ (_intrinsicName "mapFoldWithKey")
+  | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
+  | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
+  | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
+  | CTensorCreate _ -> nvar_ (_intrinsicName "tensorCreate")
+  | CTensorGetExn _ -> nvar_ (_intrinsicName "tensorGetExn")
+  | CTensorSetExn _ -> nvar_ (_intrinsicName "tensorSetExn")
+  | CTensorRank _ -> nvar_ (_intrinsicName "tensorRank")
+  | CTensorShape _ -> nvar_ (_intrinsicName "tensorShape")
+  | CTensorReshapeExn _ -> nvar_ (_intrinsicName "tensorReshapeExn")
+  | CTensorCopyExn _ -> nvar_ (_intrinsicName "tensorCopyExn")
+  | CTensorSliceExn _ -> nvar_ (_intrinsicName "tensorSliceExn")
+  | CTensorSubExn _ -> nvar_ (_intrinsicName "tensorSubExn")
+  | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
+  | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
+  | CBootParserGetId _ -> nvar_ (_intrinsicName "bootParserGetId")
+  | CBootParserGetTerm _ -> nvar_ (_intrinsicName "bootParserGetTerm")
+  | CBootParserGetString _ -> nvar_ (_intrinsicName "bootParserGetString")
+  | CBootParserGetInt _ -> nvar_ (_intrinsicName "bootParserGetInt")
+  | CBootParserGetFloat _ -> nvar_ (_intrinsicName "bootParserGetFloat")
+  | CBootParserGetListLength _ -> nvar_ (_intrinsicName "bootParserGetListLength")
+  | CBootParserGetConst _ -> nvar_ (_intrinsicName "bootParserGetConst")
+  | CBootParserGetPat _ -> nvar_ (_intrinsicName "bootParserGetPat")
+  | CBootParserGetInfo _ -> nvar_ (_intrinsicName "bootParserGetInfo")
+  | t -> dprintLn t; error "Intrinsic not implemented"
+
   sem objWrapRec =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
     _objRepr t
+  | TmConst {val = c} -> intrinsic2name c
   | TmApp t ->
     if _isIntrinsicApp (TmApp t) then
       TmApp {{t with lhs = objWrapRec t.lhs}
@@ -1450,7 +1548,7 @@ let mapEmptyTest = bind_
 utest ocamlEvalInt (generateEmptyEnv mapEmptyTest) with int_ 42 using eqExpr in
 
 let mapInsertFindTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
   , mapFindWithExn_ (int_ 42) (var_ "m")
@@ -1459,7 +1557,7 @@ utest ocamlEvalInt (generateEmptyEnv mapInsertFindTest)
 with int_ 1 using eqExpr in
 
 let mapMemTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
   ] in
@@ -1467,7 +1565,7 @@ utest ocamlEvalBool (generateEmptyEnv mapMemTrueTest)
 with true_ using eqExpr in
 
 let mapMemFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 78) (var_ "m")
   ] in
@@ -1475,7 +1573,7 @@ utest ocamlEvalBool (generateEmptyEnv mapMemFalseTest)
 with false_ using eqExpr in
 
 let mapRemoveTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapRemove_ (int_ 42) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
@@ -1484,7 +1582,7 @@ utest ocamlEvalBool (generateEmptyEnv mapRemoveTest)
 with false_ using eqExpr in
 
 let mapFindOrElseTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 42) (var_ "m")
   ] in
@@ -1492,7 +1590,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindOrElseTrueTest)
 with int_ 1 using eqExpr in
 
 let mapFindOrElseFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 3) (var_ "m")
   ] in
@@ -1500,7 +1598,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindOrElseFalseTest)
 with int_ 123 using eqExpr in
 
 let mapFindApplyOrElseTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindApplyOrElse_
       (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
@@ -1511,7 +1609,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseTrueTest)
 with int_ 2 using eqExpr in
 
 let mapFindApplyOrElseFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindApplyOrElse_
      (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
@@ -1522,14 +1620,14 @@ utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseFalseTest)
 with int_ 7 using eqExpr in
 
 let mapSizeEmptyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , mapSize_ (var_ "m")
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapSizeEmptyTest)
 with int_ 0 using eqExpr in
 
 let mapSizeTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 100) (int_ 567) (var_ "m"))
@@ -1539,7 +1637,7 @@ utest ocamlEvalInt (generateEmptyEnv mapSizeTest)
 with int_ 2 using eqExpr in
 
 let mapAnyTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (geqi_ (var_ "k") (var_ "v")))) (var_ "m")
   ] in
@@ -1547,7 +1645,7 @@ utest ocamlEvalBool (generateEmptyEnv mapAnyTrueTest)
 with true_ using eqExpr in
 
 let mapAnyFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 0) (negi_ (int_ 1)) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (eqi_ (var_ "k") (var_ "v")))) (var_ "m")
@@ -1556,7 +1654,7 @@ utest ocamlEvalBool (generateEmptyEnv mapAnyFalseTest)
 with false_ using eqExpr in
 
 let mapMapTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
@@ -1566,7 +1664,7 @@ utest ocamlEvalInt (generateEmptyEnv mapMapTest)
 with int_ 100 using eqExpr in
 
 let mapMapWithKeyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m"
@@ -1578,7 +1676,7 @@ utest ocamlEvalInt (generateEmptyEnv mapMapWithKeyTest)
 with int_ 59 using eqExpr in
 
 let mapFoldWithKeyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , mapFoldWithKey_
@@ -1589,10 +1687,10 @@ utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
 with int_ 103 using eqExpr in
 
 let mapEqTrueTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
@@ -1602,10 +1700,10 @@ utest ocamlEvalBool (generateEmptyEnv mapEqTrueTest)
 with true_ using eqExpr in
 
 let mapEqFalseTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 3) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
@@ -1615,10 +1713,10 @@ utest ocamlEvalBool (generateEmptyEnv mapEqFalseTest)
 with false_ using eqExpr in
 
 let mapCmpEqTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
@@ -1628,10 +1726,10 @@ utest ocamlEvalInt (generateEmptyEnv mapCmpEqTest)
 with int_ 0 using eqExpr in
 
 let mapCmpNEqTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 1) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
@@ -1641,7 +1739,7 @@ utest ocamlEvalInt (generateEmptyEnv mapCmpNEqTest)
 with int_ 1 using eqExpr in
 
 let mapGetCmpFunTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "f" (mapGetCmpFun_ (var_ "m"))
   , appf2_ (var_ "f") (int_ 12) (int_ 2)
   ] in
@@ -1650,7 +1748,7 @@ with int_ 10 using eqExpr in
 
 -- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
 let mapBindingsTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (nvar_ (_intrinsicName "subi")))
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
   , ulet_ "seq" (mapBindings_ (var_ "m1"))

@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "mexpr/const-types.mc"
 include "map.mc"
 include "stringid.mc"
 
@@ -135,15 +136,26 @@ let builtinNames : [Name] = mapKeys builtinEnv
 let builtinNameMap : Map String Name =
   mapFromList cmpString (map (lam x. (nameGetStr x, x)) builtinNames)
 
-let builtinIntrinsicName : String -> Name = lam str.
-  match mapLookup str builtinNameMap with Some name then
-    name
-  else error (join ["Could not find intrinsic: ", str])
-
-let builtinNameTypeMap : Map Name Type = use MExprAst in
+let builtinNameTypeMap : Map Name Type =
+  use ConstAst in
+  use MExprConstType in
   mapMap
     (lam v.
       match v with TmConst {val = c} then
         tyConst c
       else never)
     builtinEnv
+
+let builtinPprintNameMap =
+  mapFromList nameCmp (map (lam n. (n, nameGetStr n)) builtinNames)
+
+let builtinPprintCount =
+  mapFromList cmpString (map (lam n. (nameGetStr n, 1)) builtinNames)
+
+let builtinPprintStrings = mapMap (lam. 0) builtinPprintCount
+
+let builtinPprintEnv =
+  { nameMap = builtinPprintNameMap
+  , count = builtinPprintCount
+  , strings = builtinPprintStrings
+  }
