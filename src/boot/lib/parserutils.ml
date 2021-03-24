@@ -107,6 +107,7 @@ let rec merge_includes root visited = function
             in
             let file_stdloc =
               Filename.concat stdlib_loc (Ustring.to_utf8 path)
+              |> Utils.normalize_path
             in
             if List.mem filename visited then
               raise_error info ("Cycle detected in included files: " ^ filename)
