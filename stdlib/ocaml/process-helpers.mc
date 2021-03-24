@@ -30,7 +30,7 @@ let phJoinPath = lam p1. lam p2.
   let p = pycall _pathlib "Path" (p1,) in
   pycall _blt "str" (pycall p "joinpath" (p2,),)
 
-let phRunCommand : String -> String -> String -> ExecResult =
+let phRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
     let r = pycallkw _subprocess "run" (cmd,)
             { cwd=cwd,
