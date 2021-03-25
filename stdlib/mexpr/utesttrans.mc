@@ -163,16 +163,19 @@ recursive let _eqFunc = use MExprAst in
   else dprintLn ty; error "Unsupported type"
 end
 
-let utestAst = lam ty. lam info. lam l. lam r.
+let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
   appf5_
     (nvar_ utestRunnerName)
     (record_ [
       ("filename", str_ info.filename),
       ("row", str_ info.row)])
-    (_printFunc ty)
-    (_eqFunc ty)
+    printFunc
+    eqFunc
     l
     r
+
+let utestAst = lam ty. lam info. lam l. lam r.
+  utestRunnerCall info (_printFunc ty) (_eqFunc ty) l r
 
 let _generateUtest = lam t.
   use MExprAst in
@@ -184,7 +187,14 @@ let _generateUtest = lam t.
     else never
   in
   match compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
-    utestAst ty utestInfo t.test t.expected
+    match t.tusing with Some eqFunc then
+      let eqFunc =
+        ulam_ "a"
+          (ulam_ "b"
+            (appf2_ eqFunc (var_ "a") (var_ "b"))) in
+      utestRunnerCall utestInfo (_printFunc ty) eqFunc t.test t.expected
+    else
+      utestAst ty utestInfo t.test t.expected
   else error "Type error"
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
