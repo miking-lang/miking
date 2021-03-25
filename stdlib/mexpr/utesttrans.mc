@@ -41,6 +41,61 @@ let int2string = lam n.
   else int2string_rechelper n
 in
 
+let inf =
+  divf 1.0 0.0
+in
+
+-- A naive float2string implementation that only formats in standard form
+let float2string = lam arg.
+  -- Quick fix to check for infinities
+  if eqf arg inf then \"INFINITY\" else
+  if eqf arg (negf inf) then \"-INFINITY\" else
+  -- End of quick fix
+  let precision = 7 in -- Precision in number of digits
+  let prefixpair = if ltf arg 0.0 then (\"-\", negf arg) else (\"\", arg) in
+  let prefix = prefixpair.0 in
+  let val = prefixpair.1 in
+  recursive
+  let float2string_rechelper = lam prec. lam digits. lam v.
+    -- Assume 0 <= v < 10
+    if eqi prec digits then
+      \"\"
+    else if eqf v 0.0 then
+      \"0\"
+    else
+      let fstdig = floorfi v in
+      let remaining = mulf (subf v (int2float fstdig)) 10.0 in
+      let c = int2char (addi fstdig (char2int '0')) in
+      cons c (float2string_rechelper prec (addi digits 1) remaining)
+  in
+  recursive
+  let positiveExponentPair = lam acc. lam v.
+    if ltf v 10.0
+    then (v, acc)
+    else positiveExponentPair (addi acc 1) (divf v 10.0)
+  in
+  recursive
+  let negativeExponentPair = lam acc. lam v.
+    if geqf v 1.0
+    then (v, acc)
+    else negativeExponentPair (addi acc 1) (mulf v 10.0)
+  in
+  let res = if eqf val 0.0 then
+              \"0.0\"
+            else if gtf val 1.0 then
+              let pospair = positiveExponentPair 0 val in
+              let retstr = float2string_rechelper precision 0 (pospair.0) in
+              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
+              concat decimals (concat \"e+\" (int2string pospair.1))
+            else
+              let pospair = negativeExponentPair 0 val in
+              let retstr = float2string_rechelper precision 0 (pospair.0) in
+              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
+              concat decimals (concat \"e-\" (int2string pospair.1))
+  in
+  concat prefix res
+in
+
 recursive
   let strJoin = lam delim. lam strs.
     if eqi (length strs) 0
@@ -127,15 +182,23 @@ let int2stringName = optionGetOrElse
   (lam. error "Expected int2string to be defined")
   (findName "int2string" utestRunner)
 
+let float2stringName = optionGetOrElse
+  (lam. error "Expected float2string to be defined")
+  (findName "float2string" utestRunner)
+
 let withUtestRunner = lam term.
   bind_ utestRunner term
 
 recursive let _printFunc = use MExprAst in
   lam ty.
-  match ty with TyInt {} then
+  match ty with TyInt _ then
     nvar_ int2stringName
-  else match ty with TyBool {} then
+  else match ty with TyFloat _ then
+    nvar_ float2stringName
+  else match ty with TyBool _ then
     ulam_ "b" (if_ (var_ "b") (str_ "true") (str_ "false"))
+  else match ty with TyChar _ then
+    ulam_ "c" (seq_ [char_ '\'', var_ "c", char_ '\''])
   else match ty with TySeq {ty = elemTy} then
     ulam_ "seq" (app_ (var_ "join") (seq_ [
       str_ "[",
@@ -153,10 +216,12 @@ let _eqBool = ulam_ "a" (ulam_ "b"
 
 recursive let _eqFunc = use MExprAst in
   lam ty.
-  match ty with TyInt {} then
+  match ty with TyInt _ then
     ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b")))
-  else match ty with TyBool {} then
+  else match ty with TyBool _ then
     _eqBool
+  else match ty with TyChar _ then
+    ulam_ "a" (ulam_ "b" (eqc_ (var_ "a") (var_ "b")))
   else match ty with TySeq {ty = elemTy} then
     ulam_ "a" (ulam_ "b" (appf3_ (var_ "eqSeq")
                                  (_eqFunc elemTy) (var_ "a") (var_ "b")))
@@ -249,20 +314,64 @@ let utestu_info_ =
           , info = default_info}
 in
 
-let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
-eval {env = builtinEnv} (symbolize (utestGen t));
-utest utestStrip t with unit_ using eqExpr in
+let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
+eval {env = builtinEnv} (symbolize (utestGen intNoUsing));
+utest utestStrip intNoUsing with unit_ using eqExpr in
 
-let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
-eval {env = builtinEnv} (symbolize (utestGen t1));
-utest utestStrip t1 with unit_ using eqExpr in
+let intWithUsing = typeAnnot (
+  utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
+eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
+utest utestStrip intWithUsing with unit_ using eqExpr in
 
 let lhs = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
 let rhs = reverse_ (seq_ [
   reverse_ (seq_ [int_ 4, int_ 3]),
   reverse_ (seq_ [int_ 2, int_ 1])]) in
-let t2 = typeAnnot (utest_info_ lhs rhs unit_) in
-eval {env = builtinEnv} (symbolize (utestGen t2));
-utest utestStrip t2 with unit_ using eqExpr in
+let nestedSeqInt = typeAnnot (utest_info_ lhs rhs unit_) in
+eval {env = builtinEnv} (symbolize (utestGen nestedSeqInt));
+utest utestStrip nestedSeqInt with unit_ using eqExpr in
+
+let lhs = seq_ [
+  float_ 6.5, float_ 1.0, float_ 0.0, float_ 3.14
+] in
+let rhs = reverse_ (seq_ [
+  float_ 3.14, float_ 0.0, float_ 1.0, float_ 6.5
+]) in
+let elemEq = const_ (CEqf ()) in
+let seqEq =
+  ulam_ "a"
+    (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
+let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs unit_ seqEq) in
+eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
+utest utestStrip floatSeqWithUsing with unit_ using eqExpr in
+
+let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') unit_) in
+eval {env = builtinEnv} (symbolize (utestGen charNoUsing));
+utest utestStrip charNoUsing with unit_ using eqExpr in
+
+let charWithUsing = typeAnnot (bindall_ [
+  ulet_ "leqChar" (ulam_ "c1" (ulam_ "c2" (
+    leqi_ (char2int_ (var_ "c1")) (char2int_ (var_ "c2"))
+  ))),
+  ulet_ "geqChar" (ulam_ "c1" (ulam_ "c2" (
+    geqi_ (char2int_ (var_ "c1")) (char2int_ (var_ "c2"))
+  ))),
+  ulet_ "char2lower" (ulam_ "c" (
+    if_
+      (and_
+        (appf2_ (var_ "geqChar") (var_ "c") (char_ 'A'))
+        (appf2_ (var_ "leqChar") (var_ "c") (char_ 'Z')))
+      (int2char_ (addi_ (char2int_ (var_ "c")) (int_ 32)))
+      (var_ "c")
+  )),
+  ulet_ "charEqIgnoreCase"
+    (ulam_ "a"
+      (ulam_ "b"
+        (eqc_
+          (app_ (var_ "char2lower") (var_ "a"))
+          (app_ (var_ "char2lower") (var_ "b"))))),
+  utestu_info_ (char_ 'a') (char_ 'A') unit_ (var_ "charEqIgnoreCase")
+]) in
+eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
 
 ()
