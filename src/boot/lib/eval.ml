@@ -36,7 +36,8 @@ let evalprog filename =
         printf "\n%s" error_string ;
         utest_fail := !utest_fail + 1 ;
         utest_fail_local := !utest_fail_local + 1 )
-      else fprintf stderr "%s\n" error_string ) ;
+      else fprintf stderr "%s\n" error_string ;
+      exit 1 ) ;
   parsed_files := [] ;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n" ;
   if !enable_debug_profiling then
