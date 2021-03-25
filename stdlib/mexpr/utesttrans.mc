@@ -10,10 +10,14 @@ include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 
 let _utestRunnerStr = "
+let head = lam seq. get seq 0 in
+let tail = lam seq. subsequence seq 1 (length seq) in
+let null = lam seq. eqi (length seq) 0 in
+
 recursive
   let foldl = lam f. lam acc. lam seq.
-    if eqi 0 (length seq) then acc
-    else foldl f (f acc (get seq 0)) (subsequence seq 1 (length seq))
+    if null seq then acc
+    else foldl f (f acc (head seq)) (tail seq)
 in
 let join = lam seqs.
   foldl concat [] seqs
@@ -35,6 +39,35 @@ let int2string = lam n.
   if lti n 0
   then cons '-' (int2string_rechelper (negi n))
   else int2string_rechelper n
+in
+
+recursive
+  let strJoin = lam delim. lam strs.
+    if eqi (length strs) 0
+    then \"\"
+    else if eqi (length strs) 1
+         then head strs
+         else concat (concat (head strs) delim) (strJoin delim (tail strs))
+in
+
+let mapi = lam f. lam seq.
+  recursive let work = lam i. lam f. lam seq.
+      if null seq then []
+      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
+  in
+  work 0 f seq
+in
+
+let map = lam f. mapi (lam. lam x. f x) in
+
+let eqSeq = lam eq : (Unknown -> Unknown -> Bool).
+  recursive let work = lam as. lam bs.
+    let pair = (as, bs) in
+    match pair with ([], []) then true else
+    match pair with ([a] ++ as, [b] ++ bs) then
+      if eq a b then work as bs else false
+    else false
+  in work
 in
 
 let utestTestPassed = lam.
@@ -70,7 +103,7 @@ in
 let utestRunner =
   use BootParser in
   use MExprSym in
-  symbolize (parseMExprString _utestRunnerStr)
+  parseMExprString _utestRunnerStr
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -103,15 +136,20 @@ recursive let _printFunc = use MExprAst in
     nvar_ int2stringName
   else match ty with TyBool {} then
     ulam_ "b" (if_ (var_ "b") (str_ "true") (str_ "false"))
+  else match ty with TySeq {ty = elemTy} then
+    ulam_ "seq" (app_ (var_ "join") (seq_ [
+      str_ "[",
+      appf2_ (var_ "strJoin")
+               (str_ ",")
+               (appf2_ (var_ "map") (_printFunc elemTy) (var_ "seq")),
+      str_ "]"
+    ]))
   else dprintLn ty; error "Unsupported type"
 end
 
 let _eqBool = ulam_ "a" (ulam_ "b"
-  (if_
-    (or_ (and_ (var_ "a") (var_ "b"))
-         (and_ (not_ (var_ "a")) (not_ (var_ "b"))))
-    true_
-    false_))
+  (or_ (and_ (var_ "a") (var_ "b"))
+       (and_ (not_ (var_ "a")) (not_ (var_ "b")))))
 
 recursive let _eqFunc = use MExprAst in
   lam ty.
@@ -119,6 +157,9 @@ recursive let _eqFunc = use MExprAst in
     ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b")))
   else match ty with TyBool {} then
     _eqBool
+  else match ty with TySeq {ty = elemTy} then
+    ulam_ "a" (ulam_ "b" (appf3_ (var_ "eqSeq")
+                                 (_eqFunc elemTy) (var_ "a") (var_ "b")))
   else dprintLn ty; error "Unsupported type"
 end
 
@@ -199,9 +240,19 @@ let utestu_info_ =
 in
 
 let t = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
-let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CEqi{}))) in
--- eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) (utestGen t));
-
+eval {env = builtinEnv} (symbolize (utestGen t));
 utest utestStrip t with unit_ using eqExpr in
+
+let t1 = typeAnnot (utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
+eval {env = builtinEnv} (symbolize (utestGen t1));
 utest utestStrip t1 with unit_ using eqExpr in
+
+let lhs = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
+let rhs = reverse_ (seq_ [
+  reverse_ (seq_ [int_ 4, int_ 3]),
+  reverse_ (seq_ [int_ 2, int_ 1])]) in
+let t2 = typeAnnot (utest_info_ lhs rhs unit_) in
+eval {env = builtinEnv} (symbolize (utestGen t2));
+utest utestStrip t2 with unit_ using eqExpr in
+
 ()
