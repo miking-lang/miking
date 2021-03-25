@@ -630,6 +630,11 @@ lang CharPrettyPrint = CharAst + ConstPrettyPrint
   | CChar c -> ['\'', c.val, '\'']
 end
 
+lang CmpCharPrettyPrint = CmpCharAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CEqc _ -> "eqc"
+end
+
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CSymb _ -> "sym"
@@ -982,9 +987,9 @@ lang MExprPrettyPrint =
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
-  CmpFloatPrettyPrint + CharPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint
-  + SeqOpPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  MapPrettyPrint + SysPrettyPrint +
+  CmpFloatPrettyPrint + CharPrettyPrint + CmpCharPrettyPrint +
+  SymbPrettyPrint + CmpSymbPrettyPrint + SeqOpPrettyPrint + RefOpPrettyPrint +
+  TensorOpPrettyPrint + MapPrettyPrint + SysPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

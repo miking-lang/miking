@@ -46,9 +46,6 @@ utest showChar '\n' with "\'\\n\'"
 utest showChar '\r' with "\'\\r\'"
 utest showChar '\t' with "\'\\t\'"
 
-let show_char = lam c. concat "'" (concat [c] "'")
-
-
 -- Character conversion
 let char2upper = lam c.
   if and (geqChar c 'a') (leqChar c 'z')

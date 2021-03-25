@@ -189,43 +189,94 @@ let float2stringName = optionGetOrElse
 let withUtestRunner = lam term.
   bind_ utestRunner term
 
-recursive let _printFunc = use MExprAst in
-  lam ty.
-  match ty with TyInt _ then
-    nvar_ int2stringName
-  else match ty with TyFloat _ then
-    nvar_ float2stringName
-  else match ty with TyBool _ then
-    ulam_ "b" (if_ (var_ "b") (str_ "true") (str_ "false"))
-  else match ty with TyChar _ then
-    ulam_ "c" (seq_ [char_ '\'', var_ "c", char_ '\''])
-  else match ty with TySeq {ty = elemTy} then
-    ulam_ "seq" (app_ (var_ "join") (seq_ [
-      str_ "[",
-      appf2_ (var_ "strJoin")
-               (str_ ",")
-               (appf2_ (var_ "map") (_printFunc elemTy) (var_ "seq")),
-      str_ "]"
-    ]))
-  else dprintLn ty; error "Unsupported type"
+recursive
+  let _printRecord = lam fields.
+    let fields = map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
+    let recordPattern =
+      prec_ (map (lam b. (b.0, pvar_ b.0)) fields) in
+    let printedFields = seq_ (
+      map
+        (lam b.
+          app_ (var_ "join") (seq_ [
+            str_ b.0,
+            str_ " = ",
+            app_ (_printFunc b.1) (var_ b.0)]))
+        fields) in
+    lam_ "r" (tyrecord_ fields) (
+      match_
+        (var_ "r")
+        recordPattern
+        (app_ (var_ "join") (seq_ [
+          str_ "{",
+          (appf2_ (var_ "strJoin") (str_ ",") printedFields),
+          str_ "}"]))
+        never_)
+  let _printFunc = use MExprAst in
+    lam ty.
+    match ty with TyInt _ then
+      nvar_ int2stringName
+    else match ty with TyFloat _ then
+      nvar_ float2stringName
+    else match ty with TyBool _ then
+      ulam_ "b" (if_ (var_ "b") (str_ "true") (str_ "false"))
+    else match ty with TyChar _ then
+      ulam_ "c" (app_ (var_ "join") (seq_ [str_ "\'", seq_ [var_ "c"], str_ "\'"]))
+    else match ty with TySeq {ty = elemTy} then
+      ulam_ "seq" (app_ (var_ "join") (seq_ [
+        str_ "[",
+        appf2_ (var_ "strJoin")
+                 (str_ ",")
+                 (appf2_ (var_ "map") (_printFunc elemTy) (var_ "seq")),
+        str_ "]"
+      ]))
+    else match ty with TyRecord {fields = fields} then
+      _printRecord fields
+    else dprintLn ty; error "UtestRunner does not support pretty-printing of this type"
 end
 
 let _eqBool = ulam_ "a" (ulam_ "b"
   (or_ (and_ (var_ "a") (var_ "b"))
        (and_ (not_ (var_ "a")) (not_ (var_ "b")))))
 
-recursive let _eqFunc = use MExprAst in
-  lam ty.
-  match ty with TyInt _ then
-    ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b")))
-  else match ty with TyBool _ then
-    _eqBool
-  else match ty with TyChar _ then
-    ulam_ "a" (ulam_ "b" (eqc_ (var_ "a") (var_ "b")))
-  else match ty with TySeq {ty = elemTy} then
-    ulam_ "a" (ulam_ "b" (appf3_ (var_ "eqSeq")
-                                 (_eqFunc elemTy) (var_ "a") (var_ "b")))
-  else dprintLn ty; error "Unsupported type"
+recursive
+  let _eqRecord = lam fields.
+    let fields = map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
+    let recordPattern = lam i.
+      prec_ (map (lam b. (b.0, pvar_ (join [b.0, int2string i]))) fields) in
+    let matchPattern = ptuple_ [
+      recordPattern 0, recordPattern 1
+    ] in
+    let equalSeq = seq_ (
+      map
+        (lam b.
+          let lhs = join [b.0, "0"] in
+          let rhs = join [b.0, "1"] in
+          appf2_ (_eqFunc b.1) (var_ lhs) (var_ rhs))
+        fields) in
+    let trueSeq = seq_ (create (length fields) (lam. true_)) in
+    lam_ "a" (tyrecord_ fields)
+      (lam_ "b" (tyrecord_ fields) (
+        match_
+          (tuple_ [var_ "a", var_ "b"])
+          matchPattern
+          (appf3_ (var_ "eqSeq") _eqBool equalSeq trueSeq)
+          never_))
+  let _eqFunc = use MExprAst in
+    lam ty.
+    match ty with TyInt _ then
+      ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b")))
+    else match ty with TyBool _ then
+      _eqBool
+    else match ty with TyChar _ then
+      ulam_ "a" (ulam_ "b" (eqc_ (var_ "a") (var_ "b")))
+    else match ty with TySeq {ty = elemTy} then
+      ulam_ "a" (ulam_ "b" (appf3_ (var_ "eqSeq")
+                                   (_eqFunc elemTy) (var_ "a") (var_ "b")))
+    else match ty with TyRecord {fields = fields} then
+      _eqRecord fields
+    else
+      dprintLn ty;
+      error "UtestRunner does not provide a default equality function for this type"
 end
 
 let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
@@ -342,7 +393,7 @@ let seqEq =
   ulam_ "a"
     (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
 let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs unit_ seqEq) in
-eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
+-- eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
 utest utestStrip floatSeqWithUsing with unit_ using eqExpr in
 
 let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') unit_) in
@@ -373,5 +424,31 @@ let charWithUsing = typeAnnot (bindall_ [
   utestu_info_ (char_ 'a') (char_ 'A') unit_ (var_ "charEqIgnoreCase")
 ]) in
 -- eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
+
+let baseRecordFields = [
+  ("a", int_ 4),
+  ("b", true_),
+  ("c", char_ 'x'),
+  ("d", seq_ [int_ 1, int_ 2, int_ 4, int_ 8]),
+  ("e", record_ [
+    ("x", int_ 1),
+    ("y", int_ 0)
+  ])
+] in
+let r = record_ baseRecordFields in
+let recordNoUsing = typeAnnot (utest_info_ r r unit_) in
+-- eval {env = builtinEnv} (symbolize (utestGen recordNoUsing));
+utest utestStrip recordNoUsing with unit_ using eqExpr in
+
+let lhs = record_ (cons ("k", int_ 4) baseRecordFields) in
+let rhs = record_ (cons ("k", int_ 2) baseRecordFields) in
+let recordEq =
+  ulam_ "r1" (ulam_ "r2" (
+    eqi_ (recordproj_ "k" (var_ "r1")) (recordproj_ "k" (var_ "r2"))
+  ))
+in
+let recordWithUsing = typeAnnot (utestu_info_ lhs rhs unit_ recordEq) in
+-- eval {env = builtinEnv} (symbolize (utestGen recordWithUsing));
+utest utestStrip recordWithUsing with unit_ using eqExpr in
 
 ()
