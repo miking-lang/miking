@@ -111,7 +111,7 @@ files=(
 # "stdlib/matrix.mc"
 # "stdlib/either.mc"
 # "stdlib/vec.mc"
-# "stdlib/bool.mc"
+  "stdlib/bool.mc"
 # "stdlib/stringid.mc"
 # "stdlib/graph.mc"
 # "stdlib/char.mc"
