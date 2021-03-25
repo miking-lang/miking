@@ -315,12 +315,12 @@ let utestu_info_ =
 in
 
 let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
-eval {env = builtinEnv} (symbolize (utestGen intNoUsing));
+-- eval {env = builtinEnv} (symbolize (utestGen intNoUsing));
 utest utestStrip intNoUsing with unit_ using eqExpr in
 
 let intWithUsing = typeAnnot (
   utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
-eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
+-- eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
 utest utestStrip intWithUsing with unit_ using eqExpr in
 
 let lhs = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
@@ -328,7 +328,7 @@ let rhs = reverse_ (seq_ [
   reverse_ (seq_ [int_ 4, int_ 3]),
   reverse_ (seq_ [int_ 2, int_ 1])]) in
 let nestedSeqInt = typeAnnot (utest_info_ lhs rhs unit_) in
-eval {env = builtinEnv} (symbolize (utestGen nestedSeqInt));
+-- eval {env = builtinEnv} (symbolize (utestGen nestedSeqInt));
 utest utestStrip nestedSeqInt with unit_ using eqExpr in
 
 let lhs = seq_ [
@@ -346,7 +346,7 @@ eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
 utest utestStrip floatSeqWithUsing with unit_ using eqExpr in
 
 let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') unit_) in
-eval {env = builtinEnv} (symbolize (utestGen charNoUsing));
+-- eval {env = builtinEnv} (symbolize (utestGen charNoUsing));
 utest utestStrip charNoUsing with unit_ using eqExpr in
 
 let charWithUsing = typeAnnot (bindall_ [
@@ -372,6 +372,6 @@ let charWithUsing = typeAnnot (bindall_ [
           (app_ (var_ "char2lower") (var_ "b"))))),
   utestu_info_ (char_ 'a') (char_ 'A') unit_ (var_ "charEqIgnoreCase")
 ]) in
-eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
+-- eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
 
 ()
