@@ -51,15 +51,16 @@ let compatibleType =
         Some (TySeq {t1 with ty = t})
       else None ()
     else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
-      let fieldCompatibleType = lam k. lam ty1.
-        match mapLookup k t2.fields with Some ty2 then
-          compatibleType tyEnv ty1 ty2
-        else None ()
+      let f = lam acc. lam p.
+        match p with (k, ty1) then
+          match mapLookup k t2.fields with Some ty2 then
+            match compatibleType tyEnv ty1 ty2 with Some ty then
+              Some (mapInsert k ty acc)
+            else None ()
+          else None ()
+        else never
       in
-      let fields = mapMapWithKey fieldCompatibleType t1.fields in
-      let allSome = all (lam o. match o with Some _ then true else false)
-                        (mapValues fields) in
-      if allSome then
+      match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
         Some (TyRecord {t1 with fields = fields})
       else
         None ()
