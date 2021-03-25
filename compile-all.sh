@@ -4,10 +4,17 @@
 #  Copyright (C) David Broman. See file LICENSE.txt
 ###################################################
 
-# Compile a file
+# Compile and run a file
 compile() {
     echo $1
     build/mi src/main/mi.mc -- compile --test $1
+    if [ $? -eq 0 ]
+    then
+        binary=$(basename "$1" .mc)
+        ./$binary
+        rm $binary
+        echo ""
+    fi
 }
 
 files=(
@@ -111,7 +118,7 @@ files=(
 # "stdlib/matrix.mc"
 # "stdlib/either.mc"
 # "stdlib/vec.mc"
-# "stdlib/bool.mc"
+  "stdlib/bool.mc"
 # "stdlib/stringid.mc"
 # "stdlib/graph.mc"
 # "stdlib/char.mc"

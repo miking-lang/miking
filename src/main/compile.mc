@@ -70,7 +70,7 @@ let compile = lam files. lam options.
     in
 
     -- Symbolize the MExpr AST and annotate it with types
-    let ast = symbolizeExpr (symVarNameEnv builtinNames) ast in
+    let ast = symbolize ast in
     let ast = typeAnnot ast in
 
     -- Translate the MExpr AST into an OCaml AST
