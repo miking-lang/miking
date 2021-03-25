@@ -107,7 +107,7 @@ files=(
 # "stdlib/nfa.mc"
 # "stdlib/digraph.mc"
 # "stdlib/string.mc"
-# "stdlib/math.mc"
+  "stdlib/math.mc"
 # "stdlib/set.mc"
 # "stdlib/maxmatch.mc"
 # "stdlib/name.mc"

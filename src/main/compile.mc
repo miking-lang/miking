@@ -63,6 +63,7 @@ let compile = lam files. lam options.
     let ast =
       if options.runTests then
         -- Add type annotations as they are required by utestGen
+        let ast = symbolize ast in
         let ast = typeAnnot ast in
         utestGen ast
       else
