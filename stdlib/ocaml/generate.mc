@@ -676,7 +676,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
     if mapIsEmpty t.bindings then
       _objRepr (TmRecord t)
     else
-      let bindings = mapMap (lam expr. _objRepr (objWrapRec expr)) t.bindings in
+      let bindings = mapMap (lam expr. objWrapRec expr) t.bindings in
       TmRecord {t with bindings = bindings}
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
@@ -1269,6 +1269,16 @@ let recordUpdate2 = symbolize (
   ])
 in
 utest recordUpdate2 with generateTypeAnnotated recordUpdate2
+using sameSemantics in
+
+let recordWithLet = symbolize (
+  bindall_
+  [ ulet_ "r" (record_ [
+     ("f", bind_ (ulet_ "x" (int_ 3)) (addi_ (var_ "x") (int_ 1))),
+     ("g", ulam_ "x" (var_ "x"))])
+  , int_ 42
+  ]) in
+utest recordWithLet with generateTypeAnnotated recordWithLet
 using sameSemantics in
 
 -- Ints
