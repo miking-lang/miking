@@ -33,6 +33,6 @@ let run = lam files. lam options.
     in
 
     -- Evaluate the symbolized program
-    eval {env = builtinEnv} (symbolizeExpr (symVarNameEnv builtinNames) ast)
+    eval {env = builtinEnv} (symbolize ast)
   in
   iter runFile files
