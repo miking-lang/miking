@@ -111,9 +111,10 @@ lang LetSym = Sym + LetAst
     match env with {varEnv = varEnv} then
       let tyBody = symbolizeType env t.tyBody in
       let ty = symbolizeType env t.ty in
+      let body = symbolizeExpr env t.body in
       if nameHasSym t.ident then
         TmLet {{{{t with tyBody = tyBody}
-                    with body = symbolizeExpr env t.body}
+                    with body = body}
                     with inexpr = symbolizeExpr env t.inexpr}
                     with ty = ty}
       else
@@ -123,7 +124,7 @@ lang LetSym = Sym + LetAst
         let env = {env with varEnv = varEnv} in
         TmLet {{{{{t with ident = ident}
                      with tyBody = tyBody}
-                     with body = symbolizeExpr env t.body}
+                     with body = body}
                      with inexpr = symbolizeExpr env t.inexpr}
                      with ty = ty}
     else never

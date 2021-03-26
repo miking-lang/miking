@@ -137,7 +137,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         let msg = join ["Record update was annotated with an invalid type."] in
         infoErrorExit t.info msg
     else
-      let msg = join ["Expected type to be a TyVar.",
+      let msg = join ["Expected type to be a TyVar. ",
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->

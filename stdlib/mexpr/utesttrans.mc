@@ -157,7 +157,6 @@ in
 
 let utestRunner =
   use BootParser in
-  use MExprSym in
   parseMExprString _utestRunnerStr
 
 -- Get the name of a string identifier in an expression
