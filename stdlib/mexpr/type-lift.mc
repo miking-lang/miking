@@ -278,9 +278,12 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
         -- Ignore any existing constructors in the variant type.
         match tyIdent with TyVariant _ then
           let variantNameTy = TyVariantName {ident = t.ident} in
+          printLn (join ["Adding variant type with name ", nameGetStr t.ident]);
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
         else match tyIdent with TyRecord {fields = fields} then
+          printLn "Adding record type with fields:";
+          dprintLn (mapBindings fields);
           let f = lam env. lam. lam ty. typeLiftType env ty in
           match mapMapAccum f env fields with (env, fields) then
             match _addRecordTypeVar env fields with (env, _) then
@@ -288,6 +291,8 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
             else never
           else never
         else
+          printLn "Adding other kind of type: ";
+          dprintLn tyIdent;
           {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
       in
       match typeLiftExpr env t.inexpr with (env, inexpr) then
@@ -351,18 +356,18 @@ lang UtestTypeLift = TypeLift + UtestAst
         match typeLiftExpr env t.next with (env, next) then
           match typeLiftType env t.ty with (env, ty) then
             match t.tusing with Some tusing then
-              match typeLiftType env t.tusing with (env, tusing) then
+              match typeLiftExpr env tusing with (env, tusing) then
                 (env, TmUtest {{{{{t with test = test}
-                                    with expected = expected}
-                                    with next = next}
-                                    with tusing = t.tusing}
-                                    with ty = ty})
+                                     with expected = expected}
+                                     with next = next}
+                                     with tusing = Some tusing}
+                                     with ty = ty})
               else never
             else (env, TmUtest {{{{{t with test = test}
-                                    with expected = expected}
-                                    with next = next}
-                                    with tusing = t.tusing}
-                                    with ty = ty})
+                                      with expected = expected}
+                                      with next = next}
+                                      with tusing = t.tusing}
+                                      with ty = ty})
           else never
         else never
       else never

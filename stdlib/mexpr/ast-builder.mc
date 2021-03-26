@@ -230,7 +230,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, ty = ty, body = body, info = NoInfo ()} in
+    let newbind = {ident = n, tyBody = ty, body = body, ty = TyUnknown (), info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     error "reclets is not a TmRecLets construct"
