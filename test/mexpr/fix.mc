@@ -2,7 +2,7 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- Test fixpoint usages
-
+include "prelude.mc" 
 mexpr
 
 -- Separate fix-point
