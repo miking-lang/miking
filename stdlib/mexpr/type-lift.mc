@@ -106,6 +106,12 @@ recursive let _cmpType = lam ty1. lam ty2.
   else diff
 end
 
+let emptyTypeLiftEnv = {
+  typeEnv = [],
+  records = mapEmpty (mapCmp _cmpType),
+  variants = mapEmpty nameCmp
+}
+
 -- Adds a record type with the given fields to the type lifting environment.
 let _addRecordTypeVar = lam env. lam fields.
   use MExprAst in
@@ -136,14 +142,9 @@ lang TypeLift = MExprEq
   --   contained in the resulting environment.
   -- * The constructor names and argument types have been added to the
   --   `TyVariant`s.
-  sem typeLift = -- Expr -> (AssocSeq Name Type, Expr)
+  sem typeLift (env : TypeLiftEnv) = -- TypeLiftEnv -> Expr -> (AssocSeq Name Type, Expr)
   | e ->
-    let emptyEnv = {
-      typeEnv = [],
-      records = mapEmpty (mapCmp _cmpType),
-      variants = mapEmpty nameCmp
-    } in
-    match typeLiftExpr emptyEnv e with (env, t) then
+    match typeLiftExpr env e with (env, t) then
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
@@ -278,22 +279,16 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
         -- Ignore any existing constructors in the variant type.
         match tyIdent with TyVariant _ then
           let variantNameTy = TyVariantName {ident = t.ident} in
-          printLn (join ["Adding variant type with name ", nameGetStr t.ident]);
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
         else match tyIdent with TyRecord {fields = fields} then
-          printLn "Adding record type with fields:";
-          dprintLn (mapBindings fields);
           let f = lam env. lam. lam ty. typeLiftType env ty in
           match mapMapAccum f env fields with (env, fields) then
             match _addRecordTypeVar env fields with (env, _) then
               env
             else never
           else never
-        else
-          printLn "Adding other kind of type: ";
-          dprintLn tyIdent;
-          {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
+        else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
       in
       match typeLiftExpr env t.inexpr with (env, inexpr) then
         (env, inexpr)
@@ -503,7 +498,7 @@ let unitNotLifted = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (int_ 2),
   unit_
 ])) in
-(match typeLift unitNotLifted with (env, t) then
+(match typeLift emptyTypeLiftEnv unitNotLifted with (env, t) then
   utest env with [] using eqEnv in
   utest t with unitNotLifted using eqExpr in
   ()
@@ -515,7 +510,7 @@ let noVariantsOrRecords = typeAnnot (symbolize (bindall_ [
   ulet_ "z" (addi_ (var_ "x") (var_ "y")),
   var_ "z"
 ])) in
-(match typeLift noVariantsOrRecords with (env, t) then
+(match typeLift emptyTypeLiftEnv noVariantsOrRecords with (env, t) then
   utest env with [] using eqEnv in
   utest t with noVariantsOrRecords using eqExpr in
   ()
@@ -538,7 +533,7 @@ let expectedEnv = [
     (leafName, tyint_)
   ])
 ] in
-(match typeLift variant with (env, t) then
+(match typeLift emptyTypeLiftEnv variant with (env, t) then
   utest env with expectedEnv using eqEnv in
   utest t with unit_ using eqExpr in
   ()
@@ -556,7 +551,7 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   lastTerm
 ])) in
-(match typeLift variantWithRecords with (env, t) then
+(match typeLift emptyTypeLiftEnv variantWithRecords with (env, t) then
   let recid = (get env 0).0 in
   let expectedEnv = [
     (recid, tyrecord_ [
@@ -583,7 +578,7 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   ]),
   unit_
 ])) in
-(match typeLift nestedRecord with (env, t) then
+(match typeLift emptyTypeLiftEnv nestedRecord with (env, t) then
   let fstid = (get env 0).0 in
   let sndid = (get env 1).0 in
   let expectedEnv = [
@@ -607,7 +602,7 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 2), ("b", true_)]),
   unit_
 ])) in
-(match typeLift recordsSameFieldsDifferentTypes with (env, t) then
+(match typeLift emptyTypeLiftEnv recordsSameFieldsDifferentTypes with (env, t) then
   let fstid = (get env 0).0 in
   let sndid = (get env 1).0 in
   let expectedEnv = [
@@ -624,7 +619,7 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ulet_ "y" (record_ [("a", int_ 3), ("b", int_ 6)]),
   unit_
 ])) in
-(match typeLift recordsSameFieldsSameTypes with (env, t) then
+(match typeLift emptyTypeLiftEnv recordsSameFieldsSameTypes with (env, t) then
   let recid = (get env 0).0 in
   let expectedEnv = [
     (recid, tyrecord_ [("a", tyint_), ("b", tyint_)])
@@ -638,7 +633,7 @@ let record = typeAnnot (symbolize (record_ [
   ("a", int_ 2),
   ("b", float_ 1.5)
 ])) in
-(match typeLift record with (env, t) then
+(match typeLift emptyTypeLiftEnv record with (env, t) then
   match ty t with TyVar {ident = ident} then
     match assocSeqLookup {eq=nameEq} ident env with Some recordTy then
       utest recordTy with ty record using eqType [] in
@@ -652,7 +647,7 @@ let recordUpdate = typeAnnot (symbolize (bindall_ [
   recordupdate_ (var_ "x") "a" (int_ 2)
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
-(match typeLift recordUpdate with (env, t) then
+(match typeLift emptyTypeLiftEnv recordUpdate with (env, t) then
   match t with TmLet {tyBody = TyVar {ident = ident}} then
     match assocSeqLookup {eq=nameEq} ident env with Some ty then
       utest ty with recordType using eqType [] in
@@ -674,7 +669,7 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   ]),
   var_ "env"
 ])) in
-(match typeLift typeAliases with (env, t) then
+(match typeLift emptyTypeLiftEnv typeAliases with (env, t) then
   -- Note that records and variants are added to the front of the environment
   -- as they are processed, so the last record in the given term will be first
   -- in the environment.

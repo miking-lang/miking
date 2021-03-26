@@ -170,7 +170,7 @@ lang BootParser = MExprAst
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
       TyVariant {info = ginfo t 0,
-                 constrs = mapEmpty nameEqSym}
+                 constrs = mapEmpty nameCmp}
     else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyVar-/ ->
     TyVar {info = ginfo t 0,

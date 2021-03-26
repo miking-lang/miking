@@ -50,6 +50,35 @@ let ocamlCompile = lam sourcePath. lam ocamlAst.
   phMoveFile p.binaryPath destinationFile;
   phChmodWriteAccessFile destinationFile
 
+let generateTests = lam ast. lam testsEnabled.
+  use MCoreCompile in
+  if testsEnabled then
+    let ast = symbolize ast in
+    let ast = typeAnnot ast in
+    match typeLift emptyTypeLiftEnv ast with (env, ast) then
+      (env, utestGen ast)
+    else never
+  else
+    ([], utestStrip ast)
+
+-- We need to reconstruct the type lift environment because the utest generator
+-- needs types to be annotated and lifted, but it has to be performed once
+-- again after the utests have been generated.
+let reconstructTypeLiftEnv = lam env.
+  use MExprAst in
+  let recordEnv = foldl (lam acc. lam entry.
+    match entry with (id, TyRecord {fields = fields}) then
+      mapInsert fields id acc
+    else acc) (mapEmpty (mapCmp _cmpType)) env in
+  let variantEnv = foldl (lam acc. lam entry.
+    match entry with (id, TyVariant {constrs = constrs}) then
+      mapInsert id constrs acc
+    else acc
+  ) (mapEmpty nameCmp) env in
+  { typeEnv = env
+  , records = recordEnv
+  , variants = variantEnv }
+
 let compile = lam files. lam options.
   use MCoreCompile in
   let compileFile = lam file.
@@ -60,30 +89,33 @@ let compile = lam files. lam options.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    let ast =
-      if options.runTests then
-        -- Add type annotations as they are required by utestGen
-        let ast = symbolize ast in
-        let ast = typeAnnot ast in
-        utestGen ast
-      else
-        utestStrip ast
-    in
+    match generateTests ast options.runTests with (env, ast) then
+      -- Re-symbolize the MExpr AST and re-annotate it with types
+      let ast = symbolize ast in
+      let constructors = foldl (lam acc. lam entry.
+        match entry with (id, TyVariant {constrs = constrs}) then
+          mapUnion acc constrs
+        else acc) (mapEmpty nameCmp) env in
+      let typeAnnotEnv = {{{_typeEnvEmpty with varEnv = builtinNameTypeMap}
+                                          with conEnv = constructors}
+                                          with tyEnv = env} in
+      let ast = typeAnnotExpr typeAnnotEnv ast in
 
-    -- Symbolize the MExpr AST and annotate it with types
-    let ast = symbolize ast in
-    let ast = typeAnnot ast in
+      -- Translate the MExpr AST into an OCaml AST
+      let ocamlAst =
+        let typeLiftEnv = reconstructTypeLiftEnv env in
+        match typeLift typeLiftEnv ast with (env, ast) then
+          match generateTypeDecl env ast with (env, ast) then
+            let ast = generate env ast in
+            let ast = objWrap ast in
+            _withPreamble ast
+          else never
+        else never
+      in
 
-    -- Translate the MExpr AST into an OCaml AST
-    let ocamlAst =
-      match generateTypeDecl ast with (env, ast) then
-        let ast = generate env ast in
-        let ast = objWrap ast in
-        _withPreamble ast
-      else never
-    in
+      -- Compile OCaml AST
+      ocamlCompile file ocamlAst
 
-    -- Compile OCaml AST
-    ocamlCompile file ocamlAst
+    else never
   in
   iter compileFile files

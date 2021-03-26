@@ -401,13 +401,11 @@ let _addTypeDeclarations = lam typeLiftEnv. lam t.
   foldl f t typeLiftEnv
 
 lang OCamlTypeDeclGenerate = MExprTypeLift
-  sem generateTypeDecl =
+  sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
-    match typeLift expr with (env, t) then
-      let generateEnv = _typeLiftEnvToGenerateEnv env in
-      let t = _addTypeDeclarations env t in
-      (generateEnv, t)
-    else never
+    let generateEnv = _typeLiftEnvToGenerateEnv env in
+    let expr = _addTypeDeclarations env expr in
+    (generateEnv, expr)
 end
 
 recursive let _isIntrinsicApp = use OCamlAst in
@@ -814,8 +812,10 @@ let generateEmptyEnv = lam t.
 in
 
 let generateTypeAnnotated = lam t.
-  match generateTypeDecl (typeAnnot t) with (env, t) then
-    objWrap (generate env t)
+  match typeLift emptyTypeLiftEnv (typeAnnot t) with (env, t) then
+    match generateTypeDecl env t with (env, t) then
+      objWrap (generate env t)
+    else never
   else never
 in
 

@@ -35,8 +35,8 @@ recursive
 let compatibleType =
   use MExprAst in
   use MExprEq in
-  lam tyEnv. lam ty1. lam ty2.
-  match (unwrapType tyEnv ty1, unwrapType tyEnv ty2)
+  lam tyEnv. lam wrappedType1. lam wrappedType2.
+  match (unwrapType tyEnv wrappedType1, unwrapType tyEnv wrappedType2)
   with (Some ty1, Some ty2) then
     match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
     else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
@@ -64,6 +64,19 @@ let compatibleType =
         Some (TyRecord {t1 with fields = fields})
       else
         None ()
+    else match (ty1, ty2) with (TyVariant t1, TyVariant t2) then
+      -- Avoid losing the type identifier of empty variants
+      if and (mapIsEmpty t1.constrs) (mapIsEmpty t2.constrs) then
+        Some wrappedType1
+      else if mapIsEmpty t1.constrs then
+        Some ty2
+      else if mapIsEmpty t2.constrs then
+        Some ty1
+      -- NOTE(larshum, 2021-03-26): We only check equality of the constructor
+      -- names to avoid infinite recursion.
+      else if eqSeq nameEq (mapKeys t1.constrs) (mapKeys t2.constrs) then
+        Some ty1
+      else None ()
     else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
   else None ()
@@ -186,10 +199,10 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
           match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
             tyBody
           else
-            let msg = [
-              "Inconsistent type annotation of recursive let-expression\n"
+            let msg = join [
+              "Inconsistent type annotation of recursive let-expression\n",
               "Expected type: ", _pprintType (ty body), "\n",
-              "Annotated type: ", _pprintType t.tyBody
+              "Annotated type: ", _pprintType binding.tyBody
             ] in
             infoErrorExit t.info msg
         in
@@ -271,7 +284,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
             match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
             else
-              let msg = [
+              let msg = join [
                 "Inconsistent types of constructor application",
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (ty body)
@@ -279,8 +292,8 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
               infoErrorExit t.info msg
           else tyunknown_
         else
-          let msg = ["Application of untyped constructor: ",
-                     nameGetStr t.ident] in
+          let msg = join ["Application of untyped constructor: ",
+                          nameGetStr t.ident] in
           infoErrorExit t.info msg
       in
       TmConApp {{t with body = body}
