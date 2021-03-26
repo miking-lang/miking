@@ -13,6 +13,7 @@ include "mexpr/ast.mc"
 include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
+include "mexpr/builtin.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,
