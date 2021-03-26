@@ -153,6 +153,9 @@ lang OCamlPrettyPrint =
   | CEqc _ -> "(=)"
   | CChar2Int _ -> "int_of_char"
   | CInt2Char _ -> "char_of_int"
+  | CRef _ -> "ref"
+  | CModRef _ -> "(:=)"
+  | CDeRef _ -> "(!)"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->

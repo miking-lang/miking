@@ -552,14 +552,6 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
     else never
 end
 
-lang RefPrettyPrint = PrettyPrint + RefAst
-  sem isAtomic =
-  | TmRef _ -> true
-
-  sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmRef _ -> (env, "(ref)")
-end
-
 lang NeverPrettyPrint = PrettyPrint + NeverAst
   sem isAtomic =
   | TmNever _ -> true
@@ -982,7 +974,7 @@ lang MExprPrettyPrint =
   VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
   DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
-  NeverPrettyPrint + RefPrettyPrint +
+  NeverPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +

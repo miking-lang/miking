@@ -243,7 +243,11 @@ lang NeverEval = NeverAst
   --TODO(?,?)
 end
 
-lang RefEval = RefAst
+-- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
+lang RefEval
+  syn Expr =
+  | TmRef {ref : Ref}
+
   sem eval (ctx : {env : Env}) =
   | TmRef r -> TmRef r
 end
@@ -1040,7 +1044,7 @@ lang TimeEval = TimeAst + IntAst
     float_ (wallTimeMs ())
 end
 
-lang RefOpEval = RefOpAst + IntAst
+lang RefOpEval = RefOpAst + RefEval + IntAst
   syn Const =
   | CModRef2 Ref
 

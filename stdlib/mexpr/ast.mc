@@ -372,24 +372,6 @@ lang NeverAst
   | TmNever _ & t -> acc
 end
 
-
--- TmRef --
--- TODO (dbro, 2020-02-16): this term should be moved into an evaluation term
--- in the same way as for closures. Eventually, this should be a rank 0 tensor.
-lang RefAst
-  syn Expr =
-  | TmRef {ref : Ref}
-
-  sem info =
-  | TmRef r -> NoInfo ()
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRef t -> TmRef t
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRef t -> acc
-end
-
 ---------------
 -- CONSTANTS --
 ---------------
@@ -545,7 +527,7 @@ lang TimeAst = ConstAst
   | CSleepMs {}
 end
 
-lang RefOpAst = ConstAst + RefAst
+lang RefOpAst = ConstAst
   syn Const =
   | CRef {}
   | CModRef {}
@@ -885,7 +867,7 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + RefAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
