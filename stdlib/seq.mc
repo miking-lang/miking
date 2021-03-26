@@ -128,7 +128,7 @@ utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
 
 recursive
 let unfoldr = lam f. lam b.
-  let fb = f b in
+  let fb : Option (Unknown, Unknown) = f b in
   match fb with None _ then [] else
   match fb with Some (a, bp) then cons a (unfoldr f bp)
   else never

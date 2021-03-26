@@ -1,8 +1,8 @@
 include "bool.mc"
 
-type Option a
-con Some : a -> Option a
-con None : () -> Option a
+type Option
+con Some : a -> Option
+con None : () -> Option
 
 -- Equality check between two options. Returns true if both are None, false if
 -- exactly one of them are None, and the result of evaluating the provided
