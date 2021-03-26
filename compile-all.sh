@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ###################################################
 #  Miking is licensed under the MIT license.
 #  Copyright (C) David Broman. See file LICENSE.txt
