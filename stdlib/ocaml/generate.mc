@@ -288,7 +288,15 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else None ()
       else None ()
     in
-    match env with {records = records, constrs = constrs} then
+    if mapIsEmpty t.bindings then
+      let wrap = lam cont.
+        OTmMatch {
+          target = nvar_ targetName,
+          arms = [(OPatTuple {pats = []}, cont)]
+        }
+      in
+      (assocEmpty, wrap)
+    else match env with {records = records, constrs = constrs} then
       match lookupRecordFields targetTy constrs with Some fields then
         match mapLookup fields records with Some name then
           let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in

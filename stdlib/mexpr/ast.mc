@@ -346,7 +346,9 @@ lang UtestAst
                               with tusing = tusing}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmUtest t -> f (f (f (f acc t.test) t.expected) t.next) t.tusing
+  | TmUtest t ->
+    let acc = f (f (f acc t.test) t.expected) t.next in
+    optionMapOrElse (lam. acc) (f acc) t.tusing
 end
 
 

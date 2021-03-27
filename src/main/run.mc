@@ -21,11 +21,9 @@ let generateTests = lam ast. lam testsEnabled.
   if testsEnabled then
     let ast = symbolize ast in
     let ast = typeAnnot ast in
-    match typeLift emptyTypeLiftEnv ast with (env, ast) then
-      (env, utestGen ast)
-    else never
+    utestGen ast
   else
-    ([], utestStrip ast)
+    (symEnvEmpty, utestStrip ast)
 
 let run = lam files. lam options.
   use ExtMCore in
@@ -35,9 +33,11 @@ let run = lam files. lam options.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
-    match generateTests ast options.runTests with (_, ast) then
-      -- Evaluate the symbolized program
-      eval {env = builtinEnv} (symbolize ast)
+    -- If option --test, then generate utest runner calls. Otherwise strip away
+    -- all utest nodes from the AST.
+    match generateTests ast options.runTests with (symEnv, ast) then
+      let ast = symbolizeExpr symEnv ast in
+      eval {env = builtinEnv} ast
     else never
   in
   iter runFile files

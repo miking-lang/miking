@@ -55,29 +55,9 @@ let generateTests = lam ast. lam testsEnabled.
   if testsEnabled then
     let ast = symbolize ast in
     let ast = typeAnnot ast in
-    match typeLift emptyTypeLiftEnv ast with (env, ast) then
-      (env, utestGen env ast)
-    else never
+    utestGen ast
   else
-    ([], utestStrip ast)
-
--- We need to reconstruct the type lift environment because the utest generator
--- needs types to be annotated and lifted, but it has to be performed once
--- again after the utests have been generated.
-let reconstructTypeLiftEnv = lam env.
-  use MExprAst in
-  let recordEnv = foldl (lam acc. lam entry.
-    match entry with (id, TyRecord {fields = fields}) then
-      mapInsert fields id acc
-    else acc) (mapEmpty (mapCmp _cmpType)) env in
-  let variantEnv = foldl (lam acc. lam entry.
-    match entry with (id, TyVariant {constrs = constrs}) then
-      mapInsert id constrs acc
-    else acc
-  ) (mapEmpty nameCmp) env in
-  { typeEnv = env
-  , records = recordEnv
-  , variants = variantEnv }
+    (symEnvEmpty, utestStrip ast)
 
 let compile = lam files. lam options.
   use MCoreCompile in
@@ -89,22 +69,15 @@ let compile = lam files. lam options.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (env, ast) then
+    match generateTests ast options.runTests with (symEnv, ast) then
+
       -- Re-symbolize the MExpr AST and re-annotate it with types
-      let ast = symbolize ast in
-      let constructors = foldl (lam acc. lam entry.
-        match entry with (id, TyVariant {constrs = constrs}) then
-          mapUnion acc constrs
-        else acc) (mapEmpty nameCmp) env in
-      let typeAnnotEnv = {{{_typeEnvEmpty with varEnv = builtinNameTypeMap}
-                                          with conEnv = constructors}
-                                          with tyEnv = env} in
-      let ast = typeAnnotExpr typeAnnotEnv ast in
+      let ast = symbolizeExpr symEnv ast in
+      let ast = typeAnnot ast in
 
       -- Translate the MExpr AST into an OCaml AST
       let ocamlAst =
-        let typeLiftEnv = reconstructTypeLiftEnv env in
-        match typeLift typeLiftEnv ast with (env, ast) then
+        match typeLift emptyTypeLiftEnv ast with (env, ast) then
           match generateTypeDecl env ast with (env, ast) then
             let ast = generate env ast in
             let ast = objWrap ast in
@@ -115,7 +88,6 @@ let compile = lam files. lam options.
 
       -- Compile OCaml AST
       ocamlCompile file ocamlAst
-
     else never
   in
   iter compileFile files
