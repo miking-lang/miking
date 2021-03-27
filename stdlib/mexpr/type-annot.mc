@@ -35,50 +35,37 @@ recursive
 let compatibleType =
   use MExprAst in
   use MExprEq in
-  lam tyEnv. lam wrappedType1. lam wrappedType2.
-  match (unwrapType tyEnv wrappedType1, unwrapType tyEnv wrappedType2)
-  with (Some ty1, Some ty2) then
-    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-      match compatibleType tyEnv t1.from t2.from with Some a then
-        match compatibleType tyEnv t1.to t2.to with Some b then
-          Some (TyArrow {{t1 with from = a} with to = b})
-        else None ()
+  lam tyEnv. lam ty1. lam ty2.
+  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+    match compatibleType tyEnv t1.from t2.from with Some a then
+      match compatibleType tyEnv t1.to t2.to with Some b then
+        Some (TyArrow {{t1 with from = a} with to = b})
       else None ()
-    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-      match compatibleType tyEnv t1.ty t2.ty with Some t then
-        Some (TySeq {t1 with ty = t})
-      else None ()
-    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
-      let f = lam acc. lam p.
-        match p with (k, ty1) then
-          match mapLookup k t2.fields with Some ty2 then
-            match compatibleType tyEnv ty1 ty2 with Some ty then
-              Some (mapInsert k ty acc)
-            else None ()
-          else None ()
-        else never
-      in
-      match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
-        Some (TyRecord {t1 with fields = fields})
-      else
-        None ()
-    else match (ty1, ty2) with (TyVariant t1, TyVariant t2) then
-      -- Avoid losing the type identifier of empty variants
-      if and (mapIsEmpty t1.constrs) (mapIsEmpty t2.constrs) then
-        Some wrappedType1
-      else if mapIsEmpty t1.constrs then
-        Some ty2
-      else if mapIsEmpty t2.constrs then
-        Some ty1
-      -- NOTE(larshum, 2021-03-26): We only check equality of the constructor
-      -- names to avoid infinite recursion.
-      else if eqSeq nameEq (mapKeys t1.constrs) (mapKeys t2.constrs) then
-        Some ty1
-      else None ()
-    else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
+  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TySeq {t1 with ty = t})
+    else None ()
+  else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+    let f = lam acc. lam p.
+      match p with (k, ty1) then
+        match mapLookup k t2.fields with Some ty2 then
+          match compatibleType tyEnv ty1 ty2 with Some ty then
+            Some (mapInsert k ty acc)
+          else None ()
+        else None ()
+      else never
+    in
+    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
+      Some (TyRecord {t1 with fields = fields})
+    else
+      None ()
+  else match (ty1, ty2) with (TyVar t1, TyVar t2) then
+    if nameEq t1.ident t2.ident then Some ty1
+    else None ()
+  else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
 

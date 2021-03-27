@@ -162,8 +162,9 @@ end
 lang RefOpTypeAst = RefOpAst
   sem tyConst =
   | CRef _ -> tyarrow_ (tygeneric_ "a") tyref_
-  | CModRef _ -> tyarrow_ tyref_ (tygeneric_ "a")
-  | CDeRef _ -> tyarrows_ [tyref_, tygeneric_ "a", tyunit_] end
+  | CModRef _ -> tyarrows_ [tyref_, tygeneric_ "a", tyunit_]
+  | CDeRef _ -> tyarrow_ tyref_ (tygeneric_ "a")
+end
 
 lang MapTypeAst = MapAst
   sem tyConst =

@@ -8,6 +8,7 @@ include "mexpr/builtin.mc"
 include "mexpr/eq.mc"
 include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
 
 let _utestRunnerStr = "
 let head = lam seq. get seq 0 in
@@ -125,6 +126,17 @@ let eqSeq = lam eq : (Unknown -> Unknown -> Bool).
   in work
 in
 
+let and : Bool -> Bool -> Bool =
+  lam a. lam b. if a then b else false
+in
+
+recursive
+  let all = lam p. lam seq.
+    if null seq
+    then true
+    else and (p (head seq)) (all p (tail seq))
+in
+
 let utestTestPassed = lam.
   print \".\"
 in
@@ -185,98 +197,228 @@ let float2stringName = optionGetOrElse
   (lam. error "Expected float2string to be defined")
   (findName "float2string" utestRunner)
 
-let withUtestRunner = lam term.
-  bind_ utestRunner term
+let lookupTypeVariableIdent = lam env. lam ty.
+  optionMapOr (None ())
+              (lam t. Some t.0)
+              (find (lam t. eqi (_cmpType ty t.1) 0) env)
 
-recursive
-  let _printRecord = lam fields.
-    let fields = map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
-    let recordPattern =
-      prec_ (map (lam b. (b.0, pvar_ b.0)) fields) in
-    let printedFields = seq_ (
-      map
-        (lam b.
-          app_ (var_ "join") (seq_ [
-            str_ b.0,
-            str_ " = ",
-            app_ (_printFunc b.1) (var_ b.0)]))
-        fields) in
-    lam_ "r" (tyrecord_ fields) (
-      match_
-        (var_ "r")
-        recordPattern
-        (app_ (var_ "join") (seq_ [
-          str_ "{",
-          (appf2_ (var_ "strJoin") (str_ ",") printedFields),
-          str_ "}"]))
-        never_)
-  let _printFunc = use MExprAst in
-    lam ty.
-    match ty with TyInt _ then
-      nvar_ int2stringName
-    else match ty with TyFloat _ then
-      nvar_ float2stringName
-    else match ty with TyBool _ then
-      ulam_ "b" (if_ (var_ "b") (str_ "true") (str_ "false"))
-    else match ty with TyChar _ then
-      ulam_ "c" (app_ (var_ "join") (seq_ [str_ "\'", seq_ [var_ "c"], str_ "\'"]))
-    else match ty with TySeq {ty = elemTy} then
-      ulam_ "seq" (app_ (var_ "join") (seq_ [
-        str_ "[",
-        appf2_ (var_ "strJoin")
-                 (str_ ",")
-                 (appf2_ (var_ "map") (_printFunc elemTy) (var_ "seq")),
-        str_ "]"
-      ]))
-    else match ty with TyRecord {fields = fields} then
-      _printRecord fields
-    else dprintLn ty; error "UtestRunner does not support pretty-printing of this type"
-end
-
-let _eqBool = ulam_ "a" (ulam_ "b"
-  (or_ (and_ (var_ "a") (var_ "b"))
-       (and_ (not_ (var_ "a")) (not_ (var_ "b")))))
-
-recursive
-  let _eqRecord = lam fields.
-    let fields = map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
-    let recordPattern = lam i.
-      prec_ (map (lam b. (b.0, pvar_ (join [b.0, int2string i]))) fields) in
-    let matchPattern = ptuple_ [
-      recordPattern 0, recordPattern 1
-    ] in
-    let equalSeq = seq_ (
-      map
-        (lam b.
-          let lhs = join [b.0, "0"] in
-          let rhs = join [b.0, "1"] in
-          appf2_ (_eqFunc b.1) (var_ lhs) (var_ rhs))
-        fields) in
-    let trueSeq = seq_ (create (length fields) (lam. true_)) in
-    lam_ "a" (tyrecord_ fields)
-      (lam_ "b" (tyrecord_ fields) (
-        match_
-          (tuple_ [var_ "a", var_ "b"])
-          matchPattern
-          (appf3_ (var_ "eqSeq") _eqBool equalSeq trueSeq)
-          never_))
-  let _eqFunc = use MExprAst in
-    lam ty.
-    match ty with TyInt _ then
-      ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b")))
-    else match ty with TyBool _ then
-      _eqBool
-    else match ty with TyChar _ then
-      ulam_ "a" (ulam_ "b" (eqc_ (var_ "a") (var_ "b")))
-    else match ty with TySeq {ty = elemTy} then
-      ulam_ "a" (ulam_ "b" (appf3_ (var_ "eqSeq")
-                                   (_eqFunc elemTy) (var_ "a") (var_ "b")))
-    else match ty with TyRecord {fields = fields} then
-      _eqRecord fields
+recursive let defineUtestFunctionType = use MExprAst in
+  lam env. lam acc. lam ty.
+  match unwrapType env ty with Some ty then
+    if mapMem ty acc then acc
     else
-      dprintLn ty;
-      error "UtestRunner does not provide a default equality function for this type"
+      let varId = lookupTypeVariableIdent env ty in
+      let acc = mapInsert ty (nameSym "pprint", nameSym "equal", varId) acc in
+      match ty with TySeq {ty = elemTy} then
+        defineUtestFunctionType env acc elemTy
+      else match ty with TyRecord {fields = fields} then
+        mapFoldWithKey (lam acc. lam. lam v. defineUtestFunctionType env acc v)
+                       acc fields
+      else match ty with TyVariant {constrs = constrs} then
+        mapFoldWithKey (lam acc. lam. lam v. defineUtestFunctionType env acc v)
+                       acc constrs
+      else acc
+  else acc
 end
+
+recursive let collectUtestFunctionTypes = use MExprAst in
+  lam env. lam acc. lam expr.
+  match expr with TmUtest t then
+    let acc =
+      match compatibleType env (ty t.test) (ty t.expected) with Some ty then
+        defineUtestFunctionType env acc ty
+      else acc
+    in
+    collectUtestFunctionTypes env acc t.next
+  else
+    sfold_Expr_Expr (collectUtestFunctionTypes env) acc expr
+end
+
+let getPprintFuncName = lam env. lam acc. lam ty.
+  match unwrapType env ty with Some ty then
+    match mapLookup ty acc with Some (pprintName, _) then
+      pprintName
+    else dprintLn ty; error "Could not find pprint function name for type"
+  else dprintLn ty; error "Could not unwrap type"
+
+let getEqualFuncName = lam env. lam acc. lam ty.
+  match unwrapType env ty with Some ty then
+    match mapLookup ty acc with Some (_, equalName) then
+      equalName
+    else dprintLn ty; error "Could not find equal function name for type"
+  else dprintLn ty; error "Could not unwrap type"
+
+let _pprintInt =
+  lam_ "a" tyint_ (app_ (nvar_ int2stringName) (var_ "a"))
+
+let _equalInt =
+  lam_ "a" tyint_ (lam_ "b" tyint_ (eqi_ (var_ "a") (var_ "b")))
+
+let _pprintFloat =
+  lam_ "a" tyfloat_ (app_ (nvar_ float2stringName) (var_ "a"))
+
+let _equalFloat =
+  lam_ "a" tyfloat_ (lam_ "b" tyfloat_
+    (error_ "Utest equality of floats requires custom comparison function."))
+
+let _pprintBool =
+  lam_ "a" tybool_ (if_ (var_ "a") (str_ "true") (str_ "false"))
+
+let _equalBool =
+  lam_ "a" tybool_ (lam_ "b" tybool_
+    (or_ (and_ (var_ "a") (var_ "b"))
+         (and_ (not_ (var_ "a")) (not_ (var_ "b")))))
+
+let _pprintChar =
+  lam_ "a" tychar_ (app_ (var_ "join")
+                   (seq_ [str_ "\'", seq_ [var_ "a"], str_ "\'"]))
+
+let _equalChar =
+  lam_ "a" tychar_ (lam_ "b" tychar_ (eqc_ (var_ "a") (var_ "b")))
+
+let _pprintSeq = lam ty. lam elemPprintFuncName.
+  lam_ "a" ty (app_ (var_ "join") (seq_ [
+      str_ "[",
+      appf2_ (var_ "strJoin")
+        (str_ ",")
+        (appf2_ (var_ "map") (nvar_ elemPprintFuncName) (var_ "a")),
+      str_ "]"
+    ]))
+
+let _equalSeq = lam ty. lam elemEqualFuncName.
+  lam_ "a" ty (lam_ "b" ty
+    (appf3_ (var_ "eqSeq") (nvar_ elemEqualFuncName) (var_ "a") (var_ "b")))
+
+let _pprintRecord = lam acc. lam env. lam ty. lam fields.
+  use RecordPat in
+  let recordBindings =
+    mapMapWithKey (lam id. lam. pvar_ (sidToString id)) fields
+  in
+  let recordPattern =
+    PatRecord {bindings = recordBindings, info = NoInfo ()}
+  in
+  let fieldPprints = lam seq. lam id. lam fieldTy.
+    let fieldPprintName = getPprintFuncName env acc fieldTy in
+    let pprintApp = app_ (var_ "join") (seq_ [
+      str_ (sidToString id),
+      str_ " = ",
+      app_ (nvar_ fieldPprintName) (var_ (sidToString id))]) in
+    cons pprintApp seq
+  in
+  let pprintFuncs = mapFoldWithKey fieldPprints [] fields in
+  lam_ "a" ty
+    (match_ (var_ "a")
+      recordPattern
+      (app_ (var_ "join") (seq_ [
+        str_ "{",
+        appf2_ (var_ "strJoin") (str_ ",") (seq_ fieldPprints),
+        str_ "}"
+      ]))
+      never_)
+
+let _equalRecord = lam acc. lam env. lam ty. lam fields.
+  use RecordPat in
+  let recordBindings = lam prefix.
+    mapMapWithKey (lam id. lam. pvar_ (join [prefix, sidToString id])) fields
+  in
+  let lhsPrefix = "lhs_" in
+  let rhsPrefix = "rhs_" in
+  let matchPattern =
+    ptuple_ [
+      PatRecord {bindings = recordBindings lhsPrefix, info = NoInfo ()},
+      PatRecord {bindings = recordBindings rhsPrefix, info = NoInfo ()}] in
+  let fieldEquals = lam seq. lam id. lam fieldTy.
+    let fieldEqName = getEqualFuncName env acc fieldTy in
+    let lhs = var_ (join [lhsPrefix, sidToString id]) in
+    let rhs = var_ (join [rhsPrefix, sidToString id]) in
+    let equalApp = appf2_ (nvar_ fieldEqName) (var_ lhs) (var_ rhs) in
+    cons equalApp seq
+  in
+  let equalFuncs = mapFoldWithKey fieldEquals [] fields in
+  lam_ "a" ty (lam_ "b" ty
+    (match_ (tuple_ [var_ "a", var_ "b"])
+      matchPattern
+      (appf2_ (var_ "all") (ulam_ "b" (var_ "b")) (seq_ fieldEquals))
+      never_))
+
+let _pprintVariant = lam acc. lam env. lam ty. lam constrs.
+  let constrPprint = lam cont. lam constrId. lam argTy.
+    let pprintFuncId = getPprintFuncName env acc argTy in
+    let constructorPattern = pcon_ (nameGetStr constrId) (pvar_ "t") in
+    match_ (var_ "a")
+      constructorPattern
+      (app_ (var_ "join") (seq_ [
+        str_ (nameGetStr constrId),
+        str_ " ",
+        app_ (nvar_ pprintFuncId) (var_ "t")]))
+      cont
+  in
+  let constructorMatches = mapFoldWithKey constrPprint never_ constrs in
+  lam_ "a" ty constructorMatches
+
+let _equalVariant = lam acc. lam env. lam ty. lam constrs.
+  let constrEqual = lam cont. lam constrId. lam argTy.
+    let equalFuncId = getEqualFuncName env acc argTy in
+    let lhsId = nameSym "lhs" in
+    let rhsId = nameSym "rhs" in
+    let constructorPattern = ptuple_ [
+      pcon_ (nameGetStr constrId) (npvar_ lhsId),
+      pcon_ (nameGetStr constrId) (npvar_ rhsId)
+    ] in
+    match_ (tuple_ [var_ "a", var_ "b"])
+      constructorPattern
+      (appf2_ (nvar_ equalFuncId) (nvar_ lhsId) (nvar_ rhsId))
+      cont
+  in
+  let constructorMatches = mapFoldWithKey constrEqual false_ constrs in
+  lam_ "a" ty (lam_ "b" ty constructorMatches)
+
+let generateUtestFunctions = use MExprAst in
+  lam env. lam acc.
+  let f = lam seq. lam ty. lam ids.
+    match ids with (pprintName, equalName, varId) then
+      let funcs =
+        match ty with TyInt _ then
+          (_pprintInt, _equalInt)
+        else match ty with TyFloat _ then
+          (_pprintFloat, _equalFloat)
+        else match ty with TyBool _ then
+          (_pprintBool, _equalBool)
+        else match ty with TyChar _ then
+          (_pprintChar, _equalChar)
+        else match ty with TySeq {ty = elemTy} then
+          let pprintName = getPprintFuncName env acc elemTy in
+          let equalName = getEqualFuncName env acc elemTy in
+          (_pprintSeq ty pprintName, _equalSeq ty equalName)
+        else match ty with TyRecord {fields = fields} then
+          match varId with Some ident then
+            let annotTy = ntyvar_ ident in
+            ( _pprintRecord acc env annotTy fields
+            , _equalRecord acc env annotTy fields)
+          else
+            dprintLn (mapBindings fields);
+            error "Record type was not properly lifted"
+        else match ty with TyVariant {constrs = constrs} then
+          match varId with Some ident then
+            let annotTy = ntyvar_ ident in
+            ( _pprintVariant acc env annotTy constrs
+            , _equalVariant acc env annotTy constrs)
+          else
+            dprintLn (mapBindings constrs);
+            error "Variant type was not properly lifted"
+        else dprintLn ty; error "Unsupported pprint type"
+      in
+      cons ( (pprintName, tyunknown_, funcs.0)
+           , (equalName, tyunknown_, funcs.1))
+           seq
+    else never
+  in
+  match unzip (mapFoldWithKey f [] acc) with (pprints, equals) then
+    bind_ (nreclets_ pprints) (nreclets_ equals)
+  else never
+
+let withUtestRunner = lam utestFunctions. lam term.
+  bindall_ [utestRunner, utestFunctions, term]
 
 let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
   appf5_
@@ -289,10 +431,7 @@ let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
     l
     r
 
-let utestAst = lam ty. lam info. lam l. lam r.
-  utestRunnerCall info (_printFunc ty) (_eqFunc ty) l r
-
-let _generateUtest = lam t.
+let _generateUtest = lam env. lam funcMap. lam t.
   use MExprAst in
   let utestInfo =
     match t.info with Info {filename = f, row1 = row} then
@@ -301,15 +440,21 @@ let _generateUtest = lam t.
       {filename = "", row = "0"}
     else never
   in
-  match compatibleType assocEmpty (ty t.test) (ty t.expected) with Some ty then
-    match t.tusing with Some eqFunc then
-      let eqFunc =
-        ulam_ "a"
-          (ulam_ "b"
-            (appf2_ eqFunc (var_ "a") (var_ "b"))) in
-      utestRunnerCall utestInfo (_printFunc ty) eqFunc t.test t.expected
-    else
-      utestAst ty utestInfo t.test t.expected
+  match compatibleType env (ty t.test) (ty t.expected) with Some ty then
+    match unwrapType env ty with Some ty then
+      match mapLookup ty funcMap with Some (pprintFuncName, equalFuncName) then
+        let pprintFunc = nvar_ pprintFuncName in
+        let eqFunc =
+          match t.tusing with Some eqFunc then
+            ulam_ "a"
+              (ulam_ "b"
+                (appf2_ eqFunc (var_ "a") (var_ "b")))
+          else
+            nvar_ equalFuncName
+        in
+        utestRunnerCall utestInfo pprintFunc eqFunc t.test t.expected
+      else error "Type error"
+    else error "Type error"
   else error "Type error"
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
@@ -322,15 +467,20 @@ lang MExprUtestTrans = MExprAst
   sem utestStrip =
   | t -> utestStripH t
 
-  sem utestGenH =
+  sem utestGenH (typeLiftEnv : AssocSeq Name Type) (funcMap : Map Type (Name, Name)) =
   | TmUtest t ->
-    bind_ (ulet_ "" (_generateUtest t)) (utestGenH t.next)
-  | t -> smap_Expr_Expr utestGenH t
+    bind_ (ulet_ "" (_generateUtest typeLiftEnv funcMap t))
+          (utestGenH typeLiftEnv funcMap t.next)
+  | t -> smap_Expr_Expr (utestGenH typeLiftEnv funcMap) t
 
-  sem utestGen =
+  sem utestGen (typeLiftEnv : AssocSeq Name Type) =
   | t ->
-    let t = utestGenH t in
-    withUtestRunner t
+    let funcMap : Map Type (Name, Name) =
+      collectUtestFunctionTypes typeLiftEnv (mapEmpty _cmpType) t
+    in
+    let utestFunctions = generateUtestFunctions typeLiftEnv funcMap in
+    let t = utestGenH typeLiftEnv funcMap t in
+    withUtestRunner utestFunctions t
 end
 
 lang TestLang = MExprUtestTrans + MExprEq + MExprTypeAnnot + MExprEval

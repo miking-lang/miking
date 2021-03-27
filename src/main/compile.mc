@@ -56,7 +56,7 @@ let generateTests = lam ast. lam testsEnabled.
     let ast = symbolize ast in
     let ast = typeAnnot ast in
     match typeLift emptyTypeLiftEnv ast with (env, ast) then
-      (env, utestGen ast)
+      (env, utestGen env ast)
     else never
   else
     ([], utestStrip ast)
