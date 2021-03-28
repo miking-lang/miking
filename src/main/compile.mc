@@ -78,7 +78,7 @@ let compile = lam files. lam options.
 
       -- Translate the MExpr AST into an OCaml AST
       let ocamlAst =
-        match typeLift emptyTypeLiftEnv ast with (env, ast) then
+        match typeLift ast with (env, ast) then
           match generateTypeDecl env ast with (env, ast) then
             let ast = generate env ast in
             let ast = objWrap ast in

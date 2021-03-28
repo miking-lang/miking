@@ -820,7 +820,7 @@ let generateEmptyEnv = lam t.
 in
 
 let generateTypeAnnotated = lam t.
-  match typeLift emptyTypeLiftEnv (typeAnnot t) with (env, t) then
+  match typeLift (typeAnnot t) with (env, t) then
     match generateTypeDecl env t with (env, t) then
       objWrap (generate env t)
     else never
