@@ -500,7 +500,6 @@ let getTypeFunctions =
 let generateUtestFunctions = use MExprAst in
   lam env.
   recursive let f = lam seq. lam ty. lam ids.
-    dprintLn ty;
     match getTypeFunctions env ty with Some (pprintFunc, equalFunc) then
       match ids with (pprintName, equalName) then
         cons ( (pprintName, tyunknown_, pprintFunc)
