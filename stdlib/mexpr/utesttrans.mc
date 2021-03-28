@@ -202,14 +202,6 @@ let utestRunnerName = optionGetOrElse
   (lam. error "Expected utestRunner to be defined")
   (findName "utestRunner" utestRunner)
 
-let int2stringName = optionGetOrElse
-  (lam. error "Expected int2string to be defined")
-  (findName "int2string" utestRunner)
-
-let float2stringName = optionGetOrElse
-  (lam. error "Expected float2string to be defined")
-  (findName "float2string" utestRunner)
-
 recursive let isFullyKnownType = use MExprAst in
   lam ty.
   match ty with TyUnknown _ then
@@ -270,12 +262,24 @@ let collectKnownProgramTypes = use MExprAst in
           let constructors =
             match mapLookup ident acc.variants with Some constructors then
               mapInsert t.ident argTy constructors
-            else error (join ["Constructor refers to undefined type ", nameGetStr ident])
+            else
+              let msg = join [
+                "Constructor application refers to undefined constructor ",
+                nameGetStr ident
+              ] in
+              infoErrorExit expr.info msg
           in
           let variants = mapInsert ident constructors acc.variants in
           let acc = {acc with variants = variants} in
           sfold_Expr_Expr collectTypes acc expr
-        else dprintLn t.tyIdent; error "Wrong type of constructor definition"
+        else
+          use MExprPrettyPrint in
+          let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty t.tyIdent).1 in
+          let msg = join [
+            "Unexpected type of constructor definition: ", tyIdentStr, "\n",
+            "Expected constructor of arrow type"
+          ] in
+          infoErrorExit expr.info msg
       else
         let acc = collectType acc (ty expr) in
         sfold_Expr_Expr collectTypes acc expr
@@ -287,7 +291,7 @@ let collectKnownProgramTypes = use MExprAst in
   } in
   let typeEnv = collectTypes emptyUtestTypeEnv expr in
   let typeFunctions = mapFoldWithKey (lam acc. lam k. lam v.
-    let variantTy = TyVar {ident = k} in
+    let variantTy = ntyvar_ k in
     let pprintName = nameSym "pprint" in
     let equalName = nameSym "equal" in
     mapInsert variantTy (pprintName, equalName) acc
@@ -310,17 +314,17 @@ let getEqualFuncName = lam env. lam ty.
   else dprintLn ty; error "Could not find equality function definition for type"
 
 let _pprintInt =
-  lam_ "a" tyint_ (app_ (nvar_ int2stringName) (var_ "a"))
+  lam_ "a" tyint_ (app_ (var_ "int2string") (var_ "a"))
 
 let _equalInt =
   lam_ "a" tyint_ (lam_ "b" tyint_ (eqi_ (var_ "a") (var_ "b")))
 
 let _pprintFloat =
-  lam_ "a" tyfloat_ (app_ (nvar_ float2stringName) (var_ "a"))
+  lam_ "a" tyfloat_ (app_ (var_ "float2string") (var_ "a"))
 
 let _equalFloat =
   lam_ "a" tyfloat_ (lam_ "b" tyfloat_
-    (error_ "Utest equality of floats requires custom comparison function."))
+    (error_ (str_ "Utest equality of floats requires custom comparison function.")))
 
 let _pprintBool =
   lam_ "a" tybool_ (if_ (var_ "a") (str_ "true") (str_ "false"))
@@ -441,44 +445,60 @@ let _equalVariant = lam env. lam ty. lam constrs.
   let constructorMatches = mapFoldWithKey constrEqual false_ constrs in
   lam_ "a" ty (lam_ "b" ty constructorMatches)
 
-recursive let getTypeFunctions = use MExprAst in
+let getTypeFunctions =
+  use MExprAst in
+  use MExprPrettyPrint in
   lam env. lam ty.
   match ty with TyInt _ then
-    (_pprintInt, _equalInt)
+    Some (_pprintInt, _equalInt)
   else match ty with TyFloat _ then
-    (_pprintFloat, _equalFloat)
+    Some (_pprintFloat, _equalFloat)
   else match ty with TyBool _ then
-    (_pprintBool, _equalBool)
+    Some (_pprintBool, _equalBool)
   else match ty with TyChar _ then
-    (_pprintChar, _equalChar)
+    Some (_pprintChar, _equalChar)
   else match ty with TySeq {ty = elemTy} then
     let elemPprintName = getPprintFuncName env elemTy in
     let elemEqualName = getEqualFuncName env elemTy in
-    (_pprintSeq ty elemPprintName, _equalSeq ty elemEqualName)
+    Some (_pprintSeq ty elemPprintName, _equalSeq ty elemEqualName)
   else match ty with TyRecord {fields = fields} then
-    ( _pprintRecord env ty fields
-    , _equalRecord env ty fields)
+    Some ( _pprintRecord env ty fields
+         , _equalRecord env ty fields)
   else match ty with TyVar {ident = ident} then
     match mapLookup ident env.variants with Some constrs then
-      let annotTy = ntyvar_ ident in
-      ( _pprintVariant env annotTy constrs
-      , _equalVariant env annotTy constrs)
+      if all (lam ty. isFullyKnownType) (mapValues constrs) then
+        let annotTy = ntyvar_ ident in
+        Some ( _pprintVariant env annotTy constrs
+             , _equalVariant env annotTy constrs)
+      else None ()
     else match mapLookup ident env.aliases with Some ty then
-      getTypeFunctions env ty
-    else dprintLn ty; error "Unknown type variable"
-  else dprintLn ty; error "Unsupported pprint type"
-end
+      -- NOTE(larshum, 2021-03-28): Aliases do not need to generate functions,
+      -- as they will be referring to the function of their aliased type.
+      None ()
+    else
+      let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
+      let msg = join [
+        "Type variable ", tyStr, " references unknown type."
+      ] in
+      infoErrorExit ty.info msg
+  else
+    let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
+    let msg = join [
+      "Could not generate pretty-print and equality functions for type ",
+      tyStr, "."
+    ] in
+    infoErrorExit ty.info msg
 
 let generateUtestFunctions = use MExprAst in
   lam env.
   recursive let f = lam seq. lam ty. lam ids.
-    match getTypeFunctions env ty with (pprintFunc, equalFunc) then
+    match getTypeFunctions env ty with Some (pprintFunc, equalFunc) then
       match ids with (pprintName, equalName) then
         cons ( (pprintName, tyunknown_, pprintFunc)
              , (equalName, tyunknown_, equalFunc))
              seq
       else never
-    else never
+    else seq
   in
   match unzip (mapFoldWithKey f [] env.typeFunctions) with (pprints, equals) then
     bind_ (nreclets_ pprints) (nreclets_ equals)
@@ -496,6 +516,7 @@ let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
     r
 
 let _generateUtest = lam env. lam t.
+  use MExprPrettyPrint in
   use MExprAst in
   let utestInfo =
     match t.info with Info {filename = f, row1 = row} then
@@ -504,7 +525,16 @@ let _generateUtest = lam env. lam t.
       {filename = "", row = "0"}
     else never
   in
-  match compatibleType [] (ty t.test) (ty t.expected) with Some ty then
+  let unwrappedType = lam ty.
+    match ty with TyVar {ident = ident} then
+      match mapLookup ident env.aliases with Some ty then
+        ty
+      else ty
+    else ty
+  in
+  let lhs = unwrappedType (ty t.test) in
+  let rhs = unwrappedType (ty t.expected) in
+  match compatibleType [] lhs rhs with Some ty then
     match mapLookup ty env.typeFunctions with Some (pprintName, equalName) then
       let pprintFunc = nvar_ pprintName in
       let eqFunc =
@@ -516,8 +546,21 @@ let _generateUtest = lam env. lam t.
           nvar_ equalName
       in
       utestRunnerCall utestInfo pprintFunc eqFunc t.test t.expected
-    else error "Type error"
-  else error "Type error"
+    else
+      let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
+      let msg = join [
+        "Arguments to utest need more type information.\n",
+        "Type was inferred to be ", tyStr
+      ] in
+      infoErrorExit t.info msg
+  else
+    let lhsType = (getTypeStringCode 0 pprintEnvEmpty (ty t.test)).1 in
+    let rhsType = (getTypeStringCode 0 pprintEnvEmpty (ty t.expected)).1 in
+    let msg = join [
+      "Arguments to utest have incompatible types\n",
+      "LHS: ", lhsType, "\nRHS: ", rhsType
+    ] in
+    infoErrorExit t.info msg
 
 let constructSymbolizeEnv = lam env.
   let constructorNames = mapFoldWithKey (lam acc. lam. lam constructors.
