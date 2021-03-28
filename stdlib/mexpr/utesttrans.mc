@@ -447,11 +447,12 @@ let _equalVariant = lam env. lam ty. lam constrs.
 
 let getTypeFunctions =
   use MExprAst in
+  use MExprPrettyPrint in
   lam env. lam ty.
   let reportError = lam msg : String -> String.
-    use MExprPrettyPrint in
-    let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
-    infoErrorExit ty.info (msg tyStr)
+    match getTypeStringCode 0 pprintEnvEmpty ty with (_, tyStr) then
+      infoErrorExit (info ty) (msg tyStr)
+    else never
   in
   match ty with TyInt _ then
     Some (_pprintInt, _equalInt)
@@ -499,6 +500,7 @@ let getTypeFunctions =
 let generateUtestFunctions = use MExprAst in
   lam env.
   recursive let f = lam seq. lam ty. lam ids.
+    dprintLn ty;
     match getTypeFunctions env ty with Some (pprintFunc, equalFunc) then
       match ids with (pprintName, equalName) then
         cons ( (pprintName, tyunknown_, pprintFunc)
