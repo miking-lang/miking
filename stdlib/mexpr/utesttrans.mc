@@ -447,8 +447,12 @@ let _equalVariant = lam env. lam ty. lam constrs.
 
 let getTypeFunctions =
   use MExprAst in
-  use MExprPrettyPrint in
   lam env. lam ty.
+  let reportError = lam msg : String -> String.
+    use MExprPrettyPrint in
+    let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
+    infoErrorExit ty.info (msg tyStr)
+  in
   match ty with TyInt _ then
     Some (_pprintInt, _equalInt)
   else match ty with TyFloat _ then
@@ -466,28 +470,31 @@ let getTypeFunctions =
          , _equalRecord env ty fields)
   else match ty with TyVar {ident = ident} then
     match mapLookup ident env.variants with Some constrs then
-      if all (lam ty. isFullyKnownType) (mapValues constrs) then
+      if all (lam ty. isFullyKnownType ty) (mapValues constrs) then
         let annotTy = ntyvar_ ident in
         Some ( _pprintVariant env annotTy constrs
              , _equalVariant env annotTy constrs)
-      else None ()
+      else
+        let msg = lam tyStr. join [
+          "Could not generate pretty-print and equality functions for type ",
+          tyStr, " because it is partially unknown."
+        ] in
+        reportError msg
     else match mapLookup ident env.aliases with Some ty then
       -- NOTE(larshum, 2021-03-28): Aliases do not need to generate functions,
       -- as they will be referring to the function of their aliased type.
       None ()
     else
-      let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
-      let msg = join [
+      let msg = lam tyStr. join [
         "Type variable ", tyStr, " references unknown type."
       ] in
-      infoErrorExit ty.info msg
+      reportError msg
   else
-    let tyStr = (getTypeStringCode 0 pprintEnvEmpty ty).1 in
-    let msg = join [
+    let msg = lam tyStr. join [
       "Could not generate pretty-print and equality functions for type ",
       tyStr, "."
     ] in
-    infoErrorExit ty.info msg
+    reportError msg
 
 let generateUtestFunctions = use MExprAst in
   lam env.
