@@ -23,7 +23,8 @@ let generateTests = lam ast. lam testsEnabled.
     let ast = typeAnnot ast in
     utestGen ast
   else
-    (symEnvEmpty, utestStrip ast)
+    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    (symEnv, utestStrip ast)
 
 let run = lam files. lam options.
   use ExtMCore in
