@@ -299,7 +299,7 @@ let collectKnownProgramTypes = use MExprAst in
   let typeFunctions = mapFoldWithKey (lam acc. lam k. lam v.
     match mapLookup v acc with Some names then
       mapInsert (ntyvar_ k) names acc
-    else dprintLn k; dprintLn v; error "Type referenced by alias could not be found"
+    else acc -- alias is never used
   ) typeFunctions typeEnv.aliases in
   {typeEnv with typeFunctions = typeFunctions}
 
