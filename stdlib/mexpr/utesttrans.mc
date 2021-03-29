@@ -341,51 +341,71 @@ let _pprintChar =
 let _equalChar =
   lam_ "a" tychar_ (lam_ "b" tychar_ (eqc_ (var_ "a") (var_ "b")))
 
-let _pprintSeq = lam ty. lam elemPprintFuncName.
-  lam_ "a" ty (app_ (var_ "join") (seq_ [
-      str_ "[",
-      appf2_ (var_ "strJoin")
-        (str_ ",")
-        (appf2_ (var_ "map") (nvar_ elemPprintFuncName) (var_ "a")),
-      str_ "]"
-    ]))
+let _pprintStr =
+  lam_ "a" tystr_ (app_ (var_ "join") (seq_ [str_ "\"", var_ "a", str_ "\""]))
+
+let _pprintSeq = use MExprAst in
+  lam ty. lam elemPprintFuncName.
+  match ty with TySeq {ty = TyChar _} then
+    _pprintStr
+  else
+    lam_ "a" ty (app_ (var_ "join") (seq_ [
+        str_ "[",
+        appf2_ (var_ "strJoin")
+          (str_ ",")
+          (appf2_ (var_ "map") (nvar_ elemPprintFuncName) (var_ "a")),
+        str_ "]"
+      ]))
 
 let _equalSeq = lam ty. lam elemEqualFuncName.
   lam_ "a" ty (lam_ "b" ty
     (appf3_ (var_ "eqSeq") (nvar_ elemEqualFuncName) (var_ "a") (var_ "b")))
 
-let _pprintRecord = lam env. lam ty. lam fields.
-  if mapIsEmpty fields then
-    lam_ "a" ty (str_ "()")
+let _pprintRecord = use MExprAst in
+  lam env. lam ty. lam fields.
+  if mapIsEmpty fields then lam_ "a" ty (str_ "()")
   else
-    use RecordPat in
     let recordBindings =
       mapMapWithKey (lam id. lam. pvar_ (sidToString id)) fields
     in
     let recordPattern =
       PatRecord {bindings = recordBindings, info = NoInfo ()}
     in
-    let fieldPprints = lam seq. lam id. lam fieldTy.
-      let fieldPprintName = getPprintFuncName env fieldTy in
-      let pprintApp = app_ (var_ "join") (seq_ [
-        str_ (sidToString id),
-        str_ " = ",
-        app_ (nvar_ fieldPprintName) (var_ (sidToString id))]) in
-      cons pprintApp seq
+    let pprintSeq =
+      match _record2tuple fields with Some types then
+        let tuplePprints = lam seq. lam id. lam fieldTy.
+          let fieldPprintName = getPprintFuncName env fieldTy in
+          let pprintApp = app_ (nvar_ fieldPprintName) (var_ (sidToString id)) in
+          snoc seq pprintApp
+        in
+        let pprintFuncs = mapFoldWithKey tuplePprints [] fields in
+        seq_ [
+          str_ "(",
+          appf2_ (var_ "strJoin") (str_ ",") (seq_ pprintFuncs),
+          str_ ")"]
+      else
+        let fieldPprints = lam seq. lam id. lam fieldTy.
+          let fieldPprintName = getPprintFuncName env fieldTy in
+          let pprintApp = app_ (var_ "join") (seq_ [
+            str_ (sidToString id),
+            str_ " = ",
+            app_ (nvar_ fieldPprintName) (var_ (sidToString id))]) in
+          cons seq pprintApp
+        in
+        let pprintFuncs = mapFoldWithKey fieldPprints [] fields in
+        seq_ [
+          str_ "{",
+          appf2_ (var_ "strJoin") (str_ ",") (seq_ pprintFuncs),
+          str_ "}"]
     in
-    let pprintFuncs = mapFoldWithKey fieldPprints [] fields in
     lam_ "a" ty
       (match_ (var_ "a")
         recordPattern
-        (app_ (var_ "join") (seq_ [
-          str_ "{",
-          appf2_ (var_ "strJoin") (str_ ",") (seq_ pprintFuncs),
-          str_ "}"
-        ]))
+        (app_ (var_ "join") pprintSeq)
         never_)
 
-let _equalRecord = lam env. lam ty. lam fields.
-  use RecordPat in
+let _equalRecord = use MExprAst in
+  lam env. lam ty. lam fields.
   let recordBindings = lam prefix.
     mapMapWithKey (lam id. lam. pvar_ (join [prefix, sidToString id])) fields
   in
