@@ -209,9 +209,7 @@ let collectKnownProgramTypes = use MExprAst in
       let pprintName = nameSym "pprint" in
       let equalName = nameSym "equal" in
       let funcNames = (pprintName, equalName) in
-      match ty with TyUnknown _ | TyInt _ | TyFloat _ | TyBool _ | TyChar _ then
-        {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
-      else match ty with TySeq {ty = elemTy} then
+      match ty with TySeq {ty = elemTy} then
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
         collectType acc elemTy
@@ -220,7 +218,7 @@ let collectKnownProgramTypes = use MExprAst in
         let acc = {acc with typeFunctions = typeFuns} in
         mapFoldWithKey (lam acc. lam. lam fieldTy. collectType acc fieldTy)
                        acc fields
-      else acc
+      else {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
   in
   recursive
     let collectTypes = lam acc. lam expr.
@@ -248,7 +246,7 @@ let collectKnownProgramTypes = use MExprAst in
                 "Constructor application refers to undefined constructor ",
                 nameGetStr ident
               ] in
-              infoErrorExit expr.info msg
+              infoErrorExit (info expr) msg
           in
           let variants = mapInsert ident constructors acc.variants in
           let acc = {acc with variants = variants} in
@@ -257,10 +255,9 @@ let collectKnownProgramTypes = use MExprAst in
           use MExprPrettyPrint in
           let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty t.tyIdent).1 in
           let msg = join [
-            "Unexpected type of constructor definition: ", tyIdentStr, "\n",
-            "Expected constructor of arrow type"
+            "Expected constructor of arrow type, got ", tyIdentStr, "\n"
           ] in
-          infoErrorExit expr.info msg
+          infoErrorExit (info expr) msg
       else
         let acc = collectType acc (ty expr) in
         sfold_Expr_Expr collectTypes acc expr
@@ -445,21 +442,29 @@ let _equalVariant = lam env. lam ty. lam constrs.
   let constructorMatches = mapFoldWithKey constrEqual false_ constrs in
   lam_ "a" ty (lam_ "b" ty constructorMatches)
 
-recursive let typeHasDefaultEquality = use MExprAst in
+let typeHasDefaultEquality = use MExprAst in
   lam env. lam ty.
-  match ty with TyUnknown _ | TyFloat _ then false
-  else match ty with TySeq t then
-    typeHasDefaultEquality env t.ty
-  else match ty with TyRecord t then
-    mapAll (lam ty. typeHasDefaultEquality env ty) t.fields
-  else match ty with TyVar t then
-    match mapLookup t.ident env.variants with Some constrs then
-      mapAll (lam ty. typeHasDefaultEquality env ty) constrs
-    else match mapLookup t.ident env.aliases with Some ty then
-      typeHasDefaultEquality env ty
+  recursive let work = lam visited. lam ty.
+    match ty with TyInt _ | TyBool _ | TyChar _ then true
+    else match ty with TySeq t then
+      work visited t.ty
+    else match ty with TyRecord t then
+      mapAll (lam ty. work visited ty) t.fields
+    else match ty with TyVar t then
+      -- If we have already visited a type variable, we stop here to avoid
+      -- infinite recursion.
+      match mapLookup t.ident visited with Some _ then
+        true
+      else
+        let visited = mapInsert t.ident () visited in
+        match mapLookup t.ident env.variants with Some constrs then
+          mapAll (lam ty. work visited ty) constrs
+        else match mapLookup t.ident env.aliases with Some ty then
+          work visited ty
+        else false
     else false
-  else true
-end
+  in
+  work (mapEmpty nameCmp) ty
 
 let getTypeFunctions =
   use MExprAst in
@@ -470,9 +475,7 @@ let getTypeFunctions =
       infoErrorExit (info ty) (msg tyStr)
     else never
   in
-  match ty with TyUnknown _ then
-    Some (_pprintUnknown, None ())
-  else match ty with TyInt _ then
+  match ty with TyInt _ then
     Some (_pprintInt, Some _equalInt)
   else match ty with TyFloat _ then
     Some (_pprintFloat, None ())
@@ -504,12 +507,7 @@ let getTypeFunctions =
         "Type variable ", tyStr, " references unknown type."
       ] in
       reportError msg
-  else
-    let msg = lam tyStr. join [
-      "Could not generate pretty-print and equality functions for type ",
-      tyStr, "."
-    ] in
-    reportError msg
+  else Some (_pprintUnknown, None ())
 
 let generateUtestFunctions =
   use MExprAst in
