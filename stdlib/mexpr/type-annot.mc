@@ -186,7 +186,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
           match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
             tyBody
           else
-            let msg = [
+            let msg = join [
               "Inconsistent type annotation of recursive let-expression\n"
               "Expected type: ", _pprintType (ty body), "\n",
               "Annotated type: ", _pprintType t.tyBody
@@ -271,7 +271,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
             match compatibleType tyEnv (ty body) from with Some _ then
               TyVar target
             else
-              let msg = [
+              let msg = join [
                 "Inconsistent types of constructor application",
                 "Constructor expected argument of type ", _pprintType from,
                 ", but the actual type was ", _pprintType (ty body)
@@ -279,7 +279,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
               infoErrorExit t.info msg
           else tyunknown_
         else
-          let msg = ["Application of untyped constructor: ",
+          let msg = join ["Application of untyped constructor: ",
                      nameGetStr t.ident] in
           infoErrorExit t.info msg
       in
