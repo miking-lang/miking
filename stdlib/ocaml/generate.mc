@@ -1282,6 +1282,16 @@ let recordWithLet = symbolize (
 utest recordWithLet with generateTypeAnnotated recordWithLet
 using sameSemantics in
 
+let recordWithLam = symbolize (
+  bindall_
+  [ ulet_ "r" (record_ [
+     ("foo", ulam_ "x" (var_ "x"))])
+  , ulet_ "foo" (recordproj_ "foo" (var_ "r"))
+  , app_ (var_ "foo") (int_ 42)
+  ]) in
+utest recordWithLam with generateTypeAnnotated recordWithLam
+using sameSemantics in
+
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
 utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
