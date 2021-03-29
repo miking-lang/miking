@@ -162,8 +162,11 @@ lang OCamlGenerate = MExprAst + OCamlAst
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
-  | PatNamed {ident = PWildcard _} -> (assocEmpty, identity)
-  | PatNamed {ident = PName n} -> (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
+  | PatNamed {ident = PWildcard _} ->
+    (assocEmpty, lam cont. _if true_ cont _none)
+  | PatNamed {ident = PName n} ->
+    (assocInsert {eq=nameEqSym} n targetName assocEmpty,
+     lam cont. _if true_ cont _none)
   | PatBool {val = val} ->
     let wrap = lam cont.
       _if (nvar_ targetName)
@@ -845,6 +848,20 @@ let stripTypeDecls = lam t.
 in
 
 -- Match
+let matchWild1 = symbolize
+  (match_ (int_ 1)
+     pvarw_
+     true_
+     false_) in
+utest matchWild1 with generateEmptyEnv matchWild1 using sameSemantics in
+
+let matchWild2 = symbolize
+  (match_ (int_ 1)
+     (pvar_ "n")
+     true_
+     false_) in
+utest matchWild2 with generateEmptyEnv matchWild2 using sameSemantics in
+
 let matchChar1 = symbolize
  (match_ (char_ 'a')
    (pchar_ 'a')
