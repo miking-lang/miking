@@ -94,6 +94,7 @@ files=(
 # "stdlib/parser/gen-ast.mc"
 # "stdlib/ref.mc"
 # "stdlib/prelude.mc"
+# "stdlib/common.mc"
 # "stdlib/dfa.mc"
 # "stdlib/map.mc"
 # "stdlib/symtable.mc"

@@ -3,6 +3,8 @@
 --
 -- Boolean intrinstics
 
+include "bool.mc"
+
 mexpr
 
 -- Boolean values
