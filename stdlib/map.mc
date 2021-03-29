@@ -50,6 +50,9 @@ let mapFoldlOption : (acc -> k -> v -> Option acc)
   lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t. f acc t.0 t.1) acc (mapBindings m)
 
+let mapAll : (v -> Bool) -> Map k v -> Bool = lam f. lam m.
+  mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
+
 mexpr
 
 let m = mapEmpty subi in
@@ -112,5 +115,14 @@ with (acc, m)
 then (acc, mapBindings m)
 else never
 with (9,[(negi 1,("x-1")),(1,("x1")),(2,("x22")),(3,("x3")),(4,("x44"))]) in
+
+let m = mapFromList subi
+  [ (1, "1")
+  , (2, "2")
+  , (123, "123")
+  ] in
+utest mapAll (lam str. geqi (length str) 1) m with true in
+utest mapAll (lam str. leqi (length str) 3) m with true in
+utest mapAll (lam str. lti (length str) 2) m with false in
 
 ()
