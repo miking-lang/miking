@@ -3,6 +3,8 @@
 --
 -- Test integer primitives
 
+include "common.mc"
+
 mexpr
 
 -- Construction of lists

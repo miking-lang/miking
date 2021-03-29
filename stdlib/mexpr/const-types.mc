@@ -182,7 +182,7 @@ lang MapTypeAst = MapAst
   | CMapBindings _ -> tyarrow_ tymap_
                                (tyseq_ (tytuple_ [tygeneric_ "a", tygeneric_ "b"]))
   | CMapSize _ -> tyarrow_ tymap_ tyint_
-  | CMapMem _ -> tyarrows_ [tygeneric_ "a", tymap_, tyint_]
+  | CMapMem _ -> tyarrows_ [tygeneric_ "a", tymap_, tybool_]
   | CMapAny _ -> tyarrows_ [tyarrows_ [tygeneric_ "a", tygeneric_ "b", tybool_],
                             tymap_, tybool_]
   | CMapMap _ -> tyarrows_ [tyarrow_ (tygeneric_ "b") (tygeneric_ "c"),

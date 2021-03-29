@@ -367,7 +367,7 @@ let _pprintRecord = use MExprAst in
             str_ (sidToString id),
             str_ " = ",
             app_ (nvar_ fieldPprintName) (var_ (sidToString id))]) in
-          cons seq pprintApp
+          snoc seq pprintApp
         in
         let pprintFuncs = mapFoldWithKey fieldPprints [] fields in
         seq_ [
