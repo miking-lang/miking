@@ -558,6 +558,9 @@ let _preamble =
     , intr3 "mapEq" (appf3_ (_mapOp "eq"))
     , intr3 "mapCmp" (appf3_ (_mapOp "cmp"))
     , intr3 "mapGetCmpFun" (appf3_ (_mapOp "key_cmp"))
+    , intr1 "ref" ref_
+    , intr1 "deref" deref_
+    , intr2 "modref" modref_
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
@@ -659,6 +662,9 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CBootParserGetConst _ -> nvar_ (_intrinsicName "bootParserGetConst")
   | CBootParserGetPat _ -> nvar_ (_intrinsicName "bootParserGetPat")
   | CBootParserGetInfo _ -> nvar_ (_intrinsicName "bootParserGetInfo")
+  | CRef _ -> nvar_ (_intrinsicName "ref")
+  | CModRef _ -> nvar_ (_intrinsicName "modref")
+  | CDeRef _ -> nvar_ (_intrinsicName "deref")
   | t -> dprintLn t; error "Intrinsic not implemented"
 
   sem objWrapRec =
@@ -706,7 +712,7 @@ let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here the make
+-- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here to make
 -- the test run faster. This is an ugly hack!
 let preambleStr =
   let str = expr2str (bind_ _preamble (int_ 0)) in
@@ -1766,6 +1772,33 @@ let mapBindingsTest = bindall_
   ] in
 
 utest ocamlEvalInt (generateEmptyEnv mapBindingsTest) with int_ 2 using eqExpr in
+
+-- References
+let refDeRefIntTest = deref_ (ref_ (int_ 1)) in
+utest ocamlEvalInt (generateEmptyEnv refDeRefIntTest)
+with int_ 1 using eqExpr in
+
+let refModrefDerefIntTest =
+  bind_
+    (ulet_ "x" (ref_ (int_ 1)))
+    (semi_ (modref_ (var_ "x") (int_ 2))
+           (deref_ (var_ "x")))
+in
+utest ocamlEvalInt (generateEmptyEnv refModrefDerefIntTest)
+with int_ 2 using eqExpr in
+
+let refDeRefIntSeqTest = get_ (deref_ (ref_ (seq_ (int_ 1)))) (int_ 0) in
+utest ocamlEvalInt (generateEmptyEnv refDeRefIntTest)
+with int_ 1 using eqExpr in
+
+let refModrefDerefSeqIntTest =
+  bind_
+    (ulet_ "x" (ref_ (seq_ (int_ 1))))
+    (semi_ (modref_ (var_ "x") (seq_ (int_ 2)))
+           (get_ (deref_ (var_ "x")) (int_ 0)))
+in
+utest ocamlEvalInt (generateEmptyEnv refModrefDerefIntTest)
+with int_ 2 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
 -- intrinsics

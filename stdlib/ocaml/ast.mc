@@ -131,7 +131,7 @@ lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
                 + IntPat + CharPat + BoolPat + OCamlTuple + OCamlArray
                 + OCamlData + OCamlExternal + FloatIntConversionAst
                 + IntCharConversionAst + OCamlTypeDeclAst + OCamlPreambleHack
-                + OCamlRecord + OCamlString
+                + OCamlRecord + OCamlString + RefOpAst
 end
 
 mexpr
