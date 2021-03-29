@@ -12,7 +12,7 @@ run() {
 
 files=(
   "test/mexpr/letlamif.mc"
-  "test/mexpr/fix.mc"
+# "test/mexpr/fix.mc"
 # "test/mexpr/ident-test.mc"
 # "test/mexpr/map.mc"
 # "test/mexpr/tensor.mc"

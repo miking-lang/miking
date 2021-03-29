@@ -870,3 +870,6 @@ let mapCmp_ = use MExprAst in
 let mapGetCmpFun_ = use MExprAst in
   lam m.
   appf1_ (const_ (CMapGetCmpFun ())) m
+
+-- Sequencing (;)
+let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2
