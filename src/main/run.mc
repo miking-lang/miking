@@ -9,9 +9,22 @@ include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 
-lang ExtMCore = BootParser + MExpr + MExprTypeAnnot + MExprUtestTrans
+lang ExtMCore =
+  BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans
+end
+
+let generateTests = lam ast. lam testsEnabled.
+  use ExtMCore in
+  if testsEnabled then
+    let ast = symbolize ast in
+    let ast = typeAnnot ast in
+    utestGen ast
+  else
+    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    (symEnv, utestStrip ast)
 
 let run = lam files. lam options.
   use ExtMCore in
@@ -23,16 +36,9 @@ let run = lam files. lam options.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    let ast =
-      if options.runTests then
-        -- Add type annotations as they are required by utestGen
-        let ast = typeAnnot ast in
-        utestGen ast
-      else
-        utestStrip ast
-    in
-
-    -- Evaluate the symbolized program
-    eval {env = builtinEnv} (symbolize ast)
+    match generateTests ast options.runTests with (symEnv, ast) then
+      let ast = symbolizeExpr symEnv ast in
+      eval {env = builtinEnv} ast
+    else never
   in
   iter runFile files

@@ -50,6 +50,16 @@ let ocamlCompile = lam sourcePath. lam ocamlAst.
   phMoveFile p.binaryPath destinationFile;
   phChmodWriteAccessFile destinationFile
 
+let generateTests = lam ast. lam testsEnabled.
+  use MCoreCompile in
+  if testsEnabled then
+    let ast = symbolize ast in
+    let ast = typeAnnot ast in
+    utestGen ast
+  else
+    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    (symEnv, utestStrip ast)
+
 let compile = lam files. lam options.
   use MCoreCompile in
   let compileFile = lam file.
@@ -60,29 +70,25 @@ let compile = lam files. lam options.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    let ast =
-      if options.runTests then
-        -- Add type annotations as they are required by utestGen
-        let ast = typeAnnot ast in
-        utestGen ast
-      else
-        utestStrip ast
-    in
+    match generateTests ast options.runTests with (symEnv, ast) then
 
-    -- Symbolize the MExpr AST and annotate it with types
-    let ast = symbolize ast in
-    let ast = typeAnnot ast in
+      -- Re-symbolize the MExpr AST and re-annotate it with types
+      let ast = symbolizeExpr symEnv ast in
+      let ast = typeAnnot ast in
 
-    -- Translate the MExpr AST into an OCaml AST
-    let ocamlAst =
-      match generateTypeDecl ast with (env, ast) then
-        let ast = generate env ast in
-        let ast = objWrap ast in
-        _withPreamble ast
-      else never
-    in
+      -- Translate the MExpr AST into an OCaml AST
+      let ocamlAst =
+        match typeLift ast with (env, ast) then
+          match generateTypeDecl env ast with (env, ast) then
+            let ast = generate env ast in
+            let ast = objWrap ast in
+            _withPreamble ast
+          else never
+        else never
+      in
 
-    -- Compile OCaml AST
-    ocamlCompile file ocamlAst
+      -- Compile OCaml AST
+      ocamlCompile file ocamlAst
+    else never
   in
   iter compileFile files

@@ -71,7 +71,7 @@ let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
 let unwrapType = use MExprAst in
   lam typeEnv. lam ty.
   match ty with TyVar {ident = id} then
-    assocLookup {eq=nameEq} id typeEnv
+    assocSeqLookup {eq=nameEq} id typeEnv
   else Some ty
 
 -----------

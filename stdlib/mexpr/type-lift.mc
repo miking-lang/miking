@@ -106,6 +106,12 @@ recursive let _cmpType = lam ty1. lam ty2.
   else diff
 end
 
+let emptyTypeLiftEnv = {
+  typeEnv = [],
+  records = mapEmpty (mapCmp _cmpType),
+  variants = mapEmpty nameCmp
+}
+
 -- Adds a record type with the given fields to the type lifting environment.
 let _addRecordTypeVar = lam env. lam fields.
   use MExprAst in
@@ -138,12 +144,7 @@ lang TypeLift = MExprEq
   --   `TyVariant`s.
   sem typeLift = -- Expr -> (AssocSeq Name Type, Expr)
   | e ->
-    let emptyEnv = {
-      typeEnv = [],
-      records = mapEmpty (mapCmp _cmpType),
-      variants = mapEmpty nameCmp
-    } in
-    match typeLiftExpr emptyEnv e with (env, t) then
+    match typeLiftExpr emptyTypeLiftEnv e with (env, t) then
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
@@ -287,8 +288,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
               env
             else never
           else never
-        else
-          {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
+        else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
       in
       match typeLiftExpr env t.inexpr with (env, inexpr) then
         (env, inexpr)
@@ -351,18 +351,18 @@ lang UtestTypeLift = TypeLift + UtestAst
         match typeLiftExpr env t.next with (env, next) then
           match typeLiftType env t.ty with (env, ty) then
             match t.tusing with Some tusing then
-              match typeLiftType env t.tusing with (env, tusing) then
+              match typeLiftExpr env tusing with (env, tusing) then
                 (env, TmUtest {{{{{t with test = test}
-                                    with expected = expected}
-                                    with next = next}
-                                    with tusing = t.tusing}
-                                    with ty = ty})
+                                     with expected = expected}
+                                     with next = next}
+                                     with tusing = Some tusing}
+                                     with ty = ty})
               else never
             else (env, TmUtest {{{{{t with test = test}
-                                    with expected = expected}
-                                    with next = next}
-                                    with tusing = t.tusing}
-                                    with ty = ty})
+                                      with expected = expected}
+                                      with next = next}
+                                      with tusing = t.tusing}
+                                      with ty = ty})
           else never
         else never
       else never

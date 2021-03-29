@@ -25,7 +25,7 @@ lang MExprMakeConstBinOp = ArithIntAst + AppAst + UnknownTypeAst
       val = lam x. lam y.
         let op = TmConst {val = op, ty = TyUnknown (), info = makeInfo p p2} in
         let app = lam x. lam y. 
-                TmApp {lhs = x, rhs = y, info = mergeInfo (info x) (info y)} in
+                TmApp {lhs = x, rhs = y, ty = TyUnknown (), info = mergeInfo (info x) (info y)} in
         let res = (app (app op x) y) in
         res, 
       pos = p2, str = xs, assoc = assoc, prec = prec}

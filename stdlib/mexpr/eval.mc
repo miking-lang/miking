@@ -198,6 +198,11 @@ lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
   | TmConst c -> TmConst c
 end
 
+lang TypeEval = TypeAst
+  sem eval (ctx : {env : Env}) =
+  | TmType t -> eval ctx t.inexpr
+end
+
 lang DataEval = DataAst + AppEval
   sem eval (ctx : {env : Env}) =
   | TmConDef t -> eval ctx t.inexpr
@@ -1188,7 +1193,8 @@ lang MExprEval =
 
   -- Terms
   VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
-  ConstEval + DataEval + MatchEval + UtestEval + SeqEval + NeverEval + RefEval
+  ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
+  NeverEval + RefEval
 
   -- Constants
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +

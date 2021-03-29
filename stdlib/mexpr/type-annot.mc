@@ -36,36 +36,36 @@ let compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
-  match (unwrapType tyEnv ty1, unwrapType tyEnv ty2)
-  with (Some ty1, Some ty2) then
-    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-      match compatibleType tyEnv t1.from t2.from with Some a then
-        match compatibleType tyEnv t1.to t2.to with Some b then
-          Some (TyArrow {{t1 with from = a} with to = b})
-        else None ()
+  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+    match compatibleType tyEnv t1.from t2.from with Some a then
+      match compatibleType tyEnv t1.to t2.to with Some b then
+        Some (TyArrow {{t1 with from = a} with to = b})
       else None ()
-    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-      match compatibleType tyEnv t1.ty t2.ty with Some t then
-        Some (TySeq {t1 with ty = t})
-      else None ()
-    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
-      let f = lam acc. lam p.
-        match p with (k, ty1) then
-          match mapLookup k t2.fields with Some ty2 then
-            match compatibleType tyEnv ty1 ty2 with Some ty then
-              Some (mapInsert k ty acc)
-            else None ()
-          else None ()
-        else never
-      in
-      match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
-        Some (TyRecord {t1 with fields = fields})
-      else
-        None ()
-    else if eqType tyEnv ty1 ty2 then Some ty1
     else None ()
+  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TySeq {t1 with ty = t})
+    else None ()
+  else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+    let f = lam acc. lam p.
+      match p with (k, ty1) then
+        match mapLookup k t2.fields with Some ty2 then
+          match compatibleType tyEnv ty1 ty2 with Some ty then
+            Some (mapInsert k ty acc)
+          else None ()
+        else None ()
+      else never
+    in
+    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
+      Some (TyRecord {t1 with fields = fields})
+    else
+      None ()
+  else match (ty1, ty2) with (TyVar t1, TyVar t2) then
+    if nameEq t1.ident t2.ident then Some ty1
+    else None ()
+  else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
 
@@ -187,9 +187,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
             tyBody
           else
             let msg = join [
-              "Inconsistent type annotation of recursive let-expression\n"
+              "Inconsistent type annotation of recursive let-expression\n",
               "Expected type: ", _pprintType (ty body), "\n",
-              "Annotated type: ", _pprintType t.tyBody
+              "Annotated type: ", _pprintType binding.tyBody
             ] in
             infoErrorExit t.info msg
         in
@@ -280,7 +280,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
           else tyunknown_
         else
           let msg = join ["Application of untyped constructor: ",
-                     nameGetStr t.ident] in
+                          nameGetStr t.ident] in
           infoErrorExit t.info msg
       in
       TmConApp {{t with body = body}

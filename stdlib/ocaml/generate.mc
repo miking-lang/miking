@@ -137,7 +137,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         let msg = join ["Record update was annotated with an invalid type."] in
         infoErrorExit t.info msg
     else
-      let msg = join ["Expected type to be a TyVar.",
+      let msg = join ["Expected type to be a TyVar. ",
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->
@@ -288,7 +288,15 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else None ()
       else None ()
     in
-    match env with {records = records, constrs = constrs} then
+    if mapIsEmpty t.bindings then
+      let wrap = lam cont.
+        OTmMatch {
+          target = nvar_ targetName,
+          arms = [(OPatTuple {pats = []}, cont)]
+        }
+      in
+      (assocEmpty, wrap)
+    else match env with {records = records, constrs = constrs} then
       match lookupRecordFields targetTy constrs with Some fields then
         match mapLookup fields records with Some name then
           let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
@@ -401,13 +409,11 @@ let _addTypeDeclarations = lam typeLiftEnv. lam t.
   foldl f t typeLiftEnv
 
 lang OCamlTypeDeclGenerate = MExprTypeLift
-  sem generateTypeDecl =
+  sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
-    match typeLift expr with (env, t) then
-      let generateEnv = _typeLiftEnvToGenerateEnv env in
-      let t = _addTypeDeclarations env t in
-      (generateEnv, t)
-    else never
+    let generateEnv = _typeLiftEnvToGenerateEnv env in
+    let expr = _addTypeDeclarations env expr in
+    (generateEnv, expr)
 end
 
 recursive let _isIntrinsicApp = use OCamlAst in
@@ -821,8 +827,10 @@ let generateEmptyEnv = lam t.
 in
 
 let generateTypeAnnotated = lam t.
-  match generateTypeDecl (typeAnnot t) with (env, t) then
-    objWrap (generate env t)
+  match typeLift (typeAnnot t) with (env, t) then
+    match generateTypeDecl env t with (env, t) then
+      objWrap (generate env t)
+    else never
   else never
 in
 
