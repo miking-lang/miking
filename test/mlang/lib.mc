@@ -1,5 +1,6 @@
 let bump = addi 1
-con TestCon : TestCon
+type TestType
+con TestCon : () -> TestType
 mexpr
 utest bump 5 with 6 in
 ()
