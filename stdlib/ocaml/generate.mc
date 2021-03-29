@@ -681,8 +681,9 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | (OTmArray _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr objWrapRec t)
   | OTmMatch t ->
-    OTmMatch {{t with target = _objObj (objWrapRec t.target)}
-                 with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms}
+    _objObj
+    (OTmMatch {{t with target = _objObj (objWrapRec t.target)}
+                  with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms})
   | t -> smap_Expr_Expr objWrapRec t
 
   sem objWrap =
