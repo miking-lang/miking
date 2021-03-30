@@ -514,8 +514,11 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       let wrap_data decl tm =
         match decl with
         (* TODO(vipa,?): this does not declare the type itself *)
-        | Data (_, name, cdecls) ->
-            List.fold_right (wrap_con name) cdecls tm
+        | Data (fi, name, cdecls) ->
+            let tydecl inexpr =
+              TmType (fi, mangle name, Symb.Helpers.nosym, TyUnknown fi, inexpr)
+            in
+            tydecl (List.fold_right (wrap_con (mangle name)) cdecls tm)
         | _ ->
             tm
       in
