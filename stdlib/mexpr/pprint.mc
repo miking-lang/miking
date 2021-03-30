@@ -698,6 +698,13 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapGetCmpFun _ -> "mapGetCmpFun"
 end
 
+lang IOPrettyPrint = IOAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CPrint _ -> "print"
+  | CDPrint _ -> "dprint"
+  | CReadLine _ -> "readLine"
+  | CReadBytesAsString _ -> "readBytesAsString"
+end
 
 --------------
 -- PATTERNS --
@@ -981,7 +988,7 @@ lang MExprPrettyPrint =
   ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
   CmpFloatPrettyPrint + CharPrettyPrint + CmpCharPrettyPrint +
   SymbPrettyPrint + CmpSymbPrettyPrint + SeqOpPrettyPrint + RefOpPrettyPrint +
-  TensorOpPrettyPrint + MapPrettyPrint + SysPrettyPrint +
+  TensorOpPrettyPrint + MapPrettyPrint + SysPrettyPrint + IOPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
