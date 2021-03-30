@@ -1514,11 +1514,16 @@ utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
 utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
 utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
--- TODO(Oscar Eriksson, 2020-11-16) Test splitAt when we have implemented tuple
--- projection.
+-- splitat
 let testStr = str_ "foobar" in
-let testSplit = symbolize (bind_ (ulet_ "_" (splitat_ testStr (int_ 2))) (int_ 0)) in
-utest testSplit  with generateEmptyEnv testSplit using sameSemantics in
+let testSplit0 = (bindall_ [ ulet_ "y" (splitat_ testStr (int_ 3)), tupleproj_ 0 (var_ "y")]) in
+let testSplit1 = (bindall_ [ ulet_ "y" (splitat_ testStr (int_ 3)), tupleproj_ 1 (var_ "y")]) in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit0 (int_ 0))) with char_ 'f' using eqExpr in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit0 (int_ 1))) with char_ 'o' using eqExpr in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit0 (int_ 2))) with char_ 'o' using eqExpr in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 0))) with char_ 'b' using eqExpr in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 1))) with char_ 'a' using eqExpr in
+utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 2))) with char_ 'r' using eqExpr in
 
 -- eqsym
 let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
@@ -1781,7 +1786,35 @@ let mapGetCmpFunTest = bindall_
 utest ocamlEvalInt (generateEmptyEnv mapGetCmpFunTest)
 with int_ 10 using eqExpr in
 
--- TODO(Linnea, 2020-03-12): Test mapBindings when we have tuple projections.
+-- mapBindings
+let mapBindingsTest = (bindall_
+  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
+  , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
+  , (mapBindings_ (var_ "m1"))
+  ]) in
+let t00 = (bindall_
+         [ let_ "b0" (tytuple_ [tyint_, tyint_]) (get_ mapBindingsTest (int_ 0))
+         , tupleproj_ 0 (var_ "b0")
+         ]) in
+let t01 = (bindall_
+         [ let_ "b0" (tytuple_ [tyint_, tyint_]) (get_ mapBindingsTest (int_ 0))
+         , tupleproj_ 1 (var_ "b0")
+         ]) in
+let t10 = (bindall_
+         [ let_ "b1" (tytuple_ [tyint_, tyint_]) (get_ mapBindingsTest (int_ 1))
+         , tupleproj_ 0 (var_ "b1")
+         ]) in
+let t11 = (bindall_
+         [ let_ "b1" (tytuple_ [tyint_, tyint_]) (get_ mapBindingsTest (int_ 1))
+         , tupleproj_ 1 (var_ "b1")
+         ]) in
+
+utest ocamlEvalInt (generateTypeAnnotated t00) with int_ 3 using eqExpr in
+utest ocamlEvalInt (generateTypeAnnotated t01) with int_ 56 using eqExpr in
+utest ocamlEvalInt (generateTypeAnnotated t10) with int_ 42 using eqExpr in
+utest ocamlEvalInt (generateTypeAnnotated t11) with int_ 2 using eqExpr in
+
 let mapBindingsTest = bindall_
   [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
