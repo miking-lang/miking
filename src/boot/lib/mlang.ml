@@ -309,8 +309,12 @@ let translate_cases f target cases =
   let no_match =
     let_ (us "_") Symb.Helpers.nosym
       (* TODO(?,?): we should probably have a special sort for let with wildcards *)
-      (app (TmConst (NoInfo, Cdprint)) target)
-      (app (TmConst (NoInfo, Cerror)) (TmSeq (NoInfo, msg)))
+      (app
+         (TmVar (NoInfo, Ustring.from_utf8 "dprint", Symb.Helpers.nosym))
+         target )
+      (app
+         (TmVar (NoInfo, Ustring.from_utf8 "error", Symb.Helpers.nosym))
+         (TmSeq (NoInfo, msg)) )
   in
   List.fold_right translate_case cases no_match
 
