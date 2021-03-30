@@ -303,15 +303,16 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmConDef t ->
     let env =
-      match t.tyIdent with TyArrow {from = from, to = TyVar {ident = ident}} then
+      match t.tyIdent with TyArrow {from = from,
+                                    to = TyVar tvar | TyApp {lhs = TyVar tvar}} then
         let f = lam variantMap. mapInsert t.ident from variantMap in
         let err = lam.
           error (join ["Constructor ", nameGetStr t.ident,
                        " defined before referenced variant type ",
-                       nameGetStr ident])
+                       nameGetStr tvar.ident])
         in
-        let variantMap = mapLookupApplyOrElse f err ident env.variants in
-        {env with variants = mapInsert ident variantMap env.variants}
+        let variantMap = mapLookupApplyOrElse f err tvar.ident env.variants in
+        {env with variants = mapInsert tvar.ident variantMap env.variants}
       else env
     in
     match typeLiftExpr env t.inexpr with (env, inexpr) then

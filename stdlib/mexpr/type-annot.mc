@@ -36,6 +36,11 @@ let compatibleType =
   use MExprAst in
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
+
+  -- Treat undefined type variables as unknown
+  let ty1 = match unwrapType tyEnv ty1 with None () then TyUnknown () else ty1 in
+  let ty2 = match unwrapType tyEnv ty2 with None () then TyUnknown () else ty2 in
+
   match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
   else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
   else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
@@ -65,6 +70,16 @@ let compatibleType =
   else match (ty1, ty2) with (TyVar t1, TyVar t2) then
     if nameEq t1.ident t2.ident then Some ty1
     else None ()
+  else match (ty1, ty2) with (TyApp t1, TyApp t2) then
+    match compatibleType tyEnv t1.lhs t2.lhs with Some lhs then
+      match compatibleType tyEnv t1.rhs t2.rhs with Some rhs then
+        Some (TyApp {{t1 with lhs = lhs} with rhs = rhs})
+      else never
+    else never
+  else match (ty1, ty2) with (TyVar _, TyApp {lhs = lhs}) then
+    compatibleType tyEnv ty1 lhs
+  else match (ty1, ty2) with (TyApp {lhs = lhs}, TyVar _) then
+    compatibleType tyEnv lhs ty2
   else if eqType tyEnv ty1 ty2 then Some ty1
   else None ()
 end
