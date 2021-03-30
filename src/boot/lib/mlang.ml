@@ -319,7 +319,6 @@ let translate_cases f target cases =
   List.fold_right translate_case cases no_match
 
 module USMap = Map.Make (Ustring)
-module USSet = Set.Make (Ustring)
 
 type mlangEnv = {constructors: ustring USMap.t; normals: ustring USMap.t}
 
@@ -499,11 +498,11 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
       let mangle str = langName ^. us "_" ^. str in
       let cdecl_names (CDecl (_, name, _)) = (name, mangle name) in
       let add_decl ({constructors; normals}, syns) = function
-        | Data (_, name, cdecls) ->
+        | Data (fi, name, cdecls) ->
             let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names in
             ( { constructors= USMap.add_seq new_constructors constructors
               ; normals }
-            , USSet.add name syns )
+            , USMap.add name fi syns )
         | Inter (_, name, _, _) ->
             ( {normals= USMap.add name (mangle name) normals; constructors}
             , syns )
@@ -599,13 +598,13 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
       (nss, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start = (nss, USSet.empty, []) in
+  let acc_start = (nss, USMap.empty, []) in
   let new_nss, syns, stack = List.fold_left desugar_top acc_start tops in
   let syntydecl =
     List.map
-      (fun syn tm' ->
-        TmType (NoInfo, syn, Symb.Helpers.nosym, TyUnknown NoInfo, tm') )
-      (USSet.elements syns)
+      (fun (syn, fi) tm' ->
+        TmType (fi, syn, Symb.Helpers.nosym, TyUnknown NoInfo, tm') )
+      (USMap.bindings syns)
   in
   let stack = stack @ syntydecl in
   let desugared_tm =
