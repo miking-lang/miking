@@ -1,4 +1,5 @@
 -- Top-level utest with using function
+include "bool.mc"
 
 utest 15 with 15 using eqi
 utest 12 with 7 using gti

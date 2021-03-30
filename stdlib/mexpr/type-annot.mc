@@ -304,10 +304,14 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
 end
 
 lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  -- Intentionally left blank
+
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMatch t ->
     let target = typeAnnotExpr env t.target in
-    let thn = typeAnnotExpr env t.thn in
+    let thnEnv = typeAnnotPat env (ty target) t.pat in
+    let thn = typeAnnotExpr thnEnv t.thn in
     let els = typeAnnotExpr env t.els in
     let ty =
       match env with {tyEnv = tyEnv} then
@@ -341,10 +345,104 @@ lang NeverTypeAnnot = TypeAnnot + NeverAst
   | TmNever t -> TmNever {t with ty = tyunknown_}
 end
 
+lang NamedPatTypeAnnot = TypeAnnot + NamedPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatNamed t ->
+    match t.ident with PName n then
+      {env with varEnv = mapInsert n expectedTy env.varEnv}
+    else env
+end
+
+lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + SeqTypeAst
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatSeqTot t ->
+    match expectedTy with TySeq {ty = elemTy} then
+      foldl (lam acc. lam pat. typeAnnotPat acc elemTy pat) env t.pats
+    else env
+end
+
+lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + SeqTypeAst
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatSeqEdge t ->
+    match expectedTy with TySeq {ty = elemTy} then
+      let env = foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.prefix in
+      let env =
+        match t.middle with PName n then
+          {env with varEnv = mapInsert n expectedTy env.varEnv}
+        else env
+      in
+      foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.postfix
+    else env
+end
+
+lang RecordPatTypeAnnot = TypeAnnot + RecordPat + RecordTypeAst
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatRecord t ->
+    let f = lam fields. lam acc. lam k. lam pat.
+      match mapLookup k fields with Some ty then
+        typeAnnotPat acc ty pat
+      else acc
+    in
+    match expectedTy with TyRecord {fields = fields} then
+      mapFoldWithKey (f fields) env t.bindings
+    else env
+end
+
+lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
+                        FunTypeAst
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatCon t ->
+    match mapLookup t.ident env.conEnv
+    with Some (TyArrow {from = argTy, to = TyVar _}) then
+      typeAnnotPat env argTy t.subpat
+    else env
+end
+
+lang IntPatTypeAnnot = TypeAnnot + IntPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatInt _ -> env
+end
+
+lang CharPatTypeAnnot = TypeAnnot + CharPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatChar _ -> env
+end
+
+lang BoolPatTypeAnnot = TypeAnnot + BoolPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatBool _ -> env
+end
+
+lang AndPatTypeAnnot = TypeAnnot + AndPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatAnd t ->
+    let env = typeAnnotPat env expectedTy t.lpat in
+    typeAnnotPat env expectedTy t.rpat
+end
+
+lang OrPatTypeAnnot = TypeAnnot + OrPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatOr t ->
+    let env = typeAnnotPat env expectedTy t.lpat in
+    typeAnnotPat env expectedTy t.rpat
+end
+
+lang NotPatTypeAnnot = TypeAnnot + NotPat
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  | PatNot t -> typeAnnotPat env expectedTy t.subpat
+end
+
 lang MExprTypeAnnot =
+
+  -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
-  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot
+  MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
+
+  -- Patterns
+  NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +
+  RecordPatTypeAnnot + DataPatTypeAnnot + IntPatTypeAnnot + CharPatTypeAnnot +
+  BoolPatTypeAnnot + AndPatTypeAnnot + OrPatTypeAnnot + NotPatTypeAnnot
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq
@@ -460,7 +558,7 @@ let conApp = bindall_ [
 utest ty (typeAnnot conApp) with ntyvar_ n using eqTypeEmptyEnv in
 
 let matchInteger = typeAnnot (bindall_ [
-  nlet_ x tyint_ (int_ 0),
+  nulet_ x (int_ 0),
   match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
 ]) in
 utest ty matchInteger with tyint_ using eqTypeEmptyEnv in
@@ -494,5 +592,33 @@ utest ty utestAnnot with tychar_ using eqTypeEmptyEnv in
 else never);
 
 utest ty (typeAnnot never_) with tyunknown_ using eqTypeEmptyEnv in
+
+-- Test that types are propagated through patterns in match expressions
+let matchSeq = bindall_ [
+  match_ (seq_ [str_ "a", str_ "b", str_ "c", str_ "d"])
+    (pseqedge_ [pseqtot_ [pchar_ 'a']] "mid" [pseqtot_ [pchar_ 'd']])
+    (var_ "mid")
+    never_
+] in
+utest ty (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqTypeEmptyEnv in
+
+let matchTree = bindall_ [
+  type_ "Tree" tyunknown_,
+  condef_ "Branch" (tyarrow_ (tytuple_ [tyvar_ "Tree", tyvar_ "Tree"]) (tyvar_ "Tree")),
+  condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tyvar_ "Tree")),
+  ulet_ "t" (conapp_ "Branch" (tuple_ [
+    conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
+    conapp_ "Branch" (tuple_ [
+      conapp_ "Leaf" (seq_ [int_ 2]),
+      conapp_ "Leaf" (seq_ [])])])),
+  (match_ (var_ "t")
+    (pcon_ "Branch" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]))
+    (match_ (var_ "lhs")
+      (pcon_ "Leaf" (pvar_ "n"))
+      (var_ "n")
+      never_)
+    never_)
+] in
+utest ty (typeAnnot (symbolize matchTree)) with tyseq_ tyint_ using eqTypeEmptyEnv in
 
 ()
