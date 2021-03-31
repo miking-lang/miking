@@ -3,6 +3,8 @@ include "option.mc"
 include "seq.mc"
 include "math.mc"
 
+let emptyStr : String = ""
+
 let escapeString = lam s. join (map escapeChar s)
 
 utest escapeString "e" with "e"
@@ -210,12 +212,12 @@ let strIndex = lam c. lam s.
   in
   strIndex_rechelper 0 c s
 
-utest strIndex '%' "a % 5" with Some(2)
-utest strIndex '%' "a & 5" with None ()
-utest strIndex 'w' "Hello, world!" with Some(7)
-utest strIndex 'w' "Hello, World!" with None ()
-utest strIndex 'o' "Hello, world!" with Some(4)
-utest strIndex '@' "Some @TAG@" with Some(5)
+utest strIndex '%' "a % 5" with Some(2) using optionEq eqi
+utest strIndex '%' "a & 5" with None () using optionEq eqi
+utest strIndex 'w' "Hello, world!" with Some(7) using optionEq eqi
+utest strIndex 'w' "Hello, World!" with None () using optionEq eqi
+utest strIndex 'o' "Hello, world!" with Some(4) using optionEq eqi
+utest strIndex '@' "Some @TAG@" with Some(5) using optionEq eqi
 
 -- Returns an option with the index of the last occurrence of c in s. Returns
 -- None if c was not found in s.
@@ -233,12 +235,12 @@ let strLastIndex = lam c. lam s.
   in
   strLastIndex_rechelper 0 (negi 1) c s
 
-utest strLastIndex '%' "a % 5" with Some(2)
-utest strLastIndex '%' "a & 5" with None ()
-utest strLastIndex 'w' "Hello, world!" with Some(7)
-utest strLastIndex 'w' "Hello, World!" with None ()
-utest strLastIndex 'o' "Hello, world!" with Some(8)
-utest strLastIndex '@' "Some @TAG@" with Some(9)
+utest strLastIndex '%' "a % 5" with Some(2) using optionEq eqi
+utest strLastIndex '%' "a & 5" with None () using optionEq eqi
+utest strLastIndex 'w' "Hello, world!" with Some(7) using optionEq eqi
+utest strLastIndex 'w' "Hello, World!" with None () using optionEq eqi
+utest strLastIndex 'o' "Hello, world!" with Some(8) using optionEq eqi
+utest strLastIndex '@' "Some @TAG@" with Some(9) using optionEq eqi
 
 -- Splits s on delim
 recursive
@@ -255,7 +257,7 @@ utest strSplit "ll" "Hello" with ["He", "o"]
 utest strSplit "ll" "Hellallllo" with ["He", "a", "", "o"]
 utest strSplit "" "Hello" with ["Hello"]
 utest strSplit "lla" "Hello" with ["Hello"]
-utest strSplit "Hello" "Hello" with ["", ""]
+utest strSplit "Hello" "Hello" with [emptyStr, ""]
 
 -- Trims s of spaces
 let strTrim = lam s.
@@ -284,6 +286,6 @@ recursive
 end
 
 utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
-utest strJoin "--" [] with ""
+utest strJoin "--" [] with emptyStr
 utest strJoin "--" ["coffee"] with "coffee"
 utest strJoin "water" ["coffee", "tea"] with "coffeewatertea"
