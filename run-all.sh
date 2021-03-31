@@ -136,6 +136,7 @@ files="${files} stdlib/bool.mc"
 # files="${files} src/main/compile.mc"
 # files="${files} src/main/run.mc"
 
+export MCORE_STDLIB='stdlib'
 for f in $files; do
     run "$f"
 done
