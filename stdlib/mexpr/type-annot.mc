@@ -37,51 +37,58 @@ let compatibleType =
   use MExprEq in
   lam tyEnv. lam ty1. lam ty2.
 
-  -- Treat undefined type variables as unknown
-  let ty1 = match unwrapType tyEnv ty1 with None () then TyUnknown () else ty1 in
-  let ty2 = match unwrapType tyEnv ty2 with None () then TyUnknown () else ty2 in
-
-  match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
-  else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
-  else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
-    match compatibleType tyEnv t1.from t2.from with Some a then
-      match compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {{t1 with from = a} with to = b})
-      else None ()
-    else None ()
-  else match (ty1, ty2) with (TySeq t1, TySeq t2) then
-    match compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TySeq {t1 with ty = t})
-    else None ()
-  else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
-    let f = lam acc. lam p.
-      match p with (k, ty1) then
-        match mapLookup k t2.fields with Some ty2 then
-          match compatibleType tyEnv ty1 ty2 with Some ty then
-            Some (mapInsert k ty acc)
-          else None ()
-        else None ()
-      else never
-    in
-    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
-      Some (TyRecord {t1 with fields = fields})
+  match (ty1, ty2) with (TyVar t1, TyVar t2) then
+    if nameEq t1.ident t2.ident then
+      Some ty1
     else
       None ()
-  else match (ty1, ty2) with (TyVar t1, TyVar t2) then
-    if nameEq t1.ident t2.ident then Some ty1
-    else None ()
-  else match (ty1, ty2) with (TyApp t1, TyApp t2) then
-    match compatibleType tyEnv t1.lhs t2.lhs with Some lhs then
-      match compatibleType tyEnv t1.rhs t2.rhs with Some rhs then
-        Some (TyApp {{t1 with lhs = lhs} with rhs = rhs})
+  else
+    -- Treat undefined type variables as unknown unless they refer to the same
+    -- name.
+    let ty1 = match unwrapType tyEnv ty1 with None () then TyUnknown () else ty1 in
+    let ty2 = match unwrapType tyEnv ty2 with None () then TyUnknown () else ty2 in
+
+    match (ty1, ty2) with (TyUnknown {}, _) then Some ty2
+    else match (ty1, ty2) with (_, TyUnknown {}) then Some ty1
+    else match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+      match compatibleType tyEnv t1.from t2.from with Some a then
+        match compatibleType tyEnv t1.to t2.to with Some b then
+          Some (TyArrow {{t1 with from = a} with to = b})
+        else None ()
+      else None ()
+    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+      match compatibleType tyEnv t1.ty t2.ty with Some t then
+        Some (TySeq {t1 with ty = t})
+      else None ()
+    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+      let f = lam acc. lam p.
+        match p with (k, ty1) then
+          match mapLookup k t2.fields with Some ty2 then
+            match compatibleType tyEnv ty1 ty2 with Some ty then
+              Some (mapInsert k ty acc)
+            else None ()
+          else None ()
+        else never
+      in
+      match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
+        Some (TyRecord {t1 with fields = fields})
+      else
+        None ()
+    else match (ty1, ty2) with (TyVar t1, TyVar t2) then
+      if nameEq t1.ident t2.ident then Some ty1
+      else None ()
+    else match (ty1, ty2) with (TyApp t1, TyApp t2) then
+      match compatibleType tyEnv t1.lhs t2.lhs with Some lhs then
+        match compatibleType tyEnv t1.rhs t2.rhs with Some rhs then
+          Some (TyApp {{t1 with lhs = lhs} with rhs = rhs})
+        else never
       else never
-    else never
-  else match (ty1, ty2) with (TyVar _, TyApp {lhs = lhs}) then
-    compatibleType tyEnv ty1 lhs
-  else match (ty1, ty2) with (TyApp {lhs = lhs}, TyVar _) then
-    compatibleType tyEnv lhs ty2
-  else if eqType tyEnv ty1 ty2 then Some ty1
-  else None ()
+    else match (ty1, ty2) with (TyVar _, TyApp {lhs = lhs}) then
+      compatibleType tyEnv ty1 lhs
+    else match (ty1, ty2) with (TyApp {lhs = lhs}, TyVar _) then
+      compatibleType tyEnv lhs ty2
+    else if eqType tyEnv ty1 ty2 then Some ty1
+    else None ()
 end
 
 let _isTypeAscription = use MExprAst in
