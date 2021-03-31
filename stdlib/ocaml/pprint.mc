@@ -22,12 +22,12 @@ let escapeConString = lam s.
 let escapeLabelString = lam s.
   concat "l" (map escapeChar s)
 
-utest escapeVarString "abcABC/:@_'" with "_abcABC____'"
-utest escapeVarString "" with "_"
-utest escapeVarString "@" with "__"
-utest escapeVarString "ABC123" with "_ABC123"
-utest escapeVarString "'a/b/c" with "_'a_b_c"
-utest escapeVarString "123" with "_123"
+utest escapeVarString "abcABC/:@_'" with "v_abcABC____'"
+utest escapeVarString "" with "v_"
+utest escapeVarString "@" with "v__"
+utest escapeVarString "ABC123" with "v_ABC123"
+utest escapeVarString "'a/b/c" with "v_'a_b_c"
+utest escapeVarString "123" with "v_123"
 
 utest escapeConString "abcABC/:@_'" with "CabcABC____'"
 utest escapeConString "" with "C"
@@ -45,10 +45,10 @@ let escapeConName = lam n.
   else never
 
 utest (escapeName ("abcABC/:@_'", gensym ())).0
-with ("_abcABC____'", gensym ()).0
+with ("v_abcABC____'", gensym ()).0
 
 utest (escapeName ("ABC123", gensym ())).0
-with ("_ABC123", gensym ()).0
+with ("v_ABC123", gensym ()).0
 
 -- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
 -- want to specify the type names in general. Record types are printed in a
