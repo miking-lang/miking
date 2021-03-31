@@ -401,11 +401,13 @@ let _addTypeDeclarations = lam typeLiftEnv. lam t.
           inexpr = t
         }
       else match ty with TyVariant {constrs = constrs} then
-        OTmVariantTypeDecl {
-          ident = name,
-          constrs = constrs,
-          inexpr = t
-        }
+        if mapIsEmpty constrs then t
+        else
+          OTmVariantTypeDecl {
+            ident = name,
+            constrs = constrs,
+            inexpr = t
+          }
       else t
     else never
   in
