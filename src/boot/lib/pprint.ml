@@ -585,7 +585,7 @@ and print_tm' fmt t =
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
         ty print_tm (Match, t1)
-  | TmRecLets (_, lst, t2) ->
+  | TmRecLets (_, lst, t2) -> (
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in
         let ty = ty |> ustring_of_ty |> string_of_ustring in
@@ -593,9 +593,13 @@ and print_tm' fmt t =
           fprintf fmt "@[<hov %d>let %s%s =@ %a@]" !ref_indent x
             (print_ty_if_known ty) print_tm (Match, t)
       in
-      let inner = List.map print lst in
-      fprintf fmt "@[<hov 0>@[<hov %d>recursive@ @[<hov 0>%a@] in@]@ %a@]"
-        !ref_indent concat (Space, inner) print_tm (Match, t2)
+      match lst with
+      | [] ->
+          fprintf fmt "@[<hov 0>%a@]" print_tm (Match, t2)
+      | _ ->
+          let inner = List.map print lst in
+          fprintf fmt "@[<hov 0>@[<hov %d>recursive@ @[<hov 0>%a@] in@]@ %a@]"
+            !ref_indent concat (Space, inner) print_tm (Match, t2) )
   | TmApp (_, t1, (TmApp _ as t2)) ->
       fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (App, t1) print_tm (Atom, t2)
   | TmApp (_, t1, t2) ->

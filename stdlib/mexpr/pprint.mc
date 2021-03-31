@@ -413,6 +413,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     in
     match mapAccumL f env t.bindings with (env,bindings) then
       match pprintCode indent env t.inexpr with (env,inexpr) then
+        match bindings with [] then (env, inexpr) else
         let bindings = strJoin (pprintNewline ii) bindings in
         (env,join ["recursive", pprintNewline ii,
                    bindings, pprintNewline i,
