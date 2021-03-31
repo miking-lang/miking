@@ -242,8 +242,9 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
     let elemTy =
       if eqi (length tms) 0 then tyunknown_
       else
-        let fstty = ty (get tms 0) in
-        if all (lam tm. eqType env.tyEnv fstty (ty tm)) tms then fstty
+        let types = map (lam term. ty term) tms in
+        match optionFoldlM (compatibleType env.tyEnv) tyunknown_ types with Some ty then
+          ty
         else tyunknown_
     in
     TmSeq {{t with tms = tms}
