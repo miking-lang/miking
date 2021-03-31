@@ -785,14 +785,14 @@ let ocamlEvalBool = lam ast.
 in
 
 let ocamlEvalChar = lam ast.
-  ocamlEval (wrapOCamlAstInPrint ast (printf "'%c'"))
+  ocamlEval (wrapOCamlAstInPrint ast (ulam_ "x" (app_ (printf ("'%c'")) (int2char_ (var_ "x")))))
 in
 
 utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
 utest ocamlEvalFloat (float_ 1.) with float_ 1. using eqExpr in
 utest ocamlEvalBool true_ with true_ using eqExpr in
 utest ocamlEvalChar (char_ '1') with char_ '1' using eqExpr in
-
+utest '島'with '島' in
 -- Compares evaluation of [mexprAst] as a mexpr and evaluation of
 -- [ocamlAst] as a OCaml expression.
 let sameSemantics = lam mexprAst. lam ocamlAst.

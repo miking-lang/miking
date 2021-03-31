@@ -148,7 +148,7 @@ lang OCamlPrettyPrint =
   | CGeqf _ -> "((>=) : float -> float -> bool)"
   | CNeqf _ -> "((!=) : float -> float -> bool)"
   | CInt2float _ -> "float_of_int"
-  | CChar {val = c} -> showChar c
+  | CChar {val = c} -> int2string (char2int c)
   | CEqc _ -> "((=) : char -> char -> bool)"
   | CChar2Int _ -> "int_of_char"
   | CInt2Char _ -> "char_of_int"
