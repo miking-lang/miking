@@ -144,7 +144,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let defaultCase = lam body.
       OTmConApp {
         ident = t.ident,
-        args = [body]
+        args = [generate env body]
       }
     in
     match ty (t.body) with TyVar {ident = ident} then
@@ -168,7 +168,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
             match mapLookup t.ident env.constrs with Some (TyUnknown _) then
               OTmConApp {ident = t.ident, args = [generate env reconstructedRecord]}
             else
-              OTmConApp {ident = id, args = [reconstructedRecord]}
+              OTmConApp {ident = t.ident, args = [reconstructedRecord]}
           in
           OTmMatch {
             target = generate env t.body,
