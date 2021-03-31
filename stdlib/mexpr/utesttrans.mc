@@ -206,8 +206,8 @@ let collectKnownProgramTypes = use MExprAst in
   lam expr.
   recursive
     let collectType = lam acc. lam ty.
-      let pprintName = nameSym "pprint" in
-      let equalName = nameSym "equal" in
+      let pprintName = nameSym "p" in
+      let equalName = nameSym "e" in
       let funcNames = (pprintName, equalName) in
       match ty with TySeq {ty = elemTy} then
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
