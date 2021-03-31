@@ -14,27 +14,27 @@ let escapeChar = lam c.
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeVarString = lam s.
-  concat "var_" (map escapeChar s)
+  concat "_" (map escapeChar s)
 
 let escapeConString = lam s.
-  concat "Con_" (map escapeChar s)
+  concat "C" (map escapeChar s)
 
 let escapeLabelString = lam s.
-  concat "label_" (map escapeChar s)
+  concat "l" (map escapeChar s)
 
-utest escapeVarString "abcABC/:@_'" with "var_abcABC____'"
-utest escapeVarString "" with "var_"
-utest escapeVarString "@" with "var__"
-utest escapeVarString "ABC123" with "var_ABC123"
-utest escapeVarString "'a/b/c" with "var_'a_b_c"
-utest escapeVarString "123" with "var_123"
+utest escapeVarString "abcABC/:@_'" with "_abcABC____'"
+utest escapeVarString "" with "_"
+utest escapeVarString "@" with "__"
+utest escapeVarString "ABC123" with "_ABC123"
+utest escapeVarString "'a/b/c" with "_'a_b_c"
+utest escapeVarString "123" with "_123"
 
-utest escapeConString "abcABC/:@_'" with "Con_abcABC____'"
-utest escapeConString "" with "Con_"
-utest escapeConString "@" with "Con__"
-utest escapeConString "ABC123" with "Con_ABC123"
-utest escapeConString "'a/b/c" with "Con_'a_b_c"
-utest escapeConString "123" with "Con_123"
+utest escapeConString "abcABC/:@_'" with "CabcABC____'"
+utest escapeConString "" with "C"
+utest escapeConString "@" with "C_"
+utest escapeConString "ABC123" with "CABC123"
+utest escapeConString "'a/b/c" with "C'a_b_c"
+utest escapeConString "123" with "C123"
 
 let escapeName = lam n.
   match n with (str,symb) then (escapeVarString str, symb)
@@ -45,10 +45,10 @@ let escapeConName = lam n.
   else never
 
 utest (escapeName ("abcABC/:@_'", gensym ())).0
-with ("var_abcABC____'", gensym ()).0
+with ("_abcABC____'", gensym ()).0
 
 utest (escapeName ("ABC123", gensym ())).0
-with ("var_ABC123", gensym ()).0
+with ("_ABC123", gensym ()).0
 
 -- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
 -- want to specify the type names in general. Record types are printed in a
