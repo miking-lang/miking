@@ -187,10 +187,12 @@ lang BootParser = MExprAst
 
   -- Match constant from ID
   sem matchConst (t:Unknown) =
-  | 300 /-CBool-/  -> CBool {val = eqi (gint t 0) 1 }
-  | 301 /-CInt-/   -> CInt {val = gint t 0 }
-  | 302 /-CFloat-/ -> CFloat {val = gfloat t 0}
-  | 303 /-CChar-/  -> CChar {val = int2char (gint t 0)}
+  | 300 /-CBool-/   -> CBool {val = eqi (gint t 0) 1 }
+  | 301 /-CInt-/    -> CInt {val = gint t 0 }
+  | 302 /-CFloat-/  -> CFloat {val = gfloat t 0}
+  | 303 /-CChar-/   -> CChar {val = int2char (gint t 0)}
+  | 304 /-Cdprint-/ -> CDPrint {}
+  | 305 /-Cerror-/  -> CError {}
 
   -- Get pattern help function
   sem gpat (t:Unkown) =

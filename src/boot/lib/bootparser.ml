@@ -70,6 +70,10 @@ let idCFloat = 302
 
 let idCChar = 303
 
+let idCdprint = 304
+
+let idCerror = 305
+
 (* Patterns *)
 let idPatNamed = 400
 
@@ -199,6 +203,10 @@ let getData = function
       (idCFloat, [], [], [], [], [], [], [v], [], [])
   | PTreeConst (CChar v) ->
       (idCChar, [], [], [], [], [], [v], [], [], [])
+  | PTreeConst Cdprint ->
+      (idCdprint, [], [], [], [], [], [], [], [], [])
+  | PTreeConst Cerror ->
+      (idCerror, [], [], [], [], [], [], [], [], [])
   (* Patterns *)
   | PTreePat (PatNamed (fi, x)) ->
       (idPatNamed, [fi], [], [], [], [patNameToStr x], [], [], [], [])

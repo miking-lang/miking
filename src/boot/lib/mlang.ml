@@ -482,7 +482,7 @@ let rec desugar_tm nss env =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, (stack : (tm -> tm) list)) = function
+let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
   | TopLang (Lang (_, langName, includes, decls)) ->
       let add_lang ns lang =
         USMap.find_opt lang nss
@@ -493,14 +493,17 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
       (* compute the namespace *)
       let mangle str = langName ^. us "_" ^. str in
       let cdecl_names (CDecl (_, name, _)) = (name, mangle name) in
-      let add_decl {constructors; normals} = function
-        | Data (_, _, cdecls) ->
+      let add_decl ({constructors; normals}, syns) = function
+        | Data (fi, name, cdecls) ->
             let new_constructors = List.to_seq cdecls |> Seq.map cdecl_names in
-            {constructors= USMap.add_seq new_constructors constructors; normals}
+            ( { constructors= USMap.add_seq new_constructors constructors
+              ; normals }
+            , USMap.add name fi syns )
         | Inter (_, name, _, _) ->
-            {normals= USMap.add name (mangle name) normals; constructors}
+            ( {normals= USMap.add name (mangle name) normals; constructors}
+            , syns )
       in
-      let ns = List.fold_left add_decl previous_ns decls in
+      let ns, new_syns = List.fold_left add_decl (previous_ns, syns) decls in
       (* wrap in "con"s *)
       let wrap_con ty_name (CDecl (fi, cname, ty)) tm =
         TmConDef
@@ -550,7 +553,7 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
         TmRecLets (NoInfo, List.filter_map translate_inter decls, tm)
         |> List.fold_right wrap_data decls
       in
-      (USMap.add langName ns nss, wrap :: stack)
+      (USMap.add langName ns nss, new_syns, wrap :: stack)
   (* The other tops are trivial translations *)
   | TopLet (Let (fi, id, ty, tm)) ->
       let wrap tm' =
@@ -562,10 +565,10 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
           , desugar_tm nss emptyMlangEnv tm
           , tm' )
       in
-      (nss, wrap :: stack)
+      (nss, syns, wrap :: stack)
   | TopType (Type (fi, id, ty)) ->
       let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
-      (nss, wrap :: stack)
+      (nss, syns, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
         TmRecLets
@@ -580,19 +583,26 @@ let desugar_top (nss, (stack : (tm -> tm) list)) = function
               lets
           , tm' )
       in
-      (nss, wrap :: stack)
+      (nss, syns, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
-      (nss, wrap :: stack)
+      (nss, syns, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
-      (nss, wrap :: stack)
+      (nss, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start = (nss, []) in
-  let new_nss, stack = List.fold_left desugar_top acc_start tops in
+  let acc_start = (nss, USMap.empty, []) in
+  let new_nss, syns, stack = List.fold_left desugar_top acc_start tops in
+  let syntydecl =
+    List.map
+      (fun (syn, fi) tm' ->
+        TmType (fi, syn, Symb.Helpers.nosym, TyUnknown NoInfo, tm') )
+      (USMap.bindings syns)
+  in
+  let stack = stack @ syntydecl in
   let desugared_tm =
     List.fold_left ( |> ) (desugar_tm new_nss emptyMlangEnv t) stack
   in
