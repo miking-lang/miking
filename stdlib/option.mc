@@ -28,8 +28,8 @@ let optionMap: (a -> b) -> Option a -> Option b = lam f. lam o.
   else
     None ()
 
-utest optionMap (addi 1) (None ()) with (None ())
-utest optionMap (addi 1) (Some 1) with (Some 2)
+utest optionMap (addi 1) (None ()) with (None ()) using optionEq eqi
+utest optionMap (addi 1) (Some 1) with (Some 2) using optionEq eqi
 
 let optionJoin: Option (Option a) -> Option a = lam o.
     match o with Some t then
@@ -37,18 +37,18 @@ let optionJoin: Option (Option a) -> Option a = lam o.
     else
       None ()
 
-utest optionJoin (Some (Some 1)) with (Some 1)
-utest optionJoin (Some (None ())) with (None ())
-utest optionJoin (None ()) with (None ())
+utest optionJoin (Some (Some 1)) with (Some 1) using optionEq eqi
+utest optionJoin (Some (None ())) with (None ()) using optionEq eqi
+utest optionJoin (None ()) with (None ()) using optionEq eqi
 
 -- Returns `None` if the option is `None`, otherwise calls the
 -- specified function on the wrapped value and returns the result.
 let optionBind: Option a -> (a -> Option b) -> Option b = lam o. lam f.
     optionJoin (optionMap f o)
 
-utest optionBind (None ()) (lam t. Some (addi 1 t)) with (None ())
-utest optionBind (Some 1) (lam t. Some (addi 1 t)) with (Some 2)
-utest optionBind (Some 1) (lam. None ()) with (None ())
+utest optionBind (None ()) (lam t. Some (addi 1 t)) with (None ()) using optionEq eqi
+utest optionBind (Some 1) (lam t. Some (addi 1 t)) with (Some 2) using optionEq eqi
+utest optionBind (Some 1) (lam. None ()) with (None ()) using optionEq eqi
 
 -- 'optionCompose f g' composes the option-producing functions 'f' and 'g' into
 -- a new function, which only succeeds if both 'f' and 'g' succeed.
@@ -56,9 +56,9 @@ let optionCompose: (b -> Option c) -> (a -> Option b) -> a -> Option c =
   lam f. lam g. lam x.
     optionBind (g x) f
 
-utest optionCompose (lam t. Some (addi 1 t)) (lam t. Some (muli 2 t)) 2 with Some 5
-utest optionCompose (lam t. None ()) (lam t. Some (muli 2 t)) 2 with None ()
-utest optionCompose (lam t. Some (addi 1 t)) (lam t. None ()) 2 with None ()
+utest optionCompose (lam t. Some (addi 1 t)) (lam t. Some (muli 2 t)) 2 with Some 5 using optionEq eqi
+utest optionCompose (lam t. None ()) (lam t. Some (muli 2 t)) 2 with None () using optionEq eqi
+utest optionCompose (lam t. Some (addi 1 t)) (lam t. None ()) 2 with None () using optionEq eqi
 
 -- 'optionZipWith f o1 o2' applies the function f on the values contained in
 -- o1 and o2. If either o1 or o2 is None, then None is returned.
@@ -69,9 +69,9 @@ let optionZipWith: (a -> b -> c) -> (Option a) -> (Option b) -> Option c =
     else
       None ()
 
-utest optionZipWith concat (Some "f") (Some "oo") with Some "foo"
-utest optionZipWith concat (Some "f") (None ()) with None ()
-utest optionZipWith concat (None ()) (None ()) with None ()
+utest optionZipWith muli (Some 2) (Some 3) with Some 6 using optionEq eqi
+utest optionZipWith muli (Some 2) (None ()) with None () using optionEq eqi
+utest optionZipWith muli (None ()) (None ()) with None () using optionEq eqi
 
 -- 'optionZipWithOrElse d f o1 o2' applies the function f on the values
 -- contained in o1 and o2. If either o1 or o2 is None, then d is evaluated to
@@ -146,8 +146,20 @@ let optionMapM: (a -> Option b) -> [a] -> Option [b] = lam f. lam l.
   in
   g l []
 
+-- Equality function used in the tests that follow. It is needed because no
+-- default equality can be derived for options, and this file cannot include
+-- seq.mc because that would lead to a cyclic dependency.
+recursive let _eqintseq = lam a. lam b.
+  match (a,b) with ([],[]) then true
+  else match (a,b) with ([h1]++t1,[h2]++t2) then
+    if eqi h1 h2 then _eqintseq t1 t2 else false
+  else never
+end
+
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
+using optionEq _eqintseq
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
+using optionEq _eqintseq
 
 -- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
 -- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
@@ -167,16 +179,18 @@ let optionFoldlM: (a -> b -> Option a) -> a -> [b] -> Option a = lam f.
   in recur
 
 utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2]
-      with Some 3
+      with Some 3 using optionEq eqi
 utest optionFoldlM (lam a. lam b. if gti (addi a b) 3 then None () else Some (addi a b)) 0 [1, 2, 3]
-      with None ()
-utest optionFoldlM (lam acc. lam x. Some (addi acc x)) 0 [1,2,3,4] with Some 10
+      with None () using optionEq eqi
+utest optionFoldlM (lam acc. lam x. Some (addi acc x)) 0 [1,2,3,4] with Some 10 using optionEq eqi
 utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
         0 [1,2,3,4]
 with Some 4
+using optionEq eqi
 utest optionFoldlM (lam acc. lam x. if gti x acc then Some x else None ())
         0 [1,2,2,4]
 with None ()
+using optionEq eqi
 
 -- Returns `true` if the option contains a value which
 -- satisfies the specified predicate.
@@ -207,10 +221,10 @@ let optionAnd: Option a -> Option a -> Option a = lam o1. lam o2.
   else
     None ()
 
-utest optionAnd (Some 1) (Some 2) with (Some 1)
-utest optionAnd (Some 1) (None ()) with (None ())
-utest optionAnd (None ()) (Some 1) with (None ())
-utest optionAnd (None ()) (None ()) with (None ())
+utest optionAnd (Some 1) (Some 2) with (Some 1) using optionEq eqi
+utest optionAnd (Some 1) (None ()) with (None ()) using optionEq eqi
+utest optionAnd (None ()) (Some 1) with (None ()) using optionEq eqi
+utest optionAnd (None ()) (None ()) with (None ()) using optionEq eqi
 
 -- Filters the contained value (if any) using the specified predicate.
 let optionFilter: (a -> Bool) -> Option a -> Option a = lam p. lam o.
@@ -219,27 +233,27 @@ let optionFilter: (a -> Bool) -> Option a -> Option a = lam p. lam o.
     else
       None ()
 
-utest optionFilter (eqi 1) (Some 1) with (Some 1)
-utest optionFilter (eqi 2) (Some 1) with (None ())
-utest optionFilter (eqi 2) (None ()) with (None ())
+utest optionFilter (eqi 1) (Some 1) with (Some 1) using optionEq eqi
+utest optionFilter (eqi 2) (Some 1) with (None ()) using optionEq eqi
+utest optionFilter (eqi 2) (None ()) with (None ()) using optionEq eqi
 
 -- Returns the option if it contains a value, otherwise calls the specified
 -- function and returns the result.
 let optionOrElse: (Unit -> Option a) -> Option a -> Option a = lam f. lam o.
   optionGetOrElse f (optionMap (lam x. Some x) o)
 
-utest optionOrElse (lam. Some 2) (Some 1) with (Some 1)
-utest optionOrElse (lam. Some 2) (None ()) with (Some 2)
+utest optionOrElse (lam. Some 2) (Some 1) with (Some 1) using optionEq eqi
+utest optionOrElse (lam. Some 2) (None ()) with (Some 2) using optionEq eqi
 
 -- Returns the first option if it contains a value, otherwise returns
 -- the second option.
 let optionOr: Option a -> Option a -> Option a = lam o1. lam o2.
   optionOrElse (lam. o2) o1
 
-utest optionOr (Some 1) (Some 2) with (Some 1)
-utest optionOr (Some 1) (None ()) with (Some 1)
-utest optionOr (None ()) (Some 2) with (Some 2)
-utest optionOr (None ()) (None ()) with (None ())
+utest optionOr (Some 1) (Some 2) with (Some 1) using optionEq eqi
+utest optionOr (Some 1) (None ()) with (Some 1) using optionEq eqi
+utest optionOr (None ()) (Some 2) with (Some 2) using optionEq eqi
+utest optionOr (None ()) (None ()) with (None ()) using optionEq eqi
 
 -- If exactly one option is `Some`, that option is returned,
 -- otherwise returns `None`.
@@ -251,7 +265,7 @@ let optionXor: Option a -> Option a -> Option a = lam o1. lam o2.
   else
     None ()
 
-utest optionXor (Some 1) (Some 2) with (None ())
-utest optionXor (Some 1) (None ()) with (Some 1)
-utest optionXor (None ()) (Some 2) with (Some 2)
-utest optionXor (None ()) (None ()) with (None ())
+utest optionXor (Some 1) (Some 2) with (None ()) using optionEq eqi
+utest optionXor (Some 1) (None ()) with (Some 1) using optionEq eqi
+utest optionXor (None ()) (Some 2) with (Some 2) using optionEq eqi
+utest optionXor (None ()) (None ()) with (None ()) using optionEq eqi
