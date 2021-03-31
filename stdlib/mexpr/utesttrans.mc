@@ -221,6 +221,20 @@ let collectKnownProgramTypes = use MExprAst in
       else {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
   in
   recursive
+    let unwrapTypeVarIdent = lam ty.
+      match ty with TyVar {ident = ident} then Some ident
+      else match ty with TyApp {lhs = lhs} then unwrapTypeVarIdent lhs
+      else None ()
+  in
+  let expectedArrowType = use MExprPrettyPrint in
+    lam tyIdent.
+    let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty tyIdent).1 in
+    let msg = join [
+      "Expected constructor of arrow type, got ", tyIdentStr, "\n"
+    ] in
+    infoErrorExit (info expr) msg
+  in
+  recursive
     let collectTypes = lam acc. lam expr.
       match expr with TmType t then
         match t.tyIdent with TyUnknown _ | TyVariant _ then
@@ -233,31 +247,22 @@ let collectKnownProgramTypes = use MExprAst in
           sfold_Expr_Expr collectTypes acc expr
       else match expr with TmConDef t then
         match t.tyIdent with TyArrow {from = argTy, to = to} then
-          let ident =
-            match to with TyVar {ident = ident} then ident
-            else match to with TyApp {lhs = TyVar {ident = ident}} then ident
-            else never
-          in
-          let constructors =
-            match mapLookup ident acc.variants with Some constructors then
-              mapInsert t.ident argTy constructors
-            else
-              let msg = join [
-                "Constructor application refers to undefined constructor ",
-                nameGetStr ident
-              ] in
-              infoErrorExit (info expr) msg
-          in
-          let variants = mapInsert ident constructors acc.variants in
-          let acc = {acc with variants = variants} in
-          sfold_Expr_Expr collectTypes acc expr
-        else
-          use MExprPrettyPrint in
-          let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty t.tyIdent).1 in
-          let msg = join [
-            "Expected constructor of arrow type, got ", tyIdentStr, "\n"
-          ] in
-          infoErrorExit (info expr) msg
+          match unwrapTypeVarIdent to with Some ident then
+            let constructors =
+              match mapLookup ident acc.variants with Some constructors then
+                mapInsert t.ident argTy constructors
+              else
+                let msg = join [
+                  "Constructor definition refers to undefined type ",
+                  nameGetStr ident
+                ] in
+                infoErrorExit (info expr) msg
+            in
+            let variants = mapInsert ident constructors acc.variants in
+            let acc = {acc with variants = variants} in
+            sfold_Expr_Expr collectTypes acc expr
+          else expectedArrowType t.tyIdent
+        else expectedArrowType t.tyIdent
       else
         let acc = collectType acc (ty expr) in
         sfold_Expr_Expr collectTypes acc expr

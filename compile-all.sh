@@ -113,7 +113,7 @@ files="${files} stdlib/math.mc"
 # files="${files} stdlib/maxmatch.mc"
 # files="${files} stdlib/name.mc"
 # files="${files} stdlib/assoc-seq.mc"
-# files="${files} stdlib/option.mc"
+files="${files} stdlib/option.mc"
 # files="${files} stdlib/local-search.mc"
 # files="${files} stdlib/parser-combinators.mc"
 # files="${files} stdlib/matrix.mc"
@@ -143,6 +143,7 @@ files="${files} stdlib/bool.mc"
 # files="${files} src/main/compile.mc"
 # files="${files} src/main/run.mc"
 
+export MCORE_STDLIB='stdlib'
 for f in $files; do
     compile "$f"
 done
