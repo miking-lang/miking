@@ -14,7 +14,7 @@ let escapeChar = lam c.
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeVarString = lam s.
-  concat "_" (map escapeChar s)
+  concat "v_" (map escapeChar s)
 
 let escapeConString = lam s.
   concat "C" (map escapeChar s)
