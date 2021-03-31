@@ -3,6 +3,8 @@
 --
 -- Test integer primitives
 
+include "option.mc"
+
 mexpr
 
 -- Matching unit

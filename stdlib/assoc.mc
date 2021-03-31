@@ -6,6 +6,7 @@
 include "option.mc"
 include "set.mc"
 include "char.mc"
+include "string.mc"
 
 type AssocMap k v = [(k, v)]
 type AssocTraits k = {eq : k -> k -> Bool}
@@ -182,14 +183,14 @@ let m = insert 2 '2' m in
 let m = insert 3 '3' m in
 
 utest length m with 3 in
-utest lookup 1 m with Some '1' in
-utest lookup 2 m with Some '2' in
-utest lookup 3 m with Some '3' in
-utest lookup 4 m with None () in
+utest lookup 1 m with Some '1' using optionEq eqChar in
+utest lookup 2 m with Some '2' using optionEq eqChar in
+utest lookup 3 m with Some '3' using optionEq eqChar in
+utest lookup 4 m with None () using optionEq eqChar in
 utest lookupOrElse (lam. 42) 1 m with '1' in
 utest lookupOrElse (lam. 42) 2 m with '2' in
 utest lookupOrElse (lam. 42) 3 m with '3' in
-utest lookupPred (eqi 2) m with Some '2' in
+utest lookupPred (eqi 2) m with Some '2' using optionEq eqChar in
 utest any (lam k. lam v. eqChar v '2') m with true in
 utest any (lam k. lam v. eqChar v '4') m with false in
 utest all (lam k. lam v. gti k 0) m with true in
@@ -210,9 +211,11 @@ utest sort (lam l. lam r. subi l.0 r.0) (assoc2seq m)
 with [(1, '1'), (2, '2'), (3, '3')] in
 
 let withKeyMap = mapWithKey (lam k. lam v. (k, v)) m in
-utest lookup 1 withKeyMap with Some (1, '1') in
-utest lookup 2 withKeyMap with Some (2, '2') in
-utest lookup 3 withKeyMap with Some (3, '3') in
+let eqOptionTuple =
+  optionEq (lam t1. lam t2. and (eqi t1.0 t2.0) (eqChar t1.1 t2.1)) in
+utest lookup 1 withKeyMap with Some (1, '1') using eqOptionTuple in
+utest lookup 2 withKeyMap with Some (2, '2') using eqOptionTuple in
+utest lookup 3 withKeyMap with Some (3, '3') using eqOptionTuple in
 
 let nextChar = lam c. int2char (addi 1 (char2int c)) in
 
@@ -223,13 +226,14 @@ with (Some '2', Some '3', Some '4') in
 utest fold (lam acc. lam k. lam v. addi acc k) 0 m with 6 in
 utest fold (lam acc. lam k. lam v. and acc (isDigit v)) true m with true in
 
-utest foldOption (lam acc. lam k. lam v. Some (addi acc k)) 0 m with Some 6 in
+utest foldOption (lam acc. lam k. lam v. Some (addi acc k)) 0 m with Some 6
+using optionEq eqi in
 utest foldOption (lam acc. lam k. lam v. if eqi k 4 then None () else Some acc)
         true m
-with Some true in
+with Some true using optionEq eqBool in
 utest foldOption (lam acc. lam k. lam v. if eqi k 2 then None () else Some acc)
         true m
-with None () in
+with None () using optionEq eqBool in
 
 let mapaccm = mapAccum (lam acc. lam k. lam v. (addi acc k, nextChar v)) 0 m in
 utest (mapaccm.0, (lookup 1 mapaccm.1, lookup 2 mapaccm.1, lookup 3 mapaccm.1))
@@ -240,10 +244,10 @@ let m = insert 2 '3' m in
 let m = insert 3 '4' m in
 let m = insert 4 '5' m in
 
-utest lookup 1 m with Some '2' in
-utest lookup 2 m with Some '3' in
-utest lookup 3 m with Some '4' in
-utest lookup 4 m with Some '5' in
+utest lookup 1 m with Some '2' using optionEq eqChar in
+utest lookup 2 m with Some '3' using optionEq eqChar in
+utest lookup 3 m with Some '4' using optionEq eqChar in
+utest lookup 4 m with Some '5' using optionEq eqChar in
 
 let m = [(1,3), (4,6)] in
 
@@ -279,13 +283,13 @@ let ml = mergePreferLeft m1 m2 in
 let mr = mergePreferRight m1 m2 in
 
 utest ml with mergePreferRight m2 m1 in
-utest lookup 1 ml with Some "1l" in
-utest lookup 2 ml with Some "2l" in
-utest lookup 3 ml with Some "3r" in
+utest lookup 1 ml with Some "1l" using optionEq eqString in
+utest lookup 2 ml with Some "2l" using optionEq eqString in
+utest lookup 3 ml with Some "3r" using optionEq eqString in
 
 utest mr with mergePreferLeft m2 m1 in
-utest lookup 1 mr with Some "1r" in
-utest lookup 2 mr with Some "2l" in
-utest lookup 3 mr with Some "3r" in
+utest lookup 1 mr with Some "1r" using optionEq eqString in
+utest lookup 2 mr with Some "2l" using optionEq eqString in
+utest lookup 3 mr with Some "3r" using optionEq eqString in
 
 ()
