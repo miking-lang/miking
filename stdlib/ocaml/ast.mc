@@ -125,13 +125,21 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
+lang OCamlTryWith
+  syn Expr =
+  | OTmTryWith { body : Expr,  arms : [(Pat, Expr)]}
+end
+
 lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
                 + ShiftIntAst + ArithFloatAst + BoolAst + CmpIntAst
-                + CmpFloatAst + CharAst + CmpCharAst + OCamlMatch + NamedPat
-                + IntPat + CharPat + BoolPat + OCamlTuple + OCamlArray
-                + OCamlData + OCamlExternal + FloatIntConversionAst
-                + IntCharConversionAst + OCamlTypeDeclAst + OCamlPreambleHack
-                + OCamlRecord + OCamlString + RefOpAst
+                + CmpFloatAst + CharAst + CmpCharAst  + NamedPat
+                + IntPat + CharPat + BoolPat  + FloatIntConversionAst
+                + IntCharConversionAst + RefOpAst
+
+                + OCamlTuple + OCamlArray + OCamlMatch + OCamlData
+                + OCamlExternal + OCamlTryWith + OCamlPreambleHack
+                + OCamlTypeDeclAst + OCamlRecord + OCamlString
+
 end
 
 mexpr

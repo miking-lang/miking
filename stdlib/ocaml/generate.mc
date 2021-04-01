@@ -411,6 +411,24 @@ let _addTypeDeclarations = lam typeLiftEnv. lam t.
   in
   foldl f t typeLiftEnv
 
+let _wrapTryWith = lam t.
+  use OCamlAst in
+  let msg = (nameSym "msg") in
+  let printStderr =
+    appf2_ (OTmVarExt {ident = "Printf.fprintf"})
+           (OTmVarExt {ident = "stderr"})
+           (OTmString {text = "%s\\n"}) in
+  let toUtf8 = lam s.
+    app_ (OTmVarExt {ident = "Boot.Ustring.to_utf8"}) s in
+  OTmTryWith { body = t
+             , arms = [(OPatConExt { ident = "Boot.Intrinsics.MSys.Error"
+                                   , args =
+                                     [PatNamed {ident = PName msg
+                                               , info = NoInfo ()}]
+                                   },
+                        app_ printStderr (toUtf8 (nvar_ msg)))]
+             }
+
 lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
@@ -703,8 +721,9 @@ lang OCamlObjWrap = MExprAst + OCamlAst
 
   sem objWrap =
   | OTmVariantTypeDecl t ->
-    OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
-  | t -> objWrapRec (_objObj t)
+    _wrapTryWith
+      (OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr})
+  | t -> _wrapTryWith (objWrapRec (_objObj t))
 end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
