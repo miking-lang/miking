@@ -86,10 +86,30 @@ lang OCamlPrettyPrint =
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
+  sem _nameSymString (env : PprintEnv) (esc : Name -> Name) =
+  | name ->
+    (env, join [nameGetStr (esc name)
+               , "\'"
+               , (int2string (sym2hash (optionGetOrElse
+                                         (lam. error "Expected symbol")
+                                         (nameGetSym name))))])
+
+  sem _nameNoSymString (env : PprintEnv) (esc : Name -> Name) =
+  | name ->
+    (env, concat "n" (nameGetStr (esc name)))
+
   sem pprintConName (env : PprintEnv) =
-  | name -> pprintEnvGetStr env (escapeConName name)
+  | name -> --pprintEnvGetStr env (escapeConName name)
+    if nameHasSym name then
+      _nameSymString env escapeConName name
+    else
+      _nameNoSymString env escapeConName name
   sem pprintVarName (env : PprintEnv) =
-  | name -> pprintEnvGetStr env (escapeName name)
+  | name -> --pprintEnvGetStr env (escapeName name)
+  if nameHasSym name then
+    _nameSymString env escapeName name
+  else
+    _nameNoSymString env escapeName name
   sem pprintLabelString =
   | s -> escapeLabelString s
 
