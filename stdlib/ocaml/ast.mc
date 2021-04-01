@@ -128,6 +128,14 @@ end
 lang OCamlTryWith
   syn Expr =
   | OTmTryWith { body : Expr,  arms : [(Pat, Expr)] }
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmTryWith t ->
+    OTmTryWith {{t with body = f t.body}
+                   with arms = map (lam p. (p.0, f p.1)) t.arms}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmTryWith t -> foldl (lam acc. lam a. f acc a.1) (f acc t.body) t.arms
 end
 
 lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
