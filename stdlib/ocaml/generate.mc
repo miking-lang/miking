@@ -303,7 +303,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         match mapLookup id fields with Some ty then
           ty
         else
-          infoErrorExit t.info (join ["Field ", id, " not found in record"])
+          infoErrorExit t.info (join ["Field ", sidToString id, " not found in record"])
       in
       match mapLookup id patNames with Some n then
         match generatePat env ty n pat with (names, innerWrap) then
