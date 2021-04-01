@@ -282,7 +282,8 @@ lang OCamlPrettyPrint =
                     env t.tms
     with (env,tms) then
       let merged =
-        strJoin (concat ";" (pprintNewline (pprintIncr indent))) tms
+        strJoin (concat ";" (pprintNewline (pprintIncr indent)))
+                (map (lam t. join ["(", t, ")"]) tms)
       in
       (env,join ["[| ", merged, " |]"])
     else never
