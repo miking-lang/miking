@@ -17,13 +17,13 @@ include "mexpr/pprint.mc"
 type TypeEnv = {
   varEnv: Map Name Type,
   conEnv: Map Name Type,
-  tyEnv : AssocSeq Name Type
+  tyEnv : Map Name Type
 }
 
 let _typeEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
-  tyEnv  = []
+  tyEnv  = mapEmpty nameCmp
 }
 
 -- Given two types that are possibly unknown, this function attempts to find a
@@ -34,7 +34,12 @@ let _typeEnvEmpty = {
 recursive
   let compatibleType =
     use MExprAst in
-    lam tyEnv. lam ty1. lam ty2.
+    lam tyEnv : Map Name Type. lam ty1 : Type. lam ty2 : Type.
+    let unwrapType = lam tyEnv : Map Name Type. lam ty : Type.
+      match ty with TyVar {ident = id} then
+        mapLookup id tyEnv
+      else Some ty
+    in
     let m = (ty1,ty2) in
     match m with (TyUnknown _, t2) then Some t2
     else match m with (t1, TyUnknown _) then Some t1
@@ -43,6 +48,8 @@ recursive
       else match unwrapType tyEnv (TyVar t1) with Some t1 then
         compatibleType tyEnv t1 (TyVar t2)
       else never
+    else match m with (TyApp t1, t2) then compatibleType tyEnv t1.lhs t2
+    else match m with (t1, TyApp t2) then compatibleType tyEnv t1 t2.lhs
     else match m with (TyVar t1, t2) then
       match unwrapType tyEnv (TyVar t1) with Some t1 then
         compatibleType tyEnv t1 t2
@@ -53,8 +60,6 @@ recursive
         compatibleType tyEnv t1 t2
       else
         error (concat "Unbound TyVar in compatibleType: " (nameGetStr t2.ident))
-    else match m with (TyApp t1, t2) then compatibleType tyEnv t1.lhs t2
-    else match m with (t1, TyApp t2) then compatibleType tyEnv t1 t2.lhs
     else match m with ((TyBool _ & t1), TyBool _) then Some t1
     else match m with ((TyInt _ & t1), TyInt _) then Some t1
     else match m with ((TyFloat _ & t1), TyFloat _) then Some t1
@@ -247,8 +252,9 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
     let elemTy =
       if eqi (length tms) 0 then tyunknown_
       else
-        let fstty = ty (get tms 0) in
-        if all (lam tm. eqType env.tyEnv fstty (ty tm)) tms then fstty
+        let types = map (lam term. ty term) tms in
+        match optionFoldlM (compatibleType env.tyEnv) tyunknown_ types with Some ty then
+          ty
         else tyunknown_
     in
     TmSeq {{t with tms = tms}
@@ -274,7 +280,7 @@ end
 lang TypeTypeAnnot = TypeAnnot + TypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmType t ->
-    let tyEnv = assocSeqInsert t.ident t.tyIdent env.tyEnv in
+    let tyEnv = mapInsert t.ident t.tyIdent env.tyEnv in
     let inexpr = typeAnnotExpr {env with tyEnv = tyEnv} t.inexpr in
     TmType {{t with inexpr = inexpr}
                with ty = ty inexpr}
@@ -294,9 +300,14 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
     match env with {conEnv = conEnv, tyEnv = tyEnv} then
       let ty =
         match mapLookup t.ident conEnv with Some lty then
-          match lty with TyArrow {from = from, to = TyVar target} then
+          match lty with TyArrow {from = from, to = to} then
+            recursive let tyvar = lam ty.
+              match ty with TyVar _ then ty
+              else match ty with TyApp t then tyvar t.lhs
+              else tyunknown_
+            in
             match compatibleType tyEnv (ty body) from with Some _ then
-              TyVar target
+              tyvar to
             else
               let msg = join [
                 "Inconsistent types of constructor application",
