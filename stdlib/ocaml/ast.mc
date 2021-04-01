@@ -127,7 +127,7 @@ end
 
 lang OCamlTryWith
   syn Expr =
-  | OTmTryWith { body : Expr,  arms : [(Pat, Expr)]}
+  | OTmTryWith { body : Expr,  arms : [(Pat, Expr)] }
 end
 
 lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
