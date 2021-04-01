@@ -28,7 +28,9 @@ let _escapes = [
   ('\'', "\\\'")
 ]
 let escapeChar = lam c.
-  match find (lam e. eqChar c e.0) _escapes with Some (_, v) then v
+  match find (lam e : (Char, String). eqChar c e.0) _escapes with Some n then
+    let n : (Char, String) = n in
+    n.1
   else [c]
 
 utest escapeChar 'e' with "e"
