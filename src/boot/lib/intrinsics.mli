@@ -83,13 +83,13 @@ module Symb : sig
 end
 
 module File : sig
-  val read : ustring -> ustring
+  val read : int Mseq.t -> int Mseq.t
 
-  val write : ustring -> ustring -> unit
+  val write : int Mseq.t -> int Mseq.t -> unit
 
-  val exists : ustring -> bool
+  val exists : int Mseq.t -> bool
 
-  val delete : ustring -> unit
+  val delete : int Mseq.t -> unit
 end
 
 module FloatConversion : sig
