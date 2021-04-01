@@ -815,7 +815,9 @@ let ocamlEvalBool = lam ast.
 in
 
 let ocamlEvalChar = lam ast.
-  ocamlEval (wrapOCamlAstInPrint ast (printf "'%c'"))
+  match ocamlEvalInt ast with TmConst (t & {val = CInt n}) then
+    TmConst {t with val = CChar {val = int2char n.val}}
+  else never
 in
 
 utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
