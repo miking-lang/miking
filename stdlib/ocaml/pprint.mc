@@ -50,6 +50,12 @@ with ("v_abcABC____'", gensym ()).0
 utest (escapeName ("ABC123", gensym ())).0
 with ("v_ABC123", gensym ()).0
 
+-- Prefix of non-symbolized identifiers, to avoid collision with symbolized
+-- identifiers
+let noSymVarPrefix = "n"
+
+let noSymConPrefix = "N"
+
 -- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
 -- want to specify the type names in general. Record types are printed in a
 -- different way because their types must be declared at the top of the program
@@ -86,30 +92,34 @@ lang OCamlPrettyPrint =
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
-  sem _nameSymString (env : PprintEnv) (esc : Name -> Name) =
+  sem _nameSymString (esc : Name -> Name) =
   | name ->
-    (env, join [ nameGetStr (esc name)
-               , "\'"
-               , (int2string (sym2hash (optionGetOrElse
-                                         (lam. error "Expected symbol")
-                                         (nameGetSym name))))])
+    join [ nameGetStr (esc name)
+         , "\'"
+         , (int2string (sym2hash (optionGetOrElse
+                                   (lam. error "Expected symbol")
+                                   (nameGetSym name))))]
 
-  sem _nameNoSymString (env : PprintEnv) (esc : Name -> Name) =
+  sem _nameNoSymString (prefix : String) (esc : Name -> Name) =
   | name ->
-    (env, concat "n" (nameGetStr (esc name)))
+    concat prefix (nameGetStr (esc name))
 
   sem pprintConName (env : PprintEnv) =
   | name ->
-    if nameHasSym name then
-      _nameSymString env escapeConName name
-    else
-      _nameNoSymString env escapeConName name
+    (env,
+     if nameHasSym name then
+       _nameSymString escapeConName name
+     else
+       _nameNoSymString noSymConPrefix escapeConName name)
+
   sem pprintVarName (env : PprintEnv) =
   | name ->
-  if nameHasSym name then
-    _nameSymString env escapeName name
-  else
-    _nameNoSymString env escapeName name
+    (env,
+     if nameHasSym name then
+       _nameSymString escapeName name
+     else
+       _nameNoSymString noSymVarPrefix escapeName name)
+
   sem pprintLabelString =
   | s -> escapeLabelString s
 
