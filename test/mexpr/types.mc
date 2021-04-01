@@ -3,6 +3,8 @@
 --
 -- Test the parsing of types
 
+include "math.mc"
+
 mexpr
 
 -- No type in lambda
@@ -25,7 +27,7 @@ utest f 5 with 25 in
 -- Float type
 let v : Float = 3.33 in
 let f = lam x:Float. mulf x 10.0 in
-utest f v with 33.3 using eqf in
+utest f v with 33.3 using eqfApprox 1e-5 in
 
 -- Bool type
 let v : Bool = true in
@@ -38,14 +40,23 @@ let f2 : Int -> Float -> Float = lam x:Int. lam y:Float. addf (int2float x) y in
 utest f2 10 17.2 with 27.2 using eqf in
 
 -- Tuple type
+let eqIntFloatTuple = lam t1 : (Int, Float). lam t2 : (Int, Float).
+  if eqi t1.0 t2.0 then eqf t1.1 t2.1 else false
+in
+let eqIntFloatIntTuple = lam t1 : (Int, Float, Int). lam t2 : (Int, Float, Int).
+  if eqi t1.0 t2.0 then
+    if eqf t1.1 t2.1 then eqi t1.2 t2.2 else false
+  else false
+in
+
 let x0 : Int = 7 in
 let x1 : (Int) = (8) in
 let x2 : (Int,Float) = (7, 33.3) in
 let x3 : (Int,Float,Int) = (1, 2.2, 7) in
 utest x0 with 7 in
 utest x1 with 8 in
-utest x2 with (7, 33.3) in
-utest x3 with (1, 2.2, 7) in
+utest x2 with (7, 33.3) using eqIntFloatTuple in
+utest x3 with (1, 2.2, 7) using eqIntFloatIntTuple in
 utest (lam x:(Int,Float). x.0) (8, 13.3) with 8 in
 
 -- String type
@@ -60,7 +71,7 @@ utest (lam x:[Int]. get x 2) l1 with 4 in
 type Tree in
 con Node : (Tree,Tree) -> Tree in
 con Leaf : (Int) -> Tree in
-let t : Tree = match Node(Leaf(5),Leaf(10)) with Node t then t else error "" in
+let t : (Tree, Tree) = match Node(Leaf(5),Leaf(10)) with Node t then t else error "" in
 utest t.0 with Leaf(5) in
 
 -- Type alias
