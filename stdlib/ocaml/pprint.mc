@@ -99,13 +99,13 @@ lang OCamlPrettyPrint =
     (env, concat "n" (nameGetStr (esc name)))
 
   sem pprintConName (env : PprintEnv) =
-  | name -> --pprintEnvGetStr env (escapeConName name)
+  | name ->
     if nameHasSym name then
       _nameSymString env escapeConName name
     else
       _nameNoSymString env escapeConName name
   sem pprintVarName (env : PprintEnv) =
-  | name -> --pprintEnvGetStr env (escapeName name)
+  | name ->
   if nameHasSym name then
     _nameSymString env escapeName name
   else
