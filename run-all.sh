@@ -6,8 +6,9 @@
 
 # Run a file
 run() {
-    echo $1
-    build/mi src/main/mi.mc -- run --test $1
+    output=$1
+    output="$output\n$(build/mi src/main/mi.mc -- run --test $1)\n"
+    echo $output
 }
 
 files=""
@@ -28,7 +29,6 @@ files="${files} test/mexpr/time.mc"
 # files="${files} test/mexpr/effects.mc"
 files="${files} test/mexpr/symbs.mc"
 # files="${files} test/mexpr/random-test.mc"
-
 # files="${files} test/mexpr/types.mc"
 files="${files} test/mexpr/float-test.mc"
 files="${files} test/mexpr/nestedpatterns.mc"
@@ -139,5 +139,6 @@ files="${files} stdlib/char.mc"
 
 export MCORE_STDLIB='stdlib'
 for f in $files; do
-    run "$f"
+    run "$f" &
 done
+wait
