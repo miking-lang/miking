@@ -88,7 +88,7 @@ lang OCamlPrettyPrint =
 
   sem _nameSymString (env : PprintEnv) (esc : Name -> Name) =
   | name ->
-    (env, join [nameGetStr (esc name)
+    (env, join [ nameGetStr (esc name)
                , "\'"
                , (int2string (sym2hash (optionGetOrElse
                                          (lam. error "Expected symbol")
