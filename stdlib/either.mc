@@ -5,6 +5,7 @@
 
 include "option.mc"
 include "seq.mc"
+include "string.mc"
 
 type Either a b
 con Left: a -> Either a b
@@ -75,8 +76,10 @@ let eitherBiMap: (a -> c) -> (b -> d) -> Either a b -> Either c d =
     Right (rf content)
   else never
 
-utest eitherBiMap (addi 1) (cons 'a') (Left 2) with Left 3
-utest eitherBiMap (addi 1) (cons 'a') (Right "choo") with Right "achoo"
+utest eitherBiMap (addi 1) (cons 'a') (Left 2)
+with Left 3 using eitherEq eqi eqString
+utest eitherBiMap (addi 1) (cons 'a') (Right "choo")
+with Right "achoo" using eitherEq eqi eqString
 
 --  *-
 --  * .brief Maps a function onto the Left value if that is the Either case.
@@ -89,8 +92,9 @@ utest eitherBiMap (addi 1) (cons 'a') (Right "choo") with Right "achoo"
 -- -*
 let eitherMapLeft: (a -> c) -> Either a b -> Either c b = lam f. eitherBiMap f (lam x. x)
 
-utest eitherMapLeft (cons 'a') (Right 5) with Right 5
-utest eitherMapLeft (cons 'a') (Left "choo") with Left "achoo"
+utest eitherMapLeft (cons 'a') (Right 5) with Right 5 using eitherEq eqString eqi
+utest eitherMapLeft (cons 'a') (Left "choo")
+with Left "achoo" using eitherEq eqString eqi
 
 --  *-
 --  * .brief Maps a function onto the Right value if that is the Either case.
@@ -103,8 +107,9 @@ utest eitherMapLeft (cons 'a') (Left "choo") with Left "achoo"
 -- -*
 let eitherMapRight: (b -> c) -> Either a b -> Either a c = lam f. eitherBiMap (lam x. x) f
 
-utest eitherMapRight (addi 2) (Right 40) with Right 42
-utest eitherMapRight (addi 2) (Left "foo") with Left "foo"
+utest eitherMapRight (addi 2) (Right 40) with Right 42 using eitherEq eqString eqi
+utest eitherMapRight (addi 2) (Left "foo")
+with Left "foo" using eitherEq eqString eqi
 
 --  *-
 --  * .brief If the input Either is the Left case, then its value is applied as
@@ -125,9 +130,12 @@ let eitherBindLeft: Either a b -> (a -> Either c b) -> Either c b =
     Right content
   else never
 
-utest eitherBindLeft (Left "a") (lam s. Left (head s)) with Left 'a'
-utest eitherBindLeft (Left "a") (lam. Right 42) with Right 42
-utest eitherBindLeft (Right 42) (lam s. Left (head s)) with Right 42
+utest eitherBindLeft (Left "a") (lam s. Left (head s))
+with Left 'a' using eitherEq eqc eqi
+utest eitherBindLeft (Left "a") (lam. Right 42)
+with Right 42 using eitherEq eqString eqi
+utest eitherBindLeft (Right 42) (lam s. Left (head s))
+with Right 42 using eitherEq eqc eqi
 
 --  *-
 --  * .brief If the input Either is the Right case, then its value is applied
@@ -148,9 +156,12 @@ let eitherBindRight: Either a b -> (b -> Either a c) -> Either a c =
     bf content
   else never
 
-utest eitherBindRight (Left "a") (lam i. Right [int2char i]) with Left "a"
-utest eitherBindRight (Right 10) (lam i. Right [int2char i]) with Right "\n"
-utest eitherBindRight (Right 11) (lam. Left "c") with Left "c"
+utest eitherBindRight (Left "a") (lam i. Right [int2char i])
+with Left "a" using eitherEq eqString eqString
+utest eitherBindRight (Right 10) (lam i. Right [int2char i])
+with Right "\n" using eitherEq eqString eqString
+utest eitherBindRight (Right 11) (lam. Left "c")
+with Left "c" using eitherEq eqString eqi
 
 --  *-
 --  * .brief Partitions a list of Eithers into the Left case values and the
@@ -163,7 +174,7 @@ utest eitherBindRight (Right 11) (lam. Left "c") with Left "c"
 --  *         relation to the input list.
 -- -*
 let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
-  foldl (lam acc. lam e.
+  foldl (lam acc : ([a], [b]). lam e.
     match e with Left content then
       (snoc acc.0 content, acc.1)
     else match e with Right content then
@@ -171,9 +182,14 @@ let eitherPartition: [Either a b] -> ([a],[b]) = lam es.
     else never
   ) ([],[]) es
 
-utest eitherPartition [] with ([], [])
-utest eitherPartition [Left 1, Right "foo", Right "bar", Left 42] with ([1,42], ["foo", "bar"])
-utest eitherPartition [Right 5.0, Right 1.0, Left "42"] with (["42"], [5.0, 1.0])
+let eqSeqTuple = lam eqSeql. lam eqSeqr. lam t1 : ([a], [b]). lam t2 : ([a], [b]).
+  and (eqSeql t1.0 t2.0) (eqSeqr t1.1 t2.1)
+
+utest eitherPartition [] with ([], []) using eqSeqTuple (eqSeq eqi) (eqSeq eqi)
+utest eitherPartition [Left 1, Right "foo", Right "bar", Left 42]
+with ([1,42], ["foo", "bar"]) using eqSeqTuple (eqSeq eqi) (eqSeq eqString)
+utest eitherPartition [Right 5.0, Right 1.0, Left "42"]
+with (["42"], [5.0, 1.0]) using eqSeqTuple (eqSeq eqString) (eqSeq eqf)
 
 --  *-
 --  * .brief Extracts the Left values from a list of Eithers.
@@ -185,9 +201,10 @@ utest eitherPartition [Right 5.0, Right 1.0, Left "42"] with (["42"], [5.0, 1.0]
 -- -*
 let eitherLefts: [Either a b] -> [a] = lam es. (eitherPartition es).0
 
-utest eitherLefts [] with []
-utest eitherLefts [Right 1, Right 5] with []
+utest eitherLefts [] with [] using eqSeq eqi
+utest eitherLefts [Right 1, Right 5] with [] using eqSeq eqi
 utest eitherLefts [Right 1, Left "c", Right 5, Left "a"] with ["c", "a"]
+using eqSeq eqString
 
 --  *-
 --  * .brief Extracts the Right values from a list of Eithers.
@@ -199,9 +216,10 @@ utest eitherLefts [Right 1, Left "c", Right 5, Left "a"] with ["c", "a"]
 -- -*
 let eitherRights: [Either a b] -> [b] = lam es. (eitherPartition es).1
 
-utest eitherRights [] with []
-utest eitherRights [Left "1", Left "5"] with []
+utest eitherRights [] with [] using eqSeq eqi
+utest eitherRights [Left "1", Left "5"] with [] using eqSeq eqi
 utest eitherRights [Right 1, Left "3", Right 5, Left "1"] with [1, 5]
+using eqSeq eqi
 
 --  *-
 --  * .brief Checks whether the entered Either value is the Left case.
@@ -275,8 +293,8 @@ let eitherGetLeft: Either a b -> Option a = lam e.
   else
     None ()
 
-utest eitherGetLeft (Left "foo") with Some "foo"
-utest eitherGetLeft (Right 42) with None ()
+utest eitherGetLeft (Left "foo") with Some "foo" using optionEq eqString
+utest eitherGetLeft (Right 42) with None () using optionEq eqi
 
 --  *-
 --  * .brief Extracts the Right case value as an Option.
@@ -292,5 +310,5 @@ let eitherGetRight: Either a b -> Option b = lam e.
   else
     None ()
 
-utest eitherGetRight (Left "foo") with None ()
-utest eitherGetRight (Right 42) with Some 42
+utest eitherGetRight (Left "foo") with None () using optionEq eqString
+utest eitherGetRight (Right 42) with Some 42 using optionEq eqi
