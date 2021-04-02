@@ -290,7 +290,7 @@ module Mmap = struct
       let compare = cmp
     end in
     let module MapModule = Map.Make (Ord) in
-    MapModule.fold (fun k v acc -> f (Obj.obj k) v acc) m z
+    MapModule.fold (fun k v acc -> f acc (Obj.obj k) v) m z
 
   let eq veq m1 m2 =
     let m1, cmp = Obj.obj m1 in

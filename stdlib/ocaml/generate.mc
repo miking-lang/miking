@@ -1790,6 +1790,18 @@ let mapFoldWithKeyTest = bindall_
 utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
 with int_ 103 using eqExpr in
 
+let mapFoldWithKeyNonAssociativeTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
+  , mapFoldWithKey_
+      (ulam_ "acc" (ulam_ "k" (ulam_ "v"
+        (addi_ (var_ "acc") (addi_ (muli_ (var_ "k") (int_ 2))
+                                   (var_ "v")))))) (int_ 0) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyNonAssociativeTest)
+with int_ 148 using eqExpr in
+
 let mapEqTrueTest = bindall_
   [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))

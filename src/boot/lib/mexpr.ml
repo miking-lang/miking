@@ -1097,7 +1097,7 @@ let delta eval env fi c v =
   | CmapMapWithKey (Some _), _ ->
       fail_constapp fi
   | CmapFoldWithKey (None, None), f ->
-      let foldf k v acc =
+      let foldf acc k v =
         TmApp (fi, TmApp (fi, TmApp (fi, f, acc), k), v) |> eval env
       in
       TmConst (fi, CmapFoldWithKey (Some foldf, None))

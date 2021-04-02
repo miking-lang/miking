@@ -155,7 +155,7 @@ module Mmap : sig
 
   val map_with_key : ('a -> 'b -> 'c) -> Obj.t -> Obj.t
 
-  val fold_with_key : ('a -> 'b -> 'c -> 'c) -> 'c -> Obj.t -> 'c
+  val fold_with_key : ('c -> 'a -> 'b -> 'c) -> 'c -> Obj.t -> 'c
 
   val eq : ('b -> 'b -> bool) -> Obj.t -> Obj.t -> bool
 
