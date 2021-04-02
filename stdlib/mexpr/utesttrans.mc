@@ -259,6 +259,7 @@ let collectKnownProgramTypes = use MExprAst in
                 infoErrorExit (info expr) msg
             in
             let variants = mapInsert ident constructors acc.variants in
+            let acc = collectType acc argTy in
             let acc = {acc with variants = variants} in
             sfold_Expr_Expr collectTypes acc expr
           else expectedArrowType (info expr) t.tyIdent

@@ -14,12 +14,14 @@ include "ocaml/compile.mc"
 
 type GenerateEnv = {
   constrs : Map Name Type,
-  records : Map (Map SID Type) Name
+  records : Map (Map SID Type) Name,
+  aliases : Map Name Type
 }
 
 let _emptyGenerateEnv = {
   constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp _cmpType)
+  records = mapEmpty (mapCmp _cmpType),
+  aliases = mapEmpty nameCmp
 }
 
 let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
@@ -82,6 +84,15 @@ let _intrinsicName : String -> Name = lam str.
     name
   else error (join ["Unsupported intrinsic: ", str])
 
+recursive let unwrapAlias = use MExprAst in
+  lam aliases. lam ty.
+  match ty with TyVar {ident = ident} then
+    match mapLookup ident aliases with Some ty then
+      unwrapAlias aliases ty
+    else ty
+  else ty
+end
+
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
@@ -100,7 +111,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
-      match t.ty with TyVar {ident = ident} then
+      let ty = unwrapAlias env.aliases t.ty in
+      match ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           match mapLookup fields env.records with Some id then
             let bindings = mapMap (generate env) t.bindings in
@@ -112,7 +124,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else never
   | TmRecordUpdate t ->
-    match t.ty with TyVar {ident = ident} then
+    let ty = unwrapAlias env.aliases t.ty in
+    match ty with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         match mapLookup fields env.records with Some id then
           let rec = generate env t.rec in
@@ -147,7 +160,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
         args = [generate env body]
       }
     in
-    match ty (t.body) with TyVar {ident = ident} then
+    let tyBody = unwrapAlias env.aliases (ty t.body) in
+    match tyBody with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         match mapLookup fields env.records with Some id then
           let body = generate env t.body in
@@ -330,6 +344,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
+      let targetTy = unwrapAlias env.aliases targetTy in
       match lookupRecordFields targetTy constrs with Some fields then
         match mapLookup fields records with Some name then
           let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
@@ -413,7 +428,7 @@ let _typeLiftEnvToGenerateEnv = lam typeLiftEnv.
               with constrs = mapInsert name ty env.constrs}
       else match ty with TyVariant {constrs = constrs} then
         {env with constrs = mapUnion env.constrs constrs}
-      else env
+      else {env with aliases = mapInsert name ty env.aliases}
     else never
   in
   foldl f _emptyGenerateEnv typeLiftEnv
