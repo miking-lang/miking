@@ -522,32 +522,32 @@ end
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | TyUnknown {} ->
-    match unwrapType typeEnv lhs with Some (TyUnknown {}) then true else false
+  | TyUnknown _ ->
+    match unwrapType typeEnv lhs with Some (TyUnknown _) then true else false
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | TyBool {} ->
-    match unwrapType typeEnv lhs with Some (TyBool {}) then true else false
+  | TyBool _ ->
+    match unwrapType typeEnv lhs with Some (TyBool _) then true else false
 end
 
 lang IntTypeEq = Eq + IntTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | TyInt {} ->
-    match unwrapType typeEnv lhs with Some (TyInt {}) then true else false
+  | TyInt _ ->
+    match unwrapType typeEnv lhs with Some (TyInt _) then true else false
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | TyFloat {} ->
-    match unwrapType typeEnv lhs with Some (TyFloat {}) then true else false
+  | TyFloat _ ->
+    match unwrapType typeEnv lhs with Some (TyFloat _) then true else false
 end
 
 lang CharTypeEq = Eq + CharTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
-  | TyChar {} ->
-    match unwrapType typeEnv lhs with Some (TyChar {}) then true else false
+  | TyChar _ ->
+    match unwrapType typeEnv lhs with Some (TyChar _) then true else false
 end
 
 lang FunTypeEq = Eq + FunTypeAst
@@ -874,10 +874,10 @@ let pSeqEdge8 = pseqedgew_ [pvar1] [pint_ 3,pint_ 4] in
 let pSeqEdge9 = pseqedgew_ [pvar2] [pint_ 3,pint_ 4] in
 let pSeqEdge10 = pseqedgew_ [pvar2] [pdata1,pint_ 4] in
 let pSeqEdge11 = pseqedgew_ [pvar2] [pdata2,pint_ 4] in
-let pSeqEdge12 = pseqedgen_ [pvar2] "x" [pdata1,pint_ 4] in
-let pSeqEdge13 = pseqedgen_ [pvar2] "y" [pdata2,pint_ 4] in
-let pSeqEdge14 = pseqedgen_ [pvar2] "x" [pdata3e,pint_ 4] in
-let pSeqEdge15 = pseqedgen_ [pdata3e] "x" [pdata3e,pint_ 4] in
+let pSeqEdge12 = pseqedge_ [pvar2] "x" [pdata1,pint_ 4] in
+let pSeqEdge13 = pseqedge_ [pvar2] "y" [pdata2,pint_ 4] in
+let pSeqEdge14 = pseqedge_ [pvar2] "x" [pdata3e,pint_ 4] in
+let pSeqEdge15 = pseqedge_ [pdata3e] "x" [pdata3e,pint_ 4] in
 utest pgen pSeqEdge1 with pgen pSeqEdge2 using eqExpr in
 utest pgen pSeqEdge4 with pgen pSeqEdge5 using eqExpr in
 utest pgen pSeqEdge8 with pgen pSeqEdge9 using eqExpr in

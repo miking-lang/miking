@@ -653,7 +653,7 @@ use TestLang in
 
 let default_info =
   Info { filename = "utesttrans.mc"
-       , row1 = 0, col1 = 0, row2 = 0, col1 = 0}
+       , row1 = 0, col1 = 0, row2 = 0, col2 = 0}
 in
 
 let utest_info_ =
@@ -662,7 +662,7 @@ let utest_info_ =
           , expected = e
           , next = n
           , tusing = None ()
-          , ty = TyUnknown {}
+          , ty = tyunknown_
           , info = default_info}
 in
 
@@ -672,7 +672,7 @@ let utestu_info_ =
           , expected = e
           , next = n
           , tusing = Some u
-          , ty = TyUnknown {}
+          , ty = tyunknown_
           , info = default_info}
 in
 

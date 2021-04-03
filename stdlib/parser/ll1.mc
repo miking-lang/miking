@@ -318,7 +318,7 @@ let ll1NonTerminal : String -> NonTerminal = identity
 let ll1Nt : NonTerminal -> Symbol = use ParserSpec in lam nt. NtSpec nt
 let ll1Lit : String -> Symbol = use ParserSpec in lam str.
   match nextToken {str = str, pos = posVal "" 1 1} with {lit = lit, stream = {str = unlexed}} then
-    match (unlexed, lit) with ([], ![]) then Lit {lit = str}
+    match (unlexed, lit) with ([], ![]) then Lit {lit = str, info = NoInfo ()}
     else error (join ["A literal token does not lex as a single token: \"", str, "\""])
   else never
 let ll1LIdent : Symbol = use ParserSpec in Tok (LIdentTok {val = "", info = NoInfo ()})
@@ -391,7 +391,7 @@ let gFailOnce : Grammar String =
 
 utest errorMapToBindingsExc (genParser gFailOnce)
 with [ ( "Declaration"
-  , [ ( ParserBase_Lit { lit = "let" }
+  , [ ( ParserBase_Lit { lit = "let", info = NoInfo () }
       , [ "decllet" , "declletrec" ]
       )
     ]
@@ -416,7 +416,7 @@ let gFailTwice : Grammar String =
 
 utest errorMapToBindingsExc (genParser gFailTwice)
 with [ ( "Declaration"
-  , [ ( ParserBase_Lit { lit = "let" }
+  , [ ( ParserBase_Lit { lit = "let", info = NoInfo () }
       , [ "decllet" , "declletrec" , "declletmut" ]
       )
     ]
@@ -446,7 +446,7 @@ let gFailLet : Grammar String =
 
 utest errorMapToBindingsExc (genParser gFailLet)
 with [ ( "ExpressionFollow"
-  , [ ( ParserBase_Lit { lit = "let" }
+  , [ ( ParserBase_Lit { lit = "let", info = NoInfo () }
       , [ "exprfollowsome" , "exprfollownone" ]
       )
     ]
@@ -608,7 +608,7 @@ with Left (UnexpectedToken
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
+      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("="), info = NoInfo ()}),(ParserSpec_NtSpec ("Expression"))])
       }
     ])
   , found = (ParserBase_Tok (EOFTokenParser_EOFTok {info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 3})}))
@@ -641,7 +641,7 @@ with Left (UnexpectedToken
     , {label = ("topdecl"),seen = ([]),rest = ([])}
     , { label = ("decllet")
       , seen = ([(ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 3,col1 = 0})})])
-      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("=")}),(ParserSpec_NtSpec ("Expression"))])
+      , rest = ([(ParserBase_Tok (LIdentTokenParser_LIdentTok {val = ([]),info = (NoInfo ())})),(ParserBase_Lit {lit = ("="), info = NoInfo ()}),(ParserSpec_NtSpec ("Expression"))])
       }
     ])
   , found = (ParserBase_Lit {lit = ("let"),info = (Info {filename = ("file"),row2 = 1,row1 = 1,col2 = 7,col1 = 4})})

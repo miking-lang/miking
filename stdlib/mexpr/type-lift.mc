@@ -56,7 +56,7 @@ let _replaceVariantNamesInTypeEnv = lam env.
   let f = lam ty.
     match ty with TyVariantName {ident = ident} then
       match mapLookup ident env.variants with Some constrs then
-        TyVariant {constrs = constrs}
+        TyVariant {constrs = constrs, info = NoInfo ()}
       else
         error (join ["No variant type ", nameGetStr ident,
                      " found in environment"])
@@ -115,7 +115,7 @@ let emptyTypeLiftEnv = {
 -- Adds a record type with the given fields to the type lifting environment.
 let _addRecordTypeVar = lam env. lam fields.
   use MExprAst in
-  let record = TyRecord {fields = fields} in
+  let record = TyRecord {fields = fields, info = NoInfo ()} in
   let recName = nameSym "Rec" in
   let recTyVar = ntyvar_ recName in
   let env = {{env with records = mapInsert fields recName env.records}
@@ -271,7 +271,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
     let tyIdent =
-      match t.tyIdent with TyUnknown {} then tyvariant_ []
+      match t.tyIdent with TyUnknown _ then tyvariant_ []
       else t.tyIdent
     in
     match typeLiftType env tyIdent with (env, tyIdent) then
@@ -390,27 +390,27 @@ end
 
 lang UnknownTypeTypeLift = TypeLift + UnknownTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyUnknown {} -> (env, TyUnknown {})
+  | TyUnknown t -> (env, TyUnknown t)
 end
 
 lang BoolTypeTypeLift = TypeLift + BoolTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyBool {} -> (env, TyBool {})
+  | TyBool t -> (env, TyBool t)
 end
 
 lang IntTypeTypeLift = TypeLift + IntTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyInt {} -> (env, TyInt {})
+  | TyInt t -> (env, TyInt t)
 end
 
 lang FloatTypeTypeLift = TypeLift + FloatTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyFloat {} -> (env, TyFloat {})
+  | TyFloat t -> (env, TyFloat t)
 end
 
 lang CharTypeTypeLift = TypeLift + CharTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyChar {} -> (env, TyChar {})
+  | TyChar t -> (env, TyChar t)
 end
 
 lang FunTypeTypeLift = TypeLift + FunTypeAst
@@ -418,7 +418,7 @@ lang FunTypeTypeLift = TypeLift + FunTypeAst
   | TyArrow t ->
     match typeLiftType env t.from with (env, from) then
       match typeLiftType env t.to with (env, to) then
-        (env, TyArrow {from = from, to = to})
+        (env, TyArrow {{t with from = from} with to = to})
       else never
     else never
 end
@@ -427,7 +427,7 @@ lang SeqTypeTypeLift = TypeLift + SeqTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TySeq t ->
     match typeLiftType env t.ty with (env, ty) then
-      (env, TySeq {ty = ty})
+      (env, TySeq {t with ty = ty})
     else never
 end
 
@@ -461,7 +461,7 @@ lang AppTypeTypeLift = TypeLift + AppTypeAst
   | TyApp t ->
     match typeLiftType env t.lhs with (env, lhs) then
       match typeLiftType env t.rhs with (env, rhs) then
-        (env, TyApp {lhs = lhs, rhs = rhs})
+        (env, TyApp {{t with lhs = lhs} with rhs = rhs})
       else never
     else never
 end

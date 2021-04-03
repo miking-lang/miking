@@ -182,7 +182,7 @@ let cInt2cChar =
 lam e. match e with TmConst t then
          match t.val with CInt i
            then TmConst {val = CChar {val = int2char i.val},
-                         ty = TyUnknown {}, info = NoInfo()}
+                         ty = tyunknown_, info = NoInfo()}
          else e
        else e
 in

@@ -127,7 +127,7 @@ let builtinEnv : Map Name Expr = use MExprAst in
     (map
       (lam x.
         match x with (s,c) then
-          (nameSym s, TmConst {val = c, ty = TyUnknown (), info = NoInfo ()})
+          (nameSym s, TmConst {val = c, ty = tyunknown_, info = NoInfo ()})
         else never)
       builtin)
 

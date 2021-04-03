@@ -191,7 +191,7 @@ utest isCorrect (num 0.) minf2 with true in
 utest isCorrect (num 0.) minf3 with true in
 
 -- test function with conditional
-let f4 = lam x. if ltn x (num 0.) then num 0 else x in
+let f4 = lam x. if ltn x (num 0.) then num 0.0 else x in
 
 utest der f4 (num (negf 1.)) with num 0. in
 utest der f4 (num 1.) with num 1. in
