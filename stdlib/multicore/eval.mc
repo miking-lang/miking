@@ -68,11 +68,11 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   sem delta (arg : Expr) =
   | CThreadSpawn _ ->
     let app =
-      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
+      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
     in
     TmConst {val = CThread {thread = threadSpawn (lam. eval {env = builtinEnv} app)}
             , info = NoInfo ()
-            , ty = TyUnknown ()
+            , ty = tyunknown_
             }
   | CThreadJoin _ ->
     match arg with TmConst {val = CThread {thread = thread}} then
@@ -83,7 +83,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     match arg with TmRecord {bindings = bindings} then
       if mapIsEmpty bindings then
         TmConst {val = CThreadID {id = threadSelf ()},
-                 info = NoInfo (), ty = TyUnknown ()}
+                 info = NoInfo (), ty = tyunknown_}
       else error err
     else error err
   | CThreadGetID _ ->
@@ -109,7 +109,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     else error "Argument to threadNotify not a thread ID"
   | CThreadCriticalSection _ ->
     let app =
-      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = TyUnknown ()}
+      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
     in threadCriticalSection (lam. eval {env = builtinEnv} app)
   | CThreadCPURelax _ ->
     let err = "Argument to threadCPURelax is not unit" in
@@ -172,7 +172,7 @@ utest eval (bindall_
 with int_ 44 in
 
 utest eval (bindall_
-  [ ulet_ "t" (threadSpawn_ (TmConst {val = CThreadSelf {}, ty = TyUnknown (), info = NoInfo ()}))
+  [ ulet_ "t" (threadSpawn_ (TmConst {val = CThreadSelf {}, ty = tyunknown_, info = NoInfo ()}))
   , ulet_ "tid" (threadGetID_ (var_ "t"))
   , eqi_ (threadID2Int_ (var_ "tid")) (threadID2Int_ (threadJoin_ (var_ "t")))
   ])
