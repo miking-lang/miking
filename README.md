@@ -1283,21 +1283,6 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | Tuple       | Tuple (Record)  |
 | other       | N/A             |
 
-#### Note when installing Python with brew
-`pyml` requires the shared library `libpython`. However, when using Python installed by brew on macOS, this library is not available in the paths searched by `pyml`. One way to fix this is to create a symlink to the library in `/usr/local/lib`. To find where the library is installed, use the command:
-
-```
-python3-config --ldflags
-```
-
-This should output `-L/some_path` where `some_path` is the path to the directory containing `libpython*.dylib` (where `*` is the version number). To create the symlink, type
-
-```
-ln -s /some_path/libpython*.dylib /usr/local/lib/
-```
-
-The bindings should now work properly.
-
 ## Compiling to OCaml
 The standard library contains functions for compiling and running `mexpr`
 programs targeting OCaml. See the implementation in
