@@ -117,8 +117,6 @@ module RNG : sig
 end
 
 module MSys : sig
-  exception Error of ustring
-
   val exit : int -> unit
 
   val error : int Mseq.t -> exn

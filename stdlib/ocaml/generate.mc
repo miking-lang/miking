@@ -411,31 +411,6 @@ let _addTypeDeclarations = lam typeLiftEnv. lam t.
   in
   foldl f t typeLiftEnv
 
-let _wrapTryWith = lam t.
-  use OCamlAst in
-  let msg = (nameSym "msg") in
-  let printStderr =
-    appf2_ (OTmVarExt {ident = "Printf.fprintf"})
-           (OTmVarExt {ident = "stderr"})
-           (OTmString {text = "%s\\n"}) in
-  let toUtf8 = lam s.
-    app_ (OTmVarExt {ident = "Boot.Ustring.to_utf8"}) s in
-  let strConcat = lam s1. lam s2.
-    appf2_ (OTmVarExt {ident = "(^)"}) s1 s2 in
-  OTmTryWith { body = t
-             , arms = [( OPatConExt { ident = "Boot.Intrinsics.MSys.Error"
-                                    , args =
-                                      [PatNamed { ident = PName msg
-                                                , info = NoInfo ()}]}
-                       , bind_
-                           (nulet_ (nameSym "")
-                              (app_ printStderr
-                                    (strConcat
-                                      (OTmString {text = "ERROR: "})
-                                      (toUtf8 (nvar_ msg)))))
-                           (app_
-                             (OTmVarExt {ident = "exit"}) (int_ 1)))]}
-
 lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
@@ -724,16 +699,12 @@ lang OCamlObjWrap = MExprAst + OCamlAst
     _objObj
     (OTmMatch {{t with target = _objObj (objWrapRec t.target)}
                   with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms})
-  | OTmTryWith t ->
-    _objObj
-    (OTmTryWith {{t with body = _objObj (objWrapRec t.body)}
-                    with arms = map (lam p. (p.0, _objRepr (objWrapRec p.1))) t.arms})
   | t -> smap_Expr_Expr objWrapRec t
 
   sem objWrap =
   | OTmVariantTypeDecl t ->
     OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
-  | t -> objWrapRec (_wrapTryWith (_objObj t))
+  | t -> objWrapRec (_objObj t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +

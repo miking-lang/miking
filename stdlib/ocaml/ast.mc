@@ -125,29 +125,13 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
-lang OCamlTryWith
-  syn Expr =
-  | OTmTryWith { body : Expr,  arms : [(Pat, Expr)] }
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmTryWith t ->
-    OTmTryWith {{t with body = f t.body}
-                   with arms = map (lam p. (p.0, f p.1)) t.arms}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmTryWith t -> foldl (lam acc. lam a. f acc a.1) (f acc t.body) t.arms
-end
-
 lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
                 + ShiftIntAst + ArithFloatAst + BoolAst + CmpIntAst
-                + CmpFloatAst + CharAst + CmpCharAst  + NamedPat
-                + IntPat + CharPat + BoolPat  + FloatIntConversionAst
-                + IntCharConversionAst + RefOpAst
-
-                + OCamlTuple + OCamlArray + OCamlMatch + OCamlData
-                + OCamlExternal + OCamlTryWith + OCamlPreambleHack
-                + OCamlTypeDeclAst + OCamlRecord + OCamlString
-
+                + CmpFloatAst + CharAst + CmpCharAst + OCamlMatch + NamedPat
+                + IntPat + CharPat + BoolPat + OCamlTuple + OCamlArray
+                + OCamlData + OCamlExternal + FloatIntConversionAst
+                + IntCharConversionAst + OCamlTypeDeclAst + OCamlPreambleHack
+                + OCamlRecord + OCamlString + RefOpAst
 end
 
 mexpr

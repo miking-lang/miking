@@ -132,11 +132,12 @@ module RNG = struct
 end
 
 module MSys = struct
-  exception Error of ustring
-
   let exit = exit
 
-  let error m = raise (Error (Mseq.Helpers.to_ustring m))
+  let error m =
+    Printf.eprintf "ERROR: %s\n"
+      (m |> Mseq.Helpers.to_ustring |> Ustring.to_utf8) ;
+    exit 1
 
   let argv =
     Sys.argv |> Mseq.Helpers.of_array
