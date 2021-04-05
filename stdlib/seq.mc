@@ -5,7 +5,7 @@ let make = lam n. lam v. create n (lam. v)
 
 utest make 3 5 with [5,5,5]
 utest make 4 'a' with ['a', 'a', 'a', 'a']
-utest make 0 100 with []
+utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 
 let null = lam seq. eqi 0 (length seq)
 let head = lam seq. get seq 0
@@ -45,9 +45,9 @@ let mapi = lam f. lam seq.
 let map = lam f. mapi (lam. lam x. f x)
 
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
-utest mapi (lam i. lam x. i) [] with []
+utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
-utest map (lam x. addi x 1) [] with []
+utest map (lam x. addi x 1) [] with [] using eqSeq eqi
 
 let mapOption
   : (a -> Option b)
@@ -66,10 +66,10 @@ utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2, 3,
 with [34, 35, 36]
 
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) [1, 2]
-with []
+with [] using eqSeq eqi
 
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
-with []
+with [] using eqSeq eqi
 
 recursive let iter
   : (a -> ())
@@ -130,7 +130,9 @@ recursive
 let unfoldr = lam f. lam b.
   let fb = f b in
   match fb with None _ then [] else
-  match fb with Some (a, bp) then cons a (unfoldr f bp)
+  match fb with Some tup then
+    let tup : (Unknown, Unknown) = tup in
+    cons tup.0 (unfoldr f tup.1)
   else never
 end
 
@@ -147,21 +149,21 @@ let zipWith = lam f. lam seq1. lam seq2.
 
 utest zipWith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6]
 utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
-      with [[4,6], [], [12, 13]]
-utest zipWith addi [] [] with []
+      with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
+utest zipWith addi [] [] with [] using eqSeq eqi
 
 -- Accumulating maps
 let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
-  lam f. lam acc. lam seq.
+  lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldl
-      (lam tacc. lam x.
+      (lam tacc : (a, [c]). lam x.
          match f tacc.0 x with (acc, y) then (acc, snoc tacc.1 y) else never)
       (acc, []) seq
 
 let mapAccumR : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
-  lam f. lam acc. lam seq.
+  lam f : (a -> b -> (a, c)). lam acc. lam seq.
     foldr
-      (lam x. lam tacc.
+      (lam x. lam tacc : (a, [c]).
          match f tacc.0 x with (acc, y) then (acc, cons y tacc.1) else never)
        (acc, []) seq
 
@@ -174,7 +176,8 @@ with (9, [2,3,4])
 utest mapAccumR (lam acc. lam x. ((cons x acc), x)) [] [1,2,3]
 with ([1,2,3], [1,2,3])
 
-let unzip : [(a, b)] -> ([a], [b]) = mapAccumL (lam l. lam p. (snoc l p.0, p.1)) []
+let unzip : [(a, b)] -> ([a], [b]) =
+  mapAccumL (lam l. lam p : (a, b). (snoc l p.0, p.1)) []
 
 -- Predicates
 recursive
@@ -204,7 +207,7 @@ let join = lam seqs. foldl concat [] seqs
 
 utest join [[1,2],[3,4],[5,6]] with [1,2,3,4,5,6]
 utest join [[1,2],[],[5,6]] with [1,2,5,6]
-utest join [[],[],[]] with []
+utest join [[],[],[]] with [] using eqSeq eqi
 
 -- Monadic and Applicative operations
 
@@ -225,7 +228,7 @@ recursive
 end
 
 utest filter (lam x. eqi x 1) [1,2,4] with [1]
-utest filter (lam. false) [3,5,234,1,43] with []
+utest filter (lam. false) [3,5,234,1,43] with [] using eqSeq eqi
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43]
 
 recursive
@@ -235,14 +238,16 @@ recursive
     else find p (tail seq)
 end
 
-utest find (lam x. eqi x 2) [4,1,2] with Some 2
-utest find (lam x. lti x 1) [4,1,2] with None ()
+utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
+utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
 let partition = (lam p. lam seq.
     (filter p seq, filter (lam q. if p q then false else true) seq))
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1])
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[])
+using lam a : ([Int], [Int]). lam b : ([Int], [Int]).
+  if eqSeq eqi a.0 b.0 then eqSeq eqi a.1 b.1 else false
 
 -- Removes duplicates with preserved ordering. Keeps first occurrence of an element.
 let distinct = lam eq. lam seq.
@@ -254,7 +259,7 @@ let distinct = lam eq. lam seq.
     else []
   in work seq []
 
-utest distinct eqi [] with []
+utest distinct eqi [] with [] using eqSeq eqi
 utest distinct eqi [42,42] with [42]
 utest distinct eqi [1,1,2] with [1,2]
 utest distinct eqi [1,1,5,1,2,3,4,5,0] with [1,5,2,3,4,0]
@@ -275,7 +280,7 @@ utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
 utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
 utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
 utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest sort (lam l. lam r. subi l r) [] with []
+utest sort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
 
 -- Max/Min
 let min = lam cmp. lam seq.
@@ -288,15 +293,15 @@ let min = lam cmp. lam seq.
   in
   if null seq then None () else work (head seq) (tail seq)
 
-utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3
-utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3
-utest min (lam l. lam r. subi l r) [] with None ()
+utest min (lam l. lam r. subi l r) [3,4,8,9,20] with Some 3 using optionEq eqi
+utest min (lam l. lam r. subi l r) [9,8,4,20,3] with Some 3 using optionEq eqi
+utest min (lam l. lam r. subi l r) [] with None () using optionEq eqi
 
 let max = lam cmp. min (lam l. lam r. cmp r l)
 
-utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20
-utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20
-utest max (lam l. lam r. subi l r) [] with None ()
+utest max (lam l. lam r. subi l r) [3,4,8,9,20] with Some 20 using optionEq eqi
+utest max (lam l. lam r. subi l r) [9,8,4,20,3] with Some 20 using optionEq eqi
+utest max (lam l. lam r. subi l r) [] with None () using optionEq eqi
 
 let minOrElse = lam d. lam cmp. lam seq.
   optionGetOrElse d (min cmp seq)
@@ -321,8 +326,10 @@ let index = lam pred. lam seq.
   in
   index_rechelper 0 pred seq
 
-utest index (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 1
-utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4
+utest index (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]]
+      with Some 1 using optionEq eqi
+utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
+      with Some 4 using optionEq eqi
 
 -- Last index in seq that satifies pred
 let lastIndex = lam pred. lam seq.
@@ -336,8 +343,10 @@ let lastIndex = lam pred. lam seq.
   in
   lastIndex_rechelper 0 (None ()) pred seq
 
-utest lastIndex (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 3
-utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]] with Some 4
+utest lastIndex (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]]
+      with Some 3 using optionEq eqi
+utest lastIndex (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
+      with Some 4 using optionEq eqi
 
 -- Check if s1 is a prefix of s2
 recursive let isPrefix = lam eq. lam s1. lam s2.

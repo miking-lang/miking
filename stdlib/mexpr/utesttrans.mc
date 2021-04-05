@@ -223,7 +223,7 @@ let collectKnownProgramTypes = use MExprAst in
   recursive
     let unwrapTypeVarIdent = lam ty.
       match ty with TyVar {ident = ident} then Some ident
-      else match ty with TyApp {lhs = lhs} then unwrapTypeVarIdent lhs
+      else match ty with TyApp t then unwrapTypeVarIdent t.lhs
       else None ()
   in
   let expectedArrowType = use MExprPrettyPrint in
@@ -568,16 +568,7 @@ let _generateUtest = lam env. lam t.
       {filename = "", row = "0"}
     else never
   in
-  let unwrappedType = lam ty.
-    match ty with TyVar {ident = ident} then
-      match mapLookup ident env.aliases with Some ty then
-        ty
-      else ty
-    else ty
-  in
-  let lhs = unwrappedType (ty t.test) in
-  let rhs = unwrappedType (ty t.expected) in
-  match compatibleType [] lhs rhs with Some ty then
+  match compatibleType env.aliases (ty t.test) (ty t.expected) with Some ty then
     match mapLookup ty env.typeFunctions with Some (pprintName, equalName) then
       let pprintFunc = nvar_ pprintName in
       let eqFunc =

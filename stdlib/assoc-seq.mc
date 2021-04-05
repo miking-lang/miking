@@ -14,15 +14,15 @@ let assocSeqInsert : k -> v -> AssocSeq k v -> AssocSeq k v =
     cons (k,v) s
 
 let assocSeqLookup : AssocTraits k -> k -> AssocSeq k v -> Option v =
-  lam traits. lam k. lam s.
+  lam traits : {eq : k -> k -> Bool}. lam k. lam s.
     optionMapOr (None ())
-                (lam t. Some t.1)
-                (find (lam t. traits.eq k t.0) s)
+                (lam t : (k, v). Some t.1)
+                (find (lam t : (k, v). traits.eq k t.0) s)
 
 let assocSeqMap : (v1 -> v2) -> AssocSeq k v1 -> AssocSeq k v2 =
   lam f. lam s.
-    map (lam t. (t.0, f t.1)) s
+    map (lam t : (k, v). (t.0, f t.1)) s
 
 let assocSeqFold : (acc -> k -> v -> acc) -> acc -> AssocSeq k v -> acc =
   lam f. lam acc. lam s.
-    foldl (lam acc. lam kv. f acc kv.0 kv.1) acc s
+    foldl (lam acc. lam kv : (k, v). f acc kv.0 kv.1) acc s

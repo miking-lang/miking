@@ -64,8 +64,8 @@ let noSymConPrefix = "N"
 -- will be printed as Obj.t.
 lang OCamlTypePrettyPrint =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
-  SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
-  FunTypePrettyPrint + AppTypePrettyPrint
+  SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst + AppTypeAst +
+  FunTypePrettyPrint
 
   sem pprintLabelString =
 
@@ -312,7 +312,8 @@ lang OCamlPrettyPrint =
                     env t.tms
     with (env,tms) then
       let merged =
-        strJoin (concat ";" (pprintNewline (pprintIncr indent))) tms
+        strJoin (concat ";" (pprintNewline (pprintIncr indent)))
+                (map (lam t. join ["(", t, ")"]) tms)
       in
       (env,join ["[| ", merged, " |]"])
     else never
