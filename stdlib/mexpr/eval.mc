@@ -697,7 +697,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CSplitAt2 s.tms, ty = TyUnknown {}, info = NoInfo()}
     else error "Not splitAt of a constant sequence"
   | CSplitAt2 tms ->
-    match arg with TmConst {val = CInt {val = n}, ty = TyUnknown {}, info = NoInfo()} then
+    match arg with TmConst {val = CInt {val = n}} then
       let t = splitAt tms n in
       tuple_ [seq_ t.0, seq_ t.1]
     else error "n in splitAt is not a number"

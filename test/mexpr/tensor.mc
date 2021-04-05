@@ -1,3 +1,5 @@
+include "seq.mc"
+
 -- Some helper functions
 let tensorRepeat = lam shape. lam v.
   tensorCreate shape (lam. v)

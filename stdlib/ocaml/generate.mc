@@ -118,7 +118,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
           let rec = generate env t.rec in
           let key = sidToString t.key in
           let value = generate env t.value in
-          let inlineRecordName = nameSym "_rec" in
+          let inlineRecordName = nameSym "rec" in
           OTmMatch {
             target = rec,
             arms = [
@@ -141,15 +141,45 @@ lang OCamlGenerate = MExprAst + OCamlAst
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->
-    let body =
-      match t.body with TmRecord r then
-        TmRecord {r with bindings = mapMap (generate env) r.bindings}
-      else generate env t.body
+    let defaultCase = lam body.
+      OTmConApp {
+        ident = t.ident,
+        args = [generate env body]
+      }
     in
-    OTmConApp {
-      ident = t.ident,
-      args = [body]
-    }
+    match ty (t.body) with TyVar {ident = ident} then
+      match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+        match mapLookup fields env.records with Some id then
+          let body = generate env t.body in
+          let inlineRecordName = nameSym "rec" in
+          let fieldNames =
+            mapMapWithKey (lam sid. lam. nameSym (sidToString sid)) fields
+          in
+          let fieldPatterns = mapMap (lam n. npvar_ n) fieldNames in
+          let pat = OPatRecord {bindings = fieldPatterns} in
+          let reconstructedRecord = TmRecord {
+            bindings = mapMap (lam n. nvar_ n) fieldNames,
+            ty = ty (t.body),
+            info = info (t.body)
+          } in
+          let thn =
+            -- Do not use an inline record when the constructor takes an
+            -- argument of unknown type.
+            match mapLookup t.ident env.constrs with Some (TyUnknown _) then
+              OTmConApp {ident = t.ident, args = [generate env reconstructedRecord]}
+            else
+              OTmConApp {ident = t.ident, args = [reconstructedRecord]}
+          in
+          OTmMatch {
+            target = generate env t.body,
+            arms = [(OPatCon {ident = id, args = [pat]}, thn)]
+          }
+        else
+          let msg = join ["No record type could be found in the environment. ",
+                          "This was caused by an error in the type-lifting."] in
+          infoErrorExit t.info msg
+      else defaultCase t.body
+    else defaultCase t.body
   | TmNever t ->
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {
@@ -273,7 +303,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
         match mapLookup id fields with Some ty then
           ty
         else
-          infoErrorExit t.info (join ["Field ", id, " not found in record"])
+          infoErrorExit t.info (join ["Field ", sidToString id, " not found in record"])
       in
       match mapLookup id patNames with Some n then
         match generatePat env ty n pat with (names, innerWrap) then
