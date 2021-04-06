@@ -6,15 +6,16 @@
 
 # Compile and run a file
 compile() {
-    echo $1
-    build/mi src/main/mi.mc -- compile --test $1
-    if [ $? -eq 0 ]
-    then
-        binary=$(basename "$1" .mc)
-        ./$binary
-        rm $binary
-        echo ""
-    fi
+  output=$1
+  output="$output\n$(build/mi src/main/mi.mc -- compile --test $1)"
+  if [ $? -eq 0 ]
+  then
+    binary=$(basename "$1" .mc)
+    output="$output$(./$binary)"
+    rm $binary
+    output="$output\n"
+  fi
+  echo $output
 }
 
 files=""
@@ -145,5 +146,6 @@ files="${files} stdlib/char.mc"
 
 export MCORE_STDLIB='stdlib'
 for f in $files; do
-    compile "$f"
+    compile "$f" &
 done
+wait

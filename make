@@ -61,29 +61,30 @@ runtests_ocaml() {
 # Run the test suite
 runtests() {
     (cd test
-    ../build/mi test mexpr
-    ../build/mi test mlang
+    ../build/mi test mexpr &
+    ../build/mi test mlang &
     cd ../stdlib
-    ../build/mi test mexpr
-    ../build/mi test c
-    ../build/mi test ad
-    ../build/mi test ext
-    ../build/mi test parser
+    ../build/mi test mexpr &
+    ../build/mi test c &
+    ../build/mi test ad &
+    ../build/mi test ext &
+    ../build/mi test parser &
     cd ..
     export MCORE_STDLIB='@@@'
-    build/mi test stdlib)
+    build/mi test stdlib &)
     if [ -n "$MI_TEST_PAR" ]; then
-        runtests_par
+        runtests_par &
     fi
     if [ -n "$MI_TEST_PYTHON" ]; then
-        runtests_py
+        runtests_py &
     fi
     if [ -n "$MI_TEST_SUNDIALS" ]; then
-        runtests_sundials
+        runtests_sundials &
     fi
     if [ -n "$MI_TEST_OCAML" ]; then
-        runtests_ocaml
+        runtests_ocaml &
     fi
+    wait
 }
 
 # Lint ocaml source code
