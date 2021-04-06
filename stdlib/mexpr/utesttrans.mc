@@ -227,12 +227,12 @@ let collectKnownProgramTypes = use MExprAst in
       else None ()
   in
   let expectedArrowType = use MExprPrettyPrint in
-    lam tyIdent.
+    lam info. lam tyIdent.
     let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty tyIdent).1 in
     let msg = join [
       "Expected constructor of arrow type, got ", tyIdentStr, "\n"
     ] in
-    infoErrorExit (info expr) msg
+    infoErrorExit info msg
   in
   recursive
     let collectTypes = lam acc. lam expr.
@@ -259,10 +259,11 @@ let collectKnownProgramTypes = use MExprAst in
                 infoErrorExit (info expr) msg
             in
             let variants = mapInsert ident constructors acc.variants in
+            let acc = collectType acc argTy in
             let acc = {acc with variants = variants} in
             sfold_Expr_Expr collectTypes acc expr
-          else expectedArrowType t.tyIdent
-        else expectedArrowType t.tyIdent
+          else expectedArrowType (info expr) t.tyIdent
+        else expectedArrowType (info expr) t.tyIdent
       else
         let acc = collectType acc (ty expr) in
         sfold_Expr_Expr collectTypes acc expr

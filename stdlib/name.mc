@@ -22,22 +22,17 @@ let _noSymbol = gensym ()
 let nameNoSym : String -> Name =
   lam x. (x, _noSymbol)
 
-utest nameNoSym "foo" with nameNoSym "foo"
-
 
 -- 'nameSym x' constructs a new name with string 'x' together
 -- with a fresh symbol
 let nameSym : String -> Name =
   lam x. (x, gensym ())
 
-let _t = nameSym "foo"
-utest _t with _t
-
 
 -- 'nameEqStr n1 n2' returns true if both names 'n1' and 'n2'
 -- contain the same string, else false.
 let nameEqStr : Name -> Name -> Bool =
-  lam n1. lam n2. eqString n1.0 n2.0
+  lam n1 : Name. lam n2 : Name. eqString n1.0 n2.0
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
@@ -51,7 +46,7 @@ utest nameEqStr _t1 _t3 with false
 -- 'nameHasSym n' returns true if name 'n' has a
 -- symbol, else it returns false.
 let nameHasSym : Name -> Bool =
-  lam n. not (eqsym n.1 _noSymbol)
+  lam n : Name. not (eqsym n.1 _noSymbol)
 
 utest nameHasSym (nameSym "foo") with true
 utest nameHasSym (nameNoSym "foo") with false
@@ -61,7 +56,7 @@ utest nameHasSym (nameNoSym "foo") with false
 -- symbol. If either 'n1' or 'n2' does not have a symbol, or if the symbols
 -- differ, return false.
 let nameEqSym : Name -> Name -> Bool =
-  lam n1. lam n2.
+  lam n1 : Name. lam n2 : Name.
     if and (nameHasSym n1) (nameHasSym n2) then
       eqsym n1.1 n2.1
     else false
@@ -70,15 +65,15 @@ let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
 let _t3 = nameSym "foo"
 utest nameEqSym _t1 _t1 with false
-utest nameEqSym _t2 _t2 with true
+utest _t2 with _t2 using nameEqSym
 utest nameEqSym _t1 _t2 with false
 utest nameEqSym _t2 _t3 with false
-utest nameEqSym _t3 _t3 with true
+utest _t3 with _t3 using nameEqSym
 
 -- 'nameEq n1 n2' returns true if the symbols are equal, or if neither name has
 -- a symbol and their strings are equal. Otherwise, return false.
 let nameEq : Name -> Name -> Bool =
-  lam n1. lam n2.
+  lam n1 : Name. lam n2 : Name.
     if nameEqSym n1 n2 then true
     else
       if not (nameHasSym n1) then
@@ -90,16 +85,16 @@ let nameEq : Name -> Name -> Bool =
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
 let _t3 = nameSym "foo"
-utest nameEq _t1 _t1 with true
-utest nameEq _t2 _t2 with true
+utest _t1 with _t1 using nameEq
+utest _t2 with _t2 using nameEq
 utest nameEq _t1 _t2 with false
 utest nameEq _t2 _t3 with false
-utest nameEq _t3 _t3 with true
+utest _t3 with _t3 using nameEq
 
 -- 'nameSetNewSym n' returns a new name with a fresh symbol.
 -- The returned name contains the same string as 'n'.
 let nameSetNewSym : Name -> Name =
-  lam n. (n.0, gensym ())
+  lam n : Name. (n.0, gensym ())
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
@@ -112,7 +107,7 @@ utest nameEqSym _t2 (nameSetNewSym _t2) with false
 -- 'nameSetSym n s' returns a name with the same string as 'n'
 -- but with symbol 's'.
 let nameSetSym : Name -> Symbol -> Name =
-  lam n. lam s. (n.0, s)
+  lam n : Name. lam s. (n.0, s)
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
@@ -124,7 +119,7 @@ utest nameEqSym (nameSetSym _t2 _s) (nameSetSym _t1 _s) with true
 -- 'nameSetStr n str' returns a new name with string 'str' and
 -- with the symbol of 'n', if it has a symbol.
 let nameSetStr : Name -> String -> Name =
-  lam n. lam str. (str, n.1)
+  lam n : Name. lam str. (str, n.1)
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "bar"
@@ -135,7 +130,7 @@ utest nameEqStr (nameSetStr _t2 "foo") _t1 with true
 
 -- 'nameGetStr n' returns the string of name 'n'
 let nameGetStr : Name -> String =
-  lam n. n.0
+  lam n : Name. n.0
 
 utest nameGetStr (nameNoSym "foo") with "foo"
 utest nameGetStr (nameSym "foo") with "foo"
@@ -144,17 +139,17 @@ utest nameGetStr (nameSym "foo") with "foo"
 -- 'nameGetSym n' returns optionally the symbol of name 'n'.
 -- If 'n' has no symbol, 'None' is returned.
 let nameGetSym : Name -> Option Symbol =
-  lam n. if eqsym n.1 _noSymbol then None () else Some n.1
+  lam n : Name. if eqsym n.1 _noSymbol then None () else Some n.1
 
 let _s = gensym ()
-utest nameGetSym (nameNoSym "foo") with None ()
-utest nameGetSym (nameSetSym (nameNoSym "foo") _s) with Some _s
+utest nameGetSym (nameNoSym "foo") with None () using optionEq eqsym
+utest nameGetSym (nameSetSym (nameNoSym "foo") _s) with Some _s using optionEq eqsym
 
 -- NOTE(Linnea, 2021-01-26): This function is temporarily added for performance
 -- experiments. It is not a total ordering since symbols are not ordered.
 -- 'nameCmp n1 n2' compares two names lexicographically.
 let nameCmp : Name -> Name -> Int =
-  lam n1. lam n2.
+  lam n1 : Name. lam n2 : Name.
     if nameEq n1 n2 then
       0
     else if and (nameHasSym n1) (nameHasSym n2) then

@@ -137,12 +137,20 @@ lang RecLetsAst = VarAst
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
-    TmRecLets {{t with bindings = map (lam b. {b with body = f b.body})
-                                      t.bindings}
+    let bindingMapFunc =
+      lam b : {ident : Name, tyBody : Type, body : Expr, ty : Type, info: Info}.
+        {b with body = f b.body}
+    in
+    TmRecLets {{t with bindings = map bindingMapFunc t.bindings}
                   with inexpr = f t.inexpr}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecLets t -> f (foldl f acc (map (lam b. b.body) t.bindings)) t.inexpr
+  | TmRecLets t ->
+    let bindingMapFunc =
+      lam b : {ident : Name, tyBody : Type, body : Expr, ty : Type, info: Info}.
+        b.body
+    in
+    f (foldl f acc (map bindingMapFunc t.bindings)) t.inexpr
 end
 
 

@@ -86,13 +86,19 @@ module Symb = struct
 end
 
 module File = struct
-  let read f = f |> Ustring.to_utf8 |> Ustring.read_file
+  let read f =
+    f |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Ustring.read_file
+    |> Mseq.Helpers.of_ustring
 
-  let write f d = Ustring.write_file (Ustring.to_utf8 f) d
+  let write f d =
+    let f = f |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 in
+    let d = d |> Mseq.Helpers.to_ustring in
+    Ustring.write_file f d
 
-  let exists f = f |> Ustring.to_utf8 |> Sys.file_exists
+  let exists f =
+    f |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Sys.file_exists
 
-  let delete f = f |> Ustring.to_utf8 |> Sys.remove
+  let delete f = f |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Sys.remove
 end
 
 module FloatConversion = struct
@@ -285,7 +291,7 @@ module Mmap = struct
       let compare = cmp
     end in
     let module MapModule = Map.Make (Ord) in
-    MapModule.fold (fun k v acc -> f (Obj.obj k) v acc) m z
+    MapModule.fold (fun k v acc -> f acc (Obj.obj k) v) m z
 
   let eq veq m1 m2 =
     let m1, cmp = Obj.obj m1 in

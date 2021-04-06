@@ -14,12 +14,14 @@ include "ocaml/compile.mc"
 
 type GenerateEnv = {
   constrs : Map Name Type,
-  records : Map (Map SID Type) Name
+  records : Map (Map SID Type) Name,
+  aliases : Map Name Type
 }
 
 let _emptyGenerateEnv = {
   constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp _cmpType)
+  records = mapEmpty (mapCmp _cmpType),
+  aliases = mapEmpty nameCmp
 }
 
 let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
@@ -82,6 +84,15 @@ let _intrinsicName : String -> Name = lam str.
     name
   else error (join ["Unsupported intrinsic: ", str])
 
+recursive let unwrapAlias = use MExprAst in
+  lam aliases. lam ty.
+  match ty with TyVar {ident = ident} then
+    match mapLookup ident aliases with Some ty then
+      unwrapAlias aliases ty
+    else ty
+  else ty
+end
+
 lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
@@ -100,7 +111,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
-      match t.ty with TyVar {ident = ident} then
+      let ty = unwrapAlias env.aliases t.ty in
+      match ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           match mapLookup fields env.records with Some id then
             let bindings = mapMap (generate env) t.bindings in
@@ -112,7 +124,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
         else never
       else never
   | TmRecordUpdate t ->
-    match t.ty with TyVar {ident = ident} then
+    let ty = unwrapAlias env.aliases t.ty in
+    match ty with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         match mapLookup fields env.records with Some id then
           let rec = generate env t.rec in
@@ -147,7 +160,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
         args = [generate env body]
       }
     in
-    match ty (t.body) with TyVar {ident = ident} then
+    let tyBody = unwrapAlias env.aliases (ty t.body) in
+    match tyBody with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         match mapLookup fields env.records with Some id then
           let body = generate env t.body in
@@ -330,6 +344,7 @@ lang OCamlGenerate = MExprAst + OCamlAst
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
+      let targetTy = unwrapAlias env.aliases targetTy in
       match lookupRecordFields targetTy constrs with Some fields then
         match mapLookup fields records with Some name then
           let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
@@ -413,7 +428,7 @@ let _typeLiftEnvToGenerateEnv = lam typeLiftEnv.
               with constrs = mapInsert name ty env.constrs}
       else match ty with TyVariant {constrs = constrs} then
         {env with constrs = mapUnion env.constrs constrs}
-      else env
+      else {env with aliases = mapInsert name ty env.aliases}
     else never
   in
   foldl f _emptyGenerateEnv typeLiftEnv
@@ -817,7 +832,9 @@ let ocamlEvalBool = lam ast.
 in
 
 let ocamlEvalChar = lam ast.
-  ocamlEval (wrapOCamlAstInPrint ast (printf "'%c'"))
+  match ocamlEvalInt ast with TmConst (t & {val = CInt n}) then
+    TmConst {t with val = CChar {val = int2char n.val}}
+  else never
 in
 
 utest ocamlEvalInt (int_ 1) with int_ 1 using eqExpr in
@@ -1774,6 +1791,18 @@ let mapFoldWithKeyTest = bindall_
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
 with int_ 103 using eqExpr in
+
+let mapFoldWithKeyNonAssociativeTest = bindall_
+  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
+  , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
+  , mapFoldWithKey_
+      (ulam_ "acc" (ulam_ "k" (ulam_ "v"
+        (addi_ (var_ "acc") (addi_ (muli_ (var_ "k") (int_ 2))
+                                   (var_ "v")))))) (int_ 0) (var_ "m")
+  ] in
+utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyNonAssociativeTest)
+with int_ 148 using eqExpr in
 
 let mapEqTrueTest = bindall_
   [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
