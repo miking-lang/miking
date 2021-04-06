@@ -6,8 +6,9 @@
 
 # Run a file
 run() {
-    echo $1
-    build/mi src/main/mi.mc -- run --test $1
+    output=$1
+    output="$output\n$(build/mi src/main/mi.mc -- run --test $1)\n"
+    echo $output
 }
 
 files=""
@@ -15,7 +16,7 @@ files="${files} test/mexpr/letlamif.mc"
 files="${files} test/mexpr/fix.mc"
 files="${files} test/mexpr/ident-test.mc"
 # files="${files} test/mexpr/map.mc"
-# files="${files} test/mexpr/tensor.mc"
+files="${files} test/mexpr/tensor.mc"
 # files="${files} test/mexpr/match.mc"
 files="${files} test/mexpr/reclets.mc"
 files="${files} test/mexpr/comments.mc"
@@ -28,7 +29,6 @@ files="${files} test/mexpr/time.mc"
 # files="${files} test/mexpr/effects.mc"
 files="${files} test/mexpr/symbs.mc"
 # files="${files} test/mexpr/random-test.mc"
-
 # files="${files} test/mexpr/types.mc"
 files="${files} test/mexpr/float-test.mc"
 files="${files} test/mexpr/nestedpatterns.mc"
@@ -92,7 +92,7 @@ files="${files} stdlib/common.mc"
 # files="${files} stdlib/dfa.mc"
 # files="${files} stdlib/map.mc"
 # files="${files} stdlib/symtable.mc"
-# files="${files} stdlib/tensor.mc"
+files="${files} stdlib/tensor.mc"
 files="${files} stdlib/assoc.mc"
 # files="${files} stdlib/regex.mc"
 # files="${files} stdlib/json.mc"
@@ -139,5 +139,6 @@ files="${files} stdlib/char.mc"
 
 export MCORE_STDLIB='stdlib'
 for f in $files; do
-    run "$f"
+    run "$f" &
 done
+wait

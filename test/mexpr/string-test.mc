@@ -5,11 +5,13 @@
 
 mexpr
 
+let emptyStr : String = "" in
+
 -- String and char construction (unicode characters)
 utest 'a' with 'a' in
 utest '島'with '島' in
 utest "word" with "word" in
-utest "" with [] in
+utest emptyStr with [] in
 utest "大衛·布羅曼" with "大衛·布羅曼" in
 
 

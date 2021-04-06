@@ -14,27 +14,27 @@ let escapeChar = lam c.
 utest map escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeVarString = lam s.
-  concat "var_" (map escapeChar s)
+  concat "v_" (map escapeChar s)
 
 let escapeConString = lam s.
-  concat "Con_" (map escapeChar s)
+  concat "C" (map escapeChar s)
 
 let escapeLabelString = lam s.
-  concat "label_" (map escapeChar s)
+  concat "l" (map escapeChar s)
 
-utest escapeVarString "abcABC/:@_'" with "var_abcABC____'"
-utest escapeVarString "" with "var_"
-utest escapeVarString "@" with "var__"
-utest escapeVarString "ABC123" with "var_ABC123"
-utest escapeVarString "'a/b/c" with "var_'a_b_c"
-utest escapeVarString "123" with "var_123"
+utest escapeVarString "abcABC/:@_'" with "v_abcABC____'"
+utest escapeVarString "" with "v_"
+utest escapeVarString "@" with "v__"
+utest escapeVarString "ABC123" with "v_ABC123"
+utest escapeVarString "'a/b/c" with "v_'a_b_c"
+utest escapeVarString "123" with "v_123"
 
-utest escapeConString "abcABC/:@_'" with "Con_abcABC____'"
-utest escapeConString "" with "Con_"
-utest escapeConString "@" with "Con__"
-utest escapeConString "ABC123" with "Con_ABC123"
-utest escapeConString "'a/b/c" with "Con_'a_b_c"
-utest escapeConString "123" with "Con_123"
+utest escapeConString "abcABC/:@_'" with "CabcABC____'"
+utest escapeConString "" with "C"
+utest escapeConString "@" with "C_"
+utest escapeConString "ABC123" with "CABC123"
+utest escapeConString "'a/b/c" with "C'a_b_c"
+utest escapeConString "123" with "C123"
 
 let escapeName = lam n.
   match n with (str,symb) then (escapeVarString str, symb)
@@ -45,10 +45,16 @@ let escapeConName = lam n.
   else never
 
 utest (escapeName ("abcABC/:@_'", gensym ())).0
-with ("var_abcABC____'", gensym ()).0
+with ("v_abcABC____'", gensym ()).0
 
 utest (escapeName ("ABC123", gensym ())).0
-with ("var_ABC123", gensym ()).0
+with ("v_ABC123", gensym ()).0
+
+-- Prefix of non-symbolized identifiers, to avoid collision with symbolized
+-- identifiers
+let noSymVarPrefix = "n"
+
+let noSymConPrefix = "N"
 
 -- Pretty-printing of MExpr types in OCaml. Due to the obj-wrapping, we do not
 -- want to specify the type names in general. Record types are printed in a
@@ -86,10 +92,34 @@ lang OCamlPrettyPrint =
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
 
+  sem _nameSymString (esc : Name -> Name) =
+  | name ->
+    join [ nameGetStr (esc name)
+         , "\'"
+         , (int2string (sym2hash (optionGetOrElse
+                                   (lam. error "Expected symbol")
+                                   (nameGetSym name))))]
+
+  sem _nameNoSymString (prefix : String) (esc : Name -> Name) =
+  | name ->
+    concat prefix (nameGetStr (esc name))
+
   sem pprintConName (env : PprintEnv) =
-  | name -> pprintEnvGetStr env (escapeConName name)
+  | name ->
+    (env,
+     if nameHasSym name then
+       _nameSymString escapeConName name
+     else
+       _nameNoSymString noSymConPrefix escapeConName name)
+
   sem pprintVarName (env : PprintEnv) =
-  | name -> pprintEnvGetStr env (escapeName name)
+  | name ->
+    (env,
+     if nameHasSym name then
+       _nameSymString escapeName name
+     else
+       _nameNoSymString noSymVarPrefix escapeName name)
+
   sem pprintLabelString =
   | s -> escapeLabelString s
 
@@ -148,10 +178,10 @@ lang OCamlPrettyPrint =
   | CGeqf _ -> "((>=) : float -> float -> bool)"
   | CNeqf _ -> "((!=) : float -> float -> bool)"
   | CInt2float _ -> "float_of_int"
-  | CChar {val = c} -> showChar c
-  | CEqc _ -> "((=) : char -> char -> bool)"
-  | CChar2Int _ -> "int_of_char"
-  | CInt2Char _ -> "char_of_int"
+  | CChar {val = c} -> int2string (char2int c)
+  | CEqc _ -> "Int.equal"
+  | CChar2Int _ -> "Int.add 0"
+  | CInt2Char _ -> "Int.add 0"
   | CRef _ -> "ref"
   | CModRef _ -> "(:=)"
   | CDeRef _ -> "(!)"

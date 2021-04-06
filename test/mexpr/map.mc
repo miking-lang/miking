@@ -46,7 +46,7 @@ utest mapAny (lam k. lam v. eqi (char2int '4') (char2int v)) m with false in
 
 utest mapBindings m with [(1,'1'), (2,'2'), (3,'3'), (4,'5')] in
 
-let bindsSort = sort (lam t1. lam t2. subi t1.0 t2.0) in
+let bindsSort = sort (lam t1 : (k, v). lam t2 : (k, v). subi t1.0 t2.0) in
 
 let m = mapMap (lam c. int2char (addi 1 (char2int c))) m in
 utest bindsSort (mapBindings m) with [(1,'2'), (2,'3'), (3,'4'), (4,'6')] in
@@ -58,7 +58,7 @@ utest mapFoldWithKey (lam acc. lam k. lam v. addi (addi k acc) (char2int v)) 0 m
 with 227 in
 
 -- Int tuple map
-let cmpTuple = lam t1. lam t2.
+let cmpTuple = lam t1 : (Int, Int). lam t2 : (Int, Int).
   let d = subi t1.0 t2.0 in
   match d with 0 then
     subi t1.1 t2.1

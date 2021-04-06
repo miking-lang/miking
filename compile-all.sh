@@ -6,41 +6,42 @@
 
 # Compile and run a file
 compile() {
-    echo $1
-    build/mi src/main/mi.mc -- compile --test $1
-    if [ $? -eq 0 ]
-    then
-        binary=$(basename "$1" .mc)
-        ./$binary
-        rm $binary
-        echo ""
-    fi
+  output=$1
+  output="$output\n$(build/mi src/main/mi.mc -- compile --test $1)"
+  if [ $? -eq 0 ]
+  then
+    binary=$(basename "$1" .mc)
+    output="$output$(./$binary)"
+    rm $binary
+    output="$output\n"
+  fi
+  echo $output
 }
 
 files=""
 files="${files} test/mexpr/letlamif.mc"
 # files="${files} test/mexpr/fix.mc"
 files="${files} test/mexpr/ident-test.mc"
-# files="${files} test/mexpr/map.mc"
+files="${files} test/mexpr/map.mc"
 # files="${files} test/mexpr/tensor.mc"
-# files="${files} test/mexpr/match.mc"
+files="${files} test/mexpr/match.mc"
 files="${files} test/mexpr/reclets.mc"
 files="${files} test/mexpr/comments.mc"
-# files="${files} test/mexpr/seq-test.mc"
+files="${files} test/mexpr/seq-test.mc"
 files="${files} test/mexpr/bool-test.mc"
 files="${files} test/mexpr/tuples.mc"
 # files="${files} test/mexpr/references.mc"
-# files="${files} test/mexpr/string-test.mc"
+files="${files} test/mexpr/string-test.mc"
 files="${files} test/mexpr/time.mc"
-# files="${files} test/mexpr/effects.mc"
+files="${files} test/mexpr/effects.mc"
 files="${files} test/mexpr/symbs.mc"
-# files="${files} test/mexpr/random-test.mc"
-# files="${files} test/mexpr/types.mc"
+files="${files} test/mexpr/random-test.mc"
+files="${files} test/mexpr/types.mc"
 files="${files} test/mexpr/float-test.mc"
-# files="${files} test/mexpr/nestedpatterns.mc"
+files="${files} test/mexpr/nestedpatterns.mc"
 files="${files} test/mexpr/int-test.mc"
 files="${files} test/mexpr/records.mc"
-# files="${files} test/mexpr/stringops.mc"
+files="${files} test/mexpr/stringops.mc"
 # files="${files} test/mlang/catchall.mc"
 files="${files} test/mlang/subfolder/inclib.mc"
 files="${files} test/mlang/utest.mc"
@@ -57,7 +58,7 @@ files="${files} test/mlang/also_includes_lib.mc"
 # files="${files} test/mlang/nestedpatterns.mc"
 # files="${files} stdlib/mexpr/boot-parser.mc"
 # files="${files} stdlib/mexpr/type-lift.mc"
-# files="${files} stdlib/mexpr/ast.mc"
+files="${files} stdlib/mexpr/ast.mc"
 # files="${files} stdlib/mexpr/pprint.mc"
 # files="${files} stdlib/mexpr/parser.mc"
 # files="${files} stdlib/mexpr/cps.mc"
@@ -66,15 +67,16 @@ files="${files} stdlib/mexpr/lamlift.mc"
 # files="${files} stdlib/mexpr/utesttrans.mc"
 # files="${files} stdlib/mexpr/eval.mc"
 # files="${files} stdlib/mexpr/symbolize.mc"
-# files="${files} stdlib/mexpr/builtin.mc"
-# files="${files} stdlib/mexpr/info.mc"
+files="${files} stdlib/mexpr/builtin.mc"
+files="${files} stdlib/mexpr/info.mc"
 # files="${files} stdlib/mexpr/anf.mc"
 # files="${files} stdlib/mexpr/type-annot.mc"
 # files="${files} stdlib/mexpr/mexpr.mc"
 # files="${files} stdlib/mexpr/infix.mc"
-# files="${files} stdlib/mexpr/ast-builder.mc"
+files="${files} stdlib/mexpr/ast-builder.mc"
 # files="${files} stdlib/mexpr/eq.mc"
 # files="${files} stdlib/mexpr/ast-smap-sfold-tests.mc"
+files="${files} stdlib/mexpr/const-types.mc"
 # files="${files} stdlib/c/ast.mc"
 # files="${files} stdlib/c/pprint.mc"
 # files="${files} stdlib/ad/dualnum-arith.mc"
@@ -96,7 +98,7 @@ files="${files} stdlib/mexpr/lamlift.mc"
 # files="${files} stdlib/prelude.mc"
 files="${files} stdlib/common.mc"
 # files="${files} stdlib/dfa.mc"
-# files="${files} stdlib/map.mc"
+files="${files} stdlib/map.mc"
 # files="${files} stdlib/symtable.mc"
 # files="${files} stdlib/tensor.mc"
 files="${files} stdlib/assoc.mc"
@@ -111,7 +113,7 @@ files="${files} stdlib/string.mc"
 files="${files} stdlib/math.mc"
 # files="${files} stdlib/set.mc"
 # files="${files} stdlib/maxmatch.mc"
-# files="${files} stdlib/name.mc"
+files="${files} stdlib/name.mc"
 files="${files} stdlib/assoc-seq.mc"
 files="${files} stdlib/option.mc"
 # files="${files} stdlib/local-search.mc"
@@ -145,5 +147,6 @@ files="${files} stdlib/char.mc"
 
 export MCORE_STDLIB='stdlib'
 for f in $files; do
-    compile "$f"
+    compile "$f" &
 done
+wait

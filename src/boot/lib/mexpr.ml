@@ -583,6 +583,18 @@ let fail_constapp f v fi =
 let delta eval env fi c v =
   let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
   let fail_constapp = fail_constapp c v in
+  let tm_seq2int_seq fi tmseq =
+    let to_int = function
+      | TmConst (_, CChar n) ->
+          n
+      | _ ->
+          fail_constapp fi
+    in
+    tmseq |> Mseq.Helpers.map to_int
+  in
+  let int_seq2tm_seq fi intseq =
+    TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) intseq)
+  in
   let tm_seq2int_array fi tmseq =
     tmseq
     |> Mseq.Helpers.map (function
@@ -770,13 +782,7 @@ let delta eval env fi c v =
   | Cneqf None, _ | Cneqf (Some _), _ ->
       fail_constapp fi
   | Cstring2float, TmSeq (fi, s) ->
-      let to_char = function
-        | TmConst (_, CChar c) ->
-            c
-        | _ ->
-            fail_constapp fi
-      in
-      let f = s |> Mseq.Helpers.map to_char in
+      let f = tm_seq2int_seq fi s in
       TmConst (fi, CFloat (Intrinsics.FloatConversion.string2float f))
   | Cstring2float, _ ->
       fail_constapp fi
@@ -939,23 +945,26 @@ let delta eval env fi c v =
   | CreadBytesAsString, _ ->
       fail_constapp fi
   | CreadFile, TmSeq (fi, lst) ->
-      TmSeq
-        (fi, tmseq2ustring fi lst |> Intrinsics.File.read |> ustring2tmseq fi)
+      let intseq = tm_seq2int_seq fi lst in
+      let str = Intrinsics.File.read intseq in
+      int_seq2tm_seq fi str
   | CreadFile, _ ->
       fail_constapp fi
   | CwriteFile None, TmSeq (fi, l) ->
-      TmConst (fi, CwriteFile (Some (tmseq2ustring fi l)))
+      TmConst (fi, CwriteFile (Some (tm_seq2int_seq fi l)))
   | CwriteFile (Some fname), TmSeq (fi, lst) ->
-      Intrinsics.File.write fname (tmseq2ustring fi lst) ;
+      Intrinsics.File.write fname (tm_seq2int_seq fi lst) ;
       tmUnit
-  | CwriteFile None, _ | CwriteFile (Some _), _ ->
+  | CwriteFile (Some _), _ ->
+      fail_constapp fi
+  | CwriteFile None, _ ->
       fail_constapp fi
   | CfileExists, TmSeq (fi, lst) ->
-      TmConst (fi, CBool (Intrinsics.File.exists (tmseq2ustring fi lst)))
+      TmConst (fi, CBool (Intrinsics.File.exists (tm_seq2int_seq fi lst)))
   | CfileExists, _ ->
       fail_constapp fi
   | CdeleteFile, TmSeq (fi, lst) ->
-      Intrinsics.File.delete (tmseq2ustring fi lst) ;
+      Intrinsics.File.delete (tm_seq2int_seq fi lst) ;
       tmUnit
   | CdeleteFile, _ ->
       fail_constapp fi
@@ -1088,7 +1097,7 @@ let delta eval env fi c v =
   | CmapMapWithKey (Some _), _ ->
       fail_constapp fi
   | CmapFoldWithKey (None, None), f ->
-      let foldf k v acc =
+      let foldf acc k v =
         TmApp (fi, TmApp (fi, TmApp (fi, f, acc), k), v) |> eval env
       in
       TmConst (fi, CmapFoldWithKey (Some foldf, None))

@@ -110,7 +110,7 @@ and const =
   | CreadLine
   | CreadBytesAsString
   | CreadFile
-  | CwriteFile of ustring option
+  | CwriteFile of int Mseq.t option
   | CfileExists
   | CdeleteFile
   | Cerror

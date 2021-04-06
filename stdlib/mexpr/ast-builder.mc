@@ -47,9 +47,10 @@ let pcon_ = use MExprAst in
 
 let prec_ = use MExprAst in
   lam bindings.
+  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   PatRecord {
     bindings =
-      mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
+      mapFromList cmpSID (map bindingMapFunc bindings),
     info = NoInfo()
     }
 
@@ -118,8 +119,9 @@ let tyarrows_ = use FunTypeAst in
 
 let tyrecord_ = use RecordTypeAst in
   lam fields.
+  let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   TyRecord {
-    fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) fields),
+    fields = mapFromList cmpSID (map fieldMapFunc fields),
     info = NoInfo ()
   }
 
@@ -197,24 +199,37 @@ let type_ = use MExprAst in
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. { ident = t.0
-                                    , tyBody = t.1
-                                    , body = t.2
-                                    , ty = tyunknown_
-                                    , info = NoInfo ()}) bs,
+  let bindingMapFunc = lam t : (Name, Type, Expr).
+    { ident = t.0
+    , tyBody = t.1
+    , body = t.2
+    , ty = tyunknown_
+    , info = NoInfo ()
+    }
+  in
+  TmRecLets {bindings = map bindingMapFunc bs,
              inexpr = unit_, ty = tyunknown_, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
   lam bs.
-  nreclets_ (map (lam b. (nameNoSym b.0, b.1, b.2)) bs)
+  let bindingMapFunc = lam b : (String, Type, Expr).
+    (nameNoSym b.0, b.1, b.2)
+  in
+  nreclets_ (map bindingMapFunc bs)
 
 let nureclets_ = use MExprAst in
   lam bs.
-  nreclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+  let bindingMapFunc = lam b : (Name, Expr).
+    (b.0, tyunknown_, b.1)
+  in
+  nreclets_ (map bindingMapFunc bs)
 
 let ureclets_ = use MExprAst in
   lam bs.
-  reclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+  let bindingMapFunc = lam b : (String, Expr).
+    (b.0, tyunknown_, b.1)
+  in
+  reclets_ (map bindingMapFunc bs)
 
 let reclet_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -302,7 +317,7 @@ let ulam_ = use MExprAst in
 
 let lams_ = use MExprAst in
   lam params. lam body.
-  foldr (lam p. lam acc. lam_ p.0 p.1 acc) body params
+  foldr (lam p : (String, Expr). lam acc. lam_ p.0 p.1 acc) body params
 
 let ulams_ = use MExprAst in
   lam idents. lam body.
@@ -328,8 +343,9 @@ let seq_ = use MExprAst in
 
 let record_ = use MExprAst in
   lam bindings.
+  let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
-    bindings = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) bindings),
+    bindings = mapFromList cmpSID (map bindingMapFunc bindings),
     ty = tyunknown_,
     info = NoInfo ()
   }
@@ -348,7 +364,7 @@ let record_add = use MExprAst in
       error "record is not a TmRecord construct"
 
 let record_add_bindings = lam bindings. lam record.
-  foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
+  foldl (lam recacc. lam b : (k, v). record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}

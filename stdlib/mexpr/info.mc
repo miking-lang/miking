@@ -17,24 +17,24 @@ let initPos : String -> Pos = lam filename.
   {filename = filename, row = 1, col = 0}
 
 -- Create a positon value
-let posVal : String -> Int -> Int = lam filename. lam row. lam col.
+let posVal : String -> Int -> Int -> Pos = lam filename. lam row. lam col.
   {filename = filename, row = row, col = col}
 
 -- Advance the column with parameter n
-let advanceCol : Pos -> Int -> Pos = lam p. lam n.
+let advanceCol : Pos -> Int -> Pos = lam p : Pos. lam n.
   {p with col = addi p.col n}
 
 -- Advance the positon with parameter n. Set col to zero.
-let advanceRow : Pos -> Int -> Pos = lam p. lam n.
+let advanceRow : Pos -> Int -> Pos = lam p : Pos. lam n.
   {{p with row = addi p.row n} with col = 0}
 
 -- Compose an info strucutre from two positions
-let makeInfo : Pos -> Pos -> Info = lam p1. lam p2.
+let makeInfo : Pos -> Pos -> Info = lam p1 : Pos. lam p2 : Pos.
   Info {filename = p1.filename, row1 = p1.row, col1 = p1.col,
         row2 = p2.row, col2 = p2.col}
 
 -- Compose an info structure from two other info structures
-let mergeInfo : Info -> Info -> Info = lam fi1. lam fi2.
+let mergeInfo : Info -> Info -> Info = lam fi1 : Info. lam fi2 : Info.
   match fi1 with Info r1 then
     match fi2 with Info r2 then
       Info {filename = r1.filename, row1 = r1.row1, col1 = r1.col1,
@@ -43,7 +43,7 @@ let mergeInfo : Info -> Info -> Info = lam fi1. lam fi2.
   else fi2
 
 -- Create an info structure
-let infoVal : String -> Int -> Int -> Int -> Int =
+let infoVal : String -> Int -> Int -> Int -> Int -> Info =
   lam filename. lam r1. lam c1. lam r2. lam c2.
   Info {filename = filename, row1 = r1, col1 = c1, row2 = r2, col2 = c2}
 
@@ -64,5 +64,5 @@ let infoErrorExit : Info -> String -> () = lam fi. lam str.
   exit 1
 
 -- Print an error with position info and exit (error code 1)
-let posErrorExit : Pos -> String -> () = lam p. lam str.
+let posErrorExit : Pos -> String -> () = lam p : Pos. lam str.
   infoErrorExit (infoVal p.filename p.row p.col p.row p.col) str
