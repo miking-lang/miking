@@ -27,9 +27,9 @@ lam f. lam acc. lam start. lam stop.
   work acc start
 
 utest indexFoldu (lam seq. lam i. snoc seq i) [] 0 4 with [0, 1, 2, 3]
-utest indexFoldu (lam seq. lam i. snoc seq i) [] 0 0 with []
+utest indexFoldu (lam seq. lam i. snoc seq i) [] 0 0 with [] using (eqSeq eqi)
 utest indexFoldu (lam seq. lam i. snoc seq i) [] 1 4 with [1, 2, 3]
-utest indexFoldu (lam seq. lam i. snoc seq i) [] 2 1 with []
+utest indexFoldu (lam seq. lam i. snoc seq i) [] 2 1 with [] using (eqSeq eqi)
 
 
 -- Folds `f` over the indexes up to `shape` in row-major order and accumulator
@@ -46,10 +46,10 @@ lam f. lam acc. lam shape.
   work acc 0
 
 utest indexFoldRM (lam seq. lam is. snoc seq is) [] []
-with [[]]
+with [[]] using eqSeq (eqSeq eqi)
 
 utest indexFoldRM (lam seq. lam is. snoc seq is) [] [2, 2]
-with [[0, 0], [0, 1], [1, 0], [1, 1]]
+with [[0, 0], [0, 1], [1, 0], [1, 1]] using eqSeq (eqSeq eqi)
 
 
 -- Folds `f` over the indexes of `shape` in row-major order with accumulator
@@ -72,28 +72,28 @@ lam f. lam acc. lam shape.
 
 utest optionFoldlM (lam acc. lam x. if lti x 4 then Some x else None ())
         0 [1,2,2,4]
-with None ()
+with None () using optionEq (eqSeq (eqSeq eqi))
 
 utest optionIndexFoldRMM
   (lam seq. lam is.
      if lti (length seq) 5 then Some (snoc seq is) else None ())
   []
   []
-with Some [[]]
+with Some [[]] using optionEq (eqSeq (eqSeq eqi))
 
 utest optionIndexFoldRMM
   (lam seq. lam is.
      if lti (length seq) 5 then Some (snoc seq is) else None ())
   []
   [2, 2]
-with Some [[0, 0], [0, 1], [1, 0], [1, 1]]
+with Some [[0, 0], [0, 1], [1, 0], [1, 1]] using optionEq (eqSeq (eqSeq eqi))
 
 utest optionIndexFoldRMM
   (lam seq. lam is.
      if lti (length seq) 3 then Some (snoc seq is) else None ())
   []
   [2, 2]
-with None ()
+with None () using optionEq (eqSeq (eqSeq eqi))
 
 
 -- Construct a rank 1 tensor from a non-empty sequence `seq`.
@@ -122,6 +122,7 @@ let tensorToSeqExn : Tensor a -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
 utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
+using eqSeq eqi
 
 
 -- Create a tensor filled with values `v`.
@@ -132,7 +133,7 @@ lam shape. lam v.
 utest
   let t = tensorRepeat [4] 0 in
   tensorToSeqExn t
-with [0, 0, 0, 0]
+with [0, 0, 0, 0] using eqSeq eqi
 
 
 -- The number of elements in a tensor `t`.

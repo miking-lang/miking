@@ -759,7 +759,7 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
     let mkf = lam resf. lam x0. lam is.
       if eqSeq eqi is is0 then x0
       else
-        let res = apply ctx (_toTmSeq is0) arg in
+        let res = apply ctx (_toTmSeq is) arg in
         resf res
     in
 
