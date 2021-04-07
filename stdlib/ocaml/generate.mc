@@ -222,9 +222,14 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | PatChar {val = val} ->
     (assocEmpty, lam cont. _if (eqc_ (nvar_ targetName) (char_ val)) cont _none)
   | PatSeqTot {pats = pats} ->
+    let elemTy =
+      match targetTy with TySeq {ty = elemTy} then
+        elemTy
+      else tyunknown_
+    in
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env targetTy n pat with (names, innerWrap) then
+      match generatePat env elemTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
@@ -248,9 +253,14 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let tempName = nameSym "_splitTemp" in
     let midName = nameSym "_middle" in
     let postName = nameSym "_postfix" in
+    let elemTy =
+      match targetTy with TySeq {ty = elemTy} then
+        elemTy
+      else tyunknown_
+    in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env targetTy n pat with (names, innerWrap) then
+      match generatePat env elemTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
