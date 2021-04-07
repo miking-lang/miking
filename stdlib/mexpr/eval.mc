@@ -157,7 +157,7 @@ lang RecLetsEval =
                                              rhs = eta_var,
                                              ty = tyunknown_,
                                              info = NoInfo()},
-                               tyBody = tyunknown_,
+                               tyIdent = tyunknown_,
                                ty = tyunknown_,
                                info = NoInfo()
                                },
@@ -174,7 +174,7 @@ lang RecLetsEval =
     let func_tuple = tuple_ (map (lam x. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
-                               tyBody = tyunknown_,
+                               tyIdent = tyunknown_,
                                ty = tyunknown_,
                                info = NoInfo()} in
     eval {ctx with env =
@@ -1057,7 +1057,7 @@ lang RefOpEval = RefOpAst + RefEval + IntAst
   | CRef _ -> TmRef {ref = ref arg}
   | CModRef _ ->
     match arg with TmRef {ref = r} then
-      TmConst {val = CModRef2 r, info = NoInfo()}
+      TmConst {val = CModRef2 r, ty = tyunknown_, info = NoInfo()}
     else error "first argument of modref not a reference"
   | CModRef2 r ->
     modref r arg;

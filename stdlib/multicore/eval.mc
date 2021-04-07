@@ -18,7 +18,7 @@ lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
     match arg with TmConst ({val = CInt {val = i}} & t) then
       TmConst {t with val = CAtomicRefInt {ref = atomicMake i}}
     else
-      TmConst {val = CAtomicRef {ref = atomicMake arg}, info = NoInfo()}
+      TmConst {val = CAtomicRef {ref = atomicMake arg}, ty = tyunknown_, info = NoInfo()}
   | CAtomicGet _ ->
     match arg with TmConst {val = CAtomicRef {ref = r}} then
       atomicGet r

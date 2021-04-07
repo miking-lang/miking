@@ -375,7 +375,7 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
       let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
-          match t.tyIdent with TyUnknown{} then
+          match t.tyIdent with TyUnknown _ then
             (env, join ["type ", ident, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
@@ -1039,11 +1039,11 @@ let concat_ = appf2_ (var_ "concat") in
 -- in
 let func_foo =
   ulet_ "foo" (
-    lam_ "a" (TyUnknown {}) (
-      lam_ "b" (TyUnknown {}) (
+    lam_ "a" tyunknown_ (
+      lam_ "b" tyunknown_ (
         bindall_ [
           ulet_ "bar" (
-            lam_ "x" (TyUnknown {}) (
+            lam_ "x" tyunknown_ (
               addi_ (var_ "b") (var_ "x")
             )
           ),
@@ -1087,13 +1087,13 @@ in
 -- in
 let funcs_evenodd =
     ureclets_add "even"
-        (lam_ "x" (TyUnknown {})
+        (lam_ "x" tyunknown_
             (if_ (eqi_ (var_ "x") (int_ 0))
                  (true_)
                  (not_ (app_ (var_ "odd")
                              (subi_ (var_ "x") (int_ 1))))))
     (ureclets_add "odd"
-        (lam_ "x" (TyUnknown {})
+        (lam_ "x" tyunknown_
             (if_ (eqi_ (var_ "x") (int_ 1))
                  (true_)
                  (not_ (app_ (var_ "even")
@@ -1112,7 +1112,7 @@ in
 
 -- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in
 let func_recconcs =
-    ulet_ "recconcs" (lam_ "rec" (TyUnknown {}) (lam_ "s" (tystr_) (
+    ulet_ "recconcs" (lam_ "rec" tyunknown_ (lam_ "s" (tystr_) (
         recordupdate_ (var_ "rec")
                       "s"
                       (concat_ (recordproj_ "s" (var_ "rec"))

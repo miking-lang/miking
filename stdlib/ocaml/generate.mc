@@ -815,7 +815,9 @@ in
 let printf = lam fmt.
   TmApp {
     lhs = OTmVarExt {ident = "Printf.printf"},
-    rhs = OTmString {text = fmt}
+    rhs = OTmString {text = fmt},
+    info = NoInfo (),
+    ty = tyunknown_
   }
 in
 
