@@ -202,13 +202,21 @@ let utestRunnerName = optionGetOrElse
   (lam. error "Expected utestRunner to be defined")
   (findName "utestRunner" utestRunner)
 
+let getUniquePprintAndEqualityNames = lam.
+  (nameSym "pp", nameSym "eq")
+
 let collectKnownProgramTypes = use MExprAst in
   lam expr.
-  recursive
-    let collectType = lam acc. lam ty.
-      let pprintName = nameSym "pp" in
-      let equalName = nameSym "eq" in
-      let funcNames = (pprintName, equalName) in
+  recursive let unwrapTypeVarIdent = lam ty.
+    match ty with TyVar {ident = ident} then Some ident
+    else match ty with TyApp t then unwrapTypeVarIdent t.lhs
+    else None ()
+  in
+  recursive let collectType = lam acc. lam ty.
+    if mapMem ty acc.typeFunctions then
+      acc
+    else
+      let funcNames = getUniquePprintAndEqualityNames () in
       match ty with TySeq {ty = elemTy} then
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
@@ -218,74 +226,76 @@ let collectKnownProgramTypes = use MExprAst in
         let acc = {acc with typeFunctions = typeFuns} in
         mapFoldWithKey (lam acc. lam. lam fieldTy. collectType acc fieldTy)
                        acc fields
-      else {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
-  in
-  recursive
-    let unwrapTypeVarIdent = lam ty.
-      match ty with TyVar {ident = ident} then Some ident
-      else match ty with TyApp t then unwrapTypeVarIdent t.lhs
-      else None ()
+      else match unwrapTypeVarIdent ty with Some ident then
+        let acc =
+          match mapLookup ident acc.aliases with Some ty then
+            collectType acc ty
+          else acc
+        in
+        {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
+      else
+        {acc with typeFunctions = mapInsert ty funcNames acc.typeFunctions}
   in
   let expectedArrowType = use MExprPrettyPrint in
     lam info. lam tyIdent.
     let tyIdentStr = (getTypeStringCode 0 pprintEnvEmpty tyIdent).1 in
     let msg = join [
-      "Expected constructor of arrow type, got ", tyIdentStr, "\n"
+      "Expected constructor of arrow type, got ", tyIdentStr
     ] in
     infoErrorExit info msg
   in
-  recursive
-    let collectTypes = lam acc. lam expr.
-      match expr with TmType t then
-        match t.tyIdent with TyUnknown _ | TyVariant _ then
-          let variants = mapInsert t.ident (mapEmpty nameCmp) acc.variants in
+  recursive let collectTypes = lam acc. lam expr.
+    match expr with TmType t then
+      match t.tyIdent with TyUnknown _ | TyVariant _ then
+        let variants = mapInsert t.ident (mapEmpty nameCmp) acc.variants in
+        let acc = {acc with variants = variants} in
+        sfold_Expr_Expr collectTypes acc expr
+      else
+        let aliases = mapInsert t.ident t.tyIdent acc.aliases in
+        let acc = {acc with aliases = aliases} in
+        sfold_Expr_Expr collectTypes acc expr
+    else match expr with TmConDef t then
+      match t.tyIdent with TyArrow {from = argTy, to = to} then
+        match unwrapTypeVarIdent to with Some ident then
+          let constructors =
+            match mapLookup ident acc.variants with Some constructors then
+              mapInsert t.ident argTy constructors
+            else
+              let msg = join [
+                "Constructor definition refers to undefined type ",
+                nameGetStr ident
+              ] in
+              infoErrorExit (info expr) msg
+          in
+          let variants = mapInsert ident constructors acc.variants in
+          let acc = collectType acc argTy in
           let acc = {acc with variants = variants} in
           sfold_Expr_Expr collectTypes acc expr
-        else
-          let aliases = mapInsert t.ident t.tyIdent acc.aliases in
-          let acc = {acc with aliases = aliases} in
-          sfold_Expr_Expr collectTypes acc expr
-      else match expr with TmConDef t then
-        match t.tyIdent with TyArrow {from = argTy, to = to} then
-          match unwrapTypeVarIdent to with Some ident then
-            let constructors =
-              match mapLookup ident acc.variants with Some constructors then
-                mapInsert t.ident argTy constructors
-              else
-                let msg = join [
-                  "Constructor definition refers to undefined type ",
-                  nameGetStr ident
-                ] in
-                infoErrorExit (info expr) msg
-            in
-            let variants = mapInsert ident constructors acc.variants in
-            let acc = collectType acc argTy in
-            let acc = {acc with variants = variants} in
-            sfold_Expr_Expr collectTypes acc expr
-          else expectedArrowType (info expr) t.tyIdent
         else expectedArrowType (info expr) t.tyIdent
-      else
-        let acc = collectType acc (ty expr) in
-        sfold_Expr_Expr collectTypes acc expr
+      else expectedArrowType (info expr) t.tyIdent
+    else match expr with TmUtest t then
+      let acc = collectType acc (ty t.test) in
+      let acc = collectType acc (ty t.expected) in
+      let acc =
+        match t.tusing with Some t then
+          match ty t with TyArrow {from = lhs, to = TyArrow {from = rhs, to = TyBool _}} then
+            collectType (collectType acc lhs) rhs
+          else
+            let msg = join [
+              "Arguments of equality function must be properly annotated"
+            ] in
+            infoErrorExit (info t) msg
+        else acc
+      in
+      collectTypes acc t.next
+    else sfold_Expr_Expr collectTypes acc expr
   in
   let emptyUtestTypeEnv = {
     variants = mapEmpty nameCmp,      -- Map Name Type
     aliases = mapEmpty nameCmp,       -- Map Name Type
     typeFunctions = mapEmpty _cmpType -- Map Type (Name, Name)
   } in
-  let typeEnv = collectTypes emptyUtestTypeEnv expr in
-  let typeFunctions = mapFoldWithKey (lam acc. lam k. lam v.
-    let variantTy = ntyvar_ k in
-    let pprintName = nameSym "pprint" in
-    let equalName = nameSym "equal" in
-    mapInsert variantTy (pprintName, equalName) acc
-  ) typeEnv.typeFunctions typeEnv.variants in
-  let typeFunctions = mapFoldWithKey (lam acc. lam k. lam v.
-    match mapLookup v acc with Some names then
-      mapInsert (ntyvar_ k) names acc
-    else acc -- alias is never used
-  ) typeFunctions typeEnv.aliases in
-  {typeEnv with typeFunctions = typeFunctions}
+  collectTypes emptyUtestTypeEnv expr
 
 let getPprintFuncName = lam env. lam ty.
   match mapLookup ty env.typeFunctions with Some (pprintName, _) then
@@ -448,6 +458,13 @@ let _equalVariant = lam env. lam ty. lam constrs.
   let constructorMatches = mapFoldWithKey constrEqual false_ constrs in
   lam_ "a" ty (lam_ "b" ty constructorMatches)
 
+let _pprintAlias = lam env. lam ty. lam aliasedTypePprintName.
+  lam_ "a" ty (app_ (nvar_ aliasedTypePprintName) (var_ "a"))
+
+let _equalAlias = lam env. lam ty. lam aliasedTypeEqualName.
+  lam_ "a" ty (lam_ "b" ty
+    (appf2_ (nvar_ aliasedTypeEqualName) (var_ "a") (var_ "b")))
+
 let typeHasDefaultEquality = use MExprAst in
   lam env. lam ty.
   recursive let work = lam visited. lam ty.
@@ -459,8 +476,7 @@ let typeHasDefaultEquality = use MExprAst in
     else match ty with TyVar t then
       -- If we have already visited a type variable, we stop here to avoid
       -- infinite recursion.
-      match mapLookup t.ident visited with Some _ then
-        true
+      if mapMem t.ident visited then true
       else
         let visited = mapInsert t.ident () visited in
         match mapLookup t.ident env.variants with Some constrs then
@@ -482,38 +498,40 @@ let getTypeFunctions =
     else never
   in
   match ty with TyInt _ then
-    Some (_pprintInt, Some _equalInt)
+    (_pprintInt, Some _equalInt)
   else match ty with TyFloat _ then
-    Some (_pprintFloat, None ())
+    (_pprintFloat, None ())
   else match ty with TyBool _ then
-    Some (_pprintBool, Some _equalBool)
+    (_pprintBool, Some _equalBool)
   else match ty with TyChar _ then
-    Some (_pprintChar, Some _equalChar)
+    (_pprintChar, Some _equalChar)
   else match ty with TySeq {ty = elemTy} then
     let elemPprintName = getPprintFuncName env elemTy in
     let elemEqualName = getEqualFuncName env elemTy in
-    Some (_pprintSeq ty elemPprintName, Some (_equalSeq ty elemEqualName))
+    (_pprintSeq ty elemPprintName, Some (_equalSeq ty elemEqualName))
   else match ty with TyRecord {fields = fields} then
-    Some ( _pprintRecord env ty fields
-         , Some (_equalRecord env ty fields))
+    ( _pprintRecord env ty fields
+    , Some (_equalRecord env ty fields))
   else match ty with TyVar {ident = ident} then
     match mapLookup ident env.variants with Some constrs then
       let annotTy = ntyvar_ ident in
       if all (lam ty. typeHasDefaultEquality env ty) (mapValues constrs) then
-        Some ( _pprintVariant env annotTy constrs
-             , Some (_equalVariant env annotTy constrs))
+        ( _pprintVariant env annotTy constrs
+        , Some (_equalVariant env annotTy constrs))
       else
-        Some (_pprintVariant env annotTy constrs, None ())
+        (_pprintVariant env annotTy constrs, None ())
     else match mapLookup ident env.aliases with Some ty then
-      -- NOTE(larshum, 2021-03-28): Aliases do not need to generate functions,
-      -- as they will be referring to the function of their aliased type.
-      None ()
+      let aliasVar = ntyvar_ ident in
+      let aliasedTypePprintName = getPprintFuncName env ty in
+      let aliasedTypeEqualName = getEqualFuncName env ty in
+      ( _pprintAlias env aliasVar aliasedTypePprintName
+      , Some (_equalAlias env aliasVar aliasedTypeEqualName))
     else
       let msg = lam tyStr. join [
         "Type variable ", tyStr, " references unknown type."
       ] in
       reportError msg
-  else Some (_pprintUnknown, None ())
+  else (_pprintUnknown, None ())
 
 let generateUtestFunctions =
   use MExprAst in
@@ -526,21 +544,22 @@ let generateUtestFunctions =
     lam_ "a" ty (lam_ "b" ty never_)
   in
   recursive let f = lam seq. lam ty. lam ids.
-    match getTypeFunctions env ty with Some (pprintFunc, equalFunc) then
-      match ids with (pprintName, equalName) then
-        match equalFunc with Some eqFunc then
-          cons ( (pprintName, tyunknown_, pprintFunc)
-               , (equalName, tyunknown_, eqFunc))
-               seq
-        else
-          cons ( (pprintName, tyunknown_, pprintFunc)
-               , (equalName, tyunknown_, fallbackEqFunc ty))
-               seq
+    match ids with (pprintName, equalName) then
+      match getTypeFunctions env ty with (pprintFunc, equalFunc) then
+        let eqFunc =
+          match equalFunc with Some eqFunc then eqFunc else fallbackEqFunc ty
+        in
+        cons ( (pprintName, tyunknown_, pprintFunc)
+             , (equalName, tyunknown_, eqFunc))
+             seq
       else never
-    else seq
+    else never
   in
   match unzip (mapFoldWithKey f [] env.typeFunctions) with (pprints, equals) then
-    bind_ (nreclets_ pprints) (nreclets_ equals)
+    if null pprints then
+      unit_
+    else
+      bind_ (nreclets_ pprints) (nreclets_ equals)
   else never
 
 let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
