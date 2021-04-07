@@ -1,13 +1,20 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
+-- Language fragment KeywordMaker makes it possible to define new keywords
+-- in a DSL by just using variables and applications. These new keywords
+-- are then used when constructing new terms in the DSL. 
+-- See fragment _testKeywordMaker for an example.
 
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/eq.mc"
 
-
+-- The base fragment that includes the keyword maker, but
+-- no checks for incorrect bindings in e.g. let or lam. 
+-- See the separate fragments to include this.
 lang KeywordMakerBase = VarAst + AppAst 
   sem isKeyword = 
   | _ -> false
@@ -24,13 +31,16 @@ lang KeywordMakerBase = VarAst + AppAst
   | TmVar r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some (noArgs, f) then
-       if eqi (noArgs (length args)) then f args
-       else infoErrorExit r.info (join ["Unexpected number of arguments for keyword '", ident, "'."])
+       if eqi noArgs (length args) then
+       f args
+       else infoErrorExit r.info (join ["Unexpected number of arguments for construct '", ident, "'. ",
+            "Expected ", int2string noArgs, " arguments, but found ", int2string (length args), "."])
      else TmVar r
   | expr -> smap_Expr_Expr (makeKeywords []) expr
 end
 
 
+-- Includes a check that a keyword cannot be used as a binding variable in a lambda
 lang KeywordLam = KeywordMakerBase + LamAst
   sem makeKeywords (args: [Expr]) =
   | TmLam r -> 
@@ -41,90 +51,112 @@ lang KeywordLam = KeywordMakerBase + LamAst
 end
 
 
+-- Includes a check that a keyword cannot be used as a binding variable in a let expression
 lang KeywordLet = KeywordMakerBase + LetAst
   sem makeKeywords (args: [Expr]) =
   | TmLet r ->
-     dprint "*********** 1";
      let ident = nameGetStr r.ident in
-     dprint ["*********** 2", ident, r.info, matchKeywordString r.info ident];
      match matchKeywordString r.info ident with Some _ then
-       dprint "*********** 3";
        infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
-       dprint ["*********** 4", makeKeywords [] r.body];
-       dprint ["*********** 5", makeKeywords [] r.inexpr];
---       let x = TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr} in 
---       let x = TmLet {r with body = makeKeywords [] r.body} in 
-       let x = TmLet r in 
-       dprint "*********** 6";
-       x       
+       TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr} 
 end
 
 
+-- Includes a check that a keyword cannot be used inside a pattern (inside match)
+lang KeywordMatch = KeywordMakerBase + MatchAst + NamedPat
+  sem matchKeywordPat =
+  | PatNamed r ->
+      match r.ident with PName name then
+        let ident = nameGetStr name in
+        match matchKeywordString r.info ident with Some _ then
+          infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used inside a pattern."])
+        else PatNamed r
+      else PatNamed r
+  | pat -> smap_Pat_Pat matchKeywordPat pat
 
-lang KeywordMaker = KeywordMakerBase + KeywordLam + KeywordLet
+  sem makeKeywords (args: [Expr]) =
+  | TmMatch r -> 
+      TmMatch {{{{r with target = makeKeywords [] r.target}
+                    with pat = matchKeywordPat r.pat}
+                    with thn = makeKeywords [] r.thn}
+                    with els = makeKeywords [] r.els}
+end                  
 
 
-lang _testKeywordMaker = KeywordMaker + MExpr
+-- The keyword maker fragment, that includes all checks
+lang KeywordMaker = KeywordMakerBase + KeywordLam + KeywordLet + KeywordMatch
+
+
+-- A test fragment that is used to test the approach. This
+-- fragment can be used as a template when using the keyword maker.
+lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
+
+  -- Example terms that will be used to represent the values of the
+  -- the keyword expressions (the new language constructs). The term
+  -- first demonstrates a construct without arguments, and the second term
+  -- an example where the construct has exactly 2 arguments.
   syn Expr =
   | TmNoArgs {info: Info}
   | TmTwoArgs {arg1: Expr, arg2: Expr, info: Info}
 
+  -- States that the new terms are indeed mapping from keywords
   sem isKeyword =
   | TmNoArgs _ -> true
   | TmTwoArgs _ -> true
 
+  -- Defines the new mapping from keyword to new terms
   sem matchKeywordString (info: Info) =
   | "noargs" -> Some (0, lam lst. TmNoArgs{info = info})
-  | "twoargs" -> Some (2, lam lst. TmTwoArgs{arg1 = get lst 0, arg2 = lst 1, info = info})
+  | "twoargs" -> Some (2, lam lst. TmTwoArgs{arg1 = get lst 0, arg2 = get lst 1, info = info})
 
+  -- smap for the new terms
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmNoArgs t -> TmNoArgs t
   | TmTwoArgs t -> TmTwoArgs {{t with arg1 = f t.arg1} with arg2 = f t.arg2}
+
+  -- Equality of the new terms
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmNoArgs _ ->
+      match lhs with TmNoArgs _ then Some free else None ()
+  | TmTwoArgs r ->     
+      match lhs with TmTwoArgs l then
+        match eqExprH env free l.arg1 r.arg1 with Some free then
+          eqExprH env free l.arg2 r.arg2
+        else None ()
+      else None ()
 end
+
 
 mexpr
 
-
+-- Test cases for the example fragment
 use _testKeywordMaker in
 
---let expr = ulam_ "x" true_ in  -- replace "x" with "noargs" to generate error message
---utest makeKeywords [] expr with expr in
-let expr = ulet_ "x" true_ in  -- replace "x" with "twoargs" to generate error message
-let xx = makeKeywords [] expr in
-print "\n\n";
---dprint expr;
---print "\n\n";
---dprint xx;
---utest makeKeywords [] expr with expr in
-dprint unit_;
-utest unit_ with unit_ in
+let noargs_ = TmNoArgs {info = NoInfo()} in
+let twoargs_ = lam x. lam y. TmTwoArgs {arg1 = x, arg2 = y, info = NoInfo()} in
 
+-- In the first three utests, replace "ok" with "twoargs" to generate error message
+-- that demonstrates that keywords cannot be used inside lambdas, lets, and patterns.
+
+let expr = ulam_ "ok" true_ in  
+utest makeKeywords [] expr with expr using eqExpr in
+
+let expr = bind_ (ulet_ "ok" true_) false_ in 
+utest makeKeywords [] expr with expr using eqExpr in
+
+let expr = match_ true_  (pvar_ "ok") true_ false_ in
+utest makeKeywords [] expr with expr using eqExpr in
+
+let expr = ulam_ "x" (var_ "noargs") in
+utest makeKeywords [] expr with ulam_ "x" noargs_ using eqExpr in
+
+let expr = ulam_ "x" (app_ (app_ (var_ "twoargs") (true_)) false_) in
+utest makeKeywords [] expr with ulam_ "x" (twoargs_ true_ false_) using eqExpr in
 
 ()
 
 
-/-
-LetAst_TmLet {
-  tyBody = (UnknownTypeAst_TyUnknown {info = (NoInfo ())}),
-  inexpr = (RecordAst_TmRecord {
-               bindings = map,
-               info = (NoInfo ()),
-               ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})
-            }),
-  ident = (("x"),symb(26162)),
-  info = (NoInfo ()),
-  body = (ConstAst_TmConst {
-            info = (NoInfo ()),
-            val = (BoolAst_CBool {val = true}),
-            ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})
-          }),
-  ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})
-}
-
-LetAst_TmLet {tyBody = (UnknownTypeAst_TyUnknown {info = (NoInfo ())}),inexpr = (RecordAst_TmRecord {bindings = map,info = (NoInfo ()),ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})}),ident = (("x"),symb(26162)),info = (NoInfo ()),body = (ConstAst_TmConst {info = (NoInfo ()),val = (BoolAst_CBool {val = true}),ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})}),ty = (UnknownTypeAst_TyUnknown {info = (NoInfo ())})} OK
-Unit testing SUCCESSFUL after executing 0 tests.
--/
 
 
 
