@@ -64,20 +64,20 @@ let builtinPprintEnv =
   }
 
 -- Look up the string associated with a name in the environment
-let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env.
+let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env : PprintEnv.
   match env with { nameMap = nameMap } then
     mapLookup name nameMap
   else never
 
 -- Check if a string is free in the environment.
-let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env.
+let pprintEnvFree : String -> PprintEnv -> Bool = lam str. lam env : PprintEnv.
   match env with { strings = strings } then
     not (mapMem str strings)
   else never
 
 -- Add a binding to the environment
 let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
-  lam name. lam str. lam i. lam env.
+  lam name. lam str. lam i. lam env : PprintEnv.
     match env with {nameMap = nameMap, count = count, strings = strings} then
       let baseStr = nameGetStr name in
       let count = mapInsert baseStr i count in
@@ -89,7 +89,7 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
 -- Get a string for the current name. Returns both the string and a new
 -- environment.
 let pprintEnvGetStr : PprintEnv -> Name -> (PprintEnv, String) =
-  lam env. lam name.
+  lam env : PprintEnv. lam name.
     match pprintEnvLookup name env with Some str then (env,str)
     else
       let baseStr = nameGetStr name in
@@ -375,7 +375,7 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
       let ident = str in -- TODO(dlunde,2020-11-24): change to pprintTypeName
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.tyIdent with (env, tyIdent) then
-          match t.tyIdent with TyUnknown _ then
+          match t.tyIdent with tyunknown_ then
             (env, join ["type ", ident, pprintNewline indent,
                          "in", pprintNewline indent,
                          inexpr])
@@ -401,7 +401,7 @@ lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
     let i = indent in
     let ii = pprintIncr i in
     let iii = pprintIncr ii in
-    let f = lam env. lam bind.
+    let f = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) then
         match pprintCode iii env bind.body with (env,body) then
           match getTypeStringCode indent env bind.ty with (env, ty) then
@@ -473,6 +473,12 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
 
   sem pprintTmMatchNormally (indent : Int) (env: PprintEnv) =
   | t ->
+    let t : { target : Expr
+            , pat : Pat
+            , thn : Expr
+            , els : Expr
+            , ty : Type
+            , info : Info } = t in
     let i = indent in
     let ii = pprintIncr indent in
     match pprintCode ii env t.target with (env,target) then
@@ -499,8 +505,10 @@ lang RecordProjectionSyntaxSugarPrettyPrint = MatchPrettyPrint + RecordPat + Nev
     , els = TmNever _
     , target = expr
     })
-  -> match mapBindings bindings with [(fieldLabel, PatNamed {ident = PName patName})]
-    then
+  ->
+    let binds : [(SID, Pat)] = mapBindings bindings in
+    match binds with [(fieldLabel, PatNamed {ident = PName patName})]
+      then
       if nameEq patName exprName
       then
         match printParen indent env expr with (env, expr) then
@@ -920,15 +928,15 @@ lang RecordTypePrettyPrint = RecordTypeAst
   | TyRecord t ->
     if mapIsEmpty t.fields then (env,"()") else
       let tuple =
-        let seq = map (lam b. (sidToString b.0, b.1)) (mapBindings t.fields) in
-        if all (lam t. stringIsInt t.0) seq then
-          let seq = map (lam t. (string2int t.0, t.1)) seq in
-          let seq = sort (lam l. lam r. subi l.0 r.0) seq in
+        let seq = map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings t.fields) in
+        if all (lam t : (a,b). stringIsInt t.0) seq then
+          let seq = map (lam t : (a,b). (string2int t.0, t.1)) seq in
+          let seq : [(a,b)] = sort (lam l : (a,b). lam r : (a,b). subi l.0 r.0) seq in
           let first = (head seq).0 in
           let last = (last seq).0 in
           if eqi first 0 then
             if eqi last (subi (length seq) 1) then
-              Some (map (lam t. t.1) seq)
+              Some (map (lam t : (a,b). t.1) seq)
             else None ()
           else None ()
         else None ()
@@ -941,8 +949,8 @@ lang RecordTypePrettyPrint = RecordTypeAst
         let f = lam env. lam. lam v. getTypeStringCode indent env v in
         match mapMapAccum f env t.fields with (env, fields) then
           let fields =
-            map (lam b. (sidToString b.0, b.1)) (mapBindings fields) in
-          let conventry = lam entry. join [entry.0, ": ", entry.1] in
+            map (lam b : (a,b). (sidToString b.0, b.1)) (mapBindings fields) in
+          let conventry = lam entry : (a,b). join [entry.0, ": ", entry.1] in
           (env,join ["{", strJoin ", " (map conventry fields), "}"])
         else never
 end
