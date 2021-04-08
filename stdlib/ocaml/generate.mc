@@ -97,15 +97,37 @@ lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
-  | TmMatch {target = target, pat = pat, thn = thn, els = els} ->
+  | TmMatch t ->
     let tname = nameSym "_target" in
-    match generatePat env (ty target) tname pat with (nameMap, wrap) then
+    let targetTy =
+      let ty = ty t.target in
+      -- If we don't know the type of the target and the pattern describes a
+      -- tuple, then we assume the target has that type. We do this to
+      -- eliminate the need to add type annotations when matching on tuples,
+      -- which happens frequently.
+      match ty with TyUnknown _ then
+        match t.pat with PatRecord {bindings = bindings} then
+          match _record2tuple bindings with Some _ then
+            let bindingTypes = mapMap (lam. tyunknown_) bindings in
+            match mapLookup bindingTypes env.records with Some id then
+              ntyvar_ id
+            else
+              let msg = join [
+                "Pattern specifies undefined tuple type.\n",
+                "This was caused by an error in type-lifting."
+              ] in
+              infoErrorExit t.info msg
+          else ty
+        else ty
+      else ty
+    in
+    match generatePat env targetTy tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nulet_ tname (generate env target)) (wrap (_some expr)))
+          (bind_ (nulet_ tname (generate env t.target)) (wrap (_some expr)))
           pat
-          (generate env thn)
-          (generate env els)
+          (generate env t.thn)
+          (generate env t.els)
       else never
     else never
   | TmRecord t ->
@@ -222,9 +244,14 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | PatChar {val = val} ->
     (assocEmpty, lam cont. _if (eqc_ (nvar_ targetName) (char_ val)) cont _none)
   | PatSeqTot {pats = pats} ->
+    let elemTy =
+      match targetTy with TySeq {ty = elemTy} then
+        elemTy
+      else tyunknown_
+    in
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env targetTy n pat with (names, innerWrap) then
+      match generatePat env elemTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
@@ -248,9 +275,14 @@ lang OCamlGenerate = MExprAst + OCamlAst
     let tempName = nameSym "_splitTemp" in
     let midName = nameSym "_middle" in
     let postName = nameSym "_postfix" in
+    let elemTy =
+      match targetTy with TySeq {ty = elemTy} then
+        elemTy
+      else tyunknown_
+    in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env targetTy n pat with (names, innerWrap) then
+      match generatePat env elemTy n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))

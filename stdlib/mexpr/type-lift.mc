@@ -336,7 +336,24 @@ end
 lang MatchTypeLift = TypeLift + MatchAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
+    -- If the pattern describes a tuple, then we add a tuple type containing
+    -- the amount of elements specified in the tuple (of unknown type) to the
+    -- environment.
+    let addTypeToEnvIfTuplePattern = lam env. lam pat.
+      match pat with PatRecord {bindings = bindings} then
+        match _record2tuple bindings with Some _ then
+          let bindingTypes = mapMap (lam. tyunknown_) bindings in
+          match mapLookup bindingTypes env.records with Some _ then
+            env
+          else
+            match _addRecordTypeVar env bindingTypes with (env, tyName) then
+              env
+            else never
+        else env
+      else env
+    in
     match typeLiftExpr env t.target with (env, target) then
+      let env = addTypeToEnvIfTuplePattern env t.pat in
       match typeLiftExpr env t.thn with (env, thn) then
         match typeLiftExpr env t.els with (env, els) then
           match typeLiftType env t.ty with (env, ty) then

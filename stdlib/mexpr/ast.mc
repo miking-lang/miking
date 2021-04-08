@@ -113,15 +113,17 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
+type RecLetBinding =
+  { ident : Name
+  , tyBody : Type
+  , body : Expr
+  , ty : Type
+  , info : Info }
 
 -- TmRecLets --
 lang RecLetsAst = VarAst
   syn Expr =
-  | TmRecLets {bindings : [{ident : Name,
-                            tyBody : Type,
-                            body : Expr,
-                            ty : Type,
-                            info : Info}],
+  | TmRecLets {bindings : [RecLetBinding],
                inexpr : Expr,
                ty : Type,
                info : Info}
@@ -138,7 +140,7 @@ lang RecLetsAst = VarAst
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
     let bindingMapFunc =
-      lam b : {ident : Name, tyBody : Type, body : Expr, ty : Type, info: Info}.
+      lam b : RecLetBinding.
         {b with body = f b.body}
     in
     TmRecLets {{t with bindings = map bindingMapFunc t.bindings}
@@ -147,7 +149,7 @@ lang RecLetsAst = VarAst
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmRecLets t ->
     let bindingMapFunc =
-      lam b : {ident : Name, tyBody : Type, body : Expr, ty : Type, info: Info}.
+      lam b : RecLetBinding.
         b.body
     in
     f (foldl f acc (map bindingMapFunc t.bindings)) t.inexpr

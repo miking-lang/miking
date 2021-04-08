@@ -10,7 +10,7 @@ let tensorFill = lam t. lam v.
   tensorIteri (lam. lam e. tensorSetExn e [] v) t1
 
 -- Run all tests
-let testTensors = lam eq. lam fromInt. lam v.
+let testTensors = lam eq : a -> a -> Bool. lam fromInt. lam v.
  -- Rank < 2 Tensors
   let mkRank2TestTensor = lam.
     tensorCreate [3, 4] (lam is.
