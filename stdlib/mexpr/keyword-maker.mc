@@ -22,6 +22,11 @@ lang KeywordMakerBase = VarAst + AppAst
   sem matchKeywordString (info: Info) =
   | _ -> None ()
 
+  sem makeKeywordError (info: Info) (n1: Int) (n2: Int) =
+  | ident -> infoErrorExit info (join ["Unexpected number of arguments for construct '",
+             ident, "'. ", "Expected ", int2string n1,
+             " arguments, but found ", int2string n2, "."])
+
   sem makeKeywords (args: [Expr]) =
   | TmApp r ->
      let rhs = makeKeywords [] r.rhs in
@@ -31,17 +36,34 @@ lang KeywordMakerBase = VarAst + AppAst
   | TmVar r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some (noArgs, f) then
-       if eqi noArgs (length args) then
-       f args
-       else infoErrorExit r.info (join ["Unexpected number of arguments for construct '", ident, "'. ",
-            "Expected ", int2string noArgs, " arguments, but found ", int2string (length args), "."])
+       if eqi noArgs (length args) then f args
+       else makeKeywordError r.info noArgs (length args) ident
+--       infoErrorExit r.info (join ["Unexpected number of arguments for construct '", ident, "'. ",
+--            "Expected ", int2string noArgs, " arguments, but found ", int2string (length args), "."])
      else TmVar r
   | expr -> smap_Expr_Expr (makeKeywords []) expr
 end
 
+-- Support for keywords starting with capital letter. Uses ConApp and ConDef
+lang KeywordMakerData = KeywordMakerBase + DataAst
+  sem makeKeywords (args: [Expr]) =
+  | TmConApp r ->
+     let ident = nameGetStr r.ident in
+     match matchKeywordString r.info ident with Some (noArgs, f) then
+       let args = cons r.body args in
+       if eqi noArgs (length args) then f args
+       else makeKeywordError r.info noArgs (length args) ident
+     else TmConApp r
+  | TmConDef r -> 
+     let ident = nameGetStr r.ident in
+     match matchKeywordString r.info ident with Some _ then
+       infoErrorExit r.info (join ["Keyword '", ident,
+       "' cannot be used in a constructor definition."])
+     else TmConDef {r with inexpr = makeKeywords [] r.inexpr}
+end   
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
-lang KeywordLam = KeywordMakerBase + LamAst
+lang KeywordMakerLam = KeywordMakerBase + LamAst
   sem makeKeywords (args: [Expr]) =
   | TmLam r -> 
      let ident = nameGetStr r.ident in
@@ -52,7 +74,7 @@ end
 
 
 -- Includes a check that a keyword cannot be used as a binding variable in a let expression
-lang KeywordLet = KeywordMakerBase + LetAst
+lang KeywordMakerLet = KeywordMakerBase + LetAst
   sem makeKeywords (args: [Expr]) =
   | TmLet r ->
      let ident = nameGetStr r.ident in
@@ -64,7 +86,7 @@ end
 
 
 -- Includes a check that a keyword cannot be used inside a pattern (inside match)
-lang KeywordMatch = KeywordMakerBase + MatchAst + NamedPat
+lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
   sem matchKeywordPat =
   | PatNamed r ->
       match r.ident with PName name then
@@ -85,7 +107,8 @@ end
 
 
 -- The keyword maker fragment, that includes all checks
-lang KeywordMaker = KeywordMakerBase + KeywordLam + KeywordLet + KeywordMatch
+lang KeywordMaker = KeywordMakerBase + KeywordMakerLam + KeywordMakerLet +
+                    KeywordMakerMatch + KeywordMakerData
 
 
 -- A test fragment that is used to test the approach. This
@@ -94,31 +117,40 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
 
   -- Example terms that will be used to represent the values of the
   -- the keyword expressions (the new language constructs). The term
-  -- first demonstrates a construct without arguments, and the second term
-  -- an example where the construct has exactly 2 arguments.
+  -- first demonstrates a construct without arguments, and the third term
+  -- an example where the construct has exactly 2 arguments. The second
+  -- term shows that a keyword also can start with a capital letter.
   syn Expr =
   | TmNoArgs {info: Info}
+  | TmOneArg {arg1: Expr, info: Info}
   | TmTwoArgs {arg1: Expr, arg2: Expr, info: Info}
 
   -- States that the new terms are indeed mapping from keywords
   sem isKeyword =
   | TmNoArgs _ -> true
+  | TmOneArg _ -> true
   | TmTwoArgs _ -> true
 
   -- Defines the new mapping from keyword to new terms
   sem matchKeywordString (info: Info) =
   | "noargs" -> Some (0, lam lst. TmNoArgs{info = info})
+  | "OneArg" -> Some (1, lam lst. TmOneArg{arg1 = get lst 0, info = info})
   | "twoargs" -> Some (2, lam lst. TmTwoArgs{arg1 = get lst 0, arg2 = get lst 1, info = info})
 
   -- smap for the new terms
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmNoArgs t -> TmNoArgs t
+  | TmOneArg t -> TmOneArg {t with arg1 = f t.arg1}
   | TmTwoArgs t -> TmTwoArgs {{t with arg1 = f t.arg1} with arg2 = f t.arg2}
 
   -- Equality of the new terms
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmNoArgs _ ->
       match lhs with TmNoArgs _ then Some free else None ()
+  | TmOneArg r ->     
+      match lhs with TmOneArg l then
+        eqExprH env free l.arg1 r.arg1
+      else None ()
   | TmTwoArgs r ->     
       match lhs with TmTwoArgs l then
         match eqExprH env free l.arg1 r.arg1 with Some free then
@@ -134,10 +166,12 @@ mexpr
 use _testKeywordMaker in
 
 let noargs_ = TmNoArgs {info = NoInfo()} in
+let onearg_ = lam x. TmOneArg {arg1 = x, info = NoInfo()} in
 let twoargs_ = lam x. lam y. TmTwoArgs {arg1 = x, arg2 = y, info = NoInfo()} in
 
 -- In the first three utests, replace "ok" with "twoargs" to generate error message
 -- that demonstrates that keywords cannot be used inside lambdas, lets, and patterns.
+-- Same with the forth, replace "Ok" with "OneArg"
 
 let expr = ulam_ "ok" true_ in  
 utest makeKeywords [] expr with expr using eqExpr in
@@ -148,8 +182,14 @@ utest makeKeywords [] expr with expr using eqExpr in
 let expr = match_ true_  (pvar_ "ok") true_ false_ in
 utest makeKeywords [] expr with expr using eqExpr in
 
+let expr = ucondef_ "Ok" in 
+utest makeKeywords [] expr with expr using eqExpr in
+
 let expr = ulam_ "x" (var_ "noargs") in
 utest makeKeywords [] expr with ulam_ "x" noargs_ using eqExpr in
+
+let expr = ulam_ "x" (conapp_ "OneArg" (true_))  in
+utest makeKeywords [] expr with ulam_ "x" (onearg_ true_) using eqExpr in
 
 let expr = ulam_ "x" (app_ (app_ (var_ "twoargs") (true_)) false_) in
 utest makeKeywords [] expr with ulam_ "x" (twoargs_ true_ false_) using eqExpr in
