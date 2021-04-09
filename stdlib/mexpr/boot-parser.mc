@@ -93,7 +93,7 @@ lang BootParser = MExprAst
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
       TmRecord {bindings =
                  mapFromList cmpSID
-                   (map (lam b. (stringToSid b.0, b.1)) lst),
+                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
                ty = tyunknown_,
                info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
@@ -166,7 +166,7 @@ lang BootParser = MExprAst
   | 207 /-TyRecord-/ ->
     let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
     TyRecord {info = ginfo t 0,
-              fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) lst)}
+              fields = mapFromList cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
       TyVariant {info = ginfo t 0,
@@ -218,7 +218,7 @@ lang BootParser = MExprAst
 
      PatRecord {bindings =
                  mapFromList cmpSID
-                   (map (lam b. (stringToSid b.0, b.1)) lst),
+                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
               info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
@@ -276,17 +276,17 @@ use BootParserTest in
 
 -- Tests where strings of MExpr text is parsed and then pretty printed again.
 -- All terms are tested in this way.
-let norm = lam str.
+let norm : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
 -- Test the combination of parsing and pretty printing
 let parse = lam s. expr2str (parseMExprString s) in
-let lside = lam s. norm (parse s) in
-let rside = norm in
+let lside : String -> String = lam s. norm (parse s) in
+let rside : String -> String = norm in
 
 -- Test that info gives the right columns and rows
-let l_info = lam s.  info (parseMExprString s) in
-let r_info = lam r1. lam c1. lam r2. lam c2.
+let l_info : String -> Info = lam s. info (parseMExprString s) in
+let r_info : Int -> Int -> Int -> Int -> Info = lam r1. lam c1. lam r2. lam c2.
       Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
 
 -- TmVar
@@ -324,7 +324,11 @@ let s = "recursive let x = lam x.x let y = lam x. x in y" in
 utest lside s with rside s in
 let s = "   recursive let x = 5 \n let foo = 7 in x " in
 utest l_info s with r_info 1 3 2 15 in
-utest match parseMExprString s with TmRecLets r then (head (r.bindings)).info else ()
+utest
+  match parseMExprString s with TmRecLets r then
+    let fst : RecLetBinding = head r.bindings in
+    fst.info
+  else never
 with r_info 1 13 1 22 in
 
 -- TmConst
@@ -391,7 +395,7 @@ utest lside s with rside s in
 utest l_info "  Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
 
 -- TmMatch, PatNamed
-let s =  "match 5 with x then x else 2"  in
+let s =  "match 5 with x then x else 2" in
 utest lside s with rside s in
 let s = "match foo with _ then 7 else 2" in
 utest lside s with rside s in
@@ -547,7 +551,7 @@ let s = "let y:<> = lam x.x in y" in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
 --utest lside s with rside s in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
-with r_info 1 6 1 8 in  
+with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
