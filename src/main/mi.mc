@@ -16,18 +16,21 @@ let menu = strJoin "\n" [
   "Usage: mi [compile|run] <files>",
   "",
   "Options:",
-  "  --debug-parse      Print the AST after parsing"]
+  "  --debug-parse      Print the AST after parsing",
+  "  --exit-before      Exit before evaluation or compilation"]
 in
 
 -- Option structure
 let options = {
   debugParse = false,
+  exitBefore = false,
   runTests = false
 } in
 
 -- Option map, maps strings to structure updates
 let optionsMap = [
 ("--debug-parse", lam o. {o with debugParse = true}),
+("--exit-before", lam o. {o with exitBefore = true}),
 ("--test", lam o. {o with runTests = true})
 ] in
 
