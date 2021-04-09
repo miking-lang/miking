@@ -348,26 +348,129 @@ let delete_id ({normals; _} as env) ident =
 let delete_con ({constructors; _} as env) ident =
   {env with constructors= USMap.remove ident constructors}
 
-let rec desugar_tm nss env =
+type subsumeEnv = {subsumer: ustring USMap.t; subsumes: ustring list USMap.t}
+
+let emptySubsumeEnv = {subsumer= USMap.empty; subsumes= USMap.empty}
+
+let utf8 = Ustring.to_utf8
+
+let print_subsume_env env =
+  Printf.printf "*************** Subsume env ******************\n" ;
+  Printf.printf "Subsumer: \n" ;
+  USMap.iter
+    (fun k v -> Printf.printf "%s by %s\n" (utf8 k) (utf8 v))
+    env.subsumer ;
+  Printf.printf "*************** End subsume env ******************\n"
+
+let handle_subsumption env lang includes =
+  (* if List.mem (Ustring.from_utf8 "VarAst") includes then
+   *   Printf.printf "Handle subsumption %s: %s\n" (utf8 lang)
+   *     (String.concat ", " (List.map utf8 includes))
+   * else () ; *)
+  let find_subsumer env x =
+    let is_subsumer y =
+      (* y is a subsumer of x if y has no subsumer and it subsumes x *)
+      match USMap.find_opt y env.subsumer with
+      | Some _ ->
+          false
+      | None -> (
+        match USMap.find_opt y env.subsumes with
+        | None ->
+            false
+        | Some lst ->
+            List.mem x lst )
+    in
+    let found_subsumer, subsumer =
+      USMap.fold
+        (fun k _ acc ->
+          match acc with true, _ -> acc | _ -> (is_subsumer k, k) )
+        env.subsumes (false, x)
+    in
+    if found_subsumer then
+      {env with subsumer= USMap.add x subsumer env.subsumer}
+    else
+      (* TODO: should probably remove subsumer of x here, it has none! *)
+      failwith (Printf.sprintf "No subsumer found for %s" (utf8 x))
+  in
+  let del_lang env =
+    let env = {env with subsumes= USMap.remove lang env.subsumes} in
+    match USMap.find_opt lang env.subsumes with
+    | Some lst ->
+        List.fold_left
+          (fun acc x ->
+            (* If lang was subsumer, find new subsumer *)
+            match USMap.find_opt x acc.subsumer with
+            | None ->
+                failwith
+                  ( print_subsume_env acc ;
+                    Printf.sprintf
+                      "Expected %s to have a subsumer, as it is subsumed by %s\n"
+                      (Ustring.to_utf8 x) (Ustring.to_utf8 lang) )
+            | Some s when s =. lang ->
+                find_subsumer env x
+                (* failwith
+                 *   (Printf.sprintf "%s is subsumer of %s" (Ustring.to_utf8 lang)
+                 *      (Ustring.to_utf8 x) ) *)
+            | _ ->
+                acc )
+          env lst
+    | None ->
+        env
+  in
+  let rec add_lang env to_be_subsumed =
+    (* if utf8 to_be_subsumed = "VarAst" then (
+     *   Printf.printf "%s is now subsumer of %s\n" (utf8 lang)
+     *     (utf8 to_be_subsumed) ;
+     *   print_subsume_env env )
+     * else () ; *)
+    let new_subsumer = USMap.add to_be_subsumed lang env.subsumer in
+    let env = {env with subsumer= new_subsumer} in
+    let env =
+      match USMap.find_opt to_be_subsumed env.subsumes with
+      | Some lst ->
+          List.fold_left add_lang env lst
+      | None ->
+          env
+    in
+    { env with
+      subsumes=
+        USMap.update lang
+          (function
+            | None ->
+                Some [to_be_subsumed]
+            | Some lst ->
+                Some (to_be_subsumed :: lst) )
+          env.subsumes }
+  in
+  let env = del_lang env in
+  let env = List.fold_left add_lang env includes in
+  env
+
+let rec desugar_tm nss env subs =
   let map_right f (a, b) = (a, f b) in
   function
   (* Referencing things *)
   | TmVar (fi, name, i) ->
+      (* Printf.printf "desugar_tm %s\n" (Ustring.to_utf8 name); *)
       TmVar (fi, resolve_id env name, i)
   (* Introducing things *)
   | TmLam (fi, name, s, ty, body) ->
       TmLam
-        (fi, empty_mangle name, s, ty, desugar_tm nss (delete_id env name) body)
+        ( fi
+        , empty_mangle name
+        , s
+        , ty
+        , desugar_tm nss (delete_id env name) subs body )
   | TmLet (fi, name, s, ty, e, body) ->
       TmLet
         ( fi
         , empty_mangle name
         , s
         , ty
-        , desugar_tm nss env e
-        , desugar_tm nss (delete_id env name) body )
+        , desugar_tm nss env subs e
+        , desugar_tm nss (delete_id env name) subs body )
   | TmType (fi, name, s, ty, body) ->
-      TmType (fi, name, s, ty, desugar_tm nss env body)
+      TmType (fi, name, s, ty, desugar_tm nss env subs body)
   | TmRecLets (fi, bindings, body) ->
       let env' =
         List.fold_left
@@ -378,18 +481,18 @@ let rec desugar_tm nss env =
         ( fi
         , List.map
             (fun (fi, name, s, ty, e) ->
-              (fi, empty_mangle name, s, ty, desugar_tm nss env' e) )
+              (fi, empty_mangle name, s, ty, desugar_tm nss env' subs e) )
             bindings
-        , desugar_tm nss env' body )
+        , desugar_tm nss env' subs body )
   | TmConDef (fi, name, s, ty, body) ->
       TmConDef
         ( fi
         , empty_mangle name
         , s
         , ty
-        , desugar_tm nss (delete_con env name) body )
+        , desugar_tm nss (delete_con env name) subs body )
   | TmConApp (fi, x, s, t) ->
-      TmConApp (fi, resolve_con env x, s, desugar_tm nss env t)
+      TmConApp (fi, resolve_con env x, s, desugar_tm nss env subs t)
   | TmClos _ as tm ->
       tm
   (* Both introducing and referencing *)
@@ -446,10 +549,10 @@ let rec desugar_tm nss env =
       let env', pat' = desugar_pat env pat in
       TmMatch
         ( fi
-        , desugar_tm nss env target
+        , desugar_tm nss env subs target
         , pat'
-        , desugar_tm nss env' thn
-        , desugar_tm nss env els )
+        , desugar_tm nss env' subs thn
+        , desugar_tm nss env subs els )
   (* Use *)
   | TmUse (fi, name, body) -> (
     match USMap.find_opt name nss with
@@ -457,24 +560,37 @@ let rec desugar_tm nss env =
         raise_error fi
           ("Unknown language fragment '" ^ Ustring.to_utf8 name ^ "'")
     | Some ns ->
-        desugar_tm nss (merge_env_overwrite env ns) body )
+        (* Printf.printf "Namespace of %s\n" (Ustring.to_utf8 name) ; *)
+        (* USMap.iter
+         *   (fun k v ->
+         *     Ustring.Op.uprint_endline k ;
+         *     Ustring.Op.uprint_endline v )
+         *   ns.normals ; *)
+        Printf.printf "%s is subsumed by %s" (Ustring.to_utf8 name)
+          ( match USMap.find_opt name subs.subsumer with
+          | Some lang ->
+              Ustring.to_utf8 lang
+          | None ->
+              "(none)" ) ;
+        desugar_tm nss (merge_env_overwrite env ns) subs body )
   (* Simple recursions *)
   | TmApp (fi, a, b) ->
-      TmApp (fi, desugar_tm nss env a, desugar_tm nss env b)
+      TmApp (fi, desugar_tm nss env subs a, desugar_tm nss env subs b)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map (desugar_tm nss env) tms)
+      TmSeq (fi, Mseq.Helpers.map (desugar_tm nss env subs) tms)
   | TmRecord (fi, r) ->
-      TmRecord (fi, Record.map (desugar_tm nss env) r)
+      TmRecord (fi, Record.map (desugar_tm nss env subs) r)
   | TmRecordUpdate (fi, a, lab, b) ->
-      TmRecordUpdate (fi, desugar_tm nss env a, lab, desugar_tm nss env b)
+      TmRecordUpdate
+        (fi, desugar_tm nss env subs a, lab, desugar_tm nss env subs b)
   | TmUtest (fi, a, b, using, body) ->
-      let using_desugared = Option.map (desugar_tm nss env) using in
+      let using_desugared = Option.map (desugar_tm nss env subs) using in
       TmUtest
         ( fi
-        , desugar_tm nss env a
-        , desugar_tm nss env b
+        , desugar_tm nss env subs a
+        , desugar_tm nss env subs b
         , using_desugared
-        , desugar_tm nss env body )
+        , desugar_tm nss env subs body )
   | TmNever fi ->
       TmNever fi
   (* Non-recursive *)
@@ -482,7 +598,7 @@ let rec desugar_tm nss env =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
+let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
   | TopLang (Lang (_, langName, includes, decls)) ->
       let add_lang ns lang =
         USMap.find_opt lang nss
@@ -535,7 +651,8 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
           , TyUnknown NoInfo
           , translate_cases fname (var target) cases )
         |> List.fold_right wrap_param params
-        |> desugar_tm nss ns
+        |> desugar_tm nss ns subs
+        (* TODO: pass new subs here? *)
       in
       let translate_inter = function
         | Inter (fi, name, params, cases) ->
@@ -553,7 +670,10 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
         TmRecLets (NoInfo, List.filter_map translate_inter decls, tm)
         |> List.fold_right wrap_data decls
       in
-      (USMap.add langName ns nss, new_syns, wrap :: stack)
+      ( USMap.add langName ns nss
+      , handle_subsumption subs langName includes
+      , new_syns
+      , wrap :: stack )
   (* The other tops are trivial translations *)
   | TopLet (Let (fi, id, ty, tm)) ->
       let wrap tm' =
@@ -562,13 +682,13 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
           , empty_mangle id
           , Symb.Helpers.nosym
           , ty
-          , desugar_tm nss emptyMlangEnv tm
+          , desugar_tm nss emptyMlangEnv subs tm
           , tm' )
       in
-      (nss, syns, wrap :: stack)
+      (nss, subs, syns, wrap :: stack)
   | TopType (Type (fi, id, ty)) ->
       let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
-      (nss, syns, wrap :: stack)
+      (nss, subs, syns, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
         TmRecLets
@@ -579,23 +699,25 @@ let desugar_top (nss, syns, (stack : (tm -> tm) list)) = function
                 , empty_mangle id
                 , Symb.Helpers.nosym
                 , ty
-                , desugar_tm nss emptyMlangEnv tm ) )
+                , desugar_tm nss emptyMlangEnv subs tm ) )
               lets
           , tm' )
       in
-      (nss, syns, wrap :: stack)
+      (nss, subs, syns, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
-      (nss, syns, wrap :: stack)
+      (nss, subs, syns, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
-      (nss, syns, wrap :: stack)
+      (nss, subs, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start = (nss, USMap.empty, []) in
-  let new_nss, syns, stack = List.fold_left desugar_top acc_start tops in
+  let acc_start = (nss, emptySubsumeEnv, USMap.empty, []) in
+  let new_nss, _subs, syns, stack =
+    List.fold_left desugar_top acc_start tops
+  in
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
@@ -604,7 +726,9 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   in
   let stack = stack @ syntydecl in
   let desugared_tm =
-    List.fold_left ( |> ) (desugar_tm new_nss emptyMlangEnv t) stack
+    List.fold_left ( |> )
+      (desugar_tm new_nss emptyMlangEnv emptySubsumeEnv t)
+      stack
   in
   (new_nss, desugared_tm)
 
