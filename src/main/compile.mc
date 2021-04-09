@@ -2,35 +2,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
-include "mexpr/boot-parser.mc"
-include "mexpr/builtin.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
-include "mexpr/utesttrans.mc"
-include "ocaml/ast.mc"
-include "ocaml/generate.mc"
-include "ocaml/pprint.mc"
-
-lang MCoreCompile =
-  BootParser +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
-end
-
--- Hack for pretty-printing the preamble and inserting it into the beginning of
--- the OCaml file, after all type definitions.
-let _preambleStr =
-  use OCamlPrettyPrint in
-  let str = expr2str (bind_ _preamble (int_ 0)) in
-  subsequence str 0 (subi (length str) 1)
-
-recursive let _withPreamble = lam expr.
-  use OCamlAst in
-  match expr with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
-  else
-    OTmPreambleText {text = _preambleStr, inexpr = expr}
-end
+include "generate.mc"
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
@@ -43,25 +15,13 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile = lam sourcePath. lam ocamlAst.
-  use MCoreCompile in
-  let p = ocamlCompile (expr2str ocamlAst) in
+let ocamlCompile = lam sourcePath. lam ocamlProg.
+  let p = ocamlCompile ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   phMoveFile p.binaryPath destinationFile;
   phChmodWriteAccessFile destinationFile
 
-let generateTests = lam ast. lam testsEnabled.
-  use MCoreCompile in
-  if testsEnabled then
-    let ast = symbolize ast in
-    let ast = typeAnnot ast in
-    utestGen ast
-  else
-    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
-    (symEnv, utestStrip ast)
-
 let compile = lam files. lam options.
-  use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile file in
 

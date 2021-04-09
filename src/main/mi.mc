@@ -8,12 +8,13 @@ include "seq.mc"
 include "string.mc"
 include "run.mc"
 include "assoc.mc"
+include "generate.mc"
 
 mexpr
 
 -- Menu
 let menu = strJoin "\n" [
-  "Usage: mi [compile|run] <files>",
+  "Usage: mi [compile|run|generate] <files>",
   "",
   "Options:",
   "  --debug-parse      Print the AST after parsing",
@@ -24,21 +25,24 @@ in
 let options = {
   debugParse = false,
   exitBefore = false,
-  runTests = false
+  runTests = false,
+  excludeIntrinsicsPremable = false
 } in
 
 -- Option map, maps strings to structure updates
 let optionsMap = [
 ("--debug-parse", lam o. {o with debugParse = true}),
 ("--exit-before", lam o. {o with exitBefore = true}),
-("--test", lam o. {o with runTests = true})
+("--test", lam o. {o with runTests = true}),
+("--exclude-intrinsics-premable", lam o. {o with excludeIntrinsicsPremable = true})
 ] in
 
 -- Commands map, maps command strings to functions. The functions
 -- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("run", run),
-("compile", compile)
+("compile", compile),
+("generate", generate)
 ] in
 
 -- Lookup for a string map
