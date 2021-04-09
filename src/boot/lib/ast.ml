@@ -336,7 +336,7 @@ let tyUnit fi = TyRecord (fi, Record.empty)
 module Option = BatOption
 
 (* smap for terms *)
-let smap_tm_tm (f : tm -> tm)  = function
+let smap_tm_tm (f : tm -> tm) = function
   | TmVar (_, _, _) as t ->
       t
   | TmApp (fi, t1, t2) ->
@@ -381,7 +381,7 @@ let smap_tm_tm (f : tm -> tm)  = function
       t
 
 (* sfold over terms *)
-let sfold_tm_tm (f: 'a -> tm -> 'a) (acc: 'a) = function
+let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
   | TmVar (_, _, _) ->
       acc
   | TmApp (_, t1, t2) ->
@@ -425,7 +425,6 @@ let sfold_tm_tm (f: 'a -> tm -> 'a) (acc: 'a) = function
       acc
   | TmTensor _ ->
       acc
-
 
 (* Returns the info field from a term *)
 let tm_info = function
