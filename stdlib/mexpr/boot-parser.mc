@@ -3,6 +3,7 @@
 --
 
 include "mexpr/ast.mc"
+include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
@@ -268,7 +269,7 @@ lang BootParser = MExprAst
 
 end
 
-lang BootParserTest = BootParser + MExprPrettyPrint
+lang BootParserTest = BootParser + MExprPrettyPrint + MExprEq
 
 mexpr
 use BootParserTest in
@@ -365,7 +366,8 @@ utest lside s with rside s in
 let s = "{a = 5}" in
 utest lside s with rside s in
 let s = "{bar = \"Hello\", foo = 123}" in
-utest lside s with rside s in
+let t = record_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
+utest parseMExprString s with t using eqExpr in
 utest l_info " {} " with r_info 1 1 1 3 in
 utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 
@@ -373,7 +375,8 @@ utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 let s = "{a with foo = 5}" in
 utest lside s with rside s in
 let s = "{{bar='a', foo=7} with bar = 'b'}" in
-utest lside s with rside s in
+let t = recordupdate_ (record_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
+utest parseMExprString s with t using eqExpr in
 utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
 
 -- NOTE(caylak, 2021-03-17): Commented out because test fails since parsing of TyVariant is not supported yet
@@ -430,7 +433,10 @@ utest lside s with rside s in
 utest match parseMExprString s with TmMatch r then info r.pat else ()
 with r_info 1 13 1 15 in
 let s = "match x with {bar=_, foo=x} then x else 2" in
-utest lside s with rside s in
+let t = match_ (var_ "x")
+               (prec_ [("bar", pvarw_), ("foo", pvar_ "x")])
+               (var_ "x") (int_ 2) in
+utest parseMExprString s with t using eqExpr in
 utest match parseMExprString s with TmMatch r then info r.pat else ()
 with r_info 1 13 1 27 in
 
@@ -530,19 +536,37 @@ with r_info 1 6 1 11 in
 
 -- Nested TySeq
 let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}}]= lam x.x in y" in
-utest lside s with rside s in
+let recTy = tyseq_ (tyrecord_ [
+  ("a", tyrecord_ [
+    ("a_1", tyint_),
+    ("a_2", tyfloat_)]),
+  ("b", tyrecord_ [
+    ("b_1", tystr_),
+    ("b_2", tyfloat_)])]) in
+let typedLet = lam letTy.
+  bind_ (let_ "y" letTy (ulam_ "x" (var_ "x")))
+        (var_ "y") in
+utest parseMExprString s with typedLet recTy using eqExpr in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 56 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
-utest lside s with rside s in
+let recTy = tyrecord_ [("a", tyint_), ("b", tystr_)] in
+utest parseMExprString s with typedLet recTy using eqExpr in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 22 in
 
 -- Nested TyRecord
 let s = "let y:{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}} = lam x.x in y" in
-utest lside s with rside s in
+let recTy = tyrecord_ [
+  ("a", tyrecord_ [
+    ("a_1", tyint_),
+    ("a_2", tyfloat_)]),
+  ("b", tyrecord_ [
+    ("b_1", tystr_),
+    ("b_2", tyfloat_)])] in
+utest parseMExprString s with typedLet recTy using eqExpr in
 utest match parseMExprString s with TmLet l then info l.tyBody else ()
 with r_info 1 6 1 54 in
 
