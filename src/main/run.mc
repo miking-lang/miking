@@ -38,7 +38,8 @@ let run = lam files. lam options.
     -- all utest nodes from the AST.
     match generateTests ast options.runTests with (symEnv, ast) then
       let ast = symbolizeExpr symEnv ast in
-      eval {env = builtinEnv} ast
+      if options.exitBefore then exit 0
+      else eval {env = builtinEnv} ast
     else never
   in
   iter runFile files

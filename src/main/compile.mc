@@ -88,7 +88,8 @@ let compile = lam files. lam options.
       in
 
       -- Compile OCaml AST
-      ocamlCompile file ocamlAst
+      if options.exitBefore then exit 0
+      else ocamlCompile file ocamlAst
     else never
   in
   iter compileFile files
