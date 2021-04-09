@@ -451,50 +451,49 @@ let _objTyped = lam.
   use OCamlExternal in
   OTmVarExt {ident = "Obj.t"}
 
-let _typeLiftEnvToGenerateEnv = lam typeLiftEnv.
+let _typeLiftEnvToGenerateEnv = lam typeLiftEnvMap. lam typeLiftEnv.
   use MExprAst in
-  let f = lam env. lam entry.
-    match entry with (name, ty) then
-      match ty with TyRecord {fields = fields} then
-        {{env with records = mapInsert fields name env.records}
-              with constrs = mapInsert name ty env.constrs}
-      else match ty with TyVariant {constrs = constrs} then
-        {env with constrs = mapUnion env.constrs constrs}
-      else {env with aliases = mapInsert name ty env.aliases}
-    else never
+  let f = lam env. lam name. lam ty.
+    match ty with TyRecord {fields = fields} then
+      {{env with records = mapInsert fields name env.records}
+            with constrs = mapInsert name ty env.constrs}
+    else match ty with TyVariant {constrs = constrs} then
+      let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+      {env with constrs = mapUnion env.constrs constrs}
+    else
+      {env with aliases = mapInsert name ty env.aliases}
   in
-  foldl f _emptyGenerateEnv typeLiftEnv
+  assocSeqFold f _emptyGenerateEnv typeLiftEnv
 
-let _addTypeDeclarations = lam typeLiftEnv. lam t.
+let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
   use MExprAst in
   use OCamlTypeDeclAst in
-  let f = lam t. lam envEntry.
-    match envEntry with (name, ty) then
-      match ty with TyRecord {fields = fields} then
-        let objTypedFields = mapMap _objTyped fields in
+  let f = lam t. lam name. lam ty.
+    match ty with TyRecord {fields = fields} then
+      OTmVariantTypeDecl {
+        ident = nameSym "record",
+        constrs = mapInsert name ty (mapEmpty nameCmp),
+        inexpr = t
+      }
+    else match ty with TyVariant {constrs = constrs} then
+      let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+      if mapIsEmpty constrs then t
+      else
         OTmVariantTypeDecl {
-          ident = nameSym "record",
-          constrs = mapInsert name ty (mapEmpty nameCmp),
+          ident = name,
+          constrs = constrs,
           inexpr = t
         }
-      else match ty with TyVariant {constrs = constrs} then
-        if mapIsEmpty constrs then t
-        else
-          OTmVariantTypeDecl {
-            ident = name,
-            constrs = constrs,
-            inexpr = t
-          }
-      else t
-    else never
+    else t
   in
-  foldl f t typeLiftEnv
+  assocSeqFold f t typeLiftEnv
 
 lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
-    let generateEnv = _typeLiftEnvToGenerateEnv env in
-    let expr = _addTypeDeclarations env expr in
+    let typeLiftEnvMap = mapFromList nameCmp env in
+    let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap env in
+    let expr = _addTypeDeclarations typeLiftEnvMap env expr in
     (generateEnv, expr)
 end
 
