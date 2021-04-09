@@ -17,8 +17,10 @@ let menu = strJoin "\n" [
   "Usage: mi [compile|run|generate] <files>",
   "",
   "Options:",
-  "  --debug-parse      Print the AST after parsing",
-  "  --exit-before      Exit before evaluation or compilation"]
+  "  --debug-parse                    Print the AST after parsing",
+  "  --exit-before                    Exit before evaluation or compilation"]
+  "  --test                           Generate utest code",
+  "  --exclude-intrinsics-premable    Exclude the intinsics premable"]
 in
 
 -- Option structure
