@@ -320,6 +320,24 @@ type mlangEnv = {constructors: ustring USMap.t; normals: ustring USMap.t}
 
 let emptyMlangEnv = {constructors= USMap.empty; normals= USMap.empty}
 
+(* Compute the intersection of a and b, by overwriting names in a with the names
+   in b *)
+let intersect_env_overwrite a b =
+  let merger = function
+    | None, None ->
+        None
+    | Some _, Some r ->
+        Some r
+    | None, Some _ ->
+        None
+    | Some v, None ->
+        Some v
+    (* | (Some v, None) -> Ustring.Op.uprint_endline v; failwith "Impossible" *)
+  in
+  { constructors=
+      USMap.merge (fun _ l r -> merger (l, r)) a.constructors b.constructors
+  ; normals= USMap.merge (fun _ l r -> merger (l, r)) a.normals b.normals }
+
 (* Adds the names from b to a, overwriting with the name from b when they overlap *)
 let merge_env_overwrite a b =
   { constructors=
@@ -566,13 +584,22 @@ let rec desugar_tm nss env subs =
          *     Ustring.Op.uprint_endline k ;
          *     Ustring.Op.uprint_endline v )
          *   ns.normals ; *)
-        Printf.printf "%s is subsumed by %s" (Ustring.to_utf8 name)
-          ( match USMap.find_opt name subs.subsumer with
-          | Some lang ->
-              Ustring.to_utf8 lang
+        (* Printf.printf "%s is subsumed by %s\n" (Ustring.to_utf8 name)
+         *   ( match USMap.find_opt name subs.subsumer with
+         *   | Some lang ->
+         *       Ustring.to_utf8 lang
+         *   | None ->
+         *     "(none)" ) ; *)
+        let intersected_ns =
+          match USMap.find_opt name subs.subsumer with
           | None ->
-              "(none)" ) ;
-        desugar_tm nss (merge_env_overwrite env ns) subs body )
+              ns
+          | Some s ->
+              (* Printf.printf "intersection of %s and %s\n" (utf8 name) (utf8 s); *)
+              intersect_env_overwrite ns (USMap.find s nss)
+          (* Keep things from ns only *)
+        in
+        desugar_tm nss (merge_env_overwrite env intersected_ns) subs body )
   (* Simple recursions *)
   | TmApp (fi, a, b) ->
       TmApp (fi, desugar_tm nss env subs a, desugar_tm nss env subs b)
@@ -715,9 +742,7 @@ let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   let acc_start = (nss, emptySubsumeEnv, USMap.empty, []) in
-  let new_nss, _subs, syns, stack =
-    List.fold_left desugar_top acc_start tops
-  in
+  let new_nss, subs, syns, stack = List.fold_left desugar_top acc_start tops in
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
@@ -726,9 +751,7 @@ let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
   in
   let stack = stack @ syntydecl in
   let desugared_tm =
-    List.fold_left ( |> )
-      (desugar_tm new_nss emptyMlangEnv emptySubsumeEnv t)
-      stack
+    List.fold_left ( |> ) (desugar_tm new_nss emptyMlangEnv subs t) stack
   in
   (new_nss, desugared_tm)
 
