@@ -390,7 +390,7 @@ let emptySubsumeEnv = {subsumer= USMap.empty; subsumes= USMap.empty}
 (* Check if the first language is subsumed by the second *)
 let lang_is_subsumed_by l1 l2 =
   match (l1, l2) with
-  | Lang (_, _, _, decls1), Lang (_, _, _, decls2) ->
+  | Lang (fi, _, _, decls1), Lang (_, _, _, decls2) ->
       let decl_is_subsumed_by = function
         | Inter (_, n1, _, cases1), Inter (_, n2, _, cases2) when n1 =. n2 ->
             let mk_pos_neg (pat, _) =
@@ -435,7 +435,10 @@ let lang_is_subsumed_by l1 l2 =
                         | Superset ->
                             false
                         | Equal | Overlapping _ ->
-                            failwith "Impossible" )
+                          raise_error fi
+                            "Two patterns in this semantic function are either \
+                             equal or overlapping, which should be impossible"
+                    )
                     true cases2 )
                 cases1
             in
