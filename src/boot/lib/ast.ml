@@ -478,7 +478,186 @@ let ty_info = function
   | TyApp (fi, _, _) ->
       fi
 
-(* Converts a sequence of terms to a ustring *)
+let const_has_side_effect = function
+  | CBool _  
+  | CInt _ 
+  | Caddi _ 
+  | Csubi _ 
+  | Cmuli _ 
+  | Cdivi _ 
+  | Cmodi _ 
+  | Cnegi
+  | Clti _
+  | Cleqi _
+  | Cgti _
+  | Cgeqi _ 
+  | Ceqi _ 
+  | Cneqi _
+  | Cslli _
+  | Csrli _ 
+  | Csrai _ 
+  | Carity -> false
+  (* MCore intrinsics: Floating-point numbers *)
+  | CFloat _
+  | Caddf _
+  | Csubf _
+  | Cmulf _
+  | Cdivf _
+  | Cnegf
+  | Cltf _
+  | Cleqf _
+  | Cgtf _
+  | Cgeqf _
+  | Ceqf _
+  | Cneqf _
+  | Cfloorfi
+  | Cceilfi
+  | Croundfi
+  | Cint2float
+  | Cstring2float -> false
+  (* MCore intrinsics: Characters *)
+  | CChar _
+  | Ceqc _
+  | Cchar2int 
+  | Cint2char -> false
+  (* MCore intrinsic: sequences *)
+  | Ccreate _
+  | Clength
+  | Cconcat _
+  | Cget _
+  | Cset _
+  | Ccons _
+  | Csnoc _
+  | CsplitAt _
+  | Creverse
+  | Csubsequence _ -> false
+  (* MCore intrinsics: Random numbers *)
+  | CrandIntU _ -> true
+  | CrandSetSeed -> true
+  (* MCore intrinsics: Time *)
+  | CwallTimeMs -> true
+  | CsleepMs -> true
+  (* MCore intrinsics: Debug and I/O *)
+  | Cprint 
+  | Cdprint 
+  | CreadLine 
+  | CreadBytesAsString
+  | CreadFile 
+  | CwriteFile _
+  | CfileExists
+  | CdeleteFile
+  | Cerror
+  | Cexit -> true
+  (* MCore intrinsics: Symbols *)
+  | CSymb _
+  | Cgensym
+  | Ceqsym _
+  | Csym2hash -> true
+  (* MCore intrinsics: References *)
+  | Cref
+  | CmodRef _
+  | CdeRef -> true
+  (* MCore intrinsics: Maps *)
+  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
+  | CMap _
+  | CmapEmpty
+  | CmapSize
+  | CmapGetCmpFun
+  | CmapInsert _
+  | CmapRemove _
+  | CmapFindWithExn _
+  | CmapFindOrElse _
+  | CmapFindApplyOrElse _
+  | CmapMem _
+  | CmapAny _
+  | CmapMap _
+  | CmapMapWithKey _
+  | CmapFoldWithKey _
+  | CmapBindings
+  | CmapEq _
+  | CmapCmp _ -> false
+  (* MCore intrinsics: Tensors *)
+  | CtensorCreate _
+  | CtensorGetExn _
+  | CtensorSetExn _
+  | CtensorRank
+  | CtensorShape
+  | CtensorCopyExn _
+  | CtensorReshapeExn _
+  | CtensorSliceExn _
+  | CtensorSubExn _
+  | CtensorIteri _ -> true
+  (* MCore intrinsics: Boot parser *)
+  | CbootParserTree _
+  | CbootParserParseMExprString
+  | CbootParserParseMCoreFile
+  | CbootParserGetId
+  | CbootParserGetTerm _
+  | CbootParserGetType _
+  | CbootParserGetString _
+  | CbootParserGetInt _
+  | CbootParserGetFloat _
+  | CbootParserGetListLength _
+  | CbootParserGetConst _
+  | CbootParserGetPat _
+  | CbootParserGetInfo _ -> true
+  (* External functions *)
+  | CPar _
+  | CExt _
+  | CSd _
+  | CPy _ -> true
+
+(*
+let rec tm_has_side_effect = function
+  | TmVar _ -> false 
+  | TmApp (_, t1, t2) -> tm_has_side_effect t1 || tm_has_side_effect t1
+  
+  (* Lambda abstraction *)
+  | TmLam of info * ustring * Symb.t * ty * tm
+  (* Let *)
+  | TmLet of info * ustring * Symb.t * ty * tm * tm
+  (* Recursive lets *)
+  | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm
+  (* Constant *)
+  | TmConst of info * const
+  (* Sequence *)
+  | TmSeq of info * tm Mseq.t
+  (* Record *)
+  | TmRecord of info * tm Record.t
+  (* Record update *)
+  | TmRecordUpdate of info * tm * ustring * tm
+  (* Type let *)
+  | TmType of info * ustring * Symb.t * ty * tm
+  (* Constructor definition *)
+  | TmConDef of info * ustring * Symb.t * ty * tm
+  (* Constructor application *)
+  | TmConApp of info * ustring * Symb.t * tm
+  (* Match data *)
+  | TmMatch of info * tm * pat * tm * tm
+  (* Unit testing *)
+  | TmUtest of info * tm * tm * tm option * tm
+  (* Never term *)
+  | TmNever of info
+  (* -- The following term is removed during MLang desugaring *)
+  (* Use a language *)
+  | TmUse of info * ustring * tm
+  (* -- The rest is ONLY part of the runtime system *)
+  (* Closure *)
+  | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
+  (* Fix point *)
+  | TmFix of info
+  (* Reference *)
+  | TmRef of info * tm ref
+  (* Tensor *)
+  | TmTensor of info * tm T.t
+ *)
+
+
+
+
+
+  
+  (* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
   Mseq.Helpers.map
     (fun x ->
