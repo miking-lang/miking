@@ -31,78 +31,78 @@ let _typeEnvEmpty = {
 -- It is equivalent to type equality, except that unknown types are considered
 -- compatible with any other type. If no compatible type can be found, `None`
 -- is returned.
-recursive
-  let compatibleType =
-    use MExprAst in
-    lam tyEnv : Map Name Type. lam ty1 : Type. lam ty2 : Type.
-    let unwrapType = lam tyEnv : Map Name Type. lam ty : Type.
-      match ty with TyVar {ident = id} then
-        mapLookup id tyEnv
-      else Some ty
-    in
-    let m = (ty1,ty2) in
-    match m with (TyUnknown _, t2) then Some t2
-    else match m with (t1, TyUnknown _) then Some t1
-    else match m with (TyVar t1, TyVar t2) then
-      if nameEq t1.ident t2.ident then Some ty1
-      else match unwrapType tyEnv (TyVar t1) with Some t1 then
-        compatibleType tyEnv t1 (TyVar t2)
-      else never
-    else match m with (TyApp t1, t2) then compatibleType tyEnv t1.lhs t2
-    else match m with (t1, TyApp t2) then compatibleType tyEnv t1 t2.lhs
-    else match m with (TyVar t1, t2) then
-      match unwrapType tyEnv (TyVar t1) with Some t1 then
-        compatibleType tyEnv t1 t2
-      else
-        error (concat "Unbound TyVar in compatibleType: " (nameGetStr t1.ident))
-    else match m with (t1, TyVar t2) then
-      match unwrapType tyEnv (TyVar t2) with Some t2 then
-        compatibleType tyEnv t1 t2
-      else
-        error (concat "Unbound TyVar in compatibleType: " (nameGetStr t2.ident))
-    else match m with ((TyBool _ & t1), TyBool _) then Some t1
-    else match m with ((TyInt _ & t1), TyInt _) then Some t1
-    else match m with ((TyFloat _ & t1), TyFloat _) then Some t1
-    else match m with ((TyChar _ & t1), TyChar _) then Some t1
-    else match m with (TyArrow t1, TyArrow t2) then
-      match compatibleType tyEnv t1.from t2.from with Some a then
-        match compatibleType tyEnv t1.to t2.to with Some b then
-          Some (TyArrow {{t1 with from = a} with to = b})
-        else None ()
+recursive let compatibleType =
+  use MExprAst in
+  lam tyEnv : Map Name Type. lam ty1 : Type. lam ty2 : Type.
+  let unwrapType = lam tyEnv : Map Name Type. lam ty : Type.
+    match ty with TyVar {ident = id} then
+      mapLookup id tyEnv
+    else Some ty
+  in
+  let m = (ty1,ty2) in
+  match m with (TyUnknown _, t2) then Some t2
+  else match m with (t1, TyUnknown _) then Some t1
+  else match m with (TyVar t1, TyVar t2) then
+    if nameEq t1.ident t2.ident then Some ty1
+    else match unwrapType tyEnv (TyVar t1) with Some t1 then
+      compatibleType tyEnv t1 (TyVar t2)
+    else never
+  else match m with (TyApp t1, t2) then compatibleType tyEnv t1.lhs t2
+  else match m with (t1, TyApp t2) then compatibleType tyEnv t1 t2.lhs
+  else match m with (TyVar t1, t2) then
+    match unwrapType tyEnv (TyVar t1) with Some t1 then
+      compatibleType tyEnv t1 t2
+    else
+      error (concat "Unbound TyVar in compatibleType: " (nameGetStr t1.ident))
+  else match m with (t1, TyVar t2) then
+    match unwrapType tyEnv (TyVar t2) with Some t2 then
+      compatibleType tyEnv t1 t2
+    else
+      error (concat "Unbound TyVar in compatibleType: " (nameGetStr t2.ident))
+  else match m with ((TyBool _ & t1), TyBool _) then Some t1
+  else match m with ((TyInt _ & t1), TyInt _) then Some t1
+  else match m with ((TyFloat _ & t1), TyFloat _) then Some t1
+  else match m with ((TyChar _ & t1), TyChar _) then Some t1
+  else match m with (TyArrow t1, TyArrow t2) then
+    match compatibleType tyEnv t1.from t2.from with Some a then
+      match compatibleType tyEnv t1.to t2.to with Some b then
+        Some (TyArrow {{t1 with from = a} with to = b})
       else None ()
-    else match m with (TySeq t1, TySeq t2) then
-      match compatibleType tyEnv t1.ty t2.ty with Some t then
-        Some (TySeq {t1 with ty = t})
-      else None ()
-    else match m with (TyRecord t1, TyRecord t2) then
-      let f = lam acc. lam p.
-        match p with (k, ty1) then
-          match mapLookup k t2.fields with Some ty2 then
-            match compatibleType tyEnv ty1 ty2 with Some ty then
-              Some (mapInsert k ty acc)
-            else None ()
-          else None ()
-        else never
-      in
-      match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
-        Some (TyRecord {t1 with fields = fields})
-      else
-        None ()
-    else match m with (TyVariant t1, TyVariant t2) then
-      let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
-        match mapLookup ident t2.constrs with Some ty2 then
-          match compatibleType tyEnv ty1 ty2 with Some ty then
-            Some (mapInsert ident ty acc)
-          else None ()
-        else None ()
-      ) (mapEmpty (mapGetCmpFun t1.constrs)) t1.constrs
-      in
-      optionMap (lam constrs. TyVariant {t1 with constrs = constrs}) constrsOpt
     else None ()
+  else match m with (TySeq t1, TySeq t2) then
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TySeq {t1 with ty = t})
+    else None ()
+  else match m with (TyRecord t1, TyRecord t2) then
+    let f = lam acc. lam p.
+      match p with (k, ty1) then
+        match mapLookup k t2.fields with Some ty2 then
+          match compatibleType tyEnv ty1 ty2 with Some ty then
+            Some (mapInsert k ty acc)
+          else None ()
+        else None ()
+      else never
+    in
+    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
+      Some (TyRecord {t1 with fields = fields})
+    else
+      None ()
+  else match m with (TyVariant t1, TyVariant t2) then
+    let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
+      match mapLookup ident t2.constrs with Some ty2 then
+        match compatibleType tyEnv ty1 ty2 with Some ty then
+          Some (mapInsert ident ty acc)
+        else None ()
+      else None ()
+    ) (mapEmpty (mapGetCmpFun t1.constrs)) t1.constrs
+    in
+    optionMap (lam constrs. TyVariant {t1 with constrs = constrs}) constrsOpt
+  else None ()
 end
 
 let _isTypeAscription = use MExprAst in
-  lam letTerm.
+  lam letTerm : {ident : Name, tyBody : Type, body : Expr,
+                 inexpr : Expr, ty : Type, info : Info}.
   match letTerm.inexpr with TmVar {ident = id} then
     nameEq letTerm.ident id
   else false
@@ -204,14 +204,14 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
     -- Add mapping from binding identifier to annotated type before doing type
     -- annotations of the bindings. This is to make annotations work for
     -- mutually recursive functions, given correct type annotations.
-    let foldBindingInit = lam acc. lam binding.
+    let foldBindingInit = lam acc. lam binding : RecLetBinding.
       mapInsert binding.ident binding.tyBody acc
     in
     -- Add mapping from binding identifier to the inferred type.
-    let foldBindingAfter = lam acc. lam binding.
+    let foldBindingAfter = lam acc. lam binding : RecLetBinding.
       mapInsert binding.ident binding.ty acc
     in
-    let annotBinding = lam env. lam binding.
+    let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
       let body = typeAnnotExpr env binding.body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
@@ -388,7 +388,9 @@ lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqEdge t ->
     match expectedTy with TySeq {ty = elemTy} then
-      let env = foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.prefix in
+      let env : TypeEnv =
+        foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.prefix
+      in
       let env =
         match t.middle with PName n then
           {env with varEnv = mapInsert n expectedTy env.varEnv}
@@ -474,7 +476,7 @@ mexpr
 
 use TestLang in
 
-let eqTypeEmptyEnv = eqType [] in
+let eqTypeEmptyEnv : Type -> Type -> Bool = eqType [] in
 
 let x = nameSym "x" in
 let y = nameSym "y" in
@@ -518,12 +520,15 @@ let recLets = typeAnnot (bindall_ [
 utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
 (match recLets with TmRecLets {bindings = bindings} then
+  let b0 : RecLetBinding = get bindings 0 in
+  let b1 : RecLetBinding = get bindings 1 in
+  let b2 : RecLetBinding = get bindings 2 in
   let xTy = tyarrow_ tyunit_ tyint_ in
   let yTy = tyarrow_ tyunit_ tyint_ in
   let zTy = tyarrow_ tyunit_ tyint_ in
-  utest (get bindings 0).ty with xTy using eqTypeEmptyEnv in
-  utest (get bindings 1).ty with yTy using eqTypeEmptyEnv in
-  utest (get bindings 2).ty with zTy using eqTypeEmptyEnv in
+  utest b0.ty with xTy using eqTypeEmptyEnv in
+  utest b1.ty with yTy using eqTypeEmptyEnv in
+  utest b2.ty with zTy using eqTypeEmptyEnv in
   ()
 else never);
 
