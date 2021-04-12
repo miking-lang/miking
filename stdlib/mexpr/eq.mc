@@ -50,7 +50,7 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
-type TypeEnv = AssocSeq Name Type
+type EqTypeEnv = AssocSeq Name Type
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
@@ -89,7 +89,7 @@ lang Eq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
 
-  sem eqType (typeEnv : TypeEnv) (lhs : Expr) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Expr) =
   -- Intentionally left blank
 
   sem eqExpr (e1: Expr) =
@@ -537,37 +537,37 @@ end
 -----------
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyUnknown _ ->
     match unwrapType typeEnv lhs with Some (TyUnknown _) then true else false
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyBool _ ->
     match unwrapType typeEnv lhs with Some (TyBool _) then true else false
 end
 
 lang IntTypeEq = Eq + IntTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyInt _ ->
     match unwrapType typeEnv lhs with Some (TyInt _) then true else false
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyFloat _ ->
     match unwrapType typeEnv lhs with Some (TyFloat _) then true else false
 end
 
 lang CharTypeEq = Eq + CharTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyChar _ ->
     match unwrapType typeEnv lhs with Some (TyChar _) then true else false
 end
 
 lang FunTypeEq = Eq + FunTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyArrow r ->
     match unwrapType typeEnv lhs with Some ty then
       match ty with TyArrow l then
@@ -577,7 +577,7 @@ lang FunTypeEq = Eq + FunTypeAst
 end
 
 lang SeqTypeEq = Eq + SeqTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TySeq r ->
     match unwrapType typeEnv lhs with Some ty then
       match ty with TySeq l then
@@ -587,7 +587,7 @@ lang SeqTypeEq = Eq + SeqTypeAst
 end
 
 lang RecordTypeEq = Eq + RecordTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyRecord r ->
     match unwrapType typeEnv lhs with Some ty then
       match ty with TyRecord l then
@@ -597,7 +597,7 @@ lang RecordTypeEq = Eq + RecordTypeAst
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyVariant r ->
     match unwrapType typeEnv lhs with Some ty then
       match ty with TyVariant l then
@@ -607,7 +607,7 @@ lang VariantTypeEq = Eq + VariantTypeAst
 end
 
 lang VarTypeEq = Eq + VarTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | rhs & TyVar r ->
     match unwrapType typeEnv lhs with Some lty then
       match unwrapType typeEnv rhs with Some rty then
@@ -619,7 +619,7 @@ lang VarTypeEq = Eq + VarTypeAst
 end
 
 lang AppTypeEq = Eq + AppTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyApp r ->
     match unwrapType typeEnv lhs with Some ty then
       match ty with TyApp l then
@@ -662,7 +662,7 @@ mexpr
 use MExprEq in
 
 -- Redefine eqType with type annotations
-let eqType = lam env : TypeEnv. lam l : Type. lam r : Type.
+let eqType = lam env : EqTypeEnv. lam l : Type. lam r : Type.
   eqType env l r
 in
 

@@ -50,10 +50,10 @@ end
 -- Replaces all variant type names with the variant type they represent. This
 -- function is called after going through the program, at which point all
 -- variant constructors have been identified.
-let _replaceVariantNamesInTypeEnv = lam env.
+let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
   use VariantTypeAst in
   use VariantNameTypeAst in
-  let f = lam ty.
+  let f = lam ty : Type.
     match ty with TyVariantName {ident = ident} then
       match mapLookup ident env.variants with Some constrs then
         TyVariant {constrs = constrs, info = NoInfo ()}
@@ -66,7 +66,7 @@ let _replaceVariantNamesInTypeEnv = lam env.
 
 -- This function is a simple comparison function for types. It required as a
 -- comparison function for the records map of the type-lifting environment.
-recursive let _cmpType = lam ty1. lam ty2.
+recursive let _cmpType = lam ty1 : Type. lam ty2 : Type.
   use MExprAst in
   let _typeId = lam ty.
     match ty with TyUnknown _ then 0
@@ -86,19 +86,20 @@ recursive let _cmpType = lam ty1. lam ty2.
   let id2 = _typeId ty2 in
   let diff = subi id1 id2 in
   if eqi diff 0 then
-    match (ty1, ty2) with (TyArrow t1, TyArrow t2) then
+    let m = (ty1, ty2) in
+    match m with (TyArrow t1, TyArrow t2) then
       let fromDiff = _cmpType t1.from t2.from in
       if eqi fromDiff 0 then _cmpType t1.to t2.to
       else fromDiff
-    else match (ty1, ty2) with (TySeq t1, TySeq t2) then
+    else match m with (TySeq t1, TySeq t2) then
       _cmpType t1.ty t2.ty
-    else match (ty1, ty2) with (TyRecord t1, TyRecord t2) then
+    else match m with (TyRecord t1, TyRecord t2) then
       mapCmp _cmpType t1.fields t2.fields
-    else match (ty1, ty2) with (TyVariant t1, TyVariant t2) then
+    else match m with (TyVariant t1, TyVariant t2) then
       mapCmp _cmpType t1.constrs t2.constrs
-    else match (ty1, ty2) with (TyVar t1, TyVar t2) then
+    else match m with (TyVar t1, TyVar t2) then
       nameCmp t1.ident t2.ident
-    else match (ty1, ty2) with (TyApp t1, TyApp t2) then
+    else match m with (TyApp t1, TyApp t2) then
       let lhsDiff = _cmpType t1.lhs t2.lhs in
       if eqi lhsDiff 0 then _cmpType t1.rhs t2.rhs
       else lhsDiff
@@ -106,14 +107,14 @@ recursive let _cmpType = lam ty1. lam ty2.
   else diff
 end
 
-let emptyTypeLiftEnv = {
+let emptyTypeLiftEnv : TypeLiftEnv = {
   typeEnv = [],
   records = mapEmpty (mapCmp _cmpType),
   variants = mapEmpty nameCmp
 }
 
 -- Adds a record type with the given fields to the type lifting environment.
-let _addRecordTypeVar = lam env. lam fields.
+let _addRecordTypeVar = lam env : TypeLiftEnv. lam fields : Map SID Type.
   use MExprAst in
   let record = TyRecord {fields = fields, info = NoInfo ()} in
   let recName = nameSym "Rec" in
@@ -206,7 +207,7 @@ end
 lang RecLetsTypeLift = TypeLift + RecLetsAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmRecLets t ->
-    let f = lam env. lam binding.
+    let f = lam env. lam binding : RecLetBinding.
       match typeLiftExpr env binding.body with (env, body) then
         (env, {binding with body = body})
       else never
@@ -275,6 +276,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
       else t.tyIdent
     in
     match typeLiftType env tyIdent with (env, tyIdent) then
+      let env : TypeLiftEnv = env in
       let env =
         -- Ignore any existing constructors in the variant type.
         match tyIdent with TyVariant _ then
@@ -302,7 +304,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
 
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmConDef t ->
-    recursive let unwrapTypeVarIdent = lam ty.
+    recursive let unwrapTypeVarIdent = lam ty : Type.
       match ty with TyVar t then Some t.ident
       else match ty with TyApp t then unwrapTypeVarIdent t.lhs
       else None ()
@@ -339,7 +341,7 @@ lang MatchTypeLift = TypeLift + MatchAst
     -- If the pattern describes a tuple, then we add a tuple type containing
     -- the amount of elements specified in the tuple (of unknown type) to the
     -- environment.
-    let addTypeToEnvIfTuplePattern = lam env. lam pat.
+    let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
       match pat with PatRecord {bindings = bindings} then
         match _record2tuple bindings with Some _ then
           let bindingTypes = mapMap (lam. tyunknown_) bindings in
@@ -456,6 +458,7 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
     else
       let f = lam env. lam. lam ty. typeLiftType env ty in
       match mapMapAccum f env t.fields with (env, fields) then
+        let env : TypeLiftEnv = env in
         match mapLookup fields env.records with Some name then
           (env, ntyvar_ name)
         else
@@ -507,9 +510,14 @@ mexpr
 
 use TestLang in
 
-let eqEnv = lam lenv. lam renv.
+let eqType : EqTypeEnv -> Type -> Type -> Bool =
+  lam env. lam l : Type. lam r : Type.
+  eqType env l r
+in
+
+let eqEnv = lam lenv : EqTypeEnv. lam renv : EqTypeEnv.
   use MExprEq in
-  let elemCmp = lam l. lam r.
+  let elemCmp = lam l : (Name, Type). lam r : (Name, Type).
     and (nameEq l.0 r.0)
         (eqType [] l.1 r.1)
   in
