@@ -330,9 +330,9 @@ let intersect_env_overwrite a b =
         Some r
     | None, Some _ ->
         None
-    | Some v, None ->
+    | Some l, None ->
         raise_error NoInfo
-          ( "Binding '" ^ Ustring.to_utf8 v
+          ( "Binding '" ^ Ustring.to_utf8 l
           ^ "' exists only in the subsumed language, which should be \
              impossible.\n" )
   in
@@ -422,27 +422,24 @@ let lang_is_subsumed_by l1 l2 =
             in
             (* Then, check if all patterns in A are smaller than remaining
                patterns in B *)
-            let smaller_or_equal =
-              List.map
-                (fun (p1, n1) ->
-                  List.fold_left
-                    (fun b (p2, n2) ->
-                      if not b then b
-                      else
-                        match order_query (p1, n1) (p2, n2) with
-                        | Subset | Disjoint ->
-                            true
-                        | Superset ->
-                            false
-                        | Equal | Overlapping _ ->
+            List.for_all
+              (fun (p1, n1) ->
+                List.fold_left
+                  (fun is_smaller (p2, n2) ->
+                    if not is_smaller then is_smaller
+                    else
+                      match order_query (p1, n1) (p2, n2) with
+                      | Subset | Disjoint ->
+                          true
+                      | Superset ->
+                          false
+                      | Equal | Overlapping _ ->
                           raise_error fi
-                            "Two patterns in this semantic function are either \
-                             equal or overlapping, which should be impossible"
-                    )
-                    true cases2 )
-                cases1
-            in
-            List.for_all (fun x -> x) smaller_or_equal
+                            "Two patterns in this semantic function are \
+                             either equal or overlapping, which should be \
+                             impossible" )
+                  true cases2 )
+              cases1
         | Data _, Data _ | Inter _, Inter _ | Data _, Inter _ | Inter _, Data _
           ->
             true
