@@ -165,7 +165,7 @@ let utestTestFailed =
 in
 
 let utestRunner =
-  lam info    : {filename : String, row : String}.
+  lam info    : {row : String}.
   lam lpprint : Unknown -> String.
   lam rpprint : Unknown -> String.
   lam eqfunc  : Unknown -> Unknown -> Bool.

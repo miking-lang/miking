@@ -422,7 +422,7 @@ lang SeqEdgePatEq = SeqEdgePat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
-      match _eqpatname patEnv free mid1 mid2 with Some _ then
+      match _eqpatname patEnv free mid1 mid2 with Some (f,p) then
         if eqi (length pre1) (length pre2) then
           let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
           let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
@@ -430,7 +430,7 @@ lang SeqEdgePatEq = SeqEdgePat
             match fpEnv with (f,p) then
               eqPat env f p ps.0 ps.1
             else never)
-            (free, patEnv) z1 in
+            (free,patEnv) z1 in
           match fl with Some envs then
             if eqi (length post1) (length post2) then
               optionFoldlM (lam fpEnv. lam ps : (Pat, Pat).
