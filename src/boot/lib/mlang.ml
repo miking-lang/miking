@@ -331,15 +331,10 @@ let intersect_env_overwrite a b =
     | None, Some _ ->
         None
     | Some v, None ->
-      let abinds = List.map (fun (k, _) -> k) (USMap.bindings a.constructors) in
-      let bbinds = List.map (fun (k, _) -> k) (USMap.bindings b.constructors) in
-      let binds2str binds =
-        String.concat "\n  " (List.map Ustring.to_utf8 binds)
-      in
         raise_error NoInfo
           ( "Binding '" ^ Ustring.to_utf8 v
           ^ "' exists only in the subsumed language, which should be \
-             impossible.\nBinds in left:\n" ^ (binds2str abinds) ^ "\nBinds in right:\n" ^ (binds2str bbinds) )
+             impossible.\n" )
   in
   { constructors=
       USMap.merge (fun _ l r -> merger (l, r)) a.constructors b.constructors
@@ -455,7 +450,6 @@ let lang_is_subsumed_by l1 l2 =
 
 (* Compute the resulting subsumption environment for a language declaration *)
 let handle_subsumption env langs lang includes =
-  Printf.printf "handle_subsumption %s\n" (Ustring.to_utf8 lang);
   (* Find a subsumer for a language, if any exists. *)
   let find_subsumer env x =
     (* y is a subsumer of x if y has no subsumer and it subsumes x *)
@@ -481,8 +475,8 @@ let handle_subsumption env langs lang includes =
         env.subsumes (false, x)
     in
     if found_subsumer then
-      let env = {env with subsumer= replace_subsumer env.subsumer x subsumer} in
-      {env with subsumer= USMap.add x subsumer env.subsumer}
+      { {env with subsumer= replace_subsumer env.subsumer x subsumer} with
+        subsumer= USMap.add x subsumer env.subsumer }
     else env
   in
   (* Finds new subsumers for languages that were previously subsumed by lang *)
@@ -493,18 +487,11 @@ let handle_subsumption env langs lang includes =
     | Some set ->
         let env =
           { env with
-            subsumer= USMap.filter (fun k _ -> not (USSet.mem k set)) env.subsumer }
+            subsumer=
+              USMap.filter (fun k _ -> not (USSet.mem k set)) env.subsumer }
         in
         let env = USSet.fold (fun x acc -> find_subsumer acc x) set env in
-        Printf.printf "subsumed_langs = \n";
-        USSet.iter (fun elem -> Printf.printf "  %s -> %s\n" (Ustring.to_utf8 elem)
-                       (match USMap.find_opt elem env.subsumer with
-                        | Some s -> Ustring.to_utf8 s
-                        | None -> "(none)"
-                       ))
-          set;
         env
-
     | None ->
         env
   in
@@ -531,8 +518,6 @@ let handle_subsumption env langs lang includes =
                 Some (USSet.add to_be_subsumed set) )
           env.subsumes }
   in
-  (* let is_self_subsumed = lang_is_subsumed_by (USMap.find lang langs) (USMap.find lang langs) in
-   * Printf.printf "%s self-subsumed: %b\n" (Ustring.to_utf8 lang) is_self_subsumed; *)
   List.fold_left
     (fun acc included ->
       if
@@ -661,9 +646,6 @@ let rec desugar_tm nss env subs =
           | Some subsumer ->
               (* Use namespace from subsumer, but prune bindings that are not
                  defined in the subsumed namespace *)
-              Printf.printf "%s: %s subsumed by %s\n"
-                (info2str fi |> Ustring.to_utf8)
-                (Ustring.to_utf8 name) (Ustring.to_utf8 subsumer) ;
               intersect_env_overwrite ns (USMap.find subsumer nss)
         in
         desugar_tm nss (merge_env_overwrite env intersected_ns) subs body )
