@@ -327,10 +327,15 @@ let intersect_env_overwrite a b =
     | None, None ->
         None
     | Some _, Some r ->
+        (* Printf.printf ">>> In r but not in l ***\n" ;
+         * Ustring.Op.uprint_endline r ; *)
         Some r
     | None, Some _ ->
         None
     | Some v, None ->
+        (* TODO: this should never happen, has to do with includes? *)
+        (* Printf.printf "<<< In l but not in r ***\n" ;
+         * Ustring.Op.uprint_endline v ; *)
         Some v
     (* | (Some v, None) -> Ustring.Op.uprint_endline v; failwith "Impossible" *)
   in
@@ -379,6 +384,45 @@ let print_subsume_env env =
     (fun k v -> Printf.printf "%s by %s\n" (utf8 k) (utf8 v))
     env.subsumer ;
   Printf.printf "*************** End subsume env ******************\n"
+
+(* Check if the first language A is subsumed by the second B. That is, any call
+   to a semantic function in A can be replaced by a semantic function in B. *)
+let lang_is_subsumed_by l1 l2 = match (l1, l2) with
+  | Lang (_, _, _, decls1), Lang (_, _, _, decls2) ->
+      let data_is_subsumed_by = function
+        | Data _, Data _ ->
+            true
+        | Inter (_, n1, _, cases1), Inter (_, n2, _, cases2) when n1 =. n2 ->
+            let mk_pos_neg (pat, _) =
+              let pos_pat = pat_to_normpat pat in
+              let neg_pat = normpat_complement pos_pat in
+              (pos_pat, neg_pat)
+            in
+            let cases1 = List.map mk_pos_neg cases1 in
+            let cases2 = List.map mk_pos_neg cases2 in
+            (* All cases in 1 should be Subset or Equal to cases in 2 *)
+            let smaller_or_equal =
+              List.map
+                (fun (p1, n1) ->
+                  List.fold_left
+                    (fun b (p2, n2) ->
+                      if not b then b
+                      else
+                        match order_query (p1, n1) (p2, n2) with
+                        | Subset | Equal | Disjoint ->
+                            true
+                        | Superset | Overlapping _ ->
+                            false )
+                    true cases2 )
+                cases1
+            in
+            List.for_all (fun x -> x) smaller_or_equal
+        | Inter _, Inter _ | Data _, Inter _ | Inter _, Data _ ->
+            true
+      in
+      List.for_all
+        (fun d1 -> List.for_all (fun d2 -> data_is_subsumed_by (d1, d2)) decls2)
+        decls1
 
 let handle_subsumption env lang includes =
   (* if List.mem (Ustring.from_utf8 "VarAst") includes then
@@ -595,7 +639,8 @@ let rec desugar_tm nss env subs =
           | None ->
               ns
           | Some s ->
-              (* Printf.printf "intersection of %s and %s\n" (utf8 name) (utf8 s); *)
+              Printf.printf "File %s:\n" (Ustring.to_utf8 (info2str fi)) ;
+              Printf.printf "intersection of %s and %s\n" (utf8 name) (utf8 s) ;
               intersect_env_overwrite ns (USMap.find s nss)
           (* Keep things from ns only *)
         in
@@ -626,7 +671,7 @@ let rec desugar_tm nss env subs =
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
 let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
-  | TopLang (Lang (_, langName, includes, decls)) ->
+  | TopLang (Lang (_, langName, includes, decls) as lang) ->
       let add_lang ns lang =
         USMap.find_opt lang nss
         |> Option.default emptyMlangEnv
@@ -697,6 +742,8 @@ let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
         TmRecLets (NoInfo, List.filter_map translate_inter decls, tm)
         |> List.fold_right wrap_data decls
       in
+      let is_subsumed = lang_is_subsumed_by lang lang in
+      Printf.printf "%s %s: %b\n" (utf8 langName) (utf8 langName) is_subsumed;
       ( USMap.add langName ns nss
       , handle_subsumption subs langName includes
       , new_syns
