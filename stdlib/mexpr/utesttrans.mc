@@ -165,16 +165,17 @@ let utestTestFailed =
 in
 
 let utestRunner =
-  lam info   : {filename : String, row : String}.
-  lam printf : Unknown -> String.
-  lam eqfunc : Unknown -> Unknown -> Bool.
-  lam lhs    : Unknown.
-  lam rhs    : Unknown.
+  lam info    : {filename : String, row : String}.
+  lam lpprint : Unknown -> String.
+  lam rpprint : Unknown -> String.
+  lam eqfunc  : Unknown -> Unknown -> Bool.
+  lam lhs     : Unknown.
+  lam rhs     : Unknown.
   -- Comparison
   if eqfunc lhs rhs then
     utestTestPassed ()
   else
-    utestTestFailed info.row (printf lhs) (printf rhs)
+    utestTestFailed info.row (lpprint lhs) (rpprint rhs)
 in
 
 ()
@@ -562,13 +563,14 @@ let generateUtestFunctions =
       bind_ (nreclets_ pprints) (nreclets_ equals)
   else never
 
-let utestRunnerCall = lam info. lam printFunc. lam eqFunc. lam l. lam r.
-  appf5_
+let utestRunnerCall =
+  lam info. lam lPprintFunc. lam rPprintFunc. lam eqFunc. lam l. lam r.
+  appf6_
     (nvar_ utestRunnerName)
     (record_ [
-      ("filename", str_ info.filename),
       ("row", str_ info.row)])
-    printFunc
+    lPprintFunc
+    rPprintFunc
     eqFunc
     l
     r
@@ -588,15 +590,61 @@ let _generateUtest = lam env. lam t.
       {filename = "", row = "0"}
     else never
   in
-  match compatibleType env.aliases (ty t.test) (ty t.expected) with Some ty then
+  -- NOTE(larshum, 2021-04-12): We only require that the types of the operands
+  -- are compatible if no equality function is provided. Otherwise it should be
+  -- possible to compare different types using a custom equality function, but
+  -- this function has to be annotated with explicit types.
+  match t.tusing with Some eqFunc then
+    match ty eqFunc with TyArrow {from = lty, to = TyArrow {from = rty, to = TyBool _}} then
+      match compatibleType env.aliases (ty t.test) lty with Some lty then
+        match compatibleType env.aliases (ty t.expected) rty with Some rty then
+          match mapLookup lty env.typeFunctions with Some (lhsPprintName, _) then
+            match mapLookup rty env.typeFunctions with Some (rhsPprintName, _) then
+              let lhsPprintFunc = nvar_ lhsPprintName in
+              let rhsPprintFunc = nvar_ rhsPprintName in
+              let eqFunc =
+                lam_ "a" lty
+                  (lam_ "b" rty
+                    (appf2_ eqFunc (var_ "a") (var_ "b"))) in
+              utestRunnerCall utestInfo lhsPprintFunc rhsPprintFunc eqFunc
+                              t.test t.expected
+            else
+              let msg = join [
+                "Arguments to utest need more type information.\n",
+                "Type was inferred to be ", pprintTy lty
+              ] in
+              infoErrorExit t.info msg
+          else
+            let msg = join [
+              "Arguments to utest need more type information.\n",
+              "Type was inferred to be ", pprintTy rty
+            ] in
+            infoErrorExit t.info msg
+        else
+          let msg = join [
+            "Custom equality function expected right-hand side of type ",
+            pprintTy rty, ", got argument of incompatible type ",
+            pprintTy (ty t.expected)
+          ] in
+          infoErrorExit t.info msg
+      else
+        let msg = join [
+          "Custom equality function expected left-hand side of type ",
+          pprintTy lty, ", got argument of incompatible type ",
+          pprintTy (ty t.test)
+        ] in
+        infoErrorExit t.info msg
+    else
+      let msg = join [
+        "Equality function was found to have incorrect type.\n",
+        "Type was inferred to be ", pprintTy (ty eqFunc)
+      ] in
+      infoErrorExit t.info msg
+  else match compatibleType env.aliases (ty t.test) (ty t.expected) with Some ty then
     match mapLookup ty env.typeFunctions with Some (pprintName, equalName) then
       let pprintFunc = nvar_ pprintName in
       let eqFunc =
-        match t.tusing with Some eqFunc then
-          ulam_ "a"
-            (ulam_ "b"
-              (appf2_ eqFunc (var_ "a") (var_ "b")))
-        else if typeHasDefaultEquality env ty then
+        if typeHasDefaultEquality env ty then
           nvar_ equalName
         else
           let msg = join [
@@ -605,7 +653,7 @@ let _generateUtest = lam env. lam t.
           ] in
           infoErrorExit t.info msg
       in
-      utestRunnerCall utestInfo pprintFunc eqFunc t.test t.expected
+      utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
     else
       let msg = join [
         "Arguments to utest need more type information.\n",

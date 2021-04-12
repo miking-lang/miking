@@ -661,6 +661,11 @@ mexpr
 
 use MExprEq in
 
+-- Redefine eqType with type annotations
+let eqType = lam env : TypeEnv. lam l : Type. lam r : Type.
+  eqType env l r
+in
+
 -- Simple variables
 let v1 = var_ "x" in
 let v2 = var_ "y" in
