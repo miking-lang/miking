@@ -387,7 +387,8 @@ let print_subsume_env env =
 
 (* Check if the first language A is subsumed by the second B. That is, any call
    to a semantic function in A can be replaced by a semantic function in B. *)
-let lang_is_subsumed_by l1 l2 = match (l1, l2) with
+let lang_is_subsumed_by l1 l2 =
+  match (l1, l2) with
   | Lang (_, _, _, decls1), Lang (_, _, _, decls2) ->
       let data_is_subsumed_by = function
         | Data _, Data _ ->
@@ -424,7 +425,7 @@ let lang_is_subsumed_by l1 l2 = match (l1, l2) with
         (fun d1 -> List.for_all (fun d2 -> data_is_subsumed_by (d1, d2)) decls2)
         decls1
 
-let handle_subsumption env lang includes =
+let handle_subsumption env langs lang includes =
   (* if List.mem (Ustring.from_utf8 "VarAst") includes then
    *   Printf.printf "Handle subsumption %s: %s\n" (utf8 lang)
    *     (String.concat ", " (List.map utf8 includes))
@@ -505,7 +506,26 @@ let handle_subsumption env lang includes =
           env.subsumes }
   in
   let env = del_lang env in
-  let env = List.fold_left add_lang env includes in
+  let env =
+    List.fold_left
+      (fun acc included ->
+        if
+          lang_is_subsumed_by
+            ( match USMap.find_opt included langs with
+            | Some l ->
+                l
+            | None ->
+                failwith (Printf.sprintf "Lang %s not found\n" (utf8 included))
+            )
+            (USMap.find lang langs)
+        then
+          (* Printf.printf "%s subsumed by %s\n" (utf8 included) (utf8 lang) ; *)
+          add_lang acc included
+        else
+          (* Printf.printf "%s not subsumed by %s\n" (utf8 included) (utf8 lang) ; *)
+          acc )
+      env includes
+  in
   env
 
 let rec desugar_tm nss env subs =
@@ -639,8 +659,8 @@ let rec desugar_tm nss env subs =
           | None ->
               ns
           | Some s ->
-              Printf.printf "File %s:\n" (Ustring.to_utf8 (info2str fi)) ;
-              Printf.printf "intersection of %s and %s\n" (utf8 name) (utf8 s) ;
+              (* Printf.printf "File %s:\n" (Ustring.to_utf8 (info2str fi)) ;
+               * Printf.printf "Use: intersection of %s and %s\n" (utf8 name) (utf8 s) ; *)
               intersect_env_overwrite ns (USMap.find s nss)
           (* Keep things from ns only *)
         in
@@ -670,7 +690,7 @@ let rec desugar_tm nss env subs =
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
-let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
+let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
   | TopLang (Lang (_, langName, includes, decls) as lang) ->
       let add_lang ns lang =
         USMap.find_opt lang nss
@@ -742,10 +762,11 @@ let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
         TmRecLets (NoInfo, List.filter_map translate_inter decls, tm)
         |> List.fold_right wrap_data decls
       in
-      let is_subsumed = lang_is_subsumed_by lang lang in
-      Printf.printf "%s %s: %b\n" (utf8 langName) (utf8 langName) is_subsumed;
+      let new_langs = USMap.add langName lang langs in
+      let _is_subsumed = lang_is_subsumed_by lang lang in
       ( USMap.add langName ns nss
-      , handle_subsumption subs langName includes
+      , new_langs
+      , handle_subsumption subs new_langs langName includes
       , new_syns
       , wrap :: stack )
   (* The other tops are trivial translations *)
@@ -759,10 +780,10 @@ let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
           , desugar_tm nss emptyMlangEnv subs tm
           , tm' )
       in
-      (nss, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopType (Type (fi, id, ty)) ->
       let wrap tm' = TmType (fi, id, Symb.Helpers.nosym, ty, tm') in
-      (nss, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopRecLet (RecLet (fi, lets)) ->
       let wrap tm' =
         TmRecLets
@@ -777,19 +798,21 @@ let desugar_top (nss, subs, syns, (stack : (tm -> tm) list)) = function
               lets
           , tm' )
       in
-      (nss, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopCon (Con (fi, id, ty)) ->
       let wrap tm' =
         TmConDef (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
       in
-      (nss, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
-      (nss, subs, syns, wrap :: stack)
+      (nss, langs, subs, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =
-  let acc_start = (nss, emptySubsumeEnv, USMap.empty, []) in
-  let new_nss, subs, syns, stack = List.fold_left desugar_top acc_start tops in
+  let acc_start = (nss, USMap.empty, emptySubsumeEnv, USMap.empty, []) in
+  let new_nss, _langs, subs, syns, stack =
+    List.fold_left desugar_top acc_start tops
+  in
   let syntydecl =
     List.map
       (fun (syn, fi) tm' ->
