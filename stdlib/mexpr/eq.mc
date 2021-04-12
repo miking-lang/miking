@@ -89,7 +89,7 @@ lang Eq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
 
-  sem eqType (typeEnv : EqTypeEnv) (lhs : Expr) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   -- Intentionally left blank
 
   sem eqExpr (e1: Expr) =
