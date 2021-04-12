@@ -1,6 +1,6 @@
 lang A
   syn Expr =
-  | Foo ()
+  | Foo Int
   sem foo =
   | Foo 1 -> 1
 end

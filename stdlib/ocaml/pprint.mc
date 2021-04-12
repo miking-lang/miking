@@ -289,6 +289,7 @@ lang OCamlPrettyPrint =
     match mapAccumL lname env bindings with (env,idents) then
       match mapAccumL lbody env bindings with (env,bodies) then
         match pprintCode indent env inexpr with (env,inexpr) then
+        match bodies with [] then (env,inexpr) else
           let fzip = lam ident. lam body.
             join [ident, " =",
                   pprintNewline (pprintIncr (pprintIncr indent)),
