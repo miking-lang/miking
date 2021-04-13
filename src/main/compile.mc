@@ -2,7 +2,55 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
-include "generate.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/builtin.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-annot.mc"
+include "mexpr/utesttrans.mc"
+include "ocaml/ast.mc"
+include "ocaml/generate.mc"
+include "ocaml/pprint.mc"
+
+lang MCoreCompile =
+  BootParser +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans +
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
+end
+
+let pprintMcore = lam ast.
+  use MExprPrettyPrint in
+  expr2str ast
+
+let pprintOcaml = lam ast.
+  use OCamlPrettyPrint in
+  expr2str ast
+
+-- Hack for pretty-printing the preamble and inserting it into the beginning of
+-- the OCaml file, after all type definitions.
+let _preambleStr =
+  let str = pprintOcaml (bind_ _preamble (int_ 0)) in
+  subsequence str 0 (subi (length str) 1)
+
+recursive let _withPreamble = lam expr. lam options.
+  use OCamlAst in
+  match expr with OTmVariantTypeDecl t then
+    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr options}
+  else
+    if options.excludeIntrinsicsPreamble then
+      OTmPreambleText {text = "\n", inexpr = expr}
+    else
+      OTmPreambleText {text = _preambleStr, inexpr = expr}
+end
+
+let generateTests = lam ast. lam testsEnabled.
+  use MCoreCompile in
+  if testsEnabled then
+    let ast = symbolize ast in
+    let ast = typeAnnot ast in
+    utestGen ast
+  else
+    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    (symEnv, utestStrip ast)
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
@@ -22,11 +70,12 @@ let ocamlCompile = lam sourcePath. lam ocamlProg.
   phChmodWriteAccessFile destinationFile
 
 let compile = lam files. lam options.
+  use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile file in
 
     -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (expr2str ast) else ());
+    (if options.debugParse then printLn (pprintMcore ast) else ());
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
@@ -42,14 +91,19 @@ let compile = lam files. lam options.
           match generateTypeDecl env ast with (env, ast) then
             let ast = generate env ast in
             let ast = objWrap ast in
-            _withPreamble ast
+            _withPreamble ast options
           else never
         else never
       in
 
+      let ocamlProg = pprintOcaml ocamlAst in
+
+      -- Print the AST after code generation
+      (if options.debugGenerate then printLn ocamlProg else ());
+
       -- Compile OCaml AST
       if options.exitBefore then exit 0
-      else ocamlCompile file ocamlAst
+      else ocamlCompile file ocamlProg
     else never
   in
   iter compileFile files
