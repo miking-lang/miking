@@ -1618,6 +1618,13 @@ utest int_ 2 with generateEmptyEnv (length_ testSubseq2) using sameSemantics in
 utest int_ 1 with generateEmptyEnv (length_ testSubseq3) using sameSemantics in
 utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 
+let testGetFun = bindall_
+[ ulet_ "lst" (seq_ [ulam_ "x" (var_ "x")])
+, ulet_ "f" (get_ (var_ "lst") (int_ 0))
+, app_ (var_ "f") (int_ 1)
+] in
+utest int_ 1 with generateEmptyEnv testGetFun using sameSemantics in
+
 -- splitat
 let testStr = str_ "foobar" in
 let testSplit0 = (bindall_ [ ulet_ "y" (splitat_ testStr (int_ 3)), tupleproj_ 0 (var_ "y")]) in
