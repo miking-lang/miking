@@ -125,8 +125,8 @@ lang CAst
   -- We force if, switch, and while to introduce new scopes (by setting the
   -- body type to [CStmt] rather than CStmt). It is allowed in C to have a single
   -- (i.e., not compound) statement as the body, but this statement is NOT
-  -- allowed to be a definition. To do this properly, we would need to separate
-  -- statements and definitions into different data types.
+  -- allowed to be a definition. To do this properly, we would need to have separate
+  -- data types for statements and definitions.
 
   syn CStmt =
   | CSDef     { ty: CType, id: Option Name, init: Option CInit }

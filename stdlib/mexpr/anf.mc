@@ -85,6 +85,7 @@ end
 lang RecordANF = ANF + RecordAst
   sem isValue =
   | TmRecord _ -> false
+  | TmRecord {bindings = []} -> true
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
