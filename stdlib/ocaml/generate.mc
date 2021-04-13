@@ -762,14 +762,14 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | TmApp t ->
     if _isIntrinsicApp (TmApp t) then
       TmApp {{t with lhs = objWrapRec true t.lhs}
-                with rhs = _objRepr (objWrapRec true t.rhs)}
+                with rhs = _objRepr (objWrapRec false t.rhs)}
     else
       TmApp {{t with lhs =
                   if isApp then
                     objWrapRec true t.lhs
                   else
                     _objObj (_objRepr (objWrapRec true t.lhs))}
-                with rhs = objWrapRec true t.rhs}
+                with rhs = objWrapRec false t.rhs}
   | TmRecord t ->
     if mapIsEmpty t.bindings then
       _objRepr (TmRecord t)
@@ -1621,7 +1621,10 @@ utest int_ 3 with generateEmptyEnv fst using sameSemantics in
 let testGetFun = bindall_
 [ ulet_ "lst" (seq_ [ulam_ "x" (var_ "x")])
 , ulet_ "f" (get_ (var_ "lst") (int_ 0))
-, app_ (var_ "f") (int_ 1)
+, ulet_ "_" (app_ (var_ "f") (int_ 1))
+, ulet_ "_" (app_ (ulam_ "x" (var_ "x")) (app_ (var_ "f") (int_ 1)))
+, ulet_ "_" (addi_ (app_ (var_ "f") (int_ 1)) (int_ 1))
+, int_ 1
 ] in
 utest int_ 1 with generateEmptyEnv testGetFun using sameSemantics in
 
