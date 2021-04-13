@@ -387,6 +387,8 @@ type subsumeEnv = {subsumer: ustring USMap.t; subsumes: USSet.t USMap.t}
 
 let emptySubsumeEnv = {subsumer= USMap.empty; subsumes= USMap.empty}
 
+let enable_subsumption_analysis = ref false
+
 (* Check if the first language is subsumed by the second *)
 let lang_is_subsumed_by l1 l2 =
   match (l1, l2) with
@@ -450,81 +452,85 @@ let lang_is_subsumed_by l1 l2 =
 
 (* Compute the resulting subsumption environment for a language declaration *)
 let handle_subsumption env langs lang includes =
-  (* Find a subsumer for a language, if any exists. *)
-  let find_subsumer env x =
-    (* y is a subsumer of x if y has no subsumer and it subsumes x *)
-    let is_subsumer y =
-      match USMap.find_opt y env.subsumer with
-      | Some _ ->
-          false
-      | None -> (
-        match USMap.find_opt y env.subsumes with
-        | None ->
+  if !enable_subsumption_analysis then
+    (* Find a subsumer for a language, if any exists. *)
+    let find_subsumer env x =
+      (* y is a subsumer of x if y has no subsumer and it subsumes x *)
+      let is_subsumer y =
+        match USMap.find_opt y env.subsumer with
+        | Some _ ->
             false
-        | Some set ->
-            USSet.mem x set )
+        | None -> (
+          match USMap.find_opt y env.subsumes with
+          | None ->
+              false
+          | Some set ->
+              USSet.mem x set )
+      in
+      (* Set b as the subsumer where currently a is *)
+      let replace_subsumer subsumer_map a b =
+        USMap.map (fun x -> if x =. a then b else x) subsumer_map
+      in
+      let found_subsumer, subsumer =
+        USMap.fold
+          (fun k _ acc ->
+            match acc with true, _ -> acc | _ -> (is_subsumer k, k) )
+          env.subsumes (false, x)
+      in
+      if found_subsumer then
+        { {env with subsumer= replace_subsumer env.subsumer x subsumer} with
+          subsumer= USMap.add x subsumer env.subsumer }
+      else env
     in
-    (* Set b as the subsumer where currently a is *)
-    let replace_subsumer subsumer_map a b =
-      USMap.map (fun x -> if x =. a then b else x) subsumer_map
-    in
-    let found_subsumer, subsumer =
-      USMap.fold
-        (fun k _ acc ->
-          match acc with true, _ -> acc | _ -> (is_subsumer k, k) )
-        env.subsumes (false, x)
-    in
-    if found_subsumer then
-      { {env with subsumer= replace_subsumer env.subsumer x subsumer} with
-        subsumer= USMap.add x subsumer env.subsumer }
-    else env
-  in
-  (* Finds new subsumers for languages that were previously subsumed by lang *)
-  let del_lang env =
-    let subsumed_langs = USMap.find_opt lang env.subsumes in
-    let env = {env with subsumes= USMap.remove lang env.subsumes} in
-    match subsumed_langs with
-    | Some set ->
-        let env =
-          { env with
-            subsumer=
-              USMap.filter (fun k _ -> not (USSet.mem k set)) env.subsumer }
-        in
-        let env = USSet.fold (fun x acc -> find_subsumer acc x) set env in
-        env
-    | None ->
-        env
-  in
-  (* Subsume the language, and recursively subsume the languages that were
-     previously subsumed by it *)
-  let rec add_lang to_be_subsumed env =
-    let env =
-      {env with subsumer= USMap.add to_be_subsumed lang env.subsumer}
-    in
-    let env =
-      match USMap.find_opt to_be_subsumed env.subsumes with
+    (* Finds new subsumers for languages that were previously subsumed by lang *)
+    let del_lang env =
+      let subsumed_langs = USMap.find_opt lang env.subsumes in
+      let env = {env with subsumes= USMap.remove lang env.subsumes} in
+      match subsumed_langs with
       | Some set ->
-          USSet.fold add_lang set env
+          let env =
+            { env with
+              subsumer=
+                USMap.filter (fun k _ -> not (USSet.mem k set)) env.subsumer }
+          in
+          let env = USSet.fold (fun x acc -> find_subsumer acc x) set env in
+          env
       | None ->
           env
     in
-    { env with
-      subsumes=
-        USMap.update lang
-          (function
-            | None ->
-                Some (USSet.singleton to_be_subsumed)
-            | Some set ->
-                Some (USSet.add to_be_subsumed set) )
-          env.subsumes }
-  in
-  List.fold_left
-    (fun acc included ->
-      if
-        lang_is_subsumed_by (USMap.find included langs) (USMap.find lang langs)
-      then add_lang included acc
-      else acc )
-    (del_lang env) includes
+    (* Subsume the language, and recursively subsume the languages that were
+       previously subsumed by it *)
+    let rec add_lang to_be_subsumed env =
+      let env =
+        {env with subsumer= USMap.add to_be_subsumed lang env.subsumer}
+      in
+      let env =
+        match USMap.find_opt to_be_subsumed env.subsumes with
+        | Some set ->
+            USSet.fold add_lang set env
+        | None ->
+            env
+      in
+      { env with
+        subsumes=
+          USMap.update lang
+            (function
+              | None ->
+                  Some (USSet.singleton to_be_subsumed)
+              | Some set ->
+                  Some (USSet.add to_be_subsumed set) )
+            env.subsumes }
+    in
+    List.fold_left
+      (fun acc included ->
+        if
+          lang_is_subsumed_by
+            (USMap.find included langs)
+            (USMap.find lang langs)
+        then add_lang included acc
+        else acc )
+      (del_lang env) includes
+  else env
 
 let rec desugar_tm nss env subs =
   let map_right f (a, b) = (a, f b) in
