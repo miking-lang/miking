@@ -59,7 +59,7 @@ let nfaOutStates = lam s. lam nfa.
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
   if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
-  else if not (setMem eqv startS s) then error "The start state does not exist"
+  else if not (eqsetMem eqv startS s) then error "The start state does not exist"
   else true
 
 -- States are represented by vertices in a directed graph
@@ -84,13 +84,13 @@ let nfaAddTransition = lam nfa. lam trans.
 
 -- returns true if state s is an accepted state in the nfa
 let nfaIsAcceptedState = lam s. lam nfa.
-  setMem nfa.graph.eqv s nfa.acceptStates
+  eqsetMem nfa.graph.eqv s nfa.acceptStates
 
 -- check if there is a transition with label lbl from state s
 let nfaStateHasTransition = lam s. lam trans. lam lbl.
   let neighbors = digraphEdgesFrom s trans in
   --check if lbl is a label in the neighbors list
-  setMem trans.eql lbl (map (lam x. x.2) neighbors)
+  eqsetMem trans.eql lbl (map (lam x. x.2) neighbors)
 
 -- get next state from state s with label lbl. Throws error if no transition is found
 let nfaNextStates = lam from. lam graph. lam lbl.
@@ -104,7 +104,7 @@ let nfaNextStates = lam from. lam graph. lam lbl.
 -- takes a path and returns whether it's accepted or not.
 let pathIsAccepted = lam path.
   if null path then false
-  else (setEqual eqChar (last path).status "accepted")
+  else (eqsetEqual eqChar (last path).status "accepted")
 
 -- goes through the nfa, one state of the input at a time. Returns a list of {state, status, input}
 -- where status is either accepted,stuck,not accepted or neutral ("")
@@ -162,7 +162,7 @@ let newNfa = nfaConstr states transitions startState acceptStates eqi eqChar in
 let newNfa2 = nfaConstr states2 transitions2 startState acceptStates eqi eqChar in
 let newNfa3 = nfaConstr states2 transitions2 startState [3] eqi eqChar in
 utest eqi startState newNfa.startState with true in
-utest setEqual eqi acceptStates newNfa.acceptStates with true in
+utest eqsetEqual eqi acceptStates newNfa.acceptStates with true in
 utest (digraphHasVertices states newNfa.graph) with true in
 utest (digraphHasEdges transitions newNfa.graph) with true in
 utest (digraphHasEdges [(1,2,'1')] (nfaAddTransition newNfa (1,2,'1')).graph) with true in

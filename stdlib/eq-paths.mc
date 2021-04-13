@@ -1,6 +1,6 @@
 include "digraph.mc"
 include "string.mc"
-include "set.mc"
+include "eqset.mc"
 
 -- This file implements eqPaths: computing equivalence paths for decision
 -- points.
@@ -17,7 +17,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
     recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
       lam g. lam v. lam curPath. lam visited. lam d.
         let fromEdges = digraphEdgesFrom v g in
-        if or (or (eqi d 0) (setMem (digraphEqv g) v visited))
+        if or (or (eqi d 0) (eqsetMem (digraphEqv g) v visited))
               (null fromEdges) then
           [curPath]
         else
@@ -27,7 +27,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
                 fromEdges in
           -- If current node is a start node, the current path is a valid path
           let paths =
-            if setMem (digraphEqv g) v startNodes then cons [curPath] paths
+            if eqsetMem (digraphEqv g) v startNodes then cons [curPath] paths
             else paths in
           foldl concat [] paths
     in
@@ -54,7 +54,7 @@ let i = 'i' in
 let j = 'j' in
 
 let samePaths = lam p1. lam p2.
-  setEqual eqString p1 p2 in
+  eqsetEqual eqString p1 p2 in
 
 -- Graph with one node
 -- ┌─────┐

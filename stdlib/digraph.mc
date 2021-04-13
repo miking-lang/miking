@@ -17,7 +17,7 @@
 
 include "option.mc"
 include "seq.mc"
-include "set.mc"
+include "eqset.mc"
 include "assoc.mc"
 include "math.mc"
 
@@ -189,7 +189,7 @@ let digraphTarjan = lam g : Digraph v l.
   let mapMem = assocMem {eq=g.eqv} in
   let mapLookup = assocLookupOrElse {eq=g.eqv} (lam. error "Lookup failed") in
   let mapInsert = assocInsert {eq=g.eqv} in
-  let setMem = setMem g.eqv in
+  let eqsetMem = eqsetMem g.eqv in
 
   recursive let strongConnect = lam s : Successors v l. lam v.
     let traverseSuccessors = lam s : Successors v l. lam w.
@@ -198,7 +198,7 @@ let digraphTarjan = lam g : Digraph v l.
         let n = mini (mapLookup v s.lowlink) (mapLookup w s.lowlink) in
         {s with lowlink = mapInsert v n s.lowlink}
       else if lti (mapLookup w s.number) (mapLookup v s.number) then
-        if setMem w s.stack then
+        if eqsetMem w s.stack then
           let n = mini (mapLookup v s.lowlink) (mapLookup w s.number) in
           {s with lowlink = mapInsert v n s.lowlink}
         else s
@@ -357,7 +357,7 @@ utest g with (digraphUnion g g) using eqDigraph in
 utest empty with (digraphUnion empty empty) using eqDigraph in
 
 -- Test for strongly connected components of g.
-let compsEq = setEqual (setEqual eqi) in
+let compsEq = eqsetEqual (eqsetEqual eqi) in
 
 utest compsEq (digraphStrongConnects empty) [] with true in
 
