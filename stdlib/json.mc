@@ -1,4 +1,5 @@
 include "parser-combinators.mc"
+include "common.mc"
 
 type JsonValue
 con JsonObject : [ (String, JsonValue) ] -> JsonValue

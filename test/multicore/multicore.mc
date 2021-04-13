@@ -1,3 +1,4 @@
+include "seq.mc"
 
 mexpr
 

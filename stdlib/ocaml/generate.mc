@@ -11,6 +11,7 @@ include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
+include "common.mc"
 
 type GenerateEnv = {
   constrs : Map Name Type,

@@ -391,13 +391,11 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
   | TmLet (_, _, _, _, t1, t2) ->
       f (f acc t1) t2
   | TmRecLets (_, lst, tm) ->
-      f
-        (f acc (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst))
-        tm
+      f (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst) tm
   | TmConst (_, _) ->
       acc
   | TmSeq (_, tms) ->
-      Mseq.Helpers.fold_right f tms acc
+      Mseq.Helpers.fold_left f acc tms
   | TmRecord (_, r) ->
       Record.fold (fun _ t acc -> f acc t) r acc
   | TmRecordUpdate (_, r, _, t) ->
@@ -479,24 +477,25 @@ let ty_info = function
       fi
 
 let const_has_side_effect = function
-  | CBool _  
-  | CInt _ 
-  | Caddi _ 
-  | Csubi _ 
-  | Cmuli _ 
-  | Cdivi _ 
-  | Cmodi _ 
+  | CBool _
+  | CInt _
+  | Caddi _
+  | Csubi _
+  | Cmuli _
+  | Cdivi _
+  | Cmodi _
   | Cnegi
   | Clti _
   | Cleqi _
   | Cgti _
-  | Cgeqi _ 
-  | Ceqi _ 
+  | Cgeqi _
+  | Ceqi _
   | Cneqi _
   | Cslli _
-  | Csrli _ 
-  | Csrai _ 
-  | Carity -> false
+  | Csrli _
+  | Csrai _
+  | Carity ->
+      false
   (* MCore intrinsics: Floating-point numbers *)
   | CFloat _
   | Caddf _
@@ -514,12 +513,11 @@ let const_has_side_effect = function
   | Cceilfi
   | Croundfi
   | Cint2float
-  | Cstring2float -> false
+  | Cstring2float ->
+      false
   (* MCore intrinsics: Characters *)
-  | CChar _
-  | Ceqc _
-  | Cchar2int 
-  | Cint2char -> false
+  | CChar _ | Ceqc _ | Cchar2int | Cint2char ->
+      false
   (* MCore intrinsic: sequences *)
   | Ccreate _
   | Clength
@@ -530,33 +528,36 @@ let const_has_side_effect = function
   | Csnoc _
   | CsplitAt _
   | Creverse
-  | Csubsequence _ -> false
+  | Csubsequence _ ->
+      false
   (* MCore intrinsics: Random numbers *)
-  | CrandIntU _ -> true
-  | CrandSetSeed -> true
+  | CrandIntU _ ->
+      true
+  | CrandSetSeed ->
+      true
   (* MCore intrinsics: Time *)
-  | CwallTimeMs -> true
-  | CsleepMs -> true
+  | CwallTimeMs ->
+      true
+  | CsleepMs ->
+      true
   (* MCore intrinsics: Debug and I/O *)
-  | Cprint 
-  | Cdprint 
-  | CreadLine 
+  | Cprint
+  | Cdprint
+  | CreadLine
   | CreadBytesAsString
-  | CreadFile 
+  | CreadFile
   | CwriteFile _
   | CfileExists
   | CdeleteFile
   | Cerror
-  | Cexit -> true
+  | Cexit ->
+      true
   (* MCore intrinsics: Symbols *)
-  | CSymb _
-  | Cgensym
-  | Ceqsym _
-  | Csym2hash -> true
+  | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
+      true
   (* MCore intrinsics: References *)
-  | Cref
-  | CmodRef _
-  | CdeRef -> true
+  | Cref | CmodRef _ | CdeRef ->
+      true
   (* MCore intrinsics: Maps *)
   (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap _
@@ -575,7 +576,8 @@ let const_has_side_effect = function
   | CmapFoldWithKey _
   | CmapBindings
   | CmapEq _
-  | CmapCmp _ -> false
+  | CmapCmp _ ->
+      false
   (* MCore intrinsics: Tensors *)
   | CtensorCreate _
   | CtensorGetExn _
@@ -586,7 +588,8 @@ let const_has_side_effect = function
   | CtensorReshapeExn _
   | CtensorSliceExn _
   | CtensorSubExn _
-  | CtensorIteri _ -> true
+  | CtensorIteri _ ->
+      true
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _
   | CbootParserParseMExprString
@@ -600,64 +603,13 @@ let const_has_side_effect = function
   | CbootParserGetListLength _
   | CbootParserGetConst _
   | CbootParserGetPat _
-  | CbootParserGetInfo _ -> true
+  | CbootParserGetInfo _ ->
+      true
   (* External functions *)
-  | CPar _
-  | CExt _
-  | CSd _
-  | CPy _ -> true
+  | CPar _ | CExt _ | CSd _ | CPy _ ->
+      true
 
-(*
-let rec tm_has_side_effect = function
-  | TmVar _ -> false 
-  | TmApp (_, t1, t2) -> tm_has_side_effect t1 || tm_has_side_effect t1
-  
-  (* Lambda abstraction *)
-  | TmLam of info * ustring * Symb.t * ty * tm
-  (* Let *)
-  | TmLet of info * ustring * Symb.t * ty * tm * tm
-  (* Recursive lets *)
-  | TmRecLets of info * (info * ustring * Symb.t * ty * tm) list * tm
-  (* Constant *)
-  | TmConst of info * const
-  (* Sequence *)
-  | TmSeq of info * tm Mseq.t
-  (* Record *)
-  | TmRecord of info * tm Record.t
-  (* Record update *)
-  | TmRecordUpdate of info * tm * ustring * tm
-  (* Type let *)
-  | TmType of info * ustring * Symb.t * ty * tm
-  (* Constructor definition *)
-  | TmConDef of info * ustring * Symb.t * ty * tm
-  (* Constructor application *)
-  | TmConApp of info * ustring * Symb.t * tm
-  (* Match data *)
-  | TmMatch of info * tm * pat * tm * tm
-  (* Unit testing *)
-  | TmUtest of info * tm * tm * tm option * tm
-  (* Never term *)
-  | TmNever of info
-  (* -- The following term is removed during MLang desugaring *)
-  (* Use a language *)
-  | TmUse of info * ustring * tm
-  (* -- The rest is ONLY part of the runtime system *)
-  (* Closure *)
-  | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
-  (* Fix point *)
-  | TmFix of info
-  (* Reference *)
-  | TmRef of info * tm ref
-  (* Tensor *)
-  | TmTensor of info * tm T.t
- *)
-
-
-
-
-
-  
-  (* Converts a sequence of terms to a ustring *)
+(* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
   Mseq.Helpers.map
     (fun x ->

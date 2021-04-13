@@ -88,6 +88,7 @@ parse, or an ambiguity error.
 
 include "map.mc"
 include "either.mc"
+include "common.mc"
 include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the tests, but we can't put an include only there
 
 type AllowSet id

@@ -4,6 +4,7 @@
 -- NOTE(dlunde,2020-09-25):
 -- * Add support for unbound variables and constructors (similarly to eq.mc)?
 
+include "common.mc"
 include "map.mc"
 include "name.mc"
 include "string.mc"

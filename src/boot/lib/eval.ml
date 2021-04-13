@@ -23,7 +23,7 @@ let evalprog filename =
   utest_fail_local := 0 ;
   ( try
       let parsed = local_parse_mcore_file filename in
-      parsed |> add_prelude
+      parsed
       |> merge_includes (Filename.dirname filename) [filename]
       |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> Symbolize.symbolize builtin_name2sym
