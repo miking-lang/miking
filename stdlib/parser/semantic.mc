@@ -19,6 +19,7 @@ a grammar, see the tests for examples on how to use them.
 include "lexer.mc"
 include "ll1.mc"
 include "breakable.mc"
+include "common.mc"
 
 type NonTerminal
 type Production

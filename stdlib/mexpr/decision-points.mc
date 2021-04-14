@@ -6,6 +6,7 @@ include "ast-builder.mc"
 include "eq-paths.mc"
 include "anf.mc"
 include "name.mc"
+include "common.mc"
 
 -- This file contains implementations related to decision points. In particular,
 -- it implements:

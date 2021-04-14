@@ -159,7 +159,7 @@ let repl_envs =
 let initialize_envs () =
   let initial_envs, _ =
     Program ([], [], TmConst (NoInfo, CInt 0))
-    |> add_prelude |> repl_merge_includes |> eval_with_envs !repl_envs
+    |> repl_merge_includes |> eval_with_envs !repl_envs
   in
   repl_envs := initial_envs
 
