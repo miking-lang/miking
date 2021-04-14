@@ -1,6 +1,7 @@
 include "mexpr/ast.mc"
 include "mexpr/const-types.mc"
 include "map.mc"
+include "set.mc"
 include "stringid.mc"
 
 let builtin = use MExprAst in
@@ -133,6 +134,8 @@ let builtinEnv : Map Name Expr = use MExprAst in
       builtin)
 
 let builtinNames : [Name] = mapKeys builtinEnv
+
+let builtinNamesSet : Set Name = setOfSeq nameCmp builtinNames
 
 let builtinNameMap : Map String Name =
   mapFromList cmpString (map (lam x. (nameGetStr x, x)) builtinNames)

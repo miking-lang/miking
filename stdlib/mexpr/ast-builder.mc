@@ -794,7 +794,7 @@ let argv_ = use MExprAst in
 
 -- Command
 let command_ = use MExprAst in
-  lam s. appf1_ (const_ (CCommand ())) s
+  lam s. appf1_ (uconst_ (CCommand ())) s
 
 -- Time operations
 let wallTimeMs_ = use MExprAst in
