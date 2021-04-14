@@ -454,6 +454,14 @@ lang SeqTypeTypeLift = TypeLift + SeqTypeAst
     else never
 end
 
+lang TensorTypeTypeLift = TypeLift + TensorTypeAst
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyTensor t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TyTensor {t with ty = ty})
+    else never
+end
+
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TyRecord t & ty ->
@@ -505,7 +513,7 @@ lang MExprTypeLift =
   UnknownTypeTypeLift + BoolTypeTypeLift + IntTypeTypeLift +
   FloatTypeTypeLift + CharTypeTypeLift + FunTypeTypeLift + SeqTypeTypeLift +
   RecordTypeTypeLift + VariantTypeTypeLift + VarTypeTypeLift +
-  AppTypeTypeLift + VariantNameTypeTypeLift
+  AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
 end
 
 lang TestLang = MExprTypeLift + MExprSym + MExprTypeAnnot + MExprPrettyPrint
