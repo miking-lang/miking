@@ -36,7 +36,7 @@ let phRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
     let tempDir = phTempDirMake () in
     let tempStdout = phJoinPath tempDir "stdout.txt" in
-    let tempStderr = phJoinPath tempDir "stdout.txt" in
+    let tempStderr = phJoinPath tempDir "stderr.txt" in
 
     let retCode = _commandList
       [ "cd", cwd, "&&"
@@ -49,8 +49,8 @@ let phRunCommand : [String] -> String -> String -> ExecResult =
     -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
     _commandList ["echo", "", ">>", tempStdout];
     _commandList ["echo", "", ">>", tempStderr];
-    let stdout = init (init (readFile tempStdout)) in
-    let stderr = init (init (readFile tempStderr)) in
+    let stdout = init (readFile tempStdout) in
+    let stderr = init (readFile tempStderr) in
 
     phTempDirDelete tempDir ();
 
