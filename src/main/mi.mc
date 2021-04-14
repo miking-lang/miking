@@ -16,22 +16,29 @@ let menu = strJoin "\n" [
   "Usage: mi [compile|run] <files>",
   "",
   "Options:",
-  "  --debug-parse      Print the AST after parsing",
-  "  --exit-before      Exit before evaluation or compilation"]
+  "  --debug-parse                    Print the AST after parsing",
+  "  --debug-generate                 Print the AST after code generation",
+  "  --exit-before                    Exit before evaluation or compilation",
+  "  --test                           Generate utest code",
+  "  --exclude-intrinsics-preamble    Exclude the intinsics preamble"]
 in
 
 -- Option structure
 let options = {
   debugParse = false,
+  debugGenerate = false,
   exitBefore = false,
-  runTests = false
+  runTests = false,
+  excludeIntrinsicsPreamble = false
 } in
 
 -- Option map, maps strings to structure updates
 let optionsMap = [
 ("--debug-parse", lam o. {o with debugParse = true}),
+("--debug-generate", lam o. {o with debugGenerate = true}),
 ("--exit-before", lam o. {o with exitBefore = true}),
-("--test", lam o. {o with runTests = true})
+("--test", lam o. {o with runTests = true}),
+("--exclude-intrinsics-preamble", lam o. {o with excludeIntrinsicsPreamble = true})
 ] in
 
 -- Commands map, maps command strings to functions. The functions
