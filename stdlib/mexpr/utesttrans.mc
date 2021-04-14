@@ -9,6 +9,7 @@ include "mexpr/eq.mc"
 include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "common.mc"
 
 type UtestTypeEnv = {
   -- Maps every type to the names of its pretty-print and equality functions,

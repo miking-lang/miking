@@ -27,21 +27,6 @@ let stdlib_loc_unix =
   | None ->
       "@@@"
 
-let default_includes =
-  let prelude = [Include (NoInfo, us "prelude.mc")] in
-  match Sys.getenv_opt "MCORE_STDLIB" with
-  | Some "@@@" ->
-      [] (* Needed for test of stdlib *)
-  | Some _ ->
-      prelude
-  | None ->
-      if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then prelude
-      else []
-
-let add_prelude = function
-  | Program (includes, tops, tm) ->
-      Program (default_includes @ includes, tops, tm)
-
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
   | Some path ->
@@ -149,7 +134,6 @@ let parse_mcore_file filename =
     parsed_files := [] ;
     let filename = Ustring.to_utf8 filename in
     local_parse_mcore_file filename
-    (*  |> add_prelude  *)
     |> merge_includes (Filename.dirname filename) [filename]
     |> Mlang.flatten |> Mlang.desugar_post_flatten
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->

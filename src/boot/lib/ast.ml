@@ -335,53 +335,96 @@ let tyUnit fi = TyRecord (fi, Record.empty)
 
 module Option = BatOption
 
-(* General (bottom-up) map over terms *)
-let rec map_tm f = function
+(* smap for terms *)
+let smap_tm_tm (f : tm -> tm) = function
   | TmVar (_, _, _) as t ->
-      f t
+      t
   | TmApp (fi, t1, t2) ->
-      f (TmApp (fi, map_tm f t1, map_tm f t2))
+      TmApp (fi, f t1, f t2)
   | TmLam (fi, x, s, ty, t1) ->
-      f (TmLam (fi, x, s, ty, map_tm f t1))
+      TmLam (fi, x, s, ty, f t1)
   | TmLet (fi, x, s, ty, t1, t2) ->
-      f (TmLet (fi, x, s, ty, map_tm f t1, map_tm f t2))
+      TmLet (fi, x, s, ty, f t1, f t2)
   | TmRecLets (fi, lst, tm) ->
-      f
-        (TmRecLets
-           ( fi
-           , List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, map_tm f t)) lst
-           , map_tm f tm ) )
+      TmRecLets
+        (fi, List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, f t)) lst, f tm)
   | TmConst (_, _) as t ->
-      f t
+      t
   | TmSeq (fi, tms) ->
-      f (TmSeq (fi, Mseq.Helpers.map (map_tm f) tms))
+      TmSeq (fi, Mseq.Helpers.map f tms)
   | TmRecord (fi, r) ->
-      f (TmRecord (fi, Record.map (map_tm f) r))
+      TmRecord (fi, Record.map f r)
   | TmRecordUpdate (fi, r, l, t) ->
-      f (TmRecordUpdate (fi, map_tm f r, l, map_tm f t))
+      TmRecordUpdate (fi, f r, l, f t)
   | TmType (fi, x, s, ty, t1) ->
-      f (TmType (fi, x, s, ty, map_tm f t1))
+      TmType (fi, x, s, ty, f t1)
   | TmConDef (fi, x, s, ty, t1) ->
-      f (TmConDef (fi, x, s, ty, map_tm f t1))
+      TmConDef (fi, x, s, ty, f t1)
   | TmConApp (fi, k, s, t) ->
-      f (TmConApp (fi, k, s, t))
+      TmConApp (fi, k, s, f t)
   | TmMatch (fi, t1, p, t2, t3) ->
-      f (TmMatch (fi, map_tm f t1, p, map_tm f t2, map_tm f t3))
+      TmMatch (fi, f t1, p, f t2, f t3)
   | TmUtest (fi, t1, t2, tusing, tnext) ->
-      let tusing_mapped = Option.map (map_tm f) tusing in
-      f (TmUtest (fi, map_tm f t1, map_tm f t2, tusing_mapped, map_tm f tnext))
+      let tusing_mapped = Option.map f tusing in
+      TmUtest (fi, f t1, f t2, tusing_mapped, f tnext)
   | TmNever _ as t ->
-      f t
+      t
   | TmUse (fi, l, t1) ->
-      f (TmUse (fi, l, map_tm f t1))
+      TmUse (fi, l, f t1)
   | TmClos (fi, x, s, t1, env) ->
-      f (TmClos (fi, x, s, map_tm f t1, env))
+      TmClos (fi, x, s, f t1, env)
   | TmFix _ as t ->
-      f t
+      t
   | TmRef _ as t ->
-      f t
+      t
   | TmTensor _ as t ->
-      f t
+      t
+
+(* sfold over terms *)
+let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
+  | TmVar (_, _, _) ->
+      acc
+  | TmApp (_, t1, t2) ->
+      f (f acc t1) t2
+  | TmLam (_, _, _, _, t1) ->
+      f acc t1
+  | TmLet (_, _, _, _, t1, t2) ->
+      f (f acc t1) t2
+  | TmRecLets (_, lst, tm) ->
+      f
+        (f acc (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst))
+        tm
+  | TmConst (_, _) ->
+      acc
+  | TmSeq (_, tms) ->
+      Mseq.Helpers.fold_right f tms acc
+  | TmRecord (_, r) ->
+      Record.fold (fun _ t acc -> f acc t) r acc
+  | TmRecordUpdate (_, r, _, t) ->
+      f (f acc r) t
+  | TmType (_, _, _, _, t1) ->
+      f acc t1
+  | TmConDef (_, _, _, _, t1) ->
+      f acc t1
+  | TmConApp (_, _, _, t) ->
+      f acc t
+  | TmMatch (_, t1, _, t2, t3) ->
+      f (f (f acc t1) t2) t3
+  | TmUtest (_, t1, t2, tusing, tnext) ->
+      let acc = f (f acc t1) t2 in
+      f (match tusing with None -> acc | Some t -> f acc t) tnext
+  | TmNever _ ->
+      acc
+  | TmUse (_, _, t1) ->
+      f acc t1
+  | TmClos (_, _, _, t1, _) ->
+      f acc t1
+  | TmFix _ ->
+      acc
+  | TmRef _ ->
+      acc
+  | TmTensor _ ->
+      acc
 
 (* Returns the info field from a term *)
 let tm_info = function

@@ -1,3 +1,5 @@
+include "option.mc"
+
 -- The commented out fragments are part of things that should produce error messages,
 -- but we don't have a way to assert breakage yet
 

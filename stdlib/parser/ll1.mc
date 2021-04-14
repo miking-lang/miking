@@ -6,6 +6,7 @@ include "lexer.mc"
 include "map.mc"
 include "string.mc"
 include "either.mc"
+include "common.mc"
 
 type NonTerminal = String
 
