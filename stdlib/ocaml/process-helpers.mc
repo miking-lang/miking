@@ -47,8 +47,8 @@ let phRunCommand : [String] -> String -> String -> ExecResult =
       ] in
 
     -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
-    command (concat "echo \"\" >> " tempStdout);
-    command (concat "echo \"\" >> " tempStderr);
+    _commandList ["echo", "", ">>", tempStdout];
+    _commandList ["echo", "", ">>", tempStderr];
     let stdout = init (init (readFile tempStdout)) in
     let stderr = init (init (readFile tempStderr)) in
 
