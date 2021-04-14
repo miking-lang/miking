@@ -1002,7 +1002,7 @@ let delta eval env fi c v =
       |> (function
            | TmConst (_, CInt n) ->
                let f' is =
-                 if is = is0 then n
+                 if Mseq.Helpers.equal ( = ) is is0 then n
                  else
                    f is
                    |> function
@@ -1014,7 +1014,7 @@ let delta eval env fi c v =
                T.Num.create_int shape f' |> T.int
            | TmConst (_, CFloat r) ->
                let f' is =
-                 if is = is0 then r
+                 if Mseq.Helpers.equal ( = ) is is0 then r
                  else
                    f is
                    |> function
@@ -1025,7 +1025,9 @@ let delta eval env fi c v =
                in
                T.Num.create_float shape f' |> T.float
            | tm ->
-               let f' is = if is = is0 then tm else f is in
+               let f' is =
+                 if Mseq.Helpers.equal ( = ) is is0 then tm else f is
+               in
                T.NoNum.create shape f' |> T.no_num )
       |> fun t -> TmTensor (fi, t)
   | CtensorCreate _, _ ->
