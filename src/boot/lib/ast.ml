@@ -151,9 +151,9 @@ and const =
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate of int array option
+  | CtensorCreate of int Mseq.t option
   | CtensorGetExn of tm T.t option
-  | CtensorSetExn of tm T.t option * int array option
+  | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
   | CtensorShape
   | CtensorCopyExn of tm T.t option
