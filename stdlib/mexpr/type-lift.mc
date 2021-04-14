@@ -80,6 +80,7 @@ recursive let _cmpType = lam ty1 : Type. lam ty2 : Type.
     else match ty with TyVariant _ then 8
     else match ty with TyVar _ then 9
     else match ty with TyApp _ then 10
+    else match ty with TyTensor _ then 11
     else never
   in
   let id1 = _typeId ty1 in
