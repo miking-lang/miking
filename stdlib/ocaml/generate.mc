@@ -787,7 +787,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   sem objWrap =
   | OTmVariantTypeDecl t ->
     OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
-  | t -> objWrapRec false (_objObj t)
+  | t -> _objObj (objWrapRec false t)
 end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
