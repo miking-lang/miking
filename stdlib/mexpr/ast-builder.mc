@@ -109,6 +109,10 @@ let tyseq_ = use SeqTypeAst in
 
 let tystr_ = tyseq_ tychar_
 
+let tytensor_ = use TensorTypeAst in
+  lam ty.
+  TyTensor {ty = ty, info = NoInfo ()}
+
 let tyarrow_ = use FunTypeAst in
   lam from. lam to.
   TyArrow {from = from, to = to, info = NoInfo ()}
@@ -147,6 +151,56 @@ let ntyvar_ = use VarTypeAst in
 
 let tyvar_ = lam s.
   ntyvar_ (nameNoSym s)
+
+-- Tensor OP types
+let tytensorcreate_ = lam ty.
+  tyarrows_ [ tyseq_ tyint_
+            , tyarrow_ (tyseq_ tyint_) ty
+            , tytensor_ ty ]
+
+let tytensorgetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyseq_ tyint_
+            , ty ]
+
+let tytensorsetexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyseq_ tyint_
+            , ty, tyunit_ ]
+
+let tytensorrank_ = lam ty.
+  tyarrow_ (tytensor_ ty) tyint_
+
+let tytensorshape_ = lam ty.
+  tyarrow_ (tytensor_ ty) (tyseq_ tyint_)
+
+let tytensorreshapeexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyseq_ tyint_
+            , tytensor_ ty ]
+
+let tytensorcopyexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tytensor_ ty
+            , tyunit_ ]
+
+let tytensorsliceexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyseq_ tyint_
+            , tytensor_ ty ]
+
+let tytensorsubexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
+            , tyint_
+            , tytensor_ ty ]
+
+let tytensoriteri_ = lam ty.
+  tyarrows_ [ tyarrows_ [ tyint_
+                        , tytensor_ ty
+                        , tyunit_ ]
+            , tytensor_ ty
+            , tyunit_ ]
 
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
@@ -296,8 +350,10 @@ let conapp_ = use MExprAst in
   nconapp_ (nameNoSym s) b
 
 let const_ = use MExprAst in
-  lam c.
-  TmConst {val = c, ty = tyunknown_, info = NoInfo ()}
+  lam ty. lam c.
+  TmConst {val = c, ty = ty, info = NoInfo ()}
+
+let uconst_ = const_ tyunknown_
 
 let nlam_ = use MExprAst in
   lam n. lam ty. lam body.
@@ -455,25 +511,25 @@ let asc_ = use MExprAst in
 
 let int_ = use MExprAst in
   lam i.
-  const_ (CInt {val = i})
+  uconst_ (CInt {val = i})
 
 let float_ = use MExprAst in
   lam f.
-  const_ (CFloat {val = f})
+  uconst_ (CFloat {val = f})
 
 let true_ = use MExprAst in
-  const_ (CBool {val = true})
+  uconst_ (CBool {val = true})
 
 let false_ = use MExprAst in
-  const_ (CBool {val = false})
+  uconst_ (CBool {val = false})
 
 let bool_ = use MExprAst in
   lam v.
-  const_ (CBool {val = v})
+  uconst_ (CBool {val = v})
 
 let char_ = use MExprAst in
   lam c.
-  const_ (CChar {val = c})
+  uconst_ (CChar {val = c})
 
 let str_ = use MExprAst in
   lam s.
@@ -481,186 +537,186 @@ let str_ = use MExprAst in
 
 let symb_ = use MExprAst in
   lam c.
-  const_ (CSymb {val = c})
+  uconst_ (CSymb {val = c})
 
 let addi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CAddi ())) a b
+  appf2_ (uconst_ (CAddi ())) a b
 
 let subi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CSubi ())) a b
+  appf2_ (uconst_ (CSubi ())) a b
 
 let muli_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CMuli ())) a b
+  appf2_ (uconst_ (CMuli ())) a b
 
 let divi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CDivi ())) a b
+  appf2_ (uconst_ (CDivi ())) a b
 
 let modi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CModi ())) a b
+  appf2_ (uconst_ (CModi ())) a b
 
 let negi_ = use MExprAst in
   lam n.
-  appf1_ (const_ (CNegi ())) n
+  appf1_ (uconst_ (CNegi ())) n
 
 let addf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CAddf ())) a b
+  appf2_ (uconst_ (CAddf ())) a b
 
 let subf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CSubf ())) a b
+  appf2_ (uconst_ (CSubf ())) a b
 
 let mulf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CMulf ())) a b
+  appf2_ (uconst_ (CMulf ())) a b
 
 let divf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CDivf ())) a b
+  appf2_ (uconst_ (CDivf ())) a b
 
 let negf_ = use MExprAst in
   lam a.
-  appf1_ (const_ (CNegf ())) a
+  appf1_ (uconst_ (CNegf ())) a
 
 let floorfi_ = use MExprAst in
   lam x.
-  appf1_ (const_ (CFloorfi ())) x
+  appf1_ (uconst_ (CFloorfi ())) x
 
 let ceilfi_ = use MExprAst in
   lam x.
-  appf1_ (const_ (CCeilfi ())) x
+  appf1_ (uconst_ (CCeilfi ())) x
 
 let roundfi_ = use MExprAst in
   lam x.
-  appf1_ (const_ (CRoundfi ())) x
+  appf1_ (uconst_ (CRoundfi ())) x
 
 let int2float_ = use MExprAst in
   lam x.
-  appf1_ (const_ (CInt2float ())) x
+  appf1_ (uconst_ (CInt2float ())) x
 
 let eqi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CEqi ())) a b
+  appf2_ (uconst_ (CEqi ())) a b
 
 let neqi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CNeqi ())) a b
+  appf2_ (uconst_ (CNeqi ())) a b
 
 let lti_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CLti ())) a b
+  appf2_ (uconst_ (CLti ())) a b
 
 let gti_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CGti ())) a b
+  appf2_ (uconst_ (CGti ())) a b
 
 let leqi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CLeqi ())) a b
+  appf2_ (uconst_ (CLeqi ())) a b
 
 let geqi_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CGeqi ())) a b
+  appf2_ (uconst_ (CGeqi ())) a b
 
 let eqc_ = use MExprAst in
   lam c1. lam c2.
-  appf2_ (const_ (CEqc ())) c1 c2
+  appf2_ (uconst_ (CEqc ())) c1 c2
 
 let int2char_ = use MExprAst in
   lam i.
-  app_ (const_ (CInt2Char ())) i
+  app_ (uconst_ (CInt2Char ())) i
 
 let char2int_ = use MExprAst in
   lam c.
-  app_ (const_ (CChar2Int ())) c
+  app_ (uconst_ (CChar2Int ())) c
 
 let string2float_ = use MExprAst in
   lam s.
-  app_ (const_ (CString2float ())) s
+  app_ (uconst_ (CString2float ())) s
 
 let eqf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CEqf ())) a b
+  appf2_ (uconst_ (CEqf ())) a b
 
 let ltf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CLtf ())) a b
+  appf2_ (uconst_ (CLtf ())) a b
 
 let leqf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CLeqf ())) a b
+  appf2_ (uconst_ (CLeqf ())) a b
 
 let gtf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CGtf ())) a b
+  appf2_ (uconst_ (CGtf ())) a b
 
 let geqf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CGeqf ())) a b
+  appf2_ (uconst_ (CGeqf ())) a b
 
 let neqf_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CNeqf ())) a b
+  appf2_ (uconst_ (CNeqf ())) a b
 
 let slli_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CSlli ())) a b
+  appf2_ (uconst_ (CSlli ())) a b
 
 let srli_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CSrli ())) a b
+  appf2_ (uconst_ (CSrli ())) a b
 
 let srai_ = use MExprAst in
   lam a. lam b.
-  appf2_ (const_ (CSrai ())) a b
+  appf2_ (uconst_ (CSrai ())) a b
 
 let get_ = use MExprAst in
   lam s. lam i.
-  appf2_ (const_ (CGet ())) s i
+  appf2_ (uconst_ (CGet ())) s i
 
 let set_ = use MExprAst in
   lam s. lam i. lam v.
-  appf3_ (const_ (CSet ())) s i v
+  appf3_ (uconst_ (CSet ())) s i v
 
 let empty_ = use MExprAst in
   seq_ []
 
 let cons_ = use MExprAst in
   lam x. lam s.
-  appf2_ (const_ (CCons ())) x s
+  appf2_ (uconst_ (CCons ())) x s
 
 let snoc_ = use MExprAst in
   lam s. lam x.
-  appf2_ (const_ (CSnoc ())) s x
+  appf2_ (uconst_ (CSnoc ())) s x
 
 let concat_ = use MExprAst in
   lam s1. lam s2.
-  appf2_ (const_ (CConcat ())) s1 s2
+  appf2_ (uconst_ (CConcat ())) s1 s2
 
 let length_ = use MExprAst in
   lam s.
-  appf1_ (const_ (CLength ())) s
+  appf1_ (uconst_ (CLength ())) s
 
 let reverse_ = use MExprAst in
   lam s.
-  appf1_ (const_ (CReverse ())) s
+  appf1_ (uconst_ (CReverse ())) s
 
 let splitat_ = use MExprAst in
   lam s. lam n.
-  appf2_ (const_ (CSplitAt ())) s n
+  appf2_ (uconst_ (CSplitAt ())) s n
 
 let create_ = use MExprAst in
   lam n. lam f.
-  appf2_ (const_ (CCreate ())) n f
+  appf2_ (uconst_ (CCreate ())) n f
 
 let subsequence_ = use MExprAst in
   lam s. lam off. lam n.
-  appf3_ (const_ (CSubsequence ())) s off n
+  appf3_ (uconst_ (CSubsequence ())) s off n
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in
@@ -674,67 +730,67 @@ let not_ = use MExprAst in
 
 -- Symbol operations
 let gensym_ = use MExprAst in
-  lam u. appf1_ (const_ (CGensym ())) u
+  lam u. appf1_ (uconst_ (CGensym ())) u
 
 let eqsym_ = use MExprAst in
   lam s1. lam s2.
-  appf2_ (const_ (CEqsym ())) s1 s2
+  appf2_ (uconst_ (CEqsym ())) s1 s2
 
 let sym2hash_ = use MExprAst in
   lam s.
-  appf1_ (const_ (CSym2hash ())) s
+  appf1_ (uconst_ (CSym2hash ())) s
 
 -- References
 let ref_ = use MExprAst in
-  lam v. appf1_ (const_ (CRef ())) v
+  lam v. appf1_ (uconst_ (CRef ())) v
 
 let deref_ = use MExprAst in
-  lam r. appf1_ (const_ (CDeRef ())) r
+  lam r. appf1_ (uconst_ (CDeRef ())) r
 
 let modref_ = use MExprAst in
-  lam r. lam v. appf2_ (const_ (CModRef ())) r v
+  lam r. lam v. appf2_ (uconst_ (CModRef ())) r v
 
 -- File operations
 let readFile_ = use MExprAst in
-  lam f. appf1_ (const_ (CFileRead ())) f
+  lam f. appf1_ (uconst_ (CFileRead ())) f
 
 let writeFile_ = use MExprAst in
-  lam f. lam d. appf2_ (const_ (CFileWrite ())) f d
+  lam f. lam d. appf2_ (uconst_ (CFileWrite ())) f d
 
 let fileExists_ = use MExprAst in
-  lam f. appf1_ (const_ (CFileExists ())) f
+  lam f. appf1_ (uconst_ (CFileExists ())) f
 
 let deleteFile_ = use MExprAst in
-  lam f. appf1_ (const_ (CFileDelete ())) f
+  lam f. appf1_ (uconst_ (CFileDelete ())) f
 
 -- I/O operations
 let print_ = use MExprAst in
-  lam s. app_ (const_ (CPrint ())) s
+  lam s. app_ (uconst_ (CPrint ())) s
 
 let dprint_ = use MExprAst in
-  lam s. app_ (const_ (CDPrint ())) s
+  lam s. app_ (uconst_ (CDPrint ())) s
 
 let readLine_ = use MExprAst in
-  lam u. app_ (const_ (CReadLine ())) u
+  lam u. app_ (uconst_ (CReadLine ())) u
 
 -- Random number generation
 let randIntU_ = use MExprAst in
-  lam lo. lam hi. appf2_ (const_ (CRandIntU ())) lo hi
+  lam lo. lam hi. appf2_ (uconst_ (CRandIntU ())) lo hi
 
 let randSetSeed_ = use MExprAst in
-  lam s. appf1_ (const_ (CRandSetSeed ())) s
+  lam s. appf1_ (uconst_ (CRandSetSeed ())) s
 
 -- Error
 let error_ = use MExprAst in
-  lam s. appf1_ (const_ (CError ())) s
+  lam s. appf1_ (uconst_ (CError ())) s
 
 -- Exit
 let exit_ = use MExprAst in
-  lam n. appf1_ (const_ (CExit ())) n
+  lam n. appf1_ (uconst_ (CExit ())) n
 
 -- Argv
 let argv_ = use MExprAst in
-  const_ (CArgv ())
+  uconst_ (CArgv ())
 
 -- Command
 let command_ = use MExprAst in
@@ -742,154 +798,174 @@ let command_ = use MExprAst in
 
 -- Time operations
 let wallTimeMs_ = use MExprAst in
-  lam u. appf1_ (const_ (CWallTimeMs ())) u
+  lam u. appf1_ (uconst_ (CWallTimeMs ())) u
 
 let sleepMs_ = use MExprAst in
-  lam n. appf1_ (const_ (CSleepMs ())) n
+  lam n. appf1_ (uconst_ (CSleepMs ())) n
 
 -- Tensors
 let tensorCreate_ = use MExprAst in
-  lam s. lam f.
-  appf2_ (const_ (CTensorCreate ())) s f
+  lam ty. lam s. lam f.
+  appf2_ (const_ (tytensorcreate_ ty) (CTensorCreate ())) s f
+
+let utensorCreate_ = tensorCreate_ tyunknown_
 
 let tensorGetExn_ = use MExprAst in
-  lam t. lam is.
-  appf2_ (const_ (CTensorGetExn ())) t is
+  lam ty. lam t. lam is.
+  appf2_ (const_ (tytensorgetexn_ ty) (CTensorGetExn ())) t is
+
+let utensorGetExn_ = tensorGetExn_ tyunknown_
 
 let tensorSetExn_ = use MExprAst in
-  lam t. lam is. lam v.
-  appf3_ (const_ (CTensorSetExn ())) t is v
+  lam ty. lam t. lam is. lam v.
+  appf3_ (const_ (tytensorsetexn_ ty) (CTensorSetExn ())) t is v
+
+let utensorSetExn_ = tensorSetExn_ tyunknown_
 
 let tensorRank_ = use MExprAst in
-  lam t.
-  appf1_ (const_ (CTensorRank ())) t
+  lam ty. lam t.
+  appf1_ (const_ (tytensorrank_ ty) (CTensorRank ())) t
+
+let utensorRank_ = tensorRank_ tyunknown_
 
 let tensorShape_ = use MExprAst in
-  lam t.
-  appf1_ (const_ (CTensorShape ())) t
+  lam ty. lam t.
+  appf1_ (const_ (tytensorshape_ ty) (CTensorShape ())) t
+
+let utensorShape_ = tensorShape_ tyunknown_
 
 let tensorReshapeExn_ = use MExprAst in
-  lam t. lam s.
-  appf2_ (const_ (CTensorReshapeExn ())) t s
+  lam ty. lam t. lam s.
+  appf2_ (const_ (tytensorreshapeexn_ ty) (CTensorReshapeExn ())) t s
+
+let utensorReshapeExn_ = tensorReshapeExn_ tyunknown_
 
 let tensorCopyExn_ = use MExprAst in
-  lam t1. lam t2.
-  appf2_ (const_ (CTensorCopyExn ())) t1 t2
+  lam ty. lam t1. lam t2.
+  appf2_ (const_ (tytensorcopyexn_ ty) (CTensorCopyExn ())) t1 t2
+
+let utensorCopyExn_ = tensorCopyExn_ tyunknown_
 
 let tensorSliceExn_ = use MExprAst in
-  lam t. lam s.
-  appf2_ (const_ (CTensorSliceExn ())) t s
+  lam ty. lam t. lam s.
+  appf2_ (const_ (tytensorsliceexn_ ty) (CTensorSliceExn ())) t s
+
+let utensorSliceExn_ = tensorSliceExn_ tyunknown_
 
 let tensorSubExn_ = use MExprAst in
-  lam t. lam ofs. lam len.
-  appf3_ (const_ (CTensorSubExn ())) t ofs len
+  lam ty. lam t. lam ofs. lam len.
+  appf3_ (const_ (tytensorsubexn_ ty) (CTensorSubExn ())) t ofs len
+
+let utensorSubExn_ = tensorSubExn_ tyunknown_
 
 let tensorIteri_ = use MExprAst in
-  lam f. lam t.
-  appf2_ (const_ (CTensorIteri ())) f t
+  lam ty. lam f. lam t.
+  appf2_ (const_ (tytensoriteri_ ty) (CTensorIteri ())) f t
+
+let utensorIteri_ = tensorIteri_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam str. appf1_ (const_ (CBootParserParseMExprString ())) str
+  lam str. appf1_ (uconst_ (CBootParserParseMExprString ())) str
 
 let bootParserGetId_ = use MExprAst in
-  lam pt. appf1_ (const_ (CBootParserGetId ())) pt
+  lam pt. appf1_ (uconst_ (CBootParserGetId ())) pt
 
 let bootParserGetTerm_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetTerm ())) pt n
+  appf2_ (uconst_ (CBootParserGetTerm ())) pt n
 
 let bootParserGetString_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetString ())) pt n
+  appf2_ (uconst_ (CBootParserGetString ())) pt n
 
 let bootParserGetInt_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetInt ())) pt n
+  appf2_ (uconst_ (CBootParserGetInt ())) pt n
 
 let bootParserGetFloat_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetFloat ())) pt n
+  appf2_ (uconst_ (CBootParserGetFloat ())) pt n
 
 let bootParserGetListLength_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetListLength ())) pt n
+  appf2_ (uconst_ (CBootParserGetListLength ())) pt n
 
 let bootParserGetConst_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetConst ())) pt n
+  appf2_ (uconst_ (CBootParserGetConst ())) pt n
 
 let bootParserGetPat_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetPat ())) pt n
+  appf2_ (uconst_ (CBootParserGetPat ())) pt n
 
 let bootParserGetInfo_ = use MExprAst in
   lam pt. lam n.
-  appf2_ (const_ (CBootParserGetInfo ())) pt n
+  appf2_ (uconst_ (CBootParserGetInfo ())) pt n
 
 let mapEmpty_ = use MExprAst in
   lam cmp.
-  appf1_ (const_ (CMapEmpty ())) cmp
+  appf1_ (uconst_ (CMapEmpty ())) cmp
 
 let mapInsert_ = use MExprAst in
   lam k. lam v. lam m.
-  appf3_ (const_ (CMapInsert ())) k v m
+  appf3_ (uconst_ (CMapInsert ())) k v m
 
 let mapRemove_ = use MExprAst in
   lam k. lam m.
-  appf2_ (const_ (CMapRemove ())) k m
+  appf2_ (uconst_ (CMapRemove ())) k m
 
 let mapFindWithExn_ = use MExprAst in
   lam k. lam m.
-  appf2_ (const_ (CMapFindWithExn ())) k m
+  appf2_ (uconst_ (CMapFindWithExn ())) k m
 
 let mapFindOrElse_ = use MExprAst in
   lam f. lam k. lam m.
-  appf3_ (const_ (CMapFindOrElse ())) f k m
+  appf3_ (uconst_ (CMapFindOrElse ())) f k m
 
 let mapFindApplyOrElse_ = use MExprAst in
   lam f. lam felse. lam k. lam m.
-  appf4_ (const_ (CMapFindApplyOrElse ())) f felse k m
+  appf4_ (uconst_ (CMapFindApplyOrElse ())) f felse k m
 
 let mapBindings_ = use MExprAst in
   lam m.
-  appf1_ (const_ (CMapBindings ())) m
+  appf1_ (uconst_ (CMapBindings ())) m
 
 let mapSize_ = use MExprAst in
   lam m.
-  appf1_ (const_ (CMapSize ())) m
+  appf1_ (uconst_ (CMapSize ())) m
 
 let mapMem_ = use MExprAst in
   lam k. lam m.
-  appf2_ (const_ (CMapMem ())) k m
+  appf2_ (uconst_ (CMapMem ())) k m
 
 let mapAny_ = use MExprAst in
   lam p. lam m.
-  appf2_ (const_ (CMapAny ())) p m
+  appf2_ (uconst_ (CMapAny ())) p m
 
 let mapMap_ = use MExprAst in
   lam f. lam m.
-  appf2_ (const_ (CMapMap ())) f m
+  appf2_ (uconst_ (CMapMap ())) f m
 
 let mapMapWithKey_ = use MExprAst in
   lam f. lam m.
-  appf2_ (const_ (CMapMapWithKey ())) f m
+  appf2_ (uconst_ (CMapMapWithKey ())) f m
 
 let mapFoldWithKey_ = use MExprAst in
   lam f. lam z. lam m.
-  appf3_ (const_ (CMapFoldWithKey ())) f z m
+  appf3_ (uconst_ (CMapFoldWithKey ())) f z m
 
 let mapEq_ = use MExprAst in
   lam veq. lam m1. lam m2.
-  appf3_ (const_ (CMapEq ())) veq m1 m2
+  appf3_ (uconst_ (CMapEq ())) veq m1 m2
 
 let mapCmp_ = use MExprAst in
   lam vcmp. lam m1. lam m2.
-  appf3_ (const_ (CMapCmp ())) vcmp m1 m2
+  appf3_ (uconst_ (CMapCmp ())) vcmp m1 m2
 
 let mapGetCmpFun_ = use MExprAst in
   lam m.
-  appf1_ (const_ (CMapGetCmpFun ())) m
+  appf1_ (uconst_ (CMapGetCmpFun ())) m
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2

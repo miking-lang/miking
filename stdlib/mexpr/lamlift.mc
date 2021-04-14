@@ -728,12 +728,12 @@
 -- mexpr
 -- use MExprLLandPPandEval in
 --
--- let builtin_env = [{key = "addi", value = const_ (CAddi ())},
---                    {key = "subi", value = const_ (CSubi ())},
---                    {key = "muli", value = const_ (CMuli ())},
---                    {key = "not", value = const_ (CNot ())},
---                    {key = "eqi", value = const_ (CEqi ())},
---                    {key = "get", value = const_ (CGet ())}]
+-- let builtin_env = [{key = "addi", value = uconst_ (CAddi ())},
+--                    {key = "subi", value = uconst_ (CSubi ())},
+--                    {key = "muli", value = uconst_ (CMuli ())},
+--                    {key = "not", value = uconst_ (CNot ())},
+--                    {key = "eqi", value = uconst_ (CEqi ())},
+--                    {key = "get", value = uconst_ (CGet ())}]
 -- in
 --
 -- -- Lifts out the lambdas, returning a new AST with all lambdas on the top

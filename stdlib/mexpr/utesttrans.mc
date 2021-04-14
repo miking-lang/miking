@@ -753,7 +753,7 @@ let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
 utest utestStrip intNoUsing with unit_ using eqExpr in
 
 let intWithUsing = typeAnnot (
-  utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
+  utestu_info_ (int_ 1) (int_ 0) unit_ (uconst_ (CGeqi{}))) in
 -- eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
 utest utestStrip intWithUsing with unit_ using eqExpr in
 
@@ -771,7 +771,7 @@ let lhs = seq_ [
 let rhs = reverse_ (seq_ [
   float_ 3.14, float_ 0.0, float_ 1.0, float_ 6.5
 ]) in
-let elemEq = const_ (CEqf ()) in
+let elemEq = uconst_ (CEqf ()) in
 let seqEq =
   ulam_ "a"
     (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
