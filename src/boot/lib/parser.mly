@@ -90,6 +90,7 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> LTENSOR       /* "Tensor[" */
 
 %start main
 %start main_mexpr
@@ -494,7 +495,9 @@ ty_atom:
   | LPAREN ty RPAREN
       { $2 }
   | LSQUARE ty RSQUARE
-      { TySeq(mkinfo $1.i $3.i, $2) }
+    { TySeq(mkinfo $1.i $3.i, $2) }
+  | LTENSOR ty RSQUARE
+    { TyTensor(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
       { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LBRACKET RBRACKET

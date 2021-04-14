@@ -436,6 +436,8 @@ let delta eval env fi c v =
     let to_int = function
       | TmConst (_, CChar n) ->
           n
+      | TmConst (_, CInt n) ->
+          n
       | _ ->
           fail_constapp fi
     in

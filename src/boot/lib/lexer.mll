@@ -40,7 +40,6 @@ let reserved_strings = [
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
   ("using",         fun(i) -> Parser.USING{i=i;v=()});
 
-
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
   ("+",             fun(i) -> Parser.ADD{i=i;v=()});
@@ -62,7 +61,7 @@ let reserved_strings = [
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
   ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
-
+  ("Tensor[",       fun(i) -> Parser.LTENSOR{i=i;v=()});
 ]
 
 (* Info handling *)
@@ -153,8 +152,7 @@ let uident = ucase_letter (digit | '_' | us_letter)*
 
 let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" | "<<" | ">>" | ">>>" | "==" |
               "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
-              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++"
-
+              "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++" | "Tensor["
 
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+

@@ -33,7 +33,7 @@ lang BootParser = MExprAst
   sem parseMCoreFile =
   | filename ->
     let t = bootParserParseMCoreFile filename in
-    matchTerm t (bootParserGetId t) 
+    matchTerm t (bootParserGetId t)
 
   -- Parses an MExpr string and returns the final MExpr AST
   sem parseMExprString =
@@ -180,6 +180,9 @@ lang BootParser = MExprAst
     TyApp {info = ginfo t 0,
            lhs = gtype t 0,
            rhs = gtype t 1}
+  | 211 /-TyTensor-/ ->
+    TyTensor {info = ginfo t 0,
+              ty = gtype t 0}
 
   -- Get constant help function
   sem gconst(t:Unkown) =
@@ -262,6 +265,7 @@ lang BootParser = MExprAst
             col2 = gint t 3}
   | 501 /-NoInfo-/ ->
       NoInfo {}
+
 
   sem strToPatName =
   | "" ->  PWildcard ()
@@ -549,6 +553,18 @@ let typedLet = lam letTy.
 utest parseMExprString s with typedLet recTy using eqExpr in
 utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 56 in
+
+-- TyTensor
+let s = "let y:Tensor[Int] = lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 17 in
+
+-- Nested TyTensor
+let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:Tensor[Char],b_2:Float}}]= lam x.x in y" in
+utest lside s with rside s in
+utest match parseMExprString s with TmLet l then info l.tyBody else ()
+with r_info 1 6 1 62 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in

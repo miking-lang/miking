@@ -316,6 +316,8 @@ and ty =
   | TyArrow of info * ty * ty
   (* Sequence type *)
   | TySeq of info * ty
+  (* Tensor type *)
+  | TyTensor of info * ty
   (* Record type *)
   | TyRecord of info * ty Record.t
   (* Variant type *)
@@ -477,6 +479,7 @@ let ty_info = function
   | TyChar fi
   | TyArrow (fi, _, _)
   | TySeq (fi, _)
+  | TyTensor (fi, _)
   | TyRecord (fi, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)

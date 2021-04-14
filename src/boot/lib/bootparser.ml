@@ -1,4 +1,4 @@
-(* 
+(*
  * Miking is licensed under the MIT license.
  * Copyright (C) David Broman. See file LICENSE.txt
  *)
@@ -61,6 +61,8 @@ let idTyVar = 209
 
 let idTyApp = 210
 
+let idTyTensor = 211
+
 (* Const literals *)
 let idCBool = 300
 
@@ -115,7 +117,7 @@ let parseMCoreFile str =
   PTreeTm t
 
 (* Returns a tuple with the following elements
-   1. ID field 
+   1. ID field
    2. Info field
    3. List of list lengths
    4. List of types
@@ -186,6 +188,8 @@ let getData = function
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
+  | PTreeTy (TyTensor (fi, ty)) ->
+      (idTyTensor, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyRecord (fi, tymap)) ->
       let slst, tylst = tymap |> Record.bindings |> List.split in
       let len = List.length slst in
