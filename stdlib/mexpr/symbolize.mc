@@ -325,6 +325,11 @@ lang SeqTypeSym = SeqTypeAst
   | TySeq t -> TySeq {t with ty = symbolizeType env t.ty}
 end
 
+lang TensorTypeSym = TensorTypeAst
+  sem symbolizeType (env : SymEnv) =
+  | TyTensor t -> TyTensor {t with ty = symbolizeType env t.ty}
+end
+
 lang RecordTypeSym = RecordTypeAst
   sem symbolizeType (env : SymEnv) =
   | TyRecord t ->
@@ -491,7 +496,7 @@ lang MExprSym =
   -- Types
   UnknownTypeSym + BoolTypeSym + IntTypeSym + FloatTypeSym + CharTypeSym +
   FunTypeSym + SeqTypeSym + RecordTypeSym + VariantTypeSym + VarTypeSym +
-  AppTypeSym +
+  AppTypeSym + TensorTypeSym +
 
   -- Patterns
   NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
