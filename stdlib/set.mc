@@ -8,13 +8,13 @@ include "map.mc"
 
 type Set a = Map a {}
 
-let setEmpty = mapEmpty
-let setSize = mapSize
+let setEmpty : (a -> a -> Int) -> Set a = lam cmp. mapEmpty cmp
+let setSize : Set a -> Int = mapSize
 let setInsert : a -> Set a -> Set a = lam e. lam s. mapInsert e {} s
 let setRemove : a -> Set a -> Set a = lam e. lam s. mapRemove e s
-let setMem : a -> Set a -> Bool = mapMem
-let setUnion : Set a -> Set a -> Set a = mapUnion
-let setOfSeq : (k -> k -> Int) -> [a] -> Set a =
+let setMem : a -> Set a -> Bool = lam e. lam s. mapMem e s
+let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
+let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
 
