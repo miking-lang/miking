@@ -1664,7 +1664,7 @@ utest testPrint with generateEmptyEnv testPrint using sameSemantics in
 let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
 utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
 
-let testCommand = command_ (str_ "echo \"42\"")
+let testCommand = command_ (str_ "echo \"42\"") in
 utest ocamlEval (generateEmptyEnv testCommand) with int_ 42 using eqExpr in
 
 -- Random number generation operations

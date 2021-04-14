@@ -1,51 +1,37 @@
 include "string.mc"
-include "python/python.mc"
-
-let _blt = pyimport "builtins"
-let _subprocess = pyimport "subprocess"
-let _tempfile = pyimport "tempfile"
-let _pathlib = pyimport "pathlib"
 
 type ExecResult = {stdout: String, stderr: String, returncode: Int}
 
-let phWriteToFile = lam str. lam filename.
-  let f = pycall _blt "open" (filename, "w+") in
-  pycall f "write" (str,);
-  pycall f "close" ();
-  ()
-
-let phReadFile = lam filename.
-  let f = pycall _blt "open" (filename, "r+") in
-  let content = pycall f "read" () in
-  pycall f "close" ();
-  pyconvert content
+let _pathSep = "/"
+let _tempDir = "/tmp/program"
+let _tempStdout = "/tmp/stdout.txt"
+let _tempStderr = "/tmp/stderr.txt"
 
 let phMoveFile = lam fromFile. lam toFile.
-  pycall _subprocess "run" (["mv", "-f", fromFile, toFile],)
+  command (strJoin " " ["mv -f", fromFile, toFile])
 
 let phChmodWriteAccessFile = lam file.
-  pycall _subprocess "run" (["chmod", "+w", file],)
+  command (join ["chmod +w ", file])
 
 let phJoinPath = lam p1. lam p2.
-  let p = pycall _pathlib "Path" (p1,) in
-  pycall _blt "str" (pycall p "joinpath" (p2,),)
+  strJoin _pathSep [p1, p2]
 
 let phRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
-    let r = pycallkw _subprocess "run" (cmd,)
-            { cwd=cwd,
-              input=pycall (pycall _blt "str" (stdin,)) "encode" (),
-              stdout = pythonGetAttr _subprocess "PIPE",
-              stderr = pythonGetAttr _subprocess "PIPE" } in
-    let returncode = pyconvert (pythonGetAttr r "returncode") in
-    let stdout =
-      pyconvert (pycall (pythonGetAttr r "stdout") "decode" ())
-    in
-    let stderr =
-      pyconvert (pycall (pythonGetAttr r "stderr") "decode" ())
-    in
-    {stdout=stdout, stderr=stderr, returncode=returncode}
+    let retCode = command (strJoin " "
+      [ "cd", cwd, "&&"
+      , "echo", stdin, "|"
+      , strJoin " " cmd
+      , ">", _tempStdout
+      , "2>", _tempStderr
+      ]) in
+    -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
+    command (concat "echo \"\" >> " _tempStdout);
+    command (concat "echo \"\" >> " _tempStderr);
+    let stdout = init (readFile _tempStdout) in
+    let stderr = init (readFile _tempStderr) in
+    {stdout = stdout, stderr = stderr, returncode = retCode}
 
-let phTempDirMake = lam. pycall _tempfile "TemporaryDirectory" ()
-let phTempDirName = lam td. pythonGetAttr td "name"
-let phTempDirDelete = lam td. lam. pycall td "cleanup" (); ()
+let phTempDirMake = lam. command (join ["mkdir -p ", _tempDir])
+let phTempDirName = lam. _tempDir
+let phTempDirDelete = lam. lam. command (join ["rm -rf ", _tempDir])

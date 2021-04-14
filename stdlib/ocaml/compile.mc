@@ -13,15 +13,15 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
   let td = phTempDirMake () in
   let dir = phTempDirName td in
   let tempfile = lam f. phJoinPath dir f in
-  printLn p;
-  phWriteToFile p (tempfile "program.ml");
-  phWriteToFile dunefile (tempfile "dune");
+
+  writeFile (tempfile "program.ml") p;
+  writeFile (tempfile "dune") dunefile;
 
   let command = ["dune", "build"] in
   let r = phRunCommand command "" dir in
   if neqi r.returncode 0 then
       print (join ["'dune build' failed on program:\n\n",
-                   phReadFile (tempfile "program.ml"),
+                   readFile (tempfile "program.ml"),
                    "\n\nexit code: ",
                    int2string r.returncode,
                    "\n\nstandard error:\n", r.stderr]);
@@ -37,7 +37,7 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
         in
         phRunCommand command stdin (tempfile ""),
     cleanup = phTempDirDelete td,
-    binaryPath = pyconvert (tempfile "_build/default/program.exe")
+    binaryPath = tempfile "_build/default/program.exe"
   }
 
 let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
@@ -49,39 +49,37 @@ let sym =
   ocamlCompile
   "print_int (Boot.Intrinsics.Mseq.length Boot.Intrinsics.Mseq.empty)"
 in
+utest (sym.run "" []).stdout with "0" in
+sym.cleanup ();
 
 let hello =
   ocamlCompile "print_string \"Hello World!\""
 in
+utest (hello.run "" []).stdout with "Hello World!" in
+hello.cleanup ();
 
 let echo =
   ocamlCompile "print_string (read_line ())"
 in
+utest (echo.run "hello" []).stdout with "hello" in
+echo.cleanup ();
 
 let args =
   ocamlCompile "print_string (Sys.argv.(1))"
 in
+utest (args.run "" ["world"]).stdout with "world" in
+args.cleanup ();
 
 let err =
   ocamlCompile "Printf.eprintf \"Hello World!\""
 in
+utest (err.run "" []).stderr with "Hello World!" in
+err.cleanup ();
 
 let manyargs =
   ocamlCompile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
 in
-
-utest (sym.run "" []).stdout with "0" in
-utest (hello.run "" []).stdout with "Hello World!" in
-utest (echo.run "hello" []).stdout with "hello" in
-utest (args.run "" ["world"]).stdout with "world" in
-utest (err.run "" []).stderr with "Hello World!" in
 utest (manyargs.run "" ["hello", "world"]).stderr with "hello world" in
-
-sym.cleanup ();
-hello.cleanup ();
-echo.cleanup ();
-args.cleanup ();
-err.cleanup ();
 manyargs.cleanup ();
 
 ()
