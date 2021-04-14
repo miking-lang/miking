@@ -223,6 +223,10 @@ let collectKnownProgramTypes = use MExprAst in
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
         collectType acc elemTy
+      else match ty with TyTensor {ty = elemTy} then
+        let typeFuns = mapInsert ty funcNames acc.typeFunctions in
+        let acc = {acc with typeFunctions = typeFuns} in
+        collectType acc elemTy
       else match ty with TyRecord {fields = fields} then
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
@@ -484,7 +488,7 @@ let typeHasDefaultEquality = use MExprAst in
   lam env : UtestTypeEnv. lam ty.
   recursive let work = lam visited. lam ty.
     match ty with TyInt _ | TyBool _ | TyChar _ then true
-    else match ty with TySeq t then
+    else match ty with TySeq t | TyTensor t then
       work visited t.ty
     else match ty with TyRecord t then
       mapAll (lam ty. work visited ty) t.fields
