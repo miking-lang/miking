@@ -48,7 +48,8 @@ let ocamlCompile = lam sourcePath. lam ocamlAst.
   let p = ocamlCompile (expr2str ocamlAst) in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   phMoveFile p.binaryPath destinationFile;
-  phChmodWriteAccessFile destinationFile
+  phChmodWriteAccessFile destinationFile;
+  p.cleanup ()
 
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
