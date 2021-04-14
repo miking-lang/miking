@@ -314,36 +314,7 @@ let record =
     ("c", (app_ (int_ 5) (int_ 6)))
   ]
 in
-utest _anf record with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t2"),
-      ("b", int_ 4),
-      ("c", var_ "t")
-    ]),
-    var_ "t3"
-  ]
-using eqExpr in
-
-
 let rupdate = recordupdate_ record "b" (int_ 7) in
-utest _anf rupdate with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t2"),
-      ("b", int_ 4),
-      ("c", var_ "t")
-    ]),
-    ulet_ "t4" (recordupdate_ (var_ "t3") "b" (int_ 7)),
-    var_ "t4"
-  ]
-using eqExpr in
 
 let factorial =
   ureclet_ "fact"
