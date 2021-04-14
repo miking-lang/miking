@@ -397,6 +397,8 @@ let rec print_const fmt = function
       fprintf fmt "fileExists"
   | CdeleteFile ->
       fprintf fmt "deleteFile"
+  | Ccommand ->
+      fprintf fmt "command"
   | Cerror ->
       fprintf fmt "error"
   | Cexit ->

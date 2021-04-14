@@ -13,7 +13,7 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
   let td = phTempDirMake () in
   let dir = phTempDirName td in
   let tempfile = lam f. phJoinPath dir f in
-
+  printLn p;
   phWriteToFile p (tempfile "program.ml");
   phWriteToFile dunefile (tempfile "dune");
 

@@ -736,6 +736,10 @@ let exit_ = use MExprAst in
 let argv_ = use MExprAst in
   const_ (CArgv ())
 
+-- Command
+let command_ = use MExprAst in
+  lam s. appf1_ (const_ (CCommand ())) s
+
 -- Time operations
 let wallTimeMs_ = use MExprAst in
   lam u. appf1_ (const_ (CWallTimeMs ())) u

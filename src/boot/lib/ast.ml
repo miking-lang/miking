@@ -113,6 +113,7 @@ and const =
   | CwriteFile of int Mseq.t option
   | CfileExists
   | CdeleteFile
+  | Ccommand
   | Cerror
   | Cexit
   (* MCore intrinsics: Symbols *)
