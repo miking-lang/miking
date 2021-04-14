@@ -97,7 +97,8 @@ lang RecordANF = ANF + RecordAst
               (lam v. acc (mapInsert k v bs))
               e))
     in
-    (mapFoldWithKey f acc t.bindings) (mapEmpty (mapGetCmpFun t.bindings))
+    let tmp = mapFoldWithKey f acc t.bindings in
+    tmp (mapEmpty (mapGetCmpFun t.bindings))
 
   | TmRecordUpdate t ->
     normalizeName
@@ -143,7 +144,7 @@ lang RecLetsANF = ANF + RecLetsAst
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmRecLets t ->
-    let bindings = map (lam b. {b with body = normalizeTerm b.body}) t.bindings in
+    let bindings = map (lam b : RecLetBinding. {b with body = normalizeTerm b.body}) t.bindings in
     TmRecLets {{t with bindings = bindings}
                   with inexpr = normalize k t.inexpr}
 end
@@ -238,6 +239,11 @@ lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 
 mexpr
 use TestLang in
+
+let eqExpr : Expr -> Expr -> Bool =
+  lam l : Expr. lam r : Expr.
+  eqExpr l r
+in
 
 let _anf = compose normalizeTerm symbolize in
 

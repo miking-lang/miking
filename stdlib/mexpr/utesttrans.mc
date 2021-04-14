@@ -300,13 +300,23 @@ let collectKnownProgramTypes = use MExprAst in
   } in
   collectTypes emptyUtestTypeEnv expr
 
+let _unwrapAlias = use MExprAst in
+  lam aliases : Map Name Type. lam ty : Type.
+  match ty with TyVar t then
+    match mapLookup t.ident aliases with Some aliasedTy then
+      aliasedTy
+    else ty
+  else ty
+
 let getPprintFuncName = lam env : UtestTypeEnv. lam ty.
+  let ty = _unwrapAlias env.aliases ty in
   match mapLookup ty env.typeFunctions with Some n then
     let n : (Name, Name) = n in
     n.0
   else dprintLn ty; error "Could not find pretty-print function definition for type"
 
 let getEqualFuncName = lam env : UtestTypeEnv. lam ty.
+  let ty = _unwrapAlias env.aliases ty in
   match mapLookup ty env.typeFunctions with Some n then
     let n : (Name, Name) = n in
     n.1
