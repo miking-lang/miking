@@ -90,7 +90,8 @@ end
 lang OCamlPrettyPrint =
   VarPrettyPrint + ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
-  CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint
+  CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
+  AppPrettyPrint
 
   sem _nameSymString (esc : Name -> Name) =
   | name ->
@@ -127,7 +128,6 @@ lang OCamlPrettyPrint =
   | TmLam _ -> false
   | TmLet _ -> false
   | TmRecLets _ -> false
-  | TmApp _ -> false
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
   | OTmArray _ -> true
@@ -300,12 +300,6 @@ lang OCamlPrettyPrint =
                      (zipWith fzip idents bodies),
                      pprintNewline indent, "in ", inexpr])
         else never
-      else never
-    else never
-  | TmApp t ->
-    match pprintCode indent env t.lhs with (env,l) then
-      match pprintCode indent env t.rhs with (env,r) then
-        (env, join ["(", l, ") (", r, ")"])
       else never
     else never
   | OTmArray t ->
