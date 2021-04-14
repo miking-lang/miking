@@ -49,37 +49,39 @@ let sym =
   ocamlCompile
   "print_int (Boot.Intrinsics.Mseq.length Boot.Intrinsics.Mseq.empty)"
 in
-utest (sym.run "" []).stdout with "0" in
-sym.cleanup ();
 
 let hello =
   ocamlCompile "print_string \"Hello World!\""
 in
-utest (hello.run "" []).stdout with "Hello World!" in
-hello.cleanup ();
 
 let echo =
   ocamlCompile "print_string (read_line ())"
 in
-utest (echo.run "hello" []).stdout with "hello" in
-echo.cleanup ();
 
 let args =
   ocamlCompile "print_string (Sys.argv.(1))"
 in
-utest (args.run "" ["world"]).stdout with "world" in
-args.cleanup ();
 
 let err =
   ocamlCompile "Printf.eprintf \"Hello World!\""
 in
-utest (err.run "" []).stderr with "Hello World!" in
-err.cleanup ();
 
 let manyargs =
   ocamlCompile "Printf.eprintf \"%s %s\" (Sys.argv.(1)) (Sys.argv.(2))"
 in
+
+utest (sym.run "" []).stdout with "0" in
+utest (hello.run "" []).stdout with "Hello World!" in
+utest (echo.run "hello" []).stdout with "hello" in
+utest (args.run "" ["world"]).stdout with "world" in
+utest (err.run "" []).stderr with "Hello World!" in
 utest (manyargs.run "" ["hello", "world"]).stderr with "hello world" in
+
+sym.cleanup ();
+hello.cleanup ();
+echo.cleanup ();
+args.cleanup ();
+err.cleanup ();
 manyargs.cleanup ();
 
 ()
