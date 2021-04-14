@@ -22,8 +22,6 @@ include "mexpr/boot-parser.mc"
 include "ast.mc"
 include "pprint.mc"
 
-include "assoc.mc"
-
 ----------------------
 -- HELPER FUNCTIONS --
 ----------------------
@@ -44,6 +42,10 @@ let _funWithType = use CAst in
       }
     else error "Non-function type given to _funWithType"
 
+-- Check for unit type
+let isUnitTy = use RecordTypeAst in lam ty.
+  match ty with TyRecord { fields = fields } then mapIsEmpty fields
+  else false
 
 --------------------------
 -- COMPILER DEFINITIONS --
@@ -91,6 +93,8 @@ let compileCEnvEmpty = {}
 
 lang MExprCCompile = MExprAst + CAst
 
+  + MExprPrettyPrint
+
   -- Entry point
   sem compile =
   | prog ->
@@ -123,15 +127,15 @@ lang MExprCCompile = MExprAst + CAst
     else never
 
   | TyRecord { fields = fields } ->
-    -- Check for unit type
-    if mapIsEmpty fields then (env, CTyVoid {}) else
-      error "ERROR: Unnamed record type in compileType"
+    if mapIsEmpty fields then (env, CTyVoid {})
+    else
+      error "ERROR: Anonymous record type in compileType. Did you run type lift?"
 
   | TyVariant _ -> error "TODO"
   | TyVar _ -> error "TODO"
 
-  -- | TyUnknown _ -> (env, CTyVoid {})
-  -- | TyUnknown _ -> error "Unknown type in compileType"
+  -- | TyUnknown _ -> (env, CTyChar {})
+  | TyUnknown _ -> error "Unknown type in compileType"
 
   | TySeq { ty = TyChar _ } -> (env, CTyPtr { ty = CTyChar {}})
 
@@ -150,14 +154,17 @@ lang MExprCCompile = MExprAst + CAst
   | TmLam _ & fun ->
     recursive let detachParams: [Name] -> Expr -> ([Name], Expr) =
       lam acc. lam rest.
-        match rest with TmLam {ident = ident, body = rest} then
-          detachParams (snoc acc (ident)) rest
+        match rest with
+        TmLam {tyIdent = tyIdent, ident = ident, body = rest} then
+          if isUnitTy tyIdent then detachParams acc rest
+          else detachParams (snoc acc ident) rest
         else (acc, rest)
     in
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
       lam acc. lam rest.
         match rest with TyArrow {from = from, to = rest} then
-          funTypes (snoc acc from) rest
+          if isUnitTy from then funTypes acc rest
+          else funTypes (snoc acc from) rest
         else (acc, rest)
     in
     match detachParams [] fun with (params, body) then
@@ -237,7 +244,6 @@ lang MExprCCompile = MExprAst + CAst
 
   -- TmRecord: allocate and create new struct, unless it is an empty record (in
   -- which case it is compiled to the integer 0)
-  -- TODO: Some code duplication here.
   | TmRecord {ty = ty, bindings = bindings} ->
     match compileType env ty with (env, ty) then
       if mapIsEmpty bindings then (
@@ -245,7 +251,7 @@ lang MExprCCompile = MExprAst + CAst
         Some {ty = ty, id = Some ident,
               init = Some (CIExpr {expr = CEInt {i = 0}})},
         None ()
-      ) else error "TODO"
+      ) else error "TODO: TmRecord"
     else never
 
   -- TmRecordUpdate: allocate and create new struct.
@@ -263,14 +269,14 @@ lang MExprCCompile = MExprAst + CAst
     | TmUtest {ty = ty}
     | TmNever {ty = ty}
     ) & expr ->
-    match compileType env ty with (env, ty) then
-      match ty with CTyVoid _ then
-        (env, None (), Some (CSExpr {expr = compileExpr expr}))
-      else
-        (env,
-         Some {ty = ty, id = Some ident,
-               init = Some (CIExpr {expr = compileExpr expr})},
-         None ())
+    if isUnitTy ty then
+      match expr with TmVar _ then (env, None (), None())
+      else (env, None (), Some (CSExpr {expr = compileExpr expr}))
+    else match compileType env ty with (env, ty) then
+      (env,
+       Some {ty = ty, id = Some ident,
+             init = Some (CIExpr {expr = compileExpr expr})},
+       None ())
     else never
 
 
@@ -298,8 +304,7 @@ lang MExprCCompile = MExprAst + CAst
             in
             compileTops env (snoc accTop def) (snoc accInit init) inexpr
           else match init with _ then
-            -- TODO TmMatch should be handled here?
-            error "TODO"
+            error "CIList initializer, should not happen"
           else never
 
         else
@@ -382,18 +387,19 @@ lang MExprCCompile = MExprAst + CAst
     | TmMatch        { ty = ty }
     | TmUtest        { ty = ty }
     | TmNever        { ty = ty }
-    ) & rest ->
+    ) & stmt ->
     match final with {name = name} then
-      match ty with CTyVoid _ then
-        (env, snoc acc (CSExpr {expr = compileExpr rest}))
+      if isUnitTy ty then
+        match stmt with TmVar _ then (env, acc)
+        else (env, snoc acc (CSExpr {expr = compileExpr stmt}))
       else match name with Some ident then
         (env,
          snoc acc
           (CSExpr {expr = CEBinOp {
-            op = COAssign {}, lhs = CEVar {id = ident}, rhs = compileExpr rest
+            op = COAssign {}, lhs = CEVar {id = ident}, rhs = compileExpr stmt
           }}))
       else match name with None () then
-        (env, snoc acc (CSRet {val = Some (compileExpr rest)}))
+        (env, snoc acc (CSRet {val = Some (compileExpr stmt)}))
       else never
     else never
 
@@ -426,15 +432,18 @@ lang MExprCCompile = MExprAst + CAst
 
   sem compileExpr =
 
-  | TmVar {ident = ident} -> CEVar {id = ident}
+  | TmVar {ty = ty, ident = ident} ->
+    if isUnitTy ty then error "Unit type var in compileExpr"
+    else CEVar {id = ident}
 
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
-      match t with TmApp {lhs = lhs, rhs = rhs} then rec (cons rhs acc) lhs
+      match t with TmApp {lhs = lhs, rhs = rhs} then
+        if isUnitTy (ty rhs) then rec acc lhs
+        else rec (cons rhs acc) lhs
       else (t, acc)
     in
     match rec [] app with (fun, args) then
-
       -- Function calls
       match fun with TmVar {ident = ident} then
         CEApp {fun = ident, args = map compileExpr args}
@@ -509,8 +518,8 @@ use TestLang in
 
 let compile: Expr -> CProg = lam prog.
 
-  -- Symbolize with empty environment (TODO no builtin names)
-  let prog = symbolizeExpr {symEnvEmpty with varEnv = builtinNameMap} prog in
+  -- Symbolize with empty environment
+  let prog = symbolizeExpr symEnvEmpty prog in
 
   -- Type annotate
   let prog = typeAnnot prog in
@@ -527,7 +536,82 @@ in
 
 let testCompile: Expr -> String = lam expr. printCompiledCProg (compile expr) in
 
--- Factorial function
+let simpleLet = bindall_ [
+  ulet_ "x" (int_ 1),
+  int_ 0
+] in
+utest testCompile simpleLet with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <stdlib.h>",
+  "int x;",
+  "int main(int argc, char (*argv[])) {",
+  "  (x = 1);",
+  "  return 0;",
+  "}"
+] in
+
+let simpleFun = bindall_ [
+  let_ "foo" (tyarrows_ [tyint_, tyint_, tyint_])
+    (ulam_ "a" (ulam_ "b" (addi_ (var_ "a") (var_ "b")))),
+  ulet_ "x" (appf2_ (var_ "foo") (int_ 1) (int_ 2)),
+  int_ 0
+] in
+utest testCompile simpleFun with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <stdlib.h>",
+  "int foo(int a, int b) {",
+  "  int t = (a + b);",
+  "  return t;",
+  "}",
+  "int x;",
+  "int main(int argc, char (*argv[])) {",
+  "  (x = (foo(1, 2)));",
+  "  return 0;",
+  "}"
+] in
+
+let constants = bindall_ [
+  let_ "foo" (tyarrows_ [tyunit_, tyunit_])
+    (lam_ "a" tyunit_ (bindall_ [
+      ulet_ "t" (addi_ (int_ 1) (int_ 2)),
+      ulet_ "t" (addf_ (float_ 1.) (float_ 2.)),
+      ulet_ "t" (muli_ (int_ 1) (int_ 2)),
+      ulet_ "t" (mulf_ (float_ 1.) (float_ 2.)),
+      ulet_ "t" (divf_ (float_ 1.) (float_ 2.)),
+      ulet_ "t" (eqi_ (int_ 1) (int_ 2)),
+      ulet_ "t" (eqf_ (float_ 1.) (float_ 2.)),
+      ulet_ "t" (lti_ (int_ 1) (int_ 2)),
+      ulet_ "t" (ltf_ (float_ 1.) (float_ 2.)),
+      ulet_ "t" (negf_ (float_ 1.)),
+      (print_ (str_ "Hello, world!"))
+    ])),
+  int_ 0
+] in
+-- print (expr2str (normalizeTerm (typeAnnot (symbolizeExpr symEnvEmpty constants))));
+-- print (testCompile constants);
+-- print "\n";
+utest testCompile constants with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <stdlib.h>",
+  "void foo() {",
+  "  int t = (1 + 2);",
+  "  double t1 = (1.0e-0 + 2.0e+0);",
+  "  int t2 = (1 * 2);",
+  "  double t3 = (1.0e-0 * 2.0e+0);",
+  "  double t4 = (1.0e-0 / 2.0e+0);",
+  "  int t5 = (1 == 2);",
+  "  int t6 = (1.0e-0 == 2.0e+0);",
+  "  int t7 = (1 < 2);",
+  "  int t8 = (1.0e-0 < 2.0e+0);",
+  "  double t9 = (-1.0e-0);",
+  "  char (*t10) = \"Hello, world!\";",
+  "  (printf(\"%s\", t10));",
+  "}",
+  "int main(int argc, char (*argv[])) {",
+  "  return 0;",
+  "}"
+] in
+
 let factorial = bindall_ [
   reclet_ "factorial" (tyarrow_ tyint_ tyint_)
     (lam_ "n" tyint_

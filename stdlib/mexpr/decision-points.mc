@@ -36,13 +36,13 @@ let _getSym = lam n.
     (lam. error "Expected symbol")
     (nameGetSym n))
 
-lang HoleAst = UnknownTypeAst
+lang HoleAst
   syn Expr =
   | TmHole {startGuess : Expr,
             depth : Int}
 
   sem ty =
-  | TmHole h -> TyUnknown {} -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
+  | TmHole h -> tyunknown_ -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
 
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
