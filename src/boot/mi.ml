@@ -98,6 +98,10 @@ let main =
       , Arg.Set Boot.Patterns.pat_example_gives_complete_pattern
       , " Make the pattern analysis in mlang print full patterns instead of \
          partial ones." )
+    ; ( "--subsumption-analysis"
+      , Arg.Set Boot.Mlang.enable_subsumption_analysis
+      , " Enables subsumption analysis of language fragments in mlang \
+         transformations." )
     ; ( "--no-line-edit"
       , Arg.Set Boot.Repl.no_line_edit
       , " Disable line editing funcionality in the REPL." ) ]
