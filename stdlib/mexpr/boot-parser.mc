@@ -557,13 +557,13 @@ with r_info 1 6 1 56 in
 -- TyTensor
 let s = "let y:Tensor[Int] = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 17 in
 
 -- Nested TyTensor
 let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:Tensor[Char],b_2:Float}}]= lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 62 in
 
 -- TyRecord

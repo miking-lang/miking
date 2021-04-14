@@ -839,6 +839,14 @@ lang SeqTypeAst
   | TySeq r -> r.info
 end
 
+lang TensorTypeAst
+  syn Type =
+  | TyTensor {info : Info,
+              ty   : Type}
+  sem infoTy =
+  | TyTensor r -> r.info
+end
+
 lang RecordTypeAst
   syn Type =
   | TyRecord {info    : Info,
@@ -897,4 +905,4 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
-  AppTypeAst
+  AppTypeAst + TensorTypeAst
