@@ -261,9 +261,9 @@ lang RefEval
 end
 
 type T
-con TInt : Tensor Int -> T
-con TFloat : Tensor Float -> T
-con TExpr : Tensor Expr -> T
+con TInt : Tensor[Int] -> T
+con TFloat : Tensor[Float] -> T
+con TExpr : Tensor[Expr] -> T
 
 lang TensorEval
   syn Expr =
