@@ -186,7 +186,7 @@ lang LetTypeAnnot = TypeAnnot + LetAst
           let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
           let inexpr = typeAnnotExpr env t.inexpr in
           TmLet {{{{t with tyBody = tyBody}
-                      with body = body}
+                      with body = withType tyBody body}
                       with inexpr = inexpr}
                       with ty = ty inexpr}
       else

@@ -29,7 +29,7 @@ include "pprint.mc"
 -- Convenience function for constructing a function given a C type
 let _funWithType = use CAst in
   lam ty. lam id. lam params. lam body.
-    match ty with CTyFun {ret = ret, params = tyParams} then
+    match ty with CTyFun { ret = ret, params = tyParams } then
       CTFun {
         ret = ret,
         id = id,
@@ -114,14 +114,14 @@ lang MExprCCompile = MExprAst + CAst
 
   | TyArrow _ & ty ->
     recursive let params = lam acc. lam ty.
-      match ty with TyArrow {from = from, to = to} then
+      match ty with TyArrow { from = from, to = to } then
         params (snoc acc from) to
       else (acc, ty)
     in
     match params [] ty with (params, ret) then
       match mapAccumL compileType env params with (env, params) then
         match compileType env ret with (env, ret) then
-          (env, CTyFun {ret = ret, params = params})
+          (env, CTyFun { ret = ret, params = params })
         else never
       else never
     else never
@@ -155,14 +155,16 @@ lang MExprCCompile = MExprAst + CAst
     recursive let detachParams: [Name] -> Expr -> ([Name], Expr) =
       lam acc. lam rest.
         match rest with
-        TmLam {tyIdent = tyIdent, ident = ident, body = rest} then
-          if isUnitTy tyIdent then detachParams acc rest
-          else detachParams (snoc acc ident) rest
+        TmLam { ty = ty, ident = ident, body = rest } then
+          match ty with TyArrow { from = fromTy } then
+            if isUnitTy fromTy then detachParams acc rest
+            else detachParams (snoc acc ident) rest
+          else error "Incorrect type in compileFun"
         else (acc, rest)
     in
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
       lam acc. lam rest.
-        match rest with TyArrow {from = from, to = rest} then
+        match rest with TyArrow { from = from, to = rest } then
           if isUnitTy from then funTypes acc rest
           else funTypes (snoc acc from) rest
         else (acc, rest)
@@ -170,14 +172,17 @@ lang MExprCCompile = MExprAst + CAst
     match detachParams [] fun with (params, body) then
       match funTypes [] ty with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
+          dprint params;
+          print "\n\n";
+          dprint paramTypes;
           error "Number of parameters in compileFun does not match."
         else
           match mapAccumL compileType env paramTypes with (env, paramTypes) then
             let params = zipWith (lam t. lam id. (t, id)) paramTypes params in
             match compileType env retType with (env, ret) then
-              match compileStmts env {name = None ()} [] body
+              match compileStmts env { name = None () } [] body
               with (env, body) then
-                (env, CTFun {ret = ret, id = id, params = params, body = body})
+                (env, CTFun { ret = ret, id = id, params = params, body = body })
               else never
             else never
           else never
@@ -205,17 +210,17 @@ lang MExprCCompile = MExprAst + CAst
   sem compileLet (env: CompileCEnv) (ident: Name) =
 
   -- TmMatch with true as pattern: translate to if statement.
-  | TmMatch { ty = ty, target = target, pat = PatBool {val = true},
-              thn = thn, els = els} ->
+  | TmMatch { ty = ty, target = target, pat = PatBool { val = true },
+              thn = thn, els = els } ->
     match compileType env ty with (env, ty) then
       let def = match ty with CTyVoid _ then None () else
-        Some {ty = ty, id = Some ident, init = None ()}
+        Some { ty = ty, id = Some ident, init = None () }
       in
       let cond = compileExpr target in
-      let innerFinal = {name = Some ident} in
+      let innerFinal = { name = Some ident } in
       match compileStmts env innerFinal [] thn with (env, thn) then
         match compileStmts env innerFinal [] els with (env, els) then
-          let stmt = Some (CSIf {cond = cond, thn = thn, els = els}) in
+          let stmt = Some (CSIf { cond = cond, thn = thn, els = els }) in
           (env, def, stmt)
         else never
       else never
@@ -224,16 +229,16 @@ lang MExprCCompile = MExprAst + CAst
   | TmMatch _ -> error "Unsupported TmMatch pattern in compileStmts"
 
   -- TmSeq: allocate and create a new array. Special handling of strings for now.
-  | TmSeq {ty = ty, tms = tms} ->
+  | TmSeq { ty = ty, tms = tms } ->
     match compileType env ty with (env, ty) then
       let toChar = lam expr.
-        match expr with TmConst {val = CChar {val = val}} then Some val
+        match expr with TmConst { val = CChar { val = val } } then Some val
         else None ()
       in
       match optionMapM toChar tms with Some str then (
         env,
-        Some {ty = ty, id = Some ident,
-              init = Some (CIExpr {expr = CEString {s = str}})},
+        Some { ty = ty, id = Some ident,
+               init = Some (CIExpr { expr = CEString { s = str } }) },
         None ()
       )
       else error "TODO: TmSeq"
@@ -244,12 +249,12 @@ lang MExprCCompile = MExprAst + CAst
 
   -- TmRecord: allocate and create new struct, unless it is an empty record (in
   -- which case it is compiled to the integer 0)
-  | TmRecord {ty = ty, bindings = bindings} ->
+  | TmRecord { ty = ty, bindings = bindings } ->
     match compileType env ty with (env, ty) then
       if mapIsEmpty bindings then (
         env,
-        Some {ty = ty, id = Some ident,
-              init = Some (CIExpr {expr = CEInt {i = 0}})},
+        Some { ty = ty, id = Some ident,
+              init = Some (CIExpr { expr = CEInt { i = 0 } }) },
         None ()
       ) else error "TODO: TmRecord"
     else never
@@ -258,25 +263,27 @@ lang MExprCCompile = MExprAst + CAst
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
-  | ( TmVar {ty = ty}
-    | TmApp {ty = ty}
-    | TmLet {ty = ty}
-    | TmRecLets {ty = ty}
-    | TmConst {ty = ty}
-    | TmSeq {ty = ty}
-    | TmType {ty = ty}
-    | TmConDef {ty = ty}
-    | TmUtest {ty = ty}
-    | TmNever {ty = ty}
+  | ( TmVar { ty = ty }
+    | TmApp { ty = ty }
+    | TmLet { ty = ty }
+    | TmRecLets { ty = ty }
+    | TmConst { ty = ty }
+    | TmSeq { ty = ty }
+    | TmType { ty = ty }
+    | TmConDef { ty = ty }
+    | TmUtest { ty = ty }
+    | TmNever { ty = ty }
     ) & expr ->
     if isUnitTy ty then
       match expr with TmVar _ then (env, None (), None())
-      else (env, None (), Some (CSExpr {expr = compileExpr expr}))
+      else (env, None (), Some (CSExpr { expr = compileExpr expr }))
+
     else match compileType env ty with (env, ty) then
       (env,
-       Some {ty = ty, id = Some ident,
-             init = Some (CIExpr {expr = compileExpr expr})},
+       Some { ty = ty, id = Some ident,
+             init = Some (CIExpr { expr = compileExpr expr }) },
        None ())
+
     else never
 
 
@@ -286,7 +293,7 @@ lang MExprCCompile = MExprAst + CAst
 
   sem compileTops (env: CompileCEnv) (accTop: [CTop]) (accInit: [CStmt]) =
 
-  | TmLet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
+  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
     match body with TmLam _ then
       match compileFun env ident tyBody body with (env, fun) then
         compileTops env (snoc accTop fun) accInit inexpr
@@ -296,15 +303,15 @@ lang MExprCCompile = MExprAst + CAst
         -- We need to specially handle direct initialization, since most things
         -- are not allowed at top-level.
         let t = (def, init) in
-        match t with (Some ({init = Some init} & def), None ()) then
-          match init with CIExpr {expr = expr} then
-            let def = CTDef {def with init = None ()} in
-            let init = CSExpr {expr = CEBinOp {
-              op = COAssign {}, lhs = CEVar {id = ident}, rhs = expr}}
+        match t with (Some ({ init = Some init } & def), None ()) then
+          match init with CIExpr { expr = expr } then
+            let def = CTDef { def with init = None () } in
+            let init = CSExpr { expr = CEBinOp {
+              op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } }
             in
             compileTops env (snoc accTop def) (snoc accInit init) inexpr
           else match init with _ then
-            error "CIList initializer, should not happen"
+            error "CIList initializer, TODO?"
           else never
 
         else
@@ -316,18 +323,18 @@ lang MExprCCompile = MExprAst + CAst
 
       else never
 
-  | TmRecLets {bindings = bindings, inexpr = inexpr} ->
+  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
     let f = lam env. lam binding.
-      match binding with {ident = ident, tyBody = tyBody, body = body} then
+      match binding with { ident = ident, tyBody = tyBody, body = body } then
         compileFun env ident tyBody body
       else never
     in
     let g = lam fun.
-      match fun with CTFun {ret = ret, id = id, params = params, body = body}
+      match fun with CTFun { ret = ret, id = id, params = params, body = body }
       then
         let params = map (lam t. t.0) params in
-        CTDef {ty = CTyFun {ret = ret, params = params}, id = Some id,
-               init = None ()}
+        CTDef { ty = CTyFun { ret = ret, params = params }, id = Some id,
+               init = None () }
       else never
     in
     match mapAccumL f env bindings with (env, funs) then
@@ -350,7 +357,8 @@ lang MExprCCompile = MExprAst + CAst
     | TmUtest _
     | TmNever _
     ) & rest ->
-    match compileStmts env {name = None ()} accInit rest with (env, accInit) then
+    match compileStmts env { name = None () } accInit rest
+    with (env, accInit) then
       (accTop, accInit)
     else never
 
@@ -360,9 +368,9 @@ lang MExprCCompile = MExprAst + CAst
   ------------------
 
   sem compileStmts
-    (env: CompileCEnv) (final: {name: Option Name}) (acc: [CStmt]) =
+    (env: CompileCEnv) (final: { name: Option Name }) (acc: [CStmt]) =
 
-  | TmLet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
+  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
     match compileLet env ident body with (env, def, init) then
       let acc =
         match def with Some def then snoc acc (CSDef def) else acc in
@@ -388,18 +396,19 @@ lang MExprCCompile = MExprAst + CAst
     | TmUtest        { ty = ty }
     | TmNever        { ty = ty }
     ) & stmt ->
-    match final with {name = name} then
+    match final with { name = name } then
       if isUnitTy ty then
         match stmt with TmVar _ then (env, acc)
-        else (env, snoc acc (CSExpr {expr = compileExpr stmt}))
+        else (env, snoc acc (CSExpr { expr = compileExpr stmt }))
       else match name with Some ident then
         (env,
          snoc acc
-          (CSExpr {expr = CEBinOp {
-            op = COAssign {}, lhs = CEVar {id = ident}, rhs = compileExpr stmt
-          }}))
+          (CSExpr {
+            expr = CEBinOp { op = COAssign {},
+                             lhs = CEVar { id = ident },
+                             rhs = compileExpr stmt } }))
       else match name with None () then
-        (env, snoc acc (CSRet {val = Some (compileExpr stmt)}))
+        (env, snoc acc (CSRet { val = Some (compileExpr stmt) }))
       else never
     else never
 
@@ -412,44 +421,44 @@ lang MExprCCompile = MExprAst + CAst
 
   -- Binary operators
   | CAddi _
-  | CAddf _ -> CEBinOp {op = COAdd {}, lhs = head args, rhs = last args}
+  | CAddf _ -> CEBinOp { op = COAdd {}, lhs = head args, rhs = last args }
   | CSubi _
-  | CSubf _ -> CEBinOp {op = COSub {}, lhs = head args, rhs = last args}
+  | CSubf _ -> CEBinOp { op = COSub {}, lhs = head args, rhs = last args }
   | CMuli _
-  | CMulf _ -> CEBinOp {op = COMul {}, lhs = head args, rhs = last args}
-  | CDivf _ -> CEBinOp {op = CODiv {}, lhs = head args, rhs = last args}
+  | CMulf _ -> CEBinOp { op = COMul {}, lhs = head args, rhs = last args }
+  | CDivf _ -> CEBinOp { op = CODiv {}, lhs = head args, rhs = last args }
   | CEqi _
-  | CEqf _ -> CEBinOp {op = COEq {}, lhs = head args, rhs = last args}
+  | CEqf _ -> CEBinOp { op = COEq {}, lhs = head args, rhs = last args }
   | CLti _
-  | CLtf _ -> CEBinOp {op = COLt {}, lhs = head args, rhs = last args}
+  | CLtf _ -> CEBinOp { op = COLt {}, lhs = head args, rhs = last args }
 
   -- Unary operators
-  | CNegf _ -> CEUnOp {op = CONeg {}, arg = head args}
+  | CNegf _ -> CEUnOp { op = CONeg {}, arg = head args }
 
   -- Custom intrinsics
-  | CPrint _ -> CEApp {fun = _printf, args = [CEString {s = "%s"}, head args]}
+  | CPrint _ -> CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
 
 
   sem compileExpr =
 
-  | TmVar {ty = ty, ident = ident} ->
+  | TmVar { ty = ty, ident = ident } ->
     if isUnitTy ty then error "Unit type var in compileExpr"
-    else CEVar {id = ident}
+    else CEVar { id = ident }
 
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
-      match t with TmApp {lhs = lhs, rhs = rhs} then
+      match t with TmApp { lhs = lhs, rhs = rhs } then
         if isUnitTy (ty rhs) then rec acc lhs
         else rec (cons rhs acc) lhs
       else (t, acc)
     in
     match rec [] app with (fun, args) then
       -- Function calls
-      match fun with TmVar {ident = ident} then
-        CEApp {fun = ident, args = map compileExpr args}
+      match fun with TmVar { ident = ident } then
+        CEApp { fun = ident, args = map compileExpr args }
 
       -- Intrinsics
-      else match fun with TmConst {val = val} then
+      else match fun with TmConst { val = val } then
         let args = map compileExpr args in
         compileOp args val
 
@@ -459,8 +468,8 @@ lang MExprCCompile = MExprAst + CAst
   -- Anonymous function, not allowed.
   | TmLam _ -> error "Anonymous function in compileExpr."
 
-  | TmRecord {bindings = bindings} ->
-    if mapIsEmpty bindings then CEInt {i = 0}
+  | TmRecord { bindings = bindings } ->
+    if mapIsEmpty bindings then CEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF.
@@ -471,13 +480,13 @@ lang MExprCCompile = MExprAst + CAst
     error "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
-  | TmConst {val = val} ->
-    match val      with CInt   {val = val} then CEInt   {i = val}
-    else match val with CFloat {val = val} then CEFloat {f = val}
-    else match val with CChar  {val = val} then CEChar  {c = val}
-    else match val with CBool  {val = val} then
+  | TmConst { val = val } ->
+    match val      with CInt   { val = val } then CEInt   { i = val }
+    else match val with CFloat { val = val } then CEFloat { f = val }
+    else match val with CChar  { val = val } then CEChar  { c = val }
+    else match val with CBool  { val = val } then
       let val = match val with true then 1 else 0 in
-      CEInt {i = val}
+      CEInt { i = val }
     else error "Unsupported literal"
 
   -- Should not occur?
@@ -497,10 +506,10 @@ lang MExprCCompileWithMain = MExprCCompile + CPrettyPrint
         ret = CTyInt {},
         params = [
           CTyInt {},
-          CTyArray {ty = CTyPtr {ty = CTyChar {}}, size = None ()}]}
+          CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
       in
       let main = _funWithType mainTy _main [_argc, _argv] accInit in
-      CPProg {includes = _includes, tops = snoc accTop main}
+      CPProg { includes = _includes, tops = snoc accTop main }
     else never
 
 end
@@ -572,7 +581,7 @@ utest testCompile simpleFun with strJoin "\n" [
 
 let constants = bindall_ [
   let_ "foo" (tyarrows_ [tyunit_, tyunit_])
-    (lam_ "a" tyunit_ (bindall_ [
+    (ulam_ "a" (bindall_ [
       ulet_ "t" (addi_ (int_ 1) (int_ 2)),
       ulet_ "t" (addf_ (float_ 1.) (float_ 2.)),
       ulet_ "t" (muli_ (int_ 1) (int_ 2)),
@@ -587,9 +596,6 @@ let constants = bindall_ [
     ])),
   int_ 0
 ] in
--- print (expr2str (normalizeTerm (typeAnnot (symbolizeExpr symEnvEmpty constants))));
--- print (testCompile constants);
--- print "\n";
 utest testCompile constants with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
