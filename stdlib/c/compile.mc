@@ -137,7 +137,7 @@ lang MExprCCompile = MExprAst + CAst
   -- | TyUnknown _ -> (env, CTyChar {})
   | TyUnknown _ -> error "Unknown type in compileType"
 
-  | TySeq { ty = TyChar _ } -> (env, CTyPtr { ty = CTyChar {}})
+  | TySeq { ty = TyChar _ } -> (env, CTyPtr { ty = CTyChar {} })
 
   | TySeq _
   | TyApp _ -> error "Type not currently supported"
