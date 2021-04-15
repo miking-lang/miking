@@ -45,6 +45,7 @@ let debug_after_parse t =
   if !enable_debug_after_parse then (
     printf "\n-- After parsing (only mexpr part) --\n" ;
     uprint_endline (ustring_of_program t) ;
+    print_endline "" ;
     t )
   else t
 
@@ -52,6 +53,14 @@ let debug_after_parse t =
 let debug_after_symbolize t =
   if !enable_debug_after_symbolize then (
     printf "\n-- After symbolize --\n" ;
+    uprint_endline (ustring_of_tm ~margin:80 t) ;
+    t )
+  else t
+
+(* Debug printing after dead code elimination *)
+let debug_after_dead_code_elimination t =
+  if !enable_debug_after_dead_code_elimination then (
+    printf "\n-- After dead code elimination --\n" ;
     uprint_endline (ustring_of_tm ~margin:80 t) ;
     t )
   else t

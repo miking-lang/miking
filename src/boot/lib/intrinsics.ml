@@ -42,6 +42,8 @@ module Mseq = struct
 
     let map = Rope.map_array_array
 
+    let fold_left = Rope.foldl_array
+
     let fold_right = Rope.foldr_array
 
     let combine = Rope.combine_array_array
@@ -66,6 +68,8 @@ end
 module Symb = struct
   type t = int
 
+  type symbtype = int
+
   let symid = ref 0
 
   let gensym _ =
@@ -75,6 +79,8 @@ module Symb = struct
   let eqsym l r = l = r
 
   let hash s = s
+
+  let compare = Stdlib.compare
 
   module Helpers = struct
     let nosym = -1
