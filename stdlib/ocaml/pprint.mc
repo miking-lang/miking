@@ -278,11 +278,11 @@ lang OCamlPrettyPrint =
       else never
     else never
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
-    let lname = lam env. lam bind.
+    let lname = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) then
         (env, str)
       else never in
-    let lbody = lam env. lam bind.
+    let lbody = lam env. lam bind : RecLetBinding.
       match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
       with (env,str) then (env, str)
       else never in

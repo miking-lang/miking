@@ -31,10 +31,10 @@ lang OCamlMatch
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmMatch t ->
     OTmMatch {{t with target = f t.target}
-                 with arms = map (lam p. (p.0, f p.1)) t.arms}
+                 with arms = map (lam p : (Pat, Expr). (p.0, f p.1)) t.arms}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmMatch t -> foldl (lam acc. lam a. f acc a.1) (f acc t.target) t.arms
+  | OTmMatch t -> foldl (lam acc. lam a : (Pat, Expr). f acc a.1) (f acc t.target) t.arms
 end
 
 lang OCamlArray

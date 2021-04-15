@@ -3,7 +3,8 @@ include "sys.mc"
 
 type Program = String -> [String] -> ExecResult
 
-let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} = lam config. lam p.
+let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} =
+  lam config : {warnings : Bool}. lam p.
   let config = if config.warnings
     then ""
     else "(env (dev (flags (:standard -w -a)))) " in
