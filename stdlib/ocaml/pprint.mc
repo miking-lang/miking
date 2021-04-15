@@ -173,7 +173,7 @@ lang OCamlPrettyPrint =
   | CLeqi _ -> "((<=) : int -> int -> bool)"
   | CGti _ -> "((>) : int -> int -> bool)"
   | CGeqi _ -> "((>=) : int -> int -> bool)"
-  | CNeqi _ -> "((!=) : int -> int -> bool)"
+  | CNeqi _ -> "((<>) : int -> int -> bool)"
   | CSlli _ -> "Int.shift_left"
   | CSrli _ -> "Int.shift_right_logical"
   | CSrai _ -> "Int.shift_right"
@@ -182,7 +182,7 @@ lang OCamlPrettyPrint =
   | CLeqf _ -> "((<=) : float -> float -> bool)"
   | CGtf _ -> "((>) : float -> float -> bool)"
   | CGeqf _ -> "((>=) : float -> float -> bool)"
-  | CNeqf _ -> "((!=) : float -> float -> bool)"
+  | CNeqf _ -> "((<>) : float -> float -> bool)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> int2string (char2int c)
   | CEqc _ -> "Int.equal"
