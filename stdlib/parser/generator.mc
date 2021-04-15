@@ -1,6 +1,7 @@
 include "mexpr/ast-builder.mc"
 include "semantic.mc"
 include "gen-ast.mc"
+include "common.mc"
 
 /-
 

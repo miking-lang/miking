@@ -123,9 +123,9 @@ build/mi test program.mc
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
-### Prelude
+### Intrinsics
 
-The prelude contains a number of built-in values (intrinsics) and
+MCore contains a number of built-in values (intrinsics) and
 predefined functions and constants (part of the standard library).
 For instance
 ```
@@ -157,8 +157,6 @@ containing `utest` expressions. Please see the following files:
 * [Random number generation intrinsics](test/mexpr/random.mc)
 
 * [Time intrinsics](test/mexpr/time.mc)
-
-Besides the intrinsic functions, the prelude includes a number of functions defined in the MCore standard library, which can be found in the folder [stdlib](stdlib/). The main file [prelude.mc](stdlib/prelude.mc) is automatically included in all `.mc` files. Note also that the prelude file includes other files, e.g., [seq.mc](stdlib/seq.mc) and [option.mc](stdlib/option.mc). For the details of these prelude functions, please see the above files.
 
 
 ### Let Expressions
@@ -723,8 +721,7 @@ Including a file is equivalent to inserting all the top-level
 definitions of that file. There are no namespaces and no
 disambiguation; if a name defined in an included file is shadowed
 in the including file, the included definition becomes
-unavailable. When `MCORE_STDLIB` is defined, the file `prelude.mc`
-is automatically included.
+unavailable.
 
 
 ### Language Fragments

@@ -2,10 +2,10 @@
 -- matching on weighted bipartite graph G=(U,V,E). Implementation based off
 -- https://gist.github.com/KartikTalwar/3158534
 
-include "prelude.mc"
 include "matrix.mc"
 include "math.mc"
-
+include "common.mc"
+ 
 type Slack = {
   val : Int,                    -- value of slack
   u   : Int,                    -- u in U associated with this slack

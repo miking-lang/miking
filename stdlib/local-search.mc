@@ -1,14 +1,15 @@
+
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- A generic library for (stochastic) local search algorithms.
 -- Includes pre-defined meta-heuristics and allows design of custom dittos.
 
-include "prelude.mc"
 include "set.mc"
 include "digraph.mc"
 include "string.mc"
 include "ext/math.mc"
+include "common.mc"
 
 -- 'v': polymorphic value type
 -- 'c': polymorphic cost type
