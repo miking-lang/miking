@@ -66,8 +66,9 @@ let filenameWithoutExtension = lam filename.
 let ocamlCompile = lam sourcePath. lam ocamlProg.
   let p = ocamlCompile ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
-  phMoveFile p.binaryPath destinationFile;
-  phChmodWriteAccessFile destinationFile
+  sysMoveFile p.binaryPath destinationFile;
+  sysChmodWriteAccessFile destinationFile;
+  p.cleanup ()
 
 let compile = lam files. lam options.
   use MCoreCompile in

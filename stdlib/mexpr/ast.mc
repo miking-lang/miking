@@ -531,6 +531,7 @@ lang SysAst = ConstAst
   | CExit {}
   | CError {}
   | CArgv {}
+  | CCommand {}
 end
 
 lang TimeAst = ConstAst

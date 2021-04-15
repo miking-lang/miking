@@ -68,6 +68,7 @@ let builtin = use MExprAst in
   , ("writeFile", CFileWrite ())
   , ("fileExists", CFileExists ())
   , ("deleteFile", CFileDelete ())
+  , ("command", CCommand ())
   , ("error", CError ())
   , ("exit", CExit ())
   -- Symbols

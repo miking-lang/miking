@@ -106,6 +106,7 @@ let builtin =
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)
   ; ("deleteFile", f CdeleteFile)
+  ; ("command", f Ccommand)
   ; ("error", f Cerror)
   ; ("exit", f Cexit) (* MCore intrinsics: Symbols *)
   ; ("eqsym", f (Ceqsym None))
@@ -371,6 +372,8 @@ let arity = function
   | CfileExists ->
       1
   | CdeleteFile ->
+      1
+  | Ccommand ->
       1
   | Cerror ->
       1
@@ -967,6 +970,10 @@ let delta eval env fi c v =
       Intrinsics.File.delete (tm_seq2int_seq fi lst) ;
       tmUnit
   | CdeleteFile, _ ->
+      fail_constapp fi
+  | Ccommand, TmSeq (_, lst) ->
+      TmConst (fi, CInt (Intrinsics.MSys.command (tm_seq2int_seq fi lst)))
+  | Ccommand, _ ->
       fail_constapp fi
   | Cerror, TmSeq (fiseq, lst) ->
       tmseq2ustring fiseq lst |> Ustring.to_utf8 |> raise_error fi
