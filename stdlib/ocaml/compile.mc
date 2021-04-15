@@ -2,8 +2,13 @@ include "string.mc"
 include "sys.mc"
 
 type Program = String -> [String] -> ExecResult
+type CompileResult = {
+  run : Program,
+  cleanup : Unit -> Unit,
+  binaryPath : String
+}
 
-let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} =
+let ocamlCompileWithConfig : {warnings: Bool} -> String -> CompileResult =
   lam config : {warnings : Bool}. lam p.
   let config = if config.warnings
     then ""
@@ -41,7 +46,7 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
     binaryPath = tempfile "_build/default/program.exe"
   }
 
-let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
+let ocamlCompile : String -> CompileResult =
   ocamlCompileWithConfig {warnings=false}
 
 mexpr

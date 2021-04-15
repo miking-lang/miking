@@ -457,7 +457,7 @@ let _objTyped = lam.
 
 let _typeLiftEnvToGenerateEnv = lam typeLiftEnvMap. lam typeLiftEnv.
   use MExprAst in
-  let f = lam env. lam name. lam ty.
+  let f = lam env : GenerateEnv. lam name. lam ty.
     match ty with TyRecord {fields = fields} then
       {{env with records = mapInsert fields name env.records}
             with constrs = mapInsert name ty env.constrs}
