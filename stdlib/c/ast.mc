@@ -97,7 +97,7 @@ lang CAst
   -------------
 
   syn CType =
---| CTyIdent  { id: Name } -- Not really needed unless we add typedef
+  | CTyIdent  { id: Name }
   | CTyChar   {}
   | CTyInt    {}
   | CTyDouble {}
@@ -144,8 +144,10 @@ lang CAst
   -- C TOP-LEVEL --
   -----------------
   -- We support including a set of header files at the top of the program.
+  -- Type definitions are supported at this level as well.
 
   syn CTop =
+  | CTTyDef { ty: CType, id: Name }
   | CTDef { ty: CType, id: Option Name, init: Option CInit }
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 

@@ -126,7 +126,7 @@ lang CPrettyPrint = CAst
   sem printCType (decl: String) (env: PprintEnv) =
 
   -- CTyIdent not really needed unless we add typedef
-  --| CTyIdent  { id = id } -> pprintEnvGetStr env id
+  | CTyIdent  { id = id } -> pprintEnvGetStr env id
 
   | CTyChar {} -> (env, _joinSpace "char" decl)
   | CTyInt {}  -> (env, _joinSpace "int" decl)
@@ -291,6 +291,13 @@ lang CPrettyPrint = CAst
   -----------------
 
   sem printCTop (indent : Int) (env: PprintEnv) =
+  | CTTyDef { ty = ty, id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      match printCDef env ty id (None ()) with (env,str) then
+        (env, join ["typedef ", str, ";"])
+      else never
+    else never
+
   | CTDef { ty = ty, id = id, init = init } ->
     match pprintEnvGetOptStr env id with (env,id) then
       match printCDef env ty id init with (env,str) then
@@ -362,6 +369,11 @@ let wrapStmtString = lam str. join [
 let deftop = CTDef { ty = CTyInt {}, id = Some xname, init = None () } in
 utest print (wrapTop deftop) with
   "int x;"
+in
+
+let tydeftop = CTTyDef { ty = CTyInt {}, id = xname } in
+utest print (wrapTop tydeftop) with
+  "typedef int x;"
 in
 
 let definittop = CTDef {
@@ -509,6 +521,12 @@ let cast = CSExpr {
 utest print (wrapStmt cast) with
   wrapStmtString "(( struct structty (*(*(*)(char))(int (double))) ) 1);"
 in
+
+let advtydeftop = CTTyDef { ty = advty, id = xname } in
+utest print (wrapTop advtydeftop) with
+  "typedef struct structty (*(*(*x)(char))(int (double)));"
+in
+
 
 let sizety = CSExpr {
   expr = CESizeOfType { ty = advty }
