@@ -75,12 +75,10 @@ let main =
       )
     ; ( "--debug-dead-code-elim"
       , Arg.Set enable_debug_after_dead_code_elimination
-      , " Enables output of the mexpr program after dead code elimination."
-      )
+      , " Enables output of the mexpr program after dead code elimination." )
     ; ( "--debug-dead-code-info"
       , Arg.Set enable_debug_dead_code_info
-      , " Enables output of dead code elimination info."
-      )
+      , " Enables output of dead code elimination info." )
     ; ( "--debug-eval-tm"
       , Arg.Set enable_debug_eval_tm
       , " Enables output of terms in each eval step." )

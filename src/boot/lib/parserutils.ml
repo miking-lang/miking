@@ -45,7 +45,7 @@ let debug_after_parse t =
   if !enable_debug_after_parse then (
     printf "\n-- After parsing (only mexpr part) --\n" ;
     uprint_endline (ustring_of_program t) ;
-    print_endline "";
+    print_endline "" ;
     t )
   else t
 
