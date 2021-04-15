@@ -1,34 +1,10 @@
+
 open Ast
-open Intrinsics
+open Symbutils
+open Ustring.Op
 
-module SymbOrd = struct
-  type t = Symb.t
-
-  let compare = Symb.compare
-end
-
-module SymbSet = Set.Make (SymbOrd)
-module SymbMap = Map.Make (SymbOrd)
-
-(*
-let pbool s b = Printf.printf "%s: %s\n" s (if b then "true" else "false") 
-
-let testen =
-  let s1 = Symb.gensym () in
-  let s2 = Symb.gensym () in
-  let s3 = s2 in
-  pbool "s1 = s2" (s1 = s2) ;
-  pbool "s2 = s3" (s2 = s3) ;
-  let a = SymbSet.empty in
-  let b = SymbSet.add s1 a in
-  pbool "s1 set mem" (SymbSet.mem s1 b) ;
-  pbool "s2 set mem" (SymbSet.mem s2 b) ;
-  let m1 = SymbMap.empty in
-  let m2 = SymbMap.add s2 a m1 in
-  pbool "s1 map mem" (SymbMap.mem s1 m2) ;
-  pbool "s2 map mem" (SymbMap.mem s2 m2) ;
-  Printf.printf ""
- *)
+let debug_deadcode = true
+let _symbmap = ref SymbMap.empty
 
 (* Help function that collects all variables in a term *)
 let rec collect_vars (free : SymbSet.t) = function
@@ -51,9 +27,9 @@ let collect_lets t =
               let vars = collect_vars SymbSet.empty tlam in
               (SymbMap.add s (vars, false) nmap, free)
           | body ->
-              let vars = collect_vars SymbSet.empty body in 
+              let vars = collect_vars SymbSet.empty body in
               (SymbMap.add s (vars, true) nmap, SymbSet.union vars free)
-               (* TODO: handle lets without side effects *)
+          (* TODO: handle lets without side effects *)
         in
         work (nmap, free) t2
     (* TODO: add let rec *)
@@ -64,32 +40,53 @@ let collect_lets t =
 
 (* Returns a new namp, where it is marked with true everywhere we have
    a let that is used. Use depth-first search (DFS) in the graph with
-   color marking.  *)
-let mark_used_lets nmap free =
+   color marking. Returns the nmap. *)
+let mark_used_lets (nmap, free) =
   let rec dfs s (visited, nmap) =
     if SymbSet.mem s visited then (visited, nmap)
     else
       let visited = SymbSet.add s visited in
-      let (symset, _) = SymbMap.find s nmap in
-      let nmap = SymbMap.add s (symset, true) nmap in
-      SymbSet.fold dfs symset (visited, nmap) 
+      match SymbMap.find_opt s nmap with
+      | Some (symset, _) ->  
+         let nmap = SymbMap.add s (symset, true) nmap in
+         SymbSet.fold dfs symset (visited, nmap)
+      | None -> (visited, nmap)
   in
   SymbSet.fold dfs free (SymbSet.empty, nmap) |> snd
-  
 
-(* Removes all lets which have not been marked as used *)
+(* Removes all lets that have not been marked as 'used'. *)
 let rec remove_lets nmap = function
   | TmLet (fi, x, s, ty, t1, t2) ->
-     (* Is the let marked as used? *)
-     if SymbMap.find s nmap |> snd then
-       TmLet (fi, x, s, ty, t1, remove_lets nmap t2)
-     else
-       remove_lets nmap t2
-  | t -> smap_tm_tm (remove_lets nmap) t
-  
- 
+      (* Is the let marked as used? *)
+      if SymbMap.find s nmap |> snd then
+        TmLet (fi, x, s, ty, t1, remove_lets nmap t2)
+      else remove_lets nmap t2
+  | t ->
+      smap_tm_tm (remove_lets nmap) t
 
+(* Helper function for pretty printing a nmap *)
+let pprint_nmap symbmap nmap =
+  let f k (ss, used) acc = acc ^. pprint_named_symb symbmap k ^.
+                           us"let -> " ^. pprint_named_symbset symbmap ss  ^.
+                           us" used = " ^. us(if used then "true" else "false") ^. us"\n" in
+  SymbMap.fold f nmap (us"")
+
+
+(* The main dead code elimination function *)
 let elimination t =
-  
-  (* Printf.printf "%s\n" "**********" ; *)
-  t
+  (* Collect all lets and store a graph in 'nmap' and free variable in 'free' *)
+  let (nmap, free) = collect_lets t in
+  if debug_deadcode then (
+    _symbmap := symbmap t;
+    print_endline "-- Collect lets --";
+    (us"nmap: \n" ^. pprint_nmap !_symbmap nmap) |> uprint_endline; 
+    (us"free: \n" ^. pprint_named_symbset !_symbmap free) |> uprint_endline);
+  (* Mark all lets that used in the graph *)
+  let nmap = mark_used_lets (nmap, free) in
+  if debug_deadcode then (
+    print_endline "-- Marked used lets --";
+    (us"nmap: \n" ^. pprint_nmap !_symbmap nmap) |> uprint_endline);
+  (* Remove all lets that are not used *)
+  remove_lets nmap t
+
+

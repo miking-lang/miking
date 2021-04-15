@@ -19,6 +19,8 @@ let enable_debug_after_parse = ref false
 
 let enable_debug_after_symbolize = ref false
 
+let enable_debug_after_dead_code_elimination = ref false
+
 let enable_debug_after_mlang = ref false
 
 let enable_debug_symbol_print = ref false

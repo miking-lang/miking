@@ -56,6 +56,14 @@ let debug_after_symbolize t =
     t )
   else t
 
+(* Debug printing after dead code elimination *)
+let debug_after_dead_code_elimination t =
+  if !enable_debug_after_dead_code_elimination then (
+    printf "\n-- After dead code elimination --\n" ;
+    uprint_endline (ustring_of_tm ~margin:80 t) ;
+    t )
+  else t
+
 (* Debug mlang to mexpr transform *)
 let debug_after_mlang t =
   if !enable_debug_after_mlang then (
