@@ -9,34 +9,34 @@ let _null = "/dev/null"
 let _commandList = lam cmd : [String].
   command (strJoin " " cmd)
 
-let phMoveFile = lam fromFile. lam toFile.
+let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
 
-let phChmodWriteAccessFile = lam file.
+let sysChmodWriteAccessFile = lam file.
   _commandList ["chmod", "+w", file]
 
-let phJoinPath = lam p1. lam p2.
+let sysJoinPath = lam p1. lam p2.
   strJoin _pathSep [p1, p2]
 
-let phTempDirMake = lam.
+let sysTempDirMake = lam.
   recursive let mkdir = lam base. lam i.
     let dirName = concat base (int2string i) in
     match
-      _commandList ["mkdir", phJoinPath _tempDirBase dirName, "2>", _null]
+      _commandList ["mkdir", sysJoinPath _tempDirBase dirName, "2>", _null]
     with 0
     then dirName
     else mkdir base (addi i 1)
-  in phJoinPath _tempDirBase (mkdir "tmp" 0)
+  in sysJoinPath _tempDirBase (mkdir "tmp" 0)
 
-let phTempDirName = lam td. td
-let phTempDirDelete = lam td. lam.
+let sysTempDirName = lam td. td
+let sysTempDirDelete = lam td. lam.
   _commandList ["rm", "-rf", td]
 
-let phRunCommand : [String] -> String -> String -> ExecResult =
+let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
-    let tempDir = phTempDirMake () in
-    let tempStdout = phJoinPath tempDir "stdout.txt" in
-    let tempStderr = phJoinPath tempDir "stderr.txt" in
+    let tempDir = sysTempDirMake () in
+    let tempStdout = sysJoinPath tempDir "stdout.txt" in
+    let tempStderr = sysJoinPath tempDir "stderr.txt" in
 
     let retCode = _commandList
       [ "cd", cwd, "&&"
@@ -52,6 +52,6 @@ let phRunCommand : [String] -> String -> String -> ExecResult =
     let stdout = init (readFile tempStdout) in
     let stderr = init (readFile tempStderr) in
 
-    phTempDirDelete tempDir ();
+    sysTempDirDelete tempDir ();
 
     {stdout = stdout, stderr = stderr, returncode = retCode}

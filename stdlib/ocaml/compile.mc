@@ -1,5 +1,5 @@
 include "string.mc"
-include "process-helpers.mc"
+include "sys.mc"
 
 type Program = String -> [String] -> ExecResult
 
@@ -10,22 +10,22 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
   let dunefile =
     concat config "(executable (name program) (libraries batteries boot))"
   in
-  let td = phTempDirMake () in
-  let dir = phTempDirName td in
-  let tempfile = lam f. phJoinPath dir f in
+  let td = sysTempDirMake () in
+  let dir = sysTempDirName td in
+  let tempfile = lam f. sysJoinPath dir f in
 
   writeFile (tempfile "program.ml") p;
   writeFile (tempfile "dune") dunefile;
 
   let command = ["dune", "build"] in
-  let r = phRunCommand command "" dir in
+  let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then
       print (join ["'dune build' failed on program:\n\n",
                    readFile (tempfile "program.ml"),
                    "\n\nexit code: ",
                    int2string r.returncode,
                    "\n\nstandard error:\n", r.stderr]);
-      phTempDirDelete td;
+      sysTempDirDelete td;
       exit 1
   else ();
 
@@ -35,8 +35,8 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
         let command =
           concat ["dune", "exec", "./program.exe", "--"] args
         in
-        phRunCommand command stdin (tempfile ""),
-    cleanup = phTempDirDelete td,
+        sysRunCommand command stdin (tempfile ""),
+    cleanup = sysTempDirDelete td,
     binaryPath = tempfile "_build/default/program.exe"
   }
 
