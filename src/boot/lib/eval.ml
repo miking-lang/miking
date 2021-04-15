@@ -24,7 +24,7 @@ let evalprog filename =
   ( try
       let parsed = local_parse_mcore_file filename in
       parsed
-      |> merge_includes (Filename.dirname filename) [filename]
+      |> merge_includes (Filename.dirname filename) [filename] 
       |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> Symbolize.symbolize builtin_name2sym |> debug_after_symbolize
       |> Deadcode.elimination |> debug_after_dead_code_elimination

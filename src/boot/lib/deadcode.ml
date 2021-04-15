@@ -3,7 +3,6 @@ open Ast
 open Symbutils
 open Ustring.Op
 
-let debug_deadcode = true
 let _symbmap = ref SymbMap.empty
 
 (* Help function that collects all variables in a term *)
@@ -66,26 +65,29 @@ let rec remove_lets nmap = function
 
 (* Helper function for pretty printing a nmap *)
 let pprint_nmap symbmap nmap =
-  let f k (ss, used) acc = acc ^. pprint_named_symb symbmap k ^.
-                           us"let -> " ^. pprint_named_symbset symbmap ss  ^.
+  let f k (ss, used) acc = acc ^. us"let " ^. pprint_named_symb symbmap k ^.
+                           us" -> " ^. pprint_named_symbset symbmap ss  ^.
                            us" used = " ^. us(if used then "true" else "false") ^. us"\n" in
   SymbMap.fold f nmap (us"")
 
 
-(* The main dead code elimination function *)
+(* The main dead code elimination function 
+   of flag utest is false, then utests are also removed
+*)
 let elimination t =
   (* Collect all lets and store a graph in 'nmap' and free variable in 'free' *)
   let (nmap, free) = collect_lets t in
-  if debug_deadcode then (
+  if !enable_debug_dead_code_info then (
     _symbmap := symbmap t;
-    print_endline "-- Collect lets --";
-    (us"nmap: \n" ^. pprint_nmap !_symbmap nmap) |> uprint_endline; 
-    (us"free: \n" ^. pprint_named_symbset !_symbmap free) |> uprint_endline);
+    print_endline "-- Dead code info: collected lets --";
+    pprint_nmap !_symbmap nmap |> uprint_endline; 
+    print_endline "-- Dead code info: free variables --";
+    pprint_named_symbset !_symbmap free |> uprint_endline);
   (* Mark all lets that used in the graph *)
   let nmap = mark_used_lets (nmap, free) in
-  if debug_deadcode then (
-    print_endline "-- Marked used lets --";
-    (us"nmap: \n" ^. pprint_nmap !_symbmap nmap) |> uprint_endline);
+  if !enable_debug_dead_code_info then (
+    print_endline "\n-- Dead code info: marked used lets --";
+    pprint_nmap !_symbmap nmap |> uprint_endline);
   (* Remove all lets that are not used *)
   remove_lets nmap t
 
