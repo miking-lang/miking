@@ -93,8 +93,6 @@ let compileCEnvEmpty = {}
 
 lang MExprCCompile = MExprAst + CAst
 
-  + MExprPrettyPrint
-
   -- Entry point
   sem compile =
   | prog ->
