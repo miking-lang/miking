@@ -554,6 +554,7 @@ let const_has_side_effect = function
   | CwriteFile _
   | CfileExists
   | CdeleteFile
+  | Ccommand
   | Cerror
   | Cexit ->
       true

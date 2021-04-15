@@ -1323,7 +1323,8 @@ utest eval (fileExists_ f) with false_ using eqExpr in
 utest
   if false then eval (command_ (str_ "echo \"Hello world\""))
   else int_ 0
-with int_ 0 in
+with int_ 0
+using eqExpr in
 
 utest eval (match_
   (tuple_ [true_, true_])
