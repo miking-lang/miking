@@ -6,6 +6,8 @@ let _pathSep = "/"
 let _tempDirBase = "/tmp"
 let _null = "/dev/null"
 
+let _tempDirIdx = ref 0
+
 let _commandList = lam cmd : [String].
   command (strJoin " " cmd)
 
@@ -24,9 +26,12 @@ let sysTempDirMake = lam.
     match
       _commandList ["mkdir", sysJoinPath _tempDirBase dirName, "2>", _null]
     with 0
-    then dirName
-    else mkdir base (addi i 1)
-  in sysJoinPath _tempDirBase (mkdir "tmp" 0)
+    then (addi i 1, dirName)
+    else mkdir base (addi i 1) in
+  match mkdir "tmp" (deref _tempDirIdx) with (i, dir) then
+    modref _tempDirIdx i;
+    sysJoinPath _tempDirBase dir
+  else never
 
 let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam.
