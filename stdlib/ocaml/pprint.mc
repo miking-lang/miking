@@ -73,16 +73,22 @@ lang OCamlTypePrettyPrint =
   | TyRecord t ->
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
-      let f = lam env. lam sid. lam ty.
-        let str = sidToString sid in
-        match getTypeStringCode indent env ty with (env,ty) then
-          let str = pprintLabelString str in
-          (env, join [str, ": ", ty])
+      let f = lam env. lam field : (String, Type).
+        match field with (str, ty) then
+          match getTypeStringCode indent env ty with (env,ty) then
+            let str = pprintLabelString str in
+            (env, join [str, ": ", ty])
+          else never
         else never
       in
-      match mapMapAccum f env t.fields with (env, fields) then
-        let fieldStrs = mapValues fields in
-        (env, join ["{", strJoin "; " fieldStrs, "}"])
+      let fieldStrs =
+        sort
+          (lam a : (String, Type). lam b : (String, Type).
+            cmpString a.0 b.0)
+          (map (lam p : (SID, Type). (sidToString p.0, p.1))
+               (mapBindings t.fields)) in
+      match mapAccumL f env fieldStrs with (env, fields) then
+        (env, join ["{", strJoin ";" fields, "}"])
       else never
   | _ -> (env, "Obj.t")
 end
