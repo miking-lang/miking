@@ -312,14 +312,16 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
     let env =
       match t.tyIdent with TyArrow {from = from, to = to} then
         match unwrapTypeVarIdent to with Some ident then
-          let f = lam variantMap. mapInsert t.ident from variantMap in
-          let err = lam.
-            error (join ["Constructor ", nameGetStr t.ident,
-                         " defined before referenced variant type ",
-                         nameGetStr ident])
-          in
-          let variantMap = mapLookupApplyOrElse f err ident env.variants in
-          {env with variants = mapInsert ident variantMap env.variants}
+          match typeLiftType env from with (env, from) then
+            let f = lam variantMap. mapInsert t.ident from variantMap in
+            let err = lam.
+              error (join ["Constructor ", nameGetStr t.ident,
+                           " defined before referenced variant type ",
+                           nameGetStr ident])
+            in
+            let variantMap = mapLookupApplyOrElse f err ident env.variants in
+            {env with variants = mapInsert ident variantMap env.variants}
+          else never
         else env
       else env
     in
