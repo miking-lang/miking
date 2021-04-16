@@ -197,8 +197,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
           let pat = OPatRecord {bindings = fieldPatterns} in
           let reconstructedRecord = TmRecord {
             bindings = mapMap (lam n. nvar_ n) fieldNames,
-            ty = ty (t.body),
-            info = info (t.body)
+            ty = ty t.body,
+            info = infoTm t.body
           } in
           let thn =
             -- Do not use an inline record when the constructor takes an

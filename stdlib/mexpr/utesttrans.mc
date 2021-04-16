@@ -268,14 +268,14 @@ let collectKnownProgramTypes = use MExprAst in
                 "Constructor definition refers to undefined type ",
                 nameGetStr ident
               ] in
-              infoErrorExit (info expr) msg
+              infoErrorExit (infoTm expr) msg
           in
           let variants = mapInsert ident constructors acc.variants in
           let acc = collectType acc argTy in
           let acc = {acc with variants = variants} in
           sfold_Expr_Expr collectTypes acc expr
-        else expectedArrowType (info expr) t.tyIdent
-      else expectedArrowType (info expr) t.tyIdent
+        else expectedArrowType (infoTm expr) t.tyIdent
+      else expectedArrowType (infoTm expr) t.tyIdent
     else match expr with TmUtest t then
       let acc = collectType acc (ty t.test) in
       let acc = collectType acc (ty t.expected) in
@@ -287,7 +287,7 @@ let collectKnownProgramTypes = use MExprAst in
             let msg = join [
               "Arguments of equality function must be properly annotated"
             ] in
-            infoErrorExit (info t) msg
+            infoErrorExit (infoTm t) msg
         else acc
       in
       collectTypes acc t.next
@@ -509,7 +509,7 @@ let getTypeFunctions =
   lam env : UtestTypeEnv. lam ty.
   let reportError = lam msg : String -> String.
     match getTypeStringCode 0 pprintEnvEmpty ty with (_, tyStr) then
-      infoErrorExit (info ty) (msg tyStr)
+      infoErrorExit (infoTy ty) (msg tyStr)
     else never
   in
   match ty with TyInt _ then
