@@ -82,11 +82,13 @@ lang OCamlTypePrettyPrint =
         else never
       in
       let fieldStrs =
-        sort
-          (lam a : (String, Type). lam b : (String, Type).
-            cmpString a.0 b.0)
-          (map (lam p : (SID, Type). (sidToString p.0, p.1))
-               (mapBindings t.fields)) in
+        match _record2tuple t.fields with Some tupleFields then
+          mapi (lam i. lam f. (int2string i, f)) tupleFields
+        else
+          map
+            (lam f : (SID, Type).
+              (sidToString f.0, f.1))
+            (mapBindings t.fields) in
       match mapAccumL f env fieldStrs with (env, fields) then
         (env, join ["{", strJoin ";" fields, "}"])
       else never
