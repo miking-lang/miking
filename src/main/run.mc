@@ -13,6 +13,7 @@ include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
+include "mexpr/tensor-eval.mc"
 
 lang ExtMCore =
   BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans + MExprEval
