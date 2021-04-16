@@ -98,10 +98,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
-  | TmMatch ({pat = (PatBool {val = b})} & t) ->
-    OTmMatch {target = generate env t.target,
-              arms = [(PatBool {val = b}, generate env t.thn),
-                      (PatBool {val = not b}, generate env t.els)]}
+  | TmMatch ({pat = (PatBool {val = true})} & t) ->
+    _if (generate env t.target) (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = (PatBool {val = false})} & t) ->
+    _if (generate env t.target) (generate env t.els) (generate env t.thn)
+  | TmMatch ({pat = PatNamed {ident = (PName _ | PWildcard _)}} & t) ->
+    generate env t.thn
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
@@ -234,10 +236,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
   | PatNamed {ident = PWildcard _} ->
-    (assocEmpty, lam cont. _if true_ cont _none)
+    (assocEmpty, identity)
   | PatNamed {ident = PName n} ->
-    (assocInsert {eq=nameEqSym} n targetName assocEmpty,
-     lam cont. _if true_ cont _none)
+    (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
       _if (nvar_ targetName)
