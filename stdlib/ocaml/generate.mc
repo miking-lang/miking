@@ -102,14 +102,18 @@ lang OCamlGenerate = MExprAst + OCamlAst
     _if (generate env t.target) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
     _if (generate env t.target) (generate env t.els) (generate env t.thn)
-  | TmMatch ({pat = PatNamed {ident = (PName _ | PWildcard _)}} & t) ->
-    generate env t.thn
   | TmMatch ({pat = PatInt {val = i}} & t) ->
     let cond = generate env (eqi_ (int_ i) t.target) in
-    _if cond t.thn t.els
+    _if cond (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
-    _if cond t.thn t.els
+    _if cond (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) ->
+    generate env t.thn
+  | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
+    generate env (bind_
+      (nulet_ n t.target)
+       t.thn)
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
@@ -798,7 +802,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
   | OTmMatch t ->
     _objObj
-    (OTmMatch {{t with target = _objObj (objWrapRec false t.target)}
+    (OTmMatch {{t with target = _objObj (_objRepr (objWrapRec false t.target))}
                   with arms = map (lam p. (p.0, _objRepr (objWrapRec false p.1))) t.arms})
   | t -> smap_Expr_Expr (objWrapRec false) t
 
@@ -963,8 +967,8 @@ utest matchWild1 with generateEmptyEnv matchWild1 using sameSemantics in
 let matchWild2 = symbolize
   (match_ (int_ 1)
      (pvar_ "n")
-     true_
-     false_) in
+     (var_ "n")
+     (int_ 2)) in
 utest matchWild2 with generateEmptyEnv matchWild2 using sameSemantics in
 
 let matchChar1 = symbolize
