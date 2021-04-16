@@ -33,6 +33,8 @@ let enable_debug_stack_trace = ref false
 
 let enable_debug_profiling = ref false
 
+let disable_dead_code_elimination = ref false
+
 let utest = ref false (* Set to true if unit testing is enabled *)
 
 let utest_ok = ref 0 (* Counts the number of successful unit tests *)
@@ -480,6 +482,8 @@ let ty_info = function
   | TyApp (fi, _, _) ->
       fi
 
+(* Checks if a constant _may_ have a side effect. It is conservative
+   and returns only false if it is _sure_ to not have a side effect *)
 let const_has_side_effect = function
   | CBool _
   | CInt _
@@ -563,7 +567,6 @@ let const_has_side_effect = function
   | Cref | CmodRef _ | CdeRef ->
       true
   (* MCore intrinsics: Maps *)
-  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap _
   | CmapEmpty
   | CmapSize
