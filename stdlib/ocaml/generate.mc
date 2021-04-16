@@ -98,6 +98,10 @@ lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
+  | TmMatch ({pat = (PatBool {val = b})} & t) ->
+    OTmMatch {target = generate env t.target,
+              arms = [(PatBool {val = b}, generate env t.thn),
+                      (PatBool {val = not b}, generate env t.els)]}
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
