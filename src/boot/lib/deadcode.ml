@@ -36,7 +36,7 @@ let collect_lets t =
   in
   work (SymbMap.empty, SymbSet.empty) t
 
-(* Returns a new namp, where it is marked with true everywhere we have
+(* Returns a new nmap, where it is marked with true everywhere we have
    a let that is used. Use depth-first search (DFS) in the graph with
    color marking. Returns the nmap. *)
 let mark_used_lets (nmap, free) =
@@ -94,7 +94,7 @@ let elimination t =
     pprint_nmap !_symbmap nmap |> uprint_endline ;
     print_endline "-- Dead code info: free variables --" ;
     pprint_named_symbset !_symbmap free |> uprint_endline ) ;
-  (* Mark all lets that used in the graph *)
+  (* Mark all lets that are used in the graph *)
   let nmap = mark_used_lets (nmap, free) in
   if !enable_debug_dead_code_info then (
     print_endline "\n-- Dead code info: marked used lets --" ;
