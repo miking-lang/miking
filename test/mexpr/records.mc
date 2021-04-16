@@ -16,7 +16,7 @@ utest r2 with {age = 43, name = "foobar"} in
 let r3 = {{r1 with age = 41} with name = "barbar"} in
 utest r3 with {age = 41, name = "barbar"} in
 
-let bumpAge = lam r : {age : Int}. {r with age = addi r.age 1} in
+let bumpAge = lam r : {age : Int, name : String}. {r with age = addi r.age 1} in
 
 utest bumpAge r1 with r2 in
 
