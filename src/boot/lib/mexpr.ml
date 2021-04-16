@@ -1355,6 +1355,7 @@ let delta eval env fi c v =
       let t =
         Parserutils.parse_mcore_file (tmseq2ustring fi seq)
         |> Symbolize.symbolize builtin_name2sym
+        |> Deadcode.elimination builtin_sym2term builtin_name2sym
       in
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMCoreFile, _ ->

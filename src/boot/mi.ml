@@ -73,6 +73,12 @@ let main =
       , Arg.Set enable_debug_after_symbolize
       , " Enables output of the mexpr program after symbolize transformations."
       )
+    ; ( "--debug-dead-code-elim"
+      , Arg.Set enable_debug_after_dead_code_elimination
+      , " Enables output of the mexpr program after dead code elimination." )
+    ; ( "--debug-dead-code-info"
+      , Arg.Set enable_debug_dead_code_info
+      , " Enables output of dead code elimination info." )
     ; ( "--debug-eval-tm"
       , Arg.Set enable_debug_eval_tm
       , " Enables output of terms in each eval step." )
@@ -102,6 +108,9 @@ let main =
       , Arg.Set Boot.Mlang.enable_subsumption_analysis
       , " Enables subsumption analysis of language fragments in mlang \
          transformations." )
+    ; ( "--disable-dead-code-elim"
+      , Arg.Set disable_dead_code_elimination
+      , " Disables dead code elimination." )
     ; ( "--no-line-edit"
       , Arg.Set Boot.Repl.no_line_edit
       , " Disable line editing funcionality in the REPL." ) ]

@@ -19,6 +19,10 @@ let enable_debug_after_parse = ref false
 
 let enable_debug_after_symbolize = ref false
 
+let enable_debug_after_dead_code_elimination = ref false
+
+let enable_debug_dead_code_info = ref false
+
 let enable_debug_after_mlang = ref false
 
 let enable_debug_symbol_print = ref false
@@ -28,6 +32,8 @@ let enable_debug_con_shape = ref false
 let enable_debug_stack_trace = ref false
 
 let enable_debug_profiling = ref false
+
+let disable_dead_code_elimination = ref false
 
 let utest = ref false (* Set to true if unit testing is enabled *)
 
@@ -391,13 +397,11 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
   | TmLet (_, _, _, _, t1, t2) ->
       f (f acc t1) t2
   | TmRecLets (_, lst, tm) ->
-      f
-        (f acc (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst))
-        tm
+      f (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst) tm
   | TmConst (_, _) ->
       acc
   | TmSeq (_, tms) ->
-      Mseq.Helpers.fold_right f tms acc
+      Mseq.Helpers.fold_left f acc tms
   | TmRecord (_, r) ->
       Record.fold (fun _ t acc -> f acc t) r acc
   | TmRecordUpdate (_, r, _, t) ->
@@ -477,6 +481,140 @@ let ty_info = function
   | TyVar (fi, _, _)
   | TyApp (fi, _, _) ->
       fi
+
+(* Checks if a constant _may_ have a side effect. It is conservative
+   and returns only false if it is _sure_ to not have a side effect *)
+let const_has_side_effect = function
+  | CBool _
+  | CInt _
+  | Caddi _
+  | Csubi _
+  | Cmuli _
+  | Cdivi _
+  | Cmodi _
+  | Cnegi
+  | Clti _
+  | Cleqi _
+  | Cgti _
+  | Cgeqi _
+  | Ceqi _
+  | Cneqi _
+  | Cslli _
+  | Csrli _
+  | Csrai _
+  | Carity ->
+      false
+  (* MCore intrinsics: Floating-point numbers *)
+  | CFloat _
+  | Caddf _
+  | Csubf _
+  | Cmulf _
+  | Cdivf _
+  | Cnegf
+  | Cltf _
+  | Cleqf _
+  | Cgtf _
+  | Cgeqf _
+  | Ceqf _
+  | Cneqf _
+  | Cfloorfi
+  | Cceilfi
+  | Croundfi
+  | Cint2float
+  | Cstring2float ->
+      false
+  (* MCore intrinsics: Characters *)
+  | CChar _ | Ceqc _ | Cchar2int | Cint2char ->
+      false
+  (* MCore intrinsic: sequences *)
+  | Ccreate _
+  | Clength
+  | Cconcat _
+  | Cget _
+  | Cset _
+  | Ccons _
+  | Csnoc _
+  | CsplitAt _
+  | Creverse
+  | Csubsequence _ ->
+      false
+  (* MCore intrinsics: Random numbers *)
+  | CrandIntU _ ->
+      true
+  | CrandSetSeed ->
+      true
+  (* MCore intrinsics: Time *)
+  | CwallTimeMs ->
+      true
+  | CsleepMs ->
+      true
+  (* MCore intrinsics: Debug and I/O *)
+  | Cprint
+  | Cdprint
+  | CreadLine
+  | CreadBytesAsString
+  | CreadFile
+  | CwriteFile _
+  | CfileExists
+  | CdeleteFile
+  | Cerror
+  | Cexit ->
+      true
+  (* MCore intrinsics: Symbols *)
+  | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
+      true
+  (* MCore intrinsics: References *)
+  | Cref | CmodRef _ | CdeRef ->
+      true
+  (* MCore intrinsics: Maps *)
+  | CMap _
+  | CmapEmpty
+  | CmapSize
+  | CmapGetCmpFun
+  | CmapInsert _
+  | CmapRemove _
+  | CmapFindWithExn _
+  | CmapFindOrElse _
+  | CmapFindApplyOrElse _
+  | CmapMem _
+  | CmapAny _
+  | CmapMap _
+  | CmapMapWithKey _
+  | CmapFoldWithKey _
+  | CmapBindings
+  | CmapEq _
+  | CmapCmp _ ->
+      false
+  (* MCore intrinsics: Tensors *)
+  | CtensorCreate _
+  | CtensorGetExn _
+  | CtensorSetExn _
+  | CtensorRank
+  | CtensorShape
+  | CtensorCopyExn _
+  | CtensorReshapeExn _
+  | CtensorSliceExn _
+  | CtensorSubExn _
+  | CtensorIteri _ ->
+      true
+  (* MCore intrinsics: Boot parser *)
+  | CbootParserTree _
+  | CbootParserParseMExprString
+  | CbootParserParseMCoreFile
+  | CbootParserGetId
+  | CbootParserGetTerm _
+  | CbootParserGetType _
+  | CbootParserGetString _
+  | CbootParserGetInt _
+  | CbootParserGetFloat _
+  | CbootParserGetListLength _
+  | CbootParserGetConst _
+  | CbootParserGetPat _
+  | CbootParserGetInfo _ ->
+      true
+  (* External functions *)
+  | CPar _ | CExt _ | CSd _ | CPy _ ->
+      true
 
 (* Converts a sequence of terms to a ustring *)
 let tmseq2ustring fi s =
