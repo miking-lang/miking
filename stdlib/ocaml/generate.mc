@@ -104,6 +104,12 @@ lang OCamlGenerate = MExprAst + OCamlAst
     _if (generate env t.target) (generate env t.els) (generate env t.thn)
   | TmMatch ({pat = PatNamed {ident = (PName _ | PWildcard _)}} & t) ->
     generate env t.thn
+  | TmMatch ({pat = PatInt {val = i}} & t) ->
+    let cond = generate env (eqi_ (int_ i) t.target) in
+    _if cond t.thn t.els
+  | TmMatch ({pat = PatChar {val = c}} & t) ->
+    let cond = generate env (eqc_ (char_ c) t.target) in
+    _if cond t.thn t.els
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
