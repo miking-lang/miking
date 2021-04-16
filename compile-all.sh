@@ -142,9 +142,9 @@ files="${files} stdlib/ocaml/ast.mc"
 # files="${files} stdlib/python/python.mc"
 # files="${files} test/sundials/sundials.mc"
 # files="${files} stdlib/sundials/sundials.mc"
-# files="${files} src/main/mi.mc"
-# files="${files} src/main/compile.mc"
-# files="${files} src/main/run.mc"
+files="${files} src/main/mi.mc"
+files="${files} src/main/compile.mc"
+files="${files} src/main/run.mc"
 
 export MCORE_STDLIB='stdlib'
 for f in $files; do

@@ -2,16 +2,17 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "options.mc"
 include "seq.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
+include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
-include "mexpr/tensor-eval.mc"
 
 lang ExtMCore =
   BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans + MExprEval
@@ -27,7 +28,7 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
     (symEnv, utestStrip ast)
 
-let run = lam files. lam options.
+let run = lam files. lam options : Options.
   use ExtMCore in
   let runFile = lam file.
     let ast = parseMCoreFile file in
