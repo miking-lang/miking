@@ -114,6 +114,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
     generate env (bind_
       (nulet_ n t.target)
        t.thn)
+  | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
+    let cond = generate env (eqi_ (int_ 0) (length_ t.target)) in
+    _if cond (generate env t.thn) (generate env t.els)
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
