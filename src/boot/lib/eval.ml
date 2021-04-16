@@ -5,10 +5,11 @@
 
 open Printf
 open Ast
-open Msg
 open Mexpr
+open Msg
 open Parserutils
 open Ustring
+open Builtin
 
 (* Main function for evaluating a program. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)
@@ -27,7 +28,8 @@ let evalprog filename =
       |> merge_includes (Filename.dirname filename) [filename]
       |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> Symbolize.symbolize builtin_name2sym
-      |> debug_after_symbolize |> Deadcode.elimination
+      |> debug_after_symbolize
+      |> Deadcode.elimination builtin_sym2term builtin_name2sym
       |> debug_after_dead_code_elimination
       |> Mexpr.eval builtin_sym2term
       |> fun _ -> ()

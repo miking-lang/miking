@@ -10,9 +10,9 @@
 
 open Printf
 open Boot.Ast
+open Boot.Builtin
 open Boot.Eval
 open Boot.Repl
-open Boot.Mexpr
 
 (* Define the file slash, to make it platform independent *)
 let sl = if Sys.win32 then "\\" else "/"
@@ -108,6 +108,9 @@ let main =
       , Arg.Set Boot.Mlang.enable_subsumption_analysis
       , " Enables subsumption analysis of language fragments in mlang \
          transformations." )
+    ; ( "--disable-dead-code-elim"
+      , Arg.Set disable_dead_code_elimination
+      , " Disables dead code elimination." )
     ; ( "--no-line-edit"
       , Arg.Set Boot.Repl.no_line_edit
       , " Disable line editing funcionality in the REPL." ) ]
