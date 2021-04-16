@@ -149,4 +149,3 @@ let elimination builtin_sym2term builtin_name2sym t =
       pprint_nmap !_symbmap nmap |> uprint_endline ) ;
     (* Remove all lets that are not used *)
     remove_lets nmap t )
-
