@@ -1386,7 +1386,7 @@ let delta eval env fi c v =
         ( fi
         , Mseq.Helpers.map
             (fun x -> TmConst (NoInfo, CChar x))
-            (Mseq.Helpers.of_ustring (Bootparser.getString ptree n)) )
+            (Bootparser.getString ptree n) )
   | CbootParserGetString (Some _), _ ->
       fail_constapp fi
   | CbootParserGetInt None, t ->

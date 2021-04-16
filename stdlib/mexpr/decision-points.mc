@@ -86,13 +86,17 @@ let hole_ = use HoleAst in
 type CallGraph = DiGraph Name Symbol
 
 let _handleLetVertex = use LamAst in
-  lam letexpr. lam f.
+  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
+                 inexpr : Expr, ty : Type, info : Info}.
+  lam f.
     match letexpr.body with TmLam lm
     then cons letexpr.ident (f lm.body)
     else f letexpr.body
 
 let _handleLetEdge = use LamAst in
-  lam letexpr. lam f. lam g. lam prev.
+  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
+                 inexpr : Expr, ty : Type, info : Info}.
+  lam f. lam g. lam prev.
     match letexpr.body with TmLam lm
     then f g letexpr.ident lm.body
     else f g prev letexpr.body
@@ -240,7 +244,10 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     -- AST-ify the lookup table
     let defLookupTable =
       nulet_ _lookupTable
-        (seq_ (map (lam r. record_ [("id", r.id), ("path", seq_ (map symb_ r.path)), ("value", r.value)]) lookupTable))
+        (seq_ (map
+          (lam r : {id : Expr, path : [a], value : Expr}.
+            record_ [("id", r.id), ("path", seq_ (map symb_ r.path)), ("value", r.value)])
+          lookupTable))
     in
 
     -- Compute maximum depth of the decision points
@@ -249,7 +256,9 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
       else
         maxOrElse (lam. error "Expected non-empty lookup table")
                   subi
-                  (map (lam r. length r.path) lookupTable)
+                  (map (lam r : {id : Expr, path : [a], value : Expr}.
+                         length r.path)
+                       lookupTable)
     in
     let defMaxDepth = nulet_ _maxDepth (int_ maxDepth) in
 
@@ -427,7 +436,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     in concat res (_extract p extractor t.inexpr)
 
   | TmRecLets t ->
-    let handleLet = lam le.
+    let handleLet = lam le : RecLetBinding.
       if p le.ident then
         match le.body with TmLam lm then
           let newBody = extractor le.ident le.body in
@@ -458,7 +467,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
                 with inexpr = _renameIdents p rf t.inexpr}
 
   | TmRecLets t ->
-    let handleLet = lam le.
+    let handleLet = lam le : RecLetBinding.
       -- Defines a public function
       if p le.ident then
         match le.body with TmLam lm then
@@ -494,7 +503,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     else TmLet {t with inexpr = _transformCallCtx p prev t.inexpr}
 
   | TmRecLets t ->
-    let handleLetExpr = lam le.
+    let handleLetExpr = lam le : RecLetBinding.
       if p le.ident then
         match le.body with TmLam lm then
           let newBody =
@@ -529,7 +538,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + SymbAst
     let holeInfo = _holeInfo tm in
     let zip = zipWith (lam a. lam b. (a, b)) in
     foldl
-      (lam acc. lam t.
+      (lam acc. lam t : {fun : Name, hole : {startGuess : Expr, depth : Int}, id : Expr}.
          let fun = t.fun in
          let hole = t.hole in
          let depth =
@@ -565,7 +574,7 @@ end
 lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
 
 lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
-  + MExprSym
+  + MExprSym + MExprEq
 
 mexpr
 
@@ -604,9 +613,10 @@ let dprintTransform = lam ast.
   print "-------------- END OF TRANSFORMED AST --------------";
   ast
 in
-let testTransform = lam r.
+let testTransform =
+  lam r : {ast : Expr, expected : Expr, vs : [String], calls : [(String, String)]}.
   let tast = dprintTransform r.ast in
-  utest evalE tast r.expected with r.expected in ()
+  utest evalE tast r.expected with r.expected using eqExpr in ()
 in
 
 -- Perform call graph tests
@@ -614,7 +624,8 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
   -- Convert to graph with string nodes
   let toStr = lam ng.
     digraphAddEdges
-      (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
+      (map (lam t : DigraphEdge v l. (nameGetStr t.0, nameGetStr t.1, t.2))
+           (digraphEdges ng))
       (digraphAddVertices (map nameGetStr (digraphVertices ng))
                           (digraphEmpty eqString eqsym))
   in
@@ -625,9 +636,13 @@ let callGraphTests = lam ast. lam strVs. lam strEdgs.
 
   let es = digraphEdges sg in
   utest length es with length strEdgs in
-  map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
+  iter
+    (lam t : (String, String). (utest digraphIsSuccessor t.1 t.0 sg with true in ()))
+    strEdgs
 in
-let testCallgraph = lam r.
+let testCallgraph =
+  lam r : {ast : Expr, expected : Expr,
+           vs : [String], calls : [(String, String)]}.
   callGraphTests (anf r.ast) r.vs r.calls
 in
 

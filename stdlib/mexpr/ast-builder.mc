@@ -10,7 +10,7 @@ include "map.mc"
 -- Patterns --
 
 let npvar_ = use MExprAst in
-  lam n.
+  lam n : Name.
   PatNamed {ident = PName n, info = NoInfo ()}
 
 let pvar_ = use MExprAst in
@@ -67,7 +67,7 @@ let pseqedgew_ = use MExprAst in
   PatSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo()}
 
 let pseqedgen_ = use MExprAst in
-  lam pre. lam middle. lam post.
+  lam pre. lam middle : Name. lam post.
   PatSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo()}
 
 let pseqedge_ = use MExprAst in

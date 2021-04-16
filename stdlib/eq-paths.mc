@@ -22,7 +22,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
           [curPath]
         else
           let paths =
-            map (lam edge.
+            map (lam edge : DigraphEdge v l.
                    traverse g edge.1 (cons edge.2 curPath) (cons v visited) (subi d 1))
                 fromEdges in
           -- If current node is a start node, the current path is a valid path
@@ -37,7 +37,9 @@ mexpr
 -- To construct test graphs
 let empty = digraphEmpty eqi eqChar in
 let fromList = lam vs. foldl (lam g. lam v. digraphAddVertex v g) empty vs in
-let addEdges = lam g. lam es. foldl (lam acc. lam e. digraphAddEdge e.0 e.1 e.2 acc) g es in
+let addEdges = lam g. lam es.
+  foldl (lam acc. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 acc) g es
+in
 
 -- Create some labels
 let a = 'a' in
@@ -59,13 +61,13 @@ let samePaths = lam p1. lam p2.
 -- │  1  │
 -- └─────┘
 let g = fromList [1] in
-utest eqPaths g 1 0 [] with [""] in
-utest eqPaths g 1 1 [] with [""] in
-utest eqPaths g 1 2 [] with [""] in
+utest eqPaths g 1 0 [] with [""] using eqSeq eqString in
+utest eqPaths g 1 1 [] with [""] using eqSeq eqString in
+utest eqPaths g 1 2 [] with [""] using eqSeq eqString in
 
-utest eqPaths g 1 0 [1] with [""] in
-utest eqPaths g 1 1 [1] with [""] in
-utest eqPaths g 1 2 [1] with [""] in
+utest eqPaths g 1 0 [1] with [""] using eqSeq eqString in
+utest eqPaths g 1 1 [1] with [""] using eqSeq eqString in
+utest eqPaths g 1 2 [1] with [""] using eqSeq eqString in
 
 -- Simple chain graph
 -- ┌─────┐
@@ -99,13 +101,13 @@ in
 
 let v = 1 in
 -- Without specified start nodes
-utest eqPaths g v 0 [] with [""] in
+utest eqPaths g v 0 [] with [""] using eqSeq eqString in
 utest eqPaths g v 1 [] with ["a"] in
 utest eqPaths g v 2 [] with ["ba"] in
 utest eqPaths g v 3 [] with ["cba"] in
 
 -- With start nodes
-utest eqPaths g v 0 [1,2,3,4] with [""] in
+utest eqPaths g v 0 [1,2,3,4] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g v 1 [1]) ["","a"] with true in
 utest samePaths (eqPaths g v 2 [1]) ["", "ba"] with true in
 utest samePaths (eqPaths g v 2 [1,2]) ["", "a", "ba"] with true in
@@ -162,8 +164,8 @@ let g0 = addEdges
          [(1,1,a)] in
 -- let _ = digraphPrintDot g0 int2string (lam x. x) in
 
-utest eqPaths g0 1 0 [] with [""] in
-utest eqPaths g0 1 0 [1] with [""] in
+utest eqPaths g0 1 0 [] with [""] using eqSeq eqString in
+utest eqPaths g0 1 0 [1] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g0 1 1 [1]) ["", "a"] with true in
 
 -- Loop with two nodes (mutual recursion)
@@ -181,7 +183,7 @@ let g = addEdges
         [(1,2,'b'),(2,1,'a')] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 1 0 [1,2] with [""] in
+utest eqPaths g 1 0 [1,2] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g 1 1 [1]) ["", "a"] with true in
 utest samePaths (eqPaths g 1 2 [1]) ["", "ba"] with true in
 utest samePaths (eqPaths g 1 2 [1,2]) ["", "a", "ba"] with true in
@@ -207,7 +209,7 @@ let g = addEdges
         [(1,2,a), (3,2,c),(2,3,b)] in
 -- let _ = digraphPrintDot g int2string (lam x. x) in
 
-utest eqPaths g 2 0 [1,2,3] with [""] in
+utest eqPaths g 2 0 [1,2,3] with [""] using eqSeq eqString in
 utest samePaths (eqPaths g 2 1 [1,2,3]) ["", "a", "c"] with true in
 utest samePaths (eqPaths g 2 2 [1,2,3]) ["", "a", "c", "bc"] with true in
 utest samePaths (eqPaths g 2 1000000000 [1,2,3]) ["", "a", "c", "bc"] with true in
