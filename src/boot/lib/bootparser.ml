@@ -109,12 +109,7 @@ let sym = Symb.gensym ()
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
 let parseMExprString str =
-  let t =
-    str |> Mseq.Helpers.to_ustring |> Parseutils.parse_mexpr_string
-    |> Symbolize.symbolize builtin_name2sym
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym
-  in
-  PTreeTm t
+  PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
 
 let parseMCoreFile str =
   let t =
