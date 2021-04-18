@@ -26,11 +26,11 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let ident = nameSym "t" in
     let var = TmVar {
       ident = ident,
-      ty = tyunknown_,
+      ty = ty n,
       info = NoInfo {}
     } in
     TmLet {ident = ident,
-           tyBody = tyunknown_,
+           tyBody = ty n,
            body = n,
            inexpr = k var,
            ty = tyunknown_,
@@ -85,6 +85,7 @@ end
 lang RecordANF = ANF + RecordAst
   sem isValue =
   | TmRecord _ -> false
+  | TmRecord {bindings = []} -> true
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =

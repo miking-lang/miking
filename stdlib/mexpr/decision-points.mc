@@ -41,6 +41,9 @@ lang HoleAst
   | TmHole {startGuess : Expr,
             depth : Int}
 
+  sem ty =
+  | TmHole h -> tyunknown_ -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
+
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
 
