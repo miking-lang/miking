@@ -320,7 +320,7 @@ let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
 let callCtxHole2Idx : Name -> [Name] -> CallCtxInfo -> Int =
   lam name. lam path. lam info.
     match info with { hole2idx = hole2idx } then
-      mapFind path (mapFind name (deref hole2idx))
+      mapFindWithExn path (mapFindWithExn name (deref hole2idx))
     else never
 
 -----------------------------
@@ -466,7 +466,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   sem initAssignments (table : Table) =
   | tm ->
     let idsOfHole = lam name.
-      let m = mapFind name table in
+      let m = mapFindWithExn name table in
       map (lam t. match t with (k, v) then v else never) (mapBindings m)
     in
     -- Find the start guess of each decision point
@@ -485,7 +485,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
             (mapEmpty subi)
             (findHoles [] tm) in
     -- Return the lookup function
-    lam i. mapFind i m
+    lam i. mapFindWithExn i m
 
   -- Transform a program with decision points. Returns a function of type
   -- 'Skeleton'. Applying this function to a lookup function yields an MExpr
@@ -883,7 +883,7 @@ else ();
 
 let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
   let ast = bind_ (bind_ (nulet_ _table table) ast) ext in
-  eval { env = [] } ast
+  eval { env = builtinEnv } ast
 in
 
 let idxs = map (lam t. t.1) (mapBindings m) in
@@ -896,31 +896,31 @@ utest eval prog (
   app_ (nvar_ funC) true_
 ) with int_ 1 in
 
--- -- Path 2: B (1)-> A
--- utest eval prog (
---   appf2_ (nvar_ funB) true_ false_
--- ) with int_ 2 in
+-- Path 2: B (1)-> A
+utest eval prog (
+  appf2_ (nvar_ funB) true_ false_
+) with int_ 2 in
 
--- -- Path 3: B -> B (1)-> A
--- utest eval prog (
---   appf2_ (nvar_ funB) true_ true_
--- ) with int_ 3 in
+-- Path 3: B -> B (1)-> A
+utest eval prog (
+  appf2_ (nvar_ funB) true_ true_
+) with int_ 3 in
 
--- -- Path 4: C -> B (2)-> A
--- utest eval prog (
---   app_ (nvar_ funC) false_
--- ) with int_ 4 in
+-- Path 4: C -> B (2)-> A
+utest eval prog (
+  app_ (nvar_ funC) false_
+) with int_ 4 in
 
--- -- Path 5: B (2)-> A
--- utest eval prog (
---   appf2_ (nvar_ funB) false_ false_
--- ) with int_ 5 in
+-- Path 5: B (2)-> A
+utest eval prog (
+  appf2_ (nvar_ funB) false_ false_
+) with int_ 5 in
 
--- -- Path 5 again
--- utest eval prog (
---   bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
---         (appf2_ (nvar_ funB) false_ false_)
--- ) with int_ 5 in
+-- Path 5 again
+utest eval prog (
+  bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
+        (appf2_ (nvar_ funB) false_ false_)
+) with int_ 5 in
 
 -- Path 6: B -> B (2)-> A
 -- unreachable
