@@ -155,6 +155,8 @@ module MSys = struct
     Sys.argv |> Mseq.Helpers.of_array
     |> Mseq.Helpers.map (fun a ->
            a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
+
+  let command s = Sys.command (s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8)
 end
 
 module Time = struct

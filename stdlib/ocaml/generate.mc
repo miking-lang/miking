@@ -613,6 +613,7 @@ let _preamble =
     , intr1 "deleteFile" (appf1_ (_fileOp "delete"))
     , intr1 "error" (appf1_ (_sysOp "error"))
     , intr1 "exit" (appf1_ (_sysOp "exit"))
+    , intr1 "command" (appf1_ (_sysOp "command"))
     , intr2 "eqsym" (appf2_ (_symbOp "eqsym"))
     , intr1 "gensym" (appf1_ (_symbOp "gensym"))
     , intr1 "sym2hash" (appf1_ (_symbOp "hash"))
@@ -709,6 +710,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CFileDelete _ -> nvar_ (_intrinsicName "deleteFile")
   | CError _ -> nvar_ (_intrinsicName "error")
   | CExit _ -> nvar_ (_intrinsicName "exit")
+  | CCommand _ -> nvar_ (_intrinsicName "command")
   | CEqsym _ -> nvar_ (_intrinsicName "eqsym")
   | CGensym _ -> nvar_ (_intrinsicName "gensym")
   | CSym2hash _ -> nvar_ (_intrinsicName "sym2hash")
@@ -1677,6 +1679,9 @@ utest testPrint with generateEmptyEnv testPrint using sameSemantics in
 
 let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
 utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
+
+let testCommand = command_ (str_ "echo \"42\"") in
+utest ocamlEval (generateEmptyEnv testCommand) with int_ 42 using eqExpr in
 
 -- Random number generation operations
 let testSeededRandomNumber =

@@ -818,6 +818,12 @@ lang SysEval = SysAst + SeqAst + IntAst + CharAst
       exit n
     else
       error "n in exit not an integer"
+  | CCommand _ ->
+    match arg with TmSeq s then
+      TmConst {val = CInt {val = command (_seqOfCharToString s.tms)},
+               ty = tyunknown_, info = NoInfo ()}
+    else
+      error "argument to command not a sequence"
 end
 
 lang TimeEval = TimeAst + IntAst
@@ -1312,6 +1318,13 @@ utest eval (fileExists_ f) with false_ using eqExpr in
 
 -- Test argv
 -- utest eval argv_ with seq_ [str_ "mi"] in
+
+-- Test command
+utest
+  if false then eval (command_ (str_ "echo \"Hello world\""))
+  else int_ 0
+with int_ 0
+using eqExpr in
 
 utest eval (match_
   (tuple_ [true_, true_])

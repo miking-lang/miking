@@ -128,6 +128,8 @@ module MSys : sig
   val error : int Mseq.t -> exn
 
   val argv : int Mseq.t Mseq.t
+
+  val command : int Mseq.t -> int
 end
 
 module Time : sig

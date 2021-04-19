@@ -149,8 +149,9 @@ end
 lang SysTypeAst = SysAst
   sem tyConst =
   | CExit _ -> tyarrow_ tyint_ tyunknown_
-  | CError _ -> tyarrow_ tyint_ tyunknown_
+  | CError _ -> tyarrow_ tystr_ tyunknown_
   | CArgv _ -> tyseq_ tystr_
+  | CCommand _ -> tyarrow_ tystr_ tyint_
 end
 
 lang TimeTypeAst = TimeAst

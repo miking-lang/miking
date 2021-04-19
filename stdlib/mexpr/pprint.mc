@@ -671,6 +671,7 @@ lang SysPrettyPrint = SysAst + ConstPrettyPrint
   | CExit _ -> "exit"
   | CError _ -> "error"
   | CArgv _ -> "argv"
+  | CCommand _ -> "command"
 end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
