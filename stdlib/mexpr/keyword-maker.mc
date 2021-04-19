@@ -37,9 +37,11 @@ lang KeywordMakerBase = VarAst + AppAst
      else TmApp {{r with lhs = lhs} with rhs = rhs}
   | TmVar r ->
      let ident = nameGetStr r.ident in
-     match matchKeywordString r.info ident with Some (noArgs, f) then
-       if eqi noArgs (length args) then f args
-       else makeKeywordError r.info noArgs (length args) ident
+     match matchKeywordString r.info ident with Some n then
+       match n with (noArgs, f) then
+         if eqi noArgs (length args) then f args
+         else makeKeywordError r.info noArgs (length args) ident
+       else never
      else TmVar r
   | expr -> smap_Expr_Expr (makeKeywords []) expr
 end
@@ -49,10 +51,12 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
   sem makeKeywords (args: [Expr]) =
   | TmConApp r ->
      let ident = nameGetStr r.ident in
-     match matchKeywordString r.info ident with Some (noArgs, f) then
-       let args = cons r.body args in
-       if eqi noArgs (length args) then f args
-       else makeKeywordError r.info noArgs (length args) ident
+     match matchKeywordString r.info ident with Some n then
+       match n with (noArgs, f) then
+         let args = cons r.body args in
+         if eqi noArgs (length args) then f args
+         else makeKeywordError r.info noArgs (length args) ident
+       else never
      else TmConApp r
   | TmConDef r -> 
      let ident = nameGetStr r.ident in

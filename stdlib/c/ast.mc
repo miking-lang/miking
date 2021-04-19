@@ -48,46 +48,48 @@ lang CAst
   -------------------
 
   syn CExpr =
-  | CEVar        { id: Name }
-  | CEApp        { fun: Name, args: [CExpr] }
-  | CEInt        { i: Int }
-  | CEFloat      { f: Float }
-  | CEChar       { c: Char }
-  | CEString     { s: String }
-  | CEBinOp      { op: CBinOp, lhs: CExpr, rhs: CExpr }
-  | CEUnOp       { op: CUnOp, arg: CExpr }
-  | CEMember     { lhs: CExpr, id: String }
-  | CECast       { ty: CType, rhs: CExpr }
-  | CESizeOfType { ty: CType }
+  | CEVar        /- Variables -/            { id: Name }
+  | CEApp        /- Function application -/ { fun: Name, args: [CExpr] }
+  | CEInt        /- Integer literals -/     { i: Int }
+  | CEFloat      /- Float literals -/       { f: Float }
+  | CEChar       /- Character literals -/   { c: Char }
+  | CEString     /- String literals -/      { s: String }
+  | CEBinOp      /- Binary operators -/     { op: CBinOp,
+                                              lhs: CExpr,
+                                              rhs: CExpr }
+  | CEUnOp       /- Unary operators -/      { op: CUnOp, arg: CExpr }
+  | CEMember     /- lhs.id -/               { lhs: CExpr, id: String }
+  | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
+  | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
   syn CBinOp =
-  | COAssign {}
-  | COSubScript {}
-  | COOr {}
-  | COAnd {}
-  | COEq {}
-  | CONeq {}
-  | COLt {}
-  | COGt {}
-  | COLe {}
-  | COGe {}
-  | COShiftL {}
-  | COShiftR {}
-  | COAdd {}
-  | COSub {}
-  | COMul {}
-  | CODiv {}
-  | COMod {}
-  | COBOr {}
-  | COBAnd {}
-  | COXor {}
+  | COAssign    /- lhs = rhs -/  {}
+  | COSubScript /- lhs[rhs] -/   {}
+  | COOr        /- lhs || rhs -/ {}
+  | COAnd       /- lhs && rhs -/ {}
+  | COEq        /- lhs == rhs -/ {}
+  | CONeq       /- lhs != rhs -/ {}
+  | COLt        /- lhs < rhs -/  {}
+  | COGt        /- lhs > rhs -/  {}
+  | COLe        /- lhs <= rhs -/ {}
+  | COGe        /- lhs >= rhs -/ {}
+  | COShiftL    /- lhs << rhs -/ {}
+  | COShiftR    /- lhs >> rhs -/ {}
+  | COAdd       /- lhs + rhs -/  {}
+  | COSub       /- lhs - rhs -/  {}
+  | COMul       /- lhs * rhs -/  {}
+  | CODiv       /- lhs / rhs -/  {}
+  | COMod       /- lhs % rhs -/  {}
+  | COBOr       /- lhs | rhs -/  {}
+  | COBAnd      /- lhs & rhs -/  {}
+  | COXor       /- lhs ^ rhs -/  {}
 
   syn CUnOp =
-  | COSizeOf {}
-  | CODeref {}
-  | COAddrOf {}
-  | CONeg {}
-  | CONot {}
+  | COSizeOf /- sizeof(arg) -/ {}
+  | CODeref  /- *arg -/        {}
+  | COAddrOf /- &arg -/        {}
+  | CONeg    /- -arg -/        {}
+  | CONot    /- ~arg -/        {}
 
 
   -------------
@@ -95,18 +97,17 @@ lang CAst
   -------------
 
   syn CType =
-  -- CTyIdent not really needed unless we add typedef
---| CTyIdent { id: Name }
-  | CTyChar {}
-  | CTyInt {}
+--| CTyIdent  { id: Name } -- Not really needed unless we add typedef
+  | CTyChar   {}
+  | CTyInt    {}
   | CTyDouble {}
-  | CTyVoid {}
-  | CTyPtr { ty: CType }
-  | CTyFun { ret: CType, params: [CType] }
-  | CTyArray { ty: CType, size: Option Int }
+  | CTyVoid   {}
+  | CTyPtr    { ty: CType }
+  | CTyFun    { ret: CType, params: [CType] }
+  | CTyArray  { ty: CType, size: Option Int }
   | CTyStruct { id: Name, mem: Option [(CType,String)] }
-  | CTyUnion { id: Name, mem: Option [(CType,String)] }
-  | CTyEnum { id: Name, mem: Option [Name] }
+  | CTyUnion  { id: Name, mem: Option [(CType,String)] }
+  | CTyEnum   { id: Name, mem: Option [Name] }
 
 
   --------------------
@@ -122,10 +123,10 @@ lang CAst
   -- C STATEMENTS --
   ------------------
   -- We force if, switch, and while to introduce new scopes (by setting the
-  -- body type to [CStmt] rather than CStmt). It is allowed in C to have a single
-  -- (i.e., not compound) statement as the body, but this statement is NOT
-  -- allowed to be a definition. To do this properly, we would need to separate
-  -- statements and definitions into different data types.
+  -- body type to [CStmt] rather than CStmt). It is allowed in C to have a
+  -- single (i.e., not compound) statement as the body, but this statement is
+  -- NOT allowed to be a definition. To do this properly, we would need to have
+  -- separate data types for statements and definitions.
 
   syn CStmt =
   | CSDef     { ty: CType, id: Option Name, init: Option CInit }
@@ -135,13 +136,14 @@ lang CAst
   | CSExpr    { expr: CExpr }
   | CSComp    { stmts: [CStmt] }
   | CSRet     { val: Option CExpr }
-  | CSCont    { }
-  | CSBreak   { }
+  | CSCont    {}
+  | CSBreak   {}
 
 
   -----------------
   -- C TOP-LEVEL --
   -----------------
+  -- We support including a set of header files at the top of the program.
 
   syn CTop =
   | CTDef { ty: CType, id: Option Name, init: Option CInit }

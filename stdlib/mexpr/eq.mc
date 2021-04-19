@@ -5,7 +5,6 @@
 include "assoc-seq.mc"
 include "name.mc"
 include "bool.mc"
-include "tensor.mc"
 include "map.mc"
 
 include "mexpr/ast.mc"
@@ -24,8 +23,10 @@ let biEmpty = []
 -- 'biInsert (i1,i2) bmap' inserts (i1,i2) in bmap, maintaining bijectivity
 -- (destructive).
 let biInsert : (Name,Name) -> BiNameMap -> BiNameMap =
-  lam i. lam bmap.
-    let p = (lam n. if nameEq i.0 n.0 then false else not (nameEq i.1 n.1)) in
+  lam i : (Name, Name). lam bmap.
+    let p = lam n : (Name, Name).
+      if nameEq i.0 n.0 then false else not (nameEq i.1 n.1)
+    in
     cons i (filter p bmap)
 
 -- 'biMergePreferRight bmapl bmapr' inserts all elements of bmapr into bmapl
@@ -38,8 +39,10 @@ let biMergePreferRight : BiNameMap -> BiNameMap -> BiNameMap =
 -- (unspecified which), if such an entry exists. If not, returns
 -- None ().
 let biLookup : (Name,Name) -> BiNameMap -> Option (Name,Name) =
-  lam i. lam bmap.
-    let pred = (lam n. if nameEq i.0 n.0 then true else nameEq i.1 n.1) in
+  lam i : (Name, Name). lam bmap.
+    let pred = lam n : (Name, Name).
+      if nameEq i.0 n.0 then true else nameEq i.1 n.1
+    in
     find pred bmap
 
 type EqEnv = {
@@ -47,7 +50,7 @@ type EqEnv = {
   conEnv : BiNameMap
 }
 
-type TypeEnv = AssocSeq Name Type
+type EqTypeEnv = AssocSeq Name Type
 
 -- Checks if the mapping (i1,i2) exists in either the bound or free
 -- environments (bound takes precedence). If so, return the given free
@@ -56,11 +59,13 @@ type TypeEnv = AssocSeq Name Type
 -- free environment with (i1,i2) added.
 let _eqCheck : Name -> Name -> NameEnv -> NameEnv -> Option NameEnv =
   lam i1. lam i2. lam env. lam free.
-    match biLookup (i1,i2) env with Some (n1,n2) then
-      if and (nameEq i1 n1) (nameEq i2 n2) then Some free -- Match in env
+    match biLookup (i1,i2) env with Some n then
+      let n : (Name, Name) = n in
+      if and (nameEq i1 n.0) (nameEq i2 n.1) then Some free -- Match in env
       else None () -- i1<->i2 is not consistent with env
-    else match biLookup (i1,i2) free with Some (n1,n2) then
-      if and (nameEq i1 n1) (nameEq i2 n2) then Some free -- Match in free
+    else match biLookup (i1,i2) free with Some n then
+      let n : (Name, Name) = n in
+      if and (nameEq i1 n.0) (nameEq i2 n.1) then Some free -- Match in free
       else None () -- i1<->i2 is not consistent with free
     else
       -- Here, we know that neither i1 (lhs) nor i2 (rhs) exists in free.
@@ -84,7 +89,7 @@ lang Eq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
 
-  sem eqType (typeEnv : TypeEnv) (lhs : Expr) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   -- Intentionally left blank
 
   sem eqExpr (e1: Expr) =
@@ -175,13 +180,14 @@ lang RecLetsEq = Eq + RecLetsAst
           let bszip = zipWith (lam b1. lam b2. (b1, b2)) bs1 bs2 in
           let varEnv =
             foldl
-              (lam varEnv. lam t.
+              (lam varEnv. lam t : (RecLetBinding, RecLetBinding).
                  biInsert ((t.0).ident,(t.1).ident) varEnv)
               varEnv bszip
           in
           let env = {env with varEnv = varEnv} in
           optionFoldlM
-            (lam free. lam t. eqExprH env free (t.0).body (t.1).body)
+            (lam free. lam t : (RecLetBinding, RecLetBinding).
+              eqExprH env free (t.0).body (t.1).body)
             free bszip
         else None ()
       else None ()
@@ -228,10 +234,13 @@ lang MatchEq = Eq + MatchAst
     match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1, ty = ty1} then
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free els1 els2 with Some free then
-          match eqPat env free biEmpty p1 p2 with Some (free,patEnv) then
-            match env with {varEnv = varEnv} then
-              eqExprH {env with varEnv = biMergePreferRight varEnv patEnv}
-                free thn1 thn2
+          match eqPat env free biEmpty p1 p2 with Some n then
+            let n : (EqEnv, EqEnv) = n in
+            match n with (free, patEnv) then
+              match env with {varEnv = varEnv} then
+                eqExprH {env with varEnv = biMergePreferRight varEnv patEnv}
+                  free thn1 thn2
+              else never
             else never
           else None ()
         else None ()
@@ -265,7 +274,7 @@ lang SeqEq = Eq + SeqAst
     match lhs with TmSeq {tms = ts1, ty = ty1} then
       if eqi (length ts1) (length ts2) then
         let z = zipWith (lam t1. lam t2. (t1,t2)) ts1 ts2 in
-        optionFoldlM (lam free. lam tp. eqExprH env free tp.0 tp.1) free z
+        optionFoldlM (lam free. lam tp : (Expr, Expr). eqExprH env free tp.0 tp.1) free z
       else None ()
     else None ()
 end
@@ -375,8 +384,9 @@ end
 let _eqpatname : NameEnv -> NameEnv -> PatName -> PatName -> Option NameEnv =
   lam penv. lam free. lam p1. lam p2.
     match (p1,p2) with (PName i1,PName i2) then
-      match biLookup (i1,i2) penv with Some (n1,n2) then
-        if and (nameEq i1 n1) (nameEq i2 n2) then
+      match biLookup (i1,i2) penv with Some n then
+        let n : (Name, Name) = n in
+        if and (nameEq i1 n.0) (nameEq i2 n.1) then
           Some (free,penv) -- Match in env
         else None () -- i1<->i2 is not consistent with penv
       else
@@ -399,7 +409,7 @@ lang SeqTotPatEq = SeqTotPat
     match lhs with PatSeqTot {pats = ps1} then
       if eqi (length ps2) (length ps1) then
         let z = zipWith (lam p1. lam p2. (p1,p2)) ps1 ps2 in
-        optionFoldlM (lam fpEnv. lam ps.
+        optionFoldlM (lam fpEnv. lam ps : (Pat, Pat).
           match fpEnv with (f,p) then
             eqPat env f p ps.0 ps.1
           else never)
@@ -412,25 +422,27 @@ lang SeqEdgePatEq = SeqEdgePat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
-      match _eqpatname patEnv free mid1 mid2 with Some (f,p) then
-        if eqi (length pre1) (length pre2) then
-          let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
-          let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
-          let fl = optionFoldlM (lam fpEnv. lam ps.
-            match fpEnv with (f,p) then
-              eqPat env f p ps.0 ps.1
-            else never)
-            (free,patEnv) z1 in
-          match fl with Some (f1,p1) then
-            if eqi (length post1) (length post2) then
-              optionFoldlM (lam fpEnv. lam ps.
-                match fpEnv with (f,p) then
-                  eqPat env f p ps.0 ps.1
-                else never)
-                (f1,p1) z2
+      match _eqpatname patEnv free mid1 mid2 with Some n then
+        match n with (f,p) then
+          if eqi (length pre1) (length pre2) then
+            let z1 = zipWith (lam p1. lam p2. (p1,p2)) pre1 pre2 in
+            let z2 = zipWith (lam p1. lam p2. (p1,p2)) post1 post2 in
+            let fl = optionFoldlM (lam fpEnv. lam ps : (Pat, Pat).
+              match fpEnv with (f,p) then
+                eqPat env f p ps.0 ps.1
+              else never)
+              (free,patEnv) z1 in
+            match fl with Some envs then
+              if eqi (length post1) (length post2) then
+                optionFoldlM (lam fpEnv. lam ps : (Pat, Pat).
+                  match fpEnv with (f,p) then
+                    eqPat env f p ps.0 ps.1
+                  else never)
+                  envs z2
+              else None ()
             else None ()
           else None ()
-        else None ()
+        else never
       else None ()
     else None ()
 end
@@ -492,8 +504,11 @@ lang AndPatEq = AndPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatAnd {lpat = l2, rpat = r2} ->
     match lhs with PatAnd {lpat = l1, rpat = r1} then
-      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
-        eqPat env free patEnv r1 r2
+      match eqPat env free patEnv l1 l2 with Some envs then
+        let envs : (EqEnv, EqEnv) = envs in
+        match envs with (free, patEnv) then
+          eqPat env free patEnv r1 r2
+        else never
       else None ()
     else None ()
 end
@@ -502,8 +517,11 @@ lang OrPatEq = OrPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : NameEnv) (lhs : Pat) =
   | PatOr {lpat = l2, rpat = r2} ->
     match lhs with PatOr {lpat = l1, rpat = r1} then
-      match eqPat env free patEnv l1 l2 with Some (free,patEnv) then
-        eqPat env free patEnv r1 r2
+      match eqPat env free patEnv l1 l2 with Some envs then
+        let envs : (EqEnv, EqEnv) = envs in
+        match envs with (free, patEnv) then
+          eqPat env free patEnv r1 r2
+        else never
       else None ()
     else None ()
 end
@@ -521,69 +539,77 @@ end
 -----------
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyUnknown _ ->
     match unwrapType typeEnv lhs with Some (TyUnknown _) then true else false
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyBool _ ->
     match unwrapType typeEnv lhs with Some (TyBool _) then true else false
 end
 
 lang IntTypeEq = Eq + IntTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyInt _ ->
     match unwrapType typeEnv lhs with Some (TyInt _) then true else false
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyFloat _ ->
     match unwrapType typeEnv lhs with Some (TyFloat _) then true else false
 end
 
 lang CharTypeEq = Eq + CharTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyChar _ ->
     match unwrapType typeEnv lhs with Some (TyChar _) then true else false
 end
 
 lang FunTypeEq = Eq + FunTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyArrow r ->
-    match unwrapType typeEnv lhs with Some (TyArrow l) then
-      and (eqType typeEnv l.from r.from) (eqType typeEnv l.to r.to)
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyArrow l then
+        and (eqType typeEnv l.from r.from) (eqType typeEnv l.to r.to)
+      else false
     else false
 end
 
 lang SeqTypeEq = Eq + SeqTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TySeq r ->
-    match unwrapType typeEnv lhs with Some (TySeq l) then
-      eqType typeEnv l.ty r.ty
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TySeq l then
+        eqType typeEnv l.ty r.ty
+      else false
     else false
 end
 
 lang RecordTypeEq = Eq + RecordTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyRecord r ->
-    match unwrapType typeEnv lhs with Some (TyRecord l) then
-      mapEq (eqType typeEnv) l.fields r.fields
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyRecord l then
+        mapEq (eqType typeEnv) l.fields r.fields
+      else false
     else false
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyVariant r ->
-    match unwrapType typeEnv lhs with Some (TyVariant l) then
-      mapEq (eqType typeEnv) l.constrs r.constrs
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyVariant l then
+        mapEq (eqType typeEnv) l.constrs r.constrs
+      else false
     else false
 end
 
 lang VarTypeEq = Eq + VarTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | rhs & TyVar r ->
     match unwrapType typeEnv lhs with Some lty then
       match unwrapType typeEnv rhs with Some rty then
@@ -595,10 +621,12 @@ lang VarTypeEq = Eq + VarTypeAst
 end
 
 lang AppTypeEq = Eq + AppTypeAst
-  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyApp r ->
-    match unwrapType typeEnv lhs with Some (TyApp l) then
-      and (eqType typeEnv l.lhs r.lhs) (eqType typeEnv l.rhs r.rhs)
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyApp l then
+        and (eqType typeEnv l.lhs r.lhs) (eqType typeEnv l.rhs r.rhs)
+      else false
     else false
 end
 
@@ -634,6 +662,11 @@ end
 mexpr
 
 use MExprEq in
+
+-- Redefine eqType with type annotations
+let eqType = lam env : EqTypeEnv. lam l : Type. lam r : Type.
+  eqType env l r
+in
 
 -- Simple variables
 let v1 = var_ "x" in

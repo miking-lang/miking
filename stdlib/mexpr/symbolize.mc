@@ -166,7 +166,7 @@ lang RecLetsSym = Sym + RecLetsAst
 
     -- Generate fresh symbols for all identifiers
     let bindings =
-      map (lam bind.
+      map (lam bind : RecLetBinding.
              if nameHasSym bind.ident then bind
              else {bind with ident = nameSetNewSym bind.ident})
         t.bindings in
@@ -174,16 +174,17 @@ lang RecLetsSym = Sym + RecLetsAst
     -- Add all identifiers to environment
     let varEnv =
       foldl
-        (lam varEnv. lam bind.
+        (lam varEnv. lam bind : RecLetBinding.
            mapInsert (nameGetStr bind.ident) bind.ident varEnv)
         varEnv bindings in
     let env = {env with varEnv = varEnv} in
 
     -- Symbolize all bodies with the new environment
     let bindings =
-      map (lam bind. {{{bind with body = symbolizeExpr env bind.body}
-                             with tyBody = symbolizeType env bind.tyBody}
-                             with ty = symbolizeType env bind.ty})
+      map (lam bind : RecLetBinding.
+        {{{bind with body = symbolizeExpr env bind.body}
+                with tyBody = symbolizeType env bind.tyBody}
+                with ty = symbolizeType env bind.ty})
         bindings in
 
     TmRecLets {{t with bindings = bindings}
@@ -371,7 +372,9 @@ let _symbolize_patname: SymEnv -> PatName -> (SymEnv, PatName) =
       else
         let str = nameGetStr name in
         let res = mapLookup str varEnv in
-        match res with Some name then (varEnv, PName name)
+        match res with Some name then
+          let name : Name = name in
+          (varEnv, PName name)
         else match res with None () then
           let name = nameSetNewSym name in
           let varEnv = mapInsert str name varEnv in
@@ -450,16 +453,16 @@ end
 lang AndPatSym = AndPat
   sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
   | PatAnd p ->
-    let lRes = symbolizePat env patEnv p.lpat in
-    let rRes = symbolizePat env lRes.0 p.rpat in
+    let lRes : (SymEnv, Pat) = symbolizePat env patEnv p.lpat in
+    let rRes : (SymEnv, Pat) = symbolizePat env lRes.0 p.rpat in
     (rRes.0, PatAnd {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang OrPatSym = OrPat
   sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
   | PatOr p ->
-    let lRes = symbolizePat env patEnv p.lpat in
-    let rRes = symbolizePat env lRes.0 p.rpat in
+    let lRes : (SymEnv, Pat) = symbolizePat env patEnv p.lpat in
+    let rRes : (SymEnv, Pat) = symbolizePat env lRes.0 p.rpat in
     (rRes.0, PatOr {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
@@ -471,7 +474,7 @@ lang NotPatSym = NotPat
     -- error to bind a name inside a not-pattern, but we're not doing
     -- that kind of static checks yet.  Note that we still need to run
     -- symbolizeExpr though, constructors must refer to the right symbol.
-    let res = symbolizePat env patEnv p.subpat in
+    let res : (SymEnv, Pat) = symbolizePat env patEnv p.subpat in
     (patEnv, PatNot {p with subpat = res.1})
 end
 
