@@ -33,11 +33,18 @@
 --
 --   int *;
 --
---   and
---
 --   int = 1;
 --
 --   which are not valid in C.
+--
+-- * Furthermore, to support anonymous structs and unions, the tag is also
+--   optional, thus allowing
+--
+--   struct;
+--
+--   union;
+--
+--   which are also not valid in C.
 
 include "name.mc"
 
@@ -97,7 +104,7 @@ lang CAst
   -------------
 
   syn CType =
-  | CTyIdent  { id: Name }
+  | CTyVar    { id: Name }
   | CTyChar   {}
   | CTyInt    {}
   | CTyDouble {}
@@ -105,9 +112,9 @@ lang CAst
   | CTyPtr    { ty: CType }
   | CTyFun    { ret: CType, params: [CType] }
   | CTyArray  { ty: CType, size: Option Int }
-  | CTyStruct { id: Name, mem: Option [(CType,String)] }
-  | CTyUnion  { id: Name, mem: Option [(CType,String)] }
-  | CTyEnum   { id: Name, mem: Option [Name] }
+  | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyEnum   { id: Option Name, mem: Option [Name] }
 
 
   --------------------

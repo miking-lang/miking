@@ -10,12 +10,17 @@
 -- * Any top-level code besides functions and data declarations are returned as
 -- a list of C statements when compiling. Usually, these statements should be
 -- put in a `main` function or similar.
+--
+-- TODO
+-- * Compile sequences to structs containing length and an array (requires
+-- changes to type lift)
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
 include "mexpr/boot-parser.mc"
 
@@ -43,7 +48,7 @@ let _funWithType = use CAst in
     else error "Non-function type given to _funWithType"
 
 -- Check for unit type
-let isUnitTy = use RecordTypeAst in lam ty.
+let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
   else false
 
@@ -94,13 +99,28 @@ let compileCEnvEmpty = {}
 lang MExprCCompile = MExprAst + CAst
 
   -- Entry point
-  sem compile =
+  sem compile (typeEnv: AssocSeq Name Type) =
   | prog ->
-    compileTops compileCEnvEmpty [] [] prog
+    let types = [] in
+    -- 1. reverse typeEnv
+    -- 2. MapAccum over typeEnv
+    -- * If variant type in RHS -> mapped value = typedef struct decl, accum + struct def
+    -- * If record type in RHS -> mapped value = typedef struct def
+    -- * Else -> typedef type
+
+    
+    match compileTops compileCEnvEmpty [] [] prog with (tops, inits) then
+      (types, tops, inits)
+    else never
 
   -------------
   -- C TYPES --
   -------------
+
+  sem compileGlobalType (name: Name) =
+  | TyVariant { constrs = constrs } -> error "TODO"
+  | TyRecord { fields = fields } -> error "TODO"
+  | ty -> compileType compileCEnvEmpty ty
 
   sem compileType (env: CompileCEnv) =
 
@@ -129,13 +149,15 @@ lang MExprCCompile = MExprAst + CAst
     else
       error "ERROR: Anonymous record type in compileType. Did you run type lift?"
 
-  | TyVariant _ -> error "TODO"
-  | TyVar _ -> error "TODO"
+  | TyVar { ident = ident } -> CTyVar { id = ident }
 
   -- | TyUnknown _ -> (env, CTyChar {})
   | TyUnknown _ -> error "Unknown type in compileType"
 
   | TySeq { ty = TyChar _ } -> (env, CTyPtr { ty = CTyChar {} })
+
+  | TyVariant _ ->
+    error "TyVariant should not occur in compileType. Did you run type lift?"
 
   | TySeq _
   | TyApp _ -> error "Type not currently supported"
@@ -155,7 +177,7 @@ lang MExprCCompile = MExprAst + CAst
         match rest with
         TmLam { ty = ty, ident = ident, body = rest } then
           match ty with TyArrow { from = fromTy } then
-            if isUnitTy fromTy then detachParams acc rest
+            if _isUnitTy fromTy then detachParams acc rest
             else detachParams (snoc acc ident) rest
           else error "Incorrect type in compileFun"
         else (acc, rest)
@@ -163,7 +185,7 @@ lang MExprCCompile = MExprAst + CAst
     recursive let funTypes: [Type] -> Type -> ([Type], Type) =
       lam acc. lam rest.
         match rest with TyArrow { from = from, to = rest } then
-          if isUnitTy from then funTypes acc rest
+          if _isUnitTy from then funTypes acc rest
           else funTypes (snoc acc from) rest
         else (acc, rest)
     in
@@ -272,7 +294,7 @@ lang MExprCCompile = MExprAst + CAst
     | TmUtest { ty = ty }
     | TmNever { ty = ty }
     ) & expr ->
-    if isUnitTy ty then
+    if _isUnitTy ty then
       match expr with TmVar _ then (env, None (), None())
       else (env, None (), Some (CSExpr { expr = compileExpr expr }))
 
@@ -395,7 +417,7 @@ lang MExprCCompile = MExprAst + CAst
     | TmNever        { ty = ty }
     ) & stmt ->
     match final with { name = name } then
-      if isUnitTy ty then
+      if _isUnitTy ty then
         match stmt with TmVar _ then (env, acc)
         else (env, snoc acc (CSExpr { expr = compileExpr stmt }))
       else match name with Some ident then
@@ -440,13 +462,13 @@ lang MExprCCompile = MExprAst + CAst
   sem compileExpr =
 
   | TmVar { ty = ty, ident = ident } ->
-    if isUnitTy ty then error "Unit type var in compileExpr"
+    if _isUnitTy ty then error "Unit type var in compileExpr"
     else CEVar { id = ident }
 
   | TmApp _ & app ->
     recursive let rec: [Expr] -> Expr -> (Expr, [Expr]) = lam acc. lam t.
       match t with TmApp { lhs = lhs, rhs = rhs } then
-        if isUnitTy (ty rhs) then rec acc lhs
+        if _isUnitTy (ty rhs) then rec acc lhs
         else rec (cons rhs acc) lhs
       else (t, acc)
     in
@@ -497,17 +519,17 @@ lang MExprCCompileWithMain = MExprCCompile + CPrettyPrint
   sem printCompiledCProg =
   | cprog -> printCProg _compilerNames cprog
 
-  sem compileWithMain =
+  sem compileWithMain (typeEnv: AssocSeq Name Type) =
   | prog ->
-    match compile prog with (accTop, accInit) then
+    match compile typeEnv prog with (types, tops, inits) then
       let mainTy = CTyFun {
         ret = CTyInt {},
         params = [
           CTyInt {},
           CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
       in
-      let main = _funWithType mainTy _main [_argc, _argv] accInit in
-      CPProg { includes = _includes, tops = snoc accTop main }
+      let main = _funWithType mainTy _main [_argc, _argv] inits in
+      CPProg { includes = _includes, tops = join [types, tops, [main]] }
     else never
 
 end
@@ -516,12 +538,12 @@ end
 -- TESTS --
 -----------
 
-lang TestLang =
+lang Test =
   MExprCCompileWithMain + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser
+  MExprSym + BootParser + MExprTypeLift
 
 mexpr
-use TestLang in
+use Test in
 
 let compile: Expr -> CProg = lam prog.
 
@@ -534,11 +556,15 @@ let compile: Expr -> CProg = lam prog.
   -- ANF transformation
   let prog = normalizeTerm prog in
 
-  -- Run C compiler
-  let cprog = compileWithMain prog in
+  -- Type lift
+  match typeLift prog with (env, prog) then
 
-  cprog
+    -- Run C compiler
+    let cprog = compileWithMain env prog in
 
+    cprog
+
+  else never
 in
 
 let testCompile: Expr -> String = lam expr. printCompiledCProg (compile expr) in
@@ -718,5 +744,53 @@ utest testCompile oddEven with strJoin "\n" [
   "  return 0;",
   "}"
 ] using eqString in
+
+let leaf_ = lam v.
+  conapp_ "Leaf" (record_ [("v", int_ v)]) in
+
+let node_ = lam v. lam left. lam right.
+  conapp_ "Node" (record_ [("v", int_ v), ("l", left), ("r", right)]) in
+
+let variants = bindall_ [
+
+  type_ "Tree" (tyvariant_ []),
+  type_ "Integer" tyint_,
+  type_ "MyRec" (tyrecord_ [("k", (tyvar_ "Integer"))]),
+  type_ "MyRec2" (tyrecord_ [("k", (tyvar_ "MyRec")), ("t", (tyvar_ "Tree"))]),
+  type_ "Integer2" (tyvar_ "Integer"),
+
+  condef_ "Leaf" (tyarrow_ (tyrecord_ [("v", (tyvar_ "Integer2"))]) (tyvar_ "Tree")),
+  condef_ "Node" (tyarrow_
+    (tyrecord_ [("v", tyint_), ("l", (tyvar_ "Tree")), ("r", (tyvar_ "Tree"))])
+    (tyvar_ "Tree")),
+
+  let_ "i" (tyvar_ "Integer") (int_ 3),
+
+  ulet_ "tree" (node_ 1 (node_ 2 (leaf_ 3) (leaf_ 4)) (leaf_ 0)),
+
+  int_ 0
+] in
+
+-- print (expr2str variants);
+
+-- (
+-- match typeLift (normalizeTerm (typeAnnot (symbolizeExpr symEnvEmpty variants)))
+-- with (env, ast) then
+--   map (lam tup. dprint tup.0; print "    ";
+--     print (
+--     match tup.1 with TyVar { ident = ident } then
+--       join [nameGetStr ident, ", ", match nameGetSym ident with Some sym then int2string (sym2hash sym) else "-"]
+--     else match tup.1 with TyVariant {constrs = constrs} then
+--       let f = lam k. lam v. join [nameGetStr k, ": ", type2str v] in
+--       join [ "<", strJoin ", " (mapValues (mapMapWithKey f constrs)), ">"]
+--     else type2str tup.1
+--     ); print "\n"
+--   ) env;
+--   print "\n";
+--   print (expr2str ast);
+--   print "\n"
+-- else never
+-- );
+-- print (expr2str (normalizeTerm (typeAnnot (symbolizeExpr symEnvEmpty variants))));
 
 ()

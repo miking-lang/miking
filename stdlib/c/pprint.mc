@@ -125,8 +125,10 @@ lang CPrettyPrint = CAst
 
   sem printCType (decl: String) (env: PprintEnv) =
 
-  -- CTyIdent not really needed unless we add typedef
-  | CTyIdent  { id = id } -> pprintEnvGetStr env id
+  | CTyVar { id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      (env, _joinSpace id decl)
+    else never
 
   | CTyChar {} -> (env, _joinSpace "char" decl)
   | CTyInt {}  -> (env, _joinSpace "int" decl)
@@ -145,37 +147,45 @@ lang CPrettyPrint = CAst
     printCType (join [decl, "[", subscr, "]"]) env ty
 
   | CTyStruct { id = id, mem = mem } ->
-    match pprintEnvGetStr env id with (env,id) then
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printCDef env t.0 t.1 (None ()) in
+        let f = lam env. lam t.
+          printCDef env t.0 (match t.1 with Some n then n else "") (None ()) in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
-          (env, _joinSpace (join ["struct ", id, " {", mem, "}"]) decl)
+          (env, _joinSpace (join [_joinSpace "struct" id, " {", mem, "}"]) decl)
         else never
-      else (env, _joinSpace (join ["struct ", id]) decl)
+      else (env, _joinSpace (_joinSpace "struct" id) decl)
     else never
 
   | CTyUnion { id = id, mem = mem } ->
-    match pprintEnvGetStr env id with (env,id) then
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t. printCDef env t.0 t.1 (None ()) in
+        let f = lam env. lam t.
+          printCDef env t.0 (match t.1 with Some n then n else "") (None ()) in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
-          (env, _joinSpace (join ["union ", id, " {", mem, "}"]) decl)
+          (env, _joinSpace (join [_joinSpace "union" id, " {", mem, "}"]) decl)
         else never
-      else (env, _joinSpace (join ["union ", id]) decl)
+      else (env, _joinSpace (_joinSpace "union " id) decl)
     else never
 
   | CTyEnum { id = id, mem = mem } ->
-    match pprintEnvGetStr env id with (env,id) then
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
       match mem with Some mem then
         match mapAccumL pprintEnvGetStr env mem with (env,mem) then
           let mem = strJoin ", " mem in
-          (env, _joinSpace (join ["enum ", id, " {", mem, "}"]) decl)
+          (env, _joinSpace (join [_joinSpace "enum" id, " {", mem, "}"]) decl)
         else never
-      else (env, _joinSpace (join ["enum ", id]) decl)
+      else (env, _joinSpace (_joinSpace "enum" id) decl)
     else never
 
 
@@ -348,6 +358,7 @@ use CPrettyPrint in
 let funname = nameSym "fun" in
 let mainname = nameSym "main" in
 let xname = nameSym "x" in
+let tyname = nameSym "Ty" in
 
 let print = printCProg [mainname] in
 
@@ -371,9 +382,15 @@ utest print (wrapTop deftop) with
   "int x;"
 in
 
-let tydeftop = CTTyDef { ty = CTyInt {}, id = xname } in
+let tydeftop = CTTyDef { ty = CTyInt {}, id = tyname } in
 utest print (wrapTop tydeftop) with
-  "typedef int x;"
+  "typedef int Ty;"
+in
+
+let deftoptyvar =
+  CTDef { ty = CTyVar { id = tyname }, id = Some xname, init = None () } in
+utest print (wrapTop deftoptyvar) with
+  "Ty x;"
 in
 
 let definittop = CTDef {
@@ -387,11 +404,11 @@ in
 let structtyname = nameSym "structty" in
 let structtop = CTDef {
   ty = CTyStruct {
-    id = structtyname,
-    mem = Some (
-      [(CTyInt {}, "x"),
-       (CTyDouble {}, "y")]
-    )
+    id = Some structtyname,
+    mem = Some [
+      (CTyInt {}, Some "x"),
+      (CTyDouble {}, Some "y")
+    ]
   },
   id = None (),
   init = None ()
@@ -399,6 +416,38 @@ let structtop = CTDef {
 utest print (wrapTop structtop) with
   "struct structty {int x; double y;};"
 in
+
+let nestedstructtop = CTDef {
+  ty = CTyStruct {
+    id = Some structtyname,
+    mem = Some [
+      (CTyInt {}, Some "x"),
+      (CTyStruct { id = None (), mem = Some [(CTyChar {}, Some "z")] }, None ()),
+      (CTyDouble {}, Some "y")
+    ]
+  },
+  id = None (),
+  init = None ()
+} in
+utest print (wrapTop nestedstructtop) with
+  "struct structty {int x; struct {char z;}; double y;};"
+in
+
+let anonenum = CTDef {
+  ty = CTyEnum {
+    id = None (),
+    mem = Some (
+      [(nameSym "CONST"),
+       (nameSym "CONST")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+utest print (wrapTop anonenum) with
+  "enum {CONST, CONST1};"
+in
+
 
 let arrinit = CTDef {
   ty = CTyArray {
@@ -485,7 +534,7 @@ in
 
 let structname = nameSym "s" in
 let struct = CSDef {
-  ty = CTyStruct { id = structtyname, mem = None () },
+  ty = CTyStruct { id = Some structtyname, mem = None () },
   id = Some structname,
   init = None ()
 } in
@@ -506,7 +555,7 @@ CTyPtr {
     ret = CTyPtr {
       ty = CTyFun {
         ret = CTyPtr {
-          ty = CTyStruct { id = structtyname, mem = None ()}
+          ty = CTyStruct { id = Some structtyname, mem = None ()}
         },
         params = [CTyFun { ret = CTyInt {}, params = [CTyDouble {}] }]
       }
@@ -537,10 +586,10 @@ in
 
 let union = CSDef {
   ty = CTyUnion {
-    id = nameSym "unionty",
+    id = Some (nameSym "unionty"),
     mem = Some (
-      [(CTyInt {}, "x"),
-       (CTyDouble {}, "y")]
+      [(CTyInt {}, Some "x"),
+       (CTyDouble {}, Some "y")]
     )
   },
   id = None (),
@@ -552,7 +601,7 @@ in
 
 let enum = CSDef {
   ty = CTyEnum {
-    id = nameSym "enumty",
+    id = Some (nameSym "enumty"),
     mem = Some (
       [(nameSym "CONST"),
        (nameSym "CONST")]
