@@ -6,7 +6,6 @@
 open Ustring.Op
 open Msg
 open Ast
-open Builtin
 open Pprint
 open Printf
 open Intrinsics
@@ -1206,11 +1205,7 @@ let delta eval env fi c v =
   | CbootParserParseMExprString, _ ->
       fail_constapp fi
   | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
-      let t =
-        Parserutils.parse_mcore_file (tmseq2ustring fi seq)
-        |> Symbolize.symbolize builtin_name2sym
-        |> Deadcode.elimination builtin_sym2term builtin_name2sym
-      in
+      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMCoreFile, _ ->
       fail_constapp fi

@@ -4,7 +4,6 @@
  *)
 
 open Ustring.Op
-open Builtin
 open Ast
 open Intrinsics
 
@@ -112,11 +111,7 @@ let parseMExprString str =
   PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
 
 let parseMCoreFile str =
-  let t =
-    str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file
-    |> Symbolize.symbolize builtin_name2sym
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym
-  in
+  let t = str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file in
   PTreeTm t
 
 (* Returns a tuple with the following elements
