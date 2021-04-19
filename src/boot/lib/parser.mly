@@ -26,7 +26,7 @@
 
 
 
-  
+
 %}
 
 /* Misc tokens */
@@ -319,7 +319,7 @@ sequence:
      { $1 }
   | left SEMI mexpr
      { let fi = tm_info $1 in
-       TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(NoInfo), $1, $3) } 
+       TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(NoInfo), $1, $3) }
 
 left:
   | atom
@@ -358,7 +358,7 @@ atom:
       { TmRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty) }
   | LBRACKET RBRACKET    { TmRecord(mkinfo $1.i $2.i, Record.empty)}
-  | LBRACKET mexpr WITH var_ident EQ mexpr RBRACKET
+  | LBRACKET mexpr WITH label_ident EQ mexpr RBRACKET
       { TmRecordUpdate(mkinfo $1.i $7.i, $2, $4.v, $6) }
 
 proj_label:

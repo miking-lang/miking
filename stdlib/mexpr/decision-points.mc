@@ -8,6 +8,8 @@ include "anf.mc"
 include "name.mc"
 include "hashmap.mc"
 include "eq.mc"
+include "common.mc"
+
 
 -- This file contains implementations related to decision points.
 
@@ -49,13 +51,17 @@ type CallGraph = DiGraph Name Name
 let _callGraphTop = nameSym "top"
 
 let _handleLetVertex = use LamAst in
-  lam letexpr. lam f.
+  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
+                 inexpr : Expr, ty : Type, info : Info}.
+  lam f.
     match letexpr.body with TmLam lm
     then cons letexpr.ident (f lm.body)
     else f letexpr.body
 
 let _handleLetEdge = use LamAst in
-  lam letexpr. lam f. lam g. lam prev.
+  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
+                 inexpr : Expr, ty : Type, info : Info}.
+  lam f. lam g. lam prev.
     match letexpr.body with TmLam lm
     then f g letexpr.ident lm.body
     else f g prev letexpr.body
@@ -129,6 +135,9 @@ lang HoleAst
   syn Expr =
   | TmHole {startGuess : Expr,
             depth : Int}
+
+  sem ty =
+  | TmHole h -> tyunknown_ -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
 
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
@@ -602,6 +611,7 @@ end
 lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
 
 lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
+  + MExprSym + MExprEq
 
 lang MExprHoles = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
 
@@ -729,7 +739,7 @@ let letWithFunCall = {
 let factorial = {
   ast = bind_
     (ureclets_add "factorial"
-           (lam_ "n" (TyInt {})
+           (lam_ "n" (tyint_)
                  (if_ (eqi_ (var_ "n") (int_ 0))
                       (int_ 1)
                       (muli_ (var_ "n")

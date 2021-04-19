@@ -1,4 +1,5 @@
 -- Pretty printer for C.
+-- TODO(dlunde,2021-02-25): Add handling for arbitrary variable names.
 
 include "ast.mc"
 
@@ -20,6 +21,10 @@ let _joinSpace = lam fst. lam snd.
 -- argument. If it is None (), the returned string is "".
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
+
+---------------------
+-- PRETTY PRINTING --
+---------------------
 
 lang CPrettyPrint = CAst
 
@@ -326,28 +331,48 @@ lang CPrettyPrint = CAst
 
 end
 
+----------------
+-- UNIT TESTS --
+----------------
+
 mexpr
 use CPrettyPrint in
 
--- TODO(dlunde,2020-10-30): We should add proper utests here. For now, we just
--- print a C program containing all the features above.
-
-let xname = nameSym "x" in
 let funname = nameSym "fun" in
+let mainname = nameSym "main" in
+let xname = nameSym "x" in
 
-let var = CSExpr { expr = CEVar { id = xname } } in
-let app = CSExpr {
-  expr = CEApp { fun = funname, args = [CEInt { i = 1 }, CEChar { c = 'a' }] }
-} in
+let print = printCProg [mainname] in
+
+let strIndent = lam indent. lam str.
+  strJoin "\n" (map (lam str. join [make indent ' ', str]) (strSplit "\n" str))
+in
+
+let wrapTop = lam top. CPProg { includes = [], tops = [top] } in
+
+let wrapStmt = lam stmt. wrapTop (CTFun {
+  ret = CTyVoid {}, id = funname, params = [], body = [stmt]
+}) in
+let wrapStmtString = lam str. join [
+  "void fun() {\n",
+   strIndent 2 str, "\n",
+  "}"
+] in
 
 let deftop = CTDef { ty = CTyInt {}, id = Some xname, init = None () } in
+utest print (wrapTop deftop) with
+  "int x;"
+in
+
 let definittop = CTDef {
   ty = CTyChar {}, id = Some (nameSym "y"),
   init = Some (CIExpr { expr = CEChar { c = 'c'}})
 } in
+utest print (wrapTop definittop) with
+  "char y = 'c';"
+in
 
 let structtyname = nameSym "structty" in
-
 let structtop = CTDef {
   ty = CTyStruct {
     id = structtyname,
@@ -359,150 +384,9 @@ let structtop = CTDef {
   id = None (),
   init = None ()
 } in
-
-let defstmt = CSDef {
-  ty = CTyDouble {}, id = Some (nameSym "x"),
-  init = Some (CIExpr { expr = CEFloat { f = 0.1 }} )
-} in
-
-let ifstmt = CSIf {
-  cond = CEInt { i = 2 },
-  thn = [
-    var,
-    app
-  ],
-  els = [
-  ]
-} in
-
-let strinit = CSDef {
-  ty = CTyArray { ty = CTyChar {}, size = None () }, id = Some (nameSym "strinit"),
-  init = Some (CIExpr { expr = CEString { s = "strinit" } })
-} in
-
-let op = CSExpr {
-  expr = CEBinOp {
-    op = COAssign {},
-    lhs = CEVar { id = xname },
-    rhs = CEBinOp {
-      op = COMul {},
-      lhs = CEUnOp { op = CONeg {}, arg = CEInt { i = 1 } },
-      rhs = CEInt { i = 3 }
-    }
-  }
-} in
-
-let structname = nameSym "s" in
-
-let struct = CSDef {
-  ty = CTyStruct { id = structtyname, mem = None () },
-  id = Some structname,
-  init = None ()
-} in
-
-let memb = CSExpr {
-  expr = CEMember { lhs = CEVar { id = structname }, id = "x" }
-} in
-
-let advty =
-CTyPtr {
-  ty = CTyFun {
-    ret = CTyPtr {
-      ty = CTyFun {
-        ret = CTyPtr {
-          ty = CTyStruct { id = structtyname, mem = None ()}
-        },
-        params = [CTyFun { ret = CTyInt {}, params = [CTyDouble {}] }]
-      }
-    },
-    params = [CTyChar {}]
-  }
-} in
-
-let cast = CSExpr {
-  expr = CECast { ty = advty, rhs = CEInt { i = 1 } }
-} in
-
-let sizety = CSExpr {
-  expr = CESizeOfType { ty = advty }
-} in
-
-let union = CSDef {
-  ty = CTyUnion {
-    id = nameSym "unionty",
-    mem = Some (
-      [(CTyInt {}, "x"),
-       (CTyDouble {}, "y")]
-    )
-  },
-  id = None (),
-  init = None ()
-} in
-
-let enum = CSDef {
-  ty = CTyEnum {
-    id = nameSym "enumty",
-    mem = Some (
-      [(nameSym "CONST"),
-       (nameSym "CONST")]
-    )
-  },
-  id = None (),
-  init = None ()
-} in
-
-
-let switch = CSSwitch {
-  cond = CEInt { i = 1 },
-  body = [
-    (2,[
-      op,
-      CSBreak {}
-    ]),
-    (5,[
-      var
-    ]),
-    (7,[
-      app,
-      CSBreak {}
-    ])
-  ],
-  default = Some ([
-    memb
-  ])
-} in
-
-let while = CSWhile {
-  cond = CEInt { i = 42 },
-  body = [
-    app,
-    CSComp { stmts = [
-      var,
-      memb
-    ] },
-    CSCont {},
-    memb
-  ]
-} in
-
-let funbody = [
-  defstmt,
-  strinit,
-  struct,
-  union,
-  enum,
-  memb,
-  cast,
-  sizety,
-  op,
-  app,
-  ifstmt,
-  switch,
-  while
-] in
-
-let mainname = nameSym "main" in
-let arg2name = nameSym "arg2" in
+utest print (wrapTop structtop) with
+  "struct structty {int x; double y;};"
+in
 
 let arrinit = CTDef {
   ty = CTyArray {
@@ -528,14 +412,234 @@ let arrinit = CTDef {
     ]
   } )
 } in
+utest print (wrapTop arrinit) with
+  "int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};"
+in
 
-let fun = CTFun {
+let defstmt = CSDef {
+  ty = CTyDouble {}, id = Some xname,
+  init = Some (CIExpr { expr = CEFloat { f = 0.1 }} )
+} in
+utest print (wrapStmt defstmt) with
+  wrapStmtString "double x = 1.0e-1;"
+in
+
+let var = CSExpr { expr = CEVar { id = xname } } in
+let app = CSExpr {
+  expr = CEApp { fun = funname, args = [CEInt { i = 1 }, CEChar { c = 'a' }] }
+} in
+
+let ifstmt = CSIf {
+  cond = CEInt { i = 2 },
+  thn = [
+    var,
+    app
+  ],
+  els = []
+} in
+utest print (wrapStmt ifstmt) with
+  wrapStmtString (strJoin "\n" [
+    "if (2) {",
+    "  x;",
+    "  (fun(1, 'a'));",
+    "} else {",
+    "  ",
+    "}"
+  ])
+in
+
+let strinit = CSDef {
+  ty = CTyArray { ty = CTyChar {}, size = None () }, id = Some (nameSym "strinit"),
+  init = Some (CIExpr { expr = CEString { s = "strinit" } })
+} in
+utest print (wrapStmt strinit) with
+  wrapStmtString "char strinit[] = \"strinit\";"
+in
+
+let op = CSExpr {
+  expr = CEBinOp {
+    op = COAssign {},
+    lhs = CEVar { id = xname },
+    rhs = CEBinOp {
+      op = COMul {},
+      lhs = CEUnOp { op = CONeg {}, arg = CEInt { i = 1 } },
+      rhs = CEInt { i = 3 }
+    }
+  }
+} in
+utest print (wrapStmt op) with
+  wrapStmtString "(x = ((-1) * 3));"
+in
+
+let structname = nameSym "s" in
+let struct = CSDef {
+  ty = CTyStruct { id = structtyname, mem = None () },
+  id = Some structname,
+  init = None ()
+} in
+utest print (wrapStmt struct) with
+  wrapStmtString "struct structty s;"
+in
+
+let memb = CSExpr {
+  expr = CEMember { lhs = CEVar { id = structname }, id = "x" }
+} in
+utest print (wrapStmt memb) with
+  wrapStmtString "(s.x);"
+in
+
+let advty =
+CTyPtr {
+  ty = CTyFun {
+    ret = CTyPtr {
+      ty = CTyFun {
+        ret = CTyPtr {
+          ty = CTyStruct { id = structtyname, mem = None ()}
+        },
+        params = [CTyFun { ret = CTyInt {}, params = [CTyDouble {}] }]
+      }
+    },
+    params = [CTyChar {}]
+  }
+} in
+
+let cast = CSExpr {
+  expr = CECast { ty = advty, rhs = CEInt { i = 1 } }
+} in
+utest print (wrapStmt cast) with
+  wrapStmtString "(( struct structty (*(*(*)(char))(int (double))) ) 1);"
+in
+
+let sizety = CSExpr {
+  expr = CESizeOfType { ty = advty }
+} in
+utest print (wrapStmt sizety) with
+  wrapStmtString "(sizeof(struct structty (*(*(*)(char))(int (double)))));"
+in
+
+let union = CSDef {
+  ty = CTyUnion {
+    id = nameSym "unionty",
+    mem = Some (
+      [(CTyInt {}, "x"),
+       (CTyDouble {}, "y")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+utest print (wrapStmt union) with
+  wrapStmtString "union unionty {int x; double y;};"
+in
+
+let enum = CSDef {
+  ty = CTyEnum {
+    id = nameSym "enumty",
+    mem = Some (
+      [(nameSym "CONST"),
+       (nameSym "CONST")]
+    )
+  },
+  id = None (),
+  init = None ()
+} in
+utest print (wrapStmt enum) with
+  wrapStmtString "enum enumty {CONST, CONST1};"
+in
+
+let switch = CSSwitch {
+  cond = CEInt { i = 1 },
+  body = [
+    (2,[
+      op,
+      CSBreak {}
+    ]),
+    (5,[
+      var
+    ]),
+    (7,[
+      app,
+      CSBreak {}
+    ])
+  ],
+  default = Some ([
+    memb
+  ])
+} in
+utest print (wrapStmt switch) with
+  wrapStmtString (strJoin "\n" [
+    "switch (1) {",
+    "  case 2:",
+    "    (x = ((-1) * 3));",
+    "    break;",
+    "  case 5:",
+    "    x;",
+    "  case 7:",
+    "    (fun(1, 'a'));",
+    "    break;",
+    "  default:",
+    "    (s.x);",
+    "}"
+  ])
+in
+
+let while = CSWhile {
+  cond = CEInt { i = 42 },
+  body = [
+    app,
+    CSComp { stmts = [
+      var,
+      memb
+    ] },
+    CSCont {},
+    memb
+  ]
+} in
+utest print (wrapStmt while) with
+  wrapStmtString (strJoin "\n" [
+    "while (42) {",
+    "  (fun(1, 'a'));",
+    "  {",
+    "    x;",
+    "    (s.x);",
+    "  }",
+    "  continue;",
+    "  (s.x);",
+    "}"
+  ])
+in
+
+let arg2name = nameSym "arg2" in
+let fun = lam body. CTFun {
   ret =
     CTyPtr { ty = CTyFun { ret = CTyChar {}, params = [CTyInt {}, CTyDouble {}] } },
   id = funname,
   params = [(CTyInt {}, nameSym "main"), (CTyChar {}, arg2name)],
-  body = funbody
+  body = body
 } in
+utest print (wrapTop (fun [CSRet { val = Some (CEChar { c = 'a' }) }])) with
+  strJoin "\n" [
+    "char (*fun(int main1, char arg2))(int, double) {",
+    "  return 'a';",
+    "}"
+  ]
+in
+
+let funbody = [
+  defstmt,
+  strinit,
+  struct,
+  union,
+  enum,
+  memb,
+  cast,
+  sizety,
+  op,
+  app,
+  ifstmt,
+  switch,
+  while
+] in
 
 let main = CTFun {
   ret = CTyInt {}, id = mainname,
@@ -556,16 +660,66 @@ let tops = [
   definittop,
   structtop,
   arrinit,
-  fun,
+  fun funbody,
   noreturn,
   main
 ] in
 
 let prog = CPProg { includes = ["<stdio.h>"], tops = tops } in
+utest printCProg [mainname] prog with strJoin "\n" [
+"#include <stdio.h>",
+"int x;",
+"char y = 'c';",
+"struct structty {int x; double y;};",
+"int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};",
+"char (*fun(int main1, char arg2))(int, double) {",
+"  double x = 1.0e-1;",
+"  char strinit[] = \"strinit\";",
+"  struct structty s;",
+"  union unionty {int x; double y;};",
+"  enum enumty {CONST, CONST1};",
+"  (s.x);",
+"  (( struct structty (*(*(*)(char))(int (double))) ) 1);",
+"  (sizeof(struct structty (*(*(*)(char))(int (double)))));",
+"  (x = ((-1) * 3));",
+"  (fun(1, 'a'));",
+"  if (2) {",
+"    x;",
+"    (fun(1, 'a'));",
+"  } else {",
+"    ",
+"  }",
+"  switch (1) {",
+"    case 2:",
+"      (x = ((-1) * 3));",
+"      break;",
+"    case 5:",
+"      x;",
+"    case 7:",
+"      (fun(1, 'a'));",
+"      break;",
+"    default:",
+"      (s.x);",
+"  }",
+"  while (42) {",
+"    (fun(1, 'a'));",
+"    {",
+"      x;",
+"      (s.x);",
+"    }",
+"    continue;",
+"    (s.x);",
+"  }",
+"}",
+"void noreturn() {",
+"  return;",
+"}",
+"int main(int argc, char (*argv[])) {",
+"  return 1;",
+"}"
+]
+in
 
 -- let _ = printLn (printCProg [mainname] prog) in
-
--- Test making sure printCProg does not crash
-utest geqi (length (printCProg [mainname] prog)) 0 with true in
 
 ()

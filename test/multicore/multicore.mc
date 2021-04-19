@@ -1,3 +1,4 @@
+include "seq.mc"
 
 mexpr
 
@@ -28,10 +29,6 @@ utest atomicFetchAndAdd a 2 with 0 in
 -- 'atomicGet r' returns the current value of the atomic reference 'r'.
 -- : ARef a -> a
 utest atomicGet a with 2 in
-
-let v = 0.0 in
-let a = atomicMake v in
-utest atomicCAS a v 1.0 with true in
 
 
 -- Threads --

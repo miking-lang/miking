@@ -3,6 +3,8 @@
 --
 -- Test fixpoint usages
 
+include "common.mc"
+
 mexpr
 
 -- Separate fix-point

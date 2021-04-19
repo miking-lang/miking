@@ -42,6 +42,8 @@ module Mseq : sig
 
     val map : ('a -> 'b) -> 'a t -> 'b t
 
+    val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
+
     val fold_right : ('a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
 
     val combine : 'a t -> 'b t -> ('a * 'b) t
@@ -67,11 +69,15 @@ end
 module Symb : sig
   type t
 
+  type symbtype
+
   val gensym : unit -> t
 
   val eqsym : t -> t -> bool
 
   val hash : t -> int
+
+  val compare : t -> t -> int
 
   module Helpers : sig
     val nosym : t
@@ -83,13 +89,13 @@ module Symb : sig
 end
 
 module File : sig
-  val read : ustring -> ustring
+  val read : int Mseq.t -> int Mseq.t
 
-  val write : ustring -> ustring -> unit
+  val write : int Mseq.t -> int Mseq.t -> unit
 
-  val exists : ustring -> bool
+  val exists : int Mseq.t -> bool
 
-  val delete : ustring -> unit
+  val delete : int Mseq.t -> unit
 end
 
 module FloatConversion : sig
@@ -99,5 +105,67 @@ module FloatConversion : sig
 
   val roundfi : float -> int
 
-  val string2float : ustring -> float
+  val string2float : int Mseq.t -> float
+end
+
+module IO : sig
+  val print : int Mseq.t -> unit
+
+  val dprint : int Mseq.t -> unit
+
+  val read_line : unit -> int Mseq.t
+end
+
+module RNG : sig
+  val set_seed : int -> unit
+
+  val int_u : int -> int -> int
+end
+
+module MSys : sig
+  val exit : int -> unit
+
+  val error : int Mseq.t -> exn
+
+  val argv : int Mseq.t Mseq.t
+end
+
+module Time : sig
+  val get_wall_time_ms : unit -> float
+
+  val sleep_ms : int -> unit
+end
+
+module Mmap : sig
+  val empty : ('a -> 'a -> int) -> Obj.t
+
+  val insert : 'a -> 'b -> Obj.t -> Obj.t
+
+  val remove : 'a -> Obj.t -> Obj.t
+
+  val find : 'a -> Obj.t -> 'b
+
+  val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
+
+  val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> Obj.t -> 'c
+
+  val bindings : Obj.t -> ('a * 'b) Mseq.t
+
+  val size : Obj.t -> int
+
+  val mem : 'a -> Obj.t -> bool
+
+  val any : ('a -> 'b -> bool) -> Obj.t -> bool
+
+  val map : ('b -> 'c) -> Obj.t -> Obj.t
+
+  val map_with_key : ('a -> 'b -> 'c) -> Obj.t -> Obj.t
+
+  val fold_with_key : ('c -> 'a -> 'b -> 'c) -> 'c -> Obj.t -> 'c
+
+  val eq : ('b -> 'b -> bool) -> Obj.t -> Obj.t -> bool
+
+  val cmp : ('b -> 'b -> int) -> Obj.t -> Obj.t -> int
+
+  val key_cmp : Obj.t -> 'a -> 'a -> int
 end

@@ -88,6 +88,7 @@ parse, or an ambiguity error.
 
 include "map.mc"
 include "either.mc"
+include "common.mc"
 include "string.mc"  -- NOTE(vipa, 2021-02-15): This is only required for the tests, but we can't put an include only there
 
 type AllowSet id
@@ -374,7 +375,7 @@ let breakableGenGrammar
 
     let prodLabelToOpId : Map prodLabel OpId =
       mapFromList cmp (map (lam prod. (label prod, newOpId ())) grammar.productions) in
-    let toOpId : prodLabel -> OpId = lam label. mapFind label prodLabelToOpId in
+    let toOpId : prodLabel -> OpId = lam label. mapFindWithExn label prodLabelToOpId in
 
     -- TODO(vipa, 2021-02-15): This map can contain more entries than
     -- required; the inner map should only ever have entries where the
@@ -938,10 +939,10 @@ let grammar =
   }
 in
 let genned = breakableGenGrammar cmpString grammar in
-let atom = lam label. mapFind label genned.atoms in
-let prefix = lam label. mapFind label genned.prefixes in
-let infix = lam label. mapFind label genned.infixes in
-let postfix = lam label. mapFind label genned.postfixes in
+let atom = lam label. mapFindWithExn label genned.atoms in
+let prefix = lam label. mapFindWithExn label genned.prefixes in
+let infix = lam label. mapFindWithExn label genned.infixes in
+let postfix = lam label. mapFindWithExn label genned.postfixes in
 
 type Self = {val : Int, pos : Int} in
 

@@ -1,14 +1,17 @@
 -- Helper functions for creating AST nodes.
+-- Functions for types are defined in ast.mc
 
 include "mexpr/ast.mc"
 include "assoc.mc"
 include "info.mc"
+include "stringid.mc"
+include "map.mc"
 
 -- Patterns --
 
 let npvar_ = use MExprAst in
-  lam n.
-  PatNamed {ident = PName n}
+  lam n : Name.
+  PatNamed {ident = PName n, info = NoInfo ()}
 
 let pvar_ = use MExprAst in
   lam s.
@@ -18,7 +21,7 @@ let pvarw_ = use MExprAst in
   PatNamed {ident = PWildcard (), info = NoInfo()}
 
 let punit_ = use MExprAst in
-  PatRecord { bindings = assocEmpty, info = NoInfo() }
+  PatRecord { bindings = mapEmpty cmpSID, info = NoInfo() }
 
 let pint_ = use MExprAst in
   lam i.
@@ -44,11 +47,10 @@ let pcon_ = use MExprAst in
 
 let prec_ = use MExprAst in
   lam bindings.
+  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   PatRecord {
     bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
+      mapFromList cmpSID (map bindingMapFunc bindings),
     info = NoInfo()
     }
 
@@ -65,7 +67,7 @@ let pseqedgew_ = use MExprAst in
   PatSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo()}
 
 let pseqedgen_ = use MExprAst in
-  lam pre. lam middle. lam post.
+  lam pre. lam middle : Name. lam post.
   PatSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo()}
 
 let pseqedge_ = use MExprAst in
@@ -85,59 +87,65 @@ let pnot_ = use MExprAst in
   PatNot {subpat = p, info = NoInfo()}
 
 -- Types --
-let tyarrow_ = use MExprAst in
-  lam from. lam to.
-  TyArrow {from = from, to = to}
 
-let tyarrows_ = use MExprAst in
-  lam tys.
-  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc}) tys
+let tyint_ = use IntTypeAst in
+  TyInt {info = NoInfo ()}
 
-let tyunknown_ = use MExprAst in
-  TyUnknown ()
+let tyfloat_ = use FloatTypeAst in
+  TyFloat {info = NoInfo ()}
 
-let tyunit_ = use MExprAst in
-  TyRecord {fields = assocEmpty}
+let tybool_ = use BoolTypeAst in
+  TyBool {info = NoInfo ()}
 
-let tyint_ = use MExprAst in
-  TyInt ()
+let tychar_ = use CharTypeAst in
+  TyChar {info = NoInfo ()}
 
-let tyfloat_ = use MExprAst in
-  TyFloat ()
+let tyunknown_ = use UnknownTypeAst in
+  TyUnknown {info = NoInfo ()}
 
-let tybool_ = use MExprAst in
-  TyBool ()
-
-let tychar_ = use MExprAst in
-  TyChar ()
-
-let tystr_ = use MExprAst in
-  TySeq {ty = tychar_}
-
-let tyseq_ = use MExprAst in
+let tyseq_ = use SeqTypeAst in
   lam ty.
-  TySeq {ty = ty}
+  TySeq {ty = ty, info = NoInfo ()}
 
-let tyrecord_ = use MExprAst in
-  lam fields.
-  TyRecord {
-    fields = foldl (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-               assocEmpty fields }
+let tystr_ = tyseq_ tychar_
 
-let tytuple_ = use MExprAst in
+let tyarrow_ = use FunTypeAst in
+  lam from. lam to.
+  TyArrow {from = from, to = to, info = NoInfo ()}
+
+let tyarrows_ = use FunTypeAst in
   lam tys.
-  tyrecord_ (mapi (lam i. lam t. (int2string i,t)) tys)
+  foldr1 (lam e. lam acc. TyArrow {from = e, to = acc, info = NoInfo ()}) tys
 
-let tyapp_ = use MExprAst in
+let tyrecord_ = use RecordTypeAst in
+  lam fields.
+  let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  TyRecord {
+    fields = mapFromList cmpSID (map fieldMapFunc fields),
+    info = NoInfo ()
+  }
+
+let tytuple_ = lam tys.
+  tyrecord_ (mapi (lam i. lam ty. (int2string i, ty)) tys)
+
+let tyunit_ = tyrecord_ []
+
+let tyvariant_ = use VariantTypeAst in
+  lam constrs.
+  TyVariant {
+    constrs = mapFromList nameCmp constrs,
+    info = NoInfo ()
+  }
+
+let tyapp_ = use AppTypeAst in
   lam lhs. lam rhs.
-  TyApp {lhs = lhs, rhs = rhs}
+  TyApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
 
-let ntyvar_ = use MExprAst in
+let ntyvar_ = use VarTypeAst in
   lam n.
-  TyVar {ident = n}
+  TyVar {ident = n, info = NoInfo ()}
 
-let tyvar_ = use MExprAst in
-  lam s.
+let tyvar_ = lam s.
   ntyvar_ (nameNoSym s)
 
 -- Terms --
@@ -162,12 +170,12 @@ let bindall_ = use MExprAst in
   foldr1 bind_ exprs
 
 let unit_ = use MExprAst in
-  TmRecord {bindings = assocEmpty, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecord {bindings = mapEmpty cmpSID, ty = tyunknown_, info = NoInfo ()}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
   TmLet {ident = n, tyBody = ty, body = body,
-  inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
+  inexpr = unit_, ty = tyunknown_, info = NoInfo ()}
 
 let let_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -183,7 +191,7 @@ let ulet_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, ty = TyUnknown {}, inexpr = unit_, info = NoInfo ()}
+  TmType {ident = n, tyIdent = ty, ty = tyunknown_, inexpr = unit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
@@ -191,20 +199,37 @@ let type_ = use MExprAst in
 
 let nreclets_ = use MExprAst in
   lam bs.
-  TmRecLets {bindings = map (lam t. {ident = t.0, ty = t.1, body = t.2, info = NoInfo ()}) bs,
-             inexpr = unit_, ty = TyUnknown {}, info = NoInfo ()}
+  let bindingMapFunc = lam t : (Name, Type, Expr).
+    { ident = t.0
+    , tyBody = t.1
+    , body = t.2
+    , ty = tyunknown_
+    , info = NoInfo ()
+    }
+  in
+  TmRecLets {bindings = map bindingMapFunc bs,
+             inexpr = unit_, ty = tyunknown_, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
   lam bs.
-  nreclets_ (map (lam b. (nameNoSym b.0, b.1, b.2)) bs)
+  let bindingMapFunc = lam b : (String, Type, Expr).
+    (nameNoSym b.0, b.1, b.2)
+  in
+  nreclets_ (map bindingMapFunc bs)
 
 let nureclets_ = use MExprAst in
   lam bs.
-  nreclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+  let bindingMapFunc = lam b : (Name, Expr).
+    (b.0, tyunknown_, b.1)
+  in
+  nreclets_ (map bindingMapFunc bs)
 
 let ureclets_ = use MExprAst in
   lam bs.
-  reclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
+  let bindingMapFunc = lam b : (String, Expr).
+    (b.0, tyunknown_, b.1)
+  in
+  reclets_ (map bindingMapFunc bs)
 
 let reclet_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -220,7 +245,7 @@ let reclets_empty = use MExprAst in
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
   match reclets with TmRecLets t then
-    let newbind = {ident = n, ty = ty, body = body, info = NoInfo ()} in
+    let newbind = {ident = n, tyBody = ty, body = body, ty = tyunknown_, info = NoInfo ()} in
     TmRecLets {t with bindings = cons newbind t.bindings}
   else
     error "reclets is not a TmRecLets construct"
@@ -239,7 +264,7 @@ let ureclets_add = use MExprAst in
 
 let ncondef_ = use MExprAst in
   lam n. lam ty.
-  TmConDef {ident = n, tyIdent = ty, ty = TyUnknown {},
+  TmConDef {ident = n, tyIdent = ty, ty = tyunknown_,
             inexpr = unit_, info = NoInfo ()}
 
 let condef_ = use MExprAst in
@@ -256,7 +281,7 @@ let ucondef_ = use MExprAst in
 
 let nvar_ = use MExprAst in
   lam n.
-  TmVar {ident = n, ty = TyUnknown {}, info = NoInfo ()}
+  TmVar {ident = n, ty = tyunknown_, info = NoInfo ()}
 
 let var_ = use MExprAst in
   lam s.
@@ -264,7 +289,7 @@ let var_ = use MExprAst in
 
 let nconapp_ = use MExprAst in
   lam n. lam b.
-  TmConApp {ident = n, body = b, ty = TyUnknown {}, info = NoInfo ()}
+  TmConApp {ident = n, body = b, ty = tyunknown_, info = NoInfo ()}
 
 let conapp_ = use MExprAst in
   lam s. lam b.
@@ -272,11 +297,11 @@ let conapp_ = use MExprAst in
 
 let const_ = use MExprAst in
   lam c.
-  TmConst {val = c, ty = TyUnknown {}, info = NoInfo ()}
+  TmConst {val = c, ty = tyunknown_, info = NoInfo ()}
 
 let nlam_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLam {ident = n, tyIdent = ty, ty = TyUnknown {}, body = body, info = NoInfo ()}
+  TmLam {ident = n, tyIdent = ty, ty = tyunknown_, body = body, info = NoInfo ()}
 
 let lam_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -292,34 +317,36 @@ let ulam_ = use MExprAst in
 
 let lams_ = use MExprAst in
   lam params. lam body.
-  foldr (lam p. lam acc. lam_ p.0 p.1 acc) body params
+  foldr (lam p : (String, Expr). lam acc. lam_ p.0 p.1 acc) body params
 
 let ulams_ = use MExprAst in
   lam idents. lam body.
   foldr (lam s. lam acc. ulam_ s acc) body idents
 
+let nulams_ = use MExprAst in
+  lam names. lam body.
+  foldr (lam n. lam acc. nulam_ n acc) body names
+
 let if_ = use MExprAst in
   lam cond. lam thn. lam els.
   TmMatch {target = cond, pat = ptrue_, thn = thn,
-           els = els, ty = TyUnknown {}, info = NoInfo ()}
+           els = els, ty = tyunknown_, info = NoInfo ()}
 
 let match_ = use MExprAst in
   lam target. lam pat. lam thn. lam els.
   TmMatch {target = target, pat = pat, thn = thn, els = els,
-           ty = TyUnknown {}, info = NoInfo ()}
+           ty = tyunknown_, info = NoInfo ()}
 
 let seq_ = use MExprAst in
   lam tms.
-  TmSeq {tms = tms, ty = TyUnknown {}, info = NoInfo ()}
+  TmSeq {tms = tms, ty = tyunknown_, info = NoInfo ()}
 
 let record_ = use MExprAst in
   lam bindings.
+  let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
-    bindings =
-      foldl
-        (lam acc. lam b. assocInsert {eq=eqString} b.0 b.1 acc)
-        assocEmpty bindings,
-    ty = TyUnknown {},
+    bindings = mapFromList cmpSID (map bindingMapFunc bindings),
+    ty = tyunknown_,
     info = NoInfo ()
   }
 
@@ -332,15 +359,15 @@ let record_empty = unit_
 let record_add = use MExprAst in
   lam key. lam value. lam record.
   match record with TmRecord t then
-      TmRecord {t with bindings = cons (key, value) t.bindings}
+      TmRecord {t with bindings = mapInsert (stringToSid key) value t.bindings}
   else
       error "record is not a TmRecord construct"
 
 let record_add_bindings = lam bindings. lam record.
-  foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
+  foldl (lam recacc. lam b : (k, v). record_add b.0 b.1 recacc) record bindings
 
 let never_ = use MExprAst in
-  TmNever {ty = TyUnknown {}, info = NoInfo ()}
+  TmNever {ty = tyunknown_, info = NoInfo ()}
 
 -- Exhaustive match
 let matchex_ = use MExprAst in
@@ -376,11 +403,17 @@ let tupleproj_ = use MExprAst in
 
 let recordupdate_ = use MExprAst in
   lam rec. lam key. lam value.
-  TmRecordUpdate {rec = rec, key = key, value = value, ty = TyUnknown {}, info = NoInfo ()}
+  TmRecordUpdate {
+    rec = rec,
+    key = stringToSid key,
+    value = value,
+    ty = tyunknown_,
+    info = NoInfo ()
+  }
 
 let app_ = use MExprAst in
   lam l. lam r.
-  TmApp {lhs = l, rhs = r, ty = TyUnknown {}, info = NoInfo ()}
+  TmApp {lhs = l, rhs = r, ty = tyunknown_, info = NoInfo ()}
 
 let appSeq_ = use MExprAst in
   lam f. lam seq.
@@ -418,10 +451,13 @@ let appf8_ = use MExprAst in
   lam f. lam a1. lam a2. lam a3. lam a4. lam a5. lam a6. lam a7. lam a8.
   app_ (appf7_ f a1 a2 a3 a4 a5 a6 a7) a8
 
+let utestu_ = use MExprAst in
+  lam t. lam e. lam n. lam u.
+  TmUtest {test = t, expected = e, next = n, tusing = Some u, ty = tyunknown_, info = NoInfo ()}
+
 let utest_ = use MExprAst in
   lam t. lam e. lam n.
-  TmUtest {test = t, expected = e, next = n, ty = TyUnknown {}, info = NoInfo ()}
-
+  TmUtest {test = t, expected = e, next = n, tusing = None (), ty = tyunknown_, info = NoInfo ()}
 
 -- Ascription
 let asc_ = use MExprAst in
@@ -444,13 +480,17 @@ let true_ = use MExprAst in
 let false_ = use MExprAst in
   const_ (CBool {val = false})
 
+let bool_ = use MExprAst in
+  lam v.
+  const_ (CBool {val = v})
+
 let char_ = use MExprAst in
   lam c.
   const_ (CChar {val = c})
 
 let str_ = use MExprAst in
   lam s.
-  TmSeq {tms = map char_ s, ty = TyUnknown {}, info = NoInfo ()}
+  TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo ()}
 
 let symb_ = use MExprAst in
   lam c.
@@ -600,6 +640,9 @@ let set_ = use MExprAst in
   lam s. lam i. lam v.
   appf3_ (const_ (CSet ())) s i v
 
+let empty_ = use MExprAst in
+  seq_ []
+
 let cons_ = use MExprAst in
   lam x. lam s.
   appf2_ (const_ (CCons ())) x s
@@ -627,6 +670,10 @@ let splitat_ = use MExprAst in
 let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (const_ (CCreate ())) n f
+
+let subsequence_ = use MExprAst in
+  lam s. lam off. lam n.
+  appf3_ (const_ (CSubsequence ())) s off n
 
 -- Short circuit logical expressions
 let and_ = use MExprAst in
@@ -674,8 +721,11 @@ let deleteFile_ = use MExprAst in
   lam f. appf1_ (const_ (CFileDelete ())) f
 
 -- I/O operations
-let printString_ = use MExprAst in
-  lam s. app_ (const_ (CPrintString ())) s
+let print_ = use MExprAst in
+  lam s. app_ (const_ (CPrint ())) s
+
+let dprint_ = use MExprAst in
+  lam s. app_ (const_ (CDPrint ())) s
 
 let readLine_ = use MExprAst in
   lam u. app_ (const_ (CReadLine ())) u
@@ -705,3 +755,150 @@ let wallTimeMs_ = use MExprAst in
 
 let sleepMs_ = use MExprAst in
   lam n. appf1_ (const_ (CSleepMs ())) n
+
+-- Tensors
+let tensorCreate_ = use MExprAst in
+  lam s. lam f.
+  appf2_ (const_ (CTensorCreate ())) s f
+
+let tensorGetExn_ = use MExprAst in
+  lam t. lam is.
+  appf2_ (const_ (CTensorGetExn ())) t is
+
+let tensorSetExn_ = use MExprAst in
+  lam t. lam is. lam v.
+  appf3_ (const_ (CTensorSetExn ())) t is v
+
+let tensorRank_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorRank ())) t
+
+let tensorShape_ = use MExprAst in
+  lam t.
+  appf1_ (const_ (CTensorShape ())) t
+
+let tensorReshapeExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorReshapeExn ())) t s
+
+let tensorCopyExn_ = use MExprAst in
+  lam t1. lam t2.
+  appf2_ (const_ (CTensorCopyExn ())) t1 t2
+
+let tensorSliceExn_ = use MExprAst in
+  lam t. lam s.
+  appf2_ (const_ (CTensorSliceExn ())) t s
+
+let tensorSubExn_ = use MExprAst in
+  lam t. lam ofs. lam len.
+  appf3_ (const_ (CTensorSubExn ())) t ofs len
+
+let tensorIteri_ = use MExprAst in
+  lam f. lam t.
+  appf2_ (const_ (CTensorIteri ())) f t
+
+-- Bootparser
+let bootParserParseMExprString_ = use MExprAst in
+  lam str. appf1_ (const_ (CBootParserParseMExprString ())) str
+
+let bootParserGetId_ = use MExprAst in
+  lam pt. appf1_ (const_ (CBootParserGetId ())) pt
+
+let bootParserGetTerm_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetTerm ())) pt n
+
+let bootParserGetString_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetString ())) pt n
+
+let bootParserGetInt_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInt ())) pt n
+
+let bootParserGetFloat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetFloat ())) pt n
+
+let bootParserGetListLength_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetListLength ())) pt n
+
+let bootParserGetConst_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetConst ())) pt n
+
+let bootParserGetPat_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetPat ())) pt n
+
+let bootParserGetInfo_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (const_ (CBootParserGetInfo ())) pt n
+
+let mapEmpty_ = use MExprAst in
+  lam cmp.
+  appf1_ (const_ (CMapEmpty ())) cmp
+
+let mapInsert_ = use MExprAst in
+  lam k. lam v. lam m.
+  appf3_ (const_ (CMapInsert ())) k v m
+
+let mapRemove_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapRemove ())) k m
+
+let mapFindWithExn_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapFindWithExn ())) k m
+
+let mapFindOrElse_ = use MExprAst in
+  lam f. lam k. lam m.
+  appf3_ (const_ (CMapFindOrElse ())) f k m
+
+let mapFindApplyOrElse_ = use MExprAst in
+  lam f. lam felse. lam k. lam m.
+  appf4_ (const_ (CMapFindApplyOrElse ())) f felse k m
+
+let mapBindings_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapBindings ())) m
+
+let mapSize_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapSize ())) m
+
+let mapMem_ = use MExprAst in
+  lam k. lam m.
+  appf2_ (const_ (CMapMem ())) k m
+
+let mapAny_ = use MExprAst in
+  lam p. lam m.
+  appf2_ (const_ (CMapAny ())) p m
+
+let mapMap_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (const_ (CMapMap ())) f m
+
+let mapMapWithKey_ = use MExprAst in
+  lam f. lam m.
+  appf2_ (const_ (CMapMapWithKey ())) f m
+
+let mapFoldWithKey_ = use MExprAst in
+  lam f. lam z. lam m.
+  appf3_ (const_ (CMapFoldWithKey ())) f z m
+
+let mapEq_ = use MExprAst in
+  lam veq. lam m1. lam m2.
+  appf3_ (const_ (CMapEq ())) veq m1 m2
+
+let mapCmp_ = use MExprAst in
+  lam vcmp. lam m1. lam m2.
+  appf3_ (const_ (CMapCmp ())) vcmp m1 m2
+
+let mapGetCmpFun_ = use MExprAst in
+  lam m.
+  appf1_ (const_ (CMapGetCmpFun ())) m
+
+-- Sequencing (;)
+let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2

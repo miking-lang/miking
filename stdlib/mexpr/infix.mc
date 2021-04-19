@@ -23,9 +23,9 @@ lang MExprMakeConstBinOp = ArithIntAst + AppAst + UnknownTypeAst
     let p2 = advanceCol p 1 in
     Some {
       val = lam x. lam y.
-        let op = TmConst {val = op, ty = TyUnknown (), info = makeInfo p p2} in
+        let op = TmConst {val = op, ty = tyunknown_, info = makeInfo p p2} in
         let app = lam x. lam y. 
-                TmApp {lhs = x, rhs = y, info = mergeInfo (info x) (info y)} in
+                TmApp {lhs = x, rhs = y, ty = tyunknown_, info = mergeInfo (info x) (info y)} in
         let res = (app (app op x) y) in
         res, 
       pos = p2, str = xs, assoc = assoc, prec = prec}
@@ -68,12 +68,12 @@ end
 lang MExprParserExt = MExprParserBase + ExprInfixArithParser + ExprInfixParserClosed +
                       ExprInfixTestParser
 
-lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint
+lang MExprExt = MExprAst + MExprParserExt + MExprEval + MExprPrettyPrint + MExprSym
 
 
 -- Evaluate an expression into a value expression
 let evalExpr : Expr -> Expr =
-  use MExprExt in lam t. eval {env = assocEmpty} (symbolize t)
+  use MExprExt in lam t. eval {env = builtinEnv} (symbolize t)
 
 -- Parse a string and then evaluate into a value expression
 let evalStr : String -> Expr =

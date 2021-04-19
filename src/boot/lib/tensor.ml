@@ -112,6 +112,30 @@ module NoNum = struct
     else raise (Invalid_argument tensor_shape_and_ofs_and_len_does_not_match)
 
   let iteri f t = mk_iteri rank shape slice_exn f t
+
+  let equal eq t1 t2 =
+    if shape t1 = shape t2 then
+      let n = t1.size in
+      let v1 = reshape_exn t1 [|n|] in
+      let v2 = reshape_exn t2 [|n|] in
+      let rec work i =
+        if i < n then
+          if eq (get_exn v1 [|i|]) (get_exn v2 [|i|]) then work (i + 1)
+          else false
+        else true
+      in
+      work 0
+    else false
+
+  let of_array a =
+    let data = Array.copy a in
+    let size = Array.length a in
+    let shape = [|size|] in
+    let rank = 1 in
+    let left_ofs = 0 in
+    {data; shape; rank; left_ofs; size}
+
+  let data_to_array t = Array.sub t.data t.left_ofs t.size
 end
 
 module Num = struct
@@ -192,4 +216,11 @@ module Num = struct
     a
     |> Bigarray.Array1.of_array (to_ba_kind kind) Bigarray.c_layout
     |> Bigarray.genarray_of_array1
+
+  let data_to_array t =
+    let n = prod (shape t) in
+    let v = reshape_exn t [|n|] in
+    let a = Array.make n (get_exn v [|0|]) in
+    Array.iteri (fun i _ -> a.(i) <- get_exn v [|i|]) a ;
+    a
 end

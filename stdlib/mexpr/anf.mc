@@ -2,6 +2,7 @@
 -- al. (1993).
 
 include "name.mc"
+include "stringid.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -25,14 +26,14 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let ident = nameSym "t" in
     let var = TmVar {
       ident = ident,
-      ty = TyUnknown {},
+      ty = ty n,
       info = NoInfo {}
     } in
     TmLet {ident = ident,
-           tyBody = TyUnknown {},
+           tyBody = ty n,
            body = n,
            inexpr = k var,
-           ty = TyUnknown {},
+           ty = tyunknown_,
            info = NoInfo{}}
 
   sem normalizeName (k : Expr -> Expr) =
@@ -84,6 +85,7 @@ end
 lang RecordANF = ANF + RecordAst
   sem isValue =
   | TmRecord _ -> false
+  | TmRecord {bindings = []} -> true
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
@@ -93,10 +95,11 @@ lang RecordANF = ANF + RecordAst
       (lam acc. lam k. lam e.
          (lam bs.
             normalizeName
-              (lam v. acc (assocInsert {eq=eqString} k v bs))
+              (lam v. acc (mapInsert k v bs))
               e))
     in
-    (assocFold {eq=eqString} f acc t.bindings) assocEmpty
+    let tmp = mapFoldWithKey f acc t.bindings in
+    tmp (mapEmpty (mapGetCmpFun t.bindings))
 
   | TmRecordUpdate t ->
     normalizeName
@@ -142,7 +145,7 @@ lang RecLetsANF = ANF + RecLetsAst
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmRecLets t ->
-    let bindings = map (lam b. {b with body = normalizeTerm b.body}) t.bindings in
+    let bindings = map (lam b : RecLetBinding. {b with body = normalizeTerm b.body}) t.bindings in
     TmRecLets {{t with bindings = bindings}
                   with inexpr = normalize k t.inexpr}
 end
@@ -190,10 +193,11 @@ lang UtestANF = ANF + UtestAst
   | TmUtest _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmUtest t ->
-    TmUtest {{{t with test = normalizeTerm t.test}
+  | TmUtest t -> let tusing = optionMap normalizeTerm t.tusing in
+    TmUtest {{{{t with test = normalizeTerm t.test}
                  with expected = normalizeTerm t.expected}
                  with next = normalize k t.next}
+                 with tusing = tusing}
 
 end
 
@@ -236,6 +240,11 @@ lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 
 mexpr
 use TestLang in
+
+let eqExpr : Expr -> Expr -> Bool =
+  lam l : Expr. lam r : Expr.
+  eqExpr l r
+in
 
 let _anf = compose normalizeTerm symbolize in
 
@@ -312,37 +321,7 @@ let record =
     ("c", (app_ (int_ 5) (int_ 6)))
   ]
 in
-utest _anf record with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t1" (app_ (int_ 1) (var_ "t")),
-    ulet_ "t2" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t1"),
-      ("b", int_ 4),
-      ("c", var_ "t2")
-    ]),
-    var_ "t3"
-  ]
-using eqExpr in
-
-
-let rupdate =
-  recordupdate_ record "b" (int_ 7) in
-utest _anf rupdate with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t1" (app_ (int_ 1) (var_ "t")),
-    ulet_ "t2" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t1"),
-      ("b", int_ 4),
-      ("c", var_ "t2")
-    ]),
-    ulet_ "t4" (recordupdate_ (var_ "t3") "b" (int_ 7)),
-    var_ "t4"
-  ]
-using eqExpr in
+let rupdate = recordupdate_ record "b" (int_ 7) in
 
 let factorial =
   ureclet_ "fact"

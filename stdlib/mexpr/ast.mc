@@ -1,10 +1,10 @@
 -- Language fragments of MExpr
 
-include "string.mc"
-include "name.mc"
+include "mexpr/info.mc"
 include "assoc.mc"
 include "info.mc"
-include "mexpr/info.mc"
+include "name.mc"
+include "string.mc"
 
 -----------
 -- TERMS --
@@ -113,14 +113,17 @@ lang LetAst = VarAst
   | TmLet t -> f (f acc t.body) t.inexpr
 end
 
+type RecLetBinding =
+  { ident : Name
+  , tyBody : Type
+  , body : Expr
+  , ty : Type
+  , info : Info }
 
 -- TmRecLets --
 lang RecLetsAst = VarAst
   syn Expr =
-  | TmRecLets {bindings : [{ident : Name,
-                            ty : Type,
-                            body : Expr,
-                            info : Info}],
+  | TmRecLets {bindings : [RecLetBinding],
                inexpr : Expr,
                ty : Type,
                info : Info}
@@ -136,12 +139,20 @@ lang RecLetsAst = VarAst
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmRecLets t ->
-    TmRecLets {{t with bindings = map (lam b. {b with body = f b.body})
-                                      t.bindings}
+    let bindingMapFunc =
+      lam b : RecLetBinding.
+        {b with body = f b.body}
+    in
+    TmRecLets {{t with bindings = map bindingMapFunc t.bindings}
                   with inexpr = f t.inexpr}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecLets t -> f (foldl f acc (map (lam b. b.body) t.bindings)) t.inexpr
+  | TmRecLets t ->
+    let bindingMapFunc =
+      lam b : RecLetBinding.
+        b.body
+    in
+    f (foldl f acc (map bindingMapFunc t.bindings)) t.inexpr
 end
 
 
@@ -197,11 +208,11 @@ end
 -- TmRecord and TmRecordUpdate --
 lang RecordAst
   syn Expr =
-  | TmRecord {bindings : AssocMap String Expr,
+  | TmRecord {bindings : Map SID Expr,
               ty : Type,
               info : Info}
   | TmRecordUpdate {rec : Expr,
-                    key : String,
+                    key : SID,
                     value : Expr,
                     ty : Type,
                     info : Info}
@@ -219,12 +230,12 @@ lang RecordAst
   | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRecord t -> TmRecord {t with bindings = assocMap {eq=eqString} f t.bindings}
+  | TmRecord t -> TmRecord {t with bindings = mapMap f t.bindings}
   | TmRecordUpdate t -> TmRecordUpdate {{t with rec = f t.rec}
                                            with value = f t.value}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRecord t -> assocFold {eq=eqString} (lam acc. lam _k. lam v. f acc v) acc t.bindings
+  | TmRecord t -> mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc t.bindings
   | TmRecordUpdate t -> f (f acc t.rec) t.value
 end
 
@@ -324,6 +335,7 @@ lang UtestAst
   | TmUtest {test : Expr,
              expected : Expr,
              next : Expr,
+             tusing : Option Expr,
              ty : Type,
              info : Info}
 
@@ -337,12 +349,16 @@ lang UtestAst
   | TmUtest t -> TmUtest {t with ty = ty}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | TmUtest t -> TmUtest {{{t with test = f t.test}
+  | TmUtest t -> let tusing = optionMap f t.tusing in
+                 TmUtest {{{{t with test = f t.test}
                               with expected = f t.expected}
                               with next = f t.next}
+                              with tusing = tusing}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmUtest t -> f (f (f acc t.test) t.expected) t.next
+  | TmUtest t ->
+    let acc = f (f (f acc t.test) t.expected) t.next in
+    optionMapOrElse (lam. acc) (f acc) t.tusing
 end
 
 
@@ -368,29 +384,9 @@ lang NeverAst
   | TmNever _ & t -> acc
 end
 
-
--- TmRef --
--- TODO (dbro, 2020-02-16): this term should be moved into an evaluation term
--- in the same way as for closures. Eventually, this should be a rank 0 tensor.
-lang RefAst
-  syn Expr =
-  | TmRef {ref : Ref}
-
-  sem info =
-  | TmRef r -> NoInfo ()
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmRef t -> TmRef t
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmRef t -> acc
-end
-
 ---------------
 -- CONSTANTS --
 ---------------
--- All constants in boot have not been implemented. Missing ones can be added
--- as needed.
 
 lang IntAst = ConstAst
   syn Const =
@@ -505,6 +501,7 @@ lang SeqOpAst = SeqAst
   | CReverse {}
   | CCreate {}
   | CSplitAt {}
+  | CSubsequence {}
 end
 
 lang FileOpAst = ConstAst
@@ -517,7 +514,8 @@ end
 
 lang IOAst = ConstAst
   syn Const =
-  | CPrintString {}
+  | CPrint {}
+  | CDPrint {}
   | CReadLine {}
   | CReadBytesAsString {}
 end
@@ -541,11 +539,61 @@ lang TimeAst = ConstAst
   | CSleepMs {}
 end
 
-lang RefOpAst = ConstAst + RefAst
+lang RefOpAst = ConstAst
   syn Const =
   | CRef {}
   | CModRef {}
   | CDeRef {}
+end
+
+lang MapAst = ConstAst
+  syn Const =
+  | CMapEmpty {}
+  | CMapInsert {}
+  | CMapRemove {}
+  | CMapFindWithExn {}
+  | CMapFindOrElse {}
+  | CMapFindApplyOrElse {}
+  | CMapBindings {}
+  | CMapSize {}
+  | CMapMem {}
+  | CMapAny {}
+  | CMapMap {}
+  | CMapMapWithKey {}
+  | CMapFoldWithKey {}
+  | CMapEq {}
+  | CMapCmp {}
+  | CMapGetCmpFun {}
+end
+
+lang TensorOpAst = ConstAst
+  syn Const =
+  | CTensorCreate {}
+  | CTensorGetExn {}
+  | CTensorSetExn {}
+  | CTensorRank {}
+  | CTensorShape {}
+  | CTensorReshapeExn {}
+  | CTensorCopyExn {}
+  | CTensorSliceExn {}
+  | CTensorSubExn {}
+  | CTensorIteri {}
+end
+
+lang BootParserAst = ConstAst
+  syn Const =
+  | CBootParserParseMExprString {}
+  | CBootParserParseMCoreFile {}
+  | CBootParserGetId {}
+  | CBootParserGetTerm {}
+  | CBootParserGetType ()
+  | CBootParserGetString {}
+  | CBootParserGetInt {}
+  | CBootParserGetFloat {}
+  | CBootParserGetListLength {}
+  | CBootParserGetConst {}
+  | CBootParserGetPat {}
+  | CBootParserGetInfo {}
 end
 
 --------------
@@ -606,7 +654,7 @@ end
 
 lang RecordPat
   syn Pat =
-  | PatRecord {bindings : AssocMap String Pat,
+  | PatRecord {bindings : Map SID Pat,
                info: Info}
 
   sem info =
@@ -614,11 +662,11 @@ lang RecordPat
 
   sem smap_Pat_Pat (f : Pat -> a) =
   | PatRecord b ->
-      PatRecord {b with bindings = assocMap {eq=eqString} (lam b. (b.0, f b.1)) b.bindings}
+      PatRecord {b with bindings = mapMap f b.bindings}
 
   sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatRecord {bindings = bindings} -> assocFold {eq=eqString}
-                    (lam acc. lam _k. lam v. f acc v) acc bindings
+  | PatRecord {bindings = bindings} ->
+      mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
 lang DataPat = DataAst
@@ -735,60 +783,93 @@ end
 
 lang UnknownTypeAst
   syn Type =
-  | TyUnknown {}
+  | TyUnknown {info : Info}
+
+  sem info =
+  | TyUnknown r -> r.info
 end
 
 lang BoolTypeAst
   syn Type =
-  | TyBool {}
+  | TyBool {info  : Info}
+
+  sem info =
+  | TyBool r -> r.info
 end
 
 lang IntTypeAst
   syn Type =
-  | TyInt {}
+  | TyInt {info : Info}
+
+  sem info =
+  | TyInt r -> r.info
 end
 
 lang FloatTypeAst
   syn Type =
-  | TyFloat {}
+  | TyFloat {info : Info}
+
+  sem info =
+  | TyFloat r -> r.info
 end
 
 lang CharTypeAst
   syn Type =
-  | TyChar {}
+  | TyChar {info  : Info}
+
+  sem info =
+  | TyChar r -> r.info
 end
 
 lang FunTypeAst
   syn Type =
-  | TyArrow {from : Type,
+  | TyArrow {info : Info,
+             from : Type,
              to   : Type}
+  sem info =
+  | TyArrow r -> r.info
 end
 
 lang SeqTypeAst
   syn Type =
-  | TySeq {ty : Type}
+  | TySeq {info : Info,
+           ty   : Type}
+  sem info =
+  | TySeq r -> r.info
 end
 
 lang RecordTypeAst
   syn Type =
-  | TyRecord {fields : AssocMap String Type}
+  | TyRecord {info    : Info,
+              fields  : Map SID Type}
+  sem info =
+  | TyRecord r -> r.info
 end
 
 lang VariantTypeAst
   syn Type =
-  | TyVariant {constrs : [Name]}
+  | TyVariant {info     : Info,
+               constrs  : Map Name Type}
+  sem info =
+  | TyVariant r -> r.info
 end
 
 lang VarTypeAst
   syn Type =
-  | TyVar {ident : Name}
+  | TyVar {info   : Info,
+           ident  : Name}
+  sem info =
+  | TyVar r -> r.info
 end
 
 lang AppTypeAst
   syn Type =
-  | TyApp {lhs : Type, rhs : Type}
+  | TyApp {info : Info,
+           lhs  : Type,
+           rhs  : Type}
+  sem info =
+  | TyApp r -> r.info
 end
-
 
 ------------------------
 -- MEXPR AST FRAGMENT --
@@ -798,14 +879,15 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + RefAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst +
+  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorOpAst +
+  BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

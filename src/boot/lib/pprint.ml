@@ -24,23 +24,67 @@ let ref_indent = ref 2
 (** Alias for converting from ustring to string *)
 let string_of_ustring = Ustring.to_utf8
 
-(** Create string representation of variable *)
-let ustring_of_var ?(symbol = !ref_symbol) x s =
+(** Ensure strings can be parsed *)
+let parser_str s prefix cond =
+  match Ustring.length s with
+  | 0 ->
+      prefix ^. us "\"\""
+  | _ when cond s ->
+      s
+  | _ ->
+      prefix ^. us "\"" ^. s ^. us "\""
+
+(** Variable string parser translation *)
+let pprint_var_str s =
+  parser_str s (us "#var") (fun s ->
+      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+
+(** Constructor string parser translation *)
+let pprint_con_str s =
+  parser_str s (us "#con") (fun s ->
+      let c = Ustring.get s 0 in
+      is_ascii_upper_alpha c )
+
+(** Label string parser translation *)
+let pprint_label_str s =
+  parser_str s (us "#label") (fun s ->
+      is_ascii_lower_alpha (Ustring.get s 0) || Ustring.starts_with (us "_") s )
+
+(** Create string representation of an identifier *)
+let ustring_of_ident symbol pprint_ident x s =
   if symbol then
-    x
+    pprint_ident x
     ^.
     if Symb.eqsym Symb.Helpers.nosym s then us "#"
     else us "#" ^. Symb.Helpers.ustring_of_sym s
-  else x
+  else pprint_ident x
+
+(** Create string representation of a variable *)
+let ustring_of_var ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_var_str x s
+
+(** Create string representation of a constructor *)
+let ustring_of_con ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol pprint_con_str x s
+
+(** Create string representation of a type or type variable *)
+let ustring_of_type ?(symbol = !ref_symbol) x s =
+  ustring_of_ident symbol (fun x -> x) x s
 
 (** Create a string from a uchar, as it would appear in a string literal. *)
 let lit_of_uchar c =
   let str =
     match string_of_ustring (Ustring.from_uchars [|c|]) with
-    (* TODO(dlunde,?): This is a temporary fix for newlines only. How do we do this
-       properly? *)
     | "\n" ->
         "\\n"
+    | "\t" ->
+        "\\t"
+    | "\\" ->
+        "\\\\"
+    | "\'" ->
+        "\\'"
+    | "\"" ->
+        "\\\""
     | str ->
         str
   in
@@ -82,12 +126,13 @@ let ustring_of_pat p =
     | PatRecord (_, ps) ->
         let ps =
           Record.bindings ps
-          |> List.map (fun (label, p) -> label ^. us " = " ^. ppp p)
+          |> List.map (fun (label, p) ->
+                 pprint_label_str label ^. us " = " ^. ppp p )
           |> Ustring.concat (us ",")
         in
         us "{" ^. ps ^. us "}"
     | PatCon (_, x, n, p) ->
-        let con = ustring_of_var x n in
+        let con = ustring_of_con x n in
         let inner = ppp p in
         con ^. us "(" ^. inner ^. us ")"
     | PatInt (_, i) ->
@@ -132,7 +177,7 @@ let rec ustring_of_ty = function
   | TyRecord (_, tys) ->
       let pprint_ty_label = function
         | l, ty ->
-            l ^. us " : " ^. ustring_of_ty ty
+            pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
       us "{"
       ^. Ustring.concat (us ",")
@@ -143,7 +188,7 @@ let rec ustring_of_ty = function
   | TyVariant _ ->
       failwith "Printing of non-empty variant types not yet supported"
   | TyVar (_, x, s) ->
-      ustring_of_var x s
+      ustring_of_type x s
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
 
@@ -377,12 +422,20 @@ let rec print_const fmt = function
       fprintf fmt "map"
   | CmapEmpty ->
       fprintf fmt "mapEmpty"
+  | CmapSize ->
+      fprintf fmt "mapSize"
+  | CmapGetCmpFun ->
+      fprintf fmt "mapGetCmpFun"
   | CmapInsert _ ->
       fprintf fmt "mapInsert"
   | CmapRemove _ ->
       fprintf fmt "mapRemove"
-  | CmapFind _ ->
-      fprintf fmt "mapLookup"
+  | CmapFindWithExn _ ->
+      fprintf fmt "mapFindWithExn"
+  | CmapFindOrElse _ ->
+      fprintf fmt "mapFindOrElse"
+  | CmapFindApplyOrElse _ ->
+      fprintf fmt "mapFindOrElse"
   | CmapAny _ ->
       fprintf fmt "mapAny"
   | CmapMem _ ->
@@ -391,20 +444,15 @@ let rec print_const fmt = function
       fprintf fmt "mapMap"
   | CmapMapWithKey _ ->
       fprintf fmt "mapMapWithKey"
+  | CmapFoldWithKey _ ->
+      fprintf fmt "mapFoldWithKey"
   | CmapBindings ->
       fprintf fmt "mapBindings"
+  | CmapEq _ ->
+      fprintf fmt "mapEq"
+  | CmapCmp _ ->
+      fprintf fmt "mapCmp"
   (* MCore intrinsics: Tensors *)
-  | CTensor t ->
-      t
-      |> (function
-           | T.Int t' ->
-               Tensor.Num.shape t'
-           | T.Float t' ->
-               Tensor.Num.shape t'
-           | T.NoNum t' ->
-               Tensor.NoNum.shape t' )
-      |> Array.to_list |> List.map string_of_int |> String.concat ","
-      |> fprintf fmt "tensor[%s]"
   | CtensorCreate _ ->
       fprintf fmt "tensorCreate"
   | CtensorGetExn _ ->
@@ -430,10 +478,14 @@ let rec print_const fmt = function
       fprintf fmt "bootParseTree"
   | CbootParserParseMExprString ->
       fprintf fmt "bootParserParseMExprString"
+  | CbootParserParseMCoreFile ->
+      fprintf fmt "bootParserParseMCoreFile"
   | CbootParserGetId ->
       fprintf fmt "bootParserParseGetId"
   | CbootParserGetTerm _ ->
       fprintf fmt "bootParserParseGetTerm"
+  | CbootParserGetType _ ->
+      fprintf fmt "bootParserParseGetType"
   | CbootParserGetString _ ->
       fprintf fmt "bootParserParseGetString"
   | CbootParserGetInt _ ->
@@ -464,7 +516,7 @@ let rec print_const fmt = function
 (** Pretty print a record *)
 and print_record fmt r =
   let print (l, t) =
-    let l = string_of_ustring l in
+    let l = string_of_ustring (pprint_label_str l) in
     fun fmt -> fprintf fmt "%s = %a" l print_tm (App, t)
   in
   let inner = List.map print r in
@@ -497,7 +549,8 @@ and print_tm fmt (prec, t) =
     | TmClos _
     | TmFix _
     | TmNever _
-    | TmRef _ ->
+    | TmRef _
+    | TmTensor _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -505,6 +558,9 @@ and print_tm fmt (prec, t) =
 
 (** Auxiliary print function *)
 and print_tm' fmt t =
+  let print_ty_if_known tystr =
+    if tystr = "Unknown" then "" else ":" ^ tystr
+  in
   match t with
   | TmVar (_, x, s) ->
       let print = string_of_ustring (ustring_of_var x s) in
@@ -513,29 +569,37 @@ and print_tm' fmt t =
   | TmLam (_, x, s, ty, t1) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov %d>lam %s:%s.@ %a@]" !ref_indent x ty print_tm
-        (Lam, t1)
+      fprintf fmt "@[<hov %d>lam %s%s.@ %a@]" !ref_indent x
+        (print_ty_if_known ty) print_tm (Lam, t1)
   | TmLet (_, x, s, ty, t1, t2) ->
-      let x = string_of_ustring (ustring_of_var x s) in
-      let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>let %s:%s =@ %a in@]@ %a@]" !ref_indent x
-        ty print_tm (Match, t1) print_tm (Match, t2)
+      if Ustring.length x = 0 then
+        fprintf fmt "@[<hov 0>@[<hov %d>%a;@]@ %a@]" !ref_indent print_tm
+          (Match, t1) print_tm (Match, t2)
+      else
+        let x = string_of_ustring (ustring_of_var x s) in
+        let ty = ty |> ustring_of_ty |> string_of_ustring in
+        fprintf fmt "@[<hov 0>@[<hov %d>let %s%s =@ %a in@]@ %a@]" !ref_indent
+          x (print_ty_if_known ty) print_tm (Match, t1) print_tm (Match, t2)
   | TmType (_, x, s, ty, t1) ->
-      let x = string_of_ustring (ustring_of_var x s) in
+      let x = string_of_ustring (ustring_of_type x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>@[<hov %d>type %s =@ %s in@]@ %a@]" !ref_indent x
         ty print_tm (Match, t1)
-  | TmRecLets (_, lst, t2) ->
+  | TmRecLets (_, lst, t2) -> (
       let print (_, x, s, ty, t) =
         let x = string_of_ustring (ustring_of_var x s) in
         let ty = ty |> ustring_of_ty |> string_of_ustring in
         fun fmt ->
-          fprintf fmt "@[<hov %d>let %s:%s =@ %a@]" !ref_indent x ty print_tm
-            (Match, t)
+          fprintf fmt "@[<hov %d>let %s%s =@ %a@]" !ref_indent x
+            (print_ty_if_known ty) print_tm (Match, t)
       in
-      let inner = List.map print lst in
-      fprintf fmt "@[<hov 0>@[<hov %d>recursive@ @[<hov 0>%a@] in@]@ %a@]"
-        !ref_indent concat (Space, inner) print_tm (Match, t2)
+      match lst with
+      | [] ->
+          fprintf fmt "@[<hov 0>%a@]" print_tm (Match, t2)
+      | _ ->
+          let inner = List.map print lst in
+          fprintf fmt "@[<hov 0>@[<hov %d>recursive@ @[<hov 0>%a@] in@]@ %a@]"
+            !ref_indent concat (Space, inner) print_tm (Match, t2) )
   | TmApp (_, t1, (TmApp _ as t2)) ->
       fprintf fmt "@[<hv 0>%a@ %a@]" print_tm (App, t1) print_tm (Atom, t2)
   | TmApp (_, t1, t2) ->
@@ -568,11 +632,12 @@ and print_tm' fmt t =
       (* TODO(?,?): The below Atom precedences can probably be made less conservative *)
       fprintf fmt "{%a with %s = %a}" print_tm (Atom, t1) l print_tm (Atom, t2)
   | TmConDef (_, x, s, ty, t) ->
-      let str = string_of_ustring (ustring_of_var x s) in
+      let str = string_of_ustring (ustring_of_con x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>con %s:%s in@ %a@]" str ty print_tm (Match, t)
+      fprintf fmt "@[<hov 0>con %s%s in@ %a@]" str (print_ty_if_known ty)
+        print_tm (Match, t)
   | TmConApp (_, x, sym, t) ->
-      let str = string_of_ustring (ustring_of_var x sym) in
+      let str = string_of_ustring (ustring_of_con x sym) in
       fprintf fmt "%s %a" str print_tm (Atom, t)
   (* If expressions *)
   | TmMatch (_, t1, PatBool (_, true), t2, t3) ->
@@ -604,6 +669,28 @@ and print_tm' fmt t =
       fprintf fmt "never"
   | TmRef (_, _) ->
       fprintf fmt "(ref)"
+  | TmTensor (_, t) ->
+      let float_ f = TmConst (NoInfo, CFloat f) in
+      let int_ n = TmConst (NoInfo, CInt n) in
+      let shape, data =
+        t
+        |> function
+        | T.Int t' ->
+            ( t' |> Tensor.Num.shape
+            , t' |> Tensor.Num.data_to_array |> Array.map int_ )
+        | T.Float t' ->
+            ( t' |> Tensor.Num.shape
+            , t' |> Tensor.Num.data_to_array |> Array.map float_ )
+        | T.NoNum t' ->
+            (t' |> Tensor.NoNum.shape, t' |> Tensor.NoNum.data_to_array)
+      in
+      let print t fmt = fprintf fmt "%a" print_tm (App, t) in
+      let shape' =
+        shape |> Array.map int_ |> Array.to_list |> List.map print
+      in
+      let data' = List.map print (Array.to_list data) in
+      fprintf fmt "Tensor([@[<hov 0>%a@]], [@[<hov 0>%a@]])" concat
+        (Comma, shape') concat (Comma, data')
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

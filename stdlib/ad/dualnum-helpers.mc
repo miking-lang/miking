@@ -1,4 +1,4 @@
-include "dualnum-symb.mc"
+include "dualnum-tree.mc"
 
 let num = dualnumNum
 let dnum = dualnumDNum

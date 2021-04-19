@@ -123,9 +123,9 @@ build/mi test program.mc
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
-### Prelude
+### Intrinsics
 
-The prelude contains a number of built-in values (intrinsics) and
+MCore contains a number of built-in values (intrinsics) and
 predefined functions and constants (part of the standard library).
 For instance
 ```
@@ -157,8 +157,6 @@ containing `utest` expressions. Please see the following files:
 * [Random number generation intrinsics](test/mexpr/random.mc)
 
 * [Time intrinsics](test/mexpr/time.mc)
-
-Besides the intrinsic functions, the prelude includes a number of functions defined in the MCore standard library, which can be found in the folder [stdlib](stdlib/). The main file [prelude.mc](stdlib/prelude.mc) is automatically included in all `.mc` files. Note also that the prelude file includes other files, e.g., [seq.mc](stdlib/seq.mc) and [option.mc](stdlib/option.mc). For the details of these prelude functions, please see the above files.
 
 
 ### Let Expressions
@@ -723,8 +721,7 @@ Including a file is equivalent to inserting all the top-level
 definitions of that file. There are no namespaces and no
 disambiguation; if a name defined in an included file is shadowed
 in the including file, the included definition becomes
-unavailable. When `MCORE_STDLIB` is defined, the file `prelude.mc`
-is automatically included.
+unavailable.
 
 
 ### Language Fragments
@@ -1013,10 +1010,10 @@ let a = atomicMake 0 in
 utest atomicGet a with 0 in
 ```
 
-`atomicCAS` performs an atomic compare-and-set, that is, it only updates the
-value of the reference if its current value is physically identical to the
-provided value, and then returns a Boolean representing if the update was
-successful or not:
+`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
+updates the value of `a` to `newVal` if the current value is identical to
+`oldVal`, and then returns a Boolean representing if the update was successful
+or not:
 
 ```
 utest atomicCAS a 0 1 with true in
@@ -1024,8 +1021,11 @@ utest atomicCAS a 42 3 with false in
 utest atomicGet a with 1 in
 ```
 
-To unconditionally set the value, we can use `atomicExchange`, which also
-returns the old value of the reference:
+The compare-and-set operation is currently supported for integer atomic
+references only.
+
+To unconditionally set the value of an atomic reference, we can use
+`atomicExchange`, which also returns the old value of the reference:
 
 ```
 utest atomicExchange a 2 with 1 in
@@ -1279,21 +1279,6 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | Dict        | Record          |
 | Tuple       | Tuple (Record)  |
 | other       | N/A             |
-
-#### Note when installing Python with brew
-`pyml` requires the shared library `libpython`. However, when using Python installed by brew on macOS, this library is not available in the paths searched by `pyml`. One way to fix this is to create a symlink to the library in `/usr/local/lib`. To find where the library is installed, use the command:
-
-```
-python3-config --ldflags
-```
-
-This should output `-L/some_path` where `some_path` is the path to the directory containing `libpython*.dylib` (where `*` is the version number). To create the symlink, type
-
-```
-ln -s /some_path/libpython*.dylib /usr/local/lib/
-```
-
-The bindings should now work properly.
 
 ## Compiling to OCaml
 The standard library contains functions for compiling and running `mexpr`

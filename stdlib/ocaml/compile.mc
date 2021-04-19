@@ -1,69 +1,33 @@
 include "string.mc"
-include "python/python.mc"
+include "process-helpers.mc"
 
-let _blt = pyimport "builtins"
-let _subprocess = pyimport "subprocess"
-let _tempfile = pyimport "tempfile"
-let _pathlib = pyimport "pathlib"
-
-type ExecResult = {stdout: String, stderr: String, returncode: Int}
 type Program = String -> [String] -> ExecResult
-
-let _writeToFile = lam str. lam filename.
-  let f = pycall _blt "open" (filename, "w+") in
-  pycall f "write" (str,);
-  pycall f "close" ();
-  ()
-
-let _readFile = lam filename.
-  let f = pycall _blt "open" (filename, "r+") in
-  let content = pycall f "read" () in
-  pycall f "close" ();
-  pyconvert content
-
-
-let _runCommand : String->String->String->ExecResult =
-  lam cmd. lam stdin. lam cwd.
-    let r = pycallkw _subprocess "run" (cmd,)
-            { cwd=cwd,
-              input=pycall (pycall _blt "str" (stdin,)) "encode" (),
-              stdout = pythonGetAttr _subprocess "PIPE",
-              stderr = pythonGetAttr _subprocess "PIPE" } in
-    let returncode = pyconvert (pythonGetAttr r "returncode") in
-    let stdout =
-      pyconvert (pycall (pythonGetAttr r "stdout") "decode" ())
-    in
-    let stderr =
-      pyconvert (pycall (pythonGetAttr r "stderr") "decode" ())
-    in
-    {stdout=stdout, stderr=stderr, returncode=returncode}
 
 let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanup: Unit -> Unit} = lam config. lam p.
   let config = if config.warnings
     then ""
     else "(env (dev (flags (:standard -w -a)))) " in
-  let dunefile = concat config "(executable (name program) (libraries batteries boot))" in
-  let td = pycall _tempfile "TemporaryDirectory" () in
-  let dir = pythonGetAttr td "name" in
-  let tempfile = lam f.
-    let p = pycall _pathlib "Path" (dir,) in
-    pycall _blt "str" (pycall p "joinpath" (f,),)
+  let dunefile =
+    concat config "(executable (name program) (libraries batteries boot))"
   in
+  let td = phTempDirMake () in
+  let dir = phTempDirName td in
+  let tempfile = lam f. phJoinPath dir f in
 
-  _writeToFile p (tempfile "program.ml");
-  _writeToFile dunefile (tempfile "dune");
+  phWriteToFile p (tempfile "program.ml");
+  phWriteToFile dunefile (tempfile "dune");
 
   let command = ["dune", "build"] in
-  let r = _runCommand command "" (tempfile "") in
+  let r = phRunCommand command "" dir in
   if neqi r.returncode 0 then
       print (join ["'dune build' failed on program:\n\n",
-                   _readFile (tempfile "program.ml"),
+                   phReadFile (tempfile "program.ml"),
                    "\n\nexit code: ",
                    int2string r.returncode,
                    "\n\nstandard error:\n", r.stderr]);
+      phTempDirDelete td;
       exit 1
   else ();
-  
 
   {
     run =
@@ -71,15 +35,13 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> {run: Program, cleanu
         let command =
           concat ["dune", "exec", "./program.exe", "--"] args
         in
-        _runCommand command stdin (tempfile ""),
-    cleanup =
-      lam.
-        pycall td "cleanup" ();
-        ()
+        phRunCommand command stdin (tempfile ""),
+    cleanup = phTempDirDelete td,
+    binaryPath = pyconvert (tempfile "_build/default/program.exe")
   }
 
 let ocamlCompile : String -> {run: Program, cleanup: Unit -> Unit} =
-  ocamlCompileWithConfig {warnings=true}
+  ocamlCompileWithConfig {warnings=false}
 
 mexpr
 

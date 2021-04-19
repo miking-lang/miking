@@ -2,6 +2,7 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- Test symbools
+include "bool.mc"
 
 mexpr
 

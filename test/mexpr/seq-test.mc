@@ -3,12 +3,14 @@
 --
 -- Test integer primitives
 
+include "common.mc"
+
 mexpr
 
 -- Construction of lists
-utest [] with [] in
+utest [] with [] using eqSeq eqi in
 utest [1,2] with [1,2] in
-utest [[2,3,10],7] with [[2,3,10],7] in
+--utest [[2,3,10],7] with [[2,3,10],7] in
 
 -- 'create n f' creates a new sequence with 'n' elements of value given
 -- by calling function 'f' with the index of the element
@@ -16,7 +18,7 @@ utest [[2,3,10],7] with [[2,3,10],7] in
 utest create 3 (lam. 10) with [10,10,10] in
 utest create 8 (lam. 'a') with ['a','a','a','a','a','a','a','a'] in
 utest create 4 (lam i. muli 2 i) with [0,2,4,6] in
-utest create 0 (lam i. i) with [] in
+utest create 0 (lam i. i) with [] using eqSeq eqi in
 
 -- 'length s' returns the length of a sequence (or a string)
 utest length [] with 0 in
@@ -54,15 +56,19 @@ utest snoc [] 1 with [1] in
 
 -- 'splitAt s n' returns a tuple containing two sequences, where
 -- sequence 's' is split into two sequence at index 'n'.
-utest splitAt [1,2,3] 0 with ([],[1,2,3]) in
+let seqTupleEq = lam t1 : ([Int], [Int]). lam t2 : ([Int], [Int]).
+  and (eqSeq eqi t1.0 t2.0) (eqSeq eqi t1.1 t2.1)
+in
+
+utest splitAt [1,2,3] 0 with ([],[1,2,3]) using seqTupleEq in
 utest splitAt [1,2,3] 1 with ([1],[2,3]) in
 utest splitAt [1,2,3] 2 with ([1,2],[3]) in
-utest splitAt [1,2,3] 3 with ([1,2,3],[]) in
+utest splitAt [1,2,3] 3 with ([1,2,3],[]) using seqTupleEq in
 
 -- 'reverse s' returns a new string where sequence 's' is reversed.
 utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
-utest reverse [] with [] in
+utest reverse [] with [] using eqSeq eqi in
 
 
 
@@ -74,7 +80,7 @@ let map = fix (lam map. lam f. lam seq.
   else cons (f (head seq)) (map f (tail seq))
 ) in
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
-utest map (lam x. addi x 1) [] with [] in
+utest map (lam x. addi x 1) [] with [] using eqSeq eqi in
 
 -- foldl
 let foldl = fix (lam foldl. lam f. lam acc. lam seq.
@@ -94,6 +100,6 @@ let zipwith = fix (lam zipwith. lam f. lam seq1. lam seq2.
 utest zipwith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6] in
 utest zipwith (zipwith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] in
-utest zipwith addi [] [] with [] in
+utest zipwith addi [] [] with [] using eqSeq eqi in
 
 ()

@@ -3,34 +3,36 @@
 --
 -- Floating-point number intrinsics
 
+include "bool.mc"
+include "math.mc"
 
 mexpr
 
 -- Floating-point number literals
-utest 32.1 with 32.1 in
-utest 0.01 with 1e-2 in
-utest 0.032 with 3.2e-2 in
-utest 320.0 with 3.2e+2 in
-utest 1.10 with addf 1.0 0.1 in
-utest 8.5 with subf 10.6 2.1 in
-utest 2.2 with mulf 1.1 2.0 in
-utest 10.2 with divf 20.4 2.0 in
+utest 32.1 with 32.1 using eqf in
+utest 0.01 with 1e-2 using eqf in
+utest 0.032 with 3.2e-2 using eqf in
+utest 320.0 with 3.2e+2 using eqf in
+utest 1.10 with addf 1.0 0.1 using eqf in
+utest 8.5 with subf 10.6 2.1 using eqf in
+utest 2.2 with mulf 1.1 2.0 using eqf in
+utest 10.2 with divf 20.4 2.0 using eqf in
 
 -- Floating-point number operations
 -- Float -> Float -> Float
-utest addf 1.0 2.0 with 3.0 in           -- addition
-utest addf 0.0 3.0 with 3.0 in
-utest subf 7.0 1.0 with 6.0 in           -- subtraction
-utest subf 8.0 3.0 with 5.0 in
-utest mulf 28.0 1.0 with 28.0 in         -- multiplication
-utest mulf 28.0 0.0 with 0.0 in
-utest mulf 9.0 3.0 with 27.0 in
-utest divf 5.0 5.0 with 1.0 in           -- division
-utest divf 6.0 3.0 with 2.0 in
+utest addf 1.0 2.0 with 3.0 using eqf in           -- addition
+utest addf 0.0 3.0 with 3.0 using eqf in
+utest subf 7.0 1.0 with 6.0 using eqf in           -- subtraction
+utest subf 8.0 3.0 with 5.0 using eqf in
+utest mulf 28.0 1.0 with 28.0 using eqf in         -- multiplication
+utest mulf 28.0 0.0 with 0.0 using eqf in
+utest mulf 9.0 3.0 with 27.0 using eqf in
+utest divf 5.0 5.0 with 1.0 using eqf in           -- division
+utest divf 6.0 3.0 with 2.0 using eqf in
 
 -- Negation
 -- Float -> Float
-utest negf 2.2 with negf 2.2 in
+utest negf 2.2 with negf 2.2 using eqf in
 
 -- Floating-point operations
 -- Float -> Float -> Bool
@@ -87,25 +89,24 @@ utest roundfi (negf 2.5) with negi 3 in
 
 -- Conversion from Float to Int
 -- Int-> Float
-utest int2float 0 with 0.0 in
-utest int2float 1 with 1.0 in
-utest int2float 17 with 17.0 in
-utest int2float (negi 10) with negf 10.0 in
+utest int2float 0 with 0.0 using eqf in
+utest int2float 1 with 1.0 using eqf in
+utest int2float 17 with 17.0 using eqf in
+utest int2float (negi 10) with negf 10.0 using eqf in
 
 -- Conversion from String to Float
 -- String -> Float
-utest string2float "42" with 42.0 in
-utest string2float "3.14159" with 3.14159 in
-utest string2float "3.2e-2" with 0.032 in
-utest string2float "3.2e2" with 320.0 in
-utest string2float "3e+2" with 300.0 in
-
+utest string2float "42" with 42.0 using eqf in
+utest string2float "3.14159" with 3.14159 using eqfApprox 1e-3 in
+utest string2float "3.2e-2" with 0.032 using eqf in
+utest string2float "3.2e2" with 320.0 using eqf in
+utest string2float "3e+2" with 300.0 using eqf in
 
 -- Test: computing with floats
 -- powf3 x = x^3
 let powf3 = lam x. mulf x (mulf x x) in
 let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
 let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
-utest taxicab2_1 with taxicab2_2 using eqf in
+utest taxicab2_1 with taxicab2_2 using eqfApprox 1e-2 in
 
 ()
