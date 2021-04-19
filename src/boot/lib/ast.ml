@@ -558,9 +558,9 @@ let const_has_side_effect = function
   | CwriteFile _
   | CfileExists
   | CdeleteFile
-  | Ccommand
   | Cerror
-  | Cexit ->
+  | Cexit
+  | Ccommand ->
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->

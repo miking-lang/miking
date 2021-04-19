@@ -704,8 +704,8 @@ and print_env fmt env =
 
 (** Helper function for configuring the string formatter and printing *)
 let ustr_formatter_print ?(symbol = !enable_debug_symbol_print) ?(indent = 2)
-    ?(max_indent = 68) ?(margin = max_int) ?(max_boxes = max_int)
-    ?(prefix = "") printer arg =
+    ?(max_indent = 68) ?(margin = 79) ?(max_boxes = max_int) ?(prefix = "")
+    printer arg =
   (* Configure global settings *)
   ref_symbol := symbol ;
   ref_indent := indent ;
