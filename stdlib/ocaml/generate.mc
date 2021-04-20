@@ -802,9 +802,12 @@ lang OCamlObjWrap = MExprAst + OCamlAst
       let bindings = mapMap (lam expr. objWrapRec false expr) t.bindings in
       TmRecord {t with bindings = bindings}
   | (OTmArray {tms = tms}) & t ->
-    let isConstArray = all (lam expr.
-      match expr with TmConst _ then true else false) tms in
-    if isConstArray then
+    let isPrimitiveArray = all (lam expr.
+      match expr with
+        TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}
+      then true else false
+    ) tms in
+    if isPrimitiveArray then
       _objRepr t
     else
       _objRepr (smap_Expr_Expr (objWrapRec false) t)
