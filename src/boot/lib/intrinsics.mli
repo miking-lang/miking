@@ -124,8 +124,6 @@ end
 module Symb : sig
   type t
 
-  type symbtype
-
   val gensym : unit -> t
 
   val eqsym : t -> t -> bool
