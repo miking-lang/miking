@@ -591,8 +591,10 @@ end
 lang TensorTypeEq = Eq + TensorTypeAst
   sem eqType (typeEnv : TypeEnv) (lhs : Type) =
   | TyTensor r ->
-    match unwrapType typeEnv lhs with Some (TyTensor l) then
-      eqType typeEnv l.ty r.ty
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyTensor l then
+        eqType typeEnv l.ty r.ty
+      else false
     else false
 end
 

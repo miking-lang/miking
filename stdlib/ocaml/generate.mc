@@ -118,7 +118,9 @@ let _builtinNameMap : Map String Name =
       ]))
 
 let _builtinNamesSet : Set Name =
-  setOfSeq nameCmp (map (lam x. x.1) (mapBindings _builtinNameMap))
+  setOfSeq nameCmp
+           (map (lam x : (String, Name). x.1)
+           (mapBindings _builtinNameMap))
 
 let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then

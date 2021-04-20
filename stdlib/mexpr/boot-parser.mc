@@ -561,10 +561,18 @@ utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 17 in
 
 -- Nested TyTensor
-let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:Tensor[Char],b_2:Float}}]= lam x.x in y" in
-utest lside s with rside s in
+let s = "let y:{a:Tensor[Char],b:Float}= lam x.x in y" in
+let recTy = tyseq_ (tyrecord_ [
+    ("a", tytensor_ tychar_),
+    ("b", tyfloat_)
+  ])
+in
+let typedLet = lam letTy.
+  bind_ (let_ "y" letTy (ulam_ "x" (var_ "x")))
+        (var_ "y") in
+utest parseMExprString s with typedLet recTy using eqExpr in
 utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
-with r_info 1 6 1 62 in
+with r_info 1 6 1 30 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
