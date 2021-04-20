@@ -84,8 +84,9 @@ end
 -- Records and record updates can be seen as sequences of applications.
 lang RecordANF = ANF + RecordAst
   sem isValue =
-  | TmRecord _ -> false
-  | TmRecord {bindings = []} -> true
+  | TmRecord t ->
+    if mapIsEmpty t.bindings then true
+    else false
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
