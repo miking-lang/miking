@@ -365,6 +365,26 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
     else never
 end
 
+lang ExtPrettyPrint = PrettyPrint + ExtAst + UnknownTypeAst
+  sem isAtomic =
+  | TmExt _ -> false
+
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  -- Intentionally left blank
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmExt t ->
+    match pprintVarName env t.ident with (env,str) then
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        match getTypeStringCode indent env t.ty with (env,ty) then
+          (env,
+           join ["external ", str, " : ", ty, "in", pprintNewline indent,
+                 inexpr])
+        else never
+      else never
+    else never
+end
+
 lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
   sem isAtomic =
   | TmType _ -> false
@@ -993,7 +1013,7 @@ lang MExprPrettyPrint =
   VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
   DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
-  NeverPrettyPrint +
+  NeverPrettyPrint + ExtPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +

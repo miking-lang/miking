@@ -384,6 +384,30 @@ lang NeverAst
   | TmNever _ & t -> acc
 end
 
+-- TmExt --
+lang ExtAst = VarAst
+  syn Expr =
+  | TmExt {ident : Name,
+           inexpr : Expr,
+           ty : Type,
+           info : Info}
+
+  sem infoTm =
+  | TmExt r -> r.info
+
+  sem ty =
+  | TmExt t -> t.ty
+
+  sem withType (ty : Type) =
+  | TmExt t -> TmExt {t with ty = ty}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | TmExt t -> TmExt {t with inexpr = f t.inexpr}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmExt t -> f acc t.inexpr
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -888,7 +912,7 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst +
+  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + ExtAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +

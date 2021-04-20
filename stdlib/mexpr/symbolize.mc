@@ -131,6 +131,24 @@ lang LetSym = Sym + LetAst
     else never
 end
 
+lang ExtSym = Sym + ExtAst
+  sem symbolizeType (env : SymEnv) =
+  -- Intentinally left blank
+
+  sem symbolizeExpr (env : SymEnv) =
+  | TmExt t ->
+    match env with {varEnv = varEnv} then
+      let ty = symbolizeType env t.ty in
+      let ident = nameSetNewSym t.ident in
+      let str = nameGetStr ident in
+      let varEnv = mapInsert str ident varEnv in
+      let env = {env with varEnv = varEnv} in
+      TmExt {{{t with ident = ident}
+                 with inexpr = symbolizeExpr env t.inexpr}
+                 with ty = ty}
+    else never
+end
+
 lang TypeSym = Sym + TypeAst
   sem symbolizeType (env : SymEnv) =
   -- Intentinally left blank
