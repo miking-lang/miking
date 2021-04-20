@@ -1,3 +1,3 @@
 #!/bin/sh
-ocaml run.ml $1
+ocaml unix.cma run.ml $1
 
