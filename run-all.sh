@@ -8,6 +8,7 @@
 run() {
     output=$1
     output="$output\n$(build/boot src/main/mi.mc -- run --test $1)\n"
+    output="$output\n$(build/mi run --test $1)\n"
     echo $output
 }
 
