@@ -378,7 +378,8 @@ lang ExtPrettyPrint = PrettyPrint + ExtAst + UnknownTypeAst
       match pprintCode indent env t.inexpr with (env,inexpr) then
         match getTypeStringCode indent env t.ty with (env,ty) then
           (env,
-           join ["external ", str, " : ", ty, "in", pprintNewline indent,
+           join ["external ", str, " : ", ty, pprintNewline indent,
+                 "in", pprintNewline indent,
                  inexpr])
         else never
       else never
@@ -1243,6 +1244,11 @@ let empty_empty =
   bindall_ [nulet_ n1 (int_ 1), nulet_ n2 (int_ 2), addi_ (nvar_ n1) (nvar_ n2)]
 in
 
+-- external addi : Int -> Int -> Int in addi
+let external_addi =
+  bind_ (ext_ "addi" (tyarrows_ [tyint_, tyint_, tyint_])) (var_ "addi")
+in
+
 let sample_ast =
   bindall_ [
     func_foo,
@@ -1259,13 +1265,14 @@ let sample_ast =
     func_pedanticIsSome,
     func_is123,
     var_var,
-    empty_empty
+    empty_empty,
+    external_addi
   ]
 in
 
--- print "\n\n";
--- print (expr2str sample_ast);
--- print "\n\n";
+print "\n\n";
+print (expr2str sample_ast);
+print "\n\n";
 
 utest length (expr2str sample_ast) with 0 using geqi in
 
