@@ -38,6 +38,8 @@ let files_of_folders lst =
       else v :: a )
     [] lst
 
+let enable_test = ref false
+
 (* Iterate over all potential test files and run tests *)
 let testprog lst =
   utest := true ;
@@ -56,14 +58,15 @@ let testprog lst =
 let runrepl _ = start_repl ()
 
 (* Print out main menu *)
-let usage_msg = "Usage: boot [run|repl|test] <files>\n\nOptions:"
+let usage_msg = "Usage: boot [run|repl] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
   (* A list of command line arguments *)
   let speclist =
     [ (* First character in description string must be a space for alignment! *)
-      ( "--debug-parse"
+      ("--test", Arg.Set enable_test, " Run unit tests.")
+    ; ( "--debug-parse"
       , Arg.Set enable_debug_after_parse
       , " Enables output of parsing." )
     ; ( "--debug-mlang"
@@ -126,15 +129,12 @@ let main =
   if List.length !lst = 0 then Arg.usage speclist usage_msg
   else
     match List.rev !lst with
-    (* Run tests on one or more files *)
-    | "test" :: lst | "t" :: lst ->
-        testprog lst
     (* Start the MCore REPL *)
     | "repl" :: lst ->
         runrepl lst
     (* Run one program with program arguments without typechecking *)
-    | "run" :: name :: _ | name :: _ ->
-        evalprog name
+    | "run" :: (name :: _ as lst) | (name :: _ as lst) ->
+        if !enable_test then testprog lst else evalprog name
     (* Show the menu *)
     | _ ->
         Arg.usage speclist usage_msg

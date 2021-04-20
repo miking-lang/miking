@@ -13,6 +13,7 @@
 set -e
 
 export BOOT_NAME=boot
+export MI_NAME=mi
 
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
@@ -22,6 +23,18 @@ build() {
     mkdir -p build
     dune build
     cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
+    if [ -e build/$MI_NAME ]
+    then
+        echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
+    else
+        echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
+        time (build/$BOOT_NAME src/main/mi.mc -- compile src/main/mi.mc)
+        mv -f $MI_NAME build/$MI_NAME
+        echo "Bootstrapping the Miking compiler (2st round, might take some more time)"
+        time (build/$MI_NAME compile src/main/mi.mc)
+        mv -f $MI_NAME build/$MI_NAME
+        rm -f mi
+    fi
 }
 
 # Install the boot interpreter locally for the current user
@@ -30,6 +43,7 @@ install() {
     lib_path=$HOME/.local/lib/mcore/stdlib
     mkdir -p $bin_path $lib_path
     cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
+    cp -f build/$MI_NAME $bin_path/$MI_NAME; chmod +x $bin_path/$MI_NAME
     rm -rf $lib_path; cp -rf stdlib $lib_path
     dune install
 }
@@ -37,43 +51,43 @@ install() {
 # Run the test suite for parallel programming
 runtests_par() {
     (cd test
-     ../build/$BOOT_NAME test multicore/*)
-    build/$BOOT_NAME test stdlib/multicore/*
+     ../build/$BOOT_NAME multicore/* --test)
+    build/$BOOT_NAME stdlib/multicore/* --test
 }
 
 # Run the test suite for sundials
 runtests_sundials() {
     (cd test
-     ../build/$BOOT_NAME test sundials/*)
-    build/$BOOT_NAME test stdlib/sundials/*
+     ../build/$BOOT_NAME sundials/* --test)
+    build/$BOOT_NAME stdlib/sundials/* --test
 }
 
 # Run the test suite for python intrinsic tests
 runtests_py() {
     (cd test
-     ../build/$BOOT_NAME test py/*)
+     ../build/$BOOT_NAME py/* --test)
 }
 
 # Run the test suite for OCaml compiler
 runtests_ocaml() {
     (cd stdlib
-     ../build/$BOOT_NAME test ocaml/*)
+     ../build/$BOOT_NAME ocaml/* --test)
 }
 
 # Run the test suite
 runtests() {
     (cd test
-    ../build/$BOOT_NAME test mexpr &
-    ../build/$BOOT_NAME test mlang &
+    ../build/$BOOT_NAME mexpr --test &
+    ../build/$BOOT_NAME mlang --test&
     cd ../stdlib
-    ../build/$BOOT_NAME test mexpr &
-    ../build/$BOOT_NAME test c &
-    ../build/$BOOT_NAME test ad &
-    ../build/$BOOT_NAME test ext &
-    ../build/$BOOT_NAME test parser &
+    ../build/$BOOT_NAME mexpr --test &
+    ../build/$BOOT_NAME c --test &
+    ../build/$BOOT_NAME ad --test&
+    ../build/$BOOT_NAME ext --test &
+    ../build/$BOOT_NAME parser --test&
     cd ..
     export MCORE_STDLIB='@@@'
-    build/$BOOT_NAME test stdlib &)
+    build/$BOOT_NAME stdlib --test &)
     if [ -n "$MI_TEST_PAR" ]; then
         runtests_par &
     fi
