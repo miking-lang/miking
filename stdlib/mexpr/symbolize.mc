@@ -509,7 +509,7 @@ lang MExprSym =
 
   -- Terms
   VarSym + AppSym + LamSym + RecordSym + LetSym + TypeSym + RecLetsSym +
-  ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym +
+  ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym + ExtSym +
 
   -- Types
   UnknownTypeSym + BoolTypeSym + IntTypeSym + FloatTypeSym + CharTypeSym +
