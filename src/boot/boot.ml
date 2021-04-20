@@ -2,7 +2,7 @@
    Miking is licensed under the MIT license.
    Copyright (C) David Broman. See file LICENSE.txt
 
-   mi.ml is the main entry point for first stage of the
+   boot.ml is the main entry point for first stage of the
    bootstrapped Miking compiler. The bootstapper is interpreted and
    implemented in OCaml. Note that the Miking bootstrapper
    only implements a subset of the Ragnar language.
@@ -56,7 +56,7 @@ let testprog lst =
 let runrepl _ = start_repl ()
 
 (* Print out main menu *)
-let usage_msg = "Usage: mi [run|repl|test] <files>\n\nOptions:"
+let usage_msg = "Usage: boot [run|repl|test] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =

@@ -7,7 +7,7 @@
 # Compile and run a file
 compile() {
   output=$1
-  output="$output\n$(build/mi src/main/mi.mc -- compile --test $1)"
+  output="$output\n$(build/boot src/main/mi.mc -- compile --test $1)"
   if [ $? -eq 0 ]
   then
     binary=$(basename "$1" .mc)

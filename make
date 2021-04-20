@@ -12,6 +12,8 @@
 # Forces the script to exit on error
 set -e
 
+export BOOT_NAME=boot
+
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
@@ -19,7 +21,7 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 build() {
     mkdir -p build
     dune build
-    cp -f _build/install/default/bin/boot.mi build/mi
+    cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
 }
 
 # Install the boot interpreter locally for the current user
@@ -27,7 +29,7 @@ install() {
     bin_path=$HOME/.local/bin/
     lib_path=$HOME/.local/lib/mcore/stdlib
     mkdir -p $bin_path $lib_path
-    cp -f build/mi $bin_path/mi; chmod +x $bin_path/mi
+    cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
     rm -rf $lib_path; cp -rf stdlib $lib_path
     dune install
 }
@@ -35,43 +37,43 @@ install() {
 # Run the test suite for parallel programming
 runtests_par() {
     (cd test
-     ../build/mi test multicore/*)
-    build/mi test stdlib/multicore/*
+     ../build/$BOOT_NAME test multicore/*)
+    build/$BOOT_NAME test stdlib/multicore/*
 }
 
 # Run the test suite for sundials
 runtests_sundials() {
     (cd test
-     ../build/mi test sundials/*)
-    build/mi test stdlib/sundials/*
+     ../build/$BOOT_NAME test sundials/*)
+    build/$BOOT_NAME test stdlib/sundials/*
 }
 
 # Run the test suite for python intrinsic tests
 runtests_py() {
     (cd test
-     ../build/mi test py/*)
+     ../build/$BOOT_NAME test py/*)
 }
 
 # Run the test suite for OCaml compiler
 runtests_ocaml() {
     (cd stdlib
-     ../build/mi test ocaml/*)
+     ../build/$BOOT_NAME test ocaml/*)
 }
 
 # Run the test suite
 runtests() {
     (cd test
-    ../build/mi test mexpr &
-    ../build/mi test mlang &
+    ../build/$BOOT_NAME test mexpr &
+    ../build/$BOOT_NAME test mlang &
     cd ../stdlib
-    ../build/mi test mexpr &
-    ../build/mi test c &
-    ../build/mi test ad &
-    ../build/mi test ext &
-    ../build/mi test parser &
+    ../build/$BOOT_NAME test mexpr &
+    ../build/$BOOT_NAME test c &
+    ../build/$BOOT_NAME test ad &
+    ../build/$BOOT_NAME test ext &
+    ../build/$BOOT_NAME test parser &
     cd ..
     export MCORE_STDLIB='@@@'
-    build/mi test stdlib &)
+    build/$BOOT_NAME test stdlib &)
     if [ -n "$MI_TEST_PAR" ]; then
         runtests_par &
     fi
