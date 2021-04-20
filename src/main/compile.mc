@@ -32,12 +32,10 @@ let _preambleStr =
   let str = pprintOcaml (bind_ _preamble (int_ 0)) in
   subsequence str 0 (subi (length str) 1)
 
-recursive let _withPreamble = lam expr. lam options : Options.
+recursive let _withPreamble = lam expr.
   use OCamlAst in
   match expr with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr options}
-  else if options.excludeIntrinsicsPreamble then
-    expr
+    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
   else
     OTmPreambleText {text = _preambleStr, inexpr = expr}
 end
@@ -92,7 +90,7 @@ let compile = lam files. lam options : Options.
           match generateTypeDecl env ast with (env, ast) then
             let ast = generate env ast in
             let ast = objWrap ast in
-            _withPreamble ast options
+            _withPreamble ast
           else never
         else never
       in

@@ -25,8 +25,7 @@ let optionsMap = [
 ("--debug-parse", lam o : Options. {o with debugParse = true}),
 ("--debug-generate", lam o : Options. {o with debugGenerate = true}),
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
-("--test", lam o : Options. {o with runTests = true}),
-("--exclude-intrinsics-preamble", lam o : Options. {o with excludeIntrinsicsPreamble = true})
+("--test", lam o : Options. {o with runTests = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}
@@ -39,4 +38,3 @@ let parseOptions = lam xs.
       then f accOps
       else printLn (concat "Unknown option " s); exit 1
     ) options xs
-

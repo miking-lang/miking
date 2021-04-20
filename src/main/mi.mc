@@ -21,7 +21,6 @@ let menu = strJoin "\n" [
   "  --debug-generate                 Print the AST after code generation",
   "  --exit-before                    Exit before evaluation or compilation",
   "  --test                           Generate utest code",
-  "  --exclude-intrinsics-preamble    Exclude the intinsics preamble",
   ""]
 in
 
