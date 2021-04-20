@@ -19,6 +19,26 @@ let error_to_ustring e =
   | _ ->
       us (Printexc.to_string e)
 
+module ExtIdMap = Map.Make (Ustring)
+
+let check_uniqe_external_ids t =
+  let rec recur acc = function
+    | TmExt (fi, id, _, _, t) ->
+        if ExtIdMap.mem id acc then
+          raise
+            (Error
+               ( PARSE_ERROR
+               , ERROR
+               , fi
+               , [id; us "already defined at"; info2str (ExtIdMap.find id acc)]
+               ) )
+        else recur (ExtIdMap.add id fi acc) t
+    | t ->
+        sfold_tm_tm recur acc t
+  in
+  let _ = recur ExtIdMap.empty t in
+  t
+
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =
   match Sys.getenv_opt "HOME" with
@@ -136,7 +156,9 @@ let rec merge_includes root visited = function
 
 let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
-  ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
+  ustring |> Ustring.lexing_from_ustring
+  |> Parser.main_mexpr_tm Lexer.main
+  |> check_uniqe_external_ids
 
 let parse_mcore_file filename =
   try
@@ -144,7 +166,9 @@ let parse_mcore_file filename =
     let filename = Ustring.to_utf8 filename in
     local_parse_mcore_file filename
     |> merge_includes (Filename.dirname filename) [filename]
-    |> Mlang.flatten |> Mlang.desugar_post_flatten
+    |> Mlang.flatten |> Mlang.desugar_post_flatten |> check_uniqe_external_ids
+    |> Symbolize.symbolize builtin_name2sym
+    |> Deadcode.elimination builtin_sym2term builtin_name2sym
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
     fprintf stderr "%s\n" error_string ;
