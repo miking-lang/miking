@@ -54,8 +54,9 @@ let _mapOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.
 -- alternatively output is made such that if (_mkFinalPatExpr ... = (pat, expr)) then let 'pat = 'expr
 -- (where ' splices things into expressions) binds the appropriate names to the appropriate values
 -- INVARIANT: two semantically equal maps produce the same output, i.e., we preserve an equality that is stronger than structural
-let _mkFinalPatExpr : Map Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
-  let cmp = lam n1. lam n2. subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
+let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam nameMap.
+  let cmp = lam n1 : (Name, Name). lam n2 : (Name, Name).
+    subi (sym2hash (optionGetOr (negi 1) (nameGetSym n1.0))) (sym2hash (optionGetOr (negi 1) (nameGetSym n2.0))) in
   match unzip (sort cmp (assoc2seq {eq=nameEqSym} nameMap)) with (patNames, exprNames) then
     (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
@@ -196,8 +197,8 @@ lang OCamlGenerate = MExprAst + OCamlAst
           let pat = OPatRecord {bindings = fieldPatterns} in
           let reconstructedRecord = TmRecord {
             bindings = mapMap (lam n. nvar_ n) fieldNames,
-            ty = ty (t.body),
-            info = info (t.body)
+            ty = ty t.body,
+            info = infoTm t.body
           } in
           let thn =
             -- Do not use an inline record when the constructor takes an
@@ -363,8 +364,10 @@ lang OCamlGenerate = MExprAst + OCamlAst
       match ty with TyRecord {fields = fields} then
         Some fields
       else match ty with TyVar {ident = ident} then
-        match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
-          Some fields
+        match mapLookup ident constrs with Some rec then
+          match rec with TyRecord {fields = fields} then
+            Some fields
+          else None ()
         else None ()
       else None ()
     in
@@ -454,7 +457,7 @@ let _objTyped = lam.
 
 let _typeLiftEnvToGenerateEnv = lam typeLiftEnvMap. lam typeLiftEnv.
   use MExprAst in
-  let f = lam env. lam name. lam ty.
+  let f = lam env : GenerateEnv. lam name. lam ty.
     match ty with TyRecord {fields = fields} then
       {{env with records = mapInsert fields name env.records}
             with constrs = mapInsert name ty env.constrs}
@@ -785,7 +788,9 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | OTmMatch t ->
     _objObj
     (OTmMatch {{t with target = _objObj (objWrapRec false t.target)}
-                  with arms = map (lam p. (p.0, _objRepr (objWrapRec false p.1))) t.arms})
+                  with arms = map (lam p : (Pat, Expr).
+                                    (p.0, _objRepr (objWrapRec false p.1)))
+                                  t.arms})
   | t -> smap_Expr_Expr (objWrapRec false) t
 
   sem objWrap =

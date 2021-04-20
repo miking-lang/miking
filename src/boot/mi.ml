@@ -10,9 +10,9 @@
 
 open Printf
 open Boot.Ast
+open Boot.Builtin
 open Boot.Eval
 open Boot.Repl
-open Boot.Mexpr
 
 (* Define the file slash, to make it platform independent *)
 let sl = if Sys.win32 then "\\" else "/"

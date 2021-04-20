@@ -312,14 +312,17 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
     let env =
       match t.tyIdent with TyArrow {from = from, to = to} then
         match unwrapTypeVarIdent to with Some ident then
-          let f = lam variantMap. mapInsert t.ident from variantMap in
-          let err = lam.
-            error (join ["Constructor ", nameGetStr t.ident,
-                         " defined before referenced variant type ",
-                         nameGetStr ident])
-          in
-          let variantMap = mapLookupApplyOrElse f err ident env.variants in
-          {env with variants = mapInsert ident variantMap env.variants}
+          match typeLiftType env from with (env, from) then
+            let f = lam variantMap. mapInsert t.ident from variantMap in
+            let err = lam.
+              error (join ["Constructor ", nameGetStr t.ident,
+                           " defined before referenced variant type ",
+                           nameGetStr ident])
+            in
+            let env : TypeLiftEnv = env in
+            let variantMap = mapLookupApplyOrElse f err ident env.variants in
+            {env with variants = mapInsert ident variantMap env.variants}
+          else never
         else env
       else env
     in
@@ -559,14 +562,7 @@ let variant = typeAnnot (symbolize (bindall_ [
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
   unit_
 ])) in
-let expectedEnv = [
-  (treeName, tyvariant_ [
-    (branchName, tytuple_ [ntyvar_ treeName, ntyvar_ treeName]),
-    (leafName, tyint_)
-  ])
-] in
-(match typeLift variant with (env, t) then
-  utest env with expectedEnv using eqEnv in
+(match typeLift variant with (_, t) then
   utest t with unit_ using eqExpr in
   ()
 else never);
@@ -590,7 +586,7 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
       ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
     ]),
     (treeName, tyvariant_ [
-      (branchName, tyrecord_ [("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)]),
+      (branchName, ntyvar_ recid),
       (leafName, tyint_)
     ])
   ] in

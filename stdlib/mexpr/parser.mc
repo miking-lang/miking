@@ -466,7 +466,7 @@ lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst + UnknownTypeAst
   | str ->
     Some {
       val = lam x. lam y.
-        TmApp {lhs = x, rhs = y, ty = tyunknown_, info = mergeInfo (info x) (info y)},
+        TmApp {lhs = x, rhs = y, ty = tyunknown_, info = mergeInfo (infoTm x) (infoTm y)},
       pos = p, str = str, assoc = LeftAssoc (), prec = 50}
 end
 

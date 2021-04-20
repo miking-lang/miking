@@ -111,7 +111,8 @@ let parseMExprString str =
   PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
 
 let parseMCoreFile str =
-  PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file)
+  let t = str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file in
+  PTreeTm t
 
 (* Returns a tuple with the following elements
    1. ID field 

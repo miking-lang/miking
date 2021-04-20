@@ -569,6 +569,7 @@ let const_has_side_effect = function
   | Cref | CmodRef _ | CdeRef ->
       true
   (* MCore intrinsics: Maps *)
+  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap _
   | CmapEmpty
   | CmapSize
