@@ -42,6 +42,8 @@ module Mseq : sig
 
     val map : ('a -> 'b) -> 'a t -> 'b t
 
+    val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
+
     val fold_right : ('a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
 
     val combine : 'a t -> 'b t -> ('a * 'b) t
@@ -67,11 +69,15 @@ end
 module Symb : sig
   type t
 
+  type symbtype
+
   val gensym : unit -> t
 
   val eqsym : t -> t -> bool
 
   val hash : t -> int
+
+  val compare : t -> t -> int
 
   module Helpers : sig
     val nosym : t
@@ -122,6 +128,8 @@ module MSys : sig
   val error : int Mseq.t -> exn
 
   val argv : int Mseq.t Mseq.t
+
+  val command : int Mseq.t -> int
 end
 
 module Time : sig

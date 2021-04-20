@@ -3,6 +3,7 @@
 --
 
 include "mexpr/ast.mc"
+include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "string.mc"
@@ -93,7 +94,7 @@ lang BootParser = MExprAst
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
       TmRecord {bindings =
                  mapFromList cmpSID
-                   (map (lam b. (stringToSid b.0, b.1)) lst),
+                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
                ty = tyunknown_,
                info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
@@ -166,7 +167,7 @@ lang BootParser = MExprAst
   | 207 /-TyRecord-/ ->
     let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
     TyRecord {info = ginfo t 0,
-              fields = mapFromList cmpSID (map (lam b. (stringToSid b.0, b.1)) lst)}
+              fields = mapFromList cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
       TyVariant {info = ginfo t 0,
@@ -218,7 +219,7 @@ lang BootParser = MExprAst
 
      PatRecord {bindings =
                  mapFromList cmpSID
-                   (map (lam b. (stringToSid b.0, b.1)) lst),
+                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
               info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
@@ -268,7 +269,7 @@ lang BootParser = MExprAst
 
 end
 
-lang BootParserTest = BootParser + MExprPrettyPrint
+lang BootParserTest = BootParser + MExprPrettyPrint + MExprEq
 
 mexpr
 use BootParserTest in
@@ -276,17 +277,17 @@ use BootParserTest in
 
 -- Tests where strings of MExpr text is parsed and then pretty printed again.
 -- All terms are tested in this way.
-let norm = lam str.
+let norm : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
 -- Test the combination of parsing and pretty printing
 let parse = lam s. expr2str (parseMExprString s) in
-let lside = lam s. norm (parse s) in
-let rside = norm in
+let lside : String -> String = lam s. norm (parse s) in
+let rside : String -> String = norm in
 
 -- Test that info gives the right columns and rows
-let l_info = lam s.  info (parseMExprString s) in
-let r_info = lam r1. lam c1. lam r2. lam c2.
+let l_info : String -> Info = lam s. infoTm (parseMExprString s) in
+let r_info : Int -> Int -> Int -> Int -> Info = lam r1. lam c1. lam r2. lam c2.
       Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
 
 -- TmVar
@@ -311,7 +312,7 @@ utest l_info "  _aas_12 " with r_info 1 2 1 9 in
 let s = "let y = lam x.x in y" in
 utest lside s with rside s in
 utest l_info "  \n lam x.x" with r_info 2 1 2 8 in
-utest info (match parseMExprString s with TmLet r then r.body else ())
+utest infoTm (match parseMExprString s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
 utest l_info "  let x = 4 in y  " with r_info 1 2 1 14 in
 let s = "printLn x; 10" in
@@ -324,7 +325,11 @@ let s = "recursive let x = lam x.x let y = lam x. x in y" in
 utest lside s with rside s in
 let s = "   recursive let x = 5 \n let foo = 7 in x " in
 utest l_info s with r_info 1 3 2 15 in
-utest match parseMExprString s with TmRecLets r then (head (r.bindings)).info else ()
+utest
+  match parseMExprString s with TmRecLets r then
+    let fst : RecLetBinding = head r.bindings in
+    fst.info
+  else never
 with r_info 1 13 1 22 in
 
 -- TmConst
@@ -361,7 +366,8 @@ utest lside s with rside s in
 let s = "{a = 5}" in
 utest lside s with rside s in
 let s = "{bar = \"Hello\", foo = 123}" in
-utest lside s with rside s in
+let t = record_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
+utest parseMExprString s with t using eqExpr in
 utest l_info " {} " with r_info 1 1 1 3 in
 utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 
@@ -369,7 +375,8 @@ utest l_info " {foo = 123} " with r_info 1 1 1 12 in
 let s = "{a with foo = 5}" in
 utest lside s with rside s in
 let s = "{{bar='a', foo=7} with bar = 'b'}" in
-utest lside s with rside s in
+let t = recordupdate_ (record_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
+utest parseMExprString s with t using eqExpr in
 utest l_info " {foo with a = 18 } " with r_info 1 1 1 19 in
 
 -- NOTE(caylak, 2021-03-17): Commented out because test fails since parsing of TyVariant is not supported yet
@@ -391,13 +398,13 @@ utest lside s with rside s in
 utest l_info "  Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
 
 -- TmMatch, PatNamed
-let s =  "match 5 with x then x else 2"  in
+let s =  "match 5 with x then x else 2" in
 utest lside s with rside s in
 let s = "match foo with _ then 7 else 2" in
 utest lside s with rside s in
 utest l_info "match [4] with x then x else [] " with r_info 1 0 1 31 in
 let s = " match bar with Foo {a = x} then x else 2" in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 16 1 27 in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
@@ -405,67 +412,70 @@ let s = "match x with \"\" then x else 2" in
 utest lside s with rside s in
 let s = "match x with [x,y,z] then x else 2" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 20 in
 let s = " match x with [a] ++ v ++ [x,y,z] then x else 2" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 14 1 33 in
 let s = "match x with \"\" ++ x ++ [y] then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 27 in
 let s = "match x with [z] ++ x ++ \"\" then z else 2" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 27 in
 
 --TmMatch, PatRecord
 let s = "match x with {} then x else 2" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 15 in
 let s = "match x with {bar=_, foo=x} then x else 2" in
-utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+let t = match_ (var_ "x")
+               (prec_ [("bar", pvarw_), ("foo", pvar_ "x")])
+               (var_ "x") (int_ 2) in
+utest parseMExprString s with t using eqExpr in
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 27 in
 
 --TmMatch, PatCon
 let s = "match x with Foo {foo = x} then x else 100" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 26 in
 
 --TmMatch, PatInt, PatBool, PatChar
 let s = "match x with [1,2,12] then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 21 in
 let s = "match x with 'A' then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 16 in
 let s = "match x with [true,false] then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 25 in
 
 -- TmMatch, PatAnd, PatOr, PatNot
 let s = "match x with 1 & x then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 18 in
 let s = "match x with 1 | x then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 18 in
 let s = "match x with !y then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 15 in
 let s = "match 1 with (a & b) | (!c) then x else x" in
 utest lside s with rside s in
-utest match parseMExprString s with TmMatch r then info r.pat else ()
+utest match parseMExprString s with TmMatch r then infoPat r.pat else ()
 with r_info 1 14 1 26 in
 
 -- TmUtest
@@ -481,89 +491,107 @@ utest l_info "  \n  never " with r_info 2 2 2 7 in
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in
 utest lside s with rside "let y = lam x.x in y" in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 13 in
 let s = "lam x:Int. lam y:Char. x" in
 utest lside s with rside s in
-utest match parseMExprString " \n lam x:Int. lam y:Char. x" with TmLam l then info l.tyIdent else ()
+utest match parseMExprString " \n lam x:Int. lam y:Char. x" with TmLam l then infoTy l.tyIdent else ()
 with r_info 2 7 2 10 in
 
 -- TyInt
 let s = "let y:Int = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 9 in
 
 -- TyFloat
 let s = "let y:Float = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 11 in
 
 -- TyChar
 let s = "let y:Char = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 10 in
 
 -- TyArrow
 let s = "let y:(Int)->(Int) = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 7 1 17 in
 
 -- Nested TyArrow
 let s = "let y:([Float])->(Int) = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 7 1 21 in
 
 -- TySeq
 let s = "let y:[Int] = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 11 in
 
 -- Nested TySeq
 let s = "let y:[{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}}]= lam x.x in y" in
-utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+let recTy = tyseq_ (tyrecord_ [
+  ("a", tyrecord_ [
+    ("a_1", tyint_),
+    ("a_2", tyfloat_)]),
+  ("b", tyrecord_ [
+    ("b_1", tystr_),
+    ("b_2", tyfloat_)])]) in
+let typedLet = lam letTy.
+  bind_ (let_ "y" letTy (ulam_ "x" (var_ "x")))
+        (var_ "y") in
+utest parseMExprString s with typedLet recTy using eqExpr in
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 56 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
-utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+let recTy = tyrecord_ [("a", tyint_), ("b", tystr_)] in
+utest parseMExprString s with typedLet recTy using eqExpr in
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 22 in
 
 -- Nested TyRecord
 let s = "let y:{a:{a_1:Int,a_2:Float},b:{b_1:[Char],b_2:Float}} = lam x.x in y" in
-utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+let recTy = tyrecord_ [
+  ("a", tyrecord_ [
+    ("a_1", tyint_),
+    ("a_2", tyfloat_)]),
+  ("b", tyrecord_ [
+    ("b_1", tystr_),
+    ("b_2", tyfloat_)])] in
+utest parseMExprString s with typedLet recTy using eqExpr in
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 54 in
 
 -- TyVariant
 let s = "let y:<> = lam x.x in y" in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
 --utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
-with r_info 1 6 1 8 in  
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
+with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 6 1 10 in
 
 -- TyApp
 let s = "let y:((Int)->(Int))(Int) = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 8 1 24 in
 
 -- Nested TyApp
 let s = "let y:((((Int)->(Int))(Int))->(Int))(Int) = lam x.x in y" in
 utest lside s with rside s in
-utest match parseMExprString s with TmLet l then info l.tyBody else ()
+utest match parseMExprString s with TmLet l then infoTy l.tyBody else ()
 with r_info 1 10 1 40 in
 ()

@@ -3,6 +3,7 @@ open Printf
 open Ast
 open Pprint
 open Msg
+open Builtin
 module Option = BatOption
 
 (* Tab length when calculating the info field *)
@@ -45,6 +46,7 @@ let debug_after_parse t =
   if !enable_debug_after_parse then (
     printf "\n-- After parsing (only mexpr part) --\n" ;
     uprint_endline (ustring_of_program t) ;
+    print_endline "" ;
     t )
   else t
 
@@ -52,6 +54,14 @@ let debug_after_parse t =
 let debug_after_symbolize t =
   if !enable_debug_after_symbolize then (
     printf "\n-- After symbolize --\n" ;
+    uprint_endline (ustring_of_tm ~margin:80 t) ;
+    t )
+  else t
+
+(* Debug printing after dead code elimination *)
+let debug_after_dead_code_elimination t =
+  if !enable_debug_after_dead_code_elimination then (
+    printf "\n-- After dead code elimination --\n" ;
     uprint_endline (ustring_of_tm ~margin:80 t) ;
     t )
   else t
@@ -136,6 +146,8 @@ let parse_mcore_file filename =
     local_parse_mcore_file filename
     |> merge_includes (Filename.dirname filename) [filename]
     |> Mlang.flatten |> Mlang.desugar_post_flatten
+    |> Symbolize.symbolize builtin_name2sym
+    |> Deadcode.elimination builtin_sym2term builtin_name2sym
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
     fprintf stderr "%s\n" error_string ;

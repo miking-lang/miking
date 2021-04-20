@@ -59,10 +59,10 @@ let infoErrorString : Info -> String -> String = lam fi. lam str.
     join [infoStr, "ERROR: ", str]
 
 -- Print an error with info struct info and exit (error code 1)
-let infoErrorExit : Info -> String -> () = lam fi. lam str.
+let infoErrorExit : Info -> String -> Unknown = lam fi. lam str.
   print (join ["\n", (infoErrorString fi str), "\n"]);
   exit 1
 
 -- Print an error with position info and exit (error code 1)
-let posErrorExit : Pos -> String -> () = lam p : Pos. lam str.
+let posErrorExit : Pos -> String -> Unknown = lam p : Pos. lam str.
   infoErrorExit (infoVal p.filename p.row p.col p.row p.col) str

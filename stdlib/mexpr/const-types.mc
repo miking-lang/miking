@@ -149,8 +149,9 @@ end
 lang SysTypeAst = SysAst
   sem tyConst =
   | CExit _ -> tyarrow_ tyint_ tyunknown_
-  | CError _ -> tyarrow_ tyint_ tyunknown_
+  | CError _ -> tyarrow_ tystr_ tyunknown_
   | CArgv _ -> tyseq_ tystr_
+  | CCommand _ -> tyarrow_ tystr_ tyint_
 end
 
 lang TimeTypeAst = TimeAst
@@ -229,16 +230,16 @@ lang BootParserTypeAst = BootParserAst
   sem tyConst =
   | CBootParserParseMExprString _ -> tyarrow_ tystr_ tybootparsetree_
   | CBootParserParseMCoreFile _ -> tyarrow_ tystr_ tybootparsetree_
-  | CBootParserGetId _ -> tyarrow_ tybootparsetree_ tyint_
-  | CBootParserGetTerm _ -> tyarrow_ tybootparsetree_ tybootparsetree_
-  | CBootParserGetType _ -> tyarrow_ tybootparsetree_ tybootparsetree_
-  | CBootParserGetString _ -> tyarrow_ tybootparsetree_ tystr_
-  | CBootParserGetInt _ -> tyarrow_ tybootparsetree_ tyint_
-  | CBootParserGetFloat _ -> tyarrow_ tybootparsetree_ tyfloat_
-  | CBootParserGetListLength _ -> tyarrow_ tybootparsetree_ tyint_
-  | CBootParserGetConst _ -> tyarrow_ tybootparsetree_ tybootparsetree_
-  | CBootParserGetPat _ -> tyarrow_ tybootparsetree_ tybootparsetree_
-  | CBootParserGetInfo _ -> tyarrow_ tybootparsetree_ tybootparsetree_
+  | CBootParserGetId _ -> tyarrows_ [tybootparsetree_, tyint_, tyint_]
+  | CBootParserGetTerm _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  | CBootParserGetType _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  | CBootParserGetString _ -> tyarrows_ [tybootparsetree_, tyint_, tystr_]
+  | CBootParserGetInt _ -> tyarrows_ [tybootparsetree_, tyint_, tyint_]
+  | CBootParserGetFloat _ -> tyarrows_ [tybootparsetree_, tyint_, tyfloat_]
+  | CBootParserGetListLength _ -> tyarrows_ [tybootparsetree_, tyint_, tyint_]
+  | CBootParserGetConst _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  | CBootParserGetPat _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
 end
 
 lang MExprConstType =

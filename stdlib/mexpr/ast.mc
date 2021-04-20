@@ -17,7 +17,7 @@ lang VarAst
            ty: Type,
            info: Info}
 
-  sem info =
+  sem infoTm =
   | TmVar r -> r.info
 
   sem ty =
@@ -42,7 +42,7 @@ lang AppAst
            ty: Type,
            info: Info}
 
-  sem info =
+  sem infoTm =
   | TmApp r -> r.info
 
   sem ty =
@@ -70,7 +70,7 @@ lang LamAst = VarAst + AppAst
            ty : Type,
            info : Info}
 
-  sem info =
+  sem infoTm =
   | TmLam r -> r.info
 
   sem ty =
@@ -97,7 +97,7 @@ lang LetAst = VarAst
            ty : Type,
            info : Info}
 
-  sem info =
+  sem infoTm =
   | TmLet r -> r.info
 
   sem ty =
@@ -128,7 +128,7 @@ lang RecLetsAst = VarAst
                ty : Type,
                info : Info}
 
-  sem info =
+  sem infoTm =
   | TmRecLets r -> r.info
 
   sem ty =
@@ -165,7 +165,7 @@ lang ConstAst
              ty: Type,
              info: Info}
 
-  sem info =
+  sem infoTm =
   | TmConst r -> r.info
 
   sem ty =
@@ -188,7 +188,7 @@ lang SeqAst
            ty: Type,
            info: Info}
 
-  sem info =
+  sem infoTm =
   | TmSeq r -> r.info
 
   sem ty =
@@ -217,7 +217,7 @@ lang RecordAst
                     ty : Type,
                     info : Info}
 
-  sem info =
+  sem infoTm =
   | TmRecord r -> r.info
   | TmRecordUpdate r -> r.info
 
@@ -248,7 +248,7 @@ lang TypeAst
             ty : Type,
             info : Info}
 
-  sem info =
+  sem infoTm =
   | TmType r -> r.info
 
   sem ty =
@@ -277,7 +277,7 @@ lang DataAst
               ty : Type,
               info: Info}
 
-  sem info =
+  sem infoTm =
   | TmConDef r -> r.info
   | TmConApp r -> r.info
 
@@ -310,7 +310,7 @@ lang MatchAst
 
   syn Pat =
 
-  sem info =
+  sem infoTm =
   | TmMatch r -> r.info
 
   sem ty =
@@ -339,7 +339,7 @@ lang UtestAst
              ty : Type,
              info : Info}
 
-  sem info =
+  sem infoTm =
   | TmUtest r -> r.info
 
   sem ty =
@@ -368,7 +368,7 @@ lang NeverAst
   | TmNever {ty: Type,
             info: Info}
 
-  sem info =
+  sem infoTm =
   | TmNever r -> r.info
 
   sem ty =
@@ -531,6 +531,7 @@ lang SysAst = ConstAst
   | CExit {}
   | CError {}
   | CArgv {}
+  | CCommand {}
 end
 
 lang TimeAst = ConstAst
@@ -609,7 +610,7 @@ lang NamedPat
   | PatNamed {ident : PatName,
               info : Info}
 
-  sem info =
+  sem infoPat =
   | PatNamed r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -624,7 +625,7 @@ lang SeqTotPat
   | PatSeqTot {pats : [Pat],
                info : Info}
 
-  sem info =
+  sem infoPat =
   | PatSeqTot r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -641,7 +642,7 @@ lang SeqEdgePat
                 postfix : [Pat],
                 info: Info}
 
-  sem info =
+  sem infoPat =
   | PatSeqEdge r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -657,7 +658,7 @@ lang RecordPat
   | PatRecord {bindings : Map SID Pat,
                info: Info}
 
-  sem info =
+  sem infoPat =
   | PatRecord r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -675,7 +676,7 @@ lang DataPat = DataAst
             subpat : Pat,
             info : Info}
 
-  sem info =
+  sem infoPat =
   | PatCon r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -690,7 +691,7 @@ lang IntPat = IntAst
   | PatInt {val : Int,
           info : Info}
 
-  sem info =
+  sem infoPat =
   | PatInt r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -705,7 +706,7 @@ lang CharPat
   | PatChar {val : Char,
              info : Info}
 
-  sem info =
+  sem infoPat =
   | PatChar r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -720,7 +721,7 @@ lang BoolPat = BoolAst
   | PatBool {val : Bool,
              info : Info}
 
-  sem info =
+  sem infoPat =
   | PatBool r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -736,7 +737,7 @@ lang AndPat
             rpat : Pat,
             info : Info}
 
-  sem info =
+  sem infoPat =
   | PatAnd r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -752,7 +753,7 @@ lang OrPat
            rpat : Pat,
            info : Info}
 
-  sem info =
+  sem infoPat =
   | PatOr r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -767,7 +768,7 @@ lang NotPat
   | PatNot {subpat : Pat,
             info : Info}
 
-  sem info =
+  sem infoPat =
   | PatNot r -> r.info
 
   sem smap_Pat_Pat (f : Pat -> a) =
@@ -785,7 +786,7 @@ lang UnknownTypeAst
   syn Type =
   | TyUnknown {info : Info}
 
-  sem info =
+  sem infoTy =
   | TyUnknown r -> r.info
 end
 
@@ -793,7 +794,7 @@ lang BoolTypeAst
   syn Type =
   | TyBool {info  : Info}
 
-  sem info =
+  sem infoTy =
   | TyBool r -> r.info
 end
 
@@ -801,7 +802,7 @@ lang IntTypeAst
   syn Type =
   | TyInt {info : Info}
 
-  sem info =
+  sem infoTy =
   | TyInt r -> r.info
 end
 
@@ -809,7 +810,7 @@ lang FloatTypeAst
   syn Type =
   | TyFloat {info : Info}
 
-  sem info =
+  sem infoTy =
   | TyFloat r -> r.info
 end
 
@@ -817,7 +818,7 @@ lang CharTypeAst
   syn Type =
   | TyChar {info  : Info}
 
-  sem info =
+  sem infoTy =
   | TyChar r -> r.info
 end
 
@@ -826,7 +827,7 @@ lang FunTypeAst
   | TyArrow {info : Info,
              from : Type,
              to   : Type}
-  sem info =
+  sem infoTy =
   | TyArrow r -> r.info
 end
 
@@ -834,7 +835,7 @@ lang SeqTypeAst
   syn Type =
   | TySeq {info : Info,
            ty   : Type}
-  sem info =
+  sem infoTy =
   | TySeq r -> r.info
 end
 
@@ -842,7 +843,7 @@ lang RecordTypeAst
   syn Type =
   | TyRecord {info    : Info,
               fields  : Map SID Type}
-  sem info =
+  sem infoTy =
   | TyRecord r -> r.info
 end
 
@@ -850,7 +851,7 @@ lang VariantTypeAst
   syn Type =
   | TyVariant {info     : Info,
                constrs  : Map Name Type}
-  sem info =
+  sem infoTy =
   | TyVariant r -> r.info
 end
 
@@ -858,7 +859,7 @@ lang VarTypeAst
   syn Type =
   | TyVar {info   : Info,
            ident  : Name}
-  sem info =
+  sem infoTy =
   | TyVar r -> r.info
 end
 
@@ -867,7 +868,7 @@ lang AppTypeAst
   | TyApp {info : Info,
            lhs  : Type,
            rhs  : Type}
-  sem info =
+  sem infoTy =
   | TyApp r -> r.info
 end
 

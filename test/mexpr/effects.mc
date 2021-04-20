@@ -42,6 +42,8 @@ utest fileExists file with false in
 -- String -> ()
 utest if false then error "message" else 0 with 0 in
 
+-- 'command s' runs the given shell command and returns its exit code
+utest if false then command "echo \"Hello world\"" else 0 with 0 in
 
 -- 'argv' contains the program arguments
 let emptyStringSeq : [String] = [] in

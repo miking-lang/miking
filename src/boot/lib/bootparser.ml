@@ -107,7 +107,12 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-let parseMExprString str = Parserutils.parse_mexpr_string str
+let parseMExprString str =
+  PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
+
+let parseMCoreFile str =
+  let t = str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file in
+  PTreeTm t
 
 (* Returns a tuple with the following elements
    1. ID field 
@@ -262,7 +267,7 @@ let getType t n =
 
 let getString t n =
   let _, _, _, _, _, lst, _, _, _, _ = getData t in
-  List.nth lst n
+  List.nth lst n |> Intrinsics.Mseq.Helpers.of_ustring
 
 let getInt t n =
   let _, _, _, _, _, _, lst, _, _, _ = getData t in

@@ -8,13 +8,13 @@
 
 open Ustring.Op
 open Printf
-open Mexpr
 open Ast
 open Mlang
 open Msg
 open Pprint
 open Intrinsics
 open Parserutils
+open Builtin
 module Option = BatOption
 
 let initial_prompt = ">> "

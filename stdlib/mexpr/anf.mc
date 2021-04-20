@@ -26,11 +26,11 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
     let ident = nameSym "t" in
     let var = TmVar {
       ident = ident,
-      ty = tyunknown_,
+      ty = ty n,
       info = NoInfo {}
     } in
     TmLet {ident = ident,
-           tyBody = tyunknown_,
+           tyBody = ty n,
            body = n,
            inexpr = k var,
            ty = tyunknown_,
@@ -85,6 +85,7 @@ end
 lang RecordANF = ANF + RecordAst
   sem isValue =
   | TmRecord _ -> false
+  | TmRecord {bindings = []} -> true
   | TmRecordUpdate _ -> false
 
   sem normalize (k : Expr -> Expr) =
@@ -97,7 +98,8 @@ lang RecordANF = ANF + RecordAst
               (lam v. acc (mapInsert k v bs))
               e))
     in
-    (mapFoldWithKey f acc t.bindings) (mapEmpty (mapGetCmpFun t.bindings))
+    let tmp = mapFoldWithKey f acc t.bindings in
+    tmp (mapEmpty (mapGetCmpFun t.bindings))
 
   | TmRecordUpdate t ->
     normalizeName
@@ -143,7 +145,7 @@ lang RecLetsANF = ANF + RecLetsAst
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmRecLets t ->
-    let bindings = map (lam b. {b with body = normalizeTerm b.body}) t.bindings in
+    let bindings = map (lam b : RecLetBinding. {b with body = normalizeTerm b.body}) t.bindings in
     TmRecLets {{t with bindings = bindings}
                   with inexpr = normalize k t.inexpr}
 end
@@ -239,6 +241,11 @@ lang TestLang =  MExprANF + MExprSym + MExprPrettyPrint + MExprEq
 mexpr
 use TestLang in
 
+let eqExpr : Expr -> Expr -> Bool =
+  lam l : Expr. lam r : Expr.
+  eqExpr l r
+in
+
 let _anf = compose normalizeTerm symbolize in
 
 let basic =
@@ -314,36 +321,7 @@ let record =
     ("c", (app_ (int_ 5) (int_ 6)))
   ]
 in
-utest _anf record with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t2"),
-      ("b", int_ 4),
-      ("c", var_ "t")
-    ]),
-    var_ "t3"
-  ]
-using eqExpr in
-
-
 let rupdate = recordupdate_ record "b" (int_ 7) in
-utest _anf rupdate with
-  bindall_ [
-    ulet_ "t" (app_ (int_ 5) (int_ 6)),
-    ulet_ "t1" (app_ (int_ 2) (int_ 3)),
-    ulet_ "t2" (app_ (int_ 1) (var_ "t1")),
-    ulet_ "t3" (record_ [
-      ("a", var_ "t2"),
-      ("b", int_ 4),
-      ("c", var_ "t")
-    ]),
-    ulet_ "t4" (recordupdate_ (var_ "t3") "b" (int_ 7)),
-    var_ "t4"
-  ]
-using eqExpr in
 
 let factorial =
   ureclet_ "fact"
