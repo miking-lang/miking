@@ -74,6 +74,10 @@ recursive let compatibleType =
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {t1 with ty = t})
     else None ()
+  else match m with (TyTensor t1, TyTensor t2) then
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TyTensor {t1 with ty = t})
+    else None ()
   else match m with (TyRecord t1, TyRecord t2) then
     let f = lam acc. lam p.
       match p with (k, ty1) then

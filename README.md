@@ -775,7 +775,7 @@ want to extend our arithmetics language with booleans and `if`
 expressions:
 
 ```
-lang Bool
+lang MyBool
   syn Expr =
   | True()
   | False()
@@ -791,7 +791,7 @@ lang Bool
     else error "Not a boolean"
 end
 
-lang ArithBool = Arith + Bool
+lang ArithBool = Arith + MyBool
 
 mexpr
 use ArithBool in
@@ -801,12 +801,12 @@ utest eval (Add (If (False(), Num 0, Num 5), Num 2)) with Num 7 in
 
 The language fragment `ArithBool` is indistinguishable from a
 language fragment with all the syntactic and semantic cases of
-`Arith` and `Bool` merged. If we wanted, we could have added new
+`Arith` and `MyBool` merged. If we wanted, we could have added new
 cases to the language composition as well, and refer to the syntax
 and semantics of the fragments being composed:
 
 ```
-lang ArithBool = Arith + Bool
+lang ArithBool = Arith + MyBool
   syn Expr =
   | IsZero Expr
 
@@ -1052,7 +1052,7 @@ include "string.mc"
 mexpr
 let place = atomicMake 1 in
 let threads = create 10 (lam. threadSpawn (lam.
-  printLn (join 
+  printLn (join
     [int2string (atomicFetchAndAdd place 1)
     , ": thread ID "
     , int2string (threadID2int (threadSelf ()))

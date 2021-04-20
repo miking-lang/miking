@@ -27,6 +27,8 @@ let rec symbolize_type env ty =
       TyArrow (fi, symbolize_type env ty1, symbolize_type env ty2)
   | TySeq (fi, ty) ->
       TySeq (fi, symbolize_type env ty)
+  | TyTensor (fi, ty) ->
+      TyTensor (fi, symbolize_type env ty)
   | TyRecord (fi, tyr) ->
       let tyr = Record.map (fun ty -> symbolize_type env ty) tyr in
       TyRecord (fi, tyr)

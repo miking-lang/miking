@@ -80,6 +80,7 @@ recursive let _cmpType = lam ty1 : Type. lam ty2 : Type.
     else match ty with TyVariant _ then 8
     else match ty with TyVar _ then 9
     else match ty with TyApp _ then 10
+    else match ty with TyTensor _ then 11
     else never
   in
   let id1 = _typeId ty1 in
@@ -453,6 +454,14 @@ lang SeqTypeTypeLift = TypeLift + SeqTypeAst
     else never
 end
 
+lang TensorTypeTypeLift = TypeLift + TensorTypeAst
+  sem typeLiftType (env : TypeLiftEnv) =
+  | TyTensor t ->
+    match typeLiftType env t.ty with (env, ty) then
+      (env, TyTensor {t with ty = ty})
+    else never
+end
+
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TyRecord t & ty ->
@@ -504,7 +513,7 @@ lang MExprTypeLift =
   UnknownTypeTypeLift + BoolTypeTypeLift + IntTypeTypeLift +
   FloatTypeTypeLift + CharTypeTypeLift + FunTypeTypeLift + SeqTypeTypeLift +
   RecordTypeTypeLift + VariantTypeTypeLift + VarTypeTypeLift +
-  AppTypeTypeLift + VariantNameTypeTypeLift
+  AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
 end
 
 lang TestLang = MExprTypeLift + MExprSym + MExprTypeAnnot + MExprPrettyPrint

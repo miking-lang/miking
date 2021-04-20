@@ -588,6 +588,16 @@ lang SeqTypeEq = Eq + SeqTypeAst
     else false
 end
 
+lang TensorTypeEq = Eq + TensorTypeAst
+  sem eqType (typeEnv : TypeEnv) (lhs : Type) =
+  | TyTensor r ->
+    match unwrapType typeEnv lhs with Some ty then
+      match ty with TyTensor l then
+        eqType typeEnv l.ty r.ty
+      else false
+    else false
+end
+
 lang RecordTypeEq = Eq + RecordTypeAst
   sem eqType (typeEnv : EqTypeEnv) (lhs : Type) =
   | TyRecord r ->
@@ -653,6 +663,7 @@ lang MExprEq =
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + VarTypeEq + AppTypeEq
+  + TensorTypeEq
 end
 
 -----------
@@ -1038,6 +1049,7 @@ utest eqType [] tyarr2 tyarr3 with false in
 utest eqType [] tyarr3 tyarr4 with false in
 utest tystr_ with tystr_ using eqType [] in
 utest tyseq tyint_ with tyseq tyint_ using eqType [] in
+utest tytensor_ tyint_ with tytensor_ tyint_ using eqType [] in
 utest eqType [] tystr_ (tyseq tyint_) with false in
 utest tyrec1 with tyrec1 using eqType [] in
 utest tyrec2 with tyrec3 using eqType [] in

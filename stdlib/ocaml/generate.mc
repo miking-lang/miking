@@ -25,29 +25,41 @@ let _emptyGenerateEnv = {
   aliases = mapEmpty nameCmp
 }
 
-let _seqOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
+let _seqOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
 
-let _symbOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
+let _symbOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
 
-let _floatOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
+let _floatOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
 
-let _fileOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
+let _fileOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
 
-let _ioOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
+let _ioOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
 
-let _sysOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
+let _sysOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
 
-let _randOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
+let _randOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
 
-let _timeOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
+let _timeOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
 
-let _numTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.Num." op}
+let _numTensorOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.Num." op}
 
-let _noNumTensorOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Tensor.NoNum." op}
+let _noNumTensorOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.NoNum." op}
 
-let _bootparserOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
+let _bootparserOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 
-let _mapOp = use OCamlAst in lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
+let _mapOp = use OCamlAst in
+  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
@@ -79,7 +91,36 @@ let _builtinNameMap : Map String Name =
   mapUnion
     builtinNameMap
     (mapFromList cmpString
-      (map (lam s. (s, nameSym s)) ["ofArray"]))
+      (map (lam s. (s, nameSym s))
+      [
+        "ofArray",
+        "tensorCreateNumInt",
+        "tensorCreateNumFloat",
+        "tensorCreateNoNum",
+        "tensorGetExnNum",
+        "tensorGetExnNoNum",
+        "tensorSetExnNum",
+        "tensorSetExnNoNum",
+        "tensorRankNum",
+        "tensorRankNoNum",
+        "tensorShapeNum",
+        "tensorShapeNoNum",
+        "tensorReshapeExnNum",
+        "tensorReshapeExnNoNum",
+        "tensorCopyExnNum",
+        "tensorCopyExnNoNum",
+        "tensorSliceExnNum",
+        "tensorSliceExnNoNum",
+        "tensorSubExnNum",
+        "tensorSubExnNoNum",
+        "tensorIteriNum",
+        "tensorIteriNoNum"
+      ]))
+
+let _builtinNamesSet : Set Name =
+  setOfSeq nameCmp
+           (map (lam x : (String, Name). x.1)
+           (mapBindings _builtinNameMap))
 
 let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then
@@ -288,6 +329,43 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       ty = t.ty,
       info = NoInfo ()
     }
+  | TmConst t ->
+    -- Tensor Op Generation
+    let opvar = lam op. nvar_ (_intrinsicName op) in
+    let ty = unwrapAlias env.aliases t.ty in
+    let tensorOpVar = lam opNum. lam opNoNum.
+      match ty with TyArrow {from = TyTensor {ty = tty}} then
+        match tty with TyInt _ | TyFloat _ then opvar opNum else opvar opNoNum
+      else dprintLn ty; never
+    in
+    match t.val with CTensorCreate _ then
+      match ty with TyArrow {to = TyArrow {to = TyTensor {ty = tty}}} then
+        match tty with TyInt _ then opvar "tensorCreateNumInt"
+        else match tty with TyFloat _ then opvar "tensorCreateNumFloat"
+        else opvar "tensorCreateNoNum"
+      else dprintLn ty; never
+    else match t.val with CTensorGetExn _ then
+      tensorOpVar "tensorGetExnNum" "tensorGetExnNoNum"
+    else match t.val with CTensorSetExn _ then
+      tensorOpVar "tensorSetExnNum" "tensorSetExnNoNum"
+    else match t.val with CTensorRank _ then
+      tensorOpVar "tensorRankNum" "tensorRankNoNum"
+    else match t.val with CTensorShape _ then
+      tensorOpVar "tensorShapeNum" "tensorShapeNoNum"
+    else match t.val with CTensorReshapeExn _ then
+      tensorOpVar "tensorReshapeExnNum" "tensorReshapeExnNoNum"
+    else match t.val with CTensorCopyExn _ then
+      tensorOpVar "tensorCopyExnNum" "tensorCopyExnNoNum"
+    else match t.val with CTensorSliceExn _ then
+      tensorOpVar "tensorSliceExnNum" "tensorSliceExnNoNum"
+    else match t.val with CTensorSubExn _ then
+      tensorOpVar "tensorSubExnNum" "tensorSubExnNoNum"
+    else match t.val with CTensorIteri _ then
+      match ty with TyArrow {to = TyArrow {from = TyTensor {ty = tty}}} then
+        match tty with TyInt _ | TyFloat _ then opvar "tensorIteriNum"
+        else opvar "tensorIteriNoNum"
+      else dprintLn ty; never
+    else TmConst t
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -556,7 +634,7 @@ recursive let _isIntrinsicApp = use OCamlAst in
     match t with TmApp {lhs = TmConst _} then
       true
     else match t with TmApp {lhs = TmVar {ident = ident}} then
-      mapMem ident builtinNameTypeMap
+      setMem ident _builtinNamesSet
     else match t with TmApp {lhs = (TmApp _) & lhs} then
       _isIntrinsicApp lhs
     else false
@@ -705,6 +783,27 @@ let _preamble =
     , intr1 "ref" ref_
     , intr1 "deref" deref_
     , intr2 "modref" modref_
+    , intr2 "tensorCreateNumInt" (appf2_ (_numTensorOp "create_int"))
+    , intr2 "tensorCreateNumFloat" (appf2_ (_numTensorOp "create_float"))
+    , intr2 "tensorCreateNoNum" (appf2_ (_noNumTensorOp "create"))
+    , intr2 "tensorGetExnNum" (appf2_ (_numTensorOp "get_exn"))
+    , intr2 "tensorGetExnNoNum" (appf2_ (_noNumTensorOp "get_exn"))
+    , intr3 "tensorSetExnNum" (appf3_ (_numTensorOp "set_exn"))
+    , intr3 "tensorSetExnNoNum" (appf3_ (_noNumTensorOp "set_exn"))
+    , intr1 "tensorRankNum" (appf1_ (_numTensorOp "rank"))
+    , intr1 "tensorRankNoNum" (appf1_ (_noNumTensorOp "rank"))
+    , intr1 "tensorShapeNum" (appf1_ (_numTensorOp "shape"))
+    , intr1 "tensorShapeNoNum" (appf1_ (_noNumTensorOp "shape"))
+    , intr2 "tensorReshapeExnNum" (appf2_ (_numTensorOp "reshape_exn"))
+    , intr2 "tensorReshapeExnNoNum" (appf2_ (_noNumTensorOp "reshape_exn"))
+    , intr2 "tensorCopyExnNum" (appf2_ (_numTensorOp "copy_exn"))
+    , intr2 "tensorCopyExnNoNum" (appf2_ (_noNumTensorOp "copy_exn"))
+    , intr2 "tensorSliceExnNum" (appf2_ (_numTensorOp "slice_exn"))
+    , intr2 "tensorSliceExnNoNum" (appf2_ (_noNumTensorOp "slice_exn"))
+    , intr3 "tensorSubExnNum" (appf3_ (_numTensorOp "sub_exn"))
+    , intr3 "tensorSubExnNoNum" (appf3_ (_noNumTensorOp "sub_exn"))
+    , intr2 "tensorIteriNum" (appf2_ (_numTensorOp "iteri"))
+    , intr2 "tensorIteriNoNum" (appf2_ (_noNumTensorOp "iteri"))
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
@@ -787,15 +886,6 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
   | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
   | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
-  | CTensorCreate _ -> nvar_ (_intrinsicName "tensorCreate")
-  | CTensorGetExn _ -> nvar_ (_intrinsicName "tensorGetExn")
-  | CTensorSetExn _ -> nvar_ (_intrinsicName "tensorSetExn")
-  | CTensorRank _ -> nvar_ (_intrinsicName "tensorRank")
-  | CTensorShape _ -> nvar_ (_intrinsicName "tensorShape")
-  | CTensorReshapeExn _ -> nvar_ (_intrinsicName "tensorReshapeExn")
-  | CTensorCopyExn _ -> nvar_ (_intrinsicName "tensorCopyExn")
-  | CTensorSliceExn _ -> nvar_ (_intrinsicName "tensorSliceExn")
-  | CTensorSubExn _ -> nvar_ (_intrinsicName "tensorSubExn")
   | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
   | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
   | CBootParserGetId _ -> nvar_ (_intrinsicName "bootParserGetId")
@@ -894,9 +984,11 @@ in
 -- to [p], and parses it as a mexpr expression.
 let ocamlEval = lam ast.
   let ast = withPreamble ast in
-  let res = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
-  let out = (res.run "" []).stdout in
-  res.cleanup ();
+  let prog = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
+  let res = prog.run "" [] in
+  let out = res.stdout in
+  (if neqi res.returncode 0 then printLn ""; printLn res.stderr else ());
+  prog.cleanup ();
   parseAsMExpr out
 in
 
@@ -1592,7 +1684,7 @@ in
 utest funShadowed with generateEmptyEnv funShadowed using sameSemantics in
 
 -- Lets
- let testLet =
+let testLet =
   symbolize
   (bindall_ [ulet_ "^" (int_ 1), addi_ (var_ "^") (int_ 2)])
 in
@@ -1773,7 +1865,7 @@ let mapEmptyTest = bind_
 utest ocamlEvalInt (generateEmptyEnv mapEmptyTest) with int_ 42 using eqExpr in
 
 let mapInsertFindTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 123) (int_ 90) (var_ "m"))
   , mapFindWithExn_ (int_ 42) (var_ "m")
@@ -1782,7 +1874,7 @@ utest ocamlEvalInt (generateEmptyEnv mapInsertFindTest)
 with int_ 1 using eqExpr in
 
 let mapMemTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
   ] in
@@ -1790,7 +1882,7 @@ utest ocamlEvalBool (generateEmptyEnv mapMemTrueTest)
 with true_ using eqExpr in
 
 let mapMemFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapMem_ (int_ 78) (var_ "m")
   ] in
@@ -1798,7 +1890,7 @@ utest ocamlEvalBool (generateEmptyEnv mapMemFalseTest)
 with false_ using eqExpr in
 
 let mapRemoveTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapRemove_ (int_ 42) (var_ "m"))
   , mapMem_ (int_ 42) (var_ "m")
@@ -1807,7 +1899,7 @@ utest ocamlEvalBool (generateEmptyEnv mapRemoveTest)
 with false_ using eqExpr in
 
 let mapFindOrElseTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 42) (var_ "m")
   ] in
@@ -1815,7 +1907,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindOrElseTrueTest)
 with int_ 1 using eqExpr in
 
 let mapFindOrElseFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindOrElse_ (ulam_ "" (int_ 123)) (int_ 3) (var_ "m")
   ] in
@@ -1823,7 +1915,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindOrElseFalseTest)
 with int_ 123 using eqExpr in
 
 let mapFindApplyOrElseTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindApplyOrElse_
       (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
@@ -1834,7 +1926,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseTrueTest)
 with int_ 2 using eqExpr in
 
 let mapFindApplyOrElseFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , mapFindApplyOrElse_
      (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
@@ -1845,14 +1937,14 @@ utest ocamlEvalInt (generateEmptyEnv mapFindApplyOrElseFalseTest)
 with int_ 7 using eqExpr in
 
 let mapSizeEmptyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , mapSize_ (var_ "m")
   ] in
 utest ocamlEvalInt (generateEmptyEnv mapSizeEmptyTest)
 with int_ 0 using eqExpr in
 
 let mapSizeTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 1) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 100) (int_ 567) (var_ "m"))
@@ -1862,7 +1954,7 @@ utest ocamlEvalInt (generateEmptyEnv mapSizeTest)
 with int_ 2 using eqExpr in
 
 let mapAnyTrueTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (geqi_ (var_ "k") (var_ "v")))) (var_ "m")
   ] in
@@ -1870,7 +1962,7 @@ utest ocamlEvalBool (generateEmptyEnv mapAnyTrueTest)
 with true_ using eqExpr in
 
 let mapAnyFalseTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 0) (negi_ (int_ 1)) (var_ "m"))
   , mapAny_ (ulam_ "k" (ulam_ "v" (eqi_ (var_ "k") (var_ "v")))) (var_ "m")
@@ -1879,7 +1971,7 @@ utest ocamlEvalBool (generateEmptyEnv mapAnyFalseTest)
 with false_ using eqExpr in
 
 let mapMapTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m" (mapMap_ (ulam_ "v" (addi_ (int_ 44) (var_ "v"))) (var_ "m"))
@@ -1889,7 +1981,7 @@ utest ocamlEvalInt (generateEmptyEnv mapMapTest)
 with int_ 100 using eqExpr in
 
 let mapMapWithKeyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , ulet_ "m"
@@ -1901,7 +1993,7 @@ utest ocamlEvalInt (generateEmptyEnv mapMapWithKeyTest)
 with int_ 59 using eqExpr in
 
 let mapFoldWithKeyTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , mapFoldWithKey_
@@ -1912,7 +2004,7 @@ utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyTest)
 with int_ 103 using eqExpr in
 
 let mapFoldWithKeyNonAssociativeTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m" (mapInsert_ (int_ 42) (int_ 2) (var_ "m"))
   , ulet_ "m" (mapInsert_ (int_ 3) (int_ 56) (var_ "m"))
   , mapFoldWithKey_
@@ -1924,10 +2016,10 @@ utest ocamlEvalInt (generateEmptyEnv mapFoldWithKeyNonAssociativeTest)
 with int_ 148 using eqExpr in
 
 let mapEqTrueTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m2" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
@@ -1937,10 +2029,10 @@ utest ocamlEvalBool (generateEmptyEnv mapEqTrueTest)
 with true_ using eqExpr in
 
 let mapEqFalseTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m2" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 3) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapEq_ (ulam_ "v1" (ulam_ "v2"
@@ -1950,10 +2042,10 @@ utest ocamlEvalBool (generateEmptyEnv mapEqFalseTest)
 with false_ using eqExpr in
 
 let mapCmpEqTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m2" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 2) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
@@ -1963,10 +2055,10 @@ utest ocamlEvalInt (generateEmptyEnv mapCmpEqTest)
 with int_ 0 using eqExpr in
 
 let mapCmpNEqTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
-  , ulet_ "m2" (mapEmpty_ (const_ (CSubi ())))
+  , ulet_ "m2" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m2" (mapInsert_ (int_ 42) (int_ 1) (var_ "m2"))
   , ulet_ "m2" (mapInsert_ (int_ 3) (int_ 56) (var_ "m2"))
   , mapCmp_ (ulam_ "v1" (ulam_ "v2"
@@ -1976,7 +2068,7 @@ utest ocamlEvalInt (generateEmptyEnv mapCmpNEqTest)
 with int_ 1 using eqExpr in
 
 let mapGetCmpFunTest = bindall_
-  [ ulet_ "m" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "f" (mapGetCmpFun_ (var_ "m"))
   , appf2_ (var_ "f") (int_ 12) (int_ 2)
   ] in
@@ -1985,7 +2077,7 @@ with int_ 10 using eqExpr in
 
 -- mapBindings
 let mapBindingsTest = (bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
   , (mapBindings_ (var_ "m1"))
@@ -2013,7 +2105,7 @@ utest ocamlEvalInt (generateTypeAnnotated t10) with int_ 42 using eqExpr in
 utest ocamlEvalInt (generateTypeAnnotated t11) with int_ 2 using eqExpr in
 
 let mapBindingsTest = bindall_
-  [ ulet_ "m1" (mapEmpty_ (const_ (CSubi ())))
+  [ ulet_ "m1" (mapEmpty_ (uconst_ (CSubi ())))
   , ulet_ "m1" (mapInsert_ (int_ 42) (int_ 2) (var_ "m1"))
   , ulet_ "m1" (mapInsert_ (int_ 3) (int_ 56) (var_ "m1"))
   , ulet_ "seq" (mapBindings_ (var_ "m1"))
@@ -2049,7 +2141,287 @@ in
 utest ocamlEvalInt (generateEmptyEnv refModrefDerefIntTest)
 with int_ 2 using eqExpr in
 
--- TODO(larshum, 2021-03-06): Add tests for boot parser, and tensor
--- intrinsics
+-- Tensor Ops
+let tensorCreateGetIntTest =
+  tensorGetExn_ tyint_ (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1)))
+                       (seq_ [])
+in
+utest ocamlEvalInt (generateEmptyEnv tensorCreateGetIntTest)
+with int_ 1 using eqExpr in
+
+let tensorCreateGetFloatTest =
+  tensorGetExn_ tyfloat_ (tensorCreate_ tyfloat_ (seq_ [])
+                                                 (ulam_ "x" (float_ 1.)))
+                         (seq_ [])
+in
+utest ocamlEvalFloat (generateEmptyEnv tensorCreateGetFloatTest)
+with float_ 1. using eqExpr in
+
+let tensorCreateGetCharTest =
+  tensorGetExn_ tychar_ (tensorCreate_ tychar_ (seq_ [])
+                                               (ulam_ "x" (char_ '1')))
+                       (seq_ [])
+in
+utest ocamlEvalChar (generateEmptyEnv tensorCreateGetCharTest)
+with char_ '1' using eqExpr in
+
+let tensorSetIntTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+    (semi_ (tensorSetExn_ tyint_ (var_ "t")
+                                 (seq_ [])
+                                 (int_ 2))
+           (tensorGetExn_ tyint_ (var_ "t")
+                                 (seq_ [])))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSetIntTest)
+with int_ 2 using eqExpr in
+
+let tensorSetFloatTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
+    (semi_ (tensorSetExn_ tyfloat_ (var_ "t")
+                                   (seq_ [])
+                                   (float_ 2.))
+           (tensorGetExn_ tyfloat_ (var_ "t")
+                                   (seq_ [])))
+in
+utest ocamlEvalFloat (generateEmptyEnv tensorSetFloatTest)
+with float_ 2. using eqExpr in
+
+let tensorSetCharTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1'))))
+    (semi_ (tensorSetExn_ tychar_ (var_ "t")
+                                  (seq_ [])
+                                  (char_ '2'))
+           (tensorGetExn_ tychar_ (var_ "t")
+                                  (seq_ [])))
+in
+utest ocamlEvalChar (generateEmptyEnv tensorSetCharTest)
+with char_ '2' using eqExpr in
+
+let tensorRankIntTest =
+  tensorRank_ tyint_ (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1)))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorRankIntTest)
+with int_ 0 using eqExpr in
+
+let tensorRankFloatTest =
+  tensorRank_ tyfloat_ (tensorCreate_ tyfloat_ (seq_ [])
+                       (ulam_ "x" (float_ 1.)))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorRankFloatTest)
+with int_ 0 using eqExpr in
+
+let tensorRankCharTest =
+  tensorRank_ tychar_ (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1')))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorRankCharTest)
+with int_ 0 using eqExpr in
+
+let tensorShapeIntTest =
+  length_ (tensorShape_ tyint_
+                        (tensorCreate_ tyint_ (seq_ [])
+                        (ulam_ "x" (int_ 1))))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorShapeIntTest)
+with int_ 0 using eqExpr in
+
+let tensorShapeFloatTest =
+  length_ (tensorShape_ tyfloat_
+                        (tensorCreate_ tyfloat_ (seq_ [])
+                        (ulam_ "x" (float_ 1.))))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorShapeFloatTest)
+with int_ 0 using eqExpr in
+
+let tensorShapeCharTest =
+  length_ (tensorShape_ tychar_
+                        (tensorCreate_ tychar_ (seq_ [])
+                        (ulam_ "x" (char_ '1'))))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorShapeCharTest)
+with int_ 0 using eqExpr in
+
+let tensorReshapeIntTest =
+  tensorRank_ tyint_
+              (tensorReshapeExn_ tyint_
+                                 (tensorCreate_ tyint_
+                                                (seq_ [int_ 1, int_ 2])
+                                                (ulam_ "x" (int_ 1)))
+                                 (seq_ [int_ 2]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorReshapeIntTest)
+with int_ 1 using eqExpr in
+
+let tensorReshapeFloatTest =
+  tensorRank_ tyfloat_
+              (tensorReshapeExn_ tyfloat_
+                                 (tensorCreate_ tyfloat_
+                                                (seq_ [int_ 1, int_ 2])
+                                                (ulam_ "x" (float_ 1.)))
+                                 (seq_ [int_ 2]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorReshapeFloatTest)
+with int_ 1 using eqExpr in
+
+let tensorReshapeCharTest =
+  tensorRank_ tychar_
+              (tensorReshapeExn_ tychar_
+                                 (tensorCreate_ tychar_
+                                                (seq_ [int_ 1, int_ 2])
+                                                (ulam_ "x" (char_ '1')))
+                                 (seq_ [int_ 2]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorReshapeCharTest)
+with int_ 1 using eqExpr in
+
+let tensorCopyIntTest =
+  bind_
+  (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 2))))
+  (semi_ (tensorCopyExn_ tyint_
+                         (var_ "t")
+                         (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+         (tensorGetExn_ tyint_ (var_ "t") (seq_ [])))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorCopyIntTest)
+with int_ 2 using eqExpr in
+
+let tensorCopyFloatTest =
+  bind_
+  (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 2.))))
+  (semi_ (tensorCopyExn_ tyfloat_
+                         (var_ "t")
+                         (tensorCreate_ tyfloat_
+                                        (seq_ [])
+                                        (ulam_ "x" (float_ 1.))))
+         (tensorGetExn_ tyfloat_ (var_ "t") (seq_ [])))
+in
+utest ocamlEvalFloat (generateEmptyEnv tensorCopyFloatTest)
+with float_ 2. using eqExpr in
+
+let tensorCopyCharTest =
+  bind_
+  (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '2'))))
+  (semi_ (tensorCopyExn_ tychar_
+                         (var_ "t")
+                         (tensorCreate_ tychar_
+                                        (seq_ [])
+                                        (ulam_ "x" (char_ '1'))))
+         (tensorGetExn_ tychar_ (var_ "t") (seq_ [])))
+in
+utest ocamlEvalChar (generateEmptyEnv tensorCopyCharTest)
+with char_ '2' using eqExpr in
+
+let tensorSliceIntTest =
+  tensorRank_ tyint_
+              (tensorSliceExn_ tyint_
+                               (tensorCreate_ tyint_
+                                              (seq_ [int_ 1])
+                                              (ulam_ "x" (int_ 1)))
+                               (seq_ [int_ 0]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSliceIntTest)
+with int_ 0 using eqExpr in
+
+let tensorSliceFloatTest =
+  tensorRank_ tyfloat_
+              (tensorSliceExn_ tyfloat_
+                               (tensorCreate_ tyfloat_
+                                              (seq_ [int_ 1])
+                                              (ulam_ "x" (float_ 1.)))
+                               (seq_ [int_ 0]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSliceFloatTest)
+with int_ 0 using eqExpr in
+
+let tensorSliceCharTest =
+  tensorRank_ tychar_
+              (tensorSliceExn_ tychar_
+                               (tensorCreate_ tychar_
+                                              (seq_ [int_ 1])
+                                              (ulam_ "x" (char_ '1')))
+                               (seq_ [int_ 0]))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSliceCharTest)
+with int_ 0 using eqExpr in
+
+let tensorSubIntTest =
+  tensorRank_ tyint_
+              (tensorSubExn_ tyint_
+                             (tensorCreate_ tyint_
+                                            (seq_ [int_ 1])
+                                            (ulam_ "x" (int_ 1)))
+                             (int_ 0)
+                             (int_ 1))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSubIntTest)
+with int_ 1 using eqExpr in
+
+let tensorSubFloatTest =
+  tensorRank_ tyfloat_
+              (tensorSubExn_ tyfloat_
+                             (tensorCreate_ tyfloat_
+                                            (seq_ [int_ 1])
+                                            (ulam_ "x" (float_ 1.)))
+                             (int_ 0)
+                             (int_ 1))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSubFloatTest)
+with int_ 1 using eqExpr in
+
+let tensorSubCharTest =
+  tensorRank_ tychar_
+              (tensorSubExn_ tychar_
+                             (tensorCreate_ tychar_
+                                            (seq_ [int_ 1])
+                                            (ulam_ "x" (char_ '1')))
+                             (int_ 0)
+                             (int_ 1))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorSubCharTest)
+with int_ 1 using eqExpr in
+
+let tensorIteriIntTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+    (semi_ (tensorIteri_ tyint_
+                         (ulam_ "i" (ulam_ "t" unit_))
+                         (var_ "t"))
+           (tensorGetExn_ tyint_
+                          (var_ "t")
+                          (seq_ [])))
+in
+utest ocamlEvalInt (generateEmptyEnv tensorIteriIntTest)
+with int_ 1 using eqExpr in
+
+let tensorIteriFloatTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
+    (semi_ (tensorIteri_ tyfloat_
+                         (ulam_ "i" (ulam_ "t" unit_))
+                         (var_ "t"))
+           (tensorGetExn_ tyfloat_
+                          (var_ "t")
+                          (seq_ [])))
+in
+utest ocamlEvalFloat (generateEmptyEnv tensorIteriFloatTest)
+with float_ 1. using eqExpr in
+
+let tensorIteriCharTest =
+  bind_
+    (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1'))))
+    (semi_ (tensorIteri_ tychar_
+                         (ulam_ "i" (ulam_ "t" unit_))
+                         (var_ "t"))
+           (tensorGetExn_ tychar_
+                          (var_ "t")
+                          (seq_ [])))
+in
+utest ocamlEvalChar (generateEmptyEnv tensorIteriCharTest)
+with char_ '1' using eqExpr in
+
+-- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 
 ()

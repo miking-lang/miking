@@ -172,6 +172,8 @@ let rec ustring_of_ty = function
         us "String"
     | _ ->
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
+  | TyTensor (_, ty) ->
+      us "Tensor[" ^. ustring_of_ty ty ^. us "]"
   | TyRecord (_, tys) when tys = Record.empty ->
       us "()"
   | TyRecord (_, tys) ->

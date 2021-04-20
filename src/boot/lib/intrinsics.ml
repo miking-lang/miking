@@ -63,6 +63,60 @@ module T = struct
   let float t = Float t
 
   let no_num t = NoNum t
+
+  let to_arr = Mseq.Helpers.to_array
+
+  let of_arr = Mseq.Helpers.of_array
+
+  module Num = struct
+    let create kind shape f =
+      Tensor.Num.create kind (to_arr shape) (fun ids -> f (of_arr ids))
+
+    let create_int = create Tensor.Num.Int
+
+    let create_float = create Tensor.Num.Float
+
+    let get_exn t ids = Tensor.Num.get_exn t (to_arr ids)
+
+    let set_exn t ids v = Tensor.Num.set_exn t (to_arr ids) v
+
+    let rank = Tensor.Num.rank
+
+    let shape t = Tensor.Num.shape t |> of_arr
+
+    let copy_exn = Tensor.Num.copy_exn
+
+    let reshape_exn t shape = Tensor.Num.reshape_exn t (to_arr shape)
+
+    let slice_exn t shape = Tensor.Num.slice_exn t (to_arr shape)
+
+    let sub_exn = Tensor.Num.sub_exn
+
+    let iteri = Tensor.Num.iteri
+  end
+
+  module NoNum = struct
+    let create shape f =
+      Tensor.NoNum.create (to_arr shape) (fun ids -> f (of_arr ids))
+
+    let get_exn t ids = Tensor.NoNum.get_exn t (to_arr ids)
+
+    let set_exn t ids v = Tensor.NoNum.set_exn t (to_arr ids) v
+
+    let rank = Tensor.NoNum.rank
+
+    let shape t = Tensor.NoNum.shape t |> of_arr
+
+    let copy_exn = Tensor.NoNum.copy_exn
+
+    let reshape_exn t shape = Tensor.NoNum.reshape_exn t (to_arr shape)
+
+    let slice_exn t shape = Tensor.NoNum.slice_exn t (to_arr shape)
+
+    let sub_exn = Tensor.NoNum.sub_exn
+
+    let iteri = Tensor.NoNum.iteri
+  end
 end
 
 module Symb = struct

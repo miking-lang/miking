@@ -5,7 +5,6 @@
 -- A generic library for (stochastic) local search algorithms.
 -- Includes pre-defined meta-heuristics and allows design of custom dittos.
 
-include "set.mc"
 include "digraph.mc"
 include "string.mc"
 include "ext/math.mc"
@@ -204,7 +203,7 @@ let neighbours = lam g. lam state.
 
   let neighbourFromExchange = lam oldEdgs. lam newEdgs. lam tour.
     let equal = digraphEdgeEq g in
-    setUnion equal newEdgs (setDiff equal tour oldEdgs)
+    eqsetUnion equal newEdgs (eqsetDiff equal tour oldEdgs)
   in
 
   let possibleExchanges =
@@ -279,7 +278,7 @@ let metaSA = (saState, stepSA (neighbours g) randSol) in
 
 -- Tabu search
 let toursEq = lam t1. lam t2.
-  setEqual (digraphEdgeEq g) t1 t2 in
+  eqsetEqual (digraphEdgeEq g) t1 t2 in
 
 let tabuState = TabuSearch {tabu = [initTour],
                             isTabu = lam tour. lam tabu. any (toursEq tour) tabu,

@@ -4,7 +4,6 @@
 -- A simple library that defines map operations over sequences of tuples.
 
 include "option.mc"
-include "set.mc"
 include "char.mc"
 include "string.mc"
 

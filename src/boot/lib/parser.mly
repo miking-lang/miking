@@ -70,9 +70,19 @@
 %token <unit Ast.tokendata> NEVER
 %token <unit Ast.tokendata> USING
 
+/* Types */
+%token <unit Ast.tokendata> TUNKNOWN
+%token <unit Ast.tokendata> TBOOL
+%token <unit Ast.tokendata> TINT
+%token <unit Ast.tokendata> TFLOAT
+%token <unit Ast.tokendata> TCHAR
+%token <unit Ast.tokendata> TSTRING
+%token <unit Ast.tokendata> TTENSOR
+
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
 %token <unit Ast.tokendata> ADD           /* "+"   */
+
 
 /* Symbolic Tokens */
 %token <unit Ast.tokendata> LPAREN        /* "("   */
@@ -490,28 +500,34 @@ ty_left:
 
 ty_atom:
   | LPAREN RPAREN
-      { tyUnit (mkinfo $1.i $2.i) }
+    { tyUnit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
-      { $2 }
+    { $2 }
   | LSQUARE ty RSQUARE
-      { TySeq(mkinfo $1.i $3.i, $2) }
+    { TySeq(mkinfo $1.i $3.i, $2) }
   | LPAREN ty COMMA ty_list RPAREN
-      { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
+    { tuplety2recordty (mkinfo $1.i $5.i) ($2::$4) }
   | LBRACKET RBRACKET
-      { tyUnit (mkinfo $1.i $2.i) }
+    { tyUnit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
-      { TyRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
-        (fun acc (k,v) -> Record.add k v acc) Record.empty) }
+    { TyRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
+      (fun acc (k,v) -> Record.add k v acc) Record.empty) }
+  | TTENSOR LSQUARE ty RSQUARE
+    { TyTensor(mkinfo $1.i $4.i, $3) }
+  | TUNKNOWN
+    { TyUnknown $1.i }
+  | TBOOL
+    { TyBool $1.i }
+  | TINT
+    { TyInt $1.i }
+  | TFLOAT
+    { TyFloat $1.i }
+  | TCHAR
+    { TyChar $1.i }
+  | TSTRING
+    { TySeq($1.i,TyChar $1.i) }
   | type_ident
-      {match Ustring.to_utf8 $1.v with
-       | "Unknown" -> TyUnknown $1.i
-       | "Bool"    -> TyBool $1.i
-       | "Int"     -> TyInt $1.i
-       | "Float"   -> TyFloat $1.i
-       | "Char"    -> TyChar $1.i
-       | "String"  -> TySeq($1.i,TyChar $1.i)
-       | s         -> TyVar($1.i,us s,Symb.Helpers.nosym)
-      }
+    { TyVar($1.i,$1.v,Symb.Helpers.nosym) }
 
 ty_list:
   | ty COMMA ty_list
