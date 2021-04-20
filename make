@@ -22,15 +22,16 @@ cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 build() {
     mkdir -p build
     dune build
+    dune install > /dev/null 2>&1 
     cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
     if [ -e build/$MI_NAME ]
     then
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time (build/$BOOT_NAME src/main/mi.mc -- compile src/main/mi.mc)
-        echo "Bootstrapping the Miking compiler (2st round, might take some more time)"
-        time ($MI_NAME compile src/main/mi.mc)
+        time build/$BOOT_NAME src/main/mi.mc -- compile src/main/mi.mc
+        echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
+        time ./$MI_NAME compile src/main/mi.mc
         mv -f $MI_NAME build/$MI_NAME
         rm -f mi
     fi
@@ -44,7 +45,6 @@ install() {
     cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
     cp -f build/$MI_NAME $bin_path/$MI_NAME; chmod +x $bin_path/$MI_NAME
     rm -rf $lib_path; cp -rf stdlib $lib_path
-    dune install
 }
 
 # Run the test suite for parallel programming
