@@ -151,9 +151,9 @@ and const =
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate of int array option
+  | CtensorCreate of int Mseq.t option
   | CtensorGetExn of tm T.t option
-  | CtensorSetExn of tm T.t option * int array option
+  | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
   | CtensorShape
   | CtensorCopyExn of tm T.t option
@@ -316,6 +316,8 @@ and ty =
   | TyArrow of info * ty * ty
   (* Sequence type *)
   | TySeq of info * ty
+  (* Tensor type *)
+  | TyTensor of info * ty
   (* Record type *)
   | TyRecord of info * ty Record.t
   (* Variant type *)
@@ -477,6 +479,7 @@ let ty_info = function
   | TyChar fi
   | TyArrow (fi, _, _)
   | TySeq (fi, _)
+  | TyTensor (fi, _)
   | TyRecord (fi, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)

@@ -103,7 +103,7 @@ utest smap_Expr_Expr map2varX tmRecordI
 with record_ [("x", tmVarX), ("y", tmVarX)] using eqExpr in
 
 -- TODO(vipa, 2020-09-24): the best test here would be one that collects all the children to see that we see all of them. The issue is that we shouldn't depend on the enumeration order, so we would like to collect the (multi-)set of children, not a sequence.
--- We would thus like something like `sfold_Expr_Expr (lam acc. lam c. setInsert c acc) emptySet tmRecordI with setFromList [tmConst3, tmApp11] using setEqual`
+-- We would thus like something like `sfold_Expr_Expr (lam acc. lam c. eqsetInsert c acc) emptySet tmRecordI with setFromList [tmConst3, tmApp11] using eqsetEqual`
 -- There is also another test further down the file, search for the other todo with the same metadata
 utest sfold_Expr_Expr (lam acc. lam. addi acc 1) 0 tmRecordI with 2 in
 

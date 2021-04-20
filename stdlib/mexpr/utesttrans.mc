@@ -223,6 +223,10 @@ let collectKnownProgramTypes = use MExprAst in
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
         collectType acc elemTy
+      else match ty with TyTensor {ty = elemTy} then
+        let typeFuns = mapInsert ty funcNames acc.typeFunctions in
+        let acc = {acc with typeFunctions = typeFuns} in
+        collectType acc elemTy
       else match ty with TyRecord {fields = fields} then
         let typeFuns = mapInsert ty funcNames acc.typeFunctions in
         let acc = {acc with typeFunctions = typeFuns} in
@@ -484,7 +488,7 @@ let typeHasDefaultEquality = use MExprAst in
   lam env : UtestTypeEnv. lam ty.
   recursive let work = lam visited. lam ty.
     match ty with TyInt _ | TyBool _ | TyChar _ then true
-    else match ty with TySeq t then
+    else match ty with TySeq t | TyTensor t then
       work visited t.ty
     else match ty with TyRecord t then
       mapAll (lam ty. work visited ty) t.fields
@@ -749,7 +753,7 @@ let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
 utest utestStrip intNoUsing with unit_ using eqExpr in
 
 let intWithUsing = typeAnnot (
-  utestu_info_ (int_ 1) (int_ 0) unit_ (const_ (CGeqi{}))) in
+  utestu_info_ (int_ 1) (int_ 0) unit_ (uconst_ (CGeqi{}))) in
 -- eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
 utest utestStrip intWithUsing with unit_ using eqExpr in
 
@@ -767,7 +771,7 @@ let lhs = seq_ [
 let rhs = reverse_ (seq_ [
   float_ 3.14, float_ 0.0, float_ 1.0, float_ 6.5
 ]) in
-let elemEq = const_ (CEqf ()) in
+let elemEq = uconst_ (CEqf ()) in
 let seqEq =
   ulam_ "a"
     (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in

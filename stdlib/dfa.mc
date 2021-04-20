@@ -56,7 +56,7 @@ let startState = 0 in
 let acceptStates = [2] in
 let newDfa = dfaConstr states transitions startState acceptStates eqi eqChar in
 utest eqi startState newDfa.startState with true in
-utest setEqual eqi acceptStates newDfa.acceptStates with true in
+utest eqsetEqual eqi acceptStates newDfa.acceptStates with true in
 utest (digraphHasVertices states newDfa.graph) with true in
 utest (digraphHasEdges transitions newDfa.graph) with true in
 utest (digraphHasEdges [(1,2,'1')] (nfaAddTransition newDfa (1,2,'1')).graph) with true in

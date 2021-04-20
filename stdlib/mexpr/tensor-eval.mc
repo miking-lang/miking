@@ -86,11 +86,11 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   sem delta (arg : Expr) =
   | CTensorCreate _ ->
     let val = CTensorCreate2 (_ofTmSeq arg) in
-    const_ val
+    uconst_ val
   | CTensorGetExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorGetExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorGetExn not a tensor"
   | CTensorGetExn2 t ->
     let is = _ofTmSeq arg in
@@ -107,12 +107,12 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorSetExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSetExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorSetExn not a tensor"
   | CTensorSetExn2 t ->
     let is = _ofTmSeq arg in
     let val = CTensorSetExn3 (t, is) in
-    const_ val
+    uconst_ val
   | CTensorSetExn3 (t, is) ->
     match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
       tensorSetExn t is v;
@@ -143,7 +143,7 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorReshapeExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorReshapeExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorReshapeExn not a tensor"
   | CTensorReshapeExn2 t ->
     let is = _ofTmSeq arg in
@@ -160,7 +160,7 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorCopyExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorCopyExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorCopyExn not a tensor"
   | CTensorCopyExn2 t1 ->
     match arg with TmTensor { val = t2 } then
@@ -178,7 +178,7 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorSliceExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSliceExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorSliceExn not a tensor"
   | CTensorSliceExn2 t ->
     let is = _ofTmSeq arg in
@@ -195,12 +195,12 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
   | CTensorSubExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSubExn2 t in
-      const_ val
+      uconst_ val
     else error "First argument to CTensorSubExn not a tensor"
   | CTensorSubExn2 t ->
     match arg with TmConst { val = CInt { val = ofs }} then
       let val = CTensorSubExn3 (t, ofs) in
-      const_ val
+      uconst_ val
     else error "Second argument to CTensorSubExn not an integer"
   | CTensorSubExn3 (t, ofs) ->
     match arg with TmConst { val = CInt { val = len }} then
@@ -217,7 +217,7 @@ lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + Cons
     else error "Second argument to CTensorSubExn not an integer"
   | CTensorIteri _ ->
     let val = CTensorIteri2 arg in
-    const_ val
+    uconst_ val
 end
 
 lang MExprEval = MExprEval + TensorOpEval
@@ -236,71 +236,71 @@ let eval : Expr -> Expr =
 
 -- Tensors
 let testTensors = lam v : (a,a,a).
-  let t0 = eval (tensorCreate_ (seq_ []) (ulam_ "x" v.0)) in
-  let t1 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.0)) in
-  let t2 = eval (tensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.1)) in
+  let t0 = eval (utensorCreate_ (seq_ []) (ulam_ "x" v.0)) in
+  let t1 = eval (utensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.0)) in
+  let t2 = eval (utensorCreate_ (seq_ [int_ 4]) (ulam_ "x" v.1)) in
 
   let evaln = evalNoSymbolize in
 
-  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.0 using eqExpr in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.0 using eqExpr in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.0 using eqExpr in
+  utest evaln (utensorGetExn_ t0 (seq_ [])) with v.0 using eqExpr in
+  utest evaln (utensorGetExn_ t1 (seq_ [int_ 0])) with v.0 using eqExpr in
+  utest evaln (utensorGetExn_ t1 (seq_ [int_ 1])) with v.0 using eqExpr in
 
-  utest evaln (tensorSetExn_ t0 (seq_ []) v.1) with unit_ using eqExpr in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ using eqExpr in
-  utest evaln (tensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ using eqExpr in
+  utest evaln (utensorSetExn_ t0 (seq_ []) v.1) with unit_ using eqExpr in
+  utest evaln (utensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ using eqExpr in
+  utest evaln (utensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ using eqExpr in
 
-  utest evaln (tensorGetExn_ t0 (seq_ [])) with v.1 using eqExpr in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 0])) with v.1 using eqExpr in
-  utest evaln (tensorGetExn_ t1 (seq_ [int_ 1])) with v.2 using eqExpr in
+  utest evaln (utensorGetExn_ t0 (seq_ [])) with v.1 using eqExpr in
+  utest evaln (utensorGetExn_ t1 (seq_ [int_ 0])) with v.1 using eqExpr in
+  utest evaln (utensorGetExn_ t1 (seq_ [int_ 1])) with v.2 using eqExpr in
 
-  utest evaln (tensorRank_ t0) with int_ 0 using eqExpr in
-  utest evaln (tensorRank_ t1) with int_ 1 using eqExpr in
+  utest evaln (utensorRank_ t0) with int_ 0 using eqExpr in
+  utest evaln (utensorRank_ t1) with int_ 1 using eqExpr in
 
-  utest evaln (tensorShape_ t0) with seq_ [] using eqExpr in
-  utest evaln (tensorShape_ t1) with seq_ [int_ 4] using eqExpr in
+  utest evaln (utensorShape_ t0) with seq_ [] using eqExpr in
+  utest evaln (utensorShape_ t1) with seq_ [int_ 4] using eqExpr in
 
-  utest evaln (tensorShape_ (tensorReshapeExn_ t0 (seq_ [int_ 1])))
+  utest evaln (utensorShape_ (utensorReshapeExn_ t0 (seq_ [int_ 1])))
   with seq_ [int_ 1] using eqExpr in
 
-  utest evaln (tensorShape_ (tensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
+  utest evaln (utensorShape_ (utensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
   with seq_ [int_ 2, int_ 2] using eqExpr in
 
-  utest evaln (tensorCopyExn_ t1 t2) with unit_ using eqExpr in
+  utest evaln (utensorCopyExn_ t1 t2) with unit_ using eqExpr in
 
-  utest evaln (tensorRank_ (tensorSliceExn_ t1 (seq_ [int_ 0])))
+  utest evaln (utensorRank_ (utensorSliceExn_ t1 (seq_ [int_ 0])))
   with int_ 0 using eqExpr in
 
-  utest evaln (tensorShape_ (tensorSliceExn_ t1 (seq_ [int_ 0])))
+  utest evaln (utensorShape_ (utensorSliceExn_ t1 (seq_ [int_ 0])))
   with seq_ [] using eqExpr in
 
-  utest evaln (tensorRank_ (tensorSubExn_ t1 (int_ 0) (int_ 2)))
+  utest evaln (utensorRank_ (utensorSubExn_ t1 (int_ 0) (int_ 2)))
   with int_ 1 using eqExpr in
 
-  utest evaln (tensorShape_ (tensorSubExn_ t1 (int_ 0) (int_ 2)))
+  utest evaln (utensorShape_ (utensorSubExn_ t1 (int_ 0) (int_ 2)))
   with seq_ [int_ 2] using eqExpr in
 
-  let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
+  let t3 = eval (utensorCreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
   let f = eval (ulam_ "i"
                   (ulam_ "x"
-                     (tensorCopyExn_ (var_ "x") (var_ "x"))))
+                     (utensorCopyExn_ (var_ "x") (var_ "x"))))
   in
-  utest evaln (tensorIteri_ f t3) with unit_ using eqExpr in
+  utest evaln (utensorIteri_ f t3) with unit_ using eqExpr in
   ()
 in
 
-let t3 = eval (tensorCreate_ (seq_ [int_ 3]) (ulam_ "x" (int_ 0))) in
+let t3 = eval (utensorCreate_ (seq_ [int_ 3]) (ulam_ "x" (int_ 0))) in
 let f = eval (ulam_ "i"
                 (ulam_ "x"
-                   (tensorSetExn_ (var_ "x") (seq_ []) (var_ "i"))))
+                   (utensorSetExn_ (var_ "x") (seq_ []) (var_ "i"))))
 in
 
 let evaln = evalNoSymbolize in
 
-utest evaln (tensorIteri_ f t3) with unit_ using eqExpr in
-utest evaln (tensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 using eqExpr in
-utest evaln (tensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
-utest evaln (tensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in
+utest evaln (utensorIteri_ f t3) with unit_ using eqExpr in
+utest evaln (utensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 using eqExpr in
+utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
+utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in
 
 testTensors (int_ 0, int_ 1, int_ 2);
 testTensors (float_ 0., float_ 1., float_ 2.);

@@ -126,7 +126,7 @@ utest graphCountEdges g5 with 2 in
 let g6 = graphUnion empty empty in
 utest graphCountVertices g6 with 0 in
 
-let compsEq = setEqual (setEqual eqi) in
+let compsEq = eqsetEqual (eqsetEqual eqi) in
 
 utest compsEq (digraphStrongConnects empty) [] with true in
 

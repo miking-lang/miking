@@ -436,29 +436,18 @@ let delta eval env fi c v =
     let to_int = function
       | TmConst (_, CChar n) ->
           n
+      | TmConst (_, CInt n) ->
+          n
       | _ ->
           fail_constapp fi
     in
     tmseq |> Mseq.Helpers.map to_int
   in
-  let int_seq2tm_seq fi intseq =
+  let int_seq2char_tm_seq fi intseq =
     TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) intseq)
   in
-  let tm_seq2int_array fi tmseq =
-    tmseq
-    |> Mseq.Helpers.map (function
-         | TmConst (_, CInt n) ->
-             n
-         | _ ->
-             fail_constapp fi )
-    |> Mseq.Helpers.to_array
-  in
-  let int_array2tm_seq fi a =
-    let seq =
-      a |> Mseq.Helpers.of_array
-      |> Mseq.Helpers.map (fun n -> TmConst (fi, CInt n))
-    in
-    TmSeq (fi, seq)
+  let int_seq2int_tm_seq fi intseq =
+    TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CInt n)) intseq)
   in
   let mapCompare cmp x y =
     let app = TmApp (fi, TmApp (fi, cmp, x), y) in
@@ -796,7 +785,7 @@ let delta eval env fi c v =
   | CreadFile, TmSeq (fi, lst) ->
       let intseq = tm_seq2int_seq fi lst in
       let str = Intrinsics.File.read intseq in
-      int_seq2tm_seq fi str
+      int_seq2char_tm_seq fi str
   | CreadFile, _ ->
       fail_constapp fi
   | CwriteFile None, TmSeq (fi, l) ->
@@ -1000,20 +989,20 @@ let delta eval env fi c v =
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
   | CtensorCreate None, TmSeq (_, seq) ->
-      let shape = tm_seq2int_array fi seq in
+      let shape = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorCreate (Some shape))
   | CtensorCreate (Some shape), tm ->
       let f is =
-        let tmseq = int_array2tm_seq (tm_info tm) is in
+        let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         TmApp (fi, tm, tmseq) |> eval env
       in
-      let is0 = Array.make (Array.length shape) 0 in
+      let is0 = Mseq.create (Mseq.length shape) (fun _ -> 0) in
       let tm0 = f is0 in
       tm0
       |> (function
            | TmConst (_, CInt n) ->
                let f' is =
-                 if is = is0 then n
+                 if Mseq.Helpers.equal ( = ) is is0 then n
                  else
                    f is
                    |> function
@@ -1022,10 +1011,10 @@ let delta eval env fi c v =
                    | _ ->
                        raise_error fi "Expected integer"
                in
-               Tensor.Num.create Tensor.Num.Int shape f' |> T.int
+               T.Num.create_int shape f' |> T.int
            | TmConst (_, CFloat r) ->
                let f' is =
-                 if is = is0 then r
+                 if Mseq.Helpers.equal ( = ) is is0 then r
                  else
                    f is
                    |> function
@@ -1034,44 +1023,44 @@ let delta eval env fi c v =
                    | _ ->
                        raise_error fi "Expected float"
                in
-               Tensor.Num.create Tensor.Num.Float shape f' |> T.float
+               T.Num.create_float shape f' |> T.float
            | tm ->
-               let f' is = if is = is0 then tm else f is in
-               Tensor.NoNum.create shape f' |> T.no_num )
+               let f' is =
+                 if Mseq.Helpers.equal ( = ) is is0 then tm else f is
+               in
+               T.NoNum.create shape f' |> T.no_num )
       |> fun t -> TmTensor (fi, t)
   | CtensorCreate _, _ ->
       fail_constapp fi
   | CtensorGetExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorGetExn (Some t))
   | CtensorGetExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         t
         |> function
         | T.Int t' ->
-            TmConst (fi, CInt (Tensor.Num.get_exn t' is))
+            TmConst (fi, CInt (T.Num.get_exn t' is))
         | T.Float t' ->
-            TmConst (fi, CFloat (Tensor.Num.get_exn t' is))
+            TmConst (fi, CFloat (T.Num.get_exn t' is))
         | T.NoNum t' ->
-            Tensor.NoNum.get_exn t' is
+            T.NoNum.get_exn t' is
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorGetExn _, _ ->
       fail_constapp fi
   | CtensorSetExn (None, None), TmTensor (_, t) ->
       TmConst (fi, CtensorSetExn (Some t, None))
   | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorSetExn (Some t, Some is))
   | CtensorSetExn (Some (T.Int t), Some is), TmConst (_, CInt n) -> (
-    try Tensor.Num.set_exn t is n ; tmUnit
+    try T.Num.set_exn t is n ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn (Some (T.Float t), Some is), TmConst (_, CFloat r) -> (
-    try Tensor.Num.set_exn t is r ; tmUnit
+    try T.Num.set_exn t is r ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn (Some (T.NoNum t), Some is), tm -> (
-    try
-      Tensor.NoNum.set_exn t is tm ;
-      tmUnit
+    try T.NoNum.set_exn t is tm ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
       fail_constapp fi
@@ -1080,11 +1069,11 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t' ->
-            Tensor.Num.rank t'
+            T.Num.rank t'
         | T.Float t' ->
-            Tensor.Num.rank t'
+            T.Num.rank t'
         | NoNum t' ->
-            Tensor.NoNum.rank t'
+            T.NoNum.rank t'
       in
       TmConst (fi, CInt n)
   | CtensorRank, _ ->
@@ -1094,40 +1083,39 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t' ->
-            Tensor.Num.shape t'
+            T.Num.shape t'
         | T.Float t' ->
-            Tensor.Num.shape t'
+            T.Num.shape t'
         | T.NoNum t' ->
-            Tensor.NoNum.shape t'
+            T.NoNum.shape t'
       in
-      int_array2tm_seq fi shape
+      int_seq2int_tm_seq fi shape
   | CtensorShape, _ ->
       fail_constapp fi
   | CtensorCopyExn None, TmTensor (_, t1) ->
       TmConst (fi, CtensorCopyExn (Some t1))
   | CtensorCopyExn (Some (T.Int t1)), TmTensor (_, T.Int t2) ->
-      Tensor.Num.copy_exn t1 t2 ; tmUnit
+      T.Num.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn (Some (T.Float t1)), TmTensor (_, T.Float t2) ->
-      Tensor.Num.copy_exn t1 t2 ; tmUnit
+      T.Num.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn (Some (T.NoNum t1)), TmTensor (_, T.NoNum t2) ->
-      Tensor.NoNum.copy_exn t1 t2 ;
-      tmUnit
+      T.NoNum.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn _, _ ->
       fail_constapp fi
   | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))
   | CtensorReshapeExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         let t' =
           t
           |> function
           | T.Int t'' ->
-              Tensor.Num.reshape_exn t'' is |> T.int
+              T.Num.reshape_exn t'' is |> T.int
           | T.Float t'' ->
-              Tensor.Num.reshape_exn t'' is |> T.float
+              T.Num.reshape_exn t'' is |> T.float
           | T.NoNum t'' ->
-              Tensor.NoNum.reshape_exn t'' is |> T.no_num
+              T.NoNum.reshape_exn t'' is |> T.no_num
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1136,17 +1124,17 @@ let delta eval env fi c v =
   | CtensorSliceExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorSliceExn (Some t))
   | CtensorSliceExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         let t' =
           t
           |> function
           | T.Int t'' ->
-              Tensor.Num.slice_exn t'' is |> T.int
+              T.Num.slice_exn t'' is |> T.int
           | T.Float t'' ->
-              Tensor.Num.slice_exn t'' is |> T.float
+              T.Num.slice_exn t'' is |> T.float
           | T.NoNum t'' ->
-              Tensor.NoNum.slice_exn t'' is |> T.no_num
+              T.NoNum.slice_exn t'' is |> T.no_num
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1162,11 +1150,11 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t'' ->
-            Tensor.Num.sub_exn t'' ofs len |> T.int
+            T.Num.sub_exn t'' ofs len |> T.int
         | T.Float t'' ->
-            Tensor.Num.sub_exn t'' ofs len |> T.float
+            T.Num.sub_exn t'' ofs len |> T.float
         | T.NoNum t'' ->
-            Tensor.NoNum.sub_exn t'' ofs len |> T.no_num
+            T.NoNum.sub_exn t'' ofs len |> T.no_num
       in
       TmTensor (fi, t')
     with Invalid_argument msg -> raise_error fi msg )
@@ -1187,11 +1175,11 @@ let delta eval env fi c v =
         ( t
         |> function
         | T.Int t' ->
-            Tensor.Num.iteri (iterf T.int) t'
+            T.Num.iteri (iterf T.int) t'
         | T.Float t' ->
-            Tensor.Num.iteri (iterf T.float) t'
+            T.Num.iteri (iterf T.float) t'
         | T.NoNum t' ->
-            Tensor.NoNum.iteri (iterf T.no_num) t' ) ;
+            T.NoNum.iteri (iterf T.no_num) t' ) ;
         tmUnit
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorIteri _, _ ->

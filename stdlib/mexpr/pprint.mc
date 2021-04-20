@@ -924,6 +924,14 @@ lang SeqTypePrettyPrint = SeqTypeAst
     else never
 end
 
+lang TensorTypePrettyPrint = TensorTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyTensor t ->
+    match getTypeStringCode indent env t.ty with (env, ty) then
+      (env, join ["Tensor[", ty, "]"])
+    else never
+end
+
 lang RecordTypePrettyPrint = RecordTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyRecord t ->
@@ -1010,7 +1018,7 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  VarTypePrettyPrint + AppTypePrettyPrint
+  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

@@ -6,8 +6,6 @@
 include "option.mc"
 include "seq.mc"
 
-type Tensor a
-
 let _prod = foldl muli 1
 
 let _rowMajorOfsToIndex = lam shape. lam k.
@@ -97,19 +95,19 @@ with None () using optionEq (eqSeq (eqSeq eqi))
 
 
 -- Construct a rank 1 tensor from a non-empty sequence `seq`.
-let tensorOfSeqOrElse : (Unit -> Tensor a) -> [a] -> Tensor a =
+let tensorOfSeqOrElse : (Unit -> Tensor[a]) -> [a] -> Tensor[a] =
 lam f. lam seq.
   let n = length seq in
   if eqi n 0 then f ()
   else
     tensorCreate [n] (lam is. get seq (get is 0))
 
-let tensorOfSeqExn : [a] -> Tensor a =
+let tensorOfSeqExn : [a] -> Tensor[a] =
   tensorOfSeqOrElse (lam. error "Empty seq in tensorOfSeqExn")
 
 
 -- Construct a sequence from a rank 1 tensor `t`.
-let tensorToSeqOrElse : (Unit -> [a]) -> Tensor a -> [a] =
+let tensorToSeqOrElse : (Unit -> [a]) -> Tensor[a] -> [a] =
 lam f. lam t.
   if neqi (tensorRank t) 1 then f ()
   else
@@ -118,7 +116,7 @@ lam f. lam t.
                then Some (tensorGetExn t [i], addi i 1) else None ())
             0
 
-let tensorToSeqExn : Tensor a -> [a] =
+let tensorToSeqExn : Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
 utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
@@ -126,7 +124,7 @@ using eqSeq eqi
 
 
 -- Create a tensor filled with values `v`.
-let tensorRepeat : [Int] -> a -> Tensor a =
+let tensorRepeat : [Int] -> a -> Tensor[a] =
 lam shape. lam v.
   tensorCreate shape (lam. v)
 
@@ -137,7 +135,7 @@ with [0, 0, 0, 0] using eqSeq eqi
 
 
 -- The number of elements in a tensor `t`.
-let tensorSize : Tensor a -> Int =
+let tensorSize : Tensor[a] -> Int =
 lam t. _prod (tensorShape t)
 
 utest tensorSize (tensorCreate [1, 2, 3] (lam. 0)) with 6
@@ -146,7 +144,7 @@ utest tensorSize (tensorCreate [] (lam. 0)) with 1
 
 -- Map the elements of `t1` to the elements of `t2` using the function `f`,
 -- where `t1` and `t2` has to have the same shape.
-let tensorMapOrElse : (Unit -> Unit) -> (a -> b) -> Tensor a -> Tensor b -> Unit =
+let tensorMapOrElse : (Unit -> Unit) -> (a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
   if eqSeq eqi (tensorShape t1) (tensorShape t2) then
     let n = tensorSize t1 in
@@ -180,7 +178,7 @@ with 1
 
 
 -- Fill a tensor `t` with values `v`.
-let tensorFill : Tensor a -> a -> Unit =
+let tensorFill : Tensor[a] -> a -> Unit =
 lam t. lam v. tensorMapExn (lam. v) t t
 
 utest
@@ -191,7 +189,7 @@ with [0, 0, 0, 0]
 
 
 -- Element-wise equality of tensor `t1` and `t2` using `eq`
-let eqTensor : (a -> b -> Bool) -> Tensor a -> Tensor b -> Bool =
+let eqTensor : (a -> b -> Bool) -> Tensor[a] -> Tensor[b] -> Bool =
 lam eq. lam t1. lam t2.
   if eqSeq eqi (tensorShape t1) (tensorShape t2) then
     let n = tensorSize t1 in

@@ -1,5 +1,5 @@
 include "dfa.mc"
-include "set.mc"
+include "eqset.mc"
 
 -- Represents basic regular expressions.
 type RegEx
@@ -149,8 +149,8 @@ let regexFromDFA = lam dfa.
                        let eqv = (nfaGetEqv dfa) in
                        if eqv s t.0 then false else
                        if eqv s t.1 then false else
-                       if and (setMem eqv t.0 inStates)
-                              (setMem eqv t.1 outStates) then false
+                       if and (eqsetMem eqv t.0 inStates)
+                              (eqsetMem eqv t.1 outStates) then false
                        else true)
                     (nfaTransitions dfa)
     in
