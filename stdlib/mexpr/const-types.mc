@@ -9,11 +9,9 @@ include "mexpr/ast-builder.mc"
 let tysym_ = tyunknown_
 let tyref_ = tyunknown_
 let tymap_ = tyunknown_
-let tytensor_ = lam ty. tyunknown_
 let tybootparsetree_ = tyunknown_
 let tygeneric_ = lam id. tyunknown_
 let tygenericseq_ = lam id. tyseq_ (tygeneric_ id)
-let tygenerictensor_ = lam id. tytensor_ (tygeneric_ id)
 
 lang LiteralTypeAst = IntAst + FloatAst + BoolAst + CharAst
   sem tyConst =
@@ -149,8 +147,9 @@ end
 lang SysTypeAst = SysAst
   sem tyConst =
   | CExit _ -> tyarrow_ tyint_ tyunknown_
-  | CError _ -> tyarrow_ tyint_ tyunknown_
+  | CError _ -> tyarrow_ tystr_ tyunknown_
   | CArgv _ -> tyseq_ tystr_
+  | CCommand _ -> tyarrow_ tystr_ tyint_
 end
 
 lang TimeTypeAst = TimeAst
@@ -203,26 +202,16 @@ end
 
 lang TensorOpTypeAst = TensorOpAst
   sem tyConst =
-  | CTensorCreate _ -> tyarrows_ [tyseq_ tyint_,
-                                  tyarrow_ (tyseq_ tyint_) (tygeneric_ "a"),
-                                  tygenerictensor_ "a"]
-  | CTensorGetExn _ -> tyarrows_ [tygenerictensor_ "a", tyseq_ tyint_,
-                                  tygeneric_ "a"]
-  | CTensorSetExn _ -> tyarrows_ [tygenerictensor_ "a", tyseq_ tyint_,
-                                  tygeneric_ "a", tyunit_]
-  | CTensorRank _ -> tyarrow_ (tygenerictensor_ "a") tyint_
-  | CTensorShape _ -> tyarrow_ (tygenerictensor_ "a") (tyseq_ tyint_)
-  | CTensorReshapeExn _ -> tyarrows_ [tygenerictensor_ "a",
-                                      tyseq_ tyint_, tygenerictensor_ "a"]
-  | CTensorCopyExn _ -> tyarrows_ [tygenerictensor_ "a", tygenerictensor_ "a",
-                                   tyunit_]
-  | CTensorSliceExn _ -> tyarrows_ [tygenerictensor_ "a", tyseq_ tyint_,
-                                    tygenerictensor_ "a"]
-  | CTensorSubExn _ -> tyarrows_ [tygenerictensor_ "a", tyint_, tyint_,
-                                  tygenerictensor_ "a"]
-  | CTensorIteri _ -> tyarrows_ [tyarrows_ [tyint_, tygenerictensor_ "a",
-                                            tyunit_],
-                                 tygenerictensor_ "a", tyunit_]
+  | CTensorCreate _ -> tytensorcreate_ (tygeneric_ "a")
+  | CTensorGetExn _ -> tytensorgetexn_ (tygeneric_ "a")
+  | CTensorSetExn _ -> tytensorsetexn_ (tygeneric_ "a")
+  | CTensorRank _ -> tytensorrank_ (tygeneric_ "a")
+  | CTensorShape _ -> tytensorshape_ (tygeneric_ "a")
+  | CTensorReshapeExn _ -> tytensorreshapeexn_ (tygeneric_ "a")
+  | CTensorCopyExn _ -> tytensorcopyexn_ (tygeneric_ "a")
+  | CTensorSliceExn _ -> tytensorsliceexn_ (tygeneric_ "a")
+  | CTensorSubExn _ -> tytensorsubexn_ (tygeneric_ "a")
+  | CTensorIteri _ -> tytensoriteri_ (tygeneric_ "a")
 end
 
 lang BootParserTypeAst = BootParserAst

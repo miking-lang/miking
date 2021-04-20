@@ -172,6 +172,8 @@ let rec ustring_of_ty = function
         us "String"
     | _ ->
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
+  | TyTensor (_, ty) ->
+      us "Tensor[" ^. ustring_of_ty ty ^. us "]"
   | TyRecord (_, tys) when tys = Record.empty ->
       us "()"
   | TyRecord (_, tys) ->
@@ -397,6 +399,8 @@ let rec print_const fmt = function
       fprintf fmt "fileExists"
   | CdeleteFile ->
       fprintf fmt "deleteFile"
+  | Ccommand ->
+      fprintf fmt "command"
   | Cerror ->
       fprintf fmt "error"
   | Cexit ->
@@ -702,8 +706,8 @@ and print_env fmt env =
 
 (** Helper function for configuring the string formatter and printing *)
 let ustr_formatter_print ?(symbol = !enable_debug_symbol_print) ?(indent = 2)
-    ?(max_indent = 68) ?(margin = 79) ?(max_boxes = max_int)
-    ?(prefix = "") printer arg =
+    ?(max_indent = 68) ?(margin = 79) ?(max_boxes = max_int) ?(prefix = "")
+    printer arg =
   (* Configure global settings *)
   ref_symbol := symbol ;
   ref_indent := indent ;

@@ -40,6 +40,14 @@ let reserved_strings = [
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
   ("using",         fun(i) -> Parser.USING{i=i;v=()});
 
+  (* Types *)
+  ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});
+  ("Bool",          fun(i) -> Parser.TBOOL{i=i;v=()});
+  ("Int",           fun(i) -> Parser.TINT{i=i;v=()});
+  ("Float",         fun(i) -> Parser.TFLOAT{i=i;v=()});
+  ("Char",          fun(i) -> Parser.TCHAR{i=i;v=()});
+  ("String",        fun(i) -> Parser.TSTRING{i=i;v=()});
+  ("Tensor",        fun(i) -> Parser.TTENSOR{i=i;v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
@@ -62,7 +70,6 @@ let reserved_strings = [
   ("!",             fun(i) -> Parser.NOT{i=i;v=()});
   ("_",             fun(i) -> Parser.UNDERSCORE{i=i;v=()});
   ("->",            fun(i) -> Parser.ARROW{i=i;v=()});
-
 ]
 
 (* Info handling *)
@@ -114,12 +121,15 @@ let _ = List.iter (fun (str,f) -> Hashtbl.add str_tab str f)
   reserved_strings
 
 (* Make identfier, keyword, or operator  *)
-let mkid s =
+let mkid id s =
   try
     let f = Hashtbl.find str_tab s in f (mkinfo_fast s)
   with Not_found ->
     let s2 = Ustring.from_utf8 s in
-    Parser.LC_IDENT {i=mkinfo_ustring s2; v=s2}
+    id {i=mkinfo_ustring s2; v=s2}
+
+let mklcid = mkid (fun t -> Parser.LC_IDENT t)
+let mkucid = mkid (fun t -> Parser.UC_IDENT t)
 
 (* String handling *)
 let string_buf = Buffer.create 80
@@ -155,7 +165,6 @@ let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" |
               "!=" | "!" | "&&" | "||" | "++"| "$" | "("  | ")"  | "["  | "]" | "{"  | "}"  |
               "::" | ":" | ","  | ";"  | "."  | "&" | "|" | "->" | "=>" | "++"
 
-
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+
 let signed_integer = unsigned_integer  | '-' unsigned_integer
@@ -185,9 +194,9 @@ rule main = parse
   | unsigned_number as str
       { Parser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
   | ident | symtok as s
-      { mkid s }
+      { mklcid s }
   | uident as s
-      { Parser.UC_IDENT{i=mkinfo_fast s; v= Ustring.from_utf8 s} }
+      { mkucid s }
   | '\'' ((s_escape | utf8) as c) '\''
       { let s = Ustring.from_utf8 c in
         let esc_s = Ustring.convert_escaped_chars s in

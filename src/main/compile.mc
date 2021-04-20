@@ -2,6 +2,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "options.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
 include "mexpr/symbolize.mc"
@@ -31,15 +32,14 @@ let _preambleStr =
   let str = pprintOcaml (bind_ _preamble (int_ 0)) in
   subsequence str 0 (subi (length str) 1)
 
-recursive let _withPreamble = lam expr. lam options.
+recursive let _withPreamble = lam expr. lam options : Options.
   use OCamlAst in
   match expr with OTmVariantTypeDecl t then
     OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr options}
+  else if options.excludeIntrinsicsPreamble then
+    expr
   else
-    if options.excludeIntrinsicsPreamble then
-      OTmPreambleText {text = "\n", inexpr = expr}
-    else
-      OTmPreambleText {text = _preambleStr, inexpr = expr}
+    OTmPreambleText {text = _preambleStr, inexpr = expr}
 end
 
 let generateTests = lam ast. lam testsEnabled.
@@ -64,12 +64,13 @@ let filenameWithoutExtension = lam filename.
   else filename
 
 let ocamlCompile = lam sourcePath. lam ocamlProg.
-  let p = ocamlCompile ocamlProg in
+  let p : CompileResult = ocamlCompile ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
-  phMoveFile p.binaryPath destinationFile;
-  phChmodWriteAccessFile destinationFile
+  sysMoveFile p.binaryPath destinationFile;
+  sysChmodWriteAccessFile destinationFile;
+  p.cleanup ()
 
-let compile = lam files. lam options.
+let compile = lam files. lam options : Options.
   use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile file in

@@ -119,6 +119,7 @@ and const =
   | CwriteFile of int Mseq.t option
   | CfileExists
   | CdeleteFile
+  | Ccommand
   | Cerror
   | Cexit
   (* MCore intrinsics: Symbols *)
@@ -150,9 +151,9 @@ and const =
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate of int array option
+  | CtensorCreate of int Mseq.t option
   | CtensorGetExn of tm T.t option
-  | CtensorSetExn of tm T.t option * int array option
+  | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
   | CtensorShape
   | CtensorCopyExn of tm T.t option
@@ -315,6 +316,8 @@ and ty =
   | TyArrow of info * ty * ty
   (* Sequence type *)
   | TySeq of info * ty
+  (* Tensor type *)
+  | TyTensor of info * ty
   (* Record type *)
   | TyRecord of info * ty Record.t
   (* Variant type *)
@@ -476,6 +479,7 @@ let ty_info = function
   | TyChar fi
   | TyArrow (fi, _, _)
   | TySeq (fi, _)
+  | TyTensor (fi, _)
   | TyRecord (fi, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)
@@ -558,7 +562,8 @@ let const_has_side_effect = function
   | CfileExists
   | CdeleteFile
   | Cerror
-  | Cexit ->
+  | Cexit
+  | Ccommand ->
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
@@ -567,6 +572,7 @@ let const_has_side_effect = function
   | Cref | CmodRef _ | CdeRef ->
       true
   (* MCore intrinsics: Maps *)
+  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
   | CMap _
   | CmapEmpty
   | CmapSize

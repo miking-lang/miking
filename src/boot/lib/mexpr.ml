@@ -15,159 +15,6 @@ open Intrinsics
    for instance by the Jupyter kernel *)
 let program_output = ref uprint_string
 
-(* Extract the arguments when running boot, and the arguments of the actual program.
-   -- is used to separate the program arguments. For instance,
-     mi myprog.mc --debug-parse -- foo --something
-   results in two arrays:
-    argv_boot: ["mi","myprog.mc","--debug-parse"]
-    argv_prog: ["mi","foo","--something"] *)
-let argv_boot, argv_prog =
-  let n, _ =
-    Sys.argv
-    |> Array.fold_left
-         (fun (n, b) x -> if x = "--" || b then (n, true) else (n + 1, b))
-         (0, false)
-  in
-  ( Array.sub Sys.argv 0 n
-  , Array.append (Array.sub Sys.argv 0 1)
-      ( try Array.sub Sys.argv (n + 1) (Array.length Sys.argv - n - 1)
-        with _ -> [||] ) )
-
-(* Mapping between named builtin functions (intrinsics) and the
-   correspond constants *)
-let builtin =
-  let f c = TmConst (NoInfo, c) in
-  (* MCore intrinsics: Integers *)
-  [ ("addi", f (Caddi None))
-  ; ("subi", f (Csubi None))
-  ; ("muli", f (Cmuli None))
-  ; ("divi", f (Cdivi None))
-  ; ("modi", f (Cmodi None))
-  ; ("negi", f Cnegi)
-  ; ("lti", f (Clti None))
-  ; ("leqi", f (Cleqi None))
-  ; ("gti", f (Cgti None))
-  ; ("geqi", f (Cgeqi None))
-  ; ("eqi", f (Ceqi None))
-  ; ("neqi", f (Cneqi None))
-  ; ("slli", f (Cslli None))
-  ; ("srli", f (Csrli None))
-  ; ("srai", f (Csrai None))
-  ; ("arity", f Carity) (* MCore intrinsics: Floating-point numbers *)
-  ; ("addf", f (Caddf None))
-  ; ("subf", f (Csubf None))
-  ; ("mulf", f (Cmulf None))
-  ; ("divf", f (Cdivf None))
-  ; ("negf", f Cnegf)
-  ; ("ltf", f (Cltf None))
-  ; ("leqf", f (Cleqf None))
-  ; ("gtf", f (Cgtf None))
-  ; ("geqf", f (Cgeqf None))
-  ; ("eqf", f (Ceqf None))
-  ; ("neqf", f (Cneqf None))
-  ; ("floorfi", f Cfloorfi)
-  ; ("ceilfi", f Cceilfi)
-  ; ("roundfi", f Croundfi)
-  ; ("int2float", f Cint2float)
-  ; ("string2float", f Cstring2float) (* MCore intrinsics: Characters *)
-  ; ("eqc", f (Ceqc None))
-  ; ("char2int", f Cchar2int)
-  ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
-  ; ("create", f (Ccreate None))
-  ; ("length", f Clength)
-  ; ("concat", f (Cconcat None))
-  ; ("get", f (Cget None))
-  ; ("set", f (Cset (None, None)))
-  ; ("cons", f (Ccons None))
-  ; ("snoc", f (Csnoc None))
-  ; ("splitAt", f (CsplitAt None))
-  ; ("reverse", f Creverse)
-  ; ("subsequence", f (Csubsequence (None, None)))
-    (* MCore intrinsics: Random numbers *)
-  ; ("randIntU", f (CrandIntU None))
-  ; ("randSetSeed", f CrandSetSeed) (* MCore intrinsics: Time *)
-  ; ("wallTimeMs", f CwallTimeMs)
-  ; ("sleepMs", f CsleepMs) (* MCore intrinsics: Debug and I/O *)
-  ; ("print", f Cprint)
-  ; ("dprint", f Cdprint)
-  ; ("readLine", f CreadLine)
-  ; ("readBytesAsString", f CreadBytesAsString)
-  ; ( "argv"
-    , TmSeq
-        ( NoInfo
-        , argv_prog |> Mseq.Helpers.of_array
-          |> Mseq.Helpers.map (fun s ->
-                 TmSeq
-                   ( NoInfo
-                   , s |> us |> Mseq.Helpers.of_ustring
-                     |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   ) ) ) )
-  ; ("readFile", f CreadFile)
-  ; ("writeFile", f (CwriteFile None))
-  ; ("fileExists", f CfileExists)
-  ; ("deleteFile", f CdeleteFile)
-  ; ("error", f Cerror)
-  ; ("exit", f Cexit) (* MCore intrinsics: Symbols *)
-  ; ("eqsym", f (Ceqsym None))
-  ; ("gensym", f Cgensym)
-  ; ("sym2hash", f Csym2hash) (* MCore intrinsics: References *)
-  ; ("ref", f Cref)
-  ; ("deref", f CdeRef)
-  ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)
-  ; ("mapEmpty", f CmapEmpty)
-  ; ("mapSize", f CmapSize)
-  ; ("mapGetCmpFun", f CmapGetCmpFun)
-  ; ("mapInsert", f (CmapInsert (None, None)))
-  ; ("mapRemove", f (CmapRemove None))
-  ; ("mapFindWithExn", f (CmapFindWithExn None))
-  ; ("mapFindOrElse", f (CmapFindOrElse (None, None)))
-  ; ("mapFindApplyOrElse", f (CmapFindApplyOrElse (None, None, None)))
-  ; ("mapAny", f (CmapAny None))
-  ; ("mapMem", f (CmapMem None))
-  ; ("mapMap", f (CmapMap None))
-  ; ("mapMapWithKey", f (CmapMapWithKey None))
-  ; ("mapFoldWithKey", f (CmapFoldWithKey (None, None)))
-  ; ("mapBindings", f CmapBindings)
-  ; ("mapEq", f (CmapEq (None, None)))
-  ; ("mapCmp", f (CmapCmp (None, None)))
-  ; ("tensorCreate", f (CtensorCreate None)) (* MCore intrinsics: Tensors *)
-  ; ("tensorGetExn", f (CtensorGetExn None))
-  ; ("tensorSetExn", f (CtensorSetExn (None, None)))
-  ; ("tensorRank", f CtensorRank)
-  ; ("tensorShape", f CtensorShape)
-  ; ("tensorReshapeExn", f (CtensorReshapeExn None))
-  ; ("tensorCopyExn", f (CtensorCopyExn None))
-  ; ("tensorSliceExn", f (CtensorSliceExn None))
-  ; ("tensorSubExn", f (CtensorSubExn (None, None)))
-  ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
-  ; ("bootParserParseMExprString", f CbootParserParseMExprString)
-  ; ("bootParserParseMCoreFile", f CbootParserParseMCoreFile)
-  ; ("bootParserGetId", f CbootParserGetId)
-  ; ("bootParserGetTerm", f (CbootParserGetTerm None))
-  ; ("bootParserGetType", f (CbootParserGetType None))
-  ; ("bootParserGetString", f (CbootParserGetString None))
-  ; ("bootParserGetInt", f (CbootParserGetInt None))
-  ; ("bootParserGetFloat", f (CbootParserGetFloat None))
-  ; ("bootParserGetListLength", f (CbootParserGetListLength None))
-  ; ("bootParserGetConst", f (CbootParserGetConst None))
-  ; ("bootParserGetPat", f (CbootParserGetPat None))
-  ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
-  (* Append multicore intrinsics *)
-  @ Par.externals
-  (* Append external functions *)
-  @ Ext.externals
-  (* Append sundials intrinsics *)
-  @ Sd.externals
-  (* Append python intrinsics *)
-  @ Pyffi.externals
-  |> List.map (fun (x, t) -> (x, Symb.gensym (), t))
-
-(* Mapping name to symbol *)
-let builtin_name2sym = List.map (fun (x, s, _) -> (IdVar (usid x), s)) builtin
-
-(* Mapping sym to term *)
-let builtin_sym2term = List.map (fun (_, s, t) -> (s, t)) builtin
-
 (* Returns the number of expected arguments of a constant *)
 let arity = function
   (* MCore intrinsics: Booleans *)
@@ -371,6 +218,8 @@ let arity = function
   | CfileExists ->
       1
   | CdeleteFile ->
+      1
+  | Ccommand ->
       1
   | Cerror ->
       1
@@ -587,29 +436,18 @@ let delta eval env fi c v =
     let to_int = function
       | TmConst (_, CChar n) ->
           n
+      | TmConst (_, CInt n) ->
+          n
       | _ ->
           fail_constapp fi
     in
     tmseq |> Mseq.Helpers.map to_int
   in
-  let int_seq2tm_seq fi intseq =
+  let int_seq2char_tm_seq fi intseq =
     TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) intseq)
   in
-  let tm_seq2int_array fi tmseq =
-    tmseq
-    |> Mseq.Helpers.map (function
-         | TmConst (_, CInt n) ->
-             n
-         | _ ->
-             fail_constapp fi )
-    |> Mseq.Helpers.to_array
-  in
-  let int_array2tm_seq fi a =
-    let seq =
-      a |> Mseq.Helpers.of_array
-      |> Mseq.Helpers.map (fun n -> TmConst (fi, CInt n))
-    in
-    TmSeq (fi, seq)
+  let int_seq2int_tm_seq fi intseq =
+    TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CInt n)) intseq)
   in
   let mapCompare cmp x y =
     let app = TmApp (fi, TmApp (fi, cmp, x), y) in
@@ -947,7 +785,7 @@ let delta eval env fi c v =
   | CreadFile, TmSeq (fi, lst) ->
       let intseq = tm_seq2int_seq fi lst in
       let str = Intrinsics.File.read intseq in
-      int_seq2tm_seq fi str
+      int_seq2char_tm_seq fi str
   | CreadFile, _ ->
       fail_constapp fi
   | CwriteFile None, TmSeq (fi, l) ->
@@ -967,6 +805,10 @@ let delta eval env fi c v =
       Intrinsics.File.delete (tm_seq2int_seq fi lst) ;
       tmUnit
   | CdeleteFile, _ ->
+      fail_constapp fi
+  | Ccommand, TmSeq (_, lst) ->
+      TmConst (fi, CInt (Intrinsics.MSys.command (tm_seq2int_seq fi lst)))
+  | Ccommand, _ ->
       fail_constapp fi
   | Cerror, TmSeq (fiseq, lst) ->
       tmseq2ustring fiseq lst |> Ustring.to_utf8 |> raise_error fi
@@ -1147,20 +989,20 @@ let delta eval env fi c v =
       fail_constapp fi
   (* MCore intrinsics: Tensors *)
   | CtensorCreate None, TmSeq (_, seq) ->
-      let shape = tm_seq2int_array fi seq in
+      let shape = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorCreate (Some shape))
   | CtensorCreate (Some shape), tm ->
       let f is =
-        let tmseq = int_array2tm_seq (tm_info tm) is in
+        let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         TmApp (fi, tm, tmseq) |> eval env
       in
-      let is0 = Array.make (Array.length shape) 0 in
+      let is0 = Mseq.create (Mseq.length shape) (fun _ -> 0) in
       let tm0 = f is0 in
       tm0
       |> (function
            | TmConst (_, CInt n) ->
                let f' is =
-                 if is = is0 then n
+                 if Mseq.Helpers.equal ( = ) is is0 then n
                  else
                    f is
                    |> function
@@ -1169,10 +1011,10 @@ let delta eval env fi c v =
                    | _ ->
                        raise_error fi "Expected integer"
                in
-               Tensor.Num.create Tensor.Num.Int shape f' |> T.int
+               T.Num.create_int shape f' |> T.int
            | TmConst (_, CFloat r) ->
                let f' is =
-                 if is = is0 then r
+                 if Mseq.Helpers.equal ( = ) is is0 then r
                  else
                    f is
                    |> function
@@ -1181,44 +1023,44 @@ let delta eval env fi c v =
                    | _ ->
                        raise_error fi "Expected float"
                in
-               Tensor.Num.create Tensor.Num.Float shape f' |> T.float
+               T.Num.create_float shape f' |> T.float
            | tm ->
-               let f' is = if is = is0 then tm else f is in
-               Tensor.NoNum.create shape f' |> T.no_num )
+               let f' is =
+                 if Mseq.Helpers.equal ( = ) is is0 then tm else f is
+               in
+               T.NoNum.create shape f' |> T.no_num )
       |> fun t -> TmTensor (fi, t)
   | CtensorCreate _, _ ->
       fail_constapp fi
   | CtensorGetExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorGetExn (Some t))
   | CtensorGetExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         t
         |> function
         | T.Int t' ->
-            TmConst (fi, CInt (Tensor.Num.get_exn t' is))
+            TmConst (fi, CInt (T.Num.get_exn t' is))
         | T.Float t' ->
-            TmConst (fi, CFloat (Tensor.Num.get_exn t' is))
+            TmConst (fi, CFloat (T.Num.get_exn t' is))
         | T.NoNum t' ->
-            Tensor.NoNum.get_exn t' is
+            T.NoNum.get_exn t' is
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorGetExn _, _ ->
       fail_constapp fi
   | CtensorSetExn (None, None), TmTensor (_, t) ->
       TmConst (fi, CtensorSetExn (Some t, None))
   | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorSetExn (Some t, Some is))
   | CtensorSetExn (Some (T.Int t), Some is), TmConst (_, CInt n) -> (
-    try Tensor.Num.set_exn t is n ; tmUnit
+    try T.Num.set_exn t is n ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn (Some (T.Float t), Some is), TmConst (_, CFloat r) -> (
-    try Tensor.Num.set_exn t is r ; tmUnit
+    try T.Num.set_exn t is r ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn (Some (T.NoNum t), Some is), tm -> (
-    try
-      Tensor.NoNum.set_exn t is tm ;
-      tmUnit
+    try T.NoNum.set_exn t is tm ; tmUnit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
       fail_constapp fi
@@ -1227,11 +1069,11 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t' ->
-            Tensor.Num.rank t'
+            T.Num.rank t'
         | T.Float t' ->
-            Tensor.Num.rank t'
+            T.Num.rank t'
         | NoNum t' ->
-            Tensor.NoNum.rank t'
+            T.NoNum.rank t'
       in
       TmConst (fi, CInt n)
   | CtensorRank, _ ->
@@ -1241,40 +1083,39 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t' ->
-            Tensor.Num.shape t'
+            T.Num.shape t'
         | T.Float t' ->
-            Tensor.Num.shape t'
+            T.Num.shape t'
         | T.NoNum t' ->
-            Tensor.NoNum.shape t'
+            T.NoNum.shape t'
       in
-      int_array2tm_seq fi shape
+      int_seq2int_tm_seq fi shape
   | CtensorShape, _ ->
       fail_constapp fi
   | CtensorCopyExn None, TmTensor (_, t1) ->
       TmConst (fi, CtensorCopyExn (Some t1))
   | CtensorCopyExn (Some (T.Int t1)), TmTensor (_, T.Int t2) ->
-      Tensor.Num.copy_exn t1 t2 ; tmUnit
+      T.Num.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn (Some (T.Float t1)), TmTensor (_, T.Float t2) ->
-      Tensor.Num.copy_exn t1 t2 ; tmUnit
+      T.Num.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn (Some (T.NoNum t1)), TmTensor (_, T.NoNum t2) ->
-      Tensor.NoNum.copy_exn t1 t2 ;
-      tmUnit
+      T.NoNum.copy_exn t1 t2 ; tmUnit
   | CtensorCopyExn _, _ ->
       fail_constapp fi
   | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))
   | CtensorReshapeExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         let t' =
           t
           |> function
           | T.Int t'' ->
-              Tensor.Num.reshape_exn t'' is |> T.int
+              T.Num.reshape_exn t'' is |> T.int
           | T.Float t'' ->
-              Tensor.Num.reshape_exn t'' is |> T.float
+              T.Num.reshape_exn t'' is |> T.float
           | T.NoNum t'' ->
-              Tensor.NoNum.reshape_exn t'' is |> T.no_num
+              T.NoNum.reshape_exn t'' is |> T.no_num
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1283,17 +1124,17 @@ let delta eval env fi c v =
   | CtensorSliceExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorSliceExn (Some t))
   | CtensorSliceExn (Some t), TmSeq (_, seq) -> (
-      let is = tm_seq2int_array fi seq in
+      let is = tm_seq2int_seq fi seq in
       try
         let t' =
           t
           |> function
           | T.Int t'' ->
-              Tensor.Num.slice_exn t'' is |> T.int
+              T.Num.slice_exn t'' is |> T.int
           | T.Float t'' ->
-              Tensor.Num.slice_exn t'' is |> T.float
+              T.Num.slice_exn t'' is |> T.float
           | T.NoNum t'' ->
-              Tensor.NoNum.slice_exn t'' is |> T.no_num
+              T.NoNum.slice_exn t'' is |> T.no_num
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1309,11 +1150,11 @@ let delta eval env fi c v =
         t
         |> function
         | T.Int t'' ->
-            Tensor.Num.sub_exn t'' ofs len |> T.int
+            T.Num.sub_exn t'' ofs len |> T.int
         | T.Float t'' ->
-            Tensor.Num.sub_exn t'' ofs len |> T.float
+            T.Num.sub_exn t'' ofs len |> T.float
         | T.NoNum t'' ->
-            Tensor.NoNum.sub_exn t'' ofs len |> T.no_num
+            T.NoNum.sub_exn t'' ofs len |> T.no_num
       in
       TmTensor (fi, t')
     with Invalid_argument msg -> raise_error fi msg )
@@ -1334,11 +1175,11 @@ let delta eval env fi c v =
         ( t
         |> function
         | T.Int t' ->
-            Tensor.Num.iteri (iterf T.int) t'
+            T.Num.iteri (iterf T.int) t'
         | T.Float t' ->
-            Tensor.Num.iteri (iterf T.float) t'
+            T.Num.iteri (iterf T.float) t'
         | T.NoNum t' ->
-            Tensor.NoNum.iteri (iterf T.no_num) t' ) ;
+            T.NoNum.iteri (iterf T.no_num) t' ) ;
         tmUnit
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorIteri _, _ ->
@@ -1352,11 +1193,7 @@ let delta eval env fi c v =
   | CbootParserParseMExprString, _ ->
       fail_constapp fi
   | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
-      let t =
-        Parserutils.parse_mcore_file (tmseq2ustring fi seq)
-        |> Symbolize.symbolize builtin_name2sym
-        |> Deadcode.elimination builtin_sym2term builtin_name2sym
-      in
+      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree (PTreeTm t))
   | CbootParserParseMCoreFile, _ ->
       fail_constapp fi

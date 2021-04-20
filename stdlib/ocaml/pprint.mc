@@ -73,16 +73,24 @@ lang OCamlTypePrettyPrint =
   | TyRecord t ->
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
-      let f = lam env. lam sid. lam ty.
-        let str = sidToString sid in
-        match getTypeStringCode indent env ty with (env,ty) then
-          let str = pprintLabelString str in
-          (env, join [str, ": ", ty])
+      let f = lam env. lam field : (String, Type).
+        match field with (str, ty) then
+          match getTypeStringCode indent env ty with (env,ty) then
+            let str = pprintLabelString str in
+            (env, join [str, ": ", ty])
+          else never
         else never
       in
-      match mapMapAccum f env t.fields with (env, fields) then
-        let fieldStrs = mapValues fields in
-        (env, join ["{", strJoin "; " fieldStrs, "}"])
+      let fieldStrs =
+        match _record2tuple t.fields with Some tupleFields then
+          mapi (lam i. lam f. (int2string i, f)) tupleFields
+        else
+          map
+            (lam f : (SID, Type).
+              (sidToString f.0, f.1))
+            (mapBindings t.fields) in
+      match mapAccumL f env fieldStrs with (env, fields) then
+        (env, join ["{", strJoin ";" fields, "}"])
       else never
   | _ -> (env, "Obj.t")
 end
@@ -167,7 +175,7 @@ lang OCamlPrettyPrint =
   | CLeqi _ -> "((<=) : int -> int -> bool)"
   | CGti _ -> "((>) : int -> int -> bool)"
   | CGeqi _ -> "((>=) : int -> int -> bool)"
-  | CNeqi _ -> "((!=) : int -> int -> bool)"
+  | CNeqi _ -> "((<>) : int -> int -> bool)"
   | CSlli _ -> "Int.shift_left"
   | CSrli _ -> "Int.shift_right_logical"
   | CSrai _ -> "Int.shift_right"
@@ -176,7 +184,7 @@ lang OCamlPrettyPrint =
   | CLeqf _ -> "((<=) : float -> float -> bool)"
   | CGtf _ -> "((>) : float -> float -> bool)"
   | CGeqf _ -> "((>=) : float -> float -> bool)"
-  | CNeqf _ -> "((!=) : float -> float -> bool)"
+  | CNeqf _ -> "((<>) : float -> float -> bool)"
   | CInt2float _ -> "float_of_int"
   | CChar {val = c} -> int2string (char2int c)
   | CEqc _ -> "Int.equal"
@@ -278,11 +286,11 @@ lang OCamlPrettyPrint =
       else never
     else never
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
-    let lname = lam env. lam bind.
+    let lname = lam env. lam bind : RecLetBinding.
       match pprintVarName env bind.ident with (env,str) then
         (env, str)
       else never in
-    let lbody = lam env. lam bind.
+    let lbody = lam env. lam bind : RecLetBinding.
       match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
       with (env,str) then (env, str)
       else never in

@@ -64,6 +64,61 @@ module T : sig
   val float : (float, Tensor.Num.float_elt) Tensor.Num.t -> 'a t
 
   val no_num : 'a Tensor.NoNum.t -> 'a t
+
+  module Num : sig
+    val create_int :
+         int Mseq.t
+      -> (int Mseq.t -> int)
+      -> (int, Tensor.Num.int_elt) Tensor.Num.t
+
+    val create_float :
+         int Mseq.t
+      -> (int Mseq.t -> float)
+      -> (float, Tensor.Num.float_elt) Tensor.Num.t
+
+    val get_exn : ('a, 'b) Tensor.Num.t -> int Mseq.t -> 'a
+
+    val set_exn : ('a, 'b) Tensor.Num.t -> int Mseq.t -> 'a -> unit
+
+    val rank : ('a, 'b) Tensor.Num.t -> int
+
+    val shape : ('a, 'b) Tensor.Num.t -> int Mseq.t
+
+    val copy_exn : ('a, 'b) Tensor.Num.t -> ('a, 'b) Tensor.Num.t -> unit
+
+    val reshape_exn :
+      ('a, 'b) Tensor.Num.t -> int Mseq.t -> ('a, 'b) Tensor.Num.t
+
+    val slice_exn :
+      ('a, 'b) Tensor.Num.t -> int Mseq.t -> ('a, 'b) Tensor.Num.t
+
+    val sub_exn : ('a, 'b) Tensor.Num.t -> int -> int -> ('a, 'b) Tensor.Num.t
+
+    val iteri :
+      (int -> ('a, 'b) Tensor.Num.t -> unit) -> ('a, 'b) Tensor.Num.t -> unit
+  end
+
+  module NoNum : sig
+    val create : int Mseq.t -> (int Mseq.t -> 'a) -> 'a Tensor.NoNum.t
+
+    val get_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a
+
+    val set_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a -> unit
+
+    val rank : 'a Tensor.NoNum.t -> int
+
+    val shape : 'a Tensor.NoNum.t -> int Mseq.t
+
+    val copy_exn : 'a Tensor.NoNum.t -> 'a Tensor.NoNum.t -> unit
+
+    val reshape_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a Tensor.NoNum.t
+
+    val slice_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a Tensor.NoNum.t
+
+    val sub_exn : 'a Tensor.NoNum.t -> int -> int -> 'a Tensor.NoNum.t
+
+    val iteri : (int -> 'a Tensor.NoNum.t -> unit) -> 'a Tensor.NoNum.t -> unit
+  end
 end
 
 module Symb : sig
@@ -128,6 +183,8 @@ module MSys : sig
   val error : int Mseq.t -> exn
 
   val argv : int Mseq.t Mseq.t
+
+  val command : int Mseq.t -> int
 end
 
 module Time : sig

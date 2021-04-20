@@ -1,8 +1,8 @@
 lang Empty
 end
 
-lang Bool
-  syn Bool =
+lang MyBool
+  syn MyBool =
   | True ()
   | False ()
 
@@ -11,7 +11,7 @@ lang Bool
   | False _ -> True ()
 end
 
-lang AlsoBool = Bool
+lang AlsoBool = MyBool
 end
 
 lang AlsoAlsoBool = AlsoBool
@@ -21,7 +21,7 @@ lang AlsoAlsoBool = AlsoBool
 end
 
 lang Recursive
-  syn Bool =
+  syn MyBool =
   | True ()
   | False ()
 
@@ -31,7 +31,7 @@ lang Recursive
 end
 
 lang Mutual
-  syn Bool =
+  syn MyBool =
   | True ()
   | False ()
 
@@ -44,7 +44,7 @@ lang Mutual
   | False _ -> if eqi n 0 then True () else my_not (subi n 1) (False ())
 end
 
-lang And = Bool
+lang And = MyBool
   sem my_and (b1 : Dyn) =
   | True _ -> b1
   | False _ -> False ()
@@ -55,7 +55,7 @@ mexpr
 use Empty in
   ();
 
-use Bool in
+use MyBool in
   utest my_not (True ()) with False () in
   ();
 
@@ -84,5 +84,3 @@ use And in
   utest my_and (False ()) (True ()) with (False ()) in
   utest my_and (False ()) (False ()) with (False ()) in
   ()
-
-

@@ -5,10 +5,11 @@
 
 open Printf
 open Ast
-open Msg
 open Mexpr
+open Msg
 open Parserutils
 open Ustring
+open Builtin
 
 (* Main function for evaluating a program. Performs lexing, parsing
    and evaluation. Does not perform any type checking *)

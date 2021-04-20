@@ -1,13 +1,13 @@
 include "ocaml/ast.mc"
 include "mexpr/symbolize.mc"
 
-let _symbolizeVarName = lam env. lam ident.
+let _symbolizeVarName = lam env : SymEnv. lam ident.
   match env with {varEnv = varEnv} then
     if nameHasSym ident then (env, ident)
     else
       let ident = nameSetNewSym ident in
       let str = nameGetStr ident in
-      let varEnv = assocInsert {eq=eqString} str ident varEnv in
+      let varEnv = mapInsert str ident varEnv in
       let env = {env with varEnv = varEnv} in
       (env, ident)
   else never
@@ -20,7 +20,7 @@ lang OCamlSym =
   + RecordTypeSym + VarTypeSym + OCamlExternal + OCamlPreambleHack
   + OCamlString + OCamlRecord
 
-  sem symbolizeExpr (env : Env) =
+  sem symbolizeExpr (env : SymEnv) =
   | OTmVariantTypeDecl t ->
     let f = lam env. lam constr.
       match constr with (ident, ty) then
@@ -39,8 +39,8 @@ lang OCamlSym =
     else never
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm. match arm with (pat, expr) then
-      match symbolizePat env assocEmpty pat with (patEnv, pat) then
-        let thnEnv = {env with varEnv = assocMergePreferRight {eq=eqString} env.varEnv patEnv} in
+      match symbolizePat env (mapEmpty cmpString) pat with (patEnv, pat) then
+        let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
         (pat, symbolizeExpr thnEnv expr)
       else never else never in
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
@@ -59,7 +59,7 @@ lang OCamlSym =
     OTmPreambleText {t with inexpr = symbolizeExpr env t.inexpr}
   | OTmString t -> OTmString t
 
-  sem symbolizePat (env : Env) (patEnv : Env) =
+  sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
   | OPatTuple { pats = pats } ->
     match mapAccumL (symbolizePat env) patEnv pats with (patEnv, pats) then
       (patEnv, OPatTuple { pats = pats })
@@ -70,7 +70,7 @@ lang OCamlSym =
         if nameHasSym t.ident then t.ident
         else
           let str = nameGetStr t.ident in
-          match assocLookup {eq=eqString} str conEnv with Some ident then ident
+          match mapLookup str conEnv with Some ident then ident
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
       match mapAccumL (symbolizePat env) patEnv t.args with (patEnv, args) then

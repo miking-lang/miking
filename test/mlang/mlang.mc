@@ -11,7 +11,7 @@ lang Arith
     addi (eval e1) (eval e2)
 end
 
-lang Bool
+lang MyBool
   syn Expr =
   | True ()
   | False ()
@@ -29,9 +29,9 @@ lang Bool
     else eval els
 end
 
-lang ArithBool = Arith + Bool
+lang ArithBool = Arith + MyBool
 
-lang ArithBool2 = Arith + Bool
+lang ArithBool2 = Arith + MyBool
   syn Expr =
   | IsZero(Dyn)
 
