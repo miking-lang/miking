@@ -29,9 +29,8 @@ build() {
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
         time (build/$BOOT_NAME src/main/mi.mc -- compile src/main/mi.mc)
-        mv -f $MI_NAME build/$MI_NAME
         echo "Bootstrapping the Miking compiler (2st round, might take some more time)"
-        time (build/$MI_NAME compile src/main/mi.mc)
+        time ($MI_NAME compile src/main/mi.mc)
         mv -f $MI_NAME build/$MI_NAME
         rm -f mi
     fi
