@@ -95,10 +95,59 @@ recursive let unwrapAlias = use MExprAst in
   else ty
 end
 
-lang OCamlGenerate = MExprAst + OCamlAst
+let lookupRecordFields = use MExprAst in
+  lam ty. lam constrs.
+  match ty with TyRecord {fields = fields} then
+    Some fields
+  else match ty with TyVar {ident = ident} then
+    match mapLookup ident constrs with Some (TyRecord {fields = fields}) then
+      Some fields
+    else None ()
+  else None ()
+
+lang OCamlMatchGenerate = MExprAst + OCamlAst
+  sem matchTargetType (env : GenerateEnv) =
+  | t ->
+    let t : {target : Expr, pat : Pat, thn : Expr,
+             els : Expr, ty : Type, info : Info} = t in
+    let ty = ty t.target in
+    -- If we don't know the type of the target and the pattern describes a
+    -- tuple, then we assume the target has that type. We do this to
+    -- eliminate the need to add type annotations when matching on tuples,
+    -- which happens frequently.
+    match ty with TyUnknown _ then
+      match t.pat with PatRecord {bindings = bindings} then
+        match _record2tuple bindings with Some _ then
+          let bindingTypes = mapMap (lam. tyunknown_) bindings in
+          match mapLookup bindingTypes env.records with Some id then
+            ntyvar_ id
+          else
+            let msg = join [
+              "Pattern specifies undefined tuple type.\n",
+              "This was caused by an error in type-lifting."
+            ] in
+            infoErrorExit t.info msg
+        else ty
+      else ty
+    else ty
+
+  sem generateDefaultMatchCase (env : GenerateEnv) =
+  | t ->
+    let t : {target : Expr, pat : Pat, thn : Expr,
+             els : Expr, ty : Type, info : Info} = t in
+    let tname = nameSym "_target" in
+    let targetTy = matchTargetType env t in
+    match generatePat env targetTy tname t.pat with (nameMap, wrap) then
+      match _mkFinalPatExpr nameMap with (pat, expr) then
+        _optMatch
+          (bind_ (nulet_ tname (generate env t.target)) (wrap (_some expr)))
+          pat
+          (generate env t.thn)
+          (generate env t.els)
+      else never
+    else never
+
   sem generate (env : GenerateEnv) =
-  | TmSeq {tms = tms} ->
-    app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
     _if (generate env t.target) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
@@ -118,39 +167,33 @@ lang OCamlGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
     let cond = generate env (eqi_ (int_ 0) (length_ t.target)) in
     _if cond (generate env t.thn) (generate env t.els)
-  | TmMatch t ->
-    let tname = nameSym "_target" in
-    let targetTy =
-      let ty = ty t.target in
-      -- If we don't know the type of the target and the pattern describes a
-      -- tuple, then we assume the target has that type. We do this to
-      -- eliminate the need to add type annotations when matching on tuples,
-      -- which happens frequently.
-      match ty with TyUnknown _ then
-        match t.pat with PatRecord {bindings = bindings} then
-          match _record2tuple bindings with Some _ then
-            let bindingTypes = mapMap (lam. tyunknown_) bindings in
-            match mapLookup bindingTypes env.records with Some id then
-              ntyvar_ id
-            else
-              let msg = join [
-                "Pattern specifies undefined tuple type.\n",
-                "This was caused by an error in type-lifting."
-              ] in
-              infoErrorExit t.info msg
-          else ty
-        else ty
-      else ty
-    in
-    match generatePat env targetTy tname t.pat with (nameMap, wrap) then
-      match _mkFinalPatExpr nameMap with (pat, expr) then
-        _optMatch
-          (bind_ (nulet_ tname (generate env t.target)) (wrap (_some expr)))
-          pat
-          (generate env t.thn)
-          (generate env t.els)
-      else never
-    else never
+  | TmMatch ({pat = PatRecord pr, thn = TmVar thnv, els = TmNever _} & t) ->
+    let binds : [(SID, Pat)] = mapBindings pr.bindings in
+    match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
+      if nameEq patName thnv.ident then
+        let targetTy = matchTargetType env t in
+        let targetTy = unwrapAlias env.aliases targetTy in
+        match lookupRecordFields targetTy env.constrs with Some fields then
+          match mapLookup fields env.records with Some name then
+            let pat = PatNamed p in
+            let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
+            OTmMatch {
+              target = generate env t.target,
+              arms = [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
+            }
+          else error "Record type not handled by type-lifting"
+        else error "Unknown record type"
+      else generateDefaultMatchCase env t
+    else generateDefaultMatchCase env t
+  | TmMatch t -> generateDefaultMatchCase env t
+
+  sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
+end
+
+lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
+  sem generate (env : GenerateEnv) =
+  | TmSeq {tms = tms} ->
+    app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
@@ -377,17 +420,6 @@ lang OCamlGenerate = MExprAst + OCamlAst
           (names, wrap)
         else never
       else never
-    in
-    let lookupRecordFields = lam ty. lam constrs.
-      match ty with TyRecord {fields = fields} then
-        Some fields
-      else match ty with TyVar {ident = ident} then
-        match mapLookup ident constrs with Some rec then
-          match rec with TyRecord {fields = fields} then
-            Some fields
-          else None ()
-        else None ()
-      else None ()
     in
     if mapIsEmpty t.bindings then
       let wrap = lam cont.
