@@ -212,6 +212,14 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       let sym_using = Option.map (fun t -> symbolize env t) tusing in
       TmUtest
         (fi, symbolize env t1, symbolize env t2, sym_using, symbolize env tnext)
+  | TmExt (fi, x, _, ty, t) ->
+      let s = Symb.gensym () in
+      TmExt
+        ( fi
+        , x
+        , s
+        , symbolize_type env ty
+        , symbolize ((IdVar (sid_of_ustring x), s) :: env) t )
   | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
@@ -258,6 +266,12 @@ let rec symbolize_toplevel (env : (ident * Symb.t) list) = function
         symbolize_toplevel ((IdCon (sid_of_ustring x), s) :: env) t
       in
       (new_env, TmConDef (fi, x, s, symbolize_type env ty, new_t2))
+  | TmExt (fi, x, _, ty, t) ->
+      let s = Symb.gensym () in
+      let new_env, new_t =
+        symbolize_toplevel ((IdVar (sid_of_ustring x), s) :: env) t
+      in
+      (new_env, TmExt (fi, x, s, symbolize_type env ty, new_t))
   | ( TmVar _
     | TmLam _
     | TmApp _

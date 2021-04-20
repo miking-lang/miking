@@ -69,6 +69,7 @@
 %token <unit Ast.tokendata> INCLUDE
 %token <unit Ast.tokendata> NEVER
 %token <unit Ast.tokendata> USING
+%token <unit Ast.tokendata> EXTERNAL
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -315,6 +316,9 @@ mexpr:
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmUtest(fi,$2,$4,Some $6,$8) }
+  | EXTERNAL ident COLON ty IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmExt(fi,$2.v,Symb.Helpers.nosym,$4,$6) }
 
 lets:
   | LET var_ident ty_op EQ mexpr

@@ -39,6 +39,8 @@ let idTmUtest = 113
 
 let idTmNever = 114
 
+let idTmExt = 115
+
 (* Types *)
 let idTyUnknown = 200
 
@@ -187,6 +189,8 @@ let getData = function
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTm (TmExt (fi, x, _, ty, t)) ->
+      (idTmExt, [fi], [], [ty], [t], [x], [], [], [], [])
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [])
