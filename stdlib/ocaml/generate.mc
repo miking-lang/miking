@@ -99,6 +99,25 @@ lang OCamlGenerate = MExprAst + OCamlAst
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
+  | TmMatch ({pat = (PatBool {val = true})} & t) ->
+    _if (generate env t.target) (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = (PatBool {val = false})} & t) ->
+    _if (generate env t.target) (generate env t.els) (generate env t.thn)
+  | TmMatch ({pat = PatInt {val = i}} & t) ->
+    let cond = generate env (eqi_ (int_ i) t.target) in
+    _if cond (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = PatChar {val = c}} & t) ->
+    let cond = generate env (eqc_ (char_ c) t.target) in
+    _if cond (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) ->
+    generate env t.thn
+  | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
+    generate env (bind_
+      (nulet_ n t.target)
+       t.thn)
+  | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
+    let cond = generate env (eqi_ (int_ 0) (length_ t.target)) in
+    _if cond (generate env t.thn) (generate env t.els)
   | TmMatch t ->
     let tname = nameSym "_target" in
     let targetTy =
@@ -231,10 +250,9 @@ lang OCamlGenerate = MExprAst + OCamlAst
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
   | PatNamed {ident = PWildcard _} ->
-    (assocEmpty, lam cont. _if true_ cont _none)
+    (assocEmpty, identity)
   | PatNamed {ident = PName n} ->
-    (assocInsert {eq=nameEqSym} n targetName assocEmpty,
-     lam cont. _if true_ cont _none)
+    (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
       _if (nvar_ targetName)
@@ -783,11 +801,20 @@ lang OCamlObjWrap = MExprAst + OCamlAst
     else
       let bindings = mapMap (lam expr. objWrapRec false expr) t.bindings in
       TmRecord {t with bindings = bindings}
-  | (OTmArray _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
+  | (OTmArray {tms = tms}) & t ->
+    let isPrimitiveArray = all (lam expr.
+      match expr with
+        TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}
+      then true else false
+    ) tms in
+    if isPrimitiveArray then
+      _objRepr t
+    else
+      _objRepr (smap_Expr_Expr (objWrapRec false) t)
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
   | OTmMatch t ->
     _objObj
-    (OTmMatch {{t with target = _objObj (objWrapRec false t.target)}
+    (OTmMatch {{t with target = _objObj (_objRepr (objWrapRec false t.target))}
                   with arms = map (lam p : (Pat, Expr).
                                     (p.0, _objRepr (objWrapRec false p.1)))
                                   t.arms})
@@ -954,8 +981,8 @@ utest matchWild1 with generateEmptyEnv matchWild1 using sameSemantics in
 let matchWild2 = symbolize
   (match_ (int_ 1)
      (pvar_ "n")
-     true_
-     false_) in
+     (var_ "n")
+     (int_ 2)) in
 utest matchWild2 with generateEmptyEnv matchWild2 using sameSemantics in
 
 let matchChar1 = symbolize
