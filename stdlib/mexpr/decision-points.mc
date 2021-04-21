@@ -202,7 +202,9 @@ type CallCtxInfo = {
   lbl2count: Hashmap Name Int,
 
   -- Maps a decision points and a call path to a unique integer.
-  hole2idx: Ref (Map Name (Map [Name] Int)),
+  -- TODO(Linnea, 2021-04-21): When we have 'smapAccumL_Expr_Expr', this
+  -- shouldn't be a reference.
+  hole2idx: Ref (Map Name (Map[Name] Int)),
 
   -- Counts the number of decision points stored thus far.
   count: Int
@@ -408,7 +410,8 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Expr =
   use MatchAst in use NeverAst in
     lam lookup. lam holeId. lam incVarName. lam info : CallCtxInfo. lam paths.
       match info with { lbl2inc = lbl2inc } then
-        -- TODO: Represent paths as trees, then this partition becomes trivial
+        -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
+        -- partition becomes trivial
         let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
           let startVals = foldl (lam acc. lam p.
                                    eqsetInsert _eqn (head p) acc)
