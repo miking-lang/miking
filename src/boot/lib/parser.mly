@@ -166,6 +166,8 @@ top:
     { TopCon($1) }
   | toputest
     { TopUtest($1) }
+  | topext
+    { TopExt($1) }
 
 toplet:
   | LET var_ident ty_op EQ mexpr
@@ -208,6 +210,11 @@ mlang:
                  mkinfo $1.i $2.i
       in
       Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
+
+topext:
+  | EXTERNAL ident COLON ty
+    { let fi = mkinfo $1.i (ty_info $4) in
+      Ext (fi, $2.v, $4) }
 
 lang_includes:
   | EQ lang_list

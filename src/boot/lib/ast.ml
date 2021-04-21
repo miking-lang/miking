@@ -211,6 +211,8 @@ and con_decl = Con of info * ustring * ty
 
 and utest_top = Utest of info * tm * tm * tm option
 
+and ext_decl = Ext of info * ustring * ty
+
 and top =
   | TopLang of mlang
   | TopLet of let_decl
@@ -218,6 +220,7 @@ and top =
   | TopRecLet of rec_let_decl
   | TopCon of con_decl
   | TopUtest of utest_top
+  | TopExt of ext_decl
 
 and include_ = Include of info * ustring
 
