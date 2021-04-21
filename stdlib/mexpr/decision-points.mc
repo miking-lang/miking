@@ -371,11 +371,13 @@ let _appSetCallee : Expr -> Name -> Expr = use AppAst in use VarAst in
       else error "Expected an application"
     in work tm
 
--- let _x = nameSym "x"
--- let _y = nameSym "y"
--- utest _appSetCallee
---       (appf2_ (nvar_ _x) (nvar_ _y) (int_ 4)) _y
--- with  (appf2_ (nvar_ _y) (nvar_ _y) (int_ 4))
+let _x = nameSym "x"
+let _y = nameSym "y"
+let t =
+  utest _appSetCallee
+        (appf2_ (nvar_ _x) (nvar_ _y) (int_ 4)) _y
+  with  (appf2_ (nvar_ _y) (nvar_ _y) (int_ 4))
+  using use MExprEq in eqExpr in ()
 
 -- Replace the innermost body in a nested lambda expression by the result of a
 -- function that operates on the list of arguments of the lambda.
@@ -389,20 +391,22 @@ let _lamWithBody : ([Name] -> Expr) -> Expr -> Expr = use LamAst in
       else error "Expected a lambda expression"
     in work [] tm
 
--- let _x = nameSym "x"
--- let _y = nameSym "y"
--- let _z = nameSym "z"
--- utest
---   _lamWithBody (lam args.
---                   match args with [x, y, z] then
---                     muli_ (nvar_ x) (nvar_ y)
---                   else error "Test failed")
---                (nulam_ _x (nulam_ _y (nulam_ _z (addi_ (int_ 1) (int_ 1)))))
--- with (nulam_ _x (nulam_ _y (nulam_ _z (muli_ (nvar_ _x) (nvar_ _y)))))
+let _x = nameSym "x"
+let _y = nameSym "y"
+let _z = nameSym "z"
+let t =
+  utest
+    _lamWithBody (lam args.
+                    match args with [x, y, z] then
+                      muli_ (nvar_ x) (nvar_ y)
+                    else error "Test failed")
+                 (nulam_ _x (nulam_ _y (nulam_ _z (addi_ (int_ 1) (int_ 1)))))
+  with (nulam_ _x (nulam_ _y (nulam_ _z (muli_ (nvar_ _x) (nvar_ _y)))))
+  using use MExprEq in eqExpr in ()
 
--- Generate skeleton code for looking up a value of a decision point depending
--- on its call history
-let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skeleton =
+-- Generate code for looking up a value of a decision point depending on its
+-- call history
+let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Expr =
   use MatchAst in use NeverAst in
     lam lookup. lam holeId. lam incVarName. lam info : CallCtxInfo. lam paths.
       match info with { lbl2inc = lbl2inc } then
@@ -444,7 +448,7 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skelet
 -- Helper for creating a hidden equivalent of a public function and replace the
 -- public function with a forwarding call to the hidden function.
 type Binding = {ident : Name, body : Expr}
-let _forwardCall : Name -> (Expr -> Expr) -> LetBinding -> (LetBinding, LetBinding) =
+let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
   lam local. lam f. lam bind : Binding.
     let fwdVar = _fwdVarFromName bind.ident in
     let newBody = lam args.
@@ -465,8 +469,8 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                          -- Included for debugging
                          + MExprPrettyPrint
   syn Intermediate =
-  | Complete {prog: Expr, table: Table}
-  | Partial {part: Lookup -> Expr} -- TODO
+  -- Reads values from a lookup table (to be given as argv)
+  | FromTable {prog: Expr, table: Table}
 
   -- Find the initial mapping from decision points to values
   -- Returns a function of type 'Lookup'.
@@ -494,10 +498,10 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     -- Return the lookup function
     lam i. mapFindWithExn i m
 
-  -- Transform a program with decision points. Returns a function of type
-  -- 'Skeleton'. Applying this function to a lookup function yields an MExpr
-  -- program where the values of the decision points have been statically
-  -- replaced by values given by the lookup function.
+  -- Transform a program with decision points. All decision points will be
+  -- eliminated and replaced by lookups in a static table. One reference per
+  -- function tracks which function that latest called that function, thereby
+  -- maintaining call history.
   sem transform (publicFns : [Name]) =
   | tm ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
@@ -511,7 +515,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let tm = bind_ incVars tm in
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     let prog = _maintainCallCtx lookup info _callGraphTop tm in
-    Complete { prog = prog
+    FromTable { prog = prog
              , table = deref (info.hole2idx)
              }
 
@@ -840,7 +844,7 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match transform pub ast with Complete { prog = prog } then
+    match transform pub ast with FromTable { prog = prog } then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
       printLn (expr2str prog);
       ()
@@ -892,7 +896,7 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match transform [funB, funC] ast with Complete { table = table, prog = prog } then
+match transform [funB, funC] ast with FromTable { table = table, prog = prog } then
 match mapBindings table with [(_, m)] then
 
 

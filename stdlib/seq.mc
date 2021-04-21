@@ -331,7 +331,7 @@ utest index (lam x. eqi (length x) 2) [[1,2,3], [1,2], [3], [1,2], [], [1]]
 utest index (lam x. null x) [[1,2,3], [1,2], [3], [1,2], [], [1]]
       with Some 4 using optionEq eqi
 
--- Last index in seq that satifies pred
+-- Last index in seq that satisfies pred
 let lastIndex = lam pred. lam seq.
   recursive let lastIndex_rechelper = lam i. lam acc. lam pred. lam seq.
     if null seq then
