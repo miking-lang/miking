@@ -32,12 +32,27 @@ let rec collect_vars (free : SymbSet.t) = function
   | t ->
       sfold_tm_tm collect_vars free t
 
-(* Help function that collects free variables in a body in a let *)
+(* Helper function that counts the number of lambdas directly below in a term *)
+let rec lam_counts n = function
+  | TmLam (_, _, _, _, tlam) ->
+      lam_counts (n + 1) tlam
+  | _ ->
+      n
+
+(* Help function that collects let information and free variables 
+   Returns a tuple with two elements
+   1. NMap: a mapping from a let symbol to a tuple with the following 4 elements: 
+          (a) The symbol set of variables inside the let that points backwards
+          (c) Boolean flag saying if the let is used.  
+          (b) Boolean stating if the let body has (possibly) side effects
+          (d) Lambda count. That is, if how many lambdas that are at the top of the body 
+   2. Free Vars: A symbol set with all variables that are free (not under a lambda in a let) *)
 let collect_in_body s nmap free = function
   | TmLam (_, _, _, _, tlam) ->
       let vars = collect_vars SymbSet.empty tlam in
-      ( SymbMap.add s (vars, false, tm_has_side_effect nmap false tlam) nmap
-      , free )
+      (* Note: we need to compute the side effect, if other open terms refer to this term *)
+      let se = tm_has_side_effect nmap false tlam in
+      (SymbMap.add s (vars, false, se) nmap, free)
   | body ->
       let vars = collect_vars SymbSet.empty body in
       let se = tm_has_side_effect nmap false body in
