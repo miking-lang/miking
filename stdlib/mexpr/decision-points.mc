@@ -174,12 +174,12 @@ let hole_ = use HoleAst in
   TmHole {startGuess = startGuess, depth = depth}
 
 ------------------------------
--- Call context information --
+-- Call context environment --
 ------------------------------
 
 -- Maintains call context information necessary for program transformations.
--- This information is static and is computed once for each program.
-type CallCtxInfo = {
+-- Except for 'hole2idx' and 'count', the information is static.
+type CallCtxEnv = {
 
   -- Call graph of the program. Functions are nodes, function calls are edges.
   callGraph: CallGraph,
@@ -201,8 +201,8 @@ type CallCtxInfo = {
   -- node.
   lbl2count: Hashmap Name Int,
 
-  -- Maps a decision points and a call path to a unique integer.
-  -- TODO(Linnea, 2021-04-21): When we have 'smapAccumL_Expr_Expr', this
+  -- Maps a decision point and a call path to a unique integer.
+  -- TODO(Linnea, 2021-04-21): Once we have 'smapAccumL_Expr_Expr', this
   -- shouldn't be a reference.
   hole2idx: Ref (Map Name (Map[Name] Int)),
 
@@ -216,8 +216,8 @@ let _newNameFromStr : Str -> Name -> Name = lam prefix. lam name.
 -- Get the name of the incoming variable from a name.
 let _incVarFromName = _newNameFromStr "inc_"
 
--- Compute the call context info from a program.
-let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxInfo =
+-- Compute the initial call context environment for a program.
+let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
   lam publicFns. lam callGraph. lam tm.
     let fun2inc =
       _nameMapInit (digraphVertices callGraph) identity _incVarFromName
@@ -262,23 +262,23 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxInfo =
 
 -- Returns the binding of a function name, or None () if the name is not a node
 -- in the call graph.
-let callCtxFunLookup : Name -> CallCtxInfo -> Option Name =
-  lam name : Name. lam info : CallCtxInfo.
-    match info with { fun2inc = fun2inc } then
+let callCtxFunLookup : Name -> CallCtxEnv -> Option Name =
+  lam name : Name. lam env : CallCtxEnv.
+    match env with { fun2inc = fun2inc } then
       hashmapLookup {eq = _eqn, hashfn = _nameHash} name fun2inc
     else never
 
 -- Get the incoming variable name of a function, giving an error if the function
 -- name is not part of the call graph.
-let callCtxFun2Inc : Name -> CallCtxInfo -> Name = lam name. lam info.
+let callCtxFun2Inc : Name -> CallCtxEnv -> Name = lam name. lam env.
   optionGetOrElse (lam. error "fun2inc lookup failed")
-                  (callCtxFunLookup name info)
+                  (callCtxFunLookup name env)
 
 -- Get the incoming variable name of an edge label, giving an error if the edge
 -- is not part of the call graph.
-let callCtxLbl2Inc : Name -> CallCtxInfo -> Name =
-  lam lbl : Name. lam info : CallCtxInfo.
-    match info with { lbl2inc = lbl2inc } then
+let callCtxLbl2Inc : Name -> CallCtxEnv -> Name =
+  lam lbl : Name. lam env : CallCtxEnv.
+    match env with { lbl2inc = lbl2inc } then
       optionGetOrElse (lam. error "lbl2inc lookup failed")
                       (hashmapLookup {eq = _eqn, hashfn = _nameHash}
                                      lbl lbl2inc)
@@ -286,29 +286,29 @@ let callCtxLbl2Inc : Name -> CallCtxInfo -> Name =
 
 -- Get the count of an edge label, giving an error if the edge is not part of
 -- the call graph.
-let callCtxLbl2Count : Name -> CallCtxInfo -> Int =
-  lam lbl : Name. lam info : CallCtxInfo.
-    match info with { lbl2count = lbl2count } then
+let callCtxLbl2Count : Name -> CallCtxEnv -> Int =
+  lam lbl : Name. lam env : CallCtxEnv.
+    match env with { lbl2count = lbl2count } then
       optionGetOrElse (lam. error "lbl2count lookup failed")
                       (hashmapLookup {eq = _eqn, hashfn = _nameHash}
                                      lbl lbl2count)
     else never
 
 -- Get all the incoming variable names of the program.
-let callCtxIncVarNames : CallCtxInfo -> [Name] = lam info : CallCtxInfo.
-  match info with { fun2inc = fun2inc } then
+let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
+  match env with { fun2inc = fun2inc } then
     hashmapValues {eq = _eqn, hashfn = _nameHash} fun2inc
   else never
 
 -- Lookup the internal name of a public function.
-let callCtxPubLookup : Name -> CallCtxInfo -> Option Name = lam name. lam info.
-  match info with { pub2internal = pub2internal } then
+let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
+  match env with { pub2internal = pub2internal } then
     hashmapLookup {eq = _eqn, hashfn = _nameHash} name pub2internal
   else never
 
-let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
-  lam name. lam paths. lam info : CallCtxInfo.
-    match info with { hole2idx = hole2idx, count = count } then
+let callCtxAddHole : Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
+  lam name. lam paths. lam env : CallCtxEnv.
+    match env with { hole2idx = hole2idx, count = count } then
     match
       foldl
       (lam acc. lam k.
@@ -318,12 +318,12 @@ let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
       paths
     with (m, count) then
       modref hole2idx (mapInsert name m (deref hole2idx));
-      {info with count = count}
+      {env with count = count}
     else never else never
 
-let callCtxHole2Idx : Name -> [Name] -> CallCtxInfo -> Int =
-  lam name. lam path. lam info : CallCtxInfo.
-    match info with { hole2idx = hole2idx } then
+let callCtxHole2Idx : Name -> [Name] -> CallCtxEnv -> Int =
+  lam name. lam path. lam env : CallCtxEnv.
+    match env with { hole2idx = hole2idx } then
       mapFindWithExn path (mapFindWithExn name (deref hole2idx))
     else never
 
@@ -406,10 +406,10 @@ let t =
 
 -- Generate code for looking up a value of a decision point depending on its
 -- call history
-let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Expr =
+let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxEnv -> [[Name]] -> Expr =
   use MatchAst in use NeverAst in
-    lam lookup. lam holeId. lam incVarName. lam info : CallCtxInfo. lam paths.
-      match info with { lbl2inc = lbl2inc } then
+    lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
+      match env with { lbl2inc = lbl2inc } then
         -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
         -- partition becomes trivial
         let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
@@ -430,15 +430,15 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Expr =
             match partitionPaths nonEmpty with (startVals, partition) then
               let branches =
                 mapi (lam i. lam n.
-                        let iv = callCtxLbl2Inc n info in
-                        let count = callCtxLbl2Count n info in
+                        let iv = callCtxLbl2Inc n env in
+                        let count = callCtxLbl2Count n env in
                         matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
                                  (work iv (map tail (get partition i)) (cons n acc)))
                      startVals
               in
               let defaultVal =
                 if eqi (length nonEmpty) (length paths) then never_
-                else lookup (callCtxHole2Idx holeId acc info)
+                else lookup (callCtxHole2Idx holeId acc env)
               in
               matchall_ (snoc branches defaultVal)
             else never
@@ -507,17 +507,17 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | tm ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv tm in
-    let info = callCtxInit publicFns (toCallGraph tm) tm in
+    let env = callCtxInit publicFns (toCallGraph tm) tm in
     -- Declare the incoming variables
     let incVars =
       bindall_ (map (lam incVarName. nulet_ incVarName (ref_ (int_ _incUndef)))
-                    (callCtxIncVarNames info))
+                    (callCtxIncVarNames env))
     in
     let tm = bind_ incVars tm in
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
-    let prog = _maintainCallCtx lookup info _callGraphTop tm in
+    let prog = _maintainCallCtx lookup env _callGraphTop tm in
     LookupTable { prog = prog
-             , table = deref (info.hole2idx)
+             , table = deref (env.hole2idx)
              }
 
   -- Move the contents of each public function to a hidden private function, and
@@ -573,17 +573,17 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
 
   -- Maintain call context history by updating incoming variables before
   -- function calls.
-  sem _maintainCallCtx (lookup : Lookup) (info : CallCtxInfo) (cur : Name) =
+  sem _maintainCallCtx (lookup : Lookup) (env : CallCtxEnv) (cur : Name) =
   -- Application: caller updates incoming variable of callee
   | TmLet ({ body = TmApp a } & t) ->
     -- NOTE(Linnea, 2021-01-29): ANF form means no recursion necessary for the
     -- application node (can only contain values)
-    let le = TmLet {t with inexpr = _maintainCallCtx lookup info cur t.inexpr} in
+    let le = TmLet {t with inexpr = _maintainCallCtx lookup env cur t.inexpr} in
     match _appGetCallee (TmApp a) with Some callee then
-      match callCtxFunLookup callee info
+      match callCtxFunLookup callee env
       with Some iv then
         -- Set the incoming var of callee to current node
-        let count = callCtxLbl2Count t.ident info in
+        let count = callCtxLbl2Count t.ident env in
         let update = modref_ (nvar_ iv) (int_ count) in
         bind_ (nulet_ (nameSym "_") update) le
       else le
@@ -591,41 +591,41 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
 
   -- Decision point: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
-     match info with
+     match env with
       { callGraph = callGraph, publicFns = publicFns }
      then
        let paths = eqPaths callGraph cur depth publicFns in
-       let info = callCtxAddHole ident paths info in
-       let iv = callCtxFun2Inc cur info in
-       let lookupCode = _lookupCallCtx lookup ident iv info paths in
+       let env = callCtxAddHole ident paths env in
+       let iv = callCtxFun2Inc cur env in
+       let lookupCode = _lookupCallCtx lookup ident iv env paths in
        TmLet {{t with body = lookupCode}
-                 with inexpr = _maintainCallCtx lookup info cur t.inexpr}
+                 with inexpr = _maintainCallCtx lookup env cur t.inexpr}
      else never
 
   -- Function definitions: possibly update cur inside body of function
   | TmLet ({ body = TmLam lm } & t) ->
     let curBody =
-      match callCtxFunLookup t.ident info with Some _
+      match callCtxFunLookup t.ident env with Some _
       then t.ident
       else cur
-    in TmLet {{t with body = _maintainCallCtx lookup info curBody t.body}
-                 with inexpr = _maintainCallCtx lookup info cur t.inexpr}
+    in TmLet {{t with body = _maintainCallCtx lookup env curBody t.body}
+                 with inexpr = _maintainCallCtx lookup env cur t.inexpr}
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds =
       map (lam bind : RecLetBinding.
         match bind with { body = TmLam lm } then
           let curBody =
-            match callCtxFunLookup bind.ident info with Some _
+            match callCtxFunLookup bind.ident env with Some _
             then bind.ident
             else cur
-          in {bind with body = _maintainCallCtx lookup info curBody bind.body}
-        else {bind with body = _maintainCallCtx lookup info cur bind.body})
+          in {bind with body = _maintainCallCtx lookup env curBody bind.body}
+        else {bind with body = _maintainCallCtx lookup env cur bind.body})
       bindings
     in TmRecLets {{t with bindings = newBinds}
-                     with inexpr = _maintainCallCtx lookup info cur inexpr}
+                     with inexpr = _maintainCallCtx lookup env cur inexpr}
   | tm ->
-    smap_Expr_Expr (_maintainCallCtx lookup info cur) tm
+    smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
 end
 
 lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
@@ -953,4 +953,3 @@ utest eval prog (
 ()
 
 else never else never
-
