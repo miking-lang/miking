@@ -471,7 +471,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                          + MExprPrettyPrint
   syn Intermediate =
   -- Reads values from a lookup table (to be given as argv)
-  | FromTable {prog: Expr, table: Table}
+  | LookupTable {prog: Expr, table: Table}
 
   -- Find the initial mapping from decision points to values
   -- Returns a function of type 'Lookup'.
@@ -516,7 +516,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let tm = bind_ incVars tm in
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     let prog = _maintainCallCtx lookup info _callGraphTop tm in
-    FromTable { prog = prog
+    LookupTable { prog = prog
              , table = deref (info.hole2idx)
              }
 
@@ -844,7 +844,7 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match transform pub ast with FromTable { prog = prog } then
+    match transform pub ast with LookupTable { prog = prog } then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
       printLn (expr2str prog);
       ()
@@ -896,7 +896,7 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match transform [funB, funC] ast with FromTable { table = table, prog = prog } then
+match transform [funB, funC] ast with LookupTable { table = table, prog = prog } then
 match mapBindings table with [(_, m)] then
 
 
