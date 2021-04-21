@@ -66,6 +66,11 @@ lang CPrettyPrint = CAst
       (env, _par (join [lhs, ".", id]))
     else never
 
+  | CEArrow { lhs = lhs, id = id } ->
+    match printCExpr env lhs with (env,lhs) then
+      (env, _par (join [lhs, "->", id]))
+    else never
+
   | CECast { ty = ty, rhs = rhs } ->
     match printCType "" env ty with (env,ty) then
       match printCExpr env rhs with (env,rhs) then

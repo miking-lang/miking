@@ -5,11 +5,10 @@
 -- data.
 -- * Non-primitive data types are always stored in the heap, and handled
 -- through pointers.
--- * There is no garbage collection. TODO(dlunde, 2021-04-12): Heap memory is
--- deallocated for all pointers in a call stack frame when it is popped.
+-- * There is no garbage collection. Currently, memory is never freed.
 -- * Any top-level code besides functions and data declarations are returned as
--- a list of C statements when compiling. Usually, these statements should be
--- put in a `main` function or similar.
+-- a list of C statements. Usually, these statements should be
+-- put in a C `main` function or similar.
 --
 -- TODO
 -- * Compile sequences to structs containing length and an array (requires
@@ -80,17 +79,22 @@ let _compilerNames : [Name] = [
   _printf
 ]
 
+let _constrKey = "constr"
+
 --------------------------
 -- COMPILER ENVIRONMENT --
 --------------------------
 
+type ConstrDataEnv = [(Name,String)]
+
 type CompileCEnv = {
 
--- Empty for now, but can probably be useful for something
+  -- Empty for now
+  constrData: ConstrDataEnv
 
 }
 
-let compileCEnvEmpty = {}
+let compileCEnvEmpty = { constrData = [] }
 
 ----------------------------------
 -- MEXPR -> C COMPILER FRAGMENT --
@@ -98,58 +102,135 @@ let compileCEnvEmpty = {}
 
 lang MExprCCompile = MExprAst + CAst
 
-  -- Entry point
-  sem compile (typeEnv: AssocSeq Name Type) =
-  | prog ->
-    let types = [] in
-    -- 1. reverse typeEnv
-    -- 2. MapAccum over typeEnv
-    -- * If variant type in RHS -> mapped value = typedef struct decl, accum + struct def
-    -- * If record type in RHS -> mapped value = typedef struct def
-    -- * Else -> typedef type
+  sem allocStruct (ty: Type) =
+  -- Intentionally left blank
 
-    
-    match compileTops compileCEnvEmpty [] [] prog with (tops, inits) then
-      (types, tops, inits)
+  sem free =
+  -- Intentionally left blank
+
+  -- Entry point
+  sem compile (typeEnv: [(Name,Type)]) =
+  | prog ->
+
+    let decls: [CTop] =
+      foldl (lam acc. lam t. genTyDecls acc t.0 t.1) [] typeEnv in
+    let defs: [CTop] =
+      foldl (lam acc. lam t. genTyDefs acc t.0 t.1) [] typeEnv in
+    let postDefs: (ConstrDataEnv, [CTop]) =
+      foldl (lam acc. lam t. genTyPostDefs acc t.0 t.1) ([],[]) typeEnv in
+
+    match postDefs with (constrData, postDefs) then
+      let env = { compileCEnvEmpty with constrData = constrData } in
+      match compileTops env [] [] prog with (tops, inits) then
+        (join [decls, defs, postDefs], tops, inits)
+      else never
     else never
+
+
+  sem genTyDecls (acc: [CTop]) (name: Name) =
+
+  | TyVariant _ ->
+    let decl = CTTyDef {
+      ty = CTyPtr { ty = CTyStruct { id = Some name, mem = None () } },
+      id = name
+    } in
+    cons decl acc
+
+  | _ -> acc
+
+
+  sem genTyDefs (acc: [CTop]) (name: Name) =
+
+  | TyVariant _ -> acc
+
+  | TyRecord { fields = fields } ->
+    let fieldsLs: [(CType,String)] =
+      mapFoldWithKey (lam acc. lam k. lam ty.
+        let ty = match compileType compileCEnvEmpty ty with (_, ty) then
+          ty else never in
+        snoc acc (ty, Some (sidToString k))) [] fields in
+    let def = CTTyDef {
+      ty = CTyPtr { ty = CTyStruct { id = Some name, mem = Some fieldsLs } },
+      id = name
+    } in
+    cons def acc
+
+  | ty ->
+    let def =
+      match compileType compileCEnvEmpty ty with (_, ty) then
+        CTTyDef { ty = ty, id = name }
+      else never in
+    cons def acc
+
+
+  sem genTyPostDefs (acc: (ConstrDataEnv, [CTop])) (name: Name) =
+
+  | TyVariant { constrs = constrs } ->
+    match acc with (constrData, postDefs) then
+      let constrLs: [(Name, CType)] =
+        mapFoldWithKey (lam acc. lam name. lam ty.
+          let ty = match compileType compileCEnvEmpty ty with (_, ty) then
+            ty else never in
+            snoc acc (name, ty)) [] constrs in
+      let constrLs: [(Name, String, CType)] =
+        mapi (lam i. lam t. (t.0, cons 'd' (int2string i), t.1)) constrLs in
+      let constrData = foldl (lam acc. lam t.
+        assocSeqInsert t.0 t.1 acc) constrData constrLs in
+      let def = CTDef {
+        ty = CTyStruct {
+          id = Some name,
+          mem = Some [
+            (CTyEnum {
+               id = None (),
+               mem = Some (map (lam t. t.0) constrLs)
+             }, Some _constrKey),
+            (CTyUnion {
+               id = None (),
+               mem = Some (map (lam t. (t.2, Some t.1)) constrLs)
+             }, None ())
+          ] },
+        id = None (), init = None ()
+      }
+      in
+      (constrData, cons def postDefs)
+    else never
+
+  | _ -> acc
+
+
 
   -------------
   -- C TYPES --
   -------------
 
-  sem compileGlobalType (name: Name) =
-  | TyVariant { constrs = constrs } -> error "TODO"
-  | TyRecord { fields = fields } -> error "TODO"
-  | ty -> compileType compileCEnvEmpty ty
-
   sem compileType (env: CompileCEnv) =
 
-  | TyInt _
-  | TyBool _  -> (env, CTyInt {})
-
+  | TyInt _   -> (env, CTyInt {})
   | TyFloat _ -> (env, CTyDouble {})
+  | TyBool _
   | TyChar _  -> (env, CTyChar {})
 
   | TyArrow _ & ty ->
-    recursive let params = lam acc. lam ty.
-      match ty with TyArrow { from = from, to = to } then
-        params (snoc acc from) to
-      else (acc, ty)
-    in
-    match params [] ty with (params, ret) then
-      match mapAccumL compileType env params with (env, params) then
-        match compileType env ret with (env, ret) then
-          (env, CTyFun { ret = ret, params = params })
-        else never
-      else never
-    else never
+    error "Type not currently supported"
+    -- recursive let params = lam acc. lam ty.
+    --   match ty with TyArrow { from = from, to = to } then
+    --     params (snoc acc from) to
+    --   else (acc, ty)
+    -- in
+    -- match params [] ty with (params, ret) then
+    --   match mapAccumL compileType env params with (env, params) then
+    --     match compileType env ret with (env, ret) then
+    --       (env, CTyFun { ret = ret, params = params })
+    --     else never
+    --   else never
+    -- else never
 
   | TyRecord { fields = fields } ->
     if mapIsEmpty fields then (env, CTyVoid {})
     else
-      error "ERROR: Anonymous record type in compileType. Did you run type lift?"
+      error "ERROR: TyRecord should not occur in compileType. Did you run type lift?"
 
-  | TyVar { ident = ident } -> CTyVar { id = ident }
+  | TyVar { ident = ident } -> (env, CTyVar { id = ident })
 
   -- | TyUnknown _ -> (env, CTyChar {})
   | TyUnknown _ -> error "Unknown type in compileType"
@@ -192,9 +273,6 @@ lang MExprCCompile = MExprAst + CAst
     match detachParams [] fun with (params, body) then
       match funTypes [] ty with (paramTypes, retType) then
         if neqi (length params) (length paramTypes) then
-          dprint params;
-          print "\n\n";
-          dprint paramTypes;
           error "Number of parameters in compileFun does not match."
         else
           match mapAccumL compileType env paramTypes with (env, paramTypes) then
@@ -209,20 +287,7 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else never
 
-  | TmVar _
-  | TmApp _
-  | TmLet _
-  | TmRecLets _
-  | TmConst _
-  | TmSeq _
-  | TmRecord _
-  | TmRecordUpdate _
-  | TmType _
-  | TmConDef _
-  | TmConApp _
-  | TmMatch _
-  | TmUtest _
-  | TmNever _ -> error "Non-function supplied to compileFun"
+  | _ -> error "Non-function supplied to compileFun"
 
 
   -- Compile various let-bound forms. Note that, if the program is in ANF,
@@ -240,8 +305,8 @@ lang MExprCCompile = MExprAst + CAst
       let innerFinal = { name = Some ident } in
       match compileStmts env innerFinal [] thn with (env, thn) then
         match compileStmts env innerFinal [] els with (env, els) then
-          let stmt = Some (CSIf { cond = cond, thn = thn, els = els }) in
-          (env, def, stmt)
+          let stmt = CSIf { cond = cond, thn = thn, els = els } in
+          (env, def, [stmt])
         else never
       else never
     else never
@@ -259,13 +324,47 @@ lang MExprCCompile = MExprAst + CAst
         env,
         Some { ty = ty, id = Some ident,
                init = Some (CIExpr { expr = CEString { s = str } }) },
-        None ()
+        []
       )
       else error "TODO: TmSeq"
     else never
 
   -- TmConApp: allocate and create a new struct.
-  | TmConApp _ -> error "TODO: TmConApp"
+  | TmConApp { ident = constrIdent, body = body, ty = ty } ->
+    match compileType env ty with (env, ty) then
+    match env with { constrData = constrData } then
+      let def = allocStruct ty ident in
+      let dataKey =
+        match assocSeqLookup { eq = nameEq } constrIdent constrData
+        with Some dataKey then dataKey
+        else error "Data key not found for TmConApp in compileLet"
+      in
+      let init = [
+        -- Set constructor tag
+        CSExpr {
+          expr = CEBinOp {
+            op = COAssign {},
+            lhs = CEArrow {
+              lhs = CEVar { id = ident }, id = _constrKey
+            },
+            rhs = CEVar { id = constrIdent }
+          }
+        },
+        -- Set data
+        CSExpr {
+          expr = CEBinOp {
+            op = COAssign {},
+            lhs = CEArrow {
+              lhs = CEVar { id = ident }, id = dataKey
+            },
+            rhs = compileExpr body
+          }
+        }
+      ] in
+      (env, Some def, init)
+
+    else never
+    else never
 
   -- TmRecord: allocate and create new struct, unless it is an empty record (in
   -- which case it is compiled to the integer 0)
@@ -274,35 +373,42 @@ lang MExprCCompile = MExprAst + CAst
       if mapIsEmpty bindings then (
         env,
         Some { ty = ty, id = Some ident,
-              init = Some (CIExpr { expr = CEInt { i = 0 } }) },
-        None ()
-      ) else error "TODO: TmRecord"
+               init = Some (CIExpr { expr = CEInt { i = 0 } }) },
+        []
+      )
+      else
+        let def = allocStruct ty ident in
+        let init = mapMapWithKey (lam sid. lam expr.
+          CSExpr {
+            expr = CEBinOp {
+              op = COAssign {},
+              lhs = CEArrow {
+                lhs = CEVar { id = ident }, id = sidToString sid
+              },
+              rhs = compileExpr expr
+            }
+          }
+        ) bindings in
+        (env, Some def, mapValues init)
     else never
 
   -- TmRecordUpdate: allocate and create new struct.
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
-  | ( TmVar { ty = ty }
-    | TmApp { ty = ty }
-    | TmLet { ty = ty }
-    | TmRecLets { ty = ty }
-    | TmConst { ty = ty }
-    | TmSeq { ty = ty }
-    | TmType { ty = ty }
-    | TmConDef { ty = ty }
-    | TmUtest { ty = ty }
-    | TmNever { ty = ty }
-    ) & expr ->
+  | ( TmVar { ty = ty } | TmApp { ty = ty } | TmLet { ty = ty }
+    | TmRecLets { ty = ty } | TmConst { ty = ty } | TmSeq { ty = ty }
+    | TmType { ty = ty } | TmConDef { ty = ty } | TmUtest { ty = ty }
+    | TmNever { ty = ty }) & expr ->
     if _isUnitTy ty then
       match expr with TmVar _ then (env, None (), None())
-      else (env, None (), Some (CSExpr { expr = compileExpr expr }))
+      else (env, None (), [CSExpr { expr = compileExpr expr }])
 
     else match compileType env ty with (env, ty) then
       (env,
        Some { ty = ty, id = Some ident,
-             init = Some (CIExpr { expr = compileExpr expr }) },
-       None ())
+              init = Some (CIExpr { expr = compileExpr expr }) },
+       [])
 
     else never
 
@@ -323,22 +429,22 @@ lang MExprCCompile = MExprAst + CAst
         -- We need to specially handle direct initialization, since most things
         -- are not allowed at top-level.
         let t = (def, init) in
-        match t with (Some ({ init = Some init } & def), None ()) then
-          match init with CIExpr { expr = expr } then
+        match t with (Some ({ init = Some definit } & def), _) then
+          match definit with CIExpr { expr = expr } then
             let def = CTDef { def with init = None () } in
-            let init = CSExpr { expr = CEBinOp {
+            let definit = CSExpr { expr = CEBinOp {
               op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } }
             in
-            compileTops env (snoc accTop def) (snoc accInit init) inexpr
-          else match init with _ then
+            let accInit = join [accInit, [definit], init] in
+            compileTops env (snoc accTop def) accInit inexpr
+          else match definit with _ then
             error "CIList initializer, TODO?"
           else never
 
         else
           let accTop =
             match def with Some def then snoc accTop (CTDef def) else accTop in
-          let accInit =
-            match init with Some init then snoc accInit init else accInit in
+          let accInit = concat accInit init in
           compileTops env accTop accInit inexpr
 
       else never
@@ -363,20 +469,10 @@ lang MExprCCompile = MExprAst + CAst
     else never
 
   -- Set up initialization code (for use, e.g., in a main function)
-  | ( TmVar _
-    | TmLam _
-    | TmApp _
-    | TmConst _
-    | TmSeq _
-    | TmRecord _
-    | TmRecordUpdate _
-    | TmType _
-    | TmConDef _
-    | TmConApp _
-    | TmMatch _
-    | TmUtest _
-    | TmNever _
-    ) & rest ->
+  | ( TmVar _ | TmLam _ | TmApp _ | TmConst _
+    | TmSeq _ | TmRecord _ | TmRecordUpdate _
+    | TmType _ | TmConDef _ | TmConApp _
+    | TmMatch _ | TmUtest _ | TmNever _) & rest ->
     match compileStmts env { name = None () } accInit rest
     with (env, accInit) then
       (accTop, accInit)
@@ -392,30 +488,18 @@ lang MExprCCompile = MExprAst + CAst
 
   | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
     match compileLet env ident body with (env, def, init) then
-      let acc =
-        match def with Some def then snoc acc (CSDef def) else acc in
-      let acc =
-        match init with Some init then snoc acc init else acc in
+      let acc = match def with Some def then snoc acc (CSDef def) else acc in
+      let acc = concat acc init in
       compileStmts env final acc inexpr
     else never
 
   -- Return result of `compileExpr` (use `final` to decide between return and
   -- assign)
-  | ( TmVar          { ty = ty }
-    | TmApp          { ty = ty }
-    | TmLam          { ty = ty }
-    | TmRecLets      { ty = ty }
-    | TmConst        { ty = ty }
-    | TmSeq          { ty = ty }
-    | TmRecord       { ty = ty }
-    | TmRecordUpdate { ty = ty }
-    | TmType         { ty = ty }
-    | TmConDef       { ty = ty }
-    | TmConApp       { ty = ty }
-    | TmMatch        { ty = ty }
-    | TmUtest        { ty = ty }
-    | TmNever        { ty = ty }
-    ) & stmt ->
+  | ( TmVar { ty = ty } | TmApp { ty = ty } | TmLam { ty = ty }
+    | TmRecLets { ty = ty } | TmConst { ty = ty } | TmSeq { ty = ty }
+    | TmRecord { ty = ty } | TmRecordUpdate { ty = ty } | TmType { ty = ty }
+    | TmConDef { ty = ty } | TmConApp { ty = ty } | TmMatch { ty = ty }
+    | TmUtest { ty = ty } | TmNever { ty = ty }) & stmt ->
     match final with { name = name } then
       if _isUnitTy ty then
         match stmt with TmVar _ then (env, acc)
@@ -437,7 +521,7 @@ lang MExprCCompile = MExprAst + CAst
   -------------------
 
   -- Only a subset of constants can be compiled
-  sem compileOp (args: [CExpr])=
+  sem compileOp (args: [CExpr]) =
 
   -- Binary operators
   | CAddi _
@@ -456,7 +540,8 @@ lang MExprCCompile = MExprAst + CAst
   | CNegf _ -> CEUnOp { op = CONeg {}, arg = head args }
 
   -- Custom intrinsics
-  | CPrint _ -> CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
+  | CPrint _ ->
+    CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
 
 
   sem compileExpr =
@@ -514,12 +599,33 @@ lang MExprCCompile = MExprAst + CAst
 
 end
 
-lang MExprCCompileWithMain = MExprCCompile + CPrettyPrint
+lang MExprCCompileGCC = MExprCCompile + CPrettyPrint
+
+  sem allocStruct (ty: Type) =
+  | name ->
+    match ty with CTyVar { id = tyName } then {
+      ty = ty,
+      id = Some name,
+      init = Some (
+        CIExpr {
+          expr = CEApp {
+            fun = _malloc,
+            args = [
+              CESizeOfType { ty = CTyStruct { id = Some tyName, mem = None ()}}
+            ]
+          }
+        }
+      )
+    }
+    else error "Not a CTyVar in allocStruct"
+
+  sem free =
+  | todo -> error "TODO"
 
   sem printCompiledCProg =
   | cprog -> printCProg _compilerNames cprog
 
-  sem compileWithMain (typeEnv: AssocSeq Name Type) =
+  sem compileWithMain (typeEnv: [(Name,Type)]) =
   | prog ->
     match compile typeEnv prog with (types, tops, inits) then
       let mainTy = CTyFun {
@@ -539,7 +645,7 @@ end
 -----------
 
 lang Test =
-  MExprCCompileWithMain + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
+  MExprCCompileGCC + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
   MExprSym + BootParser + MExprTypeLift
 
 mexpr
@@ -629,10 +735,10 @@ utest testCompile constants with strJoin "\n" [
   "  int t2 = (1 * 2);",
   "  double t3 = (1.0e-0 * 2.0e+0);",
   "  double t4 = (1.0e-0 / 2.0e+0);",
-  "  int t5 = (1 == 2);",
-  "  int t6 = (1.0e-0 == 2.0e+0);",
-  "  int t7 = (1 < 2);",
-  "  int t8 = (1.0e-0 < 2.0e+0);",
+  "  char t5 = (1 == 2);",
+  "  char t6 = (1.0e-0 == 2.0e+0);",
+  "  char t7 = (1 < 2);",
+  "  char t8 = (1.0e-0 < 2.0e+0);",
   "  double t9 = (-1.0e-0);",
   "  char (*t10) = \"Hello, world!\";",
   "  (printf(\"%s\", t10));",
@@ -657,7 +763,7 @@ utest testCompile factorial with strJoin "\n" [
   "#include <stdlib.h>",
   "int factorial(int);",
   "int factorial(int n) {",
-  "  int t = (n == 0);",
+  "  char t = (n == 0);",
   "  int t1;",
   "  if (t) {",
   "    (t1 = 1);",
@@ -700,40 +806,40 @@ let oddEven = bindall_ [
 utest testCompile oddEven with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
-  "int odd(int);",
-  "int even(int);",
-  "int odd(int x) {",
-  "  int t = (x == 1);",
-  "  int t1;",
+  "char odd(int);",
+  "char even(int);",
+  "char odd(int x) {",
+  "  char t = (x == 1);",
+  "  char t1;",
   "  if (t) {",
   "    (t1 = 1);",
   "  } else {",
-  "    int t2 = (x < 1);",
-  "    int t3;",
+  "    char t2 = (x < 1);",
+  "    char t3;",
   "    if (t2) {",
   "      (t3 = 0);",
   "    } else {",
   "      int t4 = (x - 1);",
-  "      int t5 = (even(t4));",
+  "      char t5 = (even(t4));",
   "      (t3 = t5);",
   "    }",
   "    (t1 = t3);",
   "  }",
   "  return t1;",
   "}",
-  "int even(int x1) {",
-  "  int t6 = (x1 == 0);",
-  "  int t7;",
+  "char even(int x1) {",
+  "  char t6 = (x1 == 0);",
+  "  char t7;",
   "  if (t6) {",
   "    (t7 = 1);",
   "  } else {",
-  "    int t8 = (x1 < 0);",
-  "    int t9;",
+  "    char t8 = (x1 < 0);",
+  "    char t9;",
   "    if (t8) {",
   "      (t9 = 0);",
   "    } else {",
   "      int t10 = (x1 - 1);",
-  "      int t11 = (odd(t10));",
+  "      char t11 = (odd(t10));",
   "      (t9 = t11);",
   "    }",
   "    (t7 = t9);",
@@ -745,13 +851,7 @@ utest testCompile oddEven with strJoin "\n" [
   "}"
 ] using eqString in
 
-let leaf_ = lam v.
-  conapp_ "Leaf" (record_ [("v", int_ v)]) in
-
-let node_ = lam v. lam left. lam right.
-  conapp_ "Node" (record_ [("v", int_ v), ("l", left), ("r", right)]) in
-
-let variants = bindall_ [
+let typedefs = bindall_ [
 
   type_ "Tree" (tyvariant_ []),
   type_ "Integer" tyint_,
@@ -759,17 +859,63 @@ let variants = bindall_ [
   type_ "MyRec2" (tyrecord_ [("k", (tyvar_ "MyRec")), ("t", (tyvar_ "Tree"))]),
   type_ "Integer2" (tyvar_ "Integer"),
 
-  condef_ "Leaf" (tyarrow_ (tyrecord_ [("v", (tyvar_ "Integer2"))]) (tyvar_ "Tree")),
+  condef_ "Leaf"
+    (tyarrow_ (tyrecord_ [("v", (tyvar_ "Integer2"))]) (tyvar_ "Tree")),
   condef_ "Node" (tyarrow_
     (tyrecord_ [("v", tyint_), ("l", (tyvar_ "Tree")), ("r", (tyvar_ "Tree"))])
     (tyvar_ "Tree")),
 
-  let_ "i" (tyvar_ "Integer") (int_ 3),
+  int_ 0
+] in
+utest testCompile typedefs with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <stdlib.h>",
+  "typedef struct Tree (*Tree);",
+  "typedef int Integer;",
+  "typedef struct Rec {Integer k;} (*Rec);",
+  "typedef Rec MyRec;",
+  "typedef struct Rec1 {MyRec k; Tree t;} (*Rec1);",
+  "typedef Rec1 MyRec2;",
+  "typedef Integer Integer2;",
+  "typedef struct Rec2 {Integer2 v;} (*Rec2);",
+  "typedef struct Rec3 {int v; Tree l; Tree r;} (*Rec3);",
+  "struct Tree {enum {Leaf, Node} constr; union {Rec2 d0; Rec3 d1;};};",
+  "int main(int argc, char (*argv[])) {",
+  "  return 0;",
+  "}"
+] using eqString in
 
-  ulet_ "tree" (node_ 1 (node_ 2 (leaf_ 3) (leaf_ 4)) (leaf_ 0)),
+let leaf_ = lam v.
+  conapp_ "Leaf" (record_ [("v", int_ v)]) in
+
+let node_ = lam v. lam left. lam right.
+  conapp_ "Node" (record_ [("v", int_ v), ("l", left), ("r", right)]) in
+
+let trees = bindall_ [
+
+  type_ "Tree" (tyvariant_ []),
+
+  condef_ "Leaf"
+    (tyarrow_ (tyrecord_ [("v", tyint_)]) (tyvar_ "Tree")),
+
+  condef_ "Node" (tyarrow_
+    (tyrecord_ [("v", tyint_), ("l", (tyvar_ "Tree")), ("r", (tyvar_ "Tree"))])
+    (tyvar_ "Tree")),
+
+  ulet_ "tree"
+    (node_ 1 (node_ 2 (leaf_ 3) (leaf_ 4)) (node_ 5 (leaf_ 6) (leaf_ 7))),
+
+  reclet_
+    "treeRec" (tyarrow_ (tyvar_ "Tree") tyunit_)
+    (lam_ "t" (tyvar_ "Tree") (app_ (var_ "treeRec") (var_ "t"))),
 
   int_ 0
 ] in
+
+print (expr2str trees);
+print "\n\n";
+print (testCompile trees);
+print "\n\n";
 
 -- print (expr2str variants);
 

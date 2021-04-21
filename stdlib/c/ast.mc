@@ -66,6 +66,7 @@ lang CAst
                                               rhs: CExpr }
   | CEUnOp       /- Unary operators -/      { op: CUnOp, arg: CExpr }
   | CEMember     /- lhs.id -/               { lhs: CExpr, id: String }
+  | CEArrow      /- lhs->id -/              { lhs: CExpr, id: String }
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
