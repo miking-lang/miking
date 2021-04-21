@@ -136,6 +136,21 @@ recursive let unwrapAlias = use MExprAst in
   else ty
 end
 
+let toOCamlType = use MExprAst in
+  lam ty : Type.
+  recursive let work = lam nested : Bool. lam ty : Type.
+    match ty with TyRecord t then
+      if or (mapIsEmpty t.fields) nested then tyunknown_
+      else TyRecord {t with fields = mapMap (work true) t.fields}
+    else match ty with TyArrow t then
+      TyArrow {{t with from = work true t.from}
+                  with to = work true t.to}
+    else tyunknown_
+  in work false ty
+
+let ocamlTypedFields = lam fields : Map SID Type.
+  mapMap toOCamlType fields
+
 let lookupRecordFields = use MExprAst in
   lam ty. lam constrs.
   match ty with TyRecord {fields = fields} then
@@ -215,7 +230,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
         let targetTy = matchTargetType env t in
         let targetTy = unwrapAlias env.aliases targetTy in
         match lookupRecordFields targetTy env.constrs with Some fields then
-          match mapLookup fields env.records with Some name then
+          let fieldTypes = ocamlTypedFields fields in
+          match mapLookup fieldTypes env.records with Some name then
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
             OTmMatch {
@@ -241,7 +257,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       let ty = unwrapAlias env.aliases t.ty in
       match ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
-          match mapLookup fields env.records with Some id then
+          let fieldTypes = ocamlTypedFields fields in
+          match mapLookup fieldTypes env.records with Some id then
             let bindings = mapMap (generate env) t.bindings in
             OTmConApp {
               ident = id,
@@ -254,7 +271,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     let ty = unwrapAlias env.aliases t.ty in
     match ty with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
-        match mapLookup fields env.records with Some id then
+        let fieldTypes = ocamlTypedFields fields in
+        match mapLookup fieldTypes env.records with Some id then
           let rec = generate env t.rec in
           let key = sidToString t.key in
           let value = generate env t.value in
@@ -290,7 +308,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     let tyBody = unwrapAlias env.aliases (ty t.body) in
     match tyBody with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
-        match mapLookup fields env.records with Some id then
+        let fieldTypes = ocamlTypedFields fields in
+        match mapLookup fieldTypes env.records with Some id then
           let body = generate env t.body in
           let inlineRecordName = nameSym "rec" in
           let fieldNames =
@@ -510,7 +529,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     else match env with {records = records, constrs = constrs} then
       let targetTy = unwrapAlias env.aliases targetTy in
       match lookupRecordFields targetTy constrs with Some fields then
-        match mapLookup fields records with Some name then
+        let fieldTypes = ocamlTypedFields fields in
+        match mapLookup fieldTypes records with Some name then
           let patNames = mapMapWithKey (lam id. lam. nameSym (sidToString id)) t.bindings in
           let genPats = mapValues
             (mapMapWithKey (lam k. lam v. genBindingPat patNames fields k v) t.bindings)
@@ -579,16 +599,47 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     else never
 end
 
-let _objTyped = lam.
-  use OCamlExternal in
-  OTmVarExt {ident = "Obj.t"}
-
-let _typeLiftEnvToGenerateEnv = lam typeLiftEnvMap. lam typeLiftEnv.
+let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
   use MExprAst in
+  use OCamlTypeDeclAst in
+  let f = lam acc. lam name. lam ty.
+    match acc with (t, recordFieldsToName) then
+      match ty with TyRecord tr then
+        let fieldTypes = ocamlTypedFields tr.fields in
+        match mapLookup fieldTypes recordFieldsToName with Some _ then
+          (t, recordFieldsToName)
+        else
+          let recordFieldsToName = mapInsert fieldTypes name recordFieldsToName in
+          let recordTy = TyRecord {tr with fields = fieldTypes} in
+          (OTmVariantTypeDecl {
+            ident = nameSym "record",
+            constrs = mapInsert name recordTy (mapEmpty nameCmp),
+            inexpr = t
+          }, recordFieldsToName)
+      else match ty with TyVariant {constrs = constrs} then
+        let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+        if mapIsEmpty constrs then (t, recordFieldsToName)
+        else
+          (OTmVariantTypeDecl {
+            ident = name,
+            constrs = constrs,
+            inexpr = t
+          }, recordFieldsToName)
+      else (t, recordFieldsToName)
+    else never
+  in
+  let init = (t, mapEmpty (mapCmp _cmpType)) in
+  assocSeqFold f init typeLiftEnv
+
+let _typeLiftEnvToGenerateEnv = use MExprAst in
+  lam typeLiftEnvMap. lam typeLiftEnv. lam recordFieldsToName.
   let f = lam env : GenerateEnv. lam name. lam ty.
     match ty with TyRecord {fields = fields} then
-      {{env with records = mapInsert fields name env.records}
-            with constrs = mapInsert name ty env.constrs}
+      let fieldTypes = ocamlTypedFields fields in
+      match mapLookup fieldTypes recordFieldsToName with Some id then
+        {{env with records = mapInsert fieldTypes id env.records}
+              with constrs = mapInsert name ty env.constrs}
+      else error "Type lifting error"
     else match ty with TyVariant {constrs = constrs} then
       let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
       {env with constrs = mapUnion env.constrs constrs}
@@ -597,36 +648,17 @@ let _typeLiftEnvToGenerateEnv = lam typeLiftEnvMap. lam typeLiftEnv.
   in
   assocSeqFold f _emptyGenerateEnv typeLiftEnv
 
-let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
-  use MExprAst in
-  use OCamlTypeDeclAst in
-  let f = lam t. lam name. lam ty.
-    match ty with TyRecord {fields = fields} then
-      OTmVariantTypeDecl {
-        ident = nameSym "record",
-        constrs = mapInsert name ty (mapEmpty nameCmp),
-        inexpr = t
-      }
-    else match ty with TyVariant {constrs = constrs} then
-      let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
-      if mapIsEmpty constrs then t
-      else
-        OTmVariantTypeDecl {
-          ident = name,
-          constrs = constrs,
-          inexpr = t
-        }
-    else t
-  in
-  assocSeqFold f t typeLiftEnv
 
 lang OCamlTypeDeclGenerate = MExprTypeLift
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
     let typeLiftEnvMap = mapFromList nameCmp env in
-    let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap env in
-    let expr = _addTypeDeclarations typeLiftEnvMap env expr in
-    (generateEnv, expr)
+    let exprDecls = _addTypeDeclarations typeLiftEnvMap env expr in
+    match exprDecls with (expr, recordFieldsToName) then
+      let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
+                                                  env recordFieldsToName in
+      (generateEnv, expr)
+    else never
 end
 
 recursive let _isIntrinsicApp = use OCamlAst in
