@@ -7,7 +7,7 @@
 # Compile and run a file
 compile() {
   output=$1
-  output="$output\n$(build/mi src/main/mi.mc -- compile --test $1)"
+  output="$output\n$($2 $1)"
   if [ $? -eq 0 ]
   then
     binary=$(basename "$1" .mc)
@@ -149,7 +149,15 @@ files="${files} src/main/compile.mc"
 files="${files} src/main/run.mc"
 
 export MCORE_STDLIB='stdlib'
+
+# Compile using boot
 for f in $files; do
-    compile "$f" &
+    compile "$f" "build/boot src/main/mi.mc -- compile --test" &
+done
+wait
+
+# Compile using the bootstrapped compiler
+for f in $files; do
+    compile "$f" "build/mi compile --test" &
 done
 wait
