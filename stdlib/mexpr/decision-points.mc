@@ -7,6 +7,7 @@ include "eq-paths.mc"
 include "anf.mc"
 include "name.mc"
 include "hashmap.mc"
+include "eqset.mc"
 include "eq.mc"
 include "common.mc"
 
@@ -261,10 +262,11 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxInfo =
 
 -- Returns the binding of a function name, or None () if the name is not a node
 -- in the call graph.
-let callCtxFunLookup : Name -> CallCtxInfo -> Option Name = lam name. lam info.
-  match info with { fun2inc = fun2inc } then
-    hashmapLookup {eq = _eqn, hashfn = _nameHash} name fun2inc
-  else never
+let callCtxFunLookup : Name -> CallCtxInfo -> Option Name =
+  lam name : Name. lam info : CallCtxInfo.
+    match info with { fun2inc = fun2inc } then
+      hashmapLookup {eq = _eqn, hashfn = _nameHash} name fun2inc
+    else never
 
 -- Get the incoming variable name of a function, giving an error if the function
 -- name is not part of the call graph.
@@ -274,24 +276,26 @@ let callCtxFun2Inc : Name -> CallCtxInfo -> Name = lam name. lam info.
 
 -- Get the incoming variable name of an edge label, giving an error if the edge
 -- is not part of the call graph.
-let callCtxLbl2Inc : Name -> CallCtxInfo -> Name = lam lbl. lam info.
-  match info with { lbl2inc = lbl2inc } then
-    optionGetOrElse (lam. error "lbl2inc lookup failed")
-                    (hashmapLookup {eq = _eqn, hashfn = _nameHash}
-                                   lbl lbl2inc)
-  else never
+let callCtxLbl2Inc : Name -> CallCtxInfo -> Name =
+  lam lbl : Name. lam info : CallCtxInfo.
+    match info with { lbl2inc = lbl2inc } then
+      optionGetOrElse (lam. error "lbl2inc lookup failed")
+                      (hashmapLookup {eq = _eqn, hashfn = _nameHash}
+                                     lbl lbl2inc)
+    else never
 
 -- Get the count of an edge label, giving an error if the edge is not part of
 -- the call graph.
-let callCtxLbl2Count : Name -> CallCtxInfo -> Int = lam lbl. lam info.
-  match info with { lbl2count = lbl2count } then
-    optionGetOrElse (lam. error "lbl2count lookup failed")
-                    (hashmapLookup {eq = _eqn, hashfn = _nameHash}
-                                   lbl lbl2count)
-  else never
+let callCtxLbl2Count : Name -> CallCtxInfo -> Int =
+  lam lbl : Name. lam info : CallCtxInfo.
+    match info with { lbl2count = lbl2count } then
+      optionGetOrElse (lam. error "lbl2count lookup failed")
+                      (hashmapLookup {eq = _eqn, hashfn = _nameHash}
+                                     lbl lbl2count)
+    else never
 
 -- Get all the incoming variable names of the program.
-let callCtxIncVarNames : CallCtxInfo -> [Name] = lam info.
+let callCtxIncVarNames : CallCtxInfo -> [Name] = lam info : CallCtxInfo.
   match info with { fun2inc = fun2inc } then
     hashmapValues {eq = _eqn, hashfn = _nameHash} fun2inc
   else never
@@ -303,7 +307,7 @@ let callCtxPubLookup : Name -> CallCtxInfo -> Option Name = lam name. lam info.
   else never
 
 let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
-  lam name. lam paths. lam info.
+  lam name. lam paths. lam info : CallCtxInfo.
     match info with { hole2idx = hole2idx, count = count } then
     match
       foldl
@@ -318,7 +322,7 @@ let callCtxAddHole : Name -> [[Name]] -> CallCtxInfo -> CallCtxInfo =
     else never else never
 
 let callCtxHole2Idx : Name -> [Name] -> CallCtxInfo -> Int =
-  lam name. lam path. lam info.
+  lam name. lam path. lam info : CallCtxInfo.
     match info with { hole2idx = hole2idx } then
       mapFindWithExn path (mapFindWithExn name (deref hole2idx))
     else never
@@ -348,8 +352,12 @@ let _appGetCallee : Expr -> Option Name = use AppAst in use VarAst in lam tm.
 
 let _x = nameSym "x"
 let _y = nameSym "y"
-utest _appGetCallee (appf3_ (nvar_ _x) true_ (nvar_ _y) (int_ 4)) with Some _x
-utest _appGetCallee (addi_ (nvar_ _x) (int_ 3)) with None ()
+utest
+  _appGetCallee (appf3_ (nvar_ _x) true_ (nvar_ _y) (int_ 4))
+with Some _x using optionEq nameEq
+utest
+  _appGetCallee (addi_ (nvar_ _x) (int_ 3))
+with None () using optionEq nameEq
 
 -- Set the leftmost node (callee function) to a given name in a nested
 -- application.
@@ -363,11 +371,11 @@ let _appSetCallee : Expr -> Name -> Expr = use AppAst in use VarAst in
       else error "Expected an application"
     in work tm
 
-let _x = nameSym "x"
-let _y = nameSym "y"
-utest _appSetCallee
-      (appf2_ (nvar_ _x) (nvar_ _y) (int_ 4)) _y
-with  (appf2_ (nvar_ _y) (nvar_ _y) (int_ 4))
+-- let _x = nameSym "x"
+-- let _y = nameSym "y"
+-- utest _appSetCallee
+--       (appf2_ (nvar_ _x) (nvar_ _y) (int_ 4)) _y
+-- with  (appf2_ (nvar_ _y) (nvar_ _y) (int_ 4))
 
 -- Replace the innermost body in a nested lambda expression by the result of a
 -- function that operates on the list of arguments of the lambda.
@@ -381,27 +389,27 @@ let _lamWithBody : ([Name] -> Expr) -> Expr -> Expr = use LamAst in
       else error "Expected a lambda expression"
     in work [] tm
 
-let _x = nameSym "x"
-let _y = nameSym "y"
-let _z = nameSym "z"
-utest
-  _lamWithBody (lam args.
-                  match args with [x, y, z] then
-                    muli_ (nvar_ x) (nvar_ y)
-                  else error "Test failed")
-               (nulam_ _x (nulam_ _y (nulam_ _z (addi_ (int_ 1) (int_ 1)))))
-with (nulam_ _x (nulam_ _y (nulam_ _z (muli_ (nvar_ _x) (nvar_ _y)))))
+-- let _x = nameSym "x"
+-- let _y = nameSym "y"
+-- let _z = nameSym "z"
+-- utest
+--   _lamWithBody (lam args.
+--                   match args with [x, y, z] then
+--                     muli_ (nvar_ x) (nvar_ y)
+--                   else error "Test failed")
+--                (nulam_ _x (nulam_ _y (nulam_ _z (addi_ (int_ 1) (int_ 1)))))
+-- with (nulam_ _x (nulam_ _y (nulam_ _z (muli_ (nvar_ _x) (nvar_ _y)))))
 
 -- Generate skeleton code for looking up a value of a decision point depending
 -- on its call history
 let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skeleton =
   use MatchAst in use NeverAst in
-    lam lookup. lam holeId. lam incVarName. lam info. lam paths.
+    lam lookup. lam holeId. lam incVarName. lam info : CallCtxInfo. lam paths.
       match info with { lbl2inc = lbl2inc } then
         -- TODO: Represent paths as trees, then this partition becomes trivial
         let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
           let startVals = foldl (lam acc. lam p.
-                                   setInsert _eqn (head p) acc)
+                                   eqsetInsert _eqn (head p) acc)
                                 [] paths in
           let partition = (create (length startVals) (lam. [])) in
           let partition =
@@ -435,10 +443,10 @@ let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxInfo -> [[Name]] -> Skelet
 
 -- Helper for creating a hidden equivalent of a public function and replace the
 -- public function with a forwarding call to the hidden function.
-type Binding = {ident : Name, ty : Type, body : Expr}
-let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
-  use LamAst in
-    lam local. lam f. lam bind.
+type Binding = {ident : Name, body : Expr}
+let _forwardCall : Name -> (Expr -> Expr) -> LetBinding -> (LetBinding, LetBinding) =
+--  use LamAst in
+    lam local. lam f. lam bind : Binding.
       let fwdVar = _fwdVarFromName bind.ident in
       let newBody = lam args.
         bind_ (nulet_ fwdVar (appSeq_ (nvar_ local) (map nvar_ args)))
@@ -522,26 +530,34 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     else TmLet {t with inexpr = _replacePublic pub2priv t.inexpr}
 
   -- Function definition: create private equivalent of public functions
-  | TmLet ({ body = TmLam lm } & t) ->
+  | TmLet ({ body = TmLam lm } & t) & tm ->
     match hashmapLookup {eq = _eqn, hashfn = _nameHash} t.ident pub2priv
     with Some local then
-      match _forwardCall local (_replacePublic pub2priv) t with (priv, pub) then
+      match _forwardCall local (_replacePublic pub2priv) {ident = t.ident, body = t.body}
+      with (priv, pub) then
         let pubAndRest =
-          TmLet {pub with inexpr = _replacePublic pub2priv t.inexpr}
-        in TmLet {priv with inexpr = pubAndRest}
+          TmLet {{{t with ident = pub.ident}
+                     with body = pub.body}
+                     with inexpr = _replacePublic pub2priv t.inexpr}
+        in TmLet {{{t with ident = priv.ident}
+                      with body = priv.body}
+                      with inexpr = pubAndRest}
       else never
     else TmLet {{t with inexpr = _replacePublic pub2priv t.inexpr}
                    with body = _replacePublic pub2priv t.body}
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds = foldl
-      (lam acc. lam bind.
+      (lam acc : [RecLetBinding]. lam bind : RecLetBinding.
         match bind with { body = TmLam lm } then
           match hashmapLookup {eq = _eqn, hashfn =_nameHash} bind.ident pub2priv
           with Some local then
-            match _forwardCall local (_replacePublic pub2priv) bind
+            match _forwardCall local (_replacePublic pub2priv) {ident = bind.ident, body = bind.body}
             with (privBind, pubBind) then
-              concat [privBind, pubBind] acc
+              concat [{{bind with ident = privBind.ident}
+                             with body = privBind.body},
+                      {{bind with ident = pubBind.ident}
+                             with body = pubBind.body}] acc
             else never
           else cons bind acc
         else cons bind acc)
@@ -593,14 +609,14 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds =
-      map (lam bind.
-             match bind with { body = TmLam lm } then
-               let curBody =
-                 match callCtxFunLookup bind.ident info with Some _
-                 then bind.ident
-                 else cur
-               in {bind with body = _maintainCallCtx lookup info curBody bind.body}
-             else {bind with body = _maintainCallCtx lookup info cur bind.body})
+      map (lam bind : RecLetBinding.
+        match bind with { body = TmLam lm } then
+          let curBody =
+            match callCtxFunLookup bind.ident info with Some _
+            then bind.ident
+            else cur
+          in {bind with body = _maintainCallCtx lookup info curBody bind.body}
+        else {bind with body = _maintainCallCtx lookup info cur bind.body})
       bindings
     in TmRecLets {{t with bindings = newBinds}
                      with inexpr = _maintainCallCtx lookup info cur inexpr}
@@ -625,21 +641,26 @@ let anf = compose normalizeTerm symbolize in
 -- Call graph tests --
 ----------------------
 
-let doCallGraphTests = lam r.
-  let tests = lam ast. lam strVs. lam strEdgs.
+type CallGraphTest = {ast : Expr, expected : Expr, vs : [String],
+                      calls : [(String, String)]} in
+
+let doCallGraphTests = lam r : CallGraphTest.
+  let tests = lam ast. lam strVs : [String]. lam strEdgs : [(String, String)].
     let toStr = lam ng.
       digraphAddEdges
-        (map (lam t. (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
-        (digraphAddVertices (map nameGetStr (digraphVertices ng))
-                            (digraphEmpty eqString _eqn))
+        (map (lam t : DigraphEdge Name Name.
+           (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
+           (digraphAddVertices (map nameGetStr (digraphVertices ng))
+                               (digraphEmpty eqString _eqn))
     in
     let sg = toStr (toCallGraph ast) in
 
-    utest setEqual eqString strVs (digraphVertices sg) with true in
+    utest eqsetEqual eqString strVs (digraphVertices sg) with true in
 
     let es = digraphEdges sg in
     utest length es with length strEdgs in
-    map (lam t. (utest digraphIsSuccessor t.1 t.0 sg with true in ())) strEdgs
+    map (lam t : (String, String).
+      utest digraphIsSuccessor t.1 t.0 sg with true in ()) strEdgs
   in
   tests (anf r.ast) r.vs r.calls
 in
@@ -878,7 +899,8 @@ match mapBindings table with [(_, m)] then
 
 if debug then
   printLn "Mapped paths";
-  map dprintLn (sort (lam t1. lam t2. subi t1.1 t2.1) (mapBindings m))
+  dprintLn
+    (sort (lam t1 : ([Name], Int). lam t2 : ([Name], Int). subi t1.1 t2.1) (mapBindings m))
 else ();
 
 let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
@@ -886,7 +908,7 @@ let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
   eval { env = builtinEnv } ast
 in
 
-let idxs = map (lam t. t.1) (mapBindings m) in
+let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
 let table = seq_ (mapi (lam i. lam. int_ (addi 1 i)) idxs) in
 
 let eval = evalWithArgv table in
@@ -894,33 +916,33 @@ let eval = evalWithArgv table in
 -- Path 1: C -> B (1)-> A
 utest eval prog (
   app_ (nvar_ funC) true_
-) with int_ 1 in
+) with int_ 1 using eqExpr in
 
 -- Path 2: B (1)-> A
 utest eval prog (
   appf2_ (nvar_ funB) true_ false_
-) with int_ 2 in
+) with int_ 2 using eqExpr in
 
 -- Path 3: B -> B (1)-> A
 utest eval prog (
   appf2_ (nvar_ funB) true_ true_
-) with int_ 3 in
+) with int_ 3 using eqExpr in
 
 -- Path 4: C -> B (2)-> A
 utest eval prog (
   app_ (nvar_ funC) false_
-) with int_ 4 in
+) with int_ 4 using eqExpr in
 
 -- Path 5: B (2)-> A
 utest eval prog (
   appf2_ (nvar_ funB) false_ false_
-) with int_ 5 in
+) with int_ 5 using eqExpr in
 
 -- Path 5 again
 utest eval prog (
   bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
         (appf2_ (nvar_ funB) false_ false_)
-) with int_ 5 in
+) with int_ 5 using eqExpr in
 
 -- Path 6: B -> B (2)-> A
 -- unreachable
@@ -928,7 +950,7 @@ utest eval prog (
 ()
 
 else never else never
-=======
+
 --include "mexpr.mc"
 --include "pprint.mc"
 --include "digraph.mc"

@@ -428,7 +428,7 @@ let never_ = use MExprAst in
 -- Exhaustive match
 let matchex_ = use MExprAst in
   lam target. lam pat. lam thn.
-    TmMatch {target = target, pat = pat, thn = thn, els = never_}
+    match_ target pat thn never_
 
 let matchall_ = use MExprAst in
   lam matches.
