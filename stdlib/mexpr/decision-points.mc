@@ -51,21 +51,12 @@ type CallGraph = DiGraph Name Name
 -- The top of the call graph, has no incoming edges.
 let _callGraphTop = nameSym "top"
 
+type Binding = {ident : Name, body : Expr}
 let _handleLetVertex = use LamAst in
-  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
-                 inexpr : Expr, ty : Type, info : Info}.
-  lam f.
+  lam f.lam letexpr : Binding.
     match letexpr.body with TmLam lm
     then cons letexpr.ident (f lm.body)
     else f letexpr.body
-
-let _handleLetEdge = use LamAst in
-  lam letexpr : {ident : Name, tyBody : Type, body : Expr,
-                 inexpr : Expr, ty : Type, info : Info}.
-  lam f. lam g. lam prev.
-    match letexpr.body with TmLam lm
-    then f g letexpr.ident lm.body
-    else f g prev letexpr.body
 
 let _handleApps = use AppAst in use VarAst in
   lam id. lam f. lam prev. lam g. lam app.
@@ -97,12 +88,15 @@ lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
 
   sem _findVertices =
   | TmLet t ->
-    let res_body = _handleLetVertex t _findVertices
-    in concat res_body (_findVertices t.inexpr)
+    concat
+      (_handleLetVertex _findVertices {ident = t.ident, body = t.body})
+      (_findVertices t.inexpr)
 
   | TmRecLets t ->
     let res =
-      foldl (lam a. lam b. concat a (_handleLetVertex b _findVertices))
+      foldl (lam acc. lam b : RecLetBinding.
+               concat acc
+                 (_handleLetVertex _findVertices {ident = b.ident, body = b.body}))
             [] t.bindings
     in concat res (_findVertices t.inexpr)
 
@@ -120,8 +114,12 @@ lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
 
   | TmRecLets t ->
     let res =
-      foldl (lam g. lam b. digraphUnion g (_handleLetEdge b _findEdges g prev))
-            cg t.bindings
+      let handleBinding = lam g. lam b : RecLetBinding.
+        match b with { body = TmLam { body = lambody }, ident = ident } then
+          _findEdges g ident lambody
+        else
+          _findEdges g prev b.body
+      in foldl (lam g. lam b. digraphUnion g (handleBinding g b)) cg t.bindings
     in _findEdges res prev t.inexpr
 
   | tm ->
@@ -816,20 +814,19 @@ let hiddenCall = {
 } in
 
 
-let cgTests = [
-    constant
-  , identity
-  , funCall
-  , callSameFunctionTwice
-  , innerFun
-  , letWithFunCall
-  , factorial
-  , evenOdd
-  , hiddenCall
+let cgTests =
+[ constant
+, identity
+, funCall
+, callSameFunctionTwice
+, innerFun
+, letWithFunCall
+, factorial
+, evenOdd
+, hiddenCall
 ] in
 
 map doCallGraphTests cgTests;
-
 
 ---------------------------
 -- Decision points tests --
