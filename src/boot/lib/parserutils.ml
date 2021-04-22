@@ -208,8 +208,8 @@ let parse_mcore_file filename =
     |> Mlang.flatten |> Mlang.desugar_post_flatten
     |> raise_parse_error_on_non_unique_external_id
     |> Symbolize.symbolize builtin_name2sym
-    |> raise_parse_error_on_partially_applied_external
     |> Deadcode.elimination builtin_sym2term builtin_name2sym
+    |> raise_parse_error_on_partially_applied_external
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
     fprintf stderr "%s\n" error_string ;

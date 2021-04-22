@@ -29,10 +29,10 @@ let evalprog filename =
       |> Mlang.flatten |> Mlang.desugar_post_flatten |> debug_after_mlang
       |> raise_parse_error_on_non_unique_external_id
       |> Symbolize.symbolize builtin_name2sym
-      |> raise_parse_error_on_partially_applied_external
       |> debug_after_symbolize
       |> Deadcode.elimination builtin_sym2term builtin_name2sym
       |> debug_after_dead_code_elimination
+      |> raise_parse_error_on_partially_applied_external
       |> Mexpr.eval builtin_sym2term
       |> fun _ -> ()
     with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
