@@ -399,11 +399,10 @@ let s = "con Foo : (Int) -> (Tree) in x" in
 utest lside ["x"] s with rside s in
 utest l_infoClosed "  con Bar in 10 " with r_info 1 2 1 12 in
 
--- Linnea
--- -- TmConApp
--- let s = "Foo {a = 5}" in
--- utest lsideClosed s with rside s in
--- utest l_infoClosed "  con Foo in Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
+-- TmConApp
+let s = "Foo {a = 5}" in
+utest lside ["Foo"] s with rside s in
+utest l_info ["Foo"] "  Foo {foo = 7, b = 3} " with r_info 1 2 1 22 in
 
 -- TmMatch, PatNamed
 let s =  "match 5 with x then x else 2" in
@@ -411,10 +410,9 @@ utest lsideClosed s with rside s in
 let s = "match foo with _ then 7 else 2" in
 utest lside ["foo"] s with rside s in
 utest l_infoClosed "match [4] with x then x else [] " with r_info 1 0 1 31 in
--- Linnea
--- let s = " match bar with Foo {a = x} then x else 2" in
--- utest match parseMExprString [] s with TmMatch r then infoPat r.pat else ()
--- with r_info 1 16 1 27 in
+let s = " match bar with Foo {a = x} then x else 2" in
+utest match parseMExprString ["Foo", "bar"] s with TmMatch r then infoPat r.pat else ()
+with r_info 1 16 1 27 in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
 let s = "match x with \"\" then x else 2" in
@@ -450,11 +448,10 @@ utest match parseMExprString ["x"] s with TmMatch r then infoPat r.pat else ()
 with r_info 1 13 1 27 in
 
 --TmMatch, PatCon
--- Linnea
--- let s = "match x with Foo {foo = x} then x else 100" in
--- utest lside ["x"] s with rside s in
--- utest match parseMExprString ["x"] s with TmMatch r then infoPat r.pat else ()
--- with r_info 1 13 1 26 in
+let s = "match x with Foo {foo = x} then x else 100" in
+utest lside ["x", "Foo"] s with rside s in
+utest match parseMExprString ["x", "Foo"] s with TmMatch r then infoPat r.pat else ()
+with r_info 1 13 1 26 in
 
 --TmMatch, PatInt, PatBool, PatChar
 let s = "match x with [1,2,12] then x else x" in

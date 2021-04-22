@@ -110,26 +110,24 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
+let symbolizeEnvWithKeywords keywords =
+  builtin_name2sym
+  @ List.map
+      (fun k ->
+        if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
+          (IdCon (sid_of_ustring k), Intrinsics.Symb.gensym ())
+        else (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()) )
+      (Mseq.Helpers.to_list keywords)
+
 let parseMExprString keywords str =
-  let symbolize_env =
-    builtin_name2sym
-    @ List.map
-        (fun k -> (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()))
-        (Mseq.Helpers.to_list keywords)
-  in
   PTreeTm
-    (str |> Parserutils.parse_mexpr_string |> Symbolize.symbolize symbolize_env)
+    ( str |> Parserutils.parse_mexpr_string
+    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords) )
 
 let parseMCoreFile keywords filename =
-  let symbolize_env =
-    builtin_name2sym
-    @ List.map
-        (fun k -> (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()))
-        (Mseq.Helpers.to_list keywords)
-  in
   PTreeTm
     ( filename |> Parserutils.parse_mcore_file
-    |> Symbolize.symbolize symbolize_env
+    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
     |> Deadcode.elimination builtin_sym2term builtin_name2sym )
 
 (* Returns a tuple with the following elements
