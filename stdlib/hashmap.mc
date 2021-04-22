@@ -17,8 +17,9 @@ include "string.mc"
 -- The base type of a HashMap object.
 --   k: Polymorphic key type
 --   v: Polymorphic value type
+type HashMapEntry k v = {hash : Int, key : k, value : v}
 type HashMap k v = {
-  buckets : [[{hash : Int, key : k, value : v}]],
+  buckets : [[HashMapEntry k v]],
   nelems : Int
 }
 type HashMapTraits k = {
@@ -28,8 +29,8 @@ type HashMapTraits k = {
 
 -- Private definitions
 let _hashmapDefaultBucketCount = 100
-let _hashmapBucketIdx = lam hash. lam hm. modi (absi hash) (length hm.buckets)
-
+let _hashmapBucketIdx = lam hash. lam hm : HashMap k v.
+  modi (absi hash) (length hm.buckets)
 
 -- 'hashmapEmpty' is an empty hashmap with a default number of buckets.
 let hashmapEmpty : HashMap k v =
@@ -37,8 +38,8 @@ let hashmapEmpty : HashMap k v =
    nelems = 0}
 
 -- 'hashmap2seq hm' converts the hashmap 'hm' to a sequence of tuples.
-let hashmap2seq : HashMap k v -> [(k,v)] = lam hm.
-  join (map (lam bucket. map (lam e. (e.key, e.value)) bucket)
+let hashmap2seq : HashMap k v -> [(k,v)] = lam hm : HashMap k v.
+  join (map (lam bucket. map (lam e : HashMapEntry k v. (e.key, e.value)) bucket)
             hm.buckets)
 
 -- 'hashmapStrTraits' is traits for a hashmap with strings as keys.
@@ -54,8 +55,9 @@ let hashmapStrTraits : HashMapTraits String =
   {eq = eqString, hashfn = djb2 5381}
 
 
--- 'hashmapCount hm' returns the number of elements in a hashmap.
-let hashmapCount : HashMapTraits k -> HashMap k v -> Int = lam traits. lam hm. hm.nelems
+-- 'hashmapCount traits hm' returns the number of elements in a hashmap.
+let hashmapCount : HashMapTraits k -> HashMap k v -> Int =
+  lam traits. lam hm : HashMap k v. hm.nelems
 
 -- 'hashmapInsert traits k v hm' returns a new hashmap, where the key-value pair
 -- ('k', 'v') is stored. If 'k' is already a key in 'hm', its old value will be
@@ -63,7 +65,7 @@ let hashmapCount : HashMapTraits k -> HashMap k v -> Int = lam traits. lam hm. h
 -- [NOTE(?,?)]
 --   The insertion uses a recursion that is not tail-recursive.
 let hashmapInsert : HashMapTraits k -> k -> v -> HashMap k v -> HashMap k v =
-  lam traits. lam key. lam value. lam hm.
+  lam traits : HashMapTraits k. lam key. lam value. lam hm : HashMap k v.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
     let bucket = get hm.buckets idx in
@@ -72,7 +74,7 @@ let hashmapInsert : HashMapTraits k -> k -> v -> HashMap k v -> HashMap k v =
       if null seq then
         [newEntry]
       else
-        let entry = head seq in
+        let entry : HashMapEntry k v = head seq in
         if neqi hash entry.hash then
           cons entry (inserter (tail seq))
         else if traits.eq key entry.key then
@@ -90,7 +92,7 @@ let hashmapInsert : HashMapTraits k -> k -> v -> HashMap k v -> HashMap k v =
 -- [NOTE(?,?)]
 --   The removal uses a recursion that is not tail-recursive.
 let hashmapRemove : HashMapTraits k -> k -> HashMap k v -> HashMap k v =
-  lam traits. lam key. lam hm.
+  lam traits : HashMapTraits k. lam key. lam hm : HashMap k v.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
     let bucket = get hm.buckets idx in
@@ -98,7 +100,7 @@ let hashmapRemove : HashMapTraits k -> k -> HashMap k v -> HashMap k v =
       if null seq then
         seq
       else
-        let entry = head seq in
+        let entry : HashMapEntry k v = head seq in
         if neqi hash entry.hash then
           cons entry (remover (tail seq))
         else if traits.eq key entry.key then
@@ -114,14 +116,14 @@ let hashmapRemove : HashMapTraits k -> k -> HashMap k v -> HashMap k v =
 -- 'hashmapLookup traits k hm' looks up the key 'k' in 'hm', returning an
 -- Option type.
 let hashmapLookup : HashMapTraits k -> k -> HashMap k v -> Option v =
-  lam traits. lam key. lam hm.
+  lam traits : HashMapTraits k. lam key. lam hm : HashMap k v.
     let hash = traits.hashfn key in
     let idx = _hashmapBucketIdx hash hm in
     recursive let finder = lam seq.
       if null seq then
         None ()
       else
-        let entry = head seq in
+        let entry : HashMapEntry k v = head seq in
         if neqi hash entry.hash then
           finder (tail seq)
         else if traits.eq key entry.key then
@@ -149,11 +151,11 @@ let hashmapLookupOr : HashMapTraits k -> v -> k -> HashMap k v -> v =
 -- [NOTE(?,?)]
 --   Linear complexity.
 let hashmapLookupPred : HashMapTraits k -> (k -> Bool) -> HashMap k v -> Option v =
-  lam traits. lam p. lam hm.
+  lam traits. lam p. lam hm : HashMap k v.
     let flatBuckets = foldr1 concat hm.buckets in
     optionMapOr (None ())
-                (lam r. Some (r.value))
-                (find (lam r. p r.key) flatBuckets)
+                (lam r : HashMapEntry k v. Some (r.value))
+                (find (lam r : HashMapEntry k v. p r.key) flatBuckets)
 
 -- 'hashmapMem traits k hm' returns true if 'k' is a key in 'hm', else false.
 let hashmapMem : HashMapTraits k -> k -> HashMap k v -> Bool =
@@ -162,29 +164,29 @@ let hashmapMem : HashMapTraits k -> k -> HashMap k v -> Bool =
 
 -- 'hashmapAny traits p hm' returns true if at least one entry in the hashmap matches the predicate
 let hashmapAny : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
-  lam traits. lam p. lam hm.
-    any (any (lam r. p r.key r.value)) hm.buckets
+  lam traits. lam p. lam hm : HashMap k v.
+    any (any (lam r : HashMapEntry k v. p r.key r.value)) hm.buckets
 
 -- 'hashmapAll traits p hm' returns true iff all entries in the hashmap matches the predicate
 let hashmapAll : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> Bool =
-  lam traits. lam p. lam hm.
-    all (all (lam r. p r.key r.value)) hm.buckets
+  lam traits. lam p. lam hm : HashMap k v.
+    all (all (lam r : HashMapEntry k v. p r.key r.value)) hm.buckets
 
 -- 'hashmapMap' maps the provided functions on all values in the hashmap
 let hashmapMap : HashMapTraits k -> (v1 -> v2) -> HashMap k v1 -> HashMap k v2 =
-  lam traits. lam fn. lam hm.
-    {buckets = map (map (lam r. {hash = r.hash, key = r.key, value = fn r.value})) hm.buckets,
+  lam traits. lam fn. lam hm : HashMap k v.
+    {buckets = map (map (lam r : HashMapEntry k v. {hash = r.hash, key = r.key, value = fn r.value})) hm.buckets,
      nelems = hm.nelems}
 
 -- 'hashmapFilter p hm' returns a new hashmap with only the key-value pairs in
 -- 'hm' that satisfies 'p'.
 let hashmapFilter : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> HashMap k v =
-  lam traits. lam p. lam hm.
-    let ret = foldl (lam acc. lam bucket.
+  lam traits. lam p. lam hm : HashMap k v.
+    let ret : ([[HashEntry k v]], Int)= foldl (lam acc : ([[HashEntry k v]], Int). lam bucket.
         -- NOTE(johnwikman, 2020-10-01): Using snoc here ensures that order of
         -- the buckets are the same, and that hashing index of all entries remain
         -- valid.
-        let newBucket = filter (lam r. p r.key r.value) bucket in
+        let newBucket = filter (lam r : HashMapEntry k v. p r.key r.value) bucket in
         (snoc acc.0 newBucket, addi acc.1 (length newBucket))
       ) ([], 0) hm.buckets
     in
@@ -192,19 +194,19 @@ let hashmapFilter : HashMapTraits k -> (k -> v -> Bool) -> HashMap k v -> HashMa
 
 -- 'hashmapFilterKeys p hm' returns a list of all keys in 'hm' that satisfies 'p'
 let hashmapFilterKeys : HashMapTraits k -> (k -> Bool) -> HashMap k v -> [k] =
-  lam traits. lam p. lam hm.
+  lam traits. lam p. lam hm : HashMap k v.
     foldl (lam keys. lam bucket.
-      concat (map (lam r. r.key)
-                  (filter (lam r. p r.key) bucket))
+      concat (map (lam r : HashMapEntry k v. r.key)
+                  (filter (lam r : HashMapEntry k v. p r.key) bucket))
              keys
     ) [] hm.buckets
 
 -- 'hashmapFilterValues traits p hm' returns a list of all values in 'hm' that satisfies 'p'
 let hashmapFilterValues : HashMapTraits k -> (v -> Bool) -> HashMap k v -> [v] =
-  lam traits. lam p. lam hm.
+  lam traits. lam p. lam hm : HashMap k v.
     foldl (lam values. lam bucket.
-      concat (map (lam r. r.value)
-                  (filter (lam r. p r.value) bucket))
+      concat (map (lam r : HashMapEntry k v. r.value)
+                  (filter (lam r : HashMapEntry k v. p r.value) bucket))
              values
     ) [] hm.buckets
 
@@ -217,7 +219,6 @@ let hashmapKeys : HashMapTraits k -> HashMap k v -> [k] =
 let hashmapValues : HashMapTraits k -> HashMap k v -> [v] =
   lam traits. lam hm.
     hashmapFilterValues traits (lam. true) hm
-
 
 mexpr
 
@@ -244,13 +245,13 @@ let m = empty in
 
 utest count m with 0 in
 utest mem "foo" m with false in
-utest lookup "foo" m with None () in
+utest lookup "foo" m with None () using optionEq eqString in
 
 let m = insert "foo" "aaa" m in
 
 utest count m with 1 in
 utest mem "foo" m with true in
-utest lookup "foo" m with Some ("aaa") in
+utest lookup "foo" m with Some ("aaa") using optionEq eqString in
 utest lookupOrElse (lam. 42) "foo" m with "aaa" in
 
 let m = insert "bar" "bbb" m in
@@ -264,10 +265,10 @@ utest any (lam a. lam. eqString "bar" a) m with true in
 utest all (lam a. lam. eqString "bar" a) m with false in
 utest all (lam a. lam. eqi (length a) 3) m with true in
 utest all (lam. lam b. eqi (length b) 3) m with true in
-utest lookup "bar" m with Some ("bbb") in
+utest lookup "bar" m with Some ("bbb") using optionEq eqString in
 utest lookupOrElse (lam. "BABAR") "bar" m with "bbb" in
 utest lookupOr "bananas" "bar42" m with "bananas" in
-utest lookupPred (eqString "bar") m with Some "bbb" in
+utest lookupPred (eqString "bar") m with Some "bbb" using optionEq eqString in
 utest
   match keys m with ["foo", "bar"] | ["bar", "foo"]
   then true else false
@@ -280,7 +281,8 @@ utest
   match hashmap2seq m with [("foo", "aaa"), ("bar", "bbb")] | [("bar", "bbb"), ("foo", "aaa")]
   then true else false
 with true in
-utest filter (eqString) m with empty in
+utest count (filter (eqString) m) with 0 in
+
 utest hashmap2seq (filter (lam a. lam. eqString "foo" a) m) with [("foo", "aaa")] in
 utest hashmap2seq (filter (lam. lam b. eqString "bbb" b) m) with [("bar", "bbb")] in
 utest filterKeys (lam a. optionIsSome (strIndex 'o' a)) m with ["foo"] in
@@ -289,15 +291,15 @@ utest filterValues (lam a. optionIsSome (strIndex 'b' a)) m with ["bbb"] in
 
 -- Test map all values
 let mMapped = map (cons '?') m in
-utest lookup "foo" mMapped with Some ("?aaa") in
-utest lookup "bar" mMapped with Some ("?bbb") in
+utest lookup "foo" mMapped with Some ("?aaa") using optionEq eqString in
+utest lookup "bar" mMapped with Some ("?bbb") using optionEq eqString in
 
 
 let m = insert "foo" "ccc" m in
 
 utest count m with 2 in
 utest mem "foo" m with true in
-utest lookup "foo" m with Some ("ccc") in
+utest lookup "foo" m with Some ("ccc") using optionEq eqString in
 utest lookupOrElse (lam. 42) "foo" m with "ccc" in
 utest lookupOrElse (lam. 42) "abc" m with 42 in
 
@@ -305,25 +307,25 @@ let m = remove "foo" m in
 
 utest count m with 1 in
 utest mem "foo" m with false in
-utest lookup "foo" m with None () in
+utest lookup "foo" m with None () using optionEq eqString in
 
 let m = remove "foo" m in
 
 utest count m with 1 in
 utest mem "foo" m with false in
-utest lookup "foo" m with None () in
+utest lookup "foo" m with None () using optionEq eqString in
 
 let m = remove "babar" m in
 
 utest count m with 1 in
 utest mem "babar" m with false in
-utest lookup "babar" m with None () in
+utest lookup "babar" m with None () using optionEq eqString in
 
 let m = insert "" "ddd" m in
 
 utest count m with 2 in
 utest mem "" m with true in
-utest lookup "" m with Some ("ddd") in
+utest lookup "" m with Some ("ddd") using optionEq eqString in
 utest lookupOrElse (lam. 1) "" m with "ddd" in
 
 -- Test with collisions
@@ -334,7 +336,7 @@ recursive let populate = lam hm. lam i.
     hm
   else
     let key = cons 'a' (int2string i) in
-    utest lookup key hm with None () in
+    utest lookup key hm with None () using optionEq eqi in
     populate (insert key i hm)
              (addi i 1)
 in
@@ -347,7 +349,7 @@ recursive let checkmem = lam i.
     ()
   else
     let key = cons 'a' (int2string i) in
-    utest lookup key m with Some (i) in
+    utest lookup key m with Some (i) using optionEq eqi in
     checkmem (addi i 1)
 in
 checkmem 0;
@@ -358,7 +360,7 @@ recursive let removeall = lam i. lam hm.
   else
     let key = cons 'a' (int2string i) in
     let newHm = remove key hm in
-    utest lookup key newHm with None () in
+    utest lookup key newHm with None () using optionEq eqi in
     removeall (addi i 1) newHm
 in
 let m = removeall 0 m in

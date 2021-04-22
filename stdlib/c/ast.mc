@@ -33,11 +33,18 @@
 --
 --   int *;
 --
---   and
---
 --   int = 1;
 --
 --   which are not valid in C.
+--
+-- * Furthermore, to support anonymous structs and unions, the tag is also
+--   optional, thus allowing
+--
+--   struct;
+--
+--   union;
+--
+--   which are also not valid in C.
 
 include "name.mc"
 
@@ -59,6 +66,7 @@ lang CAst
                                               rhs: CExpr }
   | CEUnOp       /- Unary operators -/      { op: CUnOp, arg: CExpr }
   | CEMember     /- lhs.id -/               { lhs: CExpr, id: String }
+  | CEArrow      /- lhs->id -/              { lhs: CExpr, id: String }
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
@@ -97,7 +105,7 @@ lang CAst
   -------------
 
   syn CType =
---| CTyIdent  { id: Name } -- Not really needed unless we add typedef
+  | CTyVar    { id: Name }
   | CTyChar   {}
   | CTyInt    {}
   | CTyDouble {}
@@ -105,9 +113,9 @@ lang CAst
   | CTyPtr    { ty: CType }
   | CTyFun    { ret: CType, params: [CType] }
   | CTyArray  { ty: CType, size: Option Int }
-  | CTyStruct { id: Name, mem: Option [(CType,String)] }
-  | CTyUnion  { id: Name, mem: Option [(CType,String)] }
-  | CTyEnum   { id: Name, mem: Option [Name] }
+  | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyEnum   { id: Option Name, mem: Option [Name] }
 
 
   --------------------
@@ -138,14 +146,17 @@ lang CAst
   | CSRet     { val: Option CExpr }
   | CSCont    {}
   | CSBreak   {}
+  | CSNop     {}
 
 
   -----------------
   -- C TOP-LEVEL --
   -----------------
   -- We support including a set of header files at the top of the program.
+  -- Type definitions are supported at this level as well.
 
   syn CTop =
+  | CTTyDef { ty: CType, id: Name }
   | CTDef { ty: CType, id: Option Name, init: Option CInit }
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
 
