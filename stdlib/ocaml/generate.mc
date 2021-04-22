@@ -161,11 +161,13 @@ let lookupRecordFields = use MExprAst in
     else None ()
   else None ()
 
+type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
+                    els : Expr, ty : Type, info : Info}
+
 lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem matchTargetType (env : GenerateEnv) =
   | t ->
-    let t : {target : Expr, pat : Pat, thn : Expr,
-             els : Expr, ty : Type, info : Info} = t in
+    let t : MatchRecord = t in
     let ty = ty t.target in
     -- If we don't know the type of the target and the pattern describes a
     -- tuple, then we assume the target has that type. We do this to
@@ -173,6 +175,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     -- which happens frequently.
     match ty with TyUnknown _ then
       match t.pat with PatRecord {bindings = bindings} then
+        if mapIsEmpty bindings then ty else
         match _record2tuple bindings with Some _ then
           let bindingTypes = mapMap (lam. tyunknown_) bindings in
           match mapLookup bindingTypes env.records with Some id then
@@ -189,8 +192,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
 
   sem generateDefaultMatchCase (env : GenerateEnv) =
   | t ->
-    let t : {target : Expr, pat : Pat, thn : Expr,
-             els : Expr, ty : Type, info : Info} = t in
+    let t : MatchRecord = t in
     let tname = nameSym "_target" in
     let targetTy = matchTargetType env t in
     match generatePat env targetTy tname t.pat with (nameMap, wrap) then
@@ -202,6 +204,38 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           (generate env t.els)
       else never
     else never
+
+  sem collectNestedMatchesByConstructor (env : GenerateEnv) =
+  | t ->
+    let t : MatchRecord = t in
+    -- We assume that the target is a variable because otherwise there is no
+    -- easy way to determine that the expressions are the same, as we don't
+    -- have access to the outer scope where variables have been defined.
+    let eqTarget =
+      match t.target with TmVar {ident = ident} then
+        lam t.
+          match t with TmVar {ident = id} then
+            nameEq ident id
+          else false
+      else never
+    in
+    recursive let collectMatchTerms = lam acc. lam t : MatchRecord.
+      if eqTarget t.target then
+        match t.pat with PatCon pc then
+          let acc =
+            match mapLookup pc.ident acc with Some pats then
+              let pats = cons (pc.subpat, t.thn) pats in
+              mapInsert pc.ident pats acc
+            else
+              mapInsert pc.ident [(pc.subpat, t.thn)] acc
+          in
+          match t.els with TmMatch tm then
+            collectMatchTerms acc tm
+          else Some (acc, t.els)
+        else None ()
+      else None ()
+    in
+    collectMatchTerms (mapEmpty nameCmp) t
 
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
@@ -227,8 +261,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
     match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
       if nameEq patName thnv.ident then
-        let targetTy = matchTargetType env t in
-        let targetTy = unwrapAlias env.aliases targetTy in
+        let targetTy = unwrapAlias env.aliases (matchTargetType env t) in
         match lookupRecordFields targetTy env.constrs with Some fields then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
@@ -241,6 +274,50 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           else error "Record type not handled by type-lifting"
         else error "Unknown record type"
       else generateDefaultMatchCase env t
+    else generateDefaultMatchCase env t
+  | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
+    match collectNestedMatchesByConstructor env t with Some matches then
+      match matches with (arms, defaultCase) then
+        -- Assign the term of the final else-branch to a variable so that we
+        -- don't introduce unnecessary code duplication (the default case could
+        -- be large).
+        let defaultCaseName = nameSym "defaultCase" in
+        let defaultCaseVal = ulam_ "" (generate env defaultCase) in
+        let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
+
+        let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
+          assocSeqFold
+            (lam acc. lam pat. lam thn. match_ target pat thn acc)
+            (app_ (nvar_ defaultCaseName) unit_)
+            patExpr
+        in
+        let f = lam arm : (Name, [(Pat, Expr)]).
+          match mapLookup arm.0 env.constrs with Some argTy then
+            let patVarName = nameSym "x" in
+            let target =
+              match argTy with TyRecord _ then t.target
+              else nvar_ patVarName
+            in
+            let pat = OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
+            let innerPatternTerm = toNestedMatch (withType argTy target) arm.1 in
+            (pat, generate env innerPatternTerm)
+          else
+            let msg = join [
+              "Unknown constructor referenced in nested match expression: ",
+              nameGetStr arm.0
+            ] in
+            infoErrorExit t.info msg
+        in
+        let flattenedMatch =
+          OTmMatch {
+            target = generate env t.target,
+            arms =
+              snoc
+                (map f (mapBindings arms))
+                (pvarw_, (app_ (nvar_ defaultCaseName) unit_))
+          } in
+          bind_ defaultCaseLet flattenedMatch
+      else never
     else generateDefaultMatchCase env t
   | TmMatch t -> generateDefaultMatchCase env t
 

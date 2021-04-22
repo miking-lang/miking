@@ -1,4 +1,4 @@
 (executable
- (name mi)
+ (name boot)
  (public_name boot.mi)
  (libraries boot))
