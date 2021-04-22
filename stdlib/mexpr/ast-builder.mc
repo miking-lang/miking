@@ -425,6 +425,19 @@ let record_add_bindings = lam bindings. lam record.
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
 
+-- Exhaustive match
+let matchex_ = use MExprAst in
+  lam target. lam pat. lam thn.
+    match_ target pat thn never_
+
+let matchall_ = use MExprAst in
+  lam matches.
+    foldr1 (lam m. lam acc.
+      match m with TmMatch t then
+        TmMatch {t with els = acc}
+      else never)
+      matches
+
 let nrecordproj_ = use MExprAst in
   lam name. lam key. lam r.
   -- It is fine to use any variable name here. It doesn't matter if it
