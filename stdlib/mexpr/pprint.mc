@@ -201,9 +201,18 @@ lang PrettyPrint = IdentifierPrettyPrint
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   -- Intentionally left blank
 
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  -- Intentionally left blank
+
+
   sem expr2str =
   | expr ->
     match pprintCode 0 builtinPprintEnv expr with (_,str)
+    then str else never
+
+  sem type2str =
+  | ty ->
+    match getTypeStringCode 0 builtinPprintEnv ty with (_,str)
     then str else never
 
   -- Helper function for printing parentheses
@@ -267,9 +276,6 @@ end
 lang LamPrettyPrint = PrettyPrint + LamAst + UnknownTypeAst
   sem isAtomic =
   | TmLam _ -> false
-
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLam t ->
@@ -337,9 +343,6 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
   sem isAtomic =
   | TmLet _ -> false
 
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
-
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
     match pprintVarName env t.ident with (env,str) then
@@ -366,9 +369,6 @@ lang TypePrettyPrint = PrettyPrint + TypeAst + UnknownTypeAst
   sem isAtomic =
   | TmType _ -> false
 
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
-
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmType t ->
     match pprintEnvGetStr env t.ident with (env,str) then
@@ -392,9 +392,6 @@ end
 lang RecLetsPrettyPrint = PrettyPrint + RecLetsAst + UnknownTypeAst
   sem isAtomic =
   | TmRecLets _ -> false
-
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecLets t ->
@@ -438,9 +435,6 @@ lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
   sem isAtomic =
   | TmConDef _ -> false
   | TmConApp _ -> false
-
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  -- Intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmConDef t ->
