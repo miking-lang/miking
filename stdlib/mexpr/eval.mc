@@ -273,6 +273,11 @@ lang TensorEval
   | TmTensor t -> TmTensor t
 end
 
+lang ExtEval = ExtAst
+  sem eval (ctx : {env : Env}) =
+  | TmExt r -> eval ctx r.inexpr -- nop
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -982,7 +987,7 @@ lang MExprEval =
   -- Terms
   VarEval + AppEval + LamEval + FixEval + RecordEval + RecLetsEval +
   ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
-  NeverEval + RefEval
+  NeverEval + RefEval + ExtEval
 
   -- Constants
   + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
