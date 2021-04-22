@@ -46,15 +46,23 @@ let rec lam_counts n nmap = function
 
 (* Helper function that counts the number of lambdas directly below in a term. 
    If negative, it needs to be treated as an open let with side effects *)
-let rec lambdas_left n nmap = function
-  | TmApp (_, t1, TmLam(_,_,_,_,_)) -> lambdas_left (n - 1) nmap t1
-  | TmApp (_, t1, t2) -> if tm_has_side_effect nmap false t2 then 0
-     else lambdas_left (n - 1) nmap t1
-  | TmVar (_, _, s) -> (
+let rec lambdas_left nmap n free se_free se_all = function
+  | TmApp (_, t1, t2) ->
+     let se_t2 = tm_has_side_effect nmap false t2 in
+     let free = collect_vars free t2 in
+     lambdas_left nmap (n - 1) free (se_free || se_t2) (se_all || se_t2) t1
+  | TmVar (_, _, s) as tt -> (
         match SymbMap.find_opt s nmap with
-        | Some (_, _, _, n_lambdas) -> max (n + n_lambdas) 0
-        | None -> 0)
-  | _ -> max n 0
+        | Some (_, _, se, n_lambdas) ->
+           let left = max 0 (n + n_lambdas) in
+           let free = collect_vars free tt in
+           let se_free = if left > 0 then se_free else se_free || se in
+           (left, free, se_free, (se_all || se))
+        | None -> (0, free, se_free, se_all))
+  | t ->
+     let se_t = tm_has_side_effect nmap false t in
+     let free = collect_vars free t in
+     (max 0 n, free, (se_free || se_t), (se_all || se_t))
       
 
 (* Help function that collects let information and free variables 
@@ -72,11 +80,10 @@ let collect_in_body s nmap free = function
       let se = tm_has_side_effect nmap false tlam in
       (SymbMap.add s (vars, false, se, lam_counts 1 nmap tlam) nmap, free)
   | body ->
-      let se = tm_has_side_effect nmap false body in
-      let lambdas = lambdas_left 0 nmap body in
-      let used = if lambdas > 0 then false else se in      
-      let vars = if lambdas > 0 then SymbSet.empty else collect_vars SymbSet.empty body in      
-      (SymbMap.add s (vars, used, se, lambdas) nmap, SymbSet.union vars free)
+     let (lambdas, free, se_free, se_all) = lambdas_left nmap 0 free false false body in
+     let vars = collect_vars SymbSet.empty body in      
+     let used = if lambdas > 0 && (not se_free) then false else se_free in      
+     (SymbMap.add s (vars, used, se_all, lambdas) nmap, free)
  
 
 (* Collect all mappings for lets (mapping symbol name of the let
@@ -90,7 +97,21 @@ let collect_lets nmap t =
         work (collect_in_body s nmap free t1) t2
     | TmRecLets (_, lst, tt) ->
         let f (nmap, free) (_, _, s, _, t) = collect_in_body s nmap free t in
-        work (List.fold_left f (nmap, free) lst) tt
+        let (nmap, free) = List.fold_left f (nmap, free) lst in
+        (* Update side effect in recursive lets, dependent on each other *)
+        let slst = List.map (fun (_, _, s, _, _) -> s) lst in
+        let update orig nmap s =
+          let (vars, used, _, lambdas) = SymbMap.find s nmap in
+          if SymbSet.mem orig vars
+          then SymbMap.add s (vars, used, true, lambdas) nmap
+          else nmap
+        in                            
+        let handle_se nmap s = 
+          let (_, _, se, _) = SymbMap.find s nmap in
+          if se then List.fold_left (update s) nmap slst else nmap
+        in
+        let nmap = List.fold_left handle_se nmap slst in
+        work (nmap, free) tt 
     | t ->
         sfold_tm_tm work (nmap, free) t
   in
@@ -139,9 +160,9 @@ let pprint_nmap symbmap nmap =
     ^. pprint_named_symb symbmap k
     ^. us " -> "
     ^. pprint_named_symbset symbmap ss
-    ^. us " used = "
+    ^. us ", used = "
     ^. us (if used then "true" else "false")
-    ^. us ", side effect = "
+    ^. us ", side_effect = "
     ^. us (if se then "true" else "false")
     ^. us ", #lambdas = " ^. us (sprintf "%d" n)
     ^. us "\n"
