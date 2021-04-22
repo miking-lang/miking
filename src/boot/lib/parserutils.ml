@@ -43,7 +43,7 @@ let raise_parse_error_on_non_unique_external_id t =
   let _ = recur ExtIdMap.empty t in
   t
 
-(* NOTE(oerikss, 2021-04-22) this functions should be applied on a symbolized term *)
+(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
 let raise_parse_error_on_partially_applied_external t =
   let rec recur acc = function
     | TmExt (_, _, s, ty, t) ->
