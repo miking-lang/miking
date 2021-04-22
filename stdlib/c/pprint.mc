@@ -283,6 +283,8 @@ lang CPrettyPrint = CAst
       (env, join [expr, ";"])
     else never
 
+  | CSNop {} -> (env, ";")
+
   | CSComp { stmts = stmts } ->
     let i = indent in
     let ii = pprintIncr i in
@@ -552,6 +554,18 @@ let memb = CSExpr {
 } in
 utest print (wrapStmt memb) with
   wrapStmtString "(s.x);"
+in
+
+let arrow = CSExpr {
+  expr = CEArrow { lhs = CEVar { id = structname }, id = "x" }
+} in
+utest print (wrapStmt arrow) with
+  wrapStmtString "(s->x);"
+in
+
+let nop = CSNop {} in
+utest print (wrapStmt nop) with
+  wrapStmtString ";"
 in
 
 let advty =

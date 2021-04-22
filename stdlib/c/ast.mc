@@ -146,6 +146,7 @@ lang CAst
   | CSRet     { val: Option CExpr }
   | CSCont    {}
   | CSBreak   {}
+  | CSNop     {}
 
 
   -----------------
