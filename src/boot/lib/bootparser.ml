@@ -5,6 +5,7 @@
 
 open Ustring.Op
 open Ast
+open Builtin
 open Intrinsics
 
 (* Terms *)
@@ -109,12 +110,19 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-let parseMExprString str =
-  PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
+let parseMExprString str = PTreeTm (str |> Parserutils.parse_mexpr_string)
 
-let parseMCoreFile str =
-  let t = str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file in
-  PTreeTm t
+let parseMCoreFile keywords filename =
+  let symbolize_env =
+    builtin_name2sym
+    @ List.map
+        (fun k -> (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()))
+        (Mseq.Helpers.to_list keywords)
+  in
+  PTreeTm
+    ( filename |> Parserutils.parse_mcore_file
+    |> Symbolize.symbolize symbolize_env
+    |> Deadcode.elimination builtin_sym2term builtin_name2sym )
 
 (* Returns a tuple with the following elements
    1. ID field

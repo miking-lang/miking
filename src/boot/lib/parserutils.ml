@@ -3,7 +3,6 @@ open Printf
 open Ast
 open Pprint
 open Msg
-open Builtin
 module Option = BatOption
 
 (* Tab length when calculating the info field *)
@@ -146,8 +145,6 @@ let parse_mcore_file filename =
     local_parse_mcore_file filename
     |> merge_includes (Filename.dirname filename) [filename]
     |> Mlang.flatten |> Mlang.desugar_post_flatten
-    |> Symbolize.symbolize builtin_name2sym
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
     fprintf stderr "%s\n" error_string ;

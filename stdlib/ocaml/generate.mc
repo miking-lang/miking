@@ -753,7 +753,7 @@ let _preamble =
     , intr1 "wallTimeMs" (appf1_ (_timeOp "get_wall_time_ms"))
     , intr1 "sleepMs" (appf1_ (_timeOp "sleep_ms"))
     , intr1 "bootParserParseMExprString" (appf1_ (_bootparserOp "parseMExprString"))
-    , intr1 "bootParserParseMCoreFile" (appf1_ (_bootparserOp "parseMCoreFile"))
+    , intr2 "bootParserParseMCoreFile" (appf2_ (_bootparserOp "parseMCoreFile"))
     , intr1 "bootParserGetId" (appf1_ (_bootparserOp "getId"))
     , intr2 "bootParserGetTerm" (appf2_ (_bootparserOp "getTerm"))
     , intr2 "bootParserGetType" (appf2_ (_bootparserOp "getType"))
