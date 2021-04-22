@@ -1,6 +1,7 @@
 open Ast
 open Symbutils
 open Ustring.Op
+open Printf
 
 (* Can be used when debugging symbol maps *)
 let _symbmap = ref SymbMap.empty
@@ -14,10 +15,10 @@ let rec tm_has_side_effect nmap acc = function
       if acc then true
       else
         match SymbMap.find_opt s nmap with
-        | Some (_, _, effect) ->
+        | Some (_, _, effect, _) ->
             effect
         | None ->
-            true )
+           false ) (* In case of lambda or pattern variables *)
   | TmConst (_, c) ->
       if acc then true else const_has_side_effect c
   | TmRef (_, _) | TmTensor (_, _) ->
@@ -33,11 +34,28 @@ let rec collect_vars (free : SymbSet.t) = function
       sfold_tm_tm collect_vars free t
 
 (* Helper function that counts the number of lambdas directly below in a term *)
-let rec lam_counts n = function
+let rec lam_counts n nmap = function
   | TmLam (_, _, _, _, tlam) ->
-      lam_counts (n + 1) tlam
+      lam_counts (n + 1) nmap tlam
+  | TmVar (_, _, s) -> (
+        match SymbMap.find_opt s nmap with
+        | Some (_, _, _, n_lambdas) -> n + n_lambdas
+        | None -> n)
   | _ ->
       n
+
+(* Helper function that counts the number of lambdas directly below in a term. 
+   If negative, it needs to be treated as an open let with side effects *)
+let rec lambdas_left n nmap = function
+  | TmApp (_, t1, TmLam(_,_,_,_,_)) -> lambdas_left (n - 1) nmap t1
+  | TmApp (_, t1, t2) -> if tm_has_side_effect nmap false t2 then 0
+     else lambdas_left (n - 1) nmap t1
+  | TmVar (_, _, s) -> (
+        match SymbMap.find_opt s nmap with
+        | Some (_, _, _, n_lambdas) -> max (n + n_lambdas) 0
+        | None -> 0)
+  | _ -> max n 0
+      
 
 (* Help function that collects let information and free variables 
    Returns a tuple with two elements
@@ -52,11 +70,14 @@ let collect_in_body s nmap free = function
       let vars = collect_vars SymbSet.empty tlam in
       (* Note: we need to compute the side effect, if other open terms refer to this term *)
       let se = tm_has_side_effect nmap false tlam in
-      (SymbMap.add s (vars, false, se) nmap, free)
+      (SymbMap.add s (vars, false, se, lam_counts 1 nmap tlam) nmap, free)
   | body ->
-      let vars = collect_vars SymbSet.empty body in
       let se = tm_has_side_effect nmap false body in
-      (SymbMap.add s (vars, se, se) nmap, SymbSet.union vars free)
+      let lambdas = lambdas_left 0 nmap body in
+      let used = if lambdas > 0 then false else se in      
+      let vars = if lambdas > 0 then SymbSet.empty else collect_vars SymbSet.empty body in      
+      (SymbMap.add s (vars, used, se, lambdas) nmap, SymbSet.union vars free)
+ 
 
 (* Collect all mappings for lets (mapping symbol name of the let
    to the set of variables in the let body). It also collects
@@ -84,8 +105,8 @@ let mark_used_lets (nmap, free) =
     else
       let visited = SymbSet.add s visited in
       match SymbMap.find_opt s nmap with
-      | Some (symset, _, se) ->
-          let nmap = SymbMap.add s (symset, true, se) nmap in
+      | Some (symset, _, se, n) ->
+          let nmap = SymbMap.add s (symset, true, se, n) nmap in
           SymbSet.fold dfs symset (visited, nmap)
       | None ->
           (visited, nmap)
@@ -97,12 +118,14 @@ let rec remove_lets nmap = function
   | TmLet (fi, x, s, ty, t1, t2) -> (
     (* Is the let marked as used? *)
     match SymbMap.find s nmap with
-    | _, true, _ ->
+    | _, true, _, _ ->
         TmLet (fi, x, s, ty, t1, remove_lets nmap t2)
     | _ ->
         remove_lets nmap t2 )
   | TmRecLets (fi, lst, tt) ->
-      let f (_, _, s, _, _) = match SymbMap.find s nmap with _, b, _ -> b in
+      let f (_, _, s, _, _) =
+        match SymbMap.find s nmap with _, b, _, _ -> b
+      in
       let lst = List.filter f lst in
       if List.length lst = 0 then remove_lets nmap tt
       else TmRecLets (fi, lst, remove_lets nmap tt)
@@ -111,7 +134,7 @@ let rec remove_lets nmap = function
 
 (* Helper function for pretty printing a nmap *)
 let pprint_nmap symbmap nmap =
-  let f k (ss, used, se) acc =
+  let f k (ss, used, se, n) acc =
     acc ^. us "let "
     ^. pprint_named_symb symbmap k
     ^. us " -> "
@@ -120,6 +143,7 @@ let pprint_nmap symbmap nmap =
     ^. us (if used then "true" else "false")
     ^. us ", side effect = "
     ^. us (if se then "true" else "false")
+    ^. us ", #lambdas = " ^. us (sprintf "%d" n)
     ^. us "\n"
   in
   SymbMap.fold f nmap (us "")
@@ -127,7 +151,7 @@ let pprint_nmap symbmap nmap =
 (* Helper that creates a nmap with side effect info for builtin constants *)
 let make_builtin_nmap builtin_sym2term =
   let f acc (s, t) =
-    let v = (SymbSet.empty, false, tm_has_side_effect SymbMap.empty false t) in
+    let v = (SymbSet.empty, false, tm_has_side_effect SymbMap.empty false t, 0) in
     SymbMap.add s v acc
   in
   List.fold_left f SymbMap.empty builtin_sym2term
