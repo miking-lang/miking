@@ -16,18 +16,13 @@ let defaultCompileOptions : CompileOptions = {
   optimize = true
 }
 
-let ocamlDuneConfig = lam options : CompileOptions.
-  if options.optimize then
-    "(env (dev (flags (:standard -w -a)) (ocamlopt_flags (-O3 -linscan))))"
-  else
-    "(env (dev (flags (:standard -w -a)) (ocamlopt_flags (-linscan))"
-
 let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
-  lam options. lam p.
-  let duneConfig = ocamlDuneConfig options in
+  lam options : CompileOptions. lam p.
   let dunefile =
-    concat duneConfig "(executable (name program) (libraries batteries boot))"
-  in
+   "(env
+      (dev (flags (:standard -w -a)) (ocamlopt_flags (-linscan)))
+      (opt (flags (:standard -w -a)) (ocamlopt_flags (-O3))))
+    (executable (name program) (libraries boot))" in
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
@@ -35,7 +30,12 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   writeFile (tempfile "program.ml") p;
   writeFile (tempfile "dune") dunefile;
 
-  let command = ["dune", "build"] in
+  let command =
+    if options.optimize then
+      ["dune", "build", "--profile=opt"]
+    else
+      ["dune", "build"]
+  in
   let r = sysRunCommand command "" dir in
   if neqi r.returncode 0 then
       print (join ["'dune build' failed on program:\n\n",
