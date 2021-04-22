@@ -60,7 +60,7 @@ let raise_parse_error_on_partially_applied_external t =
                 else
                   raise
                     (Error
-                       (PARSE_ERROR, ERROR, fi, [id; us "not fully applied"])
+                       (PARSE_ERROR, ERROR, fi, [id; us "partially applied"])
                     )
             | None ->
                 acc )
