@@ -65,7 +65,7 @@ let filenameWithoutExtension = lam filename.
 
 let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
-    if options.runTests then
+    if options.disableOptimizations then
       {defaultCompileOptions with optimize = false}
     else defaultCompileOptions
   in

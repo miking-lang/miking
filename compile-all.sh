@@ -152,12 +152,12 @@ export MCORE_STDLIB='stdlib'
 
 # Compile using boot
 for f in $files; do
-    compile "$f" "build/boot src/main/mi.mc -- compile --test" &
+    compile "$f" "build/boot src/main/mi.mc -- compile --test --disable-optimizations" &
 done
 wait
 
 # Compile using the bootstrapped compiler
 for f in $files; do
-    compile "$f" "build/mi compile --test" &
+    compile "$f" "build/mi compile --test --disable-optimizations" &
 done
 wait

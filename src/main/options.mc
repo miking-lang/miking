@@ -8,7 +8,8 @@ type Options = {
   debugGenerate : Bool,
   exitBefore : Bool,
   runTests : Bool,
-  excludeIntrinsicsPreamble : Bool
+  excludeIntrinsicsPreamble : Bool,
+  disableOptimizations : Bool
 }
 
 -- Option structure
@@ -17,7 +18,8 @@ let options = {
   debugGenerate = false,
   exitBefore = false,
   runTests = false,
-  excludeIntrinsicsPreamble = false
+  excludeIntrinsicsPreamble = false,
+  disableOptimizations = false
 }
 
 -- Option map, maps strings to structure updates
@@ -26,7 +28,8 @@ let optionsMap = [
 ("--debug-generate", lam o : Options. {o with debugGenerate = true}),
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
-("--exclude-intrinsics-preamble", lam o : Options. {o with excludeIntrinsicsPreamble = true})
+("--exclude-intrinsics-preamble", lam o : Options. {o with excludeIntrinsicsPreamble = true}),
+("--disable-optimizations", lam o : Options. {o with disableOptimizations = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}
