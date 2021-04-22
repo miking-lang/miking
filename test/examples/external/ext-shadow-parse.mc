@@ -1,3 +1,4 @@
 mexpr
 external addi : Int -> Int -> Int in
-addi 1 2
+let addi = lam x. lam y. x in
+addi 1

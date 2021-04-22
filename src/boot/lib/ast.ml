@@ -420,6 +420,17 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
     ->
       acc
 
+(* Returns arity given an type *)
+let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
+
+(* Returns the applicaiton depth and the applied term *)
+let rec tm_app_depth = function
+  | TmApp (_, t1, _) ->
+      let t, d = tm_app_depth t1 in
+      (t, d + 1)
+  | t ->
+      (t, 0)
+
 (* Returns the info field from a term *)
 let tm_info = function
   | TmVar (fi, _, _)

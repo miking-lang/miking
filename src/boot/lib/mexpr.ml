@@ -1491,12 +1491,14 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s) -> (
-    match List.assoc s env with
-    | TmApp (_, TmFix _, _) as t ->
+  | TmVar (fi, _, s) -> (
+    match List.assoc_opt s env with
+    | Some (TmApp (_, TmFix _, _) as t) ->
         eval env t
-    | t ->
-        t )
+    | Some t ->
+        t
+    | None ->
+        raise_error fi "Undefined variable" )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
@@ -1635,8 +1637,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmUse (fi, _, _) ->
       raise_error fi "A 'use' of a language was not desugared"
   (* External *)
-  | TmExt (fi, _, _, _, _) ->
-      raise_error fi "Cannot evaluate 'external'"
+  | TmExt (_, _, _, _, t) ->
+      eval env t
   (* Only at runtime *)
   | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
       t

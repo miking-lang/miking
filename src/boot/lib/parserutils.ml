@@ -3,6 +3,8 @@ open Printf
 open Ast
 open Pprint
 open Msg
+open Builtin
+open Symbutils
 module Option = BatOption
 
 (* Tab length when calculating the info field *)
@@ -21,22 +23,57 @@ let error_to_ustring e =
 
 module ExtIdMap = Map.Make (Ustring)
 
-let check_uniqe_external_ids t =
+let raise_parse_error_on_non_unique_external_id t =
   let rec recur acc = function
-    | TmExt (fi, id, _, _, t) ->
-        if ExtIdMap.mem id acc then
-          raise
-            (Error
-               ( PARSE_ERROR
-               , ERROR
-               , fi
-               , [id; us "already defined at"; info2str (ExtIdMap.find id acc)]
-               ) )
-        else recur (ExtIdMap.add id fi acc) t
+    | TmExt (fi, id, _, _, t) -> (
+        ExtIdMap.find_opt id acc
+        |> function
+        | Some fi' ->
+            raise
+              (Error
+                 ( PARSE_ERROR
+                 , ERROR
+                 , fi
+                 , [id; us "already defined at"; info2str fi'] ) )
+        | None ->
+            recur (ExtIdMap.add id fi acc) t )
     | t ->
         sfold_tm_tm recur acc t
   in
   let _ = recur ExtIdMap.empty t in
+  t
+
+(* NOTE(oerikss, 2021-04-22) this functions should be applied on a symbolized term *)
+let raise_parse_error_on_partially_applied_external t =
+  let rec recur acc = function
+    | TmExt (_, _, s, ty, t) ->
+        recur (SymbMap.add s (ty_arity ty) acc) t
+    | TmApp (fi, _, _) as t -> (
+        let t', depth = tm_app_depth t in
+        t'
+        |> function
+        | TmVar (_, id, s) -> (
+            SymbMap.find_opt s acc
+            |> function
+            | Some arity ->
+                if arity = depth then acc
+                else
+                  raise
+                    (Error
+                       (PARSE_ERROR, ERROR, fi, [id; us "not fully applied"])
+                    )
+            | None ->
+                acc )
+        | _ ->
+            acc )
+    | TmVar (fi, id, s) ->
+        if SymbMap.mem s acc then
+          raise (Error (PARSE_ERROR, ERROR, fi, [id; us "not applied"]))
+        else acc
+    | t ->
+        sfold_tm_tm recur acc t
+  in
+  let _ = recur SymbMap.empty t in
   t
 
 (* Standard lib default local path on unix (used by make install) *)
@@ -158,7 +195,9 @@ let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
   ustring |> Ustring.lexing_from_ustring
   |> Parser.main_mexpr_tm Lexer.main
-  |> check_uniqe_external_ids
+  |> raise_parse_error_on_non_unique_external_id
+  |> Symbolize.symbolize builtin_name2sym
+  |> raise_parse_error_on_partially_applied_external
 
 let parse_mcore_file filename =
   try
@@ -166,8 +205,10 @@ let parse_mcore_file filename =
     let filename = Ustring.to_utf8 filename in
     local_parse_mcore_file filename
     |> merge_includes (Filename.dirname filename) [filename]
-    |> Mlang.flatten |> Mlang.desugar_post_flatten |> check_uniqe_external_ids
+    |> Mlang.flatten |> Mlang.desugar_post_flatten
+    |> raise_parse_error_on_non_unique_external_id
     |> Symbolize.symbolize builtin_name2sym
+    |> raise_parse_error_on_partially_applied_external
     |> Deadcode.elimination builtin_sym2term builtin_name2sym
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
