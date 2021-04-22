@@ -1,6 +1,10 @@
 include "string.mc"
 include "sys.mc"
 
+type CompileOptions = {
+  optimize : Bool
+}
+
 type Program = String -> [String] -> ExecResult
 type CompileResult = {
   run : Program,
@@ -8,13 +12,21 @@ type CompileResult = {
   binaryPath : String
 }
 
-let ocamlCompileWithConfig : {warnings: Bool} -> String -> CompileResult =
-  lam config : {warnings : Bool}. lam p.
-  let config = if config.warnings
-    then ""
-    else "(env (dev (flags (:standard -w -a)))) " in
+let defaultCompileOptions : CompileOptions = {
+  optimize = true
+}
+
+let ocamlDuneConfig = lam options : CompileOptions.
+  if options.optimize then
+    "(env (dev (flags (:standard -w -a)) (ocamlopt_flags (-O3 -linscan))))"
+  else
+    "(env (dev (flags (:standard -w -a)) (ocamlopt_flags (-linscan))"
+
+let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
+  lam options. lam p.
+  let duneConfig = ocamlDuneConfig options in
   let dunefile =
-    concat config "(executable (name program) (libraries batteries boot))"
+    concat duneConfig "(executable (name program) (libraries batteries boot))"
   in
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
@@ -47,7 +59,7 @@ let ocamlCompileWithConfig : {warnings: Bool} -> String -> CompileResult =
   }
 
 let ocamlCompile : String -> CompileResult =
-  ocamlCompileWithConfig {warnings=false}
+  ocamlCompileWithConfig defaultCompileOptions
 
 mexpr
 

@@ -63,8 +63,13 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile = lam sourcePath. lam ocamlProg.
-  let p : CompileResult = ocamlCompile ocamlProg in
+let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
+  let compileOptions : CompileOptions =
+    if options.runTests then
+      {defaultCompileOptions with optimize = false}
+    else defaultCompileOptions
+  in
+  let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
@@ -104,7 +109,7 @@ let compile = lam files. lam options : Options.
 
       -- Compile OCaml AST
       if options.exitBefore then exit 0
-      else ocamlCompile file ocamlProg
+      else ocamlCompile options file ocamlProg
     else never
   in
   iter compileFile files
