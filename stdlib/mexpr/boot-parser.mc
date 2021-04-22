@@ -36,9 +36,9 @@ lang BootParser = MExprAst
     matchTerm t (bootParserGetId t)
 
   -- Parses an MExpr string and returns the final MExpr AST
-  sem parseMExprString =
+  sem parseMExprString (keywords : [String]) =
   | str ->
-    let t = bootParserParseMExprString str in
+    let t = bootParserParseMExprString keywords str in
     matchTerm t (bootParserGetId t)
 
   -- Get term help function

@@ -362,7 +362,9 @@ let arity = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
-  | CbootParserParseMExprString ->
+  | CbootParserParseMExprString None ->
+      2
+  | CbootParserParseMExprString (Some _) ->
       1
   | CbootParserParseMCoreFile None ->
       2
@@ -1189,10 +1191,18 @@ let delta eval env fi c v =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString, TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString (tmseq2ustring fi seq) in
+  | CbootParserParseMExprString None, TmSeq (fi, seq) ->
+      let keywords =
+        Mseq.Helpers.map
+          (function
+            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+          seq
+      in
+      TmConst (fi, CbootParserParseMExprString (Some keywords))
+  | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
+      let t = Bootparser.parseMExprString keywords (tmseq2ustring fi seq) in
       TmConst (fi, CbootParserTree t)
-  | CbootParserParseMExprString, _ ->
+  | CbootParserParseMExprString _, _ ->
       fail_constapp fi
   | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
       let keywords =

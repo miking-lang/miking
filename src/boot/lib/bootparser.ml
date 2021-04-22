@@ -110,7 +110,15 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-let parseMExprString str = PTreeTm (str |> Parserutils.parse_mexpr_string)
+let parseMExprString keywords str =
+  let symbolize_env =
+    builtin_name2sym
+    @ List.map
+        (fun k -> (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()))
+        (Mseq.Helpers.to_list keywords)
+  in
+  PTreeTm
+    (str |> Parserutils.parse_mexpr_string |> Symbolize.symbolize symbolize_env)
 
 let parseMCoreFile keywords filename =
   let symbolize_env =

@@ -866,7 +866,7 @@ let utensorIteri_ = tensorIteri_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam str. appf1_ (uconst_ (CBootParserParseMExprString ())) str
+  lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
 
 let bootParserParseMCoreFile_ = use MExprAst in
   lam key. lam str. appf2_ (uconst_ (CBootParserParseMCoreFile ())) key str
