@@ -3,7 +3,6 @@ open Printf
 open Ast
 open Pprint
 open Msg
-open Builtin
 open Symbutils
 module Option = BatOption
 
@@ -187,11 +186,7 @@ let rec merge_includes root visited = function
 
 let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
-  ustring |> Ustring.lexing_from_ustring
-  |> Parser.main_mexpr_tm Lexer.main
-  |> raise_parse_error_on_non_unique_external_id
-  |> Symbolize.symbolize builtin_name2sym
-  |> raise_parse_error_on_partially_applied_external
+  ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
 
 let parse_mcore_file filename =
   try
@@ -200,10 +195,6 @@ let parse_mcore_file filename =
     local_parse_mcore_file filename
     |> merge_includes (Filename.dirname filename) [filename]
     |> Mlang.flatten |> Mlang.desugar_post_flatten
-    |> raise_parse_error_on_non_unique_external_id
-    |> Symbolize.symbolize builtin_name2sym
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym
-    |> raise_parse_error_on_partially_applied_external
   with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
     let error_string = Ustring.to_utf8 (error_to_ustring e) in
     fprintf stderr "%s\n" error_string ;
