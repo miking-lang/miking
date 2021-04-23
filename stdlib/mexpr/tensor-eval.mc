@@ -1,4 +1,4 @@
-include "eval.mc"
+include "mexpr/eval.mc"
 
 lang TensorOpEval = TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval
   syn Const =
