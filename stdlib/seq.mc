@@ -34,6 +34,16 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
+let range = lam s. lam e.
+  recursive let helper = lam n. lam acc.
+    if lti n s then acc else
+      helper (subi n 1) (cons n acc)
+  in helper (subi e 1) []
+
+utest range 3 5 with [3,4] using eqSeq eqi
+utest range (negi 1) 2 with [negi 1, 0, 1] using eqSeq eqi
+utest range 5 3 with [] using eqSeq eqi
+
 -- Maps
 let mapi = lam f. lam seq.
   recursive let work = lam i. lam f. lam seq.
