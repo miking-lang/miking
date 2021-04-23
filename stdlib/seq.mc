@@ -34,16 +34,6 @@ utest eqSeq eqi [1] [1] with true
 utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
-let range = lam s. lam e.
-  recursive let helper = lam n. lam acc.
-    if lti n s then acc else
-      helper (subi n 1) (cons n acc)
-  in helper (subi e 1) []
-
-utest range 3 5 with [3,4] using eqSeq eqi
-utest range (negi 1) 2 with [negi 1, 0, 1] using eqSeq eqi
-utest range 5 3 with [] using eqSeq eqi
-
 -- Maps
 let mapi = lam f. lam seq.
   recursive let work = lam i. lam f. lam seq.
@@ -148,6 +138,16 @@ end
 
 utest unfoldr (lam b. if eqi b 10 then None () else Some (b, addi b 1)) 0
 with [0,1,2,3,4,5,6,7,8,9]
+
+let range = lam s. lam e. lam by.
+  unfoldr (lam b. if leqi e b then None () else Some (b, addi b by)) s
+
+utest range 3 5 1 with [3,4] using eqSeq eqi
+utest range 3 5 2 with [3] using eqSeq eqi
+utest range 3 10 3 with [3,6,9] using eqSeq eqi
+utest range (negi 1) 6 2 with [(negi 1), 1, 3, 5] using eqSeq eqi
+utest range (negi 1) 2 1 with [negi 1, 0, 1] using eqSeq eqi
+utest range 5 3 1 with [] using eqSeq eqi
 
 let zipWith = lam f. lam seq1. lam seq2.
   recursive let work = lam a. lam s1. lam s2.
