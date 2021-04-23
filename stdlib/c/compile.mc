@@ -182,8 +182,9 @@ lang MExprCCompile = MExprAst + CAst
           let ty = compileType ty in
             snoc acc (name, ty)) [] constrs in
       let constrLs: [(Name, String, CType)] =
-        mapi (lam i. lam t. (t.0, cons 'd' (int2string i), t.1)) constrLs in
-      let constrData = foldl (lam acc. lam t.
+        mapi (lam i. lam t: (Name,CType).
+          (t.0, cons 'd' (int2string i), t.1)) constrLs in
+      let constrData = foldl (lam acc. lam t: (Name,String,CType).
         assocSeqInsert t.0 t.1 acc) constrData constrLs in
       let def = CTDef {
         ty = CTyStruct {
@@ -195,7 +196,8 @@ lang MExprCCompile = MExprAst + CAst
              }, Some _constrKey),
             (CTyUnion {
                id = None (),
-               mem = Some (map (lam t. (t.2, Some t.1)) constrLs)
+               mem = Some (map
+                 (lam t: (Name,String,CType). (t.2, Some t.1)) constrLs)
              }, None ())
           ] },
         id = None (), init = None ()
