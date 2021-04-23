@@ -29,7 +29,7 @@ let symbmap t =
              (fun acc (_, x, s, _, t) -> work (SymbMap.add s x acc) t)
              acc lst )
           t1
-    | TmExt (_, x, s, t) ->
+    | TmExt (_, x, s, _, t) ->
         work (SymbMap.add s x acc) t
     | t ->
         sfold_tm_tm work acc t
