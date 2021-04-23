@@ -48,24 +48,18 @@ let rec lam_counts n nmap = function
 
 (* Helper function that counts the number of lambdas directly below in a term. 
    If negative, it needs to be treated as an open let with side effects *)
-let rec lambdas_left nmap n free se_free se_all = function
+let rec lambdas_left nmap n se = function
   | TmApp (_, t1, t2) ->
-      let se_t2 = tm_has_side_effect nmap false t2 in
-      let free = collect_vars free t2 in
-      lambdas_left nmap (n - 1) free (se_free || se_t2) (se_all || se_t2) t1
-  | TmVar (_, _, s) as tt -> (
+      lambdas_left nmap (n - 1) (tm_has_side_effect nmap se t2) t1
+  | TmVar (_, _, s) -> (
     match SymbMap.find_opt s nmap with
-    | Some (_, _, se, n_lambdas) ->
+    | Some (_, _, se2, n_lambdas) ->
         let left = max 0 (n + n_lambdas) in
-        let free = collect_vars free tt in
-        let se_free = if left > 0 then se_free else se_free || se in
-        (left, free, se_free, se_all || se)
+        (max 0 (n + n_lambdas), if left > 0 then se else se || se2)
     | None ->
-        (0, free, se_free, se_all) )
+        (0, se) )
   | t ->
-      let se_t = tm_has_side_effect nmap false t in
-      let free = collect_vars free t in
-      (max 0 n, free, se_free || se_t, se_all || se_t)
+      (max 0 n, se || tm_has_side_effect nmap false t)
 
 (* Help function that collects let information and free variables 
    Returns a tuple with two elements
@@ -73,7 +67,7 @@ let rec lambdas_left nmap n free se_free se_all = function
           (a) The symbol set of variables inside the let that points backwards
           (c) Boolean flag saying if the let is used.  
           (b) Boolean stating if the let body has (possibly) side effects
-          (d) Lambda count. That is, if how many lambdas that are at the top of the body 
+          (d) Lambda count. That is, how many lambdas that are at the top of the body 
    2. Free Vars: A symbol set with all variables that are free (not under a lambda in a let) *)
 let collect_in_body s nmap free = function
   | TmLam (_, _, _, _, tlam) ->
@@ -82,19 +76,12 @@ let collect_in_body s nmap free = function
       let se = tm_has_side_effect nmap false tlam in
       (SymbMap.add s (vars, false, se, lam_counts 1 nmap tlam) nmap, free)
   | body ->
-      let lambdas, _, se_free, _ = lambdas_left nmap 0 free false false body in
+      let lambdas, se_free = lambdas_left nmap 0 false body in
       let se_all = tm_has_side_effect nmap false body in
       let vars = collect_vars SymbSet.empty body in
       let used = if lambdas > 0 && not se_free then false else se_all in
       let free = if used then SymbSet.union free vars else free in
       (SymbMap.add s (vars, used, se_all, lambdas) nmap, free)
-
-(*     
-     let (lambdas, free, se_free, se_all) = lambdas_left nmap 0 free false false body in
-     let vars = collect_vars SymbSet.empty body in      
-     let used = if lambdas > 0 && (not se_free) then false else se_free in      
-     (SymbMap.add s (vars, used, se_all, lambdas) nmap, free)
- *)
 
 (* Collect all mappings for lets (mapping symbol name of the let
    to the set of variables in the let body). It also collects
