@@ -501,9 +501,9 @@ utest lsideClosed s with rside s in
 utest l_infoClosed "  \n  never " with r_info 2 2 2 7 in
 
 -- TmExt
-let s = "external y : Int in y" in
+let s = "external y : Int in 1" in
 utest lside s with rside s in
-utest l_info "   \n  external y : Int in y" with r_info 2 2 2 23 in
+utest l_info "   \n  external y : Int in 1" with r_info 2 2 2 23 in
 
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in

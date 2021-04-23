@@ -346,21 +346,24 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
     match pprintVarName env t.ident with (env,str) then
-      match pprintCode (pprintIncr indent) env t.body with (env,body) then
-        match pprintCode indent env t.inexpr with (env,inexpr) then
-          match getTypeStringCode indent env t.tyBody with (env, ty) then
-            let ty = if eqString ty "Unknown" then "" else concat ": " ty in
-            (env,
-             if eqString (nameGetStr t.ident) "" then
-               join [body, pprintNewline indent, ";",
-                     inexpr]
-             else
-               join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
-                     body, pprintNewline indent,
-                     "in", pprintNewline indent,
-                     inexpr])
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        match getTypeStringCode indent env t.tyBody with (env, ty) then
+          let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+          if eqString (nameGetStr t.ident) "" then
+             match printParen (pprintIncr indent) env t.body with (env,body)
+             then
+               (env, join [body, pprintNewline indent, ";", inexpr])
+             else never
+           else
+             match pprintCode (pprintIncr indent) env t.body with (env,body)
+             then
+               (env,
+                join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
+                      body, pprintNewline indent,
+                      "in", pprintNewline indent,
+                      inexpr])
+             else never
           else never
-        else never
       else never
     else never
 end

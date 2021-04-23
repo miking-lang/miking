@@ -45,35 +45,29 @@ let raise_parse_error_on_non_unique_external_id t =
 
 (* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
 let raise_parse_error_on_partially_applied_external t =
-  let rec recur acc = function
+  let rec recur ((symb_map, app_depth, fi) as acc) = function
     | TmExt (_, _, s, ty, t) ->
-        recur (SymbMap.add s (ty_arity ty) acc) t
-    | TmApp (fi, _, _) as t -> (
-        let t', depth = tm_app_depth t in
-        t'
+        let symb_map' = SymbMap.add s (ty_arity ty) symb_map in
+        recur (symb_map', app_depth, fi) t
+    | TmApp (fi, t1, t2) ->
+        let _ = recur (symb_map, app_depth + 1, fi) t1 in
+        recur (symb_map, 0, NoInfo) t2
+    | TmVar (_, id, s) -> (
+        SymbMap.find_opt s symb_map
         |> function
-        | TmVar (_, id, s) -> (
-            SymbMap.find_opt s acc
-            |> function
-            | Some arity ->
-                if arity = depth then acc
-                else
-                  raise
-                    (Error
-                       (PARSE_ERROR, ERROR, fi, [id; us "partially applied"])
-                    )
-            | None ->
-                acc )
-        | _ ->
+        | Some arity ->
+            if arity <> app_depth then
+              raise
+                (Error
+                   (PARSE_ERROR, ERROR, fi, [id; us "partially not applied"])
+                )
+            else acc
+        | None ->
             acc )
-    | TmVar (fi, id, s) ->
-        if SymbMap.mem s acc then
-          raise (Error (PARSE_ERROR, ERROR, fi, [id; us "not applied"]))
-        else acc
     | t ->
-        sfold_tm_tm recur acc t
+        sfold_tm_tm recur (symb_map, 0, NoInfo) t
   in
-  let _ = recur SymbMap.empty t in
+  let _ = recur (SymbMap.empty, 0, NoInfo) t in
   t
 
 (* Standard lib default local path on unix (used by make install) *)
