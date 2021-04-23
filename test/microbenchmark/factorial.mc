@@ -10,6 +10,6 @@ let fact = lam n.
     else muli n (fact (subi n 1))
 in
 
-repeat (lam. fact 100) 1000
+repeat (lam. fact 100) 10000
 
 
