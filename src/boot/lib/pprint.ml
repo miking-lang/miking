@@ -480,9 +480,9 @@ let rec print_const fmt = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"
-  | CbootParserParseMExprString ->
+  | CbootParserParseMExprString _ ->
       fprintf fmt "bootParserParseMExprString"
-  | CbootParserParseMCoreFile ->
+  | CbootParserParseMCoreFile _ ->
       fprintf fmt "bootParserParseMCoreFile"
   | CbootParserGetId ->
       fprintf fmt "bootParserParseGetId"

@@ -184,7 +184,7 @@ in
 
 let utestRunner =
   use BootParser in
-  parseMExprString _utestRunnerStr
+  parseMExprString [] _utestRunnerStr
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in

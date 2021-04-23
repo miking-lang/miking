@@ -362,9 +362,13 @@ let arity = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
-  | CbootParserParseMExprString ->
+  | CbootParserParseMExprString None ->
+      2
+  | CbootParserParseMExprString (Some _) ->
       1
-  | CbootParserParseMCoreFile ->
+  | CbootParserParseMCoreFile None ->
+      2
+  | CbootParserParseMCoreFile (Some _) ->
       1
   | CbootParserGetId ->
       1
@@ -1187,15 +1191,31 @@ let delta eval env fi c v =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString, TmSeq (fi, seq) ->
-      let t = Parserutils.parse_mexpr_string (tmseq2ustring fi seq) in
-      TmConst (fi, CbootParserTree (PTreeTm t))
-  | CbootParserParseMExprString, _ ->
+  | CbootParserParseMExprString None, TmSeq (fi, seq) ->
+      let keywords =
+        Mseq.Helpers.map
+          (function
+            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+          seq
+      in
+      TmConst (fi, CbootParserParseMExprString (Some keywords))
+  | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
+      let t = Bootparser.parseMExprString keywords (tmseq2ustring fi seq) in
+      TmConst (fi, CbootParserTree t)
+  | CbootParserParseMExprString _, _ ->
       fail_constapp fi
-  | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
-      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
-      TmConst (fi, CbootParserTree (PTreeTm t))
-  | CbootParserParseMCoreFile, _ ->
+  | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
+      let keywords =
+        Mseq.Helpers.map
+          (function
+            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+          seq
+      in
+      TmConst (fi, CbootParserParseMCoreFile (Some keywords))
+  | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
+      let t = Bootparser.parseMCoreFile keywords (tmseq2ustring fi seq) in
+      TmConst (fi, CbootParserTree t)
+  | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
       TmConst (fi, CInt (Bootparser.getId ptree))

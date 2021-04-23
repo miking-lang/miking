@@ -163,8 +163,8 @@ and const =
   | CtensorIteri of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
-  | CbootParserParseMExprString
-  | CbootParserParseMCoreFile
+  | CbootParserParseMExprString of ustring Mseq.t option
+  | CbootParserParseMCoreFile of ustring Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetType of tm option
@@ -605,8 +605,8 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _
-  | CbootParserParseMExprString
-  | CbootParserParseMCoreFile
+  | CbootParserParseMExprString _
+  | CbootParserParseMCoreFile _
   | CbootParserGetId
   | CbootParserGetTerm _
   | CbootParserGetType _

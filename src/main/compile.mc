@@ -73,7 +73,7 @@ let ocamlCompile = lam sourcePath. lam ocamlProg.
 let compile = lam files. lam options : Options.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = parseMCoreFile file in
+    let ast = parseMCoreFile [] file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
