@@ -58,7 +58,7 @@ let raise_parse_error_on_partially_applied_external t =
             if arity <> app_depth then
               raise
                 (Error
-                   (PARSE_ERROR, ERROR, fi, [id; us "partially not applied"])
+                   (PARSE_ERROR, ERROR, fi, [id; us "partially applied"])
                 )
             else acc
         | None ->
