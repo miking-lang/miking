@@ -7,4 +7,4 @@ let repeat f =
       let _ = f () in
       work f (n - 1)
   in
-  work f (int_of_string (Array.get Sys.argv 1))
+  work f (int_of_string Sys.argv.(1))

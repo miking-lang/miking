@@ -4,15 +4,14 @@ let menu () =
   printf
     "Usage: run <benchmark-name-without-postfix-name> <iteration> [excludes]\n\n" ;
   printf "Example: run factorial 1000\n\n" ;
-  printf "To exclude certain tests, add excluded numbers. For instance\n";
-  printf "command 'run factorial 1000 24' excludes the Miking interpreter\n";
-  printf "and OCaml byte code tests (test numbers 2 and 4).\n";
+  printf "To exclude certain tests, add excluded numbers. For instance\n" ;
+  printf "command 'run factorial 1000 24' excludes the Miking interpreter\n" ;
+  printf "and OCaml byte code tests (test numbers 2 and 4).\n" ;
   exit 1
 
 let measure excludes number str pre_cmd cmd post_cmd =
   (* printf "\n\npre_cmd: %s\ncmd: %s\npost_cmd: %s\n" pre_cmd cmd post_cmd ; *)
-
-  if String.contains excludes (String.get (string_of_int number) 0) then ()
+  if String.contains excludes (string_of_int number).[0] then ()
   else (
     printf "%d. %s " number str ;
     flush stdout ;
@@ -25,10 +24,10 @@ let measure excludes number str pre_cmd cmd post_cmd =
       printf "%10fs" (l2 -. l1) ;
       flush stdout
     in
-    run();
-    run();
+    run () ;
+    run () ;
     let _ = Sys.command (post_cmd ^ to_null) in
-    printf "\n"; flush stdout)
+    printf "\n" ; flush stdout )
 
 let main =
   let len = Array.length Sys.argv in
@@ -43,9 +42,10 @@ let main =
       ("boot eval " ^ name_mc ^ " -- " ^ iterations)
       "" ;
     measure excludes 2 "Miking interpreter:" ""
-      ("mi eval " ^ name_mc ^ " -- " ^ iterations) "" ;
-    measure excludes 3 "Miking compiler:   "
-      ("mi compile " ^ name_mc) ("./" ^ name ^ " "  ^ iterations)
+      ("mi eval " ^ name_mc ^ " -- " ^ iterations)
+      "" ;
+    measure excludes 3 "Miking compiler:   " ("mi compile " ^ name_mc)
+      ("./" ^ name ^ " " ^ iterations)
       ("rm -f " ^ name) ;
     if Sys.file_exists (name ^ ".ml") then (
       measure excludes 4 "OCaml byte code    "
