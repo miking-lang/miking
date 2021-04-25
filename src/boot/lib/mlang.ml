@@ -264,7 +264,8 @@ let data_to_lang info name includes {inters; syns} : mlang =
 
 let flatten_lang (prev_langs : lang_data Record.t) :
     top -> lang_data Record.t * top = function
-  | (TopLet _ | TopType _ | TopRecLet _ | TopCon _ | TopUtest _) as top ->
+  | (TopLet _ | TopType _ | TopRecLet _ | TopCon _ | TopUtest _ | TopExt _) as
+    top ->
       (prev_langs, top)
   | TopLang (Lang (info, name, includes, _) as lang) ->
       let self_data = compute_lang_data lang in
@@ -676,7 +677,7 @@ let rec desugar_tm nss env subs =
   | TmNever fi ->
       TmNever fi
   (* Non-recursive *)
-  | (TmConst _ | TmFix _ | TmRef _ | TmTensor _) as tm ->
+  | (TmConst _ | TmFix _ | TmRef _ | TmTensor _ | TmExt _) as tm ->
       tm
 
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
@@ -795,6 +796,11 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
       (nss, langs, subs, syns, wrap :: stack)
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
+      (nss, langs, subs, syns, wrap :: stack)
+  | TopExt (Ext (fi, id, ty)) ->
+      let wrap tm' =
+        TmExt (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
+      in
       (nss, langs, subs, syns, wrap :: stack)
 
 let desugar_post_flatten_with_nss nss (Program (_, tops, t)) =

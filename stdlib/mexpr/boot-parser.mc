@@ -140,6 +140,11 @@ lang BootParser = MExprAst
   | 114 /-TmNever-/ ->
      TmNever {ty = tyunknown_,
               info = ginfo t 0}
+  | 115 /-TmExt-/ ->
+    TmExt {ident = gname t 0,
+           ty = gtype t 0,
+           inexpr = gterm t 0,
+           info = ginfo t 0}
 
   -- Get type help function
   sem gtype(t:Unknown) =
@@ -322,7 +327,7 @@ utest l_infoClosed "  \n lam x.x" with r_info 2 1 2 8 in
 utest infoTm (match parseMExprString [] s with TmLet r then r.body else ())
 with r_info 1 8 1 15 in
 utest l_info ["y"] "  let x = 4 in y  " with r_info 1 2 1 14 in
-let s = "printLn x; 10" in
+let s = "(printLn x); 10" in
 utest lside ["printLn", "x"] s with rside s in
 
 -- TmRecLets, TmLam
@@ -494,6 +499,11 @@ utest l_infoClosed "\n utest 3 with 4 in () " with r_info 2 1 2 18 in
 let s = "never" in
 utest lsideClosed s with rside s in
 utest l_infoClosed "  \n  never " with r_info 2 2 2 7 in
+
+-- TmExt
+let s = "external y : Int in 1" in
+utest lsideClosed s with rside s in
+utest l_infoClosed "   \n  external y : Int in 1" with r_info 2 2 2 23 in
 
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in

@@ -3,6 +3,7 @@ open Printf
 open Ast
 open Pprint
 open Msg
+open Symbutils
 module Option = BatOption
 
 (* Tab length when calculating the info field *)
@@ -18,6 +19,53 @@ let error_to_ustring e =
       message2str m
   | _ ->
       us (Printexc.to_string e)
+
+module ExtIdMap = Map.Make (Ustring)
+
+let raise_parse_error_on_non_unique_external_id t =
+  let rec recur acc = function
+    | TmExt (fi, id, _, _, t) -> (
+        ExtIdMap.find_opt id acc
+        |> function
+        | Some fi' ->
+            raise
+              (Error
+                 ( PARSE_ERROR
+                 , ERROR
+                 , fi
+                 , [id; us "already defined at"; info2str fi'] ) )
+        | None ->
+            recur (ExtIdMap.add id fi acc) t )
+    | t ->
+        sfold_tm_tm recur acc t
+  in
+  let _ = recur ExtIdMap.empty t in
+  t
+
+(* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
+let raise_parse_error_on_partially_applied_external t =
+  let rec recur ((symb_map, app_depth, fi) as acc) = function
+    | TmExt (_, _, s, ty, t) ->
+        let symb_map' = SymbMap.add s (ty_arity ty) symb_map in
+        recur (symb_map', app_depth, fi) t
+    | TmApp (fi, t1, t2) ->
+        let _ = recur (symb_map, app_depth + 1, fi) t1 in
+        recur (symb_map, 0, NoInfo) t2
+    | TmVar (_, id, s) -> (
+        SymbMap.find_opt s symb_map
+        |> function
+        | Some arity ->
+            if arity <> app_depth then
+              raise
+                (Error (PARSE_ERROR, ERROR, fi, [id; us "partially applied"]))
+            else acc
+        | None ->
+            acc )
+    | t ->
+        sfold_tm_tm recur (symb_map, 0, NoInfo) t
+  in
+  let _ = recur (SymbMap.empty, 0, NoInfo) t in
+  t
 
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =

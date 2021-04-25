@@ -122,13 +122,9 @@ end
 module Symb = struct
   type t = int
 
-  type symbtype = int
-
   let symid = ref 0
 
-  let gensym _ =
-    symid := !symid + 1 ;
-    !symid
+  let gensym _ = incr symid ; !symid
 
   let eqsym l r = l = r
 

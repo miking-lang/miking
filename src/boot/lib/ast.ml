@@ -211,6 +211,8 @@ and con_decl = Con of info * ustring * ty
 
 and utest_top = Utest of info * tm * tm * tm option
 
+and ext_decl = Ext of info * ustring * ty
+
 and top =
   | TopLang of mlang
   | TopLet of let_decl
@@ -218,6 +220,7 @@ and top =
   | TopRecLet of rec_let_decl
   | TopCon of con_decl
   | TopUtest of utest_top
+  | TopExt of ext_decl
 
 and include_ = Include of info * ustring
 
@@ -267,6 +270,8 @@ and tm =
   | TmRef of info * tm ref
   (* Tensor *)
   | TmTensor of info * tm T.t
+  (* External *)
+  | TmExt of info * ustring * Symb.t * ty * tm
 
 (* Kind of pattern name *)
 and patName =
@@ -346,8 +351,6 @@ module Option = BatOption
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) = function
-  | TmVar (_, _, _) as t ->
-      t
   | TmApp (fi, t1, t2) ->
       TmApp (fi, f t1, f t2)
   | TmLam (fi, x, s, ty, t1) ->
@@ -357,8 +360,6 @@ let smap_tm_tm (f : tm -> tm) = function
   | TmRecLets (fi, lst, tm) ->
       TmRecLets
         (fi, List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, f t)) lst, f tm)
-  | TmConst (_, _) as t ->
-      t
   | TmSeq (fi, tms) ->
       TmSeq (fi, Mseq.Helpers.map f tms)
   | TmRecord (fi, r) ->
@@ -376,23 +377,16 @@ let smap_tm_tm (f : tm -> tm) = function
   | TmUtest (fi, t1, t2, tusing, tnext) ->
       let tusing_mapped = Option.map f tusing in
       TmUtest (fi, f t1, f t2, tusing_mapped, f tnext)
-  | TmNever _ as t ->
-      t
   | TmUse (fi, l, t1) ->
       TmUse (fi, l, f t1)
   | TmClos (fi, x, s, t1, env) ->
       TmClos (fi, x, s, f t1, env)
-  | TmFix _ as t ->
-      t
-  | TmRef _ as t ->
-      t
-  | TmTensor _ as t ->
+  | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _ | TmExt _)
+    as t ->
       t
 
 (* sfold over terms *)
 let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
-  | TmVar (_, _, _) ->
-      acc
   | TmApp (_, t1, t2) ->
       f (f acc t1) t2
   | TmLam (_, _, _, _, t1) ->
@@ -401,8 +395,6 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
       f (f acc t1) t2
   | TmRecLets (_, lst, tm) ->
       f (List.fold_left (fun acc (_, _, _, _, t) -> f acc t) acc lst) tm
-  | TmConst (_, _) ->
-      acc
   | TmSeq (_, tms) ->
       Mseq.Helpers.fold_left f acc tms
   | TmRecord (_, r) ->
@@ -420,18 +412,16 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
   | TmUtest (_, t1, t2, tusing, tnext) ->
       let acc = f (f acc t1) t2 in
       f (match tusing with None -> acc | Some t -> f acc t) tnext
-  | TmNever _ ->
-      acc
   | TmUse (_, _, t1) ->
       f acc t1
   | TmClos (_, _, _, t1, _) ->
       f acc t1
-  | TmFix _ ->
+  | TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _ | TmExt _
+    ->
       acc
-  | TmRef _ ->
-      acc
-  | TmTensor _ ->
-      acc
+
+(* Returns arity given an type *)
+let rec ty_arity = function TyArrow (_, _, ty) -> 1 + ty_arity ty | _ -> 0
 
 (* Returns the info field from a term *)
 let tm_info = function
@@ -454,7 +444,8 @@ let tm_info = function
   | TmClos (fi, _, _, _, _)
   | TmFix fi
   | TmRef (fi, _)
-  | TmTensor (fi, _) ->
+  | TmTensor (fi, _)
+  | TmExt (fi, _, _, _, _) ->
       fi
 
 let pat_info = function

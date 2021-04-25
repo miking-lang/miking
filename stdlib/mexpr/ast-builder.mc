@@ -215,6 +215,8 @@ recursive let bind_ = use MExprAst in
     TmConDef {t with inexpr = bind_ t.inexpr expr}
   else match letexpr with TmType t then
     TmType {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmExt t then
+    TmExt {t with inexpr = bind_ t.inexpr expr}
   else
     expr -- Insert at the end of the chain
 end
@@ -242,6 +244,14 @@ let nulet_ = use MExprAst in
 let ulet_ = use MExprAst in
   lam s. lam body.
   let_ s tyunknown_ body
+
+let next_ = use MExprAst in
+  lam n. lam ty.
+  TmExt {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
+
+let ext_ = use MExprAst in
+  lam s. lam ty.
+  next_ (nameNoSym s) ty
 
 let ntype_ = use MExprAst in
   lam n. lam ty.

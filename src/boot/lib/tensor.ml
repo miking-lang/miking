@@ -114,17 +114,17 @@ module NoNum = struct
   let iteri f t = mk_iteri rank shape slice_exn f t
 
   let equal eq t1 t2 =
-    if shape t1 = shape t2 then
+    if shape t1 = shape t2 then (
       let n = t1.size in
       let v1 = reshape_exn t1 [|n|] in
       let v2 = reshape_exn t2 [|n|] in
-      let rec work i =
-        if i < n then
-          if eq (get_exn v1 [|i|]) (get_exn v2 [|i|]) then work (i + 1)
-          else false
-        else true
-      in
-      work 0
+      let tmp = ref true in
+      let i = ref 0 in
+      while !tmp do
+        tmp := eq (get_exn v1 [|!i|]) (get_exn v2 [|!i|]) ;
+        incr i
+      done ;
+      !tmp )
     else false
 
   let of_array a =

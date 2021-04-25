@@ -39,6 +39,8 @@ let idTmUtest = 113
 
 let idTmNever = 114
 
+let idTmExt = 115
+
 (* Types *)
 let idTyUnknown = 200
 
@@ -122,13 +124,17 @@ let symbolizeEnvWithKeywords keywords =
 let parseMExprString keywords str =
   PTreeTm
     ( str |> Parserutils.parse_mexpr_string
-    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords) )
+    |> Parserutils.raise_parse_error_on_non_unique_external_id
+    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
+    |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 let parseMCoreFile keywords filename =
   PTreeTm
     ( filename |> Parserutils.parse_mcore_file
+    |> Parserutils.raise_parse_error_on_non_unique_external_id
     |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym )
+    |> Deadcode.elimination builtin_sym2term builtin_name2sym
+    |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 (* Returns a tuple with the following elements
    1. ID field
@@ -187,6 +193,8 @@ let getData = function
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTm (TmExt (fi, x, _, ty, t)) ->
+      (idTmExt, [fi], [], [ty], [t], [x], [], [], [], [])
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [])

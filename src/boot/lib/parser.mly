@@ -69,6 +69,7 @@
 %token <unit Ast.tokendata> INCLUDE
 %token <unit Ast.tokendata> NEVER
 %token <unit Ast.tokendata> USING
+%token <unit Ast.tokendata> EXTERNAL
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -165,6 +166,8 @@ top:
     { TopCon($1) }
   | toputest
     { TopUtest($1) }
+  | topext
+    { TopExt($1) }
 
 toplet:
   | LET var_ident ty_op EQ mexpr
@@ -207,6 +210,11 @@ mlang:
                  mkinfo $1.i $2.i
       in
       Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
+
+topext:
+  | EXTERNAL ident COLON ty
+    { let fi = mkinfo $1.i (ty_info $4) in
+      Ext (fi, $2.v, $4) }
 
 lang_includes:
   | EQ lang_list
@@ -315,6 +323,9 @@ mexpr:
   | UTEST mexpr WITH mexpr USING mexpr IN mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
         TmUtest(fi,$2,$4,Some $6,$8) }
+  | EXTERNAL ident COLON ty IN mexpr
+      { let fi = mkinfo $1.i (tm_info $6) in
+        TmExt(fi,$2.v,Symb.Helpers.nosym,$4,$6) }
 
 lets:
   | LET var_ident ty_op EQ mexpr
