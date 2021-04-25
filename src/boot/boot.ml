@@ -58,7 +58,7 @@ let testprog lst =
 let runrepl _ = start_repl ()
 
 (* Print out main menu *)
-let usage_msg = "Usage: boot [run|repl] <files>\n\nOptions:"
+let usage_msg = "Usage: boot [eval|repl] <files>\n\nOptions:"
 
 (* Main function. Checks arguments and reads file names *)
 let main =
@@ -132,8 +132,8 @@ let main =
     (* Start the MCore REPL *)
     | "repl" :: lst ->
         runrepl lst
-    (* Run one program with program arguments without typechecking *)
-    | "run" :: (name :: _ as lst) | (name :: _ as lst) ->
+    (* Eval one program with program arguments without typechecking *)
+    | "eval" :: (name :: _ as lst) ->
         if !enable_test then testprog lst else evalprog name
     (* Show the menu *)
     | _ ->

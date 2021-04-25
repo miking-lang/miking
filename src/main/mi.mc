@@ -6,6 +6,7 @@
 include "compile.mc"
 include "seq.mc"
 include "string.mc"
+include "eval.mc"
 include "run.mc"
 include "assoc.mc"
 include "options.mc"
@@ -13,31 +14,56 @@ include "options.mc"
 mexpr
 
 -- Menu
-let menu = strJoin "\n" [
-  "Usage: mi [compile|run] <files>",
-  "",
-  "Options:",
-  "  --debug-parse                    Print the AST after parsing",
-  "  --debug-generate                 Print the AST after code generation",
-  "  --exit-before                    Exit before evaluation or compilation",
-  "  --test                           Generate utest code",
-  ""]
+let menu =
+"Usage: mi <command> file [<options>|<args>]
+
+Commands:
+  eval      Evaluates a .mc file using an internal interpreter
+  compile   Compiles a .mc file into an executable with the same name
+  run       Combines eval and compile, to run the program as fast as possible
+
+If no command is given, the file will be executed using the run command
+and all arguments after the file are arguments to the .mc executed file.
+In this, case, no options to 'mi' can be given.
+
+Options:
+  --debug-parse       Print the AST after parsing
+  --debug-generate    Print the AST after code generation
+  --exit-before       Exit before evaluation or compilation
+  --test              Generate utest code
+  -- [args]           If the run or eval commands are used, then the text
+                      following -- is the argument to the executed program
+"
 in
 
 -- Commands map, maps command strings to functions. The functions
 -- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("run", run),
+("eval", eval),
 ("compile", compile)
 ] in
 
 -- Main: find and run the correct command. See commandsMap above.
 
+-- Does the command line include at least a file or a command?
 if lti (length argv) 2 then print menu else
-  match mapStringLookup (get argv 1) commandsMap with Some cmd
+  let cmdString = get argv 1 in
+  let rest = tail (tail argv) in
+  -- Is it a known command?
+  match mapStringLookup cmdString commandsMap with Some cmd
   then
-    let split = splitDashDash (tail (tail argv)) in
+    -- Yes, split into program arguments (after stand alone '--')
+    let split = splitDashDash rest in
     let argvp = partition (isPrefix eqc "--") split.first in
-    cmd argvp.1 (parseOptions argvp.0) split.last
+    -- Invoke the selected command
+    cmd argvp.1 (parseOptions argvp.0) (cons "mi" split.last)
   else
-    [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
+    -- No, not a well known command
+    -- Is it a .mc file instead of a command
+    if isSuffix eqChar ".mc" cmdString then
+       -- Yes, run the 'run' command with arguments and default options
+       run [cmdString] options (cons "mi" rest)
+    else
+       -- No, print error
+       [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
