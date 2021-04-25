@@ -38,3 +38,11 @@ let parseOptions = lam xs.
       then f accOps
       else printLn (concat "Unknown option " s); exit 1
     ) options xs
+
+-- Split the program arguments before and after the empty '--'
+let splitDashDash = lam lst.
+  match index (eqString "--") lst with Some n then
+    let r = splitAt lst n in
+    {first = r.0, last = tail r.1}
+  else
+    {first = lst, last = []}

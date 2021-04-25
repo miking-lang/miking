@@ -68,7 +68,11 @@ let ocamlCompile = lam sourcePath. lam ocamlProg.
   sysChmodWriteAccessFile destinationFile;
   p.cleanup ()
 
-let compile = lam files. lam options : Options.
+-- Main function for compiling a program
+-- files: a list of files
+-- options: the options structure to the main program
+-- rest: the rest of the arguments, after stand alone --
+let compile = lam files. lam options : Options. lam rest.
   use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile [] file in

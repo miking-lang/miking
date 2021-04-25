@@ -36,7 +36,8 @@ let commandsMap = [
 if lti (length argv) 2 then print menu else
   match mapStringLookup (get argv 1) commandsMap with Some cmd
   then
-    let argvp = partition (isPrefix eqc "--") (tail (tail argv)) in
-    cmd argvp.1 (parseOptions argvp.0)
+    let split = splitDashDash (tail (tail argv)) in
+    let argvp = partition (isPrefix eqc "--") split.first in
+    cmd argvp.1 (parseOptions argvp.0) split.last
   else
     [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]

@@ -28,7 +28,11 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
     (symEnv, utestStrip ast)
 
-let run = lam files. lam options : Options.
+-- Main function for evaluating a program using the interpreter
+-- files: a list of files
+-- options: the options structure to the main program
+-- rest: the rest of the arguments, after stand alone --
+let run = lam files. lam options : Options. lam rest.
   use ExtMCore in
   let runFile = lam file.
     let ast = parseMCoreFile [] file in
@@ -40,8 +44,10 @@ let run = lam files. lam options : Options.
     -- all utest nodes from the AST.
     match generateTests ast options.runTests with (symEnv, ast) then
       let ast = symbolizeExpr symEnv ast in
-      if options.exitBefore then exit 0
-      else eval {env = builtinEnv} ast
+      if options.exitBefore then exit 0      
+      else
+        -- TODO: update builtin environment with arguments
+        eval {env = builtinEnv} ast
     else never
   in
   iter runFile files
