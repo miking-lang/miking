@@ -7,7 +7,7 @@ recursive
       ()
     else
       f();
-      work f (subi n 1) 
+      work f (subi n 1)
 end
 
 let repeat = lam f. work f (string2int (get argv 1))

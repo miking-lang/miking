@@ -44,7 +44,7 @@ let run = lam files. lam options : Options. lam rest.
     -- all utest nodes from the AST.
     match generateTests ast options.runTests with (symEnv, ast) then
       let ast = symbolizeExpr symEnv ast in
-      if options.exitBefore then exit 0      
+      if options.exitBefore then exit 0
       else
         -- TODO: update builtin environment with arguments
         eval {env = builtinEnv} ast
