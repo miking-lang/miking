@@ -10,3 +10,6 @@ include "eval.mc"
 -- starts, to not unnecessarily start the compilation process, and (ii)
 -- how should side effects be handled?
 let run = eval
+
+let test = lam files. lam options : Options. lam args.
+  run files {options with runTests = true} args
