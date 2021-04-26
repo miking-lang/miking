@@ -68,4 +68,5 @@ if lti (length argv) 2 then print menu else
        run [cmdString] options (cons "mi" rest)
     else
        -- No, print error
-       [printLn (join ["Unknown command '", get argv 1, "'"]), exit 1]
+       printLn (join ["Unknown command '", get argv 1, "'"]);
+       exit 1
