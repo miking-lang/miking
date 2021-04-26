@@ -271,8 +271,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
               target = generate env t.target,
               arms = [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
             }
-          else error "Record type not handled by type-lifting"
-        else error "Unknown record type"
+          else infoErrorExit t.info "Record type not handled by type-lifting"
+        else infoErrorExit t.info "Unknown record type"
       else generateDefaultMatchCase env t
     else generateDefaultMatchCase env t
   | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
