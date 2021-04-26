@@ -464,9 +464,12 @@ type Lookup = Int -> Expr
 type Table = Map Name (Map [Name] Int)
 
 let _table = nameSym "table"
+let _argv =
+  match find (lam n. eqString "argv" (nameGetStr n)) builtinNames with Some n
+  then n else error "argv name not found"
 
 --
-lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
+lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                          -- Included for debugging
                          + MExprPrettyPrint
   syn Intermediate =
@@ -503,7 +506,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   -- eliminated and replaced by lookups in a static table. One reference per
   -- function tracks which function that latest called that function, thereby
   -- maintaining call history.
-  sem transform (publicFns : [Name]) =
+  sem flatten (publicFns : [Name]) =
   | tm ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv tm in
@@ -516,9 +519,12 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let tm = bind_ incVars tm in
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
-    LookupTable { prog = prog
-             , table = deref (env.hole2idx)
-             }
+    let table = deref env.hole2idx in
+    let nbrFlatHoles = mapFoldWithKey (lam acc. lam. lam m.
+      addi acc (mapSize m)) 0 table in
+    LookupTable { prog = _wrapArgv nbrFlatHoles prog
+                , table = deref (env.hole2idx)
+                }
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
@@ -585,7 +591,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
         -- Set the incoming var of callee to current node
         let count = callCtxLbl2Count t.ident env in
         let update = modref_ (nvar_ iv) (int_ count) in
-        bind_ (nulet_ (nameSym "_") update) le
+        bind_ (nulet_ (nameSym "") update) le
       else le
     else le
 
@@ -626,14 +632,24 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                      with inexpr = _maintainCallCtx lookup env cur inexpr}
   | tm ->
     smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
+
+  -- Since the values of the decision points are given via the suffix of argv,
+  -- we need to overwrite argv with its suffix, so that use of argv in the
+  -- original program works as expected.
+  sem _wrapArgv (n : Int) =
+  | tm ->
+    matchex_
+      (splitat_ (nvar_ _argv) (int_ 6))
+      (ptuple_ [npvar_ _table, npvar_ _argv])
+      tm
 end
 
 lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
 
-lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
+lang TestLang = MExpr + FlattenHoles + PPrintLang + MExprANF + HoleANF
   + MExprSym + MExprEq
 
-lang MExprHoles = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
+lang MExprHoles = MExpr + FlattenHoles + PPrintLang + MExprANF + HoleANF
 
 mexpr
 
@@ -844,7 +860,7 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match transform pub ast with LookupTable { prog = prog } then
+    match flatten pub ast with LookupTable { prog = prog } then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
       printLn (expr2str prog);
       ()
@@ -874,7 +890,7 @@ let callBA2 = nameSym "callBA2" in
 let callBB = nameSym "callBB" in
 let callCB = nameSym "callCB" in
 let h = nameSym "h" in
-let ast = bindall_ [  nulet_ funA (ulam_ "_"
+let ast = bindall_ [  nulet_ funA (ulam_ ""
                         (bind_ (nulet_ h (hole_ (int_ 0) 2))
                                (nvar_ h)))
                     , nureclets_add funB
@@ -896,7 +912,7 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match transform [funB, funC] ast with LookupTable { table = table, prog = prog } then
+match flatten [funB, funC] ast with LookupTable { table = table, prog = prog } then
 match mapBindings table with [(_, m)] then
 
 
@@ -907,12 +923,18 @@ if debug then
 else ();
 
 let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
-  let ast = bind_ (bind_ (nulet_ _table table) ast) ext in
+  let astExt =
+    match ast with TmMatch ({thn = thn} & t) then
+      TmMatch {t with thn = bind_ thn ext}
+    else error "Expected match expression"
+  in
+  let table = seq_ (concat table (map (str_) argv)) in
+  let ast = bind_ (nulet_ _argv table) astExt in
   eval { env = builtinEnv } ast
 in
 
 let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
-let table = seq_ (mapi (lam i. lam. int_ (addi 1 i)) idxs) in
+let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
 
 let eval = evalWithArgv table in
 
@@ -943,7 +965,7 @@ utest eval prog (
 
 -- Path 5 again
 utest eval prog (
-  bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
+  bind_ (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
         (appf2_ (nvar_ funB) false_ false_)
 ) with int_ 5 using eqExpr in
 
