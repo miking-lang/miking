@@ -39,6 +39,7 @@ let reserved_strings = [
   ("include",       fun(i) -> Parser.INCLUDE{i=i;v=()});
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
   ("using",         fun(i) -> Parser.USING{i=i;v=()});
+  ("external",      fun(i) -> Parser.EXTERNAL{i=i;v=()});
 
   (* Types *)
   ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});

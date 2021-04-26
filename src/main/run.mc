@@ -31,7 +31,7 @@ let generateTests = lam ast. lam testsEnabled.
 let run = lam files. lam options : Options.
   use ExtMCore in
   let runFile = lam file.
-    let ast = parseMCoreFile file in
+    let ast = parseMCoreFile [] file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());

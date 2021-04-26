@@ -346,20 +346,44 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
     match pprintVarName env t.ident with (env,str) then
-      match pprintCode (pprintIncr indent) env t.body with (env,body) then
-        match pprintCode indent env t.inexpr with (env,inexpr) then
-          match getTypeStringCode indent env t.tyBody with (env, ty) then
-            let ty = if eqString ty "Unknown" then "" else concat ": " ty in
-            (env,
-             if eqString (nameGetStr t.ident) "" then
-               join [body, pprintNewline indent, ";",
-                     inexpr]
-             else
-               join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
-                     body, pprintNewline indent,
-                     "in", pprintNewline indent,
-                     inexpr])
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        match getTypeStringCode indent env t.tyBody with (env, ty) then
+          let ty = if eqString ty "Unknown" then "" else concat ": " ty in
+          if eqString (nameGetStr t.ident) "" then
+             match printParen (pprintIncr indent) env t.body with (env,body)
+             then
+               (env, join [body, pprintNewline indent, ";", inexpr])
+             else never
+           else
+             match pprintCode (pprintIncr indent) env t.body with (env,body)
+             then
+               (env,
+                join ["let ", str, ty, " =", pprintNewline (pprintIncr indent),
+                      body, pprintNewline indent,
+                      "in", pprintNewline indent,
+                      inexpr])
+             else never
           else never
+      else never
+    else never
+end
+
+lang ExtPrettyPrint = PrettyPrint + ExtAst + UnknownTypeAst
+  sem isAtomic =
+  | TmExt _ -> false
+
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  -- Intentionally left blank
+
+  sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmExt t ->
+    match pprintVarName env t.ident with (env,str) then
+      match pprintCode indent env t.inexpr with (env,inexpr) then
+        match getTypeStringCode indent env t.ty with (env,ty) then
+          (env,
+           join ["external ", str, " : ", ty, pprintNewline indent,
+                 "in", pprintNewline indent,
+                 inexpr])
         else never
       else never
     else never
@@ -993,7 +1017,7 @@ lang MExprPrettyPrint =
   VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + ConstPrettyPrint +
   DataPrettyPrint + MatchPrettyPrint + UtestPrettyPrint + SeqPrettyPrint +
-  NeverPrettyPrint +
+  NeverPrettyPrint + ExtPrettyPrint +
 
   -- Constants
   IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
@@ -1223,6 +1247,11 @@ let empty_empty =
   bindall_ [nulet_ n1 (int_ 1), nulet_ n2 (int_ 2), addi_ (nvar_ n1) (nvar_ n2)]
 in
 
+-- external addi : Int -> Int -> Int in addi
+let external_addi =
+  bind_ (ext_ "addi" (tyarrows_ [tyint_, tyint_, tyint_])) (var_ "addi")
+in
+
 let sample_ast =
   bindall_ [
     func_foo,
@@ -1239,7 +1268,8 @@ let sample_ast =
     func_pedanticIsSome,
     func_is123,
     var_var,
-    empty_empty
+    empty_empty,
+    external_addi
   ]
 in
 

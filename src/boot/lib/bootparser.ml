@@ -5,6 +5,7 @@
 
 open Ustring.Op
 open Ast
+open Builtin
 open Intrinsics
 
 (* Terms *)
@@ -37,6 +38,8 @@ let idTmMatch = 112
 let idTmUtest = 113
 
 let idTmNever = 114
+
+let idTmExt = 115
 
 (* Types *)
 let idTyUnknown = 200
@@ -109,12 +112,29 @@ let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
-let parseMExprString str =
-  PTreeTm (str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mexpr_string)
+let symbolizeEnvWithKeywords keywords =
+  builtin_name2sym
+  @ List.map
+      (fun k ->
+        if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
+          (IdCon (sid_of_ustring k), Intrinsics.Symb.gensym ())
+        else (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()) )
+      (Mseq.Helpers.to_list keywords)
 
-let parseMCoreFile str =
-  let t = str |> Mseq.Helpers.to_ustring |> Parserutils.parse_mcore_file in
-  PTreeTm t
+let parseMExprString keywords str =
+  PTreeTm
+    ( str |> Parserutils.parse_mexpr_string
+    |> Parserutils.raise_parse_error_on_non_unique_external_id
+    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
+    |> Parserutils.raise_parse_error_on_partially_applied_external )
+
+let parseMCoreFile keywords filename =
+  PTreeTm
+    ( filename |> Parserutils.parse_mcore_file
+    |> Parserutils.raise_parse_error_on_non_unique_external_id
+    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
+    |> Deadcode.elimination builtin_sym2term builtin_name2sym
+    |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 (* Returns a tuple with the following elements
    1. ID field
@@ -173,6 +193,8 @@ let getData = function
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
+  | PTreeTm (TmExt (fi, x, _, ty, t)) ->
+      (idTmExt, [fi], [], [ty], [t], [x], [], [], [], [])
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [])

@@ -480,9 +480,9 @@ let rec print_const fmt = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"
-  | CbootParserParseMExprString ->
+  | CbootParserParseMExprString _ ->
       fprintf fmt "bootParserParseMExprString"
-  | CbootParserParseMCoreFile ->
+  | CbootParserParseMCoreFile _ ->
       fprintf fmt "bootParserParseMCoreFile"
   | CbootParserGetId ->
       fprintf fmt "bootParserParseGetId"
@@ -534,7 +534,7 @@ and print_tm fmt (prec, t) =
     match t with
     | TmMatch (_, _, PatBool (_, true), _, _) ->
         If
-    | TmMatch _ | TmLet _ | TmType _ ->
+    | TmMatch _ | TmLet _ | TmType _ | TmExt _ ->
         Match
     | TmLam _ ->
         Lam
@@ -695,6 +695,11 @@ and print_tm' fmt t =
       let data' = List.map print (Array.to_list data) in
       fprintf fmt "Tensor([@[<hov 0>%a@]], [@[<hov 0>%a@]])" concat
         (Comma, shape') concat (Comma, data')
+  | TmExt (_, x, s, ty, t) ->
+      let x = string_of_ustring (ustring_of_var x s) in
+      let ty = ty |> ustring_of_ty |> string_of_ustring in
+      fprintf fmt "@[<hov 0>@[<hov %d>external %s : %s in@]@ %a@]" !ref_indent
+        x ty print_tm (Match, t)
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

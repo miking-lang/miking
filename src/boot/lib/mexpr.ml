@@ -362,9 +362,13 @@ let arity = function
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
-  | CbootParserParseMExprString ->
+  | CbootParserParseMExprString None ->
+      2
+  | CbootParserParseMExprString (Some _) ->
       1
-  | CbootParserParseMCoreFile ->
+  | CbootParserParseMCoreFile None ->
+      2
+  | CbootParserParseMCoreFile (Some _) ->
       1
   | CbootParserGetId ->
       1
@@ -1187,15 +1191,31 @@ let delta eval env fi c v =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
-  | CbootParserParseMExprString, TmSeq (fi, seq) ->
-      let t = Parserutils.parse_mexpr_string (tmseq2ustring fi seq) in
-      TmConst (fi, CbootParserTree (PTreeTm t))
-  | CbootParserParseMExprString, _ ->
+  | CbootParserParseMExprString None, TmSeq (fi, seq) ->
+      let keywords =
+        Mseq.Helpers.map
+          (function
+            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+          seq
+      in
+      TmConst (fi, CbootParserParseMExprString (Some keywords))
+  | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
+      let t = Bootparser.parseMExprString keywords (tmseq2ustring fi seq) in
+      TmConst (fi, CbootParserTree t)
+  | CbootParserParseMExprString _, _ ->
       fail_constapp fi
-  | CbootParserParseMCoreFile, TmSeq (fi, seq) ->
-      let t = Parserutils.parse_mcore_file (tmseq2ustring fi seq) in
-      TmConst (fi, CbootParserTree (PTreeTm t))
-  | CbootParserParseMCoreFile, _ ->
+  | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
+      let keywords =
+        Mseq.Helpers.map
+          (function
+            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+          seq
+      in
+      TmConst (fi, CbootParserParseMCoreFile (Some keywords))
+  | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
+      let t = Bootparser.parseMCoreFile keywords (tmseq2ustring fi seq) in
+      TmConst (fi, CbootParserTree t)
+  | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
   | CbootParserGetId, TmConst (fi, CbootParserTree ptree) ->
       TmConst (fi, CInt (Bootparser.getId ptree))
@@ -1471,12 +1491,14 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   debug_eval env t ;
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
-  | TmVar (_, _, s) -> (
-    match List.assoc s env with
-    | TmApp (_, TmFix _, _) as t ->
+  | TmVar (fi, _, s) -> (
+    match List.assoc_opt s env with
+    | Some (TmApp (_, TmFix _, _) as t) ->
         eval env t
-    | t ->
-        t )
+    | Some t ->
+        t
+    | None ->
+        raise_error fi "Undefined variable" )
   (* Application *)
   | TmApp (fiapp, t1, t2) -> (
     match eval env t1 with
@@ -1614,6 +1636,9 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Use *)
   | TmUse (fi, _, _) ->
       raise_error fi "A 'use' of a language was not desugared"
+  (* External *)
+  | TmExt (_, _, _, _, t) ->
+      eval env t
   (* Only at runtime *)
   | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
       t
@@ -1657,5 +1682,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmUtest _
     | TmNever _
     | TmRef _
-    | TmTensor _ ) as t ->
+    | TmTensor _
+    | TmExt _ ) as t ->
       (env, eval env t)

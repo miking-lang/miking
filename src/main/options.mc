@@ -8,7 +8,6 @@ type Options = {
   debugGenerate : Bool,
   exitBefore : Bool,
   runTests : Bool,
-  excludeIntrinsicsPreamble : Bool,
   disableOptimizations : Bool
 }
 
@@ -18,7 +17,6 @@ let options = {
   debugGenerate = false,
   exitBefore = false,
   runTests = false,
-  excludeIntrinsicsPreamble = false,
   disableOptimizations = false
 }
 
@@ -28,7 +26,6 @@ let optionsMap = [
 ("--debug-generate", lam o : Options. {o with debugGenerate = true}),
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
-("--exclude-intrinsics-preamble", lam o : Options. {o with excludeIntrinsicsPreamble = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true})
 ]
 
@@ -42,4 +39,3 @@ let parseOptions = lam xs.
       then f accOps
       else printLn (concat "Unknown option " s); exit 1
     ) options xs
-

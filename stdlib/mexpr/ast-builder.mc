@@ -215,6 +215,8 @@ recursive let bind_ = use MExprAst in
     TmConDef {t with inexpr = bind_ t.inexpr expr}
   else match letexpr with TmType t then
     TmType {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmExt t then
+    TmExt {t with inexpr = bind_ t.inexpr expr}
   else
     expr -- Insert at the end of the chain
 end
@@ -242,6 +244,14 @@ let nulet_ = use MExprAst in
 let ulet_ = use MExprAst in
   lam s. lam body.
   let_ s tyunknown_ body
+
+let next_ = use MExprAst in
+  lam n. lam ty.
+  TmExt {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
+
+let ext_ = use MExprAst in
+  lam s. lam ty.
+  next_ (nameNoSym s) ty
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
@@ -879,7 +889,10 @@ let utensorIteri_ = tensorIteri_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
-  lam str. appf1_ (uconst_ (CBootParserParseMExprString ())) str
+  lam key. lam str. appf2_ (uconst_ (CBootParserParseMExprString ())) key str
+
+let bootParserParseMCoreFile_ = use MExprAst in
+  lam key. lam str. appf2_ (uconst_ (CBootParserParseMCoreFile ())) key str
 
 let bootParserGetId_ = use MExprAst in
   lam pt. appf1_ (uconst_ (CBootParserGetId ())) pt

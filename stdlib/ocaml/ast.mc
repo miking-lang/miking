@@ -125,13 +125,40 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
-lang OCamlAst = LamAst + LetAst + RecLetsAst + RecordAst + ArithIntAst
-                + ShiftIntAst + ArithFloatAst + BoolAst + CmpIntAst
-                + CmpFloatAst + CharAst + CmpCharAst + OCamlMatch + NamedPat
-                + IntPat + CharPat + BoolPat + OCamlTuple + OCamlArray
-                + OCamlData + OCamlExternal + FloatIntConversionAst
-                + IntCharConversionAst + OCamlTypeDeclAst + OCamlPreambleHack
-                + OCamlRecord + OCamlString + RefOpAst
+lang OCamlTypeAst =
+  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
+  RecordTypeAst
+
+  syn Type =
+  | TyList {info : Info, ty : Type}
+  | TyArray {info : Info, ty : Type}
+  | TyGenArray {info : Info, ty : Type}
+  | TyTuple {info : Info, tys : [Type]}
+
+  sem infoTy =
+  | TyList r -> r.info
+  | TyArray r -> r.info
+  | TyGenArray r -> r.info
+  | TyTuple r -> r.info
+end
+
+lang OCamlAst =
+  -- Terms
+  LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
+  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord +
+
+  -- Constants
+  ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +
+  IntCharConversionAst + OCamlString + RefOpAst +
+
+  -- Patterns
+  NamedPat + IntPat + CharPat + BoolPat +
+
+  -- Compares
+  CmpIntAst + CmpFloatAst + CharAst + CmpCharAst +
+
+  -- Other
+  OCamlExternal  + OCamlPreambleHack
 end
 
 mexpr
