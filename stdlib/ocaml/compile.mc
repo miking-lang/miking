@@ -20,8 +20,8 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   lam options : CompileOptions. lam p.
   let dunefile =
    "(env
-      (dev (flags (:standard -w -a)) (ocamlopt_flags (-linscan)))
-      (opt (flags (:standard -w -a)) (ocamlopt_flags (-O3))))
+      (dev (flags (:standard -w -a)) (ocamlc_flags (-without-runtime)) (ocamlopt_flags (-linscan)))
+      (opt (flags (:standard -w -a)) (ocamlc_flags (-without-runtime)) (ocamlopt_flags (-O3))))
     (executable (name program) (libraries boot))" in
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
