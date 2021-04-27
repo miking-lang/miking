@@ -9,12 +9,13 @@ include "string.mc"
 include "run.mc"
 include "assoc.mc"
 include "options.mc"
+include "tune.mc"
 
 mexpr
 
 -- Menu
 let menu = strJoin "\n" [
-  "Usage: mi [compile|run] <files>",
+  "Usage: mi [compile|run|tune] <files>",
   "",
   "Options:",
   "  --debug-parse                    Print the AST after parsing",
@@ -28,7 +29,8 @@ in
 -- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("run", run),
-("compile", compile)
+("compile", compile),
+("tune", tune)
 ] in
 
 -- Main: find and run the correct command. See commandsMap above.

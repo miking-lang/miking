@@ -9,6 +9,7 @@ include "name.mc"
 include "hashmap.mc"
 include "eqset.mc"
 include "eq.mc"
+include "keyword-maker.mc"
 include "common.mc"
 
 
@@ -130,13 +131,15 @@ end
 -- Language fragments for decision points --
 --------------------------------------------
 
-lang HoleAst
+lang HoleAst = IntAst + ANF + KeywordMaker
   syn Expr =
-  | TmHole {startGuess : Expr,
-            depth : Int}
+  | TmHole {init : Expr,
+            depth : Int,
+            ty : Type,
+            info : Info}
 
   sem ty =
-  | TmHole h -> tyunknown_ -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
+  | TmHole {ty = ty} -> ty
 
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
@@ -146,32 +149,42 @@ lang HoleAst
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmHole h -> acc
-end
 
-lang HolePrettyPrint = HoleAst + TypePrettyPrint
   sem isAtomic =
   | TmHole _ -> false
 
   sem pprintCode (indent : Int) (env : SymEnv) =
   | TmHole h ->
-    match pprintCode indent env h.startGuess with (env, startStr) then
+    match pprintCode indent env h.init with (env, startStr) then
       (env,
          join ["hole ", startStr, " ", int2string h.depth])
     else never
-end
 
-lang HoleANF = HoleAst + ANF
   sem isValue =
   | TmHole _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmHole {startGuess = startGuess, depth = depth} ->
-    k (TmHole {startGuess = normalizeTerm startGuess, depth = depth})
+  | TmHole {init = init, depth = depth} ->
+    k (TmHole {init = normalizeTerm init, depth = depth})
+
+  sem isKeyword =
+  | TmHole _ -> true
+
+  sem matchKeywordString (info : Info) =
+  | "hole" -> Some (2,
+                    lam lst.
+                      TmHole { init = get lst 0
+                             , depth =
+                               match get lst 1
+                               with TmConst {val = CInt {val = i}}
+                               then i else error "Depth must be a constant integer"
+                             , info = info
+                             , ty = tyunknown_})
 end
 
 let hole_ = use HoleAst in
-  lam startGuess. lam depth.
-  TmHole {startGuess = startGuess, depth = depth}
+  lam init. lam depth.
+  TmHole {init = init, depth = depth, ty = tyunknown_, info = NoInfo ()}
 
 ------------------------------
 -- Call context environment --
@@ -460,8 +473,7 @@ let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
                           with body = f bind.body}
     in (localFun, {bind with body = _lamWithBody newBody bind.body})
 
-type Lookup = Int -> Expr
-type Table = Map Name (Map [Name] Int)
+type LookupTable = Map Int Expr
 
 let _table = nameSym "table"
 let _argv =
@@ -470,46 +482,17 @@ let _argv =
 
 --
 lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
-                         -- Included for debugging
-                         + MExprPrettyPrint
-  syn Intermediate =
-  -- Reads values from a lookup table (to be given as argv)
-  | LookupTable {prog: Expr, table: Table}
-
-  -- Find the initial mapping from decision points to values
-  -- Returns a function of type 'Lookup'.
-  sem initAssignments (table : Table) =
-  | tm ->
-    let idsOfHole = lam name.
-      let m = mapFindWithExn name table in
-      map (lam t. match t with (k, v) then v else never) (mapBindings m)
-    in
-    -- Find the start guess of each decision point
-    recursive let findHoles : [(Int, Expr)] -> Expr -> [(Int, Expr)] =
-      lam acc. lam t.
-        match t with TmLet ({body = TmHole {startGuess = startGuess}} & le) then
-          let ids = idsOfHole le.ident in
-          findHoles (concat (map (lam i. (i, startGuess)) ids) acc) le.inexpr
-        else
-          sfold_Expr_Expr concat acc (smap_Expr_Expr (findHoles acc) t)
-    in
-    -- Build a map for int -> value
-    let m =
-      foldl (lam acc. lam t.
-               mapInsert t.0 t.1 acc)
-            (mapEmpty subi)
-            (findHoles [] tm) in
-    -- Return the lookup function
-    lam i. mapFindWithExn i m
+                    -- Included for debugging
+                    + MExprPrettyPrint
 
   -- Transform a program with decision points. All decision points will be
   -- eliminated and replaced by lookups in a static table. One reference per
   -- function tracks which function that latest called that function, thereby
   -- maintaining call history.
   sem flatten (publicFns : [Name]) =
-  | tm ->
+  | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
-    let tm = _replacePublic pub2priv tm in
+    let tm = _replacePublic pub2priv t in
     let env = callCtxInit publicFns (toCallGraph tm) tm in
     -- Declare the incoming variables
     let incVars =
@@ -522,9 +505,32 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let table = deref env.hole2idx in
     let nbrFlatHoles = mapFoldWithKey (lam acc. lam. lam m.
       addi acc (mapSize m)) 0 table in
-    LookupTable { prog = _wrapArgv nbrFlatHoles prog
-                , table = deref (env.hole2idx)
-                }
+    (_wrapArgv nbrFlatHoles prog, _initAssignments env t)
+
+  -- Find the initial mapping from decision points to values
+  sem _initAssignments (env : CallCtxEnv) =
+  | tm ->
+    let hole2idx = deref env.hole2idx in
+    let idsOfHole = lam name.
+      let m = mapFindWithExn name hole2idx in
+      map (lam t. match t with (k, v) then v else never) (mapBindings m)
+    in
+    -- Find the start guess of each decision point
+    recursive let findHoles : [(Int, Expr)] -> Expr -> [(Int, Expr)] =
+      lam acc. lam t.
+        match t with TmLet ({body = TmHole {init = init}} & le) then
+          let ids = idsOfHole le.ident in
+          findHoles (concat (map (lam i. (i, init)) ids) acc) le.inexpr
+        else
+          sfold_Expr_Expr concat acc (smap_Expr_Expr (findHoles acc) t)
+    in
+    -- Build a map for int -> value
+    let m =
+      foldl (lam acc. lam t.
+               mapInsert t.0 t.1 acc)
+            (mapEmpty subi)
+            (findHoles [] tm)
+    in m
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
@@ -638,18 +644,17 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   -- original program works as expected.
   sem _wrapArgv (n : Int) =
   | tm ->
+    -- TODO: apply a convert function on each argument depending on the type of
+    -- the hole
     matchex_
       (splitat_ (nvar_ _argv) (int_ 6))
       (ptuple_ [npvar_ _table, npvar_ _argv])
       tm
 end
 
-lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
+lang MExprHoles = MExpr + FlattenHoles + MExprANF
 
-lang TestLang = MExpr + FlattenHoles + PPrintLang + MExprANF + HoleANF
-  + MExprSym + MExprEq
-
-lang MExprHoles = MExpr + FlattenHoles + PPrintLang + MExprANF + HoleANF
+lang TestLang = MExprHoles + MExprSym + MExprEq
 
 mexpr
 
@@ -860,7 +865,7 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match flatten pub ast with LookupTable { prog = prog } then
+    match flatten pub ast with (prog, _) then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
       printLn (expr2str prog);
       ()
@@ -912,66 +917,59 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match flatten [funB, funC] ast with LookupTable { table = table, prog = prog } then
-match mapBindings table with [(_, m)] then
+match flatten [funB, funC] ast with (prog, table) then
 
-
-if debug then
-  printLn "Mapped paths";
-  dprintLn
-    (sort (lam t1 : ([Name], Int). lam t2 : ([Name], Int). subi t1.1 t2.1) (mapBindings m))
-else ();
-
-let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
-  let astExt =
-    match ast with TmMatch ({thn = thn} & t) then
-      TmMatch {t with thn = bind_ thn ext}
-    else error "Expected match expression"
+  let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
+    let astExt =
+      match ast with TmMatch ({thn = thn} & t) then
+        TmMatch {t with thn = bind_ thn ext}
+      else error "Expected match expression"
+    in
+    let table = seq_ (concat table (map (str_) argv)) in
+    let ast = bind_ (nulet_ _argv table) astExt in
+    eval { env = builtinEnv } ast
   in
-  let table = seq_ (concat table (map (str_) argv)) in
-  let ast = bind_ (nulet_ _argv table) astExt in
-  eval { env = builtinEnv } ast
-in
 
-let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
-let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
+  --let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
+  let idxs = mapi (lam i. lam. i) (mapBindings table) in
+  let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
 
-let eval = evalWithArgv table in
+  let eval = evalWithArgv table in
 
--- Path 1: C -> B (1)-> A
-utest eval prog (
-  app_ (nvar_ funC) true_
-) with int_ 1 using eqExpr in
+  -- Path 1: C -> B (1)-> A
+  utest eval prog (
+    app_ (nvar_ funC) true_
+  ) with int_ 1 using eqExpr in
 
--- Path 2: B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ false_
-) with int_ 2 using eqExpr in
+  -- Path 2: B (1)-> A
+  utest eval prog (
+    appf2_ (nvar_ funB) true_ false_
+  ) with int_ 2 using eqExpr in
 
--- Path 3: B -> B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ true_
-) with int_ 3 using eqExpr in
+  -- Path 3: B -> B (1)-> A
+  utest eval prog (
+    appf2_ (nvar_ funB) true_ true_
+  ) with int_ 3 using eqExpr in
 
--- Path 4: C -> B (2)-> A
-utest eval prog (
-  app_ (nvar_ funC) false_
-) with int_ 4 using eqExpr in
+  -- Path 4: C -> B (2)-> A
+  utest eval prog (
+    app_ (nvar_ funC) false_
+  ) with int_ 4 using eqExpr in
 
--- Path 5: B (2)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) false_ false_
-) with int_ 5 using eqExpr in
+  -- Path 5: B (2)-> A
+  utest eval prog (
+    appf2_ (nvar_ funB) false_ false_
+  ) with int_ 5 using eqExpr in
 
--- Path 5 again
-utest eval prog (
-  bind_ (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
-        (appf2_ (nvar_ funB) false_ false_)
-) with int_ 5 using eqExpr in
+  -- Path 5 again
+  utest eval prog (
+    bind_ (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
+          (appf2_ (nvar_ funB) false_ false_)
+  ) with int_ 5 using eqExpr in
 
--- Path 6: B -> B (2)-> A
--- unreachable
+  -- Path 6: B -> B (2)-> A
+  -- unreachable
 
 ()
 
-else never else never
+else never

@@ -66,43 +66,48 @@ let ocamlCompile = lam sourcePath. lam ocamlProg.
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
-  p.cleanup ()
+  p.cleanup ();
+  destinationFile
+
+let ocamlCompileAst = lam file. lam ast.
+  use MCoreCompile in
+  -- If option --debug-parse, then pretty print the AST
+  (if options.debugParse then printLn (pprintMcore ast) else ());
+
+  -- If option --test, then generate utest runner calls. Otherwise strip away
+  -- all utest nodes from the AST.
+  match generateTests ast options.runTests with (symEnv, ast) then
+
+    -- Re-symbolize the MExpr AST and re-annotate it with types
+    let ast = symbolizeExpr symEnv ast in
+    let ast = typeAnnot ast in
+
+    -- Translate the MExpr AST into an OCaml AST
+    let ocamlAst =
+      match typeLift ast with (env, ast) then
+        match generateTypeDecl env ast with (env, ast) then
+          let ast = generate env ast in
+          let ast = objWrap ast in
+          _withPreamble ast
+        else never
+      else never
+    in
+
+    let ocamlProg = pprintOcaml ocamlAst in
+
+    print "Debug-generate"; dprintLn (options.debugGenerate);
+    -- Print the AST after code generation
+    (if options.debugGenerate then printLn ocamlProg else ());
+
+    -- Compile OCaml AST
+    if options.exitBefore then exit 0
+    else ocamlCompile file ocamlProg
+  else never
 
 let compile = lam files. lam options : Options.
   use MCoreCompile in
   let compileFile = lam file.
     let ast = parseMCoreFile [] file in
-
-    -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (pprintMcore ast) else ());
-
-    -- If option --test, then generate utest runner calls. Otherwise strip away
-    -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) then
-
-      -- Re-symbolize the MExpr AST and re-annotate it with types
-      let ast = symbolizeExpr symEnv ast in
-      let ast = typeAnnot ast in
-
-      -- Translate the MExpr AST into an OCaml AST
-      let ocamlAst =
-        match typeLift ast with (env, ast) then
-          match generateTypeDecl env ast with (env, ast) then
-            let ast = generate env ast in
-            let ast = objWrap ast in
-            _withPreamble ast
-          else never
-        else never
-      in
-
-      let ocamlProg = pprintOcaml ocamlAst in
-
-      -- Print the AST after code generation
-      (if options.debugGenerate then printLn ocamlProg else ());
-
-      -- Compile OCaml AST
-      if options.exitBefore then exit 0
-      else ocamlCompile file ocamlProg
-    else never
+    ocamlCompileAst file ast
   in
   iter compileFile files
