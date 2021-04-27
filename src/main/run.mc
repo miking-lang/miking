@@ -11,5 +11,3 @@ include "eval.mc"
 -- how should side effects be handled?
 let run = eval
 
-let test = lam files. lam options : Options. lam args.
-  run files {options with runTests = true} args

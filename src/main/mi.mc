@@ -15,24 +15,23 @@ mexpr
 
 -- Menu
 let menu =
-"Usage: mi <command> file [<options>|<args>]
+"Usage: mi <command> [<options>] file [<options>]
 
 Commands:
   eval      Evaluates a .mc file using an internal interpreter
   compile   Compiles a .mc file into an executable with the same name
   run       Combines eval and compile, to run the program as fast as possible
-  test      Same as run, but with tests enabled and where the texts after
-            the .mc file are arguments to the executable program
 
 If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
+In such case, options need to be written before the file name.
 
 Options:
   --debug-parse       Print the AST after parsing
   --debug-generate    Print the AST after code generation
   --exit-before       Exit before evaluation or compilation
   --test              Generate utest code
-  -- [args]           If the run or eval commands are used, then the texts
+  -- <args>           If the run or eval commands are used, then the texts
                       following -- are arguments to the executed program
 "
 in
@@ -41,7 +40,6 @@ in
 -- always take two arguments: a list of filename and an option structure.
 let commandsMap = [
 ("run", run),
-("test", test),
 ("eval", eval),
 ("compile", compile)
 ] in
@@ -50,6 +48,7 @@ let commandsMap = [
 
 -- Does the command line include at least a file or a command?
 if lti (length argv) 2 then print menu else
+
   let cmdString = get argv 1 in
   let rest = tail (tail argv) in
   -- Is it a known command?

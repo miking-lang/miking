@@ -22,7 +22,7 @@ To compile and run the test suite, execute:
 make test
 ```
 
-An interpreter is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
+The Miking executable is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
 
 ```
 mexpr print "Hello world!"
@@ -49,14 +49,14 @@ make install
 
 This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
 
-The Miking interpreter also features a simple REPL.
+The Miking boot interpreter also features a simple REPL.
 The REPL allows interactively executing fragments of MCore code.
 Both toplevel definitions and expressions can be evaluated.
 
 To start the REPL (assuming that the interpreter is installed in the path), run
 
 ```
-mi repl
+boot repl
 ```
 
 The following is an example interaction with the REPL.
@@ -114,11 +114,11 @@ When writing MCore programs, it is typically done by writing explicit unit tests
 utest addi 1 2 with 3 in
 ()
 ```
-checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test`:
+checks that the addition of `1` and `2` is in fact `3`. To run the tests in an `.mc` file, run the `mi` command with argument `test` (assuming that you have now installed `mi` in your path):
 
 
 ```
-build/mi test program.mc
+mi run program.mc --test
 ```
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
