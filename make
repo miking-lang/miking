@@ -77,13 +77,12 @@ runtests_ocaml() {
 runtests() {
     (cd test
     ../build/$BOOT_NAME eval mexpr --test &
-    ../build/$BOOT_NAME eval mlang --test&
+    ../build/$BOOT_NAME eval mlang --test &
     cd ../stdlib
     ../build/$BOOT_NAME eval mexpr --test &
     ../build/$BOOT_NAME eval c --test &
-    ../build/$BOOT_NAME eval ad --test&
-    ../build/$BOOT_NAME eval ext --test &
-    ../build/$BOOT_NAME eval parser --test&
+    ../build/$BOOT_NAME eval ad --test &
+    ../build/$BOOT_NAME eval parser --test &
     cd ..
     export MCORE_STDLIB='@@@'
     build/$BOOT_NAME eval stdlib --test &)
