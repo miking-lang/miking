@@ -33,11 +33,7 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + Named
     TmLam {r with body = t}
   | TmVar r ->
     let ident = nameGetStr r.ident in
-    match mapLookup ident env with Some n then
-      match n with Some tm then
-        tm
-      else TmVar r
-    else TmVar r
+    match mapFindOrElse (lam. Some (TmVar r)) ident env with Some tm then tm else TmVar r
   | TmRecLets r ->
      let fEnv = lam acc. lam b:RecLetBinding. mapInsert (nameGetStr b.ident) (None()) acc in
      let env = foldl fEnv env r.bindings in
