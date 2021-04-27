@@ -608,6 +608,13 @@ lang ArithIntPrettyPrint = ArithIntAst + ConstPrettyPrint
   | CNegi _ -> "negi"
 end
 
+lang ShiftIntPrettyPrint = ShiftIntAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CSlli _ -> "slli"
+  | CSrli _ -> "srli"
+  | CSrai _ -> "srai"
+end
+
 lang FloatPrettyPrint = FloatAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CFloat t -> float2string t.val
@@ -622,6 +629,14 @@ lang ArithFloatPrettyPrint = ArithFloatAst + ConstPrettyPrint
   | CNegf _ -> "negf"
 end
 
+lang FloatIntConversionPrettyPrint = FloatIntConversionAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CFloorfi _ -> "floorfi"
+  | CCeilfi _ -> "ceilfi"
+  | CRoundfi _ -> "roundfi"
+  | CInt2float _ -> "int2float"
+end
+
 lang BoolPrettyPrint = BoolAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CBool b -> if b.val then "true" else "false"
@@ -630,13 +645,21 @@ end
 lang CmpIntPrettyPrint = CmpIntAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CEqi _ -> "eqi"
+  | CNeqi _ -> "neqi"
   | CLti _ -> "lti"
+  | CGti _ -> "gti"
+  | CLeqi _ -> "leqi"
+  | CGeqi _ -> "geqi"
 end
 
 lang CmpFloatPrettyPrint = CmpFloatAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CEqf _ -> "eqf"
   | CLtf _ -> "ltf"
+  | CLeqf _ -> "leqf"
+  | CGtf _ -> "gtf"
+  | CGeqf _ -> "geqf"
+  | CNeqf _ -> "neqf"
 end
 
 lang CharPrettyPrint = CharAst + ConstPrettyPrint
@@ -654,9 +677,22 @@ lang CmpCharPrettyPrint = CmpCharAst + ConstPrettyPrint
   | CEqc _ -> "eqc"
 end
 
+lang IntCharConversionPrettyPrint = IntCharConversionAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CInt2Char _ -> "int2char"
+  | CChar2Int _ -> "char2int"
+end
+
+lang FloatStringConversionPrettyPrint = FloatStringConversionAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CString2float _ -> "string2float"
+end
+
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CSymb _ -> "sym"
+  | CGensym _ -> "gensym"
+  | CSym2hash _ -> "sym2hash"
 end
 
 lang CmpSymbPrettyPrint = CmpSymbAst + ConstPrettyPrint
@@ -675,13 +711,29 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CReverse _ -> "reverse"
   | CCreate _ -> "create"
   | CSplitAt _ -> "splitAt"
+  | CSubsequence _ -> "subsequence"
 end
 
-lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
+lang FileOpPrettyPrint = FileOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CRef _ -> "ref"
-  | CModRef _ -> "modref"
-  | CDeRef _ -> "deref"
+  | CFileRead _ -> "fileRead"
+  | CFileWrite _ -> "fileWrite"
+  | CFileExists _ -> "fileExists"
+  | CFileDelete _ -> "fileDelete"
+end
+
+lang IOPrettyPrint = IOAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CPrint _ -> "print"
+  | CDPrint _ -> "dprint"
+  | CReadLine _ -> "readLine"
+  | CReadBytesAsString _ -> "readBytesAsString"
+end
+
+lang RandomNumberGeneratorPrettyPrint = RandomNumberGeneratorAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CRandIntU _ -> "randIntU"
+  | CRandSetSeed _ -> "randSetSeed"
 end
 
 lang SysPrettyPrint = SysAst + ConstPrettyPrint
@@ -692,18 +744,17 @@ lang SysPrettyPrint = SysAst + ConstPrettyPrint
   | CCommand _ -> "command"
 end
 
-lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
+lang TimePrettyPrint = TimeAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CTensorCreate _ -> "tensorCreate"
-  | CTensorGetExn _ -> "tensorGetExn"
-  | CTensorSetExn _ -> "tensorSetExn"
-  | CTensorRank _ -> "tensorRank"
-  | CTensorShape _ -> "tensorShape"
-  | CTensorReshapeExn _ -> "tensorReshapeExn"
-  | CTensorCopyExn _ -> "tensorCopyExn"
-  | CTensorSliceExn _ -> "tensorSliceExn"
-  | CTensorSubExn _ -> "tensorSubExn"
-  | CTensorIteri _ -> "tensorIteri"
+  | CWallTimeMs _ -> "wallTimeMs"
+  | CSleepMs _ -> "sleepMs"
+end
+
+lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CRef _ -> "ref"
+  | CModRef _ -> "modref"
+  | CDeRef _ -> "deref"
 end
 
 lang MapPrettyPrint = MapAst + ConstPrettyPrint
@@ -726,12 +777,34 @@ lang MapPrettyPrint = MapAst + ConstPrettyPrint
   | CMapGetCmpFun _ -> "mapGetCmpFun"
 end
 
-lang IOPrettyPrint = IOAst + ConstPrettyPrint
+lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CPrint _ -> "print"
-  | CDPrint _ -> "dprint"
-  | CReadLine _ -> "readLine"
-  | CReadBytesAsString _ -> "readBytesAsString"
+  | CTensorCreate _ -> "tensorCreate"
+  | CTensorGetExn _ -> "tensorGetExn"
+  | CTensorSetExn _ -> "tensorSetExn"
+  | CTensorRank _ -> "tensorRank"
+  | CTensorShape _ -> "tensorShape"
+  | CTensorReshapeExn _ -> "tensorReshapeExn"
+  | CTensorCopyExn _ -> "tensorCopyExn"
+  | CTensorSliceExn _ -> "tensorSliceExn"
+  | CTensorSubExn _ -> "tensorSubExn"
+  | CTensorIteri _ -> "tensorIteri"
+end
+
+lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CBootParserParseMExprString _ -> "bootParserParseMExprString"
+  | CBootParserParseMCoreFile _ -> "bootParserParseMCoreFile"
+  | CBootParserGetId _ -> "bootParserGetId"
+  | CBootParserGetTerm _ -> "bootParserGetTerm"
+  | CBootParserGetType _ -> "bootParserGetType"
+  | CBootParserGetString _ -> "bootParserGetString"
+  | CBootParserGetInt _ -> "bootParserGetInt"
+  | CBootParserGetFloat _ -> "bootParserGetFloat"
+  | CBootParserGetListLength _ -> "bootParserGetListLength"
+  | CBootParserGetConst _ -> "bootParserGetConst"
+  | CBootParserGetPat _ -> "bootParserGetPat"
+  | CBootParserGetInfo _ -> "bootParserGetInfo"
 end
 
 --------------
@@ -1020,11 +1093,15 @@ lang MExprPrettyPrint =
   NeverPrettyPrint + ExtPrettyPrint +
 
   -- Constants
-  IntPrettyPrint + ArithIntPrettyPrint + FloatPrettyPrint +
-  ArithFloatPrettyPrint + BoolPrettyPrint + CmpIntPrettyPrint +
-  CmpFloatPrettyPrint + CharPrettyPrint + CmpCharPrettyPrint +
-  SymbPrettyPrint + CmpSymbPrettyPrint + SeqOpPrettyPrint + RefOpPrettyPrint +
-  TensorOpPrettyPrint + MapPrettyPrint + SysPrettyPrint + IOPrettyPrint +
+  IntPrettyPrint + ArithIntPrettyPrint + ShiftIntPrettyPrint +
+  FloatPrettyPrint + ArithFloatPrettyPrint + FloatIntConversionPrettyPrint +
+  BoolPrettyPrint + CmpIntPrettyPrint + CmpFloatPrettyPrint + CharPrettyPrint +
+  CmpCharPrettyPrint + IntCharConversionPrettyPrint +
+  FloatStringConversionPrettyPrint + SymbPrettyPrint + CmpSymbPrettyPrint +
+  SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
+  RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
+  RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
+  BootParserPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
