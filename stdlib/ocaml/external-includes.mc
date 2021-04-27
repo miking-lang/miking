@@ -1,4 +1,4 @@
-include "math-ext.ext-ocaml.mc"
+include "ext/math-ext.ext-ocaml.mc"
 
 type ExternalImpl = {name : Name, extIdent : String, extTy : Type}
 
