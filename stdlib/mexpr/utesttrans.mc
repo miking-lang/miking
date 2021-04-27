@@ -190,8 +190,9 @@ let utestRunner = lam.
   match deref _utestRunnerCode with Some t then t
   else
     use BootParser in
-    modref _utestRunnerCode (parseMExprString [] _utestRunnerStr);
-    deref _utestRunnerCode
+    let code = parseMExprString [] _utestRunnerStr in
+    modref _utestRunnerCode (Some code);
+    code
 
 
 -- Get the name of a string identifier in an expression
