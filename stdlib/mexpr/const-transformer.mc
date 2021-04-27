@@ -11,7 +11,7 @@ include "mexpr/builtin.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/ast.mc"
 
-lang ConstTransformer = VarAst + LamAst + LetAst
+lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + NamedPat
 
   sem constTransform =
   | t ->
@@ -21,6 +21,7 @@ lang ConstTransformer = VarAst + LamAst + LetAst
       let t2 = ctWorker env t in
       --dprint t2;
       t2
+
 
   sem ctWorker (env: Map String Expr) =
   | TmLet r ->
@@ -34,7 +35,22 @@ lang ConstTransformer = VarAst + LamAst + LetAst
   | TmVar r ->
     let ident = nameGetStr r.ident in
     match mapFindOrElse (lam. TmVar r) ident env with Some tm then tm else TmVar r
-  -- TODO in this PR: | TmMatch
-  -- TOCO in this PR: | TmRecLets
+  | TmRecLets r ->
+     let fEnv = lam acc. lam b:RecLetBinding. mapInsert (nameGetStr b.ident) (None()) acc in
+     let env = foldl fEnv env r.bindings in
+     let bindings = map (lam b:RecLetBinding. {b with body = ctWorker env b.body}) r.bindings in
+     TmRecLets {r with bindings = bindings}
+  | TmMatch r ->
+     let fEnv = lam acc. lam x. mapInsert x (None()) acc in
+     let env2 = foldl fEnv env (ctGetPatVars [] r.pat) in
+     TmMatch {{r with thn = ctWorker env2 r.thn} with els = ctWorker env r.els}
   | t -> smap_Expr_Expr (ctWorker env) t
+
+
+  sem ctGetPatVars (acc: [String]) =
+  | PatNamed r ->
+      match r.ident with PName n then cons (nameGetStr n) acc else acc
+  | t -> sfold_Pat_Pat ctGetPatVars acc t
+
+
 end
