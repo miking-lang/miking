@@ -29,7 +29,7 @@ build() {
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
+        time build/$BOOT_NAME eval src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
         time ./$MI_NAME compile src/main/mi.mc
         mv -f $MI_NAME build/$MI_NAME
@@ -50,43 +50,43 @@ install() {
 # Run the test suite for parallel programming
 runtests_par() {
     (cd test
-     ../build/$BOOT_NAME multicore/* --test)
-    build/$BOOT_NAME stdlib/multicore/* --test
+     ../build/$BOOT_NAME eval multicore/* --test)
+    build/$BOOT_NAME eval stdlib/multicore/* --test
 }
 
 # Run the test suite for sundials
 runtests_sundials() {
     (cd test
-     ../build/$BOOT_NAME sundials/* --test)
-    build/$BOOT_NAME stdlib/sundials/* --test
+     ../build/$BOOT_NAME eval sundials/* --test)
+    build/$BOOT_NAME eval stdlib/sundials/* --test
 }
 
 # Run the test suite for python intrinsic tests
 runtests_py() {
     (cd test
-     ../build/$BOOT_NAME py/* --test)
+     ../build/$BOOT_NAME eval py/* --test)
 }
 
 # Run the test suite for OCaml compiler
 runtests_ocaml() {
     (cd stdlib
-     ../build/$BOOT_NAME ocaml/* --test)
+     ../build/$BOOT_NAME eval ocaml/* --test)
 }
 
 # Run the test suite
 runtests() {
     (cd test
-    ../build/$BOOT_NAME mexpr --test &
-    ../build/$BOOT_NAME mlang --test&
+    ../build/$BOOT_NAME eval mexpr --test &
+    ../build/$BOOT_NAME eval mlang --test&
     cd ../stdlib
-    ../build/$BOOT_NAME mexpr --test &
-    ../build/$BOOT_NAME c --test &
-    ../build/$BOOT_NAME ad --test&
-    ../build/$BOOT_NAME ext --test &
-    ../build/$BOOT_NAME parser --test&
+    ../build/$BOOT_NAME eval mexpr --test &
+    ../build/$BOOT_NAME eval c --test &
+    ../build/$BOOT_NAME eval ad --test&
+    ../build/$BOOT_NAME eval ext --test &
+    ../build/$BOOT_NAME eval parser --test&
     cd ..
     export MCORE_STDLIB='@@@'
-    build/$BOOT_NAME stdlib --test &)
+    build/$BOOT_NAME eval stdlib --test &)
     if [ -n "$MI_TEST_PAR" ]; then
         runtests_par &
     fi
