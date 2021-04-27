@@ -1094,7 +1094,7 @@ in
 let ocamlEval = lam ast.
   let ast = withPreamble ast in
   let compileOptions = {defaultCompileOptions with optimize = false} in
-  let prog = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
+  let prog = ocamlCompileWithConfig compileOptions (expr2str ast) in
   let res = prog.run "" [] in
   let out = res.stdout in
   (if neqi res.returncode 0 then printLn ""; printLn res.stderr else ());
