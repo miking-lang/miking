@@ -436,7 +436,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       let rs =
         map
           (lam impl: ExternalImpl.
-            marshal (oext_ impl.extIdent) (ty, impl.extTy))
+            externalMarshal (oext_ impl.extIdent) (ty, impl.extTy))
           impls
       in
       let r : {cost : Int, tm : Expr} =

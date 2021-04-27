@@ -20,7 +20,7 @@ let _testExternals =
 let externalMap =
   mapMapWithKey
   (lam id : String.
-    map (lam imp : ExternalImpl.
+    map (lam imp : {ident : String, ty : Type}.
           {name = nameSym id, extIdent = imp.ident, extTy = imp.ty}))
   (foldl1 mapUnion
     [
