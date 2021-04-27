@@ -51,7 +51,9 @@ let externalMarshal : Expr -> (Type, Type) -> {cost : Int, tm : Expr} =
       else
         let argtts : [(Type, Type)] =
           zipWith
-            (lam from. lam to. (from, to))
+            (lam from. lam to.
+              match from with TyArrow _ then (to, from)
+              else (from, to))
             (init fromTys)
             (init toTys)
         in

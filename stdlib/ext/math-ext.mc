@@ -1,8 +1,5 @@
 include "math.mc"
 
--- TODO(oerikss, 2021-04-27) If we don't define this alias dead code elimination
--- will remove eqfApprox. This is a bug and the code elimination should be
--- updated to check if functions are used in tests.
 let _eqf = eqfApprox 1e-6
 
 external exp : Float -> Float

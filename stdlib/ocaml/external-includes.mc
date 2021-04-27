@@ -14,6 +14,12 @@ let _testExternals =
         ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
                         tylist_ (tyvar_ "a"),
                         tylist_ (tyvar_ "b")] }
+    ]),
+    ("testListConcatMap", [
+      { ident = "List.concat_map",
+        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tylist_ (tyvar_ "b")),
+                        tylist_ (tyvar_ "a"),
+                        tylist_ (tyvar_ "b")] }
     ])
   ]
 
