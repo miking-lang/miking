@@ -436,9 +436,13 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       let rs =
         map
           (lam impl: ExternalImpl.
-            externalMarshal (oext_ impl.extIdent) (ty, impl.extTy))
+            externalMarshal (oext_ impl.extIdent) ty impl.extTy)
           impls
       in
+      -- NOTE(oerikss, 2021-04-27) Here we pick the implementation with the
+      -- lowest cost with respect to the type of the external directly. In the
+      -- future we would like to choose the implementation at each application
+      -- of the external.
       let r : {cost : Int, tm : Expr} =
         minOrElse
           (lam. error "impossible")
@@ -2542,6 +2546,23 @@ bind_
 in
 use MExprPrettyPrint in
 utest ocamlEvalInt (generateEmptyEnv extListMapTest)
+with int_ 1 using eqExpr in
+
+let extListConcatMapTest = symbolize (
+bind_
+  (ext_ "testListConcatMap" (tyarrows_ [tyarrow_ (tyvar_ "a")
+                                                 (tyseq_ (tyvar_ "b")),
+                                  tyseq_ (tyvar_ "a"),
+                                  tyseq_ (tyvar_ "b")]))
+  (get_
+    (appSeq_
+      (var_ "testListConcatMap")
+        [ulam_ "x" (seq_ [addi_ (var_ "x") (int_ 1)]),
+         seq_ [int_ 0, int_ 1]])
+    (int_ 0)))
+in
+use MExprPrettyPrint in
+utest ocamlEvalInt (generateEmptyEnv extListConcatMapTest)
 with int_ 1 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
