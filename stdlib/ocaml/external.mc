@@ -39,8 +39,8 @@ let externalMarshal = lam tm. lam fromTy. lam toTy.
       else match tt with (TyList _, TyList _) then
         {tm = tm, cost = 0}
       else match tt with (TySeq _, TyList _) then
-        -- NOTE(oerikss, 2021-04-24) we would like the cost to be proportional to
-        -- the length of the sequence. This applies to other types as well.
+        -- NOTE(oerikss, 2021-04-24) we would like the cost to be proportional
+        -- to the length of the sequence. This applies to other types as well.
         {tm = app_ (intrinsicOpSeq "Helpers.to_list") tm, cost = 3}
       else match tt with (TyList _, TySeq _) then
         {tm = app_ (intrinsicOpSeq "Helpers.of_list") tm, cost = 3}
