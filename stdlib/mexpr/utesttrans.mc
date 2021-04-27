@@ -186,16 +186,13 @@ let _utestRunnerCode = ref (None())
 
 -- Makes sure that the code is only parsed once and that it is
 -- not parsed if it is not used.
-let utestRunner = lam. unit_
-
-/-
+let utestRunner = lam.
   match deref _utestRunnerCode with Some t then t
   else
-
     use BootParser in
     modref _utestRunnerCode (parseMExprString [] _utestRunnerStr);
     deref _utestRunnerCode
-   -/
+
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
