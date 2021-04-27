@@ -4,7 +4,8 @@ let inf = divf 1.0 0.0
 let maxf = lam r. lam l. if gtf r l then r else l
 let minf = lam r. lam l. if ltf r l then r else l
 let absf = lam f. maxf f (negf f)
-let eqfApprox = lam epsilon. lam r. lam l. if leqf (absf (subf r l)) epsilon then true else false
+let eqfApprox = lam epsilon. lam r. lam l.
+  if leqf (absf (subf r l)) epsilon then true else false
 
 utest maxf 0. 0. with 0. using eqfApprox 1e-6
 utest maxf 1. 0. with 1. using eqfApprox 1e-6
