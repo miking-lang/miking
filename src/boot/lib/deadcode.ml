@@ -187,7 +187,7 @@ let extend_symb_map_builtin builtin_name2sym symbmap =
   in
   List.fold_left f symbmap builtin_name2sym
 
-(* The main dead code elimination function 
+(* The main dead code elimination function
    of flag utest is false, then utests are also removed
 *)
 let elimination builtin_sym2term builtin_name2sym t =

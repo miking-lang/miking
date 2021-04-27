@@ -152,7 +152,7 @@ export MCORE_STDLIB='stdlib'
 
 # Compile using boot
 for f in $files; do
-    compile "$f" "build/boot src/main/mi.mc -- compile --test" &
+    compile "$f" "build/boot eval src/main/mi.mc -- compile --test" &
 done
 wait
 
