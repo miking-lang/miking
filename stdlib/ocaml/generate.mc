@@ -744,6 +744,8 @@ let _objRepr = use OCamlAst in
   lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
 let _objObj = use OCamlAst in
   lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
+let _objMagic = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
 
 let _preamble =
   use OCamlAst in
@@ -1015,7 +1017,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
                   if isApp then
                     objWrapRec true t.lhs
                   else
-                    _objObj (_objRepr (objWrapRec true t.lhs))}
+                    _objMagic (objWrapRec true t.lhs)}
                 with rhs = objWrapRec false t.rhs}
   | TmRecord t ->
     if mapIsEmpty t.bindings then
@@ -1036,7 +1038,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
   | OTmMatch t ->
     _objObj
-    (OTmMatch {{t with target = _objObj (_objRepr (objWrapRec false t.target))}
+    (OTmMatch {{t with target = _objMagic (objWrapRec false t.target)}
                   with arms = map (lam p : (Pat, Expr).
                                     (p.0, _objRepr (objWrapRec false p.1)))
                                   t.arms})
