@@ -196,6 +196,10 @@ let findName : String -> Expr -> Option Name = use MExprAst in
         else match findNameH (None ()) body with Some n then Some n
         else match findNameH (None ()) inexpr with Some n then Some n
         else None ()
+      else match expr with TmExt {ident = ident, inexpr = inexpr} then
+        if eqString (nameGetStr ident) str then Some ident
+        else match findNameH (None ()) inexpr with Some n then Some n
+        else None ()
       else sfold_Expr_Expr findNameH (None ()) expr
     in
     findNameH (None ()) expr

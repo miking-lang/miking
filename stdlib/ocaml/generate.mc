@@ -11,7 +11,9 @@ include "mexpr/type-lift.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
+include "ocaml/intrinsics-ops.mc"
 include "common.mc"
+include "external.mc"
 
 type GenerateEnv = {
   constrs : Map Name Type,
@@ -24,42 +26,6 @@ let _emptyGenerateEnv = {
   records = mapEmpty (mapCmp _cmpType),
   aliases = mapEmpty nameCmp
 }
-
-let _seqOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
-
-let _symbOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
-
-let _floatOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
-
-let _fileOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
-
-let _ioOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
-
-let _sysOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
-
-let _randOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
-
-let _timeOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
-
-let _numTensorOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.Num." op}
-
-let _noNumTensorOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.NoNum." op}
-
-let _bootparserOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
-
-let _mapOp = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
@@ -462,6 +428,27 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         else opvar "tensorIteriNoNum"
       else dprintLn ty; never
     else TmConst t
+  -- TmExt Generation
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
+    let identStr = nameGetStr ident in
+    let impls = mapLookup identStr externalMap in
+    match impls with Some (![] & impls) then
+      let rs =
+        map
+          (lam impl: ExternalImpl.
+            marshal (oext_ impl.extIdent) (ty, impl.extTy))
+          impls
+      in
+      let r : {cost : Int, tm : Expr} =
+        minOrElse
+          (lam. error "impossible")
+          (lam r1 : {cost : Int, tm : Expr}. lam r2 : {cost : Int, tm : Expr}.
+            subi r1.cost r2.cost)
+        rs
+      in
+      bind_ (nulet_ ident r.tm) (generate env inexpr)
+    else
+      error (join ["No implementation for external ", identStr])
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -824,95 +811,95 @@ let _preamble =
     , intr2 "geqf" geqf_
     , intr2 "eqf" eqf_
     , intr2 "neqf" neqf_
-    , intr1 "floorfi" (appf1_ (_floatOp "floorfi"))
-    , intr1 "ceilfi" (appf1_ (_floatOp "ceilfi"))
-    , intr1 "roundfi" (appf1_ (_floatOp "roundfi"))
+    , intr1 "floorfi" (appf1_ (intrinsicOpFloat "floorfi"))
+    , intr1 "ceilfi" (appf1_ (intrinsicOpFloat "ceilfi"))
+    , intr1 "roundfi" (appf1_ (intrinsicOpFloat "roundfi"))
     , intr1 "int2float" int2float_
-    , intr1 "string2float" (appf1_ (_floatOp "string2float"))
+    , intr1 "string2float" (appf1_ (intrinsicOpFloat "string2float"))
     , intr2 "eqc" eqc_
     , intr1 "char2int" char2int_
     , intr1 "int2char" int2char_
-    , intr2 "create" (appf2_ (_seqOp "create"))
-    , intr1 "length" (appf1_ (_seqOp "length"))
-    , intr2 "concat" (appf2_ (_seqOp "concat"))
-    , intr2 "get" (appf2_ (_seqOp "get"))
-    , intr3 "set" (appf3_ (_seqOp "set"))
-    , intr2 "cons" (appf2_ (_seqOp "cons"))
-    , intr2 "snoc" (appf2_ (_seqOp "snoc"))
-    , intr2 "splitAt" (appf2_ (_seqOp "split_at"))
-    , intr1 "reverse" (appf1_ (_seqOp "reverse"))
-    , intr3 "subsequence" (appf3_ (_seqOp "subsequence"))
-    , intr1 "ofArray" (appf1_ (_seqOp "Helpers.of_array"))
-    , intr1 "print" (appf1_ (_ioOp "print"))
-    , intr1 "dprint" (appf1_ (_ioOp "dprint"))
-    , intr1 "readLine" (appf1_ (_ioOp "read_line"))
-    , intr0 "argv" (_sysOp "argv")
-    , intr1 "readFile" (appf1_ (_fileOp "read"))
-    , intr2 "writeFile" (appf2_ (_fileOp "write"))
-    , intr1 "fileExists" (appf1_ (_fileOp "exists"))
-    , intr1 "deleteFile" (appf1_ (_fileOp "delete"))
-    , intr1 "error" (appf1_ (_sysOp "error"))
-    , intr1 "exit" (appf1_ (_sysOp "exit"))
-    , intr1 "command" (appf1_ (_sysOp "command"))
-    , intr2 "eqsym" (appf2_ (_symbOp "eqsym"))
-    , intr1 "gensym" (appf1_ (_symbOp "gensym"))
-    , intr1 "sym2hash" (appf1_ (_symbOp "hash"))
-    , intr2 "randIntU" (appf2_ (_randOp "int_u"))
-    , intr1 "randSetSeed" (appf1_ (_randOp "set_seed"))
-    , intr1 "wallTimeMs" (appf1_ (_timeOp "get_wall_time_ms"))
-    , intr1 "sleepMs" (appf1_ (_timeOp "sleep_ms"))
-    , intr2 "bootParserParseMExprString" (appf2_ (_bootparserOp "parseMExprString"))
-    , intr2 "bootParserParseMCoreFile" (appf2_ (_bootparserOp "parseMCoreFile"))
-    , intr1 "bootParserGetId" (appf1_ (_bootparserOp "getId"))
-    , intr2 "bootParserGetTerm" (appf2_ (_bootparserOp "getTerm"))
-    , intr2 "bootParserGetType" (appf2_ (_bootparserOp "getType"))
-    , intr2 "bootParserGetString" (appf2_ (_bootparserOp "getString"))
-    , intr2 "bootParserGetInt" (appf2_ (_bootparserOp "getInt"))
-    , intr2 "bootParserGetFloat" (appf2_ (_bootparserOp "getFloat"))
-    , intr2 "bootParserGetListLength" (appf2_ (_bootparserOp "getListLength"))
-    , intr2 "bootParserGetConst" (appf2_ (_bootparserOp "getConst"))
-    , intr2 "bootParserGetPat" (appf2_ (_bootparserOp "getPat"))
-    , intr2 "bootParserGetInfo" (appf2_ (_bootparserOp "getInfo"))
-    , intr1 "mapEmpty" (appf1_ (_mapOp "empty"))
-    , intr3 "mapInsert" (appf3_ (_mapOp "insert"))
-    , intr2 "mapRemove" (appf2_ (_mapOp "remove"))
-    , intr2 "mapFindWithExn" (appf2_ (_mapOp "find"))
-    , intr3 "mapFindOrElse" (appf3_ (_mapOp "find_or_else"))
-    , intr4 "mapFindApplyOrElse" (appf4_ (_mapOp "find_apply_or_else"))
-    , intr1 "mapBindings" (appf1_ (_mapOp "bindings"))
-    , intr1 "mapSize" (appf1_ (_mapOp "size"))
-    , intr2 "mapMem" (appf2_ (_mapOp "mem"))
-    , intr2 "mapAny" (appf2_ (_mapOp "any"))
-    , intr2 "mapMap" (appf2_ (_mapOp "map"))
-    , intr2 "mapMapWithKey" (appf2_ (_mapOp "map_with_key"))
-    , intr3 "mapFoldWithKey" (appf3_ (_mapOp "fold_with_key"))
-    , intr3 "mapEq" (appf3_ (_mapOp "eq"))
-    , intr3 "mapCmp" (appf3_ (_mapOp "cmp"))
-    , intr3 "mapGetCmpFun" (appf3_ (_mapOp "key_cmp"))
+    , intr2 "create" (appf2_ (intrinsicOpSeq "create"))
+    , intr1 "length" (appf1_ (intrinsicOpSeq "length"))
+    , intr2 "concat" (appf2_ (intrinsicOpSeq "concat"))
+    , intr2 "get" (appf2_ (intrinsicOpSeq "get"))
+    , intr3 "set" (appf3_ (intrinsicOpSeq "set"))
+    , intr2 "cons" (appf2_ (intrinsicOpSeq "cons"))
+    , intr2 "snoc" (appf2_ (intrinsicOpSeq "snoc"))
+    , intr2 "splitAt" (appf2_ (intrinsicOpSeq "split_at"))
+    , intr1 "reverse" (appf1_ (intrinsicOpSeq "reverse"))
+    , intr3 "subsequence" (appf3_ (intrinsicOpSeq "subsequence"))
+    , intr1 "ofArray" (appf1_ (intrinsicOpSeq "Helpers.of_array"))
+    , intr1 "print" (appf1_ (intrinsicOpIO "print"))
+    , intr1 "dprint" (appf1_ (intrinsicOpIO "dprint"))
+    , intr1 "readLine" (appf1_ (intrinsicOpIO "read_line"))
+    , intr0 "argv" (intrinsicOpSys "argv")
+    , intr1 "readFile" (appf1_ (intrinsicOpFile "read"))
+    , intr2 "writeFile" (appf2_ (intrinsicOpFile "write"))
+    , intr1 "fileExists" (appf1_ (intrinsicOpFile "exists"))
+    , intr1 "deleteFile" (appf1_ (intrinsicOpFile "delete"))
+    , intr1 "error" (appf1_ (intrinsicOpSys "error"))
+    , intr1 "exit" (appf1_ (intrinsicOpSys "exit"))
+    , intr1 "command" (appf1_ (intrinsicOpSys "command"))
+    , intr2 "eqsym" (appf2_ (intrinsicOpSymb "eqsym"))
+    , intr1 "gensym" (appf1_ (intrinsicOpSymb "gensym"))
+    , intr1 "sym2hash" (appf1_ (intrinsicOpSymb "hash"))
+    , intr2 "randIntU" (appf2_ (intrinsicOpRand "int_u"))
+    , intr1 "randSetSeed" (appf1_ (intrinsicOpRand "set_seed"))
+    , intr1 "wallTimeMs" (appf1_ (intrinsicOpTime "get_wall_time_ms"))
+    , intr1 "sleepMs" (appf1_ (intrinsicOpTime "sleep_ms"))
+    , intr2 "bootParserParseMExprString" (appf2_ (intrinsicOpBootparser "parseMExprString"))
+    , intr2 "bootParserParseMCoreFile" (appf2_ (intrinsicOpBootparser "parseMCoreFile"))
+    , intr1 "bootParserGetId" (appf1_ (intrinsicOpBootparser "getId"))
+    , intr2 "bootParserGetTerm" (appf2_ (intrinsicOpBootparser "getTerm"))
+    , intr2 "bootParserGetType" (appf2_ (intrinsicOpBootparser "getType"))
+    , intr2 "bootParserGetString" (appf2_ (intrinsicOpBootparser "getString"))
+    , intr2 "bootParserGetInt" (appf2_ (intrinsicOpBootparser "getInt"))
+    , intr2 "bootParserGetFloat" (appf2_ (intrinsicOpBootparser "getFloat"))
+    , intr2 "bootParserGetListLength" (appf2_ (intrinsicOpBootparser "getListLength"))
+    , intr2 "bootParserGetConst" (appf2_ (intrinsicOpBootparser "getConst"))
+    , intr2 "bootParserGetPat" (appf2_ (intrinsicOpBootparser "getPat"))
+    , intr2 "bootParserGetInfo" (appf2_ (intrinsicOpBootparser "getInfo"))
+    , intr1 "mapEmpty" (appf1_ (intrinsicOpMap "empty"))
+    , intr3 "mapInsert" (appf3_ (intrinsicOpMap "insert"))
+    , intr2 "mapRemove" (appf2_ (intrinsicOpMap "remove"))
+    , intr2 "mapFindWithExn" (appf2_ (intrinsicOpMap "find"))
+    , intr3 "mapFindOrElse" (appf3_ (intrinsicOpMap "find_or_else"))
+    , intr4 "mapFindApplyOrElse" (appf4_ (intrinsicOpMap "find_apply_or_else"))
+    , intr1 "mapBindings" (appf1_ (intrinsicOpMap "bindings"))
+    , intr1 "mapSize" (appf1_ (intrinsicOpMap "size"))
+    , intr2 "mapMem" (appf2_ (intrinsicOpMap "mem"))
+    , intr2 "mapAny" (appf2_ (intrinsicOpMap "any"))
+    , intr2 "mapMap" (appf2_ (intrinsicOpMap "map"))
+    , intr2 "mapMapWithKey" (appf2_ (intrinsicOpMap "map_with_key"))
+    , intr3 "mapFoldWithKey" (appf3_ (intrinsicOpMap "fold_with_key"))
+    , intr3 "mapEq" (appf3_ (intrinsicOpMap "eq"))
+    , intr3 "mapCmp" (appf3_ (intrinsicOpMap "cmp"))
+    , intr3 "mapGetCmpFun" (appf3_ (intrinsicOpMap "key_cmp"))
     , intr1 "ref" ref_
     , intr1 "deref" deref_
     , intr2 "modref" modref_
-    , intr2 "tensorCreateNumInt" (appf2_ (_numTensorOp "create_int"))
-    , intr2 "tensorCreateNumFloat" (appf2_ (_numTensorOp "create_float"))
-    , intr2 "tensorCreateNoNum" (appf2_ (_noNumTensorOp "create"))
-    , intr2 "tensorGetExnNum" (appf2_ (_numTensorOp "get_exn"))
-    , intr2 "tensorGetExnNoNum" (appf2_ (_noNumTensorOp "get_exn"))
-    , intr3 "tensorSetExnNum" (appf3_ (_numTensorOp "set_exn"))
-    , intr3 "tensorSetExnNoNum" (appf3_ (_noNumTensorOp "set_exn"))
-    , intr1 "tensorRankNum" (appf1_ (_numTensorOp "rank"))
-    , intr1 "tensorRankNoNum" (appf1_ (_noNumTensorOp "rank"))
-    , intr1 "tensorShapeNum" (appf1_ (_numTensorOp "shape"))
-    , intr1 "tensorShapeNoNum" (appf1_ (_noNumTensorOp "shape"))
-    , intr2 "tensorReshapeExnNum" (appf2_ (_numTensorOp "reshape_exn"))
-    , intr2 "tensorReshapeExnNoNum" (appf2_ (_noNumTensorOp "reshape_exn"))
-    , intr2 "tensorCopyExnNum" (appf2_ (_numTensorOp "copy_exn"))
-    , intr2 "tensorCopyExnNoNum" (appf2_ (_noNumTensorOp "copy_exn"))
-    , intr2 "tensorSliceExnNum" (appf2_ (_numTensorOp "slice_exn"))
-    , intr2 "tensorSliceExnNoNum" (appf2_ (_noNumTensorOp "slice_exn"))
-    , intr3 "tensorSubExnNum" (appf3_ (_numTensorOp "sub_exn"))
-    , intr3 "tensorSubExnNoNum" (appf3_ (_noNumTensorOp "sub_exn"))
-    , intr2 "tensorIteriNum" (appf2_ (_numTensorOp "iteri"))
-    , intr2 "tensorIteriNoNum" (appf2_ (_noNumTensorOp "iteri"))
+    , intr2 "tensorCreateNumInt" (appf2_ (intrinsicOpTensorNum "create_int"))
+    , intr2 "tensorCreateNumFloat" (appf2_ (intrinsicOpTensorNum "create_float"))
+    , intr2 "tensorCreateNoNum" (appf2_ (intrinsicOpTensorNoNum "create"))
+    , intr2 "tensorGetExnNum" (appf2_ (intrinsicOpTensorNum "get_exn"))
+    , intr2 "tensorGetExnNoNum" (appf2_ (intrinsicOpTensorNoNum "get_exn"))
+    , intr3 "tensorSetExnNum" (appf3_ (intrinsicOpTensorNum "set_exn"))
+    , intr3 "tensorSetExnNoNum" (appf3_ (intrinsicOpTensorNoNum "set_exn"))
+    , intr1 "tensorRankNum" (appf1_ (intrinsicOpTensorNum "rank"))
+    , intr1 "tensorRankNoNum" (appf1_ (intrinsicOpTensorNoNum "rank"))
+    , intr1 "tensorShapeNum" (appf1_ (intrinsicOpTensorNum "shape"))
+    , intr1 "tensorShapeNoNum" (appf1_ (intrinsicOpTensorNoNum "shape"))
+    , intr2 "tensorReshapeExnNum" (appf2_ (intrinsicOpTensorNum "reshape_exn"))
+    , intr2 "tensorReshapeExnNoNum" (appf2_ (intrinsicOpTensorNoNum "reshape_exn"))
+    , intr2 "tensorCopyExnNum" (appf2_ (intrinsicOpTensorNum "copy_exn"))
+    , intr2 "tensorCopyExnNoNum" (appf2_ (intrinsicOpTensorNoNum "copy_exn"))
+    , intr2 "tensorSliceExnNum" (appf2_ (intrinsicOpTensorNum "slice_exn"))
+    , intr2 "tensorSliceExnNoNum" (appf2_ (intrinsicOpTensorNoNum "slice_exn"))
+    , intr3 "tensorSubExnNum" (appf3_ (intrinsicOpTensorNum "sub_exn"))
+    , intr3 "tensorSubExnNoNum" (appf3_ (intrinsicOpTensorNoNum "sub_exn"))
+    , intr2 "tensorIteriNum" (appf2_ (intrinsicOpTensorNum "iteri"))
+    , intr2 "tensorIteriNoNum" (appf2_ (intrinsicOpTensorNoNum "iteri"))
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
@@ -2532,6 +2519,30 @@ in
 utest ocamlEvalChar (generateEmptyEnv tensorIteriCharTest)
 with char_ '1' using eqExpr in
 
--- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
+-- Externals
+let extExpTest =
+  bind_
+    (ext_ "testExp" (tyarrow_ tyfloat_ tyfloat_))
+    (app_ (var_ "testExp") (float_ 0.))
+in
+utest ocamlEvalFloat (generateEmptyEnv extExpTest)
+with float_ 1. using eqExpr in
 
+let extListMapTest = symbolize (
+bind_
+  (ext_ "testListMap" (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
+                                  tyseq_ (tyvar_ "a"),
+                                  tyseq_ (tyvar_ "b")]))
+  (get_
+    (appSeq_
+      (var_ "testListMap")
+        [ulam_ "x" (addi_ (var_ "x") (int_ 1)),
+         seq_ [int_ 0, int_ 1]])
+    (int_ 0)))
+in
+use MExprPrettyPrint in
+utest ocamlEvalInt (generateEmptyEnv extListMapTest)
+with int_ 1 using eqExpr in
+
+-- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 ()
