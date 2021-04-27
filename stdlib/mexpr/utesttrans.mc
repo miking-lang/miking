@@ -182,9 +182,20 @@ in
 ()
 "
 
-let utestRunner =
-  use BootParser in
-  parseMExprString [] _utestRunnerStr
+let _utestRunnerCode = ref (None())
+
+-- Makes sure that the code is only parsed once and that it is
+-- not parsed if it is not used.
+let utestRunner = lam. unit_
+
+/-
+  match deref _utestRunnerCode with Some t then t
+  else
+
+    use BootParser in
+    modref _utestRunnerCode (parseMExprString [] _utestRunnerStr);
+    deref _utestRunnerCode
+   -/
 
 -- Get the name of a string identifier in an expression
 let findName : String -> Expr -> Option Name = use MExprAst in
@@ -200,9 +211,10 @@ let findName : String -> Expr -> Option Name = use MExprAst in
     in
     findNameH (None ()) expr
 
-let utestRunnerName = optionGetOrElse
+
+let utestRunnerName = lam. optionGetOrElse
   (lam. error "Expected utestRunner to be defined")
-  (findName "utestRunner" utestRunner)
+  (findName "utestRunner" (utestRunner ()))
 
 let getUniquePprintAndEqualityNames = lam.
   (nameSym "pp", nameSym "eq")
@@ -585,7 +597,7 @@ let utestRunnerCall =
   lam info : {row : String}. lam lPprintFunc. lam rPprintFunc.
   lam eqFunc. lam l. lam r.
   appf6_
-    (nvar_ utestRunnerName)
+    (nvar_ (utestRunnerName ()))
     (record_ [
       ("row", str_ info.row)])
     lPprintFunc
@@ -686,7 +698,7 @@ let constructSymbolizeEnv = lam env : UtestTypeEnv.
                  with tyEnv = typeNames}
 
 let withUtestRunner = lam utestFunctions. lam term.
-  bindall_ [utestRunner, utestFunctions, term]
+  bindall_ [utestRunner (), utestFunctions, term]
 
 -- NOTE(linnea, 2021-03-17): Assumes that typeAnnot has been called prior to the
 -- transformation.
