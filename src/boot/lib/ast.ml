@@ -177,7 +177,6 @@ and const =
   | CbootParserGetInfo of tm option
   (* External functions *)
   | CPar of tm Parast.ext
-  | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
 
@@ -612,7 +611,7 @@ let const_has_side_effect = function
   | CbootParserGetInfo _ ->
       true
   (* External functions *)
-  | CPar _ | CExt _ | CSd _ | CPy _ ->
+  | CPar _ | CSd _ | CPy _ ->
       true
 
 (* Converts a sequence of terms to a ustring *)

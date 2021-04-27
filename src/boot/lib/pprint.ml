@@ -513,9 +513,6 @@ let rec print_const fmt = function
   (* Sundials intrinsics *)
   | CSd v ->
       fprintf fmt "%s" (string_of_ustring (Sdpprint.pprint v))
-  (* External pprint TODO(?,?):: Should not be part of core language *)
-  | CExt v ->
-      fprintf fmt "%s" (string_of_ustring (Extpprint.pprint v))
 
 (** Pretty print a record *)
 and print_record fmt r =

@@ -142,8 +142,6 @@ let builtin =
   ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
   (* Append multicore intrinsics *)
   @ Par.externals
-  (* Append external functions *)
-  @ Ext.externals
   (* Append sundials intrinsics *)
   @ Sd.externals
   (* Append python intrinsics *)
