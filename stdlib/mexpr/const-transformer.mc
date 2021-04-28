@@ -38,7 +38,8 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + Named
      let fEnv = lam acc. lam b:RecLetBinding. mapInsert (nameGetStr b.ident) (None()) acc in
      let env = foldl fEnv env r.bindings in
      let bindings = map (lam b:RecLetBinding. {b with body = ctWorker env b.body}) r.bindings in
-     TmRecLets {r with bindings = bindings}
+     TmRecLets {{r with bindings = bindings}
+                   with inexpr = ctWorker env r.inexpr}
   | TmMatch r ->
      let fEnv = lam acc. lam x. mapInsert x (None()) acc in
      let env2 = foldl fEnv env (ctGetPatVars [] r.pat) in
