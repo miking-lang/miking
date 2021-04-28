@@ -1,0 +1,2 @@
+#!/bin/sh
+ocaml unix.cma run.ml $1 $2 $3 $4 $5
