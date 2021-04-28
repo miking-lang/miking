@@ -87,46 +87,6 @@ let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
 let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
 let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
 
-let _builtinNameMap : Map String Name =
-  mapUnion
-    builtinNameMap
-    (mapFromList cmpString
-      (map (lam s. (s, nameSym s))
-      [
-        "ofArray",
-        "tensorCreateNumInt",
-        "tensorCreateNumFloat",
-        "tensorCreateNoNum",
-        "tensorGetExnNum",
-        "tensorGetExnNoNum",
-        "tensorSetExnNum",
-        "tensorSetExnNoNum",
-        "tensorRankNum",
-        "tensorRankNoNum",
-        "tensorShapeNum",
-        "tensorShapeNoNum",
-        "tensorReshapeExnNum",
-        "tensorReshapeExnNoNum",
-        "tensorCopyExnNum",
-        "tensorCopyExnNoNum",
-        "tensorSliceExnNum",
-        "tensorSliceExnNoNum",
-        "tensorSubExnNum",
-        "tensorSubExnNoNum",
-        "tensorIteriNum",
-        "tensorIteriNoNum"
-      ]))
-
-let _builtinNamesSet : Set Name =
-  setOfSeq nameCmp
-           (map (lam x : (String, Name). x.1)
-           (mapBindings _builtinNameMap))
-
-let _intrinsicName : String -> Name = lam str.
-  match mapLookup str _builtinNameMap with Some name then
-    name
-  else error (join ["Unsupported intrinsic: ", str])
-
 recursive let unwrapAlias = use MExprAst in
   lam aliases. lam ty.
   match ty with TyVar {ident = ident} then
@@ -160,6 +120,175 @@ let lookupRecordFields = use MExprAst in
       Some fields
     else None ()
   else None ()
+
+let _objRepr = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
+let _objObj = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
+
+lang OCamlConstGenerate = MExprAst
+  sem tensorOpVar (opName : Name) =
+  | TyArrow {from = TyTensor {ty = TyInt _ | TyFloat _}} ->
+    _numTensorOp opName
+  | TyArrow {from = TyTensor _} ->
+    _noNumTensorOp opName
+
+  sem mkBody (op : Expr) =
+  | args ->
+    nulams_ args (_objRepr (foldl (lam t. lam a. t (_objObj (nvar_ a))) op args))
+
+  sem intr0 =
+  | op -> mkBody op []
+
+  sem intr1 =
+  | op ->
+    let a = nameSym "a" in
+    mkBody op [a]
+
+  sem intr2 =
+  | op ->
+    let a = nameSym "a" in
+    let b = nameSym "b" in
+    mkBody op [a,b]
+
+  sem intr3 =
+  | op ->
+    let a = nameSym "a" in
+    let b = nameSym "b" in
+    let c = nameSym "c" in
+    mkBody op [a,b,c]
+
+  sem intr4 =
+  | op ->
+    let a = nameSym "a" in
+    let b = nameSym "b" in
+    let c = nameSym "c" in
+    let d = nameSym "d" in
+    mkBody op [a,b,c,d]
+
+  sem generateConst (constTy : Type) (info : Info) =
+  | CAddi _ -> intr2 addi_
+  | CSubi _ -> intr2 subi_
+  | CMuli _ -> intr2 muli_
+  | CDivi _ -> intr2 divi_
+  | CModi _ -> intr2 modi_
+  | CNegi _ -> intr1 negi_
+  | CLti _ -> intr2 lti_
+  | CLeqi _ -> intr2 leqi_
+  | CGti _ -> intr2 gti_
+  | CGeqi _ -> intr2 geqi_
+  | CEqi _ -> intr2 eqi_
+  | CNeqi _ -> intr2 neqi_
+  | CSlli _ -> intr2 slli_
+  | CSrli _ -> intr2 srli_
+  | CSrai _ -> intr2 srai_
+  | CAddf _ -> intr2 addf_
+  | CSubf _ -> intr2 subf_
+  | CMulf _ -> intr2 mulf_
+  | CDivf _ -> intr2 divf_
+  | CNegf _ -> intr1 negf_
+  | CLtf _ -> intr2 ltf_
+  | CLeqf _ -> intr2 leqf_
+  | CGtf _ -> intr2 gtf_
+  | CGeqf _ -> intr2 geqf_
+  | CEqf _ -> intr2 eqf_
+  | CNeqf _ -> intr2 neqf_
+  | CFloorfi _ -> intr1 (appf1_ (_floatOp "floorfi"))
+  | CCeilfi _ -> intr1 (appf1_ (_floatOp "ceilfi"))
+  | CRoundfi _ -> intr1 (appf1_ (_floatOp "roundfi"))
+  | CInt2float _ -> intr1 int2float_
+  | CString2float _ -> intr1 (appf1_ (_floatOp "string2float"))
+  | CEqc _ -> intr2 eqc_
+  | CChar2Int _ -> intr1 char2int_
+  | CInt2Char _ -> intr1 int2char_
+  | CCreate _ -> intr2 (appf2_ (_seqOp "create"))
+  | CLength _ -> intr1 (appf1_ (_seqOp "length"))
+  | CConcat _ -> intr2 (appf2_ (_seqOp "concat"))
+  | CGet _ -> intr2 (appf2_ (_seqOp "get"))
+  | CSet _ -> intr2 (appf2_ (_seqOp "set"))
+  | CCons _ -> intr2 (appf2_ (_seqOp "cons"))
+  | CSnoc _ -> intr2 (appf2_ (_seqOp "snoc"))
+  | CSplitAt _ -> intr2 (appf2_ (_seqOp "split_at"))
+  | CReverse _ -> intr1 (appf1_ (_seqOp "reverse"))
+  | CSubsequence _ -> intr3 (appf3_ (_seqOp "subsequence"))
+  | CPrint _ -> intr1 (appf1_ (_ioOp "print"))
+  | CDPrint _ -> intr1 (appf1_ (_ioOp "dprint"))
+  | CReadLine _ -> intr1 (appf1_ (_ioOp "read_line"))
+  | CArgv _ -> intr0 (_sysOp "argv")
+  | CFileRead _ -> intr1 (appf1_ (_fileOp "read"))
+  | CFileWrite _ -> intr2 (appf2_ (_fileOp "write"))
+  | CFileExists _ -> intr1 (appf1_ (_fileOp "exists"))
+  | CFileDelete _ -> intr1 (appf1_ (_fileOp "delete"))
+  | CError _ -> intr1 (appf1_ (_sysOp "error"))
+  | CExit _ -> intr1 (appf1_ (_sysOp "exit"))
+  | CCommand _ -> intr1 (appf1_ (_sysOp "command"))
+  | CEqsym _ -> intr2 (appf2_ (_symbOp "eqsym"))
+  | CGensym _ -> intr1 (appf1_ (_symbOp "gensym"))
+  | CSym2hash _ -> intr1 (appf1_ (_symbOp "hash"))
+  | CRandIntU _ -> intr2 (appf2_ (_randOp "int_u"))
+  | CRandSetSeed _ -> intr1 (appf1_ (_randOp "set_seed"))
+  | CWallTimeMs _ -> intr1 (appf1_ (_timeOp "get_wall_time_ms"))
+  | CSleepMs _ -> intr1 (appf1_ (_timeOp "sleep_ms"))
+  | CRef _ -> intr1 ref_
+  | CModRef _ -> intr2 modref_
+  | CDeRef _ -> intr1 deref_
+  | CMapEmpty _ -> intr1 (appf1_ (_mapOp "empty"))
+  | CMapInsert _ -> intr3 (appf3_ (_mapOp "insert"))
+  | CMapRemove _ -> intr2 (appf2_ (_mapOp "remove"))
+  | CMapFindWithExn _ -> intr2 (appf2_ (_mapOp "find"))
+  | CMapFindOrElse _ -> intr3 (appf3_ (_mapOp "find_or_else"))
+  | CMapFindApplyOrElse _ -> intr4 (appf4_ (_mapOp "find_apply_or_else"))
+  | CMapBindings _ -> intr1 (appf1_ (_mapOp "bindings"))
+  | CMapSize _ -> intr1 (appf1_ (_mapOp "size"))
+  | CMapMem _ -> intr2 (appf2_ (_mapOp "mem"))
+  | CMapAny _ -> intr2 (appf2_ (_mapOp "any"))
+  | CMapMap _ -> intr2 (appf2_ (_mapOp "map"))
+  | CMapMapWithKey _ -> intr2 (appf2_ (_mapOp "map_with_key"))
+  | CMapFoldWithKey _ -> intr3 (appf3_ (_mapOp "fold_with_key"))
+  | CMapEq _ -> intr3 (appf3_ (_mapOp "eq"))
+  | CMapCmp _ -> intr3 (appf3_ (_mapOp "cmp"))
+  | CMapGetCmpFun _ -> intr3 (appf3_ (_mapOp "key_cmp"))
+  | CTensorCreate _ ->
+    let createOp =
+      match constTy with TyArrow {to = TyArrow {to = TyTensor {ty = tty}}} then
+        match tty with TyInt _ then _numTensorOp "create_int"
+        else match tty with TyFloat _ then _numTensorOp "create_float"
+        else _noNumTensorOp "create"
+      else dprintLn ty; never
+    in
+    intr2 (appf2_ createOp)
+  | CTensorGetExn _ -> intr2 (appf2_ (tensorOpVar "get_exn" constTy))
+  | CTensorSetExn _ -> intr3 (appf3_ (tensorOpVar "set_exn" constTy))
+  | CTensorRank _ -> intr1 (appf1_ (tensorOpVar "rank" constTy))
+  | CTensorShape _ -> intr1 (appf1_ (tensorOpVar "shape" constTy))
+  | CTensorReshapeExn _ -> intr2 (appf2_ (tensorOpVar "reshape_exn" constTy))
+  | CTensorCopyExn _ -> intr2 (appf2_ (tensorOpVar "copy_exn" constTy))
+  | CTensorSliceExn _ -> intr2 (appf2_ (tensorOpVar "slice_exn" constTy))
+  | CTensorSubExn _ -> intr3 (appf3_ (tensorOpVar "sub_exn" constTy))
+  | CTensorIteri _ ->
+    let iteriStr = "iteri" in
+    let iteriOp =
+      match constTy with TyArrow {to = TyArrow {from = TyTensor {ty = tty}}} then
+        match tty with TyInt _ | TyFloat _ then _numTensorOp iteriStr
+        else _noNumTensorOp iteriStr
+      else dprintLn ty; never
+    in
+    intr2 (appf2_ iteriOp)
+  | CBootParserParseMExprString _ -> intr2 (appf2_ (_bootparserOp "parseMExprString"))
+  | CBootParserParseMCoreFile _ -> intr2 (appf2_ (_bootparserOp "parseMCoreFile"))
+  | CBootParserGetId _ -> intr1 (appf1_ (_bootparserOp "getId"))
+  | CBootParserGetTerm _ -> intr2 (appf2_ (_bootparserOp "getTerm"))
+  | CBootParserGetType _ -> intr2 (appf2_ (_bootparserOp "getType"))
+  | CBootParserGetString _ -> intr2 (appf2_ (_bootparserOp "getString"))
+  | CBootParserGetInt _ -> intr2 (appf2_ (_bootparserOp "getInt"))
+  | CBootParserGetFloat _ -> intr2 (appf2_ (_bootparserOp "getFloat"))
+  | CBootParserGetListLength _ -> intr2 (appf2_ (_bootparserOp "getListLength"))
+  | CBootParserGetConst _ -> intr2 (appf2_ (_bootparserOp "getConst"))
+  | CBootParserGetPat _ -> intr2 (appf2_ (_bootparserOp "getPat"))
+  | CBootParserGetInfo _ -> intr2 (appf2_ (_bootparserOp "getInfo"))
+  | (CInt _ | CFloat _ | CBool _ | CChar _ | CSymb _) & c ->
+    TmConst {val = c, ty = constTy, info = info}
+end
 
 type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
                     els : Expr, ty : Type, info : Info}
@@ -198,7 +327,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match generatePat env targetTy tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nulet_ tname (generate env t.target)) (wrap (_some expr)))
+          (bind_ (nulet_ tname (generate env t.target))
+                 (generate env (wrap (_some expr))))
           pat
           (generate env t.thn)
           (generate env t.els)
@@ -324,10 +454,10 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
 end
 
-lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
+lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlConstGenerate
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
-    app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
+    app_ (_seqOp "Helpers.of_array") (OTmArray {tms = map (generate env) tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
@@ -426,42 +556,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       info = NoInfo ()
     }
   | TmConst t ->
-    -- Tensor Op Generation
-    let opvar = lam op. nvar_ (_intrinsicName op) in
     let ty = unwrapAlias env.aliases t.ty in
-    let tensorOpVar = lam opNum. lam opNoNum.
-      match ty with TyArrow {from = TyTensor {ty = tty}} then
-        match tty with TyInt _ | TyFloat _ then opvar opNum else opvar opNoNum
-      else dprintLn ty; never
-    in
-    match t.val with CTensorCreate _ then
-      match ty with TyArrow {to = TyArrow {to = TyTensor {ty = tty}}} then
-        match tty with TyInt _ then opvar "tensorCreateNumInt"
-        else match tty with TyFloat _ then opvar "tensorCreateNumFloat"
-        else opvar "tensorCreateNoNum"
-      else dprintLn ty; never
-    else match t.val with CTensorGetExn _ then
-      tensorOpVar "tensorGetExnNum" "tensorGetExnNoNum"
-    else match t.val with CTensorSetExn _ then
-      tensorOpVar "tensorSetExnNum" "tensorSetExnNoNum"
-    else match t.val with CTensorRank _ then
-      tensorOpVar "tensorRankNum" "tensorRankNoNum"
-    else match t.val with CTensorShape _ then
-      tensorOpVar "tensorShapeNum" "tensorShapeNoNum"
-    else match t.val with CTensorReshapeExn _ then
-      tensorOpVar "tensorReshapeExnNum" "tensorReshapeExnNoNum"
-    else match t.val with CTensorCopyExn _ then
-      tensorOpVar "tensorCopyExnNum" "tensorCopyExnNoNum"
-    else match t.val with CTensorSliceExn _ then
-      tensorOpVar "tensorSliceExnNum" "tensorSliceExnNoNum"
-    else match t.val with CTensorSubExn _ then
-      tensorOpVar "tensorSubExnNum" "tensorSubExnNoNum"
-    else match t.val with CTensorIteri _ then
-      match ty with TyArrow {to = TyArrow {from = TyTensor {ty = tty}}} then
-        match tty with TyInt _ | TyFloat _ then opvar "tensorIteriNum"
-        else opvar "tensorIteriNoNum"
-      else dprintLn ty; never
-    else TmConst t
+    generateConst ty t.info t.val
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -742,292 +838,22 @@ recursive let _isIntrinsicApp = use OCamlAst in
   lam t.
     match t with TmApp {lhs = TmConst _} then
       true
-    else match t with TmApp {lhs = TmVar {ident = ident}} then
-      setMem ident _builtinNamesSet
     else match t with TmApp {lhs = (TmApp _) & lhs} then
       _isIntrinsicApp lhs
     else false
 end
 
-let _objRepr = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
-let _objObj = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
-
-let _preamble =
-  use OCamlAst in
-
-  let objObjVar = lam a. _objObj (nvar_ a) in
-
-  let mkBody = lam op. lam args.
-    nulams_ args (_objRepr (foldl (lam t. lam a. t (objObjVar a)) op args))
-  in
-
-  let intr0 = lam str. lam op.
-    nulet_ (_intrinsicName str) (mkBody op [])
-  in
-
-  let intr1 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         mkBody op [a])
-  in
-
-  let intr2 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         mkBody op [a, b])
-  in
-
-  let intr3 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         let c = nameSym "c" in
-         mkBody op [a, b, c])
-  in
-
-  let intr4 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         let c = nameSym "c" in
-         let d = nameSym "d" in
-         mkBody op [a, b, c, d])
-  in
-
-  bindall_
-    [ intr2 "addi" addi_
-    , intr2 "subi" subi_
-    , intr2 "muli" muli_
-    , intr2 "divi" divi_
-    , intr2 "modi" modi_
-    , intr1 "negi" negi_
-    , intr2 "lti" lti_
-    , intr2 "leqi" leqi_
-    , intr2 "gti" gti_
-    , intr2 "geqi" geqi_
-    , intr2 "eqi" eqi_
-    , intr2 "neqi" neqi_
-    , intr2 "slli" slli_
-    , intr2 "srli" srli_
-    , intr2 "srai" srai_
-    , intr2 "addf" addf_
-    , intr2 "subf" subf_
-    , intr2 "mulf" mulf_
-    , intr2 "divf" divf_
-    , intr1 "negf" negf_
-    , intr2 "ltf" ltf_
-    , intr2 "leqf" leqf_
-    , intr2 "gtf" gtf_
-    , intr2 "geqf" geqf_
-    , intr2 "eqf" eqf_
-    , intr2 "neqf" neqf_
-    , intr1 "floorfi" (appf1_ (_floatOp "floorfi"))
-    , intr1 "ceilfi" (appf1_ (_floatOp "ceilfi"))
-    , intr1 "roundfi" (appf1_ (_floatOp "roundfi"))
-    , intr1 "int2float" int2float_
-    , intr1 "string2float" (appf1_ (_floatOp "string2float"))
-    , intr2 "eqc" eqc_
-    , intr1 "char2int" char2int_
-    , intr1 "int2char" int2char_
-    , intr2 "create" (appf2_ (_seqOp "create"))
-    , intr1 "length" (appf1_ (_seqOp "length"))
-    , intr2 "concat" (appf2_ (_seqOp "concat"))
-    , intr2 "get" (appf2_ (_seqOp "get"))
-    , intr3 "set" (appf3_ (_seqOp "set"))
-    , intr2 "cons" (appf2_ (_seqOp "cons"))
-    , intr2 "snoc" (appf2_ (_seqOp "snoc"))
-    , intr2 "splitAt" (appf2_ (_seqOp "split_at"))
-    , intr1 "reverse" (appf1_ (_seqOp "reverse"))
-    , intr3 "subsequence" (appf3_ (_seqOp "subsequence"))
-    , intr1 "ofArray" (appf1_ (_seqOp "Helpers.of_array"))
-    , intr1 "print" (appf1_ (_ioOp "print"))
-    , intr1 "dprint" (appf1_ (_ioOp "dprint"))
-    , intr1 "readLine" (appf1_ (_ioOp "read_line"))
-    , intr0 "argv" (_sysOp "argv")
-    , intr1 "readFile" (appf1_ (_fileOp "read"))
-    , intr2 "writeFile" (appf2_ (_fileOp "write"))
-    , intr1 "fileExists" (appf1_ (_fileOp "exists"))
-    , intr1 "deleteFile" (appf1_ (_fileOp "delete"))
-    , intr1 "error" (appf1_ (_sysOp "error"))
-    , intr1 "exit" (appf1_ (_sysOp "exit"))
-    , intr1 "command" (appf1_ (_sysOp "command"))
-    , intr2 "eqsym" (appf2_ (_symbOp "eqsym"))
-    , intr1 "gensym" (appf1_ (_symbOp "gensym"))
-    , intr1 "sym2hash" (appf1_ (_symbOp "hash"))
-    , intr2 "randIntU" (appf2_ (_randOp "int_u"))
-    , intr1 "randSetSeed" (appf1_ (_randOp "set_seed"))
-    , intr1 "wallTimeMs" (appf1_ (_timeOp "get_wall_time_ms"))
-    , intr1 "sleepMs" (appf1_ (_timeOp "sleep_ms"))
-    , intr2 "bootParserParseMExprString" (appf2_ (_bootparserOp "parseMExprString"))
-    , intr2 "bootParserParseMCoreFile" (appf2_ (_bootparserOp "parseMCoreFile"))
-    , intr1 "bootParserGetId" (appf1_ (_bootparserOp "getId"))
-    , intr2 "bootParserGetTerm" (appf2_ (_bootparserOp "getTerm"))
-    , intr2 "bootParserGetType" (appf2_ (_bootparserOp "getType"))
-    , intr2 "bootParserGetString" (appf2_ (_bootparserOp "getString"))
-    , intr2 "bootParserGetInt" (appf2_ (_bootparserOp "getInt"))
-    , intr2 "bootParserGetFloat" (appf2_ (_bootparserOp "getFloat"))
-    , intr2 "bootParserGetListLength" (appf2_ (_bootparserOp "getListLength"))
-    , intr2 "bootParserGetConst" (appf2_ (_bootparserOp "getConst"))
-    , intr2 "bootParserGetPat" (appf2_ (_bootparserOp "getPat"))
-    , intr2 "bootParserGetInfo" (appf2_ (_bootparserOp "getInfo"))
-    , intr1 "mapEmpty" (appf1_ (_mapOp "empty"))
-    , intr3 "mapInsert" (appf3_ (_mapOp "insert"))
-    , intr2 "mapRemove" (appf2_ (_mapOp "remove"))
-    , intr2 "mapFindWithExn" (appf2_ (_mapOp "find"))
-    , intr3 "mapFindOrElse" (appf3_ (_mapOp "find_or_else"))
-    , intr4 "mapFindApplyOrElse" (appf4_ (_mapOp "find_apply_or_else"))
-    , intr1 "mapBindings" (appf1_ (_mapOp "bindings"))
-    , intr1 "mapSize" (appf1_ (_mapOp "size"))
-    , intr2 "mapMem" (appf2_ (_mapOp "mem"))
-    , intr2 "mapAny" (appf2_ (_mapOp "any"))
-    , intr2 "mapMap" (appf2_ (_mapOp "map"))
-    , intr2 "mapMapWithKey" (appf2_ (_mapOp "map_with_key"))
-    , intr3 "mapFoldWithKey" (appf3_ (_mapOp "fold_with_key"))
-    , intr3 "mapEq" (appf3_ (_mapOp "eq"))
-    , intr3 "mapCmp" (appf3_ (_mapOp "cmp"))
-    , intr3 "mapGetCmpFun" (appf3_ (_mapOp "key_cmp"))
-    , intr1 "ref" ref_
-    , intr1 "deref" deref_
-    , intr2 "modref" modref_
-    , intr2 "tensorCreateNumInt" (appf2_ (_numTensorOp "create_int"))
-    , intr2 "tensorCreateNumFloat" (appf2_ (_numTensorOp "create_float"))
-    , intr2 "tensorCreateNoNum" (appf2_ (_noNumTensorOp "create"))
-    , intr2 "tensorGetExnNum" (appf2_ (_numTensorOp "get_exn"))
-    , intr2 "tensorGetExnNoNum" (appf2_ (_noNumTensorOp "get_exn"))
-    , intr3 "tensorSetExnNum" (appf3_ (_numTensorOp "set_exn"))
-    , intr3 "tensorSetExnNoNum" (appf3_ (_noNumTensorOp "set_exn"))
-    , intr1 "tensorRankNum" (appf1_ (_numTensorOp "rank"))
-    , intr1 "tensorRankNoNum" (appf1_ (_noNumTensorOp "rank"))
-    , intr1 "tensorShapeNum" (appf1_ (_numTensorOp "shape"))
-    , intr1 "tensorShapeNoNum" (appf1_ (_noNumTensorOp "shape"))
-    , intr2 "tensorReshapeExnNum" (appf2_ (_numTensorOp "reshape_exn"))
-    , intr2 "tensorReshapeExnNoNum" (appf2_ (_noNumTensorOp "reshape_exn"))
-    , intr2 "tensorCopyExnNum" (appf2_ (_numTensorOp "copy_exn"))
-    , intr2 "tensorCopyExnNoNum" (appf2_ (_noNumTensorOp "copy_exn"))
-    , intr2 "tensorSliceExnNum" (appf2_ (_numTensorOp "slice_exn"))
-    , intr2 "tensorSliceExnNoNum" (appf2_ (_noNumTensorOp "slice_exn"))
-    , intr3 "tensorSubExnNum" (appf3_ (_numTensorOp "sub_exn"))
-    , intr3 "tensorSubExnNoNum" (appf3_ (_noNumTensorOp "sub_exn"))
-    , intr2 "tensorIteriNum" (appf2_ (_numTensorOp "iteri"))
-    , intr2 "tensorIteriNoNum" (appf2_ (_noNumTensorOp "iteri"))
-    ]
-
-lang OCamlObjWrap = MExprAst + OCamlAst
-  sem intrinsic2name =
-  | CAddi _ -> nvar_ (_intrinsicName "addi")
-  | CSubi _ -> nvar_ (_intrinsicName "subi")
-  | CMuli _ -> nvar_ (_intrinsicName "muli")
-  | CDivi _ -> nvar_ (_intrinsicName "divi")
-  | CModi _ -> nvar_ (_intrinsicName "modi")
-  | CNegi _ -> nvar_ (_intrinsicName "negi")
-  | CLti _ -> nvar_ (_intrinsicName "lti")
-  | CLeqi _ -> nvar_ (_intrinsicName "leqi")
-  | CGti _ -> nvar_ (_intrinsicName "gti")
-  | CGeqi _ -> nvar_ (_intrinsicName "geqi")
-  | CEqi _ -> nvar_ (_intrinsicName "eqi")
-  | CNeqi _ -> nvar_ (_intrinsicName "neqi")
-  | CSlli _ -> nvar_ (_intrinsicName "slli")
-  | CSrli _ -> nvar_ (_intrinsicName "srli")
-  | CSrai _ -> nvar_ (_intrinsicName "srai")
-  | CAddf _ -> nvar_ (_intrinsicName "addf")
-  | CSubf _ -> nvar_ (_intrinsicName "subf")
-  | CMulf _ -> nvar_ (_intrinsicName "mulf")
-  | CDivf _ -> nvar_ (_intrinsicName "divf")
-  | CNegf _ -> nvar_ (_intrinsicName "negf")
-  | CLtf _ -> nvar_ (_intrinsicName "ltf")
-  | CLeqf _ -> nvar_ (_intrinsicName "leqf")
-  | CGtf _ -> nvar_ (_intrinsicName "gtf")
-  | CGeqf _ -> nvar_ (_intrinsicName "geqf")
-  | CEqf _ -> nvar_ (_intrinsicName "eqf")
-  | CNeqf _ -> nvar_ (_intrinsicName "neqf")
-  | CFloorfi _ -> nvar_ (_intrinsicName "floorfi")
-  | CCeilfi _ -> nvar_ (_intrinsicName "ceilfi")
-  | CRoundfi _ -> nvar_ (_intrinsicName "roundfi")
-  | CInt2float _ -> nvar_ (_intrinsicName "int2float")
-  | CString2float _ -> nvar_ (_intrinsicName "string2float")
-  | CEqc _ -> nvar_ (_intrinsicName "eqc")
-  | CChar2Int _ -> nvar_ (_intrinsicName "char2int")
-  | CInt2Char _ -> nvar_ (_intrinsicName "int2char")
-  | CCreate _ -> nvar_ (_intrinsicName "create")
-  | CLength _ -> nvar_ (_intrinsicName "length")
-  | CConcat _ -> nvar_ (_intrinsicName "concat")
-  | CGet _ -> nvar_ (_intrinsicName "get")
-  | CSet _ -> nvar_ (_intrinsicName "set")
-  | CCons _ -> nvar_ (_intrinsicName "cons")
-  | CSnoc _ -> nvar_ (_intrinsicName "snoc")
-  | CSplitAt _ -> nvar_ (_intrinsicName "splitAt")
-  | CReverse _ -> nvar_ (_intrinsicName "reverse")
-  | CSubsequence _ -> nvar_ (_intrinsicName "subsequence")
-  | CPrint _ -> nvar_ (_intrinsicName "print")
-  | CDPrint _ -> nvar_ (_intrinsicName "dprint")
-  | CReadLine _ -> nvar_ (_intrinsicName "readLine")
-  | CArgv _ -> nvar_ (_intrinsicName "argv")
-  | CFileRead _ -> nvar_ (_intrinsicName "readFile")
-  | CFileWrite _ -> nvar_ (_intrinsicName "writeFile")
-  | CFileExists _ -> nvar_ (_intrinsicName "fileExists")
-  | CFileDelete _ -> nvar_ (_intrinsicName "deleteFile")
-  | CError _ -> nvar_ (_intrinsicName "error")
-  | CExit _ -> nvar_ (_intrinsicName "exit")
-  | CCommand _ -> nvar_ (_intrinsicName "command")
-  | CEqsym _ -> nvar_ (_intrinsicName "eqsym")
-  | CGensym _ -> nvar_ (_intrinsicName "gensym")
-  | CSym2hash _ -> nvar_ (_intrinsicName "sym2hash")
-  | CRandIntU _ -> nvar_ (_intrinsicName "randIntU")
-  | CRandSetSeed _ -> nvar_ (_intrinsicName "randSetSeed")
-  | CWallTimeMs _ -> nvar_ (_intrinsicName "wallTimeMs")
-  | CSleepMs _ -> nvar_ (_intrinsicName "sleepMs")
-  | CMapEmpty _ -> nvar_ (_intrinsicName "mapEmpty")
-  | CMapInsert _ -> nvar_ (_intrinsicName "mapInsert")
-  | CMapRemove _ -> nvar_ (_intrinsicName "mapRemove")
-  | CMapFindWithExn _ -> nvar_ (_intrinsicName "mapFindWithExn")
-  | CMapFindOrElse _ -> nvar_ (_intrinsicName "mapFindOrElse")
-  | CMapFindApplyOrElse _ -> nvar_ (_intrinsicName "mapFindApplyOrElse")
-  | CMapBindings _ -> nvar_ (_intrinsicName "mapBindings")
-  | CMapSize _ -> nvar_ (_intrinsicName "mapSize")
-  | CMapMem _ -> nvar_ (_intrinsicName "mapMem")
-  | CMapAny _ -> nvar_ (_intrinsicName "mapAny")
-  | CMapMap _ -> nvar_ (_intrinsicName "mapMap")
-  | CMapMapWithKey _ -> nvar_ (_intrinsicName "mapMapWithKey")
-  | CMapFoldWithKey _ -> nvar_ (_intrinsicName "mapFoldWithKey")
-  | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
-  | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
-  | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
-  | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
-  | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
-  | CBootParserParseMCoreFile _ -> nvar_ (_intrinsicName "bootParserParseMCoreFile")
-  | CBootParserGetId _ -> nvar_ (_intrinsicName "bootParserGetId")
-  | CBootParserGetTerm _ -> nvar_ (_intrinsicName "bootParserGetTerm")
-  | CBootParserGetType _ -> nvar_ (_intrinsicName "bootParserGetType")
-  | CBootParserGetString _ -> nvar_ (_intrinsicName "bootParserGetString")
-  | CBootParserGetInt _ -> nvar_ (_intrinsicName "bootParserGetInt")
-  | CBootParserGetFloat _ -> nvar_ (_intrinsicName "bootParserGetFloat")
-  | CBootParserGetListLength _ -> nvar_ (_intrinsicName "bootParserGetListLength")
-  | CBootParserGetConst _ -> nvar_ (_intrinsicName "bootParserGetConst")
-  | CBootParserGetPat _ -> nvar_ (_intrinsicName "bootParserGetPat")
-  | CBootParserGetInfo _ -> nvar_ (_intrinsicName "bootParserGetInfo")
-  | CRef _ -> nvar_ (_intrinsicName "ref")
-  | CModRef _ -> nvar_ (_intrinsicName "modref")
-  | CDeRef _ -> nvar_ (_intrinsicName "deref")
-  | t -> dprintLn t; error "Intrinsic not implemented"
-
+lang OCamlObjWrap = MExprAst + OCamlAst + OCamlConstGenerate
   sem objWrapRec (isApp : Bool) =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
     _objRepr t
-  | TmConst {val = c} -> intrinsic2name c
   | TmApp t ->
-    if _isIntrinsicApp (TmApp t) then
-      TmApp {{t with lhs = objWrapRec true t.lhs}
-                with rhs = _objRepr (objWrapRec false t.rhs)}
-    else
-      TmApp {{t with lhs =
-                  if isApp then
-                    objWrapRec true t.lhs
-                  else
-                    _objObj (_objRepr (objWrapRec true t.lhs))}
-                with rhs = objWrapRec false t.rhs}
+    TmApp {{t with lhs =
+                if isApp then
+                  objWrapRec true t.lhs
+                else
+                  _objObj (_objRepr (objWrapRec true t.lhs))}
+              with rhs = objWrapRec false t.rhs}
   | TmRecord t ->
     if mapIsEmpty t.bindings then
       _objRepr (TmRecord t)
@@ -1074,27 +900,9 @@ let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here to make
--- the test run faster. This is an ugly hack!
-let preambleStr =
-  let str = expr2str (bind_ _preamble (int_ 0)) in
-  let len = length str in
-  subsequence str 0 (subi len 1)
-in
-
--- NOTE(larshum, 2021-03-08): Adds the preamble to the top of a given term,
--- but places it after all variant type declarations.
-recursive let withPreamble = lam t.
-  match t with OTmVariantTypeDecl tt then
-    OTmVariantTypeDecl {tt with inexpr = withPreamble tt.inexpr}
-  else
-    OTmPreambleText {text = preambleStr, inexpr = t}
-in
-
 -- Evaluates OCaml expressions [strConvert] given as string, applied
 -- to [p], and parses it as a mexpr expression.
 let ocamlEval = lam ast.
-  let ast = withPreamble ast in
   let prog = ocamlCompileWithConfig {warnings=false} (expr2str ast) in
   let res = prog.run "" [] in
   let out = res.stdout in
