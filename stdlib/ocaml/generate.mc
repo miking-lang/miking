@@ -834,16 +834,7 @@ lang OCamlTypeDeclGenerate = MExprTypeLift
     else never
 end
 
-recursive let _isIntrinsicApp = use OCamlAst in
-  lam t.
-    match t with TmApp {lhs = TmConst _} then
-      true
-    else match t with TmApp {lhs = (TmApp _) & lhs} then
-      _isIntrinsicApp lhs
-    else false
-end
-
-lang OCamlObjWrap = MExprAst + OCamlAst + OCamlConstGenerate
+lang OCamlObjWrap = MExprAst + OCamlAst
   sem objWrapRec (isApp : Bool) =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
     _objRepr t
