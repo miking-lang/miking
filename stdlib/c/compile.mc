@@ -126,11 +126,12 @@ lang MExprCCompile = MExprAst + CAst
   | prog ->
 
     let decls: [CTop] =
-      foldl (lam acc. lam t. genTyDecls acc t.0 t.1) [] typeEnv in
+      foldl (lam acc. lam t: (Name,Type). genTyDecls acc t.0 t.1) [] typeEnv in
     let defs: [CTop] =
-      foldl (lam acc. lam t. genTyDefs acc t.0 t.1) [] typeEnv in
+      foldl (lam acc. lam t: (Name,Type). genTyDefs acc t.0 t.1) [] typeEnv in
     let postDefs: (ConstrDataEnv, [CTop]) =
-      foldl (lam acc. lam t. genTyPostDefs acc t.0 t.1) ([],[]) typeEnv in
+      foldl (lam acc. lam t: (Name,Type). genTyPostDefs acc t.0 t.1)
+        ([],[]) typeEnv in
 
     match postDefs with (constrData, postDefs) then
       let env = {{ compileCEnvEmpty with constrData = constrData }
@@ -508,32 +509,48 @@ lang MExprCCompile = MExprAst + CAst
         compileTops env (snoc accTop fun) accInit inexpr
       else never
     else
+      type Def = { ty: CType, id: Option Name, init: Option CInit } in
       match compileLet env ident body with (env, def, init) then
+        -- let t: (Option { ty: CType, id: Option Name, init: Option CInit }, [CStmt]) =
+        --   (def, init) in
+        let definit =
+          match def with Some def then
+            let def: Def = def in
+            match def with { init = Some definit } then Some definit
+            else None ()
+          else None ()
+        in
         -- We need to specially handle direct initialization, since most things
         -- are not allowed at top-level.
-        let t = (def, init) in
-        match t with (Some ({ init = Some definit } & def), _) then
-          match definit with CIExpr { expr = expr } then
-            let def = CTDef { def with init = None () } in
-            let definit = CSExpr { expr = CEBinOp {
-              op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } }
-            in
-            let accInit = join [accInit, [definit], init] in
-            compileTops env (snoc accTop def) accInit inexpr
-          else match definit with _ then
-            error "CIList initializer, TODO?"
+        match definit with Some definit then
+          let definit: CInit = definit in
+          match def with Some def then
+            let def: Def = def in
+            match definit with CIExpr { expr = expr } then
+              let def = CTDef { def with init = None () } in
+              let definit = CSExpr { expr = CEBinOp {
+                op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } }
+              in
+              let accInit = join [accInit, [definit], init] in
+              compileTops env (snoc accTop def) accInit inexpr
+            else match definit with _ then
+              error "CIList initializer, TODO?"
+            else never
           else never
 
         else
           let accTop =
-            match def with Some def then snoc accTop (CTDef def) else accTop in
+            match def with Some def then
+              let def: Def = def in
+              snoc accTop (CTDef def)
+            else accTop in
           let accInit = concat accInit init in
           compileTops env accTop accInit inexpr
 
       else never
 
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let f = lam env. lam binding.
+    let f = lam env. lam binding: RecLetBinding.
       match binding with { ident = ident, tyBody = tyBody, body = body } then
         compileFun env ident tyBody body
       else never
@@ -571,7 +588,9 @@ lang MExprCCompile = MExprAst + CAst
 
   | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
     match compileLet env ident body with (env, def, init) then
-      let acc = match def with Some def then snoc acc (CSDef def) else acc in
+      let acc = match def with Some def then
+        let def: Def = def in
+        snoc acc (CSDef def) else acc in
       let acc = concat acc init in
       compileStmts env final acc inexpr
     else never
