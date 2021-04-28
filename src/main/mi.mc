@@ -27,12 +27,13 @@ and all arguments after the file are arguments to the .mc executed file.
 In such case, options need to be written before the file name.
 
 Options:
-  --debug-parse       Print the AST after parsing
-  --debug-generate    Print the AST after code generation
-  --exit-before       Exit before evaluation or compilation
-  --test              Generate utest code
-  -- <args>           If the run or eval commands are used, then the texts
-                      following -- are arguments to the executed program
+  --debug-parse           Print the AST after parsing
+  --debug-generate        Print the AST after code generation
+  --exit-before           Exit before evaluation or compilation
+  --test                  Generate utest code
+  --disable-optimizations Disables optimizations to decrease compilation time
+  -- <args>               If the run or eval commands are used, then the texts
+                          following -- are arguments to the executed program
 "
 in
 
