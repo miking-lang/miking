@@ -43,7 +43,9 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + Named
   | TmMatch r ->
      let fEnv = lam acc. lam x. mapInsert x (None()) acc in
      let env2 = foldl fEnv env (ctGetPatVars [] r.pat) in
-     TmMatch {{r with thn = ctWorker env2 r.thn} with els = ctWorker env r.els}
+     TmMatch {{{r with target = ctWorker env r.target}
+                  with thn = ctWorker env2 r.thn}
+                  with els = ctWorker env r.els}
   | t -> smap_Expr_Expr (ctWorker env) t
 
 
