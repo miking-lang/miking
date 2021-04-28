@@ -692,11 +692,12 @@ and print_tm' fmt t =
       let data' = List.map print (Array.to_list data) in
       fprintf fmt "Tensor([@[<hov 0>%a@]], [@[<hov 0>%a@]])" concat
         (Comma, shape') concat (Comma, data')
-  | TmExt (_, x, s, ty, t) ->
+  | TmExt (_, x, s, e, ty, t) ->
       let x = string_of_ustring (ustring_of_var x s) in
       let ty = ty |> ustring_of_ty |> string_of_ustring in
-      fprintf fmt "@[<hov 0>@[<hov %d>external %s : %s in@]@ %a@]" !ref_indent
-        x ty print_tm (Match, t)
+      let e = if e then "!" else "" in
+      fprintf fmt "@[<hov 0>@[<hov %d>external %s %s : %s in@]@ %a@]"
+        !ref_indent x e ty print_tm (Match, t)
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

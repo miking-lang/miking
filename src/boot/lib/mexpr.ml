@@ -1631,7 +1631,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   | TmUse (fi, _, _) ->
       raise_error fi "A 'use' of a language was not desugared"
   (* External *)
-  | TmExt (_, _, _, _, t) ->
+  | TmExt (_, _, _, _, _, t) ->
       eval env t
   (* Only at runtime *)
   | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->

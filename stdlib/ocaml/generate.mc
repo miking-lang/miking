@@ -2528,7 +2528,7 @@ with char_ '1' using eqExpr in
 -- Externals
 let extExpTest =
   bind_
-    (ext_ "testExp" (tyarrow_ tyfloat_ tyfloat_))
+    (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
     (app_ (var_ "testExp") (float_ 0.))
 in
 utest ocamlEvalFloat (generateEmptyEnv extExpTest)
@@ -2536,9 +2536,11 @@ with float_ 1. using eqExpr in
 
 let extListMapTest = symbolize (
 bind_
-  (ext_ "testListMap" (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                                  tyseq_ (tyvar_ "a"),
-                                  tyseq_ (tyvar_ "b")]))
+  (ext_ "testListMap"
+        false
+        (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
+                    tyseq_ (tyvar_ "a"),
+                    tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
       (var_ "testListMap")
@@ -2552,10 +2554,11 @@ with int_ 1 using eqExpr in
 
 let extListConcatMapTest = symbolize (
 bind_
-  (ext_ "testListConcatMap" (tyarrows_ [tyarrow_ (tyvar_ "a")
-                                                 (tyseq_ (tyvar_ "b")),
-                                  tyseq_ (tyvar_ "a"),
-                                  tyseq_ (tyvar_ "b")]))
+  (ext_ "testListConcatMap"
+        false
+        (tyarrows_ [tyarrow_ (tyvar_ "a") (tyseq_ (tyvar_ "b")),
+                    tyseq_ (tyvar_ "a"),
+                    tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
       (var_ "testListConcatMap")

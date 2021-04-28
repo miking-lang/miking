@@ -141,7 +141,7 @@ lang ExtSym = Sym + ExtAst
       let ty = symbolizeType env t.ty in
       if nameHasSym t.ident then
         TmExt {{t with inexpr = symbolizeExpr env t.inexpr}
-                   with ty = ty}
+                  with ty = ty}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
