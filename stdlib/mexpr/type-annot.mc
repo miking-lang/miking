@@ -124,7 +124,7 @@ lang TypeAnnot
 
   sem typeAnnot =
   | expr ->
-    let env = {_typeEnvEmpty with varEnv = builtinNameTypeMap} in
+    let env = _typeEnvEmpty in
     typeAnnotExpr env expr
 end
 

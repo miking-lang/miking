@@ -714,7 +714,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CCreate2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
-    let f = lam i. eval {env = builtinEnv} (app_ arg (int_ i)) in
+    let f = lam i. eval {env = mapEmpty nameCmp} (app_ arg (int_ i)) in
     TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
   | CSubsequence _ ->
     match arg with TmSeq s then
@@ -1016,7 +1016,7 @@ use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize : Expr -> Expr =
-  lam t : Expr. eval {env = builtinEnv} t in
+  lam t : Expr. eval {env = mapEmpty nameCmp} t in
 
 let eval : Expr -> Expr =
   lam t : Expr. evalNoSymbolize (symbolize t) in

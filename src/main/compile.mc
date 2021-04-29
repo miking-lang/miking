@@ -33,7 +33,7 @@ let generateTests = lam ast. lam testsEnabled.
     let ast = typeAnnot ast in
     utestGen ast
   else
-    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.

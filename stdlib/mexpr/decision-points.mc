@@ -908,7 +908,7 @@ else ();
 
 let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
   let ast = bind_ (bind_ (nulet_ _table table) ast) ext in
-  eval { env = builtinEnv } ast
+  eval { env = mapEmpty nameCmp } ast
 in
 
 let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in

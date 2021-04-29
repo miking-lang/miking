@@ -70,7 +70,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     let app =
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
     in
-    TmConst {val = CThread {thread = threadSpawn (lam. eval {env = builtinEnv} app)}
+    TmConst {val = CThread {thread = threadSpawn (lam. eval {env = mapEmpty nameCmp} app)}
             , info = NoInfo ()
             , ty = tyunknown_
             }
@@ -110,7 +110,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   | CThreadCriticalSection _ ->
     let app =
       TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
-    in threadCriticalSection (lam. eval {env = builtinEnv} app)
+    in threadCriticalSection (lam. eval {env = mapEmpty nameCmp} app)
   | CThreadCPURelax _ ->
     let err = "Argument to threadCPURelax is not unit" in
     match arg with TmRecord {bindings = bindings} then
@@ -130,7 +130,7 @@ use MExprParEval in
 
 -- Evaluation shorthand used in tests below
 let eval =
-  lam t. eval {env = builtinEnv} (symbolize t) in
+  lam t. eval {env = mapEmpty nameCmp} (symbolize t) in
 
 -- Atomic references
 let p = ulet_ "r" (atomicMake_ (int_ 0)) in

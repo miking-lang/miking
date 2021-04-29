@@ -955,7 +955,7 @@ utest ocamlEvalChar (char_ '1') with char_ '1' using eqExpr in
 let sameSemantics = lam mexprAst. lam ocamlAst.
   let mexprVal =
     use MExprEval in
-    eval {env = builtinEnv} mexprAst
+    eval {env = mapEmpty nameCmp} mexprAst
   in
   match mexprVal with TmConst t then
     match t.val with CInt _ then

@@ -51,17 +51,6 @@ let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
                        count = mapEmpty cmpString,
                        strings = mapEmpty cmpString }
 
--- Definition of a pprint environment including the names of the builtin
--- functions.
-let builtinPprintNameMap =
-  mapFromList nameCmp (map (lam n. (n, nameGetStr n)) builtinNames)
-let builtinPprintCount = mapMap (lam. 1) builtinNameMap
-let builtinPprintStrings = mapMap (lam. 0) builtinPprintCount
-let builtinPprintEnv =
-  { nameMap = builtinPprintNameMap
-  , count = builtinPprintCount
-  , strings = builtinPprintStrings
-  }
 
 -- Look up the string associated with a name in the environment
 let pprintEnvLookup : Name -> PprintEnv -> Option String = lam name. lam env : PprintEnv.
@@ -207,12 +196,12 @@ lang PrettyPrint = IdentifierPrettyPrint
 
   sem expr2str =
   | expr ->
-    match pprintCode 0 builtinPprintEnv expr with (_,str)
+    match pprintCode 0 pprintEnvEmpty expr with (_,str)
     then str else never
 
   sem type2str =
   | ty ->
-    match getTypeStringCode 0 builtinPprintEnv ty with (_,str)
+    match getTypeStringCode 0 pprintEnvEmpty ty with (_,str)
     then str else never
 
   -- Helper function for printing parentheses
