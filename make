@@ -111,7 +111,33 @@ fix () {
     dune build @fmt --auto-promote
 }
 
+compile_test () {
+  output=$1
+  output="$output\n$($2 $1)"
+  if [ $? -eq 0 ]
+  then
+    binary=$(basename "$1" .mc)
+    output="$output$(./$binary)"
+    rm $binary
+    output="$output\n"
+  fi
+  echo $output
+}
+
+run_test() {
+    output=$1
+    output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1)\n"
+    output="$output\n$(build/mi run --test $1)\n"
+    echo $output
+}
+
 case $1 in
+    run-test)
+        run_test "$2"
+        ;;
+    compile-test)
+        compile_test "$2" "$3"
+        ;;
     lint)
         lint
         ;;
