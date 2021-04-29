@@ -150,7 +150,7 @@ files="${files} stdlib/ocaml/external.mc"
 files="${files} src/main/mi.mc"
 files="${files} src/main/compile.mc"
 files="${files} src/main/run.mc"
-# files="${files} stdlib/ext/math-ext.mc"
+files="${files} stdlib/ext/math-ext.mc"
 
 export MCORE_STDLIB='stdlib'
 
