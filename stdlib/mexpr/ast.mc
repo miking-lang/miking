@@ -401,6 +401,7 @@ lang ExtAst = Ast + VarAst
   syn Expr =
   | TmExt {ident : Name,
            inexpr : Expr,
+           effect : Bool,
            ty : Type,
            info : Info}
 

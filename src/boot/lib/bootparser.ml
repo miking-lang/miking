@@ -193,8 +193,8 @@ let getData = function
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], []) )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [])
-  | PTreeTm (TmExt (fi, x, _, ty, t)) ->
-      (idTmExt, [fi], [], [ty], [t], [x], [], [], [], [])
+  | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
+      (idTmExt, [fi], [], [ty], [t], [x], [(if e then 1 else 0)], [], [], [])
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [])

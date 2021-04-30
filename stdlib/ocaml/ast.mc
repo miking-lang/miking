@@ -125,9 +125,12 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
+let oext_ = use OCamlExternal in
+  lam id : String. OTmVarExt {ident = id}
+
 lang OCamlTypeAst =
   BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
-  RecordTypeAst
+  RecordTypeAst + VarTypeAst
 
   syn Type =
   | TyList {info : Info, ty : Type}
@@ -141,6 +144,18 @@ lang OCamlTypeAst =
   | TyGenArray r -> r.info
   | TyTuple r -> r.info
 end
+
+let tylist_ = use OCamlTypeAst in
+  lam ty. TyList {info = NoInfo (), ty = ty}
+
+let tyarray_ = use OCamlTypeAst in
+  lam ty. TyArray {info = NoInfo (), ty = ty}
+
+let tygenarray_ = use OCamlTypeAst in
+  lam ty. TyGenArray {info = NoInfo (), ty = ty}
+
+let tyotuple_ = use OCamlTypeAst in
+  lam tys. TyTuple {info = NoInfo (), tys = tys}
 
 lang OCamlAst =
   -- Terms

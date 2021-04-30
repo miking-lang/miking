@@ -203,6 +203,16 @@ lang LetTypeAnnot = TypeAnnot + LetAst
     else never
 end
 
+lang ExpTypeAnnot = TypeAnnot + ExtAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmExt t ->
+    match env with {varEnv = varEnv, tyEnv = tyEnv} then
+      let env = {env with varEnv = mapInsert t.ident t.ty varEnv} in
+      let inexpr = typeAnnotExpr env t.inexpr in
+      TmExt {t with inexpr = inexpr}
+    else never
+end
+
 lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
@@ -468,6 +478,7 @@ lang MExprTypeAnnot =
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
+  ExpTypeAnnot +
 
   -- Patterns
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +

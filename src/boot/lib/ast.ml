@@ -177,7 +177,6 @@ and const =
   | CbootParserGetInfo of tm option
   (* External functions *)
   | CPar of tm Parast.ext
-  | CExt of Extast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
 
@@ -211,7 +210,7 @@ and con_decl = Con of info * ustring * ty
 
 and utest_top = Utest of info * tm * tm * tm option
 
-and ext_decl = Ext of info * ustring * ty
+and ext_decl = Ext of info * ustring * bool * ty
 
 and top =
   | TopLang of mlang
@@ -262,7 +261,7 @@ and tm =
   (* Use a language *)
   | TmUse of info * ustring * tm
   (* External *)
-  | TmExt of info * ustring * Symb.t * ty * tm
+  | TmExt of info * ustring * Symb.t * bool * ty * tm
   (* -- The rest is ONLY part of the runtime system *)
   (* Closure *)
   | TmClos of info * ustring * Symb.t * tm * env Lazy.t (* Closure *)
@@ -379,8 +378,8 @@ let smap_tm_tm (f : tm -> tm) = function
       TmUtest (fi, f t1, f t2, tusing_mapped, f tnext)
   | TmUse (fi, l, t1) ->
       TmUse (fi, l, f t1)
-  | TmExt (fi, x, s, ty, t) ->
-      TmExt (fi, x, s, ty, f t)
+  | TmExt (fi, x, s, ty, e, t) ->
+      TmExt (fi, x, s, ty, e, f t)
   | TmClos (fi, x, s, t1, env) ->
       TmClos (fi, x, s, f t1, env)
   | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
@@ -415,7 +414,7 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
       f (match tusing with None -> acc | Some t -> f acc t) tnext
   | TmUse (_, _, t1) ->
       f acc t1
-  | TmExt (_, _, _, _, t) ->
+  | TmExt (_, _, _, _, _, t) ->
       f acc t
   | TmClos (_, _, _, t1, _) ->
       f acc t1
@@ -447,7 +446,7 @@ let tm_info = function
   | TmFix fi
   | TmRef (fi, _)
   | TmTensor (fi, _)
-  | TmExt (fi, _, _, _, _) ->
+  | TmExt (fi, _, _, _, _, _) ->
       fi
 
 let pat_info = function
@@ -612,7 +611,7 @@ let const_has_side_effect = function
   | CbootParserGetInfo _ ->
       true
   (* External functions *)
-  | CPar _ | CExt _ | CSd _ | CPy _ ->
+  | CPar _ | CSd _ | CPy _ ->
       true
 
 (* Converts a sequence of terms to a ustring *)

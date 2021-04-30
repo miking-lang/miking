@@ -407,6 +407,14 @@ lang NeverTypeLift = TypeLift + NeverAst
     else never
 end
 
+lang ExtTypeLift = TypeLift + ExtAst
+  sem typeLiftExpr (env : TypeLiftEnv) =
+  | TmExt t ->
+    match typeLiftExpr env t.inexpr with (env, inexpr) then
+      (env, TmExt {t with inexpr = inexpr})
+    else never
+end
+
 -----------
 -- TYPES --
 -----------
@@ -507,7 +515,7 @@ lang MExprTypeLift =
   -- Terms
   VarTypeLift + AppTypeLift + LamTypeLift + LetTypeLift + RecLetsTypeLift +
   ConstTypeLift + SeqTypeLift + RecordTypeLift + TypeTypeLift + DataTypeLift +
-  MatchTypeLift + UtestTypeLift + NeverTypeLift +
+  MatchTypeLift + UtestTypeLift + NeverTypeLift + ExtTypeLift +
 
   -- Types
   UnknownTypeTypeLift + BoolTypeTypeLift + IntTypeTypeLift +

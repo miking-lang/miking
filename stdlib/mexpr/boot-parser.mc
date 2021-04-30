@@ -142,6 +142,7 @@ lang BootParser = MExprAst
               info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,
+           effect = neqi (gint t 0) 0,
            ty = gtype t 0,
            inexpr = gterm t 0,
            info = ginfo t 0}
@@ -504,6 +505,10 @@ utest l_infoClosed "  \n  never " with r_info 2 2 2 7 in
 let s = "external y : Int in 1" in
 utest lsideClosed s with rside s in
 utest l_infoClosed "   \n  external y : Int in 1" with r_info 2 2 2 23 in
+
+let s = "external y! : Int in 1" in
+utest lsideClosed s with rside s in
+utest l_infoClosed "   \n  external y! : Int in 1" with r_info 2 2 2 24 in
 
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in
