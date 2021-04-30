@@ -6,6 +6,9 @@ let _testExternals =
   use OCamlTypeAst in
   mapFromList cmpString
   [
+    ("testZero", [
+      { ident = "Float.zero", ty = tyfloat_ }
+    ]),
     ("testExp", [
       { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
@@ -23,6 +26,9 @@ let _testExternals =
     ])
   ]
 
+-- NOTE(oerikss, 2021-04-30) Add your external maps here. This is a temporary
+-- solution. In the end we want to provide these definitions outside the
+-- compiler (which will require some parsing).
 let externalMap =
   mapMapWithKey
   (lam id : String.
