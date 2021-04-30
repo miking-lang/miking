@@ -2534,24 +2534,6 @@ in
 utest ocamlEvalFloat (generateEmptyEnv extZeroTest)
 with float_ 0. using eqExpr in
 
-let extListMapTest = symbolize (
-bind_
-  (ext_ "testListMap"
-        false
-        (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                    tyseq_ (tyvar_ "a"),
-                    tyseq_ (tyvar_ "b")]))
-  (get_
-    (appSeq_
-      (var_ "testListMap")
-        [ulam_ "x" (addi_ (var_ "x") (int_ 1)),
-         seq_ [int_ 0, int_ 1]])
-    (int_ 0)))
-in
-use MExprPrettyPrint in
-utest ocamlEvalInt (generateEmptyEnv extListMapTest)
-with int_ 1 using eqExpr in
-
 let extExpTest =
   bind_
     (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
@@ -2574,7 +2556,6 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-use MExprPrettyPrint in
 utest ocamlEvalInt (generateEmptyEnv extListMapTest)
 with int_ 1 using eqExpr in
 
@@ -2592,7 +2573,6 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-use MExprPrettyPrint in
 utest ocamlEvalInt (generateEmptyEnv extListConcatMapTest)
 with int_ 1 using eqExpr in
 
