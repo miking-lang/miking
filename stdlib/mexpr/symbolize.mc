@@ -16,9 +16,8 @@ include "mexpr/pprint.mc"
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
--- NOTE(dlunde,2020-09-25): The environment differs from boot, since we do not
--- have access to the unique string identifiers from ustring.ml. Instead, we
--- use strings directly.
+-- The environment differs from boot in that we use strings directly (we do
+-- have SIDs available, however, if needed).
 
 type SymEnv = {
   varEnv: Map String Name,
