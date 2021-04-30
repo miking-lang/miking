@@ -42,7 +42,7 @@ lang Sym
   -- Symbolize with builtin environment
   sem symbolize =
   | expr ->
-    let env = {symEnvEmpty with varEnv = builtinNameMap} in
+    let env = symEnvEmpty in
     symbolizeExpr env expr
 end
 

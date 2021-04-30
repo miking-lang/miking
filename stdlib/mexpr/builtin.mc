@@ -123,29 +123,3 @@ let builtin = use MExprAst in
   , ("bootParserGetInfo", CBootParserGetInfo ())
   ]
 
-let builtinEnv : Map Name Expr = use MExprAst in
-  mapFromList
-    nameCmp
-    (map
-      (lam x : (String, Const).
-        match x with (s,c) then
-          (nameSym s, TmConst {val = c, ty = tyunknown_, info = NoInfo ()})
-        else never)
-      builtin)
-
-let builtinNames : [Name] = mapKeys builtinEnv
-
-let builtinNamesSet : Set Name = setOfSeq nameCmp builtinNames
-
-let builtinNameMap : Map String Name =
-  mapFromList cmpString (map (lam x. (nameGetStr x, x)) builtinNames)
-
-let builtinNameTypeMap : Map Name Type =
-  use ConstAst in
-  use MExprConstType in
-  mapMap
-    (lam v : Expr.
-      match v with TmConst {val = c} then
-        tyConst c
-      else never)
-    builtinEnv

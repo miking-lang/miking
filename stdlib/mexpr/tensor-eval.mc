@@ -229,7 +229,7 @@ mexpr
 use TestLang in
 
 let evalNoSymbolize : Expr -> Expr =
-  lam t : Expr. eval {env = builtinEnv} t in
+  lam t : Expr. eval {env = mapEmpty nameCmp} t in
 
 let eval : Expr -> Expr =
   lam t : Expr. evalNoSymbolize (symbolize t) in

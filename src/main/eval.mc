@@ -21,6 +21,11 @@ include "mexpr/utesttrans.mc"
 
 lang ExtMCore =
   BootParser + MExpr + MExprTypeAnnot + MExprTypeLift + MExprUtestTrans + MExprEval
+
+  sem updateArgv (args : [String]) =
+  | TmConst r -> match r.val with CArgv () then seq_ (map str_ args) else TmConst r
+  | t -> smap_Expr_Expr (updateArgv args) t
+
 end
 
 let generateTests = lam ast. lam testsEnabled.
@@ -30,21 +35,8 @@ let generateTests = lam ast. lam testsEnabled.
     let ast = typeAnnot ast in
     utestGen ast
   else
-    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
-
-
--- Function for updating the builtin environment to also include
--- program specific arguments
-let updateBuiltinWithArgs = lam args. lam builtinEnv.
-  let n = nameNoSym "argv" in
-  let argsTerm = seq_ (map str_ args) in
-  let f = lam acc. lam k. lam v.
-             if nameEqStr k n then mapInsert k argsTerm acc
-             else mapInsert k v acc in
-  mapFoldWithKey f (mapEmpty nameCmp) builtinEnv
-
-
 
 -- Main function for evaluating a program using the interpreter
 -- files: a list of files
@@ -64,7 +56,7 @@ let eval = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
       if options.exitBefore then exit 0
       else
-        eval {env = updateBuiltinWithArgs args builtinEnv} ast
+        eval {env = mapEmpty nameCmp} (updateArgv args ast)
     else never
   in
   iter evalFile files

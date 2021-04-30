@@ -28,7 +28,7 @@ let pprintOcaml = lam ast.
 
 -- Hack for pretty-printing the preamble and inserting it into the beginning of
 -- the OCaml file, after all type definitions.
-let _preambleStr =
+let _preambleStr = lam.
   let str = pprintOcaml (bind_ _preamble (int_ 0)) in
   subsequence str 0 (subi (length str) 1)
 
@@ -37,7 +37,7 @@ recursive let _withPreamble = lam expr.
   match expr with OTmVariantTypeDecl t then
     OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
   else
-    OTmPreambleText {text = _preambleStr, inexpr = expr}
+    OTmPreambleText {text = _preambleStr (), inexpr = expr}
 end
 
 let generateTests = lam ast. lam testsEnabled.
@@ -47,7 +47,7 @@ let generateTests = lam ast. lam testsEnabled.
     let ast = typeAnnot ast in
     utestGen ast
   else
-    let symEnv = {symEnvEmpty with varEnv = builtinNameMap} in
+    let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.

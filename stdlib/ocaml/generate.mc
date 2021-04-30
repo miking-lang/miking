@@ -54,34 +54,39 @@ let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, a
 let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
 
 let _builtinNameMap : Map String Name =
-  mapUnion
-    builtinNameMap
-    (mapFromList cmpString
-      (map (lam s. (s, nameSym s))
-      [
-        "ofArray",
-        "tensorCreateNumInt",
-        "tensorCreateNumFloat",
-        "tensorCreateNoNum",
-        "tensorGetExnNum",
-        "tensorGetExnNoNum",
-        "tensorSetExnNum",
-        "tensorSetExnNoNum",
-        "tensorRankNum",
-        "tensorRankNoNum",
-        "tensorShapeNum",
-        "tensorShapeNoNum",
-        "tensorReshapeExnNum",
-        "tensorReshapeExnNoNum",
-        "tensorCopyExnNum",
-        "tensorCopyExnNoNum",
-        "tensorSliceExnNum",
-        "tensorSliceExnNoNum",
-        "tensorSubExnNum",
-        "tensorSubExnNoNum",
-        "tensorIteriNum",
-        "tensorIteriNoNum"
-      ]))
+  let builtinStrs =
+    match unzip builtin with (strs, _) then
+      strs
+    else never
+  in
+  mapFromList cmpString
+    (map (lam s. (s, nameSym s))
+      (concat
+        builtinStrs
+        [
+          "ofArray",
+          "tensorCreateNumInt",
+          "tensorCreateNumFloat",
+          "tensorCreateNoNum",
+          "tensorGetExnNum",
+          "tensorGetExnNoNum",
+          "tensorSetExnNum",
+          "tensorSetExnNoNum",
+          "tensorRankNum",
+          "tensorRankNoNum",
+          "tensorShapeNum",
+          "tensorShapeNoNum",
+          "tensorReshapeExnNum",
+          "tensorReshapeExnNoNum",
+          "tensorCopyExnNum",
+          "tensorCopyExnNoNum",
+          "tensorSliceExnNum",
+          "tensorSliceExnNoNum",
+          "tensorSubExnNum",
+          "tensorSubExnNoNum",
+          "tensorIteriNum",
+          "tensorIteriNoNum"
+        ]))
 
 let _builtinNamesSet : Set Name =
   setOfSeq nameCmp
@@ -164,7 +169,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match generatePat env targetTy tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nulet_ tname (generate env t.target)) (wrap (_some expr)))
+          (bind_ (nulet_ tname (generate env t.target))
+                 (generate env (wrap (_some expr))))
           pat
           (generate env t.thn)
           (generate env t.els)
@@ -990,8 +996,10 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
   | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
   | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
+  | CBootParserParseMCoreFile _ -> nvar_ (_intrinsicName "bootParserParseMCoreFile")
   | CBootParserGetId _ -> nvar_ (_intrinsicName "bootParserGetId")
   | CBootParserGetTerm _ -> nvar_ (_intrinsicName "bootParserGetTerm")
+  | CBootParserGetType _ -> nvar_ (_intrinsicName "bootParserGetType")
   | CBootParserGetString _ -> nvar_ (_intrinsicName "bootParserGetString")
   | CBootParserGetInt _ -> nvar_ (_intrinsicName "bootParserGetInt")
   | CBootParserGetFloat _ -> nvar_ (_intrinsicName "bootParserGetFloat")
@@ -1067,7 +1075,7 @@ in
 
 -- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here to make
 -- the test run faster. This is an ugly hack!
-let preambleStr =
+let preambleStr = lam.
   let str = expr2str (bind_ _preamble (int_ 0)) in
   let len = length str in
   subsequence str 0 (subi len 1)
@@ -1079,7 +1087,7 @@ recursive let withPreamble = lam t.
   match t with OTmVariantTypeDecl tt then
     OTmVariantTypeDecl {tt with inexpr = withPreamble tt.inexpr}
   else
-    OTmPreambleText {text = preambleStr, inexpr = t}
+    OTmPreambleText {text = preambleStr (), inexpr = t}
 in
 
 -- Evaluates OCaml expressions [strConvert] given as string, applied
@@ -1148,7 +1156,7 @@ utest ocamlEvalChar (char_ '1') with char_ '1' using eqExpr in
 let sameSemantics = lam mexprAst. lam ocamlAst.
   let mexprVal =
     use MExprEval in
-    eval {env = builtinEnv} mexprAst
+    eval {env = mapEmpty nameCmp} mexprAst
   in
   match mexprVal with TmConst t then
     match t.val with CInt _ then
