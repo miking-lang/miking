@@ -433,7 +433,7 @@ lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
     match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = TyVar _}) then
+    with Some (TyArrow {from = argTy, to = _}) then
       typeAnnotPat env argTy t.subpat
     else env
 end
