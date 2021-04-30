@@ -8,7 +8,7 @@
 #  the system, we just run the batch make file.
 ###################################################
 
-.PHONY : all test test-all install lint fix clean old files compile-all
+.PHONY : all test test-all install lint fix clean old files test-bootstrap
 
 all:
 	@./make
@@ -302,8 +302,6 @@ run_files += stdlib/char.mc
 # run_files += src/main/run.mc
 
 test-bootstrap: ${compile_files} ${run_files}
-
-testt: stdlib/common.mc stdlib/common.mc
 
 ${compile_files}::
 	@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"
