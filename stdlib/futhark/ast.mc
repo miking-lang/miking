@@ -2,6 +2,8 @@
 
 lang FutharkAst
   syn FutConst =
+  | FCInt { val : Int }
+  | FCFloat { val : Float }
   | FCAdd ()
   | FCSub ()
   | FCMul ()
@@ -14,18 +16,18 @@ lang FutharkAst
   | FCOr ()
   | FCAnd ()
   | FCXor ()
+  | FCMap ()
+  | FCMap2 ()
 
   syn FutExpr =
   | FEVar { ident : Name }
-  | FEInt64 { val : Int }
-  | FEFloat64 { val : Float }
   | FERecord { fields : Map SID FutExpr }
+  | FERecordProj { rec : FutExpr, key : SID }
   | FEArray { tms : [FutExpr] }
   | FEConst { val : FutConst }
-  | FELam { ident : Name, body : FutExpr }
+  | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
-  | FELet { ident : Name, body : FutExpr, inexpr : FutExpr }
-  | FERecordProj { rec : FutExpr, key : SID }
+  | FELet { ident : Name, ty : FutType, body : FutExpr, inexpr : FutExpr }
 
   syn FutType =
   | FTyIdent { ident : Name }
