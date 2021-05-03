@@ -3,6 +3,30 @@ include "map.mc"
 include "name.mc"
 include "stringid.mc"
 
+-- Types --
+
+let futIntTy_ = use FutharkAst in
+  FTyIdent {ident = nameSym "i64"}
+
+let futFloatTy_ = use FutharkAst in
+  FTyIdent {ident = nameSym "f64"}
+
+let futSizedArrayTy_ = use FutharkAst in
+  lam elemTy. lam sz.
+  FTyArray {elem = elemTy, dim = Some sz}
+
+let futUnsizedArrayTy_ = use FutharkAst in
+  lam elemTy.
+  FTyArray {elem = elemTy, dim = None ()}
+
+let futRecordTy_ = use FutharkAst in
+  lam fieldSeq.
+  FTyRecord {fields = mapFromList cmpSID (map
+                        (lam kv : (String, FutType). (stringToSid kv.0, kv.1))
+                        fieldSeq)}
+
+let futUnitTy_ = lam. futRecordTy_ []
+
 -- Expressions --
 
 recursive let futBind_ = use FutharkAst in
@@ -12,13 +36,13 @@ recursive let futBind_ = use FutharkAst in
   else expr
 end
 
+let futBindall_ = lam exprs. foldr1 futBind_ exprs
+
 let nFutVar_ = use FutharkAst in
   lam n.
   FEVar {ident = n}
 
-let futVar_ = use FutharkAst in
-  lam str.
-  nFutVar_ (nameNoSym str)
+let futVar_ = lam str. nFutVar_ (nameNoSym str)
 
 let futRecord_ = use FutharkAst in
   lam fieldSeq.
@@ -26,8 +50,7 @@ let futRecord_ = use FutharkAst in
                        (lam kv : (String, FutExpr). (stringToSid kv.0, kv.1))
                        fieldSeq)}
 
-let futUnit_ = use FutharkAst in
-  futRecord_ []
+let futUnit_ = lam. futRecord_ []
 
 let futRecordProj_ = use FutharkAst in
   lam rec. lam field.
@@ -53,28 +76,30 @@ let nFutLam_ = use FutharkAst in
   lam n. lam body.
   FELam {idents = [n], body = body}
 
-let futLam_ = use FutharkAst in
-  lam str. lam body.
+let futLam_ = lam str. lam body.
   nFutLam_ (nameNoSym str) body
 
 let futApp_ = use FutharkAst in
   lam lhs. lam rhs.
   FEApp {lhs = lhs, rhs = rhs}
 
-let futAppSeq_ = use FutharkAst in
-  lam f. lam seq.
+let futAppSeq_ = lam f. lam seq.
   foldl futApp_ f seq
 
-let futBinop_ = use FutharkAst in
-  lam op. lam a. lam b.
+let futBinop_ = lam op. lam a. lam b.
   futAppSeq_ op [a, b]
 
 let nFutLet_ = use FutharkAst in
   lam n. lam ty. lam body.
-  FELet {ident = n, ty = ty, body = body, inexpr = futUnit_}
+  FELet {ident = n, ty = ty, body = body, inexpr = futUnit_ ()}
 
-let futLet_ = use FutharkAst in
-  lam str. lam ty. lam body.
+let nuFutLet_ = lam n. lam body.
+  nFutLet_ n (futUnitTy_ ()) body
+
+let uFutLet_ = lam str. lam body.
+  nFutLet_ (nameNoSym str) (futUnitTy_ ()) body
+
+let futLet_ = lam str. lam ty. lam body.
   nFutLet_ (nameNoSym str) ty body
 
 -- Constants --
@@ -106,25 +131,3 @@ let futMap_ = use FutharkAst in
 let futMap2_ = use FutharkAst in
   lam f. lam a1. lam a2.
   futAppSeq_ (futConst_ (FCMap2 ())) [f, a1, a2]
-
--- Types --
-
-let futIntTy_ = use FutharkAst in
-  FTyIdent {ident = nameSym "i64"}
-
-let futFloatTy_ = use FutharkAst in
-  FTyIdent {ident = nameSym "f64"}
-
-let futSizedArrayTy_ = use FutharkAst in
-  lam elemTy. lam sz.
-  FTyArray {elem = elemTy, dim = Some sz}
-
-let futUnsizedArrayTy_ = use FutharkAst in
-  lam elemTy.
-  FTyArray {elem = elemTy, dim = None ()}
-
-let futRecordTy_ = use FutharkAst in
-  lam fieldSeq.
-  FTyRecord {fields = mapFromList cmpSID (map
-                        (lam kv : (String, FutType). (stringToSid kv.0, kv.1))
-                        fieldSeq)}

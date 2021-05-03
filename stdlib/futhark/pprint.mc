@@ -27,7 +27,10 @@ utest escapeFutharkVarString "_" with "v__"
 utest escapeFutharkVarString "abc123" with "v_abc___"
 
 let escapeFutharkLabelString = lam s.
-  concat "l" (map escapeChar s)
+  if stringIsInt s then
+    s
+  else
+    concat "l" (map escapeChar s)
 
 utest escapeFutharkLabelString "abc" with "labc"
 utest escapeFutharkLabelString "abc123" with "labc___"
@@ -134,7 +137,7 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
       (env, join [rec, ".", str])
     else never
   | FEArray {tms = tms} ->
-    match mapAccumL pprintExpr indent env tms with (env, tms) then
+    match mapAccumL (pprintExpr indent) env tms with (env, tms) then
       (env, join ["[", strJoin "," tms, "]"])
     else never
   | FEConst {val = val} ->
@@ -164,9 +167,10 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
     let aindent = pprintIncr indent in
     match pprintExpr aindent env body with (env, body) then
       match pprintExpr indent env inexpr with (env, inexpr) then
-        (env, join ["let ", pprintEnvGetStr env ident, " =",
-                    pprintNewline aindent, body, " in",
-                    pprintNewline indent, inexpr])
+        match pprintEnvGetStr env ident with (_, ident) then
+          (env, join ["let ", ident, " = ", body, " in",
+                      pprintNewline indent, inexpr])
+        else never
       else never
     else never
 
@@ -201,7 +205,7 @@ let constDecl = FDeclConst {
   val = futAdd_ (futInt_ 2) (futInt_ 3)
 } in
 
-let fn = nameSym "fn" in
+let fn = nameSym "recordProj" in
 let y = nameSym "y" in
 let recordProjDecl = FDeclFun {
   ident = fn,
@@ -211,24 +215,40 @@ let recordProjDecl = FDeclFun {
   body = futRecordProj_ (nFutVar_ y) "a"
 } in
 
-let sumPairs = nameSym "sumPairs" in
-let sumPairsA = nameSym "a" in
-let sumPairsB = nameSym "b" in
+let diffPairs = nameSym "diffPairs" in
+let diffPairsA = nameSym "a" in
+let diffPairsB = nameSym "b" in
 let lamX = nameSym "x" in
 let lamY = nameSym "y" in
-let sumPairsDecl = FDeclFun {
-  ident = sumPairs,
+let diffPairsDecl = FDeclFun {
+  ident = diffPairs,
   entry = false,
   params = [
-    (sumPairsA, futUnsizedArrayTy_ futIntTy_),
-    (sumPairsB, futUnsizedArrayTy_ futIntTy_)
+    (diffPairsA, futUnsizedArrayTy_ futIntTy_),
+    (diffPairsB, futUnsizedArrayTy_ futIntTy_)
   ],
   ret = futUnsizedArrayTy_ futIntTy_,
   body =
     futMap2_
-      (nFutLams_ [lamX, lamY] (futAdd_ (nFutVar_ lamX) (nFutVar_ lamY)))
-      (nFutVar_ sumPairsA)
-      (nFutVar_ sumPairsB)
+      (nFutLams_ [lamX, lamY] (futSub_ (nFutVar_ lamX) (nFutVar_ lamY)))
+      (nFutVar_ diffPairsA)
+      (nFutVar_ diffPairsB)
+} in
+
+let literals = nameSym "literals" in
+let literalsDecl = FDeclFun {
+  ident = literals,
+  entry = false,
+  params = [],
+  ret = futRecordTy_ [],
+  body = futBindall_ [
+    uFutLet_ "int" (futInt_ 4),
+    uFutLet_ "float" (futFloat_ 3.14),
+    uFutLet_ "array" (futArray_ [futInt_ 1, futInt_ 2, futInt_ 0]),
+    uFutLet_ "tuple" (futRecord_ [("0", futInt_ 2), ("1", futInt_ 3)]),
+    uFutLet_ "rec" (futRecord_ [("e", futFloat_ 2.718), ("pi", futFloat_ 3.14)]),
+    futUnit_ ()
+  ]
 } in
 
 let tmp = nameSym "tmp" in
@@ -245,7 +265,8 @@ let mainDecl = FDeclFun {
 let decls = [
   constDecl,
   recordProjDecl,
-  sumPairsDecl,
+  diffPairsDecl,
+  literalsDecl,
   mainDecl
 ] in
 let prog = FProg {decls = decls} in
