@@ -8,7 +8,7 @@ let isValidChar = lam c.
 let escapeChar = lam c.
   if isValidChar c then c else '_'
 
-utest map escapeChar "abc1_'@x+Yz" with "abc__'_x_Yz"
+utest map escapeChar "abc1_'@x+Yz" with "abc____x_Yz"
 
 let escapeFutharkConString = lam s.
   concat "#_" (map escapeChar s)
@@ -32,7 +32,7 @@ let escapeFutharkLabelString = lam s.
 utest escapeFutharkLabelString "abc" with "labc"
 utest escapeFutharkLabelString "abc123" with "labc___"
 utest escapeFutharkLabelString "0" with "l_"
-utest escapeFutharkLabelString "a'b/c" with "la'b_c"
+utest escapeFutharkLabelString "a'b/c" with "la_b_c"
 
 lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
   sem pprintConName (env : PprintEnv) =
@@ -139,17 +139,25 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
     else never
   | FEConst {val = val} ->
     (env, pprintConst val)
-  | FELam {ident = ident, body = body} ->
+  | FELam {idents = idents, body = body} ->
     let aindent = pprintIncr indent in
-    match pprintVarName env ident with (env, str) then
+    match mapAccumL pprintVarName env idents with (env, strs) then
       match pprintExpr aindent env body with (env, body) then
-        (env, join ["(\\", str, " ->", pprintNewline aindent, body, ")"])
+        (env, join ["(\\", strJoin " " strs, " ->",
+                    pprintNewline aindent, body, ")"])
       else never
     else never
-  | FEApp {lhs = lhs, rhs = rhs} ->
-    match pprintExpr indent env lhs with (env, lhs) then
-      match pprintExpr indent env rhs with (env, rhs) then
-        (env, join [lhs, " ", rhs])
+  | FEApp t ->
+    recursive let appseq = lam t.
+      match t with FEApp {lhs = lhs, rhs = rhs} then
+        snoc (appseq lhs) rhs
+      else [t]
+    in
+    let apps = appseq (FEApp t) in
+    match pprintExpr indent env (head apps) with (env, fun) then
+      let aindent = pprintIncr indent in
+      match mapAccumL (pprintExpr aindent) env (tail apps) with (env, args) then
+        (env, join [fun, pprintNewline aindent, strJoin (pprintNewline aindent) args])
       else never
     else never
   | FELet {ident = ident, body = body, inexpr = inexpr} ->
@@ -178,6 +186,7 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
   | FCOr () -> "(|)"
   | FCXor () -> "(^)"
   | FCMap () -> "map"
+  | FCMap2 () -> "map2"
 end
 
 mexpr
@@ -202,6 +211,26 @@ let recordProjDecl = FDeclFun {
   body = futRecordProj_ (nFutVar_ y) "a"
 } in
 
+let sumPairs = nameSym "sumPairs" in
+let sumPairsA = nameSym "a" in
+let sumPairsB = nameSym "b" in
+let lamX = nameSym "x" in
+let lamY = nameSym "y" in
+let sumPairsDecl = FDeclFun {
+  ident = sumPairs,
+  entry = false,
+  params = [
+    (sumPairsA, futUnsizedArrayTy_ futIntTy_),
+    (sumPairsB, futUnsizedArrayTy_ futIntTy_)
+  ],
+  ret = futUnsizedArrayTy_ futIntTy_,
+  body =
+    futMap2_
+      (nFutLams_ [lamX, lamY] (futAdd_ (nFutVar_ lamX) (nFutVar_ lamY)))
+      (nFutVar_ sumPairsA)
+      (nFutVar_ sumPairsB)
+} in
+
 let tmp = nameSym "tmp" in
 let z = nameSym "z" in
 let w = nameSym "w" in
@@ -216,7 +245,9 @@ let mainDecl = FDeclFun {
 let decls = [
   constDecl,
   recordProjDecl,
+  sumPairsDecl,
   mainDecl
 ] in
 let prog = FProg {decls = decls} in
-print (expr2str prog)
+-- print (expr2str prog);
+()

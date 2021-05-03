@@ -41,9 +41,17 @@ let futConst_ = use FutharkAst in
   lam c.
   FEConst {val = c}
 
+let nFutLams_ = use FutharkAst in
+  lam nargs. lam body.
+  FELam {idents = nargs, body = body}
+
+let futLams_ = use FutharkAst in
+  lam args. lam body.
+  FELam {idents = map nameNoSym args, body = body}
+
 let nFutLam_ = use FutharkAst in
   lam n. lam body.
-  FELam {ident = n, body = body}
+  FELam {idents = [n], body = body}
 
 let futLam_ = use FutharkAst in
   lam str. lam body.
@@ -94,6 +102,10 @@ let futDiv_ = use FutharkAst in
 let futMap_ = use FutharkAst in
   lam f. lam array.
   futAppSeq_ (futConst_ (FCMap ())) [f, array]
+
+let futMap2_ = use FutharkAst in
+  lam f. lam a1. lam a2.
+  futAppSeq_ (futConst_ (FCMap2 ())) [f, a1, a2]
 
 -- Types --
 
