@@ -242,11 +242,11 @@ let literalsDecl = FDeclFun {
   params = [],
   ret = futRecordTy_ [],
   body = futBindall_ [
-    uFutLet_ "int" (futInt_ 4),
-    uFutLet_ "float" (futFloat_ 3.14),
-    uFutLet_ "array" (futArray_ [futInt_ 1, futInt_ 2, futInt_ 0]),
-    uFutLet_ "tuple" (futRecord_ [("0", futInt_ 2), ("1", futInt_ 3)]),
-    uFutLet_ "rec" (futRecord_ [("e", futFloat_ 2.718), ("pi", futFloat_ 3.14)]),
+    uFutLet_ "_int" (futInt_ 4),
+    uFutLet_ "_float" (futFloat_ 3.14),
+    uFutLet_ "_array" (futArray_ [futInt_ 1, futInt_ 2, futInt_ 0]),
+    uFutLet_ "_tuple" (futRecord_ [("0", futInt_ 2), ("1", futInt_ 3)]),
+    uFutLet_ "_rec" (futRecord_ [("e", futFloat_ 2.718), ("pi", futFloat_ 3.14)]),
     futUnit_ ()
   ]
 } in
