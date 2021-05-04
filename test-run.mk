@@ -135,5 +135,5 @@ run_files += stdlib/char.mc
 all: ${run_files}
 
 ${run_files}::
-	@./make run-test $@
+	-@./make run-test $@
 

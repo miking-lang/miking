@@ -136,8 +136,8 @@ compile_files += stdlib/ext/math-ext.mc
 all: ${compile_files}
 
 ${compile_files}::
-	@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"
+	-@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"
 
 ${compile_files}::
-	@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"
 
