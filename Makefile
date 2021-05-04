@@ -63,7 +63,6 @@ test-run:
 test-boot:\
   test-boot-base\
   test-boot-par\
-  test-boot-sundials\
   test-boot-py\
   test-boot-ocaml
 
