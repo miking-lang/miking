@@ -28,7 +28,9 @@
   test-boot-py\
   test-boot-ocaml
 
-all:
+all: build/mi
+
+build/mi:
 	@./make
 
 test:
@@ -54,10 +56,10 @@ test-all:\
   test-run\
   test-boot
 
-test-compile:
+test-compile: build/mi
 	@$(MAKE) -s -f test-compile.mk all
 
-test-run:
+test-run: build/mi
 	@$(MAKE) -s -f test-run.mk all
 
 test-boot:\
@@ -66,18 +68,18 @@ test-boot:\
   test-boot-py\
   test-boot-ocaml
 
-test-boot-base:
+test-boot-base: build/mi
 	@$(MAKE) -s -f test-boot.mk base
 
-test-boot-par:
+test-boot-par: build/mi
 	@$(MAKE) -s -f test-boot.mk par
 
-test-boot-sundials:
+test-boot-sundials: build/mi
 	@$(MAKE) -s -f test-boot.mk sundials
 
-test-boot-py:
+test-boot-py: build/mi
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-ocaml:
+test-boot-ocaml: build/mi
 	@$(MAKE) -s -f test-boot.mk ocaml
 
