@@ -8,7 +8,7 @@
 #  the system, we just run the batch make file.
 ###################################################
 
-.PHONY : all test test-all install lint fix clean old files test-bootstrap test-compile test-bootstrap
+.PHONY : all test test-all install lint fix clean old test-compile test-run test-bootstrap
 
 all:
 	@./make
