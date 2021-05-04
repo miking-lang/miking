@@ -47,60 +47,6 @@ install() {
     rm -rf $lib_path; cp -rf stdlib $lib_path
 }
 
-# Run the test suite for parallel programming
-runtests_par() {
-    (cd test
-     ../build/$BOOT_NAME eval multicore/* --test)
-    build/$BOOT_NAME eval stdlib/multicore/* --test
-}
-
-# Run the test suite for sundials
-runtests_sundials() {
-    (cd test
-     ../build/$BOOT_NAME eval sundials/* --test)
-    build/$BOOT_NAME eval stdlib/sundials/* --test
-}
-
-# Run the test suite for python intrinsic tests
-runtests_py() {
-    (cd test
-     ../build/$BOOT_NAME eval py/* --test)
-}
-
-# Run the test suite for OCaml compiler
-runtests_ocaml() {
-    (cd stdlib
-     ../build/$BOOT_NAME eval ocaml/* --test)
-}
-
-# Run the test suite
-runtests() {
-    (cd test
-    ../build/$BOOT_NAME eval mexpr --test &
-    ../build/$BOOT_NAME eval mlang --test &
-    cd ../stdlib
-    ../build/$BOOT_NAME eval mexpr --test &
-    ../build/$BOOT_NAME eval c --test &
-    ../build/$BOOT_NAME eval ad --test &
-    ../build/$BOOT_NAME eval parser --test &
-    cd ..
-    export MCORE_STDLIB='@@@'
-    build/$BOOT_NAME eval stdlib --test &)
-    if [ -n "$MI_TEST_PAR" ]; then
-        runtests_par &
-    fi
-    if [ -n "$MI_TEST_PYTHON" ]; then
-        runtests_py &
-    fi
-    if [ -n "$MI_TEST_SUNDIALS" ]; then
-        runtests_sundials &
-    fi
-    if [ -n "$MI_TEST_OCAML" ]; then
-        runtests_ocaml &
-    fi
-    wait
-}
-
 # Lint ocaml source code
 lint () {
     dune build @fmt
