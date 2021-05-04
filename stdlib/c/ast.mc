@@ -48,11 +48,31 @@
 
 include "name.mc"
 
-lang CAst
+-------------
+-- C TYPES --
+-------------
+lang CTypeAst
 
-  -------------------
-  -- C EXPRESSIONS --
-  -------------------
+  syn CType =
+  | CTyVar    { id: Name }
+  | CTyChar   {}
+  | CTyInt    {}
+  | CTyDouble {}
+  | CTyVoid   {}
+  | CTyPtr    { ty: CType }
+  | CTyFun    { ret: CType, params: [CType] }
+  | CTyArray  { ty: CType, size: Option Int }
+  | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyEnum   { id: Option Name, mem: Option [Name] }
+
+end
+
+
+-------------------
+-- C EXPRESSIONS --
+-------------------
+lang CExprAst = CTypeAst
 
   syn CExpr =
   | CEVar        /- Variables -/            { id: Name }
@@ -99,37 +119,24 @@ lang CAst
   | CONeg    /- -arg -/        {}
   | CONot    /- ~arg -/        {}
 
-
-  -------------
-  -- C TYPES --
-  -------------
-
-  syn CType =
-  | CTyVar    { id: Name }
-  | CTyChar   {}
-  | CTyInt    {}
-  | CTyDouble {}
-  | CTyVoid   {}
-  | CTyPtr    { ty: CType }
-  | CTyFun    { ret: CType, params: [CType] }
-  | CTyArray  { ty: CType, size: Option Int }
-  | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
-  | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
-  | CTyEnum   { id: Option Name, mem: Option [Name] }
+end
 
 
-  --------------------
-  -- C INITIALIZERS --
-  --------------------
+--------------------
+-- C INITIALIZERS --
+--------------------
+lang CInitAst = CExprAst
 
   syn CInit =
   | CIExpr { expr: CExpr }
   | CIList { inits: [CInit] }
 
+end
 
-  ------------------
-  -- C STATEMENTS --
-  ------------------
+------------------
+-- C STATEMENTS --
+------------------
+lang CStmtAst = CTypeAst + CInitAst + CExprAst
   -- We force if, switch, and while to introduce new scopes (by setting the
   -- body type to [CStmt] rather than CStmt). It is allowed in C to have a
   -- single (i.e., not compound) statement as the body, but this statement is
@@ -148,20 +155,34 @@ lang CAst
   | CSBreak   {}
   | CSNop     {}
 
+end
 
-  -----------------
-  -- C TOP-LEVEL --
-  -----------------
-  -- We support including a set of header files at the top of the program.
-  -- Type definitions are supported at this level as well.
+
+-----------------
+-- C TOP-LEVEL --
+-----------------
+lang CTopAst = CTypeAst + CInitAst + CStmtAst
 
   syn CTop =
+  -- Type definitions are supported at this level.
   | CTTyDef { ty: CType, id: Name }
   | CTDef { ty: CType, id: Option Name, init: Option CInit }
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
+
+end
+
+---------------
+-- C PROGRAM --
+---------------
+lang CProgAst = CTopAst
+  -- We support including a set of header files at the top of the program.
 
   syn CProg =
   | CPProg { includes: [String], tops: [CTop] }
 
 end
 
+-----------------------
+-- COMBINED FRAGMENT --
+-----------------------
+lang CAst = CExprAst + CTypeAst + CInitAst + CStmtAst + CTopAst + CProgAst

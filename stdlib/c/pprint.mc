@@ -1,4 +1,4 @@
--- Pretty printer for C.
+-- Pretty printing for C fragments.
 -- TODO(dlunde,2021-02-25): Add handling for arbitrary variable names.
 
 include "ast.mc"
@@ -23,15 +23,85 @@ let _joinSpace = lam fst. lam snd.
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
----------------------
--- PRETTY PRINTING --
----------------------
+-------------
+-- C TYPES --
+-------------
+lang CTypePrettyPrint = CTypeAst
 
-lang CPrettyPrint = CAst
 
-  -------------------
-  -- C EXPRESSIONS --
-  -------------------
+  sem printCType (decl: String) (env: PprintEnv) =
+
+  | CTyVar { id = id } ->
+    match pprintEnvGetStr env id with (env,id) then
+      (env, _joinSpace id decl)
+    else never
+
+  | CTyChar {} -> (env, _joinSpace "char" decl)
+  | CTyInt {}  -> (env, _joinSpace "int" decl)
+  | CTyDouble {} -> (env, _joinSpace "double" decl)
+  | CTyVoid {} -> (env, _joinSpace "void" decl)
+  | CTyPtr { ty = ty } -> printCType (join ["(*", decl, ")"]) env ty
+
+  | CTyFun { ret = ret, params = params } ->
+    match mapAccumL (printCType "") env params with (env,params) then
+      let params = join ["(", strJoin ", " params, ")"] in
+      printCType (join [decl, params]) env ret
+    else never
+
+  | CTyArray { ty = ty, size = size } ->
+    let subscr = match size with Some size then int2string size else "" in
+    printCType (join [decl, "[", subscr, "]"]) env ty
+
+  | CTyStruct { id = id, mem = mem } ->
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
+      match mem with Some mem then
+        let f = lam env. lam t: (CType,Option String).
+          printCType (match t.1 with Some n then n else "") env t.0  in
+        match mapAccumL f env mem with (env,mem) then
+          let mem = map (lam s. join [s,";"]) mem in
+          let mem = strJoin " " mem in
+          (env, _joinSpace (join [_joinSpace "struct" id, " {", mem, "}"]) decl)
+        else never
+      else (env, _joinSpace (_joinSpace "struct" id) decl)
+    else never
+
+  | CTyUnion { id = id, mem = mem } ->
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
+      match mem with Some mem then
+        let f = lam env. lam t: (CType, Option String).
+          printCType (match t.1 with Some n then n else "") env t.0 in
+        match mapAccumL f env mem with (env,mem) then
+          let mem = map (lam s. join [s,";"]) mem in
+          let mem = strJoin " " mem in
+          (env, _joinSpace (join [_joinSpace "union" id, " {", mem, "}"]) decl)
+        else never
+      else (env, _joinSpace (_joinSpace "union " id) decl)
+    else never
+
+  | CTyEnum { id = id, mem = mem } ->
+    let idtup =
+      match id with Some id then pprintEnvGetStr env id else (env, "") in
+    match idtup with (env,id) then
+      match mem with Some mem then
+        match mapAccumL pprintEnvGetStr env mem with (env,mem) then
+          let mem = strJoin ", " mem in
+          (env, _joinSpace (join [_joinSpace "enum" id, " {", mem, "}"]) decl)
+        else never
+      else (env, _joinSpace (_joinSpace "enum" id) decl)
+    else never
+
+end
+
+
+
+-------------------
+-- C EXPRESSIONS --
+-------------------
+lang CExprPrettyPrint = CExprAst + CTypePrettyPrint
 
   sem printCExpr (env: PprintEnv) =
 
@@ -113,10 +183,28 @@ lang CPrettyPrint = CAst
   | CONeg    {} -> join ["-", arg]
   | CONot    {} -> join ["~", arg]
 
+end
 
-  -------------
-  -- C TYPES --
-  -------------
+
+--------------------
+-- C INITIALIZERS --
+--------------------
+lang CInitPrettyPrint = CInitAst + CExprPrettyPrint
+
+  sem printCInit (env: PprintEnv) =
+  | CIExpr { expr = expr } -> printCExpr env expr
+
+  | CIList { inits = inits } ->
+    match mapAccumL printCInit env inits with (env,inits) then
+      (env, join ["{", strJoin ", " inits, "}"])
+    else never
+
+end
+
+-------------------------------------
+-- HELPER FRAGMENT FOR DEFINITIONS --
+-------------------------------------
+lang CDefPrettyPrint = CTypePrettyPrint + CInitPrettyPrint
 
   -- Helper function for printing declarations and definitions
   sem printCDef (env: PprintEnv) (ty: CType) (id: String) =
@@ -129,88 +217,14 @@ lang CPrettyPrint = CAst
       else (env, decl)
     else never
 
-  sem printCType (decl: String) (env: PprintEnv) =
+end
 
-  | CTyVar { id = id } ->
-    match pprintEnvGetStr env id with (env,id) then
-      (env, _joinSpace id decl)
-    else never
-
-  | CTyChar {} -> (env, _joinSpace "char" decl)
-  | CTyInt {}  -> (env, _joinSpace "int" decl)
-  | CTyDouble {} -> (env, _joinSpace "double" decl)
-  | CTyVoid {} -> (env, _joinSpace "void" decl)
-  | CTyPtr { ty = ty } -> printCType (join ["(*", decl, ")"]) env ty
-
-  | CTyFun { ret = ret, params = params } ->
-    match mapAccumL (printCType "") env params with (env,params) then
-      let params = join ["(", strJoin ", " params, ")"] in
-      printCType (join [decl, params]) env ret
-    else never
-
-  | CTyArray { ty = ty, size = size } ->
-    let subscr = match size with Some size then int2string size else "" in
-    printCType (join [decl, "[", subscr, "]"]) env ty
-
-  | CTyStruct { id = id, mem = mem } ->
-    let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
-    match idtup with (env,id) then
-      match mem with Some mem then
-        let f = lam env. lam t: (CType,Option String).
-          printCDef env t.0 (match t.1 with Some n then n else "") (None ()) in
-        match mapAccumL f env mem with (env,mem) then
-          let mem = map (lam s. join [s,";"]) mem in
-          let mem = strJoin " " mem in
-          (env, _joinSpace (join [_joinSpace "struct" id, " {", mem, "}"]) decl)
-        else never
-      else (env, _joinSpace (_joinSpace "struct" id) decl)
-    else never
-
-  | CTyUnion { id = id, mem = mem } ->
-    let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
-    match idtup with (env,id) then
-      match mem with Some mem then
-        let f = lam env. lam t: (CType, Option String).
-          printCDef env t.0 (match t.1 with Some n then n else "") (None ()) in
-        match mapAccumL f env mem with (env,mem) then
-          let mem = map (lam s. join [s,";"]) mem in
-          let mem = strJoin " " mem in
-          (env, _joinSpace (join [_joinSpace "union" id, " {", mem, "}"]) decl)
-        else never
-      else (env, _joinSpace (_joinSpace "union " id) decl)
-    else never
-
-  | CTyEnum { id = id, mem = mem } ->
-    let idtup =
-      match id with Some id then pprintEnvGetStr env id else (env, "") in
-    match idtup with (env,id) then
-      match mem with Some mem then
-        match mapAccumL pprintEnvGetStr env mem with (env,mem) then
-          let mem = strJoin ", " mem in
-          (env, _joinSpace (join [_joinSpace "enum" id, " {", mem, "}"]) decl)
-        else never
-      else (env, _joinSpace (_joinSpace "enum" id) decl)
-    else never
-
-
-  --------------------
-  -- C INITIALIZERS --
-  --------------------
-
-  sem printCInit (env: PprintEnv) =
-  | CIExpr { expr = expr } -> printCExpr env expr
-
-  | CIList { inits = inits } ->
-    match mapAccumL printCInit env inits with (env,inits) then
-      (env, join ["{", strJoin ", " inits, "}"])
-    else never
-
-
-  ------------------
-  -- C STATEMENTS --
-  ------------------
+------------------
+-- C STATEMENTS --
+------------------
+lang CStmtPrettyPrint =
+  CStmtAst + CTypePrettyPrint + CInitPrettyPrint + CExprPrettyPrint
+  + CDefPrettyPrint
 
   -- Print a line-separated list of statements at the given indentation level.
   sem printCStmts (indent: Int) (env: PprintEnv) =
@@ -303,10 +317,15 @@ lang CPrettyPrint = CAst
   | CSCont { } -> (env, "continue;")
   | CSBreak { } -> (env, "break;")
 
+end
 
-  -----------------
-  -- C TOP-LEVEL --
-  -----------------
+
+-----------------
+-- C TOP-LEVEL --
+-----------------
+lang CTopPrettyPrint =
+  CTopAst + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint
+  + CDefPrettyPrint
 
   sem printCTop (indent : Int) (env: PprintEnv) =
   | CTTyDef { ty = ty, id = id } ->
@@ -341,6 +360,14 @@ lang CPrettyPrint = CAst
       else never
     else never
 
+end
+
+
+---------------
+-- C PROGRAM --
+---------------
+lang CProgPrettyPrint = CProgAst + CTopPrettyPrint
+
   sem printCProg (nameInit: [Name]) =
   | CPProg { includes = includes, tops = tops } ->
     let indent = 0 in
@@ -355,6 +382,15 @@ lang CPrettyPrint = CAst
     else never
 
 end
+
+
+-----------------------
+-- COMBINED FRAGMENT --
+-----------------------
+lang CPrettyPrint =
+  CExprPrettyPrint + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint +
+  CTopPrettyPrint + CProgPrettyPrint
+
 
 ----------------
 -- UNIT TESTS --
