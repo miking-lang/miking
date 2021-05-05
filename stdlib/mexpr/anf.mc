@@ -4,12 +4,12 @@
 include "name.mc"
 include "stringid.mc"
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/pprint.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/eq.mc"
-include "mexpr/info.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "pprint.mc"
+include "symbolize.mc"
+include "eq.mc"
+include "info.mc"
 
 lang ANF = LetAst + VarAst + UnknownTypeAst
   sem isValue =
