@@ -246,12 +246,12 @@ let ulet_ = use MExprAst in
   let_ s tyunknown_ body
 
 let next_ = use MExprAst in
-  lam n. lam ty.
-  TmExt {ident = n, ty = ty, inexpr = unit_, info = NoInfo ()}
+  lam n. lam e. lam ty.
+  TmExt {ident = n, effect = e, ty = ty, inexpr = unit_, info = NoInfo ()}
 
 let ext_ = use MExprAst in
-  lam s. lam ty.
-  next_ (nameNoSym s) ty
+  lam s. lam e. lam ty.
+  next_ (nameNoSym s) e ty
 
 let ntype_ = use MExprAst in
   lam n. lam ty.

@@ -797,9 +797,9 @@ let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
   | TopUtest (Utest (fi, lhs, rhs, using)) ->
       let wrap tm' = TmUtest (fi, lhs, rhs, using, tm') in
       (nss, langs, subs, syns, wrap :: stack)
-  | TopExt (Ext (fi, id, ty)) ->
+  | TopExt (Ext (fi, id, e, ty)) ->
       let wrap tm' =
-        TmExt (fi, empty_mangle id, Symb.Helpers.nosym, ty, tm')
+        TmExt (fi, empty_mangle id, Symb.Helpers.nosym, e, ty, tm')
       in
       (nss, langs, subs, syns, wrap :: stack)
 

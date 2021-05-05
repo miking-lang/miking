@@ -10,8 +10,19 @@ include "string.mc"
 -- TERMS --
 -----------
 
+-- Shared fragment
+lang Ast
+
+  syn Expr =
+  -- Intentionally left blank
+
+  syn Type =
+  -- Intentionally left blank
+
+end
+
 -- TmVar --
-lang VarAst
+lang VarAst = Ast
   syn Expr =
   | TmVar {ident : Name,
            ty: Type,
@@ -35,7 +46,7 @@ end
 
 
 -- TmApp --
-lang AppAst
+lang AppAst = Ast
   syn Expr =
   | TmApp {lhs : Expr,
            rhs : Expr,
@@ -62,7 +73,7 @@ end
 
 
 -- TmLam --
-lang LamAst = VarAst + AppAst
+lang LamAst = Ast + VarAst + AppAst
   syn Expr =
   | TmLam {ident : Name,
            tyIdent : Type,
@@ -88,7 +99,7 @@ end
 
 
 -- TmLet --
-lang LetAst = VarAst
+lang LetAst = Ast + VarAst
   syn Expr =
   | TmLet {ident : Name,
            tyBody : Type,
@@ -121,7 +132,7 @@ type RecLetBinding =
   , info : Info }
 
 -- TmRecLets --
-lang RecLetsAst = VarAst
+lang RecLetsAst = Ast + VarAst
   syn Expr =
   | TmRecLets {bindings : [RecLetBinding],
                inexpr : Expr,
@@ -157,7 +168,7 @@ end
 
 
 -- TmConst --
-lang ConstAst
+lang ConstAst = Ast
   syn Const =
 
   syn Expr =
@@ -182,7 +193,7 @@ lang ConstAst
 end
 
 -- TmSeq --
-lang SeqAst
+lang SeqAst = Ast
   syn Expr =
   | TmSeq {tms : [Expr],
            ty: Type,
@@ -206,7 +217,7 @@ end
 
 
 -- TmRecord and TmRecordUpdate --
-lang RecordAst
+lang RecordAst = Ast
   syn Expr =
   | TmRecord {bindings : Map SID Expr,
               ty : Type,
@@ -240,7 +251,7 @@ lang RecordAst
 end
 
 -- TmType --
-lang TypeAst
+lang TypeAst = Ast
   syn Expr =
   | TmType {ident : Name,
             tyIdent : Type,
@@ -265,7 +276,7 @@ lang TypeAst
 end
 
 -- TmConDef and TmConApp --
-lang DataAst
+lang DataAst = Ast
   syn Expr =
   | TmConDef {ident : Name,
               tyIdent : Type,
@@ -299,7 +310,7 @@ lang DataAst
 end
 
 -- TmMatch --
-lang MatchAst
+lang MatchAst = Ast
   syn Expr =
   | TmMatch {target : Expr,
              pat    : Pat,
@@ -309,6 +320,7 @@ lang MatchAst
              info     : Info}
 
   syn Pat =
+  -- Intentionally left blank
 
   sem infoTm =
   | TmMatch r -> r.info
@@ -330,7 +342,7 @@ end
 
 
 -- TmUtest --
-lang UtestAst
+lang UtestAst = Ast
   syn Expr =
   | TmUtest {test : Expr,
              expected : Expr,
@@ -363,7 +375,7 @@ end
 
 
 -- TmNever --
-lang NeverAst
+lang NeverAst = Ast
   syn Expr =
   | TmNever {ty: Type,
             info: Info}
@@ -385,10 +397,11 @@ lang NeverAst
 end
 
 -- TmExt --
-lang ExtAst = VarAst
+lang ExtAst = Ast + VarAst
   syn Expr =
   | TmExt {ident : Name,
            inexpr : Expr,
+           effect : Bool,
            ty : Type,
            info : Info}
 
@@ -629,7 +642,7 @@ type PatName
 con PName : Name -> PatName
 con PWildcard : () -> PatName
 
-lang NamedPat
+lang NamedPat = MatchAst
   syn Pat =
   | PatNamed {ident : PatName,
               info : Info}
@@ -644,7 +657,7 @@ lang NamedPat
   | PatNamed _ -> acc
 end
 
-lang SeqTotPat
+lang SeqTotPat = MatchAst
   syn Pat =
   | PatSeqTot {pats : [Pat],
                info : Info}
@@ -659,7 +672,7 @@ lang SeqTotPat
   | PatSeqTot {pats = pats} -> foldl f acc pats
 end
 
-lang SeqEdgePat
+lang SeqEdgePat = MatchAst
   syn Pat =
   | PatSeqEdge {prefix : [Pat],
                 middle: PatName,
@@ -677,7 +690,7 @@ lang SeqEdgePat
   | PatSeqEdge {prefix = pre, postfix = post} -> foldl f (foldl f acc pre) post
 end
 
-lang RecordPat
+lang RecordPat = MatchAst
   syn Pat =
   | PatRecord {bindings : Map SID Pat,
                info: Info}
@@ -694,7 +707,7 @@ lang RecordPat
       mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc bindings
 end
 
-lang DataPat = DataAst
+lang DataPat = MatchAst + DataAst
   syn Pat =
   | PatCon {ident : Name,
             subpat : Pat,
@@ -710,7 +723,7 @@ lang DataPat = DataAst
   | PatCon {subpat = subpat} -> f acc subpat
 end
 
-lang IntPat = IntAst
+lang IntPat = MatchAst + IntAst
   syn Pat =
   | PatInt {val : Int,
           info : Info}
@@ -725,7 +738,7 @@ lang IntPat = IntAst
   | PatInt _ -> acc
 end
 
-lang CharPat
+lang CharPat = MatchAst
   syn Pat =
   | PatChar {val : Char,
              info : Info}
@@ -740,7 +753,7 @@ lang CharPat
   | PatChar _ -> acc
 end
 
-lang BoolPat = BoolAst
+lang BoolPat = MatchAst + BoolAst
   syn Pat =
   | PatBool {val : Bool,
              info : Info}
@@ -755,7 +768,7 @@ lang BoolPat = BoolAst
   | PatBool _ -> acc
 end
 
-lang AndPat
+lang AndPat = MatchAst
   syn Pat =
   | PatAnd {lpat : Pat,
             rpat : Pat,
@@ -771,7 +784,7 @@ lang AndPat
   | PatAnd {lpat = l, rpat = r} -> f (f acc l) r
 end
 
-lang OrPat
+lang OrPat = MatchAst
   syn Pat =
   | PatOr {lpat : Pat,
            rpat : Pat,
@@ -787,7 +800,7 @@ lang OrPat
   | PatOr {lpat = l, rpat = r} -> f (f acc l) r
 end
 
-lang NotPat
+lang NotPat = MatchAst
   syn Pat =
   | PatNot {subpat : Pat,
             info : Info}
@@ -806,7 +819,7 @@ end
 -- TYPES --
 -----------
 
-lang UnknownTypeAst
+lang UnknownTypeAst = Ast
   syn Type =
   | TyUnknown {info : Info}
 
@@ -814,7 +827,7 @@ lang UnknownTypeAst
   | TyUnknown r -> r.info
 end
 
-lang BoolTypeAst
+lang BoolTypeAst = Ast
   syn Type =
   | TyBool {info  : Info}
 
@@ -822,7 +835,7 @@ lang BoolTypeAst
   | TyBool r -> r.info
 end
 
-lang IntTypeAst
+lang IntTypeAst = Ast
   syn Type =
   | TyInt {info : Info}
 
@@ -830,7 +843,7 @@ lang IntTypeAst
   | TyInt r -> r.info
 end
 
-lang FloatTypeAst
+lang FloatTypeAst = Ast
   syn Type =
   | TyFloat {info : Info}
 
@@ -838,7 +851,7 @@ lang FloatTypeAst
   | TyFloat r -> r.info
 end
 
-lang CharTypeAst
+lang CharTypeAst = Ast
   syn Type =
   | TyChar {info  : Info}
 
@@ -846,7 +859,7 @@ lang CharTypeAst
   | TyChar r -> r.info
 end
 
-lang FunTypeAst
+lang FunTypeAst = Ast
   syn Type =
   | TyArrow {info : Info,
              from : Type,
@@ -855,7 +868,7 @@ lang FunTypeAst
   | TyArrow r -> r.info
 end
 
-lang SeqTypeAst
+lang SeqTypeAst = Ast
   syn Type =
   | TySeq {info : Info,
            ty   : Type}
@@ -863,7 +876,7 @@ lang SeqTypeAst
   | TySeq r -> r.info
 end
 
-lang TensorTypeAst
+lang TensorTypeAst = Ast
   syn Type =
   | TyTensor {info : Info,
               ty   : Type}
@@ -871,7 +884,7 @@ lang TensorTypeAst
   | TyTensor r -> r.info
 end
 
-lang RecordTypeAst
+lang RecordTypeAst = Ast
   syn Type =
   | TyRecord {info    : Info,
               fields  : Map SID Type}
@@ -879,7 +892,7 @@ lang RecordTypeAst
   | TyRecord r -> r.info
 end
 
-lang VariantTypeAst
+lang VariantTypeAst = Ast
   syn Type =
   | TyVariant {info     : Info,
                constrs  : Map Name Type}
@@ -887,7 +900,7 @@ lang VariantTypeAst
   | TyVariant r -> r.info
 end
 
-lang VarTypeAst
+lang VarTypeAst = Ast
   syn Type =
   | TyVar {info   : Info,
            ident  : Name}
@@ -895,7 +908,7 @@ lang VarTypeAst
   | TyVar r -> r.info
 end
 
-lang AppTypeAst
+lang AppTypeAst = Ast
   syn Type =
   | TyApp {info : Info,
            lhs  : Type,

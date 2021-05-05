@@ -7,7 +7,7 @@
 # Run a file
 run() {
     output=$1
-    output="$output\n$(build/boot src/main/mi.mc -- run --test $1)\n"
+    output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1)\n"
     output="$output\n$(build/mi run --test $1)\n"
     echo $output
 }
@@ -135,6 +135,9 @@ files="${files} stdlib/char.mc"
 # files="${files} stdlib/ocaml/generate.mc"
 # files="${files} stdlib/ocaml/compile.mc"
 # files="${files} stdlib/ocaml/ast.mc"
+# files="${files} stdlib/ocaml/intrinsics-ops.mc"
+# files="${files} stdlib/ocaml/external-includes.mc"
+# files="${files} stdlib/ocaml/external.mc"
 # files="${files} stdlib/python/python.mc"
 # files="${files} test/sundials/sundials.mc"
 # files="${files} stdlib/sundials/sundials.mc"

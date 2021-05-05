@@ -16,9 +16,8 @@ include "mexpr/pprint.mc"
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
--- NOTE(dlunde,2020-09-25): The environment differs from boot, since we do not
--- have access to the unique string identifiers from ustring.ml. Instead, we
--- use strings directly.
+-- The environment differs from boot in that we use strings directly (we do
+-- have SIDs available, however, if needed).
 
 type SymEnv = {
   varEnv: Map String Name,
@@ -43,7 +42,7 @@ lang Sym
   -- Symbolize with builtin environment
   sem symbolize =
   | expr ->
-    let env = {symEnvEmpty with varEnv = builtinNameMap} in
+    let env = symEnvEmpty in
     symbolizeExpr env expr
 end
 
@@ -139,13 +138,17 @@ lang ExtSym = Sym + ExtAst
   | TmExt t ->
     match env with {varEnv = varEnv} then
       let ty = symbolizeType env t.ty in
-      let ident = nameSetNewSym t.ident in
-      let str = nameGetStr ident in
-      let varEnv = mapInsert str ident varEnv in
-      let env = {env with varEnv = varEnv} in
-      TmExt {{{t with ident = ident}
-                 with inexpr = symbolizeExpr env t.inexpr}
-                 with ty = ty}
+      if nameHasSym t.ident then
+        TmExt {{t with inexpr = symbolizeExpr env t.inexpr}
+                  with ty = ty}
+      else
+        let ident = nameSetNewSym t.ident in
+        let str = nameGetStr ident in
+        let varEnv = mapInsert str ident varEnv in
+        let env = {env with varEnv = varEnv} in
+        TmExt {{{t with ident = ident}
+                   with inexpr = symbolizeExpr env t.inexpr}
+                   with ty = ty}
     else never
 end
 

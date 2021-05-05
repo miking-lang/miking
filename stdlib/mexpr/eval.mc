@@ -56,13 +56,18 @@ let _seqOfCharToString = use MExprAst in
 -- TERMS --
 -----------
 
+lang Eval
+  sem eval (ctx: { env: Env }) =
+  -- Intentionally left blank
+end
+
 -- Fixpoint operator is only needed for eval. Hence, it is not in ast.mc
 lang FixAst = LamAst
   syn Expr =
   | TmFix ()
 end
 
-lang VarEval = VarAst + FixAst + AppAst
+lang VarEval = Eval + VarAst + FixAst + AppAst
   sem eval (ctx : {env : Env}) =
   | TmVar {ident = ident} ->
     match mapLookup ident ctx.env with Some t then
@@ -73,7 +78,7 @@ lang VarEval = VarAst + FixAst + AppAst
       error (concat "Unknown variable: " (pprintVarString (nameGetStr ident)))
 end
 
-lang AppEval = AppAst
+lang AppEval = Eval + AppAst
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | _ -> error "Bad application"
 
@@ -81,7 +86,7 @@ lang AppEval = AppAst
   | TmApp t -> apply ctx (eval ctx t.rhs) (eval ctx t.lhs)
 end
 
-lang LamEval = LamAst + VarEval + AppEval
+lang LamEval = Eval + LamAst + VarEval + AppEval
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Env}
 
@@ -93,14 +98,14 @@ lang LamEval = LamAst + VarEval + AppEval
   | TmClos t -> TmClos t
 end
 
-lang LetEval = LetAst + VarEval
+lang LetEval = Eval + LetAst + VarEval
   sem eval (ctx : {env : Env}) =
   | TmLet t ->
     eval {ctx with env = mapInsert t.ident (eval ctx t.body) ctx.env}
       t.inexpr
 end
 
-lang FixEval = FixAst + LamEval + UnknownTypeAst
+lang FixEval = Eval + FixAst + LamEval + UnknownTypeAst
   sem apply (ctx : {env : Env}) (arg : Expr) =
   | TmFix _ ->
     match arg with TmClos clos then
@@ -119,7 +124,7 @@ lang FixEval = FixAst + LamEval + UnknownTypeAst
   | TmFix _ -> TmFix ()
  end
 
-lang RecordEval = RecordAst
+lang RecordEval = Eval + RecordAst
   sem eval (ctx : {env : Env}) =
   | TmRecord t ->
     let bs = mapMap (eval ctx) t.bindings in
@@ -133,7 +138,7 @@ lang RecordEval = RecordAst
 end
 
 lang RecLetsEval =
-  RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
+  Eval + RecLetsAst + VarEval + FixAst + FixEval + RecordEval + LetEval +
   UnknownTypeAst
 
   sem eval (ctx : {env : Env}) =
@@ -189,7 +194,7 @@ lang RecLetsEval =
          (unpack_from lst_var t.inexpr)
 end
 
-lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
+lang ConstEval = Eval + ConstAst + SysAst + SeqAst + UnknownTypeAst
   sem delta (arg : Expr) =
 
   sem apply (ctx : {env : Env}) (arg : Expr) =
@@ -201,18 +206,18 @@ lang ConstEval = ConstAst + SysAst + SeqAst + UnknownTypeAst
   | TmConst c -> TmConst c
 end
 
-lang TypeEval = TypeAst
+lang TypeEval = Eval + TypeAst
   sem eval (ctx : {env : Env}) =
   | TmType t -> eval ctx t.inexpr
 end
 
-lang DataEval = DataAst + AppEval
+lang DataEval = Eval + DataAst + AppEval
   sem eval (ctx : {env : Env}) =
   | TmConDef t -> eval ctx t.inexpr
   | TmConApp t -> TmConApp {t with body = eval ctx t.body}
 end
 
-lang MatchEval = MatchAst
+lang MatchEval = Eval + MatchAst
   sem eval (ctx : {env : Env}) =
   | TmMatch t ->
     match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
@@ -223,7 +228,7 @@ lang MatchEval = MatchAst
   | _ -> None ()
 end
 
-lang UtestEval = Eq + UtestAst
+lang UtestEval = Eval + Eq + UtestAst
   sem eq (e1 : Expr) =
   | _ -> error "Equality not defined for expression"
 
@@ -240,19 +245,19 @@ lang UtestEval = Eq + UtestAst
     eval ctx t.next
 end
 
-lang SeqEval = SeqAst
+lang SeqEval = Eval + SeqAst
   sem eval (ctx : {env : Env}) =
   | TmSeq s ->
     let vs = map (eval ctx) s.tms in
     TmSeq {s with tms = vs}
 end
 
-lang NeverEval = NeverAst
+lang NeverEval = Eval + NeverAst
   --TODO(?,?)
 end
 
 -- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
-lang RefEval
+lang RefEval = Eval
   syn Expr =
   | TmRef {ref : Ref}
 
@@ -265,7 +270,7 @@ con TInt : Tensor[Int] -> T
 con TFloat : Tensor[Float] -> T
 con TExpr : Tensor[Expr] -> T
 
-lang TensorEval
+lang TensorEval = Eval
   syn Expr =
   | TmTensor { val : T }
 
@@ -273,7 +278,7 @@ lang TensorEval
   | TmTensor t -> TmTensor t
 end
 
-lang ExtEval = ExtAst
+lang ExtEval = Eval + ExtAst
   sem eval (ctx : {env : Env}) =
   | TmExt r -> eval ctx r.inexpr -- nop
 end
@@ -714,7 +719,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CCreate2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
-    let f = lam i. eval {env = builtinEnv} (app_ arg (int_ i)) in
+    let f = lam i. eval {env = mapEmpty nameCmp} (app_ arg (int_ i)) in
     TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
   | CSubsequence _ ->
     match arg with TmSeq s then
@@ -1016,7 +1021,7 @@ use TestLang in
 
 -- Evaluation shorthand used in tests below
 let evalNoSymbolize : Expr -> Expr =
-  lam t : Expr. eval {env = builtinEnv} t in
+  lam t : Expr. eval {env = mapEmpty nameCmp} t in
 
 let eval : Expr -> Expr =
   lam t : Expr. evalNoSymbolize (symbolize t) in

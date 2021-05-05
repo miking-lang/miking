@@ -141,23 +141,27 @@ files="${files} stdlib/ocaml/pprint.mc"
 files="${files} stdlib/ocaml/generate.mc"
 files="${files} stdlib/ocaml/compile.mc"
 files="${files} stdlib/ocaml/ast.mc"
+files="${files} stdlib/ocaml/intrinsics-ops.mc"
+files="${files} stdlib/ocaml/external-includes.mc"
+files="${files} stdlib/ocaml/external.mc"
 # files="${files} stdlib/python/python.mc"
 # files="${files} test/sundials/sundials.mc"
 # files="${files} stdlib/sundials/sundials.mc"
 files="${files} src/main/mi.mc"
 files="${files} src/main/compile.mc"
 files="${files} src/main/run.mc"
+files="${files} stdlib/ext/math-ext.mc"
 
 export MCORE_STDLIB='stdlib'
 
 # Compile using boot
 for f in $files; do
-    compile "$f" "build/boot src/main/mi.mc -- compile --test" &
+    compile "$f" "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations" &
 done
 wait
 
 # Compile using the bootstrapped compiler
 for f in $files; do
-    compile "$f" "build/mi compile --test" &
+    compile "$f" "build/mi compile --test --disable-optimizations" &
 done
 wait

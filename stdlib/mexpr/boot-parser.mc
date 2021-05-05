@@ -6,6 +6,7 @@ include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
+include "mexpr/const-transformer.mc"
 include "string.mc"
 include "stringid.mc"
 include "seq.mc"
@@ -25,7 +26,7 @@ let makeSeq = lam f. lam len.
     work [] 0
 
 
-lang BootParser = MExprAst
+lang BootParser = MExprAst + ConstTransformer
 
   -- Parse a complete MCore file, including MLang code
   -- This function returns the final MExpr AST. The MCore
@@ -33,13 +34,13 @@ lang BootParser = MExprAst
   sem parseMCoreFile (keywords : [String]) =
   | filename ->
     let t = bootParserParseMCoreFile keywords filename in
-    matchTerm t (bootParserGetId t)
+    constTransform (matchTerm t (bootParserGetId t))
 
   -- Parses an MExpr string and returns the final MExpr AST
   sem parseMExprString (keywords : [String]) =
   | str ->
     let t = bootParserParseMExprString keywords str in
-    matchTerm t (bootParserGetId t)
+    constTransform (matchTerm t (bootParserGetId t))
 
   -- Get term help function
   sem gterm (t:Unkown) =
@@ -142,6 +143,7 @@ lang BootParser = MExprAst
               info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,
+           effect = neqi (gint t 0) 0,
            ty = gtype t 0,
            inexpr = gterm t 0,
            info = ginfo t 0}
@@ -504,6 +506,10 @@ utest l_infoClosed "  \n  never " with r_info 2 2 2 7 in
 let s = "external y : Int in 1" in
 utest lsideClosed s with rside s in
 utest l_infoClosed "   \n  external y : Int in 1" with r_info 2 2 2 23 in
+
+let s = "external y! : Int in 1" in
+utest lsideClosed s with rside s in
+utest l_infoClosed "   \n  external y! : Int in 1" with r_info 2 2 2 24 in
 
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in

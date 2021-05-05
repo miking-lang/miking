@@ -124,7 +124,7 @@ lang TypeAnnot
 
   sem typeAnnot =
   | expr ->
-    let env = {_typeEnvEmpty with varEnv = builtinNameTypeMap} in
+    let env = _typeEnvEmpty in
     typeAnnotExpr env expr
 end
 
@@ -200,6 +200,16 @@ lang LetTypeAnnot = TypeAnnot + LetAst
           "Annotated type: ", _pprintType t.tyBody
         ] in
         infoErrorExit t.info msg
+    else never
+end
+
+lang ExpTypeAnnot = TypeAnnot + ExtAst
+  sem typeAnnotExpr (env : TypeEnv) =
+  | TmExt t ->
+    match env with {varEnv = varEnv, tyEnv = tyEnv} then
+      let env = {env with varEnv = mapInsert t.ident t.ty varEnv} in
+      let inexpr = typeAnnotExpr env t.inexpr in
+      TmExt {t with inexpr = inexpr}
     else never
 end
 
@@ -423,7 +433,7 @@ lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
     match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = TyVar _}) then
+    with Some (TyArrow {from = argTy, to = _}) then
       typeAnnotPat env argTy t.subpat
     else env
 end
@@ -468,6 +478,7 @@ lang MExprTypeAnnot =
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
+  ExpTypeAnnot +
 
   -- Patterns
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +

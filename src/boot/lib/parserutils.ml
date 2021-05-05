@@ -24,7 +24,7 @@ module ExtIdMap = Map.Make (Ustring)
 
 let raise_parse_error_on_non_unique_external_id t =
   let rec recur acc = function
-    | TmExt (fi, id, _, _, t) -> (
+    | TmExt (fi, id, _, _, _, t) -> (
         ExtIdMap.find_opt id acc
         |> function
         | Some fi' ->
@@ -45,7 +45,7 @@ let raise_parse_error_on_non_unique_external_id t =
 (* NOTE(oerikss, 2021-04-22) this function should be applied on a symbolized term *)
 let raise_parse_error_on_partially_applied_external t =
   let rec recur ((symb_map, app_depth, fi) as acc) = function
-    | TmExt (_, _, s, ty, t) ->
+    | TmExt (_, _, s, _, ty, t) ->
         let symb_map' = SymbMap.add s (ty_arity ty) symb_map in
         recur (symb_map', app_depth, fi) t
     | TmApp (fi, t1, t2) ->
@@ -55,7 +55,7 @@ let raise_parse_error_on_partially_applied_external t =
         SymbMap.find_opt s symb_map
         |> function
         | Some arity ->
-            if arity <> app_depth then
+            if arity > app_depth then
               raise
                 (Error (PARSE_ERROR, ERROR, fi, [id; us "partially applied"]))
             else acc
