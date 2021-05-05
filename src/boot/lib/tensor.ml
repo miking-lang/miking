@@ -8,8 +8,6 @@ let tensor_shape_and_ofs_and_len_does_not_match =
 
 let prod = Array.fold_left ( * ) 1
 
-let sum = Array.fold_left ( + ) 0
-
 let row_major_ofs shape is =
   let n = Array.length shape in
   let d = Array.length is in
@@ -87,7 +85,7 @@ module NoNum = struct
     else raise (Invalid_argument tensor_shape_mismatch)
 
   let reshape_exn t shape =
-    if t.size = sum shape then
+    if t.size = prod shape then
       let rank = Array.length shape in
       {t with shape; rank}
     else raise (Invalid_argument tensor_shape_mismatch)
