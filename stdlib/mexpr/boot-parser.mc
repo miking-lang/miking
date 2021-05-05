@@ -2,11 +2,11 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
-include "mexpr/ast.mc"
-include "mexpr/eq.mc"
-include "mexpr/info.mc"
-include "mexpr/pprint.mc"
-include "mexpr/const-transformer.mc"
+include "ast.mc"
+include "eq.mc"
+include "info.mc"
+include "pprint.mc"
+include "const-transformer.mc"
 include "string.mc"
 include "stringid.mc"
 include "seq.mc"

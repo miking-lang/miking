@@ -1,14 +1,16 @@
 include "bool.mc"
 include "string.mc"
 include "name.mc"
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/boot-parser.mc"
-include "mexpr/builtin.mc"
-include "mexpr/eq.mc"
-include "mexpr/eval.mc"
-include "mexpr/type-annot.mc"
-include "mexpr/type-lift.mc"
+
+include "ast.mc"
+include "ast-builder.mc"
+include "boot-parser.mc"
+include "builtin.mc"
+include "eq.mc"
+include "eval.mc"
+include "type-annot.mc"
+include "type-lift.mc"
+
 include "common.mc"
 
 type UtestTypeEnv = {

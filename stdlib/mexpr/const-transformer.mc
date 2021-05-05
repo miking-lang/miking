@@ -7,9 +7,9 @@
 include "string.mc"
 include "name.mc"
 include "map.mc"
-include "mexpr/builtin.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/ast.mc"
+include "builtin.mc"
+include "ast-builder.mc"
+include "ast.mc"
 
 lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + NamedPat
 
