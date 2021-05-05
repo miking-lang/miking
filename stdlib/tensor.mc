@@ -9,12 +9,13 @@ include "seq.mc"
 let _prod = foldl muli 1
 
 let _rowMajorOfsToIndex = lam shape. lam k.
-  let f = lam kis. lam d.
+  let f = lam kis : (Int, [Int]). lam d : Int.
     let k = kis.0 in
     let is = kis.1 in
     (divi k d, cons (modi k d) is)
   in
-  (foldl f (k, []) shape).1
+  let r : (Int, [Int]) = foldl f (k, []) shape in
+  r.1
 
 -- Folds `f` over the range `start` `stop` using accumulator `acc`
 let indexFoldu : (a -> Int -> a) -> a -> Int -> Int -> a =
