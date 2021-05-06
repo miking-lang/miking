@@ -1,11 +1,3 @@
-let tensor_shape_and_index_does_not_match =
-  "Tensor shape and index does not match"
-
-let tensor_shape_mismatch = "Tensor shape mismatch"
-
-let tensor_shape_and_ofs_and_len_does_not_match =
-  "Tensor shape and ofs and len does not match"
-
 let prod = Array.fold_left ( * ) 1
 
 let row_major_ofs shape is =
@@ -43,6 +35,15 @@ let mk_iteri rank shape slice f t =
       f i (slice t [|i|])
     done
 
+let copy n shape1 shape2 reshape1 reshape2 get1 set2 t1 t2 =
+  if shape1 t1 <> shape2 t2 then
+    let t1' = reshape1 t1 [|n|] in
+    let t2' = reshape2 t2 [|n|] in
+    for i = 0 to n - 1 do
+      set2 t2' [|i|] (get1 t1' [|i|])
+    done
+  else raise (Invalid_argument "Tensor.copy")
+
 module NoNum = struct
   type 'a t =
     {data: 'a array; shape: int array; rank: int; left_ofs: int; size: int}
@@ -50,6 +51,8 @@ module NoNum = struct
   let rank t = t.rank
 
   let shape t = t.shape
+
+  let size t = t.size
 
   let create shape f =
     let rank = Array.length shape in
@@ -67,13 +70,13 @@ module NoNum = struct
     if Array.length is = rank t && is_valid_index t.shape is then
       let ofs = row_major_ofs t.shape is + t.left_ofs in
       t.data.(ofs)
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.NoNum.get_exn")
 
   let set_exn t is v =
     if is_valid_index t.shape is then
       let ofs = row_major_ofs t.shape is + t.left_ofs in
       t.data.(ofs) <- v
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.NoNum.set_exn")
 
   let copy_exn t1 t2 =
     if shape t1 = shape t2 then
@@ -82,13 +85,13 @@ module NoNum = struct
         let o1 = t1.left_ofs in
         let o2 = t2.left_ofs in
         Array.blit t1.data o1 t2.data o2 t1.size
-    else raise (Invalid_argument tensor_shape_mismatch)
+    else raise (Invalid_argument "Tensor.NoNum.copy_exn")
 
   let reshape_exn t shape =
     if t.size = prod shape then
       let rank = Array.length shape in
       {t with shape; rank}
-    else raise (Invalid_argument tensor_shape_mismatch)
+    else raise (Invalid_argument "Tensor.NoNum.reshape_exn")
 
   let slice_exn t slice =
     if Array.length slice = 0 then t
@@ -99,7 +102,7 @@ module NoNum = struct
       let shape = if rank > 0 then Array.sub t.shape n rank else [||] in
       let size = prod shape in
       {t with left_ofs; rank; shape; size}
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.NoNum.slice_exn")
 
   let sub_exn t ofs len =
     if t.rank > 0 && ofs >= 0 && ofs + len <= t.shape.(0) then (
@@ -107,7 +110,7 @@ module NoNum = struct
       let shape = Array.copy t.shape in
       shape.(0) <- len ;
       {t with left_ofs; size= prod shape; shape} )
-    else raise (Invalid_argument tensor_shape_and_ofs_and_len_does_not_match)
+    else raise (Invalid_argument "Tensor.NoNum.sub_exn")
 
   let iteri f t = mk_iteri rank shape slice_exn f t
 
@@ -222,3 +225,17 @@ module Num = struct
     Array.iteri (fun i _ -> a.(i) <- get_exn v [|i|]) a ;
     a
 end
+
+let copy_num_nonum_exn t1 t2 =
+  try
+    copy (NoNum.size t2) Num.shape NoNum.shape Num.reshape_exn
+      NoNum.reshape_exn Num.get_exn NoNum.set_exn t1 t2
+  with Invalid_argument _ ->
+    raise (Invalid_argument "Tensor.copy_num_nonum_exn")
+
+let copy_nonum_num_exn t1 t2 =
+  try
+    copy (NoNum.size t1) NoNum.shape Num.shape NoNum.reshape_exn
+      Num.reshape_exn NoNum.get_exn Num.set_exn t1 t2
+  with Invalid_argument _ ->
+    raise (Invalid_argument "Tensor.copy_nonum_num_exn")

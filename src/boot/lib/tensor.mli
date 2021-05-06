@@ -53,6 +53,8 @@ module NoNum : sig
 
   val shape : 'a t -> int array
 
+  val size : 'a t -> int
+
   val copy_exn : 'a t -> 'a t -> unit
 
   val reshape_exn : 'a t -> int array -> 'a t
@@ -69,3 +71,7 @@ module NoNum : sig
 
   val data_to_array : 'a t -> 'a array
 end
+
+val copy_num_nonum_exn : ('a, 'b) Num.t -> 'a NoNum.t -> unit
+
+val copy_nonum_num_exn : 'a NoNum.t -> ('a, 'b) Num.t -> unit

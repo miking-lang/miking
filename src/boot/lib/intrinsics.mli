@@ -59,11 +59,40 @@ module T : sig
     | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
     | NoNum of 'a Tensor.NoNum.t
 
+  type 'a u =
+    | TInt : (int, Tensor.Num.int_elt) Tensor.Num.t -> int u
+    | TFloat : (float, Tensor.Num.float_elt) Tensor.Num.t -> float u
+    | T : 'a Tensor.NoNum.t -> 'a u
+
   val int : (int, Tensor.Num.int_elt) Tensor.Num.t -> 'a t
 
   val float : (float, Tensor.Num.float_elt) Tensor.Num.t -> 'a t
 
   val no_num : 'a Tensor.NoNum.t -> 'a t
+
+  val create_int : int Mseq.t -> (int Mseq.t -> int) -> int u
+
+  val create_float : int Mseq.t -> (int Mseq.t -> float) -> float u
+
+  val create : int Mseq.t -> (int Mseq.t -> 'a) -> 'a u
+
+  val get_exn : 'a u -> int Mseq.t -> 'a
+
+  val set_exn : 'a u -> int Mseq.t -> 'a -> unit
+
+  val rank : 'a u -> int
+
+  val shape : 'a u -> int Mseq.t
+
+  val copy_exn : 'a u -> 'a u -> unit
+
+  val reshape_exn : 'a u -> int Mseq.t -> 'a u
+
+  val slice_exn : 'a u -> int Mseq.t -> 'a u
+
+  val sub_exn : 'a u -> int -> int -> 'a u
+
+  val iteri : (int -> 'a u -> unit) -> 'a u -> unit
 
   module Num : sig
     val create_int :

@@ -58,6 +58,11 @@ module T = struct
     | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
     | NoNum of 'a Tensor.NoNum.t
 
+  type 'a u =
+    | TInt : (int, Tensor.Num.int_elt) Tensor.Num.t -> int u
+    | TFloat : (float, Tensor.Num.float_elt) Tensor.Num.t -> float u
+    | T : 'a Tensor.NoNum.t -> 'a u
+
   let int t = Int t
 
   let float t = Float t
@@ -117,6 +122,104 @@ module T = struct
 
     let iteri = Tensor.NoNum.iteri
   end
+
+  let create_int shape f = TInt (Num.create_int shape f)
+
+  let create_float shape f = TFloat (Num.create Tensor.Num.Float shape f)
+
+  let create shape f = T (NoNum.create shape f)
+
+  let get_exn (type el) (t : el u) is : el =
+    match t with
+    | TInt t' ->
+        Num.get_exn t' is
+    | TFloat t' ->
+        Num.get_exn t' is
+    | T t' ->
+        NoNum.get_exn t' is
+
+  let set_exn (type el) (t : el u) is (v : el) =
+    match t with
+    | TInt t' ->
+        Num.set_exn t' is v
+    | TFloat t' ->
+        Num.set_exn t' is v
+    | T t' ->
+        NoNum.set_exn t' is v
+
+  let rank (type el) (t : el u) =
+    match t with
+    | TInt t' ->
+        Num.rank t'
+    | TFloat t' ->
+        Num.rank t'
+    | T t' ->
+        NoNum.rank t'
+
+  let shape (type el) (t : el u) =
+    match t with
+    | TInt t' ->
+        Num.shape t'
+    | TFloat t' ->
+        Num.shape t'
+    | T t' ->
+        NoNum.shape t'
+
+  let copy_exn (type el) (t1 : el u) (t2 : el u) =
+    match (t1, t2) with
+    | TInt t1', TInt t2' ->
+        Num.copy_exn t1' t2'
+    | TFloat t1', TFloat t2' ->
+        Num.copy_exn t1' t2'
+    | T t1', T t2' ->
+        NoNum.copy_exn t1' t2'
+    | T t1', TInt t2' ->
+        Tensor.copy_nonum_num_exn t1' t2'
+    | T t1', TFloat t2' ->
+        Tensor.copy_nonum_num_exn t1' t2'
+    | TInt t1', T t2' ->
+        Tensor.copy_num_nonum_exn t1' t2'
+    | TFloat t1', T t2' ->
+        Tensor.copy_num_nonum_exn t1' t2'
+
+  let reshape_exn (type el) (t : el u) shape : el u =
+    match t with
+    | TInt t' ->
+        TInt (Num.reshape_exn t' shape)
+    | TFloat t' ->
+        TFloat (Num.reshape_exn t' shape)
+    | T t' ->
+        T (NoNum.reshape_exn t' shape)
+
+  let slice_exn (type el) (t : el u) is : el u =
+    match t with
+    | TInt t' ->
+        TInt (Num.slice_exn t' is)
+    | TFloat t' ->
+        TFloat (Num.slice_exn t' is)
+    | T t' ->
+        T (NoNum.slice_exn t' is)
+
+  let sub_exn (type el) (t : el u) ofs len : el u =
+    match t with
+    | TInt t' ->
+        TInt (Num.sub_exn t' ofs len)
+    | TFloat t' ->
+        TFloat (Num.sub_exn t' ofs len)
+    | T t' ->
+        T (NoNum.sub_exn t' ofs len)
+
+  let iteri (type el) (f : int -> el u -> unit) (t : el u) =
+    match t with
+    | TInt t' ->
+        let f' i t = f i (TInt t) in
+        Num.iteri f' t'
+    | TFloat t' ->
+        let f' i t = f i (TFloat t) in
+        Num.iteri f' t'
+    | T t' ->
+        let f' i t = f i (T t) in
+        NoNum.iteri f' t'
 end
 
 module Symb = struct
