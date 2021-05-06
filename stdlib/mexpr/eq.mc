@@ -7,8 +7,8 @@ include "name.mc"
 include "bool.mc"
 include "map.mc"
 
-include "mexpr/ast.mc"
-include "mexpr/symbolize.mc"
+include "ast.mc"
+include "symbolize.mc"
 
 
 -----------------

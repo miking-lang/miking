@@ -229,7 +229,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
     let cond = generate env (eqi_ (int_ 0) (length_ t.target)) in
     _if cond (generate env t.thn) (generate env t.els)
-  | TmMatch ({pat = PatRecord pr, thn = TmVar thnv, els = TmNever _} & t) ->
+  | TmMatch ({info = info, pat = PatRecord pr, thn = TmVar thnv, els = TmNever _} & t) ->
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
     match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
       if nameEq patName thnv.ident then
@@ -244,7 +244,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
               arms = [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
             }
           else error "Record type not handled by type-lifting"
-        else error "Unknown record type"
+        else error (infoErrorString info "Unknown record type")
       else generateDefaultMatchCase env t
     else generateDefaultMatchCase env t
   | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
@@ -583,7 +583,9 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         match mapLookup id fields with Some ty then
           ty
         else
-          infoErrorExit t.info (join ["Field ", sidToString id, " not found in record"])
+          let strFields = strJoin ", " (map sidToString (mapKeys fields)) in
+          infoErrorExit t.info
+            (join ["Field ", sidToString id, " not found in record with fields {", strFields, "}"])
       in
       match mapLookup id patNames with Some n then
         match generatePat env ty n pat with (names, innerWrap) then

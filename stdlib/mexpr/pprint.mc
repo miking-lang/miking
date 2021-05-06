@@ -7,9 +7,9 @@ include "stringid.mc"
 include "name.mc"
 include "map.mc"
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/builtin.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "builtin.mc"
 
 ----------------------------
 -- PRETTY PRINT INDENTING --

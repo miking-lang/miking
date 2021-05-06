@@ -10,11 +10,11 @@ include "map.mc"
 include "name.mc"
 include "stringid.mc"
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/pprint.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/type-annot.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "pprint.mc"
+include "symbolize.mc"
+include "type-annot.mc"
 
 ------------------------------
 -- TYPE LIFTING ENVIRONMENT --

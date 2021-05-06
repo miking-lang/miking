@@ -4,10 +4,10 @@
 
 include "string.mc"
 include "seq.mc"
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/eq.mc"
-include "mexpr/info.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "eq.mc"
+include "info.mc"
 
 type ParseResult = {val : Expr, pos : Pos, str: String}
 type StrPos = {str : String, pos : Pos}

@@ -1,8 +1,8 @@
 -- Defines the types of MExpr constants. A semantic function `tyConst` is
 -- provided.
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
+include "ast.mc"
+include "ast-builder.mc"
 
 -- The types defined below are only used for documentation purposes, as these
 -- cannot be properly represented using the existing types.
