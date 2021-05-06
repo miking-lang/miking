@@ -476,9 +476,10 @@ let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
 type LookupTable = Map Int Expr
 
 let _table = nameSym "table"
-let _argv =
-  match find (lam n. eqString "argv" (nameGetStr n)) builtinNames with Some n
-  then n else error "argv name not found"
+let _argv = argv_
+  -- use Argv const node
+  --match find (lam n. eqString "argv" (nameGetStr n)) builtinNames with Some n
+  --then n else error "argv name not found"
 
 --
 lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
@@ -927,7 +928,7 @@ match flatten [funB, funC] ast with (prog, table) then
     in
     let table = seq_ (concat table (map (str_) argv)) in
     let ast = bind_ (nulet_ _argv table) astExt in
-    eval { env = builtinEnv } ast
+    eval { env = mapEmpty nameCmp } ast
   in
 
   --let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in

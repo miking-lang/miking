@@ -62,6 +62,7 @@ let filenameWithoutExtension = lam filename.
   else filename
 
 let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
+  if options.exitBefore then exit 0 else
   let compileOptions : CompileOptions =
     if options.disableOptimizations then
       {defaultCompileOptions with optimize = false}
@@ -110,8 +111,7 @@ let compile = lam files. lam options : Options. lam args.
       (if options.debugGenerate then printLn ocamlProg else ());
 
       -- Compile OCaml AST
-      if options.exitBefore then exit 0
-      else ocamlCompile options file ocamlProg
+      ocamlCompile options file ocamlProg
     else never
   in
   iter compileFile files

@@ -24,10 +24,10 @@ let tune = lam files. lam options : Options.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
     match flatten [] ast with (prog, table) then
-      let binary = ocamlCompileAst file prog in
+      let binary = ocamlCompile options file prog in
       let run = lam data : ([String], String).
         match data with (args, stdin) then
-          dprintLn (cons (join ["./", binary]) args);
+          dprintLn (cons (join ["./", binary]) args);x
           sysRunCommand (cons (join ["./", binary]) args) stdin "."
         else never
       in
