@@ -34,7 +34,7 @@ let escapeFutharkLabelString = lam s.
 
 utest escapeFutharkLabelString "abc" with "labc"
 utest escapeFutharkLabelString "abc123" with "labc___"
-utest escapeFutharkLabelString "0" with "l_"
+utest escapeFutharkLabelString "0" with "0"
 utest escapeFutharkLabelString "a'b/c" with "la_b_c"
 
 lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
