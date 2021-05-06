@@ -56,10 +56,7 @@ con Foo : a -> FooBar in
 con Bar : a -> FooBar in
 
 let f = lam x : FooBar.
-  match x with Foo t then
-    let t : (a, b) = t in
-    let s = t.0 in
-    let n = t.1 in
+  match x with Foo (s,n) then
     (n,s)
   else
   match x with Bar b then (addi b 5, "b") else
@@ -75,9 +72,7 @@ con Leaf : (Int) -> Tree in
 
 recursive
   let count = lam tree.
-    match tree with Node t then
-      let left = t.0 in
-      let right = t.1 in
+    match tree with Node (left,right) then
       addi (count left) (count right)
     else match tree with Leaf v then
       v
@@ -211,10 +206,5 @@ utest match x with true then "true" else
       match x with false then "false" else
       never
 with "true" in
-
-
-
-
-
 
 ()

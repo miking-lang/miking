@@ -391,40 +391,55 @@ lang NamedPatTypeAnnot = TypeAnnot + NamedPat
     else env
 end
 
-lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + SeqTypeAst
+lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqTot t ->
-    match expectedTy with TySeq {ty = elemTy} then
-      foldl (lam acc. lam pat. typeAnnotPat acc elemTy pat) env t.pats
+    let elemTy =
+      match expectedTy with TySeq {ty = elemTy} then Some elemTy
+      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else None ()
+    in
+    match elemTy with Some ty then
+      foldl (lam acc. lam pat. typeAnnotPat acc ty pat) env t.pats
     else env
 end
 
-lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + SeqTypeAst
+lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqEdge t ->
-    match expectedTy with TySeq {ty = elemTy} then
+    let elemTy =
+      match expectedTy with TySeq {ty = elemTy} then Some elemTy
+      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else None ()
+    in
+    match elemTy with Some ty then
       let env : TypeEnv =
-        foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.prefix
+        foldl (lam acc. lam pat. typeAnnotPat env ty pat) env t.prefix
       in
       let env =
         match t.middle with PName n then
           {env with varEnv = mapInsert n expectedTy env.varEnv}
         else env
       in
-      foldl (lam acc. lam pat. typeAnnotPat env elemTy pat) env t.postfix
+      foldl (lam acc. lam pat. typeAnnotPat env ty pat) env t.postfix
     else env
 end
 
-lang RecordPatTypeAnnot = TypeAnnot + RecordPat + RecordTypeAst
+lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
-    let f = lam fields. lam acc. lam k. lam pat.
-      match mapLookup k fields with Some ty then
-        typeAnnotPat acc ty pat
-      else acc
-    in
     match expectedTy with TyRecord {fields = fields} then
-      mapFoldWithKey (f fields) env t.bindings
+      let annotFields = lam fields. lam acc. lam k. lam pat.
+        match mapLookup k fields with Some ty then
+          typeAnnotPat acc ty pat
+        else acc
+      in
+      mapFoldWithKey (annotFields fields) env t.bindings
+    else match expectedTy with TyUnknown _ then
+      let annotUnknown = lam acc. lam. lam pat.
+        typeAnnotPat acc tyunknown_ pat
+      in
+      mapFoldWithKey annotUnknown env t.bindings
     else env
 end
 
