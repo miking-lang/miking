@@ -34,6 +34,7 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   let tempfile = lam f. sysJoinPath dir f in
 
   writeFile (tempfile "program.ml") p;
+  writeFile (tempfile "program.mli") "";
   writeFile (tempfile "dune") dunefile;
 
   let command =
