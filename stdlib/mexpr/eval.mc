@@ -5,12 +5,12 @@ include "char.mc"
 include "assoc.mc"
 include "name.mc"
 
-include "mexpr/info.mc"
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/eq.mc"
-include "mexpr/pprint.mc"
+include "info.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "symbolize.mc"
+include "eq.mc"
+include "pprint.mc"
 
 ----------------------------
 -- EVALUATION ENVIRONMENT --

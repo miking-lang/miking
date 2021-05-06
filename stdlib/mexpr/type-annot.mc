@@ -9,11 +9,11 @@
 --
 -- Requires that the types of constructors are included in the `tyIdent` field.
 include "assoc-seq.mc"
-include "mexpr/ast.mc"
-include "mexpr/const-types.mc"
-include "mexpr/eq.mc"
-include "mexpr/pprint.mc"
-include "mexpr/builtin.mc"
+include "ast.mc"
+include "const-types.mc"
+include "eq.mc"
+include "pprint.mc"
+include "builtin.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,

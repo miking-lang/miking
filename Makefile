@@ -8,16 +8,33 @@
 #  the system, we just run the batch make file.
 ###################################################
 
-.PHONY : all test clean
+.PHONY :\
+  all\
+  test\
+  install\
+  lint\
+  fix\
+  clean\
+  old\
+  test-compile\
+  test-run\
+  test-all\
+  test-compile\
+  test-run\
+  test-boot\
+  test-boot-base\
+  test-boot-part\
+  test-boot-sundials\
+  test-boot-py\
+  test-boot-ocaml
 
-all:
+all: build/mi
+
+build/mi:
 	@./make
 
 test:
 	@./make test
-
-test-all:
-	@./make test-all
 
 install:
 	@./make install
@@ -33,3 +50,36 @@ clean:
 
 old:
 	@./make old
+
+test-all:\
+  test-compile\
+  test-run\
+  test-boot
+
+test-compile: build/mi
+	@$(MAKE) -s -f test-compile.mk all
+
+test-run: build/mi
+	@$(MAKE) -s -f test-run.mk all
+
+test-boot:\
+  test-boot-base\
+  test-boot-par\
+  test-boot-py\
+  test-boot-ocaml
+
+test-boot-base: build/mi
+	@$(MAKE) -s -f test-boot.mk base
+
+test-boot-par: build/mi
+	@$(MAKE) -s -f test-boot.mk par
+
+test-boot-sundials: build/mi
+	@$(MAKE) -s -f test-boot.mk sundials
+
+test-boot-py: build/mi
+	@$(MAKE) -s -f test-boot.mk py
+
+test-boot-ocaml: build/mi
+	@$(MAKE) -s -f test-boot.mk ocaml
+

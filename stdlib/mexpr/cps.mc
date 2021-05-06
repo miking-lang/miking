@@ -3,10 +3,10 @@
 -- http://matt.might.net/articles/cps-conversion/.
 -- TODO(dlunde,2020-09-25): Add full support for MExpr when stable.
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/eq.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "symbolize.mc"
+include "eq.mc"
 
 lang FunCPS = LamSym + LamEq + UnknownTypeSym + UnknownTypeEq
 

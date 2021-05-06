@@ -1,6 +1,6 @@
 -- Language fragments of MExpr
 
-include "mexpr/info.mc"
+include "info.mc"
 include "assoc.mc"
 include "info.mc"
 include "name.mc"
