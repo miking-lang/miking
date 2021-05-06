@@ -9,9 +9,9 @@ include "map.mc"
 include "name.mc"
 include "string.mc"
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/pprint.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "pprint.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --

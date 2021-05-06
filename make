@@ -47,60 +47,6 @@ install() {
     rm -rf $lib_path; cp -rf stdlib $lib_path
 }
 
-# Run the test suite for parallel programming
-runtests_par() {
-    (cd test
-     ../build/$BOOT_NAME eval multicore/* --test)
-    build/$BOOT_NAME eval stdlib/multicore/* --test
-}
-
-# Run the test suite for sundials
-runtests_sundials() {
-    (cd test
-     ../build/$BOOT_NAME eval sundials/* --test)
-    build/$BOOT_NAME eval stdlib/sundials/* --test
-}
-
-# Run the test suite for python intrinsic tests
-runtests_py() {
-    (cd test
-     ../build/$BOOT_NAME eval py/* --test)
-}
-
-# Run the test suite for OCaml compiler
-runtests_ocaml() {
-    (cd stdlib
-     ../build/$BOOT_NAME eval ocaml/* --test)
-}
-
-# Run the test suite
-runtests() {
-    (cd test
-    ../build/$BOOT_NAME eval mexpr --test &
-    ../build/$BOOT_NAME eval mlang --test &
-    cd ../stdlib
-    ../build/$BOOT_NAME eval mexpr --test &
-    ../build/$BOOT_NAME eval c --test &
-    ../build/$BOOT_NAME eval ad --test &
-    ../build/$BOOT_NAME eval parser --test &
-    cd ..
-    export MCORE_STDLIB='@@@'
-    build/$BOOT_NAME eval stdlib --test &)
-    if [ -n "$MI_TEST_PAR" ]; then
-        runtests_par &
-    fi
-    if [ -n "$MI_TEST_PYTHON" ]; then
-        runtests_py &
-    fi
-    if [ -n "$MI_TEST_SUNDIALS" ]; then
-        runtests_sundials &
-    fi
-    if [ -n "$MI_TEST_OCAML" ]; then
-        runtests_ocaml &
-    fi
-    wait
-}
-
 # Lint ocaml source code
 lint () {
     dune build @fmt
@@ -111,24 +57,38 @@ fix () {
     dune build @fmt --auto-promote
 }
 
+compile_test () {
+  output=$1
+  output="$output\n$($2 $1)"
+  if [ $? -eq 0 ]
+  then
+    binary=$(basename "$1" .mc)
+    output="$output$(./$binary)"
+    rm $binary
+    output="$output\n"
+  fi
+  echo $output
+}
+
+run_test() {
+    output=$1
+    output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1)\n"
+    output="$output\n$(build/mi run --test $1)\n"
+    echo $output
+}
+
 case $1 in
+    run-test)
+        run_test "$2"
+        ;;
+    compile-test)
+        compile_test "$2" "$3"
+        ;;
     lint)
         lint
         ;;
     fix)
         fix
-        ;;
-    test)
-        build
-        runtests
-        ;;
-    test-all)
-        export MI_TEST_PYTHON=1
-        export MI_TEST_OCAML=1
-        export MI_TEST_PAR=1
-        lint
-        build
-        runtests
         ;;
     install)
         build

@@ -8,11 +8,11 @@
 -- Note that also keywords starting with capital letters are allowed,
 -- using MCore's constructor definition.
 
-include "mexpr/ast.mc"
-include "mexpr/info.mc"
-include "mexpr/mexpr.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/eq.mc"
+include "ast.mc"
+include "info.mc"
+include "mexpr.mc"
+include "ast-builder.mc"
+include "eq.mc"
 
 -- The base fragment that includes the keyword maker, but
 -- no checks for incorrect bindings in e.g. let or lam.

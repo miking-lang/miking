@@ -1,5 +1,5 @@
-include "mexpr/ast.mc"
-include "mexpr/const-types.mc"
+include "ast.mc"
+include "const-types.mc"
 include "map.mc"
 include "set.mc"
 include "stringid.mc"

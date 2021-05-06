@@ -7,12 +7,12 @@
 -- code into standard MExpr.
 ---------------------------------------------------- 
 
-include "mexpr/ast.mc"
-include "mexpr/ast-builder.mc"
-include "mexpr/eval.mc"
-include "mexpr/parser.mc"
-include "mexpr/info.mc"
-include "mexpr/pprint.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "eval.mc"
+include "parser.mc"
+include "info.mc"
+include "pprint.mc"
 include "ast-builder.mc"
 
 -- Fragment for constructing constant binary operators. Used by InfixArithParser
