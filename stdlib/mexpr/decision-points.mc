@@ -476,7 +476,8 @@ let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
 type LookupTable = Map Int Expr
 
 let _table = nameSym "table"
-let _argv = argv_
+let _argv = nameSym "argv"
+  -- argv_
   -- use Argv const node
   --match find (lam n. eqString "argv" (nameGetStr n)) builtinNames with Some n
   --then n else error "argv name not found"
@@ -492,6 +493,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   -- maintaining call history.
   sem flatten (publicFns : [Name]) =
   | t ->
+    match _flatten publicFns t with (prog, initVals, nbrFlatHoles) then
+      (_wrapArgv nbrFlatHoles prog, initVals)
+    else never
+
+  -- Does everything except wrapping argv, for test with 'eval' using fake argv.
+  sem _flatten (publicFns : [Name]) =
+  | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv t in
     let env = callCtxInit publicFns (toCallGraph tm) tm in
@@ -506,7 +514,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let table = deref env.hole2idx in
     let nbrFlatHoles = mapFoldWithKey (lam acc. lam. lam m.
       addi acc (mapSize m)) 0 table in
-    (_wrapArgv nbrFlatHoles prog, _initAssignments env t)
+    (prog, _initAssignments env t, nbrFlatHoles)
 
   -- Find the initial mapping from decision points to values
   sem _initAssignments (env : CallCtxEnv) =
@@ -640,16 +648,18 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | tm ->
     smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
 
-  -- Since the values of the decision points are given via the suffix of argv,
-  -- we need to overwrite argv with its suffix, so that use of argv in the
-  -- original program works as expected.
+  -- sem _replaceArgv =
+  -- | TmConst {val = CArgv _} ->
+  --   nvar_ _argv
+  -- | tm -> smap_Expr_Expr _replaceArgv tm
+
   sem _wrapArgv (n : Int) =
   | tm ->
     -- TODO: apply a convert function on each argument depending on the type of
     -- the hole
     matchex_
-      (splitat_ (nvar_ _argv) (int_ 6))
-      (ptuple_ [npvar_ _table, npvar_ _argv])
+      (splitat_ argv_ (subi_ (length_ argv_) (int_ n)))
+      (ptuple_ [pvarw_, npvar_ _argv])
       tm
 end
 
@@ -857,7 +867,7 @@ map doCallGraphTests cgTests;
 -- Decision points tests --
 ---------------------------
 
-let debug = false in
+let debug = true in
 
 let debugPrint = lam ast. lam pub.
   if debug then
@@ -924,10 +934,10 @@ match flatten [funB, funC] ast with (prog, table) then
     let astExt =
       match ast with TmMatch ({thn = thn} & t) then
         TmMatch {t with thn = bind_ thn ext}
-      else error "Expected match expression"
+      else dprintLn ast; error "Expected match expression"
     in
-    let table = seq_ (concat table (map (str_) argv)) in
-    let ast = bind_ (nulet_ _argv table) astExt in
+    printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
+    printLn (expr2str ast);
     eval { env = mapEmpty nameCmp } ast
   in
 

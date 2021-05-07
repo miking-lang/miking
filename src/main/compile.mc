@@ -93,6 +93,7 @@ let compile = lam files. lam options : Options. lam args.
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
       let ast = typeAnnot ast in
+      let ast = typeAnnot ast in
 
       -- Translate the MExpr AST into an OCaml AST
       let ocamlAst =

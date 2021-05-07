@@ -27,7 +27,7 @@ let tune = lam files. lam options : Options.
       let binary = ocamlCompile options file prog in
       let run = lam data : ([String], String).
         match data with (args, stdin) then
-          dprintLn (cons (join ["./", binary]) args);x
+          dprintLn (cons (join ["./", binary]) args);
           sysRunCommand (cons (join ["./", binary]) args) stdin "."
         else never
       in
