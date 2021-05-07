@@ -610,7 +610,7 @@ let utestRunnerCall =
     l
     r
 
-let _generateUtest = use MExprAst in
+let _generateUtest = use MExprTypeAnnot in
   lam env : UtestTypeEnv.
   lam t : {test : Expr, expected : Expr, next : Expr, tusing : Option Expr,
            ty : Type, info : Info}.

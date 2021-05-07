@@ -27,84 +27,6 @@ let _typeEnvEmpty = {
   tyEnv  = mapEmpty nameCmp
 }
 
--- Given two types that are possibly unknown, this function attempts to find a
--- type that is compatible with both given types in the given type environment.
--- It is equivalent to type equality, except that unknown types are considered
--- compatible with any other type. If no compatible type can be found, `None`
--- is returned.
-recursive let compatibleType =
-  use MExprAst in
-  lam tyEnv : Map Name Type. lam ty1 : Type. lam ty2 : Type.
-  let unwrapType = lam tyEnv : Map Name Type. lam ty : Type.
-    match ty with TyVar {ident = id} then
-      mapLookup id tyEnv
-    else Some ty
-  in
-  let m = (ty1,ty2) in
-  match m with (TyUnknown _, t2) then Some t2
-  else match m with (t1, TyUnknown _) then Some t1
-  else match m with (TyVar t1, TyVar t2) then
-    if nameEq t1.ident t2.ident then Some ty1
-    else match unwrapType tyEnv (TyVar t1) with Some t1 then
-      compatibleType tyEnv t1 (TyVar t2)
-    else never
-  else match m with (TyApp t1, t2) then compatibleType tyEnv t1.lhs t2
-  else match m with (t1, TyApp t2) then compatibleType tyEnv t1 t2.lhs
-  else match m with (TyVar t1, t2) then
-    match unwrapType tyEnv (TyVar t1) with Some t1 then
-      compatibleType tyEnv t1 t2
-    else
-      error (concat "Unbound TyVar in compatibleType: " (nameGetStr t1.ident))
-  else match m with (t1, TyVar t2) then
-    match unwrapType tyEnv (TyVar t2) with Some t2 then
-      compatibleType tyEnv t1 t2
-    else
-      error (concat "Unbound TyVar in compatibleType: " (nameGetStr t2.ident))
-  else match m with ((TyBool _ & t1), TyBool _) then Some t1
-  else match m with ((TyInt _ & t1), TyInt _) then Some t1
-  else match m with ((TyFloat _ & t1), TyFloat _) then Some t1
-  else match m with ((TyChar _ & t1), TyChar _) then Some t1
-  else match m with (TyArrow t1, TyArrow t2) then
-    match compatibleType tyEnv t1.from t2.from with Some a then
-      match compatibleType tyEnv t1.to t2.to with Some b then
-        Some (TyArrow {{t1 with from = a} with to = b})
-      else None ()
-    else None ()
-  else match m with (TySeq t1, TySeq t2) then
-    match compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TySeq {t1 with ty = t})
-    else None ()
-  else match m with (TyTensor t1, TyTensor t2) then
-    match compatibleType tyEnv t1.ty t2.ty with Some t then
-      Some (TyTensor {t1 with ty = t})
-    else None ()
-  else match m with (TyRecord t1, TyRecord t2) then
-    let f = lam acc. lam p.
-      match p with (k, ty1) then
-        match mapLookup k t2.fields with Some ty2 then
-          match compatibleType tyEnv ty1 ty2 with Some ty then
-            Some (mapInsert k ty acc)
-          else None ()
-        else None ()
-      else never
-    in
-    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields) with Some fields then
-      Some (TyRecord {t1 with fields = fields})
-    else
-      None ()
-  else match m with (TyVariant t1, TyVariant t2) then
-    let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
-      match mapLookup ident t2.constrs with Some ty2 then
-        match compatibleType tyEnv ty1 ty2 with Some ty then
-          Some (mapInsert ident ty acc)
-        else None ()
-      else None ()
-    ) (mapEmpty (mapGetCmpFun t1.constrs)) t1.constrs
-    in
-    optionMap (lam constrs. TyVariant {t1 with constrs = constrs}) constrsOpt
-  else None ()
-end
-
 let _isTypeAscription = use MExprAst in
   lam letTerm : {ident : Name, tyBody : Type, body : Expr,
                  inexpr : Expr, ty : Type, info : Info}.
@@ -118,7 +40,167 @@ let _pprintType = use MExprPrettyPrint in
     tyStr
   else never
 
-lang TypeAnnot
+------------------------
+-- TYPE COMPATIBILITY --
+------------------------
+
+lang CompatibleType =
+
+  -- NOTE(dlunde,2021-05-05): Part of below hack
+  AppTypeAst
+
+  -- Given two types that are possibly unknown, this function attempts to find
+  -- a type that is compatible with both given types in the given type
+  -- environment.  It is equivalent to type equality, except that unknown types
+  -- are considered compatible with any other type. If no compatible type can
+  -- be found, `None` is returned.
+  sem compatibleType (tyEnv : TypeEnv) (ty1: Type) =
+  | ty2 ->
+    let tys = (ty1, ty2) in
+    match compatibleTypeBase tyEnv tys with Some ty then Some ty
+
+    -- NOTE(dlunde,2021-05-05): Temporary hack to make sure that tyapps are
+    -- reduced before tyvars. Not sure why this is needed, but it should not
+    -- matter in the end when we have a proper type system.
+    else match tys with (TyApp t1, _) then
+      compatibleType tyEnv t1.lhs ty2
+    else match tys with (_, TyApp t2) then
+      compatibleType tyEnv ty1 t2.lhs
+    --------
+
+    else match reduceType tyEnv ty1 with Some ty1 then
+      compatibleType tyEnv ty1 ty2
+    else match reduceType tyEnv ty2 with Some ty2 then
+      compatibleType tyEnv ty1 ty2
+    else None ()
+
+  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  | _ -> None () -- Types are not compatible by default
+
+  sem reduceType (tyEnv: Env) =
+  | _ -> None () -- Types cannot be reduced by default
+
+end
+
+lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
+
+  sem compatibleTypeBase (tyEnv: TypeEnv) =
+  | (TyUnknown _ & ty1, TyUnknown _) -> Some ty1
+  | (TyUnknown _, ! TyUnknown _ & ty2) -> Some ty2
+  | (! TyUnknown _ & ty1, TyUnknown _) -> Some ty1
+
+end
+
+lang VarCompatibleType = CompatibleType + VarTypeAst
+
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyVar t1 & ty1, TyVar t2) ->
+    if nameEq t1.ident t2.ident then Some ty1 else None ()
+
+  sem reduceType (tyEnv : TypeEnv) =
+  | TyVar {ident = id} ->
+    match mapLookup id tyEnv with Some ty then Some ty else
+      error (concat "Unbound TyVar in reduceType: " (nameGetStr id))
+
+end
+
+lang AppCompatibleType = CompatibleType + AppTypeAst
+
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  -- TODO(dlunde,2021-05-05): Left out for now for compatibility with original
+  -- compatibleTypes
+
+  -- NOTE(dlunde,2021-05-05): This is NOT how we want to handle TmApp in the
+  -- end. We are now just discarding the RHS of all applications
+  sem reduceType (tyEnv : TypeEnv) =
+  | TyApp t -> Some t.lhs
+
+end
+
+lang BoolCompatibleType = CompatibleType + BoolTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyBool _ & t1, TyBool _) -> Some t1
+end
+
+lang IntCompatibleType = CompatibleType + IntTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyInt _ & t1, TyInt _) -> Some t1
+end
+
+lang FloatCompatibleType = CompatibleType + FloatTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyFloat _ & t1, TyFloat _) -> Some t1
+end
+
+lang CharCompatibleType = CompatibleType + CharTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyChar _ & t1, TyChar _) -> Some t1
+end
+
+lang FunCompatibleType = CompatibleType + FunTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyArrow t1, TyArrow t2) ->
+    match compatibleType tyEnv t1.from t2.from with Some a then
+      match compatibleType tyEnv t1.to t2.to with Some b then
+        Some (TyArrow {{t1 with from = a} with to = b})
+      else None ()
+    else None ()
+end
+
+lang SeqCompatibleType = CompatibleType + SeqTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TySeq t1, TySeq t2) ->
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TySeq {t1 with ty = t})
+    else None ()
+end
+
+lang TensorCompatibleType = CompatibleType + TensorTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyTensor t1, TyTensor t2) ->
+    match compatibleType tyEnv t1.ty t2.ty with Some t then
+      Some (TyTensor {t1 with ty = t})
+    else None ()
+end
+
+lang RecordCompatibleType = CompatibleType + RecordTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyRecord t1, TyRecord t2) ->
+    let f = lam acc. lam p.
+      match p with (k, ty1) then
+        match mapLookup k t2.fields with Some ty2 then
+          match compatibleType tyEnv ty1 ty2 with Some ty then
+            Some (mapInsert k ty acc)
+          else None ()
+        else None ()
+      else never
+    in
+    match optionFoldlM f (mapEmpty cmpSID) (mapBindings t1.fields)
+    with Some fields then Some (TyRecord {t1 with fields = fields})
+    else None ()
+end
+
+lang VariantCompatibleType = CompatibleType + VariantTypeAst
+  sem compatibleTypeBase (tyEnv : TypeEnv) =
+  | (TyVariant t1, TyVariant t2) ->
+    let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
+      match mapLookup ident t2.constrs with Some ty2 then
+        match compatibleType tyEnv ty1 ty2 with Some ty then
+          Some (mapInsert ident ty acc)
+        else None ()
+      else None ()
+    ) (mapEmpty (mapGetCmpFun t1.constrs)) t1.constrs
+    in
+    optionMap (lam constrs. TyVariant {t1 with constrs = constrs}) constrsOpt
+
+end
+
+
+-------------------
+-- TYPE ANNOTATE --
+-------------------
+
+lang TypeAnnot = CompatibleType
   sem typeAnnotExpr (env : TypeEnv) =
   -- Intentionally left blank
 
@@ -147,6 +229,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
       else never
     in
     TmVar {t with ty = ty}
+
 end
 
 lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
@@ -383,6 +466,11 @@ lang NeverTypeAnnot = TypeAnnot + NeverAst
   | TmNever t -> TmNever {t with ty = tyunknown_}
 end
 
+
+---------------------------
+-- PATTERN TYPE ANNOTATE --
+---------------------------
+
 lang NamedPatTypeAnnot = TypeAnnot + NamedPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatNamed t ->
@@ -489,6 +577,12 @@ end
 
 lang MExprTypeAnnot =
 
+  -- Type compatibility
+  UnknownCompatibleType + VarCompatibleType + BoolCompatibleType +
+  IntCompatibleType + FloatCompatibleType + CharCompatibleType +
+  FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
+  RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
+
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
@@ -499,6 +593,7 @@ lang MExprTypeAnnot =
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +
   RecordPatTypeAnnot + DataPatTypeAnnot + IntPatTypeAnnot + CharPatTypeAnnot +
   BoolPatTypeAnnot + AndPatTypeAnnot + OrPatTypeAnnot + NotPatTypeAnnot
+
 end
 
 lang TestLang = MExprTypeAnnot + MExprPrettyPrint + MExprEq

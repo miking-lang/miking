@@ -66,23 +66,26 @@ fix () {
 }
 
 compile_test () {
+  set +e
   output=$1
-  output="$output\n$($2 $1)"
+  output="$output\n$($2 $1 2>&1)"
   if [ $? -eq 0 ]
   then
     binary=$(basename "$1" .mc)
     output="$output$(./$binary)"
     rm $binary
-    output="$output\n"
   fi
-  echo $output
+  echo "$output\n"
+  set -e
 }
 
 run_test() {
-    output=$1
-    output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1)\n"
-    output="$output\n$(build/mi run --test $1)\n"
-    echo $output
+  set +e
+  output=$1
+  output="$output\n$(build/boot eval src/main/mi.mc -- run --test $1 2>&1)\n"
+  output="$output\n$(build/mi run --test $1)\n"
+  echo $output
+  set -e
 }
 
 case $1 in
