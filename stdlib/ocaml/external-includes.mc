@@ -33,6 +33,9 @@ let _testExternals =
     ]),
     ("testNonExistant", [
       { ident = "none", ty = tyint_, libraries = ["no-lib"] }
+    ]),
+    ("testBatZero", [
+      { ident = "BatInt.zero", ty = tyint_, libraries = ["batteries"] }
     ])
   ]
 

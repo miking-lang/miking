@@ -1,3 +1,6 @@
+-- This program tests an external function with a callback and marshaling of
+-- data
+
 include "string.mc"
 
 external testListConcatMap : (a -> [b]) -> [a] -> [b]
