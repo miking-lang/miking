@@ -381,24 +381,21 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr externalMap in
     match impls with Some (![] & impls) then
-      let rs =
-        map
-          (lam impl: ExternalImpl.
-            externalMarshal (oext_ impl.extIdent) ty impl.extTy)
-          impls
-      in
       -- NOTE(oerikss, 2021-04-27) Here we pick the implementation with the
       -- lowest cost with respect to the type of the external directly. In the
       -- future we would like to choose the implementation at each application
       -- of the external.
-      let r : {cost : Int, tm : Expr} =
+      let impl : ExternalImpl =
         minOrElse
           (lam. error "impossible")
-          (lam r1 : {cost : Int, tm : Expr}. lam r2 : {cost : Int, tm : Expr}.
-            subi r1.cost r2.cost)
-        rs
+          (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
+             let cost1 = externalMarshalCost r1.extTy ty in
+             let cost2 = externalMarshalCost r2.extTy ty in
+             subi cost1 cost2)
+        impls
       in
-      bind_ (nulet_ ident r.tm) (generate env inexpr)
+      let t = externalMarshal (oext_ impl.extIdent) impl.extTy ty in
+      bind_ (nulet_ ident t) (generate env inexpr)
     else
       error (join ["No implementation for external ", identStr])
   | t -> smap_Expr_Expr (generate env) t
