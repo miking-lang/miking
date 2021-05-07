@@ -18,12 +18,18 @@ export MI_NAME=mi
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-# General function for building the project
-build() {
+# Compile and build the boot interpreter
+build_boot(){
     mkdir -p build
     dune build
-    dune install > /dev/null 2>&1
     cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
+}
+
+
+# General function for building the project
+build() {
+    build_boot
+    dune install > /dev/null 2>&1
     if [ -e build/$MI_NAME ]
     then
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
@@ -36,6 +42,8 @@ build() {
         rm -f mi
     fi
 }
+
+
 
 # Install the boot interpreter locally for the current user
 install() {
@@ -78,6 +86,9 @@ run_test() {
 }
 
 case $1 in
+    boot)
+        build_boot
+        ;;
     run-test)
         run_test "$2"
         ;;
