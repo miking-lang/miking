@@ -73,127 +73,53 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
     let n = nameSym "x" in
     app_ (nulam_ n (recur t ty1 ty2)) unit_
 
--- let x =
--- use OCamlPrettyPrint in
--- printLn "";
--- printLn (expr2str
--- (
---   externalMarshal
---     (var_ "f")
---     (tylist_ tyint_)
---     (tyseq_ tyint_)
--- )
--- )
 
--- let x =
--- use OCamlPrettyPrint in
--- printLn "";
--- printLn (expr2str
--- (
---   externalMarshal
---     (var_ "f")
---     (tyarrow_ (tyint_) (tylist_ tyint_))
---     (tyarrow_ (tyint_) (tyseq_ tyint_))
--- )
--- )
+type ExternalNameMap = Map Name [ExternalImpl]
 
+lang OCamlGenerateExternal
+  sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
+  -- Intentionally left blank
 
--- let x =
--- use OCamlPrettyPrint in
--- printLn "";
--- printLn (expr2str
--- (
---   externalMarshal
---     (var_ "f")
---     (tyarrow_ (tylist_ tyint_) (tylist_ tyint_))
---     (tyarrow_ (tyseq_ tyint_) (tyseq_ tyint_))
--- )
--- )
+  sem generateExternals (extNameMap : ExternalNameMap) =
+  -- Intentionally left blank
 
--- let x =
--- use OCamlPrettyPrint in
--- printLn "";
--- printLn (expr2str
--- (
---   externalMarshal
---     (var_ "f")
---     (tyarrows_ [tylist_ tyint_, tylist_ tyint_, tylist_ tyint_])
---     (tyarrows_ [tyseq_ tyint_, tyseq_ tyint_, tyseq_ tyint_])
--- )
--- )
+  sem chooseAndGenerateExternals (extMap : ExternalMap) =
+  | t ->
+    let extNameMap = buildExternalNameMap extMap (mapEmpty nameCmp) t in
+    (extNameMap, generateExternals extNameMap t)
+end
 
--- let x =
--- use OCamlPrettyPrint in
--- printLn "";
--- printLn (expr2str
--- (
---   externalMarshal
---     (var_ "f")
---     (tyarrow_ (tyarrow_ (tylist_ tyint_) (tylist_ tyint_)) tyint_)
---     (tyarrow_ (tyarrow_ (tyseq_ tyint_) (tyseq_ tyint_)) tyint_)
--- )
--- )
+-- A naive implementation of external generation where we just pick the
+-- implementation with the lowest cost with respect to the type given at the
+-- external term definition.
+lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
+  sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
+    let identStr = nameGetStr ident in
+    let impls = mapLookup identStr extMap in
+    match impls with Some (![] & impls) then
+      let impl =
+        minOrElse
+          (lam. error "impossible")
+          (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
+             let cost1 = externalMarshalCost r1.extTy ty in
+             let cost2 = externalMarshalCost r2.extTy ty in
+             subi cost1 cost2)
+        impls
+      in
+      buildExternalNameMap extMap (mapInsert ident [impl] extNameMap) inexpr
+    else
+      error (join ["No implementation for external ", identStr])
+  | t -> sfold_Expr_Expr (buildExternalNameMap extMap) extNameMap t
 
--- type ExternalNameMap = Map Name ExternalImpl
-
--- lang OCamlGenerateExternal
---   sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
---   -- Intentionally left blank
-
---   sem generateExternals (extNameMap : ExternalNameMap) =
---   -- Intentionally left blank
-
---   sem buildAndGenerateExternals (extMap : ExternalMap) =
---   | t ->
---     let extNameMap = buildExternalNameMap extMap (mapEmpty nameCmp) t in
---     (extNameMap, generateExternals extNameMap t)
--- end
-
--- -- A naive implementation of external generation where we just pick the
--- -- implementation with the least cost with respect to the type given at the
--- -- external term definition.
--- lang OCamlGenerateExternalNaive = OCamlGenerateExternal
---   sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
---   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
---     let identStr = nameGetStr ident in
---     let impls = mapLookup identStr env.externalMap in
---     match impls with Some (![] & impls) then
---       let rs =
---         map
---           (lam impl: ExternalImpl.
---             lexternalMarshal (oext_ impl.extIdent) ty impl.extTy)
---           impls
---       in
---       let r : CostExpr =
---         minOrElse
---           (lam. error "impossible")
---           (lam r1 : CostExpr. lam r2 : CostExpr.
---             subi r1.cost r2.cost)
---         rs
---       in
---       bind_ (nulet_ ident r.tm) (generate env inexpr)
---     else
---       error (join ["No implementation for external ", identStr])
-
---   sem generateExternal (env : ExternalEnv) =
---   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
---     let identStr = nameGetStr ident in
---     let impls = mapLookup identStr env.externalMap in
---     match impls with Some (![] & impls) then
---       let rs =
---         map
---           (lam impl: ExternalImpl.
---             lexternalMarshal (oext_ impl.extIdent) ty impl.extTy)
---           impls
---       in
---       let r : CostExpr =
---         minOrElse
---           (lam. error "impossible")
---           (lam r1 : CostExpr. lam r2 : CostExpr.
---             subi r1.cost r2.cost)
---         rs
---       in
---       bind_ (nulet_ ident r.tm) (generate env inexpr)
---     else
---       error (join ["No implementation for external ", identStr])
--- end
+  sem generateExternals (extNameMap : ExternalNameMap) =
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
+    match mapLookup ident extNameMap
+    with Some r then
+      let r : ExternalImpl = head r in
+      let t = externalMarshal (oext_ r.extIdent) r.extTy ty in
+      bind_ (nulet_ ident t) (generateExternals extNameMap inexpr)
+    else
+      error (join ["No implementation for external ", nameGetStr ident])
+  | t -> smap_Expr_Expr (generateExternals extNameMap) t
+end

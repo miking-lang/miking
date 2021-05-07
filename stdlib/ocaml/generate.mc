@@ -377,27 +377,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
-    let identStr = nameGetStr ident in
-    let impls = mapLookup identStr externalMap in
-    match impls with Some (![] & impls) then
-      -- NOTE(oerikss, 2021-04-27) Here we pick the implementation with the
-      -- lowest cost with respect to the type of the external directly. In the
-      -- future we would like to choose the implementation at each application
-      -- of the external.
-      let impl : ExternalImpl =
-        minOrElse
-          (lam. error "impossible")
-          (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
-             let cost1 = externalMarshalCost r1.extTy ty in
-             let cost2 = externalMarshalCost r2.extTy ty in
-             subi cost1 cost2)
-        impls
-      in
-      let t = externalMarshal (oext_ impl.extIdent) impl.extTy ty in
-      bind_ (nulet_ ident t) (generate env inexpr)
-    else
-      error (join ["No implementation for external ", identStr])
+  | TmExt _ ->
+    error "externals expected to be generated in a previous step"
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -1005,7 +986,7 @@ end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
                  MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
-                 MExprTypeAnnot + OCamlObjWrap
+                 MExprTypeAnnot + OCamlObjWrap + OCamlGenerateExternalNaive
 
 mexpr
 
@@ -2487,12 +2468,19 @@ utest ocamlEvalChar (generateEmptyEnv tensorIteriCharTest)
 with char_ '1' using eqExpr in
 
 -- Externals
+
+let generateWithExternals = lam ast.
+  match chooseAndGenerateExternals globalExternalMap ast with (m, ast) then
+    generateEmptyEnv ast
+  else never
+in
+
 let extZeroTest =
   bind_
     (ext_ "testZero" false tyfloat_)
     (var_ "testZero")
 in
-utest ocamlEvalFloat (generateEmptyEnv extZeroTest)
+utest ocamlEvalFloat (generateWithExternals extZeroTest)
 with float_ 0. using eqExpr in
 
 let extExpTest =
@@ -2500,7 +2488,7 @@ let extExpTest =
     (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
     (app_ (var_ "testExp") (float_ 0.))
 in
-utest ocamlEvalFloat (generateEmptyEnv extExpTest)
+utest ocamlEvalFloat (generateWithExternals extExpTest)
 with float_ 1. using eqExpr in
 
 let extListMapTest = symbolize (
@@ -2517,7 +2505,7 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-utest ocamlEvalInt (generateEmptyEnv extListMapTest)
+utest ocamlEvalInt (generateWithExternals extListMapTest)
 with int_ 1 using eqExpr in
 
 let extListConcatMapTest = symbolize (
@@ -2534,7 +2522,7 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-utest ocamlEvalInt (generateEmptyEnv extListConcatMapTest)
+utest ocamlEvalInt (generateWithExternals extListConcatMapTest)
 with int_ 1 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
