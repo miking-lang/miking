@@ -95,12 +95,6 @@ lang VarCompatibleType = CompatibleType + VarTypeAst
 
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyVar t1 & ty1, TyVar t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type vTy = {info: Info, ident: Name} in
-    let t1: vTy = t1 in
-    let t2: vTy = t2 in
-    ------------
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
   sem reduceType (tyEnv : TypeEnv) =
@@ -146,12 +140,6 @@ end
 lang FunCompatibleType = CompatibleType + FunTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyArrow t1, TyArrow t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type aTy = {info: Info, from: Type, to: Type} in
-    let t1: aTy = t1 in
-    let t2: aTy = t2 in
-    ------------
     match compatibleType tyEnv t1.from t2.from with Some a then
       match compatibleType tyEnv t1.to t2.to with Some b then
         Some (TyArrow {{t1 with from = a} with to = b})
@@ -162,12 +150,6 @@ end
 lang SeqCompatibleType = CompatibleType + SeqTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TySeq t1, TySeq t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type sTy = {info: Info, ty: Ty} in
-    let t1: sTy = t1 in
-    let t2: sTy = t2 in
-    ------------
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {t1 with ty = t})
     else None ()
@@ -176,12 +158,6 @@ end
 lang TensorCompatibleType = CompatibleType + TensorTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyTensor t1, TyTensor t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type tTy = {info : Info, ty: Type} in
-    let t1: tTy = t1 in
-    let t2: tTy = t2 in
-    ------------
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TyTensor {t1 with ty = t})
     else None ()
@@ -190,12 +166,6 @@ end
 lang RecordCompatibleType = CompatibleType + RecordTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyRecord t1, TyRecord t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type rTy = {info: Info, fields: Map SID Type} in
-    let t1: rTy = t1 in
-    let t2: rTy = t2 in
-    ------------
     let f = lam acc. lam p.
       match p with (k, ty1) then
         match mapLookup k t2.fields with Some ty2 then
@@ -213,12 +183,6 @@ end
 lang VariantCompatibleType = CompatibleType + VariantTypeAst
   sem compatibleTypeBase (tyEnv : TypeEnv) =
   | (TyVariant t1, TyVariant t2) ->
-    -- TODO(dlunde,2021-05-05): This is a temporary fix to make this compile
-    -- (not sure why it's needed)
-    type vTy = {info: Info, constrs: Map Name Type} in
-    let t1: vTy = t1 in
-    let t2: vTy = t2 in
-    ------------
     let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
       match mapLookup ident t2.constrs with Some ty2 then
         match compatibleType tyEnv ty1 ty2 with Some ty then
