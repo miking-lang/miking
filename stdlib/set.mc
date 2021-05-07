@@ -17,6 +17,7 @@ let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
+let setToSeq : Set a -> [a] = lam s. mapKeys s
 
 mexpr
 
@@ -37,10 +38,15 @@ utest setSize s2 with 2 in
 utest setMem 2 s2 with true in
 utest setMem 3 s2 with true in
 
-let s3 = setUnion s1 s2 in
-utest setSize s3 with 3 in
-utest setMem 1 s3 with true in
+let s3 = setOfSeq subi (setToSeq s2) in
+utest setSize s3 with 2 in
 utest setMem 2 s3 with true in
 utest setMem 3 s3 with true in
+
+let s4 = setUnion s1 s2 in
+utest setSize s4 with 3 in
+utest setMem 1 s4 with true in
+utest setMem 2 s4 with true in
+utest setMem 3 s4 with true in
 
 ()
