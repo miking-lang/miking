@@ -1,2 +1,2 @@
--- This program tests removal of unused externals defined in external library
+-- This program tests removal of unused externals which defines a library
 external testNonExistant : Int
