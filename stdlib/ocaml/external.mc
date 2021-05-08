@@ -5,6 +5,7 @@ include "ocaml/pprint.mc"
 
 lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst
 
+-- Computes the cost `Int` of marshaling data from `Type` to `Type`.
 let externalMarshalCost : Type -> Type -> Int =
   use OCamlMarshalData in
   recursive let recur = lam ty1. lam ty2.
@@ -39,6 +40,8 @@ utest
 with 9
 
 
+-- Marshals expression `Exp` of type `Type` to expression `Expr` of type
+-- `Type`.
 let externalMarshal : Expr -> Type -> Type -> Expr =
   use OCamlMarshalData in
   lam t. lam ty1. lam ty2.
@@ -77,9 +80,16 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
 type ExternalNameMap = Map Name [ExternalImpl]
 
 lang OCamlGenerateExternal
+
+  -- Takes a map `ExternalMap` and constructs a map `ExternalNameMap` of
+  -- external implementations used in a program `Expr`.
   sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
   -- Intentionally left blank
 
+
+  -- Generates code given an map `ExternalNameMap` of external implementations
+  -- in a program `Expr`. The resulting program should be free of `TmExt`
+  -- terms.
   sem generateExternals (extNameMap : ExternalNameMap) =
   -- Intentionally left blank
 
