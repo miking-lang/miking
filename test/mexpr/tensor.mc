@@ -1,22 +1,25 @@
 include "seq.mc"
 
--- Some helper functions
-let tensorRepeat = lam shape. lam v.
-  tensorCreate shape (lam. v)
-
-let tensorFill = lam t. lam v.
-  let n = foldl muli 1 (tensorShape t) in
-  let t1 = tensorReshapeExn t [n] in
-  tensorIteri (lam. lam e. tensorSetExn e [] v) t1
-
 -- Run all tests
-let testTensors = lam eq : a -> a -> Bool. lam fromInt. lam v.
+let testTensors = lam tcreate. lam eq : a -> a -> Bool. lam fromInt. lam v.
+
+  -- Some helper functions
+  let tensorRepeat = lam shape. lam v.
+    tcreate shape (lam. v)
+  in
+
+  let tensorFill = lam t. lam v.
+    let n = foldl muli 1 (tensorShape t) in
+    let t1 = tensorReshapeExn t [n] in
+    tensorIteri (lam. lam e. tensorSetExn e [] v) t1
+  in
+
  -- Rank < 2 Tensors
   let mkRank2TestTensor = lam.
-    tensorCreate [3, 4] (lam is.
-                          let i = get is 0 in
-                          let j = get is 1 in
-                          fromInt (addi (addi (muli i 4) j) 1)) in
+    tcreate [3, 4] (lam is.
+                      let i = get is 0 in
+                      let j = get is 1 in
+                      fromInt (addi (addi (muli i 4) j) 1)) in
 
   -- Set and Get
   let t = tensorRepeat [] v.0 in
@@ -251,12 +254,12 @@ let testTensors = lam eq : a -> a -> Bool. lam fromInt. lam v.
 
   -- Rank 3 Tensors
   let mkRank3TestTensor = lam.
-    tensorCreate [2, 2, 3] (lam is.
-                              let i = get is 0 in
-                              let j = get is 1 in
-                              let k = get is 2 in
-                              let ofs = addi k (muli 3 (addi j (muli 2 i))) in
-                              fromInt (addi ofs 1)) in
+    tcreate [2, 2, 3] (lam is.
+                         let i = get is 0 in
+                         let j = get is 1 in
+                         let k = get is 2 in
+                         let ofs = addi k (muli 3 (addi j (muli 2 i))) in
+                         fromInt (addi ofs 1)) in
 
   -- Get Set
   let t = mkRank3TestTensor () in
@@ -377,10 +380,10 @@ let testTensors = lam eq : a -> a -> Bool. lam fromInt. lam v.
   ()
 
 let v = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
-let _void = testTensors eqi (lam x. x) v
+let _void = testTensors tensorCreateInt eqi (lam x. x) v
 
 let v = (0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.)
-let _void = testTensors eqf int2float v
+let _void = testTensors tensorCreateFloat eqf int2float v
 
 let v = ([0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12])
-let _void = testTensors (eqSeq eqi) (lam x. [x]) v
+let _void = testTensors tensorCreate (eqSeq eqi) (lam x. [x]) v

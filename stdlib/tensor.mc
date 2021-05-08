@@ -95,13 +95,28 @@ utest optionIndexFoldRMM
 with None () using optionEq (eqSeq (eqSeq eqi))
 
 
--- Construct a rank 1 tensor from a non-empty sequence `seq`.
-let tensorOfSeqOrElse : (Unit -> Tensor[a]) -> [a] -> Tensor[a] =
-lam f. lam seq.
+let _tensorOfSeqOrElse =
+lam tcreate. lam f. lam seq.
   let n = length seq in
   if eqi n 0 then f ()
   else
-    tensorCreate [n] (lam is. get seq (get is 0))
+    tcreate [n] (lam is. get seq (get is 0))
+
+-- Construct a rank 1 tensor from a non-empty sequence `seq`.
+let tensorOfSeqIntOrElse : (Unit -> Tensor[Int]) -> [Int] -> Tensor[Int] =
+_tensorOfSeqOrElse tensorCreateInt
+
+let tensorOfSeqIntExn : [Int] -> Tensor[Int] =
+  tensorOfSeqIntOrElse (lam. error "Empty seq in tensorOfSeqIntExn")
+
+let tensorOfSeqFloatOrElse : (Unit -> Tensor[Float]) -> [Float] -> Tensor[Float] =
+_tensorOfSeqOrElse tensorCreateFloat
+
+let tensorOfSeqFloatExn : [Float] -> Tensor[Float] =
+  tensorOfSeqFloatOrElse (lam. error "Empty seq in tensorOfSeqFloatExn")
+
+let tensorOfSeqOrElse : (Unit -> Tensor[a]) -> [a] -> Tensor[a] =
+_tensorOfSeqOrElse tensorCreate
 
 let tensorOfSeqExn : [a] -> Tensor[a] =
   tensorOfSeqOrElse (lam. error "Empty seq in tensorOfSeqExn")
@@ -120,9 +135,14 @@ lam f. lam t.
 let tensorToSeqExn : Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
-utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
+utest tensorToSeqExn (tensorOfSeqIntExn [1, 2, 3, 4]) with [1, 2, 3, 4]
 using eqSeq eqi
 
+utest tensorToSeqExn (tensorOfSeqFloatExn [1., 2., 3., 4.])
+with [1., 2., 3., 4.] using eqSeq eqf
+
+utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
+using eqSeq eqi
 
 -- Create a tensor filled with values `v`.
 let tensorRepeat : [Int] -> a -> Tensor[a] =
