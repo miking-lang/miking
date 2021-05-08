@@ -459,6 +459,10 @@ let rec print_const fmt = function
   (* MCore intrinsics: Tensors *)
   | CtensorCreate _ ->
       fprintf fmt "tensorCreate"
+  | CtensorCreateInt _ ->
+      fprintf fmt "tensorCreateInt"
+  | CtensorCreateFloat _ ->
+      fprintf fmt "tensorCreateFloat"
   | CtensorGetExn _ ->
       fprintf fmt "tensorGetExn"
   | CtensorSetExn _ ->

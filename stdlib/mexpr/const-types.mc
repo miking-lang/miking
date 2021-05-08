@@ -202,6 +202,8 @@ end
 
 lang TensorOpTypeAst = TensorOpAst
   sem tyConst =
+  | CTensorCreateInt _ -> tytensorcreateint_
+  | CTensorCreateFloat _ -> tytensorcreatefloat_
   | CTensorCreate _ -> tytensorcreate_ (tygeneric_ "a")
   | CTensorGetExn _ -> tytensorgetexn_ (tygeneric_ "a")
   | CTensorSetExn _ -> tytensorsetexn_ (tygeneric_ "a")

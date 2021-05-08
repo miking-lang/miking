@@ -98,6 +98,8 @@ let builtin = use MExprAst in
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors
+  , ("tensorCreateInt", CTensorCreateInt ())
+  , ("tensorCreateFloat", CTensorCreateFloat ())
   , ("tensorCreate", CTensorCreate ())
   , ("tensorGetExn", CTensorGetExn ())
   , ("tensorSetExn", CTensorSetExn ())
@@ -122,4 +124,3 @@ let builtin = use MExprAst in
   , ("bootParserGetPat", CBootParserGetPat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
   ]
-
