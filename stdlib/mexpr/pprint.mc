@@ -769,9 +769,9 @@ end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CTensorCreateInt _ -> "tensorCreateInt"
-  | CTensorCreateFloat _ -> "tensorCreateFloat"
-  | CTensorCreate _ -> "tensorCreate"
+  | CTensorCreateInt _ -> "tensorCreateCArrayInt"
+  | CTensorCreateFloat _ -> "tensorCreateCArrayFloat"
+  | CTensorCreate _ -> "tensorCreateDense"
   | CTensorGetExn _ -> "tensorGetExn"
   | CTensorSetExn _ -> "tensorSetExn"
   | CTensorRank _ -> "tensorRank"

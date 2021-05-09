@@ -55,26 +55,28 @@ end
 
 module T : sig
   type 'a t =
-    | Int of (int, Tensor.Num.int_elt) Tensor.Num.t
-    | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
-    | NoNum of 'a Tensor.NoNum.t
+    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | Dense of 'a Tensor.Dense.t
 
   type 'a u =
-    | TInt : (int, Tensor.Num.int_elt) Tensor.Num.t -> int u
-    | TFloat : (float, Tensor.Num.float_elt) Tensor.Num.t -> float u
-    | T : 'a Tensor.NoNum.t -> 'a u
+    | TCArrayInt : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> int u
+    | TCArrayFloat :
+        (float, Tensor.CArray.float_elt) Tensor.CArray.t
+        -> float u
+    | TDense : 'a Tensor.Dense.t -> 'a u
 
-  val int : (int, Tensor.Num.int_elt) Tensor.Num.t -> 'a t
+  val carray_int : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> 'a t
 
-  val float : (float, Tensor.Num.float_elt) Tensor.Num.t -> 'a t
+  val carray_float : (float, Tensor.CArray.float_elt) Tensor.CArray.t -> 'a t
 
-  val no_num : 'a Tensor.NoNum.t -> 'a t
+  val dense : 'a Tensor.Dense.t -> 'a t
 
-  val create_int : int Mseq.t -> (int Mseq.t -> int) -> int u
+  val create_carray_int : int Mseq.t -> (int Mseq.t -> int) -> int u
 
-  val create_float : int Mseq.t -> (int Mseq.t -> float) -> float u
+  val create_carray_float : int Mseq.t -> (int Mseq.t -> float) -> float u
 
-  val create : int Mseq.t -> (int Mseq.t -> 'a) -> 'a u
+  val create_dense : int Mseq.t -> (int Mseq.t -> 'a) -> 'a u
 
   val get_exn : 'a u -> int Mseq.t -> 'a
 
@@ -94,59 +96,62 @@ module T : sig
 
   val iteri : (int -> 'a u -> unit) -> 'a u -> unit
 
-  module Num : sig
+  module CArray : sig
     val create_int :
          int Mseq.t
       -> (int Mseq.t -> int)
-      -> (int, Tensor.Num.int_elt) Tensor.Num.t
+      -> (int, Tensor.CArray.int_elt) Tensor.CArray.t
 
     val create_float :
          int Mseq.t
       -> (int Mseq.t -> float)
-      -> (float, Tensor.Num.float_elt) Tensor.Num.t
+      -> (float, Tensor.CArray.float_elt) Tensor.CArray.t
 
-    val get_exn : ('a, 'b) Tensor.Num.t -> int Mseq.t -> 'a
+    val get_exn : ('a, 'b) Tensor.CArray.t -> int Mseq.t -> 'a
 
-    val set_exn : ('a, 'b) Tensor.Num.t -> int Mseq.t -> 'a -> unit
+    val set_exn : ('a, 'b) Tensor.CArray.t -> int Mseq.t -> 'a -> unit
 
-    val rank : ('a, 'b) Tensor.Num.t -> int
+    val rank : ('a, 'b) Tensor.CArray.t -> int
 
-    val shape : ('a, 'b) Tensor.Num.t -> int Mseq.t
+    val shape : ('a, 'b) Tensor.CArray.t -> int Mseq.t
 
-    val copy_exn : ('a, 'b) Tensor.Num.t -> ('a, 'b) Tensor.Num.t -> unit
+    val copy_exn : ('a, 'b) Tensor.CArray.t -> ('a, 'b) Tensor.CArray.t -> unit
 
     val reshape_exn :
-      ('a, 'b) Tensor.Num.t -> int Mseq.t -> ('a, 'b) Tensor.Num.t
+      ('a, 'b) Tensor.CArray.t -> int Mseq.t -> ('a, 'b) Tensor.CArray.t
 
     val slice_exn :
-      ('a, 'b) Tensor.Num.t -> int Mseq.t -> ('a, 'b) Tensor.Num.t
+      ('a, 'b) Tensor.CArray.t -> int Mseq.t -> ('a, 'b) Tensor.CArray.t
 
-    val sub_exn : ('a, 'b) Tensor.Num.t -> int -> int -> ('a, 'b) Tensor.Num.t
+    val sub_exn :
+      ('a, 'b) Tensor.CArray.t -> int -> int -> ('a, 'b) Tensor.CArray.t
 
     val iteri :
-      (int -> ('a, 'b) Tensor.Num.t -> unit) -> ('a, 'b) Tensor.Num.t -> unit
+         (int -> ('a, 'b) Tensor.CArray.t -> unit)
+      -> ('a, 'b) Tensor.CArray.t
+      -> unit
   end
 
-  module NoNum : sig
-    val create : int Mseq.t -> (int Mseq.t -> 'a) -> 'a Tensor.NoNum.t
+  module Dense : sig
+    val create : int Mseq.t -> (int Mseq.t -> 'a) -> 'a Tensor.Dense.t
 
-    val get_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a
+    val get_exn : 'a Tensor.Dense.t -> int Mseq.t -> 'a
 
-    val set_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a -> unit
+    val set_exn : 'a Tensor.Dense.t -> int Mseq.t -> 'a -> unit
 
-    val rank : 'a Tensor.NoNum.t -> int
+    val rank : 'a Tensor.Dense.t -> int
 
-    val shape : 'a Tensor.NoNum.t -> int Mseq.t
+    val shape : 'a Tensor.Dense.t -> int Mseq.t
 
-    val copy_exn : 'a Tensor.NoNum.t -> 'a Tensor.NoNum.t -> unit
+    val copy_exn : 'a Tensor.Dense.t -> 'a Tensor.Dense.t -> unit
 
-    val reshape_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a Tensor.NoNum.t
+    val reshape_exn : 'a Tensor.Dense.t -> int Mseq.t -> 'a Tensor.Dense.t
 
-    val slice_exn : 'a Tensor.NoNum.t -> int Mseq.t -> 'a Tensor.NoNum.t
+    val slice_exn : 'a Tensor.Dense.t -> int Mseq.t -> 'a Tensor.Dense.t
 
-    val sub_exn : 'a Tensor.NoNum.t -> int -> int -> 'a Tensor.NoNum.t
+    val sub_exn : 'a Tensor.Dense.t -> int -> int -> 'a Tensor.Dense.t
 
-    val iteri : (int -> 'a Tensor.NoNum.t -> unit) -> 'a Tensor.NoNum.t -> unit
+    val iteri : (int -> 'a Tensor.Dense.t -> unit) -> 'a Tensor.Dense.t -> unit
   end
 end
 

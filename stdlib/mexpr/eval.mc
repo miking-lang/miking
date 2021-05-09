@@ -902,17 +902,17 @@ lang TensorOpEval =
       with TmConst { val = CInt { val = n } } then n
       else error "Expected integer from f in CTensorCreateInt"
     in
-    TmTensor { val = TInt (tensorCreateInt shape f) }
+    TmTensor { val = TInt (tensorCreateCArrayInt shape f) }
   | TmConst { val = CTensorCreateFloat2 shape } ->
     let f = lam is.
       match apply ctx (_toTmSeq is) arg
       with TmConst { val = CFloat { val = r } } then r
       else error "Expected float from f in CTensorCreateFloat"
     in
-    TmTensor { val = TFloat (tensorCreateFloat shape f) }
+    TmTensor { val = TFloat (tensorCreateCArrayFloat shape f) }
   | TmConst { val = CTensorCreate2 shape } ->
     let f = lam is. apply ctx (_toTmSeq is) arg in
-    TmTensor { val = TExpr (tensorCreate shape f) }
+    TmTensor { val = TExpr (tensorCreateDense shape f) }
   | TmConst { val = CTensorIteri2 f } ->
     match arg with TmTensor { val = t } then
 

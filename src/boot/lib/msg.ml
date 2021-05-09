@@ -80,7 +80,8 @@ let info2str = function
 (** [message2str m] returns a string representation of message [m].
     Is message is not intended to be read by humans. *)
 let message2str (id, sev, info, _) =
-  info2str info ^. us " " ^. severity2str sev ^. us ": " ^. id2str id ^. us "\n"
+  info2str info ^. us " " ^. severity2str sev ^. us ": " ^. id2str id
+  ^. us "\n"
 
 let raise_error fi msg = raise (Error (ERROR msg, ERROR, fi, []))
 

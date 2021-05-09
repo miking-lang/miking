@@ -1,4 +1,4 @@
-module Num : sig
+module CArray : sig
   type ('a, 'b) t
 
   type float_elt
@@ -6,7 +6,7 @@ module Num : sig
   type int_elt
 
   type ('a, 'b) kind =
-    | Float : (float, float_elt) kind
+    | CArrayFloat : (float, float_elt) kind
     | Int : (int, int_elt) kind
 
   val kind : ('a, 'b) t -> ('a, 'b) kind
@@ -40,7 +40,7 @@ module Num : sig
   val data_to_array : ('a, 'b) t -> 'a array
 end
 
-module NoNum : sig
+module Dense : sig
   type 'a t
 
   val create : int array -> (int array -> 'a) -> 'a t
@@ -72,6 +72,6 @@ module NoNum : sig
   val data_to_array : 'a t -> 'a array
 end
 
-val copy_num_nonum_exn : ('a, 'b) Num.t -> 'a NoNum.t -> unit
+val copy_num_nonum_exn : ('a, 'b) CArray.t -> 'a Dense.t -> unit
 
-val copy_nonum_num_exn : 'a NoNum.t -> ('a, 'b) Num.t -> unit
+val copy_nonum_num_exn : 'a Dense.t -> ('a, 'b) CArray.t -> unit

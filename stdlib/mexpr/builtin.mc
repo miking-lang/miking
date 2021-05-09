@@ -98,9 +98,9 @@ let builtin = use MExprAst in
   , ("mapEq", CMapEq ())
   , ("mapCmp", CMapCmp ())
   -- Tensors
-  , ("tensorCreateInt", CTensorCreateInt ())
-  , ("tensorCreateFloat", CTensorCreateFloat ())
-  , ("tensorCreate", CTensorCreate ())
+  , ("tensorCreateCArrayInt", CTensorCreateInt ())
+  , ("tensorCreateCArrayFloat", CTensorCreateFloat ())
+  , ("tensorCreateDense", CTensorCreate ())
   , ("tensorGetExn", CTensorGetExn ())
   , ("tensorSetExn", CTensorSetExn ())
   , ("tensorRank", CTensorRank ())

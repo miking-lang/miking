@@ -153,9 +153,9 @@ and const =
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate of int Mseq.t option
-  | CtensorCreateInt of int Mseq.t option
-  | CtensorCreateFloat of int Mseq.t option
+  | CtensorCreateDense of int Mseq.t option
+  | CtensorCreateCArrayInt of int Mseq.t option
+  | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
@@ -588,9 +588,9 @@ let const_has_side_effect = function
   | CmapCmp _ ->
       false
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate _
-  | CtensorCreateInt _
-  | CtensorCreateFloat _
+  | CtensorCreateDense _
+  | CtensorCreateCArrayInt _
+  | CtensorCreateCArrayFloat _
   | CtensorGetExn _
   | CtensorSetExn _
   | CtensorRank

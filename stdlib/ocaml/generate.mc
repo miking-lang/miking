@@ -835,9 +835,9 @@ let _preamble =
     , intr1 "ref" ref_
     , intr1 "deref" deref_
     , intr2 "modref" modref_
-    , intr2 "tensorCreateInt" (appf2_ (intrinsicOpTensor "create_int"))
-    , intr2 "tensorCreateFloat" (appf2_ (intrinsicOpTensor "create_float"))
-    , intr2 "tensorCreate" (appf2_ (intrinsicOpTensor "create"))
+    , intr2 "tensorCreateCArrayInt" (appf2_ (intrinsicOpTensor "create_carray_int"))
+    , intr2 "tensorCreateCArrayFloat" (appf2_ (intrinsicOpTensor "create_carray_float"))
+    , intr2 "tensorCreateDense" (appf2_ (intrinsicOpTensor "create_dense"))
     , intr2 "tensorGetExn" (appf2_ (intrinsicOpTensor "get_exn"))
     , intr3 "tensorSetExn" (appf3_ (intrinsicOpTensor "set_exn"))
     , intr1 "tensorRank" (appf1_ (intrinsicOpTensor "rank"))
@@ -929,9 +929,9 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
   | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
   | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
-  | CTensorCreateInt _ -> nvar_ (_intrinsicName "tensorCreateInt")
-  | CTensorCreateFloat _ -> nvar_ (_intrinsicName "tensorCreateFloat")
-  | CTensorCreate _ -> nvar_ (_intrinsicName "tensorCreate")
+  | CTensorCreateInt _ -> nvar_ (_intrinsicName "tensorCreateCArrayInt")
+  | CTensorCreateFloat _ -> nvar_ (_intrinsicName "tensorCreateCArrayFloat")
+  | CTensorCreate _ -> nvar_ (_intrinsicName "tensorCreateDense")
   | CTensorGetExn _ -> nvar_ (_intrinsicName "tensorGetExn")
   | CTensorSetExn _ -> nvar_ (_intrinsicName "tensorSetExn")
   | CTensorRank _ -> nvar_ (_intrinsicName "tensorRank")

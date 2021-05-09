@@ -54,172 +54,174 @@ end
 
 module T = struct
   type 'a t =
-    | Int of (int, Tensor.Num.int_elt) Tensor.Num.t
-    | Float of (float, Tensor.Num.float_elt) Tensor.Num.t
-    | NoNum of 'a Tensor.NoNum.t
+    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | Dense of 'a Tensor.Dense.t
 
   type 'a u =
-    | TInt : (int, Tensor.Num.int_elt) Tensor.Num.t -> int u
-    | TFloat : (float, Tensor.Num.float_elt) Tensor.Num.t -> float u
-    | T : 'a Tensor.NoNum.t -> 'a u
+    | TCArrayInt : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> int u
+    | TCArrayFloat :
+        (float, Tensor.CArray.float_elt) Tensor.CArray.t
+        -> float u
+    | TDense : 'a Tensor.Dense.t -> 'a u
 
-  let int t = Int t
+  let carray_int t = CArrayInt t
 
-  let float t = Float t
+  let carray_float t = CArrayFloat t
 
-  let no_num t = NoNum t
+  let dense t = Dense t
 
   let to_arr = Mseq.Helpers.to_array
 
   let of_arr = Mseq.Helpers.of_array
 
-  module Num = struct
+  module CArray = struct
     let create kind shape f =
-      Tensor.Num.create kind (to_arr shape) (fun ids -> f (of_arr ids))
+      Tensor.CArray.create kind (to_arr shape) (fun ids -> f (of_arr ids))
 
-    let create_int = create Tensor.Num.Int
+    let create_int = create Tensor.CArray.Int
 
-    let create_float = create Tensor.Num.Float
+    let create_float = create Tensor.CArray.CArrayFloat
 
-    let get_exn t ids = Tensor.Num.get_exn t (to_arr ids)
+    let get_exn t ids = Tensor.CArray.get_exn t (to_arr ids)
 
-    let set_exn t ids v = Tensor.Num.set_exn t (to_arr ids) v
+    let set_exn t ids v = Tensor.CArray.set_exn t (to_arr ids) v
 
-    let rank = Tensor.Num.rank
+    let rank = Tensor.CArray.rank
 
-    let shape t = Tensor.Num.shape t |> of_arr
+    let shape t = Tensor.CArray.shape t |> of_arr
 
-    let copy_exn = Tensor.Num.copy_exn
+    let copy_exn = Tensor.CArray.copy_exn
 
-    let reshape_exn t shape = Tensor.Num.reshape_exn t (to_arr shape)
+    let reshape_exn t shape = Tensor.CArray.reshape_exn t (to_arr shape)
 
-    let slice_exn t shape = Tensor.Num.slice_exn t (to_arr shape)
+    let slice_exn t shape = Tensor.CArray.slice_exn t (to_arr shape)
 
-    let sub_exn = Tensor.Num.sub_exn
+    let sub_exn = Tensor.CArray.sub_exn
 
-    let iteri = Tensor.Num.iteri
+    let iteri = Tensor.CArray.iteri
   end
 
-  module NoNum = struct
+  module Dense = struct
     let create shape f =
-      Tensor.NoNum.create (to_arr shape) (fun ids -> f (of_arr ids))
+      Tensor.Dense.create (to_arr shape) (fun ids -> f (of_arr ids))
 
-    let get_exn t ids = Tensor.NoNum.get_exn t (to_arr ids)
+    let get_exn t ids = Tensor.Dense.get_exn t (to_arr ids)
 
-    let set_exn t ids v = Tensor.NoNum.set_exn t (to_arr ids) v
+    let set_exn t ids v = Tensor.Dense.set_exn t (to_arr ids) v
 
-    let rank = Tensor.NoNum.rank
+    let rank = Tensor.Dense.rank
 
-    let shape t = Tensor.NoNum.shape t |> of_arr
+    let shape t = Tensor.Dense.shape t |> of_arr
 
-    let copy_exn = Tensor.NoNum.copy_exn
+    let copy_exn = Tensor.Dense.copy_exn
 
-    let reshape_exn t shape = Tensor.NoNum.reshape_exn t (to_arr shape)
+    let reshape_exn t shape = Tensor.Dense.reshape_exn t (to_arr shape)
 
-    let slice_exn t shape = Tensor.NoNum.slice_exn t (to_arr shape)
+    let slice_exn t shape = Tensor.Dense.slice_exn t (to_arr shape)
 
-    let sub_exn = Tensor.NoNum.sub_exn
+    let sub_exn = Tensor.Dense.sub_exn
 
-    let iteri = Tensor.NoNum.iteri
+    let iteri = Tensor.Dense.iteri
   end
 
-  let create_int shape f = TInt (Num.create_int shape f)
+  let create_carray_int shape f = TCArrayInt (CArray.create_int shape f)
 
-  let create_float shape f = TFloat (Num.create Tensor.Num.Float shape f)
+  let create_carray_float shape f = TCArrayFloat (CArray.create_float shape f)
 
-  let create shape f = T (NoNum.create shape f)
+  let create_dense shape f = TDense (Dense.create shape f)
 
   let get_exn (type el) (t : el u) is : el =
     match t with
-    | TInt t' ->
-        Num.get_exn t' is
-    | TFloat t' ->
-        Num.get_exn t' is
-    | T t' ->
-        NoNum.get_exn t' is
+    | TCArrayInt t' ->
+        CArray.get_exn t' is
+    | TCArrayFloat t' ->
+        CArray.get_exn t' is
+    | TDense t' ->
+        Dense.get_exn t' is
 
   let set_exn (type el) (t : el u) is (v : el) =
     match t with
-    | TInt t' ->
-        Num.set_exn t' is v
-    | TFloat t' ->
-        Num.set_exn t' is v
-    | T t' ->
-        NoNum.set_exn t' is v
+    | TCArrayInt t' ->
+        CArray.set_exn t' is v
+    | TCArrayFloat t' ->
+        CArray.set_exn t' is v
+    | TDense t' ->
+        Dense.set_exn t' is v
 
   let rank (type el) (t : el u) =
     match t with
-    | TInt t' ->
-        Num.rank t'
-    | TFloat t' ->
-        Num.rank t'
-    | T t' ->
-        NoNum.rank t'
+    | TCArrayInt t' ->
+        CArray.rank t'
+    | TCArrayFloat t' ->
+        CArray.rank t'
+    | TDense t' ->
+        Dense.rank t'
 
   let shape (type el) (t : el u) =
     match t with
-    | TInt t' ->
-        Num.shape t'
-    | TFloat t' ->
-        Num.shape t'
-    | T t' ->
-        NoNum.shape t'
+    | TCArrayInt t' ->
+        CArray.shape t'
+    | TCArrayFloat t' ->
+        CArray.shape t'
+    | TDense t' ->
+        Dense.shape t'
 
   let copy_exn (type el) (t1 : el u) (t2 : el u) =
     match (t1, t2) with
-    | TInt t1', TInt t2' ->
-        Num.copy_exn t1' t2'
-    | TFloat t1', TFloat t2' ->
-        Num.copy_exn t1' t2'
-    | T t1', T t2' ->
-        NoNum.copy_exn t1' t2'
-    | T t1', TInt t2' ->
+    | TCArrayInt t1', TCArrayInt t2' ->
+        CArray.copy_exn t1' t2'
+    | TCArrayFloat t1', TCArrayFloat t2' ->
+        CArray.copy_exn t1' t2'
+    | TDense t1', TDense t2' ->
+        Dense.copy_exn t1' t2'
+    | TDense t1', TCArrayInt t2' ->
         Tensor.copy_nonum_num_exn t1' t2'
-    | T t1', TFloat t2' ->
+    | TDense t1', TCArrayFloat t2' ->
         Tensor.copy_nonum_num_exn t1' t2'
-    | TInt t1', T t2' ->
+    | TCArrayInt t1', TDense t2' ->
         Tensor.copy_num_nonum_exn t1' t2'
-    | TFloat t1', T t2' ->
+    | TCArrayFloat t1', TDense t2' ->
         Tensor.copy_num_nonum_exn t1' t2'
 
   let reshape_exn (type el) (t : el u) shape : el u =
     match t with
-    | TInt t' ->
-        TInt (Num.reshape_exn t' shape)
-    | TFloat t' ->
-        TFloat (Num.reshape_exn t' shape)
-    | T t' ->
-        T (NoNum.reshape_exn t' shape)
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.reshape_exn t' shape)
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.reshape_exn t' shape)
+    | TDense t' ->
+        TDense (Dense.reshape_exn t' shape)
 
   let slice_exn (type el) (t : el u) is : el u =
     match t with
-    | TInt t' ->
-        TInt (Num.slice_exn t' is)
-    | TFloat t' ->
-        TFloat (Num.slice_exn t' is)
-    | T t' ->
-        T (NoNum.slice_exn t' is)
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.slice_exn t' is)
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.slice_exn t' is)
+    | TDense t' ->
+        TDense (Dense.slice_exn t' is)
 
   let sub_exn (type el) (t : el u) ofs len : el u =
     match t with
-    | TInt t' ->
-        TInt (Num.sub_exn t' ofs len)
-    | TFloat t' ->
-        TFloat (Num.sub_exn t' ofs len)
-    | T t' ->
-        T (NoNum.sub_exn t' ofs len)
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.sub_exn t' ofs len)
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.sub_exn t' ofs len)
+    | TDense t' ->
+        TDense (Dense.sub_exn t' ofs len)
 
   let iteri (type el) (f : int -> el u -> unit) (t : el u) =
     match t with
-    | TInt t' ->
-        let f' i t = f i (TInt t) in
-        Num.iteri f' t'
-    | TFloat t' ->
-        let f' i t = f i (TFloat t) in
-        Num.iteri f' t'
-    | T t' ->
-        let f' i t = f i (T t) in
-        NoNum.iteri f' t'
+    | TCArrayInt t' ->
+        let f' i t = f i (TCArrayInt t) in
+        CArray.iteri f' t'
+    | TCArrayFloat t' ->
+        let f' i t = f i (TCArrayFloat t) in
+        CArray.iteri f' t'
+    | TDense t' ->
+        let f' i t = f i (TDense t) in
+        Dense.iteri f' t'
 end
 
 module Symb = struct

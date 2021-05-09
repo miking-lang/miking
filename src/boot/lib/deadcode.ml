@@ -63,9 +63,10 @@ let rec lambdas_left nmap n se = function
 
 (* Count the number of lambdas (arrow types) in a type *)
 let rec lambdas_in_type = function
-  | TyArrow(_, _, ty2) -> 1 + lambdas_in_type ty2
-  | _ -> 0
-
+  | TyArrow (_, _, ty2) ->
+      1 + lambdas_in_type ty2
+  | _ ->
+      0
 
 (* Help function that collects let information and free variables 
    Returns a tuple with two elements
@@ -115,9 +116,13 @@ let collect_lets nmap t =
         in
         let nmap = List.fold_left handle_se nmap slst in
         work (nmap, free) tt
-    | TmExt(_, _, s, side_effect, ty, t1) ->
-       let nmap = SymbMap.add s (SymbSet.empty, false, side_effect, lambdas_in_type ty) nmap in
-       work (nmap, free) t1
+    | TmExt (_, _, s, side_effect, ty, t1) ->
+        let nmap =
+          SymbMap.add s
+            (SymbSet.empty, false, side_effect, lambdas_in_type ty)
+            nmap
+        in
+        work (nmap, free) t1
     | t ->
         sfold_tm_tm work (nmap, free) t
   in
@@ -156,14 +161,14 @@ let rec remove_lets nmap = function
       let lst = List.filter f lst in
       if List.length lst = 0 then remove_lets nmap tt
       else TmRecLets (fi, lst, remove_lets nmap tt)
-  | TmExt(fi, x, s, se, ty, t1) ->
-     (match SymbMap.find s nmap with
-      | _, true, _, _ ->
-         TmExt(fi, x, s, se, ty, remove_lets nmap t1)
-      | _ ->
-         remove_lets nmap t1 )
+  | TmExt (fi, x, s, se, ty, t1) -> (
+    match SymbMap.find s nmap with
+    | _, true, _, _ ->
+        TmExt (fi, x, s, se, ty, remove_lets nmap t1)
+    | _ ->
+        remove_lets nmap t1 )
   | t ->
-     smap_tm_tm (remove_lets nmap) t
+      smap_tm_tm (remove_lets nmap) t
 
 (* Helper function for pretty printing a nmap *)
 let pprint_nmap symbmap nmap =
