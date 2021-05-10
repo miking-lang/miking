@@ -772,6 +772,7 @@ let _preamble =
     , intr1 "roundfi" (appf1_ (intrinsicOpFloat "roundfi"))
     , intr1 "int2float" int2float_
     , intr1 "string2float" (appf1_ (intrinsicOpFloat "string2float"))
+    , intr1 "float2string" (appf1_ (intrinsicOpFloat "float2string"))
     , intr2 "eqc" eqc_
     , intr1 "char2int" char2int_
     , intr1 "int2char" int2char_
@@ -882,6 +883,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CRoundfi _ -> nvar_ (_intrinsicName "roundfi")
   | CInt2float _ -> nvar_ (_intrinsicName "int2float")
   | CString2float _ -> nvar_ (_intrinsicName "string2float")
+  | CFloat2string _ -> nvar_ (_intrinsicName "float2string")
   | CEqc _ -> nvar_ (_intrinsicName "eqc")
   | CChar2Int _ -> nvar_ (_intrinsicName "char2int")
   | CInt2Char _ -> nvar_ (_intrinsicName "int2char")
@@ -1126,7 +1128,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
         eqExpr mexprVal ocamlVal
       else error "Value mismatch"
     else error "Unsupported constant"
-  else error "Unsupported value"
+  else dprint mexprVal; error "Unsupported value"
 in
 
 let generateEmptyEnv = lam t.
@@ -1880,6 +1882,14 @@ utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
 
 let testString2float = string2float_ (str_ "1.5") in
 utest testString2float with generateEmptyEnv testString2float using sameSemantics in
+
+let testFloat2string = symbolize (float2string_ (float_ 1.5)) in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 0)))
+with char_ '1' using eqExpr in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 1)))
+with char_ '.' using eqExpr in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 2)))
+with char_ '5' using eqExpr in
 
 -- File operations
 let testFileExists = fileExists_ (str_ "test_file_ops") in

@@ -43,7 +43,7 @@ let dtupleproj_ = use MExprAst in
   drecordproj_ (int2string i) t
 
 -- Converts a sequence of characters to a string
-let _seqOfCharToString = use MExprAst in
+let _seqOfCharsToString = use MExprAst in
   lam tms.
     let f = lam c.
       match c with TmConst {val = CChar c} then
@@ -51,6 +51,8 @@ let _seqOfCharToString = use MExprAst in
       else error "Not a character"
     in
     map f tms
+
+let _stringToSeqOfChars = map char_
 
 -----------
 -- TERMS --
@@ -739,9 +741,14 @@ lang FloatStringConversionEval = FloatStringConversionAst
   sem delta (arg : Expr) =
   | CString2float _ ->
     match arg with TmSeq {tms = tms} then
-      let s = _seqOfCharToString tms in
+      let s = _seqOfCharsToString tms in
       float_ (string2float s)
     else error "Not converting a sequence"
+  | CFloat2string _ ->
+    match arg with TmConst {val = CFloat {val = f}} then
+      let tms = _stringToSeqOfChars (float2string f) in
+      seq_ tms
+    else error "Not converting a float"
 end
 
 lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
@@ -751,28 +758,28 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
   sem delta (arg : Expr) =
   | CFileRead _ ->
     match arg with TmSeq s then
-      let f = _seqOfCharToString s.tms in
+      let f = _seqOfCharsToString s.tms in
       str_ (readFile f)
     else error "f in readFile not a sequence"
   | CFileWrite _ ->
     match arg with TmSeq s then
-      let f = _seqOfCharToString s.tms in
+      let f = _seqOfCharsToString s.tms in
       TmConst {val = CFileWrite2 f, ty = tyunknown_, info = NoInfo()}
     else error "f in writeFile not a sequence"
   | CFileWrite2 f ->
     match arg with TmSeq s then
-      let d = _seqOfCharToString s.tms in
+      let d = _seqOfCharsToString s.tms in
       writeFile f d;
       unit_
     else error "d in writeFile not a sequence"
   | CFileExists _ ->
     match arg with TmSeq s then
-      let f = _seqOfCharToString s.tms in
+      let f = _seqOfCharsToString s.tms in
       TmConst {val = CBool {val = fileExists f}, ty = tyunknown_, info = NoInfo()}
     else error "f in fileExists not a sequence"
   | CFileDelete _ ->
     match arg with TmSeq s then
-      let f = _seqOfCharToString s.tms in
+      let f = _seqOfCharsToString s.tms in
       deleteFile f;
       unit_
     else error "f in deleteFile not a sequence"
@@ -782,7 +789,7 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
   sem delta (arg : Expr) =
   | CPrint _ ->
     match arg with TmSeq s then
-      let s = _seqOfCharToString s.tms in
+      let s = _seqOfCharsToString s.tms in
       print s;
       unit_
     else error "string to print is not a string"
@@ -820,7 +827,7 @@ lang SysEval = SysAst + SeqAst + IntAst + CharAst
   sem delta (arg : Expr) =
   | CError _ ->
     match arg with TmSeq s then
-      error (_seqOfCharToString s.tms)
+      error (_seqOfCharsToString s.tms)
     else
       error "s in error not a sequence"
   | CExit _ ->
@@ -830,7 +837,7 @@ lang SysEval = SysAst + SeqAst + IntAst + CharAst
       error "n in exit not an integer"
   | CCommand _ ->
     match arg with TmSeq s then
-      TmConst {val = CInt {val = command (_seqOfCharToString s.tms)},
+      TmConst {val = CInt {val = command (_seqOfCharsToString s.tms)},
                ty = tyunknown_, info = NoInfo ()}
     else
       error "argument to command not a sequence"
@@ -1764,6 +1771,7 @@ utest eval (char2int_ (char_ '\t')) with int_ 9 using eqExpr in
 
 -- String-Float conversion
 utest eval (string2float_ (str_ "1.5")) with float_ 1.5 using eqExpr in
+utest eval (float2string_ (float_ 1.5)) with str_ "1.5" using eqExpr in
 
 -- References
 let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),

@@ -340,6 +340,8 @@ let rec print_const fmt = function
       fprintf fmt "int2float"
   | Cstring2float ->
       fprintf fmt "string2float"
+  | Cfloat2string ->
+      fprintf fmt "float2string"
   (* MCore intrinsics: Characters *)
   | CChar v ->
       fprintf fmt "%s" (lit_of_uchar v)

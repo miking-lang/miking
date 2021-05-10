@@ -62,57 +62,6 @@ let inf =
   divf 1.0 0.0
 in
 
--- A naive float2string implementation that only formats in standard form
-let float2string = lam arg.
-  -- Quick fix to check for infinities
-  if eqf arg inf then \"INFINITY\" else
-  if eqf arg (negf inf) then \"-INFINITY\" else
-  -- End of quick fix
-  let precision = 7 in -- Precision in number of digits
-  let prefixpair = if ltf arg 0.0 then (\"-\", negf arg) else (\"\", arg) in
-  let prefix = prefixpair.0 in
-  let val = prefixpair.1 in
-  recursive
-  let float2string_rechelper = lam prec. lam digits. lam v.
-    -- Assume 0 <= v < 10
-    if eqi prec digits then
-      \"\"
-    else if eqf v 0.0 then
-      \"0\"
-    else
-      let fstdig = floorfi v in
-      let remaining = mulf (subf v (int2float fstdig)) 10.0 in
-      let c = int2char (addi fstdig (char2int '0')) in
-      cons c (float2string_rechelper prec (addi digits 1) remaining)
-  in
-  recursive
-  let positiveExponentPair = lam acc. lam v.
-    if ltf v 10.0
-    then (v, acc)
-    else positiveExponentPair (addi acc 1) (divf v 10.0)
-  in
-  recursive
-  let negativeExponentPair = lam acc. lam v.
-    if geqf v 1.0
-    then (v, acc)
-    else negativeExponentPair (addi acc 1) (mulf v 10.0)
-  in
-  let res = if eqf val 0.0 then
-              \"0.0\"
-            else if gtf val 1.0 then
-              let pospair = positiveExponentPair 0 val in
-              let retstr = float2string_rechelper precision 0 (pospair.0) in
-              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
-              concat decimals (concat \"e+\" (int2string pospair.1))
-            else
-              let pospair = negativeExponentPair 0 val in
-              let retstr = float2string_rechelper precision 0 (pospair.0) in
-              let decimals = cons (head retstr) (cons '.' (tail retstr)) in
-              concat decimals (concat \"e-\" (int2string pospair.1))
-  in
-  concat prefix res
-in
-
 recursive
   let strJoin = lam delim. lam strs.
     if eqi (length strs) 0
@@ -352,7 +301,7 @@ let _equalInt =
   lam_ "a" tyint_ (lam_ "b" tyint_ (eqi_ (var_ "a") (var_ "b")))
 
 let _pprintFloat =
-  lam_ "a" tyfloat_ (app_ (var_ "float2string") (var_ "a"))
+  lam_ "a" tyfloat_ (float2string_ (var_ "a"))
 
 let _pprintBool =
   lam_ "a" tybool_ (if_ (var_ "a") (str_ "true") (str_ "false"))

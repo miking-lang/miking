@@ -676,6 +676,7 @@ end
 lang FloatStringConversionPrettyPrint = FloatStringConversionAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CString2float _ -> "string2float"
+  | CFloat2string _ -> "float2string"
 end
 
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint

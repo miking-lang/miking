@@ -1,18 +1,16 @@
 include "ext/math-ext.mc"
 
-let _eqf = eqfApprox 1e-6
-
 -- Float stuff
 let inf = divf 1.0 0.0
 let minf = lam r. lam l. if ltf r l then r else l
 
-utest minf 0. 0. with 0. using _eqf
-utest minf 1. 0. with 0. using _eqf
-utest minf 0. 1. with 0. using _eqf
+utest minf 0. 0. with 0. using eqf
+utest minf 1. 0. with 0. using eqf
+utest minf 0. 1. with 0. using eqf
 
-utest absf 0. with 0. using _eqf
-utest absf 1. with 1. using _eqf
-utest absf (negf 1.) with 1. using _eqf
+utest absf 0. with 0. using eqf
+utest absf 1. with 1. using eqf
+utest absf (negf 1.) with 1. using eqf
 
 -- Int stuff
 let maxi = lam r. lam l. if gti r l then r else l

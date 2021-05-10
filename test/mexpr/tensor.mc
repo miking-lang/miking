@@ -403,7 +403,7 @@ let vs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 let _void = testTensors tensorCreateCArrayInt eqi (lam x. x) vs
 
 let vs = [0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.]
-let _void = testTensors tensorCreateCArrayFloat (eqfApprox 1.e-5) int2float vs
+let _void = testTensors tensorCreateCArrayFloat eqf int2float vs
 
 let vs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12]]
 let _void = testTensors tensorCreateDense (eqSeq eqi) (lam x. [x]) vs

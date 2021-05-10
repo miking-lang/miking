@@ -513,6 +513,7 @@ end
 lang FloatStringConversionAst = SeqAst + FloatAst
   syn Const =
   | CString2float {}
+  | CFloat2string {}
 end
 
 lang SymbAst = ConstAst

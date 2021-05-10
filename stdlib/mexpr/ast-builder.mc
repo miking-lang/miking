@@ -672,6 +672,10 @@ let string2float_ = use MExprAst in
   lam s.
   app_ (uconst_ (CString2float ())) s
 
+let float2string_ = use MExprAst in
+  lam f.
+  app_ (uconst_ (CFloat2string ())) f
+
 let eqf_ = use MExprAst in
   lam a. lam b.
   appf2_ (uconst_ (CEqf ())) a b

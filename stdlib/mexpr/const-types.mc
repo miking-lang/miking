@@ -89,6 +89,7 @@ end
 lang FloatStringConversionTypeAst = FloatStringConversionAst
   sem tyConst =
   | CString2float _ -> tyarrow_ tystr_ tyfloat_
+  | CFloat2string _ -> tyarrow_ tyfloat_ tystr_
 end
 
 lang SymbTypeAst = SymbAst

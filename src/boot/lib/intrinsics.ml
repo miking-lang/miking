@@ -269,8 +269,9 @@ module FloatConversion = struct
 
   let roundfi f = f |> Float.round |> int_of_float
 
-  let string2float s =
-    s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8 |> Float.of_string
+  let string2float s = s |> Mseq.Helpers.to_ustring |> float_of_ustring
+
+  let float2string r = r |> ustring_of_float |> Mseq.Helpers.of_ustring
 end
 
 module IO = struct
