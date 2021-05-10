@@ -500,9 +500,7 @@ lang AppTypeTypeLift = TypeLift + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TyApp t ->
     match typeLiftType env t.lhs with (env, lhs) then
-      match typeLiftType env t.rhs with (env, rhs) then
-        (env, TyApp {{t with lhs = lhs} with rhs = rhs})
-      else never
+      (env, lhs)
     else never
 end
 
