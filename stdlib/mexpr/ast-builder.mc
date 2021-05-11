@@ -383,7 +383,7 @@ let ulam_ = use MExprAst in
 
 let lams_ = use MExprAst in
   lam params. lam body.
-  foldr (lam p : (String, Expr). lam acc. lam_ p.0 p.1 acc) body params
+  foldr (lam p : (String, Type). lam acc. lam_ p.0 p.1 acc) body params
 
 let ulams_ = use MExprAst in
   lam idents. lam body.
