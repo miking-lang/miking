@@ -1,7 +1,6 @@
 include "ocaml/external-includes.mc"
 include "ocaml/ast.mc"
 include "ocaml/intrinsics-ops.mc"
-include "ocaml/pprint.mc"
 
 lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst
 

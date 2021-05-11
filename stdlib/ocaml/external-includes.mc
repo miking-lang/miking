@@ -1,4 +1,6 @@
+include "ext/batteries.ext-ocaml.mc" -- For testing
 include "ext/math-ext.ext-ocaml.mc"
+
 
 type ExternalImplDef = {ident : String, ty : Type, libraries : [String]}
 
@@ -33,9 +35,6 @@ let _testExternals =
     ]),
     ("testNonExistant", [
       { ident = "none", ty = tyint_, libraries = ["no-lib"] }
-    ]),
-    ("testBatZero", [
-      { ident = "BatInt.zero", ty = tyint_, libraries = ["batteries"] }
     ])
   ]
 
@@ -53,5 +52,6 @@ let globalExternalMap : ExternalMap =
   (foldl1 mapUnion
     [
       _testExternals, -- For testing purposes
+      batteries,      -- For testing purposes
       mathExtMap
     ])

@@ -1,5 +1,6 @@
 -- This program tests an external function from the batteries library
 
-external testBatZero : Int
+external batteriesZero : Int
 mexpr
-testBatZero
+utest batteriesZero with 0 in
+()
