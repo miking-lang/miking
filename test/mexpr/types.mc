@@ -27,7 +27,7 @@ utest f 5 with 25 in
 -- Float type
 let v : Float = 3.33 in
 let f = lam x:Float. mulf x 10.0 in
-utest f v with 33.3 using eqfApprox 1e-5 in
+utest f v with 33.3 using eqf in
 
 -- Bool type
 let v : Bool = true in

@@ -90,6 +90,7 @@ and const =
   | Croundfi
   | Cint2float
   | Cstring2float
+  | Cfloat2string
   (* MCore intrinsics: Characters *)
   | CChar of int
   | Ceqc of int option
@@ -153,7 +154,9 @@ and const =
   | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
   | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate of int Mseq.t option
+  | CtensorCreateDense of int Mseq.t option
+  | CtensorCreateCArrayInt of int Mseq.t option
+  | CtensorCreateCArrayFloat of int Mseq.t option
   | CtensorGetExn of tm T.t option
   | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
@@ -344,7 +347,7 @@ and ident =
   (* A label identifier *)
   | IdLabel of sid
 
-let tmUnit = TmRecord (NoInfo, Record.empty)
+let tm_unit = TmRecord (NoInfo, Record.empty)
 
 let tyUnit fi = TyRecord (fi, Record.empty)
 
@@ -519,7 +522,8 @@ let const_has_side_effect = function
   | Cceilfi
   | Croundfi
   | Cint2float
-  | Cstring2float ->
+  | Cstring2float
+  | Cfloat2string ->
       false
   (* MCore intrinsics: Characters *)
   | CChar _ | Ceqc _ | Cchar2int | Cint2char ->
@@ -586,7 +590,9 @@ let const_has_side_effect = function
   | CmapCmp _ ->
       false
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate _
+  | CtensorCreateDense _
+  | CtensorCreateCArrayInt _
+  | CtensorCreateCArrayFloat _
   | CtensorGetExn _
   | CtensorSetExn _
   | CtensorRank

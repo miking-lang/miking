@@ -123,7 +123,8 @@ let delta eval env fi c v =
         ( fi
         , CPar
             (ParThread
-               (Thread.spawn (fun _ -> TmApp (fi, f, tmUnit) |> eval env)) ) )
+               (Thread.spawn (fun _ -> TmApp (fi, f, tm_unit) |> eval env)) )
+        )
   | ParthreadJoin, TmConst (_, CPar (ParThread p)) ->
       Thread.join p
   | ParthreadJoin, _ ->
@@ -137,16 +138,16 @@ let delta eval env fi c v =
   | ParthreadSelf, _ ->
       fail_constapp fi
   | ParthreadWait, TmRecord (_, x) when Record.is_empty x ->
-      Thread.wait () ; tmUnit
+      Thread.wait () ; tm_unit
   | ParthreadWait, _ ->
       fail_constapp fi
   | ParthreadNotify, TmConst (_, CPar (ParThreadID tid)) ->
-      Thread.notify tid ; tmUnit
+      Thread.notify tid ; tm_unit
   | ParthreadNotify, _ ->
       fail_constapp fi
   | ParthreadCriticalSection, f ->
-      Thread.critical_section (fun _ -> TmApp (fi, f, tmUnit) |> eval env)
+      Thread.critical_section (fun _ -> TmApp (fi, f, tm_unit) |> eval env)
   | ParthreadCPURelax, TmRecord (_, x) when Record.is_empty x ->
-      Thread.cpu_relax () ; tmUnit
+      Thread.cpu_relax () ; tm_unit
   | ParthreadCPURelax, _ ->
       fail_constapp fi

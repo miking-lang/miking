@@ -1,14 +1,4 @@
-let tensor_shape_and_index_does_not_match =
-  "Tensor shape and index does not match"
-
-let tensor_shape_mismatch = "Tensor shape mismatch"
-
-let tensor_shape_and_ofs_and_len_does_not_match =
-  "Tensor shape and ofs and len does not match"
-
 let prod = Array.fold_left ( * ) 1
-
-let sum = Array.fold_left ( + ) 0
 
 let row_major_ofs shape is =
   let n = Array.length shape in
@@ -45,13 +35,24 @@ let mk_iteri rank shape slice f t =
       f i (slice t [|i|])
     done
 
-module NoNum = struct
+let copy n shape1 shape2 reshape1 reshape2 get1 set2 t1 t2 =
+  if shape1 t1 <> shape2 t2 then
+    let t1' = reshape1 t1 [|n|] in
+    let t2' = reshape2 t2 [|n|] in
+    for i = 0 to n - 1 do
+      set2 t2' [|i|] (get1 t1' [|i|])
+    done
+  else raise (Invalid_argument "Tensor.copy")
+
+module Dense = struct
   type 'a t =
     {data: 'a array; shape: int array; rank: int; left_ofs: int; size: int}
 
   let rank t = t.rank
 
   let shape t = t.shape
+
+  let size t = t.size
 
   let create shape f =
     let rank = Array.length shape in
@@ -69,13 +70,13 @@ module NoNum = struct
     if Array.length is = rank t && is_valid_index t.shape is then
       let ofs = row_major_ofs t.shape is + t.left_ofs in
       t.data.(ofs)
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.Dense.get_exn")
 
   let set_exn t is v =
     if is_valid_index t.shape is then
       let ofs = row_major_ofs t.shape is + t.left_ofs in
       t.data.(ofs) <- v
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.Dense.set_exn")
 
   let copy_exn t1 t2 =
     if shape t1 = shape t2 then
@@ -84,13 +85,13 @@ module NoNum = struct
         let o1 = t1.left_ofs in
         let o2 = t2.left_ofs in
         Array.blit t1.data o1 t2.data o2 t1.size
-    else raise (Invalid_argument tensor_shape_mismatch)
+    else raise (Invalid_argument "Tensor.Dense.copy_exn")
 
   let reshape_exn t shape =
-    if t.size = sum shape then
+    if t.size = prod shape then
       let rank = Array.length shape in
       {t with shape; rank}
-    else raise (Invalid_argument tensor_shape_mismatch)
+    else raise (Invalid_argument "Tensor.Dense.reshape_exn")
 
   let slice_exn t slice =
     if Array.length slice = 0 then t
@@ -101,7 +102,7 @@ module NoNum = struct
       let shape = if rank > 0 then Array.sub t.shape n rank else [||] in
       let size = prod shape in
       {t with left_ofs; rank; shape; size}
-    else raise (Invalid_argument tensor_shape_and_index_does_not_match)
+    else raise (Invalid_argument "Tensor.Dense.slice_exn")
 
   let sub_exn t ofs len =
     if t.rank > 0 && ofs >= 0 && ofs + len <= t.shape.(0) then (
@@ -109,7 +110,7 @@ module NoNum = struct
       let shape = Array.copy t.shape in
       shape.(0) <- len ;
       {t with left_ofs; size= prod shape; shape} )
-    else raise (Invalid_argument tensor_shape_and_ofs_and_len_does_not_match)
+    else raise (Invalid_argument "Tensor.Dense.sub_exn")
 
   let iteri f t = mk_iteri rank shape slice_exn f t
 
@@ -138,26 +139,26 @@ module NoNum = struct
   let data_to_array t = Array.sub t.data t.left_ofs t.size
 end
 
-module Num = struct
+module CArray = struct
   type float_elt = Bigarray.float64_elt
 
   type int_elt = Bigarray.int_elt
 
   type ('a, 'b) kind =
-    | Float : (float, float_elt) kind
+    | CArrayFloat : (float, float_elt) kind
     | Int : (int, int_elt) kind
 
   type ('a, 'b) t = ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
 
   let to_ba_kind : type a b. (a, b) kind -> (a, b) Bigarray.kind = function
-    | Float ->
+    | CArrayFloat ->
         Bigarray.Float64
     | Int ->
         Bigarray.Int
 
   let of_ba_kind : type a b. (a, b) Bigarray.kind -> (a, b) kind = function
     | Bigarray.Float64 ->
-        Float
+        CArrayFloat
     | Bigarray.Int ->
         Int
     | _ ->
@@ -175,7 +176,7 @@ module Num = struct
   let create :
       type a b. (a, b) kind -> int array -> (int array -> a) -> (a, b) t =
     function
-    | Float ->
+    | CArrayFloat ->
         fun shape f ->
           let t =
             Bigarray.Genarray.create Bigarray.float64 Bigarray.c_layout shape
@@ -192,7 +193,7 @@ module Num = struct
 
   let int = Int
 
-  let float = Float
+  let float = CArrayFloat
 
   let get_exn = Bigarray.Genarray.get
 
@@ -224,3 +225,17 @@ module Num = struct
     Array.iteri (fun i _ -> a.(i) <- get_exn v [|i|]) a ;
     a
 end
+
+let copy_num_nonum_exn t1 t2 =
+  try
+    copy (Dense.size t2) CArray.shape Dense.shape CArray.reshape_exn
+      Dense.reshape_exn CArray.get_exn Dense.set_exn t1 t2
+  with Invalid_argument _ ->
+    raise (Invalid_argument "Tensor.copy_num_nonum_exn")
+
+let copy_nonum_num_exn t1 t2 =
+  try
+    copy (Dense.size t1) Dense.shape CArray.shape Dense.reshape_exn
+      CArray.reshape_exn Dense.get_exn CArray.set_exn t1 t2
+  with Invalid_argument _ ->
+    raise (Invalid_argument "Tensor.copy_nonum_num_exn")

@@ -132,11 +132,11 @@ let formatJson = formatValue
 
 mexpr
 
-utest parseJson "1.234500e+2" with Some (JsonFloat 123.45) in
-utest formatJson (JsonFloat 123.45) with "1.234500e+2" in
+utest parseJson "123.45" with Some (JsonFloat 123.45) in
+utest formatJson (JsonFloat 123.45) with "123.45" in
 
 utest parseJson "-1e-5" with Some (JsonFloat (negf 1e-5)) in
-utest formatJson (JsonFloat (negf 1e-5)) with "-1.0e-5" in
+utest formatJson (JsonFloat (negf 1e-5)) with "-1e-05" in
 
 utest parseJson "1233" with Some (JsonInt 1233) in
 utest formatJson (JsonInt 1233) with "1233" in
@@ -179,6 +179,6 @@ in
 utest testParser jsonValue "{\"mylist\" : [{},2,3e-2], \"mystr\" : \n\"foo\", \"mybool\" :\ttrue, \"mynull\":null}abc"
 with Success (myJsonObject, ("abc", {file ="", row = 2, col = 39})) in
 utest formatValue myJsonObject
-with "{\"mylist\": [{}, 2, 3.0e-2], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
+with "{\"mylist\": [{}, 2, 0.03], \"mystr\": \"foo\", \"mybool\": true, \"mynull\": null}" in
 utest parseJson (formatValue myJsonObject) with Some myJsonObject in
 ()

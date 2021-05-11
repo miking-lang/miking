@@ -64,28 +64,7 @@ let _builtinNameMap : Map String Name =
       (concat
         builtinStrs
         [
-          "ofArray",
-          "tensorCreateNumInt",
-          "tensorCreateNumFloat",
-          "tensorCreateNoNum",
-          "tensorGetExnNum",
-          "tensorGetExnNoNum",
-          "tensorSetExnNum",
-          "tensorSetExnNoNum",
-          "tensorRankNum",
-          "tensorRankNoNum",
-          "tensorShapeNum",
-          "tensorShapeNoNum",
-          "tensorReshapeExnNum",
-          "tensorReshapeExnNoNum",
-          "tensorCopyExnNum",
-          "tensorCopyExnNoNum",
-          "tensorSliceExnNum",
-          "tensorSliceExnNoNum",
-          "tensorSubExnNum",
-          "tensorSubExnNoNum",
-          "tensorIteriNum",
-          "tensorIteriNoNum"
+          "ofArray"
         ]))
 
 let _builtinNamesSet : Set Name =
@@ -397,43 +376,6 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       ty = t.ty,
       info = NoInfo ()
     }
-  | TmConst t ->
-    -- Tensor Op Generation
-    let opvar = lam op. nvar_ (_intrinsicName op) in
-    let ty = unwrapAlias env.aliases t.ty in
-    let tensorOpVar = lam opNum. lam opNoNum.
-      match ty with TyArrow {from = TyTensor {ty = tty}} then
-        match tty with TyInt _ | TyFloat _ then opvar opNum else opvar opNoNum
-      else dprintLn ty; never
-    in
-    match t.val with CTensorCreate _ then
-      match ty with TyArrow {to = TyArrow {to = TyTensor {ty = tty}}} then
-        match tty with TyInt _ then opvar "tensorCreateNumInt"
-        else match tty with TyFloat _ then opvar "tensorCreateNumFloat"
-        else opvar "tensorCreateNoNum"
-      else dprintLn ty; never
-    else match t.val with CTensorGetExn _ then
-      tensorOpVar "tensorGetExnNum" "tensorGetExnNoNum"
-    else match t.val with CTensorSetExn _ then
-      tensorOpVar "tensorSetExnNum" "tensorSetExnNoNum"
-    else match t.val with CTensorRank _ then
-      tensorOpVar "tensorRankNum" "tensorRankNoNum"
-    else match t.val with CTensorShape _ then
-      tensorOpVar "tensorShapeNum" "tensorShapeNoNum"
-    else match t.val with CTensorReshapeExn _ then
-      tensorOpVar "tensorReshapeExnNum" "tensorReshapeExnNoNum"
-    else match t.val with CTensorCopyExn _ then
-      tensorOpVar "tensorCopyExnNum" "tensorCopyExnNoNum"
-    else match t.val with CTensorSliceExn _ then
-      tensorOpVar "tensorSliceExnNum" "tensorSliceExnNoNum"
-    else match t.val with CTensorSubExn _ then
-      tensorOpVar "tensorSubExnNum" "tensorSubExnNoNum"
-    else match t.val with CTensorIteri _ then
-      match ty with TyArrow {to = TyArrow {from = TyTensor {ty = tty}}} then
-        match tty with TyInt _ | TyFloat _ then opvar "tensorIteriNum"
-        else opvar "tensorIteriNoNum"
-      else dprintLn ty; never
-    else TmConst t
   -- TmExt Generation
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
     let identStr = nameGetStr ident in
@@ -830,6 +772,7 @@ let _preamble =
     , intr1 "roundfi" (appf1_ (intrinsicOpFloat "roundfi"))
     , intr1 "int2float" int2float_
     , intr1 "string2float" (appf1_ (intrinsicOpFloat "string2float"))
+    , intr1 "float2string" (appf1_ (intrinsicOpFloat "float2string"))
     , intr2 "eqc" eqc_
     , intr1 "char2int" char2int_
     , intr1 "int2char" int2char_
@@ -893,27 +836,18 @@ let _preamble =
     , intr1 "ref" ref_
     , intr1 "deref" deref_
     , intr2 "modref" modref_
-    , intr2 "tensorCreateNumInt" (appf2_ (intrinsicOpTensorNum "create_int"))
-    , intr2 "tensorCreateNumFloat" (appf2_ (intrinsicOpTensorNum "create_float"))
-    , intr2 "tensorCreateNoNum" (appf2_ (intrinsicOpTensorNoNum "create"))
-    , intr2 "tensorGetExnNum" (appf2_ (intrinsicOpTensorNum "get_exn"))
-    , intr2 "tensorGetExnNoNum" (appf2_ (intrinsicOpTensorNoNum "get_exn"))
-    , intr3 "tensorSetExnNum" (appf3_ (intrinsicOpTensorNum "set_exn"))
-    , intr3 "tensorSetExnNoNum" (appf3_ (intrinsicOpTensorNoNum "set_exn"))
-    , intr1 "tensorRankNum" (appf1_ (intrinsicOpTensorNum "rank"))
-    , intr1 "tensorRankNoNum" (appf1_ (intrinsicOpTensorNoNum "rank"))
-    , intr1 "tensorShapeNum" (appf1_ (intrinsicOpTensorNum "shape"))
-    , intr1 "tensorShapeNoNum" (appf1_ (intrinsicOpTensorNoNum "shape"))
-    , intr2 "tensorReshapeExnNum" (appf2_ (intrinsicOpTensorNum "reshape_exn"))
-    , intr2 "tensorReshapeExnNoNum" (appf2_ (intrinsicOpTensorNoNum "reshape_exn"))
-    , intr2 "tensorCopyExnNum" (appf2_ (intrinsicOpTensorNum "copy_exn"))
-    , intr2 "tensorCopyExnNoNum" (appf2_ (intrinsicOpTensorNoNum "copy_exn"))
-    , intr2 "tensorSliceExnNum" (appf2_ (intrinsicOpTensorNum "slice_exn"))
-    , intr2 "tensorSliceExnNoNum" (appf2_ (intrinsicOpTensorNoNum "slice_exn"))
-    , intr3 "tensorSubExnNum" (appf3_ (intrinsicOpTensorNum "sub_exn"))
-    , intr3 "tensorSubExnNoNum" (appf3_ (intrinsicOpTensorNoNum "sub_exn"))
-    , intr2 "tensorIteriNum" (appf2_ (intrinsicOpTensorNum "iteri"))
-    , intr2 "tensorIteriNoNum" (appf2_ (intrinsicOpTensorNoNum "iteri"))
+    , intr2 "tensorCreateCArrayInt" (appf2_ (intrinsicOpTensor "create_carray_int"))
+    , intr2 "tensorCreateCArrayFloat" (appf2_ (intrinsicOpTensor "create_carray_float"))
+    , intr2 "tensorCreateDense" (appf2_ (intrinsicOpTensor "create_dense"))
+    , intr2 "tensorGetExn" (appf2_ (intrinsicOpTensor "get_exn"))
+    , intr3 "tensorSetExn" (appf3_ (intrinsicOpTensor "set_exn"))
+    , intr1 "tensorRank" (appf1_ (intrinsicOpTensor "rank"))
+    , intr1 "tensorShape" (appf1_ (intrinsicOpTensor "shape"))
+    , intr2 "tensorReshapeExn" (appf2_ (intrinsicOpTensor "reshape_exn"))
+    , intr2 "tensorCopyExn" (appf2_ (intrinsicOpTensor "copy_exn"))
+    , intr2 "tensorSliceExn" (appf2_ (intrinsicOpTensor "slice_exn"))
+    , intr3 "tensorSubExn" (appf3_ (intrinsicOpTensor "sub_exn"))
+    , intr2 "tensorIteri" (appf2_ (intrinsicOpTensor "iteri"))
     ]
 
 lang OCamlObjWrap = MExprAst + OCamlAst
@@ -949,6 +883,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CRoundfi _ -> nvar_ (_intrinsicName "roundfi")
   | CInt2float _ -> nvar_ (_intrinsicName "int2float")
   | CString2float _ -> nvar_ (_intrinsicName "string2float")
+  | CFloat2string _ -> nvar_ (_intrinsicName "float2string")
   | CEqc _ -> nvar_ (_intrinsicName "eqc")
   | CChar2Int _ -> nvar_ (_intrinsicName "char2int")
   | CInt2Char _ -> nvar_ (_intrinsicName "int2char")
@@ -996,6 +931,17 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
   | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
   | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
+  | CTensorCreateInt _ -> nvar_ (_intrinsicName "tensorCreateCArrayInt")
+  | CTensorCreateFloat _ -> nvar_ (_intrinsicName "tensorCreateCArrayFloat")
+  | CTensorCreate _ -> nvar_ (_intrinsicName "tensorCreateDense")
+  | CTensorGetExn _ -> nvar_ (_intrinsicName "tensorGetExn")
+  | CTensorSetExn _ -> nvar_ (_intrinsicName "tensorSetExn")
+  | CTensorRank _ -> nvar_ (_intrinsicName "tensorRank")
+  | CTensorShape _ -> nvar_ (_intrinsicName "tensorShape")
+  | CTensorReshapeExn _ -> nvar_ (_intrinsicName "tensorReshapeExn")
+  | CTensorCopyExn _ -> nvar_ (_intrinsicName "tensorCopyExn")
+  | CTensorSliceExn _ -> nvar_ (_intrinsicName "tensorSliceExn")
+  | CTensorSubExn _ -> nvar_ (_intrinsicName "tensorSubExn")
   | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
   | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
   | CBootParserParseMCoreFile _ -> nvar_ (_intrinsicName "bootParserParseMCoreFile")
@@ -1182,7 +1128,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
         eqExpr mexprVal ocamlVal
       else error "Value mismatch"
     else error "Unsupported constant"
-  else error "Unsupported value"
+  else dprint mexprVal; error "Unsupported value"
 in
 
 let generateEmptyEnv = lam t.
@@ -1937,6 +1883,14 @@ utest testInt2float with generateEmptyEnv testInt2float using sameSemantics in
 let testString2float = string2float_ (str_ "1.5") in
 utest testString2float with generateEmptyEnv testString2float using sameSemantics in
 
+let testFloat2string = symbolize (float2string_ (float_ 1.5)) in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 0)))
+with char_ '1' using eqExpr in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 1)))
+with char_ '.' using eqExpr in
+utest ocamlEvalChar (generateEmptyEnv (get_ testFloat2string (int_ 2)))
+with char_ '5' using eqExpr in
+
 -- File operations
 let testFileExists = fileExists_ (str_ "test_file_ops") in
 utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
@@ -2256,14 +2210,14 @@ with int_ 2 using eqExpr in
 
 -- Tensor Ops
 let tensorCreateGetIntTest =
-  tensorGetExn_ tyint_ (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1)))
+  tensorGetExn_ tyint_ (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1)))
                        (seq_ [])
 in
 utest ocamlEvalInt (generateEmptyEnv tensorCreateGetIntTest)
 with int_ 1 using eqExpr in
 
 let tensorCreateGetFloatTest =
-  tensorGetExn_ tyfloat_ (tensorCreate_ tyfloat_ (seq_ [])
+  tensorGetExn_ tyfloat_ (tensorCreateFloat_ (seq_ [])
                                                  (ulam_ "x" (float_ 1.)))
                          (seq_ [])
 in
@@ -2280,7 +2234,7 @@ with char_ '1' using eqExpr in
 
 let tensorSetIntTest =
   bind_
-    (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+    (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
     (semi_ (tensorSetExn_ tyint_ (var_ "t")
                                  (seq_ [])
                                  (int_ 2))
@@ -2292,7 +2246,7 @@ with int_ 2 using eqExpr in
 
 let tensorSetFloatTest =
   bind_
-    (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
+    (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
     (semi_ (tensorSetExn_ tyfloat_ (var_ "t")
                                    (seq_ [])
                                    (float_ 2.))
@@ -2315,13 +2269,13 @@ utest ocamlEvalChar (generateEmptyEnv tensorSetCharTest)
 with char_ '2' using eqExpr in
 
 let tensorRankIntTest =
-  tensorRank_ tyint_ (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1)))
+  tensorRank_ tyint_ (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1)))
 in
 utest ocamlEvalInt (generateEmptyEnv tensorRankIntTest)
 with int_ 0 using eqExpr in
 
 let tensorRankFloatTest =
-  tensorRank_ tyfloat_ (tensorCreate_ tyfloat_ (seq_ [])
+  tensorRank_ tyfloat_ (tensorCreateFloat_ (seq_ [])
                        (ulam_ "x" (float_ 1.)))
 in
 utest ocamlEvalInt (generateEmptyEnv tensorRankFloatTest)
@@ -2335,7 +2289,7 @@ with int_ 0 using eqExpr in
 
 let tensorShapeIntTest =
   length_ (tensorShape_ tyint_
-                        (tensorCreate_ tyint_ (seq_ [])
+                        (tensorCreateInt_ (seq_ [])
                         (ulam_ "x" (int_ 1))))
 in
 utest ocamlEvalInt (generateEmptyEnv tensorShapeIntTest)
@@ -2343,7 +2297,7 @@ with int_ 0 using eqExpr in
 
 let tensorShapeFloatTest =
   length_ (tensorShape_ tyfloat_
-                        (tensorCreate_ tyfloat_ (seq_ [])
+                        (tensorCreateFloat_ (seq_ [])
                         (ulam_ "x" (float_ 1.))))
 in
 utest ocamlEvalInt (generateEmptyEnv tensorShapeFloatTest)
@@ -2360,7 +2314,7 @@ with int_ 0 using eqExpr in
 let tensorReshapeIntTest =
   tensorRank_ tyint_
               (tensorReshapeExn_ tyint_
-                                 (tensorCreate_ tyint_
+                                 (tensorCreateInt_
                                                 (seq_ [int_ 1, int_ 2])
                                                 (ulam_ "x" (int_ 1)))
                                  (seq_ [int_ 2]))
@@ -2371,7 +2325,7 @@ with int_ 1 using eqExpr in
 let tensorReshapeFloatTest =
   tensorRank_ tyfloat_
               (tensorReshapeExn_ tyfloat_
-                                 (tensorCreate_ tyfloat_
+                                 (tensorCreateFloat_
                                                 (seq_ [int_ 1, int_ 2])
                                                 (ulam_ "x" (float_ 1.)))
                                  (seq_ [int_ 2]))
@@ -2392,10 +2346,10 @@ with int_ 1 using eqExpr in
 
 let tensorCopyIntTest =
   bind_
-  (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 2))))
+  (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 2))))
   (semi_ (tensorCopyExn_ tyint_
                          (var_ "t")
-                         (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+                         (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
          (tensorGetExn_ tyint_ (var_ "t") (seq_ [])))
 in
 utest ocamlEvalInt (generateEmptyEnv tensorCopyIntTest)
@@ -2403,10 +2357,10 @@ with int_ 2 using eqExpr in
 
 let tensorCopyFloatTest =
   bind_
-  (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 2.))))
+  (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 2.))))
   (semi_ (tensorCopyExn_ tyfloat_
                          (var_ "t")
-                         (tensorCreate_ tyfloat_
+                         (tensorCreateFloat_
                                         (seq_ [])
                                         (ulam_ "x" (float_ 1.))))
          (tensorGetExn_ tyfloat_ (var_ "t") (seq_ [])))
@@ -2430,7 +2384,7 @@ with char_ '2' using eqExpr in
 let tensorSliceIntTest =
   tensorRank_ tyint_
               (tensorSliceExn_ tyint_
-                               (tensorCreate_ tyint_
+                               (tensorCreateInt_
                                               (seq_ [int_ 1])
                                               (ulam_ "x" (int_ 1)))
                                (seq_ [int_ 0]))
@@ -2441,7 +2395,7 @@ with int_ 0 using eqExpr in
 let tensorSliceFloatTest =
   tensorRank_ tyfloat_
               (tensorSliceExn_ tyfloat_
-                               (tensorCreate_ tyfloat_
+                               (tensorCreateFloat_
                                               (seq_ [int_ 1])
                                               (ulam_ "x" (float_ 1.)))
                                (seq_ [int_ 0]))
@@ -2463,7 +2417,7 @@ with int_ 0 using eqExpr in
 let tensorSubIntTest =
   tensorRank_ tyint_
               (tensorSubExn_ tyint_
-                             (tensorCreate_ tyint_
+                             (tensorCreateInt_
                                             (seq_ [int_ 1])
                                             (ulam_ "x" (int_ 1)))
                              (int_ 0)
@@ -2475,7 +2429,7 @@ with int_ 1 using eqExpr in
 let tensorSubFloatTest =
   tensorRank_ tyfloat_
               (tensorSubExn_ tyfloat_
-                             (tensorCreate_ tyfloat_
+                             (tensorCreateFloat_
                                             (seq_ [int_ 1])
                                             (ulam_ "x" (float_ 1.)))
                              (int_ 0)
@@ -2498,7 +2452,7 @@ with int_ 1 using eqExpr in
 
 let tensorIteriIntTest =
   bind_
-    (ulet_ "t" (tensorCreate_ tyint_ (seq_ []) (ulam_ "x" (int_ 1))))
+    (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
     (semi_ (tensorIteri_ tyint_
                          (ulam_ "i" (ulam_ "t" unit_))
                          (var_ "t"))
@@ -2511,7 +2465,7 @@ with int_ 1 using eqExpr in
 
 let tensorIteriFloatTest =
   bind_
-    (ulet_ "t" (tensorCreate_ tyfloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
+    (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
     (semi_ (tensorIteri_ tyfloat_
                          (ulam_ "i" (ulam_ "t" unit_))
                          (var_ "t"))

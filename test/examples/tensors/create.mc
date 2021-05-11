@@ -1,2 +1,2 @@
 mexpr
-tensorCreate [] (lam. 0)
+tensorCreateDense [] (lam. addi 0 0)

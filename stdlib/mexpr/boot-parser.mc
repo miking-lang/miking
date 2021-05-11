@@ -353,7 +353,7 @@ let s = "false" in
 utest lsideClosed s with rside s in
 let s = "123" in
 utest lsideClosed s with rside s in
-let s = "1.70e+1" in
+let s = "17." in
 utest lsideClosed s with rside s in
 let s = "'a'" in
 utest lsideClosed s with rside s in

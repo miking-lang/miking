@@ -329,7 +329,7 @@ module Op = struct
 
   let float_of_ustring s =
     try float_of_string (to_latin1 s)
-    with _ -> raise (Failure "int_of_ustring")
+    with _ -> raise (Failure "float_of_ustring")
 
   let uprint_char c = print_string (to_utf8 (from_uchars [|c|]))
 

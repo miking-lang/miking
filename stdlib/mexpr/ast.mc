@@ -513,6 +513,7 @@ end
 lang FloatStringConversionAst = SeqAst + FloatAst
   syn Const =
   | CString2float {}
+  | CFloat2string {}
 end
 
 lang SymbAst = ConstAst
@@ -606,6 +607,8 @@ end
 
 lang TensorOpAst = ConstAst
   syn Const =
+  | CTensorCreateInt {}
+  | CTensorCreateFloat {}
   | CTensorCreate {}
   | CTensorGetExn {}
   | CTensorSetExn {}
