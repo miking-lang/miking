@@ -19,10 +19,10 @@ let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   use MExprAst in
   -- TODO: types
   let stringVals = mapMapWithKey (lam. lam v.
-    match v with TmConst {val = b} then _bool2string b
+    match v with TmConst {val = CBool {val = b}} then _bool2string b
     else dprintLn v; error "The type of this value is not supported yet"
   ) vals in
-  concat (mapValues stringVals) args
+  concat args (mapValues stringVals)
 
 lang TuneHoles = HoleAst + FlattenHoles
   sem tune (run : Runner) (data : [InputData]) =
@@ -32,7 +32,7 @@ lang TuneHoles = HoleAst + FlattenHoles
   | (args, stdin) ->
     let allArgs = _addToArgs vals args in
     let t1 = wallTimeMs () in
-    let res = runner (allArgs, stdin) in
+    let res : ExecResult = runner (allArgs, stdin) in
     let t2 = wallTimeMs () in
     print "Result: "; dprintLn res;
     match res.returncode with 0 then
@@ -54,13 +54,21 @@ end
 
 ---- Settings for local search ----
 ---- TODO Some of these settings should be input to the framework
-let _nbrIterations = 1
+let _expr2str = use MExprAst in lam expr.
+  match expr with TmConst {val = CBool {val = b}} then
+    _bool2string b
+  else dprintLn expr; error "Expr type not supported yet"
+
+let _nbrIterations = 10
 let _localSearchSettings = {
   printIter = lam st : SearchState v c.
     let st : SearchState v c = st in
     let inc : Solution v c = st.inc in
+    let values = map _expr2str (mapValues inc.0) in
+    dprintLn values;
     print (join  ["Iter: ", int2string st.iter, "\n",
-                  "Best cost: ", float2string inc.1, "\n"]),
+                  "Best cost: ", float2string inc.1, "\n",
+                  "Best solution: ", strJoin ", " values, "\n"]),
   terminate = (lam st : SearchState v c.
     geqi st.iter _nbrIterations)
 }
@@ -80,7 +88,7 @@ lang LocalSearch = TuneHoles
     let startState = initSearchState (initSol, costF initSol) cmp in
 
     -- Set up meta heuristic
-    let meta = metaHeur startState in
+    let meta = metaHeur costF in
 
     -- Do the search!
     _localSearchSettings.printIter startState;
@@ -90,9 +98,30 @@ lang LocalSearch = TuneHoles
       startState
       meta
 
-  sem metaHeur (startSol : Solution v Float) =
+--sem metaHeur (startSol : Solution v Float) =
+  sem metaHeur =
   -- Intentionally left blank
 
 end
 
-lang MExprTune = LocalSearch
+lang RandomWalk = LocalSearch
+  sem metaHeur =
+  | costFun ->
+    let neighbours : NeighbourhoodFun v c = lam searchState : SearchState v c.
+      match searchState with {cur = cur} then
+        -- TODO: assumes Boolean decision points
+        let randTable = mapMapWithKey (lam. lam v.
+          if eqi 0 (randIntU 0 2) then false_ else true_) cur.0 in
+        [randTable]
+      else never
+    in
+    let selectFun : SelectFun = lam assignments. lam searchState.
+      let newTable = get assignments 0 in
+      let cost = costFun newTable in
+      Some (newTable, cost)
+    in
+    (Base {}, stepBase neighbours selectFun)
+end
+
+
+lang MExprTune = RandomWalk

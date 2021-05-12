@@ -13,7 +13,7 @@ lang MCoreTune =
   BootParser +  MExprHoles + MExprTune
 end
 
-let tune = lam files. lam options : Options.
+let tune = lam files. lam options : Options. lam args.
   use MCoreTune in
   let tuneFile = lam file.
     let ast = makeKeywords [] (parseMCoreFile ["hole"] file) in
@@ -24,13 +24,15 @@ let tune = lam files. lam options : Options.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
     match flatten [] ast with (prog, table) then
-      let binary = ocamlCompile options file prog in
+      printLn (expr2str prog);
+      let binary = ocamlCompileAst options file prog in
       let run = lam data : ([String], String).
         match data with (args, stdin) then
           dprintLn (cons (join ["./", binary]) args);
           sysRunCommand (cons (join ["./", binary]) args) stdin "."
         else never
       in
+      -- TODO: give real data
       tune run [(["0"], "")] table
     else never
   in

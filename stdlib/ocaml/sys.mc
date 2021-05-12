@@ -1,4 +1,5 @@
 include "string.mc"
+include "common.mc"
 
 type ExecResult = {stdout: String, stderr: String, returncode: Int}
 
@@ -39,6 +40,7 @@ let sysTempDirDelete = lam td. lam.
 
 let sysRunCommand : [String] -> String -> String -> ExecResult =
   lam cmd. lam stdin. lam cwd.
+
     let tempDir = sysTempDirMake () in
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
     let tempStderr = sysJoinPath tempDir "stderr.txt" in

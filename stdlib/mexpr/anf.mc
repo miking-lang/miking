@@ -229,9 +229,18 @@ lang NeverANF = ANF + NeverAst
 
 end
 
+lang ExtANF = ANF + ExtAst
+  sem isValue =
+  | TmExt _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmExt ({inexpr = inexpr} & t) ->
+    k (TmExt {t with inexpr = normalizeTerm inexpr})
+end
+
 lang MExprANF =
   VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
-  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
 
 -----------
 -- TESTS --

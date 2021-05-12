@@ -38,8 +38,7 @@ type StepFun v c = SearchState v c -> MetaState v c -> (Option (Solution v c), M
 
 type MetaHeuristic v c = (MetaState v c, StepFun v c)
 
--- TODO(Linnea, 2021-04-26): Add exp intrinsic
-let exp = lam x. x
+let myexp = lam x. x
 
 -- Master search algorithm.
 --
@@ -123,7 +122,7 @@ let stepSA : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
             (Some proposal, updatedMeta)
           else
             -- Accept worsening solution with a probability dependent on temperature
-            let pAccept = exp (divf (int2float (subi proposal.1 cur.1)) r.temp) in
+            let pAccept = myexp (divf (int2float (subi proposal.1 cur.1)) r.temp) in
             let rnd = int2float (randIntU 0 100) in
             let choice = if geqf (mulf pAccept 100.0) rnd then proposal else state.cur in
             (Some choice, updatedMeta)

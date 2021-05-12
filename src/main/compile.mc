@@ -61,7 +61,24 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
+let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
+  use MCoreCompile in
+  -- Translate the MExpr AST into an OCaml AST
+  let ocamlAst =
+    match typeLift mexprAst with (env, ast) then
+      match generateTypeDecl env ast with (env, ast) then
+        let ast = generate env ast in
+        let ast = objWrap ast in
+        _withPreamble ast
+      else never
+    else never
+  in
+
+  let ocamlProg = pprintOcaml ocamlAst in
+
+  -- Print the AST after code generation
+  (if options.debugGenerate then printLn ocamlProg else ());
+
   if options.exitBefore then exit 0 else
   let compileOptions : CompileOptions =
     if options.disableOptimizations then
@@ -72,7 +89,10 @@ let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
-  p.cleanup ()
+  p.cleanup ();
+  destinationFile
+
+
 
 -- Main function for compiling a program
 -- files: a list of files
@@ -95,24 +115,8 @@ let compile = lam files. lam options : Options. lam args.
       let ast = typeAnnot ast in
       let ast = typeAnnot ast in
 
-      -- Translate the MExpr AST into an OCaml AST
-      let ocamlAst =
-        match typeLift ast with (env, ast) then
-          match generateTypeDecl env ast with (env, ast) then
-            let ast = generate env ast in
-            let ast = objWrap ast in
-            _withPreamble ast
-          else never
-        else never
-      in
-
-      let ocamlProg = pprintOcaml ocamlAst in
-
-      -- Print the AST after code generation
-      (if options.debugGenerate then printLn ocamlProg else ());
-
-      -- Compile OCaml AST
-      ocamlCompile options file ocamlProg
+      -- Compile MExpr AST
+      ocamlCompileAst options file ast
     else never
   in
   iter compileFile files

@@ -10,7 +10,9 @@ include "hashmap.mc"
 include "eqset.mc"
 include "eq.mc"
 include "keyword-maker.mc"
+include "boot-parser.mc"
 include "common.mc"
+include "utesttrans.mc"
 
 
 -- This file contains implementations related to decision points.
@@ -164,8 +166,8 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   | TmHole _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmHole {init = init, depth = depth} ->
-    k (TmHole {init = normalizeTerm init, depth = depth})
+  | TmHole ({init = init} & t) ->
+    k (TmHole {t with init = normalizeTerm t.init})
 
   sem isKeyword =
   | TmHole _ -> true
@@ -535,7 +537,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     in
     -- Build a map for int -> value
     let m =
-      foldl (lam acc. lam t.
+      foldl (lam acc. lam t : (Int, Expr).
                mapInsert t.0 t.1 acc)
             (mapEmpty subi)
             (findHoles [] tm)
@@ -657,10 +659,52 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | tm ->
     -- TODO: apply a convert function on each argument depending on the type of
     -- the hole
+    printLn "Before boot parsing";
+    use BootParser in
+    let impl = parseMExprString [] "
+    let head = lam seq. get seq 0 in
+    let tail = lam seq. subsequence seq 1 (subi (length seq) 1) in
+    let null = lam seq. eqi 0 (length seq) in
+    let or: Bool -> Bool -> Bool =
+      lam a. lam b. if a then true else b in
+
+    let zipWith = lam f. lam seq1. lam seq2.
+      recursive let work = lam a. lam s1. lam s2.
+        if or (null s1) (null s2) then a
+        else
+          work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
+        in
+        work [] seq1 seq2
+    in
+
+    let string2bool = lam s : String.
+      match s with \"true\" then true
+      else match s with \"false\" then false
+      else error (concat \"Cannot be converted to Bool: \" s)
+    in
+
+    ()
+    " in
+
+    let getName : String -> Expr -> Name = lam s. lam expr.
+      match findName s expr with Some n then n
+      else error (concat "not found: " s) in
+
+    let zipWithName = getName "zipWith" impl in
+    let string2boolName = getName "string2bool" impl in
+    let convertFuns = seq_ (create n (lam i. nvar_ string2boolName)) in
+
+    let x = nameSym "x" in
+    let y = nameSym "y" in
+    let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
+
     matchex_
       (splitat_ argv_ (subi_ (length_ argv_) (int_ n)))
-      (ptuple_ [pvarw_, npvar_ _argv])
-      tm
+      (ptuple_ [pvarw_, npvar_ _table])
+      (bindall_
+        [ impl
+        , nulet_ _table (appf3_ (nvar_ zipWithName) doConvert convertFuns (nvar_ _table))
+        , tm])
 end
 
 lang MExprHoles = MExpr + FlattenHoles + MExprANF
