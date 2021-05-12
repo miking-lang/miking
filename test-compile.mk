@@ -132,6 +132,10 @@ compile_files += src/main/mi.mc
 compile_files += src/main/compile.mc
 compile_files += src/main/run.mc
 compile_files += stdlib/ext/math-ext.mc
+compile_files += stdlib/futhark/ast.mc
+compile_files += stdlib/futhark/ast-builder.mc
+compile_files += stdlib/futhark/generate.mc
+compile_files += stdlib/futhark/pprint.mc
 
 all: ${compile_files}
 
