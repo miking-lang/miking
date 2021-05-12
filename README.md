@@ -11,7 +11,7 @@ Before you can use the Miking system, you need to install
 
 After the installation, you need to install the OCaml multicore compiler by
 following these steps:
-* Clone the `miking-lang/multicore-ocaml` repository by running the following in
+* Clone the `miking-lang/ocaml-multicore` repository by running the following in
   your choice of directory:
   ```
   git clone https://github.com/miking-lang/ocaml-multicore.git
