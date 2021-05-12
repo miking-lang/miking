@@ -1,3 +1,5 @@
+-- This program tests an external functions which needs marshaling of data
+
 include "string.mc"
 
 external testListMap : (a -> b) -> [a] -> [b]
