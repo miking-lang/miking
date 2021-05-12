@@ -2,7 +2,8 @@ include "string.mc"
 include "sys.mc"
 
 type CompileOptions = {
-  optimize : Bool
+  optimize : Bool,
+  libraries : [String]
 }
 
 type Program = String -> [String] -> ExecResult
@@ -13,12 +14,17 @@ type CompileResult = {
 }
 
 let defaultCompileOptions : CompileOptions = {
-  optimize = true
+  optimize = true,
+  libraries = []
 }
 
 let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
   lam options : CompileOptions. lam p.
+  let libstr =
+    strJoin " " (distinct eqString (cons "boot" options.libraries))
+  in
   let dunefile =
+   join [
    "(env
       (dev
         (flags (:standard -w -a))
@@ -28,12 +34,13 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
         (flags (:standard -w -a))
         (ocamlc_flags (-without-runtime))
         (ocamlopt_flags (-O3))))
-    (executable (name program) (libraries boot))" in
+    (executable (name program) (libraries ", libstr , "))"] in
   let td = sysTempDirMake () in
   let dir = sysTempDirName td in
   let tempfile = lam f. sysJoinPath dir f in
 
   writeFile (tempfile "program.ml") p;
+  writeFile (tempfile "program.mli") "";
   writeFile (tempfile "dune") dunefile;
 
   let command =

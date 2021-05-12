@@ -340,6 +340,8 @@ let rec print_const fmt = function
       fprintf fmt "int2float"
   | Cstring2float ->
       fprintf fmt "string2float"
+  | Cfloat2string ->
+      fprintf fmt "float2string"
   (* MCore intrinsics: Characters *)
   | CChar v ->
       fprintf fmt "%s" (lit_of_uchar v)
@@ -457,8 +459,12 @@ let rec print_const fmt = function
   | CmapCmp _ ->
       fprintf fmt "mapCmp"
   (* MCore intrinsics: Tensors *)
-  | CtensorCreate _ ->
-      fprintf fmt "tensorCreate"
+  | CtensorCreateDense _ ->
+      fprintf fmt "tensorCreateDense"
+  | CtensorCreateCArrayInt _ ->
+      fprintf fmt "tensorCreateCArrayInt"
+  | CtensorCreateCArrayFloat _ ->
+      fprintf fmt "tensorCreateCArrayFloat"
   | CtensorGetExn _ ->
       fprintf fmt "tensorGetExn"
   | CtensorSetExn _ ->
@@ -676,14 +682,14 @@ and print_tm' fmt t =
       let shape, data =
         t
         |> function
-        | T.Int t' ->
-            ( t' |> Tensor.Num.shape
-            , t' |> Tensor.Num.data_to_array |> Array.map int_ )
-        | T.Float t' ->
-            ( t' |> Tensor.Num.shape
-            , t' |> Tensor.Num.data_to_array |> Array.map float_ )
-        | T.NoNum t' ->
-            (t' |> Tensor.NoNum.shape, t' |> Tensor.NoNum.data_to_array)
+        | T.CArrayInt t' ->
+            ( t' |> Tensor.CArray.shape
+            , t' |> Tensor.CArray.data_to_array |> Array.map int_ )
+        | T.CArrayFloat t' ->
+            ( t' |> Tensor.CArray.shape
+            , t' |> Tensor.CArray.data_to_array |> Array.map float_ )
+        | T.Dense t' ->
+            (t' |> Tensor.Dense.shape, t' |> Tensor.Dense.data_to_array)
       in
       let print t fmt = fprintf fmt "%a" print_tm (App, t) in
       let shape' =

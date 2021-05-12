@@ -3,4 +3,4 @@
 -- Extected output:
 -- {}
 
-external print ! : String -> ()
+external ext ! : ()

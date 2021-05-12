@@ -676,6 +676,7 @@ end
 lang FloatStringConversionPrettyPrint = FloatStringConversionAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CString2float _ -> "string2float"
+  | CFloat2string _ -> "float2string"
 end
 
 lang SymbPrettyPrint = SymbAst + ConstPrettyPrint
@@ -769,7 +770,9 @@ end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CTensorCreate _ -> "tensorCreate"
+  | CTensorCreateInt _ -> "tensorCreateCArrayInt"
+  | CTensorCreateFloat _ -> "tensorCreateCArrayFloat"
+  | CTensorCreate _ -> "tensorCreateDense"
   | CTensorGetExn _ -> "tensorGetExn"
   | CTensorSetExn _ -> "tensorSetExn"
   | CTensorRank _ -> "tensorRank"
