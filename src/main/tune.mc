@@ -13,7 +13,24 @@ lang MCoreTune =
   BootParser +  MExprHoles + MExprTune
 end
 
+let getInput : String -> Option String = lam s.
+  let prefix = "--input=" in
+  if isPrefix eqc prefix s then
+    subsequence s (length prefix) (length s)
+  else error (concat "Not a valid input: " s)
+
+recursive let parseArgs = lam args. lam acc.
+  match args with [] then acc
+  else match args with [a] ++ args then
+    parseArgs args (snoc acc (getInput a))
+  else never
+end
+
 let tune = lam files. lam options : Options. lam args.
+  let inputData = parseArgs (tail args) [] in
+  let inputData = map (lam d. (strSplit " " d, "")) inputData in
+  dprintLn inputData;
+
   use MCoreTune in
   let tuneFile = lam file.
     let ast = makeKeywords [] (parseMCoreFile ["hole"] file) in
@@ -32,8 +49,7 @@ let tune = lam files. lam options : Options. lam args.
           sysRunCommand (cons (join ["./", binary]) args) stdin "."
         else never
       in
-      -- TODO: give real data
-      tune run [(["0"], "")] table
+      tune run inputData table
     else never
   in
   iter tuneFile files
