@@ -6,13 +6,20 @@ include "stringid.mc"
 -- Types --
 
 let futIntTy_ = use FutharkAst in
-  FTyIdent {ident = nameSym "i64"}
+  FTyInt {}
 
 let futFloatTy_ = use FutharkAst in
-  FTyIdent {ident = nameSym "f64"}
+  FTyFloat {}
+
+let nFutIdentTy_ = use FutharkAst in
+  lam n.
+  FTyIdent {ident = n}
+
+let futIdentTy_ = lam str.
+  nFutIdentTy_ (nameNoSym str)
 
 let futSizedArrayTy_ = use FutharkAst in
-  lam elemTy. lam sz.
+  lam sz. lam elemTy.
   FTyArray {elem = elemTy, dim = Some sz}
 
 let futUnsizedArrayTy_ = use FutharkAst in
@@ -59,6 +66,10 @@ let futRecordProj_ = use FutharkAst in
 let futArray_ = use FutharkAst in
   lam tms.
   FEArray {tms = tms}
+
+let futArrayAccess_ = use FutharkAst in
+  lam array. lam index.
+  FEArrayAccess {array = array, index = index}
 
 let futConst_ = use FutharkAst in
   lam c.
