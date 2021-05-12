@@ -244,7 +244,7 @@ lang MExprCCompile = MExprAst + CAst
 
   | TyVar { ident = ident } -> CTyVar { id = ident }
 
-  -- | TyUnknown _ -> (env, CTyChar {})
+  -- | TyUnknown _ -> CTyChar {}
   | TyUnknown _ -> error "Unknown type in compileType"
 
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
@@ -370,7 +370,7 @@ lang MExprCCompile = MExprAst + CAst
               thn = thn, els = els } ->
 
     -- Allocate memory for return value of match expression
-    let def = match ty with CTyVoid _ then None () else
+    let def = if _isUnitTy tyMatch then None () else
       Some { ty = compileType tyMatch, id = Some ident, init = None () }
     in
 
@@ -481,10 +481,8 @@ lang MExprCCompile = MExprAst + CAst
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
 
   -- Declare variable and call `compileExpr` on body.
-  | ( TmVar { ty = ty } | TmApp { ty = ty } | TmLet { ty = ty }
-    | TmRecLets { ty = ty } | TmConst { ty = ty } | TmSeq { ty = ty }
-    | TmType { ty = ty } | TmConDef { ty = ty } | TmUtest { ty = ty }
-    | TmNever { ty = ty }) & expr ->
+  | expr ->
+    let ty = ty expr in
     if _isUnitTy ty then
       match expr with TmVar _ then (env, None (), None())
       else (env, None (), [CSExpr { expr = compileExpr expr }])
@@ -569,10 +567,7 @@ lang MExprCCompile = MExprAst + CAst
     else never
 
   -- Set up initialization code (for use, e.g., in a main function)
-  | ( TmVar _ | TmLam _ | TmApp _ | TmConst _
-    | TmSeq _ | TmRecord _ | TmRecordUpdate _
-    | TmType _ | TmConDef _ | TmConApp _
-    | TmMatch _ | TmUtest _ | TmNever _) & rest ->
+  | rest ->
     match compileStmts env { name = None () } accInit rest
     with (env, accInit) then
       (accTop, accInit)
@@ -599,13 +594,9 @@ lang MExprCCompile = MExprAst + CAst
 
   -- Return result of `compileExpr` (use `final` to decide between return and
   -- assign)
-  | ( TmVar { ty = ty } | TmApp { ty = ty } | TmLam { ty = ty }
-    | TmRecLets { ty = ty } | TmConst { ty = ty } | TmSeq { ty = ty }
-    | TmRecord { ty = ty } | TmRecordUpdate { ty = ty } | TmType { ty = ty }
-    | TmConDef { ty = ty } | TmConApp { ty = ty } | TmMatch { ty = ty }
-    | TmUtest { ty = ty } ) & stmt ->
+  | stmt ->
     match final with { name = name } then
-      if _isUnitTy ty then
+      if _isUnitTy (ty stmt) then
         match stmt with TmVar _ then (env, acc)
         else (env, snoc acc (CSExpr { expr = compileExpr stmt }))
       else match name with Some ident then
