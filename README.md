@@ -552,13 +552,13 @@ with [["a","b"]] in
 Tensors are mutable data structures and can be of up to rank 16. The index
 of an element is represented as a sequence of integers.
 
-We construct tensors using `tensorCreate shape f`, where `shape` is a sequence
+We construct tensors using `tensorCreateDense shape f`, where `shape` is a sequence
 denoting the shape of the tensor and `f` is a function taking an index as an
 argument and returning the element at that index.
 
 We can construct a zero-order tensor with value `'a'` as
 ```
-let t0 = tensorCreate [] (lam _. 'a') in
+let t0 = tensorCreateDense [] (lam _. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
 ```
@@ -571,7 +571,7 @@ utest tensorGetExn t0 [] with 'b' in
 
 We can construct a rank 1 tensor (i.e. vector) as
 ```
-let t1 = tensorCreate [9] (lam i. addi (get i 0) 1) in
+let t1 = tensorCreateDense [9] (lam i. addi (get i 0) 1) in
 utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
 ```
 where `tensorToSeqExn` is defined in `tensor.mc`.

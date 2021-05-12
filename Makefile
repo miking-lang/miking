@@ -10,6 +10,7 @@
 
 .PHONY :\
   all\
+  boot\
   test\
   install\
   lint\
@@ -30,6 +31,8 @@
 
 all: build/mi
 
+boot:
+	@./make boot
 build/mi:
 	@./make
 

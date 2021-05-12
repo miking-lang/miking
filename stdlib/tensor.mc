@@ -6,15 +6,19 @@
 include "option.mc"
 include "seq.mc"
 
+-- Default to dense tensors
+let tensorCreate = tensorCreateDense
+
 let _prod = foldl muli 1
 
 let _rowMajorOfsToIndex = lam shape. lam k.
-  let f = lam kis. lam d.
+  let f = lam kis : (Int, [Int]). lam d : Int.
     let k = kis.0 in
     let is = kis.1 in
     (divi k d, cons (modi k d) is)
   in
-  (foldl f (k, []) shape).1
+  let r : (Int, [Int]) = foldl f (k, []) shape in
+  r.1
 
 -- Folds `f` over the range `start` `stop` using accumulator `acc`
 let indexFoldu : (a -> Int -> a) -> a -> Int -> Int -> a =
@@ -68,10 +72,6 @@ lam f. lam acc. lam shape.
   in
   work acc 0
 
-utest optionFoldlM (lam acc. lam x. if lti x 4 then Some x else None ())
-        0 [1,2,2,4]
-with None () using optionEq (eqSeq (eqSeq eqi))
-
 utest optionIndexFoldRMM
   (lam seq. lam is.
      if lti (length seq) 5 then Some (snoc seq is) else None ())
@@ -93,18 +93,22 @@ utest optionIndexFoldRMM
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
 
-
 -- Construct a rank 1 tensor from a non-empty sequence `seq`.
-let tensorOfSeqOrElse : (Unit -> Tensor[a]) -> [a] -> Tensor[a] =
-lam f. lam seq.
+let tensorOfSeqOrElse :
+  (Unit -> Tensor[a]) ->
+  ([Int] -> ([Int] -> a) -> Tensor[a]) ->
+  [a] ->
+  Tensor[a] =
+lam f. lam tcreate. lam seq.
   let n = length seq in
   if eqi n 0 then f ()
   else
-    tensorCreate [n] (lam is. get seq (get is 0))
+    tcreate [n] (lam is. get seq (get is 0))
 
-let tensorOfSeqExn : [a] -> Tensor[a] =
-  tensorOfSeqOrElse (lam. error "Empty seq in tensorOfSeqExn")
-
+let tensorOfSeqExn
+  : ([Int] -> ([Int] -> a) -> Tensor[a]) -> [a] -> Tensor[a] =
+  tensorOfSeqOrElse
+    (lam. error "Empty seq in tensorOfSeqExn")
 
 -- Construct a sequence from a rank 1 tensor `t`.
 let tensorToSeqOrElse : (Unit -> [a]) -> Tensor[a] -> [a] =
@@ -119,17 +123,22 @@ lam f. lam t.
 let tensorToSeqExn : Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
-utest tensorToSeqExn (tensorOfSeqExn [1, 2, 3, 4]) with [1, 2, 3, 4]
-using eqSeq eqi
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [1, 2, 3, 4])
+with [1, 2, 3, 4] using eqSeq eqi
 
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayFloat [1., 2., 3., 4.])
+with [1., 2., 3., 4.] using eqSeq eqf
+
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateDense [1, 2, 3, 4])
+with [1, 2, 3, 4] using eqSeq eqi
 
 -- Create a tensor filled with values `v`.
-let tensorRepeat : [Int] -> a -> Tensor[a] =
+let tensorDenseRepeat : [Int] -> a -> Tensor[a] =
 lam shape. lam v.
-  tensorCreate shape (lam. v)
+  tensorCreateDense shape (lam. v)
 
 utest
-  let t = tensorRepeat [4] 0 in
+  let t = tensorDenseRepeat [4] 0 in
   tensorToSeqExn t
 with [0, 0, 0, 0] using eqSeq eqi
 
@@ -138,8 +147,8 @@ with [0, 0, 0, 0] using eqSeq eqi
 let tensorSize : Tensor[a] -> Int =
 lam t. _prod (tensorShape t)
 
-utest tensorSize (tensorCreate [1, 2, 3] (lam. 0)) with 6
-utest tensorSize (tensorCreate [] (lam. 0)) with 1
+utest tensorSize (tensorCreateDense [1, 2, 3] (lam. 0)) with 6
+utest tensorSize (tensorCreateDense [] (lam. 0)) with 1
 
 
 -- Map the elements of `t1` to the elements of `t2` using the function `f`,
@@ -158,20 +167,20 @@ let tensorMapExn =
   tensorMapOrElse (lam. error "Tensor shape mismatch in tensorMap")
 
 utest
-  let t1 = tensorOfSeqExn [1, 2, 3, 4] in
-  let t2 = tensorCreate [4] (lam. []) in
+  let t1 = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
+  let t2 = tensorCreateDense [4] (lam. []) in
   tensorMapExn (lam x. [x]) t1 t2;
   tensorToSeqExn t2
 with [[1], [2], [3], [4]]
 
 utest
-  let t = tensorOfSeqExn [1, 2, 3, 4] in
+  let t = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
   tensorMapExn (addi 1) t t;
   tensorToSeqExn t
 with [2, 3, 4, 5]
 
 utest
-  let t = tensorRepeat [] 0 in
+  let t = tensorDenseRepeat [] 0 in
   tensorMapExn (addi 1) t t;
   tensorGetExn t []
 with 1
@@ -182,7 +191,7 @@ let tensorFill : Tensor[a] -> a -> Unit =
 lam t. lam v. tensorMapExn (lam. v) t t
 
 utest
-  let t = tensorOfSeqExn [1, 2, 3, 4] in
+  let t = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
   tensorFill t 0;
   tensorToSeqExn t
 with [0, 0, 0, 0]
@@ -209,32 +218,32 @@ lam eq. lam t1. lam t2.
   else false
 
 utest
-  let t1 = tensorRepeat [] 0 in
-  let t2 = tensorRepeat [1] 0 in
+  let t1 = tensorDenseRepeat [] 0 in
+  let t2 = tensorDenseRepeat [1] 0 in
   eqTensor eqi t1 t2
 with false
 
 utest
-  let t1 = tensorRepeat [2, 3] 0 in
-  let t2 = tensorRepeat [3, 2] 0 in
+  let t1 = tensorDenseRepeat [2, 3] 0 in
+  let t2 = tensorDenseRepeat [3, 2] 0 in
   eqTensor eqi t1 t2
 with false
 
 utest
-  let t1 = tensorRepeat [2, 3] 0 in
-  let t2 = tensorRepeat [2, 3] 0 in
+  let t1 = tensorDenseRepeat [2, 3] 0 in
+  let t2 = tensorDenseRepeat [2, 3] 0 in
   eqTensor eqi t1 t2
 with true
 
 utest
-  let t1 = tensorRepeat [2, 3] [0] in
-  let t2 = tensorRepeat [2, 3] 0 in
+  let t1 = tensorDenseRepeat [2, 3] [0] in
+  let t2 = tensorDenseRepeat [2, 3] 0 in
   eqTensor (lam x. lam y. eqi (head x) y) t1 t2
 with true
 
 utest
-  let t1 = tensorOfSeqExn [1, 2] in
-  let t2 = tensorOfSeqExn [1, 3] in
+  let t1 = tensorOfSeqExn tensorCreateDense [1, 2] in
+  let t2 = tensorOfSeqExn tensorCreateDense [1, 3] in
   eqTensor eqi t1 t2
 with false
 
@@ -243,12 +252,12 @@ mexpr
 -- Tensors are mutable data structures and can be of up to rank 16. The index
 -- of an element is represented as a sequence of integers.
 
--- We construct tensors using `tensorCreate shape f`, where `shape` is a
+-- We construct tensors using `tensorCreateDense shape f`, where `shape` is a
 -- sequence denoting the shape of the tensor and `f` is a function taking a
 -- index as an argument and returning the element at that index.
 
 -- We can construct a zero-order tensor with value 'a' as
-let t0 = tensorCreate [] (lam. 'a') in
+let t0 = tensorCreateDense [] (lam. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
 
@@ -257,7 +266,7 @@ utest tensorSetExn t0 [] 'b' with () in
 utest tensorGetExn t0 [] with 'b' in
 
 -- We can construct a rank 1 tensor (i.e. vector) as
-let t1 = tensorCreate [9] (lam i. addi (get i 0) 1) in
+let t1 = tensorCreateDense [9] (lam i. addi (get i 0) 1) in
 utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
 -- where `tensorToSeqExn` is defined in `tensor.mc`
 

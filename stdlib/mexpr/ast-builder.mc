@@ -153,6 +153,16 @@ let tyvar_ = lam s.
   ntyvar_ (nameNoSym s)
 
 -- Tensor OP types
+let tytensorcreateint_ =
+  tyarrows_ [ tyseq_ tyint_
+            , tyarrow_ (tyseq_ tyint_) tyint_
+            , tytensor_ tyint_ ]
+
+let tytensorcreatefloat_ =
+  tyarrows_ [ tyseq_ tyint_
+            , tyarrow_ (tyseq_ tyint_) tyfloat_
+            , tytensor_ tyfloat_ ]
+
 let tytensorcreate_ = lam ty.
   tyarrows_ [ tyseq_ tyint_
             , tyarrow_ (tyseq_ tyint_) ty
@@ -662,6 +672,10 @@ let string2float_ = use MExprAst in
   lam s.
   app_ (uconst_ (CString2float ())) s
 
+let float2string_ = use MExprAst in
+  lam f.
+  app_ (uconst_ (CFloat2string ())) f
+
 let eqf_ = use MExprAst in
   lam a. lam b.
   appf2_ (uconst_ (CEqf ())) a b
@@ -827,6 +841,14 @@ let sleepMs_ = use MExprAst in
   lam n. appf1_ (uconst_ (CSleepMs ())) n
 
 -- Tensors
+let tensorCreateInt_ = use MExprAst in
+  lam s. lam f.
+  appf2_ (const_ tytensorcreateint_ (CTensorCreateInt ())) s f
+
+let tensorCreateFloat_ = use MExprAst in
+  lam s. lam f.
+  appf2_ (const_ tytensorcreatefloat_ (CTensorCreateFloat ())) s f
+
 let tensorCreate_ = use MExprAst in
   lam ty. lam s. lam f.
   appf2_ (const_ (tytensorcreate_ ty) (CTensorCreate ())) s f
