@@ -19,7 +19,7 @@ following these steps:
 * Make sure you are on the `no-effect-syntax` branch in the
   `miking-lang/ocaml-multicore` repository:
   ```
-  git checkout no-effect-syntax
+  cd ocaml-multicore && git checkout no-effect-syntax
   ```
 * Create a new OPAM switch by running the following:
   ```
