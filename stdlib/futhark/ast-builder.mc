@@ -113,6 +113,10 @@ let uFutLet_ = lam str. lam body.
 let futLet_ = lam str. lam ty. lam body.
   nFutLet_ (nameNoSym str) ty body
 
+let futIf_ = use FutharkAst in
+  lam cond. lam thn. lam els.
+  FEIf {cond = cond, thn = thn, els = els}
+
 -- Constants --
 
 let futInt_ = use FutharkAst in

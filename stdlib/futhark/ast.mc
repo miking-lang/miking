@@ -17,6 +17,8 @@ lang FutharkAst
   | FCNeq ()
   | FCGt ()
   | FCLt ()
+  | FCGeq ()
+  | FCLeq ()
   | FCOr ()
   | FCAnd ()
   | FCXor ()
@@ -33,6 +35,7 @@ lang FutharkAst
   | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
   | FELet { ident : Name, ty : FutType, body : FutExpr, inexpr : FutExpr }
+  | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
 
   syn FutType =
   | FTyInt ()

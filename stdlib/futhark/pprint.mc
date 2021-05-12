@@ -37,6 +37,18 @@ utest escapeFutharkLabelString "abc123" with "labc___"
 utest escapeFutharkLabelString "0" with "0"
 utest escapeFutharkLabelString "a'b/c" with "la_b_c"
 
+-- Converts a given float to a string that uses a valid representation in
+-- Futhark. This is needed because the 'float2string' intrinsic emits the
+-- digits of the faction after the dot if the value is an integer.
+let futharkFloat2string = lam f.
+  let s = float2string f in
+  if eqi (floorfi f) (ceilfi f) then
+    snoc s '0'
+  else s
+
+utest futharkFloat2string 2.0 with "2.0"
+utest futharkFloat2string 3.14 with "3.14"
+
 lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
   sem pprintConName (env : PprintEnv) =
   | name ->
@@ -56,51 +68,30 @@ lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
   | sid -> escapeFutharkLabelString (sidToString sid)
 end
 
-lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
-  sem expr2str =
-  | FProg {decls = decls} ->
-    let env = pprintEnvEmpty in
-    match mapAccumL pprintDecl env decls with (_, decls) then
-      strJoin "\n" decls
-    else never
+lang FutharkConstPrettyPrint = FutharkAst
+  sem pprintConst =
+  | FCInt {val = val} -> join [int2string val, "i64"]
+  | FCFloat {val = val} -> join [futharkFloat2string val, "f64"]
+  | FCAdd () -> "(+)"
+  | FCSub () -> "(-)"
+  | FCMul () -> "(*)"
+  | FCDiv () -> "(/)"
+  | FCRem () -> "(%)"
+  | FCEq () -> "(=)"
+  | FCNeq () -> "(!)"
+  | FCGt () -> "(>)"
+  | FCLt () -> "(<)"
+  | FCGeq () -> "(>=)"
+  | FCLeq () -> "(<=)"
+  | FCAnd () -> "(&)"
+  | FCOr () -> "(|)"
+  | FCXor () -> "(^)"
+  | FCMap () -> "map"
+  | FCMap2 () -> "map2"
+end
 
-  sem pprintDecl (env : PprintEnv) =
-  | FDeclFun {ident = ident, entry = entry, typeParams = typeParams,
-              params = params, ret = ret, body = body} ->
-    let pprintParam = lam env. lam param : (Name, FutType).
-      match param with (ident, ty) then
-        match pprintVarName env ident with (env, ident) then
-          match pprintType 0 env ty with (env, ty) then
-            (env, join ["(", ident, " : ", ty, ")"])
-          else never
-        else never
-      else never
-    in
-    let entryStr = if entry then "entry" else "let" in
-    let bodyIndent = pprintIncr 0 in
-    match mapAccumL pprintTypeParam env typeParams with (env, typeParams) then
-      match pprintVarName env ident with (env, ident) then
-        match mapAccumL pprintParam env params with (env, params) then
-          match pprintType 0 env ret with (env, ret) then
-            match pprintExpr bodyIndent env body with (env, body) then
-              (env, join [entryStr, " ", ident, " ", strJoin " " typeParams,
-                          " ", strJoin " " params, " : ", ret, " =",
-                          pprintNewline bodyIndent, body])
-            else never
-          else never
-        else never
-      else never
-    else never
-  | FDeclConst {ident = ident, ty = ty, val = val} ->
-    let valIndent = pprintIncr 0 in
-    match pprintVarName env ident with (env, ident) then
-      match pprintType 0 env ty with (env, ty) then
-        match pprintExpr valIndent env val with (env, val) then
-          (env, join ["let ", ident, " : ", ty, " =",
-                      pprintNewline valIndent, val])
-        else never
-      else never
-    else never
+lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
+  sem pprintExpr (indent : Int) (env : PprintEnv) =
 
   sem pprintType (indent : Int) (env : PprintEnv) =
   | FTyInt _ -> (env, "i64")
@@ -124,6 +115,47 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
     in
     match mapMapAccum pprintField env fields with (env, fields) then
       (env, join ["{", strJoin "," (mapValues fields), "}"])
+    else never
+end
+
+lang FutharkTypeParamPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
+  sem pprintTypeParam (env : PprintEnv) =
+  | FPSize {val = n} ->
+    match pprintVarName env n with (env, n) then
+      (env, join ["[", n, "]"])
+    else never
+  | FPType {val = n} ->
+    match pprintVarName env n with (env, n) then
+      (env, cons '\'' n)
+    else never
+end
+
+lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
+                              FutharkTypePrettyPrint
+  sem isAtomic =
+  | FEVar _ -> true
+  | FERecord _ -> true
+  | FERecordProj _ -> false
+  | FEArray _ -> true
+  | FEArrayAccess _ -> false
+  | FEConst _ -> true
+  | FELam _ -> false
+  | FEApp _ -> false
+  | FELet _ -> false
+  | FEIf _ -> false
+
+  sem pprintParen (indent : Int) (env : PprintEnv) =
+  | expr ->
+    let i = if isAtomic expr then indent else addi 1 indent in
+    match pprintExpr i env expr with (env, str) then
+      if isAtomic expr then (env, str)
+      else (env, join ["(", str, ")"])
+    else never
+
+  sem pprintArgs (indent : Int) (env : PprintEnv) =
+  | exprs ->
+    match mapAccumL (pprintParen indent) env exprs with (env, args) then
+      (env, strJoin (pprintNewline indent) args)
     else never
 
   sem pprintExpr (indent : Int) (env : PprintEnv) =
@@ -169,10 +201,10 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
       else [t]
     in
     let apps = appseq (FEApp t) in
-    match pprintExpr indent env (head apps) with (env, fun) then
+    match pprintParen indent env (head apps) with (env, fun) then
       let aindent = pprintIncr indent in
-      match mapAccumL (pprintExpr aindent) env (tail apps) with (env, args) then
-        (env, join [fun, pprintNewline aindent, strJoin (pprintNewline aindent) args])
+      match pprintArgs aindent env (tail apps) with (env, args) then
+        (env, join [fun, pprintNewline aindent, args])
       else never
     else never
   | FELet {ident = ident, body = body, inexpr = inexpr} ->
@@ -185,33 +217,64 @@ lang FutharkPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
         else never
       else never
     else never
-
-  sem pprintConst =
-  | FCInt {val = val} -> join [int2string val, "i64"]
-  | FCFloat {val = val} -> join [float2string val, "f64"]
-  | FCAdd () -> "(+)"
-  | FCSub () -> "(-)"
-  | FCMul () -> "(*)"
-  | FCDiv () -> "(/)"
-  | FCRem () -> "(%)"
-  | FCEq () -> "(=)"
-  | FCNeq () -> "(!)"
-  | FCGt () -> "(>)"
-  | FCLt () -> "(<)"
-  | FCAnd () -> "(&)"
-  | FCOr () -> "(|)"
-  | FCXor () -> "(^)"
-  | FCMap () -> "map"
-  | FCMap2 () -> "map2"
-
-  sem pprintTypeParam (env : PprintEnv) =
-  | FPSize {val = n} ->
-    match pprintVarName env n with (env, n) then
-      (env, join ["[", n, "]"])
+  | FEIf {cond = cond, thn = thn, els = els} ->
+    let aindent = pprintIncr indent in
+    match pprintExpr indent env cond with (env, cond) then
+      match pprintExpr aindent env thn with (env, thn) then
+        match pprintExpr aindent env els with (env, els) then
+          (env, join ["if ", cond, " then", pprintNewline aindent, thn,
+                      pprintNewline indent, "else", pprintNewline aindent,
+                      els])
+        else never
+      else never
     else never
-  | FPType {val = n} ->
-    match pprintVarName env n with (env, n) then
-      (env, cons '\'' n)
+end
+
+lang FutharkPrettyPrint = FutharkConstPrettyPrint + FutharkTypePrettyPrint +
+                          FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
+  sem expr2str =
+  | FProg {decls = decls} ->
+    let env = pprintEnvEmpty in
+    match mapAccumL pprintDecl env decls with (_, decls) then
+      strJoin "\n" decls
+    else never
+
+  sem pprintDecl (env : PprintEnv) =
+  | FDeclFun {ident = ident, entry = entry, typeParams = typeParams,
+              params = params, ret = ret, body = body} ->
+    let pprintParam = lam env. lam param : (Name, FutType).
+      match param with (ident, ty) then
+        match pprintVarName env ident with (env, ident) then
+          match pprintType 0 env ty with (env, ty) then
+            (env, join ["(", ident, " : ", ty, ")"])
+          else never
+        else never
+      else never
+    in
+    let entryStr = if entry then "entry" else "let" in
+    let bodyIndent = pprintIncr 0 in
+    match mapAccumL pprintTypeParam env typeParams with (env, typeParams) then
+      match pprintVarName env ident with (env, ident) then
+        match mapAccumL pprintParam env params with (env, params) then
+          match pprintType 0 env ret with (env, ret) then
+            match pprintExpr bodyIndent env body with (env, body) then
+              (env, join [entryStr, " ", ident, " ", strJoin " " typeParams,
+                          " ", strJoin " " params, " : ", ret, " =",
+                          pprintNewline bodyIndent, body])
+            else never
+          else never
+        else never
+      else never
+    else never
+  | FDeclConst {ident = ident, ty = ty, val = val} ->
+    let valIndent = pprintIncr 0 in
+    match pprintVarName env ident with (env, ident) then
+      match pprintType 0 env ty with (env, ty) then
+        match pprintExpr valIndent env val with (env, val) then
+          (env, join ["let ", ident, " : ", ty, " =",
+                      pprintNewline valIndent, val])
+        else never
+      else never
     else never
 end
 
@@ -327,5 +390,5 @@ let decls = [
   mainDecl
 ] in
 let prog = FProg {decls = decls} in
-print (expr2str prog);
+-- print (expr2str prog);
 ()

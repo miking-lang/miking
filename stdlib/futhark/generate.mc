@@ -30,12 +30,68 @@ let getDef = use FutharkAst in
     body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i)
   }
 
-lang FutharkGenerate = MExprAst + FutharkAst
-  sem generateProgram (entryPoints : Set Name) =
-  | prog ->
-    let preamble = [getDef ()] in
-    FProg {decls = concat preamble (generateToplevel entryPoints prog)}
+lang FutharkConstGenerate = MExprAst + FutharkAst
+  sem generateConst =
+  | CInt n -> futInt_ n.val
+  | CFloat f -> futFloat_ f.val
+  | CAddi _ | CAddf _ -> futConst_ (FCAdd ())
+  | CSubi _ | CSubf _ -> futConst_ (FCSub ())
+  | CMuli _ | CMulf _ -> futConst_ (FCMul ())
+  | CDivi _ | CDivf _ -> futConst_ (FCDiv ())
+  | CModi _ -> futConst_ (FCRem ())
+  | CEqi _ | CEqf _ -> futConst_ (FCEq ())
+  | CNeqi _ | CNeqf _ -> futConst_ (FCNeq ())
+  | CGti _ | CGtf _ -> futConst_ (FCGt ())
+  | CLti _ | CLtf _ -> futConst_ (FCLt ())
+  | CGeqi _ | CGeqf _ -> futConst_ (FCGeq ())
+  | CLeqi _ | CLeqf _ -> futConst_ (FCLeq ())
+  | CGet () -> nFutVar_ (getFn ())
+end
 
+lang FutharkTypeGenerate = MExprAst + FutharkAst
+  sem generateType =
+  | TyInt _ -> futIntTy_
+  | TyFloat _ -> futFloatTy_
+  | TySeq {ty = elemTy} -> futUnsizedArrayTy_ (generateType elemTy)
+  | TyRecord {fields = fields} ->
+    FTyRecord {fields = mapMap generateType fields}
+  | TyUnknown _ -> error "Cannot translate unknown type to Futhark"
+end
+
+lang FutharkMatchGenerate = MExprAst + FutharkAst
+  sem generateExpr =
+  | TmMatch ({pat = PatBool {val = true}} & t) ->
+    futIf_ (generateExpr t.target) (generateExpr t.thn) (generateExpr t.els)
+  | TmMatch ({pat = PatBool {val = false}} & t) ->
+    futIf_ (generateExpr t.target) (generateExpr t.els) (generateExpr t.thn)
+  | TmMatch ({pat = PatInt {val = i}} & t) ->
+    let cond = generateExpr (eqi_ (int_ i) t.target) in
+    futIf_ cond (generateExpr t.thn) (generateExpr t.els)
+  | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) ->
+    generateExpr t.thn
+  | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
+    generateExpr (bind_ (nulet_ n t.target) t.thn)
+  | TmMatch t ->
+    infoErrorExit t.info "Unsupported match expression"
+end
+
+lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
+                           FutharkMatchGenerate
+  sem generateExpr =
+  | TmVar t -> FEVar {ident = t.ident}
+  | TmRecord t -> FERecord {fields = mapMap generateExpr t.bindings}
+  | TmSeq {tms = tms} -> futArray_ (map generateExpr tms)
+  | TmConst c -> generateConst c.val
+  | TmLam t -> nFutLam_ t.ident (generateExpr t.body)
+  | TmApp t -> FEApp {lhs = generateExpr t.lhs, rhs = generateExpr t.rhs}
+  | TmLet t ->
+    FELet {ident = t.ident, ty = generateType t.ty,
+           body = generateExpr t.body,
+           inexpr = generateExpr t.inexpr}
+end
+
+lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
+                               FutharkTypeGenerate
   sem generateToplevel (entryPoints : Set Name) =
   | TmLet t ->
     let collectParams = lam body : Expr.
@@ -56,51 +112,24 @@ lang FutharkGenerate = MExprAst + FutharkAst
       match collectParams t.body with (params, body) then
         if null params then
           FDeclConst {ident = t.ident, ty = generateType t.tyBody,
-                      val = generate body}
+                      val = generateExpr body}
         else
           let isEntry = setMem t.ident entryPoints in
           let retTy = findReturnType t.tyBody in
           FDeclFun {ident = t.ident, entry = isEntry, typeParams = [],
                     params = params, ret = generateType retTy,
-                    body = generate body}
+                    body = generateExpr body}
       else never
     in
     cons decl (generateToplevel entryPoints t.inexpr)
   | _ -> []
+end
 
-  sem generate =
-  | TmVar t -> FEVar {ident = t.ident}
-  | TmRecord t -> FERecord {fields = mapMap generate t.bindings}
-  | TmSeq {tms = tms} -> futArray_ (map generate tms)
-  | TmConst c -> generateConst c.val
-  | TmLam t -> nFutLam_ t.ident (generate t.body)
-  | TmApp t -> FEApp {lhs = generate t.lhs, rhs = generate t.rhs}
-  | TmLet t ->
-    FELet {ident = t.ident, ty = generateType t.ty,
-           body = generate t.body,
-           inexpr = generate t.inexpr}
-
-  sem generateConst =
-  | CInt n -> futInt_ n.val
-  | CFloat f -> futFloat_ f.val
-  | CAddi _ | CAddf _ -> futConst_ (FCAdd ())
-  | CSubi _ | CSubf _ -> futConst_ (FCSub ())
-  | CMuli _ | CMulf _ -> futConst_ (FCMul ())
-  | CDivi _ | CDivf _ -> futConst_ (FCDiv ())
-  | CModi _ -> futConst_ (FCRem ())
-  | CEqi _ | CEqf _ -> futConst_ (FCEq ())
-  | CNeqi _ | CNeqf _ -> futConst_ (FCNeq ())
-  | CGti _ | CGtf _ -> futConst_ (FCGt ())
-  | CLti _ | CLtf _ -> futConst_ (FCLt ())
-  | CGet () -> nFutVar_ (getFn ())
-
-  sem generateType =
-  | TyInt _ -> futIntTy_
-  | TyFloat _ -> futFloatTy_
-  | TySeq {ty = elemTy} -> futUnsizedArrayTy_ (generateType elemTy)
-  | TyRecord {fields = fields} ->
-    FTyRecord {fields = mapMap generateType fields}
-  | TyUnknown _ -> error "Cannot translate unknown type to Futhark"
+lang FutharkGenerate = FutharkToplevelGenerate
+  sem generateProgram (entryPoints : Set Name) =
+  | prog ->
+    let preamble = [getDef ()] in
+    FProg {decls = concat preamble (generateToplevel entryPoints prog)}
 end
 
 lang TestLang = FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeAnnot
@@ -111,6 +140,7 @@ use TestLang in
 
 let fName = nameSym "f" in
 let gName = nameSym "g" in
+let minName = nameSym "min" in
 let t = typeAnnot (symbolize (bindall_ [
   let_ "a" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3]),
   let_ "b" (tyseq_ tyfloat_) (seq_ [float_ 2.718, float_ 3.14]),
@@ -121,8 +151,12 @@ let t = typeAnnot (symbolize (bindall_ [
   nlet_ gName (tyarrows_ [tyseq_ tyfloat_, tyfloat_, tyfloat_])
               (lam_ "r" (tyseq_ tyfloat_)
                 (lam_ "f" tyfloat_ (addf_ (var_ "f") (get_ (var_ "r") (int_ 0))))),
+  nlet_ minName (tyarrows_ [tyint_, tyint_, tyint_])
+                (lam_ "a" tyint_ (lam_ "b" tyint_ (
+                  if_ (geqi_ (var_ "a") (var_ "b")) (var_ "b") (var_ "a")))),
   unit_
 ])) in
 let entryPoints = setInsert fName (setEmpty nameCmp) in
 let p = generateProgram entryPoints t in
-print (expr2str p)
+-- print (expr2str p);
+()
