@@ -26,6 +26,7 @@ let externalMarshal = lam tm. lam mcoreTy. lam ocamlTy.
   recursive
   let marshal : Expr -> (Type, Type) -> {cost : Int, tm : Expr} =
   use OCamlMarshalData in
+  use OCamlExternal in
   lam tm. lam tt.
     match tt with (TyVar _, _) then
       {tm = tm, cost = 0}
@@ -42,9 +43,9 @@ let externalMarshal = lam tm. lam mcoreTy. lam ocamlTy.
     else match tt with (TySeq _, TyList _) then
       -- NOTE(oerikss, 2021-04-24) we would like the cost to be proportional
       -- to the length of the sequence. This applies to other types as well.
-      {tm = app_ (intrinsicOpSeq "Helpers.to_list") tm, cost = 3}
+      {tm = app_ (OTmVarExt {ident = (intrinsicOpSeq "Helpers.to_list")}) tm, cost = 3}
     else match tt with (TyList _, TySeq _) then
-      {tm = app_ (intrinsicOpSeq "Helpers.of_list") tm, cost = 3}
+      {tm = app_ (OTmVarExt {ident = (intrinsicOpSeq "Helpers.of_list")}) tm, cost = 3}
     else error "Cannot marshal data"
 
   let recur : Expr -> Type -> Type -> {cost : Int, tm : Expr} =

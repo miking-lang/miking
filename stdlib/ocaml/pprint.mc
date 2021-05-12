@@ -4,6 +4,7 @@ include "ocaml/symbolize.mc"
 include "mexpr/pprint.mc"
 include "char.mc"
 include "name.mc"
+include "intrinsics-ops.mc"
 
 let isValidChar = lam c.
   or (isAlphanum c) (or (eqChar c '_') (eqChar c '\''))
@@ -99,7 +100,7 @@ lang OCamlPrettyPrint =
   VarPrettyPrint + ConstPrettyPrint + OCamlAst +
   IdentifierPrettyPrint + NamedPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + OCamlTypePrettyPrint +
-  AppPrettyPrint
+  AppPrettyPrint + MExprAst-- TODO(vipa, 2021-05-12): should MExprAst be here? It wasn't before, but some of the copied constants aren't in the others
 
   sem _nameSymString (esc : Name -> Name) =
   | name ->
@@ -193,6 +194,68 @@ lang OCamlPrettyPrint =
   | CRef _ -> "ref"
   | CModRef _ -> "(:=)"
   | CDeRef _ -> "(!)"
+  | CFloorfi _ -> intrinsicOpFloat "floorfi"
+  | CCeilfi _ -> intrinsicOpFloat "ceilfi"
+  | CRoundfi _ -> intrinsicOpFloat "roundfi"
+  | CString2float _ -> intrinsicOpFloat "string2float"
+  | CCreate _ -> intrinsicOpSeq "create"
+  | CLength _ -> intrinsicOpSeq "length"
+  | CConcat _ -> intrinsicOpSeq "concat"
+  | CGet _ -> intrinsicOpSeq "get"
+  | CSet _ -> intrinsicOpSeq "set"
+  | CCons _ -> intrinsicOpSeq "cons"
+  | CSnoc _ -> intrinsicOpSeq "snoc"
+  | CSplitAt _ -> intrinsicOpSeq "splitAt"
+  | CReverse _ -> intrinsicOpSeq "reverse"
+  | CSubsequence _ -> intrinsicOpSeq "subsequence"
+  | CPrint _ -> intrinsicOpIO "print"
+  | CDPrint _ -> intrinsicOpIO "dprint"
+  | CReadLine _ -> intrinsicOpIO "readLine"
+  | CArgv _ -> intrinsicOpSys "argv"
+  | CFileRead _ -> intrinsicOpFile "readFile"
+  | CFileWrite _ -> intrinsicOpFile "writeFile"
+  | CFileExists _ -> intrinsicOpFile "fileExists"
+  | CFileDelete _ -> intrinsicOpFile "deleteFile"
+  | CError _ -> intrinsicOpSys "error"
+  | CExit _ -> intrinsicOpSys "exit"
+  | CCommand _ -> intrinsicOpSys "command"
+  | CEqsym _ -> intrinsicOpSymb "eqsym"
+  | CGensym _ -> intrinsicOpSymb "gensym"
+  | CSym2hash _ -> intrinsicOpSymb "hash"
+  | CRandIntU _ -> intrinsicOpRand "int_u"
+  | CRandSetSeed _ -> intrinsicOpRand "set_seed"
+  | CWallTimeMs _ -> intrinsicOpTime "get_wall_time_ms"
+  | CSleepMs _ -> intrinsicOpTime "sleep_ms"
+  | CMapEmpty _ -> intrinsicOpMap "empty"
+  | CMapInsert _ -> intrinsicOpMap "insert"
+  | CMapRemove _ -> intrinsicOpMap "remove"
+  | CMapFindWithExn _ -> intrinsicOpMap "find"
+  | CMapFindOrElse _ -> intrinsicOpMap "find_or_else"
+  | CMapFindApplyOrElse _ -> intrinsicOpMap "find_apply_or_else"
+  | CMapBindings _ -> intrinsicOpMap "bindings"
+  | CMapSize _ -> intrinsicOpMap "size"
+  | CMapMem _ -> intrinsicOpMap "mem"
+  | CMapAny _ -> intrinsicOpMap "any"
+  | CMapMap _ -> intrinsicOpMap "map"
+  | CMapMapWithKey _ -> intrinsicOpMap "map_with_key"
+  | CMapFoldWithKey _ -> intrinsicOpMap "fold_with_key"
+  | CMapEq _ -> intrinsicOpMap "eq"
+  | CMapCmp _ -> intrinsicOpMap "cmp"
+  | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
+  -- | CTensorIteri _ -> _intrinsicName "tensorIteri"
+  | CBootParserParseMExprString _ -> intrinsicOpBootparser "parseMExprString"
+  | CBootParserParseMCoreFile _ -> intrinsicOpBootparser "parseMCoreFile"
+  | CBootParserGetId _ -> intrinsicOpBootparser "getId"
+  | CBootParserGetTerm _ -> intrinsicOpBootparser "getTerm"
+  | CBootParserGetType _ -> intrinsicOpBootparser "getType"
+  | CBootParserGetString _ -> intrinsicOpBootparser "getString"
+  | CBootParserGetInt _ -> intrinsicOpBootparser "getInt"
+  | CBootParserGetFloat _ -> intrinsicOpBootparser "getFloat"
+  | CBootParserGetListLength _ -> intrinsicOpBootparser "getListLength"
+  | CBootParserGetConst _ -> intrinsicOpBootparser "getConst"
+  | CBootParserGetPat _ -> intrinsicOpBootparser "getPat"
+  | CBootParserGetInfo _ -> intrinsicOpBootparser "getInfo"
+  -- TODO(vipa, 2021-05-11): Add references to the intrinsics here, instead of putting them in the preamble
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->

@@ -135,6 +135,11 @@ let lookupRecordFields = use MExprAst in
 type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
                     els : Expr, ty : Type, info : Info}
 
+let _objRepr = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
+let _objMagic = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
+
 lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem matchTargetType (env : GenerateEnv) =
   | t ->
@@ -211,12 +216,12 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
 
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
-    _if (generate env t.target) (generate env t.thn) (generate env t.els)
+    _if (_objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
-    _if (generate env t.target) (generate env t.els) (generate env t.thn)
+    _if (_objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
   | TmMatch ({pat = PatInt {val = i}} & t) ->
     let cond = generate env (eqi_ (int_ i) t.target) in
-    _if cond (generate env t.thn) (generate env t.els)
+    _if (_objMagic cond) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
@@ -240,7 +245,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
             OTmMatch {
-              target = generate env t.target,
+              target = _objMagic (generate env t.target),
               arms = [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
             }
           else error "Record type not handled by type-lifting"
@@ -282,7 +287,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
         in
         let flattenedMatch =
           OTmMatch {
-            target = generate env t.target,
+            target = _objMagic (generate env t.target),
             arms =
               snoc
                 (map f (mapBindings arms))
@@ -299,7 +304,7 @@ end
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
-    app_ (nvar_ (_intrinsicName "ofArray")) (OTmArray {tms = map (generate env) tms})
+    app_ (OTmVarExt {ident = (intrinsicOpSeq "Helpers.ofArray")}) (OTmArray {tms = map (generate env) tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
@@ -348,18 +353,20 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->
-    let defaultCase = lam body.
-      OTmConApp {
-        ident = t.ident,
-        args = [generate env body]
-      }
-    in
-    let tyBody = unwrapAlias env.aliases (ty t.body) in
-    match tyBody with TyVar {ident = ident} then
-      match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
+    -- TODO(vipa, 2021-05-11): have to special-case unit
+    -- TODO(vipa, 2021-05-11): can env.constrs contain a non-resolved alias? If so this breaks.
+    match mapLookup t.ident env.constrs with Some (TyRecord {fields = fields}) then
+      -- NOTE(vipa, 2021-05-11): Constructor that takes explicit record, it should be inlined
+      match t.body with TmRecord r then
+        -- NOTE(vipa, 2021-05-11): We have an explicit record, use it directly
+        OTmConApp {
+          ident = t.ident,
+          args = [TmRecord {r with bindings = mapMap (lam e. _objRepr (generate env e)) r.bindings}]
+        }
+      else
+        -- NOTE(vipa, 2021-05-11): Not an explicit record, pattern match and reconstruct it
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes env.records with Some id then
-          let body = generate env t.body in
           let inlineRecordName = nameSym "rec" in
           let fieldNames =
             mapMapWithKey (lam sid. lam. nameSym (sidToString sid)) fields
@@ -371,24 +378,27 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
             ty = ty t.body,
             info = infoTm t.body
           } in
-          let thn =
-            -- Do not use an inline record when the constructor takes an
-            -- argument of unknown type.
-            match mapLookup t.ident env.constrs with Some (TyUnknown _) then
-              OTmConApp {ident = t.ident, args = [generate env reconstructedRecord]}
-            else
-              OTmConApp {ident = t.ident, args = [reconstructedRecord]}
-          in
           OTmMatch {
-            target = generate env t.body,
-            arms = [(OPatCon {ident = id, args = [pat]}, thn)]
+            target = _objMagic (generate env t.body),
+            arms = [
+              ( OPatCon {ident = id, args = [pat]}
+              , OTmConApp {ident = t.ident, args = [reconstructedRecord]}
+              )
+            ]
           }
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
           infoErrorExit t.info msg
-      else defaultCase t.body
-    else defaultCase t.body
+    else
+      -- NOTE(vipa, 2021-05-11): Argument is not an explicit record, it should be `repr`ed
+      OTmConApp {
+        ident = t.ident,
+        args = [_objRepr (generate env t.body)]
+      }
+  | TmApp (t & {lhs = lhs & !(TmApp _), rhs = rhs}) ->
+    TmApp {{t with lhs = _objMagic (generate env lhs)}
+              with rhs = generate env rhs}
   | TmNever t ->
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
     TmApp {
@@ -748,174 +758,6 @@ recursive let _isIntrinsicApp = use OCamlAst in
     else false
 end
 
-let _objRepr = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
-let _objObj = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.obj"}) t
-let _objMagic = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
-
-let _preamble =
-  use OCamlAst in
-
-  let objObjVar = lam a. _objObj (nvar_ a) in
-
-  let mkBody = lam op. lam args.
-    nulams_ args (_objRepr (foldl (lam t. lam a. t (objObjVar a)) op args))
-  in
-
-  let intr0 = lam str. lam op.
-    nulet_ (_intrinsicName str) (mkBody op [])
-  in
-
-  let intr1 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         mkBody op [a])
-  in
-
-  let intr2 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         mkBody op [a, b])
-  in
-
-  let intr3 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         let c = nameSym "c" in
-         mkBody op [a, b, c])
-  in
-
-  let intr4 = lam str. lam op.
-      nulet_ (_intrinsicName str)
-        (let a = nameSym "a" in
-         let b = nameSym "b" in
-         let c = nameSym "c" in
-         let d = nameSym "d" in
-         mkBody op [a, b, c, d])
-  in
-
-  bindall_
-    [ intr2 "addi" addi_
-    , intr2 "subi" subi_
-    , intr2 "muli" muli_
-    , intr2 "divi" divi_
-    , intr2 "modi" modi_
-    , intr1 "negi" negi_
-    , intr2 "lti" lti_
-    , intr2 "leqi" leqi_
-    , intr2 "gti" gti_
-    , intr2 "geqi" geqi_
-    , intr2 "eqi" eqi_
-    , intr2 "neqi" neqi_
-    , intr2 "slli" slli_
-    , intr2 "srli" srli_
-    , intr2 "srai" srai_
-    , intr2 "addf" addf_
-    , intr2 "subf" subf_
-    , intr2 "mulf" mulf_
-    , intr2 "divf" divf_
-    , intr1 "negf" negf_
-    , intr2 "ltf" ltf_
-    , intr2 "leqf" leqf_
-    , intr2 "gtf" gtf_
-    , intr2 "geqf" geqf_
-    , intr2 "eqf" eqf_
-    , intr2 "neqf" neqf_
-    , intr1 "floorfi" (appf1_ (intrinsicOpFloat "floorfi"))
-    , intr1 "ceilfi" (appf1_ (intrinsicOpFloat "ceilfi"))
-    , intr1 "roundfi" (appf1_ (intrinsicOpFloat "roundfi"))
-    , intr1 "int2float" int2float_
-    , intr1 "string2float" (appf1_ (intrinsicOpFloat "string2float"))
-    , intr2 "eqc" eqc_
-    , intr1 "char2int" char2int_
-    , intr1 "int2char" int2char_
-    , intr2 "create" (appf2_ (intrinsicOpSeq "create"))
-    , intr1 "length" (appf1_ (intrinsicOpSeq "length"))
-    , intr2 "concat" (appf2_ (intrinsicOpSeq "concat"))
-    , intr2 "get" (appf2_ (intrinsicOpSeq "get"))
-    , intr3 "set" (appf3_ (intrinsicOpSeq "set"))
-    , intr2 "cons" (appf2_ (intrinsicOpSeq "cons"))
-    , intr2 "snoc" (appf2_ (intrinsicOpSeq "snoc"))
-    , intr2 "splitAt" (appf2_ (intrinsicOpSeq "split_at"))
-    , intr1 "reverse" (appf1_ (intrinsicOpSeq "reverse"))
-    , intr3 "subsequence" (appf3_ (intrinsicOpSeq "subsequence"))
-    , intr1 "ofArray" (appf1_ (intrinsicOpSeq "Helpers.of_array"))
-    , intr1 "print" (appf1_ (intrinsicOpIO "print"))
-    , intr1 "dprint" (appf1_ (intrinsicOpIO "dprint"))
-    , intr1 "readLine" (appf1_ (intrinsicOpIO "read_line"))
-    , intr0 "argv" (intrinsicOpSys "argv")
-    , intr1 "readFile" (appf1_ (intrinsicOpFile "read"))
-    , intr2 "writeFile" (appf2_ (intrinsicOpFile "write"))
-    , intr1 "fileExists" (appf1_ (intrinsicOpFile "exists"))
-    , intr1 "deleteFile" (appf1_ (intrinsicOpFile "delete"))
-    , intr1 "error" (appf1_ (intrinsicOpSys "error"))
-    , intr1 "exit" (appf1_ (intrinsicOpSys "exit"))
-    , intr1 "command" (appf1_ (intrinsicOpSys "command"))
-    , intr2 "eqsym" (appf2_ (intrinsicOpSymb "eqsym"))
-    , intr1 "gensym" (appf1_ (intrinsicOpSymb "gensym"))
-    , intr1 "sym2hash" (appf1_ (intrinsicOpSymb "hash"))
-    , intr2 "randIntU" (appf2_ (intrinsicOpRand "int_u"))
-    , intr1 "randSetSeed" (appf1_ (intrinsicOpRand "set_seed"))
-    , intr1 "wallTimeMs" (appf1_ (intrinsicOpTime "get_wall_time_ms"))
-    , intr1 "sleepMs" (appf1_ (intrinsicOpTime "sleep_ms"))
-    , intr2 "bootParserParseMExprString" (appf2_ (intrinsicOpBootparser "parseMExprString"))
-    , intr2 "bootParserParseMCoreFile" (appf2_ (intrinsicOpBootparser "parseMCoreFile"))
-    , intr1 "bootParserGetId" (appf1_ (intrinsicOpBootparser "getId"))
-    , intr2 "bootParserGetTerm" (appf2_ (intrinsicOpBootparser "getTerm"))
-    , intr2 "bootParserGetType" (appf2_ (intrinsicOpBootparser "getType"))
-    , intr2 "bootParserGetString" (appf2_ (intrinsicOpBootparser "getString"))
-    , intr2 "bootParserGetInt" (appf2_ (intrinsicOpBootparser "getInt"))
-    , intr2 "bootParserGetFloat" (appf2_ (intrinsicOpBootparser "getFloat"))
-    , intr2 "bootParserGetListLength" (appf2_ (intrinsicOpBootparser "getListLength"))
-    , intr2 "bootParserGetConst" (appf2_ (intrinsicOpBootparser "getConst"))
-    , intr2 "bootParserGetPat" (appf2_ (intrinsicOpBootparser "getPat"))
-    , intr2 "bootParserGetInfo" (appf2_ (intrinsicOpBootparser "getInfo"))
-    , intr1 "mapEmpty" (appf1_ (intrinsicOpMap "empty"))
-    , intr3 "mapInsert" (appf3_ (intrinsicOpMap "insert"))
-    , intr2 "mapRemove" (appf2_ (intrinsicOpMap "remove"))
-    , intr2 "mapFindWithExn" (appf2_ (intrinsicOpMap "find"))
-    , intr3 "mapFindOrElse" (appf3_ (intrinsicOpMap "find_or_else"))
-    , intr4 "mapFindApplyOrElse" (appf4_ (intrinsicOpMap "find_apply_or_else"))
-    , intr1 "mapBindings" (appf1_ (intrinsicOpMap "bindings"))
-    , intr1 "mapSize" (appf1_ (intrinsicOpMap "size"))
-    , intr2 "mapMem" (appf2_ (intrinsicOpMap "mem"))
-    , intr2 "mapAny" (appf2_ (intrinsicOpMap "any"))
-    , intr2 "mapMap" (appf2_ (intrinsicOpMap "map"))
-    , intr2 "mapMapWithKey" (appf2_ (intrinsicOpMap "map_with_key"))
-    , intr3 "mapFoldWithKey" (appf3_ (intrinsicOpMap "fold_with_key"))
-    , intr3 "mapEq" (appf3_ (intrinsicOpMap "eq"))
-    , intr3 "mapCmp" (appf3_ (intrinsicOpMap "cmp"))
-    , intr3 "mapGetCmpFun" (appf3_ (intrinsicOpMap "key_cmp"))
-    , intr1 "ref" ref_
-    , intr1 "deref" deref_
-    , intr2 "modref" modref_
-    , intr2 "tensorCreateNumInt" (appf2_ (intrinsicOpTensorNum "create_int"))
-    , intr2 "tensorCreateNumFloat" (appf2_ (intrinsicOpTensorNum "create_float"))
-    , intr2 "tensorCreateNoNum" (appf2_ (intrinsicOpTensorNoNum "create"))
-    , intr2 "tensorGetExnNum" (appf2_ (intrinsicOpTensorNum "get_exn"))
-    , intr2 "tensorGetExnNoNum" (appf2_ (intrinsicOpTensorNoNum "get_exn"))
-    , intr3 "tensorSetExnNum" (appf3_ (intrinsicOpTensorNum "set_exn"))
-    , intr3 "tensorSetExnNoNum" (appf3_ (intrinsicOpTensorNoNum "set_exn"))
-    , intr1 "tensorRankNum" (appf1_ (intrinsicOpTensorNum "rank"))
-    , intr1 "tensorRankNoNum" (appf1_ (intrinsicOpTensorNoNum "rank"))
-    , intr1 "tensorShapeNum" (appf1_ (intrinsicOpTensorNum "shape"))
-    , intr1 "tensorShapeNoNum" (appf1_ (intrinsicOpTensorNoNum "shape"))
-    , intr2 "tensorReshapeExnNum" (appf2_ (intrinsicOpTensorNum "reshape_exn"))
-    , intr2 "tensorReshapeExnNoNum" (appf2_ (intrinsicOpTensorNoNum "reshape_exn"))
-    , intr2 "tensorCopyExnNum" (appf2_ (intrinsicOpTensorNum "copy_exn"))
-    , intr2 "tensorCopyExnNoNum" (appf2_ (intrinsicOpTensorNoNum "copy_exn"))
-    , intr2 "tensorSliceExnNum" (appf2_ (intrinsicOpTensorNum "slice_exn"))
-    , intr2 "tensorSliceExnNoNum" (appf2_ (intrinsicOpTensorNoNum "slice_exn"))
-    , intr3 "tensorSubExnNum" (appf3_ (intrinsicOpTensorNum "sub_exn"))
-    , intr3 "tensorSubExnNoNum" (appf3_ (intrinsicOpTensorNoNum "sub_exn"))
-    , intr2 "tensorIteriNum" (appf2_ (intrinsicOpTensorNum "iteri"))
-    , intr2 "tensorIteriNoNum" (appf2_ (intrinsicOpTensorNoNum "iteri"))
-    ]
-
 lang OCamlObjWrap = MExprAst + OCamlAst
   sem intrinsic2name =
   | CAddi _ -> nvar_ (_intrinsicName "addi")
@@ -1014,50 +856,42 @@ lang OCamlObjWrap = MExprAst + OCamlAst
   | CDeRef _ -> nvar_ (_intrinsicName "deref")
   | t -> dprintLn t; error "Intrinsic not implemented"
 
-  sem objWrapRec (isApp : Bool) =
-  | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
-    _objRepr t
-  | TmConst {val = c} -> intrinsic2name c
-  | TmApp t ->
-    if _isIntrinsicApp (TmApp t) then
-      TmApp {{t with lhs = objWrapRec true t.lhs}
-                with rhs = _objRepr (objWrapRec false t.rhs)}
-    else
-      TmApp {{t with lhs =
-                  if isApp then
-                    objWrapRec true t.lhs
-                  else
-                    _objMagic (objWrapRec true t.lhs)}
-                with rhs = objWrapRec false t.rhs}
-  | TmRecord t ->
-    if mapIsEmpty t.bindings then
-      _objRepr (TmRecord t)
-    else
-      let bindings = mapMap (lam expr. objWrapRec false expr) t.bindings in
-      TmRecord {t with bindings = bindings}
-  | (OTmArray {tms = tms}) & t ->
-    let isPrimitiveArray = all (lam expr.
-      match expr with
-        TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}
-      then true else false
-    ) tms in
-    if isPrimitiveArray then
-      _objRepr t
-    else
-      _objRepr (smap_Expr_Expr (objWrapRec false) t)
-  | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
-  | OTmMatch t ->
-    _objObj
-    (OTmMatch {{t with target = _objMagic (objWrapRec false t.target)}
-                  with arms = map (lam p : (Pat, Expr).
-                                    (p.0, _objRepr (objWrapRec false p.1)))
-                                  t.arms})
-  | t -> smap_Expr_Expr (objWrapRec false) t
+  /-
+  Approach: add `magic` where we need a particular type:
+  - thing in match
+  - value in constructor (unless the constructor expects a record, in which
+    case each record member is `magic`ed)
+  - function being applied (only on the left-most thing, e.g., only `f` in
+    `f a b`)
 
-  sem objWrap =
-  | OTmVariantTypeDecl t ->
-    OTmVariantTypeDecl {t with inexpr = objWrap t.inexpr}
-  | t -> _objObj (objWrapRec false t)
+  Possible breakages:
+  - Sometimes we need some types to be the same, but we don't have a strict
+    need on what type it should be, e.g., branches in a match. If this is an
+    issue we can `repr` them.
+
+  Consequences:
+  - We do not need the preamble, the functions will be `magic`ed before being
+    applied anyway.
+  - Hopefully fewer `repr`/`magic`
+  -/
+  -- sem objWrap =
+  -- | t -> smap_Expr_Expr objWrap t
+  -- | TmApp (t & {lhs = lhs & !(TmApp _), rhs = rhs}) ->
+  --   TmApp {{t with lhs = _objMagic (objWrap lhs)}
+  --             with rhs = objWrap rhs}
+  -- | TmRecord r -> TmRecord {r with bindings = mapMap (lam e. _objRepr (objWrap e)) r.bindings}
+  -- | OTmConApp (r & {ident = ident, args = [arg & TmRecord _]}) ->
+  --   match mapLookup ident conArgs with Some (TmRecord {bindings = bindings}) then
+  --     if mapIsEmpty bindings
+  --     then OTmConApp {r with args = [_objRepr (objWrap arg)]}
+  --     else OTmConApp {r with args = [objWrap arg]}
+  --   else OTmConApp {r with args = [_objRepr (objWrap arg)]}
+  -- | OTmMatch t ->
+  --   OTmMatch {{t with target = _objMagic (objWrap t.target)}
+  --                with arms = map (lam p : (Pat, Expr).
+  --                                  (p.0, objWrap p.1))
+  --                                t.arms}
+  -- | TmConst {val = c} -> intrinsic2name c  -- TODO(vipa, 2021-05-11): Make this refer to the original operator directly
 end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
@@ -1186,13 +1020,13 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
 in
 
 let generateEmptyEnv = lam t.
-  objWrap (generate _emptyGenerateEnv t)
+  generate _emptyGenerateEnv t
 in
 
 let generateTypeAnnotated = lam t.
   match typeLift (typeAnnot t) with (env, t) then
     match generateTypeDecl env t with (env, t) then
-      objWrap (generate env t)
+      generate env t
     else never
   else never
 in

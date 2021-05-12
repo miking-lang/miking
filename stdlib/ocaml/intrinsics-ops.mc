@@ -1,37 +1,37 @@
 include "ocaml/ast.mc"
 
 let intrinsicOpSeq = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mseq." op}
+  concat "Boot.Intrinsics.Mseq."
 
 let intrinsicOpSymb = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Symb." op}
+  concat "Boot.Intrinsics.Symb."
 
 let intrinsicOpFloat = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.FloatConversion." op}
+  concat "Boot.Intrinsics.FloatConversion."
 
 let intrinsicOpFile = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.File." op}
+  concat "Boot.Intrinsics.File."
 
 let intrinsicOpIO = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.IO." op}
+  concat "Boot.Intrinsics.IO."
 
 let intrinsicOpSys = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.MSys." op}
+  concat "Boot.Intrinsics.MSys."
 
 let intrinsicOpRand = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.RNG." op}
+  concat "Boot.Intrinsics.RNG."
 
 let intrinsicOpTime = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Time." op}
+  concat "Boot.Intrinsics.Time."
 
 let intrinsicOpTensorNum = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.Num." op}
+  concat "Boot.Intrinsics.T.Num."
 
 let intrinsicOpTensorNoNum = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.NoNum." op}
+  concat "Boot.Intrinsics.T.NoNum."
 
 let intrinsicOpBootparser = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
+  concat "Boot.Bootparser."
 
 let intrinsicOpMap = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.Mmap." op}
+  concat "Boot.Intrinsics.Mmap."

@@ -26,20 +26,6 @@ let pprintOcaml = lam ast.
   use OCamlPrettyPrint in
   expr2str ast
 
--- Hack for pretty-printing the preamble and inserting it into the beginning of
--- the OCaml file, after all type definitions.
-let _preambleStr = lam.
-  let str = pprintOcaml (bind_ _preamble (int_ 0)) in
-  subsequence str 0 (subi (length str) 1)
-
-recursive let _withPreamble = lam expr.
-  use OCamlAst in
-  match expr with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
-  else
-    OTmPreambleText {text = _preambleStr (), inexpr = expr}
-end
-
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
   if testsEnabled then
@@ -97,9 +83,7 @@ let compile = lam files. lam options : Options. lam args.
       let ocamlAst =
         match typeLift ast with (env, ast) then
           match generateTypeDecl env ast with (env, ast) then
-            let ast = generate env ast in
-            let ast = objWrap ast in
-            _withPreamble ast
+            generate env ast
           else never
         else never
       in
