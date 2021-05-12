@@ -17,7 +17,7 @@ following these steps:
   git clone https://github.com/miking-lang/ocaml-multicore.git
   ```
 * Make sure you are on the `no-effect-syntax` branch in the
-  `miking-lang/multicore-ocaml` repository:
+  `miking-lang/ocaml-multicore` repository:
   ```
   git checkout no-effect-syntax
   ```
