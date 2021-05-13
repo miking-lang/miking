@@ -8,6 +8,7 @@ include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/cmp.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
@@ -21,9 +22,9 @@ type GenerateEnv = {
   aliases : Map Name Type
 }
 
-let _emptyGenerateEnv = {
+let _emptyGenerateEnv = use MExprCmp in {
   constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp _cmpType),
+  records = mapEmpty (mapCmp cmpType),
   aliases = mapEmpty nameCmp
 }
 
@@ -624,7 +625,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
       else (t, recordFieldsToName)
     else never
   in
-  let init = (t, mapEmpty (mapCmp _cmpType)) in
+  let init = use MExprCmp in (t, mapEmpty (mapCmp cmpType)) in
   assocSeqFold f init typeLiftEnv
 
 let _typeLiftEnvToGenerateEnv = use MExprAst in

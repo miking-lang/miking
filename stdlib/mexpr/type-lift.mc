@@ -15,6 +15,7 @@ include "ast-builder.mc"
 include "pprint.mc"
 include "symbolize.mc"
 include "type-annot.mc"
+include "cmp.mc"
 
 ------------------------------
 -- TYPE LIFTING ENVIRONMENT --
@@ -31,12 +32,13 @@ type TypeLiftEnv = {
 
   -- Variant types and their constructors encountered so far.
   variants: Map Name (Map Name Type)
+
 }
 
 -- This type is added specifically for the type lifting to allow distinguishing
 -- between variant types in the type environment before their constructors have
 -- been added.
-lang VariantNameTypeAst
+lang VariantNameTypeAst = Eq
   syn Type =
   | TyVariantName {ident : Name}
 
@@ -45,6 +47,7 @@ lang VariantNameTypeAst
     match lhs with TyVariantName {ident = lid} then
       nameEq lid rid
     else false
+
 end
 
 -- Replaces all variant type names with the variant type they represent. This
@@ -64,56 +67,6 @@ let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
   in
   assocSeqMap f env.typeEnv
 
--- This function is a simple comparison function for types. It required as a
--- comparison function for the records map of the type-lifting environment.
-recursive let _cmpType = lam ty1 : Type. lam ty2 : Type.
-  use MExprAst in
-  let _typeId = lam ty.
-    match ty with TyUnknown _ then 0
-    else match ty with TyBool _ then 1
-    else match ty with TyInt _ then 2
-    else match ty with TyFloat _ then 3
-    else match ty with TyChar _ then 4
-    else match ty with TyArrow _ then 5
-    else match ty with TySeq _ then 6
-    else match ty with TyRecord _ then 7
-    else match ty with TyVariant _ then 8
-    else match ty with TyVar _ then 9
-    else match ty with TyApp _ then 10
-    else match ty with TyTensor _ then 11
-    else never
-  in
-  let id1 = _typeId ty1 in
-  let id2 = _typeId ty2 in
-  let diff = subi id1 id2 in
-  if eqi diff 0 then
-    let m = (ty1, ty2) in
-    match m with (TyArrow t1, TyArrow t2) then
-      let fromDiff = _cmpType t1.from t2.from in
-      if eqi fromDiff 0 then _cmpType t1.to t2.to
-      else fromDiff
-    else match m with (TySeq t1, TySeq t2) then
-      _cmpType t1.ty t2.ty
-    else match m with (TyRecord t1, TyRecord t2) then
-      mapCmp _cmpType t1.fields t2.fields
-    else match m with (TyVariant t1, TyVariant t2) then
-      mapCmp _cmpType t1.constrs t2.constrs
-    else match m with (TyVar t1, TyVar t2) then
-      nameCmp t1.ident t2.ident
-    else match m with (TyApp t1, TyApp t2) then
-      let lhsDiff = _cmpType t1.lhs t2.lhs in
-      if eqi lhsDiff 0 then _cmpType t1.rhs t2.rhs
-      else lhsDiff
-    else diff
-  else diff
-end
-
-let emptyTypeLiftEnv : TypeLiftEnv = {
-  typeEnv = [],
-  records = mapEmpty (mapCmp _cmpType),
-  variants = mapEmpty nameCmp
-}
-
 -- Adds a record type with the given fields to the type lifting environment.
 let _addRecordTypeVar = lam env : TypeLiftEnv. lam fields : Map SID Type.
   use MExprAst in
@@ -128,7 +81,8 @@ let _addRecordTypeVar = lam env : TypeLiftEnv. lam fields : Map SID Type.
 -- TERMS --
 -----------
 
-lang TypeLift = MExprEq
+lang TypeLift = Cmp
+
   sem typeLiftExpr (env : TypeLiftEnv) =
   -- Intentionally left blank
 
@@ -146,6 +100,13 @@ lang TypeLift = MExprEq
   --   `TyVariant`s.
   sem typeLift = -- Expr -> (AssocSeq Name Type, Expr)
   | e ->
+
+    let emptyTypeLiftEnv : TypeLiftEnv = {
+      typeEnv = [],
+      records = mapEmpty (mapCmp cmpType),
+      variants = mapEmpty nameCmp
+    } in
+
     match typeLiftExpr emptyTypeLiftEnv e with (env, t) then
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
@@ -269,7 +230,7 @@ lang RecordTypeLift = TypeLift + RecordAst
 end
 
 lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
-                    VariantNameTypeAst
+                    VariantNameTypeAst + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
     let tyIdent =
@@ -299,7 +260,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
     else never
 end
 
-lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
+lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   -- Intentionally left blank
 
@@ -339,7 +300,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst
     else never
 end
 
-lang MatchTypeLift = TypeLift + MatchAst
+lang MatchTypeLift = TypeLift + MatchAst + RecordPat
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
     -- If the pattern describes a tuple, then we add a tuple type containing
@@ -510,6 +471,9 @@ lang VariantNameTypeTypeLift = TypeLift + VariantNameTypeAst
 end
 
 lang MExprTypeLift =
+  -- Compare
+  MExprCmp +
+
   -- Terms
   VarTypeLift + AppTypeLift + LamTypeLift + LetTypeLift + RecLetsTypeLift +
   ConstTypeLift + SeqTypeLift + RecordTypeLift + TypeTypeLift + DataTypeLift +
