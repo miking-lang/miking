@@ -532,10 +532,12 @@ lang MExprTypeLift =
 end
 
 lang MExprTypeLiftOrderedRecords = MExprTypeLift + TypeLiftAddRecordToEnvOrdered
-lang MExprTypeLiftUnOrderedRecords = MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+lang MExprTypeLiftUnOrderedRecordsCmpClosed =
+  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered + MExprCmpTypeIndex
 
-lang TestLang = MExprTypeLiftUnOrderedRecords + MExprSym + MExprTypeAnnot +
-                MExprPrettyPrint
+lang TestLang =
+  MExprTypeLiftUnOrderedRecordsCmpClosed + MExprSym + MExprTypeAnnot +
+  MExprPrettyPrint
 
 mexpr
 
