@@ -36,3 +36,7 @@ utest cos 0. with 1. using eqf
 
 utest addf (mulf (sin 1.) (sin 1.)) (mulf (cos 1.) (cos 1.)) with 1.
 using eqf
+
+external externalAtan2 : Float -> Float -> Float
+let atan2 = lam x. lam y. externalAtan2 x y
+utest atan2 0. 1. with 0. using eqf
