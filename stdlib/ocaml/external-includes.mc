@@ -1,5 +1,6 @@
 include "ext/batteries.ext-ocaml.mc" -- For testing
 include "ext/math-ext.ext-ocaml.mc"
+include "ext/dist.ext-ocaml.mc"
 
 
 type ExternalImplDef = {ident : String, ty : Type, libraries : [String]}
@@ -53,5 +54,6 @@ let globalExternalMap : ExternalMap =
     [
       _testExternals, -- For testing purposes
       batteries,      -- For testing purposes
-      mathExtMap
+      mathExtMap,
+      dist
     ])
