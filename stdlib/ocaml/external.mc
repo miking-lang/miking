@@ -2,17 +2,16 @@ include "ocaml/external-includes.mc"
 include "ocaml/ast.mc"
 include "ocaml/intrinsics-ops.mc"
 
-lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst
+lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst + AppTypeAst
 
 -- Computes the cost `Int` of marshaling data from `Type` to `Type`.
 let externalMarshalCost : Type -> Type -> Int =
   use OCamlMarshalData in
   recursive let recur = lam ty1. lam ty2.
     let tt = (ty1, ty2) in
-    match tt with (TyVar _, _) then 0
-    else match tt with (_, TyVar _) then 0
-    else match tt with (TyInt _, TyInt _) then 0
-    else match tt with (TyFloat _, TyFloat _) then 0
+    match tt with (TyVar _, _) | (_, TyVar _) | (TyApp _, _) | (_, TyApp _)
+    then 0
+    else match tt with (TyInt _, TyInt _) | (TyFloat _, TyFloat _) then 0
     else match tt with (TySeq _, TySeq _) then 0
     else match tt with (OTyList _, OTyList _) then 0
     else match tt with (TySeq _, OTyList _) then 5
@@ -56,7 +55,7 @@ let externalMarshalCost : Type -> Type -> Int =
     with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
       addi (recur ty21 ty11) (recur ty12 ty22)
-    else error "Cannot compute marshal data cost"
+    else error "Cannot compute marshal cost"
   in
   recur
 
@@ -81,10 +80,9 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
   lam t. lam ty1. lam ty2.
   recursive let recur = lam t. lam ty1. lam ty2.
     let tt = (ty1, ty2) in
-    match tt with (TyVar _, _) then t
-    else match tt with (_, TyVar _) then t
-    else match tt with (TyInt _, TyInt _) then t
-    else match tt with (TyFloat _, TyFloat _) then t
+    match tt with (TyVar _, _) | (_, TyVar _) | (TyApp _, _) | (_, TyApp _)
+    then t
+    else match tt with (TyInt _, TyInt _) | (TyFloat _, TyFloat _) then t
     else match tt with (TySeq _, TySeq _) then t
     else match tt with (OTyList _, OTyList _) then t
     else match tt with (TySeq _, OTyList _) then
@@ -156,35 +154,56 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
 
 type ExternalNameMap = Map Name [ExternalImpl]
 
+type ExternalChooseEnv = {
+  -- A mapping from external string identifiers to available implementations.
+  impls : ExternalMap,
+
+  -- A mapping from external names to used implementations.
+  usedImpls : ExternalNameMap ,
+
+  -- Type aliases map
+  aliases : Map Name Type
+}
+
+type ExternalGenerateEnv = {
+  -- A mapping from external names to used implementations.
+  usedImpls : ExternalNameMap ,
+
+  -- Type aliases map
+  aliases : Map Name Type
+}
+
+let externalInitialEnv = lam aliases : Map Name Type.
+  {
+    impls = globalExternalMap,
+    usedImpls = mapEmpty nameCmp,
+    aliases = aliases
+  }
+
 lang OCamlGenerateExternal
 
-  -- Takes a map `ExternalMap` and constructs a map `ExternalNameMap` of
-  -- external implementations used in a program `Expr`.
-  sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
+  -- Popluates `env` by chosing external implementations.
+  sem chooseExternalImpls (env : ExternalChooseEnv) /- : Expr -> ExternalGenerateEnv -/=
   -- Intentionally left blank
 
 
-  -- Generates code given an map `ExternalNameMap` of external implementations
-  -- in a program `Expr`. The resulting program should be free of `TmExt`
-  -- terms.
-  sem generateExternals (extNameMap : ExternalNameMap) =
+  -- Generates code for externals. The resulting program should be free of
+  -- `TmExt` terms.
+  sem generateExternals (env : ExternalGenerateEnv) =
   -- Intentionally left blank
 
-  sem chooseAndGenerateExternals (extMap : ExternalMap) =
-  | t ->
-    let extNameMap = buildExternalNameMap extMap (mapEmpty nameCmp) t in
-    (extNameMap, generateExternals extNameMap t)
 end
 
 -- A naive implementation of external generation where we just pick the
 -- implementation with the lowest cost with respect to the type given at the
 -- external term definition.
 lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
-  sem buildExternalNameMap (extMap : ExternalMap) (extNameMap : ExternalNameMap) =
+  sem _chooseExternalImpls (env : ExternalChooseEnv) =
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
     let identStr = nameGetStr ident in
-    let impls = mapLookup identStr extMap in
+    let impls = mapLookup identStr env.impls in
     match impls with Some (![] & impls) then
+      let ty = typeUnwrapAlias env.aliases ty in
       let impl =
         minOrElse
           (lam. error "impossible")
@@ -194,19 +213,26 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
              subi cost1 cost2)
         impls
       in
-      buildExternalNameMap extMap (mapInsert ident [impl] extNameMap) inexpr
+      let env = {env with usedImpls = mapInsert ident [impl] env.usedImpls} in
+      _chooseExternalImpls env inexpr
     else
       error (join ["No implementation for external ", identStr])
-  | t -> sfold_Expr_Expr (buildExternalNameMap extMap) extNameMap t
+  | t -> sfold_Expr_Expr _chooseExternalImpls env t
 
-  sem generateExternals (extNameMap : ExternalNameMap) =
+  sem chooseExternalImpls (env : ExternalChooseEnv) =
+  | t ->
+    let env : ExternalChooseEnv = _chooseExternalImpls env t in
+    { usedImpls = env.usedImpls, aliases = env.aliases }
+
+  sem generateExternals (env : ExternalGenerateEnv) =
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
-    match mapLookup ident extNameMap
+    let ty = typeUnwrapAlias env.aliases ty in
+    match mapLookup ident env.usedImpls
     with Some r then
       let r : ExternalImpl = head r in
       let t = externalMarshal (oext_ r.extIdent) r.extTy ty in
-      bind_ (nulet_ ident t) (generateExternals extNameMap inexpr)
+      bind_ (nulet_ ident t) (generateExternals env inexpr)
     else
       error (join ["No implementation for external ", nameGetStr ident])
-  | t -> smap_Expr_Expr (generateExternals extNameMap) t
+  | t -> smap_Expr_Expr (generateExternals env) t
 end

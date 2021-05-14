@@ -9,6 +9,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/cmp.mc"
+include "mexpr/type.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
@@ -77,15 +78,6 @@ let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then
     name
   else error (join ["Unsupported intrinsic: ", str])
-
-recursive let unwrapAlias = use MExprAst in
-  lam aliases. lam ty.
-  match ty with TyVar {ident = ident} then
-    match mapLookup ident aliases with Some ty then
-      unwrapAlias aliases ty
-    else ty
-  else ty
-end
 
 let toOCamlType = use MExprAst in
   lam ty : Type.
@@ -213,7 +205,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
     match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
       if nameEq patName thnv.ident then
-        let targetTy = unwrapAlias env.aliases (matchTargetType env t) in
+        let targetTy = typeUnwrapAlias env.aliases (matchTargetType env t) in
         match lookupRecordFields targetTy env.constrs with Some fields then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
@@ -283,7 +275,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
-      let ty = unwrapAlias env.aliases t.ty in
+      let ty = typeUnwrapAlias env.aliases t.ty in
       match ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           let fieldTypes = ocamlTypedFields fields in
@@ -297,7 +289,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         else never
       else never
   | TmRecordUpdate t ->
-    let ty = unwrapAlias env.aliases t.ty in
+    let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
@@ -334,7 +326,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         args = [generate env body]
       }
     in
-    let tyBody = unwrapAlias env.aliases (ty t.body) in
+    let tyBody = typeUnwrapAlias env.aliases (ty t.body) in
     match tyBody with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
@@ -524,7 +516,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
-      let targetTy = unwrapAlias env.aliases targetTy in
+      let targetTy = typeUnwrapAlias env.aliases targetTy in
       match lookupRecordFields targetTy constrs with Some fields then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes records with Some name then
@@ -614,7 +606,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             inexpr = t
           }, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
-        let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+        let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
         if mapIsEmpty constrs then (t, recordFieldsToName)
         else
           (OTmVariantTypeDecl {
@@ -638,7 +630,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
               with constrs = mapInsert name ty env.constrs}
       else error "Type lifting error"
     else match ty with TyVariant {constrs = constrs} then
-      let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+      let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
       {env with constrs = mapUnion env.constrs constrs}
     else
       {env with aliases = mapInsert name ty env.aliases}
@@ -2471,9 +2463,9 @@ with char_ '1' using eqExpr in
 -- Externals
 
 let generateWithExternals = lam ast.
-  match chooseAndGenerateExternals globalExternalMap ast with (m, ast) then
-    generateEmptyEnv ast
-  else never
+  let env = chooseExternalImpls (externalInitialEnv (mapEmpty nameCmp)) ast in
+  let ast = generateExternals env ast in
+  generateEmptyEnv ast
 in
 
 let extZeroTest =

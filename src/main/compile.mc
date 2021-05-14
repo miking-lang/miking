@@ -117,25 +117,27 @@ let compile = lam files. lam options : Options. lam args.
       -- Translate the MExpr AST into an OCaml AST and Compile
       match typeLift ast with (env, ast) then
         match generateTypeDecl env ast with (env, ast) then
-          match chooseAndGenerateExternals globalExternalMap ast
-          with (extNameMap, ast) then
-            let ast = generate env ast in
-            let ast = objWrap ast in
-            let ast = _withPreamble ast in
+          let env : GenerateEnv = env in
+          let extEnv : ExternalGenerateEnv =
+            chooseExternalImpls (externalInitialEnv env.aliases) ast
+          in
+          let ast = generateExternals extEnv ast in
+          let ast = generate env ast in
+          let ast = objWrap ast in
+          let ast = _withPreamble ast in
 
-            -- Collect external library dependencies
-            let libs = collectLibraries extNameMap in
+          -- Collect external library dependencies
+          let libs = collectLibraries extEnv.usedImpls in
 
-            let ocamlProg = pprintOcaml ast in
+          let ocamlProg = pprintOcaml ast in
 
-            -- Print the AST after code generation
-            (if options.debugGenerate then printLn ocamlProg else ());
+          -- Print the AST after code generation
+          (if options.debugGenerate then printLn ocamlProg else ());
 
-            -- Compile OCaml AST
-            if options.exitBefore then exit 0
-            else ocamlCompile options libs file ocamlProg
+          -- Compile OCaml AST
+          if options.exitBefore then exit 0
+          else ocamlCompile options libs file ocamlProg
 
-          else never
         else never
       else never
     else never
