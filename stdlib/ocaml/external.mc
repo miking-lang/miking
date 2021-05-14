@@ -14,9 +14,44 @@ let externalMarshalCost : Type -> Type -> Int =
     else match tt with (TyInt _, TyInt _) then 0
     else match tt with (TyFloat _, TyFloat _) then 0
     else match tt with (TySeq _, TySeq _) then 0
-    else match tt with (TyList _, TyList _) then 0
-    else match tt with (TySeq _, TyList _) then 3
-    else match tt with (TyList _, TySeq _) then 3
+    else match tt with (OTyList _, OTyList _) then 0
+    else match tt with (TySeq _, OTyList _) then 5
+    else match tt with (OTyList _, TySeq _) then 5
+    else match tt with (OTyArray _, OTyArray _) then 0
+    else match tt with (OTyArray _, TySeq _) then 2
+    else match tt with (TySeq _, OTyArray _) then 2
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
+      ,OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
+    then 0
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
+      ,OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
+    then 0
+    else match tt with
+      (TyTensor {ty = TyInt _}
+      ,OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
+    then 2
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
+      ,TyTensor {ty = TyInt _})
+    then 1
+    else match tt with
+      (TyTensor {ty = TyFloat _}
+      ,OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
+    then 2
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
+      ,TyTensor {ty = TyFloat _})
+    then 1
     else match tt
     with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
@@ -26,16 +61,16 @@ let externalMarshalCost : Type -> Type -> Int =
   recur
 
 utest externalMarshalCost tyint_ tyint_ with 0
-utest externalMarshalCost (tylist_ tyint_) (tyseq_ tyint_) with 3
+utest externalMarshalCost (otylist_ tyint_) (tyseq_ tyint_) with 3
 utest
   externalMarshalCost
-    (tyarrow_ (tyseq_ tyint_) (tylist_ tyint_))
-    (tyarrow_ (tylist_ tyint_) (tyseq_ tyint_))
+    (tyarrow_ (tyseq_ tyint_) (otylist_ tyint_))
+    (tyarrow_ (otylist_ tyint_) (tyseq_ tyint_))
 with 6
 utest
   externalMarshalCost
-    (tyarrows_ [tyseq_ tyint_, tylist_ tyint_, tyseq_ tyint_])
-    (tyarrows_ [tylist_ tyint_, tyseq_ tyint_, tylist_ tyint_])
+    (tyarrows_ [tyseq_ tyint_, otylist_ tyint_, tyseq_ tyint_])
+    (tyarrows_ [otylist_ tyint_, tyseq_ tyint_, otylist_ tyint_])
 with 9
 
 
@@ -52,11 +87,54 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
     else match tt with (TyInt _, TyInt _) then t
     else match tt with (TyFloat _, TyFloat _) then t
     else match tt with (TySeq _, TySeq _) then t
-    else match tt with (TyList _, TyList _) then t
-    else match tt with (TySeq _, TyList _) then
-      app_ (OTmVarExt {ident = intrinsicOpSeq "Helpers.to_list"}) t
-    else match tt with (TyList _, TySeq _) then
-      app_ (OTmVarExt {ident = intrinsicOpSeq "Helpers.of_list"}) t
+    else match tt with (OTyList _, OTyList _) then t
+    else match tt with (TySeq _, OTyList _) then
+      app_ (intrinsicOpSeq "Helpers.to_list") t
+    else match tt with (OTyList _, TySeq _) then
+      app_ (intrinsicOpSeq "Helpers.of_list") t
+    else match tt with (OTyArray _, OTyArray _) then t
+    else match tt with (TySeq _, OTyArray _) then
+      app_ (intrinsicOpSeq "Helpers.to_array") t
+    else match tt with (OTyArray _, TySeq _) then
+      app_ (intrinsicOpSeq "Helpers.of_array") t
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
+      ,OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
+    then
+      t
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
+      ,OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
+    then
+      t
+    else match tt with
+      (TyTensor {ty = TyInt _}
+      ,OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
+    then
+      app_ (intrinsicOpTensor "Helpers.to_genarray_clayout") t
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
+      ,TyTensor {ty = TyInt _})
+    then
+      app_ (intrinsicOpTensor "carray_int") t
+    else match tt with
+      (TyTensor {ty = TyFloat _}
+      ,OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
+    then
+      app_ (intrinsicOpTensor "Helpers.to_genarray_clayout") t
+    else match tt with
+      (OTyBigArrayGenArray
+        {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
+      ,TyTensor {ty = TyFloat _})
+    then
+      app_ (intrinsicOpTensor "carray_float") t
     else match tt
     with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then

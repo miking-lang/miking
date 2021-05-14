@@ -2215,5 +2215,54 @@ in
 utest ocamlEvalInt (generateWithExternals extListConcatMapTest)
 with int_ 1 using eqExpr in
 
+-- Externals and Tensors
+let extGenarrIntNumDims = symbolize (
+bind_
+  (ext_ "testGenarrIntNumDims"
+        false
+        (tyarrow_ (tytensor_ tyint_) tyint_))
+    (app_ (var_ "testGenarrIntNumDims")
+          (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1)))))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrIntNumDims)
+with int_ 0 using eqExpr in
+
+let extGenarrFloatNumDims = symbolize (
+bind_
+  (ext_ "testGenarrFloatNumDims"
+        false
+        (tyarrow_ (tytensor_ tyfloat_) tyint_))
+    (app_ (var_ "testGenarrFloatNumDims")
+          (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.)))))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrFloatNumDims)
+with int_ 0 using eqExpr in
+
+let extGenarrIntSliceLeft = symbolize (
+bind_
+  (ext_ "testGenarrIntSliceLeft"
+        false
+        (tyarrows_ [tytensor_ tyint_, tyseq_ tyint_, tytensor_ tyint_]))
+    (tensorRank_ tyint_
+      (appSeq_ (var_ "testGenarrIntSliceLeft")
+               [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (int_ 1)),
+                seq_ [int_ 0]])))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrIntSliceLeft)
+with int_ 0 using eqExpr in
+
+let extGenarrFloatSliceLeft = symbolize (
+bind_
+  (ext_ "testGenarrFloatSliceLeft"
+        false
+        (tyarrows_ [tytensor_ tyfloat_, tyseq_ tyint_, tytensor_ tyfloat_]))
+    (tensorRank_ tyfloat_
+      (appSeq_ (var_ "testGenarrFloatSliceLeft")
+               [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (float_ 1.)),
+                seq_ [int_ 0]])))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrFloatSliceLeft)
+with int_ 0 using eqExpr in
+
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 ()
