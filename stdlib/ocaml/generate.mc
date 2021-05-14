@@ -941,12 +941,12 @@ lang OCamlObjWrap = MExprAst + OCamlAst
 
   sem objWrapRec (isApp : Bool) =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
-    _objRepr t
+    _objMagic t
   | TmConst {val = c} -> intrinsic2name c
   | TmApp t ->
     if _isIntrinsicApp (TmApp t) then
       TmApp {{t with lhs = objWrapRec true t.lhs}
-                with rhs = _objRepr (objWrapRec false t.rhs)}
+                with rhs = _objMagic (objWrapRec false t.rhs)}
     else
       TmApp {{t with lhs =
                   if isApp then
@@ -956,7 +956,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
                 with rhs = objWrapRec false t.rhs}
   | TmRecord t ->
     if mapIsEmpty t.bindings then
-      _objRepr (TmRecord t)
+      _objMagic (TmRecord t)
     else
       let bindings = mapMap (lam expr. objWrapRec false expr) t.bindings in
       TmRecord {t with bindings = bindings}
@@ -967,15 +967,15 @@ lang OCamlObjWrap = MExprAst + OCamlAst
       then true else false
     ) tms in
     if isPrimitiveArray then
-      _objRepr t
+      _objMagic t
     else
-      _objRepr (smap_Expr_Expr (objWrapRec false) t)
-  | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
+      _objMagic (smap_Expr_Expr (objWrapRec false) t)
+  | (OTmConApp _) & t -> _objMagic (smap_Expr_Expr (objWrapRec false) t)
   | OTmMatch t ->
     _objObj
     (OTmMatch {{t with target = _objMagic (objWrapRec false t.target)}
                   with arms = map (lam p : (Pat, Expr).
-                                    (p.0, _objRepr (objWrapRec false p.1)))
+                                    (p.0, _objMagic (objWrapRec false p.1)))
                                   t.arms})
   | t -> smap_Expr_Expr (objWrapRec false) t
 
