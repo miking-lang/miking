@@ -111,6 +111,9 @@ let compile = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
       let ast = typeAnnot ast in
 
+      -- If option --debug-type-annot, then pretty print the AST
+      (if options.debugTypeAnnot then printLn (pprintMcore ast) else ());
+
       -- Translate the MExpr AST into an OCaml AST and Compile
       match typeLift ast with (env, ast) then
         match generateTypeDecl env ast with (env, ast) then
