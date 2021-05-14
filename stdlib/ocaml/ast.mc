@@ -132,29 +132,44 @@ lang OCamlTypeAst =
   RecordTypeAst + VarTypeAst
 
   syn Type =
-  | TyList {info : Info, ty : Type}
-  | TyArray {info : Info, ty : Type}
-  | TyGenArray {info : Info, ty : Type}
-  | TyTuple {info : Info, tys : [Type]}
+  | OTyList {info : Info, ty : Type}
+  | OTyArray {info : Info, ty : Type}
+  | OTyTuple {info : Info, tys : [Type]}
+  | OTyBigArrayGenArray {info : Info, tys : [Type]}
+  | OTyBigArrayFloat64Elt {info : Info}
+  | OTyBigArrayIntElt {info : Info}
+  | OTyBigArrayClayout {info : Info}
 
   sem infoTy =
-  | TyList r -> r.info
-  | TyArray r -> r.info
-  | TyGenArray r -> r.info
-  | TyTuple r -> r.info
+  | OTyList r -> r.info
+  | OTyArray r -> r.info
+  | OTyTuple r -> r.info
+  | OTyBigArrayGenArray r -> r.info
+  | OTyBigArrayFloat64Elt r -> r.info
+  | OTyBigArrayIntElt r -> r.info
+  | OTyBigArrayClayout r -> r.info
 end
 
-let tylist_ = use OCamlTypeAst in
-  lam ty. TyList {info = NoInfo (), ty = ty}
+let otylist_ = use OCamlTypeAst in
+  lam ty. OTyList {info = NoInfo (), ty = ty}
 
-let tyarray_ = use OCamlTypeAst in
-  lam ty. TyArray {info = NoInfo (), ty = ty}
+let otyarray_ = use OCamlTypeAst in
+  lam ty. OTyArray {info = NoInfo (), ty = ty}
 
-let tygenarray_ = use OCamlTypeAst in
-  lam ty. TyGenArray {info = NoInfo (), ty = ty}
+let otygenarray_ = use OCamlTypeAst in
+  lam tys. OTyBigArrayGenArray {info = NoInfo (), tys = tys}
 
-let tyotuple_ = use OCamlTypeAst in
-  lam tys. TyTuple {info = NoInfo (), tys = tys}
+let oclayout_ = use OCamlTypeAst in
+  OTyBigArrayClayout {info = NoInfo ()}
+
+let otygenarrayclayoutint_ = use OCamlTypeAst in
+  otygenarray_ [tyint_, OTyBigArrayIntElt {info = NoInfo ()}, oclayout_]
+
+let otygenarrayclayoutfloat_ = use OCamlTypeAst in
+  otygenarray_ [tyfloat_, OTyBigArrayFloat64Elt {info = NoInfo ()}, oclayout_]
+
+let otytuple_ = use OCamlTypeAst in
+  lam tys. OTyTuple {info = NoInfo (), tys = tys}
 
 lang OCamlAst =
   -- Terms

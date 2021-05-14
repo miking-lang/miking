@@ -27,12 +27,6 @@ let intrinsicOpTime = use OCamlAst in
 let intrinsicOpTensor = use OCamlAst in
   lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T." op}
 
-let intrinsicOpTensorNum = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.Num." op}
-
-let intrinsicOpTensorNoNum = use OCamlAst in
-  lam op. OTmVarExt {ident = concat "Boot.Intrinsics.T.NoNum." op}
-
 let intrinsicOpBootparser = use OCamlAst in
   lam op. OTmVarExt {ident = concat "Boot.Bootparser." op}
 

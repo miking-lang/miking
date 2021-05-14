@@ -22,19 +22,43 @@ let _testExternals =
     ("testListMap", [
       { ident = "List.map",
         ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                        tylist_ (tyvar_ "a"),
-                        tylist_ (tyvar_ "b")],
+                        otylist_ (tyvar_ "a"),
+                        otylist_ (tyvar_ "b")],
         libraries = [] }
     ]),
     ("testListConcatMap", [
       { ident = "List.concat_map",
-        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tylist_ (tyvar_ "b")),
-                        tylist_ (tyvar_ "a"),
-                        tylist_ (tyvar_ "b")],
+        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (otylist_ (tyvar_ "b")),
+                        otylist_ (tyvar_ "a"),
+                        otylist_ (tyvar_ "b")],
         libraries = [] }
     ]),
     ("testNonExistant", [
       { ident = "none", ty = tyint_, libraries = ["no-lib"] }
+    ]),
+    ("testGenarrIntNumDims", [
+      { ident = "Bigarray.Genarray.num_dims",
+        ty = tyarrow_ otygenarrayclayoutint_ tyint_,
+        libraries = [] }
+    ]),
+    ("testGenarrFloatNumDims", [
+      { ident = "Bigarray.Genarray.num_dims",
+        ty = tyarrow_ otygenarrayclayoutfloat_ tyint_,
+        libraries = [] }
+    ]),
+    ("testGenarrIntSliceLeft", [
+      { ident = "Bigarray.Genarray.slice_left",
+        ty = tyarrows_ [otygenarrayclayoutint_,
+                        otyarray_ tyint_,
+                        otygenarrayclayoutint_],
+        libraries = [] }
+    ]),
+    ("testGenarrFloatSliceLeft", [
+      { ident = "Bigarray.Genarray.slice_left",
+        ty = tyarrows_ [otygenarrayclayoutfloat_,
+                        otyarray_ tyint_,
+                        otygenarrayclayoutfloat_],
+        libraries = [] }
     ])
   ]
 
