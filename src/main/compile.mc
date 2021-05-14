@@ -106,7 +106,10 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
     let ast = symbolizeExpr symEnv ast in
     let ast = typeAnnot ast in
 
-      -- Translate the MExpr AST into an OCaml AST and Compile
+    -- If option --debug-type-annot, then pretty print the AST
+    (if options.debugTypeAnnot then printLn (pprintMcore ast) else ());
+
+    -- Translate the MExpr AST into an OCaml AST
     match typeLift ast with (env, ast) then
       match generateTypeDecl env ast with (env, ast) then
         let env : GenerateEnv =
