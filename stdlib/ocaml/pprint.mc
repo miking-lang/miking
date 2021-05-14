@@ -205,17 +205,17 @@ lang OCamlPrettyPrint =
   | CSet _ -> intrinsicOpSeq "set"
   | CCons _ -> intrinsicOpSeq "cons"
   | CSnoc _ -> intrinsicOpSeq "snoc"
-  | CSplitAt _ -> intrinsicOpSeq "splitAt"
+  | CSplitAt _ -> intrinsicOpSeq "split_at"
   | CReverse _ -> intrinsicOpSeq "reverse"
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
   | CDPrint _ -> intrinsicOpIO "dprint"
-  | CReadLine _ -> intrinsicOpIO "readLine"
+  | CReadLine _ -> intrinsicOpIO "read_line"
   | CArgv _ -> intrinsicOpSys "argv"
-  | CFileRead _ -> intrinsicOpFile "readFile"
-  | CFileWrite _ -> intrinsicOpFile "writeFile"
-  | CFileExists _ -> intrinsicOpFile "fileExists"
-  | CFileDelete _ -> intrinsicOpFile "deleteFile"
+  | CFileRead _ -> intrinsicOpFile "read"
+  | CFileWrite _ -> intrinsicOpFile "write"
+  | CFileExists _ -> intrinsicOpFile "exists"
+  | CFileDelete _ -> intrinsicOpFile "delete"
   | CError _ -> intrinsicOpSys "error"
   | CExit _ -> intrinsicOpSys "exit"
   | CCommand _ -> intrinsicOpSys "command"
@@ -261,7 +261,11 @@ lang OCamlPrettyPrint =
   | OTmVariantTypeDecl t ->
     let f = lam env. lam ident. lam ty.
       match pprintConName env ident with (env, ident) then
-        match getTypeStringCode indent env ty with (env, ty) then
+        let isUnit = match ty with TyRecord {fields = fields} then
+          mapIsEmpty fields else false in
+        if isUnit then
+          (env, join ["| ", ident])
+        else match getTypeStringCode indent env ty with (env, ty) then
           (env, join ["| ", ident, " of ", ty])
         else never
       else never

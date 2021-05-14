@@ -113,9 +113,6 @@ let toOCamlType = use MExprAst in
     match ty with TyRecord t then
       if or (mapIsEmpty t.fields) nested then tyunknown_
       else TyRecord {t with fields = mapMap (work true) t.fields}
-    else match ty with TyArrow t then
-      TyArrow {{t with from = work true t.from}
-                  with to = work true t.to}
     else tyunknown_
   in work false ty
 
@@ -174,8 +171,9 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match generatePat env targetTy tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (bind_ (nulet_ tname (generate env t.target))
-                 (generate env (wrap (_some expr))))
+          (_objMagic
+            (bind_ (nulet_ tname (generate env t.target))
+                   (generate env (wrap (_some expr)))))
           pat
           (generate env t.thn)
           (generate env t.els)
@@ -275,8 +273,12 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
               match argTy with TyRecord _ then t.target
               else nvar_ patVarName
             in
-            let pat = OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
-            let innerPatternTerm = toNestedMatch (withType argTy target) arm.1 in
+            let isUnit = match argTy with TyRecord {fields = fields} then
+              mapIsEmpty fields else false in
+            let pat = if isUnit
+              then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
+              else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
+            let innerPatternTerm = toNestedMatch (withType argTy (_objMagic target)) arm.1 in
             (pat, generate env innerPatternTerm)
           else
             let msg = join [
@@ -304,7 +306,14 @@ end
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
-    app_ (OTmVarExt {ident = (intrinsicOpSeq "Helpers.ofArray")}) (OTmArray {tms = map (generate env) tms})
+    -- NOTE(vipa, 2021-05-14): Assume that explicit Consts have the same type, since the program wouldn't typecheck otherwise
+    let innerGenerate = lam tm.
+      let tm = generate env tm in
+      match tm with TmConst _ then tm
+      else _objMagic tm in
+    app_
+      (_objMagic (OTmVarExt {ident = (intrinsicOpSeq "Helpers.of_array")}))
+      (OTmArray {tms = map innerGenerate tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
@@ -313,7 +322,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some id then
-            let bindings = mapMap (generate env) t.bindings in
+            let bindings = mapMap (lam e. _objRepr (generate env e)) t.bindings in
             OTmConApp {
               ident = id,
               args = [TmRecord {t with bindings = bindings}]
@@ -329,7 +338,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         match mapLookup fieldTypes env.records with Some id then
           let rec = generate env t.rec in
           let key = sidToString t.key in
-          let value = generate env t.value in
+          let value = _objRepr (generate env t.value) in
           let inlineRecordName = nameSym "rec" in
           OTmMatch {
             target = rec,
@@ -357,35 +366,44 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     -- TODO(vipa, 2021-05-11): can env.constrs contain a non-resolved alias? If so this breaks.
     match mapLookup t.ident env.constrs with Some (TyRecord {fields = fields}) then
       -- NOTE(vipa, 2021-05-11): Constructor that takes explicit record, it should be inlined
-      match t.body with TmRecord r then
-        -- NOTE(vipa, 2021-05-11): We have an explicit record, use it directly
-        OTmConApp {
-          ident = t.ident,
-          args = [TmRecord {r with bindings = mapMap (lam e. _objRepr (generate env e)) r.bindings}]
-        }
+      if mapIsEmpty fields then
+        -- NOTE(vipa, 2021-05-12): Unit record, the OCaml constructor takes 0 arguments
+        let value = OTmConApp { ident = t.ident, args = [] } in
+        match t.body with TmRecord _ then
+          value
+        else
+          semi_ (generate env t.body) value
       else
-        -- NOTE(vipa, 2021-05-11): Not an explicit record, pattern match and reconstruct it
-        let fieldTypes = ocamlTypedFields fields in
-        match mapLookup fieldTypes env.records with Some id then
-          let inlineRecordName = nameSym "rec" in
-          let fieldNames =
-            mapMapWithKey (lam sid. lam. nameSym (sidToString sid)) fields
-          in
-          let fieldPatterns = mapMap (lam n. npvar_ n) fieldNames in
-          let pat = OPatRecord {bindings = fieldPatterns} in
-          let reconstructedRecord = TmRecord {
-            bindings = mapMap (lam n. nvar_ n) fieldNames,
-            ty = ty t.body,
-            info = infoTm t.body
-          } in
-          OTmMatch {
-            target = _objMagic (generate env t.body),
-            arms = [
-              ( OPatCon {ident = id, args = [pat]}
-              , OTmConApp {ident = t.ident, args = [reconstructedRecord]}
-              )
-            ]
+        -- NOTE(vipa, 2021-05-12): Non-unit record, the OCaml constructor takes a record with 1 or more fields
+        match t.body with TmRecord r then
+          -- NOTE(vipa, 2021-05-11): We have an explicit record, use it directly
+          OTmConApp {
+            ident = t.ident,
+            args = [TmRecord {r with bindings = mapMap (lam e. _objRepr (generate env e)) r.bindings}]
           }
+        else
+          -- NOTE(vipa, 2021-05-11): Not an explicit record, pattern match and reconstruct it
+          let fieldTypes = ocamlTypedFields fields in
+          match mapLookup fieldTypes env.records with Some id then
+            let inlineRecordName = nameSym "rec" in
+            let fieldNames =
+              mapMapWithKey (lam sid. lam. nameSym (sidToString sid)) fields
+            in
+            let fieldPatterns = mapMap (lam n. npvar_ n) fieldNames in
+            let pat = OPatRecord {bindings = fieldPatterns} in
+            let reconstructedRecord = TmRecord {
+              bindings = mapMap (lam n. nvar_ n) fieldNames,
+              ty = ty t.body,
+              info = infoTm t.body
+            } in
+            OTmMatch {
+              target = _objMagic (generate env t.body),
+              arms = [
+                ( OPatCon {ident = id, args = [pat]}
+                , OTmConApp {ident = t.ident, args = [reconstructedRecord]}
+                )
+              ]
+            }
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
@@ -479,7 +497,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
-      _if (nvar_ targetName)
+      _if (_objMagic (nvar_ targetName))
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
@@ -607,7 +625,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     if mapIsEmpty t.bindings then
       let wrap = lam cont.
         OTmMatch {
-          target = nvar_ targetName,
+          target = _objMagic (nvar_ targetName),
           arms = [(OPatTuple {pats = []}, cont)]
         }
       in
@@ -630,7 +648,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
             let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
             let wrap = lam cont.
               OTmMatch {
-                target = nvar_ targetName,
+                target = _objMagic (nvar_ targetName),
                 arms = [
                   (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
                 ]
@@ -666,11 +684,18 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
           else conVarName
         in
         match generatePat env innerTy innerTargetName t.subpat with (names, subwrap) then
+          let isUnit = match innerTy with TyRecord {fields = fields} then
+            mapIsEmpty fields else false in
           let wrap = lam cont.
             OTmMatch {
-              target = nvar_ targetName,
+              target = _objMagic (nvar_ targetName),
               arms = [
-                (OPatCon {ident = t.ident, args = [npvar_ conVarName]}, subwrap cont),
+                ( OPatCon
+                  { ident = t.ident
+                  , args = if isUnit then [] else [npvar_ conVarName] -- TODO(vipa, 2021-05-14): This will break if the sub-pattern actually examines the unit
+                  }
+                , subwrap cont
+                ),
                 (pvarw_, _none)
               ]
             }
