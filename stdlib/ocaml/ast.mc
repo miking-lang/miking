@@ -10,8 +10,7 @@ lang OCamlTypeDeclAst
     OTmVariantTypeDecl {t with inexpr = f t.inexpr}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmVariantTypeDecl t ->
-    sfold_Expr_Expr f acc t.inexpr
+  | OTmVariantTypeDecl t -> f acc t.inexpr
 end
 
 lang OCamlRecord
