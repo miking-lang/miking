@@ -370,8 +370,8 @@ lang MExprCCompile = MExprAst + CAst
               thn = thn, els = els } ->
 
     -- Allocate memory for return value of match expression
-    let def = if _isUnitTy tyMatch then None () else
-      Some { ty = compileType tyMatch, id = Some ident, init = None () }
+    let def = if _isUnitTy tyMatch then [] else
+      [{ ty = compileType tyMatch, id = Some ident, init = None () }]
     in
 
     let ctarget = compileExpr target in
@@ -410,8 +410,8 @@ lang MExprCCompile = MExprAst + CAst
     in
     match optionMapM toChar tms with Some str then (
       env,
-      Some { ty = ty, id = Some ident,
-             init = Some (CIExpr { expr = CEString { s = str } }) },
+      [{ ty = ty, id = Some ident,
+             init = Some (CIExpr { expr = CEString { s = str } }) }],
       []
     )
     else error "TODO: TmSeq"
@@ -448,7 +448,7 @@ lang MExprCCompile = MExprAst + CAst
           }
         }
       ] in
-      (env, Some def, init)
+      (env, def, init)
 
     else never
 
@@ -475,7 +475,7 @@ lang MExprCCompile = MExprAst + CAst
           }
         }
       ) bindings in
-      (env, Some def, mapValues init)
+      (env, def, mapValues init)
 
   -- TmRecordUpdate: allocate and create new struct.
   | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
@@ -484,14 +484,14 @@ lang MExprCCompile = MExprAst + CAst
   | expr ->
     let ty = ty expr in
     if _isUnitTy ty then
-      match expr with TmVar _ then (env, None (), None())
-      else (env, None (), [CSExpr { expr = compileExpr expr }])
+      match expr with TmVar _ then (env, [], [])
+      else (env, [], [CSExpr { expr = compileExpr expr }])
 
     else
       let ty = compileType ty in
       (env,
-       Some { ty = ty, id = Some ident,
-              init = Some (CIExpr { expr = compileExpr expr }) },
+       [{ ty = ty, id = Some ident,
+          init = Some (CIExpr { expr = compileExpr expr }) }],
        [])
 
 
@@ -508,42 +508,29 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else
       type Def = { ty: CType, id: Option Name, init: Option CInit } in
-      match compileLet env ident body with (env, def, init) then
-        -- let t: (Option { ty: CType, id: Option Name, init: Option CInit }, [CStmt]) =
-        --   (def, init) in
-        let definit =
-          match def with Some def then
-            let def: Def = def in
-            match def with { init = Some definit } then Some definit
-            else None ()
-          else None ()
-        in
-        -- We need to specially handle direct initialization, since most things
-        -- are not allowed at top-level.
-        match definit with Some definit then
-          let definit: CInit = definit in
-          match def with Some def then
-            let def: Def = def in
+      match compileLet env ident body with (env, defs, inits) then
+
+        -- Extract direct def initializations to init (needed for C top-level)
+        let t = mapAccumL (lam definits: [CStmt]. lam def: Def.
+          match def with { init = Some definit } then
             match definit with CIExpr { expr = expr } then
-              let def = CTDef { def with init = None () } in
+              let def = { def with init = None () } in
               let definit = CSExpr { expr = CEBinOp {
-                op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } }
-              in
-              let accInit = join [accInit, [definit], init] in
-              compileTops env (snoc accTop def) accInit inexpr
+                op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } } in
+              (snoc definits definit, def)
             else match definit with _ then
               error "CIList initializer, TODO?"
             else never
-          else never
+          else (definits, def)
+        ) [] defs
+        in
 
-        else
-          let accTop =
-            match def with Some def then
-              let def: Def = def in
-              snoc accTop (CTDef def)
-            else accTop in
-          let accInit = concat accInit init in
+        match t with (definits, defs) then
+          let accInit = join [accInit, definits, inits] in
+          let defs = map (lam def. CTDef def) defs in
+          let accTop = concat accTop defs in
           compileTops env accTop accInit inexpr
+        else never
 
       else never
 
@@ -582,11 +569,9 @@ lang MExprCCompile = MExprAst + CAst
     (env: CompileCEnv) (final: { name: Option Name }) (acc: [CStmt]) =
 
   | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
-    match compileLet env ident body with (env, def, init) then
-      let acc = match def with Some def then
-        let def: Def = def in
-        snoc acc (CSDef def) else acc in
-      let acc = concat acc init in
+    match compileLet env ident body with (env, defs, inits) then
+      let defs = map (lam def. CSDef def) defs in
+      let acc = join [acc, defs, inits] in
       compileStmts env final acc inexpr
     else never
 
@@ -697,22 +682,27 @@ end
 lang MExprCCompileGCC = MExprCCompile + CPrettyPrint
 
   sem allocStruct (ty: Type) =
-  | name ->
-    match ty with CTyVar { id = tyName } then {
-      ty = ty,
-      id = Some name,
-      init = Some (
-        CIExpr {
-          expr = CEApp {
-            fun = _malloc,
-            args = [
-              CESizeOfType { ty = CTyStruct { id = Some tyName, mem = None ()}}
-            ]
+  | name -> -- Return type: [{ ty: CType, id: Option Name, init: Option CInit }]
+    match ty with CTyVar { id = tyName } then
+
+      let allocName = nameSym "alloc" in [
+
+      -- Allocate struct on the stack
+      { ty = CTyStruct { id = Some tyName, mem = None () }
+      , id = Some allocName
+      , init = None ()
+      },
+
+      -- Define name as pointer to allocated struct
+      { ty = ty
+      , id = Some name
+      , init = Some (
+          CIExpr {
+            expr = CEUnOp { op = COAddrOf {}, arg = CEVar { id = allocName } }
           }
-        }
-      )
-    }
-    else error "Not a CTyVar in allocStruct"
+        )
+      }
+    ] else error "Not a CTyVar in allocStruct"
 
   sem free =
   | name -> error "TODO"
@@ -1023,6 +1013,8 @@ let trees = bindall_ [
   int_ 0
 ] in
 
+-- print (printCompiledCProg (compile trees));
+
 utest testCompile trees with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
@@ -1030,19 +1022,33 @@ utest testCompile trees with strJoin "\n" [
   "typedef struct Rec {int v;} (*Rec);",
   "typedef struct Rec1 {int v; Tree l; Tree r;} (*Rec1);",
   "struct Tree {enum {Leaf, Node} constr; union {Rec d0; Rec1 d1;};};",
+  "struct Rec alloc;",
   "Rec t;",
+  "struct Tree alloc1;",
   "Tree t1;",
+  "struct Rec alloc2;",
   "Rec t2;",
+  "struct Tree alloc3;",
   "Tree t3;",
+  "struct Rec1 alloc4;",
   "Rec1 t4;",
+  "struct Tree alloc5;",
   "Tree t5;",
+  "struct Rec alloc6;",
   "Rec t6;",
+  "struct Tree alloc7;",
   "Tree t7;",
+  "struct Rec alloc8;",
   "Rec t8;",
+  "struct Tree alloc9;",
   "Tree t9;",
+  "struct Rec1 alloc10;",
   "Rec1 t10;",
+  "struct Tree alloc11;",
   "Tree t11;",
+  "struct Rec1 alloc12;",
   "Rec1 t12;",
+  "struct Tree alloc13;",
   "Tree tree;",
   "int treeRec(Tree);",
   "int treeRec(Tree t13) {",
@@ -1070,45 +1076,45 @@ utest testCompile trees with strJoin "\n" [
   "}",
   "int sum;",
   "int main(int argc, char (*argv[])) {",
-  "  (t = (malloc((sizeof(struct Rec)))));",
+  "  (t = (&alloc));",
   "  ((t->v) = 7);",
-  "  (t1 = (malloc((sizeof(struct Tree)))));",
+  "  (t1 = (&alloc1));",
   "  ((t1->constr) = Leaf);",
   "  ((t1->d0) = t);",
-  "  (t2 = (malloc((sizeof(struct Rec)))));",
+  "  (t2 = (&alloc2));",
   "  ((t2->v) = 6);",
-  "  (t3 = (malloc((sizeof(struct Tree)))));",
+  "  (t3 = (&alloc3));",
   "  ((t3->constr) = Leaf);",
   "  ((t3->d0) = t2);",
-  "  (t4 = (malloc((sizeof(struct Rec1)))));",
+  "  (t4 = (&alloc4));",
   "  ((t4->v) = 5);",
   "  ((t4->l) = t3);",
   "  ((t4->r) = t1);",
-  "  (t5 = (malloc((sizeof(struct Tree)))));",
+  "  (t5 = (&alloc5));",
   "  ((t5->constr) = Node);",
   "  ((t5->d1) = t4);",
-  "  (t6 = (malloc((sizeof(struct Rec)))));",
+  "  (t6 = (&alloc6));",
   "  ((t6->v) = 4);",
-  "  (t7 = (malloc((sizeof(struct Tree)))));",
+  "  (t7 = (&alloc7));",
   "  ((t7->constr) = Leaf);",
   "  ((t7->d0) = t6);",
-  "  (t8 = (malloc((sizeof(struct Rec)))));",
+  "  (t8 = (&alloc8));",
   "  ((t8->v) = 3);",
-  "  (t9 = (malloc((sizeof(struct Tree)))));",
+  "  (t9 = (&alloc9));",
   "  ((t9->constr) = Leaf);",
   "  ((t9->d0) = t8);",
-  "  (t10 = (malloc((sizeof(struct Rec1)))));",
+  "  (t10 = (&alloc10));",
   "  ((t10->v) = 2);",
   "  ((t10->l) = t9);",
   "  ((t10->r) = t7);",
-  "  (t11 = (malloc((sizeof(struct Tree)))));",
+  "  (t11 = (&alloc11));",
   "  ((t11->constr) = Node);",
   "  ((t11->d1) = t10);",
-  "  (t12 = (malloc((sizeof(struct Rec1)))));",
+  "  (t12 = (&alloc12));",
   "  ((t12->v) = 1);",
   "  ((t12->l) = t11);",
   "  ((t12->r) = t5);",
-  "  (tree = (malloc((sizeof(struct Tree)))));",
+  "  (tree = (&alloc13));",
   "  ((tree->constr) = Node);",
   "  ((tree->d1) = t12);",
   "  (sum = (treeRec(tree)));",
