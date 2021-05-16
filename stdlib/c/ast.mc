@@ -171,6 +171,12 @@ lang CTopAst = CTypeAst + CInitAst + CStmtAst
 
 end
 
+-----------------------
+-- COMBINED FRAGMENT --
+-----------------------
+lang CAst = CExprAst + CTypeAst + CInitAst + CStmtAst + CTopAst
+
+
 ---------------
 -- C PROGRAM --
 ---------------
@@ -181,8 +187,3 @@ lang CProgAst = CTopAst
   | CPProg { includes: [String], tops: [CTop] }
 
 end
-
------------------------
--- COMBINED FRAGMENT --
------------------------
-lang CAst = CExprAst + CTypeAst + CInitAst + CStmtAst + CTopAst + CProgAst

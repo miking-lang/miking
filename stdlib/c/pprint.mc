@@ -363,6 +363,14 @@ lang CTopPrettyPrint =
 end
 
 
+-----------------------
+-- COMBINED FRAGMENT --
+-----------------------
+lang CPrettyPrint =
+  CExprPrettyPrint + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint +
+  CTopPrettyPrint
+
+
 ---------------
 -- C PROGRAM --
 ---------------
@@ -383,21 +391,14 @@ lang CProgPrettyPrint = CProgAst + CTopPrettyPrint
 
 end
 
-
------------------------
--- COMBINED FRAGMENT --
------------------------
-lang CPrettyPrint =
-  CExprPrettyPrint + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint +
-  CTopPrettyPrint + CProgPrettyPrint
-
-
 ----------------
 -- UNIT TESTS --
 ----------------
 
+lang Test = CPrettyPrint + CProgPrettyPrint
+
 mexpr
-use CPrettyPrint in
+use Test in
 
 let funname = nameSym "fun" in
 let mainname = nameSym "main" in

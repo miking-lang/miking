@@ -30,22 +30,6 @@ include "pprint.mc"
 -- HELPER FUNCTIONS --
 ----------------------
 
--- Convenience function for constructing a function given a C type
-let _funWithType = use CAst in
-  lam ty. lam id. lam params. lam body.
-    match ty with CTyFun { ret = ret, params = tyParams } then
-      CTFun {
-        ret = ret,
-        id = id,
-        params =
-          if eqi (length tyParams) (length params) then
-            zipWith (lam ty. lam p. (ty,p)) tyParams params
-          else
-            error "Incorrect number of parameters in funWithType",
-        body = body
-      }
-    else error "Non-function type given to _funWithType"
-
 -- Check for unit type
 let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
@@ -70,7 +54,7 @@ let _free = nameSym "free"
 let _printf = nameSym "printf"
 
 -- C names that must be pretty printed using their exact string
-let _compilerNames : [Name] = [
+let cCompilerNames : [Name] = [
   _argc,
   _argv,
   _main,
@@ -115,7 +99,7 @@ let compileCEnvEmpty = { typeEnv = [], constrData = [] }
 
 lang MExprCCompile = MExprAst + CAst
 
-  sem allocStruct (ty: Type) =
+  sem alloc (ty: Type) =
   -- Intentionally left blank
 
   sem free =
@@ -420,7 +404,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmConApp { ident = constrIdent, body = body, ty = ty } ->
     let ty = compileType ty in
     match env with { constrData = constrData } then
-      let def = allocStruct ty ident in
+      let def = alloc ident ty in
       let dataKey =
         match assocSeqLookup { eq = nameEq } constrIdent constrData
         with Some dataKey then dataKey
@@ -463,7 +447,7 @@ lang MExprCCompile = MExprAst + CAst
       []
     )
     else
-      let def = allocStruct ty ident in
+      let def = alloc ident ty in
       let init = mapMapWithKey (lam sid. lam expr.
         CSExpr {
           expr = CEBinOp {
@@ -519,7 +503,7 @@ lang MExprCCompile = MExprAst + CAst
                 op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } } in
               (snoc definits definit, def)
             else match definit with _ then
-              error "CIList initializer, TODO?"
+              error "Non-CIExpr initializer, TODO?"
             else never
           else (definits, def)
         ) [] defs
@@ -679,14 +663,16 @@ lang MExprCCompile = MExprAst + CAst
 
 end
 
-lang MExprCCompileGCC = MExprCCompile + CPrettyPrint
 
-  sem allocStruct (ty: Type) =
-  | name -> -- Return type: [{ ty: CType, id: Option Name, init: Option CInit }]
-    match ty with CTyVar { id = tyName } then
 
-      let allocName = nameSym "alloc" in [
+lang MExprCCompileGCC =
+  MExprCCompile + CPrettyPrint + CProgAst + CProgPrettyPrint
 
+  -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
+  sem alloc (name: Name) =
+  | CTyVar { id = tyName } & ty ->
+    let allocName = nameSym "alloc" in
+    [
       -- Allocate struct on the stack
       { ty = CTyStruct { id = Some tyName, mem = None () }
       , id = Some allocName
@@ -702,13 +688,14 @@ lang MExprCCompileGCC = MExprCCompile + CPrettyPrint
           }
         )
       }
-    ] else error "Not a CTyVar in allocStruct"
+    ]
+  | _ -> error "Not a CTyVar in alloc"
 
   sem free =
-  | name -> error "TODO"
+  | name -> error "free currently unused"
 
   sem printCompiledCProg =
-  | cprog -> printCProg _compilerNames cprog
+  | cprog -> printCProg cCompilerNames cprog
 
   sem compileWithMain (typeEnv: [(Name,Type)]) =
   | prog ->
@@ -718,6 +705,22 @@ lang MExprCCompileGCC = MExprCCompile + CPrettyPrint
         params = [
           CTyInt {},
           CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
+      in
+      -- Convenience function for constructing a function given a C type
+      let _funWithType = use CAst in
+        lam ty. lam id. lam params. lam body.
+          match ty with CTyFun { ret = ret, params = tyParams } then
+            CTFun {
+              ret = ret,
+              id = id,
+              params =
+                if eqi (length tyParams) (length params) then
+                  zipWith (lam ty. lam p. (ty,p)) tyParams params
+                else
+                  error "Incorrect number of parameters in funWithType",
+              body = body
+            }
+          else error "Non-function type given to _funWithType"
       in
       let main = _funWithType mainTy _main [_argc, _argv] inits in
       CPProg { includes = _includes, tops = join [types, tops, [main]] }
