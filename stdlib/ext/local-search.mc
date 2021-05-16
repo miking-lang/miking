@@ -7,182 +7,196 @@
 
 include "digraph.mc"
 include "string.mc"
-include "ext/math.mc"
 include "common.mc"
 
 -- 'v': polymorphic value type
 -- 'c': polymorphic cost type
 type Assignment v = [v]
-type Solution v c = (Assignment v, c)
+type Solution v c = {assignment : Assignment v, cost : c}
 type SearchState v c = {
   cur : Solution v c,
   inc : Solution v c,
   iter : Int,
-  stuck : Bool,
-  -- 'cmp c1 c2' is negative if 'c1' < 'c2', positive if 'c1' > 'c2', otherwise 0
-  cmp : c -> c -> Int
+  stuck : Bool
 }
 
-type MetaState v c
-con Base               : {}                                             -> MetaState v c
-con SimulatedAnnealing : {temp : Float,
-                          decayFun : Float -> SearchState v c -> Float} -> MetaState v c
-con TabuSearch         : {tabuConvert : Solution v c -> t,
-                          tabu : [t],
-                          isTabu : t -> [t] -> Bool,
-                          tabuAdd : t -> [t] -> [t]}                    -> MetaState v c
+----------------------------
+-- Base language fragment --
+----------------------------
 
-type NeighbourhoodFun v c = SearchState v c -> [Assignment v]
-type SelectFun v c = [Assignment v] -> SearchState v c -> Option (Solution v c)
-type StepFun v c = SearchState v c -> MetaState v c -> (Option (Solution v c), MetaState v c)
+lang LocalSearchBase
 
-type MetaHeuristic v c = (MetaState v c, StepFun v c)
+  syn MetaState =
 
--- Master search algorithm.
---
--- 'minimize stop f state heur' takes a number of steps (by calling the step
--- function 'heur.1') using 'state' as initial state, and returns a tuple
--- ('sstate', 'mstate'), s.t.:
---  'sstate.inc' is the incumbent, i.e. best found, solution.
---  'sstate.iter' is the number of iterations, i.e. steps taken.
---  'sstate.cur' is the current, i.e. last seen, solution.
---  'sstate.stuck' is true iff the search got stuck (no further step possible).
---  'mstate' is the current meta state.
--- The search terminates when 'stop st' is true, where 'st' is the current
--- search state. The function 'f' is called between each iteration. The search
--- can be continued from the resulting state by using 'sstate' and 'mstate' in
--- subsequent calls to 'minimize' (see tests for examples).
-let minimize : (SearchState v c -> Bool) -> (SearchState v c -> Unit) -> SearchState v c -> MetaHeuristic v c -> (SearchState v c, MetaState v c) =
-  lam terminate. lam callAfterEachIter. lam state. lam metaHeur.
-    let step = metaHeur.1 in
-    recursive let search = lam sstate. lam mstate.
-      if not (terminate sstate) then
-        let sstate = {sstate with iter=addi sstate.iter 1} in
-        let next = step sstate mstate in
-        let newCur = next.0 in
-        match newCur with None () then
-          ({sstate with stuck = true}, mstate)
+  -- Solution v c -> (c -> c -> Int) -> SearchState v c
+  sem initSearchState =
+  | sol -> {cur = sol, inc = sol, iter = 0, stuck = false}
+
+  -- SearchState v c -> [Assignment v]
+  sem neighbourhood =
+
+  -- [Assignment v] -> SearchState v c -> Option (Solution v c)
+  sem select (assignments : [Assignment v]) =
+
+  -- Assignment v -> c
+  sem cost =
+
+  -- 'cmp c1 c2' is negative if 'c1' < 'c2', positive if 'c1' > 'c2', otherwise 0
+  sem compare (v1 : c) =
+
+  -- SearchState v c -> MetaState v c -> (Option (Solution v c), MetaState v c)
+  sem step (searchState : SearchState v c) =
+
+  -- TODO: merge {searchState , metaState}
+  -- TODO: handle stuck
+  sem minimize (searchState : SearchState v c) =
+  | metaState ->
+    match searchState with {stuck = true} then
+      (searchState, metaState)
+    else match searchState with {inc = inc} then
+      let searchState = {searchState with iter = addi searchState.iter 1} in
+      let next = step searchState metaState in
+      match next with (None (), _) then
+        ({searchState with stuck = true}, metaState)
+      else match next with (Some cur, metaState) then
+        let cur : Solution v c = cur in
+        let inc : Solution v c = inc in
+        let inc = if lti (compare cur.cost inc.cost) 0 then cur else inc in
+        let searchState = {{searchState with cur = cur} with inc = inc} in
+        (searchState, metaState)
+      else never
+    else never
+end
+
+------------------------------------
+-- Convenience language fragments --
+-- for building search heuristics --
+------------------------------------
+
+-- Select a solution among the neighbours uniformly at random.
+lang LocalSearchSelectRandomUniform = LocalSearchBase
+  sem select (assignments : [Assignment v]) =
+  | searchState ->
+    match randElem assignments with Some a then
+      Some {assignment = a, cost = cost a}
+    else
+      None ()
+end
+
+-- Select a random best neighbour.
+lang LocalSearchSelectRandomBest = LocalSearchBase
+  sem select (assignments : [Assignment v]) =
+  | searchState ->
+    match assignments with [] then None () else
+
+    -- Find minimum and filter out other elements in one pass.
+    recursive let filterMin : a -> [a] -> (a -> a -> Int) -> [a] -> [a] =
+      lam e. lam acc. lam cmp. lam xs.
+      match xs with [] then acc
+      else match xs with [x] ++ xs then
+        let v = cmp e x in
+        match v with 0 then
+          filterMin e (cons x acc) cmp xs
+        else if lti v 0 then
+          filterMin e acc cmp xs
         else
-          let mstate = next.1 in
-          let cur = optionGetOrElse (lam. error "Expected a solution") newCur in
-          -- New best solution?
-          let inc = if lti (sstate.cmp cur.1 sstate.inc.1) 0 then cur else sstate.inc in
-          let sstate = {{sstate with cur = cur} with inc = inc} in
-          callAfterEachIter sstate;
-          search sstate mstate
+          filterMin x [x] cmp xs
+      else never
+    in
+    utest filterMin 1000 [] subi [42,1,1,3] with [1,1] in
+
+    let sols = map (lam a. {assignment = a, cost = cost a}) assignments in
+    let s = head sols in
+    let minSols =
+      filterMin s [s] (lam s1. lam s2. searchState.cmp s1.cost s2.cost) sols in
+    randElem minSols
+end
+
+-- No meta information
+lang LocalSearchEmptyMeta = LocalSearchBase
+  syn MetaState =
+  | Empty {}
+
+  sem step (searchState : SearchState v c) =
+  | Empty {} ->
+    (select (neighbourhood searchState) searchState, Empty {})
+end
+
+-- Simulated annealing
+lang LocalSearchSimulatedAnnealing = LocalSearchBase
+  syn MetaState =
+  | SimulatedAnnealing {temp : Float}
+
+  -- Modifies the temperature in each iteration
+  -- Float -> SearchState v c -> Float
+  sem decay (temp : Float) =
+
+  sem step (searchState : SearchState v c) =
+  | SimulatedAnnealing t ->
+    let proposal = select (neighbourhood searchState) searchState in
+    match proposal with None () then
+      (None (), SimulatedAnnealing t)
+    else match proposal with Some proposal then
+      let proposal : Solution v c = proposal in
+      let decayed = decay searchState (SimulatedAnnealing t) in
+      let cur : Solution v c = searchState.cur in
+      -- Metropolis condition
+      if leqi (compare proposal.cost cur.cost) 0 then
+        -- Improving solution: accept.
+        (Some proposal, decayed)
       else
-        (sstate, mstate)
-    in search state metaHeur.0
-
--- 'initSearchState sol cmp' initialises a search state, where 'sol' is to be
--- used as the initial solution in the search and 'cmp' compares the cost of two
--- solutions.
-let initSearchState : Solution v c -> (c -> c -> Int) -> SearchState v c =
-  lam initSol. lam cmp.
-    {cur = initSol,
-     inc = initSol,
-     iter = 0,
-     stuck = false,
-     cmp = cmp}
-
--- 'stepBase ns sel' returns a step function for a Base meta heuristic, using
--- 'ns' as the neighourhood function and 'sel' as the select function.
-let stepBase : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
-  lam neighbourhood. lam select.
-    let step = lam state. lam meta.
-      (select (neighbourhood state) state, meta)
-    in step
-
--- 'stepSA ns sel' returns a step function for a simulated annealing meta
--- heuristic, using 'ns' as the neighourhood function and 'sel' as the select
--- function.
-let stepSA : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
-  lam neighbourhood. lam select.
-    let step = lam state. lam meta.
-      match meta with SimulatedAnnealing r then
-        let updatedMeta = SimulatedAnnealing {r with temp=r.decayFunc r.temp state} in
-        let proposalOpt = select (neighbourhood state) state in
-        -- Leave meta unchanged if stuck
-        match proposalOpt with None () then (None (), meta) else
-        let proposal = optionGetOrElse (lam. error "Expected a solution") proposalOpt in
-        -- Metropolis condition
-        if leqi (state.cmp proposal.1 state.cur.1) 0 then
-          -- Always accept improving solution
-          (Some proposal, updatedMeta)
-        else
-          -- Accept worsening solution with a probability dependent on temperature
-          let pAccept = exp (divf (int2float (subi proposal.1 state.cur.1)) r.temp) in
+        -- Worsening solution: accept with probability depending on temperature.
+        let accept =
+          let pAccept =
+            exp (divf (int2float (subi proposal.cost cur.cost)) t.temp) in
           let rnd = int2float (randIntU 0 100) in
-          let choice = if geqf (mulf pAccept 100.0) rnd then proposal else state.cur in
-          (Some choice, updatedMeta)
-      else
-        error "Expected simulated annealing as meta heuristics"
-    in step
+          geqf (mulf pAccept 100.0) rnd
+        in
+        (Some (if accept then proposal else cur), decayed)
+    else never
+end
 
--- 'stepTabu ns sel' returns a step function for a tabu search meta heuristic,
--- using 'ns' as the neighourhood function and 'sel' as the select function.
-let stepTabu : NeighbourhoodFun v c -> SelectFun v c -> StepFun v c =
-  lam neighbourhood. lam select.
-    let step : StepFun = lam state. lam meta.
-      match meta with TabuSearch r then
-        let ns = neighbourhood state in
-        let nonTabus = filter (lam n. not (r.isTabu n r.tabu)) ns in
-        let choice = select nonTabus state in
-        optionMapOr (None (), meta)
-                    (lam s. (Some s, TabuSearch {r with tabu=r.tabuAdd (r.tabuConvert s) r.tabu}))
-                    (choice)
-      else
-        error "Expected tabu search as meta heuristics"
-    in step
+-----------
+-- Tests --
+-----------
 
-mexpr
-
--- Enable/disable printing in tests
-let printEnabled = false in
-let print = if printEnabled then print else identity in
-
--- Example: Travelling Salesman Problem (TSP)
--- Given a weighted directed graph, find a tour (Hamiltonian circuit) that
--- visits each node exactly once, with minimum path weight.
-
-------------------------
--- Set up the problem --
-------------------------
+type TspTourEdge = (String, String, Int)
+type TspTour = [TspTourEdge]
 
 -- Define instance data
-let vs = ["Uppsala", "Stockholm", "Kiruna", "Gothenburg"] in
+let vs = ["Uppsala", "Stockholm", "Kiruna", "Gothenburg"]
 let es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
           ("Uppsala", "Gothenburg", 200), ("Gothenburg", "Uppsala", 250),
           ("Uppsala", "Kiruna", 10), ("Kiruna", "Uppsala", 320),
           ("Kiruna", "Stockholm", 500), ("Stockholm", "Kiruna", 20),
           ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
-          ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)] in
+          ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)]
 
-let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqString eqi)) in
+let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqString eqi))
 
 -- Define initial solution
 let initTour = [("Uppsala", "Kiruna", 10),
                 ("Kiruna", "Stockholm", 500),
                 ("Stockholm", "Gothenburg", 40),
-                ("Gothenburg", "Uppsala", 250)] in
+                ("Gothenburg", "Uppsala", 250)]
 
 let cost = lam s.
-  foldl (lam sum. lam edge. addi sum edge.2) 0 s in
+  foldl (lam sum. lam edge : TspTourEdge. addi sum edge.2) 0 s
 
-let initSol = (initTour, cost initTour) in
+let initSol = {assignment = initTour, cost = cost initTour}
 
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
 -- Hamiltonian circuit
-let neighbours = lam g. lam state.
-  let curSol = state.cur in
-  let tour = curSol.0 in
+let neighbours = lam g. lam state : SearchState TspTour Int.
+  let curSol : Solution TspTour Int = state.cur in
+  let tour = curSol.assignment in
 
   let tourHasEdge = lam v1. lam v2.
-    any (lam e. or (and (eqString v1 e.0) (eqString v2 e.1))
-                   (and (eqString v1 e.1) (eqString v2 e.0))) tour in
+    any (lam e : TspTourEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
+                                 (and (eqString v1 e.1) (eqString v2 e.0))) tour in
 
   -- Find replacing edges for 'e12' and 'e34'
-  let exchange = lam e12. lam e34.
+  let exchange = lam e12 : TspTourEdge. lam e34 : TspTourEdge.
     let v1 = e12.0 in
     let v2 = e12.1 in
     let v3 = e34.0 in
@@ -212,150 +226,58 @@ let neighbours = lam g. lam state.
            (foldl (lam innerAcc. lam e2.
                      let e = exchange e1 e2 in
                      match e with Some r then cons r innerAcc else innerAcc)
-                  []
-            tour))
+                  [] tour))
           []
           tour
-   in map (lam ex. neighbourFromExchange [ex.0,ex.1] [ex.2,ex.3] tour) possibleExchanges
+  in map (lam ex : (TspTourEdge, TspTourEdge, TspTourEdge, TspTourEdge).
+            neighbourFromExchange [ex.0,ex.1] [ex.2,ex.3] tour) possibleExchanges
+
+
+lang LocalSearchTsp = LocalSearchBase
+  sem neighbourhood =
+  | searchState -> neighbours g searchState
+
+  sem cost =
+  | s ->
+    foldl (lam acc. lam edge : TspTourEdge. addi acc edge.2) 0 s
+
+  sem compare (v1 : c) =
+  | v2 -> subi v1 v2
+end
+
+lang LocalSearchTspSimulatedAnnealing = LocalSearchTsp
+                                      + LocalSearchSimulatedAnnealing
+                                      + LocalSearchSelectRandomUniform
+
+  sem decay (searchState : SearchState v c) =
+  | SimulatedAnnealing ({temp = temp} & t) ->
+    SimulatedAnnealing {t with temp = mulf 0.95 temp}
+end
+mexpr
+
+let terminate = lam state : SearchState TspTour Int.
+  geqi state.iter 10 in
+let printIter = lam state : SearchState TspTour Int.
+  let inc : Solution TspTour Int = state.inc in
+  print (join ["Iter: ", int2string state.iter, ", ",
+               "Best: ", int2string inc.cost, "\n"]) in
+
+recursive let loop = lam state. lam minimize.
+  match state with (searchState, metaState) then
+    printIter searchState;
+    if terminate searchState then
+      (searchState, metaState)
+    else
+      loop (minimize searchState metaState) minimize
+  else never
 in
 
-let terminate = lam state. geqi state.iter 3 in
-let printIter = lam state. print (join ["Iter: ", int2string state.iter, ", ",
-                                              "Best: ", int2string state.inc.1, "\n"]) in
-let initState = initSearchState initSol subi in
+use LocalSearchTspSimulatedAnnealing in
 
-let minimizeTSP = minimize terminate printIter initState in
--- Custom termination condition
-let minimizeTSP1 = lam terminate.
-  minimize terminate printIter initState in
--- Custom start solution
-let minimizeTSP2 = lam terminate. lam init.
-  minimize terminate printIter init in
+let meta = SimulatedAnnealing {temp = 100.0} in
 
-----------------------------
--- Set up meta-heuristics --
-----------------------------
+let searchState = initSearchState initSol in
 
-let randElem = lam seq.
-  match seq with [] then None ()
-  else Some (get seq (randIntU 0 (length seq))) in
-
--- Select a random best neighbour
-let randomBest = lam ns. lam state.
-  match ns with [] then None () else
-  let costs = map cost ns in
-  let minCost = minOrElse (lam. error "undefined") subi costs in
-  let nsCosts = zipWith (lam n. lam c. (n,c)) ns costs in
-  let minNs = filter (lam t. eqi t.1 minCost) nsCosts in
-  randElem minNs
-in
-
-let metaRandBest = (Base {}, stepBase (neighbours g) randomBest) in
-
--- Select a random improving solution (steepest descent)
-let randImproving = lam ns. lam state.
-  match ns with [] then None () else
-  let curCost = state.cur.1 in
-  let nsCosts = map (lam n. (n, cost n)) ns in
-  let improvingNs = filter (lam t. lti t.1 curCost) nsCosts in
-  randElem improvingNs in
-
-let metaSteepDesc = (Base {}, stepBase (neighbours g) randImproving) in
-
--- Simulated annealing
-let randSol = lam ns. lam state.
-  match ns with [] then None () else
-  let nRand = get ns (randIntU 0 (length ns)) in
-  Some (nRand, cost nRand)
-in
-
-let decayFunc = lam temp. lam state.
-  mulf temp 0.95
-in
-
-let saState = SimulatedAnnealing {temp = 100.0, decayFunc = decayFunc} in
-let metaSA = (saState, stepSA (neighbours g) randSol) in
-
--- Tabu search
-let toursEq = lam t1. lam t2.
-  eqsetEqual (digraphEdgeEq g) t1 t2 in
-
-let tabuState = TabuSearch {tabu = [initTour],
-                            isTabu = lam tour. lam tabu. any (toursEq tour) tabu,
-                            tabuAdd = lam assign. lam tabu. cons assign tabu,
-                            tabuConvert = lam sol. sol.0} in
-let metaTabu = (tabuState, stepTabu (neighbours g) randomBest) in
-
------------------------
--- Solve the problem --
------------------------
-
-print "Choose a random best solution:\n";
-printIter initState;
-let r = minimizeTSP1 (lam st. geqi st.iter 50) metaRandBest in
-
-let sstate = r.0 in
-utest sstate.iter with 50 in
-utest sstate.inc.1 with 251 in -- optimum
-utest sstate.stuck with false in
-
-print "Steepest descent:\n";
-printIter initState;
-let r = minimizeTSP1 (lam st. geqi st.iter 100) metaSteepDesc in
-
-let sstate = r.0 in
-utest sstate.inc.1 with 251 in
-utest sstate.stuck with true in
-
-print "Simulated annealing:\n";
-printIter initState;
-let r = minimizeTSP metaSA in
-
-let sstate = r.0 in
-let mstate = match r.1 with SimulatedAnnealing s then s else error "Not a SimulatedAnnealing" in
-utest sstate.iter with 3 in
-utest sstate.stuck with false in
-utest mstate.temp with mulf 0.95 (mulf 0.95 (mulf 0.95 100.0)) in
-
-print "Tabu search:\n";
-printIter initState;
-let r = minimizeTSP metaTabu in
-
-let sstate = r.0 in
-let mstate = match r.1 with TabuSearch s then s else error "Not a TabuSearch" in
-utest sstate.iter with 3 in
-utest sstate.stuck with false in
-utest length (mstate.tabu) with 4 in
-utest mstate.isTabu initTour mstate.tabu with true in
-utest mstate.isTabu sstate.cur.0 mstate.tabu with true in
-utest mstate.isTabu sstate.inc.0 mstate.tabu with true in
-
--- Switch between meta-heuristics during search
-print "Start with tabu search:\n";
-printIter initState;
-let r = minimizeTSP2 (lam state. geqi state.iter 5) initState metaTabu in
-print "Switch to simulated annealing:\n";
-let r = minimizeTSP2 (lam state. geqi state.iter 10) r.0 metaSA in
-
-------------------------------------
--- Design a custom meta heuristic --
-------------------------------------
-
-con FooMetaState : {foo : Int} -> MetaState v c in
-
-let fooStep : StepFun = lam state. lam mstate.
-  match mstate with FooMetaState r then
-    (Some state.cur, FooMetaState {r with foo = addi 1 r.foo})
-  else "fooStep intended for foo meta heuristic only" in
-
-let metaHeurFoo = (FooMetaState {foo = 0}, fooStep) in
-
-print "Foo search:\n";
-printIter initState;
-let r = minimizeTSP metaHeurFoo in
-
-let fooVal = match r.1 with FooMetaState s then s.foo else error "Not a FooMetaState" in
-utest fooVal with (r.0).iter in
-utest (r.0).inc with initSol in
+let endState = loop (searchState, meta) minimize in
 
 ()
