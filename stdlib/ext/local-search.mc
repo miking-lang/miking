@@ -5,9 +5,9 @@
 -- A generic library for (stochastic) local search algorithms.
 -- Includes pre-defined meta-heuristics and allows design of custom dittos.
 
-include "digraph.mc"
-include "string.mc"
 include "common.mc"
+include "string.mc"
+include "digraph.mc"
 
 -- 'v': polymorphic value type
 -- 'c': polymorphic cost type
@@ -28,27 +28,35 @@ lang LocalSearchBase
 
   syn MetaState =
 
-  -- Solution v c -> (c -> c -> Int) -> SearchState v c
+  -- Initialize the search state from an initial solution
+  -- : Solution v c -> SearchState v c
   sem initSearchState =
   | sol -> {cur = sol, inc = sol, iter = 0, stuck = false}
 
-  -- SearchState v c -> [Assignment v]
+  -- The neighboring assignments
+  -- : SearchState v c -> [Assignment v]
   sem neighbourhood =
 
-  -- [Assignment v] -> SearchState v c -> Option (Solution v c)
+  -- Select a solution among the neighbours
+  -- : [Assignment v] -> SearchState v c -> Option (Solution v c)
   sem select (assignments : [Assignment v]) =
 
-  -- Assignment v -> c
+  -- The cost of an assignment
+  -- : Assignment v -> c
   sem cost =
 
-  -- 'cmp c1 c2' is negative if 'c1' < 'c2', positive if 'c1' > 'c2', otherwise 0
+  -- Comparison function for costs
+  -- : c -> c -> Int
   sem compare (v1 : c) =
 
-  -- SearchState v c -> MetaState v c -> (Option (Solution v c), MetaState v c)
+  -- Take one step, return both the next solution (if there is one), and the
+  -- resulting meta state
+  -- : SearchState v c -> MetaState -> (Option (Solution v c), MetaState)
   sem step (searchState : SearchState v c) =
 
-  -- TODO: merge {searchState , metaState}
-  -- TODO: handle stuck
+  -- Take one step and update search state accordingly, return both the
+  -- resulting search state and meta state.
+  -- : SearchState v c -> MetaState -> (SearchState v c, MetaState)
   sem minimize (searchState : SearchState v c) =
   | metaState ->
     match searchState with {stuck = true} then
@@ -87,6 +95,7 @@ end
 lang LocalSearchSelectRandomBest = LocalSearchBase
   sem select (assignments : [Assignment v]) =
   | searchState ->
+    let searchState : SearchState v c = searchState in
     match assignments with [] then None () else
 
     -- Find minimum and filter out other elements in one pass.
@@ -108,18 +117,29 @@ lang LocalSearchSelectRandomBest = LocalSearchBase
     let sols = map (lam a. {assignment = a, cost = cost a}) assignments in
     let s = head sols in
     let minSols =
-      filterMin s [s] (lam s1. lam s2. searchState.cmp s1.cost s2.cost) sols in
+      filterMin s [s] (lam s1 : Solution v c. lam s2 : Solution v c.
+                         compare s1.cost s2.cost) sols in
     randElem minSols
 end
 
--- No meta information
-lang LocalSearchEmptyMeta = LocalSearchBase
-  syn MetaState =
-  | Empty {}
-
-  sem step (searchState : SearchState v c) =
-  | Empty {} ->
-    (select (neighbourhood searchState) searchState, Empty {})
+-- Select the first improving neighbour.
+lang LocalSearchSelectFirstImproving = LocalSearchBase
+  sem select (assignments : [Assignments v]) =
+  | searchState ->
+    match searchState with {cur = cur} then
+      let cur : Solution v c = cur in
+      let curCost = cur.cost in
+      recursive let firstImproving = lam as : [Assignment v].
+        match as with [] then None ()
+        else match as with [a] ++ as then
+          let acost = cost a in
+          if lti acost curCost then
+            Some {assignment = a, cost = acost}
+          else firstImproving as
+        else never
+      in
+      firstImproving assignments
+    else never
 end
 
 -- Simulated annealing
@@ -128,8 +148,8 @@ lang LocalSearchSimulatedAnnealing = LocalSearchBase
   | SimulatedAnnealing {temp : Float}
 
   -- Modifies the temperature in each iteration
-  -- Float -> SearchState v c -> Float
-  sem decay (temp : Float) =
+  -- : SearchState v c -> MetaState -> MetaState
+  sem decay (searchState : SearchState v c) =
 
   sem step (searchState : SearchState v c) =
   | SimulatedAnnealing t ->
@@ -154,6 +174,31 @@ lang LocalSearchSimulatedAnnealing = LocalSearchBase
         in
         (Some (if accept then proposal else cur), decayed)
     else never
+end
+
+-- Tabu search
+lang LocalSearchTabuSearch = LocalSearchBase
+  syn TabuSet =
+
+  syn MetaState =
+  | TabuSearch {tabu : TabuSet}
+
+  -- : Assignment -> TabuSet -> Bool
+  sem isTabu (assignment : Assignment v) =
+
+  -- Update the tabu set
+  -- : Assignment v -> TabuSet -> TabuSet
+  sem tabuUpdate (assignment : Assignment v) =
+
+  sem step (searchState : SearchState v c) =
+  | TabuSearch ({tabu = tabu} & t) ->
+    let ns = neighbourhood searchState in
+    let nonTabus = filter (lam n. not (isTabu n tabu)) ns in
+    match select nonTabus searchState with Some choice then
+      let choice : Solution v c = choice in
+      (Some choice, TabuSearch {tabu = tabuUpdate choice.assignment tabu})
+    else
+      (None (), TabuSearch t)
 end
 
 -----------
@@ -184,6 +229,9 @@ let cost = lam s.
   foldl (lam sum. lam edge : TspTourEdge. addi sum edge.2) 0 s
 
 let initSol = {assignment = initTour, cost = cost initTour}
+
+let toursEq = lam t1. lam t2.
+  eqsetEqual (digraphEdgeEq g) t1 t2
 
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
 -- Hamiltonian circuit
@@ -253,31 +301,86 @@ lang LocalSearchTspSimulatedAnnealing = LocalSearchTsp
   | SimulatedAnnealing ({temp = temp} & t) ->
     SimulatedAnnealing {t with temp = mulf 0.95 temp}
 end
+
+lang LocalSearchTspTabuSearch = LocalSearchTsp
+                              + LocalSearchTabuSearch
+                              + LocalSearchSelectRandomBest
+  syn TabuSet =
+  | TabuList {list : [Assignment TspTour]}
+
+  sem isTabu (tour : Assignment v) =
+  | TabuList {list = list} ->
+    any (toursEq tour) list
+
+  sem tabuUpdate (tour : Assignment TspTour) =
+  | TabuList {list = list} ->
+    TabuList {list = cons tour list}
+end
+
 mexpr
 
-let terminate = lam state : SearchState TspTour Int.
-  geqi state.iter 10 in
-let printIter = lam state : SearchState TspTour Int.
-  let inc : Solution TspTour Int = state.inc in
-  print (join ["Iter: ", int2string state.iter, ", ",
-               "Best: ", int2string inc.cost, "\n"]) in
+let debug = false in
+let debugPrint = if debug then print else lam. () in
 
-recursive let loop = lam state. lam minimize.
+let nIters = lam n. lam state : SearchState TspTour Int.
+  or (state.stuck) (geqi state.iter n) in
+
+recursive let loop =
+  lam terminate : SearchState TspTour Int -> Bool.
+  lam printF : SearchState TspTour Int -> MetaState -> Unit.
+  lam state : (SearchState TspTour Int, MetaState).
+  lam minimize : SearchState TspTour Int -> MetaState -> (SearchState TspTour Int, MetaState).
   match state with (searchState, metaState) then
-    printIter searchState;
+    printF searchState metaState;
     if terminate searchState then
       (searchState, metaState)
     else
-      loop (minimize searchState metaState) minimize
-  else never
-in
+      loop terminate printF (minimize searchState metaState) minimize
+  else never in
+
+let printSearchState = lam state : SearchState TspTour Int.
+  let inc : Solution TspTour Int = state.inc in
+  debugPrint (join ["Iter: ", int2string state.iter, ", ",
+                    "Best: ", int2string inc.cost, "\n"]) in
+
+use LocalSearchTsp in
+
+let startState = initSearchState initSol in
 
 use LocalSearchTspSimulatedAnnealing in
 
 let meta = SimulatedAnnealing {temp = 100.0} in
 
-let searchState = initSearchState initSol in
+let printMeta = lam metaState : MetaState.
+  match metaState with SimulatedAnnealing {temp = temp} then
+    debugPrint (join ["Temperature: ", float2string temp, "\n"])
+  else never in
 
-let endState = loop (searchState, meta) minimize in
+(match
+   loop (nIters 100) (lam s. lam m. printSearchState s; printMeta m)
+        (startState, meta) minimize
+ with (searchState, metaState) then
+   let searchState : SearchState TspTour Int = searchState in
+   let inc : Solution TspTour Int = searchState.inc in
+   utest inc.cost with 251 in ()
+ else never);
+
+use LocalSearchTspTabuSearch in
+
+let meta = TabuSearch {tabu = TabuList {list = []}} in
+
+let printMeta = lam metaState : MetaState.
+  match metaState with TabuSearch {tabu = TabuList {list = list}} then
+    debugPrint (join ["Tabu length: ", int2string (length list), "\n"])
+  else never in
+
+(match
+   loop (nIters 100) (lam s. lam m. printSearchState s; printMeta m)
+        (startState, meta) minimize
+ with (searchState, metaState) then
+   let searchState : SearchState TspTour Int = searchState in
+   let inc : Solution TspTour Int = searchState.inc in
+   utest inc.cost with 251 in ()
+ else never);
 
 ()
