@@ -61,7 +61,7 @@ lang MExprPatternKeywordMaker = KeywordMaker + MExpr + MExprEq
   | TmParallelMap r ->
     match lhs with TmParallelMap l then
       match eqExprH env free l.f r.f with Some free then
-        eqExprH env free l.s r.s
+        eqExprH env free l.as r.as
       else None ()
     else None ()
   | TmParallelReduce r ->
@@ -110,5 +110,44 @@ mexpr
 
 use MExprPatternKeywordMaker in
 
-let expr = ulam_ "x" (appf2_ (var_ "parallelMap") (ulam_ "x" (var_ "x")) (seq_ [])) in
-dprintLn (makeKeywords [] expr)
+let parallelMap_ = lam f. lam as.
+  TmParallelMap {f = f, as = as, info = NoInfo ()} in
+let parallelReduce_ = lam f. lam ne. lam as.
+  TmParallelReduce {f = f, ne = ne, as = as, info = NoInfo ()} in
+let parallelScan_ = lam f. lam ne. lam as.
+  TmParallelScan {f = f, ne = ne, as = as, info = NoInfo ()} in
+let parallelFilter_ = lam p. lam as.
+  TmParallelFilter {p = p, as = as, info = NoInfo ()} in
+let parallelPartition_ = lam p. lam as.
+  TmParallelPartition {p = p, as = as, info = NoInfo ()} in
+let parallelAll_ = lam p. lam as.
+  TmParallelAll {p = p, as = as, info = NoInfo ()} in
+let parallelAny_ = lam p. lam as.
+  TmParallelAny {p = p, as = as, info = NoInfo ()} in
+
+let id_ = ulam_ "x" (var_ "x") in
+let trueFunc_ = ulam_ "x" true_ in
+let emptySeq_ = seq_ [] in
+
+let expr = appf2_ (var_ "parallelMap") id_ emptySeq_ in
+utest makeKeywords [] expr with parallelMap_ id_ emptySeq_ using eqExpr in
+
+let expr = appf3_ (var_ "parallelReduce") id_ (int_ 0) emptySeq_ in
+utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
+
+let expr = appf3_ (var_ "parallelScan") id_ (int_ 0) emptySeq_ in
+utest makeKeywords [] expr with parallelScan_ id_ (int_ 0) emptySeq_ using eqExpr in
+
+let expr = appf2_ (var_ "parallelFilter") trueFunc_ emptySeq_ in
+utest makeKeywords [] expr with parallelFilter_ trueFunc_ emptySeq_ using eqExpr in
+
+let expr = appf2_ (var_ "parallelPartition") trueFunc_ emptySeq_ in
+utest makeKeywords [] expr with parallelPartition_ trueFunc_ emptySeq_ using eqExpr in
+
+let expr = appf2_ (var_ "parallelAll") trueFunc_ emptySeq_ in
+utest makeKeywords [] expr with parallelAll_ trueFunc_ emptySeq_ using eqExpr in
+
+let expr = appf2_ (var_ "parallelAny") trueFunc_ emptySeq_ in
+utest makeKeywords [] expr with parallelAny_ trueFunc_ emptySeq_ using eqExpr in
+
+()
