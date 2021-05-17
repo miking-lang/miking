@@ -413,8 +413,8 @@ let randElem = lam seq.
   match seq with [] then None ()
   else Some (get seq (randIntU 0 (length seq)))
 
-utest randElem [] with None ()
-utest randElem [1] with Some 1
+utest randElem [] with None () using optionEq eqi
+utest randElem [1] with Some 1 using optionEq eqi
 utest
   match randElem [1,2] with Some (1 | 2) then true else false
   with true

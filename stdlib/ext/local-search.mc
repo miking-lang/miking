@@ -90,7 +90,7 @@ lang LocalSearchBase
     else never
 
   -- Debug a meta state.
-  -- Bool -> MetaState -> Unit
+  -- : Bool -> MetaState -> Unit
   sem debugMeta (debug : Bool) =
   | meta -> ()
 end
