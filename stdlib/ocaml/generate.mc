@@ -39,19 +39,28 @@ let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam na
     (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
 
+let _objRepr = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
+let _objMagic = use OCamlAst in
+  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
+
+let _omatch_ = lam target. lam arms.
+  use OCamlAst in
+  match arms with [h] ++ rest
+  then OTmMatch { target = target, arms = cons h (map (lam x: (Unknown, Unknown). (x.0, _objMagic x.1)) rest) }
+  else OTmMatch { target = target, arms = arms }
+
 -- Construct a match expression that matches against an option
 let _someName = "Option.Some"
 let _noneName = "Option.None"
 let _optMatch = use OCamlAst in lam target. lam somePat. lam someExpr. lam noneExpr.
-  OTmMatch
-  { target = target
-  , arms =
+  _omatch_ target
     [ (OPatConExt {ident = _someName, args = [somePat]}, someExpr)
-    , (OPatConExt {ident = _noneName, args = []}, noneExpr)]}
+    , (OPatConExt {ident = _noneName, args = []}, noneExpr)]
 let _some = use OCamlAst in lam val. OTmConAppExt {ident = _someName, args = [val]}
 let _none = use OCamlAst in OTmConAppExt {ident = _noneName, args = []}
-let _if = use OCamlAst in lam cond. lam thn. lam els. OTmMatch {target = cond, arms = [(ptrue_, thn), (pfalse_, els)]}
-let _tuplet = use OCamlAst in lam pats. lam val. lam body. OTmMatch {target = val, arms = [(OPatTuple {pats = pats}, body)]}
+let _if = use OCamlAst in lam cond. lam thn. lam els. _omatch_ cond [(ptrue_, thn), (pfalse_, els)]
+let _tuplet = use OCamlAst in lam pats. lam val. lam body. _omatch_ val [(OPatTuple {pats = pats}, body)]
 
 let _builtinNameMap : Map String Name =
   let builtinStrs =
@@ -131,11 +140,6 @@ let lookupRecordFields = use MExprAst in
 
 type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
                     els : Expr, ty : Type, info : Info}
-
-let _objRepr = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
-let _objMagic = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
 
 lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem matchTargetType (env : GenerateEnv) =
@@ -242,10 +246,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           match mapLookup fieldTypes env.records with Some name then
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
-            OTmMatch {
-              target = _objMagic (generate env t.target),
-              arms = [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
-            }
+            _omatch_ (_objMagic (generate env t.target))
+              [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
           else error "Record type not handled by type-lifting"
         else error (infoErrorString info "Unknown record type")
       else generateDefaultMatchCase env t
@@ -288,14 +290,11 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             infoErrorExit t.info msg
         in
         let flattenedMatch =
-          OTmMatch {
-            target = _objMagic (generate env t.target),
-            arms =
-              snoc
+          _omatch_ (_objMagic (generate env t.target))
+            (snoc
                 (map f (mapBindings arms))
-                (pvarw_, (app_ (nvar_ defaultCaseName) unit_))
-          } in
-          bind_ defaultCaseLet flattenedMatch
+                (pvarw_, (app_ (nvar_ defaultCaseName) unit_)))
+        in bind_ defaultCaseLet flattenedMatch
       else never
     else generateDefaultMatchCase env t
   | TmMatch t -> generateDefaultMatchCase env t
@@ -340,16 +339,13 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
           let key = sidToString t.key in
           let value = _objRepr (generate env t.value) in
           let inlineRecordName = nameSym "rec" in
-          OTmMatch {
-            target = rec,
-            arms = [
-              ( OPatCon {ident = id, args = [npvar_ inlineRecordName]}
-              , OTmConApp {ident = id, args = [
-                  recordupdate_ (nvar_ inlineRecordName) key value
-                ]}
+          _omatch_ rec
+            [ ( OPatCon {ident = id, args = [npvar_ inlineRecordName]}
+              , OTmConApp {ident = id, args =
+                [ recordupdate_ (nvar_ inlineRecordName) key value ]
+                }
               )
             ]
-          }
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
@@ -362,7 +358,6 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
                       "This was caused by an error in the type-lifting."] in
       infoErrorExit t.info msg
   | TmConApp t ->
-    -- TODO(vipa, 2021-05-11): have to special-case unit
     -- TODO(vipa, 2021-05-11): can env.constrs contain a non-resolved alias? If so this breaks.
     match mapLookup t.ident env.constrs with Some (TyRecord {fields = fields}) then
       -- NOTE(vipa, 2021-05-11): Constructor that takes explicit record, it should be inlined
@@ -396,14 +391,11 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
               ty = ty t.body,
               info = infoTm t.body
             } in
-            OTmMatch {
-              target = _objMagic (generate env t.body),
-              arms = [
-                ( OPatCon {ident = id, args = [pat]}
+            _omatch_ (_objMagic (generate env t.body))
+              [ ( OPatCon {ident = id, args = [pat]}
                 , OTmConApp {ident = t.ident, args = [reconstructedRecord]}
                 )
               ]
-            }
         else
           let msg = join ["No record type could be found in the environment. ",
                           "This was caused by an error in the type-lifting."] in
@@ -415,6 +407,10 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         args = [_objRepr (generate env t.body)]
       }
   | TmApp (t & {lhs = lhs & !(TmApp _), rhs = rhs}) ->
+  -- NOTE(vipa, 2021-05-17): Putting `magic` around the function in a
+  -- function chain makes all the other types flexible, the arguments
+  -- can be any type, and the result type can be any type, it's thus
+  -- very economical
     TmApp {{t with lhs = _objMagic (generate env lhs)}
               with rhs = generate env rhs}
   | TmNever t ->
@@ -624,10 +620,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
     in
     if mapIsEmpty t.bindings then
       let wrap = lam cont.
-        OTmMatch {
-          target = _objMagic (nvar_ targetName),
-          arms = [(OPatTuple {pats = []}, cont)]
-        }
+        _omatch_ (_objMagic (nvar_ targetName))
+          [(OPatTuple {pats = []}, cont)]
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
@@ -647,12 +641,9 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
             in
             let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
             let wrap = lam cont.
-              OTmMatch {
-                target = _objMagic (nvar_ targetName),
-                arms = [
-                  (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
+              _omatch_ (_objMagic (nvar_ targetName))
+                [ (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
                 ]
-              }
             in
             ( foldl (assocMergePreferRight {eq=nameEqSym}) assocEmpty allNames
             , wrap
@@ -687,10 +678,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
           let isUnit = match innerTy with TyRecord {fields = fields} then
             mapIsEmpty fields else false in
           let wrap = lam cont.
-            OTmMatch {
-              target = _objMagic (nvar_ targetName),
-              arms = [
-                ( OPatCon
+            _omatch_ (_objMagic (nvar_ targetName))
+              [ ( OPatCon
                   { ident = t.ident
                   , args = if isUnit then [] else [npvar_ conVarName] -- TODO(vipa, 2021-05-14): This will break if the sub-pattern actually examines the unit
                   }
@@ -698,7 +687,6 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
                 ),
                 (pvarw_, _none)
               ]
-            }
           in
           (names, wrap)
         else never
@@ -783,145 +771,9 @@ recursive let _isIntrinsicApp = use OCamlAst in
     else false
 end
 
-lang OCamlObjWrap = MExprAst + OCamlAst
-  sem intrinsic2name =
-  | CAddi _ -> nvar_ (_intrinsicName "addi")
-  | CSubi _ -> nvar_ (_intrinsicName "subi")
-  | CMuli _ -> nvar_ (_intrinsicName "muli")
-  | CDivi _ -> nvar_ (_intrinsicName "divi")
-  | CModi _ -> nvar_ (_intrinsicName "modi")
-  | CNegi _ -> nvar_ (_intrinsicName "negi")
-  | CLti _ -> nvar_ (_intrinsicName "lti")
-  | CLeqi _ -> nvar_ (_intrinsicName "leqi")
-  | CGti _ -> nvar_ (_intrinsicName "gti")
-  | CGeqi _ -> nvar_ (_intrinsicName "geqi")
-  | CEqi _ -> nvar_ (_intrinsicName "eqi")
-  | CNeqi _ -> nvar_ (_intrinsicName "neqi")
-  | CSlli _ -> nvar_ (_intrinsicName "slli")
-  | CSrli _ -> nvar_ (_intrinsicName "srli")
-  | CSrai _ -> nvar_ (_intrinsicName "srai")
-  | CAddf _ -> nvar_ (_intrinsicName "addf")
-  | CSubf _ -> nvar_ (_intrinsicName "subf")
-  | CMulf _ -> nvar_ (_intrinsicName "mulf")
-  | CDivf _ -> nvar_ (_intrinsicName "divf")
-  | CNegf _ -> nvar_ (_intrinsicName "negf")
-  | CLtf _ -> nvar_ (_intrinsicName "ltf")
-  | CLeqf _ -> nvar_ (_intrinsicName "leqf")
-  | CGtf _ -> nvar_ (_intrinsicName "gtf")
-  | CGeqf _ -> nvar_ (_intrinsicName "geqf")
-  | CEqf _ -> nvar_ (_intrinsicName "eqf")
-  | CNeqf _ -> nvar_ (_intrinsicName "neqf")
-  | CFloorfi _ -> nvar_ (_intrinsicName "floorfi")
-  | CCeilfi _ -> nvar_ (_intrinsicName "ceilfi")
-  | CRoundfi _ -> nvar_ (_intrinsicName "roundfi")
-  | CInt2float _ -> nvar_ (_intrinsicName "int2float")
-  | CString2float _ -> nvar_ (_intrinsicName "string2float")
-  | CEqc _ -> nvar_ (_intrinsicName "eqc")
-  | CChar2Int _ -> nvar_ (_intrinsicName "char2int")
-  | CInt2Char _ -> nvar_ (_intrinsicName "int2char")
-  | CCreate _ -> nvar_ (_intrinsicName "create")
-  | CLength _ -> nvar_ (_intrinsicName "length")
-  | CConcat _ -> nvar_ (_intrinsicName "concat")
-  | CGet _ -> nvar_ (_intrinsicName "get")
-  | CSet _ -> nvar_ (_intrinsicName "set")
-  | CCons _ -> nvar_ (_intrinsicName "cons")
-  | CSnoc _ -> nvar_ (_intrinsicName "snoc")
-  | CSplitAt _ -> nvar_ (_intrinsicName "splitAt")
-  | CReverse _ -> nvar_ (_intrinsicName "reverse")
-  | CSubsequence _ -> nvar_ (_intrinsicName "subsequence")
-  | CPrint _ -> nvar_ (_intrinsicName "print")
-  | CDPrint _ -> nvar_ (_intrinsicName "dprint")
-  | CReadLine _ -> nvar_ (_intrinsicName "readLine")
-  | CArgv _ -> nvar_ (_intrinsicName "argv")
-  | CFileRead _ -> nvar_ (_intrinsicName "readFile")
-  | CFileWrite _ -> nvar_ (_intrinsicName "writeFile")
-  | CFileExists _ -> nvar_ (_intrinsicName "fileExists")
-  | CFileDelete _ -> nvar_ (_intrinsicName "deleteFile")
-  | CError _ -> nvar_ (_intrinsicName "error")
-  | CExit _ -> nvar_ (_intrinsicName "exit")
-  | CCommand _ -> nvar_ (_intrinsicName "command")
-  | CEqsym _ -> nvar_ (_intrinsicName "eqsym")
-  | CGensym _ -> nvar_ (_intrinsicName "gensym")
-  | CSym2hash _ -> nvar_ (_intrinsicName "sym2hash")
-  | CRandIntU _ -> nvar_ (_intrinsicName "randIntU")
-  | CRandSetSeed _ -> nvar_ (_intrinsicName "randSetSeed")
-  | CWallTimeMs _ -> nvar_ (_intrinsicName "wallTimeMs")
-  | CSleepMs _ -> nvar_ (_intrinsicName "sleepMs")
-  | CMapEmpty _ -> nvar_ (_intrinsicName "mapEmpty")
-  | CMapInsert _ -> nvar_ (_intrinsicName "mapInsert")
-  | CMapRemove _ -> nvar_ (_intrinsicName "mapRemove")
-  | CMapFindWithExn _ -> nvar_ (_intrinsicName "mapFindWithExn")
-  | CMapFindOrElse _ -> nvar_ (_intrinsicName "mapFindOrElse")
-  | CMapFindApplyOrElse _ -> nvar_ (_intrinsicName "mapFindApplyOrElse")
-  | CMapBindings _ -> nvar_ (_intrinsicName "mapBindings")
-  | CMapSize _ -> nvar_ (_intrinsicName "mapSize")
-  | CMapMem _ -> nvar_ (_intrinsicName "mapMem")
-  | CMapAny _ -> nvar_ (_intrinsicName "mapAny")
-  | CMapMap _ -> nvar_ (_intrinsicName "mapMap")
-  | CMapMapWithKey _ -> nvar_ (_intrinsicName "mapMapWithKey")
-  | CMapFoldWithKey _ -> nvar_ (_intrinsicName "mapFoldWithKey")
-  | CMapEq _ -> nvar_ (_intrinsicName "mapEq")
-  | CMapCmp _ -> nvar_ (_intrinsicName "mapCmp")
-  | CMapGetCmpFun _ -> nvar_ (_intrinsicName "mapGetCmpFun")
-  | CTensorIteri _ -> nvar_ (_intrinsicName "tensorIteri")
-  | CBootParserParseMExprString _ -> nvar_ (_intrinsicName "bootParserParseMExprString")
-  | CBootParserParseMCoreFile _ -> nvar_ (_intrinsicName "bootParserParseMCoreFile")
-  | CBootParserGetId _ -> nvar_ (_intrinsicName "bootParserGetId")
-  | CBootParserGetTerm _ -> nvar_ (_intrinsicName "bootParserGetTerm")
-  | CBootParserGetType _ -> nvar_ (_intrinsicName "bootParserGetType")
-  | CBootParserGetString _ -> nvar_ (_intrinsicName "bootParserGetString")
-  | CBootParserGetInt _ -> nvar_ (_intrinsicName "bootParserGetInt")
-  | CBootParserGetFloat _ -> nvar_ (_intrinsicName "bootParserGetFloat")
-  | CBootParserGetListLength _ -> nvar_ (_intrinsicName "bootParserGetListLength")
-  | CBootParserGetConst _ -> nvar_ (_intrinsicName "bootParserGetConst")
-  | CBootParserGetPat _ -> nvar_ (_intrinsicName "bootParserGetPat")
-  | CBootParserGetInfo _ -> nvar_ (_intrinsicName "bootParserGetInfo")
-  | CRef _ -> nvar_ (_intrinsicName "ref")
-  | CModRef _ -> nvar_ (_intrinsicName "modref")
-  | CDeRef _ -> nvar_ (_intrinsicName "deref")
-  | t -> dprintLn t; error "Intrinsic not implemented"
-
-  /-
-  Approach: add `magic` where we need a particular type:
-  - thing in match
-  - value in constructor (unless the constructor expects a record, in which
-    case each record member is `magic`ed)
-  - function being applied (only on the left-most thing, e.g., only `f` in
-    `f a b`)
-
-  Possible breakages:
-  - Sometimes we need some types to be the same, but we don't have a strict
-    need on what type it should be, e.g., branches in a match. If this is an
-    issue we can `repr` them.
-
-  Consequences:
-  - We do not need the preamble, the functions will be `magic`ed before being
-    applied anyway.
-  - Hopefully fewer `repr`/`magic`
-  -/
-  -- sem objWrap =
-  -- | t -> smap_Expr_Expr objWrap t
-  -- | TmApp (t & {lhs = lhs & !(TmApp _), rhs = rhs}) ->
-  --   TmApp {{t with lhs = _objMagic (objWrap lhs)}
-  --             with rhs = objWrap rhs}
-  -- | TmRecord r -> TmRecord {r with bindings = mapMap (lam e. _objRepr (objWrap e)) r.bindings}
-  -- | OTmConApp (r & {ident = ident, args = [arg & TmRecord _]}) ->
-  --   match mapLookup ident conArgs with Some (TmRecord {bindings = bindings}) then
-  --     if mapIsEmpty bindings
-  --     then OTmConApp {r with args = [_objRepr (objWrap arg)]}
-  --     else OTmConApp {r with args = [objWrap arg]}
-  --   else OTmConApp {r with args = [_objRepr (objWrap arg)]}
-  -- | OTmMatch t ->
-  --   OTmMatch {{t with target = _objMagic (objWrap t.target)}
-  --                with arms = map (lam p : (Pat, Expr).
-  --                                  (p.0, objWrap p.1))
-  --                                t.arms}
-  -- | TmConst {val = c} -> intrinsic2name c  -- TODO(vipa, 2021-05-11): Make this refer to the original operator directly
-end
-
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
                  MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
-                 MExprTypeAnnot + OCamlObjWrap
+                 MExprTypeAnnot
 
 mexpr
 
@@ -934,27 +786,9 @@ let parseAsMExpr = lam s.
   use MExprParser in parseExpr (initPos "") s
 in
 
--- NOTE(oerikss, 2021-03-05): We pre- pretty-print the preamble here to make
--- the test run faster. This is an ugly hack!
-let preambleStr = lam.
-  let str = expr2str (bind_ _preamble (int_ 0)) in
-  let len = length str in
-  subsequence str 0 (subi len 1)
-in
-
--- NOTE(larshum, 2021-03-08): Adds the preamble to the top of a given term,
--- but places it after all variant type declarations.
-recursive let withPreamble = lam t.
-  match t with OTmVariantTypeDecl tt then
-    OTmVariantTypeDecl {tt with inexpr = withPreamble tt.inexpr}
-  else
-    OTmPreambleText {text = preambleStr (), inexpr = t}
-in
-
 -- Evaluates OCaml expressions [strConvert] given as string, applied
 -- to [p], and parses it as a mexpr expression.
 let ocamlEval = lam ast.
-  let ast = withPreamble ast in
   let compileOptions = {defaultCompileOptions with optimize = false} in
   let prog = ocamlCompileWithConfig compileOptions (expr2str ast) in
   let res = prog.run "" [] in

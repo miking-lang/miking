@@ -255,7 +255,6 @@ lang OCamlPrettyPrint =
   | CBootParserGetConst _ -> intrinsicOpBootparser "getConst"
   | CBootParserGetPat _ -> intrinsicOpBootparser "getPat"
   | CBootParserGetInfo _ -> intrinsicOpBootparser "getInfo"
-  -- TODO(vipa, 2021-05-11): Add references to the intrinsics here, instead of putting them in the preamble
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->
@@ -443,10 +442,6 @@ lang OCamlPrettyPrint =
         (env, join ["match", pprintNewline ii, target, pprintNewline i,
                     "with", join arms])
       else never
-    else never
-  | OTmPreambleText t ->
-    match pprintCode indent env t.inexpr with (env, inexpr) then
-      (env, join [t.text, inexpr])
     else never
   | OTmString t -> (env, join ["\"", t.text, "\""])
 

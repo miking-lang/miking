@@ -15,7 +15,7 @@ include "ocaml/pprint.mc"
 lang MCoreCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate
 end
 
 let pprintMcore = lam ast.
