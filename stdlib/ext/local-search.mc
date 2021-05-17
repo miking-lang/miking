@@ -3,22 +3,34 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 -- A generic library for (stochastic) local search algorithms.
--- Includes pre-defined meta-heuristics and allows design of custom dittos.
+--
+-- To design a local search algorithm, provide implementations for the semantic
+-- functions in the language fragment 'LocalSearchBase'. The syn 'MetaState' can
+-- be used to maintain meta-information between search iterations. See the
+-- fragments 'LocalSearchSimulatedAnnealing' and 'LocalSearchTabuSearch' for an
+-- implementation of simulated annealing and tabu search, respectively.
+--
+-- The tests contain an implementation of the travelling salesman problem (TSP).
+-- See this example for how to use the pre-defined language fragments as
+-- building blocks when implementing local search for this problem.
 
 include "common.mc"
 include "string.mc"
 include "digraph.mc"
 
--- 'v': polymorphic value type
--- 'c': polymorphic cost type
+-- An assignment of indices to values.
 type Assignment v = [v]
+
+-- A local search solution: an assignment with a cost.
 type Solution v c = {assignment : Assignment v, cost : c}
+
+-- Search state.
 type SearchState v c = {
-  cur : Solution v c,
-  inc : Solution v c,
-  iter : Int,
-  stuck : Bool
-}
+  cur : Solution v c,  -- current solution
+  inc : Solution v c,  -- incumbent (best solution thus far)
+  iter : Int,          -- number of iterations thus far
+  stuck : Bool         -- whether the search is stuck
+}                      -- (no local moves possible)
 
 ----------------------------
 -- Base language fragment --
@@ -28,29 +40,31 @@ lang LocalSearchBase
 
   syn MetaState =
 
-  -- Initialize the search state from an initial solution
-  -- : Solution v c -> SearchState v c
+  -- Initialize the search state from an initial assignment.
+  -- : Assignment v -> SearchState v c
   sem initSearchState =
-  | sol -> {cur = sol, inc = sol, iter = 0, stuck = false}
+  | a ->
+    let sol = {assignment = a, cost = cost a} in
+    {cur = sol, inc = sol, iter = 0, stuck = false}
 
-  -- The neighboring assignments
+  -- The neighbouring assignments from a search state.
   -- : SearchState v c -> [Assignment v]
   sem neighbourhood =
 
-  -- Select a solution among the neighbours
+  -- Select a solution among the neighbours.
   -- : [Assignment v] -> SearchState v c -> Option (Solution v c)
   sem select (assignments : [Assignment v]) =
 
-  -- The cost of an assignment
+  -- The cost of an assignment.
   -- : Assignment v -> c
   sem cost =
 
-  -- Comparison function for costs
+  -- Comparison function for costs.
   -- : c -> c -> Int
   sem compare (v1 : c) =
 
   -- Take one step, return both the next solution (if there is one), and the
-  -- resulting meta state
+  -- resulting meta state.
   -- : SearchState v c -> MetaState -> (Option (Solution v c), MetaState)
   sem step (searchState : SearchState v c) =
 
@@ -74,6 +88,11 @@ lang LocalSearchBase
         (searchState, metaState)
       else never
     else never
+
+  -- Debug a meta state.
+  -- Bool -> MetaState -> Unit
+  sem debugMeta (debug : Bool) =
+  | meta -> ()
 end
 
 ------------------------------------
@@ -205,37 +224,36 @@ end
 -- Tests --
 -----------
 
+-- Example: Travelling Salesman Problem (TSP)
+-- Given a weighted directed graph, find a tour (Hamiltonian circuit) that
+-- visits each node exactly once, with minimum path weight.
+
 type TspTourEdge = (String, String, Int)
 type TspTour = [TspTourEdge]
 
 -- Define instance data
-let vs = ["Uppsala", "Stockholm", "Kiruna", "Gothenburg"]
-let es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
-          ("Uppsala", "Gothenburg", 200), ("Gothenburg", "Uppsala", 250),
-          ("Uppsala", "Kiruna", 10), ("Kiruna", "Uppsala", 320),
-          ("Kiruna", "Stockholm", 500), ("Stockholm", "Kiruna", 20),
-          ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
-          ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)]
+let _vs = ["Uppsala", "Stockholm", "Kiruna", "Gothenburg"]
+let _es = [("Uppsala", "Stockholm", 80), ("Stockholm", "Uppsala", 90),
+           ("Uppsala", "Gothenburg", 200), ("Gothenburg", "Uppsala", 250),
+           ("Uppsala", "Kiruna", 10), ("Kiruna", "Uppsala", 320),
+           ("Kiruna", "Stockholm", 500), ("Stockholm", "Kiruna", 20),
+           ("Stockholm", "Gothenburg", 40), ("Gothenburg", "Stockholm", 65),
+           ("Kiruna", "Gothenburg", 111), ("Gothenburg", "Kiruna", 321)]
 
-let g = digraphAddEdges es (digraphAddVertices vs (digraphEmpty eqString eqi))
+let _tspGraph = digraphAddEdges _es (digraphAddVertices _vs (digraphEmpty eqString eqi))
 
 -- Define initial solution
-let initTour = [("Uppsala", "Kiruna", 10),
-                ("Kiruna", "Stockholm", 500),
-                ("Stockholm", "Gothenburg", 40),
-                ("Gothenburg", "Uppsala", 250)]
+let _initTour = [("Uppsala", "Kiruna", 10),
+                 ("Kiruna", "Stockholm", 500),
+                 ("Stockholm", "Gothenburg", 40),
+                 ("Gothenburg", "Uppsala", 250)]
 
-let cost = lam s.
-  foldl (lam sum. lam edge : TspTourEdge. addi sum edge.2) 0 s
-
-let initSol = {assignment = initTour, cost = cost initTour}
-
-let toursEq = lam t1. lam t2.
-  eqsetEqual (digraphEdgeEq g) t1 t2
+let _toursEq = lam t1. lam t2.
+  eqsetEqual (digraphEdgeEq _tspGraph) t1 t2
 
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
--- Hamiltonian circuit
-let neighbours = lam g. lam state : SearchState TspTour Int.
+-- Hamiltonian circuit.
+let _tspNeighbours = lam g. lam state : SearchState TspTour Int.
   let curSol : Solution TspTour Int = state.cur in
   let tour = curSol.assignment in
 
@@ -281,9 +299,10 @@ let neighbours = lam g. lam state : SearchState TspTour Int.
             neighbourFromExchange [ex.0,ex.1] [ex.2,ex.3] tour) possibleExchanges
 
 
-lang LocalSearchTsp = LocalSearchBase
+-- Problem-specific definitions.
+lang _testTsp = LocalSearchBase
   sem neighbourhood =
-  | searchState -> neighbours g searchState
+  | searchState -> _tspNeighbours _tspGraph searchState
 
   sem cost =
   | s ->
@@ -293,28 +312,40 @@ lang LocalSearchTsp = LocalSearchBase
   | v2 -> subi v1 v2
 end
 
-lang LocalSearchTspSimulatedAnnealing = LocalSearchTsp
-                                      + LocalSearchSimulatedAnnealing
-                                      + LocalSearchSelectRandomUniform
+lang _testTspSimulatedAnnealing = _testTsp
+                                + LocalSearchSimulatedAnnealing
+                                + LocalSearchSelectRandomUniform
 
   sem decay (searchState : SearchState v c) =
   | SimulatedAnnealing ({temp = temp} & t) ->
     SimulatedAnnealing {t with temp = mulf 0.95 temp}
+
+  sem debugMeta (debug : Bool) =
+  | SimulatedAnnealing {temp = temp} ->
+    if debug then
+      print (join ["Temperature: ", float2string temp, "\n"])
+    else ()
 end
 
-lang LocalSearchTspTabuSearch = LocalSearchTsp
-                              + LocalSearchTabuSearch
-                              + LocalSearchSelectRandomBest
+lang _testTspTabuSearch = _testTsp
+                        + LocalSearchTabuSearch
+                        + LocalSearchSelectRandomBest
   syn TabuSet =
   | TabuList {list : [Assignment TspTour]}
 
   sem isTabu (tour : Assignment v) =
   | TabuList {list = list} ->
-    any (toursEq tour) list
+    any (_toursEq tour) list
 
   sem tabuUpdate (tour : Assignment TspTour) =
   | TabuList {list = list} ->
     TabuList {list = cons tour list}
+
+  sem debugMeta (debug : Bool) =
+  | TabuSearch {tabu = TabuList {list = list}} ->
+    if debug then
+      print (join ["Tabu length: ", int2string (length list), "\n"])
+    else ()
 end
 
 mexpr
@@ -325,62 +356,62 @@ let debugPrint = if debug then print else lam. () in
 let nIters = lam n. lam state : SearchState TspTour Int.
   or (state.stuck) (geqi state.iter n) in
 
-recursive let loop =
-  lam terminate : SearchState TspTour Int -> Bool.
-  lam printF : SearchState TspTour Int -> MetaState -> Unit.
-  lam state : (SearchState TspTour Int, MetaState).
-  lam minimize : SearchState TspTour Int -> MetaState -> (SearchState TspTour Int, MetaState).
-  match state with (searchState, metaState) then
-    printF searchState metaState;
-    if terminate searchState then
-      (searchState, metaState)
-    else
-      loop terminate printF (minimize searchState metaState) minimize
-  else never in
-
 let printSearchState = lam state : SearchState TspTour Int.
   let inc : Solution TspTour Int = state.inc in
   debugPrint (join ["Iter: ", int2string state.iter, ", ",
                     "Best: ", int2string inc.cost, "\n"]) in
 
-use LocalSearchTsp in
-
-let startState = initSearchState initSol in
-
-use LocalSearchTspSimulatedAnnealing in
-
-let meta = SimulatedAnnealing {temp = 100.0} in
-
-let printMeta = lam metaState : MetaState.
-  match metaState with SimulatedAnnealing {temp = temp} then
-    debugPrint (join ["Temperature: ", float2string temp, "\n"])
+recursive let loop =
+  lam terminate : SearchState TspTour Int -> Bool.
+  lam state : (SearchState TspTour Int, MetaState).
+  lam debugMeta : Bool -> MetaState -> Unit.
+  lam minimize : SearchState TspTour Int -> MetaState -> (SearchState TspTour Int, MetaState).
+  match state with (searchState, metaState) then
+    printSearchState searchState;
+    debugMeta debug metaState;
+    if terminate searchState then
+      (searchState, metaState)
+    else
+      loop terminate (minimize searchState metaState) debugMeta minimize
   else never in
 
-(match
-   loop (nIters 100) (lam s. lam m. printSearchState s; printMeta m)
-        (startState, meta) minimize
- with (searchState, metaState) then
-   let searchState : SearchState TspTour Int = searchState in
-   let inc : Solution TspTour Int = searchState.inc in
-   utest inc.cost with 251 in ()
+use _testTsp in
+
+let startState = initSearchState _initTour in
+
+-- Use simulated annealing.
+use _testTspSimulatedAnnealing in
+
+let metaSA = SimulatedAnnealing {temp = 100.0} in
+
+(match loop (nIters 100) (startState, metaSA) debugMeta minimize
+ with ({inc = {cost = cost}}, _) then
+   utest cost with 251 in ()
  else never);
 
-use LocalSearchTspTabuSearch in
+-- Use tabu search.
+use _testTspTabuSearch in
 
-let meta = TabuSearch {tabu = TabuList {list = []}} in
+let metaTabu = TabuSearch {tabu = TabuList {list = []}} in
 
-let printMeta = lam metaState : MetaState.
-  match metaState with TabuSearch {tabu = TabuList {list = list}} then
-    debugPrint (join ["Tabu length: ", int2string (length list), "\n"])
-  else never in
+(match loop (nIters 100) (startState, metaTabu) debugMeta minimize
+  with ({inc = {cost = cost}}, metaState) then
+   utest cost with 251 in ()
+ else never);
 
-(match
-   loop (nIters 100) (lam s. lam m. printSearchState s; printMeta m)
-        (startState, meta) minimize
- with (searchState, metaState) then
-   let searchState : SearchState TspTour Int = searchState in
-   let inc : Solution TspTour Int = searchState.inc in
-   utest inc.cost with 251 in ()
+-- Start with simulated annealing, then switch to tabu search.
+use _testTspSimulatedAnnealing in
+
+(match loop (nIters 10) (startState, metaSA) debugMeta minimize
+ with ({inc = {cost = cost}} & searchState, _) then
+   utest leqi cost 800 with true in
+
+   use _testTspTabuSearch in
+
+   match loop (nIters 100) (searchState, metaTabu) debugMeta minimize
+   with ({inc = {cost = cost}}, metaState) then
+     utest cost with 251 in ()
+    else never
  else never);
 
 ()
