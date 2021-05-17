@@ -77,7 +77,7 @@ let filenameWithoutExtension = lam filename.
 let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
   -- Translate the MExpr AST into an OCaml AST
-  match typeList ast with (env, ast) then
+  match typeLift mexprAst with (env, ast) then
     match generateTypeDecl env ast with (env, ast) then
       match chooseAndGenerateExternals globalExternalMap ast
       with (extNameMap, ast) then
@@ -137,7 +137,7 @@ let compile = lam files. lam options : Options. lam args.
       let ast = typeAnnot ast in
 
       -- Compile MExpr AST
-      ocamlCompileAst options libs file ast
+      ocamlCompileAst options file ast
     else never
   in
   iter compileFile files

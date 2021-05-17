@@ -9,10 +9,23 @@ type CommandLineArgs = [String]
 type InputData = (CommandLineArgs, Stdin)
 type Runner = InputData -> ExecResult
 
+type SearchMethod
+con SimulatedAnnealing : Unit -> SearchMethod
+con TabuSearch         : Unit -> SearchMethod
+con RandomWalk         : Unit -> SearchMethod
+
+type TuneOptions =
+{ iters : Int
+, method : SearchMethod
+}
+
 let _bool2string = lam b.
   if b then "true" else "false"
 
 let _dataEmpty = [([""], "")]
+
+-- Turn on/off debug prints
+let _debug = true
 
 -- Add assignments of decision points to argument vector
 let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
@@ -24,8 +37,8 @@ let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   ) vals in
   concat args (mapValues stringVals)
 
-lang TuneHoles = HoleAst + FlattenHoles
-  sem tune (run : Runner) (data : [InputData]) =
+lang TuneBase = HoleAst + FlattenHoles
+  sem tune (run : Runner) (data : [InputData]) (options : TuneOptions) =
   -- Intentionally left blank
 
   sem time (vals : LookupTable) (runner : Runner) =
@@ -53,75 +66,93 @@ end
 --------------------------
 
 ---- Settings for local search ----
----- TODO Some of these settings should be input to the framework
 let _expr2str = use MExprAst in lam expr.
   match expr with TmConst {val = CBool {val = b}} then
     _bool2string b
   else dprintLn expr; error "Expr type not supported yet"
 
-let _nbrIterations = 10
-let _localSearchSettings = {
-  printIter = lam st : SearchState v c.
-    let st : SearchState v c = st in
-    let inc : Solution v c = st.inc in
-    let values = map _expr2str (mapValues inc.0) in
-    dprintLn values;
-    print (join  ["Iter: ", int2string st.iter, "\n",
-                  "Best cost: ", float2string inc.1, "\n",
-                  "Best solution: ", strJoin ", " values, "\n"]),
-  terminate = (lam st : SearchState v c.
-    geqi st.iter _nbrIterations)
-}
+lang TuneLocalSearch = TuneBase + LocalSearchBase
+  syn Assignment =
+  | Table {table : LookupTable}
 
-lang LocalSearch = TuneHoles
-  sem tune (runner : Runner) (data : [InputData]) =
+  syn Cost =
+  | Runtime {time : Float}
+
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState with {cur = {assignment = Table {table = table}}} then
+      -- TODO: assumes Boolean decision points
+      let randTable = mapMapWithKey (lam. lam v.
+        if eqi 0 (randIntU 0 2) then false_ else true_) table in
+      [Table {table = randTable}]
+    else never
+
+  sem compare =
+  | (Runtime {time = t1}, Runtime {time = t2}) ->
+    roundfi (mulf 1000.0 (subf t1 t2))
+
+  sem initMeta =
+
+  sem debugSearch =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {iter = iter, inc = {assignment = Table {table = table},
+                              cost = Runtime {time = time}}}
+    then
+      let values = map _expr2str (mapValues table) in
+      printLn (join ["Iter: ", int2string iter, "\n",
+                     "Best time: ", float2string time, "\n",
+                     "Best table: ", strJoin ", " values])
+
+    else never
+
+  sem tune (runner : Runner) (data : [InputData]) (options : TuneOptions) =
   | table ->
     let data = match data with [] then _dataEmpty else data in
-    -- Set up initial search state
-    let initSol = table in
-    -- cost function = sum of execution times for all inputs
-    let costF = lam lookup : LookupTable.
-      foldr1 addf (map (time lookup runner) data) in
-    -- comparison function: distinguish runtimes on the level of microseconds
-    let cmp = lam r1. lam r2.
-      roundfi (mulf 1000.0 (subf r1 r2)) in
-    let startState = initSearchState (initSol, costF initSol) cmp in
+    -- cost function = sum of execution times over all inputs
+    let costF = lam lookup : Assignment.
+      match lookup with Table {table = table} then
+        Runtime {time = foldr1 addf (map (time table runner) data)}
+      else never in
 
-    -- Set up meta heuristic
-    let meta = metaHeur costF in
+    -- Set up initial search state
+    let startState = initSearchState costF (Table {table = table}) in
+
+    -- When to stop the search
+    let stop = lam state : SearchState.
+      or state.stuck (geqi state.iter options.iters) in
+
+    recursive let search =
+      lam stop.
+      lam searchState.
+      lam metaState.
+        debugSearch searchState;
+        if stop searchState then
+          (searchState, metaState)
+        else
+          match minimize searchState metaState with (searchState, metaState)
+          then
+            search stop searchState metaState
+          else never
+    in
 
     -- Do the search!
-    _localSearchSettings.printIter startState;
-    minimize
-      _localSearchSettings.terminate
-      _localSearchSettings.printIter
-      startState
-      meta
-
---sem metaHeur (startSol : Solution v Float) =
-  sem metaHeur =
-  -- Intentionally left blank
-
+    search stop startState (initMeta ())
 end
 
-lang RandomWalk = LocalSearch
-  sem metaHeur =
-  | costFun ->
-    let neighbours : NeighbourhoodFun v c = lam searchState : SearchState v c.
-      match searchState with {cur = cur} then
-        -- TODO: assumes Boolean decision points
-        let randTable = mapMapWithKey (lam. lam v.
-          if eqi 0 (randIntU 0 2) then false_ else true_) cur.0 in
-        [randTable]
-      else never
-    in
-    let selectFun : SelectFun = lam assignments. lam searchState.
-      let newTable = get assignments 0 in
-      let cost = costFun newTable in
-      Some (newTable, cost)
-    in
-    (Base {}, stepBase neighbours selectFun)
-end
+lang RandomWalk = TuneLocalSearch
+                + LocalSearchSelectRandomUniform
+  syn MetaState =
+  | Empty {}
 
+  sem step (searchState : SearchState) =
+  | Empty {} ->
+    (select (neighbourhood searchState) searchState, Empty {})
+
+  sem initMeta =
+  | () -> Empty {}
+end
 
 lang MExprTune = RandomWalk

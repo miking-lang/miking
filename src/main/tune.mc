@@ -13,7 +13,9 @@ lang MCoreTune =
   BootParser +  MExprHoles + MExprTune
 end
 
-let getInput : String -> Option String = lam s.
+let tuneOptions = {iters = 10, method = RandomWalk {}}
+
+let getInput : String -> String = lam s.
   let prefix = "--input=" in
   if isPrefix eqc prefix s then
     subsequence s (length prefix) (length s)
@@ -41,7 +43,6 @@ let tune = lam files. lam options : Options. lam args.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
     match flatten [] ast with (prog, table) then
-      printLn (expr2str prog);
       let binary = ocamlCompileAst options file prog in
       let run = lam data : ([String], String).
         match data with (args, stdin) then
@@ -49,7 +50,7 @@ let tune = lam files. lam options : Options. lam args.
           sysRunCommand (cons (join ["./", binary]) args) stdin "."
         else never
       in
-      tune run inputData table
+      tune run inputData tuneOptions table
     else never
   in
   iter tuneFile files

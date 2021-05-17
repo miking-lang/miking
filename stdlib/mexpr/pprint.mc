@@ -132,7 +132,7 @@ let pprintConString = lam str.
 
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
-let _record2tuple
+let record2tuple
   : Map SID a
   -> Option [a]
   = lam bindings.
@@ -141,13 +141,16 @@ let _record2tuple
     let intKeys = map string2int keys in
     let sortedKeys = sort subi intKeys in
     -- Check if keys are a sequence 0..(n-1)
-    match and (eqi 0 (head sortedKeys))
-              (eqi (subi (length intKeys) 1) (last sortedKeys)) with true then
-      Some (map (lam key. mapLookupOrElse
-                            (lam. error "Key not found")
-                            (stringToSid (int2string key)) bindings)
-                 sortedKeys)
-    else None ()
+    match sortedKeys with [] then None ()
+    else match sortedKeys with [h] ++ _ then
+      if and (eqi 0 h)
+             (eqi (subi (length intKeys) 1) (last sortedKeys)) then
+        Some (map (lam key. mapLookupOrElse
+                              (lam. error "Key not found")
+                              (stringToSid (int2string key)) bindings)
+                   sortedKeys)
+      else None ()
+    else never
 
 
 -----------
@@ -288,7 +291,7 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmRecord {bindings = bindings} ->
     if mapIsEmpty bindings then (env,"{}")
-    else match _record2tuple bindings with Some tms then
+    else match record2tuple bindings with Some tms then
       match mapAccumL (lam env. lam e. pprintCode indent env e) env tms
       with (env,tupleExprs) then
         let merged = match tupleExprs with [e] then
@@ -864,7 +867,7 @@ lang RecordPatPrettyPrint = RecordPat + IdentifierPrettyPrint
   sem getPatStringCode (indent : Int) (env: PprintEnv) =
   | PatRecord {bindings = bindings} ->
     if mapIsEmpty bindings then (env, "{}")
-    else match _record2tuple bindings with Some pats then
+    else match record2tuple bindings with Some pats then
       match mapAccumL (lam env. lam e. getPatStringCode indent env e) env pats
       with (env, tuplePats) then
         let merged =

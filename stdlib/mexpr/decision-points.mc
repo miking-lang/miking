@@ -659,7 +659,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | tm ->
     -- TODO: apply a convert function on each argument depending on the type of
     -- the hole
-    printLn "Before boot parsing";
     use BootParser in
     let impl = parseMExprString [] "
     let head = lam seq. get seq 0 in
@@ -911,7 +910,7 @@ map doCallGraphTests cgTests;
 -- Decision points tests --
 ---------------------------
 
-let debug = true in
+let debug = false in
 
 let debugPrint = lam ast. lam pub.
   if debug then

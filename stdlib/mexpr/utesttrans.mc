@@ -349,7 +349,7 @@ let _pprintRecord = use MExprAst in
       PatRecord {bindings = recordBindings, info = NoInfo ()}
     in
     let pprintSeq =
-      match _record2tuple fields with Some types then
+      match record2tuple fields with Some types then
         let tuplePprints = lam seq. lam id. lam fieldTy.
           let fieldPprintName = getPprintFuncName env fieldTy in
           let pprintApp = app_ (nvar_ fieldPprintName) (var_ (sidToString id)) in
