@@ -8,6 +8,7 @@ include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/cmp.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
@@ -21,9 +22,9 @@ type GenerateEnv = {
   aliases : Map Name Type
 }
 
-let _emptyGenerateEnv = {
+let _emptyGenerateEnv = use MExprCmp in {
   constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp _cmpType),
+  records = mapEmpty (mapCmp cmpType),
   aliases = mapEmpty nameCmp
 }
 
@@ -377,30 +378,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
-    let identStr = nameGetStr ident in
-    let impls = mapLookup identStr externalMap in
-    match impls with Some (![] & impls) then
-      let rs =
-        map
-          (lam impl: ExternalImpl.
-            externalMarshal (oext_ impl.extIdent) ty impl.extTy)
-          impls
-      in
-      -- NOTE(oerikss, 2021-04-27) Here we pick the implementation with the
-      -- lowest cost with respect to the type of the external directly. In the
-      -- future we would like to choose the implementation at each application
-      -- of the external.
-      let r : {cost : Int, tm : Expr} =
-        minOrElse
-          (lam. error "impossible")
-          (lam r1 : {cost : Int, tm : Expr}. lam r2 : {cost : Int, tm : Expr}.
-            subi r1.cost r2.cost)
-        rs
-      in
-      bind_ (nulet_ ident r.tm) (generate env inexpr)
-    else
-      error (join ["No implementation for external ", identStr])
+  | TmExt _ ->
+    error "externals expected to be generated in a previous step"
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -646,7 +625,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
       else (t, recordFieldsToName)
     else never
   in
-  let init = (t, mapEmpty (mapCmp _cmpType)) in
+  let init = use MExprCmp in (t, mapEmpty (mapCmp cmpType)) in
   assocSeqFold f init typeLiftEnv
 
 let _typeLiftEnvToGenerateEnv = use MExprAst in
@@ -962,12 +941,12 @@ lang OCamlObjWrap = MExprAst + OCamlAst
 
   sem objWrapRec (isApp : Bool) =
   | (TmConst {val = (CInt _) | (CFloat _) | (CChar _) | (CBool _)}) & t ->
-    _objRepr t
+    _objMagic t
   | TmConst {val = c} -> intrinsic2name c
   | TmApp t ->
     if _isIntrinsicApp (TmApp t) then
       TmApp {{t with lhs = objWrapRec true t.lhs}
-                with rhs = _objRepr (objWrapRec false t.rhs)}
+                with rhs = _objMagic (objWrapRec false t.rhs)}
     else
       TmApp {{t with lhs =
                   if isApp then
@@ -977,7 +956,7 @@ lang OCamlObjWrap = MExprAst + OCamlAst
                 with rhs = objWrapRec false t.rhs}
   | TmRecord t ->
     if mapIsEmpty t.bindings then
-      _objRepr (TmRecord t)
+      _objMagic (TmRecord t)
     else
       let bindings = mapMap (lam expr. objWrapRec false expr) t.bindings in
       TmRecord {t with bindings = bindings}
@@ -988,15 +967,15 @@ lang OCamlObjWrap = MExprAst + OCamlAst
       then true else false
     ) tms in
     if isPrimitiveArray then
-      _objRepr t
+      _objMagic t
     else
-      _objRepr (smap_Expr_Expr (objWrapRec false) t)
-  | (OTmConApp _) & t -> _objRepr (smap_Expr_Expr (objWrapRec false) t)
+      _objMagic (smap_Expr_Expr (objWrapRec false) t)
+  | (OTmConApp _) & t -> _objMagic (smap_Expr_Expr (objWrapRec false) t)
   | OTmMatch t ->
     _objObj
     (OTmMatch {{t with target = _objMagic (objWrapRec false t.target)}
                   with arms = map (lam p : (Pat, Expr).
-                                    (p.0, _objRepr (objWrapRec false p.1)))
+                                    (p.0, _objMagic (objWrapRec false p.1)))
                                   t.arms})
   | t -> smap_Expr_Expr (objWrapRec false) t
 
@@ -1008,7 +987,7 @@ end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
                  MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
-                 MExprTypeAnnot + OCamlObjWrap
+                 MExprTypeAnnot + OCamlObjWrap + OCamlGenerateExternalNaive
 
 mexpr
 
@@ -2490,12 +2469,19 @@ utest ocamlEvalChar (generateEmptyEnv tensorIteriCharTest)
 with char_ '1' using eqExpr in
 
 -- Externals
+
+let generateWithExternals = lam ast.
+  match chooseAndGenerateExternals globalExternalMap ast with (m, ast) then
+    generateEmptyEnv ast
+  else never
+in
+
 let extZeroTest =
   bind_
     (ext_ "testZero" false tyfloat_)
     (var_ "testZero")
 in
-utest ocamlEvalFloat (generateEmptyEnv extZeroTest)
+utest ocamlEvalFloat (generateWithExternals extZeroTest)
 with float_ 0. using eqExpr in
 
 let extExpTest =
@@ -2503,7 +2489,7 @@ let extExpTest =
     (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
     (app_ (var_ "testExp") (float_ 0.))
 in
-utest ocamlEvalFloat (generateEmptyEnv extExpTest)
+utest ocamlEvalFloat (generateWithExternals extExpTest)
 with float_ 1. using eqExpr in
 
 let extListMapTest = symbolize (
@@ -2520,7 +2506,7 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-utest ocamlEvalInt (generateEmptyEnv extListMapTest)
+utest ocamlEvalInt (generateWithExternals extListMapTest)
 with int_ 1 using eqExpr in
 
 let extListConcatMapTest = symbolize (
@@ -2537,7 +2523,7 @@ bind_
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
-utest ocamlEvalInt (generateEmptyEnv extListConcatMapTest)
+utest ocamlEvalInt (generateWithExternals extListConcatMapTest)
 with int_ 1 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics

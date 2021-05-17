@@ -11,11 +11,13 @@ include "mexpr/utesttrans.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "ocaml/external-includes.mc"
 
 lang MCoreCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
+  OCamlGenerateExternalNaive + OCamlObjWrap
 end
 
 let pprintMcore = lam ast.
@@ -50,6 +52,17 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
+let collectLibraries = lam extNameMap : ExternalNameMap.
+  let f = lam libs. lam lib. setInsert lib libs in
+  let g =
+    lam libs. lam impl :  ExternalImpl. foldl f libs impl.libraries
+  in
+  let h = lam libs. lam. lam impls. foldl g libs impls in
+  let libs =
+    mapFoldWithKey h (setEmpty cmpString) extNameMap
+  in
+  setToSeq libs
+
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -64,34 +77,42 @@ let filenameWithoutExtension = lam filename.
 let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
   -- Translate the MExpr AST into an OCaml AST
-  let ocamlAst =
-    match typeLift mexprAst with (env, ast) then
-      match generateTypeDecl env ast with (env, ast) then
+  match typeList ast with (env, ast) then
+    match generateTypeDecl env ast with (env, ast) then
+      match chooseAndGenerateExternals globalExternalMap ast
+      with (extNameMap, ast) then
         let ast = generate env ast in
         let ast = objWrap ast in
-        _withPreamble ast
+        let ast = _withPreamble ast in
+
+        -- Collect external library dependencies
+        let libs = collectLibraries extNameMap in
+
+        let ocamlProg = pprintOcaml ast in
+
+        -- Print the AST after code generation
+        (if options.debugGenerate then printLn ocamlProg else ());
+
+        -- Compile OCaml AST
+        if options.exitBefore then exit 0
+        else
+          let compileOptions : CompileOptions =
+            {
+              (if options.disableOptimizations then
+                {defaultCompileOptions with optimize = false}
+               else defaultCompileOptions)
+               with libraries = libs
+            }
+          in
+          let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
+          let destinationFile = filenameWithoutExtension (filename sourcePath) in
+          sysMoveFile p.binaryPath destinationFile;
+          sysChmodWriteAccessFile destinationFile;
+          p.cleanup ();
+          destinationFile
       else never
     else never
-  in
-
-  let ocamlProg = pprintOcaml ocamlAst in
-
-  -- Print the AST after code generation
-  (if options.debugGenerate then printLn ocamlProg else ());
-
-  if options.exitBefore then exit 0 else
-  let compileOptions : CompileOptions =
-    if options.disableOptimizations then
-      {defaultCompileOptions with optimize = false}
-    else defaultCompileOptions
-  in
-  let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
-  let destinationFile = filenameWithoutExtension (filename sourcePath) in
-  sysMoveFile p.binaryPath destinationFile;
-  sysChmodWriteAccessFile destinationFile;
-  p.cleanup ();
-  destinationFile
-
+  else never
 
 
 -- Main function for compiling a program
@@ -116,7 +137,7 @@ let compile = lam files. lam options : Options. lam args.
       let ast = typeAnnot ast in
 
       -- Compile MExpr AST
-      ocamlCompileAst options file ast
+      ocamlCompileAst options libs file ast
     else never
   in
   iter compileFile files
