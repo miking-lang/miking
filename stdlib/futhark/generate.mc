@@ -5,6 +5,7 @@ include "pprint.mc"
 include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
@@ -30,7 +31,7 @@ let getDef = use FutharkAst in
     body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i)
   }
 
-lang FutharkConstGenerate = MExprAst + FutharkAst
+lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
   sem generateConst =
   | CInt n -> futInt_ n.val
   | CFloat f -> futFloat_ f.val
@@ -88,6 +89,13 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FELet {ident = t.ident, ty = generateType t.ty,
            body = generateExpr t.body,
            inexpr = generateExpr t.inexpr}
+  | TmParallelMap t -> futMap_ t.f t.as
+  | TmParallelReduce t -> futReduce_ t.f t.ne t.as
+  | TmParallelScan t -> futScan_ t.f t.ne t.as
+  | TmParallelFilter t -> futFilter_ t.p t.as
+  | TmParallelPartition t -> futPartition_ t.p t.as
+  | TmParallelAll t -> futAll_ t.p t.as
+  | TmParallelAny t -> futAny_ t.p t.as
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +

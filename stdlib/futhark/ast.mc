@@ -24,6 +24,12 @@ lang FutharkAst
   | FCXor ()
   | FCMap ()
   | FCMap2 ()
+  | FCReduce ()
+  | FCScan ()
+  | FCFilter ()
+  | FCPartition ()
+  | FCAll ()
+  | FCAny ()
 
   syn FutExpr =
   | FEVar { ident : Name }

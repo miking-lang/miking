@@ -88,6 +88,12 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCXor () -> "(^)"
   | FCMap () -> "map"
   | FCMap2 () -> "map2"
+  | FCReduce () -> "reduce"
+  | FCScan () -> "scan"
+  | FCFilter () -> "filter"
+  | FCPartition () -> "partition"
+  | FCAll () -> "all"
+  | FCAny () -> "any"
 end
 
 lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint

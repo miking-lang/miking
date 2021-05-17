@@ -140,9 +140,33 @@ let futDiv_ = use FutharkAst in
   futBinop_ (futConst_ (FCDiv ()))
 
 let futMap_ = use FutharkAst in
-  lam f. lam array.
-  futAppSeq_ (futConst_ (FCMap ())) [f, array]
+  lam f. lam as.
+  futAppSeq_ (futConst_ (FCMap ())) [f, as]
 
 let futMap2_ = use FutharkAst in
-  lam f. lam a1. lam a2.
-  futAppSeq_ (futConst_ (FCMap2 ())) [f, a1, a2]
+  lam f. lam as. lam bs.
+  futAppSeq_ (futConst_ (FCMap2 ())) [f, as, bs]
+
+let futReduce_ = use FutharkAst in
+  lam f. lam ne. lam as.
+  futAppSeq_ (futConst_ (FCReduce ())) [f, ne, as]
+
+let futScan_ = use FutharkAst in
+  lam f. lam ne. lam as.
+  futAppSeq_ (futConst_ (FCScan ())) [f, ne, as]
+
+let futFilter_ = use FutharkAst in
+  lam p. lam as.
+  futAppSeq_ (futConst_ (FCFilter ())) [p, as]
+
+let futPartition_ = use FutharkAst in
+  lam p. lam as.
+  futAppSeq_ (futConst_ (FCPartition ())) [p, as]
+
+let futAll_ = use FutharkAst in
+  lam p. lam as.
+  futAppSeq_ (futConst_ (FCAll ())) [p, as]
+
+let futAny_ = use FutharkAst in
+  lam p. lam as.
+  futAppSeq_ (futConst_ (FCAny ())) [p, as]
