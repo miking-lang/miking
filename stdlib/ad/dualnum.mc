@@ -122,8 +122,8 @@ utest dualnumPrimalDeep dnum134 with num3 in
 utest dualnumPrimalDeep (dnum1 dnum036 dnum048) with num3 in
 
 -- dualnum2string
-utest dualnum2string num0 with "0.0" in
-utest dualnum2string dnum134 with "3.0e+0" in
-utest dualnum2string (dnum1 dnum036 dnum048) with "3.0e+0" in
+utest dualnum2string num0 with "0." in
+utest dualnum2string dnum134 with "3." in
+utest dualnum2string (dnum1 dnum036 dnum048) with "3." in
 
 ()

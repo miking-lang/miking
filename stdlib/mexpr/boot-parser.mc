@@ -43,7 +43,7 @@ lang BootParser = MExprAst + ConstTransformer
     constTransform (matchTerm t (bootParserGetId t))
 
   -- Get term help function
-  sem gterm (t:Unkown) =
+  sem gterm (t:Unknown) =
   | n -> let t2 = bootParserGetTerm t n in
          matchTerm t2 (bootParserGetId t2)
 
@@ -192,7 +192,7 @@ lang BootParser = MExprAst + ConstTransformer
               ty = gtype t 0}
 
   -- Get constant help function
-  sem gconst(t:Unkown) =
+  sem gconst(t:Unknown) =
   | n -> let t2 = bootParserGetConst t n in
          matchConst t2 (bootParserGetId t2)
 
@@ -353,7 +353,7 @@ let s = "false" in
 utest lsideClosed s with rside s in
 let s = "123" in
 utest lsideClosed s with rside s in
-let s = "1.70e+1" in
+let s = "17." in
 utest lsideClosed s with rside s in
 let s = "'a'" in
 utest lsideClosed s with rside s in

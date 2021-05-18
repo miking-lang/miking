@@ -11,11 +11,13 @@ include "mexpr/utesttrans.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "ocaml/external-includes.mc"
 
 lang MCoreCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
+  OCamlGenerateExternalNaive
 end
 
 let pprintMcore = lam ast.
@@ -36,6 +38,17 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
+let collectLibraries = lam extNameMap : ExternalNameMap.
+  let f = lam libs. lam lib. setInsert lib libs in
+  let g =
+    lam libs. lam impl :  ExternalImpl. foldl f libs impl.libraries
+  in
+  let h = lam libs. lam. lam impls. foldl g libs impls in
+  let libs =
+    mapFoldWithKey h (setEmpty cmpString) extNameMap
+  in
+  setToSeq libs
+
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
   match strLastIndex '/' path with Some idx then
@@ -47,11 +60,16 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
+let ocamlCompile =
+  lam options : Options. lam libs. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
-    if options.disableOptimizations then
-      {defaultCompileOptions with optimize = false}
-    else defaultCompileOptions
+    {
+      (if options.disableOptimizations then
+        {defaultCompileOptions with optimize = false}
+       else defaultCompileOptions)
+
+       with libraries = libs
+    }
   in
   let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
@@ -79,23 +97,28 @@ let compile = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
       let ast = typeAnnot ast in
 
-      -- Translate the MExpr AST into an OCaml AST
-      let ocamlAst =
-        match typeLift ast with (env, ast) then
-          match generateTypeDecl env ast with (env, ast) then
-            generate env ast
+      -- Translate the MExpr AST into an OCaml AST and Compile
+      match typeLift ast with (env, ast) then
+        match generateTypeDecl env ast with (env, ast) then
+          match chooseAndGenerateExternals globalExternalMap ast
+          with (extNameMap, ast) then
+            let ast = generate env ast in
+
+            -- Collect external library dependencies
+            let libs = collectLibraries extNameMap in
+
+            let ocamlProg = pprintOcaml ast in
+
+            -- Print the AST after code generation
+            (if options.debugGenerate then printLn ocamlProg else ());
+
+            -- Compile OCaml AST
+            if options.exitBefore then exit 0
+            else ocamlCompile options libs file ocamlProg
+
           else never
         else never
-      in
-
-      let ocamlProg = pprintOcaml ocamlAst in
-
-      -- Print the AST after code generation
-      (if options.debugGenerate then printLn ocamlProg else ());
-
-      -- Compile OCaml AST
-      if options.exitBefore then exit 0
-      else ocamlCompile options file ocamlProg
+      else never
     else never
   in
   iter compileFile files

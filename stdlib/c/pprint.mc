@@ -526,7 +526,7 @@ let defstmt = CSDef {
   init = Some (CIExpr { expr = CEFloat { f = 0.1 }} )
 } in
 utest print (wrapStmt defstmt) with
-  wrapStmtString "double x = 1.0e-1;"
+  wrapStmtString "double x = 0.1;"
 using eqString in
 
 let var = CSExpr { expr = CEVar { id = xname } } in
@@ -796,7 +796,7 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "struct structty {int x; double y;};",
   "int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};",
   "char (*fun(int main1, char arg2))(int, double) {",
-  "  double x = 1.0e-1;",
+  "  double x = 0.1;",
   "  char strinit[] = \"strinit\";",
   "  struct structty s;",
   "  union unionty {int x; double y;};",

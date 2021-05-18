@@ -4,7 +4,7 @@ compile_files += test/mexpr/letlamif.mc
 compile_files += test/mexpr/fix.mc
 compile_files += test/mexpr/ident-test.mc
 compile_files += test/mexpr/map.mc
-#compile_files += test/mexpr/tensor.mc
+compile_files += test/mexpr/tensor.mc
 compile_files += test/mexpr/match.mc
 compile_files += test/mexpr/reclets.mc
 compile_files += test/mexpr/comments.mc
@@ -40,6 +40,7 @@ compile_files += test/mlang/also_includes_lib.mc
 #compile_files += test/mlang/nestedpatterns.mc
 compile_files += stdlib/mexpr/boot-parser.mc
 compile_files += stdlib/mexpr/type-lift.mc
+compile_files += stdlib/mexpr/cmp.mc
 compile_files += stdlib/mexpr/ast.mc
 compile_files += stdlib/mexpr/pprint.mc
 compile_files += stdlib/mexpr/parser.mc
@@ -140,4 +141,3 @@ ${compile_files}::
 
 ${compile_files}::
 	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"
-
