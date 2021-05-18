@@ -35,14 +35,13 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
   lam env. lam t. lam ty1. lam ty2.
   recursive let recur = lam t. lam ty1. lam ty2.
     let tt = (ty1, ty2) in
-    match tt with (TyVar _, _) | (_, TyVar _) | (TyApp _, _) | (_, TyApp _)
+    match tt with
+      (TyVar _, _) | (_, TyVar _) |
+      (TyApp {lhs = TyVar _}, _) | (_, TyApp {lhs = TyVar _}) |
+      (TyInt _, TyInt _) | (TyFloat _, TyFloat _) |
+      (TySeq _, TySeq _) |
+      (OTyList _, OTyList _)
     then
-      (0, t)
-    else match tt with (TyInt _, TyInt _) | (TyFloat _, TyFloat _) then
-      (0, t)
-    else match tt with (TySeq _, TySeq _) then
-      (0, t)
-    else match tt with (OTyList _, OTyList _) then
       (0, t)
     else match tt with (TySeq _, OTyList _) then
       (5, app_ (intrinsicOpSeq "Helpers.to_list") t)
