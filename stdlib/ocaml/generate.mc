@@ -1427,8 +1427,8 @@ let matchNestedCon5 = symbolize (
 utest stripTypeDecls matchNestedCon5 with generateTypeAnnotated matchNestedCon5
 using sameSemantics in
 
-let r = record_ [
-  ("a", record_ [
+let r = urecord_ [
+  ("a", urecord_ [
     ("x", int_ 4),
     ("y", true_),
     ("z", seq_ [int_ 1, int_ 2, int_ 3])
@@ -1506,8 +1506,8 @@ let conMatch = lam m.
     ntype_ tree tyunknown_,
     ncondef_ branch (tyarrow_ tyBranch tyTree),
     ncondef_ leaf (tyarrow_ tyint_ tyTree),
-    ulet_ "x" (nconapp_ branch (record_ [
-      ("lhs", nconapp_ branch (record_ [
+    ulet_ "x" (nconapp_ branch (urecord_ [
+      ("lhs", nconapp_ branch (urecord_ [
         ("lhs", nconapp_ leaf (int_ 1)),
         ("rhs", nconapp_ leaf (int_ 3))
       ])),
@@ -1558,7 +1558,7 @@ utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
 using sameSemantics in
 
 let recordUpdate1 = symbolize (
-  match_ (recordupdate_ (record_ [("a", int_ 0)]) "a" (int_ 1))
+  match_ (recordupdate_ (urecord_ [("a", int_ 0)]) "a" (int_ 1))
     (prec_ [("a", pvar_ "a")])
       (var_ "a")
       (int_ 0)) in
@@ -1567,7 +1567,7 @@ using sameSemantics in
 
 let recordUpdate2 = symbolize (
   bindall_ [
-    ulet_ "r" (record_ [
+    ulet_ "r" (urecord_ [
       ("a", int_ 2), ("b", true_), ("c", float_ 3.14)
     ]),
     ulet_ "r" (recordupdate_ (var_ "r") "c" (float_ 2.0)),
@@ -1582,7 +1582,7 @@ using sameSemantics in
 
 let recordWithLet = symbolize (
   bindall_
-  [ ulet_ "r" (record_ [
+  [ ulet_ "r" (urecord_ [
      ("f", bind_ (ulet_ "x" (int_ 3)) (addi_ (var_ "x") (int_ 1))),
      ("g", ulam_ "x" (var_ "x"))])
   , int_ 42
@@ -1592,7 +1592,7 @@ using sameSemantics in
 
 let recordWithLam = symbolize (
   bindall_
-  [ ulet_ "r" (record_ [
+  [ ulet_ "r" (urecord_ [
      ("foo", ulam_ "x" (var_ "x"))])
   , ulet_ "foo" (recordproj_ "foo" (var_ "r"))
   , app_ (var_ "foo") (int_ 42)
@@ -1830,12 +1830,12 @@ utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 1))) with char
 utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 2))) with char_ 'r' using eqExpr in
 
 -- eqsym
-let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
+let eqsymTest = (bind_ (ulet_ "s" (gensym_ uunit_)) (eqsym_ (var_ "s") (var_ "s"))) in
 utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
 
 -- sym2hash
 let sym2hashTest = symbolize (bindall_
-        [ ulet_ "x" (gensym_ unit_)
+        [ ulet_ "x" (gensym_ uunit_)
         , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
 
 -- Float-Integer conversions
@@ -1887,7 +1887,7 @@ utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
 using sameSemantics in
 
 -- Time operations
-let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ unit_), divf_ (var_ "x") (var_ "x")] in
+let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ uunit_), divf_ (var_ "x") (var_ "x")] in
 utest ocamlEvalFloat (generateEmptyEnv testWallTimeMs) with float_ 1.0 using eqExpr in
 
 let testSleepMs = symbolize (bind_ (sleepMs_ (int_ 10)) (int_ 5)) in
@@ -2425,7 +2425,7 @@ let tensorIteriIntTest =
   bind_
     (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
     (semi_ (tensorIteri_ tyint_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tyint_
                           (var_ "t")
@@ -2438,7 +2438,7 @@ let tensorIteriFloatTest =
   bind_
     (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
     (semi_ (tensorIteri_ tyfloat_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tyfloat_
                           (var_ "t")
@@ -2451,7 +2451,7 @@ let tensorIteriCharTest =
   bind_
     (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1'))))
     (semi_ (tensorIteri_ tychar_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tychar_
                           (var_ "t")
@@ -2463,9 +2463,16 @@ with char_ '1' using eqExpr in
 -- Externals
 
 let generateWithExternals = lam ast.
-  let env = chooseExternalImpls (externalInitialEnv (mapEmpty nameCmp)) ast in
-  let ast = generateExternals env ast in
-  generateEmptyEnv ast
+  match typeLift ast with (env, ast) then
+    match generateTypeDecl env ast with (env, ast) then
+      let env =
+        let env : GenerateEnv = env in
+        chooseExternalImpls (externalInitialEnv env.aliases env.constrs) ast
+      in
+      let ast = generateExternals env ast in
+      generateEmptyEnv ast
+    else never
+  else never
 in
 
 let extZeroTest =
@@ -2566,6 +2573,33 @@ bind_
 in
 utest ocamlEvalInt (generateWithExternals extGenarrFloatSliceLeft)
 with int_ 0 using eqExpr in
+
+let extIdArrayIntTest =
+  bind_
+    (ext_ "testIdArrayInt" false (tyarrow_ (tyseq_ tyint_) (tyseq_ tyint_)))
+    (get_ (app_ (var_ "testIdArrayInt") (seq_ [int_ 0])) (int_ 0))
+in
+utest ocamlEvalInt (generateWithExternals extIdArrayIntTest)
+with int_ 0 using eqExpr in
+
+let extIdUnitTest =
+  bind_
+    (ext_ "testIdUnit" false (tyarrow_ tyunit_ tyunit_))
+    (semi_ (app_ (var_ "testIdUnit") uunit_)
+           (int_ 0))
+in
+utest ocamlEvalInt (generateWithExternals extIdUnitTest)
+with int_ 0 using eqExpr in
+
+-- let extIdTupleIntTest =
+--   bind_
+--     (ext_ "testIdTupleInt" false (tyarrow_ (tytuple_ [tyint_, tyint_])
+--                                            (tytuple_ [tyint_, tyint_])))
+--     (tupleproj_ 0 (app_ (var_ "testIdTupleInt")
+--                         (utuple_ [int_ 0, int_ 1])))
+-- in
+-- utest ocamlEvalInt (generateWithExternals extIdTupleIntTest)
+-- with int_ 0 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 ()

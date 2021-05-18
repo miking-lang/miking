@@ -50,16 +50,27 @@ end
 lang OCamlTuple
   syn Expr =
   | OTmTuple { values : [Expr] }
+  | OTmTupleProj { tm : Expr, index : Int }
 
   syn Pat =
   | OPatTuple { pats : [Pat] }
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmTuple t -> OTmTuple {t with values = map f t.values}
+  | OTmTupleProj t -> OTmTupleProj { t with tm = map f t.tm }
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | OTmTuple t -> foldl f acc t.values
+  | OTmTupleProj t -> f acc t.tm
 end
+
+let otuple_ = use OCamlTuple in
+  lam values. OTmTuple { values = values }
+
+let ounit_ = otuple_ []
+
+let otupleproj_ = use OCamlTuple in
+  lam t. lam i. OTmTupleProj { tm = t, index = i }
 
 lang OCamlData
   syn Expr =
@@ -170,6 +181,8 @@ let otygenarrayclayoutfloat_ = use OCamlTypeAst in
 
 let otytuple_ = use OCamlTypeAst in
   lam tys. OTyTuple {info = NoInfo (), tys = tys}
+
+let otyunit_ = otytuple_ []
 
 lang OCamlAst =
   -- Terms

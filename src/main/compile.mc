@@ -118,8 +118,9 @@ let compile = lam files. lam options : Options. lam args.
       match typeLift ast with (env, ast) then
         match generateTypeDecl env ast with (env, ast) then
           let env : GenerateEnv = env in
-          let extEnv : ExternalGenerateEnv =
-            chooseExternalImpls (externalInitialEnv env.aliases) ast
+          let extEnv : ExternalEnv =
+            let env = externalInitialEnv env.aliases env.constrs in
+            chooseExternalImpls env ast
           in
           let ast = generateExternals extEnv ast in
           let ast = generate env ast in

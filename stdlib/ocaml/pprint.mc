@@ -141,6 +141,7 @@ lang OCamlPrettyPrint =
   | OTmArray _ -> true
   | OTmMatch _ -> false
   | OTmTuple _ -> true
+  | OTmTupleProj _ -> false
   | OTmConApp {args = []} -> true
   | OTmConApp _ -> false
   | OTmVariantTypeDecl _ -> false
@@ -325,6 +326,10 @@ lang OCamlPrettyPrint =
     with (env, values) then
       (env, join ["(", strJoin ", " values, ")"])
     else never
+  | OTmTupleProj {tm = tm, index = index} ->
+    match pprintCode indent env tm with (env, tm) then
+      (env, join [tm, ".", int2string index])
+    else never
   | OTmMatch {
     target = target,
     arms
@@ -425,7 +430,7 @@ lang TestLang = OCamlPrettyPrint + OCamlSym
 mexpr
 use TestLang in
 
-let debugPrint = false in
+let debugPrint = true in
 
 let pprintProg = lam ast.
   if debugPrint then
@@ -546,6 +551,10 @@ let testTuple =
   , arms = [(OPatTuple {pats = [pvar_ "a", pvar_ "b"]}, OTmTuple {values = [var_ "b", var_ "a"]})]}
 in
 
+let testTupleProj =
+  OTmTupleProj { tm = OTmTuple {values = [true_, false_]} , index = 1}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -574,7 +583,8 @@ let asts = [
   testIf,
   testIfNested,
   testPatLet,
-  testTuple
+  testTuple,
+  testTupleProj
 ] in
 
 map pprintProg asts;

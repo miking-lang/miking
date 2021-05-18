@@ -59,6 +59,19 @@ let _testExternals =
                         otyarray_ tyint_,
                         otygenarrayclayoutfloat_],
         libraries = [] }
+    ]),
+    ("testIdUnit", [
+      { ident = "Fun.id", ty = tyarrow_ otyunit_ otyunit_, libraries = [] }
+    ]),
+    ("testIdArrayInt", [
+      { ident = "Fun.id",
+        ty = tyarrow_ (otyarray_ tyint_) (otyarray_ tyint_),
+        libraries = [] }
+    ]),
+    ("testIdTupleInt", [
+      { ident = "Fun.id",
+        ty = tyarrow_ (otytuple_ [tyint_, tyint_]) (otytuple_ [tyint_, tyint_]),
+        libraries = [] }
     ])
   ]
 
