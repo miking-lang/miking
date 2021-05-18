@@ -36,8 +36,7 @@ boot:
 build/mi:
 	@./make
 
-test:
-	@./make test
+test: test-boot-base
 
 install:
 	@./make install
