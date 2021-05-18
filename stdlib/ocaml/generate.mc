@@ -694,7 +694,7 @@ end
 
 lang OCamlTest = OCamlGenerate + OCamlTypeDeclGenerate + OCamlPrettyPrint +
                  MExprSym + ConstEq + IntEq + BoolEq + CharEq + FloatEq +
-                 MExprTypeAnnot
+                 MExprTypeAnnot + OCamlGenerateExternalNaive
 
 mexpr
 
@@ -732,7 +732,7 @@ recursive let wrapOCamlAstInPrint = lam ast. lam printTerm.
   use OCamlAst in
   match ast with OTmVariantTypeDecl t then
     OTmVariantTypeDecl {t with inexpr = wrapOCamlAstInPrint t.inexpr printTerm}
-  else app_ printTerm ast
+  else app_ printTerm (_objMagic ast)
 in
 
 let printf = lam fmt.
