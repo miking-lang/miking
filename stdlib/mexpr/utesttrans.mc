@@ -405,7 +405,7 @@ let _equalRecord = use MExprAst in
     else appf2_ (var_ "all") (ulam_ "b" (var_ "b")) (seq_ equalFuncs)
   in
   lam_ "a" ty (lam_ "b" ty
-    (match_ (tuple_ [var_ "a", var_ "b"])
+    (match_ (utuple_ [var_ "a", var_ "b"])
       matchPattern
       allEqual
       never_))
@@ -434,7 +434,7 @@ let _equalVariant = lam env. lam ty. lam constrs.
       pcon_ (nameGetStr constrId) (npvar_ lhsId),
       pcon_ (nameGetStr constrId) (npvar_ rhsId)
     ] in
-    match_ (tuple_ [var_ "a", var_ "b"])
+    match_ (utuple_ [var_ "a", var_ "b"])
       constructorPattern
       (appf2_ (nvar_ equalFuncId) (nvar_ lhsId) (nvar_ rhsId))
       cont
@@ -541,7 +541,7 @@ let generateUtestFunctions =
   in
   match unzip (mapFoldWithKey f [] env.typeFunctions) with (pprints, equals) then
     if null pprints then
-      unit_
+      uunit_
     else
       bind_ (nreclets_ pprints) (nreclets_ equals)
   else never
@@ -551,7 +551,7 @@ let utestRunnerCall =
   lam eqFunc. lam l. lam r.
   appf6_
     (nvar_ (utestRunnerName ()))
-    (record_ [
+    (urecord_ [
       ("row", str_ info.row)])
     lPprintFunc
     rPprintFunc
@@ -712,22 +712,22 @@ let utestu_info_ =
           , info = default_info}
 in
 
-let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) unit_) in
+let intNoUsing = typeAnnot (utest_info_ (int_ 1) (int_ 0) uunit_) in
 -- eval {env = builtinEnv} (symbolize (utestGen intNoUsing));
-utest utestStrip intNoUsing with unit_ using eqExpr in
+utest utestStrip intNoUsing with uunit_ using eqExpr in
 
 let intWithUsing = typeAnnot (
-  utestu_info_ (int_ 1) (int_ 0) unit_ (uconst_ (CGeqi{}))) in
+  utestu_info_ (int_ 1) (int_ 0) uunit_ (uconst_ (CGeqi{}))) in
 -- eval {env = builtinEnv} (symbolize (utestGen intWithUsing));
-utest utestStrip intWithUsing with unit_ using eqExpr in
+utest utestStrip intWithUsing with uunit_ using eqExpr in
 
 let lhs = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
 let rhs = reverse_ (seq_ [
   reverse_ (seq_ [int_ 4, int_ 3]),
   reverse_ (seq_ [int_ 2, int_ 1])]) in
-let nestedSeqInt = typeAnnot (utest_info_ lhs rhs unit_) in
+let nestedSeqInt = typeAnnot (utest_info_ lhs rhs uunit_) in
 -- eval {env = builtinEnv} (symbolize (utestGen nestedSeqInt));
-utest utestStrip nestedSeqInt with unit_ using eqExpr in
+utest utestStrip nestedSeqInt with uunit_ using eqExpr in
 
 let lhs = seq_ [
   float_ 6.5, float_ 1.0, float_ 0.0, float_ 3.14
@@ -739,13 +739,13 @@ let elemEq = uconst_ (CEqf ()) in
 let seqEq =
   ulam_ "a"
     (ulam_ "b" (appf3_ (var_ "eqSeq") elemEq (var_ "a") (var_ "b"))) in
-let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs unit_ seqEq) in
+let floatSeqWithUsing = typeAnnot (utestu_info_ lhs rhs uunit_ seqEq) in
 -- eval {env = builtinEnv} (symbolize (utestGen floatSeqWithUsing));
-utest utestStrip floatSeqWithUsing with unit_ using eqExpr in
+utest utestStrip floatSeqWithUsing with uunit_ using eqExpr in
 
-let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') unit_) in
+let charNoUsing = typeAnnot (utest_info_ (char_ 'a') (char_ 'A') uunit_) in
 -- eval {env = builtinEnv} (symbolize (utestGen charNoUsing));
-utest utestStrip charNoUsing with unit_ using eqExpr in
+utest utestStrip charNoUsing with uunit_ using eqExpr in
 
 let charWithUsing = typeAnnot (bindall_ [
   ulet_ "leqChar" (ulam_ "c1" (ulam_ "c2" (
@@ -768,7 +768,7 @@ let charWithUsing = typeAnnot (bindall_ [
         (eqc_
           (app_ (var_ "char2lower") (var_ "a"))
           (app_ (var_ "char2lower") (var_ "b"))))),
-  utestu_info_ (char_ 'a') (char_ 'A') unit_ (var_ "charEqIgnoreCase")
+  utestu_info_ (char_ 'a') (char_ 'A') uunit_ (var_ "charEqIgnoreCase")
 ]) in
 -- eval {env = builtinEnv} (symbolize (utestGen charWithUsing));
 
@@ -777,25 +777,25 @@ let baseRecordFields = [
   ("b", true_),
   ("c", char_ 'x'),
   ("d", seq_ [int_ 1, int_ 2, int_ 4, int_ 8]),
-  ("e", record_ [
+  ("e", urecord_ [
     ("x", int_ 1),
     ("y", int_ 0)
   ])
 ] in
-let r = record_ baseRecordFields in
-let recordNoUsing = typeAnnot (utest_info_ r r unit_) in
+let r = urecord_ baseRecordFields in
+let recordNoUsing = typeAnnot (utest_info_ r r uunit_) in
 -- eval {env = builtinEnv} (symbolize (utestGen recordNoUsing));
-utest utestStrip recordNoUsing with unit_ using eqExpr in
+utest utestStrip recordNoUsing with uunit_ using eqExpr in
 
-let lhs = record_ (cons ("k", int_ 4) baseRecordFields) in
-let rhs = record_ (cons ("k", int_ 2) baseRecordFields) in
+let lhs = urecord_ (cons ("k", int_ 4) baseRecordFields) in
+let rhs = urecord_ (cons ("k", int_ 2) baseRecordFields) in
 let recordEq =
   ulam_ "r1" (ulam_ "r2" (
     eqi_ (recordproj_ "k" (var_ "r1")) (recordproj_ "k" (var_ "r2"))
   ))
 in
-let recordWithUsing = typeAnnot (utestu_info_ lhs rhs unit_ recordEq) in
+let recordWithUsing = typeAnnot (utestu_info_ lhs rhs uunit_ recordEq) in
 -- eval {env = builtinEnv} (symbolize (utestGen recordWithUsing));
-utest utestStrip recordWithUsing with unit_ using eqExpr in
+utest utestStrip recordWithUsing with uunit_ using eqExpr in
 
 ()

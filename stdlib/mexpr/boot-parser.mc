@@ -380,7 +380,7 @@ utest lsideClosed s with rside s in
 let s = "{a = 5}" in
 utest lsideClosed s with rside s in
 let s = "{bar = \"Hello\", foo = 123}" in
-let t = record_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
+let t = urecord_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
 utest parseMExprString [] s with t using eqExpr in
 utest l_infoClosed " {} " with r_info 1 1 1 3 in
 utest l_infoClosed " {foo = 123} " with r_info 1 1 1 12 in
@@ -389,7 +389,7 @@ utest l_infoClosed " {foo = 123} " with r_info 1 1 1 12 in
 let s = "{a with foo = 5}" in
 utest lside ["a"] s with rside s in
 let s = "{{bar='a', foo=7} with bar = 'b'}" in
-let t = recordupdate_ (record_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
+let t = recordupdate_ (urecord_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
 utest parseMExprString [] s with t using eqExpr in
 utest l_info ["foo"] " {foo with a = 18 } " with r_info 1 1 1 19 in
 

@@ -235,13 +235,16 @@ let bindall_ = use MExprAst in
   lam exprs.
   foldr1 bind_ exprs
 
-let unit_ = use MExprAst in
+let uunit_ = use MExprAst in
   TmRecord {bindings = mapEmpty cmpSID, ty = tyunknown_, info = NoInfo ()}
+
+let unit_ = use MExprAst in
+  TmRecord {bindings = mapEmpty cmpSID, ty = tyunit_, info = NoInfo ()}
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
   TmLet {ident = n, tyBody = ty, body = body,
-  inexpr = unit_, ty = tyunknown_, info = NoInfo ()}
+  inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
 
 let let_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -257,7 +260,7 @@ let ulet_ = use MExprAst in
 
 let next_ = use MExprAst in
   lam n. lam e. lam ty.
-  TmExt {ident = n, effect = e, ty = ty, inexpr = unit_, info = NoInfo ()}
+  TmExt {ident = n, effect = e, ty = ty, inexpr = uunit_, info = NoInfo ()}
 
 let ext_ = use MExprAst in
   lam s. lam e. lam ty.
@@ -265,7 +268,7 @@ let ext_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam ty.
-  TmType {ident = n, tyIdent = ty, ty = tyunknown_, inexpr = unit_, info = NoInfo ()}
+  TmType {ident = n, tyIdent = ty, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam ty.
@@ -282,7 +285,7 @@ let nreclets_ = use MExprAst in
     }
   in
   TmRecLets {bindings = map bindingMapFunc bs,
-             inexpr = unit_, ty = tyunknown_, info = NoInfo ()}
+             inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
   lam bs.
@@ -339,7 +342,7 @@ let ureclets_add = use MExprAst in
 let ncondef_ = use MExprAst in
   lam n. lam ty.
   TmConDef {ident = n, tyIdent = ty, ty = tyunknown_,
-            inexpr = unit_, info = NoInfo ()}
+            inexpr = uunit_, info = NoInfo ()}
 
 let condef_ = use MExprAst in
   lam s. lam ty.
@@ -419,17 +422,25 @@ let seq_ = use MExprAst in
 
 let record_ = use MExprAst in
   lam bindings.
+  lam ty.
   let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
     bindings = mapFromList cmpSID (map bindingMapFunc bindings),
-    ty = tyunknown_,
+    ty = ty,
     info = NoInfo ()
   }
 
-let tuple_ = use MExprAst in
-  lam tms.
-  record_ (mapi (lam i. lam t. (int2string i,t)) tms)
+let urecord_ = use MExprAst in
+  lam bindings. record_ bindings tyunknown_
 
+let tuple_ = use MExprAst in
+  lam tms. lam ty.
+  record_ (mapi (lam i. lam t. (int2string i,t)) tms) ty
+
+let utuple_ = use MExprAst in
+  lam tms. tuple_ tms tyunknown_
+
+let urecord_empty = uunit_
 let record_empty = unit_
 
 let record_add = use MExprAst in

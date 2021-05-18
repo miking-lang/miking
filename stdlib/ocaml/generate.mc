@@ -232,7 +232,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
         let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
           assocSeqFold
             (lam acc. lam pat. lam thn. match_ target pat thn acc)
-            (app_ (nvar_ defaultCaseName) unit_)
+            (app_ (nvar_ defaultCaseName) uunit_)
             patExpr
         in
         let f = lam arm : (Name, [(Pat, Expr)]).
@@ -258,7 +258,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             arms =
               snoc
                 (map f (mapBindings arms))
-                (pvarw_, (app_ (nvar_ defaultCaseName) unit_))
+                (pvarw_, (app_ (nvar_ defaultCaseName) uunit_))
           } in
           bind_ defaultCaseLet flattenedMatch
       else never

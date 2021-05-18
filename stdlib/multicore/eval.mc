@@ -68,7 +68,7 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   sem delta (arg : Expr) =
   | CThreadSpawn _ ->
     let app =
-      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
+      TmApp {lhs = arg, rhs = uunit_, info = NoInfo (), ty = tyunknown_}
     in
     TmConst {val = CThread {thread = threadSpawn (lam. eval {env = mapEmpty nameCmp} app)}
             , info = NoInfo ()
@@ -99,24 +99,24 @@ lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
     match arg with TmRecord {bindings = bindings} then
       if mapIsEmpty bindings then
         threadWait ();
-        unit_
+        uunit_
       else error err
     else error err
   | CThreadNotify _ ->
     match arg with TmConst ({val = CThreadID {id = id}} & t) then
       threadNotify id;
-      unit_
+      uunit_
     else error "Argument to threadNotify not a thread ID"
   | CThreadCriticalSection _ ->
     let app =
-      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
+      TmApp {lhs = arg, rhs = uunit_, info = NoInfo (), ty = tyunknown_}
     in threadCriticalSection (lam. eval {env = mapEmpty nameCmp} app)
   | CThreadCPURelax _ ->
     let err = "Argument to threadCPURelax is not unit" in
     match arg with TmRecord {bindings = bindings} then
       if mapIsEmpty bindings then
         threadCPURelax ();
-        unit_
+        uunit_
       else error err
     else error err
 end
@@ -180,9 +180,9 @@ with true_ in
 
 let waitForFlag = ureclet_ "waitForFlag" (ulam_ "flag"
   (if_ (atomicGet_ (var_ "flag"))
-       unit_
+       uunit_
        (bind_
-          (ulet_ "_" (threadCPURelax_ unit_))
+          (ulet_ "_" (threadCPURelax_ uunit_))
           (app_ (var_ "waitForFlag") (var_ "flag")))))
 in
 
@@ -193,7 +193,7 @@ utest eval (bindall_
       (ulam_ "_" (
         bindall_
           [ ulet_ "_" (atomicExchange_ (var_ "inCriticalSection") true_)
-          , ulet_ "_" (threadWait_ unit_)
+          , ulet_ "_" (threadWait_ uunit_)
           , ulet_ "_" (sleepMs_ (int_ 100))
           , ulet_ "_" (atomicExchange_ (var_ "afterWait") true_)
           , int_ 42

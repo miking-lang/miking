@@ -297,8 +297,8 @@ let _semanticAtom_ = nconapp_ _semanticAtomName
 let _semanticPrefix_ = nconapp_ _semanticPrefixName
 let _semanticInfix_ = nconapp_ _semanticInfixName
 let _semanticPostfix_ = nconapp_ _semanticPostfixName
-let _semanticDefaultIn_ = nconapp_ _semanticDefaultInName unit_
-let _semanticDefaultNotIn_ = nconapp_ _semanticDefaultNotInName unit_
+let _semanticDefaultIn_ = nconapp_ _semanticDefaultInName uunit_
+let _semanticDefaultNotIn_ = nconapp_ _semanticDefaultNotInName uunit_
 let _semanticInt_ = nvar_ _semanticIntName
 let _semanticFloat_ = nvar_ _semanticFloatName
 let _semanticOperator_ = nvar_ _semanticOperatorName
@@ -431,13 +431,13 @@ let generatorProd
       let stagedSpec =
         let stagedProdType =
           match prodType with GeneratorAtom {self = self} then
-            _semanticAtom_ (record_ [("self", _stageInclude self)])
+            _semanticAtom_ (urecord_ [("self", _stageInclude self)])
           else match prodType with GeneratorPrefix {self = self, right = right} then
-            _semanticPrefix_ (record_ [("self", _stageInclude self), ("right", _stageInclude right)])
+            _semanticPrefix_ (urecord_ [("self", _stageInclude self), ("right", _stageInclude right)])
           else match prodType with GeneratorInfix {self = self, left = left, right = right} then
-            _semanticInfix_ (record_ [("self", _stageInclude self), ("left", _stageInclude left), ("right", _stageInclude right)])
+            _semanticInfix_ (urecord_ [("self", _stageInclude self), ("left", _stageInclude left), ("right", _stageInclude right)])
           else match prodType with GeneratorPostfix {self = self, left = left} then
-            _semanticPostfix_ (record_ [("self", _stageInclude self), ("left", _stageInclude left)])
+            _semanticPostfix_ (urecord_ [("self", _stageInclude self), ("left", _stageInclude left)])
           else never in
         let stageField = lam sym.
           let simpleResult = lam field. lam conName.
@@ -476,19 +476,19 @@ let generatorProd
           let paramName = nameSym "syms" in
           nulam_ paramName
             (_nulet_ infoName (_symSeqInfo_ (nvar_ paramName))
-              (tuple_
+              (utuple_
                 [ nvar_ infoName
                 , match unzip (map stageField wrappedSyntax) with (pats, fields) then
                     match_ (nvar_ paramName) (pseqtot_ (mapOption identity pats))
                       (nconapp_ constructorName
-                        (record_
+                        (urecord_
                           (cons ("info", nvar_ infoName)
                             (mapOption identity fields))))
                       never_
                   else never
                 ]))
         in
-        record_
+        urecord_
           [ ("name", str_ constructorStr)
           , ("nt", var_ nonTerminal)
           , ("ptype", stagedProdType)
@@ -532,7 +532,7 @@ let generatorBracket
           let valName = nameSym "val" in
           nulam_ paramName
             (_nulet_ infoName (_symSeqInfo_ (nvar_ paramName))
-              (tuple_
+              (utuple_
                 [ nvar_ infoName
                 , match_ (get_ (nvar_ paramName) (int_ (length leftBracket)))
                   (npcon_ _ll1UserSymName (ptuple_ [pvarw_, npvar_ valName]))
@@ -540,10 +540,10 @@ let generatorBracket
                   never_
                 ]))
         in
-        record_
+        urecord_
           [ ("name", str_ (concat "grouping " nonTerminal))
           , ("nt", var_ nonTerminal)
-          , ("ptype", _semanticAtom_ (record_ [("self", _stageInclude (DefaultIn ()))]))
+          , ("ptype", _semanticAtom_ (urecord_ [("self", _stageInclude (DefaultIn ()))]))
           , ("rhs", seq_ (mapOption _stageSymbol allSymbols))
           , ("action", stagedAction)
           ]
@@ -599,19 +599,19 @@ let generatorGrammar
           let construct =
             match o with GeneratorLeftChild _ then _semanticLeftChild_ else _semanticRightChild_ in
           construct
-            (record_
+            (urecord_
               [ ("child", nvar_ (prodSymToName child.sym))
               , ("parent", nvar_ (prodSymToName parent.sym))
               ])
         else never in
       let stagePrecedence = lam prec.
         match prec with ((l, r), {mayGroupLeft = mayGroupLeft, mayGroupRight = mayGroupRight}) then
-          tuple_
-            [ tuple_
+          utuple_
+            [ utuple_
               [ nvar_ (prodSymToName l.sym)
               , nvar_ (prodSymToName r.sym)
               ]
-            , record_
+            , urecord_
               [ ("mayGroupLeft", bool_ mayGroupLeft)
               , ("mayGroupRight", bool_ mayGroupRight)
               ]
@@ -632,7 +632,7 @@ let generatorGrammar
           (name, nulet_ name (_semanticProduction_ prod.stagedSpec)))
         productions in
       match unzip productions with (prodNames, prodLets) then
-        let semanticGrammar = record_
+        let semanticGrammar = urecord_
           [ ("start", var_ start)
           , ("productions", seq_ (map nvar_ prodNames))
           , ("overrideAllow", seq_ (map stageOverride overrideAllow))
@@ -778,7 +778,7 @@ let unknownTyP = g.prod
 -- solve it later (more or less running symbolize before printing),
 -- but not at present.
 match unknownTyP with {constructor = Some {name = unknownTyConstructorName}} then
-let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (nconapp_ unknownTyConstructorName unit_) in
+let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (nconapp_ unknownTyConstructorName uunit_) in
 
 let varP = g.prod
   { constructorName = "TmVar"
