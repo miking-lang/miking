@@ -55,7 +55,7 @@ old:
 	@./make old
 
 test-all:\
-	test-boot-compile\
+  test-boot-compile\
   test-compile\
   test-run\
   test-boot
