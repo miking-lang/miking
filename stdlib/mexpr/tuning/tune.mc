@@ -1,31 +1,19 @@
-include "mexpr/decision-points.mc"
 include "ext/local-search.mc"
-include "common.mc"
 include "ocaml/sys.mc"
 include "map.mc"
+include "decision-points.mc"
+include "options.mc"
+include "common.mc"
 
-type Stdin = String
-type CommandLineArgs = [String]
-type InputData = (CommandLineArgs, Stdin)
-type Runner = InputData -> ExecResult
-
-type SearchMethod
-con SimulatedAnnealing : Unit -> SearchMethod
-con TabuSearch         : Unit -> SearchMethod
-con RandomWalk         : Unit -> SearchMethod
-
-type TuneOptions =
-{ iters : Int
-, method : SearchMethod
-}
+type Runner = String -> ExecResult
 
 let _bool2string = lam b.
   if b then "true" else "false"
 
-let _dataEmpty = [([""], "")]
-
 -- Turn on/off debug prints
 let _debug = true
+
+let _inputEmpty = [""]
 
 -- Add assignments of decision points to argument vector
 let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
@@ -38,14 +26,14 @@ let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   concat args (mapValues stringVals)
 
 lang TuneBase = HoleAst + FlattenHoles
-  sem tune (run : Runner) (data : [InputData]) (options : TuneOptions) =
+sem tune (run : Runner) (options : TuneOptions) =
   -- Intentionally left blank
 
   sem time (vals : LookupTable) (runner : Runner) =
-  | (args, stdin) ->
+  | args ->
     let allArgs = _addToArgs vals args in
     let t1 = wallTimeMs () in
-    let res : ExecResult = runner (allArgs, stdin) in
+    let res : ExecResult = runner allArgs in
     let t2 = wallTimeMs () in
     print "Result: "; dprintLn res;
     match res.returncode with 0 then
@@ -55,7 +43,6 @@ lang TuneBase = HoleAst + FlattenHoles
       [ "Program returned non-zero exit code during tuning\n"
       , "command line arguments:", strJoin " " args, "\n"
       , "all command line arguments:", strJoin " " allArgs, "\n"
-      , "stdin:", stdin, "\n"
       , "stdout:", res.stdout, "\n"
       , "stderr:", res.stderr, "\n"
       ] in error msg
@@ -108,13 +95,15 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     else never
 
-  sem tune (runner : Runner) (data : [InputData]) (options : TuneOptions) =
+  sem tune (runner : Runner) (options : TuneOptions) =
   | table ->
-    let data = match data with [] then _dataEmpty else data in
+    let input =
+      match options.input with [] then _inputEmpty else options.input in
     -- cost function = sum of execution times over all inputs
     let costF = lam lookup : Assignment.
       match lookup with Table {table = table} then
-        Runtime {time = foldr1 addf (map (time table runner) data)}
+        print "options: "; dprintLn options;
+        Runtime {time = foldr1 addf (map (time table runner) input)}
       else never in
 
     -- Set up initial search state
@@ -155,4 +144,16 @@ lang RandomWalk = TuneLocalSearch
   | () -> Empty {}
 end
 
-lang MExprTune = RandomWalk
+lang MExprTune = MExpr + TuneBase
+
+let tuneEntry = lam run : Runner. lam options : TuneOptions.
+  match options.method with RandomWalk {} then
+    use RandomWalk in
+    tune run options
+  -- else match options.maethod with SimulatedAnnealing {} then
+  --   use SimulatedAnnealing in
+  --   tune run options
+  -- else match options.method with TabuSearch {} then
+  --   use TabuSearch in
+  --   tune run options
+  else never

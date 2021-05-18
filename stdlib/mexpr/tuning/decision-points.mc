@@ -1,19 +1,18 @@
-include "mexpr.mc"
-include "pprint.mc"
+include "mexpr/mexpr.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
+include "mexpr/keyword-maker.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/utesttrans.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/anf.mc"
 include "digraph.mc"
 include "string.mc"
-include "ast-builder.mc"
 include "eq-paths.mc"
-include "anf.mc"
 include "name.mc"
 include "hashmap.mc"
 include "eqset.mc"
-include "eq.mc"
-include "keyword-maker.mc"
-include "boot-parser.mc"
 include "common.mc"
-include "utesttrans.mc"
-
 
 -- This file contains implementations related to decision points.
 
