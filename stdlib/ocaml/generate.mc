@@ -2280,15 +2280,5 @@ in
 utest ocamlEvalInt (generateWithExternals extIdUnitTest)
 with int_ 0 using eqExpr in
 
--- let extIdTupleIntTest =
---   bind_
---     (ext_ "testIdTupleInt" false (tyarrow_ (tytuple_ [tyint_, tyint_])
---                                            (tytuple_ [tyint_, tyint_])))
---     (tupleproj_ 0 (app_ (var_ "testIdTupleInt")
---                         (utuple_ [int_ 0, int_ 1])))
--- in
--- utest ocamlEvalInt (generateWithExternals extIdTupleIntTest)
--- with int_ 0 using eqExpr in
-
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 ()
