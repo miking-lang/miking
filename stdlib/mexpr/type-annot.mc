@@ -637,11 +637,11 @@ utest ty (typeAnnot letAscription) with tyint_ using eqTypeEmptyEnv in
 
 let recLets = typeAnnot (bindall_ [
   nreclets_ [
-    (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) unit_)),
-    (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) unit_)),
-    (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) unit_) (int_ 1)))
+    (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) uunit_)),
+    (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) uunit_)),
+    (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) uunit_) (int_ 1)))
   ],
-  unit_
+  uunit_
 ]) in
 utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
@@ -676,14 +676,14 @@ utest ty intMatrix with tyseq_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 let unknownSeq = typeAnnot (seq_ [nvar_ x, nvar_ y]) in
 utest ty unknownSeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
 
-let emptyRecord = typeAnnot unit_ in
+let emptyRecord = typeAnnot uunit_ in
 utest ty emptyRecord with tyunit_ using eqTypeEmptyEnv in
 
-let record = typeAnnot (record_ [
-  ("a", int_ 0), ("b", float_ 2.718), ("c", record_ []),
-  ("d", record_ [
+let record = typeAnnot (urecord_ [
+  ("a", int_ 0), ("b", float_ 2.718), ("c", urecord_ []),
+  ("d", urecord_ [
     ("e", seq_ [int_ 1, int_ 2]),
-    ("f", record_ [
+    ("f", urecord_ [
       ("x", nvar_ x), ("y", nvar_ y), ("z", nvar_ z)
     ])
   ])
@@ -701,7 +701,7 @@ utest ty record with expectedRecordType using eqTypeEmptyEnv in
 let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
 utest ty recordUpdate with expectedRecordType using eqTypeEmptyEnv in
 
-let typeDecl = bind_ (ntype_ n tyunknown_) unit_ in
+let typeDecl = bind_ (ntype_ n tyunknown_) uunit_ in
 utest ty (typeAnnot typeDecl) with tyunit_ using eqTypeEmptyEnv in
 
 let conApp = bindall_ [
@@ -760,9 +760,9 @@ let matchTree = bindall_ [
   type_ "Tree" tyunknown_,
   condef_ "Branch" (tyarrow_ (tytuple_ [tyvar_ "Tree", tyvar_ "Tree"]) (tyvar_ "Tree")),
   condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tyvar_ "Tree")),
-  ulet_ "t" (conapp_ "Branch" (tuple_ [
+  ulet_ "t" (conapp_ "Branch" (utuple_ [
     conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
-    conapp_ "Branch" (tuple_ [
+    conapp_ "Branch" (utuple_ [
       conapp_ "Leaf" (seq_ [int_ 2]),
       conapp_ "Leaf" (seq_ [])])])),
   (match_ (var_ "t")

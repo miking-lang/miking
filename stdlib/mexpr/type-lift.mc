@@ -371,8 +371,11 @@ end
 lang ExtTypeLift = TypeLift + ExtAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmExt t ->
-    match typeLiftExpr env t.inexpr with (env, inexpr) then
-      (env, TmExt {t with inexpr = inexpr})
+    match typeLiftType env t.ty with (env, ty) then
+      match typeLiftExpr env t.inexpr with (env, inexpr) then
+        (env, TmExt {{t with ty = ty}
+                        with inexpr = inexpr})
+      else never
     else never
 end
 
@@ -510,7 +513,7 @@ in
 
 let unitNotLifted = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (int_ 2),
-  unit_
+  uunit_
 ])) in
 (match typeLift unitNotLifted with (env, t) then
   utest env with [] using eqEnv in
@@ -539,14 +542,14 @@ let variant = typeAnnot (symbolize (bindall_ [
     ntyvar_ treeName,
     ntyvar_ treeName]) (ntyvar_ treeName)),
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
-  unit_
+  uunit_
 ])) in
 (match typeLift variant with (_, t) then
-  utest t with unit_ using eqExpr in
+  utest t with uunit_ using eqExpr in
   ()
 else never);
 
-let lastTerm = nconapp_ branchName (record_ [
+let lastTerm = nconapp_ branchName (urecord_ [
   ("lhs", nconapp_ leafName (int_ 1)),
   ("rhs", nconapp_ leafName (int_ 2))
 ]) in
@@ -575,15 +578,15 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
 else never);
 
 let nestedRecord = typeAnnot (symbolize (bindall_ [
-  ulet_ "r" (record_ [
-    ("a", record_ [
+  ulet_ "r" (urecord_ [
+    ("a", urecord_ [
       ("x", int_ 2),
       ("y", float_ 3.14),
-      ("z", unit_)
+      ("z", uunit_)
     ]),
     ("b", int_ 7)
   ]),
-  unit_
+  uunit_
 ])) in
 (match typeLift nestedRecord with (env, t) then
   let fstid = (get env 0).0 in
@@ -605,9 +608,9 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
 else never);
 
 let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (record_ [("a", int_ 2), ("b", true_)]),
-  unit_
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
+  uunit_
 ])) in
 (match typeLift recordsSameFieldsDifferentTypes with (env, t) then
   let fstid = (get env 0).0 in
@@ -622,9 +625,9 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
 else never);
 
 let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (record_ [("a", int_ 3), ("b", int_ 6)]),
-  unit_
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)]),
+  uunit_
 ])) in
 (match typeLift recordsSameFieldsSameTypes with (env, t) then
   let recid = (get env 0).0 in
@@ -636,7 +639,7 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ()
 else never);
 
-let record = typeAnnot (symbolize (record_ [
+let record = typeAnnot (symbolize (urecord_ [
   ("a", int_ 2),
   ("b", float_ 1.5)
 ])) in
@@ -650,7 +653,7 @@ let record = typeAnnot (symbolize (record_ [
 else never);
 
 let recordUpdate = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   recordupdate_ (var_ "x") "a" (int_ 2)
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
@@ -670,9 +673,9 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
     ("global", tyvar_ "GlobalEnv"),
     ("local", tyvar_ "LocalEnv")
   ]),
-  ulet_ "env" (record_ [
-    ("global", seq_ [tuple_ [str_ "x", int_ 4]]),
-    ("local", seq_ [tuple_ [str_ "a", int_ 0]])
+  ulet_ "env" (urecord_ [
+    ("global", seq_ [utuple_ [str_ "x", int_ 4]]),
+    ("local", seq_ [utuple_ [str_ "a", int_ 0]])
   ]),
   var_ "env"
 ])) in

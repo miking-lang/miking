@@ -990,10 +990,10 @@ utest testCompile typedefs with strJoin "\n" [
 ] using eqString in
 
 let leaf_ = lam v.
-  conapp_ "Leaf" (record_ [("v", int_ v)]) in
+  conapp_ "Leaf" (urecord_ [("v", int_ v)]) in
 
 let node_ = lam v. lam left. lam right.
-  conapp_ "Node" (record_ [("v", int_ v), ("l", left), ("r", right)]) in
+  conapp_ "Node" (urecord_ [("v", int_ v), ("l", left), ("r", right)]) in
 
 let trees = bindall_ [
 

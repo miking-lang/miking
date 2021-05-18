@@ -794,13 +794,13 @@
 -- -- TEMPORARY: Debug print to check why include order messes with the MLang
 -- --            uses, remove once fixed.
 -- --let _ = print "\n" in
--- --let _ = dprint (let_ "foo" (None ()) unit_) in
+-- --let _ = dprint (let_ "foo" (None ()) uunit_) in
 -- --let _ = print "\n\n" in
 -- --let _ = use MExprLLandPPandEval in
 -- --  dprint (TmLet {ident = "foo",
 -- --                 tpe = None (),
--- --                 body = unit_,
--- --                 inexpr = unit_})
+-- --                 body = uunit_,
+-- --                 inexpr = uunit_})
 -- --in
 -- --let _ = print "\n" in
 --
@@ -905,7 +905,7 @@
 --           )
 --         ),
 --         appf1_ (var_ "bar") (app_ (confun_ "MyCon")
---                                   (unit_))
+--                                   (uunit_))
 --       ]
 --     ),
 --     var_ "foo"
@@ -992,7 +992,7 @@
 --           )
 --         ),
 --         appf1_ (var_ "bar") (app_ (confun_ "MyCon")
---                                   (unit_))
+--                                   (uunit_))
 --       ]
 --     ),
 --     var_ "foo"
