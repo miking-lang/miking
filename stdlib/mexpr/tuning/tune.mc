@@ -26,7 +26,7 @@ let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   concat args (mapValues stringVals)
 
 lang TuneBase = HoleAst + FlattenHoles
-sem tune (run : Runner) (options : TuneOptions) =
+  sem tune (run : Runner) =
   -- Intentionally left blank
 
   sem time (vals : LookupTable) (runner : Runner) =
@@ -35,7 +35,7 @@ sem tune (run : Runner) (options : TuneOptions) =
     let t1 = wallTimeMs () in
     let res : ExecResult = runner allArgs in
     let t2 = wallTimeMs () in
-    print "Result: "; dprintLn res;
+    -- print "Result: "; dprintLn res;
     match res.returncode with 0 then
       subf t2 t1
     else
@@ -85,24 +85,27 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState
-    with {iter = iter, inc = {assignment = Table {table = table},
-                              cost = Runtime {time = time}}}
+    with {iter = iter
+         , inc = {assignment = Table {table = inc},
+                  cost = Runtime {time = time}}
+         , cur = {assignment = Table {table = cur}}}
     then
-      let values = map _expr2str (mapValues table) in
+      let incValues = map _expr2str (mapValues inc) in
+      let curValues = map _expr2str (mapValues cur) in
       printLn (join ["Iter: ", int2string iter, "\n",
                      "Best time: ", float2string time, "\n",
-                     "Best table: ", strJoin ", " values])
+                     "Current table: ", strJoin ", " curValues, "\n",
+                     "Best table: ", strJoin ", " incValues])
 
     else never
 
-  sem tune (runner : Runner) (options : TuneOptions) =
+  sem tune (runner : Runner) =
   | table ->
     let input =
-      match options.input with [] then _inputEmpty else options.input in
+      match tuneOptions.input with [] then _inputEmpty else tuneOptions.input in
     -- cost function = sum of execution times over all inputs
     let costF = lam lookup : Assignment.
       match lookup with Table {table = table} then
-        print "options: "; dprintLn options;
         Runtime {time = foldr1 addf (map (time table runner) input)}
       else never in
 
@@ -111,13 +114,18 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     -- When to stop the search
     let stop = lam state : SearchState.
-      or state.stuck (geqi state.iter options.iters) in
+      or state.stuck (geqi state.iter tuneOptions.iters) in
 
     recursive let search =
       lam stop.
       lam searchState.
       lam metaState.
-        debugSearch searchState;
+        (if _debug then
+          printLn "-----------------------";
+          debugSearch searchState;
+          debugMeta metaState;
+          printLn "-----------------------"
+         else ());
         if stop searchState then
           (searchState, metaState)
         else
@@ -128,11 +136,11 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     in
 
     -- Do the search!
-    search stop startState (initMeta ())
+    search stop startState (initMeta table)
 end
 
-lang RandomWalk = TuneLocalSearch
-                + LocalSearchSelectRandomUniform
+lang TuneRandomWalk = TuneLocalSearch
+                    + LocalSearchSelectRandomUniform
   syn MetaState =
   | Empty {}
 
@@ -141,19 +149,57 @@ lang RandomWalk = TuneLocalSearch
     (select (neighbourhood searchState) searchState, Empty {})
 
   sem initMeta =
-  | () -> Empty {}
+  | _ -> Empty {}
+end
+
+lang TuneSimulatedAnnealing = TuneLocalSearch
+                            + LocalSearchSimulatedAnnealing
+                            + LocalSearchSelectRandomUniform
+  sem decay (searchState : SearchState) =
+  | SimulatedAnnealing t ->
+    SimulatedAnnealing {t with temp = mulf tuneOptions.saDecayFactor t.temp}
+
+  sem initMeta =
+  | _ -> SimulatedAnnealing {temp = tuneOptions.saInitTemp}
+
+  sem debugMeta =
+  | SimulatedAnnealing {temp = temp} ->
+    printLn (join ["Temperature: ", float2string temp])
+end
+
+lang TuneTabuSearch = TuneLocalSearch
+                    + LocalSearchTabuSearch
+                    + LocalSearchSelectRandomUniform
+  syn TabuSet =
+  | Tabu {tabu : [LookupTable]}
+
+  sem isTabu =
+  | (Table {table = table}, Tabu {tabu = tabu}) ->
+    use MExprEq in
+    match find (lam t. eqSeq eqExpr (mapValues table) (mapValues t)) tabu
+    with Some _ then true else false
+
+  sem tabuUpdate =
+  | (Table {table = table}, Tabu ({tabu = tabu} & t)) ->
+    let tabu = cons table
+      (if eqi (length tabu) tuneOptions.tabuSize then init tabu else tabu) in
+    Tabu {t with tabu = tabu}
+
+  sem initMeta =
+  | table -> TabuSearch {tabu = Tabu {tabu = [table]}}
+
+  sem debugMeta =
+  | TabuSearch {tabu = Tabu {tabu = tabu}} ->
+    printLn (join ["Tabu size: ", int2string (length tabu)])
 end
 
 lang MExprTune = MExpr + TuneBase
 
-let tuneEntry = lam run : Runner. lam options : TuneOptions.
-  match options.method with RandomWalk {} then
-    use RandomWalk in
-    tune run options
-  -- else match options.maethod with SimulatedAnnealing {} then
-  --   use SimulatedAnnealing in
-  --   tune run options
-  -- else match options.method with TabuSearch {} then
-  --   use TabuSearch in
-  --   tune run options
+let tuneEntry = lam run : Runner.
+  match tuneOptions.method with RandomWalk {} then
+    use TuneRandomWalk in tune run
+  else match tuneOptions.method with SimulatedAnnealing {} then
+    use TuneSimulatedAnnealing in tune run
+  else match tuneOptions.method with TabuSearch {} then
+    use TuneTabuSearch in tune run
   else never

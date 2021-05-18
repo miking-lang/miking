@@ -23,17 +23,15 @@ let tune = lam files. lam options : Options. lam args.
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
-    let tuneOptions = parseTuneOptions tuneOptions (tail args) in
-
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
     match flatten [] ast with (prog, table) then
       let binary = ocamlCompileAst options file prog in
       let run = lam args : String.
-        dprintLn (cons (join ["./", binary]) args);
+        -- dprintLn (cons (join ["./", binary]) args);
         sysRunCommand (cons (join ["./", binary]) args) "" "."
       in
-      tuneEntry run tuneOptions table
+      tuneEntry run table
     else never
   in
   iter tuneFile files

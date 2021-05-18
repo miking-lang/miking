@@ -156,6 +156,7 @@ end
 lang LocalSearchSelectFirstImproving = LocalSearchBase
   sem select (assignments : [Assignments v]) =
   | searchState ->
+    let searchState : SearchState = searchState in
     match searchState with {cur = cur, cost = cost} then
       let cur : Solution = cur in
       let curCost = cur.cost in
