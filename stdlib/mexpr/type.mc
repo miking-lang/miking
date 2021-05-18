@@ -1,3 +1,4 @@
+include "map.mc"
 include "mexpr/ast.mc"
 
 -- Unwraps type alias `ty` from `aliases`.
