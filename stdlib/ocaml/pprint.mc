@@ -504,7 +504,7 @@ lang TestLang = OCamlPrettyPrint + OCamlSym
 mexpr
 use TestLang in
 
-let debugPrint = true in
+let debugPrint = false in
 
 let pprintProg = lam ast.
   if debugPrint then
