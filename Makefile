@@ -55,9 +55,13 @@ old:
 	@./make old
 
 test-all:\
+	test-boot-compile\
   test-compile\
   test-run\
   test-boot
+
+test-boot-compile:
+	@$(MAKE) -s -f test-boot-compile.mk all
 
 test-compile: build/mi
 	@$(MAKE) -s -f test-compile.mk all
@@ -85,4 +89,3 @@ test-boot-py: build/mi
 
 test-boot-ocaml: build/mi
 	@$(MAKE) -s -f test-boot.mk ocaml
-

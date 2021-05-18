@@ -45,10 +45,7 @@ compile_files += stdlib/mexpr/ast.mc
 compile_files += stdlib/mexpr/pprint.mc
 compile_files += stdlib/mexpr/parser.mc
 compile_files += stdlib/mexpr/cps.mc
-compile_files += stdlib/mexpr/tuning/decision-points.mc
-compile_files += stdlib/mexpr/tuning/tune.mc
-compile_files += stdlib/mexpr/tuning/tune-options.mc
-compile_files += stdlib/mexpr/tuning/eq-paths.mc
+compile_files += stdlib/mexpr/decision-points.mc
 compile_files += stdlib/mexpr/lamlift.mc
 compile_files += stdlib/mexpr/utesttrans.mc
 compile_files += stdlib/mexpr/eval.mc
@@ -91,6 +88,7 @@ compile_files += stdlib/map.mc
 compile_files += stdlib/assoc.mc
 #compile_files += stdlib/regex.mc
 #compile_files += stdlib/json.mc
+compile_files += stdlib/eq-paths.mc
 compile_files += stdlib/hashmap.mc
 compile_files += stdlib/seq.mc
 #compile_files += stdlib/nfa.mc
@@ -139,4 +137,4 @@ compile_files += stdlib/ext/math-ext.mc
 all: ${compile_files}
 
 ${compile_files}::
-	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"
+	-@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"
