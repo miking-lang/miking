@@ -47,6 +47,7 @@
 --   which are also not valid in C.
 
 include "name.mc"
+include "option.mc"
 
 -------------
 -- C TYPES --
@@ -90,6 +91,20 @@ lang CExprAst = CTypeAst
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
+  sem sfold_CExpr_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CEVar _        -> acc
+  | CEApp t        -> foldl f acc t.args
+  | CEInt _        -> acc
+  | CEFloat _      -> acc
+  | CEChar _       -> acc
+  | CEString _     -> acc
+  | CEBinOp t      -> f (f acc t.lhs) t.rhs
+  | CEUnOp t       -> f acc t.arg
+  | CEMember t     -> f acc t.lhs
+  | CEArrow t      -> f acc t.lhs
+  | CECast t       -> f acc t.rhs
+  | CESizeOfType _ -> acc
+
   syn CBinOp =
   | COAssign    /- lhs = rhs -/  {}
   | COSubScript /- lhs[rhs] -/   {}
@@ -131,6 +146,10 @@ lang CInitAst = CExprAst
   | CIExpr { expr: CExpr }
   | CIList { inits: [CInit] }
 
+  sem sfold_CInit_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CIExpr t -> f acc t.expr
+  | CIList t -> foldl (sfold_CInit_CExpr f) acc t.inits
+
 end
 
 ------------------
@@ -154,6 +173,20 @@ lang CStmtAst = CTypeAst + CInitAst + CExprAst
   | CSCont    {}
   | CSBreak   {}
   | CSNop     {}
+
+  sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
+  | CSDef t -> optionMapOrElse (lam. acc) (sfold_CInit_CExpr f acc) t.init
+  | CSIf t ->
+    let sf = sfold_CStmt_CExpr f in
+    foldl sf (foldl sf (f acc t.cond) t.thn) t.els
+  | CSSwitch t -> error "TODO"
+  | CSWhile t -> error "TODO"
+  | CSExpr t -> f acc t.expr
+  | CSComp t -> error "TODO"
+  | CSRet t -> optionMapOrElse (lam. acc) (f acc) t.val
+  | CSCont _ -> acc
+  | CSBreak _ -> acc
+  | CSNop _ -> acc
 
 end
 

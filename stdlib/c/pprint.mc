@@ -18,6 +18,15 @@ let _par = lam str. join ["(",str,")"]
 let _joinSpace = lam fst. lam snd.
   if eqString "" snd then fst else join [fst, " ", snd]
 
+let pprintEnvGetStr = lam env. lam id.
+  -- Set this to true to print names with their symbols (for debugging)
+  if true then
+    (env,join [
+      nameGetStr id,
+      match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
+    ])
+  else pprintEnvGetStr env id -- Note that this is not a recursive call!
+
 -- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
 -- argument. If it is None (), the returned string is "".
 let pprintEnvGetOptStr = lam env. lam id.
@@ -27,7 +36,6 @@ let pprintEnvGetOptStr = lam env. lam id.
 -- C TYPES --
 -------------
 lang CTypePrettyPrint = CTypeAst
-
 
   sem printCType (decl: String) (env: PprintEnv) =
 

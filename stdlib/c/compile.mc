@@ -35,6 +35,17 @@ let _isUnitTy = use RecordTypeAst in lam ty.
   match ty with TyRecord { fields = fields } then mapIsEmpty fields
   else false
 
+-- Unwrap type until something useful falls out
+recursive let _unwrapType = use VarTypeAst in
+    lam tyEnv: AssocSeq Name Type. lam ty: Type.
+    match ty with TyVar { ident = ident } then
+      match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
+        _unwrapType tyEnv ty
+      else error "TyVar not defined in environment"
+    else ty
+end
+
+
 --------------------------
 -- COMPILER DEFINITIONS --
 --------------------------
@@ -77,19 +88,15 @@ type CompileCEnv = {
   constrData: ConstrDataEnv,
 
   -- The initial type environment produced by type lifting
+  -- TODO(dlunde,2021-05-17): I want CompileCEnv to be visible across the whole
+  -- MExprCCompile fragment, which is why it is defined here. A problem,
+  -- however, is that Type is not bound outside the fragment. A solution to
+  -- this would be to define CompileCEnv within the fragment MExprCCompile
+  -- itself, with the requirement that it is visible across all semantic
+  -- functions and types defined with syn. This is currently impossible.
   typeEnv: [(Name,Type)]
 
 }
-
-recursive
-  let _unwrapType = use VarTypeAst in
-    lam tyEnv: AssocSeq Name Type. lam ty: Type.
-    match ty with TyVar { ident = ident } then
-      match assocSeqLookup { eq = nameEq } ident tyEnv with Some ty then
-        _unwrapType tyEnv ty
-      else error "TyVar not defined in environment"
-    else ty
-end
 
 let compileCEnvEmpty = { typeEnv = [], constrData = [] }
 
@@ -124,7 +131,6 @@ lang MExprCCompile = MExprAst + CAst
         (join [decls, defs, postDefs], tops, inits)
       else never
     else never
-
 
   sem genTyDecls (acc: [CTop]) (name: Name) =
 
@@ -663,10 +669,11 @@ lang MExprCCompile = MExprAst + CAst
 
 end
 
+-------------------------
+-- COMPILATION FOR GCC --
+-------------------------
 
-
-lang MExprCCompileGCC =
-  MExprCCompile + CPrettyPrint + CProgAst + CProgPrettyPrint
+lang MExprCCompileGCC = MExprCCompile + CProgAst
 
   -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
   sem alloc (name: Name) =
@@ -694,11 +701,11 @@ lang MExprCCompileGCC =
   sem free =
   | name -> error "free currently unused"
 
-  sem printCompiledCProg =
-  | cprog -> printCProg cCompilerNames cprog
+end
 
-  sem compileWithMain (typeEnv: [(Name,Type)]) =
-  | prog ->
+let compileGCC = use MExprCCompileGCC in
+  lam typeEnv: [(Name,Type)].
+  lam prog: Expr.
     match compile typeEnv prog with (types, tops, inits) then
       let mainTy = CTyFun {
         ret = CTyInt {},
@@ -706,8 +713,7 @@ lang MExprCCompileGCC =
           CTyInt {},
           CTyArray { ty = CTyPtr { ty = CTyChar {} }, size = None () }] }
       in
-      -- Convenience function for constructing a function given a C type
-      let _funWithType = use CAst in
+      let funWithType = use CAst in
         lam ty. lam id. lam params. lam body.
           match ty with CTyFun { ret = ret, params = tyParams } then
             CTFun {
@@ -720,13 +726,14 @@ lang MExprCCompileGCC =
                   error "Incorrect number of parameters in funWithType",
               body = body
             }
-          else error "Non-function type given to _funWithType"
+          else error "Non-function type given to funWithType"
       in
-      let main = _funWithType mainTy _main [_argc, _argv] inits in
+      let main = funWithType mainTy _main [_argc, _argv] inits in
       CPProg { includes = _includes, tops = join [types, tops, [main]] }
     else never
 
-end
+let printCompiledCProg = use CProgPrettyPrint in
+  lam cprog: CProg. printCProg cCompilerNames cprog
 
 -----------
 -- TESTS --
@@ -758,7 +765,7 @@ let compile: Expr -> CProg = lam prog.
   match typeLift prog with (env, prog) then
 
     -- Run C compiler
-    let cprog = compileWithMain env prog in
+    let cprog = compileGCC env prog in
 
     cprog
 
