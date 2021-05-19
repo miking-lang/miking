@@ -96,6 +96,10 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
       ,TyTensor {ty = TyFloat _})
     then
       (1, app_ (intrinsicOpTensor "carray_float") t)
+    else match tt with (ty1, OTyLabel {label = label, ty = ty2}) then
+      match recur t ty1 ty2 with (cost, t) then
+        (cost, oarglabel_ label t)
+      else never
     else match tt
     with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
