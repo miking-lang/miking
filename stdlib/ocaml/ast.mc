@@ -64,14 +64,6 @@ lang OCamlTuple
   | OTmTupleProj t -> f acc t.tm
 end
 
-let otuple_ = use OCamlTuple in
-  lam values. OTmTuple { values = values }
-
-let ounit_ = otuple_ []
-
-let otupleproj_ = use OCamlTuple in
-  lam t. lam i. OTmTupleProj { tm = t, index = i }
-
 lang OCamlData
   syn Expr =
   | OTmConApp { ident : Name, args : [Expr] }
@@ -122,6 +114,7 @@ lang OCamlExternal
   syn Expr =
   | OTmVarExt { ident : String }
   | OTmConAppExt { ident : String, args : [Expr] }
+  | OTmArgLabel { label : String, arg : Expr }
 
   syn Pat =
   | OPatConExt { ident : String, args : [Pat] }
@@ -129,18 +122,17 @@ lang OCamlExternal
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | OTmVarExt t -> acc
   | OTmConAppExt t -> foldl f acc t.args
+  | OTmArgLabel t -> f acc t.arg
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmVarExt t -> OTmVarExt t
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
+  | OTmArgLabel t -> OTmArgLabel { t with arg = f t.arg }
 end
-
-let oext_ = use OCamlExternal in
-  lam id : String. OTmVarExt {ident = id}
 
 lang OCamlTypeAst =
   BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
-  RecordTypeAst + VarTypeAst
+  RecordTypeAst + VarType
 
   syn Type =
   | OTyList {info : Info, ty : Type}
@@ -150,6 +142,7 @@ lang OCamlTypeAst =
   | OTyBigArrayFloat64Elt {info : Info}
   | OTyBigArrayIntElt {info : Info}
   | OTyBigArrayClayout {info : Info}
+  | OTyLabel {info : Info, label : String, ty : Type}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -159,6 +152,7 @@ lang OCamlTypeAst =
   | OTyBigArrayFloat64Elt r -> r.info
   | OTyBigArrayIntElt r -> r.info
   | OTyBigArrayClayout r -> r.info
+  | OTyLabel r -> r.info
 end
 
 let otylist_ = use OCamlTypeAst in
@@ -184,6 +178,9 @@ let otytuple_ = use OCamlTypeAst in
 
 let otyunit_ = otytuple_ []
 
+let otyopaque_ = use OCamlTypeAst in
+  tyvar_ "OCamlOpaque"
+
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
@@ -202,6 +199,20 @@ lang OCamlAst =
   -- Other
   OCamlExternal  + OCamlPreambleHack
 end
+
+let otuple_ = use OCamlAst in
+  lam values. OTmTuple { values = values }
+
+let ounit_ = otuple_ []
+
+let otupleproj_ = use OCamlAst in
+  lam t. lam i. OTmTupleProj { tm = t, index = i }
+
+let oext_ = use OCamlAst in
+  lam id : String. OTmVarExt {ident = id}
+
+let oarglabel_ = use OCamlAst in
+  lam label. lam arg. OTmArgLabel { label = label, arg = arg }
 
 mexpr
 ()

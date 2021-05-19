@@ -1,13 +1,14 @@
+include "ocaml/ast.mc"
 include "ext/batteries.ext-ocaml.mc" -- For testing
 include "ext/math-ext.ext-ocaml.mc"
-
+include "ext/solver.ext-ocaml.mc"
 
 type ExternalImplDef = {ident : String, ty : Type, libraries : [String]}
 
 type ExternalImpl =
   {name : Name, extIdent : String, extTy : Type, libraries : [String]}
 
-type ExternalMap = Map String [ExternalImpl]
+type ExternalImplsMap = Map String [ExternalImpl]
 
 let _testExternals =
   use OCamlTypeAst in
@@ -78,7 +79,7 @@ let _testExternals =
 -- NOTE(oerikss, 2021-04-30) Add your external maps here. This is a temporary
 -- solution. In the end we want to provide these definitions outside the
 -- compiler (which will require some parsing).
-let globalExternalMap : ExternalMap =
+let globalExternalImplsMap : ExternalImplsMap =
   mapMapWithKey
   (lam id : String.
     map (lam imp : ExternalImplDef.
@@ -90,5 +91,6 @@ let globalExternalMap : ExternalMap =
     [
       _testExternals, -- For testing purposes
       batteries,      -- For testing purposes
-      mathExtMap
+      mathExtMap,
+      solverExtMap
     ])

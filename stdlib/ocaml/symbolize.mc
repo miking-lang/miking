@@ -60,6 +60,7 @@ lang OCamlSym =
   | OTmPreambleText t ->
     OTmPreambleText {t with inexpr = symbolizeExpr env t.inexpr}
   | OTmString t -> OTmString t
+  | OTmArgLabel t -> OTmArgLabel {t with arg = symbolizeExpr env t.arg }
 
   sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
   | OPatTuple { pats = pats } ->

@@ -3,14 +3,10 @@ include "ocaml/ast.mc"
 include "ocaml/intrinsics-ops.mc"
 include "mexpr/type.mc"
 
-type ExternalNameMap = Map Name [ExternalImpl]
-
 type ExternalEnv = {
-  -- A mapping from external string identifiers to available implementations.
-  impls : ExternalMap,
 
   -- A mapping from external names to used implementations.
-  usedImpls : ExternalNameMap ,
+  usedImpls : Map Name [ExternalImpl],
 
   -- Type aliases map
   aliases : Map Name Type,
@@ -22,7 +18,6 @@ type ExternalEnv = {
 let externalInitialEnv =
   lam aliases : Map Name Type. lam constrs : Map Name Type.
   {
-    impls = globalExternalMap,
     usedImpls = mapEmpty nameCmp,
     aliases = aliases,
     constrs = constrs
@@ -32,9 +27,11 @@ lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst + AppTypeAst
 
 let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
   use OCamlMarshalData in
-  lam env. lam t. lam ty1. lam ty2.
+  lam env : ExternalEnv. lam t. lam ty1. lam ty2.
   recursive let recur = lam t. lam ty1. lam ty2.
-    let tt = (ty1, ty2) in
+    let tt =
+      (typeUnwrapAlias env.aliases ty1, typeUnwrapAlias env.aliases ty2)
+    in
     match tt with
       (TyVar _, _) | (_, TyVar _) |
       (TyApp {lhs = TyVar _}, _) | (_, TyApp {lhs = TyVar _}) |
@@ -55,11 +52,11 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
       (2, app_ (intrinsicOpSeq "Helpers.of_array") t)
     else match tt with (TyRecord {fields = fields}, OTyTuple {tys = []}) then
       if eqi (mapSize fields) 0  then
-        (0, ounit_)
+        (0, semi_ t ounit_)
       else error "Cannot marshal non-empty record to empty tuple"
     else match tt with (OTyTuple {tys = []}, TyRecord {fields = fields}) then
       if eqi (mapSize fields) 0  then
-        (0, uunit_)
+        (0, semi_ t uunit_)
       else error "Cannot marshal empty tuple to non-empty record"
     else match tt with
       (OTyBigArrayGenArray
@@ -139,7 +136,7 @@ let externalMarshalCost : ExternalEnv -> Type -> Type -> Int =
 lang OCamlGenerateExternal
 
   -- Popluates `env` by chosing external implementations.
-  sem chooseExternalImpls (env : ExternalEnv) /- : Expr -> ExternalEnv -/=
+  sem chooseExternalImpls (impls : ExternalImplsMap)  (env : ExternalEnv) /- : Expr -> ExternalEnv -/=
   -- Intentionally left blank
 
 
@@ -154,12 +151,11 @@ end
 -- implementation with the lowest cost with respect to the type given at the
 -- external term definition.
 lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
-  sem chooseExternalImpls (env : ExternalEnv) =
+  sem chooseExternalImpls (implsMap : ExternalImplsMap) (env : ExternalEnv) =
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
     let identStr = nameGetStr ident in
-    let impls = mapLookup identStr env.impls in
+    let impls = mapLookup identStr implsMap in
     match impls with Some (![] & impls) then
-      let ty = typeUnwrapAlias env.aliases ty in
       let impl =
         minOrElse
           (lam. error "impossible")
@@ -170,14 +166,13 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         impls
       in
       let env = {env with usedImpls = mapInsert ident [impl] env.usedImpls} in
-      chooseExternalImpls env inexpr
+      chooseExternalImpls implsMap env inexpr
     else
       error (join ["No implementation for external ", identStr])
-  | t -> sfold_Expr_Expr chooseExternalImpls env t
+  | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
 
   sem generateExternals (env : ExternalEnv) =
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
-    let ty = typeUnwrapAlias env.aliases ty in
     match mapLookup ident env.usedImpls
     with Some r then
       let r : ExternalImpl = head r in

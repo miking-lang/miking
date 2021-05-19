@@ -120,7 +120,7 @@ let compile = lam files. lam options : Options. lam args.
           let env : GenerateEnv = env in
           let extEnv : ExternalEnv =
             let env = externalInitialEnv env.aliases env.constrs in
-            chooseExternalImpls env ast
+            chooseExternalImpls globalExternalImplsMap env ast
           in
           let ast = generateExternals extEnv ast in
           let ast = generate env ast in
