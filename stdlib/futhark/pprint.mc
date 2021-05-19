@@ -122,6 +122,12 @@ lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
     match mapMapAccum pprintField env fields with (env, fields) then
       (env, join ["{", strJoin "," (mapValues fields), "}"])
     else never
+  | FTyArrow {from = from, to = to} ->
+    match pprintType indent env from with (env, from) then
+      match pprintType indent env to with (env, to) then
+        (env, join ["(", from, ") -> (", to, ")"])
+      else never
+    else never
 end
 
 lang FutharkTypeParamPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint

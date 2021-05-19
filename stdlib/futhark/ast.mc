@@ -49,6 +49,7 @@ lang FutharkAst
   | FTyIdent { ident : Name }
   | FTyArray { elem : FutType, dim : Option FutExpr }
   | FTyRecord { fields : Map SID FutType }
+  | FTyArrow { from : FutType, to : FutType }
 
   syn FutDecl =
   | FDeclFun { ident : Name, entry : Bool, typeParams : [FutTypeParam],

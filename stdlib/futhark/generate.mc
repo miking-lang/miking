@@ -56,6 +56,8 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TySeq {ty = elemTy} -> futUnsizedArrayTy_ (generateType elemTy)
   | TyRecord {fields = fields} ->
     FTyRecord {fields = mapMap generateType fields}
+  | TyArrow {from = from, to = to} ->
+    FTyArrow {from = generateType from, to = generateType to}
   | TyUnknown _ -> error "Cannot translate unknown type to Futhark"
 end
 
@@ -89,13 +91,18 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     FELet {ident = t.ident, ty = generateType t.ty,
            body = generateExpr t.body,
            inexpr = generateExpr t.inexpr}
-  | TmParallelMap t -> futMap_ t.f t.as
-  | TmParallelReduce t -> futReduce_ t.f t.ne t.as
-  | TmParallelScan t -> futScan_ t.f t.ne t.as
-  | TmParallelFilter t -> futFilter_ t.p t.as
-  | TmParallelPartition t -> futPartition_ t.p t.as
-  | TmParallelAll t -> futAll_ t.p t.as
-  | TmParallelAny t -> futAny_ t.p t.as
+  | TmParallelMap t -> futMap_ (generateExpr t.f) (generateExpr t.as)
+  | TmParallelMap2 t ->
+    futMap2_ (generateExpr t.f) (generateExpr t.as) (generateExpr t.bs)
+  | TmParallelReduce t ->
+    futReduce_ (generateExpr t.f) (generateExpr t.ne) (generateExpr t.as)
+  | TmParallelScan t ->
+    futScan_ (generateExpr t.f) (generateExpr t.ne) (generateExpr t.as)
+  | TmParallelFilter t -> futFilter_ (generateExpr t.p) (generateExpr t.as)
+  | TmParallelPartition t ->
+    futPartition_ (generateExpr t.p) (generateExpr t.as)
+  | TmParallelAll t -> futAll_ (generateExpr t.p) (generateExpr t.as)
+  | TmParallelAny t -> futAny_ (generateExpr t.p) (generateExpr t.as)
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
@@ -140,7 +147,10 @@ lang FutharkGenerate = FutharkToplevelGenerate
     FProg {decls = concat preamble (generateToplevel entryPoints prog)}
 end
 
-lang TestLang = FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeAnnot
+lang TestLang =
+  FutharkGenerate + FutharkPrettyPrint + MExprPatternKeywordMaker + MExprSym +
+  MExprTypeAnnot
+end
 
 mexpr
 
@@ -149,6 +159,7 @@ use TestLang in
 let fName = nameSym "f" in
 let gName = nameSym "g" in
 let minName = nameSym "min" in
+let mapFunc = nameSym "mapFunc" in
 let t = typeAnnot (symbolize (bindall_ [
   let_ "a" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3]),
   let_ "b" (tyseq_ tyfloat_) (seq_ [float_ 2.718, float_ 3.14]),
@@ -162,9 +173,12 @@ let t = typeAnnot (symbolize (bindall_ [
   nlet_ minName (tyarrows_ [tyint_, tyint_, tyint_])
                 (lam_ "a" tyint_ (lam_ "b" tyint_ (
                   if_ (geqi_ (var_ "a") (var_ "b")) (var_ "b") (var_ "a")))),
+  nlet_ mapFunc (tyarrows_ [tyarrow_ tyint_ tyint_, tyseq_ tyint_, tyseq_ tyint_])
+                (lam_ "f" (tyarrow_ tyint_ tyint_) (lam_ "s" (tyseq_ tyint_)
+                  (parallelMap_ (var_ "f") (var_ "s")))),
   unit_
 ])) in
 let entryPoints = setInsert fName (setEmpty nameCmp) in
 let p = generateProgram entryPoints t in
--- print (expr2str p);
+print (expr2str p);
 ()
