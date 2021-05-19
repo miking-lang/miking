@@ -149,6 +149,7 @@ lang OCamlPrettyPrint =
   | OTmVarExt _ -> true
   | OTmConAppExt _ -> false
   | OTmString _ -> true
+  | OTmArgLabel _ -> false
 
   sem patIsAtomic =
   | OPatRecord _ -> false
@@ -461,6 +462,10 @@ lang OCamlPrettyPrint =
       else never
     else never
   | OTmString t -> (env, join ["\"", t.text, "\""])
+  | OTmArgLabel t ->
+    match pprintCode indent env t.arg with (env, arg) then
+      (env, join ["~", t.label, ":", arg])
+    else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | OPatRecord {bindings = bindings} ->
@@ -629,6 +634,10 @@ let testTupleProj =
   OTmTupleProj { tm = OTmTuple {values = [true_, false_]} , index = 1}
 in
 
+let testArgLabel =
+  OTmArgLabel { label = "label", arg = int_ 0}
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -658,7 +667,8 @@ let asts = [
   testIfNested,
   testPatLet,
   testTuple,
-  testTupleProj
+  testTupleProj,
+  testArgLabel
 ] in
 
 map pprintProg asts;
