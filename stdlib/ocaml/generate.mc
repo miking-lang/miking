@@ -2156,7 +2156,10 @@ let generateWithExternals = lam ast.
     match generateTypeDecl env ast with (env, ast) then
       let env =
         let env : GenerateEnv = env in
-        chooseExternalImpls (externalInitialEnv env.aliases env.constrs) ast
+        chooseExternalImpls
+          globalExternalImplsMap
+          (externalInitialEnv env.aliases env.constrs)
+          ast
       in
       let ast = generateExternals env ast in
       generateEmptyEnv ast

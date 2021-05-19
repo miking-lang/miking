@@ -1350,7 +1350,7 @@ field `libraries` defines a sequence of libraries this external depends on.
 Programs defining externals should be placed under [./stdlib/ext](./stdlib/ext)
 and follow the above naming convention to avoid failing test for the
 interpreter. Additionally, the implementation map, in this case `batteries`,
-should be added to `globalExternalMap` in
+should be added to `globalExternalImplsMap` in
 [./stdlib/ocaml/external-includes.mc](./stdlib/ocaml/external-includes.mc).
 
 Morever, depending on the type of the external you might have to extend the
