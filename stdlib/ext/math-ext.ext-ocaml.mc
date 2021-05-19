@@ -1,3 +1,4 @@
+include "map.mc"
 include "ocaml/ast.mc"
 
 let mathExtMap =
