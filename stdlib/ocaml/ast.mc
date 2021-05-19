@@ -127,7 +127,7 @@ end
 
 lang OCamlTypeAst =
   BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
-  RecordTypeAst + VarTypeAst
+  RecordTypeAst + VarTypeAst + AppTypeAst
 
   syn Type =
   | OTyList {info : Info, ty : Type}

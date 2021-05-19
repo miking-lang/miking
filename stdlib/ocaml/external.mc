@@ -23,7 +23,7 @@ let externalInitialEnv =
     constrs = constrs
   }
 
-lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst + AppTypeAst
+lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst
 
 let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
   use OCamlMarshalData in
