@@ -262,18 +262,18 @@ let _initTour = [("Uppsala", "Kiruna", 10),
 let _toursEq = lam t1. lam t2.
   eqsetEqual (digraphEdgeEq _tspGraph) t1 t2
 
-let _tspCost = lam tour.
-  foldl (lam acc. lam edge : TspEdge. addi acc edge.2) 0 tour
-
 -- Neighbourhood: replace 2 edges by two others s.t. tour is still a
 -- Hamiltonian circuit.
-let _tspNeighbours = lam g. lam tour : [TspEdge].
+let _tspNeighbours = lam g. lam state : SearchState TspTour Int.
+  let curSol : Solution TspTour Int = state.cur in
+  let tour = curSol.assignment in
+
   let tourHasEdge = lam v1. lam v2.
-    any (lam e : TspEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
+    any (lam e : TspTourEdge. or (and (eqString v1 e.0) (eqString v2 e.1))
                                  (and (eqString v1 e.1) (eqString v2 e.0))) tour in
 
   -- Find replacing edges for 'e12' and 'e34'
-  let exchange = lam e12 : TspEdge. lam e34 : TspEdge.
+  let exchange = lam e12 : TspTourEdge. lam e34 : TspTourEdge.
     let v1 = e12.0 in
     let v2 = e12.1 in
     let v3 = e34.0 in
