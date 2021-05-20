@@ -213,7 +213,7 @@ lang HoleBoolAst = BoolAst + HoleAst
 
   sem sample =
   | BoolHole {} ->
-    randElem [true_, false_]
+    get [true_, false_] (randIntU 0 2)
 
   sem fromString =
   | "true" -> true
