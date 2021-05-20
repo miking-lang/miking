@@ -119,19 +119,19 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
     else
       let tt = (ty1, ty2) in
       match tt with (TySeq {ty = ty1}, OTyList {ty = ty2}) then
-        let marshalop = intrinsicOpSeq "Helpers.to_list" in
-        let mapop = intrinsicOpSeq "Helpers.map" in
+        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.to_list") in
+        let mapop = ovarext_ (intrinsicOpSeq "Helpers.map") in
         marshalContainer _listToSeqCost _approxsize marshalop mapop t ty1 ty2
       else match tt with (OTyList {ty = ty1}, TySeq {ty = ty2}) then
-        let marshalop = intrinsicOpSeq "Helpers.of_list" in
+        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.of_list") in
         let mapop = ovarext_ "List.map" in
         marshalContainer _listToSeqCost _approxsize marshalop mapop t ty1 ty2
       else match tt with (TySeq {ty = ty1}, OTyArray {ty = ty2}) then
-        let marshalop = intrinsicOpSeq "Helpers.to_array" in
-        let mapop = intrinsicOpSeq "Helpers.map" in
+        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.to_array") in
+        let mapop = ovarext_ (intrinsicOpSeq "Helpers.map") in
         marshalContainer _arrayToSeqCost _approxsize marshalop mapop t ty1 ty2
       else match tt with (OTyArray {ty = ty1}, TySeq {ty = ty2}) then
-        let marshalop = intrinsicOpSeq "Helpers.of_array" in
+        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.of_array") in
         let mapop = ovarext_ "Array.map" in
         marshalContainer _arrayToSeqCost _approxsize marshalop mapop t ty1 ty2
       else match tt with (TyRecord {fields = fields}, OTyTuple {tys = []}) then
@@ -204,26 +204,28 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
           {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
       then
         (_tensorToGenarrayCost,
-         app_ (intrinsicOpTensor "Helpers.to_genarray_clayout") t)
+         app_ (ovarext_ (intrinsicOpTensor "Helpers.to_genarray_clayout")) t)
       else match tt with
         (OTyBigArrayGenArray
           {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
         ,TyTensor {ty = TyInt _})
       then
-        (_tensorToGenarrayCost, app_ (intrinsicOpTensor "carray_int") t)
+        (_tensorToGenarrayCost,
+         app_ (ovarext_ (intrinsicOpTensor "carray_int")) t)
       else match tt with
         (TyTensor {ty = TyFloat _}
         ,OTyBigArrayGenArray
           {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
       then
         (_tensorToGenarrayCost,
-         app_ (intrinsicOpTensor "Helpers.to_genarray_clayout") t)
+         app_ (ovarext_ (intrinsicOpTensor "Helpers.to_genarray_clayout")) t)
       else match tt with
         (OTyBigArrayGenArray
           {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
         ,TyTensor {ty = TyFloat _})
       then
-        (_tensorToGenarrayCost, app_ (intrinsicOpTensor "carray_float") t)
+        (_tensorToGenarrayCost,
+         app_ (ovarext_ (intrinsicOpTensor "carray_float")) t)
       else match tt with (ty1, OTyLabel {label = label, ty = ty2}) then
         match recur t ty1 ty2 with (cost, t) then
           (cost, oarglabel_ label t)
