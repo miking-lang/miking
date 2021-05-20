@@ -45,6 +45,7 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
   use OCamlMarshalData in
   lam t. lam ty1. lam ty2.
   recursive let recur = lam t. lam ty1. lam ty2.
+    use OCamlExternal in
     let tt = (ty1, ty2) in
     match tt with (TyVar _, _) then t
     else match tt with (_, TyVar _) then t
@@ -53,9 +54,9 @@ let externalMarshal : Expr -> Type -> Type -> Expr =
     else match tt with (TySeq _, TySeq _) then t
     else match tt with (TyList _, TyList _) then t
     else match tt with (TySeq _, TyList _) then
-      app_ (intrinsicOpSeq "Helpers.to_list") t
+      app_ (OTmVarExt {ident = intrinsicOpSeq "Helpers.to_list"}) t
     else match tt with (TyList _, TySeq _) then
-      app_ (intrinsicOpSeq "Helpers.of_list") t
+      app_ (OTmVarExt {ident = intrinsicOpSeq "Helpers.of_list"}) t
     else match tt
     with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
