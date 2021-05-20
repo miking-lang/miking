@@ -513,45 +513,47 @@ let t =
 
 -- Generate code for looking up a value of a decision point depending on its
 -- call history
-let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxEnv -> [[Name]] -> Expr =
-  use MatchAst in use NeverAst in
-    lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
-      match env with { lbl2inc = lbl2inc } then
-        -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
-        -- partition becomes trivial
-        let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
-          let startVals = foldl (lam acc. lam p.
-                                   eqsetInsert _eqn (head p) acc)
-                                [] paths in
-          let partition = (create (length startVals) (lam. [])) in
-          let partition =
-            mapi
-              (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
-              partition
-          in
-          (startVals, partition)
+let _lookupCallCtx
+  : (Int -> Expr) -> Name -> Name
+  -> CallCtxEnv -> [[Name]] -> Expr =
+  lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
+    match env with { lbl2inc = lbl2inc } then
+      -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
+      -- partition becomes trivial
+      let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
+        let startVals = foldl (lam acc. lam p.
+                                 eqsetInsert _eqn (head p) acc)
+                              [] paths in
+        let partition = (create (length startVals) (lam. [])) in
+        let partition =
+          mapi
+            (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
+            partition
         in
-        recursive let work : Name -> [[Name]] -> [Name] -> Expr =
-          lam incVarName. lam paths. lam acc.
-            let nonEmpty = filter (lam p. not (null p)) paths in
-            match partitionPaths nonEmpty with (startVals, partition) then
-              let branches =
-                mapi (lam i. lam n.
-                        let iv = callCtxLbl2Inc n env in
-                        let count = callCtxLbl2Count n env in
-                        matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
-                                 (work iv (map tail (get partition i)) (cons n acc)))
-                     startVals
-              in
-              let defaultVal =
-                if eqi (length nonEmpty) (length paths) then never_
-                else lookup (callCtxHole2Idx holeId acc env)
-              in
-              matchall_ (snoc branches defaultVal)
-            else never
-          in
-        work incVarName (map reverse paths) []
-      else never
+        (startVals, partition)
+      in
+      recursive let work : Name -> [[Name]] -> [Name] -> Expr =
+        lam incVarName. lam paths. lam acc.
+          let nonEmpty = filter (lam p. not (null p)) paths in
+          match partitionPaths nonEmpty with (startVals, partition) then
+            let branches =
+              mapi (lam i. lam n.
+                      let iv = callCtxLbl2Inc n env in
+                      let count = callCtxLbl2Count n env in
+                      matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
+                               (work iv (map tail (get partition i))
+                                  (cons n acc)))
+                   startVals
+            in
+            let defaultVal =
+              if eqi (length nonEmpty) (length paths) then never_
+              else lookup (callCtxHole2Idx holeId acc env)
+            in
+            matchall_ (snoc branches defaultVal)
+          else never
+        in
+      work incVarName (map reverse paths) []
+    else never
 
 -- Helper for creating a hidden equivalent of a public function and replace the
 -- public function with a forwarding call to the hidden function.
@@ -571,10 +573,6 @@ type LookupTable = Map Int Expr
 
 let _table = nameSym "table"
 let _argv = nameSym "argv"
-  -- argv_
-  -- use Argv const node
-  --match find (lam n. eqString "argv" (nameGetStr n)) builtinNames with Some n
-  --then n else error "argv name not found"
 
 --
 lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
@@ -587,6 +585,16 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   -- maintaining call history.
   sem flatten (publicFns : [Name]) =
   | t ->
+    let lookup = lam i. get_ (nvar_ _table) (int_ i) in
+    _flattenWithLookup publicFns lookup t
+
+  sem insert (publicFns : [Name]) (table : LookupTable) =
+  | t ->
+    let lookup = lam i. mapFindWithExn i table in
+    _flattenWithLookup publicFns lookup t
+
+  sem _flattenWithLookup (publicFns : [Name]) (lookup : Int -> Expr) =
+  | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv t in
     let env = callCtxInit publicFns (toCallGraph tm) tm in
@@ -596,13 +604,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                     (callCtxIncVarNames env))
     in
     let tm = bind_ incVars tm in
-    let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
-    (_wrapArgv env prog, _initAssignments env t, deref env.idx2hole)
+    (_wrapArgv env prog, _initAssignments env, deref env.idx2hole)
+
 
   -- Find the initial mapping from decision points to values
-  sem _initAssignments (env : CallCtxEnv) =
-  | tm ->
+  sem _initAssignments =
+  | env ->
     let idx2hole = deref env.idx2hole in
     mapFromList subi
       (mapi (lam i. lam hole.

@@ -12,16 +12,10 @@ let _debug = true
 
 let _inputEmpty = [""]
 
-let _expr2str = use MExprAst in lam expr.
-  match expr with TmConst {val = CBool {val = b}} then
-    if b then "true" else "false"
-  else match expr with TmConst {val = CInt {val = i}} then int2string i
-  else dprintLn expr; error "Type of expression not supported"
-
 -- Add assignments of decision points to argument vector
 let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
-  use MExprAst in
-  let stringVals = mapMapWithKey (lam. lam v. _expr2str v) vals in
+  use MExprPrettyPrint in
+  let stringVals = mapMapWithKey (lam. lam v. expr2str v) vals in
   concat args (mapValues stringVals)
 
 lang TuneBase = Holes
@@ -88,8 +82,9 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
                   cost = Runtime {time = time}}
          , cur = {assignment = Table {table = cur}}}
     then
-      let incValues = map _expr2str (mapValues inc) in
-      let curValues = map _expr2str (mapValues cur) in
+      use MExprPrettyPrint in
+      let incValues = map expr2str (mapValues inc) in
+      let curValues = map expr2str (mapValues cur) in
       printLn (join ["Iter: ", int2string iter, "\n",
                      "Best time: ", float2string time, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
@@ -135,7 +130,13 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     in
 
     -- Do the search!
-    search stop startState (initMeta table)
+    match search stop startState (initMeta table)
+    with (searchState, _) then
+      let searchState : SearchState = searchState in
+      match searchState with {inc = {assignment = Table {table = table}}}
+      then table
+      else never
+    else never
 end
 
 lang TuneRandomWalk = TuneLocalSearch
