@@ -588,6 +588,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     match _flattenWithLookup publicFns lookup t with (prog, env)
     then
+      let env : CallCtxEnv = env in
       (_wrapArgv env prog, _initAssignments env, deref env.idx2hole)
     else never
 
