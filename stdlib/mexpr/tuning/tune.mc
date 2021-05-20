@@ -7,26 +7,25 @@ include "common.mc"
 
 type Runner = String -> ExecResult
 
-let _bool2string = lam b.
-  if b then "true" else "false"
-
 -- Turn on/off debug prints
 let _debug = true
 
 let _inputEmpty = [""]
 
+let _expr2str = use MExprAst in lam expr.
+  match expr with TmConst {val = CBool {val = b}} then
+    if b then "true" else "false"
+  else match expr with TmConst {val = CInt {val = i}} then int2string i
+  else dprintLn expr; error "Type of expression not supported"
+
 -- Add assignments of decision points to argument vector
 let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   use MExprAst in
-  -- TODO: types
-  let stringVals = mapMapWithKey (lam. lam v.
-    match v with TmConst {val = CBool {val = b}} then _bool2string b
-    else dprintLn v; error "The type of this value is not supported yet"
-  ) vals in
+  let stringVals = mapMapWithKey (lam. lam v. _expr2str v) vals in
   concat args (mapValues stringVals)
 
-lang TuneBase = HoleAst + FlattenHoles
-  sem tune (run : Runner) =
+lang TuneBase = Holes
+  sem tune (run : Runner) (holes : Expr) =
   -- Intentionally left blank
 
   sem time (vals : LookupTable) (runner : Runner) =
@@ -35,7 +34,7 @@ lang TuneBase = HoleAst + FlattenHoles
     let t1 = wallTimeMs () in
     let res : ExecResult = runner allArgs in
     let t2 = wallTimeMs () in
-    -- print "Result: "; dprintLn res;
+    print "Result: "; dprintLn res;
     match res.returncode with 0 then
       subf t2 t1
     else
@@ -52,15 +51,10 @@ end
 -- Local search methods --
 --------------------------
 
----- Settings for local search ----
-let _expr2str = use MExprAst in lam expr.
-  match expr with TmConst {val = CBool {val = b}} then
-    _bool2string b
-  else dprintLn expr; error "Expr type not supported yet"
-
 lang TuneLocalSearch = TuneBase + LocalSearchBase
   syn Assignment =
-  | Table {table : LookupTable}
+  | Table {table : LookupTable,
+           holes : [Expr]}
 
   syn Cost =
   | Runtime {time : Float}
@@ -68,11 +62,15 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cur = {assignment = Table {table = table}}} then
-      -- TODO: assumes Boolean decision points
-      let randTable = mapMapWithKey (lam. lam v.
-        if eqi 0 (randIntU 0 2) then false_ else true_) table in
-      [Table {table = randTable}]
+    match searchState
+    with {cur = {assignment = Table {holes = holes}}}
+    then
+      let table = mapFromList subi
+        (mapi (lam i. lam h.
+           match h with TmHole {hole = hole} then
+             (i, sample hole)
+           else dprintLn h; error "Expected decision point") holes) in
+      [Table {table = table, holes = holes}]
     else never
 
   sem compare =
@@ -99,7 +97,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     else never
 
-  sem tune (runner : Runner) =
+  sem tune (runner : Runner) (holes : [Expr]) =
   | table ->
     let input =
       match tuneOptions.input with [] then _inputEmpty else tuneOptions.input in
@@ -110,7 +108,8 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
       else never in
 
     -- Set up initial search state
-    let startState = initSearchState costF (Table {table = table}) in
+    let startState =
+      initSearchState costF (Table {table = table, holes = holes}) in
 
     -- When to stop the search
     let stop = lam state : SearchState.
@@ -195,11 +194,11 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
-let tuneEntry = lam run : Runner.
+let tuneEntry = lam run : Runner. lam holes : [Expr].
   match tuneOptions.method with RandomWalk {} then
-    use TuneRandomWalk in tune run
+    use TuneRandomWalk in tune run holes
   else match tuneOptions.method with SimulatedAnnealing {} then
-    use TuneSimulatedAnnealing in tune run
+    use TuneSimulatedAnnealing in tune run holes
   else match tuneOptions.method with TabuSearch {} then
-    use TuneTabuSearch in tune run
+    use TuneTabuSearch in tune run holes
   else never
