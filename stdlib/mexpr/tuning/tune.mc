@@ -194,11 +194,17 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
-let tuneEntry = lam run : Runner. lam holes : [Expr].
+let tuneEntry = lam run : Runner. lam holes : [Expr]. lam table : LookupTable.
+  -- Do warmup runs
+  use TuneBase in
+  iter (lam. map (time table run) tuneOptions.input)
+    (range 0 tuneOptions.warmups 1);
+
+  -- Choose search method
   match tuneOptions.method with RandomWalk {} then
-    use TuneRandomWalk in tune run holes
+    use TuneRandomWalk in tune run holes table
   else match tuneOptions.method with SimulatedAnnealing {} then
-    use TuneSimulatedAnnealing in tune run holes
+    use TuneSimulatedAnnealing in tune run holes table
   else match tuneOptions.method with TabuSearch {} then
-    use TuneTabuSearch in tune run holes
+    use TuneTabuSearch in tune run holes table
   else never

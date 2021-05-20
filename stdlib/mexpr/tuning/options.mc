@@ -4,6 +4,7 @@
 
 type TuneOptions =
 { iters : Int           -- Number of search iterations
+, warmups : Int         -- Number of warmup runs
 , method : SearchMethod -- Search method
 , input : [[String]]    -- Input data
 , saInitTemp : Float    -- Initial temperature for simulated annealing
@@ -24,6 +25,7 @@ let string2SearchMethod : String -> SearchMethod = lam s.
 
 let tuneOptionsDefault : TuneOptions =
 { iters = 10
+, warmups = 1
 , method = RandomWalk ()
 , input = []
 , saInitTemp = 100.0
@@ -41,6 +43,14 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
         parseTuneOptions {o with iters = string2int i} args
       else error "iters cannot be negative"
     else error "--iters with no argument"
+
+  else match args with ["--warmups"] ++ args then
+    match args with [i] ++ args then
+      let warmups = string2int i in
+      if geqi warmups 0 then
+        parseTuneOptions {o with warmups = string2int i} args
+      else error "warmups cannot be negative"
+    else error "--warmups with no argument"
 
   else match args with ["--method"] ++ args then
     match args with [m] ++ args then
