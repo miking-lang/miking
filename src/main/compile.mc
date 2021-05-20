@@ -7,10 +7,12 @@ include "mexpr/builtin.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
+include "mexpr/tuning/decision-points.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "ocaml/external-includes.mc"
+include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -59,6 +61,33 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
+let fileExists = lam path.
+  match sysRunCommand ["ls", path] "" "." with {returncode = 0} then
+    true
+  else
+    false
+
+-- Insert tuned values if a .tune file is present
+let insertTuned = lam ast. lam file.
+  let tuneFile = concat (filenameWithoutExtension file) ".tune" in
+  if fileExists tuneFile then
+    use BootParser in
+    print "parsing file: "; printLn tuneFile;
+    let table =
+      match parseMExprString [] (readFile tuneFile)
+      with TmSeq {tms = values}
+      then
+        mapFromList subi (mapi (lam i. lam e. (i, e)) values)
+      else error "Parsing of tuned values failed"
+    in
+
+    use MExprHoles in
+    let ast = makeKeywords [] ast in
+    let ast = symbolize ast in
+    let ast = normalizeTerm ast in
+    insert [] table ast
+  else ast
+
 let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
 
@@ -106,7 +135,10 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = parseMCoreFile [] file in
+    let ast = parseMCoreFile decisionPointsKeywords file in
+
+    -- If program has been tuned, then insert tuned values
+    let ast = insertTuned ast file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
@@ -117,7 +149,6 @@ let compile = lam files. lam options : Options. lam args.
 
       -- Re-symbolize the MExpr AST and re-annotate it with types
       let ast = symbolizeExpr symEnv ast in
-      let ast = typeAnnot ast in
       let ast = typeAnnot ast in
 
       -- Compile MExpr AST

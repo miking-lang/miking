@@ -14,12 +14,15 @@ lang MCoreTune =
   BootParser + MExprHoles + MExprTune
 end
 
-let writeResult = lam file : String. lam table : LookupTable.
+let writeTuned = lam file : String. lam table : LookupTable.
   use MExprPrettyPrint in
   let destinationFile = concat (filenameWithoutExtension file) ".tune" in
   print "destination: "; printLn destinationFile;
   writeFile destinationFile
-    (strJoin " " (map expr2str (mapValues table)))
+    (join
+      [ "["
+      , strJoin ", " (map expr2str (mapValues table))
+      ,  "]"])
 
 let tune = lam files. lam options : Options. lam args.
 
@@ -40,11 +43,8 @@ let tune = lam files. lam options : Options. lam args.
       in
       let result = tuneEntry run holes table in
       print "best table: "; dprintLn (mapBindings result);
-      writeResult file result;
-      match insert [] result ast with (tunedProg, _, _) then
-        --printLn (expr2str tunedProg)
-        ()
-      else never
+      writeTuned file result;
+      printLn (expr2str (insert [] result ast))
     else never
   in
   iter tuneFile files

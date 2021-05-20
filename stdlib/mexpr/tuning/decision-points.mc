@@ -586,12 +586,16 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   sem flatten (publicFns : [Name]) =
   | t ->
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
-    _flattenWithLookup publicFns lookup t
+    match _flattenWithLookup publicFns lookup t with (prog, env)
+    then
+      (_wrapArgv env prog, _initAssignments env, deref env.idx2hole)
+    else never
 
   sem insert (publicFns : [Name]) (table : LookupTable) =
   | t ->
     let lookup = lam i. mapFindWithExn i table in
-    _flattenWithLookup publicFns lookup t
+    match _flattenWithLookup publicFns lookup t with (prog, _)
+    then prog else never
 
   sem _flattenWithLookup (publicFns : [Name]) (lookup : Int -> Expr) =
   | t ->
@@ -605,12 +609,14 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     in
     let tm = bind_ incVars tm in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
-    (_wrapArgv env prog, _initAssignments env, deref env.idx2hole)
+    --(prog, _initAssignments env, deref env.idx2hole)
+    (prog, env)
 
 
   -- Find the initial mapping from decision points to values
   sem _initAssignments =
   | env ->
+    let env : CallCtxEnv = env in
     let idx2hole = deref env.idx2hole in
     mapFromList subi
       (mapi (lam i. lam hole.

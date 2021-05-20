@@ -12,3 +12,4 @@ tags
 .ctags
 .DS_Store
 *.install
+*.tune
