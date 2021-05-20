@@ -86,19 +86,6 @@ lang OCamlString
   | OTmString t -> acc
 end
 
--- This fragment is a hack used to enable inserting the preamble after variant
--- type declarations, but before the rest of the program.
-lang OCamlPreambleHack
-  syn Expr =
-  | OTmPreambleText { text : String, inexpr : Expr }
-
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmPreambleText t -> OTmPreambleText {t with inexpr = f t.inexpr}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmPreambleText t -> f acc t.inexpr
-end
-
 -- This fragment contains variants of other ocaml constructs where the
 -- names should appear exactly as specified, intended to be used to
 -- refer to externally defined names, e.g., in the ocaml standard
@@ -172,7 +159,7 @@ lang OCamlAst =
   CmpIntAst + CmpFloatAst + CharAst + CmpCharAst +
 
   -- Other
-  OCamlExternal  + OCamlPreambleHack
+  OCamlExternal
 end
 
 mexpr

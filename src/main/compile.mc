@@ -1,4 +1,3 @@
-
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
@@ -17,7 +16,7 @@ lang MCoreCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
-  OCamlGenerateExternalNaive + OCamlObjWrap
+  OCamlGenerateExternalNaive
 end
 
 let pprintMcore = lam ast.
@@ -27,20 +26,6 @@ let pprintMcore = lam ast.
 let pprintOcaml = lam ast.
   use OCamlPrettyPrint in
   expr2str ast
-
--- Hack for pretty-printing the preamble and inserting it into the beginning of
--- the OCaml file, after all type definitions.
-let _preambleStr = lam.
-  let str = pprintOcaml (bind_ _preamble (int_ 0)) in
-  subsequence str 0 (subi (length str) 1)
-
-recursive let _withPreamble = lam expr.
-  use OCamlAst in
-  match expr with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
-  else
-    OTmPreambleText {text = _preambleStr (), inexpr = expr}
-end
 
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
@@ -76,14 +61,13 @@ let filenameWithoutExtension = lam filename.
 
 let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
+
   -- Translate the MExpr AST into an OCaml AST
   match typeLift mexprAst with (env, ast) then
     match generateTypeDecl env ast with (env, ast) then
       match chooseAndGenerateExternals globalExternalMap ast
       with (extNameMap, ast) then
         let ast = generate env ast in
-        let ast = objWrap ast in
-        let ast = _withPreamble ast in
 
         -- Collect external library dependencies
         let libs = collectLibraries extNameMap in
