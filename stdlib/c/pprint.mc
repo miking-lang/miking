@@ -20,7 +20,7 @@ let _joinSpace = lam fst. lam snd.
 
 let pprintEnvGetStr = lam env. lam id.
   -- Set this to true to print names with their symbols (for debugging)
-  if true then
+  if false then
     (env,join [
       nameGetStr id,
       match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
