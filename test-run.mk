@@ -60,6 +60,7 @@ run_files += test/mlang/also_includes_lib.mc
 # run_files += stdlib/mexpr/ast-smap-sfold-tests.mc
 # run_files += stdlib/mexpr/keyword-maker.mc
 # run_files += stdlib/mexpr/const-types.mc
+# run_files += stdlib/mexpr/patterns.mc
 # run_files += stdlib/c/ast.mc
 # run_files += stdlib/c/pprint.mc
 # run_files += stdlib/c/compile.mc
