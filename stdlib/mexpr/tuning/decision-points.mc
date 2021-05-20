@@ -156,8 +156,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             hole : Hole}
 
   sem ty =
-  --| TmHole {ty = ty} -> ty
-  | _ -> tybool_
+  | TmHole {ty = ty} -> ty
 
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
@@ -188,7 +187,8 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem isKeyword =
   | TmHole _ -> true
 
-  sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole) =
+  sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole)
+              (validate : Expr -> Expr) =
   | arg ->
     use RecordAst in
     match arg with TmRecord {bindings = bindings} then
@@ -197,16 +197,17 @@ lang HoleAst = IntAst + ANF + KeywordMaker
            (mapBindings bindings)) in
       let init = _lookup "init" bindings in
       let depth = _lookup "depth" bindings in
-      TmHole { init = init
-             , depth = _expectConstInt "depth" depth
-             , info = info
-             , ty = hty
-             , hole = hole bindings}
+      validate
+        (TmHole { init = init
+                , depth = _expectConstInt "depth" depth
+                , info = info
+                , ty = hty
+                , hole = hole bindings})
     else error "Expected record type"
 end
 
 -- A Boolean decision point.
-lang HoleBoolAst = HoleAst
+lang HoleBoolAst = BoolAst + HoleAst
   syn Hole =
   | BoolHole {}
 
@@ -220,11 +221,18 @@ lang HoleBoolAst = HoleAst
 
   sem matchKeywordString (info : Info) =
   | "HoleBool" ->
-    Some (1, lam lst. _mkHole info tybool_ (lam. BoolHole {}) (get lst 0))
+    Some (1,
+      let validate = lam expr.
+        match expr with TmHole {init = init} then
+          match init with TmConst {val = CBool _} then expr
+          else error "Inital value not a constant Boolean"
+        else error "Not a decision point" in
+
+      lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
 end
 
 -- An integer decision point (range of integers).
-lang HoleIntRangeAst = HoleAst
+lang HoleIntRangeAst = IntAst + HoleAst
   syn Hole =
   | IntRange {min : Int,
               max : Int}
@@ -235,22 +243,26 @@ lang HoleIntRangeAst = HoleAst
 
   sem matchKeywordString (info : Info) =
   | "HoleIntRange" ->
-    Some (1, lam lst. _mkHole info tyint_
-      (lam m.
-         let min = _expectConstInt "min" (_lookup "min" m) in
-         let max = _expectConstInt "max" (_lookup "max" m) in
-         if leqi min max then
-           IntRange {min = min, max = max}
-         else error (join ["Empty domain: ",
-                           int2string min, "..", int2string max]))
-      (get lst 0))
-end
+    Some (1,
+      let validate = lam expr.
+        match expr
+        with TmHole {init = TmConst {val = CInt {val = i}},
+                     hole = IntRange {min = min, max = max}}
+        then
+          if and (leqi min i) (geqi max i) then expr
+          else error "Initial value is not within range"
+        else error "Not an integer decision point" in
 
--- -- An integer decision point (set of integers).
--- lang IntSetHoleAst = HoleAst
---   syn Hole =
---   | IntSet {set : [Int]}
--- end
+      lam lst. _mkHole info tyint_
+        (lam m.
+           let min = _expectConstInt "min" (_lookup "min" m) in
+           let max = _expectConstInt "max" (_lookup "max" m) in
+           if leqi min max then
+             IntRange {min = min, max = max}
+           else error (join ["Empty domain: ",
+                           int2string min, "..", int2string max]))
+        validate (get lst 0))
+end
 
 let holeBool_ = use HoleBoolAst in
   lam init. lam depth.
