@@ -246,17 +246,8 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
 
   let ty1 = typeUnwrapAlias env.aliases ty1 in
   let ty2 = typeUnwrapAlias env.aliases ty2 in
+  recur t ty1 ty2
 
-  -- TODO(oerikss, 2021-05-07) We wrap external constants in a lambdas in order
-  -- for the Obj warpping to work correctly. Ideally, this should not be
-  -- necessary.
-  match ty1 with TyArrow _ then
-    recur t ty1 ty2
-  else
-    let n = nameSym "x" in
-    match recur t ty1 ty2 with (cost, body) then
-      (cost, app_ (nulam_ n body) uunit_)
-    else never
 
 -- Marshals expression `Exp` of type `Type` to expression `Expr` of type
 -- `Type`.
