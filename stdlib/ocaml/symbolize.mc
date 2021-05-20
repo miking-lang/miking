@@ -46,8 +46,6 @@ lang OCamlSym =
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
   | OTmTuple { values = values } ->
     OTmTuple { values = map (symbolizeExpr env) values }
-  | OTmTupleProj t ->
-    OTmTupleProj { t with tm = symbolizeExpr env t.tm }
   | OTmConApp t ->
     match _symbolizeVarName env t.ident with (env, ident) then
       let args = map (symbolizeExpr env) t.args in

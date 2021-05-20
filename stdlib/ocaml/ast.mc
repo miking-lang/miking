@@ -50,18 +50,15 @@ end
 lang OCamlTuple
   syn Expr =
   | OTmTuple { values : [Expr] }
-  | OTmTupleProj { tm : Expr, index : Int }
 
   syn Pat =
   | OPatTuple { pats : [Pat] }
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | OTmTuple t -> OTmTuple {t with values = map f t.values}
-  | OTmTupleProj t -> OTmTupleProj { t with tm = map f t.tm }
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | OTmTuple t -> foldl f acc t.values
-  | OTmTupleProj t -> f acc t.tm
 end
 
 lang OCamlData
@@ -200,8 +197,6 @@ let otuple_ = use OCamlAst in
 
 let ounit_ = otuple_ []
 
-let otupleproj_ = use OCamlAst in
-  lam t. lam i. OTmTupleProj { tm = t, index = i }
 
 let oext_ = use OCamlAst in
   lam id : String. OTmVarExt {ident = id}
