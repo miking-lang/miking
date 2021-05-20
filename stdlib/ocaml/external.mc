@@ -69,6 +69,8 @@ let _requiresMarshaling =
         in
         any (lam f. f ()) fs
       else false
+    else match tt with (_, TyVar _) | (TyVar _, _) then
+      false
     else match tt with
       (TySeq {ty = ty1}, TySeq {ty = ty2}) |
       (OTyList {ty = ty1}, OTyList {ty = ty2}) |
