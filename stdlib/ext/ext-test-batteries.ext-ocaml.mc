@@ -1,6 +1,6 @@
 include "ocaml/ast.mc"
 
-let batteries =
+let extTestBatteriesMap =
   use OCamlTypeAst in
   mapFromList cmpString
   [

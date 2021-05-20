@@ -123,8 +123,7 @@ lang OCamlArgLabels
 end
 
 lang OCamlTypeAst =
-  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
-  RecordTypeAst + VarTypeAst + AppTypeAst
+  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst + FunTypeAst
 
   syn Type =
   | OTyList {info : Info, ty : Type}
@@ -135,6 +134,8 @@ lang OCamlTypeAst =
   | OTyBigArrayIntElt {info : Info}
   | OTyBigArrayClayout {info : Info}
   | OTyLabel {info : Info, label : String, ty : Type}
+  | OTyVarExt {info : Info, ident : String, args : [Type]}
+  | OTyParam {info : Info, ident : String}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -145,6 +146,8 @@ lang OCamlTypeAst =
   | OTyBigArrayIntElt r -> r.info
   | OTyBigArrayClayout r -> r.info
   | OTyLabel r -> r.info
+  | OTyVarExt r -> r.info
+  | OTyParam r -> r.info
 end
 
 let otylist_ = use OCamlTypeAst in
@@ -170,8 +173,11 @@ let otytuple_ = use OCamlTypeAst in
 
 let otyunit_ = otytuple_ []
 
-let otyopaque_ = use OCamlTypeAst in
-  tyvar_ "OCamlOpaque"
+let otyvarext_ = use OCamlTypeAst in
+  lam ident. lam args. OTyVarExt { info = NoInfo (), ident = ident, args = args}
+
+let otyparam_ = use OCamlTypeAst in
+  lam ident. OTyParam {info = NoInfo (), ident = ident}
 
 lang OCamlAst =
   -- Terms
@@ -192,13 +198,18 @@ lang OCamlAst =
   OCamlExternal
 end
 
+let optuple_ = use OCamlAst in
+  lam pats. OPatTuple { pats = pats }
+
+let omatch_ = use OCamlAst in
+  lam target. lam arms. OTmMatch {target = target, arms = arms}
+
 let otuple_ = use OCamlAst in
   lam values. OTmTuple { values = values }
 
 let ounit_ = otuple_ []
 
-
-let oext_ = use OCamlAst in
+let ovarext_ = use OCamlAst in
   lam id : String. OTmVarExt {ident = id}
 
 let oarglabel_ = use OCamlAst in

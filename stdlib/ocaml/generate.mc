@@ -2169,30 +2169,30 @@ in
 
 let extZeroTest =
   bind_
-    (ext_ "testZero" false tyfloat_)
-    (var_ "testZero")
+    (ext_ "extTestZero" false tyfloat_)
+    (var_ "extTestZero")
 in
 utest ocamlEvalFloat (generateWithExternals extZeroTest)
 with float_ 0. using eqExpr in
 
 let extExpTest =
   bind_
-    (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
-    (app_ (var_ "testExp") (float_ 0.))
+    (ext_ "extTestExp" false (tyarrow_ tyfloat_ tyfloat_))
+    (app_ (var_ "extTestExp") (float_ 0.))
 in
 utest ocamlEvalFloat (generateWithExternals extExpTest)
 with float_ 1. using eqExpr in
 
 let extListMapTest = symbolize (
 bind_
-  (ext_ "testListMap"
+  (ext_ "extTestListMap"
         false
         (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
                     tyseq_ (tyvar_ "a"),
                     tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
-      (var_ "testListMap")
+      (var_ "extTestListMap")
         [ulam_ "x" (addi_ (var_ "x") (int_ 1)),
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
@@ -2202,14 +2202,14 @@ with int_ 1 using eqExpr in
 
 let extListConcatMapTest = symbolize (
 bind_
-  (ext_ "testListConcatMap"
+  (ext_ "extTestListConcatMap"
         false
         (tyarrows_ [tyarrow_ (tyvar_ "a") (tyseq_ (tyvar_ "b")),
                     tyseq_ (tyvar_ "a"),
                     tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
-      (var_ "testListConcatMap")
+      (var_ "extTestListConcatMap")
         [ulam_ "x" (seq_ [addi_ (var_ "x") (int_ 1)]),
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
@@ -2220,10 +2220,10 @@ with int_ 1 using eqExpr in
 -- Externals and Tensors
 let extGenarrIntNumDims = symbolize (
 bind_
-  (ext_ "testGenarrIntNumDims"
+  (ext_ "extTestGenarrIntNumDims"
         false
         (tyarrow_ (tytensor_ tyint_) tyint_))
-    (app_ (var_ "testGenarrIntNumDims")
+    (app_ (var_ "extTestGenarrIntNumDims")
           (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1)))))
 in
 utest ocamlEvalInt (generateWithExternals extGenarrIntNumDims)
@@ -2231,10 +2231,10 @@ with int_ 0 using eqExpr in
 
 let extGenarrFloatNumDims = symbolize (
 bind_
-  (ext_ "testGenarrFloatNumDims"
+  (ext_ "extTestGenarrFloatNumDims"
         false
         (tyarrow_ (tytensor_ tyfloat_) tyint_))
-    (app_ (var_ "testGenarrFloatNumDims")
+    (app_ (var_ "extTestGenarrFloatNumDims")
           (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.)))))
 in
 utest ocamlEvalInt (generateWithExternals extGenarrFloatNumDims)
@@ -2242,11 +2242,11 @@ with int_ 0 using eqExpr in
 
 let extGenarrIntSliceLeft = symbolize (
 bind_
-  (ext_ "testGenarrIntSliceLeft"
+  (ext_ "extTestGenarrIntSliceLeft"
         false
         (tyarrows_ [tytensor_ tyint_, tyseq_ tyint_, tytensor_ tyint_]))
     (tensorRank_ tyint_
-      (appSeq_ (var_ "testGenarrIntSliceLeft")
+      (appSeq_ (var_ "extTestGenarrIntSliceLeft")
                [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (int_ 1)),
                 seq_ [int_ 0]])))
 in
@@ -2255,32 +2255,15 @@ with int_ 0 using eqExpr in
 
 let extGenarrFloatSliceLeft = symbolize (
 bind_
-  (ext_ "testGenarrFloatSliceLeft"
+  (ext_ "extTestGenarrFloatSliceLeft"
         false
         (tyarrows_ [tytensor_ tyfloat_, tyseq_ tyint_, tytensor_ tyfloat_]))
     (tensorRank_ tyfloat_
-      (appSeq_ (var_ "testGenarrFloatSliceLeft")
+      (appSeq_ (var_ "extTestGenarrFloatSliceLeft")
                [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (float_ 1.)),
                 seq_ [int_ 0]])))
 in
 utest ocamlEvalInt (generateWithExternals extGenarrFloatSliceLeft)
-with int_ 0 using eqExpr in
-
-let extIdArrayIntTest =
-  bind_
-    (ext_ "testIdArrayInt" false (tyarrow_ (tyseq_ tyint_) (tyseq_ tyint_)))
-    (get_ (app_ (var_ "testIdArrayInt") (seq_ [int_ 0])) (int_ 0))
-in
-utest ocamlEvalInt (generateWithExternals extIdArrayIntTest)
-with int_ 0 using eqExpr in
-
-let extIdUnitTest =
-  bind_
-    (ext_ "testIdUnit" false (tyarrow_ tyunit_ tyunit_))
-    (semi_ (app_ (var_ "testIdUnit") uunit_)
-           (int_ 0))
-in
-utest ocamlEvalInt (generateWithExternals extIdUnitTest)
 with int_ 0 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics

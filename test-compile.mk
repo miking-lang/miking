@@ -135,6 +135,7 @@ compile_files += src/main/mi.mc
 compile_files += src/main/compile.mc
 compile_files += src/main/run.mc
 compile_files += stdlib/ext/math-ext.mc
+compile_files += stdlib/ext/ext-test.mc
 
 all: ${compile_files}
 
