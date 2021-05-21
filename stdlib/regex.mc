@@ -17,7 +17,7 @@ let prec = lam reg.
   match reg with Union _ then 1 else
   match reg with Concat _ then 1 else
   match reg with Kleene _ then 1 else
-  error "Unkown regex in prec"
+  error "Unknown regex in prec"
 
 let regEx2str = lam sym2str. lam reg.
   recursive

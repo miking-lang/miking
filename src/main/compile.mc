@@ -11,11 +11,13 @@ include "mexpr/utesttrans.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
+include "ocaml/external-includes.mc"
 
 lang MCoreCompile =
   BootParser +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
-  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate + OCamlObjWrap
+  OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
+  OCamlGenerateExternalNaive
 end
 
 let pprintMcore = lam ast.
@@ -26,20 +28,6 @@ let pprintOcaml = lam ast.
   use OCamlPrettyPrint in
   expr2str ast
 
--- Hack for pretty-printing the preamble and inserting it into the beginning of
--- the OCaml file, after all type definitions.
-let _preambleStr = lam.
-  let str = pprintOcaml (bind_ _preamble (int_ 0)) in
-  subsequence str 0 (subi (length str) 1)
-
-recursive let _withPreamble = lam expr.
-  use OCamlAst in
-  match expr with OTmVariantTypeDecl t then
-    OTmVariantTypeDecl {t with inexpr = _withPreamble t.inexpr}
-  else
-    OTmPreambleText {text = _preambleStr (), inexpr = expr}
-end
-
 let generateTests = lam ast. lam testsEnabled.
   use MCoreCompile in
   if testsEnabled then
@@ -49,6 +37,17 @@ let generateTests = lam ast. lam testsEnabled.
   else
     let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
+
+let collectLibraries = lam extNameMap : ExternalNameMap.
+  let f = lam libs. lam lib. setInsert lib libs in
+  let g =
+    lam libs. lam impl :  ExternalImpl. foldl f libs impl.libraries
+  in
+  let h = lam libs. lam. lam impls. foldl g libs impls in
+  let libs =
+    mapFoldWithKey h (setEmpty cmpString) extNameMap
+  in
+  setToSeq libs
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
@@ -61,11 +60,16 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let ocamlCompile = lam options : Options. lam sourcePath. lam ocamlProg.
+let ocamlCompile =
+  lam options : Options. lam libs. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
-    if options.disableOptimizations then
-      {defaultCompileOptions with optimize = false}
-    else defaultCompileOptions
+    {
+      (if options.disableOptimizations then
+        {defaultCompileOptions with optimize = false}
+       else defaultCompileOptions)
+
+       with libraries = libs
+    }
   in
   let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
@@ -93,25 +97,28 @@ let compile = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
       let ast = typeAnnot ast in
 
-      -- Translate the MExpr AST into an OCaml AST
-      let ocamlAst =
-        match typeLift ast with (env, ast) then
-          match generateTypeDecl env ast with (env, ast) then
+      -- Translate the MExpr AST into an OCaml AST and Compile
+      match typeLift ast with (env, ast) then
+        match generateTypeDecl env ast with (env, ast) then
+          match chooseAndGenerateExternals globalExternalMap ast
+          with (extNameMap, ast) then
             let ast = generate env ast in
-            let ast = objWrap ast in
-            _withPreamble ast
+
+            -- Collect external library dependencies
+            let libs = collectLibraries extNameMap in
+
+            let ocamlProg = pprintOcaml ast in
+
+            -- Print the AST after code generation
+            (if options.debugGenerate then printLn ocamlProg else ());
+
+            -- Compile OCaml AST
+            if options.exitBefore then exit 0
+            else ocamlCompile options libs file ocamlProg
+
           else never
         else never
-      in
-
-      let ocamlProg = pprintOcaml ocamlAst in
-
-      -- Print the AST after code generation
-      (if options.debugGenerate then printLn ocamlProg else ());
-
-      -- Compile OCaml AST
-      if options.exitBefore then exit 0
-      else ocamlCompile options file ocamlProg
+      else never
     else never
   in
   iter compileFile files

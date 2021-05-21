@@ -1087,7 +1087,7 @@ interpreters to achieve the same thing.
 
 
 
-## Externals
+## Externals (builtin)
 
 As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
@@ -1260,6 +1260,70 @@ dune install
 
 after building miking with python intrinsics support.
 
+## Externals
+Externals are currently only compiled.
+
+As example of how you define an external see
+[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) and
+[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc).
+
+[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) defines the MLang part
+of the definition, e.g.
+
+```
+external batteriesZero : Int
+```
+
+which makes an external value `batteriesZero` of type `Int` available at the
+top-level. The corresponding MCore syntax is:
+
+```
+external ident : Type in expr
+```
+
+If the external has side-effects it should be annotated with a `!` after the
+identifier, e.g.
+
+```
+external print ! : String -> () in expr
+```
+
+Each external identifier can only be defined once and externals cannot be
+partially applied.
+
+[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc)
+defines the OCaml part of the external definition:
+
+```
+include "ocaml/ast.mc"
+
+let batteries =
+  use OCamlTypeAst in
+  mapFromList cmpString
+  [
+    ("batteriesZero", [
+      { ident = "BatInt.zero", ty = tyint_, libraries = ["batteries"] }
+    ])
+  ]
+```
+
+As a temporary solution, this definition is written as an MLang program and
+should define a map from external identifiers to a list of records defining
+implementations associated with this external identifier. The record field
+`ident` defines an OCaml identifier, the field `ty` defines the OCaml type of
+this identifier (see [./stdlib/ocaml/ast.mc](./stdlib/ocaml/ast.mc)), and the
+field `libraries` defines a sequence of libraries this external depends on.
+
+Programs defining externals should be placed under [./stdlib/ext](./stdlib/ext)
+and follow the above naming convention to avoid failing test for the
+interpreter. Additionally, the implementation map, in this case `batteries`,
+should be added to `globalExternalMap` in
+[./stdlib/ocaml/external-includes.mc](./stdlib/ocaml/external-includes.mc).
+
+Morever, depending on the type of the external you might have to extend the
+`externalMarshal` and `externalMarshalCost` function in
+[./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
+
 ## Contributing
 
 1. Before making a pull request please make sure that all tests pass. Run
@@ -1310,6 +1374,7 @@ These instructions are adapted from
 [https://github.com/psf/black](https://github.com/psf/black). See
 [https://git-scm.com/docs/git-blame#Documentation/git-blame.txt---ignore-revltrevgt](https://git-scm.com/docs/git-blame#Documentation/git-blame.txt---ignore-revltrevgt)
 for documentation on the `--ignore-revs-file` option.
+
 
 ## MIT License
 Miking is licensed under the MIT license.
