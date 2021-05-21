@@ -23,6 +23,8 @@ include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
 include "mexpr/boot-parser.mc"
 
+include "name.mc"
+
 include "ast.mc"
 include "pprint.mc"
 
@@ -44,6 +46,18 @@ recursive let _unwrapType = use VarTypeAst in
       else error "TyVar not defined in environment"
     else ty
 end
+
+-- Unwrap type aliases
+recursive let _unwrapTypeAlias = use VarTypeAst in
+    lam tyEnv: AssocSeq Name Type. lam ty: Type.
+    match ty with TyVar { ident = ident } then
+      let res = assocSeqLookup { eq = nameEq } ident tyEnv in
+      match res with Some ((TyVar _) & ty) then _unwrapTypeAlias tyEnv ty
+      else match res with Some _ then ty
+      else error "TyVar not defined in environment"
+    else error "Not a tyVar in _unwrapTypeAlias"
+end
+
 
 
 --------------------------
@@ -87,6 +101,9 @@ type CompileCEnv = {
   -- Map from constructor names to data field names
   constrData: ConstrDataEnv,
 
+  -- Type names translating to C structs
+  structTypes: [Name],
+
   -- The initial type environment produced by type lifting
   -- TODO(dlunde,2021-05-17): I want CompileCEnv to be visible across the whole
   -- MExprCCompile fragment, which is why it is defined here. A problem,
@@ -98,7 +115,7 @@ type CompileCEnv = {
 
 }
 
-let compileCEnvEmpty = { typeEnv = [], constrData = [] }
+let compileCEnvEmpty = { typeEnv = [], constrData = [], structTypes = [] }
 
 ----------------------------------
 -- MEXPR -> C COMPILER FRAGMENT --
@@ -116,61 +133,81 @@ lang MExprCCompile = MExprAst + CAst
   sem compile (typeEnv: [(Name,Type)]) =
   | prog ->
 
-    let decls: [CTop] =
-      foldl (lam acc. lam t: (Name,Type). genTyDecls acc t.0 t.1) [] typeEnv in
-    let defs: [CTop] =
-      foldl (lam acc. lam t: (Name,Type). genTyDefs acc t.0 t.1) [] typeEnv in
-    let postDefs: (ConstrDataEnv, [CTop]) =
-      foldl (lam acc. lam t: (Name,Type). genTyPostDefs acc t.0 t.1)
-        ([],[]) typeEnv in
+    let structTypes: [Name] = foldl (lam acc. lam t: (Name,Type).
+      if isPtrType t.1 then snoc acc t.0 else acc
+    ) [] typeEnv in
+
+    let env = {{ compileCEnvEmpty with structTypes = structTypes }
+                                  with typeEnv = typeEnv } in
+
+    let decls: [CTop] = foldl (lam acc. lam t: (Name,Type).
+      genTyDecls acc t.0 t.1
+    ) [] typeEnv in
+
+    let defs: [CTop] = foldl (lam acc. lam t: (Name,Type).
+      genTyDefs env acc t.0 t.1
+    ) [] typeEnv in
+
+    let postDefs: (ConstrDataEnv, [CTop]) = foldl (lam acc. lam t: (Name,Type).
+      genTyPostDefs env acc t.0 t.1
+    ) ([],[]) typeEnv in
 
     match postDefs with (constrData, postDefs) then
-      let env = {{ compileCEnvEmpty with constrData = constrData }
-                                    with typeEnv = typeEnv } in
+      let env = {{ env with constrData = constrData }
+                       with typeEnv = typeEnv }
+      in
       match compileTops env [] [] prog with (tops, inits) then
         (join [decls, defs, postDefs], tops, inits)
       else never
     else never
 
+  sem isPtrType =
+  | TyVariant _ -> true
+  | TyRecord _ -> true
+  | _ -> false
+
   sem genTyDecls (acc: [CTop]) (name: Name) =
 
   | TyVariant _ ->
-    let decl = CTTyDef {
-      ty = CTyPtr { ty = CTyStruct { id = Some name, mem = None () } },
-      id = name
+    let decl = CTDef {
+      ty = CTyStruct { id = Some name, mem = None () },
+      id = None (),
+      init = None ()
     } in
     cons decl acc
 
   | _ -> acc
 
 
-  sem genTyDefs (acc: [CTop]) (name: Name) =
+  sem genTyDefs (env: CompileCEnv) (acc: [CTop]) (name: Name) =
 
-  | TyVariant _ -> acc
+  | TyVariant _ -> acc -- These are handled by genTyPostDefs instead
 
   | TyRecord { fields = fields } ->
     let fieldsLs: [(CType,String)] =
       mapFoldWithKey (lam acc. lam k. lam ty.
-        let ty = compileType ty in
+        let ty = compileType env ty in
         snoc acc (ty, Some (sidToString k))) [] fields in
-    let def = CTTyDef {
-      ty = CTyPtr { ty = CTyStruct { id = Some name, mem = Some fieldsLs } },
-      id = name
+    let def = CTDef {
+      ty = CTyStruct { id = Some name, mem = Some fieldsLs },
+      id = None (),
+      init = None ()
     } in
     cons def acc
 
   | ty ->
-    let def = CTTyDef { ty = compileType ty, id = name } in
+    let def = CTTyDef { ty = compileType env ty, id = name } in
     cons def acc
 
 
-  sem genTyPostDefs (acc: (ConstrDataEnv, [CTop])) (name: Name) =
+  sem genTyPostDefs
+    (env: CompileCEnv) (acc: (ConstrDataEnv, [CTop])) (name: Name) =
 
   | TyVariant { constrs = constrs } ->
     match acc with (constrData, postDefs) then
       let constrLs: [(Name, CType)] =
         mapFoldWithKey (lam acc. lam name. lam ty.
-          let ty = compileType ty in
+          let ty = compileType env ty in
             snoc acc (name, ty)) [] constrs in
       let constrLs: [(Name, String, CType)] =
         mapi (lam i. lam t: (Name,CType).
@@ -205,7 +242,7 @@ lang MExprCCompile = MExprAst + CAst
   -- C TYPES --
   -------------
 
-  sem compileType =
+  sem compileType (env: CompileCEnv) =
 
   | TyInt _   -> CTyInt {}
   | TyFloat _ -> CTyDouble {}
@@ -232,7 +269,15 @@ lang MExprCCompile = MExprAst + CAst
     else
       error "ERROR: TyRecord should not occur in compileType. Did you run type lift?"
 
-  | TyVar { ident = ident } -> CTyVar { id = ident }
+  | TyVar { ident = ident } & ty ->
+    -- Safety precaution, it seems this may already be handled by type lifting
+    let unwrapped =
+      match _unwrapTypeAlias env.typeEnv ty with TyVar { ident = i } then i
+      else error "Impossible in compileType"
+    in
+    match find (nameEq unwrapped) env.structTypes with Some _ then
+      CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } }
+    else CTyVar { id = ident }
 
   -- | TyUnknown _ -> CTyChar {}
   | TyUnknown _ -> error "Unknown type in compileType"
@@ -277,9 +322,9 @@ lang MExprCCompile = MExprAst + CAst
         if neqi (length params) (length paramTypes) then
           error "Number of parameters in compileFun does not match."
         else
-          match map compileType paramTypes with paramTypes then
+          match map (compileType env) paramTypes with paramTypes then
             let params = zipWith (lam t. lam id. (t, id)) paramTypes params in
-            match compileType retType with ret then
+            match (compileType env) retType with ret then
               match compileStmts env { name = None () } [] body
               with (env, body) then
                 (env, CTFun { ret = ret, id = id, params = params, body = body })
@@ -298,7 +343,7 @@ lang MExprCCompile = MExprAst + CAst
 
   | PatNamed { ident = PName ident } ->
     let def = CSDef {
-      ty = compileType ty,
+      ty = compileType env ty,
       id = Some ident,
       init = Some (CIExpr { expr = target })
     } in
@@ -361,7 +406,7 @@ lang MExprCCompile = MExprAst + CAst
 
     -- Allocate memory for return value of match expression
     let def = if _isUnitTy tyMatch then [] else
-      [{ ty = compileType tyMatch, id = Some ident, init = None () }]
+      [{ ty = compileType env tyMatch, id = Some ident, init = None () }]
     in
 
     let ctarget = compileExpr target in
@@ -393,7 +438,7 @@ lang MExprCCompile = MExprAst + CAst
 
   -- TmSeq: allocate and create a new array. Special handling of strings for now.
   | TmSeq { ty = ty, tms = tms } ->
-    let ty = compileType ty in
+    let ty = compileType env ty in
     let toChar = lam expr.
       match expr with TmConst { val = CChar { val = val } } then Some val
       else None ()
@@ -408,7 +453,7 @@ lang MExprCCompile = MExprAst + CAst
 
   -- TmConApp: allocate and create a new struct.
   | TmConApp { ident = constrIdent, body = body, ty = ty } ->
-    let ty = compileType ty in
+    let ty = compileType env ty in
     match env with { constrData = constrData } then
       let def = alloc ident ty in
       let dataKey =
@@ -445,7 +490,7 @@ lang MExprCCompile = MExprAst + CAst
   -- TmRecord: allocate and create new struct, unless it is an empty record (in
   -- which case it is compiled to the integer 0)
   | TmRecord { ty = ty, bindings = bindings } ->
-    let ty = compileType ty in
+    let ty = compileType env ty in
     if mapIsEmpty bindings then (
       env,
       Some { ty = ty, id = Some ident,
@@ -478,7 +523,7 @@ lang MExprCCompile = MExprAst + CAst
       else (env, [], [CSExpr { expr = compileExpr expr }])
 
     else
-      let ty = compileType ty in
+      let ty = compileType env ty in
       (env,
        [{ ty = ty, id = Some ident,
           init = Some (CIExpr { expr = compileExpr expr }) }],
@@ -539,7 +584,7 @@ lang MExprCCompile = MExprAst + CAst
       else never
     in
     match mapAccumL f env bindings with (env, funs) then
-      let decls = map g funs in
+      let decls = if leqi (length funs) 1 then [] else map g funs in
       compileTops env (join [accTop, decls, funs]) accInit inexpr
     else never
 
@@ -677,17 +722,17 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
 
   -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
   sem alloc (name: Name) =
-  | CTyVar { id = tyName } & ty ->
+  | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } & ptrTy ->
     let allocName = nameSym "alloc" in
     [
       -- Allocate struct on the stack
-      { ty = CTyStruct { id = Some tyName, mem = None () }
+      { ty = ty
       , id = Some allocName
       , init = None ()
       },
 
       -- Define name as pointer to allocated struct
-      { ty = ty
+      { ty = ptrTy
       , id = Some name
       , init = Some (
           CIExpr {
@@ -696,7 +741,7 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
         )
       }
     ]
-  | _ -> error "Not a CTyVar in alloc"
+  | _ -> error "Incorrect type in alloc"
 
   sem free =
   | name -> error "free currently unused"
@@ -860,7 +905,6 @@ let factorial = bindall_ [
 utest testCompile factorial with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
-  "int factorial(int);",
   "int factorial(int n) {",
   "  char t = (n == 0);",
   "  int t1;",
@@ -969,17 +1013,37 @@ let typedefs = bindall_ [
 utest testCompile typedefs with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
-  "typedef struct Tree (*Tree);",
+  "struct Tree;",
   "typedef int Integer;",
-  "typedef struct Rec {Integer k;} (*Rec);",
-  "typedef Rec MyRec;",
-  "typedef struct Rec1 {MyRec k; Tree t;} (*Rec1);",
-  "typedef Rec1 MyRec2;",
+  "struct Rec {Integer k;};",
+  "typedef struct Rec (*MyRec);",
+  "struct Rec1 {struct MyRec (*k); struct Tree (*t);};",
+  "typedef struct Rec1 (*MyRec2);",
   "typedef Integer Integer2;",
-  "typedef struct Rec2 {Integer2 v;} (*Rec2);",
-  "typedef struct Rec3 {int v; Tree l; Tree r;} (*Rec3);",
-  "struct Tree {enum {Leaf, Node} constr; union {Rec2 d0; Rec3 d1;};};",
+  "struct Rec2 {Integer2 v;};",
+  "struct Rec3 {int v; struct Tree (*l); struct Tree (*r);};",
+  "struct Tree {enum {Leaf, Node} constr; union {struct Rec2 (*d0); struct Rec3 (*d1);};};",
   "int main(int argc, char (*argv[])) {",
+  "  return 0;",
+  "}"
+] using eqString in
+
+-- Potentially tricky case with type aliases
+let alias = bindall_ [
+  type_ "MyRec" (tyrecord_ [("k", tyint_)]),
+  let_ "myRec" (tyvar_ "MyRec") (record_ [("k", int_ 0)]),
+  int_ 0
+] in
+utest testCompile alias with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <stdlib.h>",
+  "struct Rec {int k;};",
+  "typedef struct Rec (*MyRec);",
+  "struct Rec alloc;",
+  "struct Rec (*myRec);",
+  "int main(int argc, char (*argv[])) {",
+  "  (myRec = (&alloc));",
+  "  ((myRec->k) = 0);",
   "  return 0;",
   "}"
 ] using eqString in
@@ -1028,45 +1092,44 @@ let trees = bindall_ [
 utest testCompile trees with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
-  "typedef struct Tree (*Tree);",
-  "typedef struct Rec {int v;} (*Rec);",
-  "typedef struct Rec1 {int v; Tree l; Tree r;} (*Rec1);",
-  "struct Tree {enum {Leaf, Node} constr; union {Rec d0; Rec1 d1;};};",
+  "struct Tree;",
+  "struct Rec {int v;};",
+  "struct Rec1 {int v; struct Tree (*l); struct Tree (*r);};",
+  "struct Tree {enum {Leaf, Node} constr; union {struct Rec (*d0); struct Rec1 (*d1);};};",
   "struct Rec alloc;",
-  "Rec t;",
+  "struct Rec (*t);",
   "struct Tree alloc1;",
-  "Tree t1;",
+  "struct Tree (*t1);",
   "struct Rec alloc2;",
-  "Rec t2;",
+  "struct Rec (*t2);",
   "struct Tree alloc3;",
-  "Tree t3;",
+  "struct Tree (*t3);",
   "struct Rec1 alloc4;",
-  "Rec1 t4;",
+  "struct Rec1 (*t4);",
   "struct Tree alloc5;",
-  "Tree t5;",
+  "struct Tree (*t5);",
   "struct Rec alloc6;",
-  "Rec t6;",
+  "struct Rec (*t6);",
   "struct Tree alloc7;",
-  "Tree t7;",
+  "struct Tree (*t7);",
   "struct Rec alloc8;",
-  "Rec t8;",
+  "struct Rec (*t8);",
   "struct Tree alloc9;",
-  "Tree t9;",
+  "struct Tree (*t9);",
   "struct Rec1 alloc10;",
-  "Rec1 t10;",
+  "struct Rec1 (*t10);",
   "struct Tree alloc11;",
-  "Tree t11;",
+  "struct Tree (*t11);",
   "struct Rec1 alloc12;",
-  "Rec1 t12;",
+  "struct Rec1 (*t12);",
   "struct Tree alloc13;",
-  "Tree tree;",
-  "int treeRec(Tree);",
-  "int treeRec(Tree t13) {",
+  "struct Tree (*tree);",
+  "int treeRec(struct Tree (*t13)) {",
   "  int t14;",
   "  if (((t13->constr) == Node)) {",
   "    int v = ((t13->d1)->v);",
-  "    Tree l = ((t13->d1)->l);",
-  "    Tree r = ((t13->d1)->r);",
+  "    struct Tree (*l) = ((t13->d1)->l);",
+  "    struct Tree (*r) = ((t13->d1)->r);",
   "    int t15 = (treeRec(l));",
   "    int t16 = (v + t15);",
   "    int t17 = (treeRec(r));",
