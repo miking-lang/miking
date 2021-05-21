@@ -62,6 +62,38 @@ let _requiresConversion =
     then
       recur ty1 ty2
     else match tt with
+      (OTyBigarrayGenarray
+        {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]}
+      ,OTyBigarrayGenarray
+        {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]})
+        |
+      (OTyBigarrayGenarray
+        {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]}
+      ,OTyBigarrayGenarray
+        {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]})
+    then
+      false
+    else match tt with
+      (OTyBigarrayArray {
+          rank = rank1,
+          tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
+        }
+      ,OTyBigarrayArray {
+          rank = rank2,
+          tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
+        })
+        |
+      (OTyBigarrayArray {
+          rank = rank1,
+          tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+        }
+      ,OTyBigarrayArray {
+          rank = rank2,
+          tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+        })
+    then
+      eqi rank1 rank2
+    else match tt with
       (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
     then
       or (recur ty21 ty11) (recur ty12 ty22)
@@ -251,42 +283,110 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
           else never
         else infoErrorExit info "Cannot convert tuple"
       else match tt with
-        (OTyBigArrayGenArray
-          {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
-        ,OTyBigArrayGenArray
-          {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
+        (OTyBigarrayGenarray
+          {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]}
+        ,OTyBigarrayGenarray
+          {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]})
+          |
+        (OTyBigarrayGenarray
+          {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]}
+        ,OTyBigarrayGenarray
+          {tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]})
       then
         (0, t)
       else match tt with
-        (OTyBigArrayGenArray
-          {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
-        ,OTyBigArrayGenArray
-          {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
-      then
-        (0, t)
-      else match tt with
-        (TyTensor {ty = TyInt _}
-        ,OTyBigArrayGenArray
-          {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
-      then
-        let lhs =
-          OTmVarExt { ident = intrinsicOpTensor "Helpers.to_genarray_clayout" }
-        in
-        let t =
-          TmApp {
-            lhs = lhs,
-            rhs = t,
-            ty = ty1,
-            info = info
+        (OTyBigarrayArray {
+            rank = rank1,
+            tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
           }
-        in
-        (_tensorToGenarrayCost, t)
-      else match tt with
-        (OTyBigArrayGenArray
-          {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
-        ,TyTensor {ty = TyInt _})
+        ,OTyBigarrayArray {
+            rank = rank2,
+            tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]
+          })
+          |
+        (OTyBigarrayArray {
+            rank = rank1,
+            tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+          }
+        ,OTyBigarrayArray {
+            rank = rank2,
+            tys = [TyFloat _, OTyBigarrayFloat64Elt _, OTyBigarrayClayout _]
+          })
       then
-        let lhs = OTmVarExt { ident = intrinsicOpTensor "carray_int" } in
+        if eqi rank1 rank2 then (0, t)
+        else infoErrorExit info "Bigarray rank mismatch"
+      else match tt with
+        (TyTensor {ty = elty1}
+        ,OTyBigarrayGenarray
+          {tys = [elty2, elty3, OTyBigarrayClayout _]})
+      then
+        match (elty1, elty2, elty3) with
+          (TyInt _, TyInt _, OTyBigarrayIntElt _) |
+          (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _)
+        then
+          let lhs =
+            OTmVarExt
+              { ident = intrinsicOpTensor "Helpers.to_genarray_clayout" }
+          in
+          let t =
+            TmApp {
+              lhs = lhs,
+              rhs = t,
+              ty = ty1,
+              info = info
+            }
+          in
+          (_tensorToGenarrayCost, t)
+        else
+          infoErrorExit info "Cannot convert to bigarray"
+      else match tt with
+        (TyTensor {ty = elty1}
+        ,OTyBigarrayArray {
+            rank = rank,
+            tys = [elty2, elty3, OTyBigarrayClayout _]
+          })
+      then
+        match (elty1, elty2, elty3) with
+          (TyInt _, TyInt _, OTyBigarrayIntElt _) |
+          (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _)
+        then
+          let lhs =
+            let op =
+              if eqi rank 1 then
+                "Helpers.to_array1_clayout"
+              else if eqi rank 2 then
+                "Helpers.to_array2_clayout"
+              else
+                infoErrorExit info "Cannot convert bigarray"
+            in
+            OTmVarExt { ident = intrinsicOpTensor op }
+          in
+          let t =
+            TmApp {
+              lhs = lhs,
+              rhs = t,
+              ty = ty1,
+              info = info
+            }
+          in
+          (_tensorToGenarrayCost, t)
+        else
+          infoErrorExit info "Cannot convert to bigarray"
+      else match tt with
+        (OTyBigarrayGenarray
+          {tys = [elty1, elty3, OTyBigarrayClayout _]}
+        ,TyTensor {ty = elty2})
+      then
+        let op =
+          let elt = (elty1, elty2, elty3) in
+          match elt with (TyInt _, TyInt _, OTyBigarrayIntElt _) then
+            "carray_int"
+          else match elt with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _)
+          then
+            "carray_float"
+          else infoErrorExit info "Cannot convert bigarray"
+        in
+        let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
         let t =
           TmApp {
             lhs = lhs,
@@ -297,28 +397,29 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
         in
         (_tensorToGenarrayCost, t)
       else match tt with
-        (TyTensor {ty = TyFloat _}
-        ,OTyBigArrayGenArray
-          {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
+        (OTyBigarrayArray {
+          rank = rank,
+          tys = [elty1, elty3, OTyBigarrayClayout _]
+         }
+        ,TyTensor {ty = elty2})
       then
-        let lhs =
-          OTmVarExt { ident = intrinsicOpTensor "Helpers.to_genarray_clayout" }
+        let op =
+          let eltr = (elty1, elty2, elty3, rank) in
+          match eltr
+          with (TyInt _, TyInt _, OTyBigarrayIntElt _, 1) then
+            "Helpers.of_array1_clayout_int"
+          else match eltr
+          with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 1) then
+            "Helpers.of_array1_clayout_float"
+          else match eltr
+          with (TyInt _, TyInt _, OTyBigarrayIntElt _, 2) then
+            "Helpers.of_array2_clayout_int"
+          else match eltr
+          with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 2) then
+            "Helpers.of_array2_clayout_float"
+          else infoErrorExit info "Cannot convert bigarray"
         in
-        let t =
-          TmApp {
-            lhs = lhs,
-            rhs = t,
-            ty = ty1,
-            info = info
-          }
-        in
-        (_tensorToGenarrayCost, t)
-      else match tt with
-        (OTyBigArrayGenArray
-          {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
-        ,TyTensor {ty = TyFloat _})
-      then
-        let lhs = OTmVarExt { ident = intrinsicOpTensor "carray_float" } in
+        let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
         let t =
           TmApp {
             lhs = lhs,
@@ -355,7 +456,7 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
             (addi cost1 cost2, t)
           else never
         else never
-      else infoErrorExit info "Cannot convert data"
+      else dprint ty1; infoErrorExit info "Cannot convert data"
   in
 
   let ty1 = typeUnwrapAlias env.aliases ty1 in
@@ -394,7 +495,7 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         (implsMap : Map String [ExternalImpl])
         (env : GenerateEnv) =
 
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
     match impls with Some (![] & impls) then
@@ -410,6 +511,6 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
       let env = { env with exts = mapInsert ident [impl] env.exts } in
       chooseExternalImpls implsMap env inexpr
     else
-      error (join ["No implementation for external ", identStr])
+      infoErrorExit info (join ["No implementation for external ", identStr])
   | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
 end

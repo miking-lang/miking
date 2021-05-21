@@ -3,32 +3,69 @@
 
 include "seq.mc"
 
-external extTestListOfLists : [[Int]]
-utest extTestListOfLists with [[0]]
+mexpr
 
-external extTestListHeadHead : [[a]] -> a
-utest extTestListHeadHead [[0]] with 0
+external extTestListOfLists : [[Int]] in
+utest extTestListOfLists with [[0]] in
 
-external extTestArrayOfArrays : [[Int]]
-utest extTestArrayOfArrays with [[0]]
+external extTestListHeadHead : [[a]] -> a in
+utest extTestListHeadHead [[0]] with 0 in
 
-external extTestArrayHeadHead : [[a]] -> a
-utest extTestArrayHeadHead [[0]] with 0
+external extTestArrayOfArrays : [[Int]] in
+utest extTestArrayOfArrays with [[0]] in
 
-external extTestFlip : (a -> b -> c) -> b -> a -> c
-utest extTestFlip (lam x. lam y. subi x y) 1 2 with 1
+external extTestArrayHeadHead : [[a]] -> a in
+utest extTestArrayHeadHead [[0]] with 0 in
 
-external extTestTuple1 : (Int, Float)
-utest extTestTuple1.0 with 1
+external extTestFlip : (a -> b -> c) -> b -> a -> c in
+utest extTestFlip (lam x. lam y. subi x y) 1 2 with 1 in
 
-external extTestTuple2 : ([Int], Int)
-utest extTestTuple2.0 with [1]
+external extTestTuple1 : (Int, Float) in
+utest extTestTuple1.0 with 1 in
 
-external extTestTuple0th1 : (Int, Float) -> Int
-utest extTestTuple0th1 (1, 2.) with 2
+external extTestTuple2 : ([Int], Int) in
+utest extTestTuple2.0 with [1] in
 
-external extTestTuple0th2 : ([Int], Int) -> [Int]
-utest extTestTuple0th2 ([1], 2) with [2]
+external extTestTuple0th1 : (Int, Float) -> Int in
+utest extTestTuple0th1 (1, 2.) with 2 in
 
-external extTestArgLabel : Int -> Int -> Int
-utest extTestArgLabel 1 2 with 1
+external extTestTuple0th2 : ([Int], Int) -> [Int] in
+utest extTestTuple0th2 ([1], 2) with [2] in
+
+external extTestArgLabel : Int -> Int -> Int in
+utest extTestArgLabel 1 2 with 1 in
+
+let t = tensorCreateCArrayInt [1] (lam. 1) in
+
+external extTestGenarrIntNumDims : Tensor[Int] -> Int in
+utest extTestGenarrIntNumDims t with 1 in
+
+external extTestGenarrIntSliceLeft : Tensor[Int] -> [Int] -> Tensor[Int] in
+utest tensorRank (extTestGenarrIntSliceLeft t [0]) with 0 in
+
+let t = tensorCreateCArrayFloat [1] (lam. 1.) in
+
+external extTestGenarrFloatNumDims : Tensor[Float] -> Int in
+utest extTestGenarrFloatNumDims t with 1 in
+
+external extTestGenarrFloatSliceLeft : Tensor[Float] -> [Int] -> Tensor[Float]
+in
+utest tensorRank (extTestGenarrFloatSliceLeft t [0]) with 0 in
+
+let t = tensorCreateCArrayInt [1, 1] (lam. 1) in
+
+external extTestArray2IntSliceLeft : Tensor[Int] -> Int -> Tensor[Int] in
+utest tensorRank (extTestArray2IntSliceLeft t 0) with 1 in
+
+external extTestArray2IntOfGenarr : Tensor[Int] -> Tensor[Int] in
+utest tensorRank (extTestArray2IntOfGenarr t) with 2 in
+
+let t = tensorCreateCArrayFloat [1, 1] (lam. 1.) in
+
+external extTestArray2FloatSliceLeft : Tensor[Float] -> Int -> Tensor[Float] in
+utest tensorRank (extTestArray2FloatSliceLeft t 0) with 1 in
+
+external extTestArray2FloatOfGenarr : Tensor[Float] -> Tensor[Float] in
+utest tensorRank (extTestArray2FloatOfGenarr t) with 2 in
+
+()

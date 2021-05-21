@@ -55,9 +55,9 @@ end
 
 module T : sig
   type 'a t =
-    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
-    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
-    | Dense of 'a Tensor.Dense.t
+    | CArrayIntBoot of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloatBoot of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | DenseBoot of 'a Tensor.Dense.t
 
   type ('a, 'b) u =
     | TCArrayInt :
@@ -68,11 +68,13 @@ module T : sig
         -> (float, Tensor.CArray.float_elt) u
     | TDense : 'a Tensor.Dense.t -> ('a, 'b) u
 
-  val carray_int : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> 'a t
+  val carray_int :
+       (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    -> (int, Tensor.CArray.int_elt) u
 
-  val carray_float : (float, Tensor.CArray.float_elt) Tensor.CArray.t -> 'a t
-
-  val dense : 'a Tensor.Dense.t -> 'a t
+  val carray_float :
+       (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    -> (float, Tensor.CArray.float_elt) u
 
   val create_carray_int :
     int Mseq.t -> (int Mseq.t -> int) -> (int, Tensor.CArray.int_elt) u
@@ -159,8 +161,29 @@ module T : sig
   end
 
   module Helpers : sig
-    val to_genarray_clayout :
-      ('a, 'b) u -> ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
+    open Bigarray
+
+    val to_genarray_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Genarray.t
+
+    val to_array1_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array1.t
+
+    val to_array2_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array2.t
+
+    val of_array1_clayout_int :
+         (int, Tensor.CArray.int_elt, c_layout) Array1.t
+      -> (int, Tensor.CArray.int_elt) u
+
+    val of_array1_clayout_float :
+         (float, Tensor.CArray.float_elt, c_layout) Array1.t
+      -> (float, Tensor.CArray.float_elt) u
+
+    val of_array2_clayout_int :
+         (int, Tensor.CArray.int_elt, c_layout) Array2.t
+      -> (int, Tensor.CArray.int_elt) u
+
+    val of_array2_clayout_float :
+         (float, Tensor.CArray.float_elt, c_layout) Array2.t
+      -> (float, Tensor.CArray.float_elt) u
   end
 end
 

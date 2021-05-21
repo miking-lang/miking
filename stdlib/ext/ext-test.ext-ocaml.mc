@@ -81,32 +81,6 @@ let extTestMap =
         libraries = []
       }
     ]),
-
-    -- The following externals are used in unit test in generate.mc and in some
-    -- examples in the examples folder.
-    ("extTestZero", [
-      { ident = "Float.zero", ty = tyfloat_, libraries = [] }
-    ]),
-    ("extTestExp", [
-      { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
-    ]),
-    ("extTestListMap", [
-      { ident = "List.map",
-        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                        otylist_ (tyvar_ "a"),
-                        otylist_ (tyvar_ "b")],
-        libraries = [] }
-    ]),
-    ("extTestListConcatMap", [
-      { ident = "List.concat_map",
-        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (otylist_ (tyvar_ "b")),
-                        otylist_ (tyvar_ "a"),
-                        otylist_ (tyvar_ "b")],
-        libraries = [] }
-    ]),
-    ("extTestNonExistant", [
-      { ident = "none", ty = tyint_, libraries = ["no-lib"] }
-    ]),
     ("extTestGenarrIntNumDims", [
       { ident = "Bigarray.Genarray.num_dims",
         ty = tyarrow_ otygenarrayclayoutint_ tyint_,
@@ -130,5 +104,52 @@ let extTestMap =
                         otyarray_ tyint_,
                         otygenarrayclayoutfloat_],
         libraries = [] }
+    ]),
+    ("extTestArray2IntSliceLeft", [
+      { ident = "Bigarray.Array2.slice_left",
+        ty = tyarrows_ [otybaarrayclayoutint_ 2,
+                         tyint_,
+                         otybaarrayclayoutint_ 1],
+        libraries = [] }
+    ]),
+    ("extTestArray2FloatSliceLeft", [
+      { ident = "Bigarray.Array2.slice_left",
+        ty = tyarrows_ [otybaarrayclayoutfloat_ 2,
+                        tyint_,
+                        otybaarrayclayoutfloat_ 1],
+        libraries = [] }
+    ]),
+    ("extTestArray2IntOfGenarr", [
+      { ident = "Bigarray.array2_of_genarray",
+        ty = tyarrow_ otygenarrayclayoutint_ (otybaarrayclayoutint_ 2) ,
+        libraries = [] }
+    ]),
+    ("extTestArray2FloatOfGenarr", [
+      { ident = "Bigarray.array2_of_genarray",
+        ty = tyarrow_ otygenarrayclayoutfloat_ (otybaarrayclayoutfloat_ 2) ,
+        libraries = [] }
+    ]),
+    ("extTestZero", [
+      { ident = "Float.zero", ty = tyfloat_, libraries = [] }
+    ]),
+    ("extTestExp", [
+      { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
+    ]),
+    ("extTestListMap", [
+      { ident = "List.map",
+        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
+                        otylist_ (tyvar_ "a"),
+                        otylist_ (tyvar_ "b")],
+        libraries = [] }
+    ]),
+    ("extTestListConcatMap", [
+      { ident = "List.concat_map",
+        ty = tyarrows_ [tyarrow_ (tyvar_ "a") (otylist_ (tyvar_ "b")),
+                        otylist_ (tyvar_ "a"),
+                        otylist_ (tyvar_ "b")],
+        libraries = [] }
+    ]),
+    ("extTestNonExistant", [
+      { ident = "none", ty = tyint_, libraries = ["no-lib"] }
     ])
   ]

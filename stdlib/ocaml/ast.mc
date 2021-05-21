@@ -130,10 +130,11 @@ lang OCamlTypeAst =
   | OTyList {info : Info, ty : Type}
   | OTyArray {info : Info, ty : Type}
   | OTyTuple {info : Info, tys : [Type]}
-  | OTyBigArrayGenArray {info : Info, tys : [Type]}
-  | OTyBigArrayFloat64Elt {info : Info}
-  | OTyBigArrayIntElt {info : Info}
-  | OTyBigArrayClayout {info : Info}
+  | OTyBigarrayGenarray {info : Info, tys : [Type]}
+  | OTyBigarrayArray {info : Info, rank : Int, tys : [Type]}
+  | OTyBigarrayFloat64Elt {info : Info}
+  | OTyBigarrayIntElt {info : Info}
+  | OTyBigarrayClayout {info : Info}
   | OTyLabel {info : Info, label : String, ty : Type}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
@@ -142,10 +143,11 @@ lang OCamlTypeAst =
   | OTyList r -> r.info
   | OTyArray r -> r.info
   | OTyTuple r -> r.info
-  | OTyBigArrayGenArray r -> r.info
-  | OTyBigArrayFloat64Elt r -> r.info
-  | OTyBigArrayIntElt r -> r.info
-  | OTyBigArrayClayout r -> r.info
+  | OTyBigarrayGenarray r -> r.info
+  | OTyBigarrayArray r -> r.info
+  | OTyBigarrayFloat64Elt r -> r.info
+  | OTyBigarrayIntElt r -> r.info
+  | OTyBigarrayClayout r -> r.info
   | OTyLabel r -> r.info
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
@@ -180,16 +182,29 @@ let otyarray_ = use OCamlAst in
   lam ty. OTyArray {info = NoInfo (), ty = ty}
 
 let otygenarray_ = use OCamlAst in
-  lam tys. OTyBigArrayGenArray {info = NoInfo (), tys = tys}
+  lam tys. OTyBigarrayGenarray {info = NoInfo (), tys = tys}
+
+let otybaarray_ = use OCamlAst in
+  lam rank. lam tys.
+    OTyBigarrayArray {info = NoInfo (), rank = rank, tys = tys}
 
 let oclayout_ = use OCamlAst in
-  OTyBigArrayClayout {info = NoInfo ()}
+  OTyBigarrayClayout {info = NoInfo ()}
 
 let otygenarrayclayoutint_ = use OCamlAst in
-  otygenarray_ [tyint_, OTyBigArrayIntElt {info = NoInfo ()}, oclayout_]
+  otygenarray_ [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
 
 let otygenarrayclayoutfloat_ = use OCamlAst in
-  otygenarray_ [tyfloat_, OTyBigArrayFloat64Elt {info = NoInfo ()}, oclayout_]
+  otygenarray_ [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+
+let otybaarrayclayoutint_ = use OCamlAst in
+  lam rank.
+    otybaarray_ rank [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+
+let otybaarrayclayoutfloat_ = use OCamlAst in
+  lam rank.
+    otybaarray_
+      rank [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
 
 let otytuple_ = use OCamlAst in
   lam tys. OTyTuple {info = NoInfo (), tys = tys}

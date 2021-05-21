@@ -1015,7 +1015,7 @@ let delta eval env fi c v =
         |> function
         | TmConst (_, CInt n) -> n | _ -> raise_error fi "Expected integer"
       in
-      T.CArray.create_int shape f |> T.carray_int |> fun t -> TmTensor (fi, t)
+      T.CArray.create_int shape f |> fun t -> TmTensor (fi, T.CArrayIntBoot t)
   | CtensorCreateCArrayInt _, _ ->
       fail_constapp fi
   | CtensorCreateCArrayFloat None, TmSeq (_, seq) ->
@@ -1030,8 +1030,7 @@ let delta eval env fi c v =
         | TmConst (_, CFloat r) -> r | _ -> raise_error fi "Expected float"
       in
       T.CArray.create_float shape f
-      |> T.carray_float
-      |> fun t -> TmTensor (fi, t)
+      |> fun t -> TmTensor (fi, T.CArrayFloatBoot t)
   | CtensorCreateCArrayFloat _, _ ->
       fail_constapp fi
   | CtensorCreateDense None, TmSeq (_, seq) ->
@@ -1042,7 +1041,7 @@ let delta eval env fi c v =
         let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         TmApp (fi, tm, tmseq) |> eval env
       in
-      T.Dense.create shape f |> T.dense |> fun t -> TmTensor (fi, t)
+      T.Dense.create shape f |> fun t -> TmTensor (fi, T.DenseBoot t)
   | CtensorCreateDense _, _ ->
       fail_constapp fi
   | CtensorGetExn None, TmTensor (_, t) ->
@@ -1052,11 +1051,11 @@ let delta eval env fi c v =
       try
         t
         |> function
-        | T.CArrayInt t' ->
+        | T.CArrayIntBoot t' ->
             TmConst (fi, CInt (T.CArray.get_exn t' is))
-        | T.CArrayFloat t' ->
+        | T.CArrayFloatBoot t' ->
             TmConst (fi, CFloat (T.CArray.get_exn t' is))
-        | T.Dense t' ->
+        | T.DenseBoot t' ->
             T.Dense.get_exn t' is
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorGetExn _, _ ->
@@ -1066,13 +1065,14 @@ let delta eval env fi c v =
   | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
       let is = tm_seq2int_seq fi seq in
       TmConst (fi, CtensorSetExn (Some t, Some is))
-  | CtensorSetExn (Some (T.CArrayInt t), Some is), TmConst (_, CInt n) -> (
+  | CtensorSetExn (Some (T.CArrayIntBoot t), Some is), TmConst (_, CInt n) -> (
     try T.CArray.set_exn t is n ; tm_unit
     with Invalid_argument msg -> raise_error fi msg )
-  | CtensorSetExn (Some (T.CArrayFloat t), Some is), TmConst (_, CFloat r) -> (
+  | CtensorSetExn (Some (T.CArrayFloatBoot t), Some is), TmConst (_, CFloat r)
+    -> (
     try T.CArray.set_exn t is r ; tm_unit
     with Invalid_argument msg -> raise_error fi msg )
-  | CtensorSetExn (Some (T.Dense t), Some is), tm -> (
+  | CtensorSetExn (Some (T.DenseBoot t), Some is), tm -> (
     try T.Dense.set_exn t is tm ; tm_unit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
@@ -1081,11 +1081,11 @@ let delta eval env fi c v =
       let n =
         t
         |> function
-        | T.CArrayInt t' ->
+        | T.CArrayIntBoot t' ->
             T.CArray.rank t'
-        | T.CArrayFloat t' ->
+        | T.CArrayFloatBoot t' ->
             T.CArray.rank t'
-        | Dense t' ->
+        | T.DenseBoot t' ->
             T.Dense.rank t'
       in
       TmConst (fi, CInt n)
@@ -1095,11 +1095,11 @@ let delta eval env fi c v =
       let shape =
         t
         |> function
-        | T.CArrayInt t' ->
+        | T.CArrayIntBoot t' ->
             T.CArray.shape t'
-        | T.CArrayFloat t' ->
+        | T.CArrayFloatBoot t' ->
             T.CArray.shape t'
-        | T.Dense t' ->
+        | T.DenseBoot t' ->
             T.Dense.shape t'
       in
       int_seq2int_tm_seq fi shape
@@ -1107,11 +1107,13 @@ let delta eval env fi c v =
       fail_constapp fi
   | CtensorCopyExn None, TmTensor (_, t1) ->
       TmConst (fi, CtensorCopyExn (Some t1))
-  | CtensorCopyExn (Some (T.CArrayInt t1)), TmTensor (_, T.CArrayInt t2) ->
+  | CtensorCopyExn (Some (T.CArrayIntBoot t1)), TmTensor (_, T.CArrayIntBoot t2)
+    ->
       T.CArray.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn (Some (T.CArrayFloat t1)), TmTensor (_, T.CArrayFloat t2) ->
+  | ( CtensorCopyExn (Some (T.CArrayFloatBoot t1))
+    , TmTensor (_, T.CArrayFloatBoot t2) ) ->
       T.CArray.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn (Some (T.Dense t1)), TmTensor (_, T.Dense t2) ->
+  | CtensorCopyExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
       T.Dense.copy_exn t1 t2 ; tm_unit
   | CtensorCopyExn _, _ ->
       fail_constapp fi
@@ -1123,12 +1125,12 @@ let delta eval env fi c v =
         let t' =
           t
           |> function
-          | T.CArrayInt t'' ->
-              T.CArray.reshape_exn t'' is |> T.carray_int
-          | T.CArrayFloat t'' ->
-              T.CArray.reshape_exn t'' is |> T.carray_float
-          | T.Dense t'' ->
-              T.Dense.reshape_exn t'' is |> T.dense
+          | T.CArrayIntBoot t'' ->
+              T.CArrayIntBoot (T.CArray.reshape_exn t'' is)
+          | T.CArrayFloatBoot t'' ->
+              T.CArrayFloatBoot (T.CArray.reshape_exn t'' is)
+          | T.DenseBoot t'' ->
+              T.DenseBoot (T.Dense.reshape_exn t'' is)
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1142,12 +1144,12 @@ let delta eval env fi c v =
         let t' =
           t
           |> function
-          | T.CArrayInt t'' ->
-              T.CArray.slice_exn t'' is |> T.carray_int
-          | T.CArrayFloat t'' ->
-              T.CArray.slice_exn t'' is |> T.carray_float
-          | T.Dense t'' ->
-              T.Dense.slice_exn t'' is |> T.dense
+          | T.CArrayIntBoot t'' ->
+              T.CArrayIntBoot (T.CArray.slice_exn t'' is)
+          | T.CArrayFloatBoot t'' ->
+              T.CArrayFloatBoot (T.CArray.slice_exn t'' is)
+          | T.DenseBoot t'' ->
+              T.DenseBoot (T.Dense.slice_exn t'' is)
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1162,12 +1164,12 @@ let delta eval env fi c v =
       let t' =
         t
         |> function
-        | T.CArrayInt t'' ->
-            T.CArray.sub_exn t'' ofs len |> T.carray_int
-        | T.CArrayFloat t'' ->
-            T.CArray.sub_exn t'' ofs len |> T.carray_float
-        | T.Dense t'' ->
-            T.Dense.sub_exn t'' ofs len |> T.dense
+        | T.CArrayIntBoot t'' ->
+            T.CArrayIntBoot (T.CArray.sub_exn t'' ofs len)
+        | T.CArrayFloatBoot t'' ->
+            T.CArrayFloatBoot (T.CArray.sub_exn t'' ofs len)
+        | T.DenseBoot t'' ->
+            T.DenseBoot (T.Dense.sub_exn t'' ofs len)
       in
       TmTensor (fi, t')
     with Invalid_argument msg -> raise_error fi msg )
@@ -1187,12 +1189,12 @@ let delta eval env fi c v =
       try
         ( t
         |> function
-        | T.CArrayInt t' ->
-            T.CArray.iteri (iterf T.carray_int) t'
-        | T.CArrayFloat t' ->
-            T.CArray.iteri (iterf T.carray_float) t'
-        | T.Dense t' ->
-            T.Dense.iteri (iterf T.dense) t' ) ;
+        | T.CArrayIntBoot t' ->
+            T.CArray.iteri (iterf (fun t -> T.CArrayIntBoot t)) t'
+        | T.CArrayFloatBoot t' ->
+            T.CArray.iteri (iterf (fun t -> T.CArrayFloatBoot t)) t'
+        | T.DenseBoot t' ->
+            T.Dense.iteri (iterf (fun t -> T.DenseBoot t)) t' ) ;
         tm_unit
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorIteri _, _ ->
@@ -1386,11 +1388,11 @@ let rec val_equal v1 v2 =
       c1 = c2
   | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
       sym1 = sym2 && val_equal v1 v2
-  | TmTensor (_, T.CArrayInt t1), TmTensor (_, T.CArrayInt t2) ->
+  | TmTensor (_, T.CArrayIntBoot t1), TmTensor (_, T.CArrayIntBoot t2) ->
       t1 = t2
-  | TmTensor (_, T.CArrayFloat t1), TmTensor (_, T.CArrayFloat t2) ->
+  | TmTensor (_, T.CArrayFloatBoot t1), TmTensor (_, T.CArrayFloatBoot t2) ->
       t1 = t2
-  | TmTensor (_, T.Dense t1), TmTensor (_, T.Dense t2) ->
+  | TmTensor (_, T.DenseBoot t1), TmTensor (_, T.DenseBoot t2) ->
       Tensor.Dense.equal val_equal t1 t2
   | _ ->
       false

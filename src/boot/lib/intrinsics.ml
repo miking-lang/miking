@@ -54,9 +54,9 @@ end
 
 module T = struct
   type 'a t =
-    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
-    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
-    | Dense of 'a Tensor.Dense.t
+    | CArrayIntBoot of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloatBoot of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | DenseBoot of 'a Tensor.Dense.t
 
   type ('a, 'b) u =
     | TCArrayInt :
@@ -67,11 +67,9 @@ module T = struct
         -> (float, Tensor.CArray.float_elt) u
     | TDense : 'a Tensor.Dense.t -> ('a, 'b) u
 
-  let carray_int t = CArrayInt t
+  let carray_int t = TCArrayInt t
 
-  let carray_float t = CArrayFloat t
-
-  let dense t = Dense t
+  let carray_float t = TCArrayFloat t
 
   let to_arr = Mseq.Helpers.to_array
 
@@ -225,8 +223,10 @@ module T = struct
         Dense.iteri f' t'
 
   module Helpers = struct
+    open Bigarray
+
     let to_genarray_clayout (type a b) (t : (a, b) u) :
-        (a, b, Bigarray.c_layout) Bigarray.Genarray.t =
+        (a, b, c_layout) Genarray.t =
       match t with
       | TCArrayInt t' ->
           t'
@@ -234,6 +234,34 @@ module T = struct
           t'
       | TDense _ ->
           raise (Invalid_argument "Intrinsics.T.Helpers.to_genarray_clayout")
+
+    let to_array1_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array1.t
+        =
+      match t with
+      | TCArrayInt t' ->
+          t' |> array1_of_genarray
+      | TCArrayFloat t' ->
+          t' |> array1_of_genarray
+      | TDense _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.to_array1_clayout")
+
+    let to_array2_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array2.t
+        =
+      match t with
+      | TCArrayInt t' ->
+          t' |> array2_of_genarray
+      | TCArrayFloat t' ->
+          t' |> array2_of_genarray
+      | TDense _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.to_array2_clayout")
+
+    let of_array1_clayout_int arr = arr |> genarray_of_array1 |> carray_int
+
+    let of_array1_clayout_float arr = arr |> genarray_of_array1 |> carray_float
+
+    let of_array2_clayout_int arr = arr |> genarray_of_array2 |> carray_int
+
+    let of_array2_clayout_float arr = arr |> genarray_of_array2 |> carray_float
   end
 end
 
