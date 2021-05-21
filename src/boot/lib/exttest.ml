@@ -6,7 +6,7 @@ let array_of_arrays = [|[|0|]|]
 
 let array_hd_hd a = a.(0).(0)
 
-let arg_label ~label:a = a
+let arg_label ~a:a ~b:b = b - a
 
 let tuple1 = (1, 2.)
 

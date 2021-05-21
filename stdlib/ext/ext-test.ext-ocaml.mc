@@ -74,6 +74,13 @@ let extTestMap =
         libraries = []
       }
     ]),
+    ("extTestArgLabel", [
+      {
+        ident = "Boot.Exttest.arg_label",
+        ty = tyarrows_ [otylabel_ "b" tyint_, otylabel_ "a" tyint_, tyint_],
+        libraries = []
+      }
+    ]),
 
     -- The following externals are used in unit test in generate.mc and in some
     -- examples in the examples folder.

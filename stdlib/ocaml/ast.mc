@@ -111,19 +111,20 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
-lang OCamlArgLabels
+lang OCamlLabel
   syn Expr =
-  | OTmArgLabel { label : String, arg : Expr }
+  | OTmLabel { label : String, arg : Expr }
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmArgLabel t -> f acc t.arg
+  | OTmLabel t -> f acc t.arg
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmArgLabel t -> OTmArgLabel { t with arg = f t.arg }
+  | OTmLabel t -> OTmLabel { t with arg = f t.arg }
 end
 
 lang OCamlTypeAst =
-  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst + FunTypeAst
+  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst +
+  FunTypeAst + OCamlLabel
 
   syn Type =
   | OTyList {info : Info, ty : Type}
@@ -153,7 +154,7 @@ end
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlArgLabels +
+  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlLabel +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +
@@ -196,10 +197,13 @@ let otytuple_ = use OCamlAst in
 let otyunit_ = otytuple_ []
 
 let otyvarext_ = use OCamlAst in
-  lam ident. lam args. OTyVarExt { info = NoInfo (), ident = ident, args = args}
+  lam ident. lam args. OTyVarExt {info = NoInfo (), ident = ident, args = args}
 
 let otyparam_ = use OCamlAst in
   lam ident. OTyParam {info = NoInfo (), ident = ident}
+
+let otylabel_ = use OCamlAst in
+  lam label. lam ty. OTyLabel {info = NoInfo (), label = label, ty = ty}
 
 mexpr
 ()

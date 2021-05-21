@@ -26,3 +26,6 @@ utest extTestTuple0th1 (1, 2.) with 2
 
 external extTestTuple0th2 : ([Int], Int) -> [Int]
 utest extTestTuple0th2 ([1], 2) with [2]
+
+external extTestArgLabel : Int -> Int -> Int
+utest extTestArgLabel 1 2 with 1

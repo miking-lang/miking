@@ -18,7 +18,7 @@ lang OCamlSym =
   + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData
   + UnknownTypeSym + IntTypeSym + BoolTypeSym + FloatTypeSym + CharTypeSym
   + RecordTypeSym + VarTypeSym + OCamlExternal
-  + OCamlString + OCamlRecord + OCamlArgLabels
+  + OCamlString + OCamlRecord + OCamlLabel
 
   sem symbolizeExpr (env : SymEnv) =
   | OTmVariantTypeDecl t ->
@@ -56,7 +56,7 @@ lang OCamlSym =
   | OTmConAppExt ({ args = args } & t) ->
     OTmConAppExt {t with args = map (symbolizeExpr env) args}
   | OTmString t -> OTmString t
-  | OTmArgLabel t -> OTmArgLabel {t with arg = symbolizeExpr env t.arg }
+  | OTmLabel t -> OTmLabel {t with arg = symbolizeExpr env t.arg }
 
   sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
   | OPatTuple { pats = pats } ->

@@ -12,7 +12,9 @@ let _requiresConversion =
   lam env : GenerateEnv. lam info. lam ty1. lam ty2.
   recursive let recur = lam ty1. lam ty2.
     let tt = (ty1, ty2) in
-    match tt with
+    match tt with (_, OTyLabel _) then
+      true
+    else match tt with
       (TyUnknown _, _) | (_, TyUnknown _) |
       (TyApp {lhs = TyVar _}, _) | (_, TyApp {lhs = TyVar _}) |
       (OTyParam _, _) | (_, OTyParam _) |
@@ -142,7 +144,9 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
       (0, t)
     else
       let tt = (ty1, ty2) in
-      match tt with (TySeq {ty = ty1}, OTyList {ty = ty2}) then
+      match tt with (_, OTyLabel {label = label, ty = ty2}) then
+        recur (OTmLabel { label = label, arg = t }) ty1 ty2
+      else match tt with (TySeq {ty = ty1}, OTyList {ty = ty2}) then
         let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_list" } in
         let mapop = OTmVarExt { ident = intrinsicOpSeq "Helpers.map" } in
         convertContainer _listToSeqCost _approxsize op mapop t ty1 ty2
