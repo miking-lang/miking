@@ -1,3 +1,6 @@
+-- This file contains tests for externals. The corresponding ocaml functions
+-- are defined in exttest.ml
+
 include "seq.mc"
 
 external extTestListOfLists : [[Int]]
