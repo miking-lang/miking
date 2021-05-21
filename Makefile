@@ -74,7 +74,7 @@ test-boot:\
   test-boot-py\
   test-boot-ocaml
 
-test-boot-base: build/mi
+test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
 
 test-boot-par: build/mi
