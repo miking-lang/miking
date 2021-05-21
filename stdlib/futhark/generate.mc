@@ -107,7 +107,7 @@ end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
-  sem generateToplevel (entryPoints : Set Name) =
+  sem generateToplevel =
   | TmLet t ->
     let collectParams = lam body : Expr.
       recursive let work = lam params : [(Name, FutType)]. lam body : Expr.
@@ -129,22 +129,21 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
           FDeclConst {ident = t.ident, ty = generateType t.tyBody,
                       val = generateExpr body}
         else
-          let isEntry = setMem t.ident entryPoints in
           let retTy = findReturnType t.tyBody in
-          FDeclFun {ident = t.ident, entry = isEntry, typeParams = [],
+          FDeclFun {ident = t.ident, entry = true, typeParams = [],
                     params = params, ret = generateType retTy,
                     body = generateExpr body}
       else never
     in
-    cons decl (generateToplevel entryPoints t.inexpr)
+    cons decl (generateToplevel t.inexpr)
   | _ -> []
 end
 
 lang FutharkGenerate = FutharkToplevelGenerate
-  sem generateProgram (entryPoints : Set Name) =
+  sem generateProgram =
   | prog ->
     let preamble = [getDef ()] in
-    FProg {decls = concat preamble (generateToplevel entryPoints prog)}
+    FProg {decls = concat preamble (generateToplevel prog)}
 end
 
 lang TestLang =
