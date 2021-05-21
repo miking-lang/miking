@@ -16,14 +16,14 @@ let _tuneFileExtension = ".tune"
 
 let tuneFileName = lam file.
   let withoutExtension =
-    match strLastIndex '.' filename with Some idx then
-      subsequence path (addi idx 1) (length path)
-    else path
+    match strLastIndex '.' file with Some idx then
+      subsequence file 0 idx
+    else file
   in concat withoutExtension _tuneFileExtension
 
 let tuneDumpTable = lam file : String. lam table : LookupTable.
   use MExprPrettyPrint in
-  let destinationFile = concat (filenameWithoutExtension file) ".tune" in
+  let destinationFile = tuneFileName file in
   print "destination: "; printLn destinationFile;
   writeFile destinationFile
     (join
@@ -32,8 +32,8 @@ let tuneDumpTable = lam file : String. lam table : LookupTable.
       ,  "]"])
 
 let tuneReadTable = lam file : String.
-  use SeqAst in
   use BootParser in
+  use SeqAst in
   match parseMExprString [] (readFile file)
   with TmSeq {tms = values}
   then
