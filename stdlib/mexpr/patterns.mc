@@ -27,31 +27,31 @@ lang MExprPatternKeywordMaker = KeywordMaker + MExprAst + MExprEq
   sem matchKeywordString (info : Info) =
   | "parallelMap" ->
     Some (2, lam lst. TmParallelMap {f = get lst 0, as = get lst 1,
-                                     ty = TyUnknown (), info = info})
+                                     ty = TyUnknown {info = info}, info = info})
   | "parallelMap2" ->
     Some (3, lam lst. TmParallelMap2 {f = get lst 0, as = get lst 1,
-                                      bs = get lst 2, ty = TyUnknown (),
-                                      info = info})
+                                      bs = get lst 2,
+                                      ty = TyUnknown {info = info}, info = info})
   | "parallelReduce" ->
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
-                                        as = get lst 2, ty = TyUnknown (),
+                                        as = get lst 2, ty = TyUnknown {info = info},
                                         info = info})
   | "parallelScan" ->
     Some (3, lam lst. TmParallelScan {f = get lst 0, ne = get lst 1,
-                                      as = get lst 2, ty = TyUnknown (),
+                                      as = get lst 2, ty = TyUnknown {info = info},
                                       info = info})
   | "parallelFilter" ->
     Some (2, lam lst. TmParallelFilter {p = get lst 0, as = get lst 1,
-                                        ty = TyUnknown (), info = info})
+                                        ty = TyUnknown {info = info}, info = info})
   | "parallelPartition" ->
     Some (2, lam lst. TmParallelPartition {p = get lst 0, as = get lst 1,
-                                           ty = TyUnknown (), info = info})
+                                           ty = TyUnknown {info = info}, info = info})
   | "parallelAll" ->
     Some (2, lam lst. TmParallelAll {p = get lst 0, as = get lst 1,
-                                     ty = TyUnknown (), info = info})
+                                     ty = TyUnknown {info = info}, info = info})
   | "parallelAny" ->
     Some (2, lam lst. TmParallelAny {p = get lst 0, as = get lst 1,
-                                     ty = TyUnknown (), info = info})
+                                     ty = TyUnknown {info = info}, info = info})
 
   sem ty =
   | TmParallelMap t -> t.ty
