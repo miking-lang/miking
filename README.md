@@ -10,25 +10,12 @@ Before you can use the Miking system, you need to install
 [OPAM](https://opam.ocaml.org/) package manager.
 
 After the installation, you need to install the OCaml multicore compiler by
-following these steps:
-* Clone the `miking-lang/multicore-ocaml` repository by running the following in
-  your choice of directory:
-  ```
-  git clone https://github.com/miking-lang/ocaml-multicore.git
-  ```
-* Make sure you are on the `no-effect-syntax` branch in the
-  `miking-lang/multicore-ocaml` repository:
-  ```
-  git checkout no-effect-syntax
-  ```
-* Create a new OPAM switch by running the following:
-  ```
-  opam switch create 4.10.0+multicore+flambda --empty
-  ```
-* To install the OCaml compiler for the new OPAM switch, run the following:
-  ```
-  opam pin add -k path --inplace-build ocaml-variants.4.10.0+multicore+flambda .
-  ```
+running the following:
+```
+opam update
+opam switch create 4.12.0+domains --packages=ocaml-variants.4.12.0+domains --repositories=multicore=git+https://github.com/ocaml-multicore/multicore-opam.git,default
+eval $(opam env)
+```
 
 After this, you need to install the `opam` packages `dune`, `batteries`, and
 `linenoise` by running the following:
@@ -38,10 +25,9 @@ opam install dune batteries linenoise
 ```
 
 Note that the `opam switch` command lets you have several OCaml installations on
-your system. When using the Miking system, you need to use the
-`4.10.0+multicore+flambda` switch. Running `opam switch
-4.10.0+multicore+flambda` followed by `eval $(opam env)` always takes you back
-to the `4.10.0+multicore+flambda` switch.
+your system. When using the Miking system, you need to use the `4.12.0+domains`
+switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
+always takes you back to the correct switch.
 
 To compile and run the test suite, go back to the Miking repository and execute:
 
