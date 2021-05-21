@@ -12,6 +12,34 @@ let _debug = true
 
 let _inputEmpty = [""]
 
+let _tuneFileExtension = ".tune"
+
+let tuneFileName = lam file.
+  let withoutExtension =
+    match strLastIndex '.' filename with Some idx then
+      subsequence path (addi idx 1) (length path)
+    else path
+  in concat withoutExtension _tuneFileExtension
+
+let tuneDumpTable = lam file : String. lam table : LookupTable.
+  use MExprPrettyPrint in
+  let destinationFile = concat (filenameWithoutExtension file) ".tune" in
+  print "destination: "; printLn destinationFile;
+  writeFile destinationFile
+    (join
+      [ "["
+      , strJoin ", " (map expr2str (mapValues table))
+      ,  "]"])
+
+let tuneReadTable = lam file : String.
+  use SeqAst in
+  use BootParser in
+  match parseMExprString [] (readFile file)
+  with TmSeq {tms = values}
+  then
+    mapFromList subi (mapi (lam i. lam e. (i, e)) values)
+  else error (join ["Parsing of tuned values from file ", file, " failed."])
+
 -- Add assignments of decision points to argument vector
 let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
   use MExprPrettyPrint in

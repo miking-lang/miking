@@ -167,9 +167,14 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmHole h -> acc
 
+  sem default =
+  | TmHole {init = init} -> init
+  | t -> smap_Expr_Expr default t
+
   sem isAtomic =
   | TmHole _ -> false
 
+  -- TODO
   sem pprintCode (indent : Int) (env : SymEnv) =
   | TmHole h ->
     match pprintCode indent env h.init with (env, startStr) then
@@ -576,8 +581,6 @@ let _argv = nameSym "argv"
 
 --
 lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
-                    -- Included for debugging
-                    + MExprPrettyPrint
 
   -- Transform a program with decision points. All decision points will be
   -- eliminated and replaced by lookups in a static table. One reference per
@@ -812,9 +815,9 @@ end
 lang Holes =
   HoleAst + HoleBoolAst + HoleIntRangeAst + FlattenHoles
 
-lang MExprHoles = Holes + MExpr + MExprANF
+lang MExprHoles = Holes + MExprSym + MExprANF
 
-lang TestLang = MExprHoles + MExprSym + MExprEq
+lang TestLang = MExprHoles + MExprEq
 
 mexpr
 

@@ -16,6 +16,7 @@ include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +
+  MExprHoles +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
   OCamlGenerateExternalNaive
@@ -65,26 +66,16 @@ let fileExists = lam path.
   match sysRunCommand ["ls", path] "" "." with {returncode = 0} then true
   else false
 
--- Insert tuned values if a .tune file is present
-let insertTuned = lam ast. lam file.
-  let tuneFile = concat (filenameWithoutExtension file) ".tune" in
+let insertTunedOrDefaults = lam ast. lam file.
+  use MCoreCompile in
+  let tuneFile = tuneFileName file in
   if fileExists tuneFile then
-    use BootParser in
     print "parsing file: "; printLn tuneFile;
-    let table =
-      match parseMExprString [] (readFile tuneFile)
-      with TmSeq {tms = values}
-      then
-        mapFromList subi (mapi (lam i. lam e. (i, e)) values)
-      else error "Parsing of tuned values failed"
-    in
-
-    use MExprHoles in
-    let ast = makeKeywords [] ast in
+    let table = tuneReadTable tuneFile in
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
     insert [] table ast
-  else ast
+  else default ast
 
 let ocamlCompile =
   lam options : Options. lam libs. lam sourcePath. lam ocamlProg.
@@ -93,7 +84,7 @@ let ocamlCompile =
       (if options.disableOptimizations then
         {defaultCompileOptions with optimize = false}
        else defaultCompileOptions)
- 
+
        with libraries = libs
     }
   in
@@ -146,10 +137,10 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = parseMCoreFile decisionPointsKeywords file in
+    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
 
-    -- If program has been tuned, then insert tuned values
-    let ast = insertTuned ast file in
+    -- Insert tuned values, or use default values if no .tune file present
+    let ast = insertTunedOrDefaults ast file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
