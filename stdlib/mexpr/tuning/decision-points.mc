@@ -574,7 +574,7 @@ let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
                           with body = f bind.body}
     in (localFun, {bind with body = _lamWithBody newBody bind.body})
 
-type LookupTable = Map Int Expr
+type LookupTable = [Expr]
 
 let _table = nameSym "table"
 let _argv = nameSym "argv"
@@ -597,7 +597,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
 
   sem insert (publicFns : [Name]) (table : LookupTable) =
   | t ->
-    let lookup = lam i. mapFindWithExn i table in
+    let lookup = lam i. get table i in
     match _flattenWithLookup publicFns lookup t with (prog, _)
     then prog else never
 
@@ -622,11 +622,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | env ->
     let env : CallCtxEnv = env in
     let idx2hole = deref env.idx2hole in
-    mapFromList subi
-      (mapi (lam i. lam hole.
-         match hole with TmHole { init = init } then (i, init)
-         else error "Not a hole term")
-         idx2hole)
+    map (lam hole. default hole) idx2hole
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.

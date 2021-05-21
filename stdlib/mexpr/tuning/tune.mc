@@ -28,7 +28,7 @@ let tuneDumpTable = lam file : String. lam table : LookupTable.
   writeFile destinationFile
     (join
       [ "["
-      , strJoin ", " (map expr2str (mapValues table))
+      , strJoin ", " (map expr2str table)
       ,  "]"])
 
 let tuneReadTable = lam file : String.
@@ -36,15 +36,13 @@ let tuneReadTable = lam file : String.
   use SeqAst in
   match parseMExprString [] (readFile file)
   with TmSeq {tms = values}
-  then
-    mapFromList subi (mapi (lam i. lam e. (i, e)) values)
+  then values
   else error (join ["Parsing of tuned values from file ", file, " failed."])
 
 -- Add assignments of decision points to argument vector
-let _addToArgs = lam vals : LookupTable. lam args : CommandLineArgs.
+let _addToArgs = lam table : LookupTable. lam args : CommandLineArgs.
   use MExprPrettyPrint in
-  let stringVals = mapMapWithKey (lam. lam v. expr2str v) vals in
-  concat args (mapValues stringVals)
+  concat args (map expr2str table)
 
 lang TuneBase = Holes
   sem tune (run : Runner) (holes : Expr) =
