@@ -9,14 +9,14 @@ include "mexpr/patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
-let get = ref (nameNoSym "")
+let getRef = ref (nameNoSym "")
 let getFn = lam.
-  let n = deref get in
+  let n = deref getRef in
   if nameHasSym n then
     n
   else
-    modref get (nameSym "get");
-    deref get
+    modref getRef (nameSym "get");
+    deref getRef
 let getDef = use FutharkAst in
   lam.
   let a = nameSym "a" in
