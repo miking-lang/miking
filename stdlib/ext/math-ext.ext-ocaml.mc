@@ -4,16 +4,21 @@ let mathExtMap =
   use OCamlTypeAst in
   mapFromList cmpString
   [
-    ("exp", [
+    ("externalExp", [
       { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
     ]),
-    ("atan", [
+    ("externalAtan", [
       { ident = "Float.atan", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
     ]),
-    ("sin", [
+    ("externalSin", [
       { ident = "Float.sin", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
     ]),
-    ("cos", [
+    ("externalCos", [
       { ident = "Float.cos", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
+    ]),
+    ("externalAtan2", [
+      { ident = "Float.atan2",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
+        libraries = [] }
     ])
   ]

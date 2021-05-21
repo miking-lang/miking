@@ -265,7 +265,7 @@ let collectKnownProgramTypes = use MExprAst in
   let emptyUtestTypeEnv = {
     variants = mapEmpty nameCmp,      -- Map Name Type
     aliases = mapEmpty nameCmp,       -- Map Name Type
-    typeFunctions = mapEmpty _cmpType -- Map Type (Name, Name)
+    typeFunctions = use MExprCmp in mapEmpty cmpType -- Map Type (Name, Name)
   } in
   collectTypes emptyUtestTypeEnv expr
 

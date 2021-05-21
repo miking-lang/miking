@@ -40,6 +40,7 @@ compile_files += test/mlang/also_includes_lib.mc
 #compile_files += test/mlang/nestedpatterns.mc
 compile_files += stdlib/mexpr/boot-parser.mc
 compile_files += stdlib/mexpr/type-lift.mc
+compile_files += stdlib/mexpr/cmp.mc
 compile_files += stdlib/mexpr/ast.mc
 compile_files += stdlib/mexpr/pprint.mc
 compile_files += stdlib/mexpr/parser.mc
