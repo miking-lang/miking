@@ -45,18 +45,21 @@ let pcon_ = use MExprAst in
   lam cs. lam cp.
   npcon_ (nameNoSym cs) cp
 
-let prec_ = use MExprAst in
-  lam bindings.
+let patRecord = use MExprAst in
+  lam bindings : [(String, Pat)].
+  lam info : Info.
   let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   PatRecord {
-    bindings =
-      mapFromList cmpSID (map bindingMapFunc bindings),
-    info = NoInfo()
-    }
+    bindings = mapFromList cmpSID (map bindingMapFunc bindings),
+    info = info
+  }
 
-let ptuple_ = use MExprAst in
-  lam ps.
-  prec_ (mapi (lam i. lam p. (int2string i,p)) ps)
+let prec_ = lam bindings. patRecord bindings (NoInfo ())
+
+let patTuple = lam ps : [Pat]. lam info : Info.
+  patRecord (mapi (lam i. lam p. (int2string i, p)) ps) info
+
+let ptuple_ = lam ps. patTuple ps (NoInfo ())
 
 let pseqtot_ = use MExprAst in
   lam ps.
@@ -420,9 +423,10 @@ let seq_ = use MExprAst in
   lam tms.
   TmSeq {tms = tms, ty = tyunknown_, info = NoInfo ()}
 
-let record_ = use MExprAst in
-  lam bindings.
-  lam ty.
+let tmRecord = use MExprAst in
+  lam bindings : [(String, Expr)].
+  lam ty : Type.
+  lam info : Info.
   let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
     bindings = mapFromList cmpSID (map bindingMapFunc bindings),
@@ -430,12 +434,16 @@ let record_ = use MExprAst in
     info = NoInfo ()
   }
 
+let record_ = lam bindings. lam ty. tmRecord bindings ty (NoInfo ())
+
 let urecord_ = use MExprAst in
   lam bindings. record_ bindings tyunknown_
 
-let tuple_ = use MExprAst in
-  lam tms. lam ty.
-  record_ (mapi (lam i. lam t. (int2string i,t)) tms) ty
+let tmTuple = use MExprAst in
+  lam tms : [Expr]. lam ty : Type. lam info : Info.
+  tmRecord (mapi (lam i. lam t. (int2string i,t)) tms) ty info
+
+let tuple_ = lam tms. lam ty. tmTuple tms ty (NoInfo ())
 
 let utuple_ = use MExprAst in
   lam tms. tuple_ tms tyunknown_

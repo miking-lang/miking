@@ -150,35 +150,6 @@ lang OCamlTypeAst =
   | OTyParam r -> r.info
 end
 
-let otylist_ = use OCamlTypeAst in
-  lam ty. OTyList {info = NoInfo (), ty = ty}
-
-let otyarray_ = use OCamlTypeAst in
-  lam ty. OTyArray {info = NoInfo (), ty = ty}
-
-let otygenarray_ = use OCamlTypeAst in
-  lam tys. OTyBigArrayGenArray {info = NoInfo (), tys = tys}
-
-let oclayout_ = use OCamlTypeAst in
-  OTyBigArrayClayout {info = NoInfo ()}
-
-let otygenarrayclayoutint_ = use OCamlTypeAst in
-  otygenarray_ [tyint_, OTyBigArrayIntElt {info = NoInfo ()}, oclayout_]
-
-let otygenarrayclayoutfloat_ = use OCamlTypeAst in
-  otygenarray_ [tyfloat_, OTyBigArrayFloat64Elt {info = NoInfo ()}, oclayout_]
-
-let otytuple_ = use OCamlTypeAst in
-  lam tys. OTyTuple {info = NoInfo (), tys = tys}
-
-let otyunit_ = otytuple_ []
-
-let otyvarext_ = use OCamlTypeAst in
-  lam ident. lam args. OTyVarExt { info = NoInfo (), ident = ident, args = args}
-
-let otyparam_ = use OCamlTypeAst in
-  lam ident. OTyParam {info = NoInfo (), ident = ident}
-
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
@@ -195,25 +166,40 @@ lang OCamlAst =
   CmpIntAst + CmpFloatAst + CharAst + CmpCharAst +
 
   -- Other
-  OCamlExternal
+  OCamlExternal +
+
+  -- Types
+  OCamlTypeAst
 end
 
-let optuple_ = use OCamlAst in
-  lam pats. OPatTuple { pats = pats }
+let otylist_ = use OCamlAst in
+  lam ty. OTyList {info = NoInfo (), ty = ty}
 
-let omatch_ = use OCamlAst in
-  lam target. lam arms. OTmMatch {target = target, arms = arms}
+let otyarray_ = use OCamlAst in
+  lam ty. OTyArray {info = NoInfo (), ty = ty}
 
-let otuple_ = use OCamlAst in
-  lam values. OTmTuple { values = values }
+let otygenarray_ = use OCamlAst in
+  lam tys. OTyBigArrayGenArray {info = NoInfo (), tys = tys}
 
-let ounit_ = otuple_ []
+let oclayout_ = use OCamlAst in
+  OTyBigArrayClayout {info = NoInfo ()}
 
-let ovarext_ = use OCamlAst in
-  lam id : String. OTmVarExt {ident = id}
+let otygenarrayclayoutint_ = use OCamlAst in
+  otygenarray_ [tyint_, OTyBigArrayIntElt {info = NoInfo ()}, oclayout_]
 
-let oarglabel_ = use OCamlAst in
-  lam label. lam arg. OTmArgLabel { label = label, arg = arg }
+let otygenarrayclayoutfloat_ = use OCamlAst in
+  otygenarray_ [tyfloat_, OTyBigArrayFloat64Elt {info = NoInfo ()}, oclayout_]
+
+let otytuple_ = use OCamlAst in
+  lam tys. OTyTuple {info = NoInfo (), tys = tys}
+
+let otyunit_ = otytuple_ []
+
+let otyvarext_ = use OCamlAst in
+  lam ident. lam args. OTyVarExt { info = NoInfo (), ident = ident, args = args}
+
+let otyparam_ = use OCamlAst in
+  lam ident. OTyParam {info = NoInfo (), ident = ident}
 
 mexpr
 ()

@@ -14,20 +14,9 @@ include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
 include "ocaml/intrinsics-ops.mc"
+include "ocaml/generate-env.mc"
+include "ocaml/external.mc"
 include "common.mc"
-include "external.mc"
-
-type GenerateEnv = {
-  constrs : Map Name Type,
-  records : Map (Map SID Type) Name,
-  aliases : Map Name Type
-}
-
-let _emptyGenerateEnv = use MExprCmp in {
-  constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp cmpType),
-  aliases = mapEmpty nameCmp
-}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
@@ -394,8 +383,24 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt _ ->
-    error "externals expected to be generated in a previous step"
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+    match mapLookup ident env.exts with Some r then
+      let r : ExternalImpl = head r in
+      let body = externalConvertData
+                  env info (OTmVarExt { ident = r.ident }) r.ty ty
+      in
+      let body = generate env body in
+      let inexpr = generate env inexpr in
+      TmLet {
+        ident = ident,
+        tyBody = ty,
+        body = body,
+        inexpr = inexpr,
+        ty = TyUnknown { info = info },
+        info = info
+      }
+    else
+      infoErrorExit (join ["No implementation for external ", nameGetStr ident])
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -2154,15 +2159,8 @@ with char_ '1' using eqExpr in
 let generateWithExternals = lam ast.
   match typeLift ast with (env, ast) then
     match generateTypeDecl env ast with (env, ast) then
-      let env =
-        let env : GenerateEnv = env in
-        chooseExternalImpls
-          globalExternalImplsMap
-          (externalInitialEnv env.aliases env.constrs)
-          ast
-      in
-      let ast = generateExternals env ast in
-      generateEmptyEnv ast
+      let env = chooseExternalImpls globalExternalImplsMap env ast in
+      generate env ast
     else never
   else never
 in

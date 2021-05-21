@@ -1,35 +1,15 @@
+include "mexpr/type.mc"
+include "stringid.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/ast.mc"
 include "ocaml/intrinsics-ops.mc"
-include "mexpr/type.mc"
-include "stringid.mc"
+include "ocaml/generate-env.mc"
 
-type ExternalEnv = {
+lang OCamlDataConversion = OCamlAst + MExprAst
 
-  -- A mapping from external names to used implementations.
-  usedImpls : Map Name [ExternalImpl],
-
-  -- Type aliases map
-  aliases : Map Name Type,
-
-  -- Record constructors
-  constrs : Map Name Type
-}
-
-let externalInitialEnv =
-  lam aliases : Map Name Type. lam constrs : Map Name Type.
-  {
-    usedImpls = mapEmpty nameCmp,
-    aliases = aliases,
-    constrs = constrs
-  }
-
-lang OCamlMarshalData = OCamlTypeAst + SeqTypeAst + TensorTypeAst + VarTypeAst
-     + AppTypeAst + UnknownTypeAst + OCamlAst
-
-let _requiresMarshaling =
-  use OCamlMarshalData in
-  lam env : ExternalEnv. lam ty1. lam ty2.
+let _requiresConversion =
+  use OCamlDataConversion in
+  lam env : GenerateEnv. lam info. lam ty1. lam ty2.
   recursive let recur = lam ty1. lam ty2.
     let tt = (ty1, ty2) in
     match tt with
@@ -49,7 +29,8 @@ let _requiresMarshaling =
                 let sid = stringToSid (int2string i) in
                 match mapLookup sid fields with Some ty1 then
                   recur ty1 ty2
-                else error "Incompatible tuple types")
+                else
+                  infoErrorExit info "Incompatible tuple types")
              tys
         in
         any (lam f. f ()) fs
@@ -64,7 +45,8 @@ let _requiresMarshaling =
                 let sid = stringToSid (int2string i) in
                 match mapLookup sid fields with Some ty2 then
                   recur ty1 ty2
-                else error "Incompatible tuple types")
+                else
+                  infoErrorExit info "Incompatible tuple types")
              tys
         in
         any (lam f. f ()) fs
@@ -91,101 +73,179 @@ let _listToSeqCost = 5
 let _arrayToSeqCost = 2
 let _tensorToGenarrayCost = 1
 
-let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
-  use OCamlMarshalData in
-  lam env : ExternalEnv. lam t. lam ty1. lam ty2.
+let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
+  use OCamlDataConversion in
+  lam env : GenerateEnv. lam info. lam t. lam ty1. lam ty2.
 
   recursive let recur = lam t. lam ty1. lam ty2.
 
-    let marshalEls =
+    let covertEls =
     lam approxsize. lam mapop. lam t. lam ty1. lam ty2.
-      let n = nameSym "x" in
-      match recur (nvar_ n) ty1 ty2 with (cost, body) then
-        let t = appSeq_ mapop [nulam_ n body, t] in
+      let ident = nameSym "x" in
+      let var =
+        TmVar {
+          ident = ident,
+          ty = TyUnknown { info = info },
+          info = info
+        }
+      in
+      match recur var ty1 ty2 with (cost, body) then
+        let t =
+          TmApp {
+            lhs = TmApp {
+                    lhs = mapop,
+                    rhs =
+                      TmLam {
+                        ident = ident,
+                        tyIdent = TyUnknown { info = info },
+                        body = body,
+                        ty = TyUnknown { info = info },
+                        info = info
+                      },
+                    ty = TyUnknown { info = info },
+                    info = info
+                  },
+            rhs = t,
+            ty = TyUnknown { info = info },
+            info = info
+          }
+        in
         (muli approxsize cost, t)
       else never
     in
 
-    let marshalContainer =
-    lam transcost. lam approxsize. lam marshalop. lam mapop. lam t. lam ty1. lam ty2.
-      if _requiresMarshaling env ty1 ty2 then
-        match marshalEls approxsize mapop t ty1 ty2 with (cost, t) then
-          (addi transcost cost, app_ marshalop t)
-        else never
-      else
-        (transcost, app_ marshalop t)
+    let convertContainer =
+    lam opcost. lam approxsize. lam op. lam mapop.
+    lam t. lam ty1. lam ty2.
+      let x =
+        if _requiresConversion env info ty1 ty2 then
+          match covertEls approxsize mapop t ty1 ty2 with (cost, t) then
+            (addi opcost cost, t)
+          else never
+        else
+          (opcost, t)
+      in
+      match x with (cost, t) then
+        let t =
+          TmApp {
+            lhs = op,
+            rhs = t,
+            ty = TyUnknown { info = info },
+            info = info
+          }
+        in
+        (cost, t)
+      else never
     in
 
-    if not (_requiresMarshaling env ty1 ty2) then
+    if not (_requiresConversion env info ty1 ty2) then
       (0, t)
     else
       let tt = (ty1, ty2) in
       match tt with (TySeq {ty = ty1}, OTyList {ty = ty2}) then
-        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.to_list") in
-        let mapop = ovarext_ (intrinsicOpSeq "Helpers.map") in
-        marshalContainer _listToSeqCost _approxsize marshalop mapop t ty1 ty2
+        let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_list" } in
+        let mapop = OTmVarExt { ident = intrinsicOpSeq "Helpers.map" } in
+        convertContainer _listToSeqCost _approxsize op mapop t ty1 ty2
       else match tt with (OTyList {ty = ty1}, TySeq {ty = ty2}) then
-        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.of_list") in
-        let mapop = ovarext_ "List.map" in
-        marshalContainer _listToSeqCost _approxsize marshalop mapop t ty1 ty2
+        let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_list" } in
+        let mapop = OTmVarExt { ident = "List.map" } in
+        convertContainer _listToSeqCost _approxsize op mapop t ty1 ty2
       else match tt with (TySeq {ty = ty1}, OTyArray {ty = ty2}) then
-        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.to_array") in
-        let mapop = ovarext_ (intrinsicOpSeq "Helpers.map") in
-        marshalContainer _arrayToSeqCost _approxsize marshalop mapop t ty1 ty2
+        let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_array" } in
+        let mapop = OTmVarExt { ident = intrinsicOpSeq "Helpers.map" } in
+        convertContainer _arrayToSeqCost _approxsize op mapop t ty1 ty2
       else match tt with (OTyArray {ty = ty1}, TySeq {ty = ty2}) then
-        let marshalop = ovarext_ (intrinsicOpSeq "Helpers.of_array") in
-        let mapop = ovarext_ "Array.map" in
-        marshalContainer _arrayToSeqCost _approxsize marshalop mapop t ty1 ty2
+        let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_array" } in
+        let mapop = OTmVarExt { ident = "Array.map" } in
+        convertContainer _arrayToSeqCost _approxsize op mapop t ty1 ty2
       else match tt with (TyRecord {fields = fields}, OTyTuple {tys = []}) then
         if eqi (mapSize fields) 0  then
-          (0, semi_ t ounit_)
-        else error "Cannot marshal non-empty record to empty tuple"
+          (0, semi_ t (OTmTuple { values = [] }))
+        else
+          infoErrorExit info "Cannot convert non-empty record to empty tuple"
       else match tt with (OTyTuple {tys = []}, TyRecord {fields = fields}) then
         if eqi (mapSize fields) 0  then
-          (0, semi_ t uunit_)
-        else error "Cannot marshal empty tuple to non-empty record"
+          (0, semi_ t (tmTuple [] ty2 info))
+        else
+          infoErrorExit info "Cannot convert empty tuple to non-empty record"
       else match tt with (OTyTuple {tys = tys}, TyVar {ident = ident}) then
         match mapLookup ident env.constrs
         with Some (TyRecord {fields = fields}) then
           let ns = create (length tys) (lam. nameSym "t") in
-          let tpat = optuple_ (map npvar_ ns) in
-          let costsValues =
+          let pvars =
+            map (lam n. PatNamed { ident = PName n, info = info }) ns
+          in
+          let tpat = OPatTuple { pats = pvars } in
+          let costsTs =
             mapi
-              (lam i. lam nty : (Name, Type).
-                let n = nty.0 in
-                let ty1 = nty.1 in
-                let sid = stringToSid (int2string i) in
-                match mapLookup sid fields with Some ty2 then
-                  recur (nvar_ n) ty1 ty2
-                else error "Cannot marshal tuple")
+              (lam i. lam x : (Name, Type).
+                match x with (ident, ty1) then
+                  let sid = stringToSid (int2string i) in
+                  match mapLookup sid fields with Some ty2 then
+                    let var =
+                      TmVar {
+                        ident = ident,
+                        ty = TyUnknown { info = info },
+                        info = info
+                      }
+                    in
+                    recur var ty1 ty2
+                  else
+                    infoErrorExit info "Cannot convert tuple"
+                else never)
               (zip ns tys)
           in
-          match unzip costsValues with (costs, values) then
-            (foldl1 addi costs, omatch_ t [(tpat, otuple_ values)])
+          match unzip costsTs with (costs, ts) then
+            let t =
+              OTmMatch {
+                target = t,
+                arms = [(OPatTuple { pats = pvars }, OTmTuple { values = ts })]
+              }
+            in
+            (foldl1 addi costs, t)
           else never
-        else error "Cannot marshal tuple"
-      else match tt
-      with (TyVar {ident = ident} & ty1, OTyTuple {tys = tys})
-      then
+        else infoErrorExit info "Cannot convert tuple"
+      else match tt with (TyVar {ident = ident}, OTyTuple {tys = tys}) then
         match mapLookup ident env.constrs
         with Some (TyRecord {fields = fields}) then
           let ns = create (length tys) (lam. nameSym "t") in
-          let tpat = ptuple_ (map npvar_ ns) in
-          let costsValues =
+          let pvars =
+            map (lam n. PatNamed { ident = PName n, info = info }) ns
+          in
+          let tpat = patTuple pvars info in
+          let costsTs =
             mapi
-              (lam i. lam nty : (Name, Type).
-                let n = nty.0 in
-                let ty2 = nty.1 in
-                let sid = stringToSid (int2string i) in
-                match mapLookup sid fields with Some ty1 then
-                  recur (nvar_ n) ty1 ty2
-                else error "Cannot marshal tuple")
+              (lam i. lam x : (Name, Type).
+                match x with (ident, ty2) then
+                  let sid = stringToSid (int2string i) in
+                  match mapLookup sid fields with Some ty1 then
+                    let var =
+                      TmVar {
+                        ident = ident,
+                        ty = TyUnknown { info = info },
+                        info = info
+                      }
+                    in
+                    recur var ty1 ty2
+                  else
+                    infoErrorExit info "Cannot convert tuple"
+                else never)
               (zip ns tys)
           in
-          match unzip costsValues with (costs, values) then
-            (foldl1 addi costs, match_ t tpat (tuple_ values ty1) never_)
+          match unzip costsTs with (costs, ts) then
+            let t =
+              TmMatch {
+                target = t,
+                pat = tpat,
+                thn = tmTuple ts ty1 info,
+                els = TmNever { ty = TyUnknown { info = info }, info = info },
+                ty = ty1,
+                info = info
+              }
+            in
+            (foldl1 addi costs, t)
           else never
-        else error "Cannot marshal tuple"
+        else infoErrorExit info "Cannot convert tuple"
       else match tt with
         (OTyBigArrayGenArray
           {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
@@ -205,83 +265,131 @@ let _externalMarshal : ExternalEnv -> Expr -> Type -> Type -> (Int, Expr) =
         ,OTyBigArrayGenArray
           {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]})
       then
-        (_tensorToGenarrayCost,
-         app_ (ovarext_ (intrinsicOpTensor "Helpers.to_genarray_clayout")) t)
+        let lhs =
+          OTmVarExt { ident = intrinsicOpTensor "Helpers.to_genarray_clayout" }
+        in
+        let t =
+          TmApp {
+            lhs = lhs,
+            rhs = t,
+            ty = ty1,
+            info = info
+          }
+        in
+        (_tensorToGenarrayCost, t)
       else match tt with
         (OTyBigArrayGenArray
           {tys = [TyInt _, OTyBigArrayIntElt _, OTyBigArrayClayout _]}
         ,TyTensor {ty = TyInt _})
       then
-        (_tensorToGenarrayCost,
-         app_ (ovarext_ (intrinsicOpTensor "carray_int")) t)
+        let lhs = OTmVarExt { ident = intrinsicOpTensor "carray_int" } in
+        let t =
+          TmApp {
+            lhs = lhs,
+            rhs = t,
+            ty = ty2,
+            info = info
+          }
+        in
+        (_tensorToGenarrayCost, t)
       else match tt with
         (TyTensor {ty = TyFloat _}
         ,OTyBigArrayGenArray
           {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]})
       then
-        (_tensorToGenarrayCost,
-         app_ (ovarext_ (intrinsicOpTensor "Helpers.to_genarray_clayout")) t)
+        let lhs =
+          OTmVarExt { ident = intrinsicOpTensor "Helpers.to_genarray_clayout" }
+        in
+        let t =
+          TmApp {
+            lhs = lhs,
+            rhs = t,
+            ty = ty1,
+            info = info
+          }
+        in
+        (_tensorToGenarrayCost, t)
       else match tt with
         (OTyBigArrayGenArray
           {tys = [TyFloat _, OTyBigArrayFloat64Elt _, OTyBigArrayClayout _]}
         ,TyTensor {ty = TyFloat _})
       then
-        (_tensorToGenarrayCost,
-         app_ (ovarext_ (intrinsicOpTensor "carray_float")) t)
-      else match tt with (ty1, OTyLabel {label = label, ty = ty2}) then
-        match recur t ty1 ty2 with (cost, t) then
-          (cost, oarglabel_ label t)
-        else never
+        let lhs = OTmVarExt { ident = intrinsicOpTensor "carray_float" } in
+        let t =
+          TmApp {
+            lhs = lhs,
+            rhs = t,
+            ty = ty2,
+            info = info
+          }
+        in
+        (_tensorToGenarrayCost, t)
       else match tt
       with (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22})
       then
-        let n = nameSym "x" in
-        match recur (nvar_ n) ty21 ty11 with (cost1, arg) then
-          match recur (app_ t arg) ty12 ty22 with (cost2, body) then
-            (addi cost1 cost2, nulam_ n body)
+        let ident = nameSym "x" in
+        let arg = TmVar { ident = ident, ty = ty21, info = info } in
+        match recur arg ty21 ty11 with (cost1, arg) then
+          let body =
+            TmApp {
+              lhs = t,
+              rhs = arg,
+              ty = ty22,
+              info = info
+            }
+          in
+          match recur body ty12 ty22 with (cost2, body) then
+            let t =
+              TmLam {
+                ident = ident,
+                tyIdent = ty21,
+                body = body,
+                ty = ty2,
+                info = info
+              }
+            in
+            (addi cost1 cost2, t)
           else never
         else never
-      else error "Cannot marshal data"
+      else infoErrorExit info "Cannot convert data"
   in
 
   let ty1 = typeUnwrapAlias env.aliases ty1 in
   let ty2 = typeUnwrapAlias env.aliases ty2 in
   recur t ty1 ty2
 
-
--- Marshals expression `Exp` of type `Type` to expression `Expr` of type
+-- Converts expression `Exp` of type `Type` to expression `Expr` of type
 -- `Type`.
-let externalMarshal : ExternalEnv -> Expr -> Type -> Type -> Expr =
-  lam env. lam t. lam ty1. lam ty2.
-  match _externalMarshal env t ty1 ty2 with (_, t) then t
+let externalConvertData : GenerateEnv -> Info -> Expr -> Type -> Type -> Expr =
+  lam env. lam info. lam t. lam ty1. lam ty2.
+  match _convert env info t ty1 ty2 with (_, t) then t
   else never
 
--- Computes the cost of Marshaling the expression `Exp` of type `Type` to
+-- Computes the cost of converting the expression `Exp` of type `Type` to
 -- expression `Expr` of type `Type`.
-let externalMarshalCost : ExternalEnv -> Type -> Type -> Int =
+let externalConvertDataCost : GenerateEnv -> Type -> Type -> Int =
   lam env. lam ty1. lam ty2.
-  match _externalMarshal env never_ ty1 ty2 with (cost, _) then cost
+  match _convert env (NoInfo ()) never_ ty1 ty2 with (cost, _) then cost
   else never
 
 lang OCamlGenerateExternal
-
   -- Popluates `env` by chosing external implementations.
-  sem chooseExternalImpls (impls : ExternalImplsMap)  (env : ExternalEnv) /- : Expr -> ExternalEnv -/=
+  sem chooseExternalImpls
+        (implsMap : Map String [ExternalImpl])
+        (env : GenerateEnv)
+         /- : Expr -> GenerateEnv -/
+        =
   -- Intentionally left blank
-
-
-  -- Generates code for externals. The resulting program should be free of
-  -- `TmExt` terms.
-  sem generateExternals (env : ExternalEnv) =
-  -- Intentionally left blank
-
 end
 
 -- A naive implementation of external generation where we just pick the
 -- implementation with the lowest cost with respect to the type given at the
 -- external term definition.
 lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
-  sem chooseExternalImpls (implsMap : ExternalImplsMap) (env : ExternalEnv) =
+  sem chooseExternalImpls
+        (implsMap : Map String [ExternalImpl])
+        (env : GenerateEnv) =
+
   | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
@@ -290,25 +398,14 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         minOrElse
           (lam. error "impossible")
           (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
-             let cost1 = externalMarshalCost r1.extTy ty in
-             let cost2 = externalMarshalCost r2.extTy ty in
+             let cost1 = externalConvertDataCost env r1.ty ty in
+             let cost2 = externalConvertDataCost env r2.ty ty in
              subi cost1 cost2)
         impls
       in
-      let env = {env with usedImpls = mapInsert ident [impl] env.usedImpls} in
+      let env = { env with exts = mapInsert ident [impl] env.exts } in
       chooseExternalImpls implsMap env inexpr
     else
       error (join ["No implementation for external ", identStr])
   | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
-
-  sem generateExternals (env : ExternalEnv) =
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr} ->
-    match mapLookup ident env.usedImpls
-    with Some r then
-      let r : ExternalImpl = head r in
-      let t = externalMarshal env (ovarext_ r.extIdent) r.extTy ty in
-      bind_ (nulet_ ident t) (generateExternals env inexpr)
-    else
-      error (join ["No implementation for external ", nameGetStr ident])
-  | t -> smap_Expr_Expr (generateExternals env) t
 end
