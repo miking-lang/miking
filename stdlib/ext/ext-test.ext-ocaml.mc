@@ -60,17 +60,51 @@ let extTestMap =
         libraries = []
       }
     ]),
-    ("extTestTuple0th1", [
+    ("extTestTuple10th", [
       {
-        ident = "Boot.Exttest.tuple_0th1",
+        ident = "Boot.Exttest.tuple1_0th",
         ty = tyarrow_ (otytuple_ [tyint_, tyfloat_]) tyint_,
         libraries = []
       }
     ]),
-    ("extTestTuple0th2", [
+    ("extTestTuple20th", [
       {
-        ident = "Boot.Exttest.tuple_0th2",
+        ident = "Boot.Exttest.tuple2_0th",
         ty = tyarrow_ (otytuple_ [otylist_ tyint_, tyint_]) (otylist_ tyint_),
+        libraries = []
+      }
+    ]),
+    ("extTestRecord1", [
+      {
+        ident = "Boot.Exttest.myrec1",
+        ty = otyrecord_ "Boot.Exttest.myrec1_t" [("a", tyint_), ("b", tyfloat_)],
+        libraries = []
+      }
+    ]),
+    ("extTestRecord1A", [
+      {
+        ident = "Boot.Exttest.myrec1_a",
+        ty = tyarrow_ (otyrecord_
+                        "Boot.Exttest.myrec1_t"
+                        [("a", tyint_), ("b", tyfloat_)])
+                      tyint_,
+        libraries = []
+      }
+    ]),
+    ("extTestRecord2", [
+      {
+        ident = "Boot.Exttest.myrec2",
+        ty = otyrecord_ "Boot.Exttest.myrec2_t" [("a", otylist_ tyint_), ("b", tyint_)],
+        libraries = []
+      }
+    ]),
+    ("extTestRecord2A", [
+      {
+        ident = "Boot.Exttest.myrec2_a",
+        ty = tyarrow_ (otyrecord_
+                        "Boot.Exttest.myrec2_t"
+                        [("a", otylist_ tyint_), ("b", tyint_)])
+                      (otylist_ tyint_),
         libraries = []
       }
     ]),

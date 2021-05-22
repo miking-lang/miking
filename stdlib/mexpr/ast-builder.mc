@@ -129,6 +129,7 @@ let tyrecord_ = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromList cmpSID (map fieldMapFunc fields),
+    labels = map (lam b : (String, a). b.0) fields,
     info = NoInfo ()
   }
 

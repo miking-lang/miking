@@ -463,11 +463,11 @@ lang OCamlPrettyPrint =
     match pprintCode indent env arg with (env, arg) then
       (env, join ["~", label, ":", arg])
     else never
-  | OTmRecord {bindings = bindings} ->
+  | OTmRecord {bindings = bindings, tyident = tyident} ->
     match unzip bindings with (labels, tms) then
       match mapAccumL (pprintCode indent) env tms with (env, tms) then
         let strs = mapi (lam i. lam t. join [get labels i, " = ", t]) tms in
-        (env, join ["{", strJoin ";" strs, "}"])
+        (env, join ["({", strJoin ";" strs, "} : ", tyident, ")"])
       else never
     else never
   | OTmProject {field = field, tm = tm} ->
@@ -643,7 +643,7 @@ let testLabel =
 in
 
 let testRecord =
-  OTmRecord { bindings = [("a", int_ 1), ("b", float_ 2.)] }
+  OTmRecord { bindings = [("a", int_ 1), ("b", float_ 2.)], tyident = "rec" }
 in
 
 let testProject =

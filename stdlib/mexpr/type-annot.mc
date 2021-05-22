@@ -364,7 +364,8 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
   | TmRecord t ->
     let bindings = mapMap (typeAnnotExpr env) t.bindings in
     let bindingTypes = mapMap ty bindings in
-    let ty = TyRecord {fields = bindingTypes, info = t.info} in
+    let labels = mapKeys t.bindings in
+    let ty = TyRecord {fields = bindingTypes, labels = labels, info = t.info} in
     TmRecord {{t with bindings = bindings}
                  with ty = ty}
   | TmRecordUpdate t ->

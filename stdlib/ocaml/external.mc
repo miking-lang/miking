@@ -53,6 +53,12 @@ let _requiresConversion =
         in
         any (lam f. f ()) fs
       else false
+    else match tt with (TyVar {ident = ident}, OTyRecord {fields = fields})
+    then
+      true
+    else match tt with (OTyRecord {fields = fields}, TyVar {ident = ident})
+    then
+      true
     else match tt with (_, TyVar _) | (TyVar _, _) then
       false
     else match tt with
@@ -106,6 +112,8 @@ let _approxsize = 10
 let _listToSeqCost = 5
 let _arrayToSeqCost = 2
 let _tensorToGenarrayCost = 1
+let _tupleConversionCost = 1
+let _recordConversionCost = 1
 
 let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
   use OCamlDataConversion in
@@ -204,7 +212,7 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
             arms = [(OPatTuple { pats = pvars }, OTmTuple { values = ts })]
           }
         in
-        (foldl1 addi costs, t)
+        (addi _tupleConversionCost (foldl1 addi costs), t)
       else never
     in
 
@@ -250,6 +258,75 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
         with Some (TyRecord {fields = fields}) then
           convertTuple t tys fields (lam t. lam ty1. lam ty2. recur t ty2 ty1)
         else infoErrorExit info "Cannot convert tuple"
+      else match tt with (OTyRecord {fields = fields1}, TyVar {ident = ident})
+      then
+        match mapLookup ident env.constrs
+        with Some (TyRecord {fields = fields2, labels = labels}) then
+          let costsTms =
+            mapi
+              (lam i. lam field : (String, Type).
+                match field with (l1, ty1) then
+                  let l2 = get labels i in
+                  match mapLookup (stringToSid l2) fields2 with Some ty2 then
+                    recur (OTmProject { field = l1, tm = t }) ty1 ty2
+                  else never
+                else never)
+              fields1
+          in
+          match unzip costsTms with (costs, tms) then
+            let t = tmRecord (zip labels tms) ty2 info in
+            let cost = addi _recordConversionCost (foldl1 addi costs) in
+            (cost, t)
+          else never
+        else infoErrorExit info "Cannot convert record"
+      else match tt with
+        (TyVar {ident = ident}, OTyRecord {tyident = tyident, fields = fields2})
+      then
+        match mapLookup ident env.constrs
+        with Some (TyRecord {fields = fields1, labels = labels1}) then
+          let ns = create (length labels1) (lam. nameSym "r") in
+          let pvars =
+            map (lam n. PatNamed { ident = PName n, info = info }) ns
+          in
+          let rpat = patRecord (zip labels1 pvars) info in
+          match unzip fields2 with (labels2, tys2) then
+            let costsTms =
+              mapi
+                (lam i. lam x : (Name, Type).
+                  match x with (ident, ty2) then
+                    let sid = stringToSid (get labels1 i) in
+                    match mapLookup sid fields1 with Some ty1 then
+                      let var =
+                        TmVar {
+                          ident = ident,
+                          ty = TyUnknown { info = info },
+                          info = info
+                        }
+                      in
+                      recur var ty1 ty2
+                    else
+                      infoErrorExit info "Cannot convert record"
+                  else never)
+                (zip ns tys2)
+            in
+            match unzip costsTms with (costs, tms) then
+              let t =
+                TmMatch {
+                  target = t,
+                  pat = rpat,
+                  thn =
+                    OTmRecord {
+                      bindings = zip labels2 tms, tyident = tyident
+                    },
+                  els = TmNever { ty = TyUnknown { info = info }, info = info },
+                  ty = TyUnknown { info = info },
+                  info = info
+                }
+              in
+              (foldl1 addi costs, t)
+            else never
+          else never
+        else infoErrorExit info "Cannot convert record"
       else match tt with
         (OTyBigarrayGenarray
           {tys = [TyInt _, OTyBigarrayIntElt _, OTyBigarrayClayout _]}

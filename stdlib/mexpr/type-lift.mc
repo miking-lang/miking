@@ -68,9 +68,12 @@ let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
   assocSeqMap f env.typeEnv
 
 -- Adds a record type with the given fields to the type lifting environment.
-let _addRecordTypeVar = lam env : TypeLiftEnv. lam fields : Map SID Type.
+let _addRecordTypeVar =
+lam env : TypeLiftEnv. lam fields : Map SID Type. lam labels : [String].
   use MExprAst in
-  let record = TyRecord {fields = fields, info = NoInfo ()} in
+  let record =
+    TyRecord {fields = fields, labels = labels, info = NoInfo ()}
+  in
   let recName = nameSym "Rec" in
   let recTyVar = ntyvar_ recName in
   let env = {{env with records = mapInsert fields recName env.records}
@@ -245,10 +248,11 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
           let variantNameTy = TyVariantName {ident = t.ident} in
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
-        else match tyIdent with TyRecord {fields = fields} then
+        else match tyIdent
+        with TyRecord {fields = fields, labels = labels} then
           let f = lam env. lam. lam ty. typeLiftType env ty in
           match mapMapAccum f env fields with (env, fields) then
-            match _addRecordTypeVar env fields with (env, _) then
+            match _addRecordTypeVar env fields labels with (env, _) then
               env
             else never
           else never
@@ -310,10 +314,11 @@ lang MatchTypeLift = TypeLift + MatchAst + RecordPat
       match pat with PatRecord {bindings = bindings} then
         match record2tuple bindings with Some _ then
           let bindingTypes = mapMap (lam. tyunknown_) bindings in
+          let labels = map sidToString (mapKeys bindings) in
           match mapLookup bindingTypes env.records with Some _ then
             env
           else
-            match _addRecordTypeVar env bindingTypes with (env, tyName) then
+            match _addRecordTypeVar env bindingTypes labels with (env, tyName) then
               env
             else never
         else env
@@ -446,7 +451,7 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
         match mapLookup fields env.records with Some name then
           (env, ntyvar_ name)
         else
-          _addRecordTypeVar env fields
+          _addRecordTypeVar env fields t.labels
       else never
 end
 

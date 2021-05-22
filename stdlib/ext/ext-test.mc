@@ -26,11 +26,23 @@ utest extTestTuple1.0 with 1 in
 external extTestTuple2 : ([Int], Int) in
 utest extTestTuple2.0 with [1] in
 
-external extTestTuple0th1 : (Int, Float) -> Int in
-utest extTestTuple0th1 (1, 2.) with 2 in
+external extTestTuple10th : (Int, Float) -> Int in
+utest extTestTuple10th (1, 3.) with 2 in
 
-external extTestTuple0th2 : ([Int], Int) -> [Int] in
-utest extTestTuple0th2 ([1], 2) with [2] in
+external extTestTuple20th : ([Int], Int) -> [Int] in
+utest extTestTuple20th ([1], 2) with [2] in
+
+external extTestRecord1 : {c : Int, d : Float} in
+utest (extTestRecord1).c with 1 in
+
+external extTestRecord1A : {c : Int, d : Float} -> Int in
+utest extTestRecord1A {c = 1, d = 3.} with 2 in
+
+external extTestRecord2 : {c : [Int], d : Int} in
+utest (extTestRecord2).c with [1] in
+
+external extTestRecord2A : {c : [Int], d : Int} -> [Int] in
+utest extTestRecord2A {c = [1], d = 2} with [2] in
 
 external extTestArgLabel : Int -> Int -> Int in
 utest extTestArgLabel 1 2 with 1 in

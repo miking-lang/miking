@@ -15,14 +15,16 @@ end
 
 lang OCamlRecord
   syn Expr =
-  | OTmRecord {bindings : [(String, Expr)]}
+  | OTmRecord {bindings : [(String, Expr)], tyident : String}
   | OTmProject {field : String, tm : Expr}
 
   syn Pat =
   | OPatRecord {bindings : Map SID Pat}
 
   sem smap_Expr_Expr (f : Expr -> a) =
-  | OTmRecord t -> OTmRecord {t with bindings = mapMap f t.bindings}
+  | OTmRecord t ->
+    let bindings = map (lam b : (String, Expr). (b.0, f b.1)) t.bindings in
+    OTmRecord {t with bindings = bindings}
   | OTmProject t -> OTmProject {t with tm = f t.tm}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
@@ -151,7 +153,7 @@ lang OCamlTypeAst =
   | OTyLabel {info : Info, label : String, ty : Type}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
-  | OTyRecord {info : Info, fields : [(String, Type)]}
+  | OTyRecord {info : Info, fields : [(String, Type)], tyident : String}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -234,6 +236,10 @@ let otyparam_ = use OCamlAst in
 
 let otylabel_ = use OCamlAst in
   lam label. lam ty. OTyLabel {info = NoInfo (), label = label, ty = ty}
+
+let otyrecord_ = use OCamlAst in
+  lam tyident. lam fields.
+    OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
 
 mexpr
 ()
