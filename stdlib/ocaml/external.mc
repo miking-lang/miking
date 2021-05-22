@@ -172,6 +172,42 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
       else never
     in
 
+    let convertTuple = lam t. lam tys. lam fields. lam recur.
+      let ns = create (length tys) (lam. nameSym "t") in
+      let pvars =
+        map (lam n. PatNamed { ident = PName n, info = info }) ns
+      in
+      let tpat = OPatTuple { pats = pvars } in
+      let costsTs =
+        mapi
+          (lam i. lam x : (Name, Type).
+            match x with (ident, ty1) then
+              let sid = stringToSid (int2string i) in
+              match mapLookup sid fields with Some ty2 then
+                let var =
+                  TmVar {
+                    ident = ident,
+                    ty = TyUnknown { info = info },
+                    info = info
+                  }
+                in
+                recur var ty1 ty2
+              else
+                infoErrorExit info "Cannot convert tuple"
+            else never)
+          (zip ns tys)
+      in
+      match unzip costsTs with (costs, ts) then
+        let t =
+          OTmMatch {
+            target = t,
+            arms = [(OPatTuple { pats = pvars }, OTmTuple { values = ts })]
+          }
+        in
+        (foldl1 addi costs, t)
+      else never
+    in
+
     if not (_requiresConversion env info ty1 ty2) then
       (0, t)
     else
@@ -207,80 +243,12 @@ let _convert : GenerateEnv -> Info -> Expr -> Type -> Type -> (Int, Expr) =
       else match tt with (OTyTuple {tys = tys}, TyVar {ident = ident}) then
         match mapLookup ident env.constrs
         with Some (TyRecord {fields = fields}) then
-          let ns = create (length tys) (lam. nameSym "t") in
-          let pvars =
-            map (lam n. PatNamed { ident = PName n, info = info }) ns
-          in
-          let tpat = OPatTuple { pats = pvars } in
-          let costsTs =
-            mapi
-              (lam i. lam x : (Name, Type).
-                match x with (ident, ty1) then
-                  let sid = stringToSid (int2string i) in
-                  match mapLookup sid fields with Some ty2 then
-                    let var =
-                      TmVar {
-                        ident = ident,
-                        ty = TyUnknown { info = info },
-                        info = info
-                      }
-                    in
-                    recur var ty1 ty2
-                  else
-                    infoErrorExit info "Cannot convert tuple"
-                else never)
-              (zip ns tys)
-          in
-          match unzip costsTs with (costs, ts) then
-            let t =
-              OTmMatch {
-                target = t,
-                arms = [(OPatTuple { pats = pvars }, OTmTuple { values = ts })]
-              }
-            in
-            (foldl1 addi costs, t)
-          else never
+          convertTuple t tys fields recur
         else infoErrorExit info "Cannot convert tuple"
       else match tt with (TyVar {ident = ident}, OTyTuple {tys = tys}) then
         match mapLookup ident env.constrs
         with Some (TyRecord {fields = fields}) then
-          let ns = create (length tys) (lam. nameSym "t") in
-          let pvars =
-            map (lam n. PatNamed { ident = PName n, info = info }) ns
-          in
-          let tpat = patTuple pvars info in
-          let costsTs =
-            mapi
-              (lam i. lam x : (Name, Type).
-                match x with (ident, ty2) then
-                  let sid = stringToSid (int2string i) in
-                  match mapLookup sid fields with Some ty1 then
-                    let var =
-                      TmVar {
-                        ident = ident,
-                        ty = TyUnknown { info = info },
-                        info = info
-                      }
-                    in
-                    recur var ty1 ty2
-                  else
-                    infoErrorExit info "Cannot convert tuple"
-                else never)
-              (zip ns tys)
-          in
-          match unzip costsTs with (costs, ts) then
-            let t =
-              TmMatch {
-                target = t,
-                pat = tpat,
-                thn = tmTuple ts ty1 info,
-                els = TmNever { ty = TyUnknown { info = info }, info = info },
-                ty = ty1,
-                info = info
-              }
-            in
-            (foldl1 addi costs, t)
-          else never
+          convertTuple t tys fields (lam t. lam ty1. lam ty2. recur t ty2 ty1)
         else infoErrorExit info "Cannot convert tuple"
       else match tt with
         (OTyBigarrayGenarray
