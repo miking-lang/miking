@@ -57,6 +57,12 @@ lang OCamlSym =
     OTmConAppExt {t with args = map (symbolizeExpr env) args}
   | OTmString t -> OTmString t
   | OTmLabel t -> OTmLabel {t with arg = symbolizeExpr env t.arg }
+  | OTmRecord t ->
+    let bindings =
+      map (lam b : (String, Expr). (b.0, symbolizeExpr env b.1)) t.bindings
+    in
+    OTmRecord {t with bindings = bindings}
+  | OTmProject t -> OTmProject {t with tm = symbolizeExpr env t.tm}
 
   sem symbolizePat (env : SymEnv) (patEnv : SymEnv) =
   | OPatTuple { pats = pats } ->

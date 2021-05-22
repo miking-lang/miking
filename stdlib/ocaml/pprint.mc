@@ -149,6 +149,8 @@ lang OCamlPrettyPrint =
   | OTmConAppExt _ -> false
   | OTmString _ -> true
   | OTmLabel _ -> true
+  | OTmRecord _ -> true
+  | OTmProject _ -> true
 
   sem patIsAtomic =
   | OPatRecord _ -> false
@@ -457,9 +459,20 @@ lang OCamlPrettyPrint =
       else never
     else never
   | OTmString t -> (env, join ["\"", t.text, "\""])
-  | OTmLabel t ->
-    match pprintCode indent env t.arg with (env, arg) then
-      (env, join ["~", t.label, ":", arg])
+  | OTmLabel {label = label, arg = arg} ->
+    match pprintCode indent env arg with (env, arg) then
+      (env, join ["~", label, ":", arg])
+    else never
+  | OTmRecord {bindings = bindings} ->
+    match unzip bindings with (labels, tms) then
+      match mapAccumL (pprintCode indent) env tms with (env, tms) then
+        let strs = mapi (lam i. lam t. join [get labels i, " = ", t]) tms in
+        (env, join ["{", strJoin ";" strs, "}"])
+      else never
+    else never
+  | OTmProject {field = field, tm = tm} ->
+    match pprintCode indent env tm with (env, tm) then
+      (env, join [tm, ".", field])
     else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
@@ -629,6 +642,14 @@ let testLabel =
   OTmLabel { label = "label", arg = int_ 0}
 in
 
+let testRecord =
+  OTmRecord { bindings = [("a", int_ 1), ("b", float_ 2.)] }
+in
+
+let testProject =
+  OTmProject { field = "a", tm = OTmVarExt { ident = "r" } }
+in
+
 let asts = [
   testAddInt1,
   testAddInt2,
@@ -658,7 +679,9 @@ let asts = [
   testIfNested,
   testPatLet,
   testTuple,
-  testLabel
+  testLabel,
+  testRecord,
+  testProject
 ] in
 
 map pprintProg asts;

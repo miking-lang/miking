@@ -14,8 +14,21 @@ lang OCamlTypeDeclAst
 end
 
 lang OCamlRecord
+  syn Expr =
+  | OTmRecord {bindings : [(String, Expr)]}
+  | OTmProject {field : String, tm : Expr}
+
   syn Pat =
   | OPatRecord {bindings : Map SID Pat}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmRecord t -> OTmRecord {t with bindings = mapMap f t.bindings}
+  | OTmProject t -> OTmProject {t with tm = f t.tm}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmRecord t ->
+    foldl (lam acc. lam a : (String, Expr). f acc a.1) acc t.bindings
+  | OTmProject t -> f acc t.tm
 end
 
 lang OCamlMatch
@@ -138,6 +151,7 @@ lang OCamlTypeAst =
   | OTyLabel {info : Info, label : String, ty : Type}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
+  | OTyRecord {info : Info, fields : [(String, Type)]}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -151,6 +165,7 @@ lang OCamlTypeAst =
   | OTyLabel r -> r.info
   | OTyVarExt r -> r.info
   | OTyParam r -> r.info
+  | OTyRecord r -> r.info
 end
 
 lang OCamlAst =
