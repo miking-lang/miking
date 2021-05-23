@@ -146,6 +146,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
                               FutharkTypePrettyPrint
   sem isAtomic =
   | FEVar _ -> true
+  | FEBuiltIn _ -> true
   | FERecord _ -> true
   | FERecordProj _ -> false
   | FEArray _ -> true
@@ -172,6 +173,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
 
   sem pprintExpr (indent : Int) (env : PprintEnv) =
   | FEVar {ident = ident} -> pprintVarName env ident
+  | FEBuiltIn {str = str} -> (env, str)
   | FERecord {fields = fields} ->
     let pprintField = lam env. lam k. lam v.
       let str = pprintLabelString k in
@@ -285,6 +287,14 @@ lang FutharkPrettyPrint = FutharkConstPrettyPrint + FutharkTypePrettyPrint +
         match pprintExpr valIndent env val with (env, val) then
           (env, join ["let ", ident, " : ", ty, " =",
                       pprintNewline valIndent, val])
+        else never
+      else never
+    else never
+  | FDeclType { ident = ident, typeParams = typeParams, ty = ty } ->
+    match mapAccumL pprintTypeParam env typeParams with (env, typeParams) then
+      match pprintVarName env ident with (env, ident) then
+        match pprintType 0 env ty with (env, ty) then
+          (env, join ["type ", ident, " ", strJoin " " typeParams, " = ", ty])
         else never
       else never
     else never

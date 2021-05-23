@@ -33,6 +33,7 @@ lang FutharkAst
 
   syn FutExpr =
   | FEVar { ident : Name }
+  | FEBuiltIn { str : String }
   | FERecord { fields : Map SID FutExpr }
   | FERecordProj { rec : FutExpr, key : SID }
   | FEArray { tms : [FutExpr] }
@@ -55,6 +56,7 @@ lang FutharkAst
   | FDeclFun { ident : Name, entry : Bool, typeParams : [FutTypeParam],
                params : [(Name, FutType)], ret : FutType, body : FutExpr }
   | FDeclConst { ident : Name, ty : FutType, val : FutExpr }
+  | FDeclType { ident : Name, typeParams : [FutTypeParam], ty : FutType }
 
   syn FutProg =
   | FProg { decls : [FutDecl] }
