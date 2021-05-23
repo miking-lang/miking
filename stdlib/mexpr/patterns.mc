@@ -208,22 +208,28 @@ end
 
 let parallelMap_ = lam f. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelMap {f = f, as = as, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelMap {f = f, as = as, ty = TyUnknown {info = NoInfo ()},
+                 info = NoInfo ()}
 let parallelMap2_ = lam f. lam as. lam bs.
   use MExprPatternKeywordMaker in
-  TmParallelMap2 {f = f, as = as, bs = bs, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelMap2 {f = f, as = as, bs = bs, ty = TyUnknown {info = NoInfo ()},
+                  info = NoInfo ()}
 let parallelReduce_ = lam f. lam ne. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
+                    info = NoInfo ()}
 let parallelScan_ = lam f. lam ne. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelScan {f = f, ne = ne, as = as, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelScan {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
+                  info = NoInfo ()}
 let parallelFilter_ = lam p. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelFilter {p = p, as = as, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelFilter {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
+                    info = NoInfo ()}
 let parallelPartition_ = lam p. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelPartition {p = p, as = as, ty = TyUnknown (), info = NoInfo ()}
+  TmParallelPartition {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
+                       info = NoInfo ()}
 let parallelAll_ = lam p. lam as.
   use MExprPatternKeywordMaker in
   TmParallelAll {p = p, as = as, info = NoInfo ()}
