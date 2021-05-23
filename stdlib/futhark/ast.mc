@@ -41,7 +41,7 @@ lang FutharkAst
   | FEConst { val : FutConst }
   | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
-  | FELet { ident : Name, ty : FutType, body : FutExpr, inexpr : FutExpr }
+  | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
 
   syn FutType =

@@ -90,11 +90,12 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyVar t ->
     match mapLookup t.ident env.typeEnv with Some futType then
       futType
-    else infoErrorExit t.info (join ["Undefined type alias ", nameGetStr t.ident])
+    else infoErrorExit t.info (join ["Undefined type identifier ",
+                                     nameGetStr t.ident])
   | TyUnknown t -> infoErrorExit t.info "Cannot translate unknown type to Futhark"
 end
 
-lang FutharkMatchGenerate = MExprAst + FutharkAst
+lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
     infoErrorExit t.info "Unsupported match expression"
@@ -119,7 +120,15 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst
         FERecordProj {rec = generateExpr env t.target, key = fieldLabel}
       else defaultGenerateMatch env (TmMatch t)
     else defaultGenerateMatch env (TmMatch t)
-  | (TmMatch _) & t -> defaultGenerateMatch t
+  | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName pre}],
+                                middle = PName mid, postfix = []},
+              els = TmNever _} & t) ->
+    let targetName = nameSym "_target" in
+    let lengthCond = geqi_ (length_ (nvar_ targetName)) (int_ 1) in
+    FELet {ident = targetName, tyBody = generateType env (ty t.target),
+           body = generateExpr env t.target,
+           inexpr = generateExpr env t.thn}
+  | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
 lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
@@ -132,7 +141,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmLam t -> nFutLam_ t.ident (generateExpr env t.body)
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
   | TmLet t ->
-    FELet {ident = t.ident, ty = generateType env t.ty,
+    FELet {ident = t.ident, tyBody = generateType env t.tyBody,
            body = generateExpr env t.body,
            inexpr = generateExpr env t.inexpr}
   | TmParallelMap t -> futMap_ (generateExpr env t.f) (generateExpr env t.as)

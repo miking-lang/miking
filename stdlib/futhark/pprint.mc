@@ -221,13 +221,15 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
         (env, join [fun, pprintNewline aindent, args])
       else never
     else never
-  | FELet {ident = ident, body = body, inexpr = inexpr} ->
+  | FELet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
     let aindent = pprintIncr indent in
     match pprintExpr aindent env body with (env, body) then
-      match pprintExpr indent env inexpr with (env, inexpr) then
-        match pprintVarName env ident with (_, ident) then
-          (env, join ["let ", ident, " = ", body, " in",
-                      pprintNewline indent, inexpr])
+      match pprintType indent env tyBody with (env, tyBody) then
+        match pprintExpr indent env inexpr with (env, inexpr) then
+          match pprintVarName env ident with (_, ident) then
+            (env, join ["let ", ident, " : ", tyBody, " = ", body, " in",
+                        pprintNewline indent, inexpr])
+          else never
         else never
       else never
     else never
