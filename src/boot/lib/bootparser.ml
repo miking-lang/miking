@@ -113,8 +113,7 @@ let sym = Symb.gensym ()
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
 let symbolizeEnvWithKeywords keywords =
-  builtin_name2sym
-  @ List.map
+   List.map
       (fun k ->
         if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
           (IdCon (sid_of_ustring k), Intrinsics.Symb.gensym ())
@@ -125,15 +124,18 @@ let parseMExprString keywords str =
   PTreeTm
     ( str |> Parserutils.parse_mexpr_string
     |> Parserutils.raise_parse_error_on_non_unique_external_id
-    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
+    |> Symbolize.symbolize (builtin_name2sym @ (symbolizeEnvWithKeywords keywords))
     |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 let parseMCoreFile keywords filename =
+  let symKeywordsMap = symbolizeEnvWithKeywords keywords in
+  let name2sym = builtin_name2sym @ symKeywordsMap in
+  let symKeywords = List.map (fun (_,s) -> s) symKeywordsMap in
   PTreeTm
     ( filename |> Parserutils.parse_mcore_file
     |> Parserutils.raise_parse_error_on_non_unique_external_id
-    |> Symbolize.symbolize (symbolizeEnvWithKeywords keywords)
-    |> Deadcode.elimination builtin_sym2term builtin_name2sym
+    |> Symbolize.symbolize name2sym
+    |> Deadcode.elimination builtin_sym2term name2sym symKeywords
     |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 (* Returns a tuple with the following elements
