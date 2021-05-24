@@ -25,16 +25,17 @@ let tune = lam files. lam options : Options. lam args.
 
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
-    match flatten [] ast with (prog, table, holes) then
+    match flatten [] ast with
+      { prog = prog, table = table, holes = holes,
+        tempFile = tempFile, cleanup = cleanup }
+    then
       let binary = ocamlCompileAst options file prog in
       let run = lam args : String.
-        -- dprintLn (cons (join ["./", binary]) args);
         sysRunCommand (cons (join ["./", binary]) args) "" "."
       in
-      let result = tuneEntry run holes table in
-      print "best table: "; dprintLn (mapBindings result);
+      let result = tuneEntry run holes tempFile table in
       tuneDumpTable file result;
-      printLn (expr2str (insert [] result ast))
+      cleanup ()
     else never
   in
   iter tuneFile files

@@ -1,5 +1,6 @@
 include "ext/local-search.mc"
 include "ocaml/sys.mc"
+include "string.mc"
 include "map.mc"
 include "decision-points.mc"
 include "options.mc"
@@ -12,56 +13,43 @@ let _debug = true
 
 let _inputEmpty = [""]
 
-let _tuneFileExtension = ".tune"
+let tuneFileExtension = ".tune"
 
 let tuneFileName = lam file.
   let withoutExtension =
     match strLastIndex '.' file with Some idx then
       subsequence file 0 idx
     else file
-  in concat withoutExtension _tuneFileExtension
+  in concat withoutExtension tuneFileExtension
 
 let tuneDumpTable = lam file : String. lam table : LookupTable.
   use MExprPrettyPrint in
   let destinationFile = tuneFileName file in
-  print "destination: "; printLn destinationFile;
   writeFile destinationFile
-    (join
-      [ "["
-      , strJoin ", " (map expr2str table)
-      ,  "]"])
+      (strJoin " " (map expr2str table))
 
 let tuneReadTable = lam file : String.
   use BootParser in
-  use SeqAst in
-  match parseMExprString [] (readFile file)
-  with TmSeq {tms = values}
-  then values
-  else error (join ["Parsing of tuned values from file ", file, " failed."])
-
--- Add assignments of decision points to argument vector
-let _addToArgs = lam table : LookupTable. lam args : CommandLineArgs.
-  use MExprPrettyPrint in
-  concat args (map expr2str table)
+  let str = readFile file in
+  map (parseMExprString []) (strSplit " " str)
 
 lang TuneBase = Holes
-  sem tune (run : Runner) (holes : Expr) =
+  sem tune (run : Runner) (holes : Expr) (file : String) =
   -- Intentionally left blank
 
-  sem time (vals : LookupTable) (runner : Runner) =
+  sem time (table : LookupTable) (runner : Runner) (file : String) =
   | args ->
-    let allArgs = _addToArgs vals args in
+    tuneDumpTable file table;
     let t1 = wallTimeMs () in
-    let res : ExecResult = runner allArgs in
+    let res : ExecResult = runner args in
     let t2 = wallTimeMs () in
-    print "Result: "; dprintLn res;
+    --print "Result: "; dprintLn res;
     match res.returncode with 0 then
       subf t2 t1
     else
       let msg = strJoin " "
       [ "Program returned non-zero exit code during tuning\n"
       , "command line arguments:", strJoin " " args, "\n"
-      , "all command line arguments:", strJoin " " allArgs, "\n"
       , "stdout:", res.stdout, "\n"
       , "stderr:", res.stderr, "\n"
       ] in error msg
@@ -85,12 +73,10 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     match searchState
     with {cur = {assignment = Table {holes = holes}}}
     then
-      let table = mapFromList subi
-        (mapi (lam i. lam h.
-           match h with TmHole {hole = hole} then
-             (i, sample hole)
-           else dprintLn h; error "Expected decision point") holes) in
-      [Table {table = table, holes = holes}]
+      let table = map (lam h.
+        match h with TmHole {hole = hole} then sample hole
+        else dprintLn h; error "Expected a decision point") holes
+      in [Table {table = table, holes = holes}]
     else never
 
   sem compare =
@@ -109,8 +95,8 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
          , cur = {assignment = Table {table = cur}}}
     then
       use MExprPrettyPrint in
-      let incValues = map expr2str (mapValues inc) in
-      let curValues = map expr2str (mapValues cur) in
+      let incValues = map expr2str inc in
+      let curValues = map expr2str cur in
       printLn (join ["Iter: ", int2string iter, "\n",
                      "Best time: ", float2string time, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
@@ -118,14 +104,14 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     else never
 
-  sem tune (runner : Runner) (holes : [Expr]) =
+  sem tune (runner : Runner) (holes : [Expr]) (file : String) =
   | table ->
     let input =
       match tuneOptions.input with [] then _inputEmpty else tuneOptions.input in
     -- cost function = sum of execution times over all inputs
     let costF = lam lookup : Assignment.
       match lookup with Table {table = table} then
-        Runtime {time = foldr1 addf (map (time table runner) input)}
+        Runtime {time = foldr1 addf (map (time table runner file) input)}
       else never in
 
     -- Set up initial search state
@@ -221,17 +207,21 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
-let tuneEntry = lam run : Runner. lam holes : [Expr]. lam table : LookupTable.
-  -- Do warmup runs
-  use TuneBase in
-  iter (lam. map (time table run) tuneOptions.input)
-    (range 0 tuneOptions.warmups 1);
+let tuneEntry =
+  lam run : Runner.
+  lam holes : [Expr].
+  lam tuneFile : String.
+  lam table : LookupTable.
+    -- Do warmup runs
+    use TuneBase in
+    iter (lam. map (time table run) tuneOptions.input)
+      (range 0 tuneOptions.warmups 1);
 
-  -- Choose search method
-  match tuneOptions.method with RandomWalk {} then
-    use TuneRandomWalk in tune run holes table
-  else match tuneOptions.method with SimulatedAnnealing {} then
-    use TuneSimulatedAnnealing in tune run holes table
-  else match tuneOptions.method with TabuSearch {} then
-    use TuneTabuSearch in tune run holes table
-  else never
+    -- Choose search method
+    match tuneOptions.method with RandomWalk {} then
+      use TuneRandomWalk in tune run holes tuneFile table
+    else match tuneOptions.method with SimulatedAnnealing {} then
+      use TuneSimulatedAnnealing in tune run holes tuneFile table
+    else match tuneOptions.method with TabuSearch {} then
+      use TuneTabuSearch in tune run holes tuneFile table
+    else never

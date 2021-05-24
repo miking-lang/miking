@@ -156,6 +156,16 @@ let findName : String -> Expr -> Option Name = use MExprAst in
         else match findNameH (None ()) body with Some n then Some n
         else match findNameH (None ()) inexpr with Some n then Some n
         else None ()
+      else match expr with TmRecLets {bindings = bindings, inexpr = inexpr} then
+        match
+          foldl (lam a. lam b : RecLetBinding.
+            match a with Some _ then a
+            else if eqString (nameGetStr b.ident) str then Some b.ident
+            else match findNameH (None ()) b.body with Some n then Some n
+            else None ()) (None ()) bindings
+        with Some n then Some n
+        else match findNameH (None ()) inexpr with Some n then Some n
+        else None ()
       else match expr with TmExt {ident = ident, inexpr = inexpr} then
         if eqString (nameGetStr ident) str then Some ident
         else match findNameH (None ()) inexpr with Some n then Some n

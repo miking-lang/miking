@@ -1,3 +1,10 @@
+include "digraph.mc"
+include "string.mc"
+include "eq-paths.mc"
+include "name.mc"
+include "hashmap.mc"
+include "eqset.mc"
+include "common.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
@@ -6,13 +13,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
-include "digraph.mc"
-include "string.mc"
-include "eq-paths.mc"
-include "name.mc"
-include "hashmap.mc"
-include "eqset.mc"
-include "common.mc"
+include "ocaml/sys.mc"
 
 -- This file contains implementations related to decision points.
 
@@ -580,7 +581,7 @@ let _table = nameSym "table"
 let _argv = nameSym "argv"
 
 --
-lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
+lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- Transform a program with decision points. All decision points will be
   -- eliminated and replaced by lookups in a static table. One reference per
@@ -592,7 +593,15 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     match _flattenWithLookup publicFns lookup t with (prog, env)
     then
       let env : CallCtxEnv = env in
-      (_wrapArgv env prog, _initAssignments env, deref env.idx2hole)
+      let tempDir = sysTempDirMake () in
+      let tuneFile = sysJoinPath tempDir ".tune" in
+      --(_wrapReadFile env tuneFile prog, _initAssignments env, deref env.idx2hole, tuneFile)
+      { prog = _wrapReadFile env tuneFile prog
+      , table = _initAssignments env
+      , holes = deref env.idx2hole
+      , tempFile = tuneFile
+      , cleanup = lam. sysTempDirDelete tempDir
+      }
     else never
 
   sem insert (publicFns : [Name]) (table : LookupTable) =
@@ -731,7 +740,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
   | tm ->
     smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
 
-  sem _wrapArgv (env : CallCtxEnv) =
+  sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
     -- TODO: apply a convert function on each argument depending on the type of
     -- the hole
@@ -750,6 +759,27 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
           work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
         in
         work [] seq1 seq2
+    in
+
+    recursive
+      let eqString = lam s1. lam s2.
+          if neqi (length s1) (length s2)
+          then false
+          else if null s1
+               then true
+               else if eqc (head s1) (head s2)
+               then eqString (tail s1) (tail s2)
+               else false
+    in
+
+    recursive
+      let strSplit = lam delim. lam s.
+        if or (eqi (length delim) 0) (lti (length s) (length delim))
+        then cons s []
+        else if eqString delim (subsequence s 0 (length delim))
+             then cons [] (strSplit delim (subsequence s (length delim) (length s)))
+             else let remaining = strSplit delim (tail s) in
+                  cons (cons (head s) (head remaining)) (tail remaining)
     in
 
     let string2bool = lam s : String.
@@ -779,6 +809,10 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     ()
     " in
 
+    use MExprSym in
+    let impl = symbolize impl in
+
+    -- TODO: update to consider recursive functions or rewrite program
     let getName : String -> Expr -> Name = lam s. lam expr.
       match findName s expr with Some n then n
       else error (concat "not found: " s) in
@@ -786,6 +820,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let zipWithName = getName "zipWith" impl in
     let string2boolName = getName "string2bool" impl in
     let string2intName = getName "string2int" impl in
+    let strSplitName = getName "strSplit" impl in
 
     let convertFuns = map (lam h.
       match h with TmHole {ty = TyBool _} then string2boolName
@@ -797,15 +832,32 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
     let y = nameSym "y" in
     let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
 
-    matchex_
-      (splitat_ argv_ (subi_ (length_ argv_) (int_ (length convertFuns))))
-      (ptuple_ [pvarw_, npvar_ _table])
-      (bindall_
-        [ impl
-        , nulet_ _table
-          (appf3_ (nvar_ zipWithName) doConvert
-            (seq_ (map nvar_ convertFuns)) (nvar_ _table))
-        , tm])
+    -- let values = readFile tune.tune in
+    -- true false 2 1
+    -- let strVals = strSplit " " values in
+    -- let table = zipWith
+
+    -- matchex_
+    --   (splitat_ argv_ (subi_ (length_ argv_) (int_ (length convertFuns))))
+    --   (ptuple_ [pvarw_, npvar_ _table])
+    --   (bindall_
+    --     [ impl
+    --     , nulet_ _table
+    --       (appf3_ (nvar_ zipWithName) doConvert
+    --         (seq_ (map nvar_ convertFuns)) (nvar_ _table))
+    --     , tm])
+
+    let fileContent = nameSym "fileContent" in
+    let strVals = nameSym "strVals" in
+    bindall_
+    [ impl
+    , nulet_ fileContent (readFile_ (str_ tuneFile))
+    , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ " ") (nvar_ fileContent))
+    , nulet_ _table
+      (appf3_ (nvar_ zipWithName) doConvert
+        (seq_ (map nvar_ convertFuns)) (nvar_ strVals))
+    , tm
+    ]
 end
 
 lang Holes =
