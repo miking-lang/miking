@@ -174,6 +174,18 @@ lang CStmtAst = CTypeAst + CInitAst + CExprAst
   | CSBreak   {}
   | CSNop     {}
 
+  sem smap_CStmt_CStmt (f: CStmt -> a) =
+  | CSDef t -> CSDef t
+  | CSIf t -> CSIf {{ t with thn = map f t.thn } with els = map f t.els }
+  | CSSwitch t -> error "TODO"
+  | CSWhile t -> error "TODO"
+  | CSExpr t -> CSExpr t
+  | CSComp t -> error "TODO"
+  | CSRet t -> CSRet t
+  | CSCont t -> CSCont t
+  | CSBreak t -> CSBreak t
+  | CSNop t -> CSNop t
+
   sem sfold_CStmt_CExpr (f: a -> CExpr -> a) (acc: a) =
   | CSDef t -> optionMapOrElse (lam. acc) (sfold_CInit_CExpr f acc) t.init
   | CSIf t ->
@@ -188,6 +200,21 @@ lang CStmtAst = CTypeAst + CInitAst + CExprAst
   | CSBreak _ -> acc
   | CSNop _ -> acc
 
+  sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
+  | CSDef t -> CSDef t
+  | CSIf t ->
+    let thn = join (map f t.thn) in
+    let els = join (map f t.els) in
+    CSIf {{ t with thn = thn } with els = els }
+  | CSSwitch t -> error "TODO"
+  | CSWhile t -> error "TODO"
+  | CSExpr t -> CSExpr t
+  | CSComp t -> error "TODO"
+  | CSRet t -> CSRet t
+  | CSCont t -> CSCont t
+  | CSBreak t -> CSBreak t
+  | CSNop t -> CSNop t
+
 end
 
 
@@ -201,6 +228,11 @@ lang CTopAst = CTypeAst + CInitAst + CStmtAst
   | CTTyDef { ty: CType, id: Name }
   | CTDef { ty: CType, id: Option Name, init: Option CInit }
   | CTFun { ret: CType, id: Name, params: [(CType,Name)], body: [CStmt] }
+
+  sem sreplace_CTop_CStmt (f: CStmt -> [CStmt]) =
+  | CTTyDef _ & t -> t
+  | CTDef _ & t -> t
+  | CTFun t -> CTFun { t with body = join (map f t.body) }
 
 end
 

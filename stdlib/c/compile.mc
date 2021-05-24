@@ -157,7 +157,7 @@ lang MExprCCompile = MExprAst + CAst
                        with typeEnv = typeEnv }
       in
       match compileTops env [] [] prog with (tops, inits) then
-        (join [decls, defs, postDefs], tops, inits)
+        (env, join [decls, defs, postDefs], tops, inits)
       else never
     else never
 
@@ -542,31 +542,10 @@ lang MExprCCompile = MExprAst + CAst
         compileTops env (snoc accTop fun) accInit inexpr
       else never
     else
-      type Def = { ty: CType, id: Option Name, init: Option CInit } in
       match compileLet env ident body with (env, defs, inits) then
-
-        -- Extract direct def initializations to init (needed for C top-level)
-        let t = mapAccumL (lam definits: [CStmt]. lam def: Def.
-          match def with { init = Some definit } then
-            match definit with CIExpr { expr = expr } then
-              let def = { def with init = None () } in
-              let definit = CSExpr { expr = CEBinOp {
-                op = COAssign {}, lhs = CEVar { id = ident }, rhs = expr } } in
-              (snoc definits definit, def)
-            else match definit with _ then
-              error "Non-CIExpr initializer, TODO?"
-            else never
-          else (definits, def)
-        ) [] defs
-        in
-
-        match t with (definits, defs) then
-          let accInit = join [accInit, definits, inits] in
-          let defs = map (lam def. CTDef def) defs in
-          let accTop = concat accTop defs in
-          compileTops env accTop accInit inexpr
-        else never
-
+        let defs = map (lam def. CSDef def) defs in
+        let accInit = join [accInit, defs, inits] in
+        compileTops env accTop accInit inexpr
       else never
 
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
@@ -692,7 +671,7 @@ lang MExprCCompile = MExprAst + CAst
     if mapIsEmpty bindings then CEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
 
-  -- Should not occur after ANF.
+  -- Should not occur after ANF and type lifting.
   | TmRecordUpdate _ | TmLet _
   | TmRecLets _ | TmType _ | TmConDef _
   | TmConApp _ | TmMatch _ | TmUtest _
@@ -751,7 +730,35 @@ end
 let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
   lam prog: Expr.
-    match compile typeEnv prog with (types, tops, inits) then
+
+    let extractTopDecls: [CStmt] -> ([CTop],[CStmt]) = lam stmts: [CStmt].
+      foldl (lam acc: ([CTop],[CStmt]). lam stmt: CStmt.
+        match stmt with CSDef ({ init = init } & def) then
+          match init with Some init then
+            let id =
+              match def with { id = Some id } then id
+              else error "Impossible in extractTopDecls"
+            in
+            match init with CIExpr { expr = expr } then
+              let def = { def with init = None () } in
+              let init = CSExpr { expr = CEBinOp {
+                op = COAssign {},
+                lhs = CEVar { id = id },
+                rhs = expr
+                }
+              } in
+              (snoc acc.0 (CTDef def), snoc acc.1 init)
+            else match init with _ then
+              error "Non-CIExpr initializer, TODO?"
+            else never
+          else (snoc acc.0 (CTDef def), acc.1)
+        else (acc.0, snoc acc.1 stmt)
+      ) ([],[]) stmts
+    in
+
+    match compile typeEnv prog with (env, types, tops, inits) then
+    match extractTopDecls inits with (topDecls, inits) then
+
       let mainTy = CTyFun {
         ret = CTyInt {},
         params = [
@@ -774,7 +781,12 @@ let compileGCC = use MExprCCompileGCC in
           else error "Non-function type given to funWithType"
       in
       let main = funWithType mainTy _main [_argc, _argv] inits in
-      CPProg { includes = _includes, tops = join [types, tops, [main]] }
+      CPProg {
+        includes = _includes,
+        tops = join [types, topDecls, tops, [main]]
+      }
+
+    else never
     else never
 
 let printCompiledCProg = use CProgPrettyPrint in
@@ -842,11 +854,11 @@ let simpleFun = bindall_ [
 utest testCompile simpleFun with strJoin "\n" [
   "#include <stdio.h>",
   "#include <stdlib.h>",
+  "int x;",
   "int foo(int a, int b) {",
   "  int t = (a + b);",
   "  return t;",
   "}",
-  "int x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = (foo(1, 2)));",
   "  return 0;",
@@ -1124,6 +1136,7 @@ utest testCompile trees with strJoin "\n" [
   "struct Rec1 (*t12);",
   "struct Tree alloc13;",
   "struct Tree (*tree);",
+  "int sum;",
   "int treeRec(struct Tree (*t13)) {",
   "  int t14;",
   "  if (((t13->constr) == Node)) {",
@@ -1147,7 +1160,6 @@ utest testCompile trees with strJoin "\n" [
   "  }",
   "  return t14;",
   "}",
-  "int sum;",
   "int main(int argc, char (*argv[])) {",
   "  (t = (&alloc));",
   "  ((t->v) = 7);",
