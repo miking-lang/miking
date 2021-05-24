@@ -27,7 +27,7 @@ let evalStrToStr : String -> String =
   use MExpr in lam str. expr2str (evalStr str)
 
 -- Same as evalStrToStr, but removes all white space. Good for testing.
-let evalTest : String -> String = lam str. 
+let evalTest : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t')))
   (evalStrToStr str)
 

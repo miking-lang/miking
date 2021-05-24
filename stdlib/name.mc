@@ -46,8 +46,7 @@ utest nameEqStr _t1 _t3 with false
 -- 'nameHasSym n' returns true if name 'n' has a
 -- symbol, else it returns false.
 let nameHasSym : Name -> Bool =
-  lam n : Name.
-    not (eqsym n.1 _noSymbol)
+  lam n : Name. not (eqsym n.1 _noSymbol)
 
 utest nameHasSym (nameSym "foo") with true
 utest nameHasSym (nameNoSym "foo") with false
