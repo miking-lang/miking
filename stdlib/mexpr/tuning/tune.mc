@@ -28,7 +28,7 @@ let tuneDumpTable = lam file : String. lam table : LookupTable.
   use MExprPrettyPrint in
   let destinationFile = tuneFileName file in
   writeFile destinationFile
-      (strJoin " " (map expr2str table))
+    (strJoin " " (map expr2str table))
 
 let tuneReadTable = lam file : String.
   use BootParser in

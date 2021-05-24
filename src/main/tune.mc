@@ -27,11 +27,11 @@ let tune = lam files. lam options : Options. lam args.
 
     -- Flatten the decision points
     match flatten [] ast with
-      { prog = prog, table = table, holes = holes,
+      { ast = ast, table = table, holes = holes,
         tempFile = tempFile, cleanup = cleanup }
     then
       -- Compile the program
-      let binary = ocamlCompileAst options file prog in
+      let binary = ocamlCompileAst options file ast in
 
       -- Runs the program with a given input
       let run = lam args : String.

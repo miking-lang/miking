@@ -580,13 +580,21 @@ type LookupTable = [Expr]
 let _table = nameSym "table"
 let _argv = nameSym "argv"
 
---
+type Flattened =
+{ ast : Expr           -- The flattened ast
+, table : LookupTable  -- The initial lookup table
+, holes : [Expr]       -- The flattened decision points
+, tempFile : String    -- The file from which decision point values are read
+, cleanup : () -> ()   -- Removes all temporary files from the disk
+}
+
+-- Fragment for transforming a program with decision points.
 lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
-  -- Transform a program with decision points. All decision points will be
-  -- eliminated and replaced by lookups in a static table. One reference per
-  -- function tracks which function that latest called that function, thereby
-  -- maintaining call history.
+  -- 'flatten public t' eliminates all decision points in the expression 't' and
+  --  and replace them by lookups in a static table One reference per function
+  --  tracks which function that latest called that function, thereby
+  --  maintaining call history. Returns a result of type 'Flattened'.
   sem flatten (publicFns : [Name]) =
   | t ->
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
@@ -595,8 +603,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       let env : CallCtxEnv = env in
       let tempDir = sysTempDirMake () in
       let tuneFile = sysJoinPath tempDir ".tune" in
-      --(_wrapReadFile env tuneFile prog, _initAssignments env, deref env.idx2hole, tuneFile)
-      { prog = _wrapReadFile env tuneFile prog
+      { ast = _wrapReadFile env tuneFile prog
       , table = _initAssignments env
       , holes = deref env.idx2hole
       , tempFile = tuneFile
@@ -604,6 +611,8 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       }
     else never
 
+  -- 'insert public table t' replaces the decision points in expression 't' by
+  -- the values in 'table'
   sem insert (publicFns : [Name]) (table : LookupTable) =
   | t ->
     let lookup = lam i. get table i in
@@ -622,9 +631,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     in
     let tm = bind_ incVars tm in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
-    --(prog, _initAssignments env, deref env.idx2hole)
     (prog, env)
-
 
   -- Find the initial mapping from decision points to values
   sem _initAssignments =
@@ -742,8 +749,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
-    -- TODO: apply a convert function on each argument depending on the type of
-    -- the hole
     use BootParser in
     let impl = parseMExprString [] "
     let head = lam seq. get seq 0 in
@@ -812,7 +817,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     use MExprSym in
     let impl = symbolize impl in
 
-    -- TODO: update to consider recursive functions or rewrite program
     let getName : String -> Expr -> Name = lam s. lam expr.
       match findName s expr with Some n then n
       else error (concat "not found: " s) in
@@ -831,21 +835,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let x = nameSym "x" in
     let y = nameSym "y" in
     let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
-
-    -- let values = readFile tune.tune in
-    -- true false 2 1
-    -- let strVals = strSplit " " values in
-    -- let table = zipWith
-
-    -- matchex_
-    --   (splitat_ argv_ (subi_ (length_ argv_) (int_ (length convertFuns))))
-    --   (ptuple_ [pvarw_, npvar_ _table])
-    --   (bindall_
-    --     [ impl
-    --     , nulet_ _table
-    --       (appf3_ (nvar_ zipWithName) doConvert
-    --         (seq_ (map nvar_ convertFuns)) (nvar_ _table))
-    --     , tm])
 
     let fileContent = nameSym "fileContent" in
     let strVals = nameSym "strVals" in
