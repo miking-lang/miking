@@ -12,6 +12,9 @@ let tymap_ = tyunknown_
 let tybootparsetree_ = tyunknown_
 let tygeneric_ = lam id. tyunknown_
 let tygenericseq_ = lam id. tyseq_ (tygeneric_ id)
+let tyaref_ = tygeneric_
+let tythread_ = tygeneric_
+let tythreadid_ = tyunknown_
 
 lang LiteralTypeAst = IntAst + FloatAst + BoolAst + CharAst
   sem tyConst =
@@ -233,11 +236,35 @@ lang BootParserTypeAst = BootParserAst
   | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
 end
 
+lang AtomicTypeAst = AtomicAst
+  sem tyConst =
+  | CAtomicMake _ -> tyarrow_ (tygeneric_ "a") (tyaref_ "a")
+  | CAtomicGet _ -> tyarrow_ (tyaref_ "a") (tygeneric_ "a")
+  | CAtomicExchange _ -> tyarrows_ [tyaref_ "a", tygeneric_ "a", tygeneric_ "a"]
+  | CAtomicFetchAndAdd _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_]
+  | CAtomicCAS _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_, tybool_]
+end
+
+lang ThreadTypeAst = ThreadAst
+  sem tyConst =
+  | CThreadSpawn _ ->
+    tyarrow_ (tyarrow_ tyunit_ (tygeneric_ "a")) (tythread_ "a")
+  | CThreadJoin _ -> tyarrow_ (tythread_ "a") (tygeneric_ "a")
+  | CThreadGetID _ -> tyarrow_ (tythread_ "a") tythreadid_
+  | CThreadID2Int _ -> tyarrow_ tythreadid_ tyint_
+  | CThreadSelf _ -> tyarrow_ tyunit_ tythreadid_
+  | CThreadWait _ -> tyarrow_ tyunit_ tyunit_
+  | CThreadNotify _ -> tyarrow_ tythreadid_ tyunit_
+  | CThreadCriticalSection _ ->
+    tyarrow_ (tyarrow_ tyunit_ (tygeneric_ "a")) (tygeneric_ "a")
+  | CThreadCPURelax _ -> tyarrow_ tyunit_ tyunit_
+end
+
 lang MExprConstType =
   LiteralTypeAst + ArithIntTypeAst + ShiftIntTypeAst + ArithFloatTypeAst +
   CmpIntTypeAst + IntCharConversionTypeAst + CmpFloatTypeAst + CmpCharTypeAst +
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + MapTypeAst +
-  TensorOpTypeAst + BootParserTypeAst
+  TensorOpTypeAst + BootParserTypeAst + AtomicTypeAst + ThreadTypeAst
 end

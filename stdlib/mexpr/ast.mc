@@ -637,6 +637,29 @@ lang BootParserAst = ConstAst
   | CBootParserGetInfo {}
 end
 
+lang AtomicAst = ConstAst
+  syn Const =
+  | CAtomicMake {}
+  | CAtomicGet {}
+  | CAtomicExchange {}
+  | CAtomicFetchAndAdd {}
+  | CAtomicCAS {}
+end
+
+lang ThreadAst = ConstAst
+  syn Const =
+  | CThreadSpawn {}
+  | CThreadJoin {}
+  | CThreadGetID {}
+  | CThreadID2Int {}
+  | CThreadSelf {}
+  | CThreadWait {}
+  | CThreadNotify {}
+  | CThreadCriticalSection {}
+  | CThreadCPURelax {}
+end
+
+
 --------------
 -- PATTERNS --
 --------------
@@ -936,7 +959,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorOpAst +
-  BootParserAst +
+  BootParserAst + AtomicAst + ThreadAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

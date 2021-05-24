@@ -1017,3 +1017,47 @@ let mapGetCmpFun_ = use MExprAst in
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2
+
+-- Atomic references
+let atomicMake_ = use MExprAst in
+  lam v. appf1_ (uconst_ (CAtomicMake ())) v
+
+let atomicGet_ = use MExprAst in
+  lam r. appf1_ (uconst_ (CAtomicGet ())) r
+
+let atomicExchange_ = use MExprAst in
+  lam r. lam v. appf2_ (uconst_ (CAtomicExchange ())) r v
+
+let atomicFetchAndAdd_ = use MExprAst in
+  lam r. lam v. appf2_ (uconst_ (CAtomicFetchAndAdd ())) r v
+
+let atomicCAS_ = use MExprAst in
+  lam r. lam seen. lam v. appf3_ (uconst_ (CAtomicCAS ())) r seen v
+
+-- Threads
+let threadSpawn_ = use MExprAst in
+  lam f. appf1_ (uconst_ (CThreadSpawn ())) f
+
+let threadJoin_ = use MExprAst in
+  lam t. appf1_ (uconst_ (CThreadJoin ())) t
+
+let threadGetID_ = use MExprAst in
+  lam t. appf1_ (uconst_ (CThreadGetID ())) t
+
+let threadID2Int_ = use MExprAst in
+  lam id. appf1_ (uconst_ (CThreadID2Int ())) id
+
+let threadSelf_ = use MExprAst in
+  lam u. appf1_ (uconst_ (CThreadJoin ())) u
+
+let threadWait_ = use MExprAst in
+  lam u. appf1_ (uconst_ (CThreadWait ())) u
+
+let threadNotify_ = use MExprAst in
+  lam id. appf1_ (uconst_ (CThreadNotify ())) id
+
+let threadCriticalSection_ = use MExprAst in
+  lam f. appf1_ (uconst_ (CThreadCriticalSection ())) f
+
+let threadCPURelax_ = use MExprAst in
+  lam u. appf1_ (uconst_ (CThreadCPURelax ())) u

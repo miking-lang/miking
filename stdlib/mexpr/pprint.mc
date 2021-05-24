@@ -442,7 +442,8 @@ lang ConstPrettyPrint = PrettyPrint + ConstAst
   -- intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmConst t -> (env,getConstStringCode indent t.val)
+  | TmConst t ->
+    (env,getConstStringCode indent t.val)
 end
 
 lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
@@ -800,6 +801,29 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   | CBootParserGetInfo _ -> "bootParserGetInfo"
 end
 
+lang AtomicPrettyPrint = AtomicAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CAtomicMake _ -> "atomicMake"
+  | CAtomicGet _ -> "atomicGet"
+  | CAtomicExchange _ -> "atomicExchange"
+  | CAtomicFetchAndAdd _ -> "atomicFetchAndAdd"
+  | CAtomicCAS _ -> "atomicCAS"
+end
+
+lang ThreadPrettyPrint = ThreadAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CThreadSpawn _ -> "threadSpawn"
+  | CThreadJoin _ -> "threadJoin"
+  | CThreadGetID _ -> "threadGetID"
+  | CThreadID2Int _ -> "threadID2int"
+  | CThreadSelf _ -> "threadSelf"
+  | CThreadWait _ -> "threadWait"
+  | CThreadNotify _ -> "threadNotify"
+  | CThreadCriticalSection _ -> "threadCriticalSection"
+  | CThreadCPURelax _ -> "threadCPURelax"
+end
+
+
 --------------
 -- PATTERNS --
 --------------
@@ -1094,13 +1118,14 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint +
+  BootParserPrettyPrint + AtomicPrettyPrint + ThreadPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
-  OrPatPrettyPrint + NotPatPrettyPrint +
+
+OrPatPrettyPrint + NotPatPrettyPrint +
 
   -- Types
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
