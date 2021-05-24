@@ -424,9 +424,6 @@ let arity = function
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
-  (* Sundials intrinsics *)
-  | CSd v ->
-      Sd.arity v
 
 let fail_constapp f v fi =
   raise_error fi
@@ -1305,9 +1302,6 @@ let delta eval env fi c v =
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
-  (* Sundials intrinsics *)
-  | CSd v, t ->
-      Sd.delta eval env fi v t
 
 (* Debug function used in the eval function *)
 let debug_eval env t =

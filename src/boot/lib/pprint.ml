@@ -513,9 +513,6 @@ let rec print_const fmt = function
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
-  (* Sundials intrinsics *)
-  | CSd v ->
-      fprintf fmt "%s" (string_of_ustring (Sdpprint.pprint v))
 
 (** Pretty print a record *)
 and print_record fmt r =
