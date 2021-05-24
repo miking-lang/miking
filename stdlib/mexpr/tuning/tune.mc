@@ -3,15 +3,17 @@ include "ocaml/sys.mc"
 include "string.mc"
 include "map.mc"
 include "decision-points.mc"
-include "options.mc"
+include "tune-options.mc"
 include "common.mc"
 
-type Runner = String -> ExecResult
+-- Performs tuning of a program with decision points.
 
--- Turn on/off debug prints
-let _debug = true
-
+-- Default input if program takes no input data
 let _inputEmpty = [""]
+
+----------------------------------
+-- Reading/writing tuned values --
+----------------------------------
 
 let tuneFileExtension = ".tune"
 
@@ -33,8 +35,14 @@ let tuneReadTable = lam file : String.
   let str = readFile file in
   map (parseMExprString []) (strSplit " " str)
 
+------------------------------
+-- Base fragment for tuning --
+------------------------------
+type Runner = String -> ExecResult
+
 lang TuneBase = Holes
-  sem tune (run : Runner) (holes : Expr) (file : String) =
+  sem tune (options : TuneOptions) (run : Runner) (holes : Expr)
+           (file : String) =
   -- Intentionally left blank
 
   sem time (table : LookupTable) (runner : Runner) (file : String) =
@@ -62,7 +70,8 @@ end
 lang TuneLocalSearch = TuneBase + LocalSearchBase
   syn Assignment =
   | Table {table : LookupTable,
-           holes : [Expr]}
+           holes : [Expr],
+           options : TuneOptions}
 
   syn Cost =
   | Runtime {time : Float}
@@ -71,12 +80,14 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState
-    with {cur = {assignment = Table {holes = holes}}}
+    with {cur =
+           {assignment =
+             Table {holes = holes, table = table, options = options}}}
     then
       let table = map (lam h.
         match h with TmHole {hole = hole} then sample hole
         else dprintLn h; error "Expected a decision point") holes
-      in [Table {table = table, holes = holes}]
+      in [Table {table = table, holes = holes, options = options}]
     else never
 
   sem compare =
@@ -104,10 +115,11 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     else never
 
-  sem tune (runner : Runner) (holes : [Expr]) (file : String) =
+  sem tune (options : TuneOptions) (runner : Runner) (holes : [Expr])
+           (file : String) =
   | table ->
     let input =
-      match tuneOptions.input with [] then _inputEmpty else tuneOptions.input in
+      match options.input with [] then _inputEmpty else options.input in
     -- cost function = sum of execution times over all inputs
     let costF = lam lookup : Assignment.
       match lookup with Table {table = table} then
@@ -116,17 +128,19 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
 
     -- Set up initial search state
     let startState =
-      initSearchState costF (Table {table = table, holes = holes}) in
+      initSearchState costF (Table {table = table
+                                   , holes = holes
+                                   , options = options}) in
 
     -- When to stop the search
     let stop = lam state : SearchState.
-      or state.stuck (geqi state.iter tuneOptions.iters) in
+      or state.stuck (geqi state.iter options.iters) in
 
     recursive let search =
       lam stop.
       lam searchState.
       lam metaState.
-        (if _debug then
+        (if options.debug then
           printLn "-----------------------";
           debugSearch searchState;
           debugMeta metaState;
@@ -142,7 +156,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     in
 
     -- Do the search!
-    match search stop startState (initMeta table)
+    match search stop startState (initMeta startState)
     with (searchState, _) then
       let searchState : SearchState = searchState in
       match searchState with {inc = {assignment = Table {table = table}}}
@@ -169,10 +183,18 @@ lang TuneSimulatedAnnealing = TuneLocalSearch
                             + LocalSearchSelectRandomUniform
   sem decay (searchState : SearchState) =
   | SimulatedAnnealing t ->
-    SimulatedAnnealing {t with temp = mulf tuneOptions.saDecayFactor t.temp}
+    match searchState with {cur = {assignment = Table {options = options}}} then
+      let options : TuneOptions = options in
+      SimulatedAnnealing {t with temp = mulf options.saDecayFactor t.temp}
+    else never
 
   sem initMeta =
-  | _ -> SimulatedAnnealing {temp = tuneOptions.saInitTemp}
+  | startState ->
+    let startState : SearchState = startState in
+    match startState with {cur = {assignment = Table {options = options}}} then
+      let options : TuneOptions = options in
+      SimulatedAnnealing {temp = options.saInitTemp}
+    else never
 
   sem debugMeta =
   | SimulatedAnnealing {temp = temp} ->
@@ -192,13 +214,18 @@ lang TuneTabuSearch = TuneLocalSearch
     with Some _ then true else false
 
   sem tabuUpdate =
-  | (Table {table = table}, Tabu ({tabu = tabu} & t)) ->
+  | (Table {table = table, options = options}, Tabu ({tabu = tabu} & t)) ->
+    let options : TuneOptions = options in
     let tabu = cons table
-      (if eqi (length tabu) tuneOptions.tabuSize then init tabu else tabu) in
+      (if eqi (length tabu) options.tabuSize then init tabu else tabu) in
     Tabu {t with tabu = tabu}
 
   sem initMeta =
-  | table -> TabuSearch {tabu = Tabu {tabu = [table]}}
+  | startState ->
+    let startState : SearchState = startState in
+    match startState with {cur = {assignment = Table {table = table}}} then
+      TabuSearch {tabu = Tabu {tabu = [table]}}
+    else never
 
   sem debugMeta =
   | TabuSearch {tabu = Tabu {tabu = tabu}} ->
@@ -207,21 +234,25 @@ end
 
 lang MExprTune = MExpr + TuneBase
 
+-- Entry point for tuning
 let tuneEntry =
+  lam args : [String].
   lam run : Runner.
   lam holes : [Expr].
   lam tuneFile : String.
   lam table : LookupTable.
+    let options = parseTuneOptions tuneOptionsDefault args in
+
     -- Do warmup runs
     use TuneBase in
-    iter (lam. map (time table run) tuneOptions.input)
-      (range 0 tuneOptions.warmups 1);
+    iter (lam. map (time table run) options.input)
+      (range 0 options.warmups 1);
 
     -- Choose search method
-    match tuneOptions.method with RandomWalk {} then
-      use TuneRandomWalk in tune run holes tuneFile table
-    else match tuneOptions.method with SimulatedAnnealing {} then
-      use TuneSimulatedAnnealing in tune run holes tuneFile table
-    else match tuneOptions.method with TabuSearch {} then
-      use TuneTabuSearch in tune run holes tuneFile table
+    match options.method with RandomWalk {} then
+      use TuneRandomWalk in tune options run holes tuneFile table
+    else match options.method with SimulatedAnnealing {} then
+      use TuneSimulatedAnnealing in tune options run holes tuneFile table
+    else match options.method with TabuSearch {} then
+      use TuneTabuSearch in tune options run holes tuneFile table
     else never

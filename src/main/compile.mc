@@ -71,7 +71,6 @@ let insertTunedOrDefaults = lam ast. lam file.
   use MCoreCompile in
   let tuneFile = tuneFileName file in
   if fileExists tuneFile then
-    print "parsing file: "; printLn tuneFile;
     let table = tuneReadTable tuneFile in
     let ast = symbolize ast in
     let ast = normalizeTerm ast in

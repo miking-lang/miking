@@ -1,9 +1,11 @@
 -- Options for tuning
 
--- TODO(Linnea, 2021-05-18): Naive implementation before we have an argparser
+-- TODO(Linnea, 2021-05-18): Naive implementation of tuning options before we
+-- have an argparser
 
 type TuneOptions =
-{ iters : Int           -- Number of search iterations
+{ debug : Bool          -- Whether to do debug prints during search
+, iters : Int           -- Number of search iterations
 , warmups : Int         -- Number of warmup runs
 , method : SearchMethod -- Search method
 , input : [[String]]    -- Input data
@@ -24,7 +26,8 @@ let string2SearchMethod : String -> SearchMethod = lam s.
   else error (concat "Unknown search method: " s)
 
 let tuneOptionsDefault : TuneOptions =
-{ iters = 10
+{ debug = false
+, iters = 10
 , warmups = 1
 , method = RandomWalk ()
 , input = []
@@ -35,6 +38,9 @@ let tuneOptionsDefault : TuneOptions =
 
 recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
   match args with [] then o
+
+  else match args with ["--debug"] ++ args then
+    parseTuneOptions {o with debug = true} args
 
   else match args with ["--iters"] ++ args then
     match args with [i] ++ args then
@@ -91,5 +97,3 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
 
   else never
 end
-
-let tuneOptions = parseTuneOptions tuneOptionsDefault argv
