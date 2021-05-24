@@ -48,7 +48,7 @@ external extTestRecord2A : {c : [Int], d : Int} -> [Int] in
 utest extTestRecord2A {c = [1], d = 2} with [2] in
 
 external extTestArgLabel : Int -> Int -> Int in
-utest extTestArgLabel 1 2 with 1 in
+utest extTestArgLabel 2 1 with 1 in
 
 let t = tensorCreateCArrayInt [1] (lam. 1) in
 
