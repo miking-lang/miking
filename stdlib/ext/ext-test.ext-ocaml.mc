@@ -46,6 +46,20 @@ let extTestMap =
         libraries = []
       }
     ]),
+    ("extTestUnit1", [
+      {
+        ident = "Boot.Exttest.unit1",
+        ty = tyarrow_ tyint_ (otytuple_ []),
+        libraries = []
+      }
+    ]),
+    ("extTestUnit2", [
+      {
+        ident = "Boot.Exttest.unit2",
+        ty = tyarrow_ (otytuple_ []) tyint_,
+        libraries = []
+      }
+    ]),
     ("extTestTuple1", [
       {
         ident = "Boot.Exttest.tuple1",
@@ -77,7 +91,9 @@ let extTestMap =
     ("extTestRecord1", [
       {
         ident = "Boot.Exttest.myrec1",
-        ty = otyrecord_ "Boot.Exttest.myrec1_t" [("a", tyint_), ("b", tyfloat_)],
+        ty = otyrecord_
+              (otyvarext_ "Boot.Exttest.myrec1_t" [])
+              [("a", tyint_), ("b", tyfloat_)],
         libraries = []
       }
     ]),
@@ -85,7 +101,7 @@ let extTestMap =
       {
         ident = "Boot.Exttest.myrec1_a",
         ty = tyarrow_ (otyrecord_
-                        "Boot.Exttest.myrec1_t"
+                        (otyvarext_ "Boot.Exttest.myrec1_t" [])
                         [("a", tyint_), ("b", tyfloat_)])
                       tyint_,
         libraries = []
@@ -94,7 +110,9 @@ let extTestMap =
     ("extTestRecord2", [
       {
         ident = "Boot.Exttest.myrec2",
-        ty = otyrecord_ "Boot.Exttest.myrec2_t" [("a", otylist_ tyint_), ("b", tyint_)],
+        ty = otyrecord_
+              (otyvarext_ "Boot.Exttest.myrec2_t" [])
+              [("a", otylist_ tyint_), ("b", tyint_)],
         libraries = []
       }
     ]),
@@ -102,7 +120,7 @@ let extTestMap =
       {
         ident = "Boot.Exttest.myrec2_a",
         ty = tyarrow_ (otyrecord_
-                        "Boot.Exttest.myrec2_t"
+                        (otyvarext_ "Boot.Exttest.myrec2_t" [])
                         [("a", otylist_ tyint_), ("b", tyint_)])
                       (otylist_ tyint_),
         libraries = []

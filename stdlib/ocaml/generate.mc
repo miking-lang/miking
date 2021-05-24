@@ -263,7 +263,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
 end
 
-lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
+lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExternalNaive
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     -- NOTE(vipa, 2021-05-14): Assume that explicit Consts have the same type, since the program wouldn't typecheck otherwise
@@ -386,19 +386,37 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
   | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
-      let body = externalConvertData
-                  env info (OTmVarExt { ident = r.ident }) r.ty ty
-      in
-      let body = generate env body in
-      let inexpr = generate env inexpr in
-      TmLet {
-        ident = ident,
-        tyBody = ty,
-        body = body,
-        inexpr = inexpr,
-        ty = TyUnknown { info = info },
-        info = info
-      }
+      match convertData info env (OTmVarExt { ident = r.ident }) r.ty ty
+      with (_, body) then
+        -- let names = create (typeArity ty) (lam. nameSym "x") in
+        -- let vars = map (lam name. TmVar { ident = name, info = info }) names in
+        -- let body =
+        --   foldl (tmApp info (TyUnknown { info = info })) (body) vars
+        -- in
+        -- let body =
+        --   foldr
+        --     (lam name. lam body.
+        --       TmLam {
+        --         ident = name,
+        --         tyIdent = TyUnknown { info = info },
+        --         ty = TyUnknown { info = info },
+        --         body = body,
+        --         info = info
+        --       })
+        --     body
+        --     names
+        -- in
+        -- let body = generate env body in
+        let inexpr = generate env inexpr in
+        TmLet {
+          ident = ident,
+          tyBody = ty,
+          body = body,
+          inexpr = inexpr,
+          ty = TyUnknown { info = info },
+          info = info
+        }
+      else never
     else
       infoErrorExit (join ["No implementation for external ", nameGetStr ident])
   | t -> smap_Expr_Expr (generate env) t
@@ -666,7 +684,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f _emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLift
+lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
     let typeLiftEnvMap = mapFromList nameCmp env in

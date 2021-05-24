@@ -113,7 +113,8 @@ utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
 
 recursive
-  let foldr = lam f. lam acc. lam seq.
+  let foldr : (b -> a -> a) -> a -> [b] -> a =
+  lam f. lam acc. lam seq.
     if null seq
     then acc
     else f (head seq) (foldr f acc (tail seq))

@@ -129,7 +129,7 @@ let tyrecord_ = use RecordTypeAst in
   let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   TyRecord {
     fields = mapFromList cmpSID (map fieldMapFunc fields),
-    labels = map (lam b : (String, a). b.0) fields,
+    labels = map (lam b : (String, a). stringToSid b.0) fields,
     info = NoInfo ()
   }
 
@@ -382,9 +382,21 @@ let const_ = use MExprAst in
 
 let uconst_ = const_ tyunknown_
 
-let nlam_ = use MExprAst in
-  lam n. lam ty. lam body.
-  TmLam {ident = n, tyIdent = ty, ty = tyunknown_, body = body, info = NoInfo ()}
+let tmLam = use MExprAst in
+  lam info : Info.
+  lam ty : Type.
+  lam ident : Name.
+  lam tyIdent : Type.
+  lam body : Expr.
+  TmLam {
+    ident = ident,
+    tyIdent = tyIdent,
+    ty = ty,
+    body = body,
+    info = info
+  }
+
+let nlam_ = tmLam (NoInfo ()) tyunknown_
 
 let lam_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -425,9 +437,9 @@ let seq_ = use MExprAst in
   TmSeq {tms = tms, ty = tyunknown_, info = NoInfo ()}
 
 let tmRecord = use MExprAst in
-  lam bindings : [(String, Expr)].
-  lam ty : Type.
   lam info : Info.
+  lam ty : Type.
+  lam bindings : [(String, Expr)].
   let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
     bindings = mapFromList cmpSID (map bindingMapFunc bindings),
@@ -435,19 +447,17 @@ let tmRecord = use MExprAst in
     info = NoInfo ()
   }
 
-let record_ = lam bindings. lam ty. tmRecord bindings ty (NoInfo ())
+let record_ = tmRecord (NoInfo ())
 
-let urecord_ = use MExprAst in
-  lam bindings. record_ bindings tyunknown_
+let urecord_ = record_ tyunknown_
 
 let tmTuple = use MExprAst in
-  lam tms : [Expr]. lam ty : Type. lam info : Info.
-  tmRecord (mapi (lam i. lam t. (int2string i,t)) tms) ty info
+  lam info : Info. lam ty : Type. lam tms : [Expr].
+  tmRecord info ty (mapi (lam i. lam t. (int2string i, t)) tms)
 
-let tuple_ = lam tms. lam ty. tmTuple tms ty (NoInfo ())
+let tuple_ = tmTuple (NoInfo ())
 
-let utuple_ = use MExprAst in
-  lam tms. tuple_ tms tyunknown_
+let utuple_ = tuple_ tyunknown_
 
 let urecord_empty = uunit_
 let record_empty = unit_
@@ -507,9 +517,11 @@ let recordupdate_ = use MExprAst in
     info = NoInfo ()
   }
 
-let app_ = use MExprAst in
-  lam l. lam r.
-  TmApp {lhs = l, rhs = r, ty = tyunknown_, info = NoInfo ()}
+let tmApp = use MExprAst in
+  lam info : Info. lam ty : Type. lam l : Expr. lam r : Expr.
+  TmApp {lhs = l, rhs = r, ty = ty, info = info}
+
+let app_ = tmApp (NoInfo ()) tyunknown_
 
 let appSeq_ = use MExprAst in
   lam f. lam seq.

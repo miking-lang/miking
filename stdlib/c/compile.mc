@@ -750,7 +750,7 @@ end
 
 lang Test =
   MExprCCompileGCC + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser + MExprTypeLift
+  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
 
 mexpr
 use Test in

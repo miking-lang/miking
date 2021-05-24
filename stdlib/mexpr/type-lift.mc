@@ -7,6 +7,7 @@
 -- Requires symbolize and type-annot to be run first.
 include "assoc-seq.mc"
 include "map.mc"
+include "set.mc"
 include "name.mc"
 include "stringid.mc"
 
@@ -29,6 +30,8 @@ type TypeLiftEnv = {
   -- Record types encountered so far. Uses intrinsic maps as this is
   -- performance critical.
   records: Map (Map SID Type) Name,
+
+  labels: Set [SID],
 
   -- Variant types and their constructors encountered so far.
   variants: Map Name (Map Name Type)
@@ -67,24 +70,57 @@ let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
   in
   assocSeqMap f env.typeEnv
 
--- Adds a record type with the given fields to the type lifting environment.
-let _addRecordTypeVar =
-lam env : TypeLiftEnv. lam fields : Map SID Type. lam labels : [String].
+
+let _addRecordToEnv =
   use MExprAst in
-  let record =
-    TyRecord {fields = fields, labels = labels, info = NoInfo ()}
-  in
-  let recName = nameSym "Rec" in
-  let recTyVar = ntyvar_ recName in
-  let env = {{env with records = mapInsert fields recName env.records}
-                  with typeEnv = assocSeqInsert recName record env.typeEnv} in
-  (env, recTyVar)
+  lam env : TypeLiftEnv. lam name : Option Name. lam ty : Type.
+  match ty with TyRecord {fields = fields, labels = labels, info = info} then
+    match name with Some name then
+      let tyvar = TyVar {ident = name, info = info} in
+      (env, tyvar)
+    else match name with None _ then
+      let name = nameSym "Rec" in
+      let tyvar = TyVar {ident = name, info = info} in
+      let env = {{{env
+                    with records = mapInsert fields name env.records}
+                    with labels = setInsert labels env.labels}
+                    with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tyvar)
+    else never
+  else error "Expected record type"
+
+-- This implementation takes record field order into account when populating
+-- the environment
+lang TypeLiftAddRecordToEnvOrdered = RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
+    match (mapLookup fields env.records, setMem labels env.labels)
+    with (name, true) then
+      _addRecordToEnv env name ty
+    else
+      _addRecordToEnv env (None ()) ty
+  | ty -> (env, ty)
+end
+
+-- This implementation does not take record field order into account when
+-- populating the environment
+lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
+    _addRecordToEnv
+      env (mapLookup fields env.records) ty
+  | ty -> (env, ty)
+end
 
 -----------
 -- TERMS --
 -----------
 
 lang TypeLift = Cmp
+
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
 
   sem typeLiftExpr (env : TypeLiftEnv) =
   -- Intentionally left blank
@@ -107,6 +143,7 @@ lang TypeLift = Cmp
     let emptyTypeLiftEnv : TypeLiftEnv = {
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
+      labels = setEmpty (seqCmp subi),
       variants = mapEmpty nameCmp
     } in
 
@@ -249,10 +286,10 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
         else match tyIdent
-        with TyRecord {fields = fields, labels = labels} then
+        with TyRecord {fields = fields} & ty then
           let f = lam env. lam. lam ty. typeLiftType env ty in
           match mapMapAccum f env fields with (env, fields) then
-            match _addRecordTypeVar env fields labels with (env, _) then
+            match addRecordToEnv env ty with (env, _) then
               env
             else never
           else never
@@ -304,23 +341,27 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
     else never
 end
 
-lang MatchTypeLift = TypeLift + MatchAst + RecordPat
+lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
     -- If the pattern describes a tuple, then we add a tuple type containing
     -- the amount of elements specified in the tuple (of unknown type) to the
     -- environment.
     let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
-      match pat with PatRecord {bindings = bindings} then
+      match pat with PatRecord {bindings = bindings, info = info} then
         match record2tuple bindings with Some _ then
-          let bindingTypes = mapMap (lam. tyunknown_) bindings in
-          let labels = map sidToString (mapKeys bindings) in
-          match mapLookup bindingTypes env.records with Some _ then
+          let fields = mapMap (lam. tyunknown_) bindings in
+          let labels = map stringToSid (create (mapSize fields) int2string) in
+          let ty =
+            TyRecord {
+              fields = fields,
+              labels = labels,
+              info = info
+            }
+          in
+          match addRecordToEnv env ty with (env, _) then
             env
-          else
-            match _addRecordTypeVar env bindingTypes labels with (env, tyName) then
-              env
-            else never
+          else never
         else env
       else env
     in
@@ -441,17 +482,13 @@ end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyRecord t & ty ->
-    if eqi (mapLength t.fields) 0 then
+  | TyRecord ({fields = fields} & r) & ty->
+    if eqi (mapLength fields) 0 then
       (env, ty)
     else
       let f = lam env. lam. lam ty. typeLiftType env ty in
-      match mapMapAccum f env t.fields with (env, fields) then
-        let env : TypeLiftEnv = env in
-        match mapLookup fields env.records with Some name then
-          (env, ntyvar_ name)
-        else
-          _addRecordTypeVar env fields t.labels
+      match mapMapAccum f env fields with (env, fields) then
+        addRecordToEnv env (TyRecord {r with fields = fields})
       else never
 end
 
@@ -494,7 +531,11 @@ lang MExprTypeLift =
   AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
 end
 
-lang TestLang = MExprTypeLift + MExprSym + MExprTypeAnnot + MExprPrettyPrint
+lang MExprTypeLiftOrderedRecords = MExprTypeLift + TypeLiftAddRecordToEnvOrdered
+lang MExprTypeLiftUnOrderedRecords = MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+
+lang TestLang = MExprTypeLiftUnOrderedRecords + MExprSym + MExprTypeAnnot +
+                MExprPrettyPrint
 
 mexpr
 

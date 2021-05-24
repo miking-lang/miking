@@ -15,7 +15,7 @@ end
 
 lang OCamlRecord
   syn Expr =
-  | OTmRecord {bindings : [(String, Expr)], tyident : String}
+  | OTmRecord {bindings : [(String, Expr)], tyident : Type}
   | OTmProject {field : String, tm : Expr}
 
   syn Pat =
@@ -153,7 +153,7 @@ lang OCamlTypeAst =
   | OTyLabel {info : Info, label : String, ty : Type}
   | OTyVarExt {info : Info, ident : String, args : [Type]}
   | OTyParam {info : Info, ident : String}
-  | OTyRecord {info : Info, fields : [(String, Type)], tyident : String}
+  | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
 
   sem infoTy =
   | OTyList r -> r.info
@@ -240,6 +240,8 @@ let otylabel_ = use OCamlAst in
 let otyrecord_ = use OCamlAst in
   lam tyident. lam fields.
     OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
+
+let otyopaque_ = otyvarext_ "opaque" []
 
 mexpr
 ()

@@ -12,6 +12,12 @@ let array_hd_hd a = a.(0).(0)
 
 let arg_label ~a ~b = b - a
 
+let unit1 x =
+  let _ = x + 1 in
+  ()
+
+let unti2 = function () -> 1
+
 let tuple1 = (1, 2.)
 
 let tuple2 = ([1], 2)

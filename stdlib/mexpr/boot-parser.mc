@@ -174,7 +174,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 207 /-TyRecord-/ ->
     let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
     TyRecord {info = ginfo t 0,
-              labels = map (lam b : (String, a). b.0) lst,
+              labels = map (lam b : (String, a). stringToSid b.0) lst,
               fields = mapFromList cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
