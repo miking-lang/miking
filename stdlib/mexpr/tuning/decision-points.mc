@@ -150,7 +150,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   syn Hole =
 
   syn Expr =
-  | TmHole {init : Expr,
+  | TmHole {default : Expr,
             depth : Int,
             ty : Type,
             info : Info,
@@ -169,26 +169,37 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   | TmHole h -> acc
 
   sem default =
-  | TmHole {init = init} -> init
+  | TmHole {default = default} -> default
   | t -> smap_Expr_Expr default t
 
   sem isAtomic =
   | TmHole _ -> false
 
-  -- TODO
+  sem pprintHole =
+
   sem pprintCode (indent : Int) (env : SymEnv) =
-  | TmHole h ->
-    match pprintCode indent env h.init with (env, startStr) then
-      (env,
-         join ["boolHole ", startStr, " ", int2string h.depth])
+  | TmHole t ->
+    match pprintCode indent env t.default with (env, default) then
+      match pprintHole t.hole with (keyword, bindings) then
+        (env, join
+          [ keyword
+          , " {"
+          , "depth = ", int2string t.depth, ", "
+          , "default = ", default, ", "
+          , strJoin ", "
+            (map (lam b : (String, String). join [b.0, " = ", b.1])
+               bindings)
+          ,  "}"
+          ])
+      else never
     else never
 
   sem isValue =
   | TmHole _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmHole ({init = init} & t) ->
-    k (TmHole {t with init = normalizeTerm t.init})
+  | TmHole ({default = default} & t) ->
+    k (TmHole {t with default = normalizeTerm t.default})
 
   sem isKeyword =
   | TmHole _ -> true
@@ -201,10 +212,10 @@ lang HoleAst = IntAst + ANF + KeywordMaker
       let bindings = mapFromList cmpString
         (map (lam t : (SID, Expr). (sidToString t.0, t.1))
            (mapBindings bindings)) in
-      let init = _lookup "init" bindings in
+      let default = _lookup "default" bindings in
       let depth = _lookup "depth" bindings in
       validate
-        (TmHole { init = init
+        (TmHole { default = default
                 , depth = _expectConstInt "depth" depth
                 , info = info
                 , ty = hty
@@ -229,12 +240,16 @@ lang HoleBoolAst = BoolAst + HoleAst
   | "HoleBool" ->
     Some (1,
       let validate = lam expr.
-        match expr with TmHole {init = init} then
-          match init with TmConst {val = CBool _} then expr
-          else error "Inital value not a constant Boolean"
+        match expr with TmHole {default = default} then
+          match default with TmConst {val = CBool _} then expr
+          else error "Default value not a constant Boolean"
         else error "Not a decision point" in
 
       lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
+
+  sem pprintHole =
+  | BoolHole {} ->
+    ("HoleBool", [])
 end
 
 -- An integer decision point (range of integers).
@@ -252,11 +267,11 @@ lang HoleIntRangeAst = IntAst + HoleAst
     Some (1,
       let validate = lam expr.
         match expr
-        with TmHole {init = TmConst {val = CInt {val = i}},
+        with TmHole {default = TmConst {val = CInt {val = i}},
                      hole = IntRange {min = min, max = max}}
         then
           if and (leqi min i) (geqi max i) then expr
-          else error "Initial value is not within range"
+          else error "Default value is not within range"
         else error "Not an integer decision point" in
 
       lam lst. _mkHole info tyint_
@@ -268,11 +283,15 @@ lang HoleIntRangeAst = IntAst + HoleAst
            else error (join ["Empty domain: ",
                            int2string min, "..", int2string max]))
         validate (get lst 0))
+
+  sem pprintHole =
+  | IntRange {min = min, max = max} ->
+    ("HoleIntRange", [("min", int2string min), ("max", int2string max)])
 end
 
 let holeBool_ = use HoleBoolAst in
-  lam init. lam depth.
-  TmHole { init = init
+  lam default. lam depth.
+  TmHole { default = default
          , depth = depth
          , ty = tybool_
          , info = NoInfo ()
