@@ -297,6 +297,15 @@ let holeBool_ = use HoleBoolAst in
          , info = NoInfo ()
          , hole = BoolHole {}}
 
+let holeIntRange_ = use HoleIntRangeAst in
+  lam default. lam depth. lam min. lam max.
+  TmHole { default = default
+         , depth = depth
+         , ty = tyint_
+         , info = NoInfo ()
+         , hole = IntRange {min = min, max = max}}
+
+
 ------------------------------
 -- Call context environment --
 ------------------------------
@@ -873,7 +882,7 @@ lang Holes =
 
 lang MExprHoles = Holes + MExprSym + MExprANF
 
-lang TestLang = MExprHoles + MExprEq
+lang TestLang = MExprHoles + MExprEq + MExprPrettyPrint
 
 mexpr
 
@@ -1084,9 +1093,9 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match flatten pub ast with (prog, _) then
+    match flatten pub ast with {ast = ast} then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
-      printLn (expr2str prog);
+      printLn (expr2str ast);
       ()
     else never
   else ()
@@ -1115,7 +1124,7 @@ let callBB = nameSym "callBB" in
 let callCB = nameSym "callCB" in
 let h = nameSym "h" in
 let ast = bindall_ [  nulet_ funA (ulam_ ""
-                        (bind_ (nulet_ h (holeBool_ (int_ 0) 2))
+                        (bind_ (nulet_ h (holeIntRange_ (int_ 0) 2 0 1))
                                (nvar_ h)))
                     , nureclets_add funB
                         (ulam_ "xB"
@@ -1136,58 +1145,66 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match flatten [funB, funC] ast with (prog, table) then
+match flatten [funB, funC] ast with
+  {ast = flatAst, table = table, holes = holes, tempFile = tempFile, cleanup = cleanup}
+then
 
-  let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
-    let astExt =
-      match ast with TmMatch ({thn = thn} & t) then
-        TmMatch {t with thn = bind_ thn ext}
-      else dprintLn ast; error "Expected match expression"
-    in
-    printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
-    printLn (expr2str ast);
-    eval { env = mapEmpty nameCmp } ast
+  let dumpTable = lam table : LookupTable.
+    writeFile tempFile (strJoin " " (map expr2str table)) in
+
+  let evalWithTable = lam table : LookupTable. lam ast : Expr. lam ext : Expr.
+    let astExt = bind_ ast ext in
+    dumpTable table;
+    (if debug then
+       printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
+       printLn (expr2str ast)
+     else ());
+    use MExprEval in
+    eval { env = mapEmpty nameCmp } astExt
   in
 
-  --let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
-  let idxs = mapi (lam i. lam. i) (mapBindings table) in
+  let idxs = mapi (lam i. lam. i) table in
   let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
+  let insertedAst = insert [funB, funC] table ast in
 
-  let eval = evalWithArgv table in
+  let eval = evalWithTable table in
 
   -- Path 1: C -> B (1)-> A
-  utest eval prog (
-    app_ (nvar_ funC) true_
-  ) with int_ 1 using eqExpr in
+  let extAst = app_ (nvar_ funC) true_ in
+  utest eval flatAst extAst with int_ 1 using eqExpr in
+  utest eval insertedAst extAst with int_ 1 using eqExpr in
 
   -- Path 2: B (1)-> A
-  utest eval prog (
-    appf2_ (nvar_ funB) true_ false_
-  ) with int_ 2 using eqExpr in
+  let extAst = appf2_ (nvar_ funB) true_ false_ in
+  utest eval flatAst extAst with int_ 2 using eqExpr in
+  utest eval insertedAst extAst with int_ 2 using eqExpr in
 
   -- Path 3: B -> B (1)-> A
-  utest eval prog (
-    appf2_ (nvar_ funB) true_ true_
-  ) with int_ 3 using eqExpr in
+  let extAst = appf2_ (nvar_ funB) true_ true_ in
+  utest eval flatAst extAst with int_ 3 using eqExpr in
+  utest eval insertedAst extAst with int_ 3 using eqExpr in
 
   -- Path 4: C -> B (2)-> A
-  utest eval prog (
-    app_ (nvar_ funC) false_
-  ) with int_ 4 using eqExpr in
+  let extAst = app_ (nvar_ funC) false_ in
+  utest eval flatAst extAst with int_ 4 using eqExpr in
+  utest eval insertedAst extAst with int_ 4 using eqExpr in
 
   -- Path 5: B (2)-> A
-  utest eval prog (
-    appf2_ (nvar_ funB) false_ false_
-  ) with int_ 5 using eqExpr in
+  let extAst = appf2_ (nvar_ funB) false_ false_ in
+  utest eval flatAst extAst with int_ 5 using eqExpr in
+  utest eval insertedAst extAst with int_ 5 using eqExpr in
 
   -- Path 5 again
-  utest eval prog (
-    bind_ (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
-          (appf2_ (nvar_ funB) false_ false_)
-  ) with int_ 5 using eqExpr in
+  let extAst = bind_
+    (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
+    (appf2_ (nvar_ funB) false_ false_) in
+  utest eval flatAst extAst with int_ 5 using eqExpr in
+  utest eval insertedAst extAst with int_ 5 using eqExpr in
 
   -- Path 6: B -> B (2)-> A
   -- unreachable
+
+  cleanup ()
 
 ()
 

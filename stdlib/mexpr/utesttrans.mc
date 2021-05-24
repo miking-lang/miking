@@ -174,6 +174,35 @@ let findName : String -> Expr -> Option Name = use MExprAst in
     in
     findNameH (None ()) expr
 
+let _expr =
+  use BootParser in
+  parseMExprString [] "let foo = lam. 42 in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
+
+let _expr =
+  use BootParser in
+  parseMExprString [] "recursive let foo = lam. 42 in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
+
+let _expr =
+  use BootParser in
+  parseMExprString [] "external foo : () in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
 
 let utestRunnerName = lam. optionGetOrElse
   (lam. error "Expected utestRunner to be defined")

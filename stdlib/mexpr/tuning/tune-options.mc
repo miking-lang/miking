@@ -1,3 +1,5 @@
+include "string.mc"
+
 -- Options for tuning
 
 -- TODO(Linnea, 2021-05-18): Naive implementation of tuning options before we
