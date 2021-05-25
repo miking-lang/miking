@@ -133,6 +133,9 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
         (addi _tupleConversionCost cost , t)
     else never
 
+  -- Converts the term `t` from `ty1` to `ty2`, returning a tuple `(Int, Expr)`
+  -- which is the cost and result of the conversion, respectively. If, and only
+  -- if, no conversion is necessary, the cost should be 0.
   sem convertData (info : Info) (env : GenerateEnv) (t : Expr) (ty1 : Type) =
   | ty2 ->
     let ty1 = typeUnwrapAlias env.aliases ty1 in
