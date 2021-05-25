@@ -10,7 +10,7 @@ type GenerateEnv = {
   exts : Map Name [ExternalImpl]
 }
 
-let _emptyGenerateEnv = use MExprCmp in {
+let _emptyGenerateEnv = use MExprCmpClosed in {
   constrs = mapEmpty nameCmp,
   records = mapEmpty (mapCmp cmpType),
   aliases = mapEmpty nameCmp,
