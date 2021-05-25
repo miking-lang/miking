@@ -106,19 +106,16 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
     let ast = symbolizeExpr symEnv ast in
     let ast = typeAnnot ast in
 
-    -- Translate the MExpr AST into an OCaml AST and Compile
+      -- Translate the MExpr AST into an OCaml AST and Compile
     match typeLift ast with (env, ast) then
       match generateTypeDecl env ast with (env, ast) then
-        let env : GenerateEnv = env in
-        let extEnv : ExternalGenerateEnv =
-          chooseExternalImpls (externalInitialEnv env.aliases) ast
+        let env : GenerateEnv =
+          chooseExternalImpls globalExternalImplsMap env ast
         in
-        let ast = generateExternals extEnv ast in
         let ast = generate env ast in
-        let ast = objWrap ast in
 
         -- Collect external library dependencies
-        let libs = collectLibraries extEnv.usedImpls in
+        let libs = collectLibraries env.exts in
 
         let ocamlProg = pprintOcaml ast in
 
