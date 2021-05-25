@@ -509,7 +509,7 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
     let impls = mapLookup identStr implsMap in
 
     let cost = lam ty1. lam ty2.
-      match convertData info env ty1 ty2 with (cost, _) then cost
+      match convertData info env (uunit_) ty1 ty2 with (cost, _) then cost
       else never
     in
 
