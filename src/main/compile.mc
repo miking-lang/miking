@@ -1,4 +1,3 @@
-
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
@@ -8,13 +7,17 @@ include "mexpr/builtin.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
+include "mexpr/tuning/decision-points.mc"
+include "mexpr/tuning/tune.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "ocaml/external-includes.mc"
+include "ocaml/sys.mc"
 
 lang MCoreCompile =
   BootParser +
+  MExprHoles +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
   OCamlGenerateExternalNaive
@@ -60,6 +63,20 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
+let fileExists = lam path.
+  match sysRunCommand ["ls", path] "" "." with {returncode = 0} then true
+  else false
+
+let insertTunedOrDefaults = lam ast. lam file.
+  use MCoreCompile in
+  let tuneFile = tuneFileName file in
+  if fileExists tuneFile then
+    let table = tuneReadTable tuneFile in
+    let ast = symbolize ast in
+    let ast = normalizeTerm ast in
+    insert [] table ast
+  else default ast
+
 let ocamlCompile =
   lam options : Options. lam libs. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
@@ -75,7 +92,43 @@ let ocamlCompile =
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
-  p.cleanup ()
+  p.cleanup ();
+  destinationFile
+
+let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
+  use MCoreCompile in
+
+  -- If option --test, then generate utest runner calls. Otherwise strip away
+  -- all utest nodes from the AST.
+  match generateTests mexprAst options.runTests with (symEnv, ast) then
+
+    -- Re-symbolize the MExpr AST and re-annotate it with types
+    let ast = symbolizeExpr symEnv ast in
+    let ast = typeAnnot ast in
+
+    -- Translate the MExpr AST into an OCaml AST
+    match typeLift ast with (env, ast) then
+      match generateTypeDecl env ast with (env, ast) then
+        match chooseAndGenerateExternals globalExternalMap ast
+        with (extNameMap, ast) then
+          let ast = generate env ast in
+
+          -- Collect external library dependencies
+          let libs = collectLibraries extNameMap in
+
+          let ocamlProg = pprintOcaml ast in
+
+          -- Print the AST after code generation
+          (if options.debugGenerate then printLn ocamlProg else ());
+
+          -- Compile OCaml AST
+          if options.exitBefore then exit 0
+          else
+            ocamlCompile options libs sourcePath ocamlProg
+        else never
+      else never
+    else never
+  else never
 
 -- Main function for compiling a program
 -- files: a list of files
@@ -84,41 +137,15 @@ let ocamlCompile =
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
   let compileFile = lam file.
-    let ast = parseMCoreFile [] file in
+    let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
+
+    -- Insert tuned values, or use default values if no .tune file present
+    let ast = insertTunedOrDefaults ast file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
 
-    -- If option --test, then generate utest runner calls. Otherwise strip away
-    -- all utest nodes from the AST.
-    match generateTests ast options.runTests with (symEnv, ast) then
-
-      -- Re-symbolize the MExpr AST and re-annotate it with types
-      let ast = symbolizeExpr symEnv ast in
-      let ast = typeAnnot ast in
-
-      -- Translate the MExpr AST into an OCaml AST and Compile
-      match typeLift ast with (env, ast) then
-        match generateTypeDecl env ast with (env, ast) then
-          match chooseAndGenerateExternals globalExternalMap ast
-          with (extNameMap, ast) then
-            let ast = generate env ast in
-
-            -- Collect external library dependencies
-            let libs = collectLibraries extNameMap in
-
-            let ocamlProg = pprintOcaml ast in
-
-            -- Print the AST after code generation
-            (if options.debugGenerate then printLn ocamlProg else ());
-
-            -- Compile OCaml AST
-            if options.exitBefore then exit 0
-            else ocamlCompile options libs file ocamlProg
-
-          else never
-        else never
-      else never
-    else never
+    -- Compile MExpr AST
+    ocamlCompileAst options file ast
   in
   iter compileFile files

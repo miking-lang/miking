@@ -83,7 +83,7 @@ lang OCamlTypePrettyPrint =
         else never
       in
       let fieldStrs =
-        match _record2tuple t.fields with Some tupleFields then
+        match record2tuple t.fields with Some tupleFields then
           mapi (lam i. lam f. (int2string i, f)) tupleFields
         else
           map

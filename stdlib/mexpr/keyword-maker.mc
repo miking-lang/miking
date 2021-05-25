@@ -3,7 +3,7 @@
 --
 -- Language fragment KeywordMaker makes it possible to define new keywords
 -- in a DSL by just using variables and applications. These new keywords
--- are then used when constructing new terms in the DSL. 
+-- are then used when constructing new terms in the DSL.
 -- See fragment _testKeywordMaker for an example.
 -- Note that also keywords starting with capital letters are allowed,
 -- using MCore's constructor definition.
@@ -15,10 +15,10 @@ include "ast-builder.mc"
 include "eq.mc"
 
 -- The base fragment that includes the keyword maker, but
--- no checks for incorrect bindings in e.g. let or lam. 
+-- no checks for incorrect bindings in e.g. let or lam.
 -- See the separate fragments to include this.
-lang KeywordMakerBase = VarAst + AppAst 
-  sem isKeyword = 
+lang KeywordMakerBase = VarAst + AppAst
+  sem isKeyword =
   | _ -> false
 
   sem matchKeywordString (info: Info) =
@@ -58,18 +58,18 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
          else makeKeywordError r.info noArgs (length args) ident
        else never
      else TmConApp r
-  | TmConDef r -> 
+  | TmConDef r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        infoErrorExit r.info (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
      else TmConDef {r with inexpr = makeKeywords [] r.inexpr}
-end   
+end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
 lang KeywordMakerLam = KeywordMakerBase + LamAst
   sem makeKeywords (args: [Expr]) =
-  | TmLam r -> 
+  | TmLam r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
@@ -85,7 +85,7 @@ lang KeywordMakerLet = KeywordMakerBase + LetAst
      match matchKeywordString r.info ident with Some _ then
        infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
-       TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr} 
+       TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr}
 end
 
 
@@ -102,12 +102,12 @@ lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
   | pat -> smap_Pat_Pat matchKeywordPat pat
 
   sem makeKeywords (args: [Expr]) =
-  | TmMatch r -> 
+  | TmMatch r ->
       TmMatch {{{{r with target = makeKeywords [] r.target}
                     with pat = matchKeywordPat r.pat}
                     with thn = makeKeywords [] r.thn}
                     with els = makeKeywords [] r.els}
-end                  
+end
 
 
 -- The keyword maker fragment, that includes all checks
@@ -159,17 +159,17 @@ lang _testKeywordMaker = KeywordMaker + MExpr + MExprEq
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmNoArgs _ ->
       match lhs with TmNoArgs _ then Some free else None ()
-  | TmOneArg r ->     
+  | TmOneArg r ->
       match lhs with TmOneArg l then
         eqExprH env free l.arg1 r.arg1
       else None ()
-  | TmTwoArgs r ->     
+  | TmTwoArgs r ->
       match lhs with TmTwoArgs l then
         match eqExprH env free l.arg1 r.arg1 with Some free then
           eqExprH env free l.arg2 r.arg2
         else None ()
       else None ()
-  | TmThreeArgs r ->     
+  | TmThreeArgs r ->
       match lhs with TmThreeArgs l then
         match eqExprH env free l.arg1 r.arg1 with Some free then
           match eqExprH env free l.arg2 r.arg2 with Some free then
@@ -195,16 +195,16 @@ let threeargs_ = lam x. lam y. lam z.
 -- that demonstrates that keywords cannot be used inside lambdas, lets, and patterns.
 -- Same with the forth, replace "Ok" with "OneArg"
 
-let expr = ulam_ "ok" true_ in  
+let expr = ulam_ "ok" true_ in
 utest makeKeywords [] expr with expr using eqExpr in
 
-let expr = bind_ (ulet_ "ok" true_) false_ in 
+let expr = bind_ (ulet_ "ok" true_) false_ in
 utest makeKeywords [] expr with expr using eqExpr in
 
 let expr = match_ true_  (pvar_ "ok") true_ false_ in
 utest makeKeywords [] expr with expr using eqExpr in
 
-let expr = ucondef_ "Ok" in 
+let expr = ucondef_ "Ok" in
 utest makeKeywords [] expr with expr using eqExpr in
 
 let expr = ulam_ "x" (var_ "noargs") in
@@ -221,15 +221,3 @@ utest makeKeywords [] expr
 with ulam_ "x" (threeargs_ true_ false_ true_) using eqExpr in
 
 ()
-
-
-
-
-
-
-
-
-
-
-
-

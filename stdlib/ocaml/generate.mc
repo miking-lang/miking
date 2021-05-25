@@ -133,7 +133,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match ty with TyUnknown _ then
       match t.pat with PatRecord {bindings = bindings} then
         if mapIsEmpty bindings then ty else
-        match _record2tuple bindings with Some _ then
+        match record2tuple bindings with Some _ then
           let bindingTypes = mapMap (lam. tyunknown_) bindings in
           match mapLookup bindingTypes env.records with Some id then
             ntyvar_ id

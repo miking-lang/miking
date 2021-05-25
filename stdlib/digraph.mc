@@ -33,6 +33,7 @@ let digraphEmpty : (v -> v -> Bool) -> (l -> l -> Bool) -> Digraph v l =
 
 -- Get equivalence function for vertices.
 let digraphEqv = lam g : Digraph v l.
+  let g : Digraph v l = g in
   g.eqv
 
 -- Get equivalence function for labels.
@@ -41,10 +42,12 @@ let digraphEql = lam g : Digraph v l.
 
 -- Get the vertices of the graph g.
 let digraphVertices = lam g : Digraph v l.
+  let g : Digraph v l = g in
   assocKeys {eq=g.eqv} g.adj
 
 -- Get the edges of the graph g.
 let digraphEdges : Digraph v l -> [DigraphEdge v l] = lam g : Digraph v l.
+  let g : Digraph v l = g in
   let vs = digraphVertices g in
   let outEdges = assocValues {eq=g.eqv} g.adj in
   let edgeLists = zipWith (lam v. lam outList. map (lam t : DigraphEdge v l. (v, t.0, t.1)) outList)

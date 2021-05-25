@@ -156,6 +156,16 @@ let findName : String -> Expr -> Option Name = use MExprAst in
         else match findNameH (None ()) body with Some n then Some n
         else match findNameH (None ()) inexpr with Some n then Some n
         else None ()
+      else match expr with TmRecLets {bindings = bindings, inexpr = inexpr} then
+        match
+          foldl (lam a. lam b : RecLetBinding.
+            match a with Some _ then a
+            else if eqString (nameGetStr b.ident) str then Some b.ident
+            else match findNameH (None ()) b.body with Some n then Some n
+            else None ()) (None ()) bindings
+        with Some n then Some n
+        else match findNameH (None ()) inexpr with Some n then Some n
+        else None ()
       else match expr with TmExt {ident = ident, inexpr = inexpr} then
         if eqString (nameGetStr ident) str then Some ident
         else match findNameH (None ()) inexpr with Some n then Some n
@@ -164,6 +174,35 @@ let findName : String -> Expr -> Option Name = use MExprAst in
     in
     findNameH (None ()) expr
 
+let _expr =
+  use BootParser in
+  parseMExprString [] "let foo = lam. 42 in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
+
+let _expr =
+  use BootParser in
+  parseMExprString [] "recursive let foo = lam. 42 in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
+
+let _expr =
+  use BootParser in
+  parseMExprString [] "external foo : () in ()"
+utest
+  match findName "foo" _expr
+  with Some n
+  then eqString (nameGetStr n) "foo"
+  else false
+with true
 
 let utestRunnerName = lam. optionGetOrElse
   (lam. error "Expected utestRunner to be defined")
@@ -349,7 +388,7 @@ let _pprintRecord = use MExprAst in
       PatRecord {bindings = recordBindings, info = NoInfo ()}
     in
     let pprintSeq =
-      match _record2tuple fields with Some types then
+      match record2tuple fields with Some types then
         let tuplePprints = lam seq. lam id. lam fieldTy.
           let fieldPprintName = getPprintFuncName env fieldTy in
           let pprintApp = app_ (nvar_ fieldPprintName) (var_ (sidToString id)) in

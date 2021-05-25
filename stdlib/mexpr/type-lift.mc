@@ -308,7 +308,7 @@ lang MatchTypeLift = TypeLift + MatchAst + RecordPat
     -- environment.
     let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
       match pat with PatRecord {bindings = bindings} then
-        match _record2tuple bindings with Some _ then
+        match record2tuple bindings with Some _ then
           let bindingTypes = mapMap (lam. tyunknown_) bindings in
           match mapLookup bindingTypes env.records with Some _ then
             env
