@@ -53,5 +53,17 @@ let dist =
     ("betaLogPDF", [
       { ident = "Boot.Dist.betaLogPDF",
         ty = tyarrow_ tyfloat_ (tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_)) , libraries = ["owl"] }
+    ]),
+    ("exponentialSample", [
+      { ident = "Boot.Dist.exponentialSample",
+        ty = tyarrow_ tyfloat_ tyfloat_ , libraries = ["owl"] }
+    ]),
+    ("exponentialPDF", [
+      { ident = "Boot.Dist.exponentialPDF",
+        ty = tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_) , libraries = ["owl"] }
+    ]),
+    ("exponentialLogPDF", [
+      { ident = "Boot.Dist.exponentialLogPDF",
+        ty = tyarrow_ tyfloat_ (tyarrow_ tyfloat_ tyfloat_) , libraries = ["owl"] }
     ])
   ]

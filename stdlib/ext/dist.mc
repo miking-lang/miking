@@ -46,6 +46,18 @@ external betaPDF : Float -> Float -> Float -> Float
 external betaLogPDF : Float -> Float -> Float -> Float
 
 
+
+-- exponentialSample lambda
+external exponentialSample ! : Float -> Float
+
+-- exponentialPDF x lambda
+external exponentialPDF : Float -> Float -> Float
+
+-- exponentialLogPDF x lambda
+external exponentialLogPDF : Float -> Float -> Float
+
+
+
 mexpr
 
 
@@ -65,6 +77,10 @@ let str = join [
 "betaSample: ", float2string (betaSample 2. 3.), "\n",
 "betaPDF: ", float2string (betaPDF 0.7 2. 3.), "\n",
 "betaLogPDF: ", float2string (betaLogPDF 0.7 2. 3.), "\n",
+"\n",
+"exponentialSample: ", float2string (exponentialSample 0.5), "\n",
+"exponentialPDF: ", float2string (exponentialPDF 1. 0.5), "\n",
+"exponentialLogPDF: ", float2string (exponentialLogPDF 1. 0.5), "\n",
 "\n"
 ] in
 

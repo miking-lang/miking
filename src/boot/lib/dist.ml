@@ -43,3 +43,14 @@ let betaPDF x a b =
 
 let betaLogPDF x a b =
   Owl_stats.beta_logpdf x ~a:a ~b:b
+
+
+
+let exponentialSample lambda =
+  Owl_stats.exponential_rvs ~lambda:lambda
+
+let exponentialPDF x lambda =
+  Owl_stats.exponential_pdf x ~lambda:lambda
+
+let exponentialLogPDF x lambda =
+  Owl_stats.exponential_logpdf x ~lambda:lambda
