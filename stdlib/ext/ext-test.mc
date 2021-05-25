@@ -23,6 +23,9 @@ utest extTestFlip (lam x. lam y. subi x y) 1 2 with 1 in
 external extTestUnit1 : Int -> () in
 utest extTestUnit1 1 with () in
 
+external extTestUnit2 : () -> Int in
+utest extTestUnit2 () with 1 in
+
 external extTestTuple1 : (Int, Float) in
 utest extTestTuple1.0 with 1 in
 

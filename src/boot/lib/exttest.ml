@@ -16,7 +16,7 @@ let unit1 x =
   let _ = x + 1 in
   ()
 
-let unti2 = function () -> 1
+let unit2 = function () -> 1
 
 let tuple1 = (1, 2.)
 
