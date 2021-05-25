@@ -798,7 +798,7 @@ let printCompiledCProg = use CProgPrettyPrint in
 
 lang Test =
   MExprCCompileGCC + MExprPrettyPrint + MExprTypeAnnot + MExprANF +
-  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords
+  MExprSym + BootParser + MExprTypeLiftUnOrderedRecords +
 
   -- Whenever MExprCmp, or any fragment including it, will be used, a typeIndex
   -- function must be provided (here through MExprCmpTypeIndex)

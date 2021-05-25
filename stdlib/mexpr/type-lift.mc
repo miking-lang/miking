@@ -531,9 +531,12 @@ lang MExprTypeLift =
   AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
 end
 
-lang MExprTypeLiftOrderedRecords = MExprTypeLift + TypeLiftAddRecordToEnvOrdered
+lang MExprTypeLiftOrderedRecordsCmpClosed =
+  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + MExprCmpTypeIndex
+lang MExprTypeLiftUnOrderedRecords =
+  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
 lang MExprTypeLiftUnOrderedRecordsCmpClosed =
-  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered + MExprCmpTypeIndex
+  MExprTypeLiftUnOrderedRecords + MExprCmpTypeIndex
 
 lang TestLang =
   MExprTypeLiftUnOrderedRecordsCmpClosed + MExprSym + MExprTypeAnnot +
