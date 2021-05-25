@@ -58,6 +58,18 @@ external exponentialLogPDF : Float -> Float -> Float
 
 
 
+-- categoricalSample p
+external categoricalSample ! : [Float] -> Int
+
+-- categoricalPDF x p
+external categoricalPDF : Int -> [Float] -> Float
+
+-- categoricalLogPDF x p
+external categoricalLogPDF : Int -> [Float] -> Float
+
+
+
+
 mexpr
 
 
@@ -81,6 +93,10 @@ let str = join [
 "exponentialSample: ", float2string (exponentialSample 0.5), "\n",
 "exponentialPDF: ", float2string (exponentialPDF 1. 0.5), "\n",
 "exponentialLogPDF: ", float2string (exponentialLogPDF 1. 0.5), "\n",
+"\n",
+"categoricalSample: ", int2string (categoricalSample [0.3, 0.5, 0.2]), "\n",
+--"categoricalPDF: ", float2string (categoricalPDF 1 [0.3, 0.5, 0.2]), "\n",
+--"categoricalLogPDF: ", float2string (categoricalLogPDF 1 [0.3, 0.5, 0.2]), "\n",
 "\n"
 ] in
 

@@ -54,3 +54,14 @@ let exponentialPDF x lambda =
 
 let exponentialLogPDF x lambda =
   Owl_stats.exponential_logpdf x ~lambda:lambda
+
+
+
+let categoricalSample p =
+  Owl_stats.categorical_rvs p
+
+let categoricalPDF x p =
+  Owl_stats.multinomial_pdf [|x|] ~p:p
+
+let categoricalLogPDF x p =
+  Owl_stats.multinomial_logpdf [|x|] ~p:p
