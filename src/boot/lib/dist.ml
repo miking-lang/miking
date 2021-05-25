@@ -12,6 +12,7 @@ let gaussianLogPDF x mu sigma =
   Owl_stats.gaussian_logpdf x ~mu:mu ~sigma:sigma
 
 
+
 let bernoulliSample p =
   Owl_stats.binomial_rvs ~p:p ~n:1
 
@@ -20,3 +21,14 @@ let bernoulliPDF x p =
 
 let bernoulliLogPDF x p =
   Owl_stats.binomial_logpdf x ~p:p ~n:1
+
+
+
+let binomialSample p n =
+  Owl_stats.binomial_rvs ~p:p ~n:n
+
+let binomialPDF x p n =
+  Owl_stats.binomial_pdf x ~p:p ~n:n
+
+let binomialLogPDF x p n =
+  Owl_stats.binomial_logpdf x ~p:p ~n:n

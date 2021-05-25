@@ -29,5 +29,17 @@ let dist =
     ("bernoulliLogPDF", [
       { ident = "Boot.Dist.bernoulliLogPDF",
         ty = tyarrow_ tyint_ (tyarrow_ tyfloat_ tyfloat_) , libraries = ["owl"] }
+    ]),
+    ("binomialSample", [
+      { ident = "Boot.Dist.binomialSample",
+        ty = tyarrow_ tyfloat_ (tyarrow_ tyint_ tyint_) , libraries = ["owl"] }
+    ]),
+    ("binomialPDF", [
+      { ident = "Boot.Dist.binomialPDF",
+        ty = tyarrow_ tyint_ (tyarrow_ tyfloat_ (tyarrow_ tyint_ tyfloat_)) , libraries = ["owl"] }
+    ]),
+    ("binomialLogPDF", [
+      { ident = "Boot.Dist.binomialLogPDF",
+        ty = tyarrow_ tyint_ (tyarrow_ tyfloat_ (tyarrow_ tyint_ tyfloat_)) , libraries = ["owl"] }
     ])
   ]
