@@ -32,3 +32,14 @@ let binomialPDF x p n =
 
 let binomialLogPDF x p n =
   Owl_stats.binomial_logpdf x ~p:p ~n:n
+
+
+
+let betaSample a b =
+  Owl_stats.beta_rvs ~a:a ~b:b
+
+let betaPDF x a b =
+  Owl_stats.beta_pdf x ~a:a ~b:b
+
+let betaLogPDF x a b =
+  Owl_stats.beta_logpdf x ~a:a ~b:b
