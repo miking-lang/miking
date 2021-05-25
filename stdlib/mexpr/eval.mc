@@ -2032,7 +2032,7 @@ utest eval (bindall_
 with int_ 44 in
 
 utest eval (bindall_
-  [ ulet_ "t" (threadSpawn_ (TmConst {val = CThreadSelf {}, ty = tyunknown_, info = NoInfo ()}))
+  [ ulet_ "t" (threadSpawn_ (ulam_ "_" (threadSelf_ unit_)))
   , ulet_ "tid" (threadGetID_ (var_ "t"))
   , eqi_ (threadID2Int_ (var_ "tid")) (threadID2Int_ (threadJoin_ (var_ "t")))
   ])

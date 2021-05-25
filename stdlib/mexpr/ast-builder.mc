@@ -1025,6 +1025,9 @@ let atomicMake_ = use MExprAst in
 let atomicGet_ = use MExprAst in
   lam r. appf1_ (uconst_ (CAtomicGet ())) r
 
+let atomicSet_ = use MExprAst in
+  lam r. lam v. appf2_ (uconst_ (CAtomicSet ())) r v
+
 let atomicExchange_ = use MExprAst in
   lam r. lam v. appf2_ (uconst_ (CAtomicExchange ())) r v
 
@@ -1048,7 +1051,7 @@ let threadID2Int_ = use MExprAst in
   lam id. appf1_ (uconst_ (CThreadID2Int ())) id
 
 let threadSelf_ = use MExprAst in
-  lam u. appf1_ (uconst_ (CThreadJoin ())) u
+  lam u. appf1_ (uconst_ (CThreadSelf ())) u
 
 let threadWait_ = use MExprAst in
   lam u. appf1_ (uconst_ (CThreadWait ())) u

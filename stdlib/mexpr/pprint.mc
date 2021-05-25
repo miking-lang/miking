@@ -805,6 +805,7 @@ lang AtomicPrettyPrint = AtomicAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CAtomicMake _ -> "atomicMake"
   | CAtomicGet _ -> "atomicGet"
+  | CAtomicSet _ -> "atomicSet"
   | CAtomicExchange _ -> "atomicExchange"
   | CAtomicFetchAndAdd _ -> "atomicFetchAndAdd"
   | CAtomicCAS _ -> "atomicCAS"

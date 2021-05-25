@@ -240,6 +240,7 @@ lang AtomicTypeAst = AtomicAst
   sem tyConst =
   | CAtomicMake _ -> tyarrow_ (tygeneric_ "a") (tyaref_ "a")
   | CAtomicGet _ -> tyarrow_ (tyaref_ "a") (tygeneric_ "a")
+  | CAtomicSet _ -> tyarrows_ [tyaref_ "a", tygeneric_ "a", tyunit_]
   | CAtomicExchange _ -> tyarrows_ [tyaref_ "a", tygeneric_ "a", tygeneric_ "a"]
   | CAtomicFetchAndAdd _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_]
   | CAtomicCAS _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_, tybool_]

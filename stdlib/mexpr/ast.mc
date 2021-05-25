@@ -641,6 +641,7 @@ lang AtomicAst = ConstAst
   syn Const =
   | CAtomicMake {}
   | CAtomicGet {}
+  | CAtomicSet {}
   | CAtomicExchange {}
   | CAtomicFetchAndAdd {}
   | CAtomicCAS {}

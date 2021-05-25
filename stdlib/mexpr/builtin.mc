@@ -127,6 +127,7 @@ let builtin = use MExprAst in
   -- Atomic operations
   , ("atomicMake", CAtomicMake ())
   , ("atomicGet", CAtomicGet ())
+  , ("atomicGet", CAtomicSet ())
   , ("atomicExchange", CAtomicExchange ())
   , ("atomicFetchAndAdd", CAtomicFetchAndAdd ())
   , ("atomicCAS", CAtomicCAS ())
