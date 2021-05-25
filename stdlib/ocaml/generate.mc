@@ -388,25 +388,6 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       let r : ExternalImpl = head r in
       match convertData info env (OTmVarExt { ident = r.ident }) r.ty ty
       with (_, body) then
-        -- let names = create (typeArity ty) (lam. nameSym "x") in
-        -- let vars = map (lam name. TmVar { ident = name, info = info }) names in
-        -- let body =
-        --   foldl (tmApp info (TyUnknown { info = info })) (body) vars
-        -- in
-        -- let body =
-        --   foldr
-        --     (lam name. lam body.
-        --       TmLam {
-        --         ident = name,
-        --         tyIdent = TyUnknown { info = info },
-        --         ty = TyUnknown { info = info },
-        --         body = body,
-        --         info = info
-        --       })
-        --     body
-        --     names
-        -- in
-        -- let body = generate env body in
         let inexpr = generate env inexpr in
         TmLet {
           ident = ident,
