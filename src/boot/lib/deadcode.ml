@@ -210,12 +210,8 @@ let extend_symb_map_builtin builtin_name2sym symbmap =
 (* Add keywords from the keyword maker to nmap, indicating sideeffect so that
    they do not disappear *)
 let add_keywords nmap symKeywords =
-  let f acc s =
-    SymbMap.add s (SymbSet.empty, false, true, 0) acc
-  in
+  let f acc s = SymbMap.add s (SymbSet.empty, false, true, 0) acc in
   List.fold_left f nmap symKeywords
-
-
 
 (* The main dead code elimination function
    of flag utest is false, then utests are also removed

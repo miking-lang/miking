@@ -9,6 +9,7 @@
 open Ustring.Op
 open Msg
 open Intrinsics
+open Parimpl
 
 (* Debug options *)
 let enable_debug_eval_tm = ref false
@@ -180,8 +181,26 @@ and const =
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
+  (* MCore intrinsics: Atomic references *)
+  | CAtomicRef of tm Atomic.t
+  | CatomicMake
+  | CatomicGet
+  | CatomicExchange of tm Atomic.t option
+  | CatomicFetchAndAdd of tm Atomic.t option
+  | CatomicCAS of tm Atomic.t option * tm option
+  (* MCore intrinsics: Threads *)
+  | CThread of tm Thread.t
+  | CThreadID of Thread.id
+  | CthreadID2int
+  | CthreadSpawn
+  | CthreadJoin
+  | CthreadGetID
+  | CthreadSelf
+  | CthreadWait
+  | CthreadNotify
+  | CthreadCriticalSection
+  | CthreadCPURelax
   (* External functions *)
-  | CPar of tm Parast.ext
   | CSd of Sdast.ext
   | CPy of tm Pyast.ext
 
@@ -618,8 +637,29 @@ let const_has_side_effect = function
   | CbootParserGetPat _
   | CbootParserGetInfo _ ->
       true
+  (* MCore intrinsics: Atomic references *)
+  | CAtomicRef _
+  | CatomicMake
+  | CatomicGet
+  | CatomicExchange _
+  | CatomicFetchAndAdd _
+  | CatomicCAS _ ->
+      true
+  (* MCore intrinsics: Threads *)
+  | CThread _
+  | CThreadID _
+  | CthreadID2int
+  | CthreadSpawn
+  | CthreadJoin
+  | CthreadGetID
+  | CthreadSelf
+  | CthreadWait
+  | CthreadNotify
+  | CthreadCriticalSection
+  | CthreadCPURelax ->
+      true
   (* External functions *)
-  | CPar _ | CSd _ | CPy _ ->
+  | CSd _ | CPy _ ->
       true
 
 (* Converts a sequence of terms to a ustring *)
