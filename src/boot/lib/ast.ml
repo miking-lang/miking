@@ -182,7 +182,6 @@ and const =
   | CbootParserGetInfo of tm option
   (* External functions *)
   | CPar of tm Parast.ext
-  | CSd of Sdast.ext
   | CPy of tm Pyast.ext
 
 (* Parser tree. Used by the boot parser intrinsics *)
@@ -328,7 +327,7 @@ and ty =
   (* Tensor type *)
   | TyTensor of info * ty
   (* Record type *)
-  | TyRecord of info * ty Record.t
+  | TyRecord of info * ty Record.t * ustring list
   (* Variant type *)
   | TyVariant of info * (ustring * Symb.t) list
   (* Type variables *)
@@ -349,7 +348,7 @@ and ident =
 
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
-let tyUnit fi = TyRecord (fi, Record.empty)
+let tyUnit fi = TyRecord (fi, Record.empty, [])
 
 module Option = BatOption
 
@@ -477,7 +476,7 @@ let ty_info = function
   | TyArrow (fi, _, _)
   | TySeq (fi, _)
   | TyTensor (fi, _)
-  | TyRecord (fi, _)
+  | TyRecord (fi, _, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)
   | TyApp (fi, _, _) ->
@@ -619,7 +618,7 @@ let const_has_side_effect = function
   | CbootParserGetInfo _ ->
       true
   (* External functions *)
-  | CPar _ | CSd _ | CPy _ ->
+  | CPar _ | CPy _ ->
       true
 
 (* Converts a sequence of terms to a ustring *)
@@ -650,12 +649,12 @@ let tuple2record fi lst =
 
 (* Converts a list of types (for a tuple type) to a record type *)
 let tuplety2recordty fi lst =
-  let r =
+  let _, r =
     List.fold_left
       (fun (i, a) x -> (i + 1, Record.add (ustring_of_int i) x a))
       (0, Record.empty) lst
   in
-  TyRecord (fi, snd r)
+  TyRecord (fi, r, List.init (Record.cardinal r) ustring_of_int)
 
 (* Converts a record map to an optional list of terms. Returns Some list if
    the record represents a tuple, None otherwise. *)

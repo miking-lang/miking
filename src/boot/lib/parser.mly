@@ -527,8 +527,12 @@ ty_atom:
   | LBRACKET RBRACKET
     { tyUnit (mkinfo $1.i $2.i) }
   | LBRACKET label_tys RBRACKET
-    { TyRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
-      (fun acc (k,v) -> Record.add k v acc) Record.empty) }
+    { let r = $2 |> List.fold_left
+                      (fun acc (k,v) -> Record.add k v acc)
+                      Record.empty
+      in
+      let ls = List.map (fun (l, _) -> l) $2 in
+        TyRecord(mkinfo $1.i $3.i, r, ls) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
   | TUNKNOWN

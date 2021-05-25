@@ -6,6 +6,7 @@ include "string.mc"
 type Options = {
   debugParse : Bool,
   debugGenerate : Bool,
+  debugTypeAnnot : Bool,
   exitBefore : Bool,
   runTests : Bool,
   disableOptimizations : Bool
@@ -15,6 +16,7 @@ type Options = {
 let options = {
   debugParse = false,
   debugGenerate = false,
+  debugTypeAnnot = false,
   exitBefore = false,
   runTests = false,
   disableOptimizations = false
@@ -24,6 +26,7 @@ let options = {
 let optionsMap = [
 ("--debug-parse", lam o : Options. {o with debugParse = true}),
 ("--debug-generate", lam o : Options. {o with debugGenerate = true}),
+("--debug-type-annot", lam o : Options. {o with debugTypeAnnot = true}),
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true})

@@ -299,7 +299,7 @@ lang CarriedTypeHelpers = CarriedTypeBase
               , match_
                 (mkNew accName valName)
                 (ptuple_ [npvar_ accName, npvar_ valName])
-                (tuple_ [nvar_ accName, nconapp_ constructor.name (nvar_ valName)])
+                (utuple_ [nvar_ accName, nconapp_ constructor.name (nvar_ valName)])
                 never_
               )
             ]
@@ -325,7 +325,7 @@ let _mkSFuncStubs
         , (accName, tyvar_ "a")
         ]
       , cases =
-        [ (npvar_ valName, tuple_ [nvar_ accName, nvar_ valName])
+        [ (npvar_ valName, utuple_ [nvar_ accName, nvar_ valName])
         ]
       } in
     let smap =
@@ -337,8 +337,8 @@ let _mkSFuncStubs
         [ ( npvar_ valName
           , tupleproj_ 1
             (smapAccumL_
-              (ulam_ "" (nulam_ valName (tuple_ [unit_, appf1_ (nvar_ fName) (nvar_ valName)])))
-              unit_
+              (ulam_ "" (nulam_ valName (utuple_ [uunit_, appf1_ (nvar_ fName) (nvar_ valName)])))
+              uunit_
               (nvar_ valName))
           )
         ]
@@ -353,7 +353,7 @@ let _mkSFuncStubs
         [ ( npvar_ valName
           , tupleproj_ 0
             (smapAccumL_
-              (nulam_ accName (nulam_ valName (tuple_ [appf2_ (nvar_ fName) (nvar_ accName) (nvar_ valName), nvar_ valName])))
+              (nulam_ accName (nulam_ valName (utuple_ [appf2_ (nvar_ fName) (nvar_ accName) (nvar_ valName), nvar_ valName])))
               (nvar_ accName)
               (nvar_ valName))
           )
@@ -439,7 +439,7 @@ lang CarriedRecord = CarriedTypeBase
           mappingFields
         in match mappedFields with (constr, mappedFields) then
           constr
-            (tuple_
+            (utuple_
               [ nvar_ accName
               , (foldl
                   (lam acc. lam update.

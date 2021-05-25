@@ -9,24 +9,14 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/cmp.mc"
+include "mexpr/type.mc"
 include "ocaml/ast.mc"
 include "ocaml/pprint.mc"
 include "ocaml/compile.mc"
 include "ocaml/intrinsics-ops.mc"
+include "ocaml/generate-env.mc"
+include "ocaml/external.mc"
 include "common.mc"
-include "external.mc"
-
-type GenerateEnv = {
-  constrs : Map Name Type,
-  records : Map (Map SID Type) Name,
-  aliases : Map Name Type
-}
-
-let _emptyGenerateEnv = use MExprCmp in {
-  constrs = mapEmpty nameCmp,
-  records = mapEmpty (mapCmp cmpType),
-  aliases = mapEmpty nameCmp
-}
 
 -- Input is a map from name to be introduced to name containing the value to be bound to that location
 -- Output is essentially `M.toList input & unzip & \(pats, exprs) -> (OPatTuple pats, TmTuple exprs)`
@@ -86,15 +76,6 @@ let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then
     name
   else error (join ["Unsupported intrinsic: ", str])
-
-recursive let unwrapAlias = use MExprAst in
-  lam aliases. lam ty.
-  match ty with TyVar {ident = ident} then
-    match mapLookup ident aliases with Some ty then
-      unwrapAlias aliases ty
-    else ty
-  else ty
-end
 
 let toOCamlType = use MExprAst in
   lam ty : Type.
@@ -220,7 +201,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
     match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
       if nameEq patName thnv.ident then
-        let targetTy = unwrapAlias env.aliases (matchTargetType env t) in
+        let targetTy = typeUnwrapAlias env.aliases (matchTargetType env t) in
         match lookupRecordFields targetTy env.constrs with Some fields then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
@@ -245,7 +226,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
         let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
           assocSeqFold
             (lam acc. lam pat. lam thn. match_ target pat thn acc)
-            (app_ (nvar_ defaultCaseName) unit_)
+            (app_ (nvar_ defaultCaseName) uunit_)
             patExpr
         in
         let f = lam arm : (Name, [(Pat, Expr)]).
@@ -273,7 +254,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           _omatch_ (_objMagic (generate env t.target))
             (snoc
                 (map f (mapBindings arms))
-                (pvarw_, (app_ (nvar_ defaultCaseName) unit_)))
+                (pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
         in bind_ defaultCaseLet flattenedMatch
       else never
     else generateDefaultMatchCase env t
@@ -282,7 +263,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
 end
 
-lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
+lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExternalNaive
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
     -- NOTE(vipa, 2021-05-14): Assume that explicit Consts have the same type, since the program wouldn't typecheck otherwise
@@ -296,7 +277,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
-      let ty = unwrapAlias env.aliases t.ty in
+      let ty = typeUnwrapAlias env.aliases t.ty in
       match ty with TyVar {ident = ident} then
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           let fieldTypes = ocamlTypedFields fields in
@@ -310,7 +291,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
         else never
       else never
   | TmRecordUpdate t ->
-    let ty = unwrapAlias env.aliases t.ty in
+    let ty = typeUnwrapAlias env.aliases t.ty in
     match ty with TyVar {ident = ident} then
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
@@ -402,8 +383,23 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt _ ->
-    error "externals expected to be generated in a previous step"
+  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+    match mapLookup ident env.exts with Some r then
+      let r : ExternalImpl = head r in
+      match convertData info env (OTmVarExt { ident = r.ident }) r.ty ty
+      with (_, body) then
+        let inexpr = generate env inexpr in
+        TmLet {
+          ident = ident,
+          tyBody = ty,
+          body = body,
+          inexpr = inexpr,
+          ty = TyUnknown { info = info },
+          info = info
+        }
+      else never
+    else
+      infoErrorExit (join ["No implementation for external ", nameGetStr ident])
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
@@ -546,7 +542,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
-      let targetTy = unwrapAlias env.aliases targetTy in
+      let targetTy = typeUnwrapAlias env.aliases targetTy in
       match lookupRecordFields targetTy constrs with Some fields then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes records with Some name then
@@ -637,7 +633,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             inexpr = t
           }, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
-        let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+        let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
         if mapIsEmpty constrs then (t, recordFieldsToName)
         else
           (OTmVariantTypeDecl {
@@ -661,7 +657,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
               with constrs = mapInsert name ty env.constrs}
       else error "Type lifting error"
     else match ty with TyVariant {constrs = constrs} then
-      let constrs = mapMap (unwrapAlias typeLiftEnvMap) constrs in
+      let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
       {env with constrs = mapUnion env.constrs constrs}
     else
       {env with aliases = mapInsert name ty env.aliases}
@@ -669,7 +665,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
   assocSeqFold f _emptyGenerateEnv typeLiftEnv
 
 
-lang OCamlTypeDeclGenerate = MExprTypeLift
+lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecords
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
     let typeLiftEnvMap = mapFromList nameCmp env in
@@ -1124,8 +1120,8 @@ let matchNestedCon5 = symbolize (
 utest stripTypeDecls matchNestedCon5 with generateTypeAnnotated matchNestedCon5
 using sameSemantics in
 
-let r = record_ [
-  ("a", record_ [
+let r = urecord_ [
+  ("a", urecord_ [
     ("x", int_ 4),
     ("y", true_),
     ("z", seq_ [int_ 1, int_ 2, int_ 3])
@@ -1203,8 +1199,8 @@ let conMatch = lam m.
     ntype_ tree tyunknown_,
     ncondef_ branch (tyarrow_ tyBranch tyTree),
     ncondef_ leaf (tyarrow_ tyint_ tyTree),
-    ulet_ "x" (nconapp_ branch (record_ [
-      ("lhs", nconapp_ branch (record_ [
+    ulet_ "x" (nconapp_ branch (urecord_ [
+      ("lhs", nconapp_ branch (urecord_ [
         ("lhs", nconapp_ leaf (int_ 1)),
         ("rhs", nconapp_ leaf (int_ 3))
       ])),
@@ -1255,7 +1251,7 @@ utest stripTypeDecls matchRecordCon3 with generateTypeAnnotated matchRecordCon3
 using sameSemantics in
 
 let recordUpdate1 = symbolize (
-  match_ (recordupdate_ (record_ [("a", int_ 0)]) "a" (int_ 1))
+  match_ (recordupdate_ (urecord_ [("a", int_ 0)]) "a" (int_ 1))
     (prec_ [("a", pvar_ "a")])
       (var_ "a")
       (int_ 0)) in
@@ -1264,7 +1260,7 @@ using sameSemantics in
 
 let recordUpdate2 = symbolize (
   bindall_ [
-    ulet_ "r" (record_ [
+    ulet_ "r" (urecord_ [
       ("a", int_ 2), ("b", true_), ("c", float_ 3.14)
     ]),
     ulet_ "r" (recordupdate_ (var_ "r") "c" (float_ 2.0)),
@@ -1279,7 +1275,7 @@ using sameSemantics in
 
 let recordWithLet = symbolize (
   bindall_
-  [ ulet_ "r" (record_ [
+  [ ulet_ "r" (urecord_ [
      ("f", bind_ (ulet_ "x" (int_ 3)) (addi_ (var_ "x") (int_ 1))),
      ("g", ulam_ "x" (var_ "x"))])
   , int_ 42
@@ -1289,7 +1285,7 @@ using sameSemantics in
 
 let recordWithLam = symbolize (
   bindall_
-  [ ulet_ "r" (record_ [
+  [ ulet_ "r" (urecord_ [
      ("foo", ulam_ "x" (var_ "x"))])
   , ulet_ "foo" (recordproj_ "foo" (var_ "r"))
   , app_ (var_ "foo") (int_ 42)
@@ -1527,12 +1523,12 @@ utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 1))) with char
 utest ocamlEvalChar (generateTypeAnnotated (get_ testSplit1 (int_ 2))) with char_ 'r' using eqExpr in
 
 -- eqsym
-let eqsymTest = (bind_ (ulet_ "s" (gensym_ unit_)) (eqsym_ (var_ "s") (var_ "s"))) in
+let eqsymTest = (bind_ (ulet_ "s" (gensym_ uunit_)) (eqsym_ (var_ "s") (var_ "s"))) in
 utest ocamlEvalBool (generateEmptyEnv eqsymTest) with true_ using eqExpr in
 
 -- sym2hash
 let sym2hashTest = symbolize (bindall_
-        [ ulet_ "x" (gensym_ unit_)
+        [ ulet_ "x" (gensym_ uunit_)
         , eqi_ (sym2hash_ (var_ "x")) (sym2hash_ (var_ "x"))]) in
 
 -- Float-Integer conversions
@@ -1584,7 +1580,7 @@ utest testSeededRandomNumber with generateEmptyEnv testSeededRandomNumber
 using sameSemantics in
 
 -- Time operations
-let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ unit_), divf_ (var_ "x") (var_ "x")] in
+let testWallTimeMs = bindall_ [ulet_ "x" (wallTimeMs_ uunit_), divf_ (var_ "x") (var_ "x")] in
 utest ocamlEvalFloat (generateEmptyEnv testWallTimeMs) with float_ 1.0 using eqExpr in
 
 let testSleepMs = symbolize (bind_ (sleepMs_ (int_ 10)) (int_ 5)) in
@@ -2122,7 +2118,7 @@ let tensorIteriIntTest =
   bind_
     (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
     (semi_ (tensorIteri_ tyint_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tyint_
                           (var_ "t")
@@ -2135,7 +2131,7 @@ let tensorIteriFloatTest =
   bind_
     (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
     (semi_ (tensorIteri_ tyfloat_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tyfloat_
                           (var_ "t")
@@ -2148,7 +2144,7 @@ let tensorIteriCharTest =
   bind_
     (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1'))))
     (semi_ (tensorIteri_ tychar_
-                         (ulam_ "i" (ulam_ "t" unit_))
+                         (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tychar_
                           (var_ "t")
@@ -2160,37 +2156,40 @@ with char_ '1' using eqExpr in
 -- Externals
 
 let generateWithExternals = lam ast.
-  match chooseAndGenerateExternals globalExternalMap ast with (m, ast) then
-    generateEmptyEnv ast
+  match typeLift ast with (env, ast) then
+    match generateTypeDecl env ast with (env, ast) then
+      let env = chooseExternalImpls globalExternalImplsMap env ast in
+      generate env ast
+    else never
   else never
 in
 
 let extZeroTest =
   bind_
-    (ext_ "testZero" false tyfloat_)
-    (var_ "testZero")
+    (ext_ "extTestZero" false tyfloat_)
+    (var_ "extTestZero")
 in
 utest ocamlEvalFloat (generateWithExternals extZeroTest)
 with float_ 0. using eqExpr in
 
 let extExpTest =
   bind_
-    (ext_ "testExp" false (tyarrow_ tyfloat_ tyfloat_))
-    (app_ (var_ "testExp") (float_ 0.))
+    (ext_ "extTestExp" false (tyarrow_ tyfloat_ tyfloat_))
+    (app_ (var_ "extTestExp") (float_ 0.))
 in
 utest ocamlEvalFloat (generateWithExternals extExpTest)
 with float_ 1. using eqExpr in
 
 let extListMapTest = symbolize (
 bind_
-  (ext_ "testListMap"
+  (ext_ "extTestListMap"
         false
         (tyarrows_ [tyarrow_ (tyvar_ "a") (tyvar_ "b"),
                     tyseq_ (tyvar_ "a"),
                     tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
-      (var_ "testListMap")
+      (var_ "extTestListMap")
         [ulam_ "x" (addi_ (var_ "x") (int_ 1)),
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
@@ -2200,20 +2199,69 @@ with int_ 1 using eqExpr in
 
 let extListConcatMapTest = symbolize (
 bind_
-  (ext_ "testListConcatMap"
+  (ext_ "extTestListConcatMap"
         false
         (tyarrows_ [tyarrow_ (tyvar_ "a") (tyseq_ (tyvar_ "b")),
                     tyseq_ (tyvar_ "a"),
                     tyseq_ (tyvar_ "b")]))
   (get_
     (appSeq_
-      (var_ "testListConcatMap")
+      (var_ "extTestListConcatMap")
         [ulam_ "x" (seq_ [addi_ (var_ "x") (int_ 1)]),
          seq_ [int_ 0, int_ 1]])
     (int_ 0)))
 in
 utest ocamlEvalInt (generateWithExternals extListConcatMapTest)
 with int_ 1 using eqExpr in
+
+-- Externals and Tensors
+let extGenarrIntNumDims = symbolize (
+bind_
+  (ext_ "extTestGenarrIntNumDims"
+        false
+        (tyarrow_ (tytensor_ tyint_) tyint_))
+    (app_ (var_ "extTestGenarrIntNumDims")
+          (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1)))))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrIntNumDims)
+with int_ 0 using eqExpr in
+
+let extGenarrFloatNumDims = symbolize (
+bind_
+  (ext_ "extTestGenarrFloatNumDims"
+        false
+        (tyarrow_ (tytensor_ tyfloat_) tyint_))
+    (app_ (var_ "extTestGenarrFloatNumDims")
+          (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.)))))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrFloatNumDims)
+with int_ 0 using eqExpr in
+
+let extGenarrIntSliceLeft = symbolize (
+bind_
+  (ext_ "extTestGenarrIntSliceLeft"
+        false
+        (tyarrows_ [tytensor_ tyint_, tyseq_ tyint_, tytensor_ tyint_]))
+    (tensorRank_ tyint_
+      (appSeq_ (var_ "extTestGenarrIntSliceLeft")
+               [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (int_ 1)),
+                seq_ [int_ 0]])))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrIntSliceLeft)
+with int_ 0 using eqExpr in
+
+let extGenarrFloatSliceLeft = symbolize (
+bind_
+  (ext_ "extTestGenarrFloatSliceLeft"
+        false
+        (tyarrows_ [tytensor_ tyfloat_, tyseq_ tyint_, tytensor_ tyfloat_]))
+    (tensorRank_ tyfloat_
+      (appSeq_ (var_ "extTestGenarrFloatSliceLeft")
+               [tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "x" (float_ 1.)),
+                seq_ [int_ 0]])))
+in
+utest ocamlEvalInt (generateWithExternals extGenarrFloatSliceLeft)
+with int_ 0 using eqExpr in
 
 -- TODO(larshum, 2021-03-06): Add tests for boot parser intrinsics
 ()

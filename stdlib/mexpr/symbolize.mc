@@ -538,7 +538,7 @@ use TestLang in
 
 let base = (ulam_ "x" (ulam_ "y" (app_ (var_ "x") (var_ "y")))) in
 
-let rec = record_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
+let rec = urecord_ [("k1", base), ("k2", (int_ 1)), ("k3", (int_ 2))] in
 
 let letin = bind_ (ulet_ "x" rec) (app_ (var_ "x") base) in
 
@@ -556,25 +556,25 @@ let const = int_ 1 in
 
 let data = bind_ (ucondef_ "Test") (conapp_ "Test" base) in
 
-let varpat = match_ unit_ (pvar_ "x") (var_ "x") base in
+let varpat = match_ uunit_ (pvar_ "x") (var_ "x") base in
 
 let recpat =
   match_ base
     (prec_ [("k1", (pvar_ "x")), ("k2", pvarw_), ("k3", (pvar_ "x"))])
-    (var_ "x") unit_ in
+    (var_ "x") uunit_ in
 
 let datapat =
   bind_ (ucondef_ "Test")
-    (match_ unit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") unit_) in
+    (match_ uunit_ (pcon_ "Test" (pvar_ "x")) (var_ "x") uunit_) in
 
 let litpat =
-  match_ unit_ (pint_ 1)
-    (match_ unit_ (pchar_ 'c')
-       (match_ unit_ (ptrue_)
+  match_ uunit_ (pint_ 1)
+    (match_ uunit_ (pchar_ 'c')
+       (match_ uunit_ (ptrue_)
             base
-          unit_)
-       unit_)
-    unit_ in
+          uunit_)
+       uunit_)
+    uunit_ in
 
 let ut = utest_ base base base in
 

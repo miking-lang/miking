@@ -144,25 +144,7 @@ module CArray = struct
 
   type int_elt = Bigarray.int_elt
 
-  type ('a, 'b) kind =
-    | CArrayFloat : (float, float_elt) kind
-    | Int : (int, int_elt) kind
-
   type ('a, 'b) t = ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
-
-  let to_ba_kind : type a b. (a, b) kind -> (a, b) Bigarray.kind = function
-    | CArrayFloat ->
-        Bigarray.Float64
-    | Int ->
-        Bigarray.Int
-
-  let of_ba_kind : type a b. (a, b) Bigarray.kind -> (a, b) kind = function
-    | Bigarray.Float64 ->
-        CArrayFloat
-    | Bigarray.Int ->
-        Int
-    | _ ->
-        failwith "Unsupported Bigarray.kind"
 
   let populate f t shape =
     let n = prod shape in
@@ -173,27 +155,15 @@ module CArray = struct
         Bigarray.Genarray.set t is (f is)
       done
 
-  let create :
-      type a b. (a, b) kind -> int array -> (int array -> a) -> (a, b) t =
-    function
-    | CArrayFloat ->
-        fun shape f ->
-          let t =
-            Bigarray.Genarray.create Bigarray.float64 Bigarray.c_layout shape
-          in
-          populate f t shape ; t
-    | Int ->
-        fun shape f ->
-          let t =
-            Bigarray.Genarray.create Bigarray.int Bigarray.c_layout shape
-          in
-          populate f t shape ; t
+  let create_int shape f =
+    let t = Bigarray.Genarray.create Bigarray.int Bigarray.c_layout shape in
+    populate f t shape ; t
 
-  let kind t = Bigarray.Genarray.kind t |> of_ba_kind
-
-  let int = Int
-
-  let float = CArrayFloat
+  let create_float shape f =
+    let t =
+      Bigarray.Genarray.create Bigarray.float64 Bigarray.c_layout shape
+    in
+    populate f t shape ; t
 
   let get_exn = Bigarray.Genarray.get
 
@@ -212,11 +182,6 @@ module CArray = struct
   let sub_exn = Bigarray.Genarray.sub_left
 
   let iteri f t = mk_iteri rank shape slice_exn f t
-
-  let of_array kind a =
-    a
-    |> Bigarray.Array1.of_array (to_ba_kind kind) Bigarray.c_layout
-    |> Bigarray.genarray_of_array1
 
   let data_to_array t =
     let n = prod (shape t) in

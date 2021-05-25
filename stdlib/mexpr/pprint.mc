@@ -1215,7 +1215,7 @@ let func_recget =
     ulet_ "recget" (
         record_add "i" (int_ 5) (
         record_add "s" (str_ "hel\nlo!")
-        record_empty))
+        urecord_empty))
 in
 
 -- let recconcs = lam rec. lam s. {rec with s = concat rec.s s} in

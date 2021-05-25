@@ -724,11 +724,11 @@ utest a1 with a2 using eqExpr in
 utest eqExpr a1 lam1 with false in
 
 -- Records
-let r1 = record_ [("a",lam1), ("b",a1), ("c",a2)] in
-let r2 = record_ [("b",a1), ("a",lam2), ("c",a2)] in
-let r3e = record_ [("a",lam1), ("b",a1), ("d",a2)] in
-let r4e = record_ [("a",lam1), ("b",a1), ("c",lam2)] in
-let r5e = record_ [("a",lam1), ("b",a1), ("c",a2), ("d",lam2)] in
+let r1 = urecord_ [("a",lam1), ("b",a1), ("c",a2)] in
+let r2 = urecord_ [("b",a1), ("a",lam2), ("c",a2)] in
+let r3e = urecord_ [("a",lam1), ("b",a1), ("d",a2)] in
+let r4e = urecord_ [("a",lam1), ("b",a1), ("c",lam2)] in
+let r5e = urecord_ [("a",lam1), ("b",a1), ("c",a2), ("d",lam2)] in
 utest r1 with r2 using eqExpr in
 utest eqExpr r1 r3e with false in
 utest eqExpr r1 r4e with false in
