@@ -1340,6 +1340,7 @@ automatically format ocaml source code.
 We are currently using this package at version `0.16.0`. To pin and/or install
 the package at this version using `opam` do
 ```
+opam pin ocaml-migrate-parsetree 2.1.0
 opam pin ocamlformat 0.16.0
 ```
 Then you can then run `dune build @fmt` to see a
