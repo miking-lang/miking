@@ -1355,8 +1355,7 @@ should be added to `globalExternalImplsMap` in
 [./stdlib/ocaml/external-includes.mc](./stdlib/ocaml/external-includes.mc).
 
 Morever, depending on the type of the external you might have to extend the
-`externalMarshal` and `externalMarshalCost` function in
-[./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
+definition in [./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
 
 ## Contributing
 
