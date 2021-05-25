@@ -1133,7 +1133,7 @@ integration you need to install the
 [Sundials](https://computing.llnl.gov/projects/sundials) library on
 your system.
 
-This involves installing the C library. On `ubuntu 18.04` you can issue:
+This involves installing the C library. On `ubuntu 20.04` you can issue:
 
 ```
 sudo apt-get install libsundials-dev
@@ -1154,13 +1154,14 @@ opam install sundialsml
 ```
 
 `mi` will automatically be compiled with sundials support when the `sundialsml` package is installed.
-To run the sundials-specific test suite, set the `MI_TEST_SUNDIALS` variable before running `make test`:
+To run the sundials-specific test suite, use the command:
 
 ```
-MI_TEST_SUNDIALS=1 make test
+make test-sundials
 ```
 
-To install for the current user, run `make install` as usual.
+To install for the current user, run `make install` as usual. The sundials
+interface can only be used in compiled code.
 
 ### Python
 Another optional feature is Python intrinsics, which allow calling Python code
