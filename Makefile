@@ -65,6 +65,9 @@ test-boot-compile:
 test-compile: build/mi
 	@$(MAKE) -s -f test-compile.mk all
 
+test-sundials: build/mi
+	@$(MAKE) -s -f test-sundials.mk all
+
 test-run: build/mi
 	@$(MAKE) -s -f test-run.mk all
 
@@ -79,9 +82,6 @@ test-boot-base: boot
 
 test-boot-par: build/mi
 	@$(MAKE) -s -f test-boot.mk par
-
-test-boot-sundials: build/mi
-	@$(MAKE) -s -f test-boot.mk sundials
 
 test-boot-py: build/mi
 	@$(MAKE) -s -f test-boot.mk py
