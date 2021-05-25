@@ -622,8 +622,8 @@ let const_has_side_effect = function
   | CPar _ | CSd _ | CPy _ ->
       true
 
-(* Converts a sequence of terms to a ustring *)
-let tmseq2ustring fi s =
+(* Converts a sequence of terms to a sequence of integers *)
+let tmseq2seqOfInt fi s =
   Mseq.Helpers.map
     (fun x ->
       match x with
@@ -632,7 +632,9 @@ let tmseq2ustring fi s =
       | _ ->
           raise_error fi "The term is not a string" )
     s
-  |> Mseq.Helpers.to_ustring
+
+(* Converts a sequence of terms to a ustring *)
+let tmseq2ustring fi s = tmseq2seqOfInt fi s |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =

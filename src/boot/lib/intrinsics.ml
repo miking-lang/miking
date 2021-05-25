@@ -1,54 +1,143 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t = 'a array Rope.t
+  type 'a t =
+    | FingerTreeSeq of 'a BatFingerTree.t
+    | ListSeq of 'a List.t
+    | RopeSeq of 'a array Rope.t
 
-  let create = Rope.create_array
+  let create_rope len f = RopeSeq (Rope.create_array len f)
 
-  let empty = Rope.empty_array
+  let empty_rope = RopeSeq Rope.empty_array
 
-  let length = Rope.length_array
+  let create = create_rope
 
-  let concat = Rope.concat_array
+  let empty = empty_rope
 
-  let get = Rope.get_array
+  let length = function
+    | RopeSeq s ->
+        Rope.length_array s
+    | _ ->
+        failwith "Not implemented"
 
-  let set = Rope.set_array
+  let concat s1 s2 =
+    match (s1, s2) with
+    | RopeSeq s1, RopeSeq s2 ->
+        RopeSeq (Rope.concat_array s1 s2)
+    | _ ->
+        failwith "Not implemented"
 
-  let cons = Rope.cons_array
+  let get = function
+    | RopeSeq s ->
+        Rope.get_array s
+    | _ ->
+        failwith "Not implemented"
 
-  let snoc = Rope.snoc_array
+  let set s i v =
+    match s with
+    | RopeSeq s ->
+        RopeSeq (Rope.set_array s i v)
+    | _ ->
+        failwith "Not implemented"
 
-  let reverse = Rope.reverse_array
+  let cons v = function
+    | RopeSeq s ->
+        RopeSeq (Rope.cons_array v s)
+    | _ ->
+        failwith "Not implemented"
 
-  let split_at = Rope.split_at_array
+  let snoc s v =
+    match s with
+    | RopeSeq s ->
+        RopeSeq (Rope.snoc_array s v)
+    | _ ->
+        failwith "Not implemented"
 
-  let subsequence = Rope.sub_array
+  let reverse = function
+    | RopeSeq s ->
+        RopeSeq (Rope.reverse_array s)
+    | _ ->
+        failwith "Not implemented"
+
+  let split_at s i =
+    match s with
+    | RopeSeq s ->
+        let s1, s2 = Rope.split_at_array s i in
+        (RopeSeq s1, RopeSeq s2)
+    | _ ->
+        failwith "Not implemented"
+
+  let subsequence s a b =
+    match s with
+    | RopeSeq s ->
+        RopeSeq (Rope.sub_array s a b)
+    | _ ->
+        failwith "Not implemented"
 
   module Helpers = struct
-    let of_list = Rope.Convert.of_list_array
+    let of_list l = RopeSeq (Rope.Convert.of_list_array l)
 
-    let to_list = Rope.Convert.to_list_array
+    let to_list = function
+      | RopeSeq s ->
+          Rope.Convert.to_list_array s
+      | _ ->
+          failwith "Not implemented"
 
-    let of_array = Rope.Convert.of_array_array
+    let of_array a = RopeSeq (Rope.Convert.of_array_array a)
 
-    let to_array = Rope.Convert.to_array_array
+    let to_array = function
+      | RopeSeq s ->
+          Rope.Convert.to_array_array s
+      | _ ->
+          failwith "Not implemented"
 
-    let of_ustring = Rope.Convert.of_ustring_array
+    let of_ustring u = RopeSeq (Rope.Convert.of_ustring_array u)
 
-    let to_ustring = Rope.Convert.to_ustring_array
+    let to_ustring = function
+      | RopeSeq s ->
+          Rope.Convert.to_ustring_array s
+      | _ ->
+          failwith "Not implemented"
 
-    let equal = Rope.equal_array
+    let equal f s1 s2 =
+      match (s1, s2) with
+      | RopeSeq s1, RopeSeq s2 ->
+          Rope.equal_array f s1 s2
+      | _ ->
+          failwith "Not implemented"
 
-    let map = Rope.map_array_array
+    let map f = function
+      | RopeSeq s ->
+          RopeSeq (Rope.map_array_array f s)
+      | _ ->
+          failwith "Not implemented"
 
-    let fold_left = Rope.foldl_array
+    let fold_left f a = function
+      | RopeSeq s ->
+          Rope.foldl_array f a s
+      | _ ->
+          failwith "Not implemented"
 
-    let fold_right = Rope.foldr_array
+    let fold_right f s a =
+      match s with
+      | RopeSeq s ->
+          Rope.foldr_array f s a
+      | _ ->
+          failwith "Not implemented"
 
-    let combine = Rope.combine_array_array
+    let combine s1 s2 =
+      match (s1, s2) with
+      | RopeSeq s1, RopeSeq s2 ->
+          RopeSeq (Rope.combine_array_array s1 s2)
+      | _ ->
+          failwith "Not implemented"
 
-    let fold_right2 = Rope.foldr2_array
+    let fold_right2 f s1 s2 a =
+      match (s1, s2) with
+      | RopeSeq s1, RopeSeq s2 ->
+          Rope.foldr2_array f s1 s2 a
+      | _ ->
+          failwith "Not implemented"
   end
 end
 

@@ -1209,7 +1209,7 @@ let delta eval env fi c v =
       in
       TmConst (fi, CbootParserParseMExprString (Some keywords))
   | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString keywords (tmseq2ustring fi seq) in
+      let t = Bootparser.parseMExprString keywords (tmseq2seqOfInt fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
@@ -1222,7 +1222,7 @@ let delta eval env fi c v =
       in
       TmConst (fi, CbootParserParseMCoreFile (Some keywords))
   | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2ustring fi seq) in
+      let t = Bootparser.parseMCoreFile keywords (tmseq2seqOfInt fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi

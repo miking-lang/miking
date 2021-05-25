@@ -1,7 +1,10 @@
 open Ustring.Op
 
 module Mseq : sig
-  type 'a t
+  type 'a t =
+    | FingerTreeSeq of 'a BatFingerTree.t
+    | ListSeq of 'a List.t
+    | RopeSeq of 'a array Rope.t
 
   val create : int -> (int -> 'a) -> 'a t
 
