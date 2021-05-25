@@ -143,7 +143,7 @@ lang TypeLift = Cmp
     let emptyTypeLiftEnv : TypeLiftEnv = {
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
-      labels = setEmpty (seqCmp subi),
+      labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
 
