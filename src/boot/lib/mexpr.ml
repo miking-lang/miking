@@ -154,6 +154,18 @@ let arity = function
       2
   | Ccreate (Some _) ->
       1
+  | CcreateFingerTree None ->
+      2
+  | CcreateFingerTree (Some _) ->
+      1
+  | CcreateList None ->
+      2
+  | CcreateList (Some _) ->
+      1
+  | CcreateRope None ->
+      2
+  | CcreateRope (Some _) ->
+      1
   | Clength ->
       1
   | Cconcat None ->
@@ -677,6 +689,27 @@ let delta eval env fi c v =
       let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
       TmSeq (tm_info f, Mseq.create n createf)
   | Ccreate None, _ ->
+      fail_constapp fi
+  | CcreateFingerTree None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateFingerTree (Some n))
+  | CcreateFingerTree (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_fingertree n createf)
+  | CcreateFingerTree None, _ ->
+      fail_constapp fi
+  | CcreateList None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateList (Some n))
+  | CcreateList (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_list n createf)
+  | CcreateList None, _ ->
+      fail_constapp fi
+  | CcreateRope None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateRope (Some n))
+  | CcreateRope (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_rope n createf)
+  | CcreateRope None, _ ->
       fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))

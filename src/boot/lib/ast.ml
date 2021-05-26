@@ -98,6 +98,9 @@ and const =
   | Cint2char
   (* MCore intrinsic: sequences *)
   | Ccreate of int option
+  | CcreateFingerTree of int option
+  | CcreateList of int option
+  | CcreateRope of int option
   | Clength
   | Cconcat of tm Mseq.t option
   | Cget of tm Mseq.t option
@@ -529,6 +532,9 @@ let const_has_side_effect = function
       false
   (* MCore intrinsic: sequences *)
   | Ccreate _
+  | CcreateFingerTree _
+  | CcreateList _
+  | CcreateRope _
   | Clength
   | Cconcat _
   | Cget _

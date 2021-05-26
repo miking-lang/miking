@@ -117,6 +117,12 @@ lang SeqOpTypeAst = SeqOpAst
   | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
+  | CCreateFingerTree _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
+  | CCreateList _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
+  | CCreateRope _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
   | CSplitAt _ -> tyarrows_ [tygenericseq_ "a", tyint_,
                              tytuple_ [tygenericseq_ "a", tygenericseq_ "a"]]
   | CSubsequence _ -> tyarrows_ [tygenericseq_ "a", tyint_, tyint_,

@@ -704,6 +704,9 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CLength _ -> "length"
   | CReverse _ -> "reverse"
   | CCreate _ -> "create"
+  | CCreateFingerTree _ -> "createFingerTree"
+  | CCreateList _ -> "createList"
+  | CCreateRope _ -> "createRope"
   | CSplitAt _ -> "splitAt"
   | CSubsequence _ -> "subsequence"
 end
