@@ -171,7 +171,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
-  | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) ->
+  | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
     generate env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
     generate env (bind_

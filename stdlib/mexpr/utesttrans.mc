@@ -363,7 +363,7 @@ let _pprintRecord = use MExprAst in
       mapMapWithKey (lam id. lam. pvar_ (sidToString id)) fields
     in
     let recordPattern =
-      PatRecord {bindings = recordBindings, info = NoInfo ()}
+      PatRecord {bindings = recordBindings, info = NoInfo (), ty = tyunknown_}
     in
     let pprintSeq =
       match record2tuple fields with Some types then
@@ -407,8 +407,8 @@ let _equalRecord = use MExprAst in
   let rhsPrefix = "rhs_" in
   let matchPattern =
     ptuple_ [
-      PatRecord {bindings = recordBindings lhsPrefix, info = NoInfo ()},
-      PatRecord {bindings = recordBindings rhsPrefix, info = NoInfo ()}] in
+      PatRecord {bindings = recordBindings lhsPrefix, info = NoInfo (), ty = tyunknown_},
+      PatRecord {bindings = recordBindings rhsPrefix, info = NoInfo (), ty = tyunknown_}] in
   let fieldEquals = lam seq. lam id. lam fieldTy.
     let fieldEqName = getEqualFuncName env fieldTy in
     let lhs = var_ (join [lhsPrefix, sidToString id]) in

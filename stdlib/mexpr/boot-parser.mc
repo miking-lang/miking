@@ -209,47 +209,57 @@ lang BootParser = MExprAst + ConstTransformer
   sem matchPat (t:Unknown) =
   | 400 /-PatNamed-/ ->
     PatNamed {ident = strToPatName (gstr t 0),
-            info = ginfo t 0}
+            info = ginfo t 0,
+            ty = tyunknown_}
   | 401 /-PatSeqTot-/ ->
     PatSeqTot {pats = create (glistlen t 0) (lam n. gpat t n),
-             info = ginfo t 0}
+             info = ginfo t 0,
+             ty = tyunknown_}
   | 402 /-PatSeqEdge-/ ->
     let len = glistlen t 0 in
     PatSeqEdge {prefix = create len (lam n. gpat t n),
               middle = strToPatName (gstr t 0),
               postfix = create (glistlen t 1) (lam n. gpat t (addi n len)),
-              info = ginfo t 0}
+              info = ginfo t 0,
+              ty = tyunknown_}
   | 403 /-PatRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
     PatRecord {bindings =
                mapFromSeq cmpSID
                  (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-               info = ginfo t 0}
+               info = ginfo t 0,
+               ty = tyunknown_}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
              subpat = gpat t 0,
-             info = ginfo t 0}
-  | 405 /-PatInt-/ ->
+             info = ginfo t 0,
+             ty = tyunknown_}
+ | 405 /-PatInt-/ ->
      PatInt {val = gint t 0,
-             info = ginfo t 0}
-  | 406 /-PatChar-/ ->
+             info = ginfo t 0,
+             ty = tyint_}
+ | 406 /-PatChar-/ ->
      PatChar {val = int2char (gint t 0),
-              info = ginfo t 0}
-  | 407 /-PatBool-/ ->
+              info = ginfo t 0,
+              ty = tychar_}
+ | 407 /-PatBool-/ ->
      PatBool {val = eqi (gint t 0) 1,
-              info = ginfo t 0}
-  | 408 /-PatAnd-/ ->
+              info = ginfo t 0,
+              ty = tybool_}
+ | 408 /-PatAnd-/ ->
      PatAnd {lpat = gpat t 0,
              rpat = gpat t 1,
-             info = ginfo t 0}
-  | 409 /-PatOr-/ ->
+             info = ginfo t 0,
+             ty = tyunknown_}
+ | 409 /-PatOr-/ ->
      PatOr {lpat = gpat t 0,
             rpat = gpat t 1,
-            info = ginfo t 0}
-  | 410 /-PatNot-/ ->
+            info = ginfo t 0,
+            ty = tyunknown_}
+ | 410 /-PatNot-/ ->
      PatNot {subpat = gpat t 0,
-             info = ginfo t 0}
-
+             info = ginfo t 0,
+             ty = tyunknown_}
 
   -- Get info help function
   sem ginfo (t:Unknown) =
