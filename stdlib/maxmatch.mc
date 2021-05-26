@@ -5,7 +5,7 @@
 include "matrix.mc"
 include "math.mc"
 include "common.mc"
- 
+
 type Slack = {
   val : Int,                    -- value of slack
   u   : Int,                    -- u in U associated with this slack
@@ -76,7 +76,7 @@ let debugShowState = lam state.
 -- Helper functions and functions to manipulate the state --
 ------------------------------------------------------------
 
-let cmpSlack = lam l. lam r. subi l.val r.val
+let cmpSlack = lam l : Slack. lam r : Slack. subi l.val r.val
 
 let isMatch = lam x. neqi x (negi 1)
 let isPerfectMatch = all isMatch
@@ -86,41 +86,41 @@ let findNonCovered = lam x.
                   (index (lam x. not (isMatch x)) x)
 
 -- lu[u] + lv[v] - w[u][v]
-let slackVal = lam u. lam v. lam state.
+let slackVal = lam u. lam v. lam state : State.
   subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.w u v)
 
 -- T <- {}
-let emptyT = lam state. {state with ts = make state.n false}
+let emptyT = lam state : State. {state with ts = make state.n false}
 
 -- v in T
-let memT = lam v. lam state. get state.ts v
+let memT = lam v. lam state : State. get state.ts v
 
 -- T <- T union {v}
-let insertT = lam v. lam state. {state with ts = set state.ts v true}
+let insertT = lam v. lam state : State. {state with ts = set state.ts v true}
 
 -- S <- {}
-let emptyS = lam state. {state with ss = []}
+let emptyS = lam state : State. {state with ss = []}
 
 -- S <- S union {u}
-let insertS = lam u. lam state. {state with ss = cons u state.ss}
+let insertS = lam u. lam state : State. {state with ss = cons u state.ss}
 
 -- all v not in T
-let vsNotInT = lam state. filter (lam v. not (memT v state)) state.vs
+let vsNotInT = lam state : State. filter (lam v. not (memT v state)) state.vs
 
 -- assigns u with v
-let assign = lam u. lam v. lam state.
+let assign = lam u. lam v. lam state : State.
   {{state with mus = set state.mus u v} with mvs = set state.mvs v u}
 
-let updateSlack = lam v. lam f. lam state.
+let updateSlack = lam v. lam f. lam state : State.
   {state with slacks = set state.slacks v (f (get state.slacks v))}
 
-let updateLu = lam u. lam f. lam state.
+let updateLu = lam u. lam f. lam state : State.
   {state with lus = set state.lus u (f (get state.lus u))}
 
-let updateLv = lam v. lam f. lam state.
+let updateLv = lam v. lam f. lam state : State.
   {state with lvs = set state.lvs v (f (get state.lvs v))}
 
-let updatePred = lam v. lam u. lam state.
+let updatePred = lam v. lam u. lam state : State.
   {state with preds = set state.preds v u}
 
 --------------------
@@ -128,20 +128,20 @@ let updatePred = lam v. lam u. lam state.
 --------------------
 
 -- Improve labels and adjusts slack with delta.
-let improveLabels = lam delta. lam state.
+let improveLabels = lam delta. lam state : State.
   let f = lam state. lam u. updateLu u (lam lu. subi lu delta) state in
 
-  let g = lam state. lam v.
+  let g = lam state : State. lam v.
     if memT v state then updateLv v (lam lv. addi lv delta) state
-    else updateSlack v (lam s. {s with val = subi s.val delta}) state
+    else updateSlack v (lam s : Slack. {s with val = subi s.val delta}) state
   in
 
-  (compose (lam state. foldl f state state.ss)
-           (lam state. foldl g state state.vs)) state
+  (compose (lam state : State. foldl f state state.ss)
+           (lam state : State. foldl g state state.vs)) state
 
 recursive
   -- Improves matching by flipping edges in the augmenting path ending in v.
-  let improveMatching = lam v. lam state.
+  let improveMatching = lam v. lam state : State.
     let u = get state.preds v in
     let v1 = get state.mus u in
     let state = assign u v state in
@@ -151,12 +151,12 @@ end
 
 -- Updates slacks according to slackv <- min slackv (slack u v) for v not in
 -- T. Applied everytime a new u is inserted in S.
-let updateSlacks = lam u. lam state.
-  let f = lam state. lam v.
-    let s = get state.slacks v in
+let updateSlacks = lam u. lam state : State.
+  let f = lam state : State. lam v.
+    let s : Slack = get state.slacks v in
     let newVal = slackVal u v state in
     if gti s.val newVal then
-      updateSlack v (lam s. {{s with val = newVal} with u = u}) state
+      updateSlack v (lam s : Slack. {{s with val = newVal} with u = u}) state
     else state
   in
   foldl f state (vsNotInT state)
@@ -164,17 +164,17 @@ let updateSlacks = lam u. lam state.
 recursive
   -- Search for augmenting paths in the equality graph, possibly updating
   -- labels along the way.
-  let augment = lam state.
-  let s =
+  let augment = lam state : State.
+  let s : Slack =
     -- min slack over v's not in T
     minOrElse (lam. error "undefined")
               cmpSlack
-              (filter (lam s. not (memT s.v state)) state.slacks)
+              (filter (lam s : Slack. not (memT s.v state)) state.slacks)
   in
 
   -- Since we can only expand the matching in the equality graph, e.g. slack =
   -- 0, to ensure a maximal matching, we might have to improve the labels.
-  let maybeImproveLabels = lam state.
+  let maybeImproveLabels = lam state : State.
     if gti s.val 0 then improveLabels s.val state
     else state
   in
@@ -189,7 +189,7 @@ recursive
     augment (updateSlacks u1 (insertS u1 state)) -- update S, slacks, and continue the search.
 end
 
-let formatResult = lam state.
+let formatResult = lam state : State.
   { incidenceU = state.mus
   , incidenceV = state.mvs
   , weight = foldl1 addi (concat state.lus state.lvs) }
@@ -198,7 +198,7 @@ let formatResult = lam state.
 -- matrix w. This implementation uses slack variables to ensure sub O(n^4) time
 -- complexity.
 let maxmatchHungarian = lam w.
-  recursive let work = lam state. lam k.
+  recursive let work = lam state : State. lam k.
     if isPerfectMatch state.mus then formatResult state
     -- We should find a complete matching in at most n steps.
     else if gti k state.n then error "Failed to find maximal matching"
