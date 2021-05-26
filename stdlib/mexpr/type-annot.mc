@@ -323,8 +323,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
             ] in
             infoErrorExit t.info msg
         in
-        {{binding with body = body}
-                  with ty = tyBody}
+        {{{binding with body = body}
+                   with ty = tyBody}
+                   with tyBody = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then
