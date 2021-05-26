@@ -49,10 +49,10 @@
 include "name.mc"
 include "option.mc"
 
--------------
--- C TYPES --
--------------
-lang CTypeAst
+-----------------------------
+-- C TYPES AND EXPRESSIONS --
+-----------------------------
+lang CExprTypeAst
 
   syn CType =
   | CTyVar    { id: Name }
@@ -62,18 +62,10 @@ lang CTypeAst
   | CTyVoid   {}
   | CTyPtr    { ty: CType }
   | CTyFun    { ret: CType, params: [CType] }
-  | CTyArray  { ty: CType, size: Option Int }
+  | CTyArray  { ty: CType, size: Option CExpr }
   | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
   | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
   | CTyEnum   { id: Option Name, mem: Option [Name] }
-
-end
-
-
--------------------
--- C EXPRESSIONS --
--------------------
-lang CExprAst = CTypeAst
 
   syn CExpr =
   | CEVar        /- Variables -/            { id: Name }
@@ -154,7 +146,7 @@ end
 --------------------
 -- C INITIALIZERS --
 --------------------
-lang CInitAst = CExprAst
+lang CInitAst = CExprTypeAst
 
   syn CInit =
   | CIExpr { expr: CExpr }
@@ -173,7 +165,7 @@ end
 ------------------
 -- C STATEMENTS --
 ------------------
-lang CStmtAst = CTypeAst + CInitAst + CExprAst
+lang CStmtAst = CInitAst + CExprTypeAst
   -- We force if, switch, and while to introduce new scopes (by setting the
   -- body type to [CStmt] rather than CStmt). It is allowed in C to have a
   -- single (i.e., not compound) statement as the body, but this statement is
@@ -257,7 +249,7 @@ end
 -----------------
 -- C TOP-LEVEL --
 -----------------
-lang CTopAst = CTypeAst + CInitAst + CStmtAst
+lang CTopAst = CExprTypeAst + CInitAst + CStmtAst
 
   syn CTop =
   -- Type definitions are supported at this level.
@@ -280,7 +272,7 @@ end
 -----------------------
 -- COMBINED FRAGMENT --
 -----------------------
-lang CAst = CExprAst + CTypeAst + CInitAst + CStmtAst + CTopAst
+lang CAst = CExprTypeAst + CInitAst + CStmtAst + CTopAst
 
 
 ---------------
