@@ -2,7 +2,6 @@
 -- matching on weighted bipartite graph G=(U,V,E). Implementation based off
 -- https://gist.github.com/KartikTalwar/3158534
 
-include "matrix.mc"
 include "math.mc"
 include "common.mc"
 
@@ -29,11 +28,13 @@ type State = {
 -- Costructs initial state from weight-matrix w.
 let preliminaries : [[Int]] -> State =
 lam w.
-  let d = matrixSize w in
+  let d = (length w, length (get w 0)) in
   let n = d.0 in
   if neqi d.1 n then error "Expected square weight matrix"
   else
-  let vs = unfoldr (lam a. if eqi a n then None () else Some (a, addi a 1)) 0 in
+  let vs =
+    unfoldr (lam a. if eqi a n then None () else Some (a, addi a 1)) 0
+  in
   let negv = make n (negi 1) in
   let zerov = make n 0 in
     {
@@ -87,7 +88,7 @@ let findNonCovered = lam x.
 
 -- lu[u] + lv[v] - w[u][v]
 let slackVal = lam u. lam v. lam state : State.
-  subi (addi (get state.lus u) (get state.lvs v)) (matrixGet state.w u v)
+  subi (addi (get state.lus u) (get state.lvs v)) (get (get state.w u) v)
 
 -- T <- {}
 let emptyT = lam state : State. {state with ts = make state.n false}
