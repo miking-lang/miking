@@ -2,140 +2,226 @@ open Ustring.Op
 
 module Mseq = struct
   type 'a t =
-    | FingerTreeSeq of 'a BatFingerTree.t
-    | ListSeq of 'a List.t
-    | RopeSeq of 'a array Rope.t
+    | FingerTree of 'a BatFingerTree.t
+    | List of 'a List.t
+    | Rope of 'a array Rope.t
 
-  let create_rope len f = RopeSeq (Rope.create_array len f)
+  let create_rope len f = Rope (Rope.create_array len f)
 
-  let empty_rope = RopeSeq Rope.empty_array
+  let create_list len f = List (List.init len f)
+
+  let empty_rope = Rope Rope.empty_array
+
+  let empty_list = List []
 
   let create = create_rope
 
   let empty = empty_rope
 
   let length = function
-    | RopeSeq s ->
+    | Rope s ->
         Rope.length_array s
+    | List s ->
+        List.length s
     | _ ->
         failwith "Not implemented"
 
   let concat s1 s2 =
     match (s1, s2) with
-    | RopeSeq s1, RopeSeq s2 ->
-        RopeSeq (Rope.concat_array s1 s2)
+    | Rope s1, Rope s2 ->
+        Rope (Rope.concat_array s1 s2)
+    | List s1, List s2 ->
+        List (s1 @ s2)
     | _ ->
         failwith "Not implemented"
 
   let get = function
-    | RopeSeq s ->
+    | Rope s ->
         Rope.get_array s
+    | List s ->
+        List.nth s
     | _ ->
         failwith "Not implemented"
 
   let set s i v =
     match s with
-    | RopeSeq s ->
-        RopeSeq (Rope.set_array s i v)
+    | Rope s ->
+        Rope (Rope.set_array s i v)
+    | List s ->
+        let rec set i v s acc =
+          match (i, s) with
+          | _, [] ->
+              failwith "Out of bounds access in sequence"
+          | 0, _ :: xs ->
+              List.rev acc @ (v :: xs)
+          | i, x :: xs ->
+              set (i - 1) v xs (x :: acc)
+        in
+        List (set i v s [])
     | _ ->
         failwith "Not implemented"
 
   let cons v = function
-    | RopeSeq s ->
-        RopeSeq (Rope.cons_array v s)
+    | Rope s ->
+        Rope (Rope.cons_array v s)
+    | List s ->
+        List (v :: s)
     | _ ->
         failwith "Not implemented"
 
   let snoc s v =
     match s with
-    | RopeSeq s ->
-        RopeSeq (Rope.snoc_array s v)
+    | Rope s ->
+        Rope (Rope.snoc_array s v)
+    | List s ->
+        List (s @ [v])
     | _ ->
         failwith "Not implemented"
 
   let reverse = function
-    | RopeSeq s ->
-        RopeSeq (Rope.reverse_array s)
+    | Rope s ->
+        Rope (Rope.reverse_array s)
+    | List s ->
+        List (List.rev s)
     | _ ->
         failwith "Not implemented"
 
   let split_at s i =
     match s with
-    | RopeSeq s ->
+    | Rope s ->
         let s1, s2 = Rope.split_at_array s i in
-        (RopeSeq s1, RopeSeq s2)
+        (Rope s1, Rope s2)
+    | List s ->
+        let rec split_at_rev l r = function
+          | 0 ->
+              (l, r)
+          | i ->
+              split_at_rev (List.hd r :: l) (List.tl r) (i - 1)
+        in
+        let l, r = split_at_rev [] s i in
+        (List (List.rev l), List r)
     | _ ->
         failwith "Not implemented"
 
   let subsequence s a b =
     match s with
-    | RopeSeq s ->
-        RopeSeq (Rope.sub_array s a b)
+    | Rope s ->
+        Rope (Rope.sub_array s a b)
+    | List s ->
+        let rec subsequence_rev acc s i =
+          match s with
+          | _ :: xs when i < a ->
+              subsequence_rev acc xs (i + 1)
+          | x :: xs when i < b ->
+              subsequence_rev (x :: acc) xs (i + 1)
+          | _ ->
+              acc
+        in
+        List (subsequence_rev [] s 0 |> List.rev)
     | _ ->
         failwith "Not implemented"
 
   module Helpers = struct
-    let of_list l = RopeSeq (Rope.Convert.of_list_array l)
+    let of_list l = Rope (Rope.Convert.of_list_array l)
+
+    let of_list_rope l = Rope (Rope.Convert.of_list_array l)
+
+    let of_list_list l = List l
 
     let to_list = function
-      | RopeSeq s ->
+      | Rope s ->
           Rope.Convert.to_list_array s
+      | List s ->
+          s
       | _ ->
           failwith "Not implemented"
 
-    let of_array a = RopeSeq (Rope.Convert.of_array_array a)
+    let of_array a = Rope (Rope.Convert.of_array_array a)
+
+    let of_array_rope a = Rope (Rope.Convert.of_array_array a)
+
+    let of_array_list a = List (Array.to_list a)
 
     let to_array = function
-      | RopeSeq s ->
+      | Rope s ->
           Rope.Convert.to_array_array s
+      | List s ->
+          Array.of_list s
       | _ ->
           failwith "Not implemented"
 
-    let of_ustring u = RopeSeq (Rope.Convert.of_ustring_array u)
+    let of_ustring u = Rope (Rope.Convert.of_ustring_array u)
+
+    let of_ustring_rope u = Rope (Rope.Convert.of_ustring_array u)
+
+    let of_ustring_list u = List (Array.to_list (ustring2array u))
 
     let to_ustring = function
-      | RopeSeq s ->
+      | Rope s ->
           Rope.Convert.to_ustring_array s
+      | List s ->
+          Array.of_list s |> array2ustring
       | _ ->
           failwith "Not implemented"
 
     let equal f s1 s2 =
       match (s1, s2) with
-      | RopeSeq s1, RopeSeq s2 ->
+      | Rope s1, Rope s2 ->
           Rope.equal_array f s1 s2
+      | List s1, List s2 ->
+          let rec equal f s1 s2 =
+            match (s1, s2) with
+            | [], [] ->
+                true
+            | [], _ | _, [] ->
+                false
+            | x :: xs, y :: ys ->
+                f x y && equal f xs ys
+          in
+          equal f s1 s2
       | _ ->
           failwith "Not implemented"
 
     let map f = function
-      | RopeSeq s ->
-          RopeSeq (Rope.map_array_array f s)
+      | Rope s ->
+          Rope (Rope.map_array_array f s)
+      | List s ->
+          List (List.map f s)
       | _ ->
           failwith "Not implemented"
 
     let fold_left f a = function
-      | RopeSeq s ->
+      | Rope s ->
           Rope.foldl_array f a s
+      | List s ->
+          List.fold_left f a s
       | _ ->
           failwith "Not implemented"
 
     let fold_right f s a =
       match s with
-      | RopeSeq s ->
+      | Rope s ->
           Rope.foldr_array f s a
+      | List s ->
+          List.fold_right f s a
       | _ ->
           failwith "Not implemented"
 
     let combine s1 s2 =
       match (s1, s2) with
-      | RopeSeq s1, RopeSeq s2 ->
-          RopeSeq (Rope.combine_array_array s1 s2)
+      | Rope s1, Rope s2 ->
+          Rope (Rope.combine_array_array s1 s2)
+      | List s1, List s2 ->
+          List (List.combine s1 s2)
       | _ ->
           failwith "Not implemented"
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with
-      | RopeSeq s1, RopeSeq s2 ->
+      | Rope s1, Rope s2 ->
           Rope.foldr2_array f s1 s2 a
+      | List s1, List s2 ->
+          List.fold_right (fun (a, b) acc -> f a b acc) (List.combine s1 s2) a
       | _ ->
           failwith "Not implemented"
   end
