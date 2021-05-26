@@ -181,7 +181,7 @@ lang RecLetsEval =
     let lst_var = TmVar {ident = lst_name,
                          ty = tyunknown_,
                          info = NoInfo()} in
-    let func_tuple = tuple_ (map (lam x : RecLetBinding. x.body) t.bindings) in
+    let func_tuple = utuple_ (map (lam x : RecLetBinding. x.body) t.bindings) in
     let unfixed_tuple = TmLam {ident = lst_name,
                                body = unpack_from lst_var func_tuple,
                                tyIdent = tyunknown_,
@@ -714,7 +714,7 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CSplitAt2 tms ->
     match arg with TmConst {val = CInt {val = n}} then
       let t = splitAt tms n in
-      tuple_ [seq_ t.0, seq_ t.1]
+      utuple_ [seq_ t.0, seq_ t.1]
     else error "n in splitAt is not a number"
   | CCreate _ ->
     match arg with TmConst {val = CInt {val = n}} then
@@ -770,7 +770,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
     match arg with TmSeq s then
       let d = _seqOfCharsToString s.tms in
       writeFile f d;
-      unit_
+      uunit_
     else error "d in writeFile not a sequence"
   | CFileExists _ ->
     match arg with TmSeq s then
@@ -781,7 +781,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
     match arg with TmSeq s then
       let f = _seqOfCharsToString s.tms in
       deleteFile f;
-      unit_
+      uunit_
     else error "f in deleteFile not a sequence"
 end
 
@@ -791,9 +791,9 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
     match arg with TmSeq s then
       let s = _seqOfCharsToString s.tms in
       print s;
-      unit_
+      uunit_
     else error "string to print is not a string"
-  | CDPrint _ -> unit_
+  | CDPrint _ -> uunit_
   | CReadLine _ ->
     let s = readLine () in
     TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo()}
@@ -819,7 +819,7 @@ lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
   | CRandSetSeed _ ->
     match arg with TmConst {val = CInt {val = s}} then
       randSetSeed s;
-      unit_
+      uunit_
     else error "s in randSetSeed not a constant integer"
 end
 
@@ -848,7 +848,7 @@ lang TimeEval = TimeAst + IntAst
   | CSleepMs _ ->
     match arg with TmConst {val = CInt {val = n}} then
       sleepMs n;
-      unit_
+      uunit_
     else error "n in sleepMs not a constant integer"
   | CWallTimeMs _ ->
     float_ (wallTimeMs ())
@@ -866,7 +866,7 @@ lang RefOpEval = RefOpAst + RefEval + IntAst
     else error "first argument of modref not a reference"
   | CModRef2 r ->
     modref r arg;
-    unit_
+    uunit_
   | CDeRef _ ->
     match arg with TmRef {ref = r} then
       deref r
@@ -933,15 +933,15 @@ lang TensorOpEval =
       match t with TInt t then
         let g = mkg (lam t. TInt t) in
         tensorIteri g t;
-        unit_
+        uunit_
       else match t with TFloat t then
         let g = mkg (lam t. TFloat t) in
         tensorIteri g t;
-        unit_
+        uunit_
       else match t with TExpr t then
         let g = mkg (lam t. TExpr t) in
         tensorIteri g t;
-        unit_
+        uunit_
       else never
     else error "Second argument to CTensorIteri not a tensor"
 
@@ -984,15 +984,15 @@ lang TensorOpEval =
   | CTensorSetExn3 (t, is) ->
     match (t, arg) with (TInt t, TmConst { val = CInt { val = v } }) then
       tensorSetExn t is v;
-      unit_
+      uunit_
     else
     match (t, arg) with (TFloat t, TmConst { val = CFloat { val = v } }) then
       tensorSetExn t is v;
-      unit_
+      uunit_
     else
     match (t, arg) with (TExpr t, v) then
       tensorSetExn t is v;
-      unit_
+      uunit_
     else error "Tensor and value type does not match in CTensorSetExn"
   | CTensorRank _ ->
     match arg with TmTensor { val = t } then
@@ -1034,13 +1034,13 @@ lang TensorOpEval =
     match arg with TmTensor { val = t2 } then
       match (t1, t2) with (TInt t1, TInt t2) then
         tensorCopyExn t1 t2;
-        unit_
+        uunit_
       else match (t1, t2) with (TFloat t1, TFloat t2) then
         tensorCopyExn t1 t2;
-        unit_
+        uunit_
       else match (t1, t2) with (TExpr t1, TExpr t2) then
         tensorCopyExn t1 t2;
-        unit_
+        uunit_
       else error "Tensor type mismatch in CTensorCopyExn"
     else error "First argument to CTensorCopyExn not a tensor"
   | CTensorSliceExn _ ->
@@ -1256,39 +1256,39 @@ let eqExpr : Expr -> Expr -> Bool =
 let id = ulam_ "x" (var_ "x") in
 let bump = ulam_ "x" (addi_ (var_ "x") (int_ 1)) in
 let fst = ulam_ "t" (tupleproj_ 0 (var_ "t")) in
-let appIdUnit = app_ id unit_ in
+let appIdUnit = app_ id uunit_ in
 let appBump3 = app_ bump (int_ 3) in
-let appFst = app_ fst (tuple_ [not_ false_, addi_ (int_ 1) (int_ 2)]) in
-utest eval appIdUnit with unit_ using eqExpr in
+let appFst = app_ fst (utuple_ [not_ false_, addi_ (int_ 1) (int_ 2)]) in
+utest eval appIdUnit with uunit_ using eqExpr in
 utest eval appBump3 with int_ 4 using eqExpr in
 utest eval appFst with true_ using eqExpr in
 
 let dataDecl =
   bind_ (ucondef_ "Foo")
-    (match_ (conapp_ "Foo" (tuple_ [unit_, unit_]))
+    (match_ (conapp_ "Foo" (utuple_ [uunit_, uunit_]))
       (pcon_ "Foo" (pvar_ "u"))
       (tupleproj_ 0 (var_ "u"))
       id) in
 
-utest eval dataDecl with unit_ using eqExpr in
+utest eval dataDecl with uunit_ using eqExpr in
 
 -- Commented out to not clutter the test suite
--- let utest_test1 = utest_ (int_ 1) (int_ 2) unit_ in
+-- let utest_test1 = utest_ (int_ 1) (int_ 2) uunit_ in
 -- let utest_test2 =
---   utest_ (tuple_ [int_ 1, addi_ (int_ 1) (int_ 2)]) (int_ 1, int_ 3) unit_ in
+--   utest_ (utuple_ [int_ 1, addi_ (int_ 1) (int_ 2)]) (int_ 1, int_ 3) uunit_ in
 -- let utest_test3 =
 --   bind_ (ucondef_ "Foo")
---     (utest_ (conapp_ "Foo" unit_) (conapp_ "Foo" unit_) unit_) in
--- utest eval utest_test1 with unit_ in
--- utest eval utest_test2 with unit_ in
--- utest eval utest_test3 with unit_ in
+--     (utest_ (conapp_ "Foo" uunit_) (conapp_ "Foo" uunit_) uunit_) in
+-- utest eval utest_test1 with uunit_ in
+-- utest eval utest_test2 with uunit_ in
+-- utest eval utest_test3 with uunit_ in
 
 -- Implementing an interpreter
 let num = lam n.  conapp_ "Num" (int_ n) in
 let one = num 1 in -- Num 1
 let two = num 2 in -- Num 2
 let three = num 3 in -- Num 3
-let add = lam n1. lam n2.  conapp_ "Add" (tuple_ [n1, n2]) in
+let add = lam n1. lam n2.  conapp_ "Add" (utuple_ [n1, n2]) in
 let addOneTwo = add one two in -- Add (Num 1, Num 2)
 let num_case = lam arg. lam els. -- match arg with Num n then Num n else els
   match_ arg (pcon_ "Num" (pvar_ "n")) (conapp_ "Num" (var_ "n")) els in
@@ -1307,11 +1307,11 @@ let result = conapp_ "Num" (addi_ (var_ "n1") (var_ "n2")) in
 
 let matchInner =
   match_ (app_ (var_ "eval") (var_ "e2")) (pcon_ "Num" (pvar_ "n2"))
-    result unit_ in
+    result uunit_ in
 
 let matchOuter =
   match_ (app_ (var_ "eval") (var_ "e1")) (pcon_ "Num" (pvar_ "n1"))
-    matchInner unit_ in
+    matchInner uunit_ in
 
 let deconstruct = lam t.
   bindall_
@@ -1322,7 +1322,7 @@ let addCase = lam arg. lam els.
 
  -- fix (lam eval. lam e. match e with then ... else ())
 let evalFn =
-  ureclet_ "eval" (ulam_ "e" (num_case (var_ "e") (addCase (var_ "e") unit_))) in
+  ureclet_ "eval" (ulam_ "e" (num_case (var_ "e") (addCase (var_ "e") uunit_))) in
 
 -- con Num in con Add in let eval = ... in t
 let wrapInDecls = lam t.
@@ -1345,8 +1345,8 @@ utest eval evalAdd1 with conapp_ "Num" (int_ 3) using eqExpr in
 utest eval evalAdd2 with conapp_ "Num" (int_ 6) using eqExpr in
 
 -- Commented out to declutter test suite output
--- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) unit_ in
--- utest eval evalUTestIntInUnit with unit_ in
+-- let evalUTestIntInUnit = utest_ (int_ 3) (int_ 3) uunit_ in
+-- utest eval evalUTestIntInUnit with uunit_ in
 
 let oddEven = lam bdy.
   bind_
@@ -1381,23 +1381,23 @@ let num = lam x. conapp_ "Num" x in
 let addEvalNested = ulam_ "arg"
   (match_ (var_ "arg") (ptuple_ [(pcon_ "Num" (pvar_ "n1")), (pcon_ "Num" (pvar_ "n2"))])
     (num (addi_ (var_ "n1") (var_ "n2")))
-    (unit_)) in
+    (uunit_)) in
 
 
-utest eval (wrapInDecls (app_ addEvalNested (tuple_ [num (int_ 1), num (int_ 2)])))
+utest eval (wrapInDecls (app_ addEvalNested (utuple_ [num (int_ 1), num (int_ 2)])))
 with conapp_ "Num" (int_ 3)
 using eqExpr in
 
 let recordProj =
-  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (urecord_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "b" (var_ "myrec")) in
 
 let recordUpdate =
-  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (urecord_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "c" (recordupdate_ (var_ "myrec") "c" (int_ 11))) in
 
 let recordUpdate2 =
-  bind_ (ulet_ "myrec" (record_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
+  bind_ (ulet_ "myrec" (urecord_ [("a", int_ 10),("b", int_ 37),("c", int_ 23)]))
     (recordproj_ "a" (recordupdate_ (var_ "myrec") "a" (int_ 1729))) in
 
 utest eval recordProj with int_ 37 using eqExpr in
@@ -1406,18 +1406,18 @@ utest eval recordUpdate2 with int_ 1729 using eqExpr in
 
 
 let recordUpdateNonValue =
-  (recordupdate_ (record_ [("a", int_ 10)]) "a" (addi_ (int_ 1729) (int_ 1))) in
-utest eval recordUpdateNonValue with record_ [("a", int_ 1730)] using eqExpr in
+  (recordupdate_ (urecord_ [("a", int_ 10)]) "a" (addi_ (int_ 1729) (int_ 1))) in
+utest eval recordUpdateNonValue with urecord_ [("a", int_ 1730)] using eqExpr in
 
 
 -- Commented out to not clutter the test suite
 -- let evalUTestRecordInUnit =
 --   utest_
---     (record_add_bindings [("a", int_ 10), ("b", int_ 13)] record_empty)
---     (record_add_bindings [("b", int_ 13), ("a", int_ 10)] record_empty)
---     unit_
+--     (record_add_bindings [("a", int_ 10), ("b", int_ 13)] urecord_empty)
+--     (record_add_bindings [("b", int_ 13), ("a", int_ 10)] urecord_empty)
+--     uunit_
 -- in
--- utest eval evalUTestRecordInUnit with unit_ in
+-- utest eval evalUTestRecordInUnit with uunit_ in
 
 utest eval (addf_ (float_ 1.) (float_ 2.)) with float_ 3. using eqExpr in
 utest eval (subf_ (float_ 1.) (float_ 2.)) with float_ (negf 1.) using eqExpr in
@@ -1477,7 +1477,7 @@ utest eval reverseAst with seq_ [int_ 3, int_ 2, int_ 1] using eqExpr in
 -- splitAt [1,4,2,3] 2 -> ([1,4],[2,3])
 let splitAtAst = splitat_ (seq_ [int_ 1, int_ 4, int_ 2, int_ 3]) (int_ 2) in
 utest eval splitAtAst
-with tuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]]
+with utuple_ [seq_ [int_ 1, int_ 4], seq_ [int_ 2, int_ 3]]
 using eqExpr in
 
 -- create 3 (lam. 42) -> [42, 42, 42]
@@ -1516,8 +1516,8 @@ utest eval (neqf_ (float_ 0.0) (float_ 1.0)) with true_ using eqExpr in
 -- Unit tests for symbols
 
 -- gensym
-let s1 = eval (gensym_ unit_) in
-let s2 = eval (gensym_ unit_) in
+let s1 = eval (gensym_ uunit_) in
+let s2 = eval (gensym_ uunit_) in
 utest s1 with s1 using eqExpr in
 utest s2 with s2 using eqExpr in
 
@@ -1537,10 +1537,10 @@ utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ using eqExpr in
 let f = str_ "test_file_ops" in
 let d = str_ "$&!@" in
 utest eval (fileExists_ f) with false_ using eqExpr in
-utest eval (writeFile_ f d) with unit_ using eqExpr in
+utest eval (writeFile_ f d) with uunit_ using eqExpr in
 utest eval (fileExists_ f) with true_ using eqExpr in
 utest eval (readFile_ f) with d using eqExpr in
-utest eval (deleteFile_ f) with unit_ using eqExpr in
+utest eval (deleteFile_ f) with uunit_ using eqExpr in
 utest eval (fileExists_ f) with false_ using eqExpr in
 
 -- Test error
@@ -1560,7 +1560,7 @@ with int_ 0
 using eqExpr in
 
 utest eval (match_
-  (tuple_ [true_, true_])
+  (utuple_ [true_, true_])
   (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
   true_
   false_)
@@ -1568,7 +1568,7 @@ with true_
 using eqExpr in
 
 utest eval (match_
-  (tuple_ [true_, false_])
+  (utuple_ [true_, false_])
   (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
   true_
   false_)
@@ -1576,7 +1576,7 @@ with false_
 using eqExpr in
 
 utest eval (match_
-  (tuple_ [false_, true_])
+  (utuple_ [false_, true_])
   (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
   true_
   false_)
@@ -1584,7 +1584,7 @@ with false_
 using eqExpr in
 
 utest eval (match_
-  (tuple_ [false_, false_])
+  (utuple_ [false_, false_])
   (pand_ (ptuple_ [ptrue_, pvarw_]) (ptuple_ [pvarw_, ptrue_]))
   true_
   false_)
@@ -1634,23 +1634,23 @@ using eqExpr in
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3, int_ 4, int_ 5])
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  (utuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5]
+with utuple_ [int_ 1, seq_ [int_ 2, int_ 3], int_ 4, int_ 5]
 using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3])
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  (utuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
-with tuple_ [int_ 1, seq_ [], int_ 2, int_ 3]
+with utuple_ [int_ 1, seq_ [], int_ 2, int_ 3]
 using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2])
   (pseqedge_ [pvar_ "a"] "b" [pvar_ "c", pvar_ "d"])
-  (tuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
+  (utuple_ [var_ "a", var_ "b", var_ "c", var_ "d"])
   false_)
 with false_
 using eqExpr in
@@ -1658,15 +1658,15 @@ using eqExpr in
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3])
   (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  (utuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
-with tuple_ [int_ 1, int_ 2, int_ 3]
+with utuple_ [int_ 1, int_ 2, int_ 3]
 using eqExpr in
 
 utest eval (match_
   (seq_ [int_ 1, int_ 2, int_ 3, int_ 4])
   (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  (utuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
 with false_
 using eqExpr in
@@ -1674,22 +1674,22 @@ using eqExpr in
 utest eval (match_
   (seq_ [int_ 1, int_ 2])
   (pseqtot_ [pvar_ "a", pvar_ "b", pvar_ "c"])
-  (tuple_ [var_ "a", var_ "b", var_ "c"])
+  (utuple_ [var_ "a", var_ "b", var_ "c"])
   false_)
 with false_
 using eqExpr in
 
 utest eval (match_
-  (tuple_ [int_ 1, int_ 2])
+  (utuple_ [int_ 1, int_ 2])
   (pand_ (pvar_ "a") (ptuple_ [pvar_ "b", pint_ 2]))
-  (tuple_ [var_ "a", var_ "b"])
-  (tuple_ [tuple_ [int_ 70, int_ 72], int_ 71]))
-with tuple_ [tuple_ [int_ 1, int_ 2], int_ 1]
+  (utuple_ [var_ "a", var_ "b"])
+  (utuple_ [utuple_ [int_ 70, int_ 72], int_ 71]))
+with utuple_ [utuple_ [int_ 1, int_ 2], int_ 1]
 using eqExpr in
 
 -- I/O operations
--- utest eval (print_ (str_ "Hello World")) with unit_ in
--- utest eval (print_ (readLine_ unit_)) with unit_ in
+-- utest eval (print_ (str_ "Hello World")) with uunit_ in
+-- utest eval (print_ (readLine_ uunit_)) with uunit_ in
 
 -- Random number generation
 let isIntInSeq = lam r : Expr. lam seq : [Int].
@@ -1705,9 +1705,9 @@ utest eval (bind_ (ulet_ "_" (randSetSeed_ (int_ 42)))
 utest eval (randIntU_ (int_ 0) (int_ 3)) with [0, 1, 2] using isIntInSeq in
 
 -- Time operations
-let t = eval (wallTimeMs_ unit_) in
+let t = eval (wallTimeMs_ uunit_) in
 utest eval (or_ (leqf_ t (float_ 0.0)) (geqf_ t (float_ 0.0))) with true_ using eqExpr in
--- utest eval (sleepMs_ (int_ 1000)) with unit_ in
+-- utest eval (sleepMs_ (int_ 1000)) with uunit_ in
 
 -- Integer arithmetics
 utest eval (addi_ (int_ 4) (int_ 2)) with int_ 6 using eqExpr in
@@ -1780,14 +1780,14 @@ let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),
                   ulet_ "r4"
                     (ref_ (ulam_ "x" (concat_ (str_ "Hello ") (var_ "x"))))]
 in
-utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with unit_ using eqExpr in
+utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with uunit_ using eqExpr in
 utest
   eval (bind_ p
-    (tuple_ [deref_ (var_ "r1"),
+    (utuple_ [deref_ (var_ "r1"),
              deref_ (var_ "r2"),
              deref_ (var_ "r3"),
              app_ (deref_ (var_ "r4")) (str_ "test")]))
-with tuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"]
+with utuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"]
 using eqExpr in
 
 utest
@@ -1795,8 +1795,8 @@ utest
     [ulet_ "_" (modref_ (var_ "r1") (int_ 3)),
      ulet_ "_" (modref_ (var_ "r2") (float_ 3.14)),
      ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
-     tuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
-with tuple_ [int_ 4, float_ 3.14, int_ 4]
+     utuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
+with utuple_ [int_ 4, float_ 3.14, int_ 4]
 using eqExpr in
 
 -- Tensors
@@ -1811,9 +1811,9 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   utest evaln (utensorGetExn_ t1 (seq_ [int_ 0])) with v.0 using eqExpr in
   utest evaln (utensorGetExn_ t1 (seq_ [int_ 1])) with v.0 using eqExpr in
 
-  utest evaln (utensorSetExn_ t0 (seq_ []) v.1) with unit_ using eqExpr in
-  utest evaln (utensorSetExn_ t1 (seq_ [int_ 0]) v.1) with unit_ using eqExpr in
-  utest evaln (utensorSetExn_ t1 (seq_ [int_ 1]) v.2) with unit_ using eqExpr in
+  utest evaln (utensorSetExn_ t0 (seq_ []) v.1) with uunit_ using eqExpr in
+  utest evaln (utensorSetExn_ t1 (seq_ [int_ 0]) v.1) with uunit_ using eqExpr in
+  utest evaln (utensorSetExn_ t1 (seq_ [int_ 1]) v.2) with uunit_ using eqExpr in
 
   utest evaln (utensorGetExn_ t0 (seq_ [])) with v.1 using eqExpr in
   utest evaln (utensorGetExn_ t1 (seq_ [int_ 0])) with v.1 using eqExpr in
@@ -1831,7 +1831,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   utest evaln (utensorShape_ (utensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
   with seq_ [int_ 2, int_ 2] using eqExpr in
 
-  utest evaln (utensorCopyExn_ t1 t2) with unit_ using eqExpr in
+  utest evaln (utensorCopyExn_ t1 t2) with uunit_ using eqExpr in
 
   utest evaln (utensorRank_ (utensorSliceExn_ t1 (seq_ [int_ 0])))
   with int_ 0 using eqExpr in
@@ -1850,7 +1850,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
                   (ulam_ "x"
                      (utensorCopyExn_ (var_ "x") (var_ "x"))))
   in
-  utest evaln (utensorIteri_ f t3) with unit_ using eqExpr in
+  utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
   ()
 in
 
@@ -1862,7 +1862,7 @@ in
 
 let evaln = evalNoSymbolize in
 
-utest evaln (utensorIteri_ f t3) with unit_ using eqExpr in
+utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in

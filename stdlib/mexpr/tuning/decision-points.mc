@@ -929,7 +929,7 @@ let constant = {
 -- let foo = lam x. x in ()
 let identity = {
   ast = ulet_ "foo" (ulam_ "x" (var_ "x")),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo"],
   calls = []
 } in
@@ -939,7 +939,7 @@ let identity = {
 let funCall = {
   ast = bind_ (ulet_ "foo" (ulam_ "x" (var_ "x")))
               (ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("bar", "foo")]
 } in
@@ -986,7 +986,7 @@ let innerFun = {
             addi_ (app_ (var_ "bar")
                         (var_ "b"))
                   (var_ "a")))))),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("foo", "bar")]
 } in

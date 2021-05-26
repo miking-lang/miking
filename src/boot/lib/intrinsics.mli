@@ -58,46 +58,52 @@ end
 
 module T : sig
   type 'a t =
-    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
-    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
-    | Dense of 'a Tensor.Dense.t
+    | CArrayIntBoot of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloatBoot of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | DenseBoot of 'a Tensor.Dense.t
 
-  type 'a u =
-    | TCArrayInt : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> int u
+  type ('a, 'b) u =
+    | TCArrayInt :
+        (int, Tensor.CArray.int_elt) Tensor.CArray.t
+        -> (int, Tensor.CArray.int_elt) u
     | TCArrayFloat :
         (float, Tensor.CArray.float_elt) Tensor.CArray.t
-        -> float u
-    | TDense : 'a Tensor.Dense.t -> 'a u
+        -> (float, Tensor.CArray.float_elt) u
+    | TDense : 'a Tensor.Dense.t -> ('a, 'b) u
 
-  val carray_int : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> 'a t
+  val carray_int :
+       (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    -> (int, Tensor.CArray.int_elt) u
 
-  val carray_float : (float, Tensor.CArray.float_elt) Tensor.CArray.t -> 'a t
+  val carray_float :
+       (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    -> (float, Tensor.CArray.float_elt) u
 
-  val dense : 'a Tensor.Dense.t -> 'a t
+  val create_carray_int :
+    int Mseq.t -> (int Mseq.t -> int) -> (int, Tensor.CArray.int_elt) u
 
-  val create_carray_int : int Mseq.t -> (int Mseq.t -> int) -> int u
+  val create_carray_float :
+    int Mseq.t -> (int Mseq.t -> float) -> (float, Tensor.CArray.float_elt) u
 
-  val create_carray_float : int Mseq.t -> (int Mseq.t -> float) -> float u
+  val create_dense : int Mseq.t -> (int Mseq.t -> 'a) -> ('a, 'a) u
 
-  val create_dense : int Mseq.t -> (int Mseq.t -> 'a) -> 'a u
+  val get_exn : ('a, 'b) u -> int Mseq.t -> 'a
 
-  val get_exn : 'a u -> int Mseq.t -> 'a
+  val set_exn : ('a, 'b) u -> int Mseq.t -> 'a -> unit
 
-  val set_exn : 'a u -> int Mseq.t -> 'a -> unit
+  val rank : ('a, 'b) u -> int
 
-  val rank : 'a u -> int
+  val shape : ('a, 'b) u -> int Mseq.t
 
-  val shape : 'a u -> int Mseq.t
+  val copy_exn : ('a, 'b) u -> ('a, 'b) u -> unit
 
-  val copy_exn : 'a u -> 'a u -> unit
+  val reshape_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
 
-  val reshape_exn : 'a u -> int Mseq.t -> 'a u
+  val slice_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
 
-  val slice_exn : 'a u -> int Mseq.t -> 'a u
+  val sub_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
 
-  val sub_exn : 'a u -> int -> int -> 'a u
-
-  val iteri : (int -> 'a u -> unit) -> 'a u -> unit
+  val iteri : (int -> ('a, 'b) u -> unit) -> ('a, 'b) u -> unit
 
   module CArray : sig
     val create_int :
@@ -155,6 +161,32 @@ module T : sig
     val sub_exn : 'a Tensor.Dense.t -> int -> int -> 'a Tensor.Dense.t
 
     val iteri : (int -> 'a Tensor.Dense.t -> unit) -> 'a Tensor.Dense.t -> unit
+  end
+
+  module Helpers : sig
+    open Bigarray
+
+    val to_genarray_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Genarray.t
+
+    val to_array1_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array1.t
+
+    val to_array2_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Array2.t
+
+    val of_array1_clayout_int :
+         (int, Tensor.CArray.int_elt, c_layout) Array1.t
+      -> (int, Tensor.CArray.int_elt) u
+
+    val of_array1_clayout_float :
+         (float, Tensor.CArray.float_elt, c_layout) Array1.t
+      -> (float, Tensor.CArray.float_elt) u
+
+    val of_array2_clayout_int :
+         (int, Tensor.CArray.int_elt, c_layout) Array2.t
+      -> (int, Tensor.CArray.int_elt) u
+
+    val of_array2_clayout_float :
+         (float, Tensor.CArray.float_elt, c_layout) Array2.t
+      -> (float, Tensor.CArray.float_elt) u
   end
 end
 

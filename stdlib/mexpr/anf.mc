@@ -325,7 +325,7 @@ utest _anf apps with
 using eqExpr in
 
 let record =
-  record_ [
+  urecord_ [
     ("a",(app_ (int_ 1) (app_ (int_ 2) (int_ 3)))),
     ("b", (int_ 4)),
     ("c", (app_ (int_ 5) (int_ 6)))
@@ -356,7 +356,7 @@ utest _anf factorial with
         ),
         var_ "t1"
       ])),
-    ulet_ "t5" unit_,
+    ulet_ "t5" uunit_,
     var_ "t5"
   ]
 using eqExpr in

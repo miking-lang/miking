@@ -14,8 +14,23 @@ lang OCamlTypeDeclAst
 end
 
 lang OCamlRecord
+  syn Expr =
+  | OTmRecord {bindings : [(String, Expr)], tyident : Type}
+  | OTmProject {field : String, tm : Expr}
+
   syn Pat =
   | OPatRecord {bindings : Map SID Pat}
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmRecord t ->
+    let bindings = map (lam b : (String, Expr). (b.0, f b.1)) t.bindings in
+    OTmRecord {t with bindings = bindings}
+  | OTmProject t -> OTmProject {t with tm = f t.tm}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmRecord t ->
+    foldl (lam acc. lam a : (String, Expr). f acc a.1) acc t.bindings
+  | OTmProject t -> f acc t.tm
 end
 
 lang OCamlMatch
@@ -111,42 +126,54 @@ lang OCamlExternal
   | OTmConAppExt t -> OTmConAppExt {t with args = map f t.args}
 end
 
-let oext_ = use OCamlExternal in
-  lam id : String. OTmVarExt {ident = id}
+lang OCamlLabel
+  syn Expr =
+  | OTmLabel { label : String, arg : Expr }
 
-lang OCamlTypeAst =
-  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + FunTypeAst +
-  RecordTypeAst + VarTypeAst
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmLabel t -> f acc t.arg
 
-  syn Type =
-  | TyList {info : Info, ty : Type}
-  | TyArray {info : Info, ty : Type}
-  | TyGenArray {info : Info, ty : Type}
-  | TyTuple {info : Info, tys : [Type]}
-
-  sem infoTy =
-  | TyList r -> r.info
-  | TyArray r -> r.info
-  | TyGenArray r -> r.info
-  | TyTuple r -> r.info
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmLabel t -> OTmLabel { t with arg = f t.arg }
 end
 
-let tylist_ = use OCamlTypeAst in
-  lam ty. TyList {info = NoInfo (), ty = ty}
+lang OCamlTypeAst =
+  BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst +
+  FunTypeAst + OCamlLabel
 
-let tyarray_ = use OCamlTypeAst in
-  lam ty. TyArray {info = NoInfo (), ty = ty}
+  syn Type =
+  | OTyList {info : Info, ty : Type}
+  | OTyArray {info : Info, ty : Type}
+  | OTyTuple {info : Info, tys : [Type]}
+  | OTyBigarrayGenarray {info : Info, tys : [Type]}
+  | OTyBigarrayArray {info : Info, rank : Int, tys : [Type]}
+  | OTyBigarrayFloat64Elt {info : Info}
+  | OTyBigarrayIntElt {info : Info}
+  | OTyBigarrayClayout {info : Info}
+  | OTyLabel {info : Info, label : String, ty : Type}
+  | OTyVarExt {info : Info, ident : String, args : [Type]}
+  | OTyParam {info : Info, ident : String}
+  | OTyRecord {info : Info, fields : [(String, Type)], tyident : Type}
 
-let tygenarray_ = use OCamlTypeAst in
-  lam ty. TyGenArray {info = NoInfo (), ty = ty}
-
-let tyotuple_ = use OCamlTypeAst in
-  lam tys. TyTuple {info = NoInfo (), tys = tys}
+  sem infoTy =
+  | OTyList r -> r.info
+  | OTyArray r -> r.info
+  | OTyTuple r -> r.info
+  | OTyBigarrayGenarray r -> r.info
+  | OTyBigarrayArray r -> r.info
+  | OTyBigarrayFloat64Elt r -> r.info
+  | OTyBigarrayIntElt r -> r.info
+  | OTyBigarrayClayout r -> r.info
+  | OTyLabel r -> r.info
+  | OTyVarExt r -> r.info
+  | OTyParam r -> r.info
+  | OTyRecord r -> r.info
+end
 
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord +
+  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlLabel +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +
@@ -159,8 +186,62 @@ lang OCamlAst =
   CmpIntAst + CmpFloatAst + CharAst + CmpCharAst +
 
   -- Other
-  OCamlExternal
+  OCamlExternal +
+
+  -- Types
+  OCamlTypeAst
 end
+
+let otylist_ = use OCamlAst in
+  lam ty. OTyList {info = NoInfo (), ty = ty}
+
+let otyarray_ = use OCamlAst in
+  lam ty. OTyArray {info = NoInfo (), ty = ty}
+
+let otygenarray_ = use OCamlAst in
+  lam tys. OTyBigarrayGenarray {info = NoInfo (), tys = tys}
+
+let otybaarray_ = use OCamlAst in
+  lam rank. lam tys.
+    OTyBigarrayArray {info = NoInfo (), rank = rank, tys = tys}
+
+let oclayout_ = use OCamlAst in
+  OTyBigarrayClayout {info = NoInfo ()}
+
+let otygenarrayclayoutint_ = use OCamlAst in
+  otygenarray_ [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+
+let otygenarrayclayoutfloat_ = use OCamlAst in
+  otygenarray_ [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+
+let otybaarrayclayoutint_ = use OCamlAst in
+  lam rank.
+    otybaarray_ rank [tyint_, OTyBigarrayIntElt {info = NoInfo ()}, oclayout_]
+
+let otybaarrayclayoutfloat_ = use OCamlAst in
+  lam rank.
+    otybaarray_
+      rank [tyfloat_, OTyBigarrayFloat64Elt {info = NoInfo ()}, oclayout_]
+
+let otytuple_ = use OCamlAst in
+  lam tys. OTyTuple {info = NoInfo (), tys = tys}
+
+let otyunit_ = otytuple_ []
+
+let otyvarext_ = use OCamlAst in
+  lam ident. lam args. OTyVarExt {info = NoInfo (), ident = ident, args = args}
+
+let otyparam_ = use OCamlAst in
+  lam ident. OTyParam {info = NoInfo (), ident = ident}
+
+let otylabel_ = use OCamlAst in
+  lam label. lam ty. OTyLabel {info = NoInfo (), label = label, ty = ty}
+
+let otyrecord_ = use OCamlAst in
+  lam tyident. lam fields.
+    OTyRecord {info = NoInfo (), tyident = tyident, fields = fields}
+
+let otyopaque_ = otyvarext_ "opaque" []
 
 mexpr
 ()

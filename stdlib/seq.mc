@@ -113,7 +113,8 @@ utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
 
 recursive
-  let foldr = lam f. lam acc. lam seq.
+  let foldr : (b -> a -> a) -> a -> [b] -> a =
+  lam f. lam acc. lam seq.
     if null seq
     then acc
     else f (head seq) (foldr f acc (tail seq))
@@ -161,6 +162,8 @@ utest zipWith addi [1,2,3,4,5] [5, 4, 3, 2, 1] with [6,6,6,6,6]
 utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
 utest zipWith addi [] [] with [] using eqSeq eqi
+
+let zip = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps
 let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =

@@ -106,26 +106,29 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
     let ast = symbolizeExpr symEnv ast in
     let ast = typeAnnot ast in
 
+    -- If option --debug-type-annot, then pretty print the AST
+    (if options.debugTypeAnnot then printLn (pprintMcore ast) else ());
+
     -- Translate the MExpr AST into an OCaml AST
     match typeLift ast with (env, ast) then
       match generateTypeDecl env ast with (env, ast) then
-        match chooseAndGenerateExternals globalExternalMap ast
-        with (extNameMap, ast) then
-          let ast = generate env ast in
+        let env : GenerateEnv =
+          chooseExternalImpls globalExternalImplsMap env ast
+        in
+        let ast = generate env ast in
 
-          -- Collect external library dependencies
-          let libs = collectLibraries extNameMap in
+        -- Collect external library dependencies
+        let libs = collectLibraries env.exts in
 
-          let ocamlProg = pprintOcaml ast in
+        let ocamlProg = pprintOcaml ast in
 
-          -- Print the AST after code generation
-          (if options.debugGenerate then printLn ocamlProg else ());
+        -- Print the AST after code generation
+        (if options.debugGenerate then printLn ocamlProg else ());
 
-          -- Compile OCaml AST
-          if options.exitBefore then exit 0
-          else
-            ocamlCompile options libs sourcePath ocamlProg
-        else never
+        -- Compile OCaml AST
+        if options.exitBefore then exit 0
+        else ocamlCompile options libs sourcePath ocamlProg
+
       else never
     else never
   else never
