@@ -8,6 +8,8 @@ module Mseq : sig
 
   val create : int -> (int -> 'a) -> 'a t
 
+  val create_fingertree : int -> (int -> 'a) -> 'a t
+
   val create_list : int -> (int -> 'a) -> 'a t
 
   val create_rope : int -> (int -> 'a) -> 'a t
@@ -39,17 +41,21 @@ module Mseq : sig
   module Helpers : sig
     val of_list : 'a list -> 'a t
 
-    val of_list_rope : 'a list -> 'a t
+    val of_list_fingertree : 'a list -> 'a t
 
     val of_list_list : 'a list -> 'a t
+
+    val of_list_rope : 'a list -> 'a t
 
     val to_list : 'a t -> 'a list
 
     val of_array : 'a array -> 'a t
 
-    val of_array_rope : 'a array -> 'a t
+    val of_array_fingertree : 'a array -> 'a t
 
     val of_array_list : 'a array -> 'a t
+
+    val of_array_rope : 'a array -> 'a t
 
     val to_array : 'a t -> 'a array
 
@@ -58,6 +64,8 @@ module Mseq : sig
     val of_ustring_rope : ustring -> int t
 
     val of_ustring_list : ustring -> int t
+
+    val of_ustring_fingertree : ustring -> int t
 
     val to_ustring : int t -> ustring
 

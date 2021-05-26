@@ -1203,7 +1203,7 @@ let delta eval env fi c v =
       let keywords =
         Mseq.Helpers.map
           (function
-            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMExprString (Some keywords))
@@ -1216,7 +1216,7 @@ let delta eval env fi c v =
       let keywords =
         Mseq.Helpers.map
           (function
-            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMCoreFile (Some keywords))

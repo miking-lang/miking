@@ -70,6 +70,11 @@ utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
 utest reverse [] with [] using eqSeq eqi in
 
+-- 'subsequence s start len' returns the subsequence of 's' of length at most
+-- 'len' that starts at index 'start'
+utest subsequence [1,2,3] 0 2 with [1,2] in
+utest subsequence [1,2,3] 0 10 with [1,2,3] in
+utest subsequence [1,2] 1 1 with [2] in
 
 
 -- The rest of the file contains various test computions with sequences

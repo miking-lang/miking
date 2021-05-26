@@ -121,6 +121,7 @@ let symbolizeEnvWithKeywords keywords =
     (Mseq.Helpers.to_list keywords)
 
 let parseMExprString keywords str =
+  let keywords = Mseq.Helpers.map Mseq.Helpers.to_ustring keywords in
   PTreeTm
     ( str |> Intrinsics.Mseq.Helpers.to_ustring
     |> Parserutils.parse_mexpr_string
@@ -130,7 +131,7 @@ let parseMExprString keywords str =
     |> Parserutils.raise_parse_error_on_partially_applied_external )
 
 let parseMCoreFile keywords filename =
-  let filename = filename in
+  let keywords = Mseq.Helpers.map Mseq.Helpers.to_ustring keywords in
   let symKeywordsMap = symbolizeEnvWithKeywords keywords in
   let name2sym = builtin_name2sym @ symKeywordsMap in
   let symKeywords = List.map (fun (_, s) -> s) symKeywordsMap in

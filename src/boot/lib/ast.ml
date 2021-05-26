@@ -168,8 +168,8 @@ and const =
   | CtensorIteri of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
-  | CbootParserParseMExprString of ustring Mseq.t option
-  | CbootParserParseMCoreFile of ustring Mseq.t option
+  | CbootParserParseMExprString of int Mseq.t Mseq.t option
+  | CbootParserParseMCoreFile of int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetType of tm option
