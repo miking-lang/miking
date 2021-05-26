@@ -22,6 +22,11 @@ external externalExp : Float -> Float
 let exp = lam x. externalExp x
 utest exp 0. with 1. using eqf
 
+external externalLog : Float -> Float
+let log = lam x. externalLog x
+utest log (exp 7.) with 7. using eqf
+utest exp (log 7.) with 7. using _eqf
+
 external externalAtan : Float -> Float
 let atan = lam x. externalAtan x
 utest atan 0. with 0. using eqf

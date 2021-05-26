@@ -8,6 +8,9 @@ let mathExtMap =
     ("externalExp", [
       { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
     ]),
+    ("externalLog", [
+      { ident = "Float.log", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
+    ]),
     ("externalAtan", [
       { ident = "Float.atan", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
     ]),
