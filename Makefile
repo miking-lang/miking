@@ -59,7 +59,7 @@ test-all:\
   test-run\
   test-boot
 
-test-boot-compile:
+test-boot-compile: build/mi
 	@$(MAKE) -s -f test-boot-compile.mk all
 
 test-compile: build/mi
