@@ -21,5 +21,10 @@ let mathExtMap =
       { ident = "Float.atan2",
         ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
         libraries = [] }
+    ]),
+    ("externalPow", [
+      { ident = "Float.pow",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
+        libraries = [] }
     ])
   ]

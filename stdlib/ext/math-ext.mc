@@ -44,3 +44,7 @@ using eqf
 external externalAtan2 : Float -> Float -> Float
 let atan2 = lam x. lam y. externalAtan2 x y
 utest atan2 0. 1. with 0. using eqf
+
+external externalPow : Float -> Float -> Float
+let pow = lam x. lam y. externalPow x y
+utest pow 3. 2. with 9. using eqf
