@@ -1,16 +1,19 @@
-include "mexpr.mc"
-include "pprint.mc"
 include "digraph.mc"
 include "string.mc"
-include "ast-builder.mc"
 include "eq-paths.mc"
-include "anf.mc"
 include "name.mc"
 include "hashmap.mc"
 include "eqset.mc"
-include "eq.mc"
 include "common.mc"
-
+include "mexpr/mexpr.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
+include "mexpr/keyword-maker.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/utesttrans.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/anf.mc"
+include "ocaml/sys.mc"
 
 -- This file contains implementations related to decision points.
 
@@ -130,13 +133,31 @@ end
 -- Language fragments for decision points --
 --------------------------------------------
 
-lang HoleAst
+let decisionPointsKeywords =
+[ "HoleBool"
+, "HoleIntRange"
+]
+
+let _lookup = lam s : String. lam m : Map String a.
+  mapLookupOrElse (lam. error (concat s " not found")) s m
+
+let _expectConstInt = lam s. lam i.
+  use IntAst in
+  match i with TmConst {val = CInt {val = i}} then i
+  else error (concat "Expected a constant integer: " s)
+
+lang HoleAst = IntAst + ANF + KeywordMaker
+  syn Hole =
+
   syn Expr =
-  | TmHole {startGuess : Expr,
-            depth : Int}
+  | TmHole {default : Expr,
+            depth : Int,
+            ty : Type,
+            info : Info,
+            hole : Hole}
 
   sem ty =
-  | TmHole h -> tyunknown_ -- TODO(dlunde,2021-02-26) I added this for compatibility with an ANF change. Should maybe be `h.ty` rather than `TyUnknown {}` if it makes sense to give this term a type annotation (as with the other terms in ast.mc).
+  | TmHole {ty = ty} -> ty
 
   sem symbolizeExpr (env : SymEnv) =
   | TmHole h -> TmHole h
@@ -146,32 +167,144 @@ lang HoleAst
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmHole h -> acc
-end
 
-lang HolePrettyPrint = HoleAst + TypePrettyPrint
+  sem default =
+  | TmHole {default = default} -> default
+  | t -> smap_Expr_Expr default t
+
   sem isAtomic =
   | TmHole _ -> false
 
-  sem pprintCode (indent : Int) (env : SymEnv) =
-  | TmHole h ->
-    match pprintCode indent env h.startGuess with (env, startStr) then
-      (env,
-         join ["hole ", startStr, " ", int2string h.depth])
-    else never
-end
+  sem pprintHole =
 
-lang HoleANF = HoleAst + ANF
+  sem pprintCode (indent : Int) (env : SymEnv) =
+  | TmHole t ->
+    match pprintCode indent env t.default with (env, default) then
+      match pprintHole t.hole with (keyword, bindings) then
+        (env, join
+          [ keyword
+          , " {"
+          , "depth = ", int2string t.depth, ", "
+          , "default = ", default, ", "
+          , strJoin ", "
+            (map (lam b : (String, String). join [b.0, " = ", b.1])
+               bindings)
+          ,  "}"
+          ])
+      else never
+    else never
+
   sem isValue =
   | TmHole _ -> false
 
   sem normalize (k : Expr -> Expr) =
-  | TmHole {startGuess = startGuess, depth = depth} ->
-    k (TmHole {startGuess = normalizeTerm startGuess, depth = depth})
+  | TmHole ({default = default} & t) ->
+    k (TmHole {t with default = normalizeTerm t.default})
+
+  sem isKeyword =
+  | TmHole _ -> true
+
+  sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole)
+              (validate : Expr -> Expr) =
+  | arg ->
+    use RecordAst in
+    match arg with TmRecord {bindings = bindings} then
+      let bindings = mapFromList cmpString
+        (map (lam t : (SID, Expr). (sidToString t.0, t.1))
+           (mapBindings bindings)) in
+      let default = _lookup "default" bindings in
+      let depth = _lookup "depth" bindings in
+      validate
+        (TmHole { default = default
+                , depth = _expectConstInt "depth" depth
+                , info = info
+                , ty = hty
+                , hole = hole bindings})
+    else error "Expected record type"
 end
 
-let hole_ = use HoleAst in
-  lam startGuess. lam depth.
-  TmHole {startGuess = startGuess, depth = depth}
+-- A Boolean decision point.
+lang HoleBoolAst = BoolAst + HoleAst
+  syn Hole =
+  | BoolHole {}
+
+  sem sample =
+  | BoolHole {} ->
+    get [true_, false_] (randIntU 0 2)
+
+  sem fromString =
+  | "true" -> true
+  | "false" -> false
+
+  sem matchKeywordString (info : Info) =
+  | "HoleBool" ->
+    Some (1,
+      let validate = lam expr.
+        match expr with TmHole {default = default} then
+          match default with TmConst {val = CBool _} then expr
+          else error "Default value not a constant Boolean"
+        else error "Not a decision point" in
+
+      lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
+
+  sem pprintHole =
+  | BoolHole {} ->
+    ("HoleBool", [])
+end
+
+-- An integer decision point (range of integers).
+lang HoleIntRangeAst = IntAst + HoleAst
+  syn Hole =
+  | IntRange {min : Int,
+              max : Int}
+
+  sem sample =
+  | IntRange {min = min, max = max} ->
+    int_ (randIntU min (addi max 1))
+
+  sem matchKeywordString (info : Info) =
+  | "HoleIntRange" ->
+    Some (1,
+      let validate = lam expr.
+        match expr
+        with TmHole {default = TmConst {val = CInt {val = i}},
+                     hole = IntRange {min = min, max = max}}
+        then
+          if and (leqi min i) (geqi max i) then expr
+          else error "Default value is not within range"
+        else error "Not an integer decision point" in
+
+      lam lst. _mkHole info tyint_
+        (lam m.
+           let min = _expectConstInt "min" (_lookup "min" m) in
+           let max = _expectConstInt "max" (_lookup "max" m) in
+           if leqi min max then
+             IntRange {min = min, max = max}
+           else error (join ["Empty domain: ",
+                           int2string min, "..", int2string max]))
+        validate (get lst 0))
+
+  sem pprintHole =
+  | IntRange {min = min, max = max} ->
+    ("HoleIntRange", [("min", int2string min), ("max", int2string max)])
+end
+
+let holeBool_ = use HoleBoolAst in
+  lam default. lam depth.
+  TmHole { default = default
+         , depth = depth
+         , ty = tybool_
+         , info = NoInfo ()
+         , hole = BoolHole {}}
+
+let holeIntRange_ = use HoleIntRangeAst in
+  lam default. lam depth. lam min. lam max.
+  TmHole { default = default
+         , depth = depth
+         , ty = tyint_
+         , info = NoInfo ()
+         , hole = IntRange {min = min, max = max}}
+
 
 ------------------------------
 -- Call context environment --
@@ -206,8 +339,11 @@ type CallCtxEnv = {
   -- shouldn't be a reference.
   hole2idx: Ref (Map Name (Map[Name] Int)),
 
-  -- Counts the number of decision points stored thus far.
-  count: Int
+  -- Maps an index to its decision point. The key set is the union of the value
+  -- sets of 'hole2idx'.
+  -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
+  -- expression may be repeated many times.
+  idx2hole: Ref ([Expr])
 }
 
 -- Create a new name from a prefix string and name.
@@ -257,7 +393,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
     , lbl2count = lbl2count
     , publicFns = publicFns
     , hole2idx  = hole2idx
-    , count = 0
+    , idx2hole = ref []
     }
 
 -- Returns the binding of a function name, or None () if the name is not a node
@@ -306,20 +442,25 @@ let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
     hashmapLookup {eq = _eqn, hashfn = _nameHash} name pub2internal
   else never
 
-let callCtxAddHole : Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
-  lam name. lam paths. lam env : CallCtxEnv.
-    match env with { hole2idx = hole2idx, count = count } then
+let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
+  lam hole. lam name. lam paths. lam env : CallCtxEnv.
+    match env with { hole2idx = hole2idx, idx2hole = idx2hole} then
+    let countInit = length (deref idx2hole) in
     match
       foldl
       (lam acc. lam k.
          match acc with (m, i) then (mapInsert k i m, addi i 1)
          else never)
-      (mapEmpty _cmpPaths, count)
+      (mapEmpty _cmpPaths, countInit)
       paths
     with (m, count) then
+      let n = length paths in
+      utest n with subi count countInit in
+      modref idx2hole (concat (deref idx2hole) (create n (lam. hole)));
       modref hole2idx (mapInsert name m (deref hole2idx));
-      {env with count = count}
-    else never else never
+      env
+    else never
+  else dprintLn env; never
 
 let callCtxHole2Idx : Name -> [Name] -> CallCtxEnv -> Int =
   lam name. lam path. lam env : CallCtxEnv.
@@ -406,45 +547,47 @@ let t =
 
 -- Generate code for looking up a value of a decision point depending on its
 -- call history
-let _lookupCallCtx : Lookup -> Name -> Name -> CallCtxEnv -> [[Name]] -> Expr =
-  use MatchAst in use NeverAst in
-    lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
-      match env with { lbl2inc = lbl2inc } then
-        -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
-        -- partition becomes trivial
-        let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
-          let startVals = foldl (lam acc. lam p.
-                                   eqsetInsert _eqn (head p) acc)
-                                [] paths in
-          let partition = (create (length startVals) (lam. [])) in
-          let partition =
-            mapi
-              (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
-              partition
-          in
-          (startVals, partition)
+let _lookupCallCtx
+  : (Int -> Expr) -> Name -> Name
+  -> CallCtxEnv -> [[Name]] -> Expr =
+  lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
+    match env with { lbl2inc = lbl2inc } then
+      -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
+      -- partition becomes trivial
+      let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
+        let startVals = foldl (lam acc. lam p.
+                                 eqsetInsert _eqn (head p) acc)
+                              [] paths in
+        let partition = (create (length startVals) (lam. [])) in
+        let partition =
+          mapi
+            (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
+            partition
         in
-        recursive let work : Name -> [[Name]] -> [Name] -> Expr =
-          lam incVarName. lam paths. lam acc.
-            let nonEmpty = filter (lam p. not (null p)) paths in
-            match partitionPaths nonEmpty with (startVals, partition) then
-              let branches =
-                mapi (lam i. lam n.
-                        let iv = callCtxLbl2Inc n env in
-                        let count = callCtxLbl2Count n env in
-                        matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
-                                 (work iv (map tail (get partition i)) (cons n acc)))
-                     startVals
-              in
-              let defaultVal =
-                if eqi (length nonEmpty) (length paths) then never_
-                else lookup (callCtxHole2Idx holeId acc env)
-              in
-              matchall_ (snoc branches defaultVal)
-            else never
-          in
-        work incVarName (map reverse paths) []
-      else never
+        (startVals, partition)
+      in
+      recursive let work : Name -> [[Name]] -> [Name] -> Expr =
+        lam incVarName. lam paths. lam acc.
+          let nonEmpty = filter (lam p. not (null p)) paths in
+          match partitionPaths nonEmpty with (startVals, partition) then
+            let branches =
+              mapi (lam i. lam n.
+                      let iv = callCtxLbl2Inc n env in
+                      let count = callCtxLbl2Count n env in
+                      matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
+                               (work iv (map tail (get partition i))
+                                  (cons n acc)))
+                   startVals
+            in
+            let defaultVal =
+              if eqi (length nonEmpty) (length paths) then never_
+              else lookup (callCtxHole2Idx holeId acc env)
+            in
+            matchall_ (snoc branches defaultVal)
+          else never
+        in
+      work incVarName (map reverse paths) []
+    else never
 
 -- Helper for creating a hidden equivalent of a public function and replace the
 -- public function with a forwarding call to the hidden function.
@@ -460,53 +603,54 @@ let _forwardCall : Name -> (Expr -> Expr) -> Binding -> (Binding, Binding) =
                           with body = f bind.body}
     in (localFun, {bind with body = _lamWithBody newBody bind.body})
 
-type Lookup = Int -> Expr
-type Table = Map Name (Map [Name] Int)
+type LookupTable = [Expr]
 
 let _table = nameSym "table"
+let _argv = nameSym "argv"
 
---
-lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
-                         -- Included for debugging
-                         + MExprPrettyPrint
-  syn Intermediate =
-  -- Reads values from a lookup table (to be given as argv)
-  | LookupTable {prog: Expr, table: Table}
+type Flattened =
+{ ast : Expr           -- The flattened ast
+, table : LookupTable  -- The initial lookup table
+, holes : [Expr]       -- The flattened decision points
+, tempFile : String    -- The file from which decision point values are read
+, cleanup : () -> ()   -- Removes all temporary files from the disk
+}
 
-  -- Find the initial mapping from decision points to values
-  -- Returns a function of type 'Lookup'.
-  sem initAssignments (table : Table) =
-  | tm ->
-    let idsOfHole = lam name.
-      let m = mapFindWithExn name table in
-      map (lam t. match t with (k, v) then v else never) (mapBindings m)
-    in
-    -- Find the start guess of each decision point
-    recursive let findHoles : [(Int, Expr)] -> Expr -> [(Int, Expr)] =
-      lam acc. lam t.
-        match t with TmLet ({body = TmHole {startGuess = startGuess}} & le) then
-          let ids = idsOfHole le.ident in
-          findHoles (concat (map (lam i. (i, startGuess)) ids) acc) le.inexpr
-        else
-          sfold_Expr_Expr concat acc (smap_Expr_Expr (findHoles acc) t)
-    in
-    -- Build a map for int -> value
-    let m =
-      foldl (lam acc. lam t.
-               mapInsert t.0 t.1 acc)
-            (mapEmpty subi)
-            (findHoles [] tm) in
-    -- Return the lookup function
-    lam i. mapFindWithExn i m
+-- Fragment for transforming a program with decision points.
+lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
-  -- Transform a program with decision points. All decision points will be
-  -- eliminated and replaced by lookups in a static table. One reference per
-  -- function tracks which function that latest called that function, thereby
-  -- maintaining call history.
-  sem transform (publicFns : [Name]) =
-  | tm ->
+  -- 'flatten public t' eliminates all decision points in the expression 't' and
+  --  and replace them by lookups in a static table One reference per function
+  --  tracks which function that latest called that function, thereby
+  --  maintaining call history. Returns a result of type 'Flattened'.
+  sem flatten (publicFns : [Name]) =
+  | t ->
+    let lookup = lam i. get_ (nvar_ _table) (int_ i) in
+    match _flattenWithLookup publicFns lookup t with (prog, env)
+    then
+      let env : CallCtxEnv = env in
+      let tempDir = sysTempDirMake () in
+      let tuneFile = sysJoinPath tempDir ".tune" in
+      { ast = _wrapReadFile env tuneFile prog
+      , table = _initAssignments env
+      , holes = deref env.idx2hole
+      , tempFile = tuneFile
+      , cleanup = lam. sysTempDirDelete tempDir
+      }
+    else never
+
+  -- 'insert public table t' replaces the decision points in expression 't' by
+  -- the values in 'table'
+  sem insert (publicFns : [Name]) (table : LookupTable) =
+  | t ->
+    let lookup = lam i. get table i in
+    match _flattenWithLookup publicFns lookup t with (prog, _)
+    then prog else never
+
+  sem _flattenWithLookup (publicFns : [Name]) (lookup : Int -> Expr) =
+  | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
-    let tm = _replacePublic pub2priv tm in
+    let tm = _replacePublic pub2priv t in
     let env = callCtxInit publicFns (toCallGraph tm) tm in
     -- Declare the incoming variables
     let incVars =
@@ -514,11 +658,15 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                     (callCtxIncVarNames env))
     in
     let tm = bind_ incVars tm in
-    let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
-    LookupTable { prog = prog
-             , table = deref (env.hole2idx)
-             }
+    (prog, env)
+
+  -- Find the initial mapping from decision points to values
+  sem _initAssignments =
+  | env ->
+    let env : CallCtxEnv = env in
+    let idx2hole = deref env.idx2hole in
+    map (lam hole. default hole) idx2hole
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
@@ -585,7 +733,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
         -- Set the incoming var of callee to current node
         let count = callCtxLbl2Count t.ident env in
         let update = modref_ (nvar_ iv) (int_ count) in
-        bind_ (nulet_ (nameSym "_") update) le
+        bind_ (nulet_ (nameSym "") update) le
       else le
     else le
 
@@ -595,7 +743,7 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
       { callGraph = callGraph, publicFns = publicFns }
      then
        let paths = eqPaths callGraph cur depth publicFns in
-       let env = callCtxAddHole ident paths env in
+       let env = callCtxAddHole t.body ident paths env in
        let iv = callCtxFun2Inc cur env in
        let lookupCode = _lookupCallCtx lookup ident iv env paths in
        TmLet {{t with body = lookupCode}
@@ -626,14 +774,115 @@ lang ContextAwareHoles = Ast2CallGraph + HoleAst + IntAst + MatchAst + NeverAst
                      with inexpr = _maintainCallCtx lookup env cur inexpr}
   | tm ->
     smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
+
+  sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
+  | tm ->
+    use BootParser in
+    let impl = parseMExprString [] "
+    let head = lam seq. get seq 0 in
+    let tail = lam seq. subsequence seq 1 (subi (length seq) 1) in
+    let null = lam seq. eqi 0 (length seq) in
+    let or: Bool -> Bool -> Bool =
+      lam a. lam b. if a then true else b in
+
+    let zipWith = lam f. lam seq1. lam seq2.
+      recursive let work = lam a. lam s1. lam s2.
+        if or (null s1) (null s2) then a
+        else
+          work (snoc a (f (head s1) (head s2))) (tail s1) (tail s2)
+        in
+        work [] seq1 seq2
+    in
+
+    recursive
+      let eqString = lam s1. lam s2.
+          if neqi (length s1) (length s2)
+          then false
+          else if null s1
+               then true
+               else if eqc (head s1) (head s2)
+               then eqString (tail s1) (tail s2)
+               else false
+    in
+
+    recursive
+      let strSplit = lam delim. lam s.
+        if or (eqi (length delim) 0) (lti (length s) (length delim))
+        then cons s []
+        else if eqString delim (subsequence s 0 (length delim))
+             then cons [] (strSplit delim (subsequence s (length delim) (length s)))
+             else let remaining = strSplit delim (tail s) in
+                  cons (cons (head s) (head remaining)) (tail remaining)
+    in
+
+    let string2bool = lam s : String.
+      match s with \"true\" then true
+      else match s with \"false\" then false
+      else error (concat \"Cannot be converted to Bool: \" s)
+    in
+
+    let string2int = lam s.
+      recursive
+      let string2int_rechelper = lam s.
+        let len = length s in
+        let last = subi len 1 in
+        if eqi len 0
+        then 0
+        else
+          let lsd = subi (char2int (get s last)) (char2int '0') in
+          let rest = muli 10 (string2int_rechelper (subsequence s 0 last)) in
+          addi rest lsd
+      in
+      match s with [] then 0 else
+      if eqc '-' (head s)
+      then negi (string2int_rechelper (tail s))
+      else string2int_rechelper s
+    in
+
+    ()
+    " in
+
+    use MExprSym in
+    let impl = symbolize impl in
+
+    let getName : String -> Expr -> Name = lam s. lam expr.
+      match findName s expr with Some n then n
+      else error (concat "not found: " s) in
+
+    let zipWithName = getName "zipWith" impl in
+    let string2boolName = getName "string2bool" impl in
+    let string2intName = getName "string2int" impl in
+    let strSplitName = getName "strSplit" impl in
+
+    let convertFuns = map (lam h.
+      match h with TmHole {ty = TyBool _} then string2boolName
+      else match h with TmHole {ty = TyInt _} then string2intName
+      else dprintLn h; error "Unsupported type"
+    ) (deref env.idx2hole) in
+
+    let x = nameSym "x" in
+    let y = nameSym "y" in
+    let doConvert = nulam_ x (nulam_ y (app_ (nvar_ x) (nvar_ y))) in
+
+    let fileContent = nameSym "fileContent" in
+    let strVals = nameSym "strVals" in
+    bindall_
+    [ impl
+    , nulet_ fileContent (readFile_ (str_ tuneFile))
+    , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ " ") (nvar_ fileContent))
+    , nulet_ _table
+      (appf3_ (nvar_ zipWithName) doConvert
+        (seq_ (map nvar_ convertFuns)) (nvar_ strVals))
+    , tm
+    ]
 end
 
-lang PPrintLang = MExprPrettyPrint + HolePrettyPrint
+lang Holes =
+  HoleAst + HoleBoolAst + HoleIntRangeAst + FlattenHoles
 
-lang TestLang = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
-  + MExprSym + MExprEq
+lang MExprHoles = Holes + MExprSym + MExprANF
 
-lang MExprHoles = MExpr + ContextAwareHoles + PPrintLang + MExprANF + HoleANF
+lang TestLang = MExprHoles + MExprEq + MExprPrettyPrint
 
 mexpr
 
@@ -680,7 +929,7 @@ let constant = {
 -- let foo = lam x. x in ()
 let identity = {
   ast = ulet_ "foo" (ulam_ "x" (var_ "x")),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo"],
   calls = []
 } in
@@ -690,7 +939,7 @@ let identity = {
 let funCall = {
   ast = bind_ (ulet_ "foo" (ulam_ "x" (var_ "x")))
               (ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("bar", "foo")]
 } in
@@ -737,7 +986,7 @@ let innerFun = {
             addi_ (app_ (var_ "bar")
                         (var_ "b"))
                   (var_ "a")))))),
-  expected = unit_,
+  expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("foo", "bar")]
 } in
@@ -844,9 +1093,9 @@ let debugPrint = lam ast. lam pub.
     let ast = anf ast in
     printLn "\n----- AFTER ANF -----\n";
     printLn (expr2str ast);
-    match transform pub ast with LookupTable { prog = prog } then
+    match flatten pub ast with {ast = ast} then
       printLn "\n----- AFTER TRANSFORMATION -----\n";
-      printLn (expr2str prog);
+      printLn (expr2str ast);
       ()
     else never
   else ()
@@ -874,8 +1123,8 @@ let callBA2 = nameSym "callBA2" in
 let callBB = nameSym "callBB" in
 let callCB = nameSym "callCB" in
 let h = nameSym "h" in
-let ast = bindall_ [  nulet_ funA (ulam_ "_"
-                        (bind_ (nulet_ h (hole_ (int_ 0) 2))
+let ast = bindall_ [  nulet_ funA (ulam_ ""
+                        (bind_ (nulet_ h (holeIntRange_ (int_ 0) 2 0 1))
                                (nvar_ h)))
                     , nureclets_add funB
                         (ulam_ "xB"
@@ -896,60 +1145,67 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match transform [funB, funC] ast with LookupTable { table = table, prog = prog } then
-match mapBindings table with [(_, m)] then
+match flatten [funB, funC] ast with
+  {ast = flatAst, table = table, holes = holes, tempFile = tempFile, cleanup = cleanup}
+then
 
+  let dumpTable = lam table : LookupTable.
+    writeFile tempFile (strJoin " " (map expr2str table)) in
 
-if debug then
-  printLn "Mapped paths";
-  dprintLn
-    (sort (lam t1 : ([Name], Int). lam t2 : ([Name], Int). subi t1.1 t2.1) (mapBindings m))
-else ();
+  let evalWithTable = lam table : LookupTable. lam ast : Expr. lam ext : Expr.
+    let astExt = bind_ ast ext in
+    dumpTable table;
+    (if debug then
+       printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
+       printLn (expr2str ast)
+     else ());
+    use MExprEval in
+    eval { env = mapEmpty nameCmp } astExt
+  in
 
-let evalWithArgv = lam table : [Expr]. lam ast : Expr. lam ext : Expr.
-  let ast = bind_ (bind_ (nulet_ _table table) ast) ext in
-  eval { env = mapEmpty nameCmp } ast
-in
+  let idxs = mapi (lam i. lam. i) table in
+  let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
+  let insertedAst = insert [funB, funC] table ast in
 
-let idxs = map (lam t : ([Name], Int). t.1) (mapBindings m) in
-let table = seq_ (mapi (lam i. lam. int_ (addi 1 i)) idxs) in
+  let eval = evalWithTable table in
 
-let eval = evalWithArgv table in
+  -- Path 1: C -> B (1)-> A
+  let extAst = app_ (nvar_ funC) true_ in
+  utest eval flatAst extAst with int_ 1 using eqExpr in
+  utest eval insertedAst extAst with int_ 1 using eqExpr in
 
--- Path 1: C -> B (1)-> A
-utest eval prog (
-  app_ (nvar_ funC) true_
-) with int_ 1 using eqExpr in
+  -- Path 2: B (1)-> A
+  let extAst = appf2_ (nvar_ funB) true_ false_ in
+  utest eval flatAst extAst with int_ 2 using eqExpr in
+  utest eval insertedAst extAst with int_ 2 using eqExpr in
 
--- Path 2: B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ false_
-) with int_ 2 using eqExpr in
+  -- Path 3: B -> B (1)-> A
+  let extAst = appf2_ (nvar_ funB) true_ true_ in
+  utest eval flatAst extAst with int_ 3 using eqExpr in
+  utest eval insertedAst extAst with int_ 3 using eqExpr in
 
--- Path 3: B -> B (1)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) true_ true_
-) with int_ 3 using eqExpr in
+  -- Path 4: C -> B (2)-> A
+  let extAst = app_ (nvar_ funC) false_ in
+  utest eval flatAst extAst with int_ 4 using eqExpr in
+  utest eval insertedAst extAst with int_ 4 using eqExpr in
 
--- Path 4: C -> B (2)-> A
-utest eval prog (
-  app_ (nvar_ funC) false_
-) with int_ 4 using eqExpr in
+  -- Path 5: B (2)-> A
+  let extAst = appf2_ (nvar_ funB) false_ false_ in
+  utest eval flatAst extAst with int_ 5 using eqExpr in
+  utest eval insertedAst extAst with int_ 5 using eqExpr in
 
--- Path 5: B (2)-> A
-utest eval prog (
-  appf2_ (nvar_ funB) false_ false_
-) with int_ 5 using eqExpr in
+  -- Path 5 again
+  let extAst = bind_
+    (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
+    (appf2_ (nvar_ funB) false_ false_) in
+  utest eval flatAst extAst with int_ 5 using eqExpr in
+  utest eval insertedAst extAst with int_ 5 using eqExpr in
 
--- Path 5 again
-utest eval prog (
-  bind_ (nulet_ (nameSym "_") (app_ (nvar_ funC) false_))
-        (appf2_ (nvar_ funB) false_ false_)
-) with int_ 5 using eqExpr in
+  -- Path 6: B -> B (2)-> A
+  -- unreachable
 
--- Path 6: B -> B (2)-> A
--- unreachable
+  cleanup ()
 
 ()
 
-else never else never
+else never

@@ -101,10 +101,11 @@ end
 --------------------
 
 lang MExprCmp =
-
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
   VarTypeCmp + AppTypeCmp
+
+lang MExprCmpTypeIndex = MExprAst
 
   -- NOTE(dlunde,2021-05-11): This function cannot be defined in isolation for
   -- each component fragment (as with cmpTypeH). Optimally, this would be
@@ -125,13 +126,15 @@ lang MExprCmp =
 
 end
 
+lang MExprCmpClosed = MExprCmp + MExprCmpTypeIndex
+
 -----------
 -- TESTS --
 -----------
 
 mexpr
 
-use MExprCmp in
+use MExprCmpClosed in
 
 utest cmpType tyunknown_ tyunknown_ with 0 in
 utest cmpType tybool_ tybool_ with 0 in

@@ -158,8 +158,6 @@ let builtin =
   ; ("threadNotify", f CthreadNotify)
   ; ("threadCriticalSection", f CthreadCriticalSection)
   ; ("threadCPURelax", f CthreadCPURelax) ]
-  (* Append sundials intrinsics *)
-  @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))

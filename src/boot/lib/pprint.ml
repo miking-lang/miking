@@ -174,17 +174,14 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
-  | TyRecord (_, tys) when tys = Record.empty ->
+  | TyRecord (_, r, _) when r = Record.empty ->
       us "()"
-  | TyRecord (_, tys) ->
-      let pprint_ty_label = function
-        | l, ty ->
-            pprint_label_str l ^. us " : " ^. ustring_of_ty ty
+  | TyRecord (_, r, ls) ->
+      let pprint_ty_label l =
+        let ty = Record.find l r in
+        pprint_label_str l ^. us " : " ^. ustring_of_ty ty
       in
-      us "{"
-      ^. Ustring.concat (us ",")
-           (List.map pprint_ty_label (Record.bindings tys))
-      ^. us "}"
+      us "{" ^. Ustring.concat (us ",") (List.map pprint_ty_label ls) ^. us "}"
   | TyVariant (_, tys) when tys = [] ->
       us "<>"
   | TyVariant _ ->
@@ -548,9 +545,6 @@ let rec print_const fmt = function
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))
-  (* Sundials intrinsics *)
-  | CSd v ->
-      fprintf fmt "%s" (string_of_ustring (Sdpprint.pprint v))
 
 (** Pretty print a record *)
 and print_record fmt r =
@@ -714,13 +708,13 @@ and print_tm' fmt t =
       let shape, data =
         t
         |> function
-        | T.CArrayInt t' ->
+        | T.CArrayIntBoot t' ->
             ( t' |> Tensor.CArray.shape
             , t' |> Tensor.CArray.data_to_array |> Array.map int_ )
-        | T.CArrayFloat t' ->
+        | T.CArrayFloatBoot t' ->
             ( t' |> Tensor.CArray.shape
             , t' |> Tensor.CArray.data_to_array |> Array.map float_ )
-        | T.Dense t' ->
+        | T.DenseBoot t' ->
             (t' |> Tensor.Dense.shape, t' |> Tensor.Dense.data_to_array)
       in
       let print t fmt = fprintf fmt "%a" print_tm (App, t) in

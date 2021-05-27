@@ -54,34 +54,33 @@ end
 
 module T = struct
   type 'a t =
-    | CArrayInt of (int, Tensor.CArray.int_elt) Tensor.CArray.t
-    | CArrayFloat of (float, Tensor.CArray.float_elt) Tensor.CArray.t
-    | Dense of 'a Tensor.Dense.t
+    | CArrayIntBoot of (int, Tensor.CArray.int_elt) Tensor.CArray.t
+    | CArrayFloatBoot of (float, Tensor.CArray.float_elt) Tensor.CArray.t
+    | DenseBoot of 'a Tensor.Dense.t
 
-  type 'a u =
-    | TCArrayInt : (int, Tensor.CArray.int_elt) Tensor.CArray.t -> int u
+  type ('a, 'b) u =
+    | TCArrayInt :
+        (int, Tensor.CArray.int_elt) Tensor.CArray.t
+        -> (int, Tensor.CArray.int_elt) u
     | TCArrayFloat :
         (float, Tensor.CArray.float_elt) Tensor.CArray.t
-        -> float u
-    | TDense : 'a Tensor.Dense.t -> 'a u
+        -> (float, Tensor.CArray.float_elt) u
+    | TDense : 'a Tensor.Dense.t -> ('a, 'b) u
 
-  let carray_int t = CArrayInt t
+  let carray_int t = TCArrayInt t
 
-  let carray_float t = CArrayFloat t
-
-  let dense t = Dense t
+  let carray_float t = TCArrayFloat t
 
   let to_arr = Mseq.Helpers.to_array
 
   let of_arr = Mseq.Helpers.of_array
 
   module CArray = struct
-    let create kind shape f =
-      Tensor.CArray.create kind (to_arr shape) (fun ids -> f (of_arr ids))
+    let create_int shape f =
+      Tensor.CArray.create_int (to_arr shape) (fun ids -> f (of_arr ids))
 
-    let create_int = create Tensor.CArray.Int
-
-    let create_float = create Tensor.CArray.CArrayFloat
+    let create_float shape f =
+      Tensor.CArray.create_float (to_arr shape) (fun ids -> f (of_arr ids))
 
     let get_exn t ids = Tensor.CArray.get_exn t (to_arr ids)
 
@@ -131,7 +130,7 @@ module T = struct
 
   let create_dense shape f = TDense (Dense.create shape f)
 
-  let get_exn (type el) (t : el u) is : el =
+  let get_exn (type a b) (t : (a, b) u) is : a =
     match t with
     | TCArrayInt t' ->
         CArray.get_exn t' is
@@ -140,7 +139,7 @@ module T = struct
     | TDense t' ->
         Dense.get_exn t' is
 
-  let set_exn (type el) (t : el u) is (v : el) =
+  let set_exn (type a b) (t : (a, b) u) is (v : a) =
     match t with
     | TCArrayInt t' ->
         CArray.set_exn t' is v
@@ -149,7 +148,7 @@ module T = struct
     | TDense t' ->
         Dense.set_exn t' is v
 
-  let rank (type el) (t : el u) =
+  let rank (type a b) (t : (a, b) u) =
     match t with
     | TCArrayInt t' ->
         CArray.rank t'
@@ -158,7 +157,7 @@ module T = struct
     | TDense t' ->
         Dense.rank t'
 
-  let shape (type el) (t : el u) =
+  let shape (type a b) (t : (a, b) u) =
     match t with
     | TCArrayInt t' ->
         CArray.shape t'
@@ -167,7 +166,7 @@ module T = struct
     | TDense t' ->
         Dense.shape t'
 
-  let copy_exn (type el) (t1 : el u) (t2 : el u) =
+  let copy_exn (type a b) (t1 : (a, b) u) (t2 : (a, b) u) =
     match (t1, t2) with
     | TCArrayInt t1', TCArrayInt t2' ->
         CArray.copy_exn t1' t2'
@@ -184,7 +183,7 @@ module T = struct
     | TCArrayFloat t1', TDense t2' ->
         Tensor.copy_num_nonum_exn t1' t2'
 
-  let reshape_exn (type el) (t : el u) shape : el u =
+  let reshape_exn (type a b) (t : (a, b) u) shape : (a, b) u =
     match t with
     | TCArrayInt t' ->
         TCArrayInt (CArray.reshape_exn t' shape)
@@ -193,7 +192,7 @@ module T = struct
     | TDense t' ->
         TDense (Dense.reshape_exn t' shape)
 
-  let slice_exn (type el) (t : el u) is : el u =
+  let slice_exn (type a b) (t : (a, b) u) is : (a, b) u =
     match t with
     | TCArrayInt t' ->
         TCArrayInt (CArray.slice_exn t' is)
@@ -202,7 +201,7 @@ module T = struct
     | TDense t' ->
         TDense (Dense.slice_exn t' is)
 
-  let sub_exn (type el) (t : el u) ofs len : el u =
+  let sub_exn (type a b) (t : (a, b) u) ofs len : (a, b) u =
     match t with
     | TCArrayInt t' ->
         TCArrayInt (CArray.sub_exn t' ofs len)
@@ -211,7 +210,7 @@ module T = struct
     | TDense t' ->
         TDense (Dense.sub_exn t' ofs len)
 
-  let iteri (type el) (f : int -> el u -> unit) (t : el u) =
+  let iteri (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) =
     match t with
     | TCArrayInt t' ->
         let f' i t = f i (TCArrayInt t) in
@@ -222,6 +221,48 @@ module T = struct
     | TDense t' ->
         let f' i t = f i (TDense t) in
         Dense.iteri f' t'
+
+  module Helpers = struct
+    open Bigarray
+
+    let to_genarray_clayout (type a b) (t : (a, b) u) :
+        (a, b, c_layout) Genarray.t =
+      match t with
+      | TCArrayInt t' ->
+          t'
+      | TCArrayFloat t' ->
+          t'
+      | TDense _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.to_genarray_clayout")
+
+    let to_array1_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array1.t
+        =
+      match t with
+      | TCArrayInt t' ->
+          t' |> array1_of_genarray
+      | TCArrayFloat t' ->
+          t' |> array1_of_genarray
+      | TDense _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.to_array1_clayout")
+
+    let to_array2_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array2.t
+        =
+      match t with
+      | TCArrayInt t' ->
+          t' |> array2_of_genarray
+      | TCArrayFloat t' ->
+          t' |> array2_of_genarray
+      | TDense _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.to_array2_clayout")
+
+    let of_array1_clayout_int arr = arr |> genarray_of_array1 |> carray_int
+
+    let of_array1_clayout_float arr = arr |> genarray_of_array1 |> carray_float
+
+    let of_array2_clayout_int arr = arr |> genarray_of_array2 |> carray_int
+
+    let of_array2_clayout_float arr = arr |> genarray_of_array2 |> carray_float
+  end
 end
 
 module Symb = struct

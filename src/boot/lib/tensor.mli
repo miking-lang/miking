@@ -1,21 +1,13 @@
 module CArray : sig
-  type ('a, 'b) t
+  type ('a, 'b) t = ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
 
-  type float_elt
+  type float_elt = Bigarray.float64_elt
 
-  type int_elt
+  type int_elt = Bigarray.int_elt
 
-  type ('a, 'b) kind =
-    | CArrayFloat : (float, float_elt) kind
-    | Int : (int, int_elt) kind
+  val create_int : int array -> (int array -> int) -> (int, int_elt) t
 
-  val kind : ('a, 'b) t -> ('a, 'b) kind
-
-  val float : (float, float_elt) kind
-
-  val int : (int, int_elt) kind
-
-  val create : ('a, 'b) kind -> int array -> (int array -> 'a) -> ('a, 'b) t
+  val create_float : int array -> (int array -> float) -> (float, float_elt) t
 
   val get_exn : ('a, 'b) t -> int array -> 'a
 
@@ -34,8 +26,6 @@ module CArray : sig
   val sub_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
 
   val iteri : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
-
-  val of_array : ('a, 'b) kind -> 'a array -> ('a, 'b) t
 
   val data_to_array : ('a, 'b) t -> 'a array
 end

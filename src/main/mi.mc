@@ -10,6 +10,7 @@ include "eval.mc"
 include "run.mc"
 include "assoc.mc"
 include "options.mc"
+include "tune.mc"
 
 mexpr
 
@@ -21,6 +22,7 @@ Commands:
   eval      Evaluates a .mc file using an internal interpreter
   compile   Compiles a .mc file into an executable with the same name
   run       Combines eval and compile, to run the program as fast as possible
+  tune      Tunes a program with decision points
 
 If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
@@ -42,7 +44,8 @@ in
 let commandsMap = [
 ("run", run),
 ("eval", eval),
-("compile", compile)
+("compile", compile),
+("tune", tune)
 ] in
 
 -- Main: find and run the correct command. See commandsMap above.

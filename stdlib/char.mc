@@ -91,6 +91,16 @@ let isAlpha = lam c. or (isLowerAlpha c) (isUpperAlpha c)
 let isLowerAlphaOrUnderscore = lam c.
   or (isLowerAlpha c) (eqChar c '_')
 
+let isAlphaOrUnderscore = lam c.
+  if isAlpha c then true
+  else eqChar c '_'
+
+utest isAlphaOrUnderscore '1' with false
+utest isAlphaOrUnderscore 'a' with true
+utest isAlphaOrUnderscore 'A' with true
+utest isAlphaOrUnderscore '_' with true
+utest isAlphaOrUnderscore '{' with false
+
 utest isAlpha 'a' with true
 utest isAlpha 'm' with true
 utest isAlpha 'z' with true

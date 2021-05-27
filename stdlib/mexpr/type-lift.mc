@@ -7,6 +7,7 @@
 -- Requires symbolize and type-annot to be run first.
 include "assoc-seq.mc"
 include "map.mc"
+include "set.mc"
 include "name.mc"
 include "stringid.mc"
 
@@ -29,6 +30,8 @@ type TypeLiftEnv = {
   -- Record types encountered so far. Uses intrinsic maps as this is
   -- performance critical.
   records: Map (Map SID Type) Name,
+
+  labels: Set [SID],
 
   -- Variant types and their constructors encountered so far.
   variants: Map Name (Map Name Type)
@@ -67,21 +70,57 @@ let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
   in
   assocSeqMap f env.typeEnv
 
--- Adds a record type with the given fields to the type lifting environment.
-let _addRecordTypeVar = lam env : TypeLiftEnv. lam fields : Map SID Type.
+
+let _addRecordToEnv =
   use MExprAst in
-  let record = TyRecord {fields = fields, info = NoInfo ()} in
-  let recName = nameSym "Rec" in
-  let recTyVar = ntyvar_ recName in
-  let env = {{env with records = mapInsert fields recName env.records}
-                  with typeEnv = assocSeqInsert recName record env.typeEnv} in
-  (env, recTyVar)
+  lam env : TypeLiftEnv. lam name : Option Name. lam ty : Type.
+  match ty with TyRecord {fields = fields, labels = labels, info = info} then
+    match name with Some name then
+      let tyvar = TyVar {ident = name, info = info} in
+      (env, tyvar)
+    else match name with None _ then
+      let name = nameSym "Rec" in
+      let tyvar = TyVar {ident = name, info = info} in
+      let env = {{{env
+                    with records = mapInsert fields name env.records}
+                    with labels = setInsert labels env.labels}
+                    with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tyvar)
+    else never
+  else error "Expected record type"
+
+-- This implementation takes record field order into account when populating
+-- the environment
+lang TypeLiftAddRecordToEnvOrdered = RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
+    match (mapLookup fields env.records, setMem labels env.labels)
+    with (name, true) then
+      _addRecordToEnv env name ty
+    else
+      _addRecordToEnv env (None ()) ty
+  | ty -> (env, ty)
+end
+
+-- This implementation does not take record field order into account when
+-- populating the environment
+lang TypeLiftAddRecordToEnvUnOrdered = RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, labels = labels, info = info} & ty ->
+    _addRecordToEnv
+      env (mapLookup fields env.records) ty
+  | ty -> (env, ty)
+end
 
 -----------
 -- TERMS --
 -----------
 
 lang TypeLift = Cmp
+
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  -- Intentionally left blank
 
   sem typeLiftExpr (env : TypeLiftEnv) =
   -- Intentionally left blank
@@ -104,6 +143,7 @@ lang TypeLift = Cmp
     let emptyTypeLiftEnv : TypeLiftEnv = {
       typeEnv = [],
       records = mapEmpty (mapCmp cmpType),
+      labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
     } in
 
@@ -245,10 +285,11 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
           let variantNameTy = TyVariantName {ident = t.ident} in
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
                 with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
-        else match tyIdent with TyRecord {fields = fields} then
+        else match tyIdent
+        with TyRecord {fields = fields} & ty then
           let f = lam env. lam. lam ty. typeLiftType env ty in
           match mapMapAccum f env fields with (env, fields) then
-            match _addRecordTypeVar env fields with (env, _) then
+            match addRecordToEnv env ty with (env, _) then
               env
             else never
           else never
@@ -300,22 +341,27 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
     else never
 end
 
-lang MatchTypeLift = TypeLift + MatchAst + RecordPat
+lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
     -- If the pattern describes a tuple, then we add a tuple type containing
     -- the amount of elements specified in the tuple (of unknown type) to the
     -- environment.
     let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
-      match pat with PatRecord {bindings = bindings} then
-        match _record2tuple bindings with Some _ then
-          let bindingTypes = mapMap (lam. tyunknown_) bindings in
-          match mapLookup bindingTypes env.records with Some _ then
+      match pat with PatRecord {bindings = bindings, info = info} then
+        match record2tuple bindings with Some _ then
+          let fields = mapMap (lam. tyunknown_) bindings in
+          let labels = map stringToSid (create (mapSize fields) int2string) in
+          let ty =
+            TyRecord {
+              fields = fields,
+              labels = labels,
+              info = info
+            }
+          in
+          match addRecordToEnv env ty with (env, _) then
             env
-          else
-            match _addRecordTypeVar env bindingTypes with (env, tyName) then
-              env
-            else never
+          else never
         else env
       else env
     in
@@ -371,8 +417,11 @@ end
 lang ExtTypeLift = TypeLift + ExtAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmExt t ->
-    match typeLiftExpr env t.inexpr with (env, inexpr) then
-      (env, TmExt {t with inexpr = inexpr})
+    match typeLiftType env t.ty with (env, ty) then
+      match typeLiftExpr env t.inexpr with (env, inexpr) then
+        (env, TmExt {{t with ty = ty}
+                        with inexpr = inexpr})
+      else never
     else never
 end
 
@@ -433,17 +482,13 @@ end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
-  | TyRecord t & ty ->
-    if eqi (mapLength t.fields) 0 then
+  | TyRecord ({fields = fields} & r) & ty->
+    if eqi (mapLength fields) 0 then
       (env, ty)
     else
       let f = lam env. lam. lam ty. typeLiftType env ty in
-      match mapMapAccum f env t.fields with (env, fields) then
-        let env : TypeLiftEnv = env in
-        match mapLookup fields env.records with Some name then
-          (env, ntyvar_ name)
-        else
-          _addRecordTypeVar env fields
+      match mapMapAccum f env fields with (env, fields) then
+        addRecordToEnv env (TyRecord {r with fields = fields})
       else never
 end
 
@@ -486,7 +531,16 @@ lang MExprTypeLift =
   AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
 end
 
-lang TestLang = MExprTypeLift + MExprSym + MExprTypeAnnot + MExprPrettyPrint
+lang MExprTypeLiftOrderedRecordsCmpClosed =
+  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + MExprCmpTypeIndex
+lang MExprTypeLiftUnOrderedRecords =
+  MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
+lang MExprTypeLiftUnOrderedRecordsCmpClosed =
+  MExprTypeLiftUnOrderedRecords + MExprCmpTypeIndex
+
+lang TestLang =
+  MExprTypeLiftUnOrderedRecordsCmpClosed + MExprSym + MExprTypeAnnot +
+  MExprPrettyPrint
 
 mexpr
 
@@ -510,7 +564,7 @@ in
 
 let unitNotLifted = typeAnnot (symbolize (bindall_ [
   ulet_ "x" (int_ 2),
-  unit_
+  uunit_
 ])) in
 (match typeLift unitNotLifted with (env, t) then
   utest env with [] using eqEnv in
@@ -539,14 +593,14 @@ let variant = typeAnnot (symbolize (bindall_ [
     ntyvar_ treeName,
     ntyvar_ treeName]) (ntyvar_ treeName)),
   ncondef_ leafName (tyarrow_ tyint_ (ntyvar_ treeName)),
-  unit_
+  uunit_
 ])) in
 (match typeLift variant with (_, t) then
-  utest t with unit_ using eqExpr in
+  utest t with uunit_ using eqExpr in
   ()
 else never);
 
-let lastTerm = nconapp_ branchName (record_ [
+let lastTerm = nconapp_ branchName (urecord_ [
   ("lhs", nconapp_ leafName (int_ 1)),
   ("rhs", nconapp_ leafName (int_ 2))
 ]) in
@@ -575,15 +629,15 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
 else never);
 
 let nestedRecord = typeAnnot (symbolize (bindall_ [
-  ulet_ "r" (record_ [
-    ("a", record_ [
+  ulet_ "r" (urecord_ [
+    ("a", urecord_ [
       ("x", int_ 2),
       ("y", float_ 3.14),
-      ("z", unit_)
+      ("z", uunit_)
     ]),
     ("b", int_ 7)
   ]),
-  unit_
+  uunit_
 ])) in
 (match typeLift nestedRecord with (env, t) then
   let fstid = (get env 0).0 in
@@ -605,9 +659,9 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
 else never);
 
 let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (record_ [("a", int_ 2), ("b", true_)]),
-  unit_
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
+  uunit_
 ])) in
 (match typeLift recordsSameFieldsDifferentTypes with (env, t) then
   let fstid = (get env 0).0 in
@@ -622,9 +676,9 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
 else never);
 
 let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (record_ [("a", int_ 3), ("b", int_ 6)]),
-  unit_
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)]),
+  uunit_
 ])) in
 (match typeLift recordsSameFieldsSameTypes with (env, t) then
   let recid = (get env 0).0 in
@@ -636,7 +690,7 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   ()
 else never);
 
-let record = typeAnnot (symbolize (record_ [
+let record = typeAnnot (symbolize (urecord_ [
   ("a", int_ 2),
   ("b", float_ 1.5)
 ])) in
@@ -650,7 +704,7 @@ let record = typeAnnot (symbolize (record_ [
 else never);
 
 let recordUpdate = typeAnnot (symbolize (bindall_ [
-  ulet_ "x" (record_ [("a", int_ 0), ("b", int_ 1)]),
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
   recordupdate_ (var_ "x") "a" (int_ 2)
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
@@ -670,9 +724,9 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
     ("global", tyvar_ "GlobalEnv"),
     ("local", tyvar_ "LocalEnv")
   ]),
-  ulet_ "env" (record_ [
-    ("global", seq_ [tuple_ [str_ "x", int_ 4]]),
-    ("local", seq_ [tuple_ [str_ "a", int_ 0]])
+  ulet_ "env" (urecord_ [
+    ("global", seq_ [utuple_ [str_ "x", int_ 4]]),
+    ("local", seq_ [utuple_ [str_ "a", int_ 0]])
   ]),
   var_ "env"
 ])) in

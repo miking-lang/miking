@@ -229,9 +229,18 @@ lang NeverANF = ANF + NeverAst
 
 end
 
+lang ExtANF = ANF + ExtAst
+  sem isValue =
+  | TmExt _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmExt ({inexpr = inexpr} & t) ->
+    k (TmExt {t with inexpr = normalizeTerm inexpr})
+end
+
 lang MExprANF =
   VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
-  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
 
 -----------
 -- TESTS --
@@ -316,7 +325,7 @@ utest _anf apps with
 using eqExpr in
 
 let record =
-  record_ [
+  urecord_ [
     ("a",(app_ (int_ 1) (app_ (int_ 2) (int_ 3)))),
     ("b", (int_ 4)),
     ("c", (app_ (int_ 5) (int_ 6)))
@@ -347,7 +356,7 @@ utest _anf factorial with
         ),
         var_ "t1"
       ])),
-    ulet_ "t5" unit_,
+    ulet_ "t5" uunit_,
     var_ "t5"
   ]
 using eqExpr in
