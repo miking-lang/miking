@@ -5,6 +5,7 @@ include "assoc.mc"
 include "info.mc"
 include "name.mc"
 include "string.mc"
+include "map.mc"
 
 -----------
 -- TERMS --
@@ -19,6 +20,28 @@ lang Ast
   syn Type =
   -- Intentionally left blank
 
+  syn Pat =
+  -- Intentionally left blank
+
+  sem ty =
+  -- Intentionally left blank
+
+  sem withType (ty : Type) =
+  -- Intentionally left blank
+
+  -- TODO(vipa, 2021-05-27): Replace smap and sfold with smapAccumL for Expr and Type as well
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | p -> (acc, p)
+
+  sem smap_Pat_Pat (f : a -> b) =
+  | p ->
+    let res: ((), Pat) = smapAccumL_Pat_Pat (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Pat_Pat (f : acc -> a -> acc) (acc : acc) =
+  | p ->
+    let res: (acc, Pat) = smapAccumL_Pat_Pat (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
 end
 
 -- TmVar --
@@ -707,12 +730,6 @@ lang NamedPat = MatchAst
 
   sem infoPat =
   | PatNamed r -> r.info
-
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatNamed p -> PatNamed p
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatNamed _ -> acc
 end
 
 lang SeqTotPat = MatchAst
@@ -723,11 +740,11 @@ lang SeqTotPat = MatchAst
   sem infoPat =
   | PatSeqTot r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatSeqTot p -> PatSeqTot {p with pats = map f p.pats}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatSeqTot {pats = pats} -> foldl f acc pats
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatSeqTot r ->
+    match mapAccumL f acc r.pats with (acc, pats) then
+      (acc, PatSeqTot {r with pats = pats})
+    else never
 end
 
 lang SeqEdgePat = MatchAst
@@ -740,12 +757,13 @@ lang SeqEdgePat = MatchAst
   sem infoPat =
   | PatSeqEdge r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
   | PatSeqEdge p ->
-      PatSeqEdge {{p with prefix = map f p.prefix} with postfix = map f p.postfix}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatSeqEdge {prefix = pre, postfix = post} -> foldl f (foldl f acc pre) post
+    match mapAccumL f acc p.prefix with (acc, prefix) then
+      match mapAccumL f acc p.postfix with (acc, postfix) then
+        (acc, PatSeqEdge {{p with prefix = prefix} with postfix = postfix})
+      else never
+    else never
 end
 
 lang RecordPat = MatchAst
@@ -756,13 +774,11 @@ lang RecordPat = MatchAst
   sem infoPat =
   | PatRecord r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatRecord b ->
-      PatRecord {b with bindings = mapMap f b.bindings}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatRecord {bindings = bindings} ->
-      mapFoldWithKey (lam acc. lam _k. lam v. f acc v) acc bindings
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatRecord p ->
+    match mapMapAccum (lam acc. lam. lam p. f acc p) acc p.bindings with (acc, bindings) then
+      (acc, PatRecord {p with bindings = bindings})
+    else never
 end
 
 lang DataPat = MatchAst + DataAst
@@ -774,11 +790,11 @@ lang DataPat = MatchAst + DataAst
   sem infoPat =
   | PatCon r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatCon c -> PatCon {c with subpat = f c.subpat}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatCon {subpat = subpat} -> f acc subpat
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatCon c ->
+    match f acc c.subpat with (acc, subpat) then
+      (acc, PatCon {c with subpat = subpat})
+    else never
 end
 
 lang IntPat = MatchAst + IntAst
@@ -788,12 +804,6 @@ lang IntPat = MatchAst + IntAst
 
   sem infoPat =
   | PatInt r -> r.info
-
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatInt v -> PatInt v
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatInt _ -> acc
 end
 
 lang CharPat = MatchAst
@@ -803,12 +813,6 @@ lang CharPat = MatchAst
 
   sem infoPat =
   | PatChar r -> r.info
-
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatChar v -> PatChar v
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatChar _ -> acc
 end
 
 lang BoolPat = MatchAst + BoolAst
@@ -818,12 +822,6 @@ lang BoolPat = MatchAst + BoolAst
 
   sem infoPat =
   | PatBool r -> r.info
-
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatBool v -> PatBool v
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatBool _ -> acc
 end
 
 lang AndPat = MatchAst
@@ -835,11 +833,13 @@ lang AndPat = MatchAst
   sem infoPat =
   | PatAnd r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatAnd p -> PatAnd {{p with lpat = f p.lpat} with rpat = f p.rpat}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatAnd {lpat = l, rpat = r} -> f (f acc l) r
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatAnd p ->
+    match f acc p.lpat with (acc, lpat) then
+      match f acc p.rpat with (acc, rpat) then
+        (acc, PatAnd {{p with lpat = lpat} with rpat = rpat})
+      else never
+    else never
 end
 
 lang OrPat = MatchAst
@@ -851,11 +851,13 @@ lang OrPat = MatchAst
   sem infoPat =
   | PatOr r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatOr p -> PatOr {{p with lpat = f p.lpat} with rpat = f p.rpat}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatOr {lpat = l, rpat = r} -> f (f acc l) r
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatOr p ->
+    match f acc p.lpat with (acc, lpat) then
+      match f acc p.rpat with (acc, rpat) then
+        (acc, PatOr {{p with lpat = lpat} with rpat = rpat})
+      else never
+    else never
 end
 
 lang NotPat = MatchAst
@@ -866,11 +868,11 @@ lang NotPat = MatchAst
   sem infoPat =
   | PatNot r -> r.info
 
-  sem smap_Pat_Pat (f : Pat -> a) =
-  | PatNot p -> PatNot {p with subpat = f p.subpat}
-
-  sem sfold_Pat_Pat (f : a -> b -> a) (acc : a) =
-  | PatNot {subpat = p} -> f acc p
+  sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
+  | PatNot p ->
+    match f acc p.subpat with (acc, subpat) then
+      (acc, PatNot {p with subpat = subpat})
+    else never
 end
 
 -----------
