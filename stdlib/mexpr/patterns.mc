@@ -232,10 +232,12 @@ let parallelPartition_ = lam p. lam as.
                        info = NoInfo ()}
 let parallelAll_ = lam p. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelAll {p = p, as = as, info = NoInfo ()}
+  TmParallelAll {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
+                 info = NoInfo ()}
 let parallelAny_ = lam p. lam as.
   use MExprPatternKeywordMaker in
-  TmParallelAny {p = p, as = as, info = NoInfo ()}
+  TmParallelAny {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
+                 info = NoInfo ()}
 
 mexpr
 
