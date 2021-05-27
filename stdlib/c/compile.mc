@@ -249,13 +249,13 @@ lang MExprCCompile = MExprAst + CAst
 
   sem compileType (env: CompileCEnv) =
 
-  | TyInt _   -> CTyInt {}
+  | TyInt _ -> CTyInt {}
   | TyFloat _ -> CTyDouble {}
   | TyBool _
-  | TyChar _  -> CTyChar {}
+  | TyChar _ -> CTyChar {}
 
   | TyArrow _ & ty ->
-    error "Type not currently supported"
+    infoErrorExit (infoTy ty) "TyArrow currently not supported"
     -- recursive let params = lam acc. lam ty.
     --   match ty with TyArrow { from = from, to = to } then
     --     params (snoc acc from) to
@@ -269,31 +269,33 @@ lang MExprCCompile = MExprAst + CAst
     --   else never
     -- else never
 
-  | TyRecord { fields = fields } ->
+  | TyRecord { fields = fields } & ty ->
     if mapIsEmpty fields then CTyVoid {}
     else
-      error "ERROR: TyRecord should not occur in compileType. Did you run type lift?"
+      infoErrorExit (infoTy ty)
+        "TyRecord should not occur in compileType. Did you run type lift?"
 
   | TyVar { ident = ident } & ty ->
     -- Safety precaution, it seems this may already be handled by type lifting
     let unwrapped =
       match _unwrapTypeAlias env.typeEnv ty with TyVar { ident = i } then i
-      else error "Impossible in compileType"
+      else infoErrorExit (infoTy ty) "Impossible in compileType"
     in
     match find (nameEq unwrapped) env.structTypes with Some _ then
       CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } }
     else CTyVar { id = ident }
 
-  | TyUnknown _ -> CTyChar {}
-  -- | TyUnknown _ -> error "Unknown type in compileType"
+  -- | TyUnknown _ -> CTyChar {}
+  | TyUnknown _ & ty -> infoErrorExit (infoTy ty) "Unknown type in compileType"
 
   | TySeq { ty = TyChar _ } -> CTyPtr { ty = CTyChar {} }
 
-  | TyVariant _ ->
-    error "TyVariant should not occur in compileType. Did you run type lift?"
+  | TyVariant _ & ty ->
+    infoErrorExit (infoTy ty)
+      "TyVariant should not occur in compileType. Did you run type lift?"
 
   | TySeq _
-  | TyApp _ -> error "Type not currently supported"
+  | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
 
 
   -------------

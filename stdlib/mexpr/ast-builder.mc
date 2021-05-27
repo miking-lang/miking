@@ -106,9 +106,17 @@ let tychar_ = use CharTypeAst in
 let tyunknown_ = use UnknownTypeAst in
   TyUnknown {info = NoInfo ()}
 
+let ityunknown_ = use UnknownTypeAst in
+  lam i: Info.
+  TyUnknown {info = i}
+
+let ityseq_ = use SeqTypeAst in
+  lam info. lam ty.
+  TySeq {ty = ty, info = info}
+
 let tyseq_ = use SeqTypeAst in
   lam ty.
-  TySeq {ty = ty, info = NoInfo ()}
+  ityseq_ (NoInfo ()) ty
 
 let tystr_ = tyseq_ tychar_
 
@@ -116,9 +124,13 @@ let tytensor_ = use TensorTypeAst in
   lam ty.
   TyTensor {ty = ty, info = NoInfo ()}
 
+let ityarrow_ = use FunTypeAst in
+  lam info. lam from. lam to.
+  TyArrow {from = from, to = to, info = info}
+
 let tyarrow_ = use FunTypeAst in
   lam from. lam to.
-  TyArrow {from = from, to = to, info = NoInfo ()}
+  ityarrow_ (NoInfo ()) from to
 
 let tyarrows_ = use FunTypeAst in
   lam tys.
