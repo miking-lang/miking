@@ -47,14 +47,14 @@ let _lookupPreamble = use FutharkAst in
   else
     error (join ["Could not find definition of function ", s, " in preamble"])
 
-recursive let isHigherOrderFunction = use FutharkAst in
+recursive let _isHigherOrderFunction = use FutharkAst in
   lam params : [(Name, FutType)].
   match params with [] then
     false
   else match params with [(_, ty)] ++ t then
     match ty with FTyArrow _ then
       true
-    else isHigherOrderFunction t
+    else _isHigherOrderFunction t
   else never
 end
 
@@ -95,6 +95,16 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyUnknown t -> infoErrorExit t.info "Cannot translate unknown type to Futhark"
 end
 
+let _collectParams = use FutharkTypeGenerate in
+  lam env : FutharkGenerateEnv. lam body : Expr.
+  recursive let work = lam params : [(Name, FutType)]. lam body : Expr.
+    match body with TmLam t then
+      let params = snoc params (t.ident, generateType env t.tyIdent) in
+      work params t.body
+    else (params, body)
+  in
+  work [] body
+
 lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
@@ -126,8 +136,14 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     let targetName = nameSym "_target" in
     let lengthCond = geqi_ (length_ (nvar_ targetName)) (int_ 1) in
     FELet {ident = targetName, tyBody = generateType env (ty t.target),
-           body = generateExpr env t.target,
-           inexpr = generateExpr env t.thn}
+           body = generateExpr env t.target, inexpr = generateExpr env t.thn}
+  | TmMatch ({pat = PatSeqEdge {prefix = [], middle = PName mid,
+                                postfix = [PatNamed {ident = PName post}]},
+              els = TmNever _} & t) ->
+    let targetName = nameSym "_target" in
+    let lengthCond = geqi_ (length_ (nvar_ targetName)) (int_ 1) in
+    FELet {ident = targetName, tyBody = generateType env (ty t.target),
+           body = generateExpr env t.target, inexpr = generateExpr env t.thn}
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
@@ -156,6 +172,34 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     futPartition_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
+  -- Super special-cased translation of self-recursive functions to get
+  -- compilation to work without complete support for recursion -> loop
+  -- translation. This code makes a lot of assumptions about the structure of
+  -- the recursive binding and how it makes its recursive calls. In general it
+  -- will not produce the correct code.
+  | TmRecLets t ->
+    let unsupportedTranslationError = lam info : Info.
+      infoErrorExit info "Cannot translate recursive binding to Futhark"
+    in
+    let generateBinding = lam binding : RecLetBinding.
+      match _collectParams env binding.body with
+        (params,
+         TmMatch {target = TmVar v1, pat = PatSeqTot {pats = []}, thn = base,
+                  els = TmMatch {target = TmVar v2, pat = PatSeqEdge p,
+                                 thn = recur, els = TmNever _}})
+      then
+        if nameEq v1.ident v2.ident then
+          match p with {prefix = [], middle = PName mid,
+                        postfix = [PatNamed {ident = PName post}]} then
+            () --TODO
+          else match p with {prefix = [PatNamed {ident = PName pre}],
+                             middle = PName mid, postfix = []} then
+            () --TODO
+          else unsupportedTranslationError binding.info
+        else unsupportedTranslationError binding.info
+      else unsupportedTranslationError binding.info
+    in
+    map generateBinding t.bindings
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
@@ -166,28 +210,19 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     let env = {env with typeEnv = mapInsert t.ident futType env.typeEnv} in
     generateToplevel env t.inexpr
   | TmLet t ->
-    let collectParams = lam body : Expr.
-      recursive let work = lam params : [(Name, FutType)]. lam body : Expr.
-        match body with TmLam t then
-          let params = snoc params (t.ident, generateType env t.tyIdent) in
-          work params t.body
-        else (params, body)
-      in
-      work [] body
-    in
     recursive let findReturnType = lam ty : Type.
       match ty with TyArrow t then
         findReturnType t.to
       else ty
     in
     let decl =
-      match collectParams t.body with (params, body) then
+      match _collectParams env t.body with (params, body) then
         if null params then
           FDeclConst {ident = t.ident, ty = generateType env t.tyBody,
                       val = generateExpr env body}
         else
           let retTy = findReturnType t.tyBody in
-          let entry = not (isHigherOrderFunction params) in
+          let entry = not (_isHigherOrderFunction params) in
           FDeclFun {ident = t.ident, entry = entry, typeParams = [],
                     params = params, ret = generateType env retTy,
                     body = generateExpr env body}
