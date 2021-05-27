@@ -409,7 +409,7 @@ lang MExprCCompile = MExprAst + CAst
   sem compileLet (env: CompileCEnv) (ident: Name) =
 
   | TmMatch { ty = tyMatch, target = target, pat = pat,
-              thn = thn, els = els } ->
+              thn = thn, els = els } & t ->
 
     -- Allocate memory for return value of match expression
     let def = if _isUnitTy tyMatch then [] else
@@ -428,16 +428,19 @@ lang MExprCCompile = MExprAst + CAst
         match compilePat env [] [] ctarget (ty target) pat
         with (conds, defs) then
 
-          -- Compute joint condition
-          let cond = foldr1 (lam cond. lam acc.
-              CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
-            ) conds in
+          let thn = concat defs thn in
 
-          -- TODO Empty cond => no if needed
+          let stmts =
+            if null conds then thn
+            else
+              -- Compute joint condition
+              let cond = foldr1 (lam cond. lam acc.
+                  CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
+                ) conds in
+              [CSIf { cond = cond, thn = thn, els = els }]
+          in
 
-          -- Produce final statement
-          let stmt = CSIf { cond = cond, thn = concat defs thn, els = els } in
-          (env, def, [stmt])
+          (env, def, stmts)
 
         else never
       else never
@@ -636,6 +639,14 @@ lang MExprCCompile = MExprAst + CAst
   | CEqf _ -> CEBinOp { op = COEq {}, lhs = head args, rhs = last args }
   | CLti _
   | CLtf _ -> CEBinOp { op = COLt {}, lhs = head args, rhs = last args }
+  | CGti _
+  | CGtf _ -> CEBinOp { op = COGt {}, lhs = head args, rhs = last args }
+  | CLeqi _
+  | CLeqf _ -> CEBinOp { op = COLe {}, lhs = head args, rhs = last args }
+  | CGeqi _
+  | CGeqf _ -> CEBinOp { op = COGe {}, lhs = head args, rhs = last args }
+  | CNeqi _
+  | CNeqf _ -> CEBinOp { op = CONeq {}, lhs = head args, rhs = last args }
 
   -- Unary operators
   | CNegf _ -> CEUnOp { op = CONeg {}, arg = head args }
