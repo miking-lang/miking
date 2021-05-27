@@ -293,13 +293,39 @@ let quickSort = lam cmp. lam seq.
     concat (quickSort cmp lr.0) (cons h (quickSort cmp lr.1))
 end
 
+recursive let merge = lam cmp. lam l. lam r.
+  match l with [] then r
+  else match r with [] then l
+  else match (l, r) with ([x] ++ xs, [y] ++ ys) then
+    if leqi (cmp x y) 0 then
+      cons x (merge cmp xs r)
+    else
+      cons y (merge cmp l ys)
+  else never
+end
+
+recursive let mergeSort = lam cmp. lam seq.
+  match seq with [] then []
+  else match seq with [x] then [x]
+  else
+    let lr = splitAt seq (divi (length seq) 2) in
+    merge cmp (mergeSort cmp lr.0) (mergeSort cmp lr.1)
+end
+
 let sort = quickSort
 
-utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
-utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
-utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest sort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest quickSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
+utest quickSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest quickSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
+utest quickSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
+utest quickSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+
+utest mergeSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
+utest mergeSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest mergeSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
+utest mergeSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
+utest mergeSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+
 
 -- Max/Min
 let min = lam cmp. lam seq.
