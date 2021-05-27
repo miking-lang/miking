@@ -63,10 +63,6 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let fileExists = lam path.
-  match sysRunCommand ["ls", path] "" "." with {returncode = 0} then true
-  else false
-
 let insertTunedOrDefaults = lam ast. lam file.
   use MCoreCompile in
   let tuneFile = tuneFileName file in

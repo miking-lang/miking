@@ -713,10 +713,10 @@ end
 
 lang FileOpPrettyPrint = FileOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CFileRead _ -> "fileRead"
-  | CFileWrite _ -> "fileWrite"
+  | CFileRead _ -> "readFile"
+  | CFileWrite _ -> "writeFile"
   | CFileExists _ -> "fileExists"
-  | CFileDelete _ -> "fileDelete"
+  | CFileDelete _ -> "deleteFile"
 end
 
 lang IOPrettyPrint = IOAst + ConstPrettyPrint

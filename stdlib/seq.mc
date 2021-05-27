@@ -254,8 +254,14 @@ end
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
-let partition = (lam p. lam seq.
-    (filter p seq, filter (lam q. if p q then false else true) seq))
+let partition = lam p. lam seq.
+  recursive let work = lam l. lam r. lam seq.
+    match seq with [] then (l, r)
+    else match seq with [s] ++ seq then
+      if p s then work (cons s l) r seq
+      else work l (cons s r) seq
+    else never
+  in work [] [] (reverse seq)
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1])
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[])

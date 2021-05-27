@@ -24,16 +24,19 @@ let tuneFileName = lam file.
     else file
   in concat withoutExtension tuneFileExtension
 
-let tuneDumpTable = lam file : String. lam table : LookupTable.
+let _tuneTable2str = lam table : LookupTable.
   use MExprPrettyPrint in
+  strJoin " " (map expr2str table)
+
+let tuneDumpTable = lam file : String. lam table : LookupTable.
   let destinationFile = tuneFileName file in
-  writeFile destinationFile
-    (strJoin " " (map expr2str table))
+  -- NOTE(Linnea, 2021-05-27): add whitespace as workaround for bug #145
+  writeFile destinationFile (concat (_tuneTable2str table) " ")
 
 let tuneReadTable = lam file : String.
   use BootParser in
   let str = readFile file in
-  map (parseMExprString []) (strSplit " " str)
+  map (parseMExprString []) (strSplit " " (strTrim str))
 
 ------------------------------
 -- Base fragment for tuning --
@@ -57,6 +60,7 @@ lang TuneBase = Holes
     else
       let msg = strJoin " "
       [ "Program returned non-zero exit code during tuning\n"
+      , "decision point values:", _tuneTable2str table, "\n"
       , "command line arguments:", strJoin " " args, "\n"
       , "stdout:", res.stdout, "\n"
       , "stderr:", res.stderr, "\n"
@@ -102,15 +106,17 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     match searchState
     with {iter = iter
          , inc = {assignment = Table {table = inc},
-                  cost = Runtime {time = time}}
-         , cur = {assignment = Table {table = cur}}}
+                  cost = Runtime {time = incTime}}
+         , cur = {assignment = Table {table = cur},
+                  cost = Runtime {time = curTime}}}
     then
       use MExprPrettyPrint in
       let incValues = map expr2str inc in
       let curValues = map expr2str cur in
       printLn (join ["Iter: ", int2string iter, "\n",
-                     "Best time: ", float2string time, "\n",
                      "Current table: ", strJoin ", " curValues, "\n",
+                     "Current time: ", float2string curTime, "\n",
+                     "Best time: ", float2string incTime, "\n",
                      "Best table: ", strJoin ", " incValues])
 
     else never
