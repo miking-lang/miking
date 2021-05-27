@@ -784,7 +784,7 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorCopyExn _ -> "tensorCopyExn"
   | CTensorSliceExn _ -> "tensorSliceExn"
   | CTensorSubExn _ -> "tensorSubExn"
-  | CTensorIteri _ -> "tensorIteri"
+  | CTensorIteri _ -> "tensorIterSlice"
 end
 
 lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint

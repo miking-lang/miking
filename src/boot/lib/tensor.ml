@@ -27,7 +27,7 @@ let inverse_row_major_ofs shape i =
   done ;
   is
 
-let mk_iteri rank shape slice f t =
+let mk_iter_slice rank shape slice f t =
   if rank t = 0 then f (-1) t
   else
     let n = (shape t).(0) in
@@ -112,7 +112,7 @@ module Dense = struct
       {t with left_ofs; size= prod shape; shape} )
     else raise (Invalid_argument "Tensor.Dense.sub_exn")
 
-  let iteri f t = mk_iteri rank shape slice_exn f t
+  let iter_slice f t = mk_iter_slice rank shape slice_exn f t
 
   let equal eq t1 t2 =
     if shape t1 = shape t2 then (
@@ -181,7 +181,7 @@ module CArray = struct
 
   let sub_exn = Bigarray.Genarray.sub_left
 
-  let iteri f t = mk_iteri rank shape slice_exn f t
+  let iter_slice f t = mk_iter_slice rank shape slice_exn f t
 
   let data_to_array t =
     let n = prod (shape t) in

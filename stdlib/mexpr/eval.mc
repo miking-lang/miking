@@ -932,15 +932,15 @@ lang TensorOpEval =
 
       match t with TInt t then
         let g = mkg (lam t. TInt t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else match t with TFloat t then
         let g = mkg (lam t. TFloat t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else match t with TExpr t then
         let g = mkg (lam t. TExpr t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else never
     else error "Second argument to CTensorIteri not a tensor"
@@ -1850,7 +1850,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
                   (ulam_ "x"
                      (utensorCopyExn_ (var_ "x") (var_ "x"))))
   in
-  utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
+  utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
   ()
 in
 
@@ -1862,7 +1862,7 @@ in
 
 let evaln = evalNoSymbolize in
 
-utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
+utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in

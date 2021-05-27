@@ -159,7 +159,7 @@ lam f. lam g. lam t1. lam t2.
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 =  tensorReshapeExn t2 [n] in
-    tensorIteri (lam i. lam e. tensorSetExn v2 [i] (g (tensorGetExn e [])))
+    tensorIterSlice (lam i. lam e. tensorSetExn v2 [i] (g (tensorGetExn e [])))
                 v1
   else f ()
 

@@ -255,7 +255,7 @@ lang OCamlPrettyPrint =
   | CMapEq _ -> intrinsicOpMap "eq"
   | CMapCmp _ -> intrinsicOpMap "cmp"
   | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
-  | CTensorIteri _ -> intrinsicOpTensor "iteri"
+  | CTensorIteri _ -> intrinsicOpTensor "iter_slice"
   | CTensorCreateInt _ -> intrinsicOpTensor "create_carray_int"
   | CTensorCreateFloat _ -> intrinsicOpTensor "create_carray_float"
   | CTensorCreate _ -> intrinsicOpTensor "create_dense"
