@@ -52,10 +52,10 @@ let pprintEnvGetStr = lam env. lam id: Name.
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
--------------
--- C TYPES --
--------------
-lang CTypePrettyPrint = CTypeAst
+-----------------------------
+-- C TYPES AND EXPRESSIONS --
+-----------------------------
+lang CExprTypePrettyPrint = CExprTypeAst
 
   sem printCType (decl: String) (env: PprintEnv) =
 
@@ -77,8 +77,11 @@ lang CTypePrettyPrint = CTypeAst
     else never
 
   | CTyArray { ty = ty, size = size } ->
-    let subscr = match size with Some size then int2string size else "" in
-    printCType (join [decl, "[", subscr, "]"]) env ty
+    let subscr =
+      match size with Some size then printCExpr env size else (env,"") in
+    match subscr with (env,subscr) then
+      printCType (join [decl, "[", subscr, "]"]) env ty
+    else never
 
   | CTyStruct { id = id, mem = mem } ->
     let idtup =
@@ -124,14 +127,6 @@ lang CTypePrettyPrint = CTypeAst
       else (env, _joinSpace (_joinSpace "enum" id) decl)
     else never
 
-end
-
-
-
--------------------
--- C EXPRESSIONS --
--------------------
-lang CExprPrettyPrint = CExprAst + CTypePrettyPrint
 
   sem printCExpr (env: PprintEnv) =
 
@@ -219,7 +214,7 @@ end
 --------------------
 -- C INITIALIZERS --
 --------------------
-lang CInitPrettyPrint = CInitAst + CExprPrettyPrint
+lang CInitPrettyPrint = CInitAst + CExprTypePrettyPrint
 
   sem printCInit (env: PprintEnv) =
   | CIExpr { expr = expr } -> printCExpr env expr
@@ -234,7 +229,7 @@ end
 -------------------------------------
 -- HELPER FRAGMENT FOR DEFINITIONS --
 -------------------------------------
-lang CDefPrettyPrint = CTypePrettyPrint + CInitPrettyPrint
+lang CDefPrettyPrint = CExprTypePrettyPrint + CInitPrettyPrint
 
   -- Helper function for printing declarations and definitions
   sem printCDef (env: PprintEnv) (ty: CType) (id: String) =
@@ -253,8 +248,7 @@ end
 -- C STATEMENTS --
 ------------------
 lang CStmtPrettyPrint =
-  CStmtAst + CTypePrettyPrint + CInitPrettyPrint + CExprPrettyPrint
-  + CDefPrettyPrint
+  CStmtAst + CInitPrettyPrint + CExprTypePrettyPrint + CDefPrettyPrint
 
   -- Print a line-separated list of statements at the given indentation level.
   sem printCStmts (indent: Int) (env: PprintEnv) =
@@ -354,7 +348,7 @@ end
 -- C TOP-LEVEL --
 -----------------
 lang CTopPrettyPrint =
-  CTopAst + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint
+  CTopAst + CExprTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint
   + CDefPrettyPrint
 
   sem printCTop (indent : Int) (env: PprintEnv) =
@@ -397,8 +391,7 @@ end
 -- COMBINED FRAGMENT --
 -----------------------
 lang CPrettyPrint =
-  CExprPrettyPrint + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint +
-  CTopPrettyPrint
+  CExprTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint + CTopPrettyPrint
 
 
 ---------------
@@ -533,7 +526,8 @@ in
 
 let arrinit = CTDef {
   ty = CTyArray {
-    ty = CTyArray { ty = CTyInt {}, size = Some 3 }, size = None ()
+    ty = CTyArray { ty = CTyInt {}, size = Some (CEInt { i = 3 }) },
+    size = None ()
   },
   id = Some (nameSym "arrinit"),
   init = Some ( CIList {
