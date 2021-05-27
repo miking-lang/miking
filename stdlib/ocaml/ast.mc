@@ -137,6 +137,19 @@ lang OCamlLabel
   | OTmLabel t -> OTmLabel { t with arg = f t.arg }
 end
 
+lang OCamlTryWith
+  syn Expr =
+  | OTmTryWith { body : Expr,  arms : [(Pat, Expr)] }
+
+  sem smap_Expr_Expr (f : Expr -> a) =
+  | OTmTryWith t ->
+    OTmTryWith {{t with body = f t.body}
+                   with arms = map (lam p : (Pat, Expr). (p.0, f p.1)) t.arms}
+
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | OTmTryWith t -> foldl (lam acc. lam a : (Pat, Expr). f acc a.1) (f acc t.body) t.arms
+end
+
 lang OCamlTypeAst =
   BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst + RecordTypeAst +
   FunTypeAst + OCamlLabel
@@ -174,6 +187,7 @@ lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
   OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlLabel +
+  OCamlTryWith +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +
