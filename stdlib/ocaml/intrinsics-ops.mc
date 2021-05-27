@@ -40,7 +40,7 @@ let intrinsicOpMap = use OCamlAst in
   concat "Boot.Intrinsics.Mmap."
 
 let intrinsicOpAtomic = use OCamlAst in
-  concat "Boot.Parimpl.Atomic."
+  concat "Atomic."
 
 let intrinsicOpThread = use OCamlAst in
-  concat "Boot.Parimpl.Thread."
+  concat "Boot.Intrinsics.Thread."

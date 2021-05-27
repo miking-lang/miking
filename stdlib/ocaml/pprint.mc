@@ -283,7 +283,7 @@ lang OCamlPrettyPrint =
   | CAtomicGet _ -> intrinsicOpAtomic "get"
   | CAtomicSet _ -> intrinsicOpAtomic "set"
   | CAtomicExchange _ -> intrinsicOpAtomic "exchange"
-  | CAtomicFetchAndAdd _ -> intrinsicOpAtomic "fetchAndAdd"
+  | CAtomicFetchAndAdd _ -> intrinsicOpAtomic "fetch_and_add"
   | CAtomicCAS _ -> intrinsicOpAtomic "compare_and_set"
   | CThreadSpawn _ -> intrinsicOpThread "spawn"
   | CThreadJoin _ -> intrinsicOpThread "join"
