@@ -9,7 +9,6 @@
 open Ustring.Op
 open Msg
 open Intrinsics
-open Parimpl
 
 (* Debug options *)
 let enable_debug_eval_tm = ref false

@@ -1994,15 +1994,19 @@ testTensors utensorCreate_ (seq_ [int_ 0], seq_ [int_ 1], seq_ [int_ 2]);
 
 -- Atomic references
 let p = ulet_ "r" (atomicMake_ (int_ 0)) in
-utest eval (bind_ p (atomicGet_ (var_ "r"))) with int_ 0 in
-utest eval (bind_ p (atomicExchange_ (var_ "r") (int_ 1))) with int_ 0 in
+utest eval (bind_ p (atomicGet_ (var_ "r"))) with int_ 0
+using eqExpr in
+utest eval (bind_ p (atomicExchange_ (var_ "r") (int_ 1))) with int_ 0
+using eqExpr in
 utest eval (bind_ p (bindall_
   [ ulet_ "_" (atomicExchange_ (var_ "r") (int_ 1))
   , atomicExchange_ (var_ "r") (int_ 2)
   ]))
-with int_ 1 in
-utest eval (bind_ p (atomicFetchAndAdd_ (var_ "r") (int_ 3))) with int_ 0 in
-utest eval (bind_ p (atomicCAS_ (var_ "r") (int_ 0) (int_ 1))) with true_ in
+with int_ 1 using eqExpr in
+utest eval (bind_ p (atomicFetchAndAdd_ (var_ "r") (int_ 3))) with int_ 0
+using eqExpr in
+utest eval (bind_ p (atomicCAS_ (var_ "r") (int_ 0) (int_ 1))) with true_
+using eqExpr in
 
 let p = ulet_ "r" (atomicMake_ (float_ 0.0)) in
 utest eval (bind_ p (atomicGet_ (var_ "r"))) with float_ 0.0 in
@@ -2011,7 +2015,7 @@ utest eval (bind_ p (bindall_
   [ ulet_ "_" (atomicExchange_ (var_ "r") (float_ 1.0))
   , atomicExchange_ (var_ "r") (float_ 2.0)
   ]))
-with float_ 1.0 in
+with float_ 1.0 using eqExpr in
 
 utest eval (bindall_
   [ ucondef_ "Foo"
@@ -2021,7 +2025,7 @@ utest eval (bindall_
   , match_ (var_ "foo1") (pcon_ "Foo" (pint_ 1)) true_ false_
   ]
 )
-with true_ in
+with true_ using eqExpr in
 
 -- Threads
 utest eval (bindall_
@@ -2029,14 +2033,14 @@ utest eval (bindall_
   , ulet_ "t" (threadSpawn_ (ulam_ "_" (addi_ (var_ "v") (int_ 1))))
   , threadJoin_ (var_ "t")
   ])
-with int_ 44 in
+with int_ 44 using eqExpr in
 
 utest eval (bindall_
   [ ulet_ "t" (threadSpawn_ (ulam_ "_" (threadSelf_ unit_)))
   , ulet_ "tid" (threadGetID_ (var_ "t"))
   , eqi_ (threadID2Int_ (var_ "tid")) (threadID2Int_ (threadJoin_ (var_ "t")))
   ])
-with true_ in
+with true_ using eqExpr in
 
 let waitForFlag = ureclet_ "waitForFlag" (ulam_ "flag"
   (if_ (atomicGet_ (var_ "flag"))
@@ -2065,7 +2069,7 @@ utest eval (bindall_
   , ulet_ "v2" (atomicGet_ (var_ "afterWait"))
   , seq_ [var_ "v1", var_ "v2", threadJoin_ (var_ "t")]
   ])
-with seq_ [false_, true_, int_ 42] in
+with seq_ [false_, true_, int_ 42] using eqExpr in
 
 
 ()

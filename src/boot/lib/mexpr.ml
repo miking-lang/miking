@@ -9,7 +9,6 @@ open Ast
 open Pprint
 open Printf
 open Intrinsics
-open Parimpl
 
 (* This function determines how to print program output.
    It's used to redirect standard output of a program,
