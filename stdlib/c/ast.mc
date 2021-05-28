@@ -63,8 +63,8 @@ lang CExprTypeAst
   | CTyPtr    { ty: CType }
   | CTyFun    { ret: CType, params: [CType] }
   | CTyArray  { ty: CType, size: Option CExpr }
-  | CTyStruct { id: Option Name, mem: Option [(CType,Option String)] }
-  | CTyUnion  { id: Option Name, mem: Option [(CType,Option String)] }
+  | CTyStruct { id: Option Name, mem: Option [(CType,Option Name)] }
+  | CTyUnion  { id: Option Name, mem: Option [(CType,Option Name)] }
   | CTyEnum   { id: Option Name, mem: Option [Name] }
 
   syn CExpr =
@@ -78,8 +78,8 @@ lang CExprTypeAst
                                               lhs: CExpr,
                                               rhs: CExpr }
   | CEUnOp       /- Unary operators -/      { op: CUnOp, arg: CExpr }
-  | CEMember     /- lhs.id -/               { lhs: CExpr, id: String }
-  | CEArrow      /- lhs->id -/              { lhs: CExpr, id: String }
+  | CEMember     /- lhs.id -/               { lhs: CExpr, id: Name }
+  | CEArrow      /- lhs->id -/              { lhs: CExpr, id: Name }
   | CECast       /- (ty) rhs -/             { ty: CType, rhs: CExpr }
   | CESizeOfType /- sizeof(ty) -/           { ty: CType }
 
