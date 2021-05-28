@@ -47,7 +47,7 @@ let threadExtMap =
 
     ("externalThreadNotify", [
       { ident = "Domain.Sync.notify"
-      , ty = tyarrow_ tythread_ otyunit_
+      , ty = tyarrow_ (tyathread_ "a") otyunit_
       , libraries = []
       }]),
 
