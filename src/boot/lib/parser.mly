@@ -172,7 +172,7 @@ top:
 toplet:
   | LET var_ident ty_op EQ mexpr
     { let fi = mkinfo $1.i $4.i in
-      Let (fi, $2.v, $3, $5) }
+      Let (fi, $2.v, $3 $1.i, $5) }
 
 toptype:
   | TYPE type_ident type_params
@@ -192,7 +192,7 @@ topRecLet:
 topcon:
   | CON con_ident ty_op
     { let fi = mkinfo $1.i $2.i in
-      Con (fi, $2.v, $3) }
+      Con (fi, $2.v, $3 $1.i) }
 
 toputest:
   | UTEST mexpr WITH mexpr
@@ -256,13 +256,13 @@ constrs:
 constr:
   | BAR con_ident constr_params
     { let fi = mkinfo $1.i $2.i in
-      CDecl(fi, $2.v, $3) }
+      CDecl(fi, $2.v, $3 $1.i) }
 
 constr_params:
   | ty
-    { $1 }
+    { fun _ -> $1 }
   |
-    { tyUnit NoInfo }
+    { fun i -> tyUnit i }
 
 params:
   | LPAREN var_ident COLON ty RPAREN params
@@ -301,19 +301,19 @@ mexpr:
          TmRecLets(fi,lst,$4) }
   | LET var_ident ty_op EQ mexpr IN mexpr
       { let fi = mkinfo $1.i $6.i in
-        TmLet(fi,$2.v,Symb.Helpers.nosym,$3,$5,$7) }
+        TmLet(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5,$7) }
   | LAM var_ident ty_op DOT mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        TmLam(fi,$2.v,Symb.Helpers.nosym,$3,$5) }
+        TmLam(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5) }
   | LAM DOT mexpr
       { let fi = mkinfo $1.i (tm_info $3) in
         TmLam(fi,us"",Symb.Helpers.nosym,TyUnknown(fi),$3) }
   | IF mexpr THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $6) in
-        TmMatch(fi,$2,PatBool(NoInfo,true),$4,$6) }
+        TmMatch(fi,$2,PatBool(fi,true),$4,$6) }
   | CON con_ident ty_op IN mexpr
       { let fi = mkinfo $1.i $4.i in
-        TmConDef(fi,$2.v,Symb.Helpers.nosym,$3,$5)}
+        TmConDef(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
          TmMatch(fi,$2,$4,$6,$8) }
@@ -336,17 +336,17 @@ mexpr:
 lets:
   | LET var_ident ty_op EQ mexpr
       { let fi = mkinfo $1.i (tm_info $5) in
-        [(fi, $2.v, $3, $5)] }
+        [(fi, $2.v, $3 $1.i, $5)] }
   | LET var_ident ty_op EQ mexpr lets
       { let fi = mkinfo $1.i (tm_info $5) in
-        (fi, $2.v, $3, $5)::$6 }
+        (fi, $2.v, $3 $1.i, $5)::$6 }
 
 sequence:
   | left
      { $1 }
   | left SEMI mexpr
      { let fi = tm_info $1 in
-       TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(NoInfo), $1, $3) }
+       TmLet(fi, us"", Symb.Helpers.nosym, TyUnknown(fi), $1, $3) }
 
 left:
   | atom
@@ -496,9 +496,9 @@ pat_list:
 
 ty_op:
   | COLON ty
-      { $2 }
+      { fun _ -> $2 }
   |
-      { TyUnknown NoInfo }
+      { fun i -> TyUnknown i }
 
 
 ty:

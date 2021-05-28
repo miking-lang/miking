@@ -44,17 +44,17 @@ lang BootParser = MExprAst + ConstTransformer
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
     TmVar {ident = gname t 0,
-           ty = tyunknown_,
+           ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}
   | 101 /-TmApp-/ ->
     TmApp {lhs = gterm t 0,
            rhs = gterm t 1,
-           ty = tyunknown_,
+           ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}
   | 102 /-TmLam-/ ->
     TmLam {ident = gname t 0,
            tyIdent = gtype t 0,
-           ty = tyunknown_,
+           ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0,
            body = gterm t 0}
   | 103 /-TmLet-/ ->
@@ -62,7 +62,7 @@ lang BootParser = MExprAst + ConstTransformer
            tyBody = gtype t 0,
            body = gterm t 0,
            inexpr = gterm t 1,
-           ty = tyunknown_,
+           ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}
   | 104 /-TmRecLets-/ ->
     TmRecLets {bindings =
@@ -70,56 +70,56 @@ lang BootParser = MExprAst + ConstTransformer
                       (lam n. {ident = gname t n,
                                tyBody = gtype t n,
                                body = gterm t n,
-                               ty = tyunknown_,
+                               ty = TyUnknown { info = ginfo t 0 },
                                info = ginfo t (addi n 1)}),
                inexpr = gterm t (glistlen t 0),
-               ty = tyunknown_,
+               ty = TyUnknown { info = ginfo t 0 },
                info = ginfo t 0}
   | 105 /-TmConst-/ ->
     let c = gconst t 0 in
     TmConst {val = gconst t 0,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 106 /-TmSeq-/ ->
     TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
-           ty =  tyunknown_,
+           ty =  TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}
   | 107 /-TmRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
     TmRecord {bindings =
                 mapFromList cmpSID
                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-              ty = tyunknown_,
+              ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
     TmRecordUpdate {rec = gterm t 0,
                    key = stringToSid (gstr t 0),
                    value = gterm t 1,
-                   ty = tyunknown_,
+                   ty = TyUnknown { info = ginfo t 0 },
                    info = ginfo t 0}
   | 109 /-TmType-/ ->
     TmType {ident = gname t 0,
             tyIdent = gtype t 0,
-            ty = tyunknown_,
+            ty = TyUnknown { info = ginfo t 0 },
             inexpr = gterm t 0,
             info = ginfo t 0}
   | 110 /-TmConDef-/ ->
     TmConDef {ident = gname t 0,
               tyIdent = gtype t 0,
+              ty = TyUnknown { info = ginfo t 0 },
               inexpr = gterm t 0,
-              ty = tyunknown_,
               info = ginfo t 0}
   | 111 /-TmConApp-/ ->
     TmConApp {ident = gname t 0,
               body = gterm t 0,
-              ty = tyunknown_,
+              ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
   | 112 /-TmMatch-/ ->
     TmMatch {target = gterm t 0,
              pat = gpat t 0,
              thn = gterm t 1,
              els = gterm t 2,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 113 /-TmUtest-/ ->
     let tusing = match (glistlen t 0) with 4 then
@@ -129,10 +129,10 @@ lang BootParser = MExprAst + ConstTransformer
              expected = gterm t 1,
              next = gterm t 2,
              tusing = tusing,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 114 /-TmNever-/ ->
-    TmNever {ty = tyunknown_,
+    TmNever {ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,

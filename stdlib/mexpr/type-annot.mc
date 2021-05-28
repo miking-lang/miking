@@ -241,8 +241,8 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
         match compatibleType env.tyEnv from ty with Some _ then
           to
-        else tyunknown_
-      else tyunknown_
+        else (ityunknown_ t.info)
+      else (ityunknown_ t.info)
     in
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
@@ -255,7 +255,7 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
     match env with {varEnv = varEnv} then
       let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
       let body = typeAnnotExpr env t.body in
-      let ty = tyarrow_ t.tyIdent (ty body) in
+      let ty = ityarrow_ t.info t.tyIdent (ty body) in
       TmLam {{t with body = body}
                 with ty = ty}
     else never
@@ -341,7 +341,10 @@ end
 
 lang ConstTypeAnnot = TypeAnnot + MExprConstType
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmConst t -> TmConst {t with ty = tyConst t.val}
+  | TmConst t ->
+    recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
+    let ty = f (tyConst t.val) in
+    TmConst {t with ty = ty }
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -349,15 +352,16 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
   | TmSeq t ->
     let tms = map (typeAnnotExpr env) t.tms in
     let elemTy =
-      if eqi (length tms) 0 then tyunknown_
+      if eqi (length tms) 0 then ityunknown_ t.info
       else
         let types = map (lam term. ty term) tms in
-        match optionFoldlM (compatibleType env.tyEnv) tyunknown_ types with Some ty then
+        match optionFoldlM (compatibleType env.tyEnv) (ityunknown_ t.info) types
+        with Some ty then
           ty
-        else tyunknown_
+        else (ityunknown_ t.info)
     in
     TmSeq {{t with tms = tms}
-              with ty = tyseq_ elemTy}
+              with ty = ityseq_ t.info elemTy}
 end
 
 lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
@@ -404,7 +408,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
             recursive let tyvar = lam ty.
               match ty with TyVar _ then ty
               else match ty with TyApp t then tyvar t.lhs
-              else tyunknown_
+              else (ityunknown_ t.info)
             in
             match compatibleType tyEnv (ty body) from with Some _ then
               tyvar to
@@ -415,7 +419,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
                 ", but the actual type was ", _pprintType (ty body)
               ] in
               infoErrorExit t.info msg
-          else tyunknown_
+          else (ityunknown_ t.info)
         else
           let msg = join ["Application of untyped constructor: ",
                           nameGetStr t.ident] in
@@ -440,7 +444,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
       match env with {tyEnv = tyEnv} then
         match compatibleType tyEnv (ty thn) (ty els) with Some ty then
           ty
-        else tyunknown_
+        else (ityunknown_ t.info)
       else never
     in
     TmMatch {{{{t with target = target}
@@ -465,7 +469,7 @@ end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmNever t -> TmNever {t with ty = tyunknown_}
+  | TmNever t -> TmNever {t with ty = (ityunknown_ t.info)}
 end
 
 
@@ -486,7 +490,7 @@ lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
   | PatSeqTot t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
       else None ()
     in
     match elemTy with Some ty then
@@ -499,7 +503,7 @@ lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
   | PatSeqEdge t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
       else None ()
     in
     match elemTy with Some ty then
@@ -527,7 +531,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
       mapFoldWithKey (annotFields fields) env t.bindings
     else match expectedTy with TyUnknown _ then
       let annotUnknown = lam acc. lam. lam pat.
-        typeAnnotPat acc tyunknown_ pat
+        typeAnnotPat acc (ityunknown_ t.info) pat
       in
       mapFoldWithKey annotUnknown env t.bindings
     else env
