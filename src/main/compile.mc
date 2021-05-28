@@ -120,7 +120,7 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
         -- Collect external library dependencies
         let libs = collectLibraries env.exts in
 
-        let ocamlProg = pprintOcaml (tryWithCatchBootError ast) in
+        let ocamlProg = pprintOcaml ast in
 
         -- Print the AST after code generation
         (if options.debugGenerate then printLn ocamlProg else ());
