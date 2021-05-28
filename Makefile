@@ -26,7 +26,7 @@
   test-boot-base\
   test-boot-part\
   test-sundials\
-	test-par\
+  test-par\
   test-boot-py\
   test-boot-ocaml
 
@@ -58,7 +58,7 @@ test-all:\
   test-boot-compile\
   test-compile\
   test-run\
-	test-par\
+  test-par\
   test-boot
 
 test-boot-compile: build/mi

@@ -445,8 +445,7 @@ lang ConstPrettyPrint = PrettyPrint + ConstAst
   -- intentionally left blank
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmConst t ->
-    (env,getConstStringCode indent t.val)
+  | TmConst t -> (env,getConstStringCode indent t.val)
 end
 
 lang DataPrettyPrint = PrettyPrint + DataAst + UnknownTypeAst
@@ -1104,8 +1103,7 @@ lang MExprPrettyPrint =
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
   RecordPatPrettyPrint + DataPatPrettyPrint + IntPatPrettyPrint +
   CharPatPrettyPrint + BoolPatPrettyPrint + AndPatPrettyPrint +
-
-OrPatPrettyPrint + NotPatPrettyPrint +
+  OrPatPrettyPrint + NotPatPrettyPrint +
 
   -- Types
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
