@@ -110,7 +110,7 @@ let builtin = use MExprAst in
   , ("tensorCopyExn", CTensorCopyExn ())
   , ("tensorSliceExn", CTensorSliceExn ())
   , ("tensorSubExn", CTensorSubExn ())
-  , ("tensorIterSlice", CTensorIteri ())
+  , ("tensorIterSlice", CTensorIterSlice ())
   -- Boot parser
   , ("bootParserParseMExprString", CBootParserParseMExprString ())
   , ("bootParserParseMCoreFile", CBootParserParseMCoreFile ())

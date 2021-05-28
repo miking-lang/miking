@@ -949,7 +949,7 @@ let utensorSubExn_ = tensorSubExn_ tyunknown_
 
 let tensorIterSlice_ = use MExprAst in
   lam ty. lam f. lam t.
-  appf2_ (const_ (tytensoriteri_ ty) (CTensorIteri ())) f t
+  appf2_ (const_ (tytensoriteri_ ty) (CTensorIterSlice ())) f t
 
 let utensorIterSlice_ = tensorIterSlice_ tyunknown_
 

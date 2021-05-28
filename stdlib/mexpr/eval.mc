@@ -888,7 +888,7 @@ lang TensorOpEval =
   | CTensorSliceExn2 T
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
-  | CTensorIteri2 Expr
+  | CTensorIterSlice2 Expr
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -920,7 +920,7 @@ lang TensorOpEval =
   | TmConst { val = CTensorCreate2 shape } ->
     let f = lam is. apply ctx (_toTmSeq is) arg in
     TmTensor { val = TExpr (tensorCreateDense shape f) }
-  | TmConst { val = CTensorIteri2 f } ->
+  | TmConst { val = CTensorIterSlice2 f } ->
     match arg with TmTensor { val = t } then
 
       let mkg = lam mkt. lam i. lam r.
@@ -943,7 +943,7 @@ lang TensorOpEval =
         tensorIterSlice g t;
         uunit_
       else never
-    else error "Second argument to CTensorIteri not a tensor"
+    else error "Second argument to CTensorIterSlice not a tensor"
 
   sem delta (arg : Expr) =
   | CTensorCreateInt _ ->
@@ -1083,8 +1083,8 @@ lang TensorOpEval =
         TmTensor { val = TExpr view }
       else never
     else error "Second argument to CTensorSubExn not an integer"
-  | CTensorIteri _ ->
-    let val = CTensorIteri2 arg in
+  | CTensorIterSlice _ ->
+    let val = CTensorIterSlice2 arg in
     uconst_ val
 end
 
