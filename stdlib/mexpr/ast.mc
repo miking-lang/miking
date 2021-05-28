@@ -43,6 +43,19 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | p -> (acc, p)
+
+  sem smap_Type_Type (f : a -> b) =
+  | p ->
+    let res: ((), Type) = smapAccumL_Type_Type (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Type_Type (f : acc -> a -> acc) (acc : acc) =
+  | p ->
+    let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
+
   sem smapAccumL_Pat_Pat (f : acc -> a -> (acc, b)) (acc : acc) =
   | p -> (acc, p)
 
@@ -891,9 +904,6 @@ lang UnknownTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyUnknown t -> TyUnknown {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyUnknown t -> TyUnknown t
-
   sem infoTy =
   | TyUnknown r -> r.info
 end
@@ -904,9 +914,6 @@ lang BoolTypeAst = Ast
 
   sem tyWithInfo (info : Info) =
   | TyBool t -> TyBool {t with info = info}
-
-  sem smap_Type_Type (f : Type -> a) =
-  | TyBool t -> TyBool t
 
   sem infoTy =
   | TyBool r -> r.info
@@ -919,9 +926,6 @@ lang IntTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyInt t -> TyInt {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyInt t -> TyInt t
-
   sem infoTy =
   | TyInt r -> r.info
 end
@@ -933,9 +937,6 @@ lang FloatTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyFloat t -> TyFloat {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyFloat t -> TyFloat t
-
   sem infoTy =
   | TyFloat r -> r.info
 end
@@ -946,9 +947,6 @@ lang CharTypeAst = Ast
 
   sem tyWithInfo (info : Info) =
   | TyChar t -> TyChar {t with info = info}
-
-  sem smap_Type_Type (f : Type -> a) =
-  | TyChar t -> TyChar t
 
   sem infoTy =
   | TyChar r -> r.info
@@ -963,8 +961,13 @@ lang FunTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyArrow t -> TyArrow {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyArrow t -> TyArrow {{t with from = f t.from} with to = f t.to}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyArrow t ->
+    match f acc t.from with (acc, from) then
+      match f acc t.to with (acc, to) then
+        (acc, TyArrow {{t with from = from} with to = to})
+      else never
+    else never
 
   sem infoTy =
   | TyArrow r -> r.info
@@ -978,8 +981,11 @@ lang SeqTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TySeq t -> TySeq {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TySeq t -> TySeq {t with ty = f t.ty}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TySeq t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, TySeq {t with ty = ty})
+    else never
 
   sem infoTy =
   | TySeq r -> r.info
@@ -993,8 +999,11 @@ lang TensorTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyTensor t -> TyTensor {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyTensor t -> TyTensor {t with ty = f t.ty}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyTensor t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, TyTensor {t with ty = ty})
+    else never
 
   sem infoTy =
   | TyTensor r -> r.info
@@ -1009,8 +1018,11 @@ lang RecordTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyRecord t -> TyRecord {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyRecord t -> TyRecord {t with fields = mapMap f t.fields}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyRecord t ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) then
+      (acc, TyRecord {t with fields = fields})
+    else never
 
   sem infoTy =
   | TyRecord r -> r.info
@@ -1024,8 +1036,11 @@ lang VariantTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyVariant t -> TyVariant {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyVariant t -> TyVariant {t with constrs = mapMap f t.constrs}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyVariant t ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.constrs with (acc, constrs) then
+      (acc, TyVariant {t with constrs = constrs})
+    else never
 
   sem infoTy =
   | TyVariant r -> r.info
@@ -1038,9 +1053,6 @@ lang VarTypeAst = Ast
 
   sem tyWithInfo (info : Info) =
   | TyVar t -> TyVar {t with info = info}
-
-  sem smap_Type_Type (f : Type -> a) =
-  | TyVar t -> TyVar t
 
   sem infoTy =
   | TyVar r -> r.info
@@ -1055,8 +1067,13 @@ lang AppTypeAst = Ast
   sem tyWithInfo (info : Info) =
   | TyApp t -> TyApp {t with info = info}
 
-  sem smap_Type_Type (f : Type -> a) =
-  | TyApp t -> TyApp {{t with lhs = f t.lhs} with rhs = f t.rhs}
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyApp t ->
+    match f acc t.lhs with (acc, lhs) then
+      match f acc t.rhs with (acc, rhs) then
+        (acc, TyApp {{t with lhs = lhs} with rhs = rhs})
+      else never
+    else never
 
   sem infoTy =
   | TyApp r -> r.info
