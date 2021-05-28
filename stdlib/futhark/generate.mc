@@ -303,7 +303,8 @@ let t = symbolize (bindall_ [
   let_ "a" (ntyvar_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
   let_ "b" (ntyvar_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
   let_ "c" (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
-           (record_ [("a", int_ 3), ("b", float_ 2.0)]),
+           (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
+                    [("a", int_ 3), ("b", float_ 2.0)]),
   nlet_ fName (tyarrows_ [tyint_, tyint_, tyint_])
               (lam_ "a" tyint_ (lam_ "b" tyint_ (addi_ (var_ "a") (var_ "b")))),
   nlet_ gName (tyarrows_ [ntyvar_ floatseq, tyfloat_, tyfloat_])
