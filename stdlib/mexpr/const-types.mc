@@ -12,9 +12,6 @@ let tymap_ = tyunknown_
 let tybootparsetree_ = tyunknown_
 let tygeneric_ = lam id. tyunknown_
 let tygenericseq_ = lam id. tyseq_ (tygeneric_ id)
-let tyaref_ = tygeneric_
-let tythread_ = tygeneric_
-let tythreadid_ = tyunknown_
 
 lang LiteralTypeAst = IntAst + FloatAst + BoolAst + CharAst
   sem tyConst =
