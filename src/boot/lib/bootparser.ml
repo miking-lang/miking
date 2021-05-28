@@ -113,12 +113,12 @@ let sym = Symb.gensym ()
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
 
 let symbolizeEnvWithKeywords keywords =
-   List.map
-      (fun k ->
-        if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
-          (IdCon (sid_of_ustring k), Intrinsics.Symb.gensym ())
-        else (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()) )
-      (Mseq.Helpers.to_list keywords)
+  List.map
+    (fun k ->
+      if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
+        (IdCon (sid_of_ustring k), Intrinsics.Symb.gensym ())
+      else (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()) )
+    (Mseq.Helpers.to_list keywords)
 
 let reportErrorAndExit err =
   let error_string = Ustring.to_utf8 (Parserutils.error_to_ustring err) in
@@ -130,7 +130,8 @@ let parseMExprString keywords str =
     PTreeTm
       ( str |> Parserutils.parse_mexpr_string
       |> Parserutils.raise_parse_error_on_non_unique_external_id
-      |> Symbolize.symbolize (builtin_name2sym @ (symbolizeEnvWithKeywords keywords))
+      |> Symbolize.symbolize
+           (builtin_name2sym @ symbolizeEnvWithKeywords keywords)
       |> Parserutils.raise_parse_error_on_partially_applied_external )
   with Msg.Error _ as e -> reportErrorAndExit e
 
@@ -138,7 +139,7 @@ let parseMCoreFile keywords filename =
   try
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
     let name2sym = builtin_name2sym @ symKeywordsMap in
-    let symKeywords = List.map (fun (_,s) -> s) symKeywordsMap in
+    let symKeywords = List.map (fun (_, s) -> s) symKeywordsMap in
     PTreeTm
       ( filename |> Parserutils.parse_mcore_file
       |> Parserutils.raise_parse_error_on_non_unique_external_id
