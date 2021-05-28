@@ -120,23 +120,32 @@ let symbolizeEnvWithKeywords keywords =
         else (IdVar (sid_of_ustring k), Intrinsics.Symb.gensym ()) )
       (Mseq.Helpers.to_list keywords)
 
+let reportErrorAndExit err =
+  let error_string = Ustring.to_utf8 (Parserutils.error_to_ustring err) in
+  Printf.fprintf stderr "%s\n" error_string ;
+  exit 1
+
 let parseMExprString keywords str =
-  PTreeTm
-    ( str |> Parserutils.parse_mexpr_string
-    |> Parserutils.raise_parse_error_on_non_unique_external_id
-    |> Symbolize.symbolize (builtin_name2sym @ (symbolizeEnvWithKeywords keywords))
-    |> Parserutils.raise_parse_error_on_partially_applied_external )
+  try
+    PTreeTm
+      ( str |> Parserutils.parse_mexpr_string
+      |> Parserutils.raise_parse_error_on_non_unique_external_id
+      |> Symbolize.symbolize (builtin_name2sym @ (symbolizeEnvWithKeywords keywords))
+      |> Parserutils.raise_parse_error_on_partially_applied_external )
+  with Msg.Error _ as e -> reportErrorAndExit e
 
 let parseMCoreFile keywords filename =
-  let symKeywordsMap = symbolizeEnvWithKeywords keywords in
-  let name2sym = builtin_name2sym @ symKeywordsMap in
-  let symKeywords = List.map (fun (_,s) -> s) symKeywordsMap in
-  PTreeTm
-    ( filename |> Parserutils.parse_mcore_file
-    |> Parserutils.raise_parse_error_on_non_unique_external_id
-    |> Symbolize.symbolize name2sym
-    |> Deadcode.elimination builtin_sym2term name2sym symKeywords
-    |> Parserutils.raise_parse_error_on_partially_applied_external )
+  try
+    let symKeywordsMap = symbolizeEnvWithKeywords keywords in
+    let name2sym = builtin_name2sym @ symKeywordsMap in
+    let symKeywords = List.map (fun (_,s) -> s) symKeywordsMap in
+    PTreeTm
+      ( filename |> Parserutils.parse_mcore_file
+      |> Parserutils.raise_parse_error_on_non_unique_external_id
+      |> Symbolize.symbolize name2sym
+      |> Deadcode.elimination builtin_sym2term name2sym symKeywords
+      |> Parserutils.raise_parse_error_on_partially_applied_external )
+  with Msg.Error _ as e -> reportErrorAndExit e
 
 (* Returns a tuple with the following elements
    1. ID field
