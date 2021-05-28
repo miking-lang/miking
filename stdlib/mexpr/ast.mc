@@ -43,6 +43,22 @@ lang Ast
     let res: (acc, Expr) = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
+  -- NOTE(vipa, 2021-05-28): This function *does not* touch the `ty`
+  -- field. It only covers nodes in the AST, so to speak, not
+  -- annotations thereof.
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | p -> (acc, p)
+
+  sem smap_Expr_Type (f : a -> b) =
+  | p ->
+    let res: ((), Expr) = smapAccumL_Expr_Type (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Expr_Type (f : acc -> a -> acc) (acc : acc) =
+  | p ->
+    let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
+
   sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
   | p -> (acc, p)
 
@@ -142,6 +158,12 @@ lang LamAst = Ast + VarAst + AppAst
   sem withType (ty : Type) =
   | TmLam t -> TmLam {t with ty = ty}
 
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmLam t ->
+    match f acc t.tyIdent with (acc, tyIdent) then
+      (acc, TmLam {t with tyIdent = tyIdent})
+    else never
+
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmLam t ->
     match f acc t.body with (acc, body) then
@@ -171,6 +193,12 @@ lang LetAst = Ast + VarAst
 
   sem withType (ty : Type) =
   | TmLet t -> TmLet {t with ty = ty}
+
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmLet t ->
+    match f acc t.tyBody with (acc, tyBody) then
+      (acc, TmLet {t with tyBody = tyBody})
+    else never
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmLet t ->
@@ -333,6 +361,12 @@ lang TypeAst = Ast
   sem withType (ty : Type) =
   | TmType t -> TmType {t with ty = ty}
 
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmType t ->
+    match f acc t.tyIdent with (acc, tyIdent) then
+      (acc, TmType {t with tyIdent = tyIdent})
+    else never
+
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmType t ->
     match f acc t.inexpr with (acc, inexpr) then
@@ -368,6 +402,12 @@ lang DataAst = Ast
   sem withType (ty : Type) =
   | TmConDef t -> TmConDef {t with ty = ty}
   | TmConApp t -> TmConApp {t with ty = ty}
+
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmConDef t ->
+    match f acc t.tyIdent with (acc, tyIdent) then
+      (acc, TmConDef {t with tyIdent = tyIdent})
+    else never
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmConDef t ->
@@ -499,6 +539,12 @@ lang ExtAst = Ast + VarAst
 
   sem withType (ty : Type) =
   | TmExt t -> TmExt {t with ty = ty}
+
+  sem smapAccumL_Expr_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmExt t ->
+    match f acc t.tyIdent with (acc, tyIdent) then
+      (acc, TmExt {t with tyIdent = tyIdent})
+    else never
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmExt t ->
