@@ -124,14 +124,4 @@ let builtin = use MExprAst in
   , ("bootParserGetConst", CBootParserGetConst ())
   , ("bootParserGetPat", CBootParserGetPat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
-  -- Threads
-  , ("threadSpawn", CThreadSpawn ())
-  , ("threadJoin", CThreadJoin ())
-  , ("threadGetID", CThreadGetID ())
-  , ("threadID2int", CThreadID2Int ())
-  , ("threadSelf", CThreadSelf ())
-  , ("threadWait", CThreadWait ())
-  , ("threadNotify", CThreadNotify ())
-  , ("threadCriticalSection", CThreadCriticalSection ())
-  , ("threadCPURelax", CThreadCPURelax ())
   ]

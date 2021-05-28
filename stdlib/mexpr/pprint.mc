@@ -804,20 +804,6 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   | CBootParserGetInfo _ -> "bootParserGetInfo"
 end
 
-lang ThreadPrettyPrint = ThreadAst + ConstPrettyPrint
-  sem getConstStringCode (indent : Int) =
-  | CThreadSpawn _ -> "threadSpawn"
-  | CThreadJoin _ -> "threadJoin"
-  | CThreadGetID _ -> "threadGetID"
-  | CThreadID2Int _ -> "threadID2int"
-  | CThreadSelf _ -> "threadSelf"
-  | CThreadWait _ -> "threadWait"
-  | CThreadNotify _ -> "threadNotify"
-  | CThreadCriticalSection _ -> "threadCriticalSection"
-  | CThreadCPURelax _ -> "threadCPURelax"
-end
-
-
 --------------
 -- PATTERNS --
 --------------
@@ -1112,7 +1098,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint + ThreadPrettyPrint +
+  BootParserPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

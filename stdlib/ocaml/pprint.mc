@@ -279,15 +279,6 @@ lang OCamlPrettyPrint =
   | CBootParserGetConst _ -> intrinsicOpBootparser "getConst"
   | CBootParserGetPat _ -> intrinsicOpBootparser "getPat"
   | CBootParserGetInfo _ -> intrinsicOpBootparser "getInfo"
-  | CThreadSpawn _ -> intrinsicOpThread "spawn"
-  | CThreadJoin _ -> intrinsicOpThread "join"
-  | CThreadGetID _ -> intrinsicOpThread "id"
-  | CThreadID2Int _ -> intrinsicOpThread "id_to_int"
-  | CThreadSelf _ -> intrinsicOpThread "self"
-  | CThreadWait _ -> intrinsicOpThread "wait"
-  | CThreadNotify _ -> intrinsicOpThread "notify"
-  | CThreadCriticalSection _ -> intrinsicOpThread "critical_section"
-  | CThreadCPURelax _ -> intrinsicOpThread "cpu_relax"
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | OTmVariantTypeDecl t ->

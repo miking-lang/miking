@@ -180,25 +180,6 @@ and const =
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
-  (* MCore intrinsics: Atomic references *)
-  | CAtomicRef of tm Atomic.t
-  | CatomicMake
-  | CatomicGet
-  | CatomicExchange of tm Atomic.t option
-  | CatomicFetchAndAdd of tm Atomic.t option
-  | CatomicCAS of tm Atomic.t option * tm option
-  (* MCore intrinsics: Threads *)
-  | CThread of tm Thread.t
-  | CThreadID of Thread.id
-  | CthreadID2int
-  | CthreadSpawn
-  | CthreadJoin
-  | CthreadGetID
-  | CthreadSelf
-  | CthreadWait
-  | CthreadNotify
-  | CthreadCriticalSection
-  | CthreadCPURelax
   (* External functions *)
   | CPy of tm Pyast.ext
 
@@ -634,27 +615,6 @@ let const_has_side_effect = function
   | CbootParserGetConst _
   | CbootParserGetPat _
   | CbootParserGetInfo _ ->
-      true
-  (* MCore intrinsics: Atomic references *)
-  | CAtomicRef _
-  | CatomicMake
-  | CatomicGet
-  | CatomicExchange _
-  | CatomicFetchAndAdd _
-  | CatomicCAS _ ->
-      true
-  (* MCore intrinsics: Threads *)
-  | CThread _
-  | CThreadID _
-  | CthreadID2int
-  | CthreadSpawn
-  | CthreadJoin
-  | CthreadGetID
-  | CthreadSelf
-  | CthreadWait
-  | CthreadNotify
-  | CthreadCriticalSection
-  | CthreadCPURelax ->
       true
   (* External functions *)
   | CPy _ ->

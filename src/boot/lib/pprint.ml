@@ -507,41 +507,6 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetPat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
-  (* MCore intrinsics: Atomic references *)
-  | CAtomicRef _ ->
-      fprintf fmt "AtomicRef"
-  | CatomicMake ->
-      fprintf fmt "atomicMake"
-  | CatomicGet ->
-      fprintf fmt "atomicGet"
-  | CatomicCAS _ ->
-      fprintf fmt "atomicCAS"
-  | CatomicExchange _ ->
-      fprintf fmt "atomicExchange"
-  | CatomicFetchAndAdd _ ->
-      fprintf fmt "atomicFetchAndAdd"
-  | CThread p ->
-      fprintf fmt "Thread(%d)" (Thread.id p |> Thread.id_to_int)
-  | CThreadID tid ->
-      fprintf fmt "ThreadID(%d)" (Thread.id_to_int tid)
-  | CthreadID2int ->
-      fprintf fmt "threadID2int"
-  | CthreadSpawn ->
-      fprintf fmt "threadSpawn"
-  | CthreadJoin ->
-      fprintf fmt "threadJoin"
-  | CthreadGetID ->
-      fprintf fmt "threadGetID"
-  | CthreadSelf ->
-      fprintf fmt "threadSelf"
-  | CthreadWait ->
-      fprintf fmt "threadWait"
-  | CthreadNotify ->
-      fprintf fmt "threadNotify"
-  | CthreadCriticalSection ->
-      fprintf fmt "threadCriticalSection"
-  | CthreadCPURelax ->
-      fprintf fmt "threadCPURelax"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

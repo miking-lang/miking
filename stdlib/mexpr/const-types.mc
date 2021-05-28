@@ -236,26 +236,11 @@ lang BootParserTypeAst = BootParserAst
   | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
 end
 
-lang ThreadTypeAst = ThreadAst
-  sem tyConst =
-  | CThreadSpawn _ ->
-    tyarrow_ (tyarrow_ tyunit_ (tygeneric_ "a")) (tythread_ "a")
-  | CThreadJoin _ -> tyarrow_ (tythread_ "a") (tygeneric_ "a")
-  | CThreadGetID _ -> tyarrow_ (tythread_ "a") tythreadid_
-  | CThreadID2Int _ -> tyarrow_ tythreadid_ tyint_
-  | CThreadSelf _ -> tyarrow_ tyunit_ tythreadid_
-  | CThreadWait _ -> tyarrow_ tyunit_ tyunit_
-  | CThreadNotify _ -> tyarrow_ tythreadid_ tyunit_
-  | CThreadCriticalSection _ ->
-    tyarrow_ (tyarrow_ tyunit_ (tygeneric_ "a")) (tygeneric_ "a")
-  | CThreadCPURelax _ -> tyarrow_ tyunit_ tyunit_
-end
-
 lang MExprConstType =
   LiteralTypeAst + ArithIntTypeAst + ShiftIntTypeAst + ArithFloatTypeAst +
   CmpIntTypeAst + IntCharConversionTypeAst + CmpFloatTypeAst + CmpCharTypeAst +
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + MapTypeAst +
-  TensorOpTypeAst + BootParserTypeAst + ThreadTypeAst
+  TensorOpTypeAst + BootParserTypeAst
 end

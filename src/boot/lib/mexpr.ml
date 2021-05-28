@@ -418,50 +418,6 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
-  (* Atomic references *)
-  | CAtomicRef _ ->
-      0
-  | CatomicMake ->
-      1
-  | CatomicGet ->
-      1
-  | CatomicCAS (None, None) ->
-      3
-  | CatomicCAS (Some _, None) ->
-      2
-  | CatomicCAS (_, Some _) ->
-      1
-  | CatomicExchange None ->
-      2
-  | CatomicExchange (Some _) ->
-      1
-  | CatomicFetchAndAdd None ->
-      2
-  | CatomicFetchAndAdd (Some _) ->
-      1
-  (* Threads *)
-  | CThread _ ->
-      0
-  | CThreadID _ ->
-      0
-  | CthreadID2int ->
-      1
-  | CthreadSpawn ->
-      1
-  | CthreadJoin ->
-      1
-  | CthreadGetID ->
-      1
-  | CthreadSelf ->
-      1
-  | CthreadWait ->
-      1
-  | CthreadNotify ->
-      1
-  | CthreadCriticalSection ->
-      1
-  | CthreadCPURelax ->
-      1
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1336,82 +1292,6 @@ let delta eval env fi c v =
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
-      fail_constapp fi
-  (* Atomic references *)
-  | CAtomicRef _, _ ->
-      fail_constapp fi
-  | CatomicMake, TmConst (_, CInt i) ->
-      TmConst (fi, CAtomicRef (Atomic.Int (Atomic.Int.make i)))
-  | CatomicMake, v ->
-      TmConst (fi, CAtomicRef (Atomic.NoInt (Atomic.NoInt.make v)))
-  | CatomicGet, TmConst (_, CAtomicRef (Int r)) ->
-      TmConst (fi, CInt (Atomic.Int.get r))
-  | CatomicGet, TmConst (_, CAtomicRef (NoInt r)) ->
-      Atomic.NoInt.get r
-  | CatomicGet, _ ->
-      fail_constapp fi
-  | CatomicExchange None, TmConst (_, CAtomicRef r) ->
-      TmConst (fi, CatomicExchange (Some r))
-  | CatomicExchange (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (Atomic.Int.exchange r i))
-  | CatomicExchange (Some (NoInt r)), v ->
-      Atomic.NoInt.exchange r v
-  | CatomicExchange _, _ ->
-      fail_constapp fi
-  | CatomicCAS (None, None), TmConst (_, CAtomicRef (Int r)) ->
-      TmConst (fi, CatomicCAS (Some (Int r), None))
-  | CatomicCAS (Some (Int r), None), (TmConst (_, CInt _) as v) ->
-      TmConst (fi, CatomicCAS (Some (Int r), Some v))
-  | CatomicCAS (Some (Int r), Some (TmConst (_, CInt i1))), TmConst (_, CInt i2)
-    ->
-      TmConst (fi, CBool (Atomic.Int.compare_and_set r i1 i2))
-  | CatomicCAS (_, _), _ ->
-      fail_constapp fi
-  | CatomicFetchAndAdd None, TmConst (_, CAtomicRef (Int r)) ->
-      TmConst (fi, CatomicFetchAndAdd (Some (Int r)))
-  | CatomicFetchAndAdd (Some (Int r)), TmConst (_, CInt i) ->
-      TmConst (fi, CInt (Atomic.Int.fetch_and_add r i))
-  | CatomicFetchAndAdd _, _ ->
-      fail_constapp fi
-  (* Threads *)
-  | CThread _, _ ->
-      fail_constapp fi
-  | CThreadID _, _ ->
-      fail_constapp fi
-  | CthreadID2int, TmConst (_, CThreadID tid) ->
-      TmConst (fi, CInt (Thread.id_to_int tid))
-  | CthreadID2int, _ ->
-      fail_constapp fi
-  | CthreadSpawn, f ->
-      TmConst
-        ( fi
-        , CThread (Thread.spawn (fun _ -> TmApp (fi, f, tm_unit) |> eval env))
-        )
-  | CthreadJoin, TmConst (_, CThread p) ->
-      Thread.join p
-  | CthreadJoin, _ ->
-      fail_constapp fi
-  | CthreadGetID, TmConst (_, CThread p) ->
-      TmConst (fi, CThreadID (Thread.id p))
-  | CthreadGetID, _ ->
-      fail_constapp fi
-  | CthreadSelf, TmRecord (_, x) when Record.is_empty x ->
-      TmConst (fi, CThreadID (Thread.self ()))
-  | CthreadSelf, _ ->
-      fail_constapp fi
-  | CthreadWait, TmRecord (_, x) when Record.is_empty x ->
-      Thread.wait () ; tm_unit
-  | CthreadWait, _ ->
-      fail_constapp fi
-  | CthreadNotify, TmConst (_, CThreadID tid) ->
-      Thread.notify tid ; tm_unit
-  | CthreadNotify, _ ->
-      fail_constapp fi
-  | CthreadCriticalSection, f ->
-      Thread.critical_section (fun _ -> TmApp (fi, f, tm_unit) |> eval env)
-  | CthreadCPURelax, TmRecord (_, x) when Record.is_empty x ->
-      Thread.cpu_relax () ; tm_unit
-  | CthreadCPURelax, _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

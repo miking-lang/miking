@@ -1088,69 +1088,6 @@ lang TensorOpEval =
     uconst_ val
 end
 
-lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
-  syn Const =
-  | CThread {thread : Thread Expr}
-  | CThreadID {id : Tid}
-
-  sem delta (arg : Expr) =
-  | CThreadSpawn _ ->
-    let app =
-      TmApp {lhs = arg, rhs = unit_, info = NoInfo (), ty = tyunknown_}
-    in
-    TmConst { val =
-                CThread {thread = threadSpawn (lam.
-                  eval {env = mapEmpty nameCmp} app)}
-            , info = NoInfo ()
-            , ty = tyunknown_
-            }
-  | CThreadJoin _ ->
-    match arg with TmConst {val = CThread {thread = thread}} then
-      threadJoin thread
-    else error "not a threadJoin of a thread"
-  | CThreadSelf _ ->
-    let err = "Argument in threadSelf is not unit" in
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        TmConst {val = CThreadID {id = threadSelf ()},
-                 info = NoInfo (), ty = tyunknown_}
-      else error err
-    else error err
-  | CThreadGetID _ ->
-    match arg with TmConst ({val = CThread {thread = thread}} & t) then
-      TmConst {t with val = CThreadID {id = threadGetID thread}}
-    else error "Argument in threadGetID is not a thread"
-  | CThreadID2Int _ ->
-    match arg with TmConst ({val = CThreadID {id = id}} & t) then
-      TmConst {t with val = CInt {val = threadID2int id}}
-    else error "Argument to threadID2int not a thread ID"
-  | CThreadWait _ ->
-    let err = "Argument to threadWait is not unit" in
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        threadWait ();
-        uunit_
-      else error err
-    else error err
-  | CThreadNotify _ ->
-    match arg with TmConst ({val = CThreadID {id = id}} & t) then
-      threadNotify id;
-      uunit_
-    else error "Argument to threadNotify not a thread ID"
-  | CThreadCriticalSection _ ->
-    let app =
-      TmApp {lhs = arg, rhs = uunit_, info = NoInfo (), ty = tyunknown_}
-    in threadCriticalSection (lam. eval {env = mapEmpty nameCmp} app)
-  | CThreadCPURelax _ ->
-    let err = "Argument to threadCPURelax is not unit" in
-    match arg with TmRecord {bindings = bindings} then
-      if mapIsEmpty bindings then
-        threadCPURelax ();
-        uunit_
-      else error err
-    else error err
-end
-
 --------------
 -- PATTERNS --
 --------------
@@ -1284,7 +1221,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  TensorOpEval + ThreadEval
+  TensorOpEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

@@ -142,22 +142,7 @@ let builtin =
   ; ("bootParserGetListLength", f (CbootParserGetListLength None))
   ; ("bootParserGetConst", f (CbootParserGetConst None))
   ; ("bootParserGetPat", f (CbootParserGetPat None))
-  ; ("bootParserGetInfo", f (CbootParserGetInfo None))
-    (* Append multicore intrinsics *)
-  ; ("atomicMake", f CatomicMake)
-  ; ("atomicGet", f CatomicGet)
-  ; ("atomicCAS", f (CatomicCAS (None, None)))
-  ; ("atomicExchange", f (CatomicExchange None))
-  ; ("atomicFetchAndAdd", f (CatomicFetchAndAdd None))
-  ; ("threadID2int", f CthreadID2int)
-  ; ("threadSpawn", f CthreadSpawn)
-  ; ("threadJoin", f CthreadJoin)
-  ; ("threadGetID", f CthreadGetID)
-  ; ("threadSelf", f CthreadSelf)
-  ; ("threadWait", f CthreadWait)
-  ; ("threadNotify", f CthreadNotify)
-  ; ("threadCriticalSection", f CthreadCriticalSection)
-  ; ("threadCPURelax", f CthreadCPURelax) ]
+  ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
   (* Append python intrinsics *)
   @ Pyffi.externals
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))

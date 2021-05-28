@@ -866,52 +866,6 @@ let stripTypeDecls = lam t.
   stripDecls t
 in
 
--- Threads
-utest ocamlEvalInt (generateEmptyEnv (bindall_
-  [ ulet_ "v" (int_ 43)
-  , ulet_ "t" (threadSpawn_ (ulam_ "_" (addi_ (var_ "v") (int_ 1))))
-  , threadJoin_ (var_ "t")
-  ]))
-with int_ 44 using eqExpr in
-
-utest ocamlEvalBool (generateEmptyEnv (bindall_
-  [ ulet_ "t" (threadSpawn_ (ulam_ "_" (threadSelf_ unit_)))
-  , ulet_ "tid" (threadGetID_ (var_ "t"))
-  , eqi_ (threadID2Int_ (var_ "tid")) (threadID2Int_ (threadJoin_ (var_ "t")))
-  ]))
-with true_ using eqExpr in
-
--- TODO: needs atomic references
--- let waitForFlag = ureclet_ "waitForFlag" (ulam_ "flag"
---   (if_ (atomicGet_ (var_ "flag"))
---        unit_
---        (bind_
---           (ulet_ "_" (threadCPURelax_ unit_))
---           (app_ (var_ "waitForFlag") (var_ "flag"))))) in
-
--- let testCriticalSection =
--- [ ulet_ "inCriticalSection" (atomicMake_ false_)
--- , ulet_ "afterWait" (atomicMake_ false_)
--- , ulet_ "t" (threadSpawn_ (ulam_ "_" (threadCriticalSection_
---     (ulam_ "_" (
---       bindall_
---         [ ulet_ "_" (atomicExchange_ (var_ "inCriticalSection") true_)
---         , ulet_ "_" (threadWait_ unit_)
---         , ulet_ "_" (sleepMs_ (int_ 100))
---         , ulet_ "_" (atomicExchange_ (var_ "afterWait") true_)
---         , int_ 42
---         ])))))
--- , waitForFlag
--- , ulet_ "_" (app_ (var_ "waitForFlag") (var_ "inCriticalSection"))
--- , ulet_ "v1" (atomicGet_ (var_ "afterWait"))
--- , ulet_ "_" (threadNotify_ (threadGetID_ (var_ "t")))
--- , ulet_ "v2" (atomicGet_ (var_ "afterWait"))
--- , seq_ [var_ "v1", var_ "v2", threadJoin_ (var_ "t")]
--- ] in
-
--- utest testCriticalSection with generateEmptyEnv testCriticalSection
--- using sameSemantics in
-
 -- Match
 let matchWild1 = symbolize
   (match_ (int_ 1)
