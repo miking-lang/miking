@@ -485,23 +485,6 @@ lang OCamlPrettyPrint =
     match pprintCode indent env tm with (env, tm) then
       (env, join [tm, ".", field])
     else never
-  | OTmTryWith {body = body, arms = arms} ->
-    let i = indent in
-    let ii = pprintIncr i in
-    let iii = pprintIncr ii in
-    match pprintCode ii env body with (env, body) then
-      let pprintArm = lam env. lam arm. match arm with (pat, expr) then
-        match getPatStringCode ii env pat with (env, pat) then
-          match printParen iii env expr with (env, expr) then
-            (env, join [pprintNewline i, "| ", pat, " ->", pprintNewline iii, expr])
-          else never
-        else never
-      else never in
-      match mapAccumL pprintArm env arms with (env, arms) then
-        (env, join ["try", pprintNewline ii, body, pprintNewline i,
-                    "with", join arms])
-      else never
-    else never
 
   sem getPatStringCode (indent : Int) (env : PprintEnv) =
   | OPatRecord {bindings = bindings} ->
