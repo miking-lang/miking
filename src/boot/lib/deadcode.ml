@@ -197,7 +197,7 @@ let make_builtin_nmap builtin_sym2term =
   in
   List.fold_left f SymbMap.empty builtin_sym2term
 
-(* Helper for extending the symbmap wiht built in names *)
+(* Helper for extending the symbmap with built in names *)
 let extend_symb_map_builtin builtin_name2sym symbmap =
   let f acc (xsid, s) =
     let x =
@@ -207,16 +207,24 @@ let extend_symb_map_builtin builtin_name2sym symbmap =
   in
   List.fold_left f symbmap builtin_name2sym
 
+(* Add keywords from the keyword maker to nmap, indicating sideeffect so that
+   they do not disappear *)
+let add_keywords nmap symKeywords =
+  let f acc s = SymbMap.add s (SymbSet.empty, false, true, 0) acc in
+  List.fold_left f nmap symKeywords
+
 (* The main dead code elimination function
    of flag utest is false, then utests are also removed
 *)
-let elimination builtin_sym2term builtin_name2sym t =
+let elimination builtin_sym2term builtin_name2sym symKeywords t =
   if !disable_dead_code_elimination then t
   else (
     if !enable_debug_dead_code_info then
       _symbmap := extend_symb_map_builtin builtin_name2sym (symbmap t) ;
     (* Collect all lets and store a graph in 'nmap' and free variable in 'free' *)
-    let nmap, free = collect_lets (make_builtin_nmap builtin_sym2term) t in
+    let nmap = make_builtin_nmap builtin_sym2term in
+    let nmap = add_keywords nmap symKeywords in
+    let nmap, free = collect_lets nmap t in
     if !enable_debug_dead_code_info then (
       print_endline "-- Dead code info: collected lets --" ;
       pprint_nmap !_symbmap nmap |> uprint_endline ;

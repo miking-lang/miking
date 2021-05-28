@@ -145,8 +145,6 @@ let builtin =
   ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
   (* Append multicore intrinsics *)
   @ Par.externals
-  (* Append sundials intrinsics *)
-  @ Sd.externals
   (* Append python intrinsics *)
   @ Pyffi.externals
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))

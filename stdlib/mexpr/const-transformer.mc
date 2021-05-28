@@ -11,6 +11,15 @@ include "builtin.mc"
 include "ast-builder.mc"
 include "ast.mc"
 
+-- Add info for both term and type in const tms
+let _constWithInfos: Info -> Expr -> Expr = use MExprAst in
+  lam i: Info. lam tm: Expr.
+    match tm with
+      TmConst ({ info = NoInfo _, ty = TyUnknown ({ info = NoInfo _ } & ty)} & t)
+    then
+      TmConst {{t with info = i} with ty = TyUnknown {ty with info = i}}
+    else tm
+
 lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + NamedPat
 
   sem constTransform =
@@ -33,7 +42,8 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + Named
     TmLam {r with body = t}
   | TmVar r ->
     let ident = nameGetStr r.ident in
-    match mapFindOrElse (lam. Some (TmVar r)) ident env with Some tm then tm else TmVar r
+    match mapFindOrElse (lam. Some (TmVar r)) ident env with Some tm
+    then _constWithInfos r.info tm else TmVar r
   | TmRecLets r ->
      let fEnv = lam acc. lam b:RecLetBinding. mapInsert (nameGetStr b.ident) (None()) acc in
      let env = foldl fEnv env r.bindings in

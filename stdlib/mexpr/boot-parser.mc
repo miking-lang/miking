@@ -51,17 +51,17 @@ lang BootParser = MExprAst + ConstTransformer
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
       TmVar {ident = gname t 0,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 101 /-TmApp-/ ->
       TmApp {lhs = gterm t 0,
              rhs = gterm t 1,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 102 /-TmLam-/ ->
       TmLam {ident = gname t 0,
              tyIdent = gtype t 0,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0,
              body = gterm t 0}
   | 103 /-TmLet-/ ->
@@ -69,64 +69,64 @@ lang BootParser = MExprAst + ConstTransformer
              tyBody = gtype t 0,
              body = gterm t 0,
              inexpr = gterm t 1,
-             ty = tyunknown_,
+             ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 104 /-TmRecLets-/ ->
       TmRecLets {bindings =
                    makeSeq (lam n. {ident = gname t n,
                                     tyBody = gtype t n,
                                     body = gterm t n,
-                                    ty = tyunknown_,
+                                    ty = TyUnknown { info = ginfo t 0 },
                                     info = ginfo t (addi n 1)})
                                       (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),
-                 ty = tyunknown_,
+                 ty = TyUnknown { info = ginfo t 0 },
                  info = ginfo t 0}
   | 105 /-TmConst-/ ->
       let c = gconst t 0 in
       TmConst {val = gconst t 0,
-               ty = tyunknown_,
+               ty = TyUnknown { info = ginfo t 0 },
                info = ginfo t 0}
   | 106 /-TmSeq-/ ->
       TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
-             ty =  tyunknown_,
+             ty =  TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 107 /-TmRecord-/ ->
      let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
       TmRecord {bindings =
                  mapFromList cmpSID
                    (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-               ty = tyunknown_,
+               ty = TyUnknown { info = ginfo t 0 },
                info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
      TmRecordUpdate {rec = gterm t 0,
                     key = stringToSid (gstr t 0),
                     value = gterm t 1,
-                    ty = tyunknown_,
+                    ty = TyUnknown { info = ginfo t 0 },
                     info = ginfo t 0}
   | 109 /-TmType-/ ->
       TmType {ident = gname t 0,
               tyIdent = gtype t 0,
-              ty = tyunknown_,
+              ty = TyUnknown { info = ginfo t 0 },
               inexpr = gterm t 0,
               info = ginfo t 0}
   | 110 /-TmConDef-/ ->
      TmConDef {ident = gname t 0,
                tyIdent = gtype t 0,
                inexpr = gterm t 0,
-               ty = tyunknown_,
+               ty = TyUnknown { info = ginfo t 0 },
                info = ginfo t 0}
   | 111 /-TmConApp-/ ->
      TmConApp {ident = gname t 0,
                body = gterm t 0,
-               ty = tyunknown_,
+               ty = TyUnknown { info = ginfo t 0 },
                info = ginfo t 0}
   | 112 /-TmMatch-/ ->
      TmMatch {target = gterm t 0,
               pat = gpat t 0,
               thn = gterm t 1,
               els = gterm t 2,
-              ty = tyunknown_,
+              ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
   | 113 /-TmUtest-/ ->
      let tusing = match (glistlen t 0) with 4 then
@@ -136,10 +136,10 @@ lang BootParser = MExprAst + ConstTransformer
               expected = gterm t 1,
               next = gterm t 2,
               tusing = tusing,
-              ty = tyunknown_,
+              ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
   | 114 /-TmNever-/ ->
-     TmNever {ty = tyunknown_,
+     TmNever {ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,
@@ -174,6 +174,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 207 /-TyRecord-/ ->
     let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
     TyRecord {info = ginfo t 0,
+              labels = map (lam b : (String, a). stringToSid b.0) lst,
               fields = mapFromList cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
@@ -380,7 +381,7 @@ utest lsideClosed s with rside s in
 let s = "{a = 5}" in
 utest lsideClosed s with rside s in
 let s = "{bar = \"Hello\", foo = 123}" in
-let t = record_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
+let t = urecord_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
 utest parseMExprString [] s with t using eqExpr in
 utest l_infoClosed " {} " with r_info 1 1 1 3 in
 utest l_infoClosed " {foo = 123} " with r_info 1 1 1 12 in
@@ -389,7 +390,7 @@ utest l_infoClosed " {foo = 123} " with r_info 1 1 1 12 in
 let s = "{a with foo = 5}" in
 utest lside ["a"] s with rside s in
 let s = "{{bar='a', foo=7} with bar = 'b'}" in
-let t = recordupdate_ (record_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
+let t = recordupdate_ (urecord_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
 utest parseMExprString [] s with t using eqExpr in
 utest l_info ["foo"] " {foo with a = 18 } " with r_info 1 1 1 19 in
 

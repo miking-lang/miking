@@ -34,6 +34,9 @@ lang VarAst = Ast
   sem ty =
   | TmVar t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmVar t -> TmVar {t with info = info}
+
   sem withType (ty : Type) =
   | TmVar t -> TmVar {t with ty = ty}
 
@@ -58,6 +61,9 @@ lang AppAst = Ast
 
   sem ty =
   | TmApp t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmApp t -> TmApp {t with info = info}
 
   sem withType (ty : Type) =
   | TmApp t -> TmApp {t with ty = ty}
@@ -87,6 +93,9 @@ lang LamAst = Ast + VarAst + AppAst
   sem ty =
   | TmLam t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmLam t -> TmLam {t with info = info}
+
   sem withType (ty : Type) =
   | TmLam t -> TmLam {t with ty = ty}
 
@@ -113,6 +122,9 @@ lang LetAst = Ast + VarAst
 
   sem ty =
   | TmLet t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmLet t -> TmLet {t with info = info}
 
   sem withType (ty : Type) =
   | TmLet t -> TmLet {t with ty = ty}
@@ -144,6 +156,9 @@ lang RecLetsAst = Ast + VarAst
 
   sem ty =
   | TmRecLets t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmRecLets t -> TmRecLets {t with info = info}
 
   sem withType (ty : Type) =
   | TmRecLets t -> TmRecLets {t with ty = ty}
@@ -182,6 +197,9 @@ lang ConstAst = Ast
   sem ty =
   | TmConst t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmConst t -> TmConst {t with info = info}
+
   sem withType (ty : Type) =
   | TmConst t -> TmConst {t with ty = ty}
 
@@ -204,6 +222,9 @@ lang SeqAst = Ast
 
   sem ty =
   | TmSeq t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmSeq t -> TmSeq {t with info = info}
 
   sem withType (ty : Type) =
   | TmSeq t -> TmSeq {t with ty = ty}
@@ -236,6 +257,10 @@ lang RecordAst = Ast
   | TmRecord t -> t.ty
   | TmRecordUpdate t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmRecord t -> TmRecord {t with info = info}
+  | TmRecordUpdate t -> TmRecordUpdate {t with info = info}
+
   sem withType (ty : Type) =
   | TmRecord t -> TmRecord {t with ty = ty}
   | TmRecordUpdate t -> TmRecordUpdate {t with ty = ty}
@@ -264,6 +289,9 @@ lang TypeAst = Ast
 
   sem ty =
   | TmType t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmType t -> TmType {t with info = info}
 
   sem withType (ty : Type) =
   | TmType t -> TmType {t with ty = ty}
@@ -295,6 +323,10 @@ lang DataAst = Ast
   sem ty =
   | TmConDef t -> t.ty
   | TmConApp t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmConDef t -> TmConDef {t with info = info}
+  | TmConApp t -> TmConApp {t with info = info}
 
   sem withType (ty : Type) =
   | TmConDef t -> TmConDef {t with ty = ty}
@@ -328,6 +360,9 @@ lang MatchAst = Ast
   sem ty =
   | TmMatch t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmMatch t -> TmMatch {t with info = info}
+
   sem withType (ty : Type) =
   | TmMatch t -> TmMatch {t with ty = ty}
 
@@ -356,6 +391,9 @@ lang UtestAst = Ast
 
   sem ty =
   | TmUtest t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmUtest t -> TmUtest {t with info = info}
 
   sem withType (ty : Type) =
   | TmUtest t -> TmUtest {t with ty = ty}
@@ -386,6 +424,9 @@ lang NeverAst = Ast
   sem ty =
   | TmNever t -> t.ty
 
+  sem withInfo (info : Info) =
+  | TmNever t -> TmNever {t with info = info}
+
   sem withType (ty : Type) =
   | TmNever t -> TmNever {t with ty = ty}
 
@@ -410,6 +451,9 @@ lang ExtAst = Ast + VarAst
 
   sem ty =
   | TmExt t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmExt t -> TmExt {t with info = info}
 
   sem withType (ty : Type) =
   | TmExt t -> TmExt {t with ty = ty}
@@ -826,6 +870,12 @@ lang UnknownTypeAst = Ast
   syn Type =
   | TyUnknown {info : Info}
 
+  sem tyWithInfo (info : Info) =
+  | TyUnknown t -> TyUnknown {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyUnknown t -> TyUnknown t
+
   sem infoTy =
   | TyUnknown r -> r.info
 end
@@ -833,6 +883,12 @@ end
 lang BoolTypeAst = Ast
   syn Type =
   | TyBool {info  : Info}
+
+  sem tyWithInfo (info : Info) =
+  | TyBool t -> TyBool {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyBool t -> TyBool t
 
   sem infoTy =
   | TyBool r -> r.info
@@ -842,6 +898,12 @@ lang IntTypeAst = Ast
   syn Type =
   | TyInt {info : Info}
 
+  sem tyWithInfo (info : Info) =
+  | TyInt t -> TyInt {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyInt t -> TyInt t
+
   sem infoTy =
   | TyInt r -> r.info
 end
@@ -850,6 +912,12 @@ lang FloatTypeAst = Ast
   syn Type =
   | TyFloat {info : Info}
 
+  sem tyWithInfo (info : Info) =
+  | TyFloat t -> TyFloat {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyFloat t -> TyFloat t
+
   sem infoTy =
   | TyFloat r -> r.info
 end
@@ -857,6 +925,12 @@ end
 lang CharTypeAst = Ast
   syn Type =
   | TyChar {info  : Info}
+
+  sem tyWithInfo (info : Info) =
+  | TyChar t -> TyChar {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyChar t -> TyChar t
 
   sem infoTy =
   | TyChar r -> r.info
@@ -867,6 +941,13 @@ lang FunTypeAst = Ast
   | TyArrow {info : Info,
              from : Type,
              to   : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyArrow t -> TyArrow {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyArrow t -> TyArrow {{t with from = f t.from} with to = f t.to}
+
   sem infoTy =
   | TyArrow r -> r.info
 end
@@ -875,6 +956,13 @@ lang SeqTypeAst = Ast
   syn Type =
   | TySeq {info : Info,
            ty   : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TySeq t -> TySeq {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TySeq t -> TySeq {t with ty = f t.ty}
+
   sem infoTy =
   | TySeq r -> r.info
 end
@@ -883,6 +971,13 @@ lang TensorTypeAst = Ast
   syn Type =
   | TyTensor {info : Info,
               ty   : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyTensor t -> TyTensor {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyTensor t -> TyTensor {t with ty = f t.ty}
+
   sem infoTy =
   | TyTensor r -> r.info
 end
@@ -890,7 +985,15 @@ end
 lang RecordTypeAst = Ast
   syn Type =
   | TyRecord {info    : Info,
-              fields  : Map SID Type}
+              fields  : Map SID Type,
+              labels  : [SID]}
+
+  sem tyWithInfo (info : Info) =
+  | TyRecord t -> TyRecord {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyRecord t -> TyRecord {t with fields = mapMap f t.fields}
+
   sem infoTy =
   | TyRecord r -> r.info
 end
@@ -899,6 +1002,13 @@ lang VariantTypeAst = Ast
   syn Type =
   | TyVariant {info     : Info,
                constrs  : Map Name Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyVariant t -> TyVariant {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyVariant t -> TyVariant {t with constrs = mapMap f t.constrs}
+
   sem infoTy =
   | TyVariant r -> r.info
 end
@@ -907,6 +1017,13 @@ lang VarTypeAst = Ast
   syn Type =
   | TyVar {info   : Info,
            ident  : Name}
+
+  sem tyWithInfo (info : Info) =
+  | TyVar t -> TyVar {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyVar t -> TyVar t
+
   sem infoTy =
   | TyVar r -> r.info
 end
@@ -916,6 +1033,13 @@ lang AppTypeAst = Ast
   | TyApp {info : Info,
            lhs  : Type,
            rhs  : Type}
+
+  sem tyWithInfo (info : Info) =
+  | TyApp t -> TyApp {t with info = info}
+
+  sem smap_Type_Type (f : Type -> a) =
+  | TyApp t -> TyApp {{t with lhs = f t.lhs} with rhs = f t.rhs}
+
   sem infoTy =
   | TyApp r -> r.info
 end

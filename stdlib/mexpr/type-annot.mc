@@ -241,8 +241,8 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
       match (ty lhs, ty rhs) with (TyArrow {from = from, to = to}, ty) then
         match compatibleType env.tyEnv from ty with Some _ then
           to
-        else tyunknown_
-      else tyunknown_
+        else (ityunknown_ t.info)
+      else (ityunknown_ t.info)
     in
     TmApp {{{t with lhs = lhs}
                with rhs = rhs}
@@ -255,7 +255,7 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
     match env with {varEnv = varEnv} then
       let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
       let body = typeAnnotExpr env t.body in
-      let ty = tyarrow_ t.tyIdent (ty body) in
+      let ty = ityarrow_ t.info t.tyIdent (ty body) in
       TmLam {{t with body = body}
                 with ty = ty}
     else never
@@ -323,8 +323,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
             ] in
             infoErrorExit t.info msg
         in
-        {{binding with body = body}
-                  with ty = tyBody}
+        {{{binding with body = body}
+                   with ty = tyBody}
+                   with tyBody = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then
@@ -340,7 +341,10 @@ end
 
 lang ConstTypeAnnot = TypeAnnot + MExprConstType
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmConst t -> TmConst {t with ty = tyConst t.val}
+  | TmConst t ->
+    recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
+    let ty = f (tyConst t.val) in
+    TmConst {t with ty = ty }
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
@@ -348,15 +352,16 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
   | TmSeq t ->
     let tms = map (typeAnnotExpr env) t.tms in
     let elemTy =
-      if eqi (length tms) 0 then tyunknown_
+      if eqi (length tms) 0 then ityunknown_ t.info
       else
         let types = map (lam term. ty term) tms in
-        match optionFoldlM (compatibleType env.tyEnv) tyunknown_ types with Some ty then
+        match optionFoldlM (compatibleType env.tyEnv) (ityunknown_ t.info) types
+        with Some ty then
           ty
-        else tyunknown_
+        else (ityunknown_ t.info)
     in
     TmSeq {{t with tms = tms}
-              with ty = tyseq_ elemTy}
+              with ty = ityseq_ t.info elemTy}
 end
 
 lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
@@ -364,7 +369,8 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
   | TmRecord t ->
     let bindings = mapMap (typeAnnotExpr env) t.bindings in
     let bindingTypes = mapMap ty bindings in
-    let ty = TyRecord {fields = bindingTypes, info = t.info} in
+    let labels = mapKeys t.bindings in
+    let ty = TyRecord {fields = bindingTypes, labels = labels, info = t.info} in
     TmRecord {{t with bindings = bindings}
                  with ty = ty}
   | TmRecordUpdate t ->
@@ -402,7 +408,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
             recursive let tyvar = lam ty.
               match ty with TyVar _ then ty
               else match ty with TyApp t then tyvar t.lhs
-              else tyunknown_
+              else (ityunknown_ t.info)
             in
             match compatibleType tyEnv (ty body) from with Some _ then
               tyvar to
@@ -413,7 +419,7 @@ lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
                 ", but the actual type was ", _pprintType (ty body)
               ] in
               infoErrorExit t.info msg
-          else tyunknown_
+          else (ityunknown_ t.info)
         else
           let msg = join ["Application of untyped constructor: ",
                           nameGetStr t.ident] in
@@ -438,7 +444,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
       match env with {tyEnv = tyEnv} then
         match compatibleType tyEnv (ty thn) (ty els) with Some ty then
           ty
-        else tyunknown_
+        else (ityunknown_ t.info)
       else never
     in
     TmMatch {{{{t with target = target}
@@ -463,7 +469,7 @@ end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmNever t -> TmNever {t with ty = tyunknown_}
+  | TmNever t -> TmNever {t with ty = (ityunknown_ t.info)}
 end
 
 
@@ -484,7 +490,7 @@ lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
   | PatSeqTot t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
       else None ()
     in
     match elemTy with Some ty then
@@ -497,7 +503,7 @@ lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
   | PatSeqEdge t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some tyunknown_
+      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
       else None ()
     in
     match elemTy with Some ty then
@@ -525,7 +531,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
       mapFoldWithKey (annotFields fields) env t.bindings
     else match expectedTy with TyUnknown _ then
       let annotUnknown = lam acc. lam. lam pat.
-        typeAnnotPat acc tyunknown_ pat
+        typeAnnotPat acc (ityunknown_ t.info) pat
       in
       mapFoldWithKey annotUnknown env t.bindings
     else env
@@ -637,11 +643,11 @@ utest ty (typeAnnot letAscription) with tyint_ using eqTypeEmptyEnv in
 
 let recLets = typeAnnot (bindall_ [
   nreclets_ [
-    (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) unit_)),
-    (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) unit_)),
-    (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) unit_) (int_ 1)))
+    (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) uunit_)),
+    (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) uunit_)),
+    (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) uunit_) (int_ 1)))
   ],
-  unit_
+  uunit_
 ]) in
 utest ty recLets with tyunit_ using eqTypeEmptyEnv in
 
@@ -676,14 +682,14 @@ utest ty intMatrix with tyseq_ (tyseq_ tyint_) using eqTypeEmptyEnv in
 let unknownSeq = typeAnnot (seq_ [nvar_ x, nvar_ y]) in
 utest ty unknownSeq with tyseq_ tyunknown_ using eqTypeEmptyEnv in
 
-let emptyRecord = typeAnnot unit_ in
+let emptyRecord = typeAnnot uunit_ in
 utest ty emptyRecord with tyunit_ using eqTypeEmptyEnv in
 
-let record = typeAnnot (record_ [
-  ("a", int_ 0), ("b", float_ 2.718), ("c", record_ []),
-  ("d", record_ [
+let record = typeAnnot (urecord_ [
+  ("a", int_ 0), ("b", float_ 2.718), ("c", urecord_ []),
+  ("d", urecord_ [
     ("e", seq_ [int_ 1, int_ 2]),
-    ("f", record_ [
+    ("f", urecord_ [
       ("x", nvar_ x), ("y", nvar_ y), ("z", nvar_ z)
     ])
   ])
@@ -701,7 +707,7 @@ utest ty record with expectedRecordType using eqTypeEmptyEnv in
 let recordUpdate = typeAnnot (recordupdate_ record "x" (int_ 1)) in
 utest ty recordUpdate with expectedRecordType using eqTypeEmptyEnv in
 
-let typeDecl = bind_ (ntype_ n tyunknown_) unit_ in
+let typeDecl = bind_ (ntype_ n tyunknown_) uunit_ in
 utest ty (typeAnnot typeDecl) with tyunit_ using eqTypeEmptyEnv in
 
 let conApp = bindall_ [
@@ -760,9 +766,9 @@ let matchTree = bindall_ [
   type_ "Tree" tyunknown_,
   condef_ "Branch" (tyarrow_ (tytuple_ [tyvar_ "Tree", tyvar_ "Tree"]) (tyvar_ "Tree")),
   condef_ "Leaf" (tyarrow_ (tyseq_ tyint_) (tyvar_ "Tree")),
-  ulet_ "t" (conapp_ "Branch" (tuple_ [
+  ulet_ "t" (conapp_ "Branch" (utuple_ [
     conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
-    conapp_ "Branch" (tuple_ [
+    conapp_ "Branch" (utuple_ [
       conapp_ "Leaf" (seq_ [int_ 2]),
       conapp_ "Leaf" (seq_ [])])])),
   (match_ (var_ "t")

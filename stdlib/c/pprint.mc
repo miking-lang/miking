@@ -3,6 +3,7 @@
 
 include "ast.mc"
 include "string.mc"
+include "char.mc"
 
 include "mexpr/pprint.mc"
 
@@ -18,16 +19,43 @@ let _par = lam str. join ["(",str,")"]
 let _joinSpace = lam fst. lam snd.
   if eqString "" snd then fst else join [fst, " ", snd]
 
+-- Replace invalid characters with underscore
+let replaceInvalidChar = lam c.
+  if isAlphaOrUnderscore c then c
+  else if isDigit c then c
+  else '_'
+
+-- Ensure string is a valid C identifier
+let escapeIdentifier = lam str: String.
+  match str with [h] ++ t then
+    let h =
+      if isAlphaOrUnderscore h then [h]
+      else if isDigit h then cons '_' [h]
+      else "_"
+    in
+    concat h (map replaceInvalidChar t)
+  else "_"
+
+let pprintEnvGetStr = lam env. lam id: Name.
+  -- Set this to true to print names with their symbols (for debugging)
+  if false then
+    (env,join [
+      nameGetStr id,
+      match nameGetSym id with Some sym then int2string (sym2hash sym) else ""
+    ])
+  else
+    let id = nameSetStr id (escapeIdentifier (nameGetStr id)) in
+    pprintEnvGetStr env id -- Note that this is not a recursive call!
+
 -- Similar to pprintEnvGetStr in mexpr/pprint.mc, but takes an Option Name as
 -- argument. If it is None (), the returned string is "".
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
--------------
--- C TYPES --
--------------
-lang CTypePrettyPrint = CTypeAst
-
+-----------------------------
+-- C TYPES AND EXPRESSIONS --
+-----------------------------
+lang CExprTypePrettyPrint = CExprTypeAst
 
   sem printCType (decl: String) (env: PprintEnv) =
 
@@ -49,8 +77,11 @@ lang CTypePrettyPrint = CTypeAst
     else never
 
   | CTyArray { ty = ty, size = size } ->
-    let subscr = match size with Some size then int2string size else "" in
-    printCType (join [decl, "[", subscr, "]"]) env ty
+    let subscr =
+      match size with Some size then printCExpr env size else (env,"") in
+    match subscr with (env,subscr) then
+      printCType (join [decl, "[", subscr, "]"]) env ty
+    else never
 
   | CTyStruct { id = id, mem = mem } ->
     let idtup =
@@ -58,7 +89,8 @@ lang CTypePrettyPrint = CTypeAst
     match idtup with (env,id) then
       match mem with Some mem then
         let f = lam env. lam t: (CType,Option String).
-          printCType (match t.1 with Some n then n else "") env t.0  in
+          printCType (match t.1 with Some n then escapeIdentifier n else "")
+            env t.0  in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -73,7 +105,8 @@ lang CTypePrettyPrint = CTypeAst
     match idtup with (env,id) then
       match mem with Some mem then
         let f = lam env. lam t: (CType, Option String).
-          printCType (match t.1 with Some n then n else "") env t.0 in
+          printCType (match t.1 with Some n then escapeIdentifier n else "")
+            env t.0 in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -94,14 +127,6 @@ lang CTypePrettyPrint = CTypeAst
       else (env, _joinSpace (_joinSpace "enum" id) decl)
     else never
 
-end
-
-
-
--------------------
--- C EXPRESSIONS --
--------------------
-lang CExprPrettyPrint = CExprAst + CTypePrettyPrint
 
   sem printCExpr (env: PprintEnv) =
 
@@ -134,12 +159,12 @@ lang CExprPrettyPrint = CExprAst + CTypePrettyPrint
 
   | CEMember { lhs = lhs, id = id } ->
     match printCExpr env lhs with (env,lhs) then
-      (env, _par (join [lhs, ".", id]))
+      (env, _par (join [lhs, ".", escapeIdentifier id]))
     else never
 
   | CEArrow { lhs = lhs, id = id } ->
     match printCExpr env lhs with (env,lhs) then
-      (env, _par (join [lhs, "->", id]))
+      (env, _par (join [lhs, "->", escapeIdentifier id]))
     else never
 
   | CECast { ty = ty, rhs = rhs } ->
@@ -189,7 +214,7 @@ end
 --------------------
 -- C INITIALIZERS --
 --------------------
-lang CInitPrettyPrint = CInitAst + CExprPrettyPrint
+lang CInitPrettyPrint = CInitAst + CExprTypePrettyPrint
 
   sem printCInit (env: PprintEnv) =
   | CIExpr { expr = expr } -> printCExpr env expr
@@ -204,7 +229,7 @@ end
 -------------------------------------
 -- HELPER FRAGMENT FOR DEFINITIONS --
 -------------------------------------
-lang CDefPrettyPrint = CTypePrettyPrint + CInitPrettyPrint
+lang CDefPrettyPrint = CExprTypePrettyPrint + CInitPrettyPrint
 
   -- Helper function for printing declarations and definitions
   sem printCDef (env: PprintEnv) (ty: CType) (id: String) =
@@ -223,8 +248,7 @@ end
 -- C STATEMENTS --
 ------------------
 lang CStmtPrettyPrint =
-  CStmtAst + CTypePrettyPrint + CInitPrettyPrint + CExprPrettyPrint
-  + CDefPrettyPrint
+  CStmtAst + CInitPrettyPrint + CExprTypePrettyPrint + CDefPrettyPrint
 
   -- Print a line-separated list of statements at the given indentation level.
   sem printCStmts (indent: Int) (env: PprintEnv) =
@@ -324,7 +348,7 @@ end
 -- C TOP-LEVEL --
 -----------------
 lang CTopPrettyPrint =
-  CTopAst + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint
+  CTopAst + CExprTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint
   + CDefPrettyPrint
 
   sem printCTop (indent : Int) (env: PprintEnv) =
@@ -363,6 +387,13 @@ lang CTopPrettyPrint =
 end
 
 
+-----------------------
+-- COMBINED FRAGMENT --
+-----------------------
+lang CPrettyPrint =
+  CExprTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint + CTopPrettyPrint
+
+
 ---------------
 -- C PROGRAM --
 ---------------
@@ -383,21 +414,14 @@ lang CProgPrettyPrint = CProgAst + CTopPrettyPrint
 
 end
 
-
------------------------
--- COMBINED FRAGMENT --
------------------------
-lang CPrettyPrint =
-  CExprPrettyPrint + CTypePrettyPrint + CInitPrettyPrint + CStmtPrettyPrint +
-  CTopPrettyPrint + CProgPrettyPrint
-
-
 ----------------
 -- UNIT TESTS --
 ----------------
 
+lang Test = CPrettyPrint + CProgPrettyPrint
+
 mexpr
-use CPrettyPrint in
+use Test in
 
 let funname = nameSym "fun" in
 let mainname = nameSym "main" in
@@ -426,6 +450,13 @@ utest print (wrapTop deftop) with
   "int x;"
 in
 
+let escapedName = CTDef {
+  ty = CTyInt {}, id = Some (nameSym "0@a[A"), init = None ()
+} in
+utest print (wrapTop escapedName) with
+  "int _0_a_A;"
+in
+
 let tydeftop = CTTyDef { ty = CTyInt {}, id = tyname } in
 utest print (wrapTop tydeftop) with
   "typedef int Ty;"
@@ -450,7 +481,7 @@ let structtop = CTDef {
   ty = CTyStruct {
     id = Some structtyname,
     mem = Some [
-      (CTyInt {}, Some "x"),
+      (CTyInt {}, Some "0x"),
       (CTyDouble {}, Some "y")
     ]
   },
@@ -458,7 +489,7 @@ let structtop = CTDef {
   init = None ()
 } in
 utest print (wrapTop structtop) with
-  "struct structty {int x; double y;};"
+  "struct structty {int _0x; double y;};"
 in
 
 let nestedstructtop = CTDef {
@@ -495,7 +526,8 @@ in
 
 let arrinit = CTDef {
   ty = CTyArray {
-    ty = CTyArray { ty = CTyInt {}, size = Some 3 }, size = None ()
+    ty = CTyArray { ty = CTyInt {}, size = Some (CEInt { i = 3 }) },
+    size = None ()
   },
   id = Some (nameSym "arrinit"),
   init = Some ( CIList {
@@ -587,17 +619,17 @@ utest print (wrapStmt struct) with
 using eqString in
 
 let memb = CSExpr {
-  expr = CEMember { lhs = CEVar { id = structname }, id = "x" }
+  expr = CEMember { lhs = CEVar { id = structname }, id = "0x" }
 } in
 utest print (wrapStmt memb) with
-  wrapStmtString "(s.x);"
+  wrapStmtString "(s._0x);"
 using eqString in
 
 let arrow = CSExpr {
-  expr = CEArrow { lhs = CEVar { id = structname }, id = "x" }
+  expr = CEArrow { lhs = CEVar { id = structname }, id = "0x" }
 } in
 utest print (wrapStmt arrow) with
-  wrapStmtString "(s->x);"
+  wrapStmtString "(s->_0x);"
 using eqString in
 
 let nop = CSNop {} in
@@ -644,7 +676,7 @@ let union = CSDef {
   ty = CTyUnion {
     id = Some (nameSym "unionty"),
     mem = Some (
-      [(CTyInt {}, Some "x"),
+      [(CTyInt {}, Some "0x"),
        (CTyDouble {}, Some "y")]
     )
   },
@@ -652,7 +684,7 @@ let union = CSDef {
   init = None ()
 } in
 utest print (wrapStmt union) with
-  wrapStmtString "union unionty {int x; double y;};"
+  wrapStmtString "union unionty {int _0x; double y;};"
 using eqString in
 
 let enum = CSDef {
@@ -701,7 +733,7 @@ utest print (wrapStmt switch) with
     "    (fun(1, 'a'));",
     "    break;",
     "  default:",
-    "    (s.x);",
+    "    (s._0x);",
     "}"
   ])
 using eqString in
@@ -724,10 +756,10 @@ utest print (wrapStmt while) with
     "  (fun(1, 'a'));",
     "  {",
     "    x;",
-    "    (s.x);",
+    "    (s._0x);",
     "  }",
     "  continue;",
-    "  (s.x);",
+    "  (s._0x);",
     "}"
   ])
 using eqString in
@@ -793,15 +825,15 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "#include <stdio.h>",
   "int x;",
   "char y = 'c';",
-  "struct structty {int x; double y;};",
+  "struct structty {int _0x; double y;};",
   "int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};",
   "char (*fun(int main1, char arg2))(int, double) {",
   "  double x = 0.1;",
   "  char strinit[] = \"strinit\";",
   "  struct structty s;",
-  "  union unionty {int x; double y;};",
+  "  union unionty {int _0x; double y;};",
   "  enum enumty {CONST, CONST1};",
-  "  (s.x);",
+  "  (s._0x);",
   "  (( struct structty (*(*(*)(char))(int (double))) ) 1);",
   "  (sizeof(struct structty (*(*(*)(char))(int (double)))));",
   "  (x = ((-1) * 3));",
@@ -822,16 +854,16 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "      (fun(1, 'a'));",
   "      break;",
   "    default:",
-  "      (s.x);",
+  "      (s._0x);",
   "  }",
   "  while (42) {",
   "    (fun(1, 'a'));",
   "    {",
   "      x;",
-  "      (s.x);",
+  "      (s._0x);",
   "    }",
   "    continue;",
-  "    (s.x);",
+  "    (s._0x);",
   "  }",
   "}",
   "void noreturn() {",

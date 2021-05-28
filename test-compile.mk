@@ -45,7 +45,10 @@ compile_files += stdlib/mexpr/ast.mc
 compile_files += stdlib/mexpr/pprint.mc
 compile_files += stdlib/mexpr/parser.mc
 compile_files += stdlib/mexpr/cps.mc
-compile_files += stdlib/mexpr/decision-points.mc
+compile_files += stdlib/mexpr/tuning/decision-points.mc
+compile_files += stdlib/mexpr/tuning/tune.mc
+compile_files += stdlib/mexpr/tuning/tune-options.mc
+compile_files += stdlib/mexpr/tuning/eq-paths.mc
 compile_files += stdlib/mexpr/lamlift.mc
 compile_files += stdlib/mexpr/utesttrans.mc
 compile_files += stdlib/mexpr/eval.mc
@@ -89,7 +92,6 @@ compile_files += stdlib/map.mc
 compile_files += stdlib/assoc.mc
 #compile_files += stdlib/regex.mc
 #compile_files += stdlib/json.mc
-compile_files += stdlib/eq-paths.mc
 compile_files += stdlib/hashmap.mc
 compile_files += stdlib/seq.mc
 #compile_files += stdlib/nfa.mc
@@ -127,22 +129,18 @@ compile_files += stdlib/ocaml/ast.mc
 compile_files += stdlib/ocaml/intrinsics-ops.mc
 compile_files += stdlib/ocaml/external-includes.mc
 compile_files += stdlib/ocaml/external.mc
-#compile_files += stdlib/python/python.mc
-#compile_files += test/sundials/sundials.mc
-#compile_files += stdlib/sundials/sundials.mc
+# compile_files += stdlib/python/python.mc
 compile_files += src/main/mi.mc
 compile_files += src/main/compile.mc
 compile_files += src/main/run.mc
 compile_files += stdlib/ext/math-ext.mc
+compile_files += stdlib/ext/ext-test.mc
 compile_files += stdlib/futhark/ast.mc
 compile_files += stdlib/futhark/ast-builder.mc
 compile_files += stdlib/futhark/generate.mc
 compile_files += stdlib/futhark/pprint.mc
 
 all: ${compile_files}
-
-${compile_files}::
-	-@./make compile-test $@ "build/boot eval src/main/mi.mc -- compile --test --disable-optimizations"
 
 ${compile_files}::
 	-@./make compile-test $@ "build/mi compile --test --disable-optimizations"
