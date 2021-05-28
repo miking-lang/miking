@@ -93,20 +93,22 @@ utest optionIndexFoldRMM
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
 
--- Construct a rank 1 tensor from a non-empty sequence `seq`.
+-- Construct a tensor of shape `shape` from a sequence `seq`.
 let tensorOfSeqOrElse :
   (Unit -> Tensor[a]) ->
   ([Int] -> ([Int] -> a) -> Tensor[a]) ->
+  [Int] ->
   [a] ->
   Tensor[a] =
-lam f. lam tcreate. lam seq.
+lam f. lam tcreate. lam shape. lam seq.
   let n = length seq in
-  if eqi n 0 then f ()
+  if neqi n (_prod shape) then f ()
   else
-    tcreate [n] (lam is. get seq (get is 0))
+    let t = tcreate [n] (lam is. get seq (get is 0)) in
+    tensorReshapeExn t shape
 
 let tensorOfSeqExn
-  : ([Int] -> ([Int] -> a) -> Tensor[a]) -> [a] -> Tensor[a] =
+  : ([Int] -> ([Int] -> a) -> Tensor[a]) -> [Int] -> [a] -> Tensor[a] =
   tensorOfSeqOrElse
     (lam. error "Empty seq in tensorOfSeqExn")
 
@@ -123,13 +125,15 @@ lam f. lam t.
 let tensorToSeqExn : Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
-utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [1, 2, 3, 4])
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [4] [1, 2, 3, 4])
 with [1, 2, 3, 4] using eqSeq eqi
 
-utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayFloat [1., 2., 3., 4.])
+utest
+  tensorToSeqExn
+    (tensorOfSeqExn tensorCreateCArrayFloat [4] [1., 2., 3., 4.])
 with [1., 2., 3., 4.] using eqSeq eqf
 
-utest tensorToSeqExn (tensorOfSeqExn tensorCreateDense [1, 2, 3, 4])
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4])
 with [1, 2, 3, 4] using eqSeq eqi
 
 -- Create a tensor filled with values `v`.
@@ -151,30 +155,32 @@ utest tensorSize (tensorCreateDense [1, 2, 3] (lam. 0)) with 6
 utest tensorSize (tensorCreateDense [] (lam. 0)) with 1
 
 
--- Map the elements of `t1` to the elements of `t2` using the function `f`,
+-- Map the elements of `t1` to the elements of `t2` via the function `f`,
 -- where `t1` and `t2` has to have the same shape.
-let tensorMapOrElse : (Unit -> Unit) -> (a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+let tensorMapOrElse
+  : (Unit -> Unit) -> (a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
 lam f. lam g. lam t1. lam t2.
   if eqSeq eqi (tensorShape t1) (tensorShape t2) then
     let n = tensorSize t1 in
     let v1 = tensorReshapeExn t1 [n] in
     let v2 =  tensorReshapeExn t2 [n] in
-    tensorIterSlice (lam i. lam e. tensorSetExn v2 [i] (g (tensorGetExn e [])))
-                v1
+    tensorIterSlice
+      (lam i. lam e. tensorSetExn v2 [i] (g (tensorGetExn e [])))
+      v1
   else f ()
 
 let tensorMapExn =
   tensorMapOrElse (lam. error "Tensor shape mismatch in tensorMap")
 
 utest
-  let t1 = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
+  let t1 = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
   let t2 = tensorCreateDense [4] (lam. []) in
   tensorMapExn (lam x. [x]) t1 t2;
   tensorToSeqExn t2
 with [[1], [2], [3], [4]]
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
+  let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
   tensorMapExn (addi 1) t t;
   tensorToSeqExn t
 with [2, 3, 4, 5]
@@ -186,15 +192,48 @@ utest
 with 1
 
 
--- Fill a tensor `t` with values `v`.
-let tensorFill : Tensor[a] -> a -> Unit =
-lam t. lam v. tensorMapExn (lam. v) t t
+-- Applies function `f` to the elements of `t`.
+let tensorMapSelf : (a -> a) -> Tensor[a] -> Unit =
+  lam f. lam t. tensorMapExn f t t
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [1, 2, 3, 4] in
-  tensorFill t 0;
+  let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
+  tensorMapSelf (addi 1) t;
   tensorToSeqExn t
-with [0, 0, 0, 0]
+with [2, 3, 4, 5]
+
+
+-- Map the index and elements of `t1` to the elements of `t2` via the function
+-- `f`, where `t1` and `t2` has to have the same shape.
+let tensorMapiOrElse
+  : (Unit -> Unit) -> ([Int] -> a -> b) -> Tensor[a] -> Tensor[b] -> Unit =
+lam f. lam g. lam t1. lam t2.
+  let shape = tensorShape t1 in
+  if eqSeq eqi shape (tensorShape t2) then
+    let n = tensorSize t1 in
+    let v1 = tensorReshapeExn t1 [n] in
+    let v2 =  tensorReshapeExn t2 [n] in
+    tensorIterSlice
+      (lam i. lam e.
+        tensorSetExn
+          v2
+          [i]
+          (g (_rowMajorOfsToIndex shape i) (tensorGetExn e [])))
+      v1
+  else f ()
+
+let tensorMapiExn =
+  tensorMapiOrElse (lam. error "Tensor shape mismatch in tensorMap")
+
+utest
+  let t1 = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  let t2 = tensorCreateDense [2, 2] (lam. ([], 0)) in
+  tensorMapiExn (lam is. lam x. (is, x)) t1 t2;
+  tensorToSeqExn (tensorReshapeExn t2 [tensorSize t2])
+with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
+
+let tensorMapiSelf : ([Int] -> a -> a) -> Tensor[a] -> Unit =
+  lam f. lam t. tensorMapiExn f t t
 
 
 -- Element-wise equality of tensor `t1` and `t2` using `eq`
@@ -242,10 +281,243 @@ utest
 with true
 
 utest
-  let t1 = tensorOfSeqExn tensorCreateDense [1, 2] in
-  let t2 = tensorOfSeqExn tensorCreateDense [1, 3] in
+  let t1 = tensorOfSeqExn tensorCreateDense [2] [1, 2] in
+  let t2 = tensorOfSeqExn tensorCreateDense [2] [1, 3] in
   eqTensor eqi t1 t2
 with false
+
+
+-- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
+-- accumulator and `t` is the i'th slice of `t1`.
+let tensorFoldlSlice
+  : (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+  lam f. lam acc. lam t1.
+  let accr = ref acc in
+  tensorIterSlice
+    (lam i. lam t.
+      let acc = f (deref accr) t in
+      modref accr acc)
+    t1;
+  deref accr
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorFoldlSlice (lam acc. lam t. addi acc (tensorGetExn t [])) 0 t
+with 6
+
+
+-- Left folds `f acc el` over all elements `el` of `t` in row-major order,
+-- where `acc` is the accumulator.
+let tensorFoldl : (b -> a -> b) -> b -> Tensor[a] -> b =
+  lam f. lam acc. lam t.
+  let t = tensorReshapeExn t [tensorSize t] in
+  tensorFoldlSlice (lam acc. lam t. f acc (tensorGetExn t [])) acc t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorFoldl addi 0 t
+with 6
+
+-- Iterates through the elements of `t` in row-major order, applying the
+-- function `f` on each index and element.
+let tensorIteri : ([Int] -> a -> Unit) -> Tensor[a] -> Unit =
+  lam f. lam t.
+  let shape = tensorShape t in
+  let t = tensorReshapeExn t [tensorSize t] in
+  tensorIterSlice
+    (lam i. lam t. f (_rowMajorOfsToIndex shape i) (tensorGetExn t [])) t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorIteri (lam i. lam x. tensorSetExn t i (addi x x)) t;
+  tensorToSeqExn t
+with [2, 4, 6]
+
+
+-- Iterates through the elements of `t` in row-major order, applying the
+-- function `f` on each element.
+let tensorIter : (a -> Unit) -> Tensor[a] -> Unit =
+  lam f. tensorIteri (lam. lam x. f x)
+
+
+-- The maximum element in `t` as defined by `cmp`.
+let tensorMax : (a -> a -> Int) -> Tensor[a] -> a =
+  lam cmp. lam t.
+    if eqi (tensorRank t) 0 then tensorGetExn t []
+    else
+      let t = tensorReshapeExn t [tensorSize t] in
+      tensorFoldlSlice
+        (lam max. lam t.
+          let x = tensorGetExn t [] in
+          if gti (cmp x max) 0 then x else max)
+        (tensorGetExn t [0])
+        t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorMax subi t
+with 3
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorMax subi t
+with 6
+
+
+-- The minimum element in `t` as defined by `cmp`.
+let tensorMin : (a -> a -> Int) -> Tensor[a] -> a =
+  lam cmp. lam t. tensorMax (lam x. lam y. cmp y x) t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorMin subi t
+with 1
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorMin subi t
+with 1
+
+
+-- Finds element and index `Some (el, i)` in `t` satisfying predicate `p`. If
+-- no such element is found then `None` is returned.
+let tensorFindi : (a -> Bool) -> Tensor[a] -> Option (a, [Int]) =
+  lam p. lam t.
+    let n = tensorSize t in
+    let shape = tensorShape t in
+    let t = tensorReshapeExn t [n] in
+    recursive let work = lam i.
+      if lti i n then
+        let e = tensorGetExn t [i] in
+        if p e then Some (e, _rowMajorOfsToIndex shape i)
+        else work (addi i 1)
+      else None ()
+    in
+    work 0
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  match tensorFindi (eqi 1) t with Some x then x else (negi 1, [])
+with (1, [0])
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  match tensorFindi (eqi 3) t with Some x then x else (negi 1, [])
+with (3, [1,0])
+
+
+-- Finds element `Some el` in `t` satisfying predicate `p`. If
+-- no such element is found then `None` is returned.
+let tensorFind : (a -> Bool) -> Tensor[a] -> Option a =
+  lam p. lam t.
+    let x = tensorFindi p t in
+    match x with Some (x, _) then Some x
+    else match x with None _ then None ()
+    else never
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  match tensorFind (eqi 1) t with Some x then x else negi 1
+with 1
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  match tensorFind (eqi 3) t with Some x then x else negi 1
+with 3
+
+
+-- Finds index `Some i` in `t` of element satisfying predicate `p`. If no such
+-- element is found then `None` is returned.
+let tensorIndex : (a -> Bool) -> Tensor[a] -> Option [Int] =
+  lam p. lam t.
+    let x = tensorFindi p t in
+    match x with Some (_, is) then Some is
+    else match x with None _ then None ()
+    else never
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  match tensorIndex (eqi 1) t with Some x then x
+  else []
+with [0]
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  match tensorIndex (eqi 3) t with Some x then x
+  else []
+with [1,0]
+
+
+-- `true` if `p x` for some `x` in `t`, else `false`.
+let tensorAny : (a -> Bool) -> Tensor[a] -> Bool =
+  lam p. lam t.
+    let x = tensorFindi p t in
+    match x with Some _ then true
+    else match x with None _ then false
+    else never
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorAny (eqi 3) t
+with true
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorAny (eqi 7) t
+with false
+
+
+-- `true` if `p x` for all `x` in `t`, else `false`.
+let tensorAll : (a -> Bool) -> Tensor[a] -> Bool =
+  lam p. lam t.
+    let x = tensorFindi (lam x. not (p x)) t in
+    match x with Some _ then false
+    else match x with None _ then true
+    else never
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorAll (gti 7) t
+with true
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorAll (gti 6) t
+with false
+
+
+-- All dims of tensor `t` are equal.
+let tensorDimsEqual = lam t.
+  let shape = tensorShape t in
+  if null shape then true
+  else all (eqi (head shape)) (tail shape)
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  tensorDimsEqual t
+with true
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [1, 4] [1, 2, 3, 4] in
+  tensorDimsEqual t
+with false
+
+
+-- Filter elements of `t` given predicate `p`.
+let tensorFilter : (a -> Bool) -> Tensor[a] -> [a] =
+  lam p. lam t.
+    let t = tensorReshapeExn t [tensorSize t] in
+    tensorFoldlSlice
+      (lam a. lam t.
+        let e = tensorGetExn t [] in
+        if p e then snoc a e else a)
+      []
+      t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  tensorFilter (lti 3) t
+with [4, 5, 6]
 
 mexpr
 
@@ -290,7 +562,7 @@ utest tensorGetExn e [] with 5 in
 utest tensorRank e with 0 in
 
 -- A slice shares data with the original tensor and no copying of data is done.
-tensorFill r2 0;
+tensorMapSelf (lam. 0) r2;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
 -- where we use `tensorFill` from `tensor.mc`
 
