@@ -55,21 +55,21 @@ lam w.
 
 let debugShowState = lam state.
   printLn "===";
-  print "lus: ";
+  print "\nlus: ";
   dprint state.lus;
-  print "lvs: ";
+  print "\nlvs: ";
   dprint state.lvs;
-  print "mus: ";
+  print "\nmus: ";
   dprint state.mus;
-  print "mvs: ";
+  print "\nmvs: ";
   dprint state.mvs;
-  print "ss: ";
+  print "\nss: ";
   dprint state.ss;
-  print "ts: ";
+  print "\nts: ";
   dprint state.ts;
-  print "slacks: ";
+  print "\nslacks: ";
   dprint state.slacks;
-  print "preds: ";
+  print "\npreds: ";
   dprint state.preds;
   ()
 
