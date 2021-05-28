@@ -197,7 +197,7 @@ let formatResult = lam state : State.
 
 -- Find a maximum weight matching on weighted bipartite graph encoded by weight
 -- matrix w. This implementation uses slack variables to ensure sub O(n^4) time
--- complexity.
+-- complexity (assuming O(log n) random access to sequences).
 let maxmatchHungarian = lam w.
   recursive let work = lam state : State. lam k.
     if isPerfectMatch state.mus then formatResult state
