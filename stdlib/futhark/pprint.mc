@@ -49,17 +49,48 @@ let futharkFloat2string = lam f.
 utest futharkFloat2string 2.0 with "2.0"
 utest futharkFloat2string 3.14 with "3.14"
 
+let pprintEnvGetFutharkStr : PprintEnv -> Name -> (PprintEnv, String) =
+  lam env : PprintEnv. lam name.
+    -- Translate the numerical index into one or a sequence of lower-case ASCII
+    -- characters. We need to do this for Futhark because it does not allow
+    -- integers in names.
+    recursive let index2string = lam str. lam i.
+      let ch = int2char (addi (modi i 26) (char2int 'a')) in
+      let str = cons ch str in
+      if lti i 26 then str
+      else index2string str (subi (divi i 26) 1)
+    in
+    match pprintEnvLookup name env with Some str then (env,str)
+    else
+      let baseStr = nameGetStr name in
+      if pprintEnvFree baseStr env then (pprintEnvAdd name baseStr 1 env, baseStr)
+      else
+        match env with {count = count} then
+          let start =
+            match mapLookup baseStr count
+            with Some i then i else 1 in
+          recursive let findFree : String -> Int -> (String, Int) =
+            lam baseStr. lam i.
+              let proposal = concat baseStr (index2string "" (subi i 1)) in
+              if pprintEnvFree proposal env then (proposal, i)
+              else findFree baseStr (addi i 1)
+          in
+          match findFree baseStr start with (str, i) then
+            (pprintEnvAdd name str (addi i 1) env, str)
+          else never
+        else never
+
 lang FutharkIdentifierPrettyPrint = IdentifierPrettyPrint
   sem pprintConName (env : PprintEnv) =
   | name ->
-    match pprintEnvGetStr env name with (env, str) then
+    match pprintEnvGetFutharkStr env name with (env, str) then
       let s = escapeFutharkConString str in
       (env, s)
     else never
 
   sem pprintVarName (env : PprintEnv) =
   | name ->
-    match pprintEnvGetStr env name with (env, str) then
+    match pprintEnvGetFutharkStr env name with (env, str) then
       let s = escapeFutharkVarString str in
       (env, s)
     else never
