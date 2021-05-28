@@ -220,7 +220,8 @@ let maxmatchHungarian = lam w.
 -- weight-incidence matrix w. Incidence of U and V after assignment is given by
 -- incidenceU and incidenceV. The total weight of the assignment is given by
 -- weight.
-let maxmatchFindMatch : [[Int]] -> {incidenceU : Int, incidenceV : Int, weight : Int} =
+let maxmatchFindMatch
+  : [[Int]] -> {incidenceU : [Int], incidenceV : [Int], weight : Int} =
 lam w. maxmatchHungarian w
 
 mexpr
