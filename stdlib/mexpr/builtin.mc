@@ -124,13 +124,6 @@ let builtin = use MExprAst in
   , ("bootParserGetConst", CBootParserGetConst ())
   , ("bootParserGetPat", CBootParserGetPat ())
   , ("bootParserGetInfo", CBootParserGetInfo ())
-  -- Atomic operations
-  , ("atomicMake", CAtomicMake ())
-  , ("atomicGet", CAtomicGet ())
-  , ("atomicSet", CAtomicSet ())
-  , ("atomicExchange", CAtomicExchange ())
-  , ("atomicFetchAndAdd", CAtomicFetchAndAdd ())
-  , ("atomicCAS", CAtomicCAS ())
   -- Threads
   , ("threadSpawn", CThreadSpawn ())
   , ("threadJoin", CThreadJoin ())

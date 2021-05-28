@@ -804,16 +804,6 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   | CBootParserGetInfo _ -> "bootParserGetInfo"
 end
 
-lang AtomicPrettyPrint = AtomicAst + ConstPrettyPrint
-  sem getConstStringCode (indent : Int) =
-  | CAtomicMake _ -> "atomicMake"
-  | CAtomicGet _ -> "atomicGet"
-  | CAtomicSet _ -> "atomicSet"
-  | CAtomicExchange _ -> "atomicExchange"
-  | CAtomicFetchAndAdd _ -> "atomicFetchAndAdd"
-  | CAtomicCAS _ -> "atomicCAS"
-end
-
 lang ThreadPrettyPrint = ThreadAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CThreadSpawn _ -> "threadSpawn"
@@ -1122,7 +1112,7 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   RefOpPrettyPrint + MapPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint + AtomicPrettyPrint + ThreadPrettyPrint +
+  BootParserPrettyPrint + ThreadPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

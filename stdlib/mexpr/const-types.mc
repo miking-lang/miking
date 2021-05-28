@@ -236,16 +236,6 @@ lang BootParserTypeAst = BootParserAst
   | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
 end
 
-lang AtomicTypeAst = AtomicAst
-  sem tyConst =
-  | CAtomicMake _ -> tyarrow_ (tygeneric_ "a") (tyaref_ "a")
-  | CAtomicGet _ -> tyarrow_ (tyaref_ "a") (tygeneric_ "a")
-  | CAtomicSet _ -> tyarrows_ [tyaref_ "a", tygeneric_ "a", tyunit_]
-  | CAtomicExchange _ -> tyarrows_ [tyaref_ "a", tygeneric_ "a", tygeneric_ "a"]
-  | CAtomicFetchAndAdd _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_]
-  | CAtomicCAS _ -> tyarrows_ [tyaref_ "Int", tyint_, tyint_, tybool_]
-end
-
 lang ThreadTypeAst = ThreadAst
   sem tyConst =
   | CThreadSpawn _ ->
@@ -267,5 +257,5 @@ lang MExprConstType =
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
   FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + MapTypeAst +
-  TensorOpTypeAst + BootParserTypeAst + AtomicTypeAst + ThreadTypeAst
+  TensorOpTypeAst + BootParserTypeAst + ThreadTypeAst
 end

@@ -3,6 +3,7 @@ include "ext/ext-test-batteries.ext-ocaml.mc" -- For testing
 include "ext/ext-test.ext-ocaml.mc"           -- For testing
 include "ext/math-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
+include "multicore/atomic.ext-ocaml.mc"
 
 type ExternalImpl = { ident : String, ty : Type, libraries : [String] }
 
@@ -15,5 +16,6 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       extTestBatteriesMap,      -- For testing purposes
       extTestMap,               -- For testing purposes
       mathExtMap,
-      sundialsExtMap
+      sundialsExtMap,
+      atomicExtMap
     ]

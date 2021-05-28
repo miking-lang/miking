@@ -1088,64 +1088,6 @@ lang TensorOpEval =
     uconst_ val
 end
 
-lang AtomicEval = AtomicAst + IntAst + BoolAst + UnknownTypeAst
-  syn Const =
-  | CAtomicRef {ref : ARef Expr}
-  | CAtomicRefInt {ref : ARef Int}
-  | CAtomicExchange2 (ARef Expr)
-  | CAtomicExchangeInt2 (ARef Int)
-  | CAtomicFetchAndAdd2 (ARef Int)
-  | CAtomicCASInt2 (ARef Int)
-  | CAtomicCASInt3 (ARef Int, Int)
-
-  sem delta (arg : Expr) =
-  | CAtomicMake _ ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CAtomicRefInt {ref = atomicMake i}}
-    else
-      TmConst {val = CAtomicRef {ref = atomicMake arg}, ty = tyunknown_,
-               info = NoInfo()}
-  | CAtomicGet _ ->
-    match arg with TmConst {val = CAtomicRef {ref = r}} then
-      atomicGet r
-    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
-      TmConst {t with val = CInt {val = atomicGet r}}
-    else error "argument to atomicGet not an atomic reference"
-  | CAtomicExchange _ ->
-    match arg with TmConst ({val = CAtomicRef {ref = r}} & t) then
-      TmConst {t with val = CAtomicExchange2 r}
-    else match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
-      TmConst {t with val = CAtomicExchangeInt2 r}
-    else error "first argument to atomicExchange not an atomic reference"
-  | CAtomicExchange2 r ->
-    atomicExchange r arg
-  | CAtomicExchangeInt2 r ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CInt {val = atomicExchange r i}}
-    else error "second argument to atomicExchange not an integer"
-  | CAtomicFetchAndAdd _ ->
-    match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
-      TmConst {t with val = CAtomicFetchAndAdd2 r}
-    else error
-       "first argument to atomicFetchAndAdd not an integer atomic reference"
-  | CAtomicFetchAndAdd2 r ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CInt {val = atomicFetchAndAdd r i}}
-    else error "second argument to atomicFetchAndAdd not an integer"
-  | CAtomicCAS _ ->
-    match arg with TmConst ({val = CAtomicRefInt {ref = r}} & t) then
-      TmConst {t with val = CAtomicCASInt2 r}
-    else error "first argument to atomicCAS not an integer atomic reference"
-  | CAtomicCASInt2 r ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CAtomicCASInt3 (r, i)}
-    else error "second argument to atomicCAS not an integer"
-  | CAtomicCASInt3 (r, seen) ->
-    match arg with TmConst ({val = CInt {val = i}} & t) then
-      TmConst {t with val = CBool {val = atomicCAS r seen i}}
-    else error "third argument to atomicCAS not an integer"
-end
-
 lang ThreadEval = ThreadAst + IntAst + UnknownTypeAst + RecordAst + AppEval
   syn Const =
   | CThread {thread : Thread Expr}
@@ -1342,7 +1284,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  TensorOpEval + AtomicEval + ThreadEval
+  TensorOpEval + ThreadEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1991,41 +1933,6 @@ utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in
 testTensors tensorCreateInt_ (int_ 0, int_ 1, int_ 2);
 testTensors tensorCreateFloat_ (float_ 0., float_ 1., float_ 2.);
 testTensors utensorCreate_ (seq_ [int_ 0], seq_ [int_ 1], seq_ [int_ 2]);
-
--- Atomic references
-let p = ulet_ "r" (atomicMake_ (int_ 0)) in
-utest eval (bind_ p (atomicGet_ (var_ "r"))) with int_ 0
-using eqExpr in
-utest eval (bind_ p (atomicExchange_ (var_ "r") (int_ 1))) with int_ 0
-using eqExpr in
-utest eval (bind_ p (bindall_
-  [ ulet_ "_" (atomicExchange_ (var_ "r") (int_ 1))
-  , atomicExchange_ (var_ "r") (int_ 2)
-  ]))
-with int_ 1 using eqExpr in
-utest eval (bind_ p (atomicFetchAndAdd_ (var_ "r") (int_ 3))) with int_ 0
-using eqExpr in
-utest eval (bind_ p (atomicCAS_ (var_ "r") (int_ 0) (int_ 1))) with true_
-using eqExpr in
-
-let p = ulet_ "r" (atomicMake_ (float_ 0.0)) in
-utest eval (bind_ p (atomicGet_ (var_ "r"))) with float_ 0.0 in
-utest eval (bind_ p (atomicExchange_ (var_ "r") (float_ 1.0))) with float_ 0.0 in
-utest eval (bind_ p (bindall_
-  [ ulet_ "_" (atomicExchange_ (var_ "r") (float_ 1.0))
-  , atomicExchange_ (var_ "r") (float_ 2.0)
-  ]))
-with float_ 1.0 using eqExpr in
-
-utest eval (bindall_
-  [ ucondef_ "Foo"
-  , ulet_ "r" (atomicMake_ (conapp_ "Foo" (int_ 1)))
-  , ulet_ "foo2" (conapp_ "Foo" (int_ 2))
-  , ulet_ "foo1" (atomicExchange_ (var_ "r") (var_ "foo2"))
-  , match_ (var_ "foo1") (pcon_ "Foo" (pint_ 1)) true_ false_
-  ]
-)
-with true_ using eqExpr in
 
 -- Threads
 utest eval (bindall_
