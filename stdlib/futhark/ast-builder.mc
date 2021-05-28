@@ -71,6 +71,10 @@ let futArrayAccess_ = use FutharkAst in
   lam array. lam index.
   FEArrayAccess {array = array, index = index}
 
+let futArrayUpdate_ = use FutharkAst in
+  lam array. lam index. lam value.
+  FEArrayUpdate {array = array, index = index, value = value}
+
 let futConst_ = use FutharkAst in
   lam c.
   FEConst {val = c}
@@ -102,13 +106,14 @@ let futBinop_ = lam op. lam a. lam b.
 
 let nFutLet_ = use FutharkAst in
   lam n. lam ty. lam body.
-  FELet {ident = n, tyBody = ty, body = body, inexpr = futUnit_ ()}
+  FELet {ident = n, tyBody = Some ty, body = body, inexpr = futUnit_ ()}
 
-let nuFutLet_ = lam n. lam body.
-  nFutLet_ n (futUnitTy_ ()) body
+let nuFutLet_ = use FutharkAst in
+  lam n. lam body.
+  FELet {ident = n, tyBody = None (), body = body, inexpr = futUnit_ ()}
 
 let uFutLet_ = lam str. lam body.
-  nFutLet_ (nameNoSym str) (futUnitTy_ ()) body
+  nuFutLet_ (nameNoSym str) body
 
 let futLet_ = lam str. lam ty. lam body.
   nFutLet_ (nameNoSym str) ty body

@@ -182,11 +182,13 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   | FERecordProj _ -> false
   | FEArray _ -> true
   | FEArrayAccess _ -> false
+  | FEArrayUpdate _ -> false
   | FEConst _ -> true
   | FELam _ -> false
   | FEApp _ -> false
   | FELet _ -> false
   | FEIf _ -> false
+  | FEFor _ -> false
 
   sem pprintParen (indent : Int) (env : PprintEnv) =
   | expr ->
@@ -230,13 +232,21 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
         (env, join [array, "[", index, "]"])
       else never
     else never
+  | FEArrayUpdate {array = array, index = index, value = value} ->
+    match pprintExpr indent env array with (env, array) then
+      match pprintExpr indent env index with (env, index) then
+        match pprintExpr indent env value with (env, value) then
+          (env, join [array, " with [", index, "] = ", value])
+        else never
+      else never
+    else never
   | FEConst {val = val} -> (env, pprintConst val)
   | FELam {idents = idents, body = body} ->
     let aindent = pprintIncr indent in
     match mapAccumL pprintVarName env idents with (env, strs) then
       match pprintExpr aindent env body with (env, body) then
-        (env, join ["(\\", strJoin " " strs, " ->",
-                    pprintNewline aindent, body, ")"])
+        (env, join ["\\", strJoin " " strs, " ->",
+                    pprintNewline aindent, body])
       else never
     else never
   | FEApp t ->
@@ -253,12 +263,19 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       else never
     else never
   | FELet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
+    let pprintOptionalType = lam env : PprintEnv. lam optTy : Option FutType.
+      match optTy with Some ty then
+        match pprintType indent env ty with (env, tyStr) then
+          (env, join [" : ", tyStr])
+        else never
+      else (env, "")
+    in
     let aindent = pprintIncr indent in
     match pprintExpr aindent env body with (env, body) then
-      match pprintType indent env tyBody with (env, tyBody) then
+      match pprintOptionalType env tyBody with (env, tyBody) then
         match pprintExpr indent env inexpr with (env, inexpr) then
-          match pprintVarName env ident with (_, ident) then
-            (env, join ["let ", ident, " : ", tyBody, " = ", body, " in",
+          match pprintVarName env ident with (env, ident) then
+            (env, join ["let ", ident, tyBody, " = ", body, " in",
                         pprintNewline indent, inexpr])
           else never
         else never
@@ -272,6 +289,18 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
           (env, join ["if ", cond, " then", pprintNewline aindent, thn,
                       pprintNewline indent, "else", pprintNewline aindent,
                       els])
+        else never
+      else never
+    else never
+  | FEFor {param = param, loopVar = loopVar, boundVar = boundVar, thn = thn} ->
+    let aindent = pprintIncr indent in
+    match pprintExpr indent env param with (env, param) then
+      match pprintVarName env loopVar with (env, loopVar) then
+        match pprintVarName env boundVar with (env, boundVar) then
+          match pprintExpr aindent env thn with (env, thn) then
+            (env, join ["loop ", param, " for ", loopVar, " < ", boundVar, " do",
+                        pprintNewline aindent, thn])
+          else never
         else never
       else never
     else never

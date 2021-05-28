@@ -38,11 +38,13 @@ lang FutharkAst
   | FERecordProj { rec : FutExpr, key : SID }
   | FEArray { tms : [FutExpr] }
   | FEArrayAccess { array : FutExpr, index : FutExpr }
+  | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr }
   | FEConst { val : FutConst }
   | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
-  | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
+  | FELet { ident : Name, tyBody : Option FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
+  | FEFor { param : FutExpr, loopVar : Name, boundVar : Name, thn : FutExpr }
 
   syn FutType =
   | FTyInt ()
