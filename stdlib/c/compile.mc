@@ -336,7 +336,8 @@ lang MExprCCompile = MExprAst + CAst
 
   -- Compile patterns
   sem compilePat (env: CompileCEnv)
-    (conds: [CExpr]) (defs: [(Name,CExpr)]) (target: CExpr) (ty: Type) =
+    (pres: [CStmt]) (conds: [CExpr]) (defs: [CStmt])
+    (target: CExpr) (ty: Type) =
 
   | PatNamed { ident = PName ident } ->
     let def = CSDef {
@@ -344,12 +345,13 @@ lang MExprCCompile = MExprAst + CAst
       id = Some ident,
       init = Some (CIExpr { expr = target })
     } in
-    ( conds, snoc defs def )
+    ( pres, conds, snoc defs def )
 
-  | PatNamed { ident = PWildcard _ } -> (conds, defs)
+  | PatNamed { ident = PWildcard _ } -> (pres, conds, defs)
 
   | PatBool { val = val } ->
-    ( snoc conds (CEBinOp {
+    ( pres,
+      snoc conds (CEBinOp {
         op = COEq {},
         lhs = target,
         rhs = let val = match val with true then 1 else 0 in CEInt { i = val }
@@ -359,18 +361,25 @@ lang MExprCCompile = MExprAst + CAst
   | PatRecord { bindings = bindings } ->
     match env with { typeEnv = typeEnv } then
       let f = lam acc. lam sid. lam subpat.
-        match acc with (conds, defs) then
+        match acc with (pres, conds, defs) then
           match _unwrapType typeEnv ty with TyRecord { fields = fields } then
             match mapLookup sid fields with Some ty then
               let label = sidToString sid in
-              compilePat env conds defs
-                (CEArrow { lhs = target, id = (nameNoSym label) }) ty subpat
-
+              let namePre = nameSym "preMatch" in
+              let pre = CSDef {
+                ty = compileType env ty,
+                id = Some namePre,
+                init = Some (CIExpr {
+                  expr = CEArrow { lhs = target, id = nameNoSym label }
+                })
+              } in
+              compilePat env (snoc pres pre)
+                conds defs (CEVar { id = namePre }) ty subpat
             else error "Label does not match between PatRecord and TyRecord"
           else error "Type not TyVar for PatRecord in compilePat"
         else never
       in
-      mapFoldWithKey f (conds, defs) bindings
+      mapFoldWithKey f (pres, conds, defs) bindings
     else never
 
   | PatCon { ident = ident, subpat = subpat } ->
@@ -382,12 +391,20 @@ lang MExprCCompile = MExprAst + CAst
       in
       match _unwrapType typeEnv ty with TyVariant { constrs = constrs } then
         match mapLookup ident constrs with Some ty then
-          compilePat env (snoc conds (CEBinOp {
+          let namePre = nameSym "preMatch" in
+          let pre = CSDef {
+            ty = compileType env ty,
+            id = Some namePre,
+            init = Some (CIExpr {
+              expr = CEArrow { lhs = target, id = dataKey }
+            })
+          } in
+          compilePat env (snoc pres pre) (snoc conds (CEBinOp {
               op = COEq {},
               lhs = CEArrow { lhs = target, id = _constrKey },
               rhs = CEVar { id = ident }
             }))
-            defs (CEArrow { lhs = target, id = dataKey }) ty subpat
+            defs (CEVar { id = namePre }) ty subpat
         else error "Invalid constructor in compilePat"
       else error "Not a TyVariant for PatCon in compilePat"
     else never
@@ -416,8 +433,8 @@ lang MExprCCompile = MExprAst + CAst
 
         -- Generate conditions corresponding to pat, and add pattern bindings
         -- to start of thn
-        match compilePat env [] [] ctarget (ty target) pat
-        with (conds, defs) then
+        match compilePat env [] [] [] ctarget (ty target) pat
+        with (pres, conds, defs) then
 
           let thn = concat defs thn in
 
@@ -430,6 +447,8 @@ lang MExprCCompile = MExprAst + CAst
                 ) conds in
               [CSIf { cond = cond, thn = thn, els = els }]
           in
+
+          let stmts = concat pres stmts in
 
           (env, def, stmts)
 
@@ -1113,8 +1132,6 @@ let trees = bindall_ [
   int_ 0
 ] in
 
--- print (printCompiledCProg (compile trees));
-
 utest testCompile trees with strJoin "\n" [
   "#include <stdio.h>",
   "struct Tree;",
@@ -1153,10 +1170,14 @@ utest testCompile trees with strJoin "\n" [
   "int sum;",
   "int treeRec(struct Tree (*t13)) {",
   "  int t14;",
+  "  struct Rec1 (*preMatch) = (t13->d1);",
+  "  int preMatch1 = (preMatch->v);",
+  "  struct Tree (*preMatch2) = (preMatch->l);",
+  "  struct Tree (*preMatch3) = (preMatch->r);",
   "  if (((t13->constr) == Node)) {",
-  "    int v1 = ((t13->d1)->v);",
-  "    struct Tree (*l1) = ((t13->d1)->l);",
-  "    struct Tree (*r1) = ((t13->d1)->r);",
+  "    int v1 = preMatch1;",
+  "    struct Tree (*l1) = preMatch2;",
+  "    struct Tree (*r1) = preMatch3;",
   "    int t15 = (treeRec(l1));",
   "    int t16 = (v1 + t15);",
   "    int t17 = (treeRec(r1));",
@@ -1164,8 +1185,10 @@ utest testCompile trees with strJoin "\n" [
   "    (t14 = t18);",
   "  } else {",
   "    int t19;",
+  "    struct Rec (*preMatch4) = (t13->d0);",
+  "    int preMatch5 = (preMatch4->v);",
   "    if (((t13->constr) == Leaf)) {",
-  "      int v2 = ((t13->d0)->v);",
+  "      int v2 = preMatch5;",
   "      (t19 = v2);",
   "    } else {",
   "      ;",

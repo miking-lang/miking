@@ -43,6 +43,9 @@ let mapKeys : Map k v -> [k] = lam m.
 let mapValues : Map k v -> [v] = lam m.
   mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
 
+let mapToList : Map k v -> [(k,v)] = lam m.
+  zipWith (lam k. lam v. (k,v)) (mapKeys m) (mapValues m)
+
 let mapMapAccum : (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
   lam f. lam acc. lam m.
     mapFoldWithKey
@@ -115,6 +118,7 @@ utest mapLookup 3 m2 with mapLookup 3 m using optionEq eqString in
 
 utest mapKeys m2 with [1,2] in
 utest mapValues m2 with ["1blub","2"] in
+utest mapToList m2 with [(1,"1blub"), (2,"2")] in
 
 utest
 match mapMapAccum (lam acc. lam k. lam v. ((addi k acc), concat "x" v)) 0 merged

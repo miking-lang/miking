@@ -228,6 +228,18 @@ lang CStmtAst = CInitAst + CExprTypeAst
   | CSBreak _ & t -> t
   | CSNop _ & t -> t
 
+  sem sfold_CStmt_CStmt (f: a -> CStmt -> a) (acc: a) =
+  | CSDef t -> acc
+  | CSIf t -> foldl f (foldl f acc t.thn) t.els
+  | CSSwitch t -> error "TODO"
+  | CSWhile t -> error "TODO"
+  | CSExpr t -> acc
+  | CSComp t -> error "TODO"
+  | CSRet t -> acc
+  | CSCont _ -> acc
+  | CSBreak _ -> acc
+  | CSNop _ -> acc
+
   sem sreplace_CStmt_CStmt (f: CStmt -> [CStmt]) =
   | CSDef t -> CSDef t
   | CSIf t ->
@@ -266,6 +278,11 @@ lang CTopAst = CExprTypeAst + CInitAst + CStmtAst
   | CTTyDef _ & t -> t
   | CTDef _ & t -> t
   | CTFun t -> CTFun { t with body = join (map f t.body) }
+
+  sem sfold_CTop_CStmt (f: a -> CStmt -> a) (acc: a) =
+  | CTTyDef _ -> acc
+  | CTDef _ -> acc
+  | CTFun t -> foldl f acc t.body
 
 end
 
