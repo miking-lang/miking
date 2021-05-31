@@ -138,6 +138,14 @@ lang TypeLift = Cmp
   sem typeLiftType (env : TypeLiftEnv) =
   | t -> smapAccumL_Type_Type typeLiftType env t
 
+  sem typeLiftPat (env : TypeLiftEnv) =
+  | t ->
+    match smapAccumL_Pat_Pat typeLiftPat env t with (env, t) then
+      match typeLiftType env (tyPat t) with (env, ty) then
+        (env, withTypePat ty t)
+      else never
+    else never
+
   -- Lifts all records, variants and type aliases from the given expression
   -- `e`. The result is returned as an environment containing tuples of names
   -- and their corresponding types, together with a modified version of the
@@ -228,36 +236,17 @@ end
 lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
-    -- If the pattern describes a tuple, then we add a tuple type containing
-    -- the amount of elements specified in the tuple (of unknown type) to the
-    -- environment.
-    let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
-      match pat with PatRecord {bindings = bindings, info = info} then
-        match record2tuple bindings with Some _ then
-          let fields = mapMap (lam. tyunknown_) bindings in
-          let labels = map stringToSid (create (mapSize fields) int2string) in
-          let ty =
-            TyRecord {
-              fields = fields,
-              labels = labels,
-              info = info
-            }
-          in
-          match addRecordToEnv env ty with (env, _) then
-            env
-          else never
-        else env
-      else env
-    in
     match typeLiftExpr env t.target with (env, target) then
-      let env = addTypeToEnvIfTuplePattern env t.pat in
-      match typeLiftExpr env t.thn with (env, thn) then
-        match typeLiftExpr env t.els with (env, els) then
-          match typeLiftType env t.ty with (env, ty) then
-            (env, TmMatch {{{{t with target = target}
-                                with thn = thn}
-                                with els = els}
-                                with ty = ty})
+      match typeLiftPat env t.pat with (env, pat) then
+        match typeLiftExpr env t.thn with (env, thn) then
+          match typeLiftExpr env t.els with (env, els) then
+            match typeLiftType env t.ty with (env, ty) then
+              (env, TmMatch {{{{{t with target = target}
+                                   with pat = pat}
+                                   with thn = thn}
+                                   with els = els}
+                                   with ty = ty})
+            else never
           else never
         else never
       else never
