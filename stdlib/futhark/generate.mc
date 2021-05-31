@@ -79,7 +79,6 @@ let _usePassedParameters = use MExprAst in
     else smap_Expr_Expr work e
   in
   work body
-end
 
 lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
   sem generateConst =
@@ -131,8 +130,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
       if null aliasArgs then
         FTyIdent {ident = aliasIdent}
       else
-        let paramNames = map paramName aliasArgs in
-        FTyParamsApp {ty = FTyIdent {ident = aliasIdent}, params = paramNames}
+        FTyParamsApp {ty = FTyIdent {ident = aliasIdent}, params = aliasArgs}
     else generateTypeNoAlias env t
 
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
@@ -404,5 +402,5 @@ let t = symbolize (bindall_ [
   unit_
 ]) in
 let p = generateProgram t in
-print (expr2str p);
+-- print (expr2str p);
 ()

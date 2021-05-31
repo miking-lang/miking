@@ -46,7 +46,7 @@ lang FutharkPatAst
   | FPRecord { bindings : Map SID FutPat }
 end
 
-lang FutharkTypeAst
+lang FutharkTypeAst = FutharkTypeParamAst
   syn FutType =
   | FTyInt ()
   | FTyFloat ()
@@ -55,7 +55,7 @@ lang FutharkTypeAst
   | FTyArray { elem : FutType, dim : Option Name }
   | FTyRecord { fields : Map SID FutType }
   | FTyArrow { from : FutType, to : FutType }
-  | FTyParamsApp { ty : FutType, params : [Name] }
+  | FTyParamsApp { ty : FutType, params : [FutTypeParam] }
 end
 
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
