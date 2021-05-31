@@ -74,28 +74,6 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
   | FEFor { param : FutExpr, loopVar : Name, boundVar : Name, thn : FutExpr }
   | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)] }
-
-  sem smap_Expr_Expr (f : FutExpr -> a) =
-  | FEVar t -> FEVar t
-  | FEBuiltIn t -> FEBuiltIn t
-  | FERecord t -> FERecord {t with fields = mapMap f t.fields}
-  | FERecordProj t -> FERecordProj {t with rec = f t.rec}
-  | FEArray t -> FEArray {t with tms = map f t.tms}
-  | FEArrayAccess t -> FEArrayAccess {{t with array = f t.array}
-                                         with index = f t.index}
-  | FEArrayUpdate t -> FEArrayUpdate {{{t with array = f t.array}
-                                          with index = f t.index}
-                                          with value = f t.value}
-  | FEConst t -> FEConst t
-  | FELam t -> FELam {t with body = f t.body}
-  | FEApp t -> FEApp {{t with lhs = f t.lhs} with rhs = f t.rhs}
-  | FELet t -> FELet {{t with body = f t.body} with inexpr = f t.inexpr}
-  | FEIf t -> FEIf {{{t with cond = f t.cond}
-                        with thn = f t.thn}
-                        with els = f t.els}
-  | FEFor t -> FEFor {{t with param = f t.param} with thn = f t.thn}
-  | FEMatch t -> FEMatch {{t with target = f t.target}
-                             with cases = assocSeqMap f t.cases}
 end
 
 lang FutharkAst = FutharkTypeParamAst + FutharkTypeAst + FutharkExprAst
