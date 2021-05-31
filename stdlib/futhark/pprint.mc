@@ -128,7 +128,7 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCAny () -> "any"
 end
 
-lang FutharkPatternPrettyPrint = FutharkAst + PatNamePrettyPrint
+lang FutharkPatPrettyPrint = FutharkAst + PatNamePrettyPrint
   sem pprintPat (indent : Int) (env : PprintEnv) =
   | FPNamed t -> _pprint_patname env t.ident
   | FPInt t -> (env, int2string t.val)
@@ -156,6 +156,18 @@ lang FutharkPatternPrettyPrint = FutharkAst + PatNamePrettyPrint
     else never
 end
 
+lang FutharkTypeParamPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
+  sem pprintTypeParam (env : PprintEnv) =
+  | FPSize {val = n} ->
+    match pprintVarName env n with (env, n) then
+      (env, join ["[", n, "]"])
+    else never
+  | FPType {val = n} ->
+    match pprintVarName env n with (env, n) then
+      (env, cons '\'' n)
+    else never
+end
+
 lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
   sem pprintExpr (indent : Int) (env : PprintEnv) =
 
@@ -166,7 +178,7 @@ lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
   | FTyIdent {ident = ident} -> pprintVarName env ident
   | FTyArray {elem = elem, dim = dim} ->
     let pprintDim = lam dim.
-      optionMapOrElse (lam. (env, "")) (pprintExpr indent env) dim
+      optionMapOrElse (lam. (env, "")) (pprintVarName env) dim
     in
     match pprintDim dim with (env, dimStr) then
       match pprintType indent env elem with (env, elem) then
@@ -189,22 +201,15 @@ lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
         (env, join ["(", from, ") -> (", to, ")"])
       else never
     else never
-end
-
-lang FutharkTypeParamPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
-  sem pprintTypeParam (env : PprintEnv) =
-  | FPSize {val = n} ->
-    match pprintVarName env n with (env, n) then
-      (env, join ["[", n, "]"])
-    else never
-  | FPType {val = n} ->
-    match pprintVarName env n with (env, n) then
-      (env, cons '\'' n)
+  | FTyParamsApp {ty = ty, params = params} ->
+    match pprintType indent env ty with (env, ty) then
+      let implicitParams = create (length params) (lam. "[]") in
+      (env, join [ty, " ", join implicitParams])
     else never
 end
 
 lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
-                              FutharkPatternPrettyPrint + FutharkTypePrettyPrint
+                              FutharkPatPrettyPrint + FutharkTypePrettyPrint
   sem isAtomic =
   | FEVar _ -> true
   | FEBuiltIn _ -> true
@@ -249,7 +254,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       (env, join ["{", strJoin "," (mapValues fields), "}"])
     else never
   | FERecordProj {rec = rec, key = key} ->
-    match pprintExpr indent env rec with (env, rec) then
+    match pprintParen indent env rec with (env, rec) then
       let str = pprintLabelString key in
       (env, join [rec, ".", str])
     else never
@@ -294,21 +299,12 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       else never
     else never
   | FELet {ident = ident, tyBody = tyBody, body = body, inexpr = inexpr} ->
-    let pprintOptionalType = lam env : PprintEnv. lam optTy : Option FutType.
-      match optTy with Some ty then
-        match pprintType indent env ty with (env, tyStr) then
-          (env, join [" : ", tyStr])
-        else never
-      else (env, "")
-    in
     let aindent = pprintIncr indent in
     match pprintExpr aindent env body with (env, body) then
-      match pprintOptionalType env tyBody with (env, tyBody) then
-        match pprintExpr indent env inexpr with (env, inexpr) then
-          match pprintVarName env ident with (env, ident) then
-            (env, join ["let ", ident, tyBody, " = ", body, " in",
-                        pprintNewline indent, inexpr])
-          else never
+      match pprintExpr indent env inexpr with (env, inexpr) then
+        match pprintVarName env ident with (env, ident) then
+          (env, join ["let ", ident, " = ", body, " in",
+                      pprintNewline indent, inexpr])
         else never
       else never
     else never
@@ -336,10 +332,11 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       else never
     else never
   | FEMatch {target = target, cases = cases} ->
+    let aindent = pprintIncr indent in
     let pprintCase = lam env : PprintEnv. lam case : (FutPat, FutExpr).
       match pprintPat indent env case.0 with (env, pat) then
-        match pprintExpr indent env case.1 with (env, expr) then
-          (env, join ["case ", pat, " -> ", expr])
+        match pprintExpr aindent env case.1 with (env, expr) then
+          (env, join ["case ", pat, " -> ", pprintNewline aindent, expr])
         else never
       else never
     in
@@ -352,8 +349,9 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
 end
 
 lang FutharkPrettyPrint =
-  FutharkConstPrettyPrint + FutharkPatternPrettyPrint +
-  FutharkTypePrettyPrint + FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
+  FutharkConstPrettyPrint + FutharkPatPrettyPrint + FutharkTypePrettyPrint +
+  FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
+
   sem expr2str =
   | FProg {decls = decls} ->
     let env = pprintEnvEmpty in

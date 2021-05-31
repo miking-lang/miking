@@ -55,6 +55,7 @@ lang FutharkTypeAst
   | FTyArray { elem : FutType, dim : Option Name }
   | FTyRecord { fields : Map SID FutType }
   | FTyArrow { from : FutType, to : FutType }
+  | FTyParamsApp { ty : FutType, params : [Name] }
 end
 
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst

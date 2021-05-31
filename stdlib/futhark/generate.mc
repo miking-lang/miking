@@ -5,12 +5,13 @@ include "pprint.mc"
 include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/cmp.mc"
 include "mexpr/patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
 type FutharkGenerateEnv = {
-  typeEnv : Map Name FutType
+  typeAliases : Map Type (Name, [FutTypeParam])
 }
 
 recursive let _isHigherOrderFunction = use FutharkAst in
@@ -24,12 +25,12 @@ recursive let _isHigherOrderFunction = use FutharkAst in
   else never
 end
 
-recursive let _getTrailingSelfRecursiveCall = use MExprAst in
+recursive let _getTrailingSelfRecursiveCallParams = use MExprAst in
   lam funcIdent : Name. lam body : Expr.
   match body with TmLet {inexpr = inexpr} then
-    _getTrailingSelfRecursiveCall funcIdent inexpr
+    _getTrailingSelfRecursiveCallParams funcIdent inexpr
   else match body with TmRecLets {inexpr = inexpr} then
-    _getTrailingSelfRecursiveCall funcIdent inexpr
+    _getTrailingSelfRecursiveCallParams funcIdent inexpr
   else
     recursive let collectAppArgs = lam args : [Expr]. lam e : Expr.
       match e with TmApp {lhs = lhs, rhs = rhs} then
@@ -42,6 +43,42 @@ recursive let _getTrailingSelfRecursiveCall = use MExprAst in
       else None ()
     in
     collectAppArgs [] body
+end
+
+let _constructLoopResult = use MExprAst in
+  lam functionParams : [(Name, a)].
+  lam recursiveCallParams : [Expr].
+  lam baseCase : Expr.
+  let updatedParams : Map Name Expr =
+    mapFromList
+      nameCmp
+      (mapi
+        (lam i. lam p : (Name, a).
+          (p.0, get recursiveCallParams i)) functionParams) in
+  recursive let work = lam e : Expr.
+    match e with TmVar t then
+      optionGetOrElse (lam. e) (mapLookup t.ident updatedParams)
+    else smap_Expr_Expr work e
+  in
+  work baseCase
+
+let _usePassedParameters = use MExprAst in
+  lam functionParams : [(Name, a)].
+  lam passedParams : [Expr].
+  lam body : Expr.
+  let paramMap : Map Name Expr =
+    mapFromList
+      nameCmp
+      (mapi
+        (lam i. lam p : (Name, a).
+          (p.0, get passedParams i))
+        (subsequence functionParams 0 (length passedParams))) in
+  recursive let work = lam e : Expr.
+    match e with TmVar t then
+      optionGetOrElse (lam. e) (mapLookup t.ident paramMap)
+    else smap_Expr_Expr work e
+  in
+  work body
 end
 
 lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
@@ -65,6 +102,7 @@ lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
   | CLength _ -> FEBuiltIn {str = "length"}
   | CCreate _ -> FEBuiltIn {str = "tabulate"}
   | CReverse _ -> FEBuiltIn {str = "reverse"}
+  | CConcat _ -> FEBuiltIn {str = "concat"}
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst
@@ -82,12 +120,22 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst
         fields
     in
     match targetTy with TyRecord {fields = fields} then
-      FPRecord {fields = mergeBindings t.bindings fields}
+      FPRecord {bindings = mergeBindings t.bindings fields}
     else infoErrorExit t.info "Cannot match non-record type on record pattern"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
+  | t ->
+    match mapLookup t env.typeAliases with Some (aliasIdent, aliasArgs) then
+      if null aliasArgs then
+        FTyIdent {ident = aliasIdent}
+      else
+        let paramNames = map paramName aliasArgs in
+        FTyParamsApp {ty = FTyIdent {ident = aliasIdent}, params = paramNames}
+    else generateTypeNoAlias env t
+
+  sem generateTypeNoAlias (env : FutharkGenerateEnv) =
   | TyInt _ -> futIntTy_
   | TyFloat _ -> futFloatTy_
   | TySeq {ty = elemTy} -> futUnsizedArrayTy_ (generateType env elemTy)
@@ -96,10 +144,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | TyArrow {from = from, to = to} ->
     FTyArrow {from = generateType env from, to = generateType env to}
   | TyVar t ->
-    match mapLookup t.ident env.typeEnv with Some futType then
-      futType
-    else infoErrorExit t.info (join ["Undefined type identifier ",
-                                     nameGetStr t.ident])
+    FTyIdent {ident = t.ident}
   | TyUnknown t ->
     infoErrorExit t.info "Cannot translate unknown type to Futhark"
 end
@@ -156,11 +201,10 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
           body = FEApp {lhs = FEBuiltIn {str = "tail"}, rhs = target},
           inexpr = generateExpr env t.thn}}
     else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
-  | TmMatch ({pat = PatRecord {bindings = bindings}, els = TmNever _} & t) ->
-    let pat = generatePattern (ty t.target) in
+  | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
-      cases = [pat, generateExpr env t.thn]
+      cases = [(generatePattern (ty t.target) pat, generateExpr env t.thn)]
     }
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
@@ -203,15 +247,96 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     futPartition_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
+  | TmRecLets ({bindings = [binding], inexpr = TmApp _} & t) ->
+    -- NOTE currently makes the following assumptions on TmRecLets, in order
+    --      to translate them into a Futhark loop:
+    -- * The recursive let contains one binding, and it is only used once,
+    --   right after the definition.
+    -- * The body of the binding has the shape
+    --   let <id> = <args> lam <i> : Int. lam <n> : Int.
+    --     if lti <i> <n> then ... <id> <args> (addi <i> 1) <n> else <base case>
+    -- * The user wishes to loop from 0 up to (excluding) n
+    -- * The final call of the recursive case is a self-recursive call
+    let unsupportedTranslationError = lam id : Int. lam info : Info.
+      infoErrorExit info (join ["Cannot translate recursive binding to Futhark",
+                                ", error code: ", int2string id])
+    in
+    let generateBinding = lam passedParams : [Expr]. lam binding : RecLetBinding.
+      match _collectParams env binding.body
+      with (funcParams ++ [(i, FTyInt _), (n, FTyInt _)] & params, body) then
+        match body with TmMatch {
+          target = TmApp {lhs = TmApp {lhs = TmConst {val = CLti _},
+                                       rhs = TmVar {ident = iarg}},
+                          rhs = TmVar {ident = narg}},
+          pat = PatBool {val = true},
+          thn = recursiveCase,
+          els = baseCase} then
+          if and (nameEq i iarg) (nameEq n narg) then
+            match _getTrailingSelfRecursiveCallParams binding.ident recursiveCase
+            with Some callParams then
+              match passedParams with passed ++ [TmConst {val = CInt {val = 0}},
+                                                 TmVar {ident = nid}] then
+                let retTy = generateType env (ty recursiveCase) in
+                let loopBody =
+                  bind_
+                    recursiveCase
+                    (_constructLoopResult params callParams baseCase) in
+                let param = _usePassedParameters params passed baseCase in
+                let body = _usePassedParameters params passed loopBody in
+                FEFor {
+                  param = generateExpr env param,
+                  loopVar = i,
+                  boundVar = nid,
+                  thn = generateExpr env body
+                }
+              else unsupportedTranslationError 5 binding.info -- last two parameters not given in "correct" form
+            else unsupportedTranslationError 4 binding.info -- not ending with trailing self-recursion
+          else unsupportedTranslationError 3 binding.info -- does not loop on final two arguments
+        else unsupportedTranslationError 2 binding.info -- body structure (+ assumption on base case)
+      else unsupportedTranslationError 1 binding.info -- parameters
+    in
+    match _getTrailingSelfRecursiveCallParams binding.ident t.inexpr
+    with Some passedParams then
+      generateBinding passedParams binding
+    else unsupportedTranslationError 0 t.info -- doesn't end with call to binding
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
   sem generateToplevel (env : FutharkGenerateEnv) =
   | TmType t ->
+    recursive let parameterizeType =
+      lam params : [FutTypeParam]. lam ty : FutType.
+      match ty with FTyArray t then
+        match parameterizeType params t.elem with (params, elem) then
+          let n = nameSym "n" in
+          let params = cons (FPSize {val = n}) params in
+          (params, FTyArray {{t with elem = elem} with dim = Some n})
+        else never
+      else match ty with FTyRecord t then
+        let paramField = lam params. lam. lam ty. parameterizeType params ty in
+        match mapMapAccum paramField params t.fields with (params, fields) then
+          (params, FTyRecord {t with fields = fields})
+        else never
+      else match ty with FTyArrow t then
+        match parameterizeType params t.from with (params, from) then
+          match parameterizeType params t.to with (params, to) then
+            (params, FTyArrow {{t with from = from} with to = to})
+          else never
+        else never
+      else (params, ty)
+    in
     let futType = generateType env t.tyIdent in
-    let env = {env with typeEnv = mapInsert t.ident futType env.typeEnv} in
-    generateToplevel env t.inexpr
+    match parameterizeType [] futType with (typeParams, ty) then
+      let alias : (Name, [FutTypeParam]) = (t.ident, typeParams) in
+      let env = {env with typeAliases = mapInsert t.tyIdent alias env.typeAliases} in
+      let decl = FDeclType {
+        ident = t.ident,
+        typeParams = typeParams,
+        ty = ty
+      } in
+      cons decl (generateToplevel env t.inexpr)
+    else never
   | TmLet t ->
     recursive let findReturnType = lam ty : Type.
       match ty with TyArrow t then
@@ -232,95 +357,13 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
       else never
     in
     cons decl (generateToplevel env t.inexpr)
-  | TmRecLets t ->
-    -- NOTE: currently makes the following assumptions on each binding:
-    -- * The body of the binding has the shape
-    --   let <id> = <args> lam <i> : Int. lam <n> : Int.
-    --     if lti <i> <n> then ... <id> <args> (addi <i> 1) <n> else <base case>
-    -- * The base case variable is one of the argument variables
-    -- * The final call of the recursive case is the self-recursive call
-    let unsupportedTranslationError = lam id : Int. lam info : Info.
-      infoErrorExit info (join ["Cannot translate recursive binding to Futhark",
-                                ", error code: ", int2string id])
-    in
-    let generateBinding = lam binding : RecLetBinding.
-      recursive let findReturnType = lam ty : Type.
-        match ty with TyArrow t then
-          findReturnType t.to
-        else ty
-      in
-      match _collectParams env binding.body
-      with (funcParams ++ [(i, FTyInt _), (n, FTyInt _)], body) then
-        match body with TmMatch {
-          target = TmApp {lhs = TmApp {lhs = TmConst {val = CLti _},
-                                       rhs = TmVar {ident = iarg}},
-                          rhs = TmVar {ident = narg}},
-          pat = PatBool {val = true},
-          thn = recursiveCase,
-          els = TmVar {ident = baseCaseVar}} then
-          if and (nameEq i iarg) (nameEq n narg) then
-            match _getTrailingSelfRecursiveCall binding.ident recursiveCase
-            with Some callParams then
-              match index (lam p : (Name, FutType). nameEq p.0 baseCaseVar) funcParams
-              with Some idx then
-                let retTy = generateType env (ty recursiveCase) in
-                let forLoopBody = generateExpr env recursiveCase in
-                let forLoopBodyWithPrealloc =
-                  match retTy with FTyArray {elem = elemTy} then
-                    let alloc =
-                      FELet {
-                        ident = baseCaseVar,
-                        tyBody = None (),
-                        body = FEApp {
-                          lhs = FEApp {
-                            lhs = FEBuiltIn {str = "replicate"},
-                            rhs = FEVar {ident = n}
-                          },
-                          rhs =
-                            match elemTy with FTyInt _ then
-                              FEConst {val = FCInt {val = 0}}
-                            else match elemTy with FTyFloat _ then
-                              FEConst {val = FCFloat {val = 0.0}}
-                            else unsupportedTranslationError 7 binding.info -- unsupported return type
-                        },
-                        inexpr = futUnit_ ()
-                      }
-                    in
-                    futBind_ alloc forLoopBody
-                  else match retTy with FTyInt _ | FTyFloat _ then
-                    forLoopBody
-                  else unsupportedTranslationError 6 binding.info -- unsupported return type
-                in
-                let funcBody =
-                  futBindall_ [
-                    forLoopBodyWithPrealloc,
-                    FEFor {
-                      param = FEVar {ident = baseCaseVar},
-                      loopVar = i,
-                      boundVar = n,
-                      thn = generateExpr env (get callParams idx)
-                    }]
-                in
-                let params = snoc (snoc funcParams (i, FTyInt ())) (n, FTyInt ()) in
-                FDeclFun {ident = binding.ident, entry = false, typeParams = [],
-                          params = params, ret = retTy,
-                          body = funcBody}
-              else unsupportedTranslationError 5 binding.info -- base case variable not among parameters
-            else unsupportedTranslationError 4 binding.info -- not ending with trailing self-recursion
-          else unsupportedTranslationError 3 binding.info -- does not loop on final two arguments
-        else unsupportedTranslationError 2 binding.info -- body structure (+ assumption on base case)
-      else unsupportedTranslationError 1 binding.info -- parameters
-    in
-    foldr
-      (lam binding. lam acc. cons (generateBinding binding) acc)
-      (generateToplevel env t.inexpr) t.bindings
   | _ -> []
 end
 
-lang FutharkGenerate = FutharkToplevelGenerate
+lang FutharkGenerate = FutharkToplevelGenerate + MExprCmpClosed
   sem generateProgram =
   | prog ->
-    let emptyEnv = {typeEnv = mapEmpty nameCmp} in
+    let emptyEnv = {typeAliases = mapEmpty cmpType} in
     FProg {decls = generateToplevel emptyEnv prog}
 end
 
