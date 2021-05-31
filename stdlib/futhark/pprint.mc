@@ -492,7 +492,7 @@ let genericGetDecl = FDeclFun {
   ident = get,
   entry = false,
   typeParams = [FPSize {val = n}, FPType {val = a}],
-  params = [(seq, futSizedArrayTy_ (nFutVar_ n) (nFutIdentTy_ a)),
+  params = [(seq, futSizedArrayTy_ n (nFutIdentTy_ a)),
             (i, futIntTy_)],
   ret = nFutIdentTy_ a,
   body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i)

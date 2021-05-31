@@ -11,7 +11,8 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
 type FutharkGenerateEnv = {
-  typeAliases : Map Type (Name, [FutTypeParam])
+  typeAliases : Map Type Name,
+  typeParams : Map Name [FutTypeParam]
 }
 
 recursive let _isHigherOrderFunction = use FutharkAst in
@@ -126,12 +127,17 @@ end
 lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
   | t ->
-    match mapLookup t env.typeAliases with Some alias then
-      let alias : (Name, [FutTypeParam]) = alias in
-      if null alias.1 then
-        FTyIdent {ident = alias.0}
-      else
-        FTyParamsApp {ty = FTyIdent {ident = alias.0}, params = alias.1}
+    let aliasIdent =
+      match t with TyVar {ident = ident} then
+        Some ident
+      else match mapLookup t env.typeAliases with Some ident then
+        Some ident
+      else None ()
+    in
+    match aliasIdent with Some id then
+      match mapLookup id env.typeParams with Some typeParams then
+        FTyParamsApp {ty = FTyIdent {ident = id}, params = typeParams}
+      else generateTypeNoAlias env t
     else generateTypeNoAlias env t
 
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
@@ -327,8 +333,8 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
     in
     let futType = generateType env t.tyIdent in
     match parameterizeType [] futType with (typeParams, ty) then
-      let alias : (Name, [FutTypeParam]) = (t.ident, typeParams) in
-      let env = {env with typeAliases = mapInsert t.tyIdent alias env.typeAliases} in
+      let env = {{env with typeAliases = mapInsert t.tyIdent t.ident env.typeAliases}
+                      with typeParams = mapInsert t.ident typeParams env.typeParams} in
       let decl = FDeclType {
         ident = t.ident,
         typeParams = typeParams,
@@ -362,7 +368,10 @@ end
 lang FutharkGenerate = FutharkToplevelGenerate + MExprCmpClosed
   sem generateProgram =
   | prog ->
-    let emptyEnv = {typeAliases = mapEmpty cmpType} in
+    let emptyEnv = {
+      typeAliases = mapEmpty cmpType,
+      typeParams = mapEmpty nameCmp
+    } in
     FProg {decls = generateToplevel emptyEnv prog}
 end
 
