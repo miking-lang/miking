@@ -126,11 +126,12 @@ end
 lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
   | t ->
-    match mapLookup t env.typeAliases with Some (aliasIdent, aliasArgs) then
-      if null aliasArgs then
-        FTyIdent {ident = aliasIdent}
+    match mapLookup t env.typeAliases with Some alias then
+      let alias : (Name, [FutTypeParam]) = alias in
+      if null alias.1 then
+        FTyIdent {ident = alias.0}
       else
-        FTyParamsApp {ty = FTyIdent {ident = aliasIdent}, params = aliasArgs}
+        FTyParamsApp {ty = FTyIdent {ident = alias.0}, params = alias.1}
     else generateTypeNoAlias env t
 
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
