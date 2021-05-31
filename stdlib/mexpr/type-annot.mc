@@ -14,6 +14,7 @@ include "const-types.mc"
 include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
+include "mexpr/type.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,
@@ -558,6 +559,7 @@ end
 lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
+    let expectedTy = typeUnwrapAlias env.tyEnv expectedTy in
     let expectedTy = match expectedTy with TyRecord _ then expectedTy else
       -- TODO(vipa, 2021-05-31): This will trigger on things like `foo.0` as well (but not `foo.1`, which can cause incorrect code to be generated.
       match (record2tuple t.bindings, mapLength t.bindings) with (Some _, length) then
