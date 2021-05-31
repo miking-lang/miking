@@ -44,6 +44,3 @@ using eqf
 external externalAtan2 : Float -> Float -> Float
 let atan2 = lam x. lam y. externalAtan2 x y
 utest atan2 0. 1. with 0. using eqf
-
-external log : Float -> Float
-utest log 1. with 0. using _eqf
