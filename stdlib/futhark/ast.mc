@@ -1,5 +1,7 @@
 -- Defines an incomplete AST for the Futhark programming language.
 
+include "mexpr/ast.mc" -- to reuse PatNamed definition
+
 lang FutharkAst
   syn FutTypeParam =
   | FPSize {val : Name}
@@ -8,6 +10,7 @@ lang FutharkAst
   syn FutConst =
   | FCInt { val : Int }
   | FCFloat { val : Float }
+  | FCBool { val : Bool }
   | FCAdd ()
   | FCSub ()
   | FCMul ()
@@ -31,6 +34,12 @@ lang FutharkAst
   | FCAll ()
   | FCAny ()
 
+  syn FutPat =
+  | FPNamed { ident : PatName }
+  | FPInt { val : Int }
+  | FPBool { val : Bool }
+  | FPRecord { bindings : Map SID FutPat }
+
   syn FutExpr =
   | FEVar { ident : Name }
   | FEBuiltIn { str : String }
@@ -45,10 +54,12 @@ lang FutharkAst
   | FELet { ident : Name, tyBody : Option FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
   | FEFor { param : FutExpr, loopVar : Name, boundVar : Name, thn : FutExpr }
+  | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)] }
 
   syn FutType =
   | FTyInt ()
   | FTyFloat ()
+  | FTyBool ()
   | FTyIdent { ident : Name }
   | FTyArray { elem : FutType, dim : Option FutExpr }
   | FTyRecord { fields : Map SID FutType }

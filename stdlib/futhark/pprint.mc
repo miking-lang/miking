@@ -101,8 +101,9 @@ end
 
 lang FutharkConstPrettyPrint = FutharkAst
   sem pprintConst =
-  | FCInt {val = val} -> join [int2string val, "i64"]
-  | FCFloat {val = val} -> join [futharkFloat2string val, "f64"]
+  | FCInt t -> join [int2string t.val, "i64"]
+  | FCFloat t -> join [futharkFloat2string t.val, "f64"]
+  | FCBool t -> if t.val then "true" else "false"
   | FCAdd () -> "(+)"
   | FCSub () -> "(-)"
   | FCMul () -> "(*)"
@@ -127,12 +128,41 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCAny () -> "any"
 end
 
+lang FutharkPatternPrettyPrint = FutharkAst + PatNamePrettyPrint
+  sem pprintPat (indent : Int) (env : PprintEnv) =
+  | FPNamed t -> _pprint_patname env t.ident
+  | FPInt t -> (env, int2string t.val)
+  | FPBool t -> (env, if t.val then "true" else "false")
+  | FPRecord t ->
+    if mapIsEmpty t.bindings then (env, "{}")
+    else match record2tuple t.bindings with Some pats then
+      match mapAccumL (lam env. lam e. pprintPat indent env e) env pats
+      with (env, tuplePats) then
+        let merged =
+          match tuplePats with [e]
+          then concat e ","
+          else strJoin ", " tuplePats in
+        (env, join ["(", merged, ")"])
+      else never
+    else match
+      mapMapAccum
+        (lam env. lam k. lam v.
+           match pprintPat indent env v with (env,str) then
+             (env,join [pprintLabelString k, " = ", str])
+           else never)
+         env t.bindings
+    with (env,bindMap) then
+      (env,join ["{", strJoin ", " (mapValues bindMap), "}"])
+    else never
+end
+
 lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
   sem pprintExpr (indent : Int) (env : PprintEnv) =
 
   sem pprintType (indent : Int) (env : PprintEnv) =
   | FTyInt _ -> (env, "i64")
   | FTyFloat _ -> (env, "f64")
+  | FTyBool _ -> (env, "bool")
   | FTyIdent {ident = ident} -> pprintVarName env ident
   | FTyArray {elem = elem, dim = dim} ->
     let pprintDim = lam dim.
@@ -174,7 +204,7 @@ lang FutharkTypeParamPrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
 end
 
 lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
-                              FutharkTypePrettyPrint
+                              FutharkPatternPrettyPrint + FutharkTypePrettyPrint
   sem isAtomic =
   | FEVar _ -> true
   | FEBuiltIn _ -> true
@@ -189,6 +219,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   | FELet _ -> false
   | FEIf _ -> false
   | FEFor _ -> false
+  | FEMatch _ -> false
 
   sem pprintParen (indent : Int) (env : PprintEnv) =
   | expr ->
@@ -304,10 +335,25 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
         else never
       else never
     else never
+  | FEMatch {target = target, cases = cases} ->
+    let pprintCase = lam env : PprintEnv. lam case : (FutPat, FutExpr).
+      match pprintPat indent env case.0 with (env, pat) then
+        match pprintExpr indent env case.1 with (env, expr) then
+          (env, join ["case ", pat, " -> ", expr])
+        else never
+      else never
+    in
+    match pprintExpr indent env target with (env, target) then
+      match mapAccumL pprintCase env cases with (env, cases) then
+        (env, join ["match ", target, pprintNewline indent,
+                    strJoin (pprintNewline indent) cases])
+      else never
+    else never
 end
 
-lang FutharkPrettyPrint = FutharkConstPrettyPrint + FutharkTypePrettyPrint +
-                          FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
+lang FutharkPrettyPrint =
+  FutharkConstPrettyPrint + FutharkPatternPrettyPrint +
+  FutharkTypePrettyPrint + FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
   sem expr2str =
   | FProg {decls = decls} ->
     let env = pprintEnvEmpty in
@@ -452,6 +498,22 @@ let genericGetDecl = FDeclFun {
   body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i)
 } in
 
+let recordMatch = nameSym "recordMatching" in
+let r = nameSym "r" in
+let recordMatchDecl = FDeclFun {
+  ident = recordMatch,
+  entry = false,
+  typeParams = [],
+  params = [(r, futRecordTy_ [("a", futIntTy_), ("b", futBoolTy_)])],
+  ret = futIntTy_,
+  body = futMatch_ (nFutVar_ r) [
+    (futPrecord_ [("a", futPint_ 4), ("b", futPvarw_ ())], futInt_ 0),
+    (futPrecord_ [("a", nFutPvar_ a), ("b", futPbool_ false)], nFutVar_ a),
+    (futPrecord_ [("a", nFutPvar_ a), ("b", futPbool_ true)],
+      futAdd_ (nFutVar_ a) (futInt_ 1))
+  ]
+} in
+
 let tmp = nameSym "tmp" in
 let z = nameSym "z" in
 let w = nameSym "w" in
@@ -471,6 +533,7 @@ let decls = [
   literalsDecl,
   arraysDecl,
   genericGetDecl,
+  recordMatchDecl,
   mainDecl
 ] in
 let prog = FProg {decls = decls} in

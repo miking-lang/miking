@@ -64,6 +64,26 @@ lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
   | CSet _ -> error "Wrong number of arguments"
   | CLength _ -> FEBuiltIn {str = "length"}
   | CCreate _ -> FEBuiltIn {str = "tabulate"}
+  | CReverse _ -> FEBuiltIn {str = "reverse"}
+end
+
+lang FutharkPatternGenerate = MExprAst + FutharkAst
+  sem generatePattern (targetTy : Type) =
+  | PatNamed t -> FPNamed {ident = t.ident}
+  | PatInt t -> FPInt {val = t.val}
+  | PatBool t -> FPBool {val = t.val}
+  | PatRecord t ->
+    let mergeBindings = lam bindings : Map SID Pat. lam fields : Map SID Type.
+      mapMapWithKey
+        (lam k. lam ty : Type.
+          match mapLookup k bindings with Some pat then
+            generatePattern ty pat
+          else futPvarw_ ())
+        fields
+    in
+    match targetTy with TyRecord {fields = fields} then
+      FPRecord {fields = mergeBindings t.bindings fields}
+    else infoErrorExit t.info "Cannot match non-record type on record pattern"
 end
 
 lang FutharkTypeGenerate = MExprAst + FutharkAst
@@ -94,8 +114,8 @@ let _collectParams = use FutharkTypeGenerate in
   in
   work [] body
 
-lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
-                            FutharkTypePrettyPrint
+lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
+                            FutharkTypeGenerate + FutharkTypePrettyPrint
   sem defaultGenerateMatch (env : FutharkGenerateEnv) =
   | TmMatch t ->
     infoErrorExit t.info "Unsupported match expression"
@@ -120,6 +140,28 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
         FERecordProj {rec = generateExpr env t.target, key = fieldLabel}
       else defaultGenerateMatch env (TmMatch t)
     else defaultGenerateMatch env (TmMatch t)
+  | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],
+                                middle = PName tail, postfix = []},
+              els = TmNever _} & t) ->
+    let target = generateExpr env t.target in
+    let targetTy = generateType env (ty t.target) in
+    match targetTy with FTyArray {elem = elemTy} then
+      FELet {
+        ident = head,
+        tyBody = elemTy,
+        body = FEApp {lhs = FEBuiltIn {str = "head"}, rhs = target},
+        inexpr = FELet {
+          ident = tail,
+          tyBody = targetTy,
+          body = FEApp {lhs = FEBuiltIn {str = "tail"}, rhs = target},
+          inexpr = generateExpr env t.thn}}
+    else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
+  | TmMatch ({pat = PatRecord {bindings = bindings}, els = TmNever _} & t) ->
+    let pat = generatePattern (ty t.target) in
+    FEMatch {
+      target = generateExpr env t.target,
+      cases = [pat, generateExpr env t.thn]
+    }
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 

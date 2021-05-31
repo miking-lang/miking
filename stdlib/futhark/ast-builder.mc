@@ -3,6 +3,29 @@ include "map.mc"
 include "name.mc"
 include "stringid.mc"
 
+-- Patterns --
+
+let nFutPvar_ = use FutharkAst in
+  lam n : Name.
+  FPNamed {ident = PName n}
+
+let futPvarw_ = use FutharkAst in
+  lam.
+  FPNamed {ident = PWildcard ()}
+
+let futPint_ = use FutharkAst in
+  lam i : Int.
+  FPInt {val = i}
+
+let futPbool_ = use FutharkAst in
+  lam b : Bool.
+  FPBool {val = b}
+
+let futPrecord_ = use FutharkAst in
+  lam bindings : [(String, FutPat)].
+  let bindingMapFunc = lam b : (String, FutPat). (stringToSid b.0, b.1) in
+  FPRecord {bindings = mapFromList cmpSID (map bindingMapFunc bindings)}
+
 -- Types --
 
 let futIntTy_ = use FutharkAst in
@@ -10,6 +33,9 @@ let futIntTy_ = use FutharkAst in
 
 let futFloatTy_ = use FutharkAst in
   FTyFloat {}
+
+let futBoolTy_ = use FutharkAst in
+  FTyBool {}
 
 let nFutIdentTy_ = use FutharkAst in
   lam n.
@@ -121,6 +147,10 @@ let futLet_ = lam str. lam ty. lam body.
 let futIf_ = use FutharkAst in
   lam cond. lam thn. lam els.
   FEIf {cond = cond, thn = thn, els = els}
+
+let futMatch_ = use FutharkAst in
+  lam target. lam cases : [(FutPat, FutExpr)].
+  FEMatch {target = target, cases = cases}
 
 -- Constants --
 
