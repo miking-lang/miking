@@ -98,9 +98,9 @@ lang VarCompatibleType = CompatibleType + VarTypeAst
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
   sem reduceType (tyEnv : TypeEnv) =
-  | TyVar {ident = id} ->
+  | TyVar {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      error (concat "Unbound TyVar in reduceType: " (nameGetStr id))
+      infoErrorExit info (concat "Unbound TyVar in reduceType: " (nameGetStr id))
 
 end
 
