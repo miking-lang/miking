@@ -45,8 +45,8 @@ let futIdentTy_ = lam str.
   nFutIdentTy_ (nameNoSym str)
 
 let futSizedArrayTy_ = use FutharkAst in
-  lam sz. lam elemTy.
-  FTyArray {elem = elemTy, dim = Some sz}
+  lam szId. lam elemTy.
+  FTyArray {elem = elemTy, dim = Some szId}
 
 let futUnsizedArrayTy_ = use FutharkAst in
   lam elemTy.
