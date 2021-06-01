@@ -33,7 +33,7 @@ let mapUnion : Map k v -> Map k v -> Map k v = lam l. lam r.
   foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
         l (mapBindings r)
 
-let mapFromList : (k -> k -> Int) -> [(k, v)] -> Map k v = lam cmp. lam bindings.
+let mapFromSeq : (k -> k -> Int) -> [(k, v)] -> Map k v = lam cmp. lam bindings.
   foldl (lam acc. lam binding : (k, v). mapInsert binding.0 binding.1 acc)
         (mapEmpty cmp) bindings
 
@@ -43,7 +43,7 @@ let mapKeys : Map k v -> [k] = lam m.
 let mapValues : Map k v -> [v] = lam m.
   mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
 
-let mapToList : Map k v -> [(k,v)] = lam m.
+let mapToSeq : Map k v -> [(k,v)] = lam m.
   zipWith (lam k. lam v. (k,v)) (mapKeys m) (mapValues m)
 
 let mapMapAccum : (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
@@ -103,7 +103,7 @@ utest mapFoldlOption
   (lam acc. lam k. lam v. if eqi k acc then None () else Some acc) 3 m
 with None () using optionEq eqString in
 
-let m = mapFromList subi
+let m = mapFromSeq subi
   [ (1, "1")
   , (2, "2")
   ] in
@@ -118,7 +118,7 @@ utest mapLookup 3 m2 with mapLookup 3 m using optionEq eqString in
 
 utest mapKeys m2 with [1,2] in
 utest mapValues m2 with ["1blub","2"] in
-utest mapToList m2 with [(1,"1blub"), (2,"2")] in
+utest mapToSeq m2 with [(1,"1blub"), (2,"2")] in
 
 utest
 match mapMapAccum (lam acc. lam k. lam v. ((addi k acc), concat "x" v)) 0 merged
@@ -127,7 +127,7 @@ then (acc, mapBindings m)
 else never
 with (9,[(negi 1,("x-1")),(1,("x1")),(2,("x22")),(3,("x3")),(4,("x44"))]) in
 
-let m = mapFromList subi
+let m = mapFromSeq subi
   [ (1, "1")
   , (2, "2")
   , (123, "123")

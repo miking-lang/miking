@@ -59,7 +59,7 @@ let _builtinNameMap : Map String Name =
       strs
     else never
   in
-  mapFromList cmpString
+  mapFromSeq cmpString
     (map (lam s. (s, nameSym s))
       (concat
         builtinStrs
@@ -206,7 +206,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
             let pat = PatNamed p in
-            let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
+            let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
             _omatch_ (_objMagic (generate env t.target))
               [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
           else error "Record type not handled by type-lifting"
@@ -668,7 +668,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
 lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecordsCmpClosed
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
-    let typeLiftEnvMap = mapFromList nameCmp env in
+    let typeLiftEnvMap = mapFromSeq nameCmp env in
     let exprDecls = _addTypeDeclarations typeLiftEnvMap env expr in
     match exprDecls with (expr, recordFieldsToName) then
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap

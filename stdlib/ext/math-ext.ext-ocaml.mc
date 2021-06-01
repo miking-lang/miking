@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let mathExtMap =
   use OCamlTypeAst in
-  mapFromList cmpString
+  mapFromSeq cmpString
   [
     ("externalExp", [
       { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
