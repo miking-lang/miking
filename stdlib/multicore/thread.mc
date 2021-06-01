@@ -17,17 +17,12 @@ let threadJoin = lam t.
   externalThreadJoin t
 
 -- 'threadGetID t' returns the ID of the thread 't'
-external externalThreadGetID ! : Thread -> ThreadID
+external externalThreadGetID ! : Thread -> Int
 let threadGetID = lam t.
   externalThreadGetID t
 
--- 'threadID2int tid' converts the thread ID 'tid' to a unique integer.
-external externalThreadID2int : ThreadID -> Int
-let threadID2int = lam tid.
-  externalThreadID2int tid
-
 -- 'threadSelf ()' returns the ID of the current thread
-external externalThreadSelf ! : Unit -> ThreadID
+external externalThreadSelf ! : Unit -> Int
 let threadSelf = lam u.
   externalThreadSelf u
 
@@ -42,7 +37,7 @@ let threadWait = lam u.
 -- 'threadNotify tid' notifies any in-progress critical section in the thread
 -- with ID 'tid'. Blocks until any in-progress critical section in that thread
 -- runs to completion.
-external externalThreadNotify ! : ThreadID -> Unit
+external externalThreadNotify ! : Int -> Unit
 let threadNotify = lam tid.
   externalThreadNotify tid
 
@@ -66,13 +61,7 @@ mexpr
 
 -- Threads --
 
-let selfTID : Unit -> Int = lam.
-  threadID2int (
-    threadSelf ()
-  )
-in
-
-let ps = create 10 (lam. threadSpawn selfTID) in
+let ps = create 10 (lam. threadSpawn (lam. threadSelf ())) in
 
 let tids = map threadJoin ps in
 
@@ -108,14 +97,14 @@ utest atomicGet a with subi (muli nIncr nSpawns) nDecr in
 -- Locksteps using CAS --
 
 -- use integer tids to make physical comparison in CAS possible
-let me = threadID2int (threadSelf ()) in
+let me = threadSelf () in
 let tid = atomicMake me in
 
 -- Wait for friend to take a step before each step.
 recursive let loop : Int -> Tid -> Unit = lam n. lam friend.
   match n with 0 then ()
   else
-    match atomicCAS tid friend (threadID2int (threadSelf ())) with true then
+    match atomicCAS tid friend (threadSelf ()) with true then
       loop (subi n 1) friend
     else
       threadCPURelax ();
@@ -123,7 +112,7 @@ recursive let loop : Int -> Tid -> Unit = lam n. lam friend.
 in
 let n = 100 in
 let t = threadSpawn (lam. loop n me) in
-loop n (threadID2int (threadGetID t));
+loop n (threadGetID t);
 -- Does not loop forever = the test has passed!
 threadJoin t;
 

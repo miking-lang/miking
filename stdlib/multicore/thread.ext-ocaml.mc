@@ -2,7 +2,6 @@ include "map.mc"
 include "ocaml/ast.mc"
 
 let tyathread_ = lam. tyunknown_
-let tythreadid_ = tyunknown_
 let tygeneric_ = lam. tyunknown_
 
 
@@ -23,19 +22,13 @@ let threadExtMap =
 
     ("externalThreadGetID", [
       { ident = "Domain.get_id"
-      , ty = tyarrow_ (tyathread_ "a") tythreadid_
-      , libraries = []
-      }]),
-
-    ("externalThreadID2int", [
-      { ident = "(fun x -> (x :> int))"
-      , ty = tyarrow_ tythreadid_ tyint_
+      , ty = tyarrow_ (tyathread_ "a") tyint_
       , libraries = []
       }]),
 
     ("externalThreadSelf", [
       { ident = "Domain.self"
-      , ty = tyarrows_ [tyaref_ "Int", tyint_, tyint_]
+      , ty = tyarrow_ otyunit_ tyint_
       , libraries = []
       }]),
 
@@ -62,6 +55,4 @@ let threadExtMap =
       , ty = tyarrow_ otyunit_ otyunit_
       , libraries = []
       }])
-
-
   ]
