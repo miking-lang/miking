@@ -9,7 +9,6 @@ utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 
 let null = lam seq. eqi 0 (length seq)
 let head = lam seq. get seq 0
-let tail = lam seq. subsequence seq 1 (subi (length seq) 1)
 let last = lam seq. get seq (subi (length seq) 1)
 let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 

@@ -101,6 +101,30 @@ module Mseq = struct
     | FingerTree s ->
         FingerTree (BatFingerTree.reverse s)
 
+  let head = function
+    | Rope s ->
+        Rope.get_array s 0
+    | List s ->
+        List.hd s
+    | FingerTree s ->
+        BatFingerTree.head_exn s
+
+  let tail = function
+    | Rope s ->
+        Rope (Rope.sub_array s 1 (Rope.length_array s))
+    | List s ->
+        List (List.tl s)
+    | FingerTree s ->
+        FingerTree (BatFingerTree.tail_exn s)
+
+  let null = function
+    | Rope s ->
+        Rope.length_array s == 0
+    | List s -> (
+      match s with [] -> true | _ -> false )
+    | FingerTree s ->
+        BatFingerTree.is_empty s
+
   let split_at s i =
     match s with
     | Rope s ->

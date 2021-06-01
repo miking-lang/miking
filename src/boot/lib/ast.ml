@@ -109,6 +109,7 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
+  | Ctail
   | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
@@ -543,6 +544,7 @@ let const_has_side_effect = function
   | Csnoc _
   | CsplitAt _
   | Creverse
+  | Ctail
   | Csubsequence _ ->
       false
   (* MCore intrinsics: Random numbers *)

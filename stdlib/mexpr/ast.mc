@@ -581,6 +581,7 @@ lang SeqOpAst = SeqAst
   | CConcat {}
   | CLength {}
   | CReverse {}
+  | CTail {}
   | CCreate {}
   | CCreateFingerTree {}
   | CCreateList {}

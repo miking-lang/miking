@@ -115,6 +115,7 @@ lang SeqOpTypeAst = SeqOpAst
                             tygenericseq_ "a"]
   | CLength _ -> tyarrow_ (tygenericseq_ "a") tyint_
   | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
+  | CTail _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
   | CCreateFingerTree _ ->

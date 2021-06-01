@@ -196,6 +196,8 @@ let arity = function
       1
   | Creverse ->
       1
+  | Ctail ->
+      1
   | Csubsequence (None, None) ->
       3
   | Csubsequence (Some _, None) ->
@@ -764,6 +766,10 @@ let delta eval env fi c v =
   | Creverse, TmSeq (fi, s) ->
       TmSeq (fi, Mseq.reverse s)
   | Creverse, _ ->
+      fail_constapp fi
+  | Ctail, TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.tail s)
+  | Ctail, _ ->
       fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))

@@ -34,6 +34,12 @@ module Mseq : sig
 
   val reverse : 'a t -> 'a t
 
+  val head : 'a t -> 'a
+
+  val tail : 'a t -> 'a t
+
+  val null : 'a t -> bool
+
   val split_at : 'a t -> int -> 'a t * 'a t
 
   val subsequence : 'a t -> int -> int -> 'a t
