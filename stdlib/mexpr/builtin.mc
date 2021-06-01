@@ -57,6 +57,7 @@ let builtin = use MExprAst in
   , ("splitAt", CSplitAt ())
   , ("reverse", CReverse ())
   , ("tail", CTail ())
+  , ("null", CNull ())
   , ("subsequence", CSubsequence ())
   -- Random numbers
   , ("randIntU", CRandIntU ())

@@ -224,6 +224,7 @@ lang OCamlPrettyPrint =
   | CSplitAt _ -> intrinsicOpSeq "split_at"
   | CReverse _ -> intrinsicOpSeq "reverse"
   | CTail _ -> intrinsicOpSeq "tail"
+  | CNull _ -> intrinsicOpSeq "null"
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
   | CDPrint _ -> intrinsicOpIO "dprint"

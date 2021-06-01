@@ -377,6 +377,8 @@ let rec print_const fmt = function
       fprintf fmt "reverse"
   | Ctail ->
       fprintf fmt "tail"
+  | Cnull ->
+      fprintf fmt "null"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)

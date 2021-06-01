@@ -74,6 +74,7 @@ let builtin =
   ; ("splitAt", f (CsplitAt None))
   ; ("reverse", f Creverse)
   ; ("tail", f Ctail)
+  ; ("null", f Cnull)
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
