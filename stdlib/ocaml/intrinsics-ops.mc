@@ -3,6 +3,9 @@ include "ocaml/ast.mc"
 let intrinsicOpSeq = use OCamlAst in
   concat "Boot.Intrinsics.Mseq."
 
+let intrinsicOpSeqHelpers = use OCamlAst in
+  concat "Boot.Intrinsics.Mseq.Helpers."
+
 let intrinsicOpSymb = use OCamlAst in
   concat "Boot.Intrinsics.Symb."
 

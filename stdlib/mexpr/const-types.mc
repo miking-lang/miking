@@ -118,6 +118,9 @@ lang SeqOpTypeAst = SeqOpAst
   | CHead _ -> tyarrow_ (tygenericseq_ "a") (tygeneric_ "a")
   | CTail _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
   | CNull _ -> tyarrow_ (tygenericseq_ "a") tybool_
+  | CMap _ ->
+    tyarrows_ [ tyarrow_ (tygeneric_ "a") (tygeneric_ "a"),
+                tygenericseq_ "a", tygenericseq_ "a" ]
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
   | CCreateFingerTree _ ->

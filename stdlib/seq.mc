@@ -39,8 +39,6 @@ let mapi = lam f. lam seq.
   in
   work 0 f seq
 
-let map = lam f. mapi (lam. lam x. f x)
-
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
 utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]

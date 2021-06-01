@@ -381,6 +381,8 @@ let rec print_const fmt = function
       fprintf fmt "tail"
   | Cnull ->
       fprintf fmt "null"
+  | Cmap _ ->
+      fprintf fmt "map"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)

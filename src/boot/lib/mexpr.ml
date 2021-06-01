@@ -202,6 +202,10 @@ let arity = function
       1
   | Cnull ->
       1
+  | Cmap None ->
+      2
+  | Cmap (Some _) ->
+      1
   | Csubsequence (None, None) ->
       3
   | Csubsequence (Some _, None) ->
@@ -782,6 +786,13 @@ let delta eval env fi c v =
   | Cnull, TmSeq (fi, s) ->
       TmConst (fi, CBool (Mseq.null s))
   | Cnull, _ ->
+      fail_constapp fi
+  | Cmap None, f ->
+      let f x = eval env (TmApp (fi, f, x)) in
+      TmConst (fi, Cmap (Some f))
+  | Cmap (Some f), TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.Helpers.map f s)
+  | Cmap _, _ ->
       fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))

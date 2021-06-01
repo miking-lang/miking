@@ -76,6 +76,7 @@ let builtin =
   ; ("head", f Chead)
   ; ("tail", f Ctail)
   ; ("null", f Cnull)
+  ; ("map", f (Cmap None))
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))

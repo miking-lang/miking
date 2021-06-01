@@ -112,6 +112,7 @@ and const =
   | Chead
   | Ctail
   | Cnull
+  | Cmap of (tm -> tm) option
   | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
@@ -549,6 +550,7 @@ let const_has_side_effect = function
   | Chead
   | Ctail
   | Cnull
+  | Cmap _
   | Csubsequence _ ->
       false
   (* MCore intrinsics: Random numbers *)

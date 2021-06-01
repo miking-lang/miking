@@ -226,6 +226,7 @@ lang OCamlPrettyPrint =
   | CHead _ -> intrinsicOpSeq "head"
   | CTail _ -> intrinsicOpSeq "tail"
   | CNull _ -> intrinsicOpSeq "null"
+  | CMap _ -> intrinsicOpSeqHelpers "map"
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
   | CDPrint _ -> intrinsicOpIO "dprint"
