@@ -301,6 +301,10 @@ let sub_bigarray (s : ('a, 'b) ba t) (off : int) (cnt : int) : ('a, 'b) ba t =
   let _ = fill !s 0 in
   ref (Leaf dst)
 
+let iter_array (f : 'a -> unit) (s : 'a array t) : unit =
+  let a = _collapse_array s in
+  Array.iter f a
+
 let map_array_array (f : 'a -> 'b) (s : 'a array t) : 'b array t =
   let a = _collapse_array s in
   ref (Leaf (Array.map f a))

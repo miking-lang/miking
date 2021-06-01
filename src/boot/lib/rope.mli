@@ -71,6 +71,9 @@ val sub_array : 'a array t -> int -> int -> 'a array t
 
 val sub_bigarray : ('a, 'b) ba t -> int -> int -> ('a, 'b) ba t
 
+val iter_array : ('a -> unit) -> 'a array t -> unit
+(** [Rope.iter_* f s] [f] to all elements in [s]. *)
+
 val map_array_array : ('a -> 'b) -> 'a array t -> 'b array t
 (** [Rope.map_*_* f s] returns a rope representing the result of applying a
     function [f] on all elements of [s]. This function collapses [s]. *)
