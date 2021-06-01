@@ -581,6 +581,7 @@ lang SeqOpAst = SeqAst
   | CConcat {}
   | CLength {}
   | CReverse {}
+  | CHead {}
   | CTail {}
   | CNull {}
   | CCreate {}

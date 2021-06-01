@@ -7,7 +7,6 @@ utest make 3 5 with [5,5,5]
 utest make 4 'a' with ['a', 'a', 'a', 'a']
 utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 
-let head = lam seq. get seq 0
 let last = lam seq. get seq (subi (length seq) 1)
 let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 

@@ -375,6 +375,8 @@ let rec print_const fmt = function
       fprintf fmt "splitAt"
   | Creverse ->
       fprintf fmt "reverse"
+  | Chead ->
+      fprintf fmt "head"
   | Ctail ->
       fprintf fmt "tail"
   | Cnull ->

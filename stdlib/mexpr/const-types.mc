@@ -115,6 +115,7 @@ lang SeqOpTypeAst = SeqOpAst
                             tygenericseq_ "a"]
   | CLength _ -> tyarrow_ (tygenericseq_ "a") tyint_
   | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
+  | CHead _ -> tyarrow_ (tygenericseq_ "a") (tygeneric_ "a")
   | CTail _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
   | CNull _ -> tyarrow_ (tygenericseq_ "a") tybool_
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),

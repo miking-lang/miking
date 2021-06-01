@@ -109,6 +109,7 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
+  | Chead
   | Ctail
   | Cnull
   | Csubsequence of tm Mseq.t option * int option
@@ -545,6 +546,7 @@ let const_has_side_effect = function
   | Csnoc _
   | CsplitAt _
   | Creverse
+  | Chead
   | Ctail
   | Cnull
   | Csubsequence _ ->

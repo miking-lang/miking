@@ -703,6 +703,7 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CConcat _ -> "concat"
   | CLength _ -> "length"
   | CReverse _ -> "reverse"
+  | CHead _ -> "head"
   | CTail _ -> "tail"
   | CNull _ -> "null"
   | CCreate _ -> "create"

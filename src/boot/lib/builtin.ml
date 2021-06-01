@@ -73,6 +73,7 @@ let builtin =
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
   ; ("reverse", f Creverse)
+  ; ("head", f Chead)
   ; ("tail", f Ctail)
   ; ("null", f Cnull)
   ; ("subsequence", f (Csubsequence (None, None)))
