@@ -193,7 +193,7 @@ let merge_lang_data fi {inters= i1; syns= s1} {inters= i2; syns= s2} :
         else if List.length p1 <> List.length p2 then
           raise_error fi1
             ( "Different number of parameters for interpreter '"
-            ^ Ustring.to_utf8 name ^ "' compared to previous definitian at "
+            ^ Ustring.to_utf8 name ^ "' compared to previous definition at "
             ^ Ustring.to_utf8 (info2str fi2) )
         else
           let c2 =

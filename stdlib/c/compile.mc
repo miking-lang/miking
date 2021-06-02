@@ -24,9 +24,14 @@ include "mexpr/builtin.mc"
 include "mexpr/boot-parser.mc"
 
 include "name.mc"
+include "map.mc"
+include "set.mc"
 
 include "ast.mc"
 include "pprint.mc"
+
+-- Externals (these should be automatically parsed eventually)
+include "ext/math-ext.ext-c.mc"
 
 ----------------------
 -- HELPER FUNCTIONS --
@@ -60,22 +65,37 @@ end
 
 
 
---------------------------
--- COMPILER DEFINITIONS --
---------------------------
+----------------------------------------
+-- COMPILER DEFINITIONS AND EXTERNALS --
+----------------------------------------
 
--- Customizable set of includes
-let cIncludes = [
-  "<stdio.h>"
+type ExtInfo = { ident: String, header: String }
+
+let externalsMap: Map String ExtInfo = foldl1 mapUnion [
+  mathExtMap
 ]
 
--- Names used in the compiler
+let externalNames =
+  map nameNoSym
+    (mapFoldWithKey (lam acc. lam. lam v. cons v.ident acc) [] externalsMap)
+
+let externalIncludes =
+  setToSeq
+    (mapFoldWithKey (lam acc. lam. lam v. setInsert v.header acc)
+       (setEmpty cmpString) externalsMap)
+
+-- Customizable set of includes
+let cIncludes = concat [
+  "<stdio.h>"
+] externalIncludes
+
+-- Names used in the compiler for intrinsics
 let _printf = nameSym "printf"
 
 -- C names that must be pretty printed using their exact string
-let cCompilerNames : [Name] = [
+let cCompilerNames: [Name] = concat [
   _printf
-]
+] externalNames
 
 let _constrKey = nameNoSym "constr"
 
@@ -100,11 +120,14 @@ type CompileCEnv = {
   -- this would be to define CompileCEnv within the fragment MExprCCompile
   -- itself, with the requirement that it is visible across all semantic
   -- functions and types defined with syn. This is currently impossible.
-  typeEnv: [(Name,Type)]
+  typeEnv: [(Name,Type)],
 
+  externals: Map Name Name
 }
 
-let compileCEnvEmpty = { typeEnv = [], constrData = [], structTypes = [] }
+let compileCEnvEmpty =
+  { typeEnv = [], constrData = [], structTypes = []
+  , externals = mapEmpty nameCmp }
 
 ----------------------------------
 -- MEXPR -> C COMPILER FRAGMENT --
@@ -126,8 +149,11 @@ lang MExprCCompile = MExprAst + CAst
       if isPtrType t.1 then snoc acc t.0 else acc
     ) [] typeEnv in
 
-    let env = {{ compileCEnvEmpty with structTypes = structTypes }
-                                  with typeEnv = typeEnv } in
+    let env = {{{ compileCEnvEmpty
+      with structTypes = structTypes }
+      with typeEnv = typeEnv }
+      with externals = collectExternals (mapEmpty nameCmp) prog }
+    in
 
     let decls: [CTop] = foldl (lam acc. lam t: (Name,Type).
       genTyDecls acc t.0 t.1
@@ -149,6 +175,14 @@ lang MExprCCompile = MExprAst + CAst
         (env, join [decls, defs, postDefs], tops, inits)
       else never
     else never
+
+  sem collectExternals (acc: Map Name Name) =
+  | TmExt t ->
+    let str = nameGetStr t.ident in
+    match mapLookup str externalsMap with Some e then
+      mapInsert t.ident (nameNoSym e.ident) acc
+    else infoErrorExit (t.info) "Unsupported external"
+  | expr -> sfold_Expr_Expr collectExternals acc expr
 
   sem isPtrType =
   | TyVariant _ -> true
@@ -424,7 +458,7 @@ lang MExprCCompile = MExprAst + CAst
       [{ ty = compileType env tyMatch, id = Some ident, init = None () }]
     in
 
-    let ctarget = compileExpr target in
+    let ctarget = compileExpr env target in
 
     -- Compile branches
     let innerFinal = { name = Some ident } in
@@ -499,7 +533,7 @@ lang MExprCCompile = MExprAst + CAst
             lhs = CEArrow {
               lhs = CEVar { id = ident }, id = dataKey
             },
-            rhs = compileExpr body
+            rhs = compileExpr env body
           }
         }
       ] in
@@ -526,7 +560,7 @@ lang MExprCCompile = MExprAst + CAst
             lhs = CEArrow {
               lhs = CEVar { id = ident }, id = nameNoSym (sidToString sid)
             },
-            rhs = compileExpr expr
+            rhs = compileExpr env expr
           }
         }
       ) bindings in
@@ -540,13 +574,13 @@ lang MExprCCompile = MExprAst + CAst
     let ty = ty expr in
     if _isUnitTy ty then
       match expr with TmVar _ then (env, [], [])
-      else (env, [], [CSExpr { expr = compileExpr expr }])
+      else (env, [], [CSExpr { expr = compileExpr env expr }])
 
     else
       let ty = compileType env ty in
       (env,
        [{ ty = ty, id = Some ident,
-          init = Some (CIExpr { expr = compileExpr expr }) }],
+          init = Some (CIExpr { expr = compileExpr env expr }) }],
        [])
 
 
@@ -587,6 +621,9 @@ lang MExprCCompile = MExprAst + CAst
       compileTops env (join [accTop, decls, funs]) accInit inexpr
     else never
 
+  -- Ignore externals (handled elsewhere)
+  | TmExt { inexpr = inexpr } -> compileTops env accTop accInit inexpr
+
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
     match compileStmts env { name = None () } accInit rest
@@ -610,22 +647,25 @@ lang MExprCCompile = MExprAst + CAst
 
   | TmNever _ -> (env, snoc acc (CSNop {}))
 
+  -- Ignore externals (handled elsewhere)
+  | TmExt { inexpr = inexpr } -> compileStmts env final acc inexpr
+
   -- Return result of `compileExpr` (use `final` to decide between return and
   -- assign)
   | stmt ->
     match final with { name = name } then
       if _isUnitTy (ty stmt) then
         match stmt with TmVar _ then (env, acc)
-        else (env, snoc acc (CSExpr { expr = compileExpr stmt }))
+        else (env, snoc acc (CSExpr { expr = compileExpr env stmt }))
       else match name with Some ident then
         (env,
          snoc acc
           (CSExpr {
             expr = CEBinOp { op = COAssign {},
                              lhs = CEVar { id = ident },
-                             rhs = compileExpr stmt } }))
+                             rhs = compileExpr env stmt } }))
       else match name with None () then
-        (env, snoc acc (CSRet { val = Some (compileExpr stmt) }))
+        (env, snoc acc (CSRet { val = Some (compileExpr env stmt) }))
       else never
     else never
 
@@ -666,10 +706,12 @@ lang MExprCCompile = MExprAst + CAst
   | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
 
 
-  sem compileExpr =
+  sem compileExpr (env: CompileCEnv) =
 
   | TmVar { ty = ty, ident = ident } ->
     if _isUnitTy ty then error "Unit type var in compileExpr"
+    else match mapLookup ident env.externals with Some ext then
+      CEVar { id = ext }
     else CEVar { id = ident }
 
   | TmApp _ & app ->
@@ -682,11 +724,15 @@ lang MExprCCompile = MExprAst + CAst
     match rec [] app with (fun, args) then
       -- Function calls
       match fun with TmVar { ident = ident } then
-        CEApp { fun = ident, args = map compileExpr args }
+        let ident =
+          match mapLookup ident env.externals with Some ext then ext
+          else ident
+        in
+        CEApp { fun = ident, args = map (compileExpr env) args }
 
       -- Intrinsics
       else match fun with TmConst { val = val } then
-        let args = map compileExpr args in
+        let args = map (compileExpr env) args in
         compileOp args val
 
       else error "Unsupported application in compileExpr"
@@ -704,7 +750,7 @@ lang MExprCCompile = MExprAst + CAst
   | TmRecordUpdate _ | TmLet _
   | TmRecLets _ | TmType _ | TmConDef _
   | TmConApp _ | TmMatch _ | TmUtest _
-  | TmSeq _ ->
+  | TmSeq _ | TmExt _ ->
     error "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
@@ -876,6 +922,7 @@ let simpleLet = bindall_ [
 ] in
 utest testCompile simpleLet with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "int x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = 1);",
@@ -891,6 +938,7 @@ let simpleFun = bindall_ [
 ] in
 utest testCompile simpleFun with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "int x;",
   "int foo(int a, int b) {",
   "  int t = (a + b);",
@@ -921,6 +969,7 @@ let constants = bindall_ [
 ] in
 utest testCompile constants with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "void foo() {",
   "  int t = (1 + 2);",
   "  double t1 = (1. + 2.);",
@@ -952,6 +1001,7 @@ let factorial = bindall_ [
 ] in
 utest testCompile factorial with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "int factorial(int n) {",
   "  char t = (n == 0);",
   "  int t1;",
@@ -995,6 +1045,7 @@ let oddEven = bindall_ [
 ] in
 utest testCompile oddEven with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "char odd(int);",
   "char even(int);",
   "char odd(int x) {",
@@ -1058,6 +1109,7 @@ let typedefs = bindall_ [
 ] in
 utest testCompile typedefs with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "struct Tree;",
   "typedef int Integer;",
   "struct Rec {Integer k;};",
@@ -1082,6 +1134,7 @@ let alias = bindall_ [
 ] in
 utest testCompile alias with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "struct Rec {int k;};",
   "typedef struct Rec (*MyRec);",
   "struct Rec alloc;",
@@ -1089,6 +1142,22 @@ utest testCompile alias with strJoin "\n" [
   "int main(int argc, char (*argv[])) {",
   "  (myRec = (&alloc));",
   "  ((myRec->k) = 0);",
+  "  return 0;",
+  "}"
+] using eqString in
+
+-- Potentially tricky case with type aliases
+let ext = bindall_ [
+  ext_ "externalLog" false (tyarrow_ tyfloat_ tyfloat_),
+  let_ "x" (tyfloat_) (app_ (var_ "externalLog") (float_ 2.)),
+  int_ 0
+] in
+utest testCompile ext with strJoin "\n" [
+  "#include <stdio.h>",
+  "#include <math.h>",
+  "double x;",
+  "int main(int argc, char (*argv[])) {",
+  "  (x = (log(2.)));",
   "  return 0;",
   "}"
 ] using eqString in
@@ -1134,6 +1203,7 @@ let trees = bindall_ [
 
 utest testCompile trees with strJoin "\n" [
   "#include <stdio.h>",
+  "#include <math.h>",
   "struct Tree;",
   "struct Rec {int v;};",
   "struct Rec1 {int v; struct Tree (*l); struct Tree (*r);};",
