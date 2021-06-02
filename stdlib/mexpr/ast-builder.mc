@@ -947,11 +947,11 @@ let tensorSubExn_ = use MExprAst in
 
 let utensorSubExn_ = tensorSubExn_ tyunknown_
 
-let tensorIteri_ = use MExprAst in
+let tensorIterSlice_ = use MExprAst in
   lam ty. lam f. lam t.
-  appf2_ (const_ (tytensoriteri_ ty) (CTensorIteri ())) f t
+  appf2_ (const_ (tytensoriteri_ ty) (CTensorIterSlice ())) f t
 
-let utensorIteri_ = tensorIteri_ tyunknown_
+let utensorIterSlice_ = tensorIterSlice_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in

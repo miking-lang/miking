@@ -478,8 +478,8 @@ let rec print_const fmt = function
       fprintf fmt "tensorSliceExn"
   | CtensorSubExn _ ->
       fprintf fmt "tensorSubExn"
-  | CtensorIteri _ ->
-      fprintf fmt "tensorIteri"
+  | CtensorIterSlice _ ->
+      fprintf fmt "tensorIterSlice"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"
