@@ -188,13 +188,13 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       (TySeq {ty = ty1}, OTyList {ty = ty2})
     then
       let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_list" } in
-      let mapop = OTmVarExt { ident = intrinsicOpSeq "Helpers.map" } in
+      let mapop = OTmVarExt { ident = intrinsicOpSeq "map" } in
       _convertContainer op _listToSeqCost _approxsize mapop info env t ty1 ty2
     else match tt with
       (TySeq {ty = ty1}, OTyArray {ty = ty2})
     then
       let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_array" } in
-      let mapop = OTmVarExt { ident = intrinsicOpSeq "Helpers.map" } in
+      let mapop = OTmVarExt { ident = intrinsicOpSeq "map" } in
       _convertContainer op _arrayToSeqCost _approxsize mapop info env t ty1 ty2
     else match tt with
       (OTyArray {ty = ty1}, TySeq {ty = ty2})

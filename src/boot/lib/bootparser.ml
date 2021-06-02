@@ -127,7 +127,7 @@ let reportErrorAndExit err =
 
 let parseMExprString keywords str =
   try
-    let keywords = Mseq.Helpers.map Mseq.Helpers.to_ustring keywords in
+    let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     PTreeTm
       ( str |> Intrinsics.Mseq.Helpers.to_ustring
       |> Parserutils.parse_mexpr_string
@@ -139,7 +139,7 @@ let parseMExprString keywords str =
 
 let parseMCoreFile keywords filename =
   try
-    let keywords = Mseq.Helpers.map Mseq.Helpers.to_ustring keywords in
+    let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
     let name2sym = builtin_name2sym @ symKeywordsMap in
     let symKeywords = List.map (fun (_, s) -> s) symKeywordsMap in

@@ -374,7 +374,7 @@ let smap_tm_tm (f : tm -> tm) = function
       TmRecLets
         (fi, List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, f t)) lst, f tm)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map f tms)
+      TmSeq (fi, Mseq.map f tms)
   | TmRecord (fi, r) ->
       TmRecord (fi, Record.map f r)
   | TmRecordUpdate (fi, r, l, t) ->
@@ -643,7 +643,7 @@ let const_has_side_effect = function
 
 (* Converts a sequence of terms to a sequence of integers *)
 let tmseq2seqOfInt fi s =
-  Mseq.Helpers.map
+  Mseq.map
     (fun x ->
       match x with
       | TmConst (_, CChar i) ->
@@ -657,8 +657,7 @@ let tmseq2ustring fi s = tmseq2seqOfInt fi s |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =
-  s |> Mseq.Helpers.of_ustring
-  |> Mseq.Helpers.map (fun x -> TmConst (fi, CChar x))
+  s |> Mseq.Helpers.of_ustring |> Mseq.map (fun x -> TmConst (fi, CChar x))
 
 (* Converts a list of terms (for a tuple) to a record term *)
 let tuple2record fi lst =

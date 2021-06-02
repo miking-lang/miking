@@ -94,12 +94,11 @@ let builtin =
     , TmSeq
         ( NoInfo
         , argv_prog |> Mseq.Helpers.of_array
-          |> Mseq.Helpers.map (fun s ->
+          |> Mseq.map (fun s ->
                  TmSeq
                    ( NoInfo
                    , s |> us |> Mseq.Helpers.of_ustring
-                     |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   ) ) ) )
+                     |> Mseq.map (fun x -> TmConst (NoInfo, CChar x)) ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)

@@ -201,6 +201,27 @@ module Mseq = struct
         FingerTree
           (subsequence_rev BatFingerTree.empty s 0 0 |> BatFingerTree.reverse)
 
+  let map f = function
+    | Rope s ->
+        Rope (Rope.map_array_array f s)
+    | List s ->
+        List (List.map f s)
+    | FingerTree s ->
+        FingerTree (BatFingerTree.map f s)
+
+  let mapi f = function
+    | Rope s ->
+        Rope (Rope.mapi_array_array f s)
+    | List s ->
+        List (List.mapi f s)
+    | FingerTree s ->
+        let _, s =
+          BatFingerTree.fold_left
+            (fun (i, a) e -> (i + 1, BatFingerTree.snoc a (f i e)))
+            (0, BatFingerTree.empty) s
+        in
+        FingerTree s
+
   module Helpers = struct
     let of_list_rope l = Rope (Rope.Convert.of_list_array l)
 
@@ -305,27 +326,6 @@ module Mseq = struct
           FingerTree (combine_fingertree s1 s2)
       | _ ->
           raise (Invalid_argument "Mseq.combine")
-
-    let map f = function
-      | Rope s ->
-          Rope (Rope.map_array_array f s)
-      | List s ->
-          List (List.map f s)
-      | FingerTree s ->
-          FingerTree (BatFingerTree.map f s)
-
-    let mapi f = function
-      | Rope s ->
-          Rope (Rope.mapi_array_array f s)
-      | List s ->
-          List (List.mapi f s)
-      | FingerTree s ->
-          let _, s =
-            BatFingerTree.fold_left
-              (fun (i, a) e -> (i + 1, BatFingerTree.snoc a (f i e)))
-              (0, BatFingerTree.empty) s
-          in
-          FingerTree s
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with
@@ -646,7 +646,7 @@ module MSys = struct
 
   let argv =
     Sys.argv |> Mseq.Helpers.of_array
-    |> Mseq.Helpers.map (fun a ->
+    |> Mseq.map (fun a ->
            a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
 
   let command s = Sys.command (s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8)

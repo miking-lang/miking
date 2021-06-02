@@ -48,6 +48,10 @@ module Mseq : sig
 
   val subsequence : 'a t -> int -> int -> 'a t
 
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
+  val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
+
   module Helpers : sig
     val of_list : 'a list -> 'a t
 
@@ -80,10 +84,6 @@ module Mseq : sig
     val to_ustring : int t -> ustring
 
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
-
-    val map : ('a -> 'b) -> 'a t -> 'b t
-
-    val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 
     val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
 
