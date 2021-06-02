@@ -65,36 +65,25 @@ end
 --------------------------
 
 -- Customizable set of includes
-let _includes = [
-  "<stdio.h>",
-  "<stdlib.h>"
+let cIncludes = [
+  "<stdio.h>"
 ]
 
 -- Names used in the compiler
-let _argc = nameSym "argc"
-let _argv = nameSym "argv"
-let _main = nameSym "main"
-let _malloc = nameSym "malloc"
-let _free = nameSym "free"
 let _printf = nameSym "printf"
 
 -- C names that must be pretty printed using their exact string
 let cCompilerNames : [Name] = [
-  _argc,
-  _argv,
-  _main,
-  _malloc,
-  _free,
   _printf
 ]
 
-let _constrKey = "constr"
+let _constrKey = nameNoSym "constr"
 
 --------------------------
 -- COMPILER ENVIRONMENT --
 --------------------------
 
-type ConstrDataEnv = [(Name,String)]
+type ConstrDataEnv = [(Name,Name)]
 
 type CompileCEnv = {
 
@@ -187,7 +176,7 @@ lang MExprCCompile = MExprAst + CAst
     let fieldsLs: [(CType,String)] =
       mapFoldWithKey (lam acc. lam k. lam ty.
         let ty = compileType env ty in
-        snoc acc (ty, Some (sidToString k))) [] fields in
+        snoc acc (ty, Some (nameNoSym (sidToString k)))) [] fields in
     let def = CTDef {
       ty = CTyStruct { id = Some name, mem = Some fieldsLs },
       id = None (),
@@ -213,7 +202,7 @@ lang MExprCCompile = MExprAst + CAst
         mapi (lam i. lam t: (Name,CType).
           (t.0, cons 'd' (int2string i), t.1)) constrLs in
       let constrData = foldl (lam acc. lam t: (Name,String,CType).
-        assocSeqInsert t.0 t.1 acc) constrData constrLs in
+        assocSeqInsert t.0 (nameNoSym t.1) acc) constrData constrLs in
       let nameEnum = nameSym "constrs" in
       let enum = CTDef {
         ty = CTyEnum {
@@ -230,7 +219,8 @@ lang MExprCCompile = MExprAst + CAst
             (CTyUnion {
                id = None (),
                mem = Some (map
-                 (lam t: (Name,String,CType). (t.2, Some t.1)) constrLs)
+                 (lam t: (Name,String,CType). (t.2, Some (nameNoSym t.1)))
+                 constrLs)
              }, None ())
           ] },
         id = None (), init = None ()
@@ -302,7 +292,7 @@ lang MExprCCompile = MExprAst + CAst
   -- HELPERS --
   -------------
 
-  -- Translate sequence of lambdas to C function. Takes an explicit type as
+  -- Translate a sequence of lambdas to a C function. Takes an explicit type as
   -- parameter, because the lambdas do not explicitly give the return type,
   -- which is required in C.
   sem compileFun (env: CompileCEnv) (id: Name) (ty: Type) =
@@ -341,12 +331,13 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else never
 
-  | _ -> error "Non-function supplied to compileFun"
+  | _ -> error "Non-lambda supplied to compileFun"
 
 
   -- Compile patterns
   sem compilePat (env: CompileCEnv)
-    (conds: [CExpr]) (defs: [(Name,CExpr)]) (target: CExpr) (ty: Type) =
+    (pres: [CStmt]) (conds: [CExpr]) (defs: [CStmt])
+    (target: CExpr) (ty: Type) =
 
   | PatNamed { ident = PName ident } ->
     let def = CSDef {
@@ -354,12 +345,13 @@ lang MExprCCompile = MExprAst + CAst
       id = Some ident,
       init = Some (CIExpr { expr = target })
     } in
-    ( conds, snoc defs def )
+    ( pres, conds, snoc defs def )
 
-  | PatNamed { ident = PWildcard _ } -> (conds, defs)
+  | PatNamed { ident = PWildcard _ } -> (pres, conds, defs)
 
   | PatBool { val = val } ->
-    ( snoc conds (CEBinOp {
+    ( pres,
+      snoc conds (CEBinOp {
         op = COEq {},
         lhs = target,
         rhs = let val = match val with true then 1 else 0 in CEInt { i = val }
@@ -369,18 +361,25 @@ lang MExprCCompile = MExprAst + CAst
   | PatRecord { bindings = bindings } ->
     match env with { typeEnv = typeEnv } then
       let f = lam acc. lam sid. lam subpat.
-        match acc with (conds, defs) then
+        match acc with (pres, conds, defs) then
           match _unwrapType typeEnv ty with TyRecord { fields = fields } then
             match mapLookup sid fields with Some ty then
               let label = sidToString sid in
-              compilePat env conds defs
-                (CEArrow { lhs = target, id = label }) ty subpat
-
+              let namePre = nameSym "preMatch" in
+              let pre = CSDef {
+                ty = compileType env ty,
+                id = Some namePre,
+                init = Some (CIExpr {
+                  expr = CEArrow { lhs = target, id = nameNoSym label }
+                })
+              } in
+              compilePat env (snoc pres pre)
+                conds defs (CEVar { id = namePre }) ty subpat
             else error "Label does not match between PatRecord and TyRecord"
           else error "Type not TyVar for PatRecord in compilePat"
         else never
       in
-      mapFoldWithKey f (conds, defs) bindings
+      mapFoldWithKey f (pres, conds, defs) bindings
     else never
 
   | PatCon { ident = ident, subpat = subpat } ->
@@ -392,24 +391,33 @@ lang MExprCCompile = MExprAst + CAst
       in
       match _unwrapType typeEnv ty with TyVariant { constrs = constrs } then
         match mapLookup ident constrs with Some ty then
-          compilePat env (snoc conds (CEBinOp {
+          let namePre = nameSym "preMatch" in
+          let pre = CSDef {
+            ty = compileType env ty,
+            id = Some namePre,
+            init = Some (CIExpr {
+              expr = CEArrow { lhs = target, id = dataKey }
+            })
+          } in
+          compilePat env (snoc pres pre) (snoc conds (CEBinOp {
               op = COEq {},
               lhs = CEArrow { lhs = target, id = _constrKey },
               rhs = CEVar { id = ident }
             }))
-            defs (CEArrow { lhs = target, id = dataKey }) ty subpat
+            defs (CEVar { id = namePre }) ty subpat
         else error "Invalid constructor in compilePat"
       else error "Not a TyVariant for PatCon in compilePat"
     else never
-  | _ -> error "Pattern not supported"
+  | pat -> infoErrorExit (infoPat pat) "Pattern not supported"
 
 
   -- Compile various let-bound forms. Note that, if the program is in ANF,
   -- most terms can only appear here (e.g., TmMatch).
   sem compileLet (env: CompileCEnv) (ident: Name) =
 
+  -- TmMatch: Compile to if-statement
   | TmMatch { ty = tyMatch, target = target, pat = pat,
-              thn = thn, els = els } ->
+              thn = thn, els = els } & t ->
 
     -- Allocate memory for return value of match expression
     let def = if _isUnitTy tyMatch then [] else
@@ -425,19 +433,24 @@ lang MExprCCompile = MExprAst + CAst
 
         -- Generate conditions corresponding to pat, and add pattern bindings
         -- to start of thn
-        match compilePat env [] [] ctarget (ty target) pat
-        with (conds, defs) then
+        match compilePat env [] [] [] ctarget (ty target) pat
+        with (pres, conds, defs) then
 
-          -- Compute joint condition
-          let cond = foldr1 (lam cond. lam acc.
-              CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
-            ) conds in
+          let thn = concat defs thn in
 
-          -- TODO Empty cond => no if needed
+          let stmts =
+            if null conds then thn
+            else
+              -- Compute joint condition
+              let cond = foldr1 (lam cond. lam acc.
+                  CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
+                ) conds in
+              [CSIf { cond = cond, thn = thn, els = els }]
+          in
 
-          -- Produce final statement
-          let stmt = CSIf { cond = cond, thn = concat defs thn, els = els } in
-          (env, def, [stmt])
+          let stmts = concat pres stmts in
+
+          (env, def, stmts)
 
         else never
       else never
@@ -511,7 +524,7 @@ lang MExprCCompile = MExprAst + CAst
           expr = CEBinOp {
             op = COAssign {},
             lhs = CEArrow {
-              lhs = CEVar { id = ident }, id = sidToString sid
+              lhs = CEVar { id = ident }, id = nameNoSym (sidToString sid)
             },
             rhs = compileExpr expr
           }
@@ -577,8 +590,7 @@ lang MExprCCompile = MExprAst + CAst
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
     match compileStmts env { name = None () } accInit rest
-    with (env, accInit) then
-      (accTop, accInit)
+    with (env, accInit) then (accTop, accInit)
     else never
 
 
@@ -633,16 +645,25 @@ lang MExprCCompile = MExprAst + CAst
   | CMulf _ -> CEBinOp { op = COMul {}, lhs = head args, rhs = last args }
   | CDivf _ -> CEBinOp { op = CODiv {}, lhs = head args, rhs = last args }
   | CEqi _
-  | CEqf _ -> CEBinOp { op = COEq {}, lhs = head args, rhs = last args }
+  | CEqf _  -> CEBinOp { op = COEq {},  lhs = head args, rhs = last args }
   | CLti _
-  | CLtf _ -> CEBinOp { op = COLt {}, lhs = head args, rhs = last args }
+  | CLtf _  -> CEBinOp { op = COLt {},  lhs = head args, rhs = last args }
+  | CGti _
+  | CGtf _  -> CEBinOp { op = COGt {},  lhs = head args, rhs = last args }
+  | CLeqi _
+  | CLeqf _ -> CEBinOp { op = COLe {},  lhs = head args, rhs = last args }
+  | CGeqi _
+  | CGeqf _ -> CEBinOp { op = COGe {},  lhs = head args, rhs = last args }
+  | CNeqi _
+  | CNeqf _ -> CEBinOp { op = CONeq {}, lhs = head args, rhs = last args }
 
   -- Unary operators
   | CNegf _ -> CEUnOp { op = CONeg {}, arg = head args }
 
-  -- Custom intrinsics
+  -- Not directly mapped to C operators
   | CPrint _ ->
     CEApp { fun = _printf, args = [CEString { s = "%s" }, head args] }
+  | CInt2float _ -> CECast { ty = CTyDouble {}, rhs = head args }
 
 
   sem compileExpr =
@@ -674,6 +695,7 @@ lang MExprCCompile = MExprAst + CAst
   -- Anonymous function, not allowed.
   | TmLam _ -> error "Anonymous function in compileExpr."
 
+  -- Unit type is represented by int literal 0.
   | TmRecord { bindings = bindings } ->
     if mapIsEmpty bindings then CEInt { i = 0 }
     else error "ERROR: Records cannot be handled in compileExpr."
@@ -695,7 +717,7 @@ lang MExprCCompile = MExprAst + CAst
       CEInt { i = val }
     else error "Unsupported literal"
 
-  -- Should not occur?
+  -- Should not occur
   | TmNever _ -> error "Never term found in compileExpr"
 
 end
@@ -733,6 +755,16 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
   | name -> error "free currently unused"
 
 end
+
+let _argc = nameSym "argc"
+let _argv = nameSym "argv"
+let _main = nameSym "main"
+
+let cGccCompilerNames = concat cCompilerNames [
+  _argc,
+  _argv,
+  _main
+]
 
 let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
@@ -789,7 +821,7 @@ let compileGCC = use MExprCCompileGCC in
       in
       let main = funWithType mainTy _main [_argc, _argv] inits in
       CPProg {
-        includes = _includes,
+        includes = cIncludes,
         tops = join [types, topDecls, tops, [main]]
       }
 
@@ -797,7 +829,7 @@ let compileGCC = use MExprCCompileGCC in
     else never
 
 let printCompiledCProg = use CProgPrettyPrint in
-  lam cprog: CProg. printCProg cCompilerNames cprog
+  lam cprog: CProg. printCProg cGccCompilerNames cprog
 
 -----------
 -- TESTS --
@@ -844,7 +876,6 @@ let simpleLet = bindall_ [
 ] in
 utest testCompile simpleLet with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "int x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = 1);",
@@ -860,7 +891,6 @@ let simpleFun = bindall_ [
 ] in
 utest testCompile simpleFun with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "int x;",
   "int foo(int a, int b) {",
   "  int t = (a + b);",
@@ -891,7 +921,6 @@ let constants = bindall_ [
 ] in
 utest testCompile constants with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "void foo() {",
   "  int t = (1 + 2);",
   "  double t1 = (1. + 2.);",
@@ -923,7 +952,6 @@ let factorial = bindall_ [
 ] in
 utest testCompile factorial with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "int factorial(int n) {",
   "  char t = (n == 0);",
   "  int t1;",
@@ -967,7 +995,6 @@ let oddEven = bindall_ [
 ] in
 utest testCompile oddEven with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "char odd(int);",
   "char even(int);",
   "char odd(int x) {",
@@ -1031,7 +1058,6 @@ let typedefs = bindall_ [
 ] in
 utest testCompile typedefs with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "struct Tree;",
   "typedef int Integer;",
   "struct Rec {Integer k;};",
@@ -1056,7 +1082,6 @@ let alias = bindall_ [
 ] in
 utest testCompile alias with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "struct Rec {int k;};",
   "typedef struct Rec (*MyRec);",
   "struct Rec alloc;",
@@ -1107,11 +1132,8 @@ let trees = bindall_ [
   int_ 0
 ] in
 
--- print (printCompiledCProg (compile trees));
-
 utest testCompile trees with strJoin "\n" [
   "#include <stdio.h>",
-  "#include <stdlib.h>",
   "struct Tree;",
   "struct Rec {int v;};",
   "struct Rec1 {int v; struct Tree (*l); struct Tree (*r);};",
@@ -1148,20 +1170,26 @@ utest testCompile trees with strJoin "\n" [
   "int sum;",
   "int treeRec(struct Tree (*t13)) {",
   "  int t14;",
+  "  struct Rec1 (*preMatch) = (t13->d1);",
+  "  int preMatch1 = (preMatch->v);",
+  "  struct Tree (*preMatch2) = (preMatch->l);",
+  "  struct Tree (*preMatch3) = (preMatch->r);",
   "  if (((t13->constr) == Node)) {",
-  "    int v = ((t13->d1)->v);",
-  "    struct Tree (*l) = ((t13->d1)->l);",
-  "    struct Tree (*r) = ((t13->d1)->r);",
-  "    int t15 = (treeRec(l));",
-  "    int t16 = (v + t15);",
-  "    int t17 = (treeRec(r));",
+  "    int v1 = preMatch1;",
+  "    struct Tree (*l1) = preMatch2;",
+  "    struct Tree (*r1) = preMatch3;",
+  "    int t15 = (treeRec(l1));",
+  "    int t16 = (v1 + t15);",
+  "    int t17 = (treeRec(r1));",
   "    int t18 = (t16 + t17);",
   "    (t14 = t18);",
   "  } else {",
   "    int t19;",
+  "    struct Rec (*preMatch4) = (t13->d0);",
+  "    int preMatch5 = (preMatch4->v);",
   "    if (((t13->constr) == Leaf)) {",
-  "      int v1 = ((t13->d0)->v);",
-  "      (t19 = v1);",
+  "      int v2 = preMatch5;",
+  "      (t19 = v2);",
   "    } else {",
   "      ;",
   "    }",

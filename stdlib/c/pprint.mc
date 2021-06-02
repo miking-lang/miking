@@ -52,6 +52,32 @@ let pprintEnvGetStr = lam env. lam id: Name.
 let pprintEnvGetOptStr = lam env. lam id.
   match id with Some id then pprintEnvGetStr env id else (env,"")
 
+--------------
+-- KEYWORDs --
+--------------
+
+-- From https://en.cppreference.com/w/c/keyword and
+-- https://en.cppreference.com/w/cpp/keyword
+let cKeywords = [
+  "_Alignas", "_Alignof", "_Atomic", "_Bool", "_Complex", "_Decimal128",
+  "_Decimal32", "_Decimal64", "_Generic", "_Imaginary", "_Noreturn",
+  "_Static_assert", "_Thread_local", "alignas", "alignof", "and", "and_eq",
+  "asm", "atomic_cancel", "atomic_commit", "atomic_noexcept", "auto", "bitand",
+  "bitor", "bool", "break", "case", "catch", "char", "char16_t", "char32_t",
+  "char8_t", "class", "co_await", "co_return", "co_yield", "compl", "concept",
+  "const", "const_cast", "consteval", "constexpr", "constinit", "continue",
+  "decltype", "default", "delete", "do", "double", "dynamic_cast", "else",
+  "enum", "explicit", "export", "extern", "false", "float", "for", "friend",
+  "goto", "if", "inline", "int", "long", "mutable", "namespace", "new",
+  "noexcept", "not", "not_eq", "nullptr", "operator", "or", "or_eq", "private",
+  "protected", "public", "reflexpr", "register", "reinterpret_cast", "requires",
+  "restrict", "return", "short", "signed", "sizeof", "static", "static_assert",
+  "static_cast", "struct", "switch", "synchronized", "template", "this",
+  "thread_local", "throw", "true", "try", "typedef", "typeid", "typename",
+  "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t",
+  "while", "xor", "xor_eq"
+]
+
 -----------------------------
 -- C TYPES AND EXPRESSIONS --
 -----------------------------
@@ -88,9 +114,13 @@ lang CExprTypePrettyPrint = CExprTypeAst
       match id with Some id then pprintEnvGetStr env id else (env, "") in
     match idtup with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t: (CType,Option String).
-          printCType (match t.1 with Some n then escapeIdentifier n else "")
-            env t.0  in
+        let f = lam env. lam t: (CType, Option Name).
+          match t.1 with Some n then
+            match pprintEnvGetStr env n with (env,n) then
+              printCType n env t.0
+            else never
+          else printCType "" env t.0
+        in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -104,9 +134,13 @@ lang CExprTypePrettyPrint = CExprTypeAst
       match id with Some id then pprintEnvGetStr env id else (env, "") in
     match idtup with (env,id) then
       match mem with Some mem then
-        let f = lam env. lam t: (CType, Option String).
-          printCType (match t.1 with Some n then escapeIdentifier n else "")
-            env t.0 in
+        let f = lam env. lam t: (CType, Option Name).
+          match t.1 with Some n then
+            match pprintEnvGetStr env n with (env,n) then
+              printCType n env t.0
+            else never
+          else printCType "" env t.0
+        in
         match mapAccumL f env mem with (env,mem) then
           let mem = map (lam s. join [s,";"]) mem in
           let mem = strJoin " " mem in
@@ -158,13 +192,17 @@ lang CExprTypePrettyPrint = CExprTypeAst
     else never
 
   | CEMember { lhs = lhs, id = id } ->
-    match printCExpr env lhs with (env,lhs) then
-      (env, _par (join [lhs, ".", escapeIdentifier id]))
+    match pprintEnvGetStr env id with (env,id) then
+      match printCExpr env lhs with (env,lhs) then
+        (env, _par (join [lhs, ".", escapeIdentifier id]))
+      else never
     else never
 
   | CEArrow { lhs = lhs, id = id } ->
-    match printCExpr env lhs with (env,lhs) then
-      (env, _par (join [lhs, "->", escapeIdentifier id]))
+    match pprintEnvGetStr env id with (env,id) then
+      match printCExpr env lhs with (env,lhs) then
+        (env, _par (join [lhs, "->", escapeIdentifier id]))
+      else never
     else never
 
   | CECast { ty = ty, rhs = rhs } ->
@@ -407,7 +445,8 @@ lang CProgPrettyPrint = CProgAst + CTopPrettyPrint
       match pprintAddStr env name with Some env then env
       else error (join ["Duplicate name in printCProg: ", nameGetStr name])
     in
-    let env = foldl addName pprintEnvEmpty nameInit in
+    let env = foldl addName pprintEnvEmpty (map nameNoSym cKeywords) in
+    let env = foldl addName env nameInit in
     match mapAccumL (printCTop indent) env tops with (env,tops) then
       strJoin (pprintNewline indent) (join [includes, tops])
     else never
@@ -428,7 +467,7 @@ let mainname = nameSym "main" in
 let xname = nameSym "x" in
 let tyname = nameSym "Ty" in
 
-let print = printCProg [mainname] in
+let printTest = printCProg [mainname] in
 
 let strIndent = lam indent. lam str.
   strJoin "\n" (map (lam str. join [make indent ' ', str]) (strSplit "\n" str))
@@ -446,25 +485,25 @@ let wrapStmtString = lam str. join [
 ] in
 
 let deftop = CTDef { ty = CTyInt {}, id = Some xname, init = None () } in
-utest print (wrapTop deftop) with
+utest printTest (wrapTop deftop) with
   "int x;"
 in
 
 let escapedName = CTDef {
   ty = CTyInt {}, id = Some (nameSym "0@a[A"), init = None ()
 } in
-utest print (wrapTop escapedName) with
+utest printTest (wrapTop escapedName) with
   "int _0_a_A;"
 in
 
 let tydeftop = CTTyDef { ty = CTyInt {}, id = tyname } in
-utest print (wrapTop tydeftop) with
+utest printTest (wrapTop tydeftop) with
   "typedef int Ty;"
 in
 
 let deftoptyvar =
   CTDef { ty = CTyVar { id = tyname }, id = Some xname, init = None () } in
-utest print (wrapTop deftoptyvar) with
+utest printTest (wrapTop deftoptyvar) with
   "Ty x;"
 in
 
@@ -472,7 +511,7 @@ let definittop = CTDef {
   ty = CTyChar {}, id = Some (nameSym "y"),
   init = Some (CIExpr { expr = CEChar { c = 'c'}})
 } in
-utest print (wrapTop definittop) with
+utest printTest (wrapTop definittop) with
   "char y = 'c';"
 in
 
@@ -481,14 +520,14 @@ let structtop = CTDef {
   ty = CTyStruct {
     id = Some structtyname,
     mem = Some [
-      (CTyInt {}, Some "0x"),
-      (CTyDouble {}, Some "y")
+      (CTyInt {}, Some (nameNoSym "0x")),
+      (CTyDouble {}, Some (nameNoSym "y"))
     ]
   },
   id = None (),
   init = None ()
 } in
-utest print (wrapTop structtop) with
+utest printTest (wrapTop structtop) with
   "struct structty {int _0x; double y;};"
 in
 
@@ -496,15 +535,17 @@ let nestedstructtop = CTDef {
   ty = CTyStruct {
     id = Some structtyname,
     mem = Some [
-      (CTyInt {}, Some "x"),
-      (CTyStruct { id = None (), mem = Some [(CTyChar {}, Some "z")] }, None ()),
-      (CTyDouble {}, Some "y")
+      (CTyInt {}, Some (nameNoSym "x")),
+      (CTyStruct {
+         id = None (), mem = Some [(CTyChar {}, Some (nameNoSym "z"))]
+       }, None ()),
+      (CTyDouble {}, Some (nameNoSym "y"))
     ]
   },
   id = None (),
   init = None ()
 } in
-utest print (wrapTop nestedstructtop) with
+utest printTest (wrapTop nestedstructtop) with
   "struct structty {int x; struct {char z;}; double y;};"
 in
 
@@ -519,7 +560,7 @@ let anonenum = CTDef {
   id = None (),
   init = None ()
 } in
-utest print (wrapTop anonenum) with
+utest printTest (wrapTop anonenum) with
   "enum {CONST, CONST1};"
 in
 
@@ -549,7 +590,7 @@ let arrinit = CTDef {
     ]
   } )
 } in
-utest print (wrapTop arrinit) with
+utest printTest (wrapTop arrinit) with
   "int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};"
 in
 
@@ -557,7 +598,7 @@ let defstmt = CSDef {
   ty = CTyDouble {}, id = Some xname,
   init = Some (CIExpr { expr = CEFloat { f = 0.1 }} )
 } in
-utest print (wrapStmt defstmt) with
+utest printTest (wrapStmt defstmt) with
   wrapStmtString "double x = 0.1;"
 using eqString in
 
@@ -574,7 +615,7 @@ let ifstmt = CSIf {
   ],
   els = []
 } in
-utest print (wrapStmt ifstmt) with
+utest printTest (wrapStmt ifstmt) with
   wrapStmtString (strJoin "\n" [
     "if (2) {",
     "  x;",
@@ -589,7 +630,7 @@ let strinit = CSDef {
   ty = CTyArray { ty = CTyChar {}, size = None () }, id = Some (nameSym "strinit"),
   init = Some (CIExpr { expr = CEString { s = "strinit" } })
 } in
-utest print (wrapStmt strinit) with
+utest printTest (wrapStmt strinit) with
   wrapStmtString "char strinit[] = \"strinit\";"
 using eqString in
 
@@ -604,7 +645,7 @@ let op = CSExpr {
     }
   }
 } in
-utest print (wrapStmt op) with
+utest printTest (wrapStmt op) with
   wrapStmtString "(x = ((-1) * 3));"
 using eqString in
 
@@ -614,26 +655,26 @@ let struct = CSDef {
   id = Some structname,
   init = None ()
 } in
-utest print (wrapStmt struct) with
+utest printTest (wrapStmt struct) with
   wrapStmtString "struct structty s;"
 using eqString in
 
 let memb = CSExpr {
-  expr = CEMember { lhs = CEVar { id = structname }, id = "0x" }
+  expr = CEMember { lhs = CEVar { id = structname }, id = (nameNoSym "0x") }
 } in
-utest print (wrapStmt memb) with
+utest printTest (wrapStmt memb) with
   wrapStmtString "(s._0x);"
 using eqString in
 
 let arrow = CSExpr {
-  expr = CEArrow { lhs = CEVar { id = structname }, id = "0x" }
+  expr = CEArrow { lhs = CEVar { id = structname }, id = (nameNoSym "0x") }
 } in
-utest print (wrapStmt arrow) with
+utest printTest (wrapStmt arrow) with
   wrapStmtString "(s->_0x);"
 using eqString in
 
 let nop = CSNop {} in
-utest print (wrapStmt nop) with
+utest printTest (wrapStmt nop) with
   wrapStmtString ";"
 using eqString in
 
@@ -655,12 +696,12 @@ CTyPtr {
 let cast = CSExpr {
   expr = CECast { ty = advty, rhs = CEInt { i = 1 } }
 } in
-utest print (wrapStmt cast) with
+utest printTest (wrapStmt cast) with
   wrapStmtString "(( struct structty (*(*(*)(char))(int (double))) ) 1);"
 using eqString in
 
 let advtydeftop = CTTyDef { ty = advty, id = xname } in
-utest print (wrapTop advtydeftop) with
+utest printTest (wrapTop advtydeftop) with
   "typedef struct structty (*(*(*x)(char))(int (double)));"
 in
 
@@ -668,7 +709,7 @@ in
 let sizety = CSExpr {
   expr = CESizeOfType { ty = advty }
 } in
-utest print (wrapStmt sizety) with
+utest printTest (wrapStmt sizety) with
   wrapStmtString "(sizeof(struct structty (*(*(*)(char))(int (double)))));"
 using eqString in
 
@@ -676,14 +717,14 @@ let union = CSDef {
   ty = CTyUnion {
     id = Some (nameSym "unionty"),
     mem = Some (
-      [(CTyInt {}, Some "0x"),
-       (CTyDouble {}, Some "y")]
+      [(CTyInt {}, Some (nameNoSym "0x")),
+       (CTyDouble {}, Some (nameNoSym "y"))]
     )
   },
   id = None (),
   init = None ()
 } in
-utest print (wrapStmt union) with
+utest printTest (wrapStmt union) with
   wrapStmtString "union unionty {int _0x; double y;};"
 using eqString in
 
@@ -698,7 +739,7 @@ let enum = CSDef {
   id = None (),
   init = None ()
 } in
-utest print (wrapStmt enum) with
+utest printTest (wrapStmt enum) with
   wrapStmtString "enum enumty {CONST, CONST1};"
 using eqString in
 
@@ -721,7 +762,7 @@ let switch = CSSwitch {
     memb
   ])
 } in
-utest print (wrapStmt switch) with
+utest printTest (wrapStmt switch) with
   wrapStmtString (strJoin "\n" [
     "switch (1) {",
     "  case 2:",
@@ -750,7 +791,7 @@ let while = CSWhile {
     memb
   ]
 } in
-utest print (wrapStmt while) with
+utest printTest (wrapStmt while) with
   wrapStmtString (strJoin "\n" [
     "while (42) {",
     "  (fun(1, 'a'));",
@@ -772,7 +813,7 @@ let fun = lam body. CTFun {
   params = [(CTyInt {}, nameSym "main"), (CTyChar {}, arg2name)],
   body = body
 } in
-utest print (wrapTop (fun [CSRet { val = Some (CEChar { c = 'a' }) }])) with
+utest printTest (wrapTop (fun [CSRet { val = Some (CEChar { c = 'a' }) }])) with
   strJoin "\n" [
     "char (*fun(int main1, char arg2))(int, double) {",
     "  return 'a';",
@@ -825,13 +866,13 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "#include <stdio.h>",
   "int x;",
   "char y = 'c';",
-  "struct structty {int _0x; double y;};",
+  "struct structty {int _0x; double y1;};",
   "int arrinit[][3] = {{1, 2, 3}, {4, 5, 6}};",
   "char (*fun(int main1, char arg2))(int, double) {",
   "  double x = 0.1;",
   "  char strinit[] = \"strinit\";",
   "  struct structty s;",
-  "  union unionty {int _0x; double y;};",
+  "  union unionty {int _0x; double y1;};",
   "  enum enumty {CONST, CONST1};",
   "  (s._0x);",
   "  (( struct structty (*(*(*)(char))(int (double))) ) 1);",

@@ -209,7 +209,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   | arg ->
     use RecordAst in
     match arg with TmRecord {bindings = bindings} then
-      let bindings = mapFromList cmpString
+      let bindings = mapFromSeq cmpString
         (map (lam t : (SID, Expr). (sidToString t.0, t.1))
            (mapBindings bindings)) in
       let default = _lookup "default" bindings in

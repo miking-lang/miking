@@ -197,7 +197,7 @@ recursive
   let any = lam p. lam seq.
     if null seq
     then false
-    else or (p (head seq)) (any p (tail seq))
+    else if p (head seq) then true else any p (tail seq)
 end
 
 utest any (lam x. eqi x 1) [0, 4, 1, 2] with true
