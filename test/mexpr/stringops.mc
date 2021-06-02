@@ -7,15 +7,6 @@ include "char.mc"
 
 mexpr
 
-let head = lam seq. get seq 0 in
-let tail = lam seq. subsequence seq 1 (length seq) in
-
-recursive
-  let map = lam f. lam seq.
-    if eqi (length seq) 0 then []
-    else cons (f (head seq)) (map f (tail seq))
-in
-
 recursive
   let eqString = lam s1. lam s2.
     if neqi (length s1) (length s2)

@@ -302,8 +302,50 @@ let sub_bigarray (s : ('a, 'b) ba t) (off : int) (cnt : int) : ('a, 'b) ba t =
   ref (Leaf dst)
 
 let iter_array (f : 'a -> unit) (s : 'a array t) : unit =
-  let a = _collapse_array s in
-  Array.iter f a
+  let rec iter = function
+    | Leaf a ->
+        Array.iter f a
+    | Concat {lhs; rhs; _} ->
+        iter lhs ; iter rhs
+  in
+  iter !s
+
+let iter_bigarray (f : 'a -> unit) (s : ('a, 'b) ba t) : unit =
+  let rec iter = function
+    | Leaf a ->
+        let n = Array1.dim a in
+        for i = 0 to n - 1 do
+          f (Array1.unsafe_get a i)
+        done
+    | Concat {lhs; rhs; _} ->
+        iter lhs ; iter rhs
+  in
+  iter !s
+
+let iteri_array (f : int -> 'a -> unit) (s : 'a array t) : unit =
+  let rec iteri off = function
+    | Leaf a ->
+        Array.iteri (fun i e -> f (i + off) e) a ;
+        Array.length a
+    | Concat {lhs; rhs; _} ->
+        let n = iteri off lhs in
+        iteri (off + n) rhs
+  in
+  iteri 0 !s |> ignore
+
+let iteri_bigarray (f : int -> 'a -> unit) (s : ('a, 'b) ba t) : unit =
+  let rec iteri off = function
+    | Leaf a ->
+        let n = Array1.dim a in
+        for i = 0 to n - 1 do
+          f (off + i) (Array1.unsafe_get a i)
+        done ;
+        n
+    | Concat {lhs; rhs; _} ->
+        let n = iteri off lhs in
+        iteri (off + n) rhs
+  in
+  iteri 0 !s |> ignore
 
 let map_array_array (f : 'a -> 'b) (s : 'a array t) : 'b array t =
   let a = _collapse_array s in
@@ -337,6 +379,42 @@ let map_bigarray_bigarray (k : ('b, 'd) kind) (f : 'a -> 'b) (s : ('a, 'c) ba t)
   let dst = _uninit_bigarray k n in
   for i = 0 to n - 1 do
     Array1.unsafe_set dst i (f (Array1.unsafe_get a i))
+  done ;
+  ref (Leaf dst)
+
+let mapi_array_array (f : int -> 'a -> 'b) (s : 'a array t) : 'b array t =
+  let a = _collapse_array s in
+  ref (Leaf (Array.mapi f a))
+
+let mapi_array_bigarray (k : ('b, 'c) kind) (f : int -> 'a -> 'b)
+    (s : 'a array t) : ('b, 'c) ba t =
+  let a = _collapse_array s in
+  let n = Array.length a in
+  let dst = _uninit_bigarray k n in
+  for i = 0 to n - 1 do
+    Array1.unsafe_set dst i (f i a.(i))
+  done ;
+  ref (Leaf dst)
+
+let mapi_bigarray_array (f : int -> 'a -> 'b) (s : ('a, 'c) ba t) : 'b array t
+    =
+  let a = _collapse_bigarray s in
+  let n = Array1.dim a in
+  if n = 0 then ref (Leaf [||])
+  else
+    let dst = Array.make n (f 0 (Array1.unsafe_get a 0)) in
+    for i = 0 to n - 1 do
+      dst.(i) <- f i (Array1.unsafe_get a i)
+    done ;
+    ref (Leaf dst)
+
+let mapi_bigarray_bigarray (k : ('b, 'd) kind) (f : int -> 'a -> 'b)
+    (s : ('a, 'c) ba t) : ('b, 'd) ba t =
+  let a = _collapse_bigarray s in
+  let n = Array1.dim a in
+  let dst = _uninit_bigarray k n in
+  for i = 0 to n - 1 do
+    Array1.unsafe_set dst i (f i (Array1.unsafe_get a i))
   done ;
   ref (Leaf dst)
 

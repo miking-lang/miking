@@ -206,6 +206,30 @@ let arity = function
       2
   | Cmap (Some _) ->
       1
+  | Cmapi None ->
+      2
+  | Cmapi (Some _) ->
+      1
+  | Citer None ->
+      2
+  | Citer (Some _) ->
+      1
+  | Citeri None ->
+      2
+  | Citeri (Some _) ->
+      1
+  | Cfoldl (None, None) ->
+      3
+  | Cfoldl (Some _, None) ->
+      2
+  | Cfoldl (_, Some _) ->
+      1
+  | Cfoldr (None, None) ->
+      3
+  | Cfoldr (Some _, None) ->
+      2
+  | Cfoldr (_, Some _) ->
+      1
   | Csubsequence (None, None) ->
       3
   | Csubsequence (Some _, None) ->
@@ -793,6 +817,50 @@ let delta eval env fi c v =
   | Cmap (Some f), TmSeq (fi, s) ->
       TmSeq (fi, Mseq.Helpers.map f s)
   | Cmap _, _ ->
+      fail_constapp fi
+  | Cmapi None, f ->
+      let f i x =
+        eval env (TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x))
+      in
+      TmConst (fi, Cmapi (Some f))
+  | Cmapi (Some f), TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.Helpers.mapi f s)
+  | Cmapi _, _ ->
+      fail_constapp fi
+  | Citer None, f ->
+      let f x = eval env (TmApp (fi, f, x)) |> ignore in
+      TmConst (fi, Citer (Some f))
+  | Citer (Some f), TmSeq (_, s) ->
+      Mseq.iter f s ; tm_unit
+  | Citer _, _ ->
+      fail_constapp fi
+  | Citeri None, f ->
+      let f i x =
+        TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x)
+        |> eval env |> ignore
+      in
+      TmConst (fi, Citeri (Some f))
+  | Citeri (Some f), TmSeq (_, s) ->
+      Mseq.iteri f s ; tm_unit
+  | Citeri _, _ ->
+      fail_constapp fi
+  | Cfoldl (None, None), f ->
+      let f a x = eval env (TmApp (fi, TmApp (fi, f, a), x)) in
+      TmConst (fi, Cfoldl (Some f, None))
+  | Cfoldl (Some f, None), a ->
+      TmConst (fi, Cfoldl (Some f, Some a))
+  | Cfoldl (Some f, Some a), TmSeq (_, s) ->
+      Mseq.Helpers.fold_left f a s
+  | Cfoldl _, _ ->
+      fail_constapp fi
+  | Cfoldr (None, None), f ->
+      let f x a = eval env (TmApp (fi, TmApp (fi, f, x), a)) in
+      TmConst (fi, Cfoldr (Some f, None))
+  | Cfoldr (Some f, None), a ->
+      TmConst (fi, Cfoldr (Some f, Some a))
+  | Cfoldr (Some f, Some a), TmSeq (_, s) ->
+      Mseq.Helpers.fold_right f a s
+  | Cfoldr _, _ ->
       fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))

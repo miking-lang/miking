@@ -32,13 +32,6 @@ utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
 -- Maps
-let mapi = lam f. lam seq.
-  recursive let work = lam i. lam f. lam seq.
-      if null seq then []
-      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
-  in
-  work 0 f seq
-
 utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
 utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi
 utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
@@ -66,19 +59,6 @@ with [] using eqSeq eqi
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
-recursive let iter
-  : (a -> ())
-  -> [a]
-  -> ()
-  = lam f. lam xs.
-    match xs with [x] ++ xs then
-      f x;
-      iter f xs
-    else match xs with [] then
-      ()
-    else never
-end
-
 utest iter (lam x. addi x 1) [1, 2, 3]
 with ()
 
@@ -88,6 +68,9 @@ utest
   deref r
 with 10
 
+utest iteri (lam i. lam x. addi x i) [1, 2, 3]
+with ()
+
 let for_
   : [a]
   -> (a -> ())
@@ -95,32 +78,18 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- Folds
-recursive
-  let foldl = lam f. lam acc. lam seq.
-    if null seq then acc
-    else foldl f (f acc (head seq)) (tail seq)
-end
-
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 utest foldl addi 0 [1,2,3,4,5] with 15
 utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
 
-recursive
-  let foldr : (b -> a -> a) -> a -> [b] -> a =
-  lam f. lam acc. lam seq.
-    if null seq
-    then acc
-    else f (head seq) (foldr f acc (tail seq))
-end
-
 let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
-utest foldr (lam x. lam acc. x) 0 [1,2] with 1
-utest foldr (lam acc. lam x. x) 0 [] with 0
-utest foldr cons [] [1,2,3] with [1,2,3]
-utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
+-- utest foldr (lam x. lam acc. x) 0 [1,2] with 1
+-- utest foldr (lam acc. lam x. x) 0 [] with 0
+-- utest foldr cons [] [1,2,3] with [1,2,3]
+-- utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
 
 recursive
 let unfoldr = lam f. lam b.

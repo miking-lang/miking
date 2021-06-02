@@ -121,6 +121,20 @@ lang SeqOpTypeAst = SeqOpAst
   | CMap _ ->
     tyarrows_ [ tyarrow_ (tygeneric_ "a") (tygeneric_ "a"),
                 tygenericseq_ "a", tygenericseq_ "a" ]
+  | CMapi _ ->
+    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tygeneric_ "a"],
+                tygenericseq_ "a", tygenericseq_ "a" ]
+  | CIter _ ->
+    tyarrows_ [tyarrow_ (tygeneric_ "a") tyunit_, tygenericseq_ "a", tyunit_]
+  | CIteri _ ->
+    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tyunit_],
+                tygenericseq_ "a", tyunit_ ]
+  | CFoldl _ ->
+    tyarrows_ [ tyarrows_ [tygeneric_ "a", tygeneric_ "b", tygeneric_ "a"],
+                tygeneric_ "a", tygenericseq_ "b", tygeneric_ "a" ]
+  | CFoldr _ ->
+    tyarrows_ [ tyarrows_ [tygeneric_ "b", tygeneric_ "a", tygeneric_ "a"],
+                tygeneric_ "a", tygenericseq_ "b", tygeneric_ "a" ]
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
   | CCreateFingerTree _ ->

@@ -662,8 +662,76 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCreateRope2 Int
   | CSubsequence2 [Expr]
   | CSubsequence3 ([Expr], Int)
+  | CMap2 Expr
+  | CMapi2 Expr
+  | CIter2 Expr
+  | CIteri2 Expr
+  | CFoldl2 Expr
+  | CFoldl3 (Expr, Expr)
+  | CFoldr2 Expr
+  | CFoldr3 (Expr, Expr)
 
   sem delta (arg : Expr) =
+  | CHead _ ->
+    match arg with TmSeq {tms = tms} then
+      head tms
+    else error "Not head of a sequence"
+  | CTail _ ->
+    match arg with TmSeq s then
+      TmSeq {s with tms = tail s.tms}
+    else error "Not tail of a sequence"
+  | CNull _ ->
+    match arg with TmSeq {tms = tms} then
+      TmConst {val = CBool {val = null tms}, ty = tyunknown_, info = NoInfo ()}
+    else error "Not null of a sequence"
+  | CMap _ ->
+    TmConst {val = CMap2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CMap2 f ->
+    match arg with TmSeq s then
+      let f = lam x. eval {env = mapEmpty nameCmp} (app_ f x) in
+      TmSeq {s with tms = map f s.tms}
+    else error "Second argument to map not a sequence"
+  | CMapi _ ->
+    TmConst {val = CMapi2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CMapi2 f ->
+    match arg with TmSeq s then
+      let f = lam i. lam x. eval {env = mapEmpty nameCmp} (appf2_ f (int_ i) x) in
+      TmSeq {s with tms = mapi f s.tms}
+    else error "Second argument to mapi not a sequence"
+  | CIter _ ->
+    TmConst {val = CIter2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CIter2 f ->
+    match arg with TmSeq s then
+      let f = lam x. eval {env = mapEmpty nameCmp} (app_ f x) in
+      iter f s.tms;
+      uunit_
+    else error "Second argument to iter not a sequence"
+  | CIteri _ ->
+    TmConst {val = CIteri2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CIteri2 f ->
+    match arg with TmSeq s then
+      let f = lam i. lam x. eval {env = mapEmpty nameCmp} (appf2_ f (int_ i) x) in
+      iteri f s.tms;
+      uunit_
+    else error "Second argument to iteri not a sequence"
+  | CFoldl _ ->
+    TmConst {val = CFoldl2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CFoldl2 f ->
+    TmConst {val = CFoldl3 (f, arg), ty = tyunknown_, info = NoInfo ()}
+  | CFoldl3 (f, acc) ->
+    match arg with TmSeq s then
+      let f = lam acc. lam x. eval {env = mapEmpty nameCmp} (appf2_ f acc x) in
+      foldl f acc s.tms
+    else error "Third argument to foldl not a sequence"
+  | CFoldr _ ->
+    TmConst {val = CFoldr2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CFoldr2 f ->
+    TmConst {val = CFoldr3 (f, arg), ty = tyunknown_, info = NoInfo ()}
+  | CFoldr3 (f, acc) ->
+    match arg with TmSeq s then
+      let f = lam x. lam acc. eval {env = mapEmpty nameCmp} (appf2_ f x acc) in
+      foldr f acc s.tms
+    else error "Third argument to foldr not a sequence"
   | CGet _ ->
     match arg with TmSeq s then
       TmConst {val = CGet2 s.tms, ty = tyunknown_, info = NoInfo()}
@@ -1516,6 +1584,99 @@ utest eval createAst2 with seq_ [int_ 0, int_ 1, int_ 2] using eqExpr in
 -- subsequence [3,5,8,6] 2 4 -> [8,6]
 let subseqAst = subsequence_ (seq_ [int_ 3, int_ 5, int_ 8, int_ 6]) (int_ 2) (int_ 4) in
 utest eval subseqAst with seq_ [int_ 8, int_ 6] using eqExpr in
+
+-- head [1,2,3] -> 1
+utest
+  eval (head_ (seq_ [int_ 1, int_ 2, int_ 3]))
+with int_ 1 using eqExpr in
+
+-- tail [1,2,3] -> [2,3]
+utest
+  eval (tail_ (seq_ [int_ 1, int_ 2, int_ 3]))
+with seq_ [int_ 2, int_ 3] using eqExpr in
+
+-- map (lam x. addi x 1) [3,4,8,9,20] -> [4,5,9,10,21]
+utest
+  let x = nameSym "x" in
+  let mapAst =
+    map_ (nulam_ x (addi_ (nvar_ x) (int_ 1)))
+         (seq_ [int_ 3, int_ 4, int_ 8, int_ 9, int_ 20]) in
+  eval mapAst
+with seq_ [int_ 4, int_ 5, int_ 9, int_ 10, int_ 21]
+using eqExpr in
+
+-- mapi (lam x. addi x i) [3,4,8,9,20] -> [3,5,10,12,24]
+utest
+  let x = nameSym "x" in
+  let i = nameSym "i" in
+  let mapiAst =
+    mapi_ (nulam_ i (nulam_ x (addi_ (nvar_ x) (nvar_ i))))
+          (seq_ [int_ 3, int_ 4, int_ 8, int_ 9, int_ 20]) in
+  eval mapiAst
+with seq_ [int_ 3, int_ 5, int_ 10, int_ 12, int_ 24]
+using eqExpr in
+
+-- iter (lam x. addi x 1) [1,2,3] -> ()
+utest
+  let x = nameSym "x" in
+  let iterAst =
+    iter_ (nulam_ x (addi_ (nvar_ x) (int_ 1))) (seq_ [int_ 1, int_ 2, int_ 3]) in
+  eval iterAst
+with uunit_ using eqExpr in
+
+-- iter (lam x. modref r (addi x (deref r))) [1,2,3,4]
+utest
+  let x = nameSym "x" in
+  let r = nameSym "r" in
+  let iterAst = bindall_
+  [ nulet_ r (ref_ (int_ 0))
+  , ulet_ ""
+    (iter_ (nulam_ x (modref_ (nvar_ r) (addi_ (nvar_ x) (deref_ (nvar_ r)))))
+           (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]))
+  , deref_ (nvar_ r)
+  ] in
+  eval iterAst
+with int_ 10 using eqExpr in
+
+-- iteri (lam i. lam x. addi x i) [1,2,3] -> ()
+utest
+  let x = nameSym "x" in
+  let i = nameSym "i" in
+  let iterAst =
+    iteri_ (nulam_ i (nulam_ x (addi_ (nvar_ x) (int_ 1)))) (seq_ [int_ 1, int_ 2, int_ 3]) in
+  eval iterAst
+with uunit_ using eqExpr in
+
+-- iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) [1,2,3,4]
+utest
+  let x = nameSym "x" in
+  let r = nameSym "r" in
+  let iteriAst = bindall_
+  [ nulet_ r (ref_ (int_ 0))
+  , ulet_ ""
+    (iteri_ (nulam_ i (nulam_ x (modref_ (nvar_ r)
+              (addi_ (nvar_ i) (addi_ (nvar_ x) (deref_ (nvar_ r)))))))
+            (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]))
+  , deref_ (nvar_ r)
+  ] in
+  eval iteriAst
+with int_ 16 using eqExpr in
+
+-- foldl addi 0 [1,2,3] -> 6
+utest
+  let foldlAst =
+    foldl_ (ulam_ "a" (ulam_ "x" (addi_ (var_ "a") (var_ "x"))))
+      (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]) in
+  eval foldlAst
+with int_ 6 using eqExpr in
+
+-- foldr cons [] [1,2,3] -> [1,2,3]
+utest
+  let foldrAst =
+    foldr_ (ulam_ "x" (ulam_ "a" (cons_ (var_ "x") (var_ "a"))))
+      (seq_ []) (seq_ [int_ 1, int_ 2, int_ 3]) in
+  eval foldrAst
+with seq_ [int_ 1, int_ 2, int_ 3] using eqExpr in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ using eqExpr in

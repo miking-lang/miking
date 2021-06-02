@@ -125,6 +125,29 @@ module Mseq = struct
     | FingerTree s ->
         BatFingerTree.is_empty s
 
+  let iter f = function
+    | Rope s ->
+        Rope.iter_array f s
+    | List s ->
+        List.iter f s
+    | FingerTree s ->
+        BatFingerTree.iter f s
+
+  let iteri f = function
+    | Rope s ->
+        Rope.iteri_array f s
+    | List s ->
+        List.iteri f s
+    | FingerTree s ->
+        let rec work i s =
+          if BatFingerTree.is_empty s then ()
+          else
+            let tl, hd = BatFingerTree.front_exn s in
+            f i hd ;
+            work (i + 1) tl
+        in
+        work 0 s
+
   let split_at s i =
     match s with
     | Rope s ->
@@ -249,14 +272,6 @@ module Mseq = struct
       | _ ->
           raise (Invalid_argument "Mseq.equal")
 
-    let map f = function
-      | Rope s ->
-          Rope (Rope.map_array_array f s)
-      | List s ->
-          List (List.map f s)
-      | FingerTree s ->
-          FingerTree (BatFingerTree.map f s)
-
     let fold_left f a = function
       | Rope s ->
           Rope.foldl_array f a s
@@ -265,8 +280,7 @@ module Mseq = struct
       | FingerTree s ->
           BatFingerTree.fold_left f a s
 
-    let fold_right f s a =
-      match s with
+    let fold_right f a = function
       | Rope s ->
           Rope.foldr_array f s a
       | List s ->
@@ -276,6 +290,7 @@ module Mseq = struct
 
     let combine_fingertree s1 s2 =
       let rec work a s1 s2 =
+        (* TODO: use is_empty *)
         if BatFingerTree.size s1 == 0 then a
         else
           work
@@ -298,6 +313,27 @@ module Mseq = struct
           FingerTree (combine_fingertree s1 s2)
       | _ ->
           raise (Invalid_argument "Mseq.combine")
+
+    let map f = function
+      | Rope s ->
+          Rope (Rope.map_array_array f s)
+      | List s ->
+          List (List.map f s)
+      | FingerTree s ->
+          FingerTree (BatFingerTree.map f s)
+
+    let mapi f = function
+      | Rope s ->
+          Rope (Rope.mapi_array_array f s)
+      | List s ->
+          List (List.mapi f s)
+      | FingerTree s ->
+          let _, s =
+            BatFingerTree.fold_left
+              (fun (i, a) e -> (i + 1, BatFingerTree.snoc a (f i e)))
+              (0, BatFingerTree.empty) s
+          in
+          FingerTree s
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with

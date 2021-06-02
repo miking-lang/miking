@@ -40,6 +40,10 @@ module Mseq : sig
 
   val null : 'a t -> bool
 
+  val iter : ('a -> unit) -> 'a t -> unit
+
+  val iteri : (int -> 'a -> unit) -> 'a t -> unit
+
   val split_at : 'a t -> int -> 'a t * 'a t
 
   val subsequence : 'a t -> int -> int -> 'a t
@@ -79,9 +83,11 @@ module Mseq : sig
 
     val map : ('a -> 'b) -> 'a t -> 'b t
 
+    val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
+
     val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
 
-    val fold_right : ('a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+    val fold_right : ('a -> 'acc -> 'acc) -> 'acc -> 'a t -> 'acc
 
     val combine : 'a t -> 'b t -> ('a * 'b) t
 

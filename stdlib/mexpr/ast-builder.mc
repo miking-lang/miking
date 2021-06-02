@@ -795,6 +795,54 @@ let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (uconst_ (CCreate ())) n f
 
+let createFingerTree_ = use MExprAst in
+  lam n. lam f.
+  appf2_ (uconst_ (CCreateFingerTree ())) n f
+
+let createList_ = use MExprAst in
+  lam n. lam f.
+  appf2_ (uconst_ (CCreateList ())) n f
+
+let createRope_ = use MExprAst in
+  lam n. lam f.
+  appf2_ (uconst_ (CCreateRope ())) n f
+
+let head_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CHead ())) s
+
+let tail_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CTail ())) s
+
+let null_ = use MExprAst in
+  lam s.
+  app_ (uconst_ (CNull ())) s
+
+let map_ = use MExprAst in
+  lam f. lam s.
+  appf2_ (uconst_ (CMap ())) f s
+
+let mapi_ = use MExprAst in
+  lam f. lam s.
+  appf2_ (uconst_ (CMapi ())) f s
+
+let iter_ = use MExprAst in
+  lam f. lam s.
+  appf2_ (uconst_ (CIter ())) f s
+
+let iteri_ = use MExprAst in
+  lam f. lam s.
+  appf2_ (uconst_ (CIteri ())) f s
+
+let foldl_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldl ())) f acc s
+
+let foldr_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldr ())) f acc s
+
 let subsequence_ = use MExprAst in
   lam s. lam off. lam n.
   appf3_ (uconst_ (CSubsequence ())) s off n

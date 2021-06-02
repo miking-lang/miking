@@ -585,6 +585,11 @@ lang SeqOpAst = SeqAst
   | CTail {}
   | CNull {}
   | CMap {}
+  | CMapi {}
+  | CIter {}
+  | CIteri {}
+  | CFoldl {}
+  | CFoldr {}
   | CCreate {}
   | CCreateFingerTree {}
   | CCreateList {}

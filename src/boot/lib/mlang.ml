@@ -593,7 +593,7 @@ let rec desugar_tm nss env subs =
         Mseq.Helpers.fold_right
           (fun p (env, pats) ->
             desugar_pat env p |> map_right (fun p -> Mseq.cons p pats) )
-          pats (env, Mseq.empty)
+          (env, Mseq.empty) pats
       and desugar_pat env = function
         | PatNamed (fi, name) ->
             name |> desugar_pname env |> map_right (fun n -> PatNamed (fi, n))
