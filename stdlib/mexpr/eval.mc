@@ -666,10 +666,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CMapi2 Expr
   | CIter2 Expr
   | CIteri2 Expr
-  | CFoldl2 Expr
-  | CFoldl3 (Expr, Expr)
-  | CFoldr2 Expr
-  | CFoldr3 (Expr, Expr)
 
   sem delta (arg : Expr) =
   | CHead _ ->
@@ -714,24 +710,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       iteri f s.tms;
       uunit_
     else error "Second argument to iteri not a sequence"
-  | CFoldl _ ->
-    TmConst {val = CFoldl2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CFoldl2 f ->
-    TmConst {val = CFoldl3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-  | CFoldl3 (f, acc) ->
-    match arg with TmSeq s then
-      let f = lam acc. lam x. eval {env = mapEmpty nameCmp} (appf2_ f acc x) in
-      foldl f acc s.tms
-    else error "Third argument to foldl not a sequence"
-  | CFoldr _ ->
-    TmConst {val = CFoldr2 arg, ty = tyunknown_, info = NoInfo ()}
-  | CFoldr2 f ->
-    TmConst {val = CFoldr3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-  | CFoldr3 (f, acc) ->
-    match arg with TmSeq s then
-      let f = lam x. lam acc. eval {env = mapEmpty nameCmp} (appf2_ f x acc) in
-      foldr f acc s.tms
-    else error "Third argument to foldr not a sequence"
   | CGet _ ->
     match arg with TmSeq s then
       TmConst {val = CGet2 s.tms, ty = tyunknown_, info = NoInfo()}
@@ -1661,22 +1639,6 @@ utest
   ] in
   eval iteriAst
 with int_ 16 using eqExpr in
-
--- foldl addi 0 [1,2,3] -> 6
-utest
-  let foldlAst =
-    foldl_ (ulam_ "a" (ulam_ "x" (addi_ (var_ "a") (var_ "x"))))
-      (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]) in
-  eval foldlAst
-with int_ 6 using eqExpr in
-
--- foldr cons [] [1,2,3] -> [1,2,3]
-utest
-  let foldrAst =
-    foldr_ (ulam_ "x" (ulam_ "a" (cons_ (var_ "x") (var_ "a"))))
-      (seq_ []) (seq_ [int_ 1, int_ 2, int_ 3]) in
-  eval foldrAst
-with seq_ [int_ 1, int_ 2, int_ 3] using eqExpr in
 
 -- Unit tests for CmpFloatEval
 utest eval (eqf_ (float_ 2.0) (float_ 1.0)) with false_ using eqExpr in

@@ -19,14 +19,6 @@ module Mseq = struct
 
   let empty_fingertree = FingerTree BatFingerTree.empty
 
-  (* let create = create_fingertree
-   *
-   * let empty = empty_fingertree *)
-
-  (* let create = create_list
-   *
-   * let empty = empty_list *)
-
   let create = create_rope
 
   let empty = empty_rope
@@ -347,18 +339,6 @@ module Mseq = struct
             a (combine_fingertree s1 s2)
       | _ ->
           raise (Invalid_argument "Mseq.fold_right2")
-
-    (* let of_list = of_list_fingertree
-     *
-     * let of_array = of_array_fingertree
-     *
-     * let of_ustring = of_ustring_fingertree *)
-
-    (* let of_list = of_list_list
-     *
-     * let of_array = of_array_list
-     *
-     * let of_ustring = of_ustring_list *)
 
     let of_list = of_list_rope
 

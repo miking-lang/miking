@@ -80,8 +80,6 @@ let builtin =
   ; ("mapi", f (Cmapi None))
   ; ("iter", f (Citer None))
   ; ("iteri", f (Citeri None))
-  ; ("foldl", f (Cfoldl (None, None)))
-  ; ("foldr", f (Cfoldr (None, None)))
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
