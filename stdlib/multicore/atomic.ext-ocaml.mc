@@ -6,7 +6,7 @@ let tygeneric_ = lam. tyunknown_
 
 let atomicExtMap =
   use OCamlTypeAst in
-  mapFromList cmpString
+  mapFromSeq cmpString
   [ ("externalAtomicMake", [
       { ident = "Atomic.make"
       , ty = tyarrow_ (tygeneric_ "a") (tyaref_ "a")
