@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let extTestMap =
   use OCamlTypeAst in
-  mapFromList cmpString
+  mapFromSeq cmpString
   [
     ("extTestListOfLists", [
       {

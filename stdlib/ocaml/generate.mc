@@ -59,7 +59,7 @@ let _builtinNameMap : Map String Name =
       strs
     else never
   in
-  mapFromList cmpString
+  mapFromSeq cmpString
     (map (lam s. (s, nameSym s))
       (concat
         builtinStrs
@@ -206,7 +206,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
             let pat = PatNamed p in
-            let precord = OPatRecord {bindings = mapFromList cmpSID [(fieldLabel, pat)]} in
+            let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
             _omatch_ (_objMagic (generate env t.target))
               [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
           else error "Record type not handled by type-lifting"
@@ -668,7 +668,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
 lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecordsCmpClosed
   sem generateTypeDecl (env : AssocSeq Name Type) =
   | expr ->
-    let typeLiftEnvMap = mapFromList nameCmp env in
+    let typeLiftEnvMap = mapFromSeq nameCmp env in
     let exprDecls = _addTypeDeclarations typeLiftEnvMap env expr in
     match exprDecls with (expr, recordFieldsToName) then
       let generateEnv = _typeLiftEnvToGenerateEnv typeLiftEnvMap
@@ -2114,43 +2114,43 @@ in
 utest ocamlEvalInt (generateEmptyEnv tensorSubCharTest)
 with int_ 1 using eqExpr in
 
-let tensorIteriIntTest =
+let tensorIterSliceIntTest =
   bind_
     (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
-    (semi_ (tensorIteri_ tyint_
+    (semi_ (tensorIterSlice_ tyint_
                          (ulam_ "i" (ulam_ "t" uunit_))
                          (var_ "t"))
            (tensorGetExn_ tyint_
                           (var_ "t")
                           (seq_ [])))
 in
-utest ocamlEvalInt (generateEmptyEnv tensorIteriIntTest)
+utest ocamlEvalInt (generateEmptyEnv tensorIterSliceIntTest)
 with int_ 1 using eqExpr in
 
-let tensorIteriFloatTest =
+let tensorIterSliceFloatTest =
   bind_
     (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 1.))))
-    (semi_ (tensorIteri_ tyfloat_
-                         (ulam_ "i" (ulam_ "t" uunit_))
-                         (var_ "t"))
+    (semi_ (tensorIterSlice_ tyfloat_
+                             (ulam_ "i" (ulam_ "t" uunit_))
+                             (var_ "t"))
            (tensorGetExn_ tyfloat_
                           (var_ "t")
                           (seq_ [])))
 in
-utest ocamlEvalFloat (generateEmptyEnv tensorIteriFloatTest)
+utest ocamlEvalFloat (generateEmptyEnv tensorIterSliceFloatTest)
 with float_ 1. using eqExpr in
 
-let tensorIteriCharTest =
+let tensorIterSliceCharTest =
   bind_
     (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '1'))))
-    (semi_ (tensorIteri_ tychar_
-                         (ulam_ "i" (ulam_ "t" uunit_))
-                         (var_ "t"))
+    (semi_ (tensorIterSlice_ tychar_
+                             (ulam_ "i" (ulam_ "t" uunit_))
+                             (var_ "t"))
            (tensorGetExn_ tychar_
                           (var_ "t")
                           (seq_ [])))
 in
-utest ocamlEvalChar (generateEmptyEnv tensorIteriCharTest)
+utest ocamlEvalChar (generateEmptyEnv tensorIterSliceCharTest)
 with char_ '1' using eqExpr in
 
 -- Externals

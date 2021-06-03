@@ -379,7 +379,7 @@ lang TensorOpEq = TensorOpAst
   | CTensorCopyExn {} -> match lhs with CTensorCopyExn _ then true else false
   | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
   | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
-  | CTensorIteri {} -> match lhs with CTensorIteri _ then true else false
+  | CTensorIterSlice {} -> match lhs with CTensorIterSlice _ then true else false
 end
 
 --------------
