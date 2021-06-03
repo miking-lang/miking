@@ -59,11 +59,11 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- Folds
-recursive
-  let foldl = lam f. lam acc. lam seq.
-  if null seq then acc
-  else foldl f (f acc (head seq)) (tail seq)
-end
+-- recursive
+--   let foldl = lam f. lam acc. lam seq.
+--   if null seq then acc
+--   else foldl f (f acc (head seq)) (tail seq)
+-- end
 
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 

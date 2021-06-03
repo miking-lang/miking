@@ -63,6 +63,7 @@ let builtin = use MExprAst in
   , ("mapi", CMapi ())
   , ("iter", CIter ())
   , ("iteri", CIteri ())
+  , ("foldl", CFoldl ())
   , ("subsequence", CSubsequence ())
   -- Random numbers
   , ("randIntU", CRandIntU ())

@@ -230,6 +230,7 @@ lang OCamlPrettyPrint =
   | CMapi _ -> intrinsicOpSeq "mapi"
   | CIter _ -> intrinsicOpSeq "iter"
   | CIteri _ -> intrinsicOpSeq "iteri"
+  | CFoldl _ -> intrinsicOpSeq "Helpers.fold_left"
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
   | CDPrint _ -> intrinsicOpIO "dprint"
