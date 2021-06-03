@@ -87,13 +87,15 @@ let dualnumEq : (Float -> Float -> Bool) -> DualNum -> DualNum -> Bool =
   recursive let recur = lam n1. lam n2.
     let nn = (n1, n2) in
     match nn with (Num r1, Num r2) then eqf r1 r2
-    else match nn with (DualNum dn1, DualNum dn2) then
-      if dualnumEqEpsilon (dualnumEpsilon dn1) (dualnumEpsilon dn2) then
-        if recur (dualnumPrimal dn1) (dualnumPrimal dn2) then
-          recur (dualnumPertubation dn1) (dualnumPertubation dn2)
+    else match nn with (DualNum _, DualNum _) then
+      let e1 = dualnumEpsilon n1 in
+      let e2 = dualnumEpsilon n2 in
+      if dualnumEqEpsilon e1 e2 then
+        if recur (dualnumPrimal e1 n1) (dualnumPrimal e2 n2) then
+          recur (dualnumPertubation e1 n1) (dualnumPertubation e2 n2)
         else false
       else false
-    else never
+    else false
   in recur
 
 mexpr
