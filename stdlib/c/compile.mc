@@ -1146,7 +1146,7 @@ utest testCompile alias with strJoin "\n" [
   "}"
 ] using eqString in
 
--- Potentially tricky case with type aliases
+-- Externals test
 let ext = bindall_ [
   ext_ "externalLog" false (tyarrow_ tyfloat_ tyfloat_),
   let_ "x" (tyfloat_) (app_ (var_ "externalLog") (float_ 2.)),
