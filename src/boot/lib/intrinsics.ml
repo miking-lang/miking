@@ -394,7 +394,7 @@ module T = struct
 
     let sub_exn = Tensor.CArray.sub_exn
 
-    let iteri = Tensor.CArray.iteri
+    let iter_slice = Tensor.CArray.iter_slice
   end
 
   module Dense = struct
@@ -417,7 +417,7 @@ module T = struct
 
     let sub_exn = Tensor.Dense.sub_exn
 
-    let iteri = Tensor.Dense.iteri
+    let iter_slice = Tensor.Dense.iter_slice
   end
 
   let create_carray_int shape f = TCArrayInt (CArray.create_int shape f)
@@ -506,17 +506,17 @@ module T = struct
     | TDense t' ->
         TDense (Dense.sub_exn t' ofs len)
 
-  let iteri (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) =
+  let iter_slice (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) =
     match t with
     | TCArrayInt t' ->
         let f' i t = f i (TCArrayInt t) in
-        CArray.iteri f' t'
+        CArray.iter_slice f' t'
     | TCArrayFloat t' ->
         let f' i t = f i (TCArrayFloat t) in
-        CArray.iteri f' t'
+        CArray.iter_slice f' t'
     | TDense t' ->
         let f' i t = f i (TDense t) in
-        Dense.iteri f' t'
+        Dense.iter_slice f' t'
 
   module Helpers = struct
     open Bigarray

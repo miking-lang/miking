@@ -87,7 +87,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 107 /-TmRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
     TmRecord {bindings =
-                mapFromList cmpSID
+                mapFromSeq cmpSID
                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
               ty = TyUnknown { info = ginfo t 0 },
               info = ginfo t 0}
@@ -168,7 +168,7 @@ lang BootParser = MExprAst + ConstTransformer
     let lst = create (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
     TyRecord {info = ginfo t 0,
               labels = map (lam b : (String, a). stringToSid b.0) lst,
-              fields = mapFromList cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
+              fields = mapFromSeq cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
   | 208 /-TyVariant-/ ->
     if eqi (glistlen t 0) 0 then
       TyVariant {info = ginfo t 0,
@@ -222,7 +222,7 @@ lang BootParser = MExprAst + ConstTransformer
     let lst = create (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
 
     PatRecord {bindings =
-               mapFromList cmpSID
+               mapFromSeq cmpSID
                  (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
                info = ginfo t 0}
   | 404 /-PatCon-/ ->

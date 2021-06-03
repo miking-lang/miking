@@ -122,7 +122,7 @@ utest zipWith (zipWith addi) [[1,2], [], [10, 10, 10]] [[3,4,5], [1,2], [2, 3]]
       with [[4,6], [], [12, 13]] using eqSeq (eqSeq eqi)
 utest zipWith addi [] [] with [] using eqSeq eqi
 
-let zip = zipWith (lam x. lam y. (x, y))
+let zip : [a] -> [b] -> [(a, b)] = zipWith (lam x. lam y. (x, y))
 
 -- Accumulating maps
 let mapAccumL : (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
@@ -156,7 +156,7 @@ recursive
   let any = lam p. lam seq.
     if null seq
     then false
-    else or (p (head seq)) (any p (tail seq))
+    else if p (head seq) then true else any p (tail seq)
 end
 
 utest any (lam x. eqi x 1) [0, 4, 1, 2] with true

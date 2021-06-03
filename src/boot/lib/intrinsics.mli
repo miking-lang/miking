@@ -143,7 +143,7 @@ module T : sig
 
   val sub_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
 
-  val iteri : (int -> ('a, 'b) u -> unit) -> ('a, 'b) u -> unit
+  val iter_slice : (int -> ('a, 'b) u -> unit) -> ('a, 'b) u -> unit
 
   module CArray : sig
     val create_int :
@@ -175,7 +175,7 @@ module T : sig
     val sub_exn :
       ('a, 'b) Tensor.CArray.t -> int -> int -> ('a, 'b) Tensor.CArray.t
 
-    val iteri :
+    val iter_slice :
          (int -> ('a, 'b) Tensor.CArray.t -> unit)
       -> ('a, 'b) Tensor.CArray.t
       -> unit
@@ -200,7 +200,8 @@ module T : sig
 
     val sub_exn : 'a Tensor.Dense.t -> int -> int -> 'a Tensor.Dense.t
 
-    val iteri : (int -> 'a Tensor.Dense.t -> unit) -> 'a Tensor.Dense.t -> unit
+    val iter_slice :
+      (int -> 'a Tensor.Dense.t -> unit) -> 'a Tensor.Dense.t -> unit
   end
 
   module Helpers : sig

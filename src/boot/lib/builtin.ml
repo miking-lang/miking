@@ -139,7 +139,7 @@ let builtin =
   ; ("tensorCopyExn", f (CtensorCopyExn None))
   ; ("tensorSliceExn", f (CtensorSliceExn None))
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
-  ; ("tensorIteri", f (CtensorIteri None)) (* MCore intrinsics: Boot parser *)
+  ; ("tensorIterSlice", f (CtensorIterSlice None)) (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f (CbootParserParseMExprString None))
   ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile None))
   ; ("bootParserGetId", f CbootParserGetId)
