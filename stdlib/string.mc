@@ -13,16 +13,7 @@ utest escapeString "\n" with "\\n"
 utest escapeString "\r" with "\\r"
 utest escapeString "\t" with "\\t"
 
-recursive
-  let eqString = lam s1. lam s2.
-      if neqi (length s1) (length s2)
-      then false
-      else if null s1
-           then true
-           else if eqChar (head s1) (head s2)
-           then eqString (tail s1) (tail s2)
-           else false
-end
+let eqString = eqSeq eqc
 
 utest eqString "" "" with true
 utest eqString "" "a" with false
@@ -64,20 +55,7 @@ utest gtString "xy" "y" with false
 -- String comparison giving a total ordering of strings.
 -- cmpString s1 s2 returns >0 or <0 if s1 lexicographically
 -- greater respectively smaller than s2, else 0.
-recursive
-  let cmpString: String -> String -> Int = lam s1. lam s2.
-    if and (null s1) (null s2) then
-      0
-    else if null s1 then
-      subi 0 1
-    else if null s2 then
-      1
-    else
-      let d = cmpChar (head s1) (head s2) in
-      match d with 0 then
-        cmpString (tail s1) (tail s2)
-      else d
-end
+let cmpString = seqCmp cmpChar
 
 utest cmpString "" "" with 0
 utest cmpString "Hello" "Hello" with 0
@@ -149,7 +127,7 @@ utest stringIsInt "-1098" with true
 let strIndex = lam c. lam s.
   recursive
   let strIndex_rechelper = lam i. lam c. lam s.
-    if eqi (length s) 0
+    if null s
     then None ()
     else if eqChar c (head s)
          then Some(i)
@@ -169,7 +147,7 @@ utest strIndex '@' "Some @TAG@" with Some(5) using optionEq eqi
 let strLastIndex = lam c. lam s.
   recursive
   let strLastIndex_rechelper = lam i. lam acc. lam c. lam s.
-    if eqi (length s) 0 then
+    if null s then
       if eqi acc (negi 1)
       then None ()
       else Some(acc)
@@ -190,8 +168,7 @@ utest strLastIndex '@' "Some @TAG@" with Some(9) using optionEq eqi
 -- Splits s on delim
 recursive
   let strSplit = lam delim. lam s.
-    if or (eqi (length delim) 0) (lti (length s) (length delim))
-    then cons s []
+    if or (null delim) (lti (length s) (length delim)) then [s]
     else if eqString delim (subsequence s 0 (length delim))
          then cons [] (strSplit delim (subsequence s (length delim) (length s)))
          else let remaining = strSplit delim (tail s) in
@@ -221,14 +198,15 @@ utest strTrim "   bbbbb  bbb " with "bbbbb  bbb"
 utest strTrim "ccccc c\t   \n" with "ccccc c"
 
 -- Joins the strings in strs on delim
-recursive
-  let strJoin = lam delim. lam strs.
-    if eqi (length strs) 0
-    then ""
-    else if eqi (length strs) 1
-         then head strs
-         else concat (concat (head strs) delim) (strJoin delim (tail strs))
-end
+let strJoin = lam delim. lam strs.
+  recursive let work = lam acc. lam strs.
+    if null strs then acc
+    else match strs with [s] then
+      concat acc s
+    else match strs with [s] ++ strs then
+      work (concat acc (concat s delim)) strs
+    else never
+in work [] strs
 
 utest strJoin "--" ["water", "tea", "coffee"] with "water--tea--coffee"
 utest strJoin "--" [] with emptyStr

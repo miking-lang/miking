@@ -44,7 +44,7 @@ let mapValues : Map k v -> [v] = lam m.
   mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
 
 let mapToSeq : Map k v -> [(k,v)] = lam m.
-  zipWith (lam k. lam v. (k,v)) (mapKeys m) (mapValues m)
+  mapBindings m
 
 let mapMapAccum : (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
   lam f. lam acc. lam m.
