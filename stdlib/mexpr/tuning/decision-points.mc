@@ -1,9 +1,3 @@
-include "digraph.mc"
-include "string.mc"
-include "eq-paths.mc"
-include "name.mc"
-include "eqset.mc"
-include "common.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/pprint.mc"
 include "mexpr/eq.mc"
@@ -12,14 +6,16 @@ include "mexpr/boot-parser.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
+
 include "ocaml/sys.mc"
 
--- This file contains implementations related to decision points.
+include "digraph.mc"
+include "string.mc"
+include "eq-paths.mc"
+include "name.mc"
+include "common.mc"
 
-let _getSym = lam n.
-  optionGetOrElse
-    (lam. error "Expected symbol")
-    (nameGetSym n)
+-- This file contains implementations related to decision points.
 
 let _eqn = lam n1. lam n2.
   if and (nameHasSym n1) (nameHasSym n2) then
@@ -548,9 +544,10 @@ let _lookupCallCtx
       -- partition becomes trivial
       let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
         let startVals = foldl (lam acc. lam p.
-                                 eqsetInsert _eqn (head p) acc)
-                              [] paths in
-        let partition = (create (length startVals) (lam. [])) in
+                                 setInsert (head p) acc)
+                              (setEmpty nameCmp) paths in
+        let startVals = mapKeys startVals in
+        let partition = create (length startVals) (lam. []) in
         let partition =
           mapi
             (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
