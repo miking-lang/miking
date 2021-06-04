@@ -487,11 +487,13 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     then
       (0, t)
     else match tt with
-      (TyVar {ident = ident}, _) | (_, TyVar {ident = ident})
+      (TyVar {ident = ident}, _) | (_, TyVar {ident = ident}) |
+      (TyApp {lhs = TyVar _}, _) | (_, TyApp {lhs = TyVar _})
     then
       (0, t)
     else
       dprint ty1;
+      print "\n";
       dprint ty2;
       infoErrorExit info "Cannot convert data"
 end

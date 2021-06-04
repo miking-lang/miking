@@ -31,7 +31,7 @@ let findIf = lam p. lam seq.
 
 let removeIf = lam p. filter (lam x. not (p x))
 
-let removeq : Eps -> [Eps] =
+let removeq : Eps -> [Eps] -> [Eps] =
 lam s. lam ss. filter (lam x. not (eqsym x s)) ss
 
 let terms : DualNum -> [Term] =
@@ -95,6 +95,24 @@ lam e. lam p.
 -- generate unique epsilon
 let dualnumGenEpsilon : Unit -> Eps = lam. gensym ()
 
+-- Equality function for epsilon
+let dualnumEqEpsilon : Eps -> Eps -> Bool = eqsym
+
+-- Structural equality function for dual numbers
+let dualnumEq : DualNum -> DualNum -> Bool =
+  recursive let recur = lam n1. lam n2.
+    let nn = (n1, n2) in
+    match nn with (Num r1, Num r2) then eqf r1 r2
+    else match nn with (DualNum dn1, DualNum dn2) then
+      if dualnumEqEpsilon (dualnumEpsilon dn1) (dualnumEpsilon dn2) then
+        if recur (dualnumPrimal dn1) (dualnumPrimal dn2) then
+          recur (dualnumPertubation dn1) (dualnumPertubation dn2)
+        else false
+      else false
+    else never
+  in recur
+
+
 mexpr
 
 let e1 = dualnumGenEpsilon () in
@@ -112,11 +130,13 @@ let dnum212 = dualnumDNum e2 num3 num4 in
 
 utest dualnumIsDualNum num1 with false in
 utest dualnumIsDualNum dnum112 with true in
-utest dualnumEpsilon dnum112 with e1 in
-utest dualnumEpsilon (dualnumDNum e3 dnum112 dnum212) with e1 in
-utest dualnumPrimal e1 dnum112 with num1 in
-utest dualnumPertubation e1 dnum112 with num2 in
-utest dualnumPrimal e2 dnum112 with dnum112 in
-utest dualnumPertubation e2 dnum112 with num0 in
+utest dualnumEpsilon dnum112 with e1 using dualnumEqEpsilon in
+utest dualnumEpsilon (dualnumDNum e3 dnum112 dnum212) with e1
+using dualnumEqEpsilon in
+
+utest dualnumPrimal e1 dnum112 with num1 using dualnumEq in
+utest dualnumPertubation e1 dnum112 with num2 using dualnumEq in
+utest dualnumPrimal e2 dnum112 with dnum112 using dualnumEq in
+utest dualnumPertubation e2 dnum112 with num0 using dualnumEq in
 
 ()

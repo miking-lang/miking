@@ -346,7 +346,7 @@ let breakableMapAllowSet
   -> AllowSet a
   -> AllowSet b
   = lam f. lam newCmp. lam s.
-    let convert = lam s. mapFromList newCmp (map (lam x. (f x.0, ())) (mapBindings s)) in
+    let convert = lam s. mapFromSeq newCmp (map (lam x. (f x.0, ())) (mapBindings s)) in
     match s with AllowSet s then AllowSet (convert s) else
     match s with DisallowSet s then DisallowSet (convert s) else
     never
@@ -374,7 +374,7 @@ let breakableGenGrammar
     in
 
     let prodLabelToOpId : Map prodLabel OpId =
-      mapFromList cmp (map (lam prod. (label prod, newOpId ())) grammar.productions) in
+      mapFromSeq cmp (map (lam prod. (label prod, newOpId ())) grammar.productions) in
     let toOpId : prodLabel -> OpId = lam label. mapFindWithExn label prodLabelToOpId in
 
     -- TODO(vipa, 2021-02-15): This map can contain more entries than
@@ -428,10 +428,10 @@ let breakableGenGrammar
           updateRef postfixes (cons (label, PostfixI {id = id, construct = c, leftAllow = l, precWhenThisIsRight = p}))
         else never);
 
-    { atoms = mapFromList cmp (deref atoms)
-    , prefixes = mapFromList cmp (deref prefixes)
-    , infixes = mapFromList cmp (deref infixes)
-    , postfixes = mapFromList cmp (deref postfixes)
+    { atoms = mapFromSeq cmp (deref atoms)
+    , prefixes = mapFromSeq cmp (deref prefixes)
+    , infixes = mapFromSeq cmp (deref infixes)
+    , postfixes = mapFromSeq cmp (deref postfixes)
     }
 
 let breakableInitState : () -> State res self ROpen
@@ -860,9 +860,9 @@ con IfA : {pos: Int, r: Ast} -> Ast in
 con ElseA : {pos: Int, l: Ast, r: Ast} -> Ast in
 con NonZeroA : {pos: Int, l: Ast} -> Ast in
 
-let allowAllBut = lam xs. DisallowSet (mapFromList cmpString (map (lam x. (x, ())) xs)) in
+let allowAllBut = lam xs. DisallowSet (mapFromSeq cmpString (map (lam x. (x, ())) xs)) in
 let allowAll = allowAllBut [] in
-let allowOnly = lam xs. AllowSet (mapFromList cmpString (map (lam x. (x, ())) xs)) in
+let allowOnly = lam xs. AllowSet (mapFromSeq cmpString (map (lam x. (x, ())) xs)) in
 
 let highLowPrec
   : [prodLabel]
