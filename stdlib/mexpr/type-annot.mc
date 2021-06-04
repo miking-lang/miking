@@ -307,7 +307,7 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
     in
     -- Add mapping from binding identifier to the inferred type.
     let foldBindingAfter = lam acc. lam binding : RecLetBinding.
-      mapInsert binding.ident binding.ty acc
+      mapInsert binding.ident binding.tyBody acc
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
       let body = typeAnnotExpr env binding.body in
@@ -323,9 +323,8 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
             ] in
             infoErrorExit t.info msg
         in
-        {{{binding with body = body}
-                   with ty = tyBody}
-                   with tyBody = tyBody}
+        {{binding with body = body}
+                  with tyBody = tyBody}
       else never
     in
     match env with {varEnv = varEnv} then
@@ -658,9 +657,9 @@ utest ty recLets with tyunit_ using eqTypeEmptyEnv in
   let xTy = tyarrow_ tyunit_ tyint_ in
   let yTy = tyarrow_ tyunit_ tyint_ in
   let zTy = tyarrow_ tyunit_ tyint_ in
-  utest b0.ty with xTy using eqTypeEmptyEnv in
-  utest b1.ty with yTy using eqTypeEmptyEnv in
-  utest b2.ty with zTy using eqTypeEmptyEnv in
+  utest b0.tyBody with xTy using eqTypeEmptyEnv in
+  utest b1.tyBody with yTy using eqTypeEmptyEnv in
+  utest b2.tyBody with zTy using eqTypeEmptyEnv in
   ()
 else never);
 

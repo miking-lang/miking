@@ -76,7 +76,6 @@ lang BootParser = MExprAst + ConstTransformer
                    makeSeq (lam n. {ident = gname t n,
                                     tyBody = gtype t n,
                                     body = gterm t n,
-                                    ty = TyUnknown { info = ginfo t 0 },
                                     info = ginfo t (addi n 1)})
                                       (glistlen t 0),
                  inexpr = gterm t (glistlen t 0),

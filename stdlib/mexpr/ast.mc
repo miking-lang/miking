@@ -140,7 +140,6 @@ type RecLetBinding =
   { ident : Name
   , tyBody : Type
   , body : Expr
-  , ty : Type
   , info : Info }
 
 -- TmRecLets --
