@@ -80,20 +80,6 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   syn Cost =
   | Runtime {time : Float}
 
-  sem neighbourhood =
-  | searchState ->
-    let searchState : SearchState = searchState in
-    match searchState
-    with {cur =
-           {assignment =
-             Table {holes = holes, table = table, options = options}}}
-    then
-      let table = map (lam h.
-        match h with TmHole {hole = hole} then sample hole
-        else dprintLn h; error "Expected a decision point") holes
-      in [Table {table = table, holes = holes, options = options}]
-    else never
-
   sem compare =
   | (Runtime {time = t1}, Runtime {time = t2}) ->
     roundfi (mulf 1000.0 (subf t1 t2))
@@ -125,7 +111,9 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
            (file : String) =
   | table ->
     let input =
-      match options.input with [] then _inputEmpty else options.input in
+      match options.input with [] then _inputEmpty else options.input
+    in
+
     -- cost function = sum of execution times over all inputs
     let costF = lam lookup : Assignment.
       match lookup with Table {table = table} then
@@ -171,6 +159,50 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     else never
 end
 
+-- Search strategies:
+-- exhaustive search
+-- tabu that doesn't get stuck all the time
+
+-- Explore the values of each decision point one by one, from left to right,
+-- while keeping the rest fixed (to their tuned values, or their defaults if
+-- they have note yet been tuned). Hence, it assumes a total independence of the
+-- decision points.
+lang TuneSemiExhaustive = TuneLocalSearch
+  syn MetaState =
+  | SemiExhaustive {curIdx : Int, last : Option Expr}
+
+  sem step (searchState : SearchState) =
+  | SemiExhaustive ({curIdx = i, last = last} & state) ->
+    match searchState
+    with {cur = {assignment = Table t}, cost = cost}
+    then
+      let return = lam i. lam last.
+        let assignment = Table {t with table = set t.table i last} in
+        ( Some {assignment = assignment, cost = cost assignment},
+          SemiExhaustive {curIdx = i, last = Some last} )
+      in
+
+      match get t.holes i with TmHole {hole = hole} then
+        match next last hole with Some last then
+          return i last
+        else
+          -- Current hole is exhausted, move to the next
+          let i = addi i 1 in
+          if eqi i (length t.holes) then
+            -- Finished the search.
+            (None (), SemiExhaustive state)
+          else match get t.holes i with TmHole {hole = hole} then
+            match next (None ()) hole with Some last then
+              return i last
+            else error "Empty value domain"
+          else never
+      else never
+    else never
+
+  sem initMeta =
+  | _ -> SemiExhaustive {curIdx = 0, last = None ()}
+end
+
 lang TuneRandomWalk = TuneLocalSearch
                     + LocalSearchSelectRandomUniform
   syn MetaState =
@@ -179,6 +211,21 @@ lang TuneRandomWalk = TuneLocalSearch
   sem step (searchState : SearchState) =
   | Empty {} ->
     (select (neighbourhood searchState) searchState, Empty {})
+
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+             Table {holes = holes, table = table, options = options}}}
+    then
+      let table = map (lam h.
+        match h with TmHole {hole = hole, ty = ty, info = info} then
+          sample hole
+        else dprintLn h; error "Expected a decision point") holes
+      in [Table {table = table, holes = holes, options = options}]
+    else never
 
   sem initMeta =
   | _ -> Empty {}
@@ -247,7 +294,8 @@ let tuneEntry =
   lam holes : [Expr].
   lam tuneFile : String.
   lam table : LookupTable.
-    let options = parseTuneOptions tuneOptionsDefault args in
+    let options = parseTuneOptions tuneOptionsDefault
+      (filter (lam a. not (eqString "mi" a)) args) in
 
     -- Do warmup runs
     use TuneBase in
@@ -261,4 +309,6 @@ let tuneEntry =
       use TuneSimulatedAnnealing in tune options run holes tuneFile table
     else match options.method with TabuSearch {} then
       use TuneTabuSearch in tune options run holes tuneFile table
+    else match options.method with SemiExhaustive {} then
+      use TuneSemiExhaustive in tune options run holes tuneFile table
     else never
