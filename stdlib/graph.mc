@@ -66,7 +66,7 @@ let graphUnion = digraphUnion
 
 mexpr
 
-let empty = graphEmpty eqi eqsym in
+let empty = graphEmpty subi eqsym in
 
 utest graphEdges empty with [] in
 utest graphVertices empty with [] in

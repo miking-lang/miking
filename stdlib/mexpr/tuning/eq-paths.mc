@@ -13,11 +13,12 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
   lam g. lam endNode. lam depth. lam startNodes.
     -- Reverse graph for forward search (more efficient for adjacency map)
     let gRev = digraphReverse g in
+    let eqv = lam v1. lam v2. eqi (digraphCmpv g v1 v2) 0 in
 
     recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
       lam g. lam v. lam curPath. lam visited. lam d.
         let fromEdges = digraphEdgesFrom v g in
-        if or (or (eqi d 0) (eqsetMem (digraphEqv g) v visited))
+        if or (or (eqi d 0) (eqsetMem eqv v visited))
               (null fromEdges) then
           [curPath]
         else
@@ -27,7 +28,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
                 fromEdges in
           -- If current node is a start node, the current path is a valid path
           let paths =
-            if eqsetMem (digraphEqv g) v startNodes then cons [curPath] paths
+            if eqsetMem eqv v startNodes then cons [curPath] paths
             else paths in
           foldl concat [] paths
     in
@@ -35,7 +36,7 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
 
 mexpr
 -- To construct test graphs
-let empty = digraphEmpty eqi eqChar in
+let empty = digraphEmpty subi eqChar in
 let fromList = lam vs. foldl (lam g. lam v. digraphAddVertex v g) empty vs in
 let addEdges = lam g. lam es.
   foldl (lam acc. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 acc) g es
