@@ -2,7 +2,6 @@ include "digraph.mc"
 include "string.mc"
 include "eq-paths.mc"
 include "name.mc"
-include "hashmap.mc"
 include "eqset.mc"
 include "common.mc"
 include "mexpr/mexpr.mc"
@@ -28,14 +27,10 @@ let _eqn = lam n1. lam n2.
   else
     error "Name without symbol."
 
-let _nameHash = lam n.
-  sym2hash (_getSym n)
-
-let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Hashmap Name v =
+let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Map Name v =
   lam items. lam toKey. lam toVal.
-    foldl (lam acc. lam i.
-             hashmapInsert {eq = _eqn, hashfn = _nameHash} (toKey i) (toVal i) acc)
-      hashmapEmpty
+    foldl (lam acc. lam e. mapInsert (toKey e) (toVal e) acc)
+      (mapEmpty nameCmp)
       items
 
 let _cmpPaths = seqCmp nameCmp
@@ -323,16 +318,16 @@ type CallCtxEnv = {
 
   -- Maps names of functions to the name of its incoming variable. The incoming
   -- variables keep track of the execution path during runtime.
-  fun2inc: Hashmap Name Name,
+  fun2inc: Map Name Name,
 
   -- Maps edge labels in the call graph to the incoming variable name of its
   -- from-node.
-  lbl2inc: Hashmap Name Name,
+  lbl2inc: Map Name Name,
 
   -- Each node in the call graph assigns a per-node unique integer to each
   -- incoming edge. This map maps an edge to the count value of its destination
   -- node.
-  lbl2count: Hashmap Name Int,
+  lbl2count: Map Name Int,
 
   -- Maps a decision point and a call path to a unique integer.
   -- TODO(Linnea, 2021-04-21): Once we have 'smapAccumL_Expr_Expr', this
@@ -363,8 +358,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
         (lam e. match e with (_, _, lbl) then lbl else never)
         (lam e.
            match e with (from, _, _) then
-             optionGetOrElse (lam. error "Internal error: lookup failed")
-               (hashmapLookup {eq = _eqn, hashfn = _nameHash} from fun2inc)
+             mapFindWithExn from fun2inc
            else never)
     in
     let lbl2count =
@@ -373,8 +367,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
                match foldl (lam acc. lam e.
                               match e with (_, _, lbl) then
                                 match acc with (hm, i) then
-                                  (hashmapInsert {eq = _eqn, hashfn = _nameHash}
-                                     lbl i hm,
+                                  (mapInsert lbl i hm,
                                    addi i 1)
                                 else never
                               else never)
@@ -382,7 +375,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
                            incomingEdges
                with (hm, _) then hm
                else never)
-            hashmapEmpty
+            (mapEmpty nameCmp)
             (digraphVertices callGraph)
 
     in
@@ -401,14 +394,15 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
 let callCtxFunLookup : Name -> CallCtxEnv -> Option Name =
   lam name : Name. lam env : CallCtxEnv.
     match env with { fun2inc = fun2inc } then
-      hashmapLookup {eq = _eqn, hashfn = _nameHash} name fun2inc
+      mapLookup name fun2inc
     else never
 
 -- Get the incoming variable name of a function, giving an error if the function
 -- name is not part of the call graph.
-let callCtxFun2Inc : Name -> CallCtxEnv -> Name = lam name. lam env.
-  optionGetOrElse (lam. error "fun2inc lookup failed")
-                  (callCtxFunLookup name env)
+let callCtxFun2Inc : Name -> CallCtxEnv -> Name = lam name. lam env : CallCtxEnv.
+  match env with { fun2inc = fun2inc } then
+    mapFindWithExn name fun2inc
+  else never
 
 -- Get the incoming variable name of an edge label, giving an error if the edge
 -- is not part of the call graph.
@@ -416,8 +410,7 @@ let callCtxLbl2Inc : Name -> CallCtxEnv -> Name =
   lam lbl : Name. lam env : CallCtxEnv.
     match env with { lbl2inc = lbl2inc } then
       optionGetOrElse (lam. error "lbl2inc lookup failed")
-                      (hashmapLookup {eq = _eqn, hashfn = _nameHash}
-                                     lbl lbl2inc)
+                      (mapLookup lbl lbl2inc)
     else never
 
 -- Get the count of an edge label, giving an error if the edge is not part of
@@ -426,20 +419,19 @@ let callCtxLbl2Count : Name -> CallCtxEnv -> Int =
   lam lbl : Name. lam env : CallCtxEnv.
     match env with { lbl2count = lbl2count } then
       optionGetOrElse (lam. error "lbl2count lookup failed")
-                      (hashmapLookup {eq = _eqn, hashfn = _nameHash}
-                                     lbl lbl2count)
+                      (mapLookup lbl lbl2count)
     else never
 
 -- Get all the incoming variable names of the program.
 let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
   match env with { fun2inc = fun2inc } then
-    hashmapValues {eq = _eqn, hashfn = _nameHash} fun2inc
+    mapValues fun2inc
   else never
 
 -- Lookup the internal name of a public function.
 let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
   match env with { pub2internal = pub2internal } then
-    hashmapLookup {eq = _eqn, hashfn = _nameHash} name pub2internal
+    mapLookup name pub2internal
   else never
 
 let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
@@ -670,11 +662,11 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
-  sem _replacePublic (pub2priv : Hashmap Name Name) =
+  sem _replacePublic (pub2priv : Map Name Name) =
   -- Function call: forward call for public function
   | TmLet ({ body = TmApp a } & t) ->
     match _appGetCallee (TmApp a) with Some callee then
-      match hashmapLookup {eq = _eqn, hashfn = _nameHash} callee pub2priv
+      match mapLookup callee pub2priv
       with Some local then
         TmLet {{t with body = _appSetCallee (TmApp a) local}
                   with inexpr = _replacePublic pub2priv t.inexpr}
@@ -683,7 +675,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- Function definition: create private equivalent of public functions
   | TmLet ({ body = TmLam lm } & t) & tm ->
-    match hashmapLookup {eq = _eqn, hashfn = _nameHash} t.ident pub2priv
+    match mapLookup t.ident pub2priv
     with Some local then
       match _forwardCall local (_replacePublic pub2priv) {ident = t.ident, body = t.body}
       with (priv, pub) then
@@ -702,7 +694,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let newBinds = foldl
       (lam acc : [RecLetBinding]. lam bind : RecLetBinding.
         match bind with { body = TmLam lm } then
-          match hashmapLookup {eq = _eqn, hashfn =_nameHash} bind.ident pub2priv
+          match mapLookup bind.ident pub2priv
           with Some local then
             match _forwardCall local (_replacePublic pub2priv) {ident = bind.ident, body = bind.body}
             with (privBind, pubBind) then
@@ -800,7 +792,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         else false
       in work
     in
-    let eqString = eqSeq eqc
+    let eqString = eqSeq eqc in
 
     recursive
       let strSplit = lam delim. lam s.
