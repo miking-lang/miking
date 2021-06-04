@@ -791,21 +791,21 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         work [] seq1 seq2
     in
 
-    recursive
-      let eqString = lam s1. lam s2.
-          if neqi (length s1) (length s2)
-          then false
-          else if null s1
-               then true
-               else if eqc (head s1) (head s2)
-               then eqString (tail s1) (tail s2)
-               else false
+    let eqSeq = lam eq : (a -> a -> Bool).
+      recursive let work = lam as. lam bs.
+      let pair = (as, bs) in
+      match pair with ([], []) then true else
+      match pair with ([a] ++ as, [b] ++ bs) then
+        if eq a b then work as bs else false
+        else false
+      in work
     in
+    let eqString = eqSeq eqc
 
     recursive
       let strSplit = lam delim. lam s.
-        if or (eqi (length delim) 0) (lti (length s) (length delim))
-        then cons s []
+        if or (null delim) (lti (length s) (length delim))
+        then [s]
         else if eqString delim (subsequence s 0 (length delim))
              then cons [] (strSplit delim (subsequence s (length delim) (length s)))
              else let remaining = strSplit delim (tail s) in

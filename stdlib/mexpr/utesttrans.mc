@@ -59,13 +59,15 @@ let inf =
   divf 1.0 0.0
 in
 
-recursive
-  let strJoin = lam delim. lam strs.
-    if eqi (length strs) 0
-    then \"\"
-    else if eqi (length strs) 1
-         then head strs
-         else concat (concat (head strs) delim) (strJoin delim (tail strs))
+let strJoin = lam delim. lam strs.
+  recursive let work = lam acc. lam strs.
+    if null strs then acc
+    else match strs with [s] then
+      concat acc s
+    else match strs with [s] ++ strs then
+      work (concat acc (concat s delim)) strs
+    else never
+  in work [] strs
 in
 
 let mapi = lam f. lam seq.
