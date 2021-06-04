@@ -15,9 +15,11 @@ let setRemove : a -> Set a -> Set a = lam e. lam s. mapRemove e s
 let setMem : a -> Set a -> Bool = lam e. lam s. mapMem e s
 let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
-lam cmp. lam seq.
-  foldr setInsert (setEmpty cmp) seq
-let setToSeq : Set a -> [a] = lam s. mapKeys s
+  lam cmp. lam seq.
+    foldr setInsert (setEmpty cmp) seq
+  let setToSeq : Set a -> [a] = lam s. mapKeys s
+let setEqual : Set a -> Set a -> Bool = lam s1. lam s2.
+  mapEq (lam. lam. true) s1 s2
 
 mexpr
 
@@ -48,5 +50,9 @@ utest setSize s4 with 3 in
 utest setMem 1 s4 with true in
 utest setMem 2 s4 with true in
 utest setMem 3 s4 with true in
+
+utest setEqual s s with true in
+utest setEqual s s1 with false in
+utest setEqual s4 (setUnion s1 s2) with true in
 
 ()

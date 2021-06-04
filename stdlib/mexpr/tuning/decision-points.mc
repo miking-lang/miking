@@ -80,7 +80,7 @@ let _handleApps = use AppAst in use VarAst in
 lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    let gempty = digraphAddVertex _callGraphTop (digraphEmpty _eqn _eqn) in
+    let gempty = digraphAddVertex _callGraphTop (digraphEmpty nameCmp _eqn) in
     let g = digraphAddVertices (_findVertices arg) gempty in
     _findEdges g _callGraphTop arg
 
@@ -893,7 +893,7 @@ let doCallGraphTests = lam r : CallGraphTest.
         (map (lam t : DigraphEdge Name Name.
            (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
            (digraphAddVertices (map nameGetStr (digraphVertices ng))
-                               (digraphEmpty eqString _eqn))
+                               (digraphEmpty cmpString _eqn))
     in
     let sg = toStr (toCallGraph ast) in
 
@@ -1146,7 +1146,7 @@ then
     dumpTable table;
     (if debug then
        printLn "\n----- AFTER TEST TRANSFORMATION -----\n";
-       printLn (expr2str ast)
+       printLn (expr2str astExt)
      else ());
     use MExprEval in
     eval { env = mapEmpty nameCmp } astExt
@@ -1158,39 +1158,39 @@ then
 
   let eval = evalWithTable table in
 
-  -- Path 1: C -> B (1)-> A
-  let extAst = app_ (nvar_ funC) true_ in
+  -- Path 1: B (1)-> A
+  let extAst = appf2_ (nvar_ funB) true_ false_ in
   utest eval flatAst extAst with int_ 1 using eqExpr in
   utest eval insertedAst extAst with int_ 1 using eqExpr in
 
-  -- Path 2: B (1)-> A
-  let extAst = appf2_ (nvar_ funB) true_ false_ in
+  -- Path 2: B -> B (1)-> A
+  let extAst = appf2_ (nvar_ funB) true_ true_ in
   utest eval flatAst extAst with int_ 2 using eqExpr in
   utest eval insertedAst extAst with int_ 2 using eqExpr in
 
-  -- Path 3: B -> B (1)-> A
-  let extAst = appf2_ (nvar_ funB) true_ true_ in
+  -- Path 3: C -> B (1)-> A
+  let extAst = app_ (nvar_ funC) true_ in
   utest eval flatAst extAst with int_ 3 using eqExpr in
   utest eval insertedAst extAst with int_ 3 using eqExpr in
 
-  -- Path 4: C -> B (2)-> A
+  -- Path 6: C -> B (2)-> A
   let extAst = app_ (nvar_ funC) false_ in
+  utest eval flatAst extAst with int_ 6 using eqExpr in
+  utest eval insertedAst extAst with int_ 6 using eqExpr in
+
+  -- Path 4: B (2)-> A
+  let extAst = appf2_ (nvar_ funB) false_ false_ in
   utest eval flatAst extAst with int_ 4 using eqExpr in
   utest eval insertedAst extAst with int_ 4 using eqExpr in
 
-  -- Path 5: B (2)-> A
-  let extAst = appf2_ (nvar_ funB) false_ false_ in
-  utest eval flatAst extAst with int_ 5 using eqExpr in
-  utest eval insertedAst extAst with int_ 5 using eqExpr in
-
-  -- Path 5 again
+  -- Path 4 again
   let extAst = bind_
     (nulet_ (nameSym "") (app_ (nvar_ funC) false_))
     (appf2_ (nvar_ funB) false_ false_) in
-  utest eval flatAst extAst with int_ 5 using eqExpr in
-  utest eval insertedAst extAst with int_ 5 using eqExpr in
+  utest eval flatAst extAst with int_ 4 using eqExpr in
+  utest eval insertedAst extAst with int_ 4 using eqExpr in
 
-  -- Path 6: B -> B (2)-> A
+  -- Path 5: B -> B (2)-> A
   -- unreachable
 
   cleanup ()
