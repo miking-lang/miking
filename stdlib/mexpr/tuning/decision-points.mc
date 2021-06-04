@@ -223,6 +223,15 @@ lang HoleBoolAst = BoolAst + HoleAst
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
+  sem next (last : Option Expr) =
+  | BoolHole {} ->
+    match last with None () then Some false_
+    else match last with Some (TmConst {val = CBool {val = false}}) then
+      Some true_
+    else match last with Some (TmConst {val = CBool {val = true}}) then
+      None ()
+    else never
+
   sem fromString =
   | "true" -> true
   | "false" -> false
@@ -252,6 +261,19 @@ lang HoleIntRangeAst = IntAst + HoleAst
   sem sample =
   | IntRange {min = min, max = max} ->
     int_ (randIntU min (addi max 1))
+
+  sem next (last : Option Expr) =
+  | IntRange {min = min, max = max} ->
+    match last with None () then Some (int_ min)
+    else match last with Some (TmConst {val = CInt {val = i}}) then
+      if eqi i max then
+        None ()
+      else if and (geqi i min) (lti i max) then
+        Some (int_ (addi i 1))
+      else
+        error (join ["Value out of range: ", int2string i,
+                    " not in [", int2string min, ", ", int2string max, "]"])
+    else dprintLn last; never
 
   sem matchKeywordString (info : Info) =
   | "HoleIntRange" ->

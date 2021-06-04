@@ -14,17 +14,20 @@ type TuneOptions =
 , saInitTemp : Float    -- Initial temperature for simulated annealing
 , saDecayFactor : Float -- Decay factor for simulated annealing
 , tabuSize : Int        -- Maximum size of tabu set
+-- , epsilonMs : Float     -- Precision of time measurement
 }
 
 type SearchMethod
 con SimulatedAnnealing : Unit -> SearchMethod
 con TabuSearch         : Unit -> SearchMethod
 con RandomWalk         : Unit -> SearchMethod
+con SemiExhaustive     : Unit -> SearchMethod
 
 let string2SearchMethod : String -> SearchMethod = lam s.
   match s with "simulated-annealing" then SimulatedAnnealing {}
   else match s with "tabu-search" then TabuSearch {}
   else match s with "random-walk" then RandomWalk {}
+  else match s with "semi-exhaustive" then SemiExhaustive {}
   else error (concat "Unknown search method: " s)
 
 let tuneOptionsDefault : TuneOptions =
@@ -94,8 +97,8 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       else error "tabu size must be at least 1"
     else error "--tabuSize with no argument"
 
-  else match args with [_] ++ args then
-    parseTuneOptions o args
+  else match args with [a] ++ args then
+    error (concat "Unknown tune option: " a)
 
   else never
 end
