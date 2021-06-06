@@ -187,33 +187,37 @@ let tailRecursiveBinding = use MExprAst in
   let tailFnId = nameSym (concat (nameGetStr binding.ident) "_tr") in
   let accId = nameSym "acc" in
   let accType = getReturnType binding.tyBody in
-  match toTailRecursiveExpression binding tailFnId accId with Some (op, body) then
-    let trBody = addParameter accId accType body in
-    let tailRecursiveBinding =
-      {{{binding with ident = tailFnId}
-                 with body = trBody}
-                 with tyBody = ty trBody} in
-    let functionArgs : [(Name, Type)] = getFunctionArguments body in
-    match neutralElement op with Some ne then
-      let originalFunctionBody =
-        nlams_ functionArgs
-          (appSeq_
-            (nvar_ tailFnId)
-            (snoc (map (lam arg : (Name, Type). nvar_ arg.0) functionArgs) ne))
-      in
-      let originalBinding = {binding with body = originalFunctionBody} in
-      [tailRecursiveBinding, originalBinding]
-    else [binding]
+  match toTailRecursiveExpression binding tailFnId accId with Some opt then
+    match opt with (op, body) then
+      let trBody = addParameter accId accType body in
+      let tailRecursiveBinding =
+        {{{binding with ident = tailFnId}
+                   with body = trBody}
+                   with tyBody = ty trBody} in
+      let functionArgs : [(Name, Type)] = getFunctionArguments body in
+      match neutralElement op with Some ne then
+        let originalFunctionBody =
+          nlams_ functionArgs
+            (appSeq_
+              (nvar_ tailFnId)
+              (snoc (map (lam arg : (Name, Type). nvar_ arg.0) functionArgs) ne))
+        in
+        let originalBinding = {binding with body = originalFunctionBody} in
+        printLn (join ["Optimized function ", infoErrorString binding.info ""]);
+        [tailRecursiveBinding, originalBinding]
+      else [binding]
+    else never
   else [binding]
 
-lang MExprTailRecursive = MExprAst
+lang MExprTailRecursion = MExprAst
   sem tailRecursive =
   | TmRecLets t ->
-    TmRecLets {t with bindings = join (map tailRecursiveBinding t.bindings)}
+    TmRecLets {{t with bindings = join (map tailRecursiveBinding t.bindings)}
+                  with inexpr = tailRecursive t.inexpr}
   | t -> smap_Expr_Expr tailRecursive t
 end
 
-lang TestLang = MExprTailRecursive + MExprTypeAnnot + MExprEq
+lang TestLang = MExprTailRecursion + MExprTypeAnnot + MExprEq
 
 mexpr
 
