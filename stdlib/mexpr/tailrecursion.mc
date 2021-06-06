@@ -304,6 +304,16 @@ let fibTailRecursive = nreclets_ [
 utest fib with fibTailRecursive using eqExpr in
 utest tailRecursive fibTailRecursive with fibTailRecursive using eqExpr in
 
-let 
+let mapUsingCons = tailRecursive (nreclets_ [
+  (mapName, tyunknown_, nulam_ f (nulam_ s (
+    match_
+      (nvar_ s)
+      (pseqedgen_ [npvar_ h] t [])
+      (cons_ (app_ (nvar_ f) (nvar_ h))
+             (appf2_ (nvar_ mapName) (nvar_ f) (nvar_ t)))
+      (seq_ []))))
+]) in
+
+utest tailRecursive mapUsingCons with mapUsingCons using eqExpr in
 
 ()
