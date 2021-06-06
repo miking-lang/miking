@@ -325,6 +325,7 @@ lang CmpIntEq = CmpIntAst
   sem eqConst (lhs : Const) =
   | CEqi {} -> match lhs with CEqi _ then true else false
   | CLti {} -> match lhs with CLti _ then true else false
+  | CLeqi {} -> match lhs with CLeqi _ then true else false
 end
 
 lang CmpFloatEq = CmpFloatAst

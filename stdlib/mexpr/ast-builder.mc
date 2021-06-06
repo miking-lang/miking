@@ -235,6 +235,8 @@ recursive let bind_ = use MExprAst in
   lam letexpr. lam expr.
   match letexpr with TmLet t then
     TmLet {t with inexpr = bind_ t.inexpr expr}
+  else match letexpr with TmLam t then
+    TmLam {t with body = bind_ t.body expr}
   else match letexpr with TmRecLets t then
     TmRecLets {t with inexpr = bind_ t.inexpr expr}
   else match letexpr with TmConDef t then
@@ -420,6 +422,10 @@ let nulam_ = use MExprAst in
 let ulam_ = use MExprAst in
   lam s. lam body.
   lam_ s tyunknown_ body
+
+let nlams_ = use MExprAst in
+  lam params. lam body.
+  foldr (lam p : (Name, Type). lam acc. nlam_ p.0 p.1 acc) body params
 
 let lams_ = use MExprAst in
   lam params. lam body.
