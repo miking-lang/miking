@@ -203,7 +203,6 @@ let tailRecursiveBinding = use MExprAst in
               (snoc (map (lam arg : (Name, Type). nvar_ arg.0) functionArgs) ne))
         in
         let originalBinding = {binding with body = originalFunctionBody} in
-        printLn (join ["Optimized function ", infoErrorString binding.info ""]);
         [tailRecursiveBinding, originalBinding]
       else [binding]
     else never
