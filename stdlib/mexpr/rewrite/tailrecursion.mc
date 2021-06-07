@@ -8,51 +8,14 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
-
-let printMExpr = use MExprPrettyPrint in
-  lam e : Expr.
-  printLn (expr2str e)
-
-recursive let getReturnType = use MExprAst in
-  lam ty : Type.
-  match ty with TyArrow {to = (TyArrow _) & t} then getReturnType t
-  else match ty with TyArrow {to = to} then to
-  else TyUnknown {info = infoTy ty}
-end
-
-recursive let setFunctionBody : Expr -> Expr -> Expr = use MExprAst in
-  lam funcBody. lam newBody.
-  match funcBody with TmLam t then
-    let body = setFunctionBody t.body newBody in
-    let ty = TyArrow {from = t.tyIdent, to = ty body, info = infoTm t.body} in
-    TmLam {{t with body = body}
-              with ty = ty}
-  else newBody
-end
-
-recursive let substituteIdentifier = use MExprAst in
-  lam from. lam to. lam e : Expr.
-  match e with TmVar ({ident = id} & t) then
-    if nameEq id from then
-      TmVar {t with ident = to}
-    else e
-  else smap_Expr_Expr (substituteIdentifier from to) e
-end
-
-let functionBodyWithoutArguments : Expr -> Expr = use MExprAst in
-  lam bodyWithArguments.
-  recursive let work = lam e.
-    match e with TmLam {body = body} then
-      work body
-    else e
-  in work bodyWithArguments
+include "mexpr/rewrite/utils.mc"
 
 -- NOTE(larshum, 2021-06-07): For now, we assume that the recursive function
 -- only has two cases and that one branch wraps at least one self-recursive
 -- call in an associative constant operator.
 let tailPositionBinaryOperator = use MExprAst in
   lam bodyWithArgs : Expr.
-  let body = functionBodyWithoutArguments bodyWithArgs in
+  let body = functionBodyWithoutLambdas bodyWithArgs in
   match body with
     TmMatch {thn = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
              els = !(TmMatch _)}
@@ -94,17 +57,17 @@ let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
   let f = lam baseBranch. lam arg1. lam arg2.
     if isSelfRecursive binding.ident arg1 then
       let lhs = appf2_ binop baseBranch (nvar_ accId) in
-      let rhs = app_ (substituteIdentifier binding.ident tailFuncId arg1)
+      let rhs = app_ (substituteIdentifier arg1 binding.ident tailFuncId)
                      (appf2_ binop arg2 (nvar_ accId)) in
       Some (lhs, rhs)
     else if isSelfRecursive binding.ident arg2 then
       let lhs = appf2_ binop (nvar_ accId) baseBranch in
-      let rhs = app_ (substituteIdentifier binding.ident tailFuncId arg2)
+      let rhs = app_ (substituteIdentifier arg2 binding.ident tailFuncId)
                      (appf2_ binop (nvar_ accId) arg1) in
       Some (lhs, rhs)
     else None ()
   in
-  let body = functionBodyWithoutArguments binding.body in
+  let body = functionBodyWithoutLambdas binding.body in
   match body with TmMatch ({thn = TmApp {lhs = TmApp {rhs = arg1},
                                          rhs = arg2}} & t) then
     optionMap
@@ -135,13 +98,13 @@ let makeTailRecursiveBinding = use MExprAst in
     match neutralElement op with Some ne then
       let tailFnId = nameSym (concat (nameGetStr binding.ident) "_tr") in
       let accId = nameSym "acc" in
-      let accType = getReturnType binding.tyBody in
       match toTailRecursiveBody binding op tailFnId accId with Some tr then
+        let accType = functionBodyReturnType binding.body in
         let trTyBody = TyArrow {from = ty ne, to = accType,
                                 info = infoTm binding.body} in
         let trInnerBody = TmLam {ident = accId, tyIdent = accType, body = tr,
                                  ty = trTyBody, info = infoTm binding.body} in
-        let trBody = setFunctionBody binding.body trInnerBody in
+        let trBody = replaceFunctionBody binding.body trInnerBody in
         let tailRecursiveBinding = {{{binding with ident = tailFnId}
                                               with body = trBody}
                                               with tyBody = ty trBody} in
