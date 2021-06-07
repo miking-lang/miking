@@ -261,6 +261,8 @@ let arity = function
       1
   | Cexit ->
       1
+  | CflushStdout ->
+      1
   (* MCore intrinsics: Symbols *)
   | CSymb _ ->
       0
@@ -930,6 +932,11 @@ let delta eval env fi c v =
   | Cexit, TmConst (_, CInt x) ->
       exit x
   | Cexit, _ ->
+      fail_constapp fi
+  | CflushStdout, TmRecord (_, x) when Record.is_empty x ->
+      Intrinsics.IO.flush_stdout () ;
+      tm_unit
+  | CflushStdout, _ ->
       fail_constapp fi
   (* MCore intrinsics: Symbols *)
   | CSymb _, _ ->

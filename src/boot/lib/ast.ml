@@ -135,6 +135,7 @@ and const =
   | Ccommand
   | Cerror
   | Cexit
+  | CflushStdout
   (* MCore intrinsics: Symbols *)
   | CSymb of Symb.t
   | Cgensym
@@ -578,9 +579,10 @@ let const_has_side_effect = function
   | CwriteFile _
   | CfileExists
   | CdeleteFile
+  | Ccommand
   | Cerror
   | Cexit
-  | Ccommand ->
+  | CflushStdout ->
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
