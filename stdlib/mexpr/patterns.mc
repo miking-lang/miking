@@ -3,7 +3,7 @@ include "mexpr/eq.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/type-annot.mc"
 
-lang MExprPatternKeywordMaker = KeywordMaker + MExprAst + MExprEq
+lang MExprParallelKeywordMaker = KeywordMaker + MExprAst + MExprEq
   syn Expr =
   | TmParallelMap {f: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelMap2 {f: Expr, as: Expr, bs: Expr, ty: Type, info: Info}
@@ -207,41 +207,41 @@ lang MExprPatternKeywordMaker = KeywordMaker + MExprAst + MExprEq
 end
 
 let parallelMap_ = lam f. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelMap {f = f, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
 let parallelMap2_ = lam f. lam as. lam bs.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelMap2 {f = f, as = as, bs = bs, ty = TyUnknown {info = NoInfo ()},
                   info = NoInfo ()}
 let parallelReduce_ = lam f. lam ne. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
                     info = NoInfo ()}
 let parallelScan_ = lam f. lam ne. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelScan {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
                   info = NoInfo ()}
 let parallelFilter_ = lam p. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelFilter {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                     info = NoInfo ()}
 let parallelPartition_ = lam p. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelPartition {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                        info = NoInfo ()}
 let parallelAll_ = lam p. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelAll {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
 let parallelAny_ = lam p. lam as.
-  use MExprPatternKeywordMaker in
+  use MExprParallelKeywordMaker in
   TmParallelAny {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
 
 mexpr
 
-use MExprPatternKeywordMaker in
+use MExprParallelKeywordMaker in
 
 let id_ = ulam_ "x" (var_ "x") in
 let trueFunc_ = ulam_ "x" true_ in
