@@ -278,6 +278,8 @@ module IO : sig
 
   val dprint : int Mseq.t -> unit
 
+  val flush_stdout : unit -> unit
+
   val read_line : unit -> int Mseq.t
 end
 

@@ -233,6 +233,7 @@ lang OCamlPrettyPrint =
   | CSubsequence _ -> intrinsicOpSeq "subsequence"
   | CPrint _ -> intrinsicOpIO "print"
   | CDPrint _ -> intrinsicOpIO "dprint"
+  | CFlushStdout _ -> intrinsicOpIO "flush_stdout"
   | CReadLine _ -> intrinsicOpIO "read_line"
   | CArgv _ -> intrinsicOpSys "argv"
   | CFileRead _ -> intrinsicOpFile "read"

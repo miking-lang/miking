@@ -855,7 +855,7 @@ lang FileOpEval = FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst
     else error "f in deleteFile not a sequence"
 end
 
-lang IOEval = IOAst + SeqAst + UnknownTypeAst
+lang IOEval = IOAst + SeqAst + RecordAst + UnknownTypeAst
   sem delta (arg : Expr) =
   | CPrint _ ->
     match arg with TmSeq s then
@@ -864,9 +864,20 @@ lang IOEval = IOAst + SeqAst + UnknownTypeAst
       uunit_
     else error "string to print is not a string"
   | CDPrint _ -> uunit_
+  | CFlushStdout _ ->
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        flushStdout ();
+        uunit_
+      else error "Argument to flushStdout is not unit"
+    else error "Argument to flushStdout is not unit"
   | CReadLine _ ->
-    let s = readLine () in
-    TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo()}
+    match arg with TmRecord {bindings = bindings} then
+      if mapIsEmpty bindings then
+        let s = readLine () in
+        TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo()}
+      else error "Argument to readLine is not unit"
+    else error "Argument to readLine is not unit"
 end
 
 lang RandomNumberGeneratorEval = RandomNumberGeneratorAst + IntAst
@@ -1835,8 +1846,13 @@ with utuple_ [utuple_ [int_ 1, int_ 2], int_ 1]
 using eqExpr in
 
 -- I/O operations
--- utest eval (print_ (str_ "Hello World")) with uunit_ in
--- utest eval (print_ (readLine_ uunit_)) with uunit_ in
+-- utest eval (print_ (str_ "Hello World")) with uunit_ using eqExpr in
+-- utest eval (print_ (readLine_ uunit_)) with uunit_ using eqExpr in
+-- utest eval
+--   (semi_ (semi_ (print_ (str_ "Hello World"))
+--                 (flushStdout_ uunit_))
+--          (sleepMs_ (int_ 5000)))
+-- with uunit_ using eqExpr in
 
 -- Random number generation
 let isIntInSeq = lam r : Expr. lam seq : [Int].

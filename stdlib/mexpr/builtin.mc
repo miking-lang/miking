@@ -73,6 +73,7 @@ let builtin = use MExprAst in
   -- MCore intrinsics: Debug and I/O
   , ("print", CPrint ())
   , ("dprint", CDPrint ())
+  , ("flushStdout", CFlushStdout ())
   , ("readLine", CReadLine ())
   , ("readBytesAsString", CReadBytesAsString ())
   , ("argv", CArgv ())
