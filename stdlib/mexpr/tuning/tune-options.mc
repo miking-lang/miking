@@ -14,19 +14,21 @@ type TuneOptions =
 , saInitTemp : Float    -- Initial temperature for simulated annealing
 , saDecayFactor : Float -- Decay factor for simulated annealing
 , tabuSize : Int        -- Maximum size of tabu set
--- , epsilonMs : Float     -- Precision of time measurement
+, epsilonMs : Float     -- Precision of time measurement
 }
 
 type SearchMethod
 con SimulatedAnnealing : Unit -> SearchMethod
 con TabuSearch         : Unit -> SearchMethod
 con RandomWalk         : Unit -> SearchMethod
+con Exhaustive         : Unit -> SearchMethod
 con SemiExhaustive     : Unit -> SearchMethod
 
 let string2SearchMethod : String -> SearchMethod = lam s.
   match s with "simulated-annealing" then SimulatedAnnealing {}
   else match s with "tabu-search" then TabuSearch {}
   else match s with "random-walk" then RandomWalk {}
+  else match s with "exhaustive" then Exhaustive {}
   else match s with "semi-exhaustive" then SemiExhaustive {}
   else error (concat "Unknown search method: " s)
 
@@ -39,6 +41,7 @@ let tuneOptionsDefault : TuneOptions =
 , saInitTemp = 100.0
 , saDecayFactor = 0.95
 , tabuSize = 10
+, epsilonMs = 10.0
 }
 
 recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
@@ -53,7 +56,7 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       if geqi iters 0 then
         parseTuneOptions {o with iters = string2int i} args
       else error "iters cannot be negative"
-    else error "--iters with no argument"
+    else error "--iters without an argument"
 
   else match args with ["--warmups"] ++ args then
     match args with [i] ++ args then
@@ -61,17 +64,17 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       if geqi warmups 0 then
         parseTuneOptions {o with warmups = string2int i} args
       else error "warmups cannot be negative"
-    else error "--warmups with no argument"
+    else error "--warmups without an argument"
 
   else match args with ["--method"] ++ args then
     match args with [m] ++ args then
       parseTuneOptions {o with method = string2SearchMethod m} args
-    else error "--method with no argument"
+    else error "--method without an argument"
 
   else match args with ["--input"] ++ args then
     match args with [a] ++ args then
       parseTuneOptions {o with input = cons (strSplit " " a) o.input} args
-    else error "--input with no argument"
+    else error "--input without an argument"
 
   else match args with ["--saInitTemp"] ++ args then
     match args with [a] ++ args then
@@ -79,7 +82,7 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       if geqf temp 0.0 then
         parseTuneOptions {o with saInitTemp = string2float a} args
       else error "temperature cannot be negative"
-    else error "--saInitTemp with no argument"
+    else error "--saInitTemp without an argument"
 
   else match args with ["--saDecayFactor"] ++ args then
     match args with [a] ++ args then
@@ -87,15 +90,23 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
       if geqf decay 0.0 then
         parseTuneOptions {o with saDecayFactor = string2float a} args
       else error "decay cannot be negative"
-    else error "--saDecayFactor with no argument"
+    else error "--saDecayFactor without an argument"
 
   else match args with ["--tabuSize"] ++ args then
     match args with [a] ++ args then
       let size = string2int a in
       if geqi size 1 then
-        parseTuneOptions {o with tabuSize = string2int a} args
+        parseTuneOptions {o with tabuSize = size} args
       else error "tabu size must be at least 1"
-    else error "--tabuSize with no argument"
+    else error "--tabuSize without an argument"
+
+  else match args with ["--epsilonMs"] ++ args then
+    match args with [a] ++ args then
+      let eps = string2float a in
+      if geqf eps 0.0 then
+        parseTuneOptions {o with epsilonMs = eps} args
+      else error "epsilonMs cannot be negative"
+    else error "--epsilonMs without an argument"
 
   else match args with [a] ++ args then
     error (concat "Unknown tune option: " a)
