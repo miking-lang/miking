@@ -13,13 +13,21 @@ let printMExpr = use MExprPrettyPrint in
   lam e : Expr.
   printLn (expr2str e)
 
-recursive let isSelfRecursiveApp = use MExprAst in
-  lam id : Name. lam e : Expr.
-  match e with TmApp {lhs = lhs, rhs = rhs} then
-    isSelfRecursiveApp id lhs
-  else match e with TmVar t then
-    nameEq id t.ident
-  else false
+recursive let getReturnType = use MExprAst in
+  lam ty : Type.
+  match ty with TyArrow {to = (TyArrow _) & t} then getReturnType t
+  else match ty with TyArrow {to = to} then to
+  else TyUnknown {info = infoTy ty}
+end
+
+recursive let setFunctionBody : Expr -> Expr -> Expr = use MExprAst in
+  lam funcBody. lam newBody.
+  match funcBody with TmLam t then
+    let body = setFunctionBody t.body newBody in
+    let ty = TyArrow {from = t.tyIdent, to = ty body, info = infoTm t.body} in
+    TmLam {{t with body = body}
+              with ty = ty}
+  else newBody
 end
 
 recursive let substituteIdentifier = use MExprAst in
@@ -31,187 +39,125 @@ recursive let substituteIdentifier = use MExprAst in
   else smap_Expr_Expr (substituteIdentifier from to) e
 end
 
-let neutralElement = use MExprAst in
-  lam e : Expr.
-  match e with TmConst {val = CAddi _} then
-    Some (TmConst {val = CInt {val = 0}, ty = tyunknown_, info = NoInfo ()})
-  else match e with TmConst {val = CMuli _} then
-    Some (TmConst {val = CInt {val = 1}, ty = tyunknown_, info = NoInfo ()})
-  else match e with TmConst {val = CConcat _} then
-    Some (TmSeq {tms = [], ty = tyunknown_, info = NoInfo ()})
+let functionBodyWithoutArguments : Expr -> Expr = use MExprAst in
+  lam bodyWithArguments.
+  recursive let work = lam e.
+    match e with TmLam {body = body} then
+      work body
+    else e
+  in work bodyWithArguments
+
+let tailPositionBinaryOperator = use MExprAst in
+  lam bodyWithArgs : Expr.
+  let body = functionBodyWithoutArguments bodyWithArgs in
+  match body with
+    TmMatch {thn = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
+             els = !(TmMatch _)}
+  then
+    Some binop
+  else match body with
+    TmMatch {els = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
+             thn = !(TmMatch _)}
+  then
+    Some binop
   else None ()
 
-let toTailRecursiveForm = use MExprAst in
-  lam id : Name. lam op : Expr. lam trId : Name. lam accId : Name. lam e : Expr.
-  match e with TmNever _ then
-    Some e
-  else match e with TmApp {lhs = TmApp {lhs = TmConst {val = c} & binop,
-                                        rhs = arg1},
-                           rhs = arg2} then
-    if optionIsSome (neutralElement binop) then
-      if isSelfRecursiveApp id arg1 then
-        Some (TmApp {
-          lhs = substituteIdentifier id trId arg1,
-          rhs = TmApp {
-            lhs = TmApp {
-              lhs = binop,
-              rhs = arg2,
-              ty = tyunknown_,
-              info = infoTm arg2
-            },
-            rhs = TmVar {ident = accId, ty = ty e, info = infoTm e},
-            ty = tyunknown_,
-            info = infoTm arg2
-          },
-          ty = tyunknown_,
-          info = infoTm e
-        })
-      else if isSelfRecursiveApp id arg2 then
-        Some (TmApp {
-          lhs = substituteIdentifier id trId arg2,
-          rhs = TmApp {
-            lhs = TmApp {
-              lhs = binop,
-              rhs = TmVar {ident = accId, ty = ty e, info = infoTm e},
-              ty = tyunknown_,
-              info = infoTm arg1
-            },
-            rhs = arg1,
-            ty = tyunknown_,
-            info = infoTm arg1
-          },
-          ty = tyunknown_,
-          info = infoTm e
-        })
-      else None ()
-    else None ()
-  else Some (appf2_ op e (nvar_ accId))
+let neutralElement = use MExprAst in
+  lam binop : Expr.
+  let i = infoTm binop in
+  match binop with TmConst {val = CAddi _} then
+    Some (TmConst {val = CInt {val = 0}, ty = TyInt {info = i}, info = i})
+  else match binop with TmConst {val = CMuli _} then
+    Some (TmConst {val = CInt {val = 1}, ty = TyInt {info = i}, info = i})
+  else match binop with TmConst {val = CConcat _} then
+    Some (TmSeq {tms = [], ty = TySeq {ty = TyUnknown {info = i}, info = i},
+                 info = i})
+  else None ()
 
-let findAssociativeBinaryOperator = use MExprEq in
-  lam e : Expr.
-  let assocOperator : Expr -> Option Expr = lam e.
-    match e with TmApp {lhs = TmApp {lhs = TmConst _ & op}} then
-      optionMap (lam. op) (neutralElement op)
+let isSelfRecursive : Name -> Expr -> Bool = use MExprAst in
+  lam funcId. lam expr.
+  recursive let work = lam e.
+    match e with TmVar {ident = id} then
+      nameEq funcId id
+    else match e with TmApp t then
+      work t.lhs
+    else false
+  in work expr
+
+let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
+  use MExprEq in
+  use MExprAst in
+  lam binding : RecLetBinding. lam binop. lam tailFuncId. lam accId.
+  let f = lam baseBranch. lam arg1. lam arg2.
+    if isSelfRecursive binding.ident arg1 then
+      let lhs = appf2_ binop baseBranch (nvar_ accId) in
+      let rhs = app_ (substituteIdentifier binding.ident tailFuncId arg1)
+                     (appf2_ binop arg2 (nvar_ accId)) in
+      Some (lhs, rhs)
+    else if isSelfRecursive binding.ident arg2 then
+      let lhs = appf2_ binop (nvar_ accId) baseBranch in
+      let rhs = app_ (substituteIdentifier binding.ident tailFuncId arg2)
+                     (appf2_ binop (nvar_ accId) arg1) in
+      Some (lhs, rhs)
     else None ()
   in
-  recursive let work : Expr -> Option Expr = lam e.
-    match e with TmMatch t then
-      match assocOperator t.thn with Some op1 then
-        match work t.els with Some op2 then
-          if eqExpr op1 op2 then Some op1 else None ()
-        else Some op1
-      else work t.els
-    else assocOperator e
-  in
-  work e
+  let body = functionBodyWithoutArguments binding.body in
+  match body with TmMatch ({thn = TmApp {lhs = TmApp {rhs = arg1},
+                                         rhs = arg2}} & t) then
+    optionMap
+      (lam cases : (Expr, Expr).
+        TmMatch {{t with thn = cases.1}
+                    with els = cases.0})
+      (f t.els arg1 arg2)
+  else match body with TmMatch ({els = TmApp {lhs = TmApp {rhs = arg1},
+                                              rhs = arg2}} & t) then
+    optionMap
+      (lam cases : (Expr, Expr).
+        TmMatch {{t with thn = cases.0}
+                    with els = cases.1})
+      (f t.thn arg1 arg2)
+  else None ()
 
-let toTailRecursiveExpression = use MExprAst in
-  lam binding : RecLetBinding. lam tailFnId. lam accId.
-  recursive let splitResult : Expr -> Expr -> (Expr, Expr) = lam acc. lam e.
-    match e with TmLet t then
-      splitResult (bind_ acc (TmLet {t with inexpr = unit_})) t.inexpr
-    else match e with TmLam t then
-      splitResult (bind_ acc (TmLam {t with body = unit_})) t.body
-    else match e with TmRecLets t then
-      splitResult (bind_ acc (TmRecLets {t with inexpr = unit_})) t.inexpr
-    else match e with TmType t then
-      splitResult (bind_ acc (TmType {t with inexpr = unit_})) t.inexpr
-    else match e with TmConDef t then
-      splitResult (bind_ acc (TmConDef {t with inexpr = unit_})) t.inexpr
-    else match e with TmUtest t then
-      splitResult (bind_ acc (TmUtest {t with next = unit_})) t.next
-    else match e with TmExt t then
-      splitResult (bind_ acc (TmExt {t with inexpr = unit_})) t.inexpr
-    else
-      (acc, e)
-  in
-  recursive let transformResultExpressionCases : Expr -> Expr -> Option Expr =
-    lam op. lam e.
-    match e with TmMatch t then
-      optionJoin
-        (optionMap
-          (lam thn.
-            optionMap
-              (lam els.
-                TmMatch {{t with thn = thn} with els = els})
-              (transformResultExpressionCases op t.els))
-          (toTailRecursiveForm binding.ident op tailFnId accId t.thn))
-    else toTailRecursiveForm binding.ident op tailFnId accId e
-  in
-  match splitResult unit_ binding.body with (funcBody, resultExpr) then
-    optionJoin
-      (optionMap
-        (lam op.
-          optionMap
-            (lam expr.
-              (op, bind_ funcBody expr))
-            (transformResultExpressionCases op resultExpr))
-        (findAssociativeBinaryOperator resultExpr))
-  else never
-
-recursive let addParameter = use MExprAst in
-  lam paramId. lam paramTy. lam body.
-  match body with TmLam t then
-    let body = addParameter paramId paramTy t.body in
-    let ty = TyArrow {from = t.tyIdent, to = ty body, info = t.info} in
-    TmLam {{t with body = body}
-              with ty = ty}
-  else
-    TmLam {
-      ident = paramId,
-      tyIdent = paramTy,
-      body = body,
-      ty = TyArrow {from = paramTy, to = ty body, info = NoInfo ()},
-      info = NoInfo ()
-    }
-end
-
-recursive let getReturnType = use MExprAst in
-  lam ty : Type.
-  match ty with TyArrow {to = to} then
-    to
-  else TyUnknown {info = infoTy ty}
-end
-
-let getFunctionArguments = use MExprAst in
-  lam e : Expr.
-  recursive let work = lam acc. lam e.
-    match e with TmLam t then
-      work (snoc acc (t.ident, t.tyIdent)) t.body
+let getFunctionParameters : Expr -> [(Name, Type)] = use MExprAst in
+  lam funcBody.
+  recursive let work = lam body. lam acc.
+    match body with TmLam t then
+      work t.body (snoc acc (t.ident, t.tyIdent))
     else acc
-  in
-  work [] e
+  in work funcBody []
 
-let tailRecursiveBinding = use MExprAst in
+let makeTailRecursiveBinding = use MExprAst in
   lam binding : RecLetBinding.
-  let tailFnId = nameSym (concat (nameGetStr binding.ident) "_tr") in
-  let accId = nameSym "acc" in
-  let accType = getReturnType binding.tyBody in
-  match toTailRecursiveExpression binding tailFnId accId with Some opt then
-    match opt with (op, body) then
-      let trBody = addParameter accId accType body in
-      let tailRecursiveBinding =
-        {{{binding with ident = tailFnId}
-                   with body = trBody}
-                   with tyBody = ty trBody} in
-      let functionArgs : [(Name, Type)] = getFunctionArguments body in
-      match neutralElement op with Some ne then
+  match tailPositionBinaryOperator binding.body with Some op then
+    match neutralElement op with Some ne then
+      let tailFnId = nameSym (concat (nameGetStr binding.ident) "_tr") in
+      let accId = nameSym "acc" in
+      let accType = getReturnType binding.tyBody in
+      match toTailRecursiveBody binding op tailFnId accId with Some tr then
+        let trTyBody = TyArrow {from = ty ne, to = accType,
+                                info = infoTm binding.body} in
+        let trInnerBody = TmLam {ident = accId, tyIdent = accType, body = tr,
+                                 ty = trTyBody, info = infoTm binding.body} in
+        let trBody = setFunctionBody binding.body trInnerBody in
+        let tailRecursiveBinding = {{{binding with ident = tailFnId}
+                                              with body = trBody}
+                                              with tyBody = ty trBody} in
+        let params : [(Name, Type)] = getFunctionParameters binding.body in
         let originalFunctionBody =
-          nlams_ functionArgs
+          nlams_ params
             (appSeq_
               (nvar_ tailFnId)
-              (snoc (map (lam arg : (Name, Type). nvar_ arg.0) functionArgs) ne))
-        in
+              (snoc (map (lam arg : (Name, Type). nvar_ arg.0) params) ne)) in
         let originalBinding = {binding with body = originalFunctionBody} in
         [tailRecursiveBinding, originalBinding]
       else [binding]
-    else never
+    else [binding]
   else [binding]
 
 lang MExprTailRecursion = MExprAst
   sem tailRecursive =
   | TmRecLets t ->
-    TmRecLets {{t with bindings = join (map tailRecursiveBinding t.bindings)}
+    TmRecLets {{t with bindings = join (map makeTailRecursiveBinding t.bindings)}
                   with inexpr = tailRecursive t.inexpr}
   | t -> smap_Expr_Expr tailRecursive t
 end
@@ -239,7 +185,7 @@ let factTailRecursive = nreclets_ [
     nlam_ n tyint_
       (nlam_ accName tyint_
         (if_ (leqi_ (nvar_ n) (int_ 1))
-             (muli_ (int_ 1) (nvar_ accName))
+             (muli_ (nvar_ accName) (int_ 1))
              (appf2_ (nvar_ trFunctionName)
                      (subi_ (nvar_ n) (int_ 1)) 
                      (muli_ (nvar_ accName) (nvar_ n)))))),
@@ -248,65 +194,39 @@ let factTailRecursive = nreclets_ [
       (appf2_ (nvar_ trFunctionName) (nvar_ n) (int_ 1)))] in
 
 utest fact with factTailRecursive using eqExpr in
+utest tailRecursive factTailRecursive with factTailRecursive using eqExpr in
 
 let mapName = nameSym "map" in
 let f = nameSym "f" in
 let s = nameSym "s" in
-let h = nameSym "h" in
-let t = nameSym "t" in
 let map = tailRecursive (nreclets_ [
-  (mapName, tyunknown_, nulam_ f (nulam_ s (
-    match_
-      (nvar_ s)
-      (pseqedgen_ [npvar_ h] t [])
-      (concat_ (seq_ [app_ (nvar_ f) (nvar_ h)])
-               (appf2_ (nvar_ mapName) (nvar_ f) (nvar_ t)))
-      (seq_ []))))
+  (mapName, tyarrows_ [tyarrow_ tyunknown_ tyunknown_, tyseq_ tyunknown_,
+                       tyseq_ tyunknown_],
+    nlam_ f (tyarrow_ tyunknown_ tyunknown_) (nlam_ s (tyseq_ tyunknown_) (
+      if_
+        (null_ (nvar_ s))
+        (seq_ [])
+        (concat_ (seq_ [app_ (nvar_ f) (head_ (nvar_ s))])
+                 (appf2_ (nvar_ mapName) (nvar_ f) (tail_ (nvar_ s)))))))
 ]) in
 
 let mapTailRecursive = nreclets_ [
   (trFunctionName, tyunknown_, nulam_ f (nulam_ s (nulam_ accName (
-    match_
-      (nvar_ s)
-      (pseqedgen_ [npvar_ h] t [])
-      (appf3_ (nvar_ trFunctionName) (nvar_ f) (nvar_ t)
-              (concat_ (nvar_ accName) (seq_ [app_ (nvar_ f) (nvar_ h)])))
-      (concat_ (seq_ []) (nvar_ accName))
-    )))),
+    if_
+      (null_ (nvar_ s))
+      (concat_ (nvar_ accName) (seq_ []))
+      (appf3_ (nvar_ trFunctionName)
+        (nvar_ f) (tail_ (nvar_ s))
+        (concat_ (nvar_ accName) (seq_ [app_ (nvar_ f) (head_ (nvar_ s))]))))))),
   (mapName, tyunknown_, nulam_ f (nulam_ s
     (appf3_ (nvar_ trFunctionName) (nvar_ f) (nvar_ s) (seq_ []))))
 ] in
 
 utest map with mapTailRecursive using eqExpr in
+utest tailRecursive mapTailRecursive with mapTailRecursive using eqExpr in
 
-let fibName = nameSym "fib" in
-let fib = tailRecursive (nreclets_ [
-  (fibName, tyunknown_, nulam_ n (
-    if_ (eqi_ (nvar_ n) (int_ 0))
-      (int_ 0)
-      (if_ (eqi_ (nvar_ n) (int_ 1))
-        (int_ 1)
-        (addi_ (app_ (nvar_ fibName) (subi_ (nvar_ n) (int_ 1)))
-               (app_ (nvar_ fibName) (subi_ (nvar_ n) (int_ 2)))))))
-]) in
-
-let fibTailRecursive = nreclets_ [
-  (trFunctionName, tyunknown_, nulam_ n (nulam_ accName (
-    if_ (eqi_  (nvar_ n) (int_ 0))
-      (addi_ (int_ 0) (nvar_ accName))
-      (if_ (eqi_ (nvar_ n) (int_ 1))
-        (addi_ (int_ 1) (nvar_ accName))
-        (appf2_ (nvar_ trFunctionName)
-          (subi_ (nvar_ n) (int_ 1))
-          (addi_ (app_ (nvar_ fibName) (subi_ (nvar_ n) (int_ 2)))
-                 (nvar_ accName))))))),
-  (fibName, tyunknown_, nulam_ n (
-    appf2_ (nvar_ trFunctionName) (nvar_ n) (int_ 0)))
-] in
-
-utest fib with fibTailRecursive using eqExpr in
-utest tailRecursive fibTailRecursive with fibTailRecursive using eqExpr in
-
+let h = nameSym "h" in
+let t = nameSym "t" in
 let mapUsingCons = tailRecursive (nreclets_ [
   (mapName, tyunknown_, nulam_ f (nulam_ s (
     match_

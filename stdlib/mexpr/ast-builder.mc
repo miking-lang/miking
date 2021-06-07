@@ -235,8 +235,6 @@ recursive let bind_ = use MExprAst in
   lam letexpr. lam expr.
   match letexpr with TmLet t then
     TmLet {t with inexpr = bind_ t.inexpr expr}
-  else match letexpr with TmLam t then
-    TmLam {t with body = bind_ t.body expr}
   else match letexpr with TmRecLets t then
     TmRecLets {t with inexpr = bind_ t.inexpr expr}
   else match letexpr with TmConDef t then

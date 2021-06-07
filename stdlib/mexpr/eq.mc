@@ -362,6 +362,9 @@ lang SeqOpEq = SeqOpAst
   | CLength {} -> match lhs with CLength _ then true else false
   | CReverse {} -> match lhs with CReverse _ then true else false
   | CSplitAt {} -> match lhs with CSplitAt _ then true else false
+  | CHead {} -> match lhs with CHead _ then true else false
+  | CTail {} -> match lhs with CTail _ then true else false
+  | CNull {} -> match lhs with CNull _ then true else false
 end
 
 lang TensorOpEq = TensorOpAst
