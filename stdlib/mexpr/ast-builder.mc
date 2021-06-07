@@ -276,7 +276,8 @@ let ulet_ = use MExprAst in
 
 let next_ = use MExprAst in
   lam n. lam e. lam ty.
-  TmExt {ident = n, effect = e, ty = ty, inexpr = uunit_, info = NoInfo ()}
+  TmExt {ident = n, tyIdent = ty, effect = e, ty = tyunknown_,
+         inexpr = uunit_, info = NoInfo ()}
 
 let ext_ = use MExprAst in
   lam s. lam e. lam ty.

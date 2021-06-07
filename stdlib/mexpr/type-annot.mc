@@ -322,9 +322,10 @@ lang ExpTypeAnnot = TypeAnnot + ExtAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmExt t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
-      let env = {env with varEnv = mapInsert t.ident t.ty varEnv} in
+      let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
       let inexpr = typeAnnotExpr env t.inexpr in
-      TmExt {t with inexpr = inexpr}
+      TmExt {{t with inexpr = inexpr}
+                with ty = ty inexpr}
     else never
 end
 

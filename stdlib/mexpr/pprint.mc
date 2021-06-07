@@ -371,7 +371,7 @@ lang ExtPrettyPrint = PrettyPrint + ExtAst + UnknownTypeAst
   | TmExt t ->
     match pprintVarName env t.ident with (env,str) then
       match pprintCode indent env t.inexpr with (env,inexpr) then
-        match getTypeStringCode indent env t.ty with (env,ty) then
+        match getTypeStringCode indent env t.tyIdent with (env,ty) then
           let e = if t.effect then "!" else "" in
           (env,
            join ["external ", str, e, " : ", ty, pprintNewline indent,

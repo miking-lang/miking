@@ -136,8 +136,9 @@ lang BootParser = MExprAst + ConstTransformer
              info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,
+           tyIdent = gtype t 0,
            effect = neqi (gint t 0) 0,
-           ty = gtype t 0,
+           ty = TyUnknown { info = ginfo t 0 },
            inexpr = gterm t 0,
            info = ginfo t 0}
 

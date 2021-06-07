@@ -235,7 +235,7 @@ lang ExtANF = ANF + ExtAst
 
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->
-    k (TmExt {t with inexpr = normalizeTerm inexpr})
+    TmExt {t with inexpr = normalize k t.inexpr}
 end
 
 lang MExprANF =

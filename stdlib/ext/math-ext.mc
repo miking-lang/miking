@@ -23,7 +23,7 @@ let exp = lam x. externalExp x
 utest exp 0. with 1. using eqf
 
 external externalLog : Float -> Float
-let log = lam x. externalLog x
+let log = lam x: Float. externalLog x
 utest log (exp 7.) with 7. using eqf
 utest exp (log 7.) with 7. using _eqf
 

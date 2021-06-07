@@ -506,7 +506,7 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         (implsMap : Map String [ExternalImpl])
         (env : GenerateEnv) =
 
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
 
@@ -520,8 +520,8 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         minOrElse
           (lam. error "impossible")
           (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
-             let cost1 = cost r1.ty ty in
-             let cost2 = cost r2.ty ty in
+             let cost1 = cost r1.ty tyIdent in
+             let cost2 = cost r2.ty tyIdent in
              subi cost1 cost2)
         impls
       in
