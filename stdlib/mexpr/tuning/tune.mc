@@ -182,46 +182,45 @@ lang TuneExhaustive = TuneLocalSearch
 
   sem step (searchState : SearchState) =
   | Exhaustive ({prev = prev, exhausted = exhausted} & x) ->
-    match searchState with
+    if exhausted then
+      (None (), Exhaustive x)
+    else match searchState with
       {cur =
          {assignment = Table {table = table, holes = holes, options = options}},
        cost = cost}
     then
-      if exhausted then
-        (None (), Exhaustive x)
-      else
-        let exhausted = ref false in
+      let exhausted = ref false in
 
-        recursive let nextConfig = lam prev. lam holes.
-          match holes with [] then []
-          else match holes with [h] then
-            match next (head prev) h with Some v then
-              [Some v]
-            else
-              modref exhausted true; []
-          else match holes with [h] ++ holes then
-            match next (head prev) h with Some v then
-              cons (Some v) (tail prev)
-            else
-              cons (next (None ()) h) (nextConfig (tail prev) holes)
-          else never
-        in
+      recursive let nextConfig = lam prev. lam holes.
+        match holes with [] then []
+        else match holes with [h] then
+          match next (head prev) h with Some v then
+            [Some v]
+          else
+            modref exhausted true; []
+        else match holes with [h] ++ holes then
+          match next (head prev) h with Some v then
+            cons (Some v) (tail prev)
+          else
+            cons (next (None ()) h) (nextConfig (tail prev) holes)
+        else never
+      in
 
-        utest
-          let ir = holeIntRange_ (int_ 0) 2 0 1 in
-          nextConfig
-            [Some (int_ 0), Some (int_ 1)]
-            [ir, ir]
-        with [Some (int_ 1), Some (int_ 1)] in
+      utest
+        let ir = holeIntRange_ (int_ 0) 2 0 1 in
+        nextConfig
+          [Some (int_ 0), Some (int_ 1)]
+          [ir, ir]
+      with [Some (int_ 1), Some (int_ 1)] in
 
-        let newTable =
-          Table { table = map (optionGetOrElse (lam. "impossible")) prev
-                , holes = holes
-                , options = options
-                } in
-        let newPrev = nextConfig prev holes in
-        ( Some {assignment = newTable, cost = cost newTable},
-          Exhaustive {prev = newPrev, exhausted = deref exhausted})
+      let newTable =
+        Table { table = map (optionGetOrElse (lam. "impossible")) prev
+              , holes = holes
+              , options = options
+              } in
+      let newPrev = nextConfig prev holes in
+      ( Some {assignment = newTable, cost = cost newTable},
+        Exhaustive {prev = newPrev, exhausted = deref exhausted})
     else never
 
   sem initMeta =
