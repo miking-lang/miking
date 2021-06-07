@@ -195,7 +195,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       (nulet_ n t.target)
        t.thn)
   | TmMatch ({pat = PatSeqTot {pats = []}} & t) ->
-    let cond = generate env (eqi_ (int_ 0) (length_ t.target)) in
+    let cond = generate env (null_ t.target) in
     _if cond (generate env t.thn) (generate env t.els)
   | TmMatch ({info = info, pat = PatRecord pr, thn = TmVar thnv, els = TmNever _} & t) ->
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
