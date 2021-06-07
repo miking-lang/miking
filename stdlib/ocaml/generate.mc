@@ -383,15 +383,15 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
-      match convertData info env (OTmVarExt { ident = r.ident }) r.ty ty
+      match convertData info env (OTmVarExt { ident = r.ident }) r.ty tyIdent
       with (_, body) then
         let inexpr = generate env inexpr in
         TmLet {
           ident = ident,
-          tyBody = ty,
+          tyBody = tyIdent,
           body = body,
           inexpr = inexpr,
           ty = TyUnknown { info = info },
