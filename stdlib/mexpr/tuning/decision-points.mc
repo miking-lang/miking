@@ -58,14 +58,14 @@ let _handleApps = use AppAst in use VarAst in
       match app with TmApp {lhs = TmVar v, rhs = rhs} then
         let resLhs =
           if digraphHasVertex v.ident g then
-            digraphAddEdge prev v.ident id g
-          else g
-        in f resLhs prev rhs
-      else match app with TmApp ({lhs = TmApp a, rhs = rhs}) then
+            [(prev, v.ident, id)]
+          else []
+        in concat resLhs (f g prev rhs)
+      else match app with TmApp {lhs = TmApp a, rhs = rhs} then
         let resLhs = appHelper g (TmApp a) in
-        f resLhs prev rhs
+        concat resLhs (f g prev rhs)
       else match app with TmApp a then
-        f (f g prev a.lhs) prev a.rhs
+        concat (f g prev a.lhs) (f g prev a.rhs)
       else never
   in appHelper g app
 
@@ -76,9 +76,13 @@ let _handleApps = use AppAst in use VarAst in
 lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
+    print "toCallGraph "; fprintLn (float2string (wallTimeMs ()));
     let gempty = digraphAddVertex _callGraphTop (digraphEmpty nameCmp _eqn) in
     let g = digraphAddVertices (_findVertices arg) gempty in
-    _findEdges g _callGraphTop arg
+    print "after findVertices "; fprintLn (float2string (wallTimeMs ()));
+    print (int2string (digraphCountVertices g)); fprintLn " vertices";
+    let edges = _findEdges g _callGraphTop arg in
+    digraphAddEdges edges g
 
   sem _findVertices =
   | TmLet t ->
@@ -100,24 +104,25 @@ lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem _findEdges (cg : CallGraph) (prev : Name) =
   | TmLet ({body = TmApp a} & t) ->
     let resBody = _handleApps t.ident _findEdges prev cg t.body in
-    _findEdges resBody prev t.inexpr
+    concat resBody (_findEdges cg prev t.inexpr)
 
   | TmLet ({body = TmLam lm} & t) ->
     let resBody = _findEdges cg t.ident lm.body in
-    _findEdges resBody prev t.inexpr
+    concat resBody (_findEdges cg prev t.inexpr)
 
   | TmRecLets t ->
     let res =
       let handleBinding = lam g. lam b : RecLetBinding.
-        match b with { body = TmLam { body = lambody }, ident = ident } then
-          _findEdges g ident lambody
-        else
-          _findEdges g prev b.body
-      in foldl (lam g. lam b. digraphUnion g (handleBinding g b)) cg t.bindings
-    in _findEdges res prev t.inexpr
+      match b with { body = TmLam { body = lambody }, ident = ident } then
+        _findEdges g ident lambody
+      else
+        _findEdges g prev b.body
+      in foldl (lam acc. lam b. concat acc (handleBinding cg b)) [] t.bindings
+    in concat res (_findEdges cg prev t.inexpr)
 
   | tm ->
-    sfold_Expr_Expr digraphUnion cg (smap_Expr_Expr (_findEdges cg prev) tm)
+    sfold_Expr_Expr concat [] (smap_Expr_Expr (_findEdges cg prev) tm)
+
 end
 
 --------------------------------------------
@@ -642,6 +647,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   --  maintaining call history. Returns a result of type 'Flattened'.
   sem flatten (publicFns : [Name]) =
   | t ->
+    fprintLn "flatten";
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     match _flattenWithLookup publicFns lookup t with (prog, env)
     then
@@ -669,6 +675,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv t in
     let env = callCtxInit publicFns (toCallGraph tm) tm in
+    print "after toCallGraph "; printLn (float2string (wallTimeMs ()));
     -- Declare the incoming variables
     let incVars =
       bindall_ (map (lam incVarName. nulet_ incVarName (ref_ (int_ _incUndef)))
