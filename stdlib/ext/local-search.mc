@@ -28,7 +28,8 @@ type SearchState = {
   iter : Int,                  -- number of iterations thus far
   stuck : Bool,                -- whether the search is stuck
                                -- (no local moves possible)
-  cost : Assignment -> Cost    -- cost of an assignment
+  cost : Assignment -> Cost,   -- cost of an assignment
+  cmp : Cost -> Cost -> Int    -- comparison of costs
 }
 
 ----------------------------
@@ -48,10 +49,10 @@ lang LocalSearchBase
 
   -- Initialize the search state from an initial assignment.
   -- : (Assignment -> Cost) -> Assignment -> SearchState
-  sem initSearchState (cost : Assignment -> Cost) =
+  sem initSearchState (cost : Assignment -> Cost) (cmp : Cost -> Cost -> Int) =
   | a ->
     let sol = {assignment = a, cost = cost a} in
-    {cur = sol, inc = sol, iter = 0, stuck = false, cost = cost}
+    {cur = sol, inc = sol, iter = 0, stuck = false, cost = cost, cmp = cmp}
 
   -- The neighbouring assignments from a search state.
   -- : SearchState -> [Assignment]
@@ -60,10 +61,6 @@ lang LocalSearchBase
   -- Select a solution among the neighbours.
   -- : [Assignment] -> SearchState -> Option Solution
   sem select (assignments : [Assignment]) =
-
-  -- Comparison function for costs.
-  -- : (Cost, Cost) -> Int
-  sem compare =
 
   -- Take one step, return both the next solution (if there is one), and the
   -- resulting meta state.
@@ -77,7 +74,7 @@ lang LocalSearchBase
   | metaState ->
     match searchState with {stuck = true} then
       (searchState, metaState)
-    else match searchState with {inc = inc} then
+    else match searchState with {inc = inc, cmp = cmp} then
       let searchState = {searchState with iter = addi searchState.iter 1} in
       let next = step searchState metaState in
       match next with (None (), _) then
@@ -85,7 +82,7 @@ lang LocalSearchBase
       else match next with (Some cur, metaState) then
         let cur : Solution = cur in
         let inc : Solution = inc in
-        let inc = if lti (compare (cur.cost, inc.cost)) 0 then cur else inc in
+        let inc = if lti (cmp cur.cost inc.cost) 0 then cur else inc in
         let searchState = {{searchState with cur = cur} with inc = inc} in
         (searchState, metaState)
       else dprintLn next; never
@@ -124,7 +121,7 @@ lang LocalSearchSelectRandomBest = LocalSearchBase
   sem select (assignments : [Assignment]) =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cost = cost} then
+    match searchState with {cost = cost, cmp = cmp} then
       match assignments with [] then None () else
 
       -- Find minimum and filter out other elements in one pass.
@@ -147,7 +144,7 @@ lang LocalSearchSelectRandomBest = LocalSearchBase
       let s = head sols in
       let minSols =
         filterMin s [s] (lam s1 : Solution. lam s2 : Solution.
-                           compare (s1.cost, s2.cost)) sols in
+                           cmp s1.cost s2.cost) sols in
       randElem minSols
     else never
 end
@@ -192,14 +189,15 @@ lang LocalSearchSimulatedAnnealing = LocalSearchBase
       let decayed = decay searchState (SimulatedAnnealing t) in
       let cur : Solution = searchState.cur in
       -- Metropolis condition
-      if leqi (compare (proposal.cost, cur.cost)) 0 then
+      if leqi (searchState.cmp proposal.cost cur.cost) 0 then
         -- Improving solution: accept.
         (Some proposal, decayed)
       else
         -- Worsening solution: accept with probability depending on temperature.
         let accept =
           let pAccept =
-            exp (divf (int2float (compare (proposal.cost, cur.cost))) t.temp) in
+            exp (divf
+              (int2float (searchState.cmp proposal.cost cur.cost)) t.temp) in
           let rnd = int2float (randIntU 0 100) in
           geqf (mulf pAccept 100.0) rnd
         in
@@ -397,6 +395,10 @@ let startState = initSearchState
   (lam tour : Assignment.
      match tour with TspTour {tour = tour} then
        TspCost {cost = foldl (lam acc. lam e : TspEdge. addi acc e.2) 0 tour}
+     else never)
+  (lam c1. lam c2.
+     match (c1, c2) with (TspCost {cost = v1}, TspCost {cost = v2}) then
+       subi v1 v2
      else never)
   (TspTour {tour = _initTour}) in
 

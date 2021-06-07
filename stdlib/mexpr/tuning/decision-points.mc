@@ -188,6 +188,12 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem isValue =
   | TmHole _ -> false
 
+  sem next (last : Option Expr) =
+  | TmHole {hole = hole} ->
+    hnext last hole
+
+  sem hnext (last : Option Expr) =
+
   sem normalize (k : Expr -> Expr) =
   | TmHole ({default = default} & t) ->
     k (TmHole {t with default = normalizeTerm t.default})
@@ -223,7 +229,7 @@ lang HoleBoolAst = BoolAst + HoleAst
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
-  sem next (last : Option Expr) =
+  sem hnext (last : Option Expr) =
   | BoolHole {} ->
     match last with None () then Some false_
     else match last with Some (TmConst {val = CBool {val = false}}) then
@@ -262,7 +268,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
   | IntRange {min = min, max = max} ->
     int_ (randIntU min (addi max 1))
 
-  sem next (last : Option Expr) =
+  sem hnext (last : Option Expr) =
   | IntRange {min = min, max = max} ->
     match last with None () then Some (int_ min)
     else match last with Some (TmConst {val = CInt {val = i}}) then
