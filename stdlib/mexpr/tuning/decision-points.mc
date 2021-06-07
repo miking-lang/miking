@@ -779,9 +779,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | tm ->
     use BootParser in
     let impl = parseMExprString [] "
-    let head = lam seq. get seq 0 in
-    let tail = lam seq. subsequence seq 1 (subi (length seq) 1) in
-    let null = lam seq. eqi 0 (length seq) in
     let or: Bool -> Bool -> Bool =
       lam a. lam b. if a then true else b in
 

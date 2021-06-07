@@ -45,6 +45,9 @@ let builtin = use MExprAst in
   , ("int2char", CInt2Char ())
   -- Sequences
   , ("create", CCreate ())
+  , ("createFingerTree", CCreateFingerTree ())
+  , ("createList", CCreateList ())
+  , ("createRope", CCreateRope ())
   , ("length", CLength ())
   , ("concat", CConcat ())
   , ("get", CGet ())
@@ -53,6 +56,13 @@ let builtin = use MExprAst in
   , ("snoc", CSnoc ())
   , ("splitAt", CSplitAt ())
   , ("reverse", CReverse ())
+  , ("head", CHead ())
+  , ("tail", CTail ())
+  , ("null", CNull ())
+  , ("map", CMap ())
+  , ("mapi", CMapi ())
+  , ("iter", CIter ())
+  , ("iteri", CIteri ())
   , ("subsequence", CSubsequence ())
   -- Random numbers
   , ("randIntU", CRandIntU ())

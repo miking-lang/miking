@@ -98,6 +98,9 @@ and const =
   | Cint2char
   (* MCore intrinsic: sequences *)
   | Ccreate of int option
+  | CcreateFingerTree of int option
+  | CcreateList of int option
+  | CcreateRope of int option
   | Clength
   | Cconcat of tm Mseq.t option
   | Cget of tm Mseq.t option
@@ -106,6 +109,13 @@ and const =
   | Csnoc of tm Mseq.t option
   | CsplitAt of tm Mseq.t option
   | Creverse
+  | Chead
+  | Ctail
+  | Cnull
+  | Cmap of (tm -> tm) option
+  | Cmapi of (int -> tm -> tm) option
+  | Citer of (tm -> unit) option
+  | Citeri of (int -> tm -> unit) option
   | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
@@ -168,8 +178,8 @@ and const =
   | CtensorIterSlice of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
-  | CbootParserParseMExprString of ustring Mseq.t option
-  | CbootParserParseMCoreFile of ustring Mseq.t option
+  | CbootParserParseMExprString of int Mseq.t Mseq.t option
+  | CbootParserParseMCoreFile of int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
   | CbootParserGetType of tm option
@@ -364,7 +374,7 @@ let smap_tm_tm (f : tm -> tm) = function
       TmRecLets
         (fi, List.map (fun (fi, x, s, ty, t) -> (fi, x, s, ty, f t)) lst, f tm)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map f tms)
+      TmSeq (fi, Mseq.map f tms)
   | TmRecord (fi, r) ->
       TmRecord (fi, Record.map f r)
   | TmRecordUpdate (fi, r, l, t) ->
@@ -529,6 +539,9 @@ let const_has_side_effect = function
       false
   (* MCore intrinsic: sequences *)
   | Ccreate _
+  | CcreateFingerTree _
+  | CcreateList _
+  | CcreateRope _
   | Clength
   | Cconcat _
   | Cget _
@@ -537,6 +550,13 @@ let const_has_side_effect = function
   | Csnoc _
   | CsplitAt _
   | Creverse
+  | Chead
+  | Ctail
+  | Cnull
+  | Cmap _
+  | Cmapi _
+  | Citer _
+  | Citeri _
   | Csubsequence _ ->
       false
   (* MCore intrinsics: Random numbers *)
@@ -621,9 +641,9 @@ let const_has_side_effect = function
   | CPar _ | CPy _ ->
       true
 
-(* Converts a sequence of terms to a ustring *)
-let tmseq2ustring fi s =
-  Mseq.Helpers.map
+(* Converts a sequence of terms to a sequence of integers *)
+let tmseq2seqOfInt fi s =
+  Mseq.map
     (fun x ->
       match x with
       | TmConst (_, CChar i) ->
@@ -631,12 +651,13 @@ let tmseq2ustring fi s =
       | _ ->
           raise_error fi "The term is not a string" )
     s
-  |> Mseq.Helpers.to_ustring
+
+(* Converts a sequence of terms to a ustring *)
+let tmseq2ustring fi s = tmseq2seqOfInt fi s |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =
-  s |> Mseq.Helpers.of_ustring
-  |> Mseq.Helpers.map (fun x -> TmConst (fi, CChar x))
+  s |> Mseq.Helpers.of_ustring |> Mseq.map (fun x -> TmConst (fi, CChar x))
 
 (* Converts a list of terms (for a tuple) to a record term *)
 let tuple2record fi lst =

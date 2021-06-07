@@ -115,8 +115,28 @@ lang SeqOpTypeAst = SeqOpAst
                             tygenericseq_ "a"]
   | CLength _ -> tyarrow_ (tygenericseq_ "a") tyint_
   | CReverse _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
+  | CHead _ -> tyarrow_ (tygenericseq_ "a") (tygeneric_ "a")
+  | CTail _ -> tyarrow_ (tygenericseq_ "a") (tygenericseq_ "a")
+  | CNull _ -> tyarrow_ (tygenericseq_ "a") tybool_
+  | CMap _ ->
+    tyarrows_ [ tyarrow_ (tygeneric_ "a") (tygeneric_ "a"),
+                tygenericseq_ "a", tygenericseq_ "a" ]
+  | CMapi _ ->
+    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tygeneric_ "a"],
+                tygenericseq_ "a", tygenericseq_ "a" ]
+  | CIter _ ->
+    tyarrows_ [tyarrow_ (tygeneric_ "a") tyunit_, tygenericseq_ "a", tyunit_]
+  | CIteri _ ->
+    tyarrows_ [ tyarrows_ [tyint_, tygeneric_ "a", tyunit_],
+                tygenericseq_ "a", tyunit_ ]
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
+  | CCreateFingerTree _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
+  | CCreateList _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
+  | CCreateRope _ ->
+    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
   | CSplitAt _ -> tyarrows_ [tygenericseq_ "a", tyint_,
                              tytuple_ [tygenericseq_ "a", tygenericseq_ "a"]]
   | CSubsequence _ -> tyarrows_ [tygenericseq_ "a", tyint_, tyint_,

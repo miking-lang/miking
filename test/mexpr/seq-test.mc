@@ -5,6 +5,23 @@
 
 include "common.mc"
 
+-- Helper function for tests
+let eqSeq = lam eq : (a -> a -> Bool).
+  recursive let work = lam as. lam bs.
+    let pair = (as, bs) in
+    match pair with ([], []) then true else
+    match pair with ([a] ++ as, [b] ++ bs) then
+      if eq a b then work as bs else false
+      else false
+    in work
+
+utest eqSeq eqi [] [] with true
+utest eqSeq eqi [1] [] with false
+utest eqSeq eqi [] [1] with false
+utest eqSeq eqi [1] [1] with true
+utest eqSeq eqi [1] [2] with false
+utest eqSeq eqi [2] [1] with false
+
 mexpr
 
 -- Construction of lists
@@ -19,6 +36,30 @@ utest create 3 (lam. 10) with [10,10,10] in
 utest create 8 (lam. 'a') with ['a','a','a','a','a','a','a','a'] in
 utest create 4 (lam i. muli 2 i) with [0,2,4,6] in
 utest create 0 (lam i. i) with [] using eqSeq eqi in
+
+-- 'createFingerTree n f' is like 'create n f', but the underlying representation
+-- of the sequence is a finger tree.
+-- Int -> (Int -> a) -> [a]
+utest
+  let s = createFingerTree 3 (lam i. i) in
+  [get s 0, get s 1, get s 2]
+with [0, 1, 2] in
+
+-- 'createList n f' is like 'create n f', but the underlying representation of
+-- the sequence is a const list.
+-- Int -> (Int -> a) -> [a]
+utest
+  let s = createList 3 (lam i. i) in
+  [get s 0, get s 1, get s 2]
+with [0, 1, 2] in
+
+-- 'createRope n f' is like 'create n f', but the underlying representation of
+-- the sequence is a rope.
+-- Int -> (Int -> a) -> [a]
+utest
+  let s = createRope 3 (lam i. i) in
+  [get s 0, get s 1, get s 2]
+with [0, 1, 2] in
 
 -- 'length s' returns the length of a sequence (or a string)
 utest length [] with 0 in
@@ -70,7 +111,54 @@ utest reverse [1,7,10] with [10,7,1] in
 utest reverse ['a'] with ['a'] in
 utest reverse [] with [] using eqSeq eqi in
 
+-- 'subsequence s start len' returns the subsequence of 's' of length at most
+-- 'len' that starts at index 'start'
+utest subsequence [1,2,3] 0 2 with [1,2] in
+utest subsequence [1,2,3] 0 10 with [1,2,3] in
+utest subsequence [1,2] 1 1 with [2] in
 
+-- 'head s' returns the first element in 's'
+-- [a] -> a
+utest head [2,3,5] with 2 in
+
+-- 'tail s' returns a sequence with all except the first element in 's'
+-- [a] -> [a]
+utest tail [2,4,8] with [4,8] in
+
+-- 'map f s' applies 'f' to all elements in 's' and returns the resulting
+-- sequence
+-- (a -> b) -> [a] -> [b]
+utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21] in
+utest map (lam x. addi x 1) [] with [] using eqSeq eqi in
+
+-- 'mapi f s' is similar to 'map', but 'f' takes the index of the element as its
+-- first argument, and the element as its second argument
+-- (Int -> a -> b) -> [a] -> [b]
+utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4] in
+utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi in
+
+-- 'iter f s' applies 'f' to every element in 's'
+-- (a -> Unit) -> [a] -> Unit
+utest iter (lam x. addi x 1) [1, 2, 3]
+with () in
+
+utest
+  let r = ref 0 in
+  iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4];
+  deref r
+with 10 in
+
+-- 'iteri f s' is like 'iter' but 'f' takes the index of the element as its
+-- first argument and the element as its second argument.
+-- (Int -> a -> Unit) -> [a] -> Unit
+utest iteri (lam i. lam x. addi x i) [1, 2, 3]
+with () in
+
+utest
+  let r = ref 0 in
+  iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) [1, 2, 3, 4];
+  deref r
+with 16 in
 
 -- The rest of the file contains various test computions with sequences
 

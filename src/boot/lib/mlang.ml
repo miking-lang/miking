@@ -303,7 +303,7 @@ let translate_cases f target cases =
     TmMatch (pat_info pat, target, pat, handler, inner)
   in
   let msg =
-    Mseq.Helpers.map
+    Mseq.map
       (fun c -> TmConst (NoInfo, CChar c))
       (us "No matching case for function " ^. f |> Mseq.Helpers.of_ustring)
   in
@@ -593,7 +593,7 @@ let rec desugar_tm nss env subs =
         Mseq.Helpers.fold_right
           (fun p (env, pats) ->
             desugar_pat env p |> map_right (fun p -> Mseq.cons p pats) )
-          pats (env, Mseq.empty)
+          (env, Mseq.empty) pats
       and desugar_pat env = function
         | PatNamed (fi, name) ->
             name |> desugar_pname env |> map_right (fun n -> PatNamed (fi, n))
@@ -660,7 +660,7 @@ let rec desugar_tm nss env subs =
   | TmApp (fi, a, b) ->
       TmApp (fi, desugar_tm nss env subs a, desugar_tm nss env subs b)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map (desugar_tm nss env subs) tms)
+      TmSeq (fi, Mseq.map (desugar_tm nss env subs) tms)
   | TmRecord (fi, r) ->
       TmRecord (fi, Record.map (desugar_tm nss env subs) r)
   | TmRecordUpdate (fi, a, lab, b) ->

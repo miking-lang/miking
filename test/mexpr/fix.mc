@@ -44,9 +44,6 @@ utest odd 41 with true in
 utest odd 42 with false in
 
 -- Generalized fixpoint for mutual recursion-----------------------------------
-let head = lam seq. get seq 0 in
-let tail = lam seq. subsequence seq 1 (length seq) in
-
 let map = fix (lam map. lam f. lam seq.
   if eqi (length seq) 0 then []
   else cons (f (head seq)) (map f (tail seq))

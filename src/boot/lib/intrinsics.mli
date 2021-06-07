@@ -1,11 +1,24 @@
 open Ustring.Op
 
 module Mseq : sig
-  type 'a t
+  type 'a t =
+    | FingerTree of 'a BatFingerTree.t
+    | List of 'a List.t
+    | Rope of 'a array Rope.t
 
   val create : int -> (int -> 'a) -> 'a t
 
+  val create_fingertree : int -> (int -> 'a) -> 'a t
+
+  val create_list : int -> (int -> 'a) -> 'a t
+
+  val create_rope : int -> (int -> 'a) -> 'a t
+
   val empty : 'a t
+
+  val empty_rope : 'a t
+
+  val empty_list : 'a t
 
   val length : 'a t -> int
 
@@ -21,30 +34,60 @@ module Mseq : sig
 
   val reverse : 'a t -> 'a t
 
+  val head : 'a t -> 'a
+
+  val tail : 'a t -> 'a t
+
+  val null : 'a t -> bool
+
+  val iter : ('a -> unit) -> 'a t -> unit
+
+  val iteri : (int -> 'a -> unit) -> 'a t -> unit
+
   val split_at : 'a t -> int -> 'a t * 'a t
 
   val subsequence : 'a t -> int -> int -> 'a t
 
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
+  val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
+
   module Helpers : sig
     val of_list : 'a list -> 'a t
+
+    val of_list_fingertree : 'a list -> 'a t
+
+    val of_list_list : 'a list -> 'a t
+
+    val of_list_rope : 'a list -> 'a t
 
     val to_list : 'a t -> 'a list
 
     val of_array : 'a array -> 'a t
 
+    val of_array_fingertree : 'a array -> 'a t
+
+    val of_array_list : 'a array -> 'a t
+
+    val of_array_rope : 'a array -> 'a t
+
     val to_array : 'a t -> 'a array
 
     val of_ustring : ustring -> int t
+
+    val of_ustring_rope : ustring -> int t
+
+    val of_ustring_list : ustring -> int t
+
+    val of_ustring_fingertree : ustring -> int t
 
     val to_ustring : int t -> ustring
 
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
-    val map : ('a -> 'b) -> 'a t -> 'b t
-
     val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
 
-    val fold_right : ('a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+    val fold_right : ('a -> 'acc -> 'acc) -> 'acc -> 'a t -> 'acc
 
     val combine : 'a t -> 'b t -> ('a * 'b) t
 

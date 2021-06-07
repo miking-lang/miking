@@ -18,13 +18,6 @@ let gint = lam t. lam n. bootParserGetInt t n
 let gfloat = lam t. lam n. bootParserGetFloat t n
 let glistlen = lam t. lam n. bootParserGetListLength t n
 
-let makeSeq = lam f. lam len.
-  recursive
-    let work = lam acc. lam n.
-      if eqi n len then acc else work (snoc acc (f n)) (addi n 1)
-  in
-    work [] 0
-
 
 lang BootParser = MExprAst + ConstTransformer
 
@@ -50,96 +43,97 @@ lang BootParser = MExprAst + ConstTransformer
   -- Match term from ID
   sem matchTerm (t:Unknown) =
   | 100 /-TmVar-/ ->
-      TmVar {ident = gname t 0,
-             ty = TyUnknown { info = ginfo t 0 },
-             info = ginfo t 0}
+    TmVar {ident = gname t 0,
+           ty = TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0}
   | 101 /-TmApp-/ ->
-      TmApp {lhs = gterm t 0,
-             rhs = gterm t 1,
-             ty = TyUnknown { info = ginfo t 0 },
-             info = ginfo t 0}
+    TmApp {lhs = gterm t 0,
+           rhs = gterm t 1,
+           ty = TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0}
   | 102 /-TmLam-/ ->
-      TmLam {ident = gname t 0,
-             tyIdent = gtype t 0,
-             ty = TyUnknown { info = ginfo t 0 },
-             info = ginfo t 0,
-             body = gterm t 0}
+    TmLam {ident = gname t 0,
+           tyIdent = gtype t 0,
+           ty = TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0,
+           body = gterm t 0}
   | 103 /-TmLet-/ ->
-      TmLet {ident = gname t 0,
-             tyBody = gtype t 0,
-             body = gterm t 0,
-             inexpr = gterm t 1,
+    TmLet {ident = gname t 0,
+           tyBody = gtype t 0,
+           body = gterm t 0,
+           inexpr = gterm t 1,
+           ty = TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0}
+  | 104 /-TmRecLets-/ ->
+    TmRecLets {bindings =
+               create (glistlen t 0)
+                      (lam n. {ident = gname t n,
+                               tyBody = gtype t n,
+                               body = gterm t n,
+                               ty = TyUnknown { info = ginfo t 0 },
+                               info = ginfo t (addi n 1)}),
+               inexpr = gterm t (glistlen t 0),
+               ty = TyUnknown { info = ginfo t 0 },
+               info = ginfo t 0}
+  | 105 /-TmConst-/ ->
+    let c = gconst t 0 in
+    TmConst {val = gconst t 0,
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
-  | 104 /-TmRecLets-/ ->
-      TmRecLets {bindings =
-                   makeSeq (lam n. {ident = gname t n,
-                                    tyBody = gtype t n,
-                                    body = gterm t n,
-                                    info = ginfo t (addi n 1)})
-                                      (glistlen t 0),
-                 inexpr = gterm t (glistlen t 0),
-                 ty = TyUnknown { info = ginfo t 0 },
-                 info = ginfo t 0}
-  | 105 /-TmConst-/ ->
-      let c = gconst t 0 in
-      TmConst {val = gconst t 0,
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
   | 106 /-TmSeq-/ ->
-      TmSeq {tms = makeSeq (lam n. gterm t n) (glistlen t 0),
-             ty =  TyUnknown { info = ginfo t 0 },
-             info = ginfo t 0}
+    TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
+           ty =  TyUnknown { info = ginfo t 0 },
+           info = ginfo t 0}
   | 107 /-TmRecord-/ ->
-     let lst = makeSeq (lam n. (gstr t n, gterm t n)) (glistlen t 0) in
-      TmRecord {bindings =
-                 mapFromSeq cmpSID
-                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
+    let lst = create (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
+    TmRecord {bindings =
+                mapFromSeq cmpSID
+                  (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
+              ty = TyUnknown { info = ginfo t 0 },
+              info = ginfo t 0}
   | 108 /-TmRecordUpdate-/ ->
-     TmRecordUpdate {rec = gterm t 0,
-                    key = stringToSid (gstr t 0),
-                    value = gterm t 1,
-                    ty = TyUnknown { info = ginfo t 0 },
-                    info = ginfo t 0}
+    TmRecordUpdate {rec = gterm t 0,
+                   key = stringToSid (gstr t 0),
+                   value = gterm t 1,
+                   ty = TyUnknown { info = ginfo t 0 },
+                   info = ginfo t 0}
   | 109 /-TmType-/ ->
-      TmType {ident = gname t 0,
+    TmType {ident = gname t 0,
+            tyIdent = gtype t 0,
+            ty = TyUnknown { info = ginfo t 0 },
+            inexpr = gterm t 0,
+            info = ginfo t 0}
+  | 110 /-TmConDef-/ ->
+    TmConDef {ident = gname t 0,
               tyIdent = gtype t 0,
               ty = TyUnknown { info = ginfo t 0 },
               inexpr = gterm t 0,
               info = ginfo t 0}
-  | 110 /-TmConDef-/ ->
-     TmConDef {ident = gname t 0,
-               tyIdent = gtype t 0,
-               inexpr = gterm t 0,
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
   | 111 /-TmConApp-/ ->
-     TmConApp {ident = gname t 0,
-               body = gterm t 0,
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
+    TmConApp {ident = gname t 0,
+              body = gterm t 0,
+              ty = TyUnknown { info = ginfo t 0 },
+              info = ginfo t 0}
   | 112 /-TmMatch-/ ->
-     TmMatch {target = gterm t 0,
-              pat = gpat t 0,
-              thn = gterm t 1,
-              els = gterm t 2,
-              ty = TyUnknown { info = ginfo t 0 },
-              info = ginfo t 0}
+    TmMatch {target = gterm t 0,
+             pat = gpat t 0,
+             thn = gterm t 1,
+             els = gterm t 2,
+             ty = TyUnknown { info = ginfo t 0 },
+             info = ginfo t 0}
   | 113 /-TmUtest-/ ->
-     let tusing = match (glistlen t 0) with 4 then
-                    Some (gterm t 3)
-                  else None () in
-     TmUtest {test = gterm t 0,
-              expected = gterm t 1,
-              next = gterm t 2,
-              tusing = tusing,
-              ty = TyUnknown { info = ginfo t 0 },
-              info = ginfo t 0}
+    let tusing = match (glistlen t 0) with 4 then
+                   Some (gterm t 3)
+                 else None () in
+    TmUtest {test = gterm t 0,
+             expected = gterm t 1,
+             next = gterm t 2,
+             tusing = tusing,
+             ty = TyUnknown { info = ginfo t 0 },
+             info = ginfo t 0}
   | 114 /-TmNever-/ ->
-     TmNever {ty = TyUnknown { info = ginfo t 0 },
-              info = ginfo t 0}
+    TmNever {ty = TyUnknown { info = ginfo t 0 },
+             info = ginfo t 0}
   | 115 /-TmExt-/ ->
     TmExt {ident = gname t 0,
            effect = neqi (gint t 0) 0,
@@ -171,7 +165,7 @@ lang BootParser = MExprAst + ConstTransformer
     TySeq {info = ginfo t 0,
            ty = gtype t 0}
   | 207 /-TyRecord-/ ->
-    let lst = makeSeq (lam n. (gstr t n, gtype t n)) (glistlen t 0) in
+    let lst = create (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
     TyRecord {info = ginfo t 0,
               labels = map (lam b : (String, a). stringToSid b.0) lst,
               fields = mapFromSeq cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
@@ -216,45 +210,45 @@ lang BootParser = MExprAst + ConstTransformer
     PatNamed {ident = strToPatName (gstr t 0),
             info = ginfo t 0}
   | 401 /-PatSeqTot-/ ->
-    PatSeqTot {pats = makeSeq (lam n. gpat t n) (glistlen t 0),
+    PatSeqTot {pats = create (glistlen t 0) (lam n. gpat t n),
              info = ginfo t 0}
   | 402 /-PatSeqEdge-/ ->
     let len = glistlen t 0 in
-    PatSeqEdge {prefix = makeSeq (lam n. gpat t n) len,
+    PatSeqEdge {prefix = create len (lam n. gpat t n),
               middle = strToPatName (gstr t 0),
-              postfix = makeSeq (lam n. gpat t (addi n len)) (glistlen t 1),
+              postfix = create (glistlen t 1) (lam n. gpat t (addi n len)),
               info = ginfo t 0}
   | 403 /-PatRecord-/ ->
-     let lst = makeSeq (lam n. (gstr t n, gpat t n)) (glistlen t 0) in
+    let lst = create (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
 
-     PatRecord {bindings =
-                 mapFromSeq cmpSID
-                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-              info = ginfo t 0}
+    PatRecord {bindings =
+               mapFromSeq cmpSID
+                 (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
+               info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
-           subpat = gpat t 0,
-           info = ginfo t 0}
+             subpat = gpat t 0,
+             info = ginfo t 0}
   | 405 /-PatInt-/ ->
      PatInt {val = gint t 0,
-           info = ginfo t 0}
+             info = ginfo t 0}
   | 406 /-PatChar-/ ->
      PatChar {val = int2char (gint t 0),
-            info = ginfo t 0}
+              info = ginfo t 0}
   | 407 /-PatBool-/ ->
      PatBool {val = eqi (gint t 0) 1,
-            info = ginfo t 0}
+              info = ginfo t 0}
   | 408 /-PatAnd-/ ->
      PatAnd {lpat = gpat t 0,
-           rpat = gpat t 1,
-           info = ginfo t 0}
+             rpat = gpat t 1,
+             info = ginfo t 0}
   | 409 /-PatOr-/ ->
      PatOr {lpat = gpat t 0,
-           rpat = gpat t 1,
-           info = ginfo t 0}
+            rpat = gpat t 1,
+            info = ginfo t 0}
   | 410 /-PatNot-/ ->
      PatNot {subpat = gpat t 0,
-           info = ginfo t 0}
+             info = ginfo t 0}
 
 
   -- Get info help function

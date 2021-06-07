@@ -14,7 +14,6 @@ let measure excludes number str pre_cmd cmd post_cmd =
   if String.contains excludes (string_of_int number).[0] then ()
   else (
     printf "%d. %s " number str ;
-    flush stdout ;
     let to_null = " 2>&1 >/dev/null" in
     let _ = Sys.command (pre_cmd ^ to_null) in
     let run () =
@@ -28,6 +27,19 @@ let measure excludes number str pre_cmd cmd post_cmd =
     run () ;
     let _ = Sys.command (post_cmd ^ to_null) in
     printf "\n" ; flush stdout )
+
+let generate_dune name =
+  let oc = open_out "dune" in
+  Printf.fprintf oc
+    "(env\n\
+    \       (dev\n\
+    \          (flags (:standard -w -a))\n\
+    \          (ocamlc_flags (-without-runtime))))\n\n\
+    \      (executable\n\
+    \         (name %s)\n\
+    \         (libraries str batteries)\n\
+    \         (modes byte exe))" name ;
+  close_out oc
 
 let main =
   let len = Array.length Sys.argv in
@@ -48,13 +60,14 @@ let main =
       ("./" ^ name ^ " " ^ iterations)
       ("rm -f " ^ name) ;
     if Sys.file_exists (name ^ ".ml") then (
-      measure excludes 4 "OCaml byte code    "
-        ("ocamlbuild " ^ name ^ ".byte")
-        ("ocamlrun " ^ name ^ ".byte" ^ " " ^ iterations)
-        ("rm -f " ^ name ^ ".byte") ;
+      generate_dune name ;
+      measure excludes 4 "Ocaml byte code    "
+        ("dune build --root ." ^ " " ^ name ^ ".bc")
+        ("ocamlrun _build/default/" ^ name ^ ".bc" ^ " " ^ iterations)
+        "rm -rf _build" ;
       measure excludes 5 "OCaml native:      "
-        ("ocamlbuild " ^ name ^ ".native")
-        ("./" ^ name ^ ".native" ^ " " ^ iterations)
-        ("rm -f " ^ name ^ ".native") )
+        ("dune build --root ." ^ " " ^ name ^ ".exe")
+        ("./_build/default/" ^ name ^ ".exe" ^ " " ^ iterations)
+        "rm -rf _build && rm dune*" )
     else () )
   else printf "ERROR: Cannot find file %s.mc\n" name

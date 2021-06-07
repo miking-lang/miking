@@ -580,7 +580,17 @@ lang SeqOpAst = SeqAst
   | CConcat {}
   | CLength {}
   | CReverse {}
+  | CHead {}
+  | CTail {}
+  | CNull {}
+  | CMap {}
+  | CMapi {}
+  | CIter {}
+  | CIteri {}
   | CCreate {}
+  | CCreateFingerTree {}
+  | CCreateList {}
+  | CCreateRope {}
   | CSplitAt {}
   | CSubsequence {}
 end

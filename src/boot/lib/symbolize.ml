@@ -68,7 +68,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
       (fun p (patEnv, ps) ->
         let patEnv, p = sPat patEnv p in
         (patEnv, Mseq.cons p ps) )
-      pats (patEnv, Mseq.empty)
+      (patEnv, Mseq.empty) pats
   and sPat (patEnv : (ident * Symb.t) list) = function
     | PatNamed (fi, NameStr (x, _)) ->
         let patEnv, s = add_name (IdVar (sid_of_ustring x)) patEnv in
@@ -182,7 +182,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   | TmApp (fi, t1, t2) ->
       TmApp (fi, symbolize env t1, symbolize env t2)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map (symbolize env) tms)
+      TmSeq (fi, Mseq.map (symbolize env) tms)
   | TmRecord (fi, r) ->
       TmRecord (fi, Record.map (symbolize env) r)
   | TmRecordUpdate (fi, t1, l, t2) ->
