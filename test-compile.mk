@@ -64,6 +64,7 @@ compile_files += stdlib/mexpr/eq.mc
 compile_files += stdlib/mexpr/ast-smap-sfold-tests.mc
 compile_files += stdlib/mexpr/keyword-maker.mc
 compile_files += stdlib/mexpr/const-types.mc
+compile_files += stdlib/mexpr/patterns.mc
 compile_files += stdlib/c/ast.mc
 compile_files += stdlib/c/pprint.mc
 #compile_files += stdlib/c/compile.mc
@@ -130,6 +131,10 @@ compile_files += src/main/compile.mc
 compile_files += src/main/run.mc
 compile_files += stdlib/ext/math-ext.mc
 compile_files += stdlib/ext/ext-test.mc
+compile_files += stdlib/futhark/ast.mc
+compile_files += stdlib/futhark/ast-builder.mc
+compile_files += stdlib/futhark/generate.mc
+compile_files += stdlib/futhark/pprint.mc
 
 all: ${compile_files}
 

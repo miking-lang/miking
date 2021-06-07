@@ -64,6 +64,7 @@ run_files += test/mlang/also_includes_lib.mc
 # run_files += stdlib/mexpr/ast-smap-sfold-tests.mc
 # run_files += stdlib/mexpr/keyword-maker.mc
 # run_files += stdlib/mexpr/const-types.mc
+# run_files += stdlib/mexpr/patterns.mc
 # run_files += stdlib/c/ast.mc
 # run_files += stdlib/c/pprint.mc
 # run_files += stdlib/c/compile.mc
@@ -132,6 +133,10 @@ run_files += stdlib/char.mc
 # run_files += src/main/mi.mc
 # run_files += src/main/compile.mc
 # run_files += src/main/run.mc
+run_files += stdlib/futhark/ast.mc
+#run_files += stdlib/futhark/ast-builder.mc
+#run_files += stdlib/futhark/generate.mc
+#run_files += stdlib/futhark/pprint.mc
 
 all: ${run_files}
 
