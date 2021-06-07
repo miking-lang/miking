@@ -47,6 +47,9 @@ let functionBodyWithoutArguments : Expr -> Expr = use MExprAst in
     else e
   in work bodyWithArguments
 
+-- NOTE(larshum, 2021-06-07): For now, we assume that the recursive function
+-- only has two cases and that one branch wraps at least one self-recursive
+-- call in an associative constant operator.
 let tailPositionBinaryOperator = use MExprAst in
   lam bodyWithArgs : Expr.
   let body = functionBodyWithoutArguments bodyWithArgs in
@@ -173,33 +176,30 @@ let accName = nameSym "acc" in
 
 let factName = nameSym "fact" in
 let n = nameSym "n" in
-let fact = tailRecursive (nreclets_ [
-  (factName, tyarrow_ tyint_ tyint_, nlam_ n tyint_
-    (if_ (leqi_ (nvar_ n) (int_ 1))
-      (int_ 1)
-      (muli_ (nvar_ n) (app_ (nvar_ factName) (subi_ (nvar_ n) (int_ 1))))))
-]) in
-
+let fact = nreclets_ [
+  (factName, tyarrow_ tyint_ tyint_, nlam_ n tyint_ (
+    if_ (leqi_ (nvar_ n) (int_ 1))
+        (int_ 1)
+        (muli_ (nvar_ n) (app_ (nvar_ factName) (subi_ (nvar_ n) (int_ 1))))))
+] in
 let factTailRecursive = nreclets_ [
   (trFunctionName, tyunknown_,
-    nlam_ n tyint_
-      (nlam_ accName tyint_
-        (if_ (leqi_ (nvar_ n) (int_ 1))
-             (muli_ (nvar_ accName) (int_ 1))
-             (appf2_ (nvar_ trFunctionName)
-                     (subi_ (nvar_ n) (int_ 1)) 
-                     (muli_ (nvar_ accName) (nvar_ n)))))),
+    nlam_ n tyint_ (nlam_ accName tyint_ (
+      if_ (leqi_ (nvar_ n) (int_ 1))
+          (muli_ (nvar_ accName) (int_ 1))
+          (appf2_ (nvar_ trFunctionName)
+                  (subi_ (nvar_ n) (int_ 1))
+                  (muli_ (nvar_ accName) (nvar_ n)))))),
   (factName, tyunknown_,
     nlam_ n tyint_
       (appf2_ (nvar_ trFunctionName) (nvar_ n) (int_ 1)))] in
-
-utest fact with factTailRecursive using eqExpr in
+utest tailRecursive fact with factTailRecursive using eqExpr in
 utest tailRecursive factTailRecursive with factTailRecursive using eqExpr in
 
 let mapName = nameSym "map" in
 let f = nameSym "f" in
 let s = nameSym "s" in
-let map = tailRecursive (nreclets_ [
+let map = nreclets_ [
   (mapName, tyarrows_ [tyarrow_ tyunknown_ tyunknown_, tyseq_ tyunknown_,
                        tyseq_ tyunknown_],
     nlam_ f (tyarrow_ tyunknown_ tyunknown_) (nlam_ s (tyseq_ tyunknown_) (
@@ -208,8 +208,7 @@ let map = tailRecursive (nreclets_ [
         (seq_ [])
         (concat_ (seq_ [app_ (nvar_ f) (head_ (nvar_ s))])
                  (appf2_ (nvar_ mapName) (nvar_ f) (tail_ (nvar_ s)))))))
-]) in
-
+] in
 let mapTailRecursive = nreclets_ [
   (trFunctionName, tyunknown_, nulam_ f (nulam_ s (nulam_ accName (
     if_
@@ -221,12 +220,33 @@ let mapTailRecursive = nreclets_ [
   (mapName, tyunknown_, nulam_ f (nulam_ s
     (appf3_ (nvar_ trFunctionName) (nvar_ f) (nvar_ s) (seq_ []))))
 ] in
-
-utest map with mapTailRecursive using eqExpr in
+utest tailRecursive map with mapTailRecursive using eqExpr in
 utest tailRecursive mapTailRecursive with mapTailRecursive using eqExpr in
 
 let h = nameSym "h" in
 let t = nameSym "t" in
+let mapMatch = nreclets_ [
+  (mapName, tyunknown_, nulam_ f (nulam_ s (
+    match_ (nvar_ s)
+      (pseqedgen_ [npvar_ h] t [])
+      (concat_ (seq_ [app_ (nvar_ f) (head_ (nvar_ s))])
+               (appf2_ (nvar_ mapName) (nvar_ f) (tail_ (nvar_ s))))
+      (seq_ []))))
+] in
+let mapMatchTailRecursive = nreclets_ [
+  (trFunctionName, tyunknown_, nulam_ f (nulam_ s (nulam_ accName (
+    match_ (nvar_ s)
+      (pseqedgen_ [npvar_ h] t [])
+      (appf3_ (nvar_ trFunctionName)
+        (nvar_ f) (tail_ (nvar_ s))
+        (concat_ (nvar_ accName) (seq_ [app_ (nvar_ f) (head_ (nvar_ s))])))
+      (concat_ (nvar_ accName) (seq_ [])))))),
+  (mapName, tyunknown_, nulam_ f (nulam_ s (
+    appf3_ (nvar_ trFunctionName) (nvar_ f) (nvar_ s) (seq_ []))))
+] in
+utest tailRecursive mapMatch with mapMatchTailRecursive using eqExpr in
+utest tailRecursive mapMatchTailRecursive with mapMatchTailRecursive using eqExpr in
+
 let mapUsingCons = tailRecursive (nreclets_ [
   (mapName, tyunknown_, nulam_ f (nulam_ s (
     match_
@@ -236,7 +256,6 @@ let mapUsingCons = tailRecursive (nreclets_ [
              (appf2_ (nvar_ mapName) (nvar_ f) (nvar_ t)))
       (seq_ []))))
 ]) in
-
 utest tailRecursive mapUsingCons with mapUsingCons using eqExpr in
 
 ()
