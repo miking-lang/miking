@@ -22,7 +22,11 @@ type NFA = {
 
 -- get equality function for states
 let nfaGetEqv = lam dfa.
-  dfa.graph.eqv
+  digraphEqv dfa.graph
+
+-- get comparison function for states
+let nfaGetCmp = lam dfa.
+  digraphCmpv dfa.graph
 
 -- get equality functions for labels
 let nfaGetEql = lam dfa.

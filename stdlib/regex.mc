@@ -158,7 +158,7 @@ let regexFromDFA = lam dfa.
     let newStates = filter (lam st. not ((nfaGetEqv dfa) s st)) (nfaStates dfa) in
     let newTrans = concat keepTrans addTrans in
     -- Create a new dfa where s has been eliminated
-    let newDFA = dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (nfaGetEql dfa)in
+    let newDFA = dfaConstr newStates newTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetCmp dfa) (nfaGetEql dfa)in
     newDFA
   in
 
@@ -208,7 +208,7 @@ let regexFromDFA = lam dfa.
   let regexOneAccept = lam dfa. lam acceptState.
     -- Turn acceptState into the only accepting state
     let dfa = dfaConstr (nfaStates dfa) (nfaTransitions dfa) (nfaStartState dfa)
-                        [acceptState] (nfaGetEqv dfa) (nfaGetEql dfa) in
+                        [acceptState] (nfaGetCmp dfa) (nfaGetEql dfa) in
 
     let startState = nfaStartState dfa in
     let toEliminate = filter
@@ -245,7 +245,7 @@ let regexFromDFA = lam dfa.
                     states
   in
   -- Create the DFA with the merged transitions
-  let dfa = dfaConstr states mergedTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetEqv dfa) (eqr (nfaGetEql dfa)) in
+  let dfa = dfaConstr states mergedTrans (nfaStartState dfa) (nfaAcceptStates dfa) (nfaGetCmp dfa) (eqr (nfaGetEql dfa)) in
 
   -- Step 2: State Elimination.
   -- Iteratively eliminate states and replace by regexes
@@ -290,7 +290,7 @@ let states = [1] in
 let transitions = [] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 utest regexFromDFA dfa with Epsilon () in
 
@@ -307,7 +307,7 @@ let states = [1] in
 let transitions = [(1,1,l1), (1,1,l2)] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 -- (l1 | l2)*
 utest regexFromDFA dfa with Kleene (Union (Symbol l1, Symbol l2)) in
@@ -329,7 +329,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [2] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 -- ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Concat (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -354,7 +354,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 -- ((l2 | l4 | l5) l3)*
 utest regexFromDFA dfa with Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5),
@@ -380,7 +380,7 @@ let states = [1,2,3] in
 let transitions = [(1,2,l1),(3,1,l3),(1,3,l2),(1,3,l4),(1,3,l5)] in
 let startState = 1 in
 let acceptStates = [1,2] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 -- (((l2 | l4 | l5) l3)*) | ((l2 | l4 | l5) l3)* l1
 utest regexFromDFA dfa with Union (Kleene (Concat (Union (Union (Symbol l2, Symbol l4), Symbol l5), Symbol l3)),
@@ -406,10 +406,6 @@ let acceptStates = [4] in
 let startState = 1 in
 let states = [1,2,3,4] in
 let transitions = [(1,2,"a"),(2,3,"c"),(2,4,"e"),(3,2,"b"),(4,2,"d")] in
-let dfa = dfaConstr states transitions startState acceptStates eqi eqString in
-
--- Short form: a(cb|ed)*e
--- Actual return: a(cb)*e(d(cb)*e)*
-utest regexFromDFA dfa with Concat (Concat (Symbol ("a"),Concat (Kleene (Concat (Symbol ("c"),Symbol ("b") )),Symbol ("e"))),Kleene (Concat (Symbol ("d"),Concat (Kleene (Concat (Symbol ("c"),Symbol ("b"))),Symbol ("e"))))) in
+let dfa = dfaConstr states transitions startState acceptStates subi eqString in
 
 ()
