@@ -15,9 +15,6 @@ let _tupleConversionCost = 1
 let _recordConversionCost = 1
 
 lang OCamlGenerateExternal = OCamlAst + MExprAst
-
-  sem generate (env : GenerateEnv) =
-
   -- Popluates `env` by chosing external implementations.
   sem chooseExternalImpls
         (implsMap : Map String [ExternalImpl])
@@ -229,34 +226,34 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields2, labels = labels2}) then
         let costsTms =
-          mapi
-            (lam i. lam field : (String, Type).
+          zipWith
+            (lam l2. lam field : (String, Type).
               match field with (l1, ty1) then
-                let l2 = get labels2 i in
                 match mapLookup l2 fields2 with Some ty2 then
                   convertData
                     info env (OTmProject { field = l1, tm = t }) ty1 ty2
                 else never
               else never)
-            fields1
+            labels2 fields1
         in
         match unzip costsTms with (costs, tms) then
-          -- NOTE(oerikss, 2021-05-23): We need to run generate since we create
-          -- an exclusive mexpr term.
           let ns = create (length labels2) (lam. nameSym "t") in
-          let vars =
-            map
-              (lam n.
-                TmVar
-                  { ident = n, ty = TyUnknown { info = info }, info = info })
-                ns
-          in
-          let labels2 = map sidToString labels2 in
-          let t = generate env (tmRecord info ty2 (zip labels2 vars)) in
-          let lets = zipWith nulet_ ns tms in
-          let t = bindall_ (snoc lets t) in
-          let cost = addi _recordConversionCost (foldl1 addi costs) in
-          (cost, t)
+          match mapLookup (ocamlTypedFields fields2) env.records
+          with Some id then
+            let bindings =
+              zipWith (lam label. lam t. (label, objRepr t)) labels2 tms
+            in
+            let record =
+              TmRecord {
+                bindings = mapFromSeq cmpSID bindings,
+                ty = ty2,
+                info = info
+               }
+            in
+            let t = OTmConApp { ident = id, args = [record] } in
+            let cost = addi _recordConversionCost (foldl1 addi costs) in
+            (cost, t)
+          else never
         else never
       else infoErrorExit info "Cannot convert record"
     else match tt with
@@ -264,73 +261,49 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     then
       match mapLookup ident env.constrs
       with Some (TyRecord {fields = fields1, labels = labels1}) then
-        let ns = create (length labels1) (lam. nameSym "r") in
-        let pvars =
-          map (lam n. PatNamed { ident = PName n, info = info }) ns
-        in
-        let rpat = patRecord (zip (map sidToString labels1) pvars) info in
-        match unzip fields2 with (labels2, tys2) then
-          let costsTms =
-            mapi
-              (lam i. lam x : (Name, Type).
-                match x with (ident, ty2) then
-                  let l1 = get labels1 i in
-                  match mapLookup l1 fields1 with Some ty1 then
-                    let var =
-                      TmVar {
-                        ident = ident,
-                        ty = TyUnknown { info = info },
-                        info = info
-                      }
-                    in
-                    convertData info env var ty1 ty2
-                  else
-                    infoErrorExit info "Cannot convert record"
-                else never)
-              (zip ns tys2)
+        match mapLookup (ocamlTypedFields fields1) env.records
+        with Some id then
+          let ns = create (length labels1) (lam. nameSym "r") in
+          let pvars =
+            map
+              (lam n.
+                PatNamed {
+                  ident = PName n,
+                  info = info
+                })
+              ns
           in
-          match unzip costsTms with (costs, tms) then
-            let ident = nameSym "x" in
-            -- NOTE(oerikss, 2021-05-23): We use this binding in place of the
-            -- term t to convert since we do not want generate to run
-            -- recursivly on t. Generate introduces Obj.magic at places which
-            -- might remove type information necessary for the external
-            -- function to work properly.
-            let var =
-              TmVar {
-                ident = ident,
-                ty = ty1,       -- NOTE(oerikss, 2021-05-23): we need the type
-                                -- of the record here to allow generate to
-                                -- construct the correct match code.
-                info = info
-              }
+          let rpat =
+            OPatRecord { bindings = mapFromSeq cmpSID (zip labels1 pvars) }
+          in
+          match unzip fields2 with (labels2, tys2) then
+            let costsTms =
+              mapi
+                (lam i. lam x : (Name, Type).
+                  match x with (ident, ty2) then
+                    let l1 = get labels1 i in
+                    match mapLookup l1 fields1 with Some ty1 then
+                      let var =
+                        TmVar {
+                          ident = ident,
+                          ty = TyUnknown { info = info },
+                          info = info
+                        }
+                      in
+                      convertData info env (objMagic var) ty1 ty2
+                    else
+                      infoErrorExit info "impossible"
+                  else never)
+                (zip ns tys2)
             in
-            let inexpr =
-              TmMatch {
-                target = var,
-                pat = rpat,
-                thn =
-                  OTmRecord {
-                    bindings = zip labels2 tms, tyident = tyident
-                  },
-                els = TmNever { ty = TyUnknown { info = info }, info = info },
-                ty = TyUnknown { info = info },
-                info = info
-              }
-            in
-            let t =
-              TmLet {
-                ident = ident,
-                ty = TyUnknown { info = info },
-                body = t,
-                tyBody = TyUnknown { info = info },
-                -- NOTE(oerikss, 2021-05-23): We need to run generate on inexpr
-                -- since it is an exclusive MExpr term.
-                inexpr = generate env inexpr,
-                info = info
-              }
-            in
-            (foldl1 addi costs, t)
+            match unzip costsTms with (costs, tms) then
+              let rec =
+                OTmRecord { bindings = zip labels2 tms, tyident = tyident }
+              in
+              let cpat = OPatCon { ident = id, args = [rpat] } in
+              let t = OTmMatch { target = t, arms = [(cpat, rec)] } in
+              (foldl1 addi costs, t)
+            else never
           else never
         else never
       else infoErrorExit info "Cannot convert record"
@@ -506,7 +479,7 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         (implsMap : Map String [ExternalImpl])
         (env : GenerateEnv) =
 
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
 
@@ -520,8 +493,8 @@ lang OCamlGenerateExternalNaive = OCamlGenerateExternal + ExtAst
         minOrElse
           (lam. error "impossible")
           (lam r1 : ExternalImpl. lam r2 : ExternalImpl.
-             let cost1 = cost r1.ty ty in
-             let cost2 = cost r2.ty ty in
+             let cost1 = cost r1.ty tyIdent in
+             let cost2 = cost r2.ty tyIdent in
              subi cost1 cost2)
         impls
       in

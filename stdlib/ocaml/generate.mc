@@ -30,15 +30,10 @@ let _mkFinalPatExpr : AssocMap Name Name -> (Pat, Expr) = use OCamlAst in lam na
     (OPatTuple {pats = map npvar_ patNames}, OTmTuple {values = map nvar_ exprNames})
   else never
 
-let _objRepr = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.repr"}) t
-let _objMagic = use OCamlAst in
-  lam t. app_ (OTmVarExt {ident = "Obj.magic"}) t
-
 let _omatch_ = lam target. lam arms.
   use OCamlAst in
   match arms with [h] ++ rest
-  then OTmMatch { target = target, arms = cons h (map (lam x: (Unknown, Unknown). (x.0, _objMagic x.1)) rest) }
+  then OTmMatch { target = target, arms = cons h (map (lam x: (Unknown, Unknown). (x.0, objMagic x.1)) rest) }
   else OTmMatch { target = target, arms = arms }
 
 -- Construct a match expression that matches against an option
@@ -76,18 +71,6 @@ let _intrinsicName : String -> Name = lam str.
   match mapLookup str _builtinNameMap with Some name then
     name
   else error (join ["Unsupported intrinsic: ", str])
-
-let toOCamlType = use MExprAst in
-  lam ty : Type.
-  recursive let work = lam nested : Bool. lam ty : Type.
-    match ty with TyRecord t then
-      if or (mapIsEmpty t.fields) nested then tyunknown_
-      else TyRecord {t with fields = mapMap (work true) t.fields}
-    else tyunknown_
-  in work false ty
-
-let ocamlTypedFields = lam fields : Map SID Type.
-  mapMap toOCamlType fields
 
 let lookupRecordFields = use MExprAst in
   lam ty. lam constrs.
@@ -136,7 +119,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match generatePat env targetTy tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
-          (_objMagic
+          (objMagic
             (bind_ (nulet_ tname (generate env t.target))
                    (generate env (wrap (_some expr)))))
           pat
@@ -179,12 +162,12 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
 
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
-    _if (_objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
+    _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
-    _if (_objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
+    _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
   | TmMatch ({pat = PatInt {val = i}} & t) ->
     let cond = generate env (eqi_ (int_ i) t.target) in
-    _if (_objMagic cond) (generate env t.thn) (generate env t.els)
+    _if (objMagic cond) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
@@ -207,7 +190,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
           match mapLookup fieldTypes env.records with Some name then
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
-            _omatch_ (_objMagic (generate env t.target))
+            _omatch_ (objMagic (generate env t.target))
               [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
           else error "Record type not handled by type-lifting"
         else error (infoErrorString info "Unknown record type")
@@ -241,7 +224,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             let pat = if isUnit
               then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
               else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
-            let innerPatternTerm = toNestedMatch (withType argTy (_objMagic target)) arm.1 in
+            let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
             (pat, generate env innerPatternTerm)
           else
             let msg = join [
@@ -251,7 +234,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             infoErrorExit t.info msg
         in
         let flattenedMatch =
-          _omatch_ (_objMagic (generate env t.target))
+          _omatch_ (objMagic (generate env t.target))
             (snoc
                 (map f (mapBindings arms))
                 (pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
@@ -270,9 +253,9 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     let innerGenerate = lam tm.
       let tm = generate env tm in
       match tm with TmConst _ then tm
-      else _objMagic tm in
+      else objMagic tm in
     app_
-      (_objMagic (OTmVarExt {ident = (intrinsicOpSeq "Helpers.of_array")}))
+      (objMagic (OTmVarExt {ident = (intrinsicOpSeq "Helpers.of_array")}))
       (OTmArray {tms = map innerGenerate tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
@@ -282,7 +265,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
         match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some id then
-            let bindings = mapMap (lam e. _objRepr (generate env e)) t.bindings in
+            let bindings = mapMap (lam e. objRepr (generate env e)) t.bindings in
             OTmConApp {
               ident = id,
               args = [TmRecord {t with bindings = bindings}]
@@ -298,7 +281,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
         match mapLookup fieldTypes env.records with Some id then
           let rec = generate env t.rec in
           let key = sidToString t.key in
-          let value = _objRepr (generate env t.value) in
+          let value = objRepr (generate env t.value) in
           let inlineRecordName = nameSym "rec" in
           _omatch_ rec
             [ ( OPatCon {ident = id, args = [npvar_ inlineRecordName]}
@@ -335,7 +318,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
           -- NOTE(vipa, 2021-05-11): We have an explicit record, use it directly
           OTmConApp {
             ident = t.ident,
-            args = [TmRecord {r with bindings = mapMap (lam e. _objRepr (generate env e)) r.bindings}]
+            args = [TmRecord {r with bindings = mapMap (lam e. objRepr (generate env e)) r.bindings}]
           }
         else
           -- NOTE(vipa, 2021-05-11): Not an explicit record, pattern match and reconstruct it
@@ -352,7 +335,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
               ty = ty t.body,
               info = infoTm t.body
             } in
-            _omatch_ (_objMagic (generate env t.body))
+            _omatch_ (objMagic (generate env t.body))
               [ ( OPatCon {ident = id, args = [pat]}
                 , OTmConApp {ident = t.ident, args = [reconstructedRecord]}
                 )
@@ -365,14 +348,14 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       -- NOTE(vipa, 2021-05-11): Argument is not an explicit record, it should be `repr`ed
       OTmConApp {
         ident = t.ident,
-        args = [_objRepr (generate env t.body)]
+        args = [objRepr (generate env t.body)]
       }
   | TmApp (t & {lhs = lhs & !(TmApp _), rhs = rhs}) ->
   -- NOTE(vipa, 2021-05-17): Putting `magic` around the function in a
   -- function chain makes all the other types flexible, the arguments
   -- can be any type, and the result type can be any type, it's thus
   -- very economical
-    TmApp {{t with lhs = _objMagic (generate env lhs)}
+    TmApp {{t with lhs = objMagic (generate env lhs)}
               with rhs = generate env rhs}
   | TmNever t ->
     let msg = "Reached a never term, which should be impossible in a well-typed program." in
@@ -383,15 +366,15 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, ty = ty, inexpr = inexpr, info = info} ->
+  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
     match mapLookup ident env.exts with Some r then
       let r : ExternalImpl = head r in
-      match convertData info env (OTmVarExt { ident = r.ident }) r.ty ty
+      match convertData info env (OTmVarExt { ident = r.ident }) r.ty tyIdent
       with (_, body) then
         let inexpr = generate env inexpr in
         TmLet {
           ident = ident,
-          tyBody = ty,
+          tyBody = tyIdent,
           body = body,
           inexpr = inexpr,
           ty = TyUnknown { info = info },
@@ -410,7 +393,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     (assocInsert {eq=nameEqSym} n targetName assocEmpty, identity)
   | PatBool {val = val} ->
     let wrap = lam cont.
-      _if (_objMagic (nvar_ targetName))
+      _if (objMagic (nvar_ targetName))
         (if val then cont else _none)
         (if val then _none else cont)
     in (assocEmpty, wrap)
@@ -537,7 +520,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     in
     if mapIsEmpty t.bindings then
       let wrap = lam cont.
-        _omatch_ (_objMagic (nvar_ targetName))
+        _omatch_ (objMagic (nvar_ targetName))
           [(OPatTuple {pats = []}, cont)]
       in
       (assocEmpty, wrap)
@@ -558,7 +541,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
             in
             let precord = OPatRecord {bindings = mapMapWithKey f t.bindings} in
             let wrap = lam cont.
-              _omatch_ (_objMagic (nvar_ targetName))
+              _omatch_ (objMagic (nvar_ targetName))
                 [ (OPatCon {ident = name, args = [precord]}, foldr (lam f. lam v. f v) cont allWraps)
                 ]
             in
@@ -595,7 +578,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
           let isUnit = match innerTy with TyRecord {fields = fields} then
             mapIsEmpty fields else false in
           let wrap = lam cont.
-            _omatch_ (_objMagic (nvar_ targetName))
+            _omatch_ (objMagic (nvar_ targetName))
               [ ( OPatCon
                   { ident = t.ident
                   , args = if isUnit then [] else [npvar_ conVarName] -- TODO(vipa, 2021-05-14): This will break if the sub-pattern actually examines the unit
@@ -662,7 +645,7 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
     else
       {env with aliases = mapInsert name ty env.aliases}
   in
-  assocSeqFold f _emptyGenerateEnv typeLiftEnv
+  assocSeqFold f emptyGenerateEnv typeLiftEnv
 
 
 lang OCamlTypeDeclGenerate = MExprTypeLiftOrderedRecordsCmpClosed
@@ -728,7 +711,7 @@ recursive let wrapOCamlAstInPrint = lam ast. lam printTerm.
   use OCamlAst in
   match ast with OTmVariantTypeDecl t then
     OTmVariantTypeDecl {t with inexpr = wrapOCamlAstInPrint t.inexpr printTerm}
-  else app_ printTerm (_objMagic ast)
+  else app_ printTerm (objMagic ast)
 in
 
 let printf = lam fmt.
@@ -796,7 +779,7 @@ let sameSemantics = lam mexprAst. lam ocamlAst.
 in
 
 let generateEmptyEnv = lam t.
-  generate _emptyGenerateEnv t
+  generate emptyGenerateEnv t
 in
 
 let generateTypeAnnotated = lam t.

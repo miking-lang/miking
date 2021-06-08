@@ -126,6 +126,45 @@ let extTestMap =
         libraries = []
       }
     ]),
+    ("extTestRecord3", [
+      {
+        ident = "Boot.Exttest.myrec3",
+        ty = otyrecord_
+              (otyvarext_ "Boot.Exttest.myrec3_t" [])
+              [
+                ("a"
+                ,otyrecord_
+                  (otyvarext_ "Boot.Exttest.myrec1_t" [])
+                  [("a", tyint_), ("b", tyfloat_)]),
+                ("b"
+                ,otyrecord_
+                  (otyvarext_ "Boot.Exttest.myrec2_t" [])
+                  [("a", otylist_ tyint_), ("b", tyint_)])
+              ],
+        libraries = []
+      }
+    ]),
+    ("extTestRecord3BA", [
+      {
+        ident = "Boot.Exttest.myrec3_b_a",
+        ty =
+          tyarrow_
+            (otyrecord_
+              (otyvarext_ "Boot.Exttest.myrec3_t" [])
+              [
+                ("a"
+                ,otyrecord_
+                  (otyvarext_ "Boot.Exttest.myrec1_t" [])
+                  [("a", tyint_), ("b", tyfloat_)]),
+                ("b"
+                ,otyrecord_
+                  (otyvarext_ "Boot.Exttest.myrec2_t" [])
+                  [("a", otylist_ tyint_), ("b", tyint_)])
+              ])
+            (otylist_ tyint_),
+        libraries = []
+      }
+    ]),
     ("extTestArgLabel", [
       {
         ident = "Boot.Exttest.arg_label",

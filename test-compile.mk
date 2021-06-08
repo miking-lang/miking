@@ -71,7 +71,6 @@ compile_files += stdlib/c/pprint.mc
 compile_files += stdlib/ad/dualnum-helpers.mc
 compile_files += stdlib/ad/dualnum-lift.mc
 compile_files += stdlib/ad/dualnum.mc
-#compile_files += stdlib/ad/dualnum-symb.mc
 compile_files += stdlib/ad/dualnum-tree.mc
 compile_files += stdlib/ext/ad/dualnum-ext.mc
 #compile_files += stdlib/parser/lexer.mc

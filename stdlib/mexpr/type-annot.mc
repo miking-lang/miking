@@ -261,11 +261,18 @@ lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
     else never
 end
 
-lang LetTypeAnnot = TypeAnnot + LetAst
+lang TypePropagation = TypeAnnot
+  sem propagateExpectedType (tyEnv : Map Name Type) =
+  | (_, t) -> t
+end
+
+lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
-      let body = typeAnnotExpr env t.body in
+      let body = match t.tyBody with TyUnknown _ then t.body else
+        propagateExpectedType tyEnv (t.tyBody, t.body) in
+      let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
         if _isTypeAscription t then
           withType tyBody body
@@ -286,17 +293,43 @@ lang LetTypeAnnot = TypeAnnot + LetAst
     else never
 end
 
+lang PropagateLetType = TypePropagation + LetAst
+  sem propagateExpectedType (tyEnv : Map Name Type) =
+  | (ty, TmLet t) -> TmLet {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}
+end
+
+lang PropagateRecLetsType = TypePropagation + RecLetsAst
+  sem propagateExpectedType (tyEnv : Map Name Type) =
+  | (ty, TmRecLets t) -> TmRecLets {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}
+end
+
+lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
+  sem propagateExpectedType (tyEnv : Map Name Type) =
+  | (TyArrow {from = from, to = to}, TmLam t) ->
+    match compatibleType tyEnv from t.tyIdent with Some ty then
+      TmLam {{t with tyIdent = ty}
+                with body = propagateExpectedType tyEnv (to, t.body)}
+    else
+      let msg = join [
+        "Inconsistent type annotation of let-expression and lambda\n",
+        "Type from let: ", _pprintType from, "\n",
+        "Type from lambda: ", _pprintType t.tyIdent
+      ] in
+      infoErrorExit t.info msg
+end
+
 lang ExpTypeAnnot = TypeAnnot + ExtAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmExt t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
-      let env = {env with varEnv = mapInsert t.ident t.ty varEnv} in
+      let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
       let inexpr = typeAnnotExpr env t.inexpr in
-      TmExt {t with inexpr = inexpr}
+      TmExt {{t with inexpr = inexpr}
+                with ty = ty inexpr}
     else never
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
+lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     -- Add mapping from binding identifier to annotated type before doing type
@@ -310,7 +343,9 @@ lang RecLetsTypeAnnot = TypeAnnot + RecLetsAst + LamAst
       mapInsert binding.ident binding.tyBody acc
     in
     let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
-      let body = typeAnnotExpr env binding.body in
+      let body = match binding.tyBody with TyUnknown _ then binding.body else
+        propagateExpectedType env.tyEnv (binding.tyBody, binding.body) in
+      let body = typeAnnotExpr env body in
       match env with {tyEnv = tyEnv} then
         let tyBody =
           match compatibleType tyEnv binding.tyBody (ty body) with Some tyBody then
@@ -587,6 +622,7 @@ lang MExprTypeAnnot =
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
+  PropagateArrowLambda + PropagateLetType +
 
   -- Terms
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
