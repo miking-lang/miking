@@ -448,7 +448,7 @@ let callCtxLbl2Inc : Name -> CallCtxEnv -> Name =
 let callCtxLbl2Count : Name -> CallCtxEnv -> Int =
   lam lbl : Name. lam env : CallCtxEnv.
     match env with { lbl2count = lbl2count } then
-      optionGetOrElse (lam. error "lbl2count lookup failed")
+      optionGetOrElse (lam. dprintLn lbl; error "lbl2count lookup failed")
                       (mapLookup lbl lbl2count)
     else never
 
@@ -675,8 +675,37 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv t in
-    let env = callCtxInit publicFns (toCallGraph tm) tm in
-    print "after toCallGraph "; printLn (float2string (wallTimeMs ()));
+    let g = toCallGraph tm in
+
+    --printLn (digraphPrintDot g (lam n. n.0) (lam n. n.0));
+
+    let paths = _eqPaths g publicFns _callGraphTop tm in
+    let names = foldl (lam acc. lam path. concat acc path) [] paths in
+
+    dprintLn names;
+    let pruned = foldl (lam acc. lam e : DigraphEdge Name Name.
+      if any (_eqn e.2) names then
+        print "*** KEEP "; dprintLn e;
+        let acc =
+          if digraphHasVertex e.0 acc then acc else digraphAddVertex e.0 acc
+        in
+        let acc =
+          if digraphHasVertex e.1 acc then acc else digraphAddVertex e.1 acc
+        in
+        digraphAddEdge e.0 e.1 e.2 acc
+      else
+        print "*** THROW AWAY "; dprintLn e;
+        acc
+      )
+      (digraphEmpty nameCmp _eqn)
+      (digraphEdges g) in
+
+    -- printLn "";
+    -- printLn (digraphPrintDot pruned (lam n. n.0) (lam n. n.0));
+    -- printLn "";
+
+    let env = callCtxInit publicFns pruned tm in
+    print "after toCallGraph "; fprintLn (float2string (wallTimeMs ()));
     -- Declare the incoming variables
     let incVars =
       bindall_ (map (lam incVarName. nulet_ incVarName (ref_ (int_ _incUndef)))
@@ -685,6 +714,18 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let tm = bind_ incVars tm in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
     (prog, env)
+
+  sem _eqPaths (g : CallGraph) (public : [Name]) (cur : Name) =
+  | TmLet ({ body = TmLam lm } & t) ->
+    concat (_eqPaths g public t.ident t.body) (_eqPaths g public cur t.inexpr)
+
+  | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
+    let paths = eqPaths g cur depth public in
+    concat paths (_eqPaths g public cur t.inexpr)
+
+  | tm ->
+    sfold_Expr_Expr concat [] (smap_Expr_Expr (_eqPaths g public cur) tm)
+
 
   -- Find the initial mapping from decision points to values
   sem _initAssignments =
@@ -752,13 +793,17 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     -- NOTE(Linnea, 2021-01-29): ANF form means no recursion necessary for the
     -- application node (can only contain values)
     let le = TmLet {t with inexpr = _maintainCallCtx lookup env cur t.inexpr} in
-    match _appGetCallee (TmApp a) with Some callee then
-      match callCtxFunLookup callee env
-      with Some iv then
-        -- Set the incoming var of callee to current node
-        let count = callCtxLbl2Count t.ident env in
-        let update = modref_ (nvar_ iv) (int_ count) in
-        bind_ (nulet_ (nameSym "") update) le
+    match callCtxFunLookup cur env with Some _ then
+      match _appGetCallee (TmApp a) with Some callee then
+        print "Callee: "; dprintLn callee;
+        print "Caller: "; dprintLn cur;
+        match callCtxFunLookup callee env
+        with Some iv then
+          -- Set the incoming var of callee to current node
+          let count = callCtxLbl2Count t.ident env in
+          let update = modref_ (nvar_ iv) (int_ count) in
+          bind_ (nulet_ (nameSym "") update) le
+        else le
       else le
     else le
 
@@ -768,6 +813,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       { callGraph = callGraph, publicFns = publicFns }
      then
        let paths = eqPaths callGraph cur depth publicFns in
+       print "*** REAL EQPATHS: "; dprintLn paths;
        let env = callCtxAddHole t.body ident paths env in
        let iv = callCtxFun2Inc cur env in
        let lookupCode = _lookupCallCtx lookup ident iv env paths in
