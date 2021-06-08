@@ -76,11 +76,8 @@ let _handleApps = use AppAst in use VarAst in
 lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    print "toCallGraph "; fprintLn (float2string (wallTimeMs ()));
     let gempty = digraphAddVertex _callGraphTop (digraphEmpty nameCmp _eqn) in
     let g = digraphAddVertices (_findVertices arg) gempty in
-    print "after findVertices "; fprintLn (float2string (wallTimeMs ()));
-    print (int2string (digraphCountVertices g)); fprintLn " vertices";
     let edges = _findEdges g _callGraphTop arg in
     digraphAddEdges edges g
 
@@ -448,7 +445,7 @@ let callCtxLbl2Inc : Name -> CallCtxEnv -> Name =
 let callCtxLbl2Count : Name -> CallCtxEnv -> Int =
   lam lbl : Name. lam env : CallCtxEnv.
     match env with { lbl2count = lbl2count } then
-      optionGetOrElse (lam. dprintLn lbl; error "lbl2count lookup failed")
+      optionGetOrElse (lam. error "lbl2count lookup failed")
                       (mapLookup lbl lbl2count)
     else never
 
@@ -482,7 +479,7 @@ let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
       modref hole2idx (mapInsert name m (deref hole2idx));
       env
     else never
-  else dprintLn env; never
+  else never
 
 let callCtxHole2Idx : Name -> [Name] -> CallCtxEnv -> Int =
   lam name. lam path. lam env : CallCtxEnv.
@@ -648,7 +645,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   --  maintaining call history. Returns a result of type 'Flattened'.
   sem flatten (publicFns : [Name]) =
   | t ->
-    fprintLn "flatten";
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     match _flattenWithLookup publicFns lookup t with (prog, env)
     then
@@ -807,8 +803,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     in
     match callCtxFunLookup cur env with Some _ then
       match _appGetCallee (TmApp a) with Some callee then
-        print "Callee: "; dprintLn callee;
-        print "Caller: "; dprintLn cur;
         match callCtxFunLookup callee env
         with Some iv then
           -- Set the incoming var of callee to current node
@@ -825,7 +819,6 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       { callGraph = callGraph, publicFns = publicFns }
      then
        let paths = mapFindWithExn ident eqPaths in
-       print "*** REAL EQPATHS: "; dprintLn paths;
        let env = callCtxAddHole t.body ident paths env in
        let iv = callCtxFun2Inc cur env in
        let lookupCode = _lookupCallCtx lookup ident iv env paths in
@@ -941,7 +934,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let convertFuns = map (lam h.
       match h with TmHole {ty = TyBool _} then string2boolName
       else match h with TmHole {ty = TyInt _} then string2intName
-      else dprintLn h; error "Unsupported type"
+      else error "Unsupported type"
     ) (deref env.idx2hole) in
 
     let x = nameSym "x" in
