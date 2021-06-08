@@ -108,6 +108,7 @@ compile_files += stdlib/bool.mc
 #compile_files += stdlib/graph.mc
 compile_files += stdlib/char.mc
 compile_files += stdlib/set.mc
+compile_files += stdlib/iterator.mc
 #compile_files += test/multicore/multicore.mc
 #compile_files += stdlib/multicore/pprint.mc
 #compile_files += stdlib/multicore/mexprpar.mc

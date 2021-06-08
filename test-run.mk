@@ -112,6 +112,7 @@ run_files += stdlib/bool.mc
 # run_files += stdlib/graph.mc
 run_files += stdlib/char.mc
 # run_files += stdlib/set.mc
+run_files += stdlib/iterator.mc
 # run_files += test/multicore/multicore.mc
 # run_files += stdlib/multicore/pprint.mc
 # run_files += stdlib/multicore/mexprpar.mc
