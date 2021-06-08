@@ -137,30 +137,18 @@ let digraphAddVertex = lam v. lam g.
 let digraphMaybeAddVertex = lam v. lam g.
   digraphAddVertexCheck v g false
 
--- Add edge e=(v1,v2,l) to graph g.
--- If v1 or v2 do not exist in g, an error is thrown.
--- If l exists in g and check is true, an error is thrown.
--- If l exist in g and check is false, g stays unchanged.
--- Otherwise, e is added to g.
-let _digraphAddEdgeCheckLabel =
-  lam v1. lam v2. lam l. lam g : Digraph v l. lam check.
-    if not (digraphHasVertices [v1, v2] g) then
-      error "some vertices do not exist"
-    else if any (g.eql l) (digraphLabels v1 v2 g) then
-      if check then error "label already exists" else g
-      else
-        let oldEdgeList =
-          mapLookupOrElse (lam. error "Edge not found") v1 g.adj
-        in
-        {g with adj = mapInsert v1 (snoc oldEdgeList (v2, l)) g.adj}
+-- Add edge e=(v1,v2,l) to g. Checks invariants iff utests are enabled.
+let digraphAddEdge = lam v1. lam v2. lam l. lam g : Digraph v l.
+  utest digraphHasVertex v1 g with true in
+  utest digraphHasVertex v2 g with true in
+  utest
+    any (g.eql l) (digraphLabels v1 v2 g)
+  with false in
 
--- Add edge e=(v1,v2,l) to g. Throws an error if l already exists in g.
-let digraphAddEdge = lam v1. lam v2. lam l. lam g.
-  _digraphAddEdgeCheckLabel v1 v2 l g true
-
--- Maybe add edge e=(v1,v2,l) to g. Graph stays unchanged if l already exists in g.
-let digraphMaybeAddEdge = lam v1. lam v2. lam l. lam g.
-  _digraphAddEdgeCheckLabel v1 v2 l g false
+  let oldEdgeList =
+    mapLookupOrElse (lam. error "Edge not found") v1 g.adj
+  in
+  {g with adj = mapInsert v1 (snoc oldEdgeList (v2, l)) g.adj}
 
 -- Add a list of vertices to a graph g.
 let digraphAddVertices = lam vs. lam g.
@@ -169,12 +157,6 @@ let digraphAddVertices = lam vs. lam g.
 -- Add a list of edges to a graph g.
 let digraphAddEdges = lam es. lam g.
   foldl (lam g. lam e : DigraphEdge v l. digraphAddEdge e.0 e.1 e.2 g) g es
-
--- Create the union of two graphs.
-let digraphUnion : Digraph v l -> Digraph v l -> Digraph v l = lam g1. lam g2.
-  let g3 = foldl (lam g. lam v. digraphMaybeAddVertex v g) g1 (digraphVertices g2)
-  in foldl (lam g. lam tup : DigraphEdge v l. digraphMaybeAddEdge tup.0 tup.1 tup.2 g)
-           g3 (digraphEdges g2)
 
 -- Reverse the direction of graph g.
 let digraphReverse = lam g : Digraph v l.
@@ -354,20 +336,6 @@ let gRev = digraphReverse g in
 utest digraphHasEdges [(2,1,l1),(3,1,l2),(1,3,l3)] gRev with true in
 utest digraphCountVertices gRev with 3 in
 utest digraphCountEdges gRev with 3 in
-
-let g = digraphUnion (digraphAddVertex 1 empty) (digraphAddVertex 2 empty) in
-
-utest digraphCountVertices g with 2 in
-utest digraphEdges g with [] using eqSeq eqi in
-
-let g = digraphUnion (digraphAddEdge 1 2 l1 g) (digraphAddEdge 1 2 l2 g) in
-
-utest digraphCountVertices g with 2 in
-utest digraphEdges g with [(1,2,l1),(1,2,l2)]
-using eqSeq (digraphEdgeEq g) in
-
-utest g with (digraphUnion g g) using eqDigraph in
-utest empty with (digraphUnion empty empty) using eqDigraph in
 
 -- Test for strongly connected components of g.
 let compsEq = eqsetEqual (eqsetEqual eqi) in

@@ -390,9 +390,10 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
              mapFindWithExn from fun2inc
            else never)
     in
+    let callGraphRev = digraphReverse callGraph in
     let lbl2count =
       foldl (lam acc. lam funName.
-               let incomingEdges = digraphEdgesTo funName callGraph in
+               let incomingEdges = digraphEdgesFrom funName callGraphRev in
                match foldl (lam acc. lam e.
                               match e with (_, _, lbl) then
                                 match acc with (hm, i) then
