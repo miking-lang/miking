@@ -685,7 +685,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     dprintLn names;
     let pruned = foldl (lam acc. lam e : DigraphEdge Name Name.
       if any (_eqn e.2) names then
-        print "*** KEEP "; dprintLn e;
+        -- print "*** KEEP "; dprintLn e;
         let acc =
           if digraphHasVertex e.0 acc then acc else digraphAddVertex e.0 acc
         in
@@ -694,7 +694,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         in
         digraphAddEdge e.0 e.1 e.2 acc
       else
-        print "*** THROW AWAY "; dprintLn e;
+        -- print "*** THROW AWAY "; dprintLn e;
         acc
       )
       (digraphEmpty nameCmp _eqn)
@@ -708,8 +708,11 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     print "after toCallGraph "; fprintLn (float2string (wallTimeMs ()));
     -- Declare the incoming variables
     let incVars =
-      bindall_ (map (lam incVarName. nulet_ incVarName (ref_ (int_ _incUndef)))
-                    (callCtxIncVarNames env))
+      let exprs =
+        map (lam incVarName.
+          nulet_ incVarName (ref_ (int_ _incUndef))) (callCtxIncVarNames env) in
+      if null exprs then uunit_
+      else bindall_ exprs
     in
     let tm = bind_ incVars tm in
     let prog = _maintainCallCtx lookup env _callGraphTop tm in
