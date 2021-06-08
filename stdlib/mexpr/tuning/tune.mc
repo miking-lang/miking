@@ -35,8 +35,9 @@ let tuneDumpTable = lam file : String. lam table : LookupTable.
 
 let tuneReadTable = lam file : String.
   use BootParser in
-  let str = readFile file in
-  map (parseMExprString []) (strSplit " " (strTrim str))
+  let str = strTrim (readFile file) in
+  match str with [] then []
+  else map (parseMExprString []) (strSplit " " str)
 
 ------------------------------
 -- Base fragment for tuning --
