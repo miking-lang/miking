@@ -12,61 +12,71 @@ let reduceName = nameSym "reduce"
 let s = nameSym "s"
 let acc = nameSym "acc"
 let f = nameSym "f"
-let reducePattern =
+let reducePattern = lam.
   if_ (null_ (nvar_ s))
     (nvar_ acc)
-    (appf2_ (nvar_ f) (head_ (nvar_ s))
-      (appf3_ (nvar_ reduceName) (nvar_ f) (nvar_ acc) (tail_ (nvar_ s))))
-let patterns =
-  use MExprAst in
-  [{ident = reduceName, expr = reducePattern,
+    (appf3_ (nvar_ reduceName)
+      (tail_ (nvar_ s))
+      (appf2_ (nvar_ f) (nvar_ acc) (head_ (nvar_ s)))
+      (nvar_ f))
+let patterns = use MExprParallelKeywordMaker in
+  [{ident = reduceName, expr = reducePattern (),
     replacement = lam info. lam args.
       let a = map (lam arg : (Name, Type, Info).
         TmVar {ident = arg.0, ty = arg.1, info = arg.2}) args in
-      withInfo info (parallelReduce_ (get a 0) (get a 1) (get a 2))}]
+      TmParallelReduce {
+        f = get a 2,
+        ne = get a 1,
+        as = get a 0,
+        ty = TyUnknown {info = info},
+        info = info}}]
 
-let matchPattern : Name -> Expr -> [(Name, Type, Info)] -> ParallelPattern
-                -> Option Expr =
+-- Attempts to match the body of the given binding with the given arguments
+-- with a parallel pattern. If they match the pattern replacement is updated to
+-- use the corresponding variables of the given body and returned. If they do
+-- not match None () is returned.
+let matchPattern : RecLetBinding -> Expr -> [(Name, Type, Info)]
+                -> ParallelPattern -> Option Expr =
   use MExprParallelKeywordMaker in
   lam binding. lam bindingBody. lam bindingArgs. lam pattern.
-  let pat = substituteIdentifier pattern.expr pattern.ident binding.ident in
   let empty = {varEnv = biEmpty, conEnv = biEmpty} in
-  match eqExprH empty empty pat bindingBody with Some freeVarEnv then
+  match eqExprH empty empty pattern.expr bindingBody with Some freeVarEnv then
     let paramNameMap =
-      map
-        (lam p : (Name, Name).
-          (p.0, lam info. TmVar {ident = p.1, info = info}))
-        freeVarEnv.varEnv in
+      mapFromSeq nameCmp
+        (map
+          (lam p : (Name, Name).
+            (p.0, lam info. TmVar {ident = p.1, info = info}))
+          freeVarEnv.varEnv) in
     let replacement = pattern.replacement binding.info bindingArgs in
-    Some (substituteVariables pattern.replacement paramNameMap)
+    Some (substituteVariables replacement paramNameMap)
   else None ()
 
 let tryRewriteBinding = use MExprAst in
   lam binding : RecLetBinding.
-  let body = functionBodyWithoutLambdas binding.body in
-  let n = length patterns in
-  recursive let tryPatterns = lam i.
-    if leqi i n then
-      let pattern = get patterns i in
-      let args = functionArguments binding.body in
-      match matchPattern binding body args pattern with Some replacement then
-        Some ({binding with body = replacement})
-      else
-        tryPatterns (addi i 1)
-    else None ()
-  in
-  match tryPatterns 0 with Some rewrittenBinding then
-    rewrittenBinding
-  else binding
+  match functionArgumentsAndBody binding.body with (args, body) then
+    let n = length patterns in
+    recursive let tryMatchPattern = lam i.
+      if lti i n then
+        let pattern = get patterns i in
+        match matchPattern binding body args pattern with Some replacement then
+          Some ({binding with body = replaceFunctionBody binding.body replacement})
+        else
+          tryMatchPattern (addi i 1)
+      else None ()
+    in
+    match tryMatchPattern 0 with Some rewrittenBinding then
+      rewrittenBinding
+    else binding
+  else never
 
 lang MExprParallelPatterns = MExprAst
   sem findParallelPatterns =
   | TmRecLets t ->
-    map tryRewriteBinding t.bindings
+    TmRecLets {t with bindings = map tryRewriteBinding t.bindings}
   | expr -> smap_Expr_Expr findParallelPatterns expr
 end
 
-lang TestLang = MExprParallelPatterns + MExprRewrite + MExprEq
+lang TestLang = MExprParallelPatterns + MExprRewrite + MExprParallelKeywordMaker
 
 mexpr
 
@@ -75,23 +85,28 @@ use TestLang in
 let fold = nameSym "fold" in
 let f = nameSym "f" in
 let s = nameSym "s" in
+let acc = nameSym "acc" in
 let h = nameSym "h" in
 let t = nameSym "t" in
 let t1 = nreclets_ [
-  (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
+  (fold, tyunknown_, nulam_ s (nulam_ acc (nulam_ f (
     match_ (nvar_ s)
       (pseqedgen_ [npvar_ h] t [])
-      (appf3_ (nvar_ fold) (nvar_ f) (nvar_ t)
-        (appf2_ (nvar_ f) (nvar_ acc) (nvar_ h)))
+      (appf3_ (nvar_ fold)
+        (nvar_ t)
+        (appf2_ (nvar_ f) (nvar_ acc) (nvar_ h))
+        (nvar_ f))
       (match_ (nvar_ s)
         (pseqtot_ [])
-        (seq_ [])
+        (nvar_ acc)
         never_)))))
 ] in
 let t2 = nreclets_ [
-  (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
+  (fold, tyunknown_, nulam_ s (nulam_ acc (nulam_ f (
     parallelReduce_ (nvar_ f) (nvar_ acc) (nvar_ s)))))
 ] in
+
 utest findParallelPatterns (rewriteTerm t1) with t2 using eqExpr in
+utest findParallelPatterns t2 with t2 using eqExpr in
 
 ()

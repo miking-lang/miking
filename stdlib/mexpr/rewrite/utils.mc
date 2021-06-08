@@ -1,12 +1,14 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
+include "mexpr/patterns.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 
 -- Gets the return type of the body of a function.
-recursive let functionBodyReturnType : Expr -> Type = use MExprAst in
+recursive let functionBodyReturnType : Expr -> Type =
+  use MExprParallelKeywordMaker in
   lam expr.
   match expr with TmLam {body = body} then
     functionBodyReturnType body
@@ -15,7 +17,8 @@ end
 
 -- Replaces the body of a functiion body, excluding its top-level parameters,
 -- with a new expression.
-recursive let replaceFunctionBody : Expr -> Expr -> Expr = use MExprAst in
+recursive let replaceFunctionBody : Expr -> Expr -> Expr =
+  use MExprParallelKeywordMaker in
   lam funcExpr. lam newExpr.
   match funcExpr with TmLam t then
     let body = replaceFunctionBody t.body newExpr in
@@ -27,7 +30,7 @@ end
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.
 let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
-  use MExprAst in
+  use MExprParallelKeywordMaker in
   lam e. lam nameMap.
   recursive let work = lam e.
     match e with TmVar {ident = id, info = info} then
@@ -44,22 +47,16 @@ let substituteIdentifier : Expr -> Name -> (Info -> Expr) -> Expr =
     [(fromId, lam info. TmVar {ident = toId, info = info})] in
   substituteVariables e nameMap
 
--- Returns the body of a function without the outermost lambdas.
-recursive let functionBodyWithoutLambdas : Expr -> Expr = use MExprAst in
-  lam e.
-  match e with TmLam {body = body} then
-    functionBodyWithoutLambdas body
-  else e
-end
-
--- Returns a list containing the arguments, in order of declaration, of a given
--- function expression.
-recursive let functionArguments : Expr -> [(Name, Type, Info)] = use MExprAst in
-  lam e.
-  match e with TmLam t then
-    cons (t.ident, t.tyIdent, t.info) (functionArguments t.body)
-  else []
-end
+-- Takes a function expression and produces a tuple containing a list of the
+-- arguments and the function body without the lambdas.
+let functionArgumentsAndBody : Expr -> ([(Name, Type, Info)], Expr) =
+  use MExprAst in
+  lam functionExpr.
+  recursive let work = lam acc. lam e.
+    match e with TmLam t then
+      work (snoc acc (t.ident, t.tyIdent, t.info)) t.body
+    else (acc, e)
+  in work [] functionExpr
 
 lang TestLang = MExprEq + MExprSym + MExprTypeAnnot
 
@@ -90,7 +87,12 @@ let names = mapFromSeq nameCmp [
 let t = addi_ (nvar_ x) (nvar_ y) in
 utest substituteVariables t names with addi_ (int_ 2) (subi_ (int_ 0) (int_ 1)) using eqExpr in
 
-let t = ulam_ "x" (ulam_ "y" (int_ 2)) in
-utest functionBodyWithoutLambdas t with int_ 2 using eqExpr in
+let t = nlam_ x tyint_ (nlam_ y tychar_ (int_ 2)) in
+let res : ([(Name, Type, Info)], Expr) = functionArgumentsAndBody t in
+let arg1 = get res.0 0 in
+let arg2 = get res.0 1 in
+utest arg1 with (x, tyint_, NoInfo ()) in
+utest arg2 with (y, tychar_, NoInfo ()) in
+utest res.1 with int_ 2 using eqExpr in
 
 ()

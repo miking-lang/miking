@@ -15,18 +15,19 @@ include "mexpr/rewrite/utils.mc"
 -- call in an associative constant operator.
 let tailPositionBinaryOperator = use MExprAst in
   lam bodyWithArgs : Expr.
-  let body = functionBodyWithoutLambdas bodyWithArgs in
-  match body with
-    TmMatch {thn = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
-             els = !(TmMatch _)}
-  then
-    Some binop
-  else match body with
-    TmMatch {els = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
-             thn = !(TmMatch _)}
-  then
-    Some binop
-  else None ()
+  match functionArgumentsAndBody bodyWithArgs with (_, body) then
+    match body with
+      TmMatch {thn = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
+               els = !(TmMatch _)}
+    then
+      Some binop
+    else match body with
+      TmMatch {els = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
+               thn = !(TmMatch _)}
+    then
+      Some binop
+    else None ()
+  else never
 
 let neutralElement = use MExprAst in
   lam binop : Expr.
@@ -67,22 +68,23 @@ let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
       Some (lhs, rhs)
     else None ()
   in
-  let body = functionBodyWithoutLambdas binding.body in
-  match body with TmMatch ({thn = TmApp {lhs = TmApp {rhs = arg1},
-                                         rhs = arg2}} & t) then
-    optionMap
-      (lam cases : (Expr, Expr).
-        TmMatch {{t with thn = cases.1}
-                    with els = cases.0})
-      (f t.els arg1 arg2)
-  else match body with TmMatch ({els = TmApp {lhs = TmApp {rhs = arg1},
-                                              rhs = arg2}} & t) then
-    optionMap
-      (lam cases : (Expr, Expr).
-        TmMatch {{t with thn = cases.0}
-                    with els = cases.1})
-      (f t.thn arg1 arg2)
-  else None ()
+  match functionArgumentsAndBody binding.body with (_, body) then
+    match body with TmMatch ({thn = TmApp {lhs = TmApp {rhs = arg1},
+                                           rhs = arg2}} & t) then
+      optionMap
+        (lam cases : (Expr, Expr).
+          TmMatch {{t with thn = cases.1}
+                      with els = cases.0})
+        (f t.els arg1 arg2)
+    else match body with TmMatch ({els = TmApp {lhs = TmApp {rhs = arg1},
+                                                rhs = arg2}} & t) then
+      optionMap
+        (lam cases : (Expr, Expr).
+          TmMatch {{t with thn = cases.0}
+                      with els = cases.1})
+        (f t.thn arg1 arg2)
+    else None ()
+  else never
 
 let getFunctionParameters : Expr -> [(Name, Type)] = use MExprAst in
   lam funcBody.
