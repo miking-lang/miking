@@ -207,13 +207,6 @@ lang TuneExhaustive = TuneLocalSearch
         else never
       in
 
-      utest
-        let ir = holeIntRange_ (int_ 0) 2 0 1 in
-        nextConfig
-          [Some (int_ 0), Some (int_ 1)]
-          [ir, ir]
-      with [Some (int_ 1), Some (int_ 1)] in
-
       let newTable =
         Table { table = map (optionGetOrElse (lam. "impossible")) prev
               , holes = holes
