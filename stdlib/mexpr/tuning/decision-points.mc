@@ -675,37 +675,32 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | t ->
     let pub2priv = _nameMapInit publicFns identity _privFunFromName in
     let tm = _replacePublic pub2priv t in
+
+    -- Compute the call graph
     let g = toCallGraph tm in
 
-    --printLn (digraphPrintDot g (lam n. n.0) (lam n. n.0));
+    -- Prune the call graph
+    let eqPathsAssoc = _eqPaths g publicFns _callGraphTop tm in
+    let eqPathsMap : Map Name [[Name]] = mapFromSeq nameCmp eqPathsAssoc in
+    let keepLbls : [Name] =
+      foldl (lam acc. lam path : (Name, [[Name]]).
+               concat acc (foldl concat [] path.1))
+        [] eqPathsAssoc
+    in
 
-    let paths = _eqPaths g publicFns _callGraphTop tm in
-    let names = foldl (lam acc. lam path. concat acc path) [] paths in
-
-    dprintLn names;
     let pruned = foldl (lam acc. lam e : DigraphEdge Name Name.
-      if any (_eqn e.2) names then
-        -- print "*** KEEP "; dprintLn e;
-        let acc =
-          if digraphHasVertex e.0 acc then acc else digraphAddVertex e.0 acc
-        in
-        let acc =
-          if digraphHasVertex e.1 acc then acc else digraphAddVertex e.1 acc
-        in
-        digraphAddEdge e.0 e.1 e.2 acc
-      else
-        -- print "*** THROW AWAY "; dprintLn e;
-        acc
-      )
+      match e with (from, to, lbl) then
+        if any (_eqn lbl) keepLbls then
+          digraphAddEdge from to lbl
+            (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
+        else acc
+      else never)
       (digraphEmpty nameCmp _eqn)
       (digraphEdges g) in
 
-    -- printLn "";
-    -- printLn (digraphPrintDot pruned (lam n. n.0) (lam n. n.0));
-    -- printLn "";
-
+    -- Initialize environment
     let env = callCtxInit publicFns pruned tm in
-    print "after toCallGraph "; fprintLn (float2string (wallTimeMs ()));
+
     -- Declare the incoming variables
     let incVars =
       let exprs =
@@ -715,20 +710,31 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       else bindall_ exprs
     in
     let tm = bind_ incVars tm in
-    let prog = _maintainCallCtx lookup env _callGraphTop tm in
+
+    -- Transform program to maintain the call history when needed
+    let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
     (prog, env)
 
+  -- Compute the equivalence paths of each decision point
+  -- ... -> [(Name, [[Name]])]
   sem _eqPaths (g : CallGraph) (public : [Name]) (cur : Name) =
+  | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
+    let paths = eqPaths g cur depth public in
+    cons (ident, paths) (_eqPaths g public cur t.inexpr)
+
   | TmLet ({ body = TmLam lm } & t) ->
     concat (_eqPaths g public t.ident t.body) (_eqPaths g public cur t.inexpr)
 
-  | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
-    let paths = eqPaths g cur depth public in
-    concat paths (_eqPaths g public cur t.inexpr)
+  | TmRecLets t ->
+    foldl (lam acc. lam bind: RecLetBinding.
+      let cur =
+        match bind with { body = TmLam lm } then bind.ident
+        else cur
+      in concat acc (_eqPaths g public cur bind.body))
+      [] t.bindings
 
   | tm ->
     sfold_Expr_Expr concat [] (smap_Expr_Expr (_eqPaths g public cur) tm)
-
 
   -- Find the initial mapping from decision points to values
   sem _initAssignments =
@@ -790,12 +796,15 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- Maintain call context history by updating incoming variables before
   -- function calls.
-  sem _maintainCallCtx (lookup : Lookup) (env : CallCtxEnv) (cur : Name) =
+  sem _maintainCallCtx (lookup : Lookup) (env : CallCtxEnv)
+                       (eqPaths : Map Name [[Name]]) (cur : Name) =
   -- Application: caller updates incoming variable of callee
   | TmLet ({ body = TmApp a } & t) ->
     -- NOTE(Linnea, 2021-01-29): ANF form means no recursion necessary for the
     -- application node (can only contain values)
-    let le = TmLet {t with inexpr = _maintainCallCtx lookup env cur t.inexpr} in
+    let le =
+      TmLet {t with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
+    in
     match callCtxFunLookup cur env with Some _ then
       match _appGetCallee (TmApp a) with Some callee then
         print "Callee: "; dprintLn callee;
@@ -815,13 +824,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
      match env with
       { callGraph = callGraph, publicFns = publicFns }
      then
-       let paths = eqPaths callGraph cur depth publicFns in
+       let paths = mapFindWithExn ident eqPaths in
        print "*** REAL EQPATHS: "; dprintLn paths;
        let env = callCtxAddHole t.body ident paths env in
        let iv = callCtxFun2Inc cur env in
        let lookupCode = _lookupCallCtx lookup ident iv env paths in
        TmLet {{t with body = lookupCode}
-                 with inexpr = _maintainCallCtx lookup env cur t.inexpr}
+                 with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
      else never
 
   -- Function definitions: possibly update cur inside body of function
@@ -830,8 +839,8 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       match callCtxFunLookup t.ident env with Some _
       then t.ident
       else cur
-    in TmLet {{t with body = _maintainCallCtx lookup env curBody t.body}
-                 with inexpr = _maintainCallCtx lookup env cur t.inexpr}
+    in TmLet {{t with body = _maintainCallCtx lookup env eqPaths curBody t.body}
+                 with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds =
@@ -841,13 +850,17 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
             match callCtxFunLookup bind.ident env with Some _
             then bind.ident
             else cur
-          in {bind with body = _maintainCallCtx lookup env curBody bind.body}
-        else {bind with body = _maintainCallCtx lookup env cur bind.body})
+          in
+          {bind with body =
+             _maintainCallCtx lookup env eqPaths curBody bind.body}
+        else
+        {bind with body = _maintainCallCtx lookup env eqPaths cur bind.body})
       bindings
-    in TmRecLets {{t with bindings = newBinds}
-                     with inexpr = _maintainCallCtx lookup env cur inexpr}
+    in
+    TmRecLets {{t with bindings = newBinds}
+                  with inexpr = _maintainCallCtx lookup env eqPaths cur inexpr}
   | tm ->
-    smap_Expr_Expr (_maintainCallCtx lookup env cur) tm
+    smap_Expr_Expr (_maintainCallCtx lookup env eqPaths cur) tm
 
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
