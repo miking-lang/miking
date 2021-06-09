@@ -66,7 +66,7 @@ lang BootParser = MExprAst + ConstTransformer
            info = ginfo t 0}
   | 104 /-TmRecLets-/ ->
     TmRecLets {bindings =
-               create (glistlen t 0)
+               hcreate (glistlen t 0)
                       (lam n. {ident = gname t n,
                                tyBody = gtype t n,
                                body = gterm t n,
@@ -81,11 +81,11 @@ lang BootParser = MExprAst + ConstTransformer
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 106 /-TmSeq-/ ->
-    TmSeq {tms = create (glistlen t 0) (lam n. gterm t n),
+    TmSeq {tms = hcreate (glistlen t 0) (lam n. gterm t n),
            ty =  TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}
   | 107 /-TmRecord-/ ->
-    let lst = create (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
+    let lst = hcreate (glistlen t 0) (lam n. (gstr t n, gterm t n)) in
     TmRecord {bindings =
                 mapFromSeq cmpSID
                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
@@ -166,7 +166,7 @@ lang BootParser = MExprAst + ConstTransformer
     TySeq {info = ginfo t 0,
            ty = gtype t 0}
   | 207 /-TyRecord-/ ->
-    let lst = create (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
+    let lst = hcreate (glistlen t 0) (lam n. (gstr t n, gtype t n)) in
     TyRecord {info = ginfo t 0,
               labels = map (lam b : (String, a). stringToSid b.0) lst,
               fields = mapFromSeq cmpSID (map (lam b : (a,b). (stringToSid b.0, b.1)) lst)}
@@ -211,16 +211,16 @@ lang BootParser = MExprAst + ConstTransformer
     PatNamed {ident = strToPatName (gstr t 0),
             info = ginfo t 0}
   | 401 /-PatSeqTot-/ ->
-    PatSeqTot {pats = create (glistlen t 0) (lam n. gpat t n),
+    PatSeqTot {pats = hcreate (glistlen t 0) (lam n. gpat t n),
              info = ginfo t 0}
   | 402 /-PatSeqEdge-/ ->
     let len = glistlen t 0 in
-    PatSeqEdge {prefix = create len (lam n. gpat t n),
+    PatSeqEdge {prefix = hcreate len (lam n. gpat t n),
               middle = strToPatName (gstr t 0),
-              postfix = create (glistlen t 1) (lam n. gpat t (addi n len)),
+              postfix = hcreate (glistlen t 1) (lam n. gpat t (addi n len)),
               info = ginfo t 0}
   | 403 /-PatRecord-/ ->
-    let lst = create (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
+    let lst = hcreate (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
     PatRecord {bindings =
                mapFromSeq cmpSID
                  (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),

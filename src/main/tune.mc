@@ -30,6 +30,7 @@ let tune = lam files. lam options : Options. lam args.
       { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
         env = env }
     then
+      -- fprintLn (expr2str ast);
       -- Compile the program
       let binary = ocamlCompileAst options file ast in
 

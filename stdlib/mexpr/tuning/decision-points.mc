@@ -152,8 +152,8 @@ end
 --------------------------------------------
 
 let decisionPointsKeywords =
-[ "HoleBool"
-, "HoleIntRange"
+[ "holeBool"
+, "holeIntRange"
 ]
 
 let _lookup = lam s : String. lam m : Map String a.
@@ -276,7 +276,7 @@ lang HoleBoolAst = BoolAst + HoleAst
   | "false" -> false
 
   sem matchKeywordString (info : Info) =
-  | "HoleBool" ->
+  | "holeBool" ->
     Some (1,
       let validate = lam expr.
         match expr with TmHole {default = default} then
@@ -288,7 +288,7 @@ lang HoleBoolAst = BoolAst + HoleAst
 
   sem pprintHole =
   | BoolHole {} ->
-    ("HoleBool", [])
+    ("holeBool", [])
 end
 
 -- An integer decision point (range of integers).
@@ -315,7 +315,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
     else dprintLn last; never
 
   sem matchKeywordString (info : Info) =
-  | "HoleIntRange" ->
+  | "holeIntRange" ->
     Some (1,
       let validate = lam expr.
         match expr
@@ -338,7 +338,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
 
   sem pprintHole =
   | IntRange {min = min, max = max} ->
-    ("HoleIntRange", [("min", int2string min), ("max", int2string max)])
+    ("holeIntRange", [("min", int2string min), ("max", int2string max)])
 end
 
 let holeBool_ = use HoleBoolAst in
@@ -504,7 +504,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv 
     with (m, count) then
       let n = length paths in
       utest n with subi count countInit in
-      modref idx2hole (concat (deref idx2hole) (create n (lam. hole)));
+      modref idx2hole (concat (deref idx2hole) (hcreate n (lam. hole)));
       modref hole2idx (mapInsert name m (deref hole2idx));
       modref hole2fun (mapInsert name funName (deref hole2fun));
       env
@@ -611,7 +611,7 @@ let _lookupCallCtx
                                    setInsert (head p) acc)
                                 (setEmpty nameInfoCmp) paths in
           let startVals = mapKeys startVals in
-          let partition = create (length startVals) (lam. []) in
+          let partition = hcreate (length startVals) (lam. []) in
           let partition =
             mapi
               (lam i. lam.

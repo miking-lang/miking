@@ -92,7 +92,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     (t : Expr)
     (fields : [(String, Type)]) =
   | tys ->
-    let ns = create (length tys) (lam. nameSym "t") in
+    let ns = hcreate (length tys) (lam. nameSym "t") in
     let pvars =
       map (lam n. PatNamed { ident = PName n, info = info }) ns
     in
@@ -237,7 +237,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
             labels2 fields1
         in
         match unzip costsTms with (costs, tms) then
-          let ns = create (length labels2) (lam. nameSym "t") in
+          let ns = hcreate (length labels2) (lam. nameSym "t") in
           match mapLookup (ocamlTypedFields fields2) env.records
           with Some id then
             let bindings =
