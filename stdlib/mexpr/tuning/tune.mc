@@ -238,7 +238,7 @@ lang TuneSemiExhaustive = TuneLocalSearch
   sem step (searchState : SearchState) =
   | SemiExhaustive ({curIdx = i, prev = prev} & state) ->
     match searchState
-    with {cur = {assignment = Table {table = table,
+    with {inc = {assignment = Table {table = table,
                                      holes = holes,
                                      options = options}},
           cost = cost}
