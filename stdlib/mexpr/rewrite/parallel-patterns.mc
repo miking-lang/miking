@@ -41,11 +41,13 @@ let matchPattern : RecLetBinding -> Expr -> [(Name, Type, Info)]
   lam binding. lam bindingBody. lam bindingArgs. lam pattern.
   let empty = {varEnv = biEmpty, conEnv = biEmpty} in
   match eqExprH empty empty pattern.expr bindingBody with Some freeVarEnv then
+    let freeVarEnv : EqEnv = freeVarEnv in
     let paramNameMap =
       mapFromSeq nameCmp
         (map
           (lam p : (Name, Name).
-            (p.0, lam info. TmVar {ident = p.1, info = info}))
+            (p.0, lam info. TmVar {ident = p.1, ty = TyUnknown {info = info},
+                                   info = info}))
           freeVarEnv.varEnv) in
     let replacement = pattern.replacement binding.info bindingArgs in
     Some (substituteVariables replacement paramNameMap)
@@ -53,7 +55,7 @@ let matchPattern : RecLetBinding -> Expr -> [(Name, Type, Info)]
 
 let tryRewriteBinding = use MExprAst in
   lam binding : RecLetBinding.
-  match functionArgumentsAndBody binding.body with (args, body) then
+  match functionParametersAndBody binding.body with (args, body) then
     let n = length patterns in
     recursive let tryMatchPattern = lam i.
       if lti i n then

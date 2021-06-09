@@ -40,16 +40,17 @@ let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
     else smap_Expr_Expr work e
   in work e
 
-let substituteIdentifier : Expr -> Name -> (Info -> Expr) -> Expr =
+let substituteIdentifier : Expr -> Name -> Name -> (Info -> Expr) =
   use MExprAst in
   lam e. lam fromId. lam toId.
   let nameMap = mapFromSeq nameCmp
-    [(fromId, lam info. TmVar {ident = toId, info = info})] in
+    [(fromId, lam info. TmVar {ident = toId, ty = TyUnknown {info = info},
+                               info = info})] in
   substituteVariables e nameMap
 
 -- Takes a function expression and produces a tuple containing a list of the
 -- arguments and the function body without the lambdas.
-let functionArgumentsAndBody : Expr -> ([(Name, Type, Info)], Expr) =
+let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
   use MExprAst in
   lam functionExpr.
   recursive let work = lam acc. lam e.
@@ -57,6 +58,20 @@ let functionArgumentsAndBody : Expr -> ([(Name, Type, Info)], Expr) =
       work (snoc acc (t.ident, t.tyIdent, t.info)) t.body
     else (acc, e)
   in work [] functionExpr
+
+-- Collects the parameters of an application and returns them in a tuple
+-- together with the target expression (the function being called).
+let collectAppArguments : Expr -> (Expr, Expr) =
+  use MExprAst in
+  lam e.
+  recursive let work = lam acc. lam e.
+    match e with TmApp {lhs = !(TmApp _) & lhs, rhs = rhs} then
+      (lhs, snoc acc rhs)
+    else match e with TmApp t then
+      work (snoc acc t.rhs) t.lhs
+    else (e, acc)
+  in
+  work [] e
 
 lang TestLang = MExprEq + MExprSym + MExprTypeAnnot
 
@@ -87,12 +102,27 @@ let names = mapFromSeq nameCmp [
 let t = addi_ (nvar_ x) (nvar_ y) in
 utest substituteVariables t names with addi_ (int_ 2) (subi_ (int_ 0) (int_ 1)) using eqExpr in
 
+let eqVariable = lam a : (Name, Type, Info). lam b : (Name, Type, Info).
+  if nameEq a.0 b.0 then
+    eqType a.1 b.1
+  else false
+in
+
 let t = nlam_ x tyint_ (nlam_ y tychar_ (int_ 2)) in
-let res : ([(Name, Type, Info)], Expr) = functionArgumentsAndBody t in
+let res : ([(Name, Type, Info)], Expr) = functionParametersAndBody t in
 let arg1 = get res.0 0 in
 let arg2 = get res.0 1 in
-utest arg1 with (x, tyint_, NoInfo ()) in
-utest arg2 with (y, tychar_, NoInfo ()) in
+utest arg1 with (x, tyint_, NoInfo ()) using eqVariable in
+utest arg2 with (y, tychar_, NoInfo ()) using eqVariable in
 utest res.1 with int_ 2 using eqExpr in
+let res : ([(Name, Type, Info)], Expr) = functionParametersAndBody (int_ 2) in
+utest res.0 with [] using eqSeq eqVariable in
+utest res.1 with int_ 2 using eqExpr in
+
+let t = collectAppArguments (appf2_ (var_ "x") (var_ "y") (var_ "z")) in
+let target = t.0 in
+let args = t.1 in
+utest t.0 with var_ "x" using eqExpr in
+utest t.1 with [var_ "y", var_ "z"] using eqSeq eqExpr in
 
 ()

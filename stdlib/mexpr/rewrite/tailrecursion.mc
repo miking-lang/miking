@@ -15,7 +15,7 @@ include "mexpr/rewrite/utils.mc"
 -- call in an associative constant operator.
 let tailPositionBinaryOperator = use MExprAst in
   lam bodyWithArgs : Expr.
-  match functionArgumentsAndBody bodyWithArgs with (_, body) then
+  match functionParametersAndBody bodyWithArgs with (_, body) then
     match body with
       TmMatch {thn = TmApp {lhs = TmApp {lhs = TmConst _ & binop}},
                els = !(TmMatch _)}
@@ -53,7 +53,6 @@ let isSelfRecursive : Name -> Expr -> Bool = use MExprAst in
 
 let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
   use MExprEq in
-  use MExprAst in
   lam binding : RecLetBinding. lam binop. lam tailFuncId. lam accId.
   let f = lam baseBranch. lam arg1. lam arg2.
     if isSelfRecursive binding.ident arg1 then
@@ -68,7 +67,7 @@ let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
       Some (lhs, rhs)
     else None ()
   in
-  match functionArgumentsAndBody binding.body with (_, body) then
+  match functionParametersAndBody binding.body with (_, body) then
     match body with TmMatch ({thn = TmApp {lhs = TmApp {rhs = arg1},
                                            rhs = arg2}} & t) then
       optionMap
