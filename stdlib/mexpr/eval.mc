@@ -980,7 +980,7 @@ lang TensorOpEval =
   | CTensorSliceExn2 T
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
-  | CTensorIteri2 Expr
+  | CTensorIterSlice2 Expr
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -1012,7 +1012,7 @@ lang TensorOpEval =
   | TmConst { val = CTensorCreate2 shape } ->
     let f = lam is. apply ctx (_toTmSeq is) arg in
     TmTensor { val = TExpr (tensorCreateDense shape f) }
-  | TmConst { val = CTensorIteri2 f } ->
+  | TmConst { val = CTensorIterSlice2 f } ->
     match arg with TmTensor { val = t } then
 
       let mkg = lam mkt. lam i. lam r.
@@ -1024,18 +1024,18 @@ lang TensorOpEval =
 
       match t with TInt t then
         let g = mkg (lam t. TInt t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else match t with TFloat t then
         let g = mkg (lam t. TFloat t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else match t with TExpr t then
         let g = mkg (lam t. TExpr t) in
-        tensorIteri g t;
+        tensorIterSlice g t;
         uunit_
       else never
-    else error "Second argument to CTensorIteri not a tensor"
+    else error "Second argument to CTensorIterSlice not a tensor"
 
   sem delta (arg : Expr) =
   | CTensorCreateInt _ ->
@@ -1175,8 +1175,8 @@ lang TensorOpEval =
         TmTensor { val = TExpr view }
       else never
     else error "Second argument to CTensorSubExn not an integer"
-  | CTensorIteri _ ->
-    let val = CTensorIteri2 arg in
+  | CTensorIterSlice _ ->
+    let val = CTensorIterSlice2 arg in
     uconst_ val
 end
 
@@ -2035,7 +2035,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
                   (ulam_ "x"
                      (utensorCopyExn_ (var_ "x") (var_ "x"))))
   in
-  utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
+  utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
   ()
 in
 
@@ -2047,7 +2047,7 @@ in
 
 let evaln = evalNoSymbolize in
 
-utest evaln (utensorIteri_ f t3) with uunit_ using eqExpr in
+utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 0])) with int_ 0 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in

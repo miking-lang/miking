@@ -31,7 +31,7 @@ let testTensors =
   let tensorFill = lam t. lam v.
     let n = foldl muli 1 (tensorShape t) in
     let t1 = tensorReshapeExn t [n] in
-    tensorIteri (lam. lam e. tensorSetExn e [] v) t1
+    tensorIterSlice (lam. lam e. tensorSetExn e [] v) t1
   in
 
  -- Rank < 2 Tensors
@@ -258,8 +258,8 @@ let testTensors =
 
   -- Iteri
   let t = tensorRepeat [2, 2] v0 in
-  tensorIteri (lam i. lam row.
-                         tensorIteri (lam j. lam e.
+  tensorIterSlice (lam i. lam row.
+                         tensorIterSlice (lam j. lam e.
                                         tensorSetExn e
                                                      []
                                                      (fromInt (addi (muli i 2)

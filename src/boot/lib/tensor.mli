@@ -25,7 +25,7 @@ module CArray : sig
 
   val sub_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
 
-  val iteri : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
+  val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
   val data_to_array : ('a, 'b) t -> 'a array
 end
@@ -53,7 +53,7 @@ module Dense : sig
 
   val sub_exn : 'a t -> int -> int -> 'a t
 
-  val iteri : (int -> 'a t -> unit) -> 'a t -> unit
+  val iter_slice : (int -> 'a t -> unit) -> 'a t -> unit
 
   val equal : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
 

@@ -411,9 +411,9 @@ let arity = function
       2
   | CtensorSubExn (_, Some _) ->
       1
-  | CtensorIteri None ->
+  | CtensorIterSlice None ->
       2
-  | CtensorIteri (Some _) ->
+  | CtensorIterSlice (Some _) ->
       1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
@@ -1302,9 +1302,9 @@ let delta eval env fi c v =
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSubExn _, _ ->
       fail_constapp fi
-  | CtensorIteri None, tm ->
-      TmConst (fi, CtensorIteri (Some tm))
-  | CtensorIteri (Some tm), TmTensor (_, t) -> (
+  | CtensorIterSlice None, tm ->
+      TmConst (fi, CtensorIterSlice (Some tm))
+  | CtensorIterSlice (Some tm), TmTensor (_, t) -> (
       let iterf tkind i t =
         let _ =
           TmApp
@@ -1317,14 +1317,14 @@ let delta eval env fi c v =
         ( t
         |> function
         | T.CArrayIntBoot t' ->
-            T.CArray.iteri (iterf (fun t -> T.CArrayIntBoot t)) t'
+            T.CArray.iter_slice (iterf (fun t -> T.CArrayIntBoot t)) t'
         | T.CArrayFloatBoot t' ->
-            T.CArray.iteri (iterf (fun t -> T.CArrayFloatBoot t)) t'
+            T.CArray.iter_slice (iterf (fun t -> T.CArrayFloatBoot t)) t'
         | T.DenseBoot t' ->
-            T.Dense.iteri (iterf (fun t -> T.DenseBoot t)) t' ) ;
+            T.Dense.iter_slice (iterf (fun t -> T.DenseBoot t)) t' ) ;
         tm_unit
       with Invalid_argument msg -> raise_error fi msg )
-  | CtensorIteri _, _ ->
+  | CtensorIterSlice _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->

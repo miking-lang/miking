@@ -310,7 +310,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
     -- let _ = mapMapWithKey dprintTablePair table in
 
     if deref hasLl1Error
-      then Left (mapFromList cmpString (filter (lam binding. not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
+      then Left (mapFromSeq cmpString (filter (lam binding. not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
       else Right {start = {nt = startNt, table = mapFindWithExn startNt table}, lits = lits}
   else never
 

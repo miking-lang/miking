@@ -267,7 +267,7 @@ lang OCamlPrettyPrint =
   | CMapEq _ -> intrinsicOpMap "eq"
   | CMapCmp _ -> intrinsicOpMap "cmp"
   | CMapGetCmpFun _ -> intrinsicOpMap "key_cmp"
-  | CTensorIteri _ -> intrinsicOpTensor "iteri"
+  | CTensorIterSlice _ -> intrinsicOpTensor "iter_slice"
   | CTensorCreateInt _ -> intrinsicOpTensor "create_carray_int"
   | CTensorCreateFloat _ -> intrinsicOpTensor "create_carray_float"
   | CTensorCreate _ -> intrinsicOpTensor "create_dense"
@@ -485,11 +485,20 @@ lang OCamlPrettyPrint =
       (env, join ["~", label, ":(", arg, ")"])
     else never
   | OTmRecord {bindings = bindings, tyident = tyident} ->
+    let innerIndent = pprintIncr (pprintIncr indent) in
     match unzip bindings with (labels, tms) then
-      match mapAccumL (pprintCode indent) env tms with (env, tms) then
-        let strs = mapi (lam i. lam t. join [get labels i, " = ", t]) tms in
+      match mapAccumL (pprintCode innerIndent) env tms with (env, tms) then
+        let strs =
+          mapi
+            (lam i. lam t.
+              join [get labels i, " =", pprintNewline innerIndent, "(", t, ")"])
+            tms
+        in
         match getTypeStringCode indent env tyident with (env, tyident) then
-         (env, join ["({", strJoin ";" strs, "} : ", tyident, ")"])
+          let merged =
+            strJoin (concat ";" (pprintNewline (pprintIncr indent))) strs
+          in
+          (env, join ["({", merged , "} : ", tyident, ")"])
         else never
       else never
     else never

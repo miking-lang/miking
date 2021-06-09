@@ -441,6 +441,7 @@ end
 lang ExtAst = Ast + VarAst
   syn Expr =
   | TmExt {ident : Name,
+           tyIdent : Type,
            inexpr : Expr,
            effect : Bool,
            ty : Type,
@@ -674,7 +675,7 @@ lang TensorOpAst = ConstAst
   | CTensorCopyExn {}
   | CTensorSliceExn {}
   | CTensorSubExn {}
-  | CTensorIteri {}
+  | CTensorIterSlice {}
 end
 
 lang BootParserAst = ConstAst

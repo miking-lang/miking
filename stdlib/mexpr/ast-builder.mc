@@ -50,7 +50,7 @@ let patRecord = use MExprAst in
   lam info : Info.
   let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   PatRecord {
-    bindings = mapFromList cmpSID (map bindingMapFunc bindings),
+    bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
     info = info
   }
 
@@ -140,7 +140,7 @@ let tyrecord_ = use RecordTypeAst in
   lam fields.
   let fieldMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
   TyRecord {
-    fields = mapFromList cmpSID (map fieldMapFunc fields),
+    fields = mapFromSeq cmpSID (map fieldMapFunc fields),
     labels = map (lam b : (String, a). stringToSid b.0) fields,
     info = NoInfo ()
   }
@@ -153,7 +153,7 @@ let tyunit_ = tyrecord_ []
 let tyvariant_ = use VariantTypeAst in
   lam constrs.
   TyVariant {
-    constrs = mapFromList nameCmp constrs,
+    constrs = mapFromSeq nameCmp constrs,
     info = NoInfo ()
   }
 
@@ -276,7 +276,8 @@ let ulet_ = use MExprAst in
 
 let next_ = use MExprAst in
   lam n. lam e. lam ty.
-  TmExt {ident = n, effect = e, ty = ty, inexpr = uunit_, info = NoInfo ()}
+  TmExt {ident = n, tyIdent = ty, effect = e, ty = tyunknown_,
+         inexpr = uunit_, info = NoInfo ()}
 
 let ext_ = use MExprAst in
   lam s. lam e. lam ty.
@@ -454,7 +455,7 @@ let tmRecord = use MExprAst in
   lam bindings : [(String, Expr)].
   let bindingMapFunc = lam b : (String, Expr). (stringToSid b.0, b.1) in
   TmRecord {
-    bindings = mapFromList cmpSID (map bindingMapFunc bindings),
+    bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
     ty = ty,
     info = NoInfo ()
   }
@@ -995,11 +996,11 @@ let tensorSubExn_ = use MExprAst in
 
 let utensorSubExn_ = tensorSubExn_ tyunknown_
 
-let tensorIteri_ = use MExprAst in
+let tensorIterSlice_ = use MExprAst in
   lam ty. lam f. lam t.
-  appf2_ (const_ (tytensoriteri_ ty) (CTensorIteri ())) f t
+  appf2_ (const_ (tytensoriteri_ ty) (CTensorIterSlice ())) f t
 
-let utensorIteri_ = tensorIteri_ tyunknown_
+let utensorIterSlice_ = tensorIterSlice_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in
