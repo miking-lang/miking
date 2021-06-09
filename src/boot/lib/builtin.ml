@@ -80,8 +80,6 @@ let builtin =
   ; ("mapi", f (Cmapi None))
   ; ("iter", f (Citer None))
   ; ("iteri", f (Citeri None))
-  ; ("foldl", f (Cfoldl (None, None)))
-  ; ("foldr", f (Cfoldr (None, None)))
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
@@ -96,12 +94,11 @@ let builtin =
     , TmSeq
         ( NoInfo
         , argv_prog |> Mseq.Helpers.of_array
-          |> Mseq.Helpers.map (fun s ->
+          |> Mseq.map (fun s ->
                  TmSeq
                    ( NoInfo
                    , s |> us |> Mseq.Helpers.of_ustring
-                     |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   ) ) ) )
+                     |> Mseq.map (fun x -> TmConst (NoInfo, CChar x)) ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)

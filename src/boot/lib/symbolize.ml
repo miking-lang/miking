@@ -182,7 +182,7 @@ let rec symbolize (env : (ident * Symb.t) list) (t : tm) =
   | TmApp (fi, t1, t2) ->
       TmApp (fi, symbolize env t1, symbolize env t2)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map (symbolize env) tms)
+      TmSeq (fi, Mseq.map (symbolize env) tms)
   | TmRecord (fi, r) ->
       TmRecord (fi, Record.map (symbolize env) r)
   | TmRecordUpdate (fi, t1, l, t2) ->

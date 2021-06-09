@@ -27,6 +27,12 @@ type UtestTypeEnv = {
 }
 
 let _utestRunnerStr = "
+recursive
+  let foldl = lam f. lam acc. lam seq.
+    if null seq then acc
+    else foldl f (f acc (head seq)) (tail seq)
+in
+
 let join = lam seqs.
   foldl concat [] seqs
 in

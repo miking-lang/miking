@@ -221,11 +221,10 @@ lang BootParser = MExprAst + ConstTransformer
               info = ginfo t 0}
   | 403 /-PatRecord-/ ->
     let lst = create (glistlen t 0) (lam n. (gstr t n, gpat t n)) in
-
-     PatRecord {bindings =
-                 mapFromSeq cmpSID
-                   (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
-              info = ginfo t 0}
+    PatRecord {bindings =
+               mapFromSeq cmpSID
+                 (map (lam b : (a,b). (stringToSid b.0, b.1)) lst),
+               info = ginfo t 0}
   | 404 /-PatCon-/ ->
      PatCon {ident = gname t 0,
              subpat = gpat t 0,

@@ -10,8 +10,6 @@ utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 let last = lam seq. get seq (subi (length seq) 1)
 let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 
-utest head [2,3,5] with 2
-utest tail [2,4,8] with [4,8]
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
@@ -32,11 +30,6 @@ utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
 -- Maps
-utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
-utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi
-utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
-utest map (lam x. addi x 1) [] with [] using eqSeq eqi
-
 let mapOption
   : (a -> Option b)
   -> [a]
@@ -59,18 +52,6 @@ with [] using eqSeq eqi
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
-utest iter (lam x. addi x 1) [1, 2, 3]
-with ()
-
-utest
-  let r = ref 0 in
-  iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4];
-  deref r
-with 10
-
-utest iteri (lam i. lam x. addi x i) [1, 2, 3]
-with ()
-
 let for_
   : [a]
   -> (a -> ())
@@ -78,18 +59,32 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- Folds
+recursive
+  let foldl = lam f. lam acc. lam seq.
+  if null seq then acc
+  else foldl f (f acc (head seq)) (tail seq)
+end
+
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 utest foldl addi 0 [1,2,3,4,5] with 15
 utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
 
+recursive
+  let foldr : (b -> a -> a) -> a -> [b] -> a =
+  lam f. lam acc. lam seq.
+    if null seq
+    then acc
+    else f (head seq) (foldr f acc (tail seq))
+end
+
 let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
--- utest foldr (lam x. lam acc. x) 0 [1,2] with 1
--- utest foldr (lam acc. lam x. x) 0 [] with 0
--- utest foldr cons [] [1,2,3] with [1,2,3]
--- utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
+utest foldr (lam x. lam acc. x) 0 [1,2] with 1
+utest foldr (lam acc. lam x. x) 0 [] with 0
+utest foldr cons [] [1,2,3] with [1,2,3]
+utest foldr1 (lam x. lam acc. (x,acc)) [1,2] with (1,2)
 
 recursive
 let unfoldr = lam f. lam b.
