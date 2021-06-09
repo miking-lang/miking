@@ -722,12 +722,14 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     concat (_eqPaths g public t.ident t.body) (_eqPaths g public cur t.inexpr)
 
   | TmRecLets t ->
-    foldl (lam acc. lam bind: RecLetBinding.
-      let cur =
-        match bind with { body = TmLam lm } then bind.ident
-        else cur
-      in concat acc (_eqPaths g public cur bind.body))
-      [] t.bindings
+    concat
+      (foldl (lam acc. lam bind: RecLetBinding.
+         let cur =
+           match bind with { body = TmLam lm } then bind.ident
+           else cur
+         in concat acc (_eqPaths g public cur bind.body))
+         [] t.bindings)
+      (_eqPaths g public cur t.inexpr)
 
   | tm ->
     sfold_Expr_Expr concat [] (smap_Expr_Expr (_eqPaths g public cur) tm)
@@ -801,30 +803,36 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let le =
       TmLet {t with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
     in
-    match callCtxFunLookup cur env with Some _ then
-      match _appGetCallee (TmApp a) with Some callee then
-        match callCtxFunLookup callee env
-        with Some iv then
-          -- Set the incoming var of callee to current node
-          let count = callCtxLbl2Count t.ident env in
-          let update = modref_ (nvar_ iv) (int_ count) in
-          bind_ (nulet_ (nameSym "") update) le
-        else le
-      else le
-    else le
+    -- Track call only if edge is part of the call graph
+    match env with { callGraph = callGraph } then
+      match callCtxFunLookup cur env with Some _ then
+        match _appGetCallee (TmApp a) with Some callee then
+          match callCtxFunLookup callee env with Some iv then
+            if digraphIsSuccessor callee cur callGraph then
+              -- Set the incoming var of callee to current node
+              let count = callCtxLbl2Count t.ident env in
+              let update = modref_ (nvar_ iv) (int_ count) in
+              bind_ (nulet_ (nameSym "") update) le
+            else le -- edge not part of call graph
+          else le -- callee not part of call graph
+        else le -- not an application with TmVar
+      else le -- caller not part of call graph
+    else never
 
   -- Decision point: lookup the value depending on call history.
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
-     match env with
-      { callGraph = callGraph, publicFns = publicFns }
-     then
-       let paths = mapFindWithExn ident eqPaths in
-       let env = callCtxAddHole t.body ident paths env in
-       let iv = callCtxFun2Inc cur env in
-       let lookupCode = _lookupCallCtx lookup ident iv env paths in
-       TmLet {{t with body = lookupCode}
-                 with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
-     else never
+    let lookupCode =
+      if eqi depth 0 then
+        let env = callCtxAddHole t.body ident [[]] env in
+        lookup (callCtxHole2Idx ident [] env)
+      else
+        let paths = mapFindWithExn ident eqPaths in
+        let env = callCtxAddHole t.body ident paths env in
+        let iv = callCtxFun2Inc cur env in
+        _lookupCallCtx lookup ident iv env paths
+    in
+    TmLet {{t with body = lookupCode}
+              with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
 
   -- Function definitions: possibly update cur inside body of function
   | TmLet ({ body = TmLam lm } & t) ->
@@ -832,8 +840,9 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       match callCtxFunLookup t.ident env with Some _
       then t.ident
       else cur
-    in TmLet {{t with body = _maintainCallCtx lookup env eqPaths curBody t.body}
-                 with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
+    in
+    TmLet {{t with body = _maintainCallCtx lookup env eqPaths curBody t.body}
+              with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds =
