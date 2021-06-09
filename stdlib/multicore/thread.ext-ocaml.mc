@@ -7,7 +7,7 @@ let tygeneric_ = lam. tyunknown_
 
 let threadExtMap =
   use OCamlTypeAst in
-  mapFromList cmpString
+  mapFromSeq cmpString
   [ ("externalThreadSpawn", [
       { ident = "Domain.spawn"
       , ty = tyarrow_ (tyarrow_ otyunit_ (tygeneric_ "a")) (tyathread_ "a")
