@@ -99,8 +99,8 @@ utest (next (next it).0).1 with Some 2 using optionEq eqi in
 utest (next (next (next it).0).0).1 with Some 3 using optionEq eqi in
 utest (next (next (next (next it).0).0).0).1 with None () using optionEq eqi in
 
-utest iteratorGet it with None () in
-utest iteratorGet (next it).0 with Some 1 in
+utest iteratorGet it with None () using optionEq eqi in
+utest iteratorGet (next it).0 with Some 1 using optionEq eqi in
 
 utest iteratorToSeq it with [1,2,3] in
 
@@ -108,7 +108,7 @@ utest iteratorToSeq (iteratorFromSeq []) with [] using eqSeq eqi in
 utest iteratorToSeq (iteratorFromSeq [1]) with [1] in
 utest iteratorToSeq (iteratorFromSeq [1,2,3]) with [1,2,3] in
 
-utest iteratorTake 0 it with [] in
+utest iteratorTake 0 it with [] using eqSeq eqi in
 utest iteratorTake 2 it with [1,2] in
 utest iteratorTake 100 it with [1,2,3] in
 utest iteratorTake (subi 0 1) it with [1,2,3] in
