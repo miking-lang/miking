@@ -266,15 +266,7 @@ lang TuneSemiExhaustive = TuneLocalSearch
   | _ -> SemiExhaustive {curIdx = 0, prev = None ()}
 end
 
-lang TuneRandomWalk = TuneLocalSearch
-                    + LocalSearchSelectRandomUniform
-  syn MetaState =
-  | Empty {}
-
-  sem step (searchState : SearchState) =
-  | Empty {} ->
-    (select (neighbourhood searchState) searchState, Empty {})
-
+lang TuneOneRandomNeighbour = TuneLocalSearch
   sem neighbourhood =
   | searchState ->
     let searchState : SearchState = searchState in
@@ -283,18 +275,44 @@ lang TuneRandomWalk = TuneLocalSearch
            {assignment =
              Table {holes = holes, table = table, options = options}}}
     then
-      let table = map (lam h.
-        match h with TmHole {hole = hole, ty = ty, info = info} then
-          sample hole
-        else dprintLn h; error "Expected a decision point") holes
-      in [Table {table = table, holes = holes, options = options}]
+      let table = map (lam h. sample h) holes in
+      iteratorFromSeq [Table {table = table, holes = holes, options = options}]
     else never
+end
+
+lang TuneManyRandomNeighbours = TuneLocalSearch
+  sem neighbourhood =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState
+    with {cur =
+           {assignment =
+             Table {holes = holes, table = table, options = options}}}
+    then
+      let step = lam.
+        let table = map (lam h. sample h) holes in
+        Some (Table {table = table, holes = holes, options = options})
+      in
+      iteratorInit step identity
+    else never
+end
+
+lang TuneRandomWalk = TuneLocalSearch
+                    + TuneOneRandomNeighbour
+                    + LocalSearchSelectRandomUniform
+  syn MetaState =
+  | Empty {}
+
+  sem step (searchState : SearchState) =
+  | Empty {} ->
+    (select (neighbourhood searchState) searchState, Empty {})
 
   sem initMeta =
   | _ -> Empty {}
 end
 
 lang TuneSimulatedAnnealing = TuneLocalSearch
+                            + TuneOneRandomNeighbour
                             + LocalSearchSimulatedAnnealing
                             + LocalSearchSelectRandomUniform
   sem decay (searchState : SearchState) =
@@ -318,8 +336,9 @@ lang TuneSimulatedAnnealing = TuneLocalSearch
 end
 
 lang TuneTabuSearch = TuneLocalSearch
+                    + TuneManyRandomNeighbours
                     + LocalSearchTabuSearch
-                    + LocalSearchSelectRandomUniform
+                    + LocalSearchSelectFirst
   syn TabuSet =
   | Tabu {tabu : [LookupTable]}
 
