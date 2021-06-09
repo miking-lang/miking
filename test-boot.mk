@@ -11,10 +11,6 @@ base-files+=$(wildcard stdlib/parser/*.mc)
 
 stdlib-root-files=$(wildcard stdlib/*.mc)
 
-par-files=
-par-files+=$(wildcard test/multicore/*.mc)
-par-files+=$(wildcard stdlib/multicore/*.mc)
-
 sundials-files=
 sundials-files+=$(wildcard test/sundials/*.mc)
 sundials-files+=$(wildcard stdlib/sundials/*.mc)
@@ -26,7 +22,6 @@ ocaml-files=$(wildcard stdlib/ocaml/*.mc)
 # Rules
 
 base: ${base-files} ${stdlib-root-files}
-par: ${par-files}
 sundials: ${sundials-files}
 py: ${py-files}
 ocaml: ${ocaml-files}
