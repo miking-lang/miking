@@ -6,6 +6,22 @@ module Mseq = struct
     | List of 'a List.t
     | Rope of 'a array Rope.t
 
+  module Convert = struct
+    let fingerTree2list = BatFingerTree.to_list
+
+    let fingerTree2rope s =
+      Rope.Convert.of_list_array (BatFingerTree.to_list s)
+
+    let list2fingerTree = BatFingerTree.of_list
+
+    let list2rope = Rope.Convert.of_list_array
+
+    let rope2fingerTree s =
+      BatFingerTree.of_list (Rope.Convert.to_list_array s)
+
+    let rope2list = Rope.Convert.to_list_array
+  end
+
   let create_rope n f = Rope (Rope.create_array n f)
 
   let create_list n f = List (List.init n f)
@@ -33,14 +49,24 @@ module Mseq = struct
 
   let concat s1 s2 =
     match (s1, s2) with
-    | Rope s1, Rope s2 ->
-        Rope (Rope.concat_array s1 s2)
-    | List s1, List s2 ->
-        List (s1 @ s2)
     | FingerTree s1, FingerTree s2 ->
         FingerTree (BatFingerTree.append s1 s2)
-    | _ ->
-        raise (Invalid_argument "Mseq.concat")
+    | FingerTree s1, List s2 ->
+        FingerTree (BatFingerTree.append s1 (Convert.list2fingerTree s2))
+    | FingerTree s1, Rope s2 ->
+        FingerTree (BatFingerTree.append s1 (Convert.rope2fingerTree s2))
+    | List s1, List s2 ->
+        List (s1 @ s2)
+    | List s1, FingerTree s2 ->
+        List (s1 @ Convert.fingerTree2list s2)
+    | List s1, Rope s2 ->
+        List (s1 @ Convert.rope2list s2)
+    | Rope s1, Rope s2 ->
+        Rope (Rope.concat_array s1 s2)
+    | Rope s1, FingerTree s2 ->
+        Rope (Rope.concat_array s1 (Convert.fingerTree2rope s2))
+    | Rope s1, List s2 ->
+        Rope (Rope.concat_array s1 (Convert.list2rope s2))
 
   let get = function
     | Rope s ->
@@ -267,23 +293,24 @@ module Mseq = struct
 
     let equal f s1 s2 =
       match (s1, s2) with
-      | Rope s1, Rope s2 ->
-          Rope.equal_array f s1 s2
-      | List s1, List s2 ->
-          let rec equal f s1 s2 =
-            match (s1, s2) with
-            | [], [] ->
-                true
-            | [], _ | _, [] ->
-                false
-            | x :: xs, y :: ys ->
-                f x y && equal f xs ys
-          in
-          equal f s1 s2
       | FingerTree s1, FingerTree s2 ->
           BatFingerTree.equal f s1 s2
-      | _ ->
-          raise (Invalid_argument "Mseq.equal")
+      | FingerTree s1, List s2 ->
+          BatFingerTree.equal f s1 (Convert.list2fingerTree s2)
+      | FingerTree s1, Rope s2 ->
+          BatFingerTree.equal f s1 (Convert.rope2fingerTree s2)
+      | List s1, List s2 ->
+          List.equal f s1 s2
+      | List s1, FingerTree s2 ->
+          List.equal f s1 (Convert.fingerTree2list s2)
+      | List s1, Rope s2 ->
+          List.equal f s1 (Convert.rope2list s2)
+      | Rope s1, Rope s2 ->
+          Rope.equal_array f s1 s2
+      | Rope s1, FingerTree s2 ->
+          Rope.equal_array f s1 (Convert.fingerTree2rope s2)
+      | Rope s1, List s2 ->
+          Rope.equal_array f s1 (Convert.list2rope s2)
 
     let fold_left f a = function
       | Rope s ->
@@ -318,27 +345,59 @@ module Mseq = struct
 
     let combine s1 s2 =
       match (s1, s2) with
-      | Rope s1, Rope s2 ->
-          Rope (Rope.combine_array_array s1 s2)
-      | List s1, List s2 ->
-          List (List.combine s1 s2)
       | FingerTree s1, FingerTree s2 ->
           FingerTree (combine_fingertree s1 s2)
-      | _ ->
-          raise (Invalid_argument "Mseq.combine")
+      | FingerTree s1, List s2 ->
+          FingerTree (combine_fingertree s1 (Convert.list2fingerTree s2))
+      | FingerTree s1, Rope s2 ->
+          FingerTree (combine_fingertree s1 (Convert.rope2fingerTree s2))
+      | List s1, List s2 ->
+          List (List.combine s1 s2)
+      | List s1, FingerTree s2 ->
+          List (List.combine s1 (Convert.fingerTree2list s2))
+      | List s1, Rope s2 ->
+          List (List.combine s1 (Convert.rope2list s2))
+      | Rope s1, Rope s2 ->
+          Rope (Rope.combine_array_array s1 s2)
+      | Rope s1, FingerTree s2 ->
+          Rope (Rope.combine_array_array s1 (Convert.fingerTree2rope s2))
+      | Rope s1, List s2 ->
+          Rope (Rope.combine_array_array s1 (Convert.list2rope s2))
 
     let fold_right2 f s1 s2 a =
       match (s1, s2) with
-      | Rope s1, Rope s2 ->
-          Rope.foldr2_array f s1 s2 a
-      | List s1, List s2 ->
-          List.fold_right (fun (a, b) acc -> f a b acc) (List.combine s1 s2) a
       | FingerTree s1, FingerTree s2 ->
           BatFingerTree.fold_right
             (fun a (x, y) -> f x y a)
             a (combine_fingertree s1 s2)
-      | _ ->
-          raise (Invalid_argument "Mseq.fold_right2")
+      | FingerTree s1, List s2 ->
+          BatFingerTree.fold_right
+            (fun a (x, y) -> f x y a)
+            a
+            (combine_fingertree s1 (Convert.list2fingerTree s2))
+      | FingerTree s1, Rope s2 ->
+          BatFingerTree.fold_right
+            (fun a (x, y) -> f x y a)
+            a
+            (combine_fingertree s1 (Convert.rope2fingerTree s2))
+      | List s1, List s2 ->
+          List.fold_right (fun (a, b) acc -> f a b acc) (List.combine s1 s2) a
+      | List s1, FingerTree s2 ->
+          List.fold_right
+            (fun (a, b) acc -> f a b acc)
+            (List.combine s1 (Convert.fingerTree2list s2))
+            a
+      | List s1, Rope s2 ->
+          List.fold_right
+            (fun (a, b) acc -> f a b acc)
+            (List.combine s1 (Convert.rope2list s2))
+            a
+      | Rope s1, Rope s2 ->
+          Rope.foldr2_array f s1 s2 a
+      | Rope s1, FingerTree s2 ->
+          Rope.foldr2_array f s1 (Convert.fingerTree2rope s2) a
+      | Rope s1, List s2 ->
+          Rope.foldr2_array f s1 (Convert.list2rope s2) a
 
     let of_list = of_list_rope
 

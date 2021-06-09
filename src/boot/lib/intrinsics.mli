@@ -94,6 +94,20 @@ module Mseq : sig
     val fold_right2 :
       ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
   end
+
+  module Convert : sig
+    val fingerTree2list : 'a BatFingerTree.t -> 'a List.t
+
+    val fingerTree2rope : 'a BatFingerTree.t -> 'a array Rope.t
+
+    val list2fingerTree : 'a List.t -> 'a BatFingerTree.t
+
+    val list2rope : 'a List.t -> 'a array Rope.t
+
+    val rope2fingerTree : 'a array Rope.t -> 'a BatFingerTree.t
+
+    val rope2list : 'a array Rope.t -> 'a List.t
+  end
 end
 
 module T : sig
