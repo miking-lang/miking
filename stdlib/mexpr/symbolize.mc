@@ -137,10 +137,10 @@ lang ExtSym = Sym + ExtAst
   sem symbolizeExpr (env : SymEnv) =
   | TmExt t ->
     match env with {varEnv = varEnv} then
-      let ty = symbolizeType env t.ty in
+      let tyIdent = symbolizeType env t.tyIdent in
       if nameHasSym t.ident then
         TmExt {{t with inexpr = symbolizeExpr env t.inexpr}
-                  with ty = ty}
+                  with tyIdent = tyIdent}
       else
         let ident = nameSetNewSym t.ident in
         let str = nameGetStr ident in
@@ -148,7 +148,7 @@ lang ExtSym = Sym + ExtAst
         let env = {env with varEnv = varEnv} in
         TmExt {{{t with ident = ident}
                    with inexpr = symbolizeExpr env t.inexpr}
-                   with ty = ty}
+                   with tyIdent = tyIdent}
     else never
 end
 

@@ -28,9 +28,11 @@ utest extTestUnit2 () with 1 in
 
 external extTestTuple1 : (Int, Float) in
 utest extTestTuple1.0 with 1 in
+utest extTestTuple1.1 with 3. using eqf in
 
 external extTestTuple2 : ([Int], Int) in
 utest extTestTuple2.0 with [1] in
+utest extTestTuple2.1 with 2 in
 
 external extTestTuple10th : (Int, Float) -> Int in
 utest extTestTuple10th (1, 3.) with 2 in
@@ -39,16 +41,29 @@ external extTestTuple20th : ([Int], Int) -> [Int] in
 utest extTestTuple20th ([1], 2) with [2] in
 
 external extTestRecord1 : {c : Int, d : Float} in
-utest (extTestRecord1).c with 1 in
+utest extTestRecord1.c with 1 in
+utest extTestRecord1.d with 3. using eqf in
 
 external extTestRecord1A : {c : Int, d : Float} -> Int in
 utest extTestRecord1A {c = 1, d = 3.} with 2 in
 
 external extTestRecord2 : {c : [Int], d : Int} in
-utest (extTestRecord2).c with [1] in
+utest extTestRecord2.c with [1] in
+utest extTestRecord2.d with 2 in
 
 external extTestRecord2A : {c : [Int], d : Int} -> [Int] in
 utest extTestRecord2A {c = [1], d = 2} with [2] in
+
+external extTestRecord3 : {c : {c : Int, d : Float}, d : {c : [Int], d : Int}} in
+utest extTestRecord3.c.c with 1 in
+utest extTestRecord3.c.d with 3. using eqf in
+utest extTestRecord3.d.c with [1] in
+utest extTestRecord3.d.d with 2 in
+
+external extTestRecord3BA
+  : {c : {c : Int, d : Float}, d : {c : [Int], d : Int}} -> [Int]
+in
+utest extTestRecord3BA {c = {c = 1, d = 3.}, d = {c = [1], d = 2}} with [2] in
 
 external extTestArgLabel : Int -> Int -> Int in
 utest extTestArgLabel 2 1 with 1 in

@@ -34,7 +34,8 @@ all: build/mi
 
 boot:
 	@./make boot
-build/mi:
+
+build/mi: boot
 	@./make
 
 test: test-boot-base
@@ -84,8 +85,11 @@ test-boot:\
 test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
 
-test-boot-py: build/mi
+test-boot-par: boot
+	@$(MAKE) -s -f test-boot.mk par
+
+test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
 
-test-boot-ocaml: build/mi
+test-boot-ocaml: boot
 	@$(MAKE) -s -f test-boot.mk ocaml

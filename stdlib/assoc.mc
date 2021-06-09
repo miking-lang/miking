@@ -22,7 +22,7 @@ let assocLength : AssocMap k v -> Int =
 -- ('k','v') is stored. If 'k' is already a key in 'm', its old value will be
 -- overwritten.
 let assocInsert : AssocTraits k -> k -> v -> AssocMap k v -> AssocMap k v =
-  lam traits : {eq : k -> k -> Bool}. lam k. lam v. lam m.
+  lam traits. lam k. lam v. lam m.
     optionMapOrElse (lam. cons (k,v) m)
                     (lam i. set m i (k,v))
                     (index (lam t : (k, v). traits.eq k t.0) m)
@@ -43,7 +43,7 @@ let assoc2seq : AssocTraits k -> AssocMap k v -> [(k,v)] =
 -- 'assocRemove traits k m' returns a new map, where 'k' is not a key. If 'k' is
 -- not a key in 'm', the map remains unchanged after the operation.
 let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
-  lam traits : {eq : k -> k -> Bool}. lam k. lam m.
+  lam traits. lam k. lam m.
     optionMapOr m
                 (lam i.
                   let spl : ([(k, v)], [(k, v)]) = splitAt m i in
@@ -55,7 +55,7 @@ let assocRemove : AssocTraits k -> k -> AssocMap k v -> AssocMap k v =
 -- If 'm' has the key 'k' stored, its value is returned, otherwise None () is
 -- returned.
 let assocLookup : AssocTraits k -> k -> AssocMap k v -> Option v =
-  lam traits : {eq : k -> k -> Bool}. lam k. lam m.
+  lam traits. lam k. lam m.
     optionMapOr (None ())
                 (lam t : (k, v). Some t.1)
                 (find (lam t : (k, v). traits.eq k t.0) m)

@@ -417,10 +417,13 @@ end
 lang ExtTypeLift = TypeLift + ExtAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmExt t ->
-    match typeLiftType env t.ty with (env, ty) then
+    match typeLiftType env t.tyIdent with (env, tyIdent) then
       match typeLiftExpr env t.inexpr with (env, inexpr) then
-        (env, TmExt {{t with ty = ty}
-                        with inexpr = inexpr})
+        match typeLiftType env t.ty with (env, ty) then
+          (env, TmExt {{{t with tyIdent = tyIdent}
+                           with inexpr = inexpr}
+                           with ty = ty})
+        else never
       else never
     else never
 end

@@ -38,7 +38,7 @@ let tyidarootf = tyidaresf
 
 let sundialsExtMap =
   use OCamlTypeAst in
-  mapFromList cmpString
+  mapFromSeq cmpString
   [
     ("externalSundialsRealArrayCreate", [
       { ident = "Sundials.RealArray.create",

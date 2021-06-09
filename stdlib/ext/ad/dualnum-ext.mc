@@ -7,31 +7,37 @@
 
 -- Public functions are prefixed with dualnum. Other functions are internal.
 
-include "dualnum-arith.mc"
-include "dualnum-bool.mc"
-include "dualnum-helpers.mc"
-include "ext/math.mc"
 
-let num = dualnumNum
-let dnum = dualnumDNum
-let lift1 = dualnumLift1
-let float2num1 = dualnumFloat2num1
-let primal = dualnumPrimal
-let pertubation = dualnumPertubation
+include "ad/dualnum-lift.mc"
+include "ad/dualnum-helpers.mc"
+include "math.mc"
 
-let epsn = num eps
+-------------
+-- ALIASES --
+-------------
+
+let _num = dualnumNum
+let _dnum = dualnumDNum
+let _lift1 = dualnumLift1
+let _lift2 = dualnumLift2
+let _float2num1 = dualnumFloat2num1
+let _float2num2 = dualnumFloat2num2
+
+----------------
+-- CONSTANTS  --
+----------------
+
 let pin = num pi
 
--- Elementary functions
-let absn = lam p. if ltn p num0 then negn p else p
 
-let eqnEps = lam l. lam r.
-  ltn (absn (subn l r)) epsn
+---------------------------
+-- ELEMENTARY FUNCTIONS  --
+---------------------------
 
 -- Trigonometric functions
 recursive
-  let sinn = lam p. lift1 (float2num1 sin) cosn p
-  let cosn = lam p. lift1 (float2num1 cos) (lam x. negn (sinn x)) p
+  let sinn = lam p. _lift1 (_float2num1 sin) cosn p
+  let cosn = lam p. _lift1 (_float2num1 cos) (lam x. negn (sinn x)) p
 end
 
 utest sinn (divn pin num2) with num1 using eqnEps
@@ -43,13 +49,35 @@ utest cosn num0 with num1 using eqnEps
 utest addn (muln (sinn num1) (sinn num1)) (muln (cosn num1) (cosn num1))
 with num1 using eqnEps
 
-utest pertubation e0 (sinn dnum011) with cosn num1 using eqnEps
-utest pertubation e0 (cosn dnum011) with negn (sinn num1) using eqnEps
+utest der sinn num1 with cosn num1 using eqnEps
+utest der cosn num1 with negn (sinn num1) using eqnEps
 
 -- Exponential function
 recursive
-  let expn = lam p. lift1 (float2num1 exp) expn p
+  let expn = lam p. _lift1 (_float2num1 exp) expn p
 end
 
 utest expn num0 with num1 using eqnEps
-utest pertubation e0 (expn dnum011) with expn num1 using eqnEps
+utest der expn num1 with expn num1 using eqnEps
+
+-- Natural logarithm
+let logn = lam p. _lift1 (_float2num1 log) (lam x. divn (num 1.) x) p
+
+utest logn num1 with num0 using eqnEps
+utest logn (expn num3) with num3 using eqnEps
+utest expn (logn num3) with num3 using eqnEps
+utest der logn num1 with num1 using eqnEps
+
+-- Power function
+recursive
+  let pown = lam p1. lam p2.
+    _lift2
+      (_float2num2 pow)
+      (lam x1. lam x2. muln x2 (pown x1 (subn x2 (_num 1.))))
+      (lam x1. lam x2. muln (pown x1 x2) (logn x1))
+      p1 p2
+end
+
+utest pown num3 num2 with num 9. using eqnEps
+utest der (lam x. pown x num2) num3 with num6 using eqnEps
+utest der (lam x. pown (expn num1) x) num2 with expn num2 using eqnEps

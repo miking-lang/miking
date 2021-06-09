@@ -46,12 +46,17 @@ let evalprog filename =
   parsed_files := [] ;
   if !utest && !utest_fail_local = 0 then printf " OK\n" else printf "\n" ;
   if !enable_debug_profiling then
-    Hashtbl.iter
-      (fun k (c, t) ->
+    let bindings =
+      Hashtbl.fold (fun k v acc -> (k, v) :: acc) runtimes []
+      |> List.sort (fun (_, (_, t1)) (_, (_, t2)) -> Float.compare t1 t2)
+      |> List.rev
+    in
+    List.iter
+      (fun (info, (count, ms)) ->
         printf "%s: %d call%s, %f ms\n"
-          (k |> info2str |> to_utf8)
-          c
-          (if c == 1 then "" else "s")
-          t )
-      runtimes
+          (info |> info2str |> to_utf8)
+          count
+          (if count == 1 then "" else "s")
+          ms )
+      bindings
   else ()
