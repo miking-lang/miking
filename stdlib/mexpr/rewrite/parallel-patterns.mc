@@ -25,9 +25,7 @@ let patterns = use MExprParallelKeywordMaker in
       let a = map (lam arg : (Name, Type, Info).
         TmVar {ident = arg.0, ty = arg.1, info = arg.2}) args in
       TmParallelReduce {
-        f = get a 2,
-        ne = get a 1,
-        as = get a 0,
+        f = get a 0, ne = get a 1, as = get a 2,
         ty = TyUnknown {info = info},
         info = info}}]
 
@@ -72,10 +70,10 @@ let tryRewriteBinding = use MExprAst in
   else never
 
 lang MExprParallelPatterns = MExprAst
-  sem findParallelPatterns =
+  sem insertParallelPatterns =
   | TmRecLets t ->
     TmRecLets {t with bindings = map tryRewriteBinding t.bindings}
-  | expr -> smap_Expr_Expr findParallelPatterns expr
+  | expr -> smap_Expr_Expr insertParallelPatterns expr
 end
 
 lang TestLang = MExprParallelPatterns + MExprRewrite + MExprParallelKeywordMaker
@@ -91,7 +89,7 @@ let acc = nameSym "acc" in
 let h = nameSym "h" in
 let t = nameSym "t" in
 let t1 = nreclets_ [
-  (fold, tyunknown_, nulam_ s (nulam_ acc (nulam_ f (
+  (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
     match_ (nvar_ s)
       (pseqedgen_ [npvar_ h] t [])
       (appf3_ (nvar_ fold)
@@ -104,11 +102,11 @@ let t1 = nreclets_ [
         never_)))))
 ] in
 let t2 = nreclets_ [
-  (fold, tyunknown_, nulam_ s (nulam_ acc (nulam_ f (
+  (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
     parallelReduce_ (nvar_ f) (nvar_ acc) (nvar_ s)))))
 ] in
 
-utest findParallelPatterns (rewriteTerm t1) with t2 using eqExpr in
-utest findParallelPatterns t2 with t2 using eqExpr in
+utest insertParallelPatterns (rewriteTerm t1) with t2 using eqExpr in
+utest insertParallelPatterns t2 with t2 using eqExpr in
 
 ()

@@ -51,7 +51,7 @@ let _constructLoopResult = use MExprAst in
   lam recursiveCallParams : [Expr].
   lam baseCase : Expr.
   let updatedParams : Map Name Expr =
-    mapFromList
+    mapFromSeq
       nameCmp
       (mapi
         (lam i. lam p : (Name, a).
@@ -68,7 +68,7 @@ let _usePassedParameters = use MExprAst in
   lam passedParams : [Expr].
   lam body : Expr.
   let paramMap : Map Name Expr =
-    mapFromList
+    mapFromSeq
       nameCmp
       (mapi
         (lam i. lam p : (Name, a).
@@ -81,7 +81,7 @@ let _usePassedParameters = use MExprAst in
   in
   work body
 
-lang FutharkConstGenerate = MExprPatternKeywordMaker + FutharkAst
+lang FutharkConstGenerate = MExprAst + FutharkAst
   sem generateConst =
   | CInt n -> futInt_ n.val
   | CFloat f -> futFloat_ f.val
@@ -215,7 +215,7 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
 end
 
 lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
-                           FutharkMatchGenerate
+                           FutharkMatchGenerate + MExprParallelKeywordMaker
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmVar t -> FEVar {ident = t.ident}
   | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings}
@@ -376,8 +376,7 @@ lang FutharkGenerate = FutharkToplevelGenerate + MExprCmpClosed
 end
 
 lang TestLang =
-  FutharkGenerate + FutharkPrettyPrint + MExprPatternKeywordMaker + MExprSym +
-  MExprTypeAnnot
+  FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeAnnot
 end
 
 mexpr

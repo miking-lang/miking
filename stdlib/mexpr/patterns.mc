@@ -5,7 +5,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 
 lang MExprParallelKeywordMaker =
-  KeywordMaker + MExprAst + MExprEq + MExprPrettyPrint
+  KeywordMaker + MExprAst + MExprEq
 
   syn Expr =
   | TmParallelMap {f: Expr, as: Expr, ty: Type, info: Info}
@@ -207,62 +207,6 @@ lang MExprParallelKeywordMaker =
         eqExprH env free l.as r.as
       else None ()
     else None ()
-
-  sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmParallelMap t ->
-    match pprintCode indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelMap ", f, " ", as])
-      else never
-    else never
-  | TmParallelMap2 t ->
-    match pprintCode indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        match pprintCode indent env t.bs with (env, bs) then
-          (env, join ["parallelMap2 ", f, " ", as, " ", bs])
-        else never
-      else never
-    else never
-  | TmParallelReduce t ->
-    match pprintCode indent env t.f with (env, f) then
-      match pprintCode indent env t.ne with (env, ne) then
-        match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelReduce ", f, " ", ne, " ", as])
-        else never
-      else never
-    else never
-  | TmParallelScan t ->
-    match pprintCode indent env t.f with (env, f) then
-      match pprintCode indent env t.ne with (env, ne) then
-        match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelScan ", f, " ", ne, " ", as])
-        else never
-      else never
-    else never
-  | TmParallelFilter t ->
-    match pprintCode indent env t.p with (env, p) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelFilter ", p, " ", as])
-      else never
-    else never
-  | TmParallelPartition t ->
-    match pprintCode indent env t.p with (env, p) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelPartition ", p, " ", as])
-      else never
-    else never
-  | TmParallelAll t ->
-    match pprintCode indent env t.p with (env, p) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelAll ", p, " ", as])
-      else never
-    else never
-  | TmParallelAny t ->
-    match pprintCode indent env t.p with (env, p) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelAny ", p, " ", as])
-      else never
-    else never
 end
 
 let parallelMap_ = lam f. lam as.

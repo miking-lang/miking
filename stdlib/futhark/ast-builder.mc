@@ -24,7 +24,7 @@ let futPbool_ = use FutharkAst in
 let futPrecord_ = use FutharkAst in
   lam bindings : [(String, FutPat)].
   let bindingMapFunc = lam b : (String, FutPat). (stringToSid b.0, b.1) in
-  FPRecord {bindings = mapFromList cmpSID (map bindingMapFunc bindings)}
+  FPRecord {bindings = mapFromSeq cmpSID (map bindingMapFunc bindings)}
 
 -- Types --
 
@@ -54,7 +54,7 @@ let futUnsizedArrayTy_ = use FutharkAst in
 
 let futRecordTy_ = use FutharkAst in
   lam fieldSeq.
-  FTyRecord {fields = mapFromList cmpSID (map
+  FTyRecord {fields = mapFromSeq cmpSID (map
                         (lam kv : (String, FutType). (stringToSid kv.0, kv.1))
                         fieldSeq)}
 
@@ -79,7 +79,7 @@ let futVar_ = lam str. nFutVar_ (nameNoSym str)
 
 let futRecord_ = use FutharkAst in
   lam fieldSeq.
-  FERecord {fields = mapFromList cmpSID (map
+  FERecord {fields = mapFromSeq cmpSID (map
                        (lam kv : (String, FutExpr). (stringToSid kv.0, kv.1))
                        fieldSeq)}
 
