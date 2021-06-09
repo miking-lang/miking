@@ -303,8 +303,7 @@ module Mseq = struct
 
     let combine_fingertree s1 s2 =
       let rec work a s1 s2 =
-        (* TODO: use is_empty *)
-        if BatFingerTree.size s1 == 0 then a
+        if BatFingerTree.is_empty s1 then a
         else
           work
             (BatFingerTree.snoc a
