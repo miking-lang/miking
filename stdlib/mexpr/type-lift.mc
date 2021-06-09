@@ -351,7 +351,7 @@ lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
       match pat with PatRecord {bindings = bindings, info = info} then
         match record2tuple bindings with Some _ then
           let fields = mapMap (lam. tyunknown_) bindings in
-          let labels = map stringToSid (create (mapSize fields) int2string) in
+          let labels = map stringToSid (hcreate (mapSize fields) int2string) in
           let ty =
             TyRecord {
               fields = fields,

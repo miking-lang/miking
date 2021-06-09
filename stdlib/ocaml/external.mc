@@ -95,7 +95,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     (t : Expr)
     (fields : [(String, Type)]) =
   | tys ->
-    let ns = create (length tys) (lam. nameSym "t") in
+    let ns = hcreate (length tys) (lam. nameSym "t") in
     let pvars =
       map (lam n. PatNamed { ident = PName n, info = info }) ns
     in
@@ -243,7 +243,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
         match unzip costsTms with (costs, tms) then
           -- NOTE(oerikss, 2021-05-23): We need to run generate since we create
           -- an exclusive mexpr term.
-          let ns = create (length labels2) (lam. nameSym "t") in
+          let ns = hcreate (length labels2) (lam. nameSym "t") in
           let vars =
             map
               (lam n.

@@ -82,9 +82,9 @@ lang KeywordMakerLet = KeywordMakerBase + LetAst
   sem makeKeywords (args: [Expr]) =
   | TmLet r ->
      let ident = nameGetStr r.ident in
-     match matchKeywordString r.info ident with Some _ then
-       infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
-     else
+     -- match matchKeywordString r.info ident with Some _ then
+     --   infoErrorExit r.info (join ["Keyword '", ident, "' cannot be used in a let expressions."])
+     -- else
        TmLet {{r with body = makeKeywords [] r.body} with inexpr = makeKeywords [] r.inexpr}
 end
 
