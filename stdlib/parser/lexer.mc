@@ -14,15 +14,19 @@ lang WSACParser
   sem eatWSAC (p : Pos) =
 end
 
+type Stream = {pos : Pos, str : String}
+type NextTokenResult = {token : Token, lit : String, info : Info, stream : Stream}
+
 -- Base language for parsing tokens preceeded by WSAC
 lang TokenParser = WSACParser
   syn Token =
-  sem nextToken /- : {pos : Pos, str : String} -> {token : Token, stream : {pos : Pos, str : String}} -/ =
-  | stream -> match eatWSAC stream.pos stream.str with {str = str, pos = pos} then
-      parseToken pos str
-    else never
+  sem nextToken /- : Stream -> NextTokenResult -/ =
+  | stream ->
+    let stream: Stream = stream in
+    let stream: Stream = eatWSAC stream.pos stream.str in
+    parseToken stream.pos stream.str
 
-  sem parseToken (pos : Pos) /- : String -> {token : Token, lit : String, info : Info, stream : {pos : Pos, str : String}} -/ =
+  sem parseToken (pos : Pos) /- : String -> NextTokenResult -/ =
   sem tokKindEq (tok : Token) /- : Token -> Bool -/ =
   sem tokInfo /- : Token -> Info -/ =
   sem tokToStr /- : Token -> String -/ =

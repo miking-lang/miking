@@ -21,8 +21,7 @@ include "ll1.mc"
 include "breakable.mc"
 include "common.mc"
 
-type NonTerminal
-type Production
+type NonTerminal = { sym: Symbol, name: String }
 
 type DefaultInclude
 con DefaultIn : () -> DefaultInclude
@@ -86,10 +85,6 @@ let _lopenType = lam x.
 
 let _ropenType = lam x.
   match x with Prefix _ | Infix _ then true else false
-
-type Override
-con LeftChild : { child : Production, parent : Production } -> Override
-con RightChild : { child : Production, parent : Production } -> Override
 
 type Precedence = { mayGroupLeft : Bool, mayGroupRight : Bool }
 
@@ -191,6 +186,12 @@ type ProductionSpec =
   , action : Action
   }
 
+type Production = { sym: Symbol, spec: ProductionSpec }
+
+type Override
+con LeftChild : { child : Production, parent : Production } -> Override
+con RightChild : { child : Production, parent : Production } -> Override
+
 -- Create a new production.
 -- WARNING: not referentially transparent
 let semanticProduction
@@ -258,10 +259,14 @@ let _breakableErrorToSemanticErrors
   = lam err.
     match err with Ambiguities ambs then
       map
-        (lam amb. match amb with {first = f, last = l, irrelevant = irr} then
+        (lam amb: Ambiguity [Symbol]. match amb with {first = f, last = l, irrelevant = irr} then
            SemanticParseAmbiguityError
              { info = mergeInfo (_seqSymInfo f) (_seqSymInfo l)
-             , irrelevant = map (lam irr. mergeInfo (_seqSymInfo irr.first) (_seqSymInfo irr.last)) irr
+             , irrelevant =
+               map
+                 (lam irr: Irrelevancy [Symbol].
+                   mergeInfo (_seqSymInfo irr.first) (_seqSymInfo irr.last))
+                 irr
              }
          else never)
         ambs
@@ -275,9 +280,9 @@ let _buildSurroundedAtom
   -> State res [Symbol] ROpen
   -> Option (State res [Symbol] RClosed)
   = lam pres. lam atom. lam posts. lam contFunc. lam st.
-    let st = foldl (lam st. lam pre. breakableAddPrefix pre.0 pre.1 st) st pres in
+    let st = foldl (lam st. lam pre: (BreakableInput res [Symbol] LClosed ROpen, [Symbol]). breakableAddPrefix pre.0 pre.1 st) st pres in
     let st = breakableAddAtom atom.0 atom.1 st in
-    let mSt = optionFoldlM (lam st. lam post. breakableAddPostfix post.0 post.1 st) st posts in
+    let mSt = optionFoldlM (lam st. lam post: (BreakableInput res [Symbol] LOpen RClosed, [Symbol]). breakableAddPostfix post.0 post.1 st) st posts in
     optionBind mSt contFunc.1
 
 let _surroundedAtomInfo
@@ -287,7 +292,8 @@ let _surroundedAtomInfo
   -> (Info, State res [Symbol] RClosed -> Option (State res [Symbol] RClosed))
   -> Info
   = lam pres. lam atom. lam posts. lam contFunc.
-      let res = join (join [map (lam x. x.1) pres, [atom.1], map (lam x. x.1) posts]) in
+    let snd: (a, b) -> b = lam x. x.1 in
+    let res = join (join [map snd pres, [atom.1], map snd posts]) in
     match res with [first] ++ _ & _ ++ [last] then
       mergeInfo (mergeInfo (_symInfo first) (_symInfo last)) contFunc.0
     else never
@@ -296,7 +302,7 @@ let _surroundedAtomInfo
 -- order on symbols via `sym2hash`, which is not guaranteed by its
 -- interface
 let _cmpSym = lam a. lam b. subi (sym2hash a) (sym2hash b)
-let _cmpSymPair = lam a. lam b.
+let _cmpSymPair = lam a: (Symbol, Symbol). lam b: (Symbol, Symbol).
   let aint1 = sym2hash a.0 in
   let bint1 = sym2hash b.0 in
   let res = subi aint1 bint1 in
@@ -319,7 +325,7 @@ let semanticGrammar
     let overrideAllow = grammar.overrideAllow in
     let overrideDisallow = grammar.overrideDisallow in
     let nonTerminals = foldl
-      (lam acc. lam prod. mapInsert prod.spec.nt.sym prod.spec.nt.name acc)
+      (lam acc. lam prod: Production. mapInsert prod.spec.nt.sym prod.spec.nt.name acc)
       (mapEmpty _cmpSym)
       productions
     in
@@ -332,17 +338,18 @@ let semanticGrammar
     -- might be nice to report overrides that don't make sense, i.e.,
     -- when the override is on left/right when the production isn't
     -- left/right-open.
+    type SingleOverride = {allow: [Symbol], disallow: [Symbol]} in
     type MultiOverride =
-      { left: {allow: [Symbol], disallow: [Symbol]}
-      , right: {allow: [Symbol], disallow: [Symbol]}
+      { left: SingleOverride
+      , right: SingleOverride
       } in
     let emptyMultiOverride = {left = {allow = [], disallow = []}, right = {allow = [], disallow = []}} in
     let mergeMultiOverride =
-      let mergeSide = lam a. lam b.
+      let mergeSide = lam a: SingleOverride. lam b: SingleOverride.
         { allow = concat a.allow b.allow
         , disallow = concat a.disallow b.disallow
         } in
-      lam a. lam b.
+      lam a: MultiOverride. lam b: MultiOverride.
       { left = mergeSide a.left b.left
       , right = mergeSide a.right b.right
       }
@@ -378,61 +385,64 @@ let semanticGrammar
     -- Make each non-terminal separately, since they should generate a
     -- breakable grammar each
     let res = for (mapBindings nonTerminals)
-      (lam nt.
+      (lam nt: (Symbol, String).
         let ntsym = nt.0 in
         let ntname = nt.1 in
         let precedences = filter
-          (lam p. match p with (({spec = {ptype = ltype, nt = lnt}}, {spec = {ptype = rtype, nt = rnt}}), _) then
-            and
-             (and (eqsym lnt.sym ntsym) (eqsym rnt.sym ntsym))
-             (and (_ropenType ltype) (_lopenType rtype))
-           else false)
+          (lam p: ((Production, Production), Precedence).
+            match p with (({spec = l}, {spec = r}), _) then
+              and
+               (and (eqsym l.nt.sym ntsym) (eqsym r.nt.sym ntsym))
+               (and (_ropenType l.ptype) (_lopenType r.ptype))
+            else false)
           precedences in
         let productions = filter
-          (lam prod. eqsym prod.spec.nt.sym ntsym)
+          (lam prod: Production. eqsym prod.spec.nt.sym ntsym)
           productions in
 
-        let getSyms = lam p. match p with (({sym = lsym}, {sym = rsym}), _)
-          then (lsym, rsym)
-          else never in
+        let getSyms = lam p: ((Production, Production), Precedence).
+          match p with (({sym = lsym}, {sym = rsym}), _)
+            then (lsym, rsym)
+            else never in
         let groupedPrecs = foldl
           (lam acc. lam p. mapInsertWith concat (getSyms p) [p] acc)
           (mapEmpty _cmpSymPair)
           precedences in
 
         let dupPrecErrs =
-          let asSpecs = lam p. match p with (({spec = lspec}, {spec = rspec}), prec)
-            then ((lspec, rspec), prec)
-            else never in
+          let asSpecs = lam p: ((Production, Production), Precedence).
+            match p with (({spec = lspec}, {spec = rspec}), prec)
+              then ((lspec, rspec), prec)
+              else never in
           let duplicatedPrecs = filter
             (lam x. gti (length x) 1)
-            (map (lam x. x.1) (mapBindings groupedPrecs)) in
+            (map (lam x: (Unknown, Unknown). x.1) (mapBindings groupedPrecs)) in
           let mkDupErr = lam ps. DuplicatedPrecedence (map asSpecs ps) in
           map mkDupErr duplicatedPrecs
         in
 
         let undefPrecErrs =
           let allLOpen = filter
-            (lam prod. _lopenType prod.spec.ptype)
+            (lam prod: Production. _lopenType prod.spec.ptype)
             productions in
           let allROpen = filter
-            (lam prod. _ropenType prod.spec.ptype)
+            (lam prod: Production. _ropenType prod.spec.ptype)
             productions in
           let paired = seqLiftA2 (lam a. lam b. (a, b)) allROpen allLOpen in
           let undef = filter
-            (lam p. match p with ({sym = lsym, spec = lspec}, {sym = rsym, spec = rspec}) then
-               not (mapMem (lsym, rsym) groupedPrecs)
+            (lam p: (Production, Production). match p with (l, r) then
+               not (mapMem (l.sym, r.sym) groupedPrecs)
              else never)
             paired in
-          map (lam x. UndefinedPrecedence {left = x.0, right = x.1}) undef
+          map (lam x: (Production, Production). UndefinedPrecedence {left = (x.0).spec, right = (x.1).spec}) undef
         in
 
         let emptyAllowSet = AllowSet (mapEmpty _cmpSym) in
         let defaultAllowSet =
           let defaultDisallow = filter
-            (lam prod. match _prodTypeSelf prod.spec.ptype with DefaultNotIn _ then true else false)
+            (lam prod: Production. match _prodTypeSelf prod.spec.ptype with DefaultNotIn _ then true else false)
             productions in
-          let syms = map (lam x. (x.sym, ())) defaultDisallow in
+          let syms = map (lam x: Production. (x.sym, ())) defaultDisallow in
           DisallowSet (mapFromSeq _cmpSym syms)
         in
 
@@ -445,7 +455,7 @@ let semanticGrammar
             never
         in
 
-        let makeProductionBreakable = lam prod.
+        let makeProductionBreakable = lam prod: Production.
           use ParserConcrete in
           match prod with {sym = sym, spec = {name = name, nt = nt, ptype = ptype, rhs = rhs, action = action}} then
             let unwrapChildren = map
@@ -456,7 +466,7 @@ let semanticGrammar
               BreakableAtom {label = sym, construct = lam mid. action (unwrapChildren mid)}
             else match ptype with Prefix {right = right} then
               let overrides = match mapLookup sym overrides
-                with Some {right = overrides} then overrides
+                with Some x then let x: MultiOverride = x in x.right
                 else {allow = [], disallow = []} in
               let rightAllow = baseAllowSet right in
               let rightAllow = foldl
@@ -471,7 +481,7 @@ let semanticGrammar
               BreakablePrefix {label = sym, construct = construct, rightAllow = rightAllow}
             else match ptype with Postfix {left = left} then
               let overrides = match mapLookup sym overrides
-                with Some {left = overrides} then overrides
+                with Some x then let x: MultiOverride = x in x.left
                 else {allow = [], disallow = []} in
               let leftAllow = baseAllowSet left in
               let leftAllow = foldl
@@ -512,10 +522,12 @@ let semanticGrammar
           else never
         in
 
+        let fst: (a, b) -> a = lam x. x.0 in
+        let snd: (a, b) -> b = lam x. x.1 in
         let breakablePrecomputed = breakableGenGrammar _cmpSym
           { productions = map makeProductionBreakable productions
           , precedences = map
-            (lam pair. (pair.0, (head pair.1).1))
+            (lam pair. (fst pair, snd (head (snd pair))))
             (mapBindings groupedPrecs)
           } in
         let atom = lam sym. mapFindWithExn sym breakablePrecomputed.atoms in
@@ -536,7 +548,7 @@ let semanticGrammar
         let postfixNt = concat "postfix " ntname in
         let postfixesNt = concat ntname " postfixes" in
 
-        let makeProductionLL1 = lam prod.
+        let makeProductionLL1 = lam prod: Production.
           match prod with {sym = sym, spec = {name = name, nt = nt, ptype = ptype, rhs = rhs, action = action}} then
             match ptype with Atom _ then
               let input = atom sym in
@@ -563,10 +575,11 @@ let semanticGrammar
             , rhs = [ll1Nt prefixesNt, ll1Nt atomNt, ll1Nt postfixesNt, ll1Nt contNt]
             , action = lam xs.
               match xs with [UserSym pres, UserSym atom, UserSym posts, UserSym contFunc] then
+                let contFunc: (Unknown, Unknown, Unknown) = contFunc in
                 let syms = join
-                  [ join (map (lam x. x.1) pres)
-                  , atom.1
-                  , join (map (lam x. x.1) posts)
+                  [ join (map snd pres)
+                  , snd atom
+                  , join (map snd posts)
                   , contFunc.2
                   ] in
                 let errs = join
@@ -598,16 +611,17 @@ let semanticGrammar
             , rhs = [ll1Nt infixNt, ll1Nt prefixesNt, ll1Nt atomNt, ll1Nt postfixesNt, ll1Nt contNt]
             , action = lam xs.
               match xs with [UserSym infix, UserSym pres, UserSym atom, UserSym posts, UserSym contFunc] then
+                let contFunc: (Unknown, Unknown, Unknown) = contFunc in
                 let syms = join
-                  [ infix.1
-                  , join (map (lam x. x.1) pres)
-                  , atom.1
-                  , join (map (lam x. x.1) posts)
+                  [ snd infix
+                  , join (map snd pres)
+                  , snd atom
+                  , join (map snd posts)
                   , contFunc.2
                   ] in
                 let newContFunc = lam st.
                   optionBind
-                    (breakableAddInfix infix.0 infix.1 st)
+                    (breakableAddInfix (fst infix) (snd infix) st)
                     (_buildSurroundedAtom pres atom posts contFunc) in
                 let contInfo = _surroundedAtomInfo pres atom posts contFunc in
                 (contInfo, newContFunc, syms)
@@ -651,7 +665,7 @@ let semanticGrammar
     else Left (join res.0)
 
 let semanticParseFile
-  : Grammar
+  : Parser
   -> String -- Filename
   -> String -- Content
   -> Either SemanticParseError Dyn
@@ -668,16 +682,16 @@ let semanticShortenErrors
   : [SemanticGrammarError]
   -> [(String, String)]
   = let shortenOne = lam err.
-      match err with UndefinedPrecedence {left = {spec = {name = lname}}, right = {spec = {name = rname}}} then
+      match err with UndefinedPrecedence {left = {name = lname}, right = {name = rname}} then
         ("undefPrec", join [lname, " -?- ", rname])
       else match err with DuplicatedPrecedence ([(({name = lname}, {name = rname}), _)] ++ _ & precs) then
-        let precs = map (lam x. x.1) precs in
+        let precs = map (lam x: (Unknown, Precedence). x.1) precs in
         let precs = map
-          (lam x. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
+          (lam x: Precedence. join ["'", if x.mayGroupLeft then "<" else "", "-", if x.mayGroupRight then ">" else "", "'"])
           precs in
         ("dupPrec", join [lname, " -?- ", rname, " in {", strJoin ", " precs, "}"])
       else match err with SemanticGrammarLL1Error err then
-        dprintLn (map (lam x. {x with #label"1" = mapBindings x.1}) (mapBindings err)); ("ll1error", "dprinted above")
+        dprintLn (map (lam x: (Unknown, Map Unknown Unknown). {x with #label"1" = mapBindings x.1}) (mapBindings err)); ("ll1error", "dprinted above")
       else dprintLn err; never
     in map shortenOne
 
@@ -793,8 +807,8 @@ utest semanticGrammar
   } with () using lam x. lam. match x
 with Left
   [ UndefinedPrecedence
-    { left = {spec = {name = "add"}}
-    , right = {spec = {name = "add"}}
+    { left = {name = "add"}
+    , right = {name = "add"}
     }
   ]
 then true else false in
