@@ -233,37 +233,64 @@ end
 -- decision points.
 lang TuneSemiExhaustive = TuneLocalSearch
   syn MetaState =
-  | SemiExhaustive {curIdx : Int, prev : Option Expr}
+  | SemiExhaustive {curIdx : Int, lastImproved : Int, prev : Option Expr}
 
   sem step (searchState : SearchState) =
-  | SemiExhaustive ({curIdx = i, prev = prev} & state) ->
+  | SemiExhaustive ({curIdx = i, prev = prev, lastImproved = lastImproved} & state) ->
     match searchState
     with {inc = {assignment = Table {table = table,
                                      holes = holes,
-                                     options = options}},
-          cost = cost}
+                                     options = options},
+                 cost = incCost},
+          cost = cost, cmp = cmp}
     then
       let return = lam i. lam prev.
         let assignment = Table {table = set table i prev, holes = holes, options = options} in
-        ( Some {assignment = assignment, cost = cost assignment},
-          SemiExhaustive {curIdx = i, prev = Some prev} )
+        let score = cost assignment in
+        let lastImproved =
+          if lti (cmp score incCost) 0 then i else lastImproved in
+        ( Some {assignment = assignment, cost = score},
+          SemiExhaustive {curIdx = i, prev = Some prev, lastImproved = lastImproved} )
       in
 
-    match next prev (get holes i) with Some prev then
-      return i prev
-    else
-      -- Current hole is exhausted, move to the next
-      let i = addi i 1 in
-      if eqi i (length holes) then
-        -- Finished the search.
-        (None (), SemiExhaustive state)
-      else match next (None ()) (get holes i) with Some prev then
+      -- Avoid repeating default config
+      let nextSkipDefault =
+        let h = get holes i in
+        match next prev h with Some prev then
+          if and (use MExprEq in eqExpr prev (default h))
+                 (gti (subi i lastImproved) 0) then
+            next (Some prev) h
+          else Some prev
+        else None ()
+      in
+
+      match nextSkipDefault with Some prev then
         return i prev
-      else error "Empty value domain"
+      else
+        -- Current hole is exhausted, move to the next
+        let i = addi i 1 in
+        if eqi i (length holes) then
+          -- Finished the search.
+          (None (), SemiExhaustive state)
+        else match next (None ()) (get holes i) with Some prev then
+          return i prev
+        else error "Empty value domain"
     else never
 
   sem initMeta =
-  | _ -> SemiExhaustive {curIdx = 0, prev = None ()}
+  | _ -> SemiExhaustive
+    { curIdx = 0
+    , lastImproved = subi 0 1  -- to avoid running default config twice
+    , prev = None ()
+    }
+
+  sem debugMeta =
+  | SemiExhaustive {curIdx = i, lastImproved = j, prev = prev} ->
+    printLn (join ["Exploring index: ", int2string i, "\n",
+                   "Last improved at: ", int2string j, "\n",
+                   "Prev: ",
+                   optionMapOrElse (lam. "None")
+                     (use MExprPrettyPrint in expr2str) prev])
 end
 
 lang TuneOneRandomNeighbour = TuneLocalSearch
