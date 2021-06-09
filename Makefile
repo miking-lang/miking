@@ -24,7 +24,6 @@
   test-run\
   test-boot\
   test-boot-base\
-  test-boot-part\
   test-sundials\
   test-par\
   test-boot-py\
@@ -84,9 +83,6 @@ test-boot:\
 
 test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
-
-test-boot-par: boot
-	@$(MAKE) -s -f test-boot.mk par
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py
