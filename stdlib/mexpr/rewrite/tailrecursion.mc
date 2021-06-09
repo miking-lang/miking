@@ -54,14 +54,24 @@ let isSelfRecursive : Name -> Expr -> Bool = use MExprAst in
 let toTailRecursiveBody : RecLetBinding -> Expr -> Name -> Name -> Expr =
   use MExprEq in
   lam binding : RecLetBinding. lam binop. lam tailFuncId. lam accId.
+  let isNeutralElement = lam e.
+    optionGetOrElse (lam. false) (optionMap (lam ne. eqExpr e ne)
+                                            (neutralElement binop))
+  in
   let f = lam baseBranch. lam arg1. lam arg2.
     if isSelfRecursive binding.ident arg1 then
-      let lhs = appf2_ binop baseBranch (nvar_ accId) in
+      let lhs =
+        if isNeutralElement baseBranch then
+          nvar_ accId
+        else appf2_ binop baseBranch (nvar_ accId) in
       let rhs = app_ (substituteIdentifier arg1 binding.ident tailFuncId)
                      (appf2_ binop arg2 (nvar_ accId)) in
       Some (lhs, rhs)
     else if isSelfRecursive binding.ident arg2 then
-      let lhs = appf2_ binop (nvar_ accId) baseBranch in
+      let lhs =
+        if isNeutralElement baseBranch then
+          nvar_ accId
+        else appf2_ binop (nvar_ accId) baseBranch in
       let rhs = app_ (substituteIdentifier arg2 binding.ident tailFuncId)
                      (appf2_ binop (nvar_ accId) arg1) in
       Some (lhs, rhs)
