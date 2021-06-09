@@ -250,25 +250,6 @@ let digraphPrintDot = lam g. lam v2str. lam l2str.
 
 mexpr
 
-let eqPair =
-  lam eq0 : a -> a -> Bool.
-  lam eq1 : b -> b -> Bool.
-  lam l : (a, b).
-  lam r : (a, b).
-  and (eq0 l.0 r.0) (eq1 l.1 r.1)
-in
-let eqDigraph = lam l : Digraph v l. lam r : Digraph v l.
-  let normalize = lam g : Digraph v l.
-    mapMapWithKey (lam. lam es.
-      sort (lam e1 : (v, l). lam e2 : (v, l).
-        digraphCmpv l e1.0 e2.0) es)
-      g.adj
-  in
-  let eqv = lam g. lam v1. lam v2.
-    eqi (digraphCmpv g v1 v2) 0 in
-  mapEq (eqSeq (eqPair (eqv l) (l.eql))) (normalize l) (normalize r)
-in
-
 let l1 = gensym () in
 let l2 = gensym () in
 let l3 = gensym () in
