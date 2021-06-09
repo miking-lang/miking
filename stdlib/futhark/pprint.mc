@@ -264,6 +264,19 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     match mapAccumL (pprintExpr indent) env tms with (env, tms) then
       (env, join ["[", strJoin "," tms, "]"])
     else never
+  | (FEArrayAccess {array = FEArrayAccess _, index = _}) & t ->
+    recursive let indicesAndTarget = lam indices. lam e.
+      match e with FEArrayAccess t then
+        indicesAndTarget (cons t.index indices) t.array
+      else (indices, e)
+    in
+    match indicesAndTarget [] t with (indices, arrayTarget) then
+      match pprintExpr indent env arrayTarget with (env, array) then
+        match mapAccumL (pprintExpr indent) env indices with (env, indices) then
+          (env, join [array, "[", strJoin "," indices, "]"])
+        else never
+      else never
+    else never
   | FEArrayAccess {array = array, index = index} ->
     match pprintExpr indent env array with (env, array) then
       match pprintExpr indent env index with (env, index) then
