@@ -196,6 +196,12 @@ lang HoleAst = IntAst + ANF + KeywordMaker
 
   sem hnext (last : Option Expr) =
 
+  sem sample =
+  | TmHole {hole = hole} ->
+    hsample hole
+
+  sem hsample =
+
   sem normalize (k : Expr -> Expr) =
   | TmHole ({default = default} & t) ->
     k (TmHole {t with default = normalizeTerm t.default})
@@ -227,7 +233,7 @@ lang HoleBoolAst = BoolAst + HoleAst
   syn Hole =
   | BoolHole {}
 
-  sem sample =
+  sem hsample =
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
@@ -266,7 +272,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
   | IntRange {min : Int,
               max : Int}
 
-  sem sample =
+  sem hsample =
   | IntRange {min = min, max = max} ->
     int_ (randIntU min (addi max 1))
 

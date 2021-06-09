@@ -156,18 +156,29 @@ lang LocalSearchSelectFirstImproving = LocalSearchBase
   sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
-    match searchState with {cur = cur, cost = cost} then
+    match searchState with {cur = cur, cost = cost, cmp = cmp} then
       let cur : Solution = cur in
       let curCost = cur.cost in
       recursive let firstImproving = lam as : Iterator Assignment.
         match iteratorNext as with (as, Some a) then
           let acost = cost a in
-          if lti acost curCost then
+          if lti (cmp acost curCost) 0 then
             Some {assignment = a, cost = acost}
           else firstImproving as
-        else never
+        else None ()
       in
       firstImproving assignments
+    else never
+end
+
+lang LocalSearchSelectFirst = LocalSearchBase
+  sem select (assignments : Iterator Assignment) =
+  | searchState ->
+    let searchState : SearchState = searchState in
+    match searchState with {cost = cost} then
+      match iteratorNext assignments with (_, Some a) then
+        Some {assignment = a, cost = cost a}
+      else None ()
     else never
 end
 
@@ -222,11 +233,12 @@ lang LocalSearchTabuSearch = LocalSearchBase
 
   sem step (searchState : SearchState) =
   | TabuSearch ({tabu = tabu} & t) ->
-    let ns = iteratorToSeq (neighbourhood searchState) in
-    let nonTabus = filter (lam n. not (isTabu (n, tabu))) ns in
-    match select (iteratorFromSeq nonTabus) searchState with Some choice then
+    let nonTabus =
+      iteratorFilter (lam n. not (isTabu (n, tabu))) (neighbourhood searchState)
+    in
+    match select nonTabus searchState with Some choice then
       let choice : Solution = choice in
-      (Some choice, TabuSearch {tabu = tabuUpdate (choice.assignment, tabu)})
+      (Some choice, TabuSearch {t with tabu = tabuUpdate (choice.assignment, tabu)})
     else
       (None (), TabuSearch t)
 end
