@@ -48,6 +48,7 @@ end
 
 lang FutharkTypeAst = FutharkTypeParamAst
   syn FutType =
+  | FTyUnknown ()
   | FTyInt ()
   | FTyFloat ()
   | FTyBool ()
@@ -70,7 +71,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEConst { val : FutConst }
   | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
-  | FELet { ident : Name, tyBody : Option FutType, body : FutExpr, inexpr : FutExpr }
+  | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
   | FEFor { param : FutExpr, loopVar : Name, boundVar : Name, thn : FutExpr }
   | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)] }

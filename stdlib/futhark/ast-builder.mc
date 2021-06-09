@@ -132,11 +132,11 @@ let futBinop_ = lam op. lam a. lam b.
 
 let nFutLet_ = use FutharkAst in
   lam n. lam ty. lam body.
-  FELet {ident = n, tyBody = Some ty, body = body, inexpr = futUnit_ ()}
+  FELet {ident = n, tyBody = ty, body = body, inexpr = futUnit_ ()}
 
 let nuFutLet_ = use FutharkAst in
   lam n. lam body.
-  FELet {ident = n, tyBody = None (), body = body, inexpr = futUnit_ ()}
+  FELet {ident = n, tyBody = FTyUnknown (), body = body, inexpr = futUnit_ ()}
 
 let uFutLet_ = lam str. lam body.
   nuFutLet_ (nameNoSym str) body

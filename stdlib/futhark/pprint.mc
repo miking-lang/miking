@@ -172,6 +172,7 @@ lang FutharkTypePrettyPrint = FutharkAst + FutharkIdentifierPrettyPrint
   sem pprintExpr (indent : Int) (env : PprintEnv) =
 
   sem pprintType (indent : Int) (env : PprintEnv) =
+  | FTyUnknown _ -> (env, "")
   | FTyInt _ -> (env, "i64")
   | FTyFloat _ -> (env, "f64")
   | FTyBool _ -> (env, "bool")
@@ -381,7 +382,8 @@ lang FutharkPrettyPrint =
       match param with (ident, ty) then
         match pprintVarName env ident with (env, ident) then
           match pprintType 0 env ty with (env, ty) then
-            (env, join ["(", ident, " : ", ty, ")"])
+            let ty = if eqString ty "" then "" else concat " : " ty in
+            (env, join ["(", ident, ty, ")"])
           else never
         else never
       else never
@@ -392,9 +394,10 @@ lang FutharkPrettyPrint =
       match pprintVarName env ident with (env, ident) then
         match mapAccumL pprintParam env params with (env, params) then
           match pprintType 0 env ret with (env, ret) then
+            let ret = if eqString ret "" then "" else concat " : " ret in
             match pprintExpr bodyIndent env body with (env, body) then
               (env, join [entryStr, " ", ident, " ", strJoin " " typeParams,
-                          " ", strJoin " " params, " : ", ret, " =",
+                          " ", strJoin " " params, ret, " =",
                           pprintNewline bodyIndent, body])
             else never
           else never
