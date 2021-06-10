@@ -24,8 +24,8 @@
   test-run\
   test-boot\
   test-boot-base\
-  test-boot-part\
-  test-boot-sundials\
+  test-sundials\
+  test-par\
   test-boot-py\
   test-boot-ocaml
 
@@ -58,6 +58,7 @@ test-all:\
   test-boot-compile\
   test-compile\
   test-run\
+  test-par\
   test-boot
 
 test-boot-compile: build/mi
@@ -69,20 +70,19 @@ test-compile: build/mi
 test-sundials: build/mi
 	@$(MAKE) -s -f test-sundials.mk all
 
+test-par: build/mi
+	@$(MAKE) -s -f test-par.mk all
+
 test-run: build/mi
 	@$(MAKE) -s -f test-run.mk all
 
 test-boot:\
   test-boot-base\
-  test-boot-par\
   test-boot-py\
   test-boot-ocaml
 
 test-boot-base: boot
 	@$(MAKE) -s -f test-boot.mk base
-
-test-boot-par: boot
-	@$(MAKE) -s -f test-boot.mk par
 
 test-boot-py: boot
 	@$(MAKE) -s -f test-boot.mk py

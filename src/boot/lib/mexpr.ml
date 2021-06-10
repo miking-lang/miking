@@ -452,9 +452,6 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
-  (* Multicore *)
-  | CPar v ->
-      Par.arity v
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1395,9 +1392,6 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
-  (* Multicore *)
-  | CPar v, t ->
-      Par.delta eval env fi v t
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
