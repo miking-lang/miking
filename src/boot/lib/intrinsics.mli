@@ -276,7 +276,7 @@ end
 module IO : sig
   val print : int Mseq.t -> unit
 
-  val dprint : int Mseq.t -> unit
+  val dprint : 'a -> unit
 
   val read_line : unit -> int Mseq.t
 end
