@@ -63,7 +63,7 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let insertTunedOrDefaults = lam options. lam ast. lam file.
+let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
   use MCoreCompile in
   if options.useTuned then
     let tuneFile = tuneFileName file in
