@@ -160,13 +160,14 @@ let factTailRecursive = nreclets_ [
   (trFunctionName, tyunknown_,
     nlam_ n tyint_ (nlam_ accName tyint_ (
       if_ (leqi_ (nvar_ n) (int_ 1))
-          (muli_ (nvar_ accName) (int_ 1))
+          (nvar_ accName)
           (appf2_ (nvar_ trFunctionName)
                   (subi_ (nvar_ n) (int_ 1))
                   (muli_ (nvar_ accName) (nvar_ n)))))),
   (factName, tyunknown_,
     nlam_ n tyint_
       (appf2_ (nvar_ trFunctionName) (nvar_ n) (int_ 1)))] in
+
 utest tailRecursive fact with factTailRecursive using eqExpr in
 utest tailRecursive factTailRecursive with factTailRecursive using eqExpr in
 
@@ -187,7 +188,7 @@ let mapTailRecursive = nreclets_ [
   (trFunctionName, tyunknown_, nulam_ f (nulam_ s (nulam_ accName (
     if_
       (null_ (nvar_ s))
-      (concat_ (nvar_ accName) (seq_ []))
+      (nvar_ accName)
       (appf3_ (nvar_ trFunctionName)
         (nvar_ f) (tail_ (nvar_ s))
         (concat_ (nvar_ accName) (seq_ [app_ (nvar_ f) (head_ (nvar_ s))]))))))),
@@ -214,7 +215,7 @@ let mapMatchTailRecursive = nreclets_ [
       (appf3_ (nvar_ trFunctionName)
         (nvar_ f) (tail_ (nvar_ s))
         (concat_ (nvar_ accName) (seq_ [app_ (nvar_ f) (head_ (nvar_ s))])))
-      (concat_ (nvar_ accName) (seq_ [])))))),
+      (nvar_ accName))))),
   (mapName, tyunknown_, nulam_ f (nulam_ s (
     appf3_ (nvar_ trFunctionName) (nvar_ f) (nvar_ s) (seq_ []))))
 ] in
