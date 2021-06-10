@@ -616,7 +616,12 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             inexpr = t
           }, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
-        let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
+        let fixConstrType = lam ty.
+          let ty = typeUnwrapAlias typeLiftEnvMap ty in
+          match ty with TyRecord tr then
+            TyRecord {tr with fields = ocamlTypedFields tr.fields}
+          else tyunknown_ in
+        let constrs = mapMap fixConstrType constrs in
         if mapIsEmpty constrs then (t, recordFieldsToName)
         else
           (OTmVariantTypeDecl {
