@@ -63,14 +63,16 @@ let filenameWithoutExtension = lam filename.
     subsequence filename 0 idx
   else filename
 
-let insertTunedOrDefaults = lam ast. lam file.
+let insertTunedOrDefaults = lam options. lam ast. lam file.
   use MCoreCompile in
-  let tuneFile = tuneFileName file in
-  if fileExists tuneFile then
-    let table = tuneReadTable tuneFile in
-    let ast = symbolize ast in
-    let ast = normalizeTerm ast in
-    insert [] table ast
+  if options.useTuned then
+    let tuneFile = tuneFileName file in
+    if fileExists tuneFile then
+      let table = tuneReadTable tuneFile in
+      let ast = symbolize ast in
+      let ast = normalizeTerm ast in
+      insert [] table ast
+    else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
 let ocamlCompile =
@@ -139,7 +141,7 @@ let compile = lam files. lam options : Options. lam args.
     let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
 
     -- Insert tuned values, or use default values if no .tune file present
-    let ast = insertTunedOrDefaults ast file in
+    let ast = insertTunedOrDefaults options ast file in
 
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (pprintMcore ast) else ());
