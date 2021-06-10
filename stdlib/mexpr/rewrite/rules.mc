@@ -44,11 +44,22 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
                                                                with thn = e1}})
     else
       TmMatch outerMatch
+  -- match s with [h] ++ t then e1 else e2 ->
+  -- match s with [] then e2 else match s with [h] ++ t then e1 else never
+  -- where e2 != match _ and e2 != never
+  | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName _}],
+                                middle = PName _, postfix = [],
+                                info = patInfo},
+              els = !(TmMatch _ | TmNever _)} & t) ->
+    let newThn = TmMatch {t with els = TmNever {ty = TyUnknown {info = t.info},
+                                                info = t.info}} in
+    rewriteTerm
+      (TmMatch {{{t with pat = PatSeqTot {pats = [], info = patInfo}}
+                   with thn = t.els}
+                   with els = newThn})
   -- match s with [] then e1 else match s with [h] ++ t then e2 else never ->
-  -- if null s then e1
-  -- else e2'
-  --
-  -- where e2' is e2 where h = head s and t = tail s
+  -- if null s then e1 else e2'
+  -- where e2' is e2 with h = head s and t = tail s
   | TmMatch ({pat = PatSeqTot {pats = []},
               target = t1,
               els = TmMatch {pat = PatSeqEdge {prefix = [PatNamed {ident = PName h}],
@@ -122,17 +133,5 @@ let t2 =
     innerExpr
     outerExprAfter in
 utest rewriteTerm t1 with t2 using eqExpr in
-
-let s = nameSym "s" in
-let h = nameSym "h" in
-let t = nameSym "t" in
-let acc = nameSym "acc" in
-let f = nameSym "f" in
-let reduce = nameSym "reduce" in
-let reducePattern =
-  if_ (null_ (nvar_ s))
-    (nvar_ acc)
-    (appf2_ (nvar_ f) (head_ (nvar_ s))
-      (appf3_ (nvar_ reduce) (nvar_ f) (nvar_ acc) (tail_ (nvar_ s)))) in
 
 ()

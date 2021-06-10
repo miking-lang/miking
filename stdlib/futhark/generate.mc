@@ -219,7 +219,50 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
-lang FutharkRecLetGenerate = FutharkTypeGenerate + MExprParallelKeywordMaker
+lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
+                           FutharkMatchGenerate + MExprParallelKeywordMaker
+  sem generateExpr (env : FutharkGenerateEnv) =
+  | TmVar t -> FEVar {ident = t.ident}
+  | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings}
+  | TmSeq {tms = tms} -> futArray_ (map (generateExpr env) tms)
+  | TmConst c -> generateConst c.val
+  | TmLam t -> nFutLam_ t.ident (generateExpr env t.body)
+  | TmApp {lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = arg1}, rhs = arg2} ->
+    futArrayAccess_ (generateExpr env arg1) (generateExpr env arg2)
+  | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSet _}, rhs = arg1},
+                        rhs = arg2},
+           rhs = arg3} ->
+    futArrayUpdate_ (generateExpr env arg1) (generateExpr env arg2)
+                    (generateExpr env arg3)
+  | TmApp {lhs = TmConst {val = CFloorfi _}, rhs = arg} ->
+    FEApp {
+      lhs = FEBuiltIn {str = "i64.f64"},
+      rhs = FEApp {
+        lhs = FEBuiltIn {str = "f64.floor"},
+        rhs = generateExpr env arg}}
+  | TmApp {lhs = TmApp {lhs = TmConst {val = CMap _}, rhs = arg1}, rhs = arg2} ->
+    futMap_ (generateExpr env arg1) (generateExpr env arg2)
+  | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
+  | TmLet t ->
+    FELet {ident = t.ident, tyBody = Some (generateType env t.tyBody),
+           body = generateExpr env t.body,
+           inexpr = generateExpr env t.inexpr}
+  | TmParallelMap t -> futMap_ (generateExpr env t.f) (generateExpr env t.as)
+  | TmParallelMap2 t ->
+    futMap2_ (generateExpr env t.f) (generateExpr env t.as) (generateExpr env t.bs)
+  | TmParallelReduce t ->
+    futReduce_ (generateExpr env t.f) (generateExpr env t.ne) (generateExpr env t.as)
+  | TmParallelScan t ->
+    futScan_ (generateExpr env t.f) (generateExpr env t.ne) (generateExpr env t.as)
+  | TmParallelFilter t -> futFilter_ (generateExpr env t.p) (generateExpr env t.as)
+  | TmParallelPartition t ->
+    futPartition_ (generateExpr env t.p) (generateExpr env t.as)
+  | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
+  | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
+end
+
+lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +
+                             MExprParallelKeywordMaker
   sem _addCallsToGraph (bindingIndex : Int) (bindingNameToIndex : Map Name Int)
                        (g : Digraph Int Int) =
   | TmApp t ->
@@ -232,7 +275,7 @@ lang FutharkRecLetGenerate = FutharkTypeGenerate + MExprParallelKeywordMaker
     else never
   | t -> sfold_Expr_Expr (_addCallsToGraph bindingIndex bindingNameToIndex) g t
 
-  sem _topologicallySortedBindings (bindings : [RecLetBinding]) =
+  sem _reverseTopologicallySortedBindings (bindings : [RecLetBinding]) =
   | _ ->
     let bindingIndices = mapi (lam i. lam. i) bindings in
     let bindingNameToIndex =
@@ -253,14 +296,19 @@ lang FutharkRecLetGenerate = FutharkTypeGenerate + MExprParallelKeywordMaker
         (zip bindingIndices bindings) in
     let s = digraphTarjan g in
     if all (lam scc. eqi (length scc) 1) s then
-      Some (reverse (join s))
+      Some (join s)
     else None ()
 
   sem defaultGenerateRecLets (env : FutharkGenerateEnv) =
   | TmRecLets t ->
-    match _topologicallySortedBindings t.bindings () with Some permutation then
+    let generateNextBinding = lam acc : FutExpr. lam binding : RecLetBinding.
+      FELet {ident = binding.ident, tyBody = generateType env binding.tyBody,
+             body = generateExpr env binding.body,
+             inexpr = acc}
+    in
+    match _reverseTopologicallySortedBindings t.bindings () with Some permutation then
       let sortedBindings = permute t.bindings permutation in
-      -- TODO: Generate a sequence of "standalone" function definitions
+      foldl generateNextBinding (generateExpr env t.inexpr) sortedBindings
     else
       infoErrorExit t.info "Could not translate recursive bindings to Futhark"
 
@@ -317,51 +365,8 @@ lang FutharkRecLetGenerate = FutharkTypeGenerate + MExprParallelKeywordMaker
   | (TmRecLets _) & t -> defaultGenerateRecLets env t
 end
 
-lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
-                           FutharkMatchGenerate + FutharkRecLetGenerate +
-                           MExprParallelKeywordMaker
-  sem generateExpr (env : FutharkGenerateEnv) =
-  | TmVar t -> FEVar {ident = t.ident}
-  | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings}
-  | TmSeq {tms = tms} -> futArray_ (map (generateExpr env) tms)
-  | TmConst c -> generateConst c.val
-  | TmLam t -> nFutLam_ t.ident (generateExpr env t.body)
-  | TmApp {lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = arg1}, rhs = arg2} ->
-    futArrayAccess_ (generateExpr env arg1) (generateExpr env arg2)
-  | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSet _}, rhs = arg1},
-                        rhs = arg2},
-           rhs = arg3} ->
-    futArrayUpdate_ (generateExpr env arg1) (generateExpr env arg2)
-                    (generateExpr env arg3)
-  | TmApp {lhs = TmConst {val = CFloorfi _}, rhs = arg} ->
-    FEApp {
-      lhs = FEBuiltIn {str = "i64.f64"},
-      rhs = FEApp {
-        lhs = FEBuiltIn {str = "f64.floor"},
-        rhs = generateExpr env arg}}
-  | TmApp {lhs = TmApp {lhs = TmConst {val = CMap _}, rhs = arg1}, rhs = arg2} ->
-    futMap_ (generateExpr env arg1) (generateExpr env arg2)
-  | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
-  | TmLet t ->
-    FELet {ident = t.ident, tyBody = Some (generateType env t.tyBody),
-           body = generateExpr env t.body,
-           inexpr = generateExpr env t.inexpr}
-  | TmParallelMap t -> futMap_ (generateExpr env t.f) (generateExpr env t.as)
-  | TmParallelMap2 t ->
-    futMap2_ (generateExpr env t.f) (generateExpr env t.as) (generateExpr env t.bs)
-  | TmParallelReduce t ->
-    futReduce_ (generateExpr env t.f) (generateExpr env t.ne) (generateExpr env t.as)
-  | TmParallelScan t ->
-    futScan_ (generateExpr env t.f) (generateExpr env t.ne) (generateExpr env t.as)
-  | TmParallelFilter t -> futFilter_ (generateExpr env t.p) (generateExpr env t.as)
-  | TmParallelPartition t ->
-    futPartition_ (generateExpr env t.p) (generateExpr env t.as)
-  | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
-  | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
-end
-
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
-                               FutharkTypeGenerate
+                               FutharkTypeGenerate + FutharkRecLetGenerate
   sem generateToplevel (env : FutharkGenerateEnv) =
   | TmType t ->
     recursive let parameterizeType =

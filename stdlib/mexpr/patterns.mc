@@ -87,6 +87,16 @@ lang MExprParallelKeywordMaker =
   | TmParallelAny t -> TmParallelAny {{t with p = f t.p}
                                          with as = f t.as}
 
+  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
+  | TmParallelMap t -> f (f acc t.f) t.as
+  | TmParallelMap2 t -> f (f (f acc t.f) t.as) t.bs
+  | TmParallelReduce t -> f (f (f acc t.f) t.ne) t.as
+  | TmParallelScan t -> f (f (f acc t.f) t.ne) t.as
+  | TmParallelFilter t -> f (f acc t.p) t.as
+  | TmParallelPartition t -> f (f acc t.p) t.as
+  | TmParallelAll t -> f (f acc t.p) t.as
+  | TmParallelAny t -> f (f acc t.p) t.as
+
   sem symbolizeExpr (env : SymEnv) =
   | (TmParallelMap _) & t -> smap_Expr_Expr (symbolizeExpr env) t
   | (TmParallelMap2 _) & t -> smap_Expr_Expr (symbolizeExpr env) t
