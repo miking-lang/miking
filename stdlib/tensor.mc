@@ -350,6 +350,11 @@ utest
     (lam acc. lam idx. lam x. (snoc acc.0 idx, addi acc.1 x)) ([], 0) t
 with ([[0], [1], [2]], 6)
 
+utest 
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  tensorFoldi (lam acc. lam idx. lam x. snoc acc (idx, x)) [] t
+with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
+
 
 -- Iterates through the elements of `t` in row-major order, applying the
 -- function `f` on each index and element.
