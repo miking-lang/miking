@@ -9,7 +9,6 @@ open Ast
 open Pprint
 open Printf
 open Intrinsics
-open Parserutils
 
 (* This function determines how to print program output.
    It's used to redirect standard output of a program,
@@ -218,12 +217,6 @@ let arity = function
   | Citeri None ->
       2
   | Citeri (Some _) ->
-      1
-  | Cfoldl (None, None) ->
-      3
-  | Cfoldl (Some _, None) ->
-      2
-  | Cfoldl (_, Some _) ->
       1
   | Csubsequence (None, None) ->
       3
@@ -835,67 +828,6 @@ let delta eval env fi c v =
   | Citeri (Some f), TmSeq (_, s) ->
       Mseq.iteri f s ; tm_unit
   | Citeri _, _ ->
-      fail_constapp fi
-  | Cfoldl (None, None), f ->
-      (* let f a x = eval env (TmApp (fi, TmApp (fi, f, a), x)) in *)
-      TmConst (fi, Cfoldl (Some f, None))
-  | Cfoldl (Some f, None), a ->
-      TmConst (fi, Cfoldl (Some f, Some a))
-  | Cfoldl (Some f, Some a), TmSeq (_fi2, _s) ->
-      let ast =
-        parse_mexpr_string
-          (Ustring.from_utf8
-             "\n\
-              recursive\n\
-             \  let foldl = lam f. lam acc. lam seq.\n\
-             \    if null seq then acc\n\
-             \    else foldl f (f acc (head seq)) (tail seq)\n\
-              in ()" )
-        |> Symbolize.symbolize Builtin.builtin_name2sym
-      in
-      let ast =
-        match ast with
-        | TmRecLets (_, [(fi, us, sym, ty, tm)], _) ->
-            let app =
-              TmApp
-                ( NoInfo
-                , TmApp
-                    ( NoInfo
-                    , TmApp
-                        ( NoInfo
-                        , TmVar
-                            ( NoInfo
-                            , Ustring.from_utf8 "foldl"
-                            , sym )
-                        , f )
-                    , a )
-                , TmSeq (_fi2, _s))
-
-              (* TmApp
-               *       ( NoInfo
-               *       , TmApp
-               *           ( NoInfo
-               *           , TmVar
-               *               ( NoInfo
-               *               , Ustring.from_utf8 "foldl"
-               *               , sym )
-               *           , f )
-               *       , a ) *)
-            in
-            TmRecLets (NoInfo, [(fi, us, sym, ty, tm)], app)
-        | _ ->
-            failwith "not a reclet"
-      in
-      (* !program_output (ustring_of_tm ast) ; *)
-      (* Mseq.Helpers.fold_left f a s *)
-      (* let res = eval env ast in *)
-      (* print_endline "result:"; *)
-      (* !program_output (ustring_of_tm res) ; *)
-      (* let res2 = eval env (TmApp (NoInfo, res, TmSeq (_fi2, _s))) in *)
-      (* print_endline "result2:"; *)
-      (* !program_output (ustring_of_tm res) ; *)
-      eval env ast
-  | Cfoldl _, _ ->
       fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))
@@ -1656,7 +1588,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s) -> (
     match List.assoc_opt s env with
-    | Some (TmApp (_, TmFix _, _) as t) ->
+    | Some ((TmApp (_, TmFix _, _) | TmRecLets _) as t) ->
         eval env t
     | Some t ->
         t
