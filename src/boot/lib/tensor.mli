@@ -9,6 +9,11 @@ module CArray : sig
 
   val create_float : int array -> (int array -> float) -> (float, float_elt) t
 
+  val transpose_int_exn : (int, int_elt) t -> int -> int -> (int, int_elt) t
+
+  val transpose_float_exn :
+    (float, float_elt) t -> int -> int -> (float, float_elt) t
+
   val get_exn : ('a, 'b) t -> int array -> 'a
 
   val set_exn : ('a, 'b) t -> int array -> 'a -> unit
@@ -46,6 +51,8 @@ module Dense : sig
   val size : 'a t -> int
 
   val copy_exn : 'a t -> 'a t -> unit
+
+  val transpose_exn : 'a t -> int -> int -> 'a t
 
   val reshape_exn : 'a t -> int array -> 'a t
 

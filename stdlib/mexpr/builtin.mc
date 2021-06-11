@@ -120,6 +120,7 @@ let builtin = use MExprAst in
   , ("tensorShape", CTensorShape ())
   , ("tensorReshapeExn", CTensorReshapeExn ())
   , ("tensorCopyExn", CTensorCopyExn ())
+  , ("tensorTransposeExn", CTensorTransposeExn ())
   , ("tensorSliceExn", CTensorSliceExn ())
   , ("tensorSubExn", CTensorSubExn ())
   , ("tensorIterSlice", CTensorIterSlice ())
