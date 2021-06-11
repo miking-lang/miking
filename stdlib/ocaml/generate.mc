@@ -1281,6 +1281,19 @@ let recordWithLam = symbolize (
 utest recordWithLam with generateTypeAnnotated recordWithLam
 using sameSemantics in
 
+let foo = nameSym "Foo" in
+let tyFoo = ntyvar_ foo in
+let fooCon = nameSym "FooCon" in
+let tyFooCon = tyrecord_ [("foo", tyarrow_ tyunknown_ tyunknown_)] in
+let conWithRecArrowTy = symbolize (bindall_
+  [ ntype_ foo tyunknown_
+  , ncondef_ fooCon (tyarrow_ tyFooCon tyFoo)
+  , ulet_ "" (nconapp_ fooCon (urecord_ [("foo", ulam_ "" (uunit_))]))
+  , int_ 42
+  ]) in
+utest conWithRecArrowTy with generateTypeAnnotated conWithRecArrowTy
+using sameSemantics in
+
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
 utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
