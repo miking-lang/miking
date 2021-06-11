@@ -353,6 +353,12 @@ let rec print_const fmt = function
   (* MCore intrinsic: sequences *)
   | Ccreate _ ->
       fprintf fmt "create"
+  | CcreateFingerTree _ ->
+      fprintf fmt "createFingerTree"
+  | CcreateList _ ->
+      fprintf fmt "createList"
+  | CcreateRope _ ->
+      fprintf fmt "createRope"
   | Clength ->
       fprintf fmt "length"
   | Cconcat _ ->
@@ -369,6 +375,20 @@ let rec print_const fmt = function
       fprintf fmt "splitAt"
   | Creverse ->
       fprintf fmt "reverse"
+  | Chead ->
+      fprintf fmt "head"
+  | Ctail ->
+      fprintf fmt "tail"
+  | Cnull ->
+      fprintf fmt "null"
+  | Cmap _ ->
+      fprintf fmt "map"
+  | Cmapi _ ->
+      fprintf fmt "mapi"
+  | Citer _ ->
+      fprintf fmt "iter"
+  | Citeri _ ->
+      fprintf fmt "iteri"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)

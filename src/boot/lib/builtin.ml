@@ -62,6 +62,9 @@ let builtin =
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
   ; ("create", f (Ccreate None))
+  ; ("createFingerTree", f (CcreateFingerTree None))
+  ; ("createList", f (CcreateList None))
+  ; ("createRope", f (CcreateRope None))
   ; ("length", f Clength)
   ; ("concat", f (Cconcat None))
   ; ("get", f (Cget None))
@@ -70,6 +73,13 @@ let builtin =
   ; ("snoc", f (Csnoc None))
   ; ("splitAt", f (CsplitAt None))
   ; ("reverse", f Creverse)
+  ; ("head", f Chead)
+  ; ("tail", f Ctail)
+  ; ("null", f Cnull)
+  ; ("map", f (Cmap None))
+  ; ("mapi", f (Cmapi None))
+  ; ("iter", f (Citer None))
+  ; ("iteri", f (Citeri None))
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
@@ -84,12 +94,11 @@ let builtin =
     , TmSeq
         ( NoInfo
         , argv_prog |> Mseq.Helpers.of_array
-          |> Mseq.Helpers.map (fun s ->
+          |> Mseq.map (fun s ->
                  TmSeq
                    ( NoInfo
                    , s |> us |> Mseq.Helpers.of_ustring
-                     |> Mseq.Helpers.map (fun x -> TmConst (NoInfo, CChar x))
-                   ) ) ) )
+                     |> Mseq.map (fun x -> TmConst (NoInfo, CChar x)) ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)

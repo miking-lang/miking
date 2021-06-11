@@ -41,7 +41,7 @@ let tuneOptionsDefault : TuneOptions =
 recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
   match args with [] then o
 
-  else match args with ["--debug"] ++ args then
+  else match args with ["--debug-tune"] ++ args then
     parseTuneOptions {o with debug = true} args
 
   else match args with ["--iters"] ++ args then

@@ -703,17 +703,27 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CConcat _ -> "concat"
   | CLength _ -> "length"
   | CReverse _ -> "reverse"
+  | CHead _ -> "head"
+  | CTail _ -> "tail"
+  | CNull _ -> "null"
+  | CMap _ -> "map"
+  | CMapi _ -> "mapi"
+  | CIter _ -> "iter"
+  | CIteri _ -> "iteri"
   | CCreate _ -> "create"
+  | CCreateFingerTree _ -> "createFingerTree"
+  | CCreateList _ -> "createList"
+  | CCreateRope _ -> "createRope"
   | CSplitAt _ -> "splitAt"
   | CSubsequence _ -> "subsequence"
 end
 
 lang FileOpPrettyPrint = FileOpAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
-  | CFileRead _ -> "fileRead"
-  | CFileWrite _ -> "fileWrite"
+  | CFileRead _ -> "readFile"
+  | CFileWrite _ -> "writeFile"
   | CFileExists _ -> "fileExists"
-  | CFileDelete _ -> "fileDelete"
+  | CFileDelete _ -> "deleteFile"
 end
 
 lang IOPrettyPrint = IOAst + ConstPrettyPrint

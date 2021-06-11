@@ -154,6 +154,18 @@ let arity = function
       2
   | Ccreate (Some _) ->
       1
+  | CcreateFingerTree None ->
+      2
+  | CcreateFingerTree (Some _) ->
+      1
+  | CcreateList None ->
+      2
+  | CcreateList (Some _) ->
+      1
+  | CcreateRope None ->
+      2
+  | CcreateRope (Some _) ->
+      1
   | Clength ->
       1
   | Cconcat None ->
@@ -183,6 +195,28 @@ let arity = function
   | CsplitAt (Some _) ->
       1
   | Creverse ->
+      1
+  | Chead ->
+      1
+  | Ctail ->
+      1
+  | Cnull ->
+      1
+  | Cmap None ->
+      2
+  | Cmap (Some _) ->
+      1
+  | Cmapi None ->
+      2
+  | Cmapi (Some _) ->
+      1
+  | Citer None ->
+      2
+  | Citer (Some _) ->
+      1
+  | Citeri None ->
+      2
+  | Citeri (Some _) ->
       1
   | Csubsequence (None, None) ->
       3
@@ -446,13 +480,13 @@ let delta eval env fi c v =
       | _ ->
           fail_constapp fi
     in
-    tmseq |> Mseq.Helpers.map to_int
+    tmseq |> Mseq.map to_int
   in
   let int_seq2char_tm_seq fi intseq =
-    TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) intseq)
+    TmSeq (fi, Mseq.map (fun n -> TmConst (fi, CChar n)) intseq)
   in
   let int_seq2int_tm_seq fi intseq =
-    TmSeq (fi, Mseq.Helpers.map (fun n -> TmConst (fi, CInt n)) intseq)
+    TmSeq (fi, Mseq.map (fun n -> TmConst (fi, CInt n)) intseq)
   in
   let map_compare cmp x y =
     let app = TmApp (fi, TmApp (fi, cmp, x), y) in
@@ -675,6 +709,27 @@ let delta eval env fi c v =
       TmSeq (tm_info f, Mseq.create n createf)
   | Ccreate None, _ ->
       fail_constapp fi
+  | CcreateFingerTree None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateFingerTree (Some n))
+  | CcreateFingerTree (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_fingertree n createf)
+  | CcreateFingerTree None, _ ->
+      fail_constapp fi
+  | CcreateList None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateList (Some n))
+  | CcreateList (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_list n createf)
+  | CcreateList None, _ ->
+      fail_constapp fi
+  | CcreateRope None, TmConst (_, CInt n) ->
+      TmConst (fi, CcreateRope (Some n))
+  | CcreateRope (Some n), f ->
+      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
+      TmSeq (tm_info f, Mseq.create_rope n createf)
+  | CcreateRope None, _ ->
+      fail_constapp fi
   | Clength, TmSeq (fi, s) ->
       TmConst (fi, CInt (Mseq.length s))
   | Clength, _ ->
@@ -729,6 +784,51 @@ let delta eval env fi c v =
       TmSeq (fi, Mseq.reverse s)
   | Creverse, _ ->
       fail_constapp fi
+  | Chead, TmSeq (_, s) ->
+      Mseq.head s
+  | Chead, _ ->
+      fail_constapp fi
+  | Ctail, TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.tail s)
+  | Ctail, _ ->
+      fail_constapp fi
+  | Cnull, TmSeq (fi, s) ->
+      TmConst (fi, CBool (Mseq.null s))
+  | Cnull, _ ->
+      fail_constapp fi
+  | Cmap None, f ->
+      let f x = eval env (TmApp (fi, f, x)) in
+      TmConst (fi, Cmap (Some f))
+  | Cmap (Some f), TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.map f s)
+  | Cmap _, _ ->
+      fail_constapp fi
+  | Cmapi None, f ->
+      let f i x =
+        eval env (TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x))
+      in
+      TmConst (fi, Cmapi (Some f))
+  | Cmapi (Some f), TmSeq (fi, s) ->
+      TmSeq (fi, Mseq.mapi f s)
+  | Cmapi _, _ ->
+      fail_constapp fi
+  | Citer None, f ->
+      let f x = eval env (TmApp (fi, f, x)) |> ignore in
+      TmConst (fi, Citer (Some f))
+  | Citer (Some f), TmSeq (_, s) ->
+      Mseq.iter f s ; tm_unit
+  | Citer _, _ ->
+      fail_constapp fi
+  | Citeri None, f ->
+      let f i x =
+        TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x)
+        |> eval env |> ignore
+      in
+      TmConst (fi, Citeri (Some f))
+  | Citeri (Some f), TmSeq (_, s) ->
+      Mseq.iteri f s ; tm_unit
+  | Citeri _, _ ->
+      fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))
   | Csubsequence (Some s, None), TmConst (_, CInt off) ->
@@ -771,7 +871,7 @@ let delta eval env fi c v =
       tm_unit
   | CreadLine, TmRecord (_, r) when r = Record.empty ->
       let line = Intrinsics.IO.read_line () in
-      let tms = Mseq.Helpers.map (fun n -> TmConst (fi, CChar n)) line in
+      let tms = Mseq.map (fun n -> TmConst (fi, CChar n)) line in
       TmSeq (fi, tms)
   | CreadLine, _ ->
       fail_constapp fi
@@ -961,8 +1061,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | CmapBindings, TmConst (_, CMap (_, m)) ->
       let binds =
-        Mmap.bindings m
-        |> Mseq.Helpers.map (fun (k, v) -> tuple2record fi [k; v])
+        Mmap.bindings m |> Mseq.map (fun (k, v) -> tuple2record fi [k; v])
       in
       TmSeq (fi, binds)
   | CmapBindings, _ ->
@@ -1198,27 +1297,27 @@ let delta eval env fi c v =
       fail_constapp fi
   | CbootParserParseMExprString None, TmSeq (fi, seq) ->
       let keywords =
-        Mseq.Helpers.map
+        Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMExprString (Some keywords))
   | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString keywords (tmseq2ustring fi seq) in
+      let t = Bootparser.parseMExprString keywords (tmseq2seqOfInt fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
   | CbootParserParseMCoreFile None, TmSeq (fi, seq) ->
       let keywords =
-        Mseq.Helpers.map
+        Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2ustring fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMCoreFile (Some keywords))
   | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2ustring fi seq) in
+      let t = Bootparser.parseMCoreFile keywords (tmseq2seqOfInt fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
@@ -1246,7 +1345,7 @@ let delta eval env fi c v =
     , TmConst (_, CInt n) ) ->
       TmSeq
         ( fi
-        , Mseq.Helpers.map
+        , Mseq.map
             (fun x -> TmConst (NoInfo, CChar x))
             (Bootparser.getString ptree n) )
   | CbootParserGetString (Some _), _ ->
@@ -1559,7 +1658,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
       t
   (* Sequences *)
   | TmSeq (fi, tms) ->
-      TmSeq (fi, Mseq.Helpers.map (eval env) tms)
+      TmSeq (fi, Mseq.map (eval env) tms)
   (* Records *)
   | TmRecord (fi, tms) ->
       TmRecord (fi, Record.map (eval env) tms)

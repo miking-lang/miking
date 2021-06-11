@@ -7,14 +7,9 @@ utest make 3 5 with [5,5,5]
 utest make 4 'a' with ['a', 'a', 'a', 'a']
 utest make 0 100 with [] using lam a. lam b. eqi (length a) (length b)
 
-let null = lam seq. eqi 0 (length seq)
-let head = lam seq. get seq 0
-let tail = lam seq. subsequence seq 1 (subi (length seq) 1)
 let last = lam seq. get seq (subi (length seq) 1)
 let init = lam seq. subsequence seq 0 (subi (length seq) 1)
 
-utest head [2,3,5] with 2
-utest tail [2,4,8] with [4,8]
 utest init [2,3,5] with [2,3]
 utest last [2,4,8] with 8
 
@@ -35,20 +30,6 @@ utest eqSeq eqi [1] [2] with false
 utest eqSeq eqi [2] [1] with false
 
 -- Maps
-let mapi = lam f. lam seq.
-  recursive let work = lam i. lam f. lam seq.
-      if null seq then []
-      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
-  in
-  work 0 f seq
-
-let map = lam f. mapi (lam. lam x. f x)
-
-utest mapi (lam i. lam x. i) [3,4,8,9,20] with [0,1,2,3,4]
-utest mapi (lam i. lam x. i) [] with [] using eqSeq eqi
-utest map (lam x. addi x 1) [3,4,8,9,20] with [4,5,9,10,21]
-utest map (lam x. addi x 1) [] with [] using eqSeq eqi
-
 let mapOption
   : (a -> Option b)
   -> [a]
@@ -71,28 +52,6 @@ with [] using eqSeq eqi
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
-recursive let iter
-  : (a -> ())
-  -> [a]
-  -> ()
-  = lam f. lam xs.
-    match xs with [x] ++ xs then
-      f x;
-      iter f xs
-    else match xs with [] then
-      ()
-    else never
-end
-
-utest iter (lam x. addi x 1) [1, 2, 3]
-with ()
-
-utest
-  let r = ref 0 in
-  iter (lam x. modref r (addi x (deref r))) [1, 2, 3, 4];
-  deref r
-with 10
-
 let for_
   : [a]
   -> (a -> ())
@@ -102,8 +61,8 @@ let for_
 -- Folds
 recursive
   let foldl = lam f. lam acc. lam seq.
-    if null seq then acc
-    else foldl f (f acc (head seq)) (tail seq)
+  if null seq then acc
+  else foldl f (f acc (head seq)) (tail seq)
 end
 
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
@@ -254,8 +213,14 @@ end
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
-let partition = (lam p. lam seq.
-    (filter p seq, filter (lam q. if p q then false else true) seq))
+let partition = lam p. lam seq.
+  recursive let work = lam l. lam r. lam seq.
+    match seq with [] then (l, r)
+    else match seq with [s] ++ seq then
+      if p s then work (cons s l) r seq
+      else work l (cons s r) seq
+    else never
+  in work [] [] (reverse seq)
 
 utest partition (lam x. gti x 3) [4,5,78,1] with ([4,5,78],[1])
 utest partition (lam x. gti x 0) [4,5,78,1] with ([4,5,78,1],[])
@@ -287,13 +252,39 @@ let quickSort = lam cmp. lam seq.
     concat (quickSort cmp lr.0) (cons h (quickSort cmp lr.1))
 end
 
+recursive let merge = lam cmp. lam l. lam r.
+  match l with [] then r
+  else match r with [] then l
+  else match (l, r) with ([x] ++ xs, [y] ++ ys) then
+    if leqi (cmp x y) 0 then
+      cons x (merge cmp xs r)
+    else
+      cons y (merge cmp l ys)
+  else never
+end
+
+recursive let mergeSort = lam cmp. lam seq.
+  match seq with [] then []
+  else match seq with [x] then [x]
+  else
+    let lr = splitAt seq (divi (length seq) 2) in
+    merge cmp (mergeSort cmp lr.0) (mergeSort cmp lr.1)
+end
+
 let sort = quickSort
 
-utest sort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
-utest sort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
-utest sort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
-utest sort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
-utest sort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+utest quickSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
+utest quickSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest quickSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
+utest quickSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
+utest quickSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+
+utest mergeSort (lam l. lam r. subi l r) [3,4,8,9,20] with [3,4,8,9,20]
+utest mergeSort (lam l. lam r. subi l r) [9,8,4,20,3] with [3,4,8,9,20]
+utest mergeSort (lam l. lam r. subi r l) [9,8,4,20,3] with [20,9,8,4,3]
+utest mergeSort (lam l. lam r. 0) [9,8,4,20,3] with [9,8,4,20,3]
+utest mergeSort (lam l. lam r. subi l r) [] with [] using eqSeq eqi
+
 
 -- Max/Min
 let min = lam cmp. lam seq.

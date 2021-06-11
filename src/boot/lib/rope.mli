@@ -71,6 +71,19 @@ val sub_array : 'a array t -> int -> int -> 'a array t
 
 val sub_bigarray : ('a, 'b) ba t -> int -> int -> ('a, 'b) ba t
 
+val iter_array : ('a -> unit) -> 'a array t -> unit
+(** [Rope.iter_* f s] applies [f] to all elements in [s]. This function
+    collapses [s].*)
+
+val iter_bigarray : ('a -> unit) -> ('a, 'b) ba t -> unit
+
+val iteri_array : (int -> 'a -> unit) -> 'a array t -> unit
+(** [Rope.iteri_* f s] same as [Rope.iter_*] but [f] takes the index of the
+    element as its first argument and the element as its second element. This
+    function collapses [s] *)
+
+val iteri_bigarray : (int -> 'a -> unit) -> ('a, 'b) ba t -> unit
+
 val map_array_array : ('a -> 'b) -> 'a array t -> 'b array t
 (** [Rope.map_*_* f s] returns a rope representing the result of applying a
     function [f] on all elements of [s]. This function collapses [s]. *)
@@ -82,6 +95,19 @@ val map_bigarray_array : ('a -> 'b) -> ('a, 'c) ba t -> 'b array t
 
 val map_bigarray_bigarray :
   ('b, 'd) kind -> ('a -> 'b) -> ('a, 'c) ba t -> ('b, 'd) ba t
+
+val mapi_array_array : (int -> 'a -> 'b) -> 'a array t -> 'b array t
+(** [Rope.mapi_*_* f s] is the same as [Rope.map_*_* f s], but the function [f]
+   is applied to the index of the element as its first element, and the element
+   as its second argument. This function collapses [s]. *)
+
+val mapi_array_bigarray :
+  ('b, 'c) kind -> (int -> 'a -> 'b) -> 'a array t -> ('b, 'c) ba t
+
+val mapi_bigarray_array : (int -> 'a -> 'b) -> ('a, 'c) ba t -> 'b array t
+
+val mapi_bigarray_bigarray :
+  ('b, 'd) kind -> (int -> 'a -> 'b) -> ('a, 'c) ba t -> ('b, 'd) ba t
 
 val foldl_array : ('a -> 'b -> 'a) -> 'a -> 'b array t -> 'a
 (** [Rope.foldl_* f acc s] returns the result of applying [f] on the

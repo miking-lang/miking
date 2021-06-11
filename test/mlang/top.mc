@@ -1,6 +1,3 @@
-let head = lam s. get s 0
-let tail = lam s. subsequence s 1 (length s)
-
 lang WrappedList
   syn List =
   | List [Dyn]
@@ -19,10 +16,6 @@ let topUse =
   hd
 
 mexpr
-
-let s = [1,2,3] in
-utest head s with 1 in
-utest tail s with [2,3] in
 
 utest topUse with 1 in
 
