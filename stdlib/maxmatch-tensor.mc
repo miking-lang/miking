@@ -202,7 +202,7 @@ let maxmatchHungarian = lam w : Tensor[Int].
       if isPerfectMatch () then
         { incidenceU = mus
         , incidenceV = mvs
-        , weight = addi (tensorFoldl addi 0 lus) (tensorFoldl addi 0 lvs) }
+        , weight = addi (tensorFold addi 0 lus) (tensorFold addi 0 lvs) }
       -- We should find a complete matching in at most n steps.
       else if gti k n then error "Failed to find maximal matching"
       else

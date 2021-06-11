@@ -287,36 +287,69 @@ utest
 with false
 
 
--- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
--- accumulator and `t` is the i'th slice of `t1`.
-let tensorFoldlSlice
-  : (b -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
+-- Left folds `f acc idx t` over the zero'th dimension of `t1`, where `acc` is
+-- the accumulator, `idx` is the index of the slice, and `t` is the i'th slice
+-- of `t1`.
+let tensorFoldliSlice
+  : (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t1.
   let accr = ref acc in
   tensorIterSlice
     (lam i. lam t.
-      let acc = f (deref accr) t in
+      let acc = f (deref accr) i t in
       modref accr acc)
     t1;
   deref accr
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
-  tensorFoldlSlice (lam acc. lam t. addi acc (tensorGetExn t [])) 0 t
+  tensorFoldliSlice 
+    (lam acc. lam i. lam t. addi (addi acc (tensorGetExn t [])) i) 0 t
+with 9
+
+
+-- Left folds `f acc t` over the zero'th dimension of `t1`, where `acc` is the
+-- accumulator and `t` is the i'th slice of `t1`.
+let tensorFoldlSlice : (b -> Int -> Tensor[a] -> b) -> b -> Tensor[a] -> b = 
+  lam f. tensorFoldliSlice (lam acc. lam. f acc)
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorFoldlSlice 
+    (lam acc. lam t. addi acc (tensorGetExn t [])) 0 t
 with 6
 
 
--- Left folds `f acc el` over all elements `el` of `t` in row-major order,
--- where `acc` is the accumulator.
-let tensorFoldl : (b -> a -> b) -> b -> Tensor[a] -> b =
+-- Folds `f acc el` over all elements `el` of `t` in row-major order, where
+-- `acc` is the accumulator.
+let tensorFold : (b -> a -> b) -> b -> Tensor[a] -> b =
   lam f. lam acc. lam t.
   let t = tensorReshapeExn t [tensorSize t] in
   tensorFoldlSlice (lam acc. lam t. f acc (tensorGetExn t [])) acc t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
-  tensorFoldl addi 0 t
+  tensorFold addi 0 t
 with 6
+
+
+-- Folds `f idx acc el` over all elements `el` of `t` in row-major order, where
+-- `acc` is the accumulator and `idx` is the index of the element.
+let tensorFoldi : ([Int] -> a -> b) -> b -> Tensor[a] -> b = 
+  lam f. lam acc. lam t.
+  let shape = tensorShape t in
+  let t = tensorReshapeExn t [tensorSize t] in
+  tensorFoldliSlice 
+    (lam acc. lam i. lam t. 
+      f acc (_rowMajorOfsToIndex shape i) (tensorGetExn t [])) 
+    acc t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorFoldi 
+    (lam acc. lam idx. lam x. (snoc acc.0 idx, addi acc.1 x)) ([], 0) t
+with ([[0], [1], [2]], 6)
+
 
 -- Iterates through the elements of `t` in row-major order, applying the
 -- function `f` on each index and element.
