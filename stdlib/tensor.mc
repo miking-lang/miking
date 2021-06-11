@@ -11,14 +11,21 @@ let tensorCreate = tensorCreateDense
 
 let _prod = foldl muli 1
 
-let _rowMajorOfsToIndex = lam shape. lam k.
-  let f = lam kis : (Int, [Int]). lam d : Int.
-    let k = kis.0 in
-    let is = kis.1 in
-    (divi k d, cons (modi k d) is)
+-- Converts linear index `k` to Cartesian index in row-major order.
+let linearToCartesianIndex = lam shape. lam k.
+  let f = lam d. lam kidx.
+    match kidx with (k, idx) then
+      (divi k d, cons (modi k d) idx)
+    else never
   in
-  let r : (Int, [Int]) = foldl f (k, []) shape in
+  let r : (Int, [Int]) = foldr f (k, []) shape in
   r.1
+
+utest linearToCartesianIndex [2] 0 with [0]
+utest linearToCartesianIndex [2] 1 with [1]
+utest linearToCartesianIndex [2, 3] 2 with [0, 2]
+utest linearToCartesianIndex [2, 3] 3 with [1, 0]
+
 
 -- Folds `f` over the range `start` `stop` using accumulator `acc`
 let indexFoldu : (a -> Int -> a) -> a -> Int -> Int -> a =
@@ -41,28 +48,28 @@ lam f. lam acc. lam shape.
   let size = _prod shape in
   recursive let work = lam acc. lam k.
     if lti k size then
-      let is = _rowMajorOfsToIndex shape k in
-      work (f acc is) (addi k 1)
+      let idx = linearToCartesianIndex shape k in
+      work (f acc idx) (addi k 1)
     else acc
   in
   work acc 0
 
-utest indexFoldRM (lam seq. lam is. snoc seq is) [] []
+utest indexFoldRM (lam seq. lam idx. snoc seq idx) [] []
 with [[]] using eqSeq (eqSeq eqi)
 
-utest indexFoldRM (lam seq. lam is. snoc seq is) [] [2, 2]
+utest indexFoldRM (lam seq. lam idx. snoc seq idx) [] [2, 2]
 with [[0, 0], [0, 1], [1, 0], [1, 1]] using eqSeq (eqSeq eqi)
 
 
 -- Folds `f` over the indexes of `shape` in row-major order with accumulator
--- `acc`. If `f acc is` is `None ()` then the result is `None ()`.
+-- `acc`. If `f acc idx` is `None ()` then the result is `None ()`.
 let optionIndexFoldRMM : (a -> [Int] -> Option a) -> a -> [Int] -> Option a =
 lam f. lam acc. lam shape.
   let size = _prod shape in
   recursive let work = lam acc. lam k.
     if lti k size then
-      let is = _rowMajorOfsToIndex shape k in
-      let res =  f acc is in
+      let idx = linearToCartesianIndex shape k in
+      let res =  f acc idx in
       match res with Some acc then
         work acc (addi k 1)
       else match res with None _ then
@@ -73,22 +80,22 @@ lam f. lam acc. lam shape.
   work acc 0
 
 utest optionIndexFoldRMM
-  (lam seq. lam is.
-     if lti (length seq) 5 then Some (snoc seq is) else None ())
+  (lam seq. lam idx.
+     if lti (length seq) 5 then Some (snoc seq idx) else None ())
   []
   []
 with Some [[]] using optionEq (eqSeq (eqSeq eqi))
 
 utest optionIndexFoldRMM
-  (lam seq. lam is.
-     if lti (length seq) 5 then Some (snoc seq is) else None ())
+  (lam seq. lam idx.
+     if lti (length seq) 5 then Some (snoc seq idx) else None ())
   []
   [2, 2]
 with Some [[0, 0], [0, 1], [1, 0], [1, 1]] using optionEq (eqSeq (eqSeq eqi))
 
 utest optionIndexFoldRMM
-  (lam seq. lam is.
-     if lti (length seq) 3 then Some (snoc seq is) else None ())
+  (lam seq. lam idx.
+     if lti (length seq) 3 then Some (snoc seq idx) else None ())
   []
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
@@ -104,7 +111,7 @@ lam f. lam tcreate. lam shape. lam seq.
   let n = length seq in
   if neqi n (_prod shape) then f ()
   else
-    let t = tcreate [n] (lam is. get seq (get is 0)) in
+    let t = tcreate [n] (lam idx. get seq (get idx 0)) in
     tensorReshapeExn t shape
 
 let tensorOfSeqExn
@@ -218,7 +225,7 @@ lam f. lam g. lam t1. lam t2.
         tensorSetExn
           v2
           [i]
-          (g (_rowMajorOfsToIndex shape i) (tensorGetExn e [])))
+          (g (linearToCartesianIndex shape i) (tensorGetExn e [])))
       v1
   else f ()
 
@@ -231,7 +238,7 @@ utest
     ,3, 4] 
   in
   let t2 = tensorCreateDense [2, 2] (lam. ([], 0)) in
-  tensorMapiExn (lam is. lam x. (is, x)) t1 t2;
+  tensorMapiExn (lam idx. lam x. (idx, x)) t1 t2;
   tensorToSeqExn (tensorReshapeExn t2 [tensorSize t2])
 with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
 
@@ -344,7 +351,7 @@ let tensorFoldi : ([Int] -> a -> b) -> b -> Tensor[a] -> b =
   let t = tensorReshapeExn t [tensorSize t] in
   tensorFoldliSlice 
     (lam acc. lam i. lam t. 
-      f acc (_rowMajorOfsToIndex shape i) (tensorGetExn t [])) 
+      f acc (linearToCartesianIndex shape i) (tensorGetExn t [])) 
     acc t
 
 utest
@@ -371,7 +378,7 @@ let tensorIteri : ([Int] -> a -> Unit) -> Tensor[a] -> Unit =
   let shape = tensorShape t in
   let t = tensorReshapeExn t [tensorSize t] in
   tensorIterSlice
-    (lam i. lam t. f (_rowMajorOfsToIndex shape i) (tensorGetExn t [])) t
+    (lam i. lam t. f (linearToCartesianIndex shape i) (tensorGetExn t [])) t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
@@ -441,7 +448,7 @@ let tensorFindi : (a -> Bool) -> Tensor[a] -> Option (a, [Int]) =
     recursive let work = lam i.
       if lti i n then
         let e = tensorGetExn t [i] in
-        if p e then Some (e, _rowMajorOfsToIndex shape i)
+        if p e then Some (e, linearToCartesianIndex shape i)
         else work (addi i 1)
       else None ()
     in
@@ -489,7 +496,7 @@ with 3
 let tensorIndex : (a -> Bool) -> Tensor[a] -> Option [Int] =
   lam p. lam t.
     let x = tensorFindi p t in
-    match x with Some (_, is) then Some is
+    match x with Some (_, idx) then Some idx
     else match x with None _ then None ()
     else never
 
