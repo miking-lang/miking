@@ -34,7 +34,7 @@ let testTensors =
     tensorIterSlice (lam. lam e. tensorSetExn e [] v) t1
   in
 
- -- Rank < 2 Tensors
+  -- Rank < 2 Tensors
   let mkRank2TestTensor = lam.
     tcreate [3, 4] (lam is.
                       let i = get is 0 in
@@ -443,3 +443,12 @@ let _void = testTensors tensorCreateCArrayFloat eqf int2float vs
 
 let vs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12]]
 let _void = testTensors tensorCreateDense (eqSeq eqi) (lam x. [x]) vs
+
+-- Create
+let t = tensorCreateDense [2, 3] (lam idx. idx)
+utest tensorGetExn t [0, 0] with [0, 0]
+utest tensorGetExn t [0, 1] with [0, 1]
+utest tensorGetExn t [0, 2] with [0, 2]
+utest tensorGetExn t [1, 0] with [1, 0]
+utest tensorGetExn t [1, 1] with [1, 1]
+utest tensorGetExn t [1, 2] with [1, 2]
