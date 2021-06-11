@@ -590,12 +590,9 @@ with false
 let tensorFilter : (a -> Bool) -> Tensor[a] -> [a] =
   lam p. lam t.
     let t = tensorReshapeExn t [tensorSize t] in
-    tensorFoldlSlice
-      (lam a. lam t.
-        let e = tensorGetExn t [] in
-        if p e then snoc a e else a)
-      []
-      t
+    tensorFold
+      (lam a. lam x. if p x then snoc a x else a)
+      [] t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [2, 3] 
@@ -604,6 +601,22 @@ utest
   in
   tensorFilter (lti 3) t
 with [4, 5, 6]
+
+
+-- Filter index of elements of `t` given predicate `p`.
+let tensorFilteri : (a -> Bool) -> Tensor[a] -> [[Int]] = 
+  lam p. lam t.
+    tensorFoldi
+      (lam a. lam idx. lam x. if p x then snoc a idx else a)
+      [] t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
+  tensorFilteri (lti 3) t
+with [[1, 0], [1, 1], [1, 2]]
 
 mexpr
 
