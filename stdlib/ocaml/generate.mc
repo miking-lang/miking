@@ -616,7 +616,12 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             inexpr = t
           }, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
-        let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
+        let fixConstrType = lam ty.
+          let ty = typeUnwrapAlias typeLiftEnvMap ty in
+          match ty with TyRecord tr then
+            TyRecord {tr with fields = ocamlTypedFields tr.fields}
+          else tyunknown_ in
+        let constrs = mapMap fixConstrType constrs in
         if mapIsEmpty constrs then (t, recordFieldsToName)
         else
           (OTmVariantTypeDecl {
@@ -1274,6 +1279,19 @@ let recordWithLam = symbolize (
   , app_ (var_ "foo") (int_ 42)
   ]) in
 utest recordWithLam with generateTypeAnnotated recordWithLam
+using sameSemantics in
+
+let foo = nameSym "Foo" in
+let tyFoo = ntyvar_ foo in
+let fooCon = nameSym "FooCon" in
+let tyFooCon = tyrecord_ [("foo", tyarrow_ tyunknown_ tyunknown_)] in
+let conWithRecArrowTy = symbolize (bindall_
+  [ ntype_ foo tyunknown_
+  , ncondef_ fooCon (tyarrow_ tyFooCon tyFoo)
+  , ulet_ "" (nconapp_ fooCon (urecord_ [("foo", ulam_ "" (uunit_))]))
+  , int_ 42
+  ]) in
+utest conWithRecArrowTy with generateTypeAnnotated conWithRecArrowTy
 using sameSemantics in
 
 -- Ints
