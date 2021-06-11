@@ -108,6 +108,7 @@ run_files += stdlib/bool.mc
 # run_files += stdlib/graph.mc
 run_files += stdlib/char.mc
 # run_files += stdlib/set.mc
+run_files += stdlib/iterator.mc
 # run_files += test/py/python.mc
 # run_files += stdlib/ocaml/symbolize.mc
 # run_files += stdlib/ocaml/sys.mc

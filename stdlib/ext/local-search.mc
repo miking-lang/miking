@@ -17,6 +17,7 @@
 include "common.mc"
 include "string.mc"
 include "digraph.mc"
+include "iterator.mc"
 
 -- A local search solution: an assignment with a cost.
 type Solution = {assignment : Assignment, cost : Cost}
@@ -55,12 +56,12 @@ lang LocalSearchBase
     {cur = sol, inc = sol, iter = 0, stuck = false, cost = cost, cmp = cmp}
 
   -- The neighbouring assignments from a search state.
-  -- : SearchState -> [Assignment]
+  -- : SearchState -> (Iterator Assignment)
   sem neighbourhood =
 
   -- Select a solution among the neighbours.
-  -- : [Assignment] -> SearchState -> Option Solution
-  sem select (assignments : [Assignment]) =
+  -- : Iterator Assignment -> SearchState -> Option Solution
+  sem select (assignments : Iterator Assignment) =
 
   -- Take one step, return both the next solution (if there is one), and the
   -- resulting meta state.
@@ -85,7 +86,7 @@ lang LocalSearchBase
         let inc = if lti (cmp cur.cost inc.cost) 0 then cur else inc in
         let searchState = {{searchState with cur = cur} with inc = inc} in
         (searchState, metaState)
-      else dprintLn next; never
+      else never
     else never
 
   -- Debug a meta state.
@@ -105,11 +106,11 @@ end
 
 -- Select a solution among the neighbours uniformly at random.
 lang LocalSearchSelectRandomUniform = LocalSearchBase
-  sem select (assignments : [Assignment]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cost = cost} then
-      match randElem assignments with Some a then
+      match randElem (iteratorToSeq assignments) with Some a then
         Some {assignment = a, cost = cost a}
       else
         None ()
@@ -118,10 +119,11 @@ end
 
 -- Select a random best neighbour.
 lang LocalSearchSelectRandomBest = LocalSearchBase
-  sem select (assignments : [Assignment]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cost = cost, cmp = cmp} then
+      let assignments = iteratorToSeq assignments in
       match assignments with [] then None () else
 
       -- Find minimum and filter out other elements in one pass.
@@ -151,15 +153,14 @@ end
 
 -- Select the first improving neighbour.
 lang LocalSearchSelectFirstImproving = LocalSearchBase
-  sem select (assignments : [Assignments v]) =
+  sem select (assignments : Iterator Assignment) =
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cur = cur, cost = cost} then
       let cur : Solution = cur in
       let curCost = cur.cost in
-      recursive let firstImproving = lam as : [Assignment].
-        match as with [] then None ()
-        else match as with [a] ++ as then
+      recursive let firstImproving = lam as : Iterator Assignment.
+        match iteratorNext as with (as, Some a) then
           let acost = cost a in
           if lti acost curCost then
             Some {assignment = a, cost = acost}
@@ -221,9 +222,9 @@ lang LocalSearchTabuSearch = LocalSearchBase
 
   sem step (searchState : SearchState) =
   | TabuSearch ({tabu = tabu} & t) ->
-    let ns = neighbourhood searchState in
+    let ns = iteratorToSeq (neighbourhood searchState) in
     let nonTabus = filter (lam n. not (isTabu (n, tabu))) ns in
-    match select nonTabus searchState with Some choice then
+    match select (iteratorFromSeq nonTabus) searchState with Some choice then
       let choice : Solution = choice in
       (Some choice, TabuSearch {tabu = tabuUpdate (choice.assignment, tabu)})
     else
@@ -314,11 +315,14 @@ lang _testTsp = LocalSearchBase
 
   sem neighbourhood =
   | searchState ->
-    let searchState : SearchState = searchState in
-    match searchState with {cur = {assignment = TspTour {tour = tour}}} then
-      map (lam tour. TspTour {tour = tour})
-          (_tspNeighbours _tspGraph tour)
-    else never
+    let ns =
+      let searchState : SearchState = searchState in
+      match searchState with {cur = {assignment = TspTour {tour = tour}}} then
+        map (lam tour. TspTour {tour = tour})
+            (_tspNeighbours _tspGraph tour)
+      else never
+    in
+    iteratorFromSeq ns
 
   sem compare =
   | (TspCost {cost = v1}, TspCost {cost = v2}) ->
