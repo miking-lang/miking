@@ -226,7 +226,10 @@ let tensorMapiExn =
   tensorMapiOrElse (lam. error "Tensor shape mismatch in tensorMap")
 
 utest
-  let t1 = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  let t1 = tensorOfSeqExn tensorCreateDense [2, 2] 
+    [1, 2
+    ,3, 4] 
+  in
   let t2 = tensorCreateDense [2, 2] (lam. ([], 0)) in
   tensorMapiExn (lam is. lam x. (is, x)) t1 t2;
   tensorToSeqExn (tensorReshapeExn t2 [tensorSize t2])
@@ -353,7 +356,10 @@ utest
 with ([[0], [1], [2]], 6)
 
 utest 
-  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] 
+    [1, 2
+    ,3, 4] 
+  in
   tensorFoldi (lam acc. lam idx. lam x. snoc acc (idx, x)) [] t
 with [([0, 0], 1), ([0, 1], 2), ([1, 0], 3), ([1, 1], 4)]
 
@@ -399,7 +405,10 @@ utest
 with 3
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorMax subi t
 with 6
 
@@ -414,7 +423,10 @@ utest
 with 1
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorMin subi t
 with 1
 
@@ -441,9 +453,12 @@ utest
 with (1, [0])
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   match tensorFindi (eqi 3) t with Some x then x else (negi 1, [])
-with (3, [1,0])
+with (3, [0, 2])
 
 
 -- Finds element `Some el` in `t` satisfying predicate `p`. If
@@ -461,7 +476,10 @@ utest
 with 1
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   match tensorFind (eqi 3) t with Some x then x else negi 1
 with 3
 
@@ -482,10 +500,13 @@ utest
 with [0]
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   match tensorIndex (eqi 3) t with Some x then x
   else []
-with [1,0]
+with [0, 2]
 
 
 -- `true` if `p x` for some `x` in `t`, else `false`.
@@ -497,12 +518,18 @@ let tensorAny : (a -> Bool) -> Tensor[a] -> Bool =
     else never
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorAny (eqi 3) t
 with true
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorAny (eqi 7) t
 with false
 
@@ -516,12 +543,18 @@ let tensorAll : (a -> Bool) -> Tensor[a] -> Bool =
     else never
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorAll (gti 7) t
 with true
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorAll (gti 6) t
 with false
 
@@ -533,7 +566,10 @@ let tensorDimsEqual = lam t.
   else all (eqi (head shape)) (tail shape)
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] 
+    [1, 2
+    ,3, 4] 
+  in
   tensorDimsEqual t
 with true
 
@@ -555,7 +591,10 @@ let tensorFilter : (a -> Bool) -> Tensor[a] -> [a] =
       t
 
 utest
-  let t = tensorOfSeqExn tensorCreateDense [2, 3] [1, 2, 3, 4, 5, 6] in
+  let t = tensorOfSeqExn tensorCreateDense [2, 3] 
+    [1, 2, 3
+    ,4, 5, 6] 
+  in
   tensorFilter (lti 3) t
 with [4, 5, 6]
 
