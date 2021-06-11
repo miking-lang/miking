@@ -988,6 +988,8 @@ lang TensorOpEval =
   | CTensorSetExn3 (T, [Int])
   | CTensorReshapeExn2 T
   | CTensorCopyExn2 T
+  | CTensorTransposeExn2 T
+  | CTensorTransposeExn3 (T, Int)
   | CTensorSliceExn2 T
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
@@ -1146,6 +1148,29 @@ lang TensorOpEval =
         uunit_
       else error "Tensor type mismatch in CTensorCopyExn"
     else error "First argument to CTensorCopyExn not a tensor"
+  | CTensorTransposeExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorTransposeExn2 t in
+      uconst_ val
+    else error "First argument to CTensorTransposeExn not a tensor"
+  | CTensorTransposeExn2 t ->
+    match arg with TmConst { val = CInt { val = n } } then
+      let val = CTensorTransposeExn3 (t, n) in
+      uconst_ val
+    else error "Second argument to CTensorTransposeExn not an integer"
+  | CTensorTransposeExn3 (t, n1) ->
+    match arg with TmConst { val = CInt { val = n2 } } then
+      match t with TInt t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "Second argument to CTensorTransposeExn not an integer"
   | CTensorSliceExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSliceExn2 t in
