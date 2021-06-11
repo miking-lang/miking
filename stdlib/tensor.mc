@@ -347,7 +347,9 @@ let tensorFoldi : ([Int] -> a -> b) -> b -> Tensor[a] -> b =
 utest
   let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
   tensorFoldi 
-    (lam acc. lam idx. lam x. (snoc acc.0 idx, addi acc.1 x)) ([], 0) t
+    (lam acc : ([[Int]], Int). lam idx. lam x. 
+      (snoc acc.0 idx, addi acc.1 x)) 
+    ([], 0) t
 with ([[0], [1], [2]], 6)
 
 utest 
