@@ -22,6 +22,14 @@ lang ParserBase = Lexer
 
   -- NOTE(vipa, 2021-02-08): This should be ParserConcrete.Symbol -> Dyn
   -- type Action = [Symbol] -> Dyn
+
+  sem symToStr =
+  | Tok t -> tokToStr t
+  | Lit t -> t.lit
+
+  sem symInfo =
+  | Tok t -> tokInfo t
+  | Lit t -> t.lit
 end
 
 lang ParserSpec = ParserBase
@@ -33,18 +41,36 @@ lang ParserSpec = ParserBase
 
   syn Symbol =
   | NtSpec NonTerminal
+
+  sem symToStr =
+  | NtSpec n -> n
+
+  sem symInfo =
+  | NtSpec _ -> NoInfo ()
 end
 
 lang ParserGenerated = ParserBase
   syn Symbol =
   -- NOTE(vipa, 2021-02-08): The `Ref` here is slightly undesirable, but I see no other way to construct a cyclic data structure
   -- NOTE(vipa, 2021-02-08): The first `Symbol` here should be `ParserBase.Symbol`
-  | NtSym {nt: NonTerminal, table: (Ref (Map Symbol {syms: [Symbol], action: Action}))}
+  | NtSym {nt: NonTerminal, table: (Ref (Map Symbol {syms: [Symbol], action: Action, label: prodLabel}))}
+
+  sem symToStr =
+  | NtSym t -> t.nt
+
+  sem symInfo =
+  | NtSym _ -> NoInfo ()
 end
 
 lang ParserConcrete = ParserBase
   syn Symbol =
   | UserSym Dyn
+
+  sem symToStr =
+  | UserSym _ -> "<UserSym>"
+
+  sem symInfo =
+  | UserSym _ -> NoInfo ()
 end
 
 let _compareSymbol = use ParserBase in lam lsym. lam rsym.
