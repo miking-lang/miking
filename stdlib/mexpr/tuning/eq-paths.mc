@@ -18,9 +18,9 @@ let eqPaths : Digraph -> a -> Int -> [a] -> [[a]] =
     recursive let traverse : Digraph -> a -> [b] -> [a] -> Int -> [[a]] =
       lam g. lam v. lam curPath. lam visited. lam d.
         let fromEdges = digraphEdgesFrom v g in
-        if or (or (eqi d 0) (eqsetMem eqv v visited))
-              (null fromEdges) then
-          [curPath]
+        if eqi d 0 then [curPath]
+        else if null fromEdges then [curPath]
+        else if eqsetMem eqv v visited then [curPath]
         else
           let paths =
             map (lam edge : DigraphEdge v l.
