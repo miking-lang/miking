@@ -23,13 +23,21 @@ let _eqn = lam n1. lam n2.
   else
     error "Name without symbol."
 
+type NameInfo = (Name, Info)
+
+let nameInfoCmp = lam v1. lam v2.
+  nameCmp v1.0 v2.0
+
+let nameInfoEq = lam l1. lam l2.
+  _eqn l1.0 l2.0
+
+let _cmpPaths = seqCmp nameInfoCmp
+
 let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Map Name v =
   lam items. lam toKey. lam toVal.
     foldl (lam acc. lam e. mapInsert (toKey e) (toVal e) acc)
       (mapEmpty nameCmp)
       items
-
-let _cmpPaths = seqCmp nameCmp
 
 -------------------------
 -- Call graph creation --
@@ -40,16 +48,27 @@ let _cmpPaths = seqCmp nameCmp
 
 -- The type of the call graph. Vertices are names of function identifiers, edges
 -- are names of application nodes.
-type CallGraph = DiGraph Name Name
+
+type CallGraph = DiGraph NameInfo NameInfo
+
+let callGraphNames = lam cg.
+  map (lam t : NameInfo. t.0) (digraphVertices cg)
+
+let _callGraphNameSeq = lam seq.
+  map (lam t : DigraphEdge NameInfo.
+    ((t.0).0, (t.1).0, (t.2).0)) seq
+
+let callGraphEdgeNames = lam cg.
+  _callGraphNameSeq (digraphEdges cg)
 
 -- The top of the call graph, has no incoming edges.
-let _callGraphTop = nameSym "top"
+let _callGraphTop = (nameSym "top", NoInfo ())
 
-type Binding = {ident : Name, body : Expr}
+type Binding = {ident : Name, body : Expr, info : Info}
 let _handleLetVertex = use LamAst in
   lam f.lam letexpr : Binding.
     match letexpr.body with TmLam lm
-    then cons letexpr.ident (f lm.body)
+    then cons (letexpr.ident, letexpr.info) (f lm.body)
     else f letexpr.body
 
 let _handleApps = use AppAst in use VarAst in
@@ -57,8 +76,8 @@ let _handleApps = use AppAst in use VarAst in
     recursive let appHelper = lam g. lam app.
       match app with TmApp {lhs = TmVar v, rhs = rhs} then
         let resLhs =
-          if digraphHasVertex v.ident g then
-            [(prev, v.ident, id)]
+          if digraphHasVertex (v.ident, v.info) g then
+            [(prev, (v.ident, v.info), id)]
           else []
         in concat resLhs (f g prev rhs)
       else match app with TmApp {lhs = TmApp a, rhs = rhs} then
@@ -76,7 +95,8 @@ let _handleApps = use AppAst in use VarAst in
 lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem toCallGraph =
   | arg ->
-    let gempty = digraphAddVertex _callGraphTop (digraphEmpty nameCmp _eqn) in
+    let gempty = digraphAddVertex _callGraphTop
+      (digraphEmpty nameInfoCmp nameInfoEq) in
     let g = digraphAddVertices (_findVertices arg) gempty in
     let edges = _findEdges g _callGraphTop arg in
     digraphAddEdges edges g
@@ -84,36 +104,38 @@ lang Ast2CallGraph = LetAst + LamAst + RecLetsAst
   sem _findVertices =
   | TmLet t ->
     concat
-      (_handleLetVertex _findVertices {ident = t.ident, body = t.body})
+      (_handleLetVertex _findVertices
+        {ident = t.ident, body = t.body, info = t.info})
       (_findVertices t.inexpr)
 
   | TmRecLets t ->
     let res =
       foldl (lam acc. lam b : RecLetBinding.
                concat acc
-                 (_handleLetVertex _findVertices {ident = b.ident, body = b.body}))
+                 (_handleLetVertex _findVertices
+                   {ident = b.ident, body = b.body, info = b.info}))
             [] t.bindings
     in concat res (_findVertices t.inexpr)
 
   | tm ->
     sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
 
-  sem _findEdges (cg : CallGraph) (prev : Name) =
+  sem _findEdges (cg : CallGraph) (prev : NameInfo) =
   | TmLet ({body = TmApp a} & t) ->
-    let resBody = _handleApps t.ident _findEdges prev cg t.body in
+    let resBody = _handleApps (t.ident, t.info) _findEdges prev cg t.body in
     concat resBody (_findEdges cg prev t.inexpr)
 
   | TmLet ({body = TmLam lm} & t) ->
-    let resBody = _findEdges cg t.ident lm.body in
+    let resBody = _findEdges cg (t.ident, t.info) lm.body in
     concat resBody (_findEdges cg prev t.inexpr)
 
   | TmRecLets t ->
     let res =
       let handleBinding = lam g. lam b : RecLetBinding.
-      match b with { body = TmLam { body = lambody }, ident = ident } then
-        _findEdges g ident lambody
-      else
-        _findEdges g prev b.body
+        match b with { body = TmLam { body = lambody }, ident = ident, info = info } then
+          _findEdges g (ident, info) lambody
+        else
+          _findEdges g prev b.body
       in foldl (lam acc. lam b. concat acc (handleBinding cg b)) [] t.bindings
     in concat res (_findEdges cg prev t.inexpr)
 
@@ -346,7 +368,7 @@ type CallCtxEnv = {
 
   -- List of public functions of the program (possible entry points in the call
   -- graph)
-  publicFns: [Name],
+  publicFns: [NameInfo],
 
   -- Maps names of functions to the name of its incoming variable. The incoming
   -- variables keep track of the execution path during runtime.
@@ -364,7 +386,7 @@ type CallCtxEnv = {
   -- Maps a decision point and a call path to a unique integer.
   -- TODO(Linnea, 2021-04-21): Once we have 'smapAccumL_Expr_Expr', this
   -- shouldn't be a reference.
-  hole2idx: Ref (Map Name (Map[Name] Int)),
+  hole2idx: Ref (Map NameInfo (Map [NameInfo] Int)),
 
   -- Maps an index to its decision point. The key set is the union of the value
   -- sets of 'hole2idx'.
@@ -380,13 +402,13 @@ let _newNameFromStr : Str -> Name -> Name = lam prefix. lam name.
 let _incVarFromName = _newNameFromStr "inc_"
 
 -- Compute the initial call context environment for a program.
-let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
+let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
   lam publicFns. lam callGraph. lam tm.
     let fun2inc =
-      _nameMapInit (digraphVertices callGraph) identity _incVarFromName
+      _nameMapInit (callGraphNames callGraph) identity _incVarFromName
     in
     let lbl2inc =
-      _nameMapInit (digraphEdges callGraph)
+      _nameMapInit (callGraphEdgeNames callGraph)
         (lam e. match e with (_, _, lbl) then lbl else never)
         (lam e.
            match e with (from, _, _) then
@@ -396,7 +418,8 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
     let callGraphRev = digraphReverse callGraph in
     let lbl2count =
       foldl (lam acc. lam funName.
-               let incomingEdges = digraphEdgesFrom funName callGraphRev in
+               let incomingEdges =
+                 _callGraphNameSeq (digraphEdgesFrom funName callGraphRev) in
                match foldl (lam acc. lam e.
                               match e with (_, _, lbl) then
                                 match acc with (hm, i) then
@@ -412,7 +435,7 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
             (digraphVertices callGraph)
 
     in
-    let hole2idx = ref (mapEmpty nameCmp) in
+    let hole2idx = ref (mapEmpty nameInfoCmp) in
     { callGraph = callGraph
     , fun2inc = fun2inc
     , lbl2inc = lbl2inc
@@ -422,8 +445,8 @@ let callCtxInit : [Name] -> CallGraph -> Expr -> CallCtxEnv =
     , idx2hole = ref []
     }
 
--- Returns the binding of a function name, or None () if the name is not a node
--- in the call graph.
+-- Returns the incoming variable of a function name, or None () if the name is
+-- not a node in the call graph.
 let callCtxFunLookup : Name -> CallCtxEnv -> Option Name =
   lam name : Name. lam env : CallCtxEnv.
     match env with { fun2inc = fun2inc } then
@@ -461,13 +484,7 @@ let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
     mapValues fun2inc
   else never
 
--- Lookup the internal name of a public function.
-let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
-  match env with { pub2internal = pub2internal } then
-    mapLookup name pub2internal
-  else never
-
-let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
+let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> CallCtxEnv -> CallCtxEnv =
   lam hole. lam name. lam paths. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx, idx2hole = idx2hole} then
     let countInit = length (deref idx2hole) in
@@ -487,10 +504,10 @@ let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
     else never
   else never
 
-let callCtxHole2Idx : Name -> [Name] -> CallCtxEnv -> Int =
-  lam name. lam path. lam env : CallCtxEnv.
+let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
+  lam nameInfo. lam path. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx } then
-      mapFindWithExn path (mapFindWithExn name (deref hole2idx))
+      mapFindWithExn path (mapFindWithExn nameInfo (deref hole2idx))
     else never
 
 -----------------------------
@@ -507,23 +524,25 @@ let _privFunFromName = _newNameFromStr "pri_"
 -- Get the leftmost node (callee function) in a nested application node. Returns
 -- optionally the variable name if the leftmost node is a variable, otherwise
 -- None ().
-let _appGetCallee : Expr -> Option Name = use AppAst in use VarAst in lam tm.
+let _appGetCallee : Expr -> Option NameInfo = use AppAst in use VarAst in lam tm.
   recursive let work = lam app.
     match app with TmApp {lhs = TmVar v} then
-      Some v.ident
+      Some (v.ident, v.info)
     else match app with TmApp {lhs = TmApp a} then
       work (TmApp a)
     else None ()
   in work tm
 
 let _x = nameSym "x"
+let _xInfo = (_x, NoInfo ())
 let _y = nameSym "y"
+let _yInfo = (_y, NoInfo ())
 utest
   _appGetCallee (appf3_ (nvar_ _x) true_ (nvar_ _y) (int_ 4))
-with Some _x using optionEq nameEq
+with Some _xInfo using optionEq nameInfoEq
 utest
   _appGetCallee (addi_ (nvar_ _x) (int_ 3))
-with None () using optionEq nameEq
+with None () using optionEq nameInfoEq
 
 -- Set the leftmost node (callee function) to a given name in a nested
 -- application.
@@ -573,33 +592,35 @@ let t =
 -- Generate code for looking up a value of a decision point depending on its
 -- call history
 let _lookupCallCtx
-  : (Int -> Expr) -> Name -> Name
-  -> CallCtxEnv -> [[Name]] -> Expr =
+  : (Int -> Expr) -> NameInfo -> Name
+  -> CallCtxEnv -> [[NameInfo]] -> Expr =
   lam lookup. lam holeId. lam incVarName. lam env : CallCtxEnv. lam paths.
     match env with { lbl2inc = lbl2inc } then
       -- TODO(Linnea, 2021-04-21): Represent paths as trees, then this
       -- partition becomes trivial
-      let partitionPaths : [[Name]] -> ([Name], [[[Name]]]) = lam paths.
-        let startVals = foldl (lam acc. lam p.
-                                 setInsert (head p) acc)
-                              (setEmpty nameCmp) paths in
-        let startVals = mapKeys startVals in
-        let partition = create (length startVals) (lam. []) in
-        let partition =
-          mapi
-            (lam i. lam. filter (lam p. _eqn (head p) (get startVals i)) paths)
-            partition
-        in
-        (startVals, partition)
+      let partitionPaths : [[NameInfo]] -> ([NameInfo], [[[NameInfo]]]) =
+        lam paths.
+          let startVals = foldl (lam acc. lam p.
+                                   setInsert (head p) acc)
+                                (setEmpty nameInfoCmp) paths in
+          let startVals = mapKeys startVals in
+          let partition = create (length startVals) (lam. []) in
+          let partition =
+            mapi
+              (lam i. lam.
+                 filter (lam p. nameInfoEq (head p) (get startVals i)) paths)
+              partition
+          in
+          (startVals, partition)
       in
-      recursive let work : Name -> [[Name]] -> [Name] -> Expr =
+      recursive let work : NameInfo -> [[NameInfo]] -> [NameInfo] -> Expr =
         lam incVarName. lam paths. lam acc.
           let nonEmpty = filter (lam p. not (null p)) paths in
           match partitionPaths nonEmpty with (startVals, partition) then
             let branches =
-              mapi (lam i. lam n.
-                      let iv = callCtxLbl2Inc n env in
-                      let count = callCtxLbl2Count n env in
+              mapi (lam i. lam n : NameInfo.
+                      let iv = callCtxLbl2Inc n.0 env in
+                      let count = callCtxLbl2Count n.0 env in
                       matchex_ (deref_ (nvar_ incVarName)) (pint_ count)
                                (work iv (map tail (get partition i))
                                   (cons n acc)))
@@ -649,7 +670,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   --  and replace them by lookups in a static table One reference per function
   --  tracks which function that latest called that function, thereby
   --  maintaining call history. Returns a result of type 'Flattened'.
-  sem flatten (publicFns : [Name]) =
+  sem flatten (publicFns : [NameInfo]) =
   | t ->
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     match _flattenWithLookup publicFns lookup t with (prog, env)
@@ -667,15 +688,18 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- 'insert public table t' replaces the decision points in expression 't' by
   -- the values in 'table'
-  sem insert (publicFns : [Name]) (table : LookupTable) =
+  sem insert (publicFns : [NameInfo]) (table : LookupTable) =
   | t ->
     let lookup = lam i. get table i in
     match _flattenWithLookup publicFns lookup t with (prog, _)
     then prog else never
 
-  sem _flattenWithLookup (publicFns : [Name]) (lookup : Int -> Expr) =
+  sem _flattenWithLookup (publicFns : [NameInfo]) (lookup : Int -> Expr) =
   | t ->
-    let pub2priv = _nameMapInit publicFns identity _privFunFromName in
+    let pub2priv =
+      _nameMapInit (map (lam t : NameInfo. t.0) publicFns)
+        identity _privFunFromName
+    in
     let tm = _replacePublic pub2priv t in
 
     -- Compute the call graph
@@ -683,21 +707,21 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
     -- Prune the call graph
     let eqPathsAssoc = _eqPaths g publicFns _callGraphTop tm in
-    let eqPathsMap : Map Name [[Name]] = mapFromSeq nameCmp eqPathsAssoc in
-    let keepLbls : [Name] =
-      foldl (lam acc. lam path : (Name, [[Name]]).
+    let eqPathsMap : Map NameInfo [[NameInfo]] = mapFromSeq nameInfoCmp eqPathsAssoc in
+    let keepLbls : [NameInfo] =
+      foldl (lam acc. lam path : (NameInfo, [[NameInfo]]).
                concat acc (foldl concat [] path.1))
         [] eqPathsAssoc
     in
 
-    let pruned = foldl (lam acc. lam e : DigraphEdge Name Name.
+    let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
       match e with (from, to, lbl) then
-        if any (_eqn lbl) keepLbls then
+        if any (nameInfoEq lbl) keepLbls then
           digraphAddEdge from to lbl
             (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
         else acc
       else never)
-      (digraphEmpty nameCmp _eqn)
+      (digraphEmpty nameInfoCmp nameInfoEq)
       (digraphEdges g) in
 
     -- Initialize environment
@@ -719,19 +743,20 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
   -- Compute the equivalence paths of each decision point
   -- ... -> [(Name, [[Name]])]
-  sem _eqPaths (g : CallGraph) (public : [Name]) (cur : Name) =
+  sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) =
   | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
     let paths = eqPaths g cur depth public in
-    cons (ident, paths) (_eqPaths g public cur t.inexpr)
+    cons ((ident, t.info), paths) (_eqPaths g public cur t.inexpr)
 
   | TmLet ({ body = TmLam lm } & t) ->
-    concat (_eqPaths g public t.ident t.body) (_eqPaths g public cur t.inexpr)
+    concat (_eqPaths g public (t.ident, t.info) t.body)
+           (_eqPaths g public cur t.inexpr)
 
   | TmRecLets t ->
     concat
       (foldl (lam acc. lam bind: RecLetBinding.
          let cur =
-           match bind with { body = TmLam lm } then bind.ident
+           match bind with { body = TmLam lm } then (bind.ident, bind.info)
            else cur
          in concat acc (_eqPaths g public cur bind.body))
          [] t.bindings)
@@ -753,7 +778,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   -- Function call: forward call for public function
   | TmLet ({ body = TmApp a } & t) ->
     match _appGetCallee (TmApp a) with Some callee then
-      match mapLookup callee pub2priv
+      match mapLookup callee.0 pub2priv
       with Some local then
         TmLet {{t with body = _appSetCallee (TmApp a) local}
                   with inexpr = _replacePublic pub2priv t.inexpr}
@@ -801,7 +826,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   -- Maintain call context history by updating incoming variables before
   -- function calls.
   sem _maintainCallCtx (lookup : Lookup) (env : CallCtxEnv)
-                       (eqPaths : Map Name [[Name]]) (cur : Name) =
+                       (eqPaths : Map NameInfo [[NameInfo]]) (cur : NameInfo) =
   -- Application: caller updates incoming variable of callee
   | TmLet ({ body = TmApp a } & t) ->
     -- NOTE(Linnea, 2021-01-29): ANF form means no recursion necessary for the
@@ -811,9 +836,9 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     in
     -- Track call only if edge is part of the call graph
     match env with { callGraph = callGraph } then
-      match callCtxFunLookup cur env with Some _ then
+      match callCtxFunLookup cur.0 env with Some _ then
         match _appGetCallee (TmApp a) with Some callee then
-          match callCtxFunLookup callee env with Some iv then
+          match callCtxFunLookup callee.0 env with Some iv then
             if digraphIsSuccessor callee cur callGraph then
               -- Set the incoming var of callee to current node
               let count = callCtxLbl2Count t.ident env in
@@ -829,13 +854,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
     let lookupCode =
       if eqi depth 0 then
-        let env = callCtxAddHole t.body ident [[]] env in
-        lookup (callCtxHole2Idx ident [] env)
+        let env = callCtxAddHole t.body (ident, t.info) [[]] env in
+        lookup (callCtxHole2Idx (ident, t.info) [] env)
       else
-        let paths = mapFindWithExn ident eqPaths in
-        let env = callCtxAddHole t.body ident paths env in
-        let iv = callCtxFun2Inc cur env in
-        _lookupCallCtx lookup ident iv env paths
+        let paths = mapFindWithExn (ident, t.info) eqPaths in
+        let env = callCtxAddHole t.body (ident, t.info) paths env in
+        let iv = callCtxFun2Inc cur.0 env in
+        _lookupCallCtx lookup (ident, t.info) iv env paths
     in
     TmLet {{t with body = lookupCode}
               with inexpr = _maintainCallCtx lookup env eqPaths cur t.inexpr}
@@ -844,7 +869,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | TmLet ({ body = TmLam lm } & t) ->
     let curBody =
       match callCtxFunLookup t.ident env with Some _
-      then t.ident
+      then (t.ident, t.info)
       else cur
     in
     TmLet {{t with body = _maintainCallCtx lookup env eqPaths curBody t.body}
@@ -856,7 +881,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
         match bind with { body = TmLam lm } then
           let curBody =
             match callCtxFunLookup bind.ident env with Some _
-            then bind.ident
+            then (bind.ident, bind.info)
             else cur
           in
           {bind with body =
@@ -991,12 +1016,18 @@ type CallGraphTest = {ast : Expr, expected : Expr, vs : [String],
 
 let doCallGraphTests = lam r : CallGraphTest.
   let tests = lam ast. lam strVs : [String]. lam strEdgs : [(String, String)].
+
     let toStr = lam ng.
-      digraphAddEdges
-        (map (lam t : DigraphEdge Name Name.
-           (nameGetStr t.0, nameGetStr t.1, t.2)) (digraphEdges ng))
-           (digraphAddVertices (map nameGetStr (digraphVertices ng))
-                               (digraphEmpty cmpString _eqn))
+
+      let edges = map (lam t : DigraphEdge CallGraphVertex CallGraphLabel.
+        match t with (from, to, label) then
+          (nameGetStr from.0, nameGetStr to.0, label.0)
+        else never
+      ) (digraphEdges ng) in
+
+      let vertices = map (lam v : CallGraphVertex. nameGetStr v.0) (digraphVertices ng) in
+
+      digraphAddEdges edges (digraphAddVertices vertices (digraphEmpty cmpString _eqn))
     in
     let sg = toStr (toCallGraph ast) in
 
@@ -1237,7 +1268,7 @@ in
 debugPrint ast [funB, funC];
 let ast = anf ast in
 
-match flatten [funB, funC] ast with
+match flatten [(funB, NoInfo ()), (funC, NoInfo ())] ast with
   {ast = flatAst, table = table, holes = holes, tempFile = tempFile, cleanup = cleanup}
 then
 
@@ -1257,7 +1288,7 @@ then
 
   let idxs = mapi (lam i. lam. i) table in
   let table = mapi (lam i. lam. int_ (addi 1 i)) idxs in
-  let insertedAst = insert [funB, funC] table ast in
+  let insertedAst = insert [(funB, NoInfo ()), (funC, NoInfo ())] table ast in
 
   let eval = evalWithTable table in
 
