@@ -17,6 +17,10 @@ let _inputEmpty = [""]
 
 let tuneFileExtension = ".tune"
 
+let _delim = "\n"
+
+let _sepLength = 20
+
 let tuneFileName = lam file.
   let withoutExtension =
     match strLastIndex '.' file with Some idx then
@@ -26,18 +30,52 @@ let tuneFileName = lam file.
 
 let _tuneTable2str = lam table : LookupTable.
   use MExprPrettyPrint in
-  strJoin " " (map expr2str table)
+  let rows = mapi (lam i. lam expr.
+    join [int2string i, ": ", expr2str expr]) table in
+  strJoin _delim rows
 
-let tuneDumpTable = lam file : String. lam table : LookupTable.
-  let destinationFile = tuneFileName file in
-  -- NOTE(Linnea, 2021-05-27): add whitespace as workaround for bug #145
-  writeFile destinationFile (concat (_tuneTable2str table) " ")
+let _tuneInfo = lam hole2idx.
+  let entry2str = lam holeInfo : NameInfo. lam path : [NameInfo]. lam i : Int.
+    strJoin "\n"
+    [ concat "index: " (int2string i)
+    , concat "name: " (nameGetStr holeInfo.0)
+    , concat "defined at: " (info2str holeInfo.1)
+    , concat "in function: " "?"
+    , concat "call path: " (strJoin "->" (map nameInfoGetStr path))
+    ]
+  in
+  let taggedEntries =
+    mapFoldWithKey
+      (lam acc : [String]. lam h : NameInfo. lam pathMap : Map [NameInfo] Int.
+         concat acc (map (lam b : ([NameInfo], Int). (b.1, entry2str h b.0 b.1)) (mapBindings pathMap)))
+      [] hole2idx
+  in
+  let sortedTagged =
+    sort (lam e1 : (Int, String). lam e2 : (Int, String). subi e1.0 e2.0)
+      taggedEntries
+  in
+  let entries = map (lam e : (Int, String). e.1) sortedTagged in
+  strJoin (join ["\n", make _sepLength '-', "\n"]) entries
+
+let tuneDumpTable =
+  lam file : String.
+  lam info : Option (Map NameInfo (Map [NameInfo] Int)).
+  lam table : LookupTable.
+    let destinationFile = tuneFileName file in
+    let str = join
+    [ concat (_tuneTable2str table) _delim -- NOTE(Linnea, 2021-05-27): add whitespace as workaround for bug #145
+    , make _sepLength '='
+    , "\n"
+    , match info with Some hole2idx then _tuneInfo hole2idx else ""
+    , "\n"
+    ] in
+    writeFile destinationFile str
 
 let tuneReadTable = lam file : String.
   use BootParser in
   let str = strTrim (readFile file) in
   match str with [] then []
-  else map (parseMExprString []) (strSplit " " str)
+  else map (parseMExprString []) (strSplit _delim str)
 
 ------------------------------
 -- Base fragment for tuning --
@@ -51,17 +89,16 @@ lang TuneBase = Holes
 
   sem time (table : LookupTable) (runner : Runner) (file : String) =
   | args ->
-    tuneDumpTable file table;
+    tuneDumpTable file (None ()) table;
     let t1 = wallTimeMs () in
     let res : ExecResult = runner args in
     let t2 = wallTimeMs () in
-    --print "Result: "; dprintLn res;
     match res.returncode with 0 then
       subf t2 t1
     else
       let msg = strJoin " "
       [ "Program returned non-zero exit code during tuning\n"
-      , "decision point values:", _tuneTable2str table, "\n"
+      , "decision point values:\n", _tuneTable2str table, "\n"
       , "command line arguments:", strJoin " " args, "\n"
       , "stdout:", res.stdout, "\n"
       , "stderr:", res.stderr, "\n"
@@ -401,6 +438,7 @@ let tuneEntry =
   lam args : [String].
   lam run : Runner.
   lam holes : [Expr].
+  lam hole2idx : Map NameInfo (Map [NameInfo] Int).
   lam tuneFile : String.
   lam table : LookupTable.
     let options = parseTuneOptions tuneOptionsDefault

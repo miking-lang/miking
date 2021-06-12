@@ -31,6 +31,9 @@ let nameInfoCmp = lam v1. lam v2.
 let nameInfoEq = lam l1. lam l2.
   _eqn l1.0 l2.0
 
+let nameInfoGetStr = lam ni.
+  nameGetStr ni.0
+
 let _cmpPaths = seqCmp nameInfoCmp
 
 let _nameMapInit : [a] -> (a -> Name) -> (a -> v) -> Map Name v =
@@ -661,6 +664,8 @@ type Flattened =
 , holes : [Expr]       -- The flattened decision points
 , tempFile : String    -- The file from which decision point values are read
 , cleanup : () -> ()   -- Removes all temporary files from the disk
+  -- Maps a decision point and equivalence path to their integer id
+, hole2idx: Map NameInfo (Map [NameInfo] Int)
 }
 
 -- Fragment for transforming a program with decision points.
@@ -683,6 +688,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
       , holes = deref env.idx2hole
       , tempFile = tuneFile
       , cleanup = lam. sysTempDirDelete tempDir
+      , hole2idx = deref env.hole2idx
       }
     else never
 
@@ -923,6 +929,14 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let eqString = eqSeq eqc in
 
     recursive
+      let foldl = lam f. lam acc. lam seq.
+      if null seq then acc
+      else foldl f (f acc (head seq)) (tail seq)
+    in
+
+    let join = lam seqs. foldl concat [] seqs in
+
+    recursive
       let strSplit = lam delim. lam s.
         if or (null delim) (lti (length s) (length delim))
         then [s]
@@ -935,7 +949,35 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let string2bool = lam s : String.
       match s with \"true\" then true
       else match s with \"false\" then false
-      else error (concat \"Cannot be converted to Bool: \" s)
+      else error (join [\"Cannot be converted to Bool: \'\", s, \"\'\"])
+    in
+
+    recursive let any = lam p. lam seq.
+      if null seq
+      then false
+      else if p (head seq) then true else any p (tail seq)
+    in
+
+    let isWhitespace = lam c. any (eqc c) [' ', '\n', '\t', '\r'] in
+
+    let strTrim = lam s.
+      recursive
+      let strTrim_init = lam s.
+        if null s then s
+        else if isWhitespace (head s)
+        then strTrim_init (tail s)
+        else s
+      in reverse (strTrim_init (reverse (strTrim_init s)))
+    in
+
+    let strIndex = lam c. lam s.
+      recursive let strIndex_rechelper = lam i. lam c. lam s.
+        if null s
+        then error (join [\"Expected an occurrence of \'\", [c],\"\'\"])
+        else if eqc c (head s)
+        then i
+        else strIndex_rechelper (addi i 1) c (tail s)
+      in strIndex_rechelper 0 c s
     in
 
     let string2int = lam s.
@@ -970,6 +1012,8 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let string2boolName = getName "string2bool" impl in
     let string2intName = getName "string2int" impl in
     let strSplitName = getName "strSplit" impl in
+    let strTrimName = getName "strTrim" impl in
+    let strIndexName = getName "strIndex" impl in
 
     let convertFuns = map (lam h.
       match h with TmHole {ty = TyBool _} then string2boolName
@@ -983,10 +1027,20 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
 
     let fileContent = nameSym "fileContent" in
     let strVals = nameSym "strVals" in
+    let i = nameSym "i" in
+    let p = nameSym "p" in
     bindall_
     [ impl
     , nulet_ fileContent (readFile_ (str_ tuneFile))
-    , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ " ") (nvar_ fileContent))
+    , nulet_ i (appf2_ (nvar_ strIndexName) (char_ '=') (nvar_ fileContent))
+    , nulet_ fileContent
+       (ntupleproj_ p 0 (splitat_ (nvar_ fileContent) (nvar_ i)))
+    , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ "\n")
+        (app_ (nvar_ strTrimName) (nvar_ fileContent)))
+    , let x = nameSym "x" in
+      nulet_ strVals (map_ (nulam_ x
+        (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
+        (nvar_ strVals))
     , nulet_ _table
       (appf3_ (nvar_ zipWithName) doConvert
         (seq_ (map nvar_ convertFuns)) (nvar_ strVals))
