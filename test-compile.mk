@@ -107,6 +107,16 @@ compile_files += stdlib/bool.mc
 #compile_files += stdlib/graph.mc
 compile_files += stdlib/char.mc
 compile_files += stdlib/set.mc
+<<<<<<< HEAD
+=======
+compile_files += stdlib/iterator.mc
+#compile_files += test/multicore/multicore.mc
+#compile_files += stdlib/multicore/pprint.mc
+#compile_files += stdlib/multicore/mexprpar.mc
+#compile_files += stdlib/multicore/eval.mc
+#compile_files += stdlib/multicore/atomic.mc
+#compile_files += stdlib/multicore/ast.mc
+>>>>>>> 5c980e64ae31e3a161c75d3e54362a9c88c048f2
 #compile_files += test/py/python.mc
 compile_files += stdlib/ocaml/symbolize.mc
 compile_files += stdlib/ocaml/sys.mc

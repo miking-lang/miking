@@ -1018,7 +1018,6 @@ let doCallGraphTests = lam r : CallGraphTest.
   let tests = lam ast. lam strVs : [String]. lam strEdgs : [(String, String)].
 
     let toStr = lam ng.
-
       let edges = map (lam t : DigraphEdge CallGraphVertex CallGraphLabel.
         match t with (from, to, label) then
           (nameGetStr from.0, nameGetStr to.0, label.0)
