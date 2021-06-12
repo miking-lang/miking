@@ -6,7 +6,7 @@ include "decision-points.mc"
 include "tune-options.mc"
 include "common.mc"
 
--- Performs tuning of a program with decision points.
+-- Performs tuning of a flattened program with decision points.
 
 -- Default input if program takes no input data
 let _inputEmpty = [""]
@@ -34,14 +34,34 @@ let _tuneTable2str = lam table : LookupTable.
     join [int2string i, ": ", expr2str expr]) table in
   strJoin _delim rows
 
-let _tuneInfo = lam hole2idx.
+let _tuneInfo = lam env : CallCtxEnv.
+  let hole2idx = deref env.hole2idx in
+  let hole2fun = deref env.hole2fun in
+  let callGraph = env.callGraph in
+  let edges = digraphEdges callGraph in
+
+  let eqPathVerbose = lam path : [NameInfo].
+    let edgePath =
+      filter (lam e : (NameInfo, NameInfo, NameInfo).
+        any (nameInfoEq e.2) path) edges
+    in
+    match edgePath with [] then []
+    else
+      let lastEdge : (NameInfo, NameInfo, NameInfo) = last edgePath in
+      let destination = lastEdge.1 in
+      snoc (map (lam e : (NameInfo, NameInfo, NameInfo). e.0) edgePath)
+        destination
+  in
+
   let entry2str = lam holeInfo : NameInfo. lam path : [NameInfo]. lam i : Int.
+    let funInfo : NameInfo = mapFindWithExn holeInfo hole2fun in
     strJoin "\n"
-    [ concat "index: " (int2string i)
-    , concat "name: " (nameGetStr holeInfo.0)
-    , concat "defined at: " (info2str holeInfo.1)
-    , concat "in function: " "?"
-    , concat "call path: " (strJoin "->" (map nameInfoGetStr path))
+    [ concat "Index: " (int2string i)
+    , concat "Name: " (nameInfoGetStr holeInfo)
+    , concat "Defined at: " (info2str holeInfo.1)
+    , concat "Function: " (nameInfoGetStr funInfo)
+    , concat "Function defined at: " (info2str funInfo.1)
+    , concat "Call path: " (strJoin " -> " (map nameInfoGetStr (eqPathVerbose path)))
     ]
   in
   let taggedEntries =
@@ -59,14 +79,15 @@ let _tuneInfo = lam hole2idx.
 
 let tuneDumpTable =
   lam file : String.
-  lam info : Option (Map NameInfo (Map [NameInfo] Int)).
+  lam env : Option CallCtxEnv.
   lam table : LookupTable.
     let destinationFile = tuneFileName file in
     let str = join
-    [ concat (_tuneTable2str table) _delim -- NOTE(Linnea, 2021-05-27): add whitespace as workaround for bug #145
+    [ _tuneTable2str table
+    , "\n"
     , make _sepLength '='
     , "\n"
-    , match info with Some hole2idx then _tuneInfo hole2idx else ""
+    , match env with Some env then _tuneInfo env else ""
     , "\n"
     ] in
     writeFile destinationFile str
@@ -437,9 +458,8 @@ lang MExprTune = MExpr + TuneBase
 let tuneEntry =
   lam args : [String].
   lam run : Runner.
-  lam holes : [Expr].
-  lam hole2idx : Map NameInfo (Map [NameInfo] Int).
   lam tuneFile : String.
+  lam env : CallCtxEnv.
   lam table : LookupTable.
     let options = parseTuneOptions tuneOptionsDefault
       (filter (lam a. not (eqString "mi" a)) args) in
@@ -448,6 +468,8 @@ let tuneEntry =
     use TuneBase in
     iter (lam. map (time table run tuneFile) options.input)
       (range 0 options.warmups 1);
+
+    let holes : [Expr] = deref env.idx2hole in
 
     -- Choose search method
     (match options.method with RandomWalk {} then

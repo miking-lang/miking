@@ -27,8 +27,8 @@ let tune = lam files. lam options : Options. lam args.
 
     -- Flatten the decision points
     match flatten [] ast with
-      { ast = ast, table = table, holes = holes, tempFile = tempFile,
-        cleanup = cleanup, hole2idx = hole2idx }
+      { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
+        env = env }
     then
       -- Compile the program
       let binary = ocamlCompileAst options file ast in
@@ -38,10 +38,10 @@ let tune = lam files. lam options : Options. lam args.
         sysRunCommand (cons (join ["./", binary]) args) "" "."
       in
       -- Do the tuning
-      let result = tuneEntry args run holes hole2idx tempFile table in
+      let result = tuneEntry args run tempFile env table in
 
       -- Write the best found values to filename.tune
-      tuneDumpTable file (Some hole2idx) result;
+      tuneDumpTable file (Some env) result;
 
       -- Clean up temporary files used during tuning
       cleanup ()

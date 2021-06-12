@@ -395,7 +395,10 @@ type CallCtxEnv = {
   -- sets of 'hole2idx'.
   -- OPT(Linnea, 2021-05-19): Consider other representations, as the same
   -- expression may be repeated many times.
-  idx2hole: Ref ([Expr])
+  idx2hole: Ref ([Expr]),
+
+  -- Maps a hole to the function in which it is defined (for debugging purposes)
+  hole2fun: Ref (Map NameInfo NameInfo)
 }
 
 -- Create a new name from a prefix string and name.
@@ -438,14 +441,14 @@ let callCtxInit : [NameInfo] -> CallGraph -> Expr -> CallCtxEnv =
             (digraphVertices callGraph)
 
     in
-    let hole2idx = ref (mapEmpty nameInfoCmp) in
     { callGraph = callGraph
     , fun2inc = fun2inc
     , lbl2inc = lbl2inc
     , lbl2count = lbl2count
     , publicFns = publicFns
-    , hole2idx  = hole2idx
+    , hole2idx  = ref (mapEmpty nameInfoCmp)
     , idx2hole = ref []
+    , hole2fun = ref (mapEmpty nameInfoCmp)
     }
 
 -- Returns the incoming variable of a function name, or None () if the name is
@@ -487,9 +490,9 @@ let callCtxIncVarNames : CallCtxEnv -> [Name] = lam env : CallCtxEnv.
     mapValues fun2inc
   else never
 
-let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> CallCtxEnv -> CallCtxEnv =
-  lam hole. lam name. lam paths. lam env : CallCtxEnv.
-    match env with { hole2idx = hole2idx, idx2hole = idx2hole} then
+let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> NameInfo -> CallCtxEnv -> CallCtxEnv =
+  lam hole. lam name. lam paths. lam funName. lam env : CallCtxEnv.
+    match env with { hole2idx = hole2idx, idx2hole = idx2hole, hole2fun = hole2fun } then
     let countInit = length (deref idx2hole) in
     match
       foldl
@@ -503,6 +506,7 @@ let callCtxAddHole : Expr -> NameInfo -> [[NameInfo]] -> CallCtxEnv -> CallCtxEn
       utest n with subi count countInit in
       modref idx2hole (concat (deref idx2hole) (create n (lam. hole)));
       modref hole2idx (mapInsert name m (deref hole2idx));
+      modref hole2fun (mapInsert name funName (deref hole2fun));
       env
     else never
   else never
@@ -661,11 +665,9 @@ let _argv = nameSym "argv"
 type Flattened =
 { ast : Expr           -- The flattened ast
 , table : LookupTable  -- The initial lookup table
-, holes : [Expr]       -- The flattened decision points
 , tempFile : String    -- The file from which decision point values are read
 , cleanup : () -> ()   -- Removes all temporary files from the disk
-  -- Maps a decision point and equivalence path to their integer id
-, hole2idx: Map NameInfo (Map [NameInfo] Int)
+, env : CallCtxEnv     -- Call context environment
 }
 
 -- Fragment for transforming a program with decision points.
@@ -680,15 +682,13 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let lookup = lam i. get_ (nvar_ _table) (int_ i) in
     match _flattenWithLookup publicFns lookup t with (prog, env)
     then
-      let env : CallCtxEnv = env in
       let tempDir = sysTempDirMake () in
       let tuneFile = sysJoinPath tempDir ".tune" in
       { ast = _wrapReadFile env tuneFile prog
       , table = _initAssignments env
-      , holes = deref env.idx2hole
       , tempFile = tuneFile
       , cleanup = lam. sysTempDirDelete tempDir
-      , hole2idx = deref env.hole2idx
+      , env = env
       }
     else never
 
@@ -860,11 +860,11 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
     let lookupCode =
       if eqi depth 0 then
-        let env = callCtxAddHole t.body (ident, t.info) [[]] env in
+        let env = callCtxAddHole t.body (ident, t.info) [[]] cur env in
         lookup (callCtxHole2Idx (ident, t.info) [] env)
       else
         let paths = mapFindWithExn (ident, t.info) eqPaths in
-        let env = callCtxAddHole t.body (ident, t.info) paths env in
+        let env = callCtxAddHole t.body (ident, t.info) paths cur env in
         let iv = callCtxFun2Inc cur.0 env in
         _lookupCallCtx lookup (ident, t.info) iv env paths
     in
