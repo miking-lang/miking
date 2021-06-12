@@ -836,6 +836,14 @@ let iteri_ = use MExprAst in
   lam f. lam s.
   appf2_ (uconst_ (CIteri ())) f s
 
+let foldl_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldl ())) f acc s
+
+let foldr_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldr ())) f acc s
+
 let subsequence_ = use MExprAst in
   lam s. lam off. lam n.
   appf3_ (uconst_ (CSubsequence ())) s off n
