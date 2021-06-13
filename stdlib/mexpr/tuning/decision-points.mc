@@ -1322,11 +1322,16 @@ debugPrint ast [funB, funC];
 let ast = anf ast in
 
 match flatten [(funB, NoInfo ()), (funC, NoInfo ())] ast with
-  {ast = flatAst, table = table, holes = holes, tempFile = tempFile, cleanup = cleanup}
+  {ast = flatAst, table = table, tempFile = tempFile, cleanup = cleanup, env = env}
 then
 
   let dumpTable = lam table : LookupTable.
-    writeFile tempFile (strJoin " " (map expr2str table)) in
+    use MExprPrettyPrint in
+    let rows = mapi (lam i. lam expr.
+    join [int2string i, ": ", expr2str expr]) table in
+    let str = strJoin "\n" (concat rows ["="]) in
+    writeFile tempFile str
+  in
 
   let evalWithTable = lam table : LookupTable. lam ast : Expr. lam ext : Expr.
     let astExt = bind_ ast ext in
