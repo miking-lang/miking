@@ -7,10 +7,11 @@ include "options.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
+include "mexpr/seq-transformer.mc"
 include "ocaml/sys.mc"
 
 lang MCoreTune =
-  BootParser + MExprHoles + MExprTune
+  BootParser + MExprHoles + MExprTune + SeqTransformer
 end
 
 let tune = lam files. lam options : Options. lam args.
@@ -19,18 +20,23 @@ let tune = lam files. lam options : Options. lam args.
     use MCoreTune in
     let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
 
+    -- If option --enable-seq-transform, then transform sequence literals into
+    -- using hcreate
+    let ast = if options.seqTransform then seqTransform ast else ast in
+
     -- If option --debug-parse, then pretty print the AST
     (if options.debugParse then printLn (expr2str ast) else ());
 
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
 
+    fprintLn "Before flatten";
     -- Flatten the decision points
     match flatten [] ast with
       { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
         env = env }
     then
-      -- fprintLn (expr2str ast);
+      fprintLn "After flatten";
       -- Compile the program
       let binary = ocamlCompileAst options file ast in
 

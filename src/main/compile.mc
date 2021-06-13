@@ -8,13 +8,12 @@ include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
+include "mexpr/seq-transformer.mc"
 include "ocaml/ast.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/sys.mc"
-
-include "mexpr/seq-transformer.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -142,8 +141,8 @@ let compile = lam files. lam options : Options. lam args.
   let compileFile = lam file.
     let ast = makeKeywords [] (parseMCoreFile (cons "hcreate" decisionPointsKeywords) file) in
 
-    -- If option --seq-transform, then transform sequence literals into using
-    -- hcreate
+    -- If option --enable-seq-transform, then transform sequence literals into
+    -- using hcreate
     let ast = if options.seqTransform then seqTransform ast else ast in
 
     -- Insert tuned values, or use default values if no .tune file present

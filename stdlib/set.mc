@@ -17,7 +17,7 @@ let setUnion : Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 let setOfSeq : (a -> a -> Int) -> [a] -> Set a =
   lam cmp. lam seq.
     foldr setInsert (setEmpty cmp) seq
-  let setToSeq : Set a -> [a] = lam s. mapKeys s
+let setToSeq : Set a -> [a] = lam s. mapKeys s
 let setEqual : Set a -> Set a -> Bool = lam s1. lam s2.
   mapEq (lam. lam. true) s1 s2
 

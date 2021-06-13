@@ -640,7 +640,10 @@ let _lookupCallCtx
             matchall_ (snoc branches defaultVal)
           else never
         in
-      work incVarName (map reverse paths) []
+      fprintLn "Before work";
+      let res = work incVarName (map reverse paths) [] in
+      fprintLn "After work";
+      res
     else never
 
 -- Helper for creating a hidden equivalent of a public function and replace the
@@ -708,30 +711,74 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     in
     let tm = _replacePublic pub2priv t in
 
+    fprintLn "Before callgraph";
     -- Compute the call graph
     let g = toCallGraph tm in
+    fprintLn "After callgraph";
 
+    fprintLn "Before eqPaths";
     -- Prune the call graph
     let eqPathsAssoc = _eqPaths g publicFns _callGraphTop tm in
-    let eqPathsMap : Map NameInfo [[NameInfo]] = mapFromSeq nameInfoCmp eqPathsAssoc in
-    let keepLbls : [NameInfo] =
-      foldl (lam acc. lam path : (NameInfo, [[NameInfo]]).
+    let keepEdges : [(NameInfo, NameInfo, NameInfo)] =
+      foldl (lam acc. lam path : (NameInfo, [[(NameInfo,NameInfo,NameInfo)]]).
                concat acc (foldl concat [] path.1))
         [] eqPathsAssoc
     in
+    let eqPathsMap : Map NameInfo [[NameInfo]] =
+      mapFromSeq nameInfoCmp (map (lam e : (Name, [[(NameInfo, NameInfo, NameInfo)]]).
+        (e.0, eqPathsToLbls e.1)) eqPathsAssoc)
+    in
+    fprintLn "After eqPaths";
+    fprintLn "Before pruning";
+
+    -- let keepLbls = foldl (lam acc. lam path. concat acc (foldl concat [] path)) [] (mapValues eqPathsMap) in
+    -- dprintLn keepLbls;
+
+    -- let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
+    --   match e with (from, to, lbl) then
+    --     if any (nameInfoEq lbl) keepLbls then
+    --       digraphAddEdge from to lbl
+    --         (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
+    --     else acc
+    --   else never)
+    --   (digraphEmpty nameInfoCmp nameInfoEq)
+    --   (digraphEdges g) in
+
+    -- let keepEdges = distinct (lam e1 : DigraphEdge NameInfo NameInfo. lam e2 : DigraphEdge NameInfo NameInfo.
+    --   nameInfoEq e1.2 e2.2
+    -- ) keepEdges in
+    let edgeCmp = lam e1 : DigraphEdge NameInfo NameInfo. lam e2 : DigraphEdge NameInfo NameInfo.
+      nameInfoCmp e1.2 e2.2
+    in
+    let keepEdges = setToSeq (setOfSeq edgeCmp keepEdges) in
+
+    fprintLn "After distinct";
 
     let pruned = foldl (lam acc. lam e : DigraphEdge NameInfo NameInfo.
       match e with (from, to, lbl) then
-        if any (nameInfoEq lbl) keepLbls then
+        --if digraphHasEdge e acc then acc
+        --else
           digraphAddEdge from to lbl
             (digraphMaybeAddVertex from (digraphMaybeAddVertex to acc))
-        else acc
       else never)
       (digraphEmpty nameInfoCmp nameInfoEq)
-      (digraphEdges g) in
+      keepEdges
+    in
 
+    -- print "pruned vertices: "; printLn (int2string (digraphCountVertices pruned));
+    -- print "pruned edges: "; printLn (int2string (digraphCountEdges pruned));
+    -- digraphPrintDot pruned nameInfoGetStr nameInfoGetStr;
+    -- print "pruned2 vertices: "; printLn (int2string (digraphCountVertices pruned2));
+    -- print "pruned2 edges: "; printLn (int2string (digraphCountEdges pruned2));
+    -- digraphPrintDot pruned2 nameInfoGetStr nameInfoGetStr;
+    -- dprintLn keepEdges;
+
+    fprintLn "After pruning";
+
+    fprintLn "Before callCtxInit";
     -- Initialize environment
     let env = callCtxInit publicFns pruned tm in
+    fprintLn "After callCtxInit";
 
     -- Declare the incoming variables
     let incVars =
@@ -744,7 +791,9 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
     let tm = bind_ incVars tm in
 
     -- Transform program to maintain the call history when needed
+    fprintLn "Before _maintainCallCtx";
     let prog = _maintainCallCtx lookup env eqPathsMap _callGraphTop tm in
+    fprintLn "After _maintainCallCtx";
     (prog, env)
 
   -- Compute the equivalence paths of each decision point
