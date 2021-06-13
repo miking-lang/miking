@@ -81,6 +81,7 @@ lang BootParser = MExprAst + ConstTransformer
              ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
   | 106 /-TmSeq-/ ->
+    let lst = hcreate (glistlen t 0) (lam n. gterm t n) in
     TmSeq {tms = hcreate (glistlen t 0) (lam n. gterm t n),
            ty =  TyUnknown { info = ginfo t 0 },
            info = ginfo t 0}

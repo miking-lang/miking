@@ -10,7 +10,8 @@ type Options = {
   exitBefore : Bool,
   runTests : Bool,
   disableOptimizations : Bool,
-  useTuned : Bool
+  useTuned : Bool,
+  seqTransform : Bool
 }
 
 -- Option structure
@@ -21,7 +22,8 @@ let options = {
   exitBefore = false,
   runTests = false,
   disableOptimizations = false,
-  useTuned = false
+  useTuned = false,
+  seqTransform = false
 }
 
 -- Option map, maps strings to structure updates
@@ -32,7 +34,8 @@ let optionsMap = [
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
-("--use-tuned", lam o : Options. {o with useTuned = true})
+("--use-tuned", lam o : Options. {o with useTuned = true}),
+("--enable-seq-transform", lam o : Options. {o with seqTransform = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}

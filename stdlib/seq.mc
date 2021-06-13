@@ -1,16 +1,5 @@
 include "option.mc"
 include "bool.mc"
-include "mexpr/tuning/decision-points-boot.mc"
-
-let hcreate = lam n. lam f.
-  let repr = holeIntRange {min = 0, max = 2, depth = 1, default = 2} in
-  match repr with 0 then
-    createFingerTree n f
-  else match repr with 1 then
-    createList n f
-  else match repr with 2 then
-    createRope n f
-  else never
 
 let make = lam n. lam v. hcreate n (lam. v)
 
