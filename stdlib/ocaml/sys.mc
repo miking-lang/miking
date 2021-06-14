@@ -8,8 +8,15 @@ let _null = "/dev/null"
 
 let _tempDirIdx = ref 0
 
+let _commandListTime : [String] -> (Float, Int) = lam cmd.
+  let cmd = strJoin " " cmd in
+  let t1 = wallTimeMs () in
+  let res = command cmd in
+  let t2 = wallTimeMs () in
+  (subf t2 t1, res)
+
 let _commandList = lam cmd : [String].
-  command (strJoin " " cmd)
+  match _commandListTime cmd with (_, res) then res else never
 
 let sysMoveFile = lam fromFile. lam toFile.
   _commandList ["mv", "-f", fromFile, toFile]
@@ -37,26 +44,32 @@ let sysTempDirName = lam td. td
 let sysTempDirDelete = lam td. lam.
   _commandList ["rm", "-rf", td]
 
-let sysRunCommand : [String] -> String -> String -> ExecResult =
+let sysTimeCommand : [String] -> String -> String -> (Float, ExecResult) =
   lam cmd. lam stdin. lam cwd.
     let tempDir = sysTempDirMake () in
     let tempStdout = sysJoinPath tempDir "stdout.txt" in
     let tempStderr = sysJoinPath tempDir "stderr.txt" in
 
-    let retCode = _commandList
+    match _commandListTime
       [ "cd", cwd, "&&"
       , "echo", stdin, "|"
       , strJoin " " cmd
       , ">", tempStdout
       , "2>", tempStderr
-      ] in
+      ]
+    with (ms, retCode) then
 
-    -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
-    _commandList ["echo", "", ">>", tempStdout];
-    _commandList ["echo", "", ">>", tempStderr];
-    let stdout = init (readFile tempStdout) in
-    let stderr = init (readFile tempStderr) in
+      -- NOTE(Linnea, 2021-04-14): Workaround for readFile bug #145
+      _commandList ["echo", "", ">>", tempStdout];
+      _commandList ["echo", "", ">>", tempStderr];
+      let stdout = init (readFile tempStdout) in
+      let stderr = init (readFile tempStderr) in
 
-    sysTempDirDelete tempDir ();
+      sysTempDirDelete tempDir ();
 
-    {stdout = stdout, stderr = stderr, returncode = retCode}
+      (ms, {stdout = stdout, stderr = stderr, returncode = retCode})
+    else never
+
+let sysRunCommand : [String] -> String -> String -> ExecResult =
+  lam cmd. lam stdin. lam cwd.
+    match sysTimeCommand cmd stdin cwd with (_, res) then res else never

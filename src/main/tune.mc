@@ -14,6 +14,13 @@ lang MCoreTune =
   BootParser + MExprHoles + MExprTune + SeqTransformer
 end
 
+let tableFromFile = lam file.
+  printLn "tableFromFile";
+  let tuneFile = tuneFileName file in
+  if fileExists tuneFile then
+    tuneReadTable tuneFile
+  else error (join ["Tune file ", tuneFile, " does not exist"])
+
 let tune = lam files. lam options : Options. lam args.
 
   (if options.help then printLn tuneMenu; exit 0 else ());
@@ -39,13 +46,17 @@ let tune = lam files. lam options : Options. lam args.
         env = env }
     then
       fprintLn "After flatten";
+      -- If option --use-tuned is given, then use given tune file as defaults
+      let table = if options.useTuned then tableFromFile file else table in
+
       -- Compile the program
       let binary = ocamlCompileAst options file ast in
 
       -- Runs the program with a given input
       let run = lam args : String.
-        sysRunCommand (cons (join ["./", binary]) args) "" "."
+        sysTimeCommand (cons (join ["./", binary]) args) "" "."
       in
+
       -- Do the tuning
       let result = tuneEntry args run tempFile env table in
 

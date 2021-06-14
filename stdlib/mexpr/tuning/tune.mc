@@ -55,13 +55,15 @@ let _tuneInfo = lam env : CallCtxEnv.
 
   let entry2str = lam holeInfo : NameInfo. lam path : [NameInfo]. lam i : Int.
     let funInfo : NameInfo = mapFindWithExn holeInfo hole2fun in
+    let path = eqPathVerbose path in
     strJoin "\n"
     [ concat "Index: " (int2string i)
     , concat "Name: " (nameInfoGetStr holeInfo)
     , concat "Defined at: " (info2str holeInfo.1)
     , concat "Function: " (nameInfoGetStr funInfo)
     , concat "Function defined at: " (info2str funInfo.1)
-    , concat "Call path: " (strJoin " -> " (map nameInfoGetStr (eqPathVerbose path)))
+    , concat "Call path (functions): " (strJoin " -> " (map nameInfoGetStr path))
+    , concat "Call path (info): " (strJoin " -> " (map (lam x : NameInfo. info2str x.1) path))
     ]
   in
   let taggedEntries =
@@ -94,14 +96,18 @@ let tuneDumpTable =
 
 let tuneReadTable = lam file : String.
   use BootParser in
-  let str = strTrim (readFile file) in
-  match str with [] then []
-  else map (parseMExprString []) (strSplit _delim str)
+  let fileContent = readFile file in
+  match strIndex '=' fileContent with Some i then
+    let fileContent = (splitAt fileContent i).0 in
+    let strVals = strSplit _delim (strTrim fileContent) in
+    let strVals = map (lam x. get (strSplit ": " x) 1) strVals in
+    map (parseMExprString []) strVals
+  else error "Tune file incorrectly formatted (expected a '=')"
 
 ------------------------------
 -- Base fragment for tuning --
 ------------------------------
-type Runner = String -> ExecResult
+type Runner = String -> (Float, ExecResult)
 
 lang TuneBase = Holes
   sem tune (options : TuneOptions) (run : Runner) (holes : Expr)
@@ -111,19 +117,18 @@ lang TuneBase = Holes
   sem time (table : LookupTable) (runner : Runner) (file : String) =
   | args ->
     tuneDumpTable file (None ()) table;
-    let t1 = wallTimeMs () in
-    let res : ExecResult = runner args in
-    let t2 = wallTimeMs () in
-    match res.returncode with 0 then
-      subf t2 t1
-    else
-      let msg = strJoin " "
-      [ "Program returned non-zero exit code during tuning\n"
-      , "decision point values:\n", _tuneTable2str table, "\n"
-      , "command line arguments:", strJoin " " args, "\n"
-      , "stdout:", res.stdout, "\n"
-      , "stderr:", res.stderr, "\n"
-      ] in error msg
+    match runner args with (ms, res) then
+      let res : ExecResult = res in
+      match res.returncode with 0 then ms
+      else
+        let msg = strJoin " "
+        [ "Program returned non-zero exit code during tuning\n"
+        , "decision point values:\n", _tuneTable2str table, "\n"
+        , "command line arguments:", strJoin " " args, "\n"
+        , "stdout:", res.stdout, "\n"
+        , "stderr:", res.stderr, "\n"
+        ] in error msg
+    else never
 end
 
 --------------------------
@@ -196,8 +201,12 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
     in
 
     -- When to stop the search
-    let stop = lam state : SearchState.
-      or state.stuck (geqi state.iter options.iters) in
+    let stopCond = lam niters. lam state : SearchState.
+      or state.stuck (geqi state.iter niters) in
+
+    let stop = stopCond options.iters in
+
+    let warmupStop = stopCond options.warmups in
 
     recursive let search =
       lam stop.
@@ -218,6 +227,15 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
             search stop searchState metaState
           else never
     in
+
+    -- Do warmup runs and throw away results
+    (if options.debug then
+       fprintLn "----------------------- WARMUP RUNS -----------------------"
+       else ());
+    search warmupStop startState (initMeta startState);
+    (if options.debug then
+       fprintLn "-----------------------------------------------------------"
+       else ());
 
     -- Do the search!
     match search stop startState (initMeta startState)
@@ -463,11 +481,6 @@ let tuneEntry =
   lam table : LookupTable.
     let options = parseTuneOptions tuneOptionsDefault
       (filter (lam a. not (eqString "mi" a)) args) in
-
-    -- Do warmup runs
-    use TuneBase in
-    iter (lam. map (time table run tuneFile) options.input)
-      (range 0 options.warmups 1);
 
     let holes : [Expr] = deref env.idx2hole in
 
