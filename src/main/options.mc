@@ -11,7 +11,8 @@ type Options = {
   runTests : Bool,
   disableOptimizations : Bool,
   useTuned : Bool,
-  seqTransform : Bool
+  seqTransform : Bool,
+  help : Bool
 }
 
 -- Option structure
@@ -23,7 +24,8 @@ let options = {
   runTests = false,
   disableOptimizations = false,
   useTuned = false,
-  seqTransform = false
+  seqTransform = false,
+  help = false
 }
 
 -- Option map, maps strings to structure updates
@@ -35,7 +37,8 @@ let optionsMap = [
 ("--test", lam o : Options. {o with runTests = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
 ("--use-tuned", lam o : Options. {o with useTuned = true}),
-("--enable-seq-transform", lam o : Options. {o with seqTransform = true})
+("--enable-seq-transform", lam o : Options. {o with seqTransform = true}),
+("--help", lam o : Options. {o with help = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}

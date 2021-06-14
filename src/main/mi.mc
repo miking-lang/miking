@@ -35,6 +35,7 @@ Options:
   --test                  Generate utest code
   --disable-optimizations Disables optimizations to decrease compilation time
   --use-tuned             Use values from tuning during compilation
+  --enable-seq-transform  Transform sequence literals into using decision points
   -- <args>               If the run or eval commands are used, then the texts
                           following -- are arguments to the executed program
 "

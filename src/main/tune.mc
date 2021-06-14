@@ -16,6 +16,8 @@ end
 
 let tune = lam files. lam options : Options. lam args.
 
+  (if options.help then printLn tuneMenu; exit 0 else ());
+
   let tuneFile = lam file.
     use MCoreTune in
     let ast = makeKeywords [] (parseMCoreFile decisionPointsKeywords file) in
