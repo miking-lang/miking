@@ -560,6 +560,7 @@ lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
     let expectedTy = typeUnwrapAlias env.tyEnv expectedTy in
+    let expectedTy = match expectedTy with TyUnknown _ then t.ty else expectedTy in
     let expectedTy = match expectedTy with TyRecord _ then expectedTy else
       match (record2tuple t.bindings, mapLength t.bindings) with (Some _, length & !1) then
         -- NOTE(vipa, 2021-05-26): This looks like a tuple pattern, so
