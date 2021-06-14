@@ -55,13 +55,15 @@ let _tuneInfo = lam env : CallCtxEnv.
 
   let entry2str = lam holeInfo : NameInfo. lam path : [NameInfo]. lam i : Int.
     let funInfo : NameInfo = mapFindWithExn holeInfo hole2fun in
+    let path = eqPathVerbose path in
     strJoin "\n"
     [ concat "Index: " (int2string i)
     , concat "Name: " (nameInfoGetStr holeInfo)
     , concat "Defined at: " (info2str holeInfo.1)
     , concat "Function: " (nameInfoGetStr funInfo)
     , concat "Function defined at: " (info2str funInfo.1)
-    , concat "Call path: " (strJoin " -> " (map nameInfoGetStr (eqPathVerbose path)))
+    , concat "Call path (functions): " (strJoin " -> " (map nameInfoGetStr path))
+    , concat "Call path (info): " (strJoin " -> " (map (lam x : NameInfo. info2str x.1) path))
     ]
   in
   let taggedEntries =
