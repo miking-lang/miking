@@ -1,6 +1,7 @@
 include "seq.mc"
 include "common.mc"
 include "multicore/thread-pool.mc"
+include "mexpr/tuning/decision-points-boot.mc"
 
 let pool = threadPoolGlobal
 
@@ -18,7 +19,7 @@ utest split [1,2,3,4,5,6] 4 with [[1,2,3,4], [5,6]] using eqSeq (eqSeq eqi)
 utest split [] 4 with [[]] using eqSeq (eqSeq eqi)
 
 let chunkWork : [a] -> ([a] -> b) -> [b] = lam seq. lam f.
-  let chunkSize = HoleIntRange {min = 1, max = 1000, depth = 2, default = 10} in
+  let chunkSize = holeIntRange {min = 1, max = 1000, depth = 2, default = 100} in
   let chunks = split seq chunkSize in
   let tasks = map (lam chunk. threadPoolAsync pool (lam. f chunk)) chunks in
   map threadPoolWait tasks
