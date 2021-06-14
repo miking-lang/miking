@@ -3,6 +3,7 @@ include "thread.mc"
 include "atomic.mc"
 include "channel.mc"
 include "string.mc"
+include "ocaml/sys.mc"
 
 type Async a = AtomicRef (Option a)
 
@@ -38,6 +39,11 @@ recursive let threadPoolWait : Async a -> a = lam r.
   match atomicGet r with Some v then v
   else threadCPURelax (); threadPoolWait r
 end
+
+-- Global thread pool
+let threadPoolGlobal =
+  let nproc = (sysRunCommand ["nproc"] "" ".").stdout in
+  threadPoolCreate (string2int nproc)
 
 mexpr
 
