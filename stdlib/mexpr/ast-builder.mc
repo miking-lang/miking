@@ -170,11 +170,14 @@ let pchar_ = use MExprAst in
   lam c.
   PatChar {val = c, info = NoInfo(), ty = tychar_}
 
+let pbool_ = use MExprAst in
+  lam b. PatBool {val = b, info = NoInfo(), ty = tybool_}
+
 let ptrue_ = use MExprAst in
-  PatBool {val = true, info = NoInfo(), ty = tybool_}
+  pbool_ true
 
 let pfalse_ = use MExprAst in
-  PatBool {val = false, info = NoInfo(), ty = tybool_}
+  pbool_ false
 
 let npcon_ = use MExprAst in
   lam n. lam cp.

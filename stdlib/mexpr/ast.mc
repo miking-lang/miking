@@ -23,6 +23,9 @@ lang Ast
   syn Pat =
   -- Intentionally left blank
 
+  sem infoTm =
+  -- Intentionally left blank
+
   sem ty =
   -- Intentionally left blank
 
