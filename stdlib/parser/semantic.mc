@@ -668,13 +668,43 @@ let semanticParseFile
   : Parser
   -> String -- Filename
   -> String -- Content
-  -> Either SemanticParseError Dyn
+  -> Either [SemanticParseError] Dyn
   = lam ll1table. lam filename. lam content.
     let res = ll1ParseWithTable ll1table filename content in
     match res with Left err then Left [SemanticParseError err] else
     match res with Right (Left err) then Left err else
     match res with Right (Right (_, res)) then Right res else
     never
+
+let semanticUnwrapOrPrintErrors
+  : Either [SemanticParseError] Dyn -> Dyn
+  = lam x.
+    match x with Right x then x else
+    match x with Left errs then
+      for_ errs
+        (lam err.
+          match err with SemanticParseBreakableError r then
+            printLn (infoErrorString r.info (join ["This ", r.nt, " is not syntactically valid"]))
+          else match err with SemanticParseAmbiguityError err then
+            printLn (infoErrorString err.info "Ambiguity error");
+            for_ err.irrelevant
+              (lam irr: Info. printLn (infoErrorString irr "Irrelevant region"))
+          else match err with SemanticParseError err then
+            use ParserSpec in
+            use ParserConcrete in
+            match err with UnexpectedFirst err then
+              printLn (infoErrorString (symInfo err.found) "Unexpected first token");
+              printLn (concat "Expected one of: " (strJoin ", " (map symToStr err.expected)));
+              printLn (concat "Found: " (symToStr err.found))
+            else match err with UnexpectedToken err then
+              printLn (infoErrorString (symInfo err.found) "Unexpected token");
+              printLn (concat "Expected: " (symToStr err.expected));
+              printLn (concat "Found: " (symToStr err.found))
+            else never
+          else dprintLn err; never
+        );
+      exit 1
+    else never
 
 -- Small helper to make smaller errors by discarding information that
 -- is typically not interesting
