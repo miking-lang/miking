@@ -271,15 +271,15 @@ lang TuneExhaustive = TuneLocalSearch
       recursive let nextConfig = lam prev. lam holes.
         match holes with [] then []
         else match holes with [h] then
-          match next (head prev) h with Some v then
+          match next (head prev) 1 h with Some v then
             [Some v]
           else
             modref exhausted true; []
         else match holes with [h] ++ holes then
-          match next (head prev) h with Some v then
+          match next (head prev) 1 h with Some v then
             cons (Some v) (tail prev)
           else
-            cons (next (None ()) h) (nextConfig (tail prev) holes)
+            cons (next (None ()) 1 h) (nextConfig (tail prev) holes)
         else never
       in
 
@@ -297,7 +297,7 @@ lang TuneExhaustive = TuneLocalSearch
   | initState ->
     let initState : SearchState = initState in
     match initState with {cur = {assignment = Table {holes = holes}}} then
-      let initVals = map (next (None ())) holes in
+      let initVals = map (next (None ()) 1) holes in
       utest all optionIsSome initVals with true in
       Exhaustive {prev = initVals, exhausted = false}
     else never
@@ -320,6 +320,9 @@ lang TuneSemiExhaustive = TuneLocalSearch
                  cost = incCost},
           cost = cost, cmp = cmp}
     then
+      let options : TuneOptions = options in
+      let stepSize = options.stepSize in
+
       let return = lam i. lam prev.
         let assignment = Table {table = set table i prev, holes = holes, options = options} in
         let score = cost assignment in
@@ -332,10 +335,10 @@ lang TuneSemiExhaustive = TuneLocalSearch
       -- Avoid repeating default config
       let nextSkipDefault =
         let h = get holes i in
-        match next prev h with Some prev then
+        match next prev stepSize h with Some prev then
           if and (use MExprEq in eqExpr prev (default h))
                  (gti (subi i lastImproved) 0) then
-            next (Some prev) h
+            next (Some prev) stepSize h
           else Some prev
         else None ()
       in
@@ -348,7 +351,7 @@ lang TuneSemiExhaustive = TuneLocalSearch
         if eqi i (length holes) then
           -- Finished the search.
           (None (), SemiExhaustive state)
-        else match next (None ()) (get holes i) with Some prev then
+        else match next (None ()) 1 (get holes i) with Some prev then
           return i prev
         else error "Empty value domain"
     else never

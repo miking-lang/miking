@@ -15,6 +15,7 @@ type TuneOptions =
 , saDecayFactor : Float -- Decay factor for simulated annealing
 , tabuSize : Int        -- Maximum size of tabu set
 , epsilonMs : Float     -- Precision of time measurement
+, stepSize : Int        -- Step size in int range
 }
 
 type SearchMethod
@@ -42,6 +43,7 @@ let tuneOptionsDefault : TuneOptions =
 , saDecayFactor = 0.95
 , tabuSize = 10
 , epsilonMs = 10.0
+, stepSize = 1
 }
 
 let tuneMenu =
@@ -80,6 +82,8 @@ Tune options (after -- ):
                             the decay factor (default 0.95)
   --tabu-size <n>           If --method tabu-search is used, this gives the
                             number of configufations to keep in the tabu list.
+  --step-size <n>.          If --method semi-exhaustive is used, use this as step
+                            size for integer ranges.
 
 Search methods (after --method):
    random-walk              Each decision point is assigned a value from its
@@ -156,6 +160,14 @@ recursive let parseTuneOptions = lam o : TuneOptions. lam args : [String].
         parseTuneOptions {o with epsilonMs = eps} args
       else error "epsilon-ms cannot be negative"
     else error "--epsilon-ms without an argument"
+
+else match args with ["--step-size"] ++ args then
+match args with [a] ++ args then
+let step = string2int a in
+if geqi step 0 then
+parseTuneOptions {o with stepSize = step} args
+else error "step-size cannot be negative"
+else error "--step-size without an argument"
 
   else match args with [a] ++ args then
     error (concat "Unknown tune option: " a)

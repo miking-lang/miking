@@ -215,17 +215,23 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem isValue =
   | TmHole _ -> false
 
-  sem next (last : Option Expr) =
+  sem next (last : Option Expr) (stepSize : Int) =
   | TmHole {hole = hole} ->
-    hnext last hole
+    hnext last stepSize hole
 
-  sem hnext (last : Option Expr) =
+  sem hnext (last : Option Expr) (stepSize : Int) =
 
   sem sample =
   | TmHole {hole = hole} ->
     hsample hole
 
   sem hsample =
+
+  sem isIntRange =
+  | TmHole {hole = hole} ->
+    hisIntRange hole
+
+  sem hisIntRange =
 
   sem normalize (k : Expr -> Expr) =
   | TmHole ({default = default} & t) ->
@@ -258,11 +264,14 @@ lang HoleBoolAst = BoolAst + HoleAst
   syn Hole =
   | BoolHole {}
 
+  sem isIntRange =
+  | BoolHole _ -> None ()
+
   sem hsample =
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
-  sem hnext (last : Option Expr) =
+  sem hnext (last : Option Expr) (stepSize : Int) =
   | BoolHole {} ->
     match last with None () then Some false_
     else match last with Some (TmConst {val = CBool {val = false}}) then
@@ -297,19 +306,24 @@ lang HoleIntRangeAst = IntAst + HoleAst
   | IntRange {min : Int,
               max : Int}
 
+  sem isIntRange =
+  | IntRange r -> Some (r.min, r.max)
+
   sem hsample =
   | IntRange {min = min, max = max} ->
     int_ (randIntU min (addi max 1))
 
-  sem hnext (last : Option Expr) =
+  sem hnext (last : Option Expr) (stepSize : Int) =
   | IntRange {min = min, max = max} ->
     match last with None () then Some (int_ min)
     else match last with Some (TmConst {val = CInt {val = i}}) then
       if eqi i max then
         None ()
-      else if and (geqi i min) (lti i max) then
-        Some (int_ (addi i 1))
       else
+        let next = addi i stepSize in
+        if and (geqi next min) (leqi next max) then
+          Some (int_ next)
+        else
         error (join ["Value out of range: ", int2string i,
                     " not in [", int2string min, ", ", int2string max, "]"])
     else dprintLn last; never
