@@ -92,9 +92,12 @@ let _iterateUntilFixpoint : (a -> a -> Bool) -> (a -> a) -> a -> a =
       if eq a next then a else work next
     in work
 
+type SymSet = {eps: Bool, syms: Map Symbol ()}
+
+
 -- NOTE(vipa, 2021-02-08): This should be opaque, and the first `Symbol` should be `ParserBase.Symbol`, the second should be `ParserGenerated.Symbol`
 type TableProd prodLabel = {syms: [Symbol], label: prodLabel, action: Action}
-type Table prodLabel = {start: {nt: NonTerminal, table: (Ref (Map Symbol (TableProd prodLabel)))}, lits: Map String ()}
+type Table prodLabel = {start: {nt: NonTerminal, table: (Ref (Map Symbol (TableProd prodLabel)))}, firstOfRhs: [Symbol] -> SymSet, lits: Map String ()}
 
 type FullStackItem prodLabel = {seen: [Symbol], rest: [Symbol], label: prodLabel, action: Action}
 type StackItem prodLabel = {seen: [Symbol], rest: [Symbol], label: prodLabel}
@@ -110,8 +113,60 @@ let _sanitizeStack = use ParserGenerated in use ParserSpec in lam stack.
     {seen = item.seen, rest = map genSymToSym item.rest, label = item.label} in
   map work stack
 
+let _expectedFromStack = lam firstOfRhs: [Symbol] -> SymSet.
+  recursive let work = lam stack: [FullStackItem prodLabel].
+    match stack with stack ++ [{rest = rest}] then
+      let res = firstOfRhs rest in
+      let here = mapKeys res.syms in
+      if res.eps
+      then concat here (work stack)
+      else here
+    else []
+  in work
+
+let _dedupSymbolList
+  : [Symbol]
+  -> [Symbol]
+  = recursive
+      let work = lam seen. lam retained. lam rest.
+        match rest with [] then retained else
+        match rest with [sym] ++ rest then
+          match mapLookup sym seen with Some _
+          then work seen retained rest
+          else work (mapInsert sym () seen) (snoc retained sym) rest
+        else never
+    in work (mapEmpty _compareSymbol) []
+
+let _mkLL1Error
+  : ([Symbol] -> SymSet)
+  -> Option (NonTerminal, Symbol, [FullStackItem prodLabel])
+  -> Option (Symbol, Symbol, [FullStackItem prodLabel])
+  -> ParseError prodLabel
+  = lam firstOfRhs. lam openInfo. lam workInfo.
+    match openInfo with Some (nt, token, stack) then
+      UnexpectedFirst
+        { nt = nt
+        , stack = _sanitizeStack stack
+        , found = token
+        , expected =
+          let here: SymSet = firstOfRhs [use ParserSpec in NtSpec nt] in
+          let res = mapKeys here.syms in
+          let res = if here.eps
+            then concat res (_expectedFromStack firstOfRhs stack)
+            else res
+          in _dedupSymbolList res
+        }
+     else match workInfo with Some (expected, token, stack) then
+       UnexpectedToken
+         { stack = _sanitizeStack stack
+         , found = token
+         , expected = expected
+         }
+     else error "Tried to make an LL1 error without having any information to construct one with"
+
 let ll1ParseWithTable : Table parseLabel -> String -> String -> Either (ParseError parseLabel) Dyn = use ParserGenerated in use ParserConcrete in
-  lam table. lam filename. lam contents. match table with {start = start, lits = lits} then
+  lam table. lam filename. lam contents. match table with {start = start, lits = lits, firstOfRhs = firstOfRhs} then
+    let lastOpen = ref (None ()) in
     let getNextToken = lam stream.
       let res: NextTokenResult = nextToken stream in
         -- OPT(vipa, 2021-02-08): Could use the hash of the lit to maybe optimize this, either by using a hashmap, or by first checking against the hash in a bloom filter or something like that
@@ -120,16 +175,12 @@ let ll1ParseWithTable : Table parseLabel -> String -> String -> Either (ParseErr
         else {token = Lit {lit = res.lit, info = res.info}, stream = res.stream} in
     recursive
       let openNt = lam nt: {nt: NonTerminal, table: Unknown}. lam token. lam stack. lam stream.
+        modref lastOpen (Some (nt.nt, token, stack));
         let table = deref nt.table in
         match mapLookup token table with Some r then
           let r: {syms: [Symbol], action: Action, label: prodLabel} = r in
           work (snoc stack {seen = [], rest = r.syms, action = r.action, label = r.label}) token stream
-        else Left (UnexpectedFirst
-          { nt = nt.nt
-          , stack = _sanitizeStack stack
-          , found = token
-          , expected = map (lam x: (a, b). x.0) (mapBindings table)
-          })
+        else Left (_mkLL1Error firstOfRhs (deref lastOpen) (None ()))
       let work = lam stack : [FullStackItem prodLabel]. lam token. lam stream.
         match stack with stack ++ [curr & {rest = [NtSym nt] ++ rest}] then
           openNt nt token (snoc stack {curr with rest = rest}) stream
@@ -137,21 +188,14 @@ let ll1ParseWithTable : Table parseLabel -> String -> String -> Either (ParseErr
           work (snoc stack {above with seen = snoc seenAbove (UserSym (action seen))}) token stream
         else match stack with oldStack & (stack ++ [curr & {rest = [t] ++ rest, seen = seen}]) then
           if _eqSymbol t token then
+            modref lastOpen (None ());
             let next = getNextToken stream in
             work (snoc stack {{curr with rest = rest} with seen = snoc seen token}) next.token next.stream
-          else Left (UnexpectedToken
-            { stack = _sanitizeStack oldStack
-            , found = token
-            , expected = t
-            })
+          else Left (_mkLL1Error firstOfRhs (deref lastOpen) (Some (t, token, oldStack)))
         else match stack with [{seen = seen, rest = [], action = action}] then
           match token with Tok (EOFTok _)
             then Right (action seen)
-            else Left (UnexpectedToken
-              { stack = _sanitizeStack stack
-              , found = token
-              , expected = Tok (EOFTok {info = NoInfo ()})
-              })
+            else Left (_mkLL1Error firstOfRhs (deref lastOpen) (Some (Tok (EOFTok {info = NoInfo ()}), token, stack)))
         else print "ERROR: ";
              dprintLn (stack, token, stream);
              error "Unexpected parse error, this shouldn't happen"
@@ -166,7 +210,6 @@ type GenError prodLabel = Map NonTerminal (Map Symbol [prodLabel])
 
 let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodLabel) = use ParserSpec in lam grammar.
   match grammar with {productions = productions, start = startNt} then
-    type SymSet = {eps: Bool, syms: Map Symbol ()} in
 
     let emptySymSet = {eps = false, syms = mapEmpty _compareSymbol} in
     let eqSymSet = lam s1: SymSet. lam s2: SymSet.
@@ -242,10 +285,14 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
 
     let firstOfRhs : [Symbol] -> SymSet =
       recursive let work = lam symset: SymSet. lam rhs.
+        -- NOTE(vipa, 2021-06-18): This will be called post generation
+        -- as well, so it needs to handle NtSym, even thought it'll
+        -- not be relevant when generating the table
+        use ParserGenerated in
         match rhs with [] then {symset with eps = true}
         else match rhs with [(Tok _ | Lit _) & t] ++ _ then
           {symset with syms = mapInsert t () symset.syms}
-        else match rhs with [NtSpec nt] ++ rhs then
+        else match rhs with [NtSpec nt | NtSym {nt = nt}] ++ rhs then
           let otherSymset = match mapLookup nt firstSet
             with Some s then s
             else emptySymSet in
@@ -344,7 +391,7 @@ let ll1GenParser : Grammar prodLabel -> Either (GenError prodLabel) (Table prodL
 
     if deref hasLl1Error
       then Left (mapFromSeq cmpString (filter (lam binding: (Unknown, Unknown). not (null (mapBindings binding.1))) (mapBindings (mapMap deref ll1Errors))))
-      else Right {start = {nt = startNt, table = mapFindWithExn startNt table}, lits = lits}
+      else Right {start = {nt = startNt, table = mapFindWithExn startNt table}, firstOfRhs = firstOfRhs, lits = lits}
   else never
 
 let ll1NonTerminal : String -> NonTerminal = identity
@@ -677,7 +724,6 @@ utest parse "let x ="
 with Left (UnexpectedFirst
   { expected =
     [ Tok (IntTok {info = NoInfo (), val = 0})
-    , Lit {info = NoInfo (), lit = "let"}
     ]
   , stack =
     [ { label = "toptop" , seen = [] , rest = [NtSpec "FileFollow"]}
