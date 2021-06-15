@@ -39,13 +39,13 @@ let tune = lam files. lam options : Options. lam args.
     let ast = symbolize ast in
     let ast = normalizeTerm ast in
 
-    fprintLn "Before flatten";
     -- Flatten the decision points
     match flatten [] ast with
       { ast = ast, table = table, tempFile = tempFile, cleanup = cleanup,
         env = env }
     then
-      fprintLn "After flatten";
+--      printLn (expr2str ast);
+
       -- If option --use-tuned is given, then use given tune file as defaults
       let table = if options.useTuned then tableFromFile file else table in
 
