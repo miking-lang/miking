@@ -109,7 +109,7 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCMul () -> "(*)"
   | FCDiv () -> "(/)"
   | FCRem () -> "(%)"
-  | FCEq () -> "(=)"
+  | FCEq () -> "(==)"
   | FCNeq () -> "(!)"
   | FCGt () -> "(>)"
   | FCLt () -> "(<)"
