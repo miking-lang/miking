@@ -108,6 +108,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CHead _ -> FEBuiltIn {str = "head"}
   | CTail _ -> FEBuiltIn {str = "tail"}
   | CNull _ -> FEBuiltIn {str = "null"}
+  | CMap _ -> futConst_ (FCMap ())
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst
@@ -256,8 +257,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       rhs = FEApp {
         lhs = FEBuiltIn {str = "f64.floor"},
         rhs = generateExpr env arg}}
-  | TmApp {lhs = TmApp {lhs = TmConst {val = CMap _}, rhs = arg1}, rhs = arg2} ->
-    futMap_ (generateExpr env arg1) (generateExpr env arg2)
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
   | TmLet t ->
     FELet {ident = t.ident, tyBody = Some (generateType env t.tyBody),
@@ -276,6 +275,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
   | TmFlatten t -> futFlatten_ (generateExpr env t.s)
+  | TmIndices t -> futIndices_ (generateExpr env t.s)
 end
 
 lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +

@@ -213,3 +213,7 @@ let futAny_ = use FutharkAst in
 let futFlatten_ = use FutharkAst in
   lam s.
   futApp_ (futConst_ (FCFlatten ())) s
+
+let futIndices_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCIndices ())) s

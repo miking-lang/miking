@@ -37,6 +37,7 @@ lang FutharkConstAst
   | FCAll ()
   | FCAny ()
   | FCFlatten ()
+  | FCIndices ()
 end
 
 lang FutharkPatAst
