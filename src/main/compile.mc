@@ -64,12 +64,14 @@ let filenameWithoutExtension = lam filename.
 
 let insertTunedOrDefaults = lam ast. lam file.
   use MCoreCompile in
-  let tuneFile = tuneFileName file in
-  if fileExists tuneFile then
-    let table = tuneReadTable tuneFile in
-    let ast = symbolize ast in
-    let ast = normalizeTerm ast in
-    insert [] table ast
+  if options.useTuned then
+    let tuneFile = tuneFileName file in
+    if fileExists tuneFile then
+      let table = tuneReadTable tuneFile in
+      let ast = symbolize ast in
+      let ast = normalizeTerm ast in
+      insert [] table ast
+    else error (join ["Tune file ", tuneFile, " does not exist"])
   else default ast
 
 let ocamlCompile =
