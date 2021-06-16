@@ -236,6 +236,13 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                     (generateExpr env arg3)
   | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                      rhs = arg1},
+                        rhs = TmConst {val = CInt {val = 0}}},
+           rhs = arg3} ->
+    futAppSeq_
+      (FEBuiltIn {str = "take"})
+      [generateExpr env arg3, generateExpr env arg1]
+  | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
+                                     rhs = arg1},
                         rhs = arg2},
            rhs = arg3} ->
     -- NOTE(larshum, 2021-06-16): The generated code constructs a slice, which
