@@ -101,6 +101,10 @@ let futArrayUpdate_ = use FutharkAst in
   lam array. lam index. lam value.
   FEArrayUpdate {array = array, index = index, value = value}
 
+let futArraySlice_ = use FutharkAst in
+  lam array. lam startIdx. lam endIdx.
+  FEArraySlice {array = array, startIdx = startIdx, endIdx = endIdx}
+
 let futConst_ = use FutharkAst in
   lam c.
   FEConst {val = c}
@@ -205,3 +209,7 @@ let futAll_ = use FutharkAst in
 let futAny_ = use FutharkAst in
   lam p. lam as.
   futAppSeq_ (futConst_ (FCAny ())) [p, as]
+
+let futFlatten_ = use FutharkAst in
+  lam s.
+  futApp_ (futConst_ (FCFlatten ())) s

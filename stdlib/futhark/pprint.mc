@@ -126,6 +126,7 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCPartition () -> "partition"
   | FCAll () -> "all"
   | FCAny () -> "any"
+  | FCFlatten () -> "flatten"
 end
 
 lang FutharkPatPrettyPrint = FutharkAst + PatNamePrettyPrint
@@ -221,6 +222,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   | FEArray _ -> true
   | FEArrayAccess _ -> false
   | FEArrayUpdate _ -> false
+  | FEArraySlice _ -> false
   | FEConst _ -> true
   | FELam _ -> false
   | FEApp _ -> false
@@ -289,6 +291,14 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       match pprintExpr indent env index with (env, index) then
         match pprintExpr indent env value with (env, value) then
           (env, join [array, " with [", index, "] = ", value])
+        else never
+      else never
+    else never
+  | FEArraySlice {array = array, startIdx = startIdx, endIdx = endIdx} ->
+    match pprintExpr indent env array with (env, array) then
+      match pprintExpr indent env startIdx with (env, startIdx) then
+        match pprintExpr indent env endIdx with (env, endIdx) then
+          (env, join [array, "[", startIdx, ":", endIdx, "]"])
         else never
       else never
     else never

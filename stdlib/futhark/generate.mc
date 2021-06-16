@@ -234,6 +234,15 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
            rhs = arg3} ->
     futArrayUpdate_ (generateExpr env arg1) (generateExpr env arg2)
                     (generateExpr env arg3)
+  | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
+                                     rhs = arg1},
+                        rhs = arg2},
+           rhs = arg3} ->
+    -- NOTE(larshum, 2021-06-16): The generated code constructs a slice, which
+    -- is a reference rather than a copy. This could result in compilation
+    -- errors on Futhark's side.
+    futArraySlice_ (generateExpr env arg1) (generateExpr env arg2)
+                   (generateExpr env (addi_ arg2 arg3))
   | TmApp {lhs = TmConst {val = CFloorfi _}, rhs = arg} ->
     FEApp {
       lhs = FEBuiltIn {str = "i64.f64"},
@@ -259,6 +268,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     futPartition_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
+  | TmFlatten t -> futFlatten_ (generateExpr env t.s)
 end
 
 lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +

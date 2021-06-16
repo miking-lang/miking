@@ -36,6 +36,7 @@ lang FutharkConstAst
   | FCPartition ()
   | FCAll ()
   | FCAny ()
+  | FCFlatten ()
 end
 
 lang FutharkPatAst
@@ -68,6 +69,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEArray { tms : [FutExpr] }
   | FEArrayAccess { array : FutExpr, index : FutExpr }
   | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr }
+  | FEArraySlice { array : FutExpr, startIdx : FutExpr, endIdx : FutExpr }
   | FEConst { val : FutConst }
   | FELam { idents : [Name], body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
