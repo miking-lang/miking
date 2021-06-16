@@ -16,6 +16,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition {p: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelAll {p: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelAny {p: Expr, as: Expr, ty: Type, info: Info}
+  | TmFlatten {s: Expr, ty: Type, info: Info}
 
   sem isKeyword =
   | TmParallelMap _ -> true
@@ -26,6 +27,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition _ -> true
   | TmParallelAll _ -> true
   | TmParallelAny _ -> true
+  | TmFlatten _ -> true
 
   sem matchKeywordString (info : Info) =
   | "parallelMap" ->
@@ -55,6 +57,9 @@ lang MExprParallelKeywordMaker =
   | "parallelAny" ->
     Some (2, lam lst. TmParallelAny {p = get lst 0, as = get lst 1,
                                      ty = TyUnknown {info = info}, info = info})
+  | "flatten" ->
+    Some (1, lam lst. TmFlatten {s = get lst 0, ty = TyUnknown {info = info},
+                                 info = info})
 
   sem ty =
   | TmParallelMap t -> t.ty
@@ -65,6 +70,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition t -> t.ty
   | TmParallelAll t -> t.ty
   | TmParallelAny t -> t.ty
+  | TmFlatten t -> t.ty
 
   sem smap_Expr_Expr (f : Expr -> a) =
   | TmParallelMap t -> TmParallelMap {{t with f = f t.f}
@@ -86,6 +92,7 @@ lang MExprParallelKeywordMaker =
                                          with as = f t.as}
   | TmParallelAny t -> TmParallelAny {{t with p = f t.p}
                                          with as = f t.as}
+  | TmFlatten t -> TmFlatten {t with s = f t.s}
 
   sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
   | TmParallelMap t -> f (f acc t.f) t.as
@@ -96,6 +103,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition t -> f (f acc t.p) t.as
   | TmParallelAll t -> f (f acc t.p) t.as
   | TmParallelAny t -> f (f acc t.p) t.as
+  | TmFlatten t -> f acc t.s
 
   sem symbolizeExpr (env : SymEnv) =
   | (TmParallelMap _) & t -> smap_Expr_Expr (symbolizeExpr env) t
@@ -106,6 +114,7 @@ lang MExprParallelKeywordMaker =
   | (TmParallelPartition _) & t -> smap_Expr_Expr (symbolizeExpr env) t
   | (TmParallelAll _) & t -> smap_Expr_Expr (symbolizeExpr env) t
   | (TmParallelAny _) & t -> smap_Expr_Expr (symbolizeExpr env) t
+  | (TmFlatten _) & t -> smap_Expr_Expr (symbolizeExpr env) t
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmParallelMap t ->
@@ -161,6 +170,15 @@ lang MExprParallelKeywordMaker =
     TmParallelAny {{{t with p = typeAnnotExpr env t.p}
                        with as = typeAnnotExpr env t.as}
                        with ty = tybool_}
+  | TmFlatten t ->
+    let s = typeAnnotExpr env t.s in
+    let ty =
+      match ty s with TySeq {ty = TySeq {ty = elemTy}} then
+        elemTy
+      else tyunknown_
+    in
+    TmFlatten {{t with s = typeAnnotExpr env t.s}
+                  with ty = tyseq_ ty}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmParallelMap r ->
@@ -217,6 +235,10 @@ lang MExprParallelKeywordMaker =
         eqExprH env free l.as r.as
       else None ()
     else None ()
+  | TmFlatten r ->
+    match lhs with TmFlatten l then
+      eqExprH env free l.s r.s
+    else None ()
 end
 
 let parallelMap_ = lam f. lam as.
@@ -251,6 +273,9 @@ let parallelAny_ = lam p. lam as.
   use MExprParallelKeywordMaker in
   TmParallelAny {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
+let flatten_ = lam s.
+  use MExprParallelKeywordMaker in
+  TmFlatten {s = s, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
 
 mexpr
 
@@ -259,11 +284,11 @@ use MExprParallelKeywordMaker in
 let id_ = ulam_ "x" (var_ "x") in
 let trueFunc_ = ulam_ "x" true_ in
 let emptySeq_ = seq_ [] in
+let zip_ = ulam_ "x" (ulam_ "y" (utuple_ [var_ "x", var_ "y"])) in
 
 let expr = appf2_ (var_ "parallelMap") id_ emptySeq_ in
 utest makeKeywords [] expr with parallelMap_ id_ emptySeq_ using eqExpr in
 
-let zip_ = ulam_ "x" (ulam_ "y" (tuple_ [var_ "x", var_ "y"])) in
 let expr = appf3_ (var_ "parallelMap2") zip_ emptySeq_ emptySeq_ in
 utest makeKeywords [] expr with parallelMap2_ zip_ emptySeq_ emptySeq_ using eqExpr in
 
@@ -284,5 +309,9 @@ utest makeKeywords [] expr with parallelAll_ trueFunc_ emptySeq_ using eqExpr in
 
 let expr = appf2_ (var_ "parallelAny") trueFunc_ emptySeq_ in
 utest makeKeywords [] expr with parallelAny_ trueFunc_ emptySeq_ using eqExpr in
+
+let s = seq_ [seq_ [int_ 1, int_ 2], seq_ [int_ 3, int_ 4]] in
+let expr = app_ (var_ "flatten") s in
+utest makeKeywords [] expr with flatten_ s using eqExpr in
 
 ()
