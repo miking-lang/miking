@@ -710,6 +710,8 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CMapi _ -> "mapi"
   | CIter _ -> "iter"
   | CIteri _ -> "iteri"
+  | CFoldl _ -> "foldl"
+  | CFoldr _ -> "foldr"
   | CCreate _ -> "create"
   | CCreateFingerTree _ -> "createFingerTree"
   | CCreateList _ -> "createList"

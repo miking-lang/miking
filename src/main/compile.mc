@@ -3,7 +3,6 @@
 
 include "options.mc"
 include "mexpr/boot-parser.mc"
-include "mexpr/builtin.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/utesttrans.mc"

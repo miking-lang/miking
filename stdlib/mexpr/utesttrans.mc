@@ -27,12 +27,6 @@ type UtestTypeEnv = {
 }
 
 let _utestRunnerStr = "
-recursive
-  let foldl = lam f. lam acc. lam seq.
-    if null seq then acc
-    else foldl f (f acc (head seq)) (tail seq)
-in
-
 let join = lam seqs.
   foldl concat [] seqs
 in
@@ -68,16 +62,6 @@ recursive
          else concat (concat (head strs) delim) (strJoin delim (tail strs))
 in
 
-let mapi = lam f. lam seq.
-  recursive let work = lam i. lam f. lam seq.
-      if null seq then []
-      else cons (f i (head seq)) (work (addi i 1) f (tail seq))
-  in
-  work 0 f seq
-in
-
-let map = lam f. mapi (lam. lam x. f x) in
-
 let eqSeq = lam eq : (Unknown -> Unknown -> Bool).
   recursive let work = lam as. lam bs.
     let pair = (as, bs) in
@@ -88,15 +72,12 @@ let eqSeq = lam eq : (Unknown -> Unknown -> Bool).
   in work
 in
 
-let and : Bool -> Bool -> Bool =
-  lam a. lam b. if a then b else false
-in
-
 recursive
   let all = lam p. lam seq.
     if null seq
     then true
-    else and (p (head seq)) (all p (tail seq))
+    else if p (head seq) then all p (tail seq)
+    else false
 in
 
 let utestTestPassed = lam.
@@ -366,7 +347,7 @@ let _pprintSeq = use MExprAst in
         str_ "[",
         appf2_ (var_ "strJoin")
           (str_ ",")
-          (appf2_ (var_ "map") (nvar_ elemPprintFuncName) (var_ "a")),
+          (map_ (nvar_ elemPprintFuncName) (var_ "a")),
         str_ "]"
       ]))
 

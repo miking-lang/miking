@@ -9,4 +9,3 @@ let iterf = lam n.
 in
 
 repeat (lam. iterf n)
-2
