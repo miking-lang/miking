@@ -206,7 +206,7 @@ let keywords_and_identifiers () =
   in
   let _, nss, name2sym, _ = !repl_envs in
   let names_without_langs =
-    List.map (fun x -> x |> fst |> extract_name) name2sym
+    List.map (fun x -> x |> fst |> extract_name) (Symbolize.sym_env_to_assoc name2sym)
   in
   let replace_name name mangled_name names =
     names |> USSet.add name |> USSet.remove mangled_name

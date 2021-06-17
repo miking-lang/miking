@@ -47,6 +47,7 @@ let infoVal : String -> Int -> Int -> Int -> Int -> Info =
   lam filename. lam r1. lam c1. lam r2. lam c2.
   Info {filename = filename, row1 = r1, col1 = c1, row2 = r2, col2 = c2}
 
+
 -- Generate a string from an info
 let info2str : Info -> String = lam fi.
   match fi with NoInfo () then "[No file info] " else
@@ -55,7 +56,7 @@ let info2str : Info -> String = lam fi.
     "-", int2string r.row2, ":", int2string r.col2, " "]
   else never
 
--- Generate an info error stirng
+-- Generate an info error string
 let infoErrorString : Info -> String -> String = lam fi. lam str.
     join [info2str fi, "ERROR: ", str]
 

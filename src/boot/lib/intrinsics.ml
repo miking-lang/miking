@@ -672,7 +672,42 @@ end
 module IO = struct
   let print s = s |> Mseq.Helpers.to_ustring |> uprint_string
 
-  let dprint _ = ()
+  let dprint v =
+    let v = Obj.repr v in
+    let string_of_tag t =
+      let res = ref (string_of_int t) in
+      if t = Obj.lazy_tag then res := !res ^ " (lazy)";
+      if t = Obj.closure_tag then res := !res ^ " (closure)";
+      if t = Obj.object_tag then res := !res ^ " (object)";
+      if t = Obj.infix_tag then res := !res ^ " (infix)";
+      if t = Obj.forward_tag then res := !res ^ " (forward)";
+      if t = Obj.no_scan_tag then res := !res ^ " (no_scan)";
+      if t = Obj.abstract_tag then res := !res ^ " (abstract)";
+      if t = Obj.string_tag then res := !res ^ " (string)";
+      if t = Obj.double_tag then res := !res ^ " (double)";
+      if t = Obj.double_array_tag then res := !res ^ " (double_array)";
+      if t = Obj.custom_tag then res := !res ^ " (custom)";
+      if t = Obj.int_tag then res := !res ^ " (int)";
+      if t = Obj.out_of_heap_tag then res := !res ^ " (out_of_heap)";
+      if t = Obj.unaligned_tag then res := !res ^ " (unaligned)";
+      !res in
+    let rec work indent v =
+      if Obj.is_int v then
+        string_of_int (Obj.obj v) ^ "\n"
+      else if Obj.tag v = Obj.double_tag then
+        string_of_float (Obj.obj v) ^ "\n"
+      else if Obj.tag v = Obj.closure_tag then
+        "<closure>\n"
+      else
+        let istr = String.make indent ' ' in
+        let children = List.init (Obj.size v)
+          (fun i -> istr ^ ", " ^ work (indent + 2) (Obj.field v i)) in
+        begin
+          "{ tag: " ^ string_of_tag (Obj.tag v) ^ ", size: " ^ string_of_int (Obj.size v) ^ "\n" ^
+          String.concat "" children ^
+          istr ^ "}\n"
+        end
+    in print_string (work 0 v);;
 
   let flush_stdout () = flush stdout
 
