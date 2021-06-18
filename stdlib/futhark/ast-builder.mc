@@ -111,7 +111,7 @@ let futConst_ = use FutharkAst in
 
 let nFutLam_ = use FutharkAst in
   lam n. lam body.
-  FELam {idents = n, body = body}
+  FELam {ident = n, body = body}
 
 let futLam_ = lam str. lam body.
   nFutLam_ (nameNoSym str) body

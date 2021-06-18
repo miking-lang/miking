@@ -301,11 +301,11 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
       else never
     else never
   | FEConst {val = val} -> (env, pprintConst val)
-  | FELam {idents = idents, body = body} ->
+  | FELam {ident = ident, body = body} ->
     let aindent = pprintIncr indent in
-    match mapAccumL pprintVarName env idents with (env, strs) then
+    match pprintVarName env ident with (env, ident) then
       match pprintExpr aindent env body with (env, body) then
-        (env, join ["\\", strJoin " " strs, " ->",
+        (env, join ["\\", ident, " ->",
                     pprintNewline aindent, body])
       else never
     else never
@@ -360,7 +360,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     let pprintCase = lam env : PprintEnv. lam case : (FutPat, FutExpr).
       match pprintPat indent env case.0 with (env, pat) then
         match pprintExpr aindent env case.1 with (env, expr) then
-          (env, join ["case ", pat, " -> ", pprintNewline aindent, expr])
+          (env, join ["case ", pat, " ->", pprintNewline aindent, expr])
         else never
       else never
     in
@@ -471,7 +471,7 @@ let diffPairsDecl = FDeclFun {
   ret = futUnsizedArrayTy_ futIntTy_,
   body =
     futMap2_
-      (nFutLams_ [lamX, lamY] (futSub_ (nFutVar_ lamX) (nFutVar_ lamY)))
+      (nFutLam_ lamX (nFutLam_ lamY (futSub_ (nFutVar_ lamX) (nFutVar_ lamY))))
       (nFutVar_ diffPairsA)
       (nFutVar_ diffPairsB)
 } in

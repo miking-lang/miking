@@ -72,7 +72,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr }
   | FEArraySlice { array : FutExpr, startIdx : FutExpr, endIdx : FutExpr }
   | FEConst { val : FutConst }
-  | FELam { idents : Name, body : FutExpr }
+  | FELam { ident : Name, body : FutExpr }
   | FEApp { lhs : FutExpr, rhs : FutExpr }
   | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
