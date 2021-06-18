@@ -320,6 +320,9 @@ let _equalInt =
 let _pprintFloat =
   lam_ "a" tyfloat_ (float2string_ (var_ "a"))
 
+let _equalFloat =
+  lam_ "a" tyfloat_ (lam_ "b" tyfloat_ (eqf_ (var_ "a") (var_ "b")))
+
 let _pprintBool =
   lam_ "a" tybool_ (if_ (var_ "a") (str_ "true") (str_ "false"))
 
@@ -469,7 +472,7 @@ let _equalAlias = lam env. lam ty. lam aliasedTypeEqualName.
 let typeHasDefaultEquality = use MExprAst in
   lam env : UtestTypeEnv. lam ty.
   recursive let work = lam visited. lam ty.
-    match ty with TyInt _ | TyBool _ | TyChar _ then true
+    match ty with TyInt _ | TyFloat _ | TyBool _ | TyChar _ then true
     else match ty with TySeq t | TyTensor t then
       work visited t.ty
     else match ty with TyRecord t then
@@ -501,7 +504,7 @@ let getTypeFunctions =
   match ty with TyInt _ then
     (_pprintInt, Some _equalInt)
   else match ty with TyFloat _ then
-    (_pprintFloat, None ())
+    (_pprintFloat, Some _equalFloat)
   else match ty with TyBool _ then
     (_pprintBool, Some _equalBool)
   else match ty with TyChar _ then
@@ -576,6 +579,80 @@ let utestRunnerCall =
     l
     r
 
+lang UtestViaMatch = Ast + PrettyPrint
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | t ->
+    let pprintTy = use MExprPrettyPrint in
+      lam ty.
+      match getTypeStringCode 0 pprintEnvEmpty ty with (_, tyStr) then
+        tyStr
+      else never
+    in
+    let name = nameSym "x" in
+    let ty = ty t in
+    let equalName = getEqualFuncName env ty in
+    if typeHasDefaultEquality env ty then
+      ([appf2_ (nvar_ equalName) (nvar_ name) t], npvar_ name)
+    else
+      let msg = join [
+        "Utest needs a custom equality function to be provided, or for the expected value to be a literal. ",
+        "No default equality implemented for type ", pprintTy ty, "."
+      ] in infoErrorExit (infoTm t) msg
+end
+
+lang UtestViaMatchInt = UtestViaMatch + IntAst
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmConst {val = CInt {val = val}} -> ([], pint_ val)
+end
+
+lang UtestViaMatchBool = UtestViaMatch + BoolAst
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmConst {val = CBool {val = val}} -> ([], pbool_ val)
+end
+
+lang UtestViaMatchChar = UtestViaMatch + CharAst
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmConst {val = CChar {val = val}} -> ([], pchar_ val)
+end
+
+lang UtestViaMatchSeq = UtestViaMatch + SeqAst
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmSeq {tms = tms} ->
+    let f = lam acc. lam t.
+      let res: ([Expr], Pat) = mkPatsAndExprs env t in
+      (concat acc res.0, res.1) in
+    let res: ([Expr], [Pat]) = mapAccumL f [] tms in
+    (res.0, pseqtot_ res.1)
+end
+
+lang UtestViaMatchRecord = UtestViaMatch + RecordAst + RecordTypeAst + RecordPat
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmRecord {bindings = bindings} ->
+    let f = lam acc. lam. lam t.
+      let res: ([Expr], Pat) = mkPatsAndExprs env t in
+      (concat acc res.0, res.1) in
+    let res: ([Expr], Map SID Pat) = mapMapAccum f [] bindings in
+    let pat = PatRecord
+      { bindings = res.1
+      , info = NoInfo ()
+      , ty = TyRecord
+        { info = NoInfo ()
+        , fields = mapMap (lam. tyunknown_) res.1
+        , labels = mapKeys res.1
+        }
+      } in
+    (res.0, pat)
+end
+
+lang UtestViaMatchData = UtestViaMatch + DataAst
+  sem mkPatsAndExprs (env : UtestTypeEnv) /- : Expr -> ([Expr], Pat) -/ =
+  | TmConApp {ident = ident, body = body} ->
+    let res: ([Expr], Pat) = mkPatsAndExprs env body in
+    (res.0, npcon_ ident res.1)
+end
+
+lang MExprUtestViaMatch = MExprAst + UtestViaMatchInt + UtestViaMatchBool + UtestViaMatchChar + UtestViaMatchSeq + UtestViaMatchRecord + UtestViaMatchData
+
 let _generateUtest = use MExprTypeAnnot in
   lam env : UtestTypeEnv.
   lam t : {test : Expr, expected : Expr, next : Expr, tusing : Option Expr,
@@ -631,21 +708,35 @@ let _generateUtest = use MExprTypeAnnot in
         "Type was inferred to be ", pprintTy (ty eqFunc)
       ] in
       infoErrorExit t.info msg
-  else match compatibleType env.aliases (ty t.test) (ty t.expected) with Some ty then
-    let pprintName = getPprintFuncName env ty in
-    let equalName = getEqualFuncName env ty in
+  else match compatibleType env.aliases (ty t.test) (ty t.expected) with Some eTy then
+    let pprintName = getPprintFuncName env eTy in
     let pprintFunc = nvar_ pprintName in
-    let eqFunc =
-      if typeHasDefaultEquality env ty then
-        nvar_ equalName
-      else
-        let msg = join [
-          "Utest needs a custom equality function to be provided. ",
-          "No default equality implemented for type ", pprintTy ty, "."
-        ] in
-        infoErrorExit t.info msg
-    in
-    utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
+    use MExprUtestViaMatch in
+    let res: ([Expr], Pat) = mkPatsAndExprs env t.expected in
+    match res with (conditions, pat & !PatNamed _) then
+      -- NOTE(vipa, 2021-06-14): The expected value has some useful
+      -- structure that we can use, make the equality function a match
+      -- instead
+      let lName = nameSym "l" in
+      let inner = foldl and_ true_ conditions in
+      let eqFunc = nulam_ lName (ulam_ "" (match_ (nvar_ lName) pat inner false_)) in
+      utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
+    else
+      -- NOTE(vipa, 2021-06-14): We couldn't find any useful structure
+      -- in the expected field, just use the default equality, if
+      -- there is one
+      let equalName = getEqualFuncName env eTy in
+      let eqFunc =
+        if typeHasDefaultEquality env eTy then
+          nvar_ equalName
+        else
+          let msg = join [
+            "Utest needs a custom equality function to be provided. ",
+            "No default equality implemented for type ", pprintTy eTy, "."
+          ] in
+          infoErrorExit t.info msg
+      in
+      utestRunnerCall utestInfo pprintFunc pprintFunc eqFunc t.test t.expected
   else
     let msg = join [
       "Arguments to utest have incompatible types\n",
