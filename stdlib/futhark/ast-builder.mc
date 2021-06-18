@@ -109,17 +109,9 @@ let futConst_ = use FutharkAst in
   lam c.
   FEConst {val = c}
 
-let nFutLams_ = use FutharkAst in
-  lam nargs. lam body.
-  FELam {idents = nargs, body = body}
-
-let futLams_ = use FutharkAst in
-  lam args. lam body.
-  FELam {idents = map nameNoSym args, body = body}
-
 let nFutLam_ = use FutharkAst in
   lam n. lam body.
-  FELam {idents = [n], body = body}
+  FELam {idents = n, body = body}
 
 let futLam_ = lam str. lam body.
   nFutLam_ (nameNoSym str) body

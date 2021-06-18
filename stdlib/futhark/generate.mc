@@ -98,9 +98,6 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CLti _ | CLtf _ -> futConst_ (FCLt ())
   | CGeqi _ | CGeqf _ -> futConst_ (FCGeq ())
   | CLeqi _ | CLeqf _ -> futConst_ (FCLeq ())
-  | CFloorfi _ -> error "Wrong number of arguments"
-  | CGet _ -> error "Wrong number of arguments"
-  | CSet _ -> error "Wrong number of arguments"
   | CLength _ -> FEBuiltIn {str = "length"}
   | CCreate _ -> FEBuiltIn {str = "tabulate"}
   | CReverse _ -> FEBuiltIn {str = "reverse"}
