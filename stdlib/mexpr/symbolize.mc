@@ -314,17 +314,17 @@ end
 
 lang DataPatSym = DataPat
   sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatCon {ident = ident, subpat = subpat, info = info} ->
+  | PatCon r ->
     match env with {conEnv = conEnv} then
       let ident =
-        if nameHasSym ident then ident
+        if nameHasSym r.ident then r.ident
         else
-          let str = nameGetStr ident in
+          let str = nameGetStr r.ident in
           match mapLookup str conEnv with Some ident then ident
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
-      match symbolizePat env patEnv subpat with (patEnv, subpat) then
-        (patEnv, PatCon {ident = ident, subpat = subpat, info = info})
+      match symbolizePat env patEnv r.subpat with (patEnv, subpat) then
+        (patEnv, PatCon {{r with ident = ident} with subpat = subpat})
       else never
     else never
 end
