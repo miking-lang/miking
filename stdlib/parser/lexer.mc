@@ -14,17 +14,22 @@ lang WSACParser
   sem eatWSAC (p : Pos) =
 end
 
+type Stream = {pos : Pos, str : String}
+type NextTokenResult = {token : Token, lit : String, info : Info, stream : Stream}
+
 -- Base language for parsing tokens preceeded by WSAC
 lang TokenParser = WSACParser
   syn Token =
-  sem nextToken /- : {pos : Pos, str : String} -> {token : Token, stream : {pos : Pos, str : String}} -/ =
-  | stream -> match eatWSAC stream.pos stream.str with {str = str, pos = pos} then
-      parseToken pos str
-    else never
+  sem nextToken /- : Stream -> NextTokenResult -/ =
+  | stream ->
+    let stream: Stream = stream in
+    let stream: Stream = eatWSAC stream.pos stream.str in
+    parseToken stream.pos stream.str
 
-  sem parseToken (pos : Pos) /- : String -> {token : Token, lit : String, info : Info, stream : {pos : Pos, str : String}} -/ =
+  sem parseToken (pos : Pos) /- : String -> NextTokenResult -/ =
   sem tokKindEq (tok : Token) /- : Token -> Bool -/ =
   sem tokInfo /- : Token -> Info -/ =
+  sem tokToStr /- : Token -> String -/ =
 end
 
 -- Eats whitespace
@@ -83,6 +88,9 @@ lang EOFTokenParser = TokenParser
 
   sem tokInfo =
   | EOFTok {info = info} -> info
+
+  sem tokToStr =
+  | EOFTok _ -> "<EOF>"
 end
 
 -- Parses the continuation of an identifier, i.e., upper and lower
@@ -132,6 +140,9 @@ lang LIdentTokenParser = TokenParser
 
   sem tokInfo =
   | LIdentTok {info = info} -> info
+
+  sem tokToStr =
+  | LIdentTok tok -> concat "<LIdent>" tok.val
 end
 
 lang UIdentTokenParser = TokenParser
@@ -158,6 +169,9 @@ lang UIdentTokenParser = TokenParser
 
   sem tokInfo =
   | UIdentTok {info = info} -> info
+
+  sem tokToStr =
+  | UIdentTok tok -> concat "<UIdent>" tok.val
 end
 
 let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -207,6 +221,9 @@ lang UIntTokenParser = TokenParser
 
   sem tokInfo =
   | IntTok {info = info} -> info
+
+  sem tokToStr =
+  | IntTok tok -> concat "<Int>" (int2string tok.val)
 end
 
 let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
@@ -277,6 +294,10 @@ lang UFloatTokenParser = UIntTokenParser
 
   sem tokInfo =
   | FloatTok {info = info} -> info
+
+  sem tokToStr =
+  | FloatTok tok -> concat "<Float>" (float2string tok.val)
+
 end
 
 let parseOperatorCont : Pos -> String -> {val : String, stream : {pos : Pos, str : String}} = lam p. lam str.
@@ -321,6 +342,9 @@ lang OperatorTokenParser = TokenParser
 
   sem tokInfo =
   | OperatorTok {info = info} -> info
+
+  sem tokToStr =
+  | OperatorTok tok -> concat "<Operator>" tok.val
 end
 
 lang BracketTokenParser = TokenParser
@@ -373,6 +397,14 @@ lang BracketTokenParser = TokenParser
   | RBracketTok {info = info} -> info
   | LBraceTok {info = info} -> info
   | RBraceTok {info = info} -> info
+
+  sem tokToStr =
+  | LParenTok _ -> "<LParen>"
+  | RParenTok _ -> "<RParen>"
+  | LBracketTok _ -> "<LBracket>"
+  | RBracketTok _ -> "<RBracket>"
+  | LBraceTok _ -> "<LBrace>"
+  | RBraceTok _ -> "<RBrace>"
 end
 
 lang SemiTokenParser = TokenParser
@@ -390,6 +422,9 @@ lang SemiTokenParser = TokenParser
 
   sem tokInfo =
   | SemiTok {info = info} -> info
+
+  sem tokToStr =
+  | SemiTok _ -> "<Semi>"
 end
 
 lang CommaTokenParser = TokenParser
@@ -407,6 +442,9 @@ lang CommaTokenParser = TokenParser
 
   sem tokInfo =
   | CommaTok {info = info} -> info
+
+  sem tokToStr =
+  | CommaTok _ -> "<Comma>"
 end
 
 -- Matches a character (including escape character).
@@ -453,6 +491,9 @@ lang StringTokenParser = TokenParser
 
   sem tokInfo =
   | StringTok {info = info} -> info
+
+  sem tokToStr =
+  | StringTok tok -> concat "<String>" tok.val
 end
 
 lang CharTokenParser = TokenParser
@@ -478,6 +519,9 @@ lang CharTokenParser = TokenParser
 
   sem tokInfo =
   | CharTok {info = info} -> info
+
+  sem tokToStr =
+  | CharTok tok -> snoc "<Char>" tok.val
 end
 
 lang HashStringTokenParser = TokenParser
@@ -512,6 +556,9 @@ lang HashStringTokenParser = TokenParser
 
   sem tokInfo =
   | HashStringTok {info = info} -> info
+
+  sem tokToStr =
+  | HashStringTok tok -> join ["<Hash:", tok.hash, ">", tok.val]
 end
 
 lang Lexer
