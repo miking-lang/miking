@@ -58,8 +58,10 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
                    with thn = t.els}
                    with els = newThn})
   -- match s with [] then e1 else match s with [h] ++ t then e2 else never ->
-  -- if null s then e1 else e2'
-  -- where e2' is e2 with h = head s and t = tail s
+  -- if null s then e1 else
+  --   let h = head s in
+  --   let t = tail s in
+  --   e2
   | TmMatch ({pat = PatSeqTot {pats = []},
               target = t1,
               els = TmMatch {pat = PatSeqEdge {prefix = [PatNamed {ident = PName h}],

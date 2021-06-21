@@ -27,6 +27,16 @@ recursive let replaceFunctionBody : Expr -> Expr -> Expr =
   else newExpr
 end
 
+-- Substitutes all occurences of the expression from with the expression to in
+-- the expression e.
+let substituteExpression : Expr -> Expr -> Expr -> Expr =
+  use MExprParallelKeywordMaker in
+  lam e. lam from. lam to.
+  recursive let work = lam e.
+    if eqExpr e from then to
+    else smap_Expr_Expr work e
+  in work e
+
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.
 let substituteVariables : Expr -> Map Name (Info -> Expr) -> Expr =
@@ -61,7 +71,7 @@ let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
 
 -- Collects the parameters of an application and returns them in a tuple
 -- together with the target expression (the function being called).
-let collectAppArguments : Expr -> (Expr, Expr) =
+let collectAppArguments : Expr -> (Expr, [Expr]) =
   use MExprAst in
   lam e.
   recursive let work = lam acc. lam e.
