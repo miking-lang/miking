@@ -76,9 +76,9 @@ let collectAppArguments : Expr -> (Expr, [Expr]) =
   lam e.
   recursive let work = lam acc. lam e.
     match e with TmApp {lhs = !(TmApp _) & lhs, rhs = rhs} then
-      (lhs, snoc acc rhs)
+      (lhs, cons rhs acc)
     else match e with TmApp t then
-      work (snoc acc t.rhs) t.lhs
+      work (cons t.rhs acc) t.lhs
     else (e, acc)
   in
   work [] e
@@ -129,10 +129,19 @@ let res : ([(Name, Type, Info)], Expr) = functionParametersAndBody (int_ 2) in
 utest res.0 with [] using eqSeq eqVariable in
 utest res.1 with int_ 2 using eqExpr in
 
-let t = collectAppArguments (appf2_ (var_ "x") (var_ "y") (var_ "z")) in
+let eqVar = lam var1. lam var2.
+  match (var1, var2) with (TmVar {ident = id1}, TmVar {ident = id2}) then
+    nameEq id1 id2
+  else false
+in
+
+let x = nameSym "x" in
+let y = nameSym "y" in
+let z = nameSym "z" in
+let t = collectAppArguments (appf2_ (nvar_ x) (nvar_ y) (nvar_ z)) in
 let target = t.0 in
 let args = t.1 in
-utest t.0 with var_ "x" using eqExpr in
-utest t.1 with [var_ "y", var_ "z"] using eqSeq eqExpr in
+utest t.0 with nvar_ x using eqVar in
+utest t.1 with [nvar_ y, nvar_ z] using eqSeq eqVar in
 
 ()
