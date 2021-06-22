@@ -31,6 +31,16 @@ let optionMap: (a -> b) -> Option a -> Option b = lam f. lam o.
 utest optionMap (addi 1) (None ()) with (None ()) using optionEq eqi
 utest optionMap (addi 1) (Some 1) with (Some 2) using optionEq eqi
 
+let optionMapAccum: (a -> (acc, b)) -> acc -> Option a -> (acc, Option b) =
+  lam f. lam acc. lam o.
+    match o with Some a then
+      match f acc a with (acc, b) then
+        (acc, Some b)
+      else never
+    else (acc, o)
+
+-- TODO(vipa, 2021-05-28): Write tests for optionMapAccum
+
 let optionJoin: Option (Option a) -> Option a = lam o.
     match o with Some t then
       t

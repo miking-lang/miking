@@ -452,9 +452,6 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
-  (* Multicore *)
-  | CPar v ->
-      Par.arity v
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1395,9 +1392,6 @@ let delta eval env fi c v =
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
       fail_constapp fi
-  (* Multicore *)
-  | CPar v, t ->
-      Par.delta eval env fi v t
   (* Python intrinsics *)
   | CPy v, t ->
       Pyffi.delta eval env fi v t
@@ -1594,7 +1588,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s) -> (
     match List.assoc_opt s env with
-    | Some (TmApp (_, TmFix _, _) as t) ->
+    | Some ((TmApp (_, TmFix _, _) | TmRecLets _) as t) ->
         eval env t
     | Some t ->
         t

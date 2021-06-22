@@ -94,7 +94,7 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
   | tys ->
     let ns = create (length tys) (lam. nameSym "t") in
     let pvars =
-      map (lam n. PatNamed { ident = PName n, info = info }) ns
+      map (lam n. PatNamed { ident = PName n, info = info, ty = tyunknown_ }) ns
     in
     let tpat = OPatTuple { pats = pvars } in
     let costsTs =
@@ -269,7 +269,8 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
               (lam n.
                 PatNamed {
                   ident = PName n,
-                  info = info
+                  info = info,
+                  ty = tyunknown_
                 })
               ns
           in

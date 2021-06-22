@@ -184,10 +184,6 @@ con GeneratorPostfix :
   , leftField : Option String
   } -> GeneratorProdType
 
-type GeneratorOverride
-con GeneratorLeftChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
-con GeneratorRightChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
-
 -- A `GeneratorStaged t` is an expression of type `t`.
 type GeneratorStaged t = Expr
 
@@ -195,8 +191,12 @@ type GeneratorProduction =
   { stagedSpec : GeneratorStaged ProductionSpec
   , constructor : Option Constructor
   , sym : Symbol
-  , nonTerminal : String
+  , nonTerminal : NonTerminal
   }
+
+type GeneratorOverride
+con GeneratorLeftChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
+con GeneratorRightChild : { child : GeneratorProduction, parent : GeneratorProduction } -> GeneratorOverride
 
 let _semanticProductionName = nameSym "semanticProduction"
 let _semanticGrammarName = nameSym "semanticGrammar"
@@ -414,7 +414,7 @@ let generatorProd
             (snoc
               syntax
               (GeneratorNt {field = rName, nt = nonTerminal}))
-        else match prodType with GeneratorPostfix {leftFiled = lName} then
+        else match prodType with GeneratorPostfix {leftField = lName} then
           cons
             (GeneratorNt {field = lName, nt = nonTerminal})
             syntax
@@ -584,9 +584,9 @@ let generatorGrammar
       let composedName = concat langName "Composed" in
       let astGenInput =
         { namePrefix = langName
-        , constructors = mapOption (lam x. x.constructor) productions
+        , constructors = mapOption (lam x: GeneratorProduction. x.constructor) productions
         , requestedSFunctions = map
-          (lam x. (stringToSynType x.0, tyvar_ x.1))
+          (lam x: (String, String). (stringToSynType x.0, tyvar_ x.1))
           sfunctions
         , composedName = Some composedName
         } in
@@ -604,7 +604,7 @@ let generatorGrammar
               , ("parent", nvar_ (prodSymToName parent.sym))
               ])
         else never in
-      let stagePrecedence = lam prec.
+      let stagePrecedence = lam prec: ((GeneratorProduction, GeneratorProduction), Precedence).
         match prec with ((l, r), {mayGroupLeft = mayGroupLeft, mayGroupRight = mayGroupRight}) then
           utuple_
             [ utuple_
@@ -618,16 +618,16 @@ let generatorGrammar
             ]
         else never in
       let nts = foldl
-        (lam acc. lam prod. mapInsert prod.nonTerminal () acc)
+        (lam acc. lam prod: GeneratorProduction. mapInsert prod.nonTerminal () acc)
         (mapEmpty cmpString)
         productions in
       let ntLets = map
-        (lam pair.
+        (lam pair: (NonTerminal, ()).
           let nt = pair.0 in
           ulet_ nt (_semanticNonTerminal_ (str_ nt)))
         (mapBindings nts) in
       let productions = map
-        (lam prod.
+        (lam prod: GeneratorProduction.
           let name = prodSymToName prod.sym in
           (name, nulet_ name (_semanticProduction_ prod.stagedSpec)))
         productions in
@@ -654,7 +654,7 @@ let generatorGrammar
                   (npcon_ _rightConName (npvar_ grammarName))
                   (nulam_ fileNameName
                     (nulam_ sourceName
-                      (_eitherMapRight_ (ulam_ "x" (tupleproj_ 1 (var_ "x")))
+                      (_eitherMapRight_ (lam_ "x" (tytuple_ [tyunknown_, tyunknown_]) (tupleproj_ 1 (var_ "x")))
                         (_semanticParseFile_ (nvar_ grammarName) (nvar_ fileNameName) (nvar_ sourceName)))))
                   (match_ (nvar_ resName)
                     (npcon_ _leftConName (npvar_ errsName))
@@ -765,7 +765,7 @@ mexpr
 
 let g = generatorNamespace in
 
-let unknownTyP = g.prod
+let unknownTyP: GeneratorProduction = g.prod
   { nonTerminal = "Type"
   , constructorName = "TyUnknown"
   , prodType = g.defAtom
@@ -777,8 +777,9 @@ let unknownTyP = g.prod
 -- get it to pretty print correctly. There should be a better way to
 -- solve it later (more or less running symbolize before printing),
 -- but not at present.
-match unknownTyP with {constructor = Some {name = unknownTyConstructorName}} then
-let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (nconapp_ unknownTyConstructorName uunit_) in
+match unknownTyP with {constructor = Some x} then
+let unknownTyConstructorName = let x: Constructor = x in x.name in
+let tyField = g.nonsyntax "ty" (untargetableType (tyvar_ "Type")) (var_ "tyunknown_") in
 
 let varP = g.prod
   { constructorName = "TmVar"

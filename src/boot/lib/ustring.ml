@@ -259,6 +259,14 @@ module Op = struct
 
   type sidset = SidSet.t
 
+  module SidMap = Map.Make (struct
+    let compare = Stdlib.compare
+
+    type t = sid
+  end)
+
+  type 'a sidmap = 'a SidMap.t
+
   let ( ^. ) s1 s2 = ref (Branch (!s1, !s2))
 
   let ( ^.. ) s1 s2 =

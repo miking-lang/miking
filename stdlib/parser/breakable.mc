@@ -346,7 +346,7 @@ let breakableMapAllowSet
   -> AllowSet a
   -> AllowSet b
   = lam f. lam newCmp. lam s.
-    let convert = lam s. mapFromSeq newCmp (map (lam x. (f x.0, ())) (mapBindings s)) in
+    let convert = lam s. mapFromSeq newCmp (map (lam x: (a, ()). (f x.0, ())) (mapBindings s)) in
     match s with AllowSet s then AllowSet (convert s) else
     match s with DisallowSet s then DisallowSet (convert s) else
     never
@@ -635,7 +635,8 @@ let _addLOpen
       -> TentativeNode res self rstyle
       = lam parents.
         match parents with [p] ++ _ then
-          let cs = deref (deref (_addedNodesLeftChildren p)).1 in
+          let snd: (a, b) -> b = lam x. x.1 in
+          let cs = deref (snd (deref (_addedNodesLeftChildren p))) in
           match cs with [_] ++ _ then
             _addLeftChildren st input self cs parents
           else error "Somehow thought that a node would be a new parent, but it had no added children"
@@ -764,7 +765,8 @@ let breakableFinalizeParse
       -> [PermanentNode res self]
       = lam queue.
         match _popFromQueue queue with Some p then
-          let children = (deref (_addedNodesRightChildren p)).1 in
+          let snd: (a, b) -> b = lam x. x.1 in
+          let children = (snd (deref (_addedNodesRightChildren p))) in
           match p with TentativeRoot _ then children
           else match (p, children) with (TentativeMid _, [_] ++ _) then
             handleLeaf queue (_addRightChildren st p children);
@@ -780,8 +782,11 @@ let breakableFinalizeParse
     iter (handleLeaf queue) frontier;
     match work queue with res & [_] ++ _ then Some res else None ()
 
+type Irrelevancy self = {first: self, last: self}
+type Ambiguity self = {first: self, last: self, irrelevant: [Irrelevancy self]}
+
 type BreakableError self
-con Ambiguities : [{first: self, last: self, irrelevant: [{first: self, last: self}]}] -> BreakableError self
+con Ambiguities : [Ambiguity self] -> BreakableError self
 
 let breakableConstructResult
   : [PermanentNode res self] -- NonEmpty
@@ -812,7 +817,7 @@ let breakableConstructResult
         else never
     in
 
-    let ambiguities : Ref [{first: self, last: self, irrelevant: [self]}] = ref [] in
+    let ambiguities : Ref [Ambiguity self] = ref [] in
 
     recursive
       let workMany
@@ -838,7 +843,9 @@ let breakableConstructResult
           else match node with PrefixP {self = self, rightChildAlts = rs, input = PrefixI {construct = c}} then
             optionMap (c self) (workMany rs)
           else match node with InfixP {self = self, leftChildAlts = ls, rightChildAlts = rs, input = InfixI {construct = c}} then
-            optionZipWith (c self) (workMany ls) (workMany rs)
+            let l = workMany ls in
+            let r = workMany rs in
+            optionZipWith (c self) l r
           else match node with PostfixP {self = self, leftChildAlts = ls, input = PostfixI {construct = c}} then
             optionMap (c self) (workMany ls)
           else never
@@ -859,6 +866,8 @@ con NegateA : {pos: Int, r: Ast} -> Ast in
 con IfA : {pos: Int, r: Ast} -> Ast in
 con ElseA : {pos: Int, l: Ast, r: Ast} -> Ast in
 con NonZeroA : {pos: Int, l: Ast} -> Ast in
+
+type Self = {pos: Int, val: Int} in
 
 let allowAllBut = lam xs. DisallowSet (mapFromSeq cmpString (map (lam x. (x, ())) xs)) in
 let allowAll = allowAllBut [] in
@@ -890,41 +899,41 @@ let grammar =
     [ BreakableAtom {label = "int", construct = lam x. IntA x}
     , BreakableInfix
       { label = "plus"
-      , construct = lam x. lam l. lam r. PlusA {pos = x.pos, l = l, r = r}
+      , construct = lam x: Self. lam l. lam r. PlusA {pos = x.pos, l = l, r = r}
       , leftAllow = allowAll
       , rightAllow = allowAll
       }
     , BreakableInfix
       { label = "times"
-      , construct = lam x. lam l. lam r. TimesA {pos = x.pos, l = l, r = r}
+      , construct = lam x: Self. lam l. lam r. TimesA {pos = x.pos, l = l, r = r}
       , leftAllow = allowAll
       , rightAllow = allowAll
       }
     , BreakableInfix
       { label = "divide"
-      , construct = lam x. lam l. lam r. DivideA {pos = x.pos, l = l, r = r}
+      , construct = lam x: Self. lam l. lam r. DivideA {pos = x.pos, l = l, r = r}
       , leftAllow = allowAll
       , rightAllow = allowAll
       }
     , BreakablePrefix
       { label = "negate"
-      , construct = lam x. lam r. NegateA {pos = x.pos, r = r}
+      , construct = lam x: Self. lam r. NegateA {pos = x.pos, r = r}
       , rightAllow = allowAll
       }
     , BreakablePrefix
       { label = "if"
-      , construct = lam x. lam r. IfA {pos = x.pos, r = r}
+      , construct = lam x: Self. lam r. IfA {pos = x.pos, r = r}
       , rightAllow = allowAll
       }
     , BreakableInfix
       { label = "else"
-      , construct = lam x. lam l. lam r. ElseA {pos = x.pos, l = l, r = r}
+      , construct = lam x: Self. lam l. lam r. ElseA {pos = x.pos, l = l, r = r}
       , leftAllow = allowOnly ["if"]
       , rightAllow = allowAll
       }
     , BreakablePostfix
       { label = "nonZero"
-      , construct = lam x. lam l. NonZeroA {pos = x.pos, l = l}
+      , construct = lam x: Self. lam l. NonZeroA {pos = x.pos, l = l}
       , leftAllow = allowAll
       }
     ]
@@ -979,7 +988,7 @@ let _nonZero =
 
 let testParse
   : [Int -> TestToken]
-  -> Either (BreakableError Self) Ast
+  -> Option (Either (BreakableError Self) Ast)
   = recursive
       let workROpen = lam pos. lam st. lam tokens.
         match tokens with [t] ++ tokens then

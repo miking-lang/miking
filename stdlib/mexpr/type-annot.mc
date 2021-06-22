@@ -14,6 +14,7 @@ include "const-types.mc"
 include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
+include "mexpr/type.mc"
 
 type TypeEnv = {
   varEnv: Map Name Type,
@@ -98,9 +99,9 @@ lang VarCompatibleType = CompatibleType + VarTypeAst
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
   sem reduceType (tyEnv : TypeEnv) =
-  | TyVar {ident = id} ->
+  | TyVar {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
-      error (concat "Unbound TyVar in reduceType: " (nameGetStr id))
+      infoErrorExit info (concat "Unbound TyVar in reduceType: " (nameGetStr id))
 
 end
 
@@ -471,20 +472,19 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
   | TmMatch t ->
     let target = typeAnnotExpr env t.target in
-    let thnEnv = typeAnnotPat env (ty target) t.pat in
-    let thn = typeAnnotExpr thnEnv t.thn in
-    let els = typeAnnotExpr env t.els in
-    let ty =
-      match env with {tyEnv = tyEnv} then
-        match compatibleType tyEnv (ty thn) (ty els) with Some ty then
-          ty
-        else (ityunknown_ t.info)
-      else never
-    in
-    TmMatch {{{{t with target = target}
-                  with thn = thn}
-                  with els = els}
-                  with ty = ty}
+    match typeAnnotPat env (ty target) t.pat with (thnEnv, pat) then
+      let thn = typeAnnotExpr thnEnv t.thn in
+      let els = typeAnnotExpr env t.els in
+      let ty =
+        match compatibleType env.tyEnv (ty thn) (ty els) with Some ty
+        then ty
+        else (ityunknown_ t.info) in
+      TmMatch {{{{{t with target = target}
+                     with thn = thn}
+                     with els = els}
+                     with ty = ty}
+                     with pat = pat}
+    else never
 end
 
 lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
@@ -514,61 +514,74 @@ end
 lang NamedPatTypeAnnot = TypeAnnot + NamedPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatNamed t ->
-    match t.ident with PName n then
-      {env with varEnv = mapInsert n expectedTy env.varEnv}
-    else env
+    let env =
+      match t.ident with PName n then
+        {env with varEnv = mapInsert n expectedTy env.varEnv}
+      else env in
+    (env, PatNamed {t with ty = expectedTy})
 end
 
 lang SeqTotPatTypeAnnot = TypeAnnot + SeqTotPat + UnknownTypeAst + SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqTot t ->
     let elemTy =
-      match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
-      else None ()
+      match expectedTy with TySeq {ty = elemTy} then elemTy
+      else ityunknown_ t.info
     in
-    match elemTy with Some ty then
-      foldl (lam acc. lam pat. typeAnnotPat acc ty pat) env t.pats
-    else env
+    match mapAccumL (lam acc. lam pat. typeAnnotPat acc elemTy pat) env t.pats with (env, pats) then
+      (env, PatSeqTot {{t with pats = pats} with ty = tyseq_ elemTy})
+    else never
 end
 
 lang SeqEdgePatTypeAnnot = TypeAnnot + SeqEdgePat + UnknownTypeAst + SeqTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatSeqEdge t ->
     let elemTy =
-      match expectedTy with TySeq {ty = elemTy} then Some elemTy
-      else match expectedTy with TyUnknown _ then Some (ityunknown_ t.info)
-      else None ()
-    in
-    match elemTy with Some ty then
-      let env : TypeEnv =
-        foldl (lam acc. lam pat. typeAnnotPat env ty pat) env t.prefix
-      in
-      let env =
+      match expectedTy with TySeq {ty = elemTy} then elemTy
+      else ityunknown_ t.info in
+    let expectedTy = match expectedTy with TySeq _
+      then expectedTy
+      else tyseq_ elemTy in
+    match mapAccumL (lam acc. lam pat. typeAnnotPat acc elemTy pat) env t.prefix with (env, prefix) then
+      let env: TypeEnv = env in
+      let env: TypeEnv =
         match t.middle with PName n then
           {env with varEnv = mapInsert n expectedTy env.varEnv}
         else env
       in
-      foldl (lam acc. lam pat. typeAnnotPat env ty pat) env t.postfix
-    else env
+      match mapAccumL (lam acc. lam pat. typeAnnotPat acc elemTy pat) env t.postfix with (env, postfix) then
+        (env, PatSeqEdge {{{t with prefix = prefix} with postfix = postfix} with ty = expectedTy})
+      else never
+    else never
 end
 
 lang RecordPatTypeAnnot = TypeAnnot + RecordPat + UnknownTypeAst + RecordTypeAst
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatRecord t ->
-    match expectedTy with TyRecord {fields = fields} then
-      let annotFields = lam fields. lam acc. lam k. lam pat.
-        match mapLookup k fields with Some ty then
-          typeAnnotPat acc ty pat
-        else acc
-      in
-      mapFoldWithKey (annotFields fields) env t.bindings
-    else match expectedTy with TyUnknown _ then
-      let annotUnknown = lam acc. lam. lam pat.
-        typeAnnotPat acc (ityunknown_ t.info) pat
-      in
-      mapFoldWithKey annotUnknown env t.bindings
-    else env
+    let expectedTy = typeUnwrapAlias env.tyEnv expectedTy in
+    let expectedTy = match expectedTy with TyUnknown _ then t.ty else expectedTy in
+    let expectedTy = match expectedTy with TyRecord _ then expectedTy else
+      match (record2tuple t.bindings, mapLength t.bindings) with (Some _, length & !1) then
+        -- NOTE(vipa, 2021-05-26): This looks like a tuple pattern, so
+        -- we assume that the type is exactly that tuple type. This is
+        -- technically a hack, and so has some cases where it breaks
+        -- things, but in the common case it is fine. Once we have
+        -- exact record patterns, and tuple patterns desugar to that,
+        -- this can be removed.
+        tytuple_ (make length tyunknown_)
+      else expectedTy
+    in
+    let lookup =
+      match expectedTy with TyRecord {fields = fields} then
+        lam field. optionGetOr (ityunknown_ t.info) (mapLookup field fields)
+      else
+        lam. ityunknown_ t.info
+    in
+    let annotField = lam env. lam field. lam pat.
+      typeAnnotPat env (lookup field) pat in
+    match mapMapAccum annotField env t.bindings with (env, bindings) then
+      (env, PatRecord {{t with bindings = bindings} with ty = expectedTy})
+    else never
 end
 
 lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
@@ -576,43 +589,54 @@ lang DataPatTypeAnnot = TypeAnnot + DataPat + VariantTypeAst + VarTypeAst +
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatCon t ->
     match mapLookup t.ident env.conEnv
-    with Some (TyArrow {from = argTy, to = _}) then
-      typeAnnotPat env argTy t.subpat
-    else env
+    with Some (TyArrow {from = argTy, to = to}) then
+      match typeAnnotPat env argTy t.subpat with (env, subpat) then
+        (env, PatCon {{t with subpat = subpat} with ty = to})
+      else never
+    else (env, PatCon t)
 end
 
 lang IntPatTypeAnnot = TypeAnnot + IntPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
-  | PatInt _ -> env
+  | PatInt r -> (env, PatInt {r with ty = tyint_})
 end
 
 lang CharPatTypeAnnot = TypeAnnot + CharPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
-  | PatChar _ -> env
+  | PatChar r -> (env, PatChar {r with ty = tychar_})
 end
 
 lang BoolPatTypeAnnot = TypeAnnot + BoolPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
-  | PatBool _ -> env
+  | PatBool r -> (env, PatBool {r with ty = tybool_})
 end
 
 lang AndPatTypeAnnot = TypeAnnot + AndPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatAnd t ->
-    let env = typeAnnotPat env expectedTy t.lpat in
-    typeAnnotPat env expectedTy t.rpat
+    match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
+      match typeAnnotPat env expectedTy t.rpat with (env, rpat) then
+        (env, PatAnd {{{t with lpat = lpat} with rpat = rpat} with ty = expectedTy})
+      else never
+    else never
 end
 
 lang OrPatTypeAnnot = TypeAnnot + OrPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   | PatOr t ->
-    let env = typeAnnotPat env expectedTy t.lpat in
-    typeAnnotPat env expectedTy t.rpat
+    match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
+      match typeAnnotPat env expectedTy t.rpat with (env, rpat) then
+        (env, PatOr {{{t with lpat = lpat} with rpat = rpat} with ty = expectedTy})
+      else never
+    else never
 end
 
 lang NotPatTypeAnnot = TypeAnnot + NotPat
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
-  | PatNot t -> typeAnnotPat env expectedTy t.subpat
+  | PatNot t ->
+    match typeAnnotPat env expectedTy t.subpat with (env, subpat) then
+      (env, PatNot {{t with subpat = subpat} with ty = expectedTy})
+    else never
 end
 
 lang MExprTypeAnnot =

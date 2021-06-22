@@ -86,37 +86,11 @@ type MatchRecord = {target : Expr, pat : Pat, thn : Expr,
                     els : Expr, ty : Type, info : Info}
 
 lang OCamlMatchGenerate = MExprAst + OCamlAst
-  sem matchTargetType (env : GenerateEnv) =
-  | t ->
-    let t : MatchRecord = t in
-    let ty = ty t.target in
-    -- If we don't know the type of the target and the pattern describes a
-    -- tuple, then we assume the target has that type. We do this to
-    -- eliminate the need to add type annotations when matching on tuples,
-    -- which happens frequently.
-    match ty with TyUnknown _ then
-      match t.pat with PatRecord {bindings = bindings} then
-        if mapIsEmpty bindings then ty else
-        match record2tuple bindings with Some _ then
-          let bindingTypes = mapMap (lam. tyunknown_) bindings in
-          match mapLookup bindingTypes env.records with Some id then
-            ntyvar_ id
-          else
-            let msg = join [
-              "Pattern specifies undefined tuple type.\n",
-              "This was caused by an error in type-lifting."
-            ] in
-            infoErrorExit t.info msg
-        else ty
-      else ty
-    else ty
-
   sem generateDefaultMatchCase (env : GenerateEnv) =
   | t ->
     let t : MatchRecord = t in
     let tname = nameSym "_target" in
-    let targetTy = matchTargetType env t in
-    match generatePat env targetTy tname t.pat with (nameMap, wrap) then
+    match generatePat env tname t.pat with (nameMap, wrap) then
       match _mkFinalPatExpr nameMap with (pat, expr) then
         _optMatch
           (objMagic
@@ -171,7 +145,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
-  | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) ->
+  | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
     generate env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
     generate env (bind_
@@ -184,7 +158,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     let binds : [(SID, Pat)] = mapBindings pr.bindings in
     match binds with [(fieldLabel, PatNamed ({ident = PName patName} & p))] then
       if nameEq patName thnv.ident then
-        let targetTy = typeUnwrapAlias env.aliases (matchTargetType env t) in
+        let targetTy = typeUnwrapAlias env.aliases pr.ty in
         match lookupRecordFields targetTy env.constrs with Some fields then
           let fieldTypes = ocamlTypedFields fields in
           match mapLookup fieldTypes env.records with Some name then
@@ -193,7 +167,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             _omatch_ (objMagic (generate env t.target))
               [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
           else error "Record type not handled by type-lifting"
-        else error (infoErrorString info "Unknown record type")
+        else infoErrorExit info "Unknown record type"
       else generateDefaultMatchCase env t
     else generateDefaultMatchCase env t
   | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
@@ -243,7 +217,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     else generateDefaultMatchCase env t
   | TmMatch t -> generateDefaultMatchCase env t
 
-  sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
+  sem generatePat (env : GenerateEnv) (targetName : Name) =
 end
 
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExternalNaive
@@ -386,7 +360,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
   | t -> smap_Expr_Expr (generate env) t
 
   /- : Pat -> (AssocMap Name Name, Expr -> Expr) -/
-  sem generatePat (env : GenerateEnv) (targetTy : Type) (targetName : Name) =
+  sem generatePat (env : GenerateEnv) (targetName : Name) =
   | PatNamed {ident = PWildcard _} ->
     (assocEmpty, identity)
   | PatNamed {ident = PName n} ->
@@ -402,17 +376,12 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
   | PatChar {val = val} ->
     (assocEmpty, lam cont. _if (eqc_ (nvar_ targetName) (char_ val)) cont _none)
   | PatSeqTot {pats = pats} ->
-    let elemTy =
-      match targetTy with TySeq {ty = elemTy} then
-        elemTy
-      else tyunknown_
-    in
     let genOne = lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env elemTy n pat with (names, innerWrap) then
+      match generatePat env n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
-            (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
+            (nulet_ n (get_ (nvar_ targetName) (int_ i)))
             (innerWrap cont)
         in (names, wrap)
       else never in
@@ -433,14 +402,9 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
     let tempName = nameSym "_splitTemp" in
     let midName = nameSym "_middle" in
     let postName = nameSym "_postfix" in
-    let elemTy =
-      match targetTy with TySeq {ty = elemTy} then
-        elemTy
-      else tyunknown_
-    in
     let genOne = lam targetName. lam i. lam pat.
       let n = nameSym "_seqElem" in
-      match generatePat env elemTy n pat with (names, innerWrap) then
+      match generatePat env n pat with (names, innerWrap) then
         let wrap = lam cont.
           bind_
             (nlet_ n tyunknown_ (get_ (nvar_ targetName) (int_ i)))
@@ -463,8 +427,8 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       else never
     else never
   | PatOr {lpat = lpat, rpat = rpat} ->
-    match generatePat env targetTy targetName lpat with (lnames, lwrap) then
-      match generatePat env targetTy targetName rpat with (rnames, rwrap) then
+    match generatePat env targetName lpat with (lnames, lwrap) then
+      match generatePat env targetName rpat with (rnames, rwrap) then
         match _mkFinalPatExpr lnames with (lpat, lexpr) then
           match _mkFinalPatExpr rnames with (_, rexpr) then  -- NOTE(vipa, 2020-12-03): the pattern is identical between the two, assuming the two branches bind exactly the same names, which they should
             let names = assocMapWithKey {eq=nameEqSym} (lam k. lam. k) lnames in
@@ -485,15 +449,15 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       else never
     else never
   | PatAnd {lpat = lpat, rpat = rpat} ->
-    match generatePat env targetTy targetName lpat with (lnames, lwrap) then
-      match generatePat env targetTy targetName rpat with (rnames, rwrap) then
+    match generatePat env targetName lpat with (lnames, lwrap) then
+      match generatePat env targetName rpat with (rnames, rwrap) then
         let names = assocMergePreferRight {eq=nameEqSym} lnames rnames in
         let wrap = lam cont. lwrap (rwrap cont) in
         (names, wrap)
       else never
     else never
   | PatNot {subpat = pat} ->
-    match generatePat env targetTy targetName pat with (_, innerWrap) then
+    match generatePat env targetName pat with (_, innerWrap) then
       let wrap = lam cont.
         _optMatch (innerWrap (_some (OTmTuple {values = []})))
           pvarw_
@@ -512,7 +476,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
             (join ["Field ", sidToString id, " not found in record with fields {", strFields, "}"])
       in
       match mapLookup id patNames with Some n then
-        match generatePat env ty n pat with (names, innerWrap) then
+        match generatePat env n pat with (names, innerWrap) then
           let wrap = lam cont. innerWrap cont in
           (names, wrap)
         else never
@@ -525,7 +489,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       in
       (assocEmpty, wrap)
     else match env with {records = records, constrs = constrs} then
-      let targetTy = typeUnwrapAlias env.aliases targetTy in
+      let targetTy = typeUnwrapAlias env.aliases t.ty in
       match lookupRecordFields targetTy constrs with Some fields then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes records with Some name then
@@ -574,7 +538,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
             targetName
           else conVarName
         in
-        match generatePat env innerTy innerTargetName t.subpat with (names, subwrap) then
+        match generatePat env innerTargetName t.subpat with (names, subwrap) then
           let isUnit = match innerTy with TyRecord {fields = fields} then
             mapIsEmpty fields else false in
           let wrap = lam cont.
@@ -616,7 +580,12 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
             inexpr = t
           }, recordFieldsToName)
       else match ty with TyVariant {constrs = constrs} then
-        let constrs = mapMap (typeUnwrapAlias typeLiftEnvMap) constrs in
+        let fixConstrType = lam ty.
+          let ty = typeUnwrapAlias typeLiftEnvMap ty in
+          match ty with TyRecord tr then
+            TyRecord {tr with fields = ocamlTypedFields tr.fields}
+          else tyunknown_ in
+        let constrs = mapMap fixConstrType constrs in
         if mapIsEmpty constrs then (t, recordFieldsToName)
         else
           (OTmVariantTypeDecl {
@@ -1276,6 +1245,19 @@ let recordWithLam = symbolize (
 utest recordWithLam with generateTypeAnnotated recordWithLam
 using sameSemantics in
 
+let foo = nameSym "Foo" in
+let tyFoo = ntyvar_ foo in
+let fooCon = nameSym "FooCon" in
+let tyFooCon = tyrecord_ [("foo", tyarrow_ tyunknown_ tyunknown_)] in
+let conWithRecArrowTy = symbolize (bindall_
+  [ ntype_ foo tyunknown_
+  , ncondef_ fooCon (tyarrow_ tyFooCon tyFoo)
+  , ulet_ "" (nconapp_ fooCon (urecord_ [("foo", ulam_ "" (uunit_))]))
+  , int_ 42
+  ]) in
+utest conWithRecArrowTy with generateTypeAnnotated conWithRecArrowTy
+using sameSemantics in
+
 -- Ints
 let addInt1 = addi_ (int_ 1) (int_ 2) in
 utest addInt1 with generateEmptyEnv addInt1 using sameSemantics in
@@ -1547,8 +1529,8 @@ utest testFileExists with generateEmptyEnv testFileExists using sameSemantics in
 let testPrint = symbolize (bind_ (ulet_ "_" (print_ (str_ ""))) (int_ 0)) in
 utest testPrint with generateEmptyEnv testPrint using sameSemantics in
 
-let testDPrint = symbolize (bind_ (ulet_ "_" (dprint_ (str_ ""))) (int_ 0)) in
-utest testDPrint with generateEmptyEnv testDPrint using sameSemantics in
+let testDPrint = symbolize (dprint_ (int_ 0)) in
+utest ocamlEval (generateEmptyEnv testDPrint) with int_ 0 using eqExpr in
 
 let testCommand = command_ (str_ "echo \"42\"") in
 utest ocamlEval (generateEmptyEnv testCommand) with int_ 42 using eqExpr in

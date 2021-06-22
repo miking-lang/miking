@@ -9,7 +9,8 @@ type Options = {
   debugTypeAnnot : Bool,
   exitBefore : Bool,
   runTests : Bool,
-  disableOptimizations : Bool
+  disableOptimizations : Bool,
+  useTuned : Bool
 }
 
 -- Option structure
@@ -19,7 +20,8 @@ let options = {
   debugTypeAnnot = false,
   exitBefore = false,
   runTests = false,
-  disableOptimizations = false
+  disableOptimizations = false,
+  useTuned = false
 }
 
 -- Option map, maps strings to structure updates
@@ -29,7 +31,8 @@ let optionsMap = [
 ("--debug-type-annot", lam o : Options. {o with debugTypeAnnot = true}),
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
-("--disable-optimizations", lam o : Options. {o with disableOptimizations = true})
+("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
+("--use-tuned", lam o : Options. {o with useTuned = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}
