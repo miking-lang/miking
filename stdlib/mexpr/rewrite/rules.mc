@@ -54,7 +54,9 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
     let newThn = TmMatch {t with els = TmNever {ty = TyUnknown {info = t.info},
                                                 info = t.info}} in
     rewriteTerm
-      (TmMatch {{{t with pat = PatSeqTot {pats = [], info = patInfo}}
+      (TmMatch {{{t with pat = PatSeqTot {pats = [],
+                                          ty = TyUnknown {info = patInfo},
+                                          info = patInfo}}
                    with thn = t.els}
                    with els = newThn})
   -- match s with [] then e1 else match s with [h] ++ t then e2 else never ->
@@ -77,7 +79,8 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
                            rhs = t1,
                            ty = TyBool {info = matchTm.info},
                            info = matchTm.info} in
-      let boolPat = PatBool {val = true, info = matchTm.info} in
+      let boolPat = PatBool {val = true, ty = TyUnknown {info = matchTm.info},
+                             info = matchTm.info} in
       let elemTy =
         match ty t1 with TySeq {ty = elemTy} then
           elemTy

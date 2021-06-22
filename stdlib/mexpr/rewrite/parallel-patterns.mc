@@ -135,7 +135,7 @@ let getPatternDependencies : [Pattern] -> Map Int (Set Int) =
 -- structure to avoid having to recompute them every time an atomic pattern is
 -- checked.
 let withDependencies :
-     {atomicPatternSeq : [Pattern], replacement : (Map VarPattern Expr) -> Expr}
+     {atomicPatterns : [Pattern], replacement : (Map VarPattern Expr) -> Expr}
   -> ParallelPattern = lam pat.
   recursive let work : [(Int, Pattern)] -> Pattern -> [(Int, Pattern)] =
     lam acc. lam pat.
@@ -300,12 +300,13 @@ recursive
         work state 0
       else None ()
     in
-    let matchArgsWithParams : [Expr] -> State -> VarPattern
-                           -> Option Name -> Option State =
+    let matchArgsWithParams : [Expr] -> PatternMatchState -> VarPattern
+                           -> Option Name -> Option PatternMatchState =
       lam args. lam state. lam bindingVar. lam bindingName.
       let n = length args in
       match optionMapM getVariableIdentifier args with Some argNames then
-        recursive let work : State -> Int -> Option State = lam state. lam i.
+        recursive let work : PatternMatchState -> Int -> Option PatternMatchState =
+          lam state. lam i.
           if lti i n then
             let argName = get argNames i in
             match bindingVar with PatternName id then
@@ -363,6 +364,7 @@ recursive
         match expr with TmMatch t2 then
           match matchVariablePattern params t2.target state t.cond
           with Some updatedState then
+            let updatedState : PatternMatchState = updatedState in
             match getPatternDependencies t.thn with (thnActive, thnDeps) then
               let thnState = {{updatedState with active = thnActive}
                                             with dependencies = thnDeps} in
@@ -371,6 +373,7 @@ recursive
               with Some finalThnState then
                 if isFinalState finalThnState then
                   match getPatternDependencies t.els with (elsActive, elsDeps) then
+                    let finalThnState : PatternMatchState = finalThnState in
                     let elsState =
                       {{finalThnState with active = elsActive}
                                       with dependencies = elsDeps} in
@@ -378,6 +381,7 @@ recursive
                                               params t2.els elsState
                     with Some finalElsState then
                       if isFinalState finalElsState then
+                        let finalElsState : PatternMatchState = finalElsState in
                         Some {{finalElsState with active = updatedState.active}
                                              with dependencies = updatedState.dependencies}
                       else None ()

@@ -335,6 +335,7 @@ let expr = app_ (var_ "flatten") s in
 utest makeKeywords [] expr with flatten_ s using eqExpr in
 
 let s = seq_ [int_ 1, int_ 2, int_ 3] in
+let expr = app_ (var_ "indices") s in
 utest makeKeywords [] expr with indices_ s using eqExpr in
 
 ()
