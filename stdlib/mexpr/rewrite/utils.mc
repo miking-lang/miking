@@ -1,10 +1,10 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
-include "mexpr/patterns.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/rewrite/parallel-keywords.mc"
 
 -- Gets the return type of the body of a function.
 recursive let functionBodyReturnType : Expr -> Type =
@@ -26,16 +26,6 @@ recursive let replaceFunctionBody : Expr -> Expr -> Expr =
     TmLam {{t with body = body} with ty = ty}
   else newExpr
 end
-
--- Substitutes all occurences of the expression from with the expression to in
--- the expression e.
-let substituteExpression : Expr -> Expr -> Expr -> Expr =
-  use MExprParallelKeywordMaker in
-  lam e. lam from. lam to.
-  recursive let work = lam e.
-    if eqExpr e from then to
-    else smap_Expr_Expr work e
-  in work e
 
 -- Substitutes all variables of the given expression with the expressions their
 -- names have been mapped to.

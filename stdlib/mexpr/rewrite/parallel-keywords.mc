@@ -5,7 +5,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 
 lang MExprParallelKeywordMaker =
-  KeywordMaker + MExprAst + MExprEq
+  KeywordMaker + MExprAst + MExprEq + MExprPrettyPrint
 
   syn Expr =
   | TmParallelMap {f: Expr, as: Expr, ty: Type, info: Info}
@@ -78,40 +78,69 @@ lang MExprParallelKeywordMaker =
   | TmFlatten t -> t.ty
   | TmIndices t -> t.ty
 
-  sem smap_Expr_Expr (f : Expr -> a) =
-  | TmParallelMap t -> TmParallelMap {{t with f = f t.f}
-                                         with as = f t.as}
-  | TmParallelMap2 t -> TmParallelMap2 {{{t with f = f t.f}
-                                            with as = f t.as}
-                                            with bs = f t.bs}
-  | TmParallelReduce t -> TmParallelReduce {{{t with f = f t.f}
-                                                with ne = f t.ne}
-                                                with as = f t.as}
-  | TmParallelScan t -> TmParallelScan {{{t with f = f t.f}
-                                            with ne = f t.ne}
-                                            with as = f t.as}
-  | TmParallelFilter t -> TmParallelFilter {{t with p = f t.p}
-                                               with as = f t.as}
-  | TmParallelPartition t -> TmParallelPartition {{t with p = f t.p}
-                                                     with as = f t.as}
-  | TmParallelAll t -> TmParallelAll {{t with p = f t.p}
-                                         with as = f t.as}
-  | TmParallelAny t -> TmParallelAny {{t with p = f t.p}
-                                         with as = f t.as}
-  | TmFlatten t -> TmFlatten {t with s = f t.s}
-  | TmIndices t -> TmIndices {t with s = f t.s}
-
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | TmParallelMap t -> f (f acc t.f) t.as
-  | TmParallelMap2 t -> f (f (f acc t.f) t.as) t.bs
-  | TmParallelReduce t -> f (f (f acc t.f) t.ne) t.as
-  | TmParallelScan t -> f (f (f acc t.f) t.ne) t.as
-  | TmParallelFilter t -> f (f acc t.p) t.as
-  | TmParallelPartition t -> f (f acc t.p) t.as
-  | TmParallelAll t -> f (f acc t.p) t.as
-  | TmParallelAny t -> f (f acc t.p) t.as
-  | TmFlatten t -> f acc t.s
-  | TmIndices t -> f acc t.s
+  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TmParallelMap t ->
+    match f acc t.f with (acc, tf) then
+      match f acc t.as with (acc, as) then
+        (acc, TmParallelMap {{t with f = tf} with as = as})
+      else never
+    else never
+  | TmParallelMap2 t ->
+    match f acc t.f with (acc, tf) then
+      match f acc t.as with (acc, as) then
+        match f acc t.bs with (acc, bs) then
+          (acc, TmParallelMap2 {{{t with f = tf} with as = as} with bs = bs})
+        else never
+      else never
+    else never
+  | TmParallelReduce t ->
+    match f acc t.f with (acc, tf) then
+      match f acc t.ne with (acc, ne) then
+        match f acc t.as with (acc, as) then
+          (acc, TmParallelReduce {{{t with f = tf} with ne = ne} with as = as})
+        else never
+      else never
+    else never
+  | TmParallelScan t ->
+    match f acc t.f with (acc, tf) then
+      match f acc t.ne with (acc, ne) then
+        match f acc t.as with (acc, as) then
+          (acc, TmParallelScan {{{t with f = tf} with ne = ne} with as = as})
+        else never
+      else never
+    else never
+  | TmParallelFilter t ->
+    match f acc t.p with (acc, p) then
+      match f acc t.as with (acc, as) then
+        (acc, TmParallelFilter {{t with p = p} with as = as})
+      else never
+    else never
+  | TmParallelPartition t ->
+    match f acc t.p with (acc, p) then
+      match f acc t.as with (acc, as) then
+        (acc, TmParallelPartition {{t with p = p} with as = as})
+      else never
+    else never
+  | TmParallelAll t ->
+    match f acc t.p with (acc, p) then
+      match f acc t.as with (acc, as) then
+        (acc, TmParallelAll {{t with p = p} with as = as})
+      else never
+    else never
+  | TmParallelAny t ->
+    match f acc t.p with (acc, p) then
+      match f acc t.as with (acc, as) then
+        (acc, TmParallelAny {{t with p = p} with as = as})
+      else never
+    else never
+  | TmFlatten t ->
+    match f acc t.s with (acc, s) then
+      (acc, TmFlatten {t with s = s})
+    else never
+  | TmIndices t ->
+    match f acc t.s with (acc, s) then
+      (acc, TmIndices {t with s = s})
+    else never
 
   sem symbolizeExpr (env : SymEnv) =
   | (TmParallelMap _) & t -> smap_Expr_Expr (symbolizeExpr env) t
@@ -191,6 +220,30 @@ lang MExprParallelKeywordMaker =
   | TmIndices t ->
     TmIndices {{t with s = typeAnnotExpr env t.s}
                   with ty = tyseq_ tyint_}
+
+  sem pprintCode (indent : Int) (env : PprintEnv) =
+  | TmParallelMap t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.as with (env, as) then
+        (env, join ["parallelMap ", f, " ", as])
+      else never
+    else never
+  | TmParallelMap2 t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.as with (env, as) then
+        match pprintCode indent env t.bs with (env, bs) then
+          (env, join ["parallelMap2 ", f, " ", as, " ", bs])
+        else never
+      else never
+    else never
+  | TmParallelReduce t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.ne with (env, ne) then
+        match pprintCode indent env t.as with (env, as) then
+          (env, join ["parallelReduce ", f, " ", ne, " ", as])
+        else never
+      else never
+    else never
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmParallelMap r ->
