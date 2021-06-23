@@ -89,7 +89,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
              Table {holes = holes, table = table, options = options}}}
     then
       let table = map (lam h.
-        match h with TmHole {hole = hole} then sample hole
+        match h with TmHole {inner = h} then sample h
         else dprintLn h; error "Expected a decision point") holes
       in [Table {table = table, holes = holes, options = options}]
     else never

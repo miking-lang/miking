@@ -151,7 +151,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             depth : Int,
             ty : Type,
             info : Info,
-            hole : Hole}
+            inner : Hole}
 
   sem ty =
   | TmHole {ty = ty} -> ty
@@ -177,7 +177,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem pprintCode (indent : Int) (env : SymEnv) =
   | TmHole t ->
     match pprintCode indent env t.default with (env, default) then
-      match pprintHole t.hole with (keyword, bindings) then
+      match pprintHole t.inner with (keyword, bindings) then
         (env, join
           [ keyword
           , " {"
@@ -204,7 +204,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem matchKeywordString (info : Info) =
   | "hole" -> Some (1, lam lst. head lst)
 
-  sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole)
+  sem _mkHole (info : Info) (hty : Type) (holeMap : Map String Expr -> Hole)
               (validate : Expr -> Expr) =
   | arg ->
     use RecordAst in
@@ -219,7 +219,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
                 , depth = _expectConstInt "depth" depth
                 , info = info
                 , ty = hty
-                , hole = hole bindings})
+                , inner = holeMap bindings})
     else error "impossible"
 end
 
@@ -268,7 +268,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
       let validate = lam expr.
         match expr
         with TmHole {default = TmConst {val = CInt {val = i}},
-                     hole = IntRange {min = min, max = max}}
+                     inner = IntRange {min = min, max = max}}
         then
           if and (leqi min i) (geqi max i) then expr
           else error "Default value is not within range"
@@ -295,7 +295,7 @@ let holeBool_ = use HoleBoolAst in
          , depth = depth
          , ty = tybool_
          , info = NoInfo ()
-         , hole = BoolHole {}}
+         , inner = BoolHole {}}
 
 let holeIntRange_ = use HoleIntRangeAst in
   lam default. lam depth. lam min. lam max.
@@ -303,7 +303,7 @@ let holeIntRange_ = use HoleIntRangeAst in
          , depth = depth
          , ty = tyint_
          , info = NoInfo ()
-         , hole = IntRange {min = min, max = max}}
+         , inner = IntRange {min = min, max = max}}
 
 
 ------------------------------
@@ -443,7 +443,7 @@ let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
   else never
 
 let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
-  lam hole. lam name. lam paths. lam env : CallCtxEnv.
+  lam h. lam name. lam paths. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx, idx2hole = idx2hole} then
     let countInit = length (deref idx2hole) in
     match
@@ -456,7 +456,7 @@ let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
     with (m, count) then
       let n = length paths in
       utest n with subi count countInit in
-      modref idx2hole (concat (deref idx2hole) (create n (lam. hole)));
+      modref idx2hole (concat (deref idx2hole) (create n (lam. h)));
       modref hole2idx (mapInsert name m (deref hole2idx));
       env
     else never
@@ -666,7 +666,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | env ->
     let env : CallCtxEnv = env in
     let idx2hole = deref env.idx2hole in
-    map (lam hole. default hole) idx2hole
+    map (lam h. default h) idx2hole
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.
