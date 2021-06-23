@@ -133,13 +133,10 @@ end
 -- Language fragments for decision points --
 --------------------------------------------
 
-let decisionPointsKeywords =
-[ "HoleBool"
-, "HoleIntRange"
-]
+let decisionPointsKeywords = ["hole", "Boolean", "IntRange"]
 
-let _lookup = lam s : String. lam m : Map String a.
-  mapLookupOrElse (lam. error (concat s " not found")) s m
+let _lookupExit = lam info : Info. lam s : String. lam m : Map String a.
+  mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
 
 let _expectConstInt = lam s. lam i.
   use IntAst in
@@ -204,6 +201,9 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem isKeyword =
   | TmHole _ -> true
 
+  sem matchKeywordString (info : Info) =
+  | "hole" -> Some (1, lam lst. head lst)
+
   sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole)
               (validate : Expr -> Expr) =
   | arg ->
@@ -212,15 +212,15 @@ lang HoleAst = IntAst + ANF + KeywordMaker
       let bindings = mapFromSeq cmpString
         (map (lam t : (SID, Expr). (sidToString t.0, t.1))
            (mapBindings bindings)) in
-      let default = _lookup "default" bindings in
-      let depth = _lookup "depth" bindings in
+      let default = _lookupExit info "default" bindings in
+      let depth = mapLookupOrElse (lam. int_ 0) "depth" bindings in
       validate
         (TmHole { default = default
                 , depth = _expectConstInt "depth" depth
                 , info = info
                 , ty = hty
                 , hole = hole bindings})
-    else error "Expected record type"
+    else error "impossible"
 end
 
 -- A Boolean decision point.
@@ -237,7 +237,7 @@ lang HoleBoolAst = BoolAst + HoleAst
   | "false" -> false
 
   sem matchKeywordString (info : Info) =
-  | "HoleBool" ->
+  | "Boolean" ->
     Some (1,
       let validate = lam expr.
         match expr with TmHole {default = default} then
@@ -249,7 +249,7 @@ lang HoleBoolAst = BoolAst + HoleAst
 
   sem pprintHole =
   | BoolHole {} ->
-    ("HoleBool", [])
+    ("Boolean", [])
 end
 
 -- An integer decision point (range of integers).
@@ -263,7 +263,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
     int_ (randIntU min (addi max 1))
 
   sem matchKeywordString (info : Info) =
-  | "HoleIntRange" ->
+  | "IntRange" ->
     Some (1,
       let validate = lam expr.
         match expr
@@ -276,8 +276,8 @@ lang HoleIntRangeAst = IntAst + HoleAst
 
       lam lst. _mkHole info tyint_
         (lam m.
-           let min = _expectConstInt "min" (_lookup "min" m) in
-           let max = _expectConstInt "max" (_lookup "max" m) in
+           let min = _expectConstInt "min" (_lookupExit info "min" m) in
+           let max = _expectConstInt "max" (_lookupExit info "max" m) in
            if leqi min max then
              IntRange {min = min, max = max}
            else error (join ["Empty domain: ",
@@ -286,7 +286,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
 
   sem pprintHole =
   | IntRange {min = min, max = max} ->
-    ("HoleIntRange", [("min", int2string min), ("max", int2string max)])
+    ("IntRange", [("min", int2string min), ("max", int2string max)])
 end
 
 let holeBool_ = use HoleBoolAst in
