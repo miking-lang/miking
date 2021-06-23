@@ -14,6 +14,9 @@ let printLn = lam s. print (concat s "\n")
 
 let dprintLn = lam x. dprint x; printLn ""
 
+let fprintLn = lam s. printLn s; flushStdout ()
+
+let fdprintLn = lam s. dprintLn s; flushStdout ()
 
 recursive
   let fix = lam f. lam e. f (fix f) e

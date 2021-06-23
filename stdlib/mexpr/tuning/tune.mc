@@ -150,7 +150,8 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
           printLn "-----------------------";
           debugSearch searchState;
           debugMeta metaState;
-          printLn "-----------------------"
+          printLn "-----------------------";
+          flushStdout ()
          else ());
         if stop searchState then
           (searchState, metaState)
