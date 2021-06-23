@@ -1,21 +1,30 @@
+include "mexpr/ast.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
 type VarPattern
 con PatternIndex : Int -> VarPattern
 con PatternName : Name -> VarPattern
+con PatternLiteralInt : Int -> VarPattern
 
-let cmpVarPattern = lam c1 : VarPattern. lam c2 : VarPattern.
-  let p : (VarPattern, VarPattern) = (c1, c2) in
-  match p with (PatternIndex i1, PatternIndex i2) then
-    subi i1 i2
-  else match p with (PatternIndex i1, _) then
-    1
-  else match p with (_, PatternIndex i2) then
-    negi 1
-  else match p with (PatternName n1, PatternName n2) then
-    nameCmp n1 n2
+let varPatternIndex : VarPattern -> Int = lam p.
+  match p with PatternIndex _ then 0
+  else match p with PatternName _ then 1
+  else match p with PatternLiteralInt _ then 2
   else never
+
+let cmpVarPattern : VarPattern -> VarPattern -> Int = lam p1. lam p2.
+  let diff = subi (varPatternIndex p1) (varPatternIndex p2) in
+  if eqi diff 0 then
+    let p = (p1, p2) in
+    match p with (PatternIndex i1, PatternIndex i2) then
+      subi i1 i2
+    else match p with (PatternName n1, PatternName n2) then
+      nameCmp n1 n2
+    else match p with (PatternLiteralInt i1, PatternLiteralInt i2) then
+      subi i1 i2
+    else never
+  else diff
 
 type AtomicPattern
 con FixedAppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
@@ -23,7 +32,7 @@ con UnknownAppPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
 con BranchPattern : {id : Int, cond : VarPattern, thn : [AtomicPattern],
                         els : [AtomicPattern]} -> AtomicPattern
 con SeqPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
-con RecursionPattern : {id : Int, binds : [(Name, Int)]} -> AtomicPattern
+con RecursionPattern : {id : Int, binds : [(Name, VarPattern)]} -> AtomicPattern
 con ReturnPattern : {id : Int, var : VarPattern} -> AtomicPattern
 
 type Pattern = {
@@ -64,9 +73,8 @@ let getShallowPatternDependencies : AtomicPattern -> [VarPattern] = lam p.
   else match p with BranchPattern t then [t.cond]
   else match p with SeqPattern t then t.vars
   else match p with RecursionPattern t then
-    match unzip t.binds with (names, indices) then
-      join [map (lam n. PatternName n) names,
-            map (lam i. PatternIndex i) indices]
+    match unzip t.binds with (names, vars) then
+      join [map (lam n. PatternName n) names, vars]
     else never
   else match p with ReturnPattern t then [t.var]
   else never
@@ -164,7 +172,7 @@ let mapPattern : () -> Pattern =
         SeqPattern {id = 6, vars = [PatternIndex 5]},
         FixedAppPattern {id = 7, fn = uconst_ (CConcat ()),
                        vars = [PatternName acc, PatternIndex 6]},
-        RecursionPattern {id = 8, binds = [(s, 3), (acc, 7)]},
+        RecursionPattern {id = 8, binds = [(s, PatternIndex 3), (acc, PatternIndex 7)]},
         ReturnPattern {id = 9, var = PatternIndex 8}
       ]},
     ReturnPattern {id = 10, var = PatternIndex 1}
@@ -210,7 +218,7 @@ let reducePattern : () -> Pattern =
         FixedAppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
         FixedAppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
         UnknownAppPattern {id = 5, vars = [PatternName acc, PatternIndex 4]},
-        RecursionPattern {id = 6, binds = [(s, 3), (acc, 5)]},
+        RecursionPattern {id = 6, binds = [(s, PatternIndex 3), (acc, PatternIndex 5)]},
         ReturnPattern {id = 7, var = PatternIndex 6}
       ]},
     ReturnPattern {id = 8, var = PatternIndex 1}
@@ -245,4 +253,54 @@ let getReducePattern = lam.
   else
     let pat = reducePattern () in
     modref reducePatRef (Some pat);
+    pat
+
+-- Definition of the 'for' pattern
+let forPatRef = ref (None ())
+let forPattern = use MExprAst in
+  lam.
+  let i = nameSym "i" in
+  let n = nameSym "n" in
+  let s = nameSym "s" in
+  let acc = nameSym "acc" in
+  let atomicPatterns = [
+    FixedAppPattern {id = 0, fn = uconst_ (CLti ()),
+                     vars = [PatternName i, PatternName n]},
+    BranchPattern {id = 1, cond = PatternIndex 0,
+      thn = [
+        FixedAppPattern {id = 2, fn = uconst_ (CGet ()),
+                         vars = [PatternName s, PatternName i]},
+        UnknownAppPattern {id = 3, vars = [PatternName acc, PatternIndex 2]},
+        FixedAppPattern {id = 4, fn = uconst_ (CAddi ()),
+                         vars = [PatternName i, PatternLiteralInt 1]},
+        RecursionPattern {id = 5, binds = [(acc, PatternIndex 3),
+                                           (i, PatternIndex 4),
+                                           (n, PatternName n)]},
+        ReturnPattern {id = 6, var = PatternIndex 5}
+      ],
+      els = [ReturnPattern {id = 7, var = PatternName acc}]},
+    ReturnPattern {id = 8, var = PatternIndex 1}
+  ] in
+  let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
+    match mapLookup (PatternIndex 3) matches with Some (accResultName, _) then
+      match mapLookup (PatternIndex 1) matches
+      with Some (_, TmMatch {thn = thn}) then
+        match mapLookup (PatternName acc) matches with Some (_, accParam) then
+          match mapLookup (PatternName n) matches with Some (_, nParam) then
+            sequentialFor_
+              (nulam_ acc (nulam_ i (bind_ thn (nvar_ accResultName))))
+              accParam nParam
+          else never
+        else never
+      else never
+    else never
+  in
+  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
+
+let getForPattern = lam.
+  match deref forPatRef with Some pat then
+    pat
+  else
+    let pat = forPattern () in
+    modref forPatRef (Some pat);
     pat

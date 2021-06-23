@@ -117,11 +117,64 @@ lang TestLang =
   MExprANF + MExprRewrite + MExprParallelKeywordMaker + MExprTailRecursion +
   MExprPrettyPrint + MExprParallelPattern
 
+  sem isAtomic =
+  | TmParallelMap _ -> false
+  | TmParallelMap2 _ -> false
+  | TmParallelReduce _ -> false
+  | TmParallelScan _ -> false
+  | TmParallelFilter _ -> false
+  | TmParallelPartition _ -> false
+  | TmParallelAll _ -> false
+  | TmParallelAny _ -> false
+  | TmFlatten _ -> false
+  | TmIndices _ -> false
+  | TmSequentialFor _ -> false
+  
+  sem pprintCode (indent : Int) (env : PprintEnv) =
+  | TmParallelMap t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.as with (env, as) then
+        (env, join ["parallelMap ", f, " ", as])
+      else never
+    else never
+  | TmParallelMap2 t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.as with (env, as) then
+        match pprintCode indent env t.bs with (env, bs) then
+          (env, join ["parallelMap2 ", f, " ", as, " ", bs])
+        else never
+      else never
+    else never
+  | TmParallelReduce t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.ne with (env, ne) then
+        match pprintCode indent env t.as with (env, as) then
+          (env, join ["parallelReduce ", f, " ", ne, " ", as])
+        else never
+      else never
+    else never
+  | TmParallelScan t -> never
+  | TmParallelFilter t -> never
+  | TmParallelPartition t -> never
+  | TmParallelAll t -> never
+  | TmParallelAny t -> never
+  | TmFlatten t -> never
+  | TmIndices t -> never
+  | TmSequentialFor t ->
+    match printParen indent env t.body with (env, body) then
+      match pprintCode indent env t.init with (env, init) then
+        match pprintCode indent env t.n with (env, n) then
+          (env, join ["for ", init, " ", n, pprintNewline indent, body])
+        else never
+      else never
+    else never
+end
+
 mexpr
 
 use TestLang in
 
-let patterns = [getMapPattern (), getReducePattern ()] in
+let patterns = [getMapPattern (), getReducePattern (), getForPattern()] in
 
 let preprocess : Expr -> Expr = lam e.
   normalizeTerm (tailRecursive (rewriteTerm e))
@@ -139,6 +192,17 @@ let containsParallelKeyword : Expr -> Bool = lam e.
     else sfold_Expr_Expr work acc e
   in
   work false e
+in
+
+recursive let printExpr : Expr -> String = lam e.
+  match e with TmParallelMap t then
+    join ["parallelMap (", printExpr t.f, ") ", printExpr t.as]
+  else match e with TmParallelReduce t then
+    join ["parallelReduce (", printExpr t.f, ") ", printExpr t.ne,
+          " ", printExpr t.as]
+  else match e with TmSequentialFor t then
+    join ["for ", printExpr t.init, " ", printExpr t.n, " ", printExpr t.body]
+  else expr2str e
 in
 
 let map = nameSym "map" in
@@ -185,6 +249,35 @@ let expr = preprocess (bindall_ [
       (seq_ [int_ 1, int_ 2, int_ 3]))
 ]) in
 let expr = parallelPatternRewrite patterns expr in
+utest recletBindingCount expr with 0 in
+utest containsParallelKeyword expr with true in
+
+let iterMax = nameSym "iterMax" in
+let max = nameSym "max" in
+let i = nameSym "i" in
+let n = nameSym "n" in
+let expr = preprocess (bindall_ [
+  nulet_ s (seq_ [int_ 1, int_ 2, int_ 3]),
+  nulet_ max (nulam_ x (nulam_ y (
+    if_ (gtf_ (app_ (nvar_ f) (nvar_ x))
+              (app_ (nvar_ f) (nvar_ y)))
+      (nvar_ x)
+      (nvar_ y)
+  ))),
+  nreclets_ [
+    (iterMax, tyunknown_, nulam_ acc (nulam_ i (nulam_ n (
+      if_ (lti_ (nvar_ i) (nvar_ n))
+        (bindall_ [
+          nulet_ x (get_ (nvar_ s) (nvar_ i)),
+          nulet_ y (appf2_ (nvar_ max) (nvar_ acc) (nvar_ x)),
+          appf3_ (nvar_ iterMax) (nvar_ y) (addi_ (nvar_ i) (int_ 1)) (nvar_ n)
+        ])
+        (nvar_ acc)))))
+  ],
+  appf3_ (nvar_ iterMax) (head_ (nvar_ s)) (int_ 0) (nvar_ n)
+]) in
+let expr = parallelPatternRewrite patterns expr in
+printLn (printExpr expr);
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 

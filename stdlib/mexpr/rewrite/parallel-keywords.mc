@@ -1,3 +1,4 @@
+include "mexpr/anf.mc"
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/keyword-maker.mc"
@@ -5,7 +6,7 @@ include "mexpr/pprint.mc"
 include "mexpr/type-annot.mc"
 
 lang MExprParallelKeywordMaker =
-  KeywordMaker + MExprAst + MExprEq + MExprPrettyPrint
+  KeywordMaker + MExprAst + MExprEq + MExprANF
 
   syn Expr =
   | TmParallelMap {f: Expr, as: Expr, ty: Type, info: Info}
@@ -18,6 +19,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelAny {p: Expr, as: Expr, ty: Type, info: Info}
   | TmFlatten {s: Expr, ty: Type, info: Info}
   | TmIndices {s: Expr, ty: Type, info: Info}
+  | TmSequentialFor {body: Expr, init: Expr, n: Expr, ty: Type, info: Info}
 
   sem isKeyword =
   | TmParallelMap _ -> true
@@ -30,6 +32,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelAny _ -> true
   | TmFlatten _ -> true
   | TmIndices _ -> true
+  | TmSequentialFor _ -> true
 
   sem matchKeywordString (info : Info) =
   | "parallelMap" ->
@@ -65,6 +68,10 @@ lang MExprParallelKeywordMaker =
   | "indices" ->
     Some (1, lam lst. TmIndices {s = get lst 0, ty = TyUnknown {info = info},
                                  info = info})
+  | "for" ->
+    Some (3, lam lst. TmSequentialFor {body = get lst 0, init = get lst 1,
+                                       n = get lst 2, ty = TyUnknown {info = info},
+                                       info = info})
 
   sem ty =
   | TmParallelMap t -> t.ty
@@ -77,6 +84,7 @@ lang MExprParallelKeywordMaker =
   | TmParallelAny t -> t.ty
   | TmFlatten t -> t.ty
   | TmIndices t -> t.ty
+  | TmSequentialFor t -> t.ty
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmParallelMap t ->
@@ -141,6 +149,16 @@ lang MExprParallelKeywordMaker =
     match f acc t.s with (acc, s) then
       (acc, TmIndices {t with s = s})
     else never
+  | TmSequentialFor t ->
+    match f acc t.body with (acc, body) then
+      match f acc t.init with (acc, init) then
+        match f acc t.n with (acc, n) then
+          (acc, TmSequentialFor {{{t with body = body}
+                                     with init = init}
+                                     with n = n})
+        else never
+      else never
+    else never
 
   sem symbolizeExpr (env : SymEnv) =
   | (TmParallelMap _) & t -> smap_Expr_Expr (symbolizeExpr env) t
@@ -153,6 +171,7 @@ lang MExprParallelKeywordMaker =
   | (TmParallelAny _) & t -> smap_Expr_Expr (symbolizeExpr env) t
   | (TmFlatten _) & t -> smap_Expr_Expr (symbolizeExpr env) t
   | (TmIndices _) & t -> smap_Expr_Expr (symbolizeExpr env) t
+  | (TmSequentialFor _) & t -> smap_Expr_Expr (symbolizeExpr env) t
 
   sem typeAnnotExpr (env : TypeEnv) =
   | TmParallelMap t ->
@@ -220,30 +239,14 @@ lang MExprParallelKeywordMaker =
   | TmIndices t ->
     TmIndices {{t with s = typeAnnotExpr env t.s}
                   with ty = tyseq_ tyint_}
-
-  sem pprintCode (indent : Int) (env : PprintEnv) =
-  | TmParallelMap t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelMap ", f, " ", as])
-      else never
-    else never
-  | TmParallelMap2 t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.as with (env, as) then
-        match pprintCode indent env t.bs with (env, bs) then
-          (env, join ["parallelMap2 ", f, " ", as, " ", bs])
-        else never
-      else never
-    else never
-  | TmParallelReduce t ->
-    match printParen indent env t.f with (env, f) then
-      match pprintCode indent env t.ne with (env, ne) then
-        match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelReduce ", f, " ", ne, " ", as])
-        else never
-      else never
-    else never
+  | TmSequentialFor t ->
+    let body = typeAnnotExpr env t.body in
+    let init = typeAnnotExpr env t.init in
+    let n = typeAnnotExpr env t.n in
+    TmSequentialFor {{{{t with body = body}
+                          with init = init}
+                          with n = n}
+                          with ty = ty body}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmParallelMap r ->
@@ -308,6 +311,62 @@ lang MExprParallelKeywordMaker =
     match lhs with TmIndices l then
       eqExprH env free l.s r.s
     else None ()
+  | TmSequentialFor r ->
+    match lhs with TmSequentialFor l then
+      match eqExprH env free l.body r.body with Some free then
+        match eqExprH env free l.init r.init with Some free then
+          eqExprH env free l.n r.n
+        else None ()
+      else None ()
+    else None ()
+
+  sem isValue =
+  | TmParallelMap _ -> false
+  | TmParallelMap2 _ -> false
+  | TmParallelReduce _ -> false
+  | TmParallelScan _ -> false
+  | TmParallelFilter _ -> false
+  | TmParallelPartition _ -> false
+  | TmParallelAll _ -> false
+  | TmParallelAny _ -> false
+  | TmFlatten _ -> false
+  | TmIndices _ -> false
+  | TmSequentialFor _ -> false
+
+  sem normalize (k : Expr -> Expr) =
+  | TmParallelMap t ->
+    k (TmParallelMap {{t with f = normalizeTerm t.f}
+                         with as = normalizeTerm t.as})
+  | TmParallelMap2 t ->
+    k (TmParallelMap2 {{{t with f = normalizeTerm t.f}
+                           with as = normalizeTerm t.as}
+                           with bs = normalizeTerm t.bs})
+  | TmParallelReduce t ->
+    k (TmParallelReduce {{{t with f = normalizeTerm t.f}
+                             with ne = normalizeTerm t.ne}
+                             with as = normalizeTerm t.as})
+  | TmParallelScan t ->
+    k (TmParallelScan {{{t with f = normalizeTerm t.f}
+                           with ne = normalizeTerm t.ne}
+                           with as = normalizeTerm t.as})
+  | TmParallelFilter t ->
+    k (TmParallelFilter {{t with p = normalizeTerm t.p}
+                            with as = normalizeTerm t.as})
+  | TmParallelPartition t ->
+    k (TmParallelPartition {{t with p = normalizeTerm t.p}
+                               with as = normalizeTerm t.as})
+  | TmParallelAll t ->
+    k (TmParallelAll {{t with p = normalizeTerm t.p}
+                         with as = normalizeTerm t.as})
+  | TmParallelAny t ->
+    k (TmParallelAny {{t with p = normalizeTerm t.p}
+                          with as = normalizeTerm t.as})
+  | TmFlatten t -> k (TmFlatten {t with s = normalizeTerm t.s})
+  | TmIndices t -> k (TmIndices {t with s = normalizeTerm t.s})
+  | TmSequentialFor t ->
+    k (TmSequentialFor {{{t with body = normalizeTerm t.body}
+                            with init = normalizeTerm t.init}
+                            with n = normalizeTerm t.n})
 end
 
 let parallelMap_ = lam f. lam as.
@@ -349,6 +408,11 @@ let flatten_ = lam s.
 let indices_ = lam s.
   use MExprParallelKeywordMaker in
   TmIndices {s = s, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+
+let sequentialFor_ = lam body. lam init. lam n.
+  use MExprParallelKeywordMaker in
+  TmSequentialFor {body = body, init = init, n = n,
+                   ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
 
 mexpr
 

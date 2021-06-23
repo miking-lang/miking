@@ -7,9 +7,9 @@ include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
-include "mexpr/patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
 type FutharkGenerateEnv = {
@@ -146,6 +146,7 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateTypeNoAlias (env : FutharkGenerateEnv) =
   | TyInt _ -> futIntTy_
   | TyFloat _ -> futFloatTy_
+  | TyBool _ -> futBoolTy_
   | TySeq {ty = elemTy} -> futUnsizedArrayTy_ (generateType env elemTy)
   | TyRecord {fields = fields} ->
     FTyRecord {fields = mapMap (generateType env) fields}

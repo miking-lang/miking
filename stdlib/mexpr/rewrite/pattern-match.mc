@@ -40,7 +40,7 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
 let matchVariablePattern : [(Name, Type, Info)] -> Expr -> PatternMatchState
                         -> VarPattern -> Option PatternMatchState =
   use MExprParallelKeywordMaker in
-  lam params. lam expr. lam state. lam pat.
+  lam expr. lam state. lam pat.
   match expr with TmVar {ident = ident} then
     match pat with PatternIndex index then
       match mapLookup index state.patternIndexToBoundVar with Some matchedId then
@@ -48,15 +48,16 @@ let matchVariablePattern : [(Name, Type, Info)] -> Expr -> PatternMatchState
       else error (concat "Found reference to unmatched pattern with index "
                          (int2string index))
     else match pat with PatternName name then
-      match find (lam param : (Name, Type, Info). nameEq param.0 ident) params
-      with Some _ then
-        match mapLookup name state.nameMatches with Some boundIdent then
-          if nameEq ident boundIdent then Some state else None ()
-        else
-          let nameMatches = mapInsert name ident state.nameMatches in
-          Some {state with nameMatches = nameMatches}
-      else None ()
-    else never
+      match mapLookup name state.nameMatches with Some boundIdent then
+        if nameEq ident boundIdent then Some state else None ()
+      else
+        let nameMatches = mapInsert name ident state.nameMatches in
+        Some {state with nameMatches = nameMatches}
+    else None ()
+  else match expr with TmConst {val = CInt {val = n1}} then
+    match pat with PatternLiteralInt n2 then
+      if eqi n1 n2 then Some state else None ()
+    else None ()
   else None ()
 
 recursive
@@ -73,7 +74,7 @@ recursive
           let pat = get patterns i in
           let expr = get exprs i in
           optionBind
-            (matchVariablePattern params expr state pat)
+            (matchVariablePattern expr state pat)
             (lam updatedState. work updatedState (addi i 1))
         else Some state
       in
@@ -115,6 +116,8 @@ recursive
               else
                 error (concat "Found reference to unmatched pattern with index "
                               (int2string idx))
+            else match bindingVar with PatternLiteralInt n then
+              error "Not implemented yet"
             else never
           else None ()
         in
@@ -143,7 +146,7 @@ recursive
         else None ()
       else match pat with BranchPattern t then
         match expr with TmMatch t2 then
-          match matchVariablePattern params t2.target state t.cond
+          match matchVariablePattern t2.target state t.cond
           with Some updatedState then
             let updatedState : PatternMatchState = updatedState in
             match getPatternDependencies t.thn with (thnActive, thnDeps) then
@@ -184,17 +187,13 @@ recursive
           match collectAppArguments expr with (f, args) then
             match getVariableIdentifier f with Some fId then
               if nameEq bindingIdent fId then
-                let bindings : [(Name, VarPattern)] =
-                  map
-                    (lam binding : (Name, Int). (binding.0, PatternIndex binding.1))
-                    t.binds in
                 let matchWithParams : State -> (Name, Expr) -> Option State =
                   lam state. lam binding.
                   matchArgsWithParams args state binding.1 (Some binding.0)
                 in
-                optionFoldlM matchWithParams state bindings
+                optionFoldlM matchWithParams state t.binds
               else None ()
-            else error "Expected function application to be in ANF"
+            else None ()
           else never
         else None ()
       else match pat with ReturnPattern t then
@@ -227,7 +226,7 @@ recursive
           optionMap
             (lam state : PatternMatchState.
               applyPattern state ident expr patIdx)
-            (matchVariablePattern params expr state pvar)
+            (matchVariablePattern expr state pvar)
         else None ()
       else None ()
     else match expr with TmRecLets t then
