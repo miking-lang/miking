@@ -10,13 +10,9 @@ let curry = lam f. lam x. lam y. f(x, y)
 let uncurry = lam f. lam t : (a, b). f t.0 t.1
 
 -- Printing stuff
-let printLn = lam s. print (concat s "\n")
+let printLn = lam s. print (concat s "\n"); flushStdout ()
 
-let dprintLn = lam x. dprint x; printLn ""
-
-let fprintLn = lam s. printLn s; flushStdout ()
-
-let fdprintLn = lam s. dprintLn s; flushStdout ()
+let dprintLn = lam x. dprint x; printLn ""; flushStdout ()
 
 recursive
   let fix = lam f. lam e. f (fix f) e
