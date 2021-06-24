@@ -26,6 +26,20 @@ let cmpVarPattern : VarPattern -> VarPattern -> Int = lam p1. lam p2.
     else never
   else diff
 
+let varPatString : VarPattern -> String = lam pat.
+  match pat with PatternIndex i then
+    concat "PatternIndex " (int2string i)
+  else match pat with PatternName n then
+    let symStr =
+      match nameGetSym n with Some sym then
+        int2string (sym2hash sym)
+      else "?"
+    in
+    join ["PatternName (", nameGetStr n, ", " symStr, ")"]
+  else match pat with PatternLiteralInt n then
+    concat "PatternLiteralInt " (int2string n)
+  else never
+
 type AtomicPattern
 con FixedAppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
 con UnknownAppPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
@@ -154,6 +168,30 @@ let withDependencies :
     , replacement = pat.replacement }
   else never
 
+let getMatch : String -> VarPattern -> Map VarPattern (Name, Expr)
+            -> (Name, Expr) =
+  lam parallelPattern. lam varPat. lam matches.
+  match mapLookup varPat matches with Some (id, expr) then
+    (id, expr)
+  else
+    error (join [
+      "Pattern replacement function for ", parallelPattern,
+      " referenced unmatched variable pattern ", varPatString varPat])
+
+let getMatchName 
+  : String -> VarPattern -> Map VarPattern (Name, Expr) -> Name =
+  lam parallelPattern. lam varPat. lam matches.
+  match getMatch parallelPattern varPat matches with (id, _) then
+    id
+  else never
+
+let getMatchExpr
+  : String -> VarPattern -> Map VarPattern (Name, Expr) -> Expr =
+  lam parallelPattern. lam varPat. lam matches.
+  match getMatch parallelPattern varPat matches with (_, expr) then
+    expr
+  else never
+
 -- Definition of the 'parallelMap' pattern
 let mapPatRef : Option Pattern = ref (None ())
 let mapPattern : () -> Pattern =
@@ -178,20 +216,18 @@ let mapPattern : () -> Pattern =
     ReturnPattern {id = 10, var = PatternIndex 1}
   ] in
   let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
-    match mapLookup (PatternIndex 5) matches with Some (_, fExpr) then
-      match mapLookup (PatternIndex 4) matches with Some (headName, headExpr) then
-        let x = nameSym "x" in
-        let subMap = mapFromSeq nameCmp [
-          (headName, lam info.
-            TmVar {ident = x, ty = tyWithInfo info (ty headExpr), 
-                   info = info})
-        ] in
-        let f = nulam_ x (substituteVariables fExpr subMap) in
-        match mapLookup (PatternName s) matches with Some (_, sExpr) then
-          parallelMap_ f sExpr
-        else never
-      else never
-    else never
+    let patternName = "parallelMap" in
+    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
+    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
+    let sExpr = getMatchExpr patternName (PatternName s) matches in
+
+    let x = nameSym "x" in
+    let subMap = mapFromSeq nameCmp [
+      (headPair.0, lam info.
+        TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
+    ] in
+    let f = nulam_ x (substituteVariables fExpr subMap) in
+    parallelMap_ f sExpr
   in
   withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
 
@@ -224,26 +260,22 @@ let reducePattern : () -> Pattern =
     ReturnPattern {id = 8, var = PatternIndex 1}
   ] in
   let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
-    match mapLookup (PatternIndex 5) matches with Some (_, fExpr) then
-      match mapLookup (PatternName acc) matches with Some (accName, accExpr) then
-        match mapLookup (PatternIndex 4) matches with Some (headName, headExpr) then
-          let x = nameSym "x" in
-          let y = nameSym "y" in
-          let subMap = mapFromSeq nameCmp [
-            (accName, lam info.
-              TmVar {ident = x, ty = tyWithInfo info (ty accExpr),
-                     info = info}),
-            (headName, lam info.
-              TmVar {ident = y, ty = tyWithInfo info (ty headExpr),
-                     info = info})
-          ] in
-          let f = nulam_ x (nulam_ y (substituteVariables fExpr subMap)) in
-          match mapLookup (PatternName s) matches with Some(_, sExpr) then
-            parallelReduce_ f accExpr sExpr
-          else never
-        else never
-      else never
-    else never
+    let patternName = "parallelReduce" in
+    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
+    let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
+    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
+    let sExpr = getMatchExpr patternName (PatternName s) matches in
+
+    let x = nameSym "x" in
+    let y = nameSym "y" in
+    let subMap = mapFromSeq nameCmp [
+      (accPair.0, lam info.
+        TmVar {ident = x, ty = tyWithInfo info (ty accPair.1), info = info}),
+      (headPair.0, lam info.
+        TmVar {ident = y, ty = tyWithInfo info (ty headPair.1), info = info})
+    ] in
+    let f = nulam_ x (nulam_ y (substituteVariables fExpr subMap)) in
+    parallelReduce_ f accPair.1 sExpr
   in
   withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
 
@@ -256,6 +288,31 @@ let getReducePattern = lam.
     pat
 
 -- Definition of the 'for' pattern
+let eliminateUnusedLetExpressions : Expr -> Expr =
+  use MExprParallelKeywordMaker in
+  lam e.
+  recursive let collectVariables = lam acc. lam expr.
+    match expr with TmVar {ident = ident} then
+      setInsert ident acc
+    else sfold_Expr_Expr collectVariables acc expr
+  in
+  recursive let work = lam acc. lam expr.
+    match expr with TmVar {ident = ident} then
+      (setInsert ident acc, expr)
+    else match expr with TmLet t then
+      match work acc t.inexpr with (acc, inexpr) then
+        if setMem t.ident acc then
+          let acc = collectVariables acc t.body in
+          (acc, TmLet {t with inexpr = inexpr})
+        else
+          (acc, inexpr)
+      else never
+    else smapAccumL_Expr_Expr work acc expr
+  in
+  match work (setEmpty nameCmp) e with (_, e) then
+    e
+  else never
+
 let forPatRef = ref (None ())
 let forPattern = use MExprAst in
   lam.
@@ -282,18 +339,42 @@ let forPattern = use MExprAst in
     ReturnPattern {id = 8, var = PatternIndex 1}
   ] in
   let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
-    match mapLookup (PatternIndex 3) matches with Some (accResultName, _) then
-      match mapLookup (PatternIndex 1) matches
-      with Some (_, TmMatch {thn = thn}) then
-        match mapLookup (PatternName acc) matches with Some (_, accParam) then
-          match mapLookup (PatternName n) matches with Some (_, nParam) then
-            sequentialFor_
-              (nulam_ acc (nulam_ i (bind_ thn (nvar_ accResultName))))
-              accParam nParam
-          else never
-        else never
-      else never
-    else never
+    let patternName = "sequentialFor" in
+    let accResultName = getMatchName patternName (PatternIndex 3) matches in
+    let nParamExpr = getMatchExpr patternName (PatternName n) matches in
+    let matchExpr = getMatchExpr patternName (PatternIndex 1) matches in
+    let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
+    let iterPair : (Name, Expr) = getMatch patternName (PatternName i) matches in
+
+    match matchExpr with TmMatch {thn = thn} then
+      -- Replace i and acc with fresh variables to avoid them being replaced by
+      -- passed arguments.
+      let accFresh = nameSym (nameGetStr accPair.0) in
+      let iFresh = nameSym (nameGetStr iterPair.0) in
+      let subMap = mapFromSeq nameCmp [
+        (accPair.0, lam info.
+          TmVar {ident = accFresh, ty = tyWithInfo info (ty accPair.1),
+                 info = info}),
+        (iterPair.0, lam info.
+          TmVar {ident = iFresh, ty = tyWithInfo info (ty iterPair.1),
+                 info = info})
+      ] in
+      let thn = substituteVariables thn subMap in
+
+      -- Eliminate let-expressions that are not needed in the new form of the
+      -- for-loop. This includes at least the recursive call (the for-loop is
+      -- not recursive) and the increment of the iteration value because it is
+      -- implicitly handled by the for-loop.
+      let thn = bind_ thn (nvar_ accResultName) in
+      let thn = eliminateUnusedLetExpressions thn in
+
+      sequentialFor_
+        (nulam_ accFresh (nulam_ iFresh thn))
+        accPair.1 nParamExpr
+    else
+      error (join [
+        "Rewriting into sequential for pattern failed: BranchPattern matched ",
+        "with non-branch expression"])
   in
   withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
 

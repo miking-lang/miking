@@ -194,17 +194,6 @@ let containsParallelKeyword : Expr -> Bool = lam e.
   work false e
 in
 
-recursive let printExpr : Expr -> String = lam e.
-  match e with TmParallelMap t then
-    join ["parallelMap (", printExpr t.f, ") ", printExpr t.as]
-  else match e with TmParallelReduce t then
-    join ["parallelReduce (", printExpr t.f, ") ", printExpr t.ne,
-          " ", printExpr t.as]
-  else match e with TmSequentialFor t then
-    join ["for ", printExpr t.init, " ", printExpr t.n, " ", printExpr t.body]
-  else expr2str e
-in
-
 let map = nameSym "map" in
 let f = nameSym "f" in
 let s = nameSym "s" in
@@ -258,6 +247,7 @@ let i = nameSym "i" in
 let n = nameSym "n" in
 let expr = preprocess (bindall_ [
   nulet_ s (seq_ [int_ 1, int_ 2, int_ 3]),
+  nulet_ n (length_ (nvar_ s)),
   nulet_ max (nulam_ x (nulam_ y (
     if_ (gtf_ (app_ (nvar_ f) (nvar_ x))
               (app_ (nvar_ f) (nvar_ y)))
@@ -277,7 +267,6 @@ let expr = preprocess (bindall_ [
   appf3_ (nvar_ iterMax) (head_ (nvar_ s)) (int_ 0) (nvar_ n)
 ]) in
 let expr = parallelPatternRewrite patterns expr in
-printLn (printExpr expr);
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 
