@@ -274,6 +274,13 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
   | TmFlatten t -> futFlatten_ (generateExpr env t.s)
   | TmIndices t -> futIndices_ (generateExpr env t.s)
+  | TmSequentialFor t ->
+    match t.body with TmLam {ident = i, body = body} then
+      match t.n with TmVar {ident = n} then
+        FEFor {param = generateExpr env t.init, loopVar = i, boundVar = n,
+               thn = generateExpr env body}
+      else never
+    else never
 end
 
 lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +

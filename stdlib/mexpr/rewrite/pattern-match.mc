@@ -37,8 +37,8 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
               with atomicPatternMatches = atomicPatternMatches}
   else never
 
-let matchVariablePattern : [(Name, Type, Info)] -> Expr -> PatternMatchState
-                        -> VarPattern -> Option PatternMatchState =
+let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
+                        -> Option PatternMatchState =
   use MExprParallelKeywordMaker in
   lam expr. lam state. lam pat.
   match expr with TmVar {ident = ident} then
@@ -86,44 +86,49 @@ recursive
                            -> Option Name -> Option PatternMatchState =
       lam args. lam state. lam bindingVar. lam bindingName.
       let n = length args in
-      match optionMapM getVariableIdentifier args with Some argNames then
-        recursive let work : PatternMatchState -> Int -> Option PatternMatchState =
-          lam state. lam i.
-          if lti i n then
-            let argName = get argNames i in
-            match bindingVar with PatternName id then
-              match mapLookup id state.nameMatches with Some paramId then
-                if nameEq argName paramId then
+      recursive let work : PatternMatchState -> Int -> Option PatternMatchState =
+        lam state. lam i.
+        if lti i n then
+          let arg = get args i in
+          match bindingVar with PatternName id then
+            match getVariableIdentifier arg with Some argName then
+              match mapLookup id state.nameMatches with Some paramName then
+                if nameEq argName paramName then
                   Some state
                 else work state (addi i 1)
               else
                 let nameMatches = mapInsert id argName state.nameMatches in
                 Some {state with nameMatches = nameMatches}
-            else match bindingVar with PatternIndex idx then
-              match mapLookup idx state.patternIndexToBoundVar with Some boundVar then
-                if nameEq boundVar argName then
-                  match bindingName with Some id then
-                    match mapLookup id state.nameMatches with Some paramIdent then
-                      let paramEqName : (Name, Type, Info) -> Bool = lam param.
-                        nameEq param.0 paramIdent
-                      in
-                      optionMap
-                        (lam. state)
-                        (find paramEqName params)
-                    else error "Invalid internal state"
-                  else Some state
-                else work state (addi i 1)
-              else
-                error (concat "Found reference to unmatched pattern with index "
-                              (int2string idx))
-            else match bindingVar with PatternLiteralInt n then
-              error "Not implemented yet"
-            else never
-          else None ()
-        in
-        work state 0
-      else
-        error "Arguments of function call were not in ANF"
+            else None ()
+          else match bindingVar with PatternIndex idx then
+            match getVariableIdentifier arg with Some argName then
+              match mapLookup idx state.patternIndexToBoundVar
+              with Some boundVar then
+                match bindingName with Some id then
+                  match mapLookup id state.nameMatches with Some paramIdent then
+                    let paramEqName : (Name, Type, Info) -> Bool = lam param.
+                      nameEq param.0 paramIdent
+                    in
+                    optionMap
+                      (lam. state)
+                      (find paramEqName params)
+                  else error "Invalid internal state"
+                else Some state
+              else None ()
+            else
+              match mapLookup idx state.atomicPatternMatches with Some expr then
+                if eqExpr arg expr then
+                  Some state
+                else None ()
+              else error "Invalid internal state"
+          else match bindingVar with PatternLiteralInt n1 then
+            match arg with TmConst {val = CInt {val = n2}} then
+              if eqi n1 n2 then Some state else None ()
+            else None ()
+          else never
+        else None ()
+      in
+      work state 0
     in
     match mapLookup patIdx atomicPatternMap with Some pat then
       match pat with FixedAppPattern t then

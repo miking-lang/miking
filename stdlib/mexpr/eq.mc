@@ -365,6 +365,7 @@ lang SeqOpEq = SeqOpAst
   | CHead {} -> match lhs with CHead _ then true else false
   | CTail {} -> match lhs with CTail _ then true else false
   | CNull {} -> match lhs with CNull _ then true else false
+  | CSubsequence {} -> match lhs with CSubsequence _ then true else false
 end
 
 lang TensorOpEq = TensorOpAst

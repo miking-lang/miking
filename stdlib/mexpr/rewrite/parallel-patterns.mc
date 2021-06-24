@@ -347,14 +347,11 @@ let forPattern = use MExprAst in
     let iterPair : (Name, Expr) = getMatch patternName (PatternName i) matches in
 
     match matchExpr with TmMatch {thn = thn} then
-      -- Replace i and acc with fresh variables to avoid them being replaced by
-      -- passed arguments.
+      -- Replace i with fresh variable to avoid it being replaced by a passed
+      -- argument.
       let accFresh = nameSym (nameGetStr accPair.0) in
       let iFresh = nameSym (nameGetStr iterPair.0) in
       let subMap = mapFromSeq nameCmp [
-        (accPair.0, lam info.
-          TmVar {ident = accFresh, ty = tyWithInfo info (ty accPair.1),
-                 info = info}),
         (iterPair.0, lam info.
           TmVar {ident = iFresh, ty = tyWithInfo info (ty iterPair.1),
                  info = info})
@@ -369,7 +366,7 @@ let forPattern = use MExprAst in
       let thn = eliminateUnusedLetExpressions thn in
 
       sequentialFor_
-        (nulam_ accFresh (nulam_ iFresh thn))
+        (nulam_ iFresh thn)
         accPair.1 nParamExpr
     else
       error (join [
