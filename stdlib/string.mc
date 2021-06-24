@@ -188,15 +188,20 @@ utest strLastIndex 'o' "Hello, world!" with Some(8) using optionEq eqi
 utest strLastIndex '@' "Some @TAG@" with Some(9) using optionEq eqi
 
 -- Splits s on delim
-recursive
-  let strSplit = lam delim. lam s.
-    if or (eqi (length delim) 0) (lti (length s) (length delim))
-    then cons s []
-    else if eqString delim (subsequence s 0 (length delim))
-         then cons [] (strSplit delim (subsequence s (length delim) (length s)))
-         else let remaining = strSplit delim (tail s) in
-              cons (cons (head s) (head remaining)) (tail remaining)
-end
+let strSplit = lam delim. lam s.
+  let n = length s in
+  let m = length delim in
+  recursive let work = lam acc. lam lastMatch. lam i.
+    if lti (subi n m) i then
+      snoc acc (subsequence s lastMatch n)
+    else if eqString delim (subsequence s i m) then
+      let nexti = addi i m in
+      work (snoc acc (subsequence s lastMatch (subi i lastMatch))) nexti nexti
+    else
+      work acc lastMatch (addi i 1)
+  in
+  if eqi delim 0 then [s]
+  else work [] 0 0
 
 utest strSplit "ll" "Hello" with ["He", "o"]
 utest strSplit "ll" "Hellallllo" with ["He", "a", "", "o"]
