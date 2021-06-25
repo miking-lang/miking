@@ -30,6 +30,16 @@ utest eqString "a" "" with false
 utest eqString "a" "a" with true
 utest eqString "a" "aa" with false
 
+let eqStringSlice = lam s1. lam s2. lam o2. lam n2.
+  recursive let work = lam i.
+    if eqi i n2 then true
+    else if eqc (get s1 i) (get s2 (addi o2 i)) then work (addi i 1)
+    else false
+  in
+  if eqi (length s1) n2 then
+    work 0
+  else false
+
 -- Lexicographical ordering of strings. ltString s1 s2 is true iff s1 is
 -- lexicographically smaller than s2.
 recursive
@@ -194,13 +204,13 @@ let strSplit = lam delim. lam s.
   recursive let work = lam acc. lam lastMatch. lam i.
     if lti (subi n m) i then
       snoc acc (subsequence s lastMatch n)
-    else if eqString delim (subsequence s i m) then
+    else if eqStringSlice delim s i m then
       let nexti = addi i m in
       work (snoc acc (subsequence s lastMatch (subi i lastMatch))) nexti nexti
     else
       work acc lastMatch (addi i 1)
   in
-  if eqi delim 0 then [s]
+  if eqi (length delim) 0 then [s]
   else work [] 0 0
 
 utest strSplit "ll" "Hello" with ["He", "o"]
