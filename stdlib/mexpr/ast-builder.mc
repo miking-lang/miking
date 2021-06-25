@@ -7,88 +7,6 @@ include "info.mc"
 include "stringid.mc"
 include "map.mc"
 
--- Patterns --
-
-let npvar_ = use MExprAst in
-  lam n : Name.
-  PatNamed {ident = PName n, info = NoInfo ()}
-
-let pvar_ = use MExprAst in
-  lam s.
-  npvar_ (nameNoSym s)
-
-let pvarw_ = use MExprAst in
-  PatNamed {ident = PWildcard (), info = NoInfo()}
-
-let punit_ = use MExprAst in
-  PatRecord { bindings = mapEmpty cmpSID, info = NoInfo() }
-
-let pint_ = use MExprAst in
-  lam i.
-  PatInt {val = i, info = NoInfo()}
-
-let pchar_ = use MExprAst in
-  lam c.
-  PatChar {val = c, info = NoInfo()}
-
-let ptrue_ = use MExprAst in
-  PatBool {val = true, info = NoInfo()}
-
-let pfalse_ = use MExprAst in
-  PatBool {val = false, info = NoInfo()}
-
-let npcon_ = use MExprAst in
-  lam n. lam cp.
-  PatCon {ident = n, subpat = cp, info = NoInfo()}
-
-let pcon_ = use MExprAst in
-  lam cs. lam cp.
-  npcon_ (nameNoSym cs) cp
-
-let patRecord = use MExprAst in
-  lam bindings : [(String, Pat)].
-  lam info : Info.
-  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
-  PatRecord {
-    bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
-    info = info
-  }
-
-let prec_ = lam bindings. patRecord bindings (NoInfo ())
-
-let patTuple = lam ps : [Pat]. lam info : Info.
-  patRecord (mapi (lam i. lam p. (int2string i, p)) ps) info
-
-let ptuple_ = lam ps. patTuple ps (NoInfo ())
-
-let pseqtot_ = use MExprAst in
-  lam ps.
-  PatSeqTot {pats = ps, info = NoInfo()}
-
-let pseqedgew_ = use MExprAst in
-  lam pre. lam post.
-  PatSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo()}
-
-let pseqedgen_ = use MExprAst in
-  lam pre. lam middle : Name. lam post.
-  PatSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo()}
-
-let pseqedge_ = use MExprAst in
-  lam pre. lam middle. lam post.
-  pseqedgen_ pre (nameNoSym middle) post
-
-let pand_ = use MExprAst in
-  lam l. lam r.
-  PatAnd {lpat = l, rpat = r, info = NoInfo()}
-
-let por_ = use MExprAst in
-  lam l. lam r.
-  PatOr {lpat = l, rpat = r, info = NoInfo()}
-
-let pnot_ = use MExprAst in
-  lam p.
-  PatNot {subpat = p, info = NoInfo()}
-
 -- Types --
 
 let tyint_ = use IntTypeAst in
@@ -227,6 +145,92 @@ let tytensoriteri_ = lam ty.
                         , tyunit_ ]
             , tytensor_ ty
             , tyunit_ ]
+
+-- Patterns --
+
+let npvar_ = use MExprAst in
+  lam n : Name.
+  PatNamed {ident = PName n, info = NoInfo (), ty = tyunknown_}
+
+let pvar_ = use MExprAst in
+  lam s.
+  npvar_ (nameNoSym s)
+
+let pvarw_ = use MExprAst in
+  PatNamed {ident = PWildcard (), info = NoInfo(), ty = tyunknown_}
+
+let punit_ = use MExprAst in
+  PatRecord { bindings = mapEmpty cmpSID, info = NoInfo(), ty = tyunknown_ }
+
+let pint_ = use MExprAst in
+  lam i.
+  PatInt {val = i, info = NoInfo(), ty = tyint_}
+
+let pchar_ = use MExprAst in
+  lam c.
+  PatChar {val = c, info = NoInfo(), ty = tychar_}
+
+let pbool_ = use MExprAst in
+  lam b. PatBool {val = b, info = NoInfo(), ty = tybool_}
+
+let ptrue_ = use MExprAst in
+  pbool_ true
+
+let pfalse_ = use MExprAst in
+  pbool_ false
+
+let npcon_ = use MExprAst in
+  lam n. lam cp.
+  PatCon {ident = n, subpat = cp, info = NoInfo(), ty = tyunknown_}
+
+let pcon_ = use MExprAst in
+  lam cs. lam cp.
+  npcon_ (nameNoSym cs) cp
+
+let patRecord = use MExprAst in
+  lam bindings : [(String, Pat)].
+  lam info : Info.
+  let bindingMapFunc = lam b : (String, a). (stringToSid b.0, b.1) in
+  PatRecord {
+    bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
+    info = info,
+    ty = tyunknown_
+  }
+
+let prec_ = lam bindings. patRecord bindings (NoInfo ())
+
+let patTuple = lam ps : [Pat]. lam info : Info.
+  patRecord (mapi (lam i. lam p. (int2string i, p)) ps) info
+
+let ptuple_ = lam ps. patTuple ps (NoInfo ())
+
+let pseqtot_ = use MExprAst in
+  lam ps.
+  PatSeqTot {pats = ps, info = NoInfo(), ty = tyunknown_}
+
+let pseqedgew_ = use MExprAst in
+  lam pre. lam post.
+  PatSeqEdge {prefix = pre, middle = PWildcard (), postfix = post, info = NoInfo(), ty = tyunknown_}
+
+let pseqedgen_ = use MExprAst in
+  lam pre. lam middle : Name. lam post.
+  PatSeqEdge {prefix = pre, middle = PName middle, postfix = post, info = NoInfo(), ty = tyunknown_}
+
+let pseqedge_ = use MExprAst in
+  lam pre. lam middle. lam post.
+  pseqedgen_ pre (nameNoSym middle) post
+
+let pand_ = use MExprAst in
+  lam l. lam r.
+  PatAnd {lpat = l, rpat = r, info = NoInfo(), ty = tyunknown_}
+
+let por_ = use MExprAst in
+  lam l. lam r.
+  PatOr {lpat = l, rpat = r, info = NoInfo(), ty = tyunknown_}
+
+let pnot_ = use MExprAst in
+  lam p.
+  PatNot {subpat = p, info = NoInfo(), ty = tyunknown_}
 
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
@@ -835,6 +839,14 @@ let iter_ = use MExprAst in
 let iteri_ = use MExprAst in
   lam f. lam s.
   appf2_ (uconst_ (CIteri ())) f s
+
+let foldl_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldl ())) f acc s
+
+let foldr_ = use MExprAst in
+  lam f. lam acc. lam s.
+  appf3_ (uconst_ (CFoldr ())) f acc s
 
 let subsequence_ = use MExprAst in
   lam s. lam off. lam n.

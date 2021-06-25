@@ -32,12 +32,24 @@ let symEnvEmpty =
 -- TERMS --
 -----------
 
-lang Sym
+lang Sym = Ast
   sem symbolizeType (env : SymEnv) =
-  -- Intentionally left blank
+  | t -> smap_Type_Type (symbolizeType env) t
 
   -- Symbolize with an environment
   sem symbolizeExpr (env : SymEnv) =
+  | t ->
+    let t = smap_Expr_Expr (symbolizeExpr env) t in
+    withType (symbolizeType env (ty t)) t
+
+  -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
+  -- so it would be preferrable to pass it in some other way, a reader
+  -- monad or something. patEnv on the other hand changes, it would be
+  -- nice to pass via state monad or something.  env is the
+  -- environment from the outside, plus the names added thus far in
+  -- the pattern patEnv is only the newly added names
+  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
+  | t -> smapAccumL_Pat_Pat (symbolizePat env) patEnv t
 
   -- Symbolize with builtin environment
   sem symbolize =
@@ -60,15 +72,7 @@ lang VarSym = Sym + VarAst
     else never
 end
 
-lang AppSym = Sym + AppAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmApp t ->
-    TmApp {{{t with lhs = symbolizeExpr env t.lhs}
-               with rhs = symbolizeExpr env t.rhs}
-               with ty = symbolizeType env t.ty}
-end
-
-lang LamSym = Sym + LamAst + VarSym + AppSym
+lang LamSym = Sym + LamAst + VarSym
   sem symbolizeExpr (env : SymEnv) =
   | TmLam t ->
     match env with {varEnv = varEnv} then
@@ -90,22 +94,7 @@ lang LamSym = Sym + LamAst + VarSym + AppSym
     else never
 end
 
-lang RecordSym = Sym + RecordAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmRecord t ->
-    TmRecord {{t with bindings = mapMap (symbolizeExpr env) t.bindings}
-                 with ty = symbolizeType env t.ty}
-
-  | TmRecordUpdate t ->
-    TmRecordUpdate {{{t with rec = symbolizeExpr env t.rec}
-                        with value = symbolizeExpr env t.value}
-                        with ty = symbolizeType env t.ty}
-end
-
 lang LetSym = Sym + LetAst
-  sem symbolizeType (env : SymEnv) =
-  -- Intentinally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv} then
@@ -131,9 +120,6 @@ lang LetSym = Sym + LetAst
 end
 
 lang ExtSym = Sym + ExtAst
-  sem symbolizeType (env : SymEnv) =
-  -- Intentinally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmExt t ->
     match env with {varEnv = varEnv} then
@@ -153,9 +139,6 @@ lang ExtSym = Sym + ExtAst
 end
 
 lang TypeSym = Sym + TypeAst
-  sem symbolizeType (env : SymEnv) =
-  -- Intentinally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmType t ->
     match env with {tyEnv = tyEnv} then
@@ -178,9 +161,6 @@ lang TypeSym = Sym + TypeAst
 end
 
 lang RecLetsSym = Sym + RecLetsAst
-  sem symbolizeType (env : SymEnv) =
-  -- Intentionally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmRecLets t ->
     match env with {varEnv = varEnv} then
@@ -214,15 +194,7 @@ lang RecLetsSym = Sym + RecLetsAst
     else never
 end
 
-lang ConstSym = Sym + ConstAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmConst t -> TmConst t
-end
-
 lang DataSym = Sym + DataAst
-  sem symbolizeType (env : SymEnv) =
-  -- Intentinally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmConDef t ->
     match env with {conEnv = conEnv} then
@@ -260,15 +232,6 @@ lang DataSym = Sym + DataAst
 end
 
 lang MatchSym = Sym + MatchAst
-  -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
-  -- so it would be preferrable to pass it in some other way, a reader
-  -- monad or something. patEnv on the other hand changes, it would be
-  -- nice to pass via state monad or something.  env is the
-  -- environment from the outside, plus the names added thus far in
-  -- the pattern patEnv is only the newly added names
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  -- Intentionally left blank
-
   sem symbolizeExpr (env : SymEnv) =
   | TmMatch t ->
     match symbolizePat env (mapEmpty cmpString) t.pat
@@ -282,80 +245,9 @@ lang MatchSym = Sym + MatchAst
     else never
 end
 
-lang UtestSym = Sym + UtestAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmUtest t ->
-    let tusing = optionMap (symbolizeExpr env) t.tusing in
-    TmUtest {{{{{t with test = symbolizeExpr env t.test}
-                   with expected = symbolizeExpr env t.expected}
-                   with next = symbolizeExpr env t.next}
-                   with tusing = tusing}
-                   with ty = symbolizeType env t.ty}
-end
-
-lang SeqSym = Sym + SeqAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmSeq t ->
-    TmSeq {{t with tms = map (symbolizeExpr env) t.tms}
-              with ty = symbolizeType env t.ty}
-end
-
-lang NeverSym = Sym + NeverAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmNever t -> TmNever {t with ty = symbolizeType env t.ty}
-end
-
 -----------
 -- TYPES --
 -----------
-
-lang UnknownTypeSym = UnknownTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyUnknown _ & ty -> ty
-end
-
-lang BoolTypeSym = BoolTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyBool _ & ty -> ty
-end
-
-lang IntTypeSym = IntTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyInt _ & ty -> ty
-end
-
-lang FloatTypeSym = FloatTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyFloat _ & ty -> ty
-end
-
-lang CharTypeSym = CharTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyChar _ & ty -> ty
-end
-
-lang FunTypeSym = FunTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyArrow t ->
-    TyArrow {{t with from = symbolizeType env t.from}
-                with to = symbolizeType env t.to}
-end
-
-lang SeqTypeSym = SeqTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TySeq t -> TySeq {t with ty = symbolizeType env t.ty}
-end
-
-lang TensorTypeSym = TensorTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyTensor t -> TyTensor {t with ty = symbolizeType env t.ty}
-end
-
-lang RecordTypeSym = RecordTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyRecord t ->
-    TyRecord {t with fields = mapMap (symbolizeType env) t.fields}
-end
 
 lang VariantTypeSym = VariantTypeAst
   sem symbolizeType (env : SymEnv) =
@@ -378,13 +270,6 @@ lang VarTypeSym = VarTypeAst + UnknownTypeAst
           -- as TyUnknown for now.
           TyUnknown {info = t.info}
     else never
-end
-
-lang AppTypeSym = AppTypeAst
-  sem symbolizeType (env : SymEnv) =
-  | TyApp t ->
-    TyApp {{t with lhs = symbolizeType env t.lhs}
-              with rhs = symbolizeType env t.rhs}
 end
 
 --------------
@@ -417,13 +302,6 @@ lang NamedPatSym = NamedPat
     else never
 end
 
-lang SeqTotPatSym = SeqTotPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatSeqTot p ->
-    let res = mapAccumL (symbolizePat env) patEnv p.pats in
-    (res.0, PatSeqTot {p with pats = res.1})
-end
-
 lang SeqEdgePatSym = SeqEdgePat
   sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
   | PatSeqEdge p ->
@@ -434,62 +312,21 @@ lang SeqEdgePatSym = SeqEdgePat
       {{{p with prefix = preRes.1} with middle = midRes.1} with postfix = postRes.1})
 end
 
-lang RecordPatSym = RecordPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatRecord {bindings = bindings, info = info} ->
-    match mapMapAccum
-            (lam patEnv. lam. lam p. symbolizePat env patEnv p) patEnv bindings
-    with (env,bindings) then
-      (env, PatRecord {bindings = bindings, info = info})
-    else never
-end
-
 lang DataPatSym = DataPat
   sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatCon {ident = ident, subpat = subpat, info = info} ->
+  | PatCon r ->
     match env with {conEnv = conEnv} then
       let ident =
-        if nameHasSym ident then ident
+        if nameHasSym r.ident then r.ident
         else
-          let str = nameGetStr ident in
+          let str = nameGetStr r.ident in
           match mapLookup str conEnv with Some ident then ident
           else error (concat "Unknown constructor in symbolizeExpr: " str)
       in
-      match symbolizePat env patEnv subpat with (patEnv, subpat) then
-        (patEnv, PatCon {ident = ident, subpat = subpat, info = info})
+      match symbolizePat env patEnv r.subpat with (patEnv, subpat) then
+        (patEnv, PatCon {{r with ident = ident} with subpat = subpat})
       else never
     else never
-end
-
-lang IntPatSym = IntPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatInt i -> (patEnv, PatInt i)
-end
-
-lang CharPatSym = CharPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatChar c -> (patEnv, PatChar c)
-end
-
-lang BoolPatSym = BoolPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatBool b -> (patEnv, PatBool b)
-end
-
-lang AndPatSym = AndPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatAnd p ->
-    let lRes : (SymEnv, Pat) = symbolizePat env patEnv p.lpat in
-    let rRes : (SymEnv, Pat) = symbolizePat env lRes.0 p.rpat in
-    (rRes.0, PatAnd {{p with lpat = lRes.1} with rpat = rRes.1})
-end
-
-lang OrPatSym = OrPat
-  sem symbolizePat (env : SymEnv) (patEnv : Map String Name) =
-  | PatOr p ->
-    let lRes : (SymEnv, Pat) = symbolizePat env patEnv p.lpat in
-    let rRes : (SymEnv, Pat) = symbolizePat env lRes.0 p.rpat in
-    (rRes.0, PatOr {{p with lpat = lRes.1} with rpat = rRes.1})
 end
 
 lang NotPatSym = NotPat
@@ -510,18 +347,26 @@ end
 
 lang MExprSym =
 
-  -- Terms
-  VarSym + AppSym + LamSym + RecordSym + LetSym + TypeSym + RecLetsSym +
-  ConstSym + DataSym + MatchSym + UtestSym + SeqSym + NeverSym + ExtSym +
+  -- Default implementations (Terms)
+  RecordAst + ConstAst + UtestAst + SeqAst + NeverAst +
 
-  -- Types
-  UnknownTypeSym + BoolTypeSym + IntTypeSym + FloatTypeSym + CharTypeSym +
-  FunTypeSym + SeqTypeSym + RecordTypeSym + VariantTypeSym + VarTypeSym +
-  AppTypeSym + TensorTypeSym +
+  -- Default implementations (Types)
+  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  FunTypeAst + SeqTypeAst + TensorTypeAst + RecordTypeAst + AppTypeAst +
 
-  -- Patterns
-  NamedPatSym + SeqTotPatSym + SeqEdgePatSym + RecordPatSym + DataPatSym +
-  IntPatSym + CharPatSym + BoolPatSym + AndPatSym + OrPatSym + NotPatSym
+  -- Default implementations (Patterns)
+  SeqTotPat + RecordPat + IntPat + CharPat + BoolPat + AndPat + OrPat +
+
+  -- Non-default implementations (Terms)
+  VarSym + LamSym + LetSym + ExtSym + TypeSym + RecLetsSym + DataSym +
+  MatchSym +
+
+  -- Non-default implementations (Types)
+  VariantTypeSym + VarTypeSym +
+
+  -- Non-default implementations (Patterns)
+  NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym
+
 
 -----------
 -- TESTS --

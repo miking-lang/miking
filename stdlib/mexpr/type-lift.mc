@@ -123,10 +123,28 @@ lang TypeLift = Cmp
   -- Intentionally left blank
 
   sem typeLiftExpr (env : TypeLiftEnv) =
-  -- Intentionally left blank
+  | t ->
+    -- Lift all sub-expressions
+    match smapAccumL_Expr_Expr typeLiftExpr env t with (env, t) then
+      -- Lift the contained types
+      match smapAccumL_Expr_Type typeLiftType env t with (env, t) then
+        -- Lift the annotated type
+        match typeLiftType env (ty t) with (env, ty) then
+          (env, withType ty t)
+        else never
+      else never
+    else never
 
   sem typeLiftType (env : TypeLiftEnv) =
-  -- Intentionally left blank
+  | t -> smapAccumL_Type_Type typeLiftType env t
+
+  sem typeLiftPat (env : TypeLiftEnv) =
+  | t ->
+    match smapAccumL_Pat_Pat typeLiftPat env t with (env, t) then
+      match typeLiftType env (tyPat t) with (env, ty) then
+        (env, withTypePat ty t)
+      else never
+    else never
 
   -- Lifts all records, variants and type aliases from the given expression
   -- `e`. The result is returned as an environment containing tuples of names
@@ -150,122 +168,6 @@ lang TypeLift = Cmp
     match typeLiftExpr emptyTypeLiftEnv e with (env, t) then
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
-    else never
-end
-
-lang VarTypeLift = TypeLift + VarAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmVar t ->
-    match typeLiftType env t.ty with (env, ty) then
-      (env, TmVar {t with ty = ty})
-    else never
-end
-
-lang AppTypeLift = TypeLift + AppAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmApp t ->
-    match typeLiftExpr env t.lhs with (env, lhs) then
-      match typeLiftExpr env t.rhs with (env, rhs) then
-        match typeLiftType env t.ty with (env, ty) then
-          (env, TmApp {{{t with lhs = lhs}
-                           with rhs = rhs}
-                           with ty = ty})
-        else never
-      else never
-    else never
-end
-
-lang LamTypeLift = TypeLift + LamAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmLam t ->
-    match typeLiftType env t.tyIdent with (env, tyIdent) then
-      match typeLiftExpr env t.body with (env, body) then
-        match typeLiftType env t.ty with (env, ty) then
-          (env, TmLam {{{t with tyIdent = tyIdent}
-                           with body = body}
-                           with ty = ty})
-        else never
-      else never
-    else never
-end
-
-lang LetTypeLift = TypeLift + LetAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmLet t ->
-    match typeLiftExpr env t.body with (env, body) then
-      match typeLiftType env t.tyBody with (env, tyBody) then
-        match typeLiftExpr env t.inexpr with (env, inexpr) then
-          match typeLiftType env t.ty with (env, ty) then
-            (env, TmLet {{{{t with body = body}
-                              with tyBody = tyBody}
-                              with inexpr = inexpr}
-                              with ty = ty})
-          else never
-        else never
-      else never
-    else never
-end
-
-lang RecLetsTypeLift = TypeLift + RecLetsAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmRecLets t ->
-    let f = lam env. lam binding : RecLetBinding.
-      match typeLiftExpr env binding.body with (env, body) then
-        (env, {binding with body = body})
-      else never
-    in
-    match mapAccumL f env t.bindings with (env, bindings) then
-      match typeLiftExpr env t.inexpr with (env, inexpr) then
-        match typeLiftType env t.ty with (env, ty) then
-          (env, TmRecLets {{{t with bindings = bindings}
-                               with inexpr = inexpr}
-                               with ty = ty})
-        else never
-      else never
-    else never
-end
-
-lang ConstTypeLift = TypeLift + ConstAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmConst t ->
-    match typeLiftType env t.ty with (env, ty) then
-      (env, TmConst {t with ty = ty})
-    else never
-end
-
-lang SeqTypeLift = TypeLift + SeqAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmSeq t ->
-    match mapAccumL typeLiftExpr env t.tms with (env, tms) then
-      match typeLiftType env t.ty with (env, ty) then
-        (env, TmSeq {{t with tms = tms}
-                        with ty = ty})
-      else never
-    else never
-end
-
-lang RecordTypeLift = TypeLift + RecordAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmRecord t ->
-    let f = lam env. lam. lam v. typeLiftExpr env v in
-    match mapMapAccum f env t.bindings with (env, bindings) then
-      match typeLiftType env t.ty with (env, ty) then
-        (env, TmRecord {{t with bindings = bindings}
-                           with ty = ty})
-      else never
-    else never
-  | TmRecordUpdate t ->
-    match typeLiftExpr env t.rec with (env, rec) then
-      match typeLiftExpr env t.value with (env, value) then
-        match typeLiftType env t.ty with (env, ty) then
-          (env, TmRecordUpdate {{{t with rec = rec}
-                                    with value = value}
-                                    with ty = ty})
-        else never
-      else never
     else never
 end
 
@@ -302,9 +204,6 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
 end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  -- Intentionally left blank
-
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmConDef t ->
     recursive let unwrapTypeVarIdent = lam ty : Type.
@@ -332,97 +231,23 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + VarTypeAst + AppTypeAst
     match typeLiftExpr env t.inexpr with (env, inexpr) then
       (env, inexpr)
     else never
-  | TmConApp t ->
-    match typeLiftExpr env t.body with (env, body) then
-      match typeLiftType env t.ty with (env, ty) then
-        (env, TmConApp {{t with body = body}
-                           with ty = ty})
-      else never
-    else never
 end
 
 lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmMatch t ->
-    -- If the pattern describes a tuple, then we add a tuple type containing
-    -- the amount of elements specified in the tuple (of unknown type) to the
-    -- environment.
-    let addTypeToEnvIfTuplePattern = lam env : TypeLiftEnv. lam pat : Pat.
-      match pat with PatRecord {bindings = bindings, info = info} then
-        match record2tuple bindings with Some _ then
-          let fields = mapMap (lam. tyunknown_) bindings in
-          let labels = map stringToSid (create (mapSize fields) int2string) in
-          let ty =
-            TyRecord {
-              fields = fields,
-              labels = labels,
-              info = info
-            }
-          in
-          match addRecordToEnv env ty with (env, _) then
-            env
-          else never
-        else env
-      else env
-    in
     match typeLiftExpr env t.target with (env, target) then
-      let env = addTypeToEnvIfTuplePattern env t.pat in
-      match typeLiftExpr env t.thn with (env, thn) then
-        match typeLiftExpr env t.els with (env, els) then
-          match typeLiftType env t.ty with (env, ty) then
-            (env, TmMatch {{{{t with target = target}
-                                with thn = thn}
-                                with els = els}
-                                with ty = ty})
+      match typeLiftPat env t.pat with (env, pat) then
+        match typeLiftExpr env t.thn with (env, thn) then
+          match typeLiftExpr env t.els with (env, els) then
+            match typeLiftType env t.ty with (env, ty) then
+              (env, TmMatch {{{{{t with target = target}
+                                   with pat = pat}
+                                   with thn = thn}
+                                   with els = els}
+                                   with ty = ty})
+            else never
           else never
-        else never
-      else never
-    else never
-end
-
-lang UtestTypeLift = TypeLift + UtestAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmUtest t ->
-    match typeLiftExpr env t.test with (env, test) then
-      match typeLiftExpr env t.expected with (env, expected) then
-        match typeLiftExpr env t.next with (env, next) then
-          match typeLiftType env t.ty with (env, ty) then
-            match t.tusing with Some tusing then
-              match typeLiftExpr env tusing with (env, tusing) then
-                (env, TmUtest {{{{{t with test = test}
-                                     with expected = expected}
-                                     with next = next}
-                                     with tusing = Some tusing}
-                                     with ty = ty})
-              else never
-            else (env, TmUtest {{{{{t with test = test}
-                                      with expected = expected}
-                                      with next = next}
-                                      with tusing = t.tusing}
-                                      with ty = ty})
-          else never
-        else never
-      else never
-    else never
-end
-
-lang NeverTypeLift = TypeLift + NeverAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmNever t ->
-    match typeLiftType env t.ty with (env, ty) then
-      (env, TmNever {t with ty = ty})
-    else never
-end
-
-lang ExtTypeLift = TypeLift + ExtAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmExt t ->
-    match typeLiftType env t.tyIdent with (env, tyIdent) then
-      match typeLiftExpr env t.inexpr with (env, inexpr) then
-        match typeLiftType env t.ty with (env, ty) then
-          (env, TmExt {{{t with tyIdent = tyIdent}
-                           with inexpr = inexpr}
-                           with ty = ty})
         else never
       else never
     else never
@@ -431,57 +256,6 @@ end
 -----------
 -- TYPES --
 -----------
-
-lang UnknownTypeTypeLift = TypeLift + UnknownTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyUnknown t -> (env, TyUnknown t)
-end
-
-lang BoolTypeTypeLift = TypeLift + BoolTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyBool t -> (env, TyBool t)
-end
-
-lang IntTypeTypeLift = TypeLift + IntTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyInt t -> (env, TyInt t)
-end
-
-lang FloatTypeTypeLift = TypeLift + FloatTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyFloat t -> (env, TyFloat t)
-end
-
-lang CharTypeTypeLift = TypeLift + CharTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyChar t -> (env, TyChar t)
-end
-
-lang FunTypeTypeLift = TypeLift + FunTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyArrow t ->
-    match typeLiftType env t.from with (env, from) then
-      match typeLiftType env t.to with (env, to) then
-        (env, TyArrow {{t with from = from} with to = to})
-      else never
-    else never
-end
-
-lang SeqTypeTypeLift = TypeLift + SeqTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TySeq t ->
-    match typeLiftType env t.ty with (env, ty) then
-      (env, TySeq {t with ty = ty})
-    else never
-end
-
-lang TensorTypeTypeLift = TypeLift + TensorTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyTensor t ->
-    match typeLiftType env t.ty with (env, ty) then
-      (env, TyTensor {t with ty = ty})
-    else never
-end
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
@@ -495,16 +269,6 @@ lang RecordTypeTypeLift = TypeLift + RecordTypeAst
       else never
 end
 
-lang VariantTypeTypeLift = TypeLift + VariantTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyVariant t -> (env, TyVariant t)
-end
-
-lang VarTypeTypeLift = TypeLift + VarTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyVar t -> (env, TyVar t)
-end
-
 lang AppTypeTypeLift = TypeLift + AppTypeAst
   sem typeLiftType (env : TypeLiftEnv) =
   | TyApp t ->
@@ -513,25 +277,24 @@ lang AppTypeTypeLift = TypeLift + AppTypeAst
     else never
 end
 
-lang VariantNameTypeTypeLift = TypeLift + VariantNameTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
-  | TyVariantName t -> (env, TyVariantName t)
-end
-
 lang MExprTypeLift =
   -- Compare
   MExprCmp +
 
-  -- Terms
-  VarTypeLift + AppTypeLift + LamTypeLift + LetTypeLift + RecLetsTypeLift +
-  ConstTypeLift + SeqTypeLift + RecordTypeLift + TypeTypeLift + DataTypeLift +
-  MatchTypeLift + UtestTypeLift + NeverTypeLift + ExtTypeLift +
+  -- Default implementations (Terms)
+  VarAst + AppAst + LamAst + LetAst + RecLetsAst + ConstAst + SeqAst +
+  UtestAst + NeverAst + ExtAst +
 
-  -- Types
-  UnknownTypeTypeLift + BoolTypeTypeLift + IntTypeTypeLift +
-  FloatTypeTypeLift + CharTypeTypeLift + FunTypeTypeLift + SeqTypeTypeLift +
-  RecordTypeTypeLift + VariantTypeTypeLift + VarTypeTypeLift +
-  AppTypeTypeLift + VariantNameTypeTypeLift + TensorTypeTypeLift
+  -- Default implementations (Types)
+  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  FunTypeAst + SeqTypeAst + TensorTypeAst + VariantTypeAst + VarTypeAst +
+  VariantNameTypeAst +
+
+  -- Non-default implementations (Terms)
+  TypeTypeLift + DataTypeLift + MatchTypeLift +
+
+  -- Non-default implementations (Types)
+  RecordTypeTypeLift + AppTypeTypeLift
 end
 
 lang MExprTypeLiftOrderedRecordsCmpClosed =
@@ -548,6 +311,8 @@ lang TestLang =
 mexpr
 
 use TestLang in
+
+let fst = lam x: (a, b). x.0 in
 
 let eqType : EqTypeEnv -> Type -> Type -> Bool =
   lam env. lam l : Type. lam r : Type.
@@ -616,7 +381,7 @@ let variantWithRecords = typeAnnot (symbolize (bindall_ [
   lastTerm
 ])) in
 (match typeLift variantWithRecords with (env, t) then
-  let recid = (get env 0).0 in
+  let recid = fst (get env 0) in
   let expectedEnv = [
     (recid, tyrecord_ [
       ("lhs", ntyvar_ treeName), ("rhs", ntyvar_ treeName)
@@ -643,8 +408,8 @@ let nestedRecord = typeAnnot (symbolize (bindall_ [
   uunit_
 ])) in
 (match typeLift nestedRecord with (env, t) then
-  let fstid = (get env 0).0 in
-  let sndid = (get env 1).0 in
+  let fstid = fst (get env 0) in
+  let sndid = fst (get env 1) in
   let expectedEnv = [
     (fstid, tyrecord_ [
       ("a", ntyvar_ sndid),
@@ -667,8 +432,8 @@ let recordsSameFieldsDifferentTypes = typeAnnot (symbolize (bindall_ [
   uunit_
 ])) in
 (match typeLift recordsSameFieldsDifferentTypes with (env, t) then
-  let fstid = (get env 0).0 in
-  let sndid = (get env 1).0 in
+  let fstid = fst (get env 0) in
+  let sndid = fst (get env 1) in
   let expectedEnv = [
     (fstid, tyrecord_ [("a", tyint_), ("b", tybool_)]),
     (sndid, tyrecord_ [("a", tyint_), ("b", tyint_)])
@@ -684,7 +449,7 @@ let recordsSameFieldsSameTypes = typeAnnot (symbolize (bindall_ [
   uunit_
 ])) in
 (match typeLift recordsSameFieldsSameTypes with (env, t) then
-  let recid = (get env 0).0 in
+  let recid = fst (get env 0) in
   let expectedEnv = [
     (recid, tyrecord_ [("a", tyint_), ("b", tyint_)])
   ] in
@@ -737,7 +502,7 @@ let typeAliases = typeAnnot (symbolize (bindall_ [
   -- Note that records and variants are added to the front of the environment
   -- as they are processed, so the last record in the given term will be first
   -- in the environment.
-  let ids = map (lam p. p.0) env in
+  let ids = map (lam p: (a, b). p.0) env in
   let fstRecordId = get ids 5 in -- type Rec1 = {0 : [Char], 1 : Int}
   let globalEnvId = get ids 4 in -- type GlobalEnv = [Rec1]
   let localEnvId = get ids 3 in  -- type LocalEnv = [Rec1]

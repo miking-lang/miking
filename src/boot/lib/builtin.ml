@@ -80,6 +80,158 @@ let builtin =
   ; ("mapi", f (Cmapi None))
   ; ("iter", f (Citer None))
   ; ("iteri", f (Citeri None))
+  ; ( "foldl"
+    , let sym_foldl = Symb.gensym () in
+      let sym_f = Symb.gensym () in
+      let sym_acc = Symb.gensym () in
+      let sym_seq = Symb.gensym () in
+      TmRecLets
+        ( NoInfo
+        , [ ( NoInfo
+            , Ustring.from_utf8 "foldl"
+            , sym_foldl
+            , TyUnknown NoInfo
+            , TmLam
+                ( NoInfo
+                , Ustring.from_utf8 "f"
+                , sym_f
+                , TyUnknown NoInfo
+                , TmLam
+                    ( NoInfo
+                    , Ustring.from_utf8 "acc"
+                    , sym_acc
+                    , TyUnknown NoInfo
+                    , TmLam
+                        ( NoInfo
+                        , Ustring.from_utf8 "seq"
+                        , sym_seq
+                        , TyUnknown NoInfo
+                        , TmMatch
+                            ( NoInfo
+                            , TmApp
+                                ( NoInfo
+                                , TmConst (NoInfo, Cnull)
+                                , TmVar
+                                    (NoInfo, Ustring.from_utf8 "seq", sym_seq)
+                                )
+                            , PatBool (NoInfo, true)
+                            , TmVar (NoInfo, Ustring.from_utf8 "acc", sym_acc)
+                            , TmApp
+                                ( NoInfo
+                                , TmApp
+                                    ( NoInfo
+                                    , TmApp
+                                        ( NoInfo
+                                        , TmVar
+                                            ( NoInfo
+                                            , Ustring.from_utf8 "foldl"
+                                            , sym_foldl )
+                                        , TmVar
+                                            ( NoInfo
+                                            , Ustring.from_utf8 "f"
+                                            , sym_f ) )
+                                    , TmApp
+                                        ( NoInfo
+                                        , TmApp
+                                            ( NoInfo
+                                            , TmVar
+                                                ( NoInfo
+                                                , Ustring.from_utf8 "f"
+                                                , sym_f )
+                                            , TmVar
+                                                ( NoInfo
+                                                , Ustring.from_utf8 "acc"
+                                                , sym_acc ) )
+                                        , TmApp
+                                            ( NoInfo
+                                            , TmConst (NoInfo, Chead)
+                                            , TmVar
+                                                ( NoInfo
+                                                , Ustring.from_utf8 "seq"
+                                                , sym_seq ) ) ) )
+                                , TmApp
+                                    ( NoInfo
+                                    , TmConst (NoInfo, Ctail)
+                                    , TmVar
+                                        ( NoInfo
+                                        , Ustring.from_utf8 "seq"
+                                        , sym_seq ) ) ) ) ) ) ) ) ]
+        , TmVar (NoInfo, Ustring.from_utf8 "foldl", sym_foldl) ) )
+  ; ( "foldr"
+    , let sym_foldr = Symb.gensym () in
+      let sym_f = Symb.gensym () in
+      let sym_acc = Symb.gensym () in
+      let sym_seq = Symb.gensym () in
+      TmRecLets
+        ( NoInfo
+        , [ ( NoInfo
+            , Ustring.from_utf8 "foldr"
+            , sym_foldr
+            , TyUnknown NoInfo
+            , TmLam
+                ( NoInfo
+                , Ustring.from_utf8 "f"
+                , sym_f
+                , TyUnknown NoInfo
+                , TmLam
+                    ( NoInfo
+                    , Ustring.from_utf8 "acc"
+                    , sym_acc
+                    , TyUnknown NoInfo
+                    , TmLam
+                        ( NoInfo
+                        , Ustring.from_utf8 "seq"
+                        , sym_seq
+                        , TyUnknown NoInfo
+                        , TmMatch
+                            ( NoInfo
+                            , TmApp
+                                ( NoInfo
+                                , TmConst (NoInfo, Cnull)
+                                , TmVar
+                                    (NoInfo, Ustring.from_utf8 "seq", sym_seq)
+                                )
+                            , PatBool (NoInfo, true)
+                            , TmVar (NoInfo, Ustring.from_utf8 "acc", sym_acc)
+                            , TmApp
+                                ( NoInfo
+                                , TmApp
+                                    ( NoInfo
+                                    , TmVar
+                                        (NoInfo, Ustring.from_utf8 "f", sym_f)
+                                    , TmApp
+                                        ( NoInfo
+                                        , TmConst (NoInfo, Chead)
+                                        , TmVar
+                                            ( NoInfo
+                                            , Ustring.from_utf8 "seq"
+                                            , sym_seq ) ) )
+                                , TmApp
+                                    ( NoInfo
+                                    , TmApp
+                                        ( NoInfo
+                                        , TmApp
+                                            ( NoInfo
+                                            , TmVar
+                                                ( NoInfo
+                                                , Ustring.from_utf8 "foldr"
+                                                , sym_foldr )
+                                            , TmVar
+                                                ( NoInfo
+                                                , Ustring.from_utf8 "f"
+                                                , sym_f ) )
+                                        , TmVar
+                                            ( NoInfo
+                                            , Ustring.from_utf8 "acc"
+                                            , sym_acc ) )
+                                    , TmApp
+                                        ( NoInfo
+                                        , TmConst (NoInfo, Ctail)
+                                        , TmVar
+                                            ( NoInfo
+                                            , Ustring.from_utf8 "seq"
+                                            , sym_seq ) ) ) ) ) ) ) ) ) ]
+        , TmVar (NoInfo, Ustring.from_utf8 "foldr", sym_foldr) ) )
   ; ("subsequence", f (Csubsequence (None, None)))
     (* MCore intrinsics: Random numbers *)
   ; ("randIntU", f (CrandIntU None))
@@ -139,7 +291,8 @@ let builtin =
   ; ("tensorCopyExn", f (CtensorCopyExn None))
   ; ("tensorSliceExn", f (CtensorSliceExn None))
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
-  ; ("tensorIterSlice", f (CtensorIterSlice None)) (* MCore intrinsics: Boot parser *)
+  ; ("tensorIterSlice", f (CtensorIterSlice None))
+    (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f (CbootParserParseMExprString None))
   ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile None))
   ; ("bootParserGetId", f CbootParserGetId)
@@ -157,7 +310,7 @@ let builtin =
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))
 
 (* Mapping name to symbol *)
-let builtin_name2sym = List.map (fun (x, s, _) -> (IdVar (usid x), s)) builtin
+let builtin_name2sym = List.fold_left (fun env (x, s, _) -> Symbolize.addsym (IdVar (usid x)) s env) Symbolize.empty_sym_env builtin
 
 (* Mapping sym to term *)
 let builtin_sym2term = List.map (fun (_, s, t) -> (s, t)) builtin

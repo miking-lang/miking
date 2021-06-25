@@ -26,32 +26,6 @@ external externalThreadSelf ! : Unit -> Int
 let threadSelf = lam u.
   externalThreadSelf u
 
--- 'threadWait ()' must be called from within a critical section. Blocks
--- until the critical section becomes notified.
--- [NOTE] two calls to 'threadWait' within the same critical section is
--- meaningless, as the second one will always immediately return.
-external externalThreadWait ! : Unit -> Unit
-let threadWait = lam u.
-  externalThreadWait u
-
--- 'threadNotify tid' notifies any in-progress critical section in the thread
--- with ID 'tid'. Blocks until any in-progress critical section in that thread
--- runs to completion.
-external externalThreadNotify ! : Int -> Unit
-let threadNotify = lam tid.
-  externalThreadNotify tid
-
--- 'threadCriticalSection f' runs 'f' as a critical section in the current
--- thread 't'. A critical section means that 'f' may include a call to
--- 'threadWait' (see below), and that any call to 'threadNotify t' (see below)
--- during the critical section blocks until the critical section runs to
--- completion. A critical section is either notified, or not notified. It is
--- initially not notified, and becomes notified after a call to 'threadNotify
--- t'. Once it is notified, it stays notified.
-external externalThreadCriticalSection ! : (Unit -> a) -> a
-let threadCriticalSection = lam f.
-  externalThreadCriticalSection f
-
 -- 'threadCPURelax ()' may improve performance during busy waiting.
 external externalThreadCPURelax ! : Unit -> Unit
 let threadCPURelax = lam u.
@@ -114,39 +88,6 @@ let n = 100 in
 let t = threadSpawn (lam. loop n me) in
 loop n (threadGetID t);
 -- Does not loop forever = the test has passed!
-threadJoin t;
-
-
--- Wait, notify, and critical section --
-let inCriticalSection = atomicMake false in
-let afterWait = atomicMake false in
-
-let t = threadSpawn (lam.
-  threadCriticalSection (
-    lam.
-      atomicExchange inCriticalSection true;
-      threadWait ();
-      sleepMs 1000;
-      atomicExchange afterWait true
-  )
-) in
-
-recursive let waitForFlag : ARef a -> Unit = lam flag.
-  match atomicGet flag with true then ()
-  else waitForFlag flag
-in
-waitForFlag inCriticalSection;
-
--- When inCriticalSection is set, we know that t is in the critical section, so
--- threadNotify will unblock the threadWait.
-
-threadNotify (threadGetID t);
-
--- Since threadNotify blocks until the critical section exits, afterWait must be
--- set to true now.
-utest atomicGet afterWait with true in
-
--- Don't forget to clean up!
 threadJoin t;
 
 ()

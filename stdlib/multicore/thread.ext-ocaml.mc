@@ -32,24 +32,6 @@ let threadExtMap =
       , libraries = []
       }]),
 
-    ("externalThreadWait", [
-      { ident = "Domain.Sync.wait"
-      , ty = tyarrow_ otyunit_ otyunit_
-      , libraries = []
-      }]),
-
-    ("externalThreadNotify", [
-      { ident = "Domain.Sync.notify"
-      , ty = tyarrow_ (tyathread_ "a") otyunit_
-      , libraries = []
-      }]),
-
-    ("externalThreadCriticalSection", [
-      { ident = "Domain.Sync.critical_section"
-      , ty = tyarrow_ (tyarrow_ otyunit_ (tygeneric_ "a")) (tyathread_ "a")
-      , libraries = []
-      }]),
-
     ("externalThreadCPURelax", [
       { ident = "Domain.Sync.cpu_relax"
       , ty = tyarrow_ otyunit_ otyunit_
