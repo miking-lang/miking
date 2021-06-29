@@ -3,24 +3,35 @@ open Ustring.Op
 open Msg
 open Ast
 
-type sym_env = {var: Symb.t sidmap; con: Symb.t sidmap; ty: Symb.t sidmap; label: Symb.t sidmap;}
+type sym_env =
+  { var: Symb.t sidmap
+  ; con: Symb.t sidmap
+  ; ty: Symb.t sidmap
+  ; label: Symb.t sidmap }
 
-let empty_sym_env = {var = SidMap.empty; con = SidMap.empty; ty = SidMap.empty; label = SidMap.empty}
+let empty_sym_env =
+  {var= SidMap.empty; con= SidMap.empty; ty= SidMap.empty; label= SidMap.empty}
 
 let sym_env_to_assoc env =
   let vars = List.map (fun (k, v) -> (IdVar k, v)) (SidMap.bindings env.var) in
   let cons = List.map (fun (k, v) -> (IdCon k, v)) (SidMap.bindings env.con) in
   let tys = List.map (fun (k, v) -> (IdType k, v)) (SidMap.bindings env.ty) in
-  let labels = List.map (fun (k, v) -> (IdLabel k, v)) (SidMap.bindings env.label) in
+  let labels =
+    List.map (fun (k, v) -> (IdLabel k, v)) (SidMap.bindings env.label)
+  in
   vars @ cons @ tys @ labels
 
 let findsym fi id env =
   try
     match id with
-    | IdVar x -> SidMap.find x env.var
-    | IdCon x -> SidMap.find x env.con
-    | IdType x -> SidMap.find x env.ty
-    | IdLabel x -> SidMap.find x env.label
+    | IdVar x ->
+        SidMap.find x env.var
+    | IdCon x ->
+        SidMap.find x env.con
+    | IdType x ->
+        SidMap.find x env.ty
+    | IdLabel x ->
+        SidMap.find x env.label
   with Not_found ->
     let x, kindstr =
       match id with
@@ -37,21 +48,32 @@ let findsym fi id env =
 
 let findsym_opt id env =
   match id with
-  | IdVar x -> SidMap.find_opt x env.var
-  | IdCon x -> SidMap.find_opt x env.con
-  | IdType x -> SidMap.find_opt x env.ty
-  | IdLabel x -> SidMap.find_opt x env.label
+  | IdVar x ->
+      SidMap.find_opt x env.var
+  | IdCon x ->
+      SidMap.find_opt x env.con
+  | IdType x ->
+      SidMap.find_opt x env.ty
+  | IdLabel x ->
+      SidMap.find_opt x env.label
 
 let addsym id sym env =
   match id with
-  | IdVar x -> {env with var = SidMap.add x sym env.var}
-  | IdCon x -> {env with con = SidMap.add x sym env.con}
-  | IdType x -> {env with ty = SidMap.add x sym env.ty}
-  | IdLabel x -> {env with label = SidMap.add x sym env.label}
+  | IdVar x ->
+      {env with var= SidMap.add x sym env.var}
+  | IdCon x ->
+      {env with con= SidMap.add x sym env.con}
+  | IdType x ->
+      {env with ty= SidMap.add x sym env.ty}
+  | IdLabel x ->
+      {env with label= SidMap.add x sym env.label}
 
 let merge_sym_envs_pick_left l r =
   let pick_left _ x _ = Some x in
-  { var = SidMap.union pick_left l.var r.var; con = SidMap.union pick_left l.con r.con; ty = SidMap.union pick_left l.ty r.ty; label = SidMap.union pick_left l.label r.label; }
+  { var= SidMap.union pick_left l.var r.var
+  ; con= SidMap.union pick_left l.con r.con
+  ; ty= SidMap.union pick_left l.ty r.ty
+  ; label= SidMap.union pick_left l.label r.label }
 
 let rec symbolize_type env ty =
   match ty with
@@ -199,7 +221,7 @@ let rec symbolize (env : sym_env) (t : tm) =
         List.fold_left
           (fun env (_, x, _, _, _) ->
             let s = Symb.gensym () in
-            addsym (IdVar (sid_of_ustring x)) s env)
+            addsym (IdVar (sid_of_ustring x)) s env )
           env lst
       in
       TmRecLets
