@@ -1535,6 +1535,9 @@ utest ocamlEval (generateEmptyEnv testDPrint) with int_ 0 using eqExpr in
 let testCommand = command_ (str_ "echo \"42\"") in
 utest ocamlEval (generateEmptyEnv testCommand) with int_ 42 using eqExpr in
 
+let testFlush = semi_ (flushStdout_ uunit_) (int_ 1) in
+utest testFlush with generateEmptyEnv testFlush using sameSemantics in
+
 -- Random number generation operations
 let testSeededRandomNumber =
  symbolize
