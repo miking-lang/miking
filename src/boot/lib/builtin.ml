@@ -313,7 +313,10 @@ let builtin =
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))
 
 (* Mapping name to symbol *)
-let builtin_name2sym = List.fold_left (fun env (x, s, _) -> Symbolize.addsym (IdVar (usid x)) s env) Symbolize.empty_sym_env builtin
+let builtin_name2sym =
+  List.fold_left
+    (fun env (x, s, _) -> Symbolize.addsym (IdVar (usid x)) s env)
+    Symbolize.empty_sym_env builtin
 
 (* Mapping sym to term *)
 let builtin_sym2term = List.map (fun (_, s, t) -> (s, t)) builtin
