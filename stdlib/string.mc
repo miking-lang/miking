@@ -197,6 +197,12 @@ utest strLastIndex 'w' "Hello, World!" with None () using optionEq eqi
 utest strLastIndex 'o' "Hello, world!" with Some(8) using optionEq eqi
 utest strLastIndex '@' "Some @TAG@" with Some(9) using optionEq eqi
 
+-- The following implementation has been implemented under the assumption that
+-- the underlying representation of sequences is Ropes. Given that the
+-- assumption holds, it has the following complexities:
+-- Time: O(|s| * |delim|)
+-- Memory: O(|s|)
+--
 -- Splits s on delim
 let strSplit = lam delim. lam s.
   let n = length s in
