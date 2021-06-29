@@ -238,7 +238,7 @@ lang TensorOpTypeAst = TensorOpAst
   | CTensorRank _ -> tytensorrank_ (tygeneric_ "a")
   | CTensorShape _ -> tytensorshape_ (tygeneric_ "a")
   | CTensorReshapeExn _ -> tytensorreshapeexn_ (tygeneric_ "a")
-  | CTensorCopyExn _ -> tytensorcopyexn_ (tygeneric_ "a")
+  | CTensorBlitExn _ -> tytensorblitexn_ (tygeneric_ "a")
   | CTensorTransposeExn _ -> tytensortransposeexn_ (tygeneric_ "a")
   | CTensorSliceExn _ -> tytensorsliceexn_ (tygeneric_ "a")
   | CTensorSubExn _ -> tytensorsubexn_ (tygeneric_ "a")

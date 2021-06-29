@@ -64,10 +64,10 @@ let testTensors =
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
 
-  -- Copy
+  -- Blit
   let t1 = tensorRepeat [3, 4] v0 in
   let t2 = mkRank2TestTensor () in
-  tensorCopyExn t2 t1;
+  tensorBlitExn t2 t1;
   utest tensorGetExn t1 [0, 0] with v1 using eq in
   utest tensorGetExn t1 [0, 1] with v2 using eq in
   utest tensorGetExn t1 [0, 2] with v3 using eq in
@@ -197,11 +197,11 @@ let testTensors =
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
 
-  -- Slice and Copy
+  -- Slice and Blit
   let t = mkRank2TestTensor () in
   let t1 = tensorSliceExn t [0] in
   let t2 = tensorSliceExn t [1] in
-  tensorCopyExn t1 t2;
+  tensorBlitExn t1 t2;
   utest tensorGetExn t [0, 0] with v1 using eq in
   utest tensorGetExn t [0, 1] with v2 using eq in
   utest tensorGetExn t [0, 2] with v3 using eq in
