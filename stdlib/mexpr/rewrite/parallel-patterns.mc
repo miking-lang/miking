@@ -41,11 +41,10 @@ let varPatString : VarPattern -> String = lam pat.
   else never
 
 type AtomicPattern
-con FixedAppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
-con UnknownAppPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
+con AppPattern : {id : Int, fn : Expr, vars : [VarPattern]} -> AtomicPattern
+con UnknownOpPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
 con BranchPattern : {id : Int, cond : VarPattern, thn : [AtomicPattern],
                         els : [AtomicPattern]} -> AtomicPattern
-con SeqPattern : {id : Int, vars : [VarPattern]} -> AtomicPattern
 con RecursionPattern : {id : Int, binds : [(Name, VarPattern)]} -> AtomicPattern
 con ReturnPattern : {id : Int, var : VarPattern} -> AtomicPattern
 
@@ -53,39 +52,21 @@ type Pattern = {
   atomicPatternMap : Map Int AtomicPattern,
   activePatterns : [AtomicPattern],
   dependencies : Map Int (Set Int),
-  replacement : (Map VarPattern (Name, Expr)) -> Expr
-}
-
-type PatternMatchState = {
-  active : [Int],
-  dependencies : Map Int (Set Int),
-  patternIndexToBoundVar : Map Int Name,
-  atomicPatternMatches : Map Int Expr,
-  nameMatches : Map Name Name
-}
-
-let emptyPatternMatchState = {
-  active = [],
-  dependencies = mapEmpty subi,
-  patternIndexToBoundVar = mapEmpty subi,
-  atomicPatternMatches = mapEmpty subi,
-  nameMatches = mapEmpty nameCmp
+  replacement : Map VarPattern (Name, Expr) -> Expr
 }
 
 let getPatternIndex : AtomicPattern -> Int = lam p.
-  match p with FixedAppPattern t then t.id
-  else match p with UnknownAppPattern t then t.id
+  match p with AppPattern t then t.id
+  else match p with UnknownOpPattern t then t.id
   else match p with BranchPattern t then t.id
-  else match p with SeqPattern t then t.id
   else match p with RecursionPattern t then t.id
   else match p with ReturnPattern t then t.id
   else never
 
-let getShallowPatternDependencies : AtomicPattern -> [VarPattern] = lam p.
-  match p with FixedAppPattern t then t.vars
-  else match p with UnknownAppPattern t then t.vars
+let getShallowVarPatternDependencies : AtomicPattern -> [VarPattern] = lam p.
+  match p with AppPattern t then t.vars
+  else match p with UnknownOpPattern t then t.vars
   else match p with BranchPattern t then [t.cond]
-  else match p with SeqPattern t then t.vars
   else match p with RecursionPattern t then
     match unzip t.binds with (names, vars) then
       join [map (lam n. PatternName n) names, vars]
@@ -94,18 +75,12 @@ let getShallowPatternDependencies : AtomicPattern -> [VarPattern] = lam p.
   else never
 
 let getInnerPatterns : AtomicPattern -> Option [AtomicPattern] = lam p.
-  match p with FixedAppPattern _ then None ()
-  else match p with UnknownAppPattern _ then None ()
+  match p with AppPattern _ then None ()
+  else match p with UnknownOpPattern _ then None ()
   else match p with BranchPattern t then Some (concat t.thn t.els)
-  else match p with SeqPattern _ then None ()
   else match p with RecursionPattern _ then None ()
   else match p with ReturnPattern _ then None ()
   else never
-
-let isFinalState : PatternMatchState -> Bool = lam state.
-  match state with {active = [], dependencies = deps} then
-    mapIsEmpty deps
-  else false
 
 -- Constructs a mapping from every pattern index to a set containing the
 -- indices of patterns on which the pattern depends on. A pattern is considered
@@ -126,7 +101,7 @@ let getPatternDependencies : [AtomicPattern] -> Map Int (Set Int) =
               setInsert i patternDeps
             else patternDeps)
           (setEmpty subi)
-          (getShallowPatternDependencies p) in
+          (getShallowVarPatternDependencies p) in
       mapInsert id patternDeps dependencies
     else
       error (join ["Found multiple atomic patterns with id ",
@@ -200,20 +175,19 @@ let mapPattern : () -> Pattern =
   let s = nameSym "s" in
   let acc = nameSym "acc" in
   let atomicPatterns = [
-    FixedAppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
+    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
     BranchPattern {id = 1, cond = PatternIndex 0,
       thn = [ReturnPattern {id = 2, var = PatternName acc}],
       els = [
-        FixedAppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
-        FixedAppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
-        UnknownAppPattern {id = 5, vars = [PatternIndex 4]},
-        SeqPattern {id = 6, vars = [PatternIndex 5]},
-        FixedAppPattern {id = 7, fn = uconst_ (CConcat ()),
-                       vars = [PatternName acc, PatternIndex 6]},
-        RecursionPattern {id = 8, binds = [(s, PatternIndex 3), (acc, PatternIndex 7)]},
-        ReturnPattern {id = 9, var = PatternIndex 8}
+        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
+        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
+        UnknownOpPattern {id = 5, vars = [PatternIndex 4]},
+        AppPattern {id = 6, fn = uconst_ (CConcat ()),
+                       vars = [PatternName acc, PatternIndex 5]},
+        RecursionPattern {id = 7, binds = [(s, PatternIndex 3), (acc, PatternIndex 6)]},
+        ReturnPattern {id = 8, var = PatternIndex 7}
       ]},
-    ReturnPattern {id = 10, var = PatternIndex 1}
+    ReturnPattern {id = 9, var = PatternIndex 1}
   ] in
   let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
     let patternName = "parallelMap" in
@@ -247,13 +221,13 @@ let reducePattern : () -> Pattern =
   let s = nameSym "s" in
   let acc = nameSym "acc" in
   let atomicPatterns = [
-    FixedAppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
+    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
     BranchPattern {id = 1, cond = PatternIndex 0,
       thn = [ReturnPattern {id = 2, var = PatternName acc}],
       els = [
-        FixedAppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
-        FixedAppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
-        UnknownAppPattern {id = 5, vars = [PatternName acc, PatternIndex 4]},
+        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
+        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
+        UnknownOpPattern {id = 5, vars = [PatternName acc, PatternIndex 4]},
         RecursionPattern {id = 6, binds = [(s, PatternIndex 3), (acc, PatternIndex 5)]},
         ReturnPattern {id = 7, var = PatternIndex 6}
       ]},
@@ -318,35 +292,32 @@ let forPattern = use MExprAst in
   lam.
   let i = nameSym "i" in
   let n = nameSym "n" in
-  let s = nameSym "s" in
   let acc = nameSym "acc" in
   let atomicPatterns = [
-    FixedAppPattern {id = 0, fn = uconst_ (CLti ()),
+    AppPattern {id = 0, fn = uconst_ (CLti ()),
                      vars = [PatternName i, PatternName n]},
     BranchPattern {id = 1, cond = PatternIndex 0,
       thn = [
-        FixedAppPattern {id = 2, fn = uconst_ (CGet ()),
-                         vars = [PatternName s, PatternName i]},
-        UnknownAppPattern {id = 3, vars = [PatternName acc, PatternIndex 2]},
-        FixedAppPattern {id = 4, fn = uconst_ (CAddi ()),
+        UnknownOpPattern {id = 2, vars = [PatternName acc, PatternName i]},
+        AppPattern {id = 3, fn = uconst_ (CAddi ()),
                          vars = [PatternName i, PatternLiteralInt 1]},
-        RecursionPattern {id = 5, binds = [(acc, PatternIndex 3),
-                                           (i, PatternIndex 4),
+        RecursionPattern {id = 4, binds = [(acc, PatternIndex 2),
+                                           (i, PatternIndex 3),
                                            (n, PatternName n)]},
-        ReturnPattern {id = 6, var = PatternIndex 5}
+        ReturnPattern {id = 5, var = PatternIndex 4}
       ],
-      els = [ReturnPattern {id = 7, var = PatternName acc}]},
-    ReturnPattern {id = 8, var = PatternIndex 1}
+      els = [ReturnPattern {id = 6, var = PatternName acc}]},
+    ReturnPattern {id = 7, var = PatternIndex 1}
   ] in
   let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
     let patternName = "sequentialFor" in
-    let accResultName = getMatchName patternName (PatternIndex 3) matches in
+    let accResultName = getMatchName patternName (PatternIndex 2) matches in
     let nParamExpr = getMatchExpr patternName (PatternName n) matches in
-    let matchExpr = getMatchExpr patternName (PatternIndex 1) matches in
+    let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
     let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
     let iterPair : (Name, Expr) = getMatch patternName (PatternName i) matches in
 
-    match matchExpr with TmMatch {thn = thn} then
+    match branchExpr with TmMatch {thn = thn} then
       -- Replace i with fresh variable to avoid it being replaced by a passed
       -- argument.
       let accFresh = nameSym (nameGetStr accPair.0) in

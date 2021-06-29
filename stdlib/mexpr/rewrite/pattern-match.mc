@@ -6,6 +6,49 @@ include "mexpr/rewrite/utils.mc"
 
 include "set.mc"
 
+type PatternMatchState = {
+  -- A sequence of indices of the active patterns. These are patterns whose
+  -- dependencies have been matched with expressions, but which have not been
+  -- matched themselves.
+  active : [Int],
+
+  -- Maps the index of an unmatched pattern to a set of indices, representing
+  -- the active patterns it depends on.
+  patternDependencies : Map Int (Set Int),
+
+  -- Maps the index of a pattern to the name of the variable the expression it
+  -- matched with was bound to.
+  patternIndexToBoundVar : Map Int Name,
+
+  -- Maps the index of a pattern to the expression it matched with.
+  atomicPatternMatches : Map Int Expr,
+
+  -- Maps the name of a parameter to the argument name it has matched with.
+  nameMatches : Map Name Name,
+
+  -- Maps the name of a variable to the set of variable patterns on which it
+  -- depends.
+  variableDependencies: Map Name (Set VarPattern),
+
+  -- The parallel pattern being matched on.
+  pattern: Pattern
+}
+
+let emptyPatternMatchState = lam p : Pattern. {
+  active = [],
+  patternDependencies = mapEmpty subi,
+  patternIndexToBoundVar = mapEmpty subi,
+  atomicPatternMatches = mapEmpty subi,
+  nameMatches = mapEmpty nameCmp,
+  variableDependencies = mapEmpty nameCmp,
+  pattern = p
+}
+
+let isFinalState : PatternMatchState -> Bool = lam state.
+  match state with {active = [], patternDependencies = deps} then
+    mapIsEmpty deps
+  else false
+
 -- This function extracts the name of a TmVar and returns an option containing
 -- the name, assuming that the given expression is always a variable. If this
 -- assumption does not hold, it returns None.
@@ -15,11 +58,24 @@ let getVariableIdentifier : Expr -> Option Name =
   match varExpr with TmVar {ident = ident} then Some ident
   else None ()
 
+recursive let findVariableDependencies : PatternMatchState -> Set Int -> Expr
+                                      -> Set Int =
+  use MExprParallelKeywordMaker in
+  lam state. lam acc. lam expr.
+  match expr with TmVar {ident = ident} then
+    match mapLookup ident state.variableDependencies with Some deps then
+      setUnion acc deps
+    else
+      setInsert (PatternName ident) acc
+  else sfold_Expr_Expr (findVariableDependencies state) acc expr
+end
+
 let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState =
+  use MExprParallelKeywordMaker in
   lam state. lam boundVar. lam expr. lam patIndex.
   let active = filter (lam pidx. neqi pidx patIndex) state.active in
-  let dependencies =
-    mapMap (lam deps : Set Int. setRemove patIndex deps) state.dependencies in
+  let dependencies = mapMap (lam deps : Set Int. setRemove patIndex deps)
+                            state.patternDependencies in
   let part =
     partition
       (lam kv : (Int, Set Int). eqi (setSize kv.1) 0)
@@ -32,7 +88,7 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
     let atomicPatternMatches =
       mapInsert patIndex expr state.atomicPatternMatches in
     {{{{state with active = concat active newActivePatternIndices}
-              with dependencies = mapFromSeq subi nonEmptyDependencies}
+              with patternDependencies = mapFromSeq subi nonEmptyDependencies}
               with patternIndexToBoundVar = patternIndexToBoundVar}
               with atomicPatternMatches = atomicPatternMatches}
   else never
@@ -40,14 +96,15 @@ let applyPattern : PatternMatchState -> Name -> Expr -> Int -> PatternMatchState
 let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
                         -> Option PatternMatchState =
   use MExprParallelKeywordMaker in
-  lam expr. lam state. lam pat.
+  lam expr. lam state. lam varPat.
   match expr with TmVar {ident = ident} then
-    match pat with PatternIndex index then
+    match varPat with PatternIndex index then
       match mapLookup index state.patternIndexToBoundVar with Some matchedId then
         if nameEq ident matchedId then Some state else None ()
-      else error (concat "Found reference to unmatched pattern with index "
-                         (int2string index))
-    else match pat with PatternName name then
+      else
+        error (concat "Found reference to unmatched pattern with index "
+                      (int2string index))
+    else match varPat with PatternName name then
       match mapLookup name state.nameMatches with Some boundIdent then
         if nameEq ident boundIdent then Some state else None ()
       else
@@ -55,7 +112,7 @@ let matchVariablePattern : Expr -> PatternMatchState -> VarPattern
         Some {state with nameMatches = nameMatches}
     else None ()
   else match expr with TmConst {val = CInt {val = n1}} then
-    match pat with PatternLiteralInt n2 then
+    match varPat with PatternLiteralInt n2 then
       if eqi n1 n2 then Some state else None ()
     else None ()
   else None ()
@@ -131,7 +188,7 @@ recursive
       work state 0
     in
     match mapLookup patIdx atomicPatternMap with Some pat then
-      match pat with FixedAppPattern t then
+      match pat with AppPattern t then
         match expr with TmApp _ then
           match collectAppArguments expr with (f, args) then
             if eqExpr t.fn f then
@@ -139,7 +196,7 @@ recursive
             else None ()
           else None ()
         else None ()
-      else match pat with UnknownAppPattern t then
+      else match pat with UnknownOpPattern t then
         match expr with TmApp _ then
           match collectAppArguments expr with (_, args) then
             let matchWithParams : State -> VarPattern -> Option State =
@@ -156,7 +213,7 @@ recursive
             let updatedState : PatternMatchState = updatedState in
             match getPatternDependencies t.thn with (thnActive, thnDeps) then
               let thnState = {{updatedState with active = thnActive}
-                                            with dependencies = thnDeps} in
+                                            with patternDependencies = thnDeps} in
               match matchAtomicPatterns atomicPatternMap bindingIdent
                                         params t2.thn thnState
               with Some finalThnState then
@@ -165,26 +222,23 @@ recursive
                     let finalThnState : PatternMatchState = finalThnState in
                     let elsState =
                       {{finalThnState with active = elsActive}
-                                      with dependencies = elsDeps} in
+                                      with patternDependencies = elsDeps} in
                     match matchAtomicPatterns atomicPatternMap bindingIdent
                                               params t2.els elsState
                     with Some finalElsState then
                       if isFinalState finalElsState then
                         let finalElsState : PatternMatchState = finalElsState in
-                        Some {{finalElsState with active = updatedState.active}
-                                             with dependencies = updatedState.dependencies}
+                        let deps = updatedState.patternDependencies in
+                        let finalState =
+                          {{finalElsState with active = updatedState.active}
+                                          with patternDependencies = deps} in
+                        Some finalState
                       else None ()
                     else None ()
                   else never
                 else None ()
               else None ()
             else never
-          else None ()
-        else None ()
-      else match pat with SeqPattern t then
-        match expr with TmSeq {tms = tms} then
-          match checkVarPatterns t.vars tms state with Some updatedState then
-            Some updatedState
           else None ()
         else None ()
       else match pat with RecursionPattern t then
@@ -201,7 +255,7 @@ recursive
             else None ()
           else never
         else None ()
-      else match pat with ReturnPattern t then
+      else match pat with ReturnPattern _ then
         None ()
       else never
     else
@@ -215,6 +269,8 @@ recursive
       let updatedState =
         foldl
           (lam state. lam patIdx.
+            -- TODO: exit after one match has been found, as we don't want
+            -- multiple patterns to be matched on the same expression.
             match matchAtomicPattern atomicPatternMap bindingIdent params body
                                      state patIdx
             with Some updatedState then
@@ -222,9 +278,15 @@ recursive
             else state)
           state
           state.active in
+      let varDependencies =
+        mapInsert ident
+          (findVariableDependencies updatedState (setEmpty cmpVarPattern) body)
+          state.variableDependencies in
+      let updatedState =
+        {updatedState with variableDependencies = varDependencies} in
       matchAtomicPatterns atomicPatternMap bindingIdent params inexpr updatedState
     else match expr with TmVar {ident = ident} then
-      if and (eqi (length state.active) 1) (mapIsEmpty state.dependencies) then
+      if and (eqi (length state.active) 1) (mapIsEmpty state.patternDependencies) then
         let patIdx = head state.active in
         match mapLookup patIdx atomicPatternMap
         with Some (ReturnPattern {var = pvar}) then
@@ -257,16 +319,13 @@ let constructLookup : PatternMatchState -> Map VarPattern Expr = lam state.
 let matchPattern : RecLetBinding -> Pattern -> Option (Map VarPattern Expr) =
   use MExprParallelKeywordMaker in
   lam binding. lam pattern.
-  let initialState = {
-    active = pattern.activePatterns,
-    dependencies = pattern.dependencies,
-    patternIndexToBoundVar = mapEmpty subi,
-    atomicPatternMatches = mapEmpty subi,
-    nameMatches = mapEmpty nameCmp
-  } in
+  let initState =
+    {{emptyPatternMatchState pattern
+        with active = pattern.activePatterns}
+        with patternDependencies = pattern.dependencies} in
   match functionParametersAndBody binding.body with (params, body) then
     let result = matchAtomicPatterns pattern.atomicPatternMap binding.ident
-                                     params body initialState in
+                                     params body initState in
     optionBind
       result
       (lam state.
@@ -290,8 +349,8 @@ let preprocess : Expr -> Expr = lam e.
 in
 
 let matchBindingsWithPattern : Expr -> Pattern -> [PatternMatchResult] =
-  lam bindings. lam pattern.
-  match bindings with TmRecLets {bindings = bindings} then
+  lam recLets. lam pattern.
+  match recLets with TmRecLets {bindings = bindings} then
     map (lam binding. matchPattern binding pattern) bindings
   else never
 in
