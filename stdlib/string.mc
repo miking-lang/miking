@@ -30,6 +30,9 @@ utest eqString "a" "" with false
 utest eqString "a" "a" with true
 utest eqString "a" "aa" with false
 
+-- Compares a string with a slice of another string for equality. This avoids
+-- creating a copy of the second string, which is beneficial when Ropes are the
+-- underlying representation of sequences.
 let eqStringSlice = lam s1. lam s2. lam o2. lam n2.
   recursive let work = lam i.
     if eqi i n2 then true
