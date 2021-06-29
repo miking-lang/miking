@@ -6,10 +6,11 @@
 include "option.mc"
 include "seq.mc"
 
--- Default to dense tensors
-let tensorCreate = tensorCreateDense
-
 let _prod = foldl muli 1
+
+----------------------------
+-- TENSOR INDEX FUNCTIONS --
+----------------------------
 
 -- Converts linear index `k` to Cartesian index in row-major order.
 let linearToCartesianIndex = lam shape. lam k.
@@ -99,6 +100,14 @@ utest optionIndexFoldRMM
   []
   [2, 2]
 with None () using optionEq (eqSeq (eqSeq eqi))
+
+
+------------------------------
+-- GENERAL TENSOR FUNCTIONS --
+------------------------------
+
+-- Default to dense tensors
+let tensorCreate = tensorCreateDense
 
 -- Construct a tensor of shape `shape` from a sequence `seq`.
 let tensorOfSeqOrElse :
@@ -617,6 +626,35 @@ utest
   in
   tensorFilteri (lti 3) t
 with [[1, 0], [1, 1], [1, 2]]
+
+
+------------------------------
+-- INTEGER TENSOR FUNCTIONS --
+------------------------------
+
+let tensorCumsumiExn : Tensor[Int] -> Tensor[Int] -> Unit =
+  lam t. lam r.
+    if eqSeq eqi (tensorShape t) (tensorShape r) then
+      tensorFoldi
+        (lam acc. lam idx. lam x.
+          let acc = addi acc x in
+          tensorSetExn r idx acc; acc)
+        0 t
+    else error "Invalid Argument: tensor.tensorCumsumiExn"
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  let r = tensorCreateDense [3] (lam. 0) in
+  tensorCumsumiExn t r; tensorToSeqExn r
+with [1, 3, 6]
+
+let tensorCumsumiInplace : Tensor[Int] -> Unit =
+  lam t. tensorCumsumiExn t t
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorCumsumiInplace t; tensorToSeqExn t
+with [1, 3, 6]
 
 mexpr
 
