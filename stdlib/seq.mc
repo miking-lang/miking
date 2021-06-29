@@ -200,6 +200,18 @@ end
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
+recursive
+  let findMap : (a -> Option b) -> [a] -> Option b = lam f. lam seq.
+    match seq with [h] ++ t then
+      match f h with Some x then Some x else findMap f t
+    else None ()
+end
+
+utest findMap (lam x. if geqi x 3 then Some (muli x 2) else None ()) [1,2,3]
+with Some 6 using optionEq eqi
+utest findMap (lam x. if eqi x 0 then Some x else None ()) [1,2,3]
+with None () using optionEq eqi
+
 let partition = lam p. lam seq.
   recursive let work = lam l. lam r. lam seq.
     match seq with [] then (l, r)

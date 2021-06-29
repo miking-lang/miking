@@ -267,17 +267,16 @@ recursive
     lam atomicPatternMap. lam bindingIdent. lam params. lam expr. lam state.
     match expr with TmLet {ident = ident, body = body, inexpr = inexpr} then
       let updatedState =
-        foldl
-          (lam state. lam patIdx.
-            -- TODO: exit after one match has been found, as we don't want
-            -- multiple patterns to be matched on the same expression.
-            match matchAtomicPattern atomicPatternMap bindingIdent params body
-                                     state patIdx
-            with Some updatedState then
-              applyPattern updatedState ident body patIdx
-            else state)
-          state
-          state.active in
+        optionGetOrElse
+          (lam. state)
+          (findMap
+            (lam state. lam patIdx.
+              match matchAtomicPattern atomicPatternMap bindingIdent params body
+                                       state patIdx
+              with Some updatedState then
+                Some (applyPattern updatedState ident body patIdx)
+              else None ())
+            state.active) in
       let varDependencies =
         mapInsert ident
           (findVariableDependencies updatedState (setEmpty cmpVarPattern) body)
