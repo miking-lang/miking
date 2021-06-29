@@ -103,6 +103,14 @@ module Dense = struct
         Array.blit t1.data o1 t2.data o2 t1.size
     else raise (Invalid_argument "Tensor.Dense.blit_exn")
 
+  let copy t =
+    let data = Array.init t.size (fun i -> t.data.(i + t.stride)) in
+    let shape = t.shape in
+    let rank = t.rank in
+    let stride = 0 in
+    let size = t.size in
+    {data; shape; rank; stride; size}
+
   let transpose_exn (t : 'a t) = mk_transpose shape create get_exn t
 
   let reshape_exn t shape =
@@ -173,6 +181,13 @@ module CArray = struct
   let shape = Bigarray.Genarray.dims
 
   let blit_exn = Bigarray.Genarray.blit
+
+  let copy t =
+    let t' =
+      Bigarray.Genarray.create (Bigarray.Genarray.kind t) Bigarray.c_layout
+        (shape t)
+    in
+    blit_exn t t' ; t'
 
   let reshape_exn = Bigarray.reshape
 
