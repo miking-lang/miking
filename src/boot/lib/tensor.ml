@@ -49,14 +49,14 @@ let mk_transpose shape create get t dim0 dim1 =
         get t idx ) )
   else raise (Invalid_argument "Tensor.transpose")
 
-let copy n shape1 shape2 reshape1 reshape2 get1 set2 t1 t2 =
+let blit n shape1 shape2 reshape1 reshape2 get1 set2 t1 t2 =
   if shape1 t1 <> shape2 t2 then
     let t1' = reshape1 t1 [|n|] in
     let t2' = reshape2 t2 [|n|] in
     for i = 0 to n - 1 do
       set2 t2' [|i|] (get1 t1' [|i|])
     done
-  else raise (Invalid_argument "Tensor.copy")
+  else raise (Invalid_argument "Tensor.blit")
 
 module Dense = struct
   type 'a t =
@@ -94,14 +94,14 @@ module Dense = struct
       t.data.(linear_idx) <- v
     else raise (Invalid_argument "Tensor.Dense.set_exn")
 
-  let copy_exn t1 t2 =
+  let blit_exn t1 t2 =
     if shape t1 = shape t2 then
       if rank t1 = 0 then t2.data.(0) <- t1.data.(0)
       else
         let o1 = t1.stride in
         let o2 = t2.stride in
         Array.blit t1.data o1 t2.data o2 t1.size
-    else raise (Invalid_argument "Tensor.Dense.copy_exn")
+    else raise (Invalid_argument "Tensor.Dense.blit_exn")
 
   let transpose_exn (t : 'a t) = mk_transpose shape create get_exn t
 
@@ -172,7 +172,7 @@ module CArray = struct
 
   let shape = Bigarray.Genarray.dims
 
-  let copy_exn = Bigarray.Genarray.blit
+  let blit_exn = Bigarray.Genarray.blit
 
   let reshape_exn = Bigarray.reshape
 
@@ -214,16 +214,16 @@ module CArray = struct
     a
 end
 
-let copy_num_nonum_exn t1 t2 =
+let blit_num_nonum_exn t1 t2 =
   try
-    copy (Dense.size t2) CArray.shape Dense.shape CArray.reshape_exn
+    blit (Dense.size t2) CArray.shape Dense.shape CArray.reshape_exn
       Dense.reshape_exn CArray.get_exn Dense.set_exn t1 t2
   with Invalid_argument _ ->
-    raise (Invalid_argument "Tensor.copy_num_nonum_exn")
+    raise (Invalid_argument "Tensor.blit_num_nonum_exn")
 
-let copy_nonum_num_exn t1 t2 =
+let blit_nonum_num_exn t1 t2 =
   try
-    copy (Dense.size t1) Dense.shape CArray.shape Dense.reshape_exn
+    blit (Dense.size t1) Dense.shape CArray.shape Dense.reshape_exn
       CArray.reshape_exn Dense.get_exn CArray.set_exn t1 t2
   with Invalid_argument _ ->
-    raise (Invalid_argument "Tensor.copy_nonum_num_exn")
+    raise (Invalid_argument "Tensor.blit_nonum_num_exn")

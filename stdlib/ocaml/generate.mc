@@ -1976,7 +1976,7 @@ with int_ 1 using eqExpr in
 let tensorCopyIntTest =
   bind_
   (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 2))))
-  (semi_ (tensorCopyExn_ tyint_
+  (semi_ (tensorBlitExn_ tyint_
                          (var_ "t")
                          (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
          (tensorGetExn_ tyint_ (var_ "t") (seq_ [])))
@@ -1987,7 +1987,7 @@ with int_ 2 using eqExpr in
 let tensorCopyFloatTest =
   bind_
   (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 2.))))
-  (semi_ (tensorCopyExn_ tyfloat_
+  (semi_ (tensorBlitExn_ tyfloat_
                          (var_ "t")
                          (tensorCreateFloat_
                                         (seq_ [])
@@ -2000,7 +2000,7 @@ with float_ 2. using eqExpr in
 let tensorCopyCharTest =
   bind_
   (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '2'))))
-  (semi_ (tensorCopyExn_ tychar_
+  (semi_ (tensorBlitExn_ tychar_
                          (var_ "t")
                          (tensorCreate_ tychar_
                                         (seq_ [])
