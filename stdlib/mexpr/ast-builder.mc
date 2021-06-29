@@ -128,6 +128,10 @@ let tytensorblitexn_ = lam ty.
             , tytensor_ ty
             , tyunit_ ]
 
+let tytensorcopy_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tytensor_ ty]
+
 let tytensortransposeexn_ = lam ty.
   tyarrows_ [ tytensor_ ty
             , tyint_
@@ -996,6 +1000,12 @@ let tensorBlitExn_ = use MExprAst in
   appf2_ (const_ (tytensorblitexn_ ty) (CTensorBlitExn ())) t1 t2
 
 let utensorBlitExn_ = tensorBlitExn_ tyunknown_
+
+let tensorCopy_ = use MExprAst in
+  lam ty. lam t.
+  appf1_ (const_ (tytensorblitexn_ ty) (CTensorCopy ())) t
+
+let utensorCopy_ = tensorCopy_ tyunknown_
 
 let tensorTransposeExn_ = use MExprAst in
   lam ty. lam t. lam dim0. lam dim1.

@@ -173,6 +173,7 @@ and const =
   | CtensorRank
   | CtensorShape
   | CtensorBlitExn of tm T.t option
+  | CtensorCopy
   | CtensorTransposeExn of tm T.t option * int option
   | CtensorReshapeExn of tm T.t option
   | CtensorSliceExn of tm T.t option
@@ -619,6 +620,7 @@ let const_has_side_effect = function
   | CtensorRank
   | CtensorShape
   | CtensorBlitExn _
+  | CtensorCopy
   | CtensorTransposeExn _
   | CtensorReshapeExn _
   | CtensorSliceExn _
