@@ -27,7 +27,7 @@ let linear_to_cartesian_idx shape idx =
   done ;
   tmp
 
-let mk_iter_slice rank shape slice f t =
+let iter_slice rank shape slice f t =
   if rank t = 0 then f (-1) t
   else
     let n = (shape t).(0) in
@@ -35,7 +35,7 @@ let mk_iter_slice rank shape slice f t =
       f i (slice t [|i|])
     done
 
-let mk_transpose shape create get t dim0 dim1 =
+let transpose shape create get t dim0 dim1 =
   let shape' = shape t in
   let rank = Array.length shape' in
   if dim0 >= 0 && dim0 < rank && dim1 >= 0 && dim1 < rank then (
@@ -43,10 +43,11 @@ let mk_transpose shape create get t dim0 dim1 =
     shape'.(dim0) <- shape'.(dim1) ;
     shape'.(dim1) <- tmp ;
     create shape' (fun idx ->
-        let tmp = idx.(dim0) in
-        idx.(dim0) <- idx.(dim1) ;
-        idx.(dim1) <- tmp ;
-        get t idx ) )
+        let idx' = Array.copy idx in
+        let tmp = idx'.(dim0) in
+        idx'.(dim0) <- idx'.(dim1) ;
+        idx'.(dim1) <- tmp ;
+        get t idx' ) )
   else raise (Invalid_argument "Tensor.transpose")
 
 let blit n shape1 shape2 reshape1 reshape2 get1 set2 t1 t2 =
@@ -111,7 +112,7 @@ module Dense = struct
     let size = t.size in
     {data; shape; rank; stride; size}
 
-  let transpose_exn (t : 'a t) = mk_transpose shape create get_exn t
+  let transpose_exn (t : 'a t) = transpose shape create get_exn t
 
   let reshape_exn t shape =
     if t.size = prod shape then
@@ -138,7 +139,7 @@ module Dense = struct
       {t with stride; size= prod shape; shape} )
     else raise (Invalid_argument "Tensor.Dense.sub_exn")
 
-  let iter_slice f t = mk_iter_slice rank shape slice_exn f t
+  let iter_slice f t = iter_slice rank shape slice_exn f t
 
   let equal eq t1 t2 =
     if shape t1 = shape t2 then (
@@ -195,31 +196,15 @@ module CArray = struct
 
   let sub_exn = Bigarray.Genarray.sub_left
 
-  let populate f t shape =
-    let n = prod shape in
-    if n = 0 then Bigarray.Genarray.set t [||] (f [||])
-    else
-      let t' = Bigarray.array1_of_genarray (reshape_exn t [|n|]) in
-      for linear_idx = 0 to n - 1 do
-        let idx = linear_to_cartesian_idx shape linear_idx in
-        t'.{linear_idx} <- f idx
-      done
+  let create_int = Bigarray.Genarray.init Bigarray.int Bigarray.c_layout
 
-  let create_int shape f =
-    let t = Bigarray.Genarray.create Bigarray.int Bigarray.c_layout shape in
-    populate f t shape ; t
+  let create_float = Bigarray.Genarray.init Bigarray.float64 Bigarray.c_layout
 
-  let create_float shape f =
-    let t =
-      Bigarray.Genarray.create Bigarray.float64 Bigarray.c_layout shape
-    in
-    populate f t shape ; t
+  let transpose_int_exn = transpose shape create_int get_exn
 
-  let transpose_int_exn = mk_transpose shape create_int get_exn
+  let transpose_float_exn = transpose shape create_float get_exn
 
-  let transpose_float_exn = mk_transpose shape create_float get_exn
-
-  let iter_slice f t = mk_iter_slice rank shape slice_exn f t
+  let iter_slice f t = iter_slice rank shape slice_exn f t
 
   let data_to_array t =
     let n = prod (shape t) in

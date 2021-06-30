@@ -106,6 +106,8 @@ let testTensors =
   let t2 = tensorTransposeExn t1 0 1 in
   utest tensorRank t2 with 2 in
   utest tensorShape t2 with [4, 3] in
+  utest tensorRank t1 with 2 in
+  utest tensorShape t1 with [3, 4] in
   utest tensorGetExn t2 [0, 0] with v1 using eq in
   utest tensorGetExn t2 [1, 0] with v2 using eq in
   utest tensorGetExn t2 [2, 0] with v3 using eq in
