@@ -332,6 +332,7 @@ lang CmpFloatEq = CmpFloatAst
   sem eqConst (lhs : Const) =
   | CEqf {} -> match lhs with CEqf _ then true else false
   | CLtf {} -> match lhs with CLtf _ then true else false
+  | CGtf {} -> match lhs with CGtf _ then true else false
 end
 
 lang CharEq = CharAst

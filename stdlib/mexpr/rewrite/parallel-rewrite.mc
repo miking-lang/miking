@@ -248,19 +248,16 @@ let n = nameSym "n" in
 let expr = preprocess (bindall_ [
   nulet_ s (seq_ [int_ 1, int_ 2, int_ 3]),
   nulet_ n (length_ (nvar_ s)),
-  nulet_ max (nulam_ x (nulam_ y (
-    if_ (gtf_ (app_ (nvar_ f) (nvar_ x))
-              (app_ (nvar_ f) (nvar_ y)))
-      (nvar_ x)
-      (nvar_ y)
-  ))),
   nreclets_ [
     (iterMax, tyunknown_, nulam_ acc (nulam_ i (nulam_ n (
       if_ (eqi_ (nvar_ i) (nvar_ n))
         (nvar_ acc)
         (bindall_ [
           nulet_ x (get_ (nvar_ s) (nvar_ i)),
-          nulet_ y (appf2_ (nvar_ max) (nvar_ acc) (nvar_ x)),
+          nulet_ y (if_ (gtf_ (app_ (nvar_ f) (nvar_ acc))
+                              (app_ (nvar_ f) (nvar_ x)))
+                        (nvar_ acc)
+                        (nvar_ x)),
           appf3_ (nvar_ iterMax) (nvar_ y) (addi_ (nvar_ i) (int_ 1)) (nvar_ n)
         ])))))
   ],

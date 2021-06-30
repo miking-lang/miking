@@ -450,7 +450,6 @@ let expr = preprocess (nreclets_ [
           never_))
   ))))
 ]) in
-printLn (expr2str expr);
 let map2Pat = getMap2Pattern () in
 let map2PatternMatchResult = matchBindingsWithPattern expr map2Pat in
 let fst = optionGetOrElse (lam. never) (get map2PatternMatchResult 0) in
