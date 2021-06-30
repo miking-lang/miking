@@ -98,41 +98,7 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
       (t, lam info. TmApp {
         lhs = makeConstTerm (CTail ()) info,
         rhs = matchTm.target, ty = ty matchTm.target, info = info})] in
-    substituteVariables matchTm.thn nameMap
-  | TmMatch ({pat = PatSeqTot {pats = []},
-              target = t1,
-              els = TmMatch {pat = PatSeqEdge {prefix = [PatNamed {ident = PName h}],
-                                               middle = PName t, postfix = []},
-                             target = t2,
-                             thn = innerThn, els = TmNever _}} & matchTm) ->
-    let makeConstTerm = lam const : Const. lam info.
-      TmConst {val = const, ty = tyWithInfo info (tyConst const),
-               info = info}
-    in
-    if eqExpr t1 t2 then
-      let nullApp = TmApp {lhs = makeConstTerm (CNull ()) matchTm.info,
-                           rhs = t1,
-                           ty = TyBool {info = matchTm.info},
-                           info = matchTm.info} in
-      let boolPat = PatBool {val = true, ty = TyUnknown {info = matchTm.info},
-                             info = matchTm.info} in
-      let elemTy =
-        match ty t1 with TySeq {ty = elemTy} then
-          elemTy
-        else TyUnknown {info = infoTy (ty t1)} in
-      let nameMap = mapFromSeq nameCmp [
-        (h, lam info. TmApp {
-          lhs = makeConstTerm (CHead ()) info,
-          rhs = t1, ty = elemTy, info = info}),
-        (t, lam info. TmApp {
-          lhs = makeConstTerm (CTail ()) info,
-          rhs = t1, ty = ty t1, info = info})] in
-      let innerThn = substituteVariables innerThn nameMap in
-      TmMatch {{{{matchTm with target = rewriteTerm nullApp}
-                          with pat = boolPat}
-                          with thn = rewriteTerm matchTm.thn}
-                          with els = rewriteTerm innerThn}
-    else TmMatch matchTm
+    rewriteTerm (substituteVariables matchTm.thn nameMap)
   | t -> smap_Expr_Expr rewriteTerm t
 end
 
