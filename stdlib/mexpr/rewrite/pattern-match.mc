@@ -416,7 +416,6 @@ let expr = preprocess (nreclets_ [
 let mapPat = getMapPattern () in
 let mapPatternMatchResult = matchBindingsWithPattern expr mapPat in
 let fst = optionGetOrElse (lam. never) (get mapPatternMatchResult 0) in
-
 utest lookupSnd (PatternIndex 0) fst with Some (null_ (nvar_ s)) using optionEq eqExpr in
 utest lookupSnd (PatternIndex 3) fst with Some (tail_ (nvar_ s)) using optionEq eqExpr in
 utest lookupSnd (PatternIndex 4) fst with Some (head_ (nvar_ s)) using optionEq eqExpr in
@@ -426,8 +425,41 @@ utest mapSize fst with 12 in
 let snd = get mapPatternMatchResult 1 in
 utest optionIsNone snd with true in
 
-let fold = nameSym "fold" in
+let map2 = nameSym "map2" in
 let acc = nameSym "acc" in
+let s2 = nameSym "s" in
+let h2 = nameSym "h" in
+let t2 = nameSym "t" in
+let expr = preprocess (nreclets_ [
+  (map2, tyunknown_, nulam_ acc (nulam_ s (nulam_ s2 (
+    match_ (nvar_ s)
+      (pseqtot_ [])
+      (nvar_ acc)
+      (match_ (nvar_ s2)
+        (pseqtot_ [])
+        (nvar_ acc)
+        (match_ (nvar_ s)
+          (pseqedgen_ [npvar_ h] t [])
+          (match_ (nvar_ s2)
+            (pseqedgen_ [npvar_ h2] t2 [])
+            (appf3_ (nvar_ map2)
+              (snoc_ (nvar_ acc) (muli_ (head_ (nvar_ s)) (head_ (nvar_ s2))))
+              (tail_ (nvar_ s))
+              (tail_ (nvar_ s2)))
+            never_)
+          never_))
+  ))))
+]) in
+printLn (expr2str expr);
+let map2Pat = getMap2Pattern () in
+let map2PatternMatchResult = matchBindingsWithPattern expr map2Pat in
+let fst = optionGetOrElse (lam. never) (get map2PatternMatchResult 0) in
+utest lookupSnd (PatternIndex 6) fst with Some (tail_ (nvar_ s)) using optionEq eqExpr in
+utest lookupSnd (PatternIndex 11) fst with Some (concat_ (nvar_ acc) (var_ "t"))
+using optionEq eqExpr in
+utest mapSize fst with 19 in
+
+let fold = nameSym "fold" in
 let expr = preprocess (nreclets_ [
   (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
     match_ (nvar_ s)

@@ -1,7 +1,6 @@
 -- Performs inlining of record literals. This is needed to prevent aliasing
--- issues in Futhark.
+-- issues in Futhark after translation of terms in ANF.
 
-include "futhark/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
@@ -9,7 +8,7 @@ include "mexpr/rewrite/parallel-keywords.mc"
 
 type RecordInlineEnv = Map Name Expr
 
-lang FutharkRecordInline = FutharkAst + MExprParallelKeywordMaker
+lang FutharkRecordInline = MExprParallelKeywordMaker
   sem inlineRecordsH (env : RecordInlineEnv) =
   | TmVar (t & {ident = id}) ->
     match mapLookup id env with Some expr then

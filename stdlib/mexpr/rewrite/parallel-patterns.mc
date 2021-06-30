@@ -167,101 +167,6 @@ let getMatchExpr
     expr
   else never
 
--- Definition of the 'parallelMap' pattern
-let mapPatRef : Option Pattern = ref (None ())
-let mapPattern : () -> Pattern =
-  use MExprParallelKeywordMaker in
-  lam.
-  let s = nameSym "s" in
-  let acc = nameSym "acc" in
-  let atomicPatterns = [
-    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
-    BranchPattern {id = 1, cond = PatternIndex 0,
-      thn = [ReturnPattern {id = 2, var = PatternName acc}],
-      els = [
-        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
-        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
-        UnknownOpPattern {id = 5, vars = [PatternIndex 4]},
-        AppPattern {id = 6, fn = uconst_ (CConcat ()),
-                       vars = [PatternName acc, PatternIndex 5]},
-        RecursionPattern {id = 7, binds = [(s, PatternIndex 3), (acc, PatternIndex 6)]},
-        ReturnPattern {id = 8, var = PatternIndex 7}
-      ]},
-    ReturnPattern {id = 9, var = PatternIndex 1}
-  ] in
-  let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
-    let patternName = "parallelMap" in
-    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
-    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
-    let sExpr = getMatchExpr patternName (PatternName s) matches in
-
-    let x = nameSym "x" in
-    let subMap = mapFromSeq nameCmp [
-      (headPair.0, lam info.
-        TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
-    ] in
-    let f = nulam_ x (substituteVariables fExpr subMap) in
-    parallelMap_ f sExpr
-  in
-  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
-
-let getMapPattern = lam.
-  match deref mapPatRef with Some pat then
-    pat
-  else
-    let pat = mapPattern () in
-    modref mapPatRef (Some pat);
-    pat
-
--- Definition of the 'parallelReduce' pattern
-let reducePatRef : Option Pattern = ref (None ())
-let reducePattern : () -> Pattern =
-  use MExprParallelKeywordMaker in
-  lam.
-  let s = nameSym "s" in
-  let acc = nameSym "acc" in
-  let atomicPatterns = [
-    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
-    BranchPattern {id = 1, cond = PatternIndex 0,
-      thn = [ReturnPattern {id = 2, var = PatternName acc}],
-      els = [
-        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
-        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
-        UnknownOpPattern {id = 5, vars = [PatternName acc, PatternIndex 4]},
-        RecursionPattern {id = 6, binds = [(s, PatternIndex 3), (acc, PatternIndex 5)]},
-        ReturnPattern {id = 7, var = PatternIndex 6}
-      ]},
-    ReturnPattern {id = 8, var = PatternIndex 1}
-  ] in
-  let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
-    let patternName = "parallelReduce" in
-    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
-    let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
-    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
-    let sExpr = getMatchExpr patternName (PatternName s) matches in
-
-    let x = nameSym "x" in
-    let y = nameSym "y" in
-    let subMap = mapFromSeq nameCmp [
-      (accPair.0, lam info.
-        TmVar {ident = x, ty = tyWithInfo info (ty accPair.1), info = info}),
-      (headPair.0, lam info.
-        TmVar {ident = y, ty = tyWithInfo info (ty headPair.1), info = info})
-    ] in
-    let f = nulam_ x (nulam_ y (substituteVariables fExpr subMap)) in
-    parallelReduce_ f accPair.1 sExpr
-  in
-  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
-
-let getReducePattern = lam.
-  match deref reducePatRef with Some pat then
-    pat
-  else
-    let pat = reducePattern () in
-    modref reducePatRef (Some pat);
-    pat
-
--- Definition of the 'for' pattern
 let eliminateUnusedLetExpressions : Expr -> Expr =
   use MExprParallelKeywordMaker in
   lam e.
@@ -287,8 +192,196 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
     e
   else never
 
-let forPatRef = ref (None ())
-let forPattern = use MExprAst in
+-- Definition of the 'parallelMap' pattern
+let mapPatRef : Ref (Option Pattern) = ref (None ())
+let mapPattern : () -> Pattern =
+  use MExprParallelKeywordMaker in
+  lam.
+  let s = nameSym "s" in
+  let acc = nameSym "acc" in
+  let atomicPatterns = [
+    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
+    BranchPattern {id = 1, cond = PatternIndex 0,
+      thn = [ReturnPattern {id = 2, var = PatternName acc}],
+      els = [
+        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
+        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
+        UnknownOpPattern {id = 5, vars = [PatternIndex 4]},
+        AppPattern {id = 6, fn = uconst_ (CConcat ()),
+                    vars = [PatternName acc, PatternIndex 5]},
+        RecursionPattern {id = 7, binds = [(s, PatternIndex 3),
+                                           (acc, PatternIndex 6)]},
+        ReturnPattern {id = 8, var = PatternIndex 7}
+      ]},
+    ReturnPattern {id = 9, var = PatternIndex 1}
+  ] in
+  let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
+    let patternName = "parallelMap" in
+    let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
+    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
+    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
+    let sExpr = getMatchExpr patternName (PatternName s) matches in
+
+    match branchExpr with TmMatch {els = els} then
+      match fExpr with TmSeq {tms = [fResultVar]} then
+        let x = nameSym "x" in
+        let subMap = mapFromSeq nameCmp [
+          (headPair.0, lam info.
+            TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
+        ] in
+        let els = substituteVariables els subMap in
+        let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+        parallelMap_ (nulam_ x els) sExpr
+      else
+        error (join [
+          "Rewriting into parallelMap pattern failed: The functional expression ",
+          "did not result in a singleton sequence"])
+    else
+      error (join [
+        "Rewriting into parallelMap pattern failed: BranchPattern matched ",
+        "with non-branch expression"])
+  in
+  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
+
+let getMapPattern = lam.
+  match deref mapPatRef with Some pat then
+    pat
+  else
+    let pat = mapPattern () in
+    modref mapPatRef (Some pat);
+    pat
+
+-- Definition of the 'parallelMap2' pattern
+let map2PatRef : Ref (Option Pattern) = ref (None ())
+let map2Pattern : () -> Pattern =
+  use MExprParallelKeywordMaker in
+  lam.
+  let s1 = nameSym "s1" in
+  let s2 = nameSym "s2" in
+  let acc = nameSym "acc" in
+  let atomicPatterns = [
+    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s1]},
+    BranchPattern {id = 1, cond = PatternIndex 0,
+      thn = [ReturnPattern {id = 2, var = PatternName acc}],
+      els = [
+        AppPattern {id = 3, fn = uconst_ (CNull ()), vars = [PatternName s2]},
+        BranchPattern {id = 4, cond = PatternIndex 3,
+          thn = [ReturnPattern {id = 5, var = PatternName acc}],
+          els = [
+            AppPattern {id = 6, fn = uconst_ (CTail ()), vars = [PatternName s1]},
+            AppPattern {id = 7, fn = uconst_ (CTail ()), vars = [PatternName s2]},
+            AppPattern {id = 8, fn = uconst_ (CHead ()), vars = [PatternName s1]},
+            AppPattern {id = 9, fn = uconst_ (CHead ()), vars = [PatternName s2]},
+            UnknownOpPattern {id = 10, vars = [PatternIndex 8, PatternIndex 9]},
+            AppPattern {id = 11, fn = uconst_ (CConcat ()),
+                        vars = [PatternName acc, PatternIndex 10]},
+            RecursionPattern {id = 12, binds = [(s1, PatternIndex 6),
+                                                (s2, PatternIndex 7),
+                                                (acc, PatternIndex 11)]},
+            ReturnPattern {id = 13, var = PatternIndex 12}
+          ]},
+        ReturnPattern {id = 14, var = PatternIndex 4}]},
+    ReturnPattern {id = 15, var = PatternIndex 1}
+  ] in
+  let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
+    let patternName = "parallelMap2" in
+    let branchExpr = getMatchExpr patternName (PatternIndex 4) matches in
+    let fExpr = getMatchExpr patternName (PatternIndex 10) matches in
+    let headFst : (Name, Expr) = getMatch patternName (PatternIndex 8) matches in
+    let headSnd : (Name, Expr) = getMatch patternName (PatternIndex 9) matches in
+    let sFstExpr = getMatchExpr patternName (PatternName s1) matches in
+    let sSndExpr = getMatchExpr patternName (PatternName s2) matches in
+
+    match branchExpr with TmMatch {els = els} then
+      match fExpr with TmSeq {tms = [fResultVar]} then
+        let x = nameSym "x" in
+        let y = nameSym "y" in
+        let subMap = mapFromSeq nameCmp [
+          (headFst.0, lam info.
+            TmVar {ident = x, ty = tyWithInfo info (ty headFst.1), info = info}),
+          (headSnd.0, lam info.
+            TmVar {ident = y, ty = tyWithInfo info (ty headSnd.1), info = info})
+        ] in
+        let els = substituteVariables els subMap in
+        let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+        parallelMap2_ (nulam_ x (nulam_ y els)) sFstExpr sSndExpr
+      else
+        error (join [
+          "Rewriting into parallelMap2 pattern failed: The functional ",
+          "expression did not result in a singleton sequence"])
+    else
+      error (join [
+        "Rewriting into parallelMap2 pattern failed: Inner BranchPattern ",
+        "matched with non-branch expression"])
+  in
+  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
+
+let getMap2Pattern = lam.
+  match deref map2PatRef with Some pat then
+    pat
+  else
+    let pat = map2Pattern () in
+    modref map2PatRef (Some pat);
+    pat
+
+-- Definition of the 'parallelReduce' pattern
+let reducePatRef : Ref (Option Pattern) = ref (None ())
+let reducePattern : () -> Pattern =
+  use MExprParallelKeywordMaker in
+  lam.
+  let s = nameSym "s" in
+  let acc = nameSym "acc" in
+  let atomicPatterns = [
+    AppPattern {id = 0, fn = uconst_ (CNull ()), vars = [PatternName s]},
+    BranchPattern {id = 1, cond = PatternIndex 0,
+      thn = [ReturnPattern {id = 2, var = PatternName acc}],
+      els = [
+        AppPattern {id = 3, fn = uconst_ (CTail ()), vars = [PatternName s]},
+        AppPattern {id = 4, fn = uconst_ (CHead ()), vars = [PatternName s]},
+        UnknownOpPattern {id = 5, vars = [PatternName acc, PatternIndex 4]},
+        RecursionPattern {id = 6, binds = [(s, PatternIndex 3), (acc, PatternIndex 5)]},
+        ReturnPattern {id = 7, var = PatternIndex 6}
+      ]},
+    ReturnPattern {id = 8, var = PatternIndex 1}
+  ] in
+  let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
+    let patternName = "parallelReduce" in
+    let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
+    let fResultName = getMatchName patternName (PatternIndex 5) matches in
+    let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
+    let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
+    let sExpr = getMatchExpr patternName (PatternName s) matches in
+
+    match branchExpr with TmMatch {els = els} then
+      let x = nameSym "x" in
+      let y = nameSym "y" in
+      let subMap = mapFromSeq nameCmp [
+        (accPair.0, lam info.
+          TmVar {ident = x, ty = tyWithInfo info (ty accPair.1), info = info}),
+        (headPair.0, lam info.
+          TmVar {ident = y, ty = tyWithInfo info (ty headPair.1), info = info})
+      ] in
+      let els = substituteVariables els subMap in
+      let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultName)) in
+      parallelReduce_ (nulam_ x (nulam_ y els)) accPair.1 sExpr
+    else
+      error (join [
+        "Rewriting into parallelReduce pattern failed: BranchPattern matched ",
+        "with non-branch expression"])
+  in
+  withDependencies {atomicPatterns = atomicPatterns, replacement = replacement}
+
+let getReducePattern = lam.
+  match deref reducePatRef with Some pat then
+    pat
+  else
+    let pat = reducePattern () in
+    modref reducePatRef (Some pat);
+    pat
+
+-- Definition of the 'for' pattern
+let forPatRef : Ref (Option Pattern) = ref (None ())
+let forPattern : () -> Pattern = use MExprAst in
   lam.
   let i = nameSym "i" in
   let n = nameSym "n" in
