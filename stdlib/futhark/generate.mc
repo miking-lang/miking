@@ -276,10 +276,9 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmIndices t -> futIndices_ (generateExpr env t.s)
   | TmSequentialFor t ->
     match t.body with TmLam {ident = i, body = body} then
-      match t.n with TmVar {ident = n} then
-        FEFor {param = generateExpr env t.init, loopVar = i, boundVar = n,
-               thn = generateExpr env body}
-      else never
+      FEFor {param = generateExpr env t.init, loopVar = i,
+             boundExpr = generateExpr env t.n,
+             thn = generateExpr env body}
     else never
 end
 
@@ -334,56 +333,7 @@ lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +
     else
       infoErrorExit t.info "Could not translate recursive bindings to Futhark"
 
-
   sem generateExpr (env : FutharkGenerateEnv) =
-  | TmRecLets ({bindings = [binding], inexpr = TmApp _} & t) ->
-    -- NOTE currently makes the following assumptions on TmRecLets, in order
-    --      to translate them into a Futhark loop:
-    -- * The recursive let contains one binding, and it is only used once,
-    --   right after the definition.
-    -- * The body of the binding has the shape
-    --   let <id> = <args> lam <i> : Int. lam <n> : Int.
-    --     if lti <i> <n> then ... <id> <args> (addi <i> 1) <n> else <base case>
-    -- * The user wishes to loop from 0 up to (excluding) n
-    -- * The final call of the recursive case is a self-recursive call
-    let generateBinding = lam passedParams : [Expr]. lam binding : RecLetBinding.
-      match _collectParams env binding.body
-      with (funcParams ++ [(i, FTyInt _), (n, FTyInt _)] & params, body) then
-        match body with TmMatch {
-          target = TmApp {lhs = TmApp {lhs = TmConst {val = CLti _},
-                                       rhs = TmVar {ident = iarg}},
-                          rhs = TmVar {ident = narg}},
-          pat = PatBool {val = true},
-          thn = recursiveCase,
-          els = baseCase} then
-          if and (nameEq i iarg) (nameEq n narg) then
-            match _getTrailingSelfRecursiveCallParams binding.ident recursiveCase
-            with Some callParams then
-              match passedParams with passed ++ [TmConst {val = CInt {val = 0}},
-                                                 TmVar {ident = nid}] then
-                let retTy = generateType env (ty recursiveCase) in
-                let loopBody =
-                  bind_
-                    recursiveCase
-                    (_constructLoopResult params callParams baseCase) in
-                let param = _usePassedParameters params passed baseCase in
-                let body = _usePassedParameters params passed loopBody in
-                FEFor {
-                  param = generateExpr env param,
-                  loopVar = i,
-                  boundVar = nid,
-                  thn = generateExpr env body
-                }
-              else defaultGenerateRecLets env (TmRecLets t)
-            else defaultGenerateRecLets env (TmRecLets t)
-          else defaultGenerateRecLets env (TmRecLets t)
-        else defaultGenerateRecLets env (TmRecLets t)
-      else defaultGenerateRecLets env (TmRecLets t)
-    in
-    match _getTrailingSelfRecursiveCallParams binding.ident t.inexpr
-    with Some passedParams then
-      generateBinding passedParams binding
-    else defaultGenerateRecLets env (TmRecLets t)
   | (TmRecLets _) & t -> defaultGenerateRecLets env t
 end
 

@@ -134,14 +134,14 @@ lang TestLang =
   | TmParallelMap t ->
     match printParen indent env t.f with (env, f) then
       match pprintCode indent env t.as with (env, as) then
-        (env, join ["parallelMap ", f, " ", as])
+        (env, join ["parallelMap (", f, ") (", as, ")"])
       else never
     else never
   | TmParallelMap2 t ->
     match printParen indent env t.f with (env, f) then
       match pprintCode indent env t.as with (env, as) then
         match pprintCode indent env t.bs with (env, bs) then
-          (env, join ["parallelMap2 ", f, " ", as, " ", bs])
+          (env, join ["parallelMap2 (", f, ") (", as, ") (", bs, ")"])
         else never
       else never
     else never
@@ -149,7 +149,7 @@ lang TestLang =
     match printParen indent env t.f with (env, f) then
       match pprintCode indent env t.ne with (env, ne) then
         match pprintCode indent env t.as with (env, as) then
-          (env, join ["parallelReduce ", f, " ", ne, " ", as])
+          (env, join ["parallelReduce (", f, ") (", ne, ") (", as, ")"])
         else never
       else never
     else never
@@ -164,7 +164,7 @@ lang TestLang =
     match printParen indent env t.body with (env, body) then
       match pprintCode indent env t.init with (env, init) then
         match pprintCode indent env t.n with (env, n) then
-          (env, join ["for ", init, " ", n, pprintNewline indent, body])
+          (env, join ["for (", init, ") (", n, ")", pprintNewline indent, body])
         else never
       else never
     else never
@@ -256,13 +256,13 @@ let expr = preprocess (bindall_ [
   ))),
   nreclets_ [
     (iterMax, tyunknown_, nulam_ acc (nulam_ i (nulam_ n (
-      if_ (lti_ (nvar_ i) (nvar_ n))
+      if_ (eqi_ (nvar_ i) (nvar_ n))
+        (nvar_ acc)
         (bindall_ [
           nulet_ x (get_ (nvar_ s) (nvar_ i)),
           nulet_ y (appf2_ (nvar_ max) (nvar_ acc) (nvar_ x)),
           appf3_ (nvar_ iterMax) (nvar_ y) (addi_ (nvar_ i) (int_ 1)) (nvar_ n)
-        ])
-        (nvar_ acc)))))
+        ])))))
   ],
   appf3_ (nvar_ iterMax) (head_ (nvar_ s)) (int_ 0) (nvar_ n)
 ]) in

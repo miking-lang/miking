@@ -294,10 +294,11 @@ let forPattern = use MExprAst in
   let n = nameSym "n" in
   let acc = nameSym "acc" in
   let atomicPatterns = [
-    AppPattern {id = 0, fn = uconst_ (CLti ()),
+    AppPattern {id = 0, fn = uconst_ (CEqi ()),
                      vars = [PatternName i, PatternName n]},
     BranchPattern {id = 1, cond = PatternIndex 0,
-      thn = [
+      thn = [ReturnPattern {id = 6, var = PatternName acc}],
+      els = [
         UnknownOpPattern {id = 2, vars = [PatternName acc, PatternName i]},
         AppPattern {id = 3, fn = uconst_ (CAddi ()),
                          vars = [PatternName i, PatternLiteralInt 1]},
@@ -305,8 +306,7 @@ let forPattern = use MExprAst in
                                            (i, PatternIndex 3),
                                            (n, PatternName n)]},
         ReturnPattern {id = 5, var = PatternIndex 4}
-      ],
-      els = [ReturnPattern {id = 6, var = PatternName acc}]},
+      ]},
     ReturnPattern {id = 7, var = PatternIndex 1}
   ] in
   let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
@@ -317,7 +317,7 @@ let forPattern = use MExprAst in
     let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
     let iterPair : (Name, Expr) = getMatch patternName (PatternName i) matches in
 
-    match branchExpr with TmMatch {thn = thn} then
+    match branchExpr with TmMatch {els = els} then
       -- Replace i with fresh variable to avoid it being replaced by a passed
       -- argument.
       let accFresh = nameSym (nameGetStr accPair.0) in
@@ -327,18 +327,18 @@ let forPattern = use MExprAst in
           TmVar {ident = iFresh, ty = tyWithInfo info (ty iterPair.1),
                  info = info})
       ] in
-      let thn = substituteVariables thn subMap in
+      let els = substituteVariables els subMap in
 
       -- Eliminate let-expressions that are not needed in the new form of the
       -- for-loop. This includes at least the recursive call (the for-loop is
       -- not recursive) and the increment of the iteration value because it is
       -- implicitly handled by the for-loop.
-      let thn = bind_ thn (nvar_ accResultName) in
-      let thn = eliminateUnusedLetExpressions thn in
+      let els = bind_ els (nvar_ accResultName) in
+      let els = eliminateUnusedLetExpressions els in
 
       sequentialFor_
-        (nulam_ iFresh thn)
-        accPair.1 nParamExpr
+        (nulam_ iFresh els)
+        accPair.1 (subi_ nParamExpr iterPair.1)
     else
       error (join [
         "Rewriting into sequential for pattern failed: BranchPattern matched ",

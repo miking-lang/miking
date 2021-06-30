@@ -76,7 +76,7 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEApp { lhs : FutExpr, rhs : FutExpr }
   | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
   | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
-  | FEFor { param : FutExpr, loopVar : Name, boundVar : Name, thn : FutExpr }
+  | FEFor { param : FutExpr, loopVar : Name, boundExpr : Expr, thn : FutExpr }
   | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)] }
 end
 
