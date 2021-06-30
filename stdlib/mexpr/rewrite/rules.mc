@@ -59,8 +59,46 @@ lang MExprRewrite = MExprAst + MExprEq + MExprConstType
                                           info = patInfo}}
                    with thn = t.els}
                    with els = newThn})
-  -- match s with [] then e1 else match s with [h] ++ t then e2 else never ->
-  -- if null s then e1 else e2[h -> head s][t -> tail s]
+  -- match s with [] then e1 else e2 ->
+  -- if null s then e1 else e2
+  | TmMatch ({pat = PatSeqTot {pats = []}} & matchTm) ->
+    let makeConstTerm = lam const : Const. lam info.
+      TmConst {val = const, ty = tyWithInfo info (tyConst const),
+               info = info}
+    in
+    let targetInfo = infoTm matchTm.target in
+    let nullTarget = TmApp {
+      lhs = makeConstTerm (CNull ()) targetInfo,
+      rhs = matchTm.target,
+      ty = TyBool {info = targetInfo},
+      info = targetInfo} in
+    let boolPat = PatBool {val = true, info = infoPat matchTm.pat,
+                           ty = TyBool {info = infoPat matchTm.pat}} in
+    TmMatch {{{{matchTm with target = rewriteTerm nullTarget}
+                        with pat = boolPat}
+                        with thn = rewriteTerm matchTm.thn}
+                        with els = rewriteTerm matchTm.els}
+  -- match s with [h] ++ t then e2 else never ->
+  -- e2[h -> head s][t -> tail s]
+  | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName h}],
+                                middle = PName t, postfix = []},
+              els = TmNever _} & matchTm) ->
+    let makeConstTerm = lam const : Const. lam info.
+      TmConst {val = const, ty = tyWithInfo info (tyConst const),
+               info = info}
+    in
+    let elemTy =
+      match ty matchTm.target with TySeq {ty = elemTy} then
+        elemTy
+      else TyUnknown {info = infoTy (ty matchTm.target)} in
+    let nameMap = mapFromSeq nameCmp [
+      (h, lam info. TmApp {
+        lhs = makeConstTerm (CHead ()) info,
+        rhs = matchTm.target, ty = elemTy, info = info}),
+      (t, lam info. TmApp {
+        lhs = makeConstTerm (CTail ()) info,
+        rhs = matchTm.target, ty = ty matchTm.target, info = info})] in
+    substituteVariables matchTm.thn nameMap
   | TmMatch ({pat = PatSeqTot {pats = []},
               target = t1,
               els = TmMatch {pat = PatSeqEdge {prefix = [PatNamed {ident = PName h}],
