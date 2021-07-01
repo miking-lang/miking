@@ -360,7 +360,18 @@ lang SeqOpEq = SeqOpAst
   | CConcat {} -> match lhs with CConcat _ then true else false
   | CLength {} -> match lhs with CLength _ then true else false
   | CReverse {} -> match lhs with CReverse _ then true else false
+  | CHead {} -> match lhs with CHead _ then true else false
+  | CTail {} -> match lhs with CTail _ then true else false
+  | CNull {} -> match lhs with CNull _ then true else false
   | CSplitAt {} -> match lhs with CSplitAt _ then true else false
+  | CMap {} -> match lhs with CMap _ then true else false
+  | CMapi {} -> match lhs with CMapi _ then true else false
+  | CIter {} -> match lhs with CIter _ then true else false
+  | CIteri {} -> match lhs with CIteri _ then true else false
+  | CCreateFingerTree {} -> match lhs with CCreateFingerTree _ then true else false
+  | CCreateList {} -> match lhs with CCreateList _ then true else false
+  | CCreateRope {} -> match lhs with CCreateRope _ then true else false
+  | CSubsequence {} -> match lhs with CSubsequence _ then true else false
 end
 
 lang TensorOpEq = TensorOpAst
