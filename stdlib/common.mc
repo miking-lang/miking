@@ -10,7 +10,7 @@ let curry = lam f. lam x. lam y. f(x, y)
 let uncurry = lam f. lam t : (a, b). f t.0 t.1
 
 -- Printing stuff
-let printLn = lam s. print (concat s "\n")
+let printLn = lam s. print (concat s "\n"); flushStdout ()
 
 let dprintLn = lam x. dprint x; printLn ""
 

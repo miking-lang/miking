@@ -710,6 +710,8 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CMapi _ -> "mapi"
   | CIter _ -> "iter"
   | CIteri _ -> "iteri"
+  | CFoldl _ -> "foldl"
+  | CFoldr _ -> "foldr"
   | CCreate _ -> "create"
   | CCreateFingerTree _ -> "createFingerTree"
   | CCreateList _ -> "createList"
@@ -730,6 +732,7 @@ lang IOPrettyPrint = IOAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CPrint _ -> "print"
   | CDPrint _ -> "dprint"
+  | CFlushStdout _ -> "flushStdout"
   | CReadLine _ -> "readLine"
   | CReadBytesAsString _ -> "readBytesAsString"
 end
@@ -1038,8 +1041,9 @@ lang RecordTypePrettyPrint = RecordTypeAst
         if all (lam t : (a,b). stringIsInt t.0) seq then
           let seq = map (lam t : (a,b). (string2int t.0, t.1)) seq in
           let seq : [(a,b)] = sort (lam l : (a,b). lam r : (a,b). subi l.0 r.0) seq in
-          let first = (head seq).0 in
-          let last = (last seq).0 in
+          let fst = lam x: (a, b). x.0 in
+          let first = fst (head seq) in
+          let last = fst (last seq) in
           if eqi first 0 then
             if eqi last (subi (length seq) 1) then
               Some (map (lam t : (a,b). t.1) seq)

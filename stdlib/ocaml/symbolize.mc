@@ -13,11 +13,11 @@ let _symbolizeVarName = lam env : SymEnv. lam ident.
   else never
 
 lang OCamlSym =
-  VarSym + AppSym + LamSym + LetSym + RecLetsSym + RecordSym + ConstSym
-  + NamedPatSym + IntPatSym + CharPatSym + BoolPatSym + RecordSym
+  VarSym + AppAst + LamSym + LetSym + RecLetsSym + RecordAst + ConstAst
+  + NamedPatSym + IntPat + CharPat + BoolPat + RecordAst
   + OCamlTypeDeclAst + OCamlMatch + OCamlTuple + OCamlData
-  + UnknownTypeSym + IntTypeSym + BoolTypeSym + FloatTypeSym + CharTypeSym
-  + RecordTypeSym + VarTypeSym + OCamlExternal
+  + UnknownTypeAst + IntTypeAst + BoolTypeAst + FloatTypeAst + CharTypeAst
+  + RecordTypeAst + VarTypeSym + OCamlExternal
   + OCamlString + OCamlRecord + OCamlLabel
 
   sem symbolizeExpr (env : SymEnv) =

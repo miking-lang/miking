@@ -59,25 +59,12 @@ let for_
   = lam xs. lam f. iter f xs
 
 -- Folds
-recursive
-  let foldl = lam f. lam acc. lam seq.
-  if null seq then acc
-  else foldl f (f acc (head seq)) (tail seq)
-end
 
 let foldl1 = lam f. lam l. foldl f (head l) (tail l)
 
 utest foldl addi 0 [1,2,3,4,5] with 15
 utest foldl addi 0 [] with 0
 utest map (foldl addi 0) [[1,2,3], [], [1,3,5,7]] with [6, 0, 16]
-
-recursive
-  let foldr : (b -> a -> a) -> a -> [b] -> a =
-  lam f. lam acc. lam seq.
-    if null seq
-    then acc
-    else f (head seq) (foldr f acc (tail seq))
-end
 
 let foldr1 = lam f. lam seq. foldr f (last seq) (init seq)
 
@@ -167,7 +154,8 @@ recursive
   let all = lam p. lam seq.
     if null seq
     then true
-    else and (p (head seq)) (all p (tail seq))
+    else if p (head seq) then all p (tail seq)
+    else false
 end
 
 utest all (lam x. eqi x 1) [1, 1, 1, 2] with false

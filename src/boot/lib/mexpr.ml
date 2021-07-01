@@ -261,6 +261,8 @@ let arity = function
       1
   | Cexit ->
       1
+  | CflushStdout ->
+      1
   (* MCore intrinsics: Symbols *)
   | CSymb _ ->
       0
@@ -928,6 +930,11 @@ let delta eval env fi c v =
       exit x
   | Cexit, _ ->
       fail_constapp fi
+  | CflushStdout, TmRecord (_, x) when Record.is_empty x ->
+      Intrinsics.IO.flush_stdout () ;
+      tm_unit
+  | CflushStdout, _ ->
+      fail_constapp fi
   (* MCore intrinsics: Symbols *)
   | CSymb _, _ ->
       fail_constapp fi
@@ -1588,7 +1595,7 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s) -> (
     match List.assoc_opt s env with
-    | Some (TmApp (_, TmFix _, _) as t) ->
+    | Some ((TmApp (_, TmFix _, _) | TmRecLets _) as t) ->
         eval env t
     | Some t ->
         t

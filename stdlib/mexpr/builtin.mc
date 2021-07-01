@@ -63,6 +63,8 @@ let builtin = use MExprAst in
   , ("mapi", CMapi ())
   , ("iter", CIter ())
   , ("iteri", CIteri ())
+  , ("foldl", CFoldl ())
+  , ("foldr", CFoldr ())
   , ("subsequence", CSubsequence ())
   -- Random numbers
   , ("randIntU", CRandIntU ())
@@ -73,6 +75,7 @@ let builtin = use MExprAst in
   -- MCore intrinsics: Debug and I/O
   , ("print", CPrint ())
   , ("dprint", CDPrint ())
+  , ("flushStdout", CFlushStdout ())
   , ("readLine", CReadLine ())
   , ("readBytesAsString", CReadBytesAsString ())
   , ("argv", CArgv ())
