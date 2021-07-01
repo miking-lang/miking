@@ -8,10 +8,10 @@ include "mexpr/rewrite/parallel-keywords.mc"
 
 type RecordInlineEnv = Map Name Expr
 
-lang FutharkRecordInline = MExprParallelKeywordMaker
+lang MExprParallelRecordInline = MExprParallelKeywordMaker
   sem inlineRecordsH (env : RecordInlineEnv) =
-  | TmVar (t & {ident = id}) ->
-    match mapLookup id env with Some expr then
+  | TmVar t ->
+    match mapLookup t.ident env with Some expr then
       expr
     else TmVar t
   | TmLet ({body = TmRecord _} & t) ->
@@ -35,7 +35,7 @@ lang FutharkRecordInline = MExprParallelKeywordMaker
   | t -> inlineRecordsH (mapEmpty nameCmp) t
 end
 
-lang TestLang = FutharkRecordInline + MExprSym + MExprEq + MExprPrettyPrint
+lang TestLang = MExprParallelRecordInline + MExprSym + MExprEq + MExprPrettyPrint
 
 mexpr
 
