@@ -70,6 +70,8 @@
 %token <unit Ast.tokendata> NEVER
 %token <unit Ast.tokendata> USING
 %token <unit Ast.tokendata> EXTERNAL
+%token <unit Ast.tokendata> SWITCH
+%token <unit Ast.tokendata> CASE
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -316,7 +318,12 @@ mexpr:
         TmConDef(fi,$2.v,Symb.Helpers.nosym,$3 $1.i,$5)}
   | MATCH mexpr WITH pat THEN mexpr ELSE mexpr
       { let fi = mkinfo $1.i (tm_info $8) in
-         TmMatch(fi,$2,$4,$6,$8) }
+        TmMatch(fi,$2,$4,$6,$8) }
+  | SWITCH mexpr swcases
+      {
+        let fi = mkinfo $1.i (tm_info $3) in
+        TmLet(fi,unique_ident,Symb.Helpers.nosym,TyUnknown(fi),$2,$3)
+      }
   | USE ident IN mexpr
       { let fi = mkinfo $1.i $3.i in
         TmUse(fi,$2.v,$4) }
@@ -357,6 +364,14 @@ left:
   | con_ident atom
       { let fi = mkinfo $1.i (tm_info $2) in
         TmConApp(fi,$1.v,Symb.Helpers.nosym,$2) }
+
+swcases:
+  | CASE pat THEN mexpr swcases
+      { let fi = mkinfo $1.i (tm_info $5) in
+        let id = TmVar(fi, unique_ident, Symb.Helpers.nosym) in
+        TmMatch(fi,id,$2,$4,$5) }
+  | END
+      { TmNever($1.i) }
 
 atom:
   | atom DOT proj_label

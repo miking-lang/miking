@@ -224,8 +224,8 @@ let _pprintSemanticFunction
             else never
           else never
         else never in
-      let pprintCase = lam env. lam case.
-        match case with (pat, expr) then
+      let pprintCase = lam env. lam aCase.
+        match aCase with (pat, expr) then
           match getPatStringCode 4 env pat with (env, pat) then
             match pprintCode 4 env expr with (env, expr) then
               (env, join ["  | ", pat, " ->\n    ", expr, "\n"])
