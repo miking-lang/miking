@@ -987,7 +987,9 @@ lang TensorOpEval =
   | CTensorSetExn2 T
   | CTensorSetExn3 (T, [Int])
   | CTensorReshapeExn2 T
-  | CTensorCopyExn2 T
+  | CTensorBlitExn2 T
+  | CTensorTransposeExn2 T
+  | CTensorTransposeExn3 (T, Int)
   | CTensorSliceExn2 T
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
@@ -1128,24 +1130,60 @@ lang TensorOpEval =
       let view = tensorReshapeExn t is in
       TmTensor { val = TExpr view }
     else never
-  | CTensorCopyExn _ ->
+  | CTensorBlitExn _ ->
     match arg with TmTensor { val = t } then
-      let val = CTensorCopyExn2 t in
+      let val = CTensorBlitExn2 t in
       uconst_ val
-    else error "First argument to CTensorCopyExn not a tensor"
-  | CTensorCopyExn2 t1 ->
+    else error "First argument to CTensorBlitExn not a tensor"
+  | CTensorBlitExn2 t1 ->
     match arg with TmTensor { val = t2 } then
       match (t1, t2) with (TInt t1, TInt t2) then
-        tensorCopyExn t1 t2;
+        tensorBlitExn t1 t2;
         uunit_
       else match (t1, t2) with (TFloat t1, TFloat t2) then
-        tensorCopyExn t1 t2;
+        tensorBlitExn t1 t2;
         uunit_
       else match (t1, t2) with (TExpr t1, TExpr t2) then
-        tensorCopyExn t1 t2;
+        tensorBlitExn t1 t2;
         uunit_
-      else error "Tensor type mismatch in CTensorCopyExn"
-    else error "First argument to CTensorCopyExn not a tensor"
+      else error "Tensor type mismatch in CTensorBlitExn"
+    else error "First argument to CTensorBlitExn not a tensor"
+  | CTensorCopy _ ->
+    match arg with TmTensor { val = t } then
+      match t with TInt t then
+        let tt = tensorCopy t in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorCopy t in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorCopy t in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "First argument to CTensorCopy not a tensor"
+  | CTensorTransposeExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorTransposeExn2 t in
+      uconst_ val
+    else error "First argument to CTensorTransposeExn not a tensor"
+  | CTensorTransposeExn2 t ->
+    match arg with TmConst { val = CInt { val = n } } then
+      let val = CTensorTransposeExn3 (t, n) in
+      uconst_ val
+    else error "Second argument to CTensorTransposeExn not an integer"
+  | CTensorTransposeExn3 (t, n1) ->
+    match arg with TmConst { val = CInt { val = n2 } } then
+      match t with TInt t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "Second argument to CTensorTransposeExn not an integer"
   | CTensorSliceExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSliceExn2 t in
@@ -2032,7 +2070,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   utest evaln (utensorShape_ (utensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
   with seq_ [int_ 2, int_ 2] using eqExpr in
 
-  utest evaln (utensorCopyExn_ t1 t2) with uunit_ using eqExpr in
+  utest evaln (utensorBlitExn_ t1 t2) with uunit_ using eqExpr in
 
   utest evaln (utensorRank_ (utensorSliceExn_ t1 (seq_ [int_ 0])))
   with int_ 0 using eqExpr in
@@ -2049,7 +2087,7 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   let t3 = eval (tcreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
   let f = eval (ulam_ "i"
                   (ulam_ "x"
-                     (utensorCopyExn_ (var_ "x") (var_ "x"))))
+                     (utensorBlitExn_ (var_ "x") (var_ "x"))))
   in
   utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
   ()

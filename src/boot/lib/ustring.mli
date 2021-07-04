@@ -136,11 +136,12 @@ module Op : sig
 
     val remove : key -> 'a t -> 'a t
 
-    val merge : (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
+    val merge :
+      (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
 
     val union : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
 
-    val compare : ('a ->'a -> int) -> 'a t -> 'a t -> int
+    val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
 
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
@@ -148,9 +149,9 @@ module Op : sig
 
     val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 
-    val for_all : (key -> 'a -> bool)-> 'a t -> bool
+    val for_all : (key -> 'a -> bool) -> 'a t -> bool
 
-    val exists : (key -> 'a -> bool)-> 'a t -> bool
+    val exists : (key -> 'a -> bool) -> 'a t -> bool
 
     val filter : (key -> 'a -> bool) -> 'a t -> 'a t
 
@@ -180,19 +181,18 @@ module Op : sig
 
     val find_opt : key -> 'a t -> 'a option
 
-    val find_first : (key -> bool)-> 'a t -> key * 'a
+    val find_first : (key -> bool) -> 'a t -> key * 'a
 
-    val find_first_opt : (key -> bool)-> 'a t -> (key * 'a) option
+    val find_first_opt : (key -> bool) -> 'a t -> (key * 'a) option
 
-    val find_last : (key -> bool)-> 'a t -> key * 'a
+    val find_last : (key -> bool) -> 'a t -> key * 'a
 
-    val find_last_opt : (key -> bool)-> 'a t -> (key * 'a) option
+    val find_last_opt : (key -> bool) -> 'a t -> (key * 'a) option
 
     val map : ('a -> 'b) -> 'a t -> 'b t
 
     val mapi : (key -> 'a -> 'b) -> 'a t -> 'b t
   end
-
 
   type 'a sidmap = 'a SidMap.t
 

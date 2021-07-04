@@ -769,7 +769,9 @@ lang TensorOpAst = ConstAst
   | CTensorRank {}
   | CTensorShape {}
   | CTensorReshapeExn {}
-  | CTensorCopyExn {}
+  | CTensorBlitExn {}
+  | CTensorCopy {}
+  | CTensorTransposeExn {}
   | CTensorSliceExn {}
   | CTensorSubExn {}
   | CTensorIterSlice {}

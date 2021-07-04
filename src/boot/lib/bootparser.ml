@@ -116,10 +116,16 @@ let symbolizeEnvWithKeywords keywords =
   Mseq.Helpers.fold_left
     (fun env k ->
       if Ustring.length k > 0 && is_ascii_upper_alpha (Ustring.get k 0) then
-        Symbolize.addsym (IdCon (sid_of_ustring k)) (Intrinsics.Symb.gensym ()) env
-      else Symbolize.addsym (IdVar (sid_of_ustring k)) (Intrinsics.Symb.gensym ()) env)
-    Symbolize.empty_sym_env
-    keywords
+        Symbolize.addsym
+          (IdCon (sid_of_ustring k))
+          (Intrinsics.Symb.gensym ())
+          env
+      else
+        Symbolize.addsym
+          (IdVar (sid_of_ustring k))
+          (Intrinsics.Symb.gensym ())
+          env )
+    Symbolize.empty_sym_env keywords
 
 let reportErrorAndExit err =
   let error_string = Ustring.to_utf8 (Parserutils.error_to_ustring err) in
@@ -134,7 +140,8 @@ let parseMExprString keywords str =
       |> Parserutils.parse_mexpr_string
       |> Parserutils.raise_parse_error_on_non_unique_external_id
       |> Symbolize.symbolize
-           (Symbolize.merge_sym_envs_pick_left builtin_name2sym (symbolizeEnvWithKeywords keywords))
+           (Symbolize.merge_sym_envs_pick_left builtin_name2sym
+              (symbolizeEnvWithKeywords keywords) )
       |> Parserutils.raise_parse_error_on_partially_applied_external )
   with Msg.Error _ as e -> reportErrorAndExit e
 
@@ -142,7 +149,9 @@ let parseMCoreFile keywords filename =
   try
     let keywords = Mseq.map Mseq.Helpers.to_ustring keywords in
     let symKeywordsMap = symbolizeEnvWithKeywords keywords in
-    let name2sym = Symbolize.merge_sym_envs_pick_left builtin_name2sym symKeywordsMap in
+    let name2sym =
+      Symbolize.merge_sym_envs_pick_left builtin_name2sym symKeywordsMap
+    in
     let symKeywords =
       let getElements _ e acc = e :: acc in
       let elements = [] in
@@ -150,7 +159,8 @@ let parseMCoreFile keywords filename =
       let elements = SidMap.fold getElements symKeywordsMap.con elements in
       let elements = SidMap.fold getElements symKeywordsMap.ty elements in
       let elements = SidMap.fold getElements symKeywordsMap.label elements in
-      elements in
+      elements
+    in
     PTreeTm
       ( filename |> Intrinsics.Mseq.Helpers.to_ustring
       |> Parserutils.parse_mcore_file

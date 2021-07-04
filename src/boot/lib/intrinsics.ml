@@ -386,7 +386,13 @@ module T = struct
 
     let shape t = Tensor.CArray.shape t |> of_arr
 
-    let copy_exn = Tensor.CArray.copy_exn
+    let blit_exn = Tensor.CArray.blit_exn
+
+    let copy = Tensor.CArray.copy
+
+    let transpose_int_exn = Tensor.CArray.transpose_int_exn
+
+    let transpose_float_exn = Tensor.CArray.transpose_float_exn
 
     let reshape_exn t shape = Tensor.CArray.reshape_exn t (to_arr shape)
 
@@ -409,7 +415,11 @@ module T = struct
 
     let shape t = Tensor.Dense.shape t |> of_arr
 
-    let copy_exn = Tensor.Dense.copy_exn
+    let blit_exn = Tensor.Dense.blit_exn
+
+    let copy = Tensor.Dense.copy
+
+    let transpose_exn = Tensor.Dense.transpose_exn
 
     let reshape_exn t shape = Tensor.Dense.reshape_exn t (to_arr shape)
 
@@ -462,22 +472,40 @@ module T = struct
     | TDense t' ->
         Dense.shape t'
 
-  let copy_exn (type a b) (t1 : (a, b) u) (t2 : (a, b) u) =
+  let blit_exn (type a b) (t1 : (a, b) u) (t2 : (a, b) u) =
     match (t1, t2) with
     | TCArrayInt t1', TCArrayInt t2' ->
-        CArray.copy_exn t1' t2'
+        CArray.blit_exn t1' t2'
     | TCArrayFloat t1', TCArrayFloat t2' ->
-        CArray.copy_exn t1' t2'
+        CArray.blit_exn t1' t2'
     | TDense t1', TDense t2' ->
-        Dense.copy_exn t1' t2'
+        Dense.blit_exn t1' t2'
     | TDense t1', TCArrayInt t2' ->
-        Tensor.copy_nonum_num_exn t1' t2'
+        Tensor.blit_nonum_num_exn t1' t2'
     | TDense t1', TCArrayFloat t2' ->
-        Tensor.copy_nonum_num_exn t1' t2'
+        Tensor.blit_nonum_num_exn t1' t2'
     | TCArrayInt t1', TDense t2' ->
-        Tensor.copy_num_nonum_exn t1' t2'
+        Tensor.blit_num_nonum_exn t1' t2'
     | TCArrayFloat t1', TDense t2' ->
-        Tensor.copy_num_nonum_exn t1' t2'
+        Tensor.blit_num_nonum_exn t1' t2'
+
+  let copy (type a b) (t : (a, b) u) : (a, b) u =
+    match t with
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.copy t')
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.copy t')
+    | TDense t' ->
+        TDense (Dense.copy t')
+
+  let transpose_exn (type a b) (t : (a, b) u) dim0 dim1 : (a, b) u =
+    match t with
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.transpose_int_exn t' dim0 dim1)
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.transpose_float_exn t' dim0 dim1)
+    | TDense t' ->
+        TDense (Dense.transpose_exn t' dim0 dim1)
 
   let reshape_exn (type a b) (t : (a, b) u) shape : (a, b) u =
     match t with
@@ -618,38 +646,40 @@ module IO = struct
     let v = Obj.repr v in
     let string_of_tag t =
       let res = ref (string_of_int t) in
-      if t = Obj.lazy_tag then res := !res ^ " (lazy)";
-      if t = Obj.closure_tag then res := !res ^ " (closure)";
-      if t = Obj.object_tag then res := !res ^ " (object)";
-      if t = Obj.infix_tag then res := !res ^ " (infix)";
-      if t = Obj.forward_tag then res := !res ^ " (forward)";
-      if t = Obj.no_scan_tag then res := !res ^ " (no_scan)";
-      if t = Obj.abstract_tag then res := !res ^ " (abstract)";
-      if t = Obj.string_tag then res := !res ^ " (string)";
-      if t = Obj.double_tag then res := !res ^ " (double)";
-      if t = Obj.double_array_tag then res := !res ^ " (double_array)";
-      if t = Obj.custom_tag then res := !res ^ " (custom)";
-      if t = Obj.int_tag then res := !res ^ " (int)";
-      if t = Obj.out_of_heap_tag then res := !res ^ " (out_of_heap)";
-      if t = Obj.unaligned_tag then res := !res ^ " (unaligned)";
-      !res in
+      if t = Obj.lazy_tag then res := !res ^ " (lazy)" ;
+      if t = Obj.closure_tag then res := !res ^ " (closure)" ;
+      if t = Obj.object_tag then res := !res ^ " (object)" ;
+      if t = Obj.infix_tag then res := !res ^ " (infix)" ;
+      if t = Obj.forward_tag then res := !res ^ " (forward)" ;
+      if t = Obj.no_scan_tag then res := !res ^ " (no_scan)" ;
+      if t = Obj.abstract_tag then res := !res ^ " (abstract)" ;
+      if t = Obj.string_tag then res := !res ^ " (string)" ;
+      if t = Obj.double_tag then res := !res ^ " (double)" ;
+      if t = Obj.double_array_tag then res := !res ^ " (double_array)" ;
+      if t = Obj.custom_tag then res := !res ^ " (custom)" ;
+      if t = Obj.int_tag then res := !res ^ " (int)" ;
+      if t = Obj.out_of_heap_tag then res := !res ^ " (out_of_heap)" ;
+      if t = Obj.unaligned_tag then res := !res ^ " (unaligned)" ;
+      !res
+    in
     let rec work indent v =
-      if Obj.is_int v then
-        string_of_int (Obj.obj v) ^ "\n"
+      if Obj.is_int v then string_of_int (Obj.obj v) ^ "\n"
       else if Obj.tag v = Obj.double_tag then
         string_of_float (Obj.obj v) ^ "\n"
-      else if Obj.tag v = Obj.closure_tag then
-        "<closure>\n"
+      else if Obj.tag v = Obj.closure_tag then "<closure>\n"
       else
         let istr = String.make indent ' ' in
-        let children = List.init (Obj.size v)
-          (fun i -> istr ^ ", " ^ work (indent + 2) (Obj.field v i)) in
-        begin
-          "{ tag: " ^ string_of_tag (Obj.tag v) ^ ", size: " ^ string_of_int (Obj.size v) ^ "\n" ^
-          String.concat "" children ^
-          istr ^ "}\n"
-        end
-    in print_string (work 0 v);;
+        let children =
+          List.init (Obj.size v) (fun i ->
+              istr ^ ", " ^ work (indent + 2) (Obj.field v i) )
+        in
+        "{ tag: "
+        ^ string_of_tag (Obj.tag v)
+        ^ ", size: "
+        ^ string_of_int (Obj.size v)
+        ^ "\n" ^ String.concat "" children ^ istr ^ "}\n"
+    in
+    print_string (work 0 v)
 
   let flush_stdout () = flush stdout
 

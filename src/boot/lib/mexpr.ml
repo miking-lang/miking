@@ -383,9 +383,17 @@ let arity = function
       1
   | CtensorShape ->
       1
-  | CtensorCopyExn None ->
+  | CtensorBlitExn None ->
       2
-  | CtensorCopyExn (Some _) ->
+  | CtensorBlitExn (Some _) ->
+      1
+  | CtensorCopy ->
+      1
+  | CtensorTransposeExn (None, None) ->
+      3
+  | CtensorTransposeExn (_, None) ->
+      2
+  | CtensorTransposeExn (_, Some _) ->
       1
   | CtensorReshapeExn None ->
       2
@@ -1205,17 +1213,40 @@ let delta eval env fi c v =
       int_seq2int_tm_seq fi shape
   | CtensorShape, _ ->
       fail_constapp fi
-  | CtensorCopyExn None, TmTensor (_, t1) ->
-      TmConst (fi, CtensorCopyExn (Some t1))
-  | CtensorCopyExn (Some (T.CArrayIntBoot t1)), TmTensor (_, T.CArrayIntBoot t2)
+  | CtensorBlitExn None, TmTensor (_, t1) ->
+      TmConst (fi, CtensorBlitExn (Some t1))
+  | CtensorBlitExn (Some (T.CArrayIntBoot t1)), TmTensor (_, T.CArrayIntBoot t2)
     ->
-      T.CArray.copy_exn t1 t2 ; tm_unit
-  | ( CtensorCopyExn (Some (T.CArrayFloatBoot t1))
+      T.CArray.blit_exn t1 t2 ; tm_unit
+  | ( CtensorBlitExn (Some (T.CArrayFloatBoot t1))
     , TmTensor (_, T.CArrayFloatBoot t2) ) ->
-      T.CArray.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
-      T.Dense.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn _, _ ->
+      T.CArray.blit_exn t1 t2 ; tm_unit
+  | CtensorBlitExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
+      T.Dense.blit_exn t1 t2 ; tm_unit
+  | CtensorBlitExn _, _ ->
+      fail_constapp fi
+  | CtensorCopy, TmTensor (_, T.CArrayIntBoot t) ->
+      TmTensor (fi, T.CArrayIntBoot (T.CArray.copy t))
+  | CtensorCopy, TmTensor (_, T.CArrayFloatBoot t) ->
+      TmTensor (fi, T.CArrayFloatBoot (T.CArray.copy t))
+  | CtensorCopy, TmTensor (_, T.DenseBoot t) ->
+      TmTensor (fi, T.DenseBoot (T.Dense.copy t))
+  | CtensorCopy, _ ->
+      fail_constapp fi
+  | CtensorTransposeExn (None, None), TmTensor (_, t) ->
+      TmConst (fi, CtensorTransposeExn (Some t, None))
+  | CtensorTransposeExn (Some t, None), TmConst (_, CInt n) ->
+      TmConst (fi, CtensorTransposeExn (Some t, Some n))
+  | ( CtensorTransposeExn (Some (T.CArrayIntBoot t), Some n1)
+    , TmConst (_, CInt n2) ) ->
+      TmTensor (fi, T.CArrayIntBoot (T.CArray.transpose_int_exn t n1 n2))
+  | ( CtensorTransposeExn (Some (T.CArrayFloatBoot t), Some n1)
+    , TmConst (_, CInt n2) ) ->
+      TmTensor (fi, T.CArrayFloatBoot (T.CArray.transpose_float_exn t n1 n2))
+  | CtensorTransposeExn (Some (T.DenseBoot t), Some n1), TmConst (_, CInt n2)
+    ->
+      TmTensor (fi, T.DenseBoot (T.Dense.transpose_exn t n1 n2))
+  | CtensorTransposeExn _, _ ->
       fail_constapp fi
   | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))
