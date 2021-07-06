@@ -422,8 +422,6 @@ utest lookupSnd (PatternIndex 4) fst with Some (head_ (nvar_ s)) using optionEq 
 let recursiveCall = appf3_ (nvar_ map) (var_ "acc") (var_ "f") (var_ "t") in
 utest lookupSnd (PatternIndex 7) fst with Some recursiveCall using optionEq eqExpr in
 utest mapSize fst with 12 in
-let snd = get mapPatternMatchResult 1 in
-utest optionIsNone snd with true in
 
 let map2 = nameSym "map2" in
 let acc = nameSym "acc" in
