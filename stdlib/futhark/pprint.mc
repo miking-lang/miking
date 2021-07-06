@@ -125,6 +125,9 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCAny () -> "any"
   | FCFlatten () -> "flatten"
   | FCIndices () -> "indices"
+  | FCIota () -> "iota"
+  | FCReplicate () -> "replicate"
+  | FCTabulate () -> "tabulate"
 end
 
 lang FutharkPatPrettyPrint = FutharkAst + PatNamePrettyPrint

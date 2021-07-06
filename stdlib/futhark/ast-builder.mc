@@ -209,3 +209,15 @@ let futFlatten_ = use FutharkAst in
 let futIndices_ = use FutharkAst in
   lam s.
   futApp_ (futConst_ (FCIndices ())) s
+
+let futIota_ = use FutharkAst in
+  lam n.
+  futApp_ (futConst_ (FCIota ())) n
+
+let futReplicate_ = use FutharkAst in
+  lam n. lam e.
+  futAppSeq_ (futConst_ (FCReplicate ())) [n, e]
+
+let futTabulate_ = use FutharkAst in
+  lam n. lam f.
+  futAppSeq_ (futConst_ (FCTabulate ())) [n, f]

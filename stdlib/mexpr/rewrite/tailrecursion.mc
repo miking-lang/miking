@@ -184,6 +184,7 @@ lang MExprTailRecursion = MExprParallelKeywordMaker
       -- neutral element.
       match getNeutralElementOfAssociativeOperator binop with Some ne then
         match toTailRecursiveForm t binop ne with Some binding then
+          let binding : RecLetBinding = binding in
           let oldIdent = t.ident in
           let replacementFn = lam info.
             TmApp {

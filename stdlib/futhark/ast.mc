@@ -38,6 +38,9 @@ lang FutharkConstAst
   | FCAny ()
   | FCFlatten ()
   | FCIndices ()
+  | FCIota ()
+  | FCReplicate ()
+  | FCTabulate ()
 end
 
 lang FutharkPatAst

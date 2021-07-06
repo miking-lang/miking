@@ -14,7 +14,8 @@ include "mexpr/rewrite/utils.mc"
 
 type FutharkGenerateEnv = {
   typeAliases : Map Type Name,
-  typeParams : Map Name [FutTypeParam]
+  typeParams : Map Name [FutTypeParam],
+  boundNames : Map Name Expr
 }
 
 recursive let _isHigherOrderFunction = use FutharkAst in
@@ -99,7 +100,6 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CGeqi _ | CGeqf _ -> futConst_ (FCGeq ())
   | CLeqi _ | CLeqf _ -> futConst_ (FCLeq ())
   | CLength _ -> FEBuiltIn {str = "length"}
-  | CCreate _ -> FEBuiltIn {str = "tabulate"}
   | CReverse _ -> FEBuiltIn {str = "reverse"}
   | CConcat _ -> FEBuiltIn {str = "concat"}
   | CHead _ -> FEBuiltIn {str = "head"}
@@ -233,6 +233,30 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
            rhs = arg3} ->
     futArrayUpdate_ (generateExpr env arg1) (generateExpr env arg2)
                     (generateExpr env arg3)
+  | TmApp {lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
+           rhs = arg2} ->
+    let tryLookupExpr = lam e.
+      match e with TmVar t then
+        optionGetOrElse
+          (lam. e)
+          (mapLookup t.ident env.boundNames)
+      else e
+    in
+    let argx1 = tryLookupExpr arg1 in
+    let argx2 = tryLookupExpr arg2 in
+    match argx2 with TmLam {ident = i, body = body} then
+      match body with TmVar {ident = id} then
+        if nameEq i id then
+          match argx1 with TmApp {lhs = TmConst {val = CLength _}, rhs = seq} then
+            futIndices_ (generateExpr env seq)
+          else
+            futIota_ (generateExpr env arg1)
+        else
+          futReplicate_ (generateExpr env arg1) (generateExpr env body)
+      else match body with TmConst _ then
+        futReplicate_ (generateExpr env arg1) (generateExpr env body)
+      else futTabulate_ (generateExpr env arg1) (generateExpr env arg2)
+    else futTabulate_ (generateExpr env arg1) (generateExpr env arg2)
   | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                      rhs = arg1},
                         rhs = TmConst {val = CInt {val = 0}}},
@@ -257,9 +281,11 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
         rhs = generateExpr env arg}}
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
   | TmLet t ->
-    FELet {ident = t.ident, tyBody = Some (generateType env t.tyBody),
+    let boundNames = mapInsert t.ident t.body env.boundNames in
+    let inexprEnv = {env with boundNames = boundNames} in
+    FELet {ident = t.ident, tyBody = generateType env t.tyBody,
            body = generateExpr env t.body,
-           inexpr = generateExpr env t.inexpr}
+           inexpr = generateExpr inexprEnv t.inexpr}
   | TmParallelMap t -> futMap_ (generateExpr env t.f) (generateExpr env t.as)
   | TmParallelMap2 t ->
     futMap2_ (generateExpr env t.f) (generateExpr env t.as) (generateExpr env t.bs)
@@ -273,7 +299,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
   | TmFlatten t -> futFlatten_ (generateExpr env t.s)
-  | TmIndices t -> futIndices_ (generateExpr env t.s)
   | TmSequentialFor t ->
     match t.body with TmLam {ident = i, body = body} then
       FEFor {param = generateExpr env t.init, loopVar = i,
@@ -401,7 +426,8 @@ lang FutharkGenerate = FutharkToplevelGenerate + MExprCmpClosed
   | prog ->
     let emptyEnv = {
       typeAliases = mapEmpty cmpType,
-      typeParams = mapEmpty nameCmp
+      typeParams = mapEmpty nameCmp,
+      boundNames = mapEmpty nameCmp
     } in
     FProg {decls = generateToplevel emptyEnv prog}
 end

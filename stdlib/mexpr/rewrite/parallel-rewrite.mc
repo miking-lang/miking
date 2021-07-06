@@ -127,7 +127,6 @@ lang TestLang =
   | TmParallelAll _ -> false
   | TmParallelAny _ -> false
   | TmFlatten _ -> false
-  | TmIndices _ -> false
   | TmSequentialFor _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
@@ -159,7 +158,6 @@ lang TestLang =
   | TmParallelAll t -> never
   | TmParallelAny t -> never
   | TmFlatten t -> never
-  | TmIndices t -> never
   | TmSequentialFor t ->
     match printParen indent env t.body with (env, body) then
       match pprintCode indent env t.init with (env, init) then
