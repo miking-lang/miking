@@ -613,10 +613,10 @@ with [4, 5, 6]
 
 
 -- Filter index of elements of `t` given predicate `p`.
-let tensorFilteri : (a -> Bool) -> Tensor[a] -> [[Int]] = 
+let tensorFilteri : ([Int] -> a -> Bool) -> Tensor[a] -> [[Int]] =
   lam p. lam t.
     tensorFoldi
-      (lam a. lam idx. lam x. if p x then snoc a idx else a)
+      (lam a. lam idx. lam x. if p idx x then snoc a idx else a)
       [] t
 
 utest
@@ -624,7 +624,7 @@ utest
     [1, 2, 3
     ,4, 5, 6] 
   in
-  tensorFilteri (lti 3) t
+  tensorFilteri (lam. lti 3) t
 with [[1, 0], [1, 1], [1, 2]]
 
 
