@@ -201,11 +201,6 @@ let h = nameSym "h" in
 let t = nameSym "t" in
 let addOne = nameSym "addOne" in
 let x = nameSym "x" in
--- map = lam f. lam s.
---   if null s then
---     []
---   else
---     concat [f (head s)] (map f (tail s))
 let expr = preprocess (nreclets_ [
   (map, tyunknown_, nulam_ f (nulam_ s (
     match_ (nvar_ s)
