@@ -64,7 +64,6 @@ compile_files += stdlib/mexpr/eq.mc
 compile_files += stdlib/mexpr/ast-smap-sfold-tests.mc
 compile_files += stdlib/mexpr/keyword-maker.mc
 compile_files += stdlib/mexpr/const-types.mc
-compile_files += stdlib/mexpr/patterns.mc
 compile_files += stdlib/c/ast.mc
 compile_files += stdlib/c/pprint.mc
 #compile_files += stdlib/c/compile.mc
