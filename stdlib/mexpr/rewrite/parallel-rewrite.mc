@@ -199,6 +199,13 @@ let f = nameSym "f" in
 let s = nameSym "s" in
 let h = nameSym "h" in
 let t = nameSym "t" in
+let addOne = nameSym "addOne" in
+let x = nameSym "x" in
+-- map = lam f. lam s.
+--   if null s then
+--     []
+--   else
+--     concat [f (head s)] (map f (tail s))
 let expr = preprocess (nreclets_ [
   (map, tyunknown_, nulam_ f (nulam_ s (
     match_ (nvar_ s)
@@ -208,7 +215,10 @@ let expr = preprocess (nreclets_ [
         (pseqedgen_ [npvar_ h] t [])
         (cons_ (app_ (nvar_ f) (head_ (nvar_ s)))
                (appf2_ (nvar_ map) (nvar_ f) (tail_ (nvar_ s))))
-        never_))))
+        never_)))),
+  (addOne, tyunknown_, nulam_ s (
+    appf2_ (nvar_ map) (nulam_ x (addi_ (nvar_ x) (int_ 1))) (nvar_ s)
+  ))
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
