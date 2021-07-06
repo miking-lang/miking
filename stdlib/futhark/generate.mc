@@ -249,10 +249,8 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
         if nameEq i id then
           match argx1 with TmApp {lhs = TmConst {val = CLength _}, rhs = seq} then
             futIndices_ (generateExpr env seq)
-          else
-            futIota_ (generateExpr env arg1)
-        else
-          futReplicate_ (generateExpr env arg1) (generateExpr env body)
+          else futIota_ (generateExpr env arg1)
+        else futReplicate_ (generateExpr env arg1) (generateExpr env body)
       else match body with TmConst _ then
         futReplicate_ (generateExpr env arg1) (generateExpr env body)
       else futTabulate_ (generateExpr env arg1) (generateExpr env arg2)
