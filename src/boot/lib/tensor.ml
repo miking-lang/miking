@@ -14,7 +14,7 @@ let cartesian_to_linear_idx shape idx =
   done ;
   !tmp_ofs
 
-let linear_to_cartesian_idx shape idx =
+(* let linear_to_cartesian_idx shape idx =
   let rank = Array.length shape in
   let tmp = Array.make rank 0 in
   let ofs = ref idx in
@@ -25,7 +25,7 @@ let linear_to_cartesian_idx shape idx =
     tmp.(l) <- j ;
     ofs := !ofs / n
   done ;
-  tmp
+  tmp *)
 
 let iter_slice rank shape slice f t =
   if rank t = 0 then f (-1) t
@@ -69,15 +69,6 @@ module Dense = struct
 
   let size t = t.size
 
-  let create shape f =
-    let rank = Array.length shape in
-    let size = prod shape in
-    let data =
-      Array.init size (fun i -> f (linear_to_cartesian_idx shape i))
-    in
-    let stride = 0 in
-    {data; rank; shape; stride; size}
-
   let is_valid_index shape idx =
     let valid = ref true in
     Array.iteri (fun i n -> valid := !valid && n >= 0 && n < shape.(i)) idx ;
@@ -94,6 +85,29 @@ module Dense = struct
       let linear_idx = cartesian_to_linear_idx t.shape idx + t.stride in
       t.data.(linear_idx) <- v
     else raise (Invalid_argument "Tensor.Dense.set_exn")
+
+  (* Adoped from OCaml Bigarray implementation *)
+  let rec loop t idx0 idx f dim shape =
+    if dim = Array.length idx then
+      if idx = idx0 then () else set_exn t idx (f idx)
+    else
+      for j = 0 to pred shape.(dim) do
+        idx.(dim) <- j ;
+        loop t idx0 idx f (succ dim) shape
+      done
+
+  let create shape f =
+    let rank = Array.length shape in
+    let size = prod shape in
+    let idx = Array.make rank 0 in
+    let x0 = f idx in
+    let data = Array.make size x0 in
+    let stride = 0 in
+    let t = {data; rank; shape; stride; size} in
+    if rank = 0 then t
+    else (
+      loop t (Array.copy idx) idx f 0 shape ;
+      t )
 
   let blit_exn t1 t2 =
     if shape t1 = shape t2 then
