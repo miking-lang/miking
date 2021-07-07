@@ -209,13 +209,25 @@ with 1
 
 
 -- Applies function `f` to the elements of `t`.
-let tensorMapSelf : (a -> a) -> Tensor[a] -> Unit =
+let tensorMapInplace : (a -> a) -> Tensor[a] -> Unit =
   lam f. lam t. tensorMapExn f t t
 
 utest
   let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
-  tensorMapSelf (addi 1) t;
+  tensorMapInplace (addi 1) t;
   tensorToSeqExn t
+with [2, 3, 4, 5]
+
+
+-- Applies function `f` to the elements of a copy of `t`.
+let tensorMapCopy : (a -> a) -> Tensor[a] -> Tensor[a] =
+  lam f. lam t.
+    let r = tensorCopy t in
+    tensorMapExn f t r; r
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [4] [1, 2, 3, 4] in
+  tensorToSeqExn (tensorMapCopy (addi 1) t)
 with [2, 3, 4, 5]
 
 
@@ -656,6 +668,30 @@ utest
   tensorCumsumiInplace t; tensorToSeqExn t
 with [1, 3, 6]
 
+let tensorCumsumiCopy : Tensor[Int] -> Tensor[Int] =
+  lam t.
+    let r = tensorCopy t in
+    tensorCumsumiExn t r; r
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [3] [1, 2, 3] in
+  tensorToSeqExn (tensorCumsumiCopy t)
+with [1, 3, 6]
+
+let tensorRangei
+  : ([Int] -> ([Int] -> Int) -> Tensor[Int])
+  -> [Int]
+  -> Int
+  -> Tensor[Int] =
+  lam tcreate. lam shape. lam start.
+    let t = tcreate [_prod shape] (lam idx. addi (get idx 0) start) in
+    tensorReshapeExn t shape
+
+utest
+  let t = tensorRangei tensorCreateDense [3] 1 in
+  tensorToSeqExn t
+with [1, 2, 3]
+
 mexpr
 
 -- Tensors are mutable data structures and can be of up to rank 16. The index
@@ -699,7 +735,7 @@ utest tensorGetExn e [] with 5 in
 utest tensorRank e with 0 in
 
 -- A slice shares data with the original tensor and no copying of data is done.
-tensorMapSelf (lam. 0) r2;
+tensorMapInplace (lam. 0) r2;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
 -- where we use `tensorFill` from `tensor.mc`
 

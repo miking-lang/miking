@@ -80,7 +80,7 @@ let maxmatchHungarian = lam w : Tensor[Int].
     in
 
     -- T <- {}
-    let emptyT = lam. tensorMapSelf (lam. false) ts in
+    let emptyT = lam. tensorMapInplace (lam. false) ts in
 
     -- v in T
     let memT = lam v. tget ts [v] in
