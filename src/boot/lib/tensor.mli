@@ -22,7 +22,7 @@ module CArray : sig
 
   val shape : ('a, 'b) t -> int array
 
-  val copy_exn : ('a, 'b) t -> ('a, 'b) t -> unit
+  val blit_exn : ('a, 'b) t -> ('a, 'b) t -> unit
 
   val reshape_exn : ('a, 'b) t -> int array -> ('a, 'b) t
 
@@ -50,7 +50,7 @@ module Dense : sig
 
   val size : 'a t -> int
 
-  val copy_exn : 'a t -> 'a t -> unit
+  val blit_exn : 'a t -> 'a t -> unit
 
   val transpose_exn : 'a t -> int -> int -> 'a t
 
@@ -69,6 +69,6 @@ module Dense : sig
   val data_to_array : 'a t -> 'a array
 end
 
-val copy_num_nonum_exn : ('a, 'b) CArray.t -> 'a Dense.t -> unit
+val blit_num_nonum_exn : ('a, 'b) CArray.t -> 'a Dense.t -> unit
 
-val copy_nonum_num_exn : 'a Dense.t -> ('a, 'b) CArray.t -> unit
+val blit_nonum_num_exn : 'a Dense.t -> ('a, 'b) CArray.t -> unit

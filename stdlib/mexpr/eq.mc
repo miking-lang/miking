@@ -387,7 +387,7 @@ lang TensorOpEq = TensorOpAst
   | CTensorShape {} -> match lhs with CTensorShape _ then true else false
   | CTensorReshapeExn {} -> match lhs with CTensorReshapeExn _
     then true else false
-  | CTensorCopyExn {} -> match lhs with CTensorCopyExn _ then true else false
+  | CTensorBlitExn {} -> match lhs with CTensorBlitExn _ then true else false
   | CTensorTransposeExn {} -> match lhs with CTensorTransposeExn _ then true else false
   | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
   | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false

@@ -123,7 +123,7 @@ let tytensorreshapeexn_ = lam ty.
             , tyseq_ tyint_
             , tytensor_ ty ]
 
-let tytensorcopyexn_ = lam ty.
+let tytensorblitexn_ = lam ty.
   tyarrows_ [ tytensor_ ty
             , tytensor_ ty
             , tyunit_ ]
@@ -991,11 +991,11 @@ let tensorReshapeExn_ = use MExprAst in
 
 let utensorReshapeExn_ = tensorReshapeExn_ tyunknown_
 
-let tensorCopyExn_ = use MExprAst in
+let tensorBlitExn_ = use MExprAst in
   lam ty. lam t1. lam t2.
-  appf2_ (const_ (tytensorcopyexn_ ty) (CTensorCopyExn ())) t1 t2
+  appf2_ (const_ (tytensorblitexn_ ty) (CTensorBlitExn ())) t1 t2
 
-let utensorCopyExn_ = tensorCopyExn_ tyunknown_
+let utensorBlitExn_ = tensorBlitExn_ tyunknown_
 
 let tensorTransposeExn_ = use MExprAst in
   lam ty. lam t. lam dim0. lam dim1.
