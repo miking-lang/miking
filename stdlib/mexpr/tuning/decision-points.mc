@@ -133,13 +133,10 @@ end
 -- Language fragments for decision points --
 --------------------------------------------
 
-let decisionPointsKeywords =
-[ "HoleBool"
-, "HoleIntRange"
-]
+let decisionPointsKeywords = ["hole", "Boolean", "IntRange"]
 
-let _lookup = lam s : String. lam m : Map String a.
-  mapLookupOrElse (lam. error (concat s " not found")) s m
+let _lookupExit = lam info : Info. lam s : String. lam m : Map String a.
+  mapLookupOrElse (lam. infoErrorExit info (concat s " not found")) s m
 
 let _expectConstInt = lam s. lam i.
   use IntAst in
@@ -154,7 +151,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
             depth : Int,
             ty : Type,
             info : Info,
-            hole : Hole}
+            inner : Hole}
 
   sem ty =
   | TmHole {ty = ty} -> ty
@@ -180,7 +177,7 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem pprintCode (indent : Int) (env : SymEnv) =
   | TmHole t ->
     match pprintCode indent env t.default with (env, default) then
-      match pprintHole t.hole with (keyword, bindings) then
+      match pprintHole t.inner with (keyword, bindings) then
         (env, join
           [ keyword
           , " {"
@@ -204,7 +201,10 @@ lang HoleAst = IntAst + ANF + KeywordMaker
   sem isKeyword =
   | TmHole _ -> true
 
-  sem _mkHole (info : Info) (hty : Type) (hole : Map String Expr -> Hole)
+  sem matchKeywordString (info : Info) =
+  | "hole" -> Some (1, lam lst. head lst)
+
+  sem _mkHole (info : Info) (hty : Type) (holeMap : Map String Expr -> Hole)
               (validate : Expr -> Expr) =
   | arg ->
     use RecordAst in
@@ -212,15 +212,15 @@ lang HoleAst = IntAst + ANF + KeywordMaker
       let bindings = mapFromSeq cmpString
         (map (lam t : (SID, Expr). (sidToString t.0, t.1))
            (mapBindings bindings)) in
-      let default = _lookup "default" bindings in
-      let depth = _lookup "depth" bindings in
+      let default = _lookupExit info "default" bindings in
+      let depth = mapLookupOrElse (lam. int_ 0) "depth" bindings in
       validate
         (TmHole { default = default
                 , depth = _expectConstInt "depth" depth
                 , info = info
                 , ty = hty
-                , hole = hole bindings})
-    else error "Expected record type"
+                , inner = holeMap bindings})
+    else error "impossible"
 end
 
 -- A Boolean decision point.
@@ -237,7 +237,7 @@ lang HoleBoolAst = BoolAst + HoleAst
   | "false" -> false
 
   sem matchKeywordString (info : Info) =
-  | "HoleBool" ->
+  | "Boolean" ->
     Some (1,
       let validate = lam expr.
         match expr with TmHole {default = default} then
@@ -249,7 +249,7 @@ lang HoleBoolAst = BoolAst + HoleAst
 
   sem pprintHole =
   | BoolHole {} ->
-    ("HoleBool", [])
+    ("Boolean", [])
 end
 
 -- An integer decision point (range of integers).
@@ -263,12 +263,12 @@ lang HoleIntRangeAst = IntAst + HoleAst
     int_ (randIntU min (addi max 1))
 
   sem matchKeywordString (info : Info) =
-  | "HoleIntRange" ->
+  | "IntRange" ->
     Some (1,
       let validate = lam expr.
         match expr
         with TmHole {default = TmConst {val = CInt {val = i}},
-                     hole = IntRange {min = min, max = max}}
+                     inner = IntRange {min = min, max = max}}
         then
           if and (leqi min i) (geqi max i) then expr
           else error "Default value is not within range"
@@ -276,8 +276,8 @@ lang HoleIntRangeAst = IntAst + HoleAst
 
       lam lst. _mkHole info tyint_
         (lam m.
-           let min = _expectConstInt "min" (_lookup "min" m) in
-           let max = _expectConstInt "max" (_lookup "max" m) in
+           let min = _expectConstInt "min" (_lookupExit info "min" m) in
+           let max = _expectConstInt "max" (_lookupExit info "max" m) in
            if leqi min max then
              IntRange {min = min, max = max}
            else error (join ["Empty domain: ",
@@ -286,7 +286,7 @@ lang HoleIntRangeAst = IntAst + HoleAst
 
   sem pprintHole =
   | IntRange {min = min, max = max} ->
-    ("HoleIntRange", [("min", int2string min), ("max", int2string max)])
+    ("IntRange", [("min", int2string min), ("max", int2string max)])
 end
 
 let holeBool_ = use HoleBoolAst in
@@ -295,7 +295,7 @@ let holeBool_ = use HoleBoolAst in
          , depth = depth
          , ty = tybool_
          , info = NoInfo ()
-         , hole = BoolHole {}}
+         , inner = BoolHole {}}
 
 let holeIntRange_ = use HoleIntRangeAst in
   lam default. lam depth. lam min. lam max.
@@ -303,7 +303,7 @@ let holeIntRange_ = use HoleIntRangeAst in
          , depth = depth
          , ty = tyint_
          , info = NoInfo ()
-         , hole = IntRange {min = min, max = max}}
+         , inner = IntRange {min = min, max = max}}
 
 
 ------------------------------
@@ -443,7 +443,7 @@ let callCtxPubLookup : Name -> CallCtxEnv -> Option Name = lam name. lam env.
   else never
 
 let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
-  lam hole. lam name. lam paths. lam env : CallCtxEnv.
+  lam h. lam name. lam paths. lam env : CallCtxEnv.
     match env with { hole2idx = hole2idx, idx2hole = idx2hole} then
     let countInit = length (deref idx2hole) in
     match
@@ -456,7 +456,7 @@ let callCtxAddHole : Expr -> Name -> [[Name]] -> CallCtxEnv -> CallCtxEnv =
     with (m, count) then
       let n = length paths in
       utest n with subi count countInit in
-      modref idx2hole (concat (deref idx2hole) (create n (lam. hole)));
+      modref idx2hole (concat (deref idx2hole) (create n (lam. h)));
       modref hole2idx (mapInsert name m (deref hole2idx));
       env
     else never
@@ -666,7 +666,7 @@ lang FlattenHoles = Ast2CallGraph + HoleAst + IntAst
   | env ->
     let env : CallCtxEnv = env in
     let idx2hole = deref env.idx2hole in
-    map (lam hole. default hole) idx2hole
+    map (lam h. default h) idx2hole
 
   -- Move the contents of each public function to a hidden private function, and
   -- forward the call to the public functions to their private equivalent.

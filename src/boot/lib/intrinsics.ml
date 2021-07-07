@@ -651,6 +651,8 @@ module IO = struct
         end
     in print_string (work 0 v);;
 
+  let flush_stdout () = flush stdout
+
   let read_line _ =
     let line = try read_line () with End_of_file -> "" in
     line |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array

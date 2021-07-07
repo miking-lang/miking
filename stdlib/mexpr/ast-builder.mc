@@ -907,6 +907,9 @@ let print_ = use MExprAst in
 let dprint_ = use MExprAst in
   lam s. app_ (uconst_ (CDPrint ())) s
 
+let flushStdout_ = use MExprAst in
+  lam u. app_ (uconst_ (CFlushStdout ())) u
+
 let readLine_ = use MExprAst in
   lam u. app_ (uconst_ (CReadLine ())) u
 

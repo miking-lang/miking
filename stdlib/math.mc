@@ -16,6 +16,7 @@ utest absf (negf 1.) with 1. using eqf
 let maxi = lam r. lam l. if gti r l then r else l
 let mini = lam r. lam l. if lti r l then r else l
 let absi = lam i. maxi i (negi i)
+let signum = lam i. if eqi i 0 then 0 else divi i (absi i)
 
 utest maxi 0 0 with 0
 utest maxi 1 0 with 1
@@ -30,3 +31,9 @@ utest absi 1 with 1
 utest absi (negi 1) with 1
 
 utest addi 1 (negi 1) with 0
+
+utest signum 0 with 0
+utest signum 1 with 1
+utest signum 5 with 1
+utest signum (negi 1) with negi 1
+utest signum (subi 2 7) with negi 1
