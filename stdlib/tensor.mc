@@ -125,6 +125,9 @@ lam f. lam t.
 let tensorToSeqExn : Tensor[a] -> [a] =
   tensorToSeqOrElse (lam. error "Not rank 1 tensor in tensorToSeqExn")
 
+utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [0] [])
+with []
+
 utest tensorToSeqExn (tensorOfSeqExn tensorCreateCArrayInt [4] [1, 2, 3, 4])
 with [1, 2, 3, 4] using eqSeq eqi
 

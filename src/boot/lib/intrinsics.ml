@@ -373,14 +373,14 @@ module T = struct
 
   module CArray = struct
     let create_int shape f =
-      Tensor.CArray.create_int (to_arr shape) (fun ids -> f (of_arr ids))
+      Tensor.CArray.create_int (to_arr shape) (fun idx -> f (of_arr idx))
 
     let create_float shape f =
-      Tensor.CArray.create_float (to_arr shape) (fun ids -> f (of_arr ids))
+      Tensor.CArray.create_float (to_arr shape) (fun idx -> f (of_arr idx))
 
-    let get_exn t ids = Tensor.CArray.get_exn t (to_arr ids)
+    let get_exn t idx = Tensor.CArray.get_exn t (to_arr idx)
 
-    let set_exn t ids v = Tensor.CArray.set_exn t (to_arr ids) v
+    let set_exn t idx v = Tensor.CArray.set_exn t (to_arr idx) v
 
     let rank = Tensor.CArray.rank
 
@@ -405,11 +405,12 @@ module T = struct
 
   module Dense = struct
     let create shape f =
-      Tensor.Dense.create (to_arr shape) (fun ids -> f (of_arr ids))
+      Tensor.Dense.create (to_arr shape) (fun idx ->
+          f (of_arr (Array.copy idx)) )
 
-    let get_exn t ids = Tensor.Dense.get_exn t (to_arr ids)
+    let get_exn t idx = Tensor.Dense.get_exn t (to_arr idx)
 
-    let set_exn t ids v = Tensor.Dense.set_exn t (to_arr ids) v
+    let set_exn t idx v = Tensor.Dense.set_exn t (to_arr idx) v
 
     let rank = Tensor.Dense.rank
 
