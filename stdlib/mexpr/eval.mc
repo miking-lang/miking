@@ -2069,7 +2069,6 @@ utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in
 
 testTensors tensorCreateInt_ (int_ 0, int_ 1, int_ 2);
-testTensors tensorCreateFloat_ (float_ 0., float_ 1., float_ 2.);
 testTensors utensorCreate_ (seq_ [int_ 0], seq_ [int_ 1], seq_ [int_ 2]);
 
 ()
