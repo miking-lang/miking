@@ -1148,6 +1148,19 @@ lang TensorOpEval =
         uunit_
       else error "Tensor type mismatch in CTensorBlitExn"
     else error "First argument to CTensorBlitExn not a tensor"
+  | CTensorCopy _ ->
+    match arg with TmTensor { val = t } then
+      match t with TInt t then
+        let tt = tensorCopy t in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorCopy t in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorCopy t in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "First argument to CTensorCopy not a tensor"
   | CTensorTransposeExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorTransposeExn2 t in
