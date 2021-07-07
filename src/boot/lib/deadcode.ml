@@ -218,7 +218,7 @@ let add_keywords nmap symKeywords =
 *)
 let elimination builtin_sym2term builtin_name2sym symKeywords t =
   if !disable_dead_code_elimination then t
-  else (
+  else
     let builtin_name2sym = Symbolize.sym_env_to_assoc builtin_name2sym in
     if !enable_debug_dead_code_info then
       _symbmap := extend_symb_map_builtin builtin_name2sym (symbmap t) ;
@@ -237,4 +237,4 @@ let elimination builtin_sym2term builtin_name2sym symKeywords t =
       print_endline "\n-- Dead code info: marked used lets --" ;
       pprint_nmap !_symbmap nmap |> uprint_endline ) ;
     (* Remove all lets that are not used *)
-    remove_lets nmap t )
+    remove_lets nmap t

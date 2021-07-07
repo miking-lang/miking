@@ -137,7 +137,7 @@ module T : sig
 
   val blit_exn : ('a, 'b) u -> ('a, 'b) u -> unit
 
-  val copy :  ('a, 'b) u -> ('a, 'b) u
+  val copy : ('a, 'b) u -> ('a, 'b) u
 
   val transpose_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
 
