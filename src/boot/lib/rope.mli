@@ -170,7 +170,8 @@ module Convert : sig
   val to_array_bigarray : ('a, 'b) ba t -> 'a array
 
   val of_array_array : 'a array -> 'a array t
-  (** [Rope.Convert.of_array_* a] converts the array [a] into a rope. *)
+  (** [Rope.Convert.of_array_* a] converts the array [a] into a rope. The
+      underlying data is a reference to [a] so no copying is performed. *)
 
   val of_array_int_bigarray : int array -> int_ba t
 
