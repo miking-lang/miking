@@ -770,6 +770,7 @@ lang TensorOpAst = ConstAst
   | CTensorShape {}
   | CTensorReshapeExn {}
   | CTensorCopyExn {}
+  | CTensorTransposeExn {}
   | CTensorSliceExn {}
   | CTensorSubExn {}
   | CTensorIterSlice {}

@@ -137,6 +137,8 @@ module T : sig
 
   val copy_exn : ('a, 'b) u -> ('a, 'b) u -> unit
 
+  val transpose_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
+
   val reshape_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
 
   val slice_exn : ('a, 'b) u -> int Mseq.t -> ('a, 'b) u
@@ -166,6 +168,18 @@ module T : sig
 
     val copy_exn : ('a, 'b) Tensor.CArray.t -> ('a, 'b) Tensor.CArray.t -> unit
 
+    val transpose_int_exn :
+         (int, Tensor.CArray.int_elt) Tensor.CArray.t
+      -> int
+      -> int
+      -> (int, Tensor.CArray.int_elt) Tensor.CArray.t
+
+    val transpose_float_exn :
+         (float, Tensor.CArray.float_elt) Tensor.CArray.t
+      -> int
+      -> int
+      -> (float, Tensor.CArray.float_elt) Tensor.CArray.t
+
     val reshape_exn :
       ('a, 'b) Tensor.CArray.t -> int Mseq.t -> ('a, 'b) Tensor.CArray.t
 
@@ -193,6 +207,8 @@ module T : sig
     val shape : 'a Tensor.Dense.t -> int Mseq.t
 
     val copy_exn : 'a Tensor.Dense.t -> 'a Tensor.Dense.t -> unit
+
+    val transpose_exn : 'a Tensor.Dense.t -> int -> int -> 'a Tensor.Dense.t
 
     val reshape_exn : 'a Tensor.Dense.t -> int Mseq.t -> 'a Tensor.Dense.t
 

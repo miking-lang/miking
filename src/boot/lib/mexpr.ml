@@ -387,6 +387,12 @@ let arity = function
       2
   | CtensorCopyExn (Some _) ->
       1
+  | CtensorTransposeExn (None, None) ->
+      3
+  | CtensorTransposeExn (_, None) ->
+      2
+  | CtensorTransposeExn (_, Some _) ->
+      1
   | CtensorReshapeExn None ->
       2
   | CtensorReshapeExn (Some _) ->
@@ -1216,6 +1222,21 @@ let delta eval env fi c v =
   | CtensorCopyExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
       T.Dense.copy_exn t1 t2 ; tm_unit
   | CtensorCopyExn _, _ ->
+      fail_constapp fi
+  | CtensorTransposeExn (None, None), TmTensor (_, t) ->
+      TmConst (fi, CtensorTransposeExn (Some t, None))
+  | CtensorTransposeExn (Some t, None), TmConst (_, CInt n) ->
+      TmConst (fi, CtensorTransposeExn (Some t, Some n))
+  | ( CtensorTransposeExn (Some (T.CArrayIntBoot t), Some n1)
+    , TmConst (_, CInt n2) ) ->
+      TmTensor (fi, T.CArrayIntBoot (T.CArray.transpose_int_exn t n1 n2))
+  | ( CtensorTransposeExn (Some (T.CArrayFloatBoot t), Some n1)
+    , TmConst (_, CInt n2) ) ->
+      TmTensor (fi, T.CArrayFloatBoot (T.CArray.transpose_float_exn t n1 n2))
+  | CtensorTransposeExn (Some (T.DenseBoot t), Some n1), TmConst (_, CInt n2)
+    ->
+      TmTensor (fi, T.DenseBoot (T.Dense.transpose_exn t n1 n2))
+  | CtensorTransposeExn _, _ ->
       fail_constapp fi
   | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))

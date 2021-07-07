@@ -388,6 +388,10 @@ module T = struct
 
     let copy_exn = Tensor.CArray.copy_exn
 
+    let transpose_int_exn = Tensor.CArray.transpose_int_exn
+
+    let transpose_float_exn = Tensor.CArray.transpose_float_exn
+
     let reshape_exn t shape = Tensor.CArray.reshape_exn t (to_arr shape)
 
     let slice_exn t shape = Tensor.CArray.slice_exn t (to_arr shape)
@@ -410,6 +414,8 @@ module T = struct
     let shape t = Tensor.Dense.shape t |> of_arr
 
     let copy_exn = Tensor.Dense.copy_exn
+
+    let transpose_exn = Tensor.Dense.transpose_exn
 
     let reshape_exn t shape = Tensor.Dense.reshape_exn t (to_arr shape)
 
@@ -478,6 +484,15 @@ module T = struct
         Tensor.copy_num_nonum_exn t1' t2'
     | TCArrayFloat t1', TDense t2' ->
         Tensor.copy_num_nonum_exn t1' t2'
+
+  let transpose_exn (type a b) (t : (a, b) u) dim0 dim1 : (a, b) u =
+    match t with
+    | TCArrayInt t' ->
+        TCArrayInt (CArray.transpose_int_exn t' dim0 dim1)
+    | TCArrayFloat t' ->
+        TCArrayFloat (CArray.transpose_float_exn t' dim0 dim1)
+    | TDense t' ->
+        TDense (Dense.transpose_exn t' dim0 dim1)
 
   let reshape_exn (type a b) (t : (a, b) u) shape : (a, b) u =
     match t with
