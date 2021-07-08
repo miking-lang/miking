@@ -296,6 +296,14 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelMap t -> futMap_ (generateExpr env t.f) (generateExpr env t.as)
   | TmParallelMap2 t ->
     futMap2_ (generateExpr env t.f) (generateExpr env t.as) (generateExpr env t.bs)
+  | TmParallelFlatMap t ->
+    -- TODO(larshum, 2021-07-08): Compile differently depending on the possible
+    -- sizes of sequences.
+    -- * If size is either 0 or 1, we should use 'filter' on the map results.
+    -- * Otherwise we use 'flatten' on the map results. This requires that the
+    --   size is a constant 'n' for all elements, and that the Futhark compiler
+    --   can figure this out.
+    futFlatten_ (futMap_ (generateExpr env t.f) (generateExpr env t.as))
   | TmParallelReduce t ->
     futReduce_ (generateExpr env t.f) (generateExpr env t.ne) (generateExpr env t.as)
   | TmParallelScan t ->
@@ -305,7 +313,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     futPartition_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
-  | TmFlatten t -> futFlatten_ (generateExpr env t.s)
   | TmSequentialFor t ->
     match t.body with TmLam {ident = i, body = body} then
       FEFor {param = generateExpr env t.init, loopVar = i,

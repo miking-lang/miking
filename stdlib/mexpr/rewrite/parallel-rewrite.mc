@@ -120,13 +120,13 @@ lang TestLang =
   sem isAtomic =
   | TmParallelMap _ -> false
   | TmParallelMap2 _ -> false
+  | TmParallelFlatMap _ -> false
   | TmParallelReduce _ -> false
   | TmParallelScan _ -> false
   | TmParallelFilter _ -> false
   | TmParallelPartition _ -> false
   | TmParallelAll _ -> false
   | TmParallelAny _ -> false
-  | TmFlatten _ -> false
   | TmSequentialFor _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
@@ -144,6 +144,12 @@ lang TestLang =
         else never
       else never
     else never
+  | TmParallelFlatMap t ->
+    match printParen indent env t.f with (env, f) then
+      match pprintCode indent env t.as with (env, as) then
+        (env, join ["parallelFlatMap (", f, ") (", as, ")"])
+      else never
+    else never
   | TmParallelReduce t ->
     match printParen indent env t.f with (env, f) then
       match pprintCode indent env t.ne with (env, ne) then
@@ -157,7 +163,6 @@ lang TestLang =
   | TmParallelPartition t -> never
   | TmParallelAll t -> never
   | TmParallelAny t -> never
-  | TmFlatten t -> never
   | TmSequentialFor t ->
     match printParen indent env t.body with (env, body) then
       match pprintCode indent env t.init with (env, init) then
@@ -215,6 +220,27 @@ let expr = preprocess (nreclets_ [
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
+utest containsParallelKeyword expr with true in
+
+let flatMap = nameSym "flatMap" in
+let expr = preprocess (bindall_ [
+  nureclets_ [
+    (flatMap, nulam_ f (nulam_ s (
+      match_ (nvar_ s)
+        (pseqtot_ [])
+        (seq_ [])
+        (match_ (nvar_ s)
+          (pseqedgen_ [npvar_ h] t [])
+          (concat_ (app_ (nvar_ f) (head_ (nvar_ s)))
+                   (appf2_ (nvar_ flatMap) (nvar_ f) (tail_ (nvar_ s))))
+          never_))))],
+  ulet_ "double" (
+    appf2_ (nvar_ flatMap)
+      (nulam_ x (seq_ [nvar_ x, nvar_ x]))
+      (seq_ [int_ 1, int_ 2, int_ 3]))
+]) in
+let expr = parallelPatternRewrite patterns expr in
+utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 
 let fold = nameSym "fold" in

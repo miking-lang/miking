@@ -192,7 +192,10 @@ let eliminateUnusedLetExpressions : Expr -> Expr =
     e
   else never
 
--- Definition of the 'parallelMap' pattern
+-- Definition of the map pattern
+-- This pattern can be matched both by 'parallelMap' uses, but also by
+-- 'flatMap' uses. They are distinguished by looking at the final result, which
+-- is a singleton sequence in the 'parallelMap' case.
 let mapPatRef : Ref (Option Pattern) = ref (None ())
 let mapPattern : () -> Pattern =
   use MExprParallelKeywordMaker in
@@ -218,24 +221,23 @@ let mapPattern : () -> Pattern =
   let replacement : (Map VarPattern (Name, Expr)) -> Expr = lam matches.
     let patternName = "parallelMap" in
     let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
-    let fExpr = getMatchExpr patternName (PatternIndex 5) matches in
+    let fPair : (Name, Expr) = getMatch patternName (PatternIndex 5) matches in
     let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
     let sExpr = getMatchExpr patternName (PatternName s) matches in
 
     match branchExpr with TmMatch {els = els} then
-      match fExpr with TmSeq {tms = [fResultVar]} then
-        let x = nameSym "x" in
-        let subMap = mapFromSeq nameCmp [
-          (headPair.0, lam info.
-            TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
-        ] in
-        let els = substituteVariables els subMap in
+      let x = nameSym "x" in
+      let subMap = mapFromSeq nameCmp [
+        (headPair.0, lam info.
+          TmVar {ident = x, ty = tyWithInfo info (ty headPair.1), info = info})
+      ] in
+      let els = substituteVariables els subMap in
+      match fPair.1 with TmSeq {tms = [fResultVar]} then
         let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
         parallelMap_ (nulam_ x els) sExpr
       else
-        error (join [
-          "Rewriting into parallelMap pattern failed: The functional expression ",
-          "did not result in a singleton sequence"])
+        let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fPair.0)) in
+        parallelFlatMap_ (nulam_ x els) sExpr
     else
       error (join [
         "Rewriting into parallelMap pattern failed: BranchPattern matched ",
