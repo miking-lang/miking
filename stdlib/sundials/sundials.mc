@@ -1,4 +1,5 @@
 include "string.mc"
+include "tensor.mc"
 
 type NvectorSerial
 type SundialsMatrixDense
@@ -96,8 +97,9 @@ let idaInit =
   lam vp.
   externalIdaInit lsolver tol resf varid roots t v vp
 
-external externalIdaCalcICYaYd ! : IdaSession -> Float -> ()
-let idaCalcICYaYd = lam s. lam t. externalIdaCalcICYaYd s t
+external externalIdaCalcICYaYd !
+  : IdaSession -> Float -> NvectorSerial -> NvectorSerial -> ()
+let idaCalcICYaYd = lam s. lam t. lam y. lam yp. externalIdaCalcICYaYd s t y yp
 
 external externalIdaSolveNormal
  : IdaSession ->
@@ -107,6 +109,21 @@ external externalIdaSolveNormal
    (Float, IdaSolverResultInternal)
 let idaSolveNormal =
   lam s. lam tend. lam v. lam vp. externalIdaSolveNormal s tend v vp
+
+external externalIdaReinit
+  : IdaSession ->
+    (Int, IdaRootFn) ->
+    Float ->
+    NvectorSerial ->
+    NvectorSerial ->
+    ()
+let idaReinit =
+  lam s.
+  lam roots.
+  lam t.
+  lam v.
+  lam vp.
+  externalIdaReinit s roots t v vp
 
 mexpr
 
@@ -125,7 +142,7 @@ let vp = nvectorSerialWrap yp in
 
 let m = sundialsMatrixDense 2 in
 
-let lsolver = externalIdaDlsDense v m in
+let lsolver = idaDlsDense v m in
 
 let jacf = lam jacargs : IdaJacArgs. lam m : SundialsMatrixDense.
   let m = sundialsMatrixDenseUnwrap m in
@@ -140,8 +157,8 @@ let jacf = lam jacargs : IdaJacArgs. lam m : SundialsMatrixDense.
   ()
 in
 
-let lsolver = idaDlsSolverJacf jacf lsolver in
--- let lsolver = idaDlsSolver lsolver in
+-- let lsolver = idaDlsSolverJacf jacf lsolver in
+let lsolver = idaDlsSolver lsolver in
 let tol = idaSSTolerances 1.e-4 1.e-6 in
 
 let resf = lam. lam y. lam yp. lam r.
@@ -159,11 +176,28 @@ let rootf = lam. lam. lam. lam. () in
 let t0 = 0. in
 
 let s = idaInit lsolver tol resf varid (0, rootf) t0 v vp in
-idaCalcICYaYd s 1.e-4;
+idaCalcICYaYd s 1.e-4 v vp;
 let r = idaSolveNormal s 2. v vp in
 
-match r with (tend, r) then
+(match r with (tend, r) then
   utest idaSolverResult r with IdaSuccess {} in
   utest tend with 2. using eqf in
   ()
-else never
+else never);
+
+let y = nvectorSerialUnwrap v in
+let yp = nvectorSerialUnwrap vp in
+
+tset y [0] 1.;
+tset y [1] 0.;
+tset yp [0] 0.;
+tset yp [1] (negf 0.);
+idaReinit s (0, rootf) t0 v vp;
+idaCalcICYaYd s 1.e-4 v vp;
+let r = idaSolveNormal s 2. v vp in
+
+(match r with (tend, r) then
+  utest idaSolverResult r with IdaSuccess {} in
+  utest tend with 2. using eqf in
+  ()
+else never)
