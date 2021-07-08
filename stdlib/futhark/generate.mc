@@ -99,6 +99,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CLti _ | CLtf _ -> futConst_ (FCLt ())
   | CGeqi _ | CGeqf _ -> futConst_ (FCGeq ())
   | CLeqi _ | CLeqf _ -> futConst_ (FCLeq ())
+  | CCreate _ -> futConst_ (FCTabulate ())
   | CLength _ -> FEBuiltIn {str = "length"}
   | CReverse _ -> FEBuiltIn {str = "reverse"}
   | CConcat _ -> FEBuiltIn {str = "concat"}
@@ -218,14 +219,11 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
-lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
-                           FutharkMatchGenerate + MExprParallelKeywordMaker
+lang FutharkAppGenerate = MExprAst + FutharkAst
+  sem defaultGenerateApp (env : FutharkGenerateEnv) =
+  | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
+
   sem generateExpr (env : FutharkGenerateEnv) =
-  | TmVar t -> FEVar {ident = t.ident}
-  | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings}
-  | TmSeq {tms = tms} -> futArray_ (map (generateExpr env) tms)
-  | TmConst c -> generateConst c.val
-  | TmLam t -> nFutLam_ t.ident (generateExpr env t.body)
   | TmApp {lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = arg1}, rhs = arg2} ->
     futArrayAccess_ (generateExpr env arg1) (generateExpr env arg2)
   | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSet _}, rhs = arg1},
@@ -233,8 +231,8 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
            rhs = arg3} ->
     futArrayUpdate_ (generateExpr env arg1) (generateExpr env arg2)
                     (generateExpr env arg3)
-  | TmApp {lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
-           rhs = arg2} ->
+  | TmApp ({lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
+            rhs = arg2} & t) ->
     let tryLookupExpr = lam e.
       match e with TmVar t then
         optionGetOrElse
@@ -253,8 +251,8 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
         else futReplicate_ (generateExpr env arg1) (generateExpr env body)
       else match body with TmConst _ then
         futReplicate_ (generateExpr env arg1) (generateExpr env body)
-      else futTabulate_ (generateExpr env arg1) (generateExpr env arg2)
-    else futTabulate_ (generateExpr env arg1) (generateExpr env arg2)
+      else defaultGenerateApp env (TmApp t)
+    else defaultGenerateApp env (TmApp t)
   | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                      rhs = arg1},
                         rhs = TmConst {val = CInt {val = 0}}},
@@ -277,7 +275,18 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       rhs = FEApp {
         lhs = FEBuiltIn {str = "f64.floor"},
         rhs = generateExpr env arg}}
-  | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs}
+  | (TmApp _) & t -> defaultGenerateApp env t
+end
+
+lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
+                           FutharkMatchGenerate + FutharkAppGenerate +
+                           MExprParallelKeywordMaker
+  sem generateExpr (env : FutharkGenerateEnv) =
+  | TmVar t -> FEVar {ident = t.ident}
+  | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings}
+  | TmSeq {tms = tms} -> futArray_ (map (generateExpr env) tms)
+  | TmConst c -> generateConst c.val
+  | TmLam t -> nFutLam_ t.ident (generateExpr env t.body)
   | TmLet t ->
     let boundNames = mapInsert t.ident t.body env.boundNames in
     let inexprEnv = {env with boundNames = boundNames} in
