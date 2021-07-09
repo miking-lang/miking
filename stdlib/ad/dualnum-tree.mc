@@ -8,23 +8,23 @@
 -- Functions part of the API are prefixed with dualnum. Other functions are
 -- internal.
 
-
+include "string.mc"
 
 type Eps = Int
 
 -- Dual-numbers can be nested and are implemented as explicit trees.
 type DualNum
 con DualNum : {e : Int, x : DualNum, xp : DualNum} -> DualNum
-con Num : Float -> DualNum -- we separate out real numbers
+con Num : Float -> DualNum -- we separate out generic real numbers
 
 -- epsilons are ordered
 let dualnumLtE : Eps -> Eps -> Bool = lti
 
--- make a Real number
-let dualnumNum : Float -> DualNum =
+-- make a generic real number
+let dualnumNum : a -> DualNum =
 lam f. Num f
 
--- unpack float representation of a real number
+-- unpack real number
 let dualnumUnpackNum : DualNum -> Float =
 lam n. match n with Num f then f
        else error "Can only unpack numbers"
@@ -33,10 +33,12 @@ lam n. match n with Num f then f
 let dualnumFloat2num1 : (Float -> Float) -> (DualNum -> DualNum) =
 lam op. (lam x. dualnumNum (op (dualnumUnpackNum x)))
 
--- lift unary real operator to number operator
-let dualnumFloat2num2 : (Float -> Float -> Float) -> (DualNum -> DualNum -> DualNum) =
-lam op. (lam x1. lam x2. dualnumNum (op (dualnumUnpackNum x1)
-                                    (dualnumUnpackNum x2)))
+-- lift unary generic real operator to number operator
+let dualnumFloat2num2
+  : (Float -> Float -> Float) -> (DualNum -> DualNum -> DualNum) =
+lam op. (lam x1. lam x2. dualnumNum (op
+                                      (dualnumUnpackNum x1)
+                                      (dualnumUnpackNum x2)))
 
 -- false if x' = 0 in x+ex'
 let dualnumIsDualNum : DualNum -> Bool =
@@ -82,11 +84,11 @@ lam. modref e (addi (deref e) 1); deref e
 let dualnumEqEpsilon : Eps -> Eps -> Bool = eqi
 
 -- Structural equality function for dual numbers
-let dualnumEq : (Float -> Float -> Bool) -> DualNum -> DualNum -> Bool =
-  lam eqf.
+let dualnumEq : (a -> a -> Bool) -> DualNum -> DualNum -> Bool =
+  lam eq.
   recursive let recur = lam n1. lam n2.
     let nn = (n1, n2) in
-    match nn with (Num r1, Num r2) then eqf r1 r2
+    match nn with (Num r1, Num r2) then eq r1 r2
     else match nn with (DualNum _, DualNum _) then
       let e1 = dualnumEpsilon n1 in
       let e2 = dualnumEpsilon n2 in
@@ -97,6 +99,25 @@ let dualnumEq : (Float -> Float -> Bool) -> DualNum -> DualNum -> Bool =
       else false
     else false
   in recur
+
+-- String representation of dual number
+let dualnumToString : DualNum -> String =
+lam n.
+  let wrapInParen = lam n. lam str.
+    if dualnumIsDualNum n then join ["(", str, ")"] else str
+  in
+  recursive let recur = lam n.
+    match n with Num r then float2string r
+    else match n with DualNum {e = e, x = x, xp = xp} then
+      join [
+        wrapInParen x (recur x),
+        " + e",
+        int2string e,
+        " ",
+        wrapInParen xp (recur xp)
+      ]
+    else never
+  in recur n
 
 mexpr
 
