@@ -482,13 +482,13 @@ module T = struct
     | TDense t1', TDense t2' ->
         Dense.blit_exn t1' t2'
     | TDense t1', TCArrayInt t2' ->
-        Tensor.blit_nonum_num_exn t1' t2'
+        Tensor.blit Tensor.Dense.ops Tensor.CArray.ops t1' t2'
     | TDense t1', TCArrayFloat t2' ->
-        Tensor.blit_nonum_num_exn t1' t2'
+        Tensor.blit Tensor.Dense.ops Tensor.CArray.ops t1' t2'
     | TCArrayInt t1', TDense t2' ->
-        Tensor.blit_num_nonum_exn t1' t2'
+        Tensor.blit Tensor.CArray.ops Tensor.Dense.ops t1' t2'
     | TCArrayFloat t1', TDense t2' ->
-        Tensor.blit_num_nonum_exn t1' t2'
+        Tensor.blit Tensor.CArray.ops Tensor.Dense.ops t1' t2'
 
   let copy (type a b) (t : (a, b) u) : (a, b) u =
     match t with

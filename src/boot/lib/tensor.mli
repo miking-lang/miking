@@ -1,3 +1,22 @@
+type ('a, 'b) tensor_ops =
+  { rank: 'a -> int
+  ; shape: 'a -> int array
+  ; size: 'a -> int
+  ; get_exn: 'a -> int array -> 'b
+  ; set_exn: 'a -> int array -> 'b -> unit
+  ; reshape_exn: 'a -> int array -> 'a
+  ; slice_exn: 'a -> int array -> 'a }
+
+val blit : ('a, 'b) tensor_ops -> ('c, 'b) tensor_ops -> 'a -> 'c -> unit
+
+val equal :
+     ('a, 'b) tensor_ops
+  -> ('c, 'd) tensor_ops
+  -> ('b -> 'd -> bool)
+  -> 'a
+  -> 'c
+  -> bool
+
 module CArray : sig
   type ('a, 'b) t = ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
 
@@ -22,6 +41,8 @@ module CArray : sig
 
   val shape : ('a, 'b) t -> int array
 
+  val size : ('a, 'b) t -> int
+
   val blit_exn : ('a, 'b) t -> ('a, 'b) t -> unit
 
   val copy : ('a, 'b) t -> ('a, 'b) t
@@ -34,7 +55,11 @@ module CArray : sig
 
   val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
+  val equal : ('a -> 'b -> bool) -> ('a, 'c) t -> ('b, 'd) t -> bool
+
   val data_to_array : ('a, 'b) t -> 'a array
+
+  val ops : (('a, 'b) t, 'a) tensor_ops
 end
 
 module Dense : sig
@@ -71,8 +96,6 @@ module Dense : sig
   val of_array : 'a array -> 'a t
 
   val data_to_array : 'a t -> 'a array
+
+  val ops : ('a t, 'a) tensor_ops
 end
-
-val blit_num_nonum_exn : ('a, 'b) CArray.t -> 'a Dense.t -> unit
-
-val blit_nonum_num_exn : 'a Dense.t -> ('a, 'b) CArray.t -> unit
