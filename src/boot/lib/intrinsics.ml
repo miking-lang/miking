@@ -386,8 +386,6 @@ module T = struct
 
     let shape t = Tensor.CArray.shape t |> of_arr
 
-    let blit_exn = Tensor.CArray.blit_exn
-
     let copy = Tensor.CArray.copy
 
     let transpose_int_exn = Tensor.CArray.transpose_int_exn
@@ -415,8 +413,6 @@ module T = struct
     let rank = Tensor.Dense.rank
 
     let shape t = Tensor.Dense.shape t |> of_arr
-
-    let blit_exn = Tensor.Dense.blit_exn
 
     let copy = Tensor.Dense.copy
 
@@ -472,23 +468,6 @@ module T = struct
         CArray.shape t'
     | TDense t' ->
         Dense.shape t'
-
-  let blit_exn (type a b) (t1 : (a, b) u) (t2 : (a, b) u) =
-    match (t1, t2) with
-    | TCArrayInt t1', TCArrayInt t2' ->
-        CArray.blit_exn t1' t2'
-    | TCArrayFloat t1', TCArrayFloat t2' ->
-        CArray.blit_exn t1' t2'
-    | TDense t1', TDense t2' ->
-        Dense.blit_exn t1' t2'
-    | TDense t1', TCArrayInt t2' ->
-        Tensor.blit Tensor.Dense.ops Tensor.CArray.ops t1' t2'
-    | TDense t1', TCArrayFloat t2' ->
-        Tensor.blit Tensor.Dense.ops Tensor.CArray.ops t1' t2'
-    | TCArrayInt t1', TDense t2' ->
-        Tensor.blit Tensor.CArray.ops Tensor.Dense.ops t1' t2'
-    | TCArrayFloat t1', TDense t2' ->
-        Tensor.blit Tensor.CArray.ops Tensor.Dense.ops t1' t2'
 
   let copy (type a b) (t : (a, b) u) : (a, b) u =
     match t with

@@ -277,7 +277,6 @@ lang OCamlPrettyPrint =
   | CTensorGetExn _ -> intrinsicOpTensor "get_exn"
   | CTensorSetExn _ -> intrinsicOpTensor "set_exn"
   | CTensorReshapeExn _ -> intrinsicOpTensor "reshape_exn"
-  | CTensorBlitExn _ -> intrinsicOpTensor "blit_exn"
   | CTensorCopy _ -> intrinsicOpTensor "copy"
   | CTensorTransposeExn _ -> intrinsicOpTensor "transpose_exn"
   | CTensorSliceExn _ -> intrinsicOpTensor "slice_exn"

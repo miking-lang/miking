@@ -68,23 +68,6 @@ let testTensors =
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
 
-  -- Blit
-  let t1 = tensorRepeat [3, 4] v0 in
-  let t2 = mkRank2TestTensor () in
-  tensorBlitExn t2 t1;
-  utest tensorGetExn t1 [0, 0] with v1 using eq in
-  utest tensorGetExn t1 [0, 1] with v2 using eq in
-  utest tensorGetExn t1 [0, 2] with v3 using eq in
-  utest tensorGetExn t1 [0, 3] with v4 using eq in
-  utest tensorGetExn t1 [1, 0] with v5 using eq in
-  utest tensorGetExn t1 [1, 1] with v6 using eq in
-  utest tensorGetExn t1 [1, 2] with v7 using eq in
-  utest tensorGetExn t1 [1, 3] with v8 using eq in
-  utest tensorGetExn t1 [2, 0] with v9 using eq in
-  utest tensorGetExn t1 [2, 1] with v10 using eq in
-  utest tensorGetExn t1 [2, 2] with v11 using eq in
-  utest tensorGetExn t1 [2, 3] with v12 using eq in
-
   -- Copy
   let t1 = mkRank2TestTensor () in
   let t2 = tensorCopy t1 in
@@ -220,24 +203,6 @@ let testTensors =
   utest tensorGetExn t [1, 1] with v1 using eq in
   utest tensorGetExn t [1, 2] with v1 using eq in
   utest tensorGetExn t [1, 3] with v1 using eq in
-  utest tensorGetExn t [2, 0] with v9 using eq in
-  utest tensorGetExn t [2, 1] with v10 using eq in
-  utest tensorGetExn t [2, 2] with v11 using eq in
-  utest tensorGetExn t [2, 3] with v12 using eq in
-
-  -- Slice and Blit
-  let t = mkRank2TestTensor () in
-  let t1 = tensorSliceExn t [0] in
-  let t2 = tensorSliceExn t [1] in
-  tensorBlitExn t1 t2;
-  utest tensorGetExn t [0, 0] with v1 using eq in
-  utest tensorGetExn t [0, 1] with v2 using eq in
-  utest tensorGetExn t [0, 2] with v3 using eq in
-  utest tensorGetExn t [0, 3] with v4 using eq in
-  utest tensorGetExn t [1, 0] with v1 using eq in
-  utest tensorGetExn t [1, 1] with v2 using eq in
-  utest tensorGetExn t [1, 2] with v3 using eq in
-  utest tensorGetExn t [1, 3] with v4 using eq in
   utest tensorGetExn t [2, 0] with v9 using eq in
   utest tensorGetExn t [2, 1] with v10 using eq in
   utest tensorGetExn t [2, 2] with v11 using eq in

@@ -135,8 +135,6 @@ module T : sig
 
   val shape : ('a, 'b) u -> int Mseq.t
 
-  val blit_exn : ('a, 'b) u -> ('a, 'b) u -> unit
-
   val copy : ('a, 'b) u -> ('a, 'b) u
 
   val transpose_exn : ('a, 'b) u -> int -> int -> ('a, 'b) u
@@ -167,8 +165,6 @@ module T : sig
     val rank : ('a, 'b) Tensor.CArray.t -> int
 
     val shape : ('a, 'b) Tensor.CArray.t -> int Mseq.t
-
-    val blit_exn : ('a, 'b) Tensor.CArray.t -> ('a, 'b) Tensor.CArray.t -> unit
 
     val copy : ('a, 'b) Tensor.CArray.t -> ('a, 'b) Tensor.CArray.t
 
@@ -209,8 +205,6 @@ module T : sig
     val rank : 'a Tensor.Dense.t -> int
 
     val shape : 'a Tensor.Dense.t -> int Mseq.t
-
-    val blit_exn : 'a Tensor.Dense.t -> 'a Tensor.Dense.t -> unit
 
     val copy : 'a Tensor.Dense.t -> 'a Tensor.Dense.t
 

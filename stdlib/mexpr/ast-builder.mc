@@ -995,12 +995,6 @@ let tensorReshapeExn_ = use MExprAst in
 
 let utensorReshapeExn_ = tensorReshapeExn_ tyunknown_
 
-let tensorBlitExn_ = use MExprAst in
-  lam ty. lam t1. lam t2.
-  appf2_ (const_ (tytensorblitexn_ ty) (CTensorBlitExn ())) t1 t2
-
-let utensorBlitExn_ = tensorBlitExn_ tyunknown_
-
 let tensorCopy_ = use MExprAst in
   lam ty. lam t.
   appf1_ (const_ (tytensorblitexn_ ty) (CTensorCopy ())) t

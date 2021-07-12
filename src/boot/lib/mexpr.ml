@@ -383,10 +383,6 @@ let arity = function
       1
   | CtensorShape ->
       1
-  | CtensorBlitExn None ->
-      2
-  | CtensorBlitExn (Some _) ->
-      1
   | CtensorCopy ->
       1
   | CtensorTransposeExn (None, None) ->
@@ -1212,18 +1208,6 @@ let delta eval env fi c v =
       in
       int_seq2int_tm_seq fi shape
   | CtensorShape, _ ->
-      fail_constapp fi
-  | CtensorBlitExn None, TmTensor (_, t1) ->
-      TmConst (fi, CtensorBlitExn (Some t1))
-  | CtensorBlitExn (Some (T.CArrayIntBoot t1)), TmTensor (_, T.CArrayIntBoot t2)
-    ->
-      T.CArray.blit_exn t1 t2 ; tm_unit
-  | ( CtensorBlitExn (Some (T.CArrayFloatBoot t1))
-    , TmTensor (_, T.CArrayFloatBoot t2) ) ->
-      T.CArray.blit_exn t1 t2 ; tm_unit
-  | CtensorBlitExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
-      T.Dense.blit_exn t1 t2 ; tm_unit
-  | CtensorBlitExn _, _ ->
       fail_constapp fi
   | CtensorCopy, TmTensor (_, T.CArrayIntBoot t) ->
       TmTensor (fi, T.CArrayIntBoot (T.CArray.copy t))

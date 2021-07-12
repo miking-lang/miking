@@ -794,7 +794,6 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorRank _ -> "tensorRank"
   | CTensorShape _ -> "tensorShape"
   | CTensorReshapeExn _ -> "tensorReshapeExn"
-  | CTensorBlitExn _ -> "tensorBlitExn"
   | CTensorCopy _ -> "tensorCopy"
   | CTensorTransposeExn _ -> "tensorTransposeExn"
   | CTensorSliceExn _ -> "tensorSliceExn"

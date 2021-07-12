@@ -795,10 +795,6 @@ let s1 = tensorSubExn t2 1 2 in
 utest tensorShape s1 with [2, 3] in
 utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
 
--- We can also copy the content of one tensor to another
-let s2 = tensorSubExn t2 0 2 in
-utest tensorBlitExn s1 s2 with () in
-
 -- As before, none of these operations (except copy) does any copying
 -- and the data is shared.
 utest tensorToSeqExn t1 with [0, 0, 0, 7, 8, 9, 7, 8, 9] in

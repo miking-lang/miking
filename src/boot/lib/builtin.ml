@@ -289,7 +289,6 @@ let builtin =
   ; ("tensorRank", f CtensorRank)
   ; ("tensorShape", f CtensorShape)
   ; ("tensorReshapeExn", f (CtensorReshapeExn None))
-  ; ("tensorBlitExn", f (CtensorBlitExn None))
   ; ("tensorCopy", f CtensorCopy)
   ; ("tensorTransposeExn", f (CtensorTransposeExn (None, None)))
   ; ("tensorSliceExn", f (CtensorSliceExn None))

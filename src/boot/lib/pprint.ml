@@ -492,8 +492,6 @@ let rec print_const fmt = function
       fprintf fmt "tensorRank"
   | CtensorShape ->
       fprintf fmt "tensorShape"
-  | CtensorBlitExn _ ->
-      fprintf fmt "tensorBlitExn"
   | CtensorCopy ->
       fprintf fmt "tensorCopy"
   | CtensorTransposeExn _ ->
