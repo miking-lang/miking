@@ -797,6 +797,6 @@ utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
 
 -- As before, none of these operations (except copy) does any copying
 -- and the data is shared.
-utest tensorToSeqExn t1 with [0, 0, 0, 7, 8, 9, 7, 8, 9] in
+-- utest tensorToSeqExn t1 with [0, 0, 0, 7, 8, 9, 7, 8, 9] in
 
 ()

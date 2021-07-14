@@ -697,14 +697,14 @@ and print_tm' fmt t =
       let shape, data =
         t
         |> function
-        | T.CArrayIntBoot t' ->
-            ( t' |> Tensor.CArray.shape
-            , t' |> Tensor.CArray.data_to_array |> Array.map int_ )
-        | T.CArrayFloatBoot t' ->
-            ( t' |> Tensor.CArray.shape
-            , t' |> Tensor.CArray.data_to_array |> Array.map float_ )
-        | T.DenseBoot t' ->
-            (t' |> Tensor.Dense.shape, t' |> Tensor.Dense.data_to_array)
+        | T.TBootInt t' ->
+            ( t' |> Tensor.Barray.shape
+            , t' |> Tensor.Uop_barray.to_data_array |> Array.map int_ )
+        | T.TBootFloat t' ->
+            ( t' |> Tensor.Barray.shape
+            , t' |> Tensor.Uop_barray.to_data_array |> Array.map float_ )
+        | T.TBootGen t' ->
+            (t' |> Tensor.Generic.shape, t' |> Tensor.Uop_generic.to_data_array)
       in
       let print t fmt = fprintf fmt "%a" print_tm (App, t) in
       let shape' =

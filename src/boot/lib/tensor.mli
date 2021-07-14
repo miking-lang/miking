@@ -1,51 +1,15 @@
-type ('a, 'b) tensor_ops =
-  { rank: 'a -> int
-  ; shape: 'a -> int array
-  ; size: 'a -> int
-  ; get_exn: 'a -> int array -> 'b
-  ; set_exn: 'a -> int array -> 'b -> unit
-  ; reshape_exn: 'a -> int array -> 'a
-  ; slice_exn: 'a -> int array -> 'a }
-
-val blit : ('a, 'b) tensor_ops -> ('c, 'b) tensor_ops -> 'a -> 'c -> unit
-
-val equal :
-     ('a, 'b) tensor_ops
-  -> ('c, 'd) tensor_ops
-  -> ('b -> 'd -> bool)
-  -> 'a
-  -> 'c
-  -> bool
-
-module CArray : sig
-  type ('a, 'b) t = ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
-
-  type float_elt = Bigarray.float64_elt
-
-  type int_elt = Bigarray.int_elt
-
-  val create_int : int array -> (int array -> int) -> (int, int_elt) t
-
-  val create_float : int array -> (int array -> float) -> (float, float_elt) t
-
-  val transpose_int_exn : (int, int_elt) t -> int -> int -> (int, int_elt) t
-
-  val transpose_float_exn :
-    (float, float_elt) t -> int -> int -> (float, float_elt) t
+module type TENSOR = sig
+  type ('a, 'b) t
 
   val get_exn : ('a, 'b) t -> int array -> 'a
 
   val set_exn : ('a, 'b) t -> int array -> 'a -> unit
 
-  val rank : ('a, 'b) t -> int
-
   val shape : ('a, 'b) t -> int array
 
+  val rank : ('a, 'b) t -> int
+
   val size : ('a, 'b) t -> int
-
-  val blit_exn : ('a, 'b) t -> ('a, 'b) t -> unit
-
-  val copy : ('a, 'b) t -> ('a, 'b) t
 
   val reshape_exn : ('a, 'b) t -> int array -> ('a, 'b) t
 
@@ -53,49 +17,88 @@ module CArray : sig
 
   val sub_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
 
+  val copy : ('a, 'b) t -> ('a, 'b) t
+
+  val transpose_exn : ('a, 'b) t -> int -> int -> ('a, 'b) t
+end
+
+module type GENERIC = sig
+  include TENSOR
+
+  val create : int array -> (int array -> 'a) -> ('a, 'b) t
+end
+
+module type BARRAY = sig
+  include TENSOR
+
+  val create_int : int array -> (int array -> int) -> (int, Bigarray.int_elt) t
+
+  val create_float :
+    int array -> (int array -> float) -> (float, Bigarray.float64_elt) t
+
+  val to_genarray_clayout :
+    ('a, 'b) t -> ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t
+
+  val of_genarray_clayout :
+    ('a, 'b, Bigarray.c_layout) Bigarray.Genarray.t -> ('a, 'b) t
+end
+
+module type UOP = sig
+  type ('a, 'b) t
+
   val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
-  val equal : ('a -> 'b -> bool) -> ('a, 'c) t -> ('b, 'd) t -> bool
-
-  val data_to_array : ('a, 'b) t -> 'a array
-
-  val ops : (('a, 'b) t, 'a) tensor_ops
+  val to_data_array : ('a, 'b) t -> 'a array
 end
 
-module Dense : sig
-  type 'a t
+module type BOP = sig
+  type ('a, 'b) t1
 
-  val create : int array -> (int array -> 'a) -> 'a t
+  type ('c, 'd) t2
 
-  val get_exn : 'a t -> int array -> 'a
-
-  val set_exn : 'a t -> int array -> 'a -> unit
-
-  val rank : 'a t -> int
-
-  val shape : 'a t -> int array
-
-  val size : 'a t -> int
-
-  val blit_exn : 'a t -> 'a t -> unit
-
-  val copy : 'a t -> 'a t
-
-  val transpose_exn : 'a t -> int -> int -> 'a t
-
-  val reshape_exn : 'a t -> int array -> 'a t
-
-  val slice_exn : 'a t -> int array -> 'a t
-
-  val sub_exn : 'a t -> int -> int -> 'a t
-
-  val iter_slice : (int -> 'a t -> unit) -> 'a t -> unit
-
-  val equal : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool
-
-  val of_array : 'a array -> 'a t
-
-  val data_to_array : 'a t -> 'a array
-
-  val ops : ('a t, 'a) tensor_ops
+  val equal : ('a -> 'c -> bool) -> ('a, 'b) t1 -> ('c, 'd) t2 -> bool
 end
+
+module Generic : GENERIC
+
+module Barray : BARRAY
+
+module Uop : functor (T : TENSOR) -> sig
+  type ('a, 'b) t = ('a, 'b) T.t
+
+  val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
+
+  val to_data_array : ('a, 'b) t -> 'a array
+end
+
+module Bop : functor (T1 : TENSOR) (T2 : TENSOR) -> sig
+  type ('a, 'b) t1 = ('a, 'b) T1.t
+
+  type ('c, 'd) t2 = ('c, 'd) T2.t
+
+  val equal : ('a -> 'c -> bool) -> ('a, 'b) t1 -> ('c, 'd) t2 -> bool
+end
+
+module Uop_generic : UOP with type ('a, 'b) t = ('a, 'b) Generic.t
+
+module Uop_barray : UOP with type ('a, 'b) t = ('a, 'b) Barray.t
+
+module Bop_generic_generic :
+  BOP
+    with type ('a, 'b) t1 = ('a, 'b) Generic.t
+     and type ('c, 'd) t2 = ('c, 'd) Generic.t
+
+module Bop_barray_barray :
+  BOP
+    with type ('a, 'b) t1 = ('a, 'b) Barray.t
+     and type ('c, 'd) t2 = ('c, 'd) Barray.t
+
+module Bop_generic_barray :
+  BOP
+    with type ('a, 'b) t1 = ('a, 'b) Generic.t
+     and type ('c, 'd) t2 = ('c, 'd) Barray.t
+
+module Bop_barray_generic :
+  BOP
+    with type ('a, 'b) t1 = ('a, 'b) Barray.t
+     and type ('c, 'd) t2 = ('c, 'd) Generic.t
