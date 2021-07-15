@@ -532,6 +532,18 @@ module T = struct
       | TGen t1' ->
           Tensor.Bop_generic_generic.equal eq t1' t2' )
 
+  let to_string (type a b) (el2str : a -> int Mseq.t) (t : (a, b) u) :
+      int Mseq.t =
+    let el2str x = Mseq.Helpers.to_ustring (el2str x) in
+    ( match t with
+    | TInt t' ->
+        Tensor.Uop_barray.to_ustring el2str t'
+    | TFloat t' ->
+        Tensor.Uop_barray.to_ustring el2str t'
+    | TGen t' ->
+        Tensor.Uop_generic.to_ustring el2str t' )
+    |> Mseq.Helpers.of_ustring
+
   module Helpers = struct
     let to_genarray_clayout (type a b) (t : (a, b) u) :
         (a, b, c_layout) Genarray.t =

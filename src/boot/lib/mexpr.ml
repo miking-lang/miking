@@ -415,6 +415,10 @@ let arity = function
       2
   | CtensorEq (_, Some _) ->
       1
+  | Ctensor2string None ->
+      2
+  | Ctensor2string (Some _) ->
+      1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
@@ -1372,12 +1376,36 @@ let delta eval env fi c v =
       let keywords =
         Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMExprString (Some keywords))
+  | Ctensor2string None, tm ->
+      TmConst (fi, Ctensor2string (Some tm))
+  | Ctensor2string (Some el2str), TmTensor (_, t) ->
+      let to_ustring = function
+        | TmSeq (_, tms) ->
+            tmseq2ustring fi tms
+        | _ ->
+            fail_constapp fi
+      in
+      let el2str x = eval env (TmApp (fi, el2str, x)) |> to_ustring in
+      ( match t with
+      | T.TBootInt t' ->
+          Tensor.Uop_barray.to_ustring
+            (fun x -> TmConst (fi, CInt x) |> el2str)
+            t'
+      | T.TBootFloat t' ->
+          Tensor.Uop_barray.to_ustring
+            (fun x -> TmConst (fi, CFloat x) |> el2str)
+            t'
+      | T.TBootGen t' ->
+          Tensor.Uop_generic.to_ustring el2str t' )
+      |> fun str -> TmSeq (fi, ustring2tmseq fi str)
+  | Ctensor2string _, _ ->
+      fail_constapp fi
   | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString keywords (tmseq2seqOfInt fi seq) in
+      let t = Bootparser.parseMExprString keywords (tmseq2seq_of_int fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
@@ -1385,12 +1413,12 @@ let delta eval env fi c v =
       let keywords =
         Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMCoreFile (Some keywords))
   | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2seqOfInt fi seq) in
+      let t = Bootparser.parseMCoreFile keywords (tmseq2seq_of_int fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi

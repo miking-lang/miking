@@ -1,3 +1,5 @@
+open Ustring.Op
+
 module type TENSOR = sig
   type ('a, 'b) t
 
@@ -49,6 +51,8 @@ module type UOP = sig
   val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
   val to_data_array : ('a, 'b) t -> 'a array
+
+  val to_ustring : ('a -> ustring) -> ('a, 'b) t -> ustring
 end
 
 module type BOP = sig
@@ -242,6 +246,29 @@ module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t = struct
     let n = T.size t in
     let t' = T.reshape_exn t [|n|] in
     Array.init n (fun i -> T.get_exn t' [|i|])
+
+  let to_ustring el2str =
+    let rec recur indent t =
+      let rank = T.rank t in
+      if rank = 0 then el2str (T.get_exn t [||])
+      else if rank = 1 then (
+        let elems = ref (us "") in
+        let n = (T.shape t).(0) in
+        for i = 0 to n - 1 do
+          let e = if i < n - 1 then us ", " else us "" in
+          elems := !elems ^. recur (us "") (T.slice_exn t [|i|]) ^. e
+        done ;
+        us "[" ^. !elems ^. us "]" )
+      else
+        let newindent = indent ^. us "\t" in
+        let elems = ref (us "") in
+        for i = 0 to rank - 1 do
+          let e = if i < rank - 1 then us ",\n" ^. newindent else us "" in
+          elems := !elems ^. recur newindent (T.slice_exn t [|i|]) ^. e
+        done ;
+        us "\n[\n" ^. newindent ^. !elems ^. us "\n" ^. indent ^. us "]\n"
+    in
+    recur (us "")
 end
 
 module Bop (T1 : TENSOR) (T2 : TENSOR) :

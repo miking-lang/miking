@@ -995,6 +995,7 @@ lang TensorOpEval =
   | CTensorIterSlice2 Expr
   | CTensorEq2 Expr
   | CTensorEq3 (Expr, T)
+  | CTensorToString2 Expr
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -1082,7 +1083,22 @@ lang TensorOpEval =
       bool_ (tensorEq eq t1 t2)
     else never
     else error "Third argument to CTensorEq not a tensor"
-    
+  | TmConst { val = CTensorToString2 el2str } ->
+    match arg with TmTensor { val = t } then
+      let el2str = lam x.
+        match apply ctx x el2str with TmSeq { tms = tms } then
+          _seqOfCharsToString tms
+        else error "Invalid element to string function"
+      in
+      let str =
+        match t with TInt t then tensor2string (lam x. el2str (int_ x)) t
+        else match t with TFloat t then tensor2string (lam x. el2str (float_ x)) t
+        else match t with TExpr t then tensor2string el2str t
+        else never
+      in
+      seq_ (_stringToSeqOfChars str)
+    else error "Second argument to CTensorToString not a tensor"
+
   sem delta (arg : Expr) =
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
@@ -1249,8 +1265,10 @@ lang TensorOpEval =
     match arg with TmTensor { val = t } then
       let val = CTensorEq3 (eq, t) in
       uconst_ val
-    else error "Second argument to CTensorEq not a tensor"    
- 
+    else error "Second argument to CTensorEq not a tensor"
+  | CTensorToString _ ->
+    let val = CTensorToString2 arg in
+    uconst_ val
 end
 
 --------------

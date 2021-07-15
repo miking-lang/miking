@@ -1,3 +1,5 @@
+open Ustring
+
 module type TENSOR = sig
   type ('a, 'b) t
 
@@ -49,6 +51,8 @@ module type UOP = sig
   val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
 
   val to_data_array : ('a, 'b) t -> 'a array
+
+  val to_ustring : ('a -> ustring) -> ('a, 'b) t -> ustring
 end
 
 module type BOP = sig
@@ -63,21 +67,12 @@ module Generic : GENERIC
 
 module Barray : BARRAY
 
-module Uop : functor (T : TENSOR) -> sig
-  type ('a, 'b) t = ('a, 'b) T.t
+module Uop : functor (T : TENSOR) -> UOP with type ('a, 'b) t = ('a, 'b) T.t
 
-  val iter_slice : (int -> ('a, 'b) t -> unit) -> ('a, 'b) t -> unit
-
-  val to_data_array : ('a, 'b) t -> 'a array
-end
-
-module Bop : functor (T1 : TENSOR) (T2 : TENSOR) -> sig
-  type ('a, 'b) t1 = ('a, 'b) T1.t
-
-  type ('c, 'd) t2 = ('c, 'd) T2.t
-
-  val equal : ('a -> 'c -> bool) -> ('a, 'b) t1 -> ('c, 'd) t2 -> bool
-end
+module Bop : functor (T1 : TENSOR) (T2 : TENSOR) ->
+  BOP
+    with type ('a, 'b) t1 = ('a, 'b) T1.t
+     and type ('c, 'd) t2 = ('c, 'd) T2.t
 
 module Uop_generic : UOP with type ('a, 'b) t = ('a, 'b) Generic.t
 

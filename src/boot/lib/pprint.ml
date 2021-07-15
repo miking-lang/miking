@@ -506,6 +506,8 @@ let rec print_const fmt = function
       fprintf fmt "tensorIterSlice"
   | CtensorEq _ ->
       fprintf fmt "tensorEq"
+  | Ctensor2string _ ->
+      fprintf fmt "tensor2string"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"

@@ -392,7 +392,8 @@ lang TensorOpEq = TensorOpAst
   | CTensorSliceExn {} -> match lhs with CTensorSliceExn _ then true else false
   | CTensorSubExn {} -> match lhs with CTensorSubExn _ then true else false
   | CTensorIterSlice {} -> match lhs with CTensorIterSlice _ then true else false
-  | CTensorEq {} -> match lhs with CTensorEq _ then true else false  
+  | CTensorEq {} -> match lhs with CTensorEq _ then true else false
+  | CTensorToString {} -> match lhs with CTensorToString _ then true else false  
 end
 
 --------------

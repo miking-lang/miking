@@ -775,6 +775,7 @@ lang TensorOpAst = ConstAst
   | CTensorSubExn {}
   | CTensorIterSlice {}
   | CTensorEq {}
+  | CTensorToString {}
 end
 
 lang BootParserAst = ConstAst

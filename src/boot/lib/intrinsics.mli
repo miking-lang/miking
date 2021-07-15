@@ -167,6 +167,8 @@ module T : sig
 
   val equal : ('a -> 'b -> bool) -> ('a, 'c) u -> ('b, 'd) u -> bool
 
+  val to_string : ('a -> int Mseq.t) -> ('a, 'b) u -> int Mseq.t
+
   module Helpers : sig
     val to_genarray_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Genarray.t
 
