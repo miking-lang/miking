@@ -259,7 +259,7 @@ module Bop (T1 : TENSOR) (T2 : TENSOR) :
       let v2 = T2.reshape_exn t2 [|n|] in
       let tmp = ref true in
       let i = ref 0 in
-      while !tmp do
+      while !tmp && !i < n do
         tmp := eq (T1.get_exn v1 [|!i|]) (T2.get_exn v2 [|!i|]) ;
         incr i
       done ;

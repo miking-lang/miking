@@ -294,6 +294,7 @@ let builtin =
   ; ("tensorSliceExn", f (CtensorSliceExn None))
   ; ("tensorSubExn", f (CtensorSubExn (None, None)))
   ; ("tensorIterSlice", f (CtensorIterSlice None))
+  ; ("tensorEq", f (CtensorEq (None, None)))
     (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f (CbootParserParseMExprString None))
   ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile None))

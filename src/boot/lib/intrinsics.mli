@@ -165,6 +165,8 @@ module T : sig
 
   val rank : ('a, 'b) u -> int
 
+  val equal : ('a -> 'b -> bool) -> ('a, 'c) u -> ('b, 'd) u -> bool
+
   module Helpers : sig
     val to_genarray_clayout : ('a, 'b) u -> ('a, 'b, c_layout) Genarray.t
 

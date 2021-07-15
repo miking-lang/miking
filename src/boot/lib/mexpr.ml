@@ -409,6 +409,12 @@ let arity = function
       2
   | CtensorIterSlice (Some _) ->
       1
+  | CtensorEq (None, None) ->
+      3
+  | CtensorEq (_, None) ->
+      2
+  | CtensorEq (_, Some _) ->
+      1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       0
@@ -1316,6 +1322,49 @@ let delta eval env fi c v =
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorIterSlice _, _ ->
       fail_constapp fi
+  | CtensorEq (None, None), tm ->
+      TmConst (fi, CtensorEq (Some tm, None))
+  | CtensorEq (Some tm, None), TmTensor (_, t1) ->
+      TmConst (fi, CtensorEq (Some tm, Some t1))
+  | CtensorEq (Some tm, Some t1), TmTensor (_, t2) -> (
+      let eq wrapx wrapy x y =
+        TmApp (fi, TmApp (fi, tm, wrapx x), wrapy y)
+        |> eval env
+        |> function TmConst (_, CBool b) -> b | _ -> fail_constapp fi
+      in
+      let int_ x = TmConst (fi, CInt x) in
+      let float_ x = TmConst (fi, CFloat x) in
+      let bool_ x = TmConst (fi, CBool x) in
+      match (t1, t2) with
+      | T.TBootInt t1', T.TBootInt t2' ->
+          let eq = eq int_ int_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootFloat t2' ->
+          let eq = eq float_ float_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootInt t1', T.TBootFloat t2' ->
+          let eq = eq int_ float_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootInt t2' ->
+          let eq = eq float_ int_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootGen t2' ->
+          let eq = eq Fun.id Fun.id in
+          bool_ (Tensor.Bop_generic_generic.equal eq t1' t2')
+      | T.TBootInt t1', T.TBootGen t2' ->
+          let eq = eq int_ Fun.id in
+          bool_ (Tensor.Bop_barray_generic.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootGen t2' ->
+          let eq = eq float_ Fun.id in
+          bool_ (Tensor.Bop_barray_generic.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootInt t2' ->
+          let eq = eq Fun.id int_ in
+          bool_ (Tensor.Bop_generic_barray.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootFloat t2' ->
+          let eq = eq Fun.id float_ in
+          bool_ (Tensor.Bop_generic_barray.equal eq t1' t2') )
+  | CtensorEq _, _ ->
+      fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
       fail_constapp fi
@@ -1505,6 +1554,22 @@ let rec val_equal v1 v2 =
       t1 = t2
   | TmTensor (_, T.TBootGen t1), TmTensor (_, T.TBootGen t2) ->
       Tensor.Bop_generic_generic.equal val_equal t1 t2
+  | TmTensor (fi, T.TBootInt t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CInt x)))
+        t1 t2
+  | TmTensor (fi, T.TBootFloat t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CFloat x)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootInt t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CInt y)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootFloat t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CFloat y)))
+        t1 t2
   | _ ->
       false
 

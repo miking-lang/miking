@@ -156,6 +156,12 @@ let tytensoriteri_ = lam ty.
             , tytensor_ ty
             , tyunit_ ]
 
+let tytensoreq_ = lam ty1. lam ty2.
+  tyarrows_ [ tyarrows_ [ty1, ty2, tybool_]
+            , tytensor_ ty1
+            , tytensor_ ty2
+            , tybool_ ]
+            
 -- Patterns --
 
 let npvar_ = use MExprAst in
@@ -1024,6 +1030,12 @@ let tensorIterSlice_ = use MExprAst in
   appf2_ (const_ (tytensoriteri_ ty) (CTensorIterSlice ())) f t
 
 let utensorIterSlice_ = tensorIterSlice_ tyunknown_
+
+let tensorEq_ = use MExprAst in
+  lam ty1. lam ty2. lam eq. lam t1. lam t2.
+  appf3_ (const_ (tytensoreq_ ty1 ty2) (CTensorEq ())) eq t1 t2
+
+let utensorEq_ = tensorEq_ tyunknown_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in

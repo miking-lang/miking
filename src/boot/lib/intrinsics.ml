@@ -506,6 +506,32 @@ module T = struct
     | TGen t' ->
         Tensor.Generic.rank t'
 
+  let equal (type a b c d) (eq : a -> b -> bool) (t1 : (a, c) u) (t2 : (b, d) u)
+      : bool =
+    match (t1, t2) with
+    | TInt t1', TInt t2' ->
+        Tensor.Bop_barray_barray.equal eq t1' t2'
+    | TFloat t1', TInt t2' ->
+        Tensor.Bop_barray_barray.equal eq t1' t2'
+    | TGen t1', TInt t2' ->
+        Tensor.Bop_generic_barray.equal eq t1' t2'
+    | _, TFloat t2' -> (
+      match t1 with
+      | TInt t1' ->
+          Tensor.Bop_barray_barray.equal eq t1' t2'
+      | TFloat t1' ->
+          Tensor.Bop_barray_barray.equal eq t1' t2'
+      | TGen t1' ->
+          Tensor.Bop_generic_barray.equal eq t1' t2' )
+    | _, TGen t2' -> (
+      match t1 with
+      | TInt t1' ->
+          Tensor.Bop_barray_generic.equal eq t1' t2'
+      | TFloat t1' ->
+          Tensor.Bop_barray_generic.equal eq t1' t2'
+      | TGen t1' ->
+          Tensor.Bop_generic_generic.equal eq t1' t2' )
+
   module Helpers = struct
     let to_genarray_clayout (type a b) (t : (a, b) u) :
         (a, b, c_layout) Genarray.t =

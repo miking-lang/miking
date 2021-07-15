@@ -178,6 +178,7 @@ and const =
   | CtensorSliceExn of tm T.t option
   | CtensorSubExn of tm T.t option * int option
   | CtensorIterSlice of tm option
+  | CtensorEq of tm option * tm T.t option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
@@ -623,7 +624,8 @@ let const_has_side_effect = function
   | CtensorReshapeExn _
   | CtensorSliceExn _
   | CtensorSubExn _
-  | CtensorIterSlice _ ->
+  | CtensorIterSlice _
+  | CtensorEq _ ->
       true
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _

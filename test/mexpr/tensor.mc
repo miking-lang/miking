@@ -310,6 +310,13 @@ let testTensors =
   utest tensorGetExn t [1, 0] with v2 using eq in
   utest tensorGetExn t [1, 1] with v3 using eq in
 
+  -- Eq
+  let t1 = mkRank2TestTensor () in
+  let t2 = mkRank2TestTensor () in
+  utest tensorEq eq t1 t2 with true in
+  tensorSetExn t1 [0, 0] v0;
+  utest tensorEq eq t1 t2 with false in
+
   -- Rank 3 Tensors
   let mkRank3TestTensor = lam.
     tcreate [2, 2, 3] (lam is.

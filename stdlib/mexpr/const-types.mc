@@ -243,6 +243,7 @@ lang TensorOpTypeAst = TensorOpAst
   | CTensorSliceExn _ -> tytensorsliceexn_ (tygeneric_ "a")
   | CTensorSubExn _ -> tytensorsubexn_ (tygeneric_ "a")
   | CTensorIterSlice _ -> tytensoriteri_ (tygeneric_ "a")
+  | CTensorEq _ -> tytensoreq_ (tygeneric_ "a") (tygeneric_ "b") 
 end
 
 lang BootParserTypeAst = BootParserAst

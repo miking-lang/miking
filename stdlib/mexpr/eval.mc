@@ -977,7 +977,7 @@ lang RefOpEval = RefOpAst + RefEval + IntAst
 end
 
 lang TensorOpEval =
-  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval
+  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst
 
   syn Const =
   | CTensorCreateInt2 [Int]
@@ -993,6 +993,8 @@ lang TensorOpEval =
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
   | CTensorIterSlice2 Expr
+  | CTensorEq2 Expr
+  | CTensorEq3 (Expr, T)
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -1048,7 +1050,39 @@ lang TensorOpEval =
         uunit_
       else never
     else error "Second argument to CTensorIterSlice not a tensor"
-
+  | TmConst { val = CTensorEq3 (eq, t1) } ->
+    match arg with TmTensor { val = t2 } then
+    let mkeq = lam wrapx. lam wrapy.
+      lam x. lam y.
+        match apply ctx (wrapy y) (apply ctx (wrapx x) eq) with
+          TmConst { val = CBool { val = b } }
+        then b else error "Invalid equality function"
+    in
+    let eq =
+      match t1 with TInt _ then
+        match t2 with TInt _ then mkeq int_ int_
+        else match t2 with TFloat _ then mkeq int_ float_
+        else match t2 with TExpr _ then mkeq int_ (lam x. x)
+        else never
+      else match t1 with TFloat _ then
+        match t2 with TInt _ then mkeq float_ int_
+        else match t2 with TFloat _ then mkeq float_ float_
+        else match t2 with TExpr _ then mkeq float_ (lam x. x)
+        else never
+      else match t1 with TExpr _ then
+        match t2 with TInt _ then mkeq (lam x. x) int_
+        else match t2 with TFloat _ then mkeq (lam x. x) float_
+        else match t2 with TExpr _ then mkeq (lam x. x) (lam x. x)
+        else never
+      else never
+    in
+    match (t1, t2) with
+      (TInt t1 | TFloat t1 | TExpr t1, TInt t2 | TFloat t2 | TExpr t2)
+    then
+      bool_ (tensorEq eq t1 t2)
+    else never
+    else error "Third argument to CTensorEq not a tensor"
+    
   sem delta (arg : Expr) =
   | CTensorCreateInt _ ->
     let val = CTensorCreateInt2 (_ofTmSeq arg) in
@@ -1208,6 +1242,15 @@ lang TensorOpEval =
   | CTensorIterSlice _ ->
     let val = CTensorIterSlice2 arg in
     uconst_ val
+  | CTensorEq _ ->
+    let val = CTensorEq2 arg in
+    uconst_ val
+  | CTensorEq2 eq ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorEq3 (eq, t) in
+      uconst_ val
+    else error "Second argument to CTensorEq not a tensor"    
+ 
 end
 
 --------------
@@ -2062,6 +2105,8 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
 
   utest evaln (utensorShape_ (utensorSubExn_ t1 (int_ 0) (int_ 2)))
   with seq_ [int_ 2] using eqExpr in
+
+  -- utest evaln (utensorEq_ eqExpr t0 t0) with true_ using eqExpr in
 
   ()
 in
