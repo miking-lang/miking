@@ -81,3 +81,15 @@ end
 utest pown num3 num2 with num 9. using eqnEps
 utest der (lam x. pown x num2) num3 with num6 using eqnEps
 utest der (lam x. pown (expn num1) x) num2 with expn num2 using eqnEps
+
+-- Square root
+recursive
+  let sqrtn = lam p.
+    _lift1
+      (_float2num1 sqrt)
+      (lam x. divn (num 1.) (muln (num 2.) (sqrtn x)))
+      p
+end
+
+utest sqrtn (num 9.) with num3 using eqnEps
+utest der sqrtn (num 9.) with divn num1 num6 using eqnEps
