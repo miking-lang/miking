@@ -24,6 +24,9 @@ let intrinsicOpRand = use OCamlAst in
 let intrinsicOpTime = use OCamlAst in
   concat "Boot.Intrinsics.Time."
 
+let intrinsicOpConTag = use OCamlAst in
+  concat "Boot.Intrinsics.ConTag."
+
 let intrinsicOpTensor = use OCamlAst in
   concat "Boot.Intrinsics.T."
 

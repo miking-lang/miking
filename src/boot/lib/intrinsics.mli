@@ -305,6 +305,10 @@ module Time : sig
   val sleep_ms : int -> unit
 end
 
+module ConTag : sig
+  val constructor_tag : Obj.t -> int
+end
+
 module Mmap : sig
   val empty : ('a -> 'a -> int) -> Obj.t
 
