@@ -235,7 +235,7 @@ module Uop (T : TENSOR) : UOP with type ('a, 'b) t = ('a, 'b) T.t = struct
   type ('a, 'b) t = ('a, 'b) T.t
 
   let iter_slice f t =
-    if T.rank t = 0 then f (-1) t
+    if T.rank t = 0 then f 0 t
     else
       let n = (T.shape t).(0) in
       for i = 0 to n - 1 do
