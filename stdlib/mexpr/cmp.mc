@@ -747,7 +747,7 @@ lang MExprCmpTypeIndex = MExprAst
   | CFileDelete _ -> 68
   | CPrint _ -> 69
   | CDPrint _ -> 70
-  | CFlushStdout 71
+  | CFlushStdout -> 71
   | CReadLine _ -> 72
   | CReadBytesAsString _ -> 73
   | CRandIntU _ -> 74
