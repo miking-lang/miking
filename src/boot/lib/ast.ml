@@ -141,6 +141,8 @@ and const =
   | Cgensym
   | Ceqsym of Symb.t option
   | Csym2hash
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag
   (* MCore intrinsics: References *)
   | Cref
   | CmodRef of tm ref option
@@ -585,6 +587,9 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
+      true
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag ->
       true
   (* MCore intrinsics: References *)
   | Cref | CmodRef _ | CdeRef ->

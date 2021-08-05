@@ -86,6 +86,8 @@ let builtin = use MExprAst in
   , ("command", CCommand ())
   , ("error", CError ())
   , ("exit", CExit ())
+  -- Constructor tags
+  , ("constructorTag", CConstructorTag ())
   -- Symbols
   , ("eqsym", CEqsym ())
   , ("gensym", CGensym ())

@@ -764,6 +764,11 @@ lang RefOpPrettyPrint = RefOpAst + ConstPrettyPrint
   | CDeRef _ -> "deref"
 end
 
+lang ConTagPrettyPrint = ConTagAst + ConstPrettyPrint
+  sem getConstStringCode (indent : Int) =
+  | CConstructorTag _ -> "constructorTag"
+end
+
 lang MapPrettyPrint = MapAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CMapEmpty _ -> "mapEmpty"
