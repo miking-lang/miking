@@ -596,7 +596,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
       else (t, recordFieldsToName)
     else never
   in
-  let init = use MExprCmpClosed in (t, mapEmpty (mapCmp cmpType)) in
+  let init = use MExprCmp in (t, mapEmpty (mapCmp cmpType)) in
   assocSeqFold f init typeLiftEnv
 
 let _typeLiftEnvToGenerateEnv = use MExprAst in

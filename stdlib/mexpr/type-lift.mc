@@ -298,11 +298,11 @@ lang MExprTypeLift =
 end
 
 lang MExprTypeLiftOrderedRecordsCmpClosed =
-  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + MExprCmpTypeIndex
+  MExprTypeLift + TypeLiftAddRecordToEnvOrdered + MExprCmp
 lang MExprTypeLiftUnOrderedRecords =
   MExprTypeLift + TypeLiftAddRecordToEnvUnOrdered
 lang MExprTypeLiftUnOrderedRecordsCmpClosed =
-  MExprTypeLiftUnOrderedRecords + MExprCmpTypeIndex
+  MExprTypeLiftUnOrderedRecords + MExprCmp
 
 lang TestLang =
   MExprTypeLiftUnOrderedRecordsCmpClosed + MExprSym + MExprTypeAnnot +

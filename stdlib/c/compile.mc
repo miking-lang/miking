@@ -886,8 +886,8 @@ lang Test =
   MExprSym + BootParser + MExprTypeLiftUnOrderedRecords +
 
   -- Whenever MExprCmp, or any fragment including it, will be used, a typeIndex
-  -- function must be provided (here through MExprCmpTypeIndex)
-  MExprTypeLift + MExprCmpTypeIndex
+  -- function must be provided (here through MExprCmp)
+  MExprTypeLift + MExprCmp
 
 mexpr
 use Test in
