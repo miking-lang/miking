@@ -349,215 +349,230 @@ module Mseq = struct
 end
 
 module T = struct
+  open Bigarray
+
   type 'a t =
-    | CArrayIntBoot of (int, Tensor.CArray.int_elt) Tensor.CArray.t
-    | CArrayFloatBoot of (float, Tensor.CArray.float_elt) Tensor.CArray.t
-    | DenseBoot of 'a Tensor.Dense.t
+    | TBootInt of (int, int_elt) Tensor.Barray.t
+    | TBootFloat of (float, float64_elt) Tensor.Barray.t
+    | TBootGen of ('a, 'a) Tensor.Generic.t
 
   type ('a, 'b) u =
-    | TCArrayInt :
-        (int, Tensor.CArray.int_elt) Tensor.CArray.t
-        -> (int, Tensor.CArray.int_elt) u
-    | TCArrayFloat :
-        (float, Tensor.CArray.float_elt) Tensor.CArray.t
-        -> (float, Tensor.CArray.float_elt) u
-    | TDense : 'a Tensor.Dense.t -> ('a, 'b) u
+    | TInt : (int, int_elt) Tensor.Barray.t -> (int, int_elt) u
+    | TFloat : (float, float64_elt) Tensor.Barray.t -> (float, float64_elt) u
+    | TGen : ('a, 'b) Tensor.Generic.t -> ('a, 'b) u
 
-  let carray_int t = TCArrayInt t
+  module type OP_MSEQ = sig
+    type ('a, 'b) t
 
-  let carray_float t = TCArrayFloat t
+    val get_exn : ('a, 'b) t -> int Mseq.t -> 'a
+
+    val set_exn : ('a, 'b) t -> int Mseq.t -> 'a -> unit
+
+    val shape : ('a, 'b) t -> int Mseq.t
+
+    val reshape_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+
+    val slice_exn : ('a, 'b) t -> int Mseq.t -> ('a, 'b) t
+  end
 
   let to_arr = Mseq.Helpers.to_array
 
   let of_arr = Mseq.Helpers.of_array
 
-  module CArray = struct
-    let create_int shape f =
-      Tensor.CArray.create_int (to_arr shape) (fun ids -> f (of_arr ids))
+  module Op_mseq (T : Tensor.TENSOR) :
+    OP_MSEQ with type ('a, 'b) t = ('a, 'b) T.t = struct
+    type ('a, 'b) t = ('a, 'b) T.t
 
-    let create_float shape f =
-      Tensor.CArray.create_float (to_arr shape) (fun ids -> f (of_arr ids))
+    let get_exn t idx = T.get_exn t (to_arr idx)
 
-    let get_exn t ids = Tensor.CArray.get_exn t (to_arr ids)
+    let set_exn t idx = T.set_exn t (to_arr idx)
 
-    let set_exn t ids v = Tensor.CArray.set_exn t (to_arr ids) v
+    let shape t = of_arr (T.shape t)
 
-    let rank = Tensor.CArray.rank
+    let reshape_exn t shape = T.reshape_exn t (to_arr shape)
 
-    let shape t = Tensor.CArray.shape t |> of_arr
-
-    let copy_exn = Tensor.CArray.copy_exn
-
-    let reshape_exn t shape = Tensor.CArray.reshape_exn t (to_arr shape)
-
-    let slice_exn t shape = Tensor.CArray.slice_exn t (to_arr shape)
-
-    let sub_exn = Tensor.CArray.sub_exn
-
-    let iter_slice = Tensor.CArray.iter_slice
+    let slice_exn t idx = T.slice_exn t (to_arr idx)
   end
 
-  module Dense = struct
-    let create shape f =
-      Tensor.Dense.create (to_arr shape) (fun ids -> f (of_arr ids))
+  module Op_mseq_generic = Op_mseq (Tensor.Generic)
+  module Op_mseq_barray = Op_mseq (Tensor.Barray)
 
-    let get_exn t ids = Tensor.Dense.get_exn t (to_arr ids)
+  let create_int shape f =
+    Tensor.Barray.create_int (to_arr shape) (fun idx ->
+        f (of_arr (Array.copy idx)) )
 
-    let set_exn t ids v = Tensor.Dense.set_exn t (to_arr ids) v
+  let create_float shape f =
+    Tensor.Barray.create_float (to_arr shape) (fun idx ->
+        f (of_arr (Array.copy idx)) )
 
-    let rank = Tensor.Dense.rank
+  let create_generic shape f =
+    Tensor.Generic.create (to_arr shape) (fun idx ->
+        f (of_arr (Array.copy idx)) )
 
-    let shape t = Tensor.Dense.shape t |> of_arr
+  let create_int_packed shape f = TInt (create_int shape f)
 
-    let copy_exn = Tensor.Dense.copy_exn
+  let create_float_packed shape f = TFloat (create_float shape f)
 
-    let reshape_exn t shape = Tensor.Dense.reshape_exn t (to_arr shape)
+  let create_generic_packed shape f = TGen (create_generic shape f)
 
-    let slice_exn t shape = Tensor.Dense.slice_exn t (to_arr shape)
-
-    let sub_exn = Tensor.Dense.sub_exn
-
-    let iter_slice = Tensor.Dense.iter_slice
-  end
-
-  let create_carray_int shape f = TCArrayInt (CArray.create_int shape f)
-
-  let create_carray_float shape f = TCArrayFloat (CArray.create_float shape f)
-
-  let create_dense shape f = TDense (Dense.create shape f)
-
-  let get_exn (type a b) (t : (a, b) u) is : a =
+  let get_exn (type a b) (t : (a, b) u) idx : a =
     match t with
-    | TCArrayInt t' ->
-        CArray.get_exn t' is
-    | TCArrayFloat t' ->
-        CArray.get_exn t' is
-    | TDense t' ->
-        Dense.get_exn t' is
+    | TInt t' ->
+        Op_mseq_barray.get_exn t' idx
+    | TFloat t' ->
+        Op_mseq_barray.get_exn t' idx
+    | TGen t' ->
+        Op_mseq_generic.get_exn t' idx
 
-  let set_exn (type a b) (t : (a, b) u) is (v : a) =
+  let set_exn (type a b) (t : (a, b) u) idx (v : a) : unit =
     match t with
-    | TCArrayInt t' ->
-        CArray.set_exn t' is v
-    | TCArrayFloat t' ->
-        CArray.set_exn t' is v
-    | TDense t' ->
-        Dense.set_exn t' is v
+    | TInt t' ->
+        Op_mseq_barray.set_exn t' idx v
+    | TFloat t' ->
+        Op_mseq_barray.set_exn t' idx v
+    | TGen t' ->
+        Op_mseq_generic.set_exn t' idx v
 
-  let rank (type a b) (t : (a, b) u) =
+  let shape (type a b) (t : (a, b) u) : int Mseq.t =
     match t with
-    | TCArrayInt t' ->
-        CArray.rank t'
-    | TCArrayFloat t' ->
-        CArray.rank t'
-    | TDense t' ->
-        Dense.rank t'
+    | TInt t' ->
+        Op_mseq_barray.shape t'
+    | TFloat t' ->
+        Op_mseq_barray.shape t'
+    | TGen t' ->
+        Op_mseq_generic.shape t'
 
-  let shape (type a b) (t : (a, b) u) =
+  let slice_exn (type a b) (t : (a, b) u) idx : (a, b) u =
     match t with
-    | TCArrayInt t' ->
-        CArray.shape t'
-    | TCArrayFloat t' ->
-        CArray.shape t'
-    | TDense t' ->
-        Dense.shape t'
+    | TInt t' ->
+        TInt (Op_mseq_barray.slice_exn t' idx)
+    | TFloat t' ->
+        TFloat (Op_mseq_barray.slice_exn t' idx)
+    | TGen t' ->
+        TGen (Op_mseq_generic.slice_exn t' idx)
 
-  let copy_exn (type a b) (t1 : (a, b) u) (t2 : (a, b) u) =
+  let reshape_exn (type a b) (t : (a, b) u) idx : (a, b) u =
+    match t with
+    | TInt t' ->
+        TInt (Op_mseq_barray.reshape_exn t' idx)
+    | TFloat t' ->
+        TFloat (Op_mseq_barray.reshape_exn t' idx)
+    | TGen t' ->
+        TGen (Op_mseq_generic.reshape_exn t' idx)
+
+  let sub_exn (type a b) (t : (a, b) u) start len : (a, b) u =
+    match t with
+    | TInt t' ->
+        TInt (Tensor.Barray.sub_exn t' start len)
+    | TFloat t' ->
+        TFloat (Tensor.Barray.sub_exn t' start len)
+    | TGen t' ->
+        TGen (Tensor.Generic.sub_exn t' start len)
+
+  let copy (type a b) (t : (a, b) u) : (a, b) u =
+    match t with
+    | TInt t' ->
+        TInt (Tensor.Barray.copy t')
+    | TFloat t' ->
+        TFloat (Tensor.Barray.copy t')
+    | TGen t' ->
+        TGen (Tensor.Generic.copy t')
+
+  let transpose_exn (type a b) (t : (a, b) u) dim0 dim1 : (a, b) u =
+    match t with
+    | TInt t' ->
+        TInt (Tensor.Barray.transpose_exn t' dim0 dim1)
+    | TFloat t' ->
+        TFloat (Tensor.Barray.transpose_exn t' dim0 dim1)
+    | TGen t' ->
+        TGen (Tensor.Generic.transpose_exn t' dim0 dim1)
+
+  let iter_slice (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) : unit
+      =
+    match t with
+    | TInt t' ->
+        Tensor.Uop_barray.iter_slice (fun i t -> f i (TInt t)) t'
+    | TFloat t' ->
+        Tensor.Uop_barray.iter_slice (fun i t -> f i (TFloat t)) t'
+    | TGen t' ->
+        Tensor.Uop_generic.iter_slice (fun i t -> f i (TGen t)) t'
+
+  let rank (type a b) (t : (a, b) u) : int =
+    match t with
+    | TInt t' ->
+        Tensor.Barray.rank t'
+    | TFloat t' ->
+        Tensor.Barray.rank t'
+    | TGen t' ->
+        Tensor.Generic.rank t'
+
+  let equal (type a b c d) (eq : a -> b -> bool) (t1 : (a, c) u) (t2 : (b, d) u)
+      : bool =
     match (t1, t2) with
-    | TCArrayInt t1', TCArrayInt t2' ->
-        CArray.copy_exn t1' t2'
-    | TCArrayFloat t1', TCArrayFloat t2' ->
-        CArray.copy_exn t1' t2'
-    | TDense t1', TDense t2' ->
-        Dense.copy_exn t1' t2'
-    | TDense t1', TCArrayInt t2' ->
-        Tensor.copy_nonum_num_exn t1' t2'
-    | TDense t1', TCArrayFloat t2' ->
-        Tensor.copy_nonum_num_exn t1' t2'
-    | TCArrayInt t1', TDense t2' ->
-        Tensor.copy_num_nonum_exn t1' t2'
-    | TCArrayFloat t1', TDense t2' ->
-        Tensor.copy_num_nonum_exn t1' t2'
+    | TInt t1', TInt t2' ->
+        Tensor.Bop_barray_barray.equal eq t1' t2'
+    | TFloat t1', TInt t2' ->
+        Tensor.Bop_barray_barray.equal eq t1' t2'
+    | TGen t1', TInt t2' ->
+        Tensor.Bop_generic_barray.equal eq t1' t2'
+    | _, TFloat t2' -> (
+      match t1 with
+      | TInt t1' ->
+          Tensor.Bop_barray_barray.equal eq t1' t2'
+      | TFloat t1' ->
+          Tensor.Bop_barray_barray.equal eq t1' t2'
+      | TGen t1' ->
+          Tensor.Bop_generic_barray.equal eq t1' t2' )
+    | _, TGen t2' -> (
+      match t1 with
+      | TInt t1' ->
+          Tensor.Bop_barray_generic.equal eq t1' t2'
+      | TFloat t1' ->
+          Tensor.Bop_barray_generic.equal eq t1' t2'
+      | TGen t1' ->
+          Tensor.Bop_generic_generic.equal eq t1' t2' )
 
-  let reshape_exn (type a b) (t : (a, b) u) shape : (a, b) u =
-    match t with
-    | TCArrayInt t' ->
-        TCArrayInt (CArray.reshape_exn t' shape)
-    | TCArrayFloat t' ->
-        TCArrayFloat (CArray.reshape_exn t' shape)
-    | TDense t' ->
-        TDense (Dense.reshape_exn t' shape)
-
-  let slice_exn (type a b) (t : (a, b) u) is : (a, b) u =
-    match t with
-    | TCArrayInt t' ->
-        TCArrayInt (CArray.slice_exn t' is)
-    | TCArrayFloat t' ->
-        TCArrayFloat (CArray.slice_exn t' is)
-    | TDense t' ->
-        TDense (Dense.slice_exn t' is)
-
-  let sub_exn (type a b) (t : (a, b) u) ofs len : (a, b) u =
-    match t with
-    | TCArrayInt t' ->
-        TCArrayInt (CArray.sub_exn t' ofs len)
-    | TCArrayFloat t' ->
-        TCArrayFloat (CArray.sub_exn t' ofs len)
-    | TDense t' ->
-        TDense (Dense.sub_exn t' ofs len)
-
-  let iter_slice (type a b) (f : int -> (a, b) u -> unit) (t : (a, b) u) =
-    match t with
-    | TCArrayInt t' ->
-        let f' i t = f i (TCArrayInt t) in
-        CArray.iter_slice f' t'
-    | TCArrayFloat t' ->
-        let f' i t = f i (TCArrayFloat t) in
-        CArray.iter_slice f' t'
-    | TDense t' ->
-        let f' i t = f i (TDense t) in
-        Dense.iter_slice f' t'
+  let to_string (type a b) (el2str : a -> int Mseq.t) (t : (a, b) u) :
+      int Mseq.t =
+    let el2str x = Mseq.Helpers.to_ustring (el2str x) in
+    ( match t with
+    | TInt t' ->
+        Tensor.Uop_barray.to_ustring el2str t'
+    | TFloat t' ->
+        Tensor.Uop_barray.to_ustring el2str t'
+    | TGen t' ->
+        Tensor.Uop_generic.to_ustring el2str t' )
+    |> Mseq.Helpers.of_ustring
 
   module Helpers = struct
-    open Bigarray
-
     let to_genarray_clayout (type a b) (t : (a, b) u) :
         (a, b, c_layout) Genarray.t =
       match t with
-      | TCArrayInt t' ->
-          t'
-      | TCArrayFloat t' ->
-          t'
-      | TDense _ ->
-          raise (Invalid_argument "Intrinsics.T.Helpers.to_genarray_clayout")
+      | TInt t' ->
+          Tensor.Barray.to_genarray_clayout t'
+      | TFloat t' ->
+          Tensor.Barray.to_genarray_clayout t'
+      | TGen _ ->
+          raise
+            (Invalid_argument "Intrinsics.T.Helpers.to_genarray_clayout_int")
 
-    let to_array1_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array1.t
-        =
-      match t with
-      | TCArrayInt t' ->
-          t' |> array1_of_genarray
-      | TCArrayFloat t' ->
-          t' |> array1_of_genarray
-      | TDense _ ->
-          raise (Invalid_argument "Intrinsics.T.Helpers.to_array1_clayout")
+    let to_array1_clayout t = to_genarray_clayout t |> array1_of_genarray
 
-    let to_array2_clayout (type a b) (t : (a, b) u) : (a, b, c_layout) Array2.t
-        =
-      match t with
-      | TCArrayInt t' ->
-          t' |> array2_of_genarray
-      | TCArrayFloat t' ->
-          t' |> array2_of_genarray
-      | TDense _ ->
-          raise (Invalid_argument "Intrinsics.T.Helpers.to_array2_clayout")
+    let to_array2_clayout t = to_genarray_clayout t |> array2_of_genarray
 
-    let of_array1_clayout_int arr = arr |> genarray_of_array1 |> carray_int
+    let of_genarray_clayout (type a b) (a : (a, b, c_layout) Genarray.t) :
+        (a, b) u =
+      match Genarray.kind a with
+      | Bigarray.Int ->
+          TInt (Tensor.Barray.of_genarray_clayout a)
+      | Bigarray.Float64 ->
+          TFloat (Tensor.Barray.of_genarray_clayout a)
+      | _ ->
+          raise (Invalid_argument "Intrinsics.T.Helpers.of_genarray_clayout")
 
-    let of_array1_clayout_float arr = arr |> genarray_of_array1 |> carray_float
+    let of_array1_clayout t = genarray_of_array1 t |> of_genarray_clayout
 
-    let of_array2_clayout_int arr = arr |> genarray_of_array2 |> carray_int
-
-    let of_array2_clayout_float arr = arr |> genarray_of_array2 |> carray_float
+    let of_array2_clayout t = genarray_of_array2 t |> of_genarray_clayout
   end
 end
 
@@ -618,38 +633,40 @@ module IO = struct
     let v = Obj.repr v in
     let string_of_tag t =
       let res = ref (string_of_int t) in
-      if t = Obj.lazy_tag then res := !res ^ " (lazy)";
-      if t = Obj.closure_tag then res := !res ^ " (closure)";
-      if t = Obj.object_tag then res := !res ^ " (object)";
-      if t = Obj.infix_tag then res := !res ^ " (infix)";
-      if t = Obj.forward_tag then res := !res ^ " (forward)";
-      if t = Obj.no_scan_tag then res := !res ^ " (no_scan)";
-      if t = Obj.abstract_tag then res := !res ^ " (abstract)";
-      if t = Obj.string_tag then res := !res ^ " (string)";
-      if t = Obj.double_tag then res := !res ^ " (double)";
-      if t = Obj.double_array_tag then res := !res ^ " (double_array)";
-      if t = Obj.custom_tag then res := !res ^ " (custom)";
-      if t = Obj.int_tag then res := !res ^ " (int)";
-      if t = Obj.out_of_heap_tag then res := !res ^ " (out_of_heap)";
-      if t = Obj.unaligned_tag then res := !res ^ " (unaligned)";
-      !res in
+      if t = Obj.lazy_tag then res := !res ^ " (lazy)" ;
+      if t = Obj.closure_tag then res := !res ^ " (closure)" ;
+      if t = Obj.object_tag then res := !res ^ " (object)" ;
+      if t = Obj.infix_tag then res := !res ^ " (infix)" ;
+      if t = Obj.forward_tag then res := !res ^ " (forward)" ;
+      if t = Obj.no_scan_tag then res := !res ^ " (no_scan)" ;
+      if t = Obj.abstract_tag then res := !res ^ " (abstract)" ;
+      if t = Obj.string_tag then res := !res ^ " (string)" ;
+      if t = Obj.double_tag then res := !res ^ " (double)" ;
+      if t = Obj.double_array_tag then res := !res ^ " (double_array)" ;
+      if t = Obj.custom_tag then res := !res ^ " (custom)" ;
+      if t = Obj.int_tag then res := !res ^ " (int)" ;
+      if t = Obj.out_of_heap_tag then res := !res ^ " (out_of_heap)" ;
+      if t = Obj.unaligned_tag then res := !res ^ " (unaligned)" ;
+      !res
+    in
     let rec work indent v =
-      if Obj.is_int v then
-        string_of_int (Obj.obj v) ^ "\n"
+      if Obj.is_int v then string_of_int (Obj.obj v) ^ "\n"
       else if Obj.tag v = Obj.double_tag then
         string_of_float (Obj.obj v) ^ "\n"
-      else if Obj.tag v = Obj.closure_tag then
-        "<closure>\n"
+      else if Obj.tag v = Obj.closure_tag then "<closure>\n"
       else
         let istr = String.make indent ' ' in
-        let children = List.init (Obj.size v)
-          (fun i -> istr ^ ", " ^ work (indent + 2) (Obj.field v i)) in
-        begin
-          "{ tag: " ^ string_of_tag (Obj.tag v) ^ ", size: " ^ string_of_int (Obj.size v) ^ "\n" ^
-          String.concat "" children ^
-          istr ^ "}\n"
-        end
-    in print_string (work 0 v);;
+        let children =
+          List.init (Obj.size v) (fun i ->
+              istr ^ ", " ^ work (indent + 2) (Obj.field v i) )
+        in
+        "{ tag: "
+        ^ string_of_tag (Obj.tag v)
+        ^ ", size: "
+        ^ string_of_int (Obj.size v)
+        ^ "\n" ^ String.concat "" children ^ istr ^ "}\n"
+    in
+    print_string (work 0 v)
 
   let flush_stdout () = flush stdout
 

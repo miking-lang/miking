@@ -182,7 +182,7 @@ type Successors v l = {
   number : AssocMap v l,
   lowlink : AssocMap v l,
   stack : AssocMap v l,
-  comps : AssocMap v l
+  comps : [[v]]
 }
 
 -- Strongly connected components of g.

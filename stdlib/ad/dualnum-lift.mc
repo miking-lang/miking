@@ -13,6 +13,7 @@ include "dualnum-tree.mc"
 include "dualnum-helpers.mc"
 include "bool.mc"
 include "math.mc"
+include "tensor.mc"
 
 -------------
 -- ALIASES --
@@ -35,7 +36,6 @@ let _float2num1 = dualnumFloat2num1
 -- LIFTING OF BINARY OPERATORS  --
 ----------------------------------
 
-type FloatFun2 = Float -> Float -> Float
 type DualNumFun2 = DualNum -> DualNum -> DualNum
 
 recursive
@@ -43,7 +43,8 @@ recursive
   -- f : real operator
   -- dfdx1 : lifted first partial derivative of f
   -- dfdx2 : lifted second partial derivative of f
-  let dualnumLift2 : DualNumFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
+  let dualnumLift2
+  : DualNumFun2 -> DualNumFun2 -> DualNumFun2 -> DualNumFun2 =
   lam f. lam dfdx1. lam dfdx2.
     recursive let self = lam p1. lam p2.
       if or (_isDualNum p1)
@@ -121,13 +122,13 @@ utest dualnumPrimalDeep (dnum1 dnum036 dnum048) with num3 using dualnumEq eqf
 -- LIFTING OF BINARY OPERATORS  --
 ----------------------------------
 
-type FloatCmp2 = Float -> Float -> Bool
+type Cmp2 = Float -> Float -> Bool
 
 -- lifts compare function to nested dual-numbers. The compare functions is
 -- applied to x in x+(en)x', where x and x' are reals, e.g. x+(en)x' is the
 -- deepest element in the nested dual-number y+(e1)y'.
 -- cmp : real compare function
-let dualnumLiftBoolFun2 : FloatCmp2 -> (DualNum -> DualNum -> Bool) =
+let dualnumLiftBoolFun2 : Cmp2 -> (DualNum -> DualNum -> Bool) =
 lam cmp.
   let self = lam p1. lam p2.
     cmp (_unpack (dualnumPrimalDeep p1)) (_unpack (dualnumPrimalDeep p2))
@@ -149,7 +150,6 @@ utest dualnum2string (dnum1 dnum036 dnum048) with "3."
 -- LIFTING OF UNARY OPERATORS  --
 ---------------------------------
 
-type FloatFun1 = Float -> Float
 type DualNumFun1 = DualNum -> DualNum
 
 -- lifts unary real operator to nested dual-numbers
@@ -181,6 +181,9 @@ let der : (DualNum -> DualNum) -> DualNum -> DualNum =
   let e = genEpsilon () in
   _pertubation e (f (_dnum e x (_num 1.)))
 
+utest der (lam. num2) num2 with num0
+utest der (lam x. muln x x) (num2) with num4
+
 -- As well as scalar higher order derivatives
 recursive
 let nder : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
@@ -190,6 +193,48 @@ let nder : Int -> (DualNum -> DualNum) -> DualNum -> DualNum =
     else nder (subi n 1) (der f) x
 end
 
+utest nder 0 (lam x. muln x x) (num2) with num4
+utest nder 1 (lam x. muln x x) (num4) with num8
+utest nder 2 (lam x. muln x x) (num4) with num2
+
+-- Inplace computation of the i'th component of df_j/dx_i.
+let jaci
+  : (Tensor[DualNum] -> Tensor[DualNum] -> ())
+  -> Int
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam i. lam x. lam r.
+  let e = genEpsilon () in
+  tensorSetExn x [i] (_dnum e (tensorGetExn x [i]) (_num 1.));
+  f x r;
+  tensorMapInplace (_pertubation e) r;
+  tensorSetExn x [i] (_primal e (tensorGetExn x [i]))
+
+-- Inplace of Jacobian df_j/dx_i, where j index columns and i index rows, of `f`
+-- at `x` stored in `m`.
+let jacT
+  : (Tensor[DualNum] -> Tensor[DualNum] -> ())
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam x. lam m. tensorIterSlice (lam i. lam r. jaci f i x r) m
+
+utest
+  let f = lam t. lam r.
+    let x1 = tensorGetExn t [0] in
+    let x2 = tensorGetExn t [1] in
+    tensorSetExn r [0] (addn x1 (muln (_num 2.) x2));
+    tensorSetExn r [1] (muln (muln (_num 3.) x1) (muln (_num 4.) x2));
+    ()
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 1., _num 2.] in
+  let m = tensorCreateDense [2, 2] (lam. _num 0.) in
+  jacT f x m;
+  map _unpack (tensorToSeqExn (tensorReshapeExn m [4]))
+with
+[1., 24.
+,2., 12.]
 
 ----------------
 -- CONSTANTS  --
