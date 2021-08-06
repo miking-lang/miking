@@ -274,6 +274,9 @@ let arity = function
       1
   | Csym2hash ->
       1
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag ->
+      1
   (* MCore intrinsics: References *)
   | Cref ->
       1
@@ -966,6 +969,11 @@ let delta eval env fi c v =
       TmConst (fi, CInt (Symb.hash id))
   | Csym2hash, _ ->
       fail_constapp fi
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag, TmConApp (_, _, sym, _) ->
+      TmConst (fi, CInt (Symb.hash sym))
+  | CconstructorTag, _ ->
+      TmConst (fi, CInt 0)
   (* MCore intrinsics: References *)
   | Cref, v ->
       TmRef (fi, ref v)

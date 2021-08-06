@@ -193,6 +193,11 @@ lang RefOpTypeAst = RefOpAst
   | CDeRef _ -> tyarrow_ tyref_ (tygeneric_ "a")
 end
 
+lang ConTagTypeAst = ConTagAst
+  sem tyConst =
+  | CConstructorTag _ -> tyarrow_ (tygeneric_ "a") tyint_
+end
+
 lang MapTypeAst = MapAst
   sem tyConst =
   | CMapEmpty _ -> tyarrow_ (tyarrows_ [tygeneric_ "a", tygeneric_ "a", tyint_])
@@ -268,6 +273,6 @@ lang MExprConstType =
   CmpIntTypeAst + IntCharConversionTypeAst + CmpFloatTypeAst + CmpCharTypeAst +
   SymbTypeAst + CmpSymbTypeAst + SeqOpTypeAst + FileOpTypeAst + IOTypeAst +
   RandomNumberGeneratorTypeAst + SysTypeAst + FloatIntConversionTypeAst +
-  FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + MapTypeAst +
-  TensorOpTypeAst + BootParserTypeAst
+  FloatStringConversionTypeAst + TimeTypeAst + RefOpTypeAst + ConTagTypeAst +
+  MapTypeAst + TensorOpTypeAst + BootParserTypeAst
 end

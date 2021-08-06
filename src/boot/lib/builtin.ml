@@ -262,6 +262,7 @@ let builtin =
   ; ("eqsym", f (Ceqsym None))
   ; ("gensym", f Cgensym)
   ; ("sym2hash", f Csym2hash) (* MCore intrinsics: References *)
+  ; ("constructorTag", f CconstructorTag)
   ; ("ref", f Cref)
   ; ("deref", f CdeRef)
   ; ("modref", f (CmodRef None)) (* MCore intrinsics: Maps *)

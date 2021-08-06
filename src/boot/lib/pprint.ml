@@ -435,6 +435,9 @@ let rec print_const fmt = function
       fprintf fmt "eqsym"
   | Csym2hash ->
       fprintf fmt "sym2hash"
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag ->
+      fprintf fmt "constructorTag"
   (* MCore intrinsics: References *)
   | Cref ->
       fprintf fmt "ref"

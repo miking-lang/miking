@@ -712,6 +712,12 @@ module Time = struct
   let sleep_ms ms = Thread.delay (float_of_int ms /. 1000.)
 end
 
+module ConTag = struct
+  let constructor_tag obj =
+    if Obj.is_int obj then Obj.obj obj + Obj.custom_tag
+    else Obj.tag obj
+end
+
 module Mmap = struct
   let empty cmp =
     let cmp x y = cmp (Obj.obj x) (Obj.obj y) in

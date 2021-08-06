@@ -206,6 +206,7 @@ lang OCamlPrettyPrint =
   | CRef _ -> "ref"
   | CModRef _ -> "(:=)"
   | CDeRef _ -> "(!)"
+  | CConstructorTag _ -> intrinsicOpConTag "constructor_tag"
   | CFloorfi _ -> intrinsicOpFloat "floorfi"
   | CCeilfi _ -> intrinsicOpFloat "ceilfi"
   | CRoundfi _ -> intrinsicOpFloat "roundfi"

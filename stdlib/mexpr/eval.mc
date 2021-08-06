@@ -976,6 +976,21 @@ lang RefOpEval = RefOpAst + RefEval + IntAst
     else error "not a deref of a reference"
 end
 
+lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst
+  sem delta (arg : Expr) =
+  | CConstructorTag _ ->
+    let zeroConst = lam.
+      TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()},
+               info = NoInfo ()}
+    in
+    match arg with TmConApp {ident = id} then
+      match nameGetSym id with Some sym then
+        TmConst {val = CInt {val = sym2hash sym}, ty = TyInt {info = NoInfo ()},
+                 info = NoInfo ()}
+      else zeroConst ()
+    else zeroConst ()
+end
+
 lang TensorOpEval =
   TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst
 
@@ -1404,7 +1419,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  TensorOpEval
+  ConTagEval + TensorOpEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
