@@ -33,7 +33,7 @@ let cmpProgramPos : ProgramPos -> ProgramPos -> Int =
 type ExprStatus
 con Once : ProgramPos -> ExprStatus
 con Multiple : ProgramPos -> ExprStatus
-con Ineligible : ProgramPos -> ExprStatus
+con Ineligible : () -> ExprStatus
 
 type CSESearchEnv = {
   currentPos : ProgramPos,
@@ -213,7 +213,7 @@ lang RecLetsCSE = CSE + RecLetsAst
   | TmRecLets t ->
     let bindEnv : CSESearchEnv =
       foldl
-        (lam acc. lam bind : RecLetBinding.
+        (lam acc : CSESearchEnv. lam bind : RecLetBinding.
           let bindingPos = snoc env.currentPos (RecIdent bind.ident) in
           cseSearch {acc with currentPos = bindingPos} bind.body)
         env t.bindings in
