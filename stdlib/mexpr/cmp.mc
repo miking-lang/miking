@@ -442,10 +442,13 @@ lang TensorOpCmp = Cmp + TensorOpAst
   | (CTensorRank _, CTensorRank _) -> 0
   | (CTensorShape _, CTensorShape _) -> 0
   | (CTensorReshapeExn _, CTensorReshapeExn _) -> 0
-  | (CTensorCopyExn _, CTensorCopyExn _) -> 0
+  | (CTensorCopy _, CTensorCopy _) -> 0
+  | (CTensorTransposeExn _, CTensorTransposeExn _) -> 0
   | (CTensorSliceExn _, CTensorSliceExn _) -> 0
   | (CTensorSubExn _, CTensorSubExn _) -> 0
   | (CTensorIterSlice _, CTensorIterSlice _) -> 0
+  | (CTensorEq _, CTensorEq _) -> 0
+  | (CTensorToString _, CTensorToString _) -> 0
 end
 
 lang BootParserCmp = Cmp + BootParserAst
@@ -910,10 +913,13 @@ utest cmpConst (CTensorSetExn {}) (CTensorSetExn {}) with 0 in
 utest cmpConst (CTensorRank {}) (CTensorRank {}) with 0 in
 utest cmpConst (CTensorShape {}) (CTensorShape {}) with 0 in
 utest cmpConst (CTensorReshapeExn {}) (CTensorReshapeExn {}) with 0 in
-utest cmpConst (CTensorCopyExn {}) (CTensorCopyExn {}) with 0 in
+utest cmpConst (CTensorCopy {}) (CTensorCopy {}) with 0 in
+utest cmpConst (CTensorTransposeExn {}) (CTensorTransposeExn {}) with 0 in
 utest cmpConst (CTensorSliceExn {}) (CTensorSliceExn {}) with 0 in
 utest cmpConst (CTensorSubExn {}) (CTensorSubExn {}) with 0 in
 utest cmpConst (CTensorIterSlice {}) (CTensorIterSlice {}) with 0 in
+utest cmpConst (CTensorEq {}) (CTensorEq {}) with 0 in
+utest cmpConst (CTensorToString {}) (CTensorToString {}) with 0 in
 
 utest cmpConst (CBootParserParseMExprString {})
                (CBootParserParseMExprString {}) with 0 in
