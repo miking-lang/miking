@@ -30,3 +30,11 @@ utest absi 1 with 1
 utest absi (negi 1) with 1
 
 utest addi 1 (negi 1) with 0
+
+let succ = lam x. addi x 1
+
+utest succ 0 with 1
+
+let pred = lam x. subi x 1
+
+utest pred 1 with 0

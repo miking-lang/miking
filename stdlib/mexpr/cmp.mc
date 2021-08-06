@@ -21,8 +21,7 @@ lang Cmp = Ast
     else res
 
   sem exprIndex =
-  -- | t: Expr
-  -- Intentionally left blank
+  | t /- : Expr -/ -> constructorTag t
 
   sem cmpConst (lhs: Const) =
   | rhs /- : Const -/ -> cmpConstH (lhs, rhs)
@@ -36,8 +35,7 @@ lang Cmp = Ast
     else res
 
   sem constIndex =
-  -- | c: Const
-  -- Intentionally left blank
+  | c /- : Const -/ -> constructorTag c
 
   sem cmpPat (lhs: Pat) =
   | rhs /- : Pat -/ -> cmpPatH (lhs, rhs)
@@ -51,8 +49,7 @@ lang Cmp = Ast
     else res
 
   sem patIndex =
-  -- | p: Pat
-  -- Intentionally left blank
+  | p /- : Pat -/ -> constructorTag p
 
   sem cmpType (lhs: Type) =
   | rhs /- : Type -/ -> cmpTypeH (lhs, rhs)
@@ -66,8 +63,7 @@ lang Cmp = Ast
     else res
 
   sem typeIndex =
-  -- | ty: Type
-  -- Intentionally left blank
+  | ty /- : Type -/ -> constructorTag ty
 
 end
 
@@ -446,10 +442,13 @@ lang TensorOpCmp = Cmp + TensorOpAst
   | (CTensorRank _, CTensorRank _) -> 0
   | (CTensorShape _, CTensorShape _) -> 0
   | (CTensorReshapeExn _, CTensorReshapeExn _) -> 0
-  | (CTensorCopyExn _, CTensorCopyExn _) -> 0
+  | (CTensorCopy _, CTensorCopy _) -> 0
+  | (CTensorTransposeExn _, CTensorTransposeExn _) -> 0
   | (CTensorSliceExn _, CTensorSliceExn _) -> 0
   | (CTensorSubExn _, CTensorSubExn _) -> 0
   | (CTensorIterSlice _, CTensorIterSlice _) -> 0
+  | (CTensorEq _, CTensorEq _) -> 0
+  | (CTensorToString _, CTensorToString _) -> 0
 end
 
 lang BootParserCmp = Cmp + BootParserAst
@@ -652,194 +651,13 @@ lang MExprCmp =
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
   VarTypeCmp + AppTypeCmp
 
-lang MExprCmpTypeIndex = MExprAst
-
-  -- NOTE(larshum, 2021-07-07): These functions cannot be defined in isolation
-  -- for each component fragment (as with the cmp*H functions). Optimally, this
-  -- would be automatically generated.
-  sem exprIndex =
-  | TmVar _ -> 0
-  | TmApp _ -> 1
-  | TmLam _ -> 2
-  | TmLet _ -> 3
-  | TmRecLets _ -> 4
-  | TmConst _ -> 5
-  | TmSeq _ -> 6
-  | TmRecord _ -> 7
-  | TmRecordUpdate _ -> 8
-  | TmType _ -> 9
-  | TmConDef _ -> 10
-  | TmConApp _ -> 11
-  | TmMatch _ -> 12
-  | TmUtest _ -> 13
-  | TmNever _ -> 14
-  | TmExt _ -> 15
-
-  sem constIndex =
-  | CInt _ -> 0
-  | CAddi _ -> 1
-  | CSubi _ -> 2
-  | CMuli _ -> 3
-  | CDivi _ -> 4
-  | CNegi _ -> 5
-  | CModi _ -> 6
-  | CSlli _ -> 7
-  | CSrli _ -> 8
-  | CSrai _ -> 9
-  | CFloat _ -> 10
-  | CAddf _ -> 11
-  | CSubf _ -> 12
-  | CMulf _ -> 13
-  | CDivf _ -> 14
-  | CNegf _ -> 15
-  | CFloorfi _ -> 16
-  | CCeilfi _ -> 17
-  | CRoundfi _ -> 18
-  | CInt2float _ -> 19
-  | CBool _ -> 20
-  | CEqi _ -> 21
-  | CNeqi _ -> 22
-  | CLti _ -> 23
-  | CGti _ -> 24
-  | CLeqi _ -> 25
-  | CGeqi _ -> 26
-  | CEqf _ -> 27
-  | CLtf _ -> 28
-  | CLeqf _ -> 29
-  | CGtf _ -> 30
-  | CGeqf _ -> 31
-  | CNeqf _ -> 32
-  | CChar _ -> 33
-  | CEqc _ -> 34
-  | CInt2Char _ -> 35
-  | CChar2Int _ -> 36
-  | CString2float _ -> 37
-  | CFloat2string _ -> 38
-  | CSymb _ -> 39
-  | CGensym _ -> 40
-  | CSym2hash _ -> 41
-  | CEqsym _ -> 42
-  | CSet _ -> 43
-  | CGet _ -> 44
-  | CCons _ -> 45
-  | CSnoc _ -> 46
-  | CConcat _ -> 47
-  | CLength _ -> 48
-  | CReverse _ -> 49
-  | CHead _ -> 50
-  | CTail _ -> 51
-  | CNull _ -> 52
-  | CMap _ -> 53
-  | CMapi _ -> 54
-  | CIter _ -> 55
-  | CIteri _ -> 56
-  | CFoldl _ -> 57
-  | CFoldr _ -> 58
-  | CCreate _ -> 59
-  | CCreateFingerTree _ -> 59
-  | CCreateList _ -> 60
-  | CCreateRope _ -> 61
-  | CSplitAt _ -> 62
-  | CSubsequence _ -> 63
-  | CFileRead _ -> 64
-  | CFileWrite _ -> 65
-  | CFileExists _ -> 66
-  | CFileDelete _ -> 67
-  | CPrint _ -> 68
-  | CDPrint _ -> 69
-  | CFlushStdout 70
-  | CReadLine _ -> 71
-  | CReadBytesAsString _ -> 72
-  | CRandIntU _ -> 73
-  | CRandSetSeed _ -> 74
-  | CExit _ -> 75
-  | CError _ -> 76
-  | CArgv _ -> 77
-  | CCommand _ -> 78
-  | CWallTimeMs _ -> 79
-  | CSleepMs _ -> 80
-  | CRef _ -> 81
-  | CModRef _ -> 82
-  | CDeRef _ -> 83
-  | CMapEmpty _ -> 84
-  | CMapInsert _ -> 85
-  | CMapRemove _ -> 86
-  | CMapFindWithExn _ -> 87
-  | CMapFindOrElse _ -> 88
-  | CMapFindApplyOrElse _ -> 89
-  | CMapBindings _ -> 90
-  | CMapSize _ -> 91
-  | CMapMem _ -> 92
-  | CMapAny _ -> 93
-  | CMapMap _ -> 94
-  | CMapMapWithKey _ -> 95
-  | CMapFoldWithKey _ -> 96
-  | CMapEq _ -> 97
-  | CMapCmp _ -> 98
-  | CMapGetCmpFun _ -> 99
-  | CTensorCreateInt _ -> 100
-  | CTensorCreateFloat _ -> 101
-  | CTensorCreate _ -> 102
-  | CTensorGetExn _ -> 103
-  | CTensorSetExn _ -> 104
-  | CTensorRank _ -> 105
-  | CTensorShape _ -> 106
-  | CTensorReshapeExn _ -> 107
-  | CTensorCopyExn _ -> 108
-  | CTensorSliceExn _ -> 109
-  | CTensorSubExn _ -> 110
-  | CTensorIterSlice _ -> 111
-  | CBootParserParseMExprString _ -> 112
-  | CBootParserParseMCoreFile _ -> 113
-  | CBootParserGetId _ -> 114
-  | CBootParserGetTerm _ -> 115
-  | CBootParserGetType _ -> 116
-  | CBootParserGetString _ -> 117
-  | CBootParserGetInt _ -> 118
-  | CBootParserGetFloat _ -> 119
-  | CBootParserGetListLength _ -> 120
-  | CBootParserGetConst _ -> 121
-  | CBootParserGetPat _ -> 122
-  | CBootParserGetInfo _ -> 123
-
-  sem patIndex =
-  | PatNamed _ -> 0
-  | PatSeqTot _ -> 1
-  | PatSeqEdge _ -> 2
-  | PatRecord _ -> 3
-  | PatCon _ -> 4
-  | PatInt _ -> 5
-  | PatChar _ -> 6
-  | PatBool _ -> 7
-  | PatAnd _ -> 8
-  | PatOr _ -> 9
-  | PatNot _ -> 10
-
-  sem typeIndex =
-  | TyUnknown _ -> 0
-  | TyBool _ -> 1
-  | TyInt _ -> 2
-  | TyFloat _ -> 3
-  | TyChar _ -> 4
-  | TyArrow _ -> 5
-  | TySeq _ -> 6
-  | TyRecord _ -> 7
-  | TyVariant _ -> 8
-  | TyVar _ -> 9
-  | TyApp _ -> 10
-  | TyTensor _ -> 11
-
-end
-
-lang MExprCmpClosed = MExprCmp + MExprCmpTypeIndex
-
 -----------
 -- TESTS --
 -----------
 
 mexpr
 
-use MExprCmpClosed in
+use MExprCmp in
 
 -- Expressions
 utest cmpExpr (var_ "a") (var_ "a") with 0 in
@@ -1095,10 +913,13 @@ utest cmpConst (CTensorSetExn {}) (CTensorSetExn {}) with 0 in
 utest cmpConst (CTensorRank {}) (CTensorRank {}) with 0 in
 utest cmpConst (CTensorShape {}) (CTensorShape {}) with 0 in
 utest cmpConst (CTensorReshapeExn {}) (CTensorReshapeExn {}) with 0 in
-utest cmpConst (CTensorCopyExn {}) (CTensorCopyExn {}) with 0 in
+utest cmpConst (CTensorCopy {}) (CTensorCopy {}) with 0 in
+utest cmpConst (CTensorTransposeExn {}) (CTensorTransposeExn {}) with 0 in
 utest cmpConst (CTensorSliceExn {}) (CTensorSliceExn {}) with 0 in
 utest cmpConst (CTensorSubExn {}) (CTensorSubExn {}) with 0 in
 utest cmpConst (CTensorIterSlice {}) (CTensorIterSlice {}) with 0 in
+utest cmpConst (CTensorEq {}) (CTensorEq {}) with 0 in
+utest cmpConst (CTensorToString {}) (CTensorToString {}) with 0 in
 
 utest cmpConst (CBootParserParseMExprString {})
                (CBootParserParseMExprString {}) with 0 in

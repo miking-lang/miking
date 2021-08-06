@@ -86,6 +86,8 @@ let builtin = use MExprAst in
   , ("command", CCommand ())
   , ("error", CError ())
   , ("exit", CExit ())
+  -- Constructor tags
+  , ("constructorTag", CConstructorTag ())
   -- Symbols
   , ("eqsym", CEqsym ())
   , ("gensym", CGensym ())
@@ -120,10 +122,13 @@ let builtin = use MExprAst in
   , ("tensorRank", CTensorRank ())
   , ("tensorShape", CTensorShape ())
   , ("tensorReshapeExn", CTensorReshapeExn ())
-  , ("tensorCopyExn", CTensorCopyExn ())
+  , ("tensorCopy", CTensorCopy ())
+  , ("tensorTransposeExn", CTensorTransposeExn ())
   , ("tensorSliceExn", CTensorSliceExn ())
   , ("tensorSubExn", CTensorSubExn ())
   , ("tensorIterSlice", CTensorIterSlice ())
+  , ("tensorEq", CTensorEq ())
+  , ("tensor2string", CTensorToString ())
   -- Boot parser
   , ("bootParserParseMExprString", CBootParserParseMExprString ())
   , ("bootParserParseMCoreFile", CBootParserParseMCoreFile ())

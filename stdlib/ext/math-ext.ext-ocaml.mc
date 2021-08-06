@@ -29,5 +29,8 @@ let mathExtMap =
       { ident = "Float.pow",
         ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
         libraries = [] }
+    ]),
+    ("externalSqrt", [
+      { ident = "Float.sqrt", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
     ])
   ]
