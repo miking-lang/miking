@@ -30,12 +30,6 @@ let intrinsicOpConTag = use OCamlAst in
 let intrinsicOpTensor = use OCamlAst in
   concat "Boot.Intrinsics.T."
 
-let intrinsicOpTensorNum = use OCamlAst in
-  concat "Boot.Intrinsics.T.Num."
-
-let intrinsicOpTensorNoNum = use OCamlAst in
-  concat "Boot.Intrinsics.T.NoNum."
-
 let intrinsicOpBootparser = use OCamlAst in
   concat "Boot.Bootparser."
 

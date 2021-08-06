@@ -386,9 +386,13 @@ let arity = function
       1
   | CtensorShape ->
       1
-  | CtensorCopyExn None ->
+  | CtensorCopy ->
+      1
+  | CtensorTransposeExn (None, None) ->
+      3
+  | CtensorTransposeExn (_, None) ->
       2
-  | CtensorCopyExn (Some _) ->
+  | CtensorTransposeExn (_, Some _) ->
       1
   | CtensorReshapeExn None ->
       2
@@ -407,6 +411,16 @@ let arity = function
   | CtensorIterSlice None ->
       2
   | CtensorIterSlice (Some _) ->
+      1
+  | CtensorEq (None, None) ->
+      3
+  | CtensorEq (_, None) ->
+      2
+  | CtensorEq (_, Some _) ->
+      1
+  | Ctensor2string None ->
+      2
+  | Ctensor2string (Some _) ->
       1
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
@@ -1123,7 +1137,7 @@ let delta eval env fi c v =
         |> function
         | TmConst (_, CInt n) -> n | _ -> raise_error fi "Expected integer"
       in
-      T.CArray.create_int shape f |> fun t -> TmTensor (fi, T.CArrayIntBoot t)
+      T.create_int shape f |> fun t -> TmTensor (fi, T.TBootInt t)
   | CtensorCreateCArrayInt _, _ ->
       fail_constapp fi
   | CtensorCreateCArrayFloat None, TmSeq (_, seq) ->
@@ -1137,8 +1151,7 @@ let delta eval env fi c v =
         |> function
         | TmConst (_, CFloat r) -> r | _ -> raise_error fi "Expected float"
       in
-      T.CArray.create_float shape f
-      |> fun t -> TmTensor (fi, T.CArrayFloatBoot t)
+      T.create_float shape f |> fun t -> TmTensor (fi, T.TBootFloat t)
   | CtensorCreateCArrayFloat _, _ ->
       fail_constapp fi
   | CtensorCreateDense None, TmSeq (_, seq) ->
@@ -1149,7 +1162,7 @@ let delta eval env fi c v =
         let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         TmApp (fi, tm, tmseq) |> eval env
       in
-      T.Dense.create shape f |> fun t -> TmTensor (fi, T.DenseBoot t)
+      T.create_generic shape f |> fun t -> TmTensor (fi, T.TBootGen t)
   | CtensorCreateDense _, _ ->
       fail_constapp fi
   | CtensorGetExn None, TmTensor (_, t) ->
@@ -1159,29 +1172,34 @@ let delta eval env fi c v =
       try
         t
         |> function
-        | T.CArrayIntBoot t' ->
-            TmConst (fi, CInt (T.CArray.get_exn t' is))
-        | T.CArrayFloatBoot t' ->
-            TmConst (fi, CFloat (T.CArray.get_exn t' is))
-        | T.DenseBoot t' ->
-            T.Dense.get_exn t' is
+        | T.TBootInt t' ->
+            TmConst (fi, CInt (T.Op_mseq_barray.get_exn t' is))
+        | T.TBootFloat t' ->
+            TmConst (fi, CFloat (T.Op_mseq_barray.get_exn t' is))
+        | T.TBootGen t' ->
+            T.Op_mseq_generic.get_exn t' is
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorGetExn _, _ ->
       fail_constapp fi
   | CtensorSetExn (None, None), TmTensor (_, t) ->
       TmConst (fi, CtensorSetExn (Some t, None))
   | CtensorSetExn (Some t, None), TmSeq (_, seq) ->
-      let is = tm_seq2int_seq fi seq in
-      TmConst (fi, CtensorSetExn (Some t, Some is))
-  | CtensorSetExn (Some (T.CArrayIntBoot t), Some is), TmConst (_, CInt n) -> (
-    try T.CArray.set_exn t is n ; tm_unit
+      let idx = tm_seq2int_seq fi seq in
+      TmConst (fi, CtensorSetExn (Some t, Some idx))
+  | CtensorSetExn (Some (T.TBootInt t), Some idx), TmConst (_, CInt n) -> (
+    try
+      T.Op_mseq_barray.set_exn t idx n ;
+      tm_unit
     with Invalid_argument msg -> raise_error fi msg )
-  | CtensorSetExn (Some (T.CArrayFloatBoot t), Some is), TmConst (_, CFloat r)
-    -> (
-    try T.CArray.set_exn t is r ; tm_unit
+  | CtensorSetExn (Some (T.TBootFloat t), Some idx), TmConst (_, CFloat r) -> (
+    try
+      T.Op_mseq_barray.set_exn t idx r ;
+      tm_unit
     with Invalid_argument msg -> raise_error fi msg )
-  | CtensorSetExn (Some (T.DenseBoot t), Some is), tm -> (
-    try T.Dense.set_exn t is tm ; tm_unit
+  | CtensorSetExn (Some (T.TBootGen t), Some idx), tm -> (
+    try
+      T.Op_mseq_generic.set_exn t idx tm ;
+      tm_unit
     with Invalid_argument msg -> raise_error fi msg )
   | CtensorSetExn _, _ ->
       fail_constapp fi
@@ -1189,12 +1207,12 @@ let delta eval env fi c v =
       let n =
         t
         |> function
-        | T.CArrayIntBoot t' ->
-            T.CArray.rank t'
-        | T.CArrayFloatBoot t' ->
-            T.CArray.rank t'
-        | T.DenseBoot t' ->
-            T.Dense.rank t'
+        | T.TBootInt t' ->
+            Tensor.Barray.rank t'
+        | T.TBootFloat t' ->
+            Tensor.Barray.rank t'
+        | T.TBootGen t' ->
+            Tensor.Generic.rank t'
       in
       TmConst (fi, CInt n)
   | CtensorRank, _ ->
@@ -1203,27 +1221,36 @@ let delta eval env fi c v =
       let shape =
         t
         |> function
-        | T.CArrayIntBoot t' ->
-            T.CArray.shape t'
-        | T.CArrayFloatBoot t' ->
-            T.CArray.shape t'
-        | T.DenseBoot t' ->
-            T.Dense.shape t'
+        | T.TBootInt t' ->
+            T.Op_mseq_barray.shape t'
+        | T.TBootFloat t' ->
+            T.Op_mseq_barray.shape t'
+        | T.TBootGen t' ->
+            T.Op_mseq_generic.shape t'
       in
       int_seq2int_tm_seq fi shape
   | CtensorShape, _ ->
       fail_constapp fi
-  | CtensorCopyExn None, TmTensor (_, t1) ->
-      TmConst (fi, CtensorCopyExn (Some t1))
-  | CtensorCopyExn (Some (T.CArrayIntBoot t1)), TmTensor (_, T.CArrayIntBoot t2)
+  | CtensorCopy, TmTensor (_, T.TBootInt t) ->
+      TmTensor (fi, T.TBootInt (Tensor.Barray.copy t))
+  | CtensorCopy, TmTensor (_, T.TBootFloat t) ->
+      TmTensor (fi, T.TBootFloat (Tensor.Barray.copy t))
+  | CtensorCopy, TmTensor (_, T.TBootGen t) ->
+      TmTensor (fi, T.TBootGen (Tensor.Generic.copy t))
+  | CtensorCopy, _ ->
+      fail_constapp fi
+  | CtensorTransposeExn (None, None), TmTensor (_, t) ->
+      TmConst (fi, CtensorTransposeExn (Some t, None))
+  | CtensorTransposeExn (Some t, None), TmConst (_, CInt n) ->
+      TmConst (fi, CtensorTransposeExn (Some t, Some n))
+  | CtensorTransposeExn (Some (T.TBootInt t), Some n1), TmConst (_, CInt n2) ->
+      TmTensor (fi, T.TBootInt (Tensor.Barray.transpose_exn t n1 n2))
+  | CtensorTransposeExn (Some (T.TBootFloat t), Some n1), TmConst (_, CInt n2)
     ->
-      T.CArray.copy_exn t1 t2 ; tm_unit
-  | ( CtensorCopyExn (Some (T.CArrayFloatBoot t1))
-    , TmTensor (_, T.CArrayFloatBoot t2) ) ->
-      T.CArray.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn (Some (T.DenseBoot t1)), TmTensor (_, T.DenseBoot t2) ->
-      T.Dense.copy_exn t1 t2 ; tm_unit
-  | CtensorCopyExn _, _ ->
+      TmTensor (fi, T.TBootFloat (Tensor.Barray.transpose_exn t n1 n2))
+  | CtensorTransposeExn (Some (T.TBootGen t), Some n1), TmConst (_, CInt n2) ->
+      TmTensor (fi, T.TBootGen (Tensor.Generic.transpose_exn t n1 n2))
+  | CtensorTransposeExn _, _ ->
       fail_constapp fi
   | CtensorReshapeExn None, TmTensor (_, t) ->
       TmConst (fi, CtensorReshapeExn (Some t))
@@ -1233,12 +1260,12 @@ let delta eval env fi c v =
         let t' =
           t
           |> function
-          | T.CArrayIntBoot t'' ->
-              T.CArrayIntBoot (T.CArray.reshape_exn t'' is)
-          | T.CArrayFloatBoot t'' ->
-              T.CArrayFloatBoot (T.CArray.reshape_exn t'' is)
-          | T.DenseBoot t'' ->
-              T.DenseBoot (T.Dense.reshape_exn t'' is)
+          | T.TBootInt t'' ->
+              T.TBootInt (T.Op_mseq_barray.reshape_exn t'' is)
+          | T.TBootFloat t'' ->
+              T.TBootFloat (T.Op_mseq_barray.reshape_exn t'' is)
+          | T.TBootGen t'' ->
+              T.TBootGen (T.Op_mseq_generic.reshape_exn t'' is)
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1252,12 +1279,12 @@ let delta eval env fi c v =
         let t' =
           t
           |> function
-          | T.CArrayIntBoot t'' ->
-              T.CArrayIntBoot (T.CArray.slice_exn t'' is)
-          | T.CArrayFloatBoot t'' ->
-              T.CArrayFloatBoot (T.CArray.slice_exn t'' is)
-          | T.DenseBoot t'' ->
-              T.DenseBoot (T.Dense.slice_exn t'' is)
+          | T.TBootInt t'' ->
+              T.TBootInt (T.Op_mseq_barray.slice_exn t'' is)
+          | T.TBootFloat t'' ->
+              T.TBootFloat (T.Op_mseq_barray.slice_exn t'' is)
+          | T.TBootGen t'' ->
+              T.TBootGen (T.Op_mseq_generic.slice_exn t'' is)
         in
         TmTensor (fi, t')
       with Invalid_argument msg -> raise_error fi msg )
@@ -1272,12 +1299,12 @@ let delta eval env fi c v =
       let t' =
         t
         |> function
-        | T.CArrayIntBoot t'' ->
-            T.CArrayIntBoot (T.CArray.sub_exn t'' ofs len)
-        | T.CArrayFloatBoot t'' ->
-            T.CArrayFloatBoot (T.CArray.sub_exn t'' ofs len)
-        | T.DenseBoot t'' ->
-            T.DenseBoot (T.Dense.sub_exn t'' ofs len)
+        | T.TBootInt t'' ->
+            T.TBootInt (Tensor.Barray.sub_exn t'' ofs len)
+        | T.TBootFloat t'' ->
+            T.TBootFloat (Tensor.Barray.sub_exn t'' ofs len)
+        | T.TBootGen t'' ->
+            T.TBootGen (Tensor.Generic.sub_exn t'' ofs len)
       in
       TmTensor (fi, t')
     with Invalid_argument msg -> raise_error fi msg )
@@ -1297,15 +1324,58 @@ let delta eval env fi c v =
       try
         ( t
         |> function
-        | T.CArrayIntBoot t' ->
-            T.CArray.iter_slice (iterf (fun t -> T.CArrayIntBoot t)) t'
-        | T.CArrayFloatBoot t' ->
-            T.CArray.iter_slice (iterf (fun t -> T.CArrayFloatBoot t)) t'
-        | T.DenseBoot t' ->
-            T.Dense.iter_slice (iterf (fun t -> T.DenseBoot t)) t' ) ;
+        | T.TBootInt t' ->
+            Tensor.Uop_barray.iter_slice (iterf (fun t -> T.TBootInt t)) t'
+        | T.TBootFloat t' ->
+            Tensor.Uop_barray.iter_slice (iterf (fun t -> T.TBootFloat t)) t'
+        | T.TBootGen t' ->
+            Tensor.Uop_generic.iter_slice (iterf (fun t -> T.TBootGen t)) t' ) ;
         tm_unit
       with Invalid_argument msg -> raise_error fi msg )
   | CtensorIterSlice _, _ ->
+      fail_constapp fi
+  | CtensorEq (None, None), tm ->
+      TmConst (fi, CtensorEq (Some tm, None))
+  | CtensorEq (Some tm, None), TmTensor (_, t1) ->
+      TmConst (fi, CtensorEq (Some tm, Some t1))
+  | CtensorEq (Some tm, Some t1), TmTensor (_, t2) -> (
+      let eq wrapx wrapy x y =
+        TmApp (fi, TmApp (fi, tm, wrapx x), wrapy y)
+        |> eval env
+        |> function TmConst (_, CBool b) -> b | _ -> fail_constapp fi
+      in
+      let int_ x = TmConst (fi, CInt x) in
+      let float_ x = TmConst (fi, CFloat x) in
+      let bool_ x = TmConst (fi, CBool x) in
+      match (t1, t2) with
+      | T.TBootInt t1', T.TBootInt t2' ->
+          let eq = eq int_ int_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootFloat t2' ->
+          let eq = eq float_ float_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootInt t1', T.TBootFloat t2' ->
+          let eq = eq int_ float_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootInt t2' ->
+          let eq = eq float_ int_ in
+          bool_ (Tensor.Bop_barray_barray.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootGen t2' ->
+          let eq = eq Fun.id Fun.id in
+          bool_ (Tensor.Bop_generic_generic.equal eq t1' t2')
+      | T.TBootInt t1', T.TBootGen t2' ->
+          let eq = eq int_ Fun.id in
+          bool_ (Tensor.Bop_barray_generic.equal eq t1' t2')
+      | T.TBootFloat t1', T.TBootGen t2' ->
+          let eq = eq float_ Fun.id in
+          bool_ (Tensor.Bop_barray_generic.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootInt t2' ->
+          let eq = eq Fun.id int_ in
+          bool_ (Tensor.Bop_generic_barray.equal eq t1' t2')
+      | T.TBootGen t1', T.TBootFloat t2' ->
+          let eq = eq Fun.id float_ in
+          bool_ (Tensor.Bop_generic_barray.equal eq t1' t2') )
+  | CtensorEq _, _ ->
       fail_constapp fi
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _, _ ->
@@ -1314,12 +1384,36 @@ let delta eval env fi c v =
       let keywords =
         Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMExprString (Some keywords))
+  | Ctensor2string None, tm ->
+      TmConst (fi, Ctensor2string (Some tm))
+  | Ctensor2string (Some el2str), TmTensor (_, t) ->
+      let to_ustring = function
+        | TmSeq (_, tms) ->
+            tmseq2ustring fi tms
+        | _ ->
+            fail_constapp fi
+      in
+      let el2str x = eval env (TmApp (fi, el2str, x)) |> to_ustring in
+      ( match t with
+      | T.TBootInt t' ->
+          Tensor.Uop_barray.to_ustring
+            (fun x -> TmConst (fi, CInt x) |> el2str)
+            t'
+      | T.TBootFloat t' ->
+          Tensor.Uop_barray.to_ustring
+            (fun x -> TmConst (fi, CFloat x) |> el2str)
+            t'
+      | T.TBootGen t' ->
+          Tensor.Uop_generic.to_ustring el2str t' )
+      |> fun str -> TmSeq (fi, ustring2tmseq fi str)
+  | Ctensor2string _, _ ->
+      fail_constapp fi
   | CbootParserParseMExprString (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMExprString keywords (tmseq2seqOfInt fi seq) in
+      let t = Bootparser.parseMExprString keywords (tmseq2seq_of_int fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
@@ -1327,12 +1421,12 @@ let delta eval env fi c v =
       let keywords =
         Mseq.map
           (function
-            | TmSeq (_, s) -> tmseq2seqOfInt fi s | _ -> fail_constapp fi )
+            | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
           seq
       in
       TmConst (fi, CbootParserParseMCoreFile (Some keywords))
   | CbootParserParseMCoreFile (Some keywords), TmSeq (fi, seq) ->
-      let t = Bootparser.parseMCoreFile keywords (tmseq2seqOfInt fi seq) in
+      let t = Bootparser.parseMCoreFile keywords (tmseq2seq_of_int fi seq) in
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMCoreFile _, _ ->
       fail_constapp fi
@@ -1490,12 +1584,28 @@ let rec val_equal v1 v2 =
       c1 = c2
   | TmConApp (_, _, sym1, v1), TmConApp (_, _, sym2, v2) ->
       sym1 = sym2 && val_equal v1 v2
-  | TmTensor (_, T.CArrayIntBoot t1), TmTensor (_, T.CArrayIntBoot t2) ->
+  | TmTensor (_, T.TBootInt t1), TmTensor (_, T.TBootInt t2) ->
       t1 = t2
-  | TmTensor (_, T.CArrayFloatBoot t1), TmTensor (_, T.CArrayFloatBoot t2) ->
+  | TmTensor (_, T.TBootFloat t1), TmTensor (_, T.TBootFloat t2) ->
       t1 = t2
-  | TmTensor (_, T.DenseBoot t1), TmTensor (_, T.DenseBoot t2) ->
-      Tensor.Dense.equal val_equal t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_generic_generic.equal val_equal t1 t2
+  | TmTensor (fi, T.TBootInt t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CInt x)))
+        t1 t2
+  | TmTensor (fi, T.TBootFloat t1), TmTensor (_, T.TBootGen t2) ->
+      Tensor.Bop_barray_generic.equal
+        (fun x -> val_equal (TmConst (fi, CFloat x)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootInt t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CInt y)))
+        t1 t2
+  | TmTensor (_, T.TBootGen t1), TmTensor (fi, T.TBootFloat t2) ->
+      Tensor.Bop_generic_barray.equal
+        (fun x y -> val_equal x (TmConst (fi, CFloat y)))
+        t1 t2
   | _ ->
       false
 

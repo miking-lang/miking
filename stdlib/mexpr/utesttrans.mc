@@ -358,6 +358,13 @@ let _equalSeq = lam ty. lam elemEqualFuncName.
   lam_ "a" ty (lam_ "b" ty
     (appf3_ (var_ "eqSeq") (nvar_ elemEqualFuncName) (var_ "a") (var_ "b")))
 
+let _equalTensor = lam ty. lam elemEqualFuncName.
+  lam_ "a" ty (lam_ "b" ty
+    (utensorEq_ (nvar_ elemEqualFuncName) (var_ "a") (var_ "b")))
+
+let _pprintTensor = lam ty. lam elemPprintFuncName.
+  lam_ "a" ty (utensor2string_ (nvar_ elemPprintFuncName) (var_ "a"))
+
 let _pprintRecord = use MExprAst in
   lam env. lam ty. lam fields.
   if mapIsEmpty fields then lam_ "a" ty (str_ "()")
@@ -513,6 +520,10 @@ let getTypeFunctions =
     let elemPprintName = getPprintFuncName env elemTy in
     let elemEqualName = getEqualFuncName env elemTy in
     (_pprintSeq ty elemPprintName, Some (_equalSeq ty elemEqualName))
+  else match ty with TyTensor {ty = elemTy} then
+    let elemPprintName = getPprintFuncName env elemTy in
+    let elemEqualName = getEqualFuncName env elemTy in
+    (_pprintTensor ty elemPprintName , Some (_equalTensor ty elemEqualName))
   else match ty with TyRecord {fields = fields} then
     ( _pprintRecord env ty fields
     , Some (_equalRecord env ty fields))

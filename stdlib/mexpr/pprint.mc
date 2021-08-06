@@ -799,10 +799,13 @@ lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
   | CTensorRank _ -> "tensorRank"
   | CTensorShape _ -> "tensorShape"
   | CTensorReshapeExn _ -> "tensorReshapeExn"
-  | CTensorCopyExn _ -> "tensorCopyExn"
+  | CTensorCopy _ -> "tensorCopy"
+  | CTensorTransposeExn _ -> "tensorTransposeExn"
   | CTensorSliceExn _ -> "tensorSliceExn"
   | CTensorSubExn _ -> "tensorSubExn"
   | CTensorIterSlice _ -> "tensorIterSlice"
+  | CTensorEq _ -> "tensorEq"
+  | CTensorToString _ -> "tensor2string"
 end
 
 lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint

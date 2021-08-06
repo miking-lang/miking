@@ -40,6 +40,8 @@ let reserved_strings = [
   ("never",         fun(i) -> Parser.NEVER{i=i;v=()});
   ("using",         fun(i) -> Parser.USING{i=i;v=()});
   ("external",      fun(i) -> Parser.EXTERNAL{i=i;v=()});
+  ("switch",        fun(i) -> Parser.SWITCH{i=i;v=()});
+  ("case",          fun(i) -> Parser.CASE{i=i;v=()});
 
   (* Types *)
   ("Unknown",       fun(i) -> Parser.TUNKNOWN{i=i;v=()});

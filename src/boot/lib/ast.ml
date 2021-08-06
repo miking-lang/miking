@@ -174,11 +174,14 @@ and const =
   | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
   | CtensorShape
-  | CtensorCopyExn of tm T.t option
+  | CtensorCopy
+  | CtensorTransposeExn of tm T.t option * int option
   | CtensorReshapeExn of tm T.t option
   | CtensorSliceExn of tm T.t option
   | CtensorSubExn of tm T.t option * int option
   | CtensorIterSlice of tm option
+  | CtensorEq of tm option * tm T.t option
+  | Ctensor2string of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
@@ -622,11 +625,14 @@ let const_has_side_effect = function
   | CtensorSetExn _
   | CtensorRank
   | CtensorShape
-  | CtensorCopyExn _
+  | CtensorCopy
+  | CtensorTransposeExn _
   | CtensorReshapeExn _
   | CtensorSliceExn _
   | CtensorSubExn _
-  | CtensorIterSlice _ ->
+  | CtensorIterSlice _
+  | CtensorEq _
+  | Ctensor2string _ ->
       true
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _
@@ -648,7 +654,7 @@ let const_has_side_effect = function
       true
 
 (* Converts a sequence of terms to a sequence of integers *)
-let tmseq2seqOfInt fi s =
+let tmseq2seq_of_int fi s =
   Mseq.map
     (fun x ->
       match x with
@@ -659,7 +665,7 @@ let tmseq2seqOfInt fi s =
     s
 
 (* Converts a sequence of terms to a ustring *)
-let tmseq2ustring fi s = tmseq2seqOfInt fi s |> Mseq.Helpers.to_ustring
+let tmseq2ustring fi s = tmseq2seq_of_int fi s |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =

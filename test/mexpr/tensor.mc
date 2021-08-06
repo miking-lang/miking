@@ -34,12 +34,16 @@ let testTensors =
     tensorIterSlice (lam. lam e. tensorSetExn e [] v) t1
   in
 
- -- Rank < 2 Tensors
+  -- Rank < 2 Tensors
   let mkRank2TestTensor = lam.
     tcreate [3, 4] (lam is.
                       let i = get is 0 in
                       let j = get is 1 in
                       fromInt (addi (addi (muli i 4) j) 1)) in
+
+  -- Create and Get
+  let t = tcreate [] (lam. v1) in
+  utest tensorGetExn t [] with v1 using eq in
 
   -- Set and Get
   let t = tensorRepeat [] v0 in
@@ -65,21 +69,46 @@ let testTensors =
   utest tensorGetExn t [2, 3] with v12 using eq in
 
   -- Copy
-  let t1 = tensorRepeat [3, 4] v0 in
-  let t2 = mkRank2TestTensor () in
-  tensorCopyExn t2 t1;
+  let t1 = mkRank2TestTensor () in
+  let t2 = tensorCopy t1 in
+  utest tensorRank t2 with 2 in
+  utest tensorShape t2 with [3, 4] in
+  utest tensorGetExn t2 [0, 0] with v1 using eq in
+  utest tensorGetExn t2 [0, 1] with v2 using eq in
+  utest tensorGetExn t2 [0, 2] with v3 using eq in
+  utest tensorGetExn t2 [0, 3] with v4 using eq in
+  utest tensorGetExn t2 [1, 0] with v5 using eq in
+  utest tensorGetExn t2 [1, 1] with v6 using eq in
+  utest tensorGetExn t2 [1, 2] with v7 using eq in
+  utest tensorGetExn t2 [1, 3] with v8 using eq in
+  utest tensorGetExn t2 [2, 0] with v9 using eq in
+  utest tensorGetExn t2 [2, 1] with v10 using eq in
+  utest tensorGetExn t2 [2, 2] with v11 using eq in
+  utest tensorGetExn t2 [2, 3] with v12 using eq in
+  tensorSetExn t2 [0, 0] v0;
   utest tensorGetExn t1 [0, 0] with v1 using eq in
-  utest tensorGetExn t1 [0, 1] with v2 using eq in
-  utest tensorGetExn t1 [0, 2] with v3 using eq in
-  utest tensorGetExn t1 [0, 3] with v4 using eq in
-  utest tensorGetExn t1 [1, 0] with v5 using eq in
-  utest tensorGetExn t1 [1, 1] with v6 using eq in
-  utest tensorGetExn t1 [1, 2] with v7 using eq in
-  utest tensorGetExn t1 [1, 3] with v8 using eq in
-  utest tensorGetExn t1 [2, 0] with v9 using eq in
-  utest tensorGetExn t1 [2, 1] with v10 using eq in
-  utest tensorGetExn t1 [2, 2] with v11 using eq in
-  utest tensorGetExn t1 [2, 3] with v12 using eq in
+
+  -- Transpose
+  let t1 = mkRank2TestTensor () in
+  let t2 = tensorTransposeExn t1 0 1 in
+  utest tensorRank t2 with 2 in
+  utest tensorShape t2 with [4, 3] in
+  utest tensorRank t1 with 2 in
+  utest tensorShape t1 with [3, 4] in
+  utest tensorGetExn t2 [0, 0] with v1 using eq in
+  utest tensorGetExn t2 [1, 0] with v2 using eq in
+  utest tensorGetExn t2 [2, 0] with v3 using eq in
+  utest tensorGetExn t2 [3, 0] with v4 using eq in
+  utest tensorGetExn t2 [0, 1] with v5 using eq in
+  utest tensorGetExn t2 [1, 1] with v6 using eq in
+  utest tensorGetExn t2 [2, 1] with v7 using eq in
+  utest tensorGetExn t2 [3, 1] with v8 using eq in
+  utest tensorGetExn t2 [0, 2] with v9 using eq in
+  utest tensorGetExn t2 [1, 2] with v10 using eq in
+  utest tensorGetExn t2 [2, 2] with v11 using eq in
+  utest tensorGetExn t2 [3, 2] with v12 using eq in
+  tensorSetExn t2 [0, 0] v0;
+  utest tensorGetExn t1 [0, 0] with v1 using eq in
 
   -- Reshape
   let t = mkRank2TestTensor () in
@@ -179,23 +208,32 @@ let testTensors =
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
 
-  -- Slice and Copy
+  -- Slice and copy
   let t = mkRank2TestTensor () in
   let t1 = tensorSliceExn t [0] in
-  let t2 = tensorSliceExn t [1] in
-  tensorCopyExn t1 t2;
+  let t2 = tensorCopy t1 in
+  utest tensorRank t with 2 in
+  utest tensorShape t with [3, 4] in
   utest tensorGetExn t [0, 0] with v1 using eq in
   utest tensorGetExn t [0, 1] with v2 using eq in
   utest tensorGetExn t [0, 2] with v3 using eq in
   utest tensorGetExn t [0, 3] with v4 using eq in
-  utest tensorGetExn t [1, 0] with v1 using eq in
-  utest tensorGetExn t [1, 1] with v2 using eq in
-  utest tensorGetExn t [1, 2] with v3 using eq in
-  utest tensorGetExn t [1, 3] with v4 using eq in
+  utest tensorGetExn t [1, 0] with v5 using eq in
+  utest tensorGetExn t [1, 1] with v6 using eq in
+  utest tensorGetExn t [1, 2] with v7 using eq in
+  utest tensorGetExn t [1, 3] with v8 using eq in
   utest tensorGetExn t [2, 0] with v9 using eq in
   utest tensorGetExn t [2, 1] with v10 using eq in
   utest tensorGetExn t [2, 2] with v11 using eq in
   utest tensorGetExn t [2, 3] with v12 using eq in
+  utest tensorRank t2 with 1 in
+  utest tensorShape t2 with [4] in
+  utest tensorGetExn t2 [0] with v1 using eq in
+  utest tensorGetExn t2 [1] with v2 using eq in
+  utest tensorGetExn t2 [2] with v3 using eq in
+  utest tensorGetExn t2 [3] with v4 using eq in
+  tensorSetExn t2 [0] v0;
+  utest tensorGetExn t [0, 0] with v1 using eq in
 
   -- Sub
   let t = mkRank2TestTensor () in
@@ -272,6 +310,13 @@ let testTensors =
   utest tensorGetExn t [1, 0] with v2 using eq in
   utest tensorGetExn t [1, 1] with v3 using eq in
 
+  -- Eq
+  let t1 = mkRank2TestTensor () in
+  let t2 = mkRank2TestTensor () in
+  utest tensorEq eq t1 t2 with true in
+  tensorSetExn t1 [0, 0] v0;
+  utest tensorEq eq t1 t2 with false in
+
   -- Rank 3 Tensors
   let mkRank3TestTensor = lam.
     tcreate [2, 2, 3] (lam is.
@@ -281,7 +326,7 @@ let testTensors =
                          let ofs = addi k (muli 3 (addi j (muli 2 i))) in
                          fromInt (addi ofs 1)) in
 
-  -- Get Set
+  -- Get
   let t = mkRank3TestTensor () in
   utest tensorRank t with 3 in
   utest tensorShape t with [2, 2, 3] in
@@ -297,6 +342,24 @@ let testTensors =
   utest tensorGetExn t [1, 1, 0] with v10 using eq in
   utest tensorGetExn t [1, 1, 1] with v11 using eq in
   utest tensorGetExn t [1, 1, 2] with v12 using eq in
+
+  -- Transpose
+  let t1 = mkRank3TestTensor () in
+  let t2 = tensorTransposeExn t1 0 2 in
+  utest tensorRank t2 with 3 in
+  utest tensorShape t2 with [3, 2, 2] in
+  utest tensorGetExn t2 [0, 0, 0] with v1 using eq in
+  utest tensorGetExn t2 [1, 0, 0] with v2 using eq in
+  utest tensorGetExn t2 [2, 0, 0] with v3 using eq in
+  utest tensorGetExn t2 [0, 1, 0] with v4 using eq in
+  utest tensorGetExn t2 [1, 1, 0] with v5 using eq in
+  utest tensorGetExn t2 [2, 1, 0] with v6 using eq in
+  utest tensorGetExn t2 [0, 0, 1] with v7 using eq in
+  utest tensorGetExn t2 [1, 0, 1] with v8 using eq in
+  utest tensorGetExn t2 [2, 0, 1] with v9 using eq in
+  utest tensorGetExn t2 [0, 1, 1] with v10 using eq in
+  utest tensorGetExn t2 [1, 1, 1] with v11 using eq in
+  utest tensorGetExn t2 [2, 1, 1] with v12 using eq in
 
   -- Reshape
   let t = mkRank3TestTensor () in
@@ -407,3 +470,28 @@ let _void = testTensors tensorCreateCArrayFloat eqf int2float vs
 
 let vs = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12]]
 let _void = testTensors tensorCreateDense (eqSeq eqi) (lam x. [x]) vs
+
+-- Create
+let t = tensorCreateDense [2, 3] (lam idx. idx)
+utest tensorGetExn t [0, 0] with [0, 0]
+utest tensorGetExn t [0, 1] with [0, 1]
+utest tensorGetExn t [0, 2] with [0, 2]
+utest tensorGetExn t [1, 0] with [1, 0]
+utest tensorGetExn t [1, 1] with [1, 1]
+utest tensorGetExn t [1, 2] with [1, 2]
+
+-- To string and utest
+let t : Tensor[Int] = tensorCreateCArrayInt [2, 3] (foldl addi 0)
+utest tensor2string int2string t with "\n[\n\t[0, 1, 2],\n\t[1, 2, 3]\n]\n"
+utest t with t
+
+let t : Tensor[Float] =
+  tensorCreateCArrayFloat [2, 3] (lam idx. int2float (foldl addi 0 idx))
+utest tensor2string float2string t
+with "\n[\n\t[0., 1., 2.],\n\t[1., 2., 3.]\n]\n"
+utest t with t
+
+let t : Tensor[[Int]] = tensorCreateDense [2, 3] (lam idx. [foldl addi 0 idx])
+utest tensor2string (lam x. join ["[", int2string (get x 0) ,"]"]) t
+with "\n[\n\t[[0], [1], [2]],\n\t[[1], [2], [3]]\n]\n"
+utest t with t

@@ -406,10 +406,10 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
       let op =
         let elt = (elty1, elty2, elty3) in
         match elt with (TyInt _, TyInt _, OTyBigarrayIntElt _) then
-          "carray_int"
+          "Helpers.of_genarray_clayout"
         else match elt with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _)
         then
-          "carray_float"
+          "Helpers.of_genarray_clayout"
         else infoErrorExit info "Cannot convert bigarray"
       in
       let lhs = OTmVarExt { ident = intrinsicOpTensor op } in
@@ -433,16 +433,16 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
         let eltr = (elty1, elty2, elty3, rank) in
         match eltr
         with (TyInt _, TyInt _, OTyBigarrayIntElt _, 1) then
-          "Helpers.of_array1_clayout_int"
+          "Helpers.of_array1_clayout"
         else match eltr
         with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 1) then
-          "Helpers.of_array1_clayout_float"
+          "Helpers.of_array1_clayout"
         else match eltr
         with (TyInt _, TyInt _, OTyBigarrayIntElt _, 2) then
-          "Helpers.of_array2_clayout_int"
+          "Helpers.of_array2_clayout"
         else match eltr
         with (TyFloat _, TyFloat _, OTyBigarrayFloat64Elt _, 2) then
-          "Helpers.of_array2_clayout_float"
+          "Helpers.of_array2_clayout"
         else infoErrorExit info "Cannot convert bigarray"
       in
       let lhs = OTmVarExt { ident = intrinsicOpTensor op } in

@@ -774,10 +774,13 @@ lang TensorOpAst = ConstAst
   | CTensorRank {}
   | CTensorShape {}
   | CTensorReshapeExn {}
-  | CTensorCopyExn {}
+  | CTensorCopy {}
+  | CTensorTransposeExn {}
   | CTensorSliceExn {}
   | CTensorSubExn {}
   | CTensorIterSlice {}
+  | CTensorEq {}
+  | CTensorToString {}
 end
 
 lang BootParserAst = ConstAst
