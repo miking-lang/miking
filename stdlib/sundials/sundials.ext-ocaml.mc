@@ -129,6 +129,8 @@ let sundialsExtMap =
         ty = tyarrows_ [
                otyopaque_,
                tyfloat_,
+               otylabel_ "y" otyopaque_,
+               otylabel_ "y'" otyopaque_,
                otyunit_
         ],
         libraries = ["sundialsml"] }
@@ -141,6 +143,18 @@ let sundialsExtMap =
                otyopaque_,
                otyopaque_,
                otytuple_ [tyfloat_, otyopaque_]
+        ],
+        libraries = ["sundialsml"] }
+    ]),
+    ("externalIdaReinit", [
+      { ident = "Ida.reinit",
+        ty = tyarrows_ [
+          otyopaque_,
+          otylabel_ "roots" (otytuple_ [tyint_, tyidarootf]),
+          tyfloat_,
+          otyopaque_,
+          otyopaque_,
+          otyunit_
         ],
         libraries = ["sundialsml"] }
     ])
