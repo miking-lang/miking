@@ -435,7 +435,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
   | _ -> []
 end
 
-lang FutharkGenerate = FutharkToplevelGenerate + MExprCmpClosed
+lang FutharkGenerate = FutharkToplevelGenerate + MExprCmp
   sem generateProgram =
   | prog ->
     let emptyEnv = {

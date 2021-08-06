@@ -360,9 +360,9 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     else never
   | FEMatch {target = target, cases = cases} ->
     let aindent = pprintIncr indent in
-    let pprintCase = lam env : PprintEnv. lam case : (FutPat, FutExpr).
-      match pprintPat indent env case.0 with (env, pat) then
-        match pprintExpr aindent env case.1 with (env, expr) then
+    let pprintCase = lam env : PprintEnv. lam matchCase : (FutPat, FutExpr).
+      match pprintPat indent env matchCase.0 with (env, pat) then
+        match pprintExpr aindent env matchCase.1 with (env, expr) then
           (env, join ["case ", pat, " ->", pprintNewline aindent, expr])
         else never
       else never

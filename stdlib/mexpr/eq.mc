@@ -326,6 +326,7 @@ lang CmpIntEq = CmpIntAst
   | CEqi {} -> match lhs with CEqi _ then true else false
   | CLti {} -> match lhs with CLti _ then true else false
   | CLeqi {} -> match lhs with CLeqi _ then true else false
+  | CGti {} -> match lhs with CGti _ then true else false
 end
 
 lang CmpFloatEq = CmpFloatAst
