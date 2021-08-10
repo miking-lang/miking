@@ -23,6 +23,7 @@ build_boot(){
     mkdir -p build
     dune build
     cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
+    dune install > /dev/null 2>&1
 }
 
 
