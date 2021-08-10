@@ -330,7 +330,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     match pprintExpr aindent env body with (env, body) then
       match pprintExpr indent env inexpr with (env, inexpr) then
         match pprintVarName env ident with (env, ident) then
-          (env, join ["let ", ident, " = ", body, " in",
+          (env, join ["let ", ident, " =", pprintNewline aindent, body, " in",
                       pprintNewline indent, inexpr])
         else never
       else never
