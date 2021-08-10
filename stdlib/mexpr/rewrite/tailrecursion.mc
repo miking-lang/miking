@@ -13,6 +13,7 @@
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/rewrite/function-properties.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
@@ -80,22 +81,7 @@ let tailPositionExpressionInfo : Name -> Expr -> Option TailPosInfo =
       (lam. Some {binop = binop, side = side})
   else None ()
 
--- Returns the neutral element of the given binary operator, if it has been
--- hardcoded.
-let getNeutralElementOfOperator : Expr -> Option Expr =
-  use MExprAst in
-  lam binop.
-  let i = infoTm binop in
-  match binop with TmConst {val = CAddi _} then
-    Some (TmConst {val = CInt {val = 0}, ty = TyInt {info = i}, info = i})
-  else match binop with TmConst {val = CMuli _} then
-    Some (TmConst {val = CInt {val = 1}, ty = TyInt {info = i}, info = i})
-  else match binop with TmConst {val = CConcat _} then
-    Some (TmSeq {tms = [], ty = TySeq {ty = TyUnknown {info = i}, info = i},
-                 info = i})
-  else None ()
-
-lang MExprTailRecursion = MExprParallelKeywordMaker
+lang MExprTailRecursion = MExprParallelKeywordMaker + PMExprFunctionProperties
   -- Attempts to construct a tail-recursion rewrite environment from the given
   -- recursive binding. If this succeeds, this environment can be used to rewrite
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
@@ -130,12 +116,14 @@ lang MExprTailRecursion = MExprParallelKeywordMaker
     let exprs = findExpressionsAtTailPosition binding.body in
     let tailPosInfo = map (tailPositionExpressionInfo binding.ident) exprs in
     match foldl compatibleBinop (None ()) tailPosInfo with Some binop then
-      match getNeutralElementOfOperator binop with Some ne then
-        match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
-          let leftArgRecursion =
-            match side with Left () | Both () then true else false
-          in
-          Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
+      if isAssociative binop then
+        match getNeutralElement binop with Some ne then
+          match foldl compatibleArgumentSide (None ()) tailPosInfo with Some side then
+            let leftArgRecursion =
+              match side with Left () | Both () then true else false
+            in
+            Some {binop = binop, ne = ne, leftArgRecursion = leftArgRecursion}
+          else None ()
         else None ()
       else None ()
     else None ()

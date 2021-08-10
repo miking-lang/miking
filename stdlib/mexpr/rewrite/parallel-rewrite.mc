@@ -268,7 +268,7 @@ let expr = preprocess (bindall_ [
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
-utest containsParallelKeyword expr with true in
+utest containsParallelKeyword expr with false in
 
 let iterMax = nameSym "iterMax" in
 let max = nameSym "max" in

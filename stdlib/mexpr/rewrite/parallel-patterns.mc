@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "mexpr/rewrite/function-properties.mc"
 include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
@@ -326,10 +327,10 @@ let getMap2Pattern = lam.
     modref map2PatRef (Some pat);
     pat
 
--- Definition of the 'parallelReduce' pattern
+-- Definition of the 'parallelReduce'/'foldLeft' pattern
 let reducePatRef : Ref (Option Pattern) = ref (None ())
 let reducePattern : () -> Pattern =
-  use MExprParallelKeywordMaker in
+  use PMExprFunctionProperties in
   lam.
   let s = nameSym "s" in
   let acc = nameSym "acc" in
@@ -347,9 +348,25 @@ let reducePattern : () -> Pattern =
     ReturnPattern {id = 8, var = PatternIndex 1}
   ] in
   let replacement : Map VarPattern (Name, Expr) -> Expr = lam matches.
+    let seqReduce = lam f. lam acc. lam s.
+      TmApp {
+        lhs = TmApp {
+          lhs = TmApp {
+            lhs = TmConst {val = CFoldl (), ty = tyunknown_, info = NoInfo ()},
+            rhs = f,
+            ty = tyunknown_,
+            info = NoInfo ()
+          },
+          rhs = acc,
+          ty = tyunknown_,
+          info = NoInfo ()
+        },
+        rhs = s,
+        ty = tyunknown_,
+        info = NoInfo ()} in
     let patternName = "parallelReduce" in
     let branchExpr = getMatchExpr patternName (PatternIndex 1) matches in
-    let fResultName = getMatchName patternName (PatternIndex 5) matches in
+    let fResultPair : (Name, Expr) = getMatch patternName (PatternIndex 5) matches in
     let accPair : (Name, Expr) = getMatch patternName (PatternName acc) matches in
     let headPair : (Name, Expr) = getMatch patternName (PatternIndex 4) matches in
     let sExpr = getMatchExpr patternName (PatternName s) matches in
@@ -364,8 +381,13 @@ let reducePattern : () -> Pattern =
           TmVar {ident = y, ty = tyWithInfo info (ty headPair.1), info = info})
       ] in
       let els = substituteVariables els subMap in
-      let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultName)) in
-      parallelReduce_ (nulam_ x (nulam_ y els)) accPair.1 sExpr
+      let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultPair.0)) in
+      let f = nulam_ x (nulam_ y els) in
+      match fResultPair.1 with TmApp {lhs = TmApp {lhs = op}} then
+        if and (isAssociative op) (optionIsSome (getNeutralElement op)) then
+          parallelReduce_ f accPair.1 sExpr
+        else seqReduce f accPair.1 sExpr
+      else seqReduce f accPair.1 sExpr
     else
       error (join [
         "Rewriting into parallelReduce pattern failed: BranchPattern matched ",
