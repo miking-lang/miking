@@ -95,7 +95,7 @@ let getNeutralElementOfOperator : Expr -> Option Expr =
                  info = i})
   else None ()
 
-lang MExprTailRecursive = MExprParallelKeywordMaker
+lang MExprTailRecursion = MExprParallelKeywordMaker
   -- Attempts to construct a tail-recursion rewrite environment from the given
   -- recursive binding. If this succeeds, this environment can be used to rewrite
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
@@ -309,7 +309,7 @@ lang MExprTailRecursive = MExprParallelKeywordMaker
 end
 
 lang TestLang =
-  MExprTailRecursive + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
+  MExprTailRecursion + MExprTypeAnnot + MExprSym + MExprEq + MExprPrettyPrint
 
 mexpr
 
