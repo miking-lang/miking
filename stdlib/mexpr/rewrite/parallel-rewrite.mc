@@ -127,7 +127,6 @@ lang TestLang =
   | TmParallelPartition _ -> false
   | TmParallelAll _ -> false
   | TmParallelAny _ -> false
-  | TmSequentialFor _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmParallelMap t ->
@@ -163,21 +162,13 @@ lang TestLang =
   | TmParallelPartition t -> never
   | TmParallelAll t -> never
   | TmParallelAny t -> never
-  | TmSequentialFor t ->
-    match printParen indent env t.body with (env, body) then
-      match pprintCode indent env t.init with (env, init) then
-        match pprintCode indent env t.n with (env, n) then
-          (env, join ["for (", init, ") (", n, ")", pprintNewline indent, body])
-        else never
-      else never
-    else never
 end
 
 mexpr
 
 use TestLang in
 
-let patterns = [getMapPattern (), getReducePattern (), getForPattern()] in
+let patterns = [getMapPattern (), getReducePattern ()] in
 
 let preprocess : Expr -> Expr = lam e.
   normalizeTerm (tailRecursive (rewriteTerm e))
@@ -243,10 +234,32 @@ let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 
-let fold = nameSym "fold" in
+let reduce = nameSym "reduce" in
 let acc = nameSym "acc" in
 let x = nameSym "x" in
 let y = nameSym "y" in
+let expr = preprocess (bindall_ [
+  nureclets_ [
+    (reduce, nulam_ acc (nulam_ s (
+      match_ (nvar_ s)
+        (pseqedgen_ [npvar_ h] t [])
+        (appf2_ (nvar_ reduce)
+          (addi_ (nvar_ acc) (nvar_ h))
+          (nvar_ t))
+        (match_ (nvar_ s)
+          (pseqtot_ [])
+          (nvar_ acc)
+          never_))))],
+  ulet_ "sum" (appf2_ (nvar_ reduce) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
+]) in
+let expr = parallelPatternRewrite patterns expr in
+utest recletBindingCount expr with 0 in
+utest containsParallelKeyword expr with true in
+
+-- When an arbitrary function is passed, the pattern rewriting will make it
+-- sequential. This is because the neutral element cannot be found, nor can the
+-- associativity be confirmed.
+let fold = nameSym "fold" in
 let expr = preprocess (bindall_ [
   nreclets_ [
     (fold, tyunknown_, nulam_ acc (nulam_ f (nulam_ s (
@@ -269,31 +282,5 @@ let expr = preprocess (bindall_ [
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with false in
-
-let iterMax = nameSym "iterMax" in
-let max = nameSym "max" in
-let i = nameSym "i" in
-let n = nameSym "n" in
-let expr = preprocess (bindall_ [
-  nulet_ s (seq_ [int_ 1, int_ 2, int_ 3]),
-  nulet_ n (length_ (nvar_ s)),
-  nreclets_ [
-    (iterMax, tyunknown_, nulam_ acc (nulam_ i (nulam_ n (
-      if_ (eqi_ (nvar_ i) (nvar_ n))
-        (nvar_ acc)
-        (bindall_ [
-          nulet_ x (get_ (nvar_ s) (nvar_ i)),
-          nulet_ y (if_ (gtf_ (app_ (nvar_ f) (nvar_ acc))
-                              (app_ (nvar_ f) (nvar_ x)))
-                        (nvar_ acc)
-                        (nvar_ x)),
-          appf3_ (nvar_ iterMax) (nvar_ y) (addi_ (nvar_ i) (int_ 1)) (nvar_ n)
-        ])))))
-  ],
-  appf3_ (nvar_ iterMax) (head_ (nvar_ s)) (int_ 0) (nvar_ n)
-]) in
-let expr = parallelPatternRewrite patterns expr in
-utest recletBindingCount expr with 0 in
-utest containsParallelKeyword expr with true in
 
 ()

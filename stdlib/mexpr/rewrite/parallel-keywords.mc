@@ -18,7 +18,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition {p: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelAll {p: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelAny {p: Expr, as: Expr, ty: Type, info: Info}
-  | TmSequentialFor {body: Expr, init: Expr, n: Expr, ty: Type, info: Info}
 
   sem isKeyword =
   | TmParallelMap _ -> true
@@ -30,7 +29,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition _ -> true
   | TmParallelAll _ -> true
   | TmParallelAny _ -> true
-  | TmSequentialFor _ -> true
 
   sem matchKeywordString (info : Info) =
   | "parallelMap" ->
@@ -64,10 +62,6 @@ lang MExprParallelKeywordMaker =
   | "parallelAny" ->
     Some (2, lam lst. TmParallelAny {p = get lst 0, as = get lst 1,
                                      ty = TyUnknown {info = info}, info = info})
-  | "for" ->
-    Some (3, lam lst. TmSequentialFor {body = get lst 0, init = get lst 1,
-                                       n = get lst 2, ty = TyUnknown {info = info},
-                                       info = info})
 
   sem ty =
   | TmParallelMap t -> t.ty
@@ -79,7 +73,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition t -> t.ty
   | TmParallelAll t -> t.ty
   | TmParallelAny t -> t.ty
-  | TmSequentialFor t -> t.ty
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmParallelMap t ->
@@ -140,16 +133,6 @@ lang MExprParallelKeywordMaker =
     match f acc t.p with (acc, p) then
       match f acc t.as with (acc, as) then
         (acc, TmParallelAny {{t with p = p} with as = as})
-      else never
-    else never
-  | TmSequentialFor t ->
-    match f acc t.body with (acc, body) then
-      match f acc t.init with (acc, init) then
-        match f acc t.n with (acc, n) then
-          (acc, TmSequentialFor {{{t with body = body}
-                                     with init = init}
-                                     with n = n})
-        else never
       else never
     else never
 
@@ -216,14 +199,17 @@ lang MExprParallelKeywordMaker =
     TmParallelAny {{{t with p = typeAnnotExpr env t.p}
                        with as = typeAnnotExpr env t.as}
                        with ty = tybool_}
-  | TmSequentialFor t ->
-    let body = typeAnnotExpr env t.body in
-    let init = typeAnnotExpr env t.init in
-    let n = typeAnnotExpr env t.n in
-    TmSequentialFor {{{{t with body = body}
-                          with init = init}
-                          with n = n}
-                          with ty = ty body}
+
+  sem symbolizeExpr (env : SymEnv) =
+  | t & (TmParallelMap _) -> t
+  | t & (TmParallelMap2 _) -> t
+  | t & (TmParallelFlatMap _) -> t
+  | t & (TmParallelReduce _) -> t
+  | t & (TmParallelScan _) -> t
+  | t & (TmParallelFilter _) -> t
+  | t & (TmParallelPartition _) -> t
+  | t & (TmParallelAll _) -> t
+  | t & (TmParallelAny _) -> t
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmParallelMap r ->
@@ -286,14 +272,6 @@ lang MExprParallelKeywordMaker =
         eqExprH env free l.as r.as
       else None ()
     else None ()
-  | TmSequentialFor r ->
-    match lhs with TmSequentialFor l then
-      match eqExprH env free l.body r.body with Some free then
-        match eqExprH env free l.init r.init with Some free then
-          eqExprH env free l.n r.n
-        else None ()
-      else None ()
-    else None ()
 
   sem isValue =
   | TmParallelMap _ -> false
@@ -305,7 +283,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelPartition _ -> false
   | TmParallelAll _ -> false
   | TmParallelAny _ -> false
-  | TmSequentialFor _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmParallelMap t ->
@@ -338,10 +315,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelAny t ->
     k (TmParallelAny {{t with p = normalizeTerm t.p}
                           with as = normalizeTerm t.as})
-  | TmSequentialFor t ->
-    k (TmSequentialFor {{{t with body = normalizeTerm t.body}
-                            with init = normalizeTerm t.init}
-                            with n = normalizeTerm t.n})
 end
 
 let parallelMap_ = lam f. lam as.
@@ -380,10 +353,6 @@ let parallelAny_ = lam p. lam as.
   use MExprParallelKeywordMaker in
   TmParallelAny {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                  info = NoInfo ()}
-let sequentialFor_ = lam body. lam init. lam n.
-  use MExprParallelKeywordMaker in
-  TmSequentialFor {body = body, init = init, n = n,
-                   ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
 
 mexpr
 

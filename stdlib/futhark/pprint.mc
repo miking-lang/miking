@@ -229,7 +229,7 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   | FEApp _ -> false
   | FELet _ -> false
   | FEIf _ -> false
-  | FEFor _ -> false
+  | FEForEach _ -> false
   | FEMatch _ -> false
 
   sem pprintParen (indent : Int) (env : PprintEnv) =
@@ -346,14 +346,14 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
         else never
       else never
     else never
-  | FEFor {param = param, loopVar = loopVar, boundExpr = boundExpr, thn = thn} ->
+  | FEForEach {param = param, loopVar = loopVar, seq = seq, body = body} ->
     let aindent = pprintIncr indent in
     match pprintExpr indent env param with (env, param) then
       match pprintVarName env loopVar with (env, loopVar) then
-        match pprintExpr indent env boundExpr with (env, boundExpr) then
-          match pprintExpr aindent env thn with (env, thn) then
-            (env, join ["loop ", param, " for ", loopVar, " < ", boundExpr, " do",
-                        pprintNewline aindent, thn])
+        match pprintExpr indent env seq with (env, seq) then
+          match pprintExpr aindent env body with (env, body) then
+            (env, join ["loop ", param, " for ", loopVar, " in ", seq, " do",
+                        pprintNewline aindent, body])
           else never
         else never
       else never

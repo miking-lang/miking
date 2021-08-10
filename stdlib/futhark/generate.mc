@@ -107,6 +107,7 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CTail _ -> FEBuiltIn {str = "tail"}
   | CNull _ -> FEBuiltIn {str = "null"}
   | CMap _ -> futConst_ (FCMap ())
+  | CFoldl _ -> FEBuiltIn {str = "foldl"}
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst
@@ -275,6 +276,18 @@ lang FutharkAppGenerate = MExprAst + FutharkAst
       rhs = FEApp {
         lhs = FEBuiltIn {str = "f64.floor"},
         rhs = generateExpr env arg}}
+  | (TmApp {
+      rhs = s,
+      lhs = TmApp {
+        rhs = ne,
+        lhs = TmApp {
+          lhs = TmConst {val = CFoldl _},
+          rhs = TmLam {ident = acc, body = TmLam {ident = x, body = body}}}}
+    }) & t ->
+    let subMap = mapFromSeq nameCmp [(acc, lam info. ne)] in
+    let body = substituteVariables body subMap in
+    FEForEach {param = generateExpr env ne, loopVar = x,
+               seq = generateExpr env s, body = generateExpr env body}
   | (TmApp _) & t -> defaultGenerateApp env t
 end
 
@@ -313,12 +326,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     futPartition_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAll t -> futAll_ (generateExpr env t.p) (generateExpr env t.as)
   | TmParallelAny t -> futAny_ (generateExpr env t.p) (generateExpr env t.as)
-  | TmSequentialFor t ->
-    match t.body with TmLam {ident = i, body = body} then
-      FEFor {param = generateExpr env t.init, loopVar = i,
-             boundExpr = generateExpr env t.n,
-             thn = generateExpr env body}
-    else never
 end
 
 lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +
