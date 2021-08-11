@@ -109,6 +109,16 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
         (acc, FEArrayAccess {{t with array = array} with index = index})
       else never
     else never
+  | FEArrayUpdate t ->
+    match f acc t.array with (acc, array) then
+      match f acc t.index with (acc, index) then
+        match f acc t.value with (acc, value) then
+          (acc, FEArrayUpdate {{{t with array = array}
+                                   with index = index}
+                                   with value = value})
+        else never
+      else never
+    else never
   | FEArraySlice t ->
     match f acc t.array with (acc, array) then
       match f acc t.startIdx with (acc, startIdx) then
