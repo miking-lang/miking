@@ -513,33 +513,90 @@ mexpr
 
 use TestLang in
 
-let fName = nameSym "f" in
-let gName = nameSym "g" in
-let minName = nameSym "min" in
-let mapFunc = nameSym "mapFunc" in
-let intseq = nameSym "intseq" in
-let floatseq = nameSym "floatseq" in
 let t = symbolize (bindall_ [
-  ntype_ intseq (tyseq_ tyint_),
-  ntype_ floatseq (tyseq_ tyfloat_),
-  let_ "a" (ntyvar_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
-  let_ "b" (ntyvar_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
+  type_ "intseq" (tyseq_ tyint_),
+  type_ "floatseq" (tyseq_ tyfloat_),
+  let_ "a" (tyvar_ "intseq") (seq_ [int_ 1, int_ 2, int_ 3]),
+  let_ "b" (tyvar_ "floatseq") (seq_ [float_ 2.718, float_ 3.14]),
   let_ "c" (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
            (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
                     [("a", int_ 3), ("b", float_ 2.0)]),
-  nlet_ fName (tyarrows_ [tyint_, tyint_, tyint_])
-              (lam_ "a" tyint_ (lam_ "b" tyint_ (addi_ (var_ "a") (var_ "b")))),
-  nlet_ gName (tyarrows_ [ntyvar_ floatseq, tyfloat_, tyfloat_])
-              (lam_ "r" (ntyvar_ floatseq)
-                (lam_ "f" tyfloat_ (addf_ (var_ "f") (get_ (var_ "r") (int_ 0))))),
-  nlet_ minName (tyarrows_ [tyint_, tyint_, tyint_])
-                (lam_ "a" tyint_ (lam_ "b" tyint_ (
-                  if_ (geqi_ (var_ "a") (var_ "b")) (var_ "b") (var_ "a")))),
-  nlet_ mapFunc (tyarrows_ [tyarrow_ tyint_ tyint_, ntyvar_ intseq, ntyvar_ intseq])
-                (lam_ "f" (tyarrow_ tyint_ tyint_) (lam_ "s" (ntyvar_ intseq)
-                  (parallelMap_ (var_ "f") (var_ "s")))),
+  let_ "f" (tyarrows_ [tyint_, tyint_, tyint_])
+           (lam_ "a" tyint_ (lam_ "b" tyint_ (addi_ (var_ "a") (var_ "b")))),
+  let_ "g" (tyarrows_ [tyvar_ "floatseq", tyfloat_, tyfloat_])
+            (lam_ "r" (tyvar_ "floatseq")
+              (lam_ "f" tyfloat_ (addf_ (var_ "f") (get_ (var_ "r") (int_ 0))))),
+  let_ "min" (tyarrows_ [tyint_, tyint_, tyint_])
+             (lam_ "a" tyint_ (lam_ "b" tyint_ (
+               if_ (geqi_ (var_ "a") (var_ "b")) (var_ "b") (var_ "a")))),
+  let_ "map" (tyarrows_ [tyarrow_ tyint_ tyint_, tyvar_ "intseq", tyvar_ "intseq"])
+             (lam_ "f" (tyarrow_ tyint_ tyint_) (lam_ "s" (tyvar_ "intseq")
+               (parallelMap_ (var_ "f") (var_ "s")))),
   unit_
 ]) in
-let p = generateProgram t in
--- print (expr2str p);
+
+let intseq = nameSym "intseq" in
+let n = nameSym "n" in
+let floatseq = nameSym "floatseq" in
+let n2 = nameSym "n" in
+let a = nameSym "a" in
+let b = nameSym "b" in
+let c = nameSym "c" in
+let f = nameSym "f" in
+let a2 = nameSym "a" in
+let b2 = nameSym "b" in
+let g = nameSym "g" in
+let r = nameSym "r" in
+let f2 = nameSym "f" in
+let min = nameSym "min" in
+let a3 = nameSym "a" in
+let b3 = nameSym "b" in
+let map = nameSym "map" in
+let f3 = nameSym "f" in
+let s = nameSym "s" in
+
+let intSeqType = FTyParamsApp {
+  ty = nFutIdentTy_ intseq, params = [FPSize {val = n}], info = NoInfo ()} in
+let floatSeqType = FTyParamsApp {
+  ty = nFutIdentTy_ floatseq, params = [FPSize {val = n2}], info = NoInfo ()} in
+let expected = FProg {decls = [
+  FDeclType {ident = intseq, typeParams = [FPSize {val = n}],
+             ty = futSizedArrayTy_ futIntTy_ n, info = NoInfo ()},
+  FDeclType {ident = floatseq, typeParams = [FPSize {val = n2}],
+             ty = futSizedArrayTy_ futFloatTy_ n2, info = NoInfo ()},
+  FDeclConst {
+    ident = a, ty = intSeqType,
+    val = futArray_ [futInt_ 1, futInt_ 2, futInt_ 3], info = NoInfo ()},
+  FDeclConst {
+    ident = b, ty = floatSeqType,
+    val = futArray_ [futFloat_ 2.718, futFloat_ 3.14], info = NoInfo ()},
+  FDeclConst {
+    ident = c, ty = futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)],
+    val = futRecord_ [("a", futInt_ 3), ("b", futFloat_ 2.0)],
+    info = NoInfo ()},
+  FDeclFun {
+    ident = f, entry = true, typeParams = [],
+    params = [(a2, futIntTy_), (b2, futIntTy_)], ret = futIntTy_,
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ a2, nFutVar_ b2]},
+  FDeclFun {
+    ident = g, entry = true, typeParams = [],
+    params = [(r, floatSeqType), (f2, futFloatTy_)], ret = futFloatTy_,
+    body =
+      futAppSeq_ (futConst_ (FCAdd ()))
+        [nFutVar_ f2, futArrayAccess_ (nFutVar_ r) (futInt_ 0)]},
+  FDeclFun {
+    ident = min, entry = true, typeParams = [],
+    params = [(a3, futIntTy_), (b3, futIntTy_)], ret = futIntTy_,
+    body =
+      futIf_ (futAppSeq_ (futConst_ (FCGeq ())) [nFutVar_ a3, nFutVar_ b3])
+        (nFutVar_ b3)
+        (nFutVar_ a3)},
+  FDeclFun {
+    ident = map, entry = false, typeParams = [],
+    params = [(f3, futArrowTy_ futIntTy_ futIntTy_), (s, intSeqType)],
+    ret = intSeqType,
+    body = futAppSeq_ (futConst_ (FCMap ())) [nFutVar_ f3, nFutVar_ s]}
+]} in
+utest expr2str (generateProgram t) with expr2str expected using eqSeq eqc in
+
 ()

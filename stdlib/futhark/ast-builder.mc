@@ -65,6 +65,10 @@ let futRecordTy_ = use FutharkAst in
 
 let futUnitTy_ = lam. futRecordTy_ []
 
+let futArrowTy_ = use FutharkAst in
+  lam fromTy. lam toTy.
+  FTyArrow {from = fromTy, to = toTy, info = NoInfo ()}
+
 -- Expressions --
 
 recursive let futBind_ = use FutharkAst in

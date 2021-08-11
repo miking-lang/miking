@@ -74,6 +74,17 @@ lang MExprParallelKeywordMaker =
   | TmParallelAll t -> t.ty
   | TmParallelAny t -> t.ty
 
+  sem withType (ty : Type) =
+  | TmParallelMap t -> TmParallelMap {t with ty = ty}
+  | TmParallelMap2 t -> TmParallelMap2 {t with ty = ty}
+  | TmParallelFlatMap t -> TmParallelFlatMap {t with ty = ty}
+  | TmParallelReduce t -> TmParallelReduce {t with ty = ty}
+  | TmParallelScan t -> TmParallelScan {t with ty = ty}
+  | TmParallelFilter t -> TmParallelFilter {t with ty = ty}
+  | TmParallelPartition t -> TmParallelPartition {t with ty = ty}
+  | TmParallelAll t -> TmParallelAll {t with ty = ty}
+  | TmParallelAny t -> TmParallelAny {t with ty = ty}
+
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmParallelMap t ->
     match f acc t.f with (acc, tf) then
@@ -199,17 +210,6 @@ lang MExprParallelKeywordMaker =
     TmParallelAny {{{t with p = typeAnnotExpr env t.p}
                        with as = typeAnnotExpr env t.as}
                        with ty = tybool_}
-
-  sem symbolizeExpr (env : SymEnv) =
-  | t & (TmParallelMap _) -> t
-  | t & (TmParallelMap2 _) -> t
-  | t & (TmParallelFlatMap _) -> t
-  | t & (TmParallelReduce _) -> t
-  | t & (TmParallelScan _) -> t
-  | t & (TmParallelFilter _) -> t
-  | t & (TmParallelPartition _) -> t
-  | t & (TmParallelAll _) -> t
-  | t & (TmParallelAny _) -> t
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmParallelMap r ->
