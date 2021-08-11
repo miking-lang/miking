@@ -100,14 +100,14 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CGeqi _ | CGeqf _ -> futConst_ (FCGeq ())
   | CLeqi _ | CLeqf _ -> futConst_ (FCLeq ())
   | CCreate _ -> futConst_ (FCTabulate ())
-  | CLength _ -> FEBuiltIn {str = "length"}
-  | CReverse _ -> FEBuiltIn {str = "reverse"}
-  | CConcat _ -> FEBuiltIn {str = "concat"}
-  | CHead _ -> FEBuiltIn {str = "head"}
-  | CTail _ -> FEBuiltIn {str = "tail"}
-  | CNull _ -> FEBuiltIn {str = "null"}
+  | CLength _ -> futConst_ (FCLength ())
+  | CReverse _ -> futConst_ (FCReverse ())
+  | CConcat _ -> futConst_ (FCConcat ())
+  | CHead _ -> futConst_ (FCHead ())
+  | CTail _ -> futConst_ (FCTail ())
+  | CNull _ -> futConst_ (FCNull ())
   | CMap _ -> futConst_ (FCMap ())
-  | CFoldl _ -> FEBuiltIn {str = "foldl"}
+  | CFoldl _ -> futConst_ (FCFoldl ())
 end
 
 lang FutharkPatternGenerate = MExprAst + FutharkAst
@@ -205,11 +205,11 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
       FELet {
         ident = head,
         tyBody = elemTy,
-        body = FEApp {lhs = FEBuiltIn {str = "head"}, rhs = target},
+        body = FEApp {lhs = FEConst {val = FCHead ()}, rhs = target},
         inexpr = FELet {
           ident = tail,
           tyBody = targetTy,
-          body = FEApp {lhs = FEBuiltIn {str = "tail"}, rhs = target},
+          body = FEApp {lhs = FEConst {val = FCTail ()}, rhs = target},
           inexpr = generateExpr env t.thn}}
     else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
@@ -259,7 +259,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst
                         rhs = TmConst {val = CInt {val = 0}}},
            rhs = arg3} ->
     futAppSeq_
-      (FEBuiltIn {str = "take"})
+      (FEConst {val = FCTake ()})
       [generateExpr env arg3, generateExpr env arg1]
   | TmApp {lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                      rhs = arg1},
