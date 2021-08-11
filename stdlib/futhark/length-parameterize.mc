@@ -17,20 +17,22 @@ lang FutharkLengthParameterize = FutharkAst
   | FELet ({ident = ident,
             body = FEApp {lhs = FEConst {val = FCLength ()},
                           rhs = FEVar {ident = s}}} & t) ->
-    match mapLookup s env.params with Some (FTyArray tyArray) then
-      match tyArray.dim with Some k then
-        let newLet = FELet {t with body = FEVar {ident = k,
-                                                 info = tyArray.info}} in
-        smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
-      else
-        let parameterType = FTyArray {tyArray with dim = Some ident} in
-        let typeParam = FPSize {val = ident} in
-        let typeParams = mapInsert ident typeParam env.typeParams in
-        let env = {{env with params = mapInsert s parameterType env.params}
-                        with typeParams = typeParams} in
-        match parameterizeLengthExpr env t.inexpr with (env, inexpr) then
-          (env, inexpr)
-        else never
+    match mapLookup s env.params with Some ty then
+      match ty with FTyArray tyArray then
+        match tyArray.dim with Some k then
+          let newLet = FELet {t with body = FEVar {ident = k,
+                                                   info = tyArray.info}} in
+          smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
+        else
+          let parameterType = FTyArray {tyArray with dim = Some ident} in
+          let typeParam = FPSize {val = ident} in
+          let typeParams = mapInsert ident typeParam env.typeParams in
+          let env = {{env with params = mapInsert s parameterType env.params}
+                          with typeParams = typeParams} in
+          match parameterizeLengthExpr env t.inexpr with (env, inexpr) then
+            (env, inexpr)
+          else never
+      else infoErrorExit t.info "Cannot get length of non-sequence argument"
     else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FELet t)
   | t -> smapAccumL_FExpr_FExpr parameterizeLengthExpr env t
 
