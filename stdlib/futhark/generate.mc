@@ -577,25 +577,29 @@ let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [],
     params = [(a2, futIntTy_), (b2, futIntTy_)], ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ a2, nFutVar_ b2]},
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ a2, nFutVar_ b2],
+    info = NoInfo ()},
   FDeclFun {
     ident = g, entry = true, typeParams = [],
     params = [(r, floatSeqType), (f2, futFloatTy_)], ret = futFloatTy_,
     body =
       futAppSeq_ (futConst_ (FCAdd ()))
-        [nFutVar_ f2, futArrayAccess_ (nFutVar_ r) (futInt_ 0)]},
+        [nFutVar_ f2, futArrayAccess_ (nFutVar_ r) (futInt_ 0)],
+    info = NoInfo ()},
   FDeclFun {
     ident = min, entry = true, typeParams = [],
     params = [(a3, futIntTy_), (b3, futIntTy_)], ret = futIntTy_,
     body =
       futIf_ (futAppSeq_ (futConst_ (FCGeq ())) [nFutVar_ a3, nFutVar_ b3])
         (nFutVar_ b3)
-        (nFutVar_ a3)},
+        (nFutVar_ a3),
+    info = NoInfo ()},
   FDeclFun {
     ident = map, entry = false, typeParams = [],
     params = [(f3, futArrowTy_ futIntTy_ futIntTy_), (s, intSeqType)],
     ret = intSeqType,
-    body = futAppSeq_ (futConst_ (FCMap ())) [nFutVar_ f3, nFutVar_ s]}
+    body = futAppSeq_ (futConst_ (FCMap ())) [nFutVar_ f3, nFutVar_ s],
+    info = NoInfo ()}
 ]} in
 utest expr2str (generateProgram t) with expr2str expected using eqSeq eqc in
 
