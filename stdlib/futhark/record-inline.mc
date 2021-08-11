@@ -1,5 +1,6 @@
 include "stringid.mc"
 include "futhark/ast.mc"
+include "futhark/pprint.mc"
 
 lang FutharkRecordInline = FutharkAst
   sem inlineRecordsExpr (subMap : Map Name Expr) =
@@ -24,5 +25,27 @@ lang FutharkRecordInline = FutharkAst
   | t -> t
 
   sem inlineRecords =
-  | FProg {decls = decls} -> FProg {decls = map inlineRecordsDecl decls}
+  | FProg t -> FProg {t with decls = map inlineRecordsDecl t.decls}
 end
+
+lang TestLang = FutharkRecordInline + FutharkPrettyPrint
+
+mexpr
+
+use TestLang in
+
+let futProgram = lam body.
+  let fun = FDeclFun {
+    ident = nameSym "x", entry = true, typeParams = [], params = [],
+    ret = futUnknownTy_, body = body, info = NoInfo ()} in
+  FProg {decls = [fun]}
+in
+
+let x = nameSym "x" in
+let t = futProgram (futBindall_ [
+  nuFutLet_ x (futRecord_ [("a", futInt_ 2), ("b", futInt_ 4)]),
+  futRecordProj_ (nFutVar_ x) "b"]) in
+let expected = futProgram (futInt_ 4) in
+utest expr2str (inlineRecords t) with expr2str expected using eqSeq eqc in
+
+()
