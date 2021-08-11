@@ -19,7 +19,7 @@ lang FutharkLengthParameterize = FutharkAst
                           rhs = FEVar {ident = s}}} & t) ->
     match mapLookup s env.params with Some (FTyArray tyArray) then
       match tyArray.dim with Some k then
-        let newLet = FELet {t with ident = k} in
+        let newLet = FELet {t with body = FEVar {ident = k}} in
         smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
       else
         let parameterType = FTyArray {tyArray with dim = Some ident} in
@@ -86,6 +86,24 @@ let expected = FProg {decls = [
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
 -- has not been implemented for Futhark AST nodes.
+utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
+
+let t = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = true, typeParams = [FPSize {val = x}],
+    params = [(s, FTyArray {elem = FTyInt (), dim = Some x})],
+    ret = FTyInt (),
+    body = futBindall_ [
+      nFutLet_ y (FTyInt ()) (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]]}]} in
+let expected = FProg {decls = [
+  FDeclFun {
+    ident = f, entry = true, typeParams = [FPSize {val = x}],
+    params = [(s, FTyArray {elem = FTyInt (), dim = Some x})],
+    ret = FTyInt (),
+    body = futBindall_ [
+      nFutLet_ y (FTyInt ()) (nFutVar_ x),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]]}]} in
 utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
 
 ()
