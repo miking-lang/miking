@@ -415,8 +415,9 @@ lang FutharkPrettyPrint =
           match pprintType 0 env ret with (env, ret) then
             let ret = if eqString ret "" then "" else concat " : " ret in
             match pprintExpr bodyIndent env body with (env, body) then
-              (env, join [entryStr, " ", ident, " ", strJoin " " typeParams,
-                          " ", strJoin " " params, ret, " =",
+              (env, join [entryStr, " ", ident,
+                          join (map (cons ' ') typeParams),
+                          join (map (cons ' ') params), ret, " =",
                           pprintNewline bodyIndent, body])
             else never
           else never
