@@ -19,7 +19,8 @@ lang FutharkLengthParameterize = FutharkAst
                           rhs = FEVar {ident = s}}} & t) ->
     match mapLookup s env.params with Some (FTyArray tyArray) then
       match tyArray.dim with Some k then
-        let newLet = FELet {t with body = FEVar {ident = k}} in
+        let newLet = FELet {t with body = FEVar {ident = k,
+                                                 info = tyArray.info}} in
         smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
       else
         let parameterType = FTyArray {tyArray with dim = Some ident} in
@@ -30,8 +31,7 @@ lang FutharkLengthParameterize = FutharkAst
         match parameterizeLengthExpr env t.inexpr with (env, inexpr) then
           (env, inexpr)
         else never
-    else
-      smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FELet t)
+    else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FELet t)
   | t -> smapAccumL_FExpr_FExpr parameterizeLengthExpr env t
 
   sem parameterizeLengthDecl =
@@ -70,19 +70,21 @@ let y = nameNoSym "y" in
 let t = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [],
-    params = [(s, FTyArray {elem = FTyInt (), dim = None ()})],
-    ret = FTyInt (),
+    params = [(s, futUnsizedArrayTy_ futIntTy_)],
+    ret = futIntTy_,
     body = futBindall_ [
-      nFutLet_ x (FTyInt ()) (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
+      nuFutLet_ x (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
       futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]
-    ]}]} in
+    ],
+    info = NoInfo ()}]} in
 let result = parameterizeLength t in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = x}],
-    params = [(s, FTyArray {elem = FTyInt (), dim = Some x})],
-    ret = FTyInt (),
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]}]} in
+    params = [(s, futSizedArrayTy_ futIntTy_ x)],
+    ret = futIntTy_,
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1],
+    info = NoInfo ()}]} in
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
 -- has not been implemented for Futhark AST nodes.
@@ -91,19 +93,21 @@ utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
 let t = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = x}],
-    params = [(s, FTyArray {elem = FTyInt (), dim = Some x})],
-    ret = FTyInt (),
+    params = [(s, futSizedArrayTy_ futIntTy_ x)],
+    ret = futIntTy_,
     body = futBindall_ [
-      nFutLet_ y (FTyInt ()) (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
-      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]]}]} in
+      nuFutLet_ y (futApp_ (futConst_ (FCLength ())) (nFutVar_ s)),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
+    info = NoInfo ()}]} in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = x}],
-    params = [(s, FTyArray {elem = FTyInt (), dim = Some x})],
-    ret = FTyInt (),
+    params = [(s, futSizedArrayTy_ futIntTy_ x)],
+    ret = futIntTy_,
     body = futBindall_ [
-      nFutLet_ y (FTyInt ()) (nFutVar_ x),
-      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]]}]} in
+      nuFutLet_ y (nFutVar_ x),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
+    info = NoInfo ()}]} in
 utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
 
 ()

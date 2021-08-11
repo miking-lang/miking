@@ -3,6 +3,7 @@
 include "name.mc"
 include "set.mc"
 include "futhark/ast.mc"
+include "futhark/ast-builder.mc"
 include "futhark/pprint.mc"
 
 lang FutharkDeadcodeElimination = FutharkAst
@@ -41,7 +42,7 @@ use TestLang in
 let futFunction = lam body.
   let fun = FDeclFun {
     ident = nameSym "x", entry = true, typeParams = [], params = [],
-    ret = FTyUnknown (), body = body} in
+    ret = futUnknownTy_, body = body, info = NoInfo ()} in
   FProg {decls = [fun]}
 in
 
@@ -74,18 +75,22 @@ let i = nameSym "i" in
 let t = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 0),
   nuFutLet_ y (futArray_ [futInt_ 2, futInt_ 7]),
-  FEForEach {
-    param = nFutVar_ x, loopVar = i, seq = nFutVar_ y,
-    body = futBindall_ [
+  futForEach_
+    (nFutVar_ x)
+    i
+    (nFutVar_ y)
+    (futBindall_ [
       nuFutLet_ z (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i]),
       nuFutLet_ w (nFutVar_ z),
-      nFutVar_ w]}]) in
+      nFutVar_ w])]) in
 let expected = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 0),
   nuFutLet_ y (futArray_ [futInt_ 2, futInt_ 7]),
-  FEForEach {
-    param = nFutVar_ x, loopVar = i, seq = nFutVar_ y,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i]}]) in
+  futForEach_
+    (nFutVar_ x)
+    i
+    (nFutVar_ y)
+    (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i])]) in
 utest expr2str (deadcodeElimination t) with expr2str expected using eqSeq eqc in
 
 ()

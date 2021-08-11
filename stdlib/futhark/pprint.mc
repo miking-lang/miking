@@ -109,6 +109,8 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCMul () -> "(*)"
   | FCDiv () -> "(/)"
   | FCRem () -> "(%)"
+  | FCFloatFloor () -> "f64.floor"
+  | FCFloat2Int () -> "i64.f64"
   | FCEq () -> "(==)"
   | FCNeq () -> "(!=)"
   | FCGt () -> "(>)"
@@ -225,7 +227,6 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
                               FutharkPatPrettyPrint + FutharkTypePrettyPrint
   sem isAtomic =
   | FEVar _ -> true
-  | FEBuiltIn _ -> true
   | FERecord _ -> true
   | FERecordProj _ -> false
   | FEArray _ -> true
@@ -256,7 +257,6 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
 
   sem pprintExpr (indent : Int) (env : PprintEnv) =
   | FEVar {ident = ident} -> pprintVarName env ident
-  | FEBuiltIn {str = str} -> (env, str)
   | FERecord {fields = fields} ->
     let pprintField = lam env. lam k. lam v.
       let str = pprintLabelString k in
@@ -452,7 +452,8 @@ let x = nameSym "x" in
 let constDecl = FDeclConst {
   ident = x,
   ty = futIntTy_,
-  val = futAdd_ (futInt_ 2) (futInt_ 3)
+  val = futAdd_ (futInt_ 2) (futInt_ 3),
+  info = NoInfo ()
 } in
 
 let fn = nameSym "recordProj" in
@@ -463,7 +464,8 @@ let recordProjDecl = FDeclFun {
   typeParams = [],
   params = [(y, futRecordTy_ [("a", futIntTy_), ("b", futFloatTy_)])],
   ret = futIntTy_,
-  body = futRecordProj_ (nFutVar_ y) "a"
+  body = futRecordProj_ (nFutVar_ y) "a",
+  info = NoInfo ()
 } in
 
 let diffPairs = nameSym "diffPairs" in
@@ -484,7 +486,8 @@ let diffPairsDecl = FDeclFun {
     futMap2_
       (nFutLam_ lamX (nFutLam_ lamY (futSub_ (nFutVar_ lamX) (nFutVar_ lamY))))
       (nFutVar_ diffPairsA)
-      (nFutVar_ diffPairsB)
+      (nFutVar_ diffPairsB),
+  info = NoInfo ()
 } in
 
 let literals = nameSym "literals" in
@@ -501,7 +504,8 @@ let literalsDecl = FDeclFun {
     uFutLet_ "_tuple" (futRecord_ [("0", futInt_ 2), ("1", futInt_ 3)]),
     uFutLet_ "_rec" (futRecord_ [("e", futFloat_ 2.718), ("pi", futFloat_ 3.14)]),
     futUnit_ ()
-  ]
+  ],
+  info = NoInfo ()
 } in
 
 let arrays = nameSym "arrays" in
@@ -515,7 +519,8 @@ let arraysDecl = FDeclFun {
   body = futBindall_ [
     nuFutLet_ a (futArray_ [futInt_ 1, futInt_ 2, futInt_ 3]),
     futArrayAccess_ (nFutVar_ a) (futInt_ 1)
-  ]
+  ],
+  info = NoInfo ()
 } in
 
 let get = nameSym "get" in
@@ -527,10 +532,11 @@ let genericGetDecl = FDeclFun {
   ident = get,
   entry = false,
   typeParams = [FPSize {val = n}, FPType {val = a}],
-  params = [(seq, futSizedArrayTy_ n (nFutIdentTy_ a)),
+  params = [(seq, futSizedArrayTy_ (nFutIdentTy_ a) n),
             (i, futIntTy_)],
   ret = nFutIdentTy_ a,
-  body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i)
+  body = futArrayAccess_ (nFutVar_ seq) (nFutVar_ i),
+  info = NoInfo ()
 } in
 
 let recordMatch = nameSym "recordMatching" in
@@ -546,7 +552,8 @@ let recordMatchDecl = FDeclFun {
     (futPrecord_ [("a", nFutPvar_ a), ("b", futPbool_ false)], nFutVar_ a),
     (futPrecord_ [("a", nFutPvar_ a), ("b", futPbool_ true)],
       futAdd_ (nFutVar_ a) (futInt_ 1))
-  ]
+  ],
+  info = NoInfo ()
 } in
 
 let tmp = nameSym "tmp" in
@@ -559,7 +566,8 @@ let mainDecl = FDeclFun {
   typeParams = [],
   params = [(z, futUnsizedArrayTy_ futIntTy_)],
   ret = futUnsizedArrayTy_ futIntTy_,
-  body = futMap_ (nFutLam_ w (futAdd_ (nFutVar_ w) (nFutVar_ x))) (nFutVar_ z)} in
+  body = futMap_ (nFutLam_ w (futAdd_ (nFutVar_ w) (nFutVar_ x))) (nFutVar_ z),
+  info = NoInfo ()} in
 
 let decls = [
   constDecl,

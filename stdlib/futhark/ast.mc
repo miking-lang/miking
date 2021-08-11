@@ -2,6 +2,7 @@
 
 include "assoc-seq.mc"
 include "mexpr/ast.mc" -- to reuse PatNamed definition
+include "mexpr/info.mc"
 
 lang FutharkTypeParamAst
   syn FutTypeParam =
@@ -19,6 +20,8 @@ lang FutharkConstAst
   | FCMul ()
   | FCDiv ()
   | FCRem ()
+  | FCFloatFloor ()
+  | FCFloat2Int ()
   | FCEq ()
   | FCNeq ()
   | FCGt ()
@@ -53,42 +56,111 @@ end
 
 lang FutharkPatAst
   syn FutPat =
-  | FPNamed { ident : PatName }
-  | FPInt { val : Int }
-  | FPBool { val : Bool }
-  | FPRecord { bindings : Map SID FutPat }
+  | FPNamed { ident : PatName, info : Info }
+  | FPInt { val : Int, info : Info }
+  | FPBool { val : Bool, info : Info }
+  | FPRecord { bindings : Map SID FutPat, info : Info }
+
+  sem infoFutPat =
+  | FPNamed t -> t.info
+  | FPInt t -> t.info
+  | FPBool t -> t.info
+  | FPRecord t -> t.info
+
+  sem withInfoFutPat (info : Info) =
+  | FPNamed t -> FPNamed {t with info = info}
+  | FPInt t -> FPInt {t with info = info}
+  | FPBool t -> FPBool {t with info = info}
+  | FPRecord t -> FPRecord {t with info = info}
 end
 
 lang FutharkTypeAst = FutharkTypeParamAst
   syn FutType =
-  | FTyUnknown ()
-  | FTyInt ()
-  | FTyFloat ()
-  | FTyBool ()
-  | FTyIdent { ident : Name }
-  | FTyArray { elem : FutType, dim : Option Name }
-  | FTyRecord { fields : Map SID FutType }
-  | FTyArrow { from : FutType, to : FutType }
-  | FTyParamsApp { ty : FutType, params : [FutTypeParam] }
+  | FTyUnknown { info : Info }
+  | FTyInt { info : Info }
+  | FTyFloat { info : Info }
+  | FTyBool { info : Info }
+  | FTyIdent { ident : Name, info : Info }
+  | FTyArray { elem : FutType, dim : Option Name, info : Info }
+  | FTyRecord { fields : Map SID FutType, info : Info }
+  | FTyArrow { from : FutType, to : FutType, info : Info }
+  | FTyParamsApp { ty : FutType, params : [FutTypeParam], info : Info }
+
+  sem infoFutTy =
+  | FTyUnknown t -> t.info
+  | FTyInt t -> t.info
+  | FTyFloat t -> t.info
+  | FTyBool t -> t.info
+  | FTyIdent t -> t.info
+  | FTyArray t -> t.info
+  | FTyRecord t -> t.info
+  | FTyArrow t -> t.info
+  | FTyParamsApp t -> t.info
+
+  sem withInfoFutTy (info : Info) =
+  | FTyUnknown t -> FTyUnknown {t with info = info}
+  | FTyInt t -> FTyInt {t with info = info}
+  | FTyFloat t -> FTyFloat {t with info = info}
+  | FTyBool t -> FTyBool {t with info = info}
+  | FTyIdent t -> FTyIdent {t with info = info}
+  | FTyArray t -> FTyArray {t with info = info}
+  | FTyRecord t -> FTyRecord {t with info = info}
+  | FTyArrow t -> FTyArrow {t with info = info}
+  | FTyParamsApp t -> FTyParamsApp {t with info = info}
 end
 
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   syn FutExpr =
-  | FEVar { ident : Name }
-  | FEBuiltIn { str : String }
-  | FERecord { fields : Map SID FutExpr }
-  | FERecordProj { rec : FutExpr, key : SID }
-  | FEArray { tms : [FutExpr] }
-  | FEArrayAccess { array : FutExpr, index : FutExpr }
-  | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr }
-  | FEArraySlice { array : FutExpr, startIdx : FutExpr, endIdx : FutExpr }
-  | FEConst { val : FutConst }
-  | FELam { ident : Name, body : FutExpr }
-  | FEApp { lhs : FutExpr, rhs : FutExpr }
-  | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr }
-  | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr }
-  | FEForEach { param : FutExpr, loopVar : Name, seq : FutExpr, body : FutExpr }
-  | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)] }
+  | FEVar { ident : Name, info : Info }
+  | FERecord { fields : Map SID FutExpr, info : Info }
+  | FERecordProj { rec : FutExpr, key : SID, info : Info }
+  | FEArray { tms : [FutExpr], info : Info }
+  | FEArrayAccess { array : FutExpr, index : FutExpr, info : Info }
+  | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr,
+                    info : Info }
+  | FEArraySlice { array : FutExpr, startIdx : FutExpr, endIdx : FutExpr,
+                   info : Info }
+  | FEConst { val : FutConst, info : Info }
+  | FELam { ident : Name, body : FutExpr, info : Info }
+  | FEApp { lhs : FutExpr, rhs : FutExpr, info : Info }
+  | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr,
+            info : Info }
+  | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr, info : Info }
+  | FEForEach { param : FutExpr, loopVar : Name, seq : FutExpr, body : FutExpr,
+                info : Info }
+  | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)], info : Info }
+
+  sem infoFutTm =
+  | FEVar t -> t.info
+  | FERecord t -> t.info
+  | FERecordProj t -> t.info
+  | FEArray t -> t.info
+  | FEArrayAccess t -> t.info
+  | FEArrayUpdate t -> t.info
+  | FEArraySlice t -> t.info
+  | FEConst t -> t.info
+  | FELam t -> t.info
+  | FEApp t -> t.info
+  | FELet t -> t.info
+  | FEIf t -> t.info
+  | FEForEach t -> t.info
+  | FEMatch t -> t.info
+
+  sem withInfoFutTm (info : Info) =
+  | FEVar t -> FEVar {t with info = info}
+  | FERecord t -> FERecord {t with info = info}
+  | FERecordProj t -> FERecordProj {t with info = info}
+  | FEArray t -> FEArray {t with info = info}
+  | FEArrayAccess t -> FEArrayAccess {t with info = info}
+  | FEArrayUpdate t -> FEArrayUpdate {t with info = info}
+  | FEArraySlice t -> FEArraySlice {t with info = info}
+  | FEConst t -> FEConst {t with info = info}
+  | FELam t -> FELam {t with info = info}
+  | FEApp t -> FEApp {t with info = info}
+  | FELet t -> FELet {t with info = info}
+  | FEIf t -> FEIf {t with info = info}
+  | FEForEach t -> FEForEach {t with info = info}
+  | FEMatch t -> FEMatch {t with info = info}
 
   sem smapAccumL_FExpr_FExpr (f : acc -> a -> (acc, b)) (acc : acc) =
   | FERecord t ->
@@ -192,9 +264,11 @@ end
 lang FutharkAst = FutharkTypeParamAst + FutharkTypeAst + FutharkExprAst
   syn FutDecl =
   | FDeclFun { ident : Name, entry : Bool, typeParams : [FutTypeParam],
-               params : [(Name, FutType)], ret : FutType, body : FutExpr }
-  | FDeclConst { ident : Name, ty : FutType, val : FutExpr }
-  | FDeclType { ident : Name, typeParams : [FutTypeParam], ty : FutType }
+               params : [(Name, FutType)], ret : FutType, body : FutExpr,
+               info : Info }
+  | FDeclConst { ident : Name, ty : FutType, val : FutExpr, info : Info }
+  | FDeclType { ident : Name, typeParams : [FutTypeParam], ty : FutType,
+                info : Info }
 
   syn FutProg =
   | FProg { decls : [FutDecl] }
