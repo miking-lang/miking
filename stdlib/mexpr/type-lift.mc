@@ -25,7 +25,7 @@ include "cmp.mc"
 type TypeLiftEnv = {
 
   -- Collects all type bindings encountered in the program in sequence.
-  typeEnv: AssocSeq Name Type,
+  typeEnv: Map Int (Name, Type),
 
   -- Record types encountered so far. Uses intrinsic maps as this is
   -- performance critical.
@@ -68,8 +68,11 @@ let _replaceVariantNamesInTypeEnv = lam env : TypeLiftEnv.
                      " found in environment"])
     else ty
   in
-  assocSeqMap f env.typeEnv
+  assocSeqMap f (mapValues env.typeEnv)
 
+let _insertTypeEnv : Name -> Type -> Map Int (Name, Type) -> Map Int (Name, Type) =
+  lam name. lam ty. lam typeEnv.
+  mapInsert (mapSize typeEnv) (name, ty) typeEnv
 
 let _addRecordToEnv =
   use MExprAst in
@@ -84,7 +87,7 @@ let _addRecordToEnv =
       let env = {{{env
                     with records = mapInsert fields name env.records}
                     with labels = setInsert labels env.labels}
-                    with typeEnv = assocSeqInsert name ty env.typeEnv}
+                    with typeEnv = _insertTypeEnv name ty env.typeEnv}
       in
       (env, tyvar)
     else never
@@ -159,7 +162,7 @@ lang TypeLift = Cmp
   | e ->
 
     let emptyTypeLiftEnv : TypeLiftEnv = {
-      typeEnv = [],
+      typeEnv = mapEmpty (lam a. lam b. subi b a),
       records = mapEmpty (mapCmp cmpType),
       labels = setEmpty (seqCmp cmpSID),
       variants = mapEmpty nameCmp
@@ -186,7 +189,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
         match tyIdent with TyVariant _ then
           let variantNameTy = TyVariantName {ident = t.ident} in
           {{env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
-                with typeEnv = assocSeqInsert t.ident variantNameTy env.typeEnv}
+                with typeEnv = _insertTypeEnv t.ident variantNameTy env.typeEnv}
         else match tyIdent
         with TyRecord {fields = fields} & ty then
           let f = lam env. lam. lam ty. typeLiftType env ty in
@@ -195,7 +198,7 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
               env
             else never
           else never
-        else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
+        else {env with typeEnv = _insertTypeEnv t.ident tyIdent env.typeEnv}
       in
       match typeLiftExpr env t.inexpr with (env, inexpr) then
         (env, inexpr)
