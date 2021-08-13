@@ -218,6 +218,18 @@ let arity = function
       2
   | Citeri (Some _) ->
       1
+  | Cfoldl (None, None) ->
+      3
+  | Cfoldl (Some _, None) ->
+      2
+  | Cfoldl (_, Some _) ->
+      1
+  | Cfoldr (None, None) ->
+      3
+  | Cfoldr (Some _, None) ->
+      2
+  | Cfoldr (_, Some _) ->
+      1
   | Csubsequence (None, None) ->
       3
   | Csubsequence (Some _, None) ->
@@ -847,6 +859,24 @@ let delta eval env fi c v =
   | Citeri (Some f), TmSeq (_, s) ->
       Mseq.iteri f s ; tm_unit
   | Citeri _, _ ->
+      fail_constapp fi
+  | Cfoldl (None, None), f ->
+      let f a x = eval env (TmApp (fi, TmApp (fi, f, TmDummy (fi, a)), TmDummy (fi, x))) in
+      TmConst (fi, Cfoldl (Some f, None))
+  | Cfoldl (Some f, None), a ->
+      TmConst (fi, Cfoldl (Some f, Some a))
+  | Cfoldl (Some f, Some a), TmSeq (_, s) ->
+      Mseq.Helpers.fold_left f a s
+  | Cfoldl _, _ ->
+      fail_constapp fi
+  | Cfoldr (None, None), f ->
+      let f x a = eval env (TmApp (fi, TmApp (fi, f, TmDummy (fi, x)), TmDummy (fi, a))) in
+      TmConst (fi, Cfoldr (Some f, None))
+  | Cfoldr (Some f, None), a ->
+      TmConst (fi, Cfoldr (Some f, Some a))
+  | Cfoldr (Some f, Some a), TmSeq (_, s) ->
+      Mseq.Helpers.fold_right f a s
+  | Cfoldr _, _ ->
       fail_constapp fi
   | Csubsequence (None, None), TmSeq (fi, s) ->
       TmConst (fi, Csubsequence (Some s, None))

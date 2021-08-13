@@ -389,6 +389,10 @@ let rec print_const fmt = function
       fprintf fmt "iter"
   | Citeri _ ->
       fprintf fmt "iteri"
+  | Cfoldl _ ->
+      fprintf fmt "foldl"
+  | Cfoldr _ ->
+      fprintf fmt "foldr"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)
