@@ -816,7 +816,7 @@ let delta eval env fi c v =
   | Cnull, _ ->
       fail_constapp fi
   | Cmap None, f ->
-      let f x = eval env (TmApp (fi, f, x)) in
+      let f x = eval env (TmApp (fi, f, TmDummy (fi, x))) in
       TmConst (fi, Cmap (Some f))
   | Cmap (Some f), TmSeq (fi, s) ->
       TmSeq (fi, Mseq.map f s)
@@ -824,7 +824,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | Cmapi None, f ->
       let f i x =
-        eval env (TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x))
+        eval env (TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), TmDummy (fi, x)))
       in
       TmConst (fi, Cmapi (Some f))
   | Cmapi (Some f), TmSeq (fi, s) ->
@@ -832,7 +832,7 @@ let delta eval env fi c v =
   | Cmapi _, _ ->
       fail_constapp fi
   | Citer None, f ->
-      let f x = eval env (TmApp (fi, f, x)) |> ignore in
+      let f x = eval env (TmApp (fi, f, TmDummy (fi, x))) |> ignore in
       TmConst (fi, Citer (Some f))
   | Citer (Some f), TmSeq (_, s) ->
       Mseq.iter f s ; tm_unit
@@ -840,7 +840,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | Citeri None, f ->
       let f i x =
-        TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), x)
+        TmApp (fi, TmApp (fi, f, TmConst (NoInfo, CInt i)), TmDummy (fi, x))
         |> eval env |> ignore
       in
       TmConst (fi, Citeri (Some f))
@@ -1038,14 +1038,14 @@ let delta eval env fi c v =
       TmConst (fi, CmapFindApplyOrElse (Some f, Some felse, Some k))
   | CmapFindApplyOrElse (Some f, Some felse, Some k), TmConst (_, CMap (_, m))
     ->
-      let f v = eval env (TmApp (fi, f, v)) in
-      let felse () = eval env (TmApp (fi, felse, tm_unit)) in
+      let f v = eval env (TmApp (fi, f, TmDummy (fi, v))) in
+      let felse () = eval env (TmApp (fi, TmDummy (fi, felse), tm_unit)) in
       Mmap.find_apply_or_else f felse k m
   | CmapFindApplyOrElse _, _ ->
       fail_constapp fi
   | CmapAny None, p ->
       let pred x y =
-        let app = TmApp (fi, TmApp (fi, p, x), y) in
+        let app = TmApp (fi, TmApp (fi, p, TmDummy (fi, x)), TmDummy (fi, y)) in
         match eval env app with
         | TmConst (_, CBool b) ->
             b
@@ -1064,14 +1064,14 @@ let delta eval env fi c v =
   | CmapMem (Some _), _ ->
       fail_constapp fi
   | CmapMap None, f ->
-      let mapf x = eval env (TmApp (fi, f, x)) in
+      let mapf x = eval env (TmApp (fi, f, TmDummy (fi, x))) in
       TmConst (fi, CmapMap (Some mapf))
   | CmapMap (Some f), TmConst (_, CMap (cmp, m)) ->
       TmConst (fi, CMap (cmp, Mmap.map f m))
   | CmapMap (Some _), _ ->
       fail_constapp fi
   | CmapMapWithKey None, f ->
-      let mapf k v = TmApp (fi, TmApp (fi, f, k), v) |> eval env in
+      let mapf k v = TmApp (fi, TmApp (fi, f, TmDummy (fi, k)), TmDummy (fi, v)) |> eval env in
       TmConst (fi, CmapMapWithKey (Some mapf))
   | CmapMapWithKey (Some f), TmConst (_, CMap (cmp, m)) ->
       TmConst (fi, CMap (cmp, Mmap.map_with_key f m))
@@ -1079,7 +1079,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | CmapFoldWithKey (None, None), f ->
       let foldf acc k v =
-        TmApp (fi, TmApp (fi, TmApp (fi, f, acc), k), v) |> eval env
+        TmApp (fi, TmApp (fi, TmApp (fi, f, TmDummy (fi, acc)), TmDummy (fi, k)), TmDummy (fi, v)) |> eval env
       in
       TmConst (fi, CmapFoldWithKey (Some foldf, None))
   | CmapFoldWithKey (Some f, None), acc ->
@@ -1097,7 +1097,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | CmapEq (None, None), f ->
       let veq v1 v2 =
-        match TmApp (fi, TmApp (fi, f, v1), v2) |> eval env with
+        match TmApp (fi, TmApp (fi, f, TmDummy (fi, v1)), TmDummy (fi, v2)) |> eval env with
         | TmConst (_, CBool b) ->
             b
         | _ ->
@@ -1112,7 +1112,7 @@ let delta eval env fi c v =
       fail_constapp fi
   | CmapCmp (None, None), f ->
       let vcmp v1 v2 =
-        match TmApp (fi, TmApp (fi, f, v1), v2) |> eval env with
+        match TmApp (fi, TmApp (fi, f, TmDummy (fi, v1)), TmDummy (fi, v2)) |> eval env with
         | TmConst (_, CInt i) ->
             i
         | _ ->
@@ -1859,6 +1859,8 @@ let rec eval (env : (Symb.t * tm) list) (t : tm) =
   (* External *)
   | TmExt (_, _, _, _, _, t) ->
       eval env t
+  | TmDummy (_, t) ->
+      t
   (* Only at runtime *)
   | TmClos _ | TmFix _ | TmRef _ | TmTensor _ ->
       t
@@ -1903,5 +1905,6 @@ let rec eval_toplevel (env : (Symb.t * tm) list) = function
     | TmNever _
     | TmRef _
     | TmTensor _
-    | TmExt _ ) as t ->
+    | TmExt _
+    | TmDummy _ ) as t ->
       (env, eval env t)

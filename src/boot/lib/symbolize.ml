@@ -277,6 +277,10 @@ let rec symbolize (env : sym_env) (t : tm) =
         , e
         , symbolize_type env ty
         , symbolize (addsym (IdVar (sid_of_ustring x)) s env) t )
+  | TmDummy (fi, t) ->
+      TmDummy
+        ( fi
+        , symbolize env t )
   | TmConst _ | TmFix _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
 
@@ -344,5 +348,6 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmClos _
     | TmFix _
     | TmRef _
-    | TmTensor _ ) as t ->
+    | TmTensor _
+    | TmDummy _ ) as t ->
       (env, symbolize env t)

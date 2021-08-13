@@ -579,7 +579,8 @@ and print_tm fmt (prec, t) =
     | TmFix _
     | TmNever _
     | TmRef _
-    | TmTensor _ ->
+    | TmTensor _
+    | TmDummy _ ->
         Atom
   in
   if paren then fprintf fmt "(%a)" print_tm' t
@@ -726,6 +727,8 @@ and print_tm' fmt t =
       let e = if e then "!" else "" in
       fprintf fmt "@[<hov 0>@[<hov %d>external %s %s : %s in@]@ %a@]"
         !ref_indent x e ty print_tm (Match, t)
+  | TmDummy (_, t) ->
+      print_tm' fmt t
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

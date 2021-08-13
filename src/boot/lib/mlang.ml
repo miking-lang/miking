@@ -676,6 +676,8 @@ let rec desugar_tm nss env subs =
         , desugar_tm nss env subs body )
   | TmNever fi ->
       TmNever fi
+  | TmDummy (fi, t) ->
+      TmDummy (fi, desugar_tm nss env subs t)
   (* Non-recursive *)
   | (TmConst _ | TmFix _ | TmRef _ | TmTensor _ | TmExt _) as tm ->
       tm

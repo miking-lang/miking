@@ -290,6 +290,8 @@ and tm =
   | TmRef of info * tm ref
   (* Tensor *)
   | TmTensor of info * tm T.t
+  (* Dummy node, used to prevent (re)evaluation of its inner term *)
+  | TmDummy of info * tm
 
 (* Kind of pattern name *)
 and patName =
@@ -401,6 +403,8 @@ let smap_tm_tm (f : tm -> tm) = function
       TmExt (fi, x, s, ty, e, f t)
   | TmClos (fi, x, s, t1, env) ->
       TmClos (fi, x, s, f t1, env)
+  | TmDummy (fi, t) ->
+      TmDummy (fi, f t)
   | (TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _) as t ->
       t
 
@@ -437,6 +441,8 @@ let sfold_tm_tm (f : 'a -> tm -> 'a) (acc : 'a) = function
       f acc t
   | TmClos (_, _, _, t1, _) ->
       f acc t1
+  | TmDummy (_, t) ->
+      f acc t
   | TmVar _ | TmConst _ | TmNever _ | TmFix _ | TmRef _ | TmTensor _ ->
       acc
 
@@ -465,7 +471,8 @@ let tm_info = function
   | TmFix fi
   | TmRef (fi, _)
   | TmTensor (fi, _)
-  | TmExt (fi, _, _, _, _, _) ->
+  | TmExt (fi, _, _, _, _, _)
+  | TmDummy (fi, _) ->
       fi
 
 let pat_info = function
