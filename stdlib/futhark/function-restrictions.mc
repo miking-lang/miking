@@ -31,10 +31,8 @@ lang FutharkFunctionRestrictions = FutharkAst
 
   sem findFutharkFunctionViolationsExpr (errors : [FutharkFunctionError]) =
   | (FEArray _) & t ->
-    match tyFutTm t with FTyArray {elem = elemTy} then
-      match elemTy with FTyArrow _ then
-        cons (FunctionInArray (infoFutTm t)) errors
-      else errors
+    match tyFutTm t with FTyArray {elem = FTyArrow _} then
+      cons (FunctionInArray (infoFutTm t)) errors
     else errors
   | (FEIf _) & t ->
     match tyFutTm t with FTyArrow _ then

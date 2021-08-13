@@ -14,27 +14,23 @@ type LengthParameterizeEnv = {
 
 lang FutharkLengthParameterize = FutharkAst
   sem parameterizeLengthExpr (env : LengthParameterizeEnv) =
-  | FELet ({ident = ident,
-            body = FEApp {lhs = FEConst {val = FCLength ()},
-                          rhs = FEVar {ident = s}}} & t) ->
-    match mapLookup s env.params with Some ty then
-      match ty with FTyArray tyArray then
-        match tyArray.dim with Some k then
-          let newLetBody = FEVar {ident = k, ty = FTyInt {info = tyArray.info},
-                                  info = tyArray.info} in
-          let newLet = FELet {t with body = newLetBody} in
-          smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
-        else
-          let parameterType = FTyArray {tyArray with dim = Some ident} in
-          let typeParam = FPSize {val = ident} in
-          let typeParams = mapInsert ident typeParam env.typeParams in
-          let env = {{env with params = mapInsert s parameterType env.params}
-                          with typeParams = typeParams} in
-          match parameterizeLengthExpr env t.inexpr with (env, inexpr) then
-            (env, inexpr)
-          else never
-      else infoErrorExit t.info "Cannot get length of non-sequence argument"
-    else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FELet t)
+  | FEApp ({lhs = FEConst {val = FCLength ()},
+            rhs = FEVar {ident = s}} & t) ->
+    let lengthParamVar = lam ident. lam info.
+      FEVar {ident = ident, ty = FTyInt {info = info}, info = info}
+    in
+    match mapLookup s env.params with Some (FTyArray tyArray) then
+      match tyArray.dim with Some n then
+        (env, lengthParamVar n tyArray.info)
+      else
+        let n = nameSym "n" in
+        let newParamType = FTyArray {tyArray with dim = Some n} in
+        let typeParam = FPSize {val = n} in
+        let typeParams = mapInsert n typeParam env.typeParams in
+        let env = {{env with params = mapInsert s newParamType env.params}
+                        with typeParams = typeParams} in
+        (env, lengthParamVar n tyArray.info)
+    else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FEApp t)
   | t -> smapAccumL_FExpr_FExpr parameterizeLengthExpr env t
 
   sem parameterizeLengthDecl =
@@ -69,7 +65,8 @@ use TestLang in
 let f = nameSym "f" in
 let s = nameSym "s" in
 let x = nameSym "x" in
-let y = nameNoSym "y" in
+let y = nameSym "y" in
+let n = nameSym "n" in
 let t = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [],
@@ -83,10 +80,13 @@ let t = FProg {decls = [
 let result = parameterizeLength t in
 let expected = FProg {decls = [
   FDeclFun {
-    ident = f, entry = true, typeParams = [FPSize {val = x}],
-    params = [(s, futSizedArrayTy_ futIntTy_ x)],
+    ident = f, entry = true, typeParams = [FPSize {val = n}],
+    params = [(s, futSizedArrayTy_ futIntTy_ n)],
     ret = futIntTy_,
-    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1],
+    body = futBindall_ [
+      nuFutLet_ x (nFutVar_ n),
+      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]
+    ],
     info = NoInfo ()}]} in
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
