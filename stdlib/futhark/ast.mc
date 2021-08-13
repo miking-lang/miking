@@ -54,26 +54,6 @@ lang FutharkConstAst
   | FCTabulate ()
 end
 
-lang FutharkPatAst
-  syn FutPat =
-  | FPNamed { ident : PatName, info : Info }
-  | FPInt { val : Int, info : Info }
-  | FPBool { val : Bool, info : Info }
-  | FPRecord { bindings : Map SID FutPat, info : Info }
-
-  sem infoFutPat =
-  | FPNamed t -> t.info
-  | FPInt t -> t.info
-  | FPBool t -> t.info
-  | FPRecord t -> t.info
-
-  sem withInfoFutPat (info : Info) =
-  | FPNamed t -> FPNamed {t with info = info}
-  | FPInt t -> FPInt {t with info = info}
-  | FPBool t -> FPBool {t with info = info}
-  | FPRecord t -> FPRecord {t with info = info}
-end
-
 lang FutharkTypeAst = FutharkTypeParamAst
   syn FutType =
   | FTyUnknown { info : Info }
@@ -109,26 +89,61 @@ lang FutharkTypeAst = FutharkTypeParamAst
   | FTyParamsApp t -> FTyParamsApp {t with info = info}
 end
 
+lang FutharkPatAst = FutharkTypeAst
+  syn FutPat =
+  | FPNamed { ident : PatName, ty : FutType, info : Info }
+  | FPInt { val : Int, ty : FutType, info : Info }
+  | FPBool { val : Bool, ty : FutType, info : Info }
+  | FPRecord { bindings : Map SID FutPat, ty : FutType, info : Info }
+
+  sem infoFutPat =
+  | FPNamed t -> t.info
+  | FPInt t -> t.info
+  | FPBool t -> t.info
+  | FPRecord t -> t.info
+
+  sem withInfoFutPat (info : Info) =
+  | FPNamed t -> FPNamed {t with info = info}
+  | FPInt t -> FPInt {t with info = info}
+  | FPBool t -> FPBool {t with info = info}
+  | FPRecord t -> FPRecord {t with info = info}
+
+  sem tyFutPat =
+  | FPNamed t -> t.ty
+  | FPInt t -> t.ty
+  | FPBool t -> t.ty
+  | FPRecord t -> t.ty
+
+  sem withTypeFutPat (ty : Info) =
+  | FPNamed t -> FPNamed {t with ty = ty}
+  | FPInt t -> FPInt {t with ty = ty}
+  | FPBool t -> FPBool {t with ty = ty}
+  | FPRecord t -> FPRecord {t with ty = ty}
+end
+
 lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   syn FutExpr =
-  | FEVar { ident : Name, info : Info }
-  | FERecord { fields : Map SID FutExpr, info : Info }
-  | FERecordProj { rec : FutExpr, key : SID, info : Info }
-  | FEArray { tms : [FutExpr], info : Info }
-  | FEArrayAccess { array : FutExpr, index : FutExpr, info : Info }
-  | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr,
+  | FEVar { ident : Name, ty : FutType, info : Info }
+  | FERecord { fields : Map SID FutExpr, ty : FutType, info : Info }
+  | FERecordProj { rec : FutExpr, key : SID, ty : FutType, info : Info }
+  | FEArray { tms : [FutExpr], ty : FutType, info : Info }
+  | FEArrayAccess { array : FutExpr, index : FutExpr, ty : FutType,
                     info : Info }
+  | FEArrayUpdate { array : FutExpr, index : FutExpr, value : FutExpr,
+                    ty : FutType, info : Info }
   | FEArraySlice { array : FutExpr, startIdx : FutExpr, endIdx : FutExpr,
-                   info : Info }
-  | FEConst { val : FutConst, info : Info }
-  | FELam { ident : Name, body : FutExpr, info : Info }
-  | FEApp { lhs : FutExpr, rhs : FutExpr, info : Info }
+                   ty : FutType, info : Info }
+  | FEConst { val : FutConst, ty : FutType, info : Info }
+  | FELam { ident : Name, body : FutExpr, ty : FutType, info : Info }
+  | FEApp { lhs : FutExpr, rhs : FutExpr, ty : FutType, info : Info }
   | FELet { ident : Name, tyBody : FutType, body : FutExpr, inexpr : FutExpr,
-            info : Info }
-  | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr, info : Info }
+            ty : FutType, info : Info }
+  | FEIf { cond : FutExpr, thn : FutExpr, els : FutExpr, ty : FutType,
+           info : Info }
   | FEForEach { param : FutExpr, loopVar : Name, seq : FutExpr, body : FutExpr,
-                info : Info }
-  | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)], info : Info }
+                ty : FutType, info : Info }
+  | FEMatch { target : FutExpr, cases : [(FutPat, FutExpr)], ty : FutType,
+              info : Info }
 
   sem infoFutTm =
   | FEVar t -> t.info
@@ -161,6 +176,38 @@ lang FutharkExprAst = FutharkConstAst + FutharkPatAst + FutharkTypeAst
   | FEIf t -> FEIf {t with info = info}
   | FEForEach t -> FEForEach {t with info = info}
   | FEMatch t -> FEMatch {t with info = info}
+
+  sem tyFutTm =
+  | FEVar t -> t.ty
+  | FERecord t -> t.ty
+  | FERecordProj t -> t.ty
+  | FEArray t -> t.ty
+  | FEArrayAccess t -> t.ty
+  | FEArrayUpdate t -> t.ty
+  | FEArraySlice t -> t.ty
+  | FEConst t -> t.ty
+  | FELam t -> t.ty
+  | FEApp t -> t.ty
+  | FELet t -> t.ty
+  | FEIf t -> t.ty
+  | FEForEach t -> t.ty
+  | FEMatch t -> t.ty
+
+  sem withTypeFutTm (ty : Type) =
+  | FEVar t -> FEVar {t with ty = ty}
+  | FERecord t -> FERecord {t with ty = ty}
+  | FERecordProj t -> FERecordProj {t with ty = ty}
+  | FEArray t -> FEArray {t with ty = ty}
+  | FEArrayAccess t -> FEArrayAccess {t with ty = ty}
+  | FEArrayUpdate t -> FEArrayUpdate {t with ty = ty}
+  | FEArraySlice t -> FEArraySlice {t with ty = ty}
+  | FEConst t -> FEConst {t with ty = ty}
+  | FELam t -> FELam {t with ty = ty}
+  | FEApp t -> FEApp {t with ty = ty}
+  | FELet t -> FELet {t with ty = ty}
+  | FEIf t -> FEIf {t with ty = ty}
+  | FEForEach t -> FEForEach {t with ty = ty}
+  | FEMatch t -> FEMatch {t with ty = ty}
 
   sem smapAccumL_FExpr_FExpr (f : acc -> a -> (acc, b)) (acc : acc) =
   | FERecord t ->

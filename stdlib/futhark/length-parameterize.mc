@@ -20,8 +20,9 @@ lang FutharkLengthParameterize = FutharkAst
     match mapLookup s env.params with Some ty then
       match ty with FTyArray tyArray then
         match tyArray.dim with Some k then
-          let newLet = FELet {t with body = FEVar {ident = k,
-                                                   info = tyArray.info}} in
+          let newLetBody = FEVar {ident = k, ty = FTyInt {info = tyArray.info},
+                                  info = tyArray.info} in
+          let newLet = FELet {t with body = newLetBody} in
           smapAccumL_FExpr_FExpr parameterizeLengthExpr env newLet
         else
           let parameterType = FTyArray {tyArray with dim = Some ident} in

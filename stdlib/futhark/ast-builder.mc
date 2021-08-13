@@ -3,30 +3,6 @@ include "map.mc"
 include "name.mc"
 include "stringid.mc"
 
--- Patterns --
-
-let nFutPvar_ = use FutharkAst in
-  lam n : Name.
-  FPNamed {ident = PName n, info = NoInfo ()}
-
-let futPvarw_ = use FutharkAst in
-  lam.
-  FPNamed {ident = PWildcard (), info = NoInfo ()}
-
-let futPint_ = use FutharkAst in
-  lam i : Int.
-  FPInt {val = i, info = NoInfo ()}
-
-let futPbool_ = use FutharkAst in
-  lam b : Bool.
-  FPBool {val = b, info = NoInfo ()}
-
-let futPrecord_ = use FutharkAst in
-  lam bindings : [(String, FutPat)].
-  let bindingMapFunc = lam b : (String, FutPat). (stringToSid b.0, b.1) in
-  FPRecord {bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
-            info = NoInfo ()}
-
 -- Types --
 
 let futUnknownTy_ = use FutharkAst in
@@ -69,6 +45,30 @@ let futArrowTy_ = use FutharkAst in
   lam fromTy. lam toTy.
   FTyArrow {from = fromTy, to = toTy, info = NoInfo ()}
 
+-- Patterns --
+
+let nFutPvar_ = use FutharkAst in
+  lam n : Name.
+  FPNamed {ident = PName n, ty = futUnknownTy_, info = NoInfo ()}
+
+let futPvarw_ = use FutharkAst in
+  lam.
+  FPNamed {ident = PWildcard (), ty = futUnknownTy_, info = NoInfo ()}
+
+let futPint_ = use FutharkAst in
+  lam i : Int.
+  FPInt {val = i, ty = futUnknownTy_, info = NoInfo ()}
+
+let futPbool_ = use FutharkAst in
+  lam b : Bool.
+  FPBool {val = b, ty = futUnknownTy_, info = NoInfo ()}
+
+let futPrecord_ = use FutharkAst in
+  lam bindings : [(String, FutPat)].
+  let bindingMapFunc = lam b : (String, FutPat). (stringToSid b.0, b.1) in
+  FPRecord {bindings = mapFromSeq cmpSID (map bindingMapFunc bindings),
+            ty = futUnknownTy_, info = NoInfo ()}
+
 -- Expressions --
 
 recursive let futBind_ = use FutharkAst in
@@ -82,7 +82,7 @@ let futBindall_ = lam exprs. foldr1 futBind_ exprs
 
 let nFutVar_ = use FutharkAst in
   lam n.
-  FEVar {ident = n, info = NoInfo ()}
+  FEVar {ident = n, ty = futUnknownTy_, info = NoInfo ()}
 
 let futVar_ = lam str. nFutVar_ (nameNoSym str)
 
@@ -91,45 +91,48 @@ let futRecord_ = use FutharkAst in
   FERecord {fields = mapFromSeq cmpSID (map
                        (lam kv : (String, FutExpr). (stringToSid kv.0, kv.1))
                        fieldSeq),
-            info = NoInfo ()}
+            ty = futUnknownTy_, info = NoInfo ()}
 
 let futUnit_ = lam. futRecord_ []
 
 let futRecordProj_ = use FutharkAst in
   lam rec. lam field.
-  FERecordProj {rec = rec, key = stringToSid field, info = NoInfo ()}
+  FERecordProj {rec = rec, key = stringToSid field, ty = futUnknownTy_,
+                info = NoInfo ()}
 
 let futArray_ = use FutharkAst in
   lam tms.
-  FEArray {tms = tms, info = NoInfo ()}
+  FEArray {tms = tms, ty = futUnknownTy_, info = NoInfo ()}
 
 let futArrayAccess_ = use FutharkAst in
   lam array. lam index.
-  FEArrayAccess {array = array, index = index, info = NoInfo ()}
+  FEArrayAccess {array = array, index = index, ty = futUnknownTy_,
+                 info = NoInfo ()}
 
 let futArrayUpdate_ = use FutharkAst in
   lam array. lam index. lam value.
-  FEArrayUpdate {array = array, index = index, value = value, info = NoInfo ()}
+  FEArrayUpdate {array = array, index = index, value = value,
+                 ty = futUnknownTy_, info = NoInfo ()}
 
 let futArraySlice_ = use FutharkAst in
   lam array. lam startIdx. lam endIdx.
   FEArraySlice {array = array, startIdx = startIdx, endIdx = endIdx,
-                info = NoInfo ()}
+                ty = futUnknownTy_, info = NoInfo ()}
 
 let futConst_ = use FutharkAst in
   lam c.
-  FEConst {val = c, info = NoInfo ()}
+  FEConst {val = c, ty = futUnknownTy_, info = NoInfo ()}
 
 let nFutLam_ = use FutharkAst in
   lam n. lam body.
-  FELam {ident = n, body = body, info = NoInfo ()}
+  FELam {ident = n, body = body, ty = futUnknownTy_, info = NoInfo ()}
 
 let futLam_ = lam str. lam body.
   nFutLam_ (nameNoSym str) body
 
 let futApp_ = use FutharkAst in
   lam lhs. lam rhs.
-  FEApp {lhs = lhs, rhs = rhs, info = NoInfo ()}
+  FEApp {lhs = lhs, rhs = rhs, ty = futUnknownTy_, info = NoInfo ()}
 
 let futAppSeq_ = lam f. lam seq.
   foldl futApp_ f seq
@@ -140,7 +143,7 @@ let futBinop_ = lam op. lam a. lam b.
 let nFutLet_ = use FutharkAst in
   lam n. lam ty. lam body.
   FELet {ident = n, tyBody = ty, body = body, inexpr = futUnit_ (),
-         info = NoInfo ()}
+         ty = futUnknownTy_, info = NoInfo ()}
 
 let nuFutLet_ =
   lam n. lam body.
@@ -154,16 +157,16 @@ let futLet_ = lam str. lam ty. lam body.
 
 let futIf_ = use FutharkAst in
   lam cond. lam thn. lam els.
-  FEIf {cond = cond, thn = thn, els = els, info = NoInfo ()}
+  FEIf {cond = cond, thn = thn, els = els, ty = futUnknownTy_, info = NoInfo ()}
 
 let futForEach_ = use FutharkAst in
   lam param. lam loopVar. lam seq. lam body.
   FEForEach {param = param, loopVar = loopVar, seq = seq, body = body,
-             info = NoInfo ()}
+             ty = futUnknownTy_, info = NoInfo ()}
 
 let futMatch_ = use FutharkAst in
   lam target. lam cases : [(FutPat, FutExpr)].
-  FEMatch {target = target, cases = cases, info = NoInfo ()}
+  FEMatch {target = target, cases = cases, ty = futUnknownTy_, info = NoInfo ()}
 
 -- Constants --
 

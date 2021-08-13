@@ -110,25 +110,6 @@ lang FutharkConstGenerate = MExprAst + FutharkAst
   | CFoldl _ -> FCFoldl ()
 end
 
-lang FutharkPatternGenerate = MExprAst + FutharkAst
-  sem generatePattern (targetTy : Type) =
-  | PatNamed t -> FPNamed {ident = t.ident, info = t.info}
-  | PatInt t -> FPInt {val = t.val, info = t.info}
-  | PatBool t -> FPBool {val = t.val, info = t.info}
-  | PatRecord t ->
-    let mergeBindings = lam bindings : Map SID Pat. lam fields : Map SID Type.
-      mapMapWithKey
-        (lam k. lam ty : Type.
-          match mapLookup k bindings with Some pat then
-            generatePattern ty pat
-          else futPvarw_ ())
-        fields
-    in
-    match targetTy with TyRecord {fields = fields} then
-      FPRecord {bindings = mergeBindings t.bindings fields, info = t.info}
-    else infoErrorExit t.info "Cannot match non-record type on record pattern"
-end
-
 lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType (env : FutharkGenerateEnv) =
   | t ->
@@ -163,6 +144,29 @@ lang FutharkTypeGenerate = MExprAst + FutharkAst
   | t -> infoErrorExit (infoTy t) "Unsupported type"
 end
 
+lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
+  sem generatePattern (env : FutharkGenerateEnv) (targetTy : Type) =
+  | PatNamed t ->
+    FPNamed {ident = t.ident, ty = generateType env t.ty, info = t.info}
+  | PatInt t ->
+    FPInt {val = t.val, ty = generateType env t.ty, info = t.info}
+  | PatBool t ->
+    FPBool {val = t.val, ty = generateType env t.ty, info = t.info}
+  | PatRecord t ->
+    let mergeBindings = lam bindings : Map SID Pat. lam fields : Map SID Type.
+      mapMapWithKey
+        (lam k. lam ty : Type.
+          match mapLookup k bindings with Some pat then
+            generatePattern env ty pat
+          else futPvarw_ ())
+        fields
+    in
+    match targetTy with TyRecord {fields = fields} then
+      FPRecord {bindings = mergeBindings t.bindings fields,
+                ty = generateType env t.ty, info = t.info}
+    else infoErrorExit t.info "Cannot match non-record type on record pattern"
+end
+
 let _collectParams = use FutharkTypeGenerate in
   lam env : FutharkGenerateEnv. lam body : Expr.
   recursive let work = lam params : [(Name, FutType)]. lam body : Expr.
@@ -181,25 +185,29 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmMatch ({pat = PatBool {val = true}} & t) ->
     FEIf {cond = generateExpr env t.target, thn = generateExpr env t.thn,
-          els = generateExpr env t.els, info = t.info}
+          els = generateExpr env t.els, ty = generateType env t.ty,
+          info = t.info}
   | TmMatch ({pat = PatBool {val = false}} & t) ->
     FEIf {cond = generateExpr env t.target, thn = generateExpr env t.els,
-          els = generateExpr env t.thn, info = t.info}
+          els = generateExpr env t.thn, ty = generateType env t.ty,
+          info = t.info}
   | TmMatch ({pat = PatInt {val = i}} & t) ->
     let cond = generateExpr env (withInfo (infoTm t.target) (eqi_ (int_ i) t.target)) in
     FEIf {cond = cond, thn = generateExpr env t.thn,
-          els = generateExpr env t.els, info = t.info}
+          els = generateExpr env t.els, ty = generateType env t.ty,
+          info = t.info}
   | TmMatch ({pat = PatNamed {ident = PWildcard _}} & t) -> generateExpr env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
     FELet {ident = n, tyBody = ty t.target, body = generateExpr env t.target,
-           inexpr = generateExpr env t.thn, info = infoTm t.target}
+           inexpr = generateExpr env t.thn, ty = generateType env (ty t.thn),
+           info = infoTm t.target}
   | TmMatch ({pat = PatRecord {bindings = bindings},
               thn = TmVar {ident = exprName}, els = TmNever _} & t) ->
     let binds : [(SID, Pat)] = mapBindings bindings in
     match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
       if nameEq patName exprName then
         FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                      info = t.info}
+                      ty = t.ty, info = t.info}
       else defaultGenerateMatch env (TmMatch t)
     else defaultGenerateMatch env (TmMatch t)
   | TmMatch ({pat = PatSeqEdge {prefix = [PatNamed {ident = PName head}],
@@ -211,42 +219,53 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
       FELet {
         ident = head,
         tyBody = elemTy,
-        body = FEApp {lhs = FEConst {val = FCHead (), info = t.info},
-                      rhs = target, info = t.info},
+        body = FEApp {
+          lhs = FEConst {
+            val = FCHead (),
+            ty = FTyArrow {from = elemTy, to = targetTy, info = t.info},
+            info = t.info},
+          rhs = target, ty = elemTy, info = t.info},
         inexpr = FELet {
           ident = tail,
           tyBody = targetTy,
-          body = FEApp {lhs = FEConst {val = FCTail (), info = t.info},
-                        rhs = target, info = t.info},
+          body = FEApp {
+            lhs = FEConst {
+              val = FCTail (),
+              ty = FTyArrow {from = targetTy, to = targetTy, info = t.info},
+              info = t.info},
+            rhs = target, ty = targetTy, info = t.info},
           inexpr = generateExpr env t.thn,
+          ty = generateType env (ty t.thn),
           info = t.info},
+        ty = generateType env (ty t.thn),
         info = t.info}
     else infoErrorExit t.info "Cannot match non-sequence type on sequence pattern"
   | TmMatch ({pat = PatRecord {bindings = bindings} & pat, els = TmNever _} & t) ->
     FEMatch {
       target = generateExpr env t.target,
-      cases = [(generatePattern (ty t.target) pat, generateExpr env t.thn)],
+      cases = [(generatePattern env (ty t.target) pat, generateExpr env t.thn)],
+      ty = generateType env t.ty,
       info = t.info}
   | (TmMatch _) & t -> defaultGenerateMatch env t
 end
 
-lang FutharkAppGenerate = MExprAst + FutharkAst
+lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
   sem defaultGenerateApp (env : FutharkGenerateEnv) =
   | TmApp t -> FEApp {lhs = generateExpr env t.lhs, rhs = generateExpr env t.rhs,
-                      info = t.info}
+                      ty = generateType env t.ty, info = t.info}
 
   sem generateExpr (env : FutharkGenerateEnv) =
   | TmApp ({lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = arg1}, rhs = arg2} & t) ->
     FEArrayAccess {
       array = generateExpr env arg1, index = generateExpr env arg2,
-      info = t.info}
+      ty = generateType env t.ty, info = t.info}
   | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSet _},
                                       rhs = arg1},
                          rhs = arg2},
             rhs = arg3} & t) ->
     FEArrayUpdate {
       array = generateExpr env arg1, index = generateExpr env arg2,
-      value = generateExpr env arg3, info = t.info}
+      value = generateExpr env arg3, ty = generateType env t.ty, info = t.info}
   | TmApp ({lhs = TmApp {lhs = TmConst {val = CCreate _}, rhs = arg1},
             rhs = arg2} & t) ->
     let tryLookupExpr = lam e.
@@ -271,15 +290,23 @@ lang FutharkAppGenerate = MExprAst + FutharkAst
         else defaultGenerateApp env (TmApp t)
       else defaultGenerateApp env (TmApp t)
     in
-    withInfoFutTm t.info result
+    let resultType = generateType env t.ty in
+    withTypeFutTm resultType (withInfoFutTm t.info result)
   | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                       rhs = arg1},
                          rhs = TmConst {val = CInt {val = 0}}},
             rhs = arg3} & t) ->
-    withInfoFutTm t.info
-      (futAppSeq_
-        (FEConst {val = FCTake (), info = t.info})
-        [generateExpr env arg3, generateExpr env arg1])
+    let arrayType = generateType env (ty arg1) in
+    let takeConst = FEConst {
+      val = FCTake (),
+      ty = FTyArrow {
+        from = FTyInt {info = t.info},
+        to = FTyArrow {from = arrayType, to = arrayType, info = t.info},
+        info = t.info},
+      info = t.info} in
+    withTypeFutTm arrayType
+      (withInfoFutTm t.info
+        (futAppSeq_ takeConst [generateExpr env arg3, generateExpr env arg1]))
   | TmApp ({lhs = TmApp {lhs = TmApp {lhs = TmConst {val = CSubsequence _},
                                       rhs = arg1},
                          rhs = arg2},
@@ -289,14 +316,24 @@ lang FutharkAppGenerate = MExprAst + FutharkAst
     -- errors on Futhark's side.
     FEArraySlice {
       array = generateExpr env arg1, startIdx = generateExpr env arg2,
-      endIdx = generateExpr env arg3, info = t.info}
+      endIdx = generateExpr env arg3, ty = generateType env t.ty, info = t.info}
   | TmApp {lhs = TmConst {val = CFloorfi _}, rhs = arg, info = info} ->
     FEApp {
-      lhs = FEConst {val = FCFloat2Int (), info = info},
-      rhs = FEApp {
-        lhs = FEConst {val = FCFloatFloor (), info = info},
-        rhs = generateExpr env arg,
+      lhs = FEConst {
+        val = FCFloat2Int (),
+        ty = FTyArrow {from = FTyFloat {info = info},
+                       to = FTyInt {info = info}, info = info},
         info = info},
+      rhs = FEApp {
+        lhs = FEConst {
+          val = FCFloatFloor (),
+          ty = FTyArrow {from = FTyFloat {info = info},
+                         to = FTyFloat {info = info}, info = info},
+          info = info},
+        rhs = generateExpr env arg,
+        ty = FTyFloat {info = info},
+        info = info},
+      ty = FTyInt {info = info},
       info = info}
   | TmApp ({
       rhs = s,
@@ -310,7 +347,7 @@ lang FutharkAppGenerate = MExprAst + FutharkAst
     let body = substituteVariables body subMap in
     FEForEach {
       param = generateExpr env ne, loopVar = x, seq = generateExpr env s,
-      body = generateExpr env body, info = t.info}
+      body = generateExpr env body, ty = generateType env t.ty, info = t.info}
   | (TmApp _) & t -> defaultGenerateApp env t
 end
 
@@ -318,26 +355,37 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                            FutharkMatchGenerate + FutharkAppGenerate +
                            MExprParallelKeywordMaker
   sem generateExpr (env : FutharkGenerateEnv) =
-  | TmVar t -> FEVar {ident = t.ident, info = t.info}
-  | TmRecord t -> FERecord {fields = mapMap (generateExpr env) t.bindings,
-                            info = t.info}
+  | TmVar t ->
+    FEVar {ident = t.ident, ty = generateType env t.ty, info = t.info}
+  | TmRecord t ->
+    FERecord {fields = mapMap (generateExpr env) t.bindings,
+              ty = generateType env t.ty, info = t.info}
   | TmSeq t ->
-    FEArray {tms = map (generateExpr env) t.tms, info = t.info}
-  | TmConst t -> FEConst {val = generateConst t.val, info = t.info}
-  | TmLam t -> FELam {ident = t.ident, body = generateExpr env t.body,
-                      info = t.info}
+    FEArray {tms = map (generateExpr env) t.tms, ty = generateType env t.ty,
+             info = t.info}
+  | TmConst t ->
+    FEConst {val = generateConst t.val, ty = generateType env t.ty,
+             info = t.info}
+  | TmLam t ->
+    FELam {ident = t.ident, body = generateExpr env t.body,
+           ty = generateType env t.ty, info = t.info}
   | TmLet t ->
     let boundNames = mapInsert t.ident t.body env.boundNames in
     let inexprEnv = {env with boundNames = boundNames} in
     FELet {ident = t.ident, tyBody = generateType env t.tyBody,
            body = generateExpr env t.body,
-           inexpr = generateExpr inexprEnv t.inexpr, info = t.info}
+           inexpr = generateExpr inexprEnv t.inexpr,
+           ty = generateType env t.ty, info = t.info}
   | TmParallelMap t ->
-    withInfoFutTm t.info (futMap_ (generateExpr env t.f) (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futMap_ (generateExpr env t.f) (generateExpr env t.as)))
   | TmParallelMap2 t ->
-    withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
-                                   (generateExpr env t.as)
-                                   (generateExpr env t.bs))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futMap2_ (generateExpr env t.f)
+                                      (generateExpr env t.as)
+                                      (generateExpr env t.bs)))
   | TmParallelFlatMap t ->
     -- TODO(larshum, 2021-07-08): Compile differently depending on the possible
     -- sizes of sequences.
@@ -345,40 +393,49 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     -- * Otherwise we use 'flatten' on the map results. This requires that the
     --   size is a constant 'n' for all elements, and that the Futhark compiler
     --   can figure this out.
-    withInfoFutTm t.info (futFlatten_ (futMap_ (generateExpr env t.f)
-                                               (generateExpr env t.as)))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futFlatten_ (futMap_ (generateExpr env t.f)
+                                                  (generateExpr env t.as))))
   | TmParallelReduce t ->
-    withInfoFutTm t.info (futReduce_ (generateExpr env t.f)
-                                     (generateExpr env t.ne)
-                                     (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futReduce_ (generateExpr env t.f)
+                                        (generateExpr env t.ne)
+                                        (generateExpr env t.as)))
   | TmParallelScan t ->
-    withInfoFutTm t.info (futScan_ (generateExpr env t.f)
-                                   (generateExpr env t.ne)
-                                   (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futScan_ (generateExpr env t.f)
+                                      (generateExpr env t.ne)
+                                      (generateExpr env t.as)))
   | TmParallelFilter t ->
-    withInfoFutTm t.info (futFilter_ (generateExpr env t.p)
-                                     (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futFilter_ (generateExpr env t.p)
+                                        (generateExpr env t.as)))
   | TmParallelPartition t ->
-    withInfoFutTm t.info (futPartition_ (generateExpr env t.p)
-                                        (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futPartition_ (generateExpr env t.p)
+                                           (generateExpr env t.as)))
   | TmParallelAll t ->
-    withInfoFutTm t.info (futAll_ (generateExpr env t.p)
-                                  (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futAll_ (generateExpr env t.p)
+                                     (generateExpr env t.as)))
   | TmParallelAny t ->
-    withInfoFutTm t.info (futAny_ (generateExpr env t.p)
-                                  (generateExpr env t.as))
+    withTypeFutTm
+      (generateType env t.ty)
+      (withInfoFutTm t.info (futAny_ (generateExpr env t.p)
+                                     (generateExpr env t.as)))
+  | TmRecLets t ->
+    infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
 end
 
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
   sem generateToplevel (env : FutharkGenerateEnv) =
-  | TmRecLets t ->
-    infoErrorExit t.info "Recursive functions are not supported in Futhark"
-  | TmExt t ->
-    infoErrorExit t.info "External functions are not supported in Futhark"
-  | TmUtest t ->
-    infoErrorExit t.info "Utests are not supported in Futhark"
-  | TmConDef t -> generateToplevel env t.inexpr
   | TmType t ->
     recursive let parameterizeType =
       lam params : [FutTypeParam]. lam ty : FutType.
@@ -433,6 +490,14 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
       else never
     in
     cons decl (generateToplevel env t.inexpr)
+  | TmRecLets t ->
+    infoErrorExit t.info "Recursive functions are not supported in Futhark"
+  | TmExt t ->
+    infoErrorExit t.info "External functions are not supported in Futhark"
+  | TmUtest t ->
+    infoErrorExit t.info "Utests are not supported in Futhark"
+  | TmConDef t ->
+    infoErrorExit t.info "Constructor definitions are not supported in Futhark"
   | _ -> []
 end
 
