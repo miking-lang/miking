@@ -369,66 +369,8 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
                                   (generateExpr env t.as))
 end
 
--- TODO(larshum, 2021-08-11): This translation should be applied on the PMExpr
--- AST before translating it into Futhark (i.e. not during translation).
-lang FutharkRecLetGenerate = FutharkTypeGenerate + FutharkExprGenerate +
-                             MExprParallelKeywordMaker
-  sem _addCallsToGraph (bindingIndex : Int) (bindingNameToIndex : Map Name Int)
-                       (g : Digraph Int Int) =
-  | TmApp t ->
-    match collectAppArguments (TmApp t) with (func, args) then
-      match func with TmVar {ident = id} then
-        match mapLookup id bindingNameToIndex with Some callIndex then
-          digraphMaybeAddEdge bindingIndex callIndex 0 g
-        else g
-      else g
-    else never
-  | t -> sfold_Expr_Expr (_addCallsToGraph bindingIndex bindingNameToIndex) g t
-
-  sem _reverseTopologicallySortedBindings (bindings : [RecLetBinding]) =
-  | _ ->
-    let bindingIndices = mapi (lam i. lam. i) bindings in
-    let bindingNameToIndex =
-      mapFromSeq nameCmp
-        (mapi (lam i. lam binding : RecLetBinding. (binding.ident, i)) bindings) in
-    let g =
-      foldl
-        (lam g. lam index. digraphAddVertex index g)
-        (digraphEmpty eqi eqi)
-        bindingIndices in
-    let g =
-      foldl
-        (lam g. lam p : (Int, RecLetBinding).
-          let idx = p.0 in
-          let binding = p.1 in
-          _addCallsToGraph idx bindingNameToIndex g binding.body)
-        g
-        (zip bindingIndices bindings) in
-    let s = digraphTarjan g in
-    if all (lam scc. eqi (length scc) 1) s then
-      Some (join s)
-    else None ()
-
-  sem defaultGenerateRecLets (env : FutharkGenerateEnv) =
-  | TmRecLets t ->
-    let generateNextBinding = lam acc : FutExpr. lam binding : RecLetBinding.
-      FELet {ident = binding.ident, tyBody = generateType env binding.tyBody,
-             body = generateExpr env binding.body,
-             inexpr = acc, info = binding.info}
-    in
-    match _reverseTopologicallySortedBindings t.bindings () with Some permutation then
-      let sortedBindings = permute t.bindings permutation in
-      foldl generateNextBinding (generateExpr env t.inexpr) sortedBindings
-    else
-      infoErrorExit t.info (join ["Could not translate recursive bindings to ",
-                                  "ordinary functions in Futhark"])
-
-  sem generateExpr (env : FutharkGenerateEnv) =
-  | (TmRecLets _) & t -> defaultGenerateRecLets env t
-end
-
 lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
-                               FutharkTypeGenerate + FutharkRecLetGenerate
+                               FutharkTypeGenerate
   sem generateToplevel (env : FutharkGenerateEnv) =
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions are not supported in Futhark"
