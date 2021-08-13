@@ -124,7 +124,7 @@ let fail_constapp f v fi =
 let initialize_on_first_call () =
   if not (Py.is_initialized ()) then Py.initialize ~version:3 ()
 
-let delta _ _ fi c v =
+let delta _ fi c v =
   initialize_on_first_call () ;
   let fail_constapp fi = fail_constapp c v fi in
   match (c, v) with
