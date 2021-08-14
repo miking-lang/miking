@@ -37,7 +37,7 @@ let maxmatchHungarian = lam w : Tensor[Int].
 
     -- We assign these feasable labels, e. g. lu[u] + lv[v] => w[u][v] for all
     -- v in V, u in U
-    tensorMapiSelf (lam i. lam. tensorMax subi (tensorSliceExn w i)) lus;
+    tensorMapiInplace (lam i. lam. tensorMax subi (tensorSliceExn w i)) lus;
 
     -- labels for V
     let lvs : Tensor[Int] = tcreate [n] (lam. 0) in
@@ -80,7 +80,7 @@ let maxmatchHungarian = lam w : Tensor[Int].
     in
 
     -- T <- {}
-    let emptyT = lam. tensorMapSelf (lam. false) ts in
+    let emptyT = lam. tensorMapInplace (lam. false) ts in
 
     -- v in T
     let memT = lam v. tget ts [v] in
@@ -202,7 +202,7 @@ let maxmatchHungarian = lam w : Tensor[Int].
       if isPerfectMatch () then
         { incidenceU = mus
         , incidenceV = mvs
-        , weight = addi (tensorFoldl addi 0 lus) (tensorFoldl addi 0 lvs) }
+        , weight = addi (tensorFold addi 0 lus) (tensorFold addi 0 lvs) }
       -- We should find a complete matching in at most n steps.
       else if gti k n then error "Failed to find maximal matching"
       else

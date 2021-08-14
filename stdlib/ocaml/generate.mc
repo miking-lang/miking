@@ -596,7 +596,7 @@ let _addTypeDeclarations = lam typeLiftEnvMap. lam typeLiftEnv. lam t.
       else (t, recordFieldsToName)
     else never
   in
-  let init = use MExprCmpClosed in (t, mapEmpty (mapCmp cmpType)) in
+  let init = use MExprCmp in (t, mapEmpty (mapCmp cmpType)) in
   assocSeqFold f init typeLiftEnv
 
 let _typeLiftEnvToGenerateEnv = use MExprAst in
@@ -1975,43 +1975,6 @@ let tensorReshapeCharTest =
 in
 utest ocamlEvalInt (generateEmptyEnv tensorReshapeCharTest)
 with int_ 1 using eqExpr in
-
-let tensorCopyIntTest =
-  bind_
-  (ulet_ "t" (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 2))))
-  (semi_ (tensorCopyExn_ tyint_
-                         (var_ "t")
-                         (tensorCreateInt_ (seq_ []) (ulam_ "x" (int_ 1))))
-         (tensorGetExn_ tyint_ (var_ "t") (seq_ [])))
-in
-utest ocamlEvalInt (generateEmptyEnv tensorCopyIntTest)
-with int_ 2 using eqExpr in
-
-let tensorCopyFloatTest =
-  bind_
-  (ulet_ "t" (tensorCreateFloat_ (seq_ []) (ulam_ "x" (float_ 2.))))
-  (semi_ (tensorCopyExn_ tyfloat_
-                         (var_ "t")
-                         (tensorCreateFloat_
-                                        (seq_ [])
-                                        (ulam_ "x" (float_ 1.))))
-         (tensorGetExn_ tyfloat_ (var_ "t") (seq_ [])))
-in
-utest ocamlEvalFloat (generateEmptyEnv tensorCopyFloatTest)
-with float_ 2. using eqExpr in
-
-let tensorCopyCharTest =
-  bind_
-  (ulet_ "t" (tensorCreate_ tychar_ (seq_ []) (ulam_ "x" (char_ '2'))))
-  (semi_ (tensorCopyExn_ tychar_
-                         (var_ "t")
-                         (tensorCreate_ tychar_
-                                        (seq_ [])
-                                        (ulam_ "x" (char_ '1'))))
-         (tensorGetExn_ tychar_ (var_ "t") (seq_ [])))
-in
-utest ocamlEvalChar (generateEmptyEnv tensorCopyCharTest)
-with char_ '2' using eqExpr in
 
 let tensorSliceIntTest =
   tensorRank_ tyint_

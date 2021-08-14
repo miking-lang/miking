@@ -743,7 +743,7 @@ utest printTest (wrapStmt enum) with
   wrapStmtString "enum enumty {CONST, CONST1};"
 using eqString in
 
-let switch = CSSwitch {
+let sw = CSSwitch {
   cond = CEInt { i = 1 },
   body = [
     (2,[
@@ -762,7 +762,7 @@ let switch = CSSwitch {
     memb
   ])
 } in
-utest printTest (wrapStmt switch) with
+utest printTest (wrapStmt sw) with
   wrapStmtString (strJoin "\n" [
     "switch (1) {",
     "  case 2:",
@@ -833,7 +833,7 @@ let funbody = [
   op,
   app,
   ifstmt,
-  switch,
+  sw,
   while
 ] in
 

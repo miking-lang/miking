@@ -977,6 +977,21 @@ lang RefOpEval = RefOpAst + RefEval + IntAst
     else error "not a deref of a reference"
 end
 
+lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst
+  sem delta (arg : Expr) =
+  | CConstructorTag _ ->
+    let zeroConst = lam.
+      TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()},
+               info = NoInfo ()}
+    in
+    match arg with TmConApp {ident = id} then
+      match nameGetSym id with Some sym then
+        TmConst {val = CInt {val = sym2hash sym}, ty = TyInt {info = NoInfo ()},
+                 info = NoInfo ()}
+      else zeroConst ()
+    else zeroConst ()
+end
+
 lang MapEval =
   MapAst + UnknownTypeAst + IntAst + IntTypeAst + BoolAst + BoolTypeAst +
   SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval
@@ -1176,7 +1191,7 @@ lang MapEval =
 end
 
 lang TensorOpEval =
-  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval
+  TensorOpAst + SeqAst + IntAst + FloatAst + TensorEval + ConstEval + BoolAst
 
   syn Const =
   | CTensorCreateInt2 [Int]
@@ -1186,11 +1201,15 @@ lang TensorOpEval =
   | CTensorSetExn2 T
   | CTensorSetExn3 (T, [Int])
   | CTensorReshapeExn2 T
-  | CTensorCopyExn2 T
+  | CTensorTransposeExn2 T
+  | CTensorTransposeExn3 (T, Int)
   | CTensorSliceExn2 T
   | CTensorSubExn2 T
   | CTensorSubExn3 (T, Int)
   | CTensorIterSlice2 Expr
+  | CTensorEq2 Expr
+  | CTensorEq3 (Expr, T)
+  | CTensorToString2 Expr
 
   sem _ofTmSeq =
   | TmSeq { tms = tms } ->
@@ -1246,6 +1265,53 @@ lang TensorOpEval =
         uunit_
       else never
     else error "Second argument to CTensorIterSlice not a tensor"
+  | TmConst { val = CTensorEq3 (eq, t1) } ->
+    match arg with TmTensor { val = t2 } then
+    let mkeq = lam wrapx. lam wrapy.
+      lam x. lam y.
+        match apply ctx (wrapy y) (apply ctx (wrapx x) eq) with
+          TmConst { val = CBool { val = b } }
+        then b else error "Invalid equality function"
+    in
+    let eq =
+      match t1 with TInt _ then
+        match t2 with TInt _ then mkeq int_ int_
+        else match t2 with TFloat _ then mkeq int_ float_
+        else match t2 with TExpr _ then mkeq int_ (lam x. x)
+        else never
+      else match t1 with TFloat _ then
+        match t2 with TInt _ then mkeq float_ int_
+        else match t2 with TFloat _ then mkeq float_ float_
+        else match t2 with TExpr _ then mkeq float_ (lam x. x)
+        else never
+      else match t1 with TExpr _ then
+        match t2 with TInt _ then mkeq (lam x. x) int_
+        else match t2 with TFloat _ then mkeq (lam x. x) float_
+        else match t2 with TExpr _ then mkeq (lam x. x) (lam x. x)
+        else never
+      else never
+    in
+    match (t1, t2) with
+      (TInt t1 | TFloat t1 | TExpr t1, TInt t2 | TFloat t2 | TExpr t2)
+    then
+      bool_ (tensorEq eq t1 t2)
+    else never
+    else error "Third argument to CTensorEq not a tensor"
+  | TmConst { val = CTensorToString2 el2str } ->
+    match arg with TmTensor { val = t } then
+      let el2str = lam x.
+        match apply ctx x el2str with TmSeq { tms = tms } then
+          _seqOfCharsToString tms
+        else error "Invalid element to string function"
+      in
+      let str =
+        match t with TInt t then tensor2string (lam x. el2str (int_ x)) t
+        else match t with TFloat t then tensor2string (lam x. el2str (float_ x)) t
+        else match t with TExpr t then tensor2string el2str t
+        else never
+      in
+      seq_ (_stringToSeqOfChars str)
+    else error "Second argument to CTensorToString not a tensor"
 
   sem delta (arg : Expr) =
   | CTensorCreateInt _ ->
@@ -1327,24 +1393,42 @@ lang TensorOpEval =
       let view = tensorReshapeExn t is in
       TmTensor { val = TExpr view }
     else never
-  | CTensorCopyExn _ ->
+  | CTensorCopy _ ->
     match arg with TmTensor { val = t } then
-      let val = CTensorCopyExn2 t in
+      match t with TInt t then
+        let tt = tensorCopy t in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorCopy t in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorCopy t in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "First argument to CTensorCopy not a tensor"
+  | CTensorTransposeExn _ ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorTransposeExn2 t in
       uconst_ val
-    else error "First argument to CTensorCopyExn not a tensor"
-  | CTensorCopyExn2 t1 ->
-    match arg with TmTensor { val = t2 } then
-      match (t1, t2) with (TInt t1, TInt t2) then
-        tensorCopyExn t1 t2;
-        uunit_
-      else match (t1, t2) with (TFloat t1, TFloat t2) then
-        tensorCopyExn t1 t2;
-        uunit_
-      else match (t1, t2) with (TExpr t1, TExpr t2) then
-        tensorCopyExn t1 t2;
-        uunit_
-      else error "Tensor type mismatch in CTensorCopyExn"
-    else error "First argument to CTensorCopyExn not a tensor"
+    else error "First argument to CTensorTransposeExn not a tensor"
+  | CTensorTransposeExn2 t ->
+    match arg with TmConst { val = CInt { val = n } } then
+      let val = CTensorTransposeExn3 (t, n) in
+      uconst_ val
+    else error "Second argument to CTensorTransposeExn not an integer"
+  | CTensorTransposeExn3 (t, n1) ->
+    match arg with TmConst { val = CInt { val = n2 } } then
+      match t with TInt t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TInt tt }
+      else match t with TFloat t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TFloat tt }
+      else match t with TExpr t then
+        let tt = tensorTransposeExn t n1 n2 in
+        TmTensor { val = TExpr tt }
+      else never
+    else error "Second argument to CTensorTransposeExn not an integer"
   | CTensorSliceExn _ ->
     match arg with TmTensor { val = t } then
       let val = CTensorSliceExn2 t in
@@ -1387,6 +1471,17 @@ lang TensorOpEval =
     else error "Second argument to CTensorSubExn not an integer"
   | CTensorIterSlice _ ->
     let val = CTensorIterSlice2 arg in
+    uconst_ val
+  | CTensorEq _ ->
+    let val = CTensorEq2 arg in
+    uconst_ val
+  | CTensorEq2 eq ->
+    match arg with TmTensor { val = t } then
+      let val = CTensorEq3 (eq, t) in
+      uconst_ val
+    else error "Second argument to CTensorEq not a tensor"
+  | CTensorToString _ ->
+    let val = CTensorToString2 arg in
     uconst_ val
 end
 
@@ -1683,7 +1778,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  MapEval + TensorOpEval
+  ConTagEval + MapEval + TensorOpEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -2460,8 +2555,6 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   utest evaln (utensorShape_ (utensorReshapeExn_ t1 (seq_ [int_ 2, int_ 2])))
   with seq_ [int_ 2, int_ 2] using eqExpr in
 
-  utest evaln (utensorCopyExn_ t1 t2) with uunit_ using eqExpr in
-
   utest evaln (utensorRank_ (utensorSliceExn_ t1 (seq_ [int_ 0])))
   with int_ 0 using eqExpr in
 
@@ -2474,12 +2567,8 @@ let testTensors = lam tcreate_. lam v : (a,a,a).
   utest evaln (utensorShape_ (utensorSubExn_ t1 (int_ 0) (int_ 2)))
   with seq_ [int_ 2] using eqExpr in
 
-  let t3 = eval (tcreate_ (seq_ [int_ 3]) (ulam_ "x" v.0)) in
-  let f = eval (ulam_ "i"
-                  (ulam_ "x"
-                     (utensorCopyExn_ (var_ "x") (var_ "x"))))
-  in
-  utest evaln (utensorIterSlice_ f t3) with uunit_ using eqExpr in
+  -- utest evaln (utensorEq_ eqExpr t0 t0) with true_ using eqExpr in
+
   ()
 in
 
@@ -2497,7 +2586,6 @@ utest evaln (utensorGetExn_ t3 (seq_ [int_ 1])) with int_ 1 using eqExpr in
 utest evaln (utensorGetExn_ t3 (seq_ [int_ 2])) with int_ 2 using eqExpr in
 
 testTensors tensorCreateInt_ (int_ 0, int_ 1, int_ 2);
-testTensors tensorCreateFloat_ (float_ 0., float_ 1., float_ 2.);
 testTensors utensorCreate_ (seq_ [int_ 0], seq_ [int_ 1], seq_ [int_ 2]);
 
 ()

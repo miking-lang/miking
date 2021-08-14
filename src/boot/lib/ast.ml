@@ -116,6 +116,8 @@ and const =
   | Cmapi of (int -> tm -> tm) option
   | Citer of (tm -> unit) option
   | Citeri of (int -> tm -> unit) option
+  | Cfoldl of (tm -> tm -> tm) option * tm option
+  | Cfoldr of (tm -> tm -> tm) option * tm option
   | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
@@ -141,6 +143,8 @@ and const =
   | Cgensym
   | Ceqsym of Symb.t option
   | Csym2hash
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag
   (* MCore intrinsics: References *)
   | Cref
   | CmodRef of tm ref option
@@ -172,11 +176,14 @@ and const =
   | CtensorSetExn of tm T.t option * int Mseq.t option
   | CtensorRank
   | CtensorShape
-  | CtensorCopyExn of tm T.t option
+  | CtensorCopy
+  | CtensorTransposeExn of tm T.t option * int option
   | CtensorReshapeExn of tm T.t option
   | CtensorSliceExn of tm T.t option
   | CtensorSubExn of tm T.t option * int option
   | CtensorIterSlice of tm option
+  | CtensorEq of tm option * tm T.t option
+  | Ctensor2string of tm option
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of int Mseq.t Mseq.t option
@@ -557,6 +564,8 @@ let const_has_side_effect = function
   | Cmapi _
   | Citer _
   | Citeri _
+  | Cfoldl _
+  | Cfoldr _
   | Csubsequence _ ->
       false
   (* MCore intrinsics: Random numbers *)
@@ -585,6 +594,9 @@ let const_has_side_effect = function
       true
   (* MCore intrinsics: Symbols *)
   | CSymb _ | Cgensym | Ceqsym _ | Csym2hash ->
+      true
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag ->
       true
   (* MCore intrinsics: References *)
   | Cref | CmodRef _ | CdeRef ->
@@ -617,11 +629,14 @@ let const_has_side_effect = function
   | CtensorSetExn _
   | CtensorRank
   | CtensorShape
-  | CtensorCopyExn _
+  | CtensorCopy
+  | CtensorTransposeExn _
   | CtensorReshapeExn _
   | CtensorSliceExn _
   | CtensorSubExn _
-  | CtensorIterSlice _ ->
+  | CtensorIterSlice _
+  | CtensorEq _
+  | Ctensor2string _ ->
       true
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _
@@ -643,7 +658,7 @@ let const_has_side_effect = function
       true
 
 (* Converts a sequence of terms to a sequence of integers *)
-let tmseq2seqOfInt fi s =
+let tmseq2seq_of_int fi s =
   Mseq.map
     (fun x ->
       match x with
@@ -654,7 +669,7 @@ let tmseq2seqOfInt fi s =
     s
 
 (* Converts a sequence of terms to a ustring *)
-let tmseq2ustring fi s = tmseq2seqOfInt fi s |> Mseq.Helpers.to_ustring
+let tmseq2ustring fi s = tmseq2seq_of_int fi s |> Mseq.Helpers.to_ustring
 
 (* Converts a ustring to a sequence of terms *)
 let ustring2tmseq fi s =

@@ -732,6 +732,11 @@ lang TimeAst = ConstAst
   | CSleepMs {}
 end
 
+lang ConTagAst = ConstAst
+  syn Const =
+  | CConstructorTag {}
+end
+
 lang RefOpAst = ConstAst
   syn Const =
   | CRef {}
@@ -769,10 +774,13 @@ lang TensorOpAst = ConstAst
   | CTensorRank {}
   | CTensorShape {}
   | CTensorReshapeExn {}
-  | CTensorCopyExn {}
+  | CTensorCopy {}
+  | CTensorTransposeExn {}
   | CTensorSliceExn {}
   | CTensorSubExn {}
   | CTensorIterSlice {}
+  | CTensorEq {}
+  | CTensorToString {}
 end
 
 lang BootParserAst = ConstAst
@@ -1229,8 +1237,8 @@ lang MExprAst =
   CmpIntAst + IntCharConversionAst + CmpFloatAst + CharAst + CmpCharAst +
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
-  FloatStringConversionAst + TimeAst + RefOpAst + MapAst + TensorOpAst +
-  BootParserAst +
+  FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + MapAst +
+  TensorOpAst + BootParserAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +

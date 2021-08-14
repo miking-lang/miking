@@ -123,10 +123,20 @@ let tytensorreshapeexn_ = lam ty.
             , tyseq_ tyint_
             , tytensor_ ty ]
 
-let tytensorcopyexn_ = lam ty.
+let tytensorblitexn_ = lam ty.
   tyarrows_ [ tytensor_ ty
             , tytensor_ ty
             , tyunit_ ]
+
+let tytensorcopy_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tytensor_ ty]
+
+let tytensortransposeexn_ = lam ty.
+  tyarrows_ [ tytensor_ ty
+            , tyint_
+            , tyint_
+            , tytensor_ ty ]
 
 let tytensorsliceexn_ = lam ty.
   tyarrows_ [ tytensor_ ty
@@ -145,6 +155,17 @@ let tytensoriteri_ = lam ty.
                         , tyunit_ ]
             , tytensor_ ty
             , tyunit_ ]
+
+let tytensoreq_ = lam ty1. lam ty2.
+  tyarrows_ [ tyarrows_ [ty1, ty2, tybool_]
+            , tytensor_ ty1
+            , tytensor_ ty2
+            , tybool_ ]
+
+let tytensortostring_ = lam ty.
+  tyarrows_ [ tyarrow_ ty tystr_
+            , tytensor_ ty
+            , tystr_ ]
 
 -- Patterns --
 
@@ -985,11 +1006,17 @@ let tensorReshapeExn_ = use MExprAst in
 
 let utensorReshapeExn_ = tensorReshapeExn_ tyunknown_
 
-let tensorCopyExn_ = use MExprAst in
-  lam ty. lam t1. lam t2.
-  appf2_ (const_ (tytensorcopyexn_ ty) (CTensorCopyExn ())) t1 t2
+let tensorCopy_ = use MExprAst in
+  lam ty. lam t.
+  appf1_ (const_ (tytensorblitexn_ ty) (CTensorCopy ())) t
 
-let utensorCopyExn_ = tensorCopyExn_ tyunknown_
+let utensorCopy_ = tensorCopy_ tyunknown_
+
+let tensorTransposeExn_ = use MExprAst in
+  lam ty. lam t. lam dim0. lam dim1.
+  appf3_ (const_ (tytensortransposeexn_ ty) (CTensorTransposeExn ())) t dim0 dim1
+
+let utensorTransposeExn_ = tensorTransposeExn_ tyunknown_
 
 let tensorSliceExn_ = use MExprAst in
   lam ty. lam t. lam s.
@@ -1008,6 +1035,18 @@ let tensorIterSlice_ = use MExprAst in
   appf2_ (const_ (tytensoriteri_ ty) (CTensorIterSlice ())) f t
 
 let utensorIterSlice_ = tensorIterSlice_ tyunknown_
+
+let tensorEq_ = use MExprAst in
+  lam ty1. lam ty2. lam eq. lam t1. lam t2.
+  appf3_ (const_ (tytensoreq_ ty1 ty2) (CTensorEq ())) eq t1 t2
+
+let utensorEq_ = tensorEq_ tyunknown_ tyunknown_
+
+let tensor2string_ = use MExprAst in
+  lam ty. lam el2str. lam t.
+  appf2_ (const_ (tytensortostring_ ty) (CTensorToString ())) el2str t
+
+let utensor2string_ = tensor2string_ tyunknown_
 
 -- Bootparser
 let bootParserParseMExprString_ = use MExprAst in

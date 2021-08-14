@@ -389,6 +389,10 @@ let rec print_const fmt = function
       fprintf fmt "iter"
   | Citeri _ ->
       fprintf fmt "iteri"
+  | Cfoldl _ ->
+      fprintf fmt "foldl"
+  | Cfoldr _ ->
+      fprintf fmt "foldr"
   | Csubsequence _ ->
       fprintf fmt "subsequence"
   (* MCore intrinsics: Random numbers *)
@@ -435,6 +439,9 @@ let rec print_const fmt = function
       fprintf fmt "eqsym"
   | Csym2hash ->
       fprintf fmt "sym2hash"
+  (* MCore intrinsics: Constructor tag *)
+  | CconstructorTag ->
+      fprintf fmt "constructorTag"
   (* MCore intrinsics: References *)
   | Cref ->
       fprintf fmt "ref"
@@ -492,8 +499,10 @@ let rec print_const fmt = function
       fprintf fmt "tensorRank"
   | CtensorShape ->
       fprintf fmt "tensorShape"
-  | CtensorCopyExn _ ->
-      fprintf fmt "tensorCopyExn"
+  | CtensorCopy ->
+      fprintf fmt "tensorCopy"
+  | CtensorTransposeExn _ ->
+      fprintf fmt "tensorTransposeExn"
   | CtensorReshapeExn _ ->
       fprintf fmt "tensorReshapeExn"
   | CtensorSliceExn _ ->
@@ -502,6 +511,10 @@ let rec print_const fmt = function
       fprintf fmt "tensorSubExn"
   | CtensorIterSlice _ ->
       fprintf fmt "tensorIterSlice"
+  | CtensorEq _ ->
+      fprintf fmt "tensorEq"
+  | Ctensor2string _ ->
+      fprintf fmt "tensor2string"
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree _ ->
       fprintf fmt "bootParseTree"
@@ -695,14 +708,14 @@ and print_tm' fmt t =
       let shape, data =
         t
         |> function
-        | T.CArrayIntBoot t' ->
-            ( t' |> Tensor.CArray.shape
-            , t' |> Tensor.CArray.data_to_array |> Array.map int_ )
-        | T.CArrayFloatBoot t' ->
-            ( t' |> Tensor.CArray.shape
-            , t' |> Tensor.CArray.data_to_array |> Array.map float_ )
-        | T.DenseBoot t' ->
-            (t' |> Tensor.Dense.shape, t' |> Tensor.Dense.data_to_array)
+        | T.TBootInt t' ->
+            ( t' |> Tensor.Barray.shape
+            , t' |> Tensor.Uop_barray.to_data_array |> Array.map int_ )
+        | T.TBootFloat t' ->
+            ( t' |> Tensor.Barray.shape
+            , t' |> Tensor.Uop_barray.to_data_array |> Array.map float_ )
+        | T.TBootGen t' ->
+            (t' |> Tensor.Generic.shape, t' |> Tensor.Uop_generic.to_data_array)
       in
       let print t fmt = fprintf fmt "%a" print_tm (App, t) in
       let shape' =
