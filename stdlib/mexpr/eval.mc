@@ -1505,11 +1505,11 @@ lang BootParserEval =
 
   sem delta (arg : Expr) =
   | CBootParserParseMExprString _ ->
-    match arg with TmSeq {val = seq} then
+    match arg with TmSeq {tms = seq} then
       let keywords =
         map
           (lam keyword.
-            match keyword with TmSeq {val = s} then
+            match keyword with TmSeq {tms = s} then
               _seqOfCharsToString s
             else error (join ["Keyword of first argument passed to ",
                               "bootParserParseMExprString not a sequence"]))
@@ -1518,17 +1518,17 @@ lang BootParserEval =
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserParseMExprString not a sequence"
   | CBootParserParseMExprString2 keywords ->
-    match arg with TmSeq {val = seq} then
+    match arg with TmSeq {tms = seq} then
       let t = bootParserParseMExprString keywords (_seqOfCharsToString seq) in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserParseMExprString not a sequence"
   | CBootParserParseMCoreFile _ ->
-    match arg with TmSeq {val = seq} then
+    match arg with TmSeq {tms = seq} then
       let keywords =
         map
           (lam keyword.
-            match keyword with TmSeq {val = s} then
+            match keyword with TmSeq {tms = s} then
               _seqOfCharsToString s
             else error (join ["Keyword of first argument passed to ",
                               "bootParserParseMCoreFile not a sequence"]))
@@ -1537,7 +1537,7 @@ lang BootParserEval =
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserParseMCoreFile not a sequence"
   | CBootParserParseMCoreFile2 keywords ->
-    match arg with TmSeq {val = seq} then
+    match arg with TmSeq {tms = seq} then
       let t = bootParserParseMCoreFile keywords (_seqOfCharsToString seq) in
       TmConst {val = CBootParserTree {val = t},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
@@ -1549,7 +1549,7 @@ lang BootParserEval =
     else error "Argument to bootParserGetId not a parse tree"
   | CBootParserGetTerm _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetTerm2 {val = ptree},
+      TmConst {val = CBootParserGetTerm2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetTerm not a parse tree"
   | CBootParserGetTerm2 ptree ->
@@ -1559,7 +1559,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetTerm not an integer"
   | CBootParserGetType _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetType2 {val = ptree},
+      TmConst {val = CBootParserGetType2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetType not a parse tree"
   | CBootParserGetType2 ptree ->
@@ -1569,7 +1569,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetType not an integer"
   | CBootParserGetString _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetString2 {val = ptree},
+      TmConst {val = CBootParserGetString2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetString not a parse tree"
   | CBootParserGetString2 ptree ->
@@ -1585,7 +1585,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetString not an integer"
   | CBootParserGetInt _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetInt2 {val = ptree},
+      TmConst {val = CBootParserGetInt2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetInt not a parse tree"
   | CBootParserGetInt2 ptree ->
@@ -1595,7 +1595,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetInt not an integer"
   | CBootParserGetFloat _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetFloat2 {val = ptree},
+      TmConst {val = CBootParserGetFloat2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetFloat not a parse tree"
   | CBootParserGetFloat2 ptree ->
@@ -1605,7 +1605,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetFloat not an integer"
   | CBootParserGetListLength _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetListLength2 {val = ptree},
+      TmConst {val = CBootParserGetListLength2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetListLength not a parse tree"
   | CBootParserGetListLength2 ptree ->
@@ -1615,7 +1615,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetListLength not an integer"
   | CBootParserGetConst _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetConst2 {val = ptree},
+      TmConst {val = CBootParserGetConst2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetConst not a parse tree"
   | CBootParserGetConst2 ptree ->
@@ -1625,7 +1625,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetConst not an integer"
   | CBootParserGetPat _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetPat2 {val = ptree},
+      TmConst {val = CBootParserGetPat2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetPat not a parse tree"
   | CBootParserGetPat2 ptree ->
@@ -1635,7 +1635,7 @@ lang BootParserEval =
     else error "Second argument to bootParserGetPat not an integer"
   | CBootParserGetInfo _ ->
     match arg with TmConst {val = CBootParserTree {val = ptree}} then
-      TmConst {val = CBootParserGetInfo2 {val = ptree},
+      TmConst {val = CBootParserGetInfo2 ptree,
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "First argument to bootParserGetInfo not a parse tree"
   | CBootParserGetInfo2 ptree ->
@@ -1778,7 +1778,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + MapEval + TensorOpEval
+  ConTagEval + MapEval + TensorOpEval + BootParserEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
