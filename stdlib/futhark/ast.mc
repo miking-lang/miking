@@ -87,6 +87,37 @@ lang FutharkTypeAst = FutharkTypeParamAst
   | FTyRecord t -> FTyRecord {t with info = info}
   | FTyArrow t -> FTyArrow {t with info = info}
   | FTyParamsApp t -> FTyParamsApp {t with info = info}
+
+  sem smapAccumL_FType_FType (f : acc -> a -> (acc, b)) (acc : acc) =
+  | FTyArray t ->
+    match f acc t.elem with (acc, elem) then
+      (acc, FTyArray {t with elem = elem})
+    else never
+  | FTyRecord t ->
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) then
+      (acc, FTyRecord {t with fields = fields})
+    else never
+  | FTyArrow t ->
+    match f acc t.from with (acc, from) then
+      match f acc t.to with (acc, to) then
+        (acc, FTyArrow {{t with from = from} with to = to})
+      else never
+    else never
+  | FTyParamsApp t ->
+    match f acc t.ty with (acc, ty) then
+      (acc, FTyParamsApp {t with ty = ty})
+    else never
+  | t -> (acc, t)
+
+  sem smap_FType_FType (f : a -> b) =
+  | t ->
+    let res : ((), FutType) = smapAccumL_FType_FType (lam. lam a. ((), f a)) () t in
+    res.1
+
+  sem sfold_FType_FType (f : acc -> a -> acc) (acc : acc) =
+  | t ->
+    let res : (acc, FutType) = smapAccumL_FType_FType (lam acc. lam a. (f acc a, a)) acc t in
+    res.0
 end
 
 lang FutharkPatAst = FutharkTypeAst

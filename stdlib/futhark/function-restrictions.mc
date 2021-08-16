@@ -29,17 +29,23 @@ lang FutharkFunctionRestrictions = FutharkAst
     infoErrorString info (join ["Cannot translate expression operating on ",
                                 "functions to Futhark"])
 
+  sem containsFunctionType (acc : Bool) =
+  | FTyArrow _ -> true
+  | t -> if acc then acc else sfold_FType_FType containsFunctionType acc t
+
   sem findFutharkFunctionViolationsExpr (errors : [FutharkFunctionError]) =
   | (FEArray _) & t ->
-    match tyFutTm t with FTyArray {elem = FTyArrow _} then
-      cons (FunctionInArray (infoFutTm t)) errors
+    match tyFutTm t with FTyArray {elem = elemTy} then
+      if containsFunctionType false elemTy then
+        cons (FunctionInArray (infoFutTm t)) errors
+      else errors
     else errors
   | (FEIf _) & t ->
-    match tyFutTm t with FTyArrow _ then
+    if containsFunctionType false (tyFutTm t) then
       cons (FunctionFromIf (infoFutTm t)) errors
     else errors
   | (FEForEach {param = param}) & t ->
-    match tyFutTm param with FTyArrow _ then
+    if containsFunctionType false (tyFutTm param) then
       cons (FunctionLoopParameter (infoFutTm t)) errors
     else errors
   | t -> sfold_FExpr_FExpr findFutharkFunctionViolationsExpr errors t
@@ -130,6 +136,15 @@ utest findFutharkFunctionViolations combined
 with [FunctionInArray (NoInfo ()), FunctionFromIf (NoInfo ()),
       FunctionLoopParameter (NoInfo ())] in
 
--- reportFutharkFunctionViolations combined ;
+let t = futProgram [
+  futConst (FEArray {
+    tms = [futRecord_ [
+      ("0", nFutLam_ x (nFutVar_ x)),
+      ("1", futInt_ 2)]],
+    ty = futUnsizedArrayTy_ (futRecordTy_ [
+      ("0", futArrowTy_ futIntTy_ futIntTy_),
+      ("1", futIntTy_)]),
+    info = NoInfo ()})] in
+utest findFutharkFunctionViolations t with [FunctionInArray (NoInfo ())] in
 
 ()
