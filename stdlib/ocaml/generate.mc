@@ -139,9 +139,29 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
-  | TmMatch ({pat = PatInt {val = i}} & t) ->
+  | TmMatch ({pat = PatInt _} & t) ->
     _omatch_ (generate env t.target)
       [(t.pat, generate env t.thn), (pvarw_, generate env t.els)]
+  | TmMatch ({pat = PatInt {val = i}, target = TmVar {ident = ident}} & t) ->
+    let eqTarget = lam t.
+      match t with TmVar {ident = id} then
+        nameEq ident id
+      else false
+    in
+    recursive let collectMatchTerms = lam acc. lam t : MatchRecord.
+      if eqTarget t.target then
+        match t.pat with PatInt _ then
+          let acc = snoc acc (t.pat, generate env t.thn) in
+          match t.els with TmMatch tm then
+            collectMatchTerms acc tm
+          else (acc, generate env t.els)
+        else (acc, TmMatch t)
+      else (acc, TmMatch t)
+    in
+    match collectMatchTerms [] t
+    with (arms, defaultCase) then
+      _omatch_ (generate env t.target) (snoc arms (pvarw_, defaultCase))
+    else never
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
