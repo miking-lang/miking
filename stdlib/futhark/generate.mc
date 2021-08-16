@@ -314,9 +314,24 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     -- NOTE(larshum, 2021-06-16): The generated code constructs a slice, which
     -- is a reference rather than a copy. This could result in compilation
     -- errors on Futhark's side.
+    let startIdx = generateExpr env arg2 in
+    let offset = generateExpr env arg3 in
+    let info = mergeInfo (infoFutTm startIdx) (infoFutTm offset) in
+    let endIdx = FEApp {
+      lhs = FEApp {
+        lhs = FEConst {val = FCAdd (), ty = tyunknown_, info = info},
+        rhs = startIdx,
+        ty = FTyArrow {
+          from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
+        info = info
+      },
+      rhs = offset,
+      ty = FTyInt {info = info},
+      info = info
+    } in
     FEArraySlice {
-      array = generateExpr env arg1, startIdx = generateExpr env arg2,
-      endIdx = generateExpr env arg3, ty = generateType env t.ty, info = t.info}
+      array = generateExpr env arg1, startIdx = startIdx, endIdx = endIdx,
+      ty = generateType env t.ty, info = t.info}
   | TmApp {lhs = TmConst {val = CFloorfi _}, rhs = arg, info = info} ->
     FEApp {
       lhs = FEConst {
