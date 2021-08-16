@@ -383,9 +383,16 @@ let reducePattern : () -> Pattern =
       let els = substituteVariables els subMap in
       let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultPair.0)) in
       let f = nulam_ x (nulam_ y els) in
+
+      -- TODO(larshum, 2021-08-16): The decision on whether to generate a
+      -- parallel or sequential reduce should be taken AFTER the parameter
+      -- values are known, as f could be a parameter which is later found out
+      -- to be associative.
       match fResultPair.1 with TmApp {lhs = TmApp {lhs = op}} then
-        if and (isAssociative op) (optionIsSome (getNeutralElement op)) then
-          parallelReduce_ f accPair.1 sExpr
+        match getNeutralElement op with Some ne then
+          if isAssociative op then
+            appf2_ f accPair.1 (parallelReduce_ f ne sExpr)
+          else seqReduce f accPair.1 sExpr
         else seqReduce f accPair.1 sExpr
       else seqReduce f accPair.1 sExpr
     else
