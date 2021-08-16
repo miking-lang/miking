@@ -6,22 +6,22 @@ include "char.mc"
 include "name.mc"
 include "intrinsics-ops.mc"
 
-let isValidChar = lam c.
+let _isValidChar = lam c.
   or (isAlphanum c) (or (eqChar c '_') (eqChar c '\''))
 
-let escapeChar = lam c.
-  if isValidChar c then c else '_'
+let _escapeChar = lam c.
+  if _isValidChar c then c else '_'
 
-utest map escapeChar "abcABC/:@_'" with "abcABC____'"
+utest map _escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeVarString = lam s.
-  concat "v_" (map escapeChar s)
+  concat "v_" (map _escapeChar s)
 
 let escapeConString = lam s.
-  concat "C" (map escapeChar s)
+  concat "C" (map _escapeChar s)
 
 let escapeLabelString = lam s.
-  concat "l" (map escapeChar s)
+  concat "l" (map _escapeChar s)
 
 utest escapeVarString "abcABC/:@_'" with "v_abcABC____'"
 utest escapeVarString "" with "v_"
