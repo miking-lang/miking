@@ -140,8 +140,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
   | TmMatch ({pat = PatInt {val = i}} & t) ->
-    let cond = generate env (eqi_ (int_ i) t.target) in
-    _if (objMagic cond) (generate env t.thn) (generate env t.els)
+    _omatch_ (generate env t.target)
+      [(t.pat, generate env t.thn), (pvarw_, generate env t.els)]
   | TmMatch ({pat = PatChar {val = c}} & t) ->
     let cond = generate env (eqc_ (char_ c) t.target) in
     _if cond (generate env t.thn) (generate env t.els)
