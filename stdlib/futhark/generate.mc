@@ -414,21 +414,6 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
       (generateType env t.ty)
       (withInfoFutTm t.info (futFilter_ (generateExpr env t.p)
                                         (generateExpr env t.as)))
-  | TmParallelPartition t ->
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futPartition_ (generateExpr env t.p)
-                                           (generateExpr env t.as)))
-  | TmParallelAll t ->
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futAll_ (generateExpr env t.p)
-                                     (generateExpr env t.as)))
-  | TmParallelAny t ->
-    withTypeFutTm
-      (generateType env t.ty)
-      (withInfoFutTm t.info (futAny_ (generateExpr env t.p)
-                                     (generateExpr env t.as)))
   | TmRecLets t ->
     infoErrorExit t.info "Recursive functions cannot be translated into Futhark"
 end
