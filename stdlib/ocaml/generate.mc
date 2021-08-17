@@ -102,8 +102,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       else never
     else never
 
-  sem collectChainedMatches (env : GenerateEnv) (isChainedPat : Pat -> Bool)
-                            (acc : a) (addMatchCase : a -> MatchRecord -> a) =
+  sem collectNestedMatches (env : GenerateEnv) (isNestedPat : Pat -> Bool)
+                           (acc : a) (addMatchCase : a -> MatchRecord -> a) =
   | t ->
     let t : MatchRecord = t in
     -- We assume that the target is a variable because otherwise there is no
@@ -119,7 +119,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     in
     recursive let collectMatchTerms = lam acc. lam t : MatchRecord.
       if eqTarget t.target then
-        if isChainedPat t.pat then
+        if isNestedPat t.pat then
           let acc = addMatchCase acc t in
           match t.els with TmMatch tm then
             collectMatchTerms acc tm
@@ -131,13 +131,12 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
 
   sem collectNestedMatchesByConstructor (env : GenerateEnv) =
   | t ->
-    collectChainedMatches env
+    collectNestedMatches env
       (lam pat. match pat with PatCon _ then true else false)
       (mapEmpty nameCmp)
       (lam acc. lam t : MatchRecord.
          match t.pat with PatCon pc then
            match mapLookup pc.ident acc with Some pats then
-             -- TODO: should be snoc, or ordered later?
              let pats = cons (pc.subpat, t.thn) pats in
              mapInsert pc.ident pats acc
            else
@@ -149,20 +148,36 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
+  | TmMatch ({pat = PatInt _, target = TmVar _} & t) ->
+    match
+      collectNestedMatches env
+        (lam pat. match pat with PatInt _ then true else false) []
+        (lam acc. lam t. snoc acc (t.pat, generate env t.thn)) t
+    with (arms, defaultCase) then
+      _omatch_ (generate env t.target)
+        (snoc arms (pvarw_, generate env defaultCase))
+    else never
   | TmMatch ({pat = PatInt _} & t) ->
     _omatch_ (generate env t.target)
       [(t.pat, generate env t.thn), (pvarw_, generate env t.els)]
-  | TmMatch ({pat = PatInt {val = i}, target = TmVar {ident = ident}} & t) ->
+  | TmMatch ({pat = PatChar {val = c}, target = TmVar _} & t) ->
     match
-      collectChainedMatches env
-        (lam pat. match pat with PatInt _ then true else false)
-        [] (lam acc. lam t. snoc acc (t.pat, t.thn)) t
+      collectNestedMatches env
+        (lam pat. match pat with PatChar _ then true else false) []
+        (lam acc. lam t.
+          match t.pat with PatChar pc then
+            let pat =
+              PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty}
+            in snoc acc (pat, generate env t.thn)
+          else never) t
     with (arms, defaultCase) then
-      _omatch_ (generate env t.target) (snoc arms (pvarw_, defaultCase))
+      _omatch_ (generate env t.target)
+        (snoc arms (pvarw_, generate env defaultCase))
     else never
-  | TmMatch ({pat = PatChar {val = c}} & t) ->
-    let cond = generate env (eqc_ (char_ c) t.target) in
-    _if cond (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = PatChar pc} & t) ->
+    let pat = PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty} in
+    _omatch_ (generate env t.target)
+      [(pat, generate env t.thn), (pvarw_ generate env t.els)]
   | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
     generate env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
