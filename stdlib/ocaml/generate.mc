@@ -152,7 +152,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match
       collectNestedMatches env
         (lam pat. match pat with PatInt _ then true else false) []
-        (lam acc. lam t. snoc acc (t.pat, generate env t.thn)) t
+        (lam acc. lam t : MatchRecord. snoc acc (t.pat, generate env t.thn)) t
     with (arms, defaultCase) then
       _omatch_ (generate env t.target)
         (snoc arms (pvarw_, generate env defaultCase))
@@ -164,7 +164,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     match
       collectNestedMatches env
         (lam pat. match pat with PatChar _ then true else false) []
-        (lam acc. lam t.
+        (lam acc. lam t : MatchRecord.
           match t.pat with PatChar pc then
             let pat =
               PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty}
