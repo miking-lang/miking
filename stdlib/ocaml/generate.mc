@@ -177,7 +177,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
   | TmMatch ({pat = PatChar pc} & t) ->
     let pat = PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty} in
     _omatch_ (generate env t.target)
-      [(pat, generate env t.thn), (pvarw_ generate env t.els)]
+      [(pat, generate env t.thn), (pvarw_, generate env t.els)]
   | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
     generate env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
@@ -198,7 +198,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
             _omatch_ (objMagic (generate env t.target))
-              [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
+              [(OPatCon {ident = name, args = [precord]}, objMagic (nvar_ patName))]
           else error "Record type not handled by type-lifting"
         else infoErrorExit info "Unknown record type"
       else generateDefaultMatchCase env t
