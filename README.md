@@ -17,11 +17,11 @@ opam switch create 4.12.0+domains --packages=ocaml-variants.4.12.0+domains --rep
 eval $(opam env)
 ```
 
-After this, you need to install the `opam` packages `dune`, `batteries`, and
-`linenoise` by running the following:
+After this, you need to install the `opam` packages `dune` and `linenoise` by
+running the following:
 
 ```
-opam install dune batteries linenoise
+opam install dune linenoise
 ```
 
 Note that the `opam switch` command lets you have several OCaml installations on
