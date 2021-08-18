@@ -231,7 +231,8 @@ let get_matches prefix words = List.filter (starts_with prefix) words
 
 let get_completions str pos =
   let start_pos = begins_at str pos in
-  let word_to_complete = String.sub str start_pos (pos - start_pos + 1) in
+  let len = min (String.length str) (pos - start_pos + 1) in
+  let word_to_complete = String.sub str start_pos len in
   (start_pos, get_matches word_to_complete (keywords_and_identifiers ()))
 
 let completion_callback line_so_far ln_completions =
