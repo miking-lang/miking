@@ -62,7 +62,6 @@ let builtin =
   ; ("char2int", f Cchar2int)
   ; ("int2char", f Cint2char) (* MCore intrinsics: Sequences *)
   ; ("create", f (Ccreate None))
-  ; ("createFingerTree", f (CcreateFingerTree None))
   ; ("createList", f (CcreateList None))
   ; ("createRope", f (CcreateRope None))
   ; ("length", f Clength)

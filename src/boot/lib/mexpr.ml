@@ -154,10 +154,6 @@ let arity = function
       2
   | Ccreate (Some _) ->
       1
-  | CcreateFingerTree None ->
-      2
-  | CcreateFingerTree (Some _) ->
-      1
   | CcreateList None ->
       2
   | CcreateList (Some _) ->
@@ -728,13 +724,6 @@ let delta eval env fi c v =
       TmSeq (tm_info f, Mseq.create n createf)
   | Ccreate None, _ ->
       fail_constapp fi
-  | CcreateFingerTree None, TmConst (_, CInt n) ->
-      TmConst (fi, CcreateFingerTree (Some n))
-  | CcreateFingerTree (Some n), f ->
-      let createf i = eval env (TmApp (fi, f, TmConst (NoInfo, CInt i))) in
-      TmSeq (tm_info f, Mseq.create_fingertree n createf)
-  | CcreateFingerTree None, _ ->
-      fail_constapp fi
   | CcreateList None, TmConst (_, CInt n) ->
       TmConst (fi, CcreateList (Some n))
   | CcreateList (Some n), f ->
@@ -895,20 +884,20 @@ let delta eval env fi c v =
   | CreadLine, _ ->
       fail_constapp fi
   | CreadBytesAsString, TmConst (_, CInt v) ->
-      if v < 0 then
-        raise_error fi
-          "The argument to readBytesAsString must be a positive integer"
-      else
-        let str =
-          try BatIO.nread BatIO.stdin v with BatIO.No_more_input -> ""
-        in
-        let ustr =
-          try Ustring.from_utf8 str
-          with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
-        in
-        tuple2record fi
-          [ TmSeq (fi, ustring2tmseq fi ustr)
-          ; TmConst (fi, CInt (String.length str)) ]
+    if v < 0 then
+      raise_error fi
+        "The argument to readBytesAsString must be a positive integer"
+    else
+      let str =
+        try really_input_string stdin v with End_of_file -> ""
+      in
+      let ustr =
+        try Ustring.from_utf8 str
+        with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
+      in
+      tuple2record fi
+        [ TmSeq (fi, ustring2tmseq fi ustr)
+    ; TmConst (fi, CInt (String.length str)) ]
   | CreadBytesAsString, _ ->
       fail_constapp fi
   | CreadFile, TmSeq (fi, lst) ->

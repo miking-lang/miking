@@ -37,14 +37,6 @@ utest create 8 (lam. 'a') with ['a','a','a','a','a','a','a','a'] in
 utest create 4 (lam i. muli 2 i) with [0,2,4,6] in
 utest create 0 (lam i. i) with [] using eqSeq eqi in
 
--- 'createFingerTree n f' is like 'create n f', but the underlying representation
--- of the sequence is a finger tree.
--- Int -> (Int -> a) -> [a]
-utest
-  let s = createFingerTree 3 (lam i. i) in
-  [get s 0, get s 1, get s 2]
-with [0, 1, 2] in
-
 -- 'createList n f' is like 'create n f', but the underlying representation of
 -- the sequence is a const list.
 -- Int -> (Int -> a) -> [a]

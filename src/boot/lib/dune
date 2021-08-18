@@ -6,7 +6,7 @@
  (name boot)
  (public_name boot)
  (libraries
-  batteries
+  threads
   str
   linenoise
   ;; Optional dependencies are used if the relevant libraries are available.

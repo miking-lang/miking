@@ -137,8 +137,6 @@ lang SeqOpTypeAst = SeqOpAst
                 tygeneric_ "a", tygenericseq_ "b", tygeneric_ "a" ]
   | CCreate _ -> tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"),
                             tygenericseq_ "a"]
-  | CCreateFingerTree _ ->
-    tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
   | CCreateList _ ->
     tyarrows_ [tyint_, tyarrow_ tyint_ (tygeneric_ "a"), tygenericseq_ "a"]
   | CCreateRope _ ->

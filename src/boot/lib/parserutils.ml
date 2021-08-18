@@ -4,7 +4,6 @@ open Ast
 open Pprint
 open Msg
 open Symbutils
-module Option = BatOption
 
 (* Tab length when calculating the info field *)
 let tablength = 8

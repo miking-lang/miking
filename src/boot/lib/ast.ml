@@ -98,7 +98,6 @@ and const =
   | Cint2char
   (* MCore intrinsic: sequences *)
   | Ccreate of int option
-  | CcreateFingerTree of int option
   | CcreateList of int option
   | CcreateRope of int option
   | Clength
@@ -365,8 +364,6 @@ let tm_unit = TmRecord (NoInfo, Record.empty)
 
 let tyUnit fi = TyRecord (fi, Record.empty, [])
 
-module Option = BatOption
-
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) = function
   | TmApp (fi, t1, t2) ->
@@ -544,7 +541,6 @@ let const_has_side_effect = function
       false
   (* MCore intrinsic: sequences *)
   | Ccreate _
-  | CcreateFingerTree _
   | CcreateList _
   | CcreateRope _
   | Clength

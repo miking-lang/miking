@@ -213,7 +213,6 @@ lang OCamlPrettyPrint =
   | CString2float _ -> intrinsicOpFloat "string2float"
   | CFloat2string _ -> intrinsicOpFloat "float2string"
   | CCreate _ -> intrinsicOpSeq "create"
-  | CCreateFingerTree _ -> intrinsicOpSeq "create_fingertree"
   | CCreateList _ -> intrinsicOpSeq "create_list"
   | CCreateRope _ -> intrinsicOpSeq "create_rope"
   | CLength _ -> intrinsicOpSeq "length"
