@@ -115,9 +115,7 @@ let read_multiline first_line =
     Some (parse_prog_or_mexpr "REPL" lines)
   else None
 
-let default_delayed d = function
-  | Some x -> x
-  | None -> d ()
+let default_delayed d = function Some x -> x | None -> d ()
 
 (* Read input from the user and respond accordingly depending on if it is a
    command, the beginning of a multiline statement or a normal expression *)
@@ -227,11 +225,9 @@ let keywords_and_identifiers () =
 
 let starts_with prefix s =
   if String.length s < String.length prefix then false
-  else
-    Str.string_before s (String.length prefix) |> String.equal prefix
+  else Str.string_before s (String.length prefix) |> String.equal prefix
 
-let get_matches prefix words =
-  List.filter (starts_with prefix) words
+let get_matches prefix words = List.filter (starts_with prefix) words
 
 let get_completions str pos =
   let start_pos = begins_at str pos in

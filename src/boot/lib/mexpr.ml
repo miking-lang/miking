@@ -884,20 +884,18 @@ let delta eval env fi c v =
   | CreadLine, _ ->
       fail_constapp fi
   | CreadBytesAsString, TmConst (_, CInt v) ->
-    if v < 0 then
-      raise_error fi
-        "The argument to readBytesAsString must be a positive integer"
-    else
-      let str =
-        try really_input_string stdin v with End_of_file -> ""
-      in
-      let ustr =
-        try Ustring.from_utf8 str
-        with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
-      in
-      tuple2record fi
-        [ TmSeq (fi, ustring2tmseq fi ustr)
-    ; TmConst (fi, CInt (String.length str)) ]
+      if v < 0 then
+        raise_error fi
+          "The argument to readBytesAsString must be a positive integer"
+      else
+        let str = try really_input_string stdin v with End_of_file -> "" in
+        let ustr =
+          try Ustring.from_utf8 str
+          with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
+        in
+        tuple2record fi
+          [ TmSeq (fi, ustring2tmseq fi ustr)
+          ; TmConst (fi, CInt (String.length str)) ]
   | CreadBytesAsString, _ ->
       fail_constapp fi
   | CreadFile, TmSeq (fi, lst) ->

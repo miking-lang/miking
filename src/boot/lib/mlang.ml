@@ -683,13 +683,9 @@ let rec desugar_tm nss env subs =
 (* add namespace to nss (overwriting) if relevant, prepend a tm -> tm function to stack, return updated tuple. Should use desugar_tm, as well as desugar both sem and syn *)
 let desugar_top (nss, langs, subs, syns, (stack : (tm -> tm) list)) = function
   | TopLang (Lang (_, langName, includes, decls) as lang) ->
-      let default d = function
-        | Some x -> x
-        | None -> d
-      in
+      let default d = function Some x -> x | None -> d in
       let add_lang ns lang =
-        USMap.find_opt lang nss
-        |> default emptyMlangEnv
+        USMap.find_opt lang nss |> default emptyMlangEnv
         |> merge_env_overwrite ns
       in
       let previous_ns = List.fold_left add_lang emptyMlangEnv includes in

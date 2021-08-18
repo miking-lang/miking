@@ -1,9 +1,7 @@
 open Ustring.Op
 
 module Mseq : sig
-  type 'a t =
-    | List of 'a List.t
-    | Rope of 'a array Rope.t
+  type 'a t = List of 'a List.t | Rope of 'a array Rope.t
 
   val create : int -> (int -> 'a) -> 'a t
 

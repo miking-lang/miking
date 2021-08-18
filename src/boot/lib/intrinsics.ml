@@ -1,9 +1,7 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t =
-    | List of 'a List.t
-    | Rope of 'a array Rope.t
+  type 'a t = List of 'a List.t | Rope of 'a array Rope.t
 
   let create_rope n f = Rope (Rope.create_array n f)
 
@@ -32,11 +30,7 @@ module Mseq = struct
     | _ ->
         raise (Invalid_argument "Mseq.concat")
 
-  let get = function
-    | Rope s ->
-        Rope.get_array s
-    | List s ->
-        List.nth s
+  let get = function Rope s -> Rope.get_array s | List s -> List.nth s
 
   let set s i v =
     match s with
@@ -73,11 +67,7 @@ module Mseq = struct
     | List s ->
         List (List.rev s)
 
-  let head = function
-    | Rope s ->
-        Rope.get_array s 0
-    | List s ->
-        List.hd s
+  let head = function Rope s -> Rope.get_array s 0 | List s -> List.hd s
 
   let tail = function
     | Rope s ->
@@ -599,8 +589,7 @@ end
 
 module ConTag = struct
   let constructor_tag obj =
-    if Obj.is_int obj then Obj.obj obj + Obj.custom_tag
-    else Obj.tag obj
+    if Obj.is_int obj then Obj.obj obj + Obj.custom_tag else Obj.tag obj
 end
 
 module Mmap = struct
