@@ -253,7 +253,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlMatchGenerate + OCamlGenerateExt
       match mapLookup ident env.constrs with Some (TyRecord {fields = fields}) then
         let fieldTypes = ocamlTypedFields fields in
         match mapLookup fieldTypes env.records with Some id then
-          let rec = generate env t.rec in
+          let rec = objMagic (generate env t.rec) in
           let key = sidToString t.key in
           let value = objRepr (generate env t.value) in
           let inlineRecordName = nameSym "rec" in
