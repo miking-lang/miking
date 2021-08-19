@@ -116,6 +116,8 @@ and const =
   | Cmapi of (int -> tm -> tm) option
   | Citer of (tm -> unit) option
   | Citeri of (int -> tm -> unit) option
+  | Cfoldl of (tm -> tm -> tm) option * tm option
+  | Cfoldr of (tm -> tm -> tm) option * tm option
   | Csubsequence of tm Mseq.t option * int option
   (* MCore intrinsics: Random numbers *)
   | CrandIntU of int option
@@ -562,6 +564,8 @@ let const_has_side_effect = function
   | Cmapi _
   | Citer _
   | Citeri _
+  | Cfoldl _
+  | Cfoldr _
   | Csubsequence _ ->
       false
   (* MCore intrinsics: Random numbers *)
