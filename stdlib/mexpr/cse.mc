@@ -115,7 +115,6 @@ lang CSE = MExprCmp
           -- Ignore expressions that are only used once.
           match exprEntry with (_, Once _) then applyEnv
           else match exprEntry with (expr, Multiple pos) then
-            (use MExprPrettyPrint in printLn (expr2str expr));
             let tempId = nameSym "t" in
             let index = match pos with _ ++ [x] then x else 0 in
             let posToSubexpr = mapInsertWith concat index [(tempId, expr)]
