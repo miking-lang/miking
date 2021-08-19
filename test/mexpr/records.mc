@@ -20,4 +20,8 @@ let bumpAge = lam r : {age : Int, name : String}. {r with age = addi r.age 1} in
 
 utest bumpAge r1 with r2 in
 
+let nested = {a = {b = 1}} in
+let arec = {nested.a with b = addi nested.a.b 1} in
+utest arec.b with 2 in
+
 ()
