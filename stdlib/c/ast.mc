@@ -16,9 +16,6 @@
 
 -- NOTE(dlunde,2020-10-30):
 --
--- * Identifiers are _not_ checked for validity. You must make sure they are
---   valid C identifiers in your own code.
---
 -- * Definitions have optional identifiers and initializers to allow for
 --   declaring struct/union/enum types without instantiating them
 --

@@ -23,6 +23,7 @@ build_boot(){
     mkdir -p build
     dune build
     cp -f _build/install/default/bin/boot.mi build/$BOOT_NAME
+    dune install > /dev/null 2>&1
 }
 
 
@@ -50,8 +51,12 @@ install() {
     bin_path=$HOME/.local/bin/
     lib_path=$HOME/.local/lib/mcore/stdlib
     mkdir -p $bin_path $lib_path
-    cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
-    cp -f build/$MI_NAME $bin_path/$MI_NAME; chmod +x $bin_path/$MI_NAME
+    if [ -e build/$BOOT_NAME ]; then
+      cp -f build/$BOOT_NAME $bin_path/$BOOT_NAME; chmod +x $bin_path/$BOOT_NAME
+    fi
+    if [ -e build/$MI_NAME ]; then
+      cp -f build/$MI_NAME $bin_path/$MI_NAME; chmod +x $bin_path/$MI_NAME
+    fi
     rm -rf $lib_path; cp -rf stdlib $lib_path
 }
 
@@ -105,7 +110,6 @@ case $1 in
         fix
         ;;
     install)
-        build
         install
         ;;
     clean)
