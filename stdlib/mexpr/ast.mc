@@ -218,6 +218,7 @@ lang LetAst = Ast + VarAst
     else never
 end
 
+-- NOTE(dlunde,2021-08-10): The types `Type` and `Expr` are not visible here.
 type RecLetBinding =
   { ident : Name
   , tyBody : Type

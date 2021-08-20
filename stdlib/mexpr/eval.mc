@@ -4,6 +4,7 @@ include "string.mc"
 include "char.mc"
 include "assoc.mc"
 include "name.mc"
+include "map.mc"
 
 include "info.mc"
 include "ast.mc"
@@ -687,21 +688,23 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     TmConst {val = CMap2 arg, ty = tyunknown_, info = NoInfo ()}
   | CMap2 f ->
     match arg with TmSeq s then
-      let f = lam x. eval {env = mapEmpty nameCmp} (app_ f x) in
+      let f = lam x. apply {env = mapEmpty nameCmp} x f in
       TmSeq {s with tms = map f s.tms}
     else error "Second argument to map not a sequence"
   | CMapi _ ->
     TmConst {val = CMapi2 arg, ty = tyunknown_, info = NoInfo ()}
   | CMapi2 f ->
     match arg with TmSeq s then
-      let f = lam i. lam x. eval {env = mapEmpty nameCmp} (appf2_ f (int_ i) x) in
+      let f = lam i. lam x.
+        apply {env = mapEmpty nameCmp} x
+          (apply {env = mapEmpty nameCmp} (int_ i) f) in
       TmSeq {s with tms = mapi f s.tms}
     else error "Second argument to mapi not a sequence"
   | CIter _ ->
     TmConst {val = CIter2 arg, ty = tyunknown_, info = NoInfo ()}
   | CIter2 f ->
     match arg with TmSeq s then
-      let f = lam x. eval {env = mapEmpty nameCmp} (app_ f x) in
+      let f = lam x. apply {env = mapEmpty nameCmp} x f in
       iter f s.tms;
       uunit_
     else error "Second argument to iter not a sequence"
@@ -709,28 +712,34 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
     TmConst {val = CIteri2 arg, ty = tyunknown_, info = NoInfo ()}
   | CIteri2 f ->
     match arg with TmSeq s then
-      let f = lam i. lam x. eval {env = mapEmpty nameCmp} (appf2_ f (int_ i) x) in
+      let f = lam i. lam x.
+        apply {env = mapEmpty nameCmp} x
+          (apply {env = mapEmpty nameCmp} (int_ i) f) in
       iteri f s.tms;
       uunit_
     else error "Second argument to iteri not a sequence"
-    | CFoldl _ ->
-      TmConst {val = CFoldl2 arg, ty = tyunknown_, info = NoInfo ()}
-    | CFoldl2 f ->
-      TmConst {val = CFoldl3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-    | CFoldl3 (f, acc) ->
-      match arg with TmSeq s then
-        let f = lam acc. lam x. eval {env = mapEmpty nameCmp} (appf2_ f acc x) in
-        foldl f acc s.tms
-      else error "Third argument to foldl not a sequence"
-    | CFoldr _ ->
-      TmConst {val = CFoldr2 arg, ty = tyunknown_, info = NoInfo ()}
-    | CFoldr2 f ->
-      TmConst {val = CFoldr3 (f, arg), ty = tyunknown_, info = NoInfo ()}
-    | CFoldr3 (f, acc) ->
-      match arg with TmSeq s then
-        let f = lam x. lam acc. eval {env = mapEmpty nameCmp} (appf2_ f x acc) in
-        foldr f acc s.tms
-      else error "Third argument to foldr not a sequence"
+  | CFoldl _ ->
+    TmConst {val = CFoldl2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CFoldl2 f ->
+    TmConst {val = CFoldl3 (f, arg), ty = tyunknown_, info = NoInfo ()}
+  | CFoldl3 (f, acc) ->
+    match arg with TmSeq s then
+      let f = lam acc. lam x.
+        apply {env = mapEmpty nameCmp} x
+          (apply {env = mapEmpty nameCmp} acc f) in
+      foldl f acc s.tms
+    else error "Third argument to foldl not a sequence"
+  | CFoldr _ ->
+    TmConst {val = CFoldr2 arg, ty = tyunknown_, info = NoInfo ()}
+  | CFoldr2 f ->
+    TmConst {val = CFoldr3 (f, arg), ty = tyunknown_, info = NoInfo ()}
+  | CFoldr3 (f, acc) ->
+    match arg with TmSeq s then
+      let f = lam x. lam acc.
+        apply {env = mapEmpty nameCmp} acc
+          (apply {env = mapEmpty nameCmp} x f) in
+      foldr f acc s.tms
+    else error "Third argument to foldr not a sequence"
   | CGet _ ->
     match arg with TmSeq s then
       TmConst {val = CGet2 s.tms, ty = tyunknown_, info = NoInfo()}
@@ -791,21 +800,21 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
       TmConst {val = CCreate2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreate2 n ->
-    let f = lam i. eval {env = mapEmpty nameCmp} (app_ arg (int_ i)) in
+    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
     TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
   | CCreateList _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CCreateList2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreateList2 n ->
-    let f = lam i. eval {env = mapEmpty nameCmp} (app_ arg (int_ i)) in
+    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
     TmSeq {tms = createList n f, ty = tyunknown_, info = NoInfo()}
   | CCreateRope _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CCreateRope2 n, ty = tyunknown_, info = NoInfo()}
     else error "n in create is not a number"
   | CCreateRope2 n ->
-    let f = lam i. eval {env = mapEmpty nameCmp} (app_ arg (int_ i)) in
+    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
     TmSeq {tms = createRope n f, ty = tyunknown_, info = NoInfo()}
   | CSubsequence _ ->
     match arg with TmSeq s then
@@ -981,6 +990,216 @@ lang ConTagEval = ConTagAst + DataAst + IntAst + IntTypeAst
                  info = NoInfo ()}
       else zeroConst ()
     else zeroConst ()
+end
+
+lang MapEval =
+  MapAst + UnknownTypeAst + IntAst + IntTypeAst + BoolAst + BoolTypeAst +
+  SeqAst + SeqTypeAst + RecordAst + RecordTypeAst + ConstEval
+
+  syn Const =
+  | CMapVal {cmp : Expr -> Expr -> Expr, val : Map K V}
+  | CMapInsert2 Expr
+  | CMapInsert3 (Expr, Expr)
+  | CMapRemove2 Expr
+  | CMapFindWithExn2 Expr
+  | CMapFindOrElse2 (Expr -> Expr)
+  | CMapFindOrElse3 (Expr -> Expr, Expr) 
+  | CMapFindApplyOrElse2 (Expr -> Expr)
+  | CMapFindApplyOrElse3 (Expr -> Expr, Expr -> Expr)
+  | CMapFindApplyOrElse4 (Expr -> Expr, Expr -> Expr, Expr)
+  | CMapMem2 Expr
+  | CMapAny2 (Expr -> Expr -> Expr)
+  | CMapMap2 (Expr -> Expr)
+  | CMapMapWithKey2 (Expr -> Expr -> Expr)
+  | CMapFoldWithKey2 (Expr -> Expr -> Expr -> Expr)
+  | CMapFoldWithKey3 (Expr -> Expr -> Expr -> Expr, Expr)
+  | CMapEq2 (Expr -> Expr -> Expr)
+  | CMapEq3 (Expr -> Expr -> Expr, Map K V)
+  | CMapCmp2 (Expr -> Expr -> Expr)
+  | CMapCmp3 (Expr -> Expr -> Expr, Map K V)
+  
+  sem delta (arg : Expr) =
+  | CMapEmpty _ ->
+    let cmp = lam x. lam y.
+      let result =
+        apply {env = mapEmpty nameCmp} y
+          (apply {env = mapEmpty nameCmp} x arg) in
+      match result with TmConst {val = CInt {val = i}} then i
+      else error "Comparison function of map did not return integer value"
+    in
+    TmConst {val = CMapVal {cmp = arg, val = mapEmpty cmp},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | CMapInsert _ ->
+    TmConst {val = CMapInsert2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapInsert2 key ->
+    TmConst {val = CMapInsert3 (key, arg), ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapInsert3 (key, value) ->
+    match arg with TmConst ({val = CMapVal m} & t) then
+      TmConst {t with val = CMapVal {m with val = mapInsert key value m.val}}
+    else error "Third argument of mapInsert not a map"
+  | CMapRemove _ ->
+    TmConst {val = CMapRemove2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapRemove2 key ->
+    match arg with TmConst ({val = CMapVal m} & t) then
+      TmConst {t with val = CMapVal {m with val = mapRemove key m.val}}
+    else error "Second argument of mapRemove not a map"
+  | CMapFindWithExn _ ->
+    TmConst {val = CMapFindWithExn2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapFindWithExn2 key ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      mapFindWithExn key m
+    else error "Second argument of mapFindWithExn not a map"
+  | CMapFindOrElse _ ->
+    TmConst {val = CMapFindOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapFindOrElse2 elseFn ->
+    TmConst {val = CMapFindOrElse3 (elseFn, arg),
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | CMapFindOrElse3 (elseFn, key) ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      let elseFn = lam. apply {env = mapEmpty nameCmp} unit_ elseFn in
+      mapFindOrElse elseFn key m
+    else error "Third argument of mapFindOrElse not a map"
+  | CMapFindApplyOrElse _ ->
+    TmConst {val = CMapFindApplyOrElse2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapFindApplyOrElse2 fapply ->
+    TmConst {val = CMapFindApplyOrElse3 (fapply, arg),
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | CMapFindApplyOrElse3 (fapply, felse) ->
+    TmConst {val = CMapFindApplyOrElse4 (fapply, felse, arg),
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | CMapFindApplyOrElse4 (fapply, felse, key) ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      let fapply = lam v. apply {env = mapEmpty nameCmp} v fapply in
+      let felse = lam. apply {env = mapEmpty nameCmp} unit_ felse in
+      mapFindApplyOrElse fapply felse key m
+    else error "Fourth argument of findApplyOrElse not a map"
+  | CMapBindings _ ->
+    let bindToRecord : (k, v) -> Expr = lam bind.
+      let labels = map stringToSid ["0", "1"] in
+      let bindings = mapFromSeq cmpSID (zip labels [bind.0, bind.1]) in
+      TmRecord {
+        bindings = bindings,
+        ty = TyRecord {
+          labels = labels,
+          fields = mapMap (lam. TyUnknown {info = NoInfo ()}) bindings,
+          info = NoInfo ()},
+        info = NoInfo ()}
+    in
+    match arg with TmConst ({val = CMapVal m} & t) then
+      TmSeq {tms = map bindToRecord (mapBindings m.val),
+             ty = TySeq {ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()},
+             info = NoInfo ()}
+    else error "Argument of mapBindings not a map"
+  | CMapSize _ ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      TmConst {val = CInt {val = mapSize m}, ty = TyInt {info = NoInfo ()},
+               info = NoInfo ()}
+    else error "Argument of mapSize not a map"
+  | CMapMem _ ->
+    TmConst {val = CMapMem2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapMem2 key ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      TmConst {val = CBool {val = mapMem key m}, ty = TyBool {info = NoInfo ()},
+               info = NoInfo ()}
+    else error "Second argument of mapMem not a map"
+  | CMapAny _ ->
+    TmConst {val = CMapAny2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapAny2 pred ->
+    match arg with TmConst {val = CMapVal {val = m}} then
+      let pred = lam k. lam v.
+        let result =
+          apply {env = mapEmpty nameCmp} v
+            (apply {env = mapEmpty nameCmp} k pred) in
+        match result with TmConst {val = CBool {val = b}} then b
+        else error "Predicate of mapAny did not return boolean value"
+      in
+      TmConst {val = CBool {val = mapAny pred m},
+               ty = TyBool {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument of mapAny not a map"
+  | CMapMap _ ->
+    TmConst {val = CMapMap2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapMap2 f ->
+    match arg with TmConst ({val = CMapVal m} & t) then
+      let f = lam x. apply {env = mapEmpty nameCmp} x f in
+      TmConst {t with val = CMapVal {m with val = mapMap f m.val}}
+    else error "Second argument of mapMap not a map"
+  | CMapMapWithKey _ ->
+    TmConst {val = CMapMapWithKey2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapMapWithKey2 f ->
+    match arg with TmConst ({val = CMapVal m} & t) then
+      let f = lam k. lam v.
+        apply {env = mapEmpty nameCmp} v
+          (apply {env = mapEmpty nameCmp} k f) in
+      TmConst {t with val = CMapVal {m with val = mapMapWithKey f m.val}}
+    else error "Second argument of mapMapWithKey not a map"
+  | CMapFoldWithKey _ ->
+    TmConst {val = CMapFoldWithKey2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapFoldWithKey2 f ->
+    TmConst {val = CMapFoldWithKey3 (f, arg), ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapFoldWithKey3 (f, acc) ->
+    match arg with TmConst ({val = CMapVal m} & t) then
+      let f = lam acc. lam k. lam v.
+        apply {env = mapEmpty nameCmp} v
+          (apply {env = mapEmpty nameCmp} k
+            (apply {env = mapEmpty nameCmp} acc f)) in
+      mapFoldWithKey f acc m.val
+    else error "Third argument of mapFoldWithKey not a map"
+  | CMapEq _ ->
+    TmConst {val = CMapEq2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapEq2 eq ->
+    match arg with TmConst {val = CMapVal m1} then
+      TmConst {val = CMapEq3 (eq, m1.val), ty = TyUnknown {info = NoInfo ()},
+               info = NoInfo ()}
+    else error "Second argument of mapEq not a map"
+  | CMapEq3 (eq, m1) ->
+    match arg with TmConst {val = CMapVal m2} then
+      let eq = lam v1. lam v2.
+        let result =
+          apply {env = mapEmpty nameCmp} v2
+            (apply {env = mapEmpty nameCmp} v1 eq) in
+        match result with TmConst {val = CBool {val = b}} then b
+        else error "Equality function of mapEq did not return boolean"
+      in
+      TmConst {val = CBool {val = mapEq eq m1 m2.val},
+               ty = TyBool {info = NoInfo ()}, info = NoInfo ()}
+    else error "Third argument of mapEq not a map"
+  | CMapCmp _ ->
+    TmConst {val = CMapCmp2 arg, ty = TyUnknown {info = NoInfo ()},
+             info = NoInfo ()}
+  | CMapCmp2 cmp ->
+    match arg with TmConst {val = CMapVal m1} then
+      TmConst {val = CMapCmp3 (cmp, m1.val), ty = TyUnknown {info = NoInfo ()},
+               info = NoInfo ()}
+    else error "Second argument of mapCmp not a map"
+  | CMapCmp3 (cmp, m1) ->
+    match arg with TmConst {val = CMapVal m2} then
+      let cmp = lam v1. lam v2.
+        let result =
+          apply {env = mapEmpty nameCmp} v2
+            (apply {env = mapEmpty nameCmp} v1 cmp) in
+        match result with TmConst {val = CInt {val = i}} then i
+        else error "Comparison function of mapCmp did not return integer"
+      in
+      TmConst {val = CInt {val = mapCmp cmp m1 m2.val},
+               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+    else error "Third argument of mapCmp not a map"
+  | CMapGetCmpFun _ ->
+    match arg with TmConst {val = CMapVal {cmp = cmp}} then
+      cmp
+    else error "Argument to mapGetCmpFun not a map"
 end
 
 lang TensorOpEval =
@@ -1278,6 +1497,166 @@ lang TensorOpEval =
     uconst_ val
 end
 
+lang BootParserEval =
+  BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
+  FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst
+
+  syn Const =
+  | CBootParserTree {val : BootParserTree}
+  | CBootParserParseMExprString2 [String]
+  | CBootParserParseMCoreFile2 [String]
+  | CBootParserGetTerm2 BootParserTree
+  | CBootParserGetType2 BootParserTree
+  | CBootParserGetString2 BootParserTree
+  | CBootParserGetInt2 BootParserTree
+  | CBootParserGetFloat2 BootParserTree
+  | CBootParserGetListLength2 BootParserTree
+  | CBootParserGetConst2 BootParserTree
+  | CBootParserGetPat2 BootParserTree
+  | CBootParserGetInfo2 BootParserTree
+
+  sem delta (arg : Expr) =
+  | CBootParserParseMExprString _ ->
+    match arg with TmSeq {tms = seq} then
+      let keywords =
+        map
+          (lam keyword.
+            match keyword with TmSeq {tms = s} then
+              _seqOfCharsToString s
+            else error (join ["Keyword of first argument passed to ",
+                              "bootParserParseMExprString not a sequence"]))
+          seq in
+      TmConst {val = CBootParserParseMExprString2 keywords,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserParseMExprString not a sequence"
+  | CBootParserParseMExprString2 keywords ->
+    match arg with TmSeq {tms = seq} then
+      let t = bootParserParseMExprString keywords (_seqOfCharsToString seq) in
+      TmConst {val = CBootParserTree {val = t},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserParseMExprString not a sequence"
+  | CBootParserParseMCoreFile _ ->
+    match arg with TmSeq {tms = seq} then
+      let keywords =
+        map
+          (lam keyword.
+            match keyword with TmSeq {tms = s} then
+              _seqOfCharsToString s
+            else error (join ["Keyword of first argument passed to ",
+                              "bootParserParseMCoreFile not a sequence"]))
+          seq in
+      TmConst {val = CBootParserParseMCoreFile2 keywords,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserParseMCoreFile not a sequence"
+  | CBootParserParseMCoreFile2 keywords ->
+    match arg with TmSeq {tms = seq} then
+      let t = bootParserParseMCoreFile keywords (_seqOfCharsToString seq) in
+      TmConst {val = CBootParserTree {val = t},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserParseMCoreFile not a sequence"
+  | CBootParserGetId _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CInt {val = bootParserGetId ptree},
+               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+    else error "Argument to bootParserGetId not a parse tree"
+  | CBootParserGetTerm _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetTerm2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetTerm not a parse tree"
+  | CBootParserGetTerm2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetTerm ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetTerm not an integer"
+  | CBootParserGetType _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetType2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetType not a parse tree"
+  | CBootParserGetType2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetType ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetType not an integer"
+  | CBootParserGetString _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetString2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetString not a parse tree"
+  | CBootParserGetString2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      let str =
+        map
+          (lam c. TmConst {val = CChar {val = c},
+                           ty = TyChar {info = NoInfo ()}, info = NoInfo ()})
+          (bootParserGetString ptree n) in
+      TmSeq {tms = str, ty = TySeq {ty = TyChar {info = NoInfo ()},
+                                    info = NoInfo ()},
+             info = NoInfo ()}
+    else error "Second argument to bootParserGetString not an integer"
+  | CBootParserGetInt _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetInt2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetInt not a parse tree"
+  | CBootParserGetInt2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CInt {val = bootParserGetInt ptree n},
+               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetInt not an integer"
+  | CBootParserGetFloat _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetFloat2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetFloat not a parse tree"
+  | CBootParserGetFloat2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CFloat {val = bootParserGetFloat ptree n},
+               ty = TyFloat {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetFloat not an integer"
+  | CBootParserGetListLength _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetListLength2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetListLength not a parse tree"
+  | CBootParserGetListLength2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CInt {val = bootParserGetListLength ptree n},
+               ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetListLength not an integer"
+  | CBootParserGetConst _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetConst2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetConst not a parse tree"
+  | CBootParserGetConst2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetConst ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetConst not an integer"
+  | CBootParserGetPat _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetPat2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetPat not a parse tree"
+  | CBootParserGetPat2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetPat ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetPat not an integer"
+  | CBootParserGetInfo _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetInfo2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetInfo not a parse tree"
+  | CBootParserGetInfo2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetInfo ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetInfo not an integer"
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -1411,7 +1790,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + TensorOpEval
+  ConTagEval + MapEval + TensorOpEval + BootParserEval
 
   -- Patterns
   + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -2086,6 +2465,75 @@ utest
      utuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
 with utuple_ [int_ 4, float_ 3.14, int_ 4]
 using eqExpr in
+
+-- Maps
+
+let m1 = mapEmpty_ (uconst_ (CSubi ())) in
+utest eval (mapBindings_ m1) with seq_ [] using eqExpr in
+
+let m2 = mapInsert_ (int_ 0) (int_ 1) m1 in
+let m3 = mapInsert_ (int_ 1) (int_ 4) m2 in
+utest eval (mapBindings_ m2) with seq_ [utuple_ [int_ 0, int_ 1]] using eqExpr in
+utest eval (mapBindings_ m3)
+with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
+
+let m4 = mapRemove_ (int_ 0) m3 in
+let m5 = mapRemove_ (int_ 2) m3 in
+utest eval (mapBindings_ m4) with seq_ [utuple_ [int_ 1, int_ 4]] using eqExpr in
+utest eval (mapBindings_ m5)
+with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 4]] using eqExpr in
+
+utest eval (mapFindWithExn_ (int_ 0) m2) with int_ 1 using eqExpr in
+
+let elsef = ulam_ "" (int_ 2) in
+utest eval (mapFindOrElse_ elsef (int_ 0) m1) with int_ 2 using eqExpr in
+utest eval (mapFindOrElse_ elsef (int_ 0) m2) with int_ 1 using eqExpr in
+
+let applyf = ulam_ "k" (addi_ (var_ "k") (int_ 3)) in
+utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m1) with int_ 2 using eqExpr in
+utest eval (mapFindApplyOrElse_ applyf elsef (int_ 0) m2) with int_ 4 using eqExpr in
+
+utest eval (mapSize_ m1) with int_ 0 using eqExpr in
+utest eval (mapSize_ m2) with int_ 1 using eqExpr in
+utest eval (mapSize_ m3) with int_ 2 using eqExpr in
+utest eval (mapSize_ m4) with int_ 1 using eqExpr in
+utest eval (mapSize_ m5) with int_ 2 using eqExpr in
+
+utest eval (mapMem_ (int_ 0) m3) with true_ using eqExpr in
+utest eval (mapMem_ (int_ 0) m4) with false_ using eqExpr in
+utest eval (mapMem_ (int_ 2) m3) with false_ using eqExpr in
+
+let p = ulam_ "k" (ulam_ "v" (eqi_ (addi_ (var_ "k") (var_ "v")) (int_ 5))) in
+utest eval (mapAny_ p m2) with false_ using eqExpr in
+utest eval (mapAny_ p m3) with true_ using eqExpr in
+
+let mapf = ulam_ "v" (addi_ (var_ "v") (int_ 1)) in
+utest eval (mapBindings_ (mapMap_ mapf m3))
+with seq_ [utuple_ [int_ 0, int_ 2], utuple_ [int_ 1, int_ 5]] using eqExpr in
+utest eval (mapBindings_ (mapMap_ mapf m4))
+with seq_ [utuple_ [int_ 1, int_ 5]] using eqExpr in
+
+let mapkv = ulam_ "k" (ulam_ "v" (addi_ (var_ "k") (var_ "v"))) in
+utest eval (mapBindings_ (mapMapWithKey_ mapkv m3))
+with seq_ [utuple_ [int_ 0, int_ 1], utuple_ [int_ 1, int_ 5]] using eqExpr in
+utest eval (mapBindings_ (mapMapWithKey_ mapkv m1)) with seq_ [] using eqExpr in
+
+let foldf = ulam_ "acc" (ulam_ "k" (ulam_ "v" (
+  addi_ (var_ "acc") (addi_ (var_ "k") (var_ "v"))))) in
+utest eval (mapFoldWithKey_ foldf (int_ 0) m1) with int_ 0 using eqExpr in
+utest eval (mapFoldWithKey_ foldf (int_ 0) m3) with int_ 6 using eqExpr in
+
+let eqf = ulam_ "v1" (ulam_ "v2" (eqi_ (var_ "v1") (var_ "v2"))) in
+utest eval (mapEq_ eqf m1 m2) with false_ using eqExpr in
+utest eval (mapEq_ eqf m3 m4) with false_ using eqExpr in
+utest eval (mapEq_ eqf m3 m5) with true_ using eqExpr in
+
+let cmpf = ulam_ "v1" (ulam_ "v2" (subi_ (var_ "v1") (var_ "v2"))) in
+utest eval (neqi_ (mapCmp_ cmpf m1 m2) (int_ 0)) with true_ using eqExpr in
+utest eval (neqi_ (mapCmp_ cmpf m3 m4) (int_ 0)) with true_ using eqExpr in
+utest eval (mapCmp_ cmpf m3 m5) with int_ 0 using eqExpr in
+
+utest eval (mapGetCmpFun_ m1) with uconst_ (CSubi ()) using eqExpr in
 
 -- Tensors
 let testTensors = lam tcreate_. lam v : (a,a,a).
