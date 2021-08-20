@@ -162,7 +162,11 @@ lang MExprCCompile = MExprAst + CAst
     ) [] typeEnv in
 
     match compileTops env [] [] prog with (tops, inits) then
-      (env, join [decls, defs, postDefs], tops, inits)
+
+    let retTy: CType = compileType env (ty prog) in
+
+    (env, join [decls, defs, postDefs], tops, inits, retTy)
+
     else never
 
   sem collectExternals (acc: Map Name Name) =
@@ -541,9 +545,11 @@ lang MExprCCompile = MExprAst + CAst
     else
       let ty = compileType env ty in
       (env,
-       [{ ty = ty, id = Some ident,
-          init = Some (CIExpr { expr = compileExpr env expr }) }],
-       [])
+       [{ ty = ty, id = Some ident, init = None ()}],
+       [CSExpr { expr = CEBinOp { op = COAssign {},
+                                  lhs = CEVar { id = ident },
+                                  rhs = compileExpr env expr }}])
+
 
 
   -----------------
@@ -559,8 +565,9 @@ lang MExprCCompile = MExprAst + CAst
       else never
     else
       match compileLet env ident body with (env, defs, inits) then
-        let defs = map (lam def. CSDef def) defs in
-        let accInit = join [accInit, defs, inits] in
+        let defs = map (lam def. CTDef def) defs in
+        let accTop = concat accTop defs in
+        let accInit = concat accInit inits in
         compileTops env accTop accInit inexpr
       else never
 
@@ -741,20 +748,10 @@ lang MExprCCompileGCC = MExprCCompile + CProgAst
   | CTyPtr { ty = CTyStruct { id = Some ident, mem = None() } & ty } & ptrTy ->
     let allocName = nameSym "alloc" in
     [
-      -- Allocate struct on the stack
-      { ty = ty
-      , id = Some allocName
-      , init = None ()
-      },
-
       -- Define name as pointer to allocated struct
-      { ty = ptrTy
+      { ty = CTyArray { ty = ty, size = Some (CEInt { i = 1 }) }
       , id = Some name
-      , init = Some (
-          CIExpr {
-            expr = CEUnOp { op = COAddrOf {}, arg = CEVar { id = allocName } }
-          }
-        )
+      , init = None ()
       }
     ]
   | _ -> error "Incorrect type in alloc"
@@ -778,33 +775,7 @@ let compileGCC = use MExprCCompileGCC in
   lam typeEnv: [(Name,Type)].
   lam prog: Expr.
 
-    let extractTopDecls: [CStmt] -> ([CTop],[CStmt]) = lam stmts: [CStmt].
-      foldl (lam acc: ([CTop],[CStmt]). lam stmt: CStmt.
-        match stmt with CSDef ({ init = init } & def) then
-          match init with Some init then
-            let id =
-              match def with { id = Some id } then id
-              else error "Impossible in extractTopDecls"
-            in
-            match init with CIExpr { expr = expr } then
-              let def = { def with init = None () } in
-              let init = CSExpr { expr = CEBinOp {
-                op = COAssign {},
-                lhs = CEVar { id = id },
-                rhs = expr
-                }
-              } in
-              (snoc acc.0 (CTDef def), snoc acc.1 init)
-            else match init with _ then
-              error "Non-CIExpr initializer, TODO?"
-            else never
-          else (snoc acc.0 (CTDef def), acc.1)
-        else (acc.0, snoc acc.1 stmt)
-      ) ([],[]) stmts
-    in
-
-    match compile typeEnv prog with (env, types, tops, inits) then
-    match extractTopDecls inits with (topDecls, inits) then
+    match compile typeEnv prog with (env, types, tops, inits, _) then
 
       let mainTy = CTyFun {
         ret = CTyInt {},
@@ -830,10 +801,9 @@ let compileGCC = use MExprCCompileGCC in
       let main = funWithType mainTy _main [_argc, _argv] inits in
       CPProg {
         includes = cIncludes,
-        tops = join [types, topDecls, tops, [main]]
+        tops = join [types, tops, [main]]
       }
 
-    else never
     else never
 
 let printCompiledCProg = use CProgPrettyPrint in
@@ -901,11 +871,12 @@ let simpleFun = bindall_ [
 utest testCompile simpleFun with strJoin "\n" [
   "#include <stdio.h>",
   "#include <math.h>",
-  "int x;",
   "int foo(int a, int b) {",
-  "  int t = (a + b);",
+  "  int t;",
+  "  (t = (a + b));",
   "  return t;",
   "}",
+  "int x;",
   "int main(int argc, char (*argv[])) {",
   "  (x = (foo(1, 2)));",
   "  return 0;",
@@ -933,16 +904,26 @@ utest testCompile constants with strJoin "\n" [
   "#include <stdio.h>",
   "#include <math.h>",
   "void foo() {",
-  "  int t = (1 + 2);",
-  "  double t1 = (1. + 2.);",
-  "  int t2 = (1 * 2);",
-  "  double t3 = (1. * 2.);",
-  "  double t4 = (1. / 2.);",
-  "  char t5 = (1 == 2);",
-  "  char t6 = (1. == 2.);",
-  "  char t7 = (1 < 2);",
-  "  char t8 = (1. < 2.);",
-  "  double t9 = (-1.);",
+  "  int t;",
+  "  (t = (1 + 2));",
+  "  double t1;",
+  "  (t1 = (1. + 2.));",
+  "  int t2;",
+  "  (t2 = (1 * 2));",
+  "  double t3;",
+  "  (t3 = (1. * 2.));",
+  "  double t4;",
+  "  (t4 = (1. / 2.));",
+  "  char t5;",
+  "  (t5 = (1 == 2));",
+  "  char t6;",
+  "  (t6 = (1. == 2.));",
+  "  char t7;",
+  "  (t7 = (1 < 2));",
+  "  char t8;",
+  "  (t8 = (1. < 2.));",
+  "  double t9;",
+  "  (t9 = (-1.));",
   "  char (*t10) = \"Hello, world!\";",
   "  (printf(\"%s\", t10));",
   "}",
@@ -965,14 +946,18 @@ utest testCompile factorial with strJoin "\n" [
   "#include <stdio.h>",
   "#include <math.h>",
   "int factorial(int n) {",
-  "  char t = (n == 0);",
+  "  char t;",
+  "  (t = (n == 0));",
   "  int t1;",
   "  if ((t == 1)) {",
   "    (t1 = 1);",
   "  } else {",
-  "    int t2 = (n - 1);",
-  "    int t3 = (factorial(t2));",
-  "    int t4 = (n * t3);",
+  "    int t2;",
+  "    (t2 = (n - 1));",
+  "    int t3;",
+  "    (t3 = (factorial(t2)));",
+  "    int t4;",
+  "    (t4 = (n * t3));",
   "    (t1 = t4);",
   "  }",
   "  return t1;",
@@ -1011,18 +996,22 @@ utest testCompile oddEven with strJoin "\n" [
   "char odd(int);",
   "char even(int);",
   "char odd(int x) {",
-  "  char t = (x == 1);",
+  "  char t;",
+  "  (t = (x == 1));",
   "  char t1;",
   "  if ((t == 1)) {",
   "    (t1 = 1);",
   "  } else {",
-  "    char t2 = (x < 1);",
+  "    char t2;",
+  "    (t2 = (x < 1));",
   "    char t3;",
   "    if ((t2 == 1)) {",
   "      (t3 = 0);",
   "    } else {",
-  "      int t4 = (x - 1);",
-  "      char t5 = (even(t4));",
+  "      int t4;",
+  "      (t4 = (x - 1));",
+  "      char t5;",
+  "      (t5 = (even(t4)));",
   "      (t3 = t5);",
   "    }",
   "    (t1 = t3);",
@@ -1030,18 +1019,22 @@ utest testCompile oddEven with strJoin "\n" [
   "  return t1;",
   "}",
   "char even(int x1) {",
-  "  char t6 = (x1 == 0);",
+  "  char t6;",
+  "  (t6 = (x1 == 0));",
   "  char t7;",
   "  if ((t6 == 1)) {",
   "    (t7 = 1);",
   "  } else {",
-  "    char t8 = (x1 < 0);",
+  "    char t8;",
+  "    (t8 = (x1 < 0));",
   "    char t9;",
   "    if ((t8 == 1)) {",
   "      (t9 = 0);",
   "    } else {",
-  "      int t10 = (x1 - 1);",
-  "      char t11 = (odd(t10));",
+  "      int t10;",
+  "      (t10 = (x1 - 1));",
+  "      char t11;",
+  "      (t11 = (odd(t10)));",
   "      (t9 = t11);",
   "    }",
   "    (t7 = t9);",
@@ -1069,7 +1062,6 @@ let typedefs = bindall_ [
 
   int_ 0
 ] in
--- printLn (printCompiledCProg (compile typedefs));
 utest testCompile typedefs with strJoin "\n" [
   "#include <stdio.h>",
   "#include <math.h>",
@@ -1100,10 +1092,8 @@ utest testCompile alias with strJoin "\n" [
   "#include <math.h>",
   "struct Rec {int k;};",
   "typedef struct Rec (*MyRec);",
-  "struct Rec alloc;",
-  "struct Rec (*myRec);",
+  "struct Rec myRec[1];",
   "int main(int argc, char (*argv[])) {",
-  "  (myRec = (&alloc));",
   "  ((myRec->k) = 0);",
   "  return 0;",
   "}"
@@ -1172,35 +1162,20 @@ utest testCompile trees with strJoin "\n" [
   "struct Rec1 {int v; struct Tree (*l); struct Tree (*r);};",
   "enum constrs {Leaf, Node};",
   "struct Tree {enum constrs constr; union {struct Rec (*Leaf); struct Rec1 (*Node);};};",
-  "struct Rec alloc;",
-  "struct Rec (*t);",
-  "struct Tree alloc1;",
-  "struct Tree (*t1);",
-  "struct Rec alloc2;",
-  "struct Rec (*t2);",
-  "struct Tree alloc3;",
-  "struct Tree (*t3);",
-  "struct Rec1 alloc4;",
-  "struct Rec1 (*t4);",
-  "struct Tree alloc5;",
-  "struct Tree (*t5);",
-  "struct Rec alloc6;",
-  "struct Rec (*t6);",
-  "struct Tree alloc7;",
-  "struct Tree (*t7);",
-  "struct Rec alloc8;",
-  "struct Rec (*t8);",
-  "struct Tree alloc9;",
-  "struct Tree (*t9);",
-  "struct Rec1 alloc10;",
-  "struct Rec1 (*t10);",
-  "struct Tree alloc11;",
-  "struct Tree (*t11);",
-  "struct Rec1 alloc12;",
-  "struct Rec1 (*t12);",
-  "struct Tree alloc13;",
-  "struct Tree (*tree);",
-  "int sum;",
+  "struct Rec t[1];",
+  "struct Tree t1[1];",
+  "struct Rec t2[1];",
+  "struct Tree t3[1];",
+  "struct Rec1 t4[1];",
+  "struct Tree t5[1];",
+  "struct Rec t6[1];",
+  "struct Tree t7[1];",
+  "struct Rec t8[1];",
+  "struct Tree t9[1];",
+  "struct Rec1 t10[1];",
+  "struct Tree t11[1];",
+  "struct Rec1 t12[1];",
+  "struct Tree tree[1];",
   "int treeRec(struct Tree (*t13)) {",
   "  int t14;",
   "  struct Rec1 (*preMatch) = (t13->Node);",
@@ -1211,10 +1186,14 @@ utest testCompile trees with strJoin "\n" [
   "    int v1 = preMatch1;",
   "    struct Tree (*l1) = preMatch2;",
   "    struct Tree (*r1) = preMatch3;",
-  "    int t15 = (treeRec(l1));",
-  "    int t16 = (v1 + t15);",
-  "    int t17 = (treeRec(r1));",
-  "    int t18 = (t16 + t17);",
+  "    int t15;",
+  "    (t15 = (treeRec(l1)));",
+  "    int t16;",
+  "    (t16 = (v1 + t15));",
+  "    int t17;",
+  "    (t17 = (treeRec(r1)));",
+  "    int t18;",
+  "    (t18 = (t16 + t17));",
   "    (t14 = t18);",
   "  } else {",
   "    int t19;",
@@ -1230,46 +1209,33 @@ utest testCompile trees with strJoin "\n" [
   "  }",
   "  return t14;",
   "}",
+  "int sum;",
   "int main(int argc, char (*argv[])) {",
-  "  (t = (&alloc));",
   "  ((t->v) = 7);",
-  "  (t1 = (&alloc1));",
   "  ((t1->constr) = Leaf);",
   "  ((t1->Leaf) = t);",
-  "  (t2 = (&alloc2));",
   "  ((t2->v) = 6);",
-  "  (t3 = (&alloc3));",
   "  ((t3->constr) = Leaf);",
   "  ((t3->Leaf) = t2);",
-  "  (t4 = (&alloc4));",
   "  ((t4->v) = 5);",
   "  ((t4->l) = t3);",
   "  ((t4->r) = t1);",
-  "  (t5 = (&alloc5));",
   "  ((t5->constr) = Node);",
   "  ((t5->Node) = t4);",
-  "  (t6 = (&alloc6));",
   "  ((t6->v) = 4);",
-  "  (t7 = (&alloc7));",
   "  ((t7->constr) = Leaf);",
   "  ((t7->Leaf) = t6);",
-  "  (t8 = (&alloc8));",
   "  ((t8->v) = 3);",
-  "  (t9 = (&alloc9));",
   "  ((t9->constr) = Leaf);",
   "  ((t9->Leaf) = t8);",
-  "  (t10 = (&alloc10));",
   "  ((t10->v) = 2);",
   "  ((t10->l) = t9);",
   "  ((t10->r) = t7);",
-  "  (t11 = (&alloc11));",
   "  ((t11->constr) = Node);",
   "  ((t11->Node) = t10);",
-  "  (t12 = (&alloc12));",
   "  ((t12->v) = 1);",
   "  ((t12->l) = t11);",
   "  ((t12->r) = t5);",
-  "  (tree = (&alloc13));",
   "  ((tree->constr) = Node);",
   "  ((tree->Node) = t12);",
   "  (sum = (treeRec(tree)));",
