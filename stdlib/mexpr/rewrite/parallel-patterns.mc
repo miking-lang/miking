@@ -388,10 +388,15 @@ let reducePattern : () -> Pattern =
       -- parallel or sequential reduce should be taken AFTER the parameter
       -- values are known, as f could be a parameter which is later found out
       -- to be associative.
-      match fResultPair.1 with TmApp {lhs = TmApp {lhs = op}} then
-        match getNeutralElement op with Some ne then
-          if isAssociative op then
-            appf2_ f accPair.1 (parallelReduce_ f ne sExpr)
+      match fResultPair.1
+      with TmApp {lhs = TmApp {lhs = op},
+                  ty = TyArrow {from = accTy, to = TyArrow {from = elemTy,
+                                                            to = resTy}} then
+        if isAssociative op then
+          if and (eqType accTy elemTy) (eqType accTy resTy) then
+            match getNeutralElement op with Some ne then
+              parallelReduce_ f ne sExpr
+            else appf2_ f accPair.1 (parallelReduce_ f ne sExpr)
           else seqReduce f accPair.1 sExpr
         else seqReduce f accPair.1 sExpr
       else seqReduce f accPair.1 sExpr

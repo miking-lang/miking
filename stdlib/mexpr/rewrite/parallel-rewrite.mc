@@ -104,7 +104,7 @@ lang MExprParallelPattern = MExprParallelKeywordMaker
             else if eqi nargs nparams then
               Some (performSubstitution expr paramNames args)
             else
-              infoErrorExit info (concat "Too many arguments passed to " ident)
+              infoErrorExit info (concat "Too many arguments passed to " (nameGetStr ident))
           else None ()
         else None ()
       in
