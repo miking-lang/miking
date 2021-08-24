@@ -45,7 +45,6 @@ let builtin = use MExprAst in
   , ("int2char", CInt2Char ())
   -- Sequences
   , ("create", CCreate ())
-  , ("createFingerTree", CCreateFingerTree ())
   , ("createList", CCreateList ())
   , ("createRope", CCreateRope ())
   , ("length", CLength ())

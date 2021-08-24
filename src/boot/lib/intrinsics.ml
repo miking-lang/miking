@@ -1,23 +1,15 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t =
-    | FingerTree of 'a BatFingerTree.t
-    | List of 'a List.t
-    | Rope of 'a array Rope.t
+  type 'a t = List of 'a List.t | Rope of 'a array Rope.t
 
   let create_rope n f = Rope (Rope.create_array n f)
 
   let create_list n f = List (List.init n f)
 
-  let create_fingertree n f =
-    FingerTree (BatFingerTree.of_list (List.init n f))
-
   let empty_rope = Rope Rope.empty_array
 
   let empty_list = List []
-
-  let empty_fingertree = FingerTree BatFingerTree.empty
 
   let create = create_rope
 
@@ -28,8 +20,6 @@ module Mseq = struct
         Rope.length_array s
     | List s ->
         List.length s
-    | FingerTree s ->
-        BatFingerTree.size s
 
   let concat s1 s2 =
     match (s1, s2) with
@@ -37,18 +27,10 @@ module Mseq = struct
         Rope (Rope.concat_array s1 s2)
     | List s1, List s2 ->
         List (s1 @ s2)
-    | FingerTree s1, FingerTree s2 ->
-        FingerTree (BatFingerTree.append s1 s2)
     | _ ->
         raise (Invalid_argument "Mseq.concat")
 
-  let get = function
-    | Rope s ->
-        Rope.get_array s
-    | List s ->
-        List.nth s
-    | FingerTree s ->
-        BatFingerTree.get s
+  let get = function Rope s -> Rope.get_array s | List s -> List.nth s
 
   let set s i v =
     match s with
@@ -65,16 +47,12 @@ module Mseq = struct
               set (i - 1) v xs (x :: acc)
         in
         List (set i v s [])
-    | FingerTree s ->
-        FingerTree (BatFingerTree.set s i v)
 
   let cons v = function
     | Rope s ->
         Rope (Rope.cons_array v s)
     | List s ->
         List (v :: s)
-    | FingerTree s ->
-        FingerTree (BatFingerTree.cons s v)
 
   let snoc s v =
     match s with
@@ -82,63 +60,38 @@ module Mseq = struct
         Rope (Rope.snoc_array s v)
     | List s ->
         List (s @ [v])
-    | FingerTree s ->
-        FingerTree (BatFingerTree.snoc s v)
 
   let reverse = function
     | Rope s ->
         Rope (Rope.reverse_array s)
     | List s ->
         List (List.rev s)
-    | FingerTree s ->
-        FingerTree (BatFingerTree.reverse s)
 
-  let head = function
-    | Rope s ->
-        Rope.get_array s 0
-    | List s ->
-        List.hd s
-    | FingerTree s ->
-        BatFingerTree.head_exn s
+  let head = function Rope s -> Rope.get_array s 0 | List s -> List.hd s
 
   let tail = function
     | Rope s ->
         Rope (Rope.sub_array s 1 (Rope.length_array s))
     | List s ->
         List (List.tl s)
-    | FingerTree s ->
-        FingerTree (BatFingerTree.tail_exn s)
 
   let null = function
     | Rope s ->
         Rope.length_array s == 0
     | List s -> (
       match s with [] -> true | _ -> false )
-    | FingerTree s ->
-        BatFingerTree.is_empty s
 
   let iter f = function
     | Rope s ->
         Rope.iter_array f s
     | List s ->
         List.iter f s
-    | FingerTree s ->
-        BatFingerTree.iter f s
 
   let iteri f = function
     | Rope s ->
         Rope.iteri_array f s
     | List s ->
         List.iteri f s
-    | FingerTree s ->
-        let rec work i s =
-          if BatFingerTree.is_empty s then ()
-          else
-            let tl, hd = BatFingerTree.front_exn s in
-            f i hd ;
-            work (i + 1) tl
-        in
-        work 0 s
 
   let split_at s i =
     match s with
@@ -154,24 +107,6 @@ module Mseq = struct
         in
         let l, r = split_at_rev [] s i in
         (List (List.rev l), List r)
-    | FingerTree s ->
-        if i == 0 then (* O(1) *)
-          (empty_fingertree, FingerTree s)
-        else if i == 1 then
-          (* Amortized O(1) *)
-          ( FingerTree (BatFingerTree.singleton (BatFingerTree.head_exn s))
-          , FingerTree (BatFingerTree.tail_exn s) )
-        else if i == BatFingerTree.size s - 1 then
-          (* Amortized O(1) *)
-          ( FingerTree (BatFingerTree.init_exn s)
-          , FingerTree (BatFingerTree.singleton (BatFingerTree.last_exn s)) )
-        else if i == BatFingerTree.size s then
-          (* O(1) *)
-          (FingerTree s, empty_fingertree)
-        else
-          (* O(log n) *)
-          let s1, s2 = BatFingerTree.split_at s i in
-          (FingerTree s1, FingerTree s2)
 
   let subsequence s a n =
     match s with
@@ -188,82 +123,49 @@ module Mseq = struct
               acc
         in
         List (subsequence_rev [] s 0 0 |> List.rev)
-    | FingerTree s ->
-        let rec subsequence_rev acc s i j =
-          if BatFingerTree.is_empty s then acc
-          else if i < a then
-            subsequence_rev acc (BatFingerTree.tail_exn s) (i + 1) j
-          else if j < n then
-            let t, h = BatFingerTree.front_exn s in
-            subsequence_rev (BatFingerTree.cons acc h) t (i + 1) (j + 1)
-          else acc
-        in
-        FingerTree
-          (subsequence_rev BatFingerTree.empty s 0 0 |> BatFingerTree.reverse)
 
   let map f = function
     | Rope s ->
         Rope (Rope.map_array_array f s)
     | List s ->
         List (List.map f s)
-    | FingerTree s ->
-        FingerTree (BatFingerTree.map f s)
 
   let mapi f = function
     | Rope s ->
         Rope (Rope.mapi_array_array f s)
     | List s ->
         List (List.mapi f s)
-    | FingerTree s ->
-        let _, s =
-          BatFingerTree.fold_left
-            (fun (i, a) e -> (i + 1, BatFingerTree.snoc a (f i e)))
-            (0, BatFingerTree.empty) s
-        in
-        FingerTree s
 
   module Helpers = struct
     let of_list_rope l = Rope (Rope.Convert.of_list_array l)
 
     let of_list_list l = List l
 
-    let of_list_fingertree l = FingerTree (BatFingerTree.of_list l)
-
     let to_list = function
       | Rope s ->
           Rope.Convert.to_list_array s
       | List s ->
           s
-      | FingerTree s ->
-          BatFingerTree.to_list s
 
     let of_array_rope a = Rope (Rope.Convert.of_array_array a)
 
     let of_array_list a = List (Array.to_list a)
-
-    let of_array_fingertree a = of_list_fingertree (Array.to_list a)
 
     let to_array = function
       | Rope s ->
           Rope.Convert.to_array_array s
       | List s ->
           Array.of_list s
-      | FingerTree s ->
-          Array.of_list (BatFingerTree.to_list s)
 
     let of_ustring_rope u = Rope (Rope.Convert.of_ustring_array u)
 
     let of_ustring_list u = List (ustring2list u)
-
-    let of_ustring_fingertree u = of_list_fingertree (ustring2list u)
 
     let to_ustring = function
       | Rope s ->
           Rope.Convert.to_ustring_array s
       | List s ->
           list2ustring s
-      | FingerTree s ->
-          list2ustring (BatFingerTree.to_list s)
 
     let equal f s1 s2 =
       match (s1, s2) with
@@ -280,8 +182,6 @@ module Mseq = struct
                 f x y && equal f xs ys
           in
           equal f s1 s2
-      | FingerTree s1, FingerTree s2 ->
-          BatFingerTree.equal f s1 s2
       | _ ->
           raise (Invalid_argument "Mseq.equal")
 
@@ -290,31 +190,12 @@ module Mseq = struct
           Rope.foldl_array f a s
       | List s ->
           List.fold_left f a s
-      | FingerTree s ->
-          BatFingerTree.fold_left f a s
 
     let fold_right f a = function
       | Rope s ->
           Rope.foldr_array f s a
       | List s ->
           List.fold_right f s a
-      | FingerTree s ->
-          BatFingerTree.fold_right (fun a x -> f x a) a s
-
-    let combine_fingertree s1 s2 =
-      let rec work a s1 s2 =
-        (* TODO: use is_empty *)
-        if BatFingerTree.size s1 == 0 then a
-        else
-          work
-            (BatFingerTree.snoc a
-               (BatFingerTree.head_exn s1, BatFingerTree.head_exn s2) )
-            (BatFingerTree.tail_exn s1)
-            (BatFingerTree.tail_exn s2)
-      in
-      if BatFingerTree.size s1 != BatFingerTree.size s2 then
-        raise (Invalid_argument "sequences of different length")
-      else work BatFingerTree.empty s1 s2
 
     let combine s1 s2 =
       match (s1, s2) with
@@ -322,8 +203,6 @@ module Mseq = struct
           Rope (Rope.combine_array_array s1 s2)
       | List s1, List s2 ->
           List (List.combine s1 s2)
-      | FingerTree s1, FingerTree s2 ->
-          FingerTree (combine_fingertree s1 s2)
       | _ ->
           raise (Invalid_argument "Mseq.combine")
 
@@ -333,10 +212,6 @@ module Mseq = struct
           Rope.foldr2_array f s1 s2 a
       | List s1, List s2 ->
           List.fold_right (fun (a, b) acc -> f a b acc) (List.combine s1 s2) a
-      | FingerTree s1, FingerTree s2 ->
-          BatFingerTree.fold_right
-            (fun a (x, y) -> f x y a)
-            a (combine_fingertree s1 s2)
       | _ ->
           raise (Invalid_argument "Mseq.fold_right2")
 
@@ -714,8 +589,7 @@ end
 
 module ConTag = struct
   let constructor_tag obj =
-    if Obj.is_int obj then Obj.obj obj + Obj.custom_tag
-    else Obj.tag obj
+    if Obj.is_int obj then Obj.obj obj + Obj.custom_tag else Obj.tag obj
 end
 
 module Mmap = struct

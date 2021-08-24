@@ -361,7 +361,6 @@ lang SeqOpCmp = Cmp + SeqOpAst
   | (CFoldl _, CFoldl _) -> 0
   | (CFoldr _, CFoldr _) -> 0
   | (CCreate _, CCreate _) -> 0
-  | (CCreateFingerTree _, CCreateFingerTree _) -> 0
   | (CCreateList _, CCreateList _) -> 0
   | (CCreateRope _, CCreateRope _) -> 0
   | (CSplitAt _, CSplitAt _) -> 0
@@ -856,7 +855,6 @@ utest cmpConst (CIteri {}) (CIteri {}) with 0 in
 utest cmpConst (CFoldl {}) (CFoldl {}) with 0 in
 utest cmpConst (CFoldr {}) (CFoldr {}) with 0 in
 utest cmpConst (CCreate {}) (CCreate {}) with 0 in
-utest cmpConst (CCreateFingerTree {}) (CCreateFingerTree {}) with 0 in
 utest cmpConst (CCreateList {}) (CCreateList {}) with 0 in
 utest cmpConst (CCreateRope {}) (CCreateRope {}) with 0 in
 utest cmpConst (CSplitAt {}) (CSplitAt {}) with 0 in

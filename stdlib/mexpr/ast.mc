@@ -689,7 +689,6 @@ lang SeqOpAst = SeqAst
   | CFoldl {}
   | CFoldr {}
   | CCreate {}
-  | CCreateFingerTree {}
   | CCreateList {}
   | CCreateRope {}
   | CSplitAt {}

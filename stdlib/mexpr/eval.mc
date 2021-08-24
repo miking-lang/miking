@@ -658,7 +658,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CConcat2 [Expr]
   | CSplitAt2 [Expr]
   | CCreate2 Int
-  | CCreateFingerTree2 Int
   | CCreateList2 Int
   | CCreateRope2 Int
   | CSubsequence2 [Expr]
@@ -803,13 +802,6 @@ lang SeqOpEval = SeqOpAst + IntAst + BoolAst + ConstEval
   | CCreate2 n ->
     let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
     TmSeq {tms = create n f, ty = tyunknown_, info = NoInfo()}
-  | CCreateFingerTree _ ->
-    match arg with TmConst {val = CInt {val = n}} then
-      TmConst {val = CCreateFingerTree2 n, ty = tyunknown_, info = NoInfo()}
-    else error "n in create is not a number"
-  | CCreateFingerTree2 n ->
-    let f = lam i. apply {env = mapEmpty nameCmp} (int_ i) arg in
-    TmSeq {tms = createFingerTree n f, ty = tyunknown_, info = NoInfo()}
   | CCreateList _ ->
     match arg with TmConst {val = CInt {val = n}} then
       TmConst {val = CCreateList2 n, ty = tyunknown_, info = NoInfo()}

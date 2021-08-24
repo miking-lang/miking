@@ -15,7 +15,6 @@ open Pprint
 open Intrinsics
 open Parserutils
 open Builtin
-module Option = BatOption
 
 let initial_prompt = ">> "
 
@@ -116,13 +115,15 @@ let read_multiline first_line =
     Some (parse_prog_or_mexpr "REPL" lines)
   else None
 
+let default_delayed d = function Some x -> x | None -> d ()
+
 (* Read input from the user and respond accordingly depending on if it is a
    command, the beginning of a multiline statement or a normal expression *)
 let rec read_user_input () =
   let first_line = read_input initial_prompt in
   if handle_command first_line then read_user_input ()
   else
-    Option.default_delayed
+    default_delayed
       (fun _ -> read_until_complete false first_line)
       (read_multiline first_line)
 
@@ -222,12 +223,16 @@ let keywords_and_identifiers () =
   |> USMap.fold process_lang nss
   |> USSet.to_seq |> List.of_seq |> List.map Ustring.to_utf8 |> ( @ ) keywords
 
-let get_matches s =
-  s |> BatPervasives.flip BatString.starts_with |> List.filter
+let starts_with prefix s =
+  if String.length s < String.length prefix then false
+  else Str.string_before s (String.length prefix) |> String.equal prefix
+
+let get_matches prefix words = List.filter (starts_with prefix) words
 
 let get_completions str pos =
   let start_pos = begins_at str pos in
-  let word_to_complete = BatString.slice ~first:start_pos ~last:pos str in
+  let len = min (String.length str) (pos - start_pos + 1) in
+  let word_to_complete = String.sub str start_pos len in
   (start_pos, get_matches word_to_complete (keywords_and_identifiers ()))
 
 let completion_callback line_so_far ln_completions =

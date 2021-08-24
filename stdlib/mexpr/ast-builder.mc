@@ -821,10 +821,6 @@ let create_ = use MExprAst in
   lam n. lam f.
   appf2_ (uconst_ (CCreate ())) n f
 
-let createFingerTree_ = use MExprAst in
-  lam n. lam f.
-  appf2_ (uconst_ (CCreateFingerTree ())) n f
-
 let createList_ = use MExprAst in
   lam n. lam f.
   appf2_ (uconst_ (CCreateList ())) n f

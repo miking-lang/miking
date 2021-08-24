@@ -353,8 +353,6 @@ let rec print_const fmt = function
   (* MCore intrinsic: sequences *)
   | Ccreate _ ->
       fprintf fmt "create"
-  | CcreateFingerTree _ ->
-      fprintf fmt "createFingerTree"
   | CcreateList _ ->
       fprintf fmt "createList"
   | CcreateRope _ ->

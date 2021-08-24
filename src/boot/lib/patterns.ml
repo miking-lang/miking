@@ -157,7 +157,7 @@ module NPatOrd = struct
         let pre_res = compare_list pre1 pre2 in
         if pre_res = 0 then compare_list post1 post2 else pre_res
     | NPatNot (seqs1, cons1), NPatNot (seqs2, cons2) ->
-        let seq_res = Option.compare ~cmp:IntSet.compare seqs1 seqs2 in
+        let seq_res = Option.compare IntSet.compare seqs1 seqs2 in
         if seq_res <> 0 then seq_res else ConSet.compare cons1 cons2
     | NSPat _, (NPatRecord _ | NPatSeqTot _ | NPatSeqEdge _ | NPatNot _) ->
         -1
