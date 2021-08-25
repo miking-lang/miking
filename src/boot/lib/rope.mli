@@ -84,8 +84,7 @@ val foldr_array : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
     accumulated value, initially [acc], and the elements of [s], starting from
     the rightmost element. This function collapses [s]. *)
 
-val foldr2_array :
-  ('a -> 'b -> 'c -> 'c) -> 'a t -> 'b t -> 'c -> 'c
+val foldr2_array : ('a -> 'b -> 'c -> 'c) -> 'a t -> 'b t -> 'c -> 'c
 (** [Rope.foldr2_* f l r acc] returns the result of applying [f] on an
     accumulated value and the elements of two ropes [l] and [r], starting from
     the rightmost element. This function collapses [l] and [r]. Raises

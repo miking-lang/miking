@@ -16,8 +16,7 @@ type 'a u = Leaf of 'a array | Concat of {lhs: 'a u; rhs: 'a u; len: int}
    allows constant time concatenation. *)
 type 'a t = 'a u ref
 
-let create_array (n : int) (f : int -> 'a) : 'a t =
-  ref (Leaf (Array.init n f))
+let create_array (n : int) (f : int -> 'a) : 'a t = ref (Leaf (Array.init n f))
 
 let empty_array = Obj.magic (ref (Leaf [||]))
 
@@ -184,8 +183,7 @@ let combine_array_array (l : 'a t) (r : 'b t) : ('a * 'b) t =
     let a1, a2 = (_collapse_array l, _collapse_array r) in
     ref (Leaf (Array.map2 (fun x y -> (x, y)) a1 a2))
 
-let equal_array (f : 'a -> 'a -> bool) (l : 'a t) (r : 'a t) : bool
-    =
+let equal_array (f : 'a -> 'a -> bool) (l : 'a t) (r : 'a t) : bool =
   let ln = length_array l in
   let rn = length_array r in
   if ln != rn then false
@@ -199,8 +197,8 @@ let foldr_array (f : 'a -> 'b -> 'b) (s : 'a t) (acc : 'b) : 'b =
   let a = _collapse_array s in
   Array.fold_right f a acc
 
-let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t)
-    (acc : 'c) : 'c =
+let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t) (acc : 'c) :
+    'c =
   let ln = length_array l in
   let rn = length_array r in
   if ln != rn then raise (Invalid_argument "Rope.foldr2")
@@ -217,15 +215,11 @@ module Convert = struct
 
   let of_array_array (a : 'a array) : 'a t = ref (Leaf a)
 
-  let to_list_array (s : 'a t) : 'a list =
-    Array.to_list (to_array_array s)
+  let to_list_array (s : 'a t) : 'a list = Array.to_list (to_array_array s)
 
-  let of_list_array (l : 'a list) : 'a t =
-    of_array_array (Array.of_list l)
+  let of_list_array (l : 'a list) : 'a t = of_array_array (Array.of_list l)
 
-  let to_ustring_array (s : int t) : ustring =
-    array2ustring (to_array_array s)
+  let to_ustring_array (s : int t) : ustring = array2ustring (to_array_array s)
 
-  let of_ustring_array (u : ustring) : int t =
-    of_array_array (ustring2array u)
+  let of_ustring_array (u : ustring) : int t = of_array_array (ustring2array u)
 end
