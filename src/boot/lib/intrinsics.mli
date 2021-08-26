@@ -16,7 +16,7 @@ open Ustring.Op
  *   write as "flattens".
  *)
 module Mseq : sig
-  type 'a t = List of 'a List.t | Rope of 'a array Rope.t
+  type 'a t = List of 'a List.t | Rope of 'a Rope.t
 
   (* Defaults to create_rope, see its documentation. *)
   val create : int -> (int -> 'a) -> 'a t

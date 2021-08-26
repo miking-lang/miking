@@ -1,7 +1,7 @@
 open Ustring.Op
 
 module Mseq = struct
-  type 'a t = List of 'a List.t | Rope of 'a array Rope.t
+  type 'a t = List of 'a List.t | Rope of 'a Rope.t
 
   let create_rope n f = Rope (Rope.create_array n f)
 
