@@ -1,50 +1,147 @@
 open Ustring.Op
 
+(* The functions in this module have their time-complexity in their
+ * documentation. Many depend on the complexity of some underlying operation in
+ * OCaml, which does not have a documented complexity. In these cases we assume
+ * what it *should* be, and note that it is undocumented using (?).
+ *
+ * Note that the rope complexities assume the normal array representation, not
+ * the bigarray representation.
+ *
+ * For the rope operations, we additionally document whether they flatten the
+ * rope. The height of a flattened rope is 1. There are two possibilities:
+ * - The input is left as is and the output is a flat rope, which we write as
+ *   "output is flat".
+ * - The input is flattened, and the output rope (if any) is flat, which we
+ *   write as "flattens".
+ *)
 module Mseq : sig
   type 'a t = List of 'a List.t | Rope of 'a array Rope.t
 
+  (* Defaults to create_rope, see its documentation. *)
   val create : int -> (int -> 'a) -> 'a t
 
-  val create_list : int -> (int -> 'a) -> 'a t
-
+  (* Complexity (?): O(n*k) where n is the first argument and k is the
+   * complexity of f. *)
   val create_rope : int -> (int -> 'a) -> 'a t
 
+  (* Complexity (?): O(n*k) where n is the first argument and k is the
+   * complexity of f. *)
+  val create_list : int -> (int -> 'a) -> 'a t
+
+  (* Defaults to empty_rope, see its documentation. *)
   val empty : 'a t
 
+  (* Complexity: O(1) *)
   val empty_rope : 'a t
 
+  (* Complexity: O(1) *)
   val empty_list : 'a t
 
+  (* Complexity:
+   * rope (?): O(1) assuming OCaml's Array.length is O(1)
+   * list (?): O(n), where n is the length of the sequence
+   *)
   val length : 'a t -> int
 
+  (* Complexity:
+   * rope (?): O(1) assuming OCaml's Array.length is O(1)
+   * list (?): O(n), where n is the length of the first argument
+   *)
   val concat : 'a t -> 'a t -> 'a t
 
+  (* Complexity:
+   * rope (?): O(h), where h is the height of the rope (worst case is linear in
+   *   the length of the sequence)
+   * list (?): O(m), where m is the int
+   *)
   val get : 'a t -> int -> 'a
 
+  (* Complexity:
+   * rope (?): O(n), where n is the length of the sequence
+   * list (?): O(m), where m is the int
+   *)
   val set : 'a t -> int -> 'a -> 'a t
 
+  (* Complexity:
+   * rope (?): O(1)
+   * list: O(1)
+   *)
   val cons : 'a -> 'a t -> 'a t
 
+  (* Complexity:
+   * rope (?): O(1)
+   * list (?): O(n), where n is the length of the sequence
+   *)
   val snoc : 'a t -> 'a -> 'a t
 
+  (* Complexity:
+   * rope (?): O(n), where n is the length of the sequence (flattens)
+   * list (?): O(n), where n is the length of the sequence
+   *)
   val reverse : 'a t -> 'a t
 
+  (* Complexity:
+   * rope (?): O(h), see `get`
+   * list: O(1)
+   *)
   val head : 'a t -> 'a
 
+  (* Complexity:
+   * rope (?): O(n), where n is the length of the sequence (output is flat)
+   * list: O(1)
+   *)
   val tail : 'a t -> 'a t
 
+  (* Complexity:
+   * rope (?): O(1)
+   * list: O(1)
+   *)
   val null : 'a t -> bool
 
+  (* Complexity:
+   * rope (?): O(n*k), where n is the length of the sequence and k is the
+   *   complexity of the function
+   * list: O(n*k), where n is the length of the sequence and k is the complexity
+   *   of the function
+   *)
   val iter : ('a -> unit) -> 'a t -> unit
 
+  (* Complexity:
+   * rope (?): O(n*k), where n is the length of the sequence and k is the
+   *   complexity of the function
+   * list: O(n*k), where n is the length of the sequence and k is the complexity
+   *   of the function
+   *)
   val iteri : (int -> 'a -> unit) -> 'a t -> unit
 
+  (* Complexity:
+   * rope (?): O(n), where n is the length of the sequence (output is flat)
+   * list (?): O(m), where m is the int
+   *)
   val split_at : 'a t -> int -> 'a t * 'a t
 
+  (* Complexity:
+   * rope (?): O(max(h, m)), where h is the height of the rope, and m is the
+   *   length of the subsequence (output is flat)
+   * list (?): O(k + m), where k and m are the int inputs
+   *)
   val subsequence : 'a t -> int -> int -> 'a t
 
+  (* Complexity:
+   * rope (?): O(n*k), where n is the length of the sequence, k is the
+   *   complexity of the function (flattens)
+   * list (?): O(n*k), where n is the length of the sequence, k is the
+   *   complexity of the function
+   *)
   val map : ('a -> 'b) -> 'a t -> 'b t
 
+  (* Complexity:
+   * rope (?): O(n*k), where n is the length of the sequence, k is the
+   *   complexity of the function (flattens)
+   * list (?): O(n*k), where n is the length of the sequence, k is the
+   *   complexity of the function
+   *)
   val mapi : (int -> 'a -> 'b) -> 'a t -> 'b t
 
   module Helpers : sig
@@ -72,14 +169,44 @@ module Mseq : sig
 
     val to_ustring : int t -> ustring
 
+    (* Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function
+     *)
     val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
+    (* Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function
+     *)
     val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
 
+    (* Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *    complexity of the function
+     *)
     val fold_right : ('a -> 'acc -> 'acc) -> 'acc -> 'a t -> 'acc
 
+    (* Crashes if the two input sequences have different lengths.
+     * Complexity:
+     * rope (?): O(n), where n is the length of the sequences (flattens)
+     * list (?): O(n), where n is the length of the sequences
+     *)
     val combine : 'a t -> 'b t -> ('a * 'b) t
 
+    (* Crashes if the two input sequences have different lengths.
+     * Complexity:
+     * rope (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function (flattens)
+     * list (?): O(n*k), where n is the length of the sequence, k is the
+     *   complexity of the function
+     *)
     val fold_right2 :
       ('a -> 'b -> 'acc -> 'acc) -> 'a t -> 'b t -> 'acc -> 'acc
   end
