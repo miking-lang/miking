@@ -7,6 +7,7 @@ include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/cmp.mc"
 include "mexpr/type.mc"
@@ -753,8 +754,10 @@ in
 
 let generateTypeAnnotated = lam t.
   match typeLift (typeAnnot t) with (env, t) then
-    match generateTypeDecl env t with (env, t) then
-      generate env t
+    match removeTypeAscription t with t then
+      match generateTypeDecl env t with (env, t) then
+        generate env t
+      else never
     else never
   else never
 in
