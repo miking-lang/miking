@@ -88,7 +88,7 @@ module Mseq : sig
   val head : 'a t -> 'a
 
   (* Complexity:
-   * rope (?): O(n), where n is the length of the sequence (output is flat)
+   * rope (?): O(1), if rope is flat, otherwise O(n) (flattens)
    * list: O(1)
    *)
   val tail : 'a t -> 'a t
@@ -116,14 +116,13 @@ module Mseq : sig
   val iteri : (int -> 'a -> unit) -> 'a t -> unit
 
   (* Complexity:
-   * rope (?): O(n), where n is the length of the sequence (output is flat)
+   * rope (?): O(1), if the rope is flat, otherwise O(n) (flattens)
    * list (?): O(m), where m is the int
    *)
   val split_at : 'a t -> int -> 'a t * 'a t
 
   (* Complexity:
-   * rope (?): O(max(h, m)), where h is the height of the rope, and m is the
-   *   length of the subsequence (output is flat)
+   * rope (?): O(1), if the rope is flat, otherwise O(n) (flattens)
    * list (?): O(k + m), where k and m are the int inputs
    *)
   val subsequence : 'a t -> int -> int -> 'a t
