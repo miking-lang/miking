@@ -59,12 +59,9 @@ let _collapse_array (s : 'a t) : 'a array =
   | Leaf a ->
       a
   | Slice {v; off; len} ->
-      if off = 0 && len = Array.length v then
-        v
-      else
-        let a = Array.sub v off len in
-        s := Leaf a ;
-        a
+      let a = Array.sub v off len in
+      s := Leaf a ;
+      a
   | Concat {len; _} ->
       (* NOTE(larshum, 2021-02-12): the implementation guarantees that Concat
        * nodes are non-empty. *)
