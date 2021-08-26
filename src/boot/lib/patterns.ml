@@ -170,6 +170,17 @@ let traverse (f : 'a -> 'b list) (l : 'a list) : 'b list list =
   in
   go l
 
+let sequence (l : 'a list list) : 'a list list =
+  let rec go = function
+    | [] ->
+        [[]]
+    | x :: xs ->
+        let tails = go xs in
+        let heads = x in
+        concat_map tails ~f:(fun tl -> List.map (fun hd -> hd :: tl) heads)
+  in
+  go l
+
 let liftA2 (f : 'a -> 'b -> 'c) (la : 'a list) (lb : 'b list) : 'c list =
   concat_map la ~f:(fun a -> List.map (f a) lb)
 
@@ -211,19 +222,71 @@ let include_tail (f : 'a -> 'b) : (bool * 'a list) option * 'b list -> 'b list
   | Some (_, tail), pre ->
       pre @ List.map f tail
 
+(* This function takes the complement of a product, i.e., it produces
+   a pattern that matches if at least one of the subpatterns of the
+   product does not match. *)
 let rec list_complement (constr : npat list -> npat) (l : npat list) : normpat
     =
-  traverse (fun p -> [NPatSet.singleton p; npat_complement p]) l
-  (* Produce all combinations of (complement this) (don't complement this) for each element in the list. Length of this list is thus 2^(length l) *)
-  |> List.tl (* Remove the list that doesn't complement anything *)
-  (* We now have a normpat list list, where the inner list has length `length l`.
-     We want to have a npat list list, where the outermost list will be turned into
-     a normpat (after calling constr). We must thus move the multiplicity present in
-     normpat (since it's a set) up to the top-most list, which we can do using `traverse`
-     in the list monad. *)
-  |> concat_map ~f:(fun np_list ->
-         traverse NPatSet.elements np_list |> List.map constr )
-  |> NPatSet.of_list
+  let len = List.length l in
+  (* NOTE(vipa, 2021-08-24): There are two versions here:
+
+     - One that is O(2^n), but it produces disjoint patterns
+     - One that is O(n^2), but the patterns overlap
+
+     Later analyses, intersection in particular, end up being
+     exponential in the number of unioned patterns, which means
+     that overlapping patterns are problematic. The intersection
+     of two overlapping patterns sticks around, the intersection
+     of non-overlapping patterns do not, thus later stages get
+     much larger inputs in some cases when we pick the O(n^2)
+     version.
+
+     At present we thus pick which algorithm to use based on
+     the length of the given list, which appears to manage more
+     cases than using either algorithm exclusively does. *)
+  if len < 5 then
+    traverse (fun p -> [NPatSet.singleton p; npat_complement p]) l
+    (* Produce all combinations of (complement this) (don't complement this)
+       for each element in the list. Length of this list is thus 2^(length l) *)
+    |> List.tl (* Remove the list that doesn't complement anything *)
+    (* We now have a normpat list list, where the inner list has length `length l`.
+       We want to have a npat list list, where the outermost list will be turned into
+       a normpat (after calling constr). We must thus move the multiplicity present in
+       normpat (since it's a set) up to the top-most list, which we can do using `traverse`
+       in the list monad. *)
+    |> concat_map ~f:(fun np_list ->
+           traverse NPatSet.elements np_list |> List.map constr )
+    |> NPatSet.of_list
+  else
+    (* NOTE(vipa, 2021-08-18):
+       This works by creating a digagonal of complemented patterns, e.g.,
+       given input `[a, b, c]` we compute something like this:
+         [!a, _, _]
+       | [_, !b, _]
+       | [_, _, !c]
+     *)
+    List.init len
+      (fun target ->
+        let f i p = if i = target then NPatSet.elements (npat_complement p) else [wildpat] in
+        List.mapi f l)
+    (* NOTE(vipa, 2021-08-18): `npat_complement` produces a normpat, which
+       we here treat as a list of patterns that are unioned together. This
+       means that we presently have something like this:
+         [(a1 | a2 | ...), _, _]
+       | [_, (b1 | b2 | ...), _]
+       | [_, _, (c1 | c2 | ...)]
+       Note that a sequence of unions is represented by a list here, so
+       this is a list of lists of lists of npats. For a single list
+       (e.g., `[(a1 | a2 | ...), _, _]`) this means we can move the
+       unions to the top-level using `sequence` in the list monad, at which
+       point the only thing we need to do is concat the results, which
+       we can do in one step with `concat_map`. *)
+    |> concat_map ~f:sequence
+    (* NOTE(vipa, 2021-08-18): Finally, we apply `constr` to take each
+       `npat list` and make it into an `npat`, which become the components
+       of the final normpat. *)
+    |> List.map constr
+    |> NPatSet.of_list
 
 (* construct a normpat *)
 and npat_complement : npat -> normpat = function
