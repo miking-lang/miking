@@ -5,6 +5,9 @@ open Ustring.Op
    A Leaf node consists of an element container. They represent a part of the
    sequence.
 
+   A Slice node represents a part of an array, without explicitly making a copy
+   of it.
+
    A Concat node represents the concatentation of two ropes. It contains the
    two recursive tree structures and a length field corresponding to the
    combined length of the two ropes, so that we can look up the length in
