@@ -218,8 +218,7 @@ let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t) (acc : 'c) :
 module Convert = struct
   let to_array_array (s : 'a t) : 'a array = _collapse_array s
 
-  let of_array_array (a : 'a array) : 'a t =
-    ref (Leaf a)
+  let of_array_array (a : 'a array) : 'a t = ref (Leaf a)
 
   let to_list_array (s : 'a t) : 'a list = Array.to_list (to_array_array s)
 

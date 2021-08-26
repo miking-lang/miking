@@ -14,6 +14,7 @@ include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eval.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utesttrans.mc"
 
@@ -33,6 +34,7 @@ let generateTests = lam ast. lam testsEnabled.
   if testsEnabled then
     let ast = symbolize ast in
     let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
     utestGen ast
   else
     let symEnv = symEnvEmpty in

@@ -172,16 +172,7 @@ module Mseq = struct
       | Rope s1, Rope s2 ->
           Rope.equal_array f s1 s2
       | List s1, List s2 ->
-          let rec equal f s1 s2 =
-            match (s1, s2) with
-            | [], [] ->
-                true
-            | [], _ | _, [] ->
-                false
-            | x :: xs, y :: ys ->
-                f x y && equal f xs ys
-          in
-          equal f s1 s2
+          List.equal f s1 s2
       | _ ->
           raise (Invalid_argument "Mseq.equal")
 
@@ -211,7 +202,7 @@ module Mseq = struct
       | Rope s1, Rope s2 ->
           Rope.foldr2_array f s1 s2 a
       | List s1, List s2 ->
-          List.fold_right (fun (a, b) acc -> f a b acc) (List.combine s1 s2) a
+          List.fold_right2 f s1 s2 a
       | _ ->
           raise (Invalid_argument "Mseq.fold_right2")
 
