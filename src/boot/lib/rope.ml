@@ -9,19 +9,23 @@ open Ustring.Op
    two recursive tree structures and a length field corresponding to the
    combined length of the two ropes, so that we can look up the length in
    constant time. *)
-type 'a u = Leaf of 'a array | Concat of {lhs: 'a u; rhs: 'a u; len: int}
+type 'a u =
+  | Leaf of 'a array
+  | Slice of {v: 'a array; off: int; len: int}
+  | Concat of {lhs: 'a u; rhs: 'a u; len: int}
 
 (* A rope is represented as a reference to its tree data structure. This lets
    us collapse the tree before performing an operation on it, which in turn
    allows constant time concatenation. *)
 type 'a t = 'a u ref
 
-let create_array (n : int) (f : int -> 'a) : 'a t = ref (Leaf (Array.init n f))
+let create_array (n : int) (f : int -> 'a) : 'a t =
+  ref (Leaf (Array.init n f))
 
 let empty_array = Obj.magic (ref (Leaf [||]))
 
 let _length_array (s : 'a u) : int =
-  match s with Leaf a -> Array.length a | Concat {len; _} -> len
+  match s with Leaf a -> Array.length a | Slice {len; _} | Concat {len; _} -> len
 
 let length_array (s : 'a t) : int = _length_array !s
 
@@ -29,6 +33,8 @@ let rec _get_array (s : 'a u) (i : int) : 'a =
   match s with
   | Leaf a ->
       a.(i)
+  | Slice {v; off; _} ->
+      v.(off + i)
   | Concat {lhs; rhs; _} ->
       let n = _length_array lhs in
       if i < n then _get_array lhs i else _get_array rhs (i - n)
@@ -41,12 +47,21 @@ let _collapse_array (s : 'a t) : 'a array =
     | Leaf a ->
         let n = Array.length a in
         Array.blit a 0 dst i n ; i + n
+    | Slice {v; off; len} ->
+        Array.blit v off dst i len ; i + len
     | Concat {lhs; rhs; _} ->
         collapse dst rhs (collapse dst lhs i)
   in
   match !s with
   | Leaf a ->
       a
+  | Slice {v; off; len} ->
+      if off = 0 && len = Array.length v then
+        v
+      else
+        let a = Array.sub v off len in
+        s := Leaf a ;
+        a
   | Concat {len; _} ->
       (* NOTE(larshum, 2021-02-12): the implementation guarantees that Concat
        * nodes are non-empty. *)
@@ -68,6 +83,10 @@ let set_array (s : 'a t) (idx : int) (v : 'a) : 'a t =
     | Leaf a ->
         let a' = Array.copy a in
         a'.(i) <- v ; Leaf a'
+    | Slice {v= value; off; len} ->
+        let a' = Array.sub value off len in
+        a'.(i) <- v ;
+        Leaf a'
     | Concat {lhs; rhs; len} ->
         let n = _length_array lhs in
         if i < n then Concat {lhs= helper lhs i; rhs; len}
@@ -90,54 +109,35 @@ let split_at_array (s : 'a t) (idx : int) : 'a t * 'a t =
   if idx = 0 then (empty_array, s)
   else if idx = n then (s, empty_array)
   else
-    let fst = get_array s 0 in
-    let lhs = Array.make idx fst in
-    let rhs = Array.make (n - idx) fst in
-    let rec fill s i =
-      match s with
-      | Leaf a ->
-          let n = Array.length a in
-          ( if i + n < idx then Array.blit a 0 lhs i n
-          else if not (i < idx) then Array.blit a 0 rhs (i - idx) n
-          else
-            let lhs_copy_length = idx - i in
-            Array.blit a 0 lhs i lhs_copy_length ;
-            Array.blit a lhs_copy_length rhs 0 (n - lhs_copy_length) ) ;
-          i + n
-      | Concat {lhs; rhs; _} ->
-          fill rhs (fill lhs i)
-    in
-    let _ = fill !s 0 in
-    (ref (Leaf lhs), ref (Leaf rhs))
+    match !s with
+    | Slice {v; off; _} ->
+        ( ref (Slice {v; off; len= idx})
+        , ref (Slice {v; off= off + idx; len= n - idx}))
+    | _ ->
+        let a = _collapse_array s in
+        ( ref (Slice {v= a; off= 0; len= idx})
+        , ref (Slice {v= a; off= idx; len= n - idx}) )
 
 let sub_array (s : 'a t) (off : int) (cnt : int) : 'a t =
   let n = length_array s in
   if n = 0 then empty_array
   else
     let cnt = min (n - off) cnt in
-    let dst = Array.make cnt (get_array s 0) in
-    let rec fill s i =
-      match s with
-      | Leaf a ->
-          let n = Array.length a in
-          let src_offset = max (off - i) 0 in
-          let dst_offset = max (i - off) 0 in
-          let copy_len = min (n - src_offset) (cnt - dst_offset) in
-          Array.blit a src_offset dst dst_offset copy_len ;
-          i + n
-      | Concat {lhs; rhs; _} ->
-          let n = _length_array lhs in
-          if i + n < off then fill rhs (i + n)
-          else if off + cnt < i + n then fill lhs i
-          else fill rhs (fill lhs i)
-    in
-    let _ = fill !s 0 in
-    ref (Leaf dst)
+    match !s with
+    | Slice {v; off= o; _} ->
+        ref (Slice {v; off= o + off; len= cnt})
+    | _ ->
+        let a = _collapse_array s in
+        ref (Slice {v= a; off; len= cnt})
 
 let iter_array (f : 'a -> unit) (s : 'a t) : unit =
   let rec iter = function
     | Leaf a ->
         Array.iter f a
+    | Slice {v; off; len} ->
+        for i = off to len - 1 do
+          f v.(i)
+        done
     | Concat {lhs; rhs; _} ->
         iter lhs ; iter rhs
   in
@@ -148,6 +148,11 @@ let iteri_array (f : int -> 'a -> unit) (s : 'a t) : unit =
     | Leaf a ->
         Array.iteri (fun i e -> f (i + off) e) a ;
         Array.length a
+    | Slice {v; off= o; len} ->
+        for i = o to len - 1 do
+          f (i + off - o) v.(i)
+        done ;
+        len
     | Concat {lhs; rhs; _} ->
         let n = iteri off lhs in
         iteri (off + n) rhs
@@ -213,7 +218,8 @@ let foldr2_array (f : 'a -> 'b -> 'c -> 'c) (l : 'a t) (r : 'b t) (acc : 'c) :
 module Convert = struct
   let to_array_array (s : 'a t) : 'a array = _collapse_array s
 
-  let of_array_array (a : 'a array) : 'a t = ref (Leaf a)
+  let of_array_array (a : 'a array) : 'a t =
+    ref (Leaf a)
 
   let to_list_array (s : 'a t) : 'a list = Array.to_list (to_array_array s)
 
