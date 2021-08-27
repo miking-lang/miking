@@ -34,7 +34,7 @@ lang PMExprExtractAccelerate = MExprParallelKeywordMaker
             infoErrorExit
               (infoTm arg)
               "Cannot accelerate higher-order function argument"
-          else mapInsert v.ident (t.info, t.ty) env
+          else mapInsert v.ident (infoTm t.e, v.ty) env
       else infoErrorExit t.info "Cannot accelerate anonymous function"
   | t -> sfold_Expr_Expr collectAccelerate env t
 
