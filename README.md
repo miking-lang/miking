@@ -1130,6 +1130,13 @@ opam install pyml
 ```
 
 `mi` will automatically be compiled with Python support when the `pyml` package is installed.
+
+NOTE: Currently, there seems to be a problem with the current OPAM bindings with the multicore switch. If the above command fails, try to run the following and then install `pyml` again:
+
+```
+opam pin stdcompat 15
+```
+
 To run the Python-specific test suite, set the `MI_TEST_PYTHON` variable before running `make test`:
 
 ```
