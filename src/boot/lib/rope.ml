@@ -110,10 +110,13 @@ let split_at_array (s : 'a t) (idx : int) : 'a t * 'a t =
   else if idx = n then (s, empty_array)
   else
     match !s with
+    | Leaf a ->
+        ( ref (Slice {v= a; off= 0; len= idx})
+        , ref (Slice {v= a; off= idx; len= n - idx}) )
     | Slice {v; off; _} ->
         ( ref (Slice {v; off; len= idx})
         , ref (Slice {v; off= off + idx; len= n - idx}))
-    | _ ->
+    | Concat _ ->
         let a = _collapse_array s in
         ( ref (Slice {v= a; off= 0; len= idx})
         , ref (Slice {v= a; off= idx; len= n - idx}) )
@@ -124,9 +127,11 @@ let sub_array (s : 'a t) (off : int) (cnt : int) : 'a t =
   else
     let cnt = min (n - off) cnt in
     match !s with
+    | Leaf a ->
+        ref (Slice {v= a; off; len= cnt})
     | Slice {v; off= o; _} ->
         ref (Slice {v; off= o + off; len= cnt})
-    | _ ->
+    | Concat _ ->
         let a = _collapse_array s in
         ref (Slice {v= a; off; len= cnt})
 
