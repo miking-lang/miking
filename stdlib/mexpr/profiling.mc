@@ -1,0 +1,217 @@
+include "mexpr/ast.mc"
+include "mexpr/boot-parser.mc"
+
+type ProfileEnv = Map Name (Int, Info)
+
+let _profilerInitStr : Map Name (Int, Info) -> String = lam env.
+  let envStrs : Map Name (String, Int) =
+    mapMapWithKey
+      (lam k. lam v : (Int, Info).
+        let idx = v.0 in
+        let info = v.1 in
+        let str =
+          match info with Info t then
+            join [t.filename, "[", int2string t.row1, ":", int2string t.col1,
+                  "-", int2string t.row2, ":", int2string t.col2, "] ",
+                  nameGetStr k]
+          else join ["? ", nameGetStr k] in
+        (str, v.0))
+      env in
+  let orderedFunctionStrs : [String] =
+    map
+      (lam x : (String, Int). x.0)
+      (sort
+        (lam l : (String, Int). lam r : (String, Int). subi l.1 r.1)
+        (mapValues envStrs)) in
+  let functionProfileData =
+    join
+      [ "let functionProfileData = ref [\n"
+      , strJoin ",\n"
+          (map
+            (lam functionStr.
+              join ["  ref {emptyProfileData with id = \"", functionStr, "\"}"])
+            orderedFunctionStrs)
+      , "] in"] in
+  join [
+"type StackEntry = {
+  onTopSince : Float,
+  functionIndex : Int
+} in
+
+type ProfileData = {
+  id : String,
+  exclusiveTime : Float,
+  calls : Int
+} in
+
+let emptyProfileData = {id = \"\", exclusiveTime = 0.0, calls = 0} in
+
+let callStack : [StackEntry] =
+  ref (createList 0 (lam. {onTopSince = 0.0, functionIndex = 0})) in
+",
+functionProfileData,
+"
+let addExclusiveTime : Float -> StackEntry -> Unit =
+  lam t. lam entry.
+  let dataRef = get (deref functionProfileData) entry.functionIndex in
+  let data : ProfileData = deref dataRef in
+  let addedTime = subf t entry.onTopSince in
+  modref dataRef {data with exclusiveTime = addf data.exclusiveTime addedTime}
+in
+
+let incrementCallCount : Int -> Unit = lam index.
+  let dataRef = get (deref functionProfileData) index in
+  let data : ProfileData = deref dataRef in
+  modref dataRef {data with calls = addi data.calls 1}
+in
+
+let pushCallStack : Int -> Unit = lam index.
+  let stack = deref callStack in
+  let t = wallTimeMs () in
+  let pushEntry = lam.
+    incrementCallCount index;
+    let entry = {onTopSince = t, functionIndex = index} in
+    cons entry stack
+  in
+  let stack =
+    if null stack then pushEntry ()
+    else
+      let prevTopEntry = head stack in
+      addExclusiveTime t prevTopEntry;
+      pushEntry ()
+  in
+  modref callStack stack
+in
+
+let popCallStack : Unit -> Unit = lam.
+  let stack = deref callStack in
+  if null stack then error \"Attempted to pop empty call stack\"
+  else
+    let t = wallTimeMs () in
+    let prevTopEntry = head stack in
+    addExclusiveTime t prevTopEntry;
+    let tl = tail stack in
+    let stack =
+      if null tl then tl
+      else
+        let newHead : StackEntry = head tl in
+        cons {newHead with onTopSince = t} tl
+    in
+    modref callStack stack
+in
+
+()
+"]
+
+let _profilerReportStr = "
+let int2string = lam n.
+  recursive
+  let int2string_rechelper = lam n.
+    if lti n 10
+    then [int2char (addi n (char2int '0'))]
+    else
+      let d = [int2char (addi (modi n 10) (char2int '0'))] in
+      concat (int2string_rechelper (divi n 10)) d
+  in
+  if lti n 0
+  then cons '-' (int2string_rechelper (negi n))
+  else int2string_rechelper n
+in
+recursive let filter = lam p. lam seq.
+  if null seq then []
+  else if p (head seq) then cons (head seq) (filter p (tail seq))
+  else filter p (tail seq)
+in
+let join = foldl concat [] in
+let data =
+  filter
+    (lam entryRef : Ref ProfileData.
+      let entry : ProfileData = deref entryRef in
+      gti entry.calls 0)
+    (deref functionProfileData) in
+writeFile
+  \"mexpr.prof\"
+  (join
+    (map
+      (lam dataRef : Ref ProfileData.
+        let data : ProfileData = deref dataRef in
+        let exclusiveTime = divf data.exclusiveTime 1000.0 in
+        join [data.id, \" \", int2string data.calls, \" \",
+              float2string exclusiveTime, \"\\n\"])
+      data))
+"
+
+let _profilerReportCodeRef = ref (None ())
+let getProfilerReportCode = lam.
+  match deref _profilerReportCodeRef with Some t then t
+  else
+    use BootParser in
+    let code = parseMExprString ["functionProfileData"] _profilerReportStr in
+    modref _profilerReportCodeRef (Some code);
+    code
+
+lang MExprProfileInstrument = MExprAst + BootParser
+  sem collectToplevelFunctions (env : ProfileEnv) =
+  | TmLet t ->
+    let env =
+      match t.body with TmLam _ then
+        let idx = mapSize env in
+        mapInsert t.ident (idx, t.info) env
+      else env in
+    collectToplevelFunctions env t.inexpr
+  | TmRecLets t ->
+    let collectBinding : ProfileEnv -> RecLetBinding -> ProfileEnv =
+      lam env. lam binding.
+      match binding.body with TmLam _ then
+        let idx = mapSize env in
+        mapInsert binding.ident (idx, binding.info) env
+      else env
+    in
+    let env = foldl collectBinding env t.bindings in
+    collectToplevelFunctions env t.inexpr
+  | t -> sfold_Expr_Expr collectToplevelFunctions env t
+
+  sem instrumentProfilingCalls (functionIndex : Int) =
+  | TmLam t ->
+    TmLam {t with body = instrumentProfilingCalls functionIndex t.body}
+  | t ->
+    bindall_ [
+      ulet_ "" (app_ (var_ "pushCallStack") (int_ functionIndex)),
+      ulet_ "tmp" t,
+      ulet_ "" (app_ (var_ "popCallStack") unit_),
+      var_ "tmp"]
+
+  sem instrumentProfilingH (env : ProfileEnv) =
+  | TmLet t ->
+    match mapLookup t.ident env with Some (idx, _) then
+      TmLet {{t with body = instrumentProfilingCalls idx t.body}
+                with inexpr = instrumentProfilingH env t.inexpr}
+    else TmLet {t with inexpr = instrumentProfilingH env t.inexpr}
+  | TmRecLets t ->
+    let instrumentBinding : RecLetBinding -> RecLetBinding =
+      lam binding.
+      match mapLookup binding.ident env with Some (idx, _) then
+        {binding with body = instrumentProfilingCalls idx binding.body}
+      else binding
+    in
+    TmRecLets {{t with bindings = map instrumentBinding t.bindings}
+                  with inexpr = instrumentProfilingH env t.inexpr}
+  | TmType t -> TmType {t with inexpr = instrumentProfilingH env t.inexpr}
+  | TmConDef t -> TmConDef {t with inexpr = instrumentProfilingH env t.inexpr}
+  | TmUtest t -> TmUtest {t with next = instrumentProfilingH env t.next}
+  | TmExt t -> TmExt {t with inexpr = instrumentProfilingH env t.inexpr}
+  | t -> t
+
+  sem instrumentProfiling =
+  | t ->
+    let emptyEnv = mapEmpty nameCmp in
+    let env = collectToplevelFunctions emptyEnv t in
+    bindall_ [
+      parseMExprString [] (_profilerInitStr env),
+      ulet_ "" (instrumentProfilingH env t),
+      getProfilerReportCode ()]
+end
+
+mexpr
+
+()
