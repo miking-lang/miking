@@ -54,7 +54,9 @@ let eval = lam files. lam options : Options. lam args.
     (if options.debugParse then printLn (expr2str ast) else ());
 
     let ast =
-      if options.debugProfiling then instrumentProfiling ast else ast
+      if options.debugProfiling then
+        instrumentProfiling (symbolize ast)
+      else ast
     in
 
     -- If option --test, then generate utest runner calls. Otherwise strip away

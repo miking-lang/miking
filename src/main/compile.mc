@@ -99,7 +99,9 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
   use MCoreCompile in
 
   let mexprAst =
-    if options.debugProfiling then instrumentProfiling mexprAst else mexprAst
+    if options.debugProfiling then
+      instrumentProfiling (symbolize mexprAst)
+    else mexprAst
   in
 
   -- If option --test, then generate utest runner calls. Otherwise strip away
