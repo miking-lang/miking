@@ -1,7 +1,10 @@
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/eval.mc"
 
 type ProfileEnv = Map Name (Int, Info)
+
+let profilingResultFileName = "mexpr.prof"
 
 let _profilerInitStr : Map Name (Int, Info) -> String = lam env.
   let envStrs : Map Name (String, Int) =
@@ -103,7 +106,7 @@ in
 ()
 "]
 
-let _profilerReportStr = "
+let _profilerReportStr = join ["
 let int2string = lam n.
   recursive
   let int2string_rechelper = lam n.
@@ -130,7 +133,7 @@ let data =
       gti entry.calls 0)
     (deref functionProfileData) in
 writeFile
-  \"mexpr.prof\"
+  \"", profilingResultFileName, "\"
   (join
     (map
       (lam dataRef : Ref ProfileData.
@@ -139,7 +142,7 @@ writeFile
         join [data.id, \" \", int2string data.calls, \" \",
               float2string exclusiveTime, \"\\n\"])
       data))
-"
+"]
 
 let _profilerReportCodeRef = ref (None ())
 let getProfilerReportCode = lam.
@@ -212,6 +215,53 @@ lang MExprProfileInstrument = MExprAst + BootParser
       getProfilerReportCode ()]
 end
 
+lang TestLang = MExprProfileInstrument + MExprEval
+
 mexpr
+
+use TestLang in
+
+let t = bindall_ [
+  ureclets_ [
+    ("fact", ulam_ "n" (
+      if_ (eqi_ (var_ "n") (int_ 0))
+        (int_ 1)
+        (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1)))))),
+    ("nonsense", ulam_ "n" (
+      if_ (leqi_ (var_ "n") (int_ 0))
+        (true_)
+        (app_ (var_ "nonsense") (subi_ (var_ "n") (int_ 1)))))],
+  ulet_ "f" (ulam_ "x" (app_ (var_ "fact") (addi_ (var_ "x") (int_ 3)))),
+  app_ (var_ "f") (int_ 4)
+] in
+let t = instrumentProfiling t in
+eval {env = mapEmpty nameCmp} t;
+utest fileExists profilingResultFileName with true in
+(if fileExists profilingResultFileName then
+  let lines =
+    filter
+      (lam line. gti (length line) 0)
+      (strSplit "\n" (readFile profilingResultFileName)) in
+  utest length lines with 2 in
+  let lineTerms =
+    map
+      (lam line. strSplit " " line)
+      lines in
+  let fst = get lineTerms 0 in
+  let snd = get lineTerms 1 in
+
+  -- Function names
+  utest get fst 1 with "fact" in
+  utest get snd 1 with "f" in
+
+  -- #calls
+  utest string2int (get fst 2) with 8 in
+  utest string2int (get snd 2) with 1 in
+
+  -- Exclusive time spent in function
+  utest string2float (get fst 3) with 0.0 using gtf in
+  utest string2float (get snd 3) with 0.0 using gtf in
+  ()
+else ());
 
 ()
