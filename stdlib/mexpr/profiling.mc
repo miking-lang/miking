@@ -28,7 +28,7 @@ let _profilerInitStr : Map Name (Int, Info) -> String = lam env.
         (mapValues envStrs)) in
   let functionProfileData =
     join
-      [ "let functionProfileData = ref [\n"
+      [ "let functionProfileData = [\n"
       , strJoin ",\n"
           (map
             (lam functionStr.
@@ -56,14 +56,14 @@ functionProfileData,
 "
 let addExclusiveTime : Float -> StackEntry -> Unit =
   lam t. lam entry.
-  let dataRef = get (deref functionProfileData) entry.functionIndex in
+  let dataRef = get functionProfileData entry.functionIndex in
   let data : ProfileData = deref dataRef in
   let addedTime = subf t entry.onTopSince in
   modref dataRef {data with exclusiveTime = addf data.exclusiveTime addedTime}
 in
 
 let incrementCallCount : Int -> Unit = lam index.
-  let dataRef = get (deref functionProfileData) index in
+  let dataRef = get functionProfileData index in
   let data : ProfileData = deref dataRef in
   modref dataRef {data with calls = addi data.calls 1}
 in
@@ -131,7 +131,7 @@ let data =
     (lam entryRef : Ref ProfileData.
       let entry : ProfileData = deref entryRef in
       gti entry.calls 0)
-    (deref functionProfileData) in
+    functionProfileData in
 writeFile
   \"", profilingResultFileName, "\"
   (join
