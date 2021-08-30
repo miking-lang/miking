@@ -111,7 +111,7 @@ let popCallStack : Unit -> Unit = lam.
       if null tl then tl
       else
         let newHead : StackEntry = head tl in
-        cons {newHead with onTopSince = t} tl
+        cons {newHead with onTopSince = t} (tail tl)
     in
     modref callStack stack
 in
