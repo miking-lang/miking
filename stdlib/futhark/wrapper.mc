@@ -4,6 +4,7 @@ include "c/ast.mc"
 include "c/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
 
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
@@ -38,7 +39,18 @@ let emptyWrapperEnv = {
   ocamlToC = [], cToFuthark = [], futharkToC = [], cToOCaml = [], args = []
 }
 
-lang FutharkOCamlToCWrapper = MExprAst + CAst
+lang FutharkCWrapper = MExprAst + CAst + MExprPrettyPrint
+  sem mexprToCElementaryTypes =
+  | TyInt _ | TyChar _ -> [CTyVar {id = _getIdentExn "int64_t"}]
+  | TyFloat _ -> [CTyDouble {}]
+  | TySeq {ty = elemTy & !(TySeq _)} ->
+    map (lam ty. CTyPtr {ty = ty}) (mexprToCElementaryTypes elemTy)
+  | TySeq t -> mexprToCElementaryTypes t.ty
+  | TyRecord _ -> error "Records cannot be translated to C yet"
+  | ty -> error (join ["Translation of type ", type2str ty, " to C is not supported"])
+end
+
+lang FutharkOCamlToCWrapper = FutharkCWrapper
   sem _wosize =
   | id ->
       CEApp {fun = _getIdentExn "Wosize_val", args = [CEVar {id = id}]}
@@ -70,7 +82,7 @@ lang FutharkOCamlToCWrapper = MExprAst + CAst
                         rhs = CEVar {id = sizeId}},
         body = whileBody}]
 
-  sem _generateOCamlToCWrapperInner (elemTy : CType) (srcIdent : Name) (dstIdents : [Name]) =
+  sem _generateOCamlToCWrapperInner (elemTypes : [CType]) (srcIdent : Name) (dstIdents : [Name]) =
   | TyInt _ | TyChar _ ->
     let dstIdent = head dstIdents in
     [_assignConvertedTerm dstIdent "Long_val" srcIdent]
@@ -80,7 +92,7 @@ lang FutharkOCamlToCWrapper = MExprAst + CAst
   | TySeq {ty = TyFloat _} ->
     let dstIdent = head dstIdents in
     let iterId = nameSym "i" in
-    _generateOCamlToCSequenceWrapper elemTy iterId srcIdent dstIdents
+    _generateOCamlToCSequenceWrapper elemTypes iterId srcIdent dstIdents
       [CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEBinOp {
@@ -102,9 +114,10 @@ lang FutharkOCamlToCWrapper = MExprAst + CAst
     let innerDstIdents = map (lam. nameSym "y") dstIdents in
     let innerDstAssignments =
       map
-        (lam idents: (Name, Name).
-          let dstIdent = idents.0 in
-          let innerDstIdent = idents.1 in
+        (lam entry: ((Name, Name), CType).
+          let dstIdent = (entry.0).0 in
+          let innerDstIdent = (entry.0).1 in
+          let elemTy = entry.1 in
           let offset =
             match innerTy with TySeq _ then
               CEBinOp {
@@ -113,12 +126,14 @@ lang FutharkOCamlToCWrapper = MExprAst + CAst
                 rhs = _wosize innerSrcId}
             else CEVar {id = iterId} in
           CSDef {
-            ty = CTyPtr {ty = elemTy}, id = Some innerDstIdent,
-            init = Some (CIExpr {expr = CEBinOp {
-              op = COSubScript (),
-              lhs = CEVar {id = dstIdent},
-              rhs = offset}})})
-        (zip dstIdents innerDstIdents) in
+            ty = elemTy, id = Some innerDstIdent,
+            init = Some (CIExpr {expr = CEUnOp {
+              op = COAddrOf (),
+              arg = CEBinOp {
+                op = COSubScript (),
+                lhs = CEVar {id = dstIdent},
+                rhs = offset}}})})
+        (zip (zip dstIdents innerDstIdents) elemTypes) in
     let whileBody = join [
       [CSDef {
         ty = CTyVar {id = _getIdentExn "value"}, id = Some innerSrcId,
@@ -126,14 +141,82 @@ lang FutharkOCamlToCWrapper = MExprAst + CAst
           fun = _getIdentExn "Field",
           args = [CEVar {id = srcIdent}, CEVar {id = iterId}]}})}],
       innerDstAssignments,
-      _generateOCamlToCWrapperInner elemTy innerSrcId innerDstIdents innerTy,
+      _generateOCamlToCWrapperInner elemTypes innerSrcId innerDstIdents innerTy,
       [CSExpr {expr = CEBinOp {
         op = COAssign (),
         lhs = CEVar {id = iterId},
         rhs = CEBinOp {
           op = COAdd (), lhs = CEVar {id = iterId},
           rhs = CEInt {i = 1}}}}]] in
-    _generateOCamlToCSequenceWrapper elemTy iterId srcIdent dstIdents whileBody
+    _generateOCamlToCSequenceWrapper elemTypes iterId srcIdent dstIdents whileBody
+
+  sem _generateOCamlToCAlloc (sizeIdent : Name) (dstIdents : [Name]) =
+  | ty & (CTyPtr t) ->
+    let dstIdent = nameSym "dst" in
+    let stmt = CSDef {
+      ty = ty, id = Some dstIdent,
+      init = Some (CIExpr {expr = CECast {
+        ty = ty,
+        rhs = CEApp {
+          fun = _getIdentExn "malloc",
+          args = [CEBinOp {
+            op = COMul (),
+            lhs = CEVar {id = sizeIdent},
+            rhs = CESizeOfType {ty = t.ty}}]}}})} in
+    (cons dstIdent dstIdents, stmt)
+  | ty ->
+    let dstIdent = nameSym "dst" in
+    let stmt = CSDef {ty = ty, id = Some dstIdent, init = None ()} in
+    (cons dstIdent dstIdents, stmt)
+
+  sem _computeSizeH (sizeIdent : Name) (srcIdent : Name) =
+  | TySeq {ty = innerTy} ->
+    let updateSizeStmt = CSExpr {expr =
+      CEBinOp {
+        op = COAssign (),
+        lhs = CEVar {id = sizeIdent},
+        rhs = CEBinOp {
+          op = COMul (),
+          lhs = CEVar {id = sizeIdent},
+          rhs = _wosize srcIdent}}} in
+    match innerTy with TySeq _ then
+      let innerSrcIdent = nameSym "t" in
+      let innerSrcStmt = CSDef {
+        ty = CTyVar {id = _getIdentExn "value"},
+        id = Some innerSrcIdent,
+        init = Some (CIExpr {expr =
+          CEApp {fun = _getIdentExn "Field",
+                 args = [CEVar {id = srcIdent}, CEInt {i = 0}]}})} in
+      concat
+        [updateSizeStmt, innerSrcStmt]
+        (_computeSizeH sizeIdent innerSrcIdent innerTy)
+    else [updateSizeStmt]
+  | _ -> []
+
+  sem _computeSize (srcIdent : Name) =
+  | ty ->
+    let sizeIdent = nameSym "n" in
+    let initStmt = CSDef {
+      ty = CTyVar {id = _getIdentExn "size_t"},
+      id = Some sizeIdent,
+      init = Some (CIExpr {expr = CEInt {i = 1}})} in
+    let sizeStmt = _computeSizeH sizeIdent srcIdent ty in
+    if null sizeStmt then
+      ([], sizeIdent)
+    else (cons initStmt sizeStmt, sizeIdent)
+
+  sem _generateOCamlToCWrapper (srcIdent : Name) =
+  | ty ->
+    let cElementTypes = mexprToCElementaryTypes ty in
+    match _computeSize srcIdent ty with (sizeStmts, sizeIdent) then
+      match mapAccumL (_generateOCamlToCAlloc sizeIdent) [] cElementTypes
+      with (dstIdents, allocStmts) then
+        join [
+          sizeStmts,
+          allocStmts,
+          _generateOCamlToCWrapperInner cElementTypes srcIdent dstIdents ty]
+      else never
+    else never
 end
 
 lang FutharkCWrapper = MExprAst + CAst + CProgAst + FutharkOCamlToCWrapper
@@ -238,7 +321,6 @@ use Test in
 let elemTy = CTyVar {id = _getIdentExn "int64_t"} in
 let srcIdent = nameSym "src" in
 let dstIdents = [nameSym "dst"] in
-let ocamlArgTy = tyseq_ (tyseq_ (tyseq_ tyfloat_)) in
+let ocamlArgTy = tyseq_ tyfloat_ in
 print (printCStmts 0 pprintEnvEmpty
-  (_generateOCamlToCWrapperInner elemTy srcIdent dstIdents ocamlArgTy)).1
-
+  (_generateOCamlToCWrapper srcIdent ocamlArgTy)).1
