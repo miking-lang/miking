@@ -38,19 +38,23 @@ let _profilerInitStr : Map Name (Int, Info) -> String = lam env.
   join [
 "type StackEntry = {
   onTopSince : Float,
+  pushedAt : Float,
   functionIndex : Int
 } in
 
 type ProfileData = {
   id : String,
   exclusiveTime : Float,
+  inclusiveTime : Float,
   calls : Int
 } in
 
-let emptyProfileData = {id = \"\", exclusiveTime = 0.0, calls = 0} in
+let emptyProfileData = {id = \"\", exclusiveTime = 0.0, inclusiveTime = 0.0,
+                        calls = 0} in
 
 let callStack : [StackEntry] =
-  ref (createList 0 (lam. {onTopSince = 0.0, functionIndex = 0})) in
+  ref (createList 0 (lam. {onTopSince = 0.0, pushedAt = 0.0,
+                           functionIndex = 0})) in
 ",
 functionProfileData,
 "
@@ -60,6 +64,14 @@ let addExclusiveTime : Float -> StackEntry -> Unit =
   let data : ProfileData = deref dataRef in
   let addedTime = subf t entry.onTopSince in
   modref dataRef {data with exclusiveTime = addf data.exclusiveTime addedTime}
+in
+
+let addInclusiveTime : Float -> StackEntry -> Unit =
+  lam t. lam entry.
+  let dataRef = get functionProfileData entry.functionIndex in
+  let data : ProfileData = deref dataRef in
+  let addedTime = subf t entry.pushedAt in
+  modref dataRef {data with inclusiveTime = addf data.inclusiveTime addedTime}
 in
 
 let incrementCallCount : Int -> Unit = lam index.
@@ -73,7 +85,7 @@ let pushCallStack : Int -> Unit = lam index.
   let t = wallTimeMs () in
   let pushEntry = lam.
     incrementCallCount index;
-    let entry = {onTopSince = t, functionIndex = index} in
+    let entry = {onTopSince = t, pushedAt = t, functionIndex = index} in
     cons entry stack
   in
   let stack =
@@ -93,6 +105,7 @@ let popCallStack : Unit -> Unit = lam.
     let t = wallTimeMs () in
     let prevTopEntry = head stack in
     addExclusiveTime t prevTopEntry;
+    addInclusiveTime t prevTopEntry;
     let tl = tail stack in
     let stack =
       if null tl then tl
@@ -139,8 +152,10 @@ writeFile
       (lam dataRef : Ref ProfileData.
         let data : ProfileData = deref dataRef in
         let exclusiveTime = divf data.exclusiveTime 1000.0 in
+        let inclusiveTime = divf data.inclusiveTime 1000.0 in
         join [data.id, \" \", int2string data.calls, \" \",
-              float2string exclusiveTime, \"\\n\"])
+              float2string exclusiveTime, \" \", float2string inclusiveTime,
+              \"\\n\"])
       data))
 "]
 
