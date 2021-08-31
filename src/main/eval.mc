@@ -9,6 +9,7 @@ include "name.mc"
 
 include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
