@@ -17,6 +17,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/anf.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/builtin.mc"
 include "mexpr/boot-parser.mc"
@@ -61,6 +62,10 @@ recursive let _unwrapTypeAlias = use VarTypeAst in
     else error "Not a tyVar in _unwrapTypeAlias"
 end
 
+-- C assignment shorthand
+let _assign: CExpr -> CExpr -> CExpr = use CAst in
+  lam lhs. lam rhs.
+    CEBinOp { op = COAssign {}, lhs = lhs, rhs = rhs }
 
 
 ----------------------------------------
@@ -96,6 +101,12 @@ let cCompilerNames: [Name] = concat [
 ] externalNames
 
 let _constrKey = nameNoSym "constr"
+
+-- Used in compileStmt and compileStmts
+type Result
+con Ident : Name -> Res
+con Return : () -> Res
+con None : () -> Res
 
 --------------------------
 -- COMPILER ENVIRONMENT --
@@ -301,9 +312,9 @@ lang MExprCCompile = MExprAst + CAst
   | TyApp _ & ty -> infoErrorExit (infoTy ty) "Type not currently supported"
 
 
-  -------------
-  -- HELPERS --
-  -------------
+  -----------------------
+  -- COMPILE FUNCTIONS --
+  -----------------------
 
   -- Translate a sequence of lambdas to a C function. Takes an explicit type as
   -- argument, because the lambdas do not explicitly give the return type,
@@ -335,7 +346,7 @@ lang MExprCCompile = MExprAst + CAst
           match map (compileType env) paramTypes with paramTypes then
             let params = zipWith (lam t. lam id. (t, id)) paramTypes params in
             match (compileType env) retType with ret then
-              match compileStmts env { name = None () } [] body
+              match compileStmts env (Return ()) [] body
               with (env, body) then
                 (env, CTFun { ret = ret, id = id, params = params, body = body })
               else never
@@ -347,7 +358,10 @@ lang MExprCCompile = MExprAst + CAst
   | _ -> error "Non-lambda supplied to compileFun"
 
 
-  -- Compile patterns
+  ----------------------
+  -- COMPILE PATTERNS --
+  ----------------------
+
   sem compilePat (env: CompileCEnv)
     (pres: [CStmt]) (conds: [CExpr]) (defs: [CStmt])
     (target: CExpr) (ty: Type) =
@@ -418,139 +432,47 @@ lang MExprCCompile = MExprAst + CAst
     else never
   | pat -> infoErrorExit (infoPat pat) "Pattern not supported"
 
+  -------------------
+  -- C ALLOCATIONS --
+  -------------------
 
-  -- Compile various let-bound forms. Note that, if the program is in ANF,
-  -- most terms can only appear here (e.g., TmMatch).
-  sem compileLet (env: CompileCEnv) (ident: Name) =
+  sem compileAlloc (env: CompileCEnv) (name: Option Name) =
 
-  -- TmMatch: Compile to if-statement
-  | TmMatch { ty = tyMatch, target = target, pat = pat,
-              thn = thn, els = els } & t ->
-
-    -- Allocate memory for return value of match expression
-    let def = if _isUnitTy tyMatch then [] else
-      [{ ty = compileType env tyMatch, id = Some ident, init = None () }]
-    in
-
-    let ctarget = compileExpr env target in
-
-    -- Compile branches
-    let innerFinal = { name = Some ident } in
-    match compileStmts env innerFinal [] thn with (env, thn) then
-      match compileStmts env innerFinal [] els with (env, els) then
-
-        -- Generate conditions corresponding to pat, and add pattern bindings
-        -- to start of thn
-        match compilePat env [] [] [] ctarget (ty target) pat
-        with (pres, conds, defs) then
-
-          let thn = concat defs thn in
-
-          let stmts =
-            if null conds then thn
-            else
-              -- Compute joint condition
-              let cond = foldr1 (lam cond. lam acc.
-                  CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
-                ) conds in
-              [CSIf { cond = cond, thn = thn, els = els }]
-          in
-
-          let stmts = concat pres stmts in
-
-          (env, def, stmts)
-
-        else never
-      else never
-    else never
-
-  -- TmSeq: allocate and create a new array. Special handling of strings for now.
-  | TmSeq { ty = ty, tms = tms } ->
-    let ty = compileType env ty in
-    let toChar = lam expr.
-      match expr with TmConst { val = CChar { val = val } } then Some val
-      else None ()
-    in
-    match optionMapM toChar tms with Some str then (
-      env,
-      [{ ty = ty, id = Some ident,
-             init = Some (CIExpr { expr = CEString { s = str } }) }],
-      []
-    )
-    else error "TODO: TmSeq"
-
-  -- TmConApp: allocate and create a new struct.
-  | TmConApp { ident = constrIdent, body = body, ty = ty } ->
-    let ty = compileType env ty in
-    let def = alloc ident ty in
+  | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
+    let n = match name with Some name then name else nameSym "alloc" in
+    let def = alloc n (compileType env ty) in
     let init = [
       -- Set constructor tag
       CSExpr {
-        expr = CEBinOp {
-          op = COAssign {},
-          lhs = CEArrow {
-            lhs = CEVar { id = ident }, id = _constrKey
-          },
-          rhs = CEVar { id = constrIdent }
-        }
+        expr = _assign (CEArrow { lhs = CEVar { id = n }, id = _constrKey })
+          (CEVar { id = constrIdent })
       },
       -- Set data
       CSExpr {
-        expr = CEBinOp {
-          op = COAssign {},
-          lhs = CEArrow {
-            lhs = CEVar { id = ident }, id = constrIdent
-          },
-          rhs = compileExpr env body
-        }
+        expr = _assign (CEArrow { lhs = CEVar { id = n }, id = constrIdent })
+          (compileExpr env body)
       }
     ] in
-    (env, def, init)
+    (env, def, init, n)
 
   -- TmRecord: allocate and create new struct, unless it is an empty record (in
   -- which case it is compiled to the integer 0)
-  | TmRecord { ty = ty, bindings = bindings } ->
-    let ty = compileType env ty in
-    if mapIsEmpty bindings then (
-      env,
-      Some { ty = ty, id = Some ident,
-             init = Some (CIExpr { expr = CEInt { i = 0 } }) },
-      []
-    )
+  | TmRecord { ty = ty, bindings = bindings } & t ->
+    if mapIsEmpty bindings then
+      error "Empty bindings in TmRecord in compileAlloc"
     else
-      let def = alloc ident ty in
+      let n = match name with Some name then name else nameSym "alloc" in
+      let def = alloc n (compileType env ty) in
       let init = mapMapWithKey (lam sid. lam expr.
         CSExpr {
-          expr = CEBinOp {
-            op = COAssign {},
-            lhs = CEArrow {
-              lhs = CEVar { id = ident }, id = nameNoSym (sidToString sid)
-            },
-            rhs = compileExpr env expr
-          }
+          expr = _assign
+            (CEArrow {
+              lhs = CEVar { id = n }, id = nameNoSym (sidToString sid)
+            })
+            (compileExpr env expr)
         }
       ) bindings in
-      (env, def, mapValues init)
-
-  -- TmRecordUpdate: allocate and create new struct.
-  | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
-
-  -- Declare variable and call `compileExpr` on body.
-  | expr ->
-    let ty = ty expr in
-    if _isUnitTy ty then
-      match expr with TmVar _ then (env, [], [])
-      else (env, [], [CSExpr { expr = compileExpr env expr }])
-
-    else
-      let ty = compileType env ty in
-      (env,
-       [{ ty = ty, id = Some ident, init = None ()}],
-       [CSExpr { expr = CEBinOp { op = COAssign {},
-                                  lhs = CEVar { id = ident },
-                                  rhs = compileExpr env expr }}])
-
-
+      (env, def, mapValues init, n)
 
   -----------------
   -- C TOP-LEVEL --
@@ -559,15 +481,34 @@ lang MExprCCompile = MExprAst + CAst
   sem compileTops (env: CompileCEnv) (accTop: [CTop]) (accInit: [CStmt]) =
 
   | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
+
+    -- Functions
     match body with TmLam _ then
       match compileFun env ident tyBody body with (env, fun) then
         compileTops env (snoc accTop fun) accInit inexpr
       else never
+
+    -- Optimize direct allocations
+    else match body with TmConApp _ | TmRecord _ then
+      match compileAlloc env (Some ident) body with (env, def, init, n) then
+        let accTop = concat accTop (map (lam d. CTDef d) def) in
+        let accInit = concat accInit init in
+        compileTops env accTop accInit inexpr
+      else never
+
+    -- Other lets
     else
-      match compileLet env ident body with (env, defs, inits) then
-        let defs = map (lam def. CTDef def) defs in
-        let accTop = concat accTop defs in
-        let accInit = concat accInit inits in
+      let iu = _isUnitTy tyBody in
+      let def =
+        if iu then []
+        else
+          let ty = compileType env tyBody in
+          [CTDef { ty = ty, id = Some ident, init = None () }]
+      in
+      let lres = if iu then None () else Ident ident in
+      match compileStmt env lres body with (env, stmts) then
+        let accTop = concat accTop def in
+        let accInit = concat accInit stmts in
         compileTops env accTop accInit inexpr
       else never
 
@@ -595,7 +536,7 @@ lang MExprCCompile = MExprAst + CAst
 
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
-    match compileStmts env { name = None () } accInit rest
+    match compileStmts env (Return ()) accInit rest
     with (env, accInit) then (accTop, accInit)
     else never
 
@@ -604,39 +545,161 @@ lang MExprCCompile = MExprAst + CAst
   -- C STATEMENTS --
   ------------------
 
-  sem compileStmts
-    (env: CompileCEnv) (final: { name: Option Name }) (acc: [CStmt]) =
+  sem compileStmt (env: CompileCEnv) (res: Result) =
+
+  -- TmMatch: Compile to if-statement
+  | TmMatch { target = target, pat = pat, thn = thn, els = els } & t ->
+
+    let ctarget = compileExpr env target in
+
+    -- Compile branches
+    match compileStmts env res [] thn with (env, thn) then
+      match compileStmts env res [] els with (env, els) then
+
+        -- Generate conditions corresponding to pat, and add pattern bindings
+        -- to start of thn
+        match compilePat env [] [] [] ctarget (ty target) pat
+        with (pres, conds, defs) then
+
+          let thn = concat defs thn in
+
+          let stmts =
+            if null conds then thn
+            else
+              -- Compute joint condition
+              let cond = foldr1 (lam cond. lam acc.
+                  CEBinOp { op = COAnd {}, lhs = cond, rhs = acc }
+                ) conds in
+              [CSIf { cond = cond, thn = thn, els = els }]
+          in
+
+          let stmts = concat pres stmts in
+
+          (env, stmts)
+
+        else never
+      else never
+    else never
+
+  -- TmSeq: allocate and create a new array. Special handling of strings for now.
+  | TmSeq { tms = tms } & t ->
+    let toChar = lam expr.
+      match expr with TmConst { val = CChar { val = val } } then Some val
+      else None ()
+    in
+    match optionMapM toChar tms with Some str then
+    let str = CEString { s = str } in
+    (
+      env,
+      [
+        match res with Ident id then
+          CSExpr { expr =_assign (CEVar { id = id }) str }
+        else match res with Return _ then CSRet { val = str }
+        else
+          infoErrorExit (t.info) "Type error, should have been caught previously"
+      ]
+    )
+    else error "TODO: TmSeq"
+
+  -- TmConApp: allocate and create a new struct.
+  | TmConApp { ident = constrIdent, body = body, ty = ty } & t ->
+    let id =
+      match res with Ident id then id
+      else match res with Return _ then
+        infoErrorExit (t.info) "Returning TmConApp is not allowed"
+      else
+        infoErrorExit (t.info) "Type error, should have been caught previously"
+    in
+    match compileAlloc env (None ()) t with (env, def, init, n) then
+      (env, join [
+        map (lam d. CSDef d) def,
+        init,
+        [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
+      ])
+    else never
+
+  | TmRecord { ty = ty, bindings = bindings } & t ->
+    if mapIsEmpty bindings then
+      match res with None _ | Return _ then (env, [CSNop {}])
+      else infoErrorExit (t.info) "Binding of unit type is not allowed"
+    else
+      let id =
+        match res with Ident id then id
+        else match res with Return _ then
+          infoErrorExit (t.info) "Returning TmRecord is not allowed"
+        else
+          infoErrorExit (t.info) "Type error, should have been caught previously"
+      in
+      match compileAlloc env (None ()) t with (env, def, init, n) then
+        (env, join [
+          map (lam d. CSDef d) def,
+          init,
+          [CSExpr { expr = _assign (CEVar { id = id }) (CEVar { id = n })}]
+        ])
+      else never
+
+  -- TmRecordUpdate: allocate and create new struct.
+  | TmRecordUpdate _ -> error "TODO: TmRecordUpdate"
+
+  -- Declare variable and call `compileExpr` on body.
+  | expr ->
+
+    match res with Return _ then
+      if _isUnitTy (ty expr) then
+        match expr with TmVar _ then (env, [])
+        else (env, [CSExpr { expr = compileExpr env expr }])
+      else (env, [CSRet { val = Some (compileExpr env expr) }])
+
+    else match res with None _ then
+      if _isUnitTy (ty expr) then
+        match expr with TmVar _ then (env, [])
+        else (env, [CSExpr { expr = compileExpr env expr }])
+      else infoErrorExit (infoTm expr)
+        "Type error, should have been caught previously"
+
+    else match res with Ident id then
+      (env, [CSExpr {
+        expr = _assign (CEVar { id = id }) (compileExpr env expr)
+      }])
+
+    else never
+
+
+  sem compileStmts (env: CompileCEnv) (res: Result) (acc: [CStmt]) =
 
   | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
-    match compileLet env ident body with (env, defs, inits) then
-      let defs = map (lam def. CSDef def) defs in
-      let acc = join [acc, defs, inits] in
-      compileStmts env final acc inexpr
+
+    -- Optimize direct allocations
+    match body with TmConApp _ | TmRecord _ then
+      match compileAlloc env (Some ident) body with (env, def, init, n) then
+        let acc = join [ acc, map (lam d. CSDef d) def, init ] in
+        compileStmts env res acc inexpr
+      else never
+
+    else
+      let iu = _isUnitTy tyBody in
+      let def =
+        if iu then []
+        else
+          let ty = compileType env tyBody in
+          [CSDef { ty = ty, id = Some ident, init = None () }]
+      in
+      let lres = if iu then None () else Ident ident in
+      match compileStmt env lres body with (env, stmts) then
+        let acc = join [acc, def, stmts] in
+        compileStmts env res acc inexpr
+      else never
+
+  | stmt ->
+    match compileStmt env res stmt with (env, stmts) then
+      (env, join [acc, stmts])
     else never
 
   | TmNever _ -> (env, snoc acc (CSNop {}))
 
   -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileStmts env final acc inexpr
+  | TmExt { inexpr = inexpr } -> compileStmts env res acc inexpr
 
-  -- Return result of `compileExpr` (use `final` to decide between return and
-  -- assign)
-  | stmt ->
-    match final with { name = name } then
-      if _isUnitTy (ty stmt) then
-        match stmt with TmVar _ then (env, acc)
-        else (env, snoc acc (CSExpr { expr = compileExpr env stmt }))
-      else match name with Some ident then
-        (env,
-         snoc acc
-          (CSExpr {
-            expr = CEBinOp { op = COAssign {},
-                             lhs = CEVar { id = ident },
-                             rhs = compileExpr env stmt } }))
-      else match name with None () then
-        (env, snoc acc (CSRet { val = Some (compileExpr env stmt) }))
-      else never
-    else never
 
   -------------------
   -- C EXPRESSIONS --
@@ -677,8 +740,9 @@ lang MExprCCompile = MExprAst + CAst
 
   sem compileExpr (env: CompileCEnv) =
 
-  | TmVar { ty = ty, ident = ident } ->
-    if _isUnitTy ty then error "Unit type var in compileExpr"
+  | TmVar { ty = ty, ident = ident } & t->
+    if _isUnitTy ty then
+      error "Unit type var in compileExpr"
     else match mapLookup ident env.externals with Some ext then
       CEVar { id = ext }
     else CEVar { id = ident }
@@ -838,10 +902,13 @@ let compile: Expr -> CProg = lam prog.
   -- Type lift
   match typeLift prog with (env, prog) then
 
-    -- Run C compiler
-    let cprog = compileGCC env prog in
+  -- Remove redundant lets
+  let prog = removeTypeAscription prog in
 
-    cprog
+  -- Run C compiler
+  let cprog = compileGCC env prog in
+
+  cprog
 
   else never
 in
@@ -872,9 +939,7 @@ utest testCompile simpleFun with strJoin "\n" [
   "#include <stdio.h>",
   "#include <math.h>",
   "int foo(int a, int b) {",
-  "  int t;",
-  "  (t = (a + b));",
-  "  return t;",
+  "  return (a + b);",
   "}",
   "int x;",
   "int main(int argc, char (*argv[])) {",
@@ -924,7 +989,8 @@ utest testCompile constants with strJoin "\n" [
   "  (t8 = (1. < 2.));",
   "  double t9;",
   "  (t9 = (-1.));",
-  "  char (*t10) = \"Hello, world!\";",
+  "  char (*t10);",
+  "  (t10 = \"Hello, world!\");",
   "  (printf(\"%s\", t10));",
   "}",
   "int main(int argc, char (*argv[])) {",
@@ -948,19 +1014,15 @@ utest testCompile factorial with strJoin "\n" [
   "int factorial(int n) {",
   "  char t;",
   "  (t = (n == 0));",
-  "  int t1;",
   "  if ((t == 1)) {",
-  "    (t1 = 1);",
+  "    return 1;",
   "  } else {",
+  "    int t1;",
+  "    (t1 = (n - 1));",
   "    int t2;",
-  "    (t2 = (n - 1));",
-  "    int t3;",
-  "    (t3 = (factorial(t2)));",
-  "    int t4;",
-  "    (t4 = (n * t3));",
-  "    (t1 = t4);",
+  "    (t2 = (factorial(t1)));",
+  "    return (n * t2);",
   "  }",
-  "  return t1;",
   "}",
   "int main(int argc, char (*argv[])) {",
   "  return 0;",
@@ -998,48 +1060,36 @@ utest testCompile oddEven with strJoin "\n" [
   "char odd(int x) {",
   "  char t;",
   "  (t = (x == 1));",
-  "  char t1;",
   "  if ((t == 1)) {",
-  "    (t1 = 1);",
+  "    return 1;",
   "  } else {",
-  "    char t2;",
-  "    (t2 = (x < 1));",
-  "    char t3;",
-  "    if ((t2 == 1)) {",
-  "      (t3 = 0);",
+  "    char t1;",
+  "    (t1 = (x < 1));",
+  "    if ((t1 == 1)) {",
+  "      return 0;",
   "    } else {",
-  "      int t4;",
-  "      (t4 = (x - 1));",
-  "      char t5;",
-  "      (t5 = (even(t4)));",
-  "      (t3 = t5);",
+  "      int t2;",
+  "      (t2 = (x - 1));",
+  "      return (even(t2));",
   "    }",
-  "    (t1 = t3);",
   "  }",
-  "  return t1;",
   "}",
   "char even(int x1) {",
-  "  char t6;",
-  "  (t6 = (x1 == 0));",
-  "  char t7;",
-  "  if ((t6 == 1)) {",
-  "    (t7 = 1);",
+  "  char t3;",
+  "  (t3 = (x1 == 0));",
+  "  if ((t3 == 1)) {",
+  "    return 1;",
   "  } else {",
-  "    char t8;",
-  "    (t8 = (x1 < 0));",
-  "    char t9;",
-  "    if ((t8 == 1)) {",
-  "      (t9 = 0);",
+  "    char t4;",
+  "    (t4 = (x1 < 0));",
+  "    if ((t4 == 1)) {",
+  "      return 0;",
   "    } else {",
-  "      int t10;",
-  "      (t10 = (x1 - 1));",
-  "      char t11;",
-  "      (t11 = (odd(t10)));",
-  "      (t9 = t11);",
+  "      int t5;",
+  "      (t5 = (x1 - 1));",
+  "      return (odd(t5));",
   "    }",
-  "    (t7 = t9);",
   "  }",
-  "  return t7;",
   "}",
   "int main(int argc, char (*argv[])) {",
   "  return 0;",
@@ -1177,7 +1227,6 @@ utest testCompile trees with strJoin "\n" [
   "struct Rec1 t12[1];",
   "struct Tree tree[1];",
   "int treeRec(struct Tree (*t13)) {",
-  "  int t14;",
   "  struct Rec1 (*preMatch) = (t13->Node);",
   "  int preMatch1 = (preMatch->v);",
   "  struct Tree (*preMatch2) = (preMatch->l);",
@@ -1186,28 +1235,23 @@ utest testCompile trees with strJoin "\n" [
   "    int v1 = preMatch1;",
   "    struct Tree (*l1) = preMatch2;",
   "    struct Tree (*r1) = preMatch3;",
+  "    int t14;",
+  "    (t14 = (treeRec(l1)));",
   "    int t15;",
-  "    (t15 = (treeRec(l1)));",
+  "    (t15 = (v1 + t14));",
   "    int t16;",
-  "    (t16 = (v1 + t15));",
-  "    int t17;",
-  "    (t17 = (treeRec(r1)));",
-  "    int t18;",
-  "    (t18 = (t16 + t17));",
-  "    (t14 = t18);",
+  "    (t16 = (treeRec(r1)));",
+  "    return (t15 + t16);",
   "  } else {",
-  "    int t19;",
   "    struct Rec (*preMatch4) = (t13->Leaf);",
   "    int preMatch5 = (preMatch4->v);",
   "    if (((t13->constr) == Leaf)) {",
   "      int v2 = preMatch5;",
-  "      (t19 = v2);",
+  "      return v2;",
   "    } else {",
   "      ;",
   "    }",
-  "    (t14 = t19);",
   "  }",
-  "  return t14;",
   "}",
   "int sum;",
   "int main(int argc, char (*argv[])) {",
