@@ -6,4 +6,5 @@ let rec sum acc s =
     sum (acc + h) t
 
 let s = Rope.create 1000 (fun i -> i)
+
 let _ = Benchmarkcommon.repeat (fun () -> sum 0 s)

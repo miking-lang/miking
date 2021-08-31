@@ -22,13 +22,16 @@ type 'a u =
    allows constant time concatenation. *)
 type 'a t = 'a u ref
 
-let create_array (n : int) (f : int -> 'a) : 'a t =
-  ref (Leaf (Array.init n f))
+let create_array (n : int) (f : int -> 'a) : 'a t = ref (Leaf (Array.init n f))
 
 let empty_array = Obj.magic (ref (Leaf [||]))
 
 let _length_array (s : 'a u) : int =
-  match s with Leaf a -> Array.length a | Slice {len; _} | Concat {len; _} -> len
+  match s with
+  | Leaf a ->
+      Array.length a
+  | Slice {len; _} | Concat {len; _} ->
+      len
 
 let length_array (s : 'a t) : int = _length_array !s
 
@@ -85,8 +88,7 @@ let set_array (s : 'a t) (idx : int) (v : 'a) : 'a t =
         a'.(i) <- v ; Leaf a'
     | Slice {v= value; off; len} ->
         let a' = Array.sub value off len in
-        a'.(i) <- v ;
-        Leaf a'
+        a'.(i) <- v ; Leaf a'
     | Concat {lhs; rhs; len} ->
         let n = _length_array lhs in
         if i < n then Concat {lhs= helper lhs i; rhs; len}
@@ -115,7 +117,7 @@ let split_at_array (s : 'a t) (idx : int) : 'a t * 'a t =
         , ref (Slice {v= a; off= idx; len= n - idx}) )
     | Slice {v; off; _} ->
         ( ref (Slice {v; off; len= idx})
-        , ref (Slice {v; off= off + idx; len= n - idx}))
+        , ref (Slice {v; off= off + idx; len= n - idx}) )
     | Concat _ ->
         let a = _collapse_array s in
         ( ref (Slice {v= a; off= 0; len= idx})
