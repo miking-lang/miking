@@ -39,7 +39,7 @@ let emptyWrapperEnv = {
   ocamlToC = [], cToFuthark = [], futharkToC = [], cToOCaml = [], args = []
 }
 
-lang FutharkCWrapperBase = MExprAst + CAst + MExprPrettyPrint
+lang CWrapperBase = MExprAst + CAst + MExprPrettyPrint
   sem _wosize =
   | id ->
       CEApp {fun = _getIdentExn "Wosize_val", args = [CEVar {id = id}]}
@@ -61,7 +61,7 @@ lang FutharkCWrapperBase = MExprAst + CAst + MExprPrettyPrint
   | ty -> error (join ["Translation of type ", type2str ty, " to C is not supported"])
 end
 
-lang FutharkOCamlToCWrapper = FutharkCWrapperBase
+lang OCamlToCWrapper = CWrapperBase
   sem _generateOCamlToCSequenceWrapper (elemTy : CType) (iterId : Name)
                                        (srcIdent : Name) (dstIdents : [Name]) =
   | whileBody /- : Name -> Name -> [CStmt] -/ ->
@@ -219,7 +219,163 @@ lang FutharkOCamlToCWrapper = FutharkCWrapperBase
     else never
 end
 
-lang FutharkCToOCamlWrapper = FutharkCWrapperBase
+lang CToFutharkWrapper = CWrapperBase
+  sem _generateCToFutharkWrapperInner (ctxIdent : Name) (cElemTy : CType)
+                                      (srcIdents : [Name]) (dimIdents : [Name]) =
+  | TyInt _ | TyChar _ ->
+    let srcIdent = head srcIdents in
+    let dstIdent = nameSym "fut_dst" in
+    [CSDef {
+      ty = cElemTy, id = Some dstIdent,
+      init = Some (CIExpr {expr = CEVar {id = srcIdent}})}]
+  | TyFloat _ ->
+    let srcIdent = head srcIdents in
+    let dstIdent = nameSym "fut_dst" in
+    [CSDef {
+      ty = cElemTy, id = Some dstIdent,
+      init = Some (CIExpr {expr = CEVar {id = srcIdent}})}]
+  | TySeq _ ->
+    let elemTyStr =
+      match cElemTy with CTyVar {id = id} then
+        if nameEq id (_getIdentExn "int64_t") then
+          "i64"
+        else error "Unsupported element type"
+      else match cElemTy with CTyDouble _ then
+        "f64"
+      else error "Unsupported element type" in
+    -- TODO add support for record types
+    let srcIdent = head srcIdents in
+    let numDims = length dimIdents in
+    let seqTypeStr = join [elemTyStr, "_", int2string numDims, "d"] in
+    let seqTypeIdent = nameSym (concat "futhark_" seqTypeStr) in
+    let seqNewIdent = nameSym (concat "futhark_new_" seqTypeStr) in
+    let dstIdent = nameSym "fut_dst" in
+    [CSDef {
+      ty = CTyPtr {ty = CTyStruct {id = Some seqTypeIdent, mem = None ()}},
+      id = Some dstIdent,
+      init = Some (CIExpr {expr = CEApp {
+        fun = seqNewIdent,
+        args =
+          concat
+            [CEVar {id = ctxIdent}, CEVar {id = srcIdent}]
+            (map (lam id. CEVar {id = id}) dimIdents)}})},
+    CSExpr {expr = CEApp {
+      fun = _getIdentExn "free",
+      args = [CEVar {id = srcIdent}]}}]
+
+  sem _generateCToFutharkWrapper (elemTy : CType) (srcIdents : [Name]) (dimIdents : [Name]) =
+  | ty ->
+    let ctxConfigIdent = nameSym "config" in
+    let ctxConfigTypeIdent = nameSym "futhark_context_config" in
+    let ctxConfigFnIdent = nameSym "futhark_context_config_new" in
+    let ctxIdent = nameSym "ctx" in
+    let ctxTypeIdent = nameSym "futhark_context" in
+    let ctxFnIdent = nameSym "futhark_context_new" in
+    join [
+      [CSDef {
+        ty = CTyPtr {ty = CTyStruct {id = Some ctxConfigTypeIdent, mem = None ()}},
+        id = Some ctxConfigIdent,
+        init = Some (CIExpr {expr = CEApp {
+          fun = ctxConfigFnIdent,
+          args = []}})},
+      CSDef {
+        ty = CTyPtr {ty = CTyStruct {id = Some ctxTypeIdent, mem = None ()}},
+        id = Some ctxIdent,
+        init = Some (CIExpr {expr = CEApp {
+          fun = ctxFnIdent,
+          args = [CEVar {id = ctxConfigIdent}]}})}],
+      _generateCToFutharkWrapperInner ctxIdent elemTy srcIdents dimIdents ty]
+end
+
+lang FutharkToCWrapper = CWrapperBase
+  sem _generateFutharkToCWrapperInner (ctxIdent : Name) (dimIdents : [Name])
+                                      (result : (CType, Name)) (dstIdent : Name) =
+  | TyInt _ | TyChar _ | TyFloat _ ->
+    let resultTy = result.0 in
+    let resultId = result.1 in
+    [CSDef {
+      ty = resultTy, id = Some dstIdent,
+      init = Some (CIExpr {expr = CEVar {id = resultId}})}]
+  | ty & (TySeq _) ->
+    let resultTy = result.0 in
+    let resultId = result.1 in
+    -- 1. preallocate C memory
+    -- Need an identifier representing the size of the output.
+    let elemTyStr =
+      match resultTy with CTyVar {id = id} then
+        if nameEq id (_getIdentExn "int64_t") then
+          "i64"
+        else error "Unsupported element type"
+      else match resultTy with CTyDouble _ then
+        "f64"
+      else error "Unsupported element type" in
+    let ndims = length dimIdents in
+    let futTyStr = join [elemTyStr, "_", int2string ndims] in
+    let shapeCallId = nameSym (join ["futhark_shape_", futTyStr, "d"]) in
+    let dimId = nameSym "dim" in
+    let dims = CSDef {
+      ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
+      id = Some dimId,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
+        rhs = CEApp {
+          fun = shapeCallId,
+          args = [CEVar {id = ctxIdent}, CEVar {id = resultId}]}}})} in
+    let sizeId = nameSym "n" in
+    let dimIndices = create ndims (lam i. i) in
+    let sizeExpr =
+      foldl
+        (lam expr. lam ridx.
+          CEBinOp {
+            op = COMul (),
+            lhs = expr,
+            rhs = CEBinOp {
+              op = COSubScript (),
+              lhs = CEVar {id = dimId},
+              rhs = CEInt {i = ridx}}})
+        (CEBinOp {
+          op = COSubScript (),
+          lhs = CEVar {id = dimId},
+          rhs = CEInt {i = head dimIndices}})
+        (tail dimIndices) in
+    let totSize = CSDef {
+      ty = CTyInt (),
+      id = Some sizeId,
+      init = Some (CIExpr {expr = sizeExpr})} in
+    let prealloc = CSDef {
+      ty = CTyPtr {ty = resultTy},
+      id = Some dstIdent,
+      init = Some (CIExpr {expr = CECast {
+        ty = CTyPtr {ty = resultTy},
+        rhs = CEApp {
+          fun = _getIdentExn "malloc",
+          args = [CEBinOp {
+            op = COMul (),
+            lhs = CEVar {id = sizeId},
+            rhs = CESizeOfType {ty = resultTy}}]}}})} in
+
+    -- 2. copy Futhark to C using 'futhark_values_?' function
+    let futValuesStr = join ["futhark_values_", futTyStr, "d"] in
+    let copyFutToC = CSExpr {expr = CEApp {
+      fun = nameSym futValuesStr,
+      args = [CEVar {id = ctxIdent}, CEVar {id = resultId}, CEVar {id = dstIdent}]}} in
+
+    -- 3. free Futhark memory
+    let futFreeStr = join ["futhark_free_", futTyStr, "d"] in
+    let freeFut = CSExpr {expr = CEApp {
+      fun = nameSym futFreeStr,
+      args = [CEVar {id = ctxIdent}, CEVar {id = resultId}]}} in
+    [dims, totSize, prealloc, copyFutToC, freeFut]
+
+  sem _generateFutharkToCWrapper (ctxConfigIdent : Name) (ctxIdent : Name)
+                                 (dimIdents : [Name]) (result : (CType, Name)) =
+  | ty ->
+    let dstIdent = nameSym "c_out" in
+    _generateFutharkToCWrapperInner ctxIdent dimIdents result dstIdent ty
+    -- free ctxConfig and ctx
+end
+
+lang CToOCamlWrapper = CWrapperBase
   sem _generateCToOCamlSequenceWrapper (iterIdent : Name) (dimIdent : Name)
                                        (dimIndex : Int) (dstIdent : Name)
                                        (tag : CExpr) =
@@ -327,7 +483,7 @@ lang FutharkCToOCamlWrapper = FutharkCWrapperBase
     _generateCToOCamlWrapperInner returns dstIdent dimIdent 0 ty
 end
 
-lang FutharkCWrapper = MExprAst + CAst + CProgAst + FutharkOCamlToCWrapper
+lang FutharkCWrapper = MExprAst + CAst + CProgAst + OCamlToCWrapper
   sem _generateWrapperForInputArg (env : FutharkCWrapperEnv) (ident : Name) =
   | TyInt _ | TyChar _ ->
     let cIdent = nameSym "t" in
@@ -420,7 +576,7 @@ lang FutharkCWrapper = MExprAst + CAst + CProgAst + FutharkOCamlToCWrapper
     }
 end
 
-lang Test = FutharkOCamlToCWrapper + FutharkCToOCamlWrapper + CPrettyPrint
+lang Test = OCamlToCWrapper + CToFutharkWrapper + FutharkToCWrapper + CToOCamlWrapper + CPrettyPrint
 
 mexpr
 
@@ -428,14 +584,33 @@ use Test in
 
 let srcIdent = nameSym "src" in
 let dstIdents = [nameSym "dst"] in
-let ocamlArgTy = tyseq_ (tyseq_ tyfloat_) in
+let elemTy = tyfloat_ in
+let ocamlArgTy = tyseq_ (tyseq_ elemTy) in
+let cType = head (mexprToCElementaryTypes elemTy) in
 print (printCStmts 0 pprintEnvEmpty
   (_generateOCamlToCWrapper srcIdent ocamlArgTy)).1;
 
 print "\n\n";
 
+let dim1 = nameSym "dim1" in
+let dim2 = nameSym "dim2" in
+print (printCStmts 0 pprintEnvEmpty
+  (_generateCToFutharkWrapper cType [srcIdent] [dim1, dim2] ocamlArgTy)).1;
+
+print "\n\n";
+
 let returns = [(CTyDouble (), nameSym "dst")] in
+let ctxConfigIdent = nameSym "config" in
+let ctxIdent = nameSym "ctx" in
+let dimIdents = [dim1, dim2] in
+let dstIdent = nameSym "ret" in
+print (printCStmts 0 pprintEnvEmpty
+  (_generateFutharkToCWrapper ctxConfigIdent ctxIdent dimIdents (head returns) ocamlArgTy)).1;
+
+print "\n\n";
+
 let dstIdent = nameSym "out" in
 let dimIdent = nameSym "dim" in
 print (printCStmts 0 pprintEnvEmpty
   (_generateCToOCamlWrapper returns dstIdent dimIdent ocamlArgTy)).1
+
