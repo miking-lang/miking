@@ -84,8 +84,7 @@ let stdlib_loc =
   | None ->
       if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then
         stdlib_loc_unix
-      else
-        stdlib_cwd
+      else stdlib_cwd
 
 let prog_argv : string list ref = ref []
 
