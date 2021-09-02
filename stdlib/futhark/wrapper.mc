@@ -9,11 +9,12 @@ include "mexpr/pprint.mc"
 let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
   let identifiers =
-    ["malloc", "free", "value", "size_t", "int64_t", "Long_val", "Bool_val",
-    "Double_val", "Val_long", "Val_bool", "Val_double", "Wosize_val",
-    "caml_alloc", "Field", "Store_field", "Double_field", "Store_double_field",
-    "Double_array_tag", "futhark_context_config", "futhark_context_config_new",
-    "futhark_context", "futhark_context_config"]
+    ["malloc", "free", "printf", "exit", "value", "size_t", "int64_t",
+    "Long_val", "Bool_val", "Double_val", "Val_long", "Val_bool", "Val_double",
+    "Wosize_val", "caml_alloc", "Field", "Store_field", "Double_field",
+    "Store_double_field", "Double_array_tag", "futhark_context_config",
+    "futhark_context_config_new", "futhark_context", "futhark_context_config",
+    "futhark_context_sync", "futhark_context_get_error"]
   in
   mapFromSeq
     cmpString
@@ -89,6 +90,24 @@ let emptyWrapperEnv = {
   arguments = [], return = [], keywordIdentMap = mapEmpty cmpString,
   futharkContextConfigIdent = nameNoSym "", futharkContextIdent = nameNoSym ""
 }
+
+let getFutharkTypeString : Type -> String = use MExprAst in
+  lam ty.
+  recursive let work = lam dim. lam ty.
+    match ty with TySeq {ty = innerTy} then
+      work (addi dim 1) innerTy
+    else match ty with TyInt _ | TyChar _ then
+      (dim, "i64")
+    else match ty with TyFloat _ then
+      (dim, "f64")
+    else never
+  in
+  match work 0 ty with (dim, elemTyStr) then
+    if eqi dim 0 then
+      elemTyStr
+    else
+      join [elemTyStr, "_", int2string dim, "d"]
+  else never
 
 let getFutharkSeqTypeString : String -> Int -> String =
   lam futharkElementTypeString. lam numDims.
@@ -376,6 +395,96 @@ lang CToFutharkWrapper = CWrapperBase
     else never
 end
 
+lang FutharkCallWrapper = CWrapperBase
+  sem generateFutharkCall =
+  | env ->
+    let env : CWrapperEnv = env in
+    let return = env.return in
+    let functionId = return.ident in
+    let returnType = return.ty in
+
+    -- Declare Futhark return value
+    let futReturnTypeString = getFutharkTypeString returnType in
+    let futReturnTypeIdent = _getIdentOrInitNew futReturnTypeString in
+    let futResultIdent = nameSym "fut_ret" in
+    let futResultDeclStmt = CSDef {
+      ty = CTyVar {id = futReturnTypeIdent},
+      id = Some futResultIdent,
+      init = None ()
+    } in
+    let funcId = nameSym (concat "futhark_entry_" (nameGetStr functionId)) in
+    let returnCodeIdent = nameSym "v" in
+    let returnCodeDeclStmt = CSDef {
+      ty = CTyInt (), id = Some returnCodeIdent, init = None ()
+    } in
+
+    -- Call Futhark entry point
+    let functionCallStmt = CSExpr {expr = CEBinOp (),
+      op = COAssign (),
+      lhs = CEVar {id = returnCodeIdent},
+      rhs = CEApp {
+        fun = funcId,
+        args =
+          concat
+            [ CEVar {id = env.futharkContextIdent}
+            , CEUnOp {op = COAddrOf (), arg = CEVar {id = futResultIdent}} ]
+            (map (lam arg : ArgData. CEVar {id = arg.futIdent}) env.arguments)}
+    } in
+
+    -- Handle Futhark errors by printing the error message and exiting
+    let errorHandlingStmt = CSIf {
+      cond = CEBinOp {
+        op = CONeq (),
+        lhs = CEVar {ident = returnCodeIdent},
+        rhs = CEInt {i = 0}},
+      thn = [
+        CSExpr {expr = CEApp {
+          fun = _getIdentExn "printf",
+          args = [
+            CEString {s = "Runtime error in generated code: %s\\n"},
+            CEApp {
+              fun = _getIdentExn "futhark_context_get_error",
+              args = [CEVar {id = env.futharkContextIdent}]}]}},
+        CSExpr {expr = CEApp {
+          fun = _getIdentExn "exit",
+          args = [CEVar {id = returnCodeIdent}]}}],
+      els = []
+    } in
+    let contextSyncStmt = CSDef {
+      ty = CTyInt (), id = Some returnCodeIdent,
+      init = Some (CIExpr {expr = CEApp {
+        fun = _getIdentExn "futhark_context_sync",
+        args = [CEVar {id = env.futharkContextIdent}]}})
+    } in
+
+    -- Deallocate the Futhark input values
+    let deallocStmts =
+      join
+        (map
+          (lam arg : ArgData.
+            match arg.ty with TySeq _ then
+              let futTypeStr = getFutharkTypeString arg.ty in
+              let futFreeStr = concat "futhark_free_" futTypeStr in
+              let deallocIdent = _getIdentOrInitNew futFreeStr in
+              [CSExpr {expr = CEApp {
+                fun = deallocIdent,
+                args = [
+                  CEVar {id = env.futharkContextIdent},
+                  CEVar {id = arg.futIdent}]}}]
+            else [])
+          env.arguments)
+    in
+
+    let return = {return with futIdent = futResultIdent} in
+    let stmts =
+      concat
+        [futResultDeclStmt, returnCodeDeclStmt, functionCallStmt,
+         errorHandlingStmt, contextSyncStmt, errorHandlingStmt]
+        deallocStmts
+    in
+    ({env with return = return}, stmts)
+end
+
 lang FutharkToCWrapper = CWrapperBase
   sem _generateFutharkToCWrapperInner (ctxIdent : Name) (dimIdents : [Name])
                                       (result : (CType, Name)) (dstIdent : Name) =
@@ -612,6 +721,7 @@ lang FutharkCWrapper = OCamlToCWrapper + CToFutharkWrapper +
       includes = [
         "<stddef.h>",
         "<stdlib.h>",
+        "<stdio.h>",
         "\"program.h\"",
         "\"caml/alloc.h\"",
         "\"caml/memory.h\"",
