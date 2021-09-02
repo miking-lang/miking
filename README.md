@@ -1335,7 +1335,6 @@ instead have to use another opam switch, e.g.
 
 ```
 opam switch 4.12.0
-
 ```
 
 After this you have to rebuild the compiler, e.g.
