@@ -10,11 +10,11 @@ let cWrapperNamesRef = ref (None ())
 let _genCWrapperNames = lam.
   let identifiers =
     ["malloc", "free", "printf", "exit", "value", "size_t", "int64_t",
-    "Long_val", "Bool_val", "Double_val", "Val_long", "Val_bool", "Val_double",
-    "Wosize_val", "caml_alloc", "Field", "Store_field", "Double_field",
-    "Store_double_field", "Double_array_tag", "CAMLlocal1", "CAMLreturn",
-    "futhark_context_config", "futhark_context_config_new", "futhark_context",
-    "futhark_context_new", "futhark_context_config_free",
+    "Long_val", "Bool_val", "Double_val", "Val_long", "Val_bool",
+    "caml_copy_double", "Wosize_val", "caml_alloc", "Field", "Store_field",
+    "Double_field", "Store_double_field", "Double_array_tag", "CAMLlocal1",
+    "CAMLreturn", "futhark_context_config", "futhark_context_config_new",
+    "futhark_context", "futhark_context_new", "futhark_context_config_free",
     "futhark_context_free", "futhark_context_sync",
     "futhark_context_get_error"]
   in
