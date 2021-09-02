@@ -1295,7 +1295,7 @@ since it is part of the standard library. If let's say we wanted to use
 If you use more complicated data-structures, please consult
 [stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
 [stdlib/ext/ext-test.ext-ocaml.mc](stdlib/ext/ext-test.ext-ocaml.mc)
-(and possibly extend[stdlib/ocaml/external.mc](stdlib/ocaml/external.mc)), to
+(and possibly extend [stdlib/ocaml/external.mc](stdlib/ocaml/external.mc)), to
 see how these are converted to and from OCaml. As of now, there is no overhead
 when converting between integers, floats, bools, chars, and tuples of these as
 well as arrow types of these.
@@ -1304,9 +1304,10 @@ well as arrow types of these.
 
 A more involved example on the use of externals is an interface to the
 [Sundials](https://computing.llnl.gov/projects/sundials) numerical DAE solver.
-You find the implementation in [sundials/sundials.mc](sundials/sundials.mc) and
-[sundials/sundials.ext-ocaml.mc](sundials/sundials.ext-ocaml.mc). Note that
-these externals depends on the library `sundialsml`.
+You find the implementation in
+[stdlib/sundials/sundials.mc](stdlib/sundials/sundials.mc) and
+[stdlib/sundials/sundials.ext-ocaml.mc](stdlib/sundials/sundials.ext-ocaml.mc).
+Note that these externals depends on the library `sundialsml`.
 
 
 Installing this library involves first installing the Sundials C library. On
