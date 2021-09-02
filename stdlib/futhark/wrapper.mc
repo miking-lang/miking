@@ -113,6 +113,13 @@ let getFutharkSeqTypeString : String -> Int -> String =
   lam futharkElementTypeString. lam numDims.
   join [futharkElementTypeString, "_", int2string numDims, "d"]
 
+recursive let getDimensionsOfType : Type -> Int = use MExprAst in
+  lam ty.
+  match ty with TySeq {ty = innerTy} then
+    addi 1 (getDimensionsOfType innerTy)
+  else 0
+end
+
 lang CWrapperBase = MExprAst + CAst + MExprPrettyPrint
   sem _wosize =
   | id ->
@@ -486,91 +493,118 @@ lang FutharkCallWrapper = CWrapperBase
 end
 
 lang FutharkToCWrapper = CWrapperBase
-  sem _generateFutharkToCWrapperInner (ctxIdent : Name) (dimIdents : [Name])
-                                      (result : (CType, Name)) (dstIdent : Name) =
-  | TyInt _ | TyChar _ | TyFloat _ ->
-    let resultTy = result.0 in
-    let resultId = result.1 in
-    [CSDef {
-      ty = resultTy, id = Some dstIdent,
-      init = Some (CIExpr {expr = CEVar {id = resultId}})}]
+  sem _generateFutharkToCWrapperInner (ctxIdent : Name) (return : ArgData) =
+  | ty & (TyInt _ | TyChar _ | TyFloat _) ->
+    let ctype = head (mexprToCTypes ty) in
+    let cIdent = nameSym "c_tmp" in
+    let return = {return with cTempVars = [(cIdent, ctype)]} in
+    ( return
+    , [CSDef {
+        ty = ctype, id = Some cIdent,
+        init = Some (CIExpr {expr = CEVar {id = return.futIdent}})}] )
   | ty & (TySeq _) ->
-    let resultTy = result.0 in
-    let resultId = result.1 in
-    -- 1. preallocate C memory
-    -- Need an identifier representing the size of the output.
-    let elemTyStr =
-      match resultTy with CTyVar {id = id} then
-        if nameEq id (_getIdentExn "int64_t") then
-          "i64"
-        else error "Unsupported element type"
-      else match resultTy with CTyDouble _ then
-        "f64"
-      else error "Unsupported element type" in
-    let ndims = length dimIdents in
-    let futTyStr = join [elemTyStr, "_", int2string ndims] in
-    let shapeCallId = nameSym (join ["futhark_shape_", futTyStr, "d"]) in
-    let dimId = nameSym "dim" in
-    let dims = CSDef {
+    let ctype = head (mexprToCTypes ty) in
+    let cIdent = nameSym "c_tmp" in
+    
+    -- Find dimensions of result value through 'futhark_shape_*'
+    let futReturnTypeString = getFutharkTypeString ty in
+    let futharkShapeString = join ["futhark_shape_", futReturnTypeString] in
+    let futharkShapeIdent = nameSym futharkShapeString in
+    let dimIdent = nameSym "dim" in
+    -- NOTE(larshum, 2021-09-02): We cast away the const because the current C
+    -- AST implementation does not support const types.
+    let dimsStmt = CSDef {
       ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
-      id = Some dimId,
+      id = Some dimIdent,
       init = Some (CIExpr {expr = CECast {
         ty = CTyPtr {ty = CTyVar {id = _getIdentExn "int64_t"}},
         rhs = CEApp {
-          fun = shapeCallId,
-          args = [CEVar {id = ctxIdent}, CEVar {id = resultId}]}}})} in
-    let sizeId = nameSym "n" in
-    let dimIndices = create ndims (lam i. i) in
-    let sizeExpr =
-      foldl
-        (lam expr. lam ridx.
-          CEBinOp {
-            op = COMul (),
-            lhs = expr,
-            rhs = CEBinOp {
+          fun = futharkShapeIdent,
+          args = [
+            CEVar {id = ctxIdent},
+            CEVar {id = return.futIdent}]}}})
+    } in
+    let sizeIdent = nameSym "n" in
+    let sizeDeclStmt = CSDef {
+      ty = CTyInt (), id = Some sizeIdent, init = CEInt {i = 1}
+    } in
+    let ndims = getDimensionsOfType ty in
+    let dimIdents = create ndims (lam. nameSym "d") in
+    let dimInitStmts =
+      mapi
+        (lam i. lam ident.
+          CSDef {
+            ty = CTyInt (), id = Some ident,
+            init = CEBinOp {
               op = COSubScript (),
-              lhs = CEVar {id = dimId},
-              rhs = CEInt {i = ridx}}})
-        (CEBinOp {
-          op = COSubScript (),
-          lhs = CEVar {id = dimId},
-          rhs = CEInt {i = head dimIndices}})
-        (tail dimIndices) in
-    let totSize = CSDef {
-      ty = CTyInt (),
-      id = Some sizeId,
-      init = Some (CIExpr {expr = sizeExpr})} in
-    let prealloc = CSDef {
-      ty = CTyPtr {ty = resultTy},
-      id = Some dstIdent,
+              lhs = CEVar {id = dimIdent},
+              rhs = CEInt {i = i}}})
+        dimIdents
+    in
+    let dimProdStmts =
+      foldl
+        (lam expr. lam id.
+          CEBinOp {op = COMul (), lhs = expr, rhs = CEVar {id = id}})
+        (CEVar {id = head dimIdents})
+        (tail dimIdents)
+    in
+
+    -- Preallocate C memory using the size found in previous step
+    let preallocStmt = CSDef {
+      ty = ctype,
+      id = Some cIdent,
       init = Some (CIExpr {expr = CECast {
-        ty = CTyPtr {ty = resultTy},
+        ty = ctype,
         rhs = CEApp {
           fun = _getIdentExn "malloc",
           args = [CEBinOp {
             op = COMul (),
-            lhs = CEVar {id = sizeId},
-            rhs = CESizeOfType {ty = resultTy}}]}}})} in
+            lhs = CEVar {id = sizeIdent},
+            rhs = CESizeOfType {ty = ctype}}]}}})
+    } in
 
-    -- 2. copy Futhark to C using 'futhark_values_?' function
-    let futValuesStr = join ["futhark_values_", futTyStr, "d"] in
-    let copyFutToC = CSExpr {expr = CEApp {
-      fun = nameSym futValuesStr,
-      args = [CEVar {id = ctxIdent}, CEVar {id = resultId}, CEVar {id = dstIdent}]}} in
+    -- Copy from Futhark to C using 'futhark_values_*' function
+    let futValuesString = join ["futhark_values_", futReturnTypeString] in
+    let futValuesIdent = _getIdentOrInitNew futValuesString in
+    let copyFutharkToCStmt = CSExpr {expr = CEApp {
+      fun = futValuesIdent,
+      args = [
+        CEVar {id = ctxIdent},
+        CEVar {id = return.futIdent},
+        CEVar {id = cIdent}]
+    }} in
 
-    -- 3. free Futhark memory
-    let futFreeStr = join ["futhark_free_", futTyStr, "d"] in
-    let freeFut = CSExpr {expr = CEApp {
-      fun = nameSym futFreeStr,
-      args = [CEVar {id = ctxIdent}, CEVar {id = resultId}]}} in
-    [dims, totSize, prealloc, copyFutToC, freeFut]
+    -- Free Futhark memory
+    let futFreeString = join ["futhark_free_", futReturnTypeString] in
+    let futFreeIdent = _getIdentOrInitNew futFreeString in
+    let freeFutharkStmt = CSExpr {expr = CEApp {
+      fun = futFreeIdent,
+      args = [CEVar {id = ctxIdent}, CEVar {id = return.futIdent}]
+    }} in
 
-  sem _generateFutharkToCWrapper (ctxConfigIdent : Name) (ctxIdent : Name)
-                                 (dimIdents : [Name]) (result : (CType, Name)) =
-  | ty ->
-    let dstIdent = nameSym "c_out" in
-    _generateFutharkToCWrapperInner ctxIdent dimIdents result dstIdent ty
-    -- free ctxConfig and ctx
+    let return = {{{return with cTempVars = [(cIdent, ctype)]}
+                           with dimIdents = dimIdents}
+                           with sizeIdent = sizeIdent}
+    in
+    (return, join [[dimsStmt], dimInitStmts, dimProdStmts,
+                   [preallocStmt, copyFutharkToCStmt, freeFutharkStmt]])
+
+  sem generateFutharkToCWrapper =
+  | env ->
+    let env : CWrapperEnv = env in
+    let freeContextStmts = [
+      CSExpr {expr = CEApp {
+        fun = _getIdentExn "futhark_context_free",
+        args = [CEVar {id = env.futharkContextIdent}]}},
+      CSExpr {expr = CEApp {
+        fun = _getIdentExn "futhark_context_config_free",
+        args = [CEVar {id = env.futharkContextConfigIdent}]}}
+    ] in
+    let futCtx = env.futharkContextIdent in
+    match _generateFutharkToCWrapperInner futCtx env.return env.return.ty
+    with (return, copyStmts) then
+      ({env with return = return}, concat copyStmts freeContextStmts)
+    else never
 end
 
 lang CToOCamlWrapper = CWrapperBase
@@ -695,7 +729,7 @@ lang FutharkCWrapper = OCamlToCWrapper + CToFutharkWrapper +
                                 with return = toArgData function} in
     match generateOCamlToCWrapper env with (env, stmt1) then
       match generateCToFutharkWrapper env with (env, stmt2) then
-        match mapAccumL (_generateFutharkToCWrapper env) args with (env, stmt3) then
+        match generateFutharkToCWrapper env with (env, stmt3) then
           match mapAccumL (_generateCToOCamlWrapper env) args with (env, stmt4) then
             let value = _getIdentExn "value" in
             let withValueType = lam arg : (Name, Type).
@@ -759,8 +793,8 @@ let ctxConfigIdent = nameSym "config" in
 let ctxIdent = nameSym "ctx" in
 let dimIdents = [dim1, dim2] in
 let dstIdent = nameSym "ret" in
-print (printCStmts 0 pprintEnvEmpty
-  (_generateFutharkToCWrapper ctxConfigIdent ctxIdent dimIdents (head returns) ocamlArgTy)).1;
+--print (printCStmts 0 pprintEnvEmpty
+--  (_generateFutharkToCWrapper ctxConfigIdent ctxIdent dimIdents (head returns) ocamlArgTy)).1;
 
 print "\n\n";
 
