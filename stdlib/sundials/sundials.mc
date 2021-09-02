@@ -17,12 +17,12 @@ con IdaStopTimeReached : {} -> IdaSolverResult
 con IdaRootsFound : {} -> IdaSolverResult
 
 type IdaJacArgs = {
-       t : Float,
-       y : Tensor[Float],
-       yp : Tensor[Float],
-       res : Tensor[Float],
-       c : Float,
-       tmp : (Tensor[Float], Tensor[Float], Tensor[Float])
+  t : Float,
+  y : Tensor[Float],
+  yp : Tensor[Float],
+  res : Tensor[Float],
+  c : Float,
+  tmp : (Tensor[Float], Tensor[Float], Tensor[Float])
 }
 
 type IdaJacFn = IdaJacArgs -> SundialsMatrixDense -> ()

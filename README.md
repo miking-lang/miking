@@ -1074,49 +1074,11 @@ interpreters to achieve the same thing.
     an overriding case for that interpreter.
 
 
-
 ## Externals (builtin)
 
 As part of the experimental setup of Miking, we currently support a way
 to use external libraries without interfering with the development of
 Miking that does not need these external dependencies.
-
-### Sundials
-One of the external dependencies is Sundials, a numerical library for
-solving differential equations.  To build the project with sundials
-integration you need to install the
-[Sundials](https://computing.llnl.gov/projects/sundials) library on
-your system.
-
-This involves installing the C library. On `ubuntu 20.04` you can issue:
-
-```
-sudo apt-get install libsundials-dev
-```
-
-On `macOS`, using Homebrew, you can install Sundials using command:
-
-```
-brew install sundials
-```
-
-
-Then install the ocaml bindings
-[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
-
-```
-opam install sundialsml
-```
-
-`mi` will automatically be compiled with sundials support when the `sundialsml` package is installed.
-To run the sundials-specific test suite, use the command:
-
-```
-make test-sundials
-```
-
-To install for the current user, run `make install` as usual. The sundials
-interface can only be used in compiled code.
 
 ### Python
 Another optional feature is Python intrinsics, which allow calling Python code
@@ -1257,21 +1219,29 @@ dune install
 after building miking with python intrinsics support.
 
 ## Externals
-Externals are currently only compiled.
 
-As example of how you define an external see
-[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) and
-[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc).
+Externals allows you to interact with code in the compilation target language
+from miking. Currently, externals are only available in compiled code and are
+in an early stage of development. The example below only covers the case where
+OCaml is the target language.
 
-[./stdlib/ext/batteries.mc](./stdlib/ext/batteries.mc) defines the MLang part
-of the definition, e.g.
+You can find an example of externals definitions in
+[stdlib/ext/math-ext.mc](stdlib/ext/math-ext.mc) and
+[stdlib/ext/math-ext.ext-ocaml.mc](stdlib/ext/math-ext.ext-ocaml.mc).
+
+For the sake of this example, lets say we want to define the exponential
+function and that miking targeting OCaml should use `Float.exp` from OCaml's
+standard library for its implementation.
+
+We first define the external in a file under [stdlib/ext](stdlib/ext), let's
+say [stdlib/ext/math-ext.mc](stdlib/ext/math-ext.mc), as
 
 ```
-external batteriesZero : Int
+external externalExp : Float -> Float
 ```
 
-which makes an external value `batteriesZero` of type `Int` available at the
-top-level. The corresponding MCore syntax is:
+which makes an external value `externalExp` of type `Float -> Float` available
+at the top-level. The corresponding MCore syntax is:
 
 ```
 external ident : Type in expr
@@ -1281,43 +1251,106 @@ If the external has side-effects it should be annotated with a `!` after the
 identifier, e.g.
 
 ```
-external print ! : String -> () in expr
+external print ! : String -> ()
 ```
 
 Each external identifier can only be defined once and externals cannot be
 partially applied.
 
-[./stdlib/ext/batteries.ext-ocaml.mc](./stdlib/ext/batteries.ext-ocaml.mc)
-defines the OCaml part of the external definition:
+
+As a temporary solution, the next step is to supply a list of implementation for
+our external in the language we target for compilation (in this case OCaml). We
+do this by creating a file
+[stdlib/ext/math-ext.ext-ocaml.mc](stdlib/ext/math-ext.ext-ocaml.mc)
+and in it we define a map from external
+identifiers to a list of implementations as follows:
 
 ```
+include "map.mc"
 include "ocaml/ast.mc"
 
-let batteries =
+let mathExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
-    ("batteriesZero", [
-      { ident = "BatInt.zero", ty = tyint_, libraries = ["batteries"] }
+    ("externalExp", [
+      { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
     ])
   ]
 ```
 
-As a temporary solution, this definition is written as an MLang program and
-should define a map from external identifiers to a list of records defining
-implementations associated with this external identifier. The record field
-`ident` defines an OCaml identifier, the field `ty` defines the OCaml type of
-this identifier (see [./stdlib/ocaml/ast.mc](./stdlib/ocaml/ast.mc)), and the
-field `libraries` defines a sequence of libraries this external depends on.
+This map associates the `externalExp` external to a list of implementations,
+which here only has one element, namely the function `Float.exp` from OCaml's
+standard library. The field `ty` encode the OCaml type of this value (see
+[stdlib/ocaml/ast.mc](stdlib/ocaml/ast.mc)), which is needed to convert values
+between miking and OCaml. In the case where you have multiple implementations,
+the compiler will try to pick the implementation which gives the least amount of
+overhead when converting to and from OCaml values. The `libraries` field list
+libraries that are needed to call this function. In this case none is needed
+since it is part of the standard library. If let's say we wanted to use
+`Float.exp` from a library `foo`, then we should instead have the field `libraries =
+["foo"]`. Finally, we need to add `mathExtMap` to `globalExternalImplsMap` in
+[stdlib/ocaml/external-includes.mc](stdlib/ocaml/external-includes.mc).
 
-Programs defining externals should be placed under [./stdlib/ext](./stdlib/ext)
-and follow the above naming convention to avoid failing test for the
-interpreter. Additionally, the implementation map, in this case `batteries`,
-should be added to `globalExternalImplsMap` in
-[./stdlib/ocaml/external-includes.mc](./stdlib/ocaml/external-includes.mc).
+If you use more complicated data-structures, please consult
+[stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
+[stdlib/ext/ext-test.ext-ocaml.mc](stdlib/ext/ext-test.ext-ocaml.mc)
+(and possibly extend[stdlib/ocaml/external.mc](stdlib/ocaml/external.mc)), to
+see how these are converted to and from OCaml. As of now, there is no overhead
+when converting between integers, floats, bools, chars, and tuples of these as
+well as arrow types of these.
 
-Morever, depending on the type of the external you might have to extend the
-definition in [./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
+### Sundials
+
+A more involved example on the use of externals is an interface to the
+[Sundials](https://computing.llnl.gov/projects/sundials) numerical DAE solver.
+You find the implementation in [sundials/sundials.mc](sundials/sundials.mc) and
+[sundials/sundials.ext-ocaml.mc](sundials/sundials.ext-ocaml.mc). Note that
+these externals depends on the library `sundialsml`.
+
+
+Installing this library involves first installing the Sundials C library. On
+`ubuntu 20.04` you can do this by:
+
+```
+sudo apt-get install libsundials-dev
+```
+
+On `macOS`, using Homebrew, you instead do:
+
+```
+brew install sundials
+```
+
+Then install the ocaml bindings
+[SundialsML](https://inria-parkas.github.io/sundialsml/) via `opam`
+
+```
+opam install sundialsml
+```
+
+Currently, this library cannot be installed on the multi-core switch but you
+instead have to use another opam switch, e.g.
+
+```
+opam switch 4.12.0
+
+```
+
+After this you have to rebuild the compiler, e.g.
+
+```
+make clean
+make
+```
+
+To run the sundials-specific test suite, use the command:
+
+```
+make test-sundials
+```
+
+To install for the current user, run `make install` as usual.
 
 ## Contributing
 
