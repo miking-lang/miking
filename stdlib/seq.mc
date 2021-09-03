@@ -374,17 +374,19 @@ utest isSuffix eqi [1,2,3] [1,2,3] with true
 utest isSuffix eqi [1,2,3] [1,1,2,3] with true
 utest isSuffix eqi [1,1,2,3] [1,2,3] with false
 
-recursive
 let seqCmp : (a -> a -> Int) -> [a] -> [a] -> Int = lam cmp. lam s1. lam s2.
-  if and (null s1) (null s2) then 0
-  else if null s1 then subi 0 1
-  else if null s2 then 1
-  else
-    let d = cmp (head s1) (head s2) in
-    match d with 0 then
-      seqCmp cmp (tail s1) (tail s2)
-    else d
-end
+  recursive let work = lam s1. lam s2.
+    match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
+      let c = cmp h1 h2 in
+      if eqi c 0 then work t1 t2
+      else c
+    else 0
+  in
+  let n1 = length s1 in
+  let n2 = length s2 in
+  let ndiff = subi n1 n2 in
+  if eqi ndiff 0 then work s1 s2
+  else ndiff
 
 utest seqCmp subi [] [] with 0
 utest seqCmp subi [1,2,3] [1,2,3] with 0

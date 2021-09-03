@@ -150,15 +150,17 @@ utest nameGetSym (nameSetSym (nameNoSym "foo") _s) with Some _s using optionEq e
 -- 'nameCmp n1 n2' compares two names lexicographically.
 let nameCmp : Name -> Name -> Int =
   lam n1 : Name. lam n2 : Name.
-    if nameEq n1 n2 then
-      0
-    else if and (nameHasSym n1) (nameHasSym n2) then
-      subi (sym2hash (optionGetOrElse (lam. error "Expected symbol") (nameGetSym n1)))
-           (sym2hash (optionGetOrElse (lam. error "Expected symbol") (nameGetSym n2)))
-    else if (nameHasSym n1) then subi 0 1
-    else if (nameHasSym n2) then 1
-    else
-      cmpString (nameGetStr n1) (nameGetStr n2)
+    let sym1 = nameHasSym n1 in
+    let sym2 = nameHasSym n2 in
+    if sym1 then
+      if sym2 then
+        subi (sym2hash (optionGetOrElse (lam. error "Expected symbol")
+                                        (nameGetSym n1)))
+             (sym2hash (optionGetOrElse (lam. error "Expected symbol")
+                                        (nameGetSym n2)))
+      else negi 1
+    else if sym2 then 1
+    else cmpString (nameGetStr n1) (nameGetStr n2)
 
 let _s1 = gensym ()
 let _s2 = gensym ()
