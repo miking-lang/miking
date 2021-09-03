@@ -77,20 +77,7 @@ utest gtString "xy" "y" with false
 -- String comparison giving a total ordering of strings.
 -- cmpString s1 s2 returns >0 or <0 if s1 lexicographically
 -- greater respectively smaller than s2, else 0.
-recursive
-  let cmpString: String -> String -> Int = lam s1. lam s2.
-    if and (null s1) (null s2) then
-      0
-    else if null s1 then
-      subi 0 1
-    else if null s2 then
-      1
-    else
-      let d = cmpChar (head s1) (head s2) in
-      match d with 0 then
-        cmpString (tail s1) (tail s2)
-      else d
-end
+let cmpString : String -> String -> Int = seqCmp cmpChar
 
 utest cmpString "" "" with 0
 utest cmpString "Hello" "Hello" with 0

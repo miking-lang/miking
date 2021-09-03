@@ -6,7 +6,7 @@ Miking is a meta language-system for creating DSLs.
 This is the Miking bootstrap interpreter.
 """
 maintainer: ["David Broman <dbro@kth.se>"]
-depends: ["dune" "batteries" "linenoise"]
+depends: ["dune" "linenoise"]
 build: [
   ["dune" "subst"] {pinned}
   [
