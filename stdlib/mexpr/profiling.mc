@@ -1,3 +1,27 @@
+-- Instruments performance profiling into a given AST. The profiling is
+-- instrumented on every let-expression and recursive binding defined on the
+-- top-level, whose body is a lambda term.
+--
+-- At the end of the AST, code is instrumented for storing the profiling
+-- results in a file 'mexpr.prof'. This file will contain one line for every
+-- top-level function that was called at least once during the execution of the
+-- program. The contents of a line are the following space-separated values:
+-- 1. The name of the file and the position within the file where the function
+--    is defined.
+-- 2. The name of the function.
+-- 3. The number of calls made to the function, including self-recursive calls.
+-- 4. The exclusive time spent within the function - this excludes the time
+--    spent in its calls to other top-level functions.
+-- 5. The inclusive time of the function.
+--
+-- Known limitations:
+-- * The file to which the profiling results are stored is currently hard-coded
+--   as 'mexpr.prof'.
+-- * Intrinsic functions are not profiled.
+-- * Prevents the OCaml compiler from doing tail-call optimizations.
+-- * A partially applied function, such as x in `let x = head`, is not profiled
+--   because its body is not a lambda term.
+
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/eval.mc"
