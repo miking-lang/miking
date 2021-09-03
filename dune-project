@@ -11,5 +11,4 @@
  )
  (depends
   dune
-  batteries
   linenoise))
