@@ -5,6 +5,7 @@ include "options.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/utesttrans.mc"
 include "mexpr/tuning/decision-points.mc"
 include "mexpr/tuning/tune.mc"
@@ -35,6 +36,7 @@ let generateTests = lam ast. lam testsEnabled.
   if testsEnabled then
     let ast = symbolize ast in
     let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
     utestGen ast
   else
     let symEnv = symEnvEmpty in
@@ -102,6 +104,7 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
     let ast = typeAnnot ast in
+    let ast = removeTypeAscription ast in
 
     -- If option --debug-type-annot, then pretty print the AST
     (if options.debugTypeAnnot then printLn (pprintMcore ast) else ());

@@ -4,7 +4,6 @@ open Ast
 open Pprint
 open Msg
 open Symbutils
-module Option = BatOption
 
 (* Tab length when calculating the info field *)
 let tablength = 8
@@ -67,13 +66,16 @@ let raise_parse_error_on_partially_applied_external t =
   let _ = recur (SymbMap.empty, 0, NoInfo) t in
   t
 
+(* Current working directory standard library path *)
+let stdlib_cwd = Sys.getcwd () ^ Filename.dir_sep ^ "stdlib"
+
 (* Standard lib default local path on unix (used by make install) *)
 let stdlib_loc_unix =
   match Sys.getenv_opt "HOME" with
   | Some home ->
       home ^ "/.local/lib/mcore/stdlib"
   | None ->
-      "@@@"
+      stdlib_cwd
 
 let stdlib_loc =
   match Sys.getenv_opt "MCORE_STDLIB" with
@@ -82,7 +84,7 @@ let stdlib_loc =
   | None ->
       if Sys.os_type = "Unix" && Sys.file_exists stdlib_loc_unix then
         stdlib_loc_unix
-      else "@@@"
+      else stdlib_cwd
 
 let prog_argv : string list ref = ref []
 

@@ -13,6 +13,7 @@
   boot\
   test\
   install\
+  install-boot\
   lint\
   fix\
   clean\
@@ -39,7 +40,10 @@ build/mi: boot
 
 test: test-boot-base
 
-install:
+install: build/mi boot
+	@./make install
+
+install-boot: boot
 	@./make install
 
 lint:

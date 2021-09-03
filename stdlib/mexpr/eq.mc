@@ -371,7 +371,6 @@ lang SeqOpEq = SeqOpAst
   | CMapi {} -> match lhs with CMapi _ then true else false
   | CIter {} -> match lhs with CIter _ then true else false
   | CIteri {} -> match lhs with CIteri _ then true else false
-  | CCreateFingerTree {} -> match lhs with CCreateFingerTree _ then true else false
   | CCreateList {} -> match lhs with CCreateList _ then true else false
   | CCreateRope {} -> match lhs with CCreateRope _ then true else false
   | CSubsequence {} -> match lhs with CSubsequence _ then true else false

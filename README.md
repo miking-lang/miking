@@ -17,11 +17,11 @@ opam switch create 4.12.0+domains --packages=ocaml-variants.4.12.0+domains --rep
 eval $(opam env)
 ```
 
-After this, you need to install the `opam` packages `dune`, `batteries`, and
-`linenoise` by running the following:
+After this, you need to install the `opam` packages `dune` and `linenoise` by
+running the following:
 
 ```
-opam install dune batteries linenoise
+opam install dune linenoise
 ```
 
 Note that the `opam switch` command lets you have several OCaml installations on
@@ -1130,6 +1130,13 @@ opam install pyml
 ```
 
 `mi` will automatically be compiled with Python support when the `pyml` package is installed.
+
+NOTE: Currently, there seems to be a problem with the current OPAM bindings with the multicore switch. If the above command fails, try to run the following and then install `pyml` again:
+
+```
+opam pin stdcompat 15
+```
+
 To run the Python-specific test suite, set the `MI_TEST_PYTHON` variable before running `make test`:
 
 ```

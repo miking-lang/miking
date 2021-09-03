@@ -6,22 +6,22 @@ include "char.mc"
 include "name.mc"
 include "intrinsics-ops.mc"
 
-let isValidChar = lam c.
+let _isValidChar = lam c.
   or (isAlphanum c) (or (eqChar c '_') (eqChar c '\''))
 
-let escapeChar = lam c.
-  if isValidChar c then c else '_'
+let _escapeChar = lam c.
+  if _isValidChar c then c else '_'
 
-utest map escapeChar "abcABC/:@_'" with "abcABC____'"
+utest map _escapeChar "abcABC/:@_'" with "abcABC____'"
 
 let escapeVarString = lam s.
-  concat "v_" (map escapeChar s)
+  concat "v_" (map _escapeChar s)
 
 let escapeConString = lam s.
-  concat "C" (map escapeChar s)
+  concat "C" (map _escapeChar s)
 
 let escapeLabelString = lam s.
-  concat "l" (map escapeChar s)
+  concat "l" (map _escapeChar s)
 
 utest escapeVarString "abcABC/:@_'" with "v_abcABC____'"
 utest escapeVarString "" with "v_"
@@ -213,7 +213,6 @@ lang OCamlPrettyPrint =
   | CString2float _ -> intrinsicOpFloat "string2float"
   | CFloat2string _ -> intrinsicOpFloat "float2string"
   | CCreate _ -> intrinsicOpSeq "create"
-  | CCreateFingerTree _ -> intrinsicOpSeq "create_fingertree"
   | CCreateList _ -> intrinsicOpSeq "create_list"
   | CCreateRope _ -> intrinsicOpSeq "create_rope"
   | CLength _ -> intrinsicOpSeq "length"

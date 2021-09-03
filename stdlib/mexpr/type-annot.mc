@@ -28,13 +28,6 @@ let _typeEnvEmpty = {
   tyEnv  = mapEmpty nameCmp
 }
 
-let _isTypeAscription = use MExprAst in
-  lam letTerm : {ident : Name, tyBody : Type, body : Expr,
-                 inexpr : Expr, ty : Type, info : Info}.
-  match letTerm.inexpr with TmVar {ident = id} then
-    nameEq letTerm.ident id
-  else false
-
 let _pprintType = use MExprPrettyPrint in
   lam ty.
   match getTypeStringCode 0 pprintEnvEmpty ty with (_,tyStr) then
@@ -275,15 +268,12 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst
         propagateExpectedType tyEnv (t.tyBody, t.body) in
       let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (ty body) with Some tyBody then
-        if _isTypeAscription t then
-          withType tyBody body
-        else
-          let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
-          let inexpr = typeAnnotExpr env t.inexpr in
-          TmLet {{{{t with tyBody = tyBody}
-                      with body = withType tyBody body}
-                      with inexpr = inexpr}
-                      with ty = ty inexpr}
+        let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
+        let inexpr = typeAnnotExpr env t.inexpr in
+        TmLet {{{{t with tyBody = tyBody}
+                    with body = withType tyBody body}
+                    with inexpr = inexpr}
+                    with ty = ty inexpr}
       else
         let msg = join [
           "Inconsistent type annotation of let-expression\n",

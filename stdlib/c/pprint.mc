@@ -166,10 +166,13 @@ lang CExprTypePrettyPrint = CExprTypeAst
 
   | CEVar { id = id } -> pprintEnvGetStr env id
 
+  -- NOTE(larshum, 2021-09-03): We might need to add parentheses around
+  -- applications in the future, if we add support for scope resolution
+  -- (see https://en.cppreference.com/w/cpp/language/operator_precedence).
   | CEApp { fun = fun, args = args } ->
     match pprintEnvGetStr env fun with (env,fun) then
       match mapAccumL printCExpr env args with (env,args) then
-        (env, _par (join [fun, "(", (strJoin ", " args), ")"]))
+        (env, join [fun, "(", (strJoin ", " args), ")"])
       else never
     else never
 
@@ -619,7 +622,7 @@ utest printTest (wrapStmt ifstmt) with
   wrapStmtString (strJoin "\n" [
     "if (2) {",
     "  x;",
-    "  (fun(1, 'a'));",
+    "  fun(1, 'a');",
     "} else {",
     "  ",
     "}"
@@ -771,7 +774,7 @@ utest printTest (wrapStmt sw) with
     "  case 5:",
     "    x;",
     "  case 7:",
-    "    (fun(1, 'a'));",
+    "    fun(1, 'a');",
     "    break;",
     "  default:",
     "    (s._0x);",
@@ -794,7 +797,7 @@ let while = CSWhile {
 utest printTest (wrapStmt while) with
   wrapStmtString (strJoin "\n" [
     "while (42) {",
-    "  (fun(1, 'a'));",
+    "  fun(1, 'a');",
     "  {",
     "    x;",
     "    (s._0x);",
@@ -878,10 +881,10 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "  (( struct structty (*(*(*)(char))(int (double))) ) 1);",
   "  (sizeof(struct structty (*(*(*)(char))(int (double)))));",
   "  (x = ((-1) * 3));",
-  "  (fun(1, 'a'));",
+  "  fun(1, 'a');",
   "  if (2) {",
   "    x;",
-  "    (fun(1, 'a'));",
+  "    fun(1, 'a');",
   "  } else {",
   "    ",
   "  }",
@@ -892,13 +895,13 @@ utest printCProg [mainname] prog with strJoin "\n" [
   "    case 5:",
   "      x;",
   "    case 7:",
-  "      (fun(1, 'a'));",
+  "      fun(1, 'a');",
   "      break;",
   "    default:",
   "      (s._0x);",
   "  }",
   "  while (42) {",
-  "    (fun(1, 'a'));",
+  "    fun(1, 'a');",
   "    {",
   "      x;",
   "      (s._0x);",

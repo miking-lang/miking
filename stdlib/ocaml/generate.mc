@@ -7,6 +7,7 @@ include "mexpr/info.mc"
 include "mexpr/parser.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
+include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/cmp.mc"
 include "mexpr/type.mc"
@@ -102,7 +103,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
       else never
     else never
 
-  sem collectNestedMatchesByConstructor (env : GenerateEnv) =
+  sem collectNestedMatches (env : GenerateEnv) (isNestedPat : Pat -> Bool)
+                           (acc : a) (addMatchCase : a -> MatchRecord -> a) =
   | t ->
     let t : MatchRecord = t in
     -- We assume that the target is a variable because otherwise there is no
@@ -118,33 +120,65 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
     in
     recursive let collectMatchTerms = lam acc. lam t : MatchRecord.
       if eqTarget t.target then
-        match t.pat with PatCon pc then
-          let acc =
-            match mapLookup pc.ident acc with Some pats then
-              let pats = cons (pc.subpat, t.thn) pats in
-              mapInsert pc.ident pats acc
-            else
-              mapInsert pc.ident [(pc.subpat, t.thn)] acc
-          in
+        if isNestedPat t.pat then
+          let acc = addMatchCase acc t in
           match t.els with TmMatch tm then
             collectMatchTerms acc tm
-          else Some (acc, t.els)
-        else None ()
-      else None ()
+          else (acc, t.els)
+        else (acc, TmMatch t)
+      else (acc, TmMatch t)
     in
-    collectMatchTerms (mapEmpty nameCmp) t
+    collectMatchTerms acc t
+
+  sem collectNestedMatchesByConstructor (env : GenerateEnv) =
+  | t ->
+    collectNestedMatches env
+      (lam pat. match pat with PatCon _ then true else false)
+      (mapEmpty nameCmp)
+      (lam acc. lam t : MatchRecord.
+         match t.pat with PatCon pc then
+           match mapLookup pc.ident acc with Some pats then
+             let pats = cons (pc.subpat, t.thn) pats in
+             mapInsert pc.ident pats acc
+           else
+             mapInsert pc.ident [(pc.subpat, t.thn)] acc
+         else never) t
 
   sem generate (env : GenerateEnv) =
   | TmMatch ({pat = (PatBool {val = true})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.thn) (generate env t.els)
   | TmMatch ({pat = (PatBool {val = false})} & t) ->
     _if (objMagic (generate env t.target)) (generate env t.els) (generate env t.thn)
-  | TmMatch ({pat = PatInt {val = i}} & t) ->
-    let cond = generate env (eqi_ (int_ i) t.target) in
-    _if (objMagic cond) (generate env t.thn) (generate env t.els)
-  | TmMatch ({pat = PatChar {val = c}} & t) ->
-    let cond = generate env (eqc_ (char_ c) t.target) in
-    _if cond (generate env t.thn) (generate env t.els)
+  | TmMatch ({pat = PatInt _, target = TmVar _} & t) ->
+    match
+      collectNestedMatches env
+        (lam pat. match pat with PatInt _ then true else false) []
+        (lam acc. lam t : MatchRecord. snoc acc (t.pat, generate env t.thn)) t
+    with (arms, defaultCase) then
+      _omatch_ (generate env t.target)
+        (snoc arms (pvarw_, generate env defaultCase))
+    else never
+  | TmMatch ({pat = PatInt _} & t) ->
+    _omatch_ (generate env t.target)
+      [(t.pat, generate env t.thn), (pvarw_, generate env t.els)]
+  | TmMatch ({pat = PatChar {val = c}, target = TmVar _} & t) ->
+    match
+      collectNestedMatches env
+        (lam pat. match pat with PatChar _ then true else false) []
+        (lam acc. lam t : MatchRecord.
+          match t.pat with PatChar pc then
+            let pat =
+              PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty}
+            in snoc acc (pat, generate env t.thn)
+          else never) t
+    with (arms, defaultCase) then
+      _omatch_ (generate env t.target)
+        (snoc arms (pvarw_, generate env defaultCase))
+    else never
+  | TmMatch ({pat = PatChar pc} & t) ->
+    let pat = PatInt {val = char2int pc.val, info = pc.info, ty = pc.ty} in
+    _omatch_ (generate env t.target)
+      [(pat, generate env t.thn), (pvarw_, generate env t.els)]
   | TmMatch ({pat = PatNamed {ident = PWildcard _, ty = tyunknown_}} & t) ->
     generate env t.thn
   | TmMatch ({pat = PatNamed {ident = PName n}} & t) ->
@@ -165,56 +199,54 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst
             let pat = PatNamed p in
             let precord = OPatRecord {bindings = mapFromSeq cmpSID [(fieldLabel, pat)]} in
             _omatch_ (objMagic (generate env t.target))
-              [(OPatCon {ident = name, args = [precord]}, nvar_ patName)]
+              [(OPatCon {ident = name, args = [precord]}, objMagic (nvar_ patName))]
           else error "Record type not handled by type-lifting"
         else infoErrorExit info "Unknown record type"
       else generateDefaultMatchCase env t
     else generateDefaultMatchCase env t
   | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
-    match collectNestedMatchesByConstructor env t with Some matches then
-      match matches with (arms, defaultCase) then
-        -- Assign the term of the final else-branch to a variable so that we
-        -- don't introduce unnecessary code duplication (the default case could
-        -- be large).
-        let defaultCaseName = nameSym "defaultCase" in
-        let defaultCaseVal = ulam_ "" (generate env defaultCase) in
-        let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
+    match collectNestedMatchesByConstructor env t with (arms, defaultCase) then
+      -- Assign the term of the final else-branch to a variable so that we
+      -- don't introduce unnecessary code duplication (the default case could
+      -- be large).
+      let defaultCaseName = nameSym "defaultCase" in
+      let defaultCaseVal = ulam_ "" (generate env defaultCase) in
+      let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
 
-        let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
-          assocSeqFold
-            (lam acc. lam pat. lam thn. match_ target pat thn acc)
-            (app_ (nvar_ defaultCaseName) uunit_)
-            patExpr
-        in
-        let f = lam arm : (Name, [(Pat, Expr)]).
-          match mapLookup arm.0 env.constrs with Some argTy then
-            let patVarName = nameSym "x" in
-            let target =
-              match argTy with TyRecord _ then t.target
-              else nvar_ patVarName
-            in
-            let isUnit = match argTy with TyRecord {fields = fields} then
-              mapIsEmpty fields else false in
-            let pat = if isUnit
-              then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
-              else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
-            let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
-            (pat, generate env innerPatternTerm)
-          else
-            let msg = join [
-              "Unknown constructor referenced in nested match expression: ",
-              nameGetStr arm.0
-            ] in
-            infoErrorExit t.info msg
-        in
-        let flattenedMatch =
-          _omatch_ (objMagic (generate env t.target))
-            (snoc
-                (map f (mapBindings arms))
-                (pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
-        in bind_ defaultCaseLet flattenedMatch
-      else never
-    else generateDefaultMatchCase env t
+      let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
+        assocSeqFold
+          (lam acc. lam pat. lam thn. match_ target pat thn acc)
+          (app_ (nvar_ defaultCaseName) uunit_)
+          patExpr
+      in
+      let f = lam arm : (Name, [(Pat, Expr)]).
+        match mapLookup arm.0 env.constrs with Some argTy then
+          let patVarName = nameSym "x" in
+          let target =
+            match argTy with TyRecord _ then t.target
+            else nvar_ patVarName
+          in
+          let isUnit = match argTy with TyRecord {fields = fields} then
+            mapIsEmpty fields else false in
+          let pat = if isUnit
+            then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
+            else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
+          let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
+          (pat, generate env innerPatternTerm)
+        else
+          let msg = join [
+            "Unknown constructor referenced in nested match expression: ",
+            nameGetStr arm.0
+          ] in
+          infoErrorExit t.info msg
+      in
+      let flattenedMatch =
+        _omatch_ (objMagic (generate env t.target))
+          (snoc
+              (map f (mapBindings arms))
+              (pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
+      in bind_ defaultCaseLet flattenedMatch
+    else never
   | TmMatch t -> generateDefaultMatchCase env t
 
   sem generatePat (env : GenerateEnv) (targetName : Name) =
@@ -753,8 +785,10 @@ in
 
 let generateTypeAnnotated = lam t.
   match typeLift (typeAnnot t) with (env, t) then
-    match generateTypeDecl env t with (env, t) then
-      generate env t
+    match removeTypeAscription t with t then
+      match generateTypeDecl env t with (env, t) then
+        generate env t
+      else never
     else never
   else never
 in

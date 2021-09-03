@@ -713,7 +713,6 @@ lang SeqOpPrettyPrint = SeqOpAst + ConstPrettyPrint + CharAst
   | CFoldl _ -> "foldl"
   | CFoldr _ -> "foldr"
   | CCreate _ -> "create"
-  | CCreateFingerTree _ -> "createFingerTree"
   | CCreateList _ -> "createList"
   | CCreateRope _ -> "createRope"
   | CSplitAt _ -> "splitAt"

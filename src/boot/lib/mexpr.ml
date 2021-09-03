@@ -154,10 +154,6 @@ let arity = function
       2
   | Ccreate (Some _) ->
       1
-  | CcreateFingerTree None ->
-      2
-  | CcreateFingerTree (Some _) ->
-      1
   | CcreateList None ->
       2
   | CcreateList (Some _) ->
@@ -501,7 +497,9 @@ let fail_constapp f v fi =
    and not values. *)
 let delta (apply : info -> tm -> tm -> tm) fi c v =
   let apply = apply fi in
-  let apply_args (f : tm) (args : tm list) : tm = List.fold_left apply f args in
+  let apply_args (f : tm) (args : tm list) : tm =
+    List.fold_left apply f args
+  in
   let index_out_of_bounds_in_seq_msg = "Out of bounds access in sequence" in
   let fail_constapp = fail_constapp c v in
   let tm_seq2int_seq fi tmseq =
@@ -523,8 +521,10 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   in
   let map_compare cmp x y =
     match apply_args cmp [x; y] with
-    | TmConst (_, CInt i) -> i
-    | _ -> fail_constapp fi
+    | TmConst (_, CInt i) ->
+        i
+    | _ ->
+        fail_constapp fi
   in
   match (c, v) with
   (* MCore intrinsics: Booleans *)
@@ -743,13 +743,6 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmSeq (tm_info f, Mseq.create n createf)
   | Ccreate None, _ ->
       fail_constapp fi
-  | CcreateFingerTree None, TmConst (_, CInt n) ->
-      TmConst (fi, CcreateFingerTree (Some n))
-  | CcreateFingerTree (Some n), f ->
-      let createf i = apply f (TmConst (NoInfo, CInt i)) in
-      TmSeq (tm_info f, Mseq.create_fingertree n createf)
-  | CcreateFingerTree None, _ ->
-      fail_constapp fi
   | CcreateList None, TmConst (_, CInt n) ->
       TmConst (fi, CcreateList (Some n))
   | CcreateList (Some n), f ->
@@ -837,9 +830,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | Cmap _, _ ->
       fail_constapp fi
   | Cmapi None, f ->
-      let f i x =
-        apply_args f [TmConst (NoInfo, CInt i); x]
-      in
+      let f i x = apply_args f [TmConst (NoInfo, CInt i); x] in
       TmConst (fi, Cmapi (Some f))
   | Cmapi (Some f), TmSeq (fi, s) ->
       TmSeq (fi, Mseq.mapi f s)
@@ -853,10 +844,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | Citer _, _ ->
       fail_constapp fi
   | Citeri None, f ->
-      let f i x =
-        apply_args f [TmConst (NoInfo, CInt i); x]
-        |> ignore
-      in
+      let f i x = apply_args f [TmConst (NoInfo, CInt i); x] |> ignore in
       TmConst (fi, Citeri (Some f))
   | Citeri (Some f), TmSeq (_, s) ->
       Mseq.iteri f s ; tm_unit
@@ -931,9 +919,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
         raise_error fi
           "The argument to readBytesAsString must be a positive integer"
       else
-        let str =
-          try BatIO.nread BatIO.stdin v with BatIO.No_more_input -> ""
-        in
+        let str = try really_input_string stdin v with End_of_file -> "" in
         let ustr =
           try Ustring.from_utf8 str
           with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
@@ -1107,9 +1093,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
   | CmapMapWithKey (Some _), _ ->
       fail_constapp fi
   | CmapFoldWithKey (None, None), f ->
-      let foldf acc k v =
-        apply_args f [acc; k; v]
-      in
+      let foldf acc k v = apply_args f [acc; k; v] in
       TmConst (fi, CmapFoldWithKey (Some foldf, None))
   | CmapFoldWithKey (Some f, None), acc ->
       TmConst (fi, CmapFoldWithKey (Some f, Some acc))
@@ -1341,9 +1325,7 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CtensorIterSlice (Some tm))
   | CtensorIterSlice (Some tm), TmTensor (_, t) -> (
       let iterf tkind i t =
-        let _ =
-          apply_args tm [TmConst (fi, CInt i); TmTensor (fi, tkind t)]
-        in
+        let _ = apply_args tm [TmConst (fi, CInt i); TmTensor (fi, tkind t)] in
         ()
       in
       try
@@ -1732,7 +1714,7 @@ let add_call fi ms =
 
 (* Main evaluation loop of a term. Evaluates using big-step semantics *)
 let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
-  match f, a with
+  match (f, a) with
   (* Closure application *)
   | TmClos (ficlos, _, s, t3, env2), a -> (
       if !enable_debug_profiling then (
@@ -1758,9 +1740,9 @@ let rec apply (fiapp : info) (f : tm) (a : tm) : tm =
       delta apply fiapp c a
   (* Fix *)
   | TmFix _, (TmClos (fi, _, s, t3, env2) as tt) ->
-    eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
+      eval ((s, TmApp (fi, TmFix fi, tt)) :: Lazy.force env2) t3
   | TmFix _, _ ->
-        raise_error (tm_info f) "Incorrect CFix"
+      raise_error (tm_info f) "Incorrect CFix"
   | f, _ ->
       raise_error fiapp
         ( "Incorrect application. This is not a function: "
@@ -1771,13 +1753,13 @@ and eval (env : (Symb.t * tm) list) (t : tm) =
   match t with
   (* Variables using symbol bindings. Need to evaluate because fix point. *)
   | TmVar (fi, _, s) -> (
-      match List.assoc_opt s env with
-      | Some (TmApp (fi, (TmFix _ as f), a)) ->
-          apply fi f a
-      | Some t ->
-          t
-      | None ->
-          raise_error fi "Undefined variable" )
+    match List.assoc_opt s env with
+    | Some (TmApp (fi, (TmFix _ as f), a)) ->
+        apply fi f a
+    | Some t ->
+        t
+    | None ->
+        raise_error fi "Undefined variable" )
   (* Application *)
   | TmApp (fiapp, t1, t2) ->
       let f = eval env t1 in
