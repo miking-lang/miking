@@ -674,7 +674,19 @@ lang CToOCamlWrapper = CWrapperBase
           rhs = CEVar {id = dimIdent}},
         body = whileBody} ]
 
-  sem _generateCToOCamlWrapperInner (cvars : [(Name, CType)]) (dstIdent : Name)
+  sem _incrementCounter =
+  | countIdent /- : Name -/ ->
+    CSExpr {expr = CEBinOp {
+      op = COAssign(),
+      lhs = CEVar {id = countIdent},
+      rhs = CEBinOp {
+        op = COAdd (),
+        lhs = CEVar {id = countIdent},
+        rhs = CEInt {i = 1}}}}
+
+  sem _generateCToOCamlWrapperInner (countIdent : Name)
+                                    (cvars : [(Name, CType)])
+                                    (dstIdent : Name)
                                     (dimIdents : [Name]) =
   | TyInt _ | TyChar _ ->
     let cvar : (Name, CType) = head cvars in
@@ -683,7 +695,11 @@ lang CToOCamlWrapper = CWrapperBase
       lhs = CEVar {id = dstIdent},
       rhs = CEApp {
         fun = _getIdentExn "Val_long",
-        args = [CEVar {id = cvar.0}]}}}]
+        args = [CEBinOp {
+          op = COSubScript (),
+          lhs = CEVar {id = cvar.0},
+          rhs = CEVar {id = countIdent}}]}}},
+    _incrementCounter countIdent]
   | TyFloat _ ->
     let cvar : (Name, CType) = head cvars in
     [CSExpr {expr = CEBinOp {
@@ -691,7 +707,11 @@ lang CToOCamlWrapper = CWrapperBase
       lhs = CEVar {id = dstIdent},
       rhs = CEApp {
         fun = _getIdentExn "caml_copy_double",
-        args = [CEVar {id = cvar.0}]}}}]
+        args = [CEBinOp {
+          op = COSubScript (),
+          lhs = CEVar {id = cvar.0},
+          rhs = CEVar {id = countIdent}}]}}},
+    _incrementCounter countIdent]
   | TySeq {ty = TyFloat _} ->
     let cvar : (Name, CType) = head cvars in
     let iterIdent = nameSym "i" in
@@ -704,37 +724,21 @@ lang CToOCamlWrapper = CWrapperBase
           CEBinOp {
             op = COSubScript (),
             lhs = CEVar {id = cvar.0},
-            rhs = CEVar {id = iterIdent}}]}}
+            rhs = CEVar {id = countIdent}}]}},
+      _incrementCounter countIdent
     ] in
     let tag = CEVar {id = _getIdentExn "Double_array_tag"} in
     let dimIdent = head dimIdents in
     _generateCToOCamlSequenceWrapper iterIdent dstIdent dimIdent tag whileBody
   | TySeq {ty = innerTy} ->
     let iterIdent = nameSym "i" in
-    let innerCvars = map (lam cvar : (Name, CType). (nameSym "r", cvar.1)) cvars in
-    let innerCvarAssignStmts =
-      map
-        (lam entry : ((Name, CType), (Name, CType)).
-          let cvar = entry.0 in
-          let innerCvar = entry.1 in
-          CSDef {
-            ty = cvar.1, id = Some innerCvar.0,
-            init = Some (CIExpr {expr = CEUnOp {
-              op = COAddrOf (),
-              arg = CEBinOp {
-                op = COSubScript (),
-                lhs = CEVar {id = cvar.0},
-                rhs = CEVar {id = iterIdent}}}})})
-        (zip cvars innerCvars)
-    in
     let innerDstIdent = nameSym "x" in
     let whileBody = join [
-      innerCvarAssignStmts,
       [CSDef {
         ty = CTyVar {id = _getIdentExn "value"},
         id = Some innerDstIdent, init = None ()}],
-      _generateCToOCamlWrapperInner innerCvars innerDstIdent (tail dimIdents)
-                                    innerTy,
+      _generateCToOCamlWrapperInner countIdent cvars innerDstIdent
+                                    (tail dimIdents) innerTy,
       [CSExpr {expr = CEApp {
         fun = _getIdentExn "Store_field",
         args = [
@@ -752,8 +756,16 @@ lang CToOCamlWrapper = CWrapperBase
     let return = env.return in
     let cvars = return.cTempVars in
     let dimIdents = return.dimIdents in
-    let stmts = _generateCToOCamlWrapperInner cvars return.ident
-                                              dimIdents return.ty
+    let countIdent = nameSym "count" in
+    let countDeclStmt = CSDef {
+      ty = CTyInt (), id = Some countIdent,
+      init = Some (CIExpr {expr = CEInt {i = 0}})
+    } in
+    let stmts =
+      cons
+        countDeclStmt
+        (_generateCToOCamlWrapperInner countIdent cvars return.ident
+                                       dimIdents return.ty)
     in
     (return, stmts)
 end
@@ -857,9 +869,9 @@ mexpr
 use Test in
 
 let functionIdent = nameSym "f" in
-let returnType = TySeq {ty = TyFloat {info = NoInfo ()}, info = NoInfo ()} in
+let returnType = tyseq_ (tyseq_ (tyseq_ tyint_)) in
 let args = [
-  (nameSym "n", TySeq {ty = TyInt {info = NoInfo ()}, info = NoInfo ()})
+  (nameSym "a", tyseq_ (tyseq_ (tyseq_ tyfloat_)))
 ] in
 
 let wrapperCode = generateWrapperCode functionIdent returnType args in
