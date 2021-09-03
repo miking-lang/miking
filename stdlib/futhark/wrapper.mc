@@ -761,12 +761,20 @@ lang CToOCamlWrapper = CWrapperBase
       ty = CTyInt (), id = Some countIdent,
       init = Some (CIExpr {expr = CEInt {i = 0}})
     } in
-    let stmts =
-      cons
-        countDeclStmt
-        (_generateCToOCamlWrapperInner countIdent cvars return.ident
-                                       dimIdents return.ty)
+    let freeCvars =
+      map
+        (lam cvar : (Name, CType).
+          CSExpr {expr = CEApp {
+            fun = _getIdentExn "free",
+            args = [CEVar {id = cvar.0}]}})
+        cvars
     in
+    let stmts = join [
+      [countDeclStmt],
+      _generateCToOCamlWrapperInner countIdent cvars return.ident
+                                    dimIdents return.ty,
+      freeCvars
+    ] in
     (return, stmts)
 end
 
