@@ -13,6 +13,7 @@ include "mexpr/rewrite/parallel-keywords.mc"
 include "mexpr/rewrite/utils.mc"
 
 type FutharkGenerateEnv = {
+  entryPoints : Set Name,
   typeAliases : Map Type Name,
   typeParams : Map Name [FutTypeParam],
   boundNames : Map Name Expr
@@ -483,7 +484,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                       val = generateExpr env body, info = t.info}
         else
           let retTy = findReturnType t.tyBody in
-          let entry = not (_isHigherOrderFunction params) in
+          let entry = setMem t.ident env.entryPoints in
           FDeclFun {ident = t.ident, entry = entry, typeParams = [],
                     params = params, ret = generateType env retTy,
                     body = generateExpr env body, info = t.info}
@@ -502,9 +503,10 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
 end
 
 lang FutharkGenerate = FutharkToplevelGenerate + MExprCmp
-  sem generateProgram =
+  sem generateProgram (entryPoints : Set Name) =
   | prog ->
     let emptyEnv = {
+      entryPoints = entryPoints,
       typeAliases = mapEmpty cmpType,
       typeParams = mapEmpty nameCmp,
       boundNames = mapEmpty nameCmp
@@ -608,6 +610,8 @@ let expected = FProg {decls = [
     body = futAppSeq_ (futConst_ (FCMap ())) [nFutVar_ f3, nFutVar_ s],
     info = NoInfo ()}
 ]} in
-utest expr2str (generateProgram t) with expr2str expected using eqSeq eqc in
+let entryPoints = setOfSeq [f, g, min] in
+utest printFutProg (generateProgram entryPoints t) with printFutProg expected
+using eqSeq eqc in
 
 ()

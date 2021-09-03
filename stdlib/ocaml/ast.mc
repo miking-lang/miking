@@ -5,12 +5,22 @@ lang OCamlTypeDeclAst
   syn Expr =
   | OTmVariantTypeDecl { ident : Name, constrs : Map Name Type, inexpr : Expr }
 
-  sem smap_Expr_Expr (f : Expr -> a) =
+  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | OTmVariantTypeDecl t ->
-    OTmVariantTypeDecl {t with inexpr = f t.inexpr}
+    match f acc t.inexpr with (acc, inexpr) then
+      (acc, OTmVariantTypeDecl {t with inexpr = inexpr})
+    else never
+end
 
-  sem sfold_Expr_Expr (f : a -> b -> a) (acc : a) =
-  | OTmVariantTypeDecl t -> f acc t.inexpr
+lang OCamlCExternalDecl
+  syn Expr =
+  | OTmCExternalDecl {ident : Name, ty : Type, cIdent : String, inexpr : Expr}
+
+  sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
+  | OTmCExternalDecl t ->
+    match f acc t.inexpr with (acc, inexpr) then
+      (acc, OTmCExternalDecl {t with inexpr = inexpr})
+    else never
 end
 
 lang OCamlRecord
@@ -173,7 +183,8 @@ end
 lang OCamlAst =
   -- Terms
   LamAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
-  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlRecord + OCamlLabel +
+  OCamlArray + OCamlData + OCamlTypeDeclAst + OCamlCExternalDecl +
+  OCamlRecord + OCamlLabel +
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +

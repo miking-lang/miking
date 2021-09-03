@@ -320,6 +320,15 @@ lang OCamlPrettyPrint =
         else never
       else never
     else never
+  | OTmCExternalDecl t ->
+    match pprintVarName env t.ident with (env, ident) then
+      match getTypeStringCode indent env t.ty with (env, ty) then
+        match pprintCode indent env t.inexpr with (env, inexpr) then
+          (env, join ["external ", ident, " : ", ty, " = \"", t.cIdent, "\";;",
+                      pprintNewline indent, inexpr])
+        else never
+      else never
+    else never
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmConApp {ident = ident, args = []} -> pprintConName env ident
   | OTmConApp {ident = ident, args = [arg]} ->

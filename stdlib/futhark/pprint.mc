@@ -387,7 +387,7 @@ lang FutharkPrettyPrint =
   FutharkConstPrettyPrint + FutharkPatPrettyPrint + FutharkTypePrettyPrint +
   FutharkTypeParamPrettyPrint + FutharkExprPrettyPrint
 
-  sem expr2str =
+  sem printFutProg =
   | FProg {decls = decls} ->
     let env = pprintEnvEmpty in
     match mapAccumL pprintDecl env decls with (_, decls) then
@@ -447,7 +447,6 @@ end
 mexpr
 
 use FutharkPrettyPrint in
-
 
 let x = nameSym "x" in
 let constDecl = FDeclConst {
@@ -581,5 +580,5 @@ let decls = [
   mainDecl
 ] in
 let prog = FProg {decls = decls} in
--- print (expr2str prog);
+-- print (printFutProg prog);
 ()

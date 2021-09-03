@@ -126,7 +126,7 @@ recursive let getDimensionsOfType : Type -> Int = use MExprAst in
   else 0
 end
 
-lang CWrapperBase = MExprAst + CAst + MExprPrettyPrint
+lang CWrapperBase = MExprAst + CAst
   sem _wosize =
   | id ->
       CEApp {fun = _getIdentExn "Wosize_val", args = [CEVar {id = id}]}
@@ -144,10 +144,9 @@ lang CWrapperBase = MExprAst + CAst + MExprPrettyPrint
   | ty & (CTyVar {id = id}) ->
     if nameEq id (_getIdentExn "int64_t") then
       "i64"
-    else error (join ["Unsupported C type: ", type2str ty])
+    else error "Unsupported C type"
   | CTyDouble _ -> "f64"
   | CTyPtr t -> getFutharkElementTypeString t.ty
-  | ty -> error (join ["Cannot generate Futhark type string from C type ", type2str ty])
 
   -- Converts a given MExpr type to a sequence containing the C type or types
   -- used to represent it in the C wrapper. Records and tuples are represented
@@ -159,7 +158,6 @@ lang CWrapperBase = MExprAst + CAst + MExprPrettyPrint
     map (lam ty. CTyPtr {ty = ty}) (mexprToCTypes elemTy)
   | TySeq t -> mexprToCTypes t.ty
   | TyRecord _ -> error "Records cannot be translated to C yet"
-  | ty -> error (join ["Translation of type ", type2str ty, " to C is not supported"])
 end
 
 lang OCamlToCWrapper = CWrapperBase
@@ -440,7 +438,6 @@ lang FutharkCallWrapper = CWrapperBase
     let returnType = return.ty in
 
     -- Declare Futhark return value
-    -- TODO use correct C types for return value
     let futReturnCType = getFutharkCType returnType in
     let futResultIdent = nameSym "fut_ret" in
     let futResultDeclStmt = CSDef {
@@ -448,7 +445,9 @@ lang FutharkCallWrapper = CWrapperBase
       id = Some futResultIdent,
       init = None ()
     } in
-    let functionStr = nameGetStr env.functionIdent in
+    -- TODO(larshum, 2021-09-03): This only works under the assumption that the
+    -- function name (i.e. the string) is unique.
+    let functionStr = escapeFutharkVarString (nameGetStr env.functionIdent) in
     let funcId = nameSym (concat "futhark_entry_" functionStr) in
     let returnCodeIdent = nameSym "v" in
     let returnCodeDeclStmt = CSDef {
@@ -850,8 +849,23 @@ lang FutharkCWrapper =
       else never
     else never
 
-  sem generateWrapperCode (functionName : Name) (returnType : Type) =
-  | args /- : [(Name, Type)] -/ ->
+  sem _getArgumentAndReturnTypes (acc : [Type]) =
+  | TyArrow {from = from, to = to} ->
+    _getArgumentAndReturnTypes (snoc acc from) to
+  | ty -> (acc, ty)
+
+  sem generateWrapperCode =
+  | accelerated /- Map Name Type -/ ->
+    let entryPointWrappers =
+      map
+        (lam entry : (Name, Type).
+          match _getArgumentAndReturnTypes [] entry.1 with (argTypes, retType) then
+            let identWithType = lam ty. (nameSym "a", ty) in
+            let args : [(Name, Type)] = map identWithType argTypes in
+            generateWrapperFunctionCode entry.0 retType args
+          else never)
+        (mapBindings accelerated)
+    in
     -- NOTE(larshum, 2021-08-27): According to
     -- https://ocaml.org/manual/intfc.html CAML_NAME_SPACE should be defined
     -- before including caml headers, but the current C AST does not support
@@ -861,12 +875,12 @@ lang FutharkCWrapper =
         "<stddef.h>",
         "<stdlib.h>",
         "<stdio.h>",
-        "\"program.h\"",
+        "\"gpu.h\"",
         "\"caml/alloc.h\"",
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\""
       ],
-      tops = [generateWrapperFunctionCode functionName returnType args]
+      tops = entryPointWrappers
     }
 end
 
@@ -883,4 +897,5 @@ let args = [
 ] in
 
 let wrapperCode = generateWrapperCode functionIdent returnType args in
+()
 -- print (printCProg [] wrapperCode)
