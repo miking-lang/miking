@@ -883,4 +883,4 @@ let args = [
 ] in
 
 let wrapperCode = generateWrapperCode functionIdent returnType args in
-print (printCProg [] wrapperCode)
+-- print (printCProg [] wrapperCode)
