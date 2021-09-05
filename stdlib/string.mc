@@ -13,16 +13,7 @@ utest escapeString "\n" with "\\n"
 utest escapeString "\r" with "\\r"
 utest escapeString "\t" with "\\t"
 
-recursive
-  let eqString = lam s1. lam s2.
-      if neqi (length s1) (length s2)
-      then false
-      else if null s1
-           then true
-           else if eqChar (head s1) (head s2)
-           then eqString (tail s1) (tail s2)
-           else false
-end
+let eqString = lam s1. lam s2. eqSeq eqc s1 s2
 
 utest eqString "" "" with true
 utest eqString "" "a" with false

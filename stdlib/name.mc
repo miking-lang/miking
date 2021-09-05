@@ -57,8 +57,10 @@ utest nameHasSym (nameNoSym "foo") with false
 -- differ, return false.
 let nameEqSym : Name -> Name -> Bool =
   lam n1 : Name. lam n2 : Name.
-    if and (nameHasSym n1) (nameHasSym n2) then
-      eqsym n1.1 n2.1
+    if nameHasSym n1 then
+      if nameHasSym n2 then
+        eqsym n1.1 n2.1
+      else false
     else false
 
 let _t1 = nameNoSym "foo"
@@ -75,12 +77,9 @@ utest _t3 with _t3 using nameEqSym
 let nameEq : Name -> Name -> Bool =
   lam n1 : Name. lam n2 : Name.
     if nameEqSym n1 n2 then true
-    else
-      if not (nameHasSym n1) then
-        if not (nameHasSym n2) then
-          nameEqStr n1 n2
-        else false
-      else false
+    else if nameHasSym n1 then false
+    else if nameHasSym n2 then false
+    else nameEqStr n1 n2
 
 let _t1 = nameNoSym "foo"
 let _t2 = nameSym "foo"
@@ -150,16 +149,11 @@ utest nameGetSym (nameSetSym (nameNoSym "foo") _s) with Some _s using optionEq e
 -- 'nameCmp n1 n2' compares two names lexicographically.
 let nameCmp : Name -> Name -> Int =
   lam n1 : Name. lam n2 : Name.
-    let sym1 = nameHasSym n1 in
-    let sym2 = nameHasSym n2 in
-    if sym1 then
-      if sym2 then
-        subi (sym2hash (optionGetOrElse (lam. error "Expected symbol")
-                                        (nameGetSym n1)))
-             (sym2hash (optionGetOrElse (lam. error "Expected symbol")
-                                        (nameGetSym n2)))
+    match nameGetSym n1 with Some a then
+      match nameGetSym n2 with Some b then
+        subi (sym2hash a) (sym2hash b)
       else negi 1
-    else if sym2 then 1
+    else match nameGetSym n2 with Some _ then 1
     else cmpString (nameGetStr n1) (nameGetStr n2)
 
 let _s1 = gensym ()

@@ -191,12 +191,14 @@ utest filter (lam x. eqi x 1) [1,2,4] with [1]
 utest filter (lam. false) [3,5,234,1,43] with [] using eqSeq eqi
 utest filter (lam x. gti x 2) [3,5,234,1,43] with [3,5,234,43]
 
-recursive
-  let find = lam p. lam seq.
-    if null seq then None ()
-    else if p (head seq) then Some (head seq)
-    else find p (tail seq)
-end
+let find = lam p. lam seq.
+  foldl
+    (lam acc. lam x.
+      match acc with Some _ then acc
+      else if p x then Some x
+      else None ())
+    (None ())
+    seq
 
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
