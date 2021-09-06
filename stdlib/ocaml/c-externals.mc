@@ -5,8 +5,9 @@ lang OCamlCExternals = MExprAst + OCamlAst
   | ast /- : Expr -/ ->
     mapFoldWithKey
       (lam acc : Expr. lam k : Name. lam v : (Name, Type).
-        OTmCExternalDecl {ident = k, ty = v.1, cIdent = nameGetStr v.0,
-                          inexpr = acc})
+        OTmCExternalDecl {ident = k, ty = v.1,
+                          bytecodeIdent = concat (nameGetStr v.0) "_bytecode",
+                          nativeIdent = nameGetStr v.0, inexpr = acc})
       ast
       externals
 end

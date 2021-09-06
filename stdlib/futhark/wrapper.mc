@@ -807,12 +807,38 @@ lang FutharkCWrapper =
       cons fstDeclStmt (generateExtraParamDecl remainingArgs)
     else [fstDeclStmt]
 
+  sem generateBytecodeWrapper (functionName : Name) =
+  | nargs /- : Int -/ ->
+    let valueTy = CTyVar {id = _getIdentExn "value"} in
+    let bytecodeStr = concat (nameGetStr functionName) "_bytecode" in
+    let bytecodeFunctionName = nameNoSym bytecodeStr in
+    let args = nameSym "args" in
+    let argc = nameSym "argc" in
+    let functionArgs =
+      map
+        (lam i. CEBinOp {
+          op = COSubScript (),
+          lhs = CEVar {id = args},
+          rhs = CEInt {i = i}})
+        (create nargs (lam i. i))
+    in
+    CTFun {
+      ret = valueTy,
+      id = bytecodeFunctionName,
+      params = [(CTyPtr {ty = valueTy}, args), (CTyInt (), argc)],
+      body = [CSExpr {expr = CEApp {
+        fun = functionName,
+        args = functionArgs
+      }}]
+    }
+
   sem generateWrapperFunctionCode (functionName : Name) (returnType : Type) =
   | args /- : [(Name, Type)] -/ ->
     let toArgData = lam arg : (Name, Type).
       {{defaultArgData with ident = arg.0}
                        with ty = arg.1}
     in
+    let bytecodeWrapper = generateBytecodeWrapper functionName (length args) in
     let returnIdent = nameSym "out" in
     let returnArg = (returnIdent, returnType) in
     let env = {{{emptyWrapperEnv with arguments = map toArgData args}
@@ -837,12 +863,13 @@ lang FutharkCWrapper =
               let withValueType = lam arg : (Name, Type).
                 (CTyVar {id = value}, arg.0)
               in
-              CTFun {
-                ret = CTyVar {id = value},
-                id = functionName,
-                params = map withValueType args,
-                body = join [camlParamStmts, [camlLocalStmt], stmt1, stmt2,
-                             stmt3, stmt4, stmt5, [camlReturnStmt]]}
+              [ CTFun {
+                  ret = CTyVar {id = value},
+                  id = functionName,
+                  params = map withValueType args,
+                  body = join [camlParamStmts, [camlLocalStmt], stmt1, stmt2,
+                               stmt3, stmt4, stmt5, [camlReturnStmt]]},
+                bytecodeWrapper ]
             else never
           else never
         else never
@@ -880,7 +907,7 @@ lang FutharkCWrapper =
         "\"caml/memory.h\"",
         "\"caml/mlvalues.h\""
       ],
-      tops = entryPointWrappers
+      tops = join entryPointWrappers
     }
 end
 
