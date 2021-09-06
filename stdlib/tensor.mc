@@ -753,7 +753,7 @@ utest tensorRank e with 0 in
 -- A slice shares data with the original tensor and no copying of data is done.
 tensorMapInplace (lam. 0) r2;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
--- where we use `tensorFill` from `tensor.mc`
+-- where we use `tensorMapInplace` from `tensor.mc`
 
 -- We can get a subset of the rows of t2 by restricting its 0th dimension.
 let s1 = tensorSubExn t2 1 2 in

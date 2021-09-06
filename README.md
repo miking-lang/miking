@@ -29,19 +29,27 @@ your system. When using the Miking system, you need to use the `4.12.0+domains`
 switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
 always takes you back to the correct switch.
 
-To compile and run the test suite, go back to the Miking repository and execute:
+To compile the Miking project, go back to the Miking repository and execute:
 
 ```
-make test
+make
 ```
 
-The Miking executable is available under `build/mi` after compiling the project. To run a hello world program, create a file `hello.mc` with the following code
+This creates two binaries in the `build` directory: `build/boot` and
+`build/mi`. `build/boot` is the bootstrap interpreter, and `build/mi`
+is the main Miking executable, containing both an interpreter and a
+compiler. You will mainly be using `mi`, but `boot` provides a few
+features not yet available in the main executable, such as a REPL.
+
+Optionally, to run the test suite, use `make test-all`. Beware that this may take some time.
+
+To run a hello world program, create a file `hello.mc` with the following code,
 
 ```
-mexpr print "Hello world!"
+mexpr print "Hello world!\n"
 ```
 
-and then run it using command:
+and then run it using the command:
 
 ```
 build/mi hello.mc
@@ -53,18 +61,19 @@ for example by running the following:
 
     cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-To install the interpreter along with the standard library for the current
+To install the executables along with the standard library for the current
 user, issue:
 
 ```
 make install
 ```
 
-This will install the interpreter to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html).
+This will install the binaries to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location.
 
-The Miking boot interpreter also features a simple REPL.
-The REPL allows interactively executing fragments of MCore code.
-Both toplevel definitions and expressions can be evaluated.
+### The REPL
+The Miking bootstrap interpreter features a simple REPL, which lets
+you interactively execute fragments of MCore code. Both toplevel
+definitions and expressions can be evaluated.
 
 To start the REPL (assuming that the interpreter is installed in the path), run
 
@@ -117,13 +126,14 @@ One design objective of MExpr is to make the concrete syntax very close to the a
 
 Nevertheless, to understand the Miking system, it is a good idea to learn to write basic programs directly as MCore expressions.
 
-An MCore file `.mc` is in the end always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
+In the end, an MCore file `.mc` is always translated into an MCore expression. If an MCore file contains `mexpr 5`, it means that the final expression of the program is value `5`. That is, `mexpr` states the start of the program and is followed by the actual MExpr of the program. If the keyword `mexpr` is left out of the file, a default mexpr unit value `()` is the resulting value.
 
 ### Unit Test Expressions
 
 When writing MCore programs, it is typically done by writing explicit unit tests as part of the code. For instance
 
 ```
+mexpr
 utest addi 1 2 with 3 in
 ()
 ```
@@ -136,30 +146,32 @@ mi run program.mc --test
 
 Typically when you develop MCore programs, you do not use the `print` function. Instead, you write unit tests directly and then leave the units tests as is directly after your function. By doing so, you test your code, write regression tests, and document the informal semantics of your program directly. We strongly encourage you to develop your MCore programs this way.
 
+In the rest of this document, we omit the `mexpr` keyword for brevity, and just write the MExpr itself. Remember to add it as appropriate when trying the various examples.
+
 ### Intrinsics
 
 MCore contains a number of built-in values (intrinsics) and
 predefined functions and constants (part of the standard library).
-For instance
+For instance,
+
 ```
-mexpr
-print "Hello"
+print "Hello\n"
 ```
 
-uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type. In the rest of this section, we will leave out the `mexpr` keyword, and just write the MExpr itself.
+uses the built-in function `print` which has the type `String -> Unit`, i.e., it prints a string and returns the unit type.
 
 The current documentation of intrinsics is implicit via code
 containing `utest` expressions. Please see the following files:
 
-* [Boolean intrinsics](test/mexpr/bool.mc)
+* [Boolean intrinsics](test/mexpr/bool-test.mc)
 
-* [Integer intrinsics](test/mexpr/int.mc)
+* [Integer intrinsics](test/mexpr/int-test.mc)
 
-* [Floating-point number intrinsics](test/mexpr/float.mc)
+* [Floating-point number intrinsics](test/mexpr/float-test.mc)
 
-* [Strings intrinsics ](test/mexpr/string.mc)
+* [Strings intrinsics ](test/mexpr/string-test.mc)
 
-* [Sequences intrinsics ](test/mexpr/seq.mc)
+* [Sequences intrinsics ](test/mexpr/seq-test.mc)
 
 * [Side effect (printing, I/O, debugging etc.) intrinsics](test/mexpr/effects.mc)
 
@@ -167,7 +179,7 @@ containing `utest` expressions. Please see the following files:
 
 * [Reference intrinsics](test/mexpr/references.mc)
 
-* [Random number generation intrinsics](test/mexpr/random.mc)
+* [Random number generation intrinsics](test/mexpr/random-test.mc)
 
 * [Time intrinsics](test/mexpr/time.mc)
 
@@ -265,7 +277,7 @@ utest answer with "yes" in
 
 checks if `x` is less than 10 (using the `lti` function with signature `Int -> Int -> Bool`). If it is true, the string `"yes"` is returned, else string `"no"` is returned.
 
-Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, expression
+Note that an `if` expression is not a construct in pure MExpr. It is syntactic sugar for a `match` expression. That is, the expression
 
 ```
 if x then e1 else e2
@@ -353,6 +365,7 @@ To project out a value, a dot notation may be used.
 ```
 utest r1.age with 42 in
 utest r1.name with "foobar" in
+()
 ```
 
 A record type is not just a general product type in MCore, it is the only
@@ -364,7 +377,7 @@ record.
 
 
 ```
-utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in
+utest ("foo",5) with {#label"0" = "foo", #label"1" = 5} in ()
 ```
 
 
@@ -380,7 +393,7 @@ con Leaf : (Int) -> Tree in
 
 introduces a new data type `Tree` and defines two new constructors `Node` and `Leaf`. Constructor `Leaf` takes just one argument (an integer value for the leaf) and returns a tree, whereas the `Node` constructor takes a tuple with two trees as input and constructs a new tree node.
 
-For instance, expression
+For instance, the expression
 
 ```
 let tree = Node(Node(Leaf 4, Leaf 2), Leaf 3) in
@@ -420,7 +433,7 @@ we can check that the function computes the result as intended.
 
 In the previous match example, the `match` construct matched against
 the constructor, but not against the actual data content. MExpr is
-designed to be simple with few language construct, at the right level
+designed to be simple with few language constructs, at the right level
 of abstraction. If the abstraction level is too low, it is hard to
 perform useful static analysis and code generation. As a consequence,
 MExpr support *patterns* in `match` expressions. The `count` function
@@ -571,7 +584,7 @@ argument and returning the element at that index.
 
 We can construct a zero-order tensor with value `'a'` as
 ```
-let t0 = tensorCreateDense [] (lam _. 'a') in
+let t0 = tensorCreateDense [] (lam. 'a') in
 utest tensorRank t0 with 0 in
 utest tensorShape t0 with [] in
 ```
@@ -580,10 +593,16 @@ We can access and mutate elements in a tensor using
 ```
 utest tensorSetExn t0 [] 'b' with () in
 utest tensorGetExn t0 [] with 'b' in
+()
 ```
 
-We can construct a rank 1 tensor (i.e. vector) as
+The file [tensor.mc](stdlib/tensor.mc) contains a wide variety of useful tensor
+functions. We can import it into a program using the `include`
+keyword (more on this [later](#MLang)). We can construct a rank 1
+tensor (i.e. vector) as
 ```
+include "tensor.mc"
+mexpr
 let t1 = tensorCreateDense [9] (lam i. addi (get i 0) 1) in
 utest tensorToSeqExn t1 with [1, 2, 3, 4, 5, 6, 7, 8, 9] in
 ```
@@ -596,7 +615,7 @@ let t2 = tensorReshapeExn t1 [3, 3] in
 
 Reshape does no copying and the data is shared between `t1` and `t2`
 ```
-let _ = tensorSetExn t2 [0, 0] 2 in
+tensorSetExn t2 [0, 0] 2;
 utest tensorGetExn t1 [0] with 2 in
 ```
 
@@ -620,16 +639,17 @@ utest tensorRank e with 0 in
 
 A slice shares data with the original tensor and no copying of data is done.
 ```
-let _ = tensorFill r2 0 in
+tensorMapInplace (lam. 0) r2;
 utest tensorToSeqExn t1 with [2, 2, 3, 0, 0, 0, 7, 8, 9] in
 ```
-where we use `tensorFill` from `tensor.mc`.
+where we use `tensorMapInplace` from `tensor.mc`.
 
 We can get a subset of the rows of t2 by restricting its 0th dimension.
 ```
 let s1 = tensorSubExn t2 1 2 in
 utest tensorShape s1 with [2, 3] in
 utest tensorToSeqExn (tensorReshapeExn s1 [6]) with [0, 0, 0, 7, 8, 9] in
+()
 ```
 
 ### References
@@ -655,7 +675,7 @@ The value that a reference points to can be modified using the `modref` operator
 
 ```
 let r = ref 3 in
-let _ = modref r 4 in
+modref r 4;
 utest deref r with 4 in ()
 ```
 
@@ -667,152 +687,12 @@ variables to the same reference. As an example, in the program
 ```
 let r1 = ref "A" in
 let r2 = r1 in
-let _ = modref r2 "B" in
+modref r2 "B";
 utest deref r1 with "B" in ()
 ```
 
 the change made to the referenced value via the variable `r2` is visible when
 dereferencing the reference via the variable `r1`.
-
-### Parallel Programming
-Miking has support for shared-memory parallelism using atomic operations and
-threads running on multiple cores.
-
-The parallel programming primitives consist of atomic references and functions
-for creating and synchronizing threads. In addition to the examples below, more
-documentation can be found in the [multicore test
-suite](test/multicore/multicore.mc).
-
-#### Atomic References
-
-Atomic references are similar to ordinary references, except that operations
-performed on them are *atomic*, which means that no other execution thread can
-interfere with the result. In other words, they are safe to use in
-multi-threaded execution.
-
-`atomicMake` creates a new atomic reference and gives it an initial value. The
-value of the atomic reference can be read by `atomicGet`:
-
-```
-let a = atomicMake 0 in
-utest atomicGet a with 0 in
-```
-
-`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
-updates the value of `a` to `newVal` if the current value is identical to
-`oldVal`, and then returns a Boolean representing if the update was successful
-or not:
-
-```
-utest atomicCAS a 0 1 with true in
-utest atomicCAS a 42 3 with false in
-utest atomicGet a with 1 in
-```
-
-The compare-and-set operation is currently supported for integer atomic
-references only.
-
-To unconditionally set the value of an atomic reference, we can use
-`atomicExchange`, which also returns the old value of the reference:
-
-```
-utest atomicExchange a 2 with 1 in
-```
-
-Finally, for integer references, we can use `atomicFetchAndAdd` to increase or
-decrease the value of the reference. The function returns the old value of the
-reference:
-
-```
-utest atomicFetchAndAdd a 1 with 2 in
--- Current value is now 3
-utest atomicFetchAndAdd a (subi 0 45) with 3 in
--- Current value is now -42
-```
-
-#### Multi-Threaded Execution
-
-The following example program spawns 10 threads that compete for printing their
-IDs:
-
-```
-include "string.mc"
-mexpr
-let place = atomicMake 1 in
-let threads = create 10 (lam. threadSpawn (lam.
-  printLn (join
-    [int2string (atomicFetchAndAdd place 1)
-    , ": thread ID "
-    , int2string (threadID2int (threadSelf ()))
-    ]))
-) in
-map threadJoin threads
-```
-
-where `threadSpawn` takes a function of type `Unit -> a` as argument,
-`threadSelf` returns the ID of the current thread, and `threadID2int` converts a
-thread ID to a unique integer. Note that `threadJoin` must be called once for
-each call to `threadSpawn`. The output of the above program might be:
-
-```
-1: thread ID 1
-2: thread ID 2
-3: thread ID 129
-4: thread ID 130
-5: thread ID 3
-6: thread ID 257
-7: thread ID 258
-8: thread ID 131
-9: thread ID 385
-10: thread ID 386
-```
-
-However, the values and order of the thread IDs might be different over
-different runs.
-
-To control the execution order of threads, some form of thread synchronization
-is necessary. This can be done either using atomic references, or using the
-functions `threadCriticalSection`, `threadWait` and `threadNotify`, or both.
-In the following example:
-
-```
-let inCriticalSection = atomicMake false in
-let afterWait = atomicMake false in
-
-let t = threadSpawn (lam.
-  threadCriticalSection (
-    lam.
-      atomicExchange inCriticalSection true;
-      threadWait ();
-      atomicExchange afterWait true
-  )
-) in
-```
-
-the thread `t` enters a critical section, where it first atomically sets the
-`inCriticalSection` flag to true, before calling `threadWait`, which will block
-the execution until another thread calls `threadNotify`. In the following, the
-main thread first waits for `t` to set the `inCriticalSection` flag, before
-making a call to `threadNotify`:
-
-```
-recursive let waitForFlag = lam flag.
-  match atomicGet flag with true then ()
-  else waitForFlag flag
-in
-waitForFlag inCriticalSection;
-threadNotify (threadGetID t);
-```
-
-The `threadNotify` will block the execution of the main thread until `t` has
-finished its critical section, which means that we know that the flag
-`afterWait` must now be true:
-
-```
-utest atomicGet afterWait with true in
--- Don't forget to clean up!
-threadJoin t;
-```
 
 ## MLang
 
@@ -1119,9 +999,9 @@ To install for the current user, run `make install` as usual. The sundials
 interface can only be used in compiled code.
 
 ### Python
-Another optional feature is Python intrinsics, which allow calling Python code
-from MCore. To build the project with Python integration you need to have
-[Python 3](https://www.python.org) installed on your system. You will also need to install any Python libraries you want to use (for example using pip).
+Python intrinsics, which allow calling Python code from MCore, are offered as an optional feature for the `boot` bootstrap interpreter.
+To build the project with Python integration you need to have [Python 3](https://www.python.org) installed on your system.
+You will also need to install any Python libraries you want to use (for example using pip).
 
 In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml Python bindings, available via `opam`:
 
@@ -1129,7 +1009,7 @@ In addition, you need the [pyml](https://github.com/thierry-martinez/pyml) OCaml
 opam install pyml
 ```
 
-`mi` will automatically be compiled with Python support when the `pyml` package is installed.
+`boot` will automatically be compiled with Python support when the `pyml` package is installed.
 
 NOTE: Currently, there seems to be a problem with the current OPAM bindings with the multicore switch. If the above command fails, try to run the following and then install `pyml` again:
 
@@ -1137,10 +1017,10 @@ NOTE: Currently, there seems to be a problem with the current OPAM bindings with
 opam pin stdcompat 15
 ```
 
-To run the Python-specific test suite, set the `MI_TEST_PYTHON` variable before running `make test`:
+To run the Python-specific test suite:
 
 ```
-MI_TEST_PYTHON=1 make test
+make test-boot-py
 ```
 
 To install for the current user, run `make install` as usual.
@@ -1243,19 +1123,6 @@ opposite conversion is performed when using `pyconvert` on the result of a
 | Tuple       | Tuple (Record)  |
 | other       | N/A             |
 
-## Compiling to OCaml
-The standard library contains functions for compiling and running `mexpr`
-programs targeting OCaml. See the implementation in
-[stdlib/ocaml](stdlib/ocaml). This library requires the python intrinsics and
-that the `boot` package is installed globally for your user. To do the latter,
-run
-
-```
-dune install
-```
-
-after building miking with python intrinsics support.
-
 ## Externals
 Externals are currently only compiled.
 
@@ -1318,6 +1185,157 @@ should be added to `globalExternalImplsMap` in
 
 Morever, depending on the type of the external you might have to extend the
 definition in [./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
+
+### Parallel Programming
+Miking offers a set of externals for shared-memory parallelism using
+atomic operations and threads running on multiple cores.
+
+The parallel programming primitives consist of atomic references and functions
+for creating and synchronizing threads. In addition to the examples below, more
+documentation can be found in the standard library at
+[stdlib/multicore](stdlib/multicore/).
+
+To use the parallel programming externals, ensure that you are on the
+`4.12.0+domains`
+[switch](https://github.com/ocaml-multicore/ocaml-multicore/tree/4.12+domains).
+
+#### Atomic References
+
+Atomic references are similar to ordinary references, except that operations
+performed on them are *atomic*, which means that no other execution thread can
+interfere with the result. In other words, they are safe to use in
+multi-threaded execution. Atomic references are provided in
+[multicore/atomic.mc](stdlib/multicore/atomic.mc).
+
+`atomicMake` creates a new atomic reference and gives it an initial value. The
+value of the atomic reference can be read by `atomicGet`:
+
+```
+include "multicore/atomic.mc"
+mexpr
+let a = atomicMake 0 in
+utest atomicGet a with 0 in
+```
+
+`atomicCAS a oldVal newVal` performs an atomic compare-and-set, that is, it only
+updates the value of `a` to `newVal` if the current value is identical to
+`oldVal`, and then returns a Boolean representing if the update was successful
+or not:
+
+```
+utest atomicCAS a 0 1 with true in
+utest atomicCAS a 42 3 with false in
+utest atomicGet a with 1 in
+```
+
+The compare-and-set operation is currently supported for integer atomic
+references only.
+
+To unconditionally set the value of an atomic reference, we can use
+`atomicExchange`, which also returns the old value of the reference:
+
+```
+utest atomicExchange a 2 with 1 in
+```
+
+Finally, for integer references, we can use `atomicFetchAndAdd` to increase or
+decrease the value of the reference. The function returns the old value of the
+reference:
+
+```
+utest atomicFetchAndAdd a 1 with 2 in
+-- Current value is now 3
+utest atomicFetchAndAdd a (subi 0 45) with 3 in
+-- Current value is now -42
+```
+
+#### Multi-Threaded Execution
+
+Functions for handling threads are provided in
+[multicore/threads.mc](stdlib/multicore/threads.mc).
+The following example program spawns 10 threads that compete for printing their
+IDs:
+
+```
+include "string.mc"
+include "multicore/thread.mc"
+mexpr
+let place = atomicMake 1 in
+let threads = create 10 (lam. threadSpawn (lam.
+  print (join
+    [int2string (atomicFetchAndAdd place 1)
+    , ": thread ID "
+    , int2string (threadID2int (threadSelf ()))
+    , "\n"
+    ]))
+) in
+map threadJoin threads
+```
+
+where `threadSpawn` takes a function of type `Unit -> a` as argument,
+`threadSelf` returns the ID of the current thread, and `threadID2int` converts a
+thread ID to a unique integer. Note that `threadJoin` must be called once for
+each call to `threadSpawn`. The output of the above program might be:
+
+```
+1: thread ID 1
+2: thread ID 2
+3: thread ID 129
+4: thread ID 130
+5: thread ID 3
+6: thread ID 257
+7: thread ID 258
+8: thread ID 131
+9: thread ID 385
+10: thread ID 386
+```
+
+However, the values and order of the thread IDs might be different over
+different runs.
+
+To control the execution order of threads, some form of thread synchronization
+is necessary. This can be done either using atomic references, or using the
+functions `threadCriticalSection`, `threadWait` and `threadNotify`, or both.
+In the following example:
+
+```
+let inCriticalSection = atomicMake false in
+let afterWait = atomicMake false in
+
+let t = threadSpawn (lam.
+  threadCriticalSection (
+    lam.
+      atomicExchange inCriticalSection true;
+      threadWait ();
+      atomicExchange afterWait true
+  )
+) in
+```
+
+the thread `t` enters a critical section, where it first atomically sets the
+`inCriticalSection` flag to true, before calling `threadWait`, which will block
+the execution until another thread calls `threadNotify`. In the following, the
+main thread first waits for `t` to set the `inCriticalSection` flag, before
+making a call to `threadNotify`:
+
+```
+recursive let waitForFlag = lam flag.
+  match atomicGet flag with true then ()
+  else waitForFlag flag
+in
+waitForFlag inCriticalSection;
+threadNotify (threadGetID t);
+```
+
+The `threadNotify` will block the execution of the main thread until `t` has
+finished its critical section, which means that we know that the flag
+`afterWait` must now be true:
+
+```
+utest atomicGet afterWait with true in
+-- Don't forget to clean up!
+threadJoin t;
+```
 
 ## Contributing
 
