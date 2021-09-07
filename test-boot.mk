@@ -8,8 +8,7 @@ base-files+=$(wildcard stdlib/mexpr/*.mc)
 base-files+=$(wildcard stdlib/c/*.mc)
 base-files+=$(wildcard stdlib/ad/*.mc)
 base-files+=$(wildcard stdlib/parser/*.mc)
-
-stdlib-root-files=$(wildcard stdlib/*.mc)
+base-files+=$(wildcard stdlib/*.mc)
 
 sundials-files=
 sundials-files+=$(wildcard test/sundials/*.mc)
@@ -21,15 +20,11 @@ ocaml-files=$(wildcard stdlib/ocaml/*.mc)
 
 # Rules
 
-base: ${base-files} ${stdlib-root-files}
+base: ${base-files}
 sundials: ${sundials-files}
 py: ${py-files}
 ocaml: ${ocaml-files}
 
 # File rule
-${base-files} ${par-files} ${sundials-files} ${py-files} ${ocaml-files}::
-	-@build/${BOOT_NAME} eval --test $@
-
-# These files require special handling to not conflict with the installed stdlib
-${stdlib-root-files}::
-	-@MCORE_STDLIB='@@@' build/${BOOT_NAME} eval --test $@
+${base-files} ${sundials-files} ${py-files} ${ocaml-files}::
+	-@MCORE_STDLIB=`pwd`/stdlib build/${BOOT_NAME} eval --test $@
