@@ -42,16 +42,18 @@ let generateTests = lam ast. lam testsEnabled.
     let symEnv = symEnvEmpty in
     (symEnv, utestStrip ast)
 
-let collectLibraries = lam extNameMap : ExternalNameMap.
-  let f = lam libs. lam lib. setInsert lib libs in
-  let g =
-    lam libs. lam impl :  ExternalImpl. foldl f libs impl.libraries
+let collectlibraries : ExternalNameMap -> ([String], [String])
+= lam extNameMap.
+  let f = lam s. lam str. setInsert str s in
+  let g = lam acc : (Set String, Set String). lam impl :  ExternalImpl.
+    match acc with (libs, clibs) then
+      (foldl f libs impl.libraries, foldl f clibs impl.cLibraries)
+    else never
   in
-  let h = lam libs. lam. lam impls. foldl g libs impls in
-  let libs =
-    mapFoldWithKey h (setEmpty cmpString) extNameMap
-  in
-  setToSeq libs
+  let h = lam acc. lam. lam impls. foldl g acc impls in
+  match mapFoldWithKey h (setEmpty cmpString, setEmpty cmpString) extNameMap
+  with (libs, clibs) then (setToSeq libs, setToSeq clibs)
+  else never
 
 -- NOTE(larshum, 2021-03-22): This does not work for Windows file paths.
 let filename = lam path.
@@ -77,15 +79,16 @@ let insertTunedOrDefaults = lam ast. lam file.
   else default ast
 
 let ocamlCompile =
-  lam options : Options. lam libs. lam sourcePath. lam ocamlProg.
+  lam options : Options. lam libs. lam clibs. lam sourcePath. lam ocamlProg.
   let compileOptions : CompileOptions =
-    {
-      (if options.disableOptimizations then
-        {defaultCompileOptions with optimize = false}
-       else defaultCompileOptions)
-
-       with libraries = libs
-    }
+    let opts = {{
+        defaultCompileOptions
+        with libraries = libs }
+        with cLibraries = clibs }
+    in
+    if options.disableOptimizations then
+      { opts with optimize = false}
+    else opts
   in
   let p : CompileResult = ocamlCompileWithConfig compileOptions ocamlProg in
   let destinationFile = filenameWithoutExtension (filename sourcePath) in
@@ -118,17 +121,17 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
         let ast = generate env ast in
 
         -- Collect external library dependencies
-        let libs = collectLibraries env.exts in
+        match collectlibraries env.exts with (libs, clibs) then
+          let ocamlProg = pprintOcaml ast in
 
-        let ocamlProg = pprintOcaml ast in
+          -- Print the AST after code generation
+          (if options.debugGenerate then printLn ocamlProg else ());
 
-        -- Print the AST after code generation
-        (if options.debugGenerate then printLn ocamlProg else ());
+          -- Compile OCaml AST
+          if options.exitBefore then exit 0
+          else ocamlCompile options libs clibs sourcePath ocamlProg
 
-        -- Compile OCaml AST
-        if options.exitBefore then exit 0
-        else ocamlCompile options libs sourcePath ocamlProg
-
+        else never
       else never
     else never
   else never
