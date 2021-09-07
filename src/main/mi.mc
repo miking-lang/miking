@@ -4,6 +4,7 @@
 -- File miking.mi is the main file of the Miking tool chain.
 
 include "compile.mc"
+include "gpu.mc"
 include "seq.mc"
 include "string.mc"
 include "eval.mc"
@@ -21,6 +22,7 @@ let menu =
 Commands:
   eval      Evaluates a .mc file using an internal interpreter
   compile   Compiles a .mc file into an executable with the same name
+  gpu       Compiles a .mc file into an accelerated executable with the same name
   run       Combines eval and compile, to run the program as fast as possible
   tune      Tunes a program with decision points
 
@@ -45,6 +47,7 @@ let commandsMap = [
 ("run", run),
 ("eval", eval),
 ("compile", compile),
+("gpu", gpu),
 ("tune", tune)
 ] in
 
