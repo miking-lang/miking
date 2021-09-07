@@ -91,7 +91,7 @@ let expected = FProg {decls = [
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
 -- has not been implemented for Futhark AST nodes.
-utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
+utest printFutProg (parameterizeLength t) with printFutProg expected using eqString in
 
 let t = FProg {decls = [
   FDeclFun {
@@ -111,6 +111,6 @@ let expected = FProg {decls = [
       nuFutLet_ y (nFutVar_ x),
       futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
     info = NoInfo ()}]} in
-utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
+utest printFutProg (parameterizeLength t) with printFutProg expected using eqString in
 
 ()

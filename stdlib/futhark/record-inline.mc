@@ -46,6 +46,6 @@ let t = futProgram (futBindall_ [
   nuFutLet_ x (futRecord_ [("a", futInt_ 2), ("b", futInt_ 4)]),
   futRecordProj_ (nFutVar_ x) "b"]) in
 let expected = futProgram (futInt_ 4) in
-utest expr2str (inlineRecords t) with expr2str expected using eqSeq eqc in
+utest printFutProg (inlineRecords t) with printFutProg expected using eqString in
 
 ()

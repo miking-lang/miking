@@ -8,6 +8,10 @@ lang FutharkTypeParamAst
   syn FutTypeParam =
   | FPSize {val : Name}
   | FPType {val : Name}
+
+  sem futTypeParamIdent =
+  | FPSize t -> t.val
+  | FPType t -> t.val
 end
 
 lang FutharkConstAst
