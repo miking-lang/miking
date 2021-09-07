@@ -116,6 +116,9 @@ case $1 in
     install-boot)
         install_boot
         ;;
+    build-mi)
+        build_mi
+        ;;
     run-test)
         run_test "$2"
         ;;

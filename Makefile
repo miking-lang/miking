@@ -13,6 +13,7 @@
   boot\
   install-boot\
   build\
+  build-mi\
   install\
   lint\
   fix\
@@ -39,6 +40,9 @@ install-boot: boot
 
 build: install-boot	# Run the complete bootstrapping process to compile `mi`.
 	@./make
+
+build-mi:		# Build `mi` using the currently installed version.
+	@./make build-mi
 
 install: build
 	@./make install
