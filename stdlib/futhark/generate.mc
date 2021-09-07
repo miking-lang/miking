@@ -522,28 +522,6 @@ mexpr
 
 use TestLang in
 
-let t = symbolize (bindall_ [
-  type_ "intseq" (tyseq_ tyint_),
-  type_ "floatseq" (tyseq_ tyfloat_),
-  let_ "a" (tyvar_ "intseq") (seq_ [int_ 1, int_ 2, int_ 3]),
-  let_ "b" (tyvar_ "floatseq") (seq_ [float_ 2.718, float_ 3.14]),
-  let_ "c" (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
-           (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
-                    [("a", int_ 3), ("b", float_ 2.0)]),
-  let_ "f" (tyarrows_ [tyint_, tyint_, tyint_])
-           (lam_ "a" tyint_ (lam_ "b" tyint_ (addi_ (var_ "a") (var_ "b")))),
-  let_ "g" (tyarrows_ [tyvar_ "floatseq", tyfloat_, tyfloat_])
-            (lam_ "r" (tyvar_ "floatseq")
-              (lam_ "f" tyfloat_ (addf_ (var_ "f") (get_ (var_ "r") (int_ 0))))),
-  let_ "min" (tyarrows_ [tyint_, tyint_, tyint_])
-             (lam_ "a" tyint_ (lam_ "b" tyint_ (
-               if_ (geqi_ (var_ "a") (var_ "b")) (var_ "b") (var_ "a")))),
-  let_ "map" (tyarrows_ [tyarrow_ tyint_ tyint_, tyvar_ "intseq", tyvar_ "intseq"])
-             (lam_ "f" (tyarrow_ tyint_ tyint_) (lam_ "s" (tyvar_ "intseq")
-               (parallelMap_ (var_ "f") (var_ "s")))),
-  unit_
-]) in
-
 let intseq = nameSym "intseq" in
 let n = nameSym "n" in
 let floatseq = nameSym "floatseq" in
@@ -563,6 +541,28 @@ let b3 = nameSym "b" in
 let map = nameSym "map" in
 let f3 = nameSym "f" in
 let s = nameSym "s" in
+
+let t = bindall_ [
+  ntype_ intseq (tyseq_ tyint_),
+  ntype_ floatseq (tyseq_ tyfloat_),
+  nlet_ a (ntyvar_ intseq) (seq_ [int_ 1, int_ 2, int_ 3]),
+  nlet_ b (ntyvar_ floatseq) (seq_ [float_ 2.718, float_ 3.14]),
+  nlet_ c (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
+           (record_ (tyrecord_ [("a", tyint_), ("b", tyfloat_)])
+                    [("a", int_ 3), ("b", float_ 2.0)]),
+  nlet_ f (tyarrows_ [tyint_, tyint_, tyint_])
+           (nlam_ a2 tyint_ (nlam_ b2 tyint_ (addi_ (nvar_ a2) (nvar_ b2)))),
+  nlet_ g (tyarrows_ [ntyvar_ floatseq, tyfloat_, tyfloat_])
+            (nlam_ r (ntyvar_ floatseq)
+              (nlam_ f2 tyfloat_ (addf_ (nvar_ f2) (get_ (nvar_ r) (int_ 0))))),
+  nlet_ min (tyarrows_ [tyint_, tyint_, tyint_])
+             (nlam_ a3 tyint_ (nlam_ b3 tyint_ (
+               if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
+  nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntyvar_ intseq, ntyvar_ intseq])
+             (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntyvar_ intseq)
+               (parallelMap_ (nvar_ f3) (nvar_ s)))),
+  unit_
+] in
 
 let intSeqType = FTyParamsApp {
   ty = nFutIdentTy_ intseq, params = [FPSize {val = n}], info = NoInfo ()} in
@@ -610,7 +610,7 @@ let expected = FProg {decls = [
     body = futAppSeq_ (futConst_ (FCMap ())) [nFutVar_ f3, nFutVar_ s],
     info = NoInfo ()}
 ]} in
-let entryPoints = setOfSeq [f, g, min] in
+let entryPoints = setOfSeq nameCmp [f, g, min] in
 utest printFutProg (generateProgram entryPoints t) with printFutProg expected
 using eqSeq eqc in
 

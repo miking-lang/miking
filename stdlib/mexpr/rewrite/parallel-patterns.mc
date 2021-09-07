@@ -383,9 +383,6 @@ let reducePattern : () -> Pattern =
       let els = substituteVariables els subMap in
       let els = eliminateUnusedLetExpressions (bind_ els (nvar_ fResultPair.0)) in
       let f = nulam_ x (nulam_ y els) in
-
-      -- TODO(larshum, 2021-08-27): Decide whether this reduce should be
-      -- parallelized or not at a later stage.
       seqReduce f accPair.1 sExpr
     else
       error (join [

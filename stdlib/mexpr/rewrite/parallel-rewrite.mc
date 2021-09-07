@@ -1,7 +1,8 @@
 include "mexpr/rewrite/pattern-match.mc"
 include "mexpr/rewrite/parallel-patterns.mc"
+include "mexpr/rewrite/promote.mc"
 
-lang MExprParallelPattern = MExprParallelKeywordMaker
+lang MExprParallelPattern = MExprParallelKeywordMaker + PMExprPromote
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
     let binding : RecLetBinding = t in
@@ -21,7 +22,7 @@ lang MExprParallelPattern = MExprParallelKeywordMaker
   | t ->
     let replacements = mapEmpty nameCmp in
     match parallelPatternRewriteH patterns replacements t with (_, t) then
-      t
+      promote t
     else never
 
   sem parallelPatternRewriteH (patterns : [Pattern])
@@ -250,9 +251,6 @@ let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
 
--- When an arbitrary function is passed, the pattern rewriting will make it
--- sequential. This is because the neutral element cannot be found, nor can the
--- associativity be confirmed.
 let fold = nameSym "fold" in
 let expr = preprocess (bindall_ [
   nreclets_ [
@@ -275,6 +273,6 @@ let expr = preprocess (bindall_ [
 ]) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
-utest containsParallelKeyword expr with false in
+utest containsParallelKeyword expr with true in
 
 ()

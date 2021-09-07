@@ -59,7 +59,7 @@ let t = futFunction (futBindall_ [
 let expected = futFunction (futBindall_ [
   nuFutLet_ x (futInt_ 2),
   futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 4]]) in
-utest expr2str (deadcodeElimination t) with expr2str expected using eqSeq eqc in
+utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
 
 let f = nameSym "f" in
 let t = futFunction (futBindall_ [
@@ -69,7 +69,7 @@ let t = futFunction (futBindall_ [
   ]))),
   futUnit_ ()]) in
 let expected = futFunction (futUnit_ ()) in
-utest expr2str (deadcodeElimination t) with expr2str expected using eqSeq eqc in
+utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
 
 let i = nameSym "i" in
 let t = futFunction (futBindall_ [
@@ -91,6 +91,6 @@ let expected = futFunction (futBindall_ [
     i
     (nFutVar_ y)
     (futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, nFutVar_ i])]) in
-utest expr2str (deadcodeElimination t) with expr2str expected using eqSeq eqc in
+utest printFutProg (deadcodeElimination t) with printFutProg expected using eqString in
 
 ()

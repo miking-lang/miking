@@ -33,6 +33,21 @@ lang FutharkLengthParameterize = FutharkAst
     else smapAccumL_FExpr_FExpr parameterizeLengthExpr env (FEApp t)
   | t -> smapAccumL_FExpr_FExpr parameterizeLengthExpr env t
 
+  sem eliminateParamAliases (env : LengthParameterizeEnv)
+                            (replacements : Map Name Name) =
+  | FEVar t ->
+    match mapLookup t.ident replacements with Some paramId then
+      FEVar {t with ident = paramId}
+    else FEVar t
+  | FELet ({body = FEVar {ident = id}} & t) ->
+    match mapLookup id env.typeParams with Some param then
+      let paramId = futTypeParamIdent param in
+      let replacements = mapInsert t.ident paramId replacements in
+      eliminateParamAliases env replacements t.inexpr
+    else
+      FELet {t with inexpr = eliminateParamAliases env replacements t.inexpr}
+  | t -> smap_FExpr_FExpr (eliminateParamAliases env replacements) t
+
   sem parameterizeLengthDecl =
   | FDeclFun t ->
     let nameAndType : FutTypeParam -> (Name, FutTypeParam) = lam typeParam.
@@ -45,6 +60,7 @@ lang FutharkLengthParameterize = FutharkAst
     let env = {params = mapFromSeq nameCmp t.params,
                typeParams = mapFromSeq nameCmp (map nameAndType t.typeParams)} in
     match parameterizeLengthExpr env t.body with (env, body) then
+      let body = eliminateParamAliases env (mapEmpty nameCmp) body in
       let env : LengthParameterizeEnv = env in
       FDeclFun {{{t with body = body}
                     with params = mapBindings env.params}
@@ -83,15 +99,12 @@ let expected = FProg {decls = [
     ident = f, entry = true, typeParams = [FPSize {val = n}],
     params = [(s, futSizedArrayTy_ futIntTy_ n)],
     ret = futIntTy_,
-    body = futBindall_ [
-      nuFutLet_ x (nFutVar_ n),
-      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]
-    ],
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ n, futInt_ 1],
     info = NoInfo ()}]} in
 
 -- NOTE(larshum, 2021-08-11): We compare the pretty-printed strings as equality
 -- has not been implemented for Futhark AST nodes.
-utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
+utest printFutProg (parameterizeLength t) with printFutProg expected using eqString in
 
 let t = FProg {decls = [
   FDeclFun {
@@ -107,10 +120,8 @@ let expected = FProg {decls = [
     ident = f, entry = true, typeParams = [FPSize {val = x}],
     params = [(s, futSizedArrayTy_ futIntTy_ x)],
     ret = futIntTy_,
-    body = futBindall_ [
-      nuFutLet_ y (nFutVar_ x),
-      futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1]],
+    body = futAppSeq_ (futConst_ (FCAdd ())) [nFutVar_ x, futInt_ 1],
     info = NoInfo ()}]} in
-utest expr2str (parameterizeLength t) with expr2str expected using eqSeq eqc in
+utest printFutProg (parameterizeLength t) with printFutProg expected using eqString in
 
 ()
