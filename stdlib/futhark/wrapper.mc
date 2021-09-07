@@ -2,6 +2,7 @@ include "map.mc"
 include "string.mc"
 include "c/ast.mc"
 include "c/pprint.mc"
+include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
@@ -760,20 +761,40 @@ lang CToOCamlWrapper = CWrapperBase
       ty = CTyInt (), id = Some countIdent,
       init = Some (CIExpr {expr = CEInt {i = 0}})
     } in
-    let freeCvars =
-      map
-        (lam cvar : (Name, CType).
-          CSExpr {expr = CEApp {
-            fun = _getIdentExn "free",
-            args = [CEVar {id = cvar.0}]}})
-        cvars
+    let stmts =
+      match return.ty with TyInt _ | TyChar _ | TyFloat _ then
+        let cvar : (Name, CType) = head cvars in
+        let returnPtrIdent = nameSym "ret_ptr" in
+        let returnPtrStmt = CSDef {
+          ty = CTyPtr {ty = cvar.1}, id = Some returnPtrIdent,
+          init = Some (CIExpr {expr = CEUnOp {
+            op = COAddrOf (),
+            arg = CEVar {id = cvar.0}
+          }})
+        } in
+        let cvars = [(returnPtrIdent, CTyPtr {ty = cvar.1})] in
+        join [
+          [countDeclStmt, returnPtrStmt],
+          _generateCToOCamlWrapperInner countIdent cvars return.ident
+                                        dimIdents return.ty]
+      else
+        let freeCvars =
+          join (
+            map
+              (lam cvar : (Name, CType).
+                match cvar.1 with CTyPtr _ then
+                  [CSExpr {expr = CEApp {
+                    fun = _getIdentExn "free",
+                    args = [CEVar {id = cvar.0}]}}]
+                else [])
+              cvars)
+        in
+        join [
+          [countDeclStmt],
+          _generateCToOCamlWrapperInner countIdent cvars return.ident
+                                        dimIdents return.ty,
+          freeCvars]
     in
-    let stmts = join [
-      [countDeclStmt],
-      _generateCToOCamlWrapperInner countIdent cvars return.ident
-                                    dimIdents return.ty,
-      freeCvars
-    ] in
     (return, stmts)
 end
 
@@ -918,11 +939,11 @@ mexpr
 use Test in
 
 let functionIdent = nameSym "f" in
-let returnType = tyseq_ (tyseq_ (tyseq_ tyint_)) in
-let args = [
-  (nameSym "a", tyseq_ (tyseq_ (tyseq_ tyfloat_)))
+let functionType = tyarrows_ [
+  tyseq_ tyint_, tyseq_ tyint_
 ] in
+let accelerated = mapFromSeq nameCmp [(functionIdent, functionType)] in
 
-let wrapperCode = generateWrapperCode functionIdent returnType args in
+let wrapperCode = generateWrapperCode accelerated in
+-- print (printCProg [] wrapperCode);
 ()
--- print (printCProg [] wrapperCode)
