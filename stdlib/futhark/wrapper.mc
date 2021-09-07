@@ -945,4 +945,5 @@ let functionType = tyarrows_ [
 let accelerated = mapFromSeq nameCmp [(functionIdent, functionType)] in
 
 let wrapperCode = generateWrapperCode accelerated in
--- print (printCProg [] wrapperCode)
+-- print (printCProg [] wrapperCode);
+()
