@@ -1,8 +1,9 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
--- The mi-lite is a lightweight compiler with minimal dependencies intended to
--- be used solely for the first bootstrapping stage.
+-- The mi-lite is a lightweight compiler using the minimal amount of code
+-- needed for bootstrapping. It is used in place of mi in the first
+-- bootstrapping stage to speed up compile times.
 
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
@@ -40,16 +41,18 @@ let collectLibraries = lam extNameMap : ExternalNameMap.
   in
   setToSeq libs
 
-let compileOCaml : [String] -> String -> String -> Unit =
-  lam libs. lam file. lam ocamlProgram.
-  let options : CompileOptions = {defaultCompileOptions with libraries = libs} in
+let compileOCaml : Bool -> [String] -> String -> String -> Unit =
+  lam optimize. lam libs. lam file. lam ocamlProgram.
+  let options : CompileOptions =
+    {{defaultCompileOptions with libraries = libs}
+                            with optimize = optimize} in
   let p : CompileResult = ocamlCompileWithConfig options ocamlProgram in
   let destinationFile = filenameWithoutExtension (filename file) in
   sysMoveFile p.binaryPath destinationFile;
   sysChmodWriteAccessFile destinationFile;
   p.cleanup ()
 
-let compile : String -> Unit = lam file.
+let compile : Bool -> String -> Unit = lam optimize. lam file.
   use MCoreLiteCompile in
   let ast = parseMCoreFile [] file in
   let ast = utestStrip ast in
@@ -63,13 +66,19 @@ let compile : String -> Unit = lam file.
       in
       let ast = generate env ast in
       let libs = collectLibraries env.exts in
-      compileOCaml libs file (expr2str ast)
+      let ocamlProgram = expr2str ast in
+      compileOCaml optimize libs file ocamlProgram
     else never
   else never
 
 mexpr
 
-if neqi (length argv) 2 then
-  print "Usage: mi-lite file"
-else
-  compile (get argv 1)
+let printMenu = lam. print "Usage: mi-lite [0|1] file" in
+
+if neqi (length argv) 3 then
+  printMenu ()
+else match get argv 1 with "0" then
+  compile false (get argv 2)
+else match get argv 1 with "1" then
+  compile true (get argv 2)
+else printMenu ()
