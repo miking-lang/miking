@@ -18,6 +18,7 @@
   lint\
   fix\
   clean\
+  uninstall\
   test\
   test-all\
   test-boot-compile\
@@ -55,6 +56,9 @@ fix:
 
 clean:
 	@./make clean
+
+uninstall:
+	@./make uninstall
 
 test: test-boot-base
 

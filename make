@@ -76,6 +76,15 @@ install() {
     fi
 }
 
+# Uninstall the Miking bootstrap interpreter and compiler
+uninstall() {
+    set +e
+    dune uninstall > /dev/null 2>&1
+    rm -f $BIN_PATH/$MI_NAME
+    rm -rf $LIB_PATH/stdlib
+    set -e
+}
+
 # Lint ocaml source code
 lint () {
     dune build @fmt
@@ -133,6 +142,9 @@ case $1 in
         ;;
     install)
         install
+        ;;
+    uninstall)
+        uninstall
         ;;
     clean)
         rm -rf _build
