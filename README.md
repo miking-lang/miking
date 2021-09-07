@@ -29,7 +29,7 @@ your system. When using the Miking system, you need to use the `4.12.0+domains`
 switch. Running `opam switch 4.12.0+domains` followed by `eval $(opam env)`
 always takes you back to the correct switch.
 
-To compile the Miking project, go back to the Miking repository and execute:
+To compile the project, go back to the Miking repository and execute:
 
 ```
 make
@@ -41,7 +41,15 @@ is the main Miking executable, containing both an interpreter and a
 compiler. You will mainly be using `mi`, but `boot` provides a few
 features not yet available in the main executable, such as a REPL.
 
-Optionally, to run the test suite, use `make test-all`. Beware that this may take some time.
+To run tests checking that everything has been installed correctly,
+use
+
+```
+make test
+```
+
+Alternatively, you can use `make test-all` to run the full test suite.
+Beware that this may take some time.
 
 To run a hello world program, create a file `hello.mc` with the following code,
 
