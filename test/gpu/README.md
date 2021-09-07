@@ -4,14 +4,14 @@ This has only been tested on Ubuntu 20.04.
 
 ## Installation
 
-The `mi` compiler with GPU support can be installed from the `gpu-example`
-branch of `git@github.com:larshum/miking.git`.
+The `mi` compiler with GPU support can be installed from this branch, following
+the instructions in the README at the root of the repo.
 
 In addition to the requirements of `mi` itself, the GPU compilation also
-requires installing `make`, CUDA and Futhark:
+requires installing CUDA and Futhark:
 * CUDA is assumed to be installed in `usr/local/cuda`, which is the default
-installation directory. Use the following [installation guide](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html).
-* To install Futhark, you may follow [these instructions](https://futhark.readthedocs.io/en/stable/installation.html)
+installation directory. We recommend following the steps on the [download page](https://developer.nvidia.com/cuda-downloads).
+* To install Futhark, you may follow [these instructions](https://futhark.readthedocs.io/en/stable/installation.html).
 
 ## Running examples
 
