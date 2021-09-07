@@ -14,6 +14,7 @@ set -e
 
 export BOOT_NAME=boot
 export MI_NAME=mi
+export MI_LITE_NAME=mi-lite
 
 # Setup environment variable to find standard library
 cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
@@ -36,11 +37,11 @@ build() {
         echo "Bootstrapped compiler already exists. Run 'make clean' before to recompile. "
     else
         echo "Bootstrapping the Miking compiler (1st round, might take a few minutes)"
-        time build/$BOOT_NAME eval src/main/mi.mc -- compile --disable-optimizations src/main/mi.mc
+        time build/$BOOT_NAME eval src/main/mi-lite.mc -- src/main/mi-lite.mc
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
-        time ./$MI_NAME compile src/main/mi.mc
+        time ./$MI_LITE_NAME src/main/mi.mc
         mv -f $MI_NAME build/$MI_NAME
-        rm -f mi
+        rm -f $MI_LITE_NAME
     fi
 }
 
