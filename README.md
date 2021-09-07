@@ -1265,17 +1265,17 @@ let threads = create 10 (lam. threadSpawn (lam.
   print (join
     [int2string (atomicFetchAndAdd place 1)
     , ": thread ID "
-    , int2string (threadID2int (threadSelf ()))
+    , int2string (threadSelf ())
     , "\n"
     ]))
 ) in
 map threadJoin threads
 ```
 
-where `threadSpawn` takes a function of type `Unit -> a` as argument,
-`threadSelf` returns the ID of the current thread, and `threadID2int` converts a
-thread ID to a unique integer. Note that `threadJoin` must be called once for
-each call to `threadSpawn`. The output of the above program might be:
+where `threadSpawn` takes a function of type `Unit -> a` as argument
+and `threadSelf` returns the ID of the current thread. Note that
+`threadJoin` must be called once for each call to `threadSpawn`. The
+output of the above program might be:
 
 ```
 1: thread ID 1
@@ -1292,50 +1292,6 @@ each call to `threadSpawn`. The output of the above program might be:
 
 However, the values and order of the thread IDs might be different over
 different runs.
-
-To control the execution order of threads, some form of thread synchronization
-is necessary. This can be done either using atomic references, or using the
-functions `threadCriticalSection`, `threadWait` and `threadNotify`, or both.
-In the following example:
-
-```
-let inCriticalSection = atomicMake false in
-let afterWait = atomicMake false in
-
-let t = threadSpawn (lam.
-  threadCriticalSection (
-    lam.
-      atomicExchange inCriticalSection true;
-      threadWait ();
-      atomicExchange afterWait true
-  )
-) in
-```
-
-the thread `t` enters a critical section, where it first atomically sets the
-`inCriticalSection` flag to true, before calling `threadWait`, which will block
-the execution until another thread calls `threadNotify`. In the following, the
-main thread first waits for `t` to set the `inCriticalSection` flag, before
-making a call to `threadNotify`:
-
-```
-recursive let waitForFlag = lam flag.
-  match atomicGet flag with true then ()
-  else waitForFlag flag
-in
-waitForFlag inCriticalSection;
-threadNotify (threadGetID t);
-```
-
-The `threadNotify` will block the execution of the main thread until `t` has
-finished its critical section, which means that we know that the flag
-`afterWait` must now be true:
-
-```
-utest atomicGet afterWait with true in
--- Don't forget to clean up!
-threadJoin t;
-```
 
 ## Contributing
 
