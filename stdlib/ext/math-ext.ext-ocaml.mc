@@ -1,36 +1,34 @@
 include "map.mc"
 include "ocaml/ast.mc"
 
+let impl = lam arg : { ident : String, ty : Type }.
+  { ident = arg.ident, ty = arg.ty, libraries = [], cLibraries = [] }
+
 let mathExtMap =
   use OCamlTypeAst in
-  mapFromSeq cmpString
-  [
+  mapFromSeq cmpString [
     ("externalExp", [
-      { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
+      impl { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("externalLog", [
-      { ident = "Float.log", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
+      impl { ident = "Float.log", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("externalAtan", [
-      { ident = "Float.atan", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
+      impl { ident = "Float.atan", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("externalSin", [
-      { ident = "Float.sin", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
+      impl { ident = "Float.sin", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("externalCos", [
-      { ident = "Float.cos", ty = tyarrow_ tyfloat_ tyfloat_, libraries = [] }
+      impl { ident = "Float.cos", ty = tyarrow_ tyfloat_ tyfloat_ }
     ]),
     ("externalAtan2", [
-      { ident = "Float.atan2",
-        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
-        libraries = [] }
+      impl { ident = "Float.atan2", ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_] }
     ]),
     ("externalPow", [
-      { ident = "Float.pow",
-        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
-        libraries = [] }
+      impl { ident = "Float.pow", ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_] }
     ]),
     ("externalSqrt", [
-      { ident = "Float.sqrt", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
+      impl { ident = "Float.sqrt", ty = tyarrow_ tyfloat_ tyfloat_ }
     ])
   ]
