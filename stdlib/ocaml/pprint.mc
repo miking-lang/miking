@@ -161,6 +161,7 @@ lang OCamlPrettyPrint =
   | OTmLabel _ -> true
   | OTmRecord _ -> true
   | OTmProject _ -> true
+  | OTmLam _ -> false
 
   sem patIsAtomic =
   | OPatRecord _ -> false
@@ -346,6 +347,17 @@ lang OCamlPrettyPrint =
     else never
   | TmLam {ident = id, body = b} ->
     match pprintVarName env id with (env,str) then
+      match pprintCode (pprintIncr indent) env b with (env,body) then
+        (env,join ["fun ", str, " ->", pprintNewline (pprintIncr indent), body])
+      else never
+    else never
+  | OTmLam {label = label, ident = id, body = b} ->
+    match pprintVarName env id with (env,str) then
+      let str =
+        match label with Some label then join ["~", label, ":", str]
+        else match label with None _ then str
+        else never
+      in
       match pprintCode (pprintIncr indent) env b with (env,body) then
         (env,join ["fun ", str, " ->", pprintNewline (pprintIncr indent), body])
       else never

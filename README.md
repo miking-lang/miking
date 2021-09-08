@@ -508,7 +508,7 @@ match (opt1, opt2) with
 | (_, _) -> 1
 ```
 
-is order-dependent; any change in pattern order changes which match-arm is executed. To express this in an order-independent manner we `&` every pattern with the inverse (`!`) of the union (`|`) of the previous patterns. If we pretent for a moment that OCaml supports `&` and `!` in patterns they could then be written as:
+is order-dependent; any change in pattern order changes which match-arm is executed. To express this in an order-independent manner we `&` every pattern with the inverse (`!`) of the union (`|`) of the previous patterns. If we pretend for a moment that OCaml supports `&` and `!` in patterns they could then be written as:
 
 ```ocaml
 match (opt1, opt2) with
@@ -1149,7 +1149,12 @@ let mathExtMap =
   mapFromSeq cmpString
   [
     ("externalExp", [
-      { ident = "Float.exp", ty = tyarrow_ tyfloat_ tyfloat_ , libraries = [] }
+      { 
+        ident = "Float.exp", 
+        ty = tyarrow_ tyfloat_ tyfloat_ , 
+        libraries = [], 
+        cLibraries = [] 
+      }
     ])
   ]
 ```
@@ -1161,19 +1166,73 @@ standard library. The field `ty` encode the OCaml type of this value (see
 between miking and OCaml. In the case where you have multiple implementations,
 the compiler will try to pick the implementation which gives the least amount of
 overhead when converting to and from OCaml values. The `libraries` field list
-libraries that are needed to call this function. In this case none is needed
-since it is part of the standard library. If let's say we wanted to use
-`Float.exp` from a library `foo`, then we should instead have the field `libraries =
+OCaml libraries that are needed to call this function, and `cLibraries` lists c
+libraries that are needed during linking. In this case none are needed since it
+is part of the standard library. If let's say we wanted to use `Float.exp` from
+a library `foo`, then we should instead have the field `libraries =
 ["foo"]`. Finally, we need to add `mathExtMap` to `globalExternalImplsMap` in
 [stdlib/ocaml/external-includes.mc](stdlib/ocaml/external-includes.mc).
 
-If you use more complicated data-structures, please consult
-[stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
-[stdlib/ext/ext-test.ext-ocaml.mc](stdlib/ext/ext-test.ext-ocaml.mc)
-(and possibly extend [stdlib/ocaml/external.mc](stdlib/ocaml/external.mc)), to
-see how these are converted to and from OCaml. As of now, there is no overhead
-when converting between integers, floats, bools, chars, and tuples of these as
-well as arrow types of these.
+### Conversion between values
+Conversion between Miking values and OCaml values is defined in
+[stdlib/ocaml/external.mc](stdlib/ocaml/external.mc). Since externals are in an
+early stage of development these conversions are not complete and subject to
+change. 
+
+The following Basic types are converted without any computational overhead:
+
+| **Miking type** | **OCaml type** |
+|:----------------|:---------------|
+| `Int`           | `int`          |
+| `Float`         | `float`        |
+| `Bool`          | `bool`         |
+
+The overhead of converting sequences to OCaml data-structures is proportional to
+the length of the sequence times the conversion cost for the type of the
+elements. Strings in Miking is a special case of sequences.
+
+| **Miking type**      | **OCaml type** | **Comment**                                                                                 |
+|:---------------------|:---------------|:--------------------------------------------------------------------------------------------|
+| `[A]`                | `'a list`      |                                                                                             |
+| `[A]`                | `'a array`     | A copy is made, mutating the OCaml array does not mutate the sequence.                      |
+| `[Char]` or `String` | `string`       | The Miking string is converted to, and the OCaml string is assumed to be, encoded in UTF-8. |
+    
+Tensors are passed by reference to OCaml, i.e. mutating the corresponding
+data-structure in OCaml will mutate the tensor. As a temporary solution the
+conversion depends on the underlying implementation of the tensor, which is
+controlled by the tensor create functions `tensorCreateDense`,
+`tensorCreateCArrayInt`, and `tensorCreateCArrayFloat`. The main purpose of the
+latter two is to allow data-sharing with C libraries via OCaml bindings.
+
+| **Miking type** | **OCaml type**                                   | **Comment**                                                         |
+|:----------------|:-------------------------------------------------|:--------------------------------------------------------------------|
+| `Tensor[Int]`   | `Bigarray.((int, int_elt, c_layout) genarray.t)` | Must use `tensorCreateCArrayInt`, otherwise a runtime error occurs. |
+| `Tensor[Float]` | `Bigarray.((float, float64_elt, c_layout) genarray.t)` | Must use `tensorCreateCArrayFloat`, otherwise a runtime error occurs. |
+| `Tensor[Int]` of rank 1   | `Bigarray.((int, int_elt, c_layout) Array1.t)` | Must use `tensorCreateCArrayInt`, otherwise a runtime error occurs. |
+| `Tensor[Float]` of rank 1 | `Bigarray.((float, float64_elt, c_layout) Array1.t)` | Must use `tensorCreateCArrayFloat`, otherwise a runtime error occurs. |
+
+Tuples are converted without overhead if the conversion of their elements are
+without overhead. The same is true for arrow types. The fields in Miking records
+are un-ordered while they are ordered in OCaml so there is some overhead
+involved when converting records as each field of the Miking records needs to be
+projected to form an new OCaml records, and vice versa. The fields of the Miking
+record are associated with the fields of the OCaml record syntactically by
+position when defining the external. As an example, if the external
+```
+external myRecord : {a : Int, b: Float}
+```
+has an OCaml implementation with type `{c : int; d : float}` then the field `a` is
+associated with the field `c` and the field `b` with the field `d`.
+
+If the Miking type is abstract, i.e. we define it as 
+```
+type MyType
+```
+then no conversion is performed to and from this type.
+
+Please consult [stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
+[stdlib/ext/ext-test.ext-ocaml.mc](stdlib/ext/ext-test.ext-ocaml.mc), for more
+examples.
 
 ### Sundials
 
