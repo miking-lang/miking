@@ -1241,7 +1241,6 @@ Please consult [stdlib/ext/ext-test.mc](stdlib/ext/ext-test.mc) and
 examples.
 
 ### Sundials
-
 A more involved example on the use of externals is an interface to the
 [Sundials](https://computing.llnl.gov/projects/sundials) numerical DAE solver.
 You find the implementation in
@@ -1291,6 +1290,39 @@ make test-sundials
 ```
 
 To install for the current user, run `make install` as usual.
+
+
+### Ipopt
+Another example use of externals is an interface to the constrained Non-Linear
+Program solver [Ipopt](https://coin-or.github.io/Ipopt/). This interface is
+defined in [stdlib/ipopt/ipopt.mc](stdlib/ipopt/ipopt.mc) and
+[stdlib/ipopt/ipopt.ext-ocaml.mc](stdlib/ipopt/ipopt.ext-ocaml.mc). This library
+depends on both the OCaml library [ipoptml](https://github.com/br4sco/ipoptml)
+and the ipopt c library.
+
+To use this library you need to do the following:
+
+Install the ipopt c library, which you can do on ubuntu 20.04 with
+```
+sudo apt-get install coinor-libipopt-dev
+```
+
+Install dependencies for [ipoptml](https://github.com/br4sco/ipoptml),
+```
+opam install ctypes ctypes-foreign
+```
+
+Clone the [ipoptml](https://github.com/br4sco/ipoptml) repo and in its root run
+```
+dune build
+dune install
+```
+
+You can then test the solver in Miking with
+
+```
+make test-ipopt
+```
 
 ### Parallel Programming
 Miking offers a set of externals for shared-memory parallelism using
