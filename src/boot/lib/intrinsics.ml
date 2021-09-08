@@ -157,6 +157,12 @@ module Mseq = struct
       | List s ->
           Array.of_list s
 
+    let to_array_copy = function
+      | Rope s ->
+          Rope.Convert.to_array_array s |> Array.copy
+      | List s ->
+          Array.of_list s
+
     let of_ustring_rope u = Rope (Rope.Convert.of_ustring_array u)
 
     let of_ustring_list u = List (ustring2list u)
@@ -166,6 +172,8 @@ module Mseq = struct
           Rope.Convert.to_ustring_array s
       | List s ->
           list2ustring s
+
+    let to_utf8 s = to_ustring s |> Ustring.to_utf8
 
     let equal f s1 s2 =
       match (s1, s2) with
@@ -210,7 +218,11 @@ module Mseq = struct
 
     let of_array = of_array_rope
 
+    let of_array_copy a = Array.copy a |> of_array
+
     let of_ustring = of_ustring_rope
+
+    let of_utf8 s = Ustring.from_utf8 s |> of_ustring
   end
 end
 
