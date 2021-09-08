@@ -94,7 +94,7 @@ val foldr2_array : ('a -> 'b -> 'c -> 'c) -> 'a t -> 'b t -> 'c -> 'c
 module Convert : sig
   val to_array_array : 'a t -> 'a array
   (** [Rope.Convert.to_array_* s] converts the rope [s] into an array. This
-      function collapses [s]. *)
+      function collapses [s] and returns a reference to the underlying data. *)
 
   val of_array_array : 'a array -> 'a t
   (** [Rope.Convert.of_array_* a] converts the array [a] into a rope. The
