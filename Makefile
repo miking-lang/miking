@@ -26,6 +26,7 @@
   test-boot\
   test-boot-base\
   test-sundials\
+	test-ipopt\
   test-par\
   test-boot-py\
   test-boot-ocaml
@@ -73,6 +74,9 @@ test-compile: build/mi
 
 test-sundials: build/mi
 	@$(MAKE) -s -f test-sundials.mk all
+
+test-ipopt: build/mi
+	@$(MAKE) -s -f test-ipopt.mk all
 
 test-par: build/mi
 	@$(MAKE) -s -f test-par.mk all

@@ -4,6 +4,7 @@ include "ext/math-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
+include "ipopt/ipopt.ext-ocaml.mc"
 
 type ExternalImpl = {
   ident : String,
@@ -22,5 +23,6 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       mathExtMap,
       sundialsExtMap,
       atomicExtMap,
-      threadExtMap
+      threadExtMap,
+      ipoptExtMap
     ]
