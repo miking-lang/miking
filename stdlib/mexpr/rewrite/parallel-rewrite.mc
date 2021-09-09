@@ -123,8 +123,6 @@ lang TestLang =
   | TmParallelMap2 _ -> false
   | TmParallelFlatMap _ -> false
   | TmParallelReduce _ -> false
-  | TmParallelScan _ -> false
-  | TmParallelFilter _ -> false
   
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmParallelMap t ->
@@ -155,8 +153,6 @@ lang TestLang =
         else never
       else never
     else never
-  | TmParallelScan t -> never
-  | TmParallelFilter t -> never
 end
 
 mexpr

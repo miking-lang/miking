@@ -202,26 +202,6 @@ let futReduce_ = use FutharkAst in
   lam f. lam ne. lam as.
   futAppSeq_ (futConst_ (FCReduce ())) [f, ne, as]
 
-let futScan_ = use FutharkAst in
-  lam f. lam ne. lam as.
-  futAppSeq_ (futConst_ (FCScan ())) [f, ne, as]
-
-let futFilter_ = use FutharkAst in
-  lam p. lam as.
-  futAppSeq_ (futConst_ (FCFilter ())) [p, as]
-
-let futPartition_ = use FutharkAst in
-  lam p. lam as.
-  futAppSeq_ (futConst_ (FCPartition ())) [p, as]
-
-let futAll_ = use FutharkAst in
-  lam p. lam as.
-  futAppSeq_ (futConst_ (FCAll ())) [p, as]
-
-let futAny_ = use FutharkAst in
-  lam p. lam as.
-  futAppSeq_ (futConst_ (FCAny ())) [p, as]
-
 let futFlatten_ = use FutharkAst in
   lam s.
   futApp_ (futConst_ (FCFlatten ())) s

@@ -14,8 +14,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelMap2 {f: Expr, as: Expr, bs: Expr, ty: Type, info: Info}
   | TmParallelFlatMap {f: Expr, as: Expr, ty: Type, info: Info}
   | TmParallelReduce {f: Expr, ne: Expr, as: Expr, ty: Type, info: Info}
-  | TmParallelScan {f: Expr, ne: Expr, as: Expr, ty: Type, info: Info}
-  | TmParallelFilter {p: Expr, as: Expr, ty: Type, info: Info}
 
   sem isKeyword =
   | TmAccelerate _ -> true
@@ -23,8 +21,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelMap2 _ -> true
   | TmParallelFlatMap _ -> true
   | TmParallelReduce _ -> true
-  | TmParallelScan _ -> true
-  | TmParallelFilter _ -> true
 
   sem matchKeywordString (info : Info) =
   | "accelerate" ->
@@ -45,13 +41,6 @@ lang MExprParallelKeywordMaker =
     Some (3, lam lst. TmParallelReduce {f = get lst 0, ne = get lst 1,
                                         as = get lst 2, ty = TyUnknown {info = info},
                                         info = info})
-  | "parallelScan" ->
-    Some (3, lam lst. TmParallelScan {f = get lst 0, ne = get lst 1,
-                                      as = get lst 2, ty = TyUnknown {info = info},
-                                      info = info})
-  | "parallelFilter" ->
-    Some (2, lam lst. TmParallelFilter {p = get lst 0, as = get lst 1,
-                                        ty = TyUnknown {info = info}, info = info})
 
   sem ty =
   | TmAccelerate t -> t.ty
@@ -59,8 +48,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelMap2 t -> t.ty
   | TmParallelFlatMap t -> t.ty
   | TmParallelReduce t -> t.ty
-  | TmParallelScan t -> t.ty
-  | TmParallelFilter t -> t.ty
 
   sem withType (ty : Type) =
   | TmAccelerate t -> TmAccelerate {t with ty = ty}
@@ -68,8 +55,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelMap2 t -> TmParallelMap2 {t with ty = ty}
   | TmParallelFlatMap t -> TmParallelFlatMap {t with ty = ty}
   | TmParallelReduce t -> TmParallelReduce {t with ty = ty}
-  | TmParallelScan t -> TmParallelScan {t with ty = ty}
-  | TmParallelFilter t -> TmParallelFilter {t with ty = ty}
 
   sem smapAccumL_Expr_Expr (f : acc -> a -> (acc, b)) (acc : acc) =
   | TmAccelerate t ->
@@ -102,20 +87,6 @@ lang MExprParallelKeywordMaker =
         match f acc t.as with (acc, as) then
           (acc, TmParallelReduce {{{t with f = tf} with ne = ne} with as = as})
         else never
-      else never
-    else never
-  | TmParallelScan t ->
-    match f acc t.f with (acc, tf) then
-      match f acc t.ne with (acc, ne) then
-        match f acc t.as with (acc, as) then
-          (acc, TmParallelScan {{{t with f = tf} with ne = ne} with as = as})
-        else never
-      else never
-    else never
-  | TmParallelFilter t ->
-    match f acc t.p with (acc, p) then
-      match f acc t.as with (acc, as) then
-        (acc, TmParallelFilter {{t with p = p} with as = as})
       else never
     else never
 
@@ -158,17 +129,6 @@ lang MExprParallelKeywordMaker =
                            with ne = ne}
                            with as = typeAnnotExpr env t.as}
                            with ty = ty ne}
-  | TmParallelScan t ->
-    let ne = typeAnnotExpr env t.ne in
-    TmParallelScan {{{{t with f = typeAnnotExpr env t.f}
-                         with ne = ne}
-                         with as = typeAnnotExpr env t.as}
-                         with ty = ty ne}
-  | TmParallelFilter t ->
-    let as = typeAnnotExpr env t.as in
-    TmParallelFilter {{{t with p = typeAnnotExpr env t.p}
-                          with as = as}
-                          with ty = ty as}
 
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmAccelerate r ->
@@ -203,20 +163,6 @@ lang MExprParallelKeywordMaker =
         else None ()
       else None ()
     else None ()
-  | TmParallelScan r ->
-    match lhs with TmParallelScan l then
-      match eqExprH env free l.f r.f with Some free then
-        match eqExprH env free l.ne r.ne with Some free then
-          eqExprH env free l.as r.as
-        else None ()
-      else None ()
-    else None ()
-  | TmParallelFilter r ->
-    match lhs with TmParallelFilter l then
-      match eqExprH env free l.p r.p with Some free then
-        eqExprH env free l.as r.as
-      else None ()
-    else None ()
 
   sem isValue =
   | TmAccelerate _ -> false
@@ -224,8 +170,6 @@ lang MExprParallelKeywordMaker =
   | TmParallelMap2 _ -> false
   | TmParallelFlatMap _ -> false
   | TmParallelReduce _ -> false
-  | TmParallelScan _ -> false
-  | TmParallelFilter _ -> false
 
   sem normalize (k : Expr -> Expr) =
   | TmAccelerate t ->
@@ -244,13 +188,6 @@ lang MExprParallelKeywordMaker =
     k (TmParallelReduce {{{t with f = normalizeTerm t.f}
                              with ne = normalizeTerm t.ne}
                              with as = normalizeTerm t.as})
-  | TmParallelScan t ->
-    k (TmParallelScan {{{t with f = normalizeTerm t.f}
-                           with ne = normalizeTerm t.ne}
-                           with as = normalizeTerm t.as})
-  | TmParallelFilter t ->
-    k (TmParallelFilter {{t with p = normalizeTerm t.p}
-                            with as = normalizeTerm t.as})
 end
 
 let accelerate_ = lam e.
@@ -272,14 +209,6 @@ let parallelFlatMap_ = lam f. lam as.
 let parallelReduce_ = lam f. lam ne. lam as.
   use MExprParallelKeywordMaker in
   TmParallelReduce {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
-                    info = NoInfo ()}
-let parallelScan_ = lam f. lam ne. lam as.
-  use MExprParallelKeywordMaker in
-  TmParallelScan {f = f, ne = ne, as = as, ty = TyUnknown {info = NoInfo ()},
-                  info = NoInfo ()}
-let parallelFilter_ = lam p. lam as.
-  use MExprParallelKeywordMaker in
-  TmParallelFilter {p = p, as = as, ty = TyUnknown {info = NoInfo ()},
                     info = NoInfo ()}
 
 mexpr
@@ -306,11 +235,5 @@ utest makeKeywords [] expr with parallelFlatMap_ singleton_ emptySeq_ using eqEx
 
 let expr = appf3_ (var_ "parallelReduce") id_ (int_ 0) emptySeq_ in
 utest makeKeywords [] expr with parallelReduce_ id_ (int_ 0) emptySeq_ using eqExpr in
-
-let expr = appf3_ (var_ "parallelScan") id_ (int_ 0) emptySeq_ in
-utest makeKeywords [] expr with parallelScan_ id_ (int_ 0) emptySeq_ using eqExpr in
-
-let expr = appf2_ (var_ "parallelFilter") trueFunc_ emptySeq_ in
-utest makeKeywords [] expr with parallelFilter_ trueFunc_ emptySeq_ using eqExpr in
 
 ()
