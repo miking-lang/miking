@@ -10,7 +10,8 @@ type Options = {
   exitBefore : Bool,
   runTests : Bool,
   disableOptimizations : Bool,
-  useTuned : Bool
+  useTuned : Bool,
+  printHelp : Bool
 }
 
 -- Option structure
@@ -21,7 +22,8 @@ let options = {
   exitBefore = false,
   runTests = false,
   disableOptimizations = false,
-  useTuned = false
+  useTuned = false,
+  printHelp = false
 }
 
 -- Option map, maps strings to structure updates
@@ -32,7 +34,8 @@ let optionsMap = [
 ("--exit-before", lam o : Options. {o with exitBefore = true}),
 ("--test", lam o : Options. {o with runTests = true}),
 ("--disable-optimizations", lam o : Options. {o with disableOptimizations = true}),
-("--use-tuned", lam o : Options. {o with useTuned = true})
+("--use-tuned", lam o : Options. {o with useTuned = true}),
+("--help", lam o: Options. {o with printHelp = true})
 ]
 
 let mapStringLookup = assocLookup {eq=eqString}
@@ -51,5 +54,13 @@ let splitDashDash = lam lst.
   match index (eqString "--") lst with Some n then
     let r = splitAt lst n in
     {first = r.0, last = tail r.1}
+  else
+    {first = lst, last = []}
+
+-- Split the program arguments at the first occurrence of a non-option.
+let splitOptionPrefix = lam lst.
+  match index (compose not (isPrefix eqChar "--")) lst with Some n then
+    let r = splitAt lst n in
+    {first = r.0, last = r.1}
   else
     {first = lst, last = []}
