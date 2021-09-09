@@ -69,14 +69,20 @@ for example by running the following:
 
     cd stdlib; export MCORE_STDLIB=`pwd`; cd ..;
 
-To install the executables along with the standard library for the current
+To install the compiler along with the standard library for the current
 user, issue:
 
 ```
 make install
 ```
 
-This will install the binaries to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location.
+This will install `mi` to `$HOME/.local/bin` and the standard library to `$HOME/.local/lib/mcore/stdlib`, according to the [systemd file system hierarchy overview](https://www.freedesktop.org/software/systemd/man/file-hierarchy.html). If `MCORE_STDLIB` is unset, Miking will look in this installation folder as its default library location.
+
+Conversely, to uninstall, issue:
+
+```
+make uninstall
+```
 
 ### The REPL
 The Miking bootstrap interpreter features a simple REPL, which lets
