@@ -14,6 +14,7 @@ set -e
 
 BOOT_NAME=boot
 MI_NAME=mi
+MI_TMP_NAME=mi-tmp
 
 BIN_PATH=$HOME/.local/bin
 LIB_PATH=$HOME/.local/lib/mcore
@@ -43,7 +44,7 @@ build_mi() {
     if [ -e build/$MI_NAME ]
     then
         time build/$MI_NAME compile src/main/mi.mc
-        mv -f $MI_NAME build/$MI_NAME
+        mv -f $MI_NAME build/$MI_TMP_NAME
     else
         echo "No existing compiler binary was found."
         echo "Try running the bootstrapping phase first!"
@@ -60,6 +61,7 @@ build() {
         bootstrap_mi
         echo "Bootstrapping the Miking compiler (2nd round, might take some more time)"
         build_mi
+        mv -f build/$MI_TMP_NAME build/$MI_NAME
     fi
 }
 
