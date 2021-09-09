@@ -39,10 +39,13 @@ boot:
 install-boot: boot
 	@./make install-boot
 
-build: install-boot	# Run the complete bootstrapping process to compile `mi`.
+build: install-boot
+# Run the complete bootstrapping process to compile `mi`.
 	@./make
 
-build-mi:		# Build `mi` using the currently installed version.
+build-mi:
+# Build `mi` using the current version in `build`, skipping bootstrapping.
+# The result is named `build/mi-tmp`.
 	@./make build-mi
 
 install: build
