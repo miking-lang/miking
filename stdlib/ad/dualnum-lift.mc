@@ -211,14 +211,14 @@ lam f. lam i. lam x. lam r.
   tensorMapInplace (_pertubation e) r;
   tensorSetExn x [i] (_primal e (tensorGetExn x [i]))
 
--- Inplace of Jacobian df_j/dx_i, where j index columns and i index rows, of `f`
--- at `x` stored in `m`.
+-- Inplace computation of Jacobian df_j/dx_i, where j index columns and i index
+-- rows, of `f` at `x` stored in `m`.
 let jacT
   : (Tensor[DualNum] -> Tensor[DualNum] -> ())
   -> Tensor[DualNum]
   -> Tensor[DualNum]
   -> () =
-lam f. lam x. lam m. tensorIterSlice (lam i. lam r. jaci f i x r) m
+lam f. lam x. lam j. tensorIterSlice (lam i. lam r. jaci f i x r) j
 
 utest
   let f = lam t. lam r.
@@ -235,6 +235,33 @@ utest
 with
 [1., 24.
 ,2., 12.]
+
+-- Inplace computation of gradient df/dx_i if `f` at `x` stored in `g`.
+let grad
+  : (Tensor[DualNum] -> DualNum)
+  -> Tensor[DualNum]
+  -> Tensor[DualNum]
+  -> () =
+lam f. lam x. lam g.
+  tensorIteri
+    (lam idx. lam xi.
+      let e = genEpsilon () in
+      tensorSetExn x idx (_dnum e xi (_num 1.));
+      tensorSetExn g idx (_pertubation e (f x));
+      tensorSetExn x idx xi)
+    x
+
+utest
+  let f = lam x.
+    let x1 = tensorGetExn x [0] in
+    let x2 = tensorGetExn x [1] in
+    muln x1 x2
+  in
+  let x = tensorOfSeqExn tensorCreateDense [2] [_num 2., _num 3.] in
+  let g = tensorCreateDense [2] (lam. _num 0.) in
+  grad f x g;
+  map _unpack (tensorToSeqExn g)
+with [3., 2.]
 
 ----------------
 -- CONSTANTS  --

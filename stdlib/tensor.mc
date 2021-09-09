@@ -708,6 +708,28 @@ utest
   tensorToSeqExn t
 with [1, 2, 3]
 
+
+---------------------------
+-- SHAPE AND RANK CHECKS --
+---------------------------
+
+let tensorHasRank : Tensor[a] -> Int -> Bool =
+  lam t. lam rank. eqi (tensorRank t) rank
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [2, 2] [1, 2, 3, 4] in
+  tensorHasRank t 2
+with true
+
+
+let tensorHasShape : Tensor[a] -> [Int] -> Bool =
+  lam t. lam shape. eqSeq eqi (tensorShape t) shape
+
+utest
+  let t = tensorOfSeqExn tensorCreateDense [4, 1] [1, 2, 3, 4] in
+  tensorHasShape t [4, 1]
+with true
+
 mexpr
 
 -- Tensors are mutable data structures and can be of up to rank 16. The index
