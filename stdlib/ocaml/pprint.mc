@@ -7,7 +7,8 @@ include "name.mc"
 include "intrinsics-ops.mc"
 
 let _isValidChar = lam c.
-  or (isAlphanum c) (or (eqChar c '_') (eqChar c '\''))
+  if isAlphanum c then true
+  else eqChar c '\''
 
 let _escapeChar = lam c.
   if _isValidChar c then c else '_'
