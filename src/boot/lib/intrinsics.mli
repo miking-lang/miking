@@ -378,35 +378,37 @@ module ConTag : sig
 end
 
 module Mmap : sig
-  val empty : ('a -> 'a -> int) -> Obj.t
+  type ('a, 'b) t
 
-  val insert : 'a -> 'b -> Obj.t -> Obj.t
+  val empty : ('a -> 'a -> int) -> ('a, 'b) t
 
-  val remove : 'a -> Obj.t -> Obj.t
+  val insert : 'a -> 'b -> ('a, 'b) t -> ('a, 'b) t
 
-  val find : 'a -> Obj.t -> 'b
+  val remove : 'a -> ('a, 'b) t -> ('a, 'b) t
 
-  val find_or_else : (unit -> 'b) -> 'a -> Obj.t -> 'b
+  val find : 'a -> ('a, 'b) t -> 'b
 
-  val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> Obj.t -> 'c
+  val find_or_else : (unit -> 'b) -> 'a -> ('a, 'b) t -> 'b
 
-  val bindings : Obj.t -> ('a * 'b) Mseq.t
+  val find_apply_or_else : ('b -> 'c) -> (unit -> 'c) -> 'a -> ('a, 'b) t -> 'c
 
-  val size : Obj.t -> int
+  val bindings : ('a, 'b) t -> ('a * 'b) Mseq.t
 
-  val mem : 'a -> Obj.t -> bool
+  val size : ('a, 'b) t -> int
 
-  val any : ('a -> 'b -> bool) -> Obj.t -> bool
+  val mem : 'a -> ('a, 'b) t -> bool
 
-  val map : ('b -> 'c) -> Obj.t -> Obj.t
+  val any : ('a -> 'b -> bool) -> ('a, 'b) t -> bool
 
-  val map_with_key : ('a -> 'b -> 'c) -> Obj.t -> Obj.t
+  val map : ('b -> 'c) -> ('a, 'b) t -> ('a, 'c) t
 
-  val fold_with_key : ('c -> 'a -> 'b -> 'c) -> 'c -> Obj.t -> 'c
+  val map_with_key : ('a -> 'b -> 'c) -> ('a, 'b) t -> ('a, 'c) t
 
-  val eq : ('b -> 'b -> bool) -> Obj.t -> Obj.t -> bool
+  val fold_with_key : ('c -> 'a -> 'b -> 'c) -> 'c -> ('a, 'b) t -> 'c
 
-  val cmp : ('b -> 'b -> int) -> Obj.t -> Obj.t -> int
+  val eq : ('b -> 'b -> bool) -> ('a, 'b) t -> ('a, 'b) t -> bool
 
-  val key_cmp : Obj.t -> 'a -> 'a -> int
+  val cmp : ('b -> 'b -> int) -> ('a, 'b) t -> ('a, 'b) t -> int
+
+  val key_cmp : ('a, 'b) t -> 'a -> 'a -> int
 end

@@ -149,8 +149,7 @@ and const =
   | CmodRef of tm ref option
   | CdeRef
   (* MCore intrinsics: Maps *)
-  (* NOTE(Linnea, 2021-01-27): Obj.t denotes the type of the internal map (I was so far unable to express it properly) *)
-  | CMap of tm * Obj.t
+  | CMap of tm * (tm, tm) Mmap.t
   | CmapEmpty
   | CmapSize
   | CmapGetCmpFun
@@ -165,8 +164,8 @@ and const =
   | CmapMapWithKey of (tm -> tm -> tm) option
   | CmapFoldWithKey of (tm -> tm -> tm -> tm) option * tm option
   | CmapBindings
-  | CmapEq of (tm -> tm -> bool) option * (tm * Obj.t) option
-  | CmapCmp of (tm -> tm -> int) option * (tm * Obj.t) option
+  | CmapEq of (tm -> tm -> bool) option * (tm * (tm, tm) Mmap.t) option
+  | CmapCmp of (tm -> tm -> int) option * (tm * (tm, tm) Mmap.t) option
   (* MCore intrinsics: Tensors *)
   | CtensorCreateDense of int Mseq.t option
   | CtensorCreateCArrayInt of int Mseq.t option

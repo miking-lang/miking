@@ -584,164 +584,147 @@ module ConTag = struct
 end
 
 module Mmap = struct
-  let empty cmp =
-    let cmp x y = cmp (Obj.obj x) (Obj.obj y) in
-    let module Ord = struct
-      type t = Obj.t
+  module type Map = sig
+    type k
 
+    type v
+
+    include Map.S with type key := k
+
+    val theMap : v t
+
+    val cmp : k -> k -> int
+  end
+
+  type ('a, 'b) t = (module Map with type k = 'a and type v = 'b)
+
+  let empty (type a b) (cmp : a -> a -> int) : (a, b) t =
+    let module Ord = struct
       let compare = cmp
+
+      type t = a
     end in
     let module MapModule = Map.Make (Ord) in
-    Obj.repr (MapModule.empty, cmp)
+    let module M = struct
+      type k = a
 
-  let insert k v mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+      type v = b
 
-      let compare = cmp
+      include MapModule
+
+      let theMap = empty
+
+      let cmp = cmp
     end in
-    let module MapModule = Map.Make (Ord) in
-    Obj.repr (MapModule.add (Obj.repr k) v m, cmp)
+    (module M)
 
-  let remove k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let insert (type a b) (k : a) (v : b) (m : (a, b) t) : (a, b) t =
+    let open (val m) in
+    let module M = struct
+      include (val m)
 
-      let compare = cmp
+      let theMap = add k v theMap
     end in
-    let module MapModule = Map.Make (Ord) in
-    Obj.repr (MapModule.remove (Obj.repr k) m, cmp)
+    (module M)
 
-  let find k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let remove (type k v) (k : k) (m : (k, v) t) : (k, v) t =
+    let open (val m) in
+    let module M = struct
+      include (val m)
 
-      let compare = cmp
+      let theMap = remove k theMap
     end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.find (Obj.repr k) m
+    (module M)
 
-  let find_or_else f k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let find (type k v) (k : k) (m : (k, v) t) : v =
+    let open (val m) in
+    find k theMap
 
-      let compare = cmp
+  let find_or_else (type k v) (f : unit -> v) (k : k) (m : (k, v) t) : v =
+    let open (val m) in
+    match find_opt k theMap with Some v -> v | None -> f ()
+
+  let find_apply_or_else (type k v v') (f : v -> v') (felse : unit -> v')
+      (k : k) (m : (k, v) t) : v' =
+    let open (val m) in
+    match find_opt k theMap with Some v -> f v | None -> felse ()
+
+  let bindings (type k v) (m : (k, v) t) : (k * v) Mseq.t =
+    let open (val m) in
+    Mseq.Helpers.of_list (bindings theMap)
+
+  let size (type k v) (m : (k, v) t) : int =
+    let open (val m) in
+    cardinal theMap
+
+  let mem (type k v) (k : k) (m : (k, v) t) : bool =
+    let open (val m) in
+    mem k theMap
+
+  let any (type k v) (p : k -> v -> bool) (m : (k, v) t) : bool =
+    let open (val m) in
+    exists p theMap
+
+  let map (type k v v') (f : v -> v') (m : (k, v) t) : (k, v') t =
+    let open (val m) in
+    let module M = struct
+      include (val m)
+
+      type v = v'
+
+      let theMap = map f theMap
     end in
-    let module MapModule = Map.Make (Ord) in
-    match MapModule.find_opt (Obj.repr k) m with Some v -> v | None -> f ()
+    (module M)
 
-  let find_apply_or_else f felse k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let map_with_key (type k v v') (f : k -> v -> v') (m : (k, v) t) : (k, v') t
+      =
+    let open (val m) in
+    let module M = struct
+      include (val m)
 
-      let compare = cmp
+      type v = v'
+
+      let theMap = mapi f theMap
     end in
-    let module MapModule = Map.Make (Ord) in
-    match MapModule.find_opt (Obj.repr k) m with
-    | Some v ->
-        f v
-    | None ->
-        felse ()
+    (module M)
 
-  let bindings mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let fold_with_key (type k v a) (f : a -> k -> v -> a) (a : a) (m : (k, v) t)
+      : a =
+    let open (val m) in
+    fold (fun k v a -> f a k v) theMap a
 
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    let binds = MapModule.bindings m in
-    Mseq.Helpers.of_list (List.map (fun (k, v) -> (Obj.obj k, v)) binds)
+  let eq (type k v) (veq : v -> v -> bool) (m1 : (k, v) t) (m2 : (k, v) t) :
+      bool =
+    let binds1 : (k * v) Mseq.t = bindings m1 in
+    let binds2 : (k * v) Mseq.t = bindings m2 in
+    let open (val m1) in
+    Mseq.Helpers.equal
+      (fun (k1, v1) (k2, v2) -> if cmp k1 k2 = 0 then veq v1 v2 else false)
+      binds1 binds2
 
-  let size mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
+  let cmp (type k v) (vcmp : v -> v -> int) (m1 : (k, v) t) (m2 : (k, v) t) :
+      int =
+    let n = size m1 in
+    let m = size m2 in
+    if n < m then -1
+    else if m < n then 1
+    else
+      let binds1 : (k * v) Mseq.t = bindings m1 in
+      let binds2 : (k * v) Mseq.t = bindings m2 in
+      let open (val m1) in
+      Mseq.Helpers.fold_left
+        (fun diff ((k1, v1), (k2, v2)) ->
+          if diff = 0 then
+            let key_cmp = cmp k1 k2 in
+            if key_cmp = 0 then
+              let val_cmp = vcmp v1 v2 in
+              if val_cmp = 0 then diff else val_cmp
+            else key_cmp
+          else diff )
+        0
+        (Mseq.Helpers.combine binds1 binds2)
 
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.cardinal m
-
-  let mem k mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.mem (Obj.repr k) m
-
-  let any p mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.exists (fun k v -> p (Obj.obj k) v) m
-
-  let map f mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    Obj.repr (MapModule.map f m, cmp)
-
-  let map_with_key f mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    Obj.repr (MapModule.mapi (fun k v -> f (Obj.obj k) v) m, cmp)
-
-  let fold_with_key f z mCmpPair =
-    let m, cmp = Obj.obj mCmpPair in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.fold (fun k v acc -> f acc (Obj.obj k) v) m z
-
-  let eq veq m1 m2 =
-    let m1, cmp = Obj.obj m1 in
-    let m2, _ = Obj.obj m2 in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.equal veq m1 m2
-
-  let cmp vcmp m1 m2 =
-    let m1, cmp = Obj.obj m1 in
-    let m2, _ = Obj.obj m2 in
-    let module Ord = struct
-      type t = Obj.t
-
-      let compare = cmp
-    end in
-    let module MapModule = Map.Make (Ord) in
-    MapModule.compare vcmp m1 m2
-
-  let key_cmp mCmpPair k1 k2 =
-    let _, cmp = Obj.obj mCmpPair in
-    (cmp : Obj.t -> Obj.t -> int) (Obj.repr k1) (Obj.repr k2)
+  let key_cmp (type k v) (m : (k, v) t) (k1 : k) (k2 : k) : int =
+    let open (val m) in
+    cmp k1 k2
 end
