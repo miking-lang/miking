@@ -1,9 +1,10 @@
 
-
+include "math-ext.mc"
 
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
 let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int. externalBinomialLogPmf x p n
-let bernoulliLogPmf = lam p:Float. lam x:Int. externalBinomialLogPmf x p 1
+let bernoulliPmf = lam p:Float. lam x:Int. if eqi x 0 then subf 1. p else p
+let bernoulliLogPmf = lam p:Float. lam x:Int. log (bernoulliPmf p x)
 
 mexpr
 
@@ -16,6 +17,7 @@ let eqfApprox = lam epsilon. lam r. lam l.
 
 let _eqf = eqfApprox 1e-11 in
 
-utest binomialLogPmf 0.7 1 0 with negf 1.20397280433 using _eqf in
-utest bernoulliLogPmf 0.6 1 with negf 0.510825623766 using _eqf in
+utest exp (binomialLogPmf 0.7 1 0) with 0.3 using _eqf in
+utest bernoulliPmf 0.3 0 with 0.7 using _eqf in
+utest exp (bernoulliLogPmf 0.6 1) with 0.6 using _eqf in
 ()
