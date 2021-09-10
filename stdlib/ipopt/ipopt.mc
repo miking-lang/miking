@@ -5,6 +5,7 @@
 
 include "math.mc"
 include "tensor.mc"
+include "common.mc"
 
 type IpoptNLP                     -- Constrained Non-Linear Program
 type IpoptApplicationReturnStatus -- Internal representation of return status
@@ -53,7 +54,7 @@ type IpoptEvalJacG = Vector -> Vector -> ()
 -- - `x`, the values of the variables,
 -- - `lambda`, the values of the constraint multiplier λ,
 -- - `h`, a vector for storing the non-zero values of the Hessian, where `h`
---        assumes some pre-defined structure. This matrix is symmetric and
+--        assumes some pre-defined structure. This Hessian is symmetric and
 --        only the lower diagonal entries must be specified.
 type IpoptEvalH = Float -> Vector -> Vector -> Vector -> ()
 
@@ -205,7 +206,7 @@ external externalIpoptSolve !
 --        calling `solve`.
 -- Returns: The tuple tuple `(rs, f)`, where `rs` is the return status and `f`
 --          is the final value of the objective function.
-let ipoptSolve : IpoptNLP -> Vector  -> (IpoptReturnStatus, Float)
+let ipoptSolve : IpoptNLP -> Vector -> (IpoptReturnStatus, Float)
 = lam p. lam x.
   match externalIpoptSolve p x with (r, f) then
     (_rctoreturnstatus (externalIpoptApplicationReturnStatusRetcode r), f)

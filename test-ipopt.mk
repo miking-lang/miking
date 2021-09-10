@@ -1,6 +1,7 @@
 
 compile_files =
 compile_files += stdlib/ipopt/ipopt.mc
+compile_files += stdlib/ipopt/ipopt-ad.mc
 
 all: ${compile_files}
 
