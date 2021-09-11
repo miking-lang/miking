@@ -183,7 +183,7 @@ let repl_format tm =
 (* Autocompletion *)
 let begins_at str pos =
   let nonword_characters = Str.regexp "[][/\\\\(),={} \n\r\x0c\t]" in
-  try Str.search_backward nonword_characters str (pos - 1) + 1
+  try Str.search_backward nonword_characters str (max (pos - 1) 0) + 1
   with Not_found -> 0
 
 let keywords = List.map fst Lexer.reserved_strings
@@ -231,8 +231,7 @@ let get_matches prefix words = List.filter (starts_with prefix) words
 
 let get_completions str pos =
   let start_pos = begins_at str pos in
-  let len = min (String.length str) (pos - start_pos + 1) in
-  let word_to_complete = String.sub str start_pos len in
+  let word_to_complete = String.sub str start_pos (pos - start_pos) in
   (start_pos, get_matches word_to_complete (keywords_and_identifiers ()))
 
 let completion_callback line_so_far ln_completions =
