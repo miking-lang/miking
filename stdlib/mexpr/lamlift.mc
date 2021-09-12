@@ -1,13 +1,68 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
+include "mexpr/pprint.mc"
 
-lang MExprLambdaLift
-  sem liftLambdas =
-  | t -> unit_
+type LambdaLiftState = {
+  -- Variables in the current scope that can occur as free variables in the
+  -- current expression.
+  vars : Set Name,
+
+  -- Functions in the current scope that can occur as free variables in the
+  -- current expression. These are mapped to distinct integer values, which are
+  -- used as lookup in the sols sequence.
+  funs : Map Name Int,
+
+  -- Contains the solutions of the functions found in funs. The solution of a
+  -- function is a set of identifiers corresponding to its free variables.
+  sols : [Set Name]
+}
+
+-- Adds a name to all anonymous functions by wrapping them in a let-expression.
+-- These are all lambda expressions that are not part of the right-hand side of
+-- a let-expression or a recursive binding.
+lang LambdaLiftNameAnonymous = MExprAst
+  sem nameAnonymousLambdasInBody =
+  | TmLam t -> TmLam {t with body = nameAnonymousLambdasInBody t.body}
+  | t -> nameAnonymousLambdas t
+
+  sem nameAnonymousLambdas =
+  | TmLam t ->
+    let lambdaName = nameSym "t" in
+    TmLet {ident = lambdaName, tyBody = t.ty, body = TmLam t,
+           inexpr = TmVar {ident = lambdaName, ty = t.ty, info = t.info},
+           ty = t.ty, info = t.info}
+  | TmLet t ->
+    TmLet {{t with body = nameAnonymousLambdasInBody t.body}
+              with inexpr = nameAnonymousLambdas t.inexpr}
+  | TmRecLets t ->
+    let bindings =
+      map
+        (lam bind : RecLetBinding.
+          {bind with body = nameAnonymousLambdasInBody bind.body})
+        t.bindings in
+    TmRecLets {{t with bindings = bindings}
+                  with inexpr = nameAnonymousLambdas t.inexpr}
+  | t -> smap_Expr_Expr nameAnonymousLambdas t
 end
 
-lang TestLang = MExprLambdaLift + MExprEq
+-- Finds the set of free variables of all functions. For recursive
+-- let-expressions, this requires solving a system of set equations (as the
+-- free variables within bindings may affect each other).
+lang LambdaLiftFreeVariables = MExprAst
+  sem findFreeVariables (state : LambdaLiftState) =
+  | t -> error "not implemented yet"
+end
+
+lang MExprLambdaLift = LambdaLiftNameAnonymous + LambdaLiftFreeVariables
+  sem liftLambdas =
+  | t ->
+    let t = nameAnonymousLambdas t in
+    let t = findFreeVariables t in
+    unit_
+end
+
+lang TestLang = MExprLambdaLift + MExprEq + MExprPrettyPrint
 
 mexpr
 
@@ -254,23 +309,36 @@ let expected = symbolize (bindall_ [
   app_ (var_ "f") (int_ 2)]) in
 utest liftLambdas anonymousFunctionLift with expected using eqExpr in
 
+let anonymousMapLift = symbolize (
+  map_ (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (seq_ [int_ 0, int_ 7])) in
+let expected = symbolize (bindall_ [
+  ulet_ "t" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
+  map_ (var_ "t") (seq_ [int_ 0, int_ 7])]) in
+utest liftLambdas anonymousMapLift with expected using eqExpr in
+
 let recursiveSystem = symbolize (bindall_ [
   ulet_ "a" (int_ 1),
   ulet_ "b" (int_ 2),
+  ulet_ "c" (int_ 5),
   ureclets_ [
     ("f", ulam_ "x" (addi_ (app_ (var_ "g") (var_ "x")) (var_ "a"))),
-    ("g", ulam_ "y" (addi_ (app_ (var_ "f") (var_ "y")) (var_ "b")))
-  ],
+    ("g", ulam_ "y" (addi_ (app_ (var_ "h") (var_ "y")) (var_ "b"))),
+    ("h", ulam_ "z" (addi_ (app_ (var_ "f") (var_ "z")) (var_ "c")))],
   unit_]) in
 let expected = symbolize (bindall_ [
   ulet_ "a" (int_ 1),
   ulet_ "b" (int_ 2),
+  ulet_ "c" (int_ 5),
   ureclets_ [
-    ("f", ulam_ "a" (ulam_ "b" (ulam_ "x" (
-      addi_ (appf3_ (var_ "g") (var_ "a") (var_ "b") (var_ "x")) (var_ "a"))))),
-    ("g", ulam_ "a" (ulam_ "b" (ulam_ "y" (
-      addi_ (appf3_ (var_ "f") (var_ "a") (var_ "b") (var_ "y")) (var_ "b")))))
-  ],
+    ("f", ulams_ ["a", "b", "c", "x"] (
+      addi_ (appSeq_ (var_ "g") [var_ "a", var_ "b", var_ "c", var_ "x"])
+            (var_ "a"))),
+    ("g", ulams_ ["a", "b", "c", "y"] (
+      addi_ (appSeq_ (var_ "h") [var_ "a", var_ "b", var_ "c", var_ "y"])
+            (var_ "b"))),
+    ("h", ulams_ ["a", "b", "c", "z"] (
+      addi_ (appSeq_ (var_ "f") [var_ "a", var_ "b", var_ "c", var_ "z"])
+            (var_ "c")))],
   unit_]) in
 utest liftLambdas recursiveSystem with expected using eqExpr in
 
