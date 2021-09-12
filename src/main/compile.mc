@@ -3,6 +3,7 @@
 
 include "options.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/lamlift.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/remove-ascription.mc"
@@ -20,7 +21,8 @@ lang MCoreCompile =
   MExprHoles +
   MExprSym + MExprTypeAnnot + MExprUtestTrans +
   OCamlPrettyPrint + OCamlTypeDeclGenerate + OCamlGenerate +
-  OCamlGenerateExternalNaive
+  OCamlGenerateExternalNaive +
+  MExprLambdaLift
 end
 
 let pprintMcore = lam ast.
@@ -103,6 +105,7 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
 
     -- Re-symbolize the MExpr AST and re-annotate it with types
     let ast = symbolizeExpr symEnv ast in
+    let ast = liftLambdas ast in
     let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
 
