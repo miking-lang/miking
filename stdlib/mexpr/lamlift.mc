@@ -9,13 +9,18 @@ type LambdaLiftState = {
   vars : Set Name,
 
   -- Functions in the current scope that can occur as free variables in the
-  -- current expression. These are mapped to distinct integer values, which are
-  -- used as lookup in the sols sequence.
-  funs : Map Name Int,
+  -- current expression.
+  funs : Set Name,
 
   -- Contains the solutions of the functions found in funs. The solution of a
   -- function is a set of identifiers corresponding to its free variables.
-  sols : [Set Name]
+  sols : Map Name (Set Name)
+}
+
+let emptyLambdaLiftState = {
+  vars = setEmpty nameCmp,
+  funs = setEmpty nameCmp,
+  sols = mapEmpty nameCmp
 }
 
 -- Adds a name to all anonymous functions by wrapping them in a let-expression.
@@ -50,15 +55,60 @@ end
 -- let-expressions, this requires solving a system of set equations (as the
 -- free variables within bindings may affect each other).
 lang LambdaLiftFreeVariables = MExprAst
+  sem findFreeVariablesInBody (state : LambdaLiftState) (fv : Set Name) =
+  | TmVar t ->
+    if setMem t.ident state.vars then
+      setInsert t.ident fv
+    else if setMem t.ident state.funs then
+      match mapLookup t.ident state.sols with Some funFreeVars then
+        mapFoldWithKey
+          (lam acc. lam id. lam. setInsert id acc)
+          fv
+          funFreeVars
+      else error (join ["Invalid lambda lift state: function set contains ",
+                        "key ", nameGetStr t.ident, " but this key was not ",
+                        "found in the solutions map"])
+    else
+      -- NOTE(larshum, 2021-09-12): Variable was bound within the scope of the
+      -- current body.
+      fv
+  | TmLam t -> findFreeVariablesInBody state fv t.body
+  | TmLet (t & {body = TmLam _}) ->
+    fv
+  | TmLet t ->
+    let fv = findFreeVariablesInBody state fv t.body in
+    findFreeVariablesInBody state fv t.inexpr
+  | TmRecLets t -> findFreeVariablesInBody state fv t.inexpr
+  | t -> sfold_Expr_Expr (findFreeVariablesInBody state) fv t
+
   sem findFreeVariables (state : LambdaLiftState) =
-  | t -> error "not implemented yet"
+  | TmLet t ->
+    let state =
+      match t.body with TmLam _ then
+        let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
+        {{state with funs = setInsert t.ident state.funs}
+                with sols = mapInsert t.ident fv state.sols}
+      else state
+    in
+    match findFreeVariables state t.body with (state, body) then
+      match findFreeVariables state t.inexpr with (state, inexpr) then
+        (state, TmLet {{t with body = body} with inexpr = inexpr})
+      else never
+    else never
+  | TmRecLets t ->
+    -- TODO(larshum, 2021-09-12): Solve the system of set equations that the
+    -- bindings give rise to - approach is to solve for each SCC (of call
+    -- graph) through substitution, as functions within same SCC will all have
+    -- the same free variables.
+    (state, t)
+  | t -> smapAccumL_Expr_Expr findFreeVariables state t
 end
 
 lang MExprLambdaLift = LambdaLiftNameAnonymous + LambdaLiftFreeVariables
   sem liftLambdas =
   | t ->
     let t = nameAnonymousLambdas t in
-    let t = findFreeVariables t in
+    let t = findFreeVariables emptyLambdaLiftState t in
     unit_
 end
 
