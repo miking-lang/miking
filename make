@@ -74,11 +74,20 @@ compile_test () {
   set +e
   output=$1
   output="$output\n$($2 $1 2>&1)"
-  if [ $? -eq 0 ]
+  exit_code=$?
+  if [ $exit_code -eq 0 ]
   then
     binary=$(basename "$1" .mc)
     output="$output$(./$binary)"
-    rm $binary
+    exit_code=$?
+    if [ $exit_code -eq 0 ]
+    then
+        rm $binary
+    else
+        echo "ERROR: command ./$binary exited with $exit_code"
+    fi
+  else
+      echo "ERROR: compilation of $1 exited with $exit_code"
   fi
   echo "$output\n"
   set -e
