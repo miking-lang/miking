@@ -1,3 +1,4 @@
+include "digraph.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
@@ -65,21 +66,81 @@ lang LambdaLiftFreeVariables = MExprAst
           (lam acc. lam id. lam. setInsert id acc)
           fv
           funFreeVars
-      else error (join ["Invalid lambda lift state: function set contains ",
-                        "key ", nameGetStr t.ident, " but this key was not ",
-                        "found in the solutions map"])
+      else
+        -- NOTE(larshum, 2021-09-13): We have not found a solution for this
+        -- function yet, so we ignore it for now.
+        fv
     else
       -- NOTE(larshum, 2021-09-12): Variable was bound within the scope of the
       -- current body.
       fv
   | TmLam t -> findFreeVariablesInBody state fv t.body
-  | TmLet (t & {body = TmLam _}) ->
-    fv
+  | TmLet (t & {body = TmLam _}) -> fv
   | TmLet t ->
     let fv = findFreeVariablesInBody state fv t.body in
     findFreeVariablesInBody state fv t.inexpr
   | TmRecLets t -> findFreeVariablesInBody state fv t.inexpr
   | t -> sfold_Expr_Expr (findFreeVariablesInBody state) fv t
+
+  sem findFreeVariablesReclet (state : LambdaLiftState) =
+  | TmLet t ->
+    let state =
+      match t.body with TmLam _ then
+        let fv = findFreeVariablesInBody state (setEmpty nameCmp) t.body in
+        {{state with funs = setInsert t.ident state.funs}
+                with sols = mapInsert t.ident fv state.sols}
+      else state
+    in
+    findFreeVariablesReclet state t.inexpr
+  | TmRecLets t ->
+    let findBinding = lam state : LambdaLiftState. lam bind : RecLetBinding.
+      let fv = findFreeVariablesInBody state (setEmpty nameCmp) bind.body in
+      {{state with funs = setInsert bind.ident state.funs}
+              with sols = mapInsert bind.ident fv state.sols}
+    in
+    let state = foldl findBinding state t.bindings in
+    findFreeVariablesReclet state t.inexpr
+  | t -> sfold_Expr_Expr findFreeVariablesReclet state t
+
+  sem addGraphVertices (g : Digraph Name Int) =
+  | TmLet t ->
+    let g =
+      match t.body with TmLam _ then digraphAddVertex t.ident g
+      else g
+    in
+    let g = addGraphVertices g t.body in
+    addGraphVertices g t.inexpr
+  | TmRecLets t ->
+    let g =
+      foldl
+        (lam g. lam bind : RecLetBinding. digraphAddVertex bind.ident g)
+        g t.bindings in
+    let g =
+      foldl
+        (lam g. lam bind : RecLetBinding.
+          addGraphVertices g bind.body)
+        g t.bindings in
+    addGraphVertices g t.inexpr
+  | t -> sfold_Expr_Expr addGraphVertices g t
+
+  sem addGraphCallEdges (src : Name) (g : Digraph Name Int) =
+  | TmVar t ->
+    if digraphHasVertex t.ident g then
+      digraphMaybeAddEdge src t.ident 0 g
+    else g
+  | TmLet t ->
+    let letSrc = match t.body with TmLam _ then t.ident else src in
+    let g = addGraphCallEdges letSrc g t.body in
+    addGraphCallEdges src g t.inexpr
+  | TmRecLets t ->
+    let g =
+      foldl
+        (lam g. lam bind : RecLetBinding.
+          addGraphCallEdges bind.ident g bind.body)
+        g
+        t.bindings in
+    addGraphCallEdges src g t.inexpr
+  | t -> sfold_Expr_Expr (addGraphCallEdges src) g t
 
   sem findFreeVariables (state : LambdaLiftState) =
   | TmLet t ->
@@ -91,16 +152,41 @@ lang LambdaLiftFreeVariables = MExprAst
       else state
     in
     match findFreeVariables state t.body with (state, body) then
-      match findFreeVariables state t.inexpr with (state, inexpr) then
+      let state : LambdaLiftState = state in
+      let inexprState = {state with vars = setInsert t.ident state.vars} in
+      match findFreeVariables inexprState t.inexpr with (state, inexpr) then
         (state, TmLet {{t with body = body} with inexpr = inexpr})
       else never
     else never
   | TmRecLets t ->
-    -- TODO(larshum, 2021-09-12): Solve the system of set equations that the
-    -- bindings give rise to - approach is to solve for each SCC (of call
-    -- graph) through substitution, as functions within same SCC will all have
-    -- the same free variables.
-    (state, t)
+    recursive let propagateFunNames : LambdaLiftState -> Digraph Name Int
+                                   -> [[Name]] -> LambdaLiftState =
+      lam state. lam g. lam s.
+      match s with [h] ++ t then
+        let freeVars =
+          foldl
+            (lam acc. lam id.
+              match mapLookup id state.sols with Some fv then
+                setUnion acc fv
+              else acc)
+            (setEmpty nameCmp) h in
+        foldl
+          (lam state : LambdaLiftState. lam id.
+            {state with sols = mapInsert id freeVars state.sols})
+          state h
+      else state
+    in
+    let state = findFreeVariablesReclet state (TmRecLets t) in
+    let g : Digraph Name Int = digraphEmpty nameEq eqi in
+    let g = addGraphVertices g (TmRecLets t) in
+    let g =
+      foldl
+        (lam g. lam bind : RecLetBinding.
+          addGraphCallEdges bind.ident g bind.body)
+        g t.bindings in
+    let sccs = digraphTarjan g in
+    let state = propagateFunNames state g (reverse sccs) in
+    smapAccumL_Expr_Expr findFreeVariables state t.inexpr
   | t -> smapAccumL_Expr_Expr findFreeVariables state t
 end
 
@@ -108,8 +194,9 @@ lang MExprLambdaLift = LambdaLiftNameAnonymous + LambdaLiftFreeVariables
   sem liftLambdas =
   | t ->
     let t = nameAnonymousLambdas t in
-    let t = findFreeVariables emptyLambdaLiftState t in
-    unit_
+    match findFreeVariables emptyLambdaLiftState t with (state, t) then
+      unit_
+    else never
 end
 
 lang TestLang = MExprLambdaLift + MExprEq + MExprPrettyPrint
@@ -232,7 +319,7 @@ let deepNestedRecursiveDefs = symbolize (ureclets_ [
         ("f4", ulam_ "y" (bindall_ [
           ulet_ "k" (ulam_ "x" (app_ (var_ "f5") (var_ "x"))),
           addi_ (app_ (var_ "k") (var_ "x")) (var_ "y")])),
-        ("f5", ulam_ "x" (subi_ (var_ "x") (int_ 1)))
+        ("f5", ulam_ "x" (app_ (var_ "f4") (subi_ (var_ "x") (int_ 1))))
       ],
       addi_ (app_ (var_ "f3") (var_ "x"))
             (app_ (var_ "f4") (int_ 2))]),
@@ -248,9 +335,7 @@ let expected = symbolize (bindall_ [
     ("f1", ulam_ "x" (bindall_ [
       ulet_ "f2" (addi_ (app_ (var_ "f3") (var_ "x"))
                         (app_ (var_ "f4") (int_ 2))),
-      var_ "f2"]))
-  ]
-]) in
+      var_ "f2"]))]]) in
 utest liftLambdas deepNestedRecursiveDefs with expected using eqExpr in
 
 let fdef = ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))) in
