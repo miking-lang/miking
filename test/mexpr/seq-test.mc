@@ -142,7 +142,7 @@ with 10 in
 
 utest
   let r = ref 0 in
-  let s = splitAt [0, 0, 0, 0, 1, 2, 3, 4] 4 in
+  let s = splitAt [11, 11, 11, 11, 1, 2, 3, 4] 4 in
   iter (lam x. modref r (addi x (deref r))) s.1;
   deref r
 with 10 in
@@ -161,7 +161,7 @@ with 16 in
 
 utest
   let r = ref 0 in
-  let s = splitAt [0, 0, 0, 0, 1, 2, 3, 4] 4 in
+  let s = splitAt [17, 17, 17, 17, 1, 2, 3, 4] 4 in
   iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) s.1;
   deref r
 with 16 in
