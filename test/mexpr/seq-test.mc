@@ -140,6 +140,13 @@ utest
   deref r
 with 10 in
 
+utest
+  let r = ref 0 in
+  let s = splitAt [0, 0, 0, 0, 1, 2, 3, 4] 4 in
+  iter (lam x. modref r (addi x (deref r))) s.1;
+  deref r
+with 10 in
+
 -- 'iteri f s' is like 'iter' but 'f' takes the index of the element as its
 -- first argument and the element as its second argument.
 -- (Int -> a -> Unit) -> [a] -> Unit
@@ -149,6 +156,13 @@ with () in
 utest
   let r = ref 0 in
   iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) [1, 2, 3, 4];
+  deref r
+with 16 in
+
+utest
+  let r = ref 0 in
+  let s = splitAt [0, 0, 0, 0, 1, 2, 3, 4] 4 in
+  iteri (lam i. lam x. modref r (addi i (addi x (deref r)))) s.1;
   deref r
 with 16 in
 

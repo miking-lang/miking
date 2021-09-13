@@ -156,7 +156,7 @@ let iteri_array (f : int -> 'a -> unit) (s : 'a t) : unit =
         Array.iteri (fun i e -> f (i + off) e) a ;
         Array.length a
     | Slice {v; off= o; len} ->
-        for i = o to off + len - 1 do
+        for i = o to o + len - 1 do
           f (i + off - o) v.(i)
         done ;
         len
