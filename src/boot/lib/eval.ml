@@ -44,7 +44,7 @@ let evalprog filename =
       else fprintf stderr "%s\n" error_string ;
       exit 1 ) ;
   parsed_files := [] ;
-  if !utest && !utest_fail_local = 0 then printf " OK\n";
+  if !utest && !utest_fail_local = 0 then printf " OK\n" ;
   if !enable_debug_profiling then
     let bindings =
       Hashtbl.fold (fun k v acc -> (k, v) :: acc) runtimes []
