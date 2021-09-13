@@ -695,34 +695,42 @@ module Mmap = struct
 
   let eq (type k v) (veq : v -> v -> bool) (m1 : (k, v) t) (m2 : (k, v) t) :
       bool =
-    let binds1 : (k * v) Mseq.t = bindings m1 in
-    let binds2 : (k * v) Mseq.t = bindings m2 in
     let open (val m1) in
-    Mseq.Helpers.equal
-      (fun (k1, v1) (k2, v2) -> if cmp k1 k2 = 0 then veq v1 v2 else false)
-      binds1 binds2
+    let binds1 : (k * v) Seq.t = to_seq theMap in
+    let open (val m2) in
+    let binds2 : (k * v) Seq.t = to_seq theMap in
+    let rec work b1 b2 =
+      match b1, b2 with
+      | (Seq.Nil, Seq.Nil) -> true
+      | (Seq.Cons _, Seq.Nil) | (Seq.Nil, Seq.Cons _) -> false
+      | (Seq.Cons ((k1, v1), b1), Seq.Cons ((k2, v2), b2)) ->
+         if cmp k1 k2 = 0 then
+           if veq v1 v2 then
+             work (b1 ()) (b2 ())
+           else false
+         else false
+    in work (binds1 ()) (binds2 ())
 
   let cmp (type k v) (vcmp : v -> v -> int) (m1 : (k, v) t) (m2 : (k, v) t) :
-      int =
-    let n = size m1 in
-    let m = size m2 in
-    if n < m then -1
-    else if m < n then 1
-    else
-      let binds1 : (k * v) Mseq.t = bindings m1 in
-      let binds2 : (k * v) Mseq.t = bindings m2 in
-      let open (val m1) in
-      Mseq.Helpers.fold_left
-        (fun diff ((k1, v1), (k2, v2)) ->
-          if diff = 0 then
-            let key_cmp = cmp k1 k2 in
-            if key_cmp = 0 then
-              let val_cmp = vcmp v1 v2 in
-              if val_cmp = 0 then diff else val_cmp
-            else key_cmp
-          else diff )
-        0
-        (Mseq.Helpers.combine binds1 binds2)
+    int =
+    let open (val m1) in
+    let binds1 : (k * v) Seq.t = to_seq theMap in
+    let open (val m2) in
+    let binds2 : (k * v) Seq.t = to_seq theMap in
+    let rec work b1 b2 =
+      match b1, b2 with
+      | (Seq.Nil, Seq.Nil) -> 0
+      | (Seq.Nil, Seq.Cons _) -> -1
+      | (Seq.Cons _, Seq.Nil) -> 1
+      | (Cons ((k1, v1), b1), Cons ((k2, v2), b2)) ->
+        let key_diff = cmp k1 k2 in
+        if key_diff = 0 then
+          let val_diff = vcmp v1 v2 in
+          if val_diff = 0 then
+            work (b1 ()) (b2 ())
+          else val_diff
+        else key_diff
+    in work (binds1 ()) (binds2 ())
 
   let key_cmp (type k v) (m : (k, v) t) (k1 : k) (k2 : k) : int =
     let open (val m) in
