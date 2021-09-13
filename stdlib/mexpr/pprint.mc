@@ -826,6 +826,7 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   | CBootParserGetConst _ -> "bootParserGetConst"
   | CBootParserGetPat _ -> "bootParserGetPat"
   | CBootParserGetInfo _ -> "bootParserGetInfo"
+  | CBootParserGetPropTy _ -> "bootParserGetPropTy"
 end
 
 --------------
@@ -1036,6 +1037,24 @@ lang SeqTypePrettyPrint = SeqTypeAst
     else never
 end
 
+lang CollTypePrettyPrint = CollTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) =
+  | TyColl t ->
+    match getPropTypeStringCode indent env t.prop_ty with (env, props) then
+      (env, join ["Coll", " ", props])
+    else never
+
+  sem getPropTypeStringCode (indent : Int) (env : PprintEnv) =
+  | PropVar v ->
+    pprintEnvGetStr env v.ident
+  | PropSet {info=info, props={nonseq=ns, unique=uq}} ->
+    match      (ns, uq) with (false, false) then "{}"
+    else match (ns, uq) with (true , false) then "{NS}"
+    else match (ns, uq) with (false, true ) then "{UQ}"
+    else match (ns, uq) with (true , true ) then "{NS, UQ}"
+    else never
+end
+
 lang TensorTypePrettyPrint = TensorTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) =
   | TyTensor t ->
@@ -1135,7 +1154,8 @@ lang MExprPrettyPrint =
   UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
-  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint
+  VarTypePrettyPrint + AppTypePrettyPrint + TensorTypePrettyPrint +
+  CollTypePrettyPrint
 
   -- Identifiers
   + MExprIdentifierPrettyPrint

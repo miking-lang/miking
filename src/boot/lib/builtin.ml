@@ -158,7 +158,8 @@ let builtin =
   ; ("bootParserGetListLength", f (CbootParserGetListLength None))
   ; ("bootParserGetConst", f (CbootParserGetConst None))
   ; ("bootParserGetPat", f (CbootParserGetPat None))
-  ; ("bootParserGetInfo", f (CbootParserGetInfo None)) ]
+  ; ("bootParserGetInfo", f (CbootParserGetInfo None))
+  ; ("bootParserGetPropTy", f (CbootParserGetPropTy None)) ]
   (* Append python intrinsics *)
   @ Pyffi.externals
   |> List.map (fun (x, t) -> (x, Symb.gensym (), t))

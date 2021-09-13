@@ -713,6 +713,7 @@ utest cmpConst (CBootParserGetListLength {})
 utest cmpConst (CBootParserGetConst {}) (CBootParserGetConst {}) with 0 in
 utest cmpConst (CBootParserGetPat {}) (CBootParserGetPat {}) with 0 in
 utest cmpConst (CBootParserGetInfo {}) (CBootParserGetInfo {}) with 0 in
+utest cmpConst (CBootParserGetPropTy {}) (CBootParserGetPropTy {}) with 0 in
 
 -- Patterns
 utest cmpPat (pvar_ "a") (pvar_ "a") with 0 in

@@ -81,6 +81,12 @@
 %token <unit Ast.tokendata> TCHAR
 %token <unit Ast.tokendata> TSTRING
 %token <unit Ast.tokendata> TTENSOR
+%token <unit Ast.tokendata> TCOLL
+
+/* Collection Properties */
+%token <unit Ast.tokendata> PROPNS
+%token <unit Ast.tokendata> PROPUQ
+
 
 %token <unit Ast.tokendata> EQ            /* "="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
@@ -384,7 +390,7 @@ atom:
         else tuple2record (mkinfo $1.i $3.i) $2 }
   | LPAREN mexpr COMMA RPAREN
       { TmRecord(mkinfo $1.i $4.i, Record.singleton (us "0") $2) }
-  | LPAREN RPAREN        { TmRecord($1.i, Record.empty) }
+  | LPAREN RPAREN        { TmRecord(mkinfo $1.i $2.i, Record.empty) }
   | var_ident                { TmVar($1.i,$1.v,Symb.Helpers.nosym) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
   | UINT                 { TmConst($1.i,CInt($1.v)) }
@@ -550,6 +556,8 @@ ty_atom:
         TyRecord(mkinfo $1.i $3.i, r, ls) }
   | TTENSOR LSQUARE ty RSQUARE
     { TyTensor(mkinfo $1.i $4.i, $3) }
+  | TCOLL prop_ty
+    { TyColl(mkinfo $1.i (prop_ty_info $2), $2) }
   | TUNKNOWN
     { TyUnknown $1.i }
   | TBOOL
@@ -576,6 +584,26 @@ label_tys:
     {[($1.v, $3)]}
   | label_ident COLON ty COMMA label_tys
     {($1.v, $3)::$5}
+
+prop_ty:
+  | LBRACKET prop_set RBRACKET
+    { PropSet(mkinfo $1.i $3.i, $2) }
+  | LBRACKET RBRACKET
+    { PropSet(mkinfo $1.i $2.i, no_props) }
+  | LC_IDENT
+    { PropVar($1.i,$1.v,Symb.Helpers.nosym) }
+
+prop_set:
+  | prop COMMA prop_set
+    { $1 $3 }
+  | prop
+    { $1 no_props }
+
+prop:
+  | PROPNS
+    { fun x -> {x with nonseq = true} }
+  | PROPUQ
+    { fun x -> {x with unique = true} }
 
 
 /// Identifiers ///////////////////////////////

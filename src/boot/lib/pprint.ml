@@ -150,6 +150,21 @@ let ustring_of_pat p =
   in
   ppp p
 
+(* Convert property type to ustring. *)
+let ustring_of_prop_ty = function
+  | PropVar (_, id, s) ->
+      ustring_of_type id s
+  | PropSet (_, {nonseq; unique}) -> (
+    match (nonseq, unique) with
+    | false, false ->
+        us "{}"
+    | true, false ->
+        us "{NS}"
+    | false, true ->
+        us "{UQ}"
+    | true, true ->
+        us "{NS, UQ}" )
+
 (** Convert type to ustring.
  *  TODO(dlunde,?): Precedence
  *  TODO(dlunde,?): Use Format module printing *)
@@ -174,6 +189,8 @@ let rec ustring_of_ty = function
         us "[" ^. ustring_of_ty ty1 ^. us "]" )
   | TyTensor (_, ty) ->
       us "Tensor[" ^. ustring_of_ty ty ^. us "]"
+  | TyColl (_, prop_ty) ->
+      us "Coll " ^. ustring_of_prop_ty prop_ty
   | TyRecord (_, r, _) when r = Record.empty ->
       us "()"
   | TyRecord (_, r, ls) ->
@@ -540,6 +557,8 @@ let rec print_const fmt = function
       fprintf fmt "bootParserParseGetPat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
+  | CbootParserGetPropTy _ ->
+      fprintf fmt "bootParserParseGetPropTy"
   (* Python intrinsics *)
   | CPy v ->
       fprintf fmt "%s" (string_of_ustring (Pypprint.pprint v))

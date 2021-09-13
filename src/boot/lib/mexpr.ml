@@ -479,6 +479,10 @@ let arity = function
       2
   | CbootParserGetInfo (Some _) ->
       1
+  | CbootParserGetPropTy None ->
+      2
+  | CbootParserGetPropTy (Some _) ->
+      1
   (* Python intrinsics *)
   | CPy v ->
       Pyffi.arity v
@@ -1506,6 +1510,13 @@ let delta (apply : info -> tm -> tm -> tm) fi c v =
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CbootParserTree (Bootparser.getInfo ptree n))
   | CbootParserGetInfo (Some _), _ ->
+      fail_constapp fi
+  | CbootParserGetPropTy None, t ->
+      TmConst (fi, CbootParserGetPropTy (Some t))
+  | ( CbootParserGetPropTy (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (Bootparser.getPropTy ptree n))
+  | CbootParserGetPropTy (Some _), _ ->
       fail_constapp fi
   (* Python intrinsics *)
   | CPy v, t ->

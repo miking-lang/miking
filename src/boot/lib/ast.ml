@@ -197,6 +197,7 @@ and const =
   | CbootParserGetConst of tm option
   | CbootParserGetPat of tm option
   | CbootParserGetInfo of tm option
+  | CbootParserGetPropTy of tm option
   (* External functions *)
   | CPy of tm Pyast.ext
 
@@ -207,6 +208,7 @@ and ptree =
   | PTreePat of pat
   | PTreeConst of const
   | PTreeInfo of info
+  | PTreePropTy of prop_ty
 
 (* Terms in MLang *)
 and cdecl = CDecl of info * ustring * ty
@@ -342,6 +344,8 @@ and ty =
   | TySeq of info * ty
   (* Tensor type *)
   | TyTensor of info * ty
+  (* Collection type *)
+  | TyColl of info * prop_ty
   (* Record type *)
   | TyRecord of info * ty Record.t * ustring list
   (* Variant type *)
@@ -350,6 +354,16 @@ and ty =
   | TyVar of info * ustring * Symb.t
   (* Type application, currently only used for documenation purposes *)
   | TyApp of info * ty * ty
+
+(* Property type *)
+and prop_ty =
+  (* Property type variable *)
+  | PropVar of info * ustring * Symb.t
+  (* Property set *)
+  | PropSet of info * prop_set
+
+(* Property set *)
+and prop_set = {nonseq: bool; unique: bool}
 
 (* Kind of identifier *)
 and ident =
@@ -365,6 +379,8 @@ and ident =
 let tm_unit = TmRecord (NoInfo, Record.empty)
 
 let tyUnit fi = TyRecord (fi, Record.empty, [])
+
+let no_props = {nonseq= false; unique= false}
 
 (* smap for terms *)
 let smap_tm_tm (f : tm -> tm) = function
@@ -493,8 +509,11 @@ let ty_info = function
   | TyRecord (fi, _, _)
   | TyVariant (fi, _)
   | TyVar (fi, _, _)
-  | TyApp (fi, _, _) ->
+  | TyApp (fi, _, _)
+  | TyColl (fi, _) ->
       fi
+
+let prop_ty_info = function PropVar (fi, _, _) | PropSet (fi, _) -> fi
 
 (* Checks if a constant _may_ have a side effect. It is conservative
    and returns only false if it is _sure_ to not have a side effect *)
@@ -647,7 +666,8 @@ let const_has_side_effect = function
   | CbootParserGetListLength _
   | CbootParserGetConst _
   | CbootParserGetPat _
-  | CbootParserGetInfo _ ->
+  | CbootParserGetInfo _
+  | CbootParserGetPropTy _ ->
       true
   (* External functions *)
   | CPy _ ->

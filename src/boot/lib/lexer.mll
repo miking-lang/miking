@@ -51,6 +51,11 @@ let reserved_strings = [
   ("Char",          fun(i) -> Parser.TCHAR{i=i;v=()});
   ("String",        fun(i) -> Parser.TSTRING{i=i;v=()});
   ("Tensor",        fun(i) -> Parser.TTENSOR{i=i;v=()});
+  ("Coll",          fun(i) -> Parser.TCOLL{i=i;v=()});
+
+  (* Collection Properties *)
+  ("NS",            fun(i) -> Parser.PROPNS{i=i; v=()});
+  ("UQ",            fun(i) -> Parser.PROPUQ{i=i; v=()});
 
   (* v *)
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});

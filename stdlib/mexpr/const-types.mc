@@ -264,6 +264,7 @@ lang BootParserTypeAst = BootParserAst
   | CBootParserGetConst _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
   | CBootParserGetPat _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
   | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  | CBootParserGetPropTy _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
 end
 
 lang MExprConstType =

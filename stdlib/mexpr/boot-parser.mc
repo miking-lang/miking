@@ -184,6 +184,10 @@ lang BootParser = MExprAst + ConstTransformer
   | 211 /-TyTensor-/ ->
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
+  | 212 /-TyColl-/ ->
+    TyColl {info = ginfo t 0,
+            prop_ty = gpropty t 0}
+
 
   -- Get constant help function
   sem gconst(t:Unknown) =
@@ -276,6 +280,19 @@ lang BootParser = MExprAst + ConstTransformer
   | 501 /-NoInfo-/ ->
       NoInfo {}
 
+  -- Get property type help function
+  sem gpropty (t:Unknown) =
+  | n -> let t2 = bootParserGetPropTy t n in
+         matchPropTy t2 (bootParserGetId t2)
+
+  sem matchPropTy (t:Unknown) =
+  | 600 /-PropVar-/ ->
+      PropVar {info = ginfo t 0,
+               ident = gname t 0}
+  | 601 /-PropSet-/ ->
+      PropSet {info = ginfo t 0,
+               props = {nonseq = eqi 0 (gint t 0),
+                        unique = eqi 0 (gint t 1)}}
 
   sem strToPatName =
   | "" ->  PWildcard ()

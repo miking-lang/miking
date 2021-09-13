@@ -796,6 +796,7 @@ lang BootParserAst = ConstAst
   | CBootParserGetConst {}
   | CBootParserGetPat {}
   | CBootParserGetInfo {}
+  | CBootParserGetPropTy {}
 end
 
 --------------
@@ -1133,6 +1134,28 @@ lang SeqTypeAst = Ast
   | TySeq r -> r.info
 end
 
+lang CollTypeAst = Ast
+  syn PropType =
+  | PropVar {info : Info,
+             ident : Name}
+  | PropSet {info : Info,
+             props : {nonseq: Bool,
+                      unique: Bool}}
+
+  syn Type =
+  | TyColl {info : Info,
+            prop_ty : PropType}
+
+  sem tyWithInfo (info : Info) =
+  | TyColl t -> TyColl {t with info = info}
+
+  sem smapAccumL_Type_Type (f : acc -> a -> (acc, b)) (acc : acc) =
+  | TyColl t -> (acc, TyColl t)
+
+  sem infoTy =
+  | TyColl r -> r.info
+end
+
 lang TensorTypeAst = Ast
   syn Type =
   | TyTensor {info : Info,
@@ -1246,4 +1269,4 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + VarTypeAst +
-  AppTypeAst + TensorTypeAst
+  AppTypeAst + TensorTypeAst + CollTypeAst

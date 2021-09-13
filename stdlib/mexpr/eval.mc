@@ -1514,6 +1514,7 @@ lang BootParserEval =
   | CBootParserGetConst2 BootParserTree
   | CBootParserGetPat2 BootParserTree
   | CBootParserGetInfo2 BootParserTree
+  | CBootParserGetPropTy2 BootParserTree
 
   sem delta (arg : Expr) =
   | CBootParserParseMExprString _ ->
@@ -1655,6 +1656,16 @@ lang BootParserEval =
       TmConst {val = CBootParserTree {val = bootParserGetInfo ptree n},
                ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
     else error "Second argument to bootParserGetInfo not an integer"
+  | CBootParserGetPropTy _ ->
+    match arg with TmConst {val = CBootParserTree {val = ptree}} then
+      TmConst {val = CBootParserGetPropTy2 ptree,
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "First argument to bootParserGetPropTy not a parse tree"
+  | CBootParserGetPropTy2 ptree ->
+    match arg with TmConst {val = CInt {val = n}} then
+      TmConst {val = CBootParserTree {val = bootParserGetPropTy ptree n},
+               ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+    else error "Second argument to bootParserGetPropTy not an integer"
 end
 
 --------------

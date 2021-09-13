@@ -42,6 +42,18 @@ let tytensor_ = use TensorTypeAst in
   lam ty.
   TyTensor {ty = ty, info = NoInfo ()}
 
+let tycoll_ = use CollTypeAst in
+  lam prop_ty.
+  TyColl {prop_ty = prop_ty, info = NoInfo ()}
+
+let propvar_ = use CollTypeAst in
+  lam s.
+  PropVar {ident = nameNoSym s, info = NoInfo ()}
+
+let propset_ = use CollTypeAst in
+  lam props.
+  PropSet {props = props, info = NoInfo ()}
+
 let ityarrow_ = use FunTypeAst in
   lam info. lam from. lam to.
   TyArrow {from = from, to = to, info = info}
@@ -1088,6 +1100,10 @@ let bootParserGetPat_ = use MExprAst in
 let bootParserGetInfo_ = use MExprAst in
   lam pt. lam n.
   appf2_ (uconst_ (CBootParserGetInfo ())) pt n
+
+let bootParserGetPropTy_ = use MExprAst in
+  lam pt. lam n.
+  appf2_ (uconst_ (CBootParserGetPropTy ())) pt n
 
 let mapEmpty_ = use MExprAst in
   lam cmp.
