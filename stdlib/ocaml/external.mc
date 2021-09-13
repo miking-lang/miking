@@ -13,6 +13,7 @@ let _arrayToSeqCost = 2
 let _tensorToGenarrayCost = 1
 let _tupleConversionCost = 1
 let _recordConversionCost = 1
+let _seqtostringcost = 2
 
 lang OCamlGenerateExternal = OCamlAst + MExprAst
   -- Popluates `env` by chosing external implementations.
@@ -149,10 +150,13 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
              (cost1, OTmLabel { label = label, arg = arg })
           else never
         else
+        match ty21 with OTyLabel {ty = ty21} then
+          convertData info env arg ty21 ty11
+        else
           match convertData info env arg ty21 ty11 with (cost1, arg) then
             (cost1, arg)
           else never
-       ) with (cost1, arg)
+      ) with (cost1, arg)
       then
         let body =
           TmApp {
@@ -162,19 +166,40 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
             info = info
            }
         in
+        let label =
+          match ty21 with OTyLabel {label = label} then Some label else None ()
+        in
         match convertData info env body ty12 ty22 with (cost2, body) then
-          let t =
-            TmLam {
-              ident = ident,
-              tyIdent = ty21,
-              body = body,
-              ty = TyUnknown { info = info },
-              info = info
-            }
-          in
+          let t = OTmLam { label = label, ident = ident, body = body } in
           (addi cost1 cost2, t)
         else never
       else never
+    else match tt with
+      (OTyString _, TySeq {ty = TyChar _})
+    then
+      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_utf8" } in
+      let t =
+        TmApp {
+            lhs = op,
+            rhs = t,
+            ty = ty2,
+            info = info
+        }
+      in
+      (_seqtostringcost, t)
+    else match tt with
+      (TySeq {ty = TyChar _}, OTyString _)
+    then
+      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_utf8" } in
+      let t =
+        TmApp {
+            lhs = op,
+            rhs = t,
+            ty = TyUnknown { info = info },
+            info = info
+        }
+      in
+      (_seqtostringcost, t)
     else match tt with
       (OTyList {ty = ty1}, TySeq {ty = ty2})
     then
@@ -190,13 +215,13 @@ lang OCamlGenerateExternal = OCamlAst + MExprAst
     else match tt with
       (TySeq {ty = ty1}, OTyArray {ty = ty2})
     then
-      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_array" } in
+      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_array_copy" } in
       let mapop = OTmVarExt { ident = intrinsicOpSeq "map" } in
       _convertContainer op _arrayToSeqCost _approxsize mapop info env t ty1 ty2
     else match tt with
       (OTyArray {ty = ty1}, TySeq {ty = ty2})
     then
-      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_array" } in
+      let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_array_copy" } in
       let mapop = OTmVarExt { ident = "Array.map" } in
       _convertContainer op _arrayToSeqCost _approxsize mapop info env t ty1 ty2
     else match tt with

@@ -154,11 +154,15 @@ module Mseq : sig
 
     val of_array : 'a array -> 'a t
 
+    val of_array_copy : 'a array -> 'a t
+
     val of_array_list : 'a array -> 'a t
 
     val of_array_rope : 'a array -> 'a t
 
     val to_array : 'a t -> 'a array
+
+    val to_array_copy : 'a t -> 'a array
 
     val of_ustring : ustring -> int t
 
@@ -167,6 +171,10 @@ module Mseq : sig
     val of_ustring_list : ustring -> int t
 
     val to_ustring : int t -> ustring
+
+    val to_utf8 : int t -> string
+
+    val of_utf8 : string -> int t
 
     (* Complexity:
      * rope (?): O(n*k), where n is the length of the sequence, k is the
