@@ -85,6 +85,7 @@ compile_test () {
         rm $binary
     else
         echo "ERROR: command ./$binary exited with $exit_code"
+        rm $binary
     fi
   else
       echo "ERROR: compilation of $1 exited with $exit_code"
