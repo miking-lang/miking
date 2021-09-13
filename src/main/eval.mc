@@ -58,7 +58,7 @@ let eval = lam files. lam options : Options. lam args.
       let ast = symbolizeExpr symEnv ast in
       if options.exitBefore then exit 0
       else
-        eval {env = mapEmpty nameCmp} (updateArgv args ast)
+        eval {env = mapEmpty nameCmp} (updateArgv args ast); ()
     else never
   in
   iter evalFile files

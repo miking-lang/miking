@@ -129,7 +129,7 @@ let ocamlCompileAst = lam options : Options. lam sourcePath. lam mexprAst.
 
           -- Compile OCaml AST
           if options.exitBefore then exit 0
-          else ocamlCompile options libs clibs sourcePath ocamlProg
+          else ocamlCompile options libs clibs sourcePath ocamlProg; ()
 
         else never
       else never
