@@ -142,7 +142,7 @@ let iter_array (f : 'a -> unit) (s : 'a t) : unit =
     | Leaf a ->
         Array.iter f a
     | Slice {v; off; len} ->
-        for i = off to len - 1 do
+        for i = off to off + len - 1 do
           f v.(i)
         done
     | Concat {lhs; rhs; _} ->
@@ -156,7 +156,7 @@ let iteri_array (f : int -> 'a -> unit) (s : 'a t) : unit =
         Array.iteri (fun i e -> f (i + off) e) a ;
         Array.length a
     | Slice {v; off= o; len} ->
-        for i = o to len - 1 do
+        for i = o to off + len - 1 do
           f (i + off - o) v.(i)
         done ;
         len
