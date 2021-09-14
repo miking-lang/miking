@@ -188,14 +188,8 @@ let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
   ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
 
+(* Parse an MCore file and merge includes. Expects a normalized filename. *)
 let parse_mcore_file filename =
-  try
-    parsed_files := [] ;
-    let filename = Ustring.to_utf8 filename in
-    local_parse_mcore_file filename
-    |> merge_includes (Filename.dirname filename) [filename]
-    |> Mlang.flatten |> Mlang.desugar_post_flatten
-  with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
-    let error_string = Ustring.to_utf8 (error_to_ustring e) in
-    fprintf stderr "%s\n" error_string ;
-    exit 1
+  parsed_files := [] ;
+  local_parse_mcore_file filename
+  |> merge_includes (Filename.dirname filename) [filename]
