@@ -17,7 +17,7 @@
 -- Known limitations:
 -- * The file to which the profiling results are stored is currently hard-coded
 --   as 'mexpr.prof'.
--- * Intrinsic functions are not profiled.
+-- * Only functions defined on the top-level are profiled.
 -- * Prevents the OCaml compiler from doing tail-call optimizations.
 -- * A partially applied function, such as x in `let x = head`, is not profiled
 --   because its body is not a lambda term.
