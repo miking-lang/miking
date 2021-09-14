@@ -4,6 +4,7 @@
 include "mi-lite.mc"
 include "options.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/profiling.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/remove-ascription.mc"
@@ -19,7 +20,7 @@ include "ocaml/sys.mc"
 lang MCoreCompile =
   BootParser +
   MExprHoles +
-  MExprSym + MExprTypeAnnot + MExprUtestTrans +
+  MExprSym + MExprTypeAnnot + MExprUtestTrans + MExprProfileInstrument +
   OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
 end
 
