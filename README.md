@@ -1322,9 +1322,9 @@ definition in [./stdlib/ocaml/external.mc](./stdlib/ocaml/external.mc).
 ## Profiling
 
 Profiling of an MExpr program can be enabled using the `--debug-profile` flag
-when compiling or evaluating a program. While this flag exists in the boot
-interpreter, it performs a much simpler profiling than what is performed in
-`mi`.
+when compiling or evaluating a program. While this flag also exists in the boot
+interpreter, it produces a subset of profiling information than the profiling
+approach used in `mi` (which is what is detailed below).
 
 ### Profiling output
 
